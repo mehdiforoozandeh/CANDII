@@ -52,7 +52,7 @@ src/candi/
   train.py       training + the run JSON      eval.py / metrics.py   the M1/M2/M3/S14 instrument
   prep/          bake an H5 from ENCODE tracks
 tools/golden.py  bit-exactness gate — every change must clear it before the next one starts
-tests/           214 tests, no GPU required
+tests/           the suite; no GPU required
 ```
 
 ## Running it
@@ -60,9 +60,39 @@ tests/           214 tests, no GPU required
 ```bash
 pip install -e .
 python -m candi.train --h5 <panel.h5> --out-dir <runs> --epochs 10 --steps-per-epoch 2000
-python -m candi.eval  --h5 <panel.h5> --ckpt <run.ckpt>
+python -m candi.eval  --h5 <panel.h5> --ckpt <run.ckpt> --arch-from <run.json>
 pytest tests/ -q
 ```
+
+Always re-score with `--arch-from <run>.json`. Every architecture flag changes the `state_dict`, and
+that file carries the exact arguments the checkpoint was built from — so nothing has to be retyped,
+and nothing can be retyped wrong.
+
+## What is tunable
+
+Scale is **never** a flag: `num_assays`, `context_bins`, `resolution`, the assay order, the DSF
+ladder and the chromosome split all come from the H5's own attributes. Everything below is a
+deliberate choice, and every one of them defaults to the shipped model.
+
+| group | flags | default |
+|---|---|---|
+| geometry | `--n-cnn-layers` `--conv-kernel-size` `--pool-size` `--expansion-factor` `--n-deconv-layers` `--deconv-upsample` `--deconv-kernel-size` | 3 · 3 · 2 · 2 · 3 · 2 · 3 |
+| normalisation | `--conv-norm` `layer\|lane\|group\|batch\|instance` · `--deconv-norm` `lane\|group` · `--transformer-norm` `layer\|rmsnorm\|simple_rmsnorm\|scalenorm` · `--transformer-norm-placement` `pre\|post\|sandwich` · `--attn-qk-norm` | layer · lane · layer · pre · off |
+| conditioning | `--film-taps`, a comma set over `pre_conv` `per_conv` `post_conv` `per_transformer` `pre_deconv` `per_deconv` `post_head` · `--film-init-encoder` · `--film-init-decoder` | `per_conv,pre_deconv,per_deconv` · xavier · zero |
+| heads | `--head-sharing` `shared\|per_assay` · `--head-hidden` | shared · 0 (match the lane) |
+| optimisation | `--lr-schedule` `cosine\|linear\|constant` · `--warmup-frac` · `--lr-min-ratio` · `--clip-norm` | cosine · 0.1 · 0.1 · 1.0 |
+
+Two guards run before anything is built. `pool_size ** n_cnn_layers` must equal
+`deconv_upsample ** n_deconv_layers`, or the decoder would not undo the encoder's downsampling. And
+the DNA tower's large pool is **derived** as `isqrt(resolution)`, never chosen — the panel's
+resolution and the tower geometry are the same fact.
+
+Three things stay hardcoded on purpose: the `log2_mu` clamp `(-15, 30)`, the `mu` floor `1e-6`, and
+the 4-row covariate contract. They are part of the objective, not settings.
+
+`tests/test_flags.py` holds this surface to two claims: naming every flag at its default is
+bit-identical to naming none of them, and flipping any flag off its default changes the model. The
+second is the one that matters — an exposed, documented, inert flag has shipped here before.
 
 ## Provenance
 

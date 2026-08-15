@@ -324,6 +324,11 @@ class ConvBlock(nn.Module):
             self.norm = nn.LayerNorm(out_ch)
         elif self.normtype == "group":
             self.norm = nn.GroupNorm(groups, out_ch)
+        elif self.normtype == "instance":
+            # Per-channel, per-sample, over POSITIONS. Unlike "lane" and "group" it pools no channels
+            # at all, so it is the only option here that cannot mix assays even in principle — and
+            # also the only one that removes each channel's own profile scale along the sequence.
+            self.norm = nn.InstanceNorm1d(out_ch, affine=True)
         elif self.normtype == "lane":
             if out_ch % self.n_groups != 0:
                 raise ValueError(f"conv_norm='lane' needs out_ch % groups == 0; "
@@ -380,6 +385,37 @@ class ConvTower(nn.Module):
 # FiLM conditioning layers
 # ---------------------------------------------------------------------------
 
+FILM_INITS = ("xavier", "zero", "normal")
+
+
+def init_film_proj(proj: nn.Linear, init: str = "xavier") -> None:
+    """Initialise a FiLM projection in place. Shared by both towers so the options cannot drift.
+
+    THE CHOICE MOVES THE GLOBAL RNG STREAM, and that is not a detail: `xavier` draws twice (weight
+    and bias) on top of `nn.Linear`'s own two draws, `zero` draws not at all. Every module built
+    after a FiLM layer therefore lands on different weights under a different init, so only the
+    per-tower defaults — `xavier` in the conv tower, `zero` in the decoder — reproduce a recorded run.
+
+      xavier  Xavier-uniform weight + N(0, 0.1) bias. The encoder's historical pair: conditioning is
+              live from step 0, which is what a tower that must separate 36 tracks immediately wants.
+      zero    adaLN-zero. The layer starts as an exact identity and steering has to be learned, so a
+              run cannot lose by being born mis-conditioned. The decoder's default.
+      normal  N(0, 0.02) weight, zero bias — small but live. Offered because "live but quiet" is a
+              real third position between the two above; no run has yet used it.
+    """
+    if init == "xavier":
+        nn.init.xavier_uniform_(proj.weight)
+        nn.init.normal_(proj.bias, mean=0.0, std=0.1)
+    elif init == "zero":
+        nn.init.zeros_(proj.weight)
+        nn.init.zeros_(proj.bias)
+    elif init == "normal":
+        nn.init.normal_(proj.weight, mean=0.0, std=0.02)
+        nn.init.zeros_(proj.bias)
+    else:
+        raise ValueError(f"film_init must be one of {FILM_INITS}; got {init!r}")
+
+
 class FiLMLayer(nn.Module):
     """Per-assay FiLM in channel-first conv space.
 
@@ -387,11 +423,10 @@ class FiLMLayer(nn.Module):
     and modulate conv activations: x ← x * (1 + scale) + shift.
     """
 
-    def __init__(self, input_dim: int, output_dim: int) -> None:
+    def __init__(self, input_dim: int, output_dim: int, init: str = "xavier") -> None:
         super().__init__()
         self.proj = nn.Linear(input_dim, output_dim)
-        nn.init.xavier_uniform_(self.proj.weight)
-        nn.init.normal_(self.proj.bias, mean=0.0, std=0.1)
+        init_film_proj(self.proj, init)
 
     def forward(self, x: torch.Tensor, metadata_embed: torch.Tensor) -> torch.Tensor:
         # Same arithmetic as the flat `view(bsz, channels)` form this replaces — track `t` is
@@ -417,12 +452,11 @@ class FiLMLayer(nn.Module):
 class PerAssayFiLM(nn.Module):
     """FiLM in sequence-last (B, L, C) space, applied per-assay."""
 
-    def __init__(self, emb_dim: int, d_per_assay: int) -> None:
+    def __init__(self, emb_dim: int, d_per_assay: int, init: str = "xavier") -> None:
         super().__init__()
         self.d_per_assay = int(d_per_assay)
         self.proj = nn.Linear(int(emb_dim), 2 * int(d_per_assay))
-        nn.init.xavier_uniform_(self.proj.weight)
-        nn.init.normal_(self.proj.bias, mean=0.0, std=0.1)
+        init_film_proj(self.proj, init)
 
     def forward(self, x: torch.Tensor, meta_embed: torch.Tensor) -> torch.Tensor:
         bsz, seq_len, channels = x.shape
@@ -442,11 +476,10 @@ class PerAssayFiLM(nn.Module):
 class TransformerFeatureFiLM(nn.Module):
     """FiLM on the fused d_model features, conditioned on pooled metadata."""
 
-    def __init__(self, emb_dim: int, d_model: int) -> None:
+    def __init__(self, emb_dim: int, d_model: int, init: str = "xavier") -> None:
         super().__init__()
         self.proj = nn.Linear(int(emb_dim), 2 * int(d_model))
-        nn.init.xavier_uniform_(self.proj.weight)
-        nn.init.normal_(self.proj.bias, mean=0.0, std=0.1)
+        init_film_proj(self.proj, init)
 
     def forward(self, x: torch.Tensor, pooled_meta: torch.Tensor) -> torch.Tensor:
         scale, shift = self.proj(pooled_meta).chunk(2, dim=-1)
@@ -520,6 +553,7 @@ class SignalConvTower(nn.Module):
         meta_embed_dim: int,
         conv_norm: str,
         film_mode: str,
+        film_init: str = "xavier",
     ) -> None:
         super().__init__()
         self.num_tracks = int(num_tracks)
@@ -555,15 +589,19 @@ class SignalConvTower(nn.Module):
         self.pre_film: Optional[FiLMLayer] = None
         self.post_film: Optional[PerAssayFiLM] = None
         self.per_conv_film_layers: Optional[nn.ModuleList] = None
-        if self.film_mode == "pre_conv":
-            self.pre_film = FiLMLayer(int(meta_embed_dim), 2)
+        if self.film_mode == "off":
+            pass                                    # no conditioning reaches the conv tower at all
+        elif self.film_mode == "pre_conv":
+            self.pre_film = FiLMLayer(int(meta_embed_dim), 2, film_init)
         elif self.film_mode == "post_conv":
-            self.post_film = PerAssayFiLM(int(meta_embed_dim), self.out_per_assay)
+            self.post_film = PerAssayFiLM(int(meta_embed_dim), self.out_per_assay, film_init)
         elif self.film_mode in ("per_conv", "per_conv_and_transformer"):
             self.per_conv_film_layers = nn.ModuleList([
-                FiLMLayer(int(meta_embed_dim), 2 * (ch // self.num_tracks))
+                FiLMLayer(int(meta_embed_dim), 2 * (ch // self.num_tracks), film_init)
                 for ch in out_channels_list
             ])
+        else:
+            raise ValueError(f"Unsupported film_mode={self.film_mode}")
 
     def lane_shapes(self, context_length: int, batch: str = "B") -> List[str]:
         """The `[B, L, T, C]` shape at the tower's input and after each block, as strings.
@@ -885,6 +923,42 @@ class DualAttentionEncoderBlock(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Transformer normalisation options
+# ---------------------------------------------------------------------------
+# These values are passed straight through to `x_transformers.Encoder`, so they are only as stable
+# as that package's keyword surface. Two defences, and the second is the one that earns its keep:
+#
+#   * the maps are EMPTY at the defaults, so the shipped call passes nothing extra and cannot be
+#     affected by any of this;
+#   * `tests/test_flags.py::test_every_flag_changes_the_model` builds a model at each non-default
+#     value and asserts it differs from the default.
+#
+# The pinned x-transformers does assert on unrecognised keywords (`x_transformers.py:2198`), but only
+# AFTER `groupby_prefix_and_trim` has routed everything starting `ff_`, `attn_` or `cross_attn_` into
+# sub-dicts — and `attn_qk_norm` is one of those. So the assert is not a complete guard, and it is
+# not a guarantee either: it is one line in a dependency nobody here controls. The test is.
+#
+# `resi_dual` IS ABSENT ON PURPOSE. It was in the agreed flag set, and the test above is exactly what
+# found that the pinned version does not accept the keyword at all — offering the choice would have
+# shipped a documented option that raises the moment anyone selects it.
+
+TRANSFORMER_NORMS = ("layer", "rmsnorm", "simple_rmsnorm", "scalenorm")
+TRANSFORMER_NORM_KW = {
+    "layer": {},                                  # x-transformers' own default
+    "rmsnorm": {"use_rmsnorm": True},
+    "simple_rmsnorm": {"use_simple_rmsnorm": True},
+    "scalenorm": {"use_scalenorm": True},
+}
+
+TRANSFORMER_PLACEMENTS = ("pre", "post", "sandwich")
+TRANSFORMER_PLACEMENT_KW = {
+    "pre": {},                                    # `pre_norm=True` is already in the base kwargs
+    "post": {"pre_norm": False},
+    "sandwich": {"sandwich_norm": True},          # norm before AND after each sub-layer
+}
+
+
+# ---------------------------------------------------------------------------
 # Encoder
 # ---------------------------------------------------------------------------
 
@@ -912,6 +986,16 @@ class V2Encoder(nn.Module):
         self.missing_data_mode = str(cfg.missing_data_mode)
         self.film_mode = str(cfg.film_mode)
         self.transformer_type = str(cfg.transformer_type)
+        # Checked here, before anything is built, so a typo fails on the submit line rather than
+        # after the h5 is open — and with the valid set in the message, not a bare KeyError.
+        if str(cfg.transformer_norm) not in TRANSFORMER_NORM_KW:
+            raise ValueError(f"transformer_norm must be one of {TRANSFORMER_NORMS}; "
+                             f"got {cfg.transformer_norm!r}")
+        if str(cfg.transformer_norm_placement) not in TRANSFORMER_PLACEMENT_KW:
+            raise ValueError(f"transformer_norm_placement must be one of {TRANSFORMER_PLACEMENTS}; "
+                             f"got {cfg.transformer_norm_placement!r}")
+        if str(cfg.film_init) not in FILM_INITS:
+            raise ValueError(f"film_init must be one of {FILM_INITS}; got {cfg.film_init!r}")
 
         # -- Metadata embedding --
         self.metadata_embedding = MetadataEmbedding(
@@ -931,6 +1015,7 @@ class V2Encoder(nn.Module):
             meta_embed_dim=int(cfg.metadata_embed_dim),
             conv_norm=str(cfg.conv_norm),
             film_mode=self.film_mode,
+            film_init=str(cfg.film_init),
         )
 
         # -- Missing data handling --
@@ -994,16 +1079,22 @@ class V2Encoder(nn.Module):
                 for _ in range(int(cfg.n_transformer_layers))
             ])
         elif self.transformer_type == "xtransformers":
+            # The kwargs are assembled rather than written inline so the DEFAULT call is character
+            # for character the historical one: both `.update`s below are empty at the defaults, so
+            # nothing new is passed and the RNG stream is untouched. A non-default value adds exactly
+            # the one keyword it needs.
+            xkw = dict(
+                dim=self.d_model, depth=1, heads=int(cfg.nhead),
+                rotary_pos_emb=True,
+                attn_dropout=float(cfg.dropout),
+                ff_dropout=float(cfg.dropout),
+                ff_mult=4, pre_norm=True,
+                attn_qk_norm=bool(cfg.attn_qk_norm),
+            )
+            xkw.update(TRANSFORMER_NORM_KW[str(cfg.transformer_norm)])
+            xkw.update(TRANSFORMER_PLACEMENT_KW[str(cfg.transformer_norm_placement)])
             self.transformer_blocks = nn.ModuleList([
-                XEncoder(
-                    dim=self.d_model, depth=1, heads=int(cfg.nhead),
-                    rotary_pos_emb=True,
-                    attn_dropout=float(cfg.dropout),
-                    ff_dropout=float(cfg.dropout),
-                    ff_mult=4, pre_norm=True,
-                    attn_qk_norm=bool(cfg.attn_qk_norm),
-                )
-                for _ in range(int(cfg.n_transformer_layers))
+                XEncoder(**xkw) for _ in range(int(cfg.n_transformer_layers))
             ])
         elif self.transformer_type == "production_dual":
             # UNREACHABLE on the shipped path (transformer_type='xtransformers').
@@ -1017,7 +1108,8 @@ class V2Encoder(nn.Module):
         self.transformer_film_layers: Optional[nn.ModuleList] = None
         if self.film_mode == "per_conv_and_transformer":
             self.transformer_film_layers = nn.ModuleList([
-                TransformerFeatureFiLM(int(cfg.metadata_embed_dim), self.d_model)
+                TransformerFeatureFiLM(int(cfg.metadata_embed_dim), self.d_model,
+                                       str(cfg.film_init))
                 for _ in range(int(cfg.n_transformer_layers))
             ])
 

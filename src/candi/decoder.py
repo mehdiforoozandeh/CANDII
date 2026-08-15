@@ -45,12 +45,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from candi._vendored import CLOZE, MISSING
-from candi.encoder import MetadataEmbedding
+from candi.encoder import MetadataEmbedding, init_film_proj
 
-__all__ = ["LANE_NORMS", "LaneNorm", "PerLaneFiLM", "LaneDeconvBlock", "SymmetricDecoder"]
+__all__ = ["DECONV_NORMS", "DECODER_FILM_TAPS", "HEAD_SHARINGS", "LaneNorm", "NoFiLM",
+           "PerLaneFiLM", "PerLaneHead", "LaneDeconvBlock", "SymmetricDecoder"]
 
 
-LANE_NORMS = ("lane", "group")
+# `deconv_norm`, not `lane_norm`: the old name collided with its own first value, so "lane_norm=lane"
+# and "lane_norm=group" read as if only one of them were per-lane. Both are; what differs is which
+# axes the statistic pools. The knob is named for WHERE it applies (the deconv trunk) and its values
+# for WHAT they pool.
+DECONV_NORMS = ("lane", "group")
+
+# The decoder's FiLM taps, in the order they act. `pre_deconv` is the tap right after the input
+# projection; `per_deconv` is one tap after each deconv block; `post_head` conditions the two head
+# outputs themselves. See the module docstring for why the first two are not redundant.
+DECODER_FILM_TAPS = ("pre_deconv", "per_deconv", "post_head")
+
+HEAD_SHARINGS = ("shared", "per_assay")
 
 
 class LaneNorm(nn.Module):
@@ -79,8 +91,8 @@ class LaneNorm(nn.Module):
 
     def __init__(self, lane_width: int, mode: str = "lane", eps: float = 1e-5) -> None:
         super().__init__()
-        if mode not in LANE_NORMS:
-            raise ValueError(f"lane_norm must be one of {LANE_NORMS}; got {mode!r}")
+        if mode not in DECONV_NORMS:
+            raise ValueError(f"deconv_norm must be one of {DECONV_NORMS}; got {mode!r}")
         self.C = int(lane_width)
         self.mode = str(mode)
         self.eps = float(eps)
@@ -110,12 +122,11 @@ class PerLaneFiLM(nn.Module):
     uses in the conv tower. Zero-init so the arm starts as an exact no-op and steering grows.
     """
 
-    def __init__(self, embed_dim: int, lane_width: int) -> None:
+    def __init__(self, embed_dim: int, lane_width: int, init: str = "zero") -> None:
         super().__init__()
         self.C = int(lane_width)
         self.proj = nn.Linear(int(embed_dim), 2 * self.C)
-        nn.init.zeros_(self.proj.weight)
-        nn.init.zeros_(self.proj.bias)
+        init_film_proj(self.proj, init)
 
     def forward(self, z: torch.Tensor, meta_embed: torch.Tensor) -> torch.Tensor:
         if meta_embed.shape[1] != z.shape[2]:
@@ -125,6 +136,43 @@ class PerLaneFiLM(nn.Module):
         return z * (1.0 + gamma.unsqueeze(1)) + beta.unsqueeze(1)
 
 
+class NoFiLM(nn.Module):
+    """A tap that was switched off. Returns its input untouched and owns no parameters.
+
+    Kept in the `film_layers` list rather than removed from it so tap N is always at index N: a tap
+    set that drops `pre_deconv` must not silently renumber the taps after it, or `film/dec_*` in the
+    gradient log would point at a different layer than it did in the run being compared to.
+    """
+
+    def forward(self, z: torch.Tensor, meta_embed: torch.Tensor) -> torch.Tensor:
+        return z
+
+
+class PerLaneHead(nn.Module):
+    """`Linear(C,H) -> GELU -> Linear(H,1)`, but A INDEPENDENT copies — one per assay.
+
+    The shipped head is weight-SHARED: one small MLP reads every assay's lane. That is defensible
+    (the lane already carries assay identity, injected by four FiLM taps) and it is 1/A the
+    parameters, but it is an assumption nobody has measured. This is the alternative, exposed so the
+    question can be answered rather than argued: same arithmetic, same shapes, A separate weight
+    stacks contracted with `einsum`.
+
+    Returns `[B, L, A, 1]` so the caller's `.squeeze(-1)` is the same line for both head types.
+    """
+
+    def __init__(self, num_assays: int, lane: int, hidden: int) -> None:
+        super().__init__()
+        self.A, self.C, self.H = int(num_assays), int(lane), int(hidden)
+        self.w1 = nn.Parameter(torch.empty(self.A, self.C, self.H))
+        self.b1 = nn.Parameter(torch.zeros(self.A, self.H))
+        self.w2 = nn.Parameter(torch.empty(self.A, self.H, 1))
+        self.b2 = nn.Parameter(torch.zeros(self.A, 1))
+        _init_grouped_weight(self.w1, self.C, self.H)
+        _init_grouped_weight(self.w2, self.H, 1)
+
+    def forward(self, feat: torch.Tensor) -> torch.Tensor:
+        h = F.gelu(torch.einsum("blac,ach->blah", feat, self.w1) + self.b1)
+        return torch.einsum("blah,aho->blao", h, self.w2) + self.b2
 
 
 class LaneDeconvBlock(nn.Module):
@@ -135,7 +183,7 @@ class LaneDeconvBlock(nn.Module):
     """
 
     def __init__(self, num_assays: int, lane: int, kernel_size: int = 3, upsample: int = 2,
-                 lane_norm: str = "lane") -> None:
+                 deconv_norm: str = "lane") -> None:
         super().__init__()
         self.A = int(num_assays)
         self.lane = int(lane)
@@ -146,7 +194,7 @@ class LaneDeconvBlock(nn.Module):
                                          groups=self.A)
         self.rdeconv = nn.ConvTranspose1d(ch, ch, 1, stride=int(upsample),
                                           output_padding=int(upsample) - 1, groups=self.A)
-        self.norm = LaneNorm(self.lane, lane_norm)
+        self.norm = LaneNorm(self.lane, deconv_norm)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """`[B, L, A, lane] -> [B, L*upsample, A, lane]`."""
@@ -163,13 +211,13 @@ class LaneDeconvBlock(nn.Module):
 class SymmetricDecoder(nn.Module):
     """Grouped deconv trunk + per-assay per-layer FiLM + depth-offset log-linked NB head.
 
-    Accepts either a dense latent `[B, L2, d]` (set `in_dense_dim`, used by the non-lane arms) or a
-    lane latent `[B, L2, T, C]` (set `in_lane_width`). On the lane path the input projection is
-    per-lane, so `input_proj` stops being a cross-assay mixer; on the dense path it still is, and
-    tap 0 is what re-establishes assay identity afterwards.
+    Accepts either a dense latent `[B, L2, d]` (`in_dense_dim` — what the shipped encoder emits) or
+    a lane latent `[B, L2, T, C]` (`in_lane_width`). On the dense path `input_proj` is a cross-assay
+    mixer and the `pre_deconv` tap is what re-establishes assay identity afterwards; on the lane path
+    the projection is per-lane, so it never mixes and the tap is conditioning rather than repair.
 
-    Head arithmetic is unchanged from `candi_kit.model.DualCondDecoder` so the objective, the depth
-    offset and the h74 reference offset are all comparable across arms:
+    Head arithmetic is the recorded one, so the objective, the depth offset and the reference offset
+    stay comparable to every run already on disk:
         log2_mu = (d - depth_center) + eta   [offset ON and depth not a sentinel]
         log2_mu = eta                        [otherwise]
         log2_mu += log_ref                   [when a reference is supplied]
@@ -182,11 +230,19 @@ class SymmetricDecoder(nn.Module):
                  use_offset: bool = True, depth_center: float = 25.1, mu_eps: float = 1e-6,
                  log2_mu_clamp: tuple = (-15.0, 30.0), use_layernorm: bool = True,
                  depth_row: int = 0, num_cells: int = 0, meta_gain: float = 1.0,
-                 lane_norm: str = "lane") -> None:
+                 deconv_norm: str = "lane",
+                 film_taps: tuple = ("pre_deconv", "per_deconv"), film_init: str = "zero",
+                 head_sharing: str = "shared", head_hidden: int = 0) -> None:
         super().__init__()
         if (in_dense_dim is None) == (in_lane_width is None):
             raise ValueError("give exactly one of in_dense_dim (dense latent) or in_lane_width "
                              "(lane latent)")
+        taps = tuple(film_taps)
+        unknown = [t for t in taps if t not in DECODER_FILM_TAPS]
+        if unknown:
+            raise ValueError(f"unknown decoder film taps {unknown}; valid: {DECODER_FILM_TAPS}")
+        if str(head_sharing) not in HEAD_SHARINGS:
+            raise ValueError(f"head_sharing must be one of {HEAD_SHARINGS}; got {head_sharing!r}")
         self.A = int(num_assays)
         self.lane = int(lane)
         self.use_offset = bool(use_offset)
@@ -207,29 +263,49 @@ class SymmetricDecoder(nn.Module):
             _init_grouped_weight(self.w_in, int(in_lane_width), self.lane)
 
         self.blocks = nn.ModuleList([
-            LaneDeconvBlock(self.A, self.lane, int(conv_kernel_size), int(upsample), lane_norm)
+            LaneDeconvBlock(self.A, self.lane, int(conv_kernel_size), int(upsample), deconv_norm)
             for _ in range(int(n_deconv_layers))
         ])
-        # one tap after input_proj + one after each deconv
-        self.film_layers = nn.ModuleList([
-            PerLaneFiLM(int(meta_embed_dim), self.lane)
-            for _ in range(int(n_deconv_layers) + 1)
-        ])
-        self.head_eta = nn.Sequential(nn.Linear(self.lane, self.lane), nn.GELU(),
-                                      nn.Linear(self.lane, 1))
-        self.head_n = nn.Sequential(nn.Linear(self.lane, self.lane), nn.GELU(),
-                                    nn.Linear(self.lane, 1))
+        # Index 0 is the `pre_deconv` tap (right after input_proj); indices 1..n are `per_deconv`,
+        # one after each block. A disabled tap becomes a `NoFiLM` rather than disappearing, so the
+        # indices never renumber — see `NoFiLM`.
+        def _tap(kind: str) -> nn.Module:
+            if kind in taps:
+                return PerLaneFiLM(int(meta_embed_dim), self.lane, film_init)
+            return NoFiLM()
+
+        self.film_layers = nn.ModuleList(
+            [_tap("pre_deconv")] + [_tap("per_deconv") for _ in range(int(n_deconv_layers))]
+        )
+        hidden = int(head_hidden) if int(head_hidden) > 0 else self.lane
+        self.head_sharing = str(head_sharing)
+        if self.head_sharing == "shared":
+            self.head_eta = nn.Sequential(nn.Linear(self.lane, hidden), nn.GELU(),
+                                          nn.Linear(hidden, 1))
+            self.head_n = nn.Sequential(nn.Linear(self.lane, hidden), nn.GELU(),
+                                        nn.Linear(hidden, 1))
+        else:
+            self.head_eta = PerLaneHead(self.A, self.lane, hidden)
+            self.head_n = PerLaneHead(self.A, self.lane, hidden)
         self.meta_embedding = MetadataEmbedding(
             num_assays=self.A, embed_dim=int(meta_embed_dim),
             use_layernorm=bool(use_layernorm), num_cells=int(num_cells))
+        # BUILT LAST, AND THAT IS THE WHOLE POINT. `post_head` is purely additive and off by default,
+        # so switching it on should add a tap and change NOTHING else. Constructed anywhere earlier it
+        # would consume RNG draws — `nn.Linear.__init__` samples before `init_film_proj` zeroes it —
+        # and every module after it would land on different weights, so the arm would differ from its
+        # control in a re-sampled trunk as well as in the tap. That is the failure the encoder's
+        # `metadata_embedding` overwrite records; this is the same lesson applied forward.
+        self.film_head = (PerLaneFiLM(int(meta_embed_dim), 2, film_init)
+                          if "post_head" in taps else None)
 
     def forward(self, z: torch.Tensor, y_meta: torch.Tensor,
                 log_ref: Optional[torch.Tensor] = None,
                 memb: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
-        # `memb` lets the split-conditioning arms (a3/a5) share ONE y_meta embedding between the
-        # decoder-side axial blocks and this trunk, so the two are conditioned on the same vector
-        # and the covariate gradient has a single path to attribute. None = embed here, which is
-        # what the non-lane arms do and what keeps them comparable to candi_kit.
+        # `memb` lets a caller supply the y_meta embedding instead of having this trunk compute it,
+        # so a variant that conditions something else on the SAME vector has one path for the
+        # covariate gradient to flow through rather than two. None = embed here, which is what the
+        # shipped model does.
         if memb is None:
             memb = self.meta_embedding(y_meta.float())          # [B, A, E]
         if self.meta_gain != 1.0:
@@ -251,6 +327,19 @@ class SymmetricDecoder(nn.Module):
 
         eta = self.head_eta(feat).squeeze(-1)                    # [B, L, A]
         raw_n = self.head_n(feat).squeeze(-1)
+        if self.film_head is not None:
+            # The two head outputs as one 2-channel lane, so the tap is the same `PerLaneFiLM` the
+            # trunk uses rather than a second kind of conditioning with its own arithmetic.
+            #
+            # `.contiguous()` IS LOAD-BEARING AND IS NOT TIDYING. Slicing the stacked pair yields a
+            # STRIDED view, and the arithmetic below — softplus, pow, the division for p — picks a
+            # different kernel for a strided input than for a contiguous one. At zero init this tap
+            # is algebraically an exact identity, so switching it on must change nothing; without the
+            # copy it moved `p` by one ULP anyway, purely through memory layout. A tap that is
+            # supposed to be a no-op at init and is not is exactly the thing the golden gate exists
+            # to refuse, and this is where the test caught it.
+            pair = self.film_head(torch.stack([eta, raw_n], dim=-1), memb)
+            eta, raw_n = pair[..., 0].contiguous(), pair[..., 1].contiguous()
 
         depth = y_meta[:, self.depth_row, :]                     # [B, A]
         valid = (depth != MISSING) & (depth != CLOZE)

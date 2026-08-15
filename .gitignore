@@ -11,3 +11,13 @@ __pycache__/
 # the parent repo's .gitignore:14-16 has unanchored `logs/`, `jobs/` and `models/` rules that
 # would swallow it from above. Same reason the scripts live in slurm/ and not jobs/.
 slurm/logs/
+
+# Agent scratch. `.claude/worktrees/` holds whole extra checkouts of this repo — 1 MB each and
+# growing — which an unfiltered `rsync ./` to the cluster will happily carry along.
+.claude/
+
+# Recorded golden references (`tools/golden.py save`). Machine-local by design: the point is to
+# record the tree in front of you and check the next edit against it, so a committed one would
+# be a stale claim about somebody else's checkout.
+*.golden*.pt
+.golden_*.pt

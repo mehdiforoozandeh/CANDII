@@ -246,9 +246,8 @@ python -m candi.train \
 `{out_dir}/{tag}.ckpt`. Both arms × 3 seeds as one array: `sbatch "$KIT/slurm/train.sh"`
 (~85 min wall per arm on one `1g.10gb` MIG slice; host RSS 15–18 GiB is the binding constraint).
 
-`--compat-q19` pins the q19 architecture knobs (`embed_dim=32, dropout=0.1, n_transformer_layers=2,
-feat_per_assay=16, depth_center=25.1, d_model=0, nhead=4`) and refuses an h5 that is not 8-assay /
-768-bin (`train.py:220-222`).
+The full tunable surface — geometry, normalisation, FiLM taps and init, head sharing, LR schedule and
+clip — is tabulated in the README. Every flag defaults to the shipped model.
 
 ### 4.5 Evaluate an existing checkpoint
 
@@ -257,24 +256,40 @@ python -m candi.eval \
   --h5 /scratch/$USER/candi/q19.h5 \
   --ckpt /scratch/$USER/candi/runs/kit_on_s0.ckpt \
   --out /scratch/$USER/candi/runs/kit_on_s0_rescore.json \
+  --arch-from /scratch/$USER/candi/runs/kit_on_s0.json \
   --offset on --m3-regions 40 --n-boot 1000 --eval-budget 50000000
 ```
 
-The architecture flags must match those the checkpoint was trained with, or the `strict=True` load
-fails loudly (`eval.py:1094`). Add `--include-deprecated` to also emit the audited-and-rejected metric
-keys, each carrying its verdict string. Figures + markdown from a results JSON:
+**Always pass `--arch-from`, pointing at the run's own JSON.** Every architecture flag changes the
+`state_dict`, so a checkpoint can only be reloaded by a model built from the same arguments; that
+file carries them under `config.arch`, so nothing has to be retyped and nothing can be retyped wrong.
+Without it the flags must be matched by hand, and a mismatch is a `strict=True` load failure at best.
+Add `--include-deprecated` to also emit the audited-and-rejected metric keys, each carrying its
+verdict string. Figures + markdown from a results JSON:
 `python -m candi.report <results.json> --outdir DIR`.
 
 ### 4.6 Add a knob
 
-1. Add the argparse flag in `train.py:270-307` (and/or `eval.py:1062-1085` if it affects scoring).
-2. Thread it through `train_and_eval` (`train.py:209-215`) into `build_real_model` / `train` /
-   `evaluate` — do not read globals. (The eval-only CLI's flags live at `eval.py:1062-1082`.)
-3. Add it to the `config` echo dict (`train.py:249-265`) so every results JSON is self-describing.
-4. If it changes model construction, it **must** default to the q19 value, and `--compat-q19` must
-   pin it (`train.py:309-313`). Then re-run §5 Gate A.
+1. Add the keyword to `CandiModel.__init__` (`model.py`) with the CURRENT behaviour as its default.
+   `arch_keys()` reads the signature, so the knob joins `config.arch` — and therefore `--arch-from`
+   — without a second edit.
+2. Add the argparse flag in `train.py:main`, and thread it through `train_and_eval` into the `arch`
+   dict / `train` / `evaluate`. Do not read globals.
+3. Add it to `tests/test_flags.py`: to `DOCUMENTED_DEFAULTS` (its default must be a no-op) and to
+   `NON_DEFAULTS` (flipping it must change the model). **The second one is the one that matters** —
+   a flag that does nothing when flipped documents a control nobody has, and that has shipped here
+   before.
+4. If it changes model construction, run `python tools/golden.py check .golden_stage0.pt`. It must
+   report 0 ULP. If it cannot, the change is not a knob — it is a new model, and it needs its own
+   recorded golden and a labelled commit saying so.
 5. If it is scale (`num_assays`, `context_bins`, `resolution`, `dsf_list`, chroms), it is **not** a
    knob — it belongs in the panel and the h5 attrs (invariant 10).
+
+**Anything purely additive and default-off must be constructed LAST in its parent module.** An
+`nn.Linear` draws from the global RNG before any re-init overwrites it, so a module inserted
+mid-constructor re-samples everything built after it — and the arm then differs from its control in
+a re-sampled trunk as well as in the thing under test. `decoder.SymmetricDecoder.film_head` carries
+the worked example.
 
 ### 4.7 Change the panel size
 

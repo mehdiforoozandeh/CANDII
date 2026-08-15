@@ -33,16 +33,25 @@ class EncoderConfig:
     expansion_factor: int = 2
     conv_kernel_size: int = 3
     pool_size: int = 2
-    conv_norm: Literal["layer", "group", "batch", "lane"] = "layer"
+    conv_norm: Literal["layer", "group", "batch", "lane", "instance"] = "layer"
 
     # DNA tower
+    # dna_pool_size is DERIVED, never chosen: the tower's two large pools have to collapse exactly
+    # `resolution` bp into one bin, so dna_pool_size == isqrt(resolution). `CandiModel` computes it
+    # from the panel's resolution and this field is what it writes. Setting it by hand is how a 25 bp
+    # panel silently gets read at 100 bp.
     dna_pool_size: int = 5
     dna_pool_order: Literal["late", "early"] = "late"
 
     # Metadata FiLM conditioning placement
     film_mode: Literal[
-        "pre_conv", "post_conv", "per_conv", "per_conv_and_transformer"
+        "off", "pre_conv", "post_conv", "per_conv", "per_conv_and_transformer"
     ] = "per_conv_and_transformer"
+    # How the encoder's FiLM projections are initialised. `xavier` is the historical pair
+    # (Xavier-uniform weight + N(0, 0.1) bias) and is the only value that reproduces a recorded run:
+    # every option here draws a different number of samples from the global RNG, so changing it
+    # re-samples every module built after the tower.
+    film_init: Literal["xavier", "zero", "normal"] = "xavier"
 
     # Missing-data handling
     missing_data_mode: Literal["mask_stem", "mask_token"] = "mask_token"
@@ -59,6 +68,13 @@ class EncoderConfig:
     transformer_type: Literal[
         "dual", "xtransformers", "production_dual"
     ] = "xtransformers"
+    # Which normaliser each transformer sub-layer uses, and where it sits relative to the residual.
+    # Both are passed through to x-transformers, and BOTH ARE ONLY ADDED TO THE CALL WHEN THEY DIFFER
+    # FROM THE DEFAULT, so the shipped model's call is unchanged. The valid sets live in
+    # `encoder.TRANSFORMER_NORM_KW` / `TRANSFORMER_PLACEMENT_KW` and are pinned to what the installed
+    # x-transformers actually accepts — see the note there for why `resi_dual` is not among them.
+    transformer_norm: Literal["layer", "rmsnorm", "simple_rmsnorm", "scalenorm"] = "layer"
+    transformer_norm_placement: Literal["pre", "post", "sandwich"] = "pre"
     dropout: float = 0.1
     attn_qk_norm: bool = False  # normalize Q/K vectors before attention (xtransformers)
     transformer_layer_drop: float = 0.0  # stochastic depth: drop transformer layers with this prob (train only)

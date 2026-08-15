@@ -95,6 +95,7 @@ def _make_ds(h5_path, *, cell_cond: str, train: bool, batch_size: int, seed: int
 def _build(ds: CandiKitH5Dataset, depth_center: float, device: str, seed: int = 0):
     torch.manual_seed(seed)
     return build_model(num_assays=ds.num_assays, context_length=ds.context_bins,
+                            resolution=int(ds.resolution),
                             depth_center=depth_center, num_cells=ds.num_cells, **PROBE).to(device)
 
 
@@ -306,6 +307,7 @@ def check_W4(ds_off: CandiKitH5Dataset, ds_on: CandiKitH5Dataset, depth_center: 
     m_off = _build(ds_off, depth_center, device)
     torch.manual_seed(0)
     ref = build_model(num_assays=ds_off.num_assays, context_length=ds_off.context_bins,
+                           resolution=int(ds_off.resolution),
                            depth_center=depth_center, num_cells=0, **PROBE).to(device)
 
     def sig(m):

@@ -41,7 +41,8 @@ from candi.batch import make_masker, prepare_masked_batch
 from candi.eval import evaluate
 from candi.dataset import CandiKitH5Dataset, h5_depth_center
 from candi.meta_probe import DEFAULT_META_PROBE_DELTA, META_PROBE_MODES, make_meta_probe
-from candi.model import build_model, forward_full
+from candi.encoder import FILM_INITS
+from candi.model import DEFAULT_FILM_TAPS, build_model, forward_full, parse_film_taps
 
 
 
@@ -85,14 +86,30 @@ def nb_count_loss(out, prep, imp_weight: float = 1.0):
     return lo + imp_weight * li, terms
 
 
-def cosine_warmup(opt, total_steps, warmup_frac=0.1, min_ratio=0.1):
+LR_SCHEDULES = ("cosine", "linear", "constant")
+
+
+def make_lr_schedule(opt, total_steps, schedule="cosine", warmup_frac=0.1, min_ratio=0.1):
+    """Linear warmup, then decay to `min_ratio` of the peak LR.
+
+    `cosine` at the default 0.1 / 0.1 is the frozen historical schedule, character for character —
+    every recorded run used it, and it is what `tests/test_flags.py` pins. `linear` decays on a
+    straight line to the same floor; `constant` holds the peak after warmup, which is the right
+    control when the question is whether the decay itself is doing the work.
+    """
+    if schedule not in LR_SCHEDULES:
+        raise ValueError(f"lr_schedule must be one of {LR_SCHEDULES}; got {schedule!r}")
     warm = max(1, int(warmup_frac * total_steps))
 
     def fn(s):
         if s < warm:
             return s / warm
         t = (s - warm) / max(1, total_steps - warm)
-        return min_ratio + 0.5 * (1 - min_ratio) * (1 + math.cos(math.pi * t))
+        if schedule == "cosine":
+            return min_ratio + 0.5 * (1 - min_ratio) * (1 + math.cos(math.pi * t))
+        if schedule == "linear":
+            return min_ratio + (1 - min_ratio) * (1 - t)
+        return 1.0                                   # constant: hold the peak after warmup
 
     return torch.optim.lr_scheduler.LambdaLR(opt, fn)
 
@@ -244,11 +261,12 @@ def _grad_norms(model) -> dict:
     return out
 
 
-CLIP_NORM = 1.0
+CLIP_NORM = 1.0            # the frozen default; `--clip-norm` overrides it per run
 
 
 def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
-                imp_weight: float = 1.0, probe=None, clip_state=None):
+                imp_weight: float = 1.0, probe=None, clip_state=None,
+                clip_norm: float = CLIP_NORM):
     # The probe (when present) captures exactly this forward pass and nothing else. Its hooks return
     # on their first statement while unarmed, so the 24 of every 25 steps that do not log pay nothing,
     # and a hook that returns None cannot alter the module output — the arithmetic is unchanged.
@@ -267,12 +285,12 @@ def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
     # clip_grad_norm_ RETURNS the pre-clip total norm, which is the only way to see whether the 1.0
     # threshold binds — and with imp_weight > 1 raising the gradient scale, whether it now binds more
     # often than it did in h73.
-    total = torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP_NORM)
+    total = torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
     if clip_state is not None:
         # Accumulated ON DEVICE as a tensor. `float(total)` would be a host synchronisation on every
         # step; comparing and summing in torch keeps the hot path free of one, and the single `.item()`
         # happens on logging steps, which already synchronise.
-        hit = (total > CLIP_NORM).float()
+        hit = (total > clip_norm).float()
         clip_state["binds"] = hit if clip_state["binds"] is None else clip_state["binds"] + hit
         clip_state["steps"] += 1
     if want_grads:
@@ -290,7 +308,9 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
           log_every=0, full_coverage=False, p_full_assay=1.0, mask_fraction=0.2,
           cell_cond="off", log_fn=None, reference=None, imp_weight=1.0, unmask_frac=0.0,
           eval_hook=None, eval_every=3, terms_out=None,
-          optimizer="adam", trunk_wd=0.0, meta_probe=None) -> list:
+          optimizer="adam", trunk_wd=0.0, meta_probe=None,
+          lr_schedule="cosine", warmup_frac=0.1, lr_min_ratio=0.1,
+          clip_norm=CLIP_NORM) -> list:
     if p_full_assay == 1.0 and mask_fraction != 0.2:
         print("[train] WARNING: --mask-fraction is INERT under --p-full-assay 1.0 "
               "(DataMasker._mask_full_assay never reads it)", flush=True)
@@ -382,7 +402,8 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
             ds._ram_buf = shared                     # share the single 1.6 GB buffer (no duplication)
             datasets.append(ds)
         per_epoch = sum(d.estimate_steps_per_epoch() for d in datasets)
-        sched = cosine_warmup(opt, max(1, epochs * per_epoch))
+        sched = make_lr_schedule(opt, max(1, epochs * per_epoch), lr_schedule,
+                                 warmup_frac, lr_min_ratio)
         print(f"[train] full-coverage: {len(bios)} T_ biosamples x all train windows "
               f"= ~{per_epoch} batches/epoch x {epochs} epochs", flush=True)
         for ep in range(epochs):
@@ -409,7 +430,8 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
                         meta_probe.apply(prep)
                     want = bool(log_fn) and (step % 25 == 0)
                     terms = _train_step(model, prep, opt, sched, losses, want_grads=want,
-                                        imp_weight=imp_weight, probe=probe, clip_state=clip_state)
+                                        imp_weight=imp_weight, probe=probe,
+                                        clip_state=clip_state, clip_norm=clip_norm)
                     step += 1
                     pace["n"] += 1
                     if want:
@@ -437,7 +459,8 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
     ds = CandiKitH5Dataset(h5_path, regime, train=True, batch_size=batch_size, biosample_prefix="T_",
                            dsf_sampling=dsf_sampling, seed=seed, shuffle=True, cell_cond=cell_cond,
                            reference=reference)
-    sched = cosine_warmup(opt, epochs * steps_per_epoch)
+    sched = make_lr_schedule(opt, epochs * steps_per_epoch, lr_schedule,
+                             warmup_frac, lr_min_ratio)
     for ep in range(epochs):
         model.train()
         ds.seed = seed + ep                          # per-epoch variety (RAM buffer persists)
@@ -458,7 +481,8 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
                 meta_probe.apply(prep)
             want = bool(log_fn) and (step % 25 == 0)
             terms = _train_step(model, prep, opt, sched, losses, want_grads=want,
-                                imp_weight=imp_weight, probe=probe, clip_state=clip_state)
+                                imp_weight=imp_weight, probe=probe, clip_state=clip_state,
+                                clip_norm=clip_norm)
             step += 1
             pace["n"] += 1
             if want:
@@ -663,7 +687,14 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                    depth_center=None, d_model=0, nhead=4, p_full_assay=1.0, mask_fraction=0.2,
                    eval_batch_size=4, eval_max_batches=None, fg_frac=0.02, n_boot=1000,
                    eval_budget=200_000, m3_regions=8, include_deprecated=False, log_every=0,
-                   full_coverage=False, decoder_lane=8, lane_norm="lane",
+                   full_coverage=False, decoder_lane=8, deconv_norm="lane",
+                   resolution=None, n_cnn_layers=3, conv_kernel_size=3, pool_size=2,
+                   expansion_factor=2, n_deconv_layers=3, deconv_upsample=2, deconv_kernel_size=3,
+                   conv_norm="layer", transformer_norm="layer", transformer_norm_placement="pre",
+                   attn_qk_norm=False, film_taps=DEFAULT_FILM_TAPS,
+                   film_init_encoder="xavier", film_init_decoder="zero",
+                   head_sharing="shared", head_hidden=0,
+                   lr_schedule="cosine", warmup_frac=0.1, lr_min_ratio=0.1, clip_norm=CLIP_NORM,
                    ckpt_path=None, cell_cond="off",
                    wandb_project=None, wandb_run_name=None, reference="off", reference_path=None,
                    reference_pseudocount=None, imp_weight=1.0, unmask_frac=0.0,
@@ -695,17 +726,33 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
         torch.backends.cudnn.benchmark = False
     torch.manual_seed(seed)
     # num_cells comes from the h5's own biosample list, never from a flag — same rule as num_assays.
-    arm_kw = dict(embed_dim=embed_dim, dropout=dropout,
-                  depth_center=depth_center, use_offset=use_offset,
-                  num_assays=ds.num_assays, context_length=ds.context_bins,
-                  d_model=d_model, nhead=nhead, num_cells=ds.num_cells,
-                  meta_embed_layernorm=bool(meta_embed_layernorm), meta_gain=float(meta_gain))
-    arm_kw.update(decoder_lane=int(decoder_lane), lane_norm=str(lane_norm),
-                  n_transformer_layers=int(n_transformer_layers))
-    model = build_model(**arm_kw).to(device)
+    # THE ARCHITECTURE, as one dict. It is what `build_model` is called with AND what lands in the
+    # run JSON as `config.arch`, so `candi.eval --arch-from <run>.json` rebuilds exactly this model
+    # without a single flag being retyped. Scale (num_assays, context_bins, resolution, num_cells)
+    # still comes from the h5 and is never a flag.
+    arch = dict(embed_dim=embed_dim, dropout=dropout,
+                depth_center=depth_center, use_offset=use_offset,
+                num_assays=ds.num_assays, context_length=ds.context_bins,
+                resolution=int(ds.resolution if resolution is None else resolution),
+                d_model=d_model, nhead=nhead, num_cells=ds.num_cells,
+                meta_embed_layernorm=bool(meta_embed_layernorm), meta_gain=float(meta_gain),
+                decoder_lane=int(decoder_lane), deconv_norm=str(deconv_norm),
+                n_transformer_layers=int(n_transformer_layers),
+                n_cnn_layers=int(n_cnn_layers), conv_kernel_size=int(conv_kernel_size),
+                pool_size=int(pool_size), expansion_factor=int(expansion_factor),
+                n_deconv_layers=int(n_deconv_layers), deconv_upsample=int(deconv_upsample),
+                deconv_kernel_size=int(deconv_kernel_size),
+                conv_norm=str(conv_norm), transformer_norm=str(transformer_norm),
+                transformer_norm_placement=str(transformer_norm_placement),
+                attn_qk_norm=bool(attn_qk_norm),
+                film_taps=list(parse_film_taps(film_taps)),
+                film_init_encoder=str(film_init_encoder),
+                film_init_decoder=str(film_init_decoder),
+                head_sharing=str(head_sharing), head_hidden=int(head_hidden))
+    model = build_model(**arch).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"[train] params={n_params:,} (decoder_lane={decoder_lane} lane_norm={lane_norm} "
-          f"attn_depth={n_transformer_layers})", flush=True)
+    print(f"[train] params={n_params:,} (decoder_lane={decoder_lane} deconv_norm={deconv_norm} "
+          f"attn_depth={n_transformer_layers} film_taps={','.join(arch['film_taps'])})", flush=True)
     if float(meta_gain) != 1.0:
         print(f"[train] meta_gain={float(meta_gain)} (h76): `memb` is scaled by this FIXED, "
               "non-learnable factor immediately before decoder.film_proj. This is NOT the control "
@@ -823,7 +870,8 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                    log_fn=log_fn, reference=ref, imp_weight=imp_weight, unmask_frac=unmask_frac,
                    eval_hook=(eval_hook if eval_every else None), eval_every=eval_every,
                    terms_out=terms_log, optimizer=optimizer, trunk_wd=trunk_wd,
-                   meta_probe=mprobe)
+                   meta_probe=mprobe, lr_schedule=lr_schedule, warmup_frac=warmup_frac,
+                   lr_min_ratio=lr_min_ratio, clip_norm=clip_norm)
     model.eval()
     if ckpt_path:
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
@@ -884,8 +932,13 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                      include_deprecated=include_deprecated,
                      # The model identity. `n_params` rides along because it is the first thing any
                      # reader comparing two runs wants, and it cannot be reconstructed from the rest.
-                     decoder_lane=int(decoder_lane), lane_norm=str(lane_norm),
-                     n_params=int(n_params),
+                     decoder_lane=int(decoder_lane), deconv_norm=str(deconv_norm),
+                     # `lane_norm` is the pre-rename spelling of the same value, mirrored so a diff
+                     # against a candi_kit2 ladder JSON still lines up on this field.
+                     lane_norm=str(deconv_norm),
+                     arch=dict(arch), n_params=int(n_params),
+                     lr_schedule=str(lr_schedule), warmup_frac=float(warmup_frac),
+                     lr_min_ratio=float(lr_min_ratio), clip_norm=float(clip_norm),
                      cell_cond=cell_cond, num_cells=int(ds.num_cells),
                      # h75: recorded here as well as in the W&B config, so a reader of the run JSON
                      # cannot mistake an LN-off run for a control.
@@ -991,15 +1044,81 @@ def main():
     ap.add_argument("--m3-regions", type=int, default=8)
     ap.add_argument("--include-deprecated", action="store_true",
                     help="also emit the deprecated metric keys, each with its verdict string attached")
-    ap.add_argument("--lane-norm", default="lane", choices=["lane", "group"],
-                    help="how EVERY per-assay normaliser in the lane path pools its statistic — the "
-                         "conv tower, the fusion and the deconv trunk, one switch. Both are "
+    # -- geometry ---------------------------------------------------------------------------------
+    # The encoder's total downsampling and the decoder's total upsampling MUST agree; `build_model`
+    # refuses the pair before anything is constructed. `--dna-pool-size` is deliberately NOT a flag:
+    # it is isqrt(resolution), derived from the panel the h5 declares.
+    ap.add_argument("--n-cnn-layers", type=int, default=3,
+                    help="conv blocks in the signal tower. Each halves the sequence by --pool-size "
+                         "and multiplies the per-assay channel count by --expansion-factor.")
+    ap.add_argument("--conv-kernel-size", type=int, default=3)
+    ap.add_argument("--pool-size", type=int, default=2)
+    ap.add_argument("--expansion-factor", type=int, default=2)
+    ap.add_argument("--n-deconv-layers", type=int, default=3)
+    ap.add_argument("--deconv-upsample", type=int, default=2)
+    ap.add_argument("--deconv-kernel-size", type=int, default=3)
+    # -- normalisation ------------------------------------------------------------------------------
+    ap.add_argument("--conv-norm", default="layer",
+                    choices=["layer", "lane", "group", "batch", "instance"],
+                    help="normaliser after every conv in BOTH towers. 'layer' is the shipped default "
+                         "and, despite the grouped conv, pools its statistic across the WHOLE panel "
+                         "at each position — so the conv tower is not per-assay under it, and never "
+                         "has been (see encoder.ConvBlock). 'lane' is the same statistic computed "
+                         "within one assay; 'group' additionally pools positions; 'instance' pools "
+                         "positions per channel and mixes nothing.")
+    ap.add_argument("--deconv-norm", default="lane", choices=["lane", "group"],
+                    help="how the deconv trunk's per-assay normaliser pools its statistic. Both are "
                          "per-assay and neither leaks. 'lane' = the C channels of one lane AT EACH "
                          "POSITION, which fixes that lane's energy per bin so amplitude survives only "
                          "as a pattern across C. 'group' = the nn.GroupNorm statistic at assay "
                          "granularity — the C channels ACROSS ALL POSITIONS — which removes the "
-                         "lane's overall scale and leaves the profile along the genome intact. Lane "
-                         "arms only.")
+                         "lane's overall scale and leaves the profile along the genome intact. "
+                         "(Renamed from --lane-norm: the old name collided with its own first value.)")
+    ap.add_argument("--transformer-norm", default="layer",
+                    choices=["layer", "rmsnorm", "simple_rmsnorm", "scalenorm"],
+                    help="norm inside each x-transformers block.")
+    ap.add_argument("--transformer-norm-placement", default="pre",
+                    choices=["pre", "post", "sandwich"],
+                    help="where that norm sits relative to the residual. 'resi_dual' was in the "
+                         "agreed set and is NOT offered: the pinned x-transformers does not accept "
+                         "the keyword, so the choice would have raised the moment it was selected.")
+    ap.add_argument("--attn-qk-norm", action="store_true",
+                    help="normalise Q and K before attention (x-transformers attn_qk_norm).")
+    # -- conditioning -------------------------------------------------------------------------------
+    ap.add_argument("--film-taps", default=",".join(DEFAULT_FILM_TAPS),
+                    help="comma-separated set naming EVERY place metadata conditioning enters, both "
+                         "towers. Encoder: pre_conv | per_conv | post_conv (alternative placements "
+                         "of one FiLM — pick at most one) and per_transformer (requires per_conv). "
+                         "Decoder: pre_deconv, per_deconv, post_head. Default "
+                         f"'{','.join(DEFAULT_FILM_TAPS)}'. An empty string removes conditioning "
+                         "entirely, which is the null control for every metadata question.")
+    ap.add_argument("--film-init-encoder", default="xavier", choices=list(FILM_INITS),
+                    help="init of the conv tower's FiLM projections. xavier = live from step 0 (the "
+                         "historical pair: Xavier-uniform weight, N(0,0.1) bias).")
+    ap.add_argument("--film-init-decoder", default="zero", choices=list(FILM_INITS),
+                    help="init of the decoder's FiLM projections. zero = adaLN-zero, so the decoder "
+                         "is born un-conditioned and steering is learned. CHANGING EITHER MOVES THE "
+                         "GLOBAL RNG STREAM, so a non-default init is not comparable weight-for-"
+                         "weight with a recorded run even at the same seed.")
+    # -- heads --------------------------------------------------------------------------------------
+    ap.add_argument("--head-sharing", default="shared", choices=["shared", "per_assay"],
+                    help="shared = ONE small MLP reads every assay's lane (the shipped default, 1/A "
+                         "the parameters). per_assay = A independent copies. The shared head assumes "
+                         "the four FiLM taps have already put assay identity in the lane; that is "
+                         "reasonable and unmeasured, which is why the alternative is here.")
+    ap.add_argument("--head-hidden", type=int, default=0,
+                    help="hidden width of each head MLP. 0 = match the decoder lane width.")
+    # -- optimisation -------------------------------------------------------------------------------
+    ap.add_argument("--lr-schedule", default="cosine", choices=list(LR_SCHEDULES))
+    ap.add_argument("--warmup-frac", type=float, default=0.1,
+                    help="fraction of total steps spent warming the LR up linearly from 0.")
+    ap.add_argument("--lr-min-ratio", type=float, default=0.1,
+                    help="floor of the decay, as a fraction of the peak LR. Inert under "
+                         "--lr-schedule constant.")
+    ap.add_argument("--clip-norm", type=float, default=CLIP_NORM,
+                    help="global grad-norm clip. The pre-clip norm is logged as grad/total_preclip "
+                         "and the bind rate as train/clip_bind_frac, so a threshold that has stopped "
+                         "binding is visible rather than assumed.")
     ap.add_argument("--decoder-lane", type=int, default=8,
                     help="channels per assay inside the grouped deconv trunk. Held CONSTANT across "
                          "all three upsample stages rather than tapering 8->4->2->1, so the final "
@@ -1074,10 +1193,11 @@ def main():
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    tag = a.tag or f"candi_{a.lane_norm}_ep{a.epochs}_seed{a.seed}"
+    tag = a.tag or f"candi_{a.deconv_norm}_ep{a.epochs}_seed{a.seed}"
     meta_ln = (a.meta_embed_layernorm == "on")
-    print(f"[run] lane_norm={a.lane_norm} decoder_lane={a.decoder_lane} "
-          f"attn_depth={a.n_transformer_layers}\n"
+    print(f"[run] deconv_norm={a.deconv_norm} decoder_lane={a.decoder_lane} "
+          f"attn_depth={a.n_transformer_layers} conv_norm={a.conv_norm} "
+          f"film_taps={a.film_taps or '(none)'}\n"
           f"[run] tag={tag} device={device} full_coverage={a.full_coverage} "
           f"eval_max_batches={a.eval_max_batches or 'ALL'} reference={a.reference} "
           f"imp_weight={a.imp_weight} unmask_frac={a.unmask_frac} "
@@ -1098,7 +1218,17 @@ def main():
         eval_max_batches=(a.eval_max_batches or None), fg_frac=a.fg_frac, n_boot=a.n_boot,
         eval_budget=a.eval_budget, m3_regions=a.m3_regions, include_deprecated=a.include_deprecated,
         log_every=200, full_coverage=a.full_coverage,
-        decoder_lane=a.decoder_lane, lane_norm=a.lane_norm,
+        decoder_lane=a.decoder_lane, deconv_norm=a.deconv_norm,
+        n_cnn_layers=a.n_cnn_layers, conv_kernel_size=a.conv_kernel_size, pool_size=a.pool_size,
+        expansion_factor=a.expansion_factor, n_deconv_layers=a.n_deconv_layers,
+        deconv_upsample=a.deconv_upsample, deconv_kernel_size=a.deconv_kernel_size,
+        conv_norm=a.conv_norm, transformer_norm=a.transformer_norm,
+        transformer_norm_placement=a.transformer_norm_placement, attn_qk_norm=a.attn_qk_norm,
+        film_taps=a.film_taps, film_init_encoder=a.film_init_encoder,
+        film_init_decoder=a.film_init_decoder,
+        head_sharing=a.head_sharing, head_hidden=a.head_hidden,
+        lr_schedule=a.lr_schedule, warmup_frac=a.warmup_frac, lr_min_ratio=a.lr_min_ratio,
+        clip_norm=a.clip_norm,
         cell_cond=a.cell_cond, ckpt_path=str(out_dir / f"{tag}.ckpt"),
         wandb_project=a.wandb_project, wandb_run_name=(a.wandb_run_name or tag),
         reference=a.reference, reference_path=a.reference_path,

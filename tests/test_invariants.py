@@ -20,7 +20,7 @@ from candi.model import build_model
 
 A, CTX, RES = 6, 24, 25
 READLENS = torch.tensor([36.0, 50.0, 76.0, 100.0, 150.0])
-LANE_NORMS_UNDER_TEST = ["lane", "group"]
+DECONV_NORMS_UNDER_TEST = ["lane", "group"]
 
 
 def _meta(B, F, seed=0, num_assays=A):
@@ -117,10 +117,10 @@ def test_grouped_deconv_does_not_mix_lanes():
         assert others.max() < 1e-6, f"assay {a} leaked across the grouped deconv"
 
 
-@pytest.mark.parametrize("lane_norm", LANE_NORMS_UNDER_TEST)
-def test_lane_norm_never_mixes_lanes(lane_norm):
+@pytest.mark.parametrize("deconv_norm", DECONV_NORMS_UNDER_TEST)
+def test_deconv_norm_never_mixes_lanes(deconv_norm):
     torch.manual_seed(0)
-    n = LaneNorm(8, lane_norm).eval()
+    n = LaneNorm(8, deconv_norm).eval()
     z = torch.randn(2, 6, A, 8)
     base = n(z)
     for a in range(A):
@@ -128,7 +128,7 @@ def test_lane_norm_never_mixes_lanes(lane_norm):
         bumped[:, :, a, :] += 5.0
         moved = (n(bumped) - base).abs().amax(dim=-1).amax(dim=1).amax(dim=0)
         others = torch.cat([moved[:a], moved[a + 1:]])
-        assert others.max() < 1e-6, f"{lane_norm}: lane {a} leaked into another lane"
+        assert others.max() < 1e-6, f"{deconv_norm}: lane {a} leaked into another lane"
 
 
 def test_group_norm_preserves_the_profile_along_the_sequence():
@@ -149,9 +149,9 @@ def test_group_norm_preserves_the_profile_along_the_sequence():
         "'group' must KEEP the amplitude difference — that is the whole point of the option"
 
 
-def test_lane_norm_reaches_every_deconv_block():
-    for mode in LANE_NORMS_UNDER_TEST:
-        m = _build(lane_norm=mode)
+def test_deconv_norm_reaches_every_deconv_block():
+    for mode in DECONV_NORMS_UNDER_TEST:
+        m = _build(deconv_norm=mode)
         modes = {blk.norm.mode for blk in m.decoder.blocks}
         assert modes == {mode}, f"deconv blocks on {modes}, expected {mode}"
 

@@ -1396,7 +1396,7 @@ def main() -> None:
     import argparse
 
     from candi.dataset import h5_depth_center
-    from candi.model import build_model
+    from candi.model import build_model, build_model_from_arch
 
     ap = argparse.ArgumentParser(description="Evaluate a trained candi checkpoint (M1/M2/M3/S14)")
     ap.add_argument("--h5", required=True)
@@ -1411,7 +1411,14 @@ def main() -> None:
     ap.add_argument("--embed-dim", type=int, default=32)
     ap.add_argument("--n-transformer-layers", type=int, default=2)
     ap.add_argument("--decoder-lane", type=int, default=8)
-    ap.add_argument("--lane-norm", default="lane", choices=["lane", "group"])
+    ap.add_argument("--deconv-norm", default="lane", choices=["lane", "group"])
+    ap.add_argument("--arch-from", default=None,
+                    help="a run's own JSON. Reads config.arch and rebuilds the EXACT model that "
+                         "wrote the checkpoint, so none of the architecture flags above need to be "
+                         "retyped and none of them can be retyped WRONG. Prefer this: every "
+                         "geometry, norm, FiLM and head flag changes the state_dict, and a "
+                         "mismatched one shows up as a strict-load failure at best and as a "
+                         "quietly different model at worst. Overrides the flags it covers.")
     ap.add_argument("--dropout", type=float, default=0.1)
     ap.add_argument("--batch-size", type=int, default=4)
     ap.add_argument("--max-batches", type=int, default=0, help="0 = all")
@@ -1437,14 +1444,28 @@ def main() -> None:
     ds = CandiKitH5Dataset(a.h5, a.regime, train=False, batch_size=a.batch_size, h5_cache_ram=False)
     depth_center = a.depth_center if a.depth_center is not None else h5_depth_center(a.h5)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_model(embed_dim=a.embed_dim, dropout=a.dropout,
-                        n_transformer_layers=a.n_transformer_layers,
-                        decoder_lane=a.decoder_lane, lane_norm=a.lane_norm,
-                        depth_center=depth_center,
-                        use_offset=a.offset in ("on", "offset_on"),
-                        num_assays=ds.num_assays, context_length=ds.context_bins,
-                        d_model=a.d_model, nhead=a.nhead,
-                        meta_embed_layernorm=(a.meta_embed_layernorm == "on")).to(device)
+    if a.arch_from:
+        arch = (json.loads(Path(a.arch_from).read_text()).get("config") or {}).get("arch")
+        if not arch:
+            raise SystemExit(f"{a.arch_from} has no config.arch block — it predates --arch-from. "
+                             "Pass the architecture flags by hand, matching the run's config.")
+        # --depth-center still wins if given explicitly: it is a data fact, not an architecture one,
+        # and re-scoring against a rebuilt reference is a legitimate reason to override it.
+        if a.depth_center is not None:
+            arch["depth_center"] = float(a.depth_center)
+        model = build_model_from_arch(arch).to(device)
+        print(f"[eval] architecture read from {a.arch_from}: "
+              f"{sum(p.numel() for p in model.parameters()):,} params", flush=True)
+    else:
+        model = build_model(embed_dim=a.embed_dim, dropout=a.dropout,
+                            n_transformer_layers=a.n_transformer_layers,
+                            decoder_lane=a.decoder_lane, deconv_norm=a.deconv_norm,
+                            depth_center=depth_center,
+                            use_offset=a.offset in ("on", "offset_on"),
+                            num_assays=ds.num_assays, context_length=ds.context_bins,
+                            resolution=int(ds.resolution),
+                            d_model=a.d_model, nhead=a.nhead,
+                            meta_embed_layernorm=(a.meta_embed_layernorm == "on")).to(device)
     model.load_state_dict(torch.load(a.ckpt, map_location=device), strict=True)
     model.eval()
 
