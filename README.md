@@ -79,7 +79,7 @@ deliberate choice, and every one of them defaults to the shipped model.
 | geometry | `--n-cnn-layers` `--conv-kernel-size` `--pool-size` `--expansion-factor` `--n-deconv-layers` `--deconv-upsample` `--deconv-kernel-size` | 3 · 3 · 2 · 2 · 3 · 2 · 3 |
 | normalisation | `--conv-norm` `layer\|lane\|group\|batch\|instance` · `--deconv-norm` `lane\|group` · `--transformer-norm` `layer\|rmsnorm\|simple_rmsnorm\|scalenorm` · `--transformer-norm-placement` `pre\|post\|sandwich` · `--attn-qk-norm` | layer · lane · layer · pre · off |
 | conditioning | `--film-taps`, a comma set over `pre_conv` `per_conv` `post_conv` `per_transformer` `pre_deconv` `per_deconv` `post_head` · `--film-init-encoder` · `--film-init-decoder` | `per_conv,pre_deconv,per_deconv` · xavier · zero |
-| heads | `--head-sharing` `shared\|per_assay` · `--head-hidden` | shared · 0 (match the lane) |
+| heads | `--head-sharing` `shared\|per_assay` · `--head-hidden` · `--heads`, a comma set over `count` `signal` `peak` | shared · 0 (match the lane) · `count` |
 | optimisation | `--lr-schedule` `cosine\|linear\|constant` · `--warmup-frac` · `--lr-min-ratio` · `--clip-norm` | cosine · 0.1 · 0.1 · 1.0 |
 
 Two guards run before anything is built. `pool_size ** n_cnn_layers` must equal
@@ -89,6 +89,12 @@ resolution and the tower geometry are the same fact.
 
 Three things stay hardcoded on purpose: the `log2_mu` clamp `(-15, 30)`, the `mu` floor `1e-6`, and
 the 4-row covariate contract. They are part of the objective, not settings.
+
+`--heads` is the one flag that changes the **objective** rather than the architecture alone. `count`
+is required and is the only head the evaluation scores; `signal` (Gaussian over the arcsinh
+log-p-value track) and `peak` (Bernoulli over the peak calls) add terms to the loss with coefficient
+1.0 and are supervised on full-depth targets only. A run naming either is therefore **not** a control
+for a run that does not — it descends a different total loss and is then scored on the NB head alone.
 
 `tests/test_flags.py` holds this surface to two claims: naming every flag at its default is
 bit-identical to naming none of them, and flipping any flag off its default changes the model. The

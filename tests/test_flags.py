@@ -24,17 +24,29 @@ import hashlib
 import pytest
 import torch
 
-from candi.decoder import DECODER_FILM_TAPS, NoFiLM, PerLaneFiLM, PerLaneHead
+from candi.decoder import (
+    DECODER_FILM_TAPS,
+    SIGNAL_HEAD_VAR_BIAS,
+    SIGNAL_HEAD_VAR_EPS,
+    GaussianSignalHead,
+    NoFiLM,
+    PeakHead,
+    PerLaneFiLM,
+    PerLaneHead,
+)
 from candi.model import (
     ALL_FILM_TAPS,
     DEFAULT_FILM_TAPS,
+    DEFAULT_HEADS,
+    HEADS,
     build_model,
     build_model_from_arch,
     arch_keys,
     film_mode_from_taps,
     parse_film_taps,
+    parse_heads,
 )
-from candi.train import CLIP_NORM, LR_SCHEDULES, make_lr_schedule
+from candi.train import CLIP_NORM, LR_SCHEDULES, aux_head_losses, make_lr_schedule
 
 A, CTX, RES = 6, 24, 25
 
@@ -50,7 +62,7 @@ DOCUMENTED_DEFAULTS = dict(
     conv_norm="layer", deconv_norm="lane", transformer_norm="layer",
     transformer_norm_placement="pre", attn_qk_norm=False,
     film_taps=DEFAULT_FILM_TAPS, film_init_encoder="xavier", film_init_decoder="zero",
-    head_sharing="shared", head_hidden=0,
+    head_sharing="shared", head_hidden=0, heads=DEFAULT_HEADS,
 )
 
 # One non-default value per flag. Each must produce a model that differs from the default in its
@@ -81,6 +93,9 @@ NON_DEFAULTS = [
     ("film_init_decoder", dict(film_init_decoder="xavier")),
     ("head_sharing", dict(head_sharing="per_assay")),
     ("head_hidden", dict(head_hidden=16)),
+    ("heads_signal", dict(heads=("count", "signal"))),
+    ("heads_peak", dict(heads=("count", "peak"))),
+    ("heads_all", dict(heads=HEADS)),
 ]
 
 
@@ -266,6 +281,90 @@ def test_post_head_tap_is_an_exact_no_op_at_init():
     assert on[0] > off[0], "post_head added no parameters"
 
 
+def test_the_shipped_model_has_the_count_head_and_nothing_else():
+    """`--heads count` is the recorded model: no optional module, no extra output key."""
+    m = build_model(**BASE)
+    assert m.decoder.heads == DEFAULT_HEADS == ("count",)
+    assert m.decoder.head_signal is None
+    assert m.decoder.head_peak is None
+    with torch.no_grad():
+        out = m(*_inputs(m))
+    assert sorted(out) == ["eta", "log2_mu", "mu", "n", "p"]
+
+
+def test_adding_a_head_leaves_the_count_outputs_bit_identical():
+    """THE CLAIM BEHIND CALLING THESE HEADS ADDITIVE, asserted rather than asserted-in-a-comment.
+
+    The optional heads are constructed LAST in `SymmetricDecoder.__init__`, after `film_head`, so
+    switching them on APPENDS RNG draws instead of inserting them: every module above has already
+    been sampled. If that ordering is ever disturbed — a head moved up for readability, a module
+    added below one — the trunk re-samples and this test fails with a nonzero diff on tensors that
+    have nothing to do with the new head. That is the failure `decoder.film_head` was written to
+    document and the one `tools/golden.py` catches at full scale.
+    """
+    base = _fingerprint()
+    with_heads = _fingerprint(heads=HEADS)
+    for k in ("p", "n", "eta", "log2_mu", "mu"):
+        worst = (base[3][k] - with_heads[3][k]).abs().max().item()
+        assert worst == 0.0, (
+            f"switching the signal/peak heads on moved the count output {k} by {worst:.3e} — the "
+            "heads are not being constructed last, so the trunk re-sampled")
+    assert with_heads[0] > base[0], "the optional heads added no parameters"
+    assert set(with_heads[3]) - set(base[3]) == {"signal_mu", "signal_var", "peak_prob"}
+
+
+def test_the_signal_head_is_the_production_parameterisation():
+    """mu = softplus(.), var = softplus(.) + 1e-6, weights ~N(0,1e-4), variance bias 0.5.
+
+    Copied from `EpiDenoise/model.py::GaussianLayer` rather than chosen here, so the two put the same
+    distribution on the same target. The init is the load-bearing half: at std=1e-4 every position
+    starts at its bias, which is a broad unit-ish Gaussian rather than an NLL dividing by a variance
+    that began near the 1e-6 floor.
+    """
+    torch.manual_seed(0)
+    head = GaussianSignalHead(lane=4)
+    assert float(head.linear_var.bias) == pytest.approx(SIGNAL_HEAD_VAR_BIAS)
+    assert float(head.linear_mu.bias) == 0.0
+    for w in (head.linear_mu.weight, head.linear_var.weight):
+        assert float(w.abs().max()) < 1e-2, "the head weights are not the small-init ones"
+        assert float(w.abs().max()) > 0.0, "exactly-zero weights give every position one constant"
+
+    mu, var = head(torch.randn(2, 5, A, 4) * 10.0)
+    assert mu.shape == var.shape == (2, 5, A)
+    assert float(mu.min()) >= 0.0, "softplus mean went negative"
+    assert float(var.min()) >= SIGNAL_HEAD_VAR_EPS, "variance floor breached — the NLL can divide by 0"
+    # The bias-dominated start: softplus(0)=0.693 for the mean, softplus(0.5)=0.974 for the variance.
+    assert float(mu.mean()) == pytest.approx(0.693, abs=0.05)
+    assert float(var.mean()) == pytest.approx(0.974, abs=0.05)
+
+
+def test_the_peak_head_returns_probabilities():
+    torch.manual_seed(0)
+    head = PeakHead(lane=4)
+    p = head(torch.randn(2, 5, A, 4) * 50.0)         # large inputs: push the sigmoid to both rails
+    assert p.shape == (2, 5, A)
+    assert float(p.min()) >= 0.0 and float(p.max()) <= 1.0
+
+
+@pytest.mark.parametrize("bad,msg", [
+    ("count,nonsense", "unknown head"),
+    ("signal", "omits 'count'"),
+    ("signal,peak", "omits 'count'"),
+    ("", "omits 'count'"),
+])
+def test_bad_head_sets_are_named_not_silently_resolved(bad, msg):
+    with pytest.raises(ValueError, match=msg):
+        parse_heads(bad)
+
+
+def test_head_parsing_is_order_and_spelling_insensitive():
+    """Two spellings of one set must compare equal, or two identical arms look different."""
+    assert parse_heads("peak,count,signal") == parse_heads(HEADS) == HEADS
+    assert parse_heads(" count , count ") == ("count",)
+    assert parse_heads(["count", "signal"]) == ("count", "signal")
+    assert parse_heads(DEFAULT_HEADS) == DEFAULT_HEADS
+
+
 def test_film_init_choices_reach_the_projection():
     zero = build_model(**BASE, film_init_encoder="zero")
     w = zero.encoder.signal_tower.per_conv_film_layers[0].proj.weight
@@ -336,6 +435,7 @@ def test_arch_round_trips_through_build_model_from_arch():
     """`--arch-from` is only worth having if it rebuilds the model bit-for-bit."""
     arch = dict(BASE, **DOCUMENTED_DEFAULTS)
     arch["film_taps"] = list(arch["film_taps"])          # as JSON would store it
+    arch["heads"] = list(arch["heads"])                  # ditto — a tuple comes back as a list
     torch.manual_seed(0)
     a = build_model_from_arch(dict(arch)).eval()
     torch.manual_seed(0)
@@ -380,7 +480,17 @@ TRAINABLE = [
     ("post-norm transformer", dict(transformer_norm_placement="post")),
     ("shallow geometry", dict(n_cnn_layers=2, n_deconv_layers=2)),
     ("wide head", dict(head_hidden=16)),
+    ("signal head", dict(heads=("count", "signal"))),
+    ("peak head", dict(heads=("count", "peak"))),
+    ("both extra heads", dict(heads=HEADS)),
 ]
+
+# The optional heads hang off the trunk in PARALLEL with the count head, so `mu` alone cannot reach
+# them: a backward through `mu` would leave `head_signal` and `head_peak` with no gradient and this
+# test would pass while proving nothing about them — the `--dna-dim` failure exactly. Every head's
+# output is summed into the objective instead. For a model built with no optional head this adds
+# nothing, so the assertion for the ten pre-existing entries is unchanged.
+_HEAD_OUTPUTS = ("mu", "signal_mu", "signal_var", "peak_prob")
 
 
 @pytest.mark.parametrize("label,kw", TRAINABLE, ids=[n for n, _ in TRAINABLE])
@@ -390,7 +500,12 @@ def test_every_alternative_produces_gradient(label, kw):
     out = model(*_inputs(model))
     for k in ("p", "n", "eta", "log2_mu", "mu"):
         assert torch.isfinite(out[k]).all(), f"{label}: non-finite {k}"
-    out["mu"].sum().backward()
+    objective = None
+    for k in _HEAD_OUTPUTS:
+        if k in out:
+            assert torch.isfinite(out[k]).all(), f"{label}: non-finite {k}"
+            objective = out[k].sum() if objective is None else objective + out[k].sum()
+    objective.backward()
     live = [n for n, p in model.named_parameters()
             if p.grad is not None and float(p.grad.abs().max()) > 0]
     assert live, f"{label}: nothing in the model received gradient"
@@ -401,3 +516,113 @@ def test_every_alternative_produces_gradient(label, kw):
         # zero-inited, so gamma/beta are 0 and the tap is an identity — but the PROJECTION must
         # still see gradient, or it can never leave that init and the tap is decorative forever.
         assert any("film_head" in n for n in live), "the post_head projection receives no gradient"
+    if "signal" in kw.get("heads", ()):
+        assert any("head_signal" in n for n in live), "the Gaussian signal head is dead"
+    if "peak" in kw.get("heads", ()):
+        assert any("head_peak" in n for n in live), "the peak head is dead"
+
+
+# ---------------------------------------------------------------------------
+# 8. the auxiliary losses
+# ---------------------------------------------------------------------------
+# A head that builds, predicts and receives gradient from a hand-written `.sum()` can still be absent
+# from the loss the trainer actually descends. These test `train.aux_head_losses` itself: that it is
+# silent at the default, that it is not silent when a head exists, and that it reads the two maps that
+# make it correct rather than the two that would look correct.
+
+def _prep(*, avail=(1.0, 1.0), dsf=(1, 1), pval=None, peaks=None, B=2, L=6):
+    """A minimal prep dict shaped like `batch.prepare_masked_batch`'s output, for 2 assays.
+
+    Assay 0 is UNMASKED (`obs`), assay 1 is MASKED (`imp`) — the split every loss in this package
+    reports. `avail`/`dsf` set the two facts the signal maps are built from.
+    """
+    n_a = len(avail)
+    av = torch.tensor(avail)
+    ok = (av > 0) & (torch.tensor(dsf) == 1)
+    obs = torch.zeros(B, L, n_a, dtype=torch.bool)
+    msk = torch.zeros(B, L, n_a, dtype=torch.bool)
+    obs[:, :, 0] = True
+    msk[:, :, 1] = True
+    return {
+        "signal_observed_map": obs & ok,
+        "signal_masked_map": msk & ok,
+        "y_pval": torch.full((B, L, n_a), 1.0) if pval is None else pval,
+        "y_peaks": torch.zeros(B, L, n_a) if peaks is None else peaks,
+    }
+
+
+def test_the_default_model_adds_no_auxiliary_loss():
+    """`None`, not a zero tensor: a zero would still put a node in the graph the recorded runs lack."""
+    out = {"p": torch.rand(2, 6, 2), "n": torch.rand(2, 6, 2), "mu": torch.rand(2, 6, 2)}
+    aux, terms = aux_head_losses(out, _prep())
+    assert aux is None
+    assert terms == {}
+
+
+def test_each_auxiliary_head_contributes_a_finite_loss_and_its_own_terms():
+    torch.manual_seed(0)
+    model = build_model(**BASE, heads=HEADS)
+    out = model(*_inputs(model))
+    prep = _prep(avail=(1.0,) * A, dsf=(1,) * A, B=2, L=model.encoder.l1)
+    aux, terms = aux_head_losses(out, prep)
+    assert aux is not None and torch.isfinite(aux).all()
+    for k in ("signal_obs", "signal_imp", "peak_obs", "peak_imp", "sig_obs_n", "sig_imp_n"):
+        assert k in terms, f"{k} is not reported"
+    aux.backward()
+    live = [n for n, p in model.named_parameters()
+            if p.grad is not None and float(p.grad.abs().max()) > 0]
+    assert any("head_signal" in n for n in live), "the signal head gets no gradient FROM THE LOSS"
+    assert any("head_peak" in n for n in live), "the peak head gets no gradient FROM THE LOSS"
+
+
+def test_the_auxiliary_loss_ignores_the_missing_assay_sentinel():
+    """`y_pval`/`y_peaks` carry -1, NOT 0, for an assay the biosample does not have.
+
+    The bake writes `missing_value=-1` (`prep/handler.py::make_bios_tensor_BW` /
+    `make_bios_tensor_Peaks`) and the loader copies the whole slab through. A softplus mean can never
+    reach -1, so an unmasked Gaussian term would be dominated by columns holding no data, and a BCE
+    against -1 is not defined at all. The maps drop them because they require `y_avail > 0`; this
+    proves the loss is the same number whether those columns hold -1 or anything else.
+    """
+    out = {"signal_mu": torch.full((2, 6, 2), 1.0), "signal_var": torch.full((2, 6, 2), 1.0),
+           "peak_prob": torch.full((2, 6, 2), 0.5)}
+    clean = _prep(avail=(1.0, 0.0))                    # assay 1 unavailable, targets benign
+    sentinel = _prep(avail=(1.0, 0.0),
+                     pval=torch.tensor([[[1.0, -1.0]] * 6] * 2),
+                     peaks=torch.tensor([[[0.0, -1.0]] * 6] * 2))
+    a_clean, t_clean = aux_head_losses(out, clean)
+    a_sent, t_sent = aux_head_losses(out, sentinel)
+    assert float(a_clean) == float(a_sent), "the -1 sentinel columns reached the loss"
+    assert t_clean == t_sent
+
+
+def test_a_peak_sentinel_that_reached_the_loss_would_raise():
+    """The guard above is only worth having if the thing it guards against is loud.
+
+    `aux_head_losses` selects with the availability mask BEFORE calling the BCE, precisely so the -1
+    never reaches the kernel. This pins the other half of that reasoning: were the selection ever
+    reordered after the elementwise call — the order `nb_count_loss` uses, and the natural thing to
+    "tidy" it into — torch rejects the batch outright instead of training on nonsense.
+    """
+    with pytest.raises(RuntimeError):
+        torch.nn.functional.binary_cross_entropy(
+            torch.full((4,), 0.5), torch.tensor([0.0, 1.0, -1.0, 0.0]), reduction="none")
+
+
+def test_the_auxiliary_loss_skips_downsampled_targets():
+    """`y_pval`/`y_peaks` are FULL-DEPTH and have no per-DSF variant, so `y_dsf != 1` is not supervision.
+
+    Supervising the p-value head on a step whose count target is quarter-depth would train it to
+    contradict the depth the same batch prompted with. `signal_observed_map` already encodes this;
+    the test is that the loss reads THAT map and not `observed_map`.
+    """
+    out = {"signal_mu": torch.full((2, 6, 2), 1.0), "signal_var": torch.full((2, 6, 2), 1.0)}
+    full = _prep(avail=(1.0, 1.0), dsf=(1, 1))
+    down = _prep(avail=(1.0, 1.0), dsf=(4, 4))
+    _, t_full = aux_head_losses(out, full)
+    _, t_down = aux_head_losses(out, down)
+    assert t_full["sig_obs_n"] > 0 and t_full["sig_imp_n"] > 0
+    assert t_down["sig_obs_n"] == 0 and t_down["sig_imp_n"] == 0
+    # Nothing supervised: `imp` is omitted rather than logged as a structural zero, exactly as
+    # `nb_count_loss` omits it — a zero averaged into the curve reads as a well-fit batch.
+    assert "signal_imp" not in t_down

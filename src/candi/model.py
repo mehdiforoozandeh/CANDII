@@ -10,6 +10,7 @@ log-linked Negative Binomial head.
     x_meta  [B, 4, A+1]      (log2_depth, assay_id, read_length, run_type) for the INPUT tracks
     y_meta  [B, 4, A]        the same 4 rows for the TARGET tracks
       -> {p, n, eta, log2_mu, mu}, each [B, L, A]
+      -> + {signal_mu, signal_var} and/or {peak_prob} when `heads` names them (default: count only)
 
 WHY THE DECODER IS GROUPED
 --------------------------
@@ -31,12 +32,12 @@ import torch
 import torch.nn as nn
 
 from candi.config import EncoderConfig
-from candi.decoder import DECODER_FILM_TAPS, SymmetricDecoder
+from candi.decoder import DECODER_FILM_TAPS, DEFAULT_HEADS, HEADS, SymmetricDecoder, parse_heads
 from candi.encoder import MetadataEmbedding, V2Encoder
 
-__all__ = ["ALL_FILM_TAPS", "DEFAULT_FILM_TAPS", "ENCODER_FILM_TAPS", "CandiModel", "build_model",
-           "parse_film_taps", "film_mode_from_taps", "forward_full", "encode_latent", "nb_mean",
-           "nb_nll"]
+__all__ = ["ALL_FILM_TAPS", "DEFAULT_FILM_TAPS", "DEFAULT_HEADS", "ENCODER_FILM_TAPS", "HEADS",
+           "CandiModel", "build_model", "parse_film_taps", "parse_heads", "film_mode_from_taps",
+           "forward_full", "encode_latent", "nb_mean", "nb_nll"]
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +118,14 @@ class CandiModel(nn.Module):
                  film_taps: Sequence[str] = DEFAULT_FILM_TAPS,
                  film_init_encoder: str = "xavier", film_init_decoder: str = "zero",
                  # -- heads ------------------------------------------------------------------
-                 head_sharing: str = "shared", head_hidden: int = 0) -> None:
+                 head_sharing: str = "shared", head_hidden: int = 0,
+                 heads: Sequence[str] = DEFAULT_HEADS) -> None:
         super().__init__()
         taps = parse_film_taps(film_taps)
+        # Parsed here, next to the tap set and before the geometry guard, for the same reason: neither
+        # consumes RNG, so validating both up front costs nothing and turns a typo into a message that
+        # names the flag rather than a shape error deep inside a module.
+        head_set = parse_heads(heads)
         # THE GEOMETRY GUARD. The decoder has to return the encoder's downsampling exactly, or the
         # output is a different length from the target and the loss indexes into the wrong bins. It
         # is checked here, before any module is built, because the alternative is a shape error deep
@@ -173,7 +179,8 @@ class CandiModel(nn.Module):
             conv_kernel_size=int(deconv_kernel_size),
             film_taps=tuple(t for t in taps if t in DECODER_FILM_TAPS),
             film_init=str(film_init_decoder),
-            head_sharing=str(head_sharing), head_hidden=int(head_hidden))
+            head_sharing=str(head_sharing), head_hidden=int(head_hidden),
+            heads=head_set)
 
     def forward(self, x_data, x_dna, x_meta, y_meta, log_ref=None) -> Dict[str, torch.Tensor]:
         z = self.encoder.encode(x_data, x_dna, x_meta, return_meta=False)
@@ -226,7 +233,7 @@ def build_model_from_arch(arch: dict) -> CandiModel:
 # ---------------------------------------------------------------------------
 
 def forward_full(model: CandiModel, batch: dict) -> Dict[str, torch.Tensor]:
-    """Full head output dict (p, n, eta, log2_mu, mu) — used by the distributional M2 readout.
+    """Full head output dict (p, n, eta, log2_mu, mu, + any optional head) — used by M2's readout.
 
     `log_ref` rides in the prep dict rather than as an argument so every existing caller keeps
     working: a batch without the key is the pre-reference model, exactly.

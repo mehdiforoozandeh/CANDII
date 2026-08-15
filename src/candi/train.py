@@ -25,6 +25,12 @@ ASSEMBLED BATCH — metadata row 3 and, for the positive control, the count TARG
 `make_meta_probe` returns None, so no object is built, no RNG is seeded and every call site below is
 skipped: the training path is the pre-h64 one byte for byte. Nothing in the optimizer / schedule /
 clip / loss / step order is touched by any of the three arms.
+
+Stage 2 adds `--heads` (default `count`) under the same rule. `nb_count_loss` is UNCHANGED, including
+its `imp_weight` behaviour; the Gaussian signal and Bernoulli peak terms are auxiliary and are
+constructed only when the model built the head that produces them, so at the default `aux_head_losses`
+returns None and the loss expression `_train_step` evaluates is the pre-Stage-2 one. Evaluation stays
+NB-only by ruling: the extra heads train, and nothing scores them yet.
 """
 from __future__ import annotations
 
@@ -42,7 +48,8 @@ from candi.eval import evaluate
 from candi.dataset import CandiKitH5Dataset, h5_depth_center
 from candi.meta_probe import DEFAULT_META_PROBE_DELTA, META_PROBE_MODES, make_meta_probe
 from candi.encoder import FILM_INITS
-from candi.model import DEFAULT_FILM_TAPS, build_model, forward_full, parse_film_taps
+from candi.model import (DEFAULT_FILM_TAPS, DEFAULT_HEADS, build_model, forward_full,
+                         parse_film_taps, parse_heads)
 
 
 
@@ -84,6 +91,126 @@ def nb_count_loss(out, prep, imp_weight: float = 1.0):
     if n_imp:
         terms["imp"] = float(li)
     return lo + imp_weight * li, terms
+
+
+# ---------------------------------------------------------------------------
+# auxiliary heads (Stage 2) — Gaussian signal + Bernoulli peak
+# ---------------------------------------------------------------------------
+# These ride ALONGSIDE the NB count loss and never modify it. A run at the default `--heads count`
+# builds no optional head, so `aux_head_losses` returns `None` and `_train_step` never touches the
+# loss expression at all — not "adds a zero", which would still put a new node in the autograd graph.
+#
+# WHY THE SIGNAL MAPS AND NOT `observed_map` / `masked_map`. `y_pval` and `y_peaks` are FULL-DEPTH
+# quantities: the bake writes one `pval` and one `peaks` array per biosample, with no per-DSF variant,
+# while the counts carry a `counts_dsf{1,2,4,8}` ladder. So on a step whose target DSF is 4, the model
+# is prompted with a quarter-depth target and asked for that track's counts — and supervising its
+# p-value head against the FULL-depth p-value on the same step would train it to contradict its own
+# prompt. `batch.prepare_masked_batch` already computes `signal_observed_map` / `signal_masked_map` as
+# exactly `obs/masked AND available AND y_dsf == 1` for this reason; until now nothing consumed them.
+#
+# THOSE MAPS ARE ALSO THE SENTINEL GUARD, and this is the part that would be silent if it were wrong.
+# `y_pval` and `y_peaks` are NOT zero-filled for unavailable assays — the bake writes MISSING = -1
+# into every column the biosample does not have (`prep/handler.py::make_bios_tensor_BW`,
+# `make_bios_tensor_Peaks`, both `missing_value=-1`), and the loader copies the whole `[L, F]` slab
+# through. A Gaussian mean is a softplus and can never reach -1, so an unmasked loss would be
+# dominated by columns that carry no data; BCE against -1 is not even defined. The maps require
+# `y_avail > 0`, which drops those columns entirely.
+#
+# `obs` / `imp` here mean UNMASKED / MASKED, as everywhere else in this package.
+
+_PEAK_EPS = 1e-6
+
+
+def _elem_gaussian_nll(mu, var, target):
+    """Element-wise Gaussian NLL, `full=True` so the 0.5*log(2*pi) constant is included.
+
+    `full=True` matches production (`torch.nn.GaussianNLLLoss(reduction="none", full=True)`), which
+    matters because the constant is what makes the number a comparable log-likelihood rather than an
+    unnormalised score — the same reason the NB term uses `torch.distributions`' own `log_prob`.
+    """
+    return torch.nn.functional.gaussian_nll_loss(mu, target, var, full=True, reduction="none")
+
+
+def _elem_peak_bce(prob, target):
+    """Element-wise BCE on a PROBABILITY (the head already applied the sigmoid).
+
+    The clamp is not tidying. `PeakHead` emits `sigmoid(...)`, which saturates to exactly 0.0 or 1.0 in
+    float32 at |logit| > ~17, and `log(0)` is `-inf` — one saturated bin would turn the whole batch
+    loss into `inf` and the gradient into `nan`, permanently. Production's `nn.BCELoss` has the same
+    hazard and no clamp. A BCE-with-logits head would not need this, but it would also not be the
+    production peak head; the clamp is the price of keeping the interface.
+
+    The TARGET is deliberately NOT clamped. Peaks are 0/1 where available and -1 where the assay is
+    absent, so a -1 reaching here means the availability mask failed — and torch raising on an
+    out-of-range target is exactly the loud failure that should happen, rather than a silent clamp to
+    0 that would train the head against assays the biosample does not have. Callers must therefore
+    select with the availability mask BEFORE calling this, which `aux_head_losses` does.
+    """
+    return torch.nn.functional.binary_cross_entropy(
+        prob.clamp(_PEAK_EPS, 1.0 - _PEAK_EPS), target, reduction="none")
+
+
+def aux_head_losses(out, prep, imp_weight: float = 1.0):
+    """`(extra_loss, terms)` for whichever optional heads the model built, or `(None, {})` for none.
+
+    THE SWITCH IS THE PRESENCE OF THE OUTPUT KEY, not a flag threaded down from `main`. A model built
+    at `--heads count` emits no `signal_mu`, so there is nothing here to weigh and nothing is added.
+    This is the same contract `forward_full` uses for `log_ref` — a dict without the key IS the
+    earlier model — and it keeps the head set in exactly one place, the constructor that built it.
+
+    Each term carries the SAME `imp_weight` the count loss uses. At the shipped 1.0 that is an
+    identity, and above it the reweighting stays a property of the OBJECTIVE rather than of one head:
+    an arm that emphasised imputation for counts and not for signal would differ from its control in
+    two ways. This is a reasoned choice, not a measured one — no run has yet varied it.
+
+    The two heads are summed into the count loss with COEFFICIENT 1.0. Nobody has measured what the
+    right relative weight is, and inventing one here would bury an unmeasured constant inside a
+    "no-op" stage; 1.0 is the honest placeholder and the obvious next knob.
+    """
+    has_signal = "signal_mu" in out
+    has_peak = "peak_prob" in out
+    if not (has_signal or has_peak):
+        return None, {}
+
+    obs, msk = prep["signal_observed_map"], prep["signal_masked_map"]
+    n_obs, n_imp = int(obs.sum()), int(msk.sum())
+    total = None
+    # Reported once, not per head: both heads read the same two maps, so a second copy of these
+    # counts under a `peak_` prefix would invite a reader to look for a difference that cannot exist.
+    terms = dict(sig_obs_n=n_obs, sig_imp_n=n_imp)
+
+    def _split(elem_of, prefix, anchor):
+        """obs + imp_weight*imp over the signal maps, logged the way `nb_count_loss` logs its own.
+
+        `elem_of(mask)` SELECTS AND THEN COMPUTES, which is not the order `nb_count_loss` uses and is
+        deliberate. The count loss evaluates its NLL over the whole tensor and indexes afterwards,
+        which is safe because `y_data` is raw counts everywhere. `y_peaks` is not: unavailable assays
+        hold -1, and `binary_cross_entropy` VALIDATES that its target lies in [0, 1] — it would raise
+        on the sentinel before the mask ever got a chance to drop it. Selecting first means the
+        sentinel never reaches the kernel, and it is also strictly less arithmetic.
+
+        `anchor` is any tensor from the head, used to make a real zero when a map is empty: it keeps
+        the head's parameters attached to the graph so `backward()` still reaches them, which a python
+        `0.0` would not.
+        """
+        nonlocal total
+        lo = elem_of(obs).mean() if n_obs else anchor.sum() * 0.0
+        li = elem_of(msk).mean() if n_imp else anchor.sum() * 0.0
+        terms[f"{prefix}_obs"] = float(lo)
+        # Absent, not zero, when nothing was masked — the same rule as the count loss. A structural
+        # zero averaged into the curve reads as a confidently well-fit batch.
+        if n_imp:
+            terms[f"{prefix}_imp"] = float(li)
+        part = lo + imp_weight * li
+        total = part if total is None else total + part
+
+    if has_signal:
+        mu, var, y = out["signal_mu"], out["signal_var"], prep["y_pval"]
+        _split(lambda m: _elem_gaussian_nll(mu[m], var[m], y[m]), "signal", mu)
+    if has_peak:
+        prob, y = out["peak_prob"], prep["y_peaks"]
+        _split(lambda m: _elem_peak_bce(prob[m], y[m]), "peak", prob)
+    return total, terms
 
 
 LR_SCHEDULES = ("cosine", "linear", "constant")
@@ -274,6 +401,13 @@ def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
         probe.arm()
     out = forward_full(model, prep)
     loss, terms = nb_count_loss(out, prep, imp_weight=imp_weight)
+    # Stage 2: auxiliary heads, added only when the model built one. `aux is None` on the default
+    # `--heads count` path, so `loss` is the object `nb_count_loss` returned and the autograd graph is
+    # the pre-Stage-2 one — not the same graph plus a zero, which would still be a different graph.
+    aux, aux_terms = aux_head_losses(out, prep, imp_weight=imp_weight)
+    if aux is not None:
+        loss = loss + aux
+        terms = {**terms, **aux_terms}
     opt.zero_grad()
     loss.backward()
     # grad norms are read HERE — after backward, before clipping — or clip_grad_norm_ rescales them
@@ -693,7 +827,7 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                    conv_norm="layer", transformer_norm="layer", transformer_norm_placement="pre",
                    attn_qk_norm=False, film_taps=DEFAULT_FILM_TAPS,
                    film_init_encoder="xavier", film_init_decoder="zero",
-                   head_sharing="shared", head_hidden=0,
+                   head_sharing="shared", head_hidden=0, heads=DEFAULT_HEADS,
                    lr_schedule="cosine", warmup_frac=0.1, lr_min_ratio=0.1, clip_norm=CLIP_NORM,
                    ckpt_path=None, cell_cond="off",
                    wandb_project=None, wandb_run_name=None, reference="off", reference_path=None,
@@ -748,11 +882,24 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                 film_taps=list(parse_film_taps(film_taps)),
                 film_init_encoder=str(film_init_encoder),
                 film_init_decoder=str(film_init_decoder),
-                head_sharing=str(head_sharing), head_hidden=int(head_hidden))
+                head_sharing=str(head_sharing), head_hidden=int(head_hidden),
+                # Stored as a LIST, like film_taps, because this dict is written to the run JSON and
+                # read back by `--arch-from`; a tuple round-trips through JSON as a list anyway, and
+                # storing what comes back is what keeps the two comparable.
+                heads=list(parse_heads(heads)))
     model = build_model(**arch).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"[train] params={n_params:,} (decoder_lane={decoder_lane} deconv_norm={deconv_norm} "
-          f"attn_depth={n_transformer_layers} film_taps={','.join(arch['film_taps'])})", flush=True)
+          f"attn_depth={n_transformer_layers} film_taps={','.join(arch['film_taps'])} "
+          f"heads={','.join(arch['heads'])})", flush=True)
+    if tuple(arch["heads"]) != tuple(DEFAULT_HEADS):
+        # Said out loud because the extra heads change the OBJECTIVE while `evaluate()` still scores
+        # the NB head alone. The metrics in this run's JSON are therefore comparable to a default arm
+        # only if the reader knows the arm was trained against a different total loss.
+        print(f"[train] heads={','.join(arch['heads'])}: the Gaussian signal and/or Bernoulli peak "
+              "terms are ADDED to the NB loss (coefficient 1.0 each). Evaluation is NB-only, so this "
+              "run's M1/M2/M3 score a model trained on a different objective. This is NOT the "
+              "control arm; the control is --heads count.", flush=True)
     if float(meta_gain) != 1.0:
         print(f"[train] meta_gain={float(meta_gain)} (h76): `memb` is scaled by this FIXED, "
               "non-learnable factor immediately before decoder.film_proj. This is NOT the control "
@@ -1108,6 +1255,14 @@ def main():
                          "reasonable and unmeasured, which is why the alternative is here.")
     ap.add_argument("--head-hidden", type=int, default=0,
                     help="hidden width of each head MLP. 0 = match the decoder lane width.")
+    ap.add_argument("--heads", default=",".join(DEFAULT_HEADS),
+                    help="comma-separated set of output heads. 'count' (NB over raw counts) is the "
+                         "shipped model, is REQUIRED, and is the only head candi.eval scores. "
+                         "'signal' adds a Gaussian (mu, var) over the arcsinh log-p-value track and "
+                         "'peak' a Bernoulli over the peak calls, each supervised on the FULL-DEPTH "
+                         "targets only (y_dsf == 1) and added to the NB loss with coefficient 1.0. "
+                         f"Default '{','.join(DEFAULT_HEADS)}'. Either extra head changes the "
+                         "objective while evaluation stays NB-only, so such a run is not a control.")
     # -- optimisation -------------------------------------------------------------------------------
     ap.add_argument("--lr-schedule", default="cosine", choices=list(LR_SCHEDULES))
     ap.add_argument("--warmup-frac", type=float, default=0.1,
@@ -1197,7 +1352,7 @@ def main():
     meta_ln = (a.meta_embed_layernorm == "on")
     print(f"[run] deconv_norm={a.deconv_norm} decoder_lane={a.decoder_lane} "
           f"attn_depth={a.n_transformer_layers} conv_norm={a.conv_norm} "
-          f"film_taps={a.film_taps or '(none)'}\n"
+          f"film_taps={a.film_taps or '(none)'} heads={a.heads}\n"
           f"[run] tag={tag} device={device} full_coverage={a.full_coverage} "
           f"eval_max_batches={a.eval_max_batches or 'ALL'} reference={a.reference} "
           f"imp_weight={a.imp_weight} unmask_frac={a.unmask_frac} "
@@ -1226,7 +1381,7 @@ def main():
         transformer_norm_placement=a.transformer_norm_placement, attn_qk_norm=a.attn_qk_norm,
         film_taps=a.film_taps, film_init_encoder=a.film_init_encoder,
         film_init_decoder=a.film_init_decoder,
-        head_sharing=a.head_sharing, head_hidden=a.head_hidden,
+        head_sharing=a.head_sharing, head_hidden=a.head_hidden, heads=a.heads,
         lr_schedule=a.lr_schedule, warmup_frac=a.warmup_frac, lr_min_ratio=a.lr_min_ratio,
         clip_norm=a.clip_norm,
         cell_cond=a.cell_cond, ckpt_path=str(out_dir / f"{tag}.ckpt"),

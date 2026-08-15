@@ -12,6 +12,10 @@ profile is forming rather than once at the end.
       deconv x2, groups=A, + FiLM (3)   -> [B, 768, A, lane]
       weight-shared head lane -> 1      -> eta, raw_n   [B, 768, A]
 
+Two further heads read the same finished trunk features and are OFF unless `heads` names them:
+`GaussianSignalHead` (arcsinh log-p-value, `mu`/`var`) and `PeakHead` (peak probability). They are
+supervision, not prediction targets the kit scores — `candi.eval` is NB-only by ruling.
+
 WHY FOUR FiLM TAPS AND NOT ONE AT THE END
 -----------------------------------------
 FiLM is a POSITION-CONSTANT affine: gamma and beta do not vary along the 768 positions. Applied
@@ -38,7 +42,7 @@ because the decoder is now the only consumer of the per-lane primitives.
 from __future__ import annotations
 
 import math
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -47,8 +51,10 @@ import torch.nn.functional as F
 from candi._vendored import CLOZE, MISSING
 from candi.encoder import MetadataEmbedding, init_film_proj
 
-__all__ = ["DECONV_NORMS", "DECODER_FILM_TAPS", "HEAD_SHARINGS", "LaneNorm", "NoFiLM",
-           "PerLaneFiLM", "PerLaneHead", "LaneDeconvBlock", "SymmetricDecoder"]
+__all__ = ["DECONV_NORMS", "DECODER_FILM_TAPS", "DEFAULT_HEADS", "HEADS", "HEAD_SHARINGS",
+           "SIGNAL_HEAD_INIT_STD", "SIGNAL_HEAD_VAR_BIAS", "SIGNAL_HEAD_VAR_EPS",
+           "GaussianSignalHead", "LaneNorm", "NoFiLM", "PeakHead",
+           "PerLaneFiLM", "PerLaneHead", "LaneDeconvBlock", "SymmetricDecoder", "parse_heads"]
 
 
 # `deconv_norm`, not `lane_norm`: the old name collided with its own first value, so "lane_norm=lane"
@@ -63,6 +69,59 @@ DECONV_NORMS = ("lane", "group")
 DECODER_FILM_TAPS = ("pre_deconv", "per_deconv", "post_head")
 
 HEAD_SHARINGS = ("shared", "per_assay")
+
+# The output heads, in the order they are named everywhere. `count` is the shipped model and the only
+# one `candi.eval` scores; `signal` and `peak` are additional supervision, off unless asked for.
+HEADS = ("count", "signal", "peak")
+DEFAULT_HEADS: Tuple[str, ...] = ("count",)
+
+# The Gaussian head's parameterisation, COPIED from the production model rather than chosen here
+# (`EpiDenoise/model.py::GaussianLayer`), so a run of this kit and a run of production put the same
+# distribution on the same target and their likelihoods are comparable numbers.
+#
+#   mu  = softplus(W_mu  . lane)                 W_mu  ~ N(0, 1e-4),  bias 0.0
+#   var = softplus(W_var . lane) + 1e-6          W_var ~ N(0, 1e-4),  bias 0.5
+#
+# WHY THE INIT IS THIS AND NOT XAVIER. At std=1e-4 the weights are effectively zero on the first
+# steps, so every position predicts its BIAS: mu = softplus(0) = 0.693, var = softplus(0.5) = 0.974.
+# That is a broad, near-unit Gaussian centred in the target's range, which is the well-conditioned
+# start for an NLL whose `(y-mu)^2/var` term explodes when a small variance meets a wrong mean. Xavier
+# would instead hand step 0 a per-position mean driven by an unlearned lane and a variance that can
+# start near the 1e-6 floor, which is the same NLL with a 10^6 multiplier on its error term. The
+# weights are not exactly zero because a head with identical outputs everywhere gives scipy's
+# correlation metrics a constant input and no gradient direction to break the tie.
+SIGNAL_HEAD_INIT_STD = 1e-4
+SIGNAL_HEAD_VAR_BIAS = 0.5
+# Added AFTER the softplus, never inside it. Softplus is positive but not bounded away from zero, and
+# the NLL divides by the variance, so a saturated-negative logit is a division by ~0 rather than a
+# large loss. This floor is what makes the head's own output a legal variance.
+SIGNAL_HEAD_VAR_EPS = 1e-6
+
+
+def parse_heads(heads) -> Tuple[str, ...]:
+    """Normalise a comma string or iterable of head names into a validated tuple.
+
+    `count` is REQUIRED, not merely defaulted. The NB count head is the frozen objective, it is the
+    only head `candi.eval` scores, and every recorded number in this repo is one of its metrics — so a
+    checkpoint trained without it could not be evaluated by anything in the kit and its run JSON would
+    report metrics for a head that never existed. Refusing the set here is a one-line failure on the
+    submit command; allowing it is a failure six GPU-hours later, in `evaluate`.
+    """
+    if isinstance(heads, str):
+        names = [h.strip() for h in heads.split(",") if h.strip()]
+    else:
+        names = [str(h).strip() for h in heads]
+    unknown = [h for h in names if h not in HEADS]
+    if unknown:
+        raise ValueError(f"unknown head(s) {unknown}; valid heads are {HEADS}")
+    if "count" not in names:
+        raise ValueError(
+            f"heads {sorted(set(names))} omits 'count'. The NB count head is the objective the kit "
+            "evaluates and the one every recorded metric describes; a model without it cannot be "
+            "scored by candi.eval. Add 'count' — the signal and peak heads are auxiliary, not "
+            "alternatives to it.")
+    # de-duplicated, and ordered as HEADS so two spellings of the same set compare equal
+    return tuple(h for h in HEADS if h in names)
 
 
 class LaneNorm(nn.Module):
@@ -175,6 +234,67 @@ class PerLaneHead(nn.Module):
         return torch.einsum("blah,aho->blao", h, self.w2) + self.b2
 
 
+class GaussianSignalHead(nn.Module):
+    """`(mu, var)` per position per assay, read off that assay's lane. Off unless `signal` is asked for.
+
+    The target is the arcsinh log-p-value track, which the BAKE already transformed
+    (`prep/reference_sample.py` loads the bigwig with `arcsinh=True`), so this head predicts the
+    transformed quantity directly and nothing downstream may transform it again. That is the opposite
+    of the counts rule in invariant 5 — counts arrive raw and the ENCODER transforms them — and the two
+    are easy to conflate. The arcsinh of a `-log10 p` is non-negative, which is why a softplus mean is
+    the right link here and would be wrong for a signal that can go negative.
+
+    ONE `Linear` PER PARAMETER, NOT THE COUNT HEAD'S `Linear -> GELU -> Linear`. Production uses a
+    single linear map and this head exists to be comparable to production; the count head's hidden
+    layer and its `head_sharing` / `head_hidden` knobs are the subject of a measured question that has
+    not been asked of the signal head. Giving it a different shape "for symmetry" would silently make
+    the two heads a second uncontrolled difference. This is a reasoned choice, not a measured one.
+    """
+
+    def __init__(self, lane: int, init_std: float = SIGNAL_HEAD_INIT_STD,
+                 var_bias: float = SIGNAL_HEAD_VAR_BIAS, var_eps: float = SIGNAL_HEAD_VAR_EPS) -> None:
+        super().__init__()
+        self.var_eps = float(var_eps)
+        self.linear_mu = nn.Linear(int(lane), 1)
+        self.linear_var = nn.Linear(int(lane), 1)
+        # Re-init AFTER construction, which is the ordering that matters: `nn.Linear.__init__` has
+        # already drawn from the global RNG by this point, so these calls change the weights without
+        # rewinding the stream. That is why the whole head must be built last — see `SymmetricDecoder`.
+        nn.init.normal_(self.linear_mu.weight, mean=0.0, std=float(init_std))
+        nn.init.zeros_(self.linear_mu.bias)
+        nn.init.normal_(self.linear_var.weight, mean=0.0, std=float(init_std))
+        nn.init.constant_(self.linear_var.bias, float(var_bias))
+
+    def forward(self, feat: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """`[B, L, A, lane] -> (mu, var)`, each `[B, L, A]`."""
+        mu = F.softplus(self.linear_mu(feat)).squeeze(-1)
+        var = F.softplus(self.linear_var(feat)).squeeze(-1) + self.var_eps
+        return mu, var
+
+
+class PeakHead(nn.Module):
+    """`sigmoid(Linear(lane, 1))` — one peak PROBABILITY per position per assay. Off by default.
+
+    Returns a probability rather than a logit because that is production's interface
+    (`EpiDenoise/model.py::PeakLayer`) and because the peak output is consumed as a probability by the
+    ENCODE precision/recall/AUROC evaluation. The cost is that the paired loss is a plain BCE on a
+    number that can saturate, so `train.peak_bce_loss` clamps before taking the log — see the reason
+    there. A logit head would be numerically better and would not be this head.
+
+    NOTE for anyone diffing against production: `PeakLayer` carries a comment claiming "controlled
+    initialization" and then applies none. This follows the CODE — default `nn.Linear` init — because
+    that is what every production checkpoint was actually trained with.
+    """
+
+    def __init__(self, lane: int) -> None:
+        super().__init__()
+        self.linear_peak = nn.Linear(int(lane), 1)
+
+    def forward(self, feat: torch.Tensor) -> torch.Tensor:
+        """`[B, L, A, lane] -> [B, L, A]` in (0, 1)."""
+        return torch.sigmoid(self.linear_peak(feat)).squeeze(-1)
+
+
 class LaneDeconvBlock(nn.Module):
     """Grouped transposed conv + 1x1 grouped residual + per-lane LayerNorm — mirror of `ConvTower`.
 
@@ -222,6 +342,11 @@ class SymmetricDecoder(nn.Module):
         log2_mu = eta                        [otherwise]
         log2_mu += log_ref                   [when a reference is supplied]
         mu = 2^clamp;  n = softplus(raw_n) + eps;  p = n / (n + mu)
+
+    `heads` names which distributions the decoder emits. `('count',)` — the default — is exactly the
+    recorded model: the two optional heads are not constructed, own no parameters, and add no keys to
+    the output dict. Naming `signal` or `peak` adds `GaussianSignalHead` / `PeakHead`, each reading the
+    SAME finished trunk features the count head reads.
     """
 
     def __init__(self, *, num_assays: int, lane: int = 8, meta_embed_dim: int = 32,
@@ -232,7 +357,8 @@ class SymmetricDecoder(nn.Module):
                  depth_row: int = 0, num_cells: int = 0, meta_gain: float = 1.0,
                  deconv_norm: str = "lane",
                  film_taps: tuple = ("pre_deconv", "per_deconv"), film_init: str = "zero",
-                 head_sharing: str = "shared", head_hidden: int = 0) -> None:
+                 head_sharing: str = "shared", head_hidden: int = 0,
+                 heads: tuple = DEFAULT_HEADS) -> None:
         super().__init__()
         if (in_dense_dim is None) == (in_lane_width is None):
             raise ValueError("give exactly one of in_dense_dim (dense latent) or in_lane_width "
@@ -243,6 +369,9 @@ class SymmetricDecoder(nn.Module):
             raise ValueError(f"unknown decoder film taps {unknown}; valid: {DECODER_FILM_TAPS}")
         if str(head_sharing) not in HEAD_SHARINGS:
             raise ValueError(f"head_sharing must be one of {HEAD_SHARINGS}; got {head_sharing!r}")
+        # Validated before anything is built, like the tap set and the geometry: an unknown head name
+        # must fail on the command line, not after the trunk is on the GPU.
+        self.heads = parse_heads(heads)
         self.A = int(num_assays)
         self.lane = int(lane)
         self.use_offset = bool(use_offset)
@@ -298,6 +427,20 @@ class SymmetricDecoder(nn.Module):
         # `metadata_embedding` overwrite records; this is the same lesson applied forward.
         self.film_head = (PerLaneFiLM(int(meta_embed_dim), 2, film_init)
                           if "post_head" in taps else None)
+        # AND THESE ARE BUILT AFTER IT, FOR THE SAME REASON, ONE STEP FURTHER ALONG. Each new
+        # default-off module goes at the very END of the constructor, so switching it on appends RNG
+        # draws instead of inserting them: everything above — trunk, count heads, meta embedder,
+        # film_head — has already been sampled and cannot move. That is what lets
+        # `tests/test_flags.py::test_adding_a_head_leaves_the_count_outputs_bit_identical` assert
+        # ZERO difference in p/n/eta/log2_mu/mu with the signal and peak heads switched on, which is
+        # the whole claim behind calling these heads additive. Insert anything between `film_head` and
+        # here and that test is the one that fails.
+        #
+        # Both read `feat`, the trunk output, NOT the count head's outputs — `film_head` conditions
+        # eta and raw_n and does not touch `feat`, so the two optional heads see the same tensor
+        # whether or not the `post_head` tap is on.
+        self.head_signal = GaussianSignalHead(self.lane) if "signal" in self.heads else None
+        self.head_peak = PeakHead(self.lane) if "peak" in self.heads else None
 
     def forward(self, z: torch.Tensor, y_meta: torch.Tensor,
                 log_ref: Optional[torch.Tensor] = None,
@@ -354,4 +497,14 @@ class SymmetricDecoder(nn.Module):
         mu = torch.pow(2.0, log2_mu).clamp_min(self.eps)
         n = F.softplus(raw_n) + self.eps
         p = (n / (n + mu)).clamp(self.eps, 1.0 - self.eps)
-        return dict(p=p, n=n, eta=eta, log2_mu=log2_mu, mu=mu)
+        out = dict(p=p, n=n, eta=eta, log2_mu=log2_mu, mu=mu)
+        # The optional heads ADD keys; they never rename or replace one. `mu` is already the NB mean,
+        # so the Gaussian mean cannot be called `mu` without silently changing what every existing
+        # reader of this dict receives — hence `signal_mu`. A caller that does not build these heads
+        # gets the five-key dict byte for byte, and `train.aux_head_losses` uses the ABSENCE of the
+        # keys as its switch, the same way `forward_full` uses the absence of `log_ref`.
+        if self.head_signal is not None:
+            out["signal_mu"], out["signal_var"] = self.head_signal(feat)
+        if self.head_peak is not None:
+            out["peak_prob"] = self.head_peak(feat)
+        return out
