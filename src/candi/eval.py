@@ -39,6 +39,7 @@ from candi.metrics import (
     nb_crps, nb_quantile, ece, calibration_pit_curve, spearman, pearson, r2, _cos_dist, P_EPS,
 )
 from candi.model import forward_full
+from candi.precision import no_autocast
 
 RUN_TYPE_ROW, DEPTH_ROW, READLEN_ROW = 3, 0, 2
 OBSERVED_READLENS = (30.0, 36.0, 76.0, 100.0, 101.0)
@@ -1308,7 +1309,20 @@ def quick_eval(model, h5_path, device, *, regime: str = "type1", batch_size: int
     selection is made against the SAME objective the arm trains on. None (the `off` arm) is a strict
     no-op. The FINAL `evaluate` deliberately does not apply it — see the note at its call site in
     `train.py` and the `final_eval_meta_probe_applied` key in the run JSON.
+
+    NEVER AUTOCAST, whatever `--precision` the run trains at — see `evaluate` for why, and note the
+    sharper reason here: this function drives BEST-CHECKPOINT SELECTION. A CRPS measured at one
+    precision at epoch 6 and another at epoch 12 would select on the difference between the two.
     """
+    with no_autocast(device):
+        return _quick_eval_fp32(model, h5_path, device, regime=regime, batch_size=batch_size,
+                                batches_per_pair=batches_per_pair, fg_frac=fg_frac, seed=seed,
+                                reference=reference, meta_probe=meta_probe)
+
+
+def _quick_eval_fp32(model, h5_path, device, *, regime: str = "type1", batch_size: int = 4,
+                     batches_per_pair: int = 2, fg_frac: float = 0.02, seed: int = 0,
+                     reference=None, meta_probe=None) -> dict:
     units, assays = build_eval_units(model, h5_path, device, regime=regime, batch_size=batch_size,
                                      seed=seed, reference=reference,
                                      batches_per_pair=batches_per_pair, meta_probe=meta_probe)
@@ -1355,6 +1369,29 @@ def evaluate(model, h5_path, device, *, regime: str = "type1", batch_size: int =
              max_batches: Optional[int] = None, fg_frac: float = 0.02, n_boot: int = 1000,
              seed: int = 0, eval_budget: int = 200_000, m3_regions: int = 8,
              include_deprecated: bool = False, reference=None) -> dict:
+    """EVALUATION IS NEVER AUTOCAST, whatever `--precision` the run was trained at.
+
+    Every recorded number in this repo — the Gate B acceptance bands, the CRPS/Spearman/ECE anchors,
+    the M2 slopes — was measured in fp32. A metric measured at a different precision than the one it
+    is compared against is an undeclared difference between arms, and it would land in exactly the
+    third decimal place those bands are set at. Training precision is a throughput choice; scoring
+    precision is part of the measurement, and this repo has one.
+
+    The fence is here rather than at each of the dozen forwards below because the guarantee wanted is
+    "nothing under this call", not "not this line". `candi.metrics` needs no fence at all: it is
+    numpy, and autocast is a torch dispatcher feature that never reaches it.
+    """
+    with no_autocast(device):
+        return _evaluate_fp32(model, h5_path, device, regime=regime, batch_size=batch_size,
+                              max_batches=max_batches, fg_frac=fg_frac, n_boot=n_boot, seed=seed,
+                              eval_budget=eval_budget, m3_regions=m3_regions,
+                              include_deprecated=include_deprecated, reference=reference)
+
+
+def _evaluate_fp32(model, h5_path, device, *, regime: str = "type1", batch_size: int = 4,
+                   max_batches: Optional[int] = None, fg_frac: float = 0.02, n_boot: int = 1000,
+                   seed: int = 0, eval_budget: int = 200_000, m3_regions: int = 8,
+                   include_deprecated: bool = False, reference=None) -> dict:
     units, assays = build_eval_units(model, h5_path, device, regime=regime, batch_size=batch_size,
                                      max_batches=max_batches, seed=seed, reference=reference)
     s14 = _dsf_counterfactual(model, h5_path, device, assays, fg_frac=fg_frac, seed=seed,
