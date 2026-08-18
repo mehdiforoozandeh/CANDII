@@ -10,7 +10,7 @@ log-linked Negative Binomial head.
     x_meta  [B, 4, A+1]      (log2_depth, assay_id, read_length, run_type) for the INPUT tracks
     y_meta  [B, 4, A]        the same 4 rows for the TARGET tracks
       -> {p, n, eta, log2_mu, mu}, each [B, L, A]
-      -> + {signal_mu, signal_var} and/or {peak_prob} when `heads` names them (default: count only)
+      -> + {signal_mu, signal_var} and/or {peak_logit} when `heads` names them (default: count only)
 
 WHY THE DECODER IS GROUPED
 --------------------------

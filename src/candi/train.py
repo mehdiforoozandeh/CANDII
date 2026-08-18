@@ -50,6 +50,8 @@ from candi.meta_probe import DEFAULT_META_PROBE_DELTA, META_PROBE_MODES, make_me
 from candi.encoder import FILM_INITS
 from candi.model import (DEFAULT_FILM_TAPS, DEFAULT_HEADS, build_model, forward_full,
                          parse_film_taps, parse_heads)
+from candi.precision import (DEFAULT_PRECISION, PRECISION_HELP, PRECISIONS, assert_no_grad_scaler,
+                             autocast_region, fp32_fence)
 
 
 
@@ -58,10 +60,20 @@ from candi.model import (DEFAULT_FILM_TAPS, DEFAULT_HEADS, build_model, forward_
 # ---------------------------------------------------------------------------
 
 def _elem_nb_nll(p, n, target, eps: float = 1e-6):
-    probs = (1.0 - p).clamp(eps, 1.0 - eps)
-    total = n.clamp_min(eps)
-    dist = torch.distributions.NegativeBinomial(total_count=total, probs=probs)
-    return -dist.log_prob(target.clamp_min(0.0))       # [B, L, A]
+    # FENCED IN fp32: this is the objective, and it is a log-likelihood, so its arithmetic is all
+    # differences of large lgammas and logs of numbers near 0 and near 1 — the two places a short
+    # mantissa cancels hardest. `1.0 - p` is the specific hazard: p is routinely within 1e-3 of 1.0,
+    # bf16's ulp at 1.0 is 3.9e-3, so the subtraction would return exactly 0.0 for a large fraction
+    # of positions and the clamp would replace the whole distribution's tail with a constant `eps`.
+    # The gradient of a constant is 0, so those positions would silently stop supervising the model.
+    #
+    # The fence is inside the loss rather than at the training-loop call site so that every caller
+    # gets it — `healthcheck` calls `nb_count_loss` directly, and so will the next reader.
+    with fp32_fence(p, n, target) as (p, n, target):
+        probs = (1.0 - p).clamp(eps, 1.0 - eps)
+        total = n.clamp_min(eps)
+        dist = torch.distributions.NegativeBinomial(total_count=total, probs=probs)
+        return -dist.log_prob(target.clamp_min(0.0))       # [B, L, A]
 
 
 def nb_count_loss(out, prep, imp_weight: float = 1.0):
@@ -118,7 +130,6 @@ def nb_count_loss(out, prep, imp_weight: float = 1.0):
 #
 # `obs` / `imp` here mean UNMASKED / MASKED, as everywhere else in this package.
 
-_PEAK_EPS = 1e-6
 
 
 def _elem_gaussian_nll(mu, var, target):
@@ -131,23 +142,38 @@ def _elem_gaussian_nll(mu, var, target):
     return torch.nn.functional.gaussian_nll_loss(mu, target, var, full=True, reduction="none")
 
 
-def _elem_peak_bce(prob, target):
-    """Element-wise BCE on a PROBABILITY (the head already applied the sigmoid).
+def _elem_peak_bce(logit, target):
+    """Element-wise BCE from a LOGIT — `PeakHead` no longer applies the sigmoid.
 
-    The clamp is not tidying. `PeakHead` emits `sigmoid(...)`, which saturates to exactly 0.0 or 1.0 in
-    float32 at |logit| > ~17, and `log(0)` is `-inf` — one saturated bin would turn the whole batch
-    loss into `inf` and the gradient into `nan`, permanently. Production's `nn.BCELoss` has the same
-    hazard and no clamp. A BCE-with-logits head would not need this, but it would also not be the
-    production peak head; the clamp is the price of keeping the interface.
+    NO CLAMP, AND THE ABSENCE IS THE POINT. `binary_cross_entropy_with_logits` fuses the sigmoid into
+    the loss and evaluates it through the log-sum-exp identity, so it never forms `1 - p` and has
+    nothing to saturate. The previous probability-input version needed `clamp(eps, 1-eps)` to keep
+    `log(0)` out of the batch — and under bf16 that clamp was a NO-OP, because `1 - 1e-6` rounds to
+    exactly 1.0 and the bound landed on the value it was excluding.
 
-    The TARGET is deliberately NOT clamped. Peaks are 0/1 where available and -1 where the assay is
-    absent, so a -1 reaching here means the availability mask failed — and torch raising on an
-    out-of-range target is exactly the loud failure that should happen, rather than a silent clamp to
-    0 that would train the head against assays the biosample does not have. Callers must therefore
-    select with the availability mask BEFORE calling this, which `aux_head_losses` does.
+    What that cost was NOT a crash. `binary_cross_entropy` clamps its own log at -100, so the loss
+    merely froze at 13.8023 for every logit >= 8 and the gradient went to EXACTLY ZERO — measured.
+    The head quietly stopped learning from its most confident errors while the loss curve stayed
+    plausible. Re-adding a clamp here would be reintroducing that, wearing the look of a safety
+    measure.
+
+    THE TARGET CHECK IS EXPLICIT BECAUSE THE KERNEL NO LONGER DOES IT. `binary_cross_entropy` rejects
+    a target outside [0, 1]; `binary_cross_entropy_with_logits` does NOT — it accepts -1 and returns
+    a finite, plausible number (1.4741 at logit 0.5). Peaks are 0/1 where available and MISSING = -1
+    where the assay is absent, so a -1 arriving here means the availability mask failed, and without
+    this check the head would train against assays the biosample does not have while every loss curve
+    looked healthy. Switching to logits removed a safety property that torch was providing for free;
+    this restores it deliberately rather than losing it silently.
+
+    Callers must still select with the availability mask BEFORE calling this — `aux_head_losses` does
+    — so in normal operation the check never fires and costs one reduction per optimizer step.
     """
-    return torch.nn.functional.binary_cross_entropy(
-        prob.clamp(_PEAK_EPS, 1.0 - _PEAK_EPS), target, reduction="none")
+    if torch.is_tensor(target) and target.numel() and bool(((target < 0) | (target > 1)).any()):
+        raise ValueError(
+            "peak BCE received a target outside [0, 1] — almost certainly the MISSING = -1 sentinel "
+            "for an assay this biosample does not have. The availability mask must be applied before "
+            "the elementwise loss, not after it; see `aux_head_losses`.")
+    return torch.nn.functional.binary_cross_entropy_with_logits(logit, target, reduction="none")
 
 
 def aux_head_losses(out, prep, imp_weight: float = 1.0):
@@ -168,7 +194,7 @@ def aux_head_losses(out, prep, imp_weight: float = 1.0):
     "no-op" stage; 1.0 is the honest placeholder and the obvious next knob.
     """
     has_signal = "signal_mu" in out
-    has_peak = "peak_prob" in out
+    has_peak = "peak_logit" in out
     if not (has_signal or has_peak):
         return None, {}
 
@@ -208,8 +234,8 @@ def aux_head_losses(out, prep, imp_weight: float = 1.0):
         mu, var, y = out["signal_mu"], out["signal_var"], prep["y_pval"]
         _split(lambda m: _elem_gaussian_nll(mu[m], var[m], y[m]), "signal", mu)
     if has_peak:
-        prob, y = out["peak_prob"], prep["y_peaks"]
-        _split(lambda m: _elem_peak_bce(prob[m], y[m]), "peak", prob)
+        logit, y = out["peak_logit"], prep["y_peaks"]
+        _split(lambda m: _elem_peak_bce(logit[m], y[m]), "peak", logit)
     return total, terms
 
 
@@ -393,13 +419,31 @@ CLIP_NORM = 1.0            # the frozen default; `--clip-norm` overrides it per 
 
 def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
                 imp_weight: float = 1.0, probe=None, clip_state=None,
-                clip_norm: float = CLIP_NORM):
+                clip_norm: float = CLIP_NORM, precision=DEFAULT_PRECISION, scaler=None):
+    # NO GradScaler, ON PURPOSE, and this call is what keeps it that way. See
+    # `precision.assert_no_grad_scaler`: bf16 has fp32's exponent range so there is nothing to
+    # rescue, and a scaler added quietly would multiply every number `_grad_norms` reads below by a
+    # drifting scale factor. The parameter exists only so that adding one is a loud failure here
+    # rather than a silent corruption twelve lines down.
+    assert_no_grad_scaler(scaler)
     # The probe (when present) captures exactly this forward pass and nothing else. Its hooks return
     # on their first statement while unarmed, so the 24 of every 25 steps that do not log pay nothing,
     # and a hook that returns None cannot alter the module output — the arithmetic is unchanged.
     if probe is not None and want_grads:
         probe.arm()
-    out = forward_full(model, prep)
+    # The autocast region covers the FORWARD ONLY. `backward` must not be inside it — autograd
+    # replays each op in the dtype its forward ran in, so wrapping the backward adds nothing and the
+    # PyTorch AMP recipe says so explicitly. The loss is outside it as well, and additionally fences
+    # itself; at `--precision fp32` this context is `enabled=False` and changes no arithmetic, which
+    # is what `tools/golden.py` and `test_defaults_are_a_no_op` assert.
+    #
+    # THE DEVICE IS READ OFF THE MODEL, not threaded in from the caller. A device string passed down
+    # can disagree with where the model actually lives, and `autocast('cpu')` wrapped around a CUDA
+    # model is a SILENT no-op: every op stays fp32, the run finishes normally, and the run JSON
+    # records `precision=bf16` for a run that was nothing of the kind. There is exactly one correct
+    # answer to "which device is this forward on" and the model already holds it.
+    with autocast_region(next(model.parameters()).device, precision):
+        out = forward_full(model, prep)
     loss, terms = nb_count_loss(out, prep, imp_weight=imp_weight)
     # Stage 2: auxiliary heads, added only when the model built one. `aux is None` on the default
     # `--heads count` path, so `loss` is the object `nb_count_loss` returned and the autograd graph is
@@ -411,7 +455,8 @@ def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
     opt.zero_grad()
     loss.backward()
     # grad norms are read HERE — after backward, before clipping — or clip_grad_norm_ rescales them
-    # and the reported ratio becomes a property of the clip threshold rather than of the model.
+    # and the reported ratio becomes a property of the clip threshold rather than of the model. The
+    # same argument is why no scaler may be in play at this point without an `unscale_` before it.
     if want_grads:
         terms = {**terms, **_grad_norms(model)}
         if probe is not None:
@@ -444,7 +489,9 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
           eval_hook=None, eval_every=3, terms_out=None,
           optimizer="adam", trunk_wd=0.0, meta_probe=None,
           lr_schedule="cosine", warmup_frac=0.1, lr_min_ratio=0.1,
-          clip_norm=CLIP_NORM) -> list:
+          clip_norm=CLIP_NORM, precision=DEFAULT_PRECISION) -> list:
+    if precision not in PRECISIONS:
+        raise ValueError(f"precision must be one of {PRECISIONS}; got {precision!r}")
     if p_full_assay == 1.0 and mask_fraction != 0.2:
         print("[train] WARNING: --mask-fraction is INERT under --p-full-assay 1.0 "
               "(DataMasker._mask_full_assay never reads it)", flush=True)
@@ -565,7 +612,8 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
                     want = bool(log_fn) and (step % 25 == 0)
                     terms = _train_step(model, prep, opt, sched, losses, want_grads=want,
                                         imp_weight=imp_weight, probe=probe,
-                                        clip_state=clip_state, clip_norm=clip_norm)
+                                        clip_state=clip_state, clip_norm=clip_norm,
+                                        precision=precision)
                     step += 1
                     pace["n"] += 1
                     if want:
@@ -616,7 +664,7 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
             want = bool(log_fn) and (step % 25 == 0)
             terms = _train_step(model, prep, opt, sched, losses, want_grads=want,
                                 imp_weight=imp_weight, probe=probe, clip_state=clip_state,
-                                clip_norm=clip_norm)
+                                clip_norm=clip_norm, precision=precision)
             step += 1
             pace["n"] += 1
             if want:
@@ -834,7 +882,12 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                    reference_pseudocount=None, imp_weight=1.0, unmask_frac=0.0,
                    eval_every=3, eval_batches_per_pair=4, meta_embed_layernorm=True,
                    optimizer="adam", trunk_wd=0.0, meta_gain=1.0,
-                   meta_probe="off", meta_probe_delta=DEFAULT_META_PROBE_DELTA) -> dict:
+                   meta_probe="off", meta_probe_delta=DEFAULT_META_PROBE_DELTA,
+                   precision=DEFAULT_PRECISION) -> dict:
+    # Checked on the submit line, for the same reason as `meta_probe` below: a mistyped precision
+    # must fail before the h5 is opened, not after an hour of training.
+    if precision not in PRECISIONS:
+        raise ValueError(f"precision must be one of {PRECISIONS}; got {precision!r}")
     # h51 ambiguity guard, run BEFORE anything expensive: `adamw` + a non-zero `weight_decay` would
     # double-specify decay (a global coupled term on top of the per-group decoupled one) and the two
     # arms would stop differing in decay alone. One authoritative home for the rule; `train()` and
@@ -966,7 +1019,12 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                    # h64: the SAME rule. A `planted` run trains against a target nobody else's run
                    # has; its numbers are not comparable to a real arm's, and the config is where a
                    # reader finds that out.
-                   meta_probe=meta_probe, meta_probe_delta=float(meta_probe_delta))
+                   meta_probe=meta_probe, meta_probe_delta=float(meta_probe_delta),
+                   # Stage 3: which precision trained this. It leaves NO trace in the state_dict —
+                   # autocast keeps master weights in fp32, so a bf16 checkpoint and an fp32 one are
+                   # the same file format — and it is deliberately not part of `arch`, so the config
+                   # is the only place a reader can recover it.
+                   precision=str(precision))
     wb = _wandb_init(wandb_project, wandb_run_name, run_cfg)
     log_fn = (lambda step, d: wb.log(d, step=step)) if wb else None
 
@@ -1018,7 +1076,7 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                    eval_hook=(eval_hook if eval_every else None), eval_every=eval_every,
                    terms_out=terms_log, optimizer=optimizer, trunk_wd=trunk_wd,
                    meta_probe=mprobe, lr_schedule=lr_schedule, warmup_frac=warmup_frac,
-                   lr_min_ratio=lr_min_ratio, clip_norm=clip_norm)
+                   lr_min_ratio=lr_min_ratio, clip_norm=clip_norm, precision=precision)
     model.eval()
     if ckpt_path:
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
@@ -1086,6 +1144,11 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                      arch=dict(arch), n_params=int(n_params),
                      lr_schedule=str(lr_schedule), warmup_frac=float(warmup_frac),
                      lr_min_ratio=float(lr_min_ratio), clip_norm=float(clip_norm),
+                     # Stage 3. NOT inside `arch`, deliberately: precision changes no module, no
+                     # shape and no state_dict key, so putting it there would make `--arch-from`
+                     # refuse to re-score a bf16 checkpoint in fp32 — which is the only way eval
+                     # ever scores it, since evaluation is never autocast.
+                     precision=str(precision),
                      cell_cond=cell_cond, num_cells=int(ds.num_cells),
                      # h75: recorded here as well as in the W&B config, so a reader of the run JSON
                      # cannot mistake an LN-off run for a control.
@@ -1337,6 +1400,8 @@ def main():
                          "ALL targets and thins the windows, taking whole pair-cycles SPREAD across "
                          "the eval chromosome. Never use --eval-max-batches for this: it truncates "
                          "the pair cycle, drops whole targets, and its prefix is the dead chr21 p-arm.")
+    ap.add_argument("--precision", default=DEFAULT_PRECISION, choices=list(PRECISIONS),
+                    help=PRECISION_HELP)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--tag", default=None)
     ap.add_argument("--wandb-project", default=None,
@@ -1360,7 +1425,12 @@ def main():
           f"meta_embed_layernorm={a.meta_embed_layernorm} "
           f"optimizer={a.optimizer} weight_decay={a.weight_decay} trunk_wd={a.trunk_wd} "
           f"meta_probe={a.meta_probe} meta_probe_delta={a.meta_probe_delta} "
-          f"meta_gain={a.meta_gain}", flush=True)
+          f"meta_gain={a.meta_gain} precision={a.precision}", flush=True)
+    if a.precision != DEFAULT_PRECISION:
+        print(f"[run] precision={a.precision}: the TRAINING forward is autocast; the metadata "
+              "embedders, every FiLM tap, LaneNorm, the NB head and the whole of eval stay fp32. "
+              "Expect MEMORY, not speed — a null wall-clock delta is the expected result here.",
+              flush=True)
     t0 = time.time()
     res = train_and_eval(
         h5_path=a.h5, out_dir=out_dir, regime=a.regime, epochs=a.epochs,
@@ -1391,7 +1461,8 @@ def main():
         unmask_frac=a.unmask_frac, eval_every=a.eval_every,
         eval_batches_per_pair=a.eval_batches_per_pair, meta_embed_layernorm=meta_ln,
         optimizer=a.optimizer, trunk_wd=a.trunk_wd, meta_gain=a.meta_gain,
-        meta_probe=a.meta_probe, meta_probe_delta=a.meta_probe_delta)
+        meta_probe=a.meta_probe, meta_probe_delta=a.meta_probe_delta,
+        precision=a.precision)
     res["config"]["tag"] = tag
     res["wall_s"] = round(time.time() - t0, 1)
     with open(out_dir / f"{tag}.json", "w") as f:

@@ -50,6 +50,7 @@ import torch.nn.functional as F
 
 from candi._vendored import CLOZE, MISSING
 from candi.encoder import MetadataEmbedding, init_film_proj
+from candi.precision import fp32_fence
 
 __all__ = ["DECONV_NORMS", "DECODER_FILM_TAPS", "DEFAULT_HEADS", "HEADS", "HEAD_SHARINGS",
            "SIGNAL_HEAD_INIT_STD", "SIGNAL_HEAD_VAR_BIAS", "SIGNAL_HEAD_VAR_EPS",
@@ -159,13 +160,20 @@ class LaneNorm(nn.Module):
         self.bias = nn.Parameter(torch.zeros(self.C))
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        if self.mode == "lane":
-            dims = (-1,)                 # C only, at each position
-        else:
-            dims = (1, -1)               # C and L, per lane  (z is [B, L, T, C])
-        mean = z.mean(dim=dims, keepdim=True)
-        var = z.var(dim=dims, keepdim=True, unbiased=False)
-        return (z - mean) * torch.rsqrt(var + self.eps) * self.weight + self.bias
+        # FENCED IN fp32 because this is a REDUCTION and then a reciprocal square root of it. Torch's
+        # own autocast policy puts every normalisation in the fp32 list for this reason: the variance
+        # sums C (mode="lane") or L*C (mode="group") squared terms, and in bf16 — 8 significant bits —
+        # a running sum stops absorbing small addends long before the reduction ends, so the estimate
+        # is biased low, `rsqrt(var + eps)` is biased high, and the whole lane is silently rescaled.
+        # `eps` is 1e-5, which bf16 cannot even add to a variance near 1 without losing it entirely.
+        with fp32_fence(z) as (z,):
+            if self.mode == "lane":
+                dims = (-1,)                 # C only, at each position
+            else:
+                dims = (1, -1)               # C and L, per lane  (z is [B, L, T, C])
+            mean = z.mean(dim=dims, keepdim=True)
+            var = z.var(dim=dims, keepdim=True, unbiased=False)
+            return (z - mean) * torch.rsqrt(var + self.eps) * self.weight + self.bias
 
 
 def _init_grouped_weight(w: torch.Tensor, fan_in: int, fan_out: int) -> None:
@@ -188,11 +196,41 @@ class PerLaneFiLM(nn.Module):
         init_film_proj(self.proj, init)
 
     def forward(self, z: torch.Tensor, meta_embed: torch.Tensor) -> torch.Tensor:
-        if meta_embed.shape[1] != z.shape[2]:
-            raise ValueError(f"PerLaneFiLM track mismatch: z has {z.shape[2]} lanes, "
-                             f"meta_embed has {meta_embed.shape[1]}")
-        gamma, beta = self.proj(meta_embed).chunk(2, dim=-1)      # [B, T, C] each
-        return z * (1.0 + gamma.unsqueeze(1)) + beta.unsqueeze(1)
+        # THE PIVOT IS WRITTEN `z + z*gamma + beta`, NOT `z * (1 + gamma) + beta`. This tap is
+        # adaLN-ZERO: gamma starts at exactly 0 and conditioning is learned by growing it, so the
+        # numerics of a SMALL gamma are the numerics that decide whether the tap can ever switch on.
+        # In `1.0 + gamma` the addend is measured against ulp(1.0), which in bf16 is 2**-8 = 3.9e-3,
+        # so every |gamma| below ~3.9e-3 rounds back to exactly 1.0 and the tap is a permanent exact
+        # identity — with a normal loss curve, a live gradient, and a RISING `film/dec_*_absmax`,
+        # because the parameters move even while their effect is rounded away. Nothing reports it.
+        #
+        # BE PRECISE ABOUT WHAT THE REWRITE BUYS, because it is less than it looks. Measured on this
+        # build (20k bf16 draws from N(0,1), fraction of elements the tap actually moves):
+        #
+        #     gamma      z*(1+gamma)      z + z*gamma
+        #     1e-3          0 %              0 %       <- BOTH dead. The rewrite does not save this.
+        #     2e-3          0 %            2.8 %
+        #     3e-3          0 %           61.6 %
+        #     4e-3        100 %            100 %
+        #
+        # Adding `z*gamma` to `z` measures the small term against ulp(z) instead of ulp(1.0), and
+        # z's mantissa position varies per element, so the threshold falls from a hard uniform 2**-8
+        # to a per-element 2**-9..2**-8. That is a factor of two and a soft edge, not a cure: a gamma
+        # of 1e-3 dies either way. THE FENCE BELOW IS THE ACTUAL FIX — in fp32 ulp(1.0) is 6e-8 and
+        # both forms are fine. The rewrite is the second line of defence, for a decoder run in TRUE
+        # bf16 (weights cast, not autocast), where the fence cannot upcast parameters that arrived
+        # already demoted.
+        #
+        # In fp32 the two forms are bit-identical AT THIS INIT (gamma == beta == 0, so both reduce to
+        # z), which is what `tools/golden.py` checks at 0 ULP. They are NOT bit-identical in general:
+        # float multiplication does not distribute over addition, so once gamma != 0 the two
+        # roundings differ. Any claim that this rewrite is a no-op is a claim about the init only.
+        with fp32_fence(z, meta_embed) as (z, meta_embed):
+            if meta_embed.shape[1] != z.shape[2]:
+                raise ValueError(f"PerLaneFiLM track mismatch: z has {z.shape[2]} lanes, "
+                                 f"meta_embed has {meta_embed.shape[1]}")
+            gamma, beta = self.proj(meta_embed).chunk(2, dim=-1)      # [B, T, C] each
+            return z + z * gamma.unsqueeze(1) + beta.unsqueeze(1)
 
 
 class NoFiLM(nn.Module):
@@ -273,13 +311,37 @@ class GaussianSignalHead(nn.Module):
 
 
 class PeakHead(nn.Module):
-    """`sigmoid(Linear(lane, 1))` — one peak PROBABILITY per position per assay. Off by default.
+    """`Linear(lane, 1)` — one peak LOGIT per position per assay. Off by default.
 
-    Returns a probability rather than a logit because that is production's interface
-    (`EpiDenoise/model.py::PeakLayer`) and because the peak output is consumed as a probability by the
-    ENCODE precision/recall/AUROC evaluation. The cost is that the paired loss is a plain BCE on a
-    number that can saturate, so `train.peak_bce_loss` clamps before taking the log — see the reason
-    there. A logit head would be numerically better and would not be this head.
+    EMITS A LOGIT, NOT A PROBABILITY, and that is a deliberate divergence from production's
+    `EpiDenoise/model.py::PeakLayer`, which returns `sigmoid(...)`. A probability head cannot be made
+    safe at low precision, and this is measured rather than argued: `sigmoid` saturates to exactly
+    1.0 in bf16 by a logit of 8 — an ordinary confident peak call, where fp32 still gives 0.99966 —
+    and the paired BCE's `clamp(eps, 1-eps)` cannot rescue it, because `1 - 1e-6` is not
+    representable in bf16 as anything but 1.0. The clamp degenerates into a bound against the very
+    value it exists to exclude.
+
+    THE FAILURE IS SILENT, NOT LOUD, WHICH IS WHY IT IS WORTH THIS MUCH COMMENT. `log(1-p)` is
+    mathematically `-inf` here, but `binary_cross_entropy` clamps its internal log at -100, so
+    nothing raises and nothing prints `inf`. Measured on a negative label, bf16:
+
+        logit  8 -> loss 13.8023, d loss/d logit = 0
+        logit 12 -> loss 13.8023, d loss/d logit = 0
+        logit 40 -> loss 13.8023, d loss/d logit = 0
+
+    against fp32's 8.0004 / 11.991 / 13.8023 with gradients ~1. So the loss FREEZES at the clamp
+    value and the gradient is EXACTLY ZERO: the head stops learning from every position it is most
+    confidently wrong about, the loss curve still looks reasonable, and nothing anywhere fails.
+
+    That is the same family as the failure the NB head needed an fp32 fence for. The difference is
+    that here it is REMOVABLE rather than merely fenceable: `binary_cross_entropy_with_logits`
+    evaluates through the log-sum-exp identity and never forms `1 - p` at all, so it is exact at any
+    precision — the same three logits give 8.0003 / 12 / 40 with gradient 1.0. A fence would have
+    bounded the failure; the logit deletes it.
+
+    The external contract is unchanged. Anything wanting a probability applies `sigmoid` at the read
+    site, which is exact and cheap; only the loss ever sees the logit, and the loss is what was
+    unsafe. See `train._elem_peak_bce` for the target-range check that moved with it.
 
     NOTE for anyone diffing against production: `PeakLayer` carries a comment claiming "controlled
     initialization" and then applies none. This follows the CODE — default `nn.Linear` init — because
@@ -291,8 +353,8 @@ class PeakHead(nn.Module):
         self.linear_peak = nn.Linear(int(lane), 1)
 
     def forward(self, feat: torch.Tensor) -> torch.Tensor:
-        """`[B, L, A, lane] -> [B, L, A]` in (0, 1)."""
-        return torch.sigmoid(self.linear_peak(feat)).squeeze(-1)
+        """`[B, L, A, lane] -> [B, L, A]`, unbounded — a logit. Apply `sigmoid` to read it."""
+        return self.linear_peak(feat).squeeze(-1)
 
 
 class LaneDeconvBlock(nn.Module):
@@ -484,27 +546,48 @@ class SymmetricDecoder(nn.Module):
             pair = self.film_head(torch.stack([eta, raw_n], dim=-1), memb)
             eta, raw_n = pair[..., 0].contiguous(), pair[..., 1].contiguous()
 
-        depth = y_meta[:, self.depth_row, :]                     # [B, A]
-        valid = (depth != MISSING) & (depth != CLOZE)
-        if self.use_offset:
-            d_off = (depth - self.depth_center).unsqueeze(1)     # [B, 1, A]
-            log2_mu = torch.where(valid.unsqueeze(1), d_off + eta, eta)
-        else:
-            log2_mu = eta
-        if log_ref is not None:
-            log2_mu = log2_mu + log_ref
-        log2_mu = log2_mu.clamp(self.clamp_lo, self.clamp_hi)
-        mu = torch.pow(2.0, log2_mu).clamp_min(self.eps)
-        n = F.softplus(raw_n) + self.eps
-        p = (n / (n + mu)).clamp(self.eps, 1.0 - self.eps)
-        out = dict(p=p, n=n, eta=eta, log2_mu=log2_mu, mu=mu)
-        # The optional heads ADD keys; they never rename or replace one. `mu` is already the NB mean,
-        # so the Gaussian mean cannot be called `mu` without silently changing what every existing
-        # reader of this dict receives — hence `signal_mu`. A caller that does not build these heads
-        # gets the five-key dict byte for byte, and `train.aux_head_losses` uses the ABSENCE of the
-        # keys as its switch, the same way `forward_full` uses the absence of `log_ref`.
-        if self.head_signal is not None:
-            out["signal_mu"], out["signal_var"] = self.head_signal(feat)
-        if self.head_peak is not None:
-            out["peak_prob"] = self.head_peak(feat)
-        return out
+        # THE HEAD ARITHMETIC IS FENCED IN fp32 AS ONE BLOCK, and it is the block this whole flag was
+        # audited around. `log2_mu` is an EXPONENT: the clamp lets it reach 30, and every bit lost
+        # here is a multiplicative error on `mu`, not an additive one. bf16 carries 8 significant
+        # bits, so at log2_mu ~ 16 one ulp is 0.125 and simply STORING the value costs up to half of
+        # that — 2**0.0625 - 1 = 4.4% on mu, before any of the arithmetic below runs, and 9.1% if two
+        # roundings land the same way. `self.eps` is 1e-6 and `1.0 - self.eps` is a number bf16 cannot
+        # represent as anything but 1.0, so `p.clamp(eps, 1-eps)` would degenerate into a clamp
+        # against exactly 1.0 and hand `_elem_nb_nll` a `1 - p` of 0 to take the log of.
+        #
+        # This is also where an fp16 overflow would be LAUNDERED rather than raised — see
+        # `candi.precision`. The fence is what keeps the failure impossible rather than merely
+        # unlikely, and it is why the flag's choices stop at bf16.
+        #
+        # `feat` IS FENCED TOO, AND THAT IS NOT SYMMETRY-FOR-ITS-OWN-SAKE. The optional heads below
+        # read `feat`, and `GaussianSignalHead` floors its variance with `+ 1e-6` — an addend bf16
+        # cannot resolve against a softplus output near 1, measured: at x=0.5 the floor changes
+        # nothing at all. Outside the fence that floor silently does nothing and the Gaussian NLL's
+        # `(y-mu)^2 / var` loses the guard that keeps it finite. Same failure as the count head, same
+        # cause, so they are fenced together. The cost is two Linear(lane,1) per assay run in fp32.
+        with fp32_fence(eta, raw_n, y_meta, log_ref, feat) as (eta, raw_n, y_meta, log_ref, feat):
+            depth = y_meta[:, self.depth_row, :]                     # [B, A]
+            valid = (depth != MISSING) & (depth != CLOZE)
+            if self.use_offset:
+                d_off = (depth - self.depth_center).unsqueeze(1)     # [B, 1, A]
+                log2_mu = torch.where(valid.unsqueeze(1), d_off + eta, eta)
+            else:
+                log2_mu = eta
+            if log_ref is not None:
+                log2_mu = log2_mu + log_ref
+            log2_mu = log2_mu.clamp(self.clamp_lo, self.clamp_hi)
+            mu = torch.pow(2.0, log2_mu).clamp_min(self.eps)
+            n = F.softplus(raw_n) + self.eps
+            p = (n / (n + mu)).clamp(self.eps, 1.0 - self.eps)
+            out = dict(p=p, n=n, eta=eta, log2_mu=log2_mu, mu=mu)
+            # The optional heads ADD keys; they never rename or replace one. `mu` is already the NB
+            # mean, so the Gaussian mean cannot be called `mu` without silently changing what every
+            # existing reader of this dict receives — hence `signal_mu`. A caller that does not build
+            # these heads gets the five-key dict byte for byte, and `train.aux_head_losses` uses the
+            # ABSENCE of the keys as its switch, the same way `forward_full` uses the absence of
+            # `log_ref`.
+            if self.head_signal is not None:
+                out["signal_mu"], out["signal_var"] = self.head_signal(feat)
+            if self.head_peak is not None:
+                out["peak_logit"] = self.head_peak(feat)
+            return out

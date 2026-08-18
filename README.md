@@ -81,6 +81,17 @@ deliberate choice, and every one of them defaults to the shipped model.
 | conditioning | `--film-taps`, a comma set over `pre_conv` `per_conv` `post_conv` `per_transformer` `pre_deconv` `per_deconv` `post_head` · `--film-init-encoder` · `--film-init-decoder` | `per_conv,pre_deconv,per_deconv` · xavier · zero |
 | heads | `--head-sharing` `shared\|per_assay` · `--head-hidden` · `--heads`, a comma set over `count` `signal` `peak` | shared · 0 (match the lane) · `count` |
 | optimisation | `--lr-schedule` `cosine\|linear\|constant` · `--warmup-frac` · `--lr-min-ratio` · `--clip-norm` | cosine · 0.1 · 0.1 · 1.0 |
+| precision | `--precision` `fp32\|bf16` | fp32 |
+
+`--precision` is the one entry above that is **not** an architecture flag: it builds no module and
+changes no `state_dict` key, so it is absent from `config.arch` and lands in the run config instead.
+It buys **memory, not speed** — activations halve, master weights and optimizer state stay fp32 — so
+a null wall-clock result is the expected result and not a bug. The metadata embedders, every FiLM
+tap, `LaneNorm`, the NB head arithmetic, the loss, and the whole of `eval.py` are fenced back into
+fp32 whatever it is set to; **evaluation is never autocast**, so every recorded number stays
+comparable to every other. fp16 is deliberately not offered: the `log2_mu` ceiling below is 30, fp16
+tops out at 2**15.99, and `p = n / (n + mu)` would launder the resulting `inf` into a finite,
+plausible-looking probability rather than raise.
 
 Two guards run before anything is built. `pool_size ** n_cnn_layers` must equal
 `deconv_upsample ** n_deconv_layers`, or the decoder would not undo the encoder's downsampling. And

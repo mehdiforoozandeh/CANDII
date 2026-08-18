@@ -38,6 +38,7 @@ import torch.nn.functional as F
 from candi._vendored import exponential_linspace_int
 from candi._vendored import CLOZE, MISSING
 from candi.config import EncoderConfig
+from candi.precision import fp32_fence
 
 try:
     from x_transformers import Encoder as XEncoder
@@ -187,6 +188,19 @@ class MetadataEmbedding(nn.Module):
         Returns:
             [B, num_assays+1, embed_dim]
         """
+        # FENCED IN fp32, and this tower is the one place where the reason is not merely accuracy.
+        # Rows 1 and 3 (and row 4) are CATEGORICAL IDs read out with `.long()`. bf16 keeps 8
+        # significant bits, so it represents every integer only up to 256 — past that it snaps to
+        # even values, and `cell_id` runs to 361 on the merged panel. Measured on this build:
+        # 257 -> 256, 301 -> 300, 361 -> 360. A demoted metadata tensor would therefore look intact
+        # and index the WRONG embedding row for roughly half the cell types, raising nothing
+        # anywhere. The continuous rows want the fence too (depth is a log2 that
+        # feeds the head's offset directly, where a bf16 rounding is a multiplicative error on mu),
+        # but the categorical aliasing is the one that would never be noticed.
+        with fp32_fence(metadata) as (metadata,):
+            return self._forward_fp32(metadata)
+
+    def _forward_fp32(self, metadata: torch.Tensor) -> torch.Tensor:
         if metadata.shape[1] != self.n_rows:
             rows = "[log2_depth, assay_id, read_length, run_type]"
             if self.num_cells > 0:
@@ -432,20 +446,29 @@ class FiLMLayer(nn.Module):
         # Same arithmetic as the flat `view(bsz, channels)` form this replaces — track `t` is
         # modulated by row `t` of the projection — but the lane axis is now named rather than
         # left to the reader to infer from the channel ordering.
-        bsz, channels, seq = x.shape
-        assays = metadata_embed.shape[1]
-        if channels % assays != 0:
-            raise ValueError(f"C % F != 0 for FiLMLayer. C={channels}, F={assays}")
-        scale, shift = self.proj(metadata_embed).chunk(2, dim=-1)   # [B, T, C] each
-        lane_ch = channels // assays
-        if scale.shape[-1] != lane_ch:
-            raise ValueError(
-                f"FiLMLayer width mismatch: projection gives {scale.shape[-1]} params per track "
-                f"but the activation has {lane_ch} channels per track (C={channels}, T={assays})"
-            )
-        lanes = lanes_from_channels(x, assays)                      # [B, T, C, L]
-        lanes = lanes * (1.0 + scale.unsqueeze(-1)) + shift.unsqueeze(-1)
-        return channels_from_lanes(lanes)                           # [B, T*C, L]
+        #
+        # FENCED IN fp32: conditioning is the smallest signal in the model. The four covariates
+        # reach the trunk only through this projection, `_grad_norms` watches it precisely because a
+        # covariate that cannot steer shows up nowhere else, and a gamma small enough to be rounded
+        # away in bf16 is exactly the state that probe is looking for. The pivot below is left as
+        # `1.0 + scale` here — unlike the decoder's tap this one is xavier-inited by default, so its
+        # scales are live from step 0 and are not the ones bf16's ulp at 1.0 would annihilate. The
+        # fence is what protects the `film_init_encoder=zero` arm, which IS adaLN-zero.
+        with fp32_fence(x, metadata_embed) as (x, metadata_embed):
+            bsz, channels, seq = x.shape
+            assays = metadata_embed.shape[1]
+            if channels % assays != 0:
+                raise ValueError(f"C % F != 0 for FiLMLayer. C={channels}, F={assays}")
+            scale, shift = self.proj(metadata_embed).chunk(2, dim=-1)   # [B, T, C] each
+            lane_ch = channels // assays
+            if scale.shape[-1] != lane_ch:
+                raise ValueError(
+                    f"FiLMLayer width mismatch: projection gives {scale.shape[-1]} params per track "
+                    f"but the activation has {lane_ch} channels per track (C={channels}, T={assays})"
+                )
+            lanes = lanes_from_channels(x, assays)                      # [B, T, C, L]
+            lanes = lanes * (1.0 + scale.unsqueeze(-1)) + shift.unsqueeze(-1)
+            return channels_from_lanes(lanes)                           # [B, T*C, L]
 
 
 # UNREACHABLE on the shipped path (film_mode='per_conv' -> only FiLMLayer is built).
@@ -459,17 +482,21 @@ class PerAssayFiLM(nn.Module):
         init_film_proj(self.proj, init)
 
     def forward(self, x: torch.Tensor, meta_embed: torch.Tensor) -> torch.Tensor:
-        bsz, seq_len, channels = x.shape
-        assays = meta_embed.shape[1]
-        d = self.d_per_assay
-        if channels != assays * d:
-            raise ValueError(
-                f"PerAssayFiLM channel mismatch: C={channels}, expected {assays * d}"
-            )
-        x4 = x.view(bsz, seq_len, assays, d)
-        scale, shift = self.proj(meta_embed).chunk(2, dim=-1)
-        x4 = x4 * (1.0 + scale.unsqueeze(1)) + shift.unsqueeze(1)
-        return x4.view(bsz, seq_len, channels)
+        # fp32 for the same reason as `FiLMLayer` — see the note there. Fenced even though this class
+        # is unreachable on the shipped path: an unreachable branch that is wrong is how the next
+        # `film_mode` becomes wrong the day someone reaches it.
+        with fp32_fence(x, meta_embed) as (x, meta_embed):
+            bsz, seq_len, channels = x.shape
+            assays = meta_embed.shape[1]
+            d = self.d_per_assay
+            if channels != assays * d:
+                raise ValueError(
+                    f"PerAssayFiLM channel mismatch: C={channels}, expected {assays * d}"
+                )
+            x4 = x.view(bsz, seq_len, assays, d)
+            scale, shift = self.proj(meta_embed).chunk(2, dim=-1)
+            x4 = x4 * (1.0 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+            return x4.view(bsz, seq_len, channels)
 
 
 # UNREACHABLE on the shipped path (film_mode='per_conv', not 'per_conv_and_transformer').
@@ -482,8 +509,12 @@ class TransformerFeatureFiLM(nn.Module):
         init_film_proj(self.proj, init)
 
     def forward(self, x: torch.Tensor, pooled_meta: torch.Tensor) -> torch.Tensor:
-        scale, shift = self.proj(pooled_meta).chunk(2, dim=-1)
-        return x * (1.0 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+        # fp32 for the same reason as `FiLMLayer` — see the note there. This tap sits between
+        # transformer layers, so it is the one place where an fp32 island interrupts the bf16 stretch
+        # that autocast is actually there to speed up; the conditioning is worth more than the cast.
+        with fp32_fence(x, pooled_meta) as (x, pooled_meta):
+            scale, shift = self.proj(pooled_meta).chunk(2, dim=-1)
+            return x * (1.0 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 
 # ---------------------------------------------------------------------------

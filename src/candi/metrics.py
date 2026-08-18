@@ -18,6 +18,15 @@ from scipy.special import hyp2f1
 
 P_EPS = 1e-9
 
+# NO fp32 FENCE ANYWHERE IN THIS FILE, and that is the answer rather than an omission. The AMP audit
+# lists `metrics.py` among the things evaluation must never autocast; it already cannot be. Every
+# primitive here takes and returns NUMPY arrays, and `torch.autocast` is a torch dispatcher feature —
+# it rewrites the dtype of torch ops and reaches nothing else, so no setting of `--precision` can
+# change a number computed below. The float64 convention these rely on (`eval._p_from_true_mu`,
+# `nb_crps`) is a numpy fact for the same reason. A fence here would imply a hazard that does not
+# exist and would send the next reader looking for one. The fence that DOES matter is at
+# `eval.evaluate` / `eval.quick_eval`, which is where the torch forwards live.
+
 
 # ---------------------------------------------------------------------------
 # Closed-form negative-binomial CRPS (mean-parameterization p = n/(n+mu))
