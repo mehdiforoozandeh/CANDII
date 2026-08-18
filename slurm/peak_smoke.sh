@@ -5,16 +5,25 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=24G
 #SBATCH --time=0:50:00
-#SBATCH --output=/scratch/mforooz/candii_merge/peak_smoke_%j.out
-#SBATCH --error=/scratch/mforooz/candii_merge/peak_smoke_%j.err
+#SBATCH --output=%x_%j.out
+#SBATCH --error=%x_%j.err
 set -uo pipefail
 
-REPO=/project/6014832/mforooz/CANDII_merge
-H5=/scratch/mforooz/candi_kit/gatec.h5
-OUT=/scratch/mforooz/candii_merge/runs
+# --- override any of these ---------------------------------------------------------------------
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"   # this checkout
+# VENV defaults to the environment you are ALREADY in, never to someone else's path: sourcing a
+# venv you do not own fails late, inside python, rather than at the source line.
+VENV="${VENV:-${VIRTUAL_ENV:-}}"
+H5="${H5:?set H5=/path/to/panel.h5 -- any baked panel carrying the peaks and pval datasets}"
+OUT="${OUT:-/scratch/$USER/candii/peak_smoke}"
+# -----------------------------------------------------------------------------------------------
 mkdir -p "$OUT"
 
-source /project/6014832/mforooz/EpiDenoise/candi_venv/bin/activate
+if [ -n "$VENV" ]; then
+  source "$VENV/bin/activate"
+else
+  echo "[error] no environment: set VENV=/path/to/venv, or sbatch from an active venv" >&2; exit 1
+fi
 cd "$REPO"
 export PYTHONPATH=src
 export WANDB_MODE=disabled
@@ -47,10 +56,10 @@ run allheads_bf16 --heads count,signal,peak --precision bf16
 run peakonly_bf16 --heads count,peak         --precision bf16
 
 echo; echo "################ 2. verdict on the written run JSONs ################"
-python - <<'PY'
-import glob, json, math, sys
+OUT="$OUT" python - <<'PY'
+import glob, json, math, os, sys
 bad = 0
-for f in sorted(glob.glob("/scratch/mforooz/candii_merge/runs/*.json")):
+for f in sorted(glob.glob(os.environ["OUT"] + "/*.json")):
     d = json.load(open(f))
     losses = d.get("train_losses") or []
     finite = all(isinstance(x, (int, float)) and math.isfinite(x) for x in losses)
