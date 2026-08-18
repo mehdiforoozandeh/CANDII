@@ -76,12 +76,26 @@ deliberate choice, and every one of them defaults to the shipped model.
 
 | group | flags | default |
 |---|---|---|
-| geometry | `--n-cnn-layers` `--conv-kernel-size` `--pool-size` `--expansion-factor` `--n-deconv-layers` `--deconv-upsample` `--deconv-kernel-size` | 3 · 3 · 2 · 2 · 3 · 2 · 3 |
+| objective | `--offset` `on\|off` — whether the depth term enters the log link at all | on |
+| geometry | `--n-cnn-layers` `--conv-kernel-size` `--pool-size` `--expansion-factor` `--n-deconv-layers` `--deconv-upsample` `--deconv-kernel-size` `--decoder-lane` | 3 · 3 · 2 · 2 · 3 · 2 · 3 · 8 |
+| width | `--d-model` (`0` = derive from the panel) · `--nhead` · `--n-transformer-layers` · `--embed-dim` | 0 · 4 · 2 · 32 |
+| metadata pathway | `--meta-embed-layernorm` `on\|off` · `--meta-gain` · `--depth-center` (default: derived from the h5) | on · 1.0 · derived |
+| regularisation | `--dropout` | 0.1 |
 | normalisation | `--conv-norm` `layer\|lane\|group\|batch\|instance` · `--deconv-norm` `lane\|group` · `--transformer-norm` `layer\|rmsnorm\|simple_rmsnorm\|scalenorm` · `--transformer-norm-placement` `pre\|post\|sandwich` · `--attn-qk-norm` | layer · lane · layer · pre · off |
 | conditioning | `--film-taps`, a comma set over `pre_conv` `per_conv` `post_conv` `per_transformer` `pre_deconv` `per_deconv` `post_head` · `--film-init-encoder` · `--film-init-decoder` | `per_conv,pre_deconv,per_deconv` · xavier · zero |
 | heads | `--head-sharing` `shared\|per_assay` · `--head-hidden` · `--heads`, a comma set over `count` `signal` `peak` | shared · 0 (match the lane) · `count` |
 | optimisation | `--lr-schedule` `cosine\|linear\|constant` · `--warmup-frac` · `--lr-min-ratio` · `--clip-norm` | cosine · 0.1 · 0.1 · 1.0 |
 | precision | `--precision` `fp32\|bf16` | fp32 |
+
+**`--offset` is the one flag above that changes what the model is asked to do.** With it on, the
+mean carries a hardwired `(d − depth_center)` term, so the depth response is a closed-form thinning
+identity rather than something learned; with it off the model must learn depth from the covariate.
+Both arms are first-class and neither dominates — see `AGENTS.md` §7.2 before quoting either.
+`--reference` also changes the objective — it trains on the deviation from a per-assay average
+rather than on raw signal — but the table it needs is loaded outside the model, so it is absent
+from `config.arch` and must be passed identically at train and eval time. `EVAL.md` owns it.
+`--d-model 0` derives the transformer width from the panel, so **set it explicitly whenever
+`num_assays != 8`** or capacity silently tracks how many assays you happened to include.
 
 `--precision` is the one entry above that is **not** an architecture flag: it builds no module and
 changes no `state_dict` key, so it is absent from `config.arch` and lands in the run config instead.
