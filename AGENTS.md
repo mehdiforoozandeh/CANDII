@@ -1,406 +1,258 @@
-# AGENTS.md — machine-actionable spec for `candi/`
+# AGENTS.md — the agent-facing spec for CANDI
 
-Audience: an LLM coding agent (and its human) working inside this directory with no prior context.
-Read this file top to bottom before editing anything. Every technical claim below cites `file:line`
-inside this kit or inside the research repo it was vendored from.
+**Owns:** the file map, the invariants, the common tasks, the validation gates, the failure-mode
+table, and the frozen pre-CANDII science in §7.
 
-Companion human-facing docs in this directory: `README.md` (quickstart), `RECIPE.md` (architecture and
-training recipe), `DATA.md` (input layout + h5 schema), `TRADEOFF.md` (the offset ON/OFF result),
-`EXTENSION_HOOKS.md` (adding the p-value / peak heads), `.BUILD_PLAN.md` (the full manifest, knobs,
-metric split, validation plan, and RISKS — the most detailed source of truth for *why* each file
-looks the way it does).
+Everything else lives elsewhere and is not restated here: how we work → `CLAUDE.md`. What CANDI is
+and the full tunable surface → `README.md`. The input contract and h5 schema → `DATA.md`. What the
+metrics measure and the rules for quoting a number → `EVAL.md`.
+
+**Where this file and the code disagree, the code is right and this file is the bug.** Anchors are
+`file.py::symbol`, never `file.py:NN` — a symbol survives an edit above it, a line number does not.
 
 ---
 
 ## 1. ORIENTATION
 
-`candi/` is a **self-contained, vendored copy of one CANDI recipe**: the "q19 dual-conditioning"
-model — a counts-only Negative-Binomial epigenome imputer/denoiser conditioned on 4 experimental
-covariates on both the input and the output side. It contains everything needed to go from an
-ENCODE-style directory of per-biosample count files to a trained checkpoint and a scored results JSON:
-ingestion/bake (`src/candi/prep/`), dataset + masking, model, training driver, evaluation stack,
-tests, and SLURM scripts. It has **no imports back into the parent EpiDenoise repo** and runs from any
-working directory once `pip install -e .` has been run.
+CANDI is **one architecture, not a registry** (`model.py` module docstring). A grouped Conv1D tower
+over the assay tracks plus a dense Conv1D tower over DNA, fused linearly, through a RoPE
+transformer; then a grouped deconv mirror of the signal tower with per-assay per-layer FiLM and a
+depth-offset log-linked Negative Binomial head. ~2.35 M parameters.
 
 What it is **not**:
 
-* **Not a pretrained model.** No weights ship in this kit. `src/candi/goldens/*.pt` are *forward
-  output tensors* (`p, n, eta, log2_mu, mu`, each `[2,768,8]` float32 — verified by loading
-  `goldens/wd0_on_s0.pt`), used only to prove the vendored code reproduces the original numerics. The
-  historical `.ckpt` weight files live in the research repo, are referenced only by the optional
-  Gate-A checkpoint test, and are **not** part of the kit. Training is from scratch.
-* **Not full CANDI.** This is the counts-only NB head. There is no Gaussian p-value head and no
-  Bernoulli peak head (`src/candi/model.py:43`); therefore no peak precision/recall/AUROC and no
-  p-value track. `y_pval` / `y_peaks` are carried through the loader and batch untouched
-  (`src/candi/batch.py:51-52,104-105`) purely as the extension hook.
-* **Not a general framework.** It is one recipe with a frozen construction order and a frozen
-  optimizer/loss/step order. Most "improvements" an agent might reflexively make (reordering module
-  construction, renaming state_dict keys, "cleaning up" unreachable branches, normalizing covariates)
-  are regressions here. See §3.
+- **Not a pretrained model.** No weights ship. Training is from scratch.
+- **Not a vendored kit.** Earlier documents in this lineage described `candi/` as a self-contained
+  copy of a "q19 dual-conditioning" recipe built around `RealDualCondModel`, `DualCondDecoder`,
+  `build_real_model` and a `compat.py` bit-exactness module. **None of those exist.** The model is
+  `model.py::CandiModel` with `decoder.py::SymmetricDecoder`, and the gate is `tools/golden.py`. If
+  you find a document naming the old symbols, it predates this repo.
+- **Not the 56.2 M predecessor.** The decoder it replaces ran an *ungrouped* trunk at
+  `num_assays * feat_per_assay * 2**3` channels — a vendoring accident that put 93.7% of the
+  parameters in one dense conv tower. Mirroring the encoder instead dropped the model to 2.35 M and
+  improved both imputation and denoising.
 
 ---
 
 ## 2. FILE MAP
 
-Paths are relative to the kit root (`candi/`). "DO NOT TOUCH" = editing changes recorded numerics
-or breaks the Gate-A copy proof; change only with an explicit instruction and a re-run of §5.
+### 2.1 `src/candi/` — the training path
 
-### 2.1 `src/candi/` — training path (importable without the `[prepare]` extra)
+| file | lines | owns |
+|---|---|---|
+| `model.py` | 263 | `CandiModel`, `build_model`, the FiLM-tap vocabulary (`parse_film_taps`), and the NB helpers `forward_full` / `nb_mean` / `nb_nll` / `encode_latent`. |
+| `encoder.py` | 1252 | `MetadataEmbedding`, `SignalConvTower`, `MaskTokenInjector`, `DNAConvTower`, `LinearFusion`, `V2Encoder`. The `arcsinh` transform lives here, not in the loader. |
+| `decoder.py` | 593 | `SymmetricDecoder` — grouped deconv trunk at constant lane width, four FiLM taps, the NB head, plus the optional `GaussianSignalHead` and `PeakHead`. |
+| `dataset.py` | 497 | `CandiKitH5Dataset` and the depth-centre helper. Reads all scale from `h5.attrs`. |
+| `batch.py` | 160 | masking, the obs/imp maps, the control append, the availability cross-check. |
+| `train.py` | 1479 | the CLI, the training loop, and the run JSON. |
+| `eval.py` | 1532 | the M1/M2/M3/S14 instrument. Contract in `EVAL.md`. |
+| `metrics.py` | 146 | numeric primitives only — `nb_crps`, `calibration_pit_curve`, `ece`, the correlations. |
+| `param_groups.py` | 418 | the decay/no-decay partition, asserted exhaustive and disjoint. |
+| `precision.py` | 134 | the bf16 autocast fences. Evaluation is never autocast. |
+| `reference.py` · `probes.py` · `meta_probe.py` · `healthcheck.py` · `compare_arms.py` · `verify_bake.py` · `report.py` · `report_h74.py` | | reference table, diagnostic probes, pre-training health check, arm comparison, bake verification, figures. |
+| `_vendored.py` | 354 | `MISSING=-1`, `CLOZE=-2`, `DataMasker`. **RNG-load-bearing** — `apply_mask` draws from the global torch RNG every step. Do not reorder, do not add draws. |
 
-| file | lines | responsibility | do not touch |
-|---|---|---|---|
-| `__init__.py` | 22 | Exports only `EncoderConfig`, `V2Encoder`, `RealDualCondModel`, `build_real_model`, `forward_full`, `nb_nll`; defines `__version__`. | Do not add re-exports that pull the bake path or a loss stack — a bare `import candi` must stay at ~5 third-party top-levels. |
-| `_vendored.py` | 344 | The severance module: `MISSING=-1`, `CLOZE=-2`, `exponential_linspace_int`, `DataMasker` (verbatim from repo `_utils.py:36-353`). | `DataMasker` is RNG-load-bearing: `apply_mask` (`_vendored.py:238`) draws from the **global** torch RNG every step. Do not reorder, do not add draws. |
-| `config.py` | 65 | `EncoderConfig` dataclass only (all encoder knobs, incl. `d_model=0` auto). | Do not add/remove fields or change defaults. |
-| `encoder.py` | 974 | `MetadataEmbedding`, `SignalConvTower`, `MaskTokenInjector`, `DNAConvTower`, `LinearFusion`, `V2Encoder`. Contains added asserts at `:142`, `:162`, `:184` (4-row / assay_id / run_type bounds), `:876` (`transformer_layer_drop` must be 0.0), and the DNA-length check in `encode` (`:920-925`). | Blocks marked `# UNREACHABLE on the shipped path` (`:51`, `:302`, `:327`, `:571`, `:642`, `:654`) are kept **verbatim on purpose** — deleting them is a refactor with checkpoint-compat risk and zero benefit. |
-| `decoder.py` | 185 | `DeconvBlock`, `DeconvTower`, `_build_deconv_channel_schedule`, `DecoderTrunk`. `norm='layer'` only. | The trunk is ~91% of model parameters; its channel schedule fixes state_dict shapes. |
-| `model.py` | 277 | `_LegacyPlaceholderMetaEmbedder`, `RealMetaEmbedder` (alias of `MetadataEmbedding`), `DualCondDecoder`, `RealDualCondModel`, `build_real_model`, and the NB helpers `forward_counts / forward_full / nb_mean / nb_nll / encode_latent`. | **FROZEN CONSTRUCTION ORDER** — banner at `model.py:1-16` enumerates the six changes that silently invalidate every recorded anchor. Read it before any edit. |
-| `batch.py` | 148 | `make_masker` + `prepare_masked_batch`: masking, obs/imp maps, control append, availability cross-check. Verbatim from repo `sandbox/batch.py:15-148`. | Batch-key contract must stay byte-identical (that is what keeps `--compat-q19` valid). Control is concatenated **after** masking at `batch.py:121-123`. |
-| `dataset.py` | 367 | `CandiKitH5Dataset` (iterable, HDF5-backed) + `h5_depth_center`. Reads scale from `h5.attrs`; refuses schema v1 (`dataset.py:131-135`). | `__iter__`'s emitted dict keys/shapes (`dataset.py:320-339`) must not move. |
-| `metrics.py` | 137 | Numeric primitives only: `nb_crps`, `nb_quantile`, `calibration_pit_curve`, `ece`, `spearman`, `pearson`, `r2`, `_cos_dist`, `_steering_index`, `P_EPS`, `PIT_GRID`. | `nb_crps` is a closed-form NB CRPS (validated to ~2.4e-5 relative against exact discrete sums by `tests/test_metrics_primitives.py:40`). Do not "simplify". |
-| `eval.py` | 1109 | The measurement stack: `build_eval_units`, `eval_M1`, `eval_M2`, `eval_M3`, `_dsf_counterfactual` (S14), the clustered bootstrap `_cluster_bootstrap_ci`, `evaluate()` (`:1025`) and a checkpoint-scoring CLI (`:1052`). Owns `DEPRECATED_VERDICTS` (`:49`). | Assay labels are threaded in as an argument, never declared. Deprecated keys must keep their verdict strings. |
-| `train.py` | 347 | Training driver + CLI: NB loss, cosine warmup, `_train_step`, full-coverage round-robin, `train_and_eval`, config echo, results JSON. | `train.py:78-87` (step order), `:98` (`Adam`, coupled L2, positional lr), `:228-231` (cudnn determinism pair) are FROZEN. Never add `torch.use_deterministic_algorithms` — it crashes this encoder. |
-| `compat.py` | 150 | Gate A: `build_compat_q19`, `state_dict_sha1`, the frozen `synthetic_batch`, golden comparison, `verify`, CLI. | `synthetic_batch` (`:53`) is the frozen Gate-A input; changing its draw order invalidates every golden and the forward digests. |
-| `report.py` | 350 | Regenerates a markdown scorecard + matplotlib figures from a results JSON alone (`[report]` extra, needs `MPLBACKEND=Agg`). CLI: `python -m candi.report <results.json> [--outdir DIR]`. | Assay labels come from the results JSON `config.assays` (`report.py:40`), never a literal. |
-| `goldens/*.pt` | 6 files | Frozen forward outputs (`init_on`, `init_off`, and four named after historical checkpoints). Shipped as package data (`pyproject.toml` `[tool.setuptools.package-data]`). | **Never regenerate.** `compat._check_golden` (`compat.py:86-98`) silently *writes* a golden if the file is missing — deleting one turns the copy proof into self-certification. |
+### 2.2 `src/candi/prep/` — the bake path (needs the `[prepare]` extra)
 
-### 2.2 `src/candi/prep/` — bake path (needs the `[prepare]` extra: pysam, intervaltree, pandas)
+`bake.py` (522) writes the h5 and runs the post-bake `_verify` gates. `handler.py` (2000) is the
+ENCODE-side reader. `reference_sample.py` (191) derives and asserts the assay order.
+`panel.py` validates the panel JSON and rejects unknown keys. Schema and layout → `DATA.md`.
 
-| file | lines | responsibility | do not touch |
-|---|---|---|---|
-| `panel.py` | 57 | `Panel` dataclass + `load_panel` with strict unknown-key rejection; validates ≥2 `T_` biosamples, `context_bins % 8 == 0`, square `resolution`, disjoint train/eval chroms. | The `%8` and perfect-square rules encode the encoder's pool/block arithmetic; loosening them produces shape errors deep in the tower. |
-| `paths.py` | 42 | `SideFiles(chrom_sizes, fasta, blacklist=None, ccres=None)` + `validate()`; loud warning when the blacklist is empty or absent. | — |
-| `handler.py` | 1993 | `CANDIDataHandler`, vendored verbatim from repo `data.py` with 5 surgical edits (E1 side files/panel injection, E2 explicit `includes`, E3 DSF fallback now raises, E4 int16 overflow check, E5 unparseable `run_type` raises). Sole definition of assay→id ordering, covariate assembly, NPZ/FASTA/blacklist IO. | Do not reformat and do not "modernize". Edits E1 must stay inside `__init__` before `_load_blacklist`. |
-| `reference_sample.py` | 191 | `make_handler` (`:20`) — builds the handler and runs the **panel/alias bijection gate** (`:46-52`); `resolve_column_order` (`:56`), `assert_panel_bijection` (`:61`), `reference_tensors`, `fixed_dsf_pair_maps`. | The bijection gate is the fix for the assay-order landmine. Never bypass it. |
-| `bake.py` | 480 | ENCODE-style dir → HDF5 schema v2. Window tiling, optional type2 cCRE loci, per-(bios,chrom) bake cache, attrs, and the post-bake `_verify` gate (`:398-446`, checks F3 zero-filled meta / F4 DSF depth ladder / F7 raw counts / F15 control availability) which runs **before** the temp file is renamed into place (`:392-394`). CLI at `:446`. | `_enable_bake_cache` is load-bearing for runtime (minutes vs hours). `-1` (never `0`) is the sentinel written for an absent DSF level. |
+### 2.3 Tests, tools and jobs
 
-### 2.3 Everything else
-
-| path | responsibility |
-|---|---|
-| `tests/test_compat_q19.py` (172) | Gate A as pytest: param count, state_dict sha1, forward digests, construction-order source guards, placeholder size, adaLN-zero init, x-transformers pin. The 4 historical-checkpoint cases `pytest.skip` when the ckpt dir is absent (`:102`). |
-| `tests/test_model.py` (238) | Synthetic-tensor model tests: sentinel handling, offset reads row 0, `offset=off ⇒ log2_mu == eta`, per-assay locality, latent invariance to `y_meta`, out-of-range `assay_id`/`run_type` raise, scale axes (`num_assays ∈ {3,8,16}` × `context ∈ {384,768,1536}`), `--d-model` decoupling, DNA-length mismatch raises. No h5 needed. |
-| `tests/test_bake_gates.py` (371) | Ingestion landmines on a synthetic ENCODE-layout fixture in `tmp_path`: bijection error naming, `-1` vs `0` meta, DSF-ladder forgery detection, int16 overflow, unparseable run_type, 3-assay/384-bin round-trip into the model, raw-integer counts out of the loader. |
-| `tests/test_metrics_primitives.py` (171) | `nb_crps` vs exact sums and Monte Carlo, PIT uniformity, ECE sensitivity, correlations vs scipy. Data-free. |
-| `slurm/bake.sh` (60) | Bake job. Pure CPU *work*, but it still requests `--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1` (`slurm/bake.sh:20`) — deliberately, to route through the GPU account; the reason is in the header comment at `:7-13`. |
-| `slurm/train.sh` (56) | 2 arms × 3 seeds array (`--array=0-5`). `--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1`. |
-| `slurm/gate.sh` (69) | Fail-fast pre-flight: pytest → compat-q19 → CPU smoke → GPU smoke, propagating the first non-zero rc. |
-| `configs/panel.q19.json` | The exact 8-assay / 10-biosample q19 panel. |
-| `configs/panel.example.json` | Minimal 3-assay template. |
-| `pyproject.toml` / `requirements-fir.txt` | Portable pins / literal Alliance-Canada (`+computecanada`) rebuild list. |
-| `research/` (5 files) | The primary sources every result in this kit cites, copied from the research repo and frozen. **`research/README.md` carries a decoder ring for the `h<N>`/`q<N>` tracker ids those documents use** — the tracker itself does not ship, so without it those ids are dead links. |
-| `configs/panel.gatec.json` | 5-assay / 512-bin panel used by Gate C to prove the scale knobs are real. |
-| `slurm/gatec.sh` (44) | Gate C: bake + 3-epoch train at a non-q19 scale. |
-
-The directory is named `slurm/`, **not** `jobs/`, because the parent repo's `.gitignore:15` has an
-unanchored `jobs/` rule that would silently swallow the sbatch scripts. Avoid `models/` and `logs/`
-for the same reason.
+`tests/` is CPU-only and needs no GPU and no data. `tools/golden.py` is the bit-exactness gate;
+`tools/peak_check.py` checks the peak head. `slurm/` holds the sbatch scripts — the directory is
+named `slurm/` and **not** `jobs/` because an unanchored `jobs/` rule in a parent `.gitignore` would
+swallow it. Avoid `models/` and `logs/` for the same reason.
 
 ---
 
 ## 3. INVARIANTS — check yourself against this list after every edit
 
-1. **Frozen construction order.** `RealDualCondModel.__init__` builds `V2Encoder` **first**, then
-   replaces `encoder.metadata_embedding`, then builds `DualCondDecoder`
-   (`model.py:214-223`). `DualCondDecoder.__init__` builds trunk → `_LegacyPlaceholderMetaEmbedder`
-   → `film_proj` (constructed **then** zeroed) → `head_eta` → `head_n` → replace `meta_embedding`
-   (`model.py:141-157`). All of these draw from the global torch RNG. Reordering, skipping the
-   placeholder, or creating `film_proj` as a zero tensor changes the weight stream and breaks Gate A.
-2. **The placeholder embedder is fixed at `8 × embed_dim`** (`model.py:83`). It is never used in
-   forward; it exists solely to keep the RNG stream aligned with the historical construction. It must
-   **not** scale with `num_assays`.
-3. **No imports reaching back into the parent repo.** Nothing under `src/` may contain `from sandbox`,
-   `from model import`, `from _utils import`, or `SANDBOX_ASSAYS`. Import-time third-party top-levels
-   must stay within `{torch, numpy, h5py, x_transformers, einops, einx, loguru, sympy, scipy}` plus
-   the `[prepare]`/`[report]` extras in `prep/`/`report.py`.
-4. **The assay order is derived and asserted, never declared.** There is **no assay-name string
-   literal anywhere under `src/`**. Bake derives the order from the handler's filtered
-   `experiment_aliases` keys (`prep/reference_sample.py:56-58`), asserts a bijection against the
-   requested panel (`:61-65`), asserts `assay_to_id == range(A)` and `control_assay_id == A`
-   (`prep/reference_sample.py:48-52`), and records it in `h5.attrs['assays']`. Everything downstream
-   reads it back (`dataset.py:135`) and threads it as an argument (`eval.py`, `report.py`). Adding a
-   hard-coded list of assay names anywhere is a defect.
-5. **`arcsinh` lives in the model, not the loader.** The loader yields **raw counts**; the transform is
-   applied inside `V2Encoder.encode` via `_apply_signal_transform` (`encoder.py:629-639`,
-   `signal_transform="arcsinh"`, set at `model.py:209`). Never transform in `dataset.py` or `batch.py`
-   — that is a silent double-arcsinh.
-6. **Counts stay raw non-negative integers as NB targets.** `y_data` is the NB target
-   (`train.py:47`). The bake writes int16 raw counts and `_verify`'s F7 check rejects an already
-   transformed range (`prep/bake.py:427-433`); `tests/test_bake_gates.py:359` guards the loader side.
-7. **The control channel is never masked.** `prepare_masked_batch` masks first, then concatenates the
-   control column at index `A` (`batch.py:121-123`), so it is structurally unmaskable. Model inputs
-   are therefore `F = num_assays + 1` wide on the input side and `num_assays` wide on the target side.
-8. **`obs` / `imp` mean unmasked / masked**, not biological observed/imputed. `observed_map` =
-   unmasked-and-available, `masked_map` = cloze (`batch.py:68-77`); the loss adds the two means
-   unweighted (`train.py:45-51`).
-9. **Covariates stay raw.** The 4 rows are `[log2_depth, assay_id, read_length, run_type]` with **no
-   normalization** (parameter-encoding normalization was tested and refuted upstream). Sentinels are
-   `MISSING=-1` and `CLOZE=-2` and are kept distinct everywhere
-   (`_vendored.py`, consumed at `encoder.py:147-190`). `assay_id == num_assays` is the control slot;
-   the embedding table is `Embedding(num_assays + 3)` = real ids + control + MISSING + CLOZE. Do not
-   "fix" the `+3` to `+2`.
-10. **Scale is a property of the baked file, never a CLI flag.** `num_assays`, `context_bins`,
-    `resolution`, `dsf_list`, assay order and train/eval chromosomes come from `h5.attrs`
-    (`dataset.py:135-145`) and are passed into `build_real_model` from the dataset (`train.py:232-236`).
-    Never add flags for them.
-11. **`d_model=0` means auto** `= (num_assays+1) * expansion**n_cnn_layers` — i.e. transformer width
-    silently tracks panel size (8 assays → 72). The value is printed at every build
-    (`model.py:224-226`). When `num_assays != 8`, set `--d-model` explicitly.
-12. **Determinism pattern:** `cudnn.deterministic=True`, `cudnn.benchmark=False`, then
-    `torch.manual_seed(seed)` immediately before `build_real_model` with nothing touching the RNG in
-    between (`train.py:228-236`). `transformer_layer_drop` must remain 0.0 (`encoder.py:876-879`) — it
-    consumes global RNG inside forward.
-13. **SLURM GPU spec is fixed:** every `#SBATCH --gres` line in this kit reads
-    `--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1`, and **all three** scripts carry one — `train.sh:13`,
-    `gate.sh:13`, and `bake.sh:20`. The bake does no GPU compute; it requests the smallest MIG slice
-    only to route through the GPU account (rationale at `bake.sh:7-13`). Never write any other `--gres`
-    spec on any line.
-14. **Never write a `0`-filled metadata row.** An absent DSF level or unavailable assay is `-1`
-    (`prep/bake.py` B6 edit; availability test is `float(xm[0]) != -1.0`, `dataset.py:306,314`). A
-    zero-filled row marks every assay available at `log2(depth)=0` with all-zero counts: loss
-    descends, metrics are garbage. `dataset._check_available_columns_nonzero` (`dataset.py:169`) and bake `_verify`
-    F3 both guard this.
+1. **The control channel is never masked.** `batch.py::prepare_masked_batch` masks first and
+   concatenates the control column at index `A` afterwards, so it is structurally unmaskable. Inputs
+   are `A+1` wide, targets `A` wide.
+2. **`obs` / `imp` mean unmasked / masked**, never biological. `masked_map` is `x_data == CLOZE`;
+   `observed_map` is neither sentinel. The loss adds the two means unweighted.
+3. **`arcsinh` lives in the model, not the loader.** The loader yields raw counts; the transform is
+   applied inside `encoder.py::V2Encoder`. Transforming in `dataset.py` or `batch.py` is a silent
+   double-arcsinh.
+4. **Counts stay raw non-negative integers as NB targets.** The bake's `_verify` F7 check rejects an
+   already-transformed range; `tests/test_bake_gates.py` guards the loader side.
+5. **Scale is a property of the baked file, never a CLI flag.** `num_assays`, `context_bins`,
+   `resolution`, `dsf_list`, the assay order and the chromosome split all come from `h5.attrs`
+   (`dataset.py`). Never add flags for them.
+6. **The assay order is derived and asserted, never declared.** There is no assay-name string literal
+   under `src/`. `prep/reference_sample.py` asserts a bijection against the requested panel and that
+   `assay_to_id == range(A)` with `control_assay_id == A`, then records the order in `h5.attrs`.
+   A hard-coded assay list anywhere is a defect.
+7. **Covariates stay raw.** The four rows are `[log2_depth, assay_id, read_length, run_type]` with no
+   normalization. Sentinel detection is exact equality against `-1` and `-2`, so any normalization
+   scheme must be range-guaranteed to avoid both. The `assay_id` table is `Embedding(num_assays + 3)`
+   — real ids, control, MISSING, CLOZE. **Do not "fix" the `+3` to `+2`.**
+8. **Never write a `0`-filled metadata row.** An absent DSF level or unavailable assay is `-1`. A
+   zero-filled row marks every assay available at `log2(depth) = 0` with all-zero counts: the loss
+   descends and every metric is garbage. Guarded by the dataset's availability check and by bake
+   `_verify` F3.
+9. **`d_model = 0` means auto**, deriving the transformer width from the panel — so width silently
+   tracks assay count. Attention inner dim is `nhead * 64` regardless of `d_model`, so capacity does
+   **not** scale with the panel unless `--nhead` rises. Set `--d-model` explicitly when
+   `num_assays != 8`.
+10. **Determinism pattern:** `cudnn.deterministic=True`, `cudnn.benchmark=False`, then
+    `torch.manual_seed(seed)` immediately before the build with nothing touching the RNG in between.
+    `transformer_layer_drop` must remain `0.0` — it consumes global RNG inside `forward`.
+    `torch.use_deterministic_algorithms` is deliberately **not** used; it crashes this encoder.
+11. **Anything purely additive and default-off must be constructed LAST in its parent module.** An
+    `nn.Linear` draws from the global RNG before any re-init overwrites it, so a module inserted
+    mid-constructor re-samples everything built after it — and the arm then differs from its control
+    in a re-sampled trunk as well as in the thing under test.
+12. **No imports reaching back into a parent repo.** Nothing under `src/` may contain `from sandbox`,
+    `from model import`, `from _utils import`, or `SANDBOX_ASSAYS`.
+13. **The SLURM GPU spec is fixed.** Every `#SBATCH --gres` line reads
+    `--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1`. The bake does no GPU compute; it requests the
+    smallest MIG slice only to route through the GPU account.
+14. **`--heads` changes the objective, not just the architecture.** `count` is required and is the
+    only head `eval.py` scores. `signal` and `peak` add loss terms supervised on full-depth targets
+    only, so a run naming either is **not** a control for a run that does not.
 
-
-**Never infer what a tracker id means.** `h34`, `h45`, `q19` and friends appear throughout `research/`
-and in the prose of the main docs. The tracker is not shipped. `research/README.md` has the decoder
-ring; if an id is not in it, report it as unresolvable rather than reconstructing it from context.
-Confidently-interpolated provenance is how the retracted `Δη = 0.833` reached three separate records.
+**Never infer what a tracker id means.** `h34`, `h45`, `q19` and friends appear in prose throughout
+this lineage. Those nodes live in the read-only archive vault (§7); CANDII-era ids live in
+`cruxvault/`. If an id resolves in neither, report it as unresolvable rather than reconstructing it
+from context — confidently-interpolated provenance is how the retracted `Δη = 0.833` reached three
+separate records.
 
 ---
 
 ## 4. COMMON TASKS
 
-Set once (adapt to your machine):
-
-```bash
-export KIT=/project/6014832/mforooz/EpiDenoise/candi
-export VENV=/project/6014832/mforooz/EpiDenoise/candi_venv
-source "$VENV/bin/activate"
-export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
-export MPLBACKEND=Agg WANDB_MODE=disabled
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-```
-
 ### 4.1 Install
 
 ```bash
-pip install -e "$KIT"                 # train-only deps
-pip install -e "$KIT[prepare,report,test]"   # + bake, figures, pytest
+pip install -e .                          # train-only deps
+pip install -e ".[prepare,report,test]"   # + bake, figures, pytest
 ```
 
-On Alliance Canada, build the venv from `requirements-fir.txt` first (it documents the exact
-`module load python/3.10.13` → `--no-index` → `pip install x-transformers==2.11.23` sequence), then
-`pip install -e "$KIT" --no-deps`.
+On Alliance Canada build the venv from `requirements-fir.txt` first — it documents the exact
+`module load` → `--no-index` → pinned-`x-transformers` sequence — then `pip install -e . --no-deps`.
 
 ### 4.2 Run the tests
 
 ```bash
-cd /tmp && python -m pytest "$KIT/tests" -q
+pytest tests/ -q
 ```
 
-Run from a directory that is **not** the parent repo — that is part of the proof that the kit is
-cwd-independent. Current status in this repo: **63 passed**, CPU only (wall time is machine-dependent:
-11 s on a warm login node, ~50 s cold). On a machine without the
-historical checkpoints, the 4 `test_historical_checkpoint_loads_strict` cases skip; point
-`CANDI_KIT_CKPT_DIR` at a directory of `.ckpt` files to enable them.
+CPU only, no GPU and no data required. Run it from a directory that is not a parent repo; that is
+part of the proof the package is cwd-independent.
 
-### 4.3 Bake a new panel
+### 4.3 Bake a panel
 
-1. Write a panel JSON (copy `configs/panel.example.json`). Every key is consumed; unknown keys are
-   rejected (`prep/panel.py:51-57`). Required: ≥2 `T_` biosamples, `context_bins % 8 == 0`,
-   `resolution` a perfect square, `train_chroms` disjoint from `eval_chroms`.
-2. Bake:
-
-```bash
-python -m candi.prep.bake \
-  --root /project/6014832/mforooz/DATA_CANDI_EIC \
-  --panel "$KIT/configs/panel.q19.json" \
-  --out /scratch/$USER/candi/q19.h5 \
-  --fasta /project/6014832/mforooz/EpiDenoise/data/hg38.fa \
-  --chrom-sizes /project/6014832/mforooz/EpiDenoise/data/hg38.chrom.sizes \
-  --type2-ccre 0 --type2-non 0 --seed 42
-```
-
-Optional: `--blacklist BED`, `--ccres BED` (required iff `--type2-ccre`/`--type2-non` > 0),
-`--max-tile-per-chrom N` (smoke bakes), `--allow-missing-control`. `--out` has no default; point it at
-scratch. Note `--type2-ccre` / `--type2-non` / `--seed` are **bake CLI flags, not panel keys** —
-`load_panel` rejects unknown keys (`prep/panel.py:51-57`). On SLURM: `sbatch "$KIT/slurm/bake.sh"` (no
-GPU compute, but the script does request the MIG slice — see invariant 13).
-
-Roughly ~0.16 GB and ~1.5 min per biosample at 8 assays / 7,485 windows (`.BUILD_PLAN.md` RISKS).
+Copy `configs/panel.example.json`. Every key is consumed and unknown keys are **rejected**, so
+`--type2-ccre`, `--type2-non` and `--seed` are bake **CLI flags**, not panel fields. Requirements:
+≥2 `T_` biosamples each with ≥2 available assays, `context_bins` divisible by `pool_size**n_cnn_layers`,
+`resolution` a perfect square, `train_chroms` disjoint from `eval_chroms`. Full schema → `DATA.md`.
 
 ### 4.4 Train an arm
 
 ```bash
-python -m candi.train \
-  --h5 /scratch/$USER/candi/q19.h5 \
-  --out-dir /scratch/$USER/candi/runs \
-  --offset on --seed 0 --tag kit_on_s0 \
-  --weight-decay 0.0 --dsf-sampling uniform --epochs 25 --batch-size 8 --full-coverage \
-  --eval-batch-size 4 --eval-max-batches 0 --eval-budget 50000000 --m3-regions 40 \
-  --fg-frac 0.02 --n-boot 1000
+python -m candi.train --h5 <panel.h5> --out-dir <runs> --epochs 10 --steps-per-epoch 2000
 ```
 
-`--offset off` (alias `--arm offset_off`) trains the other arm. Writes `{out_dir}/{tag}.json` and
-`{out_dir}/{tag}.ckpt`. Both arms × 3 seeds as one array: `sbatch "$KIT/slurm/train.sh"`
-(~85 min wall per arm on one `1g.10gb` MIG slice; host RSS 15–18 GiB is the binding constraint).
+Writes `{out_dir}/{tag}.json` and `{out_dir}/{tag}.ckpt`. The full flag surface — geometry,
+normalisation, FiLM taps and init, head sharing, LR schedule, clip, precision — is tabulated in
+`README.md`, and every flag defaults to the shipped model.
 
-The full tunable surface — geometry, normalisation, FiLM taps and init, head sharing, LR schedule and
-clip — is tabulated in the README. Every flag defaults to the shipped model.
-
-### 4.5 Evaluate an existing checkpoint
+### 4.5 Evaluate a checkpoint
 
 ```bash
-python -m candi.eval \
-  --h5 /scratch/$USER/candi/q19.h5 \
-  --ckpt /scratch/$USER/candi/runs/kit_on_s0.ckpt \
-  --out /scratch/$USER/candi/runs/kit_on_s0_rescore.json \
-  --arch-from /scratch/$USER/candi/runs/kit_on_s0.json \
-  --offset on --m3-regions 40 --n-boot 1000 --eval-budget 50000000
+python -m candi.eval --h5 <panel.h5> --ckpt <run.ckpt> --arch-from <run.json>
 ```
 
-**Always pass `--arch-from`, pointing at the run's own JSON.** Every architecture flag changes the
-`state_dict`, so a checkpoint can only be reloaded by a model built from the same arguments; that
-file carries them under `config.arch`, so nothing has to be retyped and nothing can be retyped wrong.
-Without it the flags must be matched by hand, and a mismatch is a `strict=True` load failure at best.
-Add `--include-deprecated` to also emit the audited-and-rejected metric keys, each carrying its
-verdict string. Figures + markdown from a results JSON:
-`python -m candi.report <results.json> --outdir DIR`.
+**Always pass `--arch-from`.** Every architecture flag changes the `state_dict`, and that file
+carries the exact arguments the checkpoint was built from, so nothing has to be retyped and nothing
+can be retyped wrong. A mismatch is a strict-load failure at best, and at worst a model that loads
+and is quietly not the one you trained. `--reference` and `--depth-center` still need passing by
+hand; see `EVAL.md`.
 
 ### 4.6 Add a knob
 
-1. Add the keyword to `CandiModel.__init__` (`model.py`) with the CURRENT behaviour as its default.
-   `arch_keys()` reads the signature, so the knob joins `config.arch` — and therefore `--arch-from`
-   — without a second edit.
-2. Add the argparse flag in `train.py:main`, and thread it through `train_and_eval` into the `arch`
-   dict / `train` / `evaluate`. Do not read globals.
-3. Add it to `tests/test_flags.py`: to `DOCUMENTED_DEFAULTS` (its default must be a no-op) and to
-   `NON_DEFAULTS` (flipping it must change the model). **The second one is the one that matters** —
-   a flag that does nothing when flipped documents a control nobody has, and that has shipped here
-   before.
-4. If it changes model construction, run `python tools/golden.py check .golden_stage0.pt`. It must
-   report 0 ULP. If it cannot, the change is not a knob — it is a new model, and it needs its own
-   recorded golden and a labelled commit saying so.
-5. If it is scale (`num_assays`, `context_bins`, `resolution`, `dsf_list`, chroms), it is **not** a
-   knob — it belongs in the panel and the h5 attrs (invariant 10).
-
-**Anything purely additive and default-off must be constructed LAST in its parent module.** An
-`nn.Linear` draws from the global RNG before any re-init overwrites it, so a module inserted
-mid-constructor re-samples everything built after it — and the arm then differs from its control in
-a re-sampled trunk as well as in the thing under test. `decoder.SymmetricDecoder.film_head` carries
-the worked example.
+1. Add the keyword to `model.py::CandiModel.__init__` **with the current behaviour as its default**.
+   The arch keys are read off the signature, so the knob joins `config.arch` — and therefore
+   `--arch-from` — without a second edit.
+2. Add the argparse flag in `train.py` and thread it through into the arch dict. Do not read globals.
+3. Add it to `tests/test_flags.py`: to the defaults set (its default must be a bit-exact no-op) and
+   to the non-defaults set (flipping it must change the model). **The second is the one that
+   matters** — an exposed, documented, inert flag has shipped here before.
+4. Run `python tools/golden.py check <ref.pt>`. It must report 0 ULP. If it cannot, the change is not
+   a knob: it is a new model, and it needs its own recorded golden and a commit that says so.
+5. If it is scale, it is not a knob — it belongs in the panel and the h5 attrs (invariant 5).
 
 ### 4.7 Change the panel size
 
-Panel size flows: `panel.json` → handler → derived assay order → `h5.attrs` → dataset →
-`build_real_model`. To go from 8 assays to N:
-
-1. Edit `assays` / `biosamples` in the panel JSON and re-bake (§4.3). Nothing in `src/` changes.
-2. Train with an explicit `--d-model` (invariant 11). Attention inner dim is `nhead * 64` regardless
-   of `d_model`, so capacity does not scale with the panel unless `--nhead` also rises.
-3. Do **not** use `--compat-q19`, and expect the recorded anchors in §5 to be meaningless for the new
-   panel — they are anchors for the 8-assay q19 build only.
-4. Re-run `tests/test_model.py::test_scale_axes_independent` and `tests/test_bake_gates.py` — they
-   already cover 3/8/16 assays and 384/768/1536 bins.
+Scale flows `configs/panel*.json` → handler → derived assay order → `h5.attrs` → dataset → `build_model`.
+Edit `assays`/`biosamples` and re-bake; **nothing in `src/` changes.** Then train with an explicit
+`--d-model` (invariant 9), and re-run `tests/test_model.py` and `tests/test_bake_gates.py`, which
+already cover 3/8/16 assays and 384/768/1536 bins.
 
 ---
 
-## 5. VALIDATION GATES
+## 5. VALIDATION
 
-### Gate A — the copy proof (CPU, ~5 min, no SLURM, no data)
-
-**What it proves:** that this kit's model layer is a *bit-exact copy* of the original research
-implementation, not a reimplementation that merely looks similar. It is the reason the recorded
-science numbers may be attached to this code at all. It does **not** prove anything about data,
-training quality, or the science claims.
+### 5.1 The bit-exactness gate — every change clears it before the next one starts
 
 ```bash
-cd /tmp
-python -m candi.compat        # A1 + A3 only (no checkpoints needed) -> "[compat] OK"
-python -m candi.compat --ckpt-dir /project/6014832/mforooz/EpiDenoise/sandbox/diagnostics/dual_conditioning_real/results   # + A2
-python -m pytest "$KIT/tests/test_compat_q19.py" -q
+python tools/golden.py save <ref.pt>     # record the tree in front of you
+python tools/golden.py check <ref.pt>    # rebuild and assert 0 ULP
 ```
 
-⚠ **`--ckpt-dir` is not skip-safe.** If the directory exists but holds no `main_s0_perassay.ckpt` /
-`offoff_s0_perassay.ckpt` / `wd0_on_s0.ckpt` / `wd0_off_s0.ckpt`, `compat.main` raises
-`SystemExit("no q19 checkpoints found under ...")` and **exits 1** (`compat.py:144-145`) — verified.
-`slurm/gate.sh:35` passes `--ckpt-dir "$CKPT_DIR"` unconditionally, so on any machine without the
-historical checkpoints **gate tier 2 fails**. Drop that argument (A1+A3 are the parts that prove the
-copy) or run the tiers by hand. The pytest path is skip-safe (`tests/test_compat_q19.py:101-102`).
+The model is built from one seed on fixed inputs, so **any refactor that only moves code must
+reproduce the recording exactly**. A nonzero diff, a changed parameter count, or a changed
+`state_dict` key is a failure, never noise. Its reference config is the 35-assay arm
+(`A=35`, `d_model=288`), the run these numbers stay comparable to.
 
-Exact expected values — **no tolerance, do not relax them**:
+Recordings are machine-local by design and gitignored: the point is to record *your* tree and check
+your next edit against it, so a committed one would be a stale claim about somebody else's checkout.
 
-| id | check | expected |
-|---|---|---|
-| A1 | `build_compat_q19(use_offset=True)` under `torch.manual_seed(0)` | **3,103,194** parameters, state_dict sha1 **`fd0e9493ac92a15f`** (`compat.py:27-28`); identical for both arms (`use_offset` holds no parameters) |
-| A1b | pinned dependency | `importlib.metadata.version("x-transformers") == "2.11.23"` (`compat.py:29`) — the package has no `__version__`, so this is the only check |
-| A3 | frozen synthetic forward, single-threaded CPU | digest **`8c9271f29299b2e0`** (offset on) / **`cd18d437a13c041f`** (offset off); `mu.mean()` 2.604400634765625 / 1.1116695404052734; `eta.std()` 0.15498559176921844 (`tests/test_compat_q19.py:31-33`) |
-| A3b | goldens | all 5 output tensors equal to the stored `goldens/*.pt` at **0 ULP** (`compat.py:86-98`) |
-| A2 | historical checkpoints (optional) | all four load with `strict=True`, zero missing / zero unexpected keys; skipped when the ckpt dir is absent |
-| — | source guards | construction order of `RealDualCondModel` / `DualCondDecoder`, placeholder table fixed at `8 × E`, `film_proj` zero at init (`tests/test_compat_q19.py:147-172`) |
+If the gate fails after a pure refactor, the cause is almost always construction-order drift — walk
+invariant 11.
 
-`torch.set_num_threads(1)` is load-bearing for the 0-ULP comparison — CPU float reductions
-re-associate with thread count (`compat.py:76-80`).
+### 5.2 The test suite
 
-**If A1/A3 fail, STOP and do not edit the anchors.** The cause is almost always construction-order
-drift in `model.py`; walk the banner at `model.py:1-16` item by item.
+`pytest tests/ -q`. CPU only. `tests/test_flags.py` is the largest single file (1061 lines) and holds
+the tunable surface to two claims: every default is a bit-exact no-op, and every flag changes the
+model when flipped.
 
-### Gate B — from-scratch reproduction (SLURM, 2 arms × 3 seeds, ~6 GPU-hours)
+### 5.3 Pre-training health check on real data
 
-```bash
-GATE=$(sbatch --parsable "$KIT/slurm/gate.sh")
-sbatch --dependency=afterok:$GATE "$KIT/slurm/train.sh"
-```
-
-Acceptance bands are set **at the noise floor on purpose** (§7): mean over 3 seeds of the offset-ON
-arm within ±0.09 macro `crps_oracle_scaled` of 1.3077, ±0.06 pooled imputation Spearman of 0.6372,
-±0.035 ECE of 0.0533. (An M3 band of ±0.05 around 0.2154 appears in `.BUILD_PLAN.md`, but **do not gate
-on it**: M3 was never re-scored under h48 — `H48_REPORT.md` §3 — and the kit fixed the `between`-pool
-same-region contamination at `eval.py:917-932`, so the kit's M3 is *not* bit-comparable to that anchor.)
-The **structural** sign pattern is the sharper test
-and should be treated as primary: offset ON → `median_eta_slope ≈ 0` and run_type direction ≈ 0;
-offset OFF → `median_eta_slope ≥ 0.7` and a positive run_type direction; offset OFF → macro
-`scale_error ≥ 0.4` while `crps_oracle_scaled` stays within 0.09 of the ON arm. Exact structural nulls:
-`_metadata_ablation(mode="within_batch")` must read exactly 0, and `n_sentinel_skipped == 0` on a
-fully populated panel. Full detail: `.BUILD_PLAN.md` VALIDATION_PLAN Gate B.
-
-### Gate C — generalization smoke (proves the knobs are real)
-
-Bake a different panel (3 assays, 2 `T_` biosamples, `context_bins 384`, other chromosomes) and train
-2 epochs. Acceptance is **build correctness, not quality** — do not read a smoke run's CRPS as
-evidence of anything. Checks: bijection passes at 3 assays; `assay_ids == [0,1,2]`,
-`control_assay_id == 3`; `_verify` passes; the dataset reports `num_assays=3, context_bins=384` and
-`build_real_model` consumes them without a flag; `--d-model` overrides the auto width; loss decreases
-with no NaN; per-assay entries carry the 3 derived names; the negative controls in §6 all raise.
-Full spec: `.BUILD_PLAN.md` VALIDATION_PLAN Gate C.
+`healthcheck.py` runs the checks that need an actual h5 and would otherwise only fail hours into a
+training run.
 
 ---
 
 ## 6. FAILURE MODES AND THEIR SIGNATURES
 
-| symptom | likely cause | where to look |
+Every message below is a real string in the source.
+
+| symptom | cause | where to look |
 |---|---|---|
-| Gate A A1 fails: wrong param count or sha1 | construction-order drift; placeholder skipped or scaled with `num_assays`; `film_proj` created as zeros | `model.py:1-16` banner, `model.py:141-157`, `model.py:214-223` |
-| Gate A passes A1 but A3 golden mismatch at ~1e-6 | thread count not pinned, or a different CPU/BLAS | `compat.py:76-80`; run with `torch.set_num_threads(1)` / `OMP_NUM_THREADS=1` |
-| A2: `load_state_dict` reports unexpected `encoder.transformer_blocks.*` keys | x-transformers version drift | `pyproject.toml` pin; `compat.py:103-106` |
-| `ValueError: ... is schema v1; candi requires v2` | h5 baked by the old repo pipeline | re-bake with `candi.prep.bake` (`dataset.py:131-135`) |
-| `ValueError: panel/alias mismatch: missing=[...]` | a panel assay is absent from the data root, or the alias filter dropped it | `prep/reference_sample.py:46,61-65`; check the assay name spelling against the directory |
-| Loss descends smoothly, metrics are garbage, everything "available" | zero-filled metadata rows (absent DSF level written as 0 rather than -1) | `dataset.py:169`; bake `_verify` F3 (`prep/bake.py:411-415`) |
-| `AssertionError: F4 ... not the downsampled data they claim to be` | a `counts_dsf{k}` dataset holds DSF-1 data | `prep/bake.py:417-425`; handler edit E3 (an assay missing from the DSF map now raises instead of silently loading DSF-1) |
-| `ValueError: count ... exceeds int16` | counts wider than int16 in the source NPZ | handler edit E4; re-bake with a wider dtype |
-| `ValueError: unparseable run_type ...` | a metadata value outside the expected vocabulary (previously inherited the previous assay's value silently) | handler edit E5 |
-| `ValueError: metadata must be 4 rows ...` / `assay_id ... exceeds table bound` / `run_type ... exceeds table bound` | a hand-built or externally-supplied metadata tensor | `encoder.py:142-190`; these are deliberate — previously they aliased onto the MISSING/CLOZE slots |
-| `ValueError: DNA length G != context L x resolution` | panel `resolution`/`context_bins` mismatch between h5 and model | `encoder.py:920-925` |
-| `ValueError: Availability/supervision mismatch` | masking config other than assay-only (`p_full_loci`/`p_chunks` nonzero) under `missing_data_mode='mask_token'` | `batch.py:80-85`, `encoder.py:890-895` |
-| `ValueError: no training windows: regime=...` | `type2_loci` regime on an h5 baked with `--type2-ccre 0 --type2-non 0` | `dataset.py:159-162` |
-| `[data] WARNING: single-DSF ladder` | `dsf_list` has one level; per-assay independent DSF sampling is inert and the depth-steering signal is absent | `dataset.py:163-165`, `prep/panel.py:44-48` |
-| `[train] WARNING: --mask-fraction is INERT` | `--mask-fraction` set while `--p-full-assay 1.0`; `DataMasker._mask_full_assay` never reads it | `train.py:93-95`, `_vendored.py:114-143` |
-| Training runs but imputation loss is ~0 | biosamples with ≤1 available assay are skipped by the masker, so no cloze is produced | `_vendored.py:133-137`; the panel gate requires ≥2 `T_` biosamples but not ≥2 assays each |
-| Host OOM at ~N×1.6 GB | the shared RAM buffer was not shared across the per-biosample datasets | `train.py:106-113` (`ds._ram_buf = shared`) |
-| `raise ValueError("missing_data_mode='mask_stem' not shipped ...")` / `transformer_type='production_dual' not shipped` / `norm=... not shipped` | a config branch that depends on parent-repo modules | intentional; use `mask_token` / `xtransformers` / `layer` |
-| Run-to-run numbers differ on the same seed | `torch.use_deterministic_algorithms` added, `cudnn.benchmark` re-enabled, or something touched the RNG between `manual_seed` and `build_real_model` | `train.py:228-236` |
-| `MPLBACKEND` / display errors from `report.py` | headless node without `MPLBACKEND=Agg` | §4 env block |
+| `tools/golden.py check` reports a nonzero diff after a pure refactor | construction-order drift — a module inserted mid-constructor re-samples everything after it | invariant 11; `model.py`, `decoder.py` |
+| `... is schema v1; candi requires v2` | h5 baked by an older pipeline | re-bake with `candi.prep.bake` |
+| `panel/alias mismatch: missing=[...]` | a panel assay is absent from the data root, or the alias filter dropped it | `prep/reference_sample.py`; check the spelling against the directory |
+| `F3 <bios>: meta_dsf<d> zero-filled` | an absent DSF level written as `0` rather than `-1` | invariant 8; bake `_verify` F3 |
+| `F7 <bios>: negative counts on an available column` | already-transformed or corrupted counts | invariant 4 |
+| `... not the downsampled data they claim to be` | a `counts_dsf{k}` dataset holds DSF-1 data | bake `_verify` F4 |
+| `count ... exceeds int16` | counts wider than int16 in the source NPZ | re-bake with a wider dtype |
+| `unparseable run_type ...` | a metadata value outside the expected vocabulary | `prep/handler.py` |
+| `metadata must be 4 rows` / `assay_id ... exceeds table bound` / `run_type ... exceeds table bound` | a hand-built metadata tensor | `encoder.py::MetadataEmbedding`; deliberate — these previously aliased onto the sentinel slots |
+| `DNA length G != context L x resolution` | `resolution`/`context_bins` mismatch between h5 and model | `encoder.py::V2Encoder` |
+| `Availability mismatch between counts and peaks` / `... and signal` | the optional heads' targets disagree with the count availability map | `batch.py` |
+| `depth_center mismatch: reference ... vs eval ...` | a reference table built at a different depth centre | `eval.py`; the two offsets would compose on different scales |
+| `has no config.arch block — it predates --arch-from` | an old run JSON | re-score by passing the architecture by hand, or re-train |
+| `parameter(s) landed in BOTH groups` / `in no group` | the decay/no-decay partition is no longer exhaustive and disjoint | `param_groups.py`; `tests/test_param_partition.py` |
+| `[data] WARNING: single-DSF ladder` | `dsf_list` has one level, so per-assay independent DSF sampling is inert and the depth signal is gone | `prep/panel.py` |
+| loss descends smoothly, metrics are garbage, everything "available" | zero-filled metadata rows | invariant 8 |
+| imputation loss is ~0 | biosamples with ≤1 available assay are skipped by the masker, so no cloze is produced | `_vendored.py::DataMasker` |
+| run-to-run numbers differ on the same seed | something touched the RNG between `manual_seed` and the build, or `cudnn.benchmark` was re-enabled | invariant 10 |
 
 ---
 
@@ -431,10 +283,10 @@ from it was migrated into CANDII.
 | `offoff_s0_perassay` (offset OFF) | 1.9023 | 1.3871 | 0.5152 | 0.4647 | 0.4007 | 0.0968 | 2/8 | 0.1974 |
 | `wd0_off_s0` (offset OFF, wd=0) | 2.0561 | 1.4026 | 0.6535 | 0.4641 | 0.3800 | 0.0782 | 1/8 | 0.2185 |
 
-M1 columns are from `research/H48_SCORECARD.md` §M1. The **M3 ratio column is carried forward from a
-pre-fix run** (`.BUILD_PLAN.md` anchor table): `H48_REPORT.md` §3 records that M3 was never re-scored,
+M1 columns are from the archive's `candi_kit/research/H48_SCORECARD.md` §M1. The **M3 ratio column is carried forward from a
+pre-fix run** (the archive's `.BUILD_PLAN.md` anchor table): `H48_REPORT.md` §3 records that M3 was never re-scored,
 so it still uses the old permuted labels and a `between` pool that admits same-region pairs. The kit
-fixes that pool (`eval.py:917-932`), so **your M3 will not be comparable to this column** — quote it
+fixes that pool (`eval.py::eval_M3`), so **your M3 will not be comparable to this column** — quote it
 only with that caveat, or not at all.
 
 Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2):
@@ -465,7 +317,7 @@ Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2)
    assays) but its covariate steering is **functionally null**: sentinel-free real→real assay ablation
    **0.0023**, 43× below its own pre-registered 0.10 bar, and a run_type clustered CI of
    [−0.00066, +0.000087]. Its depth response is **arithmetically exact, not learned**: told-depth
-   slope 1.0000 because `log2_mu = (depth − depth_center) + eta` (`model.py:178-179`) is a closed-form
+   slope 1.0000 because `log2_mu = (depth − depth_center) + eta` (`decoder.py::SymmetricDecoder`) is a closed-form
    thinning identity — NB is closed under thinning with `n` preserved. Offset OFF gives genuine
    learned steering (assay real→real 4.1772; run_type CI [+0.118, +2.180], sign-test p=0.039) at +42%
    macro CRPS (1.9023) and 2/8 beats-marginal. **State both sides whenever you state either.**
@@ -491,7 +343,7 @@ Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2)
 6. **Capability of the model, not of this kit's outputs:** the model is counts-only NB. Do not claim
    peak calling, peak precision/recall/AUROC, or p-value tracks.
 7. **Metric hygiene.** Only the default-emitted metrics may back a claim. Keys behind
-   `--include-deprecated` ship with a verdict string in `eval.py:49` and must never be quoted as
+   `--include-deprecated` ship with a verdict string in `eval.py::DEPRECATED_VERDICTS` and must never be quoted as
    evidence: the `read_length` flip arm (7/12 flips are out of training support), the shuffled-depth
    `null` (a mathematical no-op — one `[4,F]` tensor broadcast over the batch, so the permutation is
    bitwise identity), `frac_min_at_true` (0.25 is not chance; it is the deterministic value of
@@ -510,7 +362,7 @@ Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2)
 10. **Hybrid recovery was not demonstrated.** The upstream hypothesis that a hybrid (annealed /
     α-attenuated offset / learned scale head) recovers both magnitude and steering is recorded
     **REFUTED** in the project's research tracker (`h45`; see the decoder ring in
-    `research/README.md`) — but refuted on its premises, with **no hybrid arm ever trained**, and the
+    the archive's `research/README.md`) — but refuted on its premises, with **no hybrid arm ever trained**, and the
     entry carries a 2026-07-28 flag that its refutation basis is itself under review. Do not present a hybrid
     as either available or ruled out by experiment.
 
