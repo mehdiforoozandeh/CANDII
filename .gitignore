@@ -21,3 +21,16 @@ slurm/logs/
 # be a stale claim about somebody else's checkout.
 *.golden*.pt
 .golden_*.pt
+
+# Obsidian UI state. `workspace.json` rewrites itself every time a pane moves, so tracking it
+# turns every session into a diff. The other .obsidian files are real shared config and stay.
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+
+# The crux vault is tracked — except these two, which are why the old repo became unmanageable.
+# `raw/` is 332 MB of source PDFs; it lives on the laptop that reads them and is rebuildable
+# from the tracked `cruxvault/wiki/.sources.tsv`. `results/<hid>/` is a symlink at the real run
+# directory on Fir, so committing it would commit a dangling link at best.
+cruxvault/raw/
+cruxvault/results/
