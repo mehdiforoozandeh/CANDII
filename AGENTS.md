@@ -406,9 +406,21 @@ Full spec: `.BUILD_PLAN.md` VALIDATION_PLAN Gate C.
 
 ## 7. HOW TO READ THE SCIENCE
 
-Authority order: `sandbox/diagnostics/dual_conditioning_real/H48_REPORT.md` (2026-07-24/25,
-post-adversarial-verification) > `research/H48_SCORECARD.md` > `METADATA_AUDIT.md` > everything else.
-Where an older document disagrees, H48_REPORT wins.
+**This section is frozen.** Everything in it predates CANDII and is never appended to. Results
+produced from CANDII onward live in `cruxvault/` and are never copied back here. See `CLAUDE.md`.
+
+Authority order, highest first. The first two live only in the **read-only archive repo** at
+`~/Desktop/research/libbrechteam@sfu/CANDI/`; paths below are relative to that root:
+
+1. `sandbox/diagnostics/dual_conditioning_real/H48_REPORT.md` (2026-07-24/25,
+   post-adversarial-verification) — also mirrored at `candi_kit/research/H48_REPORT.md`
+2. `candi_kit/research/H48_SCORECARD.md`
+3. `research/METADATA_AUDIT.md` — this one ships **in this repo**
+4. everything else
+
+Where an older document disagrees, H48_REPORT wins. The archive also holds the old crux vault at
+`cruxvault/` (engine 1.3, 82 hypotheses); it is a historical record, not a live one, and no node
+from it was migrated into CANDII.
 
 ### 7.1 The recorded four-arm results (single seed 0, full chr21 coverage)
 
