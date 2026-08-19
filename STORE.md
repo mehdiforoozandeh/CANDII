@@ -89,12 +89,18 @@ skips the scan when a previous run already told you the answer.
 `B_DND-41`/DNase-seq reaches **52,051** reads in one 25 bp bin — under `uint16`, but the reason the
 rule exists rather than a hardcoded width.
 
-### The pval codec is lossy by design, and the bound is 0.005
+### The pval codec is lossy by design, and the bound is 0.005 plus a float32 epsilon
 
 `layout.py::encode_pval` / `::decode_pval`. `round(-log10 p * 100)` clipped to `[0, 65535]`, so the
-resolution is 0.01 and the ceiling is **655.35**. Measured quantization error on the real corpus:
-max **0.005** on `-log10 p`, against a chr1 observed max of 161.2. Storage: 0.771 B/bin against
-2.727 for the source float32, a 3.5× win.
+resolution is 0.01 and the ceiling is **655.35**. Quantization error is half a step, **0.005** on
+`-log10 p`, against a chr1 observed max of 161.2. Storage: 0.771 B/bin against 2.727 for the source
+float32, a 3.5× win (measured on the t9 slice: 0.722 B/bin).
+
+**Do not assert `err <= 0.005` on real data — it fails.** t9 measured a round-trip max of
+**0.0050011** on `B_DND-41/DNase-seq/chr1`. The extra 1.1e-6 is not the codec: `decode_pval` returns
+float32, and a value near 161 has a float32 spacing of ~1e-5, so the decoded number cannot land
+exactly on the quantized one. The honest bound is `0.005 + float32 eps at the magnitude concerned`.
+A test that wants a hard number should use `0.0051`, or compare in float64.
 
 Stored in the **original space** — no arcsinh at bake time. Every transform belongs to the model,
 the same rule `DATA.md` states for counts. This is a deliberate departure from the old bake, which
