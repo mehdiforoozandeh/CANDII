@@ -101,7 +101,10 @@ PI-gated step after the verifiable boxes are ticked.
 `cruxvault/` is tracked. Two directories inside it are **not**, and must stay that way:
 
 - `cruxvault/raw/` — 332 MB of source PDFs. Present locally, never committed.
-- `cruxvault/results/` — `results/<hid>/` is a **symlink** at the real run directory on Fir.
+- `cruxvault/results/` — `results/<hid>/` holds the small evidence rsync'd down from Fir: the
+  report crux links from `## Artifacts`, its figures, the scored JSON, and a `FIR_PATH.txt`
+  naming the run. Checkpoints and logs stay on the cluster. **Not** a symlink — Fir is reached
+  over SSH and is not mounted here, so a link would have no local path to point at.
 
 Only the literature wiki was inherited from the old vault. No old hypothesis was migrated.
 Routine lint is `crux validate --check=tree,tasks`; the full wiki lint needs a local `raw/`.
