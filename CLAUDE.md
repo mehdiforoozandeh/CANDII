@@ -19,6 +19,7 @@ and denoising on cell types it has never seen. `README.md` is the five-minute ve
 | validation gates, failure signatures | `AGENTS.md` §5, §6 |
 | pre-CANDII results, and the rules for quoting any number | `AGENTS.md` §7 |
 | h5 schema, masking, the input contract | `DATA.md` |
+| the CANDI_STORE corpus store — layout, codecs, manifest | `STORE.md` |
 | what M1/M2/M3/S14 measure and the keys they write | `EVAL.md` |
 | every open question, hypothesis, task and result | `cruxvault/` |
 
