@@ -6,9 +6,11 @@ through a temp file, so a SLURM array task that dies mid-write leaves no half-fi
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+from candi.store import genome as G
 from candi.store import layout as L
 from candi.store.manifest import build_manifest, verify_store, write_manifest
 from candi.store.writer import build_biosample, discover_biosamples
@@ -56,8 +58,28 @@ def build_parser() -> argparse.ArgumentParser:
                    help="what to do with a non-finite -log10 p (default: refuse)")
     b.add_argument("--overwrite", action="store_true")
 
-    g = sub.add_parser("build-genome", help="FASTA -> dna.h5 ; FASTA + blacklist -> mask.h5 (t7)")
-    g.add_argument("--store-root", type=Path, default=None)
+    g = sub.add_parser("build-genome", help="FASTA -> dna.h5 ; dna.h5 + blacklist -> mask.h5 (t7)")
+    g.add_argument("--store-root", required=True, type=Path,
+                   help="CANDI_STORE root; the layer is written to <store-root>/genome/")
+    g.add_argument("--fasta", type=Path, default=None, help="uncompressed hg38 FASTA (D10)")
+    g.add_argument("--blacklist", type=Path, default=None,
+                   help="ENCODE hg38 blacklist v2 BED from t4 (D11)")
+    g.add_argument("--chrom-sizes", type=Path, default=None,
+                   help="default: <store-root>/genome/chrom_sizes.json")
+    g.add_argument("--chroms", type=_csv_list, default=None,
+                   help="explicit chromosome list; omit to take every one in chrom_sizes")
+    g.add_argument("--resolution", type=int, default=L.DEFAULT_RESOLUTION)
+    g.add_argument("--build", default=G.GENOME_BUILD)
+    g.add_argument("--fasta-sha256", default=None,
+                   help="verify the FASTA against this before building (D10 build-mismatch check)")
+    g.add_argument("--only", choices=["both", "dna", "mask"], default="both")
+    g.add_argument("--min-valid-frac", type=float, default=G.DEFAULT_MIN_VALID_FRAC,
+                   help="D12 eligibility threshold used for the report (not baked into mask.h5)")
+    g.add_argument("--context-bins", type=_csv_list, default=["768", "6144"],
+                   help="window sizes to count eligible windows for in the report")
+    g.add_argument("--report", type=Path, default=None,
+                   help="write the per-chromosome coverage + eligible-window JSON here")
+    g.add_argument("--overwrite", action="store_true")
 
     m = sub.add_parser("build-manifest", help="metadata CSVs + h5 attrs -> manifest.json")
     m.add_argument("--corpus-root", required=True, type=Path)
@@ -104,12 +126,70 @@ def _cmd_build_biosample(args) -> int:
 
 
 def _cmd_build_genome(args) -> int:
-    raise NotImplementedError(
-        "build-genome is task t7 (`src/candi/store/genome.py`): FASTA -> dna.h5 (D10) and "
-        "FASTA + ENCODE hg38 blacklist v2 -> mask.h5 (D11, D12). It needs the real blacklist "
-        "from t4 — the in-repo data/hg38_blacklist_v2.bed is 8 bytes containing '# Empty'. "
-        "See STORE_PLAN.md §6/t7."
+    sizes_path = args.chrom_sizes or (L.genome_dir(args.store_root) / "chrom_sizes.json")
+    if not Path(sizes_path).is_file():
+        raise SystemExit(
+            f"--chrom-sizes is required (and {sizes_path} does not exist). n_bins = "
+            f"floor(len/resolution) cannot be derived without it."
+        )
+    chrom_sizes = G.load_genome_chrom_sizes(sizes_path)
+    if args.only in ("both", "dna") and args.fasta is None:
+        raise SystemExit("--fasta is required to build dna.h5")
+    if args.only in ("both", "mask") and args.blacklist is None:
+        raise SystemExit("--blacklist is required to build mask.h5 (t4 writes it)")
+
+    def say(msg: str) -> None:
+        print(f"[build-genome] {msg}", flush=True)
+
+    result = G.build_genome(
+        args.store_root,
+        args.fasta,
+        args.blacklist,
+        chrom_sizes=chrom_sizes,
+        chroms=args.chroms,
+        resolution=args.resolution,
+        build=args.build,
+        fasta_sha256=args.fasta_sha256,
+        what=args.only,
+        overwrite=args.overwrite,
+        progress=say,
     )
+    if "dna" in result:
+        d = result["dna"]
+        say(f"dna.h5: {d['bytes'] / 1e9:.3f} GB, {len(d['chroms'])} chroms, "
+            f"fasta_sha256={d['fasta_sha256']}, iupac_folded={d['iupac_counts']}")
+    if "mask" in result:
+        m = result["mask"]
+        say(f"mask.h5: {m['bytes'] / 1e6:.1f} MB, {m['blacklist_intervals']} blacklist intervals "
+            f"({m['blacklist_bp']} bp), genome valid_frac={m['valid_frac_genome']:.6f}")
+
+    problems = G.verify_genome(L.genome_dir(args.store_root), chrom_sizes=chrom_sizes)
+    for p in problems:
+        say(f"PROBLEM: {p}")
+
+    report = G.genome_report(
+        L.genome_dir(args.store_root),
+        context_bins=[int(x) for x in args.context_bins],
+        min_valid_frac=args.min_valid_frac,
+    )
+    report["build_summary"] = result
+    for chrom, rec in report["per_chrom"].items():
+        elig = " ".join(
+            f"L={cb}:tiled={v['tiled']},every={v['every_start']}"
+            for cb, v in rec["eligible"].items()
+        )
+        say(f"{chrom}: n_bins={rec['n_bins']} valid={rec['n_valid']} "
+            f"({rec['valid_frac']:.6f}) {elig}")
+    gtot = report["genome"]
+    say(f"GENOME: n_bins={gtot['n_bins']} valid={gtot['n_valid']} "
+        f"({gtot['valid_frac']:.6f})")
+    for cb, v in gtot["eligible"].items():
+        say(f"GENOME eligible L={cb}: tiled={v['tiled']} every_start={v['every_start']}")
+    if args.report:
+        Path(args.report).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.report).write_text(json.dumps(report, indent=2), encoding="utf-8")
+        say(f"report -> {args.report}")
+    return 1 if problems else 0
 
 
 def _cmd_build_manifest(args) -> int:

@@ -75,34 +75,17 @@ class RegimeError(StoreError):
 # ---------------------------------------------------------------------------------------------
 
 
-def _fallback_eligible_starts(mask, context_bins: int, min_valid_frac: float,
-                              stride: int) -> np.ndarray:
-    """The same cumulative-sum rule `genome.py::eligible_starts` (t7) owns, as a fallback.
-
-    `eligible_starts` below prefers the real one and reaches this only when
-    `candi.store.genome` is not importable at all — the state of the tree while t7 was in flight,
-    and the state of a checkout that has the store but not the genome layer. Deliberately a
-    private duplicate rather than an import the other module would have to keep alive.
-    """
-    m = np.asarray(mask, dtype=np.float64).reshape(-1)
-    n = m.shape[0]
-    if context_bins <= 0 or stride <= 0:
-        raise RegimeError(f"context_bins and stride must be positive, got {context_bins}/{stride}")
-    if context_bins > n:
-        return np.zeros(0, dtype=np.int64)
-    cum = np.concatenate(([0.0], np.cumsum(m)))
-    starts = np.arange(0, n - context_bins + 1, stride, dtype=np.int64)
-    frac = (cum[starts + context_bins] - cum[starts]) / float(context_bins)
-    return starts[frac >= float(min_valid_frac)]
-
-
 def eligible_starts(mask, context_bins: int, min_valid_frac: float = DEFAULT_MIN_VALID_FRAC,
                     stride: int = 1) -> np.ndarray:
-    """Start bins of every eligible window (D12). Delegates to `genome.py` when it exists."""
-    try:
-        from candi.store.genome import eligible_starts as _real  # noqa: WPS433 (lazy on purpose)
-    except ImportError:
-        return _fallback_eligible_starts(mask, context_bins, min_valid_frac, stride)
+    """Start bins of every eligible window (D12). The rule itself lives in `genome.py`.
+
+    This is a thin delegation on purpose. D12 is one invariant, so it gets exactly one
+    implementation — `genome.py::eligible_starts` — and this module holds no copy of the
+    cumulative-sum arithmetic to drift away from it. The import is lazy only to keep
+    `import candi.store.regime` off h5py; `genome.py` is a sibling and is always present.
+    """
+    from candi.store.genome import eligible_starts as _real  # noqa: WPS433 (lazy on purpose)
+
     try:
         return np.asarray(
             _real(mask, context_bins, min_valid_frac, stride=stride), dtype=np.int64

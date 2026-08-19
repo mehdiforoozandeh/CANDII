@@ -92,7 +92,16 @@ def test_missing_chrom_sizes_is_a_clear_exit_not_a_traceback(tree):
               "--corpus-root", str(tree["corpus"]), "--kinds", "counts"])
 
 
-def test_build_genome_is_a_stub_that_points_at_t7(tree):
-    """t7 owns `genome.py`. The stub must name the task, not fail with an AttributeError."""
-    with pytest.raises(NotImplementedError, match="t7"):
-        main(["build-genome"])
+def test_build_genome_is_real_and_names_its_missing_inputs(tree, tmp_path):
+    """t7 landed `genome.py`; the stub is gone. Its inputs must fail as flags, not tracebacks.
+
+    The build itself is covered end to end in `tests/test_store_genome.py`.
+    """
+    with pytest.raises(SystemExit, match="chrom-sizes"):
+        main(["build-genome", "--store-root", str(tmp_path / "empty")])
+    (tmp_path / "genome").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "genome" / "chrom_sizes.json").write_text('{"chr1": 100}', encoding="utf-8")
+    with pytest.raises(SystemExit, match="--fasta"):
+        main(["build-genome", "--store-root", str(tmp_path)])
+    with pytest.raises(SystemExit, match="--blacklist"):
+        main(["build-genome", "--store-root", str(tmp_path), "--only", "mask"])

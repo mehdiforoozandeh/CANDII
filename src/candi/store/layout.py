@@ -331,7 +331,17 @@ def sort_chroms(chroms: Iterable[str]) -> list:
 
 
 def load_chrom_sizes(path: Path | str) -> dict:
-    """Read `chrom_sizes.json` (a `{chrom: length}` object) or a two-column `.sizes` TSV."""
+    """Read `chrom_sizes.json` or a two-column `.sizes` TSV, returning `{chrom: length}`.
+
+    The JSON comes in two shapes and both are accepted. The bare one is `{chrom: length}`. The
+    store's own `genome/chrom_sizes.json` is the **wrapped** one — a provenance record carrying
+    `build`, `resolution`, `source` and a precomputed `n_bins` alongside the sizes — because a
+    bare map cannot say which FASTA it came from.
+
+    Symptom of getting this wrong, before the wrapper was understood here:
+    `ValueError: invalid literal for int() with base 10: 'GRCh38'` out of `build-biosample`,
+    which reads as a corrupt file rather than as the top level being a header.
+    """
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(f"chrom sizes file not found: {p}")
@@ -340,6 +350,8 @@ def load_chrom_sizes(path: Path | str) -> dict:
         obj = json.loads(text)
         if not isinstance(obj, dict):
             raise StoreError(f"{p}: expected a JSON object of chrom -> length")
+        if isinstance(obj.get("chrom_sizes"), dict):
+            obj = obj["chrom_sizes"]
         return {str(k): int(v) for k, v in obj.items()}
     sizes = {}
     for lineno, line in enumerate(text.splitlines(), start=1):

@@ -219,7 +219,240 @@ explicit `null` and listed in `metadata_gaps`, so the encoder's `readlen_missing
 `run_type = single` fallbacks are gone, and so is the hard-coded replicate key `"2"` — whatever
 replicate key a `file_metadata.json` field carries is the one used, and more than one raises.
 
+## The genome layer — `dna.h5`, `mask.h5`, and which windows exist
+
+`genome/` is **shared**: `eic/` and `merged/` are its siblings, not its owners
+(`layout.py::genome_dir`, `::corpus_genome_dir`). Nothing in `genome.py` knows about biosamples,
+tracks or assays. One build serves every corpus and every regime.
+
+```
+hg38.fa            --[genome.py::build_dna]--->  genome/dna.h5   (chr_len,) uint8 base codes
+dna.h5 + blacklist --[genome.py::build_mask]-->  genome/mask.h5  (n_bins,)  uint8 0/1
+mask.h5            --[genome.py::eligible_starts]-> the window starts a regime may sample
+```
+
+### `dna.h5` is base-pair resolution, not bin resolution
+
+One `uint8` array per chromosome of length `chr_len` — `A=0 C=1 G=2 T=3 N=4` (D10), chunk
+**25600 bp**, gzip 4. 25600 is exactly `CHUNK_BINS * DEFAULT_RESOLUTION`, so one DNA chunk spans
+the same interval as one chunk of a counts/peaks/pval dataset.
+
+Everything is **uppercase-folded**: soft-masked lowercase `acgt` are real bases and get their own
+codes, not `N`. The old bake's repeat-masking is not carried over — repeat state is a modelling
+choice, and the store does not make it for you.
+
+`genome.py::GenomeLayer.dna_for_bins` is the bridge between the two coordinate systems: bin `b`
+covers `[b*25, (b+1)*25)` bp, and that is the only conversion anything should perform.
+
+### Ambiguous IUPAC letters become `N`, and are counted
+
+`R Y S W K M B D H V` in either case are coded `N = 4`. D11 makes `N` mean "this base is not a
+determined A/C/G/T", and an ambiguity code is exactly that. They are tallied per letter into the
+`iupac_counts` root attr so that folding a large number of them shows up instead of vanishing.
+On hg38 the tally is **empty** — the primary assembly carries only `ACGTN`.
+
+### `mask.h5` is bin resolution, and says why a bin is out
+
+One `uint8` 0/1 array per chromosome, `n_bins = floor(chr_len / 25)` (D13, `layout.py::n_bins_for`).
+A bin is invalid when it **contains any `N`** or **overlaps a blacklist interval by even one bp**
+(D11). The exact sentence is in the `rule` root attr, so the file states its own definition.
+
+`genome.py::build_mask` takes its N flags from `dna.h5`, never from a second FASTA parse — the mask
+therefore cannot disagree with the DNA beside it.
+
+The blacklist is the real ENCODE hg38 v2 (t4): 636 intervals, 227,162,400 bp. It arrives in
+**lexicographic** chromosome order (`chr1, chr10, chr11, …, chrY`), so
+`genome.py::read_blacklist` groups by chromosome and sorts and merges within each group. It does
+that even though the delivered file is already merged, because relying on that is how a
+re-download with different provenance becomes a silent under-count.
+
+`genome.py::blacklist_bin_flags` turns the whole interval set into one difference array plus one
+cumulative sum, so 636 intervals cost one pass over the chromosome, not 636.
+
+The build summary splits invalid bins into **N**, **blacklist**, and **both**. The overlap is
+large — the blacklist covers centromeres, which are also `N` — and a single "invalid" number
+hides which rule is doing the work.
+
+### Genome-wide coverage, as built
+
+`fasta_sha256 = 5be01555d98347fdb3714dc84c6f77c9d8bc774adcf32c6f7a8fa06f5baf5e51`
+(`EpiDenoise/data/hg38.fa` and `DATA_CANDI_MERGED/hg38.fa` are byte-identical);
+`blacklist_sha256 = 31c69342df43bbc19dd8ef2886611a8150cb53e90f341de14d30e742c9251737`.
+
+The chromosome set is `chrom_sizes.json`'s, **verbatim**: chr1–chr22, chrX, chrY. Alts, randoms,
+`chrUn_*` and `chrM` are in the FASTA and are skipped — no corpus track covers them, so a mask bin
+there could never be sampled.
+
+| | |
+|---|---|
+| `dna.h5` | **877,062,209 B** for 3,088,269,832 bp — 0.28 B/bp |
+| `mask.h5` | **6,662,180 B** for 123,530,780 bins — 0.054 B/bin |
+| valid bins | 113,251,272 / 123,530,780 = **0.9168** |
+| invalid by N | 6,026,108 bins |
+| invalid by blacklist | 9,086,496 bins (= 227,162,400 bp exactly — the blacklist is bin-aligned) |
+| invalid by both | 4,833,096 bins |
+
+The floor is not uniform: chrY is **0.4332** valid, chr22 0.6815, chr21 0.7371, chr15 0.7585 —
+against chr4's 0.9813. A regime that puts chr21 or chr22 on the eval side is choosing a
+chromosome where a quarter to a third of the bins do not exist.
+
+Eligible windows genome-wide at `min_valid_frac = 0.9`: **146,978 tiled** at `L = 768` and
+**18,209 tiled** at `L = 6144` (2,353,634 model parameters against 18,209 non-overlapping 6144-bin
+windows is the number to keep in view). Every-start counts are 112,880,377 and 111,883,465.
+
+The whole layer builds in **2.5 minutes** on one Fir node at 3.1 GB peak RSS
+(`genome/t7_build_genome.sh`, the numbers in `genome/t7_genome_report.json`). It is cheap enough
+to rebuild rather than repair.
+
+### Window eligibility is a cumulative sum, not a loop
+
+D12: a window of `L` bins starting at bin `s` is eligible iff `mask[s:s+L].mean() >=
+min_valid_frac`, default **0.9**, overridable in the regime file.
+
+`genome.py::window_valid_counts` is one cumsum over the mask, so the cost is `O(n_bins)` whatever
+`L` is; `::eligible_window_mask`, `::eligible_starts` and `::count_eligible` sit on top of it.
+`regime.py` imports these rather than re-deriving the rule — the threshold comparison in
+particular, which uses `count >= frac * L - 1e-9` so a threshold landing exactly on an integer
+(`L = 100`, `frac = 0.9` → 90) is inclusive instead of at the mercy of the last bit of the product.
+
+`stride` picks the plan: `stride = L` is the tiled, non-overlapping count a `window_plan.type =
+"tile"` epoch draws from, `stride = 1` is the size of the sampling space under a random-start plan,
+and `offset` shifts a tiling to give a second disjoint one over the same chromosome.
+
+### `GenomeLayer` is the read side, and the build-mismatch check lives in its constructor
+
+```python
+g = GenomeLayer(genome_dir, fasta_sha256=manifest["genome"]["fasta_sha256"])
+seq = g.dna("chr1", 1_000_000, 1_019_200)     # (19200,) uint8 codes
+idx = g.eligible_starts("chr1", 768)          # int64 start bins
+```
+
+Two hashes are checked before a single base is read. `mask.h5`'s `fasta_sha256` against `dna.h5`'s
+— **always**, no argument needed, which is why `build_mask` copies it across. And, when the caller
+supplies one, the expected FASTA hash against what `dna.h5` records. Either mismatch raises
+`StoreError`. `genome.py::verify_genome` is the same check as a problem list, and `build-genome`
+runs it after every build.
+
+`GenomeLayer.mask` caches the whole chromosome — the genome is ~124 MB of mask, and every
+eligibility query wants all of it.
+
+## Reading the store
+
+```python
+from candi.store.reader import CorpusStore
+
+corpus = CorpusStore("/…/CANDI_STORE/eic")
+bs     = corpus["T_DND-41"]
+counts = bs["H3K4me3"].counts("chr1", 0, 768)          # (L,)   int32
+block  = bs.counts("chr1", 0, 768, assays=[...])       # (L, F) int32, DECLARED order
+peaks  = bs.peaks("chr1", 0, 768, assays=[...])        # (L, F) uint8, 0/1
+pval   = bs.pval("chr1", 0, 768, assays=[...])         # (L, F) float32, -log10 p
+dna    = corpus.genome.dna("chr1", 0, 19_200)          # (Lbp,) uint8 codes
+```
+
+`corpus -> biosample -> assay -> kind -> chromosome` is a **Python** tree (`reader.py::CorpusStore`,
+`::BiosampleStore`, `::TrackView`), not an HDF5 one (D3). Coordinates are **bins** everywhere except
+`GenomeView.dna`, which is base pairs.
+
+Three things the reader does that the files do not:
+
+* **Upcasts counts to `int32`** (`reader.py::COUNTS_OUT_DTYPE`), so a `uint16` store and a `uint32`
+  store are indistinguishable downstream (D7), and a `-1` MISSING sentinel fits without a re-cast.
+* **Decodes pval** through `layout.py::decode_pval` at the file's own `scale` attr (D9). Nothing
+  outside the writer ever sees the fixed point.
+* **Returns columns in the order asked for.** `assays=[…]` is a permutation, and it is honoured;
+  h5py's increasing-index requirement is handled inside `reader.py::BiosampleStore._read`.
+
+`manifest.json` is read when present and **cross-checked** against the root attrs on first access to
+each biosample (`reader.py::CorpusStore._cross_check`). The h5 is the record; the manifest supplies
+only the corpus view (`assay_vocabulary`) and the per-track experimental metadata (`track_meta`).
+
+## The regime file
+
+`regime.py::Regime.from_file` parses, `::validate_against` checks it against a real store, and
+`::windows` generates the plan. The schema is `STORE_PLAN.md` §4; a copy that runs is
+`configs/regime.eic_smoke.json`.
+
+**`assays` is the column order** (D14) — declared, never derived. `regime.py::Regime.assay_columns`
+is the single place a name becomes a column index. The old availability-sorted order permuted every
+column whenever a biosample was added; it and its bijection asserts are gone.
+
+**Window eligibility is D12**: `mask[s:s+L].mean() >= min_valid_frac`, default `0.9`, overridable per
+regime. The primitive is `genome.py::eligible_starts` (t7); `regime.py::eligible_starts` calls it
+lazily and keeps a private cumulative-sum fallback for a checkout that has the store but not the
+genome layer.
+
+**DSF policy is D23**: `{"policy": "discrete", "levels": [1,2,4,8]}` by default;
+`{"policy": "loguniform", "min": 1, "max": 8}` for the continuous version; `{"policy": "off"}` pins
+DSF1. `regime.py::DsfPolicy.sample` is the only draw.
+
+`Regime.sha256` and `Regime.raw` are the file verbatim and its hash — put both in `run.json`
+alongside the manifest's hash, or a run cannot be reproduced.
+
+## `StoreDataset` — the batch dict, unchanged
+
+`dataset.py::StoreDataset` emits **exactly** the key set `dataset.py::CandiKitH5Dataset` emits, so
+`train.py`, `batch.py` and `eval.py` need no edit:
+
+```
+x_data  x_meta  x_avail  x_dna   y_data  y_meta  y_avail  y_pval  y_peaks
+control_data  control_meta  control_avail  x_dsf  y_dsf  control_x_dsf
+biosample_name  region_type  window_idx
+```
+
+Same fills, same dtypes: `x_data/y_data` `[B, L, F]` float32 pre-filled with `MISSING`,
+`x_meta/y_meta` `[B, 4, F]` likewise, `*_avail` `[B, F]`, `y_pval/y_peaks` and `control_*`
+zero-filled, `region_type` uint8. One biosample per batch. Use it with
+`DataLoader(ds, batch_size=None, num_workers=N)` — it batches and shards itself.
+
+`MISSING = -1` and `CLOZE = -2` come from `_vendored.py`; the loader writes **only** `MISSING`,
+exactly as the old one does. `CLOZE` belongs to `batch.py::prepare_masked_batch`.
+
+Two departures from the bake, both deliberate:
+
+* **`y_pval` is raw `-log10 p`**, not `arcsinh`. Every transform belongs to the model (D9), which is
+  the same rule `DATA.md` states for counts. The old bake arcsinh'd on the way in.
+* **`region_type` is always `255`** (`prep/bake.py::REGION_TILE`). The store tiles chromosomes and
+  has no cCRE annotation, so a `type2_loci`-style 0/1 would be a fabrication.
+
+### DSF is generated, not stored
+
+D6: `counts.h5` holds DSF1 only and `dataset.py::thin_counts` does `rng.binomial(counts, 1/d)` per
+element. `dataset.py::StoreDataset._depth_adjusted` moves the depth covariate with it —
+`meta[0] -= log2(d)`, which is `prep/bake.py`'s F4 gate applied at load time instead of bake time.
+
+### The eval RNG is counter-based (D22)
+
+Training draws from one free-running generator per worker, seeded from the DataLoader worker seed.
+**Evaluation seeds every single draw** from
+`SeedSequence([run_seed, h(biosample), h(assay), chrom_id, window_start, dsf_milli])`
+(`dataset.py::draw_seed`), so an eval window's thinned counts are a pure function of the window.
+
+`h` is `dataset.py::stable_hash` — `blake2b(name.utf-8, digest_size=8)`. **Not** Python's `hash()`,
+which is salted per process. `chrom_id` is the same stable hash of the chromosome name, not a
+positional index that would shift when a chromosome is added.
+
+`seed` (pool order) and `run_seed` (thinning) are separate arguments precisely so a shuffle can be
+changed without changing the numbers.
+
 ## CLI
+
+The genome layer is built **once** and every corpus shares it, so it comes first.
+
+```bash
+python -m candi.store build-genome \
+    --store-root /project/def-maxwl/mforooz/CANDI_STORE \
+    --fasta /project/6014832/mforooz/EpiDenoise/data/hg38.fa \
+    --fasta-sha256 5be01555d98347fdb3714dc84c6f77c9d8bc774adcf32c6f7a8fa06f5baf5e51 \
+    --blacklist .../CANDI_STORE/genome/hg38-blacklist.v2.bed \
+    --context-bins 768,6144 --report t7_genome_report.json
+```
+
+`--chroms` restricts the build; `--only dna|mask` runs half of it; `--fasta-sha256` refuses a wrong
+genome before it writes anything. The report JSON carries per-chromosome coverage and eligible
+window counts at every `--context-bins` value, tiled and every-start.
+
+Then, per corpus:
 
 ```bash
 python -m candi.store build-biosample \
@@ -238,7 +471,8 @@ python -m candi.store verify --corpus-root …/eic
 
 `--biosample` is repeatable and defaults to every biosample under `--source-root`, which is why one
 SLURM array task per biosample needs no merge step. `--chrom-sizes` falls back to
-`<corpus_root>/../genome/chrom_sizes.json`. `build-genome` is a stub that raises pointing at t7.
+`<corpus_root>/../genome/chrom_sizes.json`, and reads either that file's wrapped form or a flat
+`{chrom: length}` map (`layout.py::load_chrom_sizes`).
 
 Every writer output goes through a `.tmp` and an `os.replace`, so a task killed mid-write leaves no
 half-file for the next run to read.
@@ -283,8 +517,10 @@ weights extreme p-values will read low with no other symptom.
 **Symptom:** `--chrom-sizes is required (and …/genome/chrom_sizes.json does not exist).`
 
 `n_bins` cannot be derived from an npz — the whole point of D13 is that the npz length is ambiguous
-by one bin. Until t7 writes `genome/chrom_sizes.json`, pass `--chrom-sizes` explicitly; a
-two-column `hg38.chrom.sizes` TSV works as well as the JSON (`layout.py::load_chrom_sizes`).
+by one bin. `build-genome` writes `genome/chrom_sizes.json`, so build the genome layer first and
+the fallback finds it; otherwise pass `--chrom-sizes` explicitly. Three forms are read
+(`layout.py::load_chrom_sizes`): that file's wrapped object, a flat `{chrom: length}` JSON, and a
+two-column `hg38.chrom.sizes` TSV.
 
 ### Two chrom_sizes files produce a store that cannot be described
 
@@ -306,15 +542,94 @@ and widening the dtype would store the wrong quantity in the right container.
 `writer.py::_load_npz` reads `data.files[0]` and nothing else, exactly as `handler.py::_load_npz`
 does. An npz holding two arrays silently stores the first one. Write one array per npz.
 
+### A gzipped FASTA is refused rather than silently streamed
+
+**Symptom:** `build_dna needs an uncompressed FASTA (mmap random access).`
+
+`genome.py::build_dna` mmaps the file and indexes the `>` headers so each record is one contiguous
+byte range. `hg38.fa.gz` sits beside `hg38.fa` in `DATA_CANDI_MERGED/`; use the `.fa`.
+
+### A wrong-build FASTA announces itself as a length mismatch, not as garbage DNA
+
+**Symptom:** `hg38.fa:chr1 is 248956422 bp but chrom_sizes says 249250621. The FASTA and the chrom
+sizes are different builds.`
+
+Every record's parsed length is checked against `chrom_sizes` before it is written. That is the
+cheap check; `--fasta-sha256` is the exact one.
+
+### A mask rebuilt against a different `dna.h5` is caught at open, not at build
+
+**Symptom:** `mask.h5 was built from a genome with fasta_sha256 … but dna.h5 has …`
+
+Rebuilding only one of the pair (`--only dna`) is the usual cause. Rebuild the mask from the
+`dna.h5` that is actually there.
+
+### Eligible-window counts are not a size — they are a plan
+
+The tiled count and the every-start count differ by three orders of magnitude for the same mask
+(`chr1` at `L = 768`: **11,753** tiled against **9,026,831** starts). Quoting one where the other
+is meant turns "how many windows exist" into a meaningless number. Say which plan a count belongs
+to. `genome_report` labels them `tiled` and `every_start` for exactly this reason.
+
+### Two eval runs disagree and the only difference was `--num-workers`
+
+You turned off `deterministic`, or you changed `run_seed` while meaning to change `seed`.
+`StoreDataset(train=False)` sets `deterministic=True` by itself; passing `deterministic=False`
+re-enables the free-running stream and every worker count then gives different thinned counts.
+
+### A track that is on disk comes out as an all-`MISSING` column
+
+**Symptom, printed once at construction:** `[store] N (biosample, assay) column(s) are present on
+disk but carry incomplete metadata and are emitted as MISSING (D19 …)`.
+
+The manifest has no `depth`, no `read_length` or no parseable `run_type` for that track. A partial
+metadata column cannot be expressed: `encoder.py::_infer_availability_from_meta` reads availability
+off rows 0-3, so one `-1` there marks the assay absent while the signal says present, and
+`_prepare_signal` raises on the disagreement. Emitting the whole column as `MISSING` is the honest
+reading of "we do not know how deep this track is" (D19 — nothing is fabricated). Fix the CSVs and
+rebuild the manifest; `meta_missing="error"` refuses to start instead.
+
+### `no manifest.json, so no depth / read_length / run_type`
+
+`StoreDataset` needs the manifest — four of the model's inputs are in it, and the h5 deliberately
+does not carry them. Run `python -m candi.store build-manifest` first.
+
+### Every window is eligible and the blacklist seems to do nothing
+
+**Symptom:** `[store] no genome/mask.h5 — every window is eligible (D12 cannot be applied).`
+
+The genome layer is a separate build (t7). Until `mask.h5` exists, D12 has nothing to filter with
+and blacklisted and N-heavy windows are in the plan. Fine for plumbing, wrong for training.
+
+### `x_dna` is all zeros
+
+**Symptom:** `[store] no …/genome/dna.h5 — x_dna is all-zero, which the model reads as 'every base
+unknown'.` Same cause. `require_dna=True` turns it into a refusal. Note that an all-zero row is also
+the correct encoding of a real `N` (`reader.py::one_hot_dna`), so an all-zero *window* is normal and
+an all-zero *genome* is not.
+
+### `cell_cond` is refused rather than defaulted
+
+The 5th metadata row keys on a cell type derived by splitting a `T_`/`V_`/`B_` prefix
+(`dataset.py::base_cell_type`), and D16 makes store biosample names opaque ids nothing may parse.
+Deciding what a cell identity is for `A549_nonrep` is a task, not a default.
+
+### An h5py handle read from two processes returns garbage
+
+It cannot here, and that is on purpose: `reader.py::_HandlePool` keys its cache on the pid, so the
+first read inside a DataLoader worker opens the worker's own handles and **drops** the inherited
+ones without closing them (closing a parent's HDF5 handle from a child damages the parent). The
+store objects also pickle without their handles, so `spawn` behaves like `fork`. If you add a new
+file to the reader, take it from the pool — never call `h5py.File` at module or constructor level.
+
 ## What is not here yet
 
-| module | task | what it owns |
-|---|---|---|
-| `genome.py` | t7 | FASTA → `dna.h5` (D10); FASTA + ENCODE hg38 blacklist v2 → `mask.h5` (D11, D12) |
-| `reader.py` | t8 | `CorpusStore` / `BiosampleStore` — the OO API |
-| `regime.py` | t8 | regime file parse, validate, window plan (D14, D12) |
-| `dataset.py` | t8 | `StoreDataset`: window sampling, binomial thinning (D6), the batch dict |
+Every module of the store is written: `layout` / `writer` / `manifest` / `cli` (t6), `genome`
+(t7), `reader` / `regime` / `dataset` (t8). What is missing is **use**.
 
-`StoreDataset` must emit exactly the key set `dataset.py::CandiKitH5Dataset` emits, with the
-`MISSING = -1` / `CLOZE = -2` semantics of `_vendored.py` preserved, so `train.py`, `batch.py` and
-`eval.py` need no changes.
+| gap | why it is still open |
+|---|---|
+| the corpora themselves | t10 (EIC), t11 (MERGED), t12 (pval) are SLURM builds, not code |
+| `cell_cond` | the 5th meta row needs a cell identity D16 forbids parsing off the name |
+| the genome-wide eval output policy | overlap and edge handling when emitting a full imputed track — a question for the crux tree, not a task |
+| retiring the old bake | `prep/bake.py` and `dataset.py::CandiKitH5Dataset` stay until a real training run has used the store (D21) |

@@ -453,3 +453,40 @@ def test_path_helpers_are_the_documented_layout(tmp_path):
     assert L.corpus_genome_dir(corpus) == (tmp_path / "genome").resolve()
     assert L.dna_path(tmp_path) == tmp_path / "genome" / "dna.h5"
     assert L.mask_path(tmp_path) == tmp_path / "genome" / "mask.h5"
+
+
+def test_load_chrom_sizes_reads_the_wrapped_genome_form(tmp_path):
+    """`genome/chrom_sizes.json` is a provenance record, not a bare `{chrom: length}` map.
+
+    `build-genome` writes the wrapper — `build`, `resolution`, `source` and a precomputed `n_bins`
+    around the sizes — because a bare map cannot say which FASTA it came from. The fallback in
+    `cli.py::_chrom_sizes_arg` points straight at that file, so a loader that only understood the
+    bare form made `build-biosample` die with
+    `ValueError: invalid literal for int() with base 10: 'GRCh38'`.
+    """
+    wrapped = tmp_path / "chrom_sizes.json"
+    wrapped.write_text(json.dumps({
+        "schema": 1,
+        "build": "GRCh38",
+        "resolution": 25,
+        "source": {"path": "/…/hg38.fa", "sha256": "0" * 64},
+        "chrom_sizes": {"chr1": 248956422, "chr21": 46709983},
+        "n_bins": {"chr1": 9958256, "chr21": 1868399},
+    }))
+    assert L.load_chrom_sizes(wrapped) == {"chr1": 248956422, "chr21": 46709983}
+
+    bare = tmp_path / "bare.json"
+    bare.write_text(json.dumps({"chr1": 248956422}))
+    assert L.load_chrom_sizes(bare) == {"chr1": 248956422}
+
+    tsv = tmp_path / "hg38.chrom.sizes"
+    tsv.write_text("chr1\t248956422\nchr21\t46709983\n")
+    assert L.load_chrom_sizes(tsv) == {"chr1": 248956422, "chr21": 46709983}
+
+
+def test_load_chrom_sizes_still_refuses_a_genuinely_broken_file(tmp_path):
+    """Unwrapping must not turn a corrupt file into a silent empty map."""
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"build": "GRCh38", "resolution": 25}))
+    with pytest.raises(ValueError):
+        L.load_chrom_sizes(bad)
