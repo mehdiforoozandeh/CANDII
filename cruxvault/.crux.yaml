@@ -1,0 +1,9 @@
+title: CANDII
+slug: candii
+root_id: root
+engine_version: 3.1
+counter_q: 0
+counter_h: 0
+counter_s: 0
+counter_t: 2
+task_categories: data-acquisition, hpc-setup, implementation, visualization, manuscript, admin
