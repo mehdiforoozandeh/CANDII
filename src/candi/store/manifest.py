@@ -177,9 +177,15 @@ def read_metadata_csvs(paths: Iterable[Path | str]) -> dict:
 def read_file_metadata(path: Path | str) -> Optional[dict]:
     """Flatten `<TRACK>/file_metadata.json` to `{field: value}`, or None when it is absent.
 
-    Every value in that file is a dict keyed by an arbitrary replicate index. **Whatever key is
-    there is used** — the old path hard-coded `"2"` for controls and read the wrong replicate
-    everywhere else. More than one key under a field is ambiguous and raises, per D19.
+    Nearly every value in that file is a dict keyed by an arbitrary replicate index. **Whatever key
+    is there is used** — the old path hard-coded `"2"` for controls and read the wrong replicate
+    everywhere else. More than one key under a field the manifest *consumes* (`_CROSS_CHECK`) is
+    ambiguous and raises, per D19.
+
+    Not every dict-valued field is replicate-keyed: `T_testis/H3K9me3` in `DATA_CANDI_EIC` carries
+    a free-text `notes` dict keyed by `alternative_bigbed_used` / `original_bigbed` /
+    `alternative_reason`. Nothing reads it, so it is passed through **unflattened** rather than
+    resolved by a coin flip or made fatal for the whole corpus.
     """
     p = Path(path)
     if not p.is_file():
@@ -192,10 +198,13 @@ def read_file_metadata(path: Path | str) -> Optional[dict]:
         if isinstance(value, dict):
             keys = list(value.keys())
             if len(keys) != 1:
-                raise StoreError(
-                    f"{p}: field {field!r} has {len(keys)} replicate keys {keys}; exactly one is "
-                    f"required — picking one would be a coin flip written into the manifest."
-                )
+                if field in _CROSS_CHECK:
+                    raise StoreError(
+                        f"{p}: field {field!r} has {len(keys)} replicate keys {keys}; exactly one "
+                        f"is required — picking one would be a coin flip written into the manifest."
+                    )
+                out[field] = value          # not replicate-keyed, and nothing reads it
+                continue
             out[field] = value[keys[0]]
         else:
             out[field] = value

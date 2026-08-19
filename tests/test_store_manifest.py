@@ -131,6 +131,24 @@ def test_more_than_one_replicate_key_raises_instead_of_picking_one(tmp_path):
         read_file_metadata(p)
 
 
+def test_a_non_replicate_keyed_dict_field_passes_through_instead_of_killing_the_corpus(tmp_path):
+    """Real case: `DATA_CANDI_EIC/T_testis/H3K9me3` carries a free-text `notes` dict with three
+    keys that are not replicate indices. Nothing reads `notes`, so it must not be resolved by a
+    coin flip *or* take the whole `build-manifest` down."""
+    p = tmp_path / "file_metadata.json"
+    p.write_text(json.dumps({
+        "accession": {"2": "ENCFF572UCO"},
+        "notes": {"alternative_bigbed_used": "ENCFF809QOU",
+                  "original_bigbed": "ENCFF517ZEE",
+                  "alternative_reason": "primary_file_corrupted"},
+    }), encoding="utf-8")
+    fm = read_file_metadata(p)
+    assert fm["accession"] == "ENCFF572UCO"
+    assert fm["notes"] == {"alternative_bigbed_used": "ENCFF809QOU",
+                           "original_bigbed": "ENCFF517ZEE",
+                           "alternative_reason": "primary_file_corrupted"}
+
+
 def test_whatever_replicate_key_exists_is_used(tmp_path):
     p = tmp_path / "file_metadata.json"
     p.write_text(json.dumps({"read_length": {"17": 36}, "run_type": {"17": "single-ended"}}),

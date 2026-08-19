@@ -26,7 +26,7 @@ ENCODE-style npz tree --[store.writer]--> CANDI_STORE --[store.reader + regime]-
 
 ```
 CANDI_STORE/
-  genome/                      # shared across corpora (t7, not built yet)
+  genome/                      # shared across corpora — built once, by build-genome
     dna.h5                     /chr1 …  (chr_len,)  uint8 codes A=0 C=1 G=2 T=3 N=4
     mask.h5                    /chr1 …  (n_bins,)   uint8 0/1
     chrom_sizes.json           {"chr1": 248956422, …}
@@ -223,7 +223,11 @@ D19. A field that is missing, unparseable, or contradicted by a second CSV row i
 explicit `null` and listed in `metadata_gaps`, so the encoder's `readlen_missing_emb` and
 `depth_missing_emb` get the case they exist for. The old path's `read_length = 50` and
 `run_type = single` fallbacks are gone, and so is the hard-coded replicate key `"2"` — whatever
-replicate key a `file_metadata.json` field carries is the one used, and more than one raises.
+replicate key a `file_metadata.json` field carries is the one used, and more than one raises —
+for the four fields the cross-check consumes (`_CROSS_CHECK`). Not every dict-valued field is
+replicate-keyed: `DATA_CANDI_EIC/T_testis/H3K9me3` carries a free-text `notes` dict keyed by
+`alternative_bigbed_used` / `original_bigbed` / `alternative_reason`. Nothing reads `notes`, so it
+is passed through unflattened rather than resolved by a coin flip or made fatal for the corpus.
 
 ## The genome layer — `dna.h5`, `mask.h5`, and which windows exist
 
