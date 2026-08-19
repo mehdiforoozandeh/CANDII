@@ -481,8 +481,8 @@ alongside the manifest's hash, or a run cannot be reproduced.
 
 ## `StoreDataset` — the batch dict, unchanged
 
-`dataset.py::StoreDataset` emits **exactly** the key set `dataset.py::CandiKitH5Dataset` emits, so
-`train.py`, `batch.py` and `eval.py` need no edit:
+`dataset.py::StoreDataset` emits the key set `dataset.py::CandiKitH5Dataset` emits **on the training
+path**, so `train.py` and `batch.py` need no edit:
 
 ```
 x_data  x_meta  x_avail  x_dna   y_data  y_meta  y_avail  y_pval  y_peaks
@@ -494,6 +494,32 @@ Same fills, same dtypes: `x_data/y_data` `[B, L, F]` float32 pre-filled with `MI
 `x_meta/y_meta` `[B, 4, F]` likewise, `*_avail` `[B, F]`, `y_pval/y_peaks` and `control_*`
 zero-filled, `region_type` uint8. One biosample per batch. Use it with
 `DataLoader(ds, batch_size=None, num_workers=N)` — it batches and shards itself.
+
+### The eval-only keys are NOT emitted yet, and the failure is silent
+
+**Symptom: none.** `eval.py` runs, reports, and the imputation arm is simply empty.
+
+`CandiKitH5Dataset` also emits `y_data_imp`, `y_pval_imp`, `y_peaks_imp`, `y_meta_imp`,
+`imp_biosample_name` and `log_ref` on the eval path. `StoreDataset` emits none of them, and
+`eval.py` reads every one through `batch.get(...)` — so nothing raises and the imputation arm of
+eval, plus `healthcheck.py`'s h74 reference arm, degrade to nothing. **Do not score an imputation
+run off the store until this lands.** Training is unaffected.
+
+### An absent control is filled with `0`, and the old path fills it with `MISSING`
+
+Neither is fully right, and the difference is worth knowing before you compare runs.
+
+`StoreDataset` leaves `control_data` / `control_meta` at their zero initialisation and sets
+`control_avail = 0`, which is correct availability. `0` in `control_meta[0]` still reads as
+`log2(depth) = 0` rather than "unknown"; `MISSING` would be the honest fill and would match every
+other absent channel in the same dict.
+
+The old path is worse, and this is a live bug in the current training path rather than a style
+difference: `dataset.py::CandiKitH5Dataset` computes
+`control_avail = 1.0 if (control_data != 0).any()`, and the bake fills an absent control with
+`MISSING = -1`. Since `-1 != 0`, **an absent control is marked available and a channel of −1 is fed
+to the model** — on 16 of 89 EIC biosamples. Measured, not inferred; see the t9-era equivalence
+run.
 
 `MISSING = -1` and `CLOZE = -2` come from `_vendored.py`; the loader writes **only** `MISSING`,
 exactly as the old one does. `CLOZE` belongs to `batch.py::prepare_masked_batch`.

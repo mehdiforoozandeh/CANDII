@@ -8,6 +8,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes
+- `t13` [implementation] fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1
+- `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref)
+- `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset
 
 ## By category
 
@@ -18,16 +21,19 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### implementation
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
+- `t13` [implementation] fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1 — *open*
+- `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref) — *open*
+- `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset — *open*
 
 ## Done · Dropped
 
-- `t3` [implementation] build the whole-genome CANDI_STORE corpus for EIC and MERGED — *done* → `CANDI_STORE`
-- `t4` [data-acquisition] obtain the real ENCODE hg38 blacklist v2 — *done* → `hg38-blacklist.v2.bed`
-- `t5` [data-acquisition] recover metadata for the 361 chipseq-control tracks missing from the metadata CSVs — *done* → `control_metadata.csv`
-- `t6` [implementation] candi.store writer: per-biosample (bins x tracks) h5 layout, dtypes, manifest from the metadata CSVs — *done* → `src/candi/store/{layout,writer,manifest,cli,__init__,__main__}.py`
-- `t7` [implementation] candi.store genome layer: dna.h5 base codes and mask.h5 valid-bin mask — *done* → `genome.py`
-- `t8` [implementation] candi.store reader and data harness: window sampling from the mask, binomial DSF thinning, batch assembly — *done* → `reader.py`
-- `t9` [implementation] 5-biosample whole-genome slice and loader throughput benchmark on a GPU node — *done* → `5-biosample`
-- `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *done* → `EIC`
-- `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `MERGED`
-- `t12` [implementation] add the pval layer to both stores — *done* → `pval`
+- `t3` [implementation] build the whole-genome CANDI_STORE corpus for EIC and MERGED — *done* → `results/t3/DELIVERABLE.md`
+- `t4` [data-acquisition] obtain the real ENCODE hg38 blacklist v2 — *done* → `results/t4/hg38-blacklist.v2.bed`
+- `t5` [data-acquisition] recover metadata for the 361 chipseq-control tracks missing from the metadata CSVs — *done* → `results/t5/control_metadata.csv`
+- `t6` [implementation] candi.store writer: per-biosample (bins x tracks) h5 layout, dtypes, manifest from the metadata CSVs — *done* → `results/t6/DELIVERABLE.md`
+- `t7` [implementation] candi.store genome layer: dna.h5 base codes and mask.h5 valid-bin mask — *done* → `results/t7/DELIVERABLE.md`
+- `t8` [implementation] candi.store reader and data harness: window sampling from the mask, binomial DSF thinning, batch assembly — *done* → `results/t8/DELIVERABLE.md`
+- `t9` [implementation] 5-biosample whole-genome slice and loader throughput benchmark on a GPU node — *done* → `results/t9/t9_summary.json`
+- `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *done* → `results/t10/t10_report.json`
+- `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `results/t11/t11_report.json`
+- `t12` [implementation] add the pval layer to both stores — *done* → `results/t12/t12_eic_report.json`
