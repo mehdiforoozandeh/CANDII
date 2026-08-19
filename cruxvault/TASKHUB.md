@@ -11,6 +11,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t13` [implementation] fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1
 - `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref)
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset
+- `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model
 
 ## By category
 
@@ -24,6 +25,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t13` [implementation] fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1 — *open*
 - `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref) — *open*
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset — *open*
+- `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model — *open*
 
 ## Done · Dropped
 
