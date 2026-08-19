@@ -8,13 +8,36 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes
+- `t3` [implementation] build the whole-genome CANDI_STORE corpus for EIC and MERGED
+- `t4` [data-acquisition] obtain the real ENCODE hg38 blacklist v2
+- `t5` [data-acquisition] recover metadata for the 361 chipseq-control tracks missing from the metadata CSVs
+- `t6` [implementation] candi.store writer: per-biosample (bins x tracks) h5 layout, dtypes, manifest from the metadata CSVs
+
+## Blocked
+
+- `t7` [implementation] candi.store genome layer: dna.h5 base codes and mask.h5 valid-bin mask — blocked by `t4`
+- `t8` [implementation] candi.store reader and data harness: window sampling from the mask, binomial DSF thinning, batch assembly — blocked by `t6`
+- `t9` [implementation] 5-biosample whole-genome slice and loader throughput benchmark on a GPU node — blocked by `t6`, `t7`, `t8`
+- `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — blocked by `t9`
+- `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — blocked by `t10`
+- `t12` [implementation] add the pval layer to both stores — blocked by `t10`
 
 ## By category
 
 ### data-acquisition
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
+- `t4` [data-acquisition] obtain the real ENCODE hg38 blacklist v2 — *open*
+- `t5` [data-acquisition] recover metadata for the 361 chipseq-control tracks missing from the metadata CSVs — *open*
 
 ### implementation
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
+- `t3` [implementation] build the whole-genome CANDI_STORE corpus for EIC and MERGED — *open*
+- `t6` [implementation] candi.store writer: per-biosample (bins x tracks) h5 layout, dtypes, manifest from the metadata CSVs — *open*
+- `t7` [implementation] candi.store genome layer: dna.h5 base codes and mask.h5 valid-bin mask — *blocked*
+- `t8` [implementation] candi.store reader and data harness: window sampling from the mask, binomial DSF thinning, batch assembly — *blocked*
+- `t9` [implementation] 5-biosample whole-genome slice and loader throughput benchmark on a GPU node — *blocked*
+- `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *blocked*
+- `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *blocked*
+- `t12` [implementation] add the pval layer to both stores — *blocked*
