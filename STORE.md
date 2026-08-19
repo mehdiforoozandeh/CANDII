@@ -22,6 +22,86 @@ into a regime file read at load time. One store, every regime, no re-bake.
 ENCODE-style npz tree --[store.writer]--> CANDI_STORE --[store.reader + regime]--> batches
 ```
 
+## The harness, end to end
+
+Read it in three bands: **build once** into the immutable store, **stage** it to the node, then
+**regime + mask decide which windows exist** and `StoreDataset` thins on the way out. The old bake
+path is drawn alongside because both feed the same unchanged `train.py` — that is the whole point
+of D21, and it is what makes the two paths comparable at all.
+
+This fence is the source. GitHub renders it; to get a PNG,
+`npx @mermaid-js/mermaid-cli -i <extracted>.mmd -o out.png -s 3`. Kept here rather than as a
+checked-in image so it cannot drift from the doc it explains.
+
+```mermaid
+flowchart TB
+    subgraph BUILD["build once, offline — SLURM array, one task per biosample"]
+        NPZ["ENCODE npz tree<br/>signal_DSF1_res25 · peaks_res25 · signal_BW_res25"]
+        CSV["metadata CSVs + recovered control CSVs<br/>(authority, D20)"]
+        FA["hg38.fa + ENCODE blacklist v2"]
+        NPZ --> W["writer.py<br/>per biosample, per kind"]
+        CSV --> M["manifest.py<br/>CSV authority + loud json cross-check"]
+        FA --> G["genome.py"]
+    end
+
+    subgraph STORE["CANDI_STORE — immutable, /project, 461 GB"]
+        CH["counts.h5 (n_bins x n_tracks)<br/>uint16|uint32, DSF1 only"]
+        PH["peaks.h5 uint8"]
+        VH["pval.h5 uint16 fixed-point x100"]
+        MJ["manifest.json"]
+        DNA["genome/dna.h5<br/>uint8 base codes"]
+        MSK["genome/mask.h5<br/>0/1 per bin: N or blacklist"]
+    end
+
+    W --> CH
+    W --> PH
+    W --> VH
+    M --> MJ
+    G --> DNA
+    G --> MSK
+
+    STORE -->|"stage at job start, 804 MB/s"| LS["/localscratch, per node (D5)"]
+
+    subgraph LOAD["read at load time — no re-bake"]
+        RG["configs/regime.json<br/>assays = column order · biosamples<br/>chroms · context_bins · dsf · seed"]
+        RG --> RP["regime.py<br/>parse + validate"]
+        MSK -.->|"eligible_starts:<br/>mask mean >= 0.9"| RP
+        RP --> WP["window plan<br/>biosample, chrom, start"]
+
+        RD["reader.py<br/>CorpusStore -> BiosampleStore -> TrackView<br/>pid-keyed handle pool, fork-safe"]
+        CH --> RD
+        PH --> RD
+        VH --> RD
+        DNA --> RD
+        MJ --> RD
+
+        WP --> DS["dataset.py :: StoreDataset"]
+        RD --> DS
+        DS --> TH["binomial thinning<br/>rng.binomial(counts, 1/d)"]
+    end
+
+    subgraph RNG["the DSF RNG splits by mode (D22)"]
+        TR["train: worker seed,<br/>free-running"]
+        EV["eval: counter-based<br/>SeedSequence run_seed, h(bios),<br/>h(assay), h(chrom), start, dsf<br/>h = blake2b, never hash()"]
+    end
+    TH --> TR
+    TH --> EV
+
+    TH --> B["batch dict — the 18 keys CandiKitH5Dataset emits<br/>x_data y_data x_meta y_meta x_avail y_avail<br/>y_pval y_peaks x_dna control_* x_dsf y_dsf<br/>region_type window_idx biosample_name"]
+    B --> T["train.py · batch.py · eval.py<br/>UNCHANGED"]
+
+    subgraph OLD["the old path — still the training path until this is proven"]
+        OB["prep/bake.py -> eic_full.h5<br/>windows + DSF1/2/4/8 materialized"]
+        OD["dataset.py :: CandiKitH5Dataset"]
+        OB --> OD
+    end
+    OD --> T
+
+    style STORE fill:#1f4e5f,color:#fff
+    style OLD fill:#5f3a1f,color:#fff
+    style RNG fill:#3d2f5f,color:#fff
+```
+
 ## On-disk layout
 
 ```
