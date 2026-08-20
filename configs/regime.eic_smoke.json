@@ -1,0 +1,32 @@
+{
+  "_comment": "The store-era counterpart of configs/panel.q19.json — the same 8 assays, the same chr19/chr21 split, read at LOAD time instead of baked in. `assays` IS the column order (D14): edit the list and the columns move, no re-bake. `store` points at CANDI_STORE/<corpus>, whose sibling `genome/` supplies dna.h5 and mask.h5. Smoke-sized on purpose: 5 biosamples, tiles at the context length, so it runs off the t9 five-biosample slice.",
+  "store": "/project/def-maxwl/mforooz/CANDI_STORE/eic",
+  "assays": [
+    "ATAC-seq",
+    "DNase-seq",
+    "H3K4me3",
+    "H3K4me1",
+    "H3K27ac",
+    "H3K27me3",
+    "H3K36me3",
+    "H3K9me3"
+  ],
+  "biosamples": {
+    "train": [
+      "T_DND-41",
+      "T_H1-hESC",
+      "T_heart_left_ventricle"
+    ],
+    "eval": [
+      "V_DND-41",
+      "B_DND-41"
+    ]
+  },
+  "context_bins": 768,
+  "train_chroms": ["chr19"],
+  "eval_chroms": ["chr21"],
+  "window_plan": {"type": "tile", "stride_bins": 768, "min_valid_frac": 0.9},
+  "dsf": {"policy": "discrete", "levels": [1, 2, 4, 8]},
+  "kinds": ["counts", "peaks"],
+  "seed": 42
+}

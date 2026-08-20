@@ -1,0 +1,419 @@
+"""The regime file — the authority that replaced `h5.attrs` (t8).
+
+The old bake froze window size, context length, the DSF ladder, the chromosome split and the assay
+column order into the h5, so changing any of them meant a re-bake. The store holds none of it.
+A regime file holds all of it, is read at load time, and is recorded verbatim (plus its sha256)
+in `run.json`, so one store serves every regime.
+
+```json
+{
+  "store": "/…/CANDI_STORE/eic",
+  "assays": ["ATAC-seq", "DNase-seq", "H3K4me3"],
+  "biosamples": {"train": ["T_…"], "eval": ["V_…", "B_…"]},
+  "context_bins": 768,
+  "train_chroms": ["chr19"],
+  "eval_chroms": ["chr21"],
+  "window_plan": {"type": "tile", "stride_bins": 768, "min_valid_frac": 0.9},
+  "dsf": {"policy": "discrete", "levels": [1, 2, 4, 8]},
+  "kinds": ["counts", "peaks"],
+  "seed": 42
+}
+```
+
+Two decisions carry the weight:
+
+* **D14 — `assays` IS the column order.** Declared, never derived. The old
+  `sort_values(ascending=False)` ordered columns by *availability*, so adding one biosample
+  permuted every column in the panel and every checkpoint trained before it became
+  uninterpretable; the bijection asserts that guarded it are gone with it.
+  `Regime.validate_against` checks each declared assay exists in the store and **names** the one
+  that does not.
+* **D12 — window eligibility is `mask[s:s+L].mean() >= min_valid_frac`**, default 0.9,
+  overridable per regime. The primitive that computes it belongs to `genome.py` (t7); this module
+  imports it lazily so a store without a genome layer still parses, and falls back to its own
+  cumulative-sum implementation when `genome.py` is not importable yet.
+* **D23 — the default DSF policy is discrete `{1, 2, 4, 8}`**, for continuity with the existing
+  configs. `{"policy": "loguniform", "min": 1, "max": 8}` is the continuous version.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
+
+import numpy as np
+
+from candi.store import layout as L
+from candi.store.layout import StoreError
+
+__all__ = [
+    "DEFAULT_MIN_VALID_FRAC",
+    "DEFAULT_DSF_LEVELS",
+    "RegimeError",
+    "DsfPolicy",
+    "WindowPlan",
+    "Regime",
+    "eligible_starts",
+]
+
+#: D12 — a window is eligible when at least this fraction of its bins are valid.
+DEFAULT_MIN_VALID_FRAC = 0.9
+#: D23 — the discrete ladder the existing configs use.
+DEFAULT_DSF_LEVELS: Tuple[int, ...] = (1, 2, 4, 8)
+
+_SPLITS = ("train", "eval")
+
+
+class RegimeError(StoreError):
+    """A malformed regime file, or one that does not match the store it points at."""
+
+
+# ---------------------------------------------------------------------------------------------
+# D12 — window eligibility
+# ---------------------------------------------------------------------------------------------
+
+
+def eligible_starts(mask, context_bins: int, min_valid_frac: float = DEFAULT_MIN_VALID_FRAC,
+                    stride: int = 1) -> np.ndarray:
+    """Start bins of every eligible window (D12). The rule itself lives in `genome.py`.
+
+    This is a thin delegation on purpose. D12 is one invariant, so it gets exactly one
+    implementation — `genome.py::eligible_starts` — and this module holds no copy of the
+    cumulative-sum arithmetic to drift away from it. The import is lazy only to keep
+    `import candi.store.regime` off h5py; `genome.py` is a sibling and is always present.
+    """
+    from candi.store.genome import eligible_starts as _real  # noqa: WPS433 (lazy on purpose)
+
+    try:
+        return np.asarray(
+            _real(mask, context_bins, min_valid_frac, stride=stride), dtype=np.int64
+        )
+    except TypeError as exc:  # pragma: no cover - only on a t7/t8 signature drift
+        raise RegimeError(
+            f"candi.store.genome.eligible_starts does not take "
+            f"(mask, context_bins, min_valid_frac, stride=): {exc}"
+        ) from exc
+
+
+# ---------------------------------------------------------------------------------------------
+# the pieces
+# ---------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DsfPolicy:
+    """D23 — how a downsampling factor is drawn. Discrete by default; loguniform on request."""
+
+    policy: str = "discrete"
+    levels: Tuple[float, ...] = DEFAULT_DSF_LEVELS
+    dsf_min: float = 1.0
+    dsf_max: float = 8.0
+
+    @classmethod
+    def from_obj(cls, obj: Optional[Mapping[str, Any]]) -> "DsfPolicy":
+        obj = dict(obj or {})
+        policy = str(obj.get("policy", "discrete"))
+        if policy not in ("discrete", "loguniform", "off"):
+            raise RegimeError(
+                f"dsf.policy must be 'discrete', 'loguniform' or 'off', got {policy!r}"
+            )
+        levels = tuple(float(x) for x in obj.get("levels", DEFAULT_DSF_LEVELS))
+        lo = float(obj.get("min", obj.get("dsf_min", 1.0)))
+        hi = float(obj.get("max", obj.get("dsf_max", 8.0)))
+        if policy == "discrete" and (not levels or any(x < 1 for x in levels)):
+            raise RegimeError(f"dsf.levels must all be >= 1, got {list(levels)}")
+        if policy == "loguniform" and not (1.0 <= lo <= hi):
+            raise RegimeError(f"dsf: need 1 <= min <= max, got min={lo} max={hi}")
+        return cls(policy=policy, levels=levels, dsf_min=lo, dsf_max=hi)
+
+    def to_dict(self) -> dict:
+        if self.policy == "loguniform":
+            return {"policy": self.policy, "min": self.dsf_min, "max": self.dsf_max}
+        return {"policy": self.policy, "levels": [int(x) if float(x).is_integer() else x
+                                                  for x in self.levels]}
+
+    def sample(self, rng: np.random.Generator) -> float:
+        """One DSF draw. Always `>= 1`: thinning can only remove reads, never invent them."""
+        if self.policy == "off":
+            return 1.0
+        if self.policy == "discrete":
+            return float(self.levels[int(rng.integers(len(self.levels)))])
+        return float(np.exp(rng.uniform(np.log(self.dsf_min), np.log(self.dsf_max))))
+
+    @property
+    def is_trivial(self) -> bool:
+        return self.policy == "off" or (self.policy == "discrete" and tuple(self.levels) == (1.0,))
+
+
+@dataclass(frozen=True)
+class WindowPlan:
+    """How windows are laid over a chromosome. `tile` is the only plan the store needs."""
+
+    type: str = "tile"
+    stride_bins: Optional[int] = None            # defaults to `context_bins` — non-overlapping
+    min_valid_frac: float = DEFAULT_MIN_VALID_FRAC
+
+    @classmethod
+    def from_obj(cls, obj: Optional[Mapping[str, Any]]) -> "WindowPlan":
+        obj = dict(obj or {})
+        t = str(obj.get("type", "tile"))
+        if t != "tile":
+            raise RegimeError(
+                f"window_plan.type {t!r} is not supported; the store tiles ('tile') and lets the "
+                f"stride do the rest — an overlapping plan is stride < context_bins."
+            )
+        stride = obj.get("stride_bins")
+        frac = float(obj.get("min_valid_frac", DEFAULT_MIN_VALID_FRAC))
+        if not (0.0 <= frac <= 1.0):
+            raise RegimeError(f"window_plan.min_valid_frac must be in [0, 1], got {frac}")
+        if stride is not None and int(stride) <= 0:
+            raise RegimeError(f"window_plan.stride_bins must be positive, got {stride}")
+        return cls(type=t, stride_bins=None if stride is None else int(stride), min_valid_frac=frac)
+
+    def to_dict(self) -> dict:
+        return {"type": self.type, "stride_bins": self.stride_bins,
+                "min_valid_frac": self.min_valid_frac}
+
+    def stride(self, context_bins: int) -> int:
+        return int(self.stride_bins or context_bins)
+
+
+# ---------------------------------------------------------------------------------------------
+# the regime
+# ---------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Regime:
+    """A parsed, validated regime file. Immutable; `sha256` is over the bytes it was read from."""
+
+    store: str
+    assays: Tuple[str, ...]                       # D14 — THE column order
+    context_bins: int
+    train_biosamples: Tuple[str, ...] = ()
+    eval_biosamples: Tuple[str, ...] = ()
+    train_chroms: Tuple[str, ...] = ()
+    eval_chroms: Tuple[str, ...] = ()
+    window_plan: WindowPlan = field(default_factory=WindowPlan)
+    dsf: DsfPolicy = field(default_factory=DsfPolicy)
+    kinds: Tuple[str, ...] = ("counts", "peaks")
+    seed: int = 42
+    path: Optional[str] = None
+    sha256: Optional[str] = None
+    raw: Optional[str] = None                     # the file verbatim, for `run.json`
+
+    # -- parsing ------------------------------------------------------------------------------
+
+    @classmethod
+    def from_dict(cls, obj: Mapping[str, Any], *, path: Optional[Path | str] = None,
+                  raw: Optional[str] = None, sha256: Optional[str] = None) -> "Regime":
+        if not isinstance(obj, Mapping):
+            raise RegimeError("a regime must be a JSON object")
+        missing = [k for k in ("store", "assays", "context_bins") if k not in obj]
+        if missing:
+            raise RegimeError(f"regime is missing required key(s) {missing}")
+
+        assays = [str(a) for a in obj["assays"]]
+        if not assays:
+            raise RegimeError("regime.assays is empty; there is nothing to model")
+        dupes = sorted({a for a in assays if assays.count(a) > 1})
+        if dupes:
+            raise RegimeError(f"regime.assays has duplicate entries {dupes}; a column may appear once")
+        if L.CONTROL_TRACK in assays:
+            raise RegimeError(
+                f"regime.assays contains {L.CONTROL_TRACK!r}. The control is a column of "
+                f"counts.h5 flagged by `control_col` (D18) and rides its own batch keys — it is "
+                f"never one of the modelled assays."
+            )
+
+        bios = obj.get("biosamples") or {}
+        if not isinstance(bios, Mapping):
+            raise RegimeError("regime.biosamples must be an object with 'train' / 'eval' lists")
+        unknown = [k for k in bios if k not in _SPLITS]
+        if unknown:
+            raise RegimeError(f"regime.biosamples has unknown split(s) {unknown}; expected {list(_SPLITS)}")
+
+        ctx = int(obj["context_bins"])
+        if ctx <= 0:
+            raise RegimeError(f"regime.context_bins must be positive, got {ctx}")
+
+        kinds = tuple(str(k) for k in obj.get("kinds", ("counts", "peaks")))
+        bad_kinds = [k for k in kinds if k not in L.KINDS]
+        if bad_kinds:
+            raise RegimeError(f"regime.kinds has unknown kind(s) {bad_kinds}; expected {list(L.KINDS)}")
+        if "counts" not in kinds:
+            raise RegimeError("regime.kinds must include 'counts' — it is the modelled quantity")
+
+        return cls(
+            store=str(obj["store"]),
+            assays=tuple(assays),
+            context_bins=ctx,
+            train_biosamples=tuple(str(b) for b in bios.get("train", ())),
+            eval_biosamples=tuple(str(b) for b in bios.get("eval", ())),
+            train_chroms=tuple(str(c) for c in obj.get("train_chroms", ())),
+            eval_chroms=tuple(str(c) for c in obj.get("eval_chroms", ())),
+            window_plan=WindowPlan.from_obj(obj.get("window_plan")),
+            dsf=DsfPolicy.from_obj(obj.get("dsf")),
+            kinds=kinds,
+            seed=int(obj.get("seed", 42)),
+            path=None if path is None else str(path),
+            raw=raw,
+            sha256=sha256,
+        )
+
+    @classmethod
+    def from_file(cls, path: Path | str) -> "Regime":
+        p = Path(path)
+        if not p.is_file():
+            raise RegimeError(f"regime file not found: {p}")
+        raw = p.read_text(encoding="utf-8")
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RegimeError(f"{p}: not valid JSON — {exc}") from exc
+        sha = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        return cls.from_dict(obj, path=p, raw=raw, sha256=sha)
+
+    def to_dict(self) -> dict:
+        """The regime as JSON, round-trippable through `from_dict`."""
+        return {
+            "store": self.store,
+            "assays": list(self.assays),
+            "biosamples": {"train": list(self.train_biosamples), "eval": list(self.eval_biosamples)},
+            "context_bins": self.context_bins,
+            "train_chroms": list(self.train_chroms),
+            "eval_chroms": list(self.eval_chroms),
+            "window_plan": self.window_plan.to_dict(),
+            "dsf": self.dsf.to_dict(),
+            "kinds": list(self.kinds),
+            "seed": self.seed,
+        }
+
+    # -- derived ------------------------------------------------------------------------------
+
+    @property
+    def num_assays(self) -> int:
+        return len(self.assays)
+
+    def biosamples(self, split: str) -> Tuple[str, ...]:
+        if split not in _SPLITS:
+            raise RegimeError(f"unknown split {split!r}; expected one of {list(_SPLITS)}")
+        return self.train_biosamples if split == "train" else self.eval_biosamples
+
+    def chroms(self, split: str) -> Tuple[str, ...]:
+        if split not in _SPLITS:
+            raise RegimeError(f"unknown split {split!r}; expected one of {list(_SPLITS)}")
+        return self.train_chroms if split == "train" else self.eval_chroms
+
+    def assay_columns(self, tracks: Sequence[str]) -> List[int]:
+        """D14 — the declared assay order as column indices into a file's storage order.
+
+        The one place a name becomes a column. Raises naming every declared assay the file lacks,
+        because a silently dropped column shifts every column after it.
+        """
+        tracks = list(tracks)
+        missing = [a for a in self.assays if a not in tracks]
+        if missing:
+            raise RegimeError(
+                f"declared assay(s) {missing} are not in this file's tracks {tracks}"
+            )
+        return [tracks.index(a) for a in self.assays]
+
+    # -- validation ---------------------------------------------------------------------------
+
+    def validate_against(self, corpus) -> "Regime":
+        """D14 — every declared assay, biosample and chromosome must exist. Raise naming it.
+
+        `corpus` is a `reader.CorpusStore`. Assays are checked against the union over the declared
+        biosamples: an assay no biosample measures is a typo in the regime, while an assay only
+        *some* biosamples have is the normal case the loader fills with `MISSING`.
+        """
+        names = list(self.train_biosamples) + list(self.eval_biosamples)
+        if not names:
+            names = list(corpus.biosamples)
+        absent = [b for b in names if b not in corpus]
+        if absent:
+            raise RegimeError(
+                f"regime names biosample(s) not in {corpus.root}: {absent}. Names are opaque ids "
+                f"used verbatim (D16)."
+            )
+        available: set = set()
+        for b in names:
+            for kind in self.kinds:
+                if kind in corpus[b].kinds:
+                    available.update(corpus[b].assays(kind))
+        missing = [a for a in self.assays if a not in available]
+        if missing:
+            raise RegimeError(
+                f"declared assay(s) {missing} are in no biosample of {corpus.root}. "
+                f"The store has {sorted(available)}. The regime's `assays` list is the column "
+                f"order (D14) — a name that is not in the store is a typo, not an empty column."
+            )
+        store_chroms = set(corpus.n_bins())
+        bad = [c for c in list(self.train_chroms) + list(self.eval_chroms) if c not in store_chroms]
+        if bad:
+            raise RegimeError(
+                f"regime names chromosome(s) not in the store: {bad}. The store has "
+                f"{L.sort_chroms(store_chroms)}."
+            )
+        overlap = set(self.train_chroms) & set(self.eval_chroms)
+        if overlap:
+            raise RegimeError(
+                f"train_chroms and eval_chroms share {sorted(overlap)} — an eval window that also "
+                f"trained is not an evaluation."
+            )
+        for kind in self.kinds:
+            without = [b for b in names if kind not in corpus[b].kinds]
+            if without:
+                raise RegimeError(
+                    f"regime.kinds asks for {kind!r} but {without[:5]} "
+                    f"{'…' if len(without) > 5 else ''}have no {kind}.h5. pval is built last "
+                    f"(D24); drop it from `kinds` until it exists."
+                )
+        return self
+
+    # -- the window plan ------------------------------------------------------------------------
+
+    def windows(self, corpus, split: str, *, chroms: Optional[Sequence[str]] = None
+                ) -> List[Tuple[str, int]]:
+        """`[(chrom, start_bin), …]` for one split, in `sort_chroms` then ascending-start order.
+
+        Eligibility is D12 against `genome/mask.h5`. **When there is no mask layer yet, every
+        window is eligible** — the mask is t7's and a store mid-build legitimately has none. That
+        is stated rather than silent: `mask_available()` says which case you are in, and the
+        `StoreDataset` prints it once.
+        """
+        chrom_list = list(chroms if chroms is not None else self.chroms(split))
+        if not chrom_list:
+            raise RegimeError(
+                f"regime has no {split}_chroms, so there are no {split} windows to plan"
+            )
+        n_bins = corpus.n_bins()
+        stride = self.window_plan.stride(self.context_bins)
+        have_mask = self.mask_available(corpus)
+        out: List[Tuple[str, int]] = []
+        for chrom in L.sort_chroms(chrom_list):
+            n = int(n_bins[chrom])
+            if have_mask:
+                mask = corpus.genome.mask(chrom, 0, n)
+            else:
+                mask = np.ones(n, dtype=np.uint8)
+            starts = eligible_starts(
+                mask, self.context_bins, self.window_plan.min_valid_frac, stride
+            )
+            out.extend((chrom, int(s)) for s in starts)
+        if not out:
+            raise RegimeError(
+                f"no eligible {split} window on {chrom_list} at context_bins={self.context_bins}, "
+                f"stride={stride}, min_valid_frac={self.window_plan.min_valid_frac}. Either the "
+                f"context is longer than the chromosome or the mask rejects everything."
+            )
+        return out
+
+    def mask_available(self, corpus) -> bool:
+        try:
+            return bool(corpus.genome.has_mask)
+        except StoreError:  # pragma: no cover - genome dir missing entirely
+            return False
