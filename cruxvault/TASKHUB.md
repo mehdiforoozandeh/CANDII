@@ -18,7 +18,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ## Blocked
 
 - `t19` [implementation] bench primitives plus the three verification layers: vendored-reference bit-match, analytic arrays, stub model — blocked by `t18`
-- `t20` [implementation] whole-chromosome bench harness and CLI, both pval and count arms — blocked by `t19`
 - `t21` [implementation] the C-block: six covariate-sensitivity instruments (use, share, direction, specificity, invariance, bio-conservation guard) — blocked by `t19`
 - `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — blocked by `t20`, `t21`
 
@@ -38,7 +37,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model — *open*
 - `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI — *open*
 - `t19` [implementation] bench primitives plus the three verification layers: vendored-reference bit-match, analytic arrays, stub model — *blocked*
-- `t20` [implementation] whole-chromosome bench harness and CLI, both pval and count arms — *blocked*
 - `t21` [implementation] the C-block: six covariate-sensitivity instruments (use, share, direction, specificity, invariance, bio-conservation guard) — *blocked*
 - `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — *blocked*
 
@@ -54,4 +52,5 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *done* → `results/t10/t10_report.json`
 - `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `results/t11/t11_report.json`
 - `t12` [implementation] add the pval layer to both stores — *done* → `results/t12/t12_eic_report.json`
-- `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `train.py`
+- `t20` [implementation] whole-chromosome bench harness and CLI, both pval and count arms — *done* → `results/t20/DELIVERABLE.md`
+- `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `results/t23/DELIVERABLE.md`
