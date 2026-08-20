@@ -59,7 +59,20 @@ What it is **not**:
 ENCODE-side reader. `reference_sample.py` (191) derives and asserts the assay order.
 `panel.py` validates the panel JSON and rejects unknown keys. Schema and layout → `DATA.md`.
 
-### 2.3 Tests, tools and jobs
+### 2.3 `src/candi/store/` — the corpus store (needs no extra; h5py is a core dep)
+
+`layout.py` owns every on-disk rule in one place — paths, chunking, the per-file counts dtype, the
+fixed-point pval codec, the floor `n_bins` rule — and is the only module here that does not import
+h5py. `writer.py` turns one biosample's npz tree into `counts/peaks/pval.h5`; `manifest.py` builds
+`manifest.json` with the metadata CSVs as authority; `genome.py` builds `dna.h5` and `mask.h5` and
+owns window eligibility; `reader.py` is the `CorpusStore → BiosampleStore → TrackView` API;
+`regime.py` parses the regime file and generates the window plan; `dataset.py` is `StoreDataset`.
+`cli.py` exposes the build half as `python -m candi.store`.
+
+This lands **beside** the bake, not on top of it (D21). The contract is `STORE.md`; §4.8 and §4.9
+are the recipes.
+
+### 2.4 Tests, tools and jobs
 
 `tests/` is CPU-only and needs no GPU and no data. `tools/golden.py` is the bit-exactness gate;
 `tools/peak_check.py` checks the peak head. `slurm/` holds the sbatch scripts — the directory is
@@ -193,6 +206,50 @@ Scale flows `configs/panel*.json` → handler → derived assay order → `h5.at
 Edit `assays`/`biosamples` and re-bake; **nothing in `src/` changes.** Then train with an explicit
 `--d-model` (invariant 9), and re-run `tests/test_model.py` and `tests/test_bake_gates.py`, which
 already cover 3/8/16 assays and 384/768/1536 bins.
+
+### 4.8 Read the store, and train off it
+
+The corpora are built: `/project/def-maxwl/mforooz/CANDI_STORE` holds `eic/` (54.94 GB, 89
+biosamples, 35 assays) and `merged/` (406.06 GB, 361 biosamples, 47 assays) beside a shared
+`genome/`. A regime file replaces the h5 attrs; `configs/regime.eic_smoke.json` and
+`configs/regime.equiv.json` are the two that exist.
+
+```python
+corpus = CorpusStore("/project/def-maxwl/mforooz/CANDI_STORE/eic")
+counts = corpus["T_DND-41"].counts("chr1", 0, 768, assays=["H3K4me3"])   # (768, 1) int32
+loader = DataLoader(StoreDataset("configs/regime.eic_smoke.json"), batch_size=None, num_workers=4)
+```
+
+`batch_size=None` is required — `StoreDataset` yields whole batches and shards itself.
+
+Two things that will bite, both in `STORE.md` *Using the store*, which owns the detail:
+
+- **`train.py` cannot open a store.** `--h5` is required, `train_and_eval` reads `ds.num_cells`, and
+  `StoreDataset` has neither an h5 nor `num_cells`. The harness that runs today is
+  `cruxvault/results/train_ab/bench_ab.py`; D21 keeps the edit out of `src/`.
+- **A store-backed imputation eval silently scores nothing.** `StoreDataset` does not emit
+  `y_data_imp` / `y_pval_imp` / `y_peaks_imp` / `y_meta_imp` / `imp_biosample_name` / `log_ref`, and
+  `eval.py` reads all six through `batch.get(...)`. Task `t14`. Training is unaffected.
+
+`cell_cond` is refused rather than defaulted (D16) — a ported training command that passes it stops.
+
+### 4.9 Build a store
+
+Genome layer once, then one `build-biosample` per biosample, then the manifest, then verify. Full
+commands and flags → `STORE.md` *Build a store for a corpus that does not exist yet*.
+
+```bash
+python -m candi.store build-genome    --store-root <CANDI_STORE> --fasta … --blacklist …
+python -m candi.store build-biosample --source-root <npz tree> --corpus-root <…/eic> --biosample "$B"
+python -m candi.store build-manifest  --corpus-root <…/eic> --corpus eic --metadata-csv …
+python -m candi.store verify          --corpus-root <…/eic>
+```
+
+**Do not write a new array script.** `cruxvault/results/t10/t10_build_eic.sh` built EIC and
+`cruxvault/results/t12/t12_build_pval.sh` is its parameterised form; both carry the fixed `--gres`
+spec (invariant 13) and sizing justified against t9's measured worst case. Every store command needs
+torch, `build-genome` included — `candi/__init__.py` imports the encoder eagerly, so a torch-free
+venv cannot run any of them.
 
 ---
 

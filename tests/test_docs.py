@@ -35,5 +35,5 @@ def test_claude_md_stays_a_front_door() -> None:
 def test_claude_md_routes_to_every_companion_doc() -> None:
     """A router that has stopped naming a doc has stopped routing to it."""
     text = CLAUDE_MD.read_text(encoding="utf-8")
-    for doc in ("AGENTS.md", "DATA.md", "EVAL.md", "README.md"):
+    for doc in ("AGENTS.md", "DATA.md", "EVAL.md", "README.md", "STORE.md"):
         assert doc in text, f"CLAUDE.md no longer mentions {doc} — the routing table has a hole."

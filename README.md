@@ -51,6 +51,7 @@ src/candi/
   dataset.py     the H5 reader        batch.py    masking and batch prep
   train.py       training + the run JSON      eval.py / metrics.py   the M1/M2/M3/S14 instrument
   prep/          bake an H5 from ENCODE tracks
+  store/         the whole-genome corpus store — reader, regime, StoreDataset
 tools/golden.py  bit-exactness gate — every change must clear it before the next one starts
 tests/           the suite; no GPU required
 ```
@@ -67,6 +68,22 @@ pytest tests/ -q
 Always re-score with `--arch-from <run>.json`. Every architecture flag changes the `state_dict`, and
 that file carries the exact arguments the checkpoint was built from — so nothing has to be retyped,
 and nothing can be retyped wrong.
+
+## The corpus store
+
+There is a second data path. `CANDI_STORE` holds whole chromosomes rather than pre-cut windows, so
+window size, context length, the DSF ladder, the chromosome split and the assay column order stop
+being frozen into an h5 and move into a regime file read at load time — one store, every regime, no
+re-bake. It is built and lives on Fir at `/project/def-maxwl/mforooz/CANDI_STORE`: `eic/` is
+54.94 GB (89 biosamples, 35 assays), `merged/` is 406.06 GB (361 biosamples, 47 assays), beside a
+shared 884 MB `genome/`.
+
+```python
+CorpusStore("/project/def-maxwl/mforooz/CANDI_STORE/eic")["T_DND-41"].counts("chr1", 0, 768)
+```
+
+`train.py` does not read it yet — it still requires `--h5`, and the store lands beside the bake
+rather than replacing it. `STORE.md` is the contract and the recipes.
 
 ## What is tunable
 

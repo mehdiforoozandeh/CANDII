@@ -1,8 +1,8 @@
 # STORE.md — the corpus store contract
 
 Owns: the CANDI_STORE on-disk layout, the three codecs, the `n_bins` rule, the root attrs, the
-manifest and its metadata authority, the CLI, and the traps — each with the symptom you will
-actually see.
+manifest and its metadata authority, the CLI, the recipes in *Using the store*, and the traps —
+each with the symptom you will actually see.
 The **old** window-materialized bake → `DATA.md`. Metric contract → `EVAL.md`. Invariants, tasks,
 gates → `AGENTS.md`. The decisions behind every choice here, numbered `D1`–`D24` → `STORE_PLAN.md`.
 
@@ -101,6 +101,360 @@ flowchart TB
     style OLD fill:#5f3a1f,color:#fff
     style RNG fill:#3d2f5f,color:#fff
 ```
+
+## Using the store
+
+Everything after this section is the **contract** — what each piece guarantees. This section is the
+**path**: I have a store, now what. Each step names the section that owns its detail.
+
+Both corpora are built and live under one root on Fir,
+`/project/def-maxwl/mforooz/CANDI_STORE`:
+
+| | | |
+|---|---|---|
+| `genome/` | 884 MB | `dna.h5` + `mask.h5` + `chrom_sizes.json` — shared, built once |
+| `eic/` | 54.94 GB | 89 biosamples, 436 tracks, 35 assays, `counts` + `peaks` + `pval` |
+| `merged/` | 406.06 GB | 361 biosamples, 3026 tracks, 47 assays, `counts` + `peaks` + `pval` |
+
+Both carry a `manifest.json` and both pass `python -m candi.store verify`. `corpus_root` is
+`CANDI_STORE/eic`, **not** `CANDI_STORE` — `reader.py::CorpusStore` says so by name when you get it
+wrong.
+
+**Every store command needs torch**, including the ones that touch no tensor. `candi/__init__.py`
+imports `candi.encoder` eagerly, so the parent package pulls torch in before `candi.store.layout` is
+reached, and `python -m candi.store build-genome` is as torch-dependent as `StoreDataset` is. On Fir
+that venv is `/project/6014832/mforooz/EpiDenoise/candi_venv` (py3.10.13, torch 2.6.0, h5py 3.12.0).
+`~/scratch/enctest_env` is py3.11 with **no torch** and cannot run any of this.
+
+### Read data ad hoc
+
+```python
+from candi.store.reader import CorpusStore
+
+corpus = CorpusStore("/project/def-maxwl/mforooz/CANDI_STORE/eic")
+
+corpus.biosamples                          # ['B_BE2C', …] sorted, verbatim ids (D16)
+corpus.assay_vocabulary                    # the 35 assay names; the control is not one of them
+corpus.resolution                          # 25
+corpus.chroms()                            # ['chr1', …, 'chr22', 'chrX', 'chrY']
+corpus.n_bins("chr21")                     # floor(chr_len / 25)
+corpus.biosamples_with("ATAC-seq")         # which biosamples carry an assay
+corpus.track_meta("T_DND-41", "H3K4me3")   # depth / read_length / run_type / accessions, or None
+```
+
+One biosample, then one read:
+
+```python
+bs = corpus["T_DND-41"]
+
+bs.kinds                    # ['counts', 'peaks', 'pval'] — whichever files exist
+bs.tracks()                 # STORAGE order, control last (layout.py::order_tracks)
+bs.assays()                 # the same list with `chipseq-control` dropped
+bs.has("H3K4me3", "peaks")  # test before you read — an absent assay RAISES, it is not zero-filled
+bs.control_col, bs.has_control, bs.dtype, bs.n_bins("chr1")
+```
+
+Every read is in **bin** coordinates, half-open `[start, end)`:
+
+```python
+counts = bs.counts("chr1", 0, 768, assays=["H3K4me3", "ATAC-seq"])   # (768, 2) int32
+peaks  = bs.peaks("chr1", 0, 768, assays=["H3K4me3"])                # (768, 1) uint8, 0/1
+pval   = bs.pval("chr1", 0, 768, assays=["H3K4me3"])                 # (768, 1) float32, -log10 p
+ctrl   = bs.control("chr1", 0, 768)                                  # (768, 1) int32
+one    = bs["H3K4me3"].counts("chr1", 0, 768)                        # (768,)   int32
+```
+
+`assays=` is a permutation and is honoured (D14); omit it to get the file's storage order.
+`bs.block(kind, chrom, start, end, assays=…)` is the same read with the kind carried as data.
+
+The genome layer hangs off `corpus.genome`, and `dna` is the one accessor in **base pairs**:
+
+```python
+corpus.genome.dna("chr1", 0, 19_200)          # (19200,)   uint8 codes  A=0 C=1 G=2 T=3 N=4
+corpus.genome.dna_onehot("chr1", 0, 19_200)   # (19200, 4) float32; N is an all-zero row
+corpus.genome.mask("chr1", 0, 768)            # (768,)     uint8 0/1 — bins, not bp
+```
+
+Bin `b` covers `[b*25, (b+1)*25)` bp. That multiplication is the only conversion anything should do.
+
+Dtypes are the reader's, not the file's: counts come back `int32` whether the file is `uint16` or
+`uint32`, and pval comes back decoded, never as the stored fixed point. Close the handles when you
+are done, or take the store as a context manager:
+
+```python
+with CorpusStore("/…/CANDI_STORE/eic") as corpus:
+    ...
+```
+
+Detail → *Reading the store*.
+
+### Write a regime file
+
+A regime is a JSON object. Three keys are required; everything else has a default that
+`regime.py::Regime.from_dict` fills in.
+
+| key | required | what it means |
+|---|---|---|
+| `store` | **yes** | the corpus root. `StoreDataset(corpus=…)` overrides it — that is how a job reads a staged copy without editing the file |
+| `assays` | **yes** | **THE column order** (D14). No duplicates; `chipseq-control` is refused |
+| `context_bins` | **yes** | window length in bins; `768` bins = 19,200 bp at resolution 25 |
+| `biosamples.train` / `.eval` | no | the pool per split. Empty → `StoreDataset` falls back to every biosample in the store. Any key other than `train` / `eval` raises |
+| `train_chroms` / `eval_chroms` | no | must be disjoint, and every name must be in the store. A split with no chromosomes raises when its windows are planned, not at parse time |
+| `window_plan.type` | no | `tile` is the only plan. An overlapping plan is a smaller stride, not another type |
+| `window_plan.stride_bins` | no | defaults to `context_bins` — non-overlapping tiles |
+| `window_plan.min_valid_frac` | no | D12, default `0.9` |
+| `dsf.policy` | no | `discrete` (default), `loguniform`, or `off` (pins DSF 1) |
+| `dsf.levels` | no | the discrete ladder, default `[1, 2, 4, 8]`; every level must be ≥ 1 |
+| `dsf.min` / `dsf.max` | no | the loguniform bounds; `1 <= min <= max` |
+| `kinds` | no | default `["counts", "peaks"]`; **must include `counts`**, and every named kind must exist for every named biosample |
+| `seed` | no | default `42`. `StoreDataset` splits this into `seed` (pool order) and `run_seed` (thinning) |
+
+**An unknown key is silently ignored.** `Regime.from_dict` reads the keys it knows and never
+inspects the rest, so `"contxt_bins": 6144` parses clean and trains at the default 768. This is the
+opposite of a panel file, which rejects unknown keys (`AGENTS.md` §4.3). Round-trip a regime through
+`Regime.from_file(p).to_dict()` and diff it against the file if you want the typo to show.
+
+Two regimes exist and both run:
+
+* `configs/regime.eic_smoke.json` — 8 assays, 5 biosamples, chr19 train / chr21 eval, `counts` +
+  `peaks`. The store-era counterpart of `configs/panel.q19.json`, sized to run off a five-biosample
+  slice.
+* `configs/regime.equiv.json` — 35 assays in the old bake's own availability-sorted order, 51 train
+  and 38 eval biosamples, `counts` + `peaks` + `pval`, `seed` 0. **Generated**, by
+  `cruxvault/results/train_ab/make_regime.py`, from `eic_full.h5`'s attrs — it is the regime that
+  reproduces the bake's panel exactly, and it is the one to copy when the question is "same panel,
+  new knob".
+
+`Regime.sha256` and `Regime.raw` are the file's hash and its bytes. Put both in `run.json` beside
+the manifest's hash, or the run cannot be reproduced.
+
+### From regime file to `DataLoader`
+
+```python
+from torch.utils.data import DataLoader
+from candi.store.dataset import StoreDataset
+
+ds     = StoreDataset("configs/regime.eic_smoke.json", train=True, batch_size=8)
+loader = DataLoader(ds, batch_size=None, num_workers=4)
+
+for batch in loader:
+    ...            # batch["x_data"] is [8, 768, F] float32
+```
+
+**`batch_size=None` is not optional.** `StoreDataset` is an `IterableDataset` that yields whole
+batches already assembled — `_make_batch` returns `[B, L, F]` tensors — so `batch_size=None` turns
+DataLoader's own batching and collation off and the loop sees exactly what the dataset built. Any
+other value stacks `N` of those into `[N, B, L, F]`.
+
+The dataset shards itself across workers (`dataset.py::StoreDataset.__iter__` reads
+`get_worker_info`), so every window lands in exactly one worker whatever `num_workers` is. The old
+`CandiKitH5Dataset` does **not** — four workers there replay the same window stream four times, so
+an old-path worker count is a throughput number and not a training configuration.
+
+The knobs `StoreDataset` takes beyond the regime: `train` (picks the split and the RNG regime),
+`batch_size`, `corpus` (a `CorpusStore` that overrides `regime.store`), `dsf_sampling`
+(`uniform` / `off` / `x_eq_y` / `upsample_only`), `shuffle`, `seed`, `run_seed`, `deterministic`,
+`biosamples`, `chroms`, `meta_missing` (`unavailable` / `error`) and `require_dna`.
+
+`train=False` sets `deterministic=True` by itself, which is what makes an eval number independent of
+worker count (D22). Do not pass `deterministic=False` to an eval run to "match training".
+
+What comes out — 18 keys, the same set, fills and dtypes `CandiKitH5Dataset` emits on the training
+path — is in *`StoreDataset` — the batch dict, unchanged*.
+
+### Train off the store
+
+**`train.py` cannot read a store today, and this is not a missing flag.** `train.py::main` requires
+`--h5`; `train.py::train_and_eval` constructs `CandiKitH5Dataset` itself, derives `depth_center` with
+`dataset.py::h5_depth_center`, and reads `ds.num_cells` — which `StoreDataset` does not define.
+Wiring the store into `train.py` is an edit to the training path, and D21 holds that edit until a
+real run has used the store. (`train.py --regime` is the **masking** regime, `type1` /
+`type2_loci`. It has nothing to do with a regime file.)
+
+What runs today is a harness that imports the frozen pieces and drives them with either dataset —
+`cruxvault/results/train_ab/bench_ab.py`, which touches nothing under `src/`. The loop is this:
+
+```python
+import torch
+from torch.utils.data import DataLoader
+
+from candi.batch import make_masker, prepare_masked_batch
+from candi.model import build_model
+from candi.store.dataset import StoreDataset
+from candi.train import CLIP_NORM, _train_step, make_lr_schedule
+
+ds     = StoreDataset("configs/regime.eic_smoke.json", train=True, batch_size=8)
+loader = DataLoader(ds, batch_size=None, num_workers=4)
+
+torch.manual_seed(0)
+model  = build_model(num_assays=ds.num_assays, context_length=ds.context_bins,
+                     resolution=ds.resolution, num_cells=0,
+                     depth_center=24.3402004242).to("cuda")
+opt    = torch.optim.Adam(model.parameters(), 5e-4)
+sched  = make_lr_schedule(opt, ds.estimate_steps_per_epoch(), "cosine", 0.1, 0.1)
+masker = make_masker(p_full_assay=1.0, mask_fraction=0.2)
+
+losses = []
+model.train()
+for batch in loader:
+    prep = prepare_masked_batch(batch, masker, torch.device("cuda"), apply_mask=True)
+    if prep is None:                       # no valid query in this batch — same skip as train.py
+        continue
+    _train_step(model, prep, opt, sched, losses, want_grads=False, imp_weight=1.0,
+                probe=None, clip_state=None, clip_norm=CLIP_NORM, precision="fp32")
+```
+
+`num_cells=0` is forced by `cell_cond` being off, below. **`depth_center` has no store-side source**:
+`h5_depth_center` reads an h5, and there is no h5. The A/B run derived it once from `eic_full.h5`
+(24.3402004242 for the EIC panel) and passed the same number to both arms, which is what makes them
+the same model. Pass it explicitly and record it; do not let two runs pick different centres.
+
+#### A store-backed imputation eval scores nothing, and says nothing
+
+**Symptom: none.** Drive `eval.py`'s scoring off a `StoreDataset` and it runs, writes its report,
+and the imputation arm is empty.
+
+`StoreDataset` does not emit `y_data_imp`, `y_pval_imp`, `y_peaks_imp`, `y_meta_imp`,
+`imp_biosample_name` or `log_ref`. `eval.py` reads every one of them through `batch.get(...)`, so
+nothing raises — the imputation arm and `healthcheck.py`'s h74 reference arm simply degrade to
+nothing. **Do not score an imputation run off the store until task `t14` lands.** Training is
+unaffected; it never reads those keys.
+
+#### `cell_cond` is refused, not defaulted
+
+Porting a training command that passed `cell_cond` will stop here:
+
+```
+cell_cond is not carried into the store path yet. The 5th metadata row keys on a cell type
+derived by splitting a T_/V_/B_ prefix (`dataset.py::base_cell_type`), and D16 makes store
+biosample names opaque ids that nothing may parse.
+```
+
+`cell_cond="off"` is the only accepted value (D16). Deciding what a cell identity is for
+`A549_nonrep` is a task, not a default — so `num_cells` is 0 and the 5th row does not exist.
+
+### Build a store for a corpus that does not exist yet
+
+Four steps, in this order. The genome layer is shared and is built **once**; D24 puts `pval` last.
+
+**1 — the genome layer**, once per `CANDI_STORE` root, ~2.5 minutes on one node:
+
+```bash
+python -m candi.store build-genome \
+    --store-root /project/def-maxwl/mforooz/CANDI_STORE \
+    --fasta /project/6014832/mforooz/EpiDenoise/data/hg38.fa \
+    --fasta-sha256 5be01555d98347fdb3714dc84c6f77c9d8bc774adcf32c6f7a8fa06f5baf5e51 \
+    --blacklist /project/def-maxwl/mforooz/CANDI_STORE/genome/hg38-blacklist.v2.bed \
+    --context-bins 768,6144 --report t7_genome_report.json
+```
+
+It writes `genome/chrom_sizes.json`, which every later `--chrom-sizes` falls back to.
+
+**2 — one `build-biosample` per biosample**, as a SLURM array with no merge step — that is what D4
+bought:
+
+```bash
+python -m candi.store build-biosample \
+    --source-root /project/6014832/mforooz/DATA_CANDI_NEW \
+    --corpus-root /project/def-maxwl/mforooz/CANDI_STORE/new \
+    --chrom-sizes /project/def-maxwl/mforooz/CANDI_STORE/genome/chrom_sizes.json \
+    --biosample "$B" --kinds counts,peaks --overwrite
+```
+
+**Do not write a new array script.** `cruxvault/results/t10/t10_build_eic.sh` is the pattern that
+built EIC — `--array=0-88%30`, `sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" biosamples.txt` to pick the
+biosample, the fixed `--gres` spec (invariant 13), and sizing justified against t9's measured
+per-task worst case rather than guessed. `cruxvault/results/t12/t12_build_pval.sh` is the same script
+parameterised by `CORPUS` / `SRC` / `LIST` through `--export`, and is what to copy for a second
+corpus. `--kinds pval` alone opens no other kind's file, so `--overwrite` is scoped to `pval.h5` and
+a failed task can simply be resubmitted.
+
+**3 — the manifest**, once the array is complete. `StoreDataset` cannot start without it: four of the
+model's inputs are in it and the h5 deliberately does not carry them.
+
+```bash
+python -m candi.store build-manifest \
+    --corpus-root /project/def-maxwl/mforooz/CANDI_STORE/new --corpus new \
+    --metadata-csv <the signal metadata CSV> \
+    --metadata-csv <the recovered control metadata CSV> \
+    --source-root /project/6014832/mforooz/DATA_CANDI_NEW
+```
+
+EIC's pair, for reference, is `EpiDenoise/data/eic_metadata.csv` plus
+`CANDI_STORE/eic_control_metadata.csv`.
+
+`--metadata-csv` is repeatable and that is the whole mechanism for the recovered control metadata.
+`--source-root` turns on the D20 cross-check against `file_metadata.json`. `--no-strict` is for
+triage; a store you intend to train on is built without it.
+
+**4 — verify**, and read the exit code:
+
+```bash
+python -m candi.store verify --corpus-root /project/def-maxwl/mforooz/CANDI_STORE/new
+```
+
+`0` and `<root>: OK`, or `1` and a numbered problem list. Then rerun `build-biosample` with
+`--kinds pval` over the same list to add the p-value layer.
+
+### Stage to `/localscratch` before training (D5)
+
+The store lives on `/project` and is read from `/localscratch` on the node. The measured cost, on
+the EIC corpus:
+
+| | bytes | seconds | rate |
+|---|---|---|---|
+| `genome/` | 883,787,968 | 1.6 | 542 MB/s |
+| `eic/` counts + peaks | 21,536,069,991 | 93.9 | 229 MB/s |
+| `eic/` with `pval` | 55,826,431,918 | 208.8 | 267 MB/s |
+| the old `eic_full.h5`, for comparison | 24,379,189,757 | 16.3 | 1494 MB/s |
+
+Those store rows are `rsync -a`. **Use `cp`.** t9 measured 804 MB/s copying the same tier with `cp`,
+about 3× the rsync rate — `rsync` earns its keep on an incremental sync, not on a first copy into an
+empty `/localscratch`.
+
+Whether staging pays back is arithmetic, not a rule. Against the old bake the store costs **192.5 s
+more** to stage (208.8 vs 16.3) and saves **~29 s of data time per epoch** (36.7 s → 7.6 s of
+`next(iterator)` over one 356-step epoch at `num_workers=0`), so it pays for itself after **~6.6
+epochs** as measured, or **~1.8** if staged with `cp`. A single-epoch smoke test should not stage.
+
+Point the run at the copy without editing the regime file: `StoreDataset` takes a `corpus=` argument
+that overrides `regime.store`.
+
+```python
+StoreDataset(regime, corpus=CorpusStore("/localscratch/…/CANDI_STORE/eic"))
+```
+
+### What the loader actually costs
+
+Measured on one Fir node, 4 cores, one H100 MIG 1g.10gb slice, 356 steps at batch 8, both sources
+staged to `/localscratch`, same model and same init (`cruxvault/results/train_ab/`):
+
+| workers | old bake, data time | store, data time | ratio |
+|---|---|---|---|
+| 0 | 104.6 ms/step | 21.8 ms/step | **4.80×** |
+| 1 | | | 9.47× |
+| 4 | | | 1.04× |
+
+The per-step figures are the `num_workers=0` row, which ran the full 356 steps; the 1- and 4-worker
+rows ran a shorter 150-step budget, so only their ratios are comparable.
+
+**Quote the data-only figure.** End-to-end speedup depends entirely on being data-bound: at
+`num_workers=0` data was 68.9% of the step on the old path and 31.7% on the store, and the timed
+wall clock over the same 356 steps went 53.3 s → 24.1 s. At 4 workers both paths are GPU-bound and
+the 1.04× is the honest number. `num_workers=0` is not a strawman — `train.py` iterates `iter(ds)`
+directly and builds no DataLoader at all.
+
+The two window plans are **not** the same size, so this is a rate comparison and not a like-for-like
+epoch: chr19 gives 3,053 tiles on the old bake against 2,848 on the store, because D12 rejects the
+blacklisted and N-heavy ones. Genome-wide at `min_valid_frac = 0.9` there are 146,978 tiled eligible
+windows at `L = 768` and 18,209 at `L = 6144`, out of a genome that is 0.916786 valid bins.
+
+Where the two paths were made to agree, they agree exactly: counts, peaks, DNA, availability and all
+four metadata covariates are bit-identical between the store and `eic_full.h5`, **0 differing
+elements of 143.2 M**. The five places they deliberately differ — window plan, DSF realization, the
+`y_pval` transform, control availability on 11 of the 51 train biosamples, and the peaks sentinel in
+absent columns — are the `not_matched` list in
+`cruxvault/results/train_ab/results/analysis.json`.
 
 ## On-disk layout
 
@@ -743,9 +1097,13 @@ file to the reader, take it from the pool — never call `h5py.File` at module o
 Every module of the store is written: `layout` / `writer` / `manifest` / `cli` (t6), `genome`
 (t7), `reader` / `regime` / `dataset` (t8). What is missing is **use**.
 
+Both corpora now exist — t10 built EIC, t11 built MERGED, t12 added `pval` to both, and the sizes
+are in *Using the store*. What is still missing:
+
 | gap | why it is still open |
 |---|---|
-| the corpora themselves | t10 (EIC), t11 (MERGED), t12 (pval) are SLURM builds, not code |
+| a `train.py` that can open a store | `--h5` is required and `train_and_eval` reads `ds.num_cells`; D21 holds the edit until a real run has used the store |
+| the eval-only batch keys | `t14` — a store-backed imputation eval scores nothing and does not say so |
 | `cell_cond` | the 5th meta row needs a cell identity D16 forbids parsing off the name |
 | the genome-wide eval output policy | overlap and edge handling when emitting a full imputed track — a question for the crux tree, not a task |
 | retiring the old bake | `prep/bake.py` and `dataset.py::CandiKitH5Dataset` stay until a real training run has used the store (D21) |
