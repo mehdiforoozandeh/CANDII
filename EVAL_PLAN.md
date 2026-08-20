@@ -347,7 +347,7 @@ A PR without those numbers in it is not this PR.
 ## 11. State of the work (updated 2026-08-20)
 
 **Branch:** `implementation/t17-eval-suite`, pushed to `origin`, merged up to `origin/main` at
-`d9a6ede` (which carries t23). **657 tests pass, 1 skipped, `golden.py check` 0 ULP.**
+`d9a6ede` (which carries t23). **688 tests pass, 1 skipped, `golden.py check` 0 ULP.**
 
 The 1 skip is `test_real_v2_blacklist_is_the_one_that_is_three_orders_larger`, which needs
 `cruxvault/results/t4/` — untracked by design, so absent in a fresh checkout or worktree.
@@ -356,9 +356,45 @@ The 1 skip is `test_real_v2_blacklist_is_the_one_that_is_three_orders_larger`, w
 |---|---|
 | **t18** assets | **done for the beds.** GENCODE v29, FANTOM5, the stub blacklist and `gtf_to_bed.sh` pinned and checksummed under `src/candi/bench/assets/`. **The `msevar` variance pools are NOT built** — they need the store, which is on Fir. `annotations.build_variance_pools` is written and unrun. |
 | **t19** primitives + layers 1–2 | **done.** `eic.py`, `partitions.py`, `distributional.py`, `binary.py`; 46 reference tests at 0 ULP, 42 analytic tests. |
-| **t20** harness + CLI | **`ranking.py` done and verified against the published table.** `harness.py`, `cli.py` **not started.** |
+| **t20** harness + CLI | **done.** `ranking.py` verified against the published table; `harness.py` and `cli.py` score a real checkpoint end to end on both backends, 31 tests. |
 | **t21** C-block | **done.** All six instruments, 23 stub-model tests. |
-| **t22** cutover | **not started.** Blocked on t20. |
+| **t22** cutover | **not started.** No longer blocked — t20 and t21 are both in. |
+
+### t20 — the eight places the plan was silent, and what was chosen
+
+§0 says to choose the option most consistent with the decisions here and write it down. These are
+the eight, each with the decision it follows from.
+
+1. **The P-block runs on the `pval` arm only.** Its binarisation is `>= 2` on a -log10 p-value and
+   its strength bins run from `1e-1` to `10^2.5` in the same units. A count arm has no p-value, and
+   inventing a count threshold would produce a number with no counterpart in the published work.
+2. **Denoising is opt-in and its key carries a fourth field.** §4 names only the imputation key,
+   and `eval.py` already wrote denoising under `(T_, T_, assay)` — which collides with store
+   leave-one-out, where the input and target biosample are the same one. `--kinds impute` is the
+   default; `denoise` keys read `T_x|T_x|assay|denoise` and get their own `macro_denoise`.
+3. **Store imputation is leave-one-assay-out, one assay per forward pass.** D16 makes store
+   biosample names opaque, so there is no `V_`/`B_` counterpart to impute from; the assay is held
+   out by the same mask `DataMasker._mask_full_assay` applies in training. Masking every target at
+   once would be a different, harder task — and on a two-assay biosample it empties the encoder
+   input entirely.
+4. **A gapped eval tiling is refused, not scored.** The h5's windows are frozen, so that backend
+   cannot re-tile; if the bake left a hole, the harness raises with the hole measured in bins
+   rather than scoring the buffer's initial value there. That is D2 as a gate instead of a hope.
+5. **The tail tile overlaps rather than running short.** The last window is pulled back to end
+   flush with the chromosome, so a bin in the overlap is predicted twice under two contexts and the
+   later write wins. Two legitimate predictions of one bin is a property of finite context; scoring
+   one bin twice would not be, and writing by absolute index makes that impossible.
+6. **The C-block is sampled, and every count that decides its resolution is in the output.** D2 is
+   a rule about scoring a *track*; the C-block perturbs a prompt and watches the output move.
+   `n_units`, `n_windows`, `n_contexts`, `n_resamples`, `n_outer` and `n_inner` all ship.
+7. **`msevar` is only ever applied to the arm its pool was built in.** D7's EIC pool is a variance
+   of -log10 p-values; weighting squared *count* error by it would be a number with no reading.
+8. **The rank aggregation inserts CANDI's whole-track score into all ten competitor bootstraps**,
+   and records that the bias runs *against* CANDI — stage 4 keeps each team's second-best bootstrap
+   rank, so a competitor profits from its spread and CANDI has none. Scoring CANDI on the
+   challenge's own position bootstraps is not implemented: layer 4 is PR evidence, not a gate (§6),
+   and a position bootstrap makes the three region measures meaningless. **This is the one place a
+   follow-up task is owed** rather than a decision being final.
 
 ### What a fresh session needs to know before touching this
 
