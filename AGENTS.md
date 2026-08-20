@@ -222,16 +222,34 @@ loader = DataLoader(StoreDataset("configs/regime.eic_smoke.json"), batch_size=No
 
 `batch_size=None` is required — `StoreDataset` yields whole batches and shards itself.
 
-Two things that will bite, both in `STORE.md` *Using the store*, which owns the detail:
+`train.py` trains off it through ONE flag (t23) — the regime file, not the corpus root, because
+the regime already carries `store` as a required key:
 
-- **`train.py` cannot open a store.** `--h5` is required, `train_and_eval` reads `ds.num_cells`, and
-  `StoreDataset` has neither an h5 nor `num_cells`. The harness that runs today is
-  `cruxvault/results/train_ab/bench_ab.py`; D21 keeps the edit out of `src/`.
-- **A store-backed imputation eval silently scores nothing.** `StoreDataset` does not emit
-  `y_data_imp` / `y_pval_imp` / `y_peaks_imp` / `y_meta_imp` / `imp_biosample_name` / `log_ref`, and
-  `eval.py` reads all six through `batch.get(...)`. Task `t14`. Training is unaffected.
+```bash
+python -m candi.train --store configs/regime.eic_smoke.json --out-dir runs/smoke --d-model 32
+```
 
-`cell_cond` is refused rather than defaulted (D16) — a ported training command that passes it stops.
+`--h5` and `--store` (alias `--regime-file`) are **mutually exclusive and exactly one is required**;
+argparse refuses both-or-neither. Every dataset on either path is built by the one factory
+`train.py::make_dataset(source, mask_regime, …)`, and the path is picked once by
+`train.py::DataSource.resolve`.
+
+Three things that will bite, all in `STORE.md` *Using the store*, which owns the detail:
+
+- **`--regime` is NOT `--store`.** `--regime` is the *masking* regime (`type1` / `type2_loci`) and
+  predates the store. `type2_loci` is h5-only and is refused with `--store`.
+- **A store run is training only.** `StoreDataset` does not emit `y_data_imp` / `y_pval_imp` /
+  `y_peaks_imp` / `y_meta_imp` / `imp_biosample_name` / `log_ref`, and `eval.py` reads all six
+  through `batch.get(...)` — so an imputation eval would score nothing and not say so (task `t14`).
+  `--store` therefore skips `evaluate()`, forces `--eval-every` off, and writes a run json with no
+  M1/M2/M3/S14 keys at all rather than empty ones.
+- **`--reference on` is refused** on the store path: the table pins itself to an h5 fingerprint.
+
+`cell_cond` is refused rather than defaulted (D16) — a ported training command that passes it stops,
+and `num_cells` is 0, so the store trains the historical 4-row model.
+
+The run json records `data_source`, and on the store path also `store`, `regime_file`,
+`regime_json` (verbatim), `regime_sha256` and `store_manifest_sha256` (`STORE_PLAN.md` §4).
 
 ### 4.9 Build a store
 

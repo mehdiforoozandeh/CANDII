@@ -341,3 +341,37 @@ A PR without those numbers in it is not this PR.
 - Scoring the Bernoulli peak head as a primary result. B-block scores it; it remains auxiliary
   supervision, and two arms are comparable only if their `--heads` sets match.
 - Any change to `AGENTS.md` §7. Frozen, forever.
+
+---
+
+## 11. State of the work (updated 2026-08-20)
+
+**Branch:** `implementation/t17-eval-suite`, pushed to `origin`, merged up to `origin/main` at
+`d9a6ede` (which carries t23). **657 tests pass, 1 skipped, `golden.py check` 0 ULP.**
+
+The 1 skip is `test_real_v2_blacklist_is_the_one_that_is_three_orders_larger`, which needs
+`cruxvault/results/t4/` — untracked by design, so absent in a fresh checkout or worktree.
+
+| stage | state |
+|---|---|
+| **t18** assets | **done for the beds.** GENCODE v29, FANTOM5, the stub blacklist and `gtf_to_bed.sh` pinned and checksummed under `src/candi/bench/assets/`. **The `msevar` variance pools are NOT built** — they need the store, which is on Fir. `annotations.build_variance_pools` is written and unrun. |
+| **t19** primitives + layers 1–2 | **done.** `eic.py`, `partitions.py`, `distributional.py`, `binary.py`; 46 reference tests at 0 ULP, 42 analytic tests. |
+| **t20** harness + CLI | **`ranking.py` done and verified against the published table.** `harness.py`, `cli.py` **not started.** |
+| **t21** C-block | **done.** All six instruments, 23 stub-model tests. |
+| **t22** cutover | **not started.** Blocked on t20. |
+
+### What a fresh session needs to know before touching this
+
+1. **Work in the worktree**, `.claude/worktrees/t17-eval-suite`, and set `PYTHONPATH=$PWD/src` on
+   every command — the editable install otherwise resolves `candi` to the main checkout.
+   `~/miniforge3/envs/candii/bin/python` directly; `conda activate` fails in a sandboxed shell.
+2. **`bench` must not import `candi.train`.** `harness.py` opens `CandiKitH5Dataset` /
+   `StoreDataset` through its own small factory. An evaluation package importing the training module
+   is backwards, and it was also what kept t20 free of any collision with t23.
+3. **Use `StoreDataset.depth_center()`** rather than re-deriving the depth centre, so the two
+   definitions cannot drift.
+4. **t22 must edit `train.py`.** `origin/main`'s `train.py` imports `candi.eval` at lines **57**
+   (`evaluate`) and **1258** (`quick_eval`). The other three consumers of `eval.py` —
+   `compare_arms.py:78`, `report_h74.py:362,505` (all `_cluster_bootstrap_ci`) and
+   `tests/test_meta_probe.py:414` (`build_eval_units`, `quick_eval`) — are unclaimed and can be
+   repointed at any time.

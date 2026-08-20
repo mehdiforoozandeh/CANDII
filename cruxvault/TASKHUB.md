@@ -54,3 +54,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *done* → `results/t10/t10_report.json`
 - `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `results/t11/t11_report.json`
 - `t12` [implementation] add the pval layer to both stores — *done* → `results/t12/t12_eic_report.json`
+- `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `train.py`
