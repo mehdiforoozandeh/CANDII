@@ -106,3 +106,24 @@ statement is true. The P-block and B-block use t4's real v2 list where a blackli
 
 None of this is a bug to fix. It is a property of the benchmark, and `EVAL_PLAN.md` D16 says we
 reproduce the benchmark's properties including the inconvenient ones.
+
+---
+
+## `tests/fixtures/` — the published score table and rank column
+
+Not scoring assets; verification evidence. Both are read only by `tests/test_bench_ranking.py`.
+
+| file | what it is |
+|---|---|
+| `eic_moesm3_scores.csv.gz` | Genome Biology 2023 supplementary **MOESM3** — the challenge's own per-team, per-experiment, per-bootstrap score table after the quantile-normalisation correction. 12,740 rows, 25 teams, 51 blind experiments, 10 bootstraps, all nine measures. Gzipped from the copy in the archive repo at `CANDI/eic_reproduction/002_2026-08-11_macs2_peaks/refs/`. sha256 `5839b471508279f8eec58591b50b5a01755800809398cfbc7e717e3a331b10c5`. |
+| `eic_published_ranks.json` | The `rank_published` column for all 25 teams, extracted from archive `h77`'s `rescore_ranks.json`. 1.7 KB. |
+| `encode_score_metrics_vendored.py` | The organizers' `score_metrics.py`, byte-identical (git blob `5dcb343139a037e9a528e8e4ababf9cd00163ac1`). Imports are stubbed at load time in `tests/fixtures/reference.py`; the file itself is never edited. |
+
+Schreiber et al., *The ENCODE Imputation Challenge: a critical assessment of methods for cross-cell
+type imputation of epigenomic profiles*, Genome Biology 24, 79 (2023). Open access.
+
+**Measured agreement** (`test_bench_ranking.py`): feeding MOESM3 through `candi.bench.ranking`
+reproduces the published ranking at Spearman **0.9856**, with the **top three exactly right**, 13 of
+25 teams at their exact published rank and 18 of 25 inside their published tie block. Six aggregation
+variants were probed and five give identical output, so the residual is not an implementation choice
+left unturned. Exact reproduction is refuted by archive `h71` and is out of scope (`EVAL_PLAN.md` §10).
