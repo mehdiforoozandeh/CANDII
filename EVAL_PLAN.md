@@ -183,6 +183,16 @@ comment in our source naming it as deliberate.
 5. **`normalize_dict` is a no-op.** The published numbers are on **untransformed** −log10 p-values.
    No arcsinh anywhere in the E-block.
 6. **`mse1obs` uses `>=` against the `int(N*0.01)`-th largest value**, so ties admit more than 1%.
+   With `N < 100` the index is `-0 == 0`, i.e. the **minimum**, and the whole array is selected.
+7. **The numerator and denominator use different intervals, differently per metric.** All three
+   region measures take squared error from the clipped Python slice, but `mseprom` counts the
+   **clipped** length while `msegene` and `mseenh` count `end - start` **unclipped**. A gene running
+   past the end of the scored array therefore pays for bins it contributes no error over, deflating
+   `msegene`. *(Found by layer 1 during t19, not from reading the source.)*
+8. **An empty result fails in two different ways.** `sse` starts as a Python float and is promoted to
+   `numpy.float64` the first time any slice — empty or not — is summed into it. So an annotation set
+   that selects zero bins gives `np.float64(0)/0` → **nan**, while one that matches no line at all
+   leaves the loop body unrun and gives a **ZeroDivisionError**. *(Also found by layer 1.)*
 
 ### 5.2 The vendored reference
 

@@ -19,7 +19,7 @@ not pay for either.
 # below. Submodules may use it freely; the package `__init__` that lazily exports a submodule of
 # that name may not.
 
-__all__ = ["annotations"]
+__all__ = ["annotations", "binary", "distributional", "eic", "partitions"]
 
 
 def __getattr__(name: str):
