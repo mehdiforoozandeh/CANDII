@@ -7,9 +7,20 @@ the option most consistent with the decisions here, write down what you chose, a
 **Crux tasks:** `t17` (parent) with children `t18`–`t22` in `cruxvault/tasks/`.
 **Branch:** `implementation/t17-eval-suite` — one branch, staged commits, **a commit only when that
 stage's verifiables are met**. PR at the end, carrying the verification evidence.
-**Merge gate (non-experiment lane):** `pytest tests/ -q` green **and** `python tools/golden.py`
-bit-exact, at every commit until the cutover commit — which is the one commit that is *allowed* to
-move numbers, and only because it ships the equivalence report that explains every move.
+**Merge gate (non-experiment lane):** `pytest tests/ -q` green **and** `tools/golden.py check`
+0 ULP against a baseline recorded at branch creation, at every commit until the cutover commit —
+which is the one commit that is *allowed* to move numbers, and only because it ships the
+equivalence report that explains every move.
+
+```bash
+# the interpreter: `conda activate` fails in a sandboxed shell, so call it by path
+~/miniforge3/envs/candii/bin/python -m pytest tests/ -q
+~/miniforge3/envs/candii/bin/python tools/golden.py check <scratchpad>/t17_baseline.golden.pt
+```
+
+Baseline recorded 2026-08-19 at `cdeabf2`: **497 tests pass**, `params=2,353,634`,
+`sd=472362cea987`. `golden.py` takes a mode and a path — a bare `python tools/golden.py` is an
+`IndexError`, not a gate.
 
 ---
 
