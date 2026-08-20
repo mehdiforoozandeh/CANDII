@@ -26,6 +26,13 @@ ASSEMBLED BATCH — metadata row 3 and, for the positive control, the count TARG
 skipped: the training path is the pre-h64 one byte for byte. Nothing in the optimizer / schedule /
 clip / loss / step order is touched by any of the three arms.
 
+t23 adds `--store` (alias `--regime-file`) alongside `--h5`, mutually exclusive and exactly one
+required, under the same rule. It changes WHERE batches come from and nothing else: both paths go
+through the one factory `make_dataset`, which returns the pre-t23 `CandiKitH5Dataset` object for
+`--h5` with the arguments its three call sites already passed. The store path is TRAINING ONLY —
+`StoreDataset` does not emit the eval-only batch keys (t14), so `evaluate()` is skipped rather than
+called and left to score nothing. See `STORE.md` *Train off the store*.
+
 Stage 2 adds `--heads` (default `count`) under the same rule. `nb_count_loss` is UNCHANGED, including
 its `imp_weight` behaviour; the Gaussian signal and Bernoulli peak terms are auxiliary and are
 constructed only when the model built the head that produces them, so at the default `aux_head_losses`
@@ -35,10 +42,13 @@ NB-only by ruling: the extra heads train, and nothing scores them yet.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Optional
 
 import numpy as np
 import torch
@@ -53,6 +63,161 @@ from candi.model import (DEFAULT_FILM_TAPS, DEFAULT_HEADS, build_model, forward_
 from candi.precision import (DEFAULT_PRECISION, PRECISION_HELP, PRECISIONS, assert_no_grad_scaler,
                              autocast_region, fp32_fence)
 
+
+# ---------------------------------------------------------------------------
+# t23 — where batches come from: a baked h5, or a CANDI_STORE through a regime file
+# ---------------------------------------------------------------------------
+# ONE new flag, `--store` (spelled `--regime-file` if you prefer), and it takes the REGIME FILE, not
+# the corpus root. That is the whole reason one flag is enough: a regime already carries `store` as a
+# required key (`store/regime.py::Regime.from_dict` refuses a regime without it), so a second
+# `--store-root` flag would either duplicate the regime's own field or contradict it — and a
+# contradiction between a flag and the file that is supposed to be the authority is exactly the class
+# of bug the store was built to remove. `STORE_PLAN.md` §4: the regime file is the authority that
+# replaced `h5.attrs`.
+#
+# THE NAME COLLISION IS REAL AND IS NOT PAPERED OVER. `--regime` already exists and means the MASKING
+# regime (`type1` / `type2_loci`) — which windows the h5 loader draws from. It has nothing to do with
+# a store regime file. Both help strings say so out loud.
+
+#: `--store` help. Module-level so a test can assert it disambiguates `--regime` without re-parsing.
+STORE_HELP = (
+    "path to a CANDI_STORE REGIME FILE (json) — the store path. Mutually exclusive with --h5, and "
+    "exactly one of the two is required. The regime's own `store` key names the corpus root, so no "
+    "second flag is needed: see configs/regime.eic_smoke.json. NOT to be confused with --regime, "
+    "which is the MASKING regime (type1 / type2_loci) and is unrelated. Also spelled --regime-file. "
+    "On this path scale comes from the regime instead of h5.attrs, num_cells is 0 (cell_cond is "
+    "refused, D16), and M1/M2/M3/S14 are NOT scored (t14) — training only."
+)
+
+#: `--regime` help. It predates the store by a long way; the store gave its name a second meaning.
+MASK_REGIME_HELP = (
+    "the MASKING regime: type1 draws training windows from the h5's train chromosomes, type2_loci "
+    "draws them from the baked cCRE/non-cCRE loci. NOTHING to do with --store, which takes a store "
+    "REGIME FILE. type2_loci is h5-only — the store plans its own windows (regime.window_plan)."
+)
+
+
+def _manifest_sha256(corpus_root) -> Optional[str]:
+    """sha256 of the corpus `manifest.json` bytes, or None when the store has no manifest.
+
+    STORE_PLAN.md §4 requires the run record to carry this next to the regime's own hash: the regime
+    says which columns, which biosamples and which chromosomes, and the manifest says which bytes
+    were on disk under those names. Neither alone identifies the data a run saw.
+    """
+    try:
+        from candi.store import layout as L
+        p = L.manifest_path(corpus_root)
+        return hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None
+    except Exception:                                    # noqa: BLE001 — provenance is never fatal
+        return None
+
+
+@dataclass(frozen=True)
+class DataSource:
+    """Exactly one of a baked h5 or a store regime — the single object every call site is handed.
+
+    It exists so that "which data path is this" is answered ONCE, at the top of `train_and_eval`,
+    rather than three times inside three dataset constructions that would then be free to drift.
+    """
+
+    kind: str                                            # "h5" | "store"
+    h5_path: Optional[str] = None
+    regime_path: Optional[str] = None
+    regime: Any = None                                   # candi.store.regime.Regime, store path only
+
+    @classmethod
+    def resolve(cls, *, h5=None, store=None) -> "DataSource":
+        """Enforce exactly-one, then parse the regime. Argparse enforces it too; so does this.
+
+        Both, deliberately: the mutually-exclusive group catches the CLI, and this catches every
+        programmatic caller of `train_and_eval` — including the ones that used to be able to omit
+        `h5_path` only by crashing three frames deeper.
+        """
+        if (h5 is None) == (store is None):
+            raise ValueError(
+                "exactly one of h5 / store is required. --h5 <baked.h5> reads the frozen bake; "
+                "--store <regime.json> reads a CANDI_STORE through a regime file. "
+                f"Got h5={h5!r} store={store!r} — neither has a default, and they are not "
+                "combinable: the regime would then contradict the h5's own attrs.")
+        if h5 is not None:
+            return cls(kind="h5", h5_path=str(h5))
+        from candi.store.regime import Regime
+        return cls(kind="store", regime_path=str(store), regime=Regime.from_file(store))
+
+    @classmethod
+    def coerce(cls, obj) -> "DataSource":
+        """A `DataSource` passes through; anything else is read as an h5 path.
+
+        This is what keeps every pre-t23 caller of `train(model, h5_path, device, …)` working
+        unchanged, including the ones in `tests/`.
+        """
+        return obj if isinstance(obj, cls) else cls(kind="h5", h5_path=str(obj))
+
+    @property
+    def is_store(self) -> bool:
+        return self.kind == "store"
+
+    def label(self) -> str:
+        return self.regime_path if self.is_store else str(self.h5_path)
+
+    def provenance(self) -> dict:
+        """What the run record keeps about the data. On the store path, STORE_PLAN.md §4 verbatim.
+
+        The h5 path adds exactly ONE key to what it recorded before t23 (`data_source`), and keeps
+        `h5` spelled the way every existing run json spells it. A reader of an old json sees the same
+        field; a reader of a new one can tell the two paths apart without inferring it from which
+        key is absent.
+        """
+        if not self.is_store:
+            return {"data_source": "h5", "h5": str(self.h5_path)}
+        return {
+            "data_source": "store",
+            "h5": None,
+            "store": str(self.regime.store),
+            "regime_file": self.regime_path,
+            # The regime's sha256 is over the BYTES ON DISK, and `regime_json` is those bytes. A
+            # hash with no text beside it cannot be checked by a reader who no longer has the file.
+            "regime_sha256": self.regime.sha256,
+            "regime_json": self.regime.raw,
+            "store_manifest_sha256": _manifest_sha256(self.regime.store),
+        }
+
+
+def make_dataset(source, mask_regime, *, train=True, batch_size=8, dsf_sampling="uniform",
+                 seed=42, shuffle=True, h5_cache_ram=True, cell_cond="off", reference=None,
+                 only=None):
+    """THE one place a training dataset is opened, on either path. All three call sites go here.
+
+    On the h5 path this is `CandiKitH5Dataset(...)` with the arguments the three sites already
+    passed, at the values they already passed them — the defaults here are that class's own
+    defaults, so a site that used to omit an argument still gets the same object.
+
+    `only` is the single knob the two paths spell differently. The h5 loader selects biosamples by
+    NAME PREFIX (`_bios_candidates` uses `startswith`), so the full-coverage loop passes a whole
+    biosample name as a "prefix" and gets exactly that one; the store selects by exact name (D16
+    makes the names opaque ids that nothing may parse). `only=None` means "the split's whole pool"
+    on both.
+    """
+    if not source.is_store:
+        return CandiKitH5Dataset(source.h5_path, mask_regime, train=train, batch_size=batch_size,
+                                 biosample_prefix=(only or "T_"), dsf_sampling=dsf_sampling,
+                                 seed=seed, shuffle=shuffle, h5_cache_ram=h5_cache_ram,
+                                 cell_cond=cell_cond, reference=reference)
+    from candi.store.dataset import StoreDataset
+    if mask_regime != "type1":
+        raise ValueError(
+            f"--regime {mask_regime!r} is h5-only. The store plans its own windows from the regime "
+            "file's `window_plan`, and it has no cCRE annotation to tile by (every store window is "
+            "a tile — `store/dataset.py::REGION_TILE`). Use --regime type1 with --store, or change "
+            "the window plan in the regime file.")
+    if reference is not None:
+        raise ValueError(
+            "--reference on is h5-only: `candi.reference.ReferenceTable` is built from a baked h5 "
+            "and pins itself to that h5's fingerprint. A store-backed reference is not a flag.")
+    return StoreDataset(source.regime, train=train, batch_size=batch_size,
+                        dsf_sampling=dsf_sampling, seed=seed, shuffle=shuffle,
+                        cell_cond=cell_cond,
+                        biosamples=([str(only)] if only else None))
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +444,25 @@ def _t_biosamples(h5_path) -> list:
     return [b for b in order if b.startswith("T_")]
 
 
+def _coverage_biosamples(source) -> list:
+    """The biosamples `--full-coverage` iterates, on either path.
+
+    The h5 answers "every `T_` in the bake"; the store answers "the regime's declared train split",
+    because D16 forbids reading meaning out of a store biosample name — `T_` is not a thing the
+    store knows. A regime that declares no train split has not said what to iterate, and guessing
+    "all of them" would put eval biosamples into training.
+    """
+    if not source.is_store:
+        return _t_biosamples(source.h5_path)
+    names = list(source.regime.biosamples("train"))
+    if not names:
+        raise ValueError(
+            f"{source.regime_path}: --full-coverage needs `biosamples.train` to name the biosamples "
+            "to cover. The store has no `T_` convention to fall back on (D16), and covering every "
+            "biosample in the corpus would train on the eval split.")
+    return names
+
+
 # Covariate-pathway parameter groups: field -> substring patterns matched against
 # `model.named_parameters()`. Every pattern deliberately matches BOTH towers
 # (`encoder.metadata_embedding.*` and `decoder.meta_embedding.*`), because the covariate pathway is
@@ -482,7 +666,7 @@ def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
     return terms
 
 
-def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=200,
+def train(model, source, device, *, regime="type1", epochs=25, steps_per_epoch=200,
           batch_size=8, lr=5e-4, weight_decay=0.0, seed=0, dsf_sampling="uniform",
           log_every=0, full_coverage=False, p_full_assay=1.0, mask_fraction=0.2,
           cell_cond="off", log_fn=None, reference=None, imp_weight=1.0, unmask_frac=0.0,
@@ -492,6 +676,9 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
           clip_norm=CLIP_NORM, precision=DEFAULT_PRECISION) -> list:
     if precision not in PRECISIONS:
         raise ValueError(f"precision must be one of {PRECISIONS}; got {precision!r}")
+    # t23: `source` is a `DataSource`. A bare path still works and still means the h5 — every caller
+    # written before t23, this package's own and the tests', passes one positionally.
+    source = DataSource.coerce(source)
     if p_full_assay == 1.0 and mask_fraction != 0.2:
         print("[train] WARNING: --mask-fraction is INERT under --p-full-assay 1.0 "
               "(DataMasker._mask_full_assay never reads it)", flush=True)
@@ -572,20 +759,25 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
         # DETERMINISTIC full coverage: every epoch iterates ALL train windows for ALL T_ biosamples
         # (no random-biosample sampling). One per-biosample dataset each, sharing ONE RAM buffer, pulled
         # round-robin so biosamples interleave within the epoch.
-        bios = _t_biosamples(h5_path)
-        shared = Path(h5_path).read_bytes()
+        bios = _coverage_biosamples(source)
+        # h5 only: one RAM copy of the file, shared by every per-biosample dataset. The store reads
+        # whole chromosomes out of many files through its own handle pool and has nothing to share.
+        shared = None if source.is_store else Path(source.h5_path).read_bytes()
         datasets = []
         for b in bios:
-            ds = CandiKitH5Dataset(h5_path, regime, train=True, batch_size=batch_size,
-                                   biosample_prefix=b, dsf_sampling=dsf_sampling, seed=seed,
-                                   shuffle=True, h5_cache_ram=False, cell_cond=cell_cond,
-                                   reference=reference)
-            ds._ram_buf = shared                     # share the single 1.6 GB buffer (no duplication)
+            ds = make_dataset(source, regime, train=True, batch_size=batch_size, only=b,
+                              dsf_sampling=dsf_sampling, seed=seed, shuffle=True,
+                              h5_cache_ram=False, cell_cond=cell_cond, reference=reference)
+            if shared is not None:
+                ds._ram_buf = shared                 # share the single 1.6 GB buffer (no duplication)
             datasets.append(ds)
         per_epoch = sum(d.estimate_steps_per_epoch() for d in datasets)
         sched = make_lr_schedule(opt, max(1, epochs * per_epoch), lr_schedule,
                                  warmup_frac, lr_min_ratio)
-        print(f"[train] full-coverage: {len(bios)} T_ biosamples x all train windows "
+        # `T_` is the h5's own naming convention and is kept verbatim there; the store has no such
+        # convention (D16), so it says what it actually iterated.
+        what = "regime train-split" if source.is_store else "T_"
+        print(f"[train] full-coverage: {len(bios)} {what} biosamples x all train windows "
               f"= ~{per_epoch} batches/epoch x {epochs} epochs", flush=True)
         for ep in range(epochs):
             model.train()
@@ -637,10 +829,10 @@ def train(model, h5_path, device, *, regime="type1", epochs=25, steps_per_epoch=
             print(meta_probe.summary(), flush=True)
         return losses
 
-    # sampled path: random T_ biosample per batch, steps_per_epoch batches/epoch
-    ds = CandiKitH5Dataset(h5_path, regime, train=True, batch_size=batch_size, biosample_prefix="T_",
-                           dsf_sampling=dsf_sampling, seed=seed, shuffle=True, cell_cond=cell_cond,
-                           reference=reference)
+    # sampled path: random train biosample per batch, steps_per_epoch batches/epoch
+    ds = make_dataset(source, regime, train=True, batch_size=batch_size, only=None,
+                      dsf_sampling=dsf_sampling, seed=seed, shuffle=True, cell_cond=cell_cond,
+                      reference=reference)
     sched = make_lr_schedule(opt, epochs * steps_per_epoch, lr_schedule,
                              warmup_frac, lr_min_ratio)
     for ep in range(epochs):
@@ -863,7 +1055,8 @@ def _g(d, *keys, default=float("nan")):
     return default
 
 
-def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epoch=200, batch_size=8,
+def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=25,
+                   steps_per_epoch=200, batch_size=8,
                    lr=5e-4, weight_decay=0.0, use_offset=True, dsf_sampling="uniform", device="cpu",
                    seed=0, embed_dim=32, dropout=0.1, n_transformer_layers=2,
                    depth_center=None, d_model=0, nhead=4, p_full_assay=1.0, mask_fraction=0.2,
@@ -898,15 +1091,35 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
     # the h5 has been opened and the model built.
     if meta_probe not in META_PROBE_MODES:
         raise ValueError(f"meta_probe must be one of {META_PROBE_MODES}; got {meta_probe!r}")
-    # Scale is read from the h5, never from a flag. `h5_cache_ram=False` so this probe does not
-    # duplicate the shared RAM buffer that the full-coverage loop allocates.
-    ds = CandiKitH5Dataset(h5_path, regime, train=True, batch_size=batch_size,
-                           dsf_sampling=dsf_sampling, seed=seed, h5_cache_ram=False,
-                           cell_cond=cell_cond)
+    # t23: which data path, decided ONCE and here. Everything below asks `source`, never the flags.
+    source = DataSource.resolve(h5=h5_path, store=store)
+    if source.is_store:
+        # Said before anything is opened, because each of these is a way a store-backed run could
+        # look like a normal one in the run json while being something else.
+        if reference != "off":
+            raise ValueError(
+                "--reference on is h5-only: the table is built from a baked h5 and pins itself to "
+                "that h5's fingerprint (`candi.reference.ReferenceTable`). Not yet a store thing.")
+        if eval_every:
+            print("[train] store path: --eval-every is OFF. `quick_eval` reads the baked h5's "
+                  "eval windows, and StoreDataset does not emit the eval-only batch keys (t14), so "
+                  "a mid-training eval would select the 'best' checkpoint on nothing.", flush=True)
+            eval_every = 0
+    # Scale is read from the h5 (or from the regime file), never from a flag. `h5_cache_ram=False`
+    # so this probe does not duplicate the shared RAM buffer that the full-coverage loop allocates.
+    ds = make_dataset(source, regime, train=True, batch_size=batch_size,
+                      dsf_sampling=dsf_sampling, seed=seed, h5_cache_ram=False,
+                      cell_cond=cell_cond)
     if depth_center is None:
-        depth_center = h5_depth_center(h5_path)
-        print(f"[train] depth_center derived from h5 (median T_ meta_dsf1[0]) = {depth_center:.4f} "
-              "— override with --depth-center", flush=True)
+        if source.is_store:
+            depth_center = ds.depth_center()
+            print(f"[train] depth_center derived from the store (median log2 depth over the "
+                  f"regime's train split) = {depth_center:.4f} — override with --depth-center",
+                  flush=True)
+        else:
+            depth_center = h5_depth_center(h5_path)
+            print(f"[train] depth_center derived from h5 (median T_ meta_dsf1[0]) = {depth_center:.4f} "
+                  "— override with --depth-center", flush=True)
 
     if device == "cuda" and torch.cuda.is_available():
         torch.backends.cudnn.deterministic = True
@@ -1006,7 +1219,11 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                    batch_size=batch_size, lr=lr, weight_decay=weight_decay, seed=seed,
                    cell_cond=cell_cond, num_cells=int(ds.num_cells), num_assays=ds.num_assays,
                    context_bins=ds.context_bins, full_coverage=full_coverage,
-                   depth_center=float(depth_center), h5=str(h5_path),
+                   depth_center=float(depth_center),
+                   # t23: which data path, and — on the store — the regime verbatim plus its
+                   # sha256 and the manifest's (STORE_PLAN.md §4). On the h5 path this is the same
+                   # `h5=<path>` key it has always been, plus `data_source`.
+                   **source.provenance(),
                    reference=reference, imp_weight=imp_weight, unmask_frac=unmask_frac,
                    eval_every=eval_every, eval_batches_per_pair=eval_batches_per_pair,
                    meta_embed_layernorm=bool(meta_embed_layernorm),
@@ -1068,7 +1285,7 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                           "eval/wall_s": q["wall_s"]})
 
     terms_log: list = []
-    losses = train(model, h5_path, device, regime=regime, epochs=epochs, steps_per_epoch=steps_per_epoch,
+    losses = train(model, source, device, regime=regime, epochs=epochs, steps_per_epoch=steps_per_epoch,
                    batch_size=batch_size, lr=lr, weight_decay=weight_decay, seed=seed,
                    dsf_sampling=dsf_sampling, log_every=log_every, full_coverage=full_coverage,
                    p_full_assay=p_full_assay, mask_fraction=mask_fraction, cell_cond=cell_cond,
@@ -1107,10 +1324,22 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
               "trained on a transformed objective\n"
               "[meta-probe] against the untransformed one. Do NOT compare them to a "
               "--meta-probe off arm. See config.final_eval_meta_probe_applied = false.\n", flush=True)
-    ev = evaluate(model, h5_path, device, regime=regime,
-                  batch_size=eval_batch_size, max_batches=eval_max_batches, fg_frac=fg_frac,
-                  n_boot=n_boot, seed=seed, eval_budget=eval_budget, m3_regions=m3_regions,
-                  include_deprecated=include_deprecated, reference=ref)
+    if source.is_store:
+        # t14, stated rather than discovered. `evaluate` builds its units from the h5's V_/B_
+        # ground-truth arrays and reads `y_data_imp` / `y_pval_imp` / `y_peaks_imp` / `y_meta_imp` /
+        # `imp_biosample_name` through `batch.get(...)`; `StoreDataset` emits none of them, so
+        # calling it here would return an empty M1 and a pooled CRPS over zero targets, which reads
+        # in a json exactly like a finished evaluation. Refusing to produce the keys is the honest
+        # form of "this is not scored yet".
+        print("\n[train] store path: NO final evaluation. M1/M2/M3/S14 need the eval-only batch "
+              "keys the store does not emit (t14), so this run json carries the training curve, "
+              "the config and the checkpoints — and no metrics.\n", flush=True)
+        ev: dict = {}
+    else:
+        ev = evaluate(model, h5_path, device, regime=regime,
+                      batch_size=eval_batch_size, max_batches=eval_max_batches, fg_frac=fg_frac,
+                      n_boot=n_boot, seed=seed, eval_budget=eval_budget, m3_regions=m3_regions,
+                      include_deprecated=include_deprecated, reference=ref)
     ev["eval_curve"] = curve
     ev["best_checkpoint"] = dict(best, path=best_path, scored=selected)
     # h64: the arm, its magnitude, and — unambiguously — WHERE it was and was not applied.
@@ -1165,7 +1394,12 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
                      imp_weight=imp_weight, unmask_frac=unmask_frac,
                      **h64_cfg,
                      eval_every=eval_every, eval_batches_per_pair=eval_batches_per_pair,
-                     out_dir=str(out_dir), h5=str(h5_path),
+                     out_dir=str(out_dir),
+                     # t23: the same provenance block `run_cfg` carries. On the store path
+                     # that is the regime file VERBATIM plus its sha256 and the store
+                     # manifest's sha256 — STORE_PLAN.md §4's last line, which asks for all
+                     # three so a run can be re-pointed at the data it actually saw.
+                     **source.provenance(),
                      assays=list(ds.assays), num_assays=ds.num_assays,
                      context_bins=ds.context_bins, resolution=ds.resolution,
                      dsf_list=list(ds.dsf_list), train_chroms=list(ds.train_chroms),
@@ -1201,17 +1435,27 @@ def train_and_eval(*, h5_path, out_dir, regime="type1", epochs=25, steps_per_epo
         # a number with no way back to the thing that produced it.
         prov = dict(cfg_block)
         prov.update(_git_provenance())
-        prov["h5_fingerprint"] = _h5_fingerprint_safe(h5_path)
+        prov["h5_fingerprint"] = None if source.is_store else _h5_fingerprint_safe(h5_path)
         _wb_safe("config", lambda: wb.config.update(prov, allow_val_change=True))
         _wb_safe("finish", wb.finish)
     return dict(config=cfg_block, train_losses=losses, train_terms=terms_log, **ev)
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """The CLI, as a value. `main()` parses it; a test can inspect it without running anything."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--h5", required=True)
+    # t23 — EXACTLY ONE data path, enforced by argparse itself so the error arrives on the submit
+    # line with argparse's own wording ("one of the arguments --h5 --store is required" /
+    # "not allowed with argument"). `--h5` is no longer `required=True`, and it did not become
+    # optional: the GROUP is required, so omitting both still fails.
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--h5", default=None,
+                     help="path to a baked h5 (candi.prep.bake). The frozen path. Mutually "
+                          "exclusive with --store, and exactly one of the two is required.")
+    src.add_argument("--store", "--regime-file", dest="store", default=None, help=STORE_HELP)
     ap.add_argument("--out-dir", required=True)
-    ap.add_argument("--regime", default="type1", choices=["type1", "type2_loci"])
+    ap.add_argument("--regime", default="type1", choices=["type1", "type2_loci"],
+                    help=MASK_REGIME_HELP)
     ap.add_argument("--epochs", type=int, default=25)
     ap.add_argument("--steps-per-epoch", type=int, default=200)
     ap.add_argument("--batch-size", type=int, default=8)
@@ -1408,13 +1652,20 @@ def main():
                     help="W&B project; omit to disable. Auth comes from ~/.netrc. Set "
                          "WANDB_MODE=offline in the environment to buffer and `wandb sync` later.")
     ap.add_argument("--wandb-run-name", default=None, help="defaults to --tag")
-    a = ap.parse_args()
+    return ap
+
+
+def main():
+    a = build_parser().parse_args()
     use_offset = a.offset in ("on", "offset_on")
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tag = a.tag or f"candi_{a.deconv_norm}_ep{a.epochs}_seed{a.seed}"
     meta_ln = (a.meta_embed_layernorm == "on")
+    if a.store:
+        print(f"[run] data=STORE regime_file={a.store} (masking regime={a.regime}) — training "
+              "only: no M1/M2/M3/S14, num_cells=0, --reference refused. See STORE.md.", flush=True)
     print(f"[run] deconv_norm={a.deconv_norm} decoder_lane={a.decoder_lane} "
           f"attn_depth={a.n_transformer_layers} conv_norm={a.conv_norm} "
           f"film_taps={a.film_taps or '(none)'} heads={a.heads}\n"
@@ -1433,7 +1684,7 @@ def main():
               flush=True)
     t0 = time.time()
     res = train_and_eval(
-        h5_path=a.h5, out_dir=out_dir, regime=a.regime, epochs=a.epochs,
+        h5_path=a.h5, store=a.store, out_dir=out_dir, regime=a.regime, epochs=a.epochs,
         steps_per_epoch=a.steps_per_epoch, batch_size=a.batch_size, lr=a.lr,
         weight_decay=a.weight_decay, use_offset=use_offset, dsf_sampling=a.dsf_sampling, device=device,
         seed=a.seed, embed_dim=a.embed_dim, dropout=a.dropout,
@@ -1467,6 +1718,13 @@ def main():
     res["wall_s"] = round(time.time() - t0, 1)
     with open(out_dir / f"{tag}.json", "w") as f:
         json.dump(_jsonable(res), f, indent=2)
+    if "M1" not in res:
+        # t23 store path: there is no evaluation, so there is nothing to summarise but the loss.
+        losses = res.get("train_losses") or [float("nan")]
+        print(f"[{tag}] STORE run, no eval: {len(losses)} steps, "
+              f"first nll={losses[0]:.3f} last nll={losses[-1]:.3f} wall={res['wall_s']}s",
+              flush=True)
+        return
     m1, m2 = res["M1"], res["M2"]
     print(f"[{tag}] imp_spear={_g(m1['imp'], 'spearman_raw', 'spearman'):.3f} "
           f"den_spear={_g(m1['den'], 'spearman_raw', 'spearman'):.3f} "

@@ -82,7 +82,10 @@ shared 884 MB `genome/`.
 CorpusStore("/project/def-maxwl/mforooz/CANDI_STORE/eic")["T_DND-41"].counts("chr1", 0, 768)
 ```
 
-`train.py` does not read it yet — it still requires `--h5`, and the store lands beside the bake
+`train.py` trains off it: `--store <regime.json>` instead of `--h5 <baked.h5>`, exactly one of the
+two, and everything the h5's attrs used to freeze — context length, DSF ladder, chromosome split,
+assay column order — comes from the regime file. Evaluation is still h5-only (task `t14`), so a
+store run writes a training curve and checkpoints and no M1/M2/M3. The store lands beside the bake
 rather than replacing it. `STORE.md` is the contract and the recipes.
 
 ## What is tunable

@@ -10,7 +10,8 @@ Anchors are `file.py::symbol`, never line numbers. Source of truth is the code; 
 disagrees with it, the code is right and this file is the bug.
 
 **The store does not replace the bake yet.** `prep/bake.py` and `dataset.py::CandiKitH5Dataset`
-are the training path and are untouched (D21). `candi.store` lands beside them.
+are untouched (D21) and `candi.store` lands beside them. Since t23, `train.py` opens *either* —
+`--h5` or `--store` — through one factory; evaluation is still h5-only (t14).
 
 ## What changed, in one sentence
 
@@ -26,8 +27,8 @@ ENCODE-style npz tree --[store.writer]--> CANDI_STORE --[store.reader + regime]-
 
 Read it in three bands: **build once** into the immutable store, **stage** it to the node, then
 **regime + mask decide which windows exist** and `StoreDataset` thins on the way out. The old bake
-path is drawn alongside because both feed the same unchanged `train.py` — that is the whole point
-of D21, and it is what makes the two paths comparable at all.
+path is drawn alongside because both feed the same `train.py` through the same batch contract —
+that is the whole point of D21, and it is what makes the two paths comparable at all.
 
 This fence is the source. GitHub renders it; to get a PNG,
 `npx @mermaid-js/mermaid-cli -i <extracted>.mmd -o out.png -s 3`. Kept here rather than as a
@@ -264,50 +265,44 @@ path — is in *`StoreDataset` — the batch dict, unchanged*.
 
 ### Train off the store
 
-**`train.py` cannot read a store today, and this is not a missing flag.** `train.py::main` requires
-`--h5`; `train.py::train_and_eval` constructs `CandiKitH5Dataset` itself, derives `depth_center` with
-`dataset.py::h5_depth_center`, and reads `ds.num_cells` — which `StoreDataset` does not define.
-Wiring the store into `train.py` is an edit to the training path, and D21 holds that edit until a
-real run has used the store. (`train.py --regime` is the **masking** regime, `type1` /
-`type2_loci`. It has nothing to do with a regime file.)
+`train.py` opens a store through **one** flag (t23):
 
-What runs today is a harness that imports the frozen pieces and drives them with either dataset —
-`cruxvault/results/train_ab/bench_ab.py`, which touches nothing under `src/`. The loop is this:
-
-```python
-import torch
-from torch.utils.data import DataLoader
-
-from candi.batch import make_masker, prepare_masked_batch
-from candi.model import build_model
-from candi.store.dataset import StoreDataset
-from candi.train import CLIP_NORM, _train_step, make_lr_schedule
-
-ds     = StoreDataset("configs/regime.eic_smoke.json", train=True, batch_size=8)
-loader = DataLoader(ds, batch_size=None, num_workers=4)
-
-torch.manual_seed(0)
-model  = build_model(num_assays=ds.num_assays, context_length=ds.context_bins,
-                     resolution=ds.resolution, num_cells=0,
-                     depth_center=24.3402004242).to("cuda")
-opt    = torch.optim.Adam(model.parameters(), 5e-4)
-sched  = make_lr_schedule(opt, ds.estimate_steps_per_epoch(), "cosine", 0.1, 0.1)
-masker = make_masker(p_full_assay=1.0, mask_fraction=0.2)
-
-losses = []
-model.train()
-for batch in loader:
-    prep = prepare_masked_batch(batch, masker, torch.device("cuda"), apply_mask=True)
-    if prep is None:                       # no valid query in this batch — same skip as train.py
-        continue
-    _train_step(model, prep, opt, sched, losses, want_grads=False, imp_weight=1.0,
-                probe=None, clip_state=None, clip_norm=CLIP_NORM, precision="fp32")
+```bash
+python -m candi.train --store configs/regime.eic_smoke.json --out-dir runs/smoke \
+    --tag store_smoke --epochs 25 --steps-per-epoch 200 --batch-size 8 --d-model 32
 ```
 
-`num_cells=0` is forced by `cell_cond` being off, below. **`depth_center` has no store-side source**:
-`h5_depth_center` reads an h5, and there is no h5. The A/B run derived it once from `eic_full.h5`
-(24.3402004242 for the EIC panel) and passed the same number to both arms, which is what makes them
-the same model. Pass it explicitly and record it; do not let two runs pick different centres.
+`--h5` and `--store` are **mutually exclusive and exactly one is required** — argparse refuses
+both-or-neither on the submit line. `--store` takes the **regime file**, not the corpus root: the
+regime already carries `store` as a required key, so a second flag could only duplicate or
+contradict it. `--regime-file` is the same flag under a clearer name.
+
+**`--regime` is a different thing and always was.** It is the *masking* regime (`type1` /
+`type2_loci`) and has nothing to do with a regime file. `type2_loci` is h5-only — the store plans
+its own windows from `window_plan` — and `--regime type2_loci --store …` is refused.
+
+What the store path does differently:
+
+| | `--h5` | `--store` |
+|---|---|---|
+| scale (assays, context, resolution, splits) | `h5.attrs` | the regime file |
+| `depth_center` | `dataset.py::h5_depth_center` | `StoreDataset.depth_center()` — the same median, over the regime's train split. Still overridable with `--depth-center`. |
+| `num_cells` / `--cell-cond` | as baked | **0**, and any `--cell-cond` other than `off` **raises** (D16) |
+| `--reference on` | supported | **refused** — the table pins itself to an h5 fingerprint |
+| `--eval-every` | mid-training eval + best-ckpt selection | forced **off**, loudly |
+| M1/M2/M3/S14 | scored | **not scored** — see below |
+
+Every dataset on either path is built by `train.py::make_dataset(source, mask_regime, …)`, the one
+factory all three construction sites go through, and the path is chosen once by
+`train.py::DataSource.resolve(h5=…, store=…)`.
+
+The run json records which path ran. On the store path that is, per `STORE_PLAN.md` §4:
+`data_source: "store"`, `store`, `regime_file`, **`regime_json`** (the file verbatim),
+**`regime_sha256`** and **`store_manifest_sha256`**. `h5` is `null`. On the h5 path it is
+`data_source: "h5"` and the same `h5` key every earlier run json already had.
+
+The pre-t23 harness `cruxvault/results/train_ab/bench_ab.py` still runs and is still the right tool
+for an A/B against the old loader; it is no longer the only way to train off a store.
 
 #### A store-backed imputation eval scores nothing, and says nothing
 
@@ -319,6 +314,12 @@ and the imputation arm is empty.
 nothing raises — the imputation arm and `healthcheck.py`'s h74 reference arm simply degrade to
 nothing. **Do not score an imputation run off the store until task `t14` lands.** Training is
 unaffected; it never reads those keys.
+
+`train.py --store` therefore **does not call `evaluate()` at all** and writes a run json with no
+`M1` / `M2` / `M3` / `S14` keys, rather than an `M1` pooled over zero targets — which reads in a
+json exactly like a finished evaluation. `--eval-every` is forced off for the same reason. Score a
+store-trained checkpoint by re-running `candi.eval --arch-from <run>.json` against a baked h5, or
+wait for `t14`.
 
 #### `cell_cond` is refused, not defaulted
 
@@ -1095,15 +1096,15 @@ file to the reader, take it from the pool — never call `h5py.File` at module o
 ## What is not here yet
 
 Every module of the store is written: `layout` / `writer` / `manifest` / `cli` (t6), `genome`
-(t7), `reader` / `regime` / `dataset` (t8). What is missing is **use**.
+(t7), `reader` / `regime` / `dataset` (t8), and `train.py --store` opens it (t23). What is missing
+is **evaluation** — and the real runs.
 
 Both corpora now exist — t10 built EIC, t11 built MERGED, t12 added `pval` to both, and the sizes
 are in *Using the store*. What is still missing:
 
 | gap | why it is still open |
 |---|---|
-| a `train.py` that can open a store | `--h5` is required and `train_and_eval` reads `ds.num_cells`; D21 holds the edit until a real run has used the store |
-| the eval-only batch keys | `t14` — a store-backed imputation eval scores nothing and does not say so |
+| the eval-only batch keys | `t14` — a store-backed imputation eval scores nothing, so `--store` skips evaluation entirely and writes no M1/M2/M3/S14 |
 | `cell_cond` | the 5th meta row needs a cell identity D16 forbids parsing off the name |
 | the genome-wide eval output policy | overlap and edge handling when emitting a full imputed track — a question for the crux tree, not a task |
 | retiring the old bake | `prep/bake.py` and `dataset.py::CandiKitH5Dataset` stay until a real training run has used the store (D21) |
