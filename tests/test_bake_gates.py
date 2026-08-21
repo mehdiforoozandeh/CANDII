@@ -275,6 +275,73 @@ def test_dataset_treats_minus_one_meta_as_unavailable(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# (2b) t13 — an absent CONTROL is unavailable, and `!= 0` cannot tell you that
+# ---------------------------------------------------------------------------
+# The bake fills an absent control with -1 in BOTH `control` and `control_meta`
+# (`prep/handler.py::make_bios_tensor_Control`), exactly as it fills an absent DSF level. The loader
+# used to recompute availability as `(control_data != 0).any()`, and -1 is not 0, so every absent
+# control came back marked PRESENT — measured on 16 of 89 EIC biosamples.
+
+
+def _blank_the_control(path: Path, bios: str) -> None:
+    """Make `bios`'s control look the way the bake writes an absent one: -1 everywhere."""
+    with h5py.File(path, "r+") as h5:
+        g = h5["biosamples"][bios]
+        g["control"][...] = np.full_like(np.array(g["control"]), -1.0)
+        g["control_meta"][...] = np.full_like(np.array(g["control_meta"]), -1.0)
+
+
+def test_an_absent_control_is_marked_unavailable(tmp_path):
+    """t13. The rule is the MISSING sentinel in `control_meta[0]` — `log2(depth)`, which a real
+    control cannot make negative — and it is the same rule the bake's own F15 gate checks."""
+    from candi.dataset import CandiKitH5Dataset
+
+    p = write_v2_h5(tmp_path / "noctl.h5", order=("T_a", "V_a"))
+    _blank_the_control(p, "T_a")
+    ds = CandiKitH5Dataset(p, "type1", train=True, batch_size=2, dsf_sampling="off", shuffle=False)
+    b = next(iter(ds))
+    assert b["biosample_name"] == "T_a"
+    assert torch.all(b["control_avail"] == 0.0)
+    # The DATA is left at the sentinel rather than zeroed, and that is deliberate: -1 is what the
+    # encoder reads to infer MISSING, and 0 is a real coverage value that would read as available.
+    assert torch.all(b["control_data"] == -1.0)
+
+
+def test_a_real_control_is_still_marked_available(tmp_path):
+    """The other half — a fix that reported 0.0 for everything would also pass the test above."""
+    from candi.dataset import CandiKitH5Dataset
+
+    p = write_v2_h5(tmp_path / "ctl.h5", order=("T_a", "V_a"))
+    ds = CandiKitH5Dataset(p, "type1", train=True, batch_size=2, dsf_sampling="off", shuffle=False)
+    b = next(iter(ds))
+    assert torch.all(b["control_avail"] == 1.0)
+
+
+def test_the_encoder_reads_the_sentinel_not_control_avail(tmp_path):
+    """Why t13 is a CORRECTNESS-OF-THE-KEY fix and not a change to what any recorded run trained on.
+
+    `batch.prepare_masked_batch` builds `x_avail_in` and does not put it in the prep dict, and the
+    encoder re-derives availability from the signal and the metadata and REQUIRES the two to agree
+    (`encoder.py::_prepare_signal`). So the -1-filled control column was always masked out correctly
+    no matter what `control_avail` claimed. The wrong key reached no model; it would have reached
+    the next consumer to trust it.
+    """
+    from candi.batch import make_masker, prepare_masked_batch
+    from candi.dataset import CandiKitH5Dataset
+
+    p = write_v2_h5(tmp_path / "enc.h5", order=("T_a", "V_a"))
+    _blank_the_control(p, "T_a")
+    ds = CandiKitH5Dataset(p, "type1", train=True, batch_size=2, dsf_sampling="off", shuffle=False)
+    prep = prepare_masked_batch(next(iter(ds)), make_masker(p_full_assay=1.0), torch.device("cpu"))
+    assert prep is not None
+    assert "x_avail" not in prep and "control_avail" not in prep
+    # the control rides at column A of the concatenated input, still carrying its sentinel
+    A = ds.num_assays
+    assert torch.all(prep["x_data"][:, :, A] == -1.0)
+    assert torch.all(prep["x_meta"][:, :, A] == -1.0)
+
+
+# ---------------------------------------------------------------------------
 # (3) the meta_dsf{d}[0] == meta_dsf1[0] - log2(d) invariant
 # ---------------------------------------------------------------------------
 

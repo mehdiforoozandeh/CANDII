@@ -21,6 +21,8 @@ import numpy as np
 import torch
 from torch.utils.data import IterableDataset
 
+from candi._vendored import MISSING
+
 Regime = Literal["type1", "type2_loci"]
 
 _RAM_CACHE_MAX_DEFAULT = 10 * 1024**3  # 10 GiB
@@ -403,7 +405,14 @@ class CandiKitH5Dataset(IterableDataset):
                     x_dna[j] = torch.tensor(np.array(g["dna"][wi]), dtype=torch.float32)
                     control_data[j] = torch.tensor(np.array(g["control"][wi]), dtype=torch.float32)
                     control_meta[j, :4] = torch.tensor(np.array(g["control_meta"][wi]), dtype=torch.float32)
-                    control_avail[j, 0] = 1.0 if bool((control_data[j] != 0).any().item()) else 0.0
+                    # t13 — read the MISSING SENTINEL, not `!= 0`. The bake fills an absent control
+                    # with -1 in BOTH `control` and `control_meta` (`prep/handler.py::
+                    # make_bios_tensor_Control`), and `-1 != 0` is true, so the old test marked every
+                    # absent control AVAILABLE — measured on 16 of 89 EIC biosamples. `control_meta[0]`
+                    # is `log2(depth)`, and MISSING there is exactly the rule the bake's own F15 gate
+                    # uses (`prep/bake.py::_verify`), so this key now agrees with the file that
+                    # produced it. A real control cannot present as -1: depth is a positive count.
+                    control_avail[j, 0] = 0.0 if float(control_meta[j, 0, 0]) == MISSING else 1.0
                     for fi in range(F):
                         xd = int(x_dsf[j, fi])
                         yd = int(y_dsf[j, fi])
