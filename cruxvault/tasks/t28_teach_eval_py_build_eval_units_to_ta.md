@@ -1,15 +1,15 @@
 ---
 id: t28
 type: task
-title: teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored
+title: "teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored"
 category: implementation
 parent: 
 blocked_by: t14
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-21T01:03:39
-updated: 2026-08-21T01:03:39
+status: done
+created: "2026-08-21T01:03:39"
+updated: "2026-08-21T15:35:51"
 ---
 
 # t28 — teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored
@@ -24,7 +24,7 @@ t14 made StoreDataset emit the five imputation keys off a declared eval_pairs (D
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- 09a0f3e on implementation/t28-store-eval-units; build_eval_units and quick_eval take a ready dataset, store guard narrowed to eval_pairs_declared(); 780 pass, golden 0 ULP
 
 ## Evidence
 

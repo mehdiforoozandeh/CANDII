@@ -10,11 +10,21 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes
 - `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI
 - `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness
-- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF
-- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store
+- `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb
+- `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain
+- `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- cause only, no fix
+- `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- cause only, no fix
+- `t34` [implementation] resolve the chr21 bin-grid mismatch: the baked h5 has 1,867,776 bins, the store has 1,868,399
+- `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe
+- `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only
+- `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak
 
 ## By category
+
+### admin
+
+- `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe — *open*
 
 ### data-acquisition
 
@@ -25,9 +35,14 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
 - `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI — *open*
 - `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — *open*
-- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *open*
-- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *open*
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store — *open*
+- `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb — *open*
+- `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain — *open*
+- `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- cause only, no fix — *open*
+- `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- cause only, no fix — *open*
+- `t34` [implementation] resolve the chr21 bin-grid mismatch: the baked h5 has 1,867,776 bins, the store has 1,868,399 — *open*
+- `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only — *open*
+- `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *open*
 
 ## Done · Dropped
 
@@ -53,3 +68,5 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *done* → `results/t25/DELIVERABLE.md`
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *done* → `results/t26/DELIVERABLE.md`
+- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *done* → `merged-pending`
+- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *done* → `09a0f3e`

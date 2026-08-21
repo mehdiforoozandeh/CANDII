@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-21T01:03:23
-updated: 2026-08-21T01:03:23
+status: done
+created: "2026-08-21T01:03:23"
+updated: "2026-08-21T15:26:58"
 ---
 
 # t27 — give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF
@@ -24,7 +24,7 @@ t16 measured it: D22's counter-based eval RNG seeds each draw from (run_seed, bi
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- merged-pending 5904f70 on implementation/t27-thin-xy-seed; leak under the deterministic RNG 1.00 -> 0.16, survivors are dsf-1 only; 772 pass, golden 0 ULP
 
 ## Evidence
 

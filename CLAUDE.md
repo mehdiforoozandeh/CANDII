@@ -41,28 +41,33 @@ crux task add "add a Bernoulli peak head" -c implementation \
     --ref h7 --ref h9 --blocked-by None --why "unblocks the peak arm of q2"
 ```
 
-### A branch exists because code must change
+### A branch is one whole issue
 
-Every architecture choice here is already a CLI flag, and scale comes from the h5. **An
-experiment that only changes flags needs no branch** — run it from `main` and record it in the
-vault. Open a branch when the code does not exist yet.
+What a task gets is decided by the **task**, not by the size of its diff:
+
+| the task is | where it lands |
+|---|---|
+| trivial — a typo, a constant, one doc line, and nothing hangs off it | straight to `main` |
+| a whole issue — it stands alone and reviews as one thing | branch → PR → merge |
+| part of a bigger task (`--parent`) | its parent's branch — no branch, no PR of its own |
+
+The parent is the unit that ships: decompose with `crux task add … --parent t12`, open **one**
+branch for `t12`, and land every child on it. A child that wants its own PR was never a child.
+Flag-only work changes no code — so an experiment that only moves flags still runs from `main`.
 
 ```bash
 git switch -c <lane>/<taskid>-<slug>       # e.g. exp/t12-peak-head
 git push -u origin <lane>/<taskid>-<slug>  # AT CREATION, not when it is finished
+gh pr create --draft --fill                # same moment — the PR is where the work is reviewed
 ```
 
-The lane is `exp` when the engine has called the task an *experiment* (it does that
-automatically for any task carrying hypothesis refs); otherwise it is the task's own category.
-Push at creation is not a style preference: work that lives on one laptop is work that is
-already lost.
+The lane is `exp` for a task the engine calls an *experiment* (any task carrying hypothesis
+refs), otherwise the task's own category. Pushing at creation is not style: work that lives on
+one laptop is already lost. `origin` is the record; `firmerge` is a truck to Fir — never a home.
 
-`origin` is the record. `firmerge` is a truck to Fir for running things — **nothing ever lives
-only there.**
+### What lets a PR merge
 
-### What lets a branch merge
-
-**Non-experiment lanes** — the branch must not move a number:
+**Non-experiment lanes** — the PR must not move a number:
 
 ```bash
 pytest tests/ -q          # green
