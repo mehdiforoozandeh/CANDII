@@ -75,7 +75,8 @@ import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from candi.eval import _cluster_bootstrap_ci
+# t22: the statistic lives in `candi.stats` now — `candi.eval` is being deleted (D15)
+from candi.stats import cluster_bootstrap_ci as _cluster_bootstrap_ci
 
 METRICS = ("crps", "crps_oracle_scaled", "scale_error")
 LOWER_IS_BETTER = {"crps": True, "crps_oracle_scaled": True, "scale_error": True}

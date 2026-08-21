@@ -1,0 +1,102 @@
+{
+ "0": {
+  "name": "Avocado",
+  "rank_published": 25.0
+ },
+ "100": {
+  "name": "Average",
+  "rank_published": 6.0
+ },
+ "3330254": {
+  "name": "Hongyang Li and Yuanfang Guan",
+  "rank_published": 2.0
+ },
+ "3344979": {
+  "name": "NittanyLions",
+  "rank_published": 21.0
+ },
+ "3379072": {
+  "name": "BrokenNodes",
+  "rank_published": 14.0
+ },
+ "3379312": {
+  "name": "CostaLab",
+  "rank_published": 18.0
+ },
+ "3386902": {
+  "name": "KKT-ENCODE-Impute",
+  "rank_published": 23.0
+ },
+ "3388185": {
+  "name": "LiPingChun",
+  "rank_published": 5.0
+ },
+ "3389318": {
+  "name": "Song Lab",
+  "rank_published": 10.0
+ },
+ "3391272": {
+  "name": "UIOWA Michaelson Lab",
+  "rank_published": 20.0
+ },
+ "3393128": {
+  "name": "Aug2019Imputation",
+  "rank_published": 21.0
+ },
+ "3393417": {
+  "name": "Hongyang Li and Yuanfang Guan v1",
+  "rank_published": 1.0
+ },
+ "3393418": {
+  "name": "Hongyang Li and Yuanfang Guan v2",
+  "rank_published": 16.0
+ },
+ "3393457": {
+  "name": "imp",
+  "rank_published": 8.0
+ },
+ "3393458": {
+  "name": "CUWA",
+  "rank_published": 9.0
+ },
+ "3393574": {
+  "name": "Lavawizard",
+  "rank_published": 3.0
+ },
+ "3393579": {
+  "name": "Song Lab 2",
+  "rank_published": 24.0
+ },
+ "3393580": {
+  "name": "Song Lab 3",
+  "rank_published": 6.0
+ },
+ "3393606": {
+  "name": "BrokenNodes_v2",
+  "rank_published": 17.0
+ },
+ "3393756": {
+  "name": "imp1",
+  "rank_published": 8.0
+ },
+ "3393817": {
+  "name": "BrokenNodes_v3",
+  "rank_published": 14.0
+ },
+ "3393847": {
+  "name": "Guacamole",
+  "rank_published": 3.0
+ },
+ "3393851": {
+  "name": "NittanyLions2",
+  "rank_published": 19.0
+ },
+ "3393860": {
+  "name": "CUImpute1",
+  "rank_published": 13.0
+ },
+ "3393861": {
+  "name": "ICU",
+  "rank_published": 12.0
+ }
+}

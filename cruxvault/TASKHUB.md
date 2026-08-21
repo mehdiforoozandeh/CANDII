@@ -8,6 +8,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes
+- `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI
+- `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF
 - `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store
@@ -21,6 +23,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### implementation
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
+- `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI — *open*
+- `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — *open*
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *open*
 - `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *open*
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store — *open*
@@ -41,6 +45,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref) — *done* → `results/t14/DELIVERABLE.md`
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset — *done* → `results/t15/DELIVERABLE.md`
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model — *done* → `results/t16/REPORT.md`
+- `t18` [data-acquisition] pin the EIC annotation assets: GENCODE v29 genes bed, FANTOM5 hg38 permissive enhancers, msevar variance pools — *done* → `results/t18/DELIVERABLE.md`
+- `t19` [implementation] bench primitives plus the three verification layers: vendored-reference bit-match, analytic arrays, stub model — *done* → `results/t19/DELIVERABLE.md`
+- `t20` [implementation] whole-chromosome bench harness and CLI, both pval and count arms — *done* → `results/t20/DELIVERABLE.md`
+- `t21` [implementation] the C-block: six covariate-sensitivity instruments (use, share, direction, specificity, invariance, bio-conservation guard) — *done* → `results/t21/DELIVERABLE.md`
 - `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `results/t23/DELIVERABLE.md`
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *done* → `results/t25/DELIVERABLE.md`
