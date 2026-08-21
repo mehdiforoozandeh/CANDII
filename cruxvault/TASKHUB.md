@@ -12,6 +12,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref)
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model
+- `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating
+- `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job
+
+## Blocked
+
+- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — blocked by `t24`
 
 ## By category
 
@@ -26,6 +32,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref) — *open*
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset — *open*
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model — *open*
+- `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *open*
+- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *blocked*
+- `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *open*
 
 ## Done · Dropped
 
@@ -39,4 +48,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *done* → `results/t10/t10_report.json`
 - `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `results/t11/t11_report.json`
 - `t12` [implementation] add the pval layer to both stores — *done* → `results/t12/t12_eic_report.json`
-- `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `train.py`
+- `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `results/t23/DELIVERABLE.md`
