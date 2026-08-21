@@ -379,7 +379,11 @@ the effect on the h5 is much smaller than 2×.
 - `counts_dsf*` in the HDF5 and `y_data` out of the loader are **raw integers**.
 - The encoder applies `arcsinh` to the signal tower input.
 - The NB likelihood is evaluated against **raw integer targets**.
-- `pval` **is** arcsinh'd at bake time — the one exception.
+- `pval` **is** arcsinh'd at bake time — the one exception. **The store is not.** `STORE.md`'s pval
+  layer holds `-log10 p` and its reader returns that, so the same `y_pval` key means two different
+  quantities depending on which path filled it. That seam is why the signal head's target transform
+  is a training-loop flag with a source-derived default (`--signal-target-transform`, D30) rather
+  than a constant — see `EVAL.md` *Only the count head is scored*.
 
 **Symptom of applying it twice:** nothing crashes, loss descends, macro CRPS collapses to a
 plausible small number on a completely different scale, and every result is incomparable to anything

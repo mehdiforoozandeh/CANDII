@@ -38,6 +38,14 @@ its `imp_weight` behaviour; the Gaussian signal and Bernoulli peak terms are aux
 constructed only when the model built the head that produces them, so at the default `aux_head_losses`
 returns None and the loss expression `_train_step` evaluates is the pre-Stage-2 one. Evaluation stays
 NB-only by ruling: the extra heads train, and nothing scores them yet.
+
+t26 adds `--signal-target-transform` (default `auto`), which decides what space the SIGNAL head's
+target sits in and applies it inside the loss — `PVAL_CODEC_PLAN.md` D30. It exists because the two
+data paths do not hand over the same quantity: the bake stores `arcsinh(-log10 p)` and the store
+stores the raw value, so before t26 the same head silently trained against two different targets
+depending on which of `--h5` / `--store` opened the data. `auto` resolves to `none` on the h5 and
+`arcsinh` on the store, which makes the h5 path bit-identical to its pre-t26 self, and the resolved
+value is written into the run config so a run's target space is never inferred.
 """
 from __future__ import annotations
 
@@ -341,7 +349,67 @@ def _elem_peak_bce(logit, target):
     return torch.nn.functional.binary_cross_entropy_with_logits(logit, target, reduction="none")
 
 
-def aux_head_losses(out, prep, imp_weight: float = 1.0):
+#: D30 — how the Gaussian signal head's TARGET is transformed, applied inside the loss.
+#: `signal_transform` in `EncoderConfig` is a different thing entirely: that one transforms the
+#: encoder's INPUT counts. `decoder.py::GaussianSignalHead` records why the two are easy to
+#: conflate. Nothing here touches the loader — `y_pval` arrives in raw `-log10 p` space from both
+#: data paths and this is the only place it is bent.
+SIGNAL_TARGET_TRANSFORMS = ("none", "arcsinh", "log1p")
+
+#: The default is DERIVED FROM THE DATA SOURCE, not a single constant, because the two paths do not
+#: hand over the same quantity. The bake pre-transforms (`prep/handler.py` loads the bigwig with
+#: `arcsinh=True`), so applying one again would square the compression; the store (STORE_PLAN.md D9,
+#: as amended by PVAL_CODEC_PLAN.md D26) returns raw `-log10 p`, so the head needs one. This is what
+#: makes the h5 path bit-identical to its pre-t26 self: `none` is the identity.
+SIGNAL_TARGET_TRANSFORM_BY_SOURCE = {"h5": "none", "store": "arcsinh"}
+
+#: What `--signal-target-transform` defaults to. `auto` resolves through the table above; any other
+#: value overrides it and is recorded verbatim in the run config.
+SIGNAL_TARGET_TRANSFORM_AUTO = "auto"
+
+
+def resolve_signal_target_transform(source, requested: str = SIGNAL_TARGET_TRANSFORM_AUTO) -> str:
+    """`auto` -> the source's default; anything else -> itself, validated.
+
+    The RESOLVED value is what goes in the run config. A run whose target space has to be inferred
+    from which data flag was passed is a run that can be compared against one it does not belong
+    beside — the same rule `EVAL.md` already states for `--heads`.
+    """
+    if requested != SIGNAL_TARGET_TRANSFORM_AUTO and requested not in SIGNAL_TARGET_TRANSFORMS:
+        raise ValueError(
+            f"signal_target_transform must be {SIGNAL_TARGET_TRANSFORM_AUTO!r} or one of "
+            f"{SIGNAL_TARGET_TRANSFORMS}; got {requested!r}")
+    if requested != SIGNAL_TARGET_TRANSFORM_AUTO:
+        return requested
+    kind = DataSource.coerce(source).kind
+    try:
+        return SIGNAL_TARGET_TRANSFORM_BY_SOURCE[kind]
+    except KeyError:  # pragma: no cover - DataSource.resolve already fences the kind
+        raise ValueError(f"no default signal target transform for data source kind {kind!r}")
+
+
+def _apply_signal_target_transform(target, mode: str):
+    """Bend `y_pval` into the space the signal head predicts in. `none` returns the tensor itself.
+
+    `none` returns the ARGUMENT, not a clone: the pre-t26 loss expression evaluated `y` directly, and
+    an identity op inserted here would be a different autograd graph on a path that is supposed to be
+    unchanged. `y_pval` is a target and carries no grad, so there is nothing to alias badly.
+
+    Both transforms are monotone and defined at 0, which `-log10 p` reaches constantly, and both keep
+    a non-negative input non-negative — the property `GaussianSignalHead`'s softplus mean relies on.
+    """
+    if mode == "none":
+        return target
+    if mode == "arcsinh":
+        return torch.arcsinh(target)
+    if mode == "log1p":
+        return torch.log1p(target)
+    raise ValueError(
+        f"signal_target_transform must be one of {SIGNAL_TARGET_TRANSFORMS}; got {mode!r}")
+
+
+def aux_head_losses(out, prep, imp_weight: float = 1.0,
+                    signal_target_transform: str = "none"):
     """`(extra_loss, terms)` for whichever optional heads the model built, or `(None, {})` for none.
 
     THE SWITCH IS THE PRESENCE OF THE OUTPUT KEY, not a flag threaded down from `main`. A model built
@@ -357,6 +425,11 @@ def aux_head_losses(out, prep, imp_weight: float = 1.0):
     The two heads are summed into the count loss with COEFFICIENT 1.0. Nobody has measured what the
     right relative weight is, and inventing one here would bury an unmeasured constant inside a
     "no-op" stage; 1.0 is the honest placeholder and the obvious next knob.
+
+    `signal_target_transform` (D30) bends `y_pval` — and ONLY the signal head's target — before the
+    Gaussian NLL. It defaults to `"none"`, the identity, so every caller written before t26 gets the
+    pre-t26 arithmetic; `train_and_eval` resolves the real value from the data source and passes it.
+    The peak head is untouched: `y_peaks` is 0/1 and there is no space to move it into.
     """
     has_signal = "signal_mu" in out
     has_peak = "peak_logit" in out
@@ -396,7 +469,10 @@ def aux_head_losses(out, prep, imp_weight: float = 1.0):
         total = part if total is None else total + part
 
     if has_signal:
-        mu, var, y = out["signal_mu"], out["signal_var"], prep["y_pval"]
+        mu, var = out["signal_mu"], out["signal_var"]
+        # D30 — the ONE place `y_pval` changes space. The loader hands over raw `-log10 p` from both
+        # data paths and never transforms it; see `SIGNAL_TARGET_TRANSFORMS` above.
+        y = _apply_signal_target_transform(prep["y_pval"], signal_target_transform)
         _split(lambda m: _elem_gaussian_nll(mu[m], var[m], y[m]), "signal", mu)
     if has_peak:
         logit, y = out["peak_logit"], prep["y_peaks"]
@@ -603,7 +679,8 @@ CLIP_NORM = 1.0            # the frozen default; `--clip-norm` overrides it per 
 
 def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
                 imp_weight: float = 1.0, probe=None, clip_state=None,
-                clip_norm: float = CLIP_NORM, precision=DEFAULT_PRECISION, scaler=None):
+                clip_norm: float = CLIP_NORM, precision=DEFAULT_PRECISION, scaler=None,
+                signal_target_transform: str = "none"):
     # NO GradScaler, ON PURPOSE, and this call is what keeps it that way. See
     # `precision.assert_no_grad_scaler`: bf16 has fp32's exponent range so there is nothing to
     # rescue, and a scaler added quietly would multiply every number `_grad_norms` reads below by a
@@ -632,7 +709,8 @@ def _train_step(model, prep, opt, sched, losses, *, want_grads: bool = False,
     # Stage 2: auxiliary heads, added only when the model built one. `aux is None` on the default
     # `--heads count` path, so `loss` is the object `nb_count_loss` returned and the autograd graph is
     # the pre-Stage-2 one — not the same graph plus a zero, which would still be a different graph.
-    aux, aux_terms = aux_head_losses(out, prep, imp_weight=imp_weight)
+    aux, aux_terms = aux_head_losses(out, prep, imp_weight=imp_weight,
+                                     signal_target_transform=signal_target_transform)
     if aux is not None:
         loss = loss + aux
         terms = {**terms, **aux_terms}
@@ -673,12 +751,19 @@ def train(model, source, device, *, regime="type1", epochs=25, steps_per_epoch=2
           eval_hook=None, eval_every=3, terms_out=None,
           optimizer="adam", trunk_wd=0.0, meta_probe=None,
           lr_schedule="cosine", warmup_frac=0.1, lr_min_ratio=0.1,
-          clip_norm=CLIP_NORM, precision=DEFAULT_PRECISION) -> list:
+          clip_norm=CLIP_NORM, precision=DEFAULT_PRECISION,
+          signal_target_transform="none") -> list:
     if precision not in PRECISIONS:
         raise ValueError(f"precision must be one of {PRECISIONS}; got {precision!r}")
     # t23: `source` is a `DataSource`. A bare path still works and still means the h5 — every caller
     # written before t23, this package's own and the tests', passes one positionally.
     source = DataSource.coerce(source)
+    # D30. `"none"` rather than `"auto"` is the default HERE, on purpose: `train` is the low-level
+    # entry point every test and probe calls directly, and a default that reads the data source
+    # would change what those callers descend. `train_and_eval` is where `auto` is resolved.
+    if signal_target_transform not in SIGNAL_TARGET_TRANSFORMS:
+        raise ValueError(f"signal_target_transform must be one of {SIGNAL_TARGET_TRANSFORMS}; "
+                         f"got {signal_target_transform!r}")
     if p_full_assay == 1.0 and mask_fraction != 0.2:
         print("[train] WARNING: --mask-fraction is INERT under --p-full-assay 1.0 "
               "(DataMasker._mask_full_assay never reads it)", flush=True)
@@ -805,7 +890,8 @@ def train(model, source, device, *, regime="type1", epochs=25, steps_per_epoch=2
                     terms = _train_step(model, prep, opt, sched, losses, want_grads=want,
                                         imp_weight=imp_weight, probe=probe,
                                         clip_state=clip_state, clip_norm=clip_norm,
-                                        precision=precision)
+                                        precision=precision,
+                                        signal_target_transform=signal_target_transform)
                     step += 1
                     pace["n"] += 1
                     if want:
@@ -856,7 +942,8 @@ def train(model, source, device, *, regime="type1", epochs=25, steps_per_epoch=2
             want = bool(log_fn) and (step % 25 == 0)
             terms = _train_step(model, prep, opt, sched, losses, want_grads=want,
                                 imp_weight=imp_weight, probe=probe, clip_state=clip_state,
-                                clip_norm=clip_norm, precision=precision)
+                                clip_norm=clip_norm, precision=precision,
+                                signal_target_transform=signal_target_transform)
             step += 1
             pace["n"] += 1
             if want:
@@ -1076,7 +1163,8 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    eval_every=3, eval_batches_per_pair=4, meta_embed_layernorm=True,
                    optimizer="adam", trunk_wd=0.0, meta_gain=1.0,
                    meta_probe="off", meta_probe_delta=DEFAULT_META_PROBE_DELTA,
-                   precision=DEFAULT_PRECISION) -> dict:
+                   precision=DEFAULT_PRECISION,
+                   signal_target_transform=SIGNAL_TARGET_TRANSFORM_AUTO) -> dict:
     # Checked on the submit line, for the same reason as `meta_probe` below: a mistyped precision
     # must fail before the h5 is opened, not after an hour of training.
     if precision not in PRECISIONS:
@@ -1093,6 +1181,9 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
         raise ValueError(f"meta_probe must be one of {META_PROBE_MODES}; got {meta_probe!r}")
     # t23: which data path, decided ONCE and here. Everything below asks `source`, never the flags.
     source = DataSource.resolve(h5=h5_path, store=store)
+    # D30 — resolved ONCE, here, and from now on carried as a concrete value. `auto` never reaches
+    # the loss: `auto` is a request, and what a run must record is the answer.
+    signal_target_transform = resolve_signal_target_transform(source, signal_target_transform)
     if source.is_store:
         # Said before anything is opened, because each of these is a way a store-backed run could
         # look like a normal one in the run json while being something else.
@@ -1241,7 +1332,10 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    # autocast keeps master weights in fp32, so a bf16 checkpoint and an fp32 one are
                    # the same file format — and it is deliberately not part of `arch`, so the config
                    # is the only place a reader can recover it.
-                   precision=str(precision))
+                   precision=str(precision),
+                   # D30. The RESOLVED value, never `auto`. Two runs are comparable on the signal
+                   # head only if this field matches, exactly as `EVAL.md` says of `--heads`.
+                   signal_target_transform=str(signal_target_transform))
     wb = _wandb_init(wandb_project, wandb_run_name, run_cfg)
     log_fn = (lambda step, d: wb.log(d, step=step)) if wb else None
 
@@ -1293,7 +1387,8 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    eval_hook=(eval_hook if eval_every else None), eval_every=eval_every,
                    terms_out=terms_log, optimizer=optimizer, trunk_wd=trunk_wd,
                    meta_probe=mprobe, lr_schedule=lr_schedule, warmup_frac=warmup_frac,
-                   lr_min_ratio=lr_min_ratio, clip_norm=clip_norm, precision=precision)
+                   lr_min_ratio=lr_min_ratio, clip_norm=clip_norm, precision=precision,
+                   signal_target_transform=signal_target_transform)
     model.eval()
     if ckpt_path:
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
@@ -1392,6 +1487,11 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                      reference_fingerprint=(ref.src_fingerprint if ref else None),
                      reference_n_contributors=(len(ref.contributors) if ref else 0),
                      imp_weight=imp_weight, unmask_frac=unmask_frac,
+                     # D30. Resolved, not requested. The signal head leaves no trace of its target
+                     # space in the state_dict — a Gaussian head trained on `arcsinh(-log10 p)` and
+                     # one trained on the raw value are the same file — so this field is the only
+                     # place a reader can recover which one produced these numbers.
+                     signal_target_transform=str(signal_target_transform),
                      **h64_cfg,
                      eval_every=eval_every, eval_batches_per_pair=eval_batches_per_pair,
                      out_dir=str(out_dir),
@@ -1562,6 +1662,16 @@ def build_parser() -> argparse.ArgumentParser:
                          "reasonable and unmeasured, which is why the alternative is here.")
     ap.add_argument("--head-hidden", type=int, default=0,
                     help="hidden width of each head MLP. 0 = match the decoder lane width.")
+    ap.add_argument("--signal-target-transform", dest="signal_target_transform",
+                    default=SIGNAL_TARGET_TRANSFORM_AUTO,
+                    choices=[SIGNAL_TARGET_TRANSFORM_AUTO, *SIGNAL_TARGET_TRANSFORMS],
+                    help="D30: how the Gaussian signal head's TARGET (y_pval) is transformed, INSIDE "
+                         "the loss. Not the loader's job and not the same knob as the encoder's own "
+                         "input transform. 'auto' (the default) derives it from the data source — "
+                         "'none' under --h5, because the bake already stores arcsinh(-log10 p), and "
+                         "'arcsinh' under --store, which returns the raw value. The RESOLVED value is "
+                         "written to the run config; two runs are comparable on the signal head only "
+                         "if it matches. INERT unless 'signal' is in --heads.")
     ap.add_argument("--heads", default=",".join(DEFAULT_HEADS),
                     help="comma-separated set of output heads. 'count' (NB over raw counts) is the "
                          "shipped model, is REQUIRED, and is the only head candi.eval scores. "
@@ -1676,7 +1786,8 @@ def main():
           f"meta_embed_layernorm={a.meta_embed_layernorm} "
           f"optimizer={a.optimizer} weight_decay={a.weight_decay} trunk_wd={a.trunk_wd} "
           f"meta_probe={a.meta_probe} meta_probe_delta={a.meta_probe_delta} "
-          f"meta_gain={a.meta_gain} precision={a.precision}", flush=True)
+          f"meta_gain={a.meta_gain} precision={a.precision} "
+          f"signal_target_transform={a.signal_target_transform}", flush=True)
     if a.precision != DEFAULT_PRECISION:
         print(f"[run] precision={a.precision}: the TRAINING forward is autocast; the metadata "
               "embedders, every FiLM tap, LaneNorm, the NB head and the whole of eval stay fp32. "
@@ -1685,6 +1796,7 @@ def main():
     t0 = time.time()
     res = train_and_eval(
         h5_path=a.h5, store=a.store, out_dir=out_dir, regime=a.regime, epochs=a.epochs,
+        signal_target_transform=a.signal_target_transform,
         steps_per_epoch=a.steps_per_epoch, batch_size=a.batch_size, lr=a.lr,
         weight_decay=a.weight_decay, use_offset=use_offset, dsf_sampling=a.dsf_sampling, device=device,
         seed=a.seed, embed_dim=a.embed_dim, dropout=a.dropout,

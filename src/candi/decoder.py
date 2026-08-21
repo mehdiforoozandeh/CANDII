@@ -275,12 +275,21 @@ class PerLaneHead(nn.Module):
 class GaussianSignalHead(nn.Module):
     """`(mu, var)` per position per assay, read off that assay's lane. Off unless `signal` is asked for.
 
-    The target is the arcsinh log-p-value track, which the BAKE already transformed
-    (`prep/reference_sample.py` loads the bigwig with `arcsinh=True`), so this head predicts the
-    transformed quantity directly and nothing downstream may transform it again. That is the opposite
-    of the counts rule in invariant 5 — counts arrive raw and the ENCODER transforms them — and the two
-    are easy to conflate. The arcsinh of a `-log10 p` is non-negative, which is why a softplus mean is
-    the right link here and would be wrong for a signal that can go negative.
+    The target is a `-log10 p` track in whatever space the OBJECTIVE puts it in. Which space that is
+    is `--signal-target-transform` (D30), applied inside the loss at `train.aux_head_losses` and
+    nowhere else — not by this head and not by either loader. Until t26 the answer was implicit and
+    wrong in one of the two data paths: the bake pre-transforms with `arcsinh`
+    (`prep/handler.py`, via `prep/reference_sample.py` loading the bigwig with `arcsinh=True`) and the
+    store returns the raw value (`STORE_PLAN.md` D9 / `PVAL_CODEC_PLAN.md` D26), so the same head was
+    being trained against two different quantities depending on which flag opened the data. The flag
+    now defaults per source — `none` for `--h5`, `arcsinh` for `--store` — and the RESOLVED value is
+    written into the run config, because nothing in this module's state_dict records it.
+
+    That is the opposite of the counts rule in invariant 5 — counts arrive raw and the ENCODER
+    transforms them — and the two are easy to conflate; `EncoderConfig.signal_transform` is that other
+    knob and has nothing to do with this one. Both permitted transforms are monotone and map
+    non-negative to non-negative, as does the identity, which is why a softplus mean is the right link
+    here under all three and would be wrong for a signal that can go negative.
 
     ONE `Linear` PER PARAMETER, NOT THE COUNT HEAD'S `Linear -> GELU -> Linear`. Production uses a
     single linear map and this head exists to be comparable to production; the count head's hidden

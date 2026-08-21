@@ -179,6 +179,12 @@ Writes `{out_dir}/{tag}.json` and `{out_dir}/{tag}.ckpt`. The full flag surface 
 normalisation, FiLM taps and init, head sharing, LR schedule, clip, precision — is tabulated in
 `README.md`, and every flag defaults to the shipped model.
 
+One flag does **not** have a single default: `--signal-target-transform` (D30) derives it from the
+data source — `none` under `--h5`, `arcsinh` under `--store` — because the bake pre-transforms its
+pval track and the store does not. It is inert unless `signal` is in `--heads`, it is applied inside
+the loss and never by a loader, and the resolved value lands in the run config. `EVAL.md` carries the
+comparability rule that follows.
+
 ### 4.5 Evaluate a checkpoint
 
 ```bash

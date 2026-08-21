@@ -20,6 +20,7 @@ one ULP through nothing but memory layout.
 from __future__ import annotations
 
 import hashlib
+import math
 
 import pytest
 import torch
@@ -48,8 +49,11 @@ from candi.model import (
 )
 from candi.precision import (DEFAULT_PRECISION, PRECISION_HELP, PRECISIONS, assert_no_grad_scaler,
                              autocast_region, fp32_fence, no_autocast)
-from candi.train import (CLIP_NORM, LR_SCHEDULES, _elem_nb_nll, _elem_peak_bce, aux_head_losses,
-                         make_lr_schedule)
+from candi.train import (CLIP_NORM, LR_SCHEDULES, SIGNAL_TARGET_TRANSFORM_AUTO,
+                         SIGNAL_TARGET_TRANSFORM_BY_SOURCE, SIGNAL_TARGET_TRANSFORMS,
+                         _apply_signal_target_transform, _elem_nb_nll, _elem_peak_bce,
+                         aux_head_losses, build_parser, make_lr_schedule,
+                         resolve_signal_target_transform)
 
 A, CTX, RES = 6, 24, 25
 
@@ -667,6 +671,86 @@ def test_the_auxiliary_loss_skips_downsampled_targets():
     # Nothing supervised: `imp` is omitted rather than logged as a structural zero, exactly as
     # `nb_count_loss` omits it — a zero averaged into the curve reads as a well-fit batch.
     assert "signal_imp" not in t_down
+
+
+# ---------------------------------------------------------------------------
+# 7b. --signal-target-transform (t26 / PVAL_CODEC_PLAN.md D30)
+# ---------------------------------------------------------------------------
+# The bake stores arcsinh(-log10 p); the store stores the raw value. Before t26 the SAME Gaussian
+# head was trained against whichever one the data flag happened to open, with nothing recording
+# which. These pin the three properties that fix it: the default is the identity, the transform is
+# applied to the target and only to the target, and `auto` resolves off the data source.
+
+
+def test_the_default_signal_target_transform_is_the_identity():
+    """Not "approximately the identity": the pre-t26 loss evaluated `y_pval` itself.
+
+    A `torch.arcsinh` inserted unconditionally would be a different autograd graph and a different
+    number on the h5 path, which is the path every recorded signal-head result was measured on.
+    """
+    out = {"signal_mu": torch.full((2, 6, 2), 0.5), "signal_var": torch.full((2, 6, 2), 1.0)}
+    prep = _prep(pval=torch.full((2, 6, 2), 9.0))
+    _, plain = aux_head_losses(out, prep)
+    _, explicit = aux_head_losses(out, prep, signal_target_transform="none")
+    assert plain["signal_obs"] == explicit["signal_obs"]
+    # And the target really is untouched: the NLL at mu=0.5 against y=9.0, not against arcsinh(9.0).
+    y = _apply_signal_target_transform(prep["y_pval"], "none")
+    assert y is prep["y_pval"]
+
+
+@pytest.mark.parametrize("mode,x,want", [
+    ("none", 17731.0, 17731.0),
+    ("arcsinh", 17731.0, float(math.asinh(17731.0))),
+    ("log1p", 17731.0, float(math.log1p(17731.0))),
+    ("arcsinh", 0.0, 0.0),
+    ("log1p", 0.0, 0.0),
+])
+def test_each_signal_target_transform_is_the_function_it_names(mode, x, want):
+    """Including at 0, which `-log10 p` reaches constantly, and at the value D25 exists to keep."""
+    got = _apply_signal_target_transform(torch.tensor([[[x]]]), mode)
+    assert float(got) == pytest.approx(want, rel=1e-6, abs=1e-6)
+
+
+def test_the_signal_target_transform_moves_the_signal_loss_and_leaves_the_peak_loss_alone():
+    out = {"signal_mu": torch.full((2, 6, 2), 0.5), "signal_var": torch.full((2, 6, 2), 1.0),
+           "peak_logit": torch.zeros(2, 6, 2)}
+    prep = _prep(pval=torch.full((2, 6, 2), 9.0))
+    _, none = aux_head_losses(out, prep, signal_target_transform="none")
+    _, asinh = aux_head_losses(out, prep, signal_target_transform="arcsinh")
+    assert none["signal_obs"] != asinh["signal_obs"]
+    # `y_peaks` is 0/1; there is no space to move it into and the flag must not try.
+    assert none["peak_obs"] == asinh["peak_obs"]
+
+
+def test_an_unknown_signal_target_transform_raises_rather_than_falling_through():
+    with pytest.raises(ValueError, match="signal_target_transform"):
+        _apply_signal_target_transform(torch.zeros(1, 1, 1), "sqrt")
+
+
+def test_auto_resolves_off_the_data_source_and_an_explicit_value_overrides_it(tmp_path):
+    """The whole point of D30: `none` on the bake, `arcsinh` on the store, and never a guess."""
+    from candi.train import DataSource
+
+    h5 = tmp_path / "baked.h5"
+    h5.write_bytes(b"")
+    src = DataSource.coerce(h5)
+    assert src.kind == "h5"
+    assert resolve_signal_target_transform(src, SIGNAL_TARGET_TRANSFORM_AUTO) == "none"
+    assert resolve_signal_target_transform(src, "arcsinh") == "arcsinh"
+    # The table is the contract, so state both halves of it here rather than only the one a
+    # tmp_path fixture can build.
+    assert SIGNAL_TARGET_TRANSFORM_BY_SOURCE == {"h5": "none", "store": "arcsinh"}
+    with pytest.raises(ValueError, match="signal_target_transform"):
+        resolve_signal_target_transform(src, "sqrt")
+
+
+def test_the_signal_target_transform_flag_exists_and_defaults_to_auto():
+    a = build_parser().parse_args(["--h5", "x.h5", "--out-dir", "o"])
+    assert a.signal_target_transform == SIGNAL_TARGET_TRANSFORM_AUTO
+    a = build_parser().parse_args(["--h5", "x.h5", "--out-dir", "o",
+                                   "--signal-target-transform", "log1p"])
+    assert a.signal_target_transform == "log1p"
+    assert set(SIGNAL_TARGET_TRANSFORMS) == {"none", "arcsinh", "log1p"}
 
 
 # ---------------------------------------------------------------------------

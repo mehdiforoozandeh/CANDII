@@ -190,6 +190,14 @@ The consequence: a run trained with extra heads descends a different total loss 
 on the NB head alone, so it is **not** a control for a run trained without them. Two arms are
 comparable only if their `--heads` sets match.
 
+The **same rule applies to `--signal-target-transform`** (t26 / `PVAL_CODEC_PLAN.md` D30). The
+signal head's target is `y_pval` bent by that flag inside the loss, and the flag's default is derived
+from the data source — `none` under `--h5`, because the bake already stores `arcsinh(-log10 p)`, and
+`arcsinh` under `--store`, which returns the raw value. So two runs that differ only in which data
+path opened the corpus descend **different signal objectives**. The resolved value (never `auto`) is
+written to the run config as `signal_target_transform`; nothing in the checkpoint records it. Two
+arms are comparable on the signal head only if that field matches.
+
 ## Rules for quoting any number
 
 1. Say which pool — `imp` (masked) or `den` (unmasked). They are not interchangeable and `den` is
@@ -201,5 +209,5 @@ comparable only if their `--heads` sets match.
 5. Check `n_points`, `--eval-budget` and `--seed` match before comparing two runs.
 6. Give S14 both calibrations (0.25 floor, ~0.73 ceiling) or do not give S14.
 7. Never compare a `V_` delta to a `B_` delta.
-8. Confirm `--heads` matches across the arms being compared.
+8. Confirm `--heads` **and** `signal_target_transform` match across the arms being compared.
 9. Confirm `ablation_within_batch` reads 0 before believing anything else in M2.
