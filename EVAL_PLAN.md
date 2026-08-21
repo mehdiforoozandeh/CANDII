@@ -385,6 +385,18 @@ they change how the plan's own numbers must be read.
    a consequence of S14's foreground mask; C3 scores the whole track and has no such cap, and its
    unit is the level (4) rather than the target (12). The constant has NOT been changed — that is a
    scientific call. **Owed: re-derive the ceiling for whole-track support, or give C3 the mask.**
+5. **C2 reports `output_is_constant: true` while C1, C3 and C4 all show a clean depth response**
+   (`monotone_frac` 1.0, dose-response corr 0.9995, `level` owned by `depth` at a 0.779 gap). C2's
+   `total <= 1e-12` branch fires when the estimator cannot resolve variance, which is a different
+   statement and is false here. **Owed: separate "no variance" from "below resolution", and ship
+   the naive variance and the bias term so a reader can tell which fired.**
+6. **The seed floor.** §7.2's numbers were measured on the full EIC panel under `candi.eval`.
+   Measured on *this* recipe, an `eval.py` seed change moves imputation macro CRPS by **0.0327** —
+   so the report's +0.1136 is 3.5x the recipe's own noise, not inside it. Per track the picture
+   inverts and is the reassuring one: the measurement change moves CRPS by a median of **0.006**
+   while a seed change moves the same tracks by a median of **0.056**, max **1.09**. On that worst
+   track the oracle-scaled spread is 0.322, so most of the 1.09 is SCALE, not ranking — §7.2's
+   split doing exactly the job it was written for. `tools/seed_floor.py` measures this.
 
 ### t20 — the eight places the plan was silent, and what was chosen
 
