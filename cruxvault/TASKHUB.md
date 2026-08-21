@@ -13,7 +13,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model
 - `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI
-- `t18` [data-acquisition] pin the EIC annotation assets: GENCODE v29 genes bed, FANTOM5 hg38 permissive enhancers, msevar variance pools
 - `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness
 
 ## By category
@@ -21,7 +20,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### data-acquisition
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
-- `t18` [data-acquisition] pin the EIC annotation assets: GENCODE v29 genes bed, FANTOM5 hg38 permissive enhancers, msevar variance pools — *open*
 
 ### implementation
 
@@ -45,6 +43,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *done* → `results/t10/t10_report.json`
 - `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `results/t11/t11_report.json`
 - `t12` [implementation] add the pval layer to both stores — *done* → `results/t12/t12_eic_report.json`
+- `t18` [data-acquisition] pin the EIC annotation assets: GENCODE v29 genes bed, FANTOM5 hg38 permissive enhancers, msevar variance pools — *done* → `results/t18/DELIVERABLE.md`
 - `t19` [implementation] bench primitives plus the three verification layers: vendored-reference bit-match, analytic arrays, stub model — *done* → `results/t19/DELIVERABLE.md`
 - `t20` [implementation] whole-chromosome bench harness and CLI, both pval and count arms — *done* → `results/t20/DELIVERABLE.md`
 - `t21` [implementation] the C-block: six covariate-sensitivity instruments (use, share, direction, specificity, invariance, bio-conservation guard) — *done* → `results/t21/DELIVERABLE.md`
