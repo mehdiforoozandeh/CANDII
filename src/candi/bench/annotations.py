@@ -250,7 +250,8 @@ def load_variance_pool(root: Path | str, corpus: str, assay: str, chrom: str) ->
 
 def build_variance_pools(store_root: Path | str, out_root: Path | str, *, corpus: str,
                          chroms: Sequence[str], train_biosamples: Sequence[str],
-                         space: str = "pval", assays: Optional[Sequence[str]] = None) -> Path:
+                         space: str = "pval", assays: Optional[Sequence[str]] = None,
+                         block_bins: int = 1_000_000) -> Path:
     """Build and write the variance pools for one corpus. **Runs where the store is** (Fir).
 
     The definition follows `score_metrics.py::msevar` exactly: `var = std(y_all, axis=0) ** 2`
@@ -261,6 +262,12 @@ def build_variance_pools(store_root: Path | str, out_root: Path | str, *, corpus
     `train_biosamples` is passed in rather than derived, because "which biosamples are training"
     is a property of the regime file, and a builder that guessed it would silently disagree with
     whatever the run was actually trained on.
+
+    **The read is blocked, and the blocking cannot move a number.** Variance is computed per bin
+    from the members at that bin, so a `block_bins`-wide slice sees exactly the column it would
+    have seen inside a whole-chromosome stack. What blocking buys is memory: 51 EIC training
+    biosamples across chr1 is 12.5 M bins x 8 bytes x 51 = 5.1 GB held at once, and the same job
+    over chr21 with a 1 M block holds 408 MB. Raise `block_bins` for fewer, larger reads.
     """
     from candi.store.reader import CorpusStore    # lazy: drags in h5py, and only Fir needs it
 
@@ -271,6 +278,7 @@ def build_variance_pools(store_root: Path | str, out_root: Path | str, *, corpus
 
     membership: Dict[str, dict] = {}
     for chrom in chroms:
+        n_bins = int(store.n_bins(chrom))
         vectors: Dict[str, np.ndarray] = {}
         pool_assays = assays if assays is not None else sorted(
             {a for b in train_biosamples for a in store[b].assays(kind)}
@@ -281,11 +289,17 @@ def build_variance_pools(store_root: Path | str, out_root: Path | str, *, corpus
                 # One track has zero variance everywhere; a weight vector of zeros makes msevar
                 # a 0/0. Skip the assay and say so, rather than emit a vector that divides by zero.
                 continue
-            stack = np.stack([
-                np.asarray(getattr(store[b][assay], kind)(chrom), dtype=np.float64)
-                for b in members
-            ], axis=0)
-            vectors[assay] = (np.std(stack, axis=0) ** 2).astype(np.float32)
+            var = np.empty(n_bins, dtype=np.float32)
+            for lo in range(0, n_bins, max(1, block_bins)):
+                hi = min(lo + max(1, block_bins), n_bins)
+                # `start` is REQUIRED on every reader accessor -- `pval(chrom)` raises TypeError,
+                # which is how this builder was found to have never run.
+                stack = np.stack([
+                    np.asarray(getattr(store[b][assay], kind)(chrom, lo, hi), dtype=np.float64)
+                    for b in members
+                ], axis=0)
+                var[lo:hi] = (np.std(stack, axis=0) ** 2).astype(np.float32)
+            vectors[assay] = var
             membership[assay] = {"space": space, "biosamples": members, "n": len(members)}
         np.savez_compressed(varpool_path(out_root, corpus, chrom), **vectors)
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import gzip
 
+import numpy as np
 import pytest
 
 from candi.bench import annotations as A
@@ -142,3 +143,80 @@ def test_a_missing_variance_pool_raises_rather_than_scoring_zero(tmp_path) -> No
     """
     with pytest.raises(A.AssetError, match="silent 0.0"):
         A.load_variance_pool(tmp_path, "eic", "H3K4me3", "chr21")
+
+
+# ---------------------------------------------------------------------------------------------
+# the builder (D7) — against a real store written by candi.store.writer
+# ---------------------------------------------------------------------------------------------
+
+def _pool_store(tmp_path):
+    """The t8 synthetic store. Two biosamples, so a two-member pool is the largest possible."""
+    from tests.test_store_reader import make_store
+    return make_store(tmp_path)
+
+
+def test_the_builder_produces_a_pool_the_loader_can_read(tmp_path) -> None:
+    """The end-to-end shape. This test exists because the builder had never once been run.
+
+    Every reader accessor takes `start` as a REQUIRED argument, and the builder called
+    `pval(chrom)`, so the first real invocation would have died on a `TypeError` after the job had
+    already queued, loaded a 435 GB store and burned its allocation. A builder with no test is a
+    builder that does not work.
+    """
+    corpus_root = _pool_store(tmp_path / "s")
+    out = tmp_path / "varpool"
+    meta = A.build_variance_pools(corpus_root, out, corpus="eic", chroms=["chr1", "chr2"],
+                                  train_biosamples=["T_aa", "V_aa"], space="pval")
+    assert meta.exists()
+
+    pool = A.load_variance_pool(out, "eic", "H3K4me3", "chr1")
+    assert pool.values.shape == (2_000,)          # CHROM_SIZES chr1 // 25
+    assert pool.space == "pval"
+    assert pool.n_biosamples == 2
+    assert sorted(pool.biosamples) == ["T_aa", "V_aa"]
+
+
+def test_an_assay_only_one_biosample_carries_is_skipped_not_written_as_zeros(tmp_path) -> None:
+    """`ATAC-seq` is in `T_aa` alone. A one-member pool is zero everywhere, and `msevar` divides
+    by `var.sum()`, so writing it would turn a missing weight into a silent `0/0`."""
+    corpus_root = _pool_store(tmp_path / "s")
+    out = tmp_path / "varpool"
+    A.build_variance_pools(corpus_root, out, corpus="eic", chroms=["chr1"],
+                           train_biosamples=["T_aa", "V_aa"], space="pval")
+    with pytest.raises(A.AssetError, match="no variance vector for assay"):
+        A.load_variance_pool(out, "eic", "ATAC-seq", "chr1")
+
+
+def test_the_block_size_cannot_move_a_variance(tmp_path) -> None:
+    """The claim the blocked read rests on, asserted rather than argued.
+
+    Variance is per bin, so a block boundary can only change which read returned a column, never
+    the column. `37` is deliberately coprime with the chromosome length, so blocks land unaligned
+    and a boundary bug would show. Bit-exact, not `approx`.
+    """
+    corpus_root = _pool_store(tmp_path / "s")
+    whole, chunked = tmp_path / "whole", tmp_path / "chunked"
+    for root, bs in ((whole, 10_000), (chunked, 37)):
+        A.build_variance_pools(corpus_root, root, corpus="eic", chroms=["chr1"],
+                               train_biosamples=["T_aa", "V_aa"], space="pval", block_bins=bs)
+    a = A.load_variance_pool(whole, "eic", "H3K4me3", "chr1").values
+    b = A.load_variance_pool(chunked, "eic", "H3K4me3", "chr1").values
+    assert np.array_equal(a, b)
+
+
+def test_the_variance_is_the_population_variance_the_organizers_used(tmp_path) -> None:
+    """`score_metrics.py` uses `std(y_all, axis=0) ** 2` — ddof=0. At n=2 the sample variance is
+    twice that, so getting this wrong doubles every `msevar` and would still look plausible."""
+    from candi.store.reader import CorpusStore
+
+    corpus_root = _pool_store(tmp_path / "s")
+    out = tmp_path / "varpool"
+    A.build_variance_pools(corpus_root, out, corpus="eic", chroms=["chr1"],
+                           train_biosamples=["T_aa", "V_aa"], space="pval")
+    store = CorpusStore(corpus_root)
+    stack = np.stack([np.asarray(store[b]["H3K4me3"].pval("chr1", 0), dtype=np.float64)
+                      for b in ("T_aa", "V_aa")], axis=0)
+    want = (np.std(stack, axis=0) ** 2).astype(np.float32)
+    got = A.load_variance_pool(out, "eic", "H3K4me3", "chr1").values
+    assert np.array_equal(got, want)
+    assert not np.array_equal(got, (np.var(stack, axis=0, ddof=1)).astype(np.float32))
