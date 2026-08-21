@@ -924,6 +924,14 @@ Two departures from the bake, both deliberate:
 * **`region_type` is always `255`** (`prep/bake.py::REGION_TILE`). The store tiles chromosomes and
   has no cCRE annotation, so a `type2_loci`-style 0/1 would be a fabrication.
 
+An absent control is `MISSING` in **both** `control_data` and `control_meta`, never `0` (t15), which
+is the same rule every other absent column follows. It matters more than it looks: `encoder.py::
+V2Encoder._prepare_signal` ignores `control_avail` entirely and re-derives availability from the
+signal and the metadata, so a `0`-filled control column and `0`-filled control metadata agree with
+each other that the column is a real, very shallow control. A control that is present on disk but
+not fully described by the manifest is treated as absent for the same reason (D19) and is listed in
+the `[store] … emitted as MISSING` line at construction.
+
 ### DSF is generated, not stored
 
 D6: `counts.h5` holds DSF1 only and `dataset.py::thin_counts` does `rng.binomial(counts, 1/d)` per

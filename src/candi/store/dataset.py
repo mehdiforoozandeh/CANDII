@@ -289,6 +289,10 @@ class StoreDataset(IterableDataset):
         self._availability[name] = avail
         self._meta[name] = meta
         self._control_meta[name] = self._build_control_meta(name, bs)
+        if bs.has_control and self._control_meta[name] is None:
+            # Present on disk, not fully described. Same treatment and same visibility as any other
+            # column in that state (D19): emitted as MISSING, and said out loud once.
+            self._gaps.append(f"{name}/{L.CONTROL_TRACK}")
 
     def _meta_row(self, rec: Mapping[str, Any], assay_id: int) -> Optional[np.ndarray]:
         """One manifest track record -> one metadata column, or None when it is not complete.
@@ -476,8 +480,16 @@ class StoreDataset(IterableDataset):
         y_pval = torch.zeros(B, Lb, F)
         y_peaks = torch.zeros(B, Lb, F)
         x_dna = torch.zeros(B, Lbp, 4)
-        control_data = torch.zeros(B, Lb, 1)
-        control_meta = torch.zeros(B, R, 1)
+        # t15 — MISSING, not 0, exactly like `x_data`/`x_meta` three lines up. 0 in `control_meta[0]`
+        # reads as `log2(depth) = 0` — a real, very shallow control — rather than "unknown", and 0 in
+        # `control_data` reads as measured zero coverage. That is not a cosmetic difference here:
+        # `encoder._prepare_signal` IGNORES `control_avail` and re-derives availability from the
+        # signal and the metadata, so an all-zero control column with all-zero metadata AGREES with
+        # itself that it is present and the model trains on a fabricated control. The `-1` sentinel
+        # is what both inference paths read as MISSING, and it is what the bake writes
+        # (`prep/handler.py::make_bios_tensor_Control`).
+        control_data = torch.full((B, Lb, 1), float(MISSING))
+        control_meta = torch.full((B, R, 1), float(MISSING))
         control_avail = torch.zeros(B, 1)
         region_type = torch.full((B,), REGION_TILE, dtype=torch.uint8)
         x_dsf_t = torch.ones(B, F, dtype=torch.int64)
@@ -522,13 +534,18 @@ class StoreDataset(IterableDataset):
                                 pk[:, k].astype(np.float32)
                             )
 
-            if bs.has_control:
+            # t15 — the control is emitted ONLY when it is both present and fully described, which
+            # is the same rule `_build_meta` applies to every assay column: a track whose manifest
+            # record is incomplete is MISSING in data AND meta, never half-filled (D19). Writing
+            # real coverage beside `-1` metadata would be the one combination the encoder refuses —
+            # `_prepare_signal` raises when signal and metadata disagree about availability — so
+            # keeping the two in step here is what keeps that check meaningful rather than noisy.
+            cm = self._control_meta.get(name)
+            if bs.has_control and cm is not None:
                 ctrl = bs.control(chrom, start, end)[:, 0]     # never thinned: control_x_dsf == 1
                 control_data[j, :, 0] = torch.from_numpy(ctrl.astype(np.float32))
-                cm = self._control_meta.get(name)
-                if cm is not None:
-                    control_meta[j] = torch.from_numpy(cm)
-                control_avail[j, 0] = 1.0 if bool((control_data[j] != 0).any().item()) else 0.0
+                control_meta[j] = torch.from_numpy(cm)
+                control_avail[j, 0] = 1.0
 
             if self.corpus.genome.has_dna:
                 x_dna[j] = torch.from_numpy(

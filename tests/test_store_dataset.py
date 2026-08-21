@@ -284,9 +284,38 @@ def test_control_is_a_column_of_counts_not_a_kind(store):
     assert torch.all(b["control_data"] >= 0) and b["control_data"].sum() > 0
     assert torch.all(b["control_avail"] == 1.0)
     assert b["control_meta"][0, 1, 0] == float(len(ASSAYS))   # the control's own assay_id
-    # V_aa has no control column at all
+    # V_aa has no control column at all — MISSING in BOTH data and meta (t15), never 0. A 0-filled
+    # control column is a real, very shallow control as far as `encoder._prepare_signal` can tell:
+    # it ignores `control_avail` and infers availability from the signal and the metadata, and
+    # all-zero agrees with all-zero that the column is present.
     v = batches(make_ds(store, train=False, shuffle=False))[0]
-    assert torch.all(v["control_data"] == 0.0) and torch.all(v["control_avail"] == 0.0)
+    assert torch.all(v["control_data"] == float(MISSING))
+    assert torch.all(v["control_meta"] == float(MISSING))
+    assert torch.all(v["control_avail"] == 0.0)
+
+
+def test_a_control_the_manifest_does_not_describe_is_missing_not_half_filled(store, capsys):
+    """t15 / D19 — present on disk but incomplete is the SAME state as absent, for the control too.
+
+    The one combination that must never be emitted is real coverage beside `-1` metadata:
+    `encoder._prepare_signal` raises when signal and metadata disagree about availability, so a
+    half-filled control would turn a data-quality problem into a mid-training crash.
+    """
+    from candi.store import layout as L
+
+    mpath = L.manifest_path(store)
+    m = json.loads(mpath.read_text(encoding="utf-8"))
+    for rec in m["biosamples"]["T_aa"]["tracks"]:
+        if rec["assay"] == L.CONTROL_TRACK:
+            rec["depth"] = None                     # what an undescribed track looks like
+    mpath.write_text(json.dumps(m), encoding="utf-8")
+
+    ds = make_ds(store, train=True, shuffle=False)
+    assert any(g.endswith(L.CONTROL_TRACK) for g in ds._gaps), "the gap must be reported, not silent"
+    b = batches(ds)[0]
+    assert torch.all(b["control_data"] == float(MISSING))
+    assert torch.all(b["control_meta"] == float(MISSING))
+    assert torch.all(b["control_avail"] == 0.0)
 
 
 # ---------------------------------------------------------------------------------------------
