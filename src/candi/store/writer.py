@@ -207,6 +207,8 @@ def _write_kind(
     resolution: int,
     nan_policy: str,
     overwrite: bool,
+    pval_scale: int = L.PVAL_SCALE,
+    pval_transform: str = L.PVAL_TRANSFORM,
 ) -> dict:
     out = L.kind_path(corpus_root, biosample, kind)
     if out.exists() and not overwrite:
@@ -228,7 +230,8 @@ def _write_kind(
                 where = f"{biosample}/{track}/{kind}/{chrom}"
                 raw = _load_npz(src.npz_path(biosample, track, kind, chrom))
                 raw = L.fit_to_n_bins(raw, nb, where)          # D13
-                block[:, j] = _cast(raw, kind, dtype, where, nan_policy, clipped, j)
+                block[:, j] = _cast(raw, kind, dtype, where, nan_policy, clipped, j,
+                                    pval_scale=pval_scale, pval_transform=pval_transform)
             ds = f.create_dataset(chrom, **L.dataset_kwargs(nb, len(tracks), dtype))
             ds[...] = block
             total_bins += nb
@@ -249,6 +252,8 @@ def _write_kind(
                 dtype=dtype,
                 source_root=str(src.root),
                 resolution=resolution,
+                pval_scale=pval_scale,
+                pval_transform=pval_transform,
                 extra=extra,
             ),
         )
@@ -263,6 +268,11 @@ def _write_kind(
         "bins": total_bins,
         "bytes": out.stat().st_size,
         "pval_clip_frac": (clipped / float(total_bins)).tolist() if kind == "pval" else None,
+        # D25/D28 — the summary reports the codec it used, so a build log answers "what units" on
+        # its own. Under D28 every entry of `pval_clip_frac` must be 0.0; a nonzero one means a
+        # source value exceeded ~8.5e13 and is a fault in the source, not in the codec.
+        "pval_scale": int(pval_scale) if kind == "pval" else None,
+        "pval_transform": str(pval_transform) if kind == "pval" else None,
         "npz_depth": depths if kind == "counts" else None,
     }
 
@@ -275,9 +285,12 @@ def _cast(
     nan_policy: str,
     clipped: np.ndarray,
     j: int,
+    pval_scale: int = L.PVAL_SCALE,
+    pval_transform: str = L.PVAL_TRANSFORM,
 ) -> np.ndarray:
     if kind == "pval":
-        encoded, n_clipped = L.encode_pval(raw, L.PVAL_SCALE, nan_policy=nan_policy)  # D9
+        encoded, n_clipped = L.encode_pval(raw, pval_scale, nan_policy=nan_policy,   # D25
+                                           transform=pval_transform)
         clipped[j] += n_clipped
         return encoded
     if raw.dtype.kind == "f":
@@ -310,6 +323,8 @@ def build_biosample(
     counts_dtype: Optional[str] = None,
     nan_policy: str = "error",
     overwrite: bool = False,
+    pval_scale: int = L.PVAL_SCALE,
+    pval_transform: str = L.PVAL_TRANSFORM,
 ) -> dict:
     """Build one biosample's `{counts,peaks,pval}.h5` from the npz tree.
 
@@ -366,5 +381,7 @@ def build_biosample(
             resolution=resolution,
             nan_policy=nan_policy,
             overwrite=overwrite,
+            pval_scale=pval_scale,
+            pval_transform=pval_transform,
         )
     return summary

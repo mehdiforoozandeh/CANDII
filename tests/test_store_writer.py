@@ -11,6 +11,7 @@ D15 (no RNA-seq filter).
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import h5py
@@ -150,15 +151,28 @@ def test_round_trip_counts_and_peaks_are_exact(built):
 
 
 def test_round_trip_pval_is_within_the_quantization_bound(built):
-    """D9 — the codec's whole justification is max error 0.005 on `-log10 p`."""
+    """D25 — the codec's whole justification is a FLAT relative error of 1/(2*scale).
+
+    That is what changed at t24 and it is why the bound below is not the D9 form's absolute 0.005.
+    Rounding bounds the error IN ARCSINH SPACE at `eps`; `sinh` carries it back multiplied by the
+    `cosh` Jacobian, which is `sqrt(1 + x^2)`. So the exact bound is `eps * hypot(1, x)` — an
+    ABSOLUTE `eps` below 1, a RELATIVE `eps` above it, and one expression for both. Writing it this
+    way rather than as a loose relative bound is the point: it is the identity the whole codec rests
+    on, and a test that only checked "small" would not notice if `sinh` and `arcsinh` ever stopped
+    cancelling.
+    """
+    eps = 1.0 / (2 * L.PVAL_SCALE)
     with h5py.File(L.kind_path(built["corpus"], "T_SYNTH", "pval"), "r") as f:
-        assert int(f.attrs[L.ATTR_SCALE]) == 100
+        assert int(f.attrs[L.ATTR_SCALE]) == L.PVAL_SCALE
+        assert f.attrs[L.ATTR_TRANSFORM] == L.PVAL_TRANSFORM
         tracks = json.loads(f.attrs[L.ATTR_TRACKS])
         for chrom in ("chr1", "chr2"):
-            got = f[chrom][...].astype(np.float64) / 100.0
+            got = L.decode_pval(f[chrom][...], L.PVAL_SCALE, L.PVAL_TRANSFORM).astype(np.float64)
             for j, track in enumerate(tracks):
-                want = built["truth"][(track, "pval", chrom)]
-                assert np.max(np.abs(got[:, j] - want)) <= 0.005
+                want = np.asarray(built["truth"][(track, "pval", chrom)], dtype=np.float64)
+                err = np.abs(got[:, j] - want)
+                assert np.all(err <= eps * np.hypot(1.0, want) * 1.01), (
+                    track, chrom, float(np.max(err / (eps * np.hypot(1.0, want)))))
 
 
 def test_the_npz_array_key_is_irrelevant(built):
@@ -170,7 +184,7 @@ def test_root_attrs_are_complete_and_self_describing(built):
     for kind in ("counts", "peaks", "pval"):
         with h5py.File(L.kind_path(built["corpus"], "T_SYNTH", kind), "r") as f:
             a = L.read_root_attrs(f)
-        assert a[L.ATTR_SCHEMA] == 1
+        assert a[L.ATTR_SCHEMA] == L.SCHEMA_VERSION == 2      # D27
         assert a[L.ATTR_BIOSAMPLE] == "T_SYNTH"
         assert a[L.ATTR_KIND] == kind
         assert a[L.ATTR_RESOLUTION] == 25
@@ -181,6 +195,14 @@ def test_root_attrs_are_complete_and_self_describing(built):
     with h5py.File(L.kind_path(built["corpus"], "T_SYNTH", "counts"), "r") as f:
         assert f.attrs[L.ATTR_DSF] == 1                      # D6
         assert json.loads(f.attrs[L.ATTR_NPZ_DEPTH])[0] == 24_684_534
+    # D27 — the units record. `scale` alone was what a consumer had to read units off before t24,
+    # and it does not say which of two codecs produced the codes; the pair does.
+    with h5py.File(L.kind_path(built["corpus"], "T_SYNTH", "pval"), "r") as f:
+        assert f.attrs[L.ATTR_SCALE] == 2000
+        assert f.attrs[L.ATTR_TRANSFORM] == "arcsinh"
+    for kind in ("counts", "peaks"):
+        with h5py.File(L.kind_path(built["corpus"], "T_SYNTH", kind), "r") as f:
+            assert L.ATTR_TRANSFORM not in f.attrs, f"{kind} must not claim a pval codec"
 
 
 def test_chunking_and_compression_are_the_declared_policy(built):
@@ -230,34 +252,90 @@ def test_counts_dtype_for_max_boundaries():
 
 
 # ---------------------------------------------------------------------------------------------
-# §7.7 — the pval codec (D9)
+# §7.7 — the pval codec (D9, as amended by PVAL_CODEC_PLAN.md D25-D28)
 # ---------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("value", [0.0, 161.2, 655.35, 1.005, 12.3456])
+@pytest.mark.parametrize("value", [0.0, 0.1, 1.005, 12.3456, 161.2, 655.35, 17731.0, 2.4e5])
 def test_pval_codec_round_trips_within_the_bound(value):
-    enc, n_clipped = L.encode_pval(np.array([value], dtype=np.float32))
+    """`eps * hypot(1, x)`: absolute below 1, relative above it — one epsilon across seven decades.
+
+    17,731 is the corpus maximum the teammate's report named and the value D25 exists to keep; under
+    the D9 codec it stored as 655.35, a 96% error on a peak summit.
+    """
+    eps = 1.0 / (2 * L.PVAL_SCALE)
+    enc, n_clipped = L.encode_pval(np.array([value], dtype=np.float64))
     assert n_clipped == 0
-    assert abs(float(L.decode_pval(enc)[0]) - value) <= 0.005
+    got = float(L.decode_pval(enc)[0])
+    assert abs(got - value) <= eps * math.hypot(1.0, value) * 1.01, (value, got)
+
+
+def test_the_corpus_maximum_no_longer_clips():
+    """The defect, stated as a test. 62 of 363 EIC tracks hit the old ceiling; this is why."""
+    enc, n_clipped = L.encode_pval(np.array([17731.0], dtype=np.float64))
+    assert n_clipped == 0
+    assert int(enc[0]) < L.PVAL_UINT16_MAX
+    assert L.pval_max_encodable() > 1e13
+    # And the old codec, for contrast — kept reachable so the regression has a name.
+    _, n_old = L.encode_pval(np.array([17731.0]), L.PVAL_SCALE_LINEAR_V1,
+                             transform=L.PVAL_TRANSFORM_LINEAR)
+    assert n_old == 1
 
 
 def test_pval_above_the_ceiling_clips_and_is_counted():
-    enc, n_clipped = L.encode_pval(np.array([0.0, 655.35, 655.36, 1e6], dtype=np.float64))
-    assert enc.tolist() == [0, 65535, 65535, 65535]
+    """`+inf` is the only thing that reaches it now — `p == 0` is real and genuinely infinite.
+
+    It is also the reason this is an integer codec and not float16: float16 REPRESENTS inf, and an
+    inf through `arcsinh` into a Gaussian NLL is a NaN loss with no file-level evidence of where it
+    came from. A uint16 cannot carry the hazard.
+    """
+    top = L.pval_max_encodable()
+    enc, n_clipped = L.encode_pval(np.array([0.0, 17731.0, np.inf], dtype=np.float64))
+    assert enc.tolist()[:2] != [L.PVAL_UINT16_MAX, L.PVAL_UINT16_MAX]
+    assert int(enc[2]) == L.PVAL_UINT16_MAX
+    assert n_clipped == 1
+    assert float(L.decode_pval(enc)[2]) == pytest.approx(top, rel=1e-6)
+    # negatives clip at the floor: `-log10 p` is non-negative by construction
+    enc, n_clipped = L.encode_pval(np.array([-1.0], dtype=np.float64))
+    assert enc.tolist() == [0] and n_clipped == 1
+
+
+def test_the_linear_codec_still_encodes_and_decodes_for_schema_1_files():
+    """D27 — nothing WRITES linear any more, but round-tripping a schema-1 file is a real operation."""
+    x = np.array([0.0, 161.2, 655.35, 655.36, 1e6], dtype=np.float64)
+    enc, n_clipped = L.encode_pval(x, L.PVAL_SCALE_LINEAR_V1, transform=L.PVAL_TRANSFORM_LINEAR)
+    assert enc.tolist() == [0, 16120, 65535, 65535, 65535]
     assert n_clipped == 2
+    back = L.decode_pval(enc, L.PVAL_SCALE_LINEAR_V1, L.PVAL_TRANSFORM_LINEAR)
+    assert float(back[1]) == pytest.approx(161.2, abs=0.005)
+    assert L.pval_max_encodable(L.PVAL_SCALE_LINEAR_V1, L.PVAL_TRANSFORM_LINEAR) == 655.35
+
+
+def test_decoding_with_the_wrong_transform_is_wrong_which_is_why_the_attr_exists():
+    """The codes alone do not say which codec wrote them — hence D27's `transform` root attr."""
+    enc, _ = L.encode_pval(np.array([100.0], dtype=np.float64))
+    right = float(L.decode_pval(enc, L.PVAL_SCALE, L.PVAL_TRANSFORM)[0])
+    wrong = float(L.decode_pval(enc, L.PVAL_SCALE, L.PVAL_TRANSFORM_LINEAR)[0])
+    assert right == pytest.approx(100.0, rel=1e-3)
+    assert abs(wrong - 100.0) > 90.0
+    with pytest.raises(StoreError, match="unknown pval transform"):
+        L.decode_pval(enc, L.PVAL_SCALE, "log1p")
 
 
 def test_pval_clip_fraction_is_recorded_per_track(tmp_path):
     src, corpus = tmp_path / "src", tmp_path / "store" / "eic"
     make_source_tree(src, tracks=("H3K4me3", "DNase-seq"), kinds=("pval",), chroms=("chr2",))
-    # every bin of chr2/DNase-seq goes over the ceiling; H3K4me3 stays under it
+    # every bin of chr2/DNase-seq goes over the ceiling; H3K4me3 stays under it. Built at the LINEAR
+    # codec on purpose: under D25 the ceiling is 8.5e13 and no finite float32 reaches it, so the
+    # only way to still test that the accounting works is to ask for the codec that can clip.
     nb = N_BINS["chr2"]
     _write_npz(
         src / "T_SYNTH" / "DNase-seq" / f"signal_BW_res{RES}" / "chr2.npz",
         np.full(nb, 700.0, dtype=np.float32),
     )
     build_biosample(src, corpus, "T_SYNTH", chrom_sizes=CHROM_SIZES,
-                    kinds=("pval",), chroms=["chr2"])
+                    kinds=("pval",), chroms=["chr2"],
+                    pval_scale=L.PVAL_SCALE_LINEAR_V1, pval_transform=L.PVAL_TRANSFORM_LINEAR)
     with h5py.File(L.kind_path(corpus, "T_SYNTH", "pval"), "r") as f:
         tracks = json.loads(f.attrs[L.ATTR_TRACKS])
         frac = json.loads(f.attrs[L.ATTR_PVAL_CLIP_FRAC])
@@ -265,12 +343,31 @@ def test_pval_clip_fraction_is_recorded_per_track(tmp_path):
     assert frac[tracks.index("H3K4me3")] == pytest.approx(0.0)
 
 
+def test_the_default_codec_clips_nothing_which_is_what_d28_turns_into_an_alarm(tmp_path):
+    """D28 — after the rebuild `pval_clip_frac` must read exactly 0.0 everywhere.
+
+    The same 700.0 track that saturates the linear codec is nowhere near this one's ceiling, so a
+    nonzero entry in a schema-2 file means a source value above ~8.5e13 — a fault in the SOURCE.
+    """
+    src, corpus = tmp_path / "src", tmp_path / "store" / "eic"
+    make_source_tree(src, tracks=("H3K4me3", "DNase-seq"), kinds=("pval",), chroms=("chr2",))
+    _write_npz(
+        src / "T_SYNTH" / "DNase-seq" / f"signal_BW_res{RES}" / "chr2.npz",
+        np.full(N_BINS["chr2"], 700.0, dtype=np.float32),
+    )
+    build_biosample(src, corpus, "T_SYNTH", chrom_sizes=CHROM_SIZES,
+                    kinds=("pval",), chroms=["chr2"])
+    with h5py.File(L.kind_path(corpus, "T_SYNTH", "pval"), "r") as f:
+        assert json.loads(f.attrs[L.ATTR_PVAL_CLIP_FRAC]) == [0.0, 0.0]
+        assert f.attrs[L.ATTR_TRANSFORM] == "arcsinh" and f.attrs[L.ATTR_SCALE] == 2000
+
+
 def test_pval_refuses_non_finite_by_default_and_can_be_told_otherwise():
     x = np.array([1.0, np.nan, np.inf], dtype=np.float32)
     with pytest.raises(StoreError, match="non-finite"):
         L.encode_pval(x)
     enc, n_clipped = L.encode_pval(x, nan_policy="zero")
-    assert enc.tolist() == [100, 0, 65535]
+    assert enc.tolist() == [1763, 0, 65535]      # round(arcsinh(1)*2000), 0, the ceiling
     assert n_clipped == 2
 
 

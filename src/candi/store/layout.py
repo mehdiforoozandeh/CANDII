@@ -13,7 +13,11 @@ Decisions implemented here, by number (`STORE_PLAN.md` §3):
 * **D4** one file per biosample per kind: `biosamples/<NAME>/{counts,peaks,pval}.h5`.
 * **D7** counts dtype per file: `uint16` while the biosample's global max fits, else `uint32`.
 * **D8** peaks `uint8`.
-* **D9** pval `uint16` fixed-point, `scale=100`, stored in the original `-log10 p` space.
+* **D9**, as amended by `PVAL_CODEC_PLAN.md` **D25-D28**: pval `uint16` fixed-point, but of
+  `arcsinh(-log10 p)` at `scale=2000`, not of the raw value at 100. The old codec's ceiling was
+  655.35 and 62 of the EIC corpus's 363 tracks hit it; this one's is `sinh(65535/2000)` = 8.5e13.
+  The reader inverts it, so `-log10 p` is still what comes OUT (D26) — the transform is a storage
+  codec, not a change of units.
 * **D13** every kind uses `n_bins = floor(chr_len / resolution)`; a source array one bin longer
   is truncated, anything else is an error.
 * **D16** biosample names are opaque ids — nothing here parses them.
@@ -29,14 +33,19 @@ import numpy as np
 
 __all__ = [
     "SCHEMA_VERSION",
+    "SUPPORTED_SCHEMA_VERSIONS",
     "DEFAULT_RESOLUTION",
     "KINDS",
     "CONTROL_TRACK",
     "CHUNK_BINS",
     "GZIP_LEVEL",
     "PVAL_SCALE",
+    "PVAL_TRANSFORM",
+    "PVAL_TRANSFORMS",
+    "PVAL_SCALE_LINEAR_V1",
+    "PVAL_TRANSFORM_LINEAR",
     "PVAL_UINT16_MAX",
-    "PVAL_MAX_ENCODABLE",
+    "pval_max_encodable",
     "PEAKS_DTYPE",
     "PVAL_DTYPE",
     "COUNTS_DTYPES",
@@ -91,7 +100,12 @@ __all__ = [
 # constants
 # ---------------------------------------------------------------------------------------------
 
-SCHEMA_VERSION = 1
+#: D27 — bumped to 2 by the arcsinh codec. The WRITER emits only this; the READER accepts anything
+#: in `SUPPORTED_SCHEMA_VERSIONS`, which is what lets a schema-2 pval.h5 sit beside the schema-1
+#: counts.h5 and peaks.h5 that t25 does not rebuild. An equality check here would have made the
+#: bump a whole-corpus rebuild of every kind.
+SCHEMA_VERSION = 2
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 DEFAULT_RESOLUTION = 25
 
 #: The three kinds, in build order (D24). `counts` is the only one training strictly needs.
@@ -106,16 +120,56 @@ CONTROL_TRACK = "chipseq-control"
 CHUNK_BINS = 1024
 GZIP_LEVEL = 4
 
-#: D9 — fixed-point pval. `round(-log10 p * 100)` clipped into uint16.
-PVAL_SCALE = 100
+#: D25 — fixed-point pval, `round(arcsinh(-log10 p) * 2000)` in uint16.
+#:
+#: The scale and the transform are two different jobs and uint16 needs both. `arcsinh` COMPRESSES
+#: THE RANGE — it folds 0 … 17,731 into 0 … 10.5, which is what removes the truncation. The scale
+#: QUANTIZES — hdf5 stores integers and `arcsinh(x)` is a real, so the scale is the ruler between
+#: them. Quantizing in arcsinh space and inverting on read gives CONSTANT RELATIVE PRECISION,
+#: because the `cosh` Jacobian amplifies the error by exactly the factor the compression removed:
+#:
+#:     q = round(arcsinh(x)*S)   x̂ = sinh(q/S)   x̂ - x ≈ ε*sqrt(1+x²),  ε = 1/(2S)
+#:
+#: At S = 2000 that is |ε| ≤ 2.5e-4 — a flat 0.025% relative error everywhere above `-log10 p` of 1,
+#: matching float16's precision at float16's size (measured +6.2 to +7.8% on real chr20 tracks at
+#: this package's own chunking and gzip level) while never clipping and never admitting `inf`/`NaN`
+#: into the file. `PVAL_CODEC_PLAN.md` §2.1/§2.2 carry the measurements.
+PVAL_SCALE = 2000
+PVAL_TRANSFORM = "arcsinh"
+PVAL_TRANSFORMS = ("linear", "arcsinh")
 PVAL_UINT16_MAX = 65535
-PVAL_MAX_ENCODABLE = PVAL_UINT16_MAX / PVAL_SCALE  # 655.35
+
+#: The pre-D25 linear codec, kept as named constants because schema-1 files on disk still use it and
+#: `decode_pval` must keep understanding them (D27). NOT what anything writes.
+PVAL_SCALE_LINEAR_V1 = 100
+PVAL_TRANSFORM_LINEAR = "linear"
+
+
+def pval_max_encodable(scale: int = PVAL_SCALE, transform: str = PVAL_TRANSFORM) -> float:
+    """The largest `-log10 p` this codec can hold — a FUNCTION of `(scale, transform)`, not a constant.
+
+    Under D9 it was `65535/100` = 655.35 and could be a module constant. Under D25 it is
+    `sinh(65535/scale)` ≈ 8.5e13 at the default, and a file may still be linear, so a single number
+    here would be right for one of the two codecs and quietly wrong for the other.
+    """
+    _check_transform(transform)
+    if scale <= 0:
+        raise StoreError(f"pval scale must be positive, got {scale}")
+    top = PVAL_UINT16_MAX / float(scale)
+    return float(np.sinh(top)) if transform == "arcsinh" else float(top)
+
+
+def _check_transform(transform: str) -> None:
+    if transform not in PVAL_TRANSFORMS:
+        raise StoreError(f"unknown pval transform {transform!r}; expected one of "
+                         f"{list(PVAL_TRANSFORMS)}")
 
 PEAKS_DTYPE = np.uint8          # D8
 PVAL_DTYPE = np.uint16          # D9
 COUNTS_DTYPES = (np.uint16, np.uint32)   # D7, in widening order
 
-# Root attribute names. Every kind carries the first eleven; counts adds `dsf`, pval adds `scale`.
+# Root attribute names. Every kind carries the first eleven; counts adds `dsf`, pval adds `scale`
+# and `transform` (D27).
 ATTR_SCHEMA = "schema"
 ATTR_BIOSAMPLE = "biosample"
 ATTR_KIND = "kind"
@@ -129,6 +183,10 @@ ATTR_KIT_VERSION = "kit_version"
 ATTR_BUILT_UTC = "built_utc"
 ATTR_DSF = "dsf"                       # counts only, always 1 (D6)
 ATTR_SCALE = "scale"                   # pval only, always PVAL_SCALE
+#: D27 — pval only, `"arcsinh"` | `"linear"`. ABSENT on a schema-1 file, and absent MEANS `"linear"`:
+#: that default is the whole of the back-compat, and `reader.BiosampleStore.pval` is where it is
+#: applied. Never write a pval file without it.
+ATTR_TRANSFORM = "transform"
 
 #: pval only — JSON list aligned with `tracks`, the fraction of bins clipped by the codec (D9).
 ATTR_PVAL_CLIP_FRAC = "pval_clip_frac"
@@ -372,24 +430,36 @@ def load_chrom_sizes(path: Path | str) -> dict:
 # ---------------------------------------------------------------------------------------------
 
 
-def encode_pval(values, scale: int = PVAL_SCALE, nan_policy: str = "error") -> tuple:
+def encode_pval(values, scale: int = PVAL_SCALE, nan_policy: str = "error",
+                transform: str = PVAL_TRANSFORM) -> tuple:
     """`-log10 p` (float) -> `uint16` fixed point. Returns `(encoded, n_clipped)`.
 
-    `round(x * scale)` clipped to `[0, 65535]`, i.e. a resolution of `1/scale` and a ceiling of
-    `65535 / scale` = 655.35 at the default. Measured quantization error on the real corpus:
-    **max 0.005** on `-log10 p`, and chr1's observed max is 161.2, far under the ceiling.
+    D25: `round(arcsinh(x) * scale)` clipped to `[0, 65535]`. The ceiling is
+    `pval_max_encodable(scale, transform)` — 8.5e13 at the defaults, against a corpus maximum of
+    17,731, so nothing real reaches it. Quantization error is `1/(2*scale)` IN ARCSINH SPACE, which
+    inverts to a flat 2.5e-4 RELATIVE error on `-log10 p` above 1 and a 2.5e-4 absolute error below
+    it. `PVAL_CODEC_PLAN.md` §2.1 has the table.
 
-    Stored in the **original space** — no arcsinh at bake time; every transform is the model's.
+    `transform="linear"` is the pre-D25 codec, `round(x * scale)`, ceiling `65535/scale` = 655.35 at
+    `PVAL_SCALE_LINEAR_V1`. It is kept because schema-1 files on disk were written with it and
+    round-tripping one is a real operation; **nothing in this package writes it any more**.
 
-    `n_clipped` counts every bin whose value fell outside `[0, 65535/scale]`, returned as a count
-    rather than a fraction so a caller can aggregate it across chromosomes.
+    The file still holds `-log10 p` as far as every consumer is concerned — the reader inverts this
+    (D26), so the arcsinh is a STORAGE CODEC and not a change of units. What the model does to the
+    value afterwards is the model's business and is `--signal-target-transform` (D30).
 
-    `+inf` is a real `-log10 p` (`p == 0`) and clips to the ceiling like any other overflow. **NaN
-    is not a number at all**, so `nan_policy="error"` refuses it rather than inventing one;
-    `"zero"` encodes it as 0 and counts it among the clipped.
+    `n_clipped` counts every bin that fell outside the representable range, returned as a count
+    rather than a fraction so a caller can aggregate it across chromosomes. Under D28 it must be 0
+    on every rebuilt track, which turns it from bookkeeping into an alarm.
+
+    `+inf` is a real `-log10 p` (`p == 0`) and clips to the ceiling like any other overflow — and it
+    is the reason this is an integer codec rather than float16: `arcsinh(inf)` is `inf`, and an `inf`
+    reaching a Gaussian NLL is a NaN loss. **NaN is not a number at all**, so `nan_policy="error"`
+    refuses it rather than inventing one; `"zero"` encodes it as 0 and counts it among the clipped.
     """
     if nan_policy not in ("error", "zero"):
         raise StoreError(f"unknown nan_policy {nan_policy!r}; expected 'error' or 'zero'")
+    _check_transform(transform)
     if scale <= 0:
         raise StoreError(f"pval scale must be positive, got {scale}")
     x = np.asarray(values, dtype=np.float64)
@@ -402,16 +472,33 @@ def encode_pval(values, scale: int = PVAL_SCALE, nan_policy: str = "error") -> t
                 f"them. Pass nan_policy='zero' (CLI: --pval-nan zero) if that is what you want."
             )
         x = np.where(nan, 0.0, x)
-    scaled = np.rint(x * scale)
+    # `arcsinh` BEFORE `rint`, and of the float64 input: doing it after would quantize the raw value
+    # first and the compression would buy nothing.
+    y = np.arcsinh(x) if transform == "arcsinh" else x
+    scaled = np.rint(y * scale)
     out_of_range = (scaled < 0) | (scaled > PVAL_UINT16_MAX)
     n_clipped = int(np.count_nonzero(out_of_range | nan))
     encoded = np.clip(scaled, 0, PVAL_UINT16_MAX).astype(PVAL_DTYPE)
     return encoded, n_clipped
 
 
-def decode_pval(encoded, scale: int = PVAL_SCALE) -> np.ndarray:
-    """`uint16` fixed point -> `-log10 p` as float32. The exact inverse of `encode_pval`."""
-    return (np.asarray(encoded).astype(np.float32) / np.float32(scale)).astype(np.float32)
+def decode_pval(encoded, scale: int = PVAL_SCALE,
+                transform: str = PVAL_TRANSFORM) -> np.ndarray:
+    """`uint16` fixed point -> `-log10 p` as float32. The exact inverse of `encode_pval`.
+
+    `transform` MUST be the one the file was written with. It is not guessable from the codes — the
+    same uint16 array is a valid encoding under either — which is why D27 puts it in the root attrs
+    and why an absent attr means `"linear"` rather than "assume the current default".
+
+    `sinh` is evaluated in float64 and narrowed once at the end. In float32 the top of the range
+    (`q/scale` near 32.8) loses the mantissa this codec's whole precision argument rests on.
+    """
+    _check_transform(transform)
+    if scale <= 0:
+        raise StoreError(f"pval scale must be positive, got {scale}")
+    y = np.asarray(encoded).astype(np.float64) / float(scale)
+    x = np.sinh(y) if transform == "arcsinh" else y
+    return x.astype(np.float32)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -445,11 +532,17 @@ def root_attrs(
     resolution: int = DEFAULT_RESOLUTION,
     built_utc: Optional[str] = None,
     version: Optional[str] = None,
+    pval_scale: int = PVAL_SCALE,
+    pval_transform: str = PVAL_TRANSFORM,
     extra: Optional[Mapping[str, Any]] = None,
 ) -> dict:
     """Build the root attr dict for one file. The only place the attr set is defined."""
     if kind not in KINDS:
         raise StoreError(f"unknown kind {kind!r}; expected one of {list(KINDS)}")
+    if kind == "pval":
+        _check_transform(pval_transform)
+        if pval_scale <= 0:
+            raise StoreError(f"pval scale must be positive, got {pval_scale}")
     attrs = {
         ATTR_SCHEMA: int(SCHEMA_VERSION),
         ATTR_BIOSAMPLE: str(biosample),
@@ -466,7 +559,10 @@ def root_attrs(
     if kind == "counts":
         attrs[ATTR_DSF] = 1                     # D6 — DSF1 only; the loader thins.
     if kind == "pval":
-        attrs[ATTR_SCALE] = int(PVAL_SCALE)     # D9
+        # D25/D27 — the units record. Both, always, and together: a `scale` without a `transform`
+        # is exactly the schema-1 file this reader has to guess about.
+        attrs[ATTR_SCALE] = int(pval_scale)
+        attrs[ATTR_TRANSFORM] = str(pval_transform)
     if extra:
         attrs.update(extra)
     return attrs

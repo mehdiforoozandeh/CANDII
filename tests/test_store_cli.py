@@ -43,7 +43,7 @@ def test_build_then_manifest_then_verify(tree, capsys):
         "--source-root", str(tree["src"]),
     ]) == 0
     manifest = json.loads(L.manifest_path(tree["corpus"]).read_text(encoding="utf-8"))
-    assert manifest["corpus"] == "eic" and manifest["schema"] == 1
+    assert manifest["corpus"] == "eic" and manifest["schema"] == L.SCHEMA_VERSION == 2
 
     assert main(["verify", "--corpus-root", str(tree["corpus"])]) == 0
     assert "OK" in capsys.readouterr().out

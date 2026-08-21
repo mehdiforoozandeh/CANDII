@@ -4,6 +4,12 @@
 below is **settled**. Do not re-open them and do not stop to ask. Where this plan is silent, choose
 the option most consistent with the decisions here, write down what you chose, and keep going.
 
+**Amended:** **D9 only**, by [`PVAL_CODEC_PLAN.md`](PVAL_CODEC_PLAN.md) (PI-approved 2026-08-21,
+tasks `t24`/`t25`/`t26`). The pval codec is now `round(arcsinh(-log10 p) * 2000)` in `uint16`, because
+D9's linear ×100 ceiling of 655.35 truncated 62 of the EIC corpus's 363 pval tracks. **D9 below is
+left as written** — it is the record of what was approved and built, and §7 item 7 is why the defect
+was measurable at all. Every other decision here stands unchanged.
+
 **Crux tasks:** `t3` (parent) with children `t4`–`t12` in `cruxvault/tasks/`.
 **Merge gate (non-experiment lane):** `pytest tests/ -q` green **and** `python tools/golden.py`
 bit-exact. Both must hold at every commit. That is why the new code lands *beside* the old path.

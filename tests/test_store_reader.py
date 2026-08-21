@@ -247,14 +247,50 @@ def test_counts_are_upcast_so_uint16_and_uint32_stores_are_interchangeable(tmp_p
 
 
 def test_pval_comes_back_as_minus_log10_p_not_fixed_point(corpus):
-    """D9 — the reader decodes; a caller must never see the uint16."""
+    """D26 — the reader decodes; a caller must never see the uint16 OR the arcsinh.
+
+    The codec is a storage detail and stops at this line: what comes out is ordinary `-log10 p`, in
+    the same units the D9 store returned, which is why nothing above the reader had to change when
+    the codec did. Any further transform is the objective's (`--signal-target-transform`, D30).
+    """
     got = corpus["T_aa"].pval("chr1", 0, 64, assays=["H3K4me3"])[:, 0]
     with h5py.File(L.kind_path(corpus.root, "T_aa", "pval"), "r") as f:
-        j = list(L.read_root_attrs(f)[L.ATTR_TRACKS]).index("H3K4me3")
+        a = L.read_root_attrs(f)
+        j = list(a[L.ATTR_TRACKS]).index("H3K4me3")
         raw = f["chr1"][0:64, j]
+    assert a[L.ATTR_TRANSFORM] == "arcsinh" and a[L.ATTR_SCALE] == 2000
     assert got.dtype == np.float32
-    assert np.allclose(got, raw / 100.0)
+    assert np.allclose(got, np.sinh(raw / 2000.0), rtol=1e-6)
     assert got.max() > 1.0                                  # the synthetic tree goes up to ~40
+
+
+def test_a_schema_1_pval_file_still_decodes_linearly(corpus, tmp_path):
+    """D27, and the ONLY regression it exists to prevent.
+
+    A schema-1 file carries `scale` and no `transform`. If the reader fell back to this package's
+    CURRENT default instead of `"linear"`, it would return `sinh` of a number that was never
+    compressed — 161.2 would read back as 1.4e70 — and nothing would raise. The fallback is four
+    lines in `BiosampleStore.pval`; this is what those four lines are for.
+    """
+    import shutil
+
+    root = tmp_path / "schema1"
+    shutil.copytree(corpus.root, root)
+    path = L.kind_path(root, "T_aa", "pval")
+    with h5py.File(path, "r+") as f:
+        tracks = list(L.read_root_attrs(f)[L.ATTR_TRACKS])
+        j = tracks.index("H3K4me3")
+        for chrom in ("chr1", "chr2"):
+            block = f[chrom][...]
+            f[chrom][...] = np.zeros_like(block)
+            f[chrom][0:64, j] = np.rint(
+                np.linspace(0.0, 161.2, 64) * L.PVAL_SCALE_LINEAR_V1).astype(block.dtype)
+        del f.attrs[L.ATTR_TRANSFORM]                       # what a schema-1 file looks like
+        f.attrs[L.ATTR_SCHEMA] = 1
+        f.attrs[L.ATTR_SCALE] = L.PVAL_SCALE_LINEAR_V1
+
+    got = CorpusStore(root)["T_aa"].pval("chr1", 0, 64, assays=["H3K4me3"])[:, 0]
+    assert np.allclose(got, np.linspace(0.0, 161.2, 64), atol=0.005)
 
 
 def test_peaks_are_the_zero_one_indicator(corpus):

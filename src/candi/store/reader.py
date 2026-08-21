@@ -319,10 +319,24 @@ class BiosampleStore:
 
     def pval(self, chrom: str, start: int, end: Optional[int] = None,
              assays: Optional[Sequence[str]] = None) -> np.ndarray:
-        """`(L, F)` float32 `-log10 p`, decoded from the D9 fixed point in the file's own scale."""
+        """`(L, F)` float32 `-log10 p`, decoded from the fixed point in THE FILE'S OWN codec.
+
+        D26 — the codec is invisible above this line. The store holds `arcsinh(-log10 p)` scaled to
+        uint16 (D25) and this returns ordinary `-log10 p`; anything further is the model's, and is
+        `--signal-target-transform` (D30).
+
+        THIS IS THE WHOLE OF D27's BACK-COMPAT, and the reason it can be four lines: `decode_pval`
+        has exactly two call sites in the repo, this one and one test, so nothing bypasses it. The
+        codec is read off the file rather than off this package's defaults, and an ABSENT
+        `transform` attr means `"linear"` — that is what a schema-1 file is, and defaulting to the
+        current constant instead would silently reinterpret every unrebuilt file as arcsinh and
+        return `sinh` of a number that was never compressed.
+        """
         raw = self._read("pval", chrom, start, end, assays)
-        scale = int(self.attrs("pval").get(L.ATTR_SCALE, L.PVAL_SCALE))
-        return L.decode_pval(raw, scale)
+        a = self.attrs("pval")
+        scale = int(a.get(L.ATTR_SCALE, L.PVAL_SCALE_LINEAR_V1))
+        transform = str(a.get(L.ATTR_TRANSFORM, L.PVAL_TRANSFORM_LINEAR))
+        return L.decode_pval(raw, scale, transform)
 
     def control(self, chrom: str, start: int, end: Optional[int] = None) -> np.ndarray:
         """`(L, 1)` int32 of the `chipseq-control` column (D18), or a loud error when absent."""
@@ -480,9 +494,10 @@ class CorpusStore:
         mp = L.manifest_path(self.root)
         if mp.is_file():
             self._manifest = json.loads(mp.read_text(encoding="utf-8"))
-            if self._manifest.get("schema") != L.SCHEMA_VERSION:
+            if self._manifest.get("schema") not in L.SUPPORTED_SCHEMA_VERSIONS:
                 raise StoreError(
-                    f"{mp}: schema {self._manifest.get('schema')} != {L.SCHEMA_VERSION}"
+                    f"{mp}: schema {self._manifest.get('schema')} is not one of "
+                    f"{list(L.SUPPORTED_SCHEMA_VERSIONS)}"
                 )
 
     # -- structure ----------------------------------------------------------------------------

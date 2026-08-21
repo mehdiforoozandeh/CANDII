@@ -48,7 +48,7 @@ flowchart TB
     subgraph STORE["CANDI_STORE — immutable, /project, 461 GB"]
         CH["counts.h5 (n_bins x n_tracks)<br/>uint16|uint32, DSF1 only"]
         PH["peaks.h5 uint8"]
-        VH["pval.h5 uint16 fixed-point x100"]
+        VH["pval.h5 uint16 arcsinh x2000"]
         MJ["manifest.json"]
         DNA["genome/dna.h5<br/>uint8 base codes"]
         MSK["genome/mask.h5<br/>0/1 per bin: N or blacklist"]
@@ -471,7 +471,7 @@ CANDI_STORE/
       T_DND-41/
         counts.h5              /chr1 …  (n_bins, n_tracks)  uint16 | uint32
         peaks.h5               /chr1 …  (n_bins, n_tracks)  uint8
-        pval.h5                /chr1 …  (n_bins, n_tracks)  uint16, scale 100
+        pval.h5                /chr1 …  (n_bins, n_tracks)  uint16, arcsinh, scale 2000
   merged/                      same shape
 ```
 
@@ -505,7 +505,7 @@ no filters registered. Do not add a codec here that the cluster cannot read back
 |---|---|---|---|
 | `counts` | `signal_DSF1_res25/chr*.npz` | `uint16` or `uint32` | **per FILE**, from the biosample's global max (D7) |
 | `peaks` | `peaks_res25/chr*.npz` | `uint8` | D8 |
-| `pval` | `signal_BW_res25/chr*.npz` | `uint16` | fixed point, `round(-log10p * 100)` (D9) |
+| `pval` | `signal_BW_res25/chr*.npz` | `uint16` | fixed point, `round(arcsinh(-log10p) * 2000)` (D25) |
 
 `counts` is **DSF1 only** (D6). DSF2/4/8 are not stored; the loader thins binomially, which is
 exactly what the source DSF levels were (verified to 3–4 decimals against `Binomial(k, 1/d)`).
@@ -524,25 +524,58 @@ skips the scan when a previous run already told you the answer.
 `B_DND-41`/DNase-seq reaches **52,051** reads in one 25 bp bin — under `uint16`, but the reason the
 rule exists rather than a hardcoded width.
 
-### The pval codec is lossy by design, and the bound is 0.005 plus a float32 epsilon
+### The pval codec is lossy by design, and the bound is a flat 0.025% relative
 
-`layout.py::encode_pval` / `::decode_pval`. `round(-log10 p * 100)` clipped to `[0, 65535]`, so the
-resolution is 0.01 and the ceiling is **655.35**. Quantization error is half a step, **0.005** on
-`-log10 p`, against a chr1 observed max of 161.2. Storage: 0.771 B/bin against 2.727 for the source
-float32, a 3.5× win (measured on the t9 slice: 0.722 B/bin).
+`layout.py::encode_pval` / `::decode_pval`. **`round(arcsinh(-log10 p) * 2000)`** clipped to
+`[0, 65535]` — D25, which amends `STORE_PLAN.md` D9. The ceiling is `sinh(65535/2000)` =
+**8.5e13**, so nothing real reaches it.
 
-**Do not assert `err <= 0.005` on real data — it fails.** t9 measured a round-trip max of
-**0.0050011** on `B_DND-41/DNase-seq/chr1`. The extra 1.1e-6 is not the codec: `decode_pval` returns
-float32, and a value near 161 has a float32 spacing of ~1e-5, so the decoded number cannot land
-exactly on the quantized one. The honest bound is `0.005 + float32 eps at the magnitude concerned`.
-A test that wants a hard number should use `0.0051`, or compare in float64.
+Two jobs, two mechanisms, and `uint16` needs both. **`arcsinh` compresses the range**: it folds
+0 … 17,731 into 0 … 10.5. **The scale quantizes**: hdf5 stores integers, `arcsinh(x)` is a real,
+and 2000 is the ruler between them. Quantize in arcsinh space and invert with `sinh`, and the `cosh`
+Jacobian amplifies the error by exactly the factor the compression removed — what survives is
+**constant relative precision**, an integer code that behaves like a floating-point one:
 
-Stored in the **original space** — no arcsinh at bake time. Every transform belongs to the model,
-the same rule `DATA.md` states for counts. This is a deliberate departure from the old bake, which
-arcsinh'd pval on the way in.
+```
+q = round(arcsinh(x)·S)     x̂ = sinh(q/S)     x̂ − x ≈ ε·√(1+x²),   ε = 1/(2S) = 2.5e-4
+```
+
+| truth `-log10 p` | error now | error under the old ×100 codec |
+|---|---|---|
+| 0.1 | 0.00025 (0.25%) | 0.005 (**5%**) |
+| 1 | 0.00035 (0.035%) | 0.005 (0.5%) |
+| 100 | 0.025 (0.025%) | 0.005 (0.005%) |
+| 655 | 0.16 (0.025%) | 0.005 (0.0008%) |
+| **17,731** | **4.4 (0.025%)** | **clipped to 655.35 (96%)** |
+
+So: ~20× finer below 1, 2–5× coarser between 100 and 655, and the truncation gone. It costs
+**+6.2 to +7.8%** on disk (measured on real chr20 tracks at this package's own chunking and gzip
+level) — the same bytes as float16, at float16's precision, without float16's uneven step and
+without float16's ability to carry `inf` into the file.
+
+**The bound is relative, so assert it that way.** `err <= eps * hypot(1, x)` is the exact form: an
+absolute 2.5e-4 below `-log10 p` of 1, a relative 2.5e-4 above it. `decode_pval` evaluates `sinh` in
+float64 and narrows once at the end, because float32 at the top of the range loses the mantissa the
+whole precision argument rests on.
+
+**Why not float16.** Its precision is relative at 2⁻¹¹, so between 100 and 655 — where real peaks
+live — it is coarser than the codec this replaced. It also represents `inf`, and `p == 0` occurs;
+`arcsinh(inf)` into a Gaussian NLL is a NaN loss with no file-level evidence of where it came from.
+An integer cannot carry that hazard.
+
+**What was wrong before.** The old codec's ceiling was 655.35 against a corpus maximum of 17,731.
+Measured on the built EIC corpus on 2026-08-20: **62 of 363 pval tracks (17.1%) clipped at least one
+bin**, 3,046,724 bins of 44,010,731,292 — a tiny fraction, but every one of them a peak summit, the
+most informative position in the track. All seven ATAC-seq tracks were among them.
+
+`-log10 p` is still what the reader returns (D26): the arcsinh is a **storage codec**, not a change
+of units, and nothing above `BiosampleStore.pval` changed when it landed. What the model does to the
+value afterwards is `--signal-target-transform` (D30) and happens in the loss.
 
 Clipping is counted per track and written to the `pval_clip_frac` root attr and into the manifest.
-`+inf` is a real `-log10 p` (`p == 0`) and clips to the ceiling; **NaN is refused** — see the traps.
+Under **D28 it must read exactly 0.0** on every rebuilt track — a nonzero value now means a source
+value above 8.5e13, which is a fault in the source, not in the codec. `+inf` still clips to the
+ceiling; **NaN is refused** — see the traps.
 
 ## `n_bins` is `floor`, for every kind, always
 
@@ -575,8 +608,9 @@ JSON-encoded ones — do not touch `.attrs` directly).
 | `kit_version`, `built_utc` | all | provenance |
 | `dsf` | counts | always `1` (D6) |
 | `npz_depth` | counts | JSON list aligned with `tracks`; `depth` as the npz tree reported it, `null` where absent |
-| `scale` | pval | always `100` |
-| `pval_clip_frac` | pval | JSON list aligned with `tracks` |
+| `scale` | pval | integer codes per unit of the transformed value; `2000` under D25, `100` on a schema-1 file |
+| `transform` | pval | `arcsinh` (D25/D27) or `linear`. **Absent means `linear`** — that is what a schema-1 file is |
+| `pval_clip_frac` | pval | JSON list aligned with `tracks`. Must be `0.0` everywhere under D28 |
 
 ### Storage column order is not model column order
 
@@ -803,8 +837,9 @@ Three things the reader does that the files do not:
 
 * **Upcasts counts to `int32`** (`reader.py::COUNTS_OUT_DTYPE`), so a `uint16` store and a `uint32`
   store are indistinguishable downstream (D7), and a `-1` MISSING sentinel fits without a re-cast.
-* **Decodes pval** through `layout.py::decode_pval` at the file's own `scale` attr (D9). Nothing
-  outside the writer ever sees the fixed point.
+* **Decodes pval** through `layout.py::decode_pval` at the file's own `scale` AND `transform` attrs
+  (D25/D27), so `-log10 p` is what comes out whichever codec wrote the file. Nothing outside the
+  writer ever sees the fixed point or the arcsinh.
 * **Returns columns in the order asked for.** `assays=[…]` is a permutation, and it is honoured;
   h5py's increasing-index requirement is handled inside `reader.py::BiosampleStore._read`.
 
@@ -881,8 +916,11 @@ exactly as the old one does. `CLOZE` belongs to `batch.py::prepare_masked_batch`
 
 Two departures from the bake, both deliberate:
 
-* **`y_pval` is raw `-log10 p`**, not `arcsinh`. Every transform belongs to the model (D9), which is
-  the same rule `DATA.md` states for counts. The old bake arcsinh'd on the way in.
+* **`y_pval` is raw `-log10 p`**, not `arcsinh` — the loader's output, whatever the codec on disk
+  (D26). Every transform belongs to the model, the same rule `DATA.md` states for counts. The old
+  bake arcsinh'd on the way in, and a Gaussian signal head fed by both paths was therefore trained
+  against two different quantities until t26 made the target transform explicit
+  (`--signal-target-transform`, D30). Match that flag before comparing two signal-head runs.
 * **`region_type` is always `255`** (`prep/bake.py::REGION_TILE`). The store tiles chromosomes and
   has no cCRE annotation, so a `type2_loci`-style 0/1 would be a fabrication.
 
@@ -974,14 +1012,42 @@ source, or name the chromosomes you actually want with `--chroms`.
 There is no number that means "no p-value", and writing 0 would mean `p = 1` — a confident claim of
 no signal. `--pval-nan zero` does it anyway, counts those bins in `pval_clip_frac`, and is the wrong
 answer unless you have checked what produced the NaNs. `+inf` is **not** affected: `p == 0` is a real
-measurement and clips to 655.35 like any other overflow.
+measurement and clips to the ceiling like any other overflow.
+
+### The same track reads back above 655 where an older copy of it capped
+
+**Symptom:** a pval track whose maximum was exactly 655.35 in one copy of the store and is 17,731 in
+another, with no error anywhere and both copies self-consistent.
+
+That is **schema 2 beside schema 1**, and it is a version difference, not corruption. The 655.35 copy
+was written by the D9 linear ×100 codec and genuinely lost those summits; the other was written by
+D25's arcsinh ×2000 codec and did not. **The `transform` root attr is how you tell which you have** —
+`arcsinh` is schema 2, and an ABSENT attr is schema 1 and means `linear`:
+
+```bash
+python - <<'PY'
+import h5py, json
+with h5py.File("<corpus>/biosamples/<BIOS>/pval.h5") as f:
+    print(dict(schema=f.attrs["schema"], scale=f.attrs["scale"],
+               transform=f.attrs.get("transform", "linear (schema 1)")))
+PY
+```
+
+The reader handles both (D27) and returns `-log10 p` either way, so this never raises. It is safe to
+*read* a mixed corpus and **not** safe to *train* on one, because precision then differs between
+biosamples. During a rebuild, wait for the verification pass before starting a run.
 
 ### `pval_clip_frac` above zero means the ceiling is real for your data
 
-The manifest records it per track. A nonzero value says some bins hit 655.35 and lost their true
-magnitude. Everything below the ceiling is still good to 0.005, so a small fraction is harmless —
-but a track at 0.01 or higher is a track whose top-of-signal is flattened, and any evaluation that
-weights extreme p-values will read low with no other symptom.
+The manifest records it per track. Under **D28 it must read exactly 0.0** on every schema-2 file: the
+ceiling is 8.5e13 and nothing real reaches it, so a nonzero value means a source value above that —
+a fault in the source, and worth stopping for.
+
+On a **schema-1** file the same field means what it always meant: some bins hit 655.35 and lost their
+true magnitude. Measured across the built EIC corpus, 62 of 363 tracks (17.1%) were nonzero, worst
+track 0.371%, all seven ATAC-seq tracks among them. A small fraction is not harmless there — every
+clipped bin is a peak summit, so any evaluation that weights extreme p-values reads low with no other
+symptom. That is the defect D25 exists to remove.
 
 ### A missing `chrom_sizes.json` looks like a flag error, not a data error
 

@@ -52,7 +52,7 @@ def store(tmp_path):
 
 def test_manifest_has_the_documented_shape(store):
     m = build_manifest(store["corpus"], "eic", [store["csv"]], source_root=store["src"])
-    assert m["schema"] == 1 and m["corpus"] == "eic" and m["resolution"] == 25
+    assert m["schema"] == L.SCHEMA_VERSION == 2 and m["corpus"] == "eic" and m["resolution"] == 25
     assert m["kinds"] == ["counts", "peaks", "pval"]
     assert m["genome"]["n_bins"] == N_BINS
     assert m["genome"]["build"] is None and m["genome"]["fasta_sha256"] is None  # no dna.h5 yet
@@ -68,8 +68,14 @@ def test_manifest_has_the_documented_shape(store):
     assert h["run_type"] == "single-ended" and h["assembly"] == "GRCh38"
     assert h["platform"] == "Illumina HiSeq 2500" and h["lab"] == "Synthetic Lab"
     assert h["pval_clip_frac"] == 0.0 and h["npz_depth"] == 24684534
+    # D25/D27 — the manifest ALONE must answer "what are the units of this pval track". Before t24
+    # a consumer had to open the h5 and read a `scale` that did not say which codec produced it.
+    assert h["pval_scale"] == 2000 and h["pval_transform"] == "arcsinh"
     assert h["kinds"] == ["counts", "peaks", "pval"]
-    assert tracks["chipseq-control"]["kinds"] == ["counts"]
+    ctl = tracks["chipseq-control"]
+    assert ctl["kinds"] == ["counts"]
+    # A track with no pval layer claims no codec, rather than inheriting the file's.
+    assert ctl["pval_scale"] is None and ctl["pval_transform"] is None
 
 
 def test_write_manifest_lands_where_the_reader_looks(store):

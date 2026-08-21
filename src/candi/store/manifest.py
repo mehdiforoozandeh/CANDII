@@ -318,6 +318,12 @@ def build_manifest(
                     )
         clip = kinds.get("pval", {}).get(L.ATTR_PVAL_CLIP_FRAC)
         clip_tracks = list(kinds.get("pval", {}).get(L.ATTR_TRACKS, []))
+        # D25/D27 — the codec, carried through per track so the manifest ALONE answers "what are the
+        # units of this pval track". An absent `transform` attr is a schema-1 file and means
+        # `"linear"`, the same default `reader.BiosampleStore.pval` applies.
+        pval_scale = kinds.get("pval", {}).get(L.ATTR_SCALE)
+        pval_transform = kinds.get("pval", {}).get(
+            L.ATTR_TRANSFORM, L.PVAL_TRANSFORM_LINEAR if "pval" in kinds else None)
         npz_depth = kinds.get("counts", {}).get(L.ATTR_NPZ_DEPTH)
         counts_tracks = list(kinds.get("counts", {}).get(L.ATTR_TRACKS, []))
 
@@ -379,6 +385,9 @@ def build_manifest(
             rec["pval_clip_frac"] = (
                 clip[clip_tracks.index(track)] if clip and track in clip_tracks else None
             )
+            has_pval = track in clip_tracks
+            rec["pval_scale"] = int(pval_scale) if has_pval and pval_scale is not None else None
+            rec["pval_transform"] = str(pval_transform) if has_pval and pval_transform else None
             rec["kinds"] = [k for k in L.KINDS if k in kinds and track in list(kinds[k][L.ATTR_TRACKS])]
             records.append(rec)
 
@@ -440,9 +449,14 @@ def write_manifest(corpus_root: Path | str, manifest: Mapping[str, Any]) -> Path
 def verify_store(corpus_root: Path | str) -> list:
     """Structural check of a built corpus against its own manifest. Returns a list of problems.
 
-    Empty list means the store is self-consistent: every file the manifest names exists, carries
-    schema 1, agrees on resolution and track order, and every chromosome dataset has exactly the
-    `(n_bins, n_tracks)` shape and the dtype its attrs claim.
+    Empty list means the store is self-consistent: every file the manifest names exists, carries a
+    SUPPORTED schema, agrees on resolution and track order, and every chromosome dataset has exactly
+    the `(n_bins, n_tracks)` shape and the dtype its attrs claim.
+
+    "Supported", not "the current version": D27 bumped the schema for the pval codec alone, and t25
+    rebuilds only `pval.h5`, so a correct corpus is mixed by construction. What IS required of a
+    schema-2 pval file is that it name its `transform` — a file whose units cannot be recovered is a
+    problem whatever its version says.
     """
     corpus_root = Path(corpus_root)
     problems: list = []
@@ -450,8 +464,9 @@ def verify_store(corpus_root: Path | str) -> list:
     if not mpath.is_file():
         return [f"{mpath}: missing — run `build-manifest` first"]
     manifest = json.loads(mpath.read_text(encoding="utf-8"))
-    if manifest.get("schema") != L.SCHEMA_VERSION:
-        problems.append(f"{mpath}: schema {manifest.get('schema')} != {L.SCHEMA_VERSION}")
+    if manifest.get("schema") not in L.SUPPORTED_SCHEMA_VERSIONS:
+        problems.append(f"{mpath}: schema {manifest.get('schema')} is not one of "
+                        f"{list(L.SUPPORTED_SCHEMA_VERSIONS)}")
     n_bins = {c: int(n) for c, n in manifest.get("genome", {}).get("n_bins", {}).items()}
     resolution = manifest.get("resolution")
 
@@ -464,8 +479,16 @@ def verify_store(corpus_root: Path | str) -> list:
                 continue
             with h5py.File(p, "r") as f:
                 a = L.read_root_attrs(f)
-                if a.get(L.ATTR_SCHEMA) != L.SCHEMA_VERSION:
-                    problems.append(f"{p}: schema {a.get(L.ATTR_SCHEMA)}")
+                # D27 — MEMBERSHIP, not equality. t25 rebuilds only the pval layer, so a valid
+                # corpus carries schema-2 pval.h5 beside schema-1 counts.h5 and peaks.h5. An
+                # equality check here would have made a codec bump a whole-corpus rebuild of every
+                # kind, which is a much larger and entirely unnecessary operation.
+                if a.get(L.ATTR_SCHEMA) not in L.SUPPORTED_SCHEMA_VERSIONS:
+                    problems.append(f"{p}: schema {a.get(L.ATTR_SCHEMA)} is not one of "
+                                    f"{list(L.SUPPORTED_SCHEMA_VERSIONS)}")
+                if kind == "pval" and a.get(L.ATTR_SCHEMA) == 2 and not a.get(L.ATTR_TRANSFORM):
+                    problems.append(f"{p}: schema 2 pval with no {L.ATTR_TRANSFORM!r} attr — the "
+                                    f"units are unrecoverable (D27)")
                 if a.get(L.ATTR_RESOLUTION) != resolution:
                     problems.append(f"{p}: resolution {a.get(L.ATTR_RESOLUTION)} != {resolution}")
                 if a.get(L.ATTR_BIOSAMPLE) != name:

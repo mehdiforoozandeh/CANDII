@@ -56,6 +56,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="skip the D7 max scan and force this dtype")
     b.add_argument("--pval-nan", default="error", choices=["error", "zero"],
                    help="what to do with a non-finite -log10 p (default: refuse)")
+    # D25/D29 — flags, not an edit, so a rebuild at a different codec is a submit line. They default
+    # to the shipped codec; t25's job script passes both EXPLICITLY anyway, so the choice lands in
+    # all 455 sbatch logs instead of being a default someone has to go and measure afterwards.
+    b.add_argument("--pval-scale", type=int, default=L.PVAL_SCALE,
+                   help=f"integer codes per unit of the transformed -log10 p (default "
+                        f"{L.PVAL_SCALE}). With --pval-transform arcsinh this is a FLAT relative "
+                        f"precision of 1/(2*scale) = {1 / (2 * L.PVAL_SCALE):.1e}.")
+    b.add_argument("--pval-transform", default=L.PVAL_TRANSFORM, choices=list(L.PVAL_TRANSFORMS),
+                   help=f"pval storage codec (default {L.PVAL_TRANSFORM}). 'linear' is the pre-D25 "
+                        f"codec whose ceiling is 65535/scale — at scale 100 that is 655.35, which "
+                        f"truncated 62 of the EIC corpus's 363 tracks. Recorded in the file's "
+                        f"'{L.ATTR_TRANSFORM}' root attr; the reader inverts whatever it finds.")
     b.add_argument("--overwrite", action="store_true")
 
     g = sub.add_parser("build-genome", help="FASTA -> dna.h5 ; dna.h5 + blacklist -> mask.h5 (t7)")
@@ -114,11 +126,17 @@ def _cmd_build_biosample(args) -> int:
             counts_dtype=args.counts_dtype,
             nan_policy=args.pval_nan,
             overwrite=args.overwrite,
+            pval_scale=args.pval_scale,
+            pval_transform=args.pval_transform,
         )
         for kind, info in summary["kinds"].items():
+            codec = (f", codec={info['pval_transform']}x{info['pval_scale']}"
+                     f" (ceiling {L.pval_max_encodable(info['pval_scale'], info['pval_transform']):.3g}"
+                     f", clipped {max(info['pval_clip_frac'] or [0.0]):.3g})"
+                     if kind == "pval" else "")
             print(
                 f"{name}/{kind}: {len(info['tracks'])} tracks x {len(info['chroms'])} chroms, "
-                f"{info['dtype']}, control_col={info['control_col']}, "
+                f"{info['dtype']}, control_col={info['control_col']}{codec}, "
                 f"{info['bytes'] / 1e6:.1f} MB -> {info['path']}",
                 flush=True,
             )

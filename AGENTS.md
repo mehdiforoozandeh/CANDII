@@ -63,7 +63,11 @@ ENCODE-side reader. `reference_sample.py` (191) derives and asserts the assay or
 
 `layout.py` owns every on-disk rule in one place — paths, chunking, the per-file counts dtype, the
 fixed-point pval codec, the floor `n_bins` rule — and is the only module here that does not import
-h5py. `writer.py` turns one biosample's npz tree into `counts/peaks/pval.h5`; `manifest.py` builds
+h5py. **pval is stored TRANSFORMED and the reader inverts it**: `round(arcsinh(-log10 p) * 2000)` in
+`uint16` (D25), decoded back to `-log10 p` by `BiosampleStore.pval`, so the codec is invisible above
+`reader.py` and no caller changed when it landed. The codec is read off the file's own `scale` and
+`transform` attrs, never off this package's defaults — that is what lets a schema-1 file (linear
+×100, ceiling 655.35) still decode correctly, and it is the only back-compat there is. `writer.py` turns one biosample's npz tree into `counts/peaks/pval.h5`; `manifest.py` builds
 `manifest.json` with the metadata CSVs as authority; `genome.py` builds `dna.h5` and `mask.h5` and
 owns window eligibility; `reader.py` is the `CorpusStore → BiosampleStore → TrackView` API;
 `regime.py` parses the regime file and generates the window plan; `dataset.py` is `StoreDataset`.
@@ -268,6 +272,21 @@ python -m candi.store verify          --corpus-root <…/eic>
 spec (invariant 13) and sizing justified against t9's measured worst case. Every store command needs
 torch, `build-genome` included — `candi/__init__.py` imports the encoder eagerly, so a torch-free
 venv cannot run any of them.
+
+**Read the pval codec off the file, never off the code.** `layout.PVAL_SCALE` is what the writer
+will use *next*; what a given file used is in its own root attrs, and the two differ on any store
+built before t25:
+
+```bash
+python - <<'PY'
+import h5py
+with h5py.File("<corpus>/biosamples/<BIOS>/pval.h5") as f:
+    print(f.attrs["schema"], f.attrs["scale"], f.attrs.get("transform", "linear (schema 1)"))
+PY
+```
+
+`arcsinh` + `2000` is D25; an absent `transform` is schema 1 and means linear, whose ceiling was
+655.35. `manifest.json` republishes both per track as `pval_scale` / `pval_transform`.
 
 ---
 
