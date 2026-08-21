@@ -10,6 +10,7 @@ in `run.json`, so one store serves every regime.
   "store": "/…/CANDI_STORE/eic",
   "assays": ["ATAC-seq", "DNase-seq", "H3K4me3"],
   "biosamples": {"train": ["T_…"], "eval": ["V_…", "B_…"]},
+  "eval_pairs": [["T_…", "V_…"], ["T_…", "B_…"]],
   "context_bins": 768,
   "train_chroms": ["chr19"],
   "eval_chroms": ["chr21"],
@@ -34,6 +35,13 @@ Two decisions carry the weight:
   cumulative-sum implementation when `genome.py` is not importable yet.
 * **D23 — the default DSF policy is discrete `{1, 2, 4, 8}`**, for continuity with the existing
   configs. `{"policy": "loguniform", "min": 1, "max": 8}` is the continuous version.
+* **D31 (t14) — `eval_pairs` is DECLARED, never inferred.** An imputation evaluation prompts with
+  one biosample and scores against a *different* one that holds the held-out assays. The old bake
+  found the second by string surgery on the first (`T_X` → `V_X` / `B_X`,
+  `dataset.py::_all_imp_biosamples`), which D16 forbids here — store biosample names are opaque ids
+  and nothing may parse them. So the pairing is a list of `[input, target]` in the regime. It is
+  OPTIONAL: without it the eval split iterates `biosamples.eval` exactly as it did before t14 and
+  emits no imputation keys, which is the training-only mode `train.py` already documents.
 """
 from __future__ import annotations
 
@@ -68,6 +76,42 @@ _SPLITS = ("train", "eval")
 
 class RegimeError(StoreError):
     """A malformed regime file, or one that does not match the store it points at."""
+
+
+def _parse_eval_pairs(obj: Any) -> Tuple[Tuple[str, str], ...]:
+    """D31 — `[[input, target], …]`, or `[{"input": …, "target": …}, …]`. Both spellings, one shape.
+
+    A pair whose two halves are the same name is refused rather than ignored: scoring a biosample
+    against itself is an identity copy, and it is the exact mistake this list exists to make
+    impossible to arrive at by accident.
+    """
+    if obj is None:
+        return ()
+    if not isinstance(obj, (list, tuple)):
+        raise RegimeError("regime.eval_pairs must be a list of [input, target] pairs")
+    out: List[Tuple[str, str]] = []
+    for i, item in enumerate(obj):
+        if isinstance(item, Mapping):
+            missing = [k for k in ("input", "target") if k not in item]
+            if missing:
+                raise RegimeError(f"regime.eval_pairs[{i}] is missing key(s) {missing}")
+            a, b = str(item["input"]), str(item["target"])
+        elif isinstance(item, (list, tuple)) and len(item) == 2:
+            a, b = str(item[0]), str(item[1])
+        else:
+            raise RegimeError(
+                f"regime.eval_pairs[{i}] must be [input, target] or "
+                f'{{"input": …, "target": …}}; got {item!r}'
+            )
+        if a == b:
+            raise RegimeError(
+                f"regime.eval_pairs[{i}] pairs {a!r} with itself. The target supplies the ground "
+                f"truth for assays the input does not have; the same biosample supplies neither."
+            )
+        if (a, b) in out:
+            raise RegimeError(f"regime.eval_pairs[{i}] repeats the pair ({a!r}, {b!r})")
+        out.append((a, b))
+    return tuple(out)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -194,6 +238,8 @@ class Regime:
     context_bins: int
     train_biosamples: Tuple[str, ...] = ()
     eval_biosamples: Tuple[str, ...] = ()
+    #: D31 — `((input, target), …)`. Empty means "no imputation evaluation", not "derive it".
+    eval_pairs: Tuple[Tuple[str, str], ...] = ()
     train_chroms: Tuple[str, ...] = ()
     eval_chroms: Tuple[str, ...] = ()
     window_plan: WindowPlan = field(default_factory=WindowPlan)
@@ -235,6 +281,8 @@ class Regime:
         if unknown:
             raise RegimeError(f"regime.biosamples has unknown split(s) {unknown}; expected {list(_SPLITS)}")
 
+        pairs = _parse_eval_pairs(obj.get("eval_pairs"))
+
         ctx = int(obj["context_bins"])
         if ctx <= 0:
             raise RegimeError(f"regime.context_bins must be positive, got {ctx}")
@@ -252,6 +300,7 @@ class Regime:
             context_bins=ctx,
             train_biosamples=tuple(str(b) for b in bios.get("train", ())),
             eval_biosamples=tuple(str(b) for b in bios.get("eval", ())),
+            eval_pairs=pairs,
             train_chroms=tuple(str(c) for c in obj.get("train_chroms", ())),
             eval_chroms=tuple(str(c) for c in obj.get("eval_chroms", ())),
             window_plan=WindowPlan.from_obj(obj.get("window_plan")),
@@ -282,6 +331,7 @@ class Regime:
             "store": self.store,
             "assays": list(self.assays),
             "biosamples": {"train": list(self.train_biosamples), "eval": list(self.eval_biosamples)},
+            "eval_pairs": [list(p) for p in self.eval_pairs],
             "context_bins": self.context_bins,
             "train_chroms": list(self.train_chroms),
             "eval_chroms": list(self.eval_chroms),
@@ -307,6 +357,33 @@ class Regime:
             raise RegimeError(f"unknown split {split!r}; expected one of {list(_SPLITS)}")
         return self.train_chroms if split == "train" else self.eval_chroms
 
+    @property
+    def has_eval_pairs(self) -> bool:
+        """D31 — whether this regime declares an imputation evaluation at all."""
+        return bool(self.eval_pairs)
+
+    @property
+    def eval_inputs(self) -> Tuple[str, ...]:
+        """The prompt biosamples, deduplicated, in declaration order.
+
+        This is the eval-split pool when `eval_pairs` is set: the model is prompted with these and
+        scored against their partners. Without pairs the pool is `biosamples.eval`, as before t14.
+        """
+        seen: List[str] = []
+        for a, _ in self.eval_pairs:
+            if a not in seen:
+                seen.append(a)
+        return tuple(seen)
+
+    @property
+    def eval_targets(self) -> Tuple[str, ...]:
+        """The ground-truth biosamples, deduplicated, in declaration order."""
+        seen: List[str] = []
+        for _, b in self.eval_pairs:
+            if b not in seen:
+                seen.append(b)
+        return tuple(seen)
+
     def assay_columns(self, tracks: Sequence[str]) -> List[int]:
         """D14 — the declared assay order as column indices into a file's storage order.
 
@@ -331,6 +408,8 @@ class Regime:
         *some* biosamples have is the normal case the loader fills with `MISSING`.
         """
         names = list(self.train_biosamples) + list(self.eval_biosamples)
+        for a, b in self.eval_pairs:
+            names.extend((a, b))
         if not names:
             names = list(corpus.biosamples)
         absent = [b for b in names if b not in corpus]
@@ -363,6 +442,15 @@ class Regime:
             raise RegimeError(
                 f"train_chroms and eval_chroms share {sorted(overlap)} — an eval window that also "
                 f"trained is not an evaluation."
+            )
+        # D31 — a target that also trains is not held out. The INPUT is allowed to be a training
+        # biosample and normally is: the imputation prompt is exactly a biosample the model knows.
+        leaked = sorted(set(self.eval_targets) & set(self.train_biosamples))
+        if leaked:
+            raise RegimeError(
+                f"eval_pairs name {leaked} as imputation target(s), but they are also in "
+                f"biosamples.train. The target holds the ground truth being scored; a target the "
+                f"model trained on is not an imputation."
             )
         for kind in self.kinds:
             without = [b for b in names if kind not in corpus[b].kinds]

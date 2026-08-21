@@ -253,3 +253,73 @@ def test_window_plan_defaults_to_non_overlapping_tiles():
     wp = WindowPlan.from_obj(None)
     assert wp.type == "tile" and wp.stride(768) == 768
     assert wp.min_valid_frac == DEFAULT_MIN_VALID_FRAC
+
+
+# ---------------------------------------------------------------------------------------------
+# t14 / D31 — eval_pairs
+# ---------------------------------------------------------------------------------------------
+# The bake finds the imputation target by string surgery on the prompt's name (T_X -> V_X / B_X).
+# D16 makes store biosample names opaque ids, so here the pairing is DECLARED. These pin the two
+# things a declaration has to buy over a derivation: it can be wrong in ways a validator catches,
+# and it is absent by default.
+
+
+def test_eval_pairs_default_to_empty_which_means_no_imputation_eval(store):
+    r = Regime.from_dict(regime_dict(store))
+    assert r.eval_pairs == () and not r.has_eval_pairs
+    assert r.eval_inputs == () and r.eval_targets == ()
+
+
+def test_eval_pairs_accept_both_spellings_and_round_trip(store):
+    a = Regime.from_dict(regime_dict(store, eval_pairs=[["T_aa", "V_aa"]]))
+    b = Regime.from_dict(regime_dict(
+        store, eval_pairs=[{"input": "T_aa", "target": "V_aa"}]))
+    assert a.eval_pairs == b.eval_pairs == (("T_aa", "V_aa"),)
+    assert a.has_eval_pairs and a.eval_inputs == ("T_aa",) and a.eval_targets == ("V_aa",)
+    assert Regime.from_dict(a.to_dict()).eval_pairs == a.eval_pairs
+
+
+def test_eval_inputs_and_targets_dedupe_in_declaration_order(store):
+    r = Regime.from_dict(regime_dict(
+        store, biosamples={"train": [], "eval": ["T_aa", "V_aa"]},
+        eval_pairs=[["T_aa", "V_aa"], ["V_aa", "T_aa"]]))
+    assert r.eval_inputs == ("T_aa", "V_aa")
+    assert r.eval_targets == ("V_aa", "T_aa")
+
+
+def test_a_biosample_paired_with_itself_is_refused(store):
+    """An identity copy dressed as an imputation — the one mistake the list exists to prevent."""
+    with pytest.raises(RegimeError, match="with itself"):
+        Regime.from_dict(regime_dict(store, eval_pairs=[["T_aa", "T_aa"]]))
+
+
+def test_a_repeated_pair_is_refused(store):
+    with pytest.raises(RegimeError, match="repeats the pair"):
+        Regime.from_dict(regime_dict(store, eval_pairs=[["T_aa", "V_aa"], ["T_aa", "V_aa"]]))
+
+
+@pytest.mark.parametrize("bad", [["T_aa"], "T_aa,V_aa", [{"input": "T_aa"}]])
+def test_a_malformed_eval_pair_names_itself(store, bad):
+    with pytest.raises(RegimeError, match="eval_pairs"):
+        Regime.from_dict(regime_dict(store, eval_pairs=[bad]))
+
+
+def test_a_target_that_also_trains_is_refused(store, corpus):
+    """The target holds the ground truth being scored; one the model trained on is not imputation.
+
+    The INPUT is deliberately allowed to be a training biosample — the imputation prompt is exactly
+    a biosample the model knows — so only one half of the pair is checked.
+    """
+    r = Regime.from_dict(regime_dict(
+        store, biosamples={"train": ["V_aa"], "eval": []}, eval_pairs=[["T_aa", "V_aa"]]))
+    with pytest.raises(RegimeError, match="also in"):
+        r.validate_against(corpus)
+    ok = Regime.from_dict(regime_dict(
+        store, biosamples={"train": ["T_aa"], "eval": ["V_aa"]}, eval_pairs=[["T_aa", "V_aa"]]))
+    ok.validate_against(corpus)
+
+
+def test_a_pair_naming_a_biosample_the_store_lacks_is_refused(store, corpus):
+    r = Regime.from_dict(regime_dict(store, eval_pairs=[["T_aa", "Z_nope"]]))
+    with pytest.raises(RegimeError, match="not in"):
+        r.validate_against(corpus)

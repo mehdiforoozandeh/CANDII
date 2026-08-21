@@ -200,6 +200,7 @@ A regime is a JSON object. Three keys are required; everything else has a defaul
 | `assays` | **yes** | **THE column order** (D14). No duplicates; `chipseq-control` is refused |
 | `context_bins` | **yes** | window length in bins; `768` bins = 19,200 bp at resolution 25 |
 | `biosamples.train` / `.eval` | no | the pool per split. Empty → `StoreDataset` falls back to every biosample in the store. Any key other than `train` / `eval` raises |
+| `eval_pairs` | no | D31 — `[[input, target], …]` (or `[{"input": …, "target": …}, …]`). The imputation evaluation, **declared**: prompt with `input`, score against `target`. Absent → no imputation keys and the pre-t14 eval loop. A pair with the same name twice, a repeated pair, or a `target` that is also in `biosamples.train` all raise |
 | `train_chroms` / `eval_chroms` | no | must be disjoint, and every name must be in the store. A split with no chromosomes raises when its windows are planned, not at parse time |
 | `window_plan.type` | no | `tile` is the only plan. An overlapping plan is a smaller stride, not another type |
 | `window_plan.stride_bins` | no | defaults to `context_bins` — non-overlapping tiles |
@@ -304,22 +305,37 @@ The run json records which path ran. On the store path that is, per `STORE_PLAN.
 The pre-t23 harness `cruxvault/results/train_ab/bench_ab.py` still runs and is still the right tool
 for an A/B against the old loader; it is no longer the only way to train off a store.
 
-#### A store-backed imputation eval scores nothing, and says nothing
+#### The imputation eval needs `eval_pairs`, and without it scores nothing silently
 
-**Symptom: none.** Drive `eval.py`'s scoring off a `StoreDataset` and it runs, writes its report,
-and the imputation arm is empty.
+**Symptom: none.** Drive `eval.py`'s scoring off a `StoreDataset` whose regime declares no
+`eval_pairs` and it runs, writes its report, and the imputation arm is empty.
 
-`StoreDataset` does not emit `y_data_imp`, `y_pval_imp`, `y_peaks_imp`, `y_meta_imp`,
-`imp_biosample_name` or `log_ref`. `eval.py` reads every one of them through `batch.get(...)`, so
-nothing raises — the imputation arm and `healthcheck.py`'s h74 reference arm simply degrade to
-nothing. **Do not score an imputation run off the store until task `t14` lands.** Training is
-unaffected; it never reads those keys.
+`eval.py` reads `y_data_imp`, `y_pval_imp`, `y_peaks_imp`, `y_meta_imp` and `imp_biosample_name`
+through `batch.get(...)`, so a batch without them raises nothing — the imputation arm just degrades
+to nothing. Since **t14** `StoreDataset` emits all five, but **only for a declared pair**: an
+imputation eval prompts with one biosample and scores against a *different* one holding the
+held-out assays, and the bake finds that second biosample by string surgery on the first (`T_X` →
+`V_X` / `B_X`), which D16 forbids here. So it is declared:
 
-`train.py --store` therefore **does not call `evaluate()` at all** and writes a run json with no
-`M1` / `M2` / `M3` / `S14` keys, rather than an `M1` pooled over zero targets — which reads in a
-json exactly like a finished evaluation. `--eval-every` is forced off for the same reason. Score a
-store-trained checkpoint by re-running `candi.eval --arch-from <run>.json` against a baked h5, or
-wait for `t14`.
+```json
+"biosamples": {"train": ["T_DND-41"], "eval": ["V_DND-41", "B_DND-41"]},
+"eval_pairs":  [["T_DND-41", "V_DND-41"], ["T_DND-41", "B_DND-41"]]
+```
+
+The eval split then iterates PAIRS, not biosamples: the pool is the inputs, `biosamples.eval` stays
+the list of held-out targets, and a target that also appears in `biosamples.train` raises. Training
+is unaffected either way — it never reads these keys.
+
+**`log_ref` is still not emitted.** It is the h74 reference table, which pins itself to an h5's
+fingerprint (`candi.reference.ReferenceTable`), which is also why `train.py` refuses `--reference
+on` on the store path. A store-backed reference is a separate question, not a key this loader can
+fill in.
+
+`train.py --store` still **does not call `evaluate()`** and writes a run json with no `M1` / `M2` /
+`M3` / `S14` keys rather than an `M1` pooled over zero targets — `eval.py`'s own dataset factory is
+h5-only and wiring it to a store is the remaining half of this. `--eval-every` is forced off for the
+same reason. For now, score a store-trained checkpoint by re-running `candi.eval --arch-from
+<run>.json` against a baked h5.
 
 #### `cell_cond` is refused, not defaulted
 

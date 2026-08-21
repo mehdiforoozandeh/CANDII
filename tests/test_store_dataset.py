@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from candi._vendored import CLOZE, MISSING
 from candi.store import layout as L
 from candi.store.layout import StoreError
-from candi.store.dataset import StoreDataset, stable_hash, thin_counts
+from candi.store.dataset import META_ROWS, StoreDataset, stable_hash, thin_counts
 from candi.store.reader import CorpusStore
 from candi.store.regime import Regime
 
@@ -422,3 +422,101 @@ def test_windows_come_from_the_regime_plan_not_the_store(store):
     assert b["x_data"].shape[1] == 128
     assert b["x_dna"].shape[1] == 128 * 25
     assert len(ds768._windows) == len(range(0, N_BINS["chr1"] - 128 + 1, 128))
+
+
+# ---------------------------------------------------------------------------------------------
+# t14 / D31 — the eval-only imputation keys
+# ---------------------------------------------------------------------------------------------
+# `eval.py` reads y_data_imp / y_pval_imp / y_peaks_imp / y_meta_imp / imp_biosample_name through
+# `batch.get(...)`, so a loader that omits them makes an imputation eval score nothing WITHOUT
+# raising. The synthetic store is built for this: `T_aa` has all three assays and a control, `V_aa`
+# has only DNase-seq and H3K4me3.
+
+IMP_KEYS = ("y_data_imp", "y_pval_imp", "y_peaks_imp", "y_meta_imp", "imp_biosample_name")
+
+
+def test_without_eval_pairs_nothing_changes(store):
+    """Additive: a regime written before t14 gets exactly the batch it always got."""
+    b = batches(make_ds(store, train=False, shuffle=False))[0]
+    for k in IMP_KEYS:
+        assert k not in b, f"{k} must not appear without a declared pair"
+
+
+def test_declared_eval_pairs_emit_all_five_keys(store):
+    ds = make_ds(store, train=False, shuffle=False,
+                 regime_over={"eval_pairs": [["T_aa", "V_aa"]]})
+    b = batches(ds)[0]
+    B, Lb, F = 2, CTX, len(ASSAYS)
+    assert b["biosample_name"] == "T_aa" and b["imp_biosample_name"] == "V_aa"
+    assert b["y_data_imp"].shape == (B, Lb, F)
+    assert b["y_pval_imp"].shape == (B, Lb, F)
+    assert b["y_peaks_imp"].shape == (B, Lb, F)
+    assert b["y_meta_imp"].shape == (B, META_ROWS, F)
+    # The fills are the bake's, and they are NOT the same value for all three: `eval.py` builds its
+    # imputation mask as `(y_avail <= 0) & (y_data_imp != -1)`, so -1 in y_data_imp means "the
+    # target does not have this assay" while 0 in y_pval_imp/y_peaks_imp is just an empty track.
+    atac = ASSAYS.index("ATAC-seq")                       # V_aa does not have it
+    dnase = ASSAYS.index("DNase-seq")                     # V_aa does
+    assert torch.all(b["y_data_imp"][:, :, atac] == float(MISSING))
+    assert torch.all(b["y_meta_imp"][:, :, atac] == float(MISSING))
+    assert torch.all(b["y_data_imp"][:, :, dnase] >= 0)
+    assert float(b["y_data_imp"][:, :, dnase].sum()) > 0
+    assert float(b["y_meta_imp"][0, 0, dnase]) != float(MISSING)
+
+
+def test_the_imputation_target_is_the_partner_not_the_prompt(store):
+    """The whole point of the pair: y_data_imp must be the TARGET's counts, not the input's."""
+    ds = make_ds(store, train=False, shuffle=False, dsf_sampling="off",
+                 regime_over={"eval_pairs": [["T_aa", "V_aa"]]})
+    b = batches(ds)[0]
+    dnase = ASSAYS.index("DNase-seq")
+    v = CorpusStore(store)["V_aa"]
+    for j, wi in enumerate(b["window_idx"].tolist()):
+        chrom, start = ds._windows[wi]
+        want = v.counts(chrom, start, start + CTX, assays=["DNase-seq"])[:, 0]
+        assert np.allclose(b["y_data_imp"][j, :, dnase].numpy(), want)
+    # and it is genuinely a different array from the prompt's own target
+    assert not torch.equal(b["y_data"][:, :, dnase], b["y_data_imp"][:, :, dnase])
+
+
+def test_the_eval_mask_eval_py_builds_is_non_empty_for_a_real_pair(store):
+    """`(y_avail <= 0) & (y_data_imp != -1)` — an assay the prompt lacks and the target has.
+
+    Prompting with `V_aa` (no ATAC-seq) against `T_aa` (has it) is the direction that produces an
+    imputation target at all, and it is what makes this key set worth emitting.
+    """
+    ds = make_ds(store, train=False, shuffle=False,
+                 regime_over={"biosamples": {"train": [], "eval": ["T_aa"]},
+                              "eval_pairs": [["V_aa", "T_aa"]]})
+    b = batches(ds)[0]
+    imp = (b["y_avail"] <= 0).unsqueeze(1).expand_as(b["y_data_imp"]) & (b["y_data_imp"] != -1)
+    assert int(imp.sum()) > 0
+    atac = ASSAYS.index("ATAC-seq")
+    assert bool(imp[:, :, atac].all()), "ATAC-seq is exactly the assay V_aa lacks and T_aa has"
+
+
+def test_every_declared_pair_gets_its_own_batches(store):
+    ds = make_ds(store, train=False, shuffle=False,
+                 regime_over={"biosamples": {"train": [], "eval": ["T_aa", "V_aa"]},
+                              "eval_pairs": [["T_aa", "V_aa"], ["V_aa", "T_aa"]]})
+    seen = {(b["biosample_name"], b["imp_biosample_name"]) for b in batches(ds)}
+    assert seen == {("T_aa", "V_aa"), ("V_aa", "T_aa")}
+
+
+def test_the_eval_surface_eval_py_reads_off_the_dataset(store):
+    """`build_eval_units` does its slot arithmetic through these three names."""
+    ds = make_ds(store, train=False, shuffle=False,
+                 regime_over={"biosamples": {"train": [], "eval": ["V_aa"]},
+                              "eval_pairs": [["T_aa", "V_aa"]]})
+    assert ds._bios_candidates() == ["T_aa"]
+    assert ds._all_imp_biosamples("T_aa") == ["V_aa"]
+    assert ds._all_imp_biosamples("V_aa") == []
+    assert len(ds._eval_indices) == len(ds._windows) > 0
+
+
+def test_a_target_is_read_but_never_prompted_with(store):
+    """It must not enter `biosample_pool`, or `depth_center` would average the held-out split in."""
+    ds = make_ds(store, train=False, shuffle=False,
+                 regime_over={"eval_pairs": [["T_aa", "V_aa"]]})
+    assert ds.biosample_pool == ["T_aa"] and ds.imp_targets == ["V_aa"]
+    assert "V_aa" in ds._meta, "the target still needs metadata, for y_meta_imp"

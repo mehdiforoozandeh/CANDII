@@ -248,11 +248,13 @@ Three things that will bite, all in `STORE.md` *Using the store*, which owns the
 
 - **`--regime` is NOT `--store`.** `--regime` is the *masking* regime (`type1` / `type2_loci`) and
   predates the store. `type2_loci` is h5-only and is refused with `--store`.
-- **A store run is training only.** `StoreDataset` does not emit `y_data_imp` / `y_pval_imp` /
-  `y_peaks_imp` / `y_meta_imp` / `imp_biosample_name` / `log_ref`, and `eval.py` reads all six
-  through `batch.get(...)` — so an imputation eval would score nothing and not say so (task `t14`).
-  `--store` therefore skips `evaluate()`, forces `--eval-every` off, and writes a run json with no
-  M1/M2/M3/S14 keys at all rather than empty ones.
+- **A store run is still training only.** Since `t14` `StoreDataset` emits the five imputation keys
+  (`y_data_imp` / `y_pval_imp` / `y_peaks_imp` / `y_meta_imp` / `imp_biosample_name`), but only when
+  the regime declares `eval_pairs` — D16 forbids deriving the `T_X` → `V_X` pairing from the name, so
+  it is written down. `log_ref` is not emitted: it is the h74 reference table, which pins itself to
+  an h5 fingerprint. `eval.py`'s own dataset factory is h5-only, so `--store` still skips
+  `evaluate()`, forces `--eval-every` off, and writes a run json with no M1/M2/M3/S14 keys at all
+  rather than empty ones.
 - **`--reference on` is refused** on the store path: the table pins itself to an h5 fingerprint.
 
 `cell_cond` is refused rather than defaulted (D16) — a ported training command that passes it stops,
