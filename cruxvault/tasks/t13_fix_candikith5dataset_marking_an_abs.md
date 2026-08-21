@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-19T12:49:05
-updated: 2026-08-19T12:49:05
+status: done
+created: "2026-08-19T12:49:05"
+updated: "2026-08-21T10:11:22"
 ---
 
 # t13 — fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1
@@ -24,7 +24,7 @@ dataset.py:406 computes control_avail = 1.0 if (control_data != 0).any(), and th
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- results/t13/DELIVERABLE.md — merged 2b7b723
 
 ## Evidence
 

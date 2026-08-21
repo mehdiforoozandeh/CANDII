@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-19T13:41:44
-updated: 2026-08-19T13:41:44
+status: done
+created: "2026-08-19T13:41:44"
+updated: "2026-08-21T10:11:22"
 ---
 
 # t16 — quantify the identity-copy leak the old bake's materialized DSF ladder gives the model
@@ -24,7 +24,7 @@ When x_dsf == y_dsf the old bake hands the model an input column that is the SAM
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- results/t16/REPORT.md — merged e0b5fb6
 
 ## Evidence
 

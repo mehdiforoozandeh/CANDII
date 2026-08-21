@@ -7,9 +7,9 @@ parent:
 blocked_by: t24
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-20T23:47:18
-updated: 2026-08-20T23:47:18
+status: done
+created: "2026-08-20T23:47:18"
+updated: "2026-08-21T10:11:22"
 ---
 
 # t25 — rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec
@@ -27,7 +27,7 @@ change, the doc updates, and the Fir jobs.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- results/t25/DELIVERABLE.md — 455/455 rebuilt, gate 55911214 rc=0; fixes merged 6d81f64
 
 ## Evidence
 

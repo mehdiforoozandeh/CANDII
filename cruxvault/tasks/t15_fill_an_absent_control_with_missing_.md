@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-19T12:49:05
-updated: 2026-08-19T12:49:05
+status: done
+created: "2026-08-19T12:49:05"
+updated: "2026-08-21T10:11:22"
 ---
 
 # t15 — fill an absent control with MISSING rather than 0 in StoreDataset
@@ -24,7 +24,7 @@ control_avail = 0 already makes it harmless, but 0 in control_meta[0] reads as l
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- results/t15/DELIVERABLE.md — merged df047d5
 
 ## Evidence
 

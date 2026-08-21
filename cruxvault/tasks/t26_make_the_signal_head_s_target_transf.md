@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-20T23:57:31
-updated: 2026-08-20T23:57:31
+status: done
+created: "2026-08-20T23:57:31"
+updated: "2026-08-21T10:11:22"
 ---
 
 # t26 — make the signal head's target transform a training-loop option (D30), not the loader's job
@@ -27,7 +27,7 @@ land first.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- results/t26/DELIVERABLE.md — merged abd9b31
 
 ## Evidence
 

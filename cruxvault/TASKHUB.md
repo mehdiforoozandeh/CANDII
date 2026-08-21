@@ -8,18 +8,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes
-- `t13` [implementation] fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1
-- `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref)
-- `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset
-- `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model
-- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec
-- `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF
+- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store
-
-## Blocked
-
-- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — blocked by `t14`
 
 ## By category
 
@@ -30,14 +21,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### implementation
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
-- `t13` [implementation] fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1 — *open*
-- `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref) — *open*
-- `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset — *open*
-- `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model — *open*
-- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *open*
-- `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *open*
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *open*
-- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *blocked*
+- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *open*
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store — *open*
 
 ## Done · Dropped
@@ -52,5 +37,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t10` [implementation] build the EIC store: 91 biosamples, counts + peaks + dna — *done* → `results/t10/t10_report.json`
 - `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `results/t11/t11_report.json`
 - `t12` [implementation] add the pval layer to both stores — *done* → `results/t12/t12_eic_report.json`
+- `t13` [implementation] fix CandiKitH5Dataset marking an absent control as available and feeding the model a channel of -1 — *done* → `results/t13/DELIVERABLE.md`
+- `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref) — *done* → `results/t14/DELIVERABLE.md`
+- `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset — *done* → `results/t15/DELIVERABLE.md`
+- `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model — *done* → `results/t16/REPORT.md`
 - `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `results/t23/DELIVERABLE.md`
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`
+- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *done* → `results/t25/DELIVERABLE.md`
+- `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *done* → `results/t26/DELIVERABLE.md`
