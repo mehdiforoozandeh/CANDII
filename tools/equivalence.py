@@ -289,6 +289,61 @@ NEW_BLOCKS = {
 }
 
 
+#: `AGENTS.md` §7.2, quoted with every number by rule. The floor governs comparing two RUNS; both
+#: sides of this report come from ONE checkpoint, so a delta here is a measurement difference and
+#: not a model difference. It is quoted anyway, because it is the scale that says which of these
+#: measurement differences would matter downstream: a key that moves by less than 0.09 will be
+#: invisible under the noise any real arm-vs-arm comparison already carries, and one that moves by
+#: more will not be.
+NOISE_FLOOR = {
+    "macro_crps_target_clustered": 0.09,
+    "per_comparison_uncertainty": 0.13,
+    "seed_change_moves_pooled_imp_crps": 0.1195,
+    "seed_change_moves_spearman": 0.0562,
+    "seed_change_moves_ece": 0.0354,
+    "effective_replication": "12 held-out targets / 5 biosample pairs / 4 cell types",
+}
+
+#: The rows a reader actually looks at: one old path, one new path, one number each. Everything
+#: else in the report is structure; this is the comparison.
+#:
+#: `crps` NEVER appears without `crps_oracle_scaled` and `scale_error` beside it (`AGENTS.md` §7.2),
+#: which is why they are adjacent here and why the renderer refuses to emit one without the others.
+HEADLINE: Tuple[Tuple[str, str, str], ...] = (
+    ("imputation macro CRPS", "M1.imp_macro_crps", "macro.count.crps"),
+    ("  ... oracle-scaled", "M1.imp_macro_crps_oracle_scaled", "macro.count.crps_oracle_scaled"),
+    ("  ... scale error", "M1.imp_macro_scale_error", "macro.count.scale_error"),
+    ("  ... marginal bar", "M1.imp_macro_marg_crps", "macro.count.marg_crps"),
+    ("imputation macro Spearman", "M1.imp_macro_spearman_raw", "macro.count.gwspear"),
+    ("imputation pooled ECE", "M1.imp.ece", "macro.count.ece"),
+    ("denoise macro CRPS", "M1.den_macro_crps", "macro_denoise.count.crps"),
+    ("  ... oracle-scaled", "", "macro_denoise.count.crps_oracle_scaled"),
+    ("  ... scale error", "", "macro_denoise.count.scale_error"),
+    ("denoise macro Spearman", "M1.den_macro_spearman_raw", "macro_denoise.count.gwspear"),
+    ("S14 frac_min_at_true", "S14.frac_min_at_true",
+     "C.C3_depth_counterfactual.frac_min_at_true"),
+    ("S14 frac_beats_told1", "S14.frac_beats_told1",
+     "C.C3_depth_counterfactual.frac_beats_told1"),
+    ("C1 tripwire (must be 0.0)", "M2.ablation_within_batch.depth.mean_d_crps",
+     "C.C1_use.depth.within_batch_d_crps"),
+    ("scored positions per track", "M1.imp.n_points", "macro.count.n_points"),
+)
+
+#: Emitted with no old counterpart, because there was none. The nine are the point of the whole
+#: suite: without them CANDI cannot be placed against the published field at all.
+HEADLINE_NEW: Tuple[Tuple[str, str], ...] = (
+    ("EIC mse", "macro.count.mse"), ("EIC gwcorr", "macro.count.gwcorr"),
+    ("EIC gwspear", "macro.count.gwspear"), ("EIC mseprom", "macro.count.mseprom"),
+    ("EIC msegene", "macro.count.msegene"), ("EIC mseenh", "macro.count.mseenh"),
+    ("EIC mse1obs", "macro.count.mse1obs"), ("EIC mse1imp", "macro.count.mse1imp"),
+    ("pval arm CRPS", "macro.pval.crps"), ("pval arm gwcorr", "macro.pval.gwcorr"),
+    ("pval arm mse", "macro.pval.mse"), ("C-index (count)", "macro.count.c_index"),
+    ("  ... its Monte-Carlo SE", "macro.count.c_index_se"),
+    ("95% coverage (count)", "macro.count.coverage_95"),
+    ("AUPRC", "macro.count.auprc"), ("peak base rate", "macro.count.peak_base_rate"),
+)
+
+
 # ---------------------------------------------------------------------------
 # mechanics
 # ---------------------------------------------------------------------------
@@ -374,9 +429,39 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
     L.append(f"**{len(claimed)} eval.py leaf keys**, every one claimed by a rule. "
              + ", ".join(f"{v}: {len(by_verdict[v])}" for v in by_verdict) + "\n")
     L.append("## The one mechanism that explains most of this table\n")
-    L.append(f"{SCOPE.capitalize()}.\n\nA key marked `moved` has the same formula and a different "
+    # NOT str.capitalize(): it lowercases everything after the first character, which turns
+    # "(T_, V_/B_)" into "(t_, v_/b_)" and "(D2)" into "(d2)".
+    L.append(f"{SCOPE[0].upper()}{SCOPE[1:]}.\n\nA key marked `moved` has the same formula and a different "
              f"population. Read every `moved` delta as a change of what the number is a mean over, "
              f"never as the model getting better or worse.\n")
+
+    L.append("\n## Headline — the same checkpoint, both suites\n")
+    L.append("| | eval.py | bench | delta |")
+    L.append("|---|---|---|---|")
+    for label, o, n in HEADLINE:
+        ov = _get(run, o) if o else None
+        nv = _get(bench, n)
+        d = (f"{nv - ov:+.6g}" if isinstance(ov, (int, float)) and isinstance(nv, (int, float))
+             and not isinstance(ov, bool) and not isinstance(nv, bool) else "—")
+        L.append(f"| {label} | {_fmt(ov)} | {_fmt(nv)} | {d} |")
+    L.append(f"\n**Read every delta against the noise floor** (`AGENTS.md` §7.2). "
+             f"Target-clustered floor on macro CRPS is **{NOISE_FLOOR['macro_crps_target_clustered']}**; "
+             f"per-comparison uncertainty **±{NOISE_FLOOR['per_comparison_uncertainty']}**; a "
+             f"single SEED change moves pooled imputation CRPS by "
+             f"**{NOISE_FLOOR['seed_change_moves_pooled_imp_crps']}**, Spearman by "
+             f"{NOISE_FLOOR['seed_change_moves_spearman']}, ECE by "
+             f"{NOISE_FLOOR['seed_change_moves_ece']}. Effective replication is "
+             f"{NOISE_FLOOR['effective_replication']}.\n\nBoth columns are the SAME checkpoint, so "
+             f"a delta here is a measurement difference and never a model difference. The floor is "
+             f"quoted because it is the scale that decides which of these measurement differences "
+             f"would survive contact with a real arm-vs-arm comparison.\n")
+
+    L.append("\n## What has no old number, because there was none\n")
+    L.append("| | bench |")
+    L.append("|---|---|")
+    for label, n in HEADLINE_NEW:
+        L.append(f"| {label} | {_fmt(_get(bench, n))} |")
+    L.append("")
 
     for v, title in (("dropped", "Dropped — no counterpart"),
                      ("replaced", "Replaced — a different instrument, the same question"),
@@ -403,18 +488,24 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
     for k, why in NEW_BLOCKS.items():
         L.append(f"- **{k}** — {why}")
 
-    L.append("\n## Open items — the two entries that should be argued, not accepted\n")
+    L.append("\n## Accepted losses — put to the PI, and ruled on\n")
+    L.append("Both were raised as capability the new suite does not carry, and both were accepted "
+             "on 2026-08-21. They are recorded here rather than dropped from the report, because "
+             "the difference between a loss that was decided and a loss nobody noticed is the "
+             "whole reason this document exists.\n")
     L.append("1. **The target-clustered bootstrap CIs are gone.** `M2.*.d_crps_clustered`, "
              "`direction_clustered`, `overall_clustered`, `single_clustered`, `paired_clustered`. "
              "C1's randomization test gives an exact p-value and needs no cluster correction, so "
-             "nothing is *wrong* — but an interval is not a p-value, and `_cluster_bootstrap_ci` "
-             "is still imported by `compare_arms.py` and `report_h74.py`. Whatever replaces it "
-             "must live somewhere those two can reach.")
+             "nothing here is wrong — but an interval is not a p-value, and the two are not "
+             "interchangeable for an arm-vs-arm claim. **Accepted.** The statistic itself survives "
+             "the cutover: it moved to `candi.stats.cluster_bootstrap_ci` ahead of it, so "
+             "`compare_arms.py` and `report_h74.py` keep working after `eval.py` is deleted.")
     L.append("2. **Clamp telemetry has no counterpart.** `log2_mu` is clamped in the decoder head, "
-             "and `M2.depth.*_clamp*` reported how often the depth sweep drove it into the clamp. "
-             "That is how a flat depth response can have a cause other than the model ignoring "
-             "depth. C3 reports monotonicity and dose-response correlation and would read a "
-             "clamp-saturated model as unresponsive without saying why.")
+             "and `M2.depth.*_clamp*` reported how often the depth sweep drove it into the clamp — "
+             "which is how a flat depth response can have a cause other than the model ignoring "
+             "depth. C3 reports monotonicity and dose-response correlation, and would read a "
+             "clamp-saturated model as unresponsive without saying why. **Accepted**, with the "
+             "consequence stated: a C3 near zero is 'no response', not 'no sensitivity'.")
     return "\n".join(L)
 
 

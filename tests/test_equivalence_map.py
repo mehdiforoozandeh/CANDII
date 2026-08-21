@@ -145,14 +145,44 @@ def test_no_rule_is_dead_against_the_real_key_set(tool, skeleton) -> None:
         f"unexpectedly live {sorted(DEN_MACROS_EVAL_PY_NEVER_COMPUTED - dead)}")
 
 
-def test_the_two_open_items_are_still_named(tool, skeleton) -> None:
-    """The report must not quietly lose the two entries the PI has to rule on.
+def test_the_two_accepted_losses_stay_in_the_report(tool, skeleton) -> None:
+    """A loss that was decided must keep reading differently from a loss nobody noticed.
 
-    Both are real capability losses, not bookkeeping: the target-clustered bootstrap CIs (whose
-    `_cluster_bootstrap_ci` still has live consumers in `compare_arms.py` and `report_h74.py`), and
-    the clamp telemetry that distinguishes "the model ignores depth" from "log2_mu saturated".
+    Both were put to the PI and accepted on 2026-08-21: the target-clustered bootstrap CIs, and the
+    clamp telemetry that distinguishes "the model ignores depth" from "log2_mu saturated". Accepting
+    them is not a reason to stop printing them — the report is the record that the trade was made
+    deliberately, and a future reader who finds a C3 near zero needs to know it means "no response"
+    rather than "no sensitivity".
     """
     text = tool.report(skeleton, {})
-    assert "Open items" in text
-    assert "clustered" in text and "clamp" in text
-    assert "d_crps_clustered" in text
+    assert "Accepted losses" in text and "ruled on" in text
+    assert "d_crps_clustered" in text and "clamp" in text
+    assert "candi.stats.cluster_bootstrap_ci" in text, (
+        "the report must say the statistic survived the cutover, or a reader will think it died "
+        "with eval.py")
+
+
+def test_the_headline_never_shows_a_crps_without_its_split(tool) -> None:
+    """`AGENTS.md` §7.2 — raw CRPS is never quoted alone, and the headline is where it would be.
+
+    Checked structurally rather than by eye: every headline row whose bench key ends in `.crps` must
+    be followed by that same block's `crps_oracle_scaled` and `scale_error`.
+    """
+    rows = list(tool.HEADLINE)
+    for i, (_label, _old, new) in enumerate(rows):
+        if not new.endswith(".crps"):
+            continue
+        block = new[: -len("crps")]
+        following = {r[2] for r in rows[i + 1: i + 4]}
+        assert f"{block}crps_oracle_scaled" in following, new
+        assert f"{block}scale_error" in following, new
+
+
+def test_the_noise_floor_is_quoted_with_the_numbers(tool, skeleton) -> None:
+    """§7.2 again: the floor travels with every number, so it must be in the rendered text."""
+    text = tool.report(skeleton, {})
+    assert "0.09" in text and "0.1195" in text
+    assert "12 held-out targets" in text
+    assert "same checkpoint" in text.lower(), (
+        "a reader must be told both columns are one checkpoint, or they will read a measurement "
+        "difference as the model changing")
