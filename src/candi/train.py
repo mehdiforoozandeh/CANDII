@@ -168,6 +168,17 @@ class DataSource:
     def label(self) -> str:
         return self.regime_path if self.is_store else str(self.h5_path)
 
+    def eval_pairs_declared(self) -> bool:
+        """Can this source supply imputation targets to score against?
+
+        On the store the pairing is DECLARED, in the regime's `eval_pairs` (D31), because D16 makes
+        biosample names opaque ids that nothing may parse. With none declared the eval split is a
+        plain held-out split with no imputation targets in it, and a mid-training eval would have
+        nothing to select on. The h5 derives its pairing by string surgery on the `T_`/`V_`/`B_`
+        prefixes, so it always has one.
+        """
+        return True if not self.is_store else bool(self.regime.eval_pairs)
+
     def provenance(self) -> dict:
         """What the run record keeps about the data. On the store path, STORE_PLAN.md §4 verbatim.
 
@@ -1191,10 +1202,11 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
             raise ValueError(
                 "--reference on is h5-only: the table is built from a baked h5 and pins itself to "
                 "that h5's fingerprint (`candi.reference.ReferenceTable`). Not yet a store thing.")
-        if eval_every:
-            print("[train] store path: --eval-every is OFF. `quick_eval` reads the baked h5's "
-                  "eval windows, and StoreDataset does not emit the eval-only batch keys (t14), so "
-                  "a mid-training eval would select the 'best' checkpoint on nothing.", flush=True)
+        if eval_every and not source.eval_pairs_declared():
+            print("[train] store path: --eval-every is OFF. This regime declares no `eval_pairs`, "
+                  "so the eval split has no imputation targets and a mid-training eval would "
+                  "select the 'best' checkpoint on nothing. Declare `eval_pairs` (D31) to turn it "
+                  "back on.", flush=True)
             eval_every = 0
     # Scale is read from the h5 (or from the regime file), never from a flag. `h5_cache_ram=False`
     # so this probe does not duplicate the shared RAM buffer that the full-coverage loop allocates.
@@ -1348,6 +1360,24 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
     curve: list = []
     best_path = (str(Path(ckpt_path).with_suffix(".best.ckpt")) if ckpt_path else None)
 
+    # OPENED ONCE, OUTSIDE THE HOOK, and re-iterated at every check (t28). Two reasons, and the
+    # second is the load-bearing one. Re-opening per check would re-read the store's manifest and
+    # re-plan the windows eight times a run for nothing; but more importantly, ONE dataset is what
+    # pins ONE window set across every epoch. `batches_per_pair` spaces its cycles deterministically,
+    # so a re-opened dataset would in fact land on the same windows — and relying on that is relying
+    # on two defaults agreeing. Selection compares epoch 6 against epoch 12, and that comparison is
+    # only paired if both saw the same positions.
+    #
+    # `dsf_sampling="off"` pins every level at 1, which is what the scorer has always done: a
+    # selection metric measured at one depth at epoch 6 and another at epoch 12 would select on the
+    # difference between the two.
+    eval_ds = None
+    if eval_every:
+        from candi.eval import eval_cell_cond
+        eval_ds = make_dataset(source, regime, train=False, batch_size=eval_batch_size,
+                               dsf_sampling="off", seed=seed, shuffle=False, h5_cache_ram=False,
+                               cell_cond=eval_cell_cond(model), reference=ref)
+
     def eval_hook(step, ep):
         from candi.eval import quick_eval
         model.eval()
@@ -1355,9 +1385,8 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
         # h64: the SAME transform in the mid-training eval, or best-checkpoint selection would be made
         # against a different objective than the arm trains on. `record=False` inside, so eval batches
         # never enter the training arm's own no-op fraction.
-        q = quick_eval(model, h5_path, device, regime=regime, batch_size=eval_batch_size,
-                       batches_per_pair=eval_batches_per_pair, fg_frac=fg_frac, seed=seed,
-                       reference=ref, meta_probe=mprobe)
+        q = quick_eval(model, eval_ds, device, batches_per_pair=eval_batches_per_pair,
+                       fg_frac=fg_frac, seed=seed, meta_probe=mprobe)
         q.update(epoch=ep, step=step, wall_s=round(time.time() - t0, 1))
         curve.append(q)
         improved = np.isfinite(q["V_imp_crps"]) and q["V_imp_crps"] < best["crps"]

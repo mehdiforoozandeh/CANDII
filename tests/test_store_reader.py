@@ -53,9 +53,9 @@ def _npz(path: Path, arr: np.ndarray) -> None:
     np.savez_compressed(path, whatever=arr)
 
 
-def _source_tree(root: Path) -> None:
+def _source_tree(root: Path, tracks_map=None) -> None:
     """`<root>/<BIOS>/<TRACK>/{signal_DSF1_res25,peaks_res25,signal_BW_res25}/chr*.npz`."""
-    for bi, (bios, tracks) in enumerate(TRACKS.items()):
+    for bi, (bios, tracks) in enumerate((tracks_map or TRACKS).items()):
         for ti, track in enumerate(tracks):
             tdir = root / bios / track
             tdir.mkdir(parents=True, exist_ok=True)
@@ -120,23 +120,29 @@ def _genome_layer(store_root: Path, *, seed: int = 7) -> None:
             f.create_dataset(chrom, data=m)
 
 
-def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=()) -> Path:
+def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None) -> Path:
     """Build a whole CANDI_STORE — source tree, two biosamples, manifest, genome layer.
 
     Returns the **corpus root** (`…/CANDI_STORE/eic`), which is what `CorpusStore` takes.
     `drop_meta` is a list of `(biosample, assay)` whose CSV row omits `read_length`, so the
     D19 "incomplete metadata" path has something to work on.
+
+    `tracks` overrides the `{biosample: assays}` layout. It defaults to `TRACKS`, where `V_aa` is a
+    strict SUBSET of `T_aa` — the layout that exercises MISSING. An imputation eval needs the
+    opposite (a prompt that lacks something the truth carries), and rather than hand-roll a second
+    store it passes its own layout through the same real writer. See `tests/test_store_eval_units`.
     """
+    layout = dict(tracks or TRACKS)
     src, store_root = tmp / "src", tmp / "CANDI_STORE"
     corpus_root = L.corpus_root(store_root, corpus)
-    _source_tree(src)
-    for bios in BIOSAMPLES:
+    _source_tree(src, layout)
+    for bios in layout:
         build_biosample(src, corpus_root, bios, chrom_sizes=CHROM_SIZES,
                         kinds=("counts", "peaks", "pval"))
     _genome_layer(store_root)
 
     rows = []
-    for bios, tracks in TRACKS.items():
+    for bios, tracks in layout.items():
         for track in tracks:
             readlen = "" if (bios, track) in drop_meta else "36"
             rows.append(
