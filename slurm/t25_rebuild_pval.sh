@@ -42,7 +42,10 @@ set -uo pipefail
 STORE=/project/def-maxwl/mforooz/CANDI_STORE
 CORPUS="${CORPUS:?set CORPUS=eic, merged or eic_slice}"
 SRC="${SRC:?set SRC=/project/6014832/mforooz/DATA_CANDI_EIC or ..._MERGED}"
-KIT=/home/mforooz/projects/def-maxwl/mforooz/CANDII
+# Overridable, and normally overridden. The shared clone at .../CANDII is whatever branch
+# someone is working on; a 455-file rebuild must run from a checkout PINNED to the commit
+# whose codec it is applying, or "which code built this file" is unanswerable afterwards.
+KIT="${KIT:-/home/mforooz/projects/def-maxwl/mforooz/CANDII}"
 LIST="${LIST:-$STORE/t25/${CORPUS}_biosamples.txt}"
 PVAL_SCALE="${PVAL_SCALE:-2000}"
 PVAL_TRANSFORM="${PVAL_TRANSFORM:-arcsinh}"
