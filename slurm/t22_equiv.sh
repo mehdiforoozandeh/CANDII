@@ -32,7 +32,9 @@ KIT="${KIT:-$HOME/projects/def-maxwl/$USER/CANDII}"
 VENV="${VENV:-$HOME/projects/def-maxwl/$USER/candi_venv}"
 H5="${H5:-/scratch/$USER/candi_kit/q19.h5}"
 OUT="${OUT:-/scratch/$USER/candi_kit/runs_t22}"
-TAG="${TAG:-t22_on_s0}"
+SEED="${SEED:-0}"
+# TAG defaults to the seed, so a second seed cannot overwrite the first by forgetting a variable.
+TAG="${TAG:-t22_on_s$SEED}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -40,7 +42,7 @@ export MPLBACKEND=Agg WANDB_MODE=disabled
 module load StdEnv/2023 python/3.10.13 >/dev/null 2>&1
 source "$VENV/bin/activate" || { echo "[error] no venv at $VENV" >&2; exit 1; }
 cd "$KIT"; mkdir -p "$OUT"
-echo "[t22] mode=$MODE tag=$TAG host=$(hostname) commit=$(git rev-parse --short HEAD)"
+echo "[t22] mode=$MODE tag=$TAG seed=$SEED host=$(hostname) commit=$(git rev-parse --short HEAD)"
 nvidia-smi -L || true
 
 if [ "$MODE" = "train" ]; then
@@ -53,7 +55,7 @@ if [ "$MODE" = "train" ]; then
   # measurement rather than a variant invented for this comparison.
   python -m candi.train \
     --h5 "$H5" --out-dir "$OUT" \
-    --offset on --seed 0 --tag "$TAG" \
+    --offset on --seed "$SEED" --tag "$TAG" \
     --heads count,signal \
     --weight-decay 0.0 \
     --dsf-sampling uniform --epochs 25 --batch-size 8 --full-coverage \
@@ -77,7 +79,7 @@ elif [ "$MODE" = "bench" ]; then
     --h5 "$H5" --ckpt "$OUT/$TAG.ckpt" --arch-from "$OUT/$TAG.json" \
     --out "$OUT/$TAG.$BENCH_TAG.json" \
     --heads count,signal --kinds impute,denoise --blocks E,P,D,B,C \
-    --seed 0 --batch-windows 8 ${EXTRA[@]+"${EXTRA[@]}"}
+    --seed "$SEED" --batch-windows 8 ${EXTRA[@]+"${EXTRA[@]}"}
   rc=$?
 else
   echo "[error] mode must be train or bench, got '$MODE'" >&2; exit 2
