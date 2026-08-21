@@ -84,6 +84,24 @@ sbatch --export=ALL,KIT=$KIT,CORPUS=merged,SRC=/project/6014832/mforooz/DATA_CAN
        $KIT/slurm/t25_manifest.sh
 ```
 
+## 2b. Chain D and E instead of babysitting them
+
+Both take a SLURM dependency, so the whole pipeline can be submitted at once and left alone. This
+is what was actually done on 2026-08-21:
+
+```bash
+D1=$(sbatch --parsable --dependency=afterok:<A> --export=ALL,KIT=$KIT,CORPUS=eic,...     $KIT/slurm/t25_manifest.sh)
+D2=$(sbatch --parsable --dependency=afterok:<B> --export=ALL,KIT=$KIT,CORPUS=merged,...  $KIT/slurm/t25_manifest.sh)
+D3=$(sbatch --parsable --dependency=afterok:<C> --export=ALL,KIT=$KIT,CORPUS=eic_slice,... $KIT/slurm/t25_manifest.sh)
+E=$(sbatch  --parsable --dependency=afterok:$D1:$D2:$D3 --export=ALL,KIT=$KIT $KIT/slurm/t25_gate.sh)
+```
+
+`afterok` and not `after`: a manifest built over a half-failed array would be a manifest that
+faithfully describes a broken corpus, which is worse than no manifest.
+
+The `--metadata-csv` flags are recoverable from the corpus itself rather than from memory — each
+`manifest.json` records the CSVs it was built from under `metadata_csvs`.
+
 ## 3. The gate (job E)
 
 `tools/pval_codec_scan.py` **is** `PVAL_CODEC_PLAN.md` §6. It exits 0 only when every file is at
