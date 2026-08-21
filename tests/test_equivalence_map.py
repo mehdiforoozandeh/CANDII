@@ -173,7 +173,8 @@ def test_the_headline_never_shows_a_crps_without_its_split(tool) -> None:
     be followed by that same block's `crps_oracle_scaled` and `scale_error`.
     """
     rows = list(tool.HEADLINE)
-    for i, (_label, _old, new) in enumerate(rows):
+    for i, row in enumerate(rows):
+        new = row[2]                    # rows may carry a 4th element: a not-like-for-like note
         if not new.endswith(".crps"):
             continue
         block = new[: -len("crps")]

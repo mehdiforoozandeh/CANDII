@@ -319,13 +319,15 @@ NOISE_FLOOR = {
 #:
 #: `crps` NEVER appears without `crps_oracle_scaled` and `scale_error` beside it (`AGENTS.md` §7.2),
 #: which is why they are adjacent here and why the renderer refuses to emit one without the others.
-HEADLINE: Tuple[Tuple[str, str, str], ...] = (
+HEADLINE: Tuple[Tuple[str, ...], ...] = (
     ("imputation macro CRPS", "M1.imp_macro_crps", "macro.count.crps"),
     ("  ... oracle-scaled", "M1.imp_macro_crps_oracle_scaled", "macro.count.crps_oracle_scaled"),
     ("  ... scale error", "M1.imp_macro_scale_error", "macro.count.scale_error"),
     ("  ... marginal bar", "M1.imp_macro_marg_crps", "macro.count.marg_crps"),
     ("imputation macro Spearman", "M1.imp_macro_spearman_raw", "macro.count.gwspear"),
-    ("imputation pooled ECE", "M1.imp.ece", "macro.count.ece"),
+    ("imputation pooled ECE", "M1.imp.ece", "macro.count.ece",
+     "not like-for-like: eval.py pooled every position of every track into ONE calibration curve, "
+     "so a deep track dominated it; bench calibrates each track and means the tracks (D4)."),
     ("denoise macro CRPS", "M1.den_macro_crps", "macro_denoise.count.crps"),
     ("  ... oracle-scaled", "", "macro_denoise.count.crps_oracle_scaled"),
     ("  ... scale error", "", "macro_denoise.count.scale_error"),
@@ -336,7 +338,11 @@ HEADLINE: Tuple[Tuple[str, str, str], ...] = (
      "C.C3_depth_counterfactual.frac_beats_told1"),
     ("C1 tripwire (must be 0.0)", "M2.ablation_within_batch.depth.mean_d_crps",
      "C.C1_use.depth.within_batch_d_crps"),
-    ("scored positions per track", "M1.imp.n_points", "macro.count.n_points"),
+    ("scored positions", "M1.imp.n_points", "macro.count.n_points",
+     "DIFFERENT FOOTINGS, so no delta is shown. eval.py's is the POOLED length of the concatenated "
+     "arrays over every imputation track, after `--eval-budget` subsampling. bench's is the mean "
+     "PER TRACK, and equals the eval chromosome entire. Divided out, the two give the position "
+     "scope as a fraction -- see under the table."),
 )
 
 #: Emitted with no old counterpart, because there was none. The nine are the point of the whole
@@ -449,8 +455,18 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
              "mechanism. A wrong-sized model would break that claim only if a key were missing, "
              "and a missing key is exactly what the coverage gate refuses.\n"
              if cfg else "")
-    L.append(f"**{len(claimed)} eval.py leaf keys**, every one claimed by a rule. "
-             + ", ".join(f"{v}: {len(by_verdict[v])}" for v in by_verdict) + "\n")
+    # Keys AND rules. A per-assay panel of 8 assays x 20 fields x 2 halves is 320 keys and one
+    # decision; quoting only the key count makes a tidy cutover read like a massacre.
+    n_rules = {v: len({r.old for _, r, _, _ in by_verdict[v]}) for v in by_verdict}
+    L.append(f"**{len(claimed)} eval.py leaf keys**, every one claimed by a rule, under "
+             f"{sum(n_rules.values())} rules:\n")
+    L.append("| verdict | rules | keys |")
+    L.append("|---|---:|---:|")
+    for v in by_verdict:
+        L.append(f"| `{v}` | {n_rules[v]} | {len(by_verdict[v])} |")
+    L.append("\nRead the RULES column. One rule is one decision; the key count is how many "
+             "cells that decision covers, and a panel of 8 assays x 20 fields x 2 halves is 320 "
+             "keys and a single call.\n")
     L.append("## The one mechanism that explains most of this table\n")
     # NOT str.capitalize(): it lowercases everything after the first character, which turns
     # "(T_, V_/B_)" into "(t_, v_/b_)" and "(D2)" into "(d2)".
@@ -461,12 +477,29 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
     L.append("\n## Headline — the same checkpoint, both suites\n")
     L.append("| | eval.py | bench | delta |")
     L.append("|---|---|---|---|")
-    for label, o, n in HEADLINE:
+    for row in HEADLINE:
+        label, o, n = row[0], row[1], row[2]
+        note = row[3] if len(row) > 3 else None
         ov = _get(run, o) if o else None
         nv = _get(bench, n)
-        d = (f"{nv - ov:+.6g}" if isinstance(ov, (int, float)) and isinstance(nv, (int, float))
-             and not isinstance(ov, bool) and not isinstance(nv, bool) else "—")
-        L.append(f"| {label} | {_fmt(ov)} | {_fmt(nv)} | {d} |")
+        if note:
+            d = note                          # a delta between two different footings is a lie
+        else:
+            d = (f"{nv - ov:+.6g}" if isinstance(ov, (int, float)) and isinstance(nv, (int, float))
+                 and not isinstance(ov, bool) and not isinstance(nv, bool) else "—")
+        L.append(f"| {label} | {_fmt(ov)} | {_fmt(nv)} | {_cell(d)} |")
+    # The scope mechanism as a number, computed rather than asserted: the whole report leans on it.
+    pooled = _get(run, "M1.imp.n_points")
+    n_tracks = len(_get(run, "M1.imp_per_target") or {})
+    per_track_new = _get(bench, "macro.count.n_points")
+    if pooled and n_tracks and per_track_new:
+        old_per_track = pooled / n_tracks
+        L.append(f"\n**The position scope, divided out.** {pooled:,.0f} pooled positions over "
+                 f"{n_tracks} imputation tracks is **{old_per_track:,.0f} per track**, against "
+                 f"bench's **{per_track_new:,.0f}**. The old suite scored "
+                 f"**{100 * old_per_track / per_track_new:.1f}%** of the eval chromosome. That "
+                 f"single ratio is what most of the `moved` column is a consequence of.\n")
+
     L.append(f"\n**Read every delta against the noise floor** (`AGENTS.md` §7.2). "
              f"Target-clustered floor on macro CRPS is **{NOISE_FLOOR['macro_crps_target_clustered']}**; "
              f"per-comparison uncertainty **±{NOISE_FLOOR['per_comparison_uncertainty']}**; a "
@@ -496,20 +529,49 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
         L.append(f"\n## {title} ({len(rows)})\n")
         L.append("| eval.py key | bench key | old | new | why |")
         L.append("|---|---|---|---|---|")
+        counts: Dict[str, int] = {}
+        for _, r, _, _ in rows:
+            counts[r.old] = counts.get(r.old, 0) + 1
         seen = set()
         for k, r, old, new in rows:
             if r.old in seen:
                 continue                       # one row per RULE, not per expanded key
             seen.add(r.old)
             fam = f"`{r.old}`" if "*" in r.old else f"`{k}`"
-            L.append(f"| {fam} | {('`' + r.new + '`') if r.new else '—'} | "
-                     f"{_fmt(old)} | {_fmt(new)} | {r.why} |")
+            # A pattern ending in a BARE `*` claims a whole level, not one field, so the first key
+            # it happens to claim carries no meaning: `M1.den_per_assay.*` would print the value of
+            # `DNase-seq.beats_marginal`, which reads as the rule's number and is not one.
+            if r.old.rsplit(".", 1)[-1] == "*":
+                ov = f"{counts[r.old]} keys"
+                nv = f"{counts[r.old]} keys" if r.new else "—"
+            else:
+                ov, nv = _fmt(old), _fmt(new)
+            L.append(f"| {_cell(fam)} | {_cell(('`' + r.new + '`') if r.new else '—')} | "
+                     f"{ov} | {nv} | {_cell(r.why)} |")
 
     L.append("\n## What bench adds that eval.py never had\n")
     L.append("A cutover report that tabulates only what went missing reads as a regression. "
              "These have no old counterpart because there was nothing there.\n")
     for k, why in NEW_BLOCKS.items():
         L.append(f"- **{k}** — {why}")
+
+    # msevar is the one measure of the nine that needs an asset built from the corpus, so whether
+    # the E-block is nine or eight is a property of the RUN, not of the suite. Read it off the
+    # bench provenance rather than asserting nine and printing eight.
+    mv = _get(bench, "provenance.msevar") or {}
+    if mv.get("pool"):
+        members = {k: v for k, v in mv.items() if k != "pool"}
+        L.append(f"\n`msevar` IS present: pool `{mv['pool']}` (D7), "
+                 f"{len(members)} assay pool(s) loaded. It weights squared error by the "
+                 f"cross-biosample variance of that assay at that position, and the pool is built "
+                 f"in pval space, so it may only ever weight the pval arm.\n")
+    else:
+        L.append("\n`msevar` is ABSENT from this run: no `--varpool` was given, so the E-block "
+                 "here is **eight of the nine** measures. That is deliberate — the organizers' own "
+                 "code returns a bare `0.0` with no variance vector, and a 0.0 is indistinguishable "
+                 "from a perfect score in any table it lands in, so bench omits the key instead. "
+                 "The pool is D7's and is built by `slurm/t18_varpool.sh` from the store's own "
+                 "training biosamples.\n")
 
     L.append("\n## Accepted losses — put to the PI, and ruled on\n")
     L.append("Both were raised as capability the new suite does not carry, and both were accepted "
@@ -530,6 +592,15 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
              "clamp-saturated model as unresponsive without saying why. **Accepted**, with the "
              "consequence stated: a C3 near zero is 'no response', not 'no sensitivity'.")
     return "\n".join(L)
+
+
+def _cell(text: str) -> str:
+    """A markdown table cell. Bench's denoise track keys contain `|`, which would end the cell.
+
+    `per_track.*|denoise.count.crps` inside backticks still splits the row in every renderer --
+    code spans do not protect a pipe inside a table. It has to be escaped.
+    """
+    return str(text).replace("|", "\\|")
 
 
 def _fmt(v: Any) -> str:
