@@ -97,17 +97,13 @@ M1_RULES: Tuple[Rule, ...] = (
     Rule("M1.imp_per_assay.*.median_mu", "dropped", None,
          "a diagnostic of the marginal fit, superseded by marg_mu / marg_n which are the fitted "
          "parameters themselves"),
-    Rule("M1.imp_per_assay.*.median_target", "dropped", None, "as median_mu"),
+    Rule("M1.imp_per_assay.*.median_target", "dropped", None, "a diagnostic of the marginal fit, superseded by marg_mu / marg_n, as median_mu"),
     Rule("M1.imp_per_assay.*.marg_crps_legacy_median", "dropped", None,
          "the SUPERSEDED marginal: mu = median(target) + 1e-6. On 4 of 8 assays the median count is "
          "0, so the legacy bar was a near-zero constant and beating it meant nothing. It shipped "
          "beside the CRPS-optimal marginal only to show the gap; with the old suite gone there is "
          "nothing left for it to be a gap against."),
-    Rule("M1.imp_per_assay.*.marg_mu_legacy_median", "dropped", None, "as marg_crps_legacy_median"),
-
-    Rule("M1.den_per_assay.*", "moved", "per_track.*|denoise.count.*",
-         "denoising is opt-in in bench (--kinds denoise) and its keys carry a fourth field. Same "
-         f"per-assay -> per-track move as the imputation half. {SCOPE}"),
+    Rule("M1.imp_per_assay.*.marg_mu_legacy_median", "dropped", None, "the superseded legacy-median marginal's fitted mu; it goes with marg_crps_legacy_median"),
 
     Rule("M1.imp.crps", "moved", "macro.count.crps", f"{SCOPE}. {POOL}"),
     Rule("M1.imp.ece", "moved", "macro.count.ece", f"{SCOPE}. {POOL}"),
@@ -117,9 +113,8 @@ M1_RULES: Tuple[Rule, ...] = (
          f"{SCOPE}; and it is now per track rather than pooled over the panel"),
     Rule("M1.imp.n_points", "moved", "macro.count.n_points", SCOPE),
     Rule("M1.imp.spearman_raw", "moved", "macro.count.gwspear", f"{SCOPE}. {POOL}"),
-    Rule("M1.imp.pearson_log1p", "replaced", "macro.count.gwcorr", "as the per-assay form"),
-    Rule("M1.imp.r2", "dropped", None, "as the per-assay form"),
-    Rule("M1.den.*", "moved", "macro_denoise.count.*", "as den_per_assay"),
+    Rule("M1.imp.pearson_log1p", "replaced", "macro.count.gwcorr", "as the per-assay form of this key, for the reason given there"),
+    Rule("M1.imp.r2", "dropped", None, "as the per-assay form of this key, for the reason given there"),
 
     Rule("M1.imp_macro_crps", "moved", "macro.count.crps", f"{SCOPE}. {POOL}"),
     Rule("M1.imp_macro_crps_oracle_scaled", "moved", "macro.count.crps_oracle_scaled",
@@ -127,13 +122,12 @@ M1_RULES: Tuple[Rule, ...] = (
     Rule("M1.imp_macro_scale_error", "moved", "macro.count.scale_error", f"{SCOPE}. {POOL}"),
     Rule("M1.imp_macro_marg_crps", "moved", "macro.count.marg_crps", f"{SCOPE}. {POOL}"),
     Rule("M1.imp_macro_spearman_raw", "moved", "macro.count.gwspear", f"{SCOPE}. {POOL}"),
-    Rule("M1.imp_macro_pearson_log1p", "replaced", "macro.count.gwcorr", "as the per-assay form"),
+    Rule("M1.imp_macro_pearson_log1p", "replaced", "macro.count.gwcorr", "as the per-assay form of this key, for the reason given there"),
     Rule("M1.imp_beats_marginal_n", "moved", "macro.count.beats_marginal",
          "a COUNT of assays becomes a FRACTION of tracks, because the macro means over tracks and a "
          "bool means to its rate. Read it as a proportion, never as the old integer."),
     Rule("M1.imp_beats_marginal_oracle_scaled_n", "moved",
-         "macro.count.beats_marginal_oracle_scaled", "as imp_beats_marginal_n"),
-    Rule("M1.den_macro_*", "moved", "macro_denoise.count.*", "as den_per_assay"),
+         "macro.count.beats_marginal_oracle_scaled", "a count of assays becomes a fraction of tracks, as imp_beats_marginal_n"),
     Rule("M1.encoder_eff_rank_perpos", "moved", "C.C5_C6_invariance.encoder_eff_rank",
          "the effective rank moves into the C6 guard, where it belongs: it was never a health "
          "statistic on its own, it was the tripwire on M3's invariance claim (D13)"),
@@ -160,14 +154,14 @@ M2_RULES: Tuple[Rule, ...] = (
     Rule("M2.ablation.*.mean_abs_d_mu", "dropped", None,
          "an unnormalised effect size in mu units, not comparable across covariates or assays; C2's "
          "Shapley share answers the question it was reaching for (D10)"),
-    Rule("M2.ablation.*.mean_abs_d_eta", "dropped", None, "as mean_abs_d_mu"),
-    Rule("M2.ablation.*.max_abs_d_eta", "dropped", None, "as mean_abs_d_mu"),
+    Rule("M2.ablation.*.mean_abs_d_eta", "dropped", None, "an unnormalised effect size, as mean_abs_d_mu; C2's Shapley share replaces it"),
+    Rule("M2.ablation.*.max_abs_d_eta", "dropped", None, "an unnormalised effect size, as mean_abs_d_mu; C2's Shapley share replaces it"),
     Rule("M2.ablation.*.n_sentinel_skipped", "dropped", None,
          "bookkeeping for the cross-target substitution's sentinel guard; bench's resamplers draw "
          "from the observed covariate rows, so a sentinel is never manufactured"),
     Rule("M2.ablation.*.per_target", "dropped", None,
          "the per-target record backed the clustered CI; without the CI it has no consumer"),
-    Rule("M2.ablation.*.covariate", "same", "C.C1_use.*", "the key name IS the covariate"),
+    Rule("M2.ablation.*.covariate", "same", "C.C1_use.*", "the covariate name is the KEY in bench, not a value inside it"),
     Rule("M2.ablation.*.row", "dropped", None, "the metadata row index is an implementation detail"),
     Rule("M2.ablation.*.mode", "dropped", None,
          "`cross_target` was the only null; bench names its two nulls in the key instead"),
@@ -183,20 +177,20 @@ M2_RULES: Tuple[Rule, ...] = (
     Rule("M2.depth.median_total_slope", "replaced", "C.C3_direction.mean_dose_response_corr",
          "a single fitted slope cannot see a curve that wanders; C3 reports the correlation of "
          "predicted level against told depth AND monotone_frac, the step-by-step check"),
-    Rule("M2.depth.total_slope_err", "dropped", None, "the standard error of a retired statistic"),
-    Rule("M2.depth.total_slope_clamp_saturated", "dropped", None, "clamp telemetry; see below"),
+    Rule("M2.depth.total_slope_err", "dropped", None, "the standard error of a retired statistic; C3 reports monotonicity instead"),
+    Rule("M2.depth.total_slope_clamp_saturated", "dropped", None, "clamp telemetry, as frac_targets_any_clamp — see the report's Open Items"),
     Rule("M2.depth.frac_targets_any_clamp", "dropped", None,
          "CLAMP TELEMETRY HAS NO COUNTERPART. `log2_mu` is clamped in the decoder head, and these "
          "keys said how often the sweep drove it into the clamp — which is how a depth response can "
          "look flat for a reason that is not the model ignoring depth. Flagged in Open Items."),
-    Rule("M2.depth.median_frac_log2mu_at_clamp", "dropped", None, "as frac_targets_any_clamp"),
-    Rule("M2.depth.max_frac_log2mu_at_clamp", "dropped", None, "as frac_targets_any_clamp"),
-    Rule("M2.depth.p90_frac_log2mu_at_clamp", "dropped", None, "as frac_targets_any_clamp"),
+    Rule("M2.depth.median_frac_log2mu_at_clamp", "dropped", None, "clamp telemetry, as frac_targets_any_clamp — see the report's Open Items"),
+    Rule("M2.depth.max_frac_log2mu_at_clamp", "dropped", None, "clamp telemetry, as frac_targets_any_clamp — see the report's Open Items"),
+    Rule("M2.depth.p90_frac_log2mu_at_clamp", "dropped", None, "clamp telemetry, as frac_targets_any_clamp — see the report's Open Items"),
     Rule("M2.depth.direction_clustered.*", "dropped", None,
          "as M2.ablation.*.d_crps_clustered — the clustered CI has no counterpart"),
-    Rule("M2.depth.per_target", "dropped", None, "backed the clustered CI"),
-    Rule("M2.depth.n_targets", "moved", "C.n_units", "as M2.ablation.*.n_targets"),
-    Rule("M2.depth.covariate", "same", "C.C1_use.depth", "the key name IS the covariate"),
+    Rule("M2.depth.per_target", "dropped", None, "the per-target record existed to back the clustered CI; without it there is no consumer"),
+    Rule("M2.depth.n_targets", "moved", "C.n_units", "targets become units, as M2.ablation.*.n_targets"),
+    Rule("M2.depth.covariate", "same", "C.C1_use.depth", "the covariate name is the KEY in bench, not a value inside it"),
 
     Rule("M2.run_type.mean_responsiveness", "replaced", "C.C1_use.run_type.marginal_mean_d_crps",
          "responsiveness to a run_type flip becomes the covariate's effect size under the same "
@@ -205,9 +199,9 @@ M2_RULES: Tuple[Rule, ...] = (
          "the same verdict with its sign flipped and a p-value behind it"),
     Rule("M2.run_type.*_clustered.*", "dropped", None,
          "as M2.ablation.*.d_crps_clustered — the clustered CIs have no counterpart"),
-    Rule("M2.run_type.per_target", "dropped", None, "backed the clustered CIs"),
-    Rule("M2.run_type.n_targets", "moved", "C.n_units", "as M2.ablation.*.n_targets"),
-    Rule("M2.run_type.covariate", "same", "C.C1_use.run_type", "the key name IS the covariate"),
+    Rule("M2.run_type.per_target", "dropped", None, "the per-target record existed to back the clustered CIs; without them there is no consumer"),
+    Rule("M2.run_type.n_targets", "moved", "C.n_units", "targets become units, as M2.ablation.*.n_targets"),
+    Rule("M2.run_type.covariate", "same", "C.C1_use.run_type", "the covariate name is the KEY in bench, not a value inside it"),
 )
 
 # ---------------------------------------------------------------------------
@@ -220,8 +214,8 @@ M3_RULES: Tuple[Rule, ...] = (
          "test against. kBET, iLISI and batch ASW are the scIB instruments for exactly this "
          "question and each has a reachable floor and ceiling. RECORDED M3 NUMBERS ARE "
          "INCOMPARABLE TO THESE and the report must say so rather than tabulate a delta."),
-    Rule("M3.within", "replaced", "C.C5_C6_invariance.batch_asw", "as M3.ratio"),
-    Rule("M3.between", "replaced", "C.C5_C6_invariance.ilisi", "as M3.ratio"),
+    Rule("M3.within", "replaced", "C.C5_C6_invariance.batch_asw", "replaced together with M3.ratio; the cosine-distance family goes as one (D12)"),
+    Rule("M3.between", "replaced", "C.C5_C6_invariance.ilisi", "replaced together with M3.ratio; the cosine-distance family goes as one (D12)"),
     Rule("M3.invariance_ok", "replaced", "C.C5_C6_invariance.invariance_ok",
          "same name, DIFFERENT RULE: the old one was `ratio < 0.3 and eff_rank > 1.0`; the new one "
          "requires kBET rejection < 0.25, batch ASW > 0.8 AND bio_silhouette > 0.25 — the last of "
@@ -230,7 +224,7 @@ M3_RULES: Tuple[Rule, ...] = (
          "kept, but demoted: it is far too weak a guard on its own, since a latent with two "
          "directions clears `> 1.0` while being nearly collapsed"),
     Rule("M3.n_regions", "moved", "C.C5_n_latents", "regions become pooled latent vectors"),
-    Rule("M3.n_between_pairs", "dropped", None, "the pair count of a retired statistic"),
+    Rule("M3.n_between_pairs", "dropped", None, "the pair count of a retired statistic; nothing in C5 is built from cosine pairs"),
 )
 
 S14_RULES: Tuple[Rule, ...] = (
@@ -245,6 +239,32 @@ S14_RULES: Tuple[Rule, ...] = (
          "a boolean over frac_min_at_true against a threshold that was never registered; C3 ships "
          "the number and its two calibrations instead of a verdict nobody agreed"),
 )
+
+def denoise_twin(r: Rule) -> Optional[Rule]:
+    """The denoising rule implied by an imputation rule.
+
+    Derived rather than written, because the two halves are the same measurement on a different
+    target and a hand-written second copy would drift — which is exactly what `eval.py` did, where
+    `den_per_assay` and `imp_per_assay` were assembled by two near-identical code paths.
+
+    Denoising is opt-in in bench (`--kinds denoise`) and its track keys carry a fourth field, so
+    every bench-side path is rewritten to the denoise track and the denoise macro.
+    """
+    old = r.old.replace("M1.imp_per_assay.", "M1.den_per_assay.") \
+               .replace("M1.imp.", "M1.den.").replace("M1.imp_macro_", "M1.den_macro_")
+    if old == r.old:
+        return None                      # not an imputation rule; nothing to mirror
+    new = None if r.new is None else (
+        r.new.replace("per_track.*.count.", "per_track.*|denoise.count.")
+             .replace("macro.count.", "macro_denoise.count."))
+    return Rule(old, r.verdict, new, r.why + " [the denoising half, derived from the imputation "
+                                             "rule so the two cannot drift]")
+
+
+#: Imputation rules first: an imputation key must never be claimed by a denoise pattern or the
+#: other way round, and both families are disjoint by prefix, so order is safety rather than
+#: significance here.
+M1_RULES = M1_RULES + tuple(t for t in (denoise_twin(r) for r in M1_RULES) if t is not None)
 
 RULES: Tuple[Rule, ...] = M1_RULES + M2_RULES + M3_RULES + S14_RULES
 
