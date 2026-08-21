@@ -87,25 +87,33 @@ def test_the_store_leaks_only_at_dsf_1_while_training(store_regime):
     assert lv.get("dsf1_identical", 0) == lv.get("dsf1", 0)
 
 
-def test_the_store_leaks_at_every_level_under_the_deterministic_rng(store_regime):
-    """The finding t16 turned up, and the reason the leak is NOT simply 16x smaller on the store.
+def test_the_deterministic_rng_now_leaks_no_more_than_the_free_running_one(store_regime):
+    """The finding t16 turned up, and the fix that closed it.
 
     D22's counter-based eval RNG seeds each draw from
-    `(run_seed, biosample, assay, chrom, window_start, dsf_milli(dsf))`. There is NO x/y term in
-    that tuple, so when `x_dsf == y_dsf` the two `_thin` calls build the SAME generator and return
-    the SAME draw — the store reproduces the bake's leak in full, at `1/K`, not `1/K^2`.
+    `(run_seed, biosample, assay, chrom, window_start, dsf_milli(dsf))`. That tuple had NO x/y term,
+    so when `x_dsf == y_dsf` the two `_thin` calls built the SAME generator and returned the SAME
+    draw — the store reproduced the bake's leak in full, at `1/K` rather than `1/K^2`. `_thin` now
+    takes a keyword-only `side`, which enters the tuple as a seventh element, so the input's stream
+    and the target's stream can no longer coincide.
 
-    It is latent today only because `eval.py::build_eval_units` passes `dsf_sampling="off"`, which
-    pins every level at 1. Any deterministic dataset with the ladder on collides everywhere. This
-    test pins the CURRENT behaviour, not the desired one: adding an x/y term to the seed would move
-    every deterministic eval number, so it is a decision, not a cleanup.
+    What is asserted here is the SAME profile the free-running test above asserts, and that is the
+    claim: the deterministic path is no longer the leakier one. Collisions survive only at `dsf 1`,
+    where `_thin` returns before building a generator at all — no seed can separate two copies of
+    an array that was never thinned.
+
+    The fix cost nothing to land because the scorer runs at `dsf_sampling="off"`, so every level is
+    pinned at 1 and the thinning seed is never built. It moves numbers only once a deterministic
+    dataset runs with the ladder ON, which is exactly what it is there to protect.
     """
     r = measure(_store_ds(store_regime, "uniform", deterministic=True), N_BATCHES)
-    assert r["identical_given_equal_dsf"] == 1.0
+    assert r["identical_given_equal_dsf"] is not None
+    assert r["identical_given_equal_dsf"] < 1.0
+    assert r["rate_identical"] < r["rate_equal_dsf"]
     lv = r["by_equal_dsf_level"]
-    for d in (1, 2, 4, 8):
-        if lv.get(f"dsf{d}", 0):
-            assert lv[f"dsf{d}_identical"] == lv[f"dsf{d}"], f"DSF-{d} did not collide"
+    for d in (2, 4, 8):
+        assert lv.get(f"dsf{d}_identical", 0) == 0, f"a DSF-{d} pair collided under the fixed seed"
+    assert lv.get("dsf1_identical", 0) == lv.get("dsf1", 0)
 
 
 def test_the_leak_lands_on_the_denoising_half_only(bake):

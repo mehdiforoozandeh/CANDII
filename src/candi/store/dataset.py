@@ -103,22 +103,35 @@ def stable_hash(name: str) -> int:
 
 
 def draw_seed(run_seed: int, biosample: str, assay: str, chrom: str, window_start: int,
-              dsf_milli: int) -> np.random.SeedSequence:
-    """The D22 entropy tuple, verbatim: one eval draw, one seed, no shared stream.
+              dsf_milli: int, side: Optional[str] = None) -> np.random.SeedSequence:
+    """The D22 entropy tuple: one eval draw, one seed, no shared stream.
 
     `chrom_id` is `stable_hash(chrom)` rather than a positional index — a positional id would
     change the moment a chromosome is added to the store, silently rewriting every eval number.
+
+    `side` names WHICH of a window's two thinnings this is — the input (`"x"`) or the target
+    (`"y"`). Without it the tuple cannot tell them apart, so at `x_dsf == y_dsf` the two `_thin`
+    calls build the same generator and hand the model its own input back as the answer. That is
+    the leak `tests/test_dsf_leak.py` pinned and this argument closes.
+
+    IT DEFAULTS TO `None`, AND THE DEFAULT IS NOT LAZINESS. Omitting it appends nothing, so the
+    tuple is byte-for-byte the pre-fix one. `candi.bench.harness` thins through this function too,
+    at two sites that share a tuple exactly as `_thin`'s two calls did, and whether that sharing is
+    a paired depth sweep (deliberate) or the same leak (a defect) is a measurement question, not a
+    cleanup. Until it is answered, bench must not move: it omits `side` and gets the old seed. Any
+    NEW caller passes a side.
     """
-    return np.random.SeedSequence(
-        [
-            int(run_seed),
-            stable_hash(biosample),
-            stable_hash(assay),
-            stable_hash(chrom),
-            int(window_start),
-            int(dsf_milli),
-        ]
-    )
+    entropy = [
+        int(run_seed),
+        stable_hash(biosample),
+        stable_hash(assay),
+        stable_hash(chrom),
+        int(window_start),
+        int(dsf_milli),
+    ]
+    if side is not None:
+        entropy.append(stable_hash(side))
+    return np.random.SeedSequence(entropy)
 
 
 def dsf_milli(dsf: float) -> int:
@@ -501,12 +514,24 @@ class StoreDataset(IterableDataset):
     # -- thinning -------------------------------------------------------------------------------
 
     def _thin(self, counts: np.ndarray, dsf: float, name: str, assay: str, chrom: str,
-              start: int, free: np.random.Generator) -> np.ndarray:
+              start: int, free: np.random.Generator, *, side: str) -> np.ndarray:
+        """Thin one column to `dsf`. `side` is `"x"` (the input) or `"y"` (the target).
+
+        `side` IS KEYWORD-ONLY AND HAS NO DEFAULT, which is the whole point of it. The bug it fixes
+        was invisible precisely because both calls looked identical at the call site; a default
+        would let the next caller reproduce it by saying nothing. Under the free-running RNG the
+        argument changes nothing — two draws off one stream already differ — so this matters only
+        on the deterministic path, which is the eval path.
+
+        At `dsf == 1.0` there is no draw to make and the seed is never built, so x and y are the
+        same numbers whatever `side` says. That is not this bug: it is what "no thinning" means,
+        and `tests/test_dsf_leak.py` measures it separately.
+        """
         if float(dsf) == 1.0:
             return counts
         rng = (
             np.random.default_rng(draw_seed(self.run_seed, name, assay, chrom, start,
-                                            dsf_milli(dsf)))
+                                            dsf_milli(dsf), side))
             if self.deterministic
             else free
         )
@@ -576,8 +601,8 @@ class StoreDataset(IterableDataset):
                 for k, assay in enumerate(present):
                     fi = cols[k]
                     col = block[:, k]
-                    xc = self._thin(col, xd[fi], name, assay, chrom, start, free)
-                    yc = self._thin(col, yd[fi], name, assay, chrom, start, free)
+                    xc = self._thin(col, xd[fi], name, assay, chrom, start, free, side="x")
+                    yc = self._thin(col, yd[fi], name, assay, chrom, start, free, side="y")
                     x_data[j, :, fi] = torch.from_numpy(np.asarray(xc, dtype=np.float32))
                     y_data[j, :, fi] = torch.from_numpy(np.asarray(yc, dtype=np.float32))
                     x_meta[j, :, fi] = torch.from_numpy(self._depth_adjusted(meta1[:, fi], xd[fi]))
@@ -686,7 +711,7 @@ class StoreDataset(IterableDataset):
                     # Thinned under the TARGET's own name, so its stream is its own: two pairs that
                     # share a target must see the same ground truth at the same (window, dsf).
                     yc = self._thin(block[:, k], float(y_dsf_t[j, fi]), target, assay,
-                                    chrom, start, free)
+                                    chrom, start, free, side="y")
                     y_data_imp[j, :, fi] = torch.from_numpy(np.asarray(yc, dtype=np.float32))
                 if want_pval:
                     have = [a for a in t_present if tb.has(a, "pval")]

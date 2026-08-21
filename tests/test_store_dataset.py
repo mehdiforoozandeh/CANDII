@@ -346,10 +346,20 @@ def test_dsf_off_leaves_the_counts_untouched(store):
     corpus.close()
 
 
-def test_x_eq_y_thins_both_sides_identically(store):
+def test_x_eq_y_matches_the_depth_but_not_the_noise(store):
+    """The mode equalises `dsf`, and `dsf` alone -- see `dataset.py::_sample_xy_dsf`.
+
+    Identical VALUES were never part of its definition; they were what the old bake's materialised
+    ladder did, because equal `d` there meant reading one stored array twice. The store generates
+    its ladder, so equal depth is two independent binomial draws -- which is also what two real
+    experiments sequenced to the same depth look like. The perfect-copy control is
+    `dsf_sampling="off"`, where there is no thinning at all and x genuinely is y.
+    """
     b = batches(make_ds(store, train=False, shuffle=False, dsf_sampling="x_eq_y"))[0]
     assert torch.equal(b["x_dsf"], b["y_dsf"])
-    assert torch.equal(b["x_data"], b["y_data"])
+    thinned = (b["x_dsf"] > 1).any()
+    if thinned:
+        assert not torch.equal(b["x_data"], b["y_data"])
 
 
 def test_upsample_only_never_lets_y_be_deeper_than_x(store):
@@ -520,3 +530,76 @@ def test_a_target_is_read_but_never_prompted_with(store):
                  regime_over={"eval_pairs": [["T_aa", "V_aa"]]})
     assert ds.biosample_pool == ["T_aa"] and ds.imp_targets == ["V_aa"]
     assert "V_aa" in ds._meta, "the target still needs metadata, for y_meta_imp"
+
+
+# --- the x/y term in the thinning seed (the identity-copy leak) ---------------------------------
+# `_thin` is called twice per column per window -- once for the input, once for the target -- off
+# ONE entropy tuple. Before the `side` term that tuple could not tell the two calls apart, so at
+# `x_dsf == y_dsf` the deterministic RNG built the same generator twice and the target came back
+# bit-identical to the input. `tests/test_dsf_leak.py` measures the rate; these pin the mechanism.
+
+
+def test_omitting_the_side_reproduces_the_pre_fix_seed_tuple(store):
+    """`candi.bench.harness` thins through `draw_seed` and must not move. This is that promise.
+
+    The bench sites share a tuple exactly as `_thin`'s two calls did, and whether that is a paired
+    depth sweep or the same leak is an open measurement question. Until it is answered, omitting
+    `side` has to give the OLD six-element tuple, byte for byte.
+    """
+    from candi.store.dataset import draw_seed
+
+    assert list(draw_seed(42, "T_aa", "H3K4me3", "chr2", 448, 4000).entropy) == [
+        42, stable_hash("T_aa"), stable_hash("H3K4me3"), stable_hash("chr2"), 448, 4000
+    ]
+
+
+def test_the_side_is_the_seventh_element_and_x_is_not_y(store):
+    from candi.store.dataset import draw_seed
+
+    x = list(draw_seed(42, "T_aa", "H3K4me3", "chr2", 448, 4000, "x").entropy)
+    y = list(draw_seed(42, "T_aa", "H3K4me3", "chr2", 448, 4000, "y").entropy)
+    bare = list(draw_seed(42, "T_aa", "H3K4me3", "chr2", 448, 4000).entropy)
+    assert x[:6] == y[:6] == bare                      # only the new element differs
+    assert len(x) == len(y) == 7 and x[6] != y[6]
+    assert x[6] == stable_hash("x") and y[6] == stable_hash("y")
+
+
+def test_thin_refuses_to_be_called_without_a_side(store):
+    """Keyword-only, no default. The bug was invisible because both calls read identically."""
+    ds = make_ds(store)
+    with pytest.raises(TypeError):
+        ds._thin(np.array([10, 20], dtype=np.int64), 2.0, "T_aa", "H3K4me3", "chr2", 0,
+                 np.random.default_rng(0))
+
+
+def test_the_deterministic_rng_no_longer_hands_the_target_back_as_the_input(store):
+    """The fix itself: same column, same dsf, same window -- and now two different draws.
+
+    Counts are large enough that two independent binomial thinnings colliding by chance is not a
+    thing that happens; at dsf 2 over 512 bins the probability is astronomically small.
+    """
+    ds = make_ds(store, deterministic=True)
+    col = np.random.default_rng(7).integers(20, 200, size=512).astype(np.int64)
+    free = np.random.default_rng(0)
+    x = ds._thin(col, 2.0, "T_aa", "H3K4me3", "chr2", 448, free, side="x")
+    y = ds._thin(col, 2.0, "T_aa", "H3K4me3", "chr2", 448, free, side="y")
+    assert not np.array_equal(x, y), "the target is still the input"
+
+
+def test_the_fix_does_not_cost_determinism(store):
+    """Two runs of the same side must still agree -- D22 is the reason the seed is built at all."""
+    ds = make_ds(store, deterministic=True)
+    col = np.random.default_rng(7).integers(20, 200, size=512).astype(np.int64)
+    a = ds._thin(col, 4.0, "T_aa", "H3K4me3", "chr2", 448, np.random.default_rng(1), side="x")
+    b = ds._thin(col, 4.0, "T_aa", "H3K4me3", "chr2", 448, np.random.default_rng(2), side="x")
+    assert np.array_equal(a, b)
+
+
+def test_no_thinning_still_means_x_equals_y(store):
+    """Not this bug, and deliberately left alone: at dsf 1 there is no draw to make."""
+    ds = make_ds(store, deterministic=True)
+    col = np.arange(64, dtype=np.int64)
+    free = np.random.default_rng(0)
+    x = ds._thin(col, 1.0, "T_aa", "H3K4me3", "chr2", 0, free, side="x")
+    y = ds._thin(col, 1.0, "T_aa", "H3K4me3", "chr2", 0, free, side="y")
+    assert np.array_equal(x, y)
