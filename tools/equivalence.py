@@ -22,24 +22,30 @@ The five verdicts, and what each obliges the writer to supply:
 | `new` | `bench` only | nothing; there is no old number to move |
 
 The dominant mechanism is **position scope**, and it is worth stating plainly because it will
-account for most of the report: `eval.py` scored a subsample — `--eval-budget 50000000` positions
-drawn from batches that themselves covered a strided slice of chr21, since the eval loader advances
-one `(T_, V_/B_)` pair per window batch. `candi.bench` scores **every 25 bp bin** (D2). So a key
-tagged `moved` has not changed its formula; it has changed what it is a mean over. Nothing here
-attributes a delta to a model change, because the model is the same checkpoint on both sides.
+account for most of the report. `eval.py` scored a subsample, and the subsampling had two stages
+that are easy to conflate: the eval loader advances one `(T_, V_/B_)` pair per window batch, so a
+track receives one window in every `n_pairs` and the pooled arrays are already a strided slice of
+the chromosome; `--eval-budget` then cut *that* down further, but only if it was still larger.
+**On a small panel the budget does not bind at all** and the whole difference is the striding —
+the report computes the fraction from the run rather than assuming either stage did the work.
+`candi.bench` scores **every 25 bp bin** (D2). So a key tagged `moved` has not changed its formula;
+it has changed what it is a mean over. Nothing here attributes a delta to a model change, because
+the model is the same checkpoint on both sides.
 """
 from __future__ import annotations
 
 import fnmatch
 import json
+import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-SCOPE = ("position scope: eval.py drew --eval-budget positions from a strided slice of the eval "
-         "chromosome (one (T_, V_/B_) pair advances per window batch); bench scores every 25 bp "
-         "bin of it (D2)")
+SCOPE = ("position scope: eval.py scored whatever its loader's batches happened to cover -- the "
+         "eval loader advances one (T_, V_/B_) pair per window batch, so a track receives one "
+         "window in every n_pairs -- and then subsampled THAT to --eval-budget positions if it "
+         "was still larger; bench scores every 25 bp bin of the eval chromosome (D2)")
 POOL = ("pooling unit: eval.py's macro is a mean over ASSAYS; bench's is a mean over TRACKS "
         "(D4 — the per-track score is the primitive)")
 
@@ -237,9 +243,24 @@ M3_RULES: Tuple[Rule, ...] = (
 )
 
 S14_RULES: Tuple[Rule, ...] = (
-    Rule("S14.frac_min_at_true", "moved", "C.C3_depth_counterfactual.frac_min_at_true",
-         f"same definition, same calibration (0.25 constant-answer floor, ~0.73 ceiling). {SCOPE}"),
-    Rule("S14.frac_beats_told1", "moved", "C.C3_depth_counterfactual.frac_beats_told1", SCOPE),
+    # NOT `moved`. This rule used to claim "same definition, same calibration" and the run refuted
+    # both halves of that in one line: eval.py 0.25 against bench 1.00, where 0.73 was supposed to
+    # be the ceiling.
+    Rule("S14.frac_min_at_true", "replaced", "C.C3_depth_counterfactual.frac_min_at_true",
+         "THE UNIT CHANGED AND SO DID THE CALIBRATION. eval.py's denominator is the TARGET -- 12 "
+         "held-out tracks, each asked whether its argmin over told-depths lands on the true one, "
+         "and each scored on a FOREGROUND mask (the top 2% of the level-k realization). bench "
+         "pools every C-block unit into one array per level and asks the question once per LEVEL, "
+         "four times, on the whole track. Two consequences a reader must not miss. First, the "
+         "denominator went from 12 to 4, so the new number moves in quarters. Second, the ~0.73 "
+         "ceiling was a consequence of the foreground restriction, and with no foreground there is "
+         "no such ceiling -- which is why bench can report 1.0, a value the old instrument could "
+         "not produce. The `0.25` coincidence is a trap: in eval.py it is the deterministic value "
+         "of always answering told-depth 1, in bench it is 1/4 levels. The two numbers may not be "
+         "differenced, and this report shows no delta for them."),
+    Rule("S14.frac_beats_told1", "replaced", "C.C3_depth_counterfactual.frac_beats_told1",
+         "per LEVEL over four levels on the whole track, not per TARGET over twelve on a "
+         "foreground mask -- as frac_min_at_true, and undifferenceable for the same reason"),
     Rule("S14.n_targets", "moved", "C.C3_depth_counterfactual.n_levels",
          "the unit is the DSF level being scored, not the target"),
     Rule("S14.per_target", "moved", "C.C3_depth_counterfactual.crps_at_true_level",
@@ -333,9 +354,13 @@ HEADLINE: Tuple[Tuple[str, ...], ...] = (
     ("  ... scale error", "", "macro_denoise.count.scale_error"),
     ("denoise macro Spearman", "M1.den_macro_spearman_raw", "macro_denoise.count.gwspear"),
     ("S14 frac_min_at_true", "S14.frac_min_at_true",
-     "C.C3_depth_counterfactual.frac_min_at_true"),
+     "C.C3_depth_counterfactual.frac_min_at_true",
+     "NO DELTA: different denominators. eval.py asks the question once per TARGET (12) on a "
+     "foreground mask; bench asks it once per LEVEL (4) on the whole track. The old instrument "
+     "capped near 0.73 *because of* the foreground; the new one has no such cap."),
     ("S14 frac_beats_told1", "S14.frac_beats_told1",
-     "C.C3_depth_counterfactual.frac_beats_told1"),
+     "C.C3_depth_counterfactual.frac_beats_told1",
+     "NO DELTA: per level over four, not per target over twelve. See the row above."),
     ("C1 tripwire (must be 0.0)", "M2.ablation_within_batch.depth.mean_d_crps",
      "C.C1_use.depth.within_batch_d_crps"),
     ("scored positions", "M1.imp.n_points", "macro.count.n_points",
@@ -467,12 +492,26 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
     L.append("\nRead the RULES column. One rule is one decision; the key count is how many "
              "cells that decision covers, and a panel of 8 assays x 20 fields x 2 halves is 320 "
              "keys and a single call.\n")
-    L.append("## The one mechanism that explains most of this table\n")
+    L.append("## The mechanism most keys moved under\n")
     # NOT str.capitalize(): it lowercases everything after the first character, which turns
     # "(T_, V_/B_)" into "(t_, v_/b_)" and "(D2)" into "(d2)".
     L.append(f"{SCOPE[0].upper()}{SCOPE[1:]}.\n\nA key marked `moved` has the same formula and a different "
              f"population. Read every `moved` delta as a change of what the number is a mean over, "
              f"never as the model getting better or worse.\n")
+    L.append("This is what most KEYS moved under. It is **not** what moved the headline macro -- "
+             "that turns out to be the pooling unit, and the two are separated with arithmetic "
+             "under the headline table rather than left to the reader's assumption.\n")
+    budget = cfg.get("eval_budget")
+    pooled_n = _get(run, "M1.imp.n_points")
+    if budget and pooled_n:
+        if pooled_n < budget:
+            L.append(f"**On this run `--eval-budget` did not bind.** It was {budget:,} against "
+                     f"{pooled_n:,} pooled positions, so nothing was thrown away at that stage and "
+                     f"the entire scope difference is the loader's striding. Read the ratio below "
+                     f"as a property of how the eval loader batches, not of a budget flag.\n")
+        else:
+            L.append(f"**On this run `--eval-budget` did bind**: {budget:,} against "
+                     f"{pooled_n:,} pooled positions, so both stages contributed.\n")
 
     L.append("\n## Headline — the same checkpoint, both suites\n")
     L.append("| | eval.py | bench | delta |")
@@ -511,6 +550,104 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
              f"a delta here is a measurement difference and never a model difference. The floor is "
              f"quoted because it is the scale that decides which of these measurement differences "
              f"would survive contact with a real arm-vs-arm comparison.\n")
+
+    # Track by track. The macro is a mean of these, and a mean hides whether the scope change
+    # moved every track the same way or moved two of them a long way. Same key on both sides.
+    per_new = _get(bench, "per_track") or {}
+    for arm_label, old_block, suffix in (("imputation", "M1.imp_per_target", ""),
+                                         ("denoising", "M1.den_per_target", "|denoise")):
+      per_old = _get(run, old_block) or {}
+      rows_t = []
+      for key in sorted(per_old):
+        # bench's denoise track keys carry a fourth field; eval.py's do not (t20 decision 2).
+        o, n = per_old[key], (per_new.get(key + suffix) or {}).get("count") or {}
+        if not n:
+            continue
+        rows_t.append((key, o, n))
+      if rows_t:
+        L.append(f"\n## Track by track — the {arm_label} arm ({len(rows_t)} tracks)\n")
+        L.append("The macro is a mean of these. A mean cannot show whether the scope change "
+                 "moved every track alike or moved two of them a long way, and that difference "
+                 "decides whether the macro delta is a property of the measurement or of two "
+                 "tracks. Same track key on both sides.\n")
+        L.append("| track | CRPS old | CRPS new | d | oracle-scaled old | new | Spearman old | new |")
+        L.append("|---|---|---|---|---|---|---|---|")
+        for key, o, n in rows_t:
+            def d2(a, b):
+                return (f"{b - a:+.4g}" if isinstance(a, (int, float))
+                        and isinstance(b, (int, float)) else "—")
+            L.append(f"| {_cell('`' + key + '`')} | {_fmt(o.get('crps'))} | "
+                     f"{_fmt(n.get('crps'))} | {d2(o.get('crps'), n.get('crps'))} | "
+                     f"{_fmt(o.get('crps_oracle_scaled'))} | {_fmt(n.get('crps_oracle_scaled'))} | "
+                     f"{_fmt(o.get('spearman_raw'))} | {_fmt(n.get('gwspear'))} |")
+        deltas = [n.get("crps") - o.get("crps") for _, o, n in rows_t
+                  if isinstance(o.get("crps"), (int, float))
+                  and isinstance(n.get("crps"), (int, float))]
+        if deltas:
+            L.append(f"\nAcross {len(deltas)} tracks the CRPS shift runs "
+                     f"{min(deltas):+.4g} to {max(deltas):+.4g}, median "
+                     f"{statistics.median(deltas):+.4g}. Compare that SPREAD against the noise "
+                     f"floor below, not the median: a scope change that moves every track the same "
+                     f"way is a re-baselining, and one that moves two of them is a finding.\n")
+
+    # THE decomposition. The macro delta has two candidate causes and they are separable from the
+    # data already in hand: eval.py's own per-TRACK mean is the same pooling unit as bench's, so
+    # differencing against it isolates position scope, and differencing it against eval.py's
+    # per-ASSAY macro isolates the pooling unit. Without this the reader attributes the whole
+    # headline delta to the mechanism named at the top of the report, and on this run that is
+    # the wrong way round.
+    for arm_label, old_per, old_assay, old_macro, new_macro in (
+            ("imputation", "M1.imp_per_target", "M1.imp_per_assay",
+             "M1.imp_macro_crps", "macro.count.crps"),
+            ("denoising", "M1.den_per_target", "M1.den_per_assay",
+             "M1.den_macro_crps", "macro_denoise.count.crps")):
+        per = _get(run, old_per) or {}
+        n_assays = len(_get(run, old_assay) or {})
+        vals = [v["crps"] for v in per.values()
+                if isinstance(v, dict) and isinstance(v.get("crps"), (int, float))]
+        a_mean, n_mean = _get(run, old_macro), _get(bench, new_macro)
+        if not vals or not isinstance(a_mean, (int, float)) or not isinstance(n_mean, (int, float)):
+            continue
+        t_mean = statistics.mean(vals)
+        L.append(f"\n### Which mechanism actually moved the {arm_label} macro\n")
+        L.append("`eval.py` records a per-track level of its own, so the headline delta splits "
+                 "exactly rather than by argument. Its per-track mean uses bench's pooling unit on "
+                 "eval.py's positions, which is the missing middle term.\n")
+        L.append("| | CRPS | |")
+        L.append("|---|---|---|")
+        L.append(f"| eval.py, mean over {n_assays} ASSAYS | {a_mean:.5f} | the published headline |")
+        L.append(f"| eval.py, mean over {len(vals)} TRACKS | {t_mean:.5f} | same positions, "
+                 f"bench's pooling unit |")
+        L.append(f"| bench, mean over {len(vals)} TRACKS | {n_mean:.5f} | the new headline |")
+        L.append("")
+        L.append(f"- **pooling unit** (assay-mean -> track-mean): **{t_mean - a_mean:+.5f}**")
+        L.append(f"- **position scope** (subsample -> whole chromosome): "
+                 f"**{n_mean - t_mean:+.5f}**")
+        L.append(f"- total, as the headline reports it: {n_mean - a_mean:+.5f}\n")
+        # How concentrated is the panel? That is what makes the two means different questions,
+        # and it is a property of the run, not a sentence to be reused between arms.
+        by_pair: Dict[str, int] = {}
+        for k in per:
+            by_pair[k.rsplit("|", 1)[0]] = by_pair.get(k.rsplit("|", 1)[0], 0) + 1
+        top_pair, top_n = (max(by_pair.items(), key=lambda kv: kv[1]) if by_pair else ("", 0))
+        seed_move = NOISE_FLOOR["seed_change_moves_pooled_imp_crps"]
+        if abs(t_mean - a_mean) > abs(n_mean - t_mean):
+            same_order = (abs(t_mean - a_mean) > seed_move / 3)
+            L.append(f"**The pooling unit dominates; position scope does almost nothing.** "
+                     f"Scoring the whole chromosome instead of the old slice moved "
+                     f"this number by {abs(n_mean - t_mean):.5f}; changing what the mean is over "
+                     f"moved it by {abs(t_mean - a_mean):.5f}"
+                     + (f", which is of the same order as the {seed_move} a SEED change moves "
+                        f"pooled imputation CRPS (`AGENTS.md` 7.2)" if same_order else
+                        ", both of them far under any floor worth quoting")
+                     + ". An assay-mean weights each assay once however many cells carried it; a "
+                     f"track-mean weights each cell. Here {top_n} of {len(per)} {arm_label} tracks "
+                     f"come from `{top_pair}`, so the two means are genuinely different questions "
+                     f"-- and D4 settles which one is the headline.\n")
+        else:
+            L.append(f"Position scope dominates on this arm, as the mechanism note at the top "
+                     f"predicts: {abs(n_mean - t_mean):.5f} against the pooling unit's "
+                     f"{abs(t_mean - a_mean):.5f}.\n")
 
     L.append("\n## What has no old number, because there was none\n")
     L.append("| | bench |")
@@ -571,7 +708,14 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
                  "code returns a bare `0.0` with no variance vector, and a 0.0 is indistinguishable "
                  "from a perfect score in any table it lands in, so bench omits the key instead. "
                  "The pool is D7's and is built by `slurm/t18_varpool.sh` from the store's own "
-                 "training biosamples.\n")
+                 "training biosamples.\n\n"
+                 "Switching it on is not only a flag when the backend is a baked h5. A variance "
+                 "pool is a vector on the CORPUS bin grid; an h5-backed run's grid is whatever the "
+                 "bake tiled, which ends at the last whole window rather than at the end of the "
+                 "chromosome. bench compares the two lengths and refuses on a mismatch rather than "
+                 "weighting the wrong positions -- so a pool and a bake have to agree bin for bin, "
+                 "and a bake that stops short needs that decision made before `msevar` can be "
+                 "quoted from it.\n")
 
     L.append("\n## Accepted losses — put to the PI, and ruled on\n")
     L.append("Both were raised as capability the new suite does not carry, and both were accepted "
