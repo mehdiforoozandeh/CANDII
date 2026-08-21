@@ -73,9 +73,10 @@ def test_every_key_eval_py_emits_is_claimed_by_exactly_one_rule(tool, skeleton) 
     assert not orphan, (
         f"{len(orphan)} key(s) claimed by no rule — the D15 report would be incomplete: "
         f"{orphan[:10]}")
-    assert len(claimed) == 651, (
-        f"the fixture has {len(claimed)} leaf keys, not the recorded 651. If eval.py's output "
-        f"really changed, re-record the skeleton and say so; otherwise the flattener drifted.")
+    assert len(claimed) == 1411, (
+        f"the fixture has {len(claimed)} leaf keys, not the recorded 1411. If eval.py's output "
+        f"really changed, re-record the skeleton with `python tools/equivalence.py skeleton "
+        f"<run.json> {SKELETON}` and say so; otherwise the flattener drifted.")
 
 
 def test_the_report_refuses_to_render_while_a_key_is_unclaimed(tool, skeleton) -> None:
@@ -102,11 +103,14 @@ def test_the_denoise_half_mirrors_the_imputation_half(tool) -> None:
     `eval.py` is the cautionary case — `den_per_assay` and `imp_per_assay` were built by two
     near-identical code paths. Here the denoise rules are DERIVED, so the two cannot disagree.
     """
-    imp = {r.old: r for r in tool.RULES if r.old.startswith(("M1.imp_per_assay.", "M1.imp."))}
-    den = {r.old: r for r in tool.RULES if r.old.startswith(("M1.den_per_assay.", "M1.den."))}
+    heads = ("M1.imp_per_target.", "M1.imp_per_assay.", "M1.imp.")
+    imp = {r.old: r for r in tool.RULES if r.old.startswith(heads)}
+    den = {r.old: r for r in tool.RULES
+           if r.old.startswith(("M1.den_per_target.", "M1.den_per_assay.", "M1.den."))}
     assert imp and len(den) == len(imp)
     for old, r in imp.items():
-        twin = den[old.replace("M1.imp_per_assay.", "M1.den_per_assay.")
+        twin = den[old.replace("M1.imp_per_target.", "M1.den_per_target.")
+                      .replace("M1.imp_per_assay.", "M1.den_per_assay.")
                       .replace("M1.imp.", "M1.den.")]
         assert twin.verdict == r.verdict, old
 
@@ -186,3 +190,36 @@ def test_the_noise_floor_is_quoted_with_the_numbers(tool, skeleton) -> None:
     assert "same checkpoint" in text.lower(), (
         "a reader must be told both columns are one checkpoint, or they will read a measurement "
         "difference as the model changing")
+
+
+def test_the_fixture_carries_eval_pys_finest_level_and_not_only_its_coarser_ones(skeleton) -> None:
+    """The staleness that already happened once, pinned so it cannot happen twice.
+
+    The first fixture was recorded from a run made before this repo existed, whose `eval.py` had
+    no `imp_per_target` / `den_per_target`. Everything downstream looked healthy: 651 keys, every
+    one claimed, the gate green. 760 real keys -- 54% of the output, and the ONLY level that is a
+    like-for-like counterpart of bench's `per_track` -- were simply not in the fixture to be
+    unclaimed. A gate that can pass on a subset of the thing it gates is not a gate.
+    """
+    assert skeleton["M1"]["imp_per_target"], "the fixture predates eval.py's per-target level"
+    assert skeleton["M1"]["den_per_target"], "the fixture predates eval.py's per-target level"
+    a_track = next(iter(skeleton["M1"]["imp_per_target"]))
+    assert a_track.count("|") == 2, (
+        f"{a_track!r} is not an `input|target|assay` track key; bench's `per_track` uses that exact "
+        f"string, which is what makes the two comparable track by track")
+
+
+def test_the_per_assay_level_is_claimed_as_a_lost_level_not_as_a_lost_number(tool) -> None:
+    """`imp_per_assay` has no bench counterpart, and the report must say WHICH kind of loss it is.
+
+    The numbers under it are not gone -- every one is in `per_track` under a key naming the cell.
+    What is gone is the pooling step. A reader who sees `dropped` without that distinction will go
+    looking for a measurement that was never removed.
+    """
+    r = tool.match("M1.imp_per_assay.H3K4me3.crps")
+    assert r is not None and r.verdict == "dropped"
+    assert "LEVEL IS GONE" in r.why and "per_track" in r.why
+    assert tool.match("M1.den_per_assay.H3K4me3.crps").verdict == "dropped"
+    # ... while the per-TARGET form of the same key does have a counterpart
+    t = tool.match("M1.imp_per_target.T_a|B_a|H3K4me3.crps")
+    assert t is not None and t.verdict == "moved" and t.new == "per_track.*.count.crps"

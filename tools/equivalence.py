@@ -63,47 +63,56 @@ class Rule:
 # M1 — health
 # ---------------------------------------------------------------------------
 M1_RULES: Tuple[Rule, ...] = (
-    Rule("M1.imp_per_assay.*.crps", "moved", "per_track.*.count.crps",
-         f"{SCOPE}. Also per-assay -> per-track: an assay's number pooled every cell that carried "
-         f"it, which discards the cell, and the cell is the replication unit."),
-    Rule("M1.imp_per_assay.*.crps_oracle_scaled", "moved", "per_track.*.count.crps_oracle_scaled",
+    Rule("M1.imp_per_target.*.crps", "moved", "per_track.*.count.crps",
+         f"{SCOPE}. The track key is the same string on both sides "
+         f"(`input|target|assay`), so this is one track's number against the same track's."),
+    Rule("M1.imp_per_target.*.crps_oracle_scaled", "moved", "per_track.*.count.crps_oracle_scaled",
          SCOPE),
-    Rule("M1.imp_per_assay.*.scale_error", "moved", "per_track.*.count.scale_error", SCOPE),
-    Rule("M1.imp_per_assay.*.marg_crps", "moved", "per_track.*.count.marg_crps", SCOPE),
-    Rule("M1.imp_per_assay.*.marg_mu", "moved", "per_track.*.count.marg_mu", SCOPE),
-    Rule("M1.imp_per_assay.*.marg_n", "moved", "per_track.*.count.marg_n", SCOPE),
-    Rule("M1.imp_per_assay.*.beats_marginal", "moved", "per_track.*.count.beats_marginal", SCOPE),
-    Rule("M1.imp_per_assay.*.beats_marginal_oracle_scaled", "moved",
+    Rule("M1.imp_per_target.*.scale_error", "moved", "per_track.*.count.scale_error", SCOPE),
+    Rule("M1.imp_per_target.*.marg_crps", "moved", "per_track.*.count.marg_crps", SCOPE),
+    Rule("M1.imp_per_target.*.marg_mu", "moved", "per_track.*.count.marg_mu", SCOPE),
+    Rule("M1.imp_per_target.*.marg_n", "moved", "per_track.*.count.marg_n", SCOPE),
+    Rule("M1.imp_per_target.*.beats_marginal", "moved", "per_track.*.count.beats_marginal", SCOPE),
+    Rule("M1.imp_per_target.*.beats_marginal_oracle_scaled", "moved",
          "per_track.*.count.beats_marginal_oracle_scaled", SCOPE),
-    Rule("M1.imp_per_assay.*.c_star", "moved", "per_track.*.count.c_star", SCOPE),
-    Rule("M1.imp_per_assay.*.n_star_log2", "moved", "per_track.*.count.n_star_log2", SCOPE),
-    Rule("M1.imp_per_assay.*.crps_oracle_scaled_and_n", "moved",
+    Rule("M1.imp_per_target.*.c_star", "moved", "per_track.*.count.c_star", SCOPE),
+    Rule("M1.imp_per_target.*.n_star_log2", "moved", "per_track.*.count.n_star_log2", SCOPE),
+    Rule("M1.imp_per_target.*.crps_oracle_scaled_and_n", "moved",
          "per_track.*.count.crps_oracle_scaled_and_n", SCOPE),
-    Rule("M1.imp_per_assay.*.n_points", "moved", "per_track.*.count.n_points",
+    Rule("M1.imp_per_target.*.n_points", "moved", "per_track.*.count.n_points",
          "bench scores every bin, so this rises to the chromosome's bin count"),
-    Rule("M1.imp_per_assay.*.spearman_raw", "moved", "per_track.*.count.gwspear",
+    Rule("M1.imp_per_target.*.spearman_raw", "moved", "per_track.*.count.gwspear",
          f"renamed to the challenge's own spelling, same statistic. {SCOPE}"),
-    Rule("M1.imp_per_assay.*.pearson_log1p", "replaced", "per_track.*.count.gwcorr",
+    Rule("M1.imp_per_target.*.pearson_log1p", "replaced", "per_track.*.count.gwcorr",
          "gwcorr is Pearson on the RAW track, which is what score_metrics.py computes and what the "
          "published table reports. log1p Pearson is a different number and is not comparable to it; "
          "the E-block must match the organizers' code (D16), so the raw form wins."),
-    Rule("M1.imp_per_assay.*.r2", "dropped", None,
+    Rule("M1.imp_per_target.*.r2", "dropped", None,
          "r2 on raw counts is a monotone function of gwcorr under a fitted intercept and carried no "
          "decision the correlation did not; it was never quoted in AGENTS.md §7"),
-    Rule("M1.imp_per_assay.*.mse_log", "replaced", "per_track.*.count.mse",
+    Rule("M1.imp_per_target.*.mse_log", "replaced", "per_track.*.count.mse",
          "the E-block's `mse` is on the untransformed track, because normalize_dict is a no-op in "
          "score_metrics.py and the published numbers are untransformed (D16, quirk 5). mse_log and "
          "mse are not comparable and the report must not present them as a delta."),
-    Rule("M1.imp_per_assay.*.median_mu", "dropped", None,
+    Rule("M1.imp_per_target.*.median_mu", "dropped", None,
          "a diagnostic of the marginal fit, superseded by marg_mu / marg_n which are the fitted "
          "parameters themselves"),
-    Rule("M1.imp_per_assay.*.median_target", "dropped", None, "a diagnostic of the marginal fit, superseded by marg_mu / marg_n, as median_mu"),
-    Rule("M1.imp_per_assay.*.marg_crps_legacy_median", "dropped", None,
+    Rule("M1.imp_per_target.*.median_target", "dropped", None, "a diagnostic of the marginal fit, superseded by marg_mu / marg_n, as median_mu"),
+    Rule("M1.imp_per_target.*.marg_crps_legacy_median", "dropped", None,
          "the SUPERSEDED marginal: mu = median(target) + 1e-6. On 4 of 8 assays the median count is "
          "0, so the legacy bar was a near-zero constant and beating it meant nothing. It shipped "
          "beside the CRPS-optimal marginal only to show the gap; with the old suite gone there is "
          "nothing left for it to be a gap against."),
-    Rule("M1.imp_per_assay.*.marg_mu_legacy_median", "dropped", None, "the superseded legacy-median marginal's fitted mu; it goes with marg_crps_legacy_median"),
+    Rule("M1.imp_per_target.*.marg_mu_legacy_median", "dropped", None, "the superseded legacy-median marginal's fitted mu; it goes with marg_crps_legacy_median"),
+
+    # The middle level. eval.py had THREE: per target, per assay, per panel. bench has two.
+    Rule("M1.imp_per_assay.*", "dropped", None,
+         "THE PER-ASSAY LEVEL IS GONE, not the numbers in it. eval.py averaged an assay's score "
+         "over every cell that carried it, and that average discards the cell -- which is the "
+         "replication unit (D4 makes the per-track score the primitive and the mean over TRACKS "
+         "the headline). Every value this level averaged is in `per_track`, under a key that names "
+         "the cell, so a reader who wants a per-assay mean can still take one and will be able to "
+         "say what it is a mean over. The 20 field-level rules above apply unchanged at that level."),
 
     Rule("M1.imp.crps", "moved", "macro.count.crps", f"{SCOPE}. {POOL}"),
     Rule("M1.imp.ece", "moved", "macro.count.ece", f"{SCOPE}. {POOL}"),
@@ -250,7 +259,8 @@ def denoise_twin(r: Rule) -> Optional[Rule]:
     Denoising is opt-in in bench (`--kinds denoise`) and its track keys carry a fourth field, so
     every bench-side path is rewritten to the denoise track and the denoise macro.
     """
-    old = r.old.replace("M1.imp_per_assay.", "M1.den_per_assay.") \
+    old = r.old.replace("M1.imp_per_target.", "M1.den_per_target.") \
+               .replace("M1.imp_per_assay.", "M1.den_per_assay.") \
                .replace("M1.imp.", "M1.den.").replace("M1.imp_macro_", "M1.den_macro_")
     if old == r.old:
         return None                      # not an imputation rule; nothing to mirror
@@ -426,6 +436,19 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
     L.append(f"**Checkpoint** `{run.get('config', {}).get('tag', '?')}` — the SAME weights on both "
              f"sides. `train.py` writes the checkpoint (line 1300) and then calls `evaluate()` on "
              f"the model still in memory (line 1339), so nothing here is a model difference.\n")
+    cfg = run.get("config", {})
+    L.append("**What this run is, and what it is not.** "
+             f"{cfg.get('n_params', '?'):,} parameters "
+             f"(d_model {cfg.get('d_model', '?')}, {cfg.get('n_transformer_layers', '?')} layers), "
+             f"trained {cfg.get('epochs', '?')} epochs on {cfg.get('train_chroms', '?')} of "
+             f"`{Path(str(cfg.get('h5', '?'))).name}` and scored on {cfg.get('eval_chroms', '?')}, "
+             f"{cfg.get('num_assays', '?')} assays. That is the smoke-scale recipe, not CANDI's "
+             "~2.35 M-parameter production architecture. **No number in this document is a "
+             "statement about how well CANDI imputes.** The document's claim is narrower and does "
+             "not depend on the model being good: for each key, where it went and by what "
+             "mechanism. A wrong-sized model would break that claim only if a key were missing, "
+             "and a missing key is exactly what the coverage gate refuses.\n"
+             if cfg else "")
     L.append(f"**{len(claimed)} eval.py leaf keys**, every one claimed by a rule. "
              + ", ".join(f"{v}: {len(by_verdict[v])}" for v in by_verdict) + "\n")
     L.append("## The one mechanism that explains most of this table\n")
@@ -521,8 +544,27 @@ def _fmt(v: Any) -> str:
     return str(v)
 
 
+def strip_values(obj: Any) -> Any:
+    """A run JSON with every measured value replaced by `null` and every list emptied.
+
+    This is what `tests/fixtures/eval_key_skeleton.json` holds, and it is a COMMAND rather than a
+    hand edit for a reason that already bit once: the fixture was first recorded from a run made
+    before this repo existed, whose `eval.py` had no `imp_per_target` / `den_per_target` level.
+    The coverage gate passed against it while 760 real keys -- 54% of the output -- were claimed by
+    nothing at all. A fixture that can only be re-recorded by hand goes stale silently; one that is
+    re-recorded by `python tools/equivalence.py skeleton <run.json> <out.json>` does not.
+
+    Values are stripped because a number in `tests/` is a number outside the vault.
+    """
+    if isinstance(obj, dict):
+        return {k: strip_values(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return []
+    return None
+
+
 def main(argv: List[str]) -> int:
-    if not argv or argv[0] not in ("map", "cover", "report"):
+    if not argv or argv[0] not in ("map", "cover", "report", "skeleton"):
         print(__doc__)
         return 2
     cmd = argv[0]
@@ -532,6 +574,23 @@ def main(argv: List[str]) -> int:
         print(f"\n{len(RULES)} rules")
         return 0
     run = json.loads(Path(argv[1]).read_text())
+    if cmd == "skeleton":
+        body = {b: strip_values(run[b]) for b in ("M1", "M2", "M3", "S14") if b in run}
+        body["_provenance"] = {
+            "source": f"candi.train run {run.get('config', {}).get('tag', '?')}, "
+                      f"{Path(run.get('config', {}).get('h5', '?')).name}, "
+                      f"{run.get('config', {}).get('num_assays', '?')} assays",
+            "what_this_is": "the KEY STRUCTURE of candi.eval's output and nothing else",
+            "why_values_are_null": "every measured value is stripped. This fixture exists to hold "
+                                   "tools/equivalence.py's rule table to a real key set; a recorded "
+                                   "number belongs in cruxvault/, never in tests/, and AGENTS.md "
+                                   "section 7 is frozen.",
+            "recorded_by": "python tools/equivalence.py skeleton <run.json> <out.json>",
+        }
+        out = Path(argv[2])
+        out.write_text(json.dumps(body, indent=1, sort_keys=True))
+        print(f"wrote {out} ({len(flatten(body)) } leaf keys)")
+        return 0
     if cmd == "cover":
         claimed, orphan = cover(run)
         print(f"{len(claimed)} eval.py leaf keys claimed by {len(RULES)} rules")
