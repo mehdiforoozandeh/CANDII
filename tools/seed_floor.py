@@ -90,12 +90,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("runs", nargs="+", help="two or more result JSONs, same recipe, different seed")
     p.add_argument("--suite", choices=["bench", "eval"], default=None,
                    help="default: detected from the first file")
+    p.add_argument("--arm", choices=["impute", "denoise", "all"], default="impute",
+                   help="which tracks the per-track block covers. `impute` by default, because "
+                        "bench keeps both arms in one map and denoising is the easier task -- a "
+                        "median over the union is not comparable to eval.py's imputation-only one.")
     p.add_argument("--out", default=None)
     args = p.parse_args(argv)
     if len(args.runs) < 2:
         raise SystemExit("two seeds at minimum; one run has no spread to report")
 
     docs = [json.loads(Path(r).read_text()) for r in args.runs]
+    arm = args.arm
     suite = args.suite or detect(docs[0])
     names = [Path(r).stem for r in args.runs]
 
@@ -117,6 +122,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     block, pick = PER_TRACK[suite]
     per = [_get(d, block) or {} for d in docs]
     common = sorted(set(per[0]).intersection(*[set(x) for x in per[1:]])) if per[0] else []
+    # SPLIT BY ARM. bench keeps imputation and denoising in one `per_track` map, and denoising is
+    # the easier task with the smaller spread and usually the larger count -- on the t22 panel, 26
+    # denoise tracks against 12 impute. A median over the union is a median of the denoise arm
+    # wearing both names, and it is not comparable to eval.py's, which is imputation only.
+    if arm == "impute":
+        common = [k for k in common if not k.endswith("|denoise")]
+    elif arm == "denoise":
+        common = [k for k in common if k.endswith("|denoise")]
     rows = []
     for k in common:
         recs = [pick(x[k]) for x in per]
@@ -132,7 +145,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             extra[f] = fv if all(isinstance(v, (int, float)) for v in fv) else None
         rows.append((k, vals, extra))
     if rows:
-        L += ["", f"## Per track — CRPS across {len(rows)} tracks common to every run\n",
+        L += ["", f"## Per track — CRPS across {len(rows)} `{arm}` tracks common to every run\n",
               "The macro is a mean of these. A macro that holds still while its tracks swing is a "
               "macro whose stability is an averaging artefact, and the track spread is what an "
               "arm-vs-arm claim has to clear.\n",

@@ -101,7 +101,7 @@ def test_only_tracks_present_in_every_run_are_compared(tool, tmp_path, capsys) -
     out = capsys.readouterr().out
     assert "T|B|X" in out.replace("\\|", "|")
     assert "ONLY_A" not in out
-    assert "1 tracks common to every run" in out
+    assert "1 `impute` tracks common to every run" in out
 
 
 def test_a_raw_spread_that_is_all_scale_is_named_as_scale(tool, tmp_path, capsys) -> None:
@@ -127,3 +127,20 @@ def test_it_never_calls_a_range_a_confidence_interval(tool, tmp_path, capsys) ->
     out = capsys.readouterr().out.lower()
     assert "confidence interval" not in out
     assert "not a distribution" in out
+
+
+def test_the_per_track_block_is_one_arm_and_not_the_union(tool, tmp_path, capsys) -> None:
+    """bench keeps both arms in one `per_track` map, and denoising is the easier task with the
+    smaller spread and, on the t22 panel, more than twice the track count. A median over the union
+    is a median of the denoise arm wearing both names, and it is not comparable to `eval.py`'s
+    imputation-only one."""
+    a = _write(tmp_path, "a.json", _bench(1.0, {"T|B|X": 1.0, "T|T|Y|denoise": 1.0}))
+    b = _write(tmp_path, "b.json", _bench(1.0, {"T|B|X": 2.0, "T|T|Y|denoise": 1.0}))
+    tool.main([a, b])                                   # default arm=impute
+    out = capsys.readouterr().out
+    assert "1 `impute` tracks" in out
+    assert "denoise" not in out.replace("--arm", "")
+    assert "median 1.00000" in out                      # not 0.5, which the union would give
+
+    tool.main([a, b, "--arm", "denoise"])
+    assert "1 `denoise` tracks" in capsys.readouterr().out

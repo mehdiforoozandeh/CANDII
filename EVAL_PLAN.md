@@ -390,13 +390,20 @@ they change how the plan's own numbers must be read.
    `total <= 1e-12` branch fires when the estimator cannot resolve variance, which is a different
    statement and is false here. **Owed: separate "no variance" from "below resolution", and ship
    the naive variance and the bias term so a reader can tell which fired.**
-6. **The seed floor.** §7.2's numbers were measured on the full EIC panel under `candi.eval`.
-   Measured on *this* recipe, an `eval.py` seed change moves imputation macro CRPS by **0.0327** —
-   so the report's +0.1136 is 3.5x the recipe's own noise, not inside it. Per track the picture
-   inverts and is the reassuring one: the measurement change moves CRPS by a median of **0.006**
-   while a seed change moves the same tracks by a median of **0.056**, max **1.09**. On that worst
-   track the oracle-scaled spread is 0.322, so most of the 1.09 is SCALE, not ranking — §7.2's
-   split doing exactly the job it was written for. `tools/seed_floor.py` measures this.
+6. **The seed floor.** §7.2's numbers were measured on the full EIC panel under `candi.eval`, and
+   this recipe is 3.7x quieter: a seed change moves imputation macro CRPS by **0.0327** under
+   `eval.py` and **0.0608** under `bench`. Quoting §7.2 here would make a real difference read as
+   noise — **use the recipe's own floor, not §7.2's, for anything measured on q19**.
+   Per track (imputation, 12 tracks, absolute shift) the picture is the reassuring one: the
+   measurement change has median **0.0257**, a seed change **0.0559** (`eval.py`) / **0.0719**
+   (`bench`) — so a seed moves a track two to three times as much as the cutover does. The signed
+   measurement median is −0.006, which says the change has no systematic direction and is NOT a
+   ratio to set against the absolute seed figures. One track carries the tail under both
+   instruments — `T_heart_left_ventricle|V_heart_left_ventricle|H3K4me3`, 1.09 (`eval.py`) and 1.19
+   (`bench`) — with the oracle-scaled shift only 0.32 and `scale_error` 0.068 → 0.836: its
+   calibration slipped, its ranking did not. **That is the first time §7.2's split has been seen to
+   bite on real numbers here rather than be asserted as policy.** `tools/seed_floor.py` measures
+   all of it; `cruxvault/results/t22/SEED_FLOOR.md` is the record.
 
 ### t20 — the eight places the plan was silent, and what was chosen
 
