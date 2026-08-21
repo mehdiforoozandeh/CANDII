@@ -344,21 +344,47 @@ A PR without those numbers in it is not this PR.
 
 ---
 
-## 11. State of the work (updated 2026-08-20)
+## 11. State of the work (updated 2026-08-21)
 
 **Branch:** `implementation/t17-eval-suite`, pushed to `origin`, merged up to `origin/main` at
-`d9a6ede` (which carries t23). **688 tests pass, 1 skipped, `golden.py check` 0 ULP.**
+`d9a6ede` (which carries t23). **713 tests pass, 1 skipped, `golden.py check` 0 ULP.**
 
 The 1 skip is `test_real_v2_blacklist_is_the_one_that_is_three_orders_larger`, which needs
 `cruxvault/results/t4/` — untracked by design, so absent in a fresh checkout or worktree.
 
 | stage | state |
 |---|---|
-| **t18** assets | **done for the beds.** GENCODE v29, FANTOM5, the stub blacklist and `gtf_to_bed.sh` pinned and checksummed under `src/candi/bench/assets/`. **The `msevar` variance pools are NOT built** — they need the store, which is on Fir. `annotations.build_variance_pools` is written and unrun. |
+| **t18** assets | **done.** The beds pinned and checksummed under `src/candi/bench/assets/`. The `msevar` pools are built (job `55875262`): the `eic` store's `T_` split is **51 biosamples / 267 pval tracks, exactly the challenge's 267**, chr21+chr22+chrX, 30 of 35 assays usable. The builder had never been run and did not work — see `cruxvault/results/t18/DELIVERABLE.md`. |
 | **t19** primitives + layers 1–2 | **done.** `eic.py`, `partitions.py`, `distributional.py`, `binary.py`; 46 reference tests at 0 ULP, 42 analytic tests. |
 | **t20** harness + CLI | **done.** `ranking.py` verified against the published table; `harness.py` and `cli.py` score a real checkpoint end to end on both backends, 31 tests. |
 | **t21** C-block | **done.** All six instruments, 23 stub-model tests. |
-| **t22** cutover | **not started.** No longer blocked — t20 and t21 are both in. |
+| **t22** cutover | **report published, deletion NOT done.** One checkpoint scored by both suites (jobs `55866843` / `55868561`); `cruxvault/results/t22/EQUIVALENCE.md` claims all 1,411 `eval.py` keys under 114 rules. `eval.py` stays until the PI has read the table. See below. |
+
+### t22 — what the equivalence run established, and what it owes
+
+Full record in `cruxvault/results/t22/{DELIVERABLE,FINDINGS}.md`. Four things belong here because
+they change how the plan's own numbers must be read.
+
+1. **The headline macro delta is the POOLING UNIT, not position scope.** Imputation macro CRPS
+   moves +0.11355. `eval.py`'s own per-track level splits it exactly: pooling unit (assay-mean →
+   track-mean) **+0.12957**, position scope (16.7% of chr21 → all of it) **−0.01602**. Across the
+   twelve tracks the CRPS shift has median −0.006. **Consequence: every macro CRPS in `AGENTS.md`
+   §7 is an assay-mean, and a `bench` macro may not be differenced against one.** The like-for-like
+   term is `eval.py`'s per-track mean, and it is now written down.
+2. **`eval.py` cannot simply be deleted.** 298 of its 1,460 lines are the mid-training scorer
+   (`quick_eval`, `build_eval_units`), which `run_bench` cannot replace — `run_bench` took 25
+   minutes on this 8-assay panel. 850 lines are measurement-only. The survivors need a home in the
+   same commit; `_build_vb_natural_missing_meta` is among them and is already half-lifted into
+   `bench.harness.vb_natural_meta`.
+3. **The bake's eval chromosome is 623 bins short of the corpus store's** (1,867,776 against
+   1,868,399 on chr21), because `H5Source.n_bins` is `max(window_start) + context_bins`. Harmless
+   to every current number, and the reason `--varpool` cannot be switched on for an h5-backed run:
+   a variance pool is a vector on the corpus grid and `run_bench` refuses a length mismatch.
+   **Owed: tile the bake to the chromosome end, or trim genome-grid assets to the bake.**
+4. **`C3_calibration.perfect_model_ceiling` is 0.73 beside a measurement of 1.00.** The ceiling was
+   a consequence of S14's foreground mask; C3 scores the whole track and has no such cap, and its
+   unit is the level (4) rather than the target (12). The constant has NOT been changed — that is a
+   scientific call. **Owed: re-derive the ceiling for whole-track support, or give C3 the mask.**
 
 ### t20 — the eight places the plan was silent, and what was chosen
 
