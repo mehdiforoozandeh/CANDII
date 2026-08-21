@@ -128,7 +128,13 @@ swallow it. Avoid `models/` and `logs/` for the same reason.
     `from model import`, `from _utils import`, or `SANDBOX_ASSAYS`.
 13. **The SLURM GPU spec is fixed.** Every `#SBATCH --gres` line reads
     `--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1`. The bake does no GPU compute; it requests the
-    smallest MIG slice only to route through the GPU account.
+    smallest MIG slice only to route through the GPU account. *No other gres spec is ever
+    permitted* — in particular never `--gres=gpu:h100:1`, and never `--gpus=h100:1` as a loophole.
+    Dropping the line entirely is the one sanctioned escape, and only for a bake job, only when the
+    GPU queue is measurably starving the run, and only with `sbatch --test-only` first showing the
+    CPU partition would start it. `slurm/t25_rebuild_pval_cpu.sh` is the sole instance and carries
+    the case in its header; splitting an array across both routes needs **disjoint index ranges**,
+    because two tasks writing one output file is the real hazard, not the queue.
 14. **`--heads` changes the objective, not just the architecture.** `count` is required and is the
     only head `eval.py` scores. `signal` and `peak` add loss terms supervised on full-depth targets
     only, so a run naming either is **not** a control for a run that does not.
