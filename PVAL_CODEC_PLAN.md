@@ -1,8 +1,13 @@
 # PVAL_CODEC_PLAN — arcsinh fixed point for the store's pval layer
 
 **Status:** **approved by the PI on 2026-08-21.** Every decision below is settled; do not re-open them.
-Nothing has been run yet. Tasks: **t24** (the codec), **t25** (the rebuild, blocked by t24), and
-**t26** (D30's target transform, independent of both — it can land first).
+
+**Progress.** **t26** and **t24** are implemented and pushed (`implementation/t26-signal-target-transform`
+→ `be754bb`, `implementation/t24-arcsinh-pval` → `7e1d01f`), each with `pytest tests/ -q` green and
+`tools/golden.py check` bit-exact. **t25**'s scripts and its verification gate are written and tested
+(`implementation/t25-pval-rebuild` → `4562deb`) but **nothing has been submitted to Fir**: §5 blocks
+on t24 merging to `main`. See §8 for the two things the implementation forced that this plan did not
+anticipate.
 
 The PI ruled on four points: the fixed-point scale is **2000**; the loader stays in raw `-log10 p`
 space and the signal head's target transform moves into the training loop as a configurable option
@@ -285,3 +290,48 @@ The report and the scan JSON go to `cruxvault/results/t25/`.
 - **The signal head's numbers move.** Every recorded pre-CANDII signal-head number was produced
   against the `arcsinh` bake. After this change the store path agrees with them, which is the point,
   but nothing store-trained before it is comparable. That is `AGENTS.md` §7.2 territory, not a bug.
+
+---
+
+## 8. What the implementation forced that this plan did not anticipate
+
+Two decisions had to be made while building t24 and t14. Neither re-opens anything above; both are
+recorded here because a reader of §2 would otherwise find code that does more than the plan says.
+
+### 8.1 D27's schema bump needed a MEMBERSHIP check, not an equality one
+
+`SCHEMA_VERSION` is stamped on **every** kind, not just pval, and `manifest.py::verify_store` and
+`reader.py` both compared it for **equality**. Bumping it to 2 would therefore have made every
+existing `counts.h5`, `peaks.h5`, `dna.h5` and `mask.h5` fail validation — and t25 rebuilds the pval
+layer only, so a correct corpus is **mixed by construction**.
+
+So `SUPPORTED_SCHEMA_VERSIONS = (1, 2)`: the writer emits only 2, the readers accept either. An
+equality check would have turned a pval codec bump into a whole-corpus rebuild of every kind, which
+is a far larger operation and buys nothing. `verify_store` gained one new rule in exchange — a
+schema-2 pval file that carries no `transform` attr is a **problem**, because its units are then
+unrecoverable, which is the entire point of D27.
+
+### 8.2 D31 — the imputation pairing is declared (t14)
+
+Not a codec decision, but it landed in the same pass and belongs on the record. `eval.py` scores
+imputation by prompting with one biosample and comparing against a **different** one; the bake finds
+that second biosample by string surgery on the first (`T_X` → `V_X` / `B_X`), and **D16 forbids that
+here** — store biosample names are opaque ids.
+
+**D31: the pairing is a declared `eval_pairs: [[input, target], …]` in the regime file.** Optional and
+absent by default, so every regime written before t14 is unchanged. The regime refuses a pair naming
+one biosample twice, a repeated pair, and a target that also appears in `biosamples.train`.
+
+`log_ref` — the sixth key on t14's list — is deliberately **not** emitted, and `eval.py`'s own dataset
+factory is still h5-only, so `train.py --store` still skips `evaluate()`. Both are filed: **t28**
+(wire the factory) and **t29** (decide what a store-backed reference table even is).
+
+### 8.3 A third defect, found while measuring t16
+
+Unrelated to the codec, and recorded here only because it changes how the store-vs-bake comparison
+must be read. `StoreDataset._thin` seeds each deterministic draw from
+`(run_seed, biosample, assay, chrom, window_start, dsf_milli(dsf))` — with **no x/y term** — so under
+D22's counter-based eval RNG, `x_dsf == y_dsf` yields the *same draw* and the store reproduces the
+bake's full 1-in-4 identity-copy leak rather than the 1-in-16 it does while training. Latent today,
+because `eval.py` pins `dsf_sampling="off"`. Filed as **t27**, PI-gated: fixing it moves every
+deterministic eval number. Measurement in `cruxvault/results/t16/REPORT.md`.

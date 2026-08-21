@@ -14,10 +14,13 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job
+- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF
+- `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store
 
 ## Blocked
 
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — blocked by `t24`
+- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — blocked by `t14`
 
 ## By category
 
@@ -35,6 +38,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *open*
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *blocked*
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *open*
+- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *open*
+- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *blocked*
+- `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store — *open*
 
 ## Done · Dropped
 
