@@ -63,11 +63,21 @@ if [ "$MODE" = "train" ]; then
 elif [ "$MODE" = "bench" ]; then
   # --arch-from rebuilds the EXACT model that wrote the checkpoint from the run's own JSON, so no
   # architecture flag is retyped here and none of them can be retyped wrong.
+  # VARPOOL is optional and OFF by default. Without it `msevar` is absent rather than the
+  # organizers' bare 0.0, which is the honest outcome and the one this report first shipped with;
+  # with it the E-block is nine measures instead of eight. The pool is D7's, built by
+  # slurm/t18_varpool.sh from the eic store's own training biosamples, in PVAL space -- so it may
+  # only ever weight the pval arm (EVAL_PLAN.md section 9, item 7).
+  #   VARPOOL=/scratch/$USER/candi_kit/varpool BENCH_TAG=bench_varpool sbatch ... bench
+  BENCH_TAG="${BENCH_TAG:-bench}"
+  VARPOOL="${VARPOOL:-}"
+  EXTRA=()
+  [ -n "$VARPOOL" ] && EXTRA=(--varpool "$VARPOOL" --varpool-corpus "${VARPOOL_CORPUS:-eic}")
   python -m candi.bench \
     --h5 "$H5" --ckpt "$OUT/$TAG.ckpt" --arch-from "$OUT/$TAG.json" \
-    --out "$OUT/$TAG.bench.json" \
+    --out "$OUT/$TAG.$BENCH_TAG.json" \
     --heads count,signal --kinds impute,denoise --blocks E,P,D,B,C \
-    --seed 0 --batch-windows 8
+    --seed 0 --batch-windows 8 ${EXTRA[@]+"${EXTRA[@]}"}
   rc=$?
 else
   echo "[error] mode must be train or bench, got '$MODE'" >&2; exit 2
