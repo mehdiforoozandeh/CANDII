@@ -564,10 +564,21 @@ q = round(arcsinh(x)·S)     x̂ = sinh(q/S)     x̂ − x ≈ ε·√(1+x²),  
 | 655 | 0.16 (0.025%) | 0.005 (0.0008%) |
 | **17,731** | **4.4 (0.025%)** | **clipped to 655.35 (96%)** |
 
-So: ~20× finer below 1, 2–5× coarser between 100 and 655, and the truncation gone. It costs
-**+6.2 to +7.8%** on disk (measured on real chr20 tracks at this package's own chunking and gzip
-level) — the same bytes as float16, at float16's precision, without float16's uneven step and
-without float16's ability to carry `inf` into the file.
+So: ~20× finer below 1, 2–5× coarser between 100 and 655, and the truncation gone.
+
+**It costs about +43% on disk**, measured on the real rebuild (t25, 2026-08-21): 0.7791 bytes/bin
+under the old linear ×100 codec against **1.1168 bytes/bin** under arcsinh ×2000, on the same
+biosamples at the same chunking and gzip level. A pre-build estimate on a chr20 sample said +6-8%
+and was wrong by roughly 6×.
+
+**The cost is at the LOW end of the range, not the high end**, and that is worth understanding
+before choosing a scale. Under linear ×100 every `-log10 p` below 0.005 quantized to **code 0** —
+which is most of the genome — so the tracks were long runs of literal zeros and gzip ate them. Under
+arcsinh ×2000, `-log10 p` of 0.001 is code 2 and 0.0005 is code 1: the background becomes small
+varying integers, the runs break up, and the per-chunk entropy jumps. The extra bytes buy the ~20×
+precision gain below `-log10 p` of 1 shown in the table above. **If disk ever binds, halve the
+scale** — 1000 halves the codes in exactly that background region, and 5e-4 relative precision is
+still far below the track's own noise.
 
 **The bound is relative, so assert it that way.** `err <= eps * hypot(1, x)` is the exact form: an
 absolute 2.5e-4 below `-log10 p` of 1, a relative 2.5e-4 above it. `decode_pval` evaluates `sinh` in

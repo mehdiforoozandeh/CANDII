@@ -97,8 +97,9 @@ So: ~20× finer below `-log10 p` of 1, about 2–5× coarser between 100 and 655
 gone. Because the model re-applies `arcsinh`, its training target sees the flat ±2.5e-4 and no `cosh`
 amplification at all — the round trip cancels.
 
-**Size, measured** on real chr20 tracks re-encoded at the store's own `(1024, n_tracks)` chunking and
-gzip4:
+**Size — the estimate below is WRONG. See §8.4 for the measured number (+43%, not +6-8%).** It is
+left here because it is what the decision was approved on. Measured on real chr20 tracks re-encoded
+at the store's own `(1024, n_tracks)` chunking and gzip4:
 
 | codec | `B_SJCRH30` (6 tracks) | `T_H1-hESC` (22 tracks) |
 |---|---|---|
@@ -109,7 +110,8 @@ gzip4:
 | float16 | +6.7% | +4.1% |
 
 `S = 2000` costs the same bytes as float16 and matches its 0.025% precision, while never clipping and
-admitting no `inf`/`NaN` into the file. Corpus-wide that is roughly **+20 GB on 289 GB**.
+admitting no `inf`/`NaN` into the file. Corpus-wide that was estimated at **+20 GB on 289 GB** — the
+real figure is **+132 GB on 307 GB**; see §8.4.
 
 
 ### 2.2 Why a scale at all, when `arcsinh` already compresses
@@ -125,7 +127,9 @@ precision is relative, so its steps are uneven across the range — 0.0005 near 
 carry `inf` or `NaN` into the file. `arcsinh` + float32 is uniform but doubles the pval layer from
 289 GB to 578 GB.
 
-So the scale is the precision-against-disk dial, spending 65,536 codes across ~10.5 units of range:
+So the scale is the precision-against-disk dial, spending 65,536 codes across ~10.5 units of range.
+**The measured column below is wrong by roughly 6x — see §8.4.** The RANKING it implies survives; the
+magnitudes do not:
 
 | scale | codes used of 65,536 | step (arcsinh) | measured size |
 |---|---|---|---|
@@ -335,3 +339,44 @@ D22's counter-based eval RNG, `x_dsf == y_dsf` yields the *same draw* and the st
 bake's full 1-in-4 identity-copy leak rather than the 1-in-16 it does while training. Latent today,
 because `eval.py` pins `dsf_sampling="off"`. Filed as **t27**, PI-gated: fixing it moves every
 deterministic eval number. Measurement in `cruxvault/results/t16/REPORT.md`.
+
+### 8.4 The codec costs +43% on disk, not +6-8%. The estimate in §2.1 was wrong.
+
+**Measured on the real rebuild**, 2026-08-21, over the first 16 EIC biosamples to complete, at the
+store's own chunking and gzip level — i.e. exactly the thing §2.1 tried to predict:
+
+| | bytes/bin | total |
+|---|---|---|
+| t12's record, linear ×100 (eic) | 0.7791 | 34.29 GB |
+| the 73 not-yet-rebuilt files in the same corpus | 0.7195 | 28.33 GB |
+| **the 16 rebuilt files, arcsinh ×2000** | **1.1168** | 8.90 GB |
+
+**+43.3%** against t12's recorded mean, **+55.2%** against the still-linear files beside them. The
+first single file went 417.8 MB → 614.8 MB. Projected corpus-wide: 307 GB → **~439 GB, so +132 GB**
+rather than the +20 GB §2.1 predicted.
+
+**Why the chr20 estimate missed it.** The mechanism is the low end of the range, not the high end.
+Under linear ×100, every `-log10 p` below 0.005 quantizes to **code 0** — and that is most of the
+genome, which is background. Those tracks were therefore long runs of literal zeros, which gzip
+encodes almost for free. Under arcsinh ×2000, `-log10 p` of 0.001 becomes code 2 and 0.0005 becomes
+code 1: the background stops being one run and becomes small varying integers, and the entropy of
+the chunk goes up sharply. §2.1's chr20 sample evidently did not carry a representative share of
+that background, so it measured the peak-rich behaviour and missed the part that dominates.
+
+Note the irony worth recording: **the extra bytes are being spent almost entirely on the low end,
+which is the part nobody was complaining about.** §2.1's own table shows the win there — 0.25%
+error instead of 5% below `-log10 p` of 0.1 — so this is a real gain, just not the one D25 was
+approved for, and it is what it costs.
+
+**What this does and does not change.**
+
+- **Not operational.** `/project` had 12 TiB free of 28 TiB at submit time; +132 GB is 1% of that.
+  The rebuild was not at risk and was not stopped.
+- **It does bear on the scale choice.** If disk ever binds, `scale = 1000` is now the obviously
+  better trade than it looked in §2.2: it halves the codes in exactly the background region that is
+  driving the cost, and 5e-4 relative precision is still far below the pval track's own noise. **This
+  does not re-open D25** — the PI ruled 2000, the corpus is being built at 2000, and rebuilding again
+  to save 60 GB nobody needs would be silly. It is recorded so the next codec decision starts from
+  the measured number instead of the estimated one.
+- **§2.1 and §2.2 are left as written**, with pointers here. They are what the decision was approved
+  on, and rewriting them would erase the fact that the approval rested on a wrong number.
