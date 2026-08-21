@@ -689,7 +689,11 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
                 ov = f"{counts[r.old]} keys"
                 nv = f"{counts[r.old]} keys" if r.new else "—"
             else:
-                ov, nv = _fmt(old), _fmt(new)
+                ov = _fmt(old)
+                # A bench path holding a `*` names a FAMILY, so there is no single cell to print.
+                # Printing the em dash there is indistinguishable from "bench does not have it",
+                # which is the one thing a `same`/`moved` row must not look like.
+                nv = "per track" if (r.new and "*" in r.new) else _fmt(new)
             L.append(f"| {_cell(fam)} | {_cell(('`' + r.new + '`') if r.new else '—')} | "
                      f"{ov} | {nv} | {_cell(r.why)} |")
 
