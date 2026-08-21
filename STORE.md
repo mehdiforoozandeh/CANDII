@@ -566,10 +566,12 @@ q = round(arcsinh(x)·S)     x̂ = sinh(q/S)     x̂ − x ≈ ε·√(1+x²),  
 
 So: ~20× finer below 1, 2–5× coarser between 100 and 655, and the truncation gone.
 
-**It costs about +43% on disk**, measured on the real rebuild (t25, 2026-08-21): 0.7791 bytes/bin
-under the old linear ×100 codec against **1.1168 bytes/bin** under arcsinh ×2000, on the same
-biosamples at the same chunking and gzip level. A pre-build estimate on a chr20 sample said +6-8%
-and was wrong by roughly 6×.
+**It costs +33% on disk**, measured over the whole rebuild once all 455 files had landed
+(t25, 2026-08-21): the pval layer went **307 GB → 414.4 GB**, i.e. **+107.7 GB**. Per corpus, eic
+34.29 → **46.39 GB** (+35.3%) and merged 272.68 → **363.27 GB** (+33.2%). A pre-build estimate on a
+chr20 sample said +6-8% and was wrong by roughly 5×; a mid-run reading off the first 16 finished
+files said +43% and overstated it, because those 16 are the alphabetical head of the list rather
+than a random sample. **+33% is the number to quote.**
 
 **The cost is at the LOW end of the range, not the high end**, and that is worth understanding
 before choosing a scale. Under linear ×100 every `-log10 p` below 0.005 quantized to **code 0** —

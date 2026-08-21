@@ -97,7 +97,7 @@ So: ~20× finer below `-log10 p` of 1, about 2–5× coarser between 100 and 655
 gone. Because the model re-applies `arcsinh`, its training target sees the flat ±2.5e-4 and no `cosh`
 amplification at all — the round trip cancels.
 
-**Size — the estimate below is WRONG. See §8.4 for the measured number (+43%, not +6-8%).** It is
+**Size — the estimate below is WRONG. See §8.4 for the measured number (+33%, not +6-8%).** It is
 left here because it is what the decision was approved on. Measured on real chr20 tracks re-encoded
 at the store's own `(1024, n_tracks)` chunking and gzip4:
 
@@ -111,7 +111,7 @@ at the store's own `(1024, n_tracks)` chunking and gzip4:
 
 `S = 2000` costs the same bytes as float16 and matches its 0.025% precision, while never clipping and
 admitting no `inf`/`NaN` into the file. Corpus-wide that was estimated at **+20 GB on 289 GB** — the
-real figure is **+132 GB on 307 GB**; see §8.4.
+real figure is **+107.7 GB on 307 GB**; see §8.4.
 
 
 ### 2.2 Why a scale at all, when `arcsinh` already compresses
@@ -340,7 +340,7 @@ bake's full 1-in-4 identity-copy leak rather than the 1-in-16 it does while trai
 because `eval.py` pins `dsf_sampling="off"`. Filed as **t27**, PI-gated: fixing it moves every
 deterministic eval number. Measurement in `cruxvault/results/t16/REPORT.md`.
 
-### 8.4 The codec costs +43% on disk, not +6-8%. The estimate in §2.1 was wrong.
+### 8.4 The codec costs +33% on disk, not +6-8%. The estimate in §2.1 was wrong.
 
 **Measured on the real rebuild**, 2026-08-21, over the first 16 EIC biosamples to complete, at the
 store's own chunking and gzip level — i.e. exactly the thing §2.1 tried to predict:
@@ -368,15 +368,29 @@ which is the part nobody was complaining about.** §2.1's own table shows the wi
 error instead of 5% below `-log10 p` of 0.1 — so this is a real gain, just not the one D25 was
 approved for, and it is what it costs.
 
+**The final, corpus-wide number, measured after all 455 files landed** (2026-08-21 10:07 PDT).
+The +43.3% above came from the first 16 files to finish and overstated it — those 16 are the
+alphabetical head of the EIC list, not a random sample:
+
+| corpus | t12 recorded, linear ×100 | rebuilt, arcsinh ×2000 | change |
+|---|---|---|---|
+| eic (89) | 34.29 GB | **46.39 GB** | **+35.3%** |
+| merged (361) | 272.68 GB | **363.27 GB** | **+33.2%** |
+| eic_slice (5) | — | 4.76 GB | — |
+| **pval layer total** | **~307 GB** | **414.4 GB** | **+107.7 GB** |
+
+So the honest figure is **+33%, +108 GB** — worse than §2.1's +6-8%, better than the +43%/+132 GB
+this section first projected. `/project` reads 16 TiB of 28 TiB after the rebuild. Quote the +33%.
+
 **What this does and does not change.**
 
-- **Not operational.** `/project` had 12 TiB free of 28 TiB at submit time; +132 GB is 1% of that.
+- **Not operational.** `/project` had 12 TiB free of 28 TiB at submit time; +108 GB is under 1% of that.
   The rebuild was not at risk and was not stopped.
 - **It does bear on the scale choice.** If disk ever binds, `scale = 1000` is now the obviously
   better trade than it looked in §2.2: it halves the codes in exactly the background region that is
   driving the cost, and 5e-4 relative precision is still far below the pval track's own noise. **This
   does not re-open D25** — the PI ruled 2000, the corpus is being built at 2000, and rebuilding again
-  to save 60 GB nobody needs would be silly. It is recorded so the next codec decision starts from
+  to save ~50 GB nobody needs would be silly. It is recorded so the next codec decision starts from
   the measured number instead of the estimated one.
 - **§2.1 and §2.2 are left as written**, with pointers here. They are what the decision was approved
   on, and rewriting them would erase the fact that the approval rested on a wrong number.
