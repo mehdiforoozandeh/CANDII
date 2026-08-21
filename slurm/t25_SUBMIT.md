@@ -5,10 +5,25 @@ kit produces a corpus in two codecs, and the `transform` root attr tells you wha
 what it was supposed to be. `slurm/t25_rebuild_pval.sh` prints the kit's short SHA in every task log
 so a mixed run is at least diagnosable after the fact.
 
+`hpc push` is **not** how the kit gets updated. `~/.config/hpc/excludes` excludes `.git/` on
+purpose — "git is handled by git, not rsync" — and the Fir kit is a clone of the GitHub repo. It is
+also shared: it sits on whatever branch someone is working on. So:
+
 ```bash
 hpc up fir                      # in Terminal — an agent cannot answer the Duo prompt
-hpc push CANDII fir             # $KIT = /home/mforooz/projects/def-maxwl/mforooz/CANDII
 ```
+
+```bash
+# a checkout PINNED to the commit whose codec this rebuild applies, beside the shared clone and
+# without disturbing whatever branch it is on
+K=/home/mforooz/projects/def-maxwl/mforooz/CANDII
+git -C $K fetch origin
+git -C $K worktree add /home/mforooz/projects/def-maxwl/mforooz/CANDII_t25 <SHA>
+```
+
+Then pass `KIT=/home/mforooz/projects/def-maxwl/mforooz/CANDII_t25` in every `--export` below. The
+job script prints the kit's short SHA in each task log, so a run against the wrong tree is
+diagnosable rather than invisible.
 
 ## 0. Lists and log directory, once
 
@@ -29,18 +44,18 @@ thing in both runs and the two logs can be diffed.
 
 ```bash
 STORE=/project/def-maxwl/mforooz/CANDI_STORE
-KIT=/home/mforooz/projects/def-maxwl/mforooz/CANDII
+KIT=/home/mforooz/projects/def-maxwl/mforooz/CANDII_t25    # the pinned checkout, not the shared clone
 
 # A — EIC, 89 tasks, ~2.1 node-hours
-sbatch --array=0-88%15 --export=ALL,CORPUS=eic,SRC=/project/6014832/mforooz/DATA_CANDI_EIC \
+sbatch --array=0-88%15 --export=ALL,KIT=$KIT,CORPUS=eic,SRC=/project/6014832/mforooz/DATA_CANDI_EIC \
        $KIT/slurm/t25_rebuild_pval.sh
 
 # B — MERGED, 361 tasks, ~8.4 node-hours
-sbatch --array=0-360%15 --export=ALL,CORPUS=merged,SRC=/project/6014832/mforooz/DATA_CANDI_MERGED \
+sbatch --array=0-360%15 --export=ALL,KIT=$KIT,CORPUS=merged,SRC=/project/6014832/mforooz/DATA_CANDI_MERGED \
        $KIT/slurm/t25_rebuild_pval.sh
 
 # C — the 5-biosample slice, so it does not stay on the old codec
-sbatch --array=0-4 --export=ALL,CORPUS=eic_slice,SRC=/project/6014832/mforooz/DATA_CANDI_EIC \
+sbatch --array=0-4 --export=ALL,KIT=$KIT,CORPUS=eic_slice,SRC=/project/6014832/mforooz/DATA_CANDI_EIC \
        $KIT/slurm/t25_rebuild_pval.sh
 ```
 
@@ -63,9 +78,9 @@ track, and the manifest is where a consumer looks to answer "what are the units"
 
 ```bash
 CSV_ARGS="--metadata-csv <the same flags t12 used>"   # see cruxvault/results/t12/
-sbatch --export=ALL,CORPUS=eic,SRC=/project/6014832/mforooz/DATA_CANDI_EIC,CSV_ARGS="$CSV_ARGS" \
+sbatch --export=ALL,KIT=$KIT,CORPUS=eic,SRC=/project/6014832/mforooz/DATA_CANDI_EIC,CSV_ARGS="$CSV_ARGS" \
        $KIT/slurm/t25_manifest.sh
-sbatch --export=ALL,CORPUS=merged,SRC=/project/6014832/mforooz/DATA_CANDI_MERGED,CSV_ARGS="$CSV_ARGS" \
+sbatch --export=ALL,KIT=$KIT,CORPUS=merged,SRC=/project/6014832/mforooz/DATA_CANDI_MERGED,CSV_ARGS="$CSV_ARGS" \
        $KIT/slurm/t25_manifest.sh
 ```
 

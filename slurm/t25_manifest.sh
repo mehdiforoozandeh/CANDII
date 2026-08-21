@@ -24,7 +24,10 @@ set -uo pipefail
 STORE=/project/def-maxwl/mforooz/CANDI_STORE
 CORPUS="${CORPUS:?set CORPUS=eic or merged}"
 SRC="${SRC:?set SRC=...}"
-KIT=/home/mforooz/projects/def-maxwl/mforooz/CANDII
+# Overridable, and normally overridden. The shared clone at .../CANDII is whatever branch
+# someone is working on; a 455-file rebuild must run from a checkout PINNED to the commit
+# whose codec it is applying, or "which code built this file" is unanswerable afterwards.
+KIT="${KIT:-/home/mforooz/projects/def-maxwl/mforooz/CANDII}"
 CSV_ARGS="${CSV_ARGS:?set CSV_ARGS to the --metadata-csv flags, as t12 did}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
