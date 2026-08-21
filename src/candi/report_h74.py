@@ -359,7 +359,7 @@ def _reference_by_target(case: dict, key: str = "crps") -> Dict[str, float]:
 
 def _vs_reference_ci(arm: dict, case: dict, split: str, n_boot: int = 2000) -> Optional[dict]:
     """Paired arm-vs-reference delta. Positive = the REFERENCE is better."""
-    from candi.eval import _cluster_bootstrap_ci
+    from candi.stats import cluster_bootstrap_ci as _cluster_bootstrap_ci
     ref = _reference_by_target(case)
     if not ref:
         return None
@@ -502,7 +502,7 @@ def _relative_delta_section(case, ctrl) -> List[str]:
     shows ~4x the CRPS at IDENTICAL relative accuracy. Reporting delta/raw alongside the raw delta
     is what keeps a units artifact from being read as a `B_`-specific effect.
     """
-    from candi.eval import _cluster_bootstrap_ci
+    from candi.stats import cluster_bootstrap_ci as _cluster_bootstrap_ci
     cpt = case["M1"].get("imp_per_target") or {}
     kpt = ctrl["M1"].get("imp_per_target") or {}
     out = ["## Absolute versus relative — why the `B_` delta looks bigger", "",
