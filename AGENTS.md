@@ -298,6 +298,22 @@ PY
 
 ---
 
+### 4.10 Measure the DSF identity-copy leak
+
+```bash
+python tools/dsf_leak.py --h5 <panel.h5>            # or --store <regime.json>
+```
+
+When a batch draws the same `x_dsf` and `y_dsf` for an assay, the input column can be the same
+numbers as the target column — a free identity copy. **On the bake it always is**, because the ladder
+is materialized and equal `d` is one stored array read twice: 25% of available columns at the shipped
+`--dsf-sampling uniform`. The store generates the ladder (D6), so equal `d` is two draws — but only
+under the free-running training RNG; D22's counter-based eval RNG has no x/y term in its seed and
+collides at every level. Full numbers, and what does and does not follow for `AGENTS.md` §7:
+`cruxvault/results/t16/REPORT.md`.
+
+---
+
 ## 5. VALIDATION
 
 ### 5.1 The bit-exactness gate — every change clears it before the next one starts
