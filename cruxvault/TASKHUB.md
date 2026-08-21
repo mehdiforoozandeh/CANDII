@@ -12,14 +12,13 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref)
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model
-- `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating
+- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store
 
 ## Blocked
 
-- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — blocked by `t24`
 - `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — blocked by `t14`
 
 ## By category
@@ -35,8 +34,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t14` [implementation] emit the eval-only batch keys from StoreDataset (y_data_imp, y_pval_imp, y_peaks_imp, y_meta_imp, imp_biosample_name, log_ref) — *open*
 - `t15` [implementation] fill an absent control with MISSING rather than 0 in StoreDataset — *open*
 - `t16` [implementation] quantify the identity-copy leak the old bake's materialized DSF ladder gives the model — *open*
-- `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *open*
-- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *blocked*
+- `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *open*
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *open*
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *open*
 - `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *blocked*
@@ -55,3 +53,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t11` [implementation] build the MERGED store: 367 biosamples, counts + peaks — *done* → `results/t11/t11_report.json`
 - `t12` [implementation] add the pval layer to both stores — *done* → `results/t12/t12_eic_report.json`
 - `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `results/t23/DELIVERABLE.md`
+- `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`

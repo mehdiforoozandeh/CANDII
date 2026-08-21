@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-20T23:47:13
-updated: 2026-08-20T23:47:13
+status: done
+created: "2026-08-20T23:47:13"
+updated: "2026-08-21T01:13:50"
 ---
 
 # t24 — re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating
@@ -27,7 +27,7 @@ change, the doc updates, and the Fir jobs.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- results/t24/DELIVERABLE.md
 
 ## Evidence
 
