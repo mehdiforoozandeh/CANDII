@@ -29,9 +29,14 @@ def tool():
     return _load()
 
 
-def _bench(crps: float, tracks: dict) -> dict:
+def _bench(crps: float, tracks: dict, *, oracle: float | None = None,
+           scale_err: float = 0.0) -> dict:
+    """`oracle` defaults to the track's own crps, i.e. a perfectly scaled model."""
     return {"macro": {"count": {"crps": crps, "gwspear": 0.5}},
-            "per_track": {k: {"count": {"crps": v}} for k, v in tracks.items()}}
+            "per_track": {k: {"count": {"crps": v,
+                                        "crps_oracle_scaled": v if oracle is None else oracle,
+                                        "scale_error": scale_err}}
+                          for k, v in tracks.items()}}
 
 
 def _write(tmp_path, name, doc):
@@ -49,7 +54,12 @@ def test_the_same_run_twice_has_a_spread_of_exactly_zero(tool, tmp_path, capsys)
     body = [l for l in out.splitlines() if l.startswith("| ") and "spread" not in l]
     assert body
     for line in body:
-        assert line.rstrip().endswith("0.00000 |") or line.rstrip().endswith("**0.00000** |"), line
+        cells = [c.strip().strip("*") for c in line.strip("| \n").split("|")]
+        numeric = [c for c in cells if c.replace(".", "", 1).replace("-", "", 1).isdigit()]
+        assert numeric, line
+        # every numeric cell is a value or a spread; the spreads are the trailing ones and all
+        # of them must be exactly zero when the two inputs are the same file.
+        assert float(numeric[-1]) == 0.0, line
 
 
 def test_a_pair_reports_the_absolute_difference_and_not_a_signed_one(tool, tmp_path, capsys) -> None:
@@ -92,6 +102,20 @@ def test_only_tracks_present_in_every_run_are_compared(tool, tmp_path, capsys) -
     assert "T|B|X" in out.replace("\\|", "|")
     assert "ONLY_A" not in out
     assert "1 tracks common to every run" in out
+
+
+def test_a_raw_spread_that_is_all_scale_is_named_as_scale(tool, tmp_path, capsys) -> None:
+    """`AGENTS.md` section 7.2's split, doing the work it exists for.
+
+    A track whose RAW CRPS doubles across seeds while its oracle-scaled number barely moves has
+    changed its calibration, not its ranking. Quoting the raw number alone reads as the model
+    falling apart. The report must say which of the two happened.
+    """
+    a = _write(tmp_path, "a.json", _bench(1.0, {"T|B|X": 1.10}, oracle=1.04, scale_err=0.07))
+    b = _write(tmp_path, "b.json", _bench(1.0, {"T|B|X": 2.20}, oracle=1.36, scale_err=0.84))
+    tool.main([a, b])
+    out = capsys.readouterr().out
+    assert "most of the 1.10000 is SCALE and not ranking" in out
 
 
 def test_it_never_calls_a_range_a_confidence_interval(tool, tmp_path, capsys) -> None:

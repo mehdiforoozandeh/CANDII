@@ -117,30 +117,55 @@ def main(argv: Optional[List[str]] = None) -> int:
     block, pick = PER_TRACK[suite]
     per = [_get(d, block) or {} for d in docs]
     common = sorted(set(per[0]).intersection(*[set(x) for x in per[1:]])) if per[0] else []
-    field = "crps"
     rows = []
     for k in common:
-        vals = [pick(x[k]).get(field) for x in per]
-        if all(isinstance(v, (int, float)) for v in vals):
-            rows.append((k, vals))
+        recs = [pick(x[k]) for x in per]
+        vals = [r.get("crps") for r in recs]
+        if not all(isinstance(v, (int, float)) for v in vals):
+            continue
+        # AGENTS.md 7.2: raw CRPS never travels without its split, and a seed floor is the one
+        # place the split earns its keep hardest -- a track whose RAW number doubles while its
+        # oracle-scaled number barely moves has changed its scale, not its ranking.
+        extra = {}
+        for f in ("crps_oracle_scaled", "scale_error"):
+            fv = [r.get(f) for r in recs]
+            extra[f] = fv if all(isinstance(v, (int, float)) for v in fv) else None
+        rows.append((k, vals, extra))
     if rows:
         L += ["", f"## Per track — CRPS across {len(rows)} tracks common to every run\n",
               "The macro is a mean of these. A macro that holds still while its tracks swing is a "
               "macro whose stability is an averaging artefact, and the track spread is what an "
               "arm-vs-arm claim has to clear.\n",
-              "| track | " + " | ".join(names) + " | spread |",
-              "|---|" + "---|" * (len(names) + 1)]
+              "The last two columns are the split `AGENTS.md` §7.2 requires beside any raw CRPS, "
+              "and here they do real work: a track whose raw spread is large while its "
+              "oracle-scaled spread is small moved its SCALE, not its ranking, and the two are "
+              "not the same failure.\n",
+              "| track | " + " | ".join(names) + " | spread | oracle-scaled sp. | scale-error sp. |",
+              "|---|" + "---|" * (len(names) + 3)]
         sp = []
-        for k, vals in rows:
-            s = (abs(vals[1] - vals[0]) if len(vals) == 2 else max(vals) - min(vals))
-            sp.append(s)
+        def _sp(v):
+            return abs(v[1] - v[0]) if len(v) == 2 else max(v) - min(v)
+        for k, vals, extra in rows:
+            d = _sp(vals)
+            sp.append(d)
+            os_ = extra["crps_oracle_scaled"]
+            se_ = extra["scale_error"]
             L.append(f"| {k.replace('|', chr(92) + '|')} | "
-                     + " | ".join(f"{v:.5f}" for v in vals) + f" | {s:.5f} |")
+                     + " | ".join(f"{v:.5f}" for v in vals)
+                     + f" | {d:.5f} | {('%.5f' % _sp(os_)) if os_ else '—'} | "
+                     + f"{('%.5f' % _sp(se_)) if se_ else '—'} |")
+        worst = rows[sp.index(max(sp))]
         L += ["", f"**Track spread: median {statistics.median(sp):.5f}, "
-                  f"max {max(sp):.5f} on `{rows[sp.index(max(sp))][0]}`.** "
+                  f"max {max(sp):.5f} on `{worst[0]}`.** "
                   f"The macro spread above is a mean of this column, so it is smaller by "
                   f"construction; a claim about a single track has to clear the track number, not "
                   f"the macro one.\n"]
+        os_w = worst[2]["crps_oracle_scaled"]
+        if os_w and _sp(os_w) < max(sp) / 2:
+            L.append(f"On that worst track the oracle-scaled spread is only {_sp(os_w):.5f}, so "
+                     f"most of the {max(sp):.5f} is SCALE and not ranking. Quoting the raw number "
+                     f"alone would read as the model falling apart on a seed change when what "
+                     f"moved was its calibration -- which is the whole reason §7.2 forbids it.\n")
 
     text = "\n".join(L)
     if args.out:

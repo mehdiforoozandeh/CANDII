@@ -550,6 +550,13 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
              f"a delta here is a measurement difference and never a model difference. The floor is "
              f"quoted because it is the scale that decides which of these measurement differences "
              f"would survive contact with a real arm-vs-arm comparison.\n")
+    L.append("**Those floor numbers are borrowed, and the borrowing has a direction.** §7.2 "
+             "measured them on the full EIC panel with the production architecture, using "
+             "`candi.eval`. This run is a different recipe and, below, a different instrument. A "
+             "floor measured elsewhere is a placeholder: too large and a real difference reads as "
+             "noise, too small and noise reads as a result. The recipe's OWN seed floor is "
+             "measured separately and reported in `SEED_FLOOR.md` beside this file — read that "
+             "before weighing anything here.\n")
 
     # Track by track. The macro is a mean of these, and a mean hides whether the scope change
     # moved every track the same way or moved two of them a long way. Same key on both sides.
