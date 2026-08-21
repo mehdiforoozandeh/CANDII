@@ -112,12 +112,17 @@ def test_the_denoise_half_mirrors_the_imputation_half(tool) -> None:
 
 
 #: The three derived denoise rules that fire on nothing, and why that is a FINDING rather than a
-#: defect in the derivation. `eval.py`'s denoise macro block is a strict subset of its imputation
-#: one: the oracle-scale split (`crps_oracle_scaled`, `scale_error`) and the marginal bar
-#: (`marg_crps`) were computed for imputation only. So denoising was never asked the question the
-#: CRPS split exists to answer — how much of the loss is a fixable per-assay level error — and
-#: `AGENTS.md` §7.2's rule that raw CRPS is never quoted without its split could not be honoured on
-#: that half at all. `bench` computes all three for both kinds, which is why the twins exist.
+#: defect in the derivation.
+#:
+#: `eval.py` computes the oracle-scale split PER ASSAY on both halves — `den_per_assay.<A>` really
+#: does carry `crps_oracle_scaled`, `scale_error` and `marg_crps`. What it never builds is the
+#: denoising **macro** of them: `imp_macro_crps` ships beside `imp_macro_crps_oracle_scaled`,
+#: `imp_macro_scale_error` and `imp_macro_marg_crps`, while `den_macro_crps` ships alone.
+#:
+#: That is the level at which the rule bites. `AGENTS.md` §7.2 says raw CRPS is never quoted without
+#: its `oracle_scaled` / `scale_error` split, and the macro is the number anyone actually quotes —
+#: so on the denoising half the one number a reader reaches for was the one with no split beside it.
+#: `bench`'s `macro_denoise` carries all three.
 DEN_MACROS_EVAL_PY_NEVER_COMPUTED = {
     "M1.den_macro_crps_oracle_scaled",
     "M1.den_macro_scale_error",
@@ -129,8 +134,8 @@ def test_no_rule_is_dead_against_the_real_key_set(tool, skeleton) -> None:
     """A rule that claims nothing describes a key `eval.py` never emitted.
 
     Three do, and they are named above rather than deleted: they are the derived denoise twins of
-    the imputation oracle-scale split, and their emptiness is the record that the old suite never
-    computed it on the denoising half.
+    the imputation macro oracle-scale split, and their emptiness is the record that the old suite
+    never macro'd it on the denoising half — the level at which the number is quoted.
     """
     claimed, _ = tool.cover(skeleton)
     fired = Counter(r.old for r in claimed.values())
