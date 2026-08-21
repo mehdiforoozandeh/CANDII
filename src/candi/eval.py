@@ -202,25 +202,59 @@ class EvalUnit:
 
 
 @torch.no_grad()
-def build_eval_units(model, h5_path, device, *, regime: str = "type1", batch_size: int = 4,
-                     max_batches: Optional[int] = None, imp_prefixes=("V_", "B_"),
-                     seed: int = 0, reference=None,
+def eval_cell_cond(model) -> str:
+    """The `cell_cond` an eval dataset must be opened with, read off the MODEL.
+
+    It is read off the checkpoint and never passed in, because the eval prompt has to carry exactly
+    the rows the trained embedder expects; a caller free to disagree with the checkpoint is a bug
+    waiting to be written.
+
+    The mode is `"id"` for EVERY conditioned arm, the `cell_cond="random"` null included. All arms
+    are then scored under one identical protocol, which is what makes the comparison a comparison;
+    a null-arm model that learned to ignore row 4 in training is unmoved by being handed a real id
+    here, while one that did NOT is exactly what the numbers should expose.
+
+    It lives beside the scorer rather than inside it because the scorer no longer opens its own
+    data — see `build_eval_units`.
+    """
+    return "id" if _model_num_cells(model) > 0 else "off"
+
+
+def open_h5_eval_dataset(model, h5_path, *, regime: str = "type1", batch_size: int = 4,
+                         imp_prefixes=("V_", "B_"), seed: int = 0, reference=None):
+    """The h5 eval dataset, opened exactly as `build_eval_units` used to open it.
+
+    Kept whole and kept HERE, in the half of this module that is h5-only, because the store path
+    does not go through it: a store declares its pairing in the regime's `eval_pairs` (D31) rather
+    than deriving it from a name prefix, so `train=False` already yields the eval split and there is
+    nothing for `imp_prefixes` or `eval_include_vb_ground_truth` to say. This function retires with
+    the rest of the h5 path.
+    """
+    return CandiKitH5Dataset(h5_path, regime, train=False, batch_size=batch_size,
+                             biosample_prefix="T_", dsf_sampling="off", seed=seed, shuffle=False,
+                             eval_include_vb_ground_truth=True, imp_prefixes=imp_prefixes,
+                             cell_cond=eval_cell_cond(model), reference=reference)
+
+
+def build_eval_units(model, ds, device, *, max_batches: Optional[int] = None,
                      batches_per_pair: Optional[int] = None,
                      meta_probe=None) -> Tuple[List[EvalUnit], List[str]]:
-    """Returns (units, assays). `assays` is the h5's own column order — the only assay labelling the
-    kit ever uses; every labelled instrument below takes it as an explicit argument."""
-    # cell_cond is read off the MODEL, not passed in: the eval prompt must carry exactly the rows the
-    # trained embedder expects, and a caller that could disagree with the checkpoint is a bug waiting.
-    #
-    # Note the mode is "id" for EVERY conditioned arm, the cell_cond="random" null included. All arms
-    # are then scored under one identical protocol, which is what makes the comparison a comparison;
-    # and a null-arm model that learned to ignore row 4 in training is unmoved by being handed a real
-    # id here, while one that did NOT is exactly what we want the numbers to expose.
-    ds = CandiKitH5Dataset(h5_path, regime, train=False, batch_size=batch_size, biosample_prefix="T_",
-                           dsf_sampling="off", seed=seed, shuffle=False,
-                           eval_include_vb_ground_truth=True, imp_prefixes=imp_prefixes,
-                           cell_cond=("id" if _model_num_cells(model) > 0 else "off"),
-                           reference=reference)
+    """Returns (units, assays), scoring whatever eval dataset it is HANDED.
+
+    It takes a ready dataset rather than a path, and that is the whole of t28. Constructing its own
+    loader is what pinned this function to the baked h5 and made a store-backed run unscorable; the
+    three names it reads off a dataset for the slot arithmetic below — `_eval_indices`,
+    `_bios_candidates`, `_all_imp_biosamples` — are spelled identically by `StoreDataset` (t14), so
+    with the construction removed the two paths are already interchangeable here.
+
+    `assays` is the dataset's own column order — the only assay labelling the kit ever uses; every
+    labelled instrument below takes it as an explicit argument.
+
+    `batch_size` is read off the dataset instead of being a parameter. It only ever fed the cycle
+    arithmetic, and a caller that could pass a different number than the loader batches at would
+    silently mis-space `batches_per_pair` across the chromosome.
+    """
+    batch_size = int(ds.batch_size)
     # `batches_per_pair` is the EVEN way to shrink the eval, and the only one used mid-training.
     # `max_batches` truncates the pair cycle and drops whole targets (see the warning below); this
     # keeps EVERY entry and thins the WINDOWS, so the selection metric covers the same target set at
@@ -239,17 +273,40 @@ def build_eval_units(model, h5_path, device, *, regime: str = "type1", batch_siz
     n_slots = sum(max(1, len(ds._all_imp_biosamples(t))) for t in ds._bios_candidates())
     if batches_per_pair is not None:
         k = int(batches_per_pair)
-        n_cycles = max(1, len(ds._eval_indices) // batch_size // n_slots)
+        # ASKED OF THE DATASET, never derived from the batch index. The two loaders order eval
+        # batches differently -- `CandiKitH5Dataset` interleaves the pairs (batch `bi` belongs to
+        # pair `bi % n_pairs`), `StoreDataset` groups them pair-major (all of pair 0's batches, then
+        # all of pair 1's). A cycle computed as `bi // n_slots` is correct for the first and, on the
+        # second, selects a contiguous block that lies entirely inside the FIRST pair: measured on a
+        # two-pair store, `batches_per_pair` scored one target and dropped the other in silence.
+        # Thinning WINDOWS must never thin TARGETS -- that is the whole reason this knob exists
+        # rather than `max_batches` -- so the cycle is counted per pair, below, off the pair's own
+        # name in the batch.
+        n_cycles = max(1, int(ds.eval_batches_per_pair()))
         keep_cycles = sorted({min(n_cycles - 1, int((i + 0.5) * n_cycles / k)) for i in range(k)})
-        max_batches = (max(keep_cycles) + 1) * n_slots if max_batches is None else max_batches
     noop = make_masker(p_full_loci=0.0, p_full_assay=0.0, p_chunks=0.0, mask_fraction=0.0)
     model.eval()
     units: List[EvalUnit] = []
+    # Each pair's own batch counter. Both loaders emit a pair's batches in genomic order, so a
+    # pair's c-th batch is cycle c under either ordering -- which is what makes one counter correct
+    # for both without either loader having to change how it iterates.
+    pair_cycle: Dict[Tuple[str, str], int] = {}
+    last_cycle = max(keep_cycles) if keep_cycles else None
     for bi, batch in enumerate(ds):
         if max_batches is not None and bi >= max_batches:
             break
-        if keep_cycles is not None and (bi // n_slots) not in keep_cycles:
-            continue
+        if keep_cycles is not None:
+            key = (str(batch.get("biosample_name", "")), str(batch.get("imp_biosample_name", "")))
+            c = pair_cycle.get(key, 0)
+            pair_cycle[key] = c + 1
+            if c not in keep_cycles:
+                # Stop once every pair has passed its last wanted cycle. On the interleaved order
+                # that is the same early exit `max_batches` used to give; on the pair-major order
+                # nothing may stop early until the last pair has been reached, and this waits.
+                if (len(pair_cycle) >= n_slots
+                        and all(v > last_cycle for v in pair_cycle.values())):
+                    break
+                continue
         prep = prepare_masked_batch(batch, noop, device, apply_mask=False)
         if prep is None:
             continue
@@ -284,9 +341,13 @@ def build_eval_units(model, h5_path, device, *, regime: str = "type1", batch_siz
     if batches_per_pair is not None:
         seen = {(u.biosample, u.imp_biosample) for u in units if u.imp_biosample}
         print(f"[eval] batches_per_pair={batches_per_pair}: {len(units)} units over {len(seen)} "
-              f"(T_, V_/B_) pairs, {batches_per_pair * batch_size} windows each, from cycles "
-              f"{keep_cycles} of {len(ds._eval_indices) // batch_size // n_slots} "
+              f"of {n_slots} (T_, V_/B_) pairs, {batches_per_pair * batch_size} windows each, from "
+              f"cycles {keep_cycles} of {ds.eval_batches_per_pair()} "
               f"(spread across the eval chromosome, never a prefix)", flush=True)
+        if len(seen) < n_slots:
+            print(f"[eval] WARNING batches_per_pair thinned TARGETS, not just windows: "
+                  f"{n_slots - len(seen)} of {n_slots} pairs went unscored. That is a bug in the "
+                  f"cycle accounting, not a coverage choice.", flush=True)
 
     # TRUNCATION IS SILENT AND UNEVEN, so it is named here rather than left to be inferred.
     # The dataset advances one (T_, imp) PAIR per window batch, cycling. So `max_batches=N` over P
@@ -1212,10 +1273,17 @@ def reference_only_baseline(units, assays: Sequence[str], *, fg_frac: float = 0.
 
 
 @torch.no_grad()
-def quick_eval(model, h5_path, device, *, regime: str = "type1", batch_size: int = 4,
-               batches_per_pair: int = 2, fg_frac: float = 0.02, seed: int = 0,
-               reference=None, meta_probe=None) -> dict:
+def quick_eval(model, ds, device, *, batches_per_pair: int = 2, fg_frac: float = 0.02,
+               seed: int = 0, meta_probe=None) -> dict:
     """Mid-training imputation scorer: per-target foreground CRPS, split `V_`/`B_`. Cheap.
+
+    Takes a ready eval dataset (t28). The caller opens it — `train.py` through `make_dataset`, an
+    h5 caller through `open_h5_eval_dataset` — which is what lets a store-backed run be scored at
+    all. Opening it ONCE and re-iterating it every check is also what keeps the window set fixed
+    across epochs, so epoch-to-epoch comparison stays paired.
+
+    `seed` no longer reaches the loader; it seeds the foreground draw only. The loader's own seed is
+    a property of the dataset the caller built.
 
     Exists because h73 ran a single evaluation AFTER training and could therefore not distinguish
     over- from under-fitting. This runs every few epochs and drives best-checkpoint selection.
@@ -1243,17 +1311,14 @@ def quick_eval(model, h5_path, device, *, regime: str = "type1", batch_size: int
     precision at epoch 6 and another at epoch 12 would select on the difference between the two.
     """
     with no_autocast(device):
-        return _quick_eval_fp32(model, h5_path, device, regime=regime, batch_size=batch_size,
-                                batches_per_pair=batches_per_pair, fg_frac=fg_frac, seed=seed,
-                                reference=reference, meta_probe=meta_probe)
+        return _quick_eval_fp32(model, ds, device, batches_per_pair=batches_per_pair,
+                                fg_frac=fg_frac, seed=seed, meta_probe=meta_probe)
 
 
-def _quick_eval_fp32(model, h5_path, device, *, regime: str = "type1", batch_size: int = 4,
-                     batches_per_pair: int = 2, fg_frac: float = 0.02, seed: int = 0,
-                     reference=None, meta_probe=None) -> dict:
-    units, assays = build_eval_units(model, h5_path, device, regime=regime, batch_size=batch_size,
-                                     seed=seed, reference=reference,
-                                     batches_per_pair=batches_per_pair, meta_probe=meta_probe)
+def _quick_eval_fp32(model, ds, device, *, batches_per_pair: int = 2, fg_frac: float = 0.02,
+                     seed: int = 0, meta_probe=None) -> dict:
+    units, assays = build_eval_units(model, ds, device, batches_per_pair=batches_per_pair,
+                                     meta_probe=meta_probe)
     recs: List[Dict] = []
     for u in units:
         if u.imp_map is None:
@@ -1320,8 +1385,11 @@ def _evaluate_fp32(model, h5_path, device, *, regime: str = "type1", batch_size:
                    max_batches: Optional[int] = None, fg_frac: float = 0.02, n_boot: int = 1000,
                    seed: int = 0, eval_budget: int = 200_000, m3_regions: int = 8,
                    include_deprecated: bool = False, reference=None) -> dict:
-    units, assays = build_eval_units(model, h5_path, device, regime=regime, batch_size=batch_size,
-                                     max_batches=max_batches, seed=seed, reference=reference)
+    # `evaluate` is the h5-only half of this module, so it opens its own h5 dataset and hands it to
+    # the shared builder. Store-backed scoring does not come through here.
+    eval_ds = open_h5_eval_dataset(model, h5_path, regime=regime, batch_size=batch_size,
+                                   seed=seed, reference=reference)
+    units, assays = build_eval_units(model, eval_ds, device, max_batches=max_batches)
     s14 = _dsf_counterfactual(model, h5_path, device, assays, fg_frac=fg_frac, seed=seed,
                               reference=reference)
     # Both calibrations, inline, because neither is obvious from the number:
