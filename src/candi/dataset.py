@@ -311,6 +311,17 @@ class CandiKitH5Dataset(IterableDataset):
                              dtype=np.float64)[inv]
         return torch.from_numpy(self.reference.log_ref(batch_wi, bios, own))
 
+    def eval_batches_per_pair(self) -> int:
+        """How many window batches ONE `(T_, imp)` pair receives per pass.
+
+        This loader walks the eval window pool ONCE and advances `eval_pair_i` per batch, so the
+        pool is DIVIDED among the pairs and each one sees `pool / batch_size / n_pairs` batches.
+        `StoreDataset` gives every pair the whole pool instead; `build_eval_units` asks rather than
+        assumes, because assuming is how `batches_per_pair` came to drop targets on the store.
+        """
+        n_pairs = sum(max(1, len(self._all_imp_biosamples(t))) for t in self._bios_candidates())
+        return max(1, len(self._eval_indices) // max(1, self.batch_size) // max(1, n_pairs))
+
     def _all_imp_biosamples(self, t_bios: str) -> List[str]:
         """Return ALL available imp biosamples (union of every prefix) for a T_* biosample.
 

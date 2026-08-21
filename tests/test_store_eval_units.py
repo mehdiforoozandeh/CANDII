@@ -44,6 +44,10 @@ DEVICE = torch.device("cpu")
 EVAL_TRACKS = {
     "T_aa": ("ATAC-seq", "DNase-seq", L.CONTROL_TRACK),
     "V_aa": ("ATAC-seq", "DNase-seq", "H3K4me3"),
+    # TWO pairs, not one. With a single pair the cycle arithmetic below cannot be wrong: every
+    # batch belongs to the only target there is. The bug this file now pins needed two.
+    "T_bb": ("ATAC-seq", "DNase-seq", L.CONTROL_TRACK),
+    "V_bb": ("ATAC-seq", "DNase-seq", "H3K4me3"),
 }
 
 
@@ -56,8 +60,9 @@ def store(tmp_path_factory) -> Path:
 def paired_source(tmp_path_factory, store) -> DataSource:
     """A store whose regime DECLARES an imputation pair — `T_aa` prompts, `V_aa` is the truth."""
     p = tmp_path_factory.mktemp("t28regime") / "regime.json"
-    p.write_text(json.dumps(regime_dict(store, eval_pairs=[["T_aa", "V_aa"]]), indent=2),
-                 encoding="utf-8")
+    p.write_text(json.dumps(regime_dict(
+        store, biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "V_bb"]},
+        eval_pairs=[["T_aa", "V_aa"], ["T_bb", "V_bb"]]), indent=2), encoding="utf-8")
     return DataSource(kind="store", regime_path=str(p), regime=Regime.from_file(p))
 
 
@@ -168,3 +173,59 @@ def test_the_h5_path_always_reports_that_it_can_be_scored(tmp_path_factory):
     """It derives its pairing from the `T_`/`V_`/`B_` prefixes, so it can never lack one."""
     src = DataSource.coerce(str(tmp_path_factory.mktemp("t28h5") / "nothing.h5"))
     assert src.eval_pairs_declared() is True
+
+
+# ---------------------------------------------------------------------------------------------
+# thinning WINDOWS must never thin TARGETS
+# ---------------------------------------------------------------------------------------------
+
+
+def test_batches_per_pair_keeps_every_target_and_shrinks_only_the_windows(paired_source):
+    """The knob's entire reason for existing, and it did not hold on the store.
+
+    `CandiKitH5Dataset` interleaves eval batches across pairs -- batch `bi` belongs to pair
+    `bi % n_pairs` -- while `StoreDataset` groups them pair-major: all of pair 0's batches, then all
+    of pair 1's. `build_eval_units` selected cycles as `bi // n_slots`, which is right for the first
+    ordering and, on the second, picks a contiguous block lying entirely inside the FIRST pair.
+    Measured before the fix: two pairs in, one target scored, one dropped without a word.
+
+    `max_batches` warns when it drops targets. `batches_per_pair` is documented as the knob that
+    CANNOT -- "keeps EVERY entry and thins the WINDOWS" -- which is exactly why its failing silently
+    was worse than the one that shouts.
+    """
+    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
+    model = _model(probe)
+    ds = _eval_ds(paired_source, model)
+    n_pairs = len(paired_source.regime.eval_pairs)
+    assert n_pairs >= 2, "a one-pair fixture cannot see this bug"
+    full, _ = build_eval_units(model, ds, DEVICE)
+    every_target = {u.imp_biosample for u in full if u.imp_biosample}
+    for k in (1, 2):
+        units, _ = build_eval_units(model, ds, DEVICE, batches_per_pair=k)
+        assert {u.imp_biosample for u in units if u.imp_biosample} == every_target, (
+            f"batches_per_pair={k} dropped a target")
+
+
+def test_the_cycle_count_is_asked_of_the_dataset_not_derived_from_the_batch_index(paired_source):
+    """The two loaders divide the eval chromosome differently, so only they can answer this.
+
+    The store hands EVERY window to EVERY pair, so a pair's share is the whole chromosome. The h5
+    walks the pool once and cycles the pair index, so a pair's share is the pool divided by the
+    pair count. That is the "position scope" difference the t22 equivalence report separated out --
+    a real difference in what a target is scored on, not an iteration detail.
+    """
+    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
+    ds = _eval_ds(paired_source, _model(probe))
+    import math
+    assert ds.eval_batches_per_pair() == math.ceil(len(ds._eval_indices) / ds.batch_size)
+
+
+def test_more_coverage_means_more_windows_per_target_not_more_targets(paired_source):
+    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
+    model = _model(probe)
+    ds = _eval_ds(paired_source, model)
+    a, _ = build_eval_units(model, ds, DEVICE, batches_per_pair=1)
+    b, _ = build_eval_units(model, ds, DEVICE, batches_per_pair=2)
+    assert len(b) > len(a)
+    assert ({u.imp_biosample for u in a if u.imp_biosample}
+            == {u.imp_biosample for u in b if u.imp_biosample})

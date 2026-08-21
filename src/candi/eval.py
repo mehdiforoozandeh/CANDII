@@ -273,17 +273,40 @@ def build_eval_units(model, ds, device, *, max_batches: Optional[int] = None,
     n_slots = sum(max(1, len(ds._all_imp_biosamples(t))) for t in ds._bios_candidates())
     if batches_per_pair is not None:
         k = int(batches_per_pair)
-        n_cycles = max(1, len(ds._eval_indices) // batch_size // n_slots)
+        # ASKED OF THE DATASET, never derived from the batch index. The two loaders order eval
+        # batches differently -- `CandiKitH5Dataset` interleaves the pairs (batch `bi` belongs to
+        # pair `bi % n_pairs`), `StoreDataset` groups them pair-major (all of pair 0's batches, then
+        # all of pair 1's). A cycle computed as `bi // n_slots` is correct for the first and, on the
+        # second, selects a contiguous block that lies entirely inside the FIRST pair: measured on a
+        # two-pair store, `batches_per_pair` scored one target and dropped the other in silence.
+        # Thinning WINDOWS must never thin TARGETS -- that is the whole reason this knob exists
+        # rather than `max_batches` -- so the cycle is counted per pair, below, off the pair's own
+        # name in the batch.
+        n_cycles = max(1, int(ds.eval_batches_per_pair()))
         keep_cycles = sorted({min(n_cycles - 1, int((i + 0.5) * n_cycles / k)) for i in range(k)})
-        max_batches = (max(keep_cycles) + 1) * n_slots if max_batches is None else max_batches
     noop = make_masker(p_full_loci=0.0, p_full_assay=0.0, p_chunks=0.0, mask_fraction=0.0)
     model.eval()
     units: List[EvalUnit] = []
+    # Each pair's own batch counter. Both loaders emit a pair's batches in genomic order, so a
+    # pair's c-th batch is cycle c under either ordering -- which is what makes one counter correct
+    # for both without either loader having to change how it iterates.
+    pair_cycle: Dict[Tuple[str, str], int] = {}
+    last_cycle = max(keep_cycles) if keep_cycles else None
     for bi, batch in enumerate(ds):
         if max_batches is not None and bi >= max_batches:
             break
-        if keep_cycles is not None and (bi // n_slots) not in keep_cycles:
-            continue
+        if keep_cycles is not None:
+            key = (str(batch.get("biosample_name", "")), str(batch.get("imp_biosample_name", "")))
+            c = pair_cycle.get(key, 0)
+            pair_cycle[key] = c + 1
+            if c not in keep_cycles:
+                # Stop once every pair has passed its last wanted cycle. On the interleaved order
+                # that is the same early exit `max_batches` used to give; on the pair-major order
+                # nothing may stop early until the last pair has been reached, and this waits.
+                if (len(pair_cycle) >= n_slots
+                        and all(v > last_cycle for v in pair_cycle.values())):
+                    break
+                continue
         prep = prepare_masked_batch(batch, noop, device, apply_mask=False)
         if prep is None:
             continue
@@ -318,9 +341,13 @@ def build_eval_units(model, ds, device, *, max_batches: Optional[int] = None,
     if batches_per_pair is not None:
         seen = {(u.biosample, u.imp_biosample) for u in units if u.imp_biosample}
         print(f"[eval] batches_per_pair={batches_per_pair}: {len(units)} units over {len(seen)} "
-              f"(T_, V_/B_) pairs, {batches_per_pair * batch_size} windows each, from cycles "
-              f"{keep_cycles} of {len(ds._eval_indices) // batch_size // n_slots} "
+              f"of {n_slots} (T_, V_/B_) pairs, {batches_per_pair * batch_size} windows each, from "
+              f"cycles {keep_cycles} of {ds.eval_batches_per_pair()} "
               f"(spread across the eval chromosome, never a prefix)", flush=True)
+        if len(seen) < n_slots:
+            print(f"[eval] WARNING batches_per_pair thinned TARGETS, not just windows: "
+                  f"{n_slots - len(seen)} of {n_slots} pairs went unscored. That is a bug in the "
+                  f"cycle accounting, not a coverage choice.", flush=True)
 
     # TRUNCATION IS SILENT AND UNEVEN, so it is named here rather than left to be inferred.
     # The dataset advances one (T_, imp) PAIR per window batch, cycling. So `max_batches=N` over P

@@ -434,6 +434,22 @@ class StoreDataset(IterableDataset):
         """The prompt biosamples, sorted — `CandiKitH5Dataset`'s `T_`-prefixed pool, D16-safely."""
         return sorted(self.biosample_pool)
 
+    def eval_batches_per_pair(self) -> int:
+        """How many window batches ONE declared `(input, target)` pair receives per pass.
+
+        The two loaders answer this differently and `build_eval_units` cannot guess which it holds.
+        `_batches` above hands EVERY eval window to EVERY pair — `order = list(idx)` inside the loop
+        over units — so a pair's share is the whole chromosome, and this is simply the batch count.
+        `CandiKitH5Dataset` walks the window pool ONCE and cycles the pair index per batch, so there
+        a pair's share is the pool divided by the number of pairs.
+
+        That is a real difference in what a target is scored on, not a detail of iteration order:
+        it is the "position scope" term the t22 equivalence report separated out. What this method
+        exists for is narrower — `batches_per_pair` thins WINDOWS and must never thin TARGETS, and
+        computing the cycle count from the wrong loader's arithmetic is how it silently did.
+        """
+        return max(1, math.ceil(len(self._windows) / max(1, self.batch_size)))
+
     def _all_imp_biosamples(self, name: str) -> List[str]:
         """Every declared imputation target for one prompt biosample (D31).
 
