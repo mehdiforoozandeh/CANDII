@@ -74,3 +74,21 @@ def test_non_finite_points_are_dropped_not_propagated():
     r = gain_vs_jitter([1.0, float("nan"), 0.9, 0.8, float("inf"), 0.7])
     assert r["n"] == 4
     assert math.isfinite(r["gain"]) and math.isfinite(r["jitter"])
+
+
+def test_the_tool_opens_its_source_through_the_real_constructor():
+    """A guessed classmethod name fails only on the cluster, an hour into a queue.
+
+    `DataSource.resolve` is the one entry point that enforces exactly-one-of h5/store and parses the
+    regime; `from_flags` never existed. Nothing else in this tool touches the training internals, so
+    this one line is the whole surface it can get wrong that way.
+    """
+    import inspect
+
+    from candi.train import DataSource
+    from tools import calib_timing
+
+    assert hasattr(DataSource, "resolve")
+    src = inspect.getsource(calib_timing.main)
+    assert "DataSource.resolve(" in src
+    assert "from_flags" not in src

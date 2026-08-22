@@ -83,7 +83,7 @@ def main(argv=None) -> int:
     from candi.train import DataSource, make_dataset, train
 
     device = torch.device(args.device)
-    source = DataSource.from_flags(h5=None, store=args.regime)
+    source = DataSource.resolve(store=args.regime)
     if not source.eval_pairs_declared():
         raise SystemExit("this regime declares no `eval_pairs`, so there is nothing to score "
                          "(D31). Calibration (a) needs imputation targets.")
