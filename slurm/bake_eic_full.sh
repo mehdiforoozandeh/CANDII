@@ -53,6 +53,7 @@ else
 fi
 
 cd "$KIT"
+source "$KIT/slurm/_kit_pin.sh"
 mkdir -p "$(dirname "$OUT")"
 
 echo "[bake] host=$(hostname) panel=$PANEL out=$OUT"

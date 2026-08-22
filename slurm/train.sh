@@ -41,6 +41,7 @@ else
 fi
 
 cd "$KIT"
+source "$KIT/slurm/_kit_pin.sh"
 mkdir -p "$OUT"
 
 # arm x seed: tasks 0-2 = offset ON seeds 0,1,2; tasks 3-5 = offset OFF seeds 0,1,2.

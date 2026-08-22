@@ -49,6 +49,7 @@ else
 fi
 
 cd "$KIT"     # the kit is pip-installed (`pip install -e candi/`); cwd is irrelevant
+source "$KIT/slurm/_kit_pin.sh"
 mkdir -p "$(dirname "$OUT")"
 
 echo "[bake] host=$(hostname) panel=$PANEL out=$OUT"

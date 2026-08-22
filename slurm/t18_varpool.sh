@@ -39,6 +39,7 @@ export MPLBACKEND=Agg
 module load StdEnv/2023 python/3.10.13 >/dev/null 2>&1
 source "$VENV/bin/activate" || { echo "[error] no venv at $VENV" >&2; exit 1; }
 cd "$KIT"
+source "$KIT/slurm/_kit_pin.sh"
 echo "[t18] host=$(hostname) commit=$(git rev-parse --short HEAD) store=$STORE chroms=$CHROMS"
 
 PYTHONPATH="$KIT/src" python tools/build_varpool.py \
