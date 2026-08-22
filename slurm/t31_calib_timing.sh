@@ -37,13 +37,15 @@ REGIME="${REGIME:-configs/regime.eic_val.json}"
 OUT="${OUT:-/scratch/$USER/candi_kit/calib_a}"
 EPOCHS="${EPOCHS:-10}"
 STEPS="${STEPS:-200}"
-# 2 / 8 / 32 / 128 cycles = 8 / 32 / 128 / 512 windows per target = 0.33% / 1.3% / 5.3% / 21% of
-# chr21. The first is what the loader ships with today. The ANCHOR is 608 — whole chr21 per target
-# — and it runs at the FINAL epoch only: it is what every cheap level is trying to estimate, so
+# 2 / 8 / 32 / 128 cycles = 8 / 32 / 128 / 512 windows per target = 0.45% / 1.8% / 7.2% / 29% of
+# chr21. The first is what the loader ships with today. The ANCHOR is -1, meaning whole chr21 per
+# target, READ OFF THE DATASET rather than typed here: chr21 tiles to 2,432 windows on paper and
+# 1,786 after the window plan's validity filter, so a literal here would already be wrong once. It
+# runs at the FINAL epoch only: it is what every cheap level is trying to estimate, so
 # without it "stable" and "accurate" cannot be told apart, but bias is a property of the coverage
 # and does not need re-measuring every epoch.
 LEVELS="${LEVELS:-2 8 32 128}"
-ANCHOR="${ANCHOR:-608}"
+ANCHOR="${ANCHOR:--1}"
 SEED="${SEED:-0}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true

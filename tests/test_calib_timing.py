@@ -92,3 +92,37 @@ def test_the_tool_opens_its_source_through_the_real_constructor():
     src = inspect.getsource(calib_timing.main)
     assert "DataSource.resolve(" in src
     assert "from_flags" not in src
+
+
+def test_the_cycle_ceiling_is_asked_of_the_dataset_not_computed_from_the_pair_count():
+    """The h5's arithmetic understates the store's ceiling by the pair count.
+
+    `windows // batch // pairs` is right for `CandiKitH5Dataset`, where the window pool is DIVIDED
+    among pairs. `StoreDataset` hands every pair the whole chromosome, so the same formula gave 17
+    where the dataset says 447 on the EIC validation regime -- and the tool silently dropped the two
+    highest coverage levels it had been asked to price, which is the one failure a calibration must
+    not have: it would have reported a curve that stopped before the interesting part and said
+    nothing about why.
+    """
+    import inspect
+
+    from tools import calib_timing
+
+    src = inspect.getsource(calib_timing.main)
+    assert "eval_ds.eval_batches_per_pair()" in src
+    assert "// args.eval_batch_size // n_slots" not in src
+
+
+def test_a_negative_anchor_means_the_whole_eval_chromosome():
+    """Typed into a job script, the full cycle count goes stale the moment the window plan changes.
+
+    chr21 tiles to 2,432 windows on paper and 1,786 after the plan's validity filter, so a literal
+    would already have been wrong once.
+    """
+    import inspect
+
+    from tools import calib_timing
+
+    p = inspect.signature(calib_timing.main).parameters
+    src = inspect.getsource(calib_timing.main)
+    assert "anchor = n_cycles if args.anchor_level < 0 else args.anchor_level" in src

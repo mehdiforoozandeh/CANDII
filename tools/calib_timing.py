@@ -67,8 +67,9 @@ def main(argv=None) -> int:
     p.add_argument("--eval-batch-size", type=int, default=4)
     p.add_argument("--levels", type=int, nargs="+", default=[2, 8, 32, 128],
                    help="batches_per_pair values to price, cheapest first")
-    p.add_argument("--anchor-level", type=int, default=0,
-                   help="a coverage run ONCE, at the final epoch only (0 = off). Pass the full "
+    p.add_argument("--anchor-level", type=int, default=-1,
+                   help="a coverage run ONCE, at the final epoch only (0 = off, -1 = whole "
+                        "eval chromosome per target, read off the dataset). Pass the full "
                         "cycle count to score whole chr21 per target: every cheap level's bias is "
                         "then measurable against the number it is trying to estimate, rather than "
                         "argued about. Too expensive to run every epoch, and it does not need to "
@@ -104,8 +105,19 @@ def main(argv=None) -> int:
                            cell_cond=eval_cell_cond(model))
     n_windows_total = len(eval_ds._eval_indices)
     n_slots = sum(max(1, len(eval_ds._all_imp_biosamples(t))) for t in eval_ds._bios_candidates())
-    n_cycles = max(1, n_windows_total // args.eval_batch_size // n_slots)
+    # ASKED OF THE DATASET (t28). Deriving it as `windows // batch // pairs` is the h5's arithmetic,
+    # where the window pool is divided among pairs; the store gives every pair the whole chromosome,
+    # so that formula understates the ceiling by the pair count -- 17 instead of 447 on the EIC
+    # validation regime -- and would have silently dropped the two highest levels being priced.
+    n_cycles = max(1, int(eval_ds.eval_batches_per_pair()))
     levels = [k for k in args.levels if k <= n_cycles] or [1]
+    dropped = [k for k in args.levels if k > n_cycles]
+    if dropped:
+        print(f"[calib-a] levels {dropped} exceed the {n_cycles} cycles this eval split has and "
+              f"are NOT priced", flush=True)
+    # A negative anchor means "whole eval chromosome per target", read off the dataset rather than
+    # typed into the job script, where it would go stale the moment the window plan changed.
+    anchor = n_cycles if args.anchor_level < 0 else args.anchor_level
     print(f"[calib-a] {n_par:,} params, {n_windows_total:,} eval windows, {n_slots} slots, "
           f"{n_cycles} cycles; pricing batches_per_pair={levels}", flush=True)
 
@@ -114,7 +126,7 @@ def main(argv=None) -> int:
     def eval_hook(step, ep):
         model.eval()
         last = (ep == args.epochs - 1)
-        todo = list(levels) + ([args.anchor_level] if (args.anchor_level and last) else [])
+        todo = list(levels) + ([anchor] if (anchor and last and anchor not in levels) else [])
         for k in todo:
             t0 = time.time()
             q = quick_eval(model, eval_ds, device, batches_per_pair=k, seed=args.seed)
