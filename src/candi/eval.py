@@ -1274,7 +1274,7 @@ def reference_only_baseline(units, assays: Sequence[str], *, fg_frac: float = 0.
 
 @torch.no_grad()
 def quick_eval(model, ds, device, *, batches_per_pair: int = 2, fg_frac: float = 0.02,
-               seed: int = 0, meta_probe=None) -> dict:
+               seed: int = 0, meta_probe=None, return_records: bool = False) -> dict:
     """Mid-training imputation scorer: per-target foreground CRPS, split `V_`/`B_`. Cheap.
 
     Takes a ready eval dataset (t28). The caller opens it — `train.py` through `make_dataset`, an
@@ -1284,6 +1284,13 @@ def quick_eval(model, ds, device, *, batches_per_pair: int = 2, fg_frac: float =
 
     `seed` no longer reaches the loader; it seeds the foreground draw only. The loader's own seed is
     a property of the dataset the caller built.
+
+    `return_records` adds the PER-TRACK rows under `"records"`. D4 makes the per-track score the
+    primitive and the macro mean only the headline, so the rows are the real result and the means
+    are a view of them — but they are off by default because the mid-training caller logs one number
+    per epoch and would otherwise carry 45 dicts into every run json. Anything asking WHICH track
+    moved, rather than whether the mean did, needs them: calibration (a) found a -0.15 coverage bias
+    in the mean and could not say which tracks carried it, because they had already been collapsed.
 
     Exists because h73 ran a single evaluation AFTER training and could therefore not distinguish
     over- from under-fitting. This runs every few epochs and drives best-checkpoint selection.
@@ -1312,11 +1319,12 @@ def quick_eval(model, ds, device, *, batches_per_pair: int = 2, fg_frac: float =
     """
     with no_autocast(device):
         return _quick_eval_fp32(model, ds, device, batches_per_pair=batches_per_pair,
-                                fg_frac=fg_frac, seed=seed, meta_probe=meta_probe)
+                                fg_frac=fg_frac, seed=seed, meta_probe=meta_probe,
+                                return_records=return_records)
 
 
 def _quick_eval_fp32(model, ds, device, *, batches_per_pair: int = 2, fg_frac: float = 0.02,
-                     seed: int = 0, meta_probe=None) -> dict:
+                     seed: int = 0, meta_probe=None, return_records: bool = False) -> dict:
     units, assays = build_eval_units(model, ds, device, batches_per_pair=batches_per_pair,
                                      meta_probe=meta_probe)
     recs: List[Dict] = []
@@ -1354,6 +1362,12 @@ def _quick_eval_fp32(model, ds, device, *, batches_per_pair: int = 2, fg_frac: f
         out[f"{split}_imp_crps"] = a["mean"]          # SELECTION metric — matches V1
         out[f"{split}_n_targets"] = a["n_clusters"]
         out[f"{split}_imp_crps_fg"] = f["mean"]       # reported, never selected on
+    if return_records:
+        # The rows THEMSELVES, not a copy of the collapse. `target` is a tuple and json cannot hold
+        # one as written, so it is flattened here rather than at every call site.
+        out["records"] = [{"biosample": r["target"][0], "imp_biosample": r["target"][1],
+                           "assay": r["target"][2], "split": r["split"], "n_points": r["n_fg"],
+                           "crps": r["crps"], "crps_fg": r["crps_fg"]} for r in recs]
     return out
 
 
