@@ -49,6 +49,18 @@ ANCHOR="${ANCHOR:--1}"
 SEED="${SEED:-0}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
+# THE VENV PINS `candi` TO THE SHARED KIT, AND $KIT DOES NOT OVERRIDE IT.
+# `candi_venv` carries an editable install whose .pth is a hard path to
+# /project/…/CANDII/src — the shared checkout. So `cd "$KIT"` chooses which SCRIPTS run and the
+# LIBRARY still comes from wherever that clone happens to be parked, which is a branch someone
+# else pinned for some other job. This job first failed exactly that way: it ran this branch's
+# tools/calib_timing.py against a `candi.eval` three branches old, and the only symptom was an
+# ImportError for a function this branch added. Had the branch merely CHANGED a function instead
+# of adding one, it would have produced numbers instead of an error.
+#
+# PYTHONPATH is inserted ahead of site-packages, so setting it here wins. Measured on Fir:
+# without it `candi.eval` resolves to CANDII/src, with it to $KIT/src.
+export PYTHONPATH="$KIT/src"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MPLBACKEND=Agg WANDB_MODE=disabled
 module load StdEnv/2023 python/3.10.13 >/dev/null 2>&1
@@ -57,6 +69,20 @@ cd "$KIT"; mkdir -p "$OUT" slurm-logs
 echo "[t31] regime=$REGIME epochs=$EPOCHS levels='$LEVELS' anchor=$ANCHOR seed=$SEED"
 echo "[t31] host=$(hostname) commit=$(git rev-parse --short HEAD)"
 nvidia-smi -L || true
+
+# And then check it, because a comment is not a guarantee. A job that silently runs the wrong
+# library is the failure this whole block exists to prevent, so it must be loud and it must be
+# fatal — a calibration measured against unknown code is worse than no calibration.
+python - "$KIT" <<'PY' || exit 1
+import pathlib, sys
+import candi
+want = (pathlib.Path(sys.argv[1]).resolve() / "src" / "candi")
+got = pathlib.Path(candi.__file__).resolve().parent
+if got != want:
+    sys.exit(f"[t31] FATAL: candi imported from {got}, not {want}. The venv's editable install "
+             f"pins the shared kit; PYTHONPATH must point at this checkout's src.")
+print(f"[t31] candi from {got}")
+PY
 
 python tools/calib_timing.py \
   --regime "$REGIME" --out "$OUT" \
