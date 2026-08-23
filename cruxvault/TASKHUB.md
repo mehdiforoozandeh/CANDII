@@ -15,12 +15,26 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1
+- `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project
+- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external
+- `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box
+
+## Blocked
+
+- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — blocked by `t47`
+- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — blocked by `t47`
+- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — blocked by `t47`
+- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — blocked by `t47`
+- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — blocked by `t47`
+- `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
+- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
 
 ## By category
 
 ### data-acquisition
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
+- `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *open*
 
 ### implementation
 
@@ -32,6 +46,15 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term — *open*
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1 — *open*
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1 — *open*
+- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *open*
+- `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *open*
+- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — *blocked*
+- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — *blocked*
+- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — *blocked*
+- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — *blocked*
+- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — *blocked*
+- `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — *blocked*
+- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *blocked*
 
 ## Done · Dropped
 
@@ -53,21 +76,21 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t19` [implementation] bench primitives plus the three verification layers: vendored-reference bit-match, analytic arrays, stub model — *done* → `results/t19/DELIVERABLE.md`
 - `t20` [implementation] whole-chromosome bench harness and CLI, both pval and count arms — *done* → `results/t20/DELIVERABLE.md`
 - `t21` [implementation] the C-block: six covariate-sensitivity instruments (use, share, direction, specificity, invariance, bio-conservation guard) — *done* → `results/t21/DELIVERABLE.md`
-- `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — *done* → `cutover`
+- `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — *done* → `results/t22/DELIVERABLE.md`
 - `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `results/t23/DELIVERABLE.md`
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *done* → `results/t25/DELIVERABLE.md`
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *done* → `results/t26/DELIVERABLE.md`
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *done* → `merged-pending`
 - `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *done* → `09a0f3e`
-- `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb — *done* → `commits`
-- `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain — *done* → `superseded`
-- `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- cause only, no fix — *done* → `cause`
-- `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- cause only, no fix — *done* → `cause`
-- `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe — *done* → `AGENTS.md`
-- `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *done* → `verdict`
-- `t38` [implementation] teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does — *done* → `landed`
-- `t39` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `renamed`
-- `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `landed`
-- `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `landed`
-- `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `PI`
+- `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb — *done* → `results/t30/TIMING.md`
+- `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain — *done* → `results/t30/TIMING.md`
+- `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- [Cause](results/t32/FINDING.md) — per-level foreground; 0.73 unattainable (quantised to quarters). Fix ruled and landed in 2f56cb1: one fixed foreground on the deepest truth, ceiling constant deleted, perfect model measures 1.000 — *done* → `results/t32/FINDING.md`
+- `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- [Cause](results/t33/FINDING.md) — clamp below estimator resolution + ddof mismatch. Fix landed in 2f56cb1: unclamped total with naive/bias/se split, ddof=1 both, output_is_constant retired — *done* → `results/t33/FINDING.md`
+- `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe — *done* → `results/t22/SEED_FLOOR.md`
+- `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *done* → `results/t37/FINDING.md`
+- `t38` [implementation] teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does — *done* → `results/t38/DELIVERABLE.md`
+- `t39` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `results/t39/DELIVERABLE.md`
+- `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
+- `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
+- `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
