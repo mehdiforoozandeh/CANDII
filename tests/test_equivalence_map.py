@@ -12,6 +12,12 @@ in `tools/equivalence.py` claims all 651.
 
 It stays useful after `eval.py` is gone: it is then the only record of what the old suite emitted,
 and the only thing that can catch a rule being deleted along with the code it described.
+
+THE FIXTURE IS FROZEN AND NOT MIGRATED. When the covariate keys were renamed off their `C1`..`C6`
+codes to `covuse` / `covshare` / `depthdir` / `depthcounterfact` / `covspec` / `depthblind` /
+`biokeep`, only the RIGHT-hand (bench) side of the rule table moved. The fixture holds the LEFT-hand
+side — the h5-era `M1`/`M2`/`M3`/`S14` keys — and those spellings are what the archived jsons
+actually contain, so editing them would make the fixture describe a file that never existed.
 """
 from __future__ import annotations
 
@@ -155,7 +161,7 @@ def test_the_two_accepted_losses_stay_in_the_report(tool, skeleton) -> None:
     Both were put to the PI and accepted on 2026-08-21: the target-clustered bootstrap CIs, and the
     clamp telemetry that distinguishes "the model ignores depth" from "log2_mu saturated". Accepting
     them is not a reason to stop printing them — the report is the record that the trade was made
-    deliberately, and a future reader who finds a C3 near zero needs to know it means "no response"
+    deliberately, and a future reader who finds a `depthdir` near zero needs to know it means "no response"
     rather than "no sensitivity".
     """
     text = tool.report(skeleton, {})

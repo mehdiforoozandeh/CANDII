@@ -42,6 +42,7 @@ export MPLBACKEND=Agg WANDB_MODE=disabled
 module load StdEnv/2023 python/3.10.13 >/dev/null 2>&1
 source "$VENV/bin/activate" || { echo "[error] no venv at $VENV" >&2; exit 1; }
 cd "$KIT"; mkdir -p "$OUT"
+source "$KIT/slurm/_kit_pin.sh"
 echo "[t22] mode=$MODE tag=$TAG seed=$SEED host=$(hostname) commit=$(git rev-parse --short HEAD)"
 nvidia-smi -L || true
 

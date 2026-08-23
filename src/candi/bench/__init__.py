@@ -1,13 +1,19 @@
 """candi.bench — the CANDII evaluation suite.
 
-Five blocks under one CLI, replacing `candi.eval`. `EVAL_PLAN.md` is the build plan; `EVAL.md`
-becomes the contract at cutover (t22).
+Five blocks under one CLI. It replaced `candi.eval`, which is now deleted (D15); `EVAL_PLAN.md`
+is the build plan and `EVAL.md` is the contract.
 
 - **E** the nine ENCODE Imputation Challenge measures, faithful to the organizers' code
 - **P** the four post-hoc measures the challenge's own retrospective recommends instead
 - **D** distributional: CRPS with its scale split, PIT/ECE, C-index, coverage, the marginal bar
 - **B** binary/peak: AUPRC, peak overlap, correspondence curve. No AUROC, deliberately
-- **C** covariate sensitivity: use, share, direction, specificity, invariance, and the guard
+- **C** covariate sensitivity: `covuse`, `covshare`, `depthdir`, `depthcounterfact`, `covspec`,
+  and `depthblind` with the `biokeep` guard it is never reported without
+
+Plus the **loss tier**, which is not a block: `harness.loss_block` scores the three NLLs the training
+objective is built from (`distributional.nb_nll` / `gaussian_nll` / `bernoulli_nll`) on the eval
+panel, so `val_loss` and `test_loss` are the same quantity as `train_loss`. They are pure numpy
+copies because this package may not import `candi.train`, and the equivalence is pinned by test.
 
 Everything is imported lazily, for the reason `candi.store.__init__` gives: `annotations` needs
 only numpy, while the harness drags in h5py and the store. A consumer wanting a pinned bed should

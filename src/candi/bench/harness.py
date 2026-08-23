@@ -111,6 +111,12 @@ class TrackRecord:
     pval: Dict[str, np.ndarray] = field(default_factory=dict)
     peak_score: Dict[str, np.ndarray] = field(default_factory=dict)
     peaks: Dict[str, np.ndarray] = field(default_factory=dict)
+    #: Whether `peak_score` is a real `sigmoid(peak_logit)` or the NB-mean FALLBACK. Recorded at
+    #: stream time, where the model's output dict is the authority, because the two cannot be told
+    #: apart afterwards: a value range is not evidence — a well-behaved NB mean is inside [0, 1] on
+    #: most bins of most assays. `binary_suite` is rank-based and survives either, but a Bernoulli
+    #: NLL of an unbounded count is meaningless, so `loss_block` gates on this.
+    has_peak_head: bool = False
 
     @property
     def key(self) -> str:
@@ -208,6 +214,19 @@ class EvalSource:
     def targets(self, pair: Pair, kind: str) -> List[int]:
         """Assay column indices this pair supplies ground truth for, under `kind`."""
         raise NotImplementedError
+
+    def cross_cell(self, kind: str) -> bool:
+        """Does `kind` read its ground truth from a DIFFERENT biosample than the prompt?
+
+        True means the batch carries the `y_*_imp` keys — the target cell's counts, p-values, peaks
+        and covariates — and the harness scores against those rather than against the input cell's
+        own tracks. It also means nothing has to be hidden from the encoder: the target assay is one
+        the prompt cell genuinely does not have.
+
+        Imputation on a bake is always cross-cell. On a store it depends on the regime (see
+        `StoreSource.cross_cell`). Denoising never is, anywhere.
+        """
+        return kind == "impute"
 
     def windows(self, chrom: str) -> List[int]:
         return full_tiling(self.n_bins(chrom), self.context_bins)
@@ -412,7 +431,7 @@ class H5Source(EvalSource):
 
     def counts_at_dsf(self, pair: Pair, chrom: str, starts: Sequence[int],
                       dsf: int) -> np.ndarray:
-        """The bake's OWN downsampling ladder, not a re-thinning of it (S14's ground truth)."""
+        """The bake's OWN downsampling ladder, not a re-thinning of it (`depthcounterfact`'s truth)."""
         if dsf not in self.dsf_levels:
             raise ValueError(f"{self.path} carries DSF levels {self.dsf_levels}, not {dsf}")
         return self._read(pair.target_biosample, f"counts_dsf{dsf}",
@@ -435,14 +454,20 @@ class H5Source(EvalSource):
 
 
 class StoreSource(EvalSource):
-    """A `CANDI_STORE` corpus behind a regime file.
+    """A `CANDI_STORE` corpus behind a regime file. Imputation here has TWO cases.
 
-    The store has no `T_`/`V_`/`B_` convention — D16 makes biosample names opaque ids that nothing
-    may parse — so there is no paired cell to impute FROM. Imputation here is leave-one-assay-out
-    within an eval biosample: the assay is masked out of the encoder input exactly as
+    **Declared pairs (D31).** A regime may carry `eval_pairs`, a list of `[input, target]`
+    biosample names — `configs/regime.eic_val.json` carries 26 of them. Then imputation is the task
+    the training loop runs and the bake has always run: prompt with the input cell, score against
+    the target cell's tracks, and hide nothing, because the target cell is a different biosample
+    whose assays the prompt does not carry. The pairing is READ OFF THE REGIME and nowhere else —
+    D16 makes biosample names opaque ids, so no `T_`/`V_`/`B_` prefix is parsed here.
+
+    **No declared pairs.** Nothing to impute FROM, so imputation is leave-one-assay-out within an
+    eval biosample: the assay is masked out of the encoder input exactly as
     `DataMasker._mask_full_assay` masks it during training (data, metadata rows 0-3 and availability
     all set to `CLOZE`), and the decoder is asked for it from the prompt alone. That is the same
-    task the model was trained on, and it is the only imputation a store can pose.
+    task the model was trained on, and it is the only imputation a pair-less regime can pose.
 
     Batch assembly is `StoreDataset._make_batch`, called with a window list this class substitutes
     for the regime's plan. Re-implementing it here would duplicate the thinning, the depth-adjusted
@@ -460,6 +485,8 @@ class StoreSource(EvalSource):
 
         self.regime_path = Path(regime_path)
         regime = Regime.from_file(self.regime_path)
+        #: The parsed regime, kept because `eval_pairs` decides which imputation this source poses.
+        self.regime = regime
         self.ds = StoreDataset(regime, train=False, batch_size=1, dsf_sampling="off",
                                shuffle=False, deterministic=True, biosamples=biosamples)
         self.assays = list(self.ds.assays)
@@ -480,21 +507,55 @@ class StoreSource(EvalSource):
     def n_bins(self, chrom: str) -> int:
         return int(self._n_bins[chrom])
 
+    def cross_cell(self, kind: str) -> bool:
+        """Only with declared pairs is there a second cell to read the ground truth from."""
+        return kind == "impute" and self.regime.has_eval_pairs
+
     def pairs(self, kind: str) -> List[Pair]:
-        return [Pair(b, b) for b in self.ds.biosample_pool]
+        """The declared `(input, target)` pairs when the regime has them; self-pairs otherwise.
+
+        Declaration order, filtered to the inputs this source actually opened — `biosamples=` can
+        narrow the pool, and a pair whose prompt cell is not in it has nothing to prompt with.
+        Denoising is a self-pair over the pool whatever the regime declares: it reads and scores
+        one cell.
+        """
+        if not self.cross_cell(kind):
+            return [Pair(b, b) for b in self.ds.biosample_pool]
+        pool = set(self.ds.biosample_pool)
+        return [Pair(a, b) for a, b in self.ds.eval_pairs if a in pool]
 
     def targets(self, pair: Pair, kind: str) -> List[int]:
-        avail = self.ds._availability[pair.input_biosample]
-        return [a for a in range(len(self.assays)) if bool(avail[a])]
+        """Under declared pairs: assays the TARGET cell has AND THE INPUT CELL DOES NOT.
 
-    def _raw_batch(self, pair: Pair, chrom: str, starts: Sequence[int]) -> Dict[str, Any]:
+        Both halves of that rule are load-bearing, and it is the same rule the other two
+        implementations of this task enforce — `H5Source.targets` above, and
+        `StoreDataset._imp_keys`, whose `imp_map = (y_avail <= 0) & (y_data_imp != -1)` reads
+        `y_avail` off the INPUT cell. An assay neither cell has is not a target because there is no
+        ground truth; an assay BOTH cells have is not a target because the encoder can read it
+        straight off the prompt, so predicting it measures copying rather than imputation.
+
+        Without declared pairs the pair is a self-pair and every available assay is a target: for
+        `denoise` it is denoised, and for leave-one-out imputation it is held out one at a time.
+        """
+        if not self.cross_cell(kind):
+            avail = self.ds._availability[pair.input_biosample]
+            return [a for a in range(len(self.assays)) if bool(avail[a])]
+        t_avail = self.ds._availability[pair.target_biosample]
+        x_avail = self.ds._availability[pair.input_biosample]
+        return [a for a in range(len(self.assays)) if bool(t_avail[a]) and not bool(x_avail[a])]
+
+    def _raw_batch(self, pair: Pair, chrom: str, starts: Sequence[int], *,
+                   imp_target: Optional[str] = None) -> Dict[str, Any]:
         self.ds._windows = [(chrom, int(s)) for s in starts]
         free = np.random.default_rng(self._run_seed)
-        return self.ds._make_batch(pair.input_biosample, list(range(len(starts))), free)
+        return self.ds._make_batch(pair.input_biosample, list(range(len(starts))), free,
+                                   imp_target=imp_target)
 
     def batch(self, pair: Pair, chrom: str, starts: Sequence[int], kind: str, *,
               x_dsf: int = 1) -> Dict[str, Any]:
-        out = self._raw_batch(pair, chrom, starts)
+        out = self._raw_batch(
+            pair, chrom, starts,
+            imp_target=pair.target_biosample if self.cross_cell(kind) else None)
         if x_dsf != 1:
             self._thin_input(out, pair, chrom, starts, x_dsf)
         return out
@@ -507,6 +568,20 @@ class StoreSource(EvalSource):
         is a binomial thinning of its DSF-1 counts — the same operation the loader performs — and
         the covariate must fall by `log2(d)` alongside, or the model is told a depth its input
         contradicts. That identity is `prep/bake.py`'s F4 gate and `StoreDataset._depth_adjusted`.
+
+        **`draw_seed` IS CALLED WITHOUT `side`, AND THAT IS THE POINT (t37).** `counts_at_dsf`
+        below omits it too, so on a self-pair the two build the SAME generator over the same array
+        and return the same bytes. That is ONE LADDER READ TWICE, not the identity-copy leak t27
+        closed in `StoreDataset._thin`. The bake materialises `counts_dsf{d}` once and hands the
+        same rows to whoever asks — `H5Source.batch` and `H5Source.counts_at_dsf` literally read
+        one h5 dataset — and a generated ladder is only a substitute for a stored one if it agrees
+        with itself. `_thin` is the opposite case: it draws TWO experiments, so its two calls must
+        differ, which is why `side` is keyword-only and has no default there.
+
+        Nothing compares the two anyway: this method's arrays reach only `_depthblind_latents`
+        (latent invariance, no truth), and `counts_at_dsf`'s reach only `depthcounterfact` (whose
+        latent is encoded at DSF 1). Adding `side` here would move both numbers by pure noise and
+        split the store from the h5. `tests/test_bench_harness.py` pins that it stays absent.
         """
         from candi.store.dataset import draw_seed, dsf_milli, thin_counts
 
@@ -525,19 +600,37 @@ class StoreSource(EvalSource):
 
     def counts_at_dsf(self, pair: Pair, chrom: str, starts: Sequence[int],
                       dsf: int) -> np.ndarray:
+        """The ground truth at `dsf`, read off whichever cell holds it.
+
+        Like `H5Source.counts_at_dsf` this takes no `kind`, so the cell is decided by the pair
+        itself: two different biosamples can only be a declared eval pair, and then the truth is the
+        TARGET's — thinned under the target's own name, as `StoreDataset._imp_keys` thins it, so two
+        pairs sharing a target see the same numbers.
+
+        **NO `side` IN THE SEED, DELIBERATELY (t37).** See `_thin_input` above for the full
+        argument. In short: on a self-pair this and `_thin_input` share an entropy tuple and return
+        byte-identical arrays, which is what the bake does — `counts_dsf{d}` is one stored array
+        that both the input read and the truth read land on. On a declared pair `name` is the target
+        cell, so the tuples differ and the two sites separate on their own. Do not "fix" this by
+        passing `side="y"`: it moves `depthcounterfact` and `depthblind` by realization noise and
+        makes the store disagree with the h5 on every self-pair.
+        """
         from candi.store.dataset import draw_seed, dsf_milli, thin_counts
 
-        out = self._raw_batch(pair, chrom, starts)
-        y = out["y_data"].numpy().copy()
+        imp = pair.target_biosample if pair.target_biosample != pair.input_biosample else None
+        out = self._raw_batch(pair, chrom, starts, imp_target=imp)
+        y = (out["y_data_imp"] if imp else out["y_data"]).numpy().copy()
         if dsf == 1:
             return y
+        name = imp or pair.input_biosample
+        avail = (self.ds._availability[imp] if imp
+                 else (out["y_avail"][0].numpy() > 0))
         for a, assay in enumerate(self.assays):
-            if float(out["y_avail"][0, a]) <= 0:
+            if not bool(avail[a]):
                 continue
             for j, s in enumerate(starts):
                 rng = np.random.default_rng(
-                    draw_seed(self._run_seed, pair.input_biosample, assay, chrom, int(s),
-                              dsf_milli(dsf)))
+                    draw_seed(self._run_seed, name, assay, chrom, int(s), dsf_milli(dsf)))
                 y[j, :, a] = thin_counts(y[j, :, a].astype(np.int64), dsf, rng).astype(np.float32)
         return y
 
@@ -605,6 +698,11 @@ def _decode_full(model, prep: Dict[str, Any]) -> Dict[str, torch.Tensor]:
                  prep.get("log_ref"))
 
 
+def _is_loo_imputation(source: EvalSource, kind: str) -> bool:
+    """Is this the store's leave-one-assay-out imputation — the one case that masks the input?"""
+    return kind == "impute" and source.kind == "store" and not source.cross_cell(kind)
+
+
 def decode_groups(source: EvalSource, kind: str, cols: Sequence[int]) -> List[List[int]]:
     """Which target assays can share one forward pass.
 
@@ -612,13 +710,17 @@ def decode_groups(source: EvalSource, kind: str, cols: Sequence[int]) -> List[Li
     the input cell genuinely does not have, so nothing has to be hidden and one pass answers for
     every target at once.
 
-    On the store, one assay per pass, and that is not an optimisation left on the table. Store
-    imputation holds the assay out **by mask**, so masking every target at once would not be
+    The store has both cases. Under DECLARED PAIRS it behaves like the h5 — the target cell is a
+    different biosample, `targets()` keeps only the assays the prompt cell lacks, and one pass
+    answers for all of them.
+
+    Without declared pairs, one assay per pass, and that is not an optimisation left on the table.
+    Leave-one-out holds the assay out **by mask**, so masking every target at once would not be
     leave-one-out — it would be "impute all of them from whatever is left", a strictly harder task
     that is not the one the model trained on. On `V_aa`, which carries two assays, it would also
     empty the encoder input entirely.
     """
-    return [list(cols)] if (kind == "denoise" or source.kind != "store") else [[a] for a in cols]
+    return [[a] for a in cols] if _is_loo_imputation(source, kind) else [list(cols)]
 
 
 @torch.no_grad()
@@ -644,6 +746,7 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
         recs = {a: TrackRecord(pair=pair, assay=source.assays[a], kind=kind,
                                chroms=tuple(c for c, _ in plan)) for a in cols}
         have_signal = None
+        have_peak = None
         dropped: List[int] = []
         for chrom, starts in plan:
             n = source.n_bins(chrom)
@@ -652,7 +755,7 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
                 chunk = starts[lo:lo + batch_windows]
                 for group in groups:
                     batch = source.batch(pair, chrom, chunk, kind)
-                    if kind == "impute" and source.kind == "store":
+                    if _is_loo_imputation(source, kind):
                         for a in group:
                             _apply_loo_mask(batch, a)
                     prep = prepare_masked_batch(batch, noop, device, apply_mask=False)
@@ -662,7 +765,7 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
                         # dropped, never scored against an all-MISSING buffer.
                         dropped.extend(a for a in group if a not in dropped)
                         continue
-                    if kind == "impute" and source.kind == "h5":
+                    if source.cross_cell(kind):
                         prep["y_meta"] = vb_natural_meta(prep["y_meta"],
                                                          batch["y_meta_imp"].to(device),
                                                          batch["y_avail"].to(device))
@@ -677,6 +780,8 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
                     out = _decode_full(model, prep)
                     if have_signal is None:
                         have_signal = "signal_mu" in out
+                    if have_peak is None:
+                        have_peak = "peak_logit" in out
                     for j, s in enumerate(chunk):
                         sl = slice(int(s), int(s) + source.context_bins)
                         for a in group:
@@ -698,6 +803,7 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
                                 b["peak_score"][sl] = b["mu"][sl]
             for a in cols:
                 r, b = recs[a], buf[a]
+                r.has_peak_head = bool(have_peak)
                 r.mu[chrom], r.n[chrom], r.counts[chrom] = b["mu"], b["n"], b["counts"]
                 r.peaks[chrom], r.peak_score[chrom] = b["peaks"], b["peak_score"]
                 if have_signal:
@@ -729,7 +835,8 @@ def _chrom_offsets(rec: TrackRecord) -> Dict[str, int]:
     return off
 
 
-def _p_block(rec: TrackRecord, gene_annotations: Sequence[str]) -> Dict[str, object]:
+def _p_block(rec: TrackRecord, gene_annotations: Sequence[str],
+             signal_mu: Optional[Mapping[str, np.ndarray]] = None) -> Dict[str, object]:
     """The P-block for one track, over the concatenation of every eval chromosome.
 
     Runs on the **pval arm only**, and that is the paper's own scoping rather than a shortcut: the
@@ -737,13 +844,19 @@ def _p_block(rec: TrackRecord, gene_annotations: Sequence[str]) -> Dict[str, obj
     the same units. A count arm has no p-value, and inventing a count threshold to fill the slot
     would produce a number with no counterpart in the published work.
 
+    THAT SCOPING IS ALSO WHY `signal_mu` IS AN ARGUMENT. The thresholds above are absolute numbers
+    in `-log10 p`, so the prediction has to arrive in `-log10 p` too — `score_track` passes the
+    INVERTED means (`D.invert_signal_prediction`) rather than `rec.signal_mu`, which on a store is
+    in the head's training space. Defaults to `rec.signal_mu`, which is the same array whenever the
+    run's transform is `"none"`.
+
     `accuracy_by_strength` is position-free, so it takes the whole concatenation at once and its
     strength bins are the panel's, not one chromosome's. The two region correlations ARE positional,
     so their windows are built per chromosome and shifted into the concatenation — the same
     construction `eic.dict_to_arr` relies on, for the same reason.
     """
     sig = E.dict_to_arr(rec.pval, rec.chroms)
-    pred = E.dict_to_arr(rec.signal_mu, rec.chroms)
+    pred = E.dict_to_arr(rec.signal_mu if signal_mu is None else signal_mu, rec.chroms)
     pk = E.dict_to_arr(rec.peaks, rec.chroms).astype(bool)
     out: Dict[str, object] = {
         "acc_by_obs_strength": P.accuracy_by_strength(sig, pk, pred, bin_by="obs"),
@@ -761,10 +874,63 @@ def _p_block(rec: TrackRecord, gene_annotations: Sequence[str]) -> Dict[str, obj
     return out
 
 
+def loss_block(rec: TrackRecord, *, signal_target_transform: str = "none") -> Dict[str, object]:
+    """The LOSS tier for one track: the three NLLs the training objective is made of.
+
+    **This is the val/test loss, and it is not a benchmark comparison.** Every other block in this
+    file asks how good a prediction is against a truth in the benchmark's own units. These three ask
+    the one question the training loop asks — what likelihood did the model assign — so they are the
+    only numbers here that are directly comparable to `train/nll` in a run's step log. `EVAL.md`
+    lists them under the loss tier for that reason and not among the measures.
+
+    **ARM-INDEPENDENT ON PURPOSE, so the same dict is spread into every arm.** The `count` / `pval`
+    split is a split between two *comparisons* — NB predictions against raw counts, Gaussian
+    predictions against p-values. A loss is not a comparison between arms; it is one scalar the
+    objective summed. Putting `gaussian_nll` only under `pval` would then hide it from every reader
+    of the count arm, including `monitor`, which scores that arm alone.
+
+    **Head gating, from the model rather than from the numbers.** `gaussian_nll` needs a signal head
+    (`rec.has_pval`) and `bernoulli_nll` needs a peak head (`rec.has_peak_head`, recorded in
+    `stream_tracks` where the output dict is the authority). An absent head means an ABSENT KEY, not
+    a nan: a nan travels into `macro_mean`, gets skipped by a finiteness filter, and leaves a reader
+    unable to tell "no head" from "the head produced garbage".
+
+    `signal_target_transform` is D30 and it is RECORDED beside the numbers, never inferred. A
+    Gaussian NLL against `arcsinh(-log10 p)` and one against raw `-log10 p` are both finite and
+    plausible and are not the same number, and the checkpoint carries no trace of which one it was
+    trained for — the run json's `config.signal_target_transform` does.
+
+    **THIS TIER IS THE ONE DELIBERATE EXCEPTION TO THE `-log10 p` RULE.** Every benchmark measure on
+    the pval arm is quoted in `-log10 p`: `score_track` inverts the PREDICTION back into that space
+    first (`D.invert_signal_prediction`). `gaussian_nll` does the opposite on purpose — it mirrors
+    the training loss, so it takes the head's own `(µ, σ)` untouched and bends the TRUTH forward
+    with `D.transform_signal_target`. It therefore lives in TRANSFORMED space whenever the run does,
+    which is why the space travels with it as `signal_target_transform` and why this number must
+    never be compared to one scored under a different transform. `EVAL.md` §spaces is the contract.
+    """
+    chroms = rec.chroms
+    out: Dict[str, object] = {
+        "nb_nll": D.nb_nll(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms),
+                           E.dict_to_arr(rec.counts, chroms)),
+        "signal_target_transform": str(signal_target_transform),
+    }
+    if rec.has_pval:
+        # `stream_tracks` stores sigma; `gaussian_nll` takes the variance the loss was written in.
+        sigma = E.dict_to_arr(rec.signal_sigma, chroms).astype(np.float64)
+        out["gaussian_nll"] = D.gaussian_nll(
+            E.dict_to_arr(rec.signal_mu, chroms), sigma * sigma,
+            D.transform_signal_target(E.dict_to_arr(rec.pval, chroms), signal_target_transform))
+    if rec.has_peak_head:
+        out["bernoulli_nll"] = D.bernoulli_nll(E.dict_to_arr(rec.peak_score, chroms),
+                                               E.dict_to_arr(rec.peaks, chroms))
+    return out
+
+
 def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
                 enh_annotations: Sequence[str],
                 var: Optional[Mapping[str, np.ndarray]] = None,
                 seed: int = 0, c_index_pairs: int = 200_000,
+                signal_target_transform: str = "none",
                 with_curve: bool = False) -> Dict[str, Dict[str, object]]:
     """Every block this track can carry, per arm. `count` always; `pval` when the signal head is on.
 
@@ -774,12 +940,34 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
     a number with no interpretation. Omitting it omits `msevar`, which is the honest outcome; the
     organizers' code returns a bare `0.0` there and `annotations.load_variance_pool` says why we do
     not.
+
+    **THE SPACE CONTRACT, AND WHERE `signal_target_transform` LANDS.** Storage is transformed (the
+    store codec holds `arcsinh(-log10 p)`) and the reader inverts it, so the truth reaching this
+    function is raw `-log10 p` on BOTH data paths. Training supervises in transformed space, so on a
+    store the head's `(signal_mu, signal_sigma)` is a Gaussian over `arcsinh(-log10 p)`. Every
+    BENCHMARK number on the pval arm is quoted in `-log10 p` (`D.SIGNAL_EVAL_SPACE`), so the
+    prediction is bent back with `D.invert_signal_prediction` before the E-block, `gauss_suite` and
+    `_p_block` see it, and the arm records `pred_space` to say so. `binary_suite` is the one block
+    that needs nothing: it ranks by `peak_score`, and no signal-space value reaches it.
+
+    **THE LOSS TIER IS THE DELIBERATE EXCEPTION.** `loss_block` gets the UNINVERTED prediction: its
+    `gaussian_nll` mirrors the training objective, so it stays in the training space and bends the
+    TRUTH forward instead, with `signal_target_transform` recorded beside the number. That is why
+    the same `signal_target_transform` argument is used twice here in opposite directions — a
+    likelihood is not a comparison, and `EVAL.md` §spaces states the rule both obey.
+
+    `signal_target_transform` defaults to `"none"` — the identity, and the h5 path's real value — so
+    every caller written before this existed keeps the arithmetic it had, bit for bit. A caller that
+    knows better passes it: `monitor` from its own run config, `run_bench` from the CLI's
+    `--arch-from`.
     """
     arms: Dict[str, Dict[str, object]] = {}
     chroms = rec.chroms
+    loss = loss_block(rec, signal_target_transform=signal_target_transform)
 
     y_c = E.dict_to_arr(rec.counts, chroms)
     arms["count"] = {
+        **loss,
         **E.score_track(rec.counts, rec.mu, chroms, gene_annotations=gene_annotations,
                         enh_annotations=enh_annotations),
         **D.nb_suite(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms), y_c,
@@ -790,15 +978,33 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
     if rec.has_pval:
         y_p = E.dict_to_arr(rec.pval, chroms)
         pool = None if var is None else E.dict_to_arr(var, chroms)
+        # The prediction moves, the truth does not. `invert_signal_prediction` returns the caller's
+        # own arrays under `"none"`, so the h5 path builds dicts of the same objects and every key
+        # below is bit-identical to what it was before the inversion existed.
+        inv = {c: D.invert_signal_prediction(rec.signal_mu[c], rec.signal_sigma[c],
+                                             signal_target_transform) for c in chroms}
+        mu_p = {c: v[0] for c, v in inv.items()}
+        sigma_p = {c: v[1] for c, v in inv.items()}
         arms["pval"] = {
-            **E.score_track(rec.pval, rec.signal_mu, chroms, gene_annotations=gene_annotations,
+            **loss,
+            **E.score_track(rec.pval, mu_p, chroms, gene_annotations=gene_annotations,
                             enh_annotations=enh_annotations, var=pool),
-            **D.gauss_suite(E.dict_to_arr(rec.signal_mu, chroms),
-                            E.dict_to_arr(rec.signal_sigma, chroms), y_p,
+            **D.gauss_suite(E.dict_to_arr(mu_p, chroms), E.dict_to_arr(sigma_p, chroms), y_p,
                             seed=seed, n_pairs=c_index_pairs),
+            # NOTHING TO INVERT HERE, and it is worth saying why rather than leaving a reader to
+            # check: `binary_suite`'s ranking score is `peak_score` — the peak head's probability,
+            # or the NB mean without that head — never `signal_mu`, so no signal-space value
+            # reaches it. Its keys are rank-based besides, and every transform in the vocabulary is
+            # strictly increasing, so they would be unchanged even if one did.
             **B.binary_suite(E.dict_to_arr(rec.peaks, chroms).astype(bool),
                              E.dict_to_arr(rec.peak_score, chroms), y_p, with_curve=with_curve),
-            **_p_block(rec, gene_annotations),
+            **_p_block(rec, gene_annotations, signal_mu=mu_p),
+            # WHICH SPACE THESE NUMBERS ARE IN, on the row itself. `pred_space` is the answer and
+            # `pred_inversion` is how it was reached — `"none"` means the head already predicted
+            # `-log10 p`, not that the question was skipped. A row from before the contract carries
+            # neither key, which is how a reader tells the two apart.
+            "pred_space": D.SIGNAL_EVAL_SPACE,
+            "pred_inversion": str(signal_target_transform),
         }
     for arm in arms:
         arms[arm]["assay"] = rec.assay
@@ -907,9 +1113,10 @@ class _Context:
 def _spread(starts: Sequence[int], k: int) -> List[int]:
     """`k` window starts spaced across the whole chromosome — never a prefix.
 
-    `eval.py::build_eval_units` records why in blood: the eval windows walk in genomic order, so the
-    first k of them are a contiguous block at the START of the eval chromosome. On chr21 that block
-    is the acrocentric p-arm, where every position of every held-out target is exactly zero.
+    The deleted `eval.py::build_eval_units` recorded why in blood: the eval windows walk in genomic
+    order, so the first k of them are a contiguous block at the START of the eval chromosome. On
+    chr21 that block is the acrocentric p-arm, where every position of every held-out target is
+    exactly zero.
     """
     if k >= len(starts):
         return list(starts)
@@ -924,9 +1131,11 @@ def _c_contexts(model, source: EvalSource, device, *, kind: str, pairs: Sequence
     The units are IMPUTATION slots wherever the backend can pose one, and that is a methodological
     requirement rather than a convenience. If the target assay is present in the encoder input, the
     model can read its depth off the signal and ignore the prompt entirely, and every instrument in
-    the C-block would then measure a channel that is not the one under test. On the h5 the target is
-    a `V_`/`B_` assay the input cell genuinely lacks; on the store it is held out by mask, one assay
-    per context — hence one encode per held-out assay there and one per pair here.
+    the C-block would then measure a channel that is not the one under test. On the h5, and on a
+    store with declared pairs, the target is an assay the input cell genuinely lacks, so one encode
+    per pair answers for all of them; on a pair-less store it is held out by mask, one assay per
+    context, hence one encode per held-out assay. `decode_groups` is where that choice is made, and
+    asking it rather than re-deciding here is what keeps the two loops from drifting apart.
     """
     noop = make_masker(p_full_loci=0.0, p_full_assay=0.0, p_chunks=0.0, mask_fraction=0.0)
     model.eval()
@@ -937,10 +1146,10 @@ def _c_contexts(model, source: EvalSource, device, *, kind: str, pairs: Sequence
         cols = source.targets(pair, kind)
         if not cols:
             continue
-        groups = [cols] if source.kind == "h5" else [[a] for a in cols]
+        groups = decode_groups(source, kind, cols)
         for group in groups:
             batch = source.batch(pair, chrom, picks, kind)
-            if kind == "impute" and source.kind == "store":
+            if _is_loo_imputation(source, kind):
                 for a in group:
                     _apply_loo_mask(batch, a)
             prep = prepare_masked_batch(batch, noop, device, apply_mask=False)
@@ -948,7 +1157,7 @@ def _c_contexts(model, source: EvalSource, device, *, kind: str, pairs: Sequence
                 continue
             y_meta = prep["y_meta"]
             truth_t = batch["y_data"]
-            if kind == "impute" and source.kind == "h5":
+            if source.cross_cell(kind):
                 y_meta = vb_natural_meta(y_meta, batch["y_meta_imp"].to(device),
                                          batch["y_avail"].to(device))
                 truth_t = batch["y_data_imp"]
@@ -970,11 +1179,11 @@ def _predictor(model, contexts: Sequence[_Context]) -> Tuple[C.Predictor, np.nda
 
     `cov` is `(n_units, 4)` in `COVARIATES` order, read straight off the prompt rows. `predict`
     writes a candidate covariate matrix back into those rows, re-decodes the cached latents and
-    gathers `mu` and `n` at the same slots. The encoder never re-runs, which is what makes C1's
+    gathers `mu` and `n` at the same slots. The encoder never re-runs, which is what makes `covuse`'s
     ~1,600 decodes affordable — and it is exact, because the latent does not depend on `y_meta`.
 
-    **A candidate may have any number of rows.** `c1_use`, `c3_direction` and `c4_specificity` pass
-    one row per unit, but `c2_share` passes an inner block of `n_inner` rows regardless of how many
+    **A candidate may have any number of rows.** `covuse`, `depthdir` and `covspec` pass
+    one row per unit, but `covshare` passes an inner block of `n_inner` rows regardless of how many
     units exist. So a row is a free-standing covariate vector, not a unit: row `r` is evaluated in
     unit `r % n_units`, and a candidate longer than the unit list is processed in that many passes.
     Anything that assumed `len(candidate) == n_units` would index out of the batch on the first
@@ -1023,13 +1232,13 @@ def _predictor(model, contexts: Sequence[_Context]) -> Tuple[C.Predictor, np.nda
 
 
 @torch.no_grad()
-def _c5_latents(model, source: EvalSource, device, *, pairs: Sequence[Pair],
+def _depthblind_latents(model, source: EvalSource, device, *, pairs: Sequence[Pair],
                 n_windows: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Pooled latents for the same regions read at every DSF level.
 
     `batch` is the DSF level — the nuisance the encoder should be blind to; `bio_label` is the
-    region — the signal it must keep. C6 reads the second one, and D13 is why both leave here
-    together or not at all.
+    region — the signal it must keep. `biokeep` reads the second one, and D13 is why both leave
+    here together or not at all.
     """
     noop = make_masker(p_full_loci=0.0, p_full_assay=0.0, p_chunks=0.0, mask_fraction=0.0)
     model.eval()
@@ -1056,10 +1265,10 @@ def c_block(model, source: EvalSource, device, *, kind: str = "impute",
             pairs: Optional[Sequence[Pair]] = None, n_windows: int = 8,
             n_resamples: int = 50, n_outer: int = 32, n_inner: int = 8,
             seed: int = 0) -> Dict[str, object]:
-    """All six instruments (D8), on one shared set of counterfactual contexts.
+    """All seven covariate instruments (D8), on one shared set of counterfactual contexts.
 
     **This block is sampled and says so.** D2's no-subsampling rule is about scoring a TRACK, and
-    the C-block does not score a track — it perturbs a prompt and watches the output move. Every
+    this block does not score a track — it perturbs a prompt and watches the output move. Every
     count that decides its resolution is in the result (`n_units`, `n_windows`, `n_resamples`,
     `n_outer`, `n_inner`), so a reader can see what it rests on instead of inferring it.
     """
@@ -1076,13 +1285,13 @@ def c_block(model, source: EvalSource, device, *, kind: str = "impute",
         "n_contexts": len(contexts),
         "covariates": list(C.COVARIATES),
         "kind": kind,
-        "C1_use": C.c1_use(predict, cov, target, n_resamples=n_resamples, seed=seed),
-        "C2_share": C.c2_share(predict, cov, n_outer=n_outer, n_inner=n_inner, seed=seed),
-        "C3_direction": C.c3_direction(predict, cov, depth_col=DEPTH_ROW),
-        "C4_specificity": C.c4_specificity(predict, cov, seed=seed),
+        "covuse": C.covuse(predict, cov, target, n_resamples=n_resamples, seed=seed),
+        "covshare": C.covshare(predict, cov, n_outer=n_outer, n_inner=n_inner, seed=seed),
+        "depthdir": C.depthdir(predict, cov, depth_col=DEPTH_ROW),
+        "covspec": C.covspec(predict, cov, seed=seed),
     }
-    out["C1_n_resamples"] = int(n_resamples)
-    out["C2_n_outer"], out["C2_n_inner"] = int(n_outer), int(n_inner)
+    out["covuse_n_resamples"] = int(n_resamples)
+    out["covshare_n_outer"], out["covshare_n_inner"] = int(n_outer), int(n_inner)
 
     levels = [float(d) for d in source.dsf_levels] or [1.0]
     if len(levels) > 1:
@@ -1098,23 +1307,29 @@ def c_block(model, source: EvalSource, device, *, kind: str = "impute",
                 arr = source.counts_at_dsf(ctx.pair, ctx.chrom, ctx.starts, int(d))
                 parts.append(np.stack([arr[j, :, a] for j, a in ctx.slots]))
             true_by_level[d] = np.concatenate(parts, axis=0)
-        out["C3_depth_counterfactual"] = C.depth_counterfactual(pred_by_told, true_by_level)
-        out["C3_calibration"] = {
+        out["depthcounterfact"] = C.depthcounterfact(pred_by_told, true_by_level)
+        out["depthcounterfact_calibration"] = {
             "constant_answer_frac_min_at_true": 1.0 / len(levels),
-            "perfect_model_ceiling": 0.73,
             "note": "0.25 on a four-level ladder is the value of ALWAYS answering told-depth 1, "
-                    "not a chance baseline; the ceiling is ~0.73 because the foreground is the top "
-                    "slice of the level-k realization being scored, not of the truth (EVAL.md).",
+                    "not a chance baseline. There is NO ceiling constant here any more: the ~0.73 "
+                    "this key used to carry was a consequence of re-selecting the foreground from "
+                    "the level-k realization being scored, and `depthcounterfact` now draws ONE "
+                    "foreground on the deepest truth and reuses it at every level — see its "
+                    "`n_fg`, `n_positions` and `fg_level`. What a perfect model caps at under the "
+                    "fixed mask is a measurement nobody has made yet, and carrying the old number "
+                    "across the change would be quoting it against a run it does not describe.",
         }
 
-        Z, dsf_lab, region = _c5_latents(model, source, device, pairs=pair_list,
+        Z, dsf_lab, region = _depthblind_latents(model, source, device, pairs=pair_list,
                                          n_windows=n_windows)
         if Z.shape[0] >= 4 and len(np.unique(dsf_lab)) > 1:
             k = max(2, min(20, Z.shape[0] - 1))
-            out["C5_C6_invariance"] = C.c5_invariance(Z, dsf_lab, region, k=k, seed=seed)
-            out["C5_n_latents"] = int(Z.shape[0])
+            # ONE key holding both halves: D13 says `depthblind` is never reported without
+            # `biokeep`, and a single dict is what makes splitting them a code change.
+            out["depthblind_biokeep"] = C.depthblind(Z, dsf_lab, region, k=k, seed=seed)
+            out["depthblind_n_latents"] = int(Z.shape[0])
     else:
-        out["C3_depth_counterfactual"] = {
+        out["depthcounterfact"] = {
             "error": "the corpus has one DSF level, so there is no depth ladder to sweep"}
     return out
 
@@ -1123,13 +1338,22 @@ def c_block(model, source: EvalSource, device, *, kind: str = "impute",
 # the run
 # ---------------------------------------------------------------------------
 
-def _binarise(rec: TrackRecord) -> Optional[Tuple[np.ndarray, np.ndarray, int]]:
-    """MACS2 truth and the `>= 2` p-value call, bit-packed, for `panel_specificity`."""
+def _binarise(rec: TrackRecord, signal_target_transform: str = "none"
+              ) -> Optional[Tuple[np.ndarray, np.ndarray, int]]:
+    """MACS2 truth and the `>= 2` p-value call, bit-packed, for `panel_specificity`.
+
+    `BINARISE_THRESHOLD` is an absolute number IN `-log10 p`, so the prediction has to be in
+    `-log10 p` before it is compared — the same spaces contract `score_track` obeys, in the one
+    pval-arm measure that lives at the panel level instead of on a track. Comparing a training-space
+    `µ` to 2 would call a different set of positions and `panel_specificity` would be a number about
+    the store's codec.
+    """
     if not rec.has_pval:
         return None
     truth = E.dict_to_arr(rec.peaks, rec.chroms).astype(bool)
-    call = E.dict_to_arr(rec.signal_mu, rec.chroms) >= P.BINARISE_THRESHOLD
-    return np.packbits(truth), np.packbits(call), int(truth.size)
+    mu, _ = D.invert_signal_prediction(E.dict_to_arr(rec.signal_mu, rec.chroms),
+                                       np.zeros(1), signal_target_transform)
+    return np.packbits(truth), np.packbits(mu >= P.BINARISE_THRESHOLD), int(truth.size)
 
 
 def _varpool(varpool_root: Optional[Path | str], corpus: str, assay: str,
@@ -1166,9 +1390,17 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
               varpool_root: Optional[Path | str] = None, varpool_corpus: str = "eic",
               blocks: Sequence[str] = ("E", "P", "D", "B", "C"),
               c_windows: int = 8, c_resamples: int = 50,
+              signal_target_transform: str = "none",
               with_curve: bool = False, progress: bool = False,
               extra_provenance: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-    """Score one checkpoint end to end and return the result JSON of `EVAL_PLAN.md` §4."""
+    """Score one checkpoint end to end and return the result JSON of `EVAL_PLAN.md` §4.
+
+    `signal_target_transform` (D30) is recorded in `provenance` because no checkpoint carries which
+    space it was trained in. It is used twice, in opposite directions: `loss_block` bends the TRUTH
+    forward into that space (`gaussian_nll` is the training loss), and the pval arm bends the
+    PREDICTION back out of it, so every benchmark key on that arm is in `-log10 p`. See
+    `score_track` and `EVAL.md` §spaces.
+    """
     gene = ann.gene_annotations()
     enh = ann.enhancer_annotations()
     n_bins = {c: source.n_bins(c) for c in source.eval_chroms}
@@ -1184,9 +1416,10 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
             var = _varpool(varpool_root, varpool_corpus, rec.assay, rec.chroms, n_bins, var_cache)
             per_track[rec.key] = score_track(
                 rec, gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
-                c_index_pairs=c_index_pairs, with_curve=with_curve)
+                c_index_pairs=c_index_pairs, with_curve=with_curve,
+                signal_target_transform=signal_target_transform)
             if "P" in blocks and kind == "impute":
-                bits = _binarise(rec)
+                bits = _binarise(rec, signal_target_transform)
                 if bits is not None:
                     binarised.setdefault(rec.assay, []).append((rec.key, *bits))
 
@@ -1199,6 +1432,15 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
             "blocks": list(blocks),
             "depth_center": source.depth_center(),
             "annotation_assets": ann.verify_assets(),
+            # D30 — WHICH SPACE the test-loss `gaussian_nll` was scored in. The key is written even
+            # on a count-only run: "no signal head, so `none` was never applied to anything" and
+            # "the field was forgotten" must not look the same in a result file.
+            "signal_target_transform": str(signal_target_transform),
+            # The space the pval arm's BENCHMARK keys are in, run-wide. It is a constant and that is
+            # the point: a macro roll-up drops the per-track string keys (`macro_mean` averages
+            # scalars), so without this a reader of the macro alone could not tell an inverted run
+            # from a pre-contract one.
+            "pval_pred_space": D.SIGNAL_EVAL_SPACE,
             "c_index_note": "the C-index is the ONE documented exception to whole-track scoring "
                             "(EVAL_PLAN.md D3): it is pairwise, so it is estimated over a seeded "
                             "pair sample and never quoted without c_index_se.",

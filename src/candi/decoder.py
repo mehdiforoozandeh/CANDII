@@ -14,7 +14,7 @@ profile is forming rather than once at the end.
 
 Two further heads read the same finished trunk features and are OFF unless `heads` names them:
 `GaussianSignalHead` (arcsinh log-p-value, `mu`/`var`) and `PeakHead` (peak probability). They are
-supervision, not prediction targets the kit scores — `candi.eval` is NB-only by ruling.
+supervision, not prediction targets the count arm scores — the count head is NB by ruling.
 
 WHY FOUR FiLM TAPS AND NOT ONE AT THE END
 -----------------------------------------
@@ -72,7 +72,8 @@ DECODER_FILM_TAPS = ("pre_deconv", "per_deconv", "post_head")
 HEAD_SHARINGS = ("shared", "per_assay")
 
 # The output heads, in the order they are named everywhere. `count` is the shipped model and the only
-# one `candi.eval` scores; `signal` and `peak` are additional supervision, off unless asked for.
+# one the mid-training monitor scores; `signal` and `peak` are additional supervision, off unless
+# asked for. `candi.bench` scores the pval arm too, when a checkpoint carries the signal head.
 HEADS = ("count", "signal", "peak")
 DEFAULT_HEADS: Tuple[str, ...] = ("count",)
 
@@ -103,10 +104,11 @@ def parse_heads(heads) -> Tuple[str, ...]:
     """Normalise a comma string or iterable of head names into a validated tuple.
 
     `count` is REQUIRED, not merely defaulted. The NB count head is the frozen objective, it is the
-    only head `candi.eval` scores, and every recorded number in this repo is one of its metrics — so a
-    checkpoint trained without it could not be evaluated by anything in the kit and its run JSON would
-    report metrics for a head that never existed. Refusing the set here is a one-line failure on the
-    submit command; allowing it is a failure six GPU-hours later, in `evaluate`.
+    only head the mid-training monitor scores, and every recorded number in this repo is one of its
+    metrics — so a checkpoint trained without it could not be evaluated by anything in the kit and
+    its run JSON would report metrics for a head that never existed. Refusing the set here is a
+    one-line failure on the submit command; allowing it is a failure six GPU-hours later, in the
+    scorer.
     """
     if isinstance(heads, str):
         names = [h.strip() for h in heads.split(",") if h.strip()]
@@ -119,8 +121,8 @@ def parse_heads(heads) -> Tuple[str, ...]:
         raise ValueError(
             f"heads {sorted(set(names))} omits 'count'. The NB count head is the objective the kit "
             "evaluates and the one every recorded metric describes; a model without it cannot be "
-            "scored by candi.eval. Add 'count' — the signal and peak heads are auxiliary, not "
-            "alternatives to it.")
+            "scored by candi.bench's count arm. Add 'count' — the signal and peak heads are "
+            "auxiliary, not alternatives to it.")
     # de-duplicated, and ordered as HEADS so two spellings of the same set compare equal
     return tuple(h for h in HEADS if h in names)
 

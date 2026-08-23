@@ -13,12 +13,23 @@ derivation is exactly how the two drift.
 D3), because it is pairwise: chr21 is 1,868,399 bins, so exhaustive concordance is 1.7e12 pairs per
 track. It samples pairs, and it always reports the standard error of that sampling beside the
 estimate. A C-index quoted without its SE is not quotable.
+
+**The last block in this file is not a benchmark measure — it is the LOSS.** `nb_nll`,
+`gaussian_nll` and `bernoulli_nll` are the three terms the training objective is built from, so
+scoring them here is what makes `val_loss` and `test_loss` knowable at all: the training loop logs
+`train/nll` every step and, until these existed, nothing else in the repo computed any NLL. They are
+re-derived in pure numpy rather than imported, because `candi.bench` may not import `candi.train`
+(`tests/test_bench_harness.py` pins it in a subprocess). The equivalence that would otherwise be an
+assertion is a test instead — `tests/test_bench_analytic.py` imports both sides and compares them on
+random tensors — so a drift in either copy fails a test rather than quietly producing a val loss
+that is not the number the training loop would print.
 """
 from __future__ import annotations
 
 from typing import Dict, Optional
 
 import numpy as np
+from scipy.special import gammaln
 from scipy.stats import nbinom, norm
 
 from candi.metrics import P_EPS, calibration_pit_curve, ece, nb_crps
@@ -27,6 +38,10 @@ __all__ = [
     "p_from_mu", "nb_crps_mean", "oracle_scale", "marginal_nb", "gauss_crps", "gauss_crps_mean",
     "pit_curve", "ece", "c_index_nb", "c_index_gauss", "coverage_nb", "coverage_gauss",
     "nb_suite", "gauss_suite",
+    "SIGNAL_TARGET_TRANSFORMS", "transform_signal_target", "invert_signal_prediction",
+    "SIGNAL_EVAL_SPACE",
+    "NLL_EPS", "GAUSSIAN_VAR_EPS", "BERNOULLI_PROB_EPS",
+    "nb_nll", "gaussian_nll", "bernoulli_nll",
 ]
 
 pit_curve = calibration_pit_curve
@@ -322,3 +337,192 @@ def gauss_suite(mu: np.ndarray, sigma: np.ndarray, y: np.ndarray, *, seed: int =
         **c_index_gauss(mu, sigma, y, n_pairs=n_pairs, seed=seed),
         n_points=int(len(y)),
     )
+
+
+# ---------------------------------------------------------------------------
+# the LOSS — the three NLLs the objective is made of, in pure numpy
+# ---------------------------------------------------------------------------
+# Every constant below is matched to the training loop's, not chosen here. `NLL_EPS` is
+# `train.py::_elem_nb_nll`'s default; `GAUSSIAN_VAR_EPS` is `torch.nn.functional.gaussian_nll_loss`'s
+# own default clamp; the Bernoulli one is this file's alone and is explained on the function.
+#
+# WHY THESE ARE MEANS AND THE TRAINING TERMS ARE ALSO MEANS, BUT NOT THE SAME MEAN. The training loop
+# reduces over the positions its masks selected and reports `obs` and `imp` separately; a bench track
+# is one (pair, assay) over every bin of every eval chromosome, and every one of those bins is an
+# imputation target by construction. So the bench number is the `imp` term of the same formula,
+# evaluated on the eval panel instead of on a training batch — which is exactly what a val/test loss
+# is. The formula is identical; the population it is averaged over is the thing that differs, and
+# that difference is the point.
+
+#: `train.py::_elem_nb_nll(..., eps=1e-6)`. Clamps `1 - p` away from both ends and floors `n`.
+NLL_EPS = 1e-6
+
+#: `torch.nn.functional.gaussian_nll_loss(..., eps=1e-6)` — its own default, applied to `var` before
+#: the log and the division. Not a number chosen here.
+GAUSSIAN_VAR_EPS = 1e-6
+
+#: THIS ONE HAS NO COUNTERPART IN `train.py`, and the reason is worth stating. The training loop
+#: scores the peak head with `binary_cross_entropy_with_logits`, which fuses the sigmoid into the
+#: loss and never forms `1 - p`, so it needs no clamp at all. `harness.stream_tracks` stores
+#: `sigmoid(peak_logit)` — the probability, not the logit — so this copy has to take the log of a
+#: number that may have already rounded to exactly 0.0 or 1.0 in float32, and a clamp is the only
+#: way back. At float32's ulp near 1.0 this bites from about |logit| = 17.
+BERNOULLI_PROB_EPS = 1e-12
+
+#: `train.py::SIGNAL_TARGET_TRANSFORMS`, mirrored rather than imported. Kept a tuple in the same
+#: order so a mismatch is a one-line diff.
+SIGNAL_TARGET_TRANSFORMS = ("none", "arcsinh", "log1p")
+
+
+def transform_signal_target(y: np.ndarray, mode: str = "none") -> np.ndarray:
+    """Bend `-log10 p` into the space the Gaussian head was TRAINED to predict (D30).
+
+    The numpy twin of `train.py::_apply_signal_target_transform`, and it belongs to the LOSS PATH
+    ALONE. `gaussian_nll` is only the training loop's number if its target lives in the training
+    loop's space: on a store the head is fit against `arcsinh(-log10 p)`, so the loss bends the
+    TRUTH forward to meet the prediction and records which bend it used.
+
+    THE BENCHMARK PATH GOES THE OTHER WAY, and that is the space contract. Every benchmark measure
+    in this suite is quoted in `-log10 p` (`SIGNAL_EVAL_SPACE`), so the pval arm bends the
+    PREDICTION back with `invert_signal_prediction` and leaves the truth alone. Truth-forward for
+    the loss, prediction-back for the benchmark: the two directions are not interchangeable, because
+    a mean under a nonlinear map is not the map of the mean.
+    """
+    if mode == "none":
+        return np.asarray(y, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if mode == "arcsinh":
+        return np.arcsinh(y)
+    if mode == "log1p":
+        return np.log1p(y)
+    raise ValueError(
+        f"signal_target_transform must be one of {SIGNAL_TARGET_TRANSFORMS}; got {mode!r}")
+
+
+#: The space EVERY pval-arm benchmark number in this suite is quoted in — raw `-log10 p`, the units
+#: the store reader hands back (D26) and the units the truth arrives in on both data paths. Written
+#: onto the emitted arm as `pred_space` so a reader can tell a row scored under this contract from a
+#: row scored before it existed, where an `arcsinh` prediction was compared to a raw truth.
+SIGNAL_EVAL_SPACE = "-log10p"
+
+
+def invert_signal_prediction(mu: np.ndarray, sigma: np.ndarray, mode: str = "none"):
+    """Bend the Gaussian head's `(µ, σ)` BACK from its training space into `-log10 p`.
+
+    The inverse direction of `transform_signal_target`, and the benchmark path's half of the space
+    contract: the truth is already `-log10 p`, so the prediction is what has to move. `mode` is the
+    run's own `signal_target_transform`; `"none"` is the identity and returns the caller's arrays
+    UNTOUCHED, so the h5 path is bit-identical to what it computed before this function existed.
+
+    THE PUSHFORWARD IS NOT A GAUSSIAN AND THIS RETURNS A GAUSSIAN ANYWAY. `sinh` of a normal
+    variate is not normal — it is a Johnson S_U — so `(sinh µ, cosh µ · σ)` is the DELTA METHOD: a
+    first-order Taylor expansion about the mean, exact only in the limit of small `σ`. Every
+    downstream key that reads the distribution rather than its centre (`crps`, `pit_ks`,
+    `coverage_95`, `c_index`) inherits that approximation.
+
+    WHAT THAT COSTS, IN THE DIRECTION IT COSTS IT. `cosh` grows exponentially, so a bin the head is
+    confident about at large `µ` comes back with a very wide `σ'` — the same relative uncertainty
+    the store codec's own error analysis has (`store/layout.py`), but now inside a metric. Read a
+    store-path `pit_ks` or `coverage_95` as "calibration of the delta-method Gaussian", not as
+    calibration of the head, and prefer the point tier and `crps` when the two disagree. The h5 path
+    carries none of this: `mode="none"` does nothing at all.
+
+    The exception, stated once here and again in `harness.loss_block`: the LOSS tier does not use
+    this. `gaussian_nll` mirrors the training objective, so it stays in the training space with the
+    transform recorded beside it.
+
+    Both arrays come back as float64 for every mode but `"none"`; `sinh` overflows to `inf` around
+    `µ = 710`, well above anything an arcsinh-space TARGET can be — a uint16 store cannot even
+    represent one past `store.layout.PVAL_UINT16_MAX / PVAL_SCALE`. A prediction is not clamped to
+    that range, so an untrained head can still emit a `µ` that overflows, and an `inf` here is the
+    head's own output rather than an artefact of this function.
+    """
+    if mode == "none":
+        return mu, sigma
+    if mode not in SIGNAL_TARGET_TRANSFORMS:
+        raise ValueError(
+            f"signal_target_transform must be one of {SIGNAL_TARGET_TRANSFORMS}; got {mode!r}")
+    m = np.asarray(mu, dtype=np.float64)
+    s = np.asarray(sigma, dtype=np.float64)
+    if mode == "arcsinh":
+        return np.sinh(m), np.cosh(m) * s
+    # log1p: the inverse is expm1 and d/dµ expm1(µ) = exp(µ).
+    return np.expm1(m), np.exp(m) * s
+
+
+def nb_nll(n: np.ndarray, mu: np.ndarray, counts: np.ndarray, *, eps: float = NLL_EPS) -> float:
+    """Mean per-bin NB negative log-likelihood — `train.py::_elem_nb_nll`, in numpy.
+
+    Parameterised by `(n, µ)` because that is what the harness carries; `p` is derived with
+    `p_from_mu`, the same `n / (n + µ)` every other key in this file uses. The training loop is
+    handed the model's own `p` instead, so the pin in `tests/test_bench_analytic.py` feeds torch the
+    `p` this function derives — the claim being tested is that the two formulas agree, not that two
+    different parameterisations do.
+
+    THE THREE GUARDS ARE THE TRAINING LOOP'S, VALUE FOR VALUE. `probs` is `1 - p` clamped to
+    `[eps, 1-eps]`; `total` is `n` floored at `eps`; the target is floored at 0. `torch`'s
+    `NegativeBinomial(total_count, probs=probs)` puts the MEAN in `probs`'s complement, which is why
+    `probs` here is `1 - p` and not `p`.
+
+    float64 throughout while the objective runs behind `fp32_fence`, so the two agree to float32's
+    precision rather than bit-exactly — which is the right way round: this side is the more accurate
+    one.
+    """
+    n = np.asarray(n, dtype=np.float64)
+    mu = np.asarray(mu, dtype=np.float64)
+    probs = np.clip(1.0 - p_from_mu(n, mu), eps, 1.0 - eps)
+    total = np.maximum(n, eps)
+    k = np.maximum(np.asarray(counts, dtype=np.float64), 0.0)
+    log_unnorm = total * np.log1p(-probs) + k * np.log(probs)
+    log_norm = -gammaln(total + k) + gammaln(1.0 + k) + gammaln(total)
+    return float(-np.mean(log_unnorm - log_norm))
+
+
+def gaussian_nll(mu: np.ndarray, var: np.ndarray, truth: np.ndarray, *,
+                 eps: float = GAUSSIAN_VAR_EPS) -> float:
+    """Mean per-bin Gaussian NLL with `full=True` — `train.py::_elem_gaussian_nll`, in numpy.
+
+    `full=True` is not a detail: it adds `0.5*log(2*pi)`, and without it the number is an
+    unnormalised score rather than a log-likelihood comparable to anything. Production uses
+    `full=True` (`torch.nn.GaussianNLLLoss(reduction="none", full=True)`), so this does.
+
+    `var` — the VARIANCE, not the standard deviation. The harness stores `signal_sigma`, so its
+    caller squares it back; `torch` clamps `var` at `eps` before both the log and the division and
+    that clamp is reproduced here, which is also what keeps a zero-variance bin finite.
+
+    `truth` must ALREADY be in the head's target space — see `transform_signal_target`. Passing raw
+    `-log10 p` for a run trained with `arcsinh` gives a finite, plausible, wrong number.
+    """
+    mu = np.asarray(mu, dtype=np.float64)
+    v = np.maximum(np.asarray(var, dtype=np.float64), eps)
+    y = np.asarray(truth, dtype=np.float64)
+    return float(np.mean(0.5 * (np.log(v) + (mu - y) ** 2 / v + np.log(2.0 * np.pi))))
+
+
+def bernoulli_nll(prob: np.ndarray, labels: np.ndarray, *,
+                  eps: float = BERNOULLI_PROB_EPS) -> float:
+    """Mean per-bin BCE **from probabilities** — `train.py::_elem_peak_bce`, in numpy.
+
+    THE INPUT IS A PROBABILITY, NOT A LOGIT, and that is forced by the harness: `stream_tracks`
+    stores `sigmoid(peak_logit)`, and the logit is gone by the time a score is computed. So this
+    cannot use the log-sum-exp identity the training loop relies on and must clamp `prob` into
+    `[eps, 1-eps]` before taking logs — see `BERNOULLI_PROB_EPS` for what that costs and where.
+
+    THE TARGET CHECK IS `train.py::_elem_peak_bce`'S, FOR ITS REASON. `y_peaks` holds MISSING = -1
+    for an assay the biosample does not have, and BCE against -1 is not defined. A -1 arriving here
+    means the availability rule that picks scoring targets failed, and a silent finite number is the
+    worst possible response to that.
+
+    ONLY CALL THIS WHEN THE PEAK HEAD EXISTS. `stream_tracks` fills `peak_score` from the NB MEAN
+    when there is no peak head — an unbounded count, not a probability — and a BCE of that is
+    meaningless before it is numerically broken. `harness.loss_block` gates on
+    `TrackRecord.has_peak_head` for exactly this.
+    """
+    y = np.asarray(labels, dtype=np.float64)
+    if y.size and bool(((y < 0.0) | (y > 1.0)).any()):
+        raise ValueError(
+            "peak BCE received a label outside [0, 1] — almost certainly the MISSING = -1 sentinel "
+            "for an assay this biosample does not have. Only available assays are scoring targets; "
+            "see `harness.EvalSource.targets`.")
+    p = np.clip(np.asarray(prob, dtype=np.float64), eps, 1.0 - eps)
+    return float(-np.mean(y * np.log(p) + (1.0 - y) * np.log1p(-p)))

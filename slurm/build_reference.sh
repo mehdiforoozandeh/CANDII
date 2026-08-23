@@ -41,6 +41,7 @@ else
 fi
 
 cd "$KIT"
+source "$KIT/slurm/_kit_pin.sh"
 echo "[ref] host=$(hostname) h5=$H5 out=$OUT"
 echo "[ref] started $(date -Is)"
 

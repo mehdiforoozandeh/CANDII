@@ -418,12 +418,13 @@ class StoreDataset(IterableDataset):
     def estimate_steps_per_epoch(self) -> int:
         return max(1, len(self._batches(random.Random(self.seed))))
 
-    # -- the surface `eval.py::build_eval_units` reads off a dataset (t14) ------------------------
+    # -- the surface the deleted `eval.py::build_eval_units` read off a dataset (t14) -------------
     # Three names, spelled exactly as `CandiKitH5Dataset` spells them, for the same reason
     # `num_cells` and `meta_rows` are plain attributes above: the eval builder must not be able to
-    # tell the two datasets apart. They are the slot arithmetic that spaces `batches_per_pair`
-    # evenly across the eval chromosome, and getting them from the dataset is what keeps that
-    # arithmetic in one place.
+    # tell the two datasets apart. They are the slot arithmetic that spaced `batches_per_pair`
+    # evenly across the eval chromosome. That builder retired with `candi.eval` (D15) and
+    # `candi.bench` plans its own full tiling, so these three are kept for the h5/store symmetry
+    # rather than for a live caller.
 
     @property
     def _eval_indices(self) -> List[int]:
@@ -437,7 +438,8 @@ class StoreDataset(IterableDataset):
     def eval_batches_per_pair(self) -> int:
         """How many window batches ONE declared `(input, target)` pair receives per pass.
 
-        The two loaders answer this differently and `build_eval_units` cannot guess which it holds.
+        The two loaders answer this differently and the deleted `build_eval_units` could not guess
+        which it held.
         `_batches` above hands EVERY eval window to EVERY pair — `order = list(idx)` inside the loop
         over units — so a pair's share is the whole chromosome, and this is simply the batch count.
         `CandiKitH5Dataset` walks the window pool ONCE and cycles the pair index per batch, so there
