@@ -1,9 +1,9 @@
 title: CANDII
 slug: candii
 root_id: root
-engine_version: 3.1
+engine_version: 3.2
 counter_q: 0
 counter_h: 0
 counter_s: 0
-counter_t: 37
+counter_t: 45
 task_categories: data-acquisition, hpc-setup, implementation, visualization, manuscript, admin
