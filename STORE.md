@@ -290,8 +290,8 @@ What the store path does differently:
 | `depth_center` | `dataset.py::h5_depth_center` | `StoreDataset.depth_center()` — the same median, over the regime's train split. Still overridable with `--depth-center`. |
 | `num_cells` / `--cell-cond` | as baked | **0**, and any `--cell-cond` other than `off` **raises** (D16) |
 | `--reference on` | supported | **refused** — the table pins itself to an h5 fingerprint |
-| `--eval-every` | mid-training eval + best-ckpt selection | forced **off**, loudly |
-| M1/M2/M3/S14 | scored | **not scored** — see below |
+| `--eval-every` | forced **off**, loudly — its scorer was deleted | mid-training monitor + best-ckpt selection, when the regime declares `eval_pairs` |
+| scoring a checkpoint | `python -m candi.bench --h5 …` | `python -m candi.bench --store …` — a separate command on both paths |
 
 Every dataset on either path is built by `train.py::make_dataset(source, mask_regime, …)`, the one
 factory all three construction sites go through, and the path is chosen once by
@@ -331,11 +331,17 @@ fingerprint (`candi.reference.ReferenceTable`), which is also why `train.py` ref
 on` on the store path. A store-backed reference is a separate question, not a key this loader can
 fill in.
 
-`train.py --store` still **does not call `evaluate()`** and writes a run json with no `M1` / `M2` /
-`M3` / `S14` keys rather than an `M1` pooled over zero targets — `eval.py`'s own dataset factory is
-h5-only and wiring it to a store is the remaining half of this. `--eval-every` is forced off for the
-same reason. For now, score a store-trained checkpoint by re-running `candi.eval --arch-from
-<run>.json` against a baked h5.
+`train.py` no longer scores a checkpoint on **either** path: `evaluate()` belonged to `candi.eval`,
+which is deleted (D15). A run json carries the training curve, the config, the checkpoints and — on
+the store path with `eval_pairs` declared — the mid-training monitor curve. It carries no `M1` /
+`M2` / `M3` / `S14`. Score a trained checkpoint with `python -m candi.bench --store <regime>.json
+--ckpt <run>.ckpt --arch-from <run>.json --out <scores>.json`.
+
+`--eval-every` is **regime-aware** on the store path: with `eval_pairs` declared it resolves to 3
+and `candi.monitor` scores every 25 bp bin of the regime's eval chromosomes every three epochs,
+which is what selects the best checkpoint. With none declared it resolves to 0, because there is
+nothing to impute. On the h5 path it is forced to 0 outright — the scorer that served it was
+`eval.quick_eval`, and an h5 run now trains only.
 
 #### `cell_cond` is refused, not defaulted
 
@@ -1199,15 +1205,16 @@ file to the reader, take it from the pool — never call `h5py.File` at module o
 ## What is not here yet
 
 Every module of the store is written: `layout` / `writer` / `manifest` / `cli` (t6), `genome`
-(t7), `reader` / `regime` / `dataset` (t8), and `train.py --store` opens it (t23). What is missing
-is **evaluation** — and the real runs.
+(t7), `reader` / `regime` / `dataset` (t8), and `train.py --store` opens it (t23). Evaluation is
+written too: `candi.bench` scores a store-backed checkpoint end to end and `candi.monitor` watches
+one mid-training. What is missing is **the real runs**.
 
 Both corpora now exist — t10 built EIC, t11 built MERGED, t12 added `pval` to both, and the sizes
 are in *Using the store*. What is still missing:
 
 | gap | why it is still open |
 |---|---|
-| the eval-only batch keys | `t14` — a store-backed imputation eval scores nothing, so `--store` skips evaluation entirely and writes no M1/M2/M3/S14 |
+| ~~the eval-only batch keys~~ | **closed.** `t14` emits them, `t28` let a scorer read them, and `candi.monitor` now scores a store-backed run mid-training. Final scoring moved out of `train.py` entirely — `python -m candi.bench` |
 | `cell_cond` | the 5th meta row needs a cell identity D16 forbids parsing off the name |
 | the genome-wide eval output policy | overlap and edge handling when emitting a full imputed track — a question for the crux tree, not a task |
 | retiring the old bake | `prep/bake.py` and `dataset.py::CandiKitH5Dataset` stay until a real training run has used the store (D21) |
