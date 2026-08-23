@@ -1,9 +1,13 @@
-"""Train + eval driver for the CANDI dual-conditioning recipe on real data (counts-only).
+"""Training driver for the CANDI dual-conditioning recipe on real data (counts-only).
 
 One invocation = one arm. Trains the golden-reference model (real 4-row metadata, per-assay `per_conv`
-encoder + depth-offset NB head, COUNTS ONLY) on the h5's train chromosomes with per-assay independent
-DSF ON + cloze masking, then evaluates M1/M2/M3 on the eval chromosomes and writes
-`{out_dir}/{tag}.json` + `{out_dir}/{tag}.ckpt`.
+encoder + depth-offset NB head, COUNTS ONLY) on the train chromosomes with per-assay independent
+DSF ON + cloze masking, watches held-out imputation every `--eval-every` epochs through
+`candi.monitor`, and writes `{out_dir}/{tag}.json` + `{out_dir}/{tag}.ckpt`.
+
+IT NO LONGER SCORES A CHECKPOINT. `candi.eval` owned the final `evaluate()` and it is deleted
+(D15); scoring is `python -m candi.bench`, a separate command run after the training job. What this
+module still owns is the mid-training dial and the best-checkpoint selection it drives.
 
 Provenance: COPY+EDIT of
 EpiDenoise/sandbox/diagnostics/dual_conditioning_real/run_real.py:1-286.
@@ -29,9 +33,19 @@ clip / loss / step order is touched by any of the three arms.
 t23 adds `--store` (alias `--regime-file`) alongside `--h5`, mutually exclusive and exactly one
 required, under the same rule. It changes WHERE batches come from and nothing else: both paths go
 through the one factory `make_dataset`, which returns the pre-t23 `CandiKitH5Dataset` object for
-`--h5` with the arguments its three call sites already passed. The store path is TRAINING ONLY —
-`StoreDataset` does not emit the eval-only batch keys (t14), so `evaluate()` is skipped rather than
-called and left to score nothing. See `STORE.md` *Train off the store*.
+`--h5` with the arguments its three call sites already passed. See `STORE.md` *Train off the store*.
+
+The mid-training eval is `candi.monitor`, which scores every 25 bp bin of the regime's eval
+chromosomes through `candi.bench` — two dials, imputation against the declared `eval_pairs` and
+denoising against the prompt cells themselves, with the gap between them as the overfitting alarm.
+Only imputation selects the checkpoint, and only imputation runs on the `--eval-every` cadence: the
+denoising dial and the gap are computed once, at the end, on the selected checkpoint, because at the
+wall-clocks measured in `cruxvault/results/t30/TIMING.md` two dials per check do not fit the budget.
+It is STORE-ONLY, and that is now the whole story rather
+than half of one: `--h5` used to keep `eval.quick_eval` for its mid-training curve, and that
+function retired with `candi.eval`. An h5 run therefore TRAINS ONLY — no mid-training number, no
+best-checkpoint selection, one checkpoint. The degradation is printed on the submit line, and
+`python -m candi.bench --h5 …` scores the result afterwards.
 
 Stage 2 adds `--heads` (default `count`) under the same rule. `nb_count_loss` is UNCHANGED, including
 its `imp_weight` behaviour; the Gaussian signal and Bernoulli peak terms are auxiliary and are
@@ -62,12 +76,12 @@ import numpy as np
 import torch
 
 from candi.batch import make_masker, prepare_masked_batch
-from candi.eval import evaluate
 from candi.dataset import CandiKitH5Dataset, h5_depth_center
 from candi.meta_probe import DEFAULT_META_PROBE_DELTA, META_PROBE_MODES, make_meta_probe
 from candi.encoder import FILM_INITS
 from candi.model import (DEFAULT_FILM_TAPS, DEFAULT_HEADS, build_model, forward_full,
                          parse_film_taps, parse_heads)
+from candi.monitor import Monitor, format_check, resolve_eval_every, tiered_keys
 from candi.precision import (DEFAULT_PRECISION, PRECISION_HELP, PRECISIONS, assert_no_grad_scaler,
                              autocast_region, fp32_fence)
 
@@ -94,7 +108,10 @@ STORE_HELP = (
     "second flag is needed: see configs/regime.eic_smoke.json. NOT to be confused with --regime, "
     "which is the MASKING regime (type1 / type2_loci) and is unrelated. Also spelled --regime-file. "
     "On this path scale comes from the regime instead of h5.attrs, num_cells is 0 (cell_cond is "
-    "refused, D16), and M1/M2/M3/S14 are NOT scored (t14) — training only."
+    "refused, D16), and there is NO final evaluation in the training process — score the checkpoint "
+    "afterwards with `python -m candi.bench`. The MID-TRAINING monitor does run here (candi.monitor: "
+    "whole eval chromosomes, the imputation dial per check and the denoising dial once at the end) "
+    "whenever the regime declares `eval_pairs`, and it is what selects the best checkpoint."
 )
 
 #: `--regime` help. It predates the store by a long way; the store gave its name a second meaning.
@@ -984,9 +1001,10 @@ def train(model, source, device, *, regime="type1", epochs=25, steps_per_epoch=2
 # ---------------------------------------------------------------------------
 # eval
 # ---------------------------------------------------------------------------
-# `evaluate` is imported from candi.eval, which owns it (plan edit 11 wires _dsf_counterfactual
-# into that one top-level entry point). It derives the assay order from build_eval_units and the eval
-# region from the h5's own `eval_chroms` attr, so neither is threaded through here.
+# NOTHING IN THIS MODULE SCORES A CHECKPOINT ANY MORE. `evaluate` came from `candi.eval`, which is
+# deleted (D15); `python -m candi.bench` is the scorer and it takes either `--h5` or `--store`. What
+# remains here is the mid-training dial (`candi.monitor`), which is a training-loop concern: it
+# exists to select a checkpoint, not to produce a recorded number.
 
 
 # ---------------------------------------------------------------------------
@@ -1065,7 +1083,7 @@ def _cell(v):
     if isinstance(v, (int, float, np.integer, np.floating)):
         return float(v)
     if isinstance(v, (list, tuple)):
-        return "|".join(str(x) for x in v)          # `target` tuples -> the same "a|b|c" form M1 uses
+        return "|".join(str(x) for x in v)          # `target` tuples -> the "a|b|c" form the h5-era M1 used
     if v is None or isinstance(v, str):
         return v
     return str(v)
@@ -1074,8 +1092,9 @@ def _cell(v):
 def _flat_record(r: dict) -> dict:
     """Expand one level of nested dicts into `parent.child` columns.
 
-    S14's per-target records carry `crps_matrix`, `min_at_true` and `beats_told1` as sub-dicts; left
-    nested they would land in the table as one unreadable stringified blob per row.
+    The h5-era S14 per-target records carried `crps_matrix`, `min_at_true` and `beats_told1` as
+    sub-dicts; left nested they would have landed in the table as one unreadable stringified blob
+    per row.
     """
     out = {}
     for k, v in (r or {}).items():
@@ -1104,7 +1123,7 @@ def _wb_table(rows):
 
 
 def _rows_from_map(d, key_col: str = "target") -> list:
-    """`{"T_x|V_x|assay": {...}}` (M1's per-target form) -> `[{"target": "T_x|V_x|assay", ...}]`."""
+    """`{"T_x|V_x|assay": {...}}` (the h5-era M1 per-target form) -> `[{"target": "T_x|V_x|assay", ...}]`."""
     return [dict({key_col: k}, **v) for k, v in sorted((d or {}).items()) if isinstance(v, dict)]
 
 
@@ -1171,7 +1190,7 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    ckpt_path=None, cell_cond="off",
                    wandb_project=None, wandb_run_name=None, reference="off", reference_path=None,
                    reference_pseudocount=None, imp_weight=1.0, unmask_frac=0.0,
-                   eval_every=3, eval_batches_per_pair=4, meta_embed_layernorm=True,
+                   eval_every=None, eval_batches_per_pair=4, meta_embed_layernorm=True,
                    optimizer="adam", trunk_wd=0.0, meta_gain=1.0,
                    meta_probe="off", meta_probe_delta=DEFAULT_META_PROBE_DELTA,
                    precision=DEFAULT_PRECISION,
@@ -1195,6 +1214,13 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
     # D30 — resolved ONCE, here, and from now on carried as a concrete value. `auto` never reaches
     # the loss: `auto` is a request, and what a run must record is the answer.
     signal_target_transform = resolve_signal_target_transform(source, signal_target_transform)
+    # Resolved the same way and for the same reason: `None` is a request ("whatever suits this
+    # source"), and what a run records must be the answer. An explicit value — including an
+    # explicit 0 — always wins; unset means the settled cadence of 3 when the source has
+    # imputation targets to score, and 0 when it does not. The guard below is UNCHANGED and still
+    # fires on an explicit non-zero against a pair-less regime, which is the case worth a message.
+    eval_every = resolve_eval_every(eval_every,
+                                    eval_pairs_declared=source.eval_pairs_declared())
     if source.is_store:
         # Said before anything is opened, because each of these is a way a store-backed run could
         # look like a normal one in the run json while being something else.
@@ -1208,6 +1234,28 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                   "select the 'best' checkpoint on nothing. Declare `eval_pairs` (D31) to turn it "
                   "back on.", flush=True)
             eval_every = 0
+    elif eval_every:
+        # THE h5 PATH NO LONGER EVALUATES, IN PROCESS, AT ALL — degraded deliberately rather than
+        # refused, because the training half of this path is untouched and still runs. `candi.eval`
+        # is deleted (D15): it owned BOTH the mid-training `quick_eval` and the final `evaluate`,
+        # and neither has an h5-capable replacement here — `candi.monitor` opens its data with
+        # `bench.harness.open_source(store=…)` and is store-only by construction. Scoring an h5
+        # checkpoint is now a separate command AFTER the run, which `candi.bench` does support:
+        #
+        #     python -m candi.bench --h5 <panel.h5> --ckpt <run>.ckpt --arch-from <run>.json \
+        #         --out <scores>.json
+        #
+        # The cost is stated rather than discovered: with no mid-training number there is no
+        # best-checkpoint selection on this path, so `<tag>.ckpt` (the LAST epoch) is the only
+        # checkpoint an h5 run produces.
+        print("[train] h5 path: --eval-every is OFF and there is NO final evaluation. `candi.eval` "
+              "is deleted and its replacement (`candi.monitor` / `candi.bench`) reads a store, so "
+              "an h5 run now trains only. This run json carries the training curve, the config and "
+              "the LAST checkpoint — no best-checkpoint selection, and none of the h5-era "
+              "M1/M2/M3/S14 keys. Score the "
+              "checkpoint afterwards with `python -m candi.bench --h5 <panel.h5> --ckpt "
+              "<tag>.ckpt --arch-from <tag>.json --out <scores>.json`.", flush=True)
+        eval_every = 0
     # Scale is read from the h5 (or from the regime file), never from a flag. `h5_cache_ram=False`
     # so this probe does not duplicate the shared RAM buffer that the full-coverage loop allocates.
     ds = make_dataset(source, regime, train=True, batch_size=batch_size,
@@ -1230,7 +1278,7 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
     torch.manual_seed(seed)
     # num_cells comes from the h5's own biosample list, never from a flag — same rule as num_assays.
     # THE ARCHITECTURE, as one dict. It is what `build_model` is called with AND what lands in the
-    # run JSON as `config.arch`, so `candi.eval --arch-from <run>.json` rebuilds exactly this model
+    # run JSON as `config.arch`, so `candi.bench --arch-from <run>.json` rebuilds exactly this model
     # without a single flag being retyped. Scale (num_assays, context_bins, resolution, num_cells)
     # still comes from the h5 and is never a flag.
     arch = dict(embed_dim=embed_dim, dropout=dropout,
@@ -1262,13 +1310,13 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
           f"attn_depth={n_transformer_layers} film_taps={','.join(arch['film_taps'])} "
           f"heads={','.join(arch['heads'])})", flush=True)
     if tuple(arch["heads"]) != tuple(DEFAULT_HEADS):
-        # Said out loud because the extra heads change the OBJECTIVE while `evaluate()` still scores
-        # the NB head alone. The metrics in this run's JSON are therefore comparable to a default arm
-        # only if the reader knows the arm was trained against a different total loss.
+        # Said out loud because the extra heads change the OBJECTIVE while the mid-training monitor
+        # scores the count arm alone. The numbers in this run's JSON are therefore comparable to a
+        # default arm only if the reader knows the arm was trained against a different total loss.
         print(f"[train] heads={','.join(arch['heads'])}: the Gaussian signal and/or Bernoulli peak "
-              "terms are ADDED to the NB loss (coefficient 1.0 each). Evaluation is NB-only, so this "
-              "run's M1/M2/M3 score a model trained on a different objective. This is NOT the "
-              "control arm; the control is --heads count.", flush=True)
+              "terms are ADDED to the NB loss (coefficient 1.0 each). The monitor scores the count "
+              "arm, so this run's curve measures a model trained on a different objective. This is "
+              "NOT the control arm; the control is --heads count.", flush=True)
     if float(meta_gain) != 1.0:
         print(f"[train] meta_gain={float(meta_gain)} (h76): `memb` is scaled by this FIXED, "
               "non-learnable factor immediately before decoder.film_proj. This is NOT the control "
@@ -1353,59 +1401,67 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
 
     # --- mid-training eval + best-checkpoint selection ---------------------------------------------
     # h73 evaluated ONCE, after training, so over- and under-fitting were indistinguishable. This
-    # scores held-out imputation every `eval_every` epochs and keeps the best `V_` checkpoint.
-    # Selection is on `V_` by PI ruling: the bias it introduces is common-mode across arms, so the
-    # paired delta survives it, and `B_` stays clean because selection never touches it.
+    # scores held-out imputation every `eval_every` epochs and keeps the best checkpoint by it.
+    # Selection is on the imputation dial by PI ruling: the bias it introduces is common-mode across
+    # arms, so the paired delta survives it. Which biosamples that dial reads is the regime file's
+    # business — on `configs/regime.eic_val.json` the targets are all `V_`, so `B_` is never opened.
     best = {"crps": float("inf"), "epoch": -1, "step": -1}
     curve: list = []
     best_path = (str(Path(ckpt_path).with_suffix(".best.ckpt")) if ckpt_path else None)
 
     # OPENED ONCE, OUTSIDE THE HOOK, and re-iterated at every check (t28). Two reasons, and the
     # second is the load-bearing one. Re-opening per check would re-read the store's manifest and
-    # re-plan the windows eight times a run for nothing; but more importantly, ONE dataset is what
-    # pins ONE window set across every epoch. `batches_per_pair` spaces its cycles deterministically,
-    # so a re-opened dataset would in fact land on the same windows — and relying on that is relying
-    # on two defaults agreeing. Selection compares epoch 6 against epoch 12, and that comparison is
-    # only paired if both saw the same positions.
+    # re-plan the windows eight times a run for nothing; but more importantly, ONE source is what
+    # pins ONE window set across every epoch. Selection compares epoch 6 against epoch 12, and that
+    # comparison is only paired if both saw the same positions. The monitor's plan is the harness's
+    # full tiling of the regime's eval chromosomes — every 25 bp bin, so "the same positions" is
+    # "all of them" and the pairing is exact rather than merely deterministic.
     #
-    # `dsf_sampling="off"` pins every level at 1, which is what the scorer has always done: a
-    # selection metric measured at one depth at epoch 6 and another at epoch 12 would select on the
-    # difference between the two.
-    eval_ds = None
-    if eval_every:
-        from candi.eval import eval_cell_cond
-        eval_ds = make_dataset(source, regime, train=False, batch_size=eval_batch_size,
-                               dsf_sampling="off", seed=seed, shuffle=False, h5_cache_ram=False,
-                               cell_cond=eval_cell_cond(model), reference=ref)
+    # ONE PATH NOW. `--store` gets `candi.monitor`: whole eval chromosomes, an imputation dial that
+    # selects on every check and a denoising dial that only watches, once, at the end. `--h5` gets
+    # NOTHING — see the degradation
+    # notice printed above, where `eval_every` was forced to 0. The mid-training scorer the h5 path
+    # used was `eval.quick_eval`, and `candi.eval` is deleted; the monitor is store-only because
+    # `Monitor.__init__` opens its source with `open_source(store=…)`, and teaching it the h5 would
+    # be new code written against a data path that is being retired.
+    monitor = None
+    if eval_every and source.is_store:
+        # `batch_windows` IS the eval batch size — how many context windows go through the model in
+        # one forward pass — so the existing flag keeps its meaning rather than gaining a twin.
+        monitor = Monitor(store=source.regime_path, device=device, seed=seed,
+                          batch_windows=eval_batch_size,
+                          signal_target_transform=signal_target_transform, log_fn=log_fn)
+        print(f"[train] monitor: every {eval_every} epoch(s), "
+              f"{','.join(monitor.source.eval_chroms)} end to end — imputation ONLY (it is what "
+              f"selects), count arm, val loss in "
+              f"signal_target_transform={signal_target_transform}. Reported: "
+              f"{', '.join(tiered_keys(model))}", flush=True)
+        print("[train] monitor: the denoising dial (watch-only) and the overfitting gap run ONCE, "
+              "at the end, on the SELECTED checkpoint — the PI's cost ruling, measured in "
+              "cruxvault/results/t30/TIMING.md.", flush=True)
 
-    def eval_hook(step, ep):
-        from candi.eval import quick_eval
-        model.eval()
-        t0 = time.time()
-        # h64: the SAME transform in the mid-training eval, or best-checkpoint selection would be made
-        # against a different objective than the arm trains on. `record=False` inside, so eval batches
-        # never enter the training arm's own no-op fraction.
-        q = quick_eval(model, eval_ds, device, batches_per_pair=eval_batches_per_pair,
-                       fg_frac=fg_frac, seed=seed, meta_probe=mprobe)
-        q.update(epoch=ep, step=step, wall_s=round(time.time() - t0, 1))
-        curve.append(q)
-        improved = np.isfinite(q["V_imp_crps"]) and q["V_imp_crps"] < best["crps"]
+    def _keep_best(value, step, ep):
+        """Lower is better, and only a finite number may select."""
+        improved = bool(np.isfinite(value)) and float(value) < best["crps"]
         if improved:
-            best.update(crps=float(q["V_imp_crps"]), epoch=ep, step=step)
+            best.update(crps=float(value), epoch=ep, step=step)
             if best_path:
                 torch.save(model.state_dict(), best_path)
-        mark = "*BEST*" if improved else "best {:.4f} @ep{}".format(best["crps"], best["epoch"])
-        print(f"[eval@ep{ep}] V_imp_crps={q['V_imp_crps']:.4f} (n={q['V_n_targets']}) "
-              f"B_imp_crps={q['B_imp_crps']:.4f} (n={q['B_n_targets']}) | fg "
-              f"V={q['V_imp_crps_fg']:.3f} B={q['B_imp_crps_fg']:.3f} "
-              f"[{mark}] {q['wall_s']}s", flush=True)
-        if log_fn:
-            log_fn(step, {"eval/V_imp_crps": q["V_imp_crps"], "eval/B_imp_crps": q["B_imp_crps"],
-                          "eval/V_imp_crps_fg": q["V_imp_crps_fg"],
-                          "eval/B_imp_crps_fg": q["B_imp_crps_fg"],
-                          "eval/V_n_targets": q["V_n_targets"], "eval/B_n_targets": q["B_n_targets"],
-                          "eval/best_V_imp_crps": best["crps"], "eval/epoch": ep,
-                          "eval/wall_s": q["wall_s"]})
+        return improved
+
+    def eval_hook(step, ep):
+        # `model.eval()` and the `no_grad` fence are `stream_tracks`'s, and the monitor puts the
+        # training mode back itself — the two loops above disagreed about whose job that was.
+        #
+        # IMPUTE ONLY, by the PI's cost ruling on the measured wall-clocks in
+        # `cruxvault/results/t30/TIMING.md`: a whole-chromosome impute pass already spends most of
+        # the 20 % budget the cadence is held to, and the denoise dial scores ~2.3x its tracks. So
+        # the mid-training row carries the selection metric and no `gap`; the alarm is computed once
+        # below, on the checkpoint this loop ends up selecting.
+        row = monitor.check(model, epoch=ep, step=step, kinds=("impute",))
+        curve.append(row)
+        _keep_best(row["selection"]["value"], step, ep)
+        print(format_check(row, best=best), flush=True)
 
     terms_log: list = []
     losses = train(model, source, device, regime=regime, epochs=epochs, steps_per_epoch=steps_per_epoch,
@@ -1418,60 +1474,95 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    meta_probe=mprobe, lr_schedule=lr_schedule, warmup_frac=warmup_frac,
                    lr_min_ratio=lr_min_ratio, clip_norm=clip_norm, precision=precision,
                    signal_target_transform=signal_target_transform)
+    # The monitor is NOT closed here: the end-of-run check below still needs its source, and it has
+    # to run after the selected weights are loaded. `monitor.close()` is further down, after
+    # everything that reads the eval chromosomes.
     model.eval()
     if ckpt_path:
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(model.state_dict(), ckpt_path)          # the LAST checkpoint, always written
-    # Score the BEST checkpoint, not the last one. Written before the (long) final eval, so a walltime
-    # kill still leaves both checkpoints on disk and the run is re-scorable with `candi.eval`.
+    # Score the BEST checkpoint, not the last one. Written before the monitor's last check, so a
+    # walltime kill still leaves both checkpoints on disk and the run is re-scorable with
+    # `python -m candi.bench`.
     selected = "last"
     if best_path and Path(best_path).exists() and best["epoch"] != epochs - 1:
         model.load_state_dict(torch.load(best_path, map_location=device), strict=True)
         model.eval()
         selected = "best"
-        print(f"[train] scoring the BEST checkpoint (epoch {best['epoch']}, "
-              f"V_imp_crps={best['crps']:.4f}), not the last", flush=True)
-    if wb:
-        print("[wandb] training done; evaluation started (M1/M2/M3 + S14, no per-step logging)",
-              flush=True)
-    # h64: THE FINAL EVAL DOES NOT APPLY THE PROBE, deliberately, and says so both here and in the run
-    # JSON (`final_eval_meta_probe_applied`). M2 is the run_type counterfactual FLIP test — it writes
-    # row 3 itself — and M3/S14/the reference bar each build their own prompts; threading a row-3
-    # overwrite through all of them would produce numbers no reading in this node asks for. The
-    # consequence is stated plainly rather than left to be discovered: a planted arm's FINAL metrics
-    # are scored against the REAL objective it was never trained on, so they are not comparable to a
-    # real arm's. The mid-training eval curve IS probe-applied and is the comparable one.
+        print(f"[train] keeping the BEST checkpoint (epoch {best['epoch']}, impute macro "
+              f"crps={best['crps']:.4f}), not the last", flush=True)
+
+    # --- the end-of-run check: the denoising dial and the overfitting alarm, ONCE -----------------
+    # THE MODEL HERE IS THE ONE THE RUN SHIPS. That is the whole reason this sits below the load
+    # above rather than at the end of the loop: the alarm is a statement about a specific set of
+    # weights, and the last epoch's weights are not the selected ones unless the last epoch won.
+    #
+    # Mid-training rows carry the impute dial alone (see `eval_hook`), so this is the only row in
+    # the run json with a `denoise` block and a `gap`. Cost: one extra pass of each dial per RUN,
+    # not per check — which is what makes the ruling in `cruxvault/results/t30/TIMING.md` fit the
+    # budget at all.
+    final_row = None
+    if monitor is not None and curve:
+        if best["epoch"] < 0:
+            # Nothing finite ever selected, so `<tag>.best.ckpt` was never written and `model` is
+            # the last epoch's. Say so beside the numbers rather than letting the row imply that a
+            # selection happened.
+            print("[train] NO finite selection was ever made (every impute macro crps was "
+                  "non-finite), so there is no best checkpoint. The end-of-run check below scores "
+                  "the LAST model.", flush=True)
+        final_epoch = best["epoch"] if selected == "best" else epochs - 1
+        # W&B: `Monitor.log_fn` is the same `log_fn` the loop logs through, so the row reaches the
+        # dashboard from inside `final_check` — under its own `monitor_final/...` keys, at the last
+        # training step, which is the step below.
+        final_row = monitor.final_check(model, epoch=int(final_epoch),
+                                        step=int(curve[-1]["step"]), selected=selected)
+        print(format_check(final_row), flush=True)
+    if monitor is not None:
+        # The store handle pool is the monitor's, not the training loader's, so it has to be given
+        # back explicitly — nothing below reads the eval chromosomes again.
+        monitor.close()
+    # h64: THE PROBE IS NOW APPLIED IN TRAINING ONLY, ON EVERY PATH. `quick_eval` took
+    # `meta_probe=mprobe` and transformed the assembled batch, and it retired with `candi.eval`
+    # (D15); the monitor scores through `candi.bench`, which knows nothing about h64 and must not be
+    # taught — an eval package that imports a training-side arm switch is the dependency inversion
+    # the bench boundary exists to prevent. So a planted arm's mid-training curve measures it
+    # against the REAL objective it was never trained on, and the two are not comparable.
     if mprobe is not None:
-        print(f"\n[meta-probe] WARNING: meta_probe={meta_probe} was applied in TRAINING and in the "
-              "MID-TRAINING eval, but NOT in the final evaluate() below.\n"
-              "[meta-probe] The M1/M2/M3/S14 numbers in this run's JSON therefore score a model "
-              "trained on a transformed objective\n"
-              "[meta-probe] against the untransformed one. Do NOT compare them to a "
-              "--meta-probe off arm. See config.final_eval_meta_probe_applied = false.\n", flush=True)
-    if source.is_store:
-        # t14, stated rather than discovered. `evaluate` builds its units from the h5's V_/B_
-        # ground-truth arrays and reads `y_data_imp` / `y_pval_imp` / `y_peaks_imp` / `y_meta_imp` /
-        # `imp_biosample_name` through `batch.get(...)`; `StoreDataset` emits none of them, so
-        # calling it here would return an empty M1 and a pooled CRPS over zero targets, which reads
-        # in a json exactly like a finished evaluation. Refusing to produce the keys is the honest
-        # form of "this is not scored yet".
-        print("\n[train] store path: NO final evaluation. M1/M2/M3/S14 need the eval-only batch "
-              "keys the store does not emit (t14), so this run json carries the training curve, "
-              "the config and the checkpoints — and no metrics.\n", flush=True)
-        ev: dict = {}
-    else:
-        ev = evaluate(model, h5_path, device, regime=regime,
-                      batch_size=eval_batch_size, max_batches=eval_max_batches, fg_frac=fg_frac,
-                      n_boot=n_boot, seed=seed, eval_budget=eval_budget, m3_regions=m3_regions,
-                      include_deprecated=include_deprecated, reference=ref)
+        print(f"\n[meta-probe] WARNING: meta_probe={meta_probe} was applied in TRAINING ONLY.\n"
+              "[meta-probe] The mid-training monitor scores through candi.bench, which does not "
+              "apply the probe: its curve\n"
+              "[meta-probe] measures this arm against the REAL objective. Do NOT compare it to a "
+              "--meta-probe off arm.\n"
+              "[meta-probe] See config.final_eval_meta_probe_applied = false.\n", flush=True)
+    # NO FINAL EVALUATION ON EITHER PATH. `evaluate()` was `candi.eval`'s h5-only top-level entry
+    # point and it is deleted (D15); scoring a checkpoint is now `python -m candi.bench`, a separate
+    # command that takes either `--h5` or `--store`. Writing empty M1/M2 keys instead would read in
+    # a json exactly like a finished evaluation, so the keys are ABSENT, not empty.
+    #
+    # `final_check` is NOT that final evaluation coming back. It is the same monitor, on the same
+    # tiered subset, run once more so the overfitting alarm exists at all — a selection instrument,
+    # not the recorded number (`EVAL.md`, *Two instruments*).
+    print("\n[train] NO final evaluation in this process — scoring is `python -m candi.bench` now. "
+          "This run json carries the training curve, the config, the checkpoints, the "
+          "mid-training monitor curve and its one end-of-run check (store path, `eval_pairs` "
+          "declared) — and none of the h5-era M1/M2/M3/S14 keys.\n", flush=True)
+    ev: dict = {}
     ev["eval_curve"] = curve
+    # The end-of-run row, under its own key rather than appended to `eval_curve`: it is the only row
+    # with a `denoise` block and a `gap`, and it describes the SELECTED weights rather than an epoch
+    # of the curve. `None` when the monitor was off or never fired, which is absence, not zero.
+    ev["final_check"] = final_row
     ev["best_checkpoint"] = dict(best, path=best_path, scored=selected)
     # h64: the arm, its magnitude, and — unambiguously — WHERE it was and was not applied.
     # `meta_probe_shuffle_noop_frac` is the negative control's own verdict on itself: 1.0 means the
     # permutation never changed a tensor, so the arm trained on the real run_type.
+    # `meta_probe_quick_eval_applied` keeps its name so a reader of an OLD run json still finds the
+    # field, and it is now flatly False: `quick_eval` was the only scorer that ever applied the
+    # probe and it retired with `candi.eval` (D15). The mid-training monitor scores through
+    # `candi.bench`, which never applies it, so on every path the probe is training-only.
     h64_cfg = dict(meta_probe=meta_probe, meta_probe_delta=float(meta_probe_delta),
                    meta_probe_train_applied=(mprobe is not None),
-                   meta_probe_quick_eval_applied=(mprobe is not None),
+                   meta_probe_quick_eval_applied=False,
                    final_eval_meta_probe_applied=False)
     if mprobe is not None:
         h64_cfg.update(mprobe.stats())
@@ -1541,6 +1632,13 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
         # end, and a step-indexed point would imply a curve that does not exist. S14 and the
         # reference-only bar ride along — both were dropped entirely before, and S14 is the only
         # metric here with a real counterfactual ground truth.
+        #
+        # HISTORICAL, AND INERT SINCE D15. `M1`/`M2`/`M3`/`S14` are the h5-era `candi.eval` keys.
+        # Nothing writes them any more — `ev` above is built from the training curve alone — so
+        # every lookup below misses and logs nothing. Kept as the record of what the dashboard
+        # carried when the run json still had them; the covariate instruments they became are named
+        # `covuse` / `covshare` / `depthdir` / `depthcounterfact` / `covspec` / `depthblind` /
+        # `biokeep` and live in a bench json, not here.
         _wb_safe("summary", lambda: wb.summary.update(_flat_scalars(
             {k: ev[k] for k in ("M1", "M2", "M3", "S14", "reference_only_baseline") if k in ev})))
         # PER-TARGET, as tables. `_flat_scalars` silently drops every one of these because they are
@@ -1617,16 +1715,20 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--n-transformer-layers", type=int, default=2)
     ap.add_argument("--dropout", type=float, default=0.1)
     ap.add_argument("--eval-batch-size", type=int, default=4)
-    ap.add_argument("--eval-max-batches", type=int, default=0)
-    ap.add_argument("--fg-frac", type=float, default=0.02)
-    ap.add_argument("--n-boot", type=int, default=1000)
+    # THE SIX FLAGS MARKED INERT BELOW ARE INERT (`--full-coverage`, between them, is not — it is a
+    # TRAINING knob and still does what it says). Each set a knob on `eval.evaluate` — the scorer this
+    # module used to call — and `candi.eval` is deleted (D15). They are still parsed and still
+    # recorded in the run config so an old submit script does not fail on an unrecognised argument,
+    # and they change no number. `candi.bench` refuses its own spellings of --eval-budget and
+    # --eval-max-batches BY NAME (bench.cli.RETIRED, D2) because there the mistake is live.
+    ap.add_argument("--eval-max-batches", type=int, default=0, help="INERT — see above.")
+    ap.add_argument("--fg-frac", type=float, default=0.02, help="INERT — see above.")
+    ap.add_argument("--n-boot", type=int, default=1000, help="INERT — see above.")
     ap.add_argument("--full-coverage", action="store_true",
                     help="deterministic full coverage: every epoch = all train windows x all T_ biosamples")
-    ap.add_argument("--eval-budget", type=int, default=200_000,
-                    help="max eval points for M1 corr/CRPS (set very high for no subsampling)")
-    ap.add_argument("--m3-regions", type=int, default=8)
-    ap.add_argument("--include-deprecated", action="store_true",
-                    help="also emit the deprecated metric keys, each with its verdict string attached")
+    ap.add_argument("--eval-budget", type=int, default=200_000, help="INERT — see above.")
+    ap.add_argument("--m3-regions", type=int, default=8, help="INERT — see above.")
+    ap.add_argument("--include-deprecated", action="store_true", help="INERT — see above.")
     # -- geometry ---------------------------------------------------------------------------------
     # The encoder's total downsampling and the decoder's total upsampling MUST agree; `build_model`
     # refuses the pair before anything is constructed. `--dna-pool-size` is deliberately NOT a flag:
@@ -1703,7 +1805,8 @@ def build_parser() -> argparse.ArgumentParser:
                          "if it matches. INERT unless 'signal' is in --heads.")
     ap.add_argument("--heads", default=",".join(DEFAULT_HEADS),
                     help="comma-separated set of output heads. 'count' (NB over raw counts) is the "
-                         "shipped model, is REQUIRED, and is the only head candi.eval scores. "
+                         "shipped model, is REQUIRED, and is the only head the mid-training monitor "
+                         "scores. "
                          "'signal' adds a Gaussian (mu, var) over the arcsinh log-p-value track and "
                          "'peak' a Bernoulli over the peak calls, each supervised on the FULL-DEPTH "
                          "targets only (y_dsf == 1) and added to the NB loss with coefficient 1.0. "
@@ -1775,14 +1878,25 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--unmask-frac", type=float, default=0.0,
                     help="fraction of steps run fully unmasked, drawn from a DEDICATED RNG so two "
                          "arms see identical batches in identical order. h74 runs 0.15.")
-    ap.add_argument("--eval-every", type=int, default=0,
-                    help="mid-training eval every N epochs (0 = off, the h73 behaviour). Keeps the "
-                         "best V_ checkpoint and scores it at the end instead of the last one.")
+    ap.add_argument("--eval-every", type=int, default=None,
+                    help="STORE ONLY — run `candi.monitor`'s IMPUTATION dial every N epochs (0 = "
+                         "off, the h73 behaviour) and keep the best imputation checkpoint. The "
+                         "denoising dial and the overfitting gap are NOT on this cadence: they run "
+                         "once, at the end, on the selected checkpoint (cost ruling, measured in "
+                         "cruxvault/results/t30/TIMING.md). UNSET is not 0: it "
+                         "resolves to 3 when the source has imputation targets to score and to 0 "
+                         "when it does not. An explicit value always wins, including an explicit 0. "
+                         "Under --h5 it is forced to 0 whatever you pass, loudly: the h5 path's "
+                         "mid-training scorer was `eval.quick_eval` and `candi.eval` is deleted "
+                         "(D15), so an h5 run trains only and is scored afterwards with "
+                         "`python -m candi.bench --h5 …`.")
     ap.add_argument("--eval-batches-per-pair", type=int, default=4,
-                    help="window batches per (T_, V_/B_) pair in the MID-TRAINING eval only. Keeps "
-                         "ALL targets and thins the windows, taking whole pair-cycles SPREAD across "
-                         "the eval chromosome. Never use --eval-max-batches for this: it truncates "
-                         "the pair cycle, drops whole targets, and its prefix is the dead chr21 p-arm.")
+                    help="INERT. It set the window thinning of `eval.quick_eval`, the h5 path's "
+                         "mid-training scorer, and that function was deleted with the rest of "
+                         "`candi.eval` (D15). Nothing reads it now: the monitor scores every 25 bp "
+                         "bin of the regime's eval chromosomes and has nothing to thin, and the h5 "
+                         "path has no mid-training eval at all. Accepted and recorded in the run "
+                         "config so an old submit script still parses; it changes no number.")
     ap.add_argument("--precision", default=DEFAULT_PRECISION, choices=list(PRECISIONS),
                     help=PRECISION_HELP)
     ap.add_argument("--seed", type=int, default=0)
@@ -1803,15 +1917,23 @@ def main():
     tag = a.tag or f"candi_{a.deconv_norm}_ep{a.epochs}_seed{a.seed}"
     meta_ln = (a.meta_embed_layernorm == "on")
     if a.store:
-        print(f"[run] data=STORE regime_file={a.store} (masking regime={a.regime}) — training "
-              "only: no M1/M2/M3/S14, num_cells=0, --reference refused. See STORE.md.", flush=True)
+        print(f"[run] data=STORE regime_file={a.store} (masking regime={a.regime}) — num_cells=0 "
+              "(cell_cond refused, D16), --reference refused, and NO final evaluate(): this run "
+              "json gets none of the h5-era M1/M2/M3/S14 keys. The MID-TRAINING MONITOR does run "
+              "when the regime "
+              "declares `eval_pairs`: every 25 bp bin of the regime's eval chromosomes, the "
+              "imputation dial ONLY, which is what selects the best checkpoint. The denoising dial "
+              "and the gap between them — the overfitting alarm — run ONCE at the end, on the "
+              "selected checkpoint, because two dials on every check cost more than the run can "
+              "afford (cruxvault/results/t30/TIMING.md). With no pairs declared "
+              "--eval-every resolves to off. See STORE.md.", flush=True)
     print(f"[run] deconv_norm={a.deconv_norm} decoder_lane={a.decoder_lane} "
           f"attn_depth={a.n_transformer_layers} conv_norm={a.conv_norm} "
           f"film_taps={a.film_taps or '(none)'} heads={a.heads}\n"
           f"[run] tag={tag} device={device} full_coverage={a.full_coverage} "
           f"eval_max_batches={a.eval_max_batches or 'ALL'} reference={a.reference} "
           f"imp_weight={a.imp_weight} unmask_frac={a.unmask_frac} "
-          f"eval_every={a.eval_every or 'OFF'} "
+          f"eval_every={'auto' if a.eval_every is None else (a.eval_every or 'OFF')} "
           f"meta_embed_layernorm={a.meta_embed_layernorm} "
           f"optimizer={a.optimizer} weight_decay={a.weight_decay} trunk_wd={a.trunk_wd} "
           f"meta_probe={a.meta_probe} meta_probe_delta={a.meta_probe_delta} "
@@ -1859,6 +1981,9 @@ def main():
     res["wall_s"] = round(time.time() - t0, 1)
     with open(out_dir / f"{tag}.json", "w") as f:
         json.dump(_jsonable(res), f, indent=2)
+    # HISTORICAL BANNER, AND THE ONLY LIVE BRANCH SINCE D15. `M1`/`M2`/`M3` are the h5-era
+    # `candi.eval` keys; no run json carries them any more, so this test always takes the first
+    # branch and the second is kept only as the record of what the banner used to print.
     if "M1" not in res:
         # t23 store path: there is no evaluation, so there is nothing to summarise but the loss.
         losses = res.get("train_losses") or [float("nan")]

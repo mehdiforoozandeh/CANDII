@@ -1,5 +1,9 @@
 """h74 report: figures + markdown for the residual-vs-raw contrast.
 
+HISTORICAL FORMAT. Every `M1` key below is an h5-era `candi.eval` key, and `candi.eval` is deleted
+(D15). Nothing writes it any more, so this reads the ARCHIVED h74 run jsons and nothing this repo
+produces. A bench json is a different file with different keys — `EVAL.md` maps the two.
+
     python -m candi.report_h74 \
       --case  runs_reference/reference_residual_seed0.json \
       --control runs_reference/reference_raw_seed0.json \

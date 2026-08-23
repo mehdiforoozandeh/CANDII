@@ -1,7 +1,7 @@
 """What a SEED change moves, measured with the instrument you are actually quoting.
 
 `AGENTS.md` §7.2 says a seed change moves pooled imputation CRPS by **0.1195**, Spearman by
-0.0562, ECE by 0.0354. Those were measured with `candi.eval`. `candi.bench` is a different
+0.0562, ECE by 0.0354. Those were measured with `candi.eval`, since deleted (D15). `candi.bench` is a different
 instrument on a different population — whole chromosomes, a track-mean rather than an assay-mean —
 and there is no reason its seed sensitivity should be the same number. Quoting the old floor beside
 a new number is the exact failure §7.2 exists to prevent, one level up.
@@ -46,6 +46,8 @@ KEYS = {
         ("macro denoise CRPS", "macro_denoise.count.crps"),
         ("macro denoise gwspear", "macro_denoise.count.gwspear"),
     ],
+    # HISTORICAL: the h5-era `candi.eval` keys, for reading an ARCHIVED run json. Nothing writes
+    # `M1` any more (D15); `--suite bench` above is the live path.
     "eval": [
         ("imp macro CRPS", "M1.imp_macro_crps"),
         ("  ... oracle-scaled", "M1.imp_macro_crps_oracle_scaled"),

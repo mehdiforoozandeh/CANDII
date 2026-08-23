@@ -408,9 +408,23 @@ def test_cli_exposes_both_flags_with_the_right_defaults():
     assert acts["meta_probe_delta"].default == DEFAULT_META_PROBE_DELTA
 
 
-def test_quick_eval_and_build_eval_units_take_the_probe():
+def test_no_scorer_takes_the_probe_any_more_and_the_run_json_says_so():
+    """The probe is TRAINING-ONLY on every path, and the run config records that flatly.
+
+    `eval.quick_eval` and `eval.build_eval_units` took `meta_probe=` so best-checkpoint selection
+    was made against the objective the arm trains on. They retired with `candi.eval` (D15). The
+    mid-training scorer is `candi.monitor`, which goes through `candi.bench` — an eval package that
+    imported a training-side arm switch would be exactly the dependency inversion the bench
+    boundary exists to prevent, so it must NOT learn the probe. `meta_probe_quick_eval_applied`
+    keeps its name for readers of old run jsons and is now unconditionally False.
+    """
     import inspect
 
-    from candi.eval import build_eval_units, quick_eval
-    assert inspect.signature(quick_eval).parameters["meta_probe"].default is None
-    assert inspect.signature(build_eval_units).parameters["meta_probe"].default is None
+    import candi.bench.harness as H
+    import candi.monitor as MON
+
+    assert "meta_probe" not in inspect.signature(MON.Monitor.__init__).parameters
+    assert "meta_probe" not in inspect.signature(MON.Monitor.score).parameters
+    assert "meta_probe" not in inspect.signature(H.stream_tracks).parameters
+    src = inspect.getsource(__import__("candi.train", fromlist=["train_and_eval"]).train_and_eval)
+    assert "meta_probe_quick_eval_applied=False" in src

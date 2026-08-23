@@ -2,7 +2,11 @@
 # candi — the two-arm training array (offset ON / OFF) x 3 seeds.
 # #SBATCH skeleton copied from sandbox/diagnostics/dual_conditioning_real/jobs/wd0.sh; only --array,
 # the job name and the paths change. --gres is the HARD-RULE MIG slice — never any other spec.
-# ~85 min wall per arm (25 epochs x ~2.9 min + ~13 min eval); 6 arms as one array ~= 6 GPU-hours.
+# WALL IS A MEASUREMENT, so none is quoted here. What the flags below fix is the STEP COUNT, not the
+# time: --full-coverage makes an epoch one pass over every T_ biosample's train windows, and the run
+# prints the count it actually got (src/candi/train.py:876 "[train] full-coverage: N T_ biosamples x
+# all train windows = ~K batches/epoch x 25 epochs"). For minutes, read `wall_s` out of a finished
+# $OUT/<tag>.json or `seff` the job — never off a header. --time=05:00:00 is the ASK, not a fit.
 # Host RSS 15-18 GiB is the binding constraint, not GPU (the h5 is slurped into one shared buffer).
 #   sbatch candi/slurm/train.sh
 # Logs go to ./slurm-logs/ RELATIVE TO WHERE YOU SUBMIT FROM. SLURM resolves --output against

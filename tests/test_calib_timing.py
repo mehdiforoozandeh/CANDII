@@ -5,6 +5,12 @@ answers one question per coverage level: does the selection metric move MORE bet
 than it wobbles across three? Below 1, ordering two nearby checkpoints is not information, and
 running the check more often buys nothing.
 
+The three tests that inspected `calib_timing.main` are gone with it: that runner drove
+`eval.quick_eval` at several coverages and was retired when `candi.eval` was deleted (D15). They
+pinned how the tool asked its dataset for a cycle ceiling, which is not a question anything asks
+now — `candi.monitor` scores every 25 bp bin. `gain_vs_jitter` stays because the question it
+answers is a property of any selection metric, the monitor's included.
+
 The measure is the median absolute SECOND difference, deliberately, and that choice is what these
 tests pin. A standard deviation would be dominated by the trend — a steeply but perfectly smoothly
 descending curve would look enormously noisy, and the ratio would say "unusable" about the best
@@ -74,55 +80,3 @@ def test_non_finite_points_are_dropped_not_propagated():
     r = gain_vs_jitter([1.0, float("nan"), 0.9, 0.8, float("inf"), 0.7])
     assert r["n"] == 4
     assert math.isfinite(r["gain"]) and math.isfinite(r["jitter"])
-
-
-def test_the_tool_opens_its_source_through_the_real_constructor():
-    """A guessed classmethod name fails only on the cluster, an hour into a queue.
-
-    `DataSource.resolve` is the one entry point that enforces exactly-one-of h5/store and parses the
-    regime; `from_flags` never existed. Nothing else in this tool touches the training internals, so
-    this one line is the whole surface it can get wrong that way.
-    """
-    import inspect
-
-    from candi.train import DataSource
-    from tools import calib_timing
-
-    assert hasattr(DataSource, "resolve")
-    src = inspect.getsource(calib_timing.main)
-    assert "DataSource.resolve(" in src
-    assert "from_flags" not in src
-
-
-def test_the_cycle_ceiling_is_asked_of_the_dataset_not_computed_from_the_pair_count():
-    """The h5's arithmetic understates the store's ceiling by the pair count.
-
-    `windows // batch // pairs` is right for `CandiKitH5Dataset`, where the window pool is DIVIDED
-    among pairs. `StoreDataset` hands every pair the whole chromosome, so the same formula gave 17
-    where the dataset says 447 on the EIC validation regime -- and the tool silently dropped the two
-    highest coverage levels it had been asked to price, which is the one failure a calibration must
-    not have: it would have reported a curve that stopped before the interesting part and said
-    nothing about why.
-    """
-    import inspect
-
-    from tools import calib_timing
-
-    src = inspect.getsource(calib_timing.main)
-    assert "eval_ds.eval_batches_per_pair()" in src
-    assert "// args.eval_batch_size // n_slots" not in src
-
-
-def test_a_negative_anchor_means_the_whole_eval_chromosome():
-    """Typed into a job script, the full cycle count goes stale the moment the window plan changes.
-
-    chr21 tiles to 2,432 windows on paper and 1,786 after the plan's validity filter, so a literal
-    would already have been wrong once.
-    """
-    import inspect
-
-    from tools import calib_timing
-
-    p = inspect.signature(calib_timing.main).parameters
-    src = inspect.getsource(calib_timing.main)
-    assert "anchor = n_cycles if args.anchor_level < 0 else args.anchor_level" in src

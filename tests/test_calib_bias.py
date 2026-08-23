@@ -73,13 +73,16 @@ def test_no_common_track_gives_an_empty_table_rather_than_a_wrong_one():
     assert rows == []
 
 
-def test_the_scorer_can_hand_back_the_rows_the_table_needs():
+def test_the_scorer_hands_back_the_rows_the_table_needs():
     """D4 makes the per-track score the primitive; the macro mean is a view of it.
 
     Calibration (a) could not attribute its own finding because the rows had already been collapsed.
+    `quick_eval` needed `return_records=True` to hand them over and retired with `candi.eval` (D15);
+    the monitor that replaced it carries them unconditionally, so the failure cannot recur.
     """
-    import inspect
+    from candi.monitor import DialResult
 
-    from candi.eval import quick_eval
-
-    assert inspect.signature(quick_eval).parameters["return_records"].default is False
+    d = DialResult(kind="impute", macro={"crps": 0.5},
+                   per_track={"T_a|V_a|H3K4me3": {"crps": 0.5, "assay": "H3K4me3"}}, n_tracks=1)
+    assert "per_track" in d.as_dict()
+    assert d.as_dict()["per_track"]["T_a|V_a|H3K4me3"]["crps"] == 0.5

@@ -13,7 +13,9 @@
 # made them. That is the failure this guard exists to make impossible rather than unlikely.
 #
 # PYTHONPATH is inserted ahead of site-packages, so setting it here wins. Measured on Fir: without
-# it `candi.eval` resolves to CANDII/src, with it to $KIT/src.
+# it `candi` resolves to CANDII/src, with it to $KIT/src. (The module measured at the time was
+# `candi.eval`, since deleted — D15; the import below checks the package itself, which cannot go
+# stale that way.)
 export PYTHONPATH="$KIT/src"
 python - "$KIT" <<'PY' || exit 1
 import pathlib, sys

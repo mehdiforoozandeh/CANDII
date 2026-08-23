@@ -2,7 +2,8 @@
 
 D31: on the store the pairing is DECLARED, never inferred, because D16 makes biosample names
 opaque ids that nothing may parse. Neither shipped regime declares any, which is why a store-backed
-run could not be scored even after `build_eval_units` learned to take a store dataset (t28): the
+run could not be scored even after the (since-deleted) `build_eval_units` learned to take a store
+dataset (t28): the
 scorer worked and there was nothing to point it at.
 
 EIC's two splits are not interchangeable and this script keeps them apart:

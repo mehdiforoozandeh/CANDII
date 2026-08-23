@@ -101,9 +101,9 @@ def no_autocast(device):
 
     EVALUATION IS NEVER AUTOCAST. Every recorded number in this repo was measured in fp32, and a
     metric measured at a different precision than the one it is compared against is a difference
-    nobody declared. It is used at `eval.evaluate` / `eval.quick_eval` rather than at each of the
-    dozen forwards below them, because the guarantee wanted is "nothing under here", not "not this
-    line".
+    nobody declared. It is used at the evaluation ENTRY POINT — `bench.cli.main` — rather than at
+    each of the dozen forwards below it, because the guarantee wanted is "nothing under here", not
+    "not this line".
 
     Takes a device instead of a tensor because at an entry point the device is what is in scope,
     and there is no activation yet to read it from.

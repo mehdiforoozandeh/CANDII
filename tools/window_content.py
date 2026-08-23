@@ -43,7 +43,8 @@ import numpy as np
 #: different window length would be pricing a model we do not train.
 CONTEXT_BINS = 768
 
-#: Foreground is the top `FG_FRAC` of a track's own positions, matching `quick_eval(fg_frac=0.02)`.
+#: Foreground is the top `FG_FRAC` of a track's own positions, matching the `fg_frac=0.02` of the
+#: since-deleted `eval.quick_eval` (D15), which is what this calibration was measured against.
 #: Per track, never pooled -- tracks differ in depth by more than an order of magnitude, so a shared
 #: absolute threshold would call whole assays background.
 FG_FRAC = 0.02

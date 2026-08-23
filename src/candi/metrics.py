@@ -4,7 +4,7 @@ VENDORED VERBATIM of sandbox/diagnostics/dual_conditioning/metrics.py
   L27 (P_EPS), L29-131 (_nb_cdf, nb_crps, nb_quantile, r2, pearson, spearman, PIT_GRID,
   calibration_pit_curve, ece, _cos_dist), L341-353 (_steering_index).
 The synthetic-transform-bound eval harness (make_eval_units onward) is NOT shipped; the real-data
-measurement stack lives in candi.eval.
+measurement stack lives in `candi.bench` (`candi.eval`, which held it before, is deleted — D15).
 
 The closed-form NB CRPS (`nb_crps`) is the risky numeric: derived as E|X-y| - 1/2 E|X-X'| with a
 Pfaff-transformed hypergeometric Gini term, verified bit-close to an exact discrete sum and to
@@ -22,10 +22,10 @@ P_EPS = 1e-9
 # lists `metrics.py` among the things evaluation must never autocast; it already cannot be. Every
 # primitive here takes and returns NUMPY arrays, and `torch.autocast` is a torch dispatcher feature —
 # it rewrites the dtype of torch ops and reaches nothing else, so no setting of `--precision` can
-# change a number computed below. The float64 convention these rely on (`eval._p_from_true_mu`,
-# `nb_crps`) is a numpy fact for the same reason. A fence here would imply a hazard that does not
-# exist and would send the next reader looking for one. The fence that DOES matter is at
-# `eval.evaluate` / `eval.quick_eval`, which is where the torch forwards live.
+# change a number computed below. The float64 convention these rely on
+# (`bench.distributional.p_from_mu`, `nb_crps`) is a numpy fact for the same reason. A fence here
+# would imply a hazard that does not exist and would send the next reader looking for one. The
+# fence that DOES matter is at `bench.cli.main`, which is where the torch forwards live.
 
 
 # ---------------------------------------------------------------------------

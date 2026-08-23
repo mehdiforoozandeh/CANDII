@@ -1,6 +1,6 @@
 """Cluster-level inference — the statistics, with no model and no h5 anywhere near them.
 
-Lifted VERBATIM out of `candi.eval`, which is being deleted (`EVAL_PLAN.md` D15). These three
+Lifted VERBATIM out of `candi.eval`, which has since been deleted (`EVAL_PLAN.md` D15). These three
 functions were never part of the measurement stack: they are a bootstrap, a sign test and a
 target-clustered interval, and every one of their callers — `compare_arms.py`, `report_h74.py` —
 wants them without wanting an evaluation harness. Leaving them inside `eval.py` would have made the

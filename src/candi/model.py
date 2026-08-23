@@ -187,7 +187,7 @@ class CandiModel(nn.Module):
         return self.decoder(z, y_meta, log_ref)
 
     def encode(self, x_data, x_dna, x_meta) -> torch.Tensor:
-        """Encoder latent `[B, L2, d_model]`, for M3's invariance readout."""
+        """Encoder latent `[B, L2, d_model]`, for `depthblind`'s invariance readout."""
         return self.encoder.encode(x_data, x_dna, x_meta, return_meta=False)
 
     def decode_latent(self, z, y_meta, log_ref=None) -> Dict[str, torch.Tensor]:
@@ -233,7 +233,8 @@ def build_model_from_arch(arch: dict) -> CandiModel:
 # ---------------------------------------------------------------------------
 
 def forward_full(model: CandiModel, batch: dict) -> Dict[str, torch.Tensor]:
-    """Full head output dict (p, n, eta, log2_mu, mu, + any optional head) — used by M2's readout.
+    """Full head output dict (p, n, eta, log2_mu, mu, + any optional head) — the covariate block
+    reads it.
 
     `log_ref` rides in the prep dict rather than as an argument so every existing caller keeps
     working: a batch without the key is the pre-reference model, exactly.
@@ -243,7 +244,7 @@ def forward_full(model: CandiModel, batch: dict) -> Dict[str, torch.Tensor]:
 
 
 def encode_latent(model: CandiModel, batch: dict) -> torch.Tensor:
-    """Encoder latent z [B, L2, d_model] (for M3); depends only on x_data/x_dna/x_meta."""
+    """Encoder latent z [B, L2, d_model] (for `depthblind`); depends only on x_data/x_dna/x_meta."""
     return model.encode(batch["x_data"], batch["x_dna"], batch["x_meta"])
 
 
