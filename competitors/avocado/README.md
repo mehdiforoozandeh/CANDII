@@ -176,6 +176,12 @@ A resumed `train.py` picks up its `.partial` automatically; re-submitting the sa
 the whole resume procedure. A *finished* chromosome writes `ckpt/<mode>_<chrom>.pt` and the job
 skips it, so re-submission is idempotent.
 
+**Measured binning cost** (first run, 2026-08-25): chr21 **1444 s**, chr20 **2017 s**, MaxRSS
+**2.9 GB** against a 32 GB ask. Close to linear in bins, so chr1 (9.96 M bins) projects to ~2.1 h —
+which is why `bin.sh` asks for 6 h and not 3. Output sizes are exact: `chr20.npy` is
+2,753,054,216 B = 2,577,766 bins × 267 tracks × 4 B + a 128 B npy header. If that arithmetic does
+not close on a rebuild, the column set changed and §2 is the thing to re-check.
+
 **Smoke probe** (writes nothing, prints steps/s and peak CUDA memory):
 
 ```bash
