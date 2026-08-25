@@ -355,9 +355,12 @@ def test_every_method_writes_a_traceable_manifest(roots):
         assert m["notes"] and m["arms"]
         assert set(m["tracks"]) == {d.name for d in root.iterdir() if d.is_dir()}
         for row in m["tracks"].values():
-            assert row["n_contributors"] >= 1
-        # k = 3 here, so nothing is sparse; the key must exist either way so a table can read it.
-        assert m["sparse_assays"] == [] if method != "knn1" else True
+            assert row["n_contributors"] >= 1 and row["n_eligible"] == 3
+        # Three ELIGIBLE contributors, so nothing is sparse — including `knn1`, which uses one on
+        # purpose. §5's flag is about a thin training split, not about a method's own choice.
+        assert m["sparse_assays"] == []
+        assert m["poisson_n"] == SCOREABLE_POISSON_N
+        assert m["poisson_n_is_preregistered"] is False
 
 
 def test_the_arrays_each_method_promises_are_the_arrays_on_disk(roots):

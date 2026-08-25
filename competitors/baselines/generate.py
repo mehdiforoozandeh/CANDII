@@ -309,7 +309,11 @@ def _write(root: Path, dirname: str, chrom: str, arrays: Mapping[str, np.ndarray
 def _manifest(method: str, panel: Panel, notes: str, arms: Sequence[str],
               tracks: Mapping[str, Dict[str, object]], skipped: Sequence[str],
               poisson_n: float) -> Dict[str, object]:
-    sparse = sorted(k for k, v in tracks.items() if int(v["n_contributors"]) <= 2)
+    # `n_eligible`, not `n_contributors`. The flag §5 asks for is "this assay is thin in the
+    # training split", which is a property of the PANEL. `knn1` uses one contributor on purpose out
+    # of however many were eligible, and flagging every BestSingle row as sparse would make the flag
+    # mean nothing exactly where it is supposed to mean something.
+    sparse = sorted(k for k, v in tracks.items() if int(v["n_eligible"]) <= 2)
     return {
         "method": method,
         "version": VERSION,
@@ -370,7 +374,7 @@ def _merge_manifest(old: Mapping[str, object], new: Dict[str, object],
     merged["skipped_tracks"] = sorted(set(old.get("skipped_tracks", []))
                                       | set(new.get("skipped_tracks", [])))
     merged["sparse_assays"] = sorted(k for k, v in merged["tracks"].items()
-                                     if int(v["n_contributors"]) <= 2)
+                                     if int(v["n_eligible"]) <= 2)
     return merged
 
 
