@@ -162,12 +162,19 @@ that estimate were checked on our own panel before any budget was committed:
 | throughput, chr20 joint fit | **6.23 steps/s** (600-step probe: 5.78) — **7.5×** slower than 005's full H100 |
 | peak CUDA | **5.15 GiB** of the slice's 10 GiB — fits with room, because 267 columns is not 312 |
 | chr20 joint fit, 60 epochs | 6:44:42 |
+| throughput, genome mode (chr21) | **7.60 steps/s** — faster, because no gradient reaches the frozen shared params |
+| peak CUDA, genome mode | **5.17 GiB** |
 
-So the rule costs ~7.5× wall-clock and forbids nothing: the whole retrain is ~165 GPU-h on the
-slice against ~22 on a full H100, and every job fits its walltime. **No exception to §3.13 was
-needed and none was taken.** Per-chromosome walltimes below are projected from 6.0 steps/s (under
-the 6.23 actually sustained) and the arrays are split into three walltime bins so a 2.5 h
-chromosome does not queue behind a 20 h ask.
+So the rule costs wall-clock and forbids nothing: the whole retrain is ~130 GPU-h on the slice
+against ~22 on a full H100, and every job fits its walltime. **No exception to §3.13 was needed and
+none was taken.**
+
+Per-chromosome walltimes below were set from the conservative 6.0 steps/s figure *before* the
+genome-mode probe measured 7.60. They were deliberately not re-tightened afterwards: chr1 carries
+291 M genomic parameters against chr21's 54.6 M, so its Adam step is heavier and chr21's rate is an
+upper bound, not a prediction. The asks are split into three walltime bins so a 2.5 h chromosome
+does not queue behind a 20 h ask, and `MAXHOURS` plus the resume path absorbs any overrun at a cost
+of at most one epoch of rework.
 
 ---
 
@@ -198,19 +205,8 @@ python $A/predict.py --regime configs/regime.eic_val.json --out $WS/pred/eic_val
        --write-manifest --version 005-port --notes "60/30 epochs, seed 0, 267 T_ training tracks"
 sbatch --array=0-22 $A/slurm/predict.sh
 
-# 4. the §6.1 σ-table, fitted on the V panel's P1 chromosomes
-python $A/fit_sigma.py --regime configs/regime.eic_val.json \
-       --pred $WS/pred/eic_val --out $WS/sigma_avocado_v.json
-
-# 5. score — P1 (declared pairs, the regime's eval_chroms)
-python -m candi.bench.external --store configs/regime.eic_val.json \
-       --pred $WS/pred/eic_val --sigma-table $WS/sigma_avocado_v.json \
-       --out $WS/scores_avocado_P1.json
-
-# 5b. score — P2 (genome-wide: the same root, every chromosome)
-python -m candi.bench.external --store configs/regime.eic_val.json \
-       --pred $WS/pred/eic_val --sigma-table $WS/sigma_avocado_v.json \
-       --chroms "$(paste -sd, $A/chroms.txt)" --out $WS/scores_avocado_P2.json
+# 4-5. σ-table + P1 + P2 scoring, one job (see slurm/score.sh for why it is a job)
+sbatch $A/slurm/score.sh
 ```
 
 A resumed `train.py` picks up its `.partial` automatically; re-submitting the same array command is
