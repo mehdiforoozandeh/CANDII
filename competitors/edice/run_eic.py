@@ -54,6 +54,20 @@ def _cfg_from_args(args) -> Config:
                   n_targets=args.n_targets, embed_dim=args.embed_dim, seed=args.seed)
 
 
+def _resolve_chroms(chroms, store):
+    """`--chroms all` means every chromosome the store carries -- the P2 pass, as one word.
+
+    P2 is "the same pairs and truth, over every chromosome the store carries" (§2), and spelling
+    two dozen names on a command line is a way to leave one out by accident.
+    """
+    if not chroms:
+        return None
+    if len(chroms) == 1 and chroms[0] == "all":
+        from candi.store import layout as L
+        return L.sort_chroms(store.n_bins().keys())
+    return list(chroms)
+
+
 # ---------------------------------------------------------------------------
 # train
 # ---------------------------------------------------------------------------
@@ -143,7 +157,7 @@ def cmd_predict(args) -> int:
     device = torch.device(args.device)
     model.to(device).eval()
 
-    source = open_source(store=args.regime, chroms=args.chroms or None)
+    source = open_source(store=args.regime, chroms=_resolve_chroms(args.chroms, store))
     reqs = requested_tracks(source, panel)
     chroms = list(source.eval_chroms)
     print(f"[edice] {len(reqs)} declared tracks over {len(chroms)} chromosomes", flush=True)
@@ -203,7 +217,7 @@ def cmd_panel(args) -> int:
     store = _open_store(regime)
     panel = training_panel(store, regime)
     assert_no_eval_leakage(panel)
-    source = open_source(store=args.regime, chroms=args.chroms or None)
+    source = open_source(store=args.regime, chroms=_resolve_chroms(args.chroms, store))
     reqs = requested_tracks(source, panel)
 
     per_cell: dict = {}
@@ -259,7 +273,8 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--out", required=True)
     pr.add_argument("--batch-size", type=int, default=4096)
     pr.add_argument("--chroms", nargs="+", default=None,
-                    help="default: the regime's eval_chroms (P1). Name them all for P2.")
+                    help="default: the regime's eval_chroms (P1). `all` = every chromosome the "
+                         "store carries (P2).")
     pr.set_defaults(func=cmd_predict)
 
     pa = sub.add_parser("panel", help="print the panel and the declared track set; no compute")
