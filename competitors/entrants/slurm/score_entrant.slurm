@@ -9,9 +9,14 @@
 #
 # DNase-seq experiments exit 0 without scoring (decision B3): excluded from every Dataset-3 row.
 #
+# Memory: chr1-22+chrX at 25 bp is ~124 M bins. Held at peak: truth and prediction as float32
+# dicts (~0.5 GB each), their float64 concatenations for the P-block (~1 GB each), digitize's int64
+# index (~1 GB), the blacklist-deleted copies for the nine measures (~1 GB), and pyBigWig's
+# transient base-pair-resolution read of chr1 (249 Mbp float64, ~2 GB, plus its buffer). ~12-16 GB
+# peak, and the Average build was already observed at 16 GB MaxRSS with less resident than this.
 #SBATCH --job-name=t54_score
 #SBATCH --time=03:00:00
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --cpus-per-task=6
 #SBATCH --account=def-maxwl_cpu
 #SBATCH --output=slurm_logs/t54_score_%A_%a.out

@@ -14,9 +14,11 @@
 #
 #   sbatch --array=0-2 slurm/driver_parity.slurm
 #
+# --check-against-fir-score runs a SECOND full scorer in a subprocess, which loads its own copy of
+# truth and prediction, so this job needs roughly double what score_entrant.slurm asks for.
 #SBATCH --job-name=t54_parity
 #SBATCH --time=03:00:00
-#SBATCH --mem=32G
+#SBATCH --mem=64G
 #SBATCH --cpus-per-task=6
 #SBATCH --account=def-maxwl_cpu
 #SBATCH --output=slurm_logs/t54_parity_%A_%a.out
