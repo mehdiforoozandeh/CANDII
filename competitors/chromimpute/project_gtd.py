@@ -10,6 +10,12 @@ genome times the number of target marks.
 
 Exit status is the point: **1 if the projection is over budget**, so it can gate a chain. The
 default budget is 500 CPU-h — 3× the 166 CPU-h estimate, the abort threshold agreed for this run.
+
+**The linear model is deliberately conservative and known to over-price.** The real cost per mark is
+`18.4 us x bins + 3.85 ms x 100 000 instances` — a scan term plus a fixed feature-extraction term
+that does not move with the genome. Fitting seconds-per-bin from tasks that already amortise the
+constant across a whole chromosome therefore reads high, never low, which is the right bias for a
+gate whose only job is to catch a stage running away. Do not quote its number as a cost estimate.
 """
 from __future__ import annotations
 
