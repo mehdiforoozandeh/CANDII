@@ -25,6 +25,7 @@ import json
 import os
 import stat
 import sys
+import time
 from typing import Dict, List, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -216,6 +217,7 @@ def main() -> int:
     files = walk(fid, token)[shard_i::shard_n]
     print(f"[synapse] downloading {len(files)} files (shard {args.shard}) -> {args.dest}",
           flush=True)
+    n_got = n_have = 0
     for rel, name, ent in files:
         outdir = os.path.join(args.dest, rel)
         os.makedirs(outdir, exist_ok=True)
@@ -223,10 +225,31 @@ def main() -> int:
         size, md5 = SYN.file_handle(ent["id"], token)
         if os.path.exists(dest) and os.path.getsize(dest) == size:
             print(f"  have {rel}/{name}", flush=True)
+            n_have += 1
             continue
-        # The vendored downloader verifies size and md5 and removes a bad temp file itself.
-        SYN.download(ent["id"], dest, token, size, md5)
+        # The vendored downloader verifies size and md5 and removes a bad temp file itself, but it
+        # does NOT retry -- its own main() wraps the call in this loop, and dropping that was a real
+        # defect: a first run with eight shards lost five of them, four to `HTTP 403 Forbidden` and
+        # one to `RemoteDisconnected`, spread over the first hour. The vendored comment says exactly
+        # why: presigned URLs expire and Synapse throttles concurrent streams, so a 403 mid-transfer
+        # is normal rather than fatal. `download()` requests a FRESH presigned URL on entry, so a
+        # plain retry is the correct remedy.
+        for attempt in range(6):
+            try:
+                SYN.download(ent["id"], dest, token, size, md5)
+                break
+            except Exception as e:                       # noqa: BLE001
+                if attempt == 5:
+                    print(f"  GIVING UP on {rel}/{name} after 6 attempts: "
+                          f"{type(e).__name__}: {e}", flush=True)
+                    raise
+                wait = 5 * 2 ** attempt
+                print(f"  retry {rel}/{name} in {wait}s after {type(e).__name__}: {e}", flush=True)
+                time.sleep(wait)
+        n_got += 1
         print(f"  got  {rel}/{name} {size/1e6:.0f} MB", flush=True)
+    print(f"[synapse] shard {args.shard} done: {n_got} downloaded, {n_have} already present",
+          flush=True)
     return 0
 
 

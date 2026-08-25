@@ -44,8 +44,13 @@ WORK="${WORK:-/project/def-maxwl/mforooz/CANDII_t54_work}"
 module --force purge
 module load StdEnv/2023 python/3.11
 
-N=${SLURM_ARRAY_TASK_COUNT:-1}
+# NSHARD pins the partition denominator. Resubmitting only the failed shards -- say
+# `--array=0,2,3,5,7` -- sets SLURM_ARRAY_TASK_COUNT to 5, which would silently RE-PARTITION the
+# tree and send each task after a different slice than it was originally assigned. Pass NSHARD=8 on
+# any partial resubmit so each task resumes exactly its own slice.
+N=${NSHARD:-${SLURM_ARRAY_TASK_COUNT:-1}}
 I=${SLURM_ARRAY_TASK_ID:-0}
+echo "[shard] task $I of $N -> $DEST" >&2
 
 ARGS=(--token-file "$HOME/.synapse_pat" --dest "$DEST" --shard "$I/$N")
 if [ "${SURVEY:-0}" = "1" ]; then
