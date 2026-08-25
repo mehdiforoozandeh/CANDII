@@ -31,11 +31,22 @@ pearson r = 1.000000000000
 GATE max_abs <= 1e-05: PASS
 ```
 
-4 096 random inputs against a chr21-architecture stage-2 model (61.8 M parameters — the loaded
-parameter count equals Keras's own `count_params()` exactly, so every tensor moved). The residual
-is float32 accumulation order between MKL and torch, not a mapping error. **The observed tolerance
-is 2.4e-6; the gate is set at 1e-5**, four times the headroom, per the PI's instruction to document
-the tolerance on one chromosome before rolling it out.
+4 096 random inputs against a chr21-architecture stage-2 model. The loaded weight count equals
+Keras's own `count_params()` exactly, so every tensor moved. The residual is float32 accumulation
+order between MKL and torch, not a mapping error. **The observed tolerance is 2.4e-6; the gate is
+set at 1e-5**, four times the headroom, per the PI's instruction to document the tolerance on one
+chromosome before rolling it out.
+
+**What this artifact is, precisely.** It is a genuine Keras 2.2.4 checkpoint written by *their*
+code — but configured by *us*: the smoke run passed `n_assays=35`, taken from the raw metadata.
+Their own filter drops assays appearing only in the training split before building the embedding
+(`02_guacamole6_pretrain.py:49-65`), and on this data that leaves **23**, so a released chr21 file
+should carry 61,772,017 weights rather than the 61,772,797 measured here — a difference of exactly
+12 assays x 65 factors. This changes nothing about the loader, which reads every shape from the
+file and hardcodes none; it is why `parity_keras.py` derives `n_celltypes` and `n_assays` from the
+h5 rather than from a constant. It does mean the parity run validates the **mapping**, not the
+**dimensions** of their released files. Both counts are recorded in `tests/test_lavawizard.py`, so
+the first real checkpoint either confirms the 23 or tells us something we did not know.
 
 Four mappings are wrong-by-default and all four are covered:
 

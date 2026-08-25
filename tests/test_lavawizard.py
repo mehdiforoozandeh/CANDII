@@ -23,8 +23,9 @@ h5py = pytest.importorskip("h5py")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "competitors"))
 
-from lavawizard import dataset3, emit, features, keras_weights             # noqa: E402
+from lavawizard import dataset3, emit, features, keras_weights, preprocess  # noqa: E402
 from lavawizard.model import Guacamole, Precamole                          # noqa: E402
+from lavawizard.train import Sampler                                       # noqa: E402
 
 # A model small enough to build thousands of times, with the real factor widths kept so every
 # concatenation width (225 into dense_1, 2050 into dense_3) is the production one.
@@ -380,21 +381,50 @@ def test_hyperparams_cover_all_23_and_vary():
     assert dataset3.schedule("chr21")["train_epochs"] == 800
 
 
-def test_factor_sizes_build_the_chr21_model_that_matched_their_checkpoint():
-    """chr21's row must reproduce the 61,772,797-weight model parity was measured on.
+def _total_weights(m):
+    """Parameters plus float buffers — the count comparable to Keras `count_params()`.
 
-    Keras `count_params()` counts BatchNorm's `moving_mean`/`moving_variance` as non-trainable
-    weights; torch calls them buffers and leaves them out of `.parameters()`. The difference is
-    exactly `3 blocks x 2 buffers x 2048 = 12,288`, so the comparable total is parameters plus
-    buffers — which is also what `load_keras_h5` reports, since it counts the tensors in the file.
+    Keras counts BatchNorm's `moving_mean`/`moving_variance` as non-trainable weights; torch calls
+    them buffers and leaves them out of `.parameters()`. The gap is exactly
+    `3 blocks x 2 buffers x 2048 = 12,288`. `load_keras_h5` reports the same total, since it counts
+    the tensors in the file.
+    """
+    return (sum(p.numel() for p in m.parameters())
+            + sum(b.numel() for b in m.buffers() if b.dtype.is_floating_point))
+
+
+def test_factor_sizes_reproduce_the_smoke_artifact_parity_was_measured_on():
+    """61,772,797 is the SMOKE checkpoint, whose 35 assays were our choice, not their metadata.
+
+    The parity run in `README.md` used a Keras artifact produced by their code but configured by
+    us. It validates the loader — which reads every shape from the file and hardcodes nothing — and
+    it does NOT establish the dimensions of their released files. See the next test for those.
     """
     m = Guacamole(n_celltypes=51, n_assays=35,
                   n_positions=dataset3.upstream_n_bins(46_709_983),
                   **dataset3.factor_sizes("chr21"))
-    params = sum(p.numel() for p in m.parameters())
-    buffers = sum(b.numel() for b in m.buffers() if b.dtype.is_floating_point)
-    assert buffers == 3 * 2 * 2048
-    assert params + buffers == 61_772_797
+    assert sum(b.numel() for b in m.buffers() if b.dtype.is_floating_point) == 3 * 2 * 2048
+    assert _total_weights(m) == 61_772_797
+
+
+def test_released_checkpoints_should_carry_23_assays_not_35(tmp_path):
+    """Their own filter drops assays that appear only in training, and that reaches the embedding.
+
+    `02_guacamole6_pretrain.py:49-65` builds the assay list from the metadata AFTER dropping
+    training-only assays, so a released chr21 file should have 23 assay rows, not 35 — a 780-weight
+    difference (12 assays x 65 factors). Recorded as an expectation to check the moment their
+    weights arrive; the loader itself needs no change either way, since it takes the shapes from
+    the file.
+    """
+    meta = _meta(tmp_path)
+    _, cells, marks = preprocess.training_tracks(meta)
+    assert "M99" not in marks                                  # the T-only assay is gone
+
+    m23 = Guacamole(n_celltypes=51, n_assays=23,
+                    n_positions=dataset3.upstream_n_bins(46_709_983),
+                    **dataset3.factor_sizes("chr21"))
+    assert _total_weights(m23) == 61_772_017
+    assert 61_772_797 - 61_772_017 == 12 * 65
 
 
 def test_unknown_chromosome_fails_by_name():
@@ -481,3 +511,157 @@ def test_manifest_satisfies_the_bench_reader_and_records_the_switch(tmp_path):
     assert obj["signal_inversion"] == emit.ARCSINH_INVERSION
     assert obj["sparse_assays"] == ["H2AFZ"]
     assert json.loads((tmp_path / "manifest.json").read_text())["upstream"].endswith("@d638b204")
+
+
+# ---------------------------------------------------------------------------
+# preprocessing and the sampler
+# ---------------------------------------------------------------------------
+
+META_ROWS = [
+    # cell, mark, celltype, assay, split
+    ("C01", "M16", "adipose", "H3K27ac", "T"), ("C02", "M16", "adrenal", "H3K27ac", "V"),
+    ("C03", "M16", "brain", "H3K27ac", "B"), ("C01", "M17", "adipose", "H3K4me3", "T"),
+    ("C02", "M17", "adrenal", "H3K4me3", "T"), ("C03", "M17", "brain", "H3K4me3", "B"),
+    ("C01", "M99", "adipose", "OnlyInTraining", "T"),   # dropped: T-only assay
+    ("C02", "M99", "adrenal", "OnlyInTraining", "T"),
+]
+
+
+def _meta(tmp_path):
+    p = tmp_path / "meta.tsv"
+    head = "Cell_ID\tMark_ID\tCellType\tAssay\tTraining(T),Validation(V),Blind-test(B)\tfileName\n"
+    body = "".join(f"{c}\t{m}\t{ct}\t{a}\t{s}\t{c}{m}.bigwig\n" for c, m, ct, a, s in META_ROWS)
+    p.write_text(head + body, encoding="utf-8")
+    return dataset3.read_meta(p)
+
+
+def test_training_tracks_drops_training_only_assays(tmp_path):
+    tracks, cells, marks = preprocess.training_tracks(_meta(tmp_path))
+    assert "M99" not in marks, "an assay that is never a target must not get an embedding"
+    assert all(m != "M99" for _, m in tracks)
+
+
+def test_training_tracks_keep_T_and_V_but_not_B(tmp_path):
+    tracks, _, _ = preprocess.training_tracks(_meta(tmp_path))
+    assert ("C01", "M16") in tracks and ("C02", "M16") in tracks     # T and V both train
+    assert ("C03", "M16") not in tracks                              # B never trains
+
+
+def test_blind_cells_still_get_an_embedding_row(tmp_path):
+    """The tensor-factorisation mechanism: C03's row trains through the assays C03 does have."""
+    tracks, cells, _ = preprocess.training_tracks(_meta(tmp_path))
+    assert "C03" in cells, "a blind cell must be in the embedding table even though it never trains"
+    assert all(c != "C03" for c, _ in tracks)
+
+
+def test_terciles_are_equal_count_and_break_ties_by_position():
+    x = np.array([5.0, 0.0, 0.0, 0.0, 0.0, 9.0])
+    t = preprocess._terciles(x)
+    assert t.dtype == np.int8
+    assert sorted(np.bincount(t, minlength=3).tolist()) == [2, 2, 2], "three equal-count groups"
+    assert t[5] == 2 and t[0] == 2, "the two largest values land in the top tercile"
+    # The four tied zeros are split across terciles by position, not lumped together — upstream's
+    # rank(method='first') does exactly this, and it is arbitrary by design.
+    assert len(set(t[1:5].tolist())) > 1
+
+
+def _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2, seed=3):
+    """A CachedChrom on disk without touching a bigwig."""
+    rng = np.random.default_rng(seed)
+    root = tmp_path / "cache"
+    d = root / "chrT"
+    d.mkdir(parents=True)
+    values = rng.uniform(0, 3, (n_tracks, n_bins)).astype(np.float32)
+    np.save(d / "tracks.npy", values)
+    np.save(d / "tercile.npy", np.stack([preprocess._terciles(v) for v in values]))
+    marks = [f"M{j:02d}" for j in range(n_marks)]
+    cells = [f"C{i:02d}" for i in range(n_tracks)]
+    tracks = [(cells[i], marks[i % n_marks]) for i in range(n_tracks)]
+    mark_of = np.array([i % n_marks for i in range(n_tracks)])
+    sums = np.stack([values[mark_of == j].sum(0) for j in range(n_marks)]).astype(np.float32)
+    sumsq = np.stack([(values[mark_of == j] ** 2).sum(0) for j in range(n_marks)]).astype(np.float32)
+    np.save(d / "sums.npy", sums)
+    np.save(d / "sumsq.npy", sumsq)
+    (d / "index.json").write_text(json.dumps({
+        "chrom": "chrT", "n_bins": n_bins, "chrom_length": n_bins * 25, "grid": "upstream_ceil",
+        "tracks": [list(t) for t in tracks], "cells": cells, "marks": marks,
+        "mark_counts": {m: int((mark_of == j).sum()) for j, m in enumerate(marks)},
+    }), encoding="utf-8")
+    return root, values, mark_of
+
+
+def test_moments_upstream_matches_a_direct_computation(tmp_path):
+    root, values, mark_of = _fake_cache(tmp_path)
+    c = preprocess.CachedChrom(root, "chrT")
+    tix = np.array([0, 1, 4]); pos = np.array([3, 7, 11])
+    x = c.values[tix, pos].astype(np.float32)
+    avg, var = c.moments(tix, pos, x, "upstream")
+    for i, (t, p) in enumerate(zip(tix, pos)):
+        col = values[mark_of == mark_of[t], p]
+        assert avg[i] == pytest.approx(col.mean(), rel=1e-5)
+        assert var[i] == pytest.approx(col.var(), rel=1e-4, abs=1e-6)   # ddof=0
+
+
+def test_moments_loo_excludes_the_target_itself(tmp_path):
+    root, values, mark_of = _fake_cache(tmp_path)
+    c = preprocess.CachedChrom(root, "chrT")
+    tix = np.array([0, 3]); pos = np.array([5, 9])
+    x = c.values[tix, pos].astype(np.float32)
+    avg, var = c.moments(tix, pos, x, "loo")
+    for i, (t, p) in enumerate(zip(tix, pos)):
+        keep = (mark_of == mark_of[t]) & (np.arange(len(values)) != t)
+        col = values[keep, p]
+        assert avg[i] == pytest.approx(col.mean(), rel=1e-4)
+        assert var[i] == pytest.approx(col.var(), rel=1e-3, abs=1e-6)
+    up, _ = c.moments(tix, pos, x, "upstream")
+    assert not np.allclose(avg, up), "the two modes must differ, else the switch is decorative"
+
+
+def test_moments_reject_an_unknown_mode(tmp_path):
+    root, _, _ = _fake_cache(tmp_path)
+    c = preprocess.CachedChrom(root, "chrT")
+    with pytest.raises(ValueError, match="upstream.*loo"):
+        c.moments(np.array([0]), np.array([0]), np.zeros(1, np.float32), "sideways")
+
+
+def test_sampler_walks_positions_contiguously_and_covers_an_epoch(tmp_path):
+    """An epoch is ceil(n_bins/bs) steps because the position cursor sweeps the chromosome once."""
+    root, _, _ = _fake_cache(tmp_path, n_bins=40)
+    c = preprocess.CachedChrom(root, "chrT")
+    s = Sampler(c, batch_size=8, mode="upstream", seed=1)
+    assert s.steps_per_epoch == 5
+    seen = []
+    for _ in range(s.steps_per_epoch):
+        _, pos, _, _, _ = s._batch()
+        seen.append(pos)
+    assert np.array_equal(seen[0], np.arange(0, 8))
+    assert np.array_equal(seen[1], np.arange(8, 16))
+    assert sorted(np.concatenate(seen).tolist()) == list(range(40)), "one epoch covers every bin"
+
+
+def test_sampler_stage_batches_have_the_shapes_the_models_want(tmp_path):
+    root, _, _ = _fake_cache(tmp_path)
+    c = preprocess.CachedChrom(root, "chrT")
+    s = Sampler(c, batch_size=16, mode="upstream", seed=2)
+    dev = torch.device("cpu")
+
+    d1, y1 = s.stage1(dev)
+    assert set(d1) == {"celltype", "assay", "pos25", "average_onehot"}
+    assert d1["average_onehot"].shape == (16, 3)
+    assert y1.shape == (16,) and y1.min() >= 0 and y1.max() <= 2
+    small = dict(n_celltypes=len(c.cells), n_assays=len(c.marks), n_positions=c.n_bins)
+    assert Precamole(**small)(**d1).shape == (16, 3)
+
+    d2, y2 = s.stage2(dev)
+    assert set(d2) == {"celltype", "assay", "pos25", "average", "variance"}
+    assert y2.shape == (16,)
+    assert Guacamole(**small)(**d2).shape == (16,)
+
+
+def test_stage2_target_is_the_track_value_itself(tmp_path):
+    """Regression target is the observed arcsinh signal — not the average, not the tercile."""
+    root, values, _ = _fake_cache(tmp_path)
+    c = preprocess.CachedChrom(root, "chrT")
+    s = Sampler(c, batch_size=6, mode="upstream", seed=5)
+    tix, pos, x, _, _ = s._batch()
+    np.testing.assert_allclose(x, values[tix, pos], rtol=1e-6)
