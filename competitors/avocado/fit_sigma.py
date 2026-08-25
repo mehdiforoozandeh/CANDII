@@ -39,14 +39,13 @@ def main(argv=None) -> int:
     ap.add_argument("--batch-windows", type=int, default=4)
     a = ap.parse_args(argv)
 
-    from candi.bench.external import _expected, read_track_arrays
+    from candi.bench.external import _expected, read_track_arrays, stream_truth
     from candi.bench.harness import open_source
 
     chroms = tuple(c.strip() for c in a.chroms.split(",")) if a.chroms else None
     source = open_source(store=a.regime, chroms=chroms)
     root = Path(a.pred)
     try:
-        from candi.bench.external import stream_truth
         expected = _expected(source)
         use = list(source.eval_chroms)
         n_bins = {c: source.n_bins(c) for c in use}

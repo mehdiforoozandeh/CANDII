@@ -85,13 +85,23 @@ def train_columns(regime: dict, corpus) -> List[Tuple[str, str]]:
 
 
 def write_tracks(path: str | Path, cols: Sequence[Tuple[str, str]], regime: dict) -> None:
-    """`tracks.csv` -- the column order of every `<chrom>.npy`, plus its index-space translation."""
+    """`tracks.csv` -- the column order of every `<chrom>.npy`, plus its index-space translation.
+
+    Written through a per-process temp and `os.replace`, because all 23 binning array tasks write
+    it and they write it concurrently. The content is identical from every task, so an atomic
+    rename makes the race harmless; a plain `write_text` would let one reader see a half-written
+    file and mis-map every column.
+    """
+    import os
     _, cix = cell_index(regime)
     _, aix = assay_index(regime)
     lines = ["col,biosample,assay,cell_idx,assay_idx"]
     for i, (b, a) in enumerate(cols):
         lines.append(f"{i},{b},{a},{cix[b]},{aix[a]}")
-    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path = Path(path)
+    tmp = path.with_suffix(f".csv.{os.getpid()}.tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def read_tracks(path: str | Path) -> List[Tuple[int, str, str, int, int]]:
