@@ -110,6 +110,30 @@ Avocado and 005's Avocado two different procedures and break the convergence-sha
 is this task's gate. The full held-out curve is in `logs/train_*.jsonl` if the PI wants the other
 choice made later.
 
+### The convergence gate, measured (§7.1)
+
+The chr20 joint fit ran 60 epochs in 6:44:42 at 6.23 steps/s. Its curve against the 005 anchor
+(`005/output/train_logs/d3_train_log.jsonl`, its own chr20 joint fit):
+
+| | ours, 60 ep | 005 d3, 120 ep |
+|---|---|---|
+| held-out minimum | **0.05852 @ epoch 27** | **0.07153 @ epoch 22** |
+| drift, minimum → epoch 59 | **+2.24 %** | **+2.14 %** |
+| train MSE at epoch 59 | 0.02653, still falling | 0.03934, still falling |
+| held-out normalised, ep 0 → 5 → 30 → 59 | 1.000 → 0.576 → 0.558 → 0.566 | 1.000 → 0.649 → 0.618 → 0.629 |
+
+Same signature in both: a fast drop through epoch ~5, a shallow basin through the 20s, then mild
+drift upward while the training MSE keeps falling — the genomic factors overfitting, not the run
+undertraining. **The gate is on shape, and the shape reproduces.**
+
+The absolute levels differ (0.0585 vs 0.0715) and are *not* expected to match: 005 fitted the
+challenge's own Dataset-3 tracks over 312 columns, we fit our store's Dataset-2 `-log10 p` over 267.
+Comparing the two absolute numbers would be exactly the Dataset-2→Dataset-3 translation 005 measured
+at 12–66 % per-experiment error and told us not to do.
+
+This also re-confirms the halved budget from our own data rather than on 005's authority: the
+minimum lands at epoch 27, and epochs 28–59 bought **nothing** (+2.24 % worse at the end).
+
 ---
 
 ## 4. Environment and paths
@@ -128,10 +152,22 @@ binned matrices are ~129 GB and the checkpoints another ~50 GB, and none of that
 comes back to `/project` is the training logs, the scores and the σ-table. `/scratch` purges after
 60 days, which is why the commands below exist rather than living in somebody's shell history.
 
-**GPU.** Every `#SBATCH --gres` here is `gpu:nvidia_h100_80gb_hbm3_1g.10gb:1`, per `AGENTS.md`
-§3.13. 005 ran on a full H100 at ~46 steps/s and estimated a 1g.10gb slice at ~7× slower; that
-estimate is 005's, not a measurement of this code on our 267-column panel — see the smoke-run note
-in the task output.
+**GPU — the MIG slice was measured, not assumed.** Every `#SBATCH --gres` here is
+`gpu:nvidia_h100_80gb_hbm3_1g.10gb:1`, per `AGENTS.md` §3.13. 005 ran on a full H100 at 46.4 steps/s
+and *estimated* a 1g.10gb slice at ~7× slower with a working set too large to fit. Both halves of
+that estimate were checked on our own panel before any budget was committed:
+
+| | measured |
+|---|---|
+| throughput, chr20 joint fit | **6.23 steps/s** (600-step probe: 5.78) — **7.5×** slower than 005's full H100 |
+| peak CUDA | **5.15 GiB** of the slice's 10 GiB — fits with room, because 267 columns is not 312 |
+| chr20 joint fit, 60 epochs | 6:44:42 |
+
+So the rule costs ~7.5× wall-clock and forbids nothing: the whole retrain is ~165 GPU-h on the
+slice against ~22 on a full H100, and every job fits its walltime. **No exception to §3.13 was
+needed and none was taken.** Per-chromosome walltimes below are projected from 6.0 steps/s (under
+the 6.23 actually sustained) and the arrays are split into three walltime bins so a 2.5 h
+chromosome does not queue behind a 20 h ask.
 
 ---
 
@@ -149,8 +185,13 @@ sbatch --array=0-22 $A/slurm/bin.sh
 printf 'chr20\n' > $WS/chrom20.txt
 sbatch --array=0-0 --export=ALL,MODE=shared,CHROMFILE=$WS/chrom20.txt,EPOCHS=60 $A/slurm/train.sh
 
-# 2b. per-chromosome genomic factors, 30 epochs, shared frozen  (23 tasks)
-sbatch --array=0-22 --export=ALL,MODE=genome,EPOCHS=30 $A/slurm/train.sh
+# 2b. per-chromosome genomic factors, 30 epochs, shared frozen  (23 tasks).
+#     Split by projected wall-clock at 6.0 steps/s so a 2.5 h chromosome is not asking for 20 h:
+#     chr1 13.5 h, chr2 13.1 h | chr3 10.8 h .. chr7 8.6 h | chr8 7.9 h .. chrX 8.5 h, chr21 2.5 h.
+#     MAXHOURS always leaves the job ~1 h to load its matrix and write out.
+sbatch --array=0-1  --time=20:00:00 --export=ALL,MODE=genome,EPOCHS=30,MAXHOURS=19.0 $A/slurm/train.sh
+sbatch --array=2-6  --time=14:00:00 --export=ALL,MODE=genome,EPOCHS=30,MAXHOURS=13.0 $A/slurm/train.sh
+sbatch --array=7-22 --time=11:00:00 --export=ALL,MODE=genome,EPOCHS=30,MAXHOURS=10.5 $A/slurm/train.sh
 
 # 3. the §4.1 prediction root, all 23 chromosomes
 python $A/predict.py --regime configs/regime.eic_val.json --out $WS/pred/eic_val \
