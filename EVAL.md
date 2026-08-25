@@ -125,6 +125,35 @@ chr21 — so it is estimated over `--c-index-pairs` seeded pairs and always ship
 A C-index without its SE is not quotable. The C-block is sampled too and says so: `n_units`,
 `n_windows`, `n_resamples`, `n_outer`, `n_inner` are all in its output.
 
+## Scoring somebody else's tracks is the same command with no checkpoint
+
+```bash
+python -m candi.bench.external --store <regime.json> --pred <pred_root> --out <scores.json> \
+    [--chroms chr21,...] [--sigma-table <sigma.json>] [--varpool ...] [--allow-missing]
+```
+
+A rival has no checkpoint we can load, so it hands over the prediction itself, on our grid:
+`<pred_root>/manifest.json` plus one directory per track named `<input>__<target>__<assay>` — the
+`track_key` below with `|` swapped for `__` — each holding one `chr*.npz` per chromosome, arrays on
+the absolute 25 bp bin grid, length exactly `floor(chr_len / 25)`. The recognised arrays are
+`signal_mu`, `signal_sigma`, `mu` + `n`, and `peak_score`. `RIVALS_PLAN.md` §4 is the full contract.
+
+Nothing there computes a metric: truth comes from `harness.open_source`, scoring from
+`harness.score_track`, the roll-up from `harness.macro_mean`, and the result has `run_bench`'s
+shape with `provenance.method` from the manifest. `tests/test_bench_external.py` scores CANDI's own
+predictions both ways and requires every shared numeric key to agree — the external path is the
+same instrument, proven rather than asserted.
+
+Three things it will not do. It will not resize an array — a grid mismatch names the track and
+stops. It will not score a panel with holes in it — a declared pair the root does not cover fails
+the run unless `--allow-missing` records the gap in `provenance.missing_tracks`. And it will not
+invent an arm the producer did not predict: a point-only track carries the E and P blocks and **no**
+`crps` / `pit_ks` / `coverage_95` / `c_index` / `gaussian_nll` — absent keys, never nan — until a
+`--sigma-table` (`{method, fitted_on, sigma: {assay: value}}`, B1a) supplies the spread. An external
+`signal_mu` is always already in `-log10 p`, so nothing is inverted and provenance says
+`pred_inversion: "external"`. There is no C block: every covariate instrument re-decodes a perturbed
+prompt, which needs the model.
+
 ## The output is per-track first, macro second
 
 `bench.harness.run_bench` returns:
