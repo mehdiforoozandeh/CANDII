@@ -26,7 +26,7 @@ import os
 import stat
 import sys
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "vendor"))
@@ -84,17 +84,29 @@ def find_folder(parent: str, name: str, token: str) -> str:
     raise SystemExit(f"no folder named {name!r} under {parent}. Present: {have}")
 
 
-def walk(folder_id: str, token: str, prefix: str = "") -> List[Tuple[str, str, dict]]:
-    """Depth-first walk. Returns `(relative_dir, name, entity)` for every file in the tree."""
+def walk(folder_id: str, token: str, prefix: str = "",
+         only: Optional[set] = None) -> List[Tuple[str, str, dict]]:
+    """Depth-first walk. Returns `(relative_dir, name, entity)` for every file in the tree.
+
+    `only` filters on the basename stem (`C05M17` from `C05M17.bigwig`). The order is deterministic
+    -- names sorted within a folder, folders sorted -- which is what makes `--shard i/n` a stable
+    partition across separate job submissions, so a resumed shard resumes its own slice.
+    """
     out: List[Tuple[str, str, dict]] = []
     for f in list_entities(folder_id, token, ["file"]):
+        if only is not None and f["name"].rsplit(".", 1)[0] not in only:
+            continue
         out.append((prefix, f["name"], f))
     for d in list_entities(folder_id, token, ["folder"]):
-        out.extend(walk(d["id"], token, os.path.join(prefix, d["name"])))
+        out.extend(walk(d["id"], token, os.path.join(prefix, d["name"]), only))
     return out
 
 
-def survey(folder_id: str, token: str) -> Dict[str, object]:
+def read_only_set(path: str) -> set:
+    return {l.strip() for l in open(path) if l.strip()}
+
+
+def survey(folder_id: str, token: str, only: Optional[set] = None) -> Dict[str, object]:
     """Total and per-team bytes, from file handles only -- no track is transferred.
 
     Per-file sizes and md5s are recorded, not just the totals. That makes the survey json the
@@ -102,7 +114,7 @@ def survey(folder_id: str, token: str) -> Dict[str, object]:
     be named rather than merely counted -- UIOWA_Michaelson ships 50 files where every other team
     ships 51, and a placement table has to say which one is absent.
     """
-    files = walk(folder_id, token)
+    files = walk(folder_id, token, only=only)
     per_team: Dict[str, Dict[str, object]] = {}
     total = 0
     for rel, name, ent in files:
@@ -171,12 +183,21 @@ def main() -> int:
                          "non-zero if any team is short. Transfers nothing.")
     ap.add_argument("--survey-in", help="reuse a saved survey json instead of re-walking the API")
     ap.add_argument("--shard", default="0/1", help="'i/n', as in the vendored downloader")
+    ap.add_argument("--only-from",
+                    help="a file of C##M## stems (blind_experiments.txt); restrict the pull to "
+                         "files whose basename matches one. The organizers' two baseline folders "
+                         "hold 56 tracks -- the 51 blind experiments plus five C14* predictions "
+                         "for a cell that is not in the EIC 363 at all -- and scoring the panel "
+                         "needs only the 51.")
     ap.add_argument("--max-gb", type=float, default=500.0,
                     help="refuse to download a tree larger than this without --yes-i-checked. The "
                          "orchestrator is told the number first; this makes forgetting an error.")
     ap.add_argument("--yes-i-checked", action="store_true",
                     help="the survey total was reported and the pull was approved")
     args = ap.parse_args()
+    only_set = read_only_set(args.only_from) if args.only_from else None
+    if only_set:
+        print(f"[synapse] restricted to {len(only_set)} named experiments", flush=True)
 
     if args.survey_in:
         # Verifying a finished pull needs no token and no API round-trip: the saved manifest already
@@ -188,7 +209,7 @@ def main() -> int:
         token = read_token(args.token_file)
         fid = args.folder_id or find_folder(args.parent, args.folder_name, token)
         print(f"[synapse] {args.folder_name} = {fid}", flush=True)
-        s = survey(fid, token)
+        s = survey(fid, token, only=only_set)
         print(f"[synapse] {s['n_files']} files, {s['total_gb']:.1f} GB total", flush=True)
         for team in sorted(s["per_team"], key=lambda k: -s["per_team"][k]["bytes"]):
             v = s["per_team"][team]
@@ -214,7 +235,7 @@ def main() -> int:
             f"number, get the pull approved, then re-run with --yes-i-checked.")
 
     shard_i, shard_n = (int(x) for x in args.shard.split("/"))
-    files = walk(fid, token)[shard_i::shard_n]
+    files = walk(fid, token, only=only_set)[shard_i::shard_n]
     print(f"[synapse] downloading {len(files)} files (shard {args.shard}) -> {args.dest}",
           flush=True)
     n_got = n_have = 0
