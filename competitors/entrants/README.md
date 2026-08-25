@@ -203,10 +203,32 @@ sbatch --array=0-50 --export=ALL,LABEL=Guacamole,PREDDIR=/project/def-maxwl/mfor
     slurm/score_entrant.slurm
 ```
 
+All 23 teams, once the tracks are down — one array per team, so a team that fails is resubmitted
+alone:
+
+```bash
+SUB=/project/def-maxwl/mforooz/DATA_EIC_SYNAPSE/submissions_round2
+for team in "$SUB"/*/; do
+    t=$(basename "$team")
+    sbatch --array=0-50 --export=ALL,LABEL="$t",PREDDIR="$team" slurm/score_entrant.slurm
+done
+```
+
 `score_entrant.py` loads truth and prediction **once** and emits both blocks — a whole-genome track
-is ~124 M bins, so a second load would roughly double a 23 × 51 grid. `CHECK=1` additionally re-runs
-`vendor/fir_score.py` on the same inputs and requires an **exact** match on all eight measures; that
-doubles wall clock, so it is for the gate and spot-checks, not the full grid.
+is ~124 M bins, so a second load would roughly double a 23 × 51 grid. Measured cost of the P-block
+half is ~20 s and ~5 GB peak genome-wide, so it is nearly free beside the bigwig read. `CHECK=1`
+additionally re-runs `vendor/fir_score.py` on the same inputs and requires an **exact** match on all
+eight measures; that doubles wall clock, so it is for the gate and spot-checks, not the full grid.
+
+Standing proof that the adapter did not move a number, needing no submissions at all:
+
+```bash
+sbatch --array=0-2 slurm/driver_parity.slurm
+```
+
+It presents a different cell's blind track under the target's filename — a real, non-degenerate
+prediction from files already on disk — and requires exact agreement with the vendored scorer on one
+broad mark, one H3K4me3 (the only assay where the P-block's promoter branch fires) and one ATAC.
 
 DNase-seq experiments exit 0 without scoring (decision B3). That drops 3 of the 51 blind-test
 experiments, leaving **48**: 26 broad (H3K27me3 ×9, H3K9me3 ×9, H3K36me3 ×8) and 22 punctate
