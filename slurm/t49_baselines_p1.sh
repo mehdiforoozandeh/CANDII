@@ -41,6 +41,10 @@ CHROMS="${CHROMS:-chr21}"
 OUT="${OUT:-/project/def-maxwl/$USER/t49_baselines/p1}"
 METHODS="${METHODS:-avg,avg-arcsinh,knn1,knn5,marginal}"
 VARPOOL="${VARPOOL:-}"          # D7 msevar pools; without it msevar is ABSENT, never a bare 0.0
+# Which Poisson floors to run. Both by default. `FLOORS=n1e4 METHODS=avg,marginal` with
+# `--time=2:30:00` is the b1-bin version that answers §5.5's two sanity anchors and nothing else —
+# worth having when the b2 queue is 300 jobs deep and the anchors are what gate the rest of the work.
+FLOORS="${FLOORS:-spec n1e4}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
 export MPLBACKEND=Agg
@@ -56,7 +60,7 @@ case "$REGIME" in *eic_test*) echo "[t49] REFUSING: $REGIME is the B-pair regime
 echo "[t49] host=$(hostname) commit=$(git rev-parse --short HEAD) regime=$REGIME chroms=$CHROMS"
 
 rc=0
-for FLOOR in spec n1e4; do
+for FLOOR in $FLOORS; do
     case "$FLOOR" in
         spec) N=1e6 ;;
         n1e4) N=1e4 ;;
