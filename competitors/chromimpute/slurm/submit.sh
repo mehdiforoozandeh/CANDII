@@ -33,7 +33,11 @@ PYTHONPATH=$REPO/src $PY "$HERE/prepare.py" --store "$STORE" \
     --pilot 20 --no-signal
 
 NTRACK=$(wc -l < "$RUN/input/inputinfofile.txt")
-NSHARD=${CI_NSHARD:-16}
+# 12 and no higher. `prepare.py` reaches the store through `candi.store.reader`, which imports
+# `candi`, which imports torch; forty-eight processes loading torch off /project at once get a
+# half-read module back as "cannot import name 'graph' ... circular import", and retries do not
+# clear it. Four at a time is clean.
+NSHARD=${CI_NSHARD:-12}
 seq 0 $((NSHARD - 1)) | sed "s|\$|/$NSHARD|" > "$RUN/lists/prepare.txt"
 cut -f2 "$RUN/input/inputinfofile.txt" | sort -u            > "$RUN/lists/convert.txt"
 # ComputeGlobalDist runs for EVERY mark in the compendium, not just the target marks.
