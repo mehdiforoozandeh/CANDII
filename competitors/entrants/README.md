@@ -211,23 +211,43 @@ which is the discriminating comparison that settled the variant question; and a 
 
 `syn17083203/submissions_round2/` = **`syn21976211`**. Surveyed 2026-08-25:
 **1030.6 GB, 1172 files, 23 teams** (`fetch_submissions.py --survey` talks to the API only and
-transfers nothing; the breakdown is in `CANDII_t54_work/submissions_survey.json`).
+transfers nothing; the manifest lands in `CANDII_t54_work/submissions_survey.json` and carries every
+file's name, size and md5, not just the totals).
 
-`/project def-maxwl` had 16 TiB of 28 TiB used at survey time, so it fits — but the quota is
-**group-charged**, so the pull is coordinated with Max and needs a go-ahead. `fetch_submissions.py`
-refuses any tree over `--max-gb 500` without `--yes-i-checked`, which makes forgetting to report the
-size an error rather than a surprise on someone else's storage.
+### Destination: user scratch, not `/project`
 
-Note `UIOWA_Michaelson` has **50** files where every other team has 51 — check which experiment is
-absent before scoring that team, and record it rather than letting a partial panel through.
+PI ruling, 2026-08-25. These are **one-shot, re-downloadable scoring inputs** — read once per team,
+they produce small score tables and are never needed again. `/project` quota is charged to the whole
+group, so a terabyte of regenerable input there is a cost other people pay. Scratch's 60-day purge is
+therefore the *correct* lifetime, not a risk to mitigate. Only the **derived** score tables are
+permanent: those live under `CANDII_t54_work/` on `/project` and rsync down to the laptop's
+`cruxvault/results/t54/` as small files.
+
+```
+~/scratch/t54_submissions_round2/<team>/C##M##.bigwig
+```
+
+Headroom at launch: scratch 1.5 TiB of 19 TiB used, 18 TiB free, and **873K of 1000K inodes**. 1172
+more files is comfortable, but the inode count is the number to watch here, not the bytes.
+
+`fetch_submissions.py` refuses any tree over `--max-gb 500` without `--yes-i-checked`, which makes
+forgetting to report the size an error rather than a surprise on shared storage.
 
 ```bash
-# survey again (transfers nothing)
+# 1. survey (transfers nothing) — writes the manifest
 sbatch --export=ALL,SURVEY=1 slurm/fetch_submissions.slurm
 
-# once approved — eight tasks shard the tree by file, no racing, resumable
+# 2. pull — eight tasks shard the tree by file, no racing, resumable
 sbatch --array=0-7 --export=ALL,YES=1 slurm/fetch_submissions.slurm
+
+# 3. per-team verification against the manifest (transfers nothing; exits non-zero if any team short)
+sbatch --export=ALL,VERIFY=1 slurm/fetch_submissions.slurm
 ```
+
+Each file is written to a per-process `.part` and renamed **only** after both its size and its md5
+match the Synapse file handle, so a partial transfer cannot be mistaken for a finished one.
+`--verify` then checks size alone, deliberately: md5 was already proven at write time, and what
+verification adds is catching the file that never arrived at all.
 
 Token: a Synapse personal access token with view + download scope at `~/.synapse_pat`, mode 600
 (the driver refuses a group- or world-readable file and never prints the token). Everything under

@@ -1,14 +1,18 @@
 #!/bin/bash
-# Pull syn17083203/submissions_round2/ to /project. Compute nodes have internet, so a batch job is
-# the right vehicle for a transfer measured in hours -- a login-node pull dies with the SSH session.
+# Pull syn17083203/submissions_round2/ to the user's SCRATCH. Compute nodes have internet, so a batch
+# job is the right vehicle for a transfer measured in hours -- a login-node pull dies with the SSH
+# session.
 #
-# TWO STEPS, in this order:
+# THREE STEPS, in this order:
 #
 #   1. survey, transferring nothing, and report the total before pulling anything:
 #        sbatch --export=ALL,SURVEY=1 slurm/fetch_submissions.slurm
 #
 #   2. once the total is reported and the pull approved:
 #        sbatch --array=0-7 --export=ALL,YES=1 slurm/fetch_submissions.slurm
+#
+#   3. per-team verification against the survey manifest, transferring nothing:
+#        sbatch --export=ALL,VERIFY=1 slurm/fetch_submissions.slurm
 #
 # The array shards by file (`--shard i/n`, from the vendored downloader), so eight tasks share the
 # tree without racing: each writes to a per-process `.part` and renames only after size and md5 both
@@ -29,7 +33,11 @@
 set -uo pipefail
 REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t54}"
 ENT="$REPO/competitors/entrants"
-DEST="${DEST:-/project/def-maxwl/mforooz/DATA_EIC_SYNAPSE/submissions_round2}"
+# User scratch, NOT /project (PI ruling, 2026-08-25). One-shot, re-downloadable scoring inputs do
+# not belong on group-charged quota, and scratch's 60-day purge is the correct lifetime for them.
+# Only the DERIVED score tables are permanent; they live in the repo checkout under WORK and rsync
+# down to the laptop's cruxvault/results/t54/ as small files.
+DEST="${DEST:-$HOME/scratch/t54_submissions_round2}"
 WORK="${WORK:-/project/def-maxwl/mforooz/CANDII_t54_work}"
 
 # stdlib only -- no venv needed, which is why this job does not source env_fir.sh
@@ -43,6 +51,9 @@ ARGS=(--token-file "$HOME/.synapse_pat" --dest "$DEST" --shard "$I/$N")
 if [ "${SURVEY:-0}" = "1" ]; then
     mkdir -p "$WORK"
     ARGS+=(--survey --survey-out "$WORK/submissions_survey.json")
+elif [ "${VERIFY:-0}" = "1" ]; then
+    # reads the saved manifest, so it needs neither the token nor an API round-trip
+    ARGS+=(--verify --survey-in "$WORK/submissions_survey.json")
 elif [ "${YES:-0}" = "1" ]; then
     ARGS+=(--yes-i-checked)
 fi
