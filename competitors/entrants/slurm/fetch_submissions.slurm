@@ -1,0 +1,50 @@
+#!/bin/bash
+# Pull syn17083203/submissions_round2/ to /project. Compute nodes have internet, so a batch job is
+# the right vehicle for a transfer measured in hours -- a login-node pull dies with the SSH session.
+#
+# TWO STEPS, in this order:
+#
+#   1. survey, transferring nothing, and report the total before pulling anything:
+#        sbatch --export=ALL,SURVEY=1 slurm/fetch_submissions.slurm
+#
+#   2. once the total is reported and the pull approved:
+#        sbatch --array=0-7 --export=ALL,YES=1 slurm/fetch_submissions.slurm
+#
+# The array shards by file (`--shard i/n`, from the vendored downloader), so eight tasks share the
+# tree without racing: each writes to a per-process `.part` and renames only after size and md5 both
+# check out. Re-running is cheap -- a file already on disk at the right size is skipped -- so a
+# timed-out task is resubmitted rather than restarted from zero.
+#
+# `--max-gb` in the driver refuses a tree over 500 GB without YES=1, so forgetting to report the
+# size is an error rather than a surprise on someone else's quota.
+#
+#SBATCH --job-name=t54_fetch
+#SBATCH --time=24:00:00
+#SBATCH --mem=8G
+#SBATCH --cpus-per-task=2
+#SBATCH --account=def-maxwl_cpu
+#SBATCH --output=slurm_logs/t54_fetch_%A_%a.out
+#SBATCH --error=slurm_logs/t54_fetch_%A_%a.err
+
+set -uo pipefail
+REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t54}"
+ENT="$REPO/competitors/entrants"
+DEST="${DEST:-/project/def-maxwl/mforooz/DATA_EIC_SYNAPSE/submissions_round2}"
+WORK="${WORK:-/project/def-maxwl/mforooz/CANDII_t54_work}"
+
+# stdlib only -- no venv needed, which is why this job does not source env_fir.sh
+module --force purge
+module load StdEnv/2023 python/3.11
+
+N=${SLURM_ARRAY_TASK_COUNT:-1}
+I=${SLURM_ARRAY_TASK_ID:-0}
+
+ARGS=(--token-file "$HOME/.synapse_pat" --dest "$DEST" --shard "$I/$N")
+if [ "${SURVEY:-0}" = "1" ]; then
+    mkdir -p "$WORK"
+    ARGS+=(--survey --survey-out "$WORK/submissions_survey.json")
+elif [ "${YES:-0}" = "1" ]; then
+    ARGS+=(--yes-i-checked)
+fi
+
+python3 "$ENT/fetch_submissions.py" "${ARGS[@]}"
