@@ -76,12 +76,20 @@ case "$CI_STAGE" in
   dist)      # item: a mark
     CI ComputeGlobalDist -m "$ITEM" "$CONV" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$DIST"
     ;;
-  gtd)       # item: a target mark
-    # No -c: the paper default draws its 100 000 training locations across everything chrominfo
-    # declares, and one traindata file per mark is what `Train` looks for first. Passing -c would
-    # give 23 chrom-prefixed files per mark for the same 100 000 instances.
-    CI GenerateTrainData "$CONV" "$DIST" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" \
-       "$TRAINDATA" "$ITEM"
+  gtd)       # item: <mark>, or <mark> <TAB> <chrom>
+    # The manual's own recommended parallelization for this command is over chromosomes, and it has
+    # to be used genome-wide: one mark over all 23 chromosomes is ~7.6 h of scanning, past any
+    # walltime bin we want. `-c` subsets the sampled locations to that chromosome and prefixes the
+    # traindata file, and `Train` takes the union of the prefixed files when no unprefixed one
+    # exists — so the 100 000 instances are the same either way, just spread over more files.
+    M=$(echo "$ITEM" | cut -f1); C=$(echo "$ITEM" | cut -f2)
+    if [ "$C" = "$M" ]; then
+      CI GenerateTrainData "$CONV" "$DIST" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" \
+         "$TRAINDATA" "$M"
+    else
+      CI GenerateTrainData -c "$C" "$CONV" "$DIST" "$IN/inputinfofile.txt" \
+         "$IN/chrominfo.txt" "$TRAINDATA" "$M"
+    fi
     ;;
   train)     # item: <sample> <TAB> <mark>
     S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)

@@ -40,7 +40,15 @@ cut -f2 "$RUN/input/inputinfofile.txt" | sort -u            > "$RUN/lists/conver
 # GenerateTrainData's loadDistInfo opens DISTANCEDIR/<sample>_<mark>.txt for every (sample, mark)
 # pair in inputinfofile before it looks at the target, so one missing mark fails every target.
 cp "$RUN/lists/convert.txt"                                   "$RUN/lists/dist.txt"
-cut -f3 "$RUN/input/$TARGETS" | sort -u                       > "$RUN/lists/gtd.txt"
+# GenerateTrainData parallelizes over chromosomes as well as marks whenever there is more than one
+# chromosome — one mark genome-wide is hours of scanning in a single task.
+if [ "$(wc -l < "$RUN/input/chrominfo.txt")" -gt 1 ]; then
+  while read -r M; do
+    while read -r C; do printf '%s\t%s\n' "$M" "$C"; done < <(cut -f1 "$RUN/input/chrominfo.txt")
+  done < <(cut -f3 "$RUN/input/$TARGETS" | sort -u)                > "$RUN/lists/gtd.txt"
+else
+  cut -f3 "$RUN/input/$TARGETS" | sort -u                          > "$RUN/lists/gtd.txt"
+fi
 cut -f1,3 "$RUN/input/$TARGETS"                               > "$RUN/lists/train.txt"
 cp "$RUN/lists/train.txt"                                     "$RUN/lists/apply.txt"
 
@@ -79,9 +87,9 @@ for s in $STAGES; do
     prepare) t=1:00:00; m=8000M;  x=4000M ;;
     convert) t=2:00:00; m=8000M;  x=6000M ;;
     dist)    t=2:00:00; m=16000M; x=12000M ;;
-    gtd)     t=6:00:00; m=24000M; x=20000M ;;
+    gtd)     t=12:00:00; m=24000M; x=20000M ;;
     train)   t=6:00:00; m=24000M; x=20000M ;;
-    apply)   t=3:00:00; m=12000M; x=8000M ;;
+    apply)   t=12:00:00; m=16000M; x=12000M ;;
   esac
   DEP=$(sub "$s" "$t" "$m" "$x" "$DEP")
   printf '%-8s %s\n' "$s" "$DEP"
