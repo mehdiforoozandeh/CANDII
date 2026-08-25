@@ -261,7 +261,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     regime = load_json(args.regime)
     manifest = load_json(root / "manifest.json")
 
-    store = CorpusStore(root, kinds=["pval"])
+    # All three kinds, though only `pval` is read. `BiosampleStore.control_col` is taken from
+    # `kinds[0]`, and the manifest's `control_col` describes `counts`; opening `kinds=["pval"]`
+    # makes the reader's own manifest cross-check compare pval's -1 against the manifest's 11 and
+    # refuse the biosample. Opening everything keeps the check comparing like with like.
+    store = CorpusStore(root)
     n_bins = dict(manifest["genome"]["n_bins"])
     chroms = sorted(n_bins) if args.chroms == "all" else [c.strip() for c in args.chroms.split(",")]
 
