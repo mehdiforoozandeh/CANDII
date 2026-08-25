@@ -249,6 +249,16 @@ match the Synapse file handle, so a partial transfer cannot be mistaken for a fi
 `--verify` then checks size alone, deliberately: md5 was already proven at write time, and what
 verification adds is catching the file that never arrived at all.
 
+### Result, 2026-08-25: pull complete, all 23 teams verified
+
+`1172/1172` files, **960 GB** in `~/scratch/t54_submissions_round2/`, plus **90 GB** of baselines.
+`--verify` reports **ALL TEAMS COMPLETE**: every team 51/51 against the manifest, except
+`UIOWA_Michaelson` at 50/50 — which is its true count, not a shortfall of the transfer (§7).
+
+Ten retries fired and every one recovered; **zero** files exhausted their six attempts. Scratch
+finished at 2548 GiB of 19 TiB and **881K of 1000K inodes**, up from 873K — the pull cost ~8K
+inodes, comfortably inside headroom.
+
 ### Synapse throttles concurrent streams — the retry is not optional
 
 **The first run lost five of eight shards**: four to `HTTPError: HTTP Error 403: Forbidden` and one
@@ -276,10 +286,12 @@ The placement table needs `Average` and `Avocado_p0` beside the 23 entrants, and
 bigwigs on the official grid — so they go through the **same** `score_entrant.py` path as every
 entrant rather than a special-cased route.
 
-| baseline | folder | synID | files | size |
-|---|---|---|---|---|
-| `Average` (team_id 100) | `baselines/average_predictor/test` | `syn20957925` | 56 | 51.6 GB |
-| `Avocado_p0` (team_id 0) | `baselines/avocado_training_and_validation/test` | `syn20606515` | 56 | 54.1 GB |
+| baseline | folder | synID | files | pulled | verified |
+|---|---|---|---|---|---|
+| `Average` (team_id 100) | `baselines/average_predictor/test` | `syn20957925` | 56 | 51 / 47.0 GB | OK |
+| `Avocado_p0` (team_id 0) | `baselines/avocado_training_and_validation/test` | `syn20606515` | 56 | 51 / 49.2 GB | OK |
+
+Both landed complete in `~/scratch/t54_baselines/<name>/` and verify clean against their manifests.
 
 ```bash
 sbatch --array=0-3 --export=ALL,BASE=average slurm/fetch_baselines.slurm
