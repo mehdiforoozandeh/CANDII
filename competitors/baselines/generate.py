@@ -336,6 +336,44 @@ def _manifest(method: str, panel: Panel, notes: str, arms: Sequence[str],
     }
 
 
+#: Fields that describe WHAT the root is. Two runs writing into one root must agree on all of them,
+#: or the root holds two different methods' output under one name.
+_MANIFEST_IDENTITY = ("method", "version", "regime", "store", "depth_center", "poisson_n",
+                      "arms", "exclusion_rule")
+
+
+def _merge_manifest(old: Mapping[str, object], new: Dict[str, object],
+                    path: Path) -> Dict[str, object]:
+    """Fold a per-chromosome run into a root another run already started (the P2 array shape).
+
+    P2 is one SLURM task per chromosome writing into shared roots, so the second task must not
+    overwrite the first task's record of what is on disk. `chroms` and `tracks` are unioned;
+    everything in `_MANIFEST_IDENTITY` must match, and a mismatch raises rather than being merged —
+    a root holding chr1 at one Poisson floor and chr2 at another is not one prediction track.
+
+    THE RACE IS REAL AND IS BOUNDED. Two tasks finishing within the same instant can lose one
+    chromosome name from `chroms`; the npz files themselves are per (track, chromosome) and never
+    collide, and `bench.external` reads the grid off the store rather than off this field, so the
+    worst case is an understated provenance line, not a mis-scored track. Check `chroms` against the
+    directory listing before quoting a P2 row.
+    """
+    bad = {k: (old.get(k), new.get(k)) for k in _MANIFEST_IDENTITY if old.get(k) != new.get(k)}
+    if bad:
+        raise ValueError(
+            f"{path} already describes a different run: {bad}. Write to a fresh --out, or delete "
+            f"the root — merging two settings into one manifest would make every row it labels "
+            f"unattributable.")
+    merged = dict(new)
+    merged["chroms"] = sorted(set(old.get("chroms", [])) | set(new.get("chroms", [])),
+                              key=lambda c: (len(c), c))
+    merged["tracks"] = {**old.get("tracks", {}), **new.get("tracks", {})}
+    merged["skipped_tracks"] = sorted(set(old.get("skipped_tracks", []))
+                                      | set(new.get("skipped_tracks", [])))
+    merged["sparse_assays"] = sorted(k for k, v in merged["tracks"].items()
+                                     if int(v["n_contributors"]) <= 2)
+    return merged
+
+
 def generate(regime_path: Path | str, out_root: Path | str, *,
              chroms: Optional[Sequence[str]] = None, methods: Sequence[str] = METHODS,
              poisson_n: float = Hd.POISSON_N, progress: bool = True) -> Dict[str, Path]:
@@ -384,14 +422,19 @@ def generate(regime_path: Path | str, out_root: Path | str, *,
                 marginals[assay] = fit_marginal(panel, assay)
             cells = sorted({b for _, cs in rows for b in cs})
             idx = {b: i for i, b in enumerate(cells)}
+            # float32 for the two blocks that are only ever READ per track, float64 for the count
+            # block the moments are taken over. On chr1 (9.96 M bins) a 34-cell panel is 2.7 GB per
+            # float64 block, so this is the difference between a 16 GB job and a 32 GB one; `counts`
+            # is dropped the moment `norm` exists for the same reason.
             counts = np.stack([panel.corpus[b][assay].counts(chrom, 0).astype(np.float64)
                                for b in cells])
-            pvals = np.stack([panel.corpus[b][assay].pval(chrom, 0).astype(np.float64)
-                              for b in cells])
-            peaks = np.stack([panel.corpus[b][assay].peaks(chrom, 0).astype(np.float64)
-                              for b in cells])
             depths = np.array([log2_depth(panel.corpus, b, assay) for b in cells])
             norm = Hd.normalize_to_center(counts, depths, panel.depth_center)
+            del counts
+            pvals = np.stack([panel.corpus[b][assay].pval(chrom, 0).astype(np.float32)
+                              for b in cells])
+            peaks = np.stack([panel.corpus[b][assay].peaks(chrom, 0).astype(np.float32)
+                              for b in cells])
 
             for pair, contribs in rows:
                 dirname = f"{pair[0]}__{pair[1]}__{assay}"
@@ -414,7 +457,7 @@ def generate(regime_path: Path | str, out_root: Path | str, *,
                         # unauditable: the whole method is the choice.
                         row["contributors"] = list(pick)
                     tracks[m][dirname] = row
-            del counts, pvals, peaks, norm
+            del pvals, peaks, norm
             if progress:
                 print(f"[baselines] {chrom}/{assay}: {len(cells)} cells, {len(rows)} track(s) "
                       f"({time.time() - t0:.0f}s)", flush=True)
@@ -442,10 +485,11 @@ def generate(regime_path: Path | str, out_root: Path | str, *,
             "marginal": ["pval", "count"]}
     out: Dict[str, Path] = {}
     for m in methods:
-        (roots[m] / "manifest.json").write_text(
-            json.dumps(_manifest(m, panel, notes[m], arms[m], tracks[m], skipped, poisson_n),
-                       indent=2),
-            encoding="utf-8")
+        path = roots[m] / "manifest.json"
+        obj = _manifest(m, panel, notes[m], arms[m], tracks[m], skipped, poisson_n)
+        if path.exists():
+            obj = _merge_manifest(json.loads(path.read_text(encoding="utf-8")), obj, path)
+        path.write_text(json.dumps(obj, indent=2), encoding="utf-8")
         out[m] = roots[m]
         if progress:
             print(f"[baselines] {m}: {len(tracks[m])} tracks -> {roots[m]}", flush=True)
