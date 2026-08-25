@@ -35,8 +35,8 @@ from typing import Dict, List, Sequence, Tuple
 import numpy as np
 
 __all__ = ["CHROMS", "UPSTREAM_HYPERPARAMS", "factor_sizes", "schedule", "upstream_n_bins",
-           "bin_arcsinh", "track_path", "parse_name", "read_meta", "Dataset3Reader",
-           "contributor_pool"]
+           "bin_values", "bin_arcsinh", "read_binned", "track_path", "parse_name", "read_meta",
+           "Dataset3Reader", "contributor_pool"]
 
 #: The 23 upstream trains on, in `Lavawizard_pipeline.sh` order. No chrY, no scaffolds — the
 #: challenge bigwigs carry 123 contigs and their pipeline touches these.
@@ -86,22 +86,47 @@ def upstream_n_bins(chrom_length: int, resolution: int = 25) -> int:
     return -(-int(chrom_length) // int(resolution))
 
 
-def bin_arcsinh(values: np.ndarray, chrom_length: int, resolution: int = 25) -> np.ndarray:
-    """`00_data_generation.py::get_binvals`, reproduced: NaN→0, arcsinh per base, pad, mean by 25.
+def bin_values(values: np.ndarray, chrom_length: int, resolution: int = 25,
+               *, transform: str = "arcsinh") -> np.ndarray:
+    """NaN→0, optional `arcsinh` **per base**, zero-pad to a whole final bin, mean by `resolution`.
 
-    `values` is the base-pair vector for the whole chromosome. Returns `float32` of length
-    `upstream_n_bins(chrom_length)`.
+    `transform="arcsinh"` is `00_data_generation.py::get_binvals` exactly — the training signal
+    space. `transform="none"` is the same grid without the transform, which is what scoring against
+    `blind_truth` needs: the challenge's measures live in raw `-log10 p`, not in arcsinh.
     """
+    if transform not in ("arcsinh", "none"):
+        raise ValueError(f"transform must be 'arcsinh' or 'none', got {transform!r}")
     n_bins = upstream_n_bins(chrom_length, resolution)
     v = np.asarray(values, dtype=np.float64).reshape(-1)
     if v.shape[0] != int(chrom_length):
         raise ValueError(f"expected {chrom_length} base pairs, got {v.shape[0]}")
     v = np.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0)
-    v = np.arcsinh(v)                                    # per BASE, before the mean — as upstream
+    if transform == "arcsinh":
+        v = np.arcsinh(v)                                # per BASE, before the mean — as upstream
     pad = n_bins * resolution - int(chrom_length)
     if pad:
         v = np.append(v, np.zeros(pad, dtype=np.float64))
     return v.reshape(n_bins, resolution).mean(axis=1).astype(np.float32)
+
+
+def bin_arcsinh(values: np.ndarray, chrom_length: int, resolution: int = 25) -> np.ndarray:
+    """`00_data_generation.py::get_binvals`, reproduced. See `bin_values`."""
+    return bin_values(values, chrom_length, resolution, transform="arcsinh")
+
+
+def read_binned(path: Path | str, chrom: str, *, transform: str = "arcsinh") -> np.ndarray:
+    """One whole chromosome out of a bigwig, binned. The seam every consumer here shares."""
+    import pyBigWig
+
+    bw = pyBigWig.open(str(path))
+    try:
+        length = bw.chroms().get(str(chrom))
+        if length is None:
+            raise ValueError(f"{path} has no {chrom}")
+        values = np.array(bw.values(str(chrom), 0, length))
+    finally:
+        bw.close()
+    return bin_values(values, length, transform=transform)
 
 
 def parse_name(filename: str) -> Tuple[str, str]:

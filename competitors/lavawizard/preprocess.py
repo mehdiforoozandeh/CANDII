@@ -170,9 +170,20 @@ def build_cache(data_dirs: Sequence[Path], meta_tsv: Path, chrom: str, out_root:
 
 
 class CachedChrom:
-    """A built cache, memory-mapped, with the moment arithmetic the two modes need."""
+    """A built cache with the moment arithmetic the two modes need.
 
-    def __init__(self, root: Path | str, chrom: str, *, mmap: bool = True):
+    **`mmap=False` by default, and that is a performance decision, not a preference.** The sampler
+    draws `batch_size` *random tracks* at contiguous positions, so `values[track_idx, pos]` is a
+    fancy-index over 10 000–21 000 random rows. Against a memory map on Lustre that is 10 000 tiny
+    random reads per batch and the first fifty steps do not finish in five minutes (measured, and
+    it is why this default is what it is). Read into RAM once instead: chr21 is 2.6 GB, chr1 is
+    14 GB, and a training job asking for 48 GB covers the largest chromosome.
+
+    Pass `mmap=True` only for whole-array scans — inspection, or a pass that touches every row in
+    order.
+    """
+
+    def __init__(self, root: Path | str, chrom: str, *, mmap: bool = False):
         d = cache_dir(root, chrom)
         idx = json.loads((d / "index.json").read_text(encoding="utf-8"))
         self.dir = d
@@ -182,8 +193,13 @@ class CachedChrom:
         self.cells: List[str] = idx["cells"]
         self.marks: List[str] = idx["marks"]
         mode = "r" if mmap else None
+        t0 = time.time()
         self.values = np.load(d / "tracks.npy", mmap_mode=mode)
         self.tercile = np.load(d / "tercile.npy", mmap_mode=mode)
+        if not mmap:
+            gib = (self.values.nbytes + self.tercile.nbytes) / 2**30
+            print(f"{chrom}: cache read into RAM, {gib:.1f} GiB in {time.time()-t0:.0f} s",
+                  flush=True)
         self.sums = np.load(d / "sums.npy")
         self.sumsq = np.load(d / "sumsq.npy")
         self.cell_ix = np.array([self.cells.index(c) for c, _ in self.tracks], dtype=np.int64)

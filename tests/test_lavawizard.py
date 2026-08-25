@@ -665,3 +665,87 @@ def test_stage2_target_is_the_track_value_itself(tmp_path):
     s = Sampler(c, batch_size=6, mode="upstream", seed=5)
     tix, pos, x, _, _ = s._batch()
     np.testing.assert_allclose(x, values[tix, pos], rtol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# the anchor comparison
+# ---------------------------------------------------------------------------
+
+def test_bin_values_none_is_the_same_grid_without_the_transform():
+    length = 50
+    v = np.arange(length, dtype=float)
+    raw = dataset3.bin_values(v, length, transform="none")
+    arc = dataset3.bin_values(v, length, transform="arcsinh")
+    assert raw.shape == arc.shape == (2,)
+    np.testing.assert_allclose(raw[0], v[:25].mean(), rtol=1e-6)
+    np.testing.assert_allclose(arc[0], np.arcsinh(v[:25]).mean(), rtol=1e-6)
+    assert not np.allclose(raw, arc)
+    with pytest.raises(ValueError, match="transform must be"):
+        dataset3.bin_values(v, length, transform="log")
+
+
+def test_compare_computes_the_three_pairings():
+    from lavawizard import anchor
+    rng = np.random.default_rng(11)
+    truth = rng.uniform(0, 5, 500)
+    ours = truth + rng.normal(0, 0.5, 500)
+    theirs = truth + rng.normal(0, 1.0, 500)
+    r = anchor.compare(ours, theirs, truth)
+    assert r["n_bins"] == 500
+    np.testing.assert_allclose(r["ours_vs_truth_mse"], np.mean((ours - truth) ** 2), rtol=1e-9)
+    np.testing.assert_allclose(r["theirs_vs_truth_mse"], np.mean((theirs - truth) ** 2), rtol=1e-9)
+    # the deliberately-better predictor must come out better, and the ratio must say so
+    assert r["ours_vs_truth_mse"] < r["theirs_vs_truth_mse"]
+    assert r["mse_ratio_ours_over_theirs"] < 1.0
+    assert r["ours_vs_truth_pearson"] > r["theirs_vs_truth_pearson"]
+
+
+def test_compare_truncates_to_the_shortest_input():
+    from lavawizard import anchor
+    r = anchor.compare(np.zeros(10), np.zeros(8), np.zeros(12))
+    assert r["n_bins"] == 8
+
+
+def test_compare_survives_a_constant_track():
+    """A flat prediction has no correlation to report; it must be NaN, not an exception."""
+    from lavawizard import anchor
+    r = anchor.compare(np.ones(50), np.arange(50.0), np.arange(50.0))
+    assert np.isnan(r["ours_vs_truth_pearson"])
+    assert np.isfinite(r["ours_vs_truth_mse"])
+
+
+def test_summarise_carries_the_caveat_where_it_cannot_be_missed():
+    from lavawizard import anchor
+    rows = [{"cell": "C05", "mark": "M17", "ours_vs_truth_mse": 1.0, "theirs_vs_truth_mse": 2.0,
+             "ours_vs_truth_pearson": 0.8, "theirs_vs_truth_pearson": 0.7,
+             "ours_vs_theirs_pearson": 0.9},
+            {"cell": "C06", "mark": "M17", "ours_vs_truth_mse": 3.0, "theirs_vs_truth_mse": 4.0,
+             "ours_vs_truth_pearson": 0.6, "theirs_vs_truth_pearson": 0.5,
+             "ours_vs_theirs_pearson": 0.7}]
+    s = anchor.summarise(rows)
+    assert s["n_tracks"] == 2
+    assert s["macro_ours_vs_truth_mse"] == pytest.approx(2.0)
+    assert s["macro_theirs_vs_truth_mse"] == pytest.approx(3.0)
+    assert "001 vendored EIC scorer" in s["caveat"]
+    assert "Dataset-2" in s["caveat"], "the no-cross-dataset rule must travel with the number"
+
+
+def test_predict_track_uses_pooled_moments_and_names_an_unknown_cell(tmp_path):
+    """A blind cell contributes nothing to its mark's sum, so pooled IS leave-one-out."""
+    from lavawizard import anchor
+    root, values, mark_of = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    c = preprocess.CachedChrom(root, "chrT")
+    obj = {"cells": c.cells + ["C99"], "marks": c.marks}
+    model = Guacamole(n_celltypes=len(obj["cells"]), n_assays=len(c.marks),
+                      n_positions=c.n_bins).eval()
+    # Null the head so the output is exactly the average that was fed in.
+    with torch.no_grad():
+        model.y_pred.weight.zero_(); model.y_pred.bias.zero_()
+    got = anchor.predict_track(model, c, obj, "C99", c.marks[0], batch=16)
+    pooled = values[mark_of == 0].mean(0)
+    np.testing.assert_allclose(got, pooled, rtol=1e-5, atol=1e-6)
+
+    with pytest.raises(ValueError, match="no embedding row"):
+        anchor.predict_track(model, c, obj, "C_nope", c.marks[0])
+    with pytest.raises(ValueError, match="no embedding row"):
+        anchor.predict_track(model, c, obj, "C99", "M_nope")
