@@ -29,8 +29,11 @@ NTRACK=$(wc -l < "$RUN/input/inputinfofile.txt")
 NSHARD=${CI_NSHARD:-16}
 seq 0 $((NSHARD - 1)) | sed "s|\$|/$NSHARD|" > "$RUN/lists/prepare.txt"
 cut -f2 "$RUN/input/inputinfofile.txt" | sort -u            > "$RUN/lists/convert.txt"
-cut -f3 "$RUN/input/targets_pilot.tsv" | sort -u            > "$RUN/lists/dist.txt"
-cp "$RUN/lists/dist.txt"                                      "$RUN/lists/gtd.txt"
+# ComputeGlobalDist runs for EVERY mark in the compendium, not just the target marks.
+# GenerateTrainData's loadDistInfo opens DISTANCEDIR/<sample>_<mark>.txt for every (sample, mark)
+# pair in inputinfofile before it looks at the target, so one missing mark fails every target.
+cp "$RUN/lists/convert.txt"                                   "$RUN/lists/dist.txt"
+cut -f3 "$RUN/input/targets_pilot.tsv" | sort -u            > "$RUN/lists/gtd.txt"
 cut -f1,3 "$RUN/input/targets_pilot.tsv"                      > "$RUN/lists/train.txt"
 cp "$RUN/lists/train.txt"                                     "$RUN/lists/apply.txt"
 
@@ -50,12 +53,26 @@ sub() {  # sub <stage> <time> <mem> <mx> [afterok-jobid]
          "${depflag[@]}" --export="$ENV_COMMON,CI_STAGE=$stage,CI_MX=$mx" "$STAGE"
 }
 
-J_PREP=$(sub prepare 1:00:00 8000M 4000M);            echo "prepare  $J_PREP"
-J_CONV=$(sub convert 2:00:00 8000M 6000M "$J_PREP");  echo "convert  $J_CONV"
-J_DIST=$(sub dist    2:00:00 16000M 12000M "$J_CONV"); echo "dist     $J_DIST"
-J_GTD=$(sub  gtd     6:00:00 24000M 20000M "$J_DIST"); echo "gtd      $J_GTD"
-J_TRN=$(sub  train   6:00:00 24000M 20000M "$J_GTD");  echo "train    $J_TRN"
-J_APP=$(sub  apply   3:00:00 12000M 8000M "$J_TRN");   echo "apply    $J_APP"
+# `FROM` resumes the chain at a stage whose inputs already exist on disk — a stage that failed on
+# its own list rather than on its data does not make the stages before it wrong.
+FROM=${2:-prepare}
+STAGES="prepare convert dist gtd train apply"
+case " $STAGES " in *" $FROM "*) ;; *) echo "unknown start stage $FROM"; exit 2;; esac
+SKIP=1; DEP=""
+for s in $STAGES; do
+  [ "$s" = "$FROM" ] && SKIP=0
+  [ "$SKIP" = 1 ] && continue
+  case $s in
+    prepare) t=1:00:00; m=8000M;  x=4000M ;;
+    convert) t=2:00:00; m=8000M;  x=6000M ;;
+    dist)    t=2:00:00; m=16000M; x=12000M ;;
+    gtd)     t=6:00:00; m=24000M; x=20000M ;;
+    train)   t=6:00:00; m=24000M; x=20000M ;;
+    apply)   t=3:00:00; m=12000M; x=8000M ;;
+  esac
+  DEP=$(sub "$s" "$t" "$m" "$x" "$DEP")
+  printf '%-8s %s\n' "$s" "$DEP"
+done
 
 cat > "$RUN/collect.sh" <<EOF
 #!/bin/bash
