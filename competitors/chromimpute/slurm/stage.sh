@@ -72,6 +72,26 @@ case "$CI_STAGE" in
     for C in $CHROM_LIST; do
       CI Convert -c "$C" -m "$ITEM" "$IN/signal" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$CONV"
     done
+    # The bedgraphs are 161 GB and ~6 000 inodes of pure intermediate genome-wide, on a scratch
+    # quota shared with other tasks, so they go as soon as `Convert` has consumed them. Verify
+    # FIRST: `Convert` warns and skips a missing input rather than failing, so a resumed run that
+    # deleted too early would leave a hole instead of an error.
+    MISSING=0
+    while IFS=$'\t' read -r _S _M FNAME _REST; do
+      [ "$_M" = "$ITEM" ] || continue
+      for C in $CHROM_LIST; do
+        [ -s "$CONV/${C}_${FNAME}.wig.gz" ] || { echo "MISSING $CONV/${C}_${FNAME}.wig.gz"; MISSING=1; }
+      done
+    done < "$IN/inputinfofile.txt"
+    [ "$MISSING" = 0 ] || { echo "[convert] converted output incomplete for $ITEM — keeping bedgraphs"; exit 1; }
+    if [ "${CI_KEEP_BEDGRAPH:-0}" != "1" ]; then
+      NDEL=0
+      while IFS=$'\t' read -r _S _M FNAME _REST; do
+        [ "$_M" = "$ITEM" ] || continue
+        for C in $CHROM_LIST; do rm -f "$IN/signal/${C}_${FNAME}" && NDEL=$((NDEL + 1)); done
+      done < "$IN/inputinfofile.txt"
+      echo "[convert] $ITEM: converted output verified, $NDEL bedgraph file(s) deleted"
+    fi
     ;;
   dist)      # item: a mark
     CI ComputeGlobalDist -m "$ITEM" "$CONV" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$DIST"

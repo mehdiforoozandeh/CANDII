@@ -84,9 +84,9 @@ for s in $STAGES; do
   [ "$s" = "$FROM" ] && SKIP=0
   [ "$SKIP" = 1 ] && continue
   case $s in
-    prepare) t=1:00:00; m=8000M;  x=4000M ;;
-    convert) t=2:00:00; m=8000M;  x=6000M ;;
-    dist)    t=2:00:00; m=16000M; x=12000M ;;
+    prepare) t=3:00:00; m=8000M;  x=4000M ;;
+    convert) t=6:00:00; m=8000M;  x=6000M ;;
+    dist)    t=6:00:00; m=16000M; x=12000M ;;
     gtd)     t=12:00:00; m=24000M; x=20000M ;;
     train)   t=6:00:00; m=24000M; x=20000M ;;
     apply)   t=12:00:00; m=16000M; x=12000M ;;
