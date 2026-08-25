@@ -62,6 +62,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--embed-dim", type=int, default=Config.embed_dim)
     p.add_argument("--seed", type=int, default=Config.seed)
     p.add_argument("--max-bins", type=int, default=None, help="debug: truncate the bin axis")
+    p.add_argument("--val-bins", type=int, default=50_000,
+                   help="bins in the per-epoch diagnostic pass; 0 for all. The SCORED prediction "
+                        "always uses every bin.")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     return p
 
@@ -101,15 +104,24 @@ def main(argv=None) -> int:
 
     train_sampler = TrainSampler(support_x, s_cells, s_assays, n_targets=cfg.n_targets,
                                  batch_size=cfg.batch_size, rng=rng)
-    # The held-out panel watched during training IS the target panel. eDICE's split is over TRACKS,
-    # not bins, and the reference does the same (dataset_fit evaluates on the val split every
-    # epoch) -- so the curve is diagnostic only. Nothing selects on it: RIVALS_PLAN §6.3 gives one
-    # seed and paper defaults, and the scored model is the one at the final epoch.
+    # The panel watched during training IS the target panel. eDICE's split is over TRACKS, not bins,
+    # and the reference does the same (dataset_fit evaluates on a track split every epoch) -- so the
+    # curve is diagnostic only. Nothing selects on it: RIVALS_PLAN §6.3 gives one seed and paper
+    # defaults, and the scored model is the one at the final epoch.
+    #
+    # Watched on a random BIN SUBSET, because at the gate's scale a full pass costs about a third of
+    # a training epoch and would add hours to the run for a curve nothing acts on. The SCORED
+    # prediction below always uses every bin.
+    watch = np.arange(support_x.shape[0])
+    if args.val_bins and len(watch) > args.val_bins:
+        watch = np.sort(rng.choice(len(watch), size=args.val_bins, replace=False))
+    watch_sampler = FixedTargetSampler(support_x[watch], s_cells, s_assays, t_cells, t_assays,
+                                       truth=target_x[watch], batch_size=cfg.batch_size)
     eval_sampler = FixedTargetSampler(support_x, s_cells, s_assays, t_cells, t_assays,
                                       truth=target_x, batch_size=cfg.batch_size)
 
     device = torch.device(args.device)
-    history = train(model, train_sampler, cfg, device, val_sampler=eval_sampler)
+    history = train(model, train_sampler, cfg, device, val_sampler=watch_sampler)
 
     pred_x = predict(model, eval_sampler, device)
     report = gate_report(target_raw, np.sinh(pred_x), target_x, pred_x)
@@ -121,6 +133,7 @@ def main(argv=None) -> int:
         "n_parameters": n_params,
         "h5": str(Path(args.h5).resolve()),
         "n_bins_used": int(support_x.shape[0]),
+        "n_watch_bins": int(len(watch)),
         "train_splits": args.train_splits,
         "target_split": args.target_split,
         "n_support_tracks": len(support_tracks),
