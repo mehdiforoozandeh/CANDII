@@ -14,11 +14,17 @@
 # index (~1 GB), the blacklist-deleted copies for the nine measures (~1 GB), and pyBigWig's
 # transient base-pair-resolution read of chr1 (249 Mbp float64, ~2 GB, plus its buffer). ~12-16 GB
 # peak, and the Average build was already observed at 16 GB MaxRSS with less resident than this.
+#
+# fc30560 is excluded. On 2026-08-25 it produced BOTH of the day's silent failures: four fetch tasks
+# exited 0 in six seconds having downloaded nothing, and the module load left python unusable there
+# while every other node worked. A scoring task that no-ops on that node would write no CSV and
+# report success, so it is kept off the list rather than trusted.
 #SBATCH --job-name=t54_score
 #SBATCH --time=03:00:00
 #SBATCH --mem=48G
 #SBATCH --cpus-per-task=6
 #SBATCH --account=def-maxwl_cpu
+#SBATCH --exclude=fc30560
 #SBATCH --output=slurm_logs/t54_score_%A_%a.out
 #SBATCH --error=slurm_logs/t54_score_%A_%a.err
 
@@ -35,6 +41,12 @@ OUTDIR="${OUTDIR:-$WORK/entrant_scores/$LABEL}"
 
 # shellcheck disable=SC1091
 source "$ENT/env_fir.sh"
+
+# PREFLIGHT -- a task that does nothing must not report COMPLETED. Same guard the fetch jobs carry,
+# for the same reason: on a node where the environment is broken, python can vanish while the shell
+# still exits 0, and a missing CSV would then look like a method that legitimately produced no rows.
+python3 -c "import numpy, scipy, pyBigWig; print('[preflight] scorer env ok')" || {
+    echo "[preflight] FATAL: scorer env unusable on $(hostname)" >&2; exit 1; }
 
 EXPLIST="${EXPLIST:-$M001/output/bridge/blind_experiments.txt}"
 EXP=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$EXPLIST")
