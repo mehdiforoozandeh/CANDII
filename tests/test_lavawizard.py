@@ -23,7 +23,7 @@ h5py = pytest.importorskip("h5py")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "competitors"))
 
-from lavawizard import emit, features, keras_weights                      # noqa: E402
+from lavawizard import dataset3, emit, features, keras_weights             # noqa: E402
 from lavawizard.model import Guacamole, Precamole                          # noqa: E402
 
 # A model small enough to build thousands of times, with the real factor widths kept so every
@@ -290,6 +290,132 @@ def test_moments_are_arcsinh_space_and_population_variance():
     want = np.arcsinh(np.stack([tracks["T_A"], tracks["T_B"]]))
     np.testing.assert_allclose(avg, want.mean(0), rtol=1e-6)
     np.testing.assert_allclose(var, want.var(0), rtol=1e-5, atol=1e-7)   # ddof=0, as upstream
+
+
+def test_transform_none_leaves_the_reader_value_alone():
+    """The Dataset-3 path: `dataset3` already applied arcsinh per base, so it must not go on twice."""
+    tracks = {"T_A": np.array([0.0, 1.0, 4.0])}
+
+    def read(bs, assay, start, end):
+        return tracks[bs][start:end]
+
+    avg, _, _ = features.cross_cell_moments(read, ["T_A"], "chr21", 0, 3,
+                                            assay="a", transform="none")
+    np.testing.assert_allclose(avg, tracks["T_A"], rtol=1e-6)
+    twice, _, _ = features.cross_cell_moments(read, ["T_A"], "chr21", 0, 3, assay="a")
+    np.testing.assert_allclose(twice, np.arcsinh(tracks["T_A"]), rtol=1e-6)
+    assert not np.allclose(avg, twice), "the two orders must be distinguishable, else the flag is a lie"
+
+
+def test_unknown_transform_is_refused():
+    with pytest.raises(ValueError, match="transform must be"):
+        features.cross_cell_moments(lambda *a: np.zeros(3), [], "chr21", 0, 3,
+                                    assay="a", transform="log")
+
+
+# ---------------------------------------------------------------------------
+# Dataset 3 — the challenge's own grid and binning
+# ---------------------------------------------------------------------------
+
+def test_upstream_grid_is_ceil_not_floor():
+    """One bin apart on chr21, and their released embedding table proves the ceil is theirs."""
+    chr21 = 46_709_983
+    assert dataset3.upstream_n_bins(chr21) == 1_868_400
+    assert chr21 // 25 == 1_868_399, "our store's floor grid — deliberately different"
+    assert dataset3.upstream_n_bins(1000) == 40 and dataset3.upstream_n_bins(1001) == 41
+
+
+def test_bin_arcsinh_matches_upstream_order_and_padding():
+    """arcsinh per BASE then mean, NaN to zero, zero-padded to a whole final bin."""
+    length = 60                                   # 2 whole bins + 10 bp -> 3 bins
+    v = np.arange(length, dtype=float)
+    v[3] = np.nan
+    got = dataset3.bin_arcsinh(v, length)
+    assert got.shape == (3,)
+
+    base = np.arcsinh(np.nan_to_num(v))
+    np.testing.assert_allclose(got[0], base[0:25].mean(), rtol=1e-6)
+    np.testing.assert_allclose(got[1], base[25:50].mean(), rtol=1e-6)
+    # the tail bin is padded with zeros to 25, not averaged over the 10 real bases
+    np.testing.assert_allclose(got[2], np.append(base[50:60], np.zeros(15)).mean(), rtol=1e-6)
+    assert got[2] != pytest.approx(base[50:60].mean()), "padding must dilute the partial bin"
+
+
+def test_bin_arcsinh_applies_the_transform_before_the_mean():
+    """arcsinh is concave, so the two orders differ — this pins which one we do."""
+    length = 25
+    v = np.array([0.0] * 24 + [100.0])
+    got = dataset3.bin_arcsinh(v, length)[0]
+    assert got == pytest.approx(np.arcsinh(v).mean(), rel=1e-6)
+    assert got != pytest.approx(np.arcsinh(v.mean()), rel=1e-3)
+
+
+def test_bin_arcsinh_refuses_a_wrong_length():
+    with pytest.raises(ValueError, match="expected 100 base pairs"):
+        dataset3.bin_arcsinh(np.zeros(99), 100)
+
+
+def test_parse_name_and_track_path():
+    assert dataset3.parse_name("C05M17.bigwig") == ("C05", "M17")
+    assert dataset3.parse_name("/a/b/C31M29.bigwig") == ("C31", "M29")
+    assert dataset3.track_path("/d", "C05", "M17").name == "C05M17.bigwig"
+    with pytest.raises(ValueError, match="not a C##M##"):
+        dataset3.parse_name("Average.bigwig")
+
+
+def test_chroms_are_the_23_upstream_trains_on():
+    assert len(dataset3.CHROMS) == 23
+    assert dataset3.CHROMS[0] == "chr1" and dataset3.CHROMS[-1] == "chrX"
+    assert "chrY" not in dataset3.CHROMS
+
+
+def test_hyperparams_cover_all_23_and_vary():
+    assert set(dataset3.UPSTREAM_HYPERPARAMS) == set(dataset3.CHROMS)
+    # The point of the table: there is no single shared setting.
+    assert dataset3.factor_sizes("chr1")["n_25bp_factors"] == 10
+    assert dataset3.factor_sizes("chr21")["n_25bp_factors"] == 25
+    assert dataset3.factor_sizes("chr21")["n_5kbp_factors"] == 60
+    assert dataset3.factor_sizes("chrX")["n_5kbp_factors"] == 45
+    assert dataset3.schedule("chr1")["batch_size"] == 21000
+    assert dataset3.schedule("chr21")["train_epochs"] == 800
+
+
+def test_factor_sizes_build_the_chr21_model_that_matched_their_checkpoint():
+    """chr21's row must reproduce the 61,772,797-weight model parity was measured on.
+
+    Keras `count_params()` counts BatchNorm's `moving_mean`/`moving_variance` as non-trainable
+    weights; torch calls them buffers and leaves them out of `.parameters()`. The difference is
+    exactly `3 blocks x 2 buffers x 2048 = 12,288`, so the comparable total is parameters plus
+    buffers — which is also what `load_keras_h5` reports, since it counts the tensors in the file.
+    """
+    m = Guacamole(n_celltypes=51, n_assays=35,
+                  n_positions=dataset3.upstream_n_bins(46_709_983),
+                  **dataset3.factor_sizes("chr21"))
+    params = sum(p.numel() for p in m.parameters())
+    buffers = sum(b.numel() for b in m.buffers() if b.dtype.is_floating_point)
+    assert buffers == 3 * 2 * 2048
+    assert params + buffers == 61_772_797
+
+
+def test_unknown_chromosome_fails_by_name():
+    for fn in (dataset3.factor_sizes, dataset3.schedule):
+        with pytest.raises(KeyError, match="chrY"):
+            fn("chrY")
+
+
+def test_contributor_pool_splits(tmp_path):
+    meta = tmp_path / "m.tsv"
+    meta.write_text(
+        "Cell_ID\tMark_ID\tCellType\tAssay\tTraining(T),Validation(V),Blind-test(B)\tfileName\n"
+        "C01\tM16\tadipose\tH3K27ac\tT\tC01M16.bigwig\n"
+        "C02\tM16\tadrenal\tH3K27ac\tV\tC02M16.bigwig\n"
+        "C03\tM16\tbrain\tH3K27ac\tB\tC03M16.bigwig\n"
+        "C04\tM01\tliver\tATAC-seq\tT\tC04M01.bigwig\n", encoding="utf-8")
+    rows = dataset3.read_meta(meta)
+    assert rows[0]["DataType"] == "T" and "Training(T),Validation(V),Blind-test(B)" not in rows[0]
+    assert dataset3.contributor_pool(rows, "M16") == ["C01"]
+    assert dataset3.contributor_pool(rows, "M16", splits=("T", "V")) == ["C01", "C02"]
+    assert dataset3.contributor_pool(rows, "M99") == []
 
 
 def test_moments_with_no_contributors_are_zero_not_nan():

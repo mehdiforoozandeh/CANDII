@@ -12,13 +12,15 @@ contract keeps one definition. The port emits §4.1 roots and is scored by `cand
 |---|---|
 | `model.py` | the architecture — `Precamole` (stage 1) and `Guacamole` (stage 2) |
 | `keras_weights.py` | their `.h5` into a torch module, `h5py` only |
-| `features.py` | the cross-cell average and variance, from our store |
+| `features.py` | the cross-cell average and variance, and the contributor switch |
+| `dataset3.py` | the challenge's own bigwigs — their grid, their binning, their hyperparameters |
 | `emit.py` | §4.1 prediction roots |
-| `parity_keras.py` | the two-half parity harness (Keras reference, torch compare) |
+| `parity_keras.py` | **model** parity: our torch module against Keras on their weights |
+| `parity_features.py` | **input** parity: our preprocessing against `00_data_generation.py` |
 
-Tests: `tests/test_lavawizard.py`, 24 checks, seconds, no TensorFlow and no network.
+Tests: `tests/test_lavawizard.py`, 36 checks, seconds, no TensorFlow and no network.
 
-## Parity — measured, not asserted
+## Parity, part 1 — the model
 
 The port loads a real Keras 2.2.4 checkpoint and reproduces what Keras does with it:
 
@@ -35,9 +37,6 @@ is float32 accumulation order between MKL and torch, not a mapping error. **The 
 is 2.4e-6; the gate is set at 1e-5**, four times the headroom, per the PI's instruction to document
 the tolerance on one chromosome before rolling it out.
 
-That settles the half of §7.4's gate we can settle now — us against Keras on their weights. The
-full gate adds their preprocessing and bigwig quantisation, and waits on t54.
-
 Four mappings are wrong-by-default and all four are covered:
 
 | Keras | torch | why it bites |
@@ -49,6 +48,46 @@ Four mappings are wrong-by-default and all four are covered:
 
 Block order is **Dense → PReLU → BatchNorm → Dropout** — activation before normalisation. Unusual,
 and it is what they trained.
+
+## Parity, part 2 — the inputs
+
+A perfect model fed a subtly different average is still a different method, and the average is
+added straight to the output, so an error in it passes through undamped. `parity_features.py` runs
+our preprocessing and **their `00_data_generation.py`, vendored verbatim**, over the same landed
+challenge bigwigs. chr21, `training_data`, five marks spanning 4 to 34 contributors — all PASS:
+
+| quantity | worst absolute disagreement | reading |
+|---|---|---|
+| single track, per bin | **0.000e+00**, all five marks | `bin_arcsinh` is bit-identical to `get_binvals` |
+| average | 4.8e-07 … 9.5e-07 | float32 against float64 accumulation |
+| variance | 3.1e-06 … 2.37e-05 | **their** float32 cancellation in `E[x^2] - E[x]^2` |
+
+The variance disagreement tracks contributor count exactly as cancellation predicts — 9.2e-06 at
+k=4, 1.06e-05 at k=22, 2.37e-05 at k=34.
+
+The single-track row is the bug detector: the ceil grid, the zero-pad, or `arcsinh` on the wrong
+side of the mean would each move it off zero. It is exactly zero.
+
+The variance row is not our error. `E[x^2] - E[x]^2` loses precision by cancellation in float32,
+and loses more of it the larger the signal and the more contributors are summed. We accumulate in
+float64 and are the more accurate of the two. **The gate is absolute and set at 1e-4** — absolute
+because the variance enters the model as a raw scalar, so absolute error is what propagates, and a
+relative gate is meaningless in the near-zero-variance bins where one mark shows 1.7e-3 relative on
+9e-6 absolute.
+
+## The grid is not our grid
+
+Upstream rounds the bin count **up**; our store floors it, always (`STORE.md`).
+
+| | chr21 bins |
+|---|---|
+| upstream, `-(-len // 25)` | 1 868 400 |
+| our store, `floor(len / 25)` | 1 868 399 |
+
+Their released checkpoints have a `genome_25bp_embedding` of exactly 1 868 400 rows, which is how
+we know the ceil is what they trained. `dataset3.upstream_n_bins` is the grid for anything on the
+Dataset-3 side; the store's is the grid for ours. A track written on one and scored on the other is
+silently misaligned after the first partial bin.
 
 ## The contributor switch (PI ruling, 2026-08-25)
 
@@ -198,16 +237,30 @@ retrain in their own code is roughly 200 CPU-days. That is why the port exists.
 Spike done; memo and evidence in `cruxvault/results/t53/SPIKE_MEMO.md`, Fir path in
 `FIR_PATH.txt` beside it.
 
-Port: architecture, weight-loader, feature pipeline, §4.1 emitter and the parity harness are in.
-Keras-parity is measured and passing at 1e-5.
+Port: architecture, weight-loader, feature pipeline, Dataset-3 reader, §4.1 emitter and both parity
+harnesses are in. Model parity passes at 1e-5; input parity passes at 1e-4 on five marks.
 
-Not started, and blocked on t54's Synapse and Globus work:
+**Their released weights are not obtainable.** `syn21519009` returns
+`403 You lack READ access` to a token that reads every other challenge entity — the project, the
+training and validation data, the submission template, and all of `submissions_round2`. The entity
+carries **zero access requirements**, so there is no data-use agreement to accept and no
+self-service route: the ACL simply does not grant it. The challenge's own public `models` folder
+(`syn21458457`) holds four tarballs, none of them theirs. Getting these needs the uploader or the
+organisers to share; that is a message to a third party and is the PI's to send, not ours.
 
-- the **true** §7.4 gate — predict with their `syn21519009` weights and compare against their
-  submitted tracks, tolerance to be documented on one chromosome first;
-- the training loop (their two-stage, per-chromosome schedule) and both retrains.
+Consequence: the PI's amended anchor (their weights → our port → their tracks) is blocked at the
+first arrow. **The original §7.4 anchor is not** — retrain on the challenge's own training data and
+compare against their submitted tracks — and both of its inputs are now in hand.
 
-Not started, and not blocked: nothing. The next step is the gate.
+| input | state |
+|---|---|
+| challenge `training_data` / `validation_data` / `blind_truth` | landed, `/project/def-maxwl/mforooz/DATA_EIC_SYNAPSE/` |
+| their submitted Guacamole tracks (`syn21976480`, 51 files, 49.3 GB) | pulling to scratch — readable now, no t54 dependency |
+| their pretrained weights (`syn21519009`) | **403, needs a human to request access** |
+
+Not started, and now the only thing between here and a number: the training loop (their two-stage,
+per-chromosome schedule; `dataset3.schedule` has the epochs and batch sizes) and the anchor
+retrain.
 
 ## Running it
 
@@ -222,6 +275,12 @@ MAMBA_ROOT_PREFIX=$PWD/mamba ./bin/micromamba run -n lw_period \
     --h5 <their_model>.h5 --out ref.npz --n 4096
 module load StdEnv/2023 python/3.11 && source torch_env/bin/activate
 python port/lavawizard/parity_keras.py compare --h5 <their_model>.h5 --ref ref.npz --max-abs 1e-5
+
+# input parity against their own preprocessing, on the landed challenge data
+MAMBA_ROOT_PREFIX=$PWD/mamba ./bin/micromamba run -n lw_period \
+    python port/lavawizard/parity_features.py \
+    --data /project/def-maxwl/mforooz/DATA_EIC_SYNAPSE/training_data \
+    --meta repo/data/Encode_meta.tsv --chrom chr21 --mark M17 --max-abs 1e-4
 ```
 
 The TF 1.15 environment is a debugging fallback and the reference half of the parity harness. It

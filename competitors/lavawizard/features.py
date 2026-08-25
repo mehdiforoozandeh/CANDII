@@ -4,11 +4,18 @@ These are the whole reason the model works. `Guacamole` adds the average straigh
 (`model.py`), so everything the network does is a correction on top of this, and everything about
 how the average is built is therefore a fairness question rather than an implementation detail.
 
-**Signal space.** `arcsinh(-log10 p)`. Upstream applies `arcsinh` to the base-pair values and
-*then* means them into 25 bp bins (`00_data_generation.py:56-63`). Our store already holds
-`-log10 p` on the 25 bp grid (`DATA.md`:57), so we apply `arcsinh` to the binned value. `arcsinh`
-is concave, so `mean(arcsinh(x)) <= arcsinh(mean(x))` and the two differ slightly within a bin.
-This is a real divergence from their pipeline and belongs in any Lavawizard row's caveat.
+**Signal space.** `arcsinh(-log10 p)` — but *where* the `arcsinh` is applied depends on the data
+source, so `cross_cell_moments` takes it as a parameter instead of hiding it:
+
+| source | grid on disk | `transform=` | why |
+|---|---|---|---|
+| challenge bigwigs (Dataset 3) | base pair | `"none"` | `dataset3.bin_arcsinh` already applied it per base, exactly as upstream does (`00_data_generation.py:56-63`) |
+| our store (Dataset 2) | 25 bp, `-log10 p` | `"arcsinh"` | the store holds untransformed `-log10 p` (`DATA.md`:57), so it goes on the binned value |
+
+`arcsinh` is concave, so `mean(arcsinh(x)) <= arcsinh(mean(x))` and the two orders differ slightly
+within a bin. On Dataset 3 we reproduce their order exactly; on Dataset 2 the base-pair values do
+not exist to reproduce it with. **That divergence belongs in every Lavawizard Dataset-2 caveat**,
+and it is one more reason the Dataset-3 anchor is the number that validates the port.
 
 **Who contributes (the switch the PI asked for, 2026-08-25).**
 
@@ -84,19 +91,25 @@ def contributors(pool: Sequence[str], assay: str, target: str, *,
 
 def cross_cell_moments(read_pval: ReadPvalFn,
                        contributor_ids: Sequence[str], chrom: str, start: int, end: int,
-                       *, assay: str) -> Tuple[np.ndarray, np.ndarray, int]:
+                       *, assay: str, transform: str = "arcsinh") -> Tuple[np.ndarray, np.ndarray, int]:
     """Mean and population variance of `arcsinh(-log10 p)` over `contributor_ids`, per bin.
 
-    `read_pval(biosample, assay, start, end)` returns a `(end - start,)` float array of `-log10 p`
-    for one contributor — a thin seam so this is testable without a store and so the caller decides
-    the chromosome handle. Accumulates in float64 (upstream uses float32); with `arcsinh` bounding
-    the values to order 10 and a few dozen contributors, the difference is far below the store's own
-    0.025 % pval codec bound (`STORE.md`).
+    `read_pval(biosample, assay, start, end)` returns a `(end - start,)` float array for one
+    contributor — a thin seam so this is testable without a store and so the caller decides the
+    chromosome handle. `transform` says whether that array still needs `arcsinh` (`"arcsinh"`, the
+    store path) or already carries it (`"none"`, the Dataset-3 path where `dataset3.bin_arcsinh`
+    applied it per base as upstream does). See the module docstring's table.
+
+    Accumulates in float64 (upstream uses float32); with `arcsinh` bounding the values to order 10
+    and a few dozen contributors, the difference is far below the store's own 0.025 % pval codec
+    bound (`STORE.md`).
 
     Returns `(average, variance, k)`, both arrays `float32` of length `end - start`. With `k == 0`
     both arrays are zeros — the caller decides whether that track is skipped (§5 says it is, and is
     listed).
     """
+    if transform not in ("arcsinh", "none"):
+        raise ValueError(f"transform must be 'arcsinh' or 'none', got {transform!r}")
     n = int(end) - int(start)
     if n <= 0:
         raise ValueError(f"empty bin range [{start}, {end})")
@@ -104,7 +117,9 @@ def cross_cell_moments(read_pval: ReadPvalFn,
     total_sq = np.zeros(n, dtype=np.float64)
     k = 0
     for bs in contributor_ids:
-        x = np.arcsinh(np.asarray(read_pval(bs, assay, start, end), dtype=np.float64).reshape(-1))
+        x = np.asarray(read_pval(bs, assay, start, end), dtype=np.float64).reshape(-1)
+        if transform == "arcsinh":
+            x = np.arcsinh(x)
         if x.shape[0] != n:
             raise ValueError(f"{bs}/{assay} {chrom}[{start}:{end}) gave {x.shape[0]} bins, want {n}")
         total += x
