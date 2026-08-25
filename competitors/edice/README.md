@@ -71,6 +71,13 @@ Every row here follows the **code**, and every row is marked `# FIDELITY:` at th
 | masked tracks per bin | "120 randomly selected tracks" | `n_targets=120` are the TARGETS; the remaining 912 are supports, re-drawn per bin per epoch | both, consistent | — |
 | metric definition | "MSE", "Corr" | per-track state, averaged over tracks only in `result()`, after `sinh` inverts both truth and prediction (`base.py:317`) | code | mean-of-per-track-MSE ≠ pooled MSE, and raw ≠ arcsinh space. `edice_torch/metrics.py` reports **both** spaces so the gate comparison cannot be accused of picking the flattering one |
 | attention scale | not stated | `1/sqrt(depth)` with `depth = d_model // heads = 64`, applied after the head split | code | — |
+| which weights are scored | not stated | `train_roadmap.py:132` predicts from the **in-memory model after the last epoch**. Its `ModelCheckpoint(save_best_only, monitor="val_loss")` writes a best-on-val checkpoint that the prediction call then does not load | code — final epoch | scoring a best-on-val checkpoint instead would be model selection on a held-out panel, which is not what produced the published numbers |
+
+One deliberate **departure**, in the driver rather than the model: `run_roadmap.py` watches the
+TARGET panel each epoch, where the reference watches the `val` split. For the gate the supports are
+`train ∪ val`, so the reference's monitor would be reporting error on tracks that are inside its own
+training panel. Nothing selects on either curve — one seed, paper defaults, final-epoch weights — so
+the curve is a diagnostic and the change cannot move the gate.
 
 `edice_torch/model.py` also carries `SelfTransformerBlock`, unused at `n_attn_layers=1` but present
 because the reference stacks `n_attn_layers - 1` of them before the cross block.
