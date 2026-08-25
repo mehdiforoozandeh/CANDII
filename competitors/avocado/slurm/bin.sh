@@ -11,7 +11,10 @@
 #SBATCH --job-name=t50_bin
 #SBATCH --output=slurm-logs/t50_bin_%A_%a.out
 #SBATCH --error=slurm-logs/t50_bin_%A_%a.err
-#SBATCH --time=03:00:00
+# MEASURED, not guessed: chr21 (1.87M bins x 267 tracks) took 1444 s. The cost is close to linear
+# in bins, so chr1 at 9.96M bins projects to ~2.1 h -- too near a 3 h limit to risk, and a task that
+# times out leaves a .tmp behind and restarts from nothing.
+#SBATCH --time=06:00:00
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
