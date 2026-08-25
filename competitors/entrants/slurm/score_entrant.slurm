@@ -36,8 +36,13 @@ M001="${M001:-/project/def-maxwl/mforooz/MAX_EPI_IMPUTATION/experiments/001_2026
 WORK="${WORK:-/project/def-maxwl/mforooz/CANDII_t54_work}"
 OUTDIR="${OUTDIR:-$WORK/entrant_scores/$LABEL}"
 
-: "${LABEL:?set LABEL to the team name}"
-: "${PREDDIR:?set PREDDIR to the directory of that team's C##M##.bigwig files}"
+# NO APOSTROPHES IN THESE MESSAGES. Bash performs quote processing inside `${var:?word}`, so an
+# apostrophe here opens a single quote that swallows the rest of the file -- and the error is
+# reported at whatever line supplies the next quote, not at this one. That cost a whole 255-task
+# wave on 2026-08-25: the bug sat latent from the first commit because nothing later in the file had
+# a single quote until a preflight line added one.
+: "${LABEL:?set LABEL to the method name}"
+: "${PREDDIR:?set PREDDIR to the directory of C##M##.bigwig files for this method}"
 
 # shellcheck disable=SC1091
 source "$ENT/env_fir.sh"

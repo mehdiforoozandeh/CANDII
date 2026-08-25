@@ -27,6 +27,15 @@ DRY="${DRY:-0}"
 cd "$ENT" || exit 1
 mkdir -p slurm_logs
 
+# Parse the job script BEFORE submitting 1275 tasks against it. A shell syntax error costs a whole
+# wave: on 2026-08-25 an apostrophe inside `${PREDDIR:?...}` opened a single quote that swallowed
+# the file, and 255 tasks failed with exit 2 in three seconds each before it was caught. `sbatch`
+# does not parse the script, and `--test-only` does not either -- only bash does.
+for f in slurm/score_entrant.slurm env_fir.sh; do
+    bash -n "$f" || { echo "[launch] FATAL: $f does not parse -- nothing submitted" >&2; exit 1; }
+done
+echo "[launch] syntax ok: slurm/score_entrant.slurm, env_fir.sh"
+
 # The two published baselines go FIRST. They are the rows every entrant is read against, and
 # `Average` is the one method whose nine measures we can already check against the gate -- so if
 # something is wrong with the scoring path, it surfaces in wave 1 rather than after 23 teams.
