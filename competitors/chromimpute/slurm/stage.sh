@@ -5,7 +5,7 @@
 #          --export=ALL,CI_STAGE=convert,CI_RUN=$RUN stage.sh
 #
 # The stage names are the manual's command names, lowercased. `CI_RUN` is a run directory laid out
-# by `submit_pilot.sh`; every path below is derived from it, so nothing but the stage and the array
+# by `submit.sh`; every path below is derived from it, so nothing but the stage and the array
 # index changes between submissions. The work-item list for a stage is `$CI_RUN/lists/<stage>.txt`,
 # one item per line, read by `$SLURM_ARRAY_TASK_ID`.
 #
@@ -32,6 +32,14 @@ TRAINDATA=$CI_RUN/TRAINDATADIR
 PRED=$CI_RUN/PREDICTORDIR
 IMP=$CI_RUN/OUTPUTIMPUTEDIR
 mkdir -p "$CONV" "$DIST" "$TRAINDATA" "$PRED" "$IMP" "$CI_RUN/timing"
+
+# `CI_CHROMS=all` is `prepare.py`'s spelling, not a chromosome. Everything downstream loops over the
+# real names, and `chrominfo.txt` is the list `prepare.py` just wrote.
+if [ "$CI_CHROMS" = "all" ]; then
+  CHROM_LIST=$(cut -f1 "$IN/chrominfo.txt" | tr '\n' ' ')
+else
+  CHROM_LIST=${CI_CHROMS//,/ }
+fi
 
 LIST=$CI_RUN/lists/$CI_STAGE.txt
 ITEM=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$LIST")
@@ -61,7 +69,7 @@ case "$CI_STAGE" in
         --out "$IN" --chroms "$CI_CHROMS" --shard "$ITEM"
     ;;
   convert)   # item: a mark. Reads only inputinfofile.txt, so only training cells are converted.
-    for C in ${CI_CHROMS//,/ }; do
+    for C in $CHROM_LIST; do
       CI Convert -c "$C" -m "$ITEM" "$IN/signal" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$CONV"
     done
     ;;
@@ -69,10 +77,11 @@ case "$CI_STAGE" in
     CI ComputeGlobalDist -m "$ITEM" "$CONV" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$DIST"
     ;;
   gtd)       # item: a target mark
-    for C in ${CI_CHROMS//,/ }; do
-      CI GenerateTrainData -c "$C" "$CONV" "$DIST" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" \
-         "$TRAINDATA" "$ITEM"
-    done
+    # No -c: the paper default draws its 100 000 training locations across everything chrominfo
+    # declares, and one traindata file per mark is what `Train` looks for first. Passing -c would
+    # give 23 chrom-prefixed files per mark for the same 100 000 instances.
+    CI GenerateTrainData "$CONV" "$DIST" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" \
+       "$TRAINDATA" "$ITEM"
     ;;
   train)     # item: <sample> <TAB> <mark>
     S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)
@@ -80,7 +89,7 @@ case "$CI_STAGE" in
     ;;
   apply)     # item: <sample> <TAB> <mark>
     S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)
-    for C in ${CI_CHROMS//,/ }; do
+    for C in $CHROM_LIST; do
       CI Apply -c "$C" -o "impute.$S.$M.wig" "$CONV" "$DIST" "$PRED" "$IN/inputinfofile.txt" \
          "$IN/chrominfo.txt" "$IMP" "$S" "$M"
     done
