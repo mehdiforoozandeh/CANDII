@@ -266,12 +266,55 @@ compare against their submitted tracks — and both of its inputs are now in han
 | input | state |
 |---|---|
 | challenge `training_data` / `validation_data` / `blind_truth` | landed, `/project/def-maxwl/mforooz/DATA_EIC_SYNAPSE/` |
-| their submitted Guacamole tracks (`syn21976480`, 51 files, 49.3 GB) | pulling to scratch — readable now, no t54 dependency |
-| their pretrained weights (`syn21519009`) | **403, needs a human to request access** |
+| their submitted Guacamole tracks (`syn21976480`, 51 files, 49.3 GB) | **landed**, `~/scratch/t53_lavawizard/submitted_tracks/Guacamole` |
+| their pretrained weights (`syn21519009`) | **403, with the PI for outreach — do not wait on it** |
 
-Not started, and now the only thing between here and a number: the training loop (their two-stage,
-per-chromosome schedule; `dataset3.schedule` has the epochs and batch sizes) and the anchor
-retrain.
+## The anchor retrain
+
+Running. `train.sbatch`, 23 array tasks, one per chromosome, MIG `1g.10gb`, `--contributor-mode
+upstream`, seed 0. Preprocessing is done for all 23 (`cache/<chrom>/`, built once from the
+challenge bigwigs; chr21 took 15 min, 287 tracks).
+
+**Measured, not estimated** (chr21, `1g.10gb`, batch 10 000):
+
+| | value |
+|---|---|
+| step time, fp32 | 141.2 ms |
+| step time, **TF32** | **63.0 ms** |
+| peak GPU | **1.58 GiB** allocated / 1.86 reserved, of the slice's 10 |
+| host RAM, largest chromosome (chr1) | 15.0 GiB — jobs ask 64 GB |
+| loss, stage 2 over 200 steps | 0.342 → 0.110 |
+
+The profile says why: `fwd 42.2 → 16.1`, `fwd+bwd 124.8 → 45.7`, Adam a flat 11.7 ms either way,
+and the in-RAM data gather 0.1 ms. It is the three 2048-wide matmuls, so TF32 is where the 2.2x
+comes from. Sparse embeddings plus `SparseAdam` would give a further 57.4 → 48.4 ms; not taken,
+because it changes the optimizer's semantics for a 16 % gain and the anchor is the run where
+fidelity matters most.
+
+**Budget correction.** At 63 ms/step the genome-wide schedule — 6.48 M steps — is about
+**117 GPU-hours**, not the 20–40 the spike memo estimated. That estimate assumed a few milliseconds
+per step for a 2048-wide MLP and was wrong by roughly 3x even after TF32. Wall-clock is ~10 h with
+the 23 tasks in parallel. Memory says the MIG slice is still the right ask (1.58 of 10 GiB), so no
+exception is needed under `AGENTS.md`:130 — the constraint here is compute, not memory, and a
+larger slice would only buy wall-clock.
+
+## Reading an anchor number
+
+`anchor.py` scores three pairings on the upstream grid in raw `-log10 p`: ours vs `blind_truth`,
+**theirs vs `blind_truth`**, and ours vs theirs. Their column is recomputed here rather than quoted,
+so both methods meet one binning, one masking and one measure.
+
+Every record carries a caveat naming what it is not: this is **not** the 001 vendored EIC scorer
+(§7.5, t54's work), so it is comparable to the "theirs" column in the same table and to nothing
+else — never to a published leaderboard row, and never to a Dataset-2 number (005's translation
+result is the reason).
+
+A plumbing run with a deliberately under-trained checkpoint (2 steps) gives
+`C05M17: ours 0.751, theirs 0.661, r(ours,theirs) 0.857`. That is the expected shape, and it is a
+useful check rather than a result: an untrained `Guacamole` returns approximately the cross-cell
+average, because the additive skip dominates a random head — so it lands near the Average baseline
+and still correlates 0.86 with their submission. Had the two grids been misaligned, that
+correlation would be near zero.
 
 ## Running it
 
@@ -286,6 +329,14 @@ MAMBA_ROOT_PREFIX=$PWD/mamba ./bin/micromamba run -n lw_period \
     --h5 <their_model>.h5 --out ref.npz --n 4096
 module load StdEnv/2023 python/3.11 && source torch_env/bin/activate
 python port/lavawizard/parity_keras.py compare --h5 <their_model>.h5 --ref ref.npz --max-abs 1e-5
+
+# the anchor retrain: 23 array tasks, one per chromosome
+sbatch train.sbatch
+# then place the port against their submission, per chromosome
+python -m lavawizard.anchor --checkpoint runs/anchor/guacamole_chr21.pt --cache cache \
+    --chrom chr21 --their-tracks submitted_tracks/Guacamole \
+    --blind-truth $D/blind_truth --meta repo/data/Encode_meta.tsv \
+    --out runs/anchor/anchor_chr21.json
 
 # input parity against their own preprocessing, on the landed challenge data
 MAMBA_ROOT_PREFIX=$PWD/mamba ./bin/micromamba run -n lw_period \
