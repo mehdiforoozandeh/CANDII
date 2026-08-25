@@ -45,6 +45,16 @@ DEST="${DEST:-$HOME/scratch/t54_baselines/$NAME}"
 module --force purge
 module load StdEnv/2023 python/3.11
 
+# PREFLIGHT -- a job that does nothing must not report COMPLETED.
+# On 2026-08-25 four of eight baseline tasks exited 0 in six seconds having produced no stdout and
+# downloaded nothing. All four had landed on node fc30560; every task on every other node worked.
+# The module load left python unusable there, and without this check SLURM recorded the no-op as
+# success -- the worst possible failure mode, because only a file count caught it.
+command -v python3 >/dev/null 2>&1 || {
+    echo "[preflight] FATAL: python3 absent after module load on $(hostname)" >&2; exit 1; }
+python3 -c "import sys, json, urllib.request, hashlib; print('[preflight] python', sys.version.split()[0])" || {
+    echo "[preflight] FATAL: python3 present but unusable on $(hostname)" >&2; exit 1; }
+
 N=${NSHARD:-${SLURM_ARRAY_TASK_COUNT:-1}}
 I=${SLURM_ARRAY_TASK_ID:-0}
 echo "[shard] $NAME task $I of $N -> $DEST" >&2

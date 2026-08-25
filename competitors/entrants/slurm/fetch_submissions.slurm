@@ -44,6 +44,16 @@ WORK="${WORK:-/project/def-maxwl/mforooz/CANDII_t54_work}"
 module --force purge
 module load StdEnv/2023 python/3.11
 
+# PREFLIGHT -- a job that does nothing must not report COMPLETED.
+# On 2026-08-25 four baseline tasks exited 0 in six seconds having produced no stdout and downloaded
+# nothing; all four had landed on node fc30560, where the module load left python unusable. Without
+# this check SLURM records the no-op as success, which is the worst failure mode there is -- only a
+# file count caught it.
+command -v python3 >/dev/null 2>&1 || {
+    echo "[preflight] FATAL: python3 absent after module load on $(hostname)" >&2; exit 1; }
+python3 -c "import sys, json, urllib.request, hashlib; print('[preflight] python', sys.version.split()[0])" || {
+    echo "[preflight] FATAL: python3 present but unusable on $(hostname)" >&2; exit 1; }
+
 # NSHARD pins the partition denominator. Resubmitting only the failed shards -- say
 # `--array=0,2,3,5,7` -- sets SLURM_ARRAY_TASK_COUNT to 5, which would silently RE-PARTITION the
 # tree and send each task after a different slice than it was originally assigned. Pass NSHARD=8 on
