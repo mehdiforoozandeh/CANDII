@@ -69,7 +69,28 @@ cd competitors/entrants && PYTHONPATH=../../src:. pytest tests/ -q     # 15 pass
 ```
 
 The test is deliberately **not** under `tests/`: that is the candi suite and must stay free of any
-dependency on `competitors/`.
+dependency on `competitors/`. It covers every function plus the whole suite, and two of its cases
+guard the fixture rather than the code — the synthetic track must actually occupy the underflow and
+overflow strength bins, or the parity claim would be resting on the 35 interior bins alone.
+
+### Verified on real tracks, 2026-08-25
+
+`slurm/driver_parity.slurm` ran genome-wide (121,241,707 bins, chr1–22 + chrX) on three assays:
+
+| target | stand-in prediction | assay | nine-measure cross-check | P-block |
+|---|---|---|---|---|
+| C05M18 | C06M18 | H3K36me3 (broad) | exact, 8 × 10 bootstraps | `acc_obs` 0.5662 |
+| C19M22 | C28M22 | H3K4me3 (punctate) | exact, 8 × 10 bootstraps | `acc_obs` 0.8320, **promoter branch fired** |
+| C12M01 | C31M01 | ATAC-seq | exact, 8 × 10 bootstraps | `acc_obs` 0.7546 |
+
+The H3K4me3 run exercised `prom_corr_h3k4me3` over 58,121 promoter windows: 56,662 scored and 1,459
+undefined — the constant windows landing in `n_undefined` rather than being scored 0, which is the
+behaviour the port is supposed to inherit. All three emitted 37 occupied strength bins (35 interior
+plus underflow and overflow), `truth_binarisation: "signal>=2"`, `pblock_blacklist_deleted: false`
+beside `nine_measures_blacklist_deleted: true`, and the five vendored md5s.
+
+Cost: ~13 min per experiment genome-wide, of which the P-block is 13–16 s. `CHECK=1` roughly doubles
+it (21–26 min), since the cross-check runs a second full scorer.
 
 ### Three deviations, forced by what Dataset 3 distributes
 
