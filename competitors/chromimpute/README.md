@@ -43,11 +43,23 @@ filter drops it. It is a control column, not an assay.
 
 ## The grid
 
-`regime.eic_val.json`: 51 training cells → **307 training tracks** in the compendium; 26 declared
-pairs → **45 (cell, assay) imputation targets** over **22 distinct marks**. The stage costs scale
-differently — `Convert` per training track, `ComputeGlobalDist` and `GenerateTrainData` per mark,
-`Train` and `Apply` per target — which is why `prepare.pilot_subset` spreads the pilot over marks
-rather than over cells.
+`regime.eic_val.json`: 51 training cells → **267 training tracks** over **35 marks** in the
+compendium; 26 declared pairs → **45 (cell, assay) imputation targets** over **22 distinct marks**.
+The stage costs scale differently — `Convert` per training track, `ComputeGlobalDist` per
+compendium mark, `GenerateTrainData` per *target* mark, `Train` and `Apply` per target — which is
+why `prepare.pilot_subset` spreads the pilot over marks rather than over cells.
+
+Two of those scalings were learned the hard way and are worth stating:
+
+- **`ComputeGlobalDist` must run for all 35 compendium marks, not the 22 target marks.**
+  `GenerateTrainData`'s `loadDistInfo` opens `DISTANCEDIR/<sample>_<mark>.txt` for every
+  `(sample, mark)` in `inputinfofile` before it reaches the target, so one missing mark fails every
+  target in two seconds.
+- **`GenerateTrainData` and `Apply` each hold one open gzip reader per compendium track** — 267 of
+  them at once. An unthrottled SLURM array puts thousands of concurrent handles on Lustre and draws
+  transient `FileNotFoundException ... (Cannot send after transport endpoint shutdown)` opens that
+  read like missing files. `slurm/submit.sh` caps those stages with `--array=...%10`
+  (`CI_THROTTLE`).
 
 ## Two grid traps, both handled
 
@@ -95,7 +107,7 @@ PYTHONPATH=$REPO/src python collect.py --store $STORE --targets $RUN/input/targe
     --impute-dir $RUN/OUTPUTIMPUTEDIR --pred-root $RUN/pred --chroms chr21 --jar $JAR
 ```
 
-`II` is `$RUN/input/inputinfofile.txt`, `CI` is `$RUN/input/chrominfo.txt`. `slurm/submit_pilot.sh`
+`II` is `$RUN/input/inputinfofile.txt`, `CI` is `$RUN/input/chrominfo.txt`. `slurm/submit.sh`
 does all of it; `slurm/stage.sh` is the one array script every stage runs through.
 
 **`unset JAVA_TOOL_OPTIONS`** before any `java` call on Fir. The `java` module exports `-Xmx2g`,
