@@ -17,15 +17,32 @@ module --force purge
 module load StdEnv/2023 python/3.11 scipy-stack/2025a
 
 VENV="${SLURM_TMPDIR:-/tmp/$USER}/entrant_scorer_venv"
-if [ ! -d "$VENV" ]; then
-    python -m venv --system-site-packages "$VENV"
-    # shellcheck disable=SC1091
-    source "$VENV/bin/activate"
+
+# `python -m venv` runs ensurepip, which writes into a shared /localscratch and fails intermittently
+# under load -- one task in a 23-task array died this way with
+# "ensurepip ... returned non-zero exit status 1". It is transient, so retry on a fresh directory
+# rather than letting one flaky filesystem moment kill an array task.
+build_venv() {
+    for attempt in 1 2 3; do
+        rm -rf "$VENV"
+        if python -m venv --system-site-packages "$VENV" 2>&1; then
+            return 0
+        fi
+        echo "[env] venv creation failed (attempt $attempt/3), retrying" >&2
+        sleep $((5 * attempt))
+    done
+    echo "[env] venv creation failed three times" >&2
+    return 1
+}
+
+if [ ! -f "$VENV/bin/activate" ]; then
+    build_venv
+fi
+# shellcheck disable=SC1091
+source "$VENV/bin/activate"
+if ! python -c "import pyBigWig" 2>/dev/null; then
     pip install --no-index --quiet --upgrade pip
     pip install --no-index --quiet pyBigWig
-else
-    # shellcheck disable=SC1091
-    source "$VENV/bin/activate"
 fi
 
 python - <<'PY'
