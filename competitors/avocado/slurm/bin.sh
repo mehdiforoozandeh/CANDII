@@ -16,8 +16,7 @@
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
 
-source "$(dirname "$(dirname "$(readlink -f "$0")")")/slurm/_env.sh" 2>/dev/null \
-  || source /project/def-maxwl/mforooz/CANDII_t50/competitors/avocado/slurm/_env.sh
+source /project/def-maxwl/mforooz/CANDII_t50/competitors/avocado/slurm/_env.sh
 
 CHROM=$(sed -n "$((${SLURM_ARRAY_TASK_ID:-0} + 1))p" "$AVO/chroms.txt")
 [ -z "$CHROM" ] && { echo "no chromosome for index ${SLURM_ARRAY_TASK_ID:-0}"; exit 1; }
