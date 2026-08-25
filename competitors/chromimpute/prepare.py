@@ -300,7 +300,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if path.exists() and not args.force:
                 print(f"[prepare] skip {path.name} (exists)")
                 continue
-            values = view.pval(chrom)
+            values = view.pval(chrom, 0)
             want = int(n_bins[chrom])
             if values.size != want:
                 raise SystemExit(
