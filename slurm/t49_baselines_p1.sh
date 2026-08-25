@@ -7,6 +7,13 @@
 # Generate five prediction roots, score each through `python -m candi.bench.external`, and fold the
 # score files into one leaderboard json. Pure numpy + h5py; no GPU compute.
 #
+# DO_SCORE=0 STOPS AFTER GENERATION, and on a real panel that is usually what you want. Measured on
+# Fir, chr21, 45 declared tracks: generating all five roots takes ~4.5 minutes and scoring takes
+# ~110 minutes PER METHOD. Five methods at two floors inside one job is eighteen hours of serial
+# work for something that is ten independent runs, so generate here and hand the scoring to
+# `slurm/t49_baselines_score.sh --array=0-4`, one task per method. Scoring in-line is kept for a
+# small panel, where the whole thing is minutes and one job is simpler than three.
+#
 # NEVER POINT THIS AT regime.eic_test.json. B pairs are run ONCE per method at the very end (A4),
 # and this script is the development loop.
 #
@@ -45,6 +52,7 @@ VARPOOL="${VARPOOL:-}"          # D7 msevar pools; without it msevar is ABSENT, 
 # `--time=2:30:00` is the b1-bin version that answers §5.5's two sanity anchors and nothing else —
 # worth having when the b2 queue is 300 jobs deep and the anchors are what gate the rest of the work.
 FLOORS="${FLOORS:-spec n1e4}"
+DO_SCORE="${DO_SCORE:-1}"       # 0 = generate only; score with slurm/t49_baselines_score.sh
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
 export MPLBACKEND=Agg
@@ -73,6 +81,11 @@ for FLOOR in $FLOORS; do
     python -m competitors.baselines.generate \
         --store "$REGIME" --out "$PRED" --chroms "$CHROMS" --methods "$METHODS" \
         --poisson-n "$N" || { rc=1; continue; }
+
+    if [ "$DO_SCORE" != "1" ]; then
+        echo "[t49] DO_SCORE=0 — generated only; score with slurm/t49_baselines_score.sh"
+        continue
+    fi
 
     ARGS=()
     for M in ${METHODS//,/ }; do
