@@ -164,6 +164,26 @@ the expectation); `PASS_WITH_DRIFT` up to 2.4e-5, which is 001's own worst case 
 table and means find the source before scoring entrants; `FAIL` above that; `INCOMPLETE` if any
 reference row has no counterpart — the gate never passes on a partial panel.
 
+### Result, 2026-08-25: **PASS at exactly 0.0**
+
+510 (experiment, bootstrap) rows × 8 measures, 0 missing and 0 extra, worst relative difference
+**0.000e+00** — bit-identical to 001 on every measure. Recorded in
+`CANDII_t54_work/average_gate.json`.
+
+So the full chain holds: the staged Dataset-3 tracks reproduce the Average that 001 built, the
+vendored scorer reproduces the scores 001 recorded, and 001 in turn matched the *published* Average
+rows to median 2.7e-8 / max 2.6e-7. **An entrant score produced by this path inherits that
+verification.**
+
+Build inputs, for the record: 23 assays × 23 chromosomes = 529 npz, no assay missing a source track,
+287 contributor tracks summed over the 23 assays needed for the blind/validation targets, drawn from
+the 312 train+validation bigwigs linked into the farm.
+
+The comparison logic was itself checked three ways before use: the reference against itself gives
+`PASS` at 0.0; 001's *train-only* Average against its trainval reference gives `FAIL` at 2.157e-01,
+which is the discriminating comparison that settled the variant question; and a truncated input gives
+`INCOMPLETE`.
+
 ---
 
 ## 5. Downloading the submissions
