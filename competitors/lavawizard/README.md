@@ -1,11 +1,70 @@
 # Lavawizard / Guacamole
 
-Rival method for the leaderboard, `plan/RIVALS_PLAN.md` §7.4. This directory holds our port;
-today it holds only these reading notes, because the spike half of t53 is finished and the port
-half waits on the PI.
+Rival method for the leaderboard, `plan/RIVALS_PLAN.md` §7.4. The PI approved the port on
+2026-08-25 with one amendment: **their released weights are the primary parity anchor, and reading
+them needs no TensorFlow.**
 
-**Nothing here is imported by `src/candi`, ever** (decision E). The port emits §4.1 prediction
-roots and is scored by `candi.bench.external`.
+**Nothing here is imported by `src/candi`, ever** (decision E). The dependency runs one way — this
+package imports `candi.bench.external` for the §4.1 directory-name rule, so the prediction-track
+contract keeps one definition. The port emits §4.1 roots and is scored by `candi.bench.external`.
+
+| module | what it does |
+|---|---|
+| `model.py` | the architecture — `Precamole` (stage 1) and `Guacamole` (stage 2) |
+| `keras_weights.py` | their `.h5` into a torch module, `h5py` only |
+| `features.py` | the cross-cell average and variance, from our store |
+| `emit.py` | §4.1 prediction roots |
+| `parity_keras.py` | the two-half parity harness (Keras reference, torch compare) |
+
+Tests: `tests/test_lavawizard.py`, 24 checks, seconds, no TensorFlow and no network.
+
+## Parity — measured, not asserted
+
+The port loads a real Keras 2.2.4 checkpoint and reproduces what Keras does with it:
+
+```
+loaded 15 layers / 28 tensors / 61,772,797 parameters
+abs err  max 2.384e-06  mean 4.630e-07  p99 1.550e-06
+pearson r = 1.000000000000
+GATE max_abs <= 1e-05: PASS
+```
+
+4 096 random inputs against a chr21-architecture stage-2 model (61.8 M parameters — the loaded
+parameter count equals Keras's own `count_params()` exactly, so every tensor moved). The residual
+is float32 accumulation order between MKL and torch, not a mapping error. **The observed tolerance
+is 2.4e-6; the gate is set at 1e-5**, four times the headroom, per the PI's instruction to document
+the tolerance on one chromosome before rolling it out.
+
+That settles the half of §7.4's gate we can settle now — us against Keras on their weights. The
+full gate adds their preprocessing and bigwig quantisation, and waits on t54.
+
+Four mappings are wrong-by-default and all four are covered:
+
+| Keras | torch | why it bites |
+|---|---|---|
+| `kernel:0` `(in, out)` | `Linear.weight` `(out, in)` | the transpose is shape-legal on the square `dense_2` |
+| BatchNorm `epsilon=1e-3` | torch default `1e-5` | their running statistics assume theirs |
+| Keras `momentum=0.99` | torch `momentum=0.01` | the two name complementary quantities |
+| PReLU `alpha` `(2048,)` | `num_parameters=2048` | torch defaults to a single shared alpha |
+
+Block order is **Dense → PReLU → BatchNorm → Dropout** — activation before normalisation. Unusual,
+and it is what they trained.
+
+## The contributor switch (PI ruling, 2026-08-25)
+
+`features.contributors(..., mode=)` decides who feeds the cross-cell average:
+
+- **`"loo"`, the default, used for every number we report.** Training biosamples carrying the
+  assay, minus every biosample sharing the target's cell-type suffix — so T_X drops out when
+  predicting V_X. This matches `RIVALS_PLAN.md` §5's exclusion rule and their own docstring's
+  stated intent.
+- **`"upstream"`, for parity runs only.** Everyone carrying the assay, target included —
+  reproducing the leak described below, so the parity check can feed their weights the features
+  they actually saw.
+
+Which mode produced a root is written into `manifest.json` as `contributor_mode` and lands in the
+score file's provenance. A row whose mode is `upstream` is a parity artifact and is never a
+leaderboard number.
 
 ## Provenance
 
@@ -100,7 +159,8 @@ parameters; chr1 computes to ~233 M. Summed: ~3.3 G parameters, ~13 GB of weight
 every track carrying the assay, including the target track itself. The docstring at
 `03_guacamole6_train.py:128` says it should exclude the current cell type, so this is a bug. A
 blind track has no track to include, so it gets a clean average — training and test see
-different features. PI ruling needed (`RIVALS_PLAN.md` §6.2).
+different features. **Ruled (PI, 2026-08-25): the port excludes, and reproduces the leak only
+behind `mode="upstream"`.** See "The contributor switch" above.
 
 **`dict_3cat` is an object array.** `vals2cat` returns `np.array(pd.qcut(...))`, dtype `object`;
 the `astype('int8')` on the next line is never assigned. At chr1 that is 312 × 9.96 M Python
@@ -135,5 +195,34 @@ retrain in their own code is roughly 200 CPU-days. That is why the port exists.
 
 ## Status
 
-Spike done (t53, first half). Memo and evidence: `cruxvault/results/t53/SPIKE_MEMO.md`, with the
-Fir path in `FIR_PATH.txt` beside it. The port is a PI checkpoint and has not started.
+Spike done; memo and evidence in `cruxvault/results/t53/SPIKE_MEMO.md`, Fir path in
+`FIR_PATH.txt` beside it.
+
+Port: architecture, weight-loader, feature pipeline, §4.1 emitter and the parity harness are in.
+Keras-parity is measured and passing at 1e-5.
+
+Not started, and blocked on t54's Synapse and Globus work:
+
+- the **true** §7.4 gate — predict with their `syn21519009` weights and compare against their
+  submitted tracks, tolerance to be documented on one chromosome first;
+- the training loop (their two-stage, per-chromosome schedule) and both retrains.
+
+Not started, and not blocked: nothing. The next step is the gate.
+
+## Running it
+
+```bash
+# tests — laptop or cluster, no TensorFlow, no network
+PYTHONPATH=$PWD/src pytest tests/test_lavawizard.py -q
+
+# parity, on Fir. Half A needs the TF 1.15 env; half B must not have it.
+cd ~/scratch/t53_lavawizard
+MAMBA_ROOT_PREFIX=$PWD/mamba ./bin/micromamba run -n lw_period \
+    python port/lavawizard/parity_keras.py reference \
+    --h5 <their_model>.h5 --out ref.npz --n 4096
+module load StdEnv/2023 python/3.11 && source torch_env/bin/activate
+python port/lavawizard/parity_keras.py compare --h5 <their_model>.h5 --ref ref.npz --max-abs 1e-5
+```
+
+The TF 1.15 environment is a debugging fallback and the reference half of the parity harness. It
+is used for nothing else, and it is not deleted.
