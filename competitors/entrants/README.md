@@ -249,6 +249,51 @@ match the Synapse file handle, so a partial transfer cannot be mistaken for a fi
 `--verify` then checks size alone, deliberately: md5 was already proven at write time, and what
 verification adds is catching the file that never arrived at all.
 
+### Synapse throttles concurrent streams — the retry is not optional
+
+**The first run lost five of eight shards**: four to `HTTPError: HTTP Error 403: Forbidden` and one
+to `http.client.RemoteDisconnected`, spread across the first hour rather than clustered at the start.
+
+The cause was ours. The vendored `fir_synapse_download.py` wraps every transfer in a six-attempt
+retry inside its own `main()`, with a comment saying exactly why — *presigned URLs expire, and
+Synapse throttles concurrent streams, so a 403 mid-transfer is normal rather than fatal: retry with
+a fresh URL.* Our driver called `SYN.download()` directly and dropped that loop. It is restored with
+the same shape (exponential backoff; `download()` requests a fresh presigned URL on entry) plus a
+loud `GIVING UP` line naming the file if all six attempts are exhausted.
+
+Nothing was lost — the pull is resumable, so the resubmitted shards skipped everything already on
+disk. **On any partial resubmit, pass `NSHARD`** to pin the original denominator: `--array=0,2,3,5,7`
+sets `SLURM_ARRAY_TASK_COUNT` to 5, which would silently re-partition the tree and send each task
+after a slice it was never assigned.
+
+```bash
+sbatch --array=0,2,3,5,7 --export=ALL,YES=1,NSHARD=8 slurm/fetch_submissions.slurm
+```
+
+### The two organizer baselines
+
+The placement table needs `Average` and `Avocado_p0` beside the 23 entrants, and both exist as
+bigwigs on the official grid — so they go through the **same** `score_entrant.py` path as every
+entrant rather than a special-cased route.
+
+| baseline | folder | synID | files | size |
+|---|---|---|---|---|
+| `Average` (team_id 100) | `baselines/average_predictor/test` | `syn20957925` | 56 | 51.6 GB |
+| `Avocado_p0` (team_id 0) | `baselines/avocado_training_and_validation/test` | `syn20606515` | 56 | 54.1 GB |
+
+```bash
+sbatch --array=0-3 --export=ALL,BASE=average slurm/fetch_baselines.slurm
+sbatch --array=0-3 --export=ALL,BASE=avocado slurm/fetch_baselines.slurm
+```
+
+`--only-from blind_experiments.txt` cuts each to **51**. Both folders carry five extra tracks —
+`C14M01`, `C14M02`, `C14M16`, `C14M17`, `C14M22` — for a cell that is not in the EIC 363 at all, so
+they are predictions with no truth here and pulling them would be ~10 GB of dead weight.
+
+This is *additional to*, not a replacement for, our own rebuilt Average (§4): that one is npz and
+feeds the nine measures through the vendored scorer. Downloading the published tracks is what lets
+the Average row carry a P-block too, and lets the two be cross-checked against each other.
+
 Token: a Synapse personal access token with view + download scope at `~/.synapse_pat`, mode 600
 (the driver refuses a group- or world-readable file and never prints the token). Everything under
 `syn17083203` is otherwise unrestricted — no data-access committee.
