@@ -166,6 +166,44 @@ def test_the_nb_is_never_under_dispersed():
     assert np.all(n == Hd.POISSON_N)
 
 
+def test_n_never_exceeds_the_poisson_floor_from_either_branch():
+    """The clip in `nb_from_moments`, and the defect it closes.
+
+    As `V` falls towards `mu` from above, `mu**2 / (V - mu)` diverges — so a bin whose contributors
+    very nearly agree returns an enormous `n` through the MOMENT-MATCHED branch while a bin whose
+    contributors agree exactly returns `poisson_n` through the floor. Both are the statement "this is
+    Poisson"; without the clip they are different numbers, and the big one is unscoreable.
+
+    Not cosmetic: uncapped, 26 of the 45 P1 tracks came back with a NaN CRPS at `poisson_n = 1e4`,
+    and `beats_marginal` counted every one of them as a loss.
+    """
+    nearly = np.array([[10.0, 10.0], [10.0, 10.0], [10.0, 10.000_01]])
+    for floor in (1e4, Hd.POISSON_N):
+        _, n = Hd.moment_matched_nb(nearly, DC, DC, poisson_n=floor)
+        assert np.all(n <= floor), f"n above the declared Poisson floor {floor}: {n.max()}"
+        # The two branches must MEET: the exact-agreement bin and the near-agreement bin report the
+        # same limit, which is what makes the cap continuous rather than an arbitrary clamp.
+        assert n[0] == floor and n[1] == floor
+
+
+def test_the_nb_crps_ceiling_is_in_n_alone():
+    """Where `candi.metrics.nb_crps` stops working, measured — it is what sizes the Poisson floor.
+
+    Finite up to `n = 1e4` and NaN from `n = 3e4`, at every `mu` from 0.01 to 1e5. Independent of
+    `mu`, which is why capping `n` is a COMPLETE fix for the generator, and why §5.1's 1e6 is not
+    reachable by any choice this package can make on its own.
+    """
+    from candi.bench.distributional import p_from_mu
+    from candi.metrics import nb_crps
+
+    for mu in (0.01, 1.0, 100.0, 1e5):
+        m, y = np.array([mu]), np.array([float(round(mu))])
+        assert np.isfinite(nb_crps(np.array([1e4]), p_from_mu(np.array([1e4]), m), y)[0]), \
+            f"the ceiling dropped below n=1e4 at mu={mu} — re-measure before generating anything"
+        assert not np.isfinite(nb_crps(np.array([3e4]), p_from_mu(np.array([3e4]), m), y)[0]), \
+            f"nb_crps now evaluates n=3e4 at mu={mu}; re-measure the ceiling and raise the floor"
+
+
 def test_L3_arithmetic_is_depth_free():
     """`reference.py`'s L3, on the generator's arithmetic: double a depth AND its counts, nothing moves."""
     raw2 = RAW.copy()

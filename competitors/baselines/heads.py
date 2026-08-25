@@ -97,11 +97,21 @@ def nb_from_moments(m: np.ndarray, v: Optional[np.ndarray], target_log2_depth: f
 
         s = 2 ** (d_t - depth_center)
         mu = s * m                       V = s**2 * v
-        n  = mu**2 / (V - mu)  where V > mu,  else POISSON_N
+        n  = min(mu**2 / (V - mu), poisson_n)  where V > mu,  else poisson_n
         p  = n / (n + mu)                                       (derived by the scorer, not here)
 
     `v is None` means "no variance was measurable" — one contributor — and every bin takes the
     Poisson floor, the same branch a bin whose contributors agree tightly takes.
+
+    **THE `min` IS THE POISSON LIMIT REACHED FROM THE OTHER SIDE, and leaving it out was a bug.**
+    §5.1 writes the two branches as `mu**2 / (V - mu)` and `else 1e6`, and reads as though only the
+    `else` can produce a huge `n`. It cannot: as `V` falls towards `mu` from above, `mu**2/(V-mu)`
+    diverges, so a bin with `V = mu*(1 + 1e-5)` returns `n` of order `1e7` — the SAME "this is
+    Poisson" statement the floor makes, spelled as a number the floor would never emit. Without the
+    clip the function's own range contradicts its declared limit, and 26 of the 45 P1 tracks came
+    back with a NaN CRPS at `poisson_n = 1e4` because of it (`candi.metrics.nb_crps` is finite up to
+    `n = 1e4` and NaN from `n = 3e4`, independent of `mu`). Capping the computed branch at the same
+    constant the floor uses is what makes "the Poisson floor is `poisson_n`" true of both branches.
 
     Two callers, and they are the reason this is not inlined into `moment_matched_nb`: the
     cross-cell average measures `(m, v)` per bin, the per-assay marginal (§5.4) fits one `(m, v)`
@@ -119,7 +129,7 @@ def nb_from_moments(m: np.ndarray, v: Optional[np.ndarray], target_log2_depth: f
     # `V - mu` is strictly positive under the mask, so no divide-by-zero and no clipping of a
     # negative dispersion into a plausible-looking one.
     Vb = np.broadcast_to(V, mu.shape)
-    n[over] = np.maximum(mu[over] ** 2 / (Vb[over] - mu[over]), N_FLOOR)
+    n[over] = np.clip(mu[over] ** 2 / (Vb[over] - mu[over]), N_FLOOR, float(poisson_n))
     return mu, n
 
 
