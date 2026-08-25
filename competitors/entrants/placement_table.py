@@ -62,6 +62,11 @@ CAVEATS = [
     "The ten bootstraps are ten fixed chromosome subsets, not resamples of genomic positions.",
 ]
 
+# A method that scored fewer experiments than expected gets this marker on the affected assay row.
+# The D2 lesson is that a partial panel must never look like a complete one, and an assay median
+# over 7 experiments sitting unmarked beside one over 8 is exactly that failure.
+GAP_MARK = " (dagger)"
+
 
 def load_method(paths: List[str]) -> Dict[str, dict]:
     """Per-experiment records from one method's CSVs, bootstraps collapsed to mean + spread."""
@@ -145,6 +150,35 @@ def macro(rows: Dict[str, dict], mark_class: Optional[str] = None) -> dict:
     return out
 
 
+def load_expected(expect_path: str, bridge_path: str) -> Dict[str, str]:
+    """Expected experiment -> assay, DNase already dropped.
+
+    Without this the assembler can only report how many experiments a method HAPPENED to produce.
+    With it, a method that is short can be named as short, and the specific `C##M##` said out loud.
+    """
+    bridge = {r["filename"]: r for r in csv.DictReader(open(bridge_path))}
+    out: Dict[str, str] = {}
+    for line in open(expect_path):
+        exp = line.strip()
+        if not exp:
+            continue
+        assay = bridge[exp]["assay_name"]
+        if assay not in EXCLUDED_ASSAYS:
+            out[exp] = assay
+    return out
+
+
+def coverage(by_exp: Dict[str, dict], expected: Dict[str, str]) -> dict:
+    """What a method is missing against the expected panel, per assay."""
+    missing = sorted(set(expected) - set(by_exp))
+    per_assay: Dict[str, List[str]] = defaultdict(list)
+    for e in missing:
+        per_assay[expected[e]].append(e)
+    return {"n_expected": len(expected), "n_scored": len(by_exp),
+            "missing": missing, "missing_by_assay": dict(per_assay),
+            "complete": not missing}
+
+
 def fmt(x: float) -> str:
     if not np.isfinite(x):
         return "--"
@@ -170,11 +204,21 @@ def markdown(methods: Dict[str, dict]) -> str:
         have = [(name, d["per_assay"][assay]) for name, d in methods.items()
                 if assay in d["per_assay"]]
         have.sort(key=lambda kv: (kv[1][rank_key] if np.isfinite(kv[1][rank_key]) else np.inf))
+        gaps: List[str] = []
         for name, r in have:
-            L.append(f"| {name} | {r['n_experiments']} | "
+            cov = methods[name].get("coverage") or {}
+            short = (cov.get("missing_by_assay") or {}).get(assay, [])
+            mark = GAP_MARK if short else ""
+            if short:
+                have_n, want_n = r["n_experiments"], r["n_experiments"] + len(short)
+                gaps.append(f"**{name}** is missing {', '.join(short)} — its median here is over "
+                            f"{have_n} experiment{'' if have_n == 1 else 's'}, not {want_n}.")
+            L.append(f"| {name}{mark} | {r['n_experiments']} | "
                      + " | ".join(fmt(r[m]) for m in MEASURES)
                      + f" | {fmt(r['acc_obs'])} | {fmt(r['acc_imp'])} |")
         L.append("")
+        for g in gaps:
+            L += [f"(dagger) {g}", ""]
 
     for klass, title in (("broad", "Macro -- broad marks (H3K27me3, H3K36me3, H3K9me3)"),
                          ("punctate", "Macro -- punctate marks"),
@@ -195,6 +239,19 @@ def markdown(methods: Dict[str, dict]) -> str:
                   "quoted without them: broad and punctate marks differ in dynamic range by orders "
                   "of magnitude, so the pool is dominated by whichever class has more assays.", ""]
 
+    covs = {n: d["coverage"] for n, d in methods.items() if d.get("coverage")}
+    if covs:
+        L += ["## Coverage — which methods scored the full panel", "",
+              "| method | scored | expected | missing |", "|---|---:|---:|---|"]
+        for name in sorted(covs, key=lambda n: (covs[n]["complete"], n)):
+            c = covs[name]
+            L.append(f"| {name} | {c['n_scored']} | {c['n_expected']} | "
+                     + (", ".join(c["missing"]) if c["missing"] else "—") + " |")
+        L += ["", "A method missing an experiment has a smaller median in that assay's row above, "
+                  "marked (dagger). It is listed here rather than silently averaged, because an "
+                  "assay median over 7 experiments sitting unmarked beside one over 8 is exactly "
+                  "the partial-panel failure the D2 lesson is about.", ""]
+
     L += ["## Caveats -- all of these travel with every number above", ""]
     L += [f"{i}. {c}" for i, c in enumerate(CAVEATS, 1)]
     return "\n".join(L) + "\n"
@@ -208,7 +265,18 @@ def main() -> int:
                     help="'<name>=<glob>' for the matching per-experiment jsons")
     ap.add_argument("--out-md", required=True)
     ap.add_argument("--out-json", required=True)
+    ap.add_argument("--expect", help="blind_experiments.txt -- the panel every method should cover. "
+                                     "Given this, a short method is NAMED as short rather than "
+                                     "quietly contributing a smaller median.")
+    ap.add_argument("--bridge", help="eic_bridge.csv, needed with --expect to map experiment->assay")
     args = ap.parse_args()
+
+    expected = (load_expected(args.expect, args.bridge)
+                if args.expect and args.bridge else None)
+    if args.expect and not args.bridge:
+        raise SystemExit("--expect needs --bridge to map each experiment to its assay")
+    if expected:
+        print(f"expected panel: {len(expected)} experiments (DNase excluded)")
 
     pb_globs = dict(p.split("=", 1) for p in args.pblock)
     methods: Dict[str, dict] = {}
@@ -220,9 +288,14 @@ def main() -> int:
             continue
         by_exp = load_method(paths)
         pblock = load_pblock(sorted(glob.glob(pb_globs[name]))) if name in pb_globs else {}
+        cov = coverage(by_exp, expected) if expected else None
         methods[name] = {"per_exp": by_exp, "per_assay": per_assay(by_exp, pblock),
-                         "n_experiments": len(by_exp), "n_csv": len(paths)}
-        print(f"{name}: {len(by_exp)} experiments (DNase excluded), {len(pblock)} p-blocks")
+                         "n_experiments": len(by_exp), "n_csv": len(paths), "coverage": cov}
+        note = ""
+        if cov and cov["missing"]:
+            note = f"  SHORT: missing {', '.join(cov['missing'])}"
+        print(f"{name}: {len(by_exp)} experiments (DNase excluded), "
+              f"{len(pblock)} p-blocks{note}")
 
     if not methods:
         raise SystemExit("no method produced any row")
@@ -240,6 +313,7 @@ def main() -> int:
         "aggregation": ("bootstrap mean within experiment; median over experiments within assay; "
                         "mean over assay medians for macro"),
         "methods": {n: {"n_experiments": d["n_experiments"], "per_assay": d["per_assay"],
+                        "coverage": d.get("coverage"),
                         "macro_broad": macro(d["per_assay"], "broad"),
                         "macro_punctate": macro(d["per_assay"], "punctate"),
                         "macro_all": macro(d["per_assay"], None)}

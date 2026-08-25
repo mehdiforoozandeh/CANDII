@@ -296,11 +296,20 @@ experiments, leaving **48**: 26 broad (H3K27me3 ×9, H3K9me3 ×9, H3K36me3 ×8) 
 (H3K27ac ×7, H3K4me1 ×7, H3K4me3 ×5, ATAC-seq ×3).
 
 ```bash
+M001=/project/def-maxwl/mforooz/MAX_EPI_IMPUTATION/experiments/001_2026-07-27_eic_leaderboard_repro
 python3 placement_table.py \
     --scores Average=…/Average/*.csv Avocado_p0=…/Avocado_p0/*.csv Guacamole=…/Guacamole/*.csv … \
     --pblock Guacamole=…/Guacamole/*.json … \
+    --expect "$M001/output/bridge/blind_experiments.txt" \
+    --bridge "$M001/output/bridge/eic_bridge.csv" \
     --out-md placement.md --out-json placement.json
 ```
+
+**Always pass `--expect`/`--bridge`.** Without them the assembler can only report how many
+experiments a method *happened* to produce; with them a short method is named as short. It marks the
+affected assay row `(dagger)`, states underneath which `C##M##` is absent and over how many
+experiments that median was actually taken, and adds a `## Coverage` table listing every method
+against the full panel. `UIOWA_Michaelson` is the known case — see §7.
 
 Aggregation, stated once: bootstraps averaged within an experiment → experiments combined by
 **median** within an assay (what 001 and 005 both report, and what survives the heavy tail the
@@ -315,3 +324,28 @@ all six caveats appended to every table it emits.
 for rescaling a Dataset-2 score into Dataset-3 space (best H3K4me3 12 %, worst H3K4me1 66 %; DNase's
 factor is ~1327, not a translation factor at all). Score directly against Dataset-3 truth; never
 translate.
+
+---
+
+## 7. Known data gaps
+
+### `UIOWA_Michaelson` is missing `C38M18`
+
+Identified from the survey manifest on 2026-08-25, before the pull finished. 22 of the 23 teams ship
+exactly the 51-experiment blind panel; `UIOWA_Michaelson` ships 50.
+
+| | |
+|---|---|
+| experiment | `C38M18` |
+| cell | `C38` — RWPE2 |
+| assay | **H3K36me3** — a **broad** mark |
+| effect | that team's H3K36me3 median is over 7 experiments, not 8 |
+
+This is a gap in what the team submitted in 2019, not a transfer failure — the file does not exist on
+Synapse, so no re-pull will produce it. `placement_table.py --expect` marks the row `(dagger)` and
+lists it in the `## Coverage` table, so it can never pass as a complete panel. The gap lands in a
+broad mark, where the blacklist-deletion tail is heaviest, so it deserves the mention rather than a
+shrug.
+
+No other team deviates: `UIOWA_Michaelson` aside, every submitted filename set equals the blind list
+exactly, with no unexpected extras.
