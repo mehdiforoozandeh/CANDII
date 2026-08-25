@@ -92,9 +92,10 @@ def cmd_train(args) -> int:
     cfg = _cfg_from_args(args)
     if cfg.n_targets >= panel.n_tracks:
         raise SystemExit(
-            f"n_targets {cfg.n_targets} >= panel {panel.n_tracks}: no supports would be left. The "
-            f"paper's 120 assumes Roadmap's 1032 tracks; say --n-targets explicitly and record it "
-            f"in the README as a departure from paper defaults (§6.3).")
+            f"--n-targets {cfg.n_targets} >= panel {panel.n_tracks}: no supports would be left.")
+    print(f"[edice] masking {cfg.n_targets}/{panel.n_tracks} tracks per bin "
+          f"({cfg.n_targets / panel.n_tracks:.1%}); eDICE's Roadmap setting was "
+          f"120/1032 = 11.6%", flush=True)
 
     model = build_model(len(panel.biosamples), len(panel.assays), cfg)
     n_params = sum(p.numel() for p in model.parameters())
@@ -236,7 +237,14 @@ def build_parser() -> argparse.ArgumentParser:
     tr.add_argument("--epochs", type=int, default=Config.epochs)
     tr.add_argument("--lr", type=float, default=Config.lr)
     tr.add_argument("--batch-size", type=int, default=Config.batch_size)
-    tr.add_argument("--n-targets", type=int, default=Config.n_targets)
+    # NO DEFAULT, deliberately. "Paper defaults" (§6.3) is ambiguous here and the two readings are
+    # far apart: eDICE masked 120 of Roadmap's 1032 tracks per bin (11.6%), and our EIC panel holds
+    # 267 tracks, so the same ABSOLUTE 120 masks 45% while the same RATE is 31. That is a decision
+    # about the training signal, not a knob, so the run refuses to pick one silently. See the
+    # README's "The one open decision".
+    tr.add_argument("--n-targets", type=int, required=True,
+                    help="tracks masked per bin. 31 keeps eDICE's Roadmap RATE (11.6%% of 267); "
+                         "120 keeps its absolute count and masks 45%%. Pre-register the choice.")
     tr.add_argument("--embed-dim", type=int, default=Config.embed_dim)
     tr.add_argument("--seed", type=int, default=Config.seed)
     tr.add_argument("--train-chroms", nargs="+", default=None,
