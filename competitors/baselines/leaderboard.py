@@ -1,0 +1,254 @@
+"""Fold the score files `candi.bench.external` writes into one leaderboard json (§5.5, §6.4).
+
+    python -m competitors.baselines.leaderboard --protocol P1 \\
+        --scores avg=avg.json marginal=marginal.json ... --out leaderboard.json
+
+It computes NOTHING. Every number in the output is copied from a score file — this module groups
+per-track rows by assay, takes the unweighted mean the way `harness.macro_mean` does, and enforces
+the §6.4 reporting invariants on the way out.
+
+THE FOUR INVARIANTS, AS CODE RATHER THAN AS A CONVENTION
+--------------------------------------------------------
+1. **Per-assay rows first, macro second.** `per_assay` is the first key of every method block;
+   `macro` follows it.
+2. **Broad and punctate are never pooled without their separate medians beside the pool.**
+   `macro[arm]["<key>_broad_median"]` and `_punctate_median` sit next to every pooled key. The broad
+   set is §6.4's: H3K27me3, H3K36me3, H3K9me3. Accessibility (DNase-seq, ATAC-seq) is a THIRD group
+   and not a "mark" in either sense, so it gets `_accessibility_median` rather than being folded into
+   punctate — pooling an accessibility assay into a histone median is the same error one level down.
+3. **`auprc` never without `peak_base_rate`, `crps` never without `crps_oracle_scaled` and
+   `scale_error`.** A score file that carries one without the other raises here, naming the track.
+4. **A peak row that ranked by level is labelled.** `has_peak_head` travels from the score file's
+   `provenance` into `per_assay[...]["peak_ranking"]` as either `"peak_head"` or
+   `"coverage_ranking"`. §6.4 requires the label on the row itself.
+
+The noise floors from `AGENTS.md` §7.2 are stamped into the header because the quoting rule in
+`CLAUDE.md` says a number is not quotable without them, and a leaderboard is the one artifact that
+will be quoted from most.
+
+The §5.5 sanity anchors are checked, never tuned: `--check-anchors` exits non-zero and says which
+one failed. A failed anchor is a defect in the generator or in the panel, and the plan's instruction
+is to stop, not to adjust the baseline until it passes.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import date
+from pathlib import Path
+from statistics import median
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+
+__all__ = ["BROAD", "ACCESSIBILITY", "NOISE_FLOORS", "assemble", "check_anchors",
+           "build_parser", "main"]
+
+#: §6.4, verbatim. Everything else that is a histone mark is punctate.
+BROAD: Tuple[str, ...] = ("H3K27me3", "H3K36me3", "H3K9me3")
+
+#: Not marks at all. Kept out of both medians and given their own.
+ACCESSIBILITY: Tuple[str, ...] = ("DNase-seq", "ATAC-seq")
+
+#: `AGENTS.md` §7.2. Quoted with every number this file emits, because the rule in `CLAUDE.md` is
+#: that a CANDII number without its floor is not quotable. These are frozen pre-CANDII values and are
+#: copied, never recomputed.
+NOISE_FLOORS: Dict[str, float] = {
+    "macro_crps_target_clustered": 0.09,
+    "pooled_crps_seed_change": 0.1195,
+    "macro_crps_seed_floor_bench": 0.0608,
+}
+
+#: §6.4 — the pairs that may not be separated, per arm. `arm -> key -> the keys that must ship
+#: beside it`. The CRPS split is a COUNT-ARM rule and only a count-arm rule: `oracle_scale` fits a
+#: per-assay scale to an NB and re-scores it, so `crps_oracle_scaled` / `scale_error` exist for
+#: `nb_suite` and have no counterpart in `gauss_suite`. Requiring them on the pval arm would demand a
+#: key `candi.bench` does not compute, and every table that quotes a pval CRPS quotes the Gaussian
+#: one. `None` means "every arm".
+_COMPANIONS: Dict[Optional[str], Dict[str, Tuple[str, ...]]] = {
+    None: {"auprc": ("peak_base_rate",)},
+    "count": {"crps": ("crps_oracle_scaled", "scale_error")},
+}
+
+
+def _group(assay: str) -> str:
+    if assay in ACCESSIBILITY:
+        return "accessibility"
+    return "broad" if assay in BROAD else "punctate"
+
+
+def _scalars(row: Mapping[str, Any]) -> Dict[str, float]:
+    return {k: float(v) for k, v in row.items()
+            if isinstance(v, (int, float, bool)) and not isinstance(v, str)}
+
+
+def _check_companions(where: str, arm: str, keys: Sequence[str]) -> None:
+    have = set(keys)
+    for scope in (None, arm):
+        for k, companions in _COMPANIONS.get(scope, {}).items():
+            if k not in have:
+                continue
+            gone = [c for c in companions if c not in have]
+            if gone:
+                raise ValueError(
+                    f"{where}: `{k}` is present and {gone} are not. RIVALS_PLAN.md §6.4 forbids "
+                    f"quoting one without the other — a raw CRPS with no oracle_scaled/scale_error "
+                    f"split conflates capability with per-assay level, and an AUPRC with no base "
+                    f"rate is unreadable. Re-score; do not drop the companion key.")
+
+
+def _mean(vals: Sequence[float]) -> float:
+    return float(sum(vals) / len(vals))
+
+
+def assemble(scores: Mapping[str, Path | str], *, protocol: str,
+             notes: str = "") -> Dict[str, Any]:
+    """`{method: score json path}` -> the leaderboard object. Nothing is recomputed."""
+    methods: Dict[str, Any] = {}
+    for name, path in scores.items():
+        obj = json.loads(Path(path).read_text(encoding="utf-8"))
+        prov = obj["provenance"]
+        by_assay: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
+        n_tracks: Dict[str, Dict[str, int]] = {}
+        peak_ranking: Dict[str, str] = {}
+        for key, arms in obj["per_track"].items():
+            for arm, row in arms.items():
+                s = _scalars(row)
+                _check_companions(f"{name}/{key}/{arm}", arm, sorted(s))
+                assay = str(row["assay"])
+                for k, v in s.items():
+                    by_assay.setdefault(arm, {}).setdefault(assay, {}).setdefault(k, []).append(v)
+                n_tracks.setdefault(arm, {})[assay] = n_tracks.get(arm, {}).get(assay, 0) + 1
+                # `bernoulli_nll` is emitted only when the producer supplied a real `peak_score`
+                # (`harness.loss_block` withholds it when `has_peak_head` is False), so its presence
+                # IS the §6.4 label.
+                peak_ranking[assay] = ("peak_head" if "bernoulli_nll" in s
+                                       else "coverage_ranking")
+
+        per_assay: Dict[str, Dict[str, Any]] = {}
+        macro: Dict[str, Dict[str, Any]] = {}
+        for arm, assays in by_assay.items():
+            per_assay[arm] = {}
+            for assay in sorted(assays):
+                per_assay[arm][assay] = {
+                    **{k: _mean(v) for k, v in sorted(assays[assay].items())},
+                    "n_tracks": n_tracks[arm][assay],
+                    "group": _group(assay),
+                    # §6.4 — the label lives on the row, not in a caption someone may drop.
+                    "peak_ranking": peak_ranking.get(assay, "coverage_ranking"),
+                }
+            pooled = obj["macro"].get(arm, {})
+            _check_companions(f"{name}/macro/{arm}", arm, sorted(pooled))
+            out = dict(pooled)
+            keys = sorted({k for a in assays for k in assays[a]})
+            for k in keys:
+                for grp in ("broad", "punctate", "accessibility"):
+                    vals = [_mean(assays[a][k]) for a in assays
+                            if _group(a) == grp and k in assays[a]]
+                    if vals:
+                        out[f"{k}_{grp}_median"] = float(median(vals))
+                        out[f"{k}_{grp}_n_assays"] = len(vals)
+            macro[arm] = out
+
+        methods[name] = {
+            # ORDER MATTERS HERE (§6.4): per-assay rows first, macro second.
+            "per_assay": per_assay,
+            "macro": macro,
+            "provenance": {
+                "method": prov["method"],
+                "manifest": prov.get("manifest", {}),
+                "pred_root": prov.get("pred_root"),
+                "declared_tracks": prov.get("declared_tracks"),
+                "missing_tracks": prov.get("missing_tracks", []),
+                "n_scored_tracks": len(obj["tracks"]),
+                "pred_inversion": prov.get("pred_inversion"),
+                "point_only_tracks": prov.get("point_only_tracks", []),
+                "sparse_assays": prov.get("manifest", {}).get("sparse_assays", []),
+                "msevar": prov.get("msevar"),
+            },
+        }
+
+    return {
+        "generated": date.today().isoformat(),
+        "protocol": protocol,
+        "notes": notes,
+        # Quoted with every number, per `CLAUDE.md` / `AGENTS.md` §7.2.
+        "noise_floors": dict(NOISE_FLOORS),
+        "reporting": {
+            "broad": list(BROAD),
+            "accessibility": list(ACCESSIBILITY),
+            "rule": "RIVALS_PLAN.md §6.4 — per-assay rows first, macro second; broad and punctate "
+                    "medians always beside the pool; auprc with peak_base_rate; crps with "
+                    "crps_oracle_scaled and scale_error; a row that ranked peaks by predicted level "
+                    "is labelled coverage_ranking.",
+        },
+        "methods": methods,
+        "sanity": check_anchors(methods),
+    }
+
+
+def check_anchors(methods: Mapping[str, Any]) -> Dict[str, Any]:
+    """The two §5.5 sanity anchors. Reported as verdicts; never used to adjust a baseline.
+
+    1. The plain-mean pval baseline (`avg`) beats the per-assay marginal on macro mse — pval arm.
+       If it does not, the average is not carrying cross-cell information and something upstream is
+       wrong; the plan says stop.
+    2. `beats_marginal` is near-universal for the moment-matched NB baseline (`avg`, count arm).
+       `beats_marginal` is `bench.distributional.nb_suite`'s comparison against a marginal NB fitted
+       on the truth itself, so a strictly richer per-bin predictor should clear it almost everywhere.
+       "Near-universal" is read as >= 0.9 of the scored tracks.
+    """
+    out: Dict[str, Any] = {}
+    avg, marg = methods.get("avg"), methods.get("marginal")
+    if avg and marg:
+        a = avg["macro"].get("pval", {}).get("mse")
+        m = marg["macro"].get("pval", {}).get("mse")
+        out["avg_beats_marginal_on_macro_pval_mse"] = {
+            "avg_mse": a, "marginal_mse": m,
+            "pass": None if a is None or m is None else bool(a < m),
+        }
+    if avg:
+        frac = avg["macro"].get("count", {}).get("beats_marginal")
+        out["avg_beats_marginal_near_universal"] = {
+            "fraction_of_tracks": frac,
+            "threshold": 0.9,
+            "pass": None if frac is None else bool(frac >= 0.9),
+        }
+    out["all_pass"] = all(v.get("pass") is True for v in out.values() if isinstance(v, dict))
+    return out
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="python -m competitors.baselines.leaderboard",
+        description="Fold candi.bench.external score files into one leaderboard json "
+                    "(RIVALS_PLAN.md §5.5, §6.4).")
+    p.add_argument("--scores", nargs="+", required=True, metavar="NAME=PATH",
+                   help="one `method=scores.json` per entrant")
+    p.add_argument("--protocol", required=True, choices=["P1", "P2", "P3"])
+    p.add_argument("--out", required=True)
+    p.add_argument("--notes", default="")
+    p.add_argument("--check-anchors", action="store_true",
+                   help="exit 1 when a §5.5 sanity anchor fails. STOP and report; do not tune.")
+    return p
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    a = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
+    scores = dict(s.split("=", 1) for s in a.scores)
+    board = assemble(scores, protocol=a.protocol, notes=a.notes)
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(board, indent=2), encoding="utf-8")
+    print(f"[leaderboard] {len(board['methods'])} method(s) -> {out}", flush=True)
+    for k, v in board["sanity"].items():
+        if isinstance(v, dict):
+            print(f"[leaderboard] anchor {k}: {v}", flush=True)
+    if a.check_anchors and not board["sanity"]["all_pass"]:
+        print("[leaderboard] a §5.5 sanity anchor FAILED — stop and report (RIVALS_PLAN.md §5.5)",
+              flush=True)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":                                # pragma: no cover
+    raise SystemExit(main())
