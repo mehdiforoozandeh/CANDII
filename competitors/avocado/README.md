@@ -219,6 +219,29 @@ which is why `bin.sh` asks for 6 h and not 3. Output sizes are exact: `chr20.npy
 2,753,054,216 B = 2,577,766 bins × 267 tracks × 4 B + a 128 B npy header. If that arithmetic does
 not close on a rebuild, the column set changed and §2 is the thing to re-check.
 
+### The predict chain was validated before the genome fits were spent
+
+A bug in `predict.py` would only surface after ~130 GPU-h of per-chromosome fits, so it was checked
+first against a deliberately throwaway 1-epoch chr21 genome fit, written to a **separate** root so
+it could never contaminate a real prediction:
+
+```
+[pred chr21] 45 declared tracks x 1868399 bins
+[pred chr21] wrote 45 tracks in 19s; mean=0.2801 max=84.1
+declared 45  found 45  missing 0  unknown 0
+CONTRACT OK: 45 tracks, float32, len 1868399, finite, non-negative (min 0.0000 max 84.08)
+```
+
+Read back through `candi.bench.external.read_track_arrays` — the scorer's own loader — so the
+directory names, the grid length, the dtype and the `sinh`+clip inversion are all checked by the
+code that will consume them. Prediction is cheap: 19 s per chromosome for all 45 tracks, so the
+whole genome is ~20 min and `predict.sh`'s 3 h ask is generous.
+
+**Throwaway artifacts left on scratch by that check** — `ckpt/_smoke_genome_chr21.pt` and
+`pred/_smoke/` (549 MB). Both are inert: `predict.sh` resolves `ckpt/genome_<chrom>.pt`, which the
+`_smoke_` prefix does not match, and `score.sh` defaults `PRED` to `pred/eic_val`. Delete them at
+will; `/scratch` purges them anyway.
+
 **Smoke probe** (writes nothing, prints steps/s and peak CUDA memory):
 
 ```bash
