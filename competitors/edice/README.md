@@ -99,6 +99,34 @@ tracks on chromosome 21":
 
 `± ` is the s.e.m. over the 203 test tracks, which is what our `metrics.summarise` returns.
 
+### Which space is Supplementary Table 2 in? — settled by the smoke run
+
+The paper does not say, and its code says something the table contradicts: `base.py::get_raw_metrics`
+`sinh`-inverts both truth and prediction, so the metric objects report **raw** `-log10 p`. The smoke
+run (10 k bins, 20 epochs, `train` split only — nothing published for it to hit) makes the answer
+unambiguous:
+
+| | MSE | Corr |
+|---|---|---|
+| ours, raw `-log10 p` | 16.008 ± 4.797 | 0.7155 ± 0.0089 |
+| ours, arcsinh | 0.1050 ± 0.0032 | 0.6859 ± 0.0083 |
+| published | 0.091 ± 0.005 | 0.735 ± 0.018 |
+
+Raw MSE is **175× the published value** while arcsinh MSE is within 15 % of it, on a tenth of a
+percent of the data. **Supplementary Table 2's MSE is in arcsinh space**, so the table cannot have
+come from the metric objects in the released code. The internal evidence agrees: a genome-wide
+AVG baseline scoring 0.159 raw MSE against `-log10 p` tracks whose peaks reach into the hundreds is
+not possible, and their own Fg MSE of 1.041 is far too small for enriched bins on that scale.
+
+Correlation is the other way round — raw 0.716 is nearer the published 0.735 than arcsinh 0.686 —
+but Pearson is not invariant under `arcsinh` and the gap is small enough that 100× more bins, 50
+epochs and the `val` split could close it either way. **`gate.json` records both spaces for both
+metrics**, and the full run decides; nothing is picked after the fact.
+
+What the smoke run already establishes: a 5,985,025-parameter model with this masking, this pooling
+and these initialisers reaches 0.72 correlation on real Roadmap test tracks it never saw, from
+10,000 bins. That is not where a broken reimplementation lands.
+
 **Two columns, not eight.** The Fg/Bg and MACS-classification columns of Supplementary Table 2 need
 per-track MACS2 peak calls on Roadmap, and the Edmond deposit ships signal only. The gate is
 therefore on the two genome-wide columns and this file says so rather than quietly reporting half a
@@ -114,8 +142,8 @@ between "our reimplementation differs" and "their released code differs from the
 
 | run | what | job | status |
 |---|---|---|---|
-| `sample` | the repo's packaged 10 k-bin chr21 sample, 20 epochs, `train` split. A **smoke** run: nothing is published for it to hit | `56703977` | submitted 2026-08-25 |
-| `full` | `roadmap_tracks_shuffled.h5`, 997,373 bins, PredictD splits, supports `train ∪ val`, 50 epochs. **This is the gate** | *pending the smoke run* | — |
+| `sample` | the repo's packaged 10 k-bin chr21 sample, 20 epochs, `train` split. A **smoke** run: nothing is published for it to hit | `56703977` | **done**, rc=0, 10.2 s/epoch |
+| `full` | `roadmap_tracks_shuffled.h5`, 997,373 bins, PredictD splits, supports `train ∪ val`, 50 epochs. **This is the gate** | see FIR_PATH.txt | running |
 
 ```bash
 mkdir -p slurm-logs
@@ -123,8 +151,13 @@ MODE=sample sbatch competitors/edice/slurm/roadmap_gate.sh
 MODE=full   sbatch --time=24:00:00 --mem=48G competitors/edice/slurm/roadmap_gate.sh
 ```
 
-Each writes `gate.json` (published vs ours, both spaces, per-epoch history), `test_preds.npz` and
-`model.pt` under `/project/def-maxwl/mforooz/rivals_src/edice_runs/<mode>/`.
+Each writes `gate.json` (published vs ours, both spaces, per-epoch history), `test_preds.npz`,
+`train_end.pt` (the scored weights) and `last_epoch.pt` (crash insurance, overwritten in place, no
+best-so-far logic) under `/project/def-maxwl/mforooz/rivals_src/edice_runs/<mode>/`.
+
+**Cost, measured not guessed.** The smoke run did 40 batches in 10.2 s = 0.255 s/batch on one
+`1g.10gb` MIG slice. The gate is 3,896 batches/epoch × 50 epochs, so ≈ 17 min/epoch and **≈ 14–15 h**
+— which is why the per-epoch diagnostic pass runs on 50 k bins rather than all 997,373.
 
 ## Fairness (§6.2) — where the 51-cell rule is enforced
 

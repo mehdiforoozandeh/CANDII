@@ -121,7 +121,16 @@ def main(argv=None) -> int:
                                       truth=target_x, batch_size=cfg.batch_size)
 
     device = torch.device(args.device)
-    history = train(model, train_sampler, cfg, device, val_sampler=watch_sampler)
+
+    # 6 M parameters is 24 MB, so an every-epoch checkpoint is free insurance against a wall-clock
+    # kill costing the whole run. It is NOT model selection: `train_end.pt` below is what gets
+    # scored, always, and this file is overwritten in place with no best-so-far logic anywhere.
+    def snapshot(epoch, row):
+        torch.save({"epoch": epoch, "state_dict": model.state_dict(), "row": row},
+                   out / "last_epoch.pt")
+
+    history = train(model, train_sampler, cfg, device, val_sampler=watch_sampler,
+                    on_epoch=snapshot)
 
     pred_x = predict(model, eval_sampler, device)
     report = gate_report(target_raw, np.sinh(pred_x), target_x, pred_x)
@@ -147,7 +156,7 @@ def main(argv=None) -> int:
     (out / "gate.json").write_text(json.dumps(result, indent=2))
     np.savez_compressed(out / "test_preds.npz", pred_arcsinh=pred_x.astype(np.float32),
                         tracks=np.asarray(target_tracks))
-    torch.save(model.state_dict(), out / "model.pt")
+    torch.save(model.state_dict(), out / "train_end.pt")
 
     raw = report["raw"]
     print("\n--- gate ---")
