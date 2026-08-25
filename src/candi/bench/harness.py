@@ -126,6 +126,30 @@ class TrackRecord:
     def has_pval(self) -> bool:
         return bool(self.signal_mu)
 
+    @property
+    def has_count(self) -> bool:
+        """Is there a COUNT PREDICTION — not count truth, which every record carries?
+
+        True for every record `stream_tracks` builds: the NB head is on every checkpoint, so `mu`
+        and `n` are always filled. `bench.external` is the caller that can say no — a rival that
+        predicts `-log10 p` has no count prediction, and B1b (`RIVALS_PLAN.md` §1) forbids inventing
+        a read depth to manufacture one. An absent count arm is then ABSENT, by the same rule
+        `loss_block` states for an absent head: a fabricated zero scored against real counts is a
+        number a reader cannot tell from a real one.
+        """
+        return bool(self.mu)
+
+    @property
+    def has_sigma(self) -> bool:
+        """Is the pval prediction DISTRIBUTIONAL, or a bare point?
+
+        `stream_tracks` fills `signal_sigma` whenever it fills `signal_mu`, so on the model path
+        this is exactly `has_pval`. An external point-only track (`bench.external`, §4.2) has the
+        mean without the spread — and until a σ-table supplies one, `gauss_suite` and `gaussian_nll`
+        are ABSENT rather than computed against a spread nobody predicted.
+        """
+        return bool(self.signal_sigma)
+
     def n_bins(self) -> int:
         return int(sum(len(self.counts[c]) for c in self.chroms))
 
@@ -889,11 +913,14 @@ def loss_block(rec: TrackRecord, *, signal_target_transform: str = "none") -> Di
     objective summed. Putting `gaussian_nll` only under `pval` would then hide it from every reader
     of the count arm, including `monitor`, which scores that arm alone.
 
-    **Head gating, from the model rather than from the numbers.** `gaussian_nll` needs a signal head
-    (`rec.has_pval`) and `bernoulli_nll` needs a peak head (`rec.has_peak_head`, recorded in
+    **Head gating, from the model rather than from the numbers.** `nb_nll` needs a count prediction
+    (`rec.has_count`), `gaussian_nll` needs a signal head predicting a SPREAD (`rec.has_pval` and
+    `rec.has_sigma`) and `bernoulli_nll` needs a peak head (`rec.has_peak_head`, recorded in
     `stream_tracks` where the output dict is the authority). An absent head means an ABSENT KEY, not
     a nan: a nan travels into `macro_mean`, gets skipped by a finiteness filter, and leaves a reader
-    unable to tell "no head" from "the head produced garbage".
+    unable to tell "no head" from "the head produced garbage". Every record `stream_tracks` builds
+    satisfies the first two, so this gating is inert on the model path and only `bench.external`
+    ever trips it.
 
     `signal_target_transform` is D30 and it is RECORDED beside the numbers, never inferred. A
     Gaussian NLL against `arcsinh(-log10 p)` and one against raw `-log10 p` are both finite and
@@ -909,12 +936,12 @@ def loss_block(rec: TrackRecord, *, signal_target_transform: str = "none") -> Di
     never be compared to one scored under a different transform. `EVAL.md` §spaces is the contract.
     """
     chroms = rec.chroms
-    out: Dict[str, object] = {
-        "nb_nll": D.nb_nll(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms),
-                           E.dict_to_arr(rec.counts, chroms)),
-        "signal_target_transform": str(signal_target_transform),
-    }
-    if rec.has_pval:
+    out: Dict[str, object] = {}
+    if rec.has_count:
+        out["nb_nll"] = D.nb_nll(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms),
+                                 E.dict_to_arr(rec.counts, chroms))
+    out["signal_target_transform"] = str(signal_target_transform)
+    if rec.has_pval and rec.has_sigma:
         # `stream_tracks` stores sigma; `gaussian_nll` takes the variance the loss was written in.
         sigma = E.dict_to_arr(rec.signal_sigma, chroms).astype(np.float64)
         out["gaussian_nll"] = D.gaussian_nll(
@@ -932,7 +959,12 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
                 seed: int = 0, c_index_pairs: int = 200_000,
                 signal_target_transform: str = "none",
                 with_curve: bool = False) -> Dict[str, Dict[str, object]]:
-    """Every block this track can carry, per arm. `count` always; `pval` when the signal head is on.
+    """Every block this track can carry, per arm — and only the arms whose PREDICTION exists.
+
+    On the model path that reads "`count` always, `pval` when the signal head is on": `mu`/`n` are
+    on every checkpoint. An external track (`bench.external`) may carry either arm alone, so each is
+    gated on the record — `has_count`, `has_pval`, `has_sigma` — and an arm with no prediction is
+    absent rather than scored against a buffer of zeros.
 
     `var` is the D7 variance pool as `{chrom: vector}`, aligned bin-for-bin with the track. It is
     only ever applied to the arm it was built in — the pool that matches the 267 EIC training
@@ -965,32 +997,41 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
     chroms = rec.chroms
     loss = loss_block(rec, signal_target_transform=signal_target_transform)
 
-    y_c = E.dict_to_arr(rec.counts, chroms)
-    arms["count"] = {
-        **loss,
-        **E.score_track(rec.counts, rec.mu, chroms, gene_annotations=gene_annotations,
-                        enh_annotations=enh_annotations),
-        **D.nb_suite(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms), y_c,
-                     seed=seed, n_pairs=c_index_pairs),
-        **B.binary_suite(E.dict_to_arr(rec.peaks, chroms).astype(bool),
-                         E.dict_to_arr(rec.peak_score, chroms), y_c, with_curve=with_curve),
-    }
+    if rec.has_count:
+        y_c = E.dict_to_arr(rec.counts, chroms)
+        arms["count"] = {
+            **loss,
+            **E.score_track(rec.counts, rec.mu, chroms, gene_annotations=gene_annotations,
+                            enh_annotations=enh_annotations),
+            **D.nb_suite(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms), y_c,
+                         seed=seed, n_pairs=c_index_pairs),
+            **B.binary_suite(E.dict_to_arr(rec.peaks, chroms).astype(bool),
+                             E.dict_to_arr(rec.peak_score, chroms), y_c, with_curve=with_curve),
+        }
     if rec.has_pval:
         y_p = E.dict_to_arr(rec.pval, chroms)
         pool = None if var is None else E.dict_to_arr(var, chroms)
         # The prediction moves, the truth does not. `invert_signal_prediction` returns the caller's
         # own arrays under `"none"`, so the h5 path builds dicts of the same objects and every key
-        # below is bit-identical to what it was before the inversion existed.
-        inv = {c: D.invert_signal_prediction(rec.signal_mu[c], rec.signal_sigma[c],
-                                             signal_target_transform) for c in chroms}
+        # below is bit-identical to what it was before the inversion existed. A point-only external
+        # track has no spread to invert, so it hands over zeros and keeps only the mean.
+        inv = {c: D.invert_signal_prediction(
+            rec.signal_mu[c],
+            rec.signal_sigma[c] if rec.has_sigma else np.zeros_like(rec.signal_mu[c]),
+            signal_target_transform) for c in chroms}
         mu_p = {c: v[0] for c, v in inv.items()}
         sigma_p = {c: v[1] for c, v in inv.items()}
         arms["pval"] = {
             **loss,
             **E.score_track(rec.pval, mu_p, chroms, gene_annotations=gene_annotations,
                             enh_annotations=enh_annotations, var=pool),
-            **D.gauss_suite(E.dict_to_arr(mu_p, chroms), E.dict_to_arr(sigma_p, chroms), y_p,
-                            seed=seed, n_pairs=c_index_pairs),
+            # ABSENT, NOT NAN, when the track predicts a point and nothing else. Every key here is a
+            # property of a FORECAST DISTRIBUTION — CRPS, PIT, 95% coverage, the C-index — and a
+            # point track has none, so scoring it against a spread of zero would answer a question
+            # it never asked. `RIVALS_PLAN.md` §4.2 is the rule; a σ-table is how a point-only rival
+            # earns these keys back.
+            **(D.gauss_suite(E.dict_to_arr(mu_p, chroms), E.dict_to_arr(sigma_p, chroms), y_p,
+                             seed=seed, n_pairs=c_index_pairs) if rec.has_sigma else {}),
             # NOTHING TO INVERT HERE, and it is worth saying why rather than leaving a reader to
             # check: `binary_suite`'s ranking score is `peak_score` — the peak head's probability,
             # or the NB mean without that head — never `signal_mu`, so no signal-space value
