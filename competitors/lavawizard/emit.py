@@ -15,22 +15,44 @@ clip the arcsinh-space prediction at 0, then `sinh` (`04_guacamole6_generate.py:
 order matters: clipping after `sinh` would be a different function on negatives, and theirs is the
 one that produced their submission.
 
-`track_dirname` is imported from `candi.bench.external` rather than re-derived. The §4.1 contract
-gets one definition, and it lives with the reader that enforces it.
+**No runtime dependency on `candi`.** An earlier version imported `track_dirname` from
+`candi.bench.external` so the §4.1 contract had a single definition. That broke the moment this
+package was rsynced to Fir on its own — `ModuleNotFoundError: No module named 'candi'` — and a
+rival's generator has to run wherever the rival's data is. So the naming rule is implemented here,
+and `tests/test_lavawizard.py::test_track_dirname_agrees_with_the_bench_reader` asserts character
+for character that it matches `candi.bench.external.track_dirname`. One definition of *truth*,
+enforced by a test instead of by an import that dictates deployment.
 """
 from __future__ import annotations
 
 import json
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, NamedTuple, Optional, Sequence
 
 import numpy as np
 
-from candi.bench.external import track_dirname
-from candi.bench.harness import Pair
+__all__ = ["ARCSINH_INVERSION", "Pair", "track_dirname", "invert_arcsinh", "write_track",
+           "write_manifest"]
 
-__all__ = ["ARCSINH_INVERSION", "invert_arcsinh", "write_track", "write_manifest"]
+
+class Pair(NamedTuple):
+    """`(input biosample, target biosample)` — structurally what `candi.bench.harness.Pair` is.
+
+    A `NamedTuple` rather than an import, for the reason in the module docstring. `write_track`
+    also accepts the real `harness.Pair`, since it only reads the two attributes.
+    """
+    input_biosample: str
+    target_biosample: str
+
+
+def track_dirname(pair, assay: str) -> str:
+    """§4.1: the bench `track_key` with `|` swapped for the filesystem-safe `__`.
+
+    `kind` is `impute` and is implied — `denoise` has no external producer. Kept in step with
+    `candi.bench.external.track_dirname` by test, not by import.
+    """
+    return f"{pair.input_biosample}__{pair.target_biosample}__{assay}"
 
 #: Recorded in the manifest so a reader knows which way round the clip and the sinh went.
 ARCSINH_INVERSION = "clip_at_zero_then_sinh"

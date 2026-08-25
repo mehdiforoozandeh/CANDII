@@ -81,6 +81,11 @@ def compare(h5_path: Path, ref_path: Path, max_abs: float | None) -> int:
     """Half B. Load the same file into the port and diff against Keras's answer. No TensorFlow."""
     import torch
 
+    # A parity run measures numerics against Keras fp32. TF32 would silently widen the very
+    # tolerance this exists to report, so it is forced off here regardless of any global default.
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from lavawizard.keras_weights import load_keras_h5
     from lavawizard.model import Guacamole

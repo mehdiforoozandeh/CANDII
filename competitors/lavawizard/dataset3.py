@@ -114,19 +114,43 @@ def bin_arcsinh(values: np.ndarray, chrom_length: int, resolution: int = 25) -> 
     return bin_values(values, chrom_length, resolution, transform="arcsinh")
 
 
-def read_binned(path: Path | str, chrom: str, *, transform: str = "arcsinh") -> np.ndarray:
-    """One whole chromosome out of a bigwig, binned. The seam every consumer here shares."""
+def read_binned(path: Path | str, chrom: str, *, transform: str = "arcsinh",
+                attempts: int = 3, backoff: float = 5.0) -> np.ndarray:
+    """One whole chromosome out of a bigwig, binned. The seam every consumer here shares.
+
+    Retries transient filesystem errors. This is not defensive padding: an anchor run reads ~1 GB
+    per track off `/project` for hours, and a compute node with a sick Lustre client returns
+    `OSError [Errno 108] Cannot send after transport endpoint shutdown` on a file that reads
+    perfectly from every other node (observed 2026-08-25 on fc30560, twice, same file, while
+    fc30671 read it fine). Losing a multi-hour run to one node's mount is not a result.
+    A genuinely missing or malformed file still raises `ValueError` immediately, unretried.
+    """
+    import time as _time
+
     import pyBigWig
 
-    bw = pyBigWig.open(str(path))
-    try:
-        length = bw.chroms().get(str(chrom))
-        if length is None:
-            raise ValueError(f"{path} has no {chrom}")
-        values = np.array(bw.values(str(chrom), 0, length))
-    finally:
-        bw.close()
-    return bin_values(values, length, transform=transform)
+    last: Exception | None = None
+    for attempt in range(1, int(attempts) + 1):
+        try:
+            bw = pyBigWig.open(str(path))
+            try:
+                length = bw.chroms().get(str(chrom))
+                if length is None:
+                    raise ValueError(f"{path} has no {chrom}")
+                values = np.array(bw.values(str(chrom), 0, length))
+            finally:
+                bw.close()
+            return bin_values(values, length, transform=transform)
+        except ValueError:
+            raise                                   # a real content problem — do not retry it
+        except (OSError, RuntimeError) as exc:
+            last = exc
+            if attempt == attempts:
+                break
+            _time.sleep(backoff * attempt)
+    raise OSError(f"{path} {chrom}: unreadable after {attempts} attempts ({last!r}). "
+                  f"If this is Errno 108, the compute node's Lustre mount is the suspect, not the "
+                  f"file — check it from another node before assuming data loss.")
 
 
 def parse_name(filename: str) -> Tuple[str, str]:

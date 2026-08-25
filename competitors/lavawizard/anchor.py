@@ -175,8 +175,7 @@ def main(argv=None) -> int:
               f"{row['mse_ratio_ours_over_theirs']:.3f}  r(ours,theirs) "
               f"{row['ours_vs_theirs_pearson']:.4f}", flush=True)
         if ns.pred_root:
-            from candi.bench.harness import Pair
-            emit.write_track(ns.pred_root, Pair(cell, cell), mark, ns.chrom, ours,
+            emit.write_track(ns.pred_root, emit.Pair(cell, cell), mark, ns.chrom, ours,
                              n_bins=len(ours), already_inverted=True)
 
     rec = summarise(rows)

@@ -143,14 +143,33 @@ def _run_stage(model: nn.Module, sampler: Sampler, *, epochs: int, lr: float, lo
     return {"steps": step, "final_loss": last, "seconds": el, "ms_per_step": el / max(step, 1) * 1000}
 
 
+def enable_tf32(on: bool = True) -> None:
+    """TF32 tensor cores for the dense layers. **Training only — never for a parity run.**
+
+    Measured on a `1g.10gb` MIG slice at chr21's batch of 10 000: a step is 136.4 ms in fp32 and
+    57.4 ms with TF32. The split is `fwd 42.2 -> 16.1` and `fwd+bwd 124.8 -> 45.7`, with Adam a
+    flat 11.7 ms either way, so the cost is the three 2048-wide matmuls — not the optimizer, and
+    not the data (the in-RAM gather is 0.1 ms per batch).
+
+    Safe here because this is a **retrain from scratch**: TF32 changes the arithmetic of a matmul,
+    not the model, and nothing downstream compares these weights to anyone else's bit for bit.
+    `parity_keras.py` turns it off explicitly, because that *is* a numerical comparison against
+    Keras fp32 and TF32 would quietly widen the very tolerance it exists to measure.
+    """
+    torch.backends.cuda.matmul.allow_tf32 = bool(on)
+    torch.backends.cudnn.allow_tf32 = bool(on)
+
+
 def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
                      contributor_mode: str = "upstream", device: str = "cuda",
                      seed: int = 0, max_steps_per_stage: Optional[int] = None,
-                     epoch_scale: float = 1.0) -> Dict:
+                     epoch_scale: float = 1.0, tf32: bool = True) -> Dict:
     """Both stages for one chromosome. Writes `guacamole_<chrom>.pt` and `train_<chrom>.json`."""
     torch.manual_seed(seed)
     np.random.seed(seed)
     dev = torch.device(device)
+    if dev.type == "cuda":
+        enable_tf32(tf32)
     cache = CachedChrom(cache_root, chrom)
     sched = dataset3.schedule(chrom)
     factors = dataset3.factor_sizes(chrom)
@@ -194,7 +213,7 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
     record = {
         "chrom": chrom, "contributor_mode": contributor_mode, "seed": seed,
         "batch_size": bs, "pretrain_epochs": pre_ep, "train_epochs": tr_ep,
-        "epoch_scale": epoch_scale, "factors": factors,
+        "epoch_scale": epoch_scale, "factors": factors, "tf32": bool(tf32),
         "n_tracks": cache.n_tracks, "n_bins": cache.n_bins,
         "parameters": n_par, "stage1": s1, "stage2": s2,
         "gpu_peak_allocated_gib": round(peak, 3), "gpu_peak_reserved_gib": round(reserved, 3),
@@ -222,10 +241,13 @@ def main(argv=None) -> int:
                    help="smoke runs: cap each stage, for throughput and memory measurement")
     p.add_argument("--epoch-scale", type=float, default=1.0,
                    help="scale upstream's epoch counts; 1.0 is their schedule")
+    p.add_argument("--no-tf32", action="store_true",
+                   help="force fp32 matmuls; 2.4x slower, and only needed for a numerical study")
     ns = p.parse_args(argv)
     train_chromosome(ns.cache, ns.chrom, ns.out, contributor_mode=ns.contributor_mode,
                      device=ns.device, seed=ns.seed,
-                     max_steps_per_stage=ns.max_steps_per_stage, epoch_scale=ns.epoch_scale)
+                     max_steps_per_stage=ns.max_steps_per_stage, epoch_scale=ns.epoch_scale,
+                     tf32=not ns.no_tf32)
     return 0
 
 

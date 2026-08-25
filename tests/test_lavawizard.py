@@ -477,12 +477,37 @@ def test_inversion_is_clip_then_sinh():
     np.testing.assert_allclose(got[3:], np.sinh([1.0, 2.5]), rtol=1e-6)
 
 
+def test_track_dirname_agrees_with_the_bench_reader():
+    """The port implements the §4.1 naming rule itself so it can run without `candi` installed.
+
+    That freedom is only safe if the two implementations cannot drift, so this pins them together
+    character for character. If it ever fails, `candi.bench.external` is the authority and
+    `emit.track_dirname` is the bug.
+    """
+    from candi.bench.external import track_dirname as canonical
+    from candi.bench.harness import Pair as HarnessPair
+
+    for a, b, assay in [("T_X", "V_X", "H3K4me3"), ("T_DND-41", "B_BE2C", "ATAC-seq"),
+                        ("T_a/b", "V_c", "H3K27ac"), ("C05", "C05", "M17")]:
+        assert emit.track_dirname(emit.Pair(a, b), assay) == canonical(HarnessPair(a, b), assay)
+    # and the real harness Pair must work through the local function too, since anchor may pass one
+    assert emit.track_dirname(HarnessPair("T_X", "V_X"), "H3K4me3") == "T_X__V_X__H3K4me3"
+
+
+def test_emit_needs_no_candi_import():
+    """A rival generator has to run wherever the rival's data is — Fir had no `candi` on the path."""
+    src = (Path(__file__).resolve().parents[1] / "competitors" / "lavawizard" / "emit.py").read_text()
+    assert "from candi" not in src and "import candi" not in src
+    anchor_src = (Path(__file__).resolve().parents[1] / "competitors" / "lavawizard"
+                  / "anchor.py").read_text()
+    assert "from candi" not in anchor_src and "import candi" not in anchor_src
+
+
 def test_write_track_round_trips_through_the_bench_reader(tmp_path):
     """The emitter and `candi.bench.external` must agree on the contract, not merely resemble it."""
     from candi.bench.external import read_track_arrays, track_dirname
-    from candi.bench.harness import Pair
 
-    pair, assay, chrom, n = Pair("T_X", "V_X"), "H3K4me3", "chr21", 64
+    pair, assay, chrom, n = emit.Pair("T_X", "V_X"), "H3K4me3", "chr21", 64
     raw = np.linspace(-1.0, 2.0, n).astype(np.float32)
     emit.write_track(tmp_path, pair, assay, chrom, raw, n_bins=n)
 
@@ -493,9 +518,8 @@ def test_write_track_round_trips_through_the_bench_reader(tmp_path):
 
 
 def test_write_track_refuses_a_wrong_length(tmp_path):
-    from candi.bench.harness import Pair
     with pytest.raises(ValueError, match="grid wants 64"):
-        emit.write_track(tmp_path, Pair("T_X", "V_X"), "H3K4me3", "chr21",
+        emit.write_track(tmp_path, emit.Pair("T_X", "V_X"), "H3K4me3", "chr21",
                          np.zeros(63, np.float32), n_bins=64)
 
 
@@ -749,3 +773,58 @@ def test_predict_track_uses_pooled_moments_and_names_an_unknown_cell(tmp_path):
         anchor.predict_track(model, c, obj, "C_nope", c.marks[0])
     with pytest.raises(ValueError, match="no embedding row"):
         anchor.predict_track(model, c, obj, "C99", "M_nope")
+
+
+def _fake_pybigwig(monkeypatch, opener):
+    """Inject a stand-in `pyBigWig` module. `read_binned` imports it inside the function, so this
+    works without pyBigWig installed — these tests stay dependency-free like the rest of the file."""
+    import types
+    mod = types.ModuleType("pyBigWig")
+    mod.open = opener
+    monkeypatch.setitem(sys.modules, "pyBigWig", mod)
+
+
+class _FakeBW:
+    def __init__(self, chroms): self._c = chroms
+    def chroms(self): return self._c
+    def values(self, c, a, b): return list(np.arange(b - a, dtype=float))
+    def close(self): pass
+
+
+def test_read_binned_retries_a_transport_error_then_succeeds(monkeypatch):
+    """A sick Lustre client must not end a multi-hour anchor run (observed on fc30560)."""
+    calls = {"n": 0}
+
+    def opener(path):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise OSError(108, "Cannot send after transport endpoint shutdown")
+        return _FakeBW({"chr21": 50})
+
+    _fake_pybigwig(monkeypatch, opener)
+    got = dataset3.read_binned("/whatever.bigwig", "chr21", transform="none", backoff=0.0)
+    assert calls["n"] == 3, "it must actually have retried, not succeeded first time"
+    assert got.shape == (2,)
+
+
+def test_read_binned_does_not_retry_a_real_content_error(monkeypatch):
+    """A missing chromosome is not transient; retrying it only burns the backoff."""
+    calls = {"n": 0}
+
+    def opener(path):
+        calls["n"] += 1
+        return _FakeBW({"chr1": 10})
+
+    _fake_pybigwig(monkeypatch, opener)
+    with pytest.raises(ValueError, match="has no chr21"):
+        dataset3.read_binned("/whatever.bigwig", "chr21", backoff=0.0)
+    assert calls["n"] == 1, "a content error must fail on the first attempt"
+
+
+def test_read_binned_gives_up_with_a_message_that_names_the_suspect(monkeypatch):
+    def opener(path):
+        raise OSError(108, "transport endpoint")
+
+    _fake_pybigwig(monkeypatch, opener)
+    with pytest.raises(OSError, match="Lustre mount is the suspect"):
+        dataset3.read_binned("/whatever.bigwig", "chr21", attempts=2, backoff=0.0)
