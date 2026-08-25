@@ -51,20 +51,25 @@ echo "[$CI_STAGE] task $SLURM_ARRAY_TASK_ID item: $ITEM"
 # "FileNotFoundException ... (Cannot send after transport endpoint shutdown)" that looks exactly
 # like a missing file. A command that is genuinely wrong fails in seconds, so the retries cost
 # nothing; a command that hit the filesystem gets a second chance instead of failing a whole array.
-CI() {
+RETRY() {
   local try
   for try in 1 2 3; do
-    java -mx"$CI_MX" -jar "$CI_JAR" "$@" && return 0
+    "$@" && return 0
     echo "[$CI_STAGE] attempt $try failed; retrying in $((try * 30))s"
     sleep $((try * 30))
   done
   return 1
 }
+CI() { RETRY java -mx"$CI_MX" -jar "$CI_JAR" "$@"; }
 START=$SECONDS
 
 case "$CI_STAGE" in
   prepare)
-    PYTHONPATH=$CI_REPO/src $CI_PY "$CI_REPO/competitors/chromimpute/prepare.py" \
+    # Retried for the same reason the java stages are, but a different filesystem: `import candi`
+    # pulls in torch, and forty-eight processes importing it off /project at once occasionally get
+    # a half-read module back as "cannot import name 'graph' ... circular import".
+    export PYTHONPATH=$CI_REPO/src
+    RETRY $CI_PY "$CI_REPO/competitors/chromimpute/prepare.py" \
         --store "$CI_STORE" --regime "$CI_REPO/configs/regime.eic_val.json" \
         --out "$IN" --chroms "$CI_CHROMS" --shard "$ITEM"
     ;;
