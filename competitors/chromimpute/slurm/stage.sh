@@ -38,7 +38,20 @@ ITEM=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$LIST")
 [ -n "$ITEM" ] || { echo "no item $SLURM_ARRAY_TASK_ID in $LIST"; exit 1; }
 echo "[$CI_STAGE] task $SLURM_ARRAY_TASK_ID item: $ITEM"
 
-CI() { java -mx"$CI_MX" -jar "$CI_JAR" "$@"; }
+# Retry, because `GenerateTrainData` and `Apply` open one gzip reader per compendium track — 267 at
+# once — and Lustre answers a few of those with a transient
+# "FileNotFoundException ... (Cannot send after transport endpoint shutdown)" that looks exactly
+# like a missing file. A command that is genuinely wrong fails in seconds, so the retries cost
+# nothing; a command that hit the filesystem gets a second chance instead of failing a whole array.
+CI() {
+  local try
+  for try in 1 2 3; do
+    java -mx"$CI_MX" -jar "$CI_JAR" "$@" && return 0
+    echo "[$CI_STAGE] attempt $try failed; retrying in $((try * 30))s"
+    sleep $((try * 30))
+  done
+  return 1
+}
 START=$SECONDS
 
 case "$CI_STAGE" in
