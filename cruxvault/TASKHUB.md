@@ -16,16 +16,14 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1
 - `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project
-- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external
-- `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box
+- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal
+- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2
+- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid
+- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC
+- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain
 
 ## Blocked
 
-- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — blocked by `t47`
-- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — blocked by `t47`
-- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — blocked by `t47`
-- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — blocked by `t47`
-- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — blocked by `t47`
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
 
@@ -46,13 +44,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term — *open*
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1 — *open*
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1 — *open*
-- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *open*
-- `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *open*
-- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — *blocked*
-- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — *blocked*
-- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — *blocked*
-- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — *blocked*
-- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — *blocked*
+- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — *open*
+- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — *open*
+- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — *open*
+- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — *open*
+- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — *open*
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — *blocked*
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *blocked*
 
@@ -94,3 +90,5 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
 - `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
+- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
+- `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
