@@ -1,14 +1,15 @@
 #!/bin/bash
 # eDICE retrained on our EIC (RIVALS_PLAN §7.3), after the Roadmap gate is recorded.
 #
-# N_TARGETS IS REQUIRED AND HAS NO DEFAULT. That is the point: eDICE masked 120 of Roadmap's 1032
-# tracks per bin (11.6%), and our training panel holds 267, so the same ABSOLUTE count masks 45%
-# while the same RATE is 31. "Paper defaults" (§6.3) does not settle it, and it changes the training
-# signal rather than tuning it, so it is pre-registered by the PI, never defaulted by a script.
+# DECIDED (PI, 2026-08-25): N_TARGETS=31 — the paper's 11.6% RATE, not its absolute 120.
+# eDICE masked 120 of Roadmap's 1032 tracks per bin; our panel holds 267, so the absolute count
+# would mask 45% and make our variant structurally harder than the published one. The flag stays
+# REQUIRED even though the value is settled, so the number appears on the launch line and in this
+# job's log — which is where the record of what was actually run lives.
 #
 #   mkdir -p slurm-logs
-#   N_TARGETS=31  sbatch --time=24:00:00 competitors/edice/slurm/eic_train.sh   # the RATE reading
-#   N_TARGETS=120 sbatch --time=48:00:00 competitors/edice/slurm/eic_train.sh   # the ABSOLUTE reading
+#   N_TARGETS=31  sbatch --time=24:00:00 competitors/edice/slurm/eic_train.sh   # THE DECIDED RUN
+#   N_TARGETS=120 sbatch --time=48:00:00 competitors/edice/slurm/eic_train.sh   # absolute reading
 #
 # Wall: PROJECTED, not measured. The Roadmap gate measured 0.255 s/batch at 120 targets over a
 # 1032-track panel on this MIG slice. chr19 gives 2,344,704 bins = 9159 batches/epoch, and cost is
@@ -30,9 +31,10 @@ set -uo pipefail
 
 if [ -z "${N_TARGETS:-}" ]; then
   echo "[error] N_TARGETS is required and has no default." >&2
-  echo "        31  = eDICE's Roadmap masking RATE (11.6% of our 267-track panel)" >&2
+  echo "        31  = eDICE's Roadmap masking RATE (11.6% of our 267-track panel)  <-- DECIDED," >&2
+  echo "              PI 2026-08-25. This is the run to launch." >&2
   echo "        120 = eDICE's Roadmap ABSOLUTE count (masks 45% of our panel)" >&2
-  echo "        This is the PI's pre-registered call, not a knob. See competitors/edice/README.md." >&2
+  echo "        See competitors/edice/README.md, 'Masking rate on our EIC'." >&2
   exit 2
 fi
 

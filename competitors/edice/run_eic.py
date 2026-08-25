@@ -44,6 +44,31 @@ CAVEAT = ("transductive: a V_X/B_X target is queried with its paired T_X cell's 
           "(RIVALS_PLAN.md §7.3). eDICE has no embedding for a cell it never trained on.")
 
 
+#: eDICE's Roadmap masking: 120 targets out of 1032 tracks per bin.
+PAPER_N_TARGETS, PAPER_N_TRACKS = 120, 1032
+
+
+def masking_caveat(n_targets: int, n_tracks: int) -> str:
+    """The second caveat every eDICE row carries — PI decision of 2026-08-25.
+
+    Built from the run's ACTUAL numbers, so a manifest can never claim a masking rate the run did
+    not use — and it describes whichever reading was run, because a provenance string that
+    contradicts its own numbers is worse than no string at all.
+    """
+    rate = PAPER_N_TARGETS / PAPER_N_TRACKS
+    head = f"masks {n_targets} of {n_tracks} tracks per bin ({n_targets / n_tracks:.1%})"
+    if n_targets == PAPER_N_TARGETS:
+        return (f"{head} — the paper's ABSOLUTE count ({PAPER_N_TARGETS} of {PAPER_N_TRACKS}), "
+                f"whose rate was {rate:.1%} on Roadmap's larger panel.")
+    if abs(n_targets / n_tracks - rate) < 0.01:
+        return (f"{head} — the paper's {rate:.1%} RATE ({PAPER_N_TARGETS} of {PAPER_N_TRACKS}), not "
+                f"its absolute {PAPER_N_TARGETS}, which would mask "
+                f"{PAPER_N_TARGETS / n_tracks:.0%} of our smaller panel. Pre-registered departure, "
+                f"PI 2026-08-25.")
+    return (f"{head} — neither the paper's absolute {PAPER_N_TARGETS} nor its {rate:.1%} rate "
+            f"({round(rate * n_tracks)} tracks here). NOT a pre-registered setting.")
+
+
 def _open_store(regime: dict):
     from candi.store.reader import CorpusStore
     return CorpusStore(regime["store"])
@@ -126,7 +151,9 @@ def cmd_train(args) -> int:
                 "biosamples": panel.biosamples, "assays": panel.assays,
                 "tracks": panel.tracks}, out / "model.pt")
     (out / "train.json").write_text(json.dumps({
-        "method": METHOD, "caveat": CAVEAT, "regime": str(Path(args.regime).resolve()),
+        "method": METHOD, "caveat": CAVEAT,
+        "masking_caveat": masking_caveat(cfg.n_targets, panel.n_tracks),
+        "regime": str(Path(args.regime).resolve()),
         "config": asdict(cfg), "n_parameters": n_params, "train_chroms": chroms,
         "n_train_bins": int(values.shape[0]), "n_panel_tracks": panel.n_tracks,
         "n_cells": len(panel.biosamples), "n_assays": len(panel.assays),
@@ -195,9 +222,12 @@ def cmd_predict(args) -> int:
         "generated_by": "competitors/edice/run_eic.py predict",
         "date": date.today().isoformat(),
         "arms": ["pval"],
-        "notes": (f"{CAVEAT} Trained on the {len(panel.biosamples)} regime training cells' pval "
-                  f"tracks only (§6.2); paper-default hyperparameters, one seed (§6.3). "
-                  f"signal_mu clipped at 0. No count head and no peak head."),
+        "notes": (f"{CAVEAT} {masking_caveat(cfg.n_targets, panel.n_tracks)} Trained on the "
+                  f"{len(panel.biosamples)} regime training cells' pval tracks only (§6.2); paper "
+                  f"defaults otherwise, one seed (§6.3). signal_mu clipped at 0. No count head and "
+                  f"no peak head."),
+        "caveat": CAVEAT,
+        "masking_caveat": masking_caveat(cfg.n_targets, panel.n_tracks),
         "model": str(Path(args.model).resolve()),
         "chroms": chroms,
         "n_tracks": len(reqs),

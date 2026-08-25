@@ -197,17 +197,29 @@ Paper defaults, one seed (`211`, the reference's own). No sweeps. A second seed 
 gap to CANDI falls inside the applicable noise floor — `AGENTS.md` §7.2, quoted with the panel being
 compared.
 
-### The one open decision
+### Masking rate on our EIC — **decided (PI, 2026-08-25): `--n-targets 31`**
 
-`--n-targets` on the EIC path has **no default and the run refuses to start without it**, because
-"paper defaults" is genuinely ambiguous here and the two readings are far apart:
+"Paper defaults" (§6.3) does not settle how many tracks to mask per bin here, and the two readings
+are far apart:
 
-* eDICE masked **120 of Roadmap's 1032** tracks per bin — 11.6 %;
+* eDICE masked **120 of Roadmap's 1032** tracks per bin — **11.6 %**;
 * our EIC panel holds **267** tracks, so the same *absolute* 120 masks **45 %**, while the same
   *rate* is **31**.
 
-That is a decision about the training signal, not a knob to tune, so it is pre-registered rather
-than defaulted. **PI call needed before EIC training starts.**
+**The PI chose the rate: 31.** Rationale: it preserves the training-signal proportion of the
+published setup. The absolute 120 would mask 45 % of every bin, making our variant structurally
+harder than the one the paper reports — so a weak eDICE row would then be evidence about our
+masking choice, not about eDICE.
+
+This is a pre-registered departure from the paper's literal number, and it is **carried as a caveat
+wherever an eDICE row appears**, next to the transductive caveat:
+
+> eDICE masks 31 of 267 tracks per bin — the paper's 11.6 % rate, not its absolute 120, which would
+> mask 45 % of our smaller panel.
+
+`--n-targets` deliberately stays **required** in both `run_eic.py train` and `slurm/eic_train.sh`.
+Now that the value is settled the flag could carry a default, but keeping it explicit puts the
+number on the launch line and into the SLURM log, where the record of what was actually run lives.
 
 A second, smaller one: `run_eic.py train --train-chroms` defaults to the regime's `train_chroms`
 (chr19), matching CANDI's own recipe. eDICE's own recipe trains on every bin it has. The choice is
@@ -231,16 +243,22 @@ cd competitors/edice && PYTHONPATH=. pytest tests/ -q
 # the panel, without touching a GPU
 PYTHONPATH=.:../../src python run_eic.py panel --regime ../../configs/regime.eic_val.json
 
-# EIC: train -> predict -> sigma -> score
-python run_eic.py train   --regime ../../configs/regime.eic_val.json --out runs/eic \
-                          --n-targets <PRE-REGISTERED>
-python run_eic.py predict --regime ../../configs/regime.eic_val.json \
-                          --model runs/eic/model.pt --out preds/edice_p1
-python fit_sigma.py       --regime ../../configs/regime.eic_val.json \
-                          --pred preds/edice_p1 --out preds/edice_sigma.json
-python -m candi.bench.external --store ../../configs/regime.eic_val.json \
-    --pred preds/edice_p1 --out scores/edice_p1.json --sigma-table preds/edice_sigma.json
+# EIC, on Fir. BLOCKED until the gate is recorded AND the PI has called --n-targets.
+mkdir -p slurm-logs
+N_TARGETS=31 sbatch --time=24:00:00 competitors/edice/slurm/eic_train.sh   # DECIDED, PI 2026-08-25
+N_TARGETS=31 PROTOCOL=p1 sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
+N_TARGETS=31 PROTOCOL=p2 sbatch --time=12:00:00 --mem=96G competitors/edice/slurm/eic_score.sh
 ```
 
-P2 is the same `predict` call with `--chroms` naming every chromosome the store carries, scored
-through the same entry with the bench's own `--chroms` override.
+`N_TARGETS=120` with `--time=48:00:00` runs the absolute reading instead; nothing else changes, and
+the manifest's `masking_caveat` describes whichever reading was actually run. Both `eic_train.sh`
+and `run_eic.py train` **refuse to start without the flag**, and name the decided value.
+
+`eic_score.sh` chains predict → σ-fit → `candi.bench.external`. `PROTOCOL=p2` sets `--chroms all`,
+which resolves to every chromosome the store carries — measured: **23 chromosomes, 124 M bins**,
+chr1 alone 9,958,256. The σ-table is fitted **once, on P1**, and P2 reuses it: refitting σ on a
+genome-wide pass would quietly change what the CRPS column means between two rows of one table.
+
+The EIC wall is **projected, not measured** — scaling the gate's 0.255 s/batch over chr19's 9,159
+batches/epoch gives ≈ 10 h at 31 targets and ≈ 30 h at 120, since cost is dominated by
+`batch × n_targets` through the decoder.
