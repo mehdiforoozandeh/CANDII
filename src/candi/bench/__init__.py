@@ -15,6 +15,10 @@ objective is built from (`distributional.nb_nll` / `gaussian_nll` / `bernoulli_n
 panel, so `val_loss` and `test_loss` are the same quantity as `train_loss`. They are pure numpy
 copies because this package may not import `candi.train`, and the equivalence is pinned by test.
 
+`external` is the second entry point (`RIVALS_PLAN.md` §4): the same blocks, the same truth and the
+same `harness.score_track`, over prediction tracks a rival wrote to disk instead of a checkpoint we
+can load. It runs E, P, D and B; C needs the model.
+
 Everything is imported lazily, for the reason `candi.store.__init__` gives: `annotations` needs
 only numpy, while the harness drags in h5py and the store. A consumer wanting a pinned bed should
 not pay for either.
@@ -25,8 +29,8 @@ not pay for either.
 # below. Submodules may use it freely; the package `__init__` that lazily exports a submodule of
 # that name may not.
 
-__all__ = ["annotations", "binary", "cli", "covariate", "distributional", "eic", "harness",
-           "partitions", "ranking"]
+__all__ = ["annotations", "binary", "cli", "covariate", "distributional", "eic", "external",
+           "harness", "partitions", "ranking"]
 
 
 def __getattr__(name: str):
