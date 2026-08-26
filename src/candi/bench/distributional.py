@@ -32,10 +32,11 @@ import numpy as np
 from scipy.special import gammaln
 from scipy.stats import nbinom, norm
 
-from candi.metrics import P_EPS, calibration_pit_curve, ece, nb_crps
+from candi.metrics import P_EPS, calibration_pit_curve, ece, nb_crps, nb_crps_sampled
 
 __all__ = [
-    "p_from_mu", "nb_crps_mean", "oracle_scale", "marginal_nb", "gauss_crps", "gauss_crps_mean",
+    "p_from_mu", "crps_eval", "nb_crps_mean", "oracle_scale", "marginal_nb",
+    "gauss_crps", "gauss_crps_mean",
     "pit_curve", "ece", "c_index_nb", "c_index_gauss", "coverage_nb", "coverage_gauss",
     "nb_suite", "gauss_suite",
     "SIGNAL_TARGET_TRANSFORMS", "transform_signal_target", "invert_signal_prediction",
@@ -58,8 +59,34 @@ def p_from_mu(n: np.ndarray, mu: np.ndarray) -> np.ndarray:
     return np.clip(n / (n + np.maximum(mu, 1e-12)), P_EPS, 1.0 - P_EPS)
 
 
-def nb_crps_mean(n: np.ndarray, mu: np.ndarray, y: np.ndarray) -> float:
-    return float(np.mean(nb_crps(n, p_from_mu(n, mu), y)))
+def crps_eval(crps_approx: Optional[int] = None, crps_seed: int = 0):
+    """The per-bin NB CRPS this run scores with: the closed form, or the sampled estimator.
+
+    `crps_approx=None` — the default everywhere — returns `metrics.nb_crps` itself, so a caller that
+    does not ask for the approximation gets the same function object it always got and every number
+    below it is bit-identical.
+
+    `crps_approx=K` returns `metrics.nb_crps_sampled` bound to `K` draws and `crps_seed`. The seed is
+    bound rather than advanced, so every evaluation inside one track — `crps`, both oracle-scaled
+    numbers, and each point of the oracle grid search — is driven by the SAME uniforms. That is
+    common random numbers and it is the reason the derived keys survive sampling: `scale_error` is a
+    difference of two estimates that share their noise, so most of the noise cancels in the
+    subtraction instead of adding in quadrature, and the oracle argmin walks a smooth curve rather
+    than a re-rolled one at every grid point.
+    """
+    if crps_approx is None:
+        return nb_crps
+    k, s = int(crps_approx), int(crps_seed)
+
+    def _sampled(n, p, y):
+        return nb_crps_sampled(n, p, y, k=k, seed=s)
+
+    return _sampled
+
+
+def nb_crps_mean(n: np.ndarray, mu: np.ndarray, y: np.ndarray, *,
+                 crps_approx: Optional[int] = None, crps_seed: int = 0) -> float:
+    return float(np.mean(crps_eval(crps_approx, crps_seed)(n, p_from_mu(n, mu), y)))
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +94,8 @@ def nb_crps_mean(n: np.ndarray, mu: np.ndarray, y: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 
 def oracle_scale(mu: np.ndarray, n: np.ndarray, target: np.ndarray, *,
-                 fit_budget: int = 20_000, seed: int = 0) -> Dict[str, float]:
+                 fit_budget: int = 20_000, seed: int = 0,
+                 crps_approx: Optional[int] = None, crps_seed: int = 0) -> Dict[str, float]:
     """Oracle per-assay multiplicative rescale `c* = argmin_c CRPS(NB(n, µ·2^c), y)`.
 
     CRPS is location-dominated — a 4x error in µ costs +84%, a 4x error in dispersion +9% — so an arm
@@ -83,8 +111,12 @@ def oracle_scale(mu: np.ndarray, n: np.ndarray, target: np.ndarray, *,
     `scale_error` is allowed to go very slightly negative.
 
     Ported unchanged from `eval.py::_oracle_scale` so the cutover's equivalence report can show this
-    key did not move.
+    key did not move. `crps_approx` is the one later addition: it swaps BOTH the grid search and the
+    two reported numbers onto the sampled estimator, so the argmin and the value it reports are
+    measured with the same instrument. Under common random numbers (`crps_eval`) the grid stays
+    smooth, so `c_star` moves by grid resolution at worst rather than wandering.
     """
+    crps_fn = crps_eval(crps_approx, crps_seed)
     N = len(mu)
     sel = (np.arange(N) if N <= fit_budget
            else np.random.default_rng(seed).choice(N, fit_budget, replace=False))
@@ -92,7 +124,7 @@ def oracle_scale(mu: np.ndarray, n: np.ndarray, target: np.ndarray, *,
 
     def _fit(c: float, k: float = 0.0) -> float:
         m, nv = mf * 2.0 ** c, nf * 2.0 ** k
-        return float(np.mean(nb_crps(nv, p_from_mu(nv, m), tf)))
+        return float(np.mean(crps_fn(nv, p_from_mu(nv, m), tf)))
 
     c = float(min(np.arange(-6.0, 6.001, 0.25), key=_fit))
     c = float(min(np.arange(c - 0.25, c + 0.2501, 0.01), key=_fit))
@@ -100,8 +132,8 @@ def oracle_scale(mu: np.ndarray, n: np.ndarray, target: np.ndarray, *,
     ms, nk = mu * 2.0 ** c, n * 2.0 ** k
     return dict(
         c_star=c, n_star_log2=k,
-        crps_oracle_scaled=float(np.mean(nb_crps(n, p_from_mu(n, ms), target))),
-        crps_oracle_scaled_and_n=float(np.mean(nb_crps(nk, p_from_mu(nk, ms), target))),
+        crps_oracle_scaled=float(np.mean(crps_fn(n, p_from_mu(n, ms), target))),
+        crps_oracle_scaled_and_n=float(np.mean(crps_fn(nk, p_from_mu(nk, ms), target))),
     )
 
 
@@ -294,11 +326,25 @@ def coverage_gauss(mu: np.ndarray, sigma: np.ndarray, y: np.ndarray, level: floa
 # ---------------------------------------------------------------------------
 
 def nb_suite(n: np.ndarray, mu: np.ndarray, y: np.ndarray, *, seed: int = 0,
-             n_pairs: int = 200_000, with_marginal: bool = True) -> Dict[str, float]:
-    """Every D-block key for one NB-scored track. `crps` is never emitted without its split."""
+             n_pairs: int = 200_000, with_marginal: bool = True,
+             crps_approx: Optional[int] = None, crps_seed: int = 0) -> Dict[str, float]:
+    """Every D-block key for one NB-scored track. `crps` is never emitted without its split.
+
+    `crps_approx=K` swaps the closed-form CRPS for the K-draw sampled estimator on the three keys
+    that read the whole track — `crps`, `crps_oracle_scaled`, `crps_oracle_scaled_and_n` — and hence
+    on the two derived from them, `scale_error` and `beats_marginal`. Nothing else in this suite
+    moves: `ece`, the PIT curve, `coverage_95` and the C-index never touched `nb_crps`.
+
+    `marg_crps` STAYS EXACT even under `crps_approx`, and that is a choice rather than an oversight.
+    A constant forecast's CRPS depends on the target only through its histogram, so the marginal is
+    already evaluated on the unique values alone and costs nothing however many bins there are —
+    there is no CPU to buy back. Keeping it exact also keeps `beats_marginal` a comparison against a
+    bar with no sampling noise in it, so the only noise in that boolean is the model side's.
+    """
     p = p_from_mu(n, mu)
-    crps = float(np.mean(nb_crps(n, p, y)))
-    orc = oracle_scale(np.asarray(mu, float), np.asarray(n, float), np.asarray(y), seed=seed)
+    crps = float(np.mean(crps_eval(crps_approx, crps_seed)(n, p, y)))
+    orc = oracle_scale(np.asarray(mu, float), np.asarray(n, float), np.asarray(y), seed=seed,
+                       crps_approx=crps_approx, crps_seed=crps_seed)
     grid, fbar = calibration_pit_curve(n, p, y)
     out: Dict[str, float] = dict(
         crps=crps, **orc, scale_error=crps - orc["crps_oracle_scaled"],

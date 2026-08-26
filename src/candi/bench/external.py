@@ -290,6 +290,7 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
                    varpool_corpus: str = "eic", sigma_table: Optional[Mapping[str, Any]] = None,
                    sigma_table_path: Optional[str] = None, allow_missing: bool = False,
                    batch_windows: int = 4, with_curve: bool = False,
+                   crps_approx: Optional[int] = None, crps_seed: int = 0,
                    progress: bool = False) -> Dict[str, Any]:
     """Score a whole prediction root and return `run_bench`'s result shape (§4.2).
 
@@ -350,7 +351,8 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
             per_track[rec.key] = score_track(
                 rec, gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
                 c_index_pairs=c_index_pairs, with_curve=with_curve,
-                signal_target_transform=SIGNAL_TARGET_TRANSFORM)
+                signal_target_transform=SIGNAL_TARGET_TRANSFORM,
+                crps_approx=crps_approx, crps_seed=crps_seed)
             sigma_sources[rec.key] = sig_src
             bits = _binarise(rec, SIGNAL_TARGET_TRANSFORM)
             if bits is not None:
@@ -379,6 +381,12 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
             # applied. `"external"` rather than `"none"` so a reader can tell a rival's row (never
             # transformed by us) from a CANDI row whose head was trained in the eval space.
             "pred_inversion": "external",
+            # ABSENT WHEN THE CLOSED FORM WAS USED — see the same block in `harness.run_bench`. The
+            # presence of these three keys is what says a count-arm `crps` in this file is an
+            # ESTIMATE, and carries the two numbers (k, seed) a re-run would need.
+            **({} if crps_approx is None else
+               {"crps_estimator": "fair_sampled", "crps_k": int(crps_approx),
+                "crps_seed": int(crps_seed)}),
             "declared_tracks": len(expected),
             "missing_tracks": missing,
             "allow_missing": bool(allow_missing),
@@ -436,6 +444,17 @@ def build_parser() -> argparse.ArgumentParser:
                         "in provenance.missing_tracks either way; without this flag it is fatal.")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--c-index-pairs", type=int, default=200_000)
+    p.add_argument("--crps-approx", type=int, default=None, metavar="K",
+                   help="score the COUNT arm's CRPS from K sampled draws per bin instead of the "
+                        "closed form (candi.metrics.nb_crps_sampled). Off by default. It buys the "
+                        "genome-wide panel: the closed form is ~2.6 h/track on P2 and the sampler "
+                        "is minutes, and it stays finite at the n = 1e6 Poisson floor where the "
+                        "closed form is NaN. Only `crps`, `crps_oracle_scaled`, "
+                        "`crps_oracle_scaled_and_n`, `scale_error` and `beats_marginal` change; "
+                        "`marg_crps`, `nb_nll`, ece, coverage and the C-index do not. Recorded as "
+                        "provenance.crps_estimator/crps_k/crps_seed.")
+    p.add_argument("--crps-seed", type=int, default=0,
+                   help="RNG seed for --crps-approx. Inert without it.")
     p.add_argument("--batch-windows", type=int, default=4,
                    help="windows per truth read. Throughput only — every bin is read either way.")
     p.add_argument("--with-curve", action="store_true",
@@ -457,7 +476,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             source, a.pred, seed=a.seed, c_index_pairs=a.c_index_pairs,
             varpool_root=a.varpool, varpool_corpus=a.varpool_corpus, sigma_table=table,
             sigma_table_path=a.sigma_table, allow_missing=a.allow_missing,
-            batch_windows=a.batch_windows, with_curve=a.with_curve, progress=not a.quiet)
+            batch_windows=a.batch_windows, with_curve=a.with_curve,
+            crps_approx=a.crps_approx, crps_seed=a.crps_seed, progress=not a.quiet)
     finally:
         source.close()
 

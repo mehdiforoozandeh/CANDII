@@ -143,6 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
                      help="D3 — the one documented exception to whole-track scoring. The C-index "
                           "is pairwise (1.7e12 pairs on chr21), so it is estimated over this many "
                           "seeded pairs and always reported beside its Monte-Carlo SE.")
+    run.add_argument("--crps-approx", type=int, default=None, metavar="K",
+                     help="score the COUNT arm's CRPS from K sampled draws per bin instead of the "
+                          "closed form. Off by default; see `python -m candi.bench.external "
+                          "--help` for what it does and does not move.")
+    run.add_argument("--crps-seed", type=int, default=0,
+                     help="RNG seed for --crps-approx. Inert without it.")
     run.add_argument("--c-windows", type=int, default=8,
                      help="covariate block: counterfactual contexts, spread across the chromosome")
     run.add_argument("--c-resamples", type=int, default=50,
@@ -315,6 +321,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 varpool_root=a.varpool, varpool_corpus=a.varpool_corpus,
                 c_windows=a.c_windows, c_resamples=a.c_resamples,
                 signal_target_transform=stt,
+                crps_approx=a.crps_approx, crps_seed=a.crps_seed,
                 with_curve=a.with_curve, progress=not a.quiet,
                 extra_provenance={"ckpt": str(a.ckpt), "arch_from": a.arch_from,
                                   "heads": a.heads, "offset": a.offset, "device": str(device),
