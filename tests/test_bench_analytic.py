@@ -385,6 +385,25 @@ def test_a_model_that_forecasts_the_truth_beats_the_marginal_bar() -> None:
     assert D.nb_crps_mean(size, mu, y) < D.marginal_nb(y)["marg_crps"]
 
 
+def test_beats_marginal_is_absent_not_a_loss_when_crps_is_nan() -> None:
+    """t56: `bool(nan < x)` is False, so a NaN pooled CRPS silently recorded the track as a LOSS
+    (a false 0.0 on the leaderboard). An unscoreable comparison must record None (absent); a
+    scoreable one records a real bool."""
+    rng = np.random.default_rng(20)
+    size = np.full(400, 5.0)
+    mu = np.full(400, 20.0)
+    y = nbinom.rvs(size, D.p_from_mu(size, mu), random_state=rng).astype(float)
+    ok = D.nb_suite(size, mu, y, seed=0, n_pairs=2_000)
+    assert isinstance(ok["beats_marginal"], bool)
+    assert isinstance(ok["beats_marginal_oracle_scaled"], bool)
+    y_bad = y.copy()
+    y_bad[0] = np.nan                       # one unscoreable bin poisons the pooled CRPS
+    bad = D.nb_suite(size, mu, y_bad, seed=0, n_pairs=2_000)
+    assert not np.isfinite(bad["crps"])
+    assert bad["beats_marginal"] is None
+    assert bad["beats_marginal_oracle_scaled"] is None
+
+
 # ===========================================================================
 # B-block
 # ===========================================================================
