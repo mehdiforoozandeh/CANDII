@@ -16,6 +16,14 @@ difficulty:
 worse**. The gate wording in §7.4 is "should approach their published rows"; the operational
 reading used here is stated in `VERDICT_BANDS` and is a proposal to the PI, not a ruling.
 
+**The headline is the MEDIAN of per-track ratios, not the ratio of means.** Track MSE spans more
+than two orders of magnitude on this data — C06M16 scores ~100 where C05M18 scores ~0.4, because
+the tracks differ in dynamic range, not in how well either method did. A ratio of means is then
+decided by a handful of high-signal tracks and says almost nothing about the other thousand. The
+median per-track ratio gives every track one vote, which is the question the gate actually asks.
+The ratio of means is reported beside it, and `headline_disagreement` fires when the two tell
+different stories — that is a finding about the panel, not a number to quietly pick between.
+
 **What this is not.** Not the 001 vendored EIC scorer (§7.5). Not comparable to a published
 leaderboard row, and not to any Dataset-2 number — 005's translation result is why. Every record
 carries `anchor.CAVEAT` saying so.
@@ -49,6 +57,18 @@ def verdict_for(ratio: float) -> str:
         if ratio <= edge:
             return text
     return VERDICT_BANDS[-1][1]
+
+
+def _disagreement(median_ratio: float, mean_ratio: float) -> str:
+    """Do the two aggregations put the verdict in different bands? Say so rather than choose."""
+    if not (np.isfinite(median_ratio) and np.isfinite(mean_ratio)):
+        return "undefined"
+    a, b = verdict_for(median_ratio), verdict_for(mean_ratio)
+    if a == b:
+        return "none"
+    return (f"median per-track ratio {median_ratio:.3f} reads '{a.split(' —')[0]}' but the "
+            f"ratio of means {mean_ratio:.3f} reads '{b.split(' —')[0]}'. High-MSE tracks are "
+            f"pulling the mean; read the per-mark medians before quoting either.")
 
 
 def build_report(files: List[Path]) -> Dict:
@@ -95,9 +115,13 @@ def build_report(files: List[Path]) -> Dict:
         if r.get("theirs_vs_truth_mse", 0) > 0:
             by_mark.setdefault(r["mark"], []).append(r["ours_vs_truth_mse"] / r["theirs_vs_truth_mse"])
 
+    median_ratio = float(np.median(ratios)) if ratios.size else float("nan")
     return {
         "caveat": CAVEAT,
-        "verdict": verdict_for(macro_ratio),
+        "verdict": verdict_for(median_ratio),
+        "verdict_basis": "median of per-track MSE ratios (ours/theirs), one vote per track",
+        "median_track_ratio": median_ratio,
+        "headline_disagreement": _disagreement(median_ratio, macro_ratio),
         "macro_ratio_ours_over_theirs": macro_ratio,
         "pooled_ratio_ours_over_theirs": pool_o / pool_t if pool_t > 0 else float("nan"),
         "macro_ours_mse": macro_o, "macro_theirs_mse": macro_t,
@@ -145,7 +169,11 @@ def main(argv=None) -> int:
         print(f"per-track ratio  p05 {q['p05']:.3f}  p25 {q['p25']:.3f}  p50 {q['p50']:.3f}  "
               f"p75 {q['p75']:.3f}  p95 {q['p95']:.3f}")
         print(f"worse than theirs on {rec['worse_than_theirs_fraction']*100:.1f}% of tracks")
-    print(f"\nVERDICT: {rec['verdict']}")
+    print(f"\nmedian per-track ratio {rec['median_track_ratio']:.4f}   "
+          f"(ratio of means {rec['macro_ratio_ours_over_theirs']:.4f})")
+    if rec["headline_disagreement"] not in ("none", "undefined"):
+        print(f"!! {rec['headline_disagreement']}")
+    print(f"\nVERDICT ({rec['verdict_basis']}): {rec['verdict']}")
     print(f"-> {ns.out}")
     return 0
 

@@ -894,3 +894,29 @@ def test_pooled_weights_by_bin_count_and_macro_does_not(tmp_path):
     assert rec["pooled_ratio_ours_over_theirs"] > 9.9, "pooled must follow the big chromosome"
     assert rec["pooled_ratio_ours_over_theirs"] != pytest.approx(
         rec["macro_ratio_ours_over_theirs"])
+
+
+def test_verdict_uses_the_median_track_ratio_not_the_ratio_of_means(tmp_path):
+    """One huge-MSE track must not decide the verdict for a thousand others.
+
+    Track MSE spans orders of magnitude on this data (C06M16 ~100 vs C05M18 ~0.4), so a ratio of
+    means is set by dynamic range rather than by method quality.
+    """
+    from lavawizard import anchor_report as R
+    rows = [_row("C05", "M18", 1.0, 1.0) for _ in range(20)]          # 20 tracks at parity
+    rows.append(_row("C06", "M16", 200.0, 100.0))                      # one loud track at 2.0
+    f = _anchor_file(tmp_path, "chr16", rows)
+    rec = R.build_report([f])
+    assert rec["median_track_ratio"] == pytest.approx(1.0)
+    assert rec["macro_ratio_ours_over_theirs"] > 1.8, "the mean is captured by the loud track"
+    assert rec["verdict"].startswith("APPROACHES"), "the verdict must follow the median"
+    assert rec["headline_disagreement"] != "none"
+    assert "High-MSE tracks are pulling the mean" in rec["headline_disagreement"]
+
+
+def test_no_disagreement_flag_when_both_aggregations_agree(tmp_path):
+    from lavawizard import anchor_report as R
+    f = _anchor_file(tmp_path, "chr21", [_row("C05", "M17", 1.0, 1.0), _row("C05", "M18", 2.0, 2.0)])
+    rec = R.build_report([f])
+    assert rec["headline_disagreement"] == "none"
+    assert rec["verdict"].startswith("APPROACHES")
