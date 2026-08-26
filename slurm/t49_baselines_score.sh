@@ -15,9 +15,22 @@
 #
 # For P2 the dependency must be `afterok` on the WHOLE generation array: `bench.external` scores a
 # track over the CONCATENATION of every chromosome (the top-1 % thresholds of mse1obs/mse1imp are
-# taken over all of them at once), so a root missing one chromosome cannot be scored at all.
-# Genome-wide is 121 M bins against chr21's 1.87 M — 65x per track — hence the 24 h default; check
-# `seff` on the first task that lands and resize the rest rather than guessing four more times.
+# taken over all of them at once), so a root missing one chromosome cannot be scored at all. It is
+# also why P2 cannot be split by chromosome to make it cheaper: a per-chromosome top-1 % is a
+# different metric, not a cheaper estimate of the same one.
+#
+# P2 COST, MEASURED RATHER THAN GUESSED — and it is the reason `--time` is not defaulted for it.
+# chr21 is 1.87 M bins and the whole store is 121 M, so P2 is 65x per track. Measured on chr21:
+# ~2.4 min/track for a method carrying the count arm, so P2 is ~2.6 h/track and ~117 h for the 45
+# declared tracks. `avg-arcsinh` is pval-only — no NB CRPS and no `nbinom.ppf` over every bin — and
+# comes in near 10 h. The 24 h default below is right for chr21 and FAR too short for P2; the count
+# arm needs the b5 bin. Submit P2 with an explicit `--time`, e.g.
+#
+#   sbatch --array=0-4 --time=5-18:00:00 --mem=96G --cpus-per-task=2 slurm/t49_baselines_score.sh
+#
+# and mind the standing reservations: a 7-day request is refused outright with
+# `ReqNodeNotAvail, Reserved for maintenance` whenever a maintenance reservation falls inside the
+# window, so size the walltime to land BEFORE the next one rather than asking for the bin maximum.
 #
 # The leaderboard is NOT assembled here: it needs every method's score file, so run
 # `python -m competitors.baselines.leaderboard --protocol P1|P2 --scores ...` once the array is
