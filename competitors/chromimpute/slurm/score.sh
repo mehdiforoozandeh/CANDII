@@ -13,6 +13,10 @@
 #
 # `CI_ALLOW_MISSING=1` for a partial root — the pilot covers 20 of the 45 declared targets, and
 # without it `bench.external` refuses the run by design (the D2 lesson).
+#
+# `CI_SIGMA=<sigma.json>` supplies the §6.1 table. Without it a point-only rival carries the E and P
+# blocks only and no `gauss_suite` — absent keys, not NaN. With it the pval arm becomes a
+# homoscedastic Gaussian and the CRPS tier opens.
 set -euo pipefail
 
 REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t51}
@@ -24,7 +28,8 @@ OUT=${CI_OUT:-$RUN/scores_$CHROMS.json}
 if [ "$CHROMS" = "all" ]; then
   CHROMS=$(cut -f1 "$RUN/input/chrominfo.txt" | paste -sd, -)
 fi
-EXTRA=(); [ "${CI_ALLOW_MISSING:-0}" = "1" ] && EXTRA=(--allow-missing)
+EXTRA=(); [ "${CI_ALLOW_MISSING:-0}" = "1" ] && EXTRA+=(--allow-missing)
+[ -n "${CI_SIGMA:-}" ] && EXTRA+=(--sigma-table "$CI_SIGMA")
 
 cd "$REPO"
 PYTHONPATH=$REPO/src $PY -m candi.bench.external \
