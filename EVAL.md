@@ -129,7 +129,8 @@ A C-index without its SE is not quotable. The C-block is sampled too and says so
 
 ```bash
 python -m candi.bench.external --store <regime.json> --pred <pred_root> --out <scores.json> \
-    [--chroms chr21,...] [--sigma-table <sigma.json>] [--varpool ...] [--allow-missing]
+    [--chroms chr21,...] [--sigma-table <sigma.json>] [--varpool ...] [--allow-missing] \
+    [--crps-approx K --crps-seed S]
 ```
 
 A rival has no checkpoint we can load, so it hands over the prediction itself, on our grid:
@@ -269,6 +270,37 @@ Report both terms or neither. `AGENTS.md` §7.2 makes this a rule, not a prefere
 
 `marg_crps` is the CRPS-optimal marginal NB fitted to the target itself, so `beats_marginal` is the
 weakest possible bar: it asks whether the model beat a single number per assay.
+
+### `--crps-approx K` — the same CRPS, sampled instead of derived
+
+Off by default. On, the count arm's CRPS is estimated from `K` draws per bin
+(`metrics.nb_crps_sampled`) instead of evaluated in closed form, and the score file carries
+`provenance.crps_estimator: "fair_sampled"` with `crps_k` and `crps_seed`. Those three keys are
+**absent** from a default run, so their presence is what tells a reader the `crps` in front of them
+is an estimate. Available on `python -m candi.bench.external` and on `python -m candi.bench run`.
+
+It exists for two reasons, and the second is the one that is not about speed.
+
+**The closed form has a ceiling.** `nb_crps`'s Gini term is a `2F1` with `b = 1 − n`, and it returns
+NaN well before `n = 1e5`. A count baseline with no over-dispersion to report sits at the Poisson
+floor by construction — `t49`'s pre-registered `n = 1e6` run has no `crps`, no `crps_oracle_scaled`
+and no `scale_error` at all, and its `beats_marginal` reports a false `0.0`. Sampling has no such
+ceiling: at `n = 1e6` the draws are Poisson(µ), which is the right answer rather than an absence.
+
+**The estimator is unbiased, and that is a design choice with a name.** `CRPS = E|X−y| − ½E|X−X′|`
+with the second term taken over the `k(k−1)` distinct ordered pairs, not the `k²` plug-in. The
+plug-in counts the `k` zero terms `|xᵢ − xᵢ|` and is therefore low on `E|X−X′|` by `(k−1)/k` — an
+`O(1/k)` **bias**, which does not average away over 124 M bins. Consequences: the per-bin estimate
+is not clamped at zero (clamping would put the bias back), and one seed is bound for the whole
+track so `crps` and `crps_oracle_scaled` share their draws and `scale_error` is a difference with
+correlated noise rather than two independent ones.
+
+What it moves: `crps`, `crps_oracle_scaled`, `crps_oracle_scaled_and_n`, and the two derived from
+them, `scale_error` and `beats_marginal`. `c_star` / `n_star_log2` are an argmin and may land a grid
+step away. Nothing else in the D block ever called `nb_crps`. `marg_crps` stays exact under the
+flag: a constant forecast is scored on the target's histogram, so it costs nothing at any track
+length, and keeping it exact keeps `beats_marginal` a comparison against a bar with no sampling
+noise in it.
 
 ### `ece` is PIT, not interval coverage
 
@@ -491,7 +523,9 @@ written to the run config as `signal_target_transform`; nothing in the checkpoin
    `pred_space: "-log10p"`; a row without that key predates the spaces contract and compared an
    `arcsinh` prediction to a raw truth. The monitor emits no pval arm at all, by the scope ruling.
 4. Quote `crps` with `crps_oracle_scaled` and `scale_error`, or quote none of the three
-   (`AGENTS.md` §7.2).
+   (`AGENTS.md` §7.2). If the row's provenance carries `crps_estimator: "fair_sampled"`, quote
+   `crps_k` and `crps_seed` beside it as well — a sampled score is not reproducible from the
+   prediction alone, and two rows at different `k` are two instruments.
 5. Quote `c_index` with `c_index_se`, and `auprc` with `peak_base_rate`.
 6. An `auprc` from a count-only checkpoint is a coverage ranking, not a peak metric.
 7. `depthcounterfact` quotes with its 0.25 floor and **no** ceiling. An `eval.py`-era S14

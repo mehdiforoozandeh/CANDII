@@ -17,7 +17,8 @@
 # READ-ONLY ON EVERYTHING t49 OWNS. This job opens `p1v2/n1e4/preds` and the store and writes
 # nowhere near either; the running P2 score array is untouched.
 #
-# WHY --gres ON A CPU-ONLY JOB: see slurm/bake.sh.
+# NO --gres, unlike the scoring jobs. There is no model here: `truth` reads the store and `sweep`
+# is numpy, so a GPU would be requested and left idle, and the CPU partition schedules sooner.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t56_crps
 #SBATCH --output=slurm-logs/t56_crps_%A_%a.out
