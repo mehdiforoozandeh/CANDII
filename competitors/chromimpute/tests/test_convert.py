@@ -223,3 +223,64 @@ def test_apply_output_name_is_splittable_on_our_separator():
     name = collect.apply_output_name("T_upper_lobe_of_left_lung", "DNase-seq")
     assert name.split(".")[1] == "T_upper_lobe_of_left_lung"
     assert name.split(".")[2] == "DNase-seq"
+
+
+# ---------------------------------------------------------------------------------------------
+# the §6.1 sigma-table
+# ---------------------------------------------------------------------------------------------
+
+
+def _scores(rows):
+    """rows: (assay, mse, n_points) -> a minimal scores json shaped like bench.external's."""
+    return {"provenance": {"method": "ChromImpute"},
+            "per_track": {f"T_x|V_x|{a}#{i}": {"pval": {
+                "assay": a, "mse": m, "n_points": n, "signal_target_transform": "none"}}
+                for i, (a, m, n) in enumerate(rows)}}
+
+
+def test_sigma_is_the_root_of_the_pooled_mean_squared_residual():
+    import fit_sigma
+    out = fit_sigma.fit(_scores([("H3K4me3", 4.0, 100), ("H3K4me3", 16.0, 100)]))
+    assert out["H3K4me3"]["mse_pooled"] == pytest.approx(10.0)
+    assert out["H3K4me3"]["sigma"] == pytest.approx(10.0 ** 0.5)
+    assert out["H3K4me3"]["n_tracks"] == 2
+
+
+def test_sigma_pooling_is_weighted_by_bins_not_by_tracks():
+    import fit_sigma
+    out = fit_sigma.fit(_scores([("H3K9me3", 1.0, 900), ("H3K9me3", 11.0, 100)]))
+    assert out["H3K9me3"]["mse_pooled"] == pytest.approx(2.0)
+
+
+def test_sigma_refuses_a_track_scored_through_a_transform():
+    import fit_sigma
+    s = _scores([("H3K4me3", 4.0, 100)])
+    next(iter(s["per_track"].values()))["pval"]["signal_target_transform"] = "arcsinh"
+    with pytest.raises(ValueError, match="raw -log10 p"):
+        fit_sigma.fit(s)
+
+
+def test_sigma_table_has_the_three_fields_bench_external_reads(tmp_path):
+    import json
+    import fit_sigma
+    src = tmp_path / "s.json"
+    src.write_text(json.dumps(_scores([("H3K4me3", 4.0, 100)])))
+    out = tmp_path / "sigma.json"
+    fit_sigma.main([str(src), "--out", str(out)])
+    obj = json.loads(out.read_text())
+    assert obj["method"] == "ChromImpute"
+    assert obj["fitted_on"] == "regime.eic_val eval_pairs"
+    assert obj["sigma"]["H3K4me3"] == pytest.approx(2.0)
+
+
+def test_sigma_table_is_accepted_by_the_bench_reader(tmp_path):
+    """The two sides of the boundary must agree on the §4.2 shape, not just on our reading of it."""
+    import json
+    import fit_sigma
+    from candi.bench.external import read_sigma_table
+    src = tmp_path / "s.json"
+    src.write_text(json.dumps(_scores([("H3K4me3", 4.0, 100), ("H3K9me3", 9.0, 100)])))
+    out = tmp_path / "sigma.json"
+    fit_sigma.main([str(src), "--out", str(out)])
+    table = read_sigma_table(out)
+    assert table["sigma"]["H3K9me3"] == pytest.approx(3.0)
