@@ -60,6 +60,11 @@ CAVEATS = [
     "These are Dataset-3 numbers and never enter an internal Dataset-2 table. Experiment 005 "
     "measured 12-66 % per-experiment error for rescaling between the two spaces; do not translate.",
     "The ten bootstraps are ten fixed chromosome subsets, not resamples of genomic positions.",
+    "Some entrants are NOT independent. CUImpute1, CUWA and ICU submitted byte-identical tracks "
+    "for all 26 broad-mark experiments and differ only on punctate marks, so on H3K27me3, "
+    "H3K36me3 and H3K9me3 they are one submission under three names. Any per-assay table flags "
+    "such a group beneath it; never count them separately when saying how many methods beat a "
+    "given row.",
 ]
 
 # A method that scored fewer experiments than expected gets this marker on the affected assay row.
@@ -179,6 +184,30 @@ def coverage(by_exp: Dict[str, dict], expected: Dict[str, str]) -> dict:
             "complete": not missing}
 
 
+def duplicate_groups(methods: Dict[str, dict], assay: str) -> List[List[str]]:
+    """Methods whose scores for one assay are bit-identical on every measure.
+
+    Not a curiosity. `CUImpute1`, `CUWA` and `ICU` submitted **byte-identical tracks for all 26
+    broad-mark experiments** and differ only on punctate marks, so on H3K27me3, H3K36me3 and
+    H3K9me3 they are one submission wearing three names. Ranking them as three rows overstates how
+    many distinct methods the field holds, and any claim of the form "N methods beat X on broad
+    marks" triple-counts a single entry.
+
+    Detection is from the SCORES rather than from track checksums on purpose: this file reads score
+    CSVs and nothing else, and a group agreeing to the last bit of eight independently computed
+    measures over eight-plus experiments is identical for a reason worth printing either way.
+    """
+    sig: Dict[tuple, List[str]] = defaultdict(list)
+    for name, d in methods.items():
+        r = d["per_assay"].get(assay)
+        if not r:
+            continue
+        key = tuple(r[m] for m in MEASURES)
+        if all(np.isfinite(v) for v in key):
+            sig[key].append(name)
+    return [sorted(v) for v in sig.values() if len(v) > 1]
+
+
 def fmt(x: float) -> str:
     if not np.isfinite(x):
         return "--"
@@ -219,6 +248,10 @@ def markdown(methods: Dict[str, dict]) -> str:
         L.append("")
         for g in gaps:
             L += [f"(dagger) {g}", ""]
+        for grp in duplicate_groups(methods, assay):
+            L += [f"**Not independent:** {', '.join(grp)} scored bit-identically on all "
+                  f"{len(MEASURES)} measures for {assay} — they submitted the same predictions. "
+                  f"Count them once, not {len(grp)} times.", ""]
 
     for klass, title in (("broad", "Macro -- broad marks (H3K27me3, H3K36me3, H3K9me3)"),
                          ("punctate", "Macro -- punctate marks"),
