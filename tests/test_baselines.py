@@ -619,6 +619,28 @@ def test_broad_marks_are_never_folded_into_the_punctate_median():
     assert LB._group("DNase-seq") == "accessibility" and LB._group("ATAC-seq") == "accessibility"
 
 
+def test_a_pi_ruling_travels_with_the_anchor_and_never_flips_its_verdict():
+    """The PI's 2026-08-25 ruling on anchor 2, and the one thing a ruling may not do.
+
+    A ruling records what the PI CONCLUDED from a failing anchor. It must not turn `pass: False`
+    into `pass: True`, or the anchor stops being a check and becomes a formality — and it must
+    survive regeneration, which is why it lives in `PI_RULINGS` rather than in the json.
+    """
+    methods = {
+        "avg": {"macro": {"pval": {"mse": 7.13}, "count": {"beats_marginal": 0.8444}}},
+        "marginal": {"macro": {"pval": {"mse": 9.31}}},
+    }
+    got = LB.check_anchors(methods)
+    a2 = got["avg_beats_marginal_near_universal"]
+    assert a2["pass"] is False and a2["fraction_of_tracks"] == 0.8444
+    assert got["all_pass"] is False, "a ruled-on anchor must not silently pass the whole set"
+    assert "k=3" in a2["pi_ruling"]["ruling"] and "median 16" in a2["pi_ruling"]["ruling"]
+    assert "declined a post-hoc sparse-threshold change" in a2["pi_ruling"]["ruling"]
+    assert got["avg_beats_marginal_on_macro_pval_mse"]["pass"] is True
+    assert "pi_ruling" not in got["avg_beats_marginal_on_macro_pval_mse"], \
+        "anchor 1 passed on its own; it carries no ruling"
+
+
 # ---------------------------------------------------------------------------
 # the one-way rule (§3)
 # ---------------------------------------------------------------------------

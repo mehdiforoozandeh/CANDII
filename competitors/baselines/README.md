@@ -85,6 +85,28 @@ Measured against the exact Poisson CRPS at `y = round(µ)`, `n = 1e4` is within 
 whose contributors agree, overwhelmingly the near-zero ones) the two values are the same number. Both
 facts are pinned by tests rather than left in this paragraph.
 
+## The §5.5 sanity anchors, as ruled on the P1 panel
+
+Measured on `regime.eic_val`, chr21, 45 declared tracks, Poisson floor `1e4`.
+
+**Anchor 1 — the plain-mean pval baseline beats the per-assay marginal on macro mse: PASS.**
+`avg` 7.128 against `marginal` 9.312.
+
+**Anchor 2 — `beats_marginal` near-universal for the moment-matched NB baseline: FAILED, 38/45 =
+0.844 against the ≥ 0.9 reading of "near-universal".** PI ruling, 2026-08-25:
+
+> ACCEPT as a real finding. The anchor failed at the near-universal reading for an understood,
+> mechanistic reason: all 7 losing tracks average over k=3 contributors (winners: median 16), and a
+> 3-cell cross-cell mean is a noisy predictor. The PI ruled this a genuine property of the LOO
+> average rather than an artifact, and declined a post-hoc sparse-threshold change.
+
+No rules changed. §5's sparse rule stays at `n_eligible <= 2`, which flags nothing on this panel
+(min k = 3), so excluding flagged tracks leaves the anchor at 0.844 — the rule as written does not
+rescue it, and it was not amended to. The losers are all punctate; broad marks go 9/9 and
+accessibility 3/3. The ruling lives in `leaderboard.py::PI_RULINGS` so it is re-attached to the
+anchor block every time a leaderboard is regenerated, and it never converts `pass: False` into
+`pass: True`.
+
 ## Tests
 
 `tests/test_baselines.py`. The two §5.5 gates are

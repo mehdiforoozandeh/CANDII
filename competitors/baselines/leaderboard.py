@@ -186,6 +186,28 @@ def assemble(scores: Mapping[str, Path | str], *, protocol: str,
     }
 
 
+#: PI rulings on a §5.5 anchor, carried on the anchor block itself.
+#:
+#: A ruling lives HERE rather than being pasted into a generated json, because a leaderboard is
+#: regenerated every time a method is added and a hand-edited verdict would vanish on the next run.
+#: A failing anchor with a ruling still reports `pass: False` — the ruling records what the PI
+#: concluded from the failure, it does not convert it into a success. Nothing in this file may set
+#: `pass` from a ruling.
+PI_RULINGS: Dict[str, Dict[str, str]] = {
+    "avg_beats_marginal_near_universal": {
+        "date": "2026-08-25",
+        "ruling": "ACCEPT as a real finding. The anchor failed at the near-universal reading for an "
+                  "understood, mechanistic reason: all 7 losing tracks average over k=3 "
+                  "contributors (winners: median 16), and a 3-cell cross-cell mean is a noisy "
+                  "predictor. The PI ruled this a genuine property of the LOO average rather than "
+                  "an artifact, and declined a post-hoc sparse-threshold change.",
+        "rules_changed": "none — RIVALS_PLAN.md §5's sparse rule stays at n_eligible <= 2, which "
+                         "flags nothing on this panel (min k = 3), and the 0.9 reading of "
+                         "'near-universal' stands.",
+    },
+}
+
+
 def check_anchors(methods: Mapping[str, Any]) -> Dict[str, Any]:
     """The two §5.5 sanity anchors. Reported as verdicts; never used to adjust a baseline.
 
@@ -196,6 +218,10 @@ def check_anchors(methods: Mapping[str, Any]) -> Dict[str, Any]:
        `beats_marginal` is `bench.distributional.nb_suite`'s comparison against a marginal NB fitted
        on the truth itself, so a strictly richer per-bin predictor should clear it almost everywhere.
        "Near-universal" is read as >= 0.9 of the scored tracks.
+
+    An anchor the PI has ruled on carries `pi_ruling` beside its verdict. The verdict itself is
+    untouched by the ruling (see `PI_RULINGS`): anchor 2 reads `pass: False` on the P1 panel and is
+    quoted that way, with the ruling explaining what was concluded from it.
     """
     out: Dict[str, Any] = {}
     avg, marg = methods.get("avg"), methods.get("marginal")
@@ -213,6 +239,9 @@ def check_anchors(methods: Mapping[str, Any]) -> Dict[str, Any]:
             "threshold": 0.9,
             "pass": None if frac is None else bool(frac >= 0.9),
         }
+    for name, ruling in PI_RULINGS.items():
+        if name in out:
+            out[name]["pi_ruling"] = dict(ruling)
     out["all_pass"] = all(v.get("pass") is True for v in out.values() if isinstance(v, dict))
     return out
 
