@@ -828,3 +828,69 @@ def test_read_binned_gives_up_with_a_message_that_names_the_suspect(monkeypatch)
     _fake_pybigwig(monkeypatch, opener)
     with pytest.raises(OSError, match="Lustre mount is the suspect"):
         dataset3.read_binned("/whatever.bigwig", "chr21", attempts=2, backoff=0.0)
+
+
+# ---------------------------------------------------------------------------
+# the anchor verdict roll-up
+# ---------------------------------------------------------------------------
+
+def _anchor_file(tmp_path, chrom, rows):
+    from lavawizard import anchor
+    obj = anchor.summarise(rows)
+    obj["chrom"] = chrom
+    p = tmp_path / f"anchor_{chrom}.json"
+    p.write_text(json.dumps(obj), encoding="utf-8")
+    return p
+
+
+def _row(cell, mark, ours, theirs, n_bins=1000):
+    return {"cell": cell, "mark": mark, "n_bins": n_bins,
+            "ours_vs_truth_mse": ours, "theirs_vs_truth_mse": theirs,
+            "ours_vs_truth_pearson": 0.7, "theirs_vs_truth_pearson": 0.72,
+            "ours_vs_theirs_pearson": 0.9}
+
+
+def test_verdict_bands_are_monotone_and_cover_everything():
+    from lavawizard import anchor_report as R
+    edges = [e for e, _ in R.VERDICT_BANDS]
+    assert edges == sorted(edges) and edges[-1] == float("inf")
+    assert R.verdict_for(1.00).startswith("APPROACHES")
+    assert R.verdict_for(1.09).startswith("APPROACHES")
+    assert R.verdict_for(1.20).startswith("NEAR")
+    assert R.verdict_for(1.50).startswith("SHORT")
+    assert R.verdict_for(9.90).startswith("FAILS")
+    assert R.verdict_for(float("nan")).startswith("UNDEFINED")
+
+
+def test_ratio_below_one_means_we_beat_their_submission():
+    from lavawizard import anchor_report as R
+    assert R.verdict_for(0.85).startswith("APPROACHES"), "better than theirs is not a failure"
+
+
+def test_report_rolls_up_macro_pooled_and_per_mark(tmp_path):
+    from lavawizard import anchor_report as R
+    f1 = _anchor_file(tmp_path, "chr21", [_row("C05", "M17", 1.0, 1.0), _row("C05", "M18", 3.0, 2.0)])
+    f2 = _anchor_file(tmp_path, "chr22", [_row("C05", "M17", 2.0, 1.0), _row("C05", "M18", 2.0, 2.0)])
+    rec = R.build_report([f1, f2])
+    assert rec["n_chromosomes"] == 2 and rec["n_track_chromosomes"] == 4
+    assert rec["macro_ours_mse"] == pytest.approx(2.0)
+    assert rec["macro_theirs_mse"] == pytest.approx(1.5)
+    assert rec["macro_ratio_ours_over_theirs"] == pytest.approx(2.0 / 1.5)
+    # M17 ratios are 1.0 and 2.0 -> median 1.5; M18 are 1.5 and 1.0 -> median 1.25
+    assert rec["by_mark_median_ratio"]["M17"] == pytest.approx(1.5)
+    assert rec["by_mark_median_ratio"]["M18"] == pytest.approx(1.25)
+    # ratios are 1.0, 1.5, 2.0, 1.0 -> two are STRICTLY worse. Parity is not "worse".
+    assert rec["worse_than_theirs_fraction"] == pytest.approx(0.5)
+    assert "001 vendored EIC scorer" in rec["caveat"]
+
+
+def test_pooled_weights_by_bin_count_and_macro_does_not(tmp_path):
+    """A huge chromosome must move pooled but not macro — that is why both are reported."""
+    from lavawizard import anchor_report as R
+    big = _anchor_file(tmp_path, "chr1", [_row("C05", "M17", 10.0, 1.0, n_bins=1_000_000)])
+    small = _anchor_file(tmp_path, "chr21", [_row("C05", "M17", 1.0, 1.0, n_bins=1_000)])
+    rec = R.build_report([big, small])
+    assert rec["macro_ratio_ours_over_theirs"] == pytest.approx((10.0 + 1.0) / 2 / 1.0)
+    assert rec["pooled_ratio_ours_over_theirs"] > 9.9, "pooled must follow the big chromosome"
+    assert rec["pooled_ratio_ours_over_theirs"] != pytest.approx(
+        rec["macro_ratio_ours_over_theirs"])
