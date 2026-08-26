@@ -12,6 +12,7 @@ bins the track has. Only a real panel settles it.
     python tools/t56_crps_sweep.py sweep   --store ... --truth DIR --preds ROOT --out DIR \
                                            --shard i --nshards n
     python tools/t56_crps_sweep.py profile --store ... --truth DIR --preds ROOT --method avg
+    python tools/t56_crps_sweep.py curve   --sweep DIR [--scores cruxvault/results/t49/p1_n1e4]
 
 `truth` is split out because it is the only step that needs the store: every declared track's chr21
 counts, written once, so the sweep tasks are pure numerics and their wall-clock is the estimator's
@@ -180,10 +181,150 @@ def cmd_profile(a) -> int:
     return 0
 
 
+def cmd_curve(a) -> int:
+    """The deliverable: the k-curve, and the pre-stated bar applied to it.
+
+    THE BAR, stated before any of this was run: the smallest k for which, over every track, method
+    and seed, `|macro d| < 1e-3` AND `max per-track relative error < 0.1 %` AND no method ordering
+    flips. It is deliberately far stricter than anything the programme quotes — the panel's macro
+    CRPS noise floor is 0.09 and a seed change alone moves pooled CRPS by 0.1195 — so a k that
+    clears it is not arguable about. The curve is printed whole so the PI can see the margin on each
+    criterion separately and decide where the bar really belongs.
+    """
+    import glob
+    from collections import defaultdict
+
+    rows = []
+    for f in sorted(glob.glob(str(Path(a.sweep) / "shard*.json"))):
+        rows += json.load(open(f))
+    methods = sorted({r["method"] for r in rows})
+    tracks = sorted({r["track"] for r in rows})
+    print(f"{len(rows)} (track, method) rows — {len(methods)} methods x {len(tracks)} tracks")
+
+    ex = {(r["method"], r["track"]): r["exact"] for r in rows}
+    sm = defaultdict(dict)
+    for r in rows:
+        for s in r["sampled"]:
+            sm[(s["k"], s["crps_seed"])][(r["method"], r["track"])] = s
+
+    marg = {}
+    if a.scores:
+        worst = 0.0
+        for m in methods:
+            p = Path(a.scores) / f"{m}.json"
+            if not p.exists():
+                continue
+            js = json.load(open(p))
+            for (mm, t), v in ex.items():
+                if mm != m:
+                    continue
+                arm = js["per_track"].get(t.replace("__", "|") + "|impute", {}).get("count", {})
+                if arm.get("crps") is not None and np.isfinite(arm["crps"]):
+                    worst = max(worst, abs(arm["crps"] - v["crps"]))
+                if arm.get("marg_crps") is not None:
+                    marg[(m, t)] = float(arm["marg_crps"])
+        print(f"this run's EXACT column vs the stored score jsons: worst |d| = {worst:.3e} "
+              f"(0 means the sweep is reading the same instrument the panel was scored with)")
+
+    def macro(d, key):
+        per = defaultdict(list)
+        for (m, _), v in d.items():
+            per[m].append(v[key])
+        return {m: float(np.mean(v)) for m, v in per.items()}
+
+    exm = macro(ex, "crps")
+    ex_order = [m for m, _ in sorted(exm.items(), key=lambda kv: kv[1])]
+    ex_torder = {t: tuple(sorted(methods, key=lambda m: ex[(m, t)]["crps"])) for t in tracks}
+    print("exact macro crps:", {m: round(v, 4) for m, v in exm.items()})
+    print("exact macro ordering (best first):", ex_order)
+
+    print(f"\n{'k':>5} {'macro |d|':>10} {'track relerr max':>17} {'p99':>9} {'track |d| max':>14} "
+          f"{'macro flips':>12} {'track flips':>12} {'bm flips':>9} {'sec/track':>10}")
+    curve = []
+    for k in KS:
+        md, rel, ad, fm, ft, fb, sec = [], [], [], 0, 0, 0, []
+        for s in SEEDS:
+            d = sm[(k, s)]
+            mm = macro(d, "crps")
+            md += [mm[m] - exm[m] for m in methods]
+            fm += int([m for m, _ in sorted(mm.items(), key=lambda kv: kv[1])] != ex_order)
+            for t in tracks:
+                ft += int(tuple(sorted(methods, key=lambda m: d[(m, t)]["crps"])) != ex_torder[t])
+            for key, v in d.items():
+                e = ex[key]["crps"]
+                rel.append(abs(v["crps"] - e) / max(abs(e), 1e-12))
+                ad.append(abs(v["crps"] - e))
+                sec.append(v["seconds"])
+                if key in marg:
+                    fb += int((v["crps"] < marg[key]) != (e < marg[key]))
+        c = dict(k=k, macro_abs=float(np.abs(md).max()), relerr_max=float(max(rel)),
+                 relerr_p99=float(np.percentile(rel, 99)), abserr_max=float(max(ad)),
+                 flips_macro=fm, flips_track=ft, flips_bm=fb, sec=float(np.mean(sec)))
+        curve.append(c)
+        print(f"{k:5d} {c['macro_abs']:10.6f} {c['relerr_max']:16.4%} {c['relerr_p99']:8.4%} "
+              f"{c['abserr_max']:14.6f} {fm:12d} {ft:12d} {fb:9d} {c['sec']:10.1f}")
+    exact_sec = float(np.mean([v["seconds"] for v in ex.values()]))
+    by_m = {m: float(np.mean([v["seconds"] for (mm, _), v in ex.items() if mm == m]))
+            for m in methods}
+    print(f"\nEXACT: {exact_sec:.1f} s/track for the same three keys — "
+          + ", ".join(f"{m} {s:.0f}s" for m, s in by_m.items()))
+
+    # every ordering flip, with the exact gap it crossed — a flip across a gap the panel could not
+    # resolve anyway is a property of the panel, not of the estimator.
+    print("\nevery per-track ordering flip, and the exact gap it crossed:")
+    seen = 0
+    for k in KS:
+        for s in SEEDS:
+            d = sm[(k, s)]
+            for t in tracks:
+                got = tuple(sorted(methods, key=lambda m: d[(m, t)]["crps"]))
+                if got == ex_torder[t]:
+                    continue
+                i = next(j for j in range(len(methods) - 1) if ex_torder[t][j] != got[j])
+                lo, hi = ex_torder[t][i], ex_torder[t][i + 1]
+                gap = ex[(hi, t)]["crps"] - ex[(lo, t)]["crps"]
+                print(f"  k={k:4d} seed={s} {t[:46]:46s} {lo} vs {hi}: exact gap {gap:.6f}")
+                seen += 1
+    if not seen:
+        print("  none")
+
+    for key in ("crps_oracle_scaled", "crps_oracle_scaled_and_n", "scale_error"):
+        print(f"\n{key}: ", end="")
+        for k in KS:
+            md, ad = [], []
+            em = macro(ex, key)
+            for s in SEEDS:
+                d = sm[(k, s)]
+                mm = macro(d, key)
+                md += [abs(mm[m] - em[m]) for m in methods]
+                ad += [abs(v[key] - ex[kk][key]) for kk, v in d.items()]
+            print(f"k={k}: macro|d|={max(md):.5f} track|d|max={max(ad):.4f}  ", end="")
+        print()
+    npos_ex = sum(1 for v in ex.values() if v["n_star_log2"] > 0)
+    npos_s = sum(1 for v in sm[(KS[-1], 0)].values() if v["n_star_log2"] > 0)
+    print(f"\nn_star_log2 > 0 in {npos_ex}/{len(ex)} tracks EXACT, {npos_s}/{len(ex)} sampled "
+          f"(k={KS[-1]}). The exact oracle's n-grid multiplies n by 2^kk and `nb_crps` is NaN "
+          f"above n ~ 1.2e4, so on an n1e4-floor panel every positive grid point evaluates to NaN "
+          f"and `min` can never select one. That is a defect in the CLOSED FORM, surfaced here.")
+
+    ok = [c for c in curve if c["macro_abs"] < 1e-3 and c["relerr_max"] < 1e-3
+          and c["flips_macro"] == 0 and c["flips_track"] == 0 and c["flips_bm"] == 0]
+    print(f"\nk clearing the bar as written: {[c['k'] for c in ok] or 'NONE'}")
+    if a.out:
+        json.dump(dict(curve=curve, exact_sec_per_track=exact_sec, exact_macro=exm,
+                       exact_order=ex_order), open(a.out, "w"), indent=1)
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
+    q = sub.add_parser("curve")
+    q.add_argument("--sweep", required=True, help="directory of shard*.json from `sweep`")
+    q.add_argument("--scores", default=None,
+                   help="the t49 score jsons, to check this run's EXACT column against them")
+    q.add_argument("--out", default=None)
     for name in ("truth", "sweep", "profile"):
         q = sub.add_parser(name)
         q.add_argument("--store", required=True)
@@ -202,7 +343,8 @@ def main() -> int:
             q.add_argument("--method", default="avg")
             q.add_argument("--track-index", type=int, default=0)
     a = p.parse_args()
-    return {"truth": cmd_truth, "sweep": cmd_sweep, "profile": cmd_profile}[a.cmd](a)
+    return {"truth": cmd_truth, "sweep": cmd_sweep, "profile": cmd_profile,
+            "curve": cmd_curve}[a.cmd](a)
 
 
 if __name__ == "__main__":
