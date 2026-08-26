@@ -406,3 +406,28 @@ shrug.
 
 No other team deviates: `UIOWA_Michaelson` aside, every submitted filename set equals the blind list
 exactly, with no unexpected extras.
+
+### Entrants that are not independent (verified by md5, 2026-08-26)
+
+`placement_table.py` flags any group scoring bit-identically on all eight measures for an assay.
+Every flag it raised was then confirmed against the downloaded tracks themselves:
+
+| group | assay(s) | what the tracks show |
+|---|---|---|
+| `CUImpute1`, `CUWA`, `ICU` | all 3 broad marks, H3K4me3, ATAC-seq | byte-identical tracks for all **26** broad-mark experiments; they differ only on some punctate marks |
+| `CUImpute1`, `ICU` | H3K27ac | identical |
+| **`Avocado_p0`, `ICU`** | H3K4me1 | ICU submitted the **organizers' Avocado baseline tracks**, byte-identical, for all 7 H3K4me1 experiments |
+| `Hongyang_Li_and_Yuanfang_Guan`, `…_v1` | ATAC-seq | identical — and the *same single file* (md5 `50258e27ee7b`) for **all three** ATAC cells, i.e. a cell-agnostic prediction |
+
+Consequences for how the table is read, and they are not optional:
+
+- The field contains fewer distinct methods than it has rows. On broad marks, `CUImpute1`/`CUWA`/
+  `ICU` are **one** submission under three names.
+- Never write "N methods beat X on broad marks" from a row count — it triple-counts that entry.
+- `ICU`'s H3K4me1 row is not an independent method at all; it **is** the `Avocado_p0` row. Comparing
+  the two on that mark compares a thing to itself.
+- A team submitting one track for all three ATAC cells has made a prediction that cannot be
+  cell-type specific, which is worth knowing before treating its ATAC number as a modelling result.
+
+The detector works from the score CSVs alone, so it keeps working for methods added later, including
+our own — if a CANDI variant ever ties another method to the last bit, that is a bug worth seeing.
