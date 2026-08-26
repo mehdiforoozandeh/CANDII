@@ -245,8 +245,37 @@ recorded here rather than assumed.
 
 `signal_mu` only, in `-log10 p`, clipped at 0. eDICE has **no count head** — B1b forbids inventing a
 read depth to manufacture one — and **no peak head**, so `candi.bench.external` records the
-coverage-ranking fallback (`has_peak_head=False`) and every peak-tier row is labelled as such (B3).
-The forecast distribution arrives from the §6.1 σ-table, not from the model.
+coverage-ranking fallback and every peak-tier row is labelled as such (B3). The forecast
+distribution arrives from the §6.1 σ-table, not from the model.
+
+### What P1 scoring confirmed (job `56904726`)
+
+The first time our own instrument read eDICE output, the §4.1 contract held end to end:
+
+| | |
+|---|---|
+| `missing_tracks` | `[]` — all 45 declared tracks present, nothing silently dropped |
+| `declared_tracks` | 45, matching the panel dry-run exactly |
+| provenance | `pred_inversion: external`, `signal_target_transform: none`, `pval_pred_space: -log10p` |
+| blocks | `E`, `P`, `D`, `B` — `D` present only because the σ-table supplied a distribution |
+| **`macro.count`** | **`{}`, 0 entries. The count arm is ABSENT, not NaN-filled** |
+| per-track arms | `["pval"]` — no count arm fabricated anywhere |
+| `msevar` | absent, carrying its own note rather than a silent `0.0` |
+| σ-table | 22 assays over 45 tracks, `fitted_on: regime.eic_val.json eval_pairs, chroms ['chr21']` |
+
+No non-finite value anywhere in the macro block.
+
+### Open issue for the leaderboard (t49): B3's CRPS clause is unsatisfiable here
+
+`RIVALS_PLAN` §6.4 requires "CRPS always with `crps_oracle_scaled` + `scale_error`". Those keys are
+computed **only by `nb_suite`**, the count arm. `EVAL.md` §D lists the pval arm's `gauss_suite` as
+`crps`, `pit_ks`, `coverage_95`, `c_index` + `c_index_se`, `n_points` — no split, by design.
+
+Every point-only rival fills the pval arm alone, so **no rival row can ever carry that split**. This
+is not a defect in `candi.bench.external`, and not something this branch may fix — §6.4 is the
+contract. The clause was most likely written about the count-arm CRPS, since §A3 calls the
+count/CRPS tier "CANDI's showcase" and no rival has a count head at all. **The PI needs to say
+which**, before t49 builds a table that either violates B3 or quietly drops the pval CRPS column.
 
 ## Commands
 
