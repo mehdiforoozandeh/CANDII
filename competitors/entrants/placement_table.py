@@ -60,6 +60,13 @@ CAVEATS = [
     "These are Dataset-3 numbers and never enter an internal Dataset-2 table. Experiment 005 "
     "measured 12-66 % per-experiment error for rescaling between the two spaces; do not translate.",
     "The ten bootstraps are ten fixed chromosome subsets, not resamples of genomic positions.",
+    "ORDERING RECIPE. The per-assay tables here are sorted by median `mse` within an assay. That is "
+    "NOT the challenge's ranking, which ranks per measure within each (bootstrap, experiment) cell, "
+    "caps each experiment at the median, and takes the second-best of ten bootstrap ranks. A row "
+    "order here is therefore not a leaderboard position. `ORDERING_CHECK.md` applies the challenge "
+    "recipe to these same scores: under it our order matches the published one EXACTLY (25/25, "
+    "Spearman 1.0000) when msevar and DNase are dropped from both sides, and all divergence from "
+    "the published ranking comes from those two stated deviations rather than from our scoring.",
     "Some entrants are NOT independent. CUImpute1, CUWA and ICU submitted byte-identical tracks "
     "for all 26 broad-mark experiments and differ only on punctate marks, so on H3K27me3, "
     "H3K36me3 and H3K9me3 they are one submission under three names. Any per-assay table flags "
