@@ -265,17 +265,20 @@ The first time our own instrument read eDICE output, the §4.1 contract held end
 
 No non-finite value anywhere in the macro block.
 
-### Open issue for the leaderboard (t49): B3's CRPS clause is unsatisfiable here
+### B3's CRPS companions — **ruled (PI, 2026-08-26; plan amendment PR #27)**
 
-`RIVALS_PLAN` §6.4 requires "CRPS always with `crps_oracle_scaled` + `scale_error`". Those keys are
-computed **only by `nb_suite`**, the count arm. `EVAL.md` §D lists the pval arm's `gauss_suite` as
-`crps`, `pit_ks`, `coverage_95`, `c_index` + `c_index_se`, `n_points` — no split, by design.
+Raised from this run: §6.4 required "CRPS always with `crps_oracle_scaled` + `scale_error`", but
+those keys come **only from `nb_suite`**, the count arm. `EVAL.md` §D lists the pval arm's
+`gauss_suite` as `crps`, `pit_ks`, `coverage_95`, `c_index` + `c_index_se`, `n_points` — no split, by
+design. Every point-only rival fills the pval arm alone, so no rival row could ever have carried it.
 
-Every point-only rival fills the pval arm alone, so **no rival row can ever carry that split**. This
-is not a defect in `candi.bench.external`, and not something this branch may fix — §6.4 is the
-contract. The clause was most likely written about the count-arm CRPS, since §A3 calls the
-count/CRPS tier "CANDI's showcase" and no rival has a count head at all. **The PI needs to say
-which**, before t49 builds a table that either violates B3 or quietly drops the pval CRPS column.
+**The ruling: the CRPS split is count-arm only; a pval-arm Gaussian CRPS is quoted with `pit_ks` and
+`coverage_95` instead.** Further, **no pval-arm CRPS gap is significant until that arm's own noise
+floor is measured** — a separate task is filed for it, so an eDICE-vs-CANDI pval CRPS difference is
+not interpretable yet, whatever its size.
+
+Nothing in this method's outputs changes: `pit_ks` and `coverage_95` are already present in every
+macro and per-track block the P1 run produced.
 
 ## Commands
 
