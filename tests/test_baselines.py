@@ -603,14 +603,61 @@ def test_the_leaderboard_reports_per_assay_first_and_medians_beside_the_pool(bui
     assert board["sanity"]["avg_beats_marginal_on_macro_pval_mse"]["pass"] is True
 
 
-def test_the_leaderboard_refuses_a_crps_without_its_split():
+def test_the_leaderboard_refuses_a_crps_without_its_companions():
+    """§6.4, as clarified by the PI on 2026-08-26: the CRPS companions are PER ARM."""
     with pytest.raises(ValueError, match="§6.4|crps_oracle_scaled"):
         LB._check_companions("t/count", "count", ["crps", "mse"])
     with pytest.raises(ValueError, match="§6.4|peak_base_rate"):
         LB._check_companions("t/pval", "pval", ["auprc"])
-    # The Gaussian CRPS has no oracle-scale split to demand, and demanding one would ask
-    # `candi.bench` for a key it does not compute.
-    LB._check_companions("t/pval", "pval", ["crps", "peak_base_rate", "auprc"])
+    # The Gaussian CRPS has no oracle-scale split to demand — asking for one would want a key
+    # `candi.bench` does not compute — so the pval arm takes CALIBRATION companions instead.
+    with pytest.raises(ValueError, match="pit_ks|coverage_95"):
+        LB._check_companions("t/pval", "pval", ["crps", "peak_base_rate", "auprc"])
+    LB._check_companions("t/pval", "pval", ["crps", "pit_ks", "coverage_95"])
+    # ...and the count arm is never asked for the pval arm's pair.
+    LB._check_companions("t/count", "count", ["crps", "crps_oracle_scaled", "scale_error"])
+
+
+def test_the_pval_crps_gap_is_marked_unquotable_until_its_floor_exists():
+    """PI 2026-08-26 — a pval CRPS is quotable as a value; a between-method GAP on it is not.
+
+    The caveat is stamped onto the macro row rather than left in a caption, and the header says the
+    floor is missing rather than staying silent about it. `AGENTS.md` §7.2 supplies count-arm CRPS
+    floors and nothing for the pval arm, so silence here would read as "no floor needed".
+    """
+    scores = {"pval": {"crps": 0.5, "pit_ks": 0.1, "coverage_95": 0.94, "mse": 1.0,
+                       "auprc": 0.3, "peak_base_rate": 0.05}}
+    obj = {"provenance": {"method": "m", "manifest": {}}, "tracks": ["t"],
+           "per_track": {"t": {"pval": {**scores["pval"], "assay": "H3K4me3", "kind": "impute"}}},
+           "macro": {"pval": {**scores["pval"], "n_tracks": 1}}, "panel": {}, "ranking": None}
+    import json as _json
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "m.json"
+        p.write_text(_json.dumps(obj), encoding="utf-8")
+        board = LB.assemble({"m": p}, protocol="P1")
+    macro = board["methods"]["m"]["macro"]["pval"]
+    assert "crps_gap_not_quotable" in macro and "noise floor" in macro["crps_gap_not_quotable"]
+    assert "pval_macro_crps" in board["noise_floors_absent"]
+    # The count arm has floors, so it carries no such stamp.
+    assert board["noise_floors"]["macro_crps_target_clustered"] == 0.09
+
+
+def test_the_reporting_ruling_travels_in_the_header_not_on_an_anchor():
+    """A reporting-scoped ruling governs table semantics, so it rides on `reporting` — and must not
+    be attached to a §5.5 anchor, where it would read as a verdict on a result."""
+    rulings = LB.PI_RULINGS["crps_companions_are_per_arm"]
+    assert rulings["scope"] == "reporting" and rulings["date"] == "2026-08-26"
+    assert "count-arm (NB) only" in rulings["ruling"]
+    assert "pit_ks and coverage_95" in rulings["ruling"]
+    anchors = LB.check_anchors({
+        "avg": {"macro": {"pval": {"mse": 1.0}, "count": {"beats_marginal": 0.99}}},
+        "marginal": {"macro": {"pval": {"mse": 2.0}}},
+    })
+    for name, block in anchors.items():
+        if isinstance(block, dict):
+            assert block.get("pi_ruling", {}).get("scope") != "reporting", \
+                f"{name} carries a reporting ruling as if it were a verdict on a result"
 
 
 def test_broad_marks_are_never_folded_into_the_punctate_median():

@@ -59,14 +59,34 @@ NOISE_FLOORS: Dict[str, float] = {
 }
 
 #: §6.4 — the pairs that may not be separated, per arm. `arm -> key -> the keys that must ship
-#: beside it`. The CRPS split is a COUNT-ARM rule and only a count-arm rule: `oracle_scale` fits a
-#: per-assay scale to an NB and re-scores it, so `crps_oracle_scaled` / `scale_error` exist for
-#: `nb_suite` and have no counterpart in `gauss_suite`. Requiring them on the pval arm would demand a
-#: key `candi.bench` does not compute, and every table that quotes a pval CRPS quotes the Gaussian
-#: one. `None` means "every arm".
+#: beside it`. `None` means "every arm".
+#:
+#: THE TWO CRPS RULES ARE DIFFERENT RULES, per the PI ruling of 2026-08-26 (plan amendment PR #27),
+#: recorded in `PI_RULINGS` below.
+#:
+#: * **Count arm.** `crps` never without `crps_oracle_scaled` + `scale_error`. `oracle_scale` fits a
+#:   per-assay scale to an NB and re-scores it, which splits capability from per-assay level.
+#: * **Pval arm.** That split does not exist — `gauss_suite` has no oracle-scale counterpart, and
+#:   demanding one would ask `candi.bench` for a key it does not compute. The Gaussian CRPS is
+#:   instead quoted with `pit_ks` and `coverage_95`, the two keys that say whether the forecast
+#:   distribution is calibrated at all. A CRPS with neither is a sharpness number with no calibration
+#:   beside it, which is exactly the reading §6.4 exists to prevent.
 _COMPANIONS: Dict[Optional[str], Dict[str, Tuple[str, ...]]] = {
     None: {"auprc": ("peak_base_rate",)},
     "count": {"crps": ("crps_oracle_scaled", "scale_error")},
+    "pval": {"crps": ("pit_ks", "coverage_95")},
+}
+
+#: Columns on which a between-method GAP may not be presented as significant, because no noise floor
+#: has been measured for them yet. Stamped onto the arm's macro block as `<key>_gap_not_quotable` so
+#: the caveat travels on the row rather than in a caption someone drops.
+#:
+#: `CLAUDE.md`'s quoting rule is that a number needs its floor; `AGENTS.md` §7.2 supplies floors for
+#: the COUNT arm's CRPS (target-clustered 0.09, seed change 0.1195, bench seed floor 0.0608) and for
+#: nothing on the pval arm. Until the pval-arm Gaussian-CRPS floor is measured — its own task as of
+#: 2026-08-26 — a pval CRPS is quotable as a value and a pval CRPS DIFFERENCE is not.
+_GAP_NOT_QUOTABLE: Dict[str, Tuple[str, ...]] = {
+    "pval": ("crps",),
 }
 
 
@@ -147,6 +167,13 @@ def assemble(scores: Mapping[str, Path | str], *, protocol: str,
                     if vals:
                         out[f"{k}_{grp}_median"] = float(median(vals))
                         out[f"{k}_{grp}_n_assays"] = len(vals)
+            # PI 2026-08-26 — the caveat rides on the row. A reader who diffs two methods on this
+            # column has to meet the reason they may not, without going back to a caption.
+            for k in _GAP_NOT_QUOTABLE.get(arm, ()):
+                if k in out:
+                    out[f"{k}_gap_not_quotable"] = (
+                        f"no {arm}-arm noise floor measured for `{k}` yet (PI 2026-08-26): quote "
+                        f"the value, never a between-method gap on it, until the floor lands.")
             macro[arm] = out
 
         methods[name] = {
@@ -171,30 +198,44 @@ def assemble(scores: Mapping[str, Path | str], *, protocol: str,
         "generated": date.today().isoformat(),
         "protocol": protocol,
         "notes": notes,
-        # Quoted with every number, per `CLAUDE.md` / `AGENTS.md` §7.2.
+        # Quoted with every number, per `CLAUDE.md` / `AGENTS.md` §7.2. Every floor here is a
+        # COUNT-arm CRPS floor; the pval arm has none yet, which is what `_GAP_NOT_QUOTABLE` says.
         "noise_floors": dict(NOISE_FLOORS),
+        "noise_floors_absent": {
+            "pval_macro_crps": "not measured (separate task, opened 2026-08-26). A pval-arm "
+                               "Gaussian CRPS is quotable as a value; a between-method GAP on it "
+                               "is not, until this floor exists.",
+        },
         "reporting": {
             "broad": list(BROAD),
             "accessibility": list(ACCESSIBILITY),
             "rule": "RIVALS_PLAN.md §6.4 — per-assay rows first, macro second; broad and punctate "
-                    "medians always beside the pool; auprc with peak_base_rate; crps with "
-                    "crps_oracle_scaled and scale_error; a row that ranked peaks by predicted level "
-                    "is labelled coverage_ranking.",
+                    "medians always beside the pool; auprc with peak_base_rate; a row that ranked "
+                    "peaks by predicted level is labelled coverage_ranking. CRPS companions are "
+                    "PER ARM: count-arm crps with crps_oracle_scaled and scale_error, pval-arm "
+                    "crps with pit_ks and coverage_95.",
+            "pi_rulings": {k: dict(v) for k, v in PI_RULINGS.items()
+                           if v.get("scope") == "reporting"},
         },
         "methods": methods,
         "sanity": check_anchors(methods),
     }
 
 
-#: PI rulings on a §5.5 anchor, carried on the anchor block itself.
+#: PI rulings, carried by the code that writes the thing they rule on.
 #:
 #: A ruling lives HERE rather than being pasted into a generated json, because a leaderboard is
 #: regenerated every time a method is added and a hand-edited verdict would vanish on the next run.
-#: A failing anchor with a ruling still reports `pass: False` — the ruling records what the PI
-#: concluded from the failure, it does not convert it into a success. Nothing in this file may set
-#: `pass` from a ruling.
+#:
+#: `scope` says where the ruling is attached:
+#:   * `"anchor"` — onto that §5.5 anchor's verdict block. A failing anchor with a ruling still
+#:     reports `pass: False`; the ruling records what the PI concluded FROM the failure and never
+#:     converts it into a success. Nothing in this file may set `pass` from a ruling.
+#:   * `"reporting"` — onto the header's `reporting` block, because it governs table semantics
+#:     rather than one result.
 PI_RULINGS: Dict[str, Dict[str, str]] = {
     "avg_beats_marginal_near_universal": {
+        "scope": "anchor",
         "date": "2026-08-25",
         "ruling": "ACCEPT as a real finding. The anchor failed at the near-universal reading for an "
                   "understood, mechanistic reason: all 7 losing tracks average over k=3 "
@@ -204,6 +245,20 @@ PI_RULINGS: Dict[str, Dict[str, str]] = {
         "rules_changed": "none — RIVALS_PLAN.md §5's sparse rule stays at n_eligible <= 2, which "
                          "flags nothing on this panel (min k = 3), and the 0.9 reading of "
                          "'near-universal' stands.",
+    },
+    "crps_companions_are_per_arm": {
+        "scope": "reporting",
+        "date": "2026-08-26",
+        "ruling": "RIVALS_PLAN.md §6.4's 'CRPS always with oracle_scaled + scale_error' is "
+                  "CLARIFIED as count-arm (NB) only. Pval-arm Gaussian CRPS rows are instead always "
+                  "quoted with pit_ks and coverage_95 beside them. Until a pval-arm Gaussian-CRPS "
+                  "noise floor is measured (a separate task as of 2026-08-26), no between-method "
+                  "gap on that column may be presented as significant.",
+        "rules_changed": "RIVALS_PLAN.md §6.4 amended by PR #27. No re-scoring: the clarification "
+                         "changes what a table may say, not what candi.bench computed.",
+        "enforced_by": "_COMPANIONS (count -> oracle_scaled + scale_error; pval -> pit_ks + "
+                       "coverage_95) and _GAP_NOT_QUOTABLE (pval crps), which stamps "
+                       "`crps_gap_not_quotable` onto the pval macro block.",
     },
 }
 
@@ -240,7 +295,7 @@ def check_anchors(methods: Mapping[str, Any]) -> Dict[str, Any]:
             "pass": None if frac is None else bool(frac >= 0.9),
         }
     for name, ruling in PI_RULINGS.items():
-        if name in out:
+        if ruling.get("scope") == "anchor" and name in out:
             out[name]["pi_ruling"] = dict(ruling)
     out["all_pass"] = all(v.get("pass") is True for v in out.values() if isinstance(v, dict))
     return out
