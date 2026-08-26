@@ -431,3 +431,37 @@ Consequences for how the table is read, and they are not optional:
 
 The detector works from the score CSVs alone, so it keeps working for methods added later, including
 our own — if a CANDI variant ever ties another method to the last bit, that is a bug worth seeing.
+
+---
+
+## 8. Adding our own methods to this table later
+
+Our P3 rows — CANDI, and the Avocado / eDICE / ChromImpute / Lavawizard retrains — join this same
+table when they exist. Nothing here needs to change to accept them; the assembler takes
+`name=glob` pairs, so a new method is a new pair:
+
+```bash
+python3 placement_table.py \
+    --scores Average=…/Average/*.csv  Guacamole=…/Guacamole/*.csv  … \
+             CANDI_B=$WORK/candi_p3/*.csv \
+    --pblock CANDI_B=$WORK/candi_p3/*.json \
+    --expect "$M001/output/bridge/blind_experiments.txt" \
+    --bridge "$M001/output/bridge/eic_bridge.csv" \
+    --out-md placement.md --out-json placement.json
+```
+
+Two requirements on whatever produces those rows, both of which `score_entrant.py` already meets:
+
+1. **Same scorer, same grid.** Score against `DATA_EIC_SYNAPSE/blind_truth` through the vendored
+   code, on the official `ceil(len/25)` grid. A row scored any other way is not comparable to the
+   published ones and must not sit in this table — that is the whole point of the Average gate.
+2. **Same CSV columns.** `method, experiment, cell, assay, assay_name, mark_class, bootstrap_id,
+   truth_source, blacklist_filtered` plus the eight measures. The loader keys on `experiment` and
+   `assay_name` and averages over `bootstrap_id`.
+
+The easiest route is to emit CANDI's Dataset-3 predictions as bigwigs on the official grid and run
+them through `score_entrant.py` unchanged, which gets the P-block and the provenance stamp for free.
+
+The duplicate detector (§5) and the coverage check both work on any method added this way — so if a
+CANDI variant ever ties another method to the last bit, or silently scores fewer experiments than
+the panel, the table says so rather than absorbing it.
