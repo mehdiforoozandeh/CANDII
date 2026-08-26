@@ -59,8 +59,50 @@ fi
 echo "[edice] EIC $PROTOCOL  n_targets=$N_TARGETS  model=$MODEL  pred=$PRED"
 echo "[edice] host=$(hostname)"; nvidia-smi -L || true
 
-python run_eic.py predict \
-  --regime "$REGIME" --model "$MODEL" --out "$PRED" "${CHROMS[@]}" || exit $?
+# Skip the predict pass when this root is ALREADY COMPLETE. The σ-fit died once on a signature
+# bug after a finished predict, throwing away work that had succeeded; for P1 that was 5 minutes,
+# for P2 it would be hours. "Complete" means the manifest lists exactly the chromosomes asked for
+# AND every track directory holds every one of them -- a partial root is redone, never resumed,
+# because a half-written npz is the failure mode the §4.1 grid assertion exists to catch.
+# FORCE_PREDICT=1 overrides.
+complete=no
+if [ -z "${FORCE_PREDICT:-}" ] && [ -f "$PRED/manifest.json" ]; then
+  if python - "$PRED" "$PROTOCOL" "$REGIME" <<'PYEOF'
+import json, sys
+from pathlib import Path
+root, protocol, regime_path = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+m = json.loads((root / "manifest.json").read_text())
+have = list(m["chroms"])
+
+# What THIS invocation would ask for. p1 = the regime's eval_chroms; p2 = every chromosome the
+# store carries. Checked rather than assumed: the root is keyed by protocol today, but a root
+# recorded under a regime with different eval_chroms must not be silently reused.
+regime = json.loads(Path(regime_path).read_text())
+if protocol == "p1":
+    want = list(regime["eval_chroms"])
+else:
+    # candi is on PYTHONPATH already (exported above); a heredoc has no __file__ to derive it from.
+    from candi.store.reader import CorpusStore
+    from candi.store import layout as L
+    want = L.sort_chroms(CorpusStore(regime["store"]).n_bins().keys())
+
+dirs = [d for d in root.iterdir() if d.is_dir()]
+same = have == want
+whole = len(dirs) == m["n_tracks"] and all((d / f"{c}.npz").exists() for d in dirs for c in have)
+ok = same and whole
+why = "COMPLETE, skipping predict" if ok else (
+    f"chroms differ (have {have}, want {want}), redoing predict" if not same
+    else "INCOMPLETE, redoing predict")
+print(f"[edice] existing root: {len(dirs)}/{m['n_tracks']} tracks x {len(have)} chroms -> {why}")
+sys.exit(0 if ok else 1)
+PYEOF
+  then complete=yes; fi
+fi
+
+if [ "$complete" = "no" ]; then
+  python run_eic.py predict \
+    --regime "$REGIME" --model "$MODEL" --out "$PRED" "${CHROMS[@]}" || exit $?
+fi
 
 if [ "$PROTOCOL" = "p1" ]; then
   python fit_sigma.py --regime "$REGIME" --pred "$PRED" --out "$SIGMA" || exit $?

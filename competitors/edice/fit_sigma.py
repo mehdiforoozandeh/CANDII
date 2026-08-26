@@ -68,7 +68,10 @@ def main(argv=None) -> int:
                 raise SystemExit(f"{d.name}: no {chrom}.npz; the fit must cover the P1 chromosomes")
             with np.load(npz) as z:
                 mu = np.asarray(z["signal_mu"], dtype=np.float64)
-            truth = np.asarray(store[target_bs][assay].pval(chrom), dtype=np.float64)
+            # `TrackView.pval(chrom, start, end=None)` — `start` is REQUIRED here, unlike
+            # `BiosampleStore.pval`, which defaults it to 0. `end=None` resolves to the whole
+            # chromosome (`reader._slice_bounds`), so this reads the full absolute grid.
+            truth = np.asarray(store[target_bs][assay].pval(chrom, 0), dtype=np.float64)
             if truth.shape != mu.shape:
                 raise SystemExit(
                     f"{d.name}/{chrom}: prediction {mu.shape} vs truth {truth.shape} -- the npz is "
