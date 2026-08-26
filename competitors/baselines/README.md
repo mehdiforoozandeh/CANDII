@@ -85,6 +85,23 @@ Measured against the exact Poisson CRPS at `y = round(µ)`, `n = 1e4` is within 
 whose contributors agree, overwhelmingly the near-zero ones) the two values are the same number. Both
 facts are pinned by tests rather than left in this paragraph.
 
+## §6.4 CRPS companions are per arm (PI ruling, 2026-08-26)
+
+`RIVALS_PLAN.md` §6.4's "CRPS always with `oracle_scaled` + `scale_error`" is **count-arm (NB)
+only** — plan amendment PR #27. Pval-arm Gaussian CRPS rows are quoted with **`pit_ks` and
+`coverage_95`** beside them instead: `gauss_suite` has no oracle-scale counterpart, and demanding
+one would ask `candi.bench` for a key it does not compute — but a CRPS with no calibration key
+beside it is sharpness reported alone, which is the reading §6.4 exists to prevent.
+
+And, until a pval-arm Gaussian-CRPS noise floor is measured (its own task as of 2026-08-26), **no
+between-method gap on that column may be presented as significant.** `AGENTS.md` §7.2 supplies
+count-arm CRPS floors and nothing for the pval arm, so the header carries `noise_floors_absent` and
+every pval macro row carries `crps_gap_not_quotable` — on the row, not in a caption someone drops.
+
+Enforced by `leaderboard.py::_COMPANIONS` and `_GAP_NOT_QUOTABLE`; recorded in `PI_RULINGS` with
+`scope: "reporting"` so it is re-attached to the header on every rebuild. No re-scoring was needed —
+the clarification changes what a table may say, not what `candi.bench` computed.
+
 ## The §5.5 sanity anchors, as ruled on the P1 panel
 
 Measured on `regime.eic_val`, chr21, 45 declared tracks, Poisson floor `1e4`.
