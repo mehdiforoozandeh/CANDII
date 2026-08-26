@@ -148,7 +148,10 @@ def main(argv=None) -> int:
     ns = p.parse_args(argv)
 
     model, obj = load_checkpoint(ns.checkpoint, ns.device)
-    cache = CachedChrom(ns.cache, ns.chrom)
+    # `mmap=True` on purpose: prediction touches only `sums`, `sumsq` and `mark_count`,
+    # never `values` or `tercile`. Loading those into RAM would cost 15 GiB on chr1 for
+    # arrays this path never reads — and a smaller memory ask schedules sooner.
+    cache = CachedChrom(ns.cache, ns.chrom, mmap=True)
     meta = dataset3.read_meta(ns.meta)
     blind = [(r["Cell_ID"], r["Mark_ID"]) for r in meta if r["DataType"] == "B"]
     blind = [(c, m) for c, m in blind
