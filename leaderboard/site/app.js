@@ -92,9 +92,10 @@ function render() {
   if (!(state.view in board.views)) state.view = "default";
   const view = board.views[state.view];
   const app = document.getElementById("app");
+  const bare = view.rows.length === 0;
   app.replaceChildren(
     metaPanel(board),
-    ...(view.rows.length === 0 ? [emptyPanel()] : [
+    ...(bare && view.unranked.length === 0 ? [emptyPanel()] : bare ? [tablePanel(board, view)] : [
       climbPanel(board),
       tablePanel(board, view),
       countPanel(view),

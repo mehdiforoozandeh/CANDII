@@ -1,0 +1,61 @@
+{
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-generalizing"
+ },
+ "board": "main",
+ "date": "2026-08-27",
+ "lineage": "rival",
+ "method": "eDICE",
+ "metrics": {
+  "pval": {
+   "auprc": 0.5710089638565706,
+   "coverage_95": 0.9816951402438273,
+   "crps": 0.6223568013890822,
+   "gaussian_nll": 1.8864242849702075,
+   "gwcorr": 0.7030661663369489,
+   "gwspear": 0.460517676775558,
+   "mse": 7.842787404586043,
+   "mse1obs": 749.7427632040448,
+   "peak_base_rate": 0.016861527774739767,
+   "pit_ks": 0.3697582923255017
+  }
+ },
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error"
+ ],
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/rivals_src/edice_runs/eic_nt31",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "method_notes": {
+   "caveat": "transductive: a V_X/B_X target is queried with its paired T_X cell's learned embedding (RIVALS_PLAN.md §7.3). eDICE has no embedding for a cell it never trained on.",
+   "masking_caveat": "masks 31 of 267 tracks per bin (11.6%) — the paper's 11.6% RATE (120 of 1032), not its absolute 120, which would mask 45% of our smaller panel. Pre-registered departure, PI 2026-08-25.",
+   "notes": "transductive: a V_X/B_X target is queried with its paired T_X cell's learned embedding (RIVALS_PLAN.md §7.3). eDICE has no embedding for a cell it never trained on. masks 31 of 267 tracks per bin (11.6%) — the paper's 11.6% RATE (120 of 1032), not its absolute 120, which would mask 45% of our smaller panel. Pre-registered departure, PI 2026-08-25. Trained on the 51 regime training cells' pval tracks only (§6.2); paper defaults otherwise, one seed (§6.3). signal_mu clipped at 0. No count head and no peak head."
+  },
+  "regime": "/project/def-maxwl/mforooz/CANDII_t52/configs/regime.eic_val.json",
+  "score_json": "cruxvault/results/t52/eic_nt31_scores_p2.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "04be648",
+  "sigma_table": {
+   "fitted_on": "regime.eic_val.json eval_pairs, chroms ['chr21']",
+   "method": "eDICE (PyTorch reimplementation)"
+  },
+  "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397"
+ },
+ "schema_version": 1,
+ "version": "eic-r1"
+}

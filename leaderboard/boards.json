@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "doc": "LEADERBOARD_PRD.md §3, §4, §6 — one entry per board. The three boards score different data and are never mixed in one table. `frozen` hashes are stamped when the first real row lands (M4); a board whose hashes are still TODO refuses every `add`.",
+  "doc": "LEADERBOARD_PRD.md §3, §4, §6 — one entry per board. The three boards score different data and are never mixed in one table. `frozen` hashes were stamped at M4 (2026-08-27); each board's `frozen_note` says exactly what artifact its hashes digest. A board whose hashes are still TODO refuses every `add`.",
   "boards": {
     "main": {
       "label": "Main",
@@ -15,8 +15,9 @@
         "scorer": "python -m candi.bench.external"
       },
       "frozen": {
-        "store_manifest_hash": "TODO-freeze-at-stamping",
-        "regime_sha256": "TODO-freeze-at-stamping"
+        "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397",
+        "regime_sha256": "2526ae55d9904d50ff57a1a183efe0cd67b4796882736af8e894442891bc9829",
+        "frozen_note": "store hash = sha256 of fir:/project/def-maxwl/mforooz/CANDI_STORE/eic/manifest.json, read on Fir 2026-08-27 — the manifest path every stamped row's score provenance names; regime hash = sha256 of the tracked configs/regime.eic_val.json (last changed at t31), verified byte-identical to the copies in the t50/t51/t52 Fir checkouts on 2026-08-27."
       },
       "views": ["default", "strict"],
       "strict_view": {
@@ -41,8 +42,9 @@
         "scorer": "python -m candi.bench.external"
       },
       "frozen": {
-        "store_manifest_hash": "TODO-freeze-at-stamping",
-        "regime_sha256": "TODO-freeze-at-stamping"
+        "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397",
+        "regime_sha256": "2526ae55d9904d50ff57a1a183efe0cd67b4796882736af8e894442891bc9829",
+        "frozen_note": "Same store and regime as the Main board — P1 and P2 are two protocols over one eval set. See the Main board's frozen_note for what each hash digests."
       },
       "views": ["default"],
       "caveats": [
@@ -63,8 +65,9 @@
         "scorer": "Max's vendored 001 scorer (experiment 001)"
       },
       "frozen": {
-        "store_manifest_hash": "TODO-freeze-at-stamping",
-        "regime_sha256": "TODO-freeze-at-stamping"
+        "store_manifest_hash": "3982e224b235f75fcd03092c05bbcb81acb64b62494080869c110980ec79847f",
+        "regime_sha256": "8d60da135a69fef6c5d2fa18824a2f76bdd0be88e287f7ed3fef86eb1c910e44",
+        "frozen_note": "Dataset-3 has no store manifest and no regime json, so this board pins different artifacts: store hash = sha256 of cruxvault/results/t54/submissions_survey.json (the Synapse manifest — every scored prediction file with its size and md5), regime hash = sha256 of cruxvault/results/t54/placement.json (the ruled placement artifact every entrant row is extracted from; `add --placement-method` verifies the file it reads digests to exactly this)."
       },
       "views": ["default"],
       "caveats": [

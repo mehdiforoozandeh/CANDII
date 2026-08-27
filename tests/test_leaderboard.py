@@ -89,10 +89,22 @@ def test_registry_and_boards_round_trip() -> None:
     assert boards["boards"]["main"]["views"] == ["default", "strict"]
 
 
-def test_committed_rows_dir_ships_empty() -> None:
-    """Rows enter via `add`; the repo ships no demo rows (t58 M1-M3 rule)."""
-    names = sorted(p.name for p in (REPO / "leaderboard" / "rows").rglob("*") if p.is_file())
-    assert names == [".gitkeep", "README.md"]
+def test_committed_rows_all_pass_their_own_gates() -> None:
+    """Every committed row loads through the reader's gates against the frozen boards.
+
+    (Until M4 this asserted the dir was empty; real rows entered at M4, all via `add`.)"""
+    reg = lb.load_registry(REPO / "leaderboard")
+    boards = lb.load_boards(REPO / "leaderboard")
+    rows_dir = REPO / "leaderboard" / "rows"
+    for p in rows_dir.rglob("*.json"):
+        row = json.loads(p.read_text(encoding="utf-8"))
+        lb.gate_row_shape(row, reg)
+        bid = p.parent.name
+        assert row["board"] == bid
+        lb.gate_row_against_board(row, boards["boards"][bid], bid)
+    stray = [p.name for p in rows_dir.rglob("*")
+             if p.is_file() and p.suffix != ".json" and p.name not in (".gitkeep", "README.md")]
+    assert stray == []
 
 
 def test_add_round_trips_a_row(root: Path) -> None:
@@ -140,14 +152,73 @@ def test_add_refuses_missing_metrics_unless_declared(root: Path) -> None:
 
 
 def test_add_refuses_an_unfrozen_board(tmp_path: Path) -> None:
-    """The committed boards.json still carries TODO hashes — no row can be stamped on it."""
+    """A board whose hashes are still TODO refuses every add (the pre-M4 state)."""
     root = tmp_path / "leaderboard"
     (root / "rows").mkdir(parents=True)
-    for name in ("registry.json", "boards.json"):
-        root.joinpath(name).write_text(
-            (REPO / "leaderboard" / name).read_text(encoding="utf-8"), encoding="utf-8")
+    root.joinpath("registry.json").write_text(
+        (REPO / "leaderboard" / "registry.json").read_text(encoding="utf-8"), encoding="utf-8")
+    boards = json.loads((REPO / "leaderboard" / "boards.json").read_text(encoding="utf-8"))
+    for b in boards["boards"].values():
+        b["frozen"]["store_manifest_hash"] = "TODO-freeze-at-stamping"
+        b["frozen"]["regime_sha256"] = "TODO-freeze-at-stamping"
+    root.joinpath("boards.json").write_text(json.dumps(boards), encoding="utf-8")
     with pytest.raises(SystemExit, match="not frozen"):
         add(root, "score_fixture_a.json", "fixture-a", "--allow-missing")
+
+
+def test_committed_boards_are_frozen() -> None:
+    """M4 froze all three boards; a TODO hash regressing in would silently block adds."""
+    boards = lb.load_boards(REPO / "leaderboard")
+    for bid, b in boards["boards"].items():
+        for field in ("store_manifest_hash", "regime_sha256"):
+            v = b["frozen"][field]
+            assert len(v) == 64 and not v.startswith("TODO"), (bid, field)
+        assert b["frozen"].get("frozen_note"), f"board {bid} must say what its hashes digest"
+
+
+def test_placement_mode_stamps_a_dataset3_row(tmp_path: Path) -> None:
+    """`add --placement-method` copies macro_all out of a t54-style placement file, and
+    refuses a file that does not digest to the board's frozen regime hash."""
+    placement = {
+        "aggregation": "bootstrap mean; median within assay; mean over assay medians",
+        "methods": {"fixture-entrant": {
+            "n_experiments": 48,
+            # per_assay NaN (prom_corr outside H3K4me3) must not block macro_all extraction
+            "per_assay": {"H3K27me3": {"prom_corr": float("nan")}},
+            "macro_all": {"n_assays": 7, "mse": 1.5, "gwcorr": 0.4, "gwspear": 0.3,
+                          "mse1obs": 20.0}}},
+    }
+    pfile = tmp_path / "placement.json"
+    pfile.write_text(json.dumps(placement), encoding="utf-8")
+    root = tmp_path / "leaderboard"
+    (root / "rows").mkdir(parents=True)
+    root.joinpath("registry.json").write_text(
+        (REPO / "leaderboard" / "registry.json").read_text(encoding="utf-8"), encoding="utf-8")
+    boards = json.loads((REPO / "leaderboard" / "boards.json").read_text(encoding="utf-8"))
+    for b in boards["boards"].values():
+        b["frozen"]["store_manifest_hash"] = "fixhash-store"
+        b["frozen"]["regime_sha256"] = "fixhash-regime"
+    boards["boards"]["entrants"]["frozen"]["regime_sha256"] = lb.sha256_file(pfile)
+    root.joinpath("boards.json").write_text(json.dumps(boards), encoding="utf-8")
+
+    argv = ["--root", str(root), "add", str(pfile), "--board", "entrants",
+            "--method", "fixture-entrant", "--version", "round2-2019",
+            "--date", "2026-08-26", "--lineage", "entrant",
+            "--position-class", "unrecorded", "--cell-class", "unrecorded",
+            "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+            "--fir-path", "fake:/x", "--allow-missing",
+            "--placement-method", "fixture-entrant"]
+    lb.main(argv)
+    row = json.loads((root / "rows" / "entrants" / "fixture-entrant@round2-2019.json")
+                     .read_text(encoding="utf-8"))
+    assert row["metrics"]["pval"] == {"mse": 1.5, "gwcorr": 0.4, "gwspear": 0.3,
+                                      "mse1obs": 20.0}
+    assert "count" not in row["metrics"]
+    assert row["provenance"]["flags"]["placement_method"] == "fixture-entrant"
+    # a tampered placement file no longer digests to the frozen hash and is refused
+    pfile.write_text(json.dumps(placement).replace("1.5", "1.4"), encoding="utf-8")
+    with pytest.raises(SystemExit, match="digests to"):
+        lb.main(argv + ["--force"])
 
 
 def test_add_refuses_a_wrong_store_hash(root: Path) -> None:
