@@ -303,6 +303,14 @@ punctate marks never pooled together without their separate medians beside the p
 `auprc` always with `peak_base_rate`; CRPS always with `crps_oracle_scaled` + `scale_error`;
 a rival's peak-tier row always labelled coverage-ranking (no rival has a peak head).
 
+*Clarified (PI, 2026-08-26):* the `crps_oracle_scaled` + `scale_error` split applies to
+**count-arm (NB) CRPS only** — that decomposition does not exist for the pval arm's
+Gaussian CRPS, which is the only CRPS a point-only rival carries. Pval-arm Gaussian CRPS
+is instead always quoted with `pit_ks` and `coverage_95` beside it. Note also that the
+`AGENTS.md` §7.2 noise floors are count-CRPS quantities; no floor has been measured for
+pval-arm Gaussian CRPS yet, so no between-method gap on that column is quotable as
+significant until one is.
+
 ---
 
 ## 7. Per-method playbooks

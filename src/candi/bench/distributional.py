@@ -356,9 +356,14 @@ def nb_suite(n: np.ndarray, mu: np.ndarray, y: np.ndarray, *, seed: int = 0,
     if with_marginal:
         mar = marginal_nb(np.asarray(y))
         out.update(mar)
-        out["beats_marginal"] = bool(np.isfinite(mar["marg_crps"]) and crps < mar["marg_crps"])
-        out["beats_marginal_oracle_scaled"] = bool(
-            np.isfinite(mar["marg_crps"]) and orc["crps_oracle_scaled"] < mar["marg_crps"])
+        # a non-finite CRPS on either side makes the comparison ABSENT (None), never a loss:
+        # bool(nan < x) is False, which silently recorded unscoreable tracks as 0.0 (t56)
+        out["beats_marginal"] = (
+            bool(crps < mar["marg_crps"])
+            if np.isfinite(crps) and np.isfinite(mar["marg_crps"]) else None)
+        out["beats_marginal_oracle_scaled"] = (
+            bool(orc["crps_oracle_scaled"] < mar["marg_crps"])
+            if np.isfinite(orc["crps_oracle_scaled"]) and np.isfinite(mar["marg_crps"]) else None)
     return out
 
 

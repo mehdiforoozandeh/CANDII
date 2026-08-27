@@ -22,6 +22,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC
 - `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain
 - `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
+- `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal
 
 ## Blocked
 
@@ -53,6 +54,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — *blocked*
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *blocked*
 - `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *open*
+- `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal — *open*
 
 ## Done · Dropped
 
