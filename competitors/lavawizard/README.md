@@ -408,6 +408,24 @@ Same code, other corpus. `store_eic.py` writes the identical cache layout from `
   `coverage_95`, with **no** oracle split, and no pval-CRPS gap is significant until that arm's
   noise floor is measured.
 
+### The smoke, end to end
+
+Before the 23 GPU jobs, the whole chain ran on chr21 from a **50-step** checkpoint — plumbing
+evidence, not a result, and the numbers below must never be quoted as one:
+
+```
+chr21 cache from the store          267 tracks x 1,868,399 bins, 0.8 min
+train, capped at 50 steps/stage     5 marks skipped for having no leave-one-out pool
+predict, --clip --manifest          45/45 declared tracks, ~68 s each, caps 123 to 4150
+sigma-table                         27 assays fitted on the chr21 V-pair residuals
+candi.bench.external                45 of 45 declared tracks scored
+```
+
+The score file carries what the §6.4 ruling requires — `crps` beside `pit_ks` and `coverage_95`,
+no oracle split — and its provenance carries `clip: true`, `contributor_mode: loo`,
+`pred_inversion: external` and the sigma table's `fitted_on`. That is what the smoke exists to
+prove: every switch this method has reaches the score file as data.
+
 ## Reading an anchor number
 
 `anchor.py` scores three pairings on the upstream grid in raw `-log10 p`: ours vs `blind_truth`,
