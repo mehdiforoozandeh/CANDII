@@ -75,7 +75,7 @@ a:hover { text-decoration: underline; }
 
 /* ------------------------------------------------------------- masthead --- */
 .masthead { border-bottom: 1px solid var(--line); background: var(--panel); }
-.masthead-inner { max-width: 1200px; margin: 0 auto; padding: 28px 24px 0; }
+.masthead-inner { max-width: none; margin: 0 auto; padding: 28px 24px 22px; }
 .masthead h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
 .tagline { margin: 0 0 18px; color: var(--ink-soft); max-width: 62em; }
 
@@ -94,7 +94,7 @@ a:hover { text-decoration: underline; }
 .tab .tab-sub { display: block; font-weight: 400; font-size: 11px; color: var(--ink-faint); }
 
 /* ------------------------------------------------------------- layout --- */
-main { max-width: 1200px; margin: 0 auto; padding: 22px 24px 40px; }
+main { max-width: none; margin: 0 auto; padding: 22px 24px 40px; }
 .loading { color: var(--ink-faint); }
 .panel {
   background: var(--panel); border: 1px solid var(--line);
@@ -141,7 +141,8 @@ table.board { border-collapse: collapse; width: 100%; font-size: 13.5px; }
   text-align: center; }
 .board td { border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .board td.num { font-family: var(--mono); font-size: 12.5px; }
-.board th.method-col, .board td.method-col { text-align: left; }
+.board th.method-col, .board td.method-col { text-align: left; position: sticky; left: 0; z-index: 2;
+  background: var(--panel); }
 .board tbody tr:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .rank-cell { font-weight: 700; font-family: var(--mono); }
 .rank-tied { color: var(--tie); font-weight: 600; }
@@ -202,7 +203,7 @@ tr.prov-row > td { background: var(--bg); border-bottom: 1px solid var(--line);
 
 /* ------------------------------------------------------------- footer --- */
 footer { border-top: 1px solid var(--line); background: var(--panel); margin-top: 8px; }
-.footer-inner { max-width: 1200px; margin: 0 auto; padding: 20px 24px 30px;
+.footer-inner { max-width: none; margin: 0 auto; padding: 20px 24px 30px;
   font-size: 12.5px; color: var(--ink-soft); }
 .footer-inner h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--ink-faint); margin: 0 0 8px; }
@@ -218,8 +219,63 @@ footer { border-top: 1px solid var(--line); background: var(--panel); margin-top
     --band: rgba(0,0,0,0.06);
   }
   body { font-size: 11px; }
-  .tabs, .controls, .prov-toggle { display: none !important; }
+  .tabs, .controls, .prov-toggle, .help { display: none !important; }
   .panel { border: none; padding: 0; margin-bottom: 14px; break-inside: avoid; }
   .table-scroll { overflow: visible; }
   a { color: inherit; }
 }
+
+/* ------------------------------------------------------------- v2: help, ranks, radar, pending --- */
+.chip-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.help {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; padding: 0; margin-left: 4px;
+  font: inherit; font-size: 10px; font-weight: 700; line-height: 1;
+  border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink-soft);
+  cursor: pointer; vertical-align: middle; flex: 0 0 auto;
+}
+.help:hover, .help[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.help-tip {
+  position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%);
+  width: 22em; max-width: min(320px, 70vw);
+  background: var(--panel); color: var(--ink-soft); border: 1px solid var(--line-strong);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; font-weight: 400;
+  text-transform: none; letter-spacing: 0; line-height: 1.4; text-align: left;
+  white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 30;
+}
+.badge-warn { color: var(--warn); border-color: var(--warn); margin-left: 8px; }
+.badge-pending { color: var(--ink-faint); border-style: dashed; text-transform: none;
+  letter-spacing: 0; font-weight: 600; }
+.chart-kicker { margin: 4px 0 10px; color: var(--ink-soft); font-size: 13px; }
+.count-chart { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.rank-svg { width: 100%; max-width: 820px; height: auto; display: block; }
+.empty-note { color: var(--ink-faint); font-size: 13px; }
+
+.board thead .eval-head th { text-transform: none; letter-spacing: 0.02em; font-size: 12.5px;
+  color: var(--ink); font-weight: 700; border-bottom: 1px solid var(--line-strong); }
+.board th.arm-pval, .board td.arm-pval { box-shadow: inset 3px 0 0 var(--accent); }
+.board th.arm-count, .board td.arm-count { box-shadow: inset 3px 0 0 var(--entrant); }
+.space-tag { display: block; font-size: 9px; font-weight: 600; color: var(--ink-faint);
+  text-transform: uppercase; letter-spacing: 0.04em; }
+.order-only { display: block; font-size: 9px; color: var(--warn); font-weight: 600; }
+.cell-pending, tr.pending-row td { color: var(--ink-faint); background: var(--bg);
+  font-style: italic; }
+tr.medal-1 td.method-col { background: var(--gold); }
+tr.medal-2 td.method-col { background: var(--silver); }
+tr.medal-3 td.method-col { background: var(--bronze); }
+tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
+
+.radar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; }
+.radar-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 8px 4px;
+  background: var(--bg); }
+.radar-name { font-size: 13px; font-weight: 700; display: flex; gap: 8px; align-items: baseline;
+  flex-wrap: wrap; margin-bottom: 2px; }
+.radar-svg { width: 100%; height: auto; display: block; }
+.pending-card { opacity: 0.7; }
+.computing-note { margin: 18px 8px; color: var(--ink-faint); font-size: 12.5px; font-style: italic; }
+
+.panel-secondary { opacity: 0.96; border-style: dashed; }
+.panel-secondary h2 { color: var(--ink-soft); font-weight: 600; }
+.prov-board { margin-bottom: 10px; }
+.prov-board-title { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 4px; }

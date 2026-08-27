@@ -526,7 +526,31 @@ def compile_leaderboard(root: Path) -> Dict[str, Any]:
                  "composite": r["composite"], "lineage": r["lineage"]})
         for entries in climb.values():
             entries.sort(key=lambda e: (e["date"], e["version"]))
-        out_boards[bid] = {"meta": board, "views": views, "climb": climb}
+        stamped_methods = {r["method"] for r in rows}
+        pending = []
+        raw_pending = board.get("pending") or []
+        if not isinstance(raw_pending, list):
+            raise GateError(f"board `{bid}` pending must be a list")
+        for item in raw_pending:
+            if not isinstance(item, dict) or not item.get("method"):
+                raise GateError(f"board `{bid}` pending entry needs a `method`")
+            if not SLUG.match(item["method"]):
+                raise GateError(f"board `{bid}` pending method `{item['method']}` is not a slug")
+            if item["method"] in stamped_methods:
+                continue
+            lineage = item.get("lineage") or "rival"
+            if lineage not in LINEAGES:
+                raise GateError(f"board `{bid}` pending `{item['method']}` lineage "
+                                f"`{lineage}` is not one of {LINEAGES}")
+            pending.append({
+                "method": item["method"],
+                "version": item.get("version") or "",
+                "lineage": lineage,
+                "note": item.get("note") or "results computing",
+            })
+        pending.sort(key=lambda p: (p["method"], p["version"]))
+        out_boards[bid] = {"meta": board, "views": views, "climb": climb,
+                           "pending": pending}
     return {
         "schema_version": 1,
         "registry": registry,

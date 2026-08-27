@@ -1,4 +1,4 @@
-/* CANDI rivals leaderboard — vanilla JS over the compiled leaderboard.json.
+/* CANDI imputation leaderboard — vanilla JS over the compiled leaderboard.json.
  * No framework, no chart library, no external requests. The registry travels inside the
  * payload, so nothing about a metric is hard-coded here (LEADERBOARD_PRD.md §5.1). */
 "use strict";
@@ -6,14 +6,22 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const BOARD_ORDER = ["main", "dev", "entrants"];
 const CAT_ORDER = ["pointwise", "distributional", "peaks", "count_arm", "loss"];
+const RADAR_EDGES = ["pointwise", "distributional", "peaks", "count_arm"];
 const EN_DASH = "–";
+const LINEAGE_LABEL = {
+  candi: "CANDI", rival: "retrained rival",
+  baseline: "baseline", entrant: "2019 entrant",
+};
 
 const state = {
   data: null,
-  board: "main",
   view: "default",
   cats: new Set(CAT_ORDER),
+  evals: new Set(BOARD_ORDER),
+  radarEval: "main",
+  climbEval: "main",
   openProv: new Set(),
+  openHelp: null,
 };
 
 /* ------------------------------------------------------------- helpers --- */
@@ -48,6 +56,36 @@ function rowVal(row, m) {
 function spreadText(spread) {
   return spread[0] === spread[1] ? String(spread[0]) : `${spread[0]}${EN_DASH}${spread[1]}`;
 }
+function catInfo(cid) { return registry().categories[cid]; }
+function catSpace(cid) { return (catInfo(cid) && catInfo(cid).space_label) || ""; }
+function catLabel(cid) {
+  const c = catInfo(cid);
+  if (!c) return cid;
+  return c.space_label ? `${c.label} · ${c.space_label}` : c.label;
+}
+function coded(label, code) {
+  return h("span", { title: `Internal code: ${code}` }, label);
+}
+function helpBtn(id, text) {
+  if (!text) return null;
+  const open = state.openHelp === id;
+  return h("button", {
+    class: "help", type: "button",
+    "aria-label": "Explain this", "aria-expanded": String(open),
+    onclick: (ev) => {
+      ev.stopPropagation();
+      state.openHelp = open ? null : id;
+      render();
+    },
+  }, "?", open ? h("span", { class: "help-tip", role: "tooltip" }, text) : null);
+}
+function armClass(m) {
+  return m.arm === "count" ? "arm-count" : m.arm === "pval" ? "arm-pval" : "";
+}
+function spaceTag(m) {
+  const s = m.arm === "count" ? "counts" : m.arm === "pval" ? "p-value" : "diagnostic";
+  return h("span", { class: "space-tag" }, s);
+}
 
 /* ------------------------------------------------------------- boot --- */
 
@@ -63,8 +101,8 @@ async function boot() {
     return;
   }
   state.data = payload;
-  if (!(state.board in payload.boards)) state.board = Object.keys(payload.boards)[0];
-  renderTabs();
+  if (!(state.radarEval in payload.boards)) state.radarEval = Object.keys(payload.boards)[0];
+  if (!(state.climbEval in payload.boards)) state.climbEval = Object.keys(payload.boards)[0];
   render();
 }
 
@@ -76,141 +114,437 @@ function boardIds() {
   });
 }
 
-function renderTabs() {
-  const nav = document.getElementById("board-tabs");
-  nav.replaceChildren(...boardIds().map((bid) => [bid, state.data.boards[bid]]).map(([bid, b]) =>
-    h("button", {
-      class: "tab", role: "tab", "aria-selected": String(bid === state.board),
-      onclick: () => { state.board = bid; state.view = "default"; renderTabs(); render(); },
-    }, b.meta.label, h("span", { class: "tab-sub" }, b.meta.subtitle))));
+function visibleBoards() { return boardIds().filter((bid) => state.evals.has(bid)); }
+
+function viewFor(bid) {
+  const board = state.data.boards[bid];
+  const want = bid === "main" ? state.view : "default";
+  return board.views[want] || board.views.default;
+}
+
+function metaOf(bid) { return state.data.boards[bid].meta; }
+function pendingOf(bid) { return state.data.boards[bid].pending || []; }
+
+function metricGroups(cid) {
+  const all = catMetrics(cid);
+  if (cid !== "loss") return [{ arm: all[0] ? all[0].arm : null, metrics: all, cid }];
+  const pval = all.filter((m) => m.arm === "pval");
+  const count = all.filter((m) => m.arm === "count");
+  return [
+    pval.length ? { arm: "pval", metrics: pval, cid } : null,
+    count.length ? { arm: "count", metrics: count, cid } : null,
+  ].filter(Boolean);
+}
+
+function visibleGroups() {
+  return CAT_ORDER.filter((cid) => state.cats.has(cid) && cid in registry().categories)
+    .flatMap(metricGroups);
+}
+
+function evalColCount() {
+  return 2 + visibleGroups().reduce((n, g) => n + g.metrics.length, 0);
 }
 
 /* ------------------------------------------------------------- render --- */
 
 function render() {
-  const board = state.data.boards[state.board];
-  if (!(state.view in board.views)) state.view = "default";
-  const view = board.views[state.view];
   const app = document.getElementById("app");
-  const bare = view.rows.length === 0;
   app.replaceChildren(
-    metaPanel(board),
-    ...(bare && view.unranked.length === 0 ? [emptyPanel()] : bare ? [tablePanel(board, view)] : [
-      climbPanel(board),
-      tablePanel(board, view),
-      countPanel(view),
-      lineagePanel(view),
-    ]),
+    introPanel(),
+    ...visibleBoards().map(rankingSection),
+    mergedTable(),
+    radarPanel(),
+    lineagePanel(),
+    climbPanel(),
     legendPanel(),
   );
-  renderFooter(board);
+  renderFooter();
 }
 
-function metaPanel(board) {
-  const meta = board.meta;
+function introPanel() {
+  const anyCaveats = boardIds().flatMap((bid) =>
+    (metaOf(bid).caveats || []).map((c) => [bid, c]));
   return h("section", { class: "panel" },
-    h("div", { class: "meta-row" },
-      h("span", { class: "kv" }, h("b", null, meta.protocol), " · ", meta.eval_set.chroms),
-      h("span", { class: "kv" }, "pairs: ", meta.eval_set.pairs),
-      h("span", { class: "kv" }, "scorer: ", meta.eval_set.scorer),
-      h("span", { class: "hash-chip" }, "store ", meta.frozen.store_manifest_hash),
-      h("span", { class: "hash-chip" }, "regime ", meta.frozen.regime_sha256)),
+    h("h2", null, "How this page is laid out",
+      helpBtn("layout",
+        "One table, one row per method. Column groups are the eval set (what was scored) and then the kind of number. Count-space and p-value-space numbers never share a column or a chart axis. Grey rows with no numbers mean results are still computing.")),
+    h("p", { class: "sub" },
+      "Headline figures are ranking bar charts (best at top). The table under them is the same numbers, merged. ",
+      "CANDI's version-over-version chart sits at the bottom — it is not the headline."),
     h("div", { class: "caveats" },
       h("div", { class: "caveats-title" }, "Read before quoting"),
       h("ul", { style: "margin:4px 0;padding:0" },
-        meta.caveats.map((c) => h("li", null, c)))),
-    controls(board));
+        anyCaveats.map(([bid, c], i) =>
+          h("li", null, coded(metaOf(bid).label, `${metaOf(bid).protocol} / ${bid}`),
+            " — ", c, " ", helpBtn(`cav-${bid}-${i}`, metaOf(bid).eli5))))),
+    controls());
 }
 
-function controls(board) {
-  const chips = CAT_ORDER
-    .filter((cid) => cid in registry().categories)
-    .map((cid) => h("button", {
+function chipWithHelp(btn, id, text) {
+  return h("span", { class: "chip-wrap" }, btn, helpBtn(id, text));
+}
+
+function controls() {
+  const catChips = CAT_ORDER.filter((cid) => cid in registry().categories).map((cid) =>
+    chipWithHelp(h("button", {
       class: "chip", "aria-pressed": String(state.cats.has(cid)),
       onclick: () => {
         state.cats.has(cid) ? state.cats.delete(cid) : state.cats.add(cid);
         render();
       },
-    }, registry().categories[cid].label));
-  const views = (board.meta.views || ["default"]).length > 1
+    }, catInfo(cid).label), `chip-cat-${cid}`, catInfo(cid).eli5));
+  const evalChips = boardIds().map((bid) =>
+    chipWithHelp(h("button", {
+      class: "chip", "aria-pressed": String(state.evals.has(bid)),
+      title: `Internal code: ${metaOf(bid).protocol} / ${bid}`,
+      onclick: () => {
+        state.evals.has(bid) ? state.evals.delete(bid) : state.evals.add(bid);
+        if (state.evals.size === 0) state.evals.add(bid);
+        render();
+      },
+    }, metaOf(bid).label), `chip-eval-${bid}`, metaOf(bid).eli5));
+  const main = state.data.boards.main;
+  const views = (main && (main.meta.views || []).length > 1)
     ? h("span", { class: "chip-group view-toggle" },
-        h("span", { class: "chip-label" }, "view"),
-        ...board.meta.views.map((v) => h("button", {
-          class: "chip", "aria-pressed": String(state.view === v),
-          title: v === "strict" ? board.meta.strict_view.note : "All declared eval chromosomes.",
-          onclick: () => { state.view = v; render(); },
-        }, v === "strict" ? "strict (minus chr19)" : "default")))
+        h("span", { class: "chip-label" }, "full-genome chromosomes"),
+        ...(main.meta.views || []).map((v) => {
+          const labels = main.meta.view_labels || {};
+          const label = labels[v] || v;
+          const tip = v === "strict"
+            ? (main.meta.strict_view && (main.meta.strict_view.eli5 || main.meta.strict_view.note))
+            : "Every chromosome in the store. Internal code: default.";
+          return chipWithHelp(h("button", {
+            class: "chip", "aria-pressed": String(state.view === v),
+            title: `Internal code: ${v}`,
+            onclick: () => { state.view = v; render(); },
+          }, label), `view-${v}`, tip);
+        }))
     : null;
   return h("div", { class: "controls" },
     h("span", { class: "chip-group" },
-      h("span", { class: "chip-label" }, "columns"), ...chips),
+      h("span", { class: "chip-label" }, "eval set"), ...evalChips),
+    h("span", { class: "chip-group" },
+      h("span", { class: "chip-label" }, "columns"), ...catChips),
     views);
 }
 
-function emptyPanel() {
-  return h("section", { class: "panel" },
-    h("div", { class: "empty-state" },
-      h("div", { class: "big" }, "No rows stamped yet"),
-      h("p", null, "Rows enter through the gate, never by hand:"),
-      h("p", null, h("code", null, "python tools/leaderboard.py add <scores.json> …"))));
+function readerBadges(meta) {
+  return (meta.reader_badges || []).map((b, i) =>
+    h("span", { class: "badge badge-warn", title: `Internal code lives in the ?` },
+      b.label, helpBtn(`badge-${meta.protocol}-${i}`, b.eli5)));
 }
 
-/* ------------------------------------------------------------- main table --- */
+/* ------------------------------------------------------------- ranking bars --- */
 
-function medalClass(row, rows) {
-  if (!row.rank || row.rank[0] !== row.rank[1] || row.rank[0] > 3) return null;
-  const k = row.rank[0];
-  const shared = rows.some((r) => r !== row && r.rank && r.rank[0] <= k && k <= r.rank[1]);
-  return shared ? null : `medal-${k}`; // a medal only when the gap clears the floor
+function rankingSection(bid) {
+  const board = state.data.boards[bid];
+  const meta = board.meta;
+  const view = viewFor(bid);
+  const pending = pendingOf(bid);
+  const countPending = pending.filter((p) =>
+    p.lineage === "baseline" || p.lineage === "candi");
+  return h("section", { class: "panel", id: `rank-${bid}` },
+    h("h2", null,
+      coded(meta.label, `${meta.protocol} / ${bid}`),
+      h("span", { class: "h2-note" }, meta.subtitle),
+      helpBtn(`h2-${bid}`, meta.eli5),
+      ...readerBadges(meta)),
+    h("p", { class: "chart-kicker" },
+      "Headline ranking on the p-value-space composite (best at top). Count-space ranking, when present, is a separate chart — never the same axis."),
+    rankBarChart({
+      aria: `Ranked methods on ${meta.label}, p-value space`,
+      scored: view.rows.filter((r) => r.rank),
+      pending,
+      rankOf: (r) => (r.rank[0] + r.rank[1]) / 2,
+      labelOf: (r) => r.method,
+      noteOf: (r) => r.composite
+        ? (r.composite[0] === r.composite[1]
+            ? r.composite[0].toFixed(2)
+            : `${r.composite[0].toFixed(2)}${EN_DASH}${r.composite[1].toFixed(2)}`)
+        : "",
+      lineageOf: (r) => r.lineage,
+    }),
+    countChart(bid, view, countPending));
 }
 
-function tablePanel(board, view) {
-  const cats = CAT_ORDER.filter((cid) =>
-    state.cats.has(cid) &&
-    catMetrics(cid).some((m) => view.rows.some((r) => rowVal(r, m) !== null)));
-  const groupHead = h("tr", { class: "group-head" },
-    h("th", { colspan: 3 }),
-    cats.map((cid) => {
-      const n = catMetrics(cid).length;
-      const inComposite = view.categories_in_composite.includes(cid);
-      return h("th", { colspan: n },
-        registry().categories[cid].label + (inComposite ? "" : " (not in composite)"));
+function countChart(bid, view, pending) {
+  if (!state.cats.has("count_arm")) return null;
+  const rows = (view.sub_boards.count_arm && view.sub_boards.count_arm.rows) || [];
+  if (!rows.length && !pending.length) return null;
+  const crps = registry().metrics.find((m) => m.arm === "count" && m.key === "crps");
+  return h("div", { class: "count-chart" },
+    h("p", { class: "chart-kicker" },
+      "Count space — Negative Binomial CRPS, ranked separately. ",
+      helpBtn(`count-${bid}`, catInfo("count_arm").eli5)),
+    rankBarChart({
+      aria: `Ranked methods on ${metaOf(bid).label}, count space`,
+      scored: rows,
+      pending,
+      rankOf: (r) => (r.rank[0] + r.rank[1]) / 2,
+      labelOf: (r) => r.method,
+      noteOf: (r) => {
+        const v = r.metrics && r.metrics.count && r.metrics.count.crps;
+        if (v === undefined || v === null) return "";
+        const floor = crps && crps.floor !== null ? ` ±${crps.floor}` : "";
+        return `${v.toFixed(crps.decimals)}${floor}`;
+      },
+      lineageOf: (r) => {
+        const full = view.rows.find((x) => x.id === r.id || x.method === r.method);
+        return (full && full.lineage) || r.lineage || "baseline";
+      },
     }));
-  const colHead = h("tr", null,
-    h("th", null, "rank"),
-    h("th", { class: "method-col" }, "method"),
-    h("th", { title: "Mean of category sub-scores; a sub-score is the mean rank inside the category. Lower is better; the spread is the best and worst achievable rank given floor ties." }, "composite"),
-    cats.flatMap((cid) => catMetrics(cid).map((m) =>
-      h("th", { title: metricTitle(m) }, m.label))));
+}
 
-  const bodyRows = view.rows.flatMap((row) => {
-    const tr = h("tr", { class: medalClass(row, view.rows) },
-      rankCell(row),
-      methodCell(row),
-      h("td", { class: "num" },
-        row.composite
-          ? (row.composite[0] === row.composite[1]
-              ? row.composite[0].toFixed(2)
-              : `${row.composite[0].toFixed(2)}${EN_DASH}${row.composite[1].toFixed(2)}`)
-          : "—"),
-      cats.flatMap((cid) => catMetrics(cid).map((m) => metricCell(row, m, view.rows))));
+function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageOf }) {
+  const n = scored.length;
+  const items = scored.slice().sort((a, b) =>
+    rankOf(a) - rankOf(b) || labelOf(a).localeCompare(labelOf(b)));
+  const extra = pending || [];
+  if (!items.length && !extra.length) {
+    return h("p", { class: "empty-note" }, "No scores stamped yet.");
+  }
+  const rowH = 26, L = 170, R = 110, T = 6, W = 760;
+  const H = T + (items.length + extra.length) * rowH + 8;
+  const plotW = W - L - R;
+  const svg = h("svg:svg", {
+    class: "rank-svg", viewBox: `0 0 ${W} ${H}`,
+    role: "img", "aria-label": aria,
+  });
+  const colors = { candi: "var(--candi)", rival: "var(--rival)",
+                   baseline: "var(--baseline)", entrant: "var(--entrant)" };
+  items.forEach((row, i) => {
+    const y = T + i * rowH;
+    const rank = rankOf(row);
+    const t = n <= 1 ? 1 : (n - rank + 1) / n;
+    const w = Math.max(6, t * plotW);
+    const lin = lineageOf(row);
+    const color = colors[lin] || "var(--ink-soft)";
+    svg.append(
+      h("svg:text", { x: L - 8, y: y + 16, "text-anchor": "end",
+        "font-size": 12, fill: "var(--ink)" }, labelOf(row)),
+      h("svg:rect", { x: L, y: y + 6, width: w, height: 14, rx: 3, fill: color }),
+      h("svg:text", { x: L + w + 8, y: y + 16, "font-size": 11,
+        fill: "var(--ink-soft)" },
+        `#${typeof rank === "number" && rank === Math.round(rank) ? rank : rank.toFixed(1)}`
+        + (noteOf(row) ? ` · ${noteOf(row)}` : "")));
+  });
+  extra.forEach((p, i) => {
+    const y = T + (items.length + i) * rowH;
+    svg.append(
+      h("svg:text", { x: L - 8, y: y + 16, "text-anchor": "end",
+        "font-size": 12, fill: "var(--ink-faint)" }, p.method),
+      h("svg:text", { x: L, y: y + 16, "font-size": 11, fill: "var(--ink-faint)",
+        "font-style": "italic" }, p.note || "results computing"));
+  });
+  return svg;
+}
+
+/* ------------------------------------------------------------- merged table --- */
+
+function allMethods() {
+  const byName = new Map();
+  const ensure = (name, lineage) => {
+    if (!byName.has(name)) {
+      byName.set(name, { method: name, lineage: lineage || "",
+                         byBoard: {}, pending: {}, unranked: {} });
+    }
+    const m = byName.get(name);
+    if (lineage && !m.lineage) m.lineage = lineage;
+    return m;
+  };
+  for (const bid of boardIds()) {
+    const view = viewFor(bid);
+    for (const row of view.rows) {
+      ensure(row.method, row.lineage).byBoard[bid] = row;
+    }
+    for (const u of view.unranked || []) {
+      ensure(u.method).unranked[bid] = u;
+    }
+    for (const p of pendingOf(bid)) {
+      ensure(p.method, p.lineage).pending[bid] = p;
+    }
+  }
+  const rankKey = (entry, bid) => {
+    const row = entry.byBoard[bid];
+    if (row && row.rank) return (row.rank[0] + row.rank[1]) / 2;
+    if (entry.pending[bid]) return 1e6;
+    return 1e5;
+  };
+  return [...byName.values()].sort((a, b) => {
+    for (const bid of BOARD_ORDER) {
+      const d = rankKey(a, bid) - rankKey(b, bid);
+      if (d) return d;
+    }
+    return a.method.localeCompare(b.method);
+  });
+}
+
+function mergedTable() {
+  const methods = allMethods();
+  const boards = visibleBoards();
+  const groups = visibleGroups();
+  const nEval = evalColCount();
+  if (!boards.length) {
+    return h("section", { class: "panel" },
+      h("div", { class: "empty-state" },
+        h("div", { class: "big" }, "No eval set selected"),
+        h("p", null, "Turn an eval-set chip back on to see the table.")));
+  }
+
+  const evalHead = h("tr", { class: "group-head eval-head" },
+    h("th", { class: "method-col", rowspan: 3 }, "method"),
+    boards.map((bid) => {
+      const meta = metaOf(bid);
+      return h("th", { colspan: nEval, class: `eval-group eval-${bid}` },
+        coded(meta.label, `${meta.protocol} / ${bid}`),
+        h("span", { class: "h2-note" }, " ", meta.subtitle),
+        helpBtn(`tbl-${bid}`, meta.eli5),
+        ...readerBadges(meta));
+    }));
+
+  const catHead = h("tr", { class: "group-head" },
+    boards.flatMap(() => [
+      h("th", { colspan: 2, class: "summary-group" }, "Rank",
+        helpBtn("composite",
+          "Composite is the mean of category mean-ranks for categories every method on this eval set has. Lower is better. The spread is the best and worst rank given noise-floor ties.")),
+      ...groups.map((g) => {
+        const space = g.arm === "count" ? "count space"
+          : g.arm === "pval" ? "p-value space" : catSpace(g.cid);
+        const label = g.cid === "loss"
+          ? `Loss · ${space}`
+          : catLabel(g.cid);
+        const extra = (g.cid !== "loss" && catInfo(g.cid) && !catInfo(g.cid).in_composite)
+          ? " (not in composite)" : "";
+        return h("th", {
+          colspan: g.metrics.length,
+          class: g.arm === "count" ? "arm-count" : g.arm === "pval" ? "arm-pval" : "",
+        }, label + extra, helpBtn(`g-${g.cid}-${g.arm}`, catInfo(g.cid) && catInfo(g.cid).eli5));
+      }),
+    ]));
+
+  const colHead = h("tr", null,
+    boards.flatMap(() => [
+      h("th", null, "rank"),
+      h("th", { title: "Mean of category sub-scores; a sub-score is the mean rank inside the category. Lower is better." },
+        "composite"),
+      ...groups.flatMap((g) => g.metrics.map((m) =>
+        h("th", { class: armClass(m), title: metricTitle(m) }, m.label, spaceTag(m)))),
+    ]));
+
+  const bodyRows = methods.flatMap((entry) => {
+    const pendingAnywhere = boards.some((bid) => entry.pending[bid] && !entry.byBoard[bid]);
+    const tr = h("tr", { class: pendingAnywhere ? "pending-row" : medalClassMerged(entry) },
+      methodCellMerged(entry),
+      boards.flatMap((bid) => evalCells(entry, bid, groups)));
     const out = [tr];
-    if (state.openProv.has(row.id)) out.push(provRow(row, 3 + cats.reduce((n, c) => n + catMetrics(c).length, 0)));
+    if (state.openProv.has(entry.method)) {
+      out.push(provRowMerged(entry, 1 + boards.length * nEval));
+    }
     return out;
   });
 
-  return h("section", { class: "panel" },
-    h("h2", null, `${board.meta.label} board`,
-      h("span", { class: "h2-note" }, board.meta.rows_note)),
-    view.unranked.length
-      ? h("p", { class: "sub" },
-          `Not ranked on this view (no ${state.view}-view scores stamped): `
-          + view.unranked.map((r) => r.id).join(", "))
-      : null,
+  return h("section", { class: "panel", id: "table" },
+    h("h2", null, "All methods, one table",
+      helpBtn("merged",
+        "One row per method. Column groups are the eval set, then the kind of number. A grey 'results computing' cell means that method's scores have not landed yet. 'absent' means the method was scored and did not emit that number — we never invent it.")),
     h("div", { class: "table-scroll" },
       h("table", { class: "board" },
-        h("thead", null, groupHead, colHead),
+        h("thead", null, evalHead, catHead, colHead),
         h("tbody", null, bodyRows))));
+}
+
+function medalClassMerged(entry) {
+  const row = entry.byBoard.main || entry.byBoard.dev;
+  if (!row || !row.rank || row.rank[0] !== row.rank[1] || row.rank[0] > 3) return null;
+  const k = row.rank[0];
+  const peers = allMethods().filter((e) => {
+    const r = e.byBoard.main || e.byBoard.dev;
+    return r && r.rank && r.rank[0] <= k && k <= r.rank[1];
+  });
+  return peers.length > 1 ? null : `medal-${k}`;
+}
+
+function evalCells(entry, bid, groups) {
+  const row = entry.byBoard[bid];
+  const pending = entry.pending[bid];
+  const unranked = entry.unranked[bid];
+  if (pending && !row) {
+    const n = 2 + groups.reduce((k, g) => k + g.metrics.length, 0);
+    return [
+      h("td", { class: "rank-cell cell-pending", colspan: n,
+        title: pending.note || "results computing" },
+        "results computing"),
+    ];
+  }
+  if (!row) {
+    const n = 2 + groups.reduce((k, g) => k + g.metrics.length, 0);
+    const msg = unranked
+      ? (unranked.note || "no scores for this chromosome set")
+      : "—";
+    return [h("td", { class: "cell-missing", colspan: n, title: msg }, msg === "—" ? "—" : msg)];
+  }
+  const peers = viewFor(bid).rows;
+  return [
+    rankCell(row),
+    h("td", { class: "num" },
+      row.composite
+        ? (row.composite[0] === row.composite[1]
+            ? row.composite[0].toFixed(2)
+            : `${row.composite[0].toFixed(2)}${EN_DASH}${row.composite[1].toFixed(2)}`)
+        : "—",
+      candiDelta(row, bid)),
+    ...groups.flatMap((g) => g.metrics.map((m) => metricCell(row, m, peers))),
+  ];
+}
+
+function methodCellMerged(entry) {
+  const row = BOARD_ORDER.map((b) => entry.byBoard[b]).find(Boolean);
+  const b = (row && row.badges) || {};
+  const pendingNotes = visibleBoards()
+    .filter((bid) => entry.pending[bid] && !entry.byBoard[bid])
+    .map((bid) => metaOf(bid).label);
+  return h("td", { class: "method-col" },
+    h("div", { class: "method-line" },
+      h("span", { class: "method-name" }, entry.method),
+      h("span", { class: `badge lineage-${entry.lineage}` },
+        LINEAGE_LABEL[entry.lineage] || entry.lineage)),
+    h("div", { class: "method-line" },
+      row ? h("span", { class: "version-chip" }, `${row.version} · ${row.date}`) : null,
+      b.position ? h("span", { class: "badge" }, b.position) : null,
+      b.cell_types ? h("span", { class: "badge" }, b.cell_types) : null,
+      row && row.verified
+        ? h("span", { class: "verified", title: "score json resolved when the row was stamped" },
+            "✓ verified")
+        : row
+          ? h("span", { class: "unverified", title: "artifacts not resolved at stamping" },
+              "unverified")
+          : null,
+      pendingNotes.length
+        ? h("span", { class: "badge badge-pending" },
+            "computing · " + pendingNotes.join(", "))
+        : null,
+      row ? h("button", {
+        class: "prov-toggle",
+        onclick: () => {
+          state.openProv.has(entry.method)
+            ? state.openProv.delete(entry.method)
+            : state.openProv.add(entry.method);
+          render();
+        },
+      }, state.openProv.has(entry.method) ? "hide provenance" : "provenance") : null));
+}
+
+function provRowMerged(entry, colspan) {
+  const blocks = [];
+  for (const bid of visibleBoards()) {
+    const row = entry.byBoard[bid];
+    if (!row) continue;
+    blocks.push(h("div", { class: "prov-board" },
+      h("div", { class: "prov-board-title" },
+        coded(metaOf(bid).label, `${metaOf(bid).protocol} / ${bid}`)),
+      provDl(row)));
+  }
+  return h("tr", { class: "prov-row" }, h("td", { colspan }, blocks));
 }
 
 function metricTitle(m) {
@@ -218,7 +552,9 @@ function metricTitle(m) {
     + (m.direction ? `${m.direction} is better` : "companion, never ranked")];
   if (m.floor !== null) bits.push(`noise floor ±${m.floor}`);
   if (m.floor_note) bits.push(m.floor_note);
+  if (m.calibration_note) bits.push(m.calibration_note);
   if (m.note) bits.push(m.note);
+  if (m.eli5) bits.push(m.eli5);
   return bits.join("\n");
 }
 
@@ -243,11 +579,11 @@ function bestValue(m, rows) {
 function metricCell(row, m, rows) {
   const v = rowVal(row, m);
   if (v === null) {
-    return h("td", { class: "num cell-missing", title: "absent — never invented" }, "absent");
+    return h("td", { class: `num cell-missing ${armClass(m)}`,
+      title: "absent — never invented" }, "absent");
   }
   const parts = [fmt(v, m)];
   if (m.floor !== null) parts.push(h("span", { class: "floor-suffix" }, ` ±${m.floor}`));
-  // delta to the column leader; greyed with "~" when it sits under the metric's floor
   if (m.role === "ranked" && m.direction) {
     const best = bestValue(m, rows);
     const d = m.direction === "higher" ? best - v : v - best;
@@ -259,19 +595,21 @@ function metricCell(row, m, rows) {
       }, `${sub ? "~" : ""}+${d.toFixed(m.decimals)}`));
     }
   }
-  return h("td", { class: "num" }, parts);
+  if (m.arm === "pval" && m.key === "crps") {
+    parts.push(h("span", { class: "order-only",
+      title: m.calibration_note || m.eli5 }, "ordering only"));
+  }
+  return h("td", { class: `num ${armClass(m)}` }, parts);
 }
 
-/* CANDI version-over-version arrow on count crps, judged against the seed-alone
- * self-comparison bar (0.1195) — never against the cross-method floor. */
-function candiDelta(row) {
+function candiDelta(row, bid) {
   const bar = registry().candi_self_comparison_bar;
   if (row.lineage !== "candi") return null;
-  const board = state.data.boards[state.board];
+  const board = state.data.boards[bid];
   const versions = (board.climb[row.method] || []);
   const idx = versions.findIndex((e) => e.version === row.version);
   if (idx <= 0) return null;
-  const rows = board.views[state.view].rows;
+  const rows = viewFor(bid).rows;
   const here = row.metrics[bar.arm] && row.metrics[bar.arm][bar.key];
   const prevRow = rows.find((r) =>
     r.method === row.method && r.version === versions[idx - 1].version);
@@ -279,7 +617,7 @@ function candiDelta(row) {
   if (here === undefined || prev === undefined || here === null || prev === null) return null;
   const d = here - prev;
   const clears = Math.abs(d) >= bar.value;
-  const arrow = d < 0 ? "▾" : "▴"; // lower crps is better
+  const arrow = d < 0 ? "▾" : "▴";
   return h("span", {
     class: clears ? (d < 0 ? "verified" : "unverified") : "unverified",
     title: clears
@@ -288,30 +626,7 @@ function candiDelta(row) {
   }, `${clears ? "" : "~"}${arrow}`);
 }
 
-function methodCell(row) {
-  const b = row.badges || {};
-  return h("td", { class: "method-col" },
-    h("div", { class: "method-line" },
-      h("span", { class: "method-name" }, row.method),
-      h("span", { class: `badge lineage-${row.lineage}` }, row.lineage),
-      candiDelta(row)),
-    h("div", { class: "method-line" },
-      h("span", { class: "version-chip" }, `${row.version} · ${row.date}`),
-      b.position ? h("span", { class: "badge" }, b.position) : null,
-      b.cell_types ? h("span", { class: "badge" }, b.cell_types) : null,
-      row.verified
-        ? h("span", { class: "verified", title: "score json resolved when the row was stamped" }, "✓ verified")
-        : h("span", { class: "unverified", title: "artifacts not resolved at stamping" }, "unverified"),
-      h("button", {
-        class: "prov-toggle",
-        onclick: () => {
-          state.openProv.has(row.id) ? state.openProv.delete(row.id) : state.openProv.add(row.id);
-          render();
-        },
-      }, state.openProv.has(row.id) ? "hide provenance" : "provenance")));
-}
-
-function provRow(row, colspan) {
+function provDl(row) {
   const p = row.provenance;
   const dl = h("dl", { class: "prov-grid" });
   const put = (k, v) => { if (v) dl.append(h("dt", null, k), h("dd", null, v)); };
@@ -327,88 +642,184 @@ function provRow(row, colspan) {
   if (row.missing_metrics && row.missing_metrics.length) {
     put("declared missing", row.missing_metrics.join(", "));
   }
-  return h("tr", { class: "prov-row" }, h("td", { colspan }, dl));
+  return dl;
 }
 
-/* ------------------------------------------------------------- sub-boards --- */
+/* ------------------------------------------------------------- radar --- */
 
-function countPanel(view) {
-  if (!state.cats.has("count_arm")) return null;
-  const sub = view.sub_boards.count_arm;
-  if (!sub.rows.length) return null;
-  const reg = registry();
-  const crps = reg.metrics.find((m) => m.arm === "count" && m.key === "crps");
-  const cols = ["crps", "crps_oracle_scaled", "scale_error"];
-  const colMs = cols.map((k) => reg.metrics.find((m) => m.arm === "count" && m.key === k));
-  const nll = reg.metrics.find((m) => m.arm === "count" && m.key === "nb_nll");
-  const asRow = (r) => ({ metrics: { count: r.metrics.count } });
-  return h("section", { class: "panel" },
-    h("h2", null, "Count arm", h("span", { class: "h2-note" }, "sub-board — not in the composite")),
-    h("p", { class: "sub" }, sub.note),
-    h("div", { class: "table-scroll" },
-      h("table", { class: "board" },
-        h("thead", null,
-          h("tr", { class: "group-head" },
-            h("th", { colspan: 2 }),
-            h("th", { colspan: 3 }, "CRPS (NB) — paired split, never separated"),
-            h("th", { colspan: 1 }, "loss · per family")),
-          h("tr", null,
-            h("th", null, "rank"),
-            h("th", { class: "method-col" }, "method"),
-            colMs.map((m) => h("th", { title: metricTitle(m) }, m.label)),
-            h("th", { title: metricTitle(nll) }, nll.label))),
-        h("tbody", null, sub.rows.map((r) =>
-          h("tr", null,
-            h("td", { class: "rank-cell" + (r.rank[0] !== r.rank[1] ? " rank-tied" : "") },
-              spreadText(r.rank)),
-            h("td", { class: "method-col" },
-              h("span", { class: "method-name" }, r.method), " ",
-              h("span", { class: "version-chip" }, r.version)),
-            colMs.map((m) => metricCell(asRow(r), m, sub.rows.map(asRow))),
-            metricCell(asRow(r), nll, [])))))));
+function categoryRankMid(row, cid, view) {
+  if (cid === "count_arm") {
+    const sub = view.sub_boards.count_arm.rows.find((r) => r.id === row.id);
+    if (!sub || !sub.rank) return null;
+    return (sub.rank[0] + sub.rank[1]) / 2;
+  }
+  if (row.category_subscores && row.category_subscores[cid]) {
+    const s = row.category_subscores[cid];
+    return (s[0] + s[1]) / 2;
+  }
+  const ms = catMetrics(cid, ["ranked"]);
+  const ranks = ms.map((m) => row.metric_ranks && row.metric_ranks[metricId(m)]).filter(Boolean);
+  if (!ranks.length) return null;
+  return ranks.reduce((a, rk) => a + (rk[0] + rk[1]) / 2, 0) / ranks.length;
 }
 
-function lineagePanel(view) {
+function radarEdges(view) {
+  return RADAR_EDGES.filter((cid) =>
+    view.rows.some((r) => categoryRankMid(r, cid, view) !== null));
+}
+
+function axisN(view, cid) {
+  return view.rows.filter((r) => categoryRankMid(r, cid, view) !== null).length;
+}
+
+function radarPanel() {
+  const ids = boardIds();
+  if (!ids.includes(state.radarEval)) state.radarEval = ids[0];
+  const bid = state.radarEval;
+  const view = viewFor(bid);
+  const meta = metaOf(bid);
+  const edges = radarEdges(view);
+  const chips = ids.map((id) =>
+    h("button", {
+      class: "chip", "aria-pressed": String(id === bid),
+      title: `Internal code: ${metaOf(id).protocol} / ${id}`,
+      onclick: () => { state.radarEval = id; render(); },
+    }, metaOf(id).label));
+  if (edges.length < 3) {
+    return h("section", { class: "panel" },
+      h("h2", null, "Per-method shape",
+        helpBtn("radar-need",
+          "A radar needs at least three categories with ranks on one eval set. Rank 1 sits on the outer ring; last place sits at the centre. Ranks are within this eval set only.")),
+      h("div", { class: "controls" },
+        h("span", { class: "chip-group" },
+          h("span", { class: "chip-label" }, "ranks computed on"), ...chips)),
+      h("p", { class: "sub" },
+        `${meta.label} has ${edges.length} rankable categor${edges.length === 1 ? "y" : "ies"} — a shape needs three.`));
+  }
+  const cards = view.rows.map((row) => radarCard(row, view, edges));
+  const pending = pendingOf(bid).map((p) =>
+    h("div", { class: "radar-card pending-card" },
+      h("div", { class: "radar-name" }, p.method),
+      h("p", { class: "computing-note" }, p.note || "results computing")));
+  return h("section", { class: "panel", id: "radar" },
+    h("h2", null, "Per-method shape",
+      helpBtn("radar",
+        "Each edge is a category. The value is the method's rank in that category on one eval set (1 = best = outer ring; last place = centre). Count-space and p-value-space are different edges, never a shared axis of raw scores.")),
+    h("p", { class: "sub" },
+      "Ranks are computed on ",
+      coded(meta.label, `${meta.protocol} / ${bid}`),
+      " — not across eval sets."),
+    h("div", { class: "controls" },
+      h("span", { class: "chip-group" },
+        h("span", { class: "chip-label" }, "ranks computed on"), ...chips)),
+    h("div", { class: "radar-grid" }, ...cards, ...pending));
+}
+
+function radarCard(row, view, edges) {
+  const W = 220, H = 248, cx = 110, cy = 118, R = 78;
+  const svg = h("svg:svg", {
+    class: "radar-svg", viewBox: `0 0 ${W} ${H}`,
+    role: "img", "aria-label": `Category ranks for ${row.method}`,
+  });
+  const nAx = edges.length;
+  const pt = (i, t) => {
+    const ang = -Math.PI / 2 + i * 2 * Math.PI / nAx;
+    return [cx + Math.cos(ang) * R * t, cy + Math.sin(ang) * R * t];
+  };
+  for (const ring of [0.25, 0.5, 0.75, 1]) {
+    const pts = edges.map((_, i) => pt(i, ring).join(",")).join(" ");
+    svg.append(h("svg:polygon", {
+      points: pts, fill: "none", stroke: "var(--line)", "stroke-width": 1,
+    }));
+  }
+  edges.forEach((cid, i) => {
+    const [x, y] = pt(i, 1);
+    svg.append(h("svg:line", {
+      x1: cx, y1: cy, x2: x, y2: y, stroke: "var(--line)", "stroke-width": 1,
+    }));
+    const [lx, ly] = pt(i, 1.18);
+    const c = catInfo(cid);
+    svg.append(h("svg:text", {
+      x: lx, y: ly, "text-anchor": "middle", "font-size": 9,
+      fill: "var(--ink-soft)",
+    }, c ? c.label : cid));
+  });
+  const verts = [];
+  edges.forEach((cid, i) => {
+    const rank = categoryRankMid(row, cid, view);
+    if (rank === null) return;
+    const n = axisN(view, cid) || 1;
+    const t = n <= 1 ? 1 : (n - rank + 1) / n;
+    verts.push(pt(i, t));
+  });
+  const colors = { candi: "var(--candi)", rival: "var(--rival)",
+                   baseline: "var(--baseline)", entrant: "var(--entrant)" };
+  const color = colors[row.lineage] || "var(--ink-soft)";
+  if (verts.length >= 3) {
+    svg.append(h("svg:polygon", {
+      points: verts.map((p) => p.join(",")).join(" "),
+      fill: color, "fill-opacity": 0.22, stroke: color, "stroke-width": 1.5,
+    }));
+  }
+  verts.forEach(([x, y]) => {
+    svg.append(h("svg:circle", { cx: x, cy: y, r: 2.5, fill: color }));
+  });
+  return h("div", { class: "radar-card" },
+    h("div", { class: "radar-name" }, row.method,
+      h("span", { class: "version-chip" }, row.version)),
+    svg);
+}
+
+/* ------------------------------------------------------------- lineage + climb --- */
+
+function lineagePanel() {
+  const bid = visibleBoards().find((id) =>
+    (viewFor(id).sub_boards.candi_lineage.rows || []).length) || boardIds()[0];
+  const view = viewFor(bid);
   const sub = view.sub_boards.candi_lineage;
   if (!sub.rows.length) return null;
   const diags = registry().metrics.filter((m) => metricSlot(m) === "diagnostics");
+  const head = h("tr", null,
+    h("th", { class: "method-col" }, "version"),
+    ...diags.map((m) => h("th", { title: metricTitle(m) }, m.label)));
+  const body = sub.rows.map((r) => h("tr", null,
+    h("td", { class: "method-col" },
+      h("span", { class: "version-chip" }, `${r.version} · ${r.date}`)),
+    ...diags.map((m) => metricCell({ metrics: r.metrics }, m, []))));
   return h("section", { class: "panel" },
-    h("h2", null, "CANDI lineage",
-      h("span", { class: "h2-note" }, "covariate diagnostics — CANDI versions only")),
+    h("h2", null, "Covariate sensitivity",
+      h("span", { class: "h2-note" }, "CANDI versions only"),
+      helpBtn("cov", catInfo("covariate_diagnostics").eli5)),
     h("p", { class: "sub" }, sub.note),
     h("div", { class: "table-scroll" },
       h("table", { class: "board" },
-        h("thead", null, h("tr", null,
-          h("th", { class: "method-col" }, "version"),
-          diags.map((m) => h("th", { title: metricTitle(m) }, m.label)))),
-        h("tbody", null, sub.rows.map((r) =>
-          h("tr", null,
-            h("td", { class: "method-col" },
-              h("span", { class: "version-chip" }, `${r.version} · ${r.date}`)),
-            diags.map((m) => metricCell({ metrics: r.metrics }, m, []))))))));
+        h("thead", null, head),
+        h("tbody", null, body))));
 }
 
-/* ------------------------------------------------------------- climb chart --- */
-
-function climbPanel(board) {
+function climbPanel() {
+  const ids = boardIds().filter((bid) => {
+    const climb = state.data.boards[bid].climb;
+    return Object.keys(climb).some((m) => climb[m].some((e) => e.composite));
+  });
+  if (!ids.length) return null;
+  if (!ids.includes(state.climbEval)) state.climbEval = ids[0];
+  const bid = state.climbEval;
+  const board = state.data.boards[bid];
   const climb = board.climb;
   const methods = Object.keys(climb).filter((m) => climb[m].some((e) => e.composite));
-  if (!methods.length) return null;
   const W = 900, H = 260, L = 46, R = 150, T = 18, B = 34;
   const entries = methods.flatMap((m) => climb[m]);
   const dates = entries.map((e) => Date.parse(e.date));
   let [d0, d1] = [Math.min(...dates), Math.max(...dates)];
   if (d0 === d1) { d0 -= 864e5 * 7; d1 += 864e5 * 7; }
-  const mids = entries.filter((e) => e.composite)
-    .map((e) => (e.composite[0] + e.composite[1]) / 2);
   const rMax = Math.max(2, Math.ceil(Math.max(...entries
     .filter((e) => e.composite).map((e) => e.composite[1]))));
   const x = (t) => L + (t - d0) / (d1 - d0) * (W - L - R);
-  const y = (rank) => T + (rank - 1) / (rMax - 1) * (H - T - B); // rank 1 on top
+  const y = (rank) => T + (rank - 1) / (rMax - 1) * (H - T - B);
   const svg = h("svg:svg", { class: "climb-svg", viewBox: `0 0 ${W} ${H}`,
     role: "img", "aria-label": "Composite rank over time" });
 
-  // axes + integer rank gridlines
   for (let r = 1; r <= rMax; r++) {
     svg.append(
       h("svg:line", { x1: L, x2: W - R, y1: y(r), y2: y(r),
@@ -420,7 +831,6 @@ function climbPanel(board) {
     fill: "var(--ink-faint)", transform: `rotate(-90 12 ${T + 10})`, "text-anchor": "end" },
     "composite rank (1 = best)"));
 
-  // the leader's composite interval, shaded as the floor band
   const leader = methods
     .map((m) => climb[m][climb[m].length - 1])
     .filter((e) => e.composite)
@@ -435,7 +845,7 @@ function climbPanel(board) {
   const colors = { candi: "var(--candi)", rival: "var(--rival)",
                    baseline: "var(--baseline)", entrant: "var(--entrant)" };
   let labelY = [];
-  const placeLabel = (yy) => {   // nudge overlapping right-edge labels apart
+  const placeLabel = (yy) => {
     let out = yy;
     while (labelY.some((used) => Math.abs(used - out) < 13)) out += 13;
     labelY.push(out);
@@ -446,7 +856,6 @@ function climbPanel(board) {
     const lineage = series[0].lineage;
     const color = colors[lineage] || "var(--ink-soft)";
     if (lineage === "candi" && series.length > 0) {
-      // CANDI versions: a labeled line through its dated versions
       const pts = series.map((e) =>
         [x(Date.parse(e.date)), y((e.composite[0] + e.composite[1]) / 2)]);
       if (pts.length > 1) {
@@ -464,7 +873,6 @@ function climbPanel(board) {
       svg.append(h("svg:text", { x: W - R + 8, y: placeLabel(last[1] + 4),
         "font-size": 11, "font-weight": 700, fill: color }, method));
     } else {
-      // a rival/baseline has one score, not a trajectory: a flat dotted line
       const yy = y((series[0].composite[0] + series[0].composite[1]) / 2);
       svg.append(
         h("svg:line", { x1: L, x2: W - R, y1: yy, y2: yy, stroke: color,
@@ -473,20 +881,32 @@ function climbPanel(board) {
           fill: color }, method));
     }
   }
-  // x axis dates
   svg.append(
     h("svg:text", { x: L, y: H - 10, "font-size": 11, fill: "var(--ink-faint)" },
       new Date(d0).toISOString().slice(0, 10)),
     h("svg:text", { x: W - R, y: H - 10, "text-anchor": "end", "font-size": 11,
       fill: "var(--ink-faint)" }, new Date(d1).toISOString().slice(0, 10)));
 
-  return h("section", { class: "panel" },
-    h("h2", null, "Is CANDI climbing?",
-      h("span", { class: "h2-note" }, "composite vs date — shaded band: the leader's rank interval under floor ties")),
+  const chips = ids.map((id) =>
+    h("button", {
+      class: "chip", "aria-pressed": String(id === bid),
+      title: `Internal code: ${metaOf(id).protocol} / ${id}`,
+      onclick: () => { state.climbEval = id; render(); },
+    }, metaOf(id).label));
+
+  return h("section", { class: "panel panel-secondary", id: "over-time" },
+    h("h2", null, "CANDI versions over time",
+      h("span", { class: "h2-note" }, "secondary — not the headline"),
+      helpBtn("climb",
+        "Each CANDI version is a dated point. Other methods are flat dotted lines (one score, not a trajectory). The shaded band is the leader's rank interval under noise-floor ties.")),
+    h("div", { class: "controls" },
+      h("span", { class: "chip-group" },
+        h("span", { class: "chip-label" }, "eval set"), ...chips)),
     svg,
     h("div", { class: "legend-row" },
       Object.entries(colors).map(([lin, c]) =>
-        h("span", null, h("span", { class: "legend-swatch", style: `background:${c}` }), lin))));
+        h("span", null, h("span", { class: "legend-swatch", style: `background:${c}` }),
+          LINEAGE_LABEL[lin] || lin))));
 }
 
 /* ------------------------------------------------------------- legend + footer --- */
@@ -495,39 +915,51 @@ function legendPanel() {
   const reg = registry();
   const bar = reg.candi_self_comparison_bar;
   const pvalCrps = reg.metrics.find((m) => m.arm === "pval" && m.key === "crps");
+  const countCrps = reg.metrics.find((m) => m.arm === "count" && m.key === "crps");
   return h("section", { class: "panel" },
-    h("h2", null, "How to read this board"),
+    h("h2", null, "How to read a number"),
     h("dl", { class: "legend" },
       h("dt", null, `rank "1${EN_DASH}3"`),
       h("dd", null, "The best and worst achievable rank: two rows whose gap sits under a metric's noise floor are tied, and ties propagate through the category means into the composite. A gap under the floor never decides a rank."),
       h("dt", null, "score ± floor"),
-      h("dd", null, "The measured noise floor prints inside the cell (count-arm macro CRPS: ±0.09, target-clustered, AGENTS.md §7.2). Deltas under the floor grey out with a ~ prefix."),
+      h("dd", null, `Count-space macro CRPS carries ±${countCrps.floor} (target-clustered). A seed change alone moves pooled CRPS by ${bar.value} — that bar is for CANDI version-over-version arrows, never a cross-method floor. Deltas under the floor grey out with a ~ prefix.`),
       h("dt", null, "medals"),
       h("dd", null, "A row tints gold/silver/bronze only when its rank is unshared — the gap to the next row clears the floor."),
-      h("dt", null, "pval CRPS"),
-      h("dd", null, pvalCrps.floor === null
-        ? "No measured floor yet — " + pvalCrps.floor_note
-        : `floor ±${pvalCrps.floor}.`),
+      h("dt", null, "p-value CRPS"),
+      h("dd", null,
+        "Ordering only — do not read the absolute value as calibrated. ",
+        pvalCrps.floor === null ? pvalCrps.floor_note : `floor ±${pvalCrps.floor}.`,
+        " ", pvalCrps.calibration_note || ""),
+      h("dt", null, "point-to-Gaussian spread"),
+      h("dd", null, pvalCrps.calibration_note
+        || "Point-only rivals get a constant per-assay spread. Rank on CRPS; do not read the absolute value as calibrated."),
       h("dt", null, "CANDI ▴▾ arrows"),
       h("dd", null, `CANDI's own version-over-version arrows use the stricter seed-alone bar (${bar.arm} ${bar.key} ${bar.value}); it is never a cross-method floor.`),
       h("dt", null, "paired columns"),
-      h("dd", null, "Count-arm CRPS never renders without its oracle-scaled / scale-error split; pval CRPS never without PIT KS and coverage. Absent means absent — no number is ever invented."),
+      h("dd", null, "Count-space CRPS never renders without its oracle-scaled / scale-error split; p-value CRPS never without PIT KS and coverage. Absent means absent — no number is ever invented."),
+      h("dt", null, "results computing"),
+      h("dd", null, "A grey row or cell with no numbers: that method is a known entry whose scores have not landed yet. It is not a silent omission."),
       h("dt", null, "✓ verified"),
       h("dd", null, "The row's score json resolved on disk when the row was stamped and `check` re-verifies it wherever the artifact is reachable.")));
 }
 
-function renderFooter(board) {
+function renderFooter() {
   const rep = state.data.reproducibility;
+  const hashes = boardIds().map((bid) => {
+    const meta = metaOf(bid);
+    return h("p", null,
+      coded(meta.label, `${meta.protocol} / ${bid}`),
+      `: store ${meta.frozen.store_manifest_hash} · regime ${meta.frozen.regime_sha256}.`);
+  });
   document.getElementById("footer").replaceChildren(
     h("div", { class: "footer-inner" },
       h("h3", null, "Reproducibility"),
       h("p", null, "Score: ", h("code", null, rep.score_command)),
       h("p", null, "Stamp: ", h("code", null, rep.stamp_command)),
       h("p", null, rep.note),
+      ...hashes,
       h("p", null,
-        `Eval set frozen at: store ${board.meta.frozen.store_manifest_hash} · `
-        + `regime ${board.meta.frozen.regime_sha256}. `
-        + "This page is compiled by tools/leaderboard.py build — a pure function of the "
+        "This page is compiled by tools/leaderboard.py build — a pure function of the "
         + "repo tree, rebuilt by CI on every row that lands on main.")));
 }
 

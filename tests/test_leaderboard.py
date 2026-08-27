@@ -293,6 +293,35 @@ def test_empty_state_compiles(root: Path) -> None:
         for view in board["views"].values():
             assert view["rows"] == []
         assert board["climb"] == {}
+        assert isinstance(board["pending"], list)
+
+
+def test_pending_travels_into_the_payload_and_drops_when_stamped(root: Path) -> None:
+    """Absence is a first-class row: pending lists ride into the payload, and a stamped
+    method is dropped so a later `add` does not need a boards.json edit to un-grey it."""
+    compiled = lb.compile_leaderboard(root)
+    assert {p["method"] for p in compiled["boards"]["main"]["pending"]} >= {
+        "Lavawizard", "avg", "knn5"}
+    assert {p["method"] for p in compiled["boards"]["dev"]["pending"]} == {"Lavawizard"}
+    assert compiled["boards"]["entrants"]["pending"] == []
+    add(root, "score_fixture_a.json", "Lavawizard", "--allow-missing")
+    compiled = lb.compile_leaderboard(root)
+    assert all(p["method"] != "Lavawizard" for p in compiled["boards"]["dev"]["pending"])
+    assert any(p["method"] == "Lavawizard" for p in compiled["boards"]["main"]["pending"])
+
+
+def test_site_is_a_merged_plain_language_view() -> None:
+    """v2: one table, no board tabs, no climbing headline, no jargon labels in the HTML."""
+    index = (REPO / "leaderboard" / "site" / "index.html").read_text(encoding="utf-8")
+    js = (REPO / "leaderboard" / "site" / "app.js").read_text(encoding="utf-8")
+    assert 'id="board-tabs"' not in index
+    assert "Is CANDI climbing?" not in index and "Is CANDI climbing?" not in js
+    assert "strict (minus chr19)" not in index and "strict (minus chr19)" not in js
+    assert "Dataset-3" not in index
+    assert "results computing" in js
+    assert "helpBtn" in js and "rankBarChart" in js and "radarCard" in js
+    assert "ordering only" in js
+    assert "oracle-scaled" in js
 
 
 # ---------------------------------------------------------------- site ---
