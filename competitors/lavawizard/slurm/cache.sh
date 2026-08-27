@@ -14,7 +14,11 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 #SBATCH --array=0-22
-source "$(dirname "$0")/_env.sh"
-C=${CHROMS[$SLURM_ARRAY_TASK_ID]}
+# `$0` is sbatch's spool copy, not this file, so the path comes from the submit directory.
+ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
+[ -f "$ENV" ] || { echo "[error] no $ENV -- submit from the repo root" >&2; exit 2; }
+source "$ENV"
+C=${CHROMS[$SLURM_ARRAY_TASK_ID]:-}
+[ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome" >&2; exit 2; }
 echo "[cache] $C  host=$(hostname)"
 srun python -u -m lavawizard.store_eic cache --regime "$REGIME" --chrom "$C" --cache "$CACHE"

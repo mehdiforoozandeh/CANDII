@@ -15,7 +15,10 @@
 #SBATCH --time=04:00:00
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-source "$(dirname "$0")/_env.sh"
+# `$0` is sbatch's spool copy, not this file, so the path comes from the submit directory.
+ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
+[ -f "$ENV" ] || { echo "[error] no $ENV -- submit from the repo root" >&2; exit 2; }
+source "$ENV"
 PROTOCOL="${PROTOCOL:-p1}"
 PRED="${PRED:-$RUNS/pred}"
 SIGMA="${SIGMA:-$RUNS/sigma.json}"
