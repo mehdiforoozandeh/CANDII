@@ -25,7 +25,8 @@ ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
 source "$ENV"
 C=${CHROMS[$SLURM_ARRAY_TASK_ID]:-}
 [ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome" >&2; exit 2; }
+CKPT="${CKPT:-$RUNS/ckpt}"
 EXTRA=(); [ -n "${MAX_STEPS:-}" ] && EXTRA=(--max-steps-per-stage "$MAX_STEPS")
 echo "[train] $C  host=$(hostname)"; nvidia-smi -L || true
-srun python -u -m lavawizard.train --cache "$CACHE" --chrom "$C" --out "$RUNS/ckpt" \
-     --contributor-mode loo --device cuda "${EXTRA[@]}"
+srun python -u -m lavawizard.train --cache "$CACHE" --chrom "$C" --out "$CKPT" \
+     --contributor-mode loo --device "${DEVICE:-cuda}" "${EXTRA[@]}"

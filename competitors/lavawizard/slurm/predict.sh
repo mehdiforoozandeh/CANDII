@@ -24,8 +24,9 @@ source "$ENV"
 C=${CHROMS[$SLURM_ARRAY_TASK_ID]:-}
 [ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome" >&2; exit 2; }
 PRED="${PRED:-$RUNS/pred}"
+CKPT="${CKPT:-$RUNS/ckpt}"
 MAN=(); [ "$C" = "chr21" ] && MAN=(--manifest)
 echo "[predict] $C -> $PRED  host=$(hostname)"
 srun python -u -m lavawizard.store_eic predict --regime "$REGIME" --chrom "$C" \
-     --cache "$CACHE" --checkpoint "$RUNS/ckpt/guacamole_${C}.pt" \
+     --cache "$CACHE" --checkpoint "$CKPT/guacamole_${C}.pt" \
      --pred-root "$PRED" --device "${DEVICE:-cuda}" --clip "${MAN[@]}"
