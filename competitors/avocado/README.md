@@ -261,3 +261,37 @@ Avocado emits a **point in `-log10 p` and nothing else**. So:
 - The peak tier is **coverage ranking**: `signal_mu` used as the ranking score, `has_peak_head=False`
   recorded by the scorer. Every AUPRC row carries that label and its `peak_base_rate` (B3).
 - Numbers from this method are **not quotable** until the t49 leaderboard exists.
+
+### Results
+
+`cruxvault/results/t50/` in the main checkout — `scores_avocado_P1.json`, `scores_avocado_P2.json`,
+`sigma_avocado_v.json`, `FIR_PATH.txt`, and **`CAVEATS.md`, which must be read before any number
+here is quoted**.
+
+Both protocols scored 45 of 45 declared tracks with `missing_tracks: []` and no non-finite value
+anywhere. P2 reuses P1's σ-table byte-identically — only `--chroms` differs.
+
+| macro, pval arm | P1 (chr21) | P2 (genome-wide) |
+|---|--:|--:|
+| tracks | 45 | 45 |
+| bins per track | 1,868,399 | 121,241,684 |
+| `mse` | 6.6634 | 8.8983 |
+| `gwcorr` | 0.5576 | 0.5456 |
+| `gwspear` | 0.3486 | 0.3186 |
+| `crps` | 0.6172 | 0.6565 |
+| `pit_ks` | 0.3765 | 0.3592 |
+| `coverage_95` | 0.9840 | 0.9803 |
+| `gaussian_nll` | 1.7578 | 1.9293 |
+| `c_index` | 0.5277 ± 0.0002 | 0.5275 ± 0.0002 |
+| `auprc` | 0.4118 | 0.4186 |
+| `peak_base_rate` | 0.0138 | 0.0169 |
+
+Broad (H3K27me3/H3K36me3/H3K9me3) vs punctate medians, never pooled — P1: `mse` 0.700 / 1.161,
+`gwcorr` 0.436 / 0.596, `auprc` 0.212 / 0.431. P2: `mse` 0.763 / 1.551, `gwcorr` 0.343 / 0.596,
+`auprc` 0.217 / 0.457.
+
+**The σ device is the thing to look at first.** `coverage_95` 0.98 against a nominal 0.95 and
+`pit_ks` ~0.37 say the homoscedastic per-assay σ is far too wide almost everywhere — one constant
+cannot cover residuals running from near-zero background to tall peaks. That is a property of the
+B1a point→Gaussian device, not of Avocado's point predictions, and every point-only rival inherits
+it. `mse`/`gwcorr`/`gwspear` and the partition MSEs are unaffected.
