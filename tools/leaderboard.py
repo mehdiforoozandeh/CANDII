@@ -563,10 +563,24 @@ def compile_leaderboard(root: Path) -> Dict[str, Any]:
         pending.sort(key=lambda p: (p["method"], p["version"]))
         out_boards[bid] = {"meta": board, "views": views, "climb": climb,
                            "pending": pending}
+    n_diag, scorers, lineages = 0, set(), set()
+    for board in out_boards.values():
+        view = board["views"].get("default") or next(iter(board["views"].values()))
+        n_diag += len(view["sub_boards"]["candi_lineage"]["rows"])
+        for r in view["rows"]:
+            if r.get("provenance", {}).get("scorer"):
+                scorers.add(r["provenance"]["scorer"])
+            if r.get("lineage"):
+                lineages.add(r["lineage"])
     return {
         "schema_version": 1,
         "registry": registry,
         "boards": out_boards,
+        "covariate_coverage": {
+            "n_rows_with_diagnostics": n_diag,
+            "scorers": sorted(scorers),
+            "lineages": sorted(lineages),
+        },
         "reproducibility": {
             "score_command": "python -m candi.bench.external --store <regime.json> "
                              "--pred <pred_root> --out <scores.json>",

@@ -51,7 +51,9 @@
       "in_composite": false,
       "candi_lineage_only": true,
       "note": "PRD §5.3 — rivals have no covariate-conditioned decoder, so these rank CANDI versions against each other, never methods.",
-      "eli5": "Does CANDI actually use the experimental settings we tell it (depth, assay, read length, run type)? Rivals have no such decoder, so this ranks CANDI versions against each other only."
+      "eli5": "Does CANDI actually use the experimental settings we tell it (depth, assay, read length, run type)? Rivals have no such decoder, so this ranks CANDI versions against each other only. The box is empty until a CANDI checkpoint is scored by the internal bench — the path that can change a prompt and re-decode.",
+      "absent_note": "No current row has these numbers. They ask whether CANDI's decoder uses the experimental settings we tell it (depth, assay, read length, run type): the scorer changes one setting and watches the prediction move. That needs the model. Every stamped row was scored from saved prediction tracks by python -m candi.bench.external, or by the 2019 placement scorer — neither path sees a covariate-conditioned decoder, so neither can emit covuse, covshare, depthdir, depthcounterfact, covspec, depthblind, or biokeep. Rivals have no such decoder in any case.",
+      "will_populate": "These cells will fill in for CANDI-lineage rows scored by the internal python -m candi.bench C-block (default --blocks includes C). They cannot come from candi.bench.external."
     }
   },
   "metrics": [

@@ -88,6 +88,10 @@ def test_registry_and_boards_round_trip() -> None:
     assert bar["value"] == 0.1195 and bar["value"] != count_crps["floor"]
     assert set(boards["boards"]) == {"main", "dev", "entrants"}
     assert boards["boards"]["main"]["views"] == ["default", "strict"]
+    cov = reg["categories"]["covariate_diagnostics"]
+    assert "absent_note" in cov and "candi.bench.external" in cov["absent_note"]
+    assert "will_populate" in cov and "candi.bench" in cov["will_populate"]
+    assert "C-block" in cov["will_populate"]
 
 
 def test_committed_rows_all_pass_their_own_gates() -> None:
@@ -365,6 +369,47 @@ def test_lineage_sub_board_takes_only_candi_diagnostics(root: Path) -> None:
     add_all(root)
     view = dev_view(root)
     assert view["sub_boards"]["candi_lineage"]["rows"] == []  # no candi row, no lineage board
+    cov = lb.compile_leaderboard(root)["covariate_coverage"]
+    assert cov["n_rows_with_diagnostics"] == 0
+    assert "candi" not in cov["lineages"]
+
+
+def test_candi_diagnostics_surface_when_present(root: Path, tmp_path: Path) -> None:
+    """A CANDI row whose score json carries a C block of scalars lands on the lineage board."""
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["provenance"]["suite"] = "candi.bench"
+    score["C"] = {
+        "covuse": 0.91, "covshare": 0.40, "depthdir": 0.80,
+        "depthcounterfact": 0.50, "covspec": 0.70,
+        "depthblind": 0.60, "biokeep": 0.55,
+    }
+    path = tmp_path / "score_candi.json"
+    path.write_text(json.dumps(score), encoding="utf-8")
+    lb.main(["--root", str(root), "add", str(path),
+             "--board", "dev", "--method", "CANDI", "--version", "v0",
+             "--date", "2026-08-27", "--lineage", "candi",
+             "--position-class", "generalizing", "--cell-class", "zero-shot",
+             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    compiled = lb.compile_leaderboard(root)
+    lin = compiled["boards"]["dev"]["views"]["default"]["sub_boards"]["candi_lineage"]["rows"]
+    assert len(lin) == 1 and lin[0]["id"] == "CANDI@v0"
+    assert lin[0]["metrics"]["diagnostics"]["covuse"] == 0.91
+    assert lin[0]["metrics"]["diagnostics"]["biokeep"] == 0.55
+    assert compiled["covariate_coverage"]["n_rows_with_diagnostics"] == 1
+    assert "candi.bench" in compiled["covariate_coverage"]["scorers"]
+
+
+def test_committed_rows_have_no_covariate_diagnostics() -> None:
+    """The empty covariate tab is a fact about the stamped rows, not a missing widget."""
+    compiled = lb.compile_leaderboard(REPO / "leaderboard")
+    assert compiled["covariate_coverage"]["n_rows_with_diagnostics"] == 0
+    assert "candi.bench" not in compiled["covariate_coverage"]["scorers"]
+    assert "candi" not in compiled["covariate_coverage"]["lineages"]
+    for p in (REPO / "leaderboard" / "rows").rglob("*.json"):
+        row = json.loads(p.read_text(encoding="utf-8"))
+        assert not row["metrics"].get("diagnostics")
+        assert row["provenance"]["scorer"] != "candi.bench"
 
 
 # ---------------------------------------------------------------- build ---
@@ -385,6 +430,7 @@ def test_empty_state_compiles(root: Path) -> None:
             assert view["rows"] == []
         assert board["climb"] == {}
         assert isinstance(board["pending"], list)
+    assert compiled["covariate_coverage"]["n_rows_with_diagnostics"] == 0
 
 
 def test_pending_travels_into_the_payload_and_drops_when_stamped(root: Path) -> None:
@@ -401,11 +447,13 @@ def test_pending_travels_into_the_payload_and_drops_when_stamped(root: Path) -> 
     assert any(p["method"] == "Lavawizard" for p in compiled["boards"]["main"]["pending"])
 
 
-def test_site_is_a_merged_plain_language_view() -> None:
-    """v2: one table, no board tabs, no climbing headline, no jargon labels in the HTML."""
+def test_site_is_a_nested_plain_language_view() -> None:
+    """v3: outer eval-set tabs, inner metric-family tabs; v2 science rendering stays."""
     index = (REPO / "leaderboard" / "site" / "index.html").read_text(encoding="utf-8")
     js = (REPO / "leaderboard" / "site" / "app.js").read_text(encoding="utf-8")
-    assert 'id="board-tabs"' not in index
+    assert 'id: "eval-tabs"' in js and 'id: "family-tabs"' in js
+    assert "FAMILY_TABS" in js and "covariate_diagnostics" in js
+    assert "All methods, one table" not in js
     assert "Is CANDI climbing?" not in index and "Is CANDI climbing?" not in js
     assert "strict (minus chr19)" not in index and "strict (minus chr19)" not in js
     assert "Dataset-3" not in index
@@ -416,6 +464,8 @@ def test_site_is_a_merged_plain_language_view() -> None:
     assert "partial coverage" in js
     assert "not scored on this eval set" in js
     assert "compositeCell" in js
+    assert "absent_note" in js and "will_populate" in js
+    assert "No covariate-sensitivity numbers" in js
 
 
 # ---------------------------------------------------------------- site ---

@@ -281,3 +281,41 @@ tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
 .panel-secondary h2 { color: var(--ink-soft); font-weight: 600; }
 .prov-board { margin-bottom: 10px; }
 .prov-board-title { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 4px; }
+
+/* ------------------------------------------------------------- v3: nested tabs --- */
+.nested-wrap { margin-bottom: 20px; }
+.tabs.outer { padding: 0 4px; flex-wrap: wrap; }
+.tab.outer[aria-selected="true"] {
+  background: var(--panel); color: var(--ink);
+  border-color: var(--line); border-bottom-color: var(--panel);
+  position: relative; top: 1px;
+}
+.panel.eval-board { border-radius: 0 10px 10px 10px; margin-top: 0; }
+.tabs.inner {
+  gap: 4px 8px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  margin: 12px 0 14px; padding: 0;
+}
+.tab-wrap { display: inline-flex; align-items: flex-start; gap: 2px; }
+.tab.inner {
+  border: none; border-bottom: 2px solid transparent; border-radius: 0;
+  background: transparent; padding: 8px 10px 10px; top: 0; position: static;
+}
+.tab.inner:hover { color: var(--ink); }
+.tab.inner[aria-selected="true"] {
+  background: transparent; color: var(--ink);
+  border-color: transparent; border-bottom-color: var(--accent);
+  position: static; top: 0;
+}
+.cov-absent {
+  border-left: 3px solid var(--accent);
+  background: var(--bg);
+  border-radius: 0 8px 8px 0;
+  padding: 12px 14px; margin: 8px 0 4px;
+}
+.cov-absent-title { font-weight: 700; margin: 0 0 8px; color: var(--ink); }
+.cov-absent p { margin: 0 0 8px; color: var(--ink-soft); }
+.cov-absent p:last-child { margin-bottom: 0; }
+.cov-absent code { font-family: var(--mono); font-size: 12px; }
+.loss-split { display: grid; gap: 28px; }
+.loss-block h3 { font-size: 14px; margin: 0 0 8px; }
