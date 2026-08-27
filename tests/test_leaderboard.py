@@ -400,6 +400,68 @@ def test_candi_diagnostics_surface_when_present(root: Path, tmp_path: Path) -> N
     assert "candi.bench" in compiled["covariate_coverage"]["scorers"]
 
 
+def test_nested_c_block_flattens_to_registry_scalars(root: Path, tmp_path: Path) -> None:
+    """A real `harness.c_block` score (nested covuse, combined depthblind_biokeep) stamps.
+
+    Headlines the instrument names: depthdir.monotone_frac, depthcounterfact.frac_min_at_true,
+    covspec.mean_gap, depthblind_biokeep.bio_silhouette → biokeep. covuse, covshare, and
+    depthblind have no code-defined panel scalar and stay off the row rather than being averaged.
+    """
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["provenance"]["suite"] = "candi.bench"
+    score["C"] = {
+        "n_units": 4, "n_windows": 8, "n_contexts": 2,
+        "covariates": ["depth", "assay_id", "read_length", "run_type"],
+        "kind": "impute",
+        "covuse": {
+            "depth": {"crps_observed": 1.0, "marginal_p": 0.01, "marginal_mean_d_crps": 0.4,
+                      "uses_covariate": True, "within_batch_d_crps": 0.0},
+            "assay_id": {"crps_observed": 1.0, "marginal_p": 1.0, "marginal_mean_d_crps": 0.0,
+                         "uses_covariate": False, "within_batch_d_crps": 0.0},
+            "read_length": {"crps_observed": 1.0, "marginal_p": 1.0, "marginal_mean_d_crps": 0.0,
+                            "uses_covariate": False, "within_batch_d_crps": 0.0},
+            "run_type": {"crps_observed": 1.0, "marginal_p": 1.0, "marginal_mean_d_crps": 0.0,
+                         "uses_covariate": False, "within_batch_d_crps": 0.0},
+        },
+        "covshare": {"depth": 0.85, "assay_id": 0.10, "read_length": 0.03, "run_type": 0.02,
+                     "total_variance": 1.2, "total_variance_unclamped": 1.2},
+        "depthdir": {"monotone_frac": 0.80, "mean_dose_response_corr": 0.99,
+                     "mean_level_by_told_depth": [1.0, 0.5, 0.25, 0.125],
+                     "n_flat_units": 0, "ladder": [0.0, -1.0, -2.0, -3.0]},
+        "depthcounterfact": {"frac_min_at_true": 0.50, "frac_beats_told1": 0.75,
+                             "n_levels": 4, "constant_answer_value": 0.25,
+                             "crps_at_true_level": {"1.0": 0.1, "2.0": 0.2}},
+        "covspec": {"mean_gap": 0.70,
+                    "gap_by_aspect": {"level": 0.8, "shape": 0.6, "dispersion": 0.7, "tail": 0.7},
+                    "owner_by_aspect": {"level": "depth"},
+                    "matrix": [[1.0, 0.1, 0.1, 0.1]],
+                    "covariates": ["depth"], "aspects": ["level", "shape", "dispersion", "tail"]},
+        "depthblind_biokeep": {"kbet_rejection_rate": 0.10, "ilisi": 3.2, "batch_asw": 0.85,
+                               "bio_silhouette": 0.55, "effective_rank": 4.0,
+                               "invariance_ok": True},
+    }
+    path = tmp_path / "score_nested_c.json"
+    path.write_text(json.dumps(score), encoding="utf-8")
+    lb.main(["--root", str(root), "add", str(path),
+             "--board", "dev", "--method", "CANDI", "--version", "nested-c",
+             "--date", "2026-08-27", "--lineage", "candi",
+             "--position-class", "generalizing", "--cell-class", "zero-shot",
+             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    row = json.loads((root / "rows" / "dev" / "CANDI@nested-c.json").read_text(encoding="utf-8"))
+    diag = row["metrics"]["diagnostics"]
+    assert diag["depthdir"] == 0.80
+    assert diag["depthcounterfact"] == 0.50
+    assert diag["covspec"] == 0.70
+    assert diag["biokeep"] == 0.55
+    assert "covuse" not in diag
+    assert "covshare" not in diag
+    assert "depthblind" not in diag
+    lin = lb.compile_leaderboard(root)["boards"]["dev"]["views"]["default"][
+        "sub_boards"]["candi_lineage"]["rows"]
+    assert len(lin) == 1 and lin[0]["metrics"]["diagnostics"] == diag
+
+
 def test_committed_rows_have_no_covariate_diagnostics() -> None:
     """The empty covariate tab is a fact about the stamped rows, not a missing widget."""
     compiled = lb.compile_leaderboard(REPO / "leaderboard")

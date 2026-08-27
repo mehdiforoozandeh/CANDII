@@ -137,6 +137,60 @@ def metric_id(metric: Mapping[str, Any]) -> str:
 
 # ---------------------------------------------------------------- add ---
 
+#: Registry diagnostic keys. `candi.bench.harness.c_block` writes nested dicts under these
+#: names (and under the combined `depthblind_biokeep`); the stamper flattens to scalars.
+DIAGNOSTIC_KEYS: Tuple[str, ...] = (
+    "covuse", "covshare", "depthdir", "depthcounterfact", "covspec", "depthblind", "biokeep")
+
+#: Nested C-block instrument → the field the instrument itself names as the headline.
+#: `covariate.depthdir`: "`monotone_frac` … is the number to read".
+#: `covariate.depthcounterfact` / EVAL.md §C: the quoted number is `frac_min_at_true`.
+#: `covariate.covspec` already averages the per-aspect gaps into `mean_gap`.
+#: Keys not in this map have no code-defined panel scalar (see flatten_c_block).
+_C_HEADLINES: Dict[str, str] = {
+    "depthdir": "monotone_frac",
+    "depthcounterfact": "frac_min_at_true",
+    "covspec": "mean_gap",
+}
+
+
+def _finite_scalar(val: Any) -> Optional[float]:
+    """A real number, not a bool (bool is an int) and not NaN/Inf."""
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        return None
+    out = float(val)
+    return out if math.isfinite(out) else None
+
+
+def flatten_c_block(cblock: Mapping[str, Any]) -> Dict[str, float]:
+    """Lift `harness.c_block`'s nested C json onto the seven registry diagnostic keys.
+
+    Scalars already scalar pass through. Nested instruments take the headline the
+    instrument names (`_C_HEADLINES`). `depthblind_biokeep` splits: `biokeep` is
+    `covariate.biokeep`'s `bio_silhouette`; `depthblind` has no single headline and
+    is omitted. `covuse` and `covshare` are per-covariate and have no code-defined
+    panel aggregate, so a nested form is omitted rather than averaged.
+    """
+    out: Dict[str, float] = {}
+    for key in DIAGNOSTIC_KEYS:
+        raw = cblock.get(key)
+        got = _finite_scalar(raw)
+        if got is not None:
+            out[key] = got
+            continue
+        headline = _C_HEADLINES.get(key)
+        if headline and isinstance(raw, dict):
+            got = _finite_scalar(raw.get(headline))
+            if got is not None:
+                out[key] = got
+    combo = cblock.get("depthblind_biokeep")
+    if isinstance(combo, dict) and "biokeep" not in out:
+        got = _finite_scalar(combo.get("bio_silhouette"))
+        if got is not None:
+            out["biokeep"] = got
+    return out
+
+
 def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
                     allow_missing: bool) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
     """Copy registry metrics out of a bench-shaped score json. Returns (metrics, missing ids)."""
@@ -144,12 +198,13 @@ def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
     if not isinstance(macro, dict):
         raise GateError("score json has no `macro` block — not a candi.bench-shaped file")
     cblock = score.get("C") if isinstance(score.get("C"), dict) else {}
+    diagnostics = flatten_c_block(cblock)
     out: Dict[str, Dict[str, float]] = {}
     missing: List[str] = []
     for m in registry["metrics"]:
         slot = metric_slot(m)
         if slot == "diagnostics":
-            src = cblock
+            src = diagnostics
         else:
             src = macro.get(m["arm"], {}) if isinstance(macro.get(m["arm"]), dict) else {}
         val = src.get(m["key"])
