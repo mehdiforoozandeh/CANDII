@@ -36,6 +36,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer
 - `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly
 - `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score
+- `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method
 
 ## Blocked
 
@@ -81,6 +82,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer — *open*
 - `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly — *open*
 - `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score — *open*
+- `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method — *open*
 
 ## Done · Dropped
 
