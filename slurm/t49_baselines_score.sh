@@ -82,6 +82,14 @@ export PYTHONPATH="$KIT/src:$KIT"
 
 case "$REGIME" in *eic_test*) echo "[t49] REFUSING: $REGIME is the B-pair regime (A4)"; exit 2;; esac
 echo "[t49-score] host=$(hostname) commit=$(git rev-parse --short HEAD) method=$METHOD"
+# Which CRPS estimator ran is a PI-ruled fact about the numbers, so it belongs in the log and not
+# only in whoever's memory of the submit line. The score json carries its own stamp; this is the
+# copy you can read after the job is gone.
+if [ -n "$CRPS_APPROX" ]; then
+    echo "[t49-score] crps=fair_sampled k=$CRPS_APPROX seed=$CRPS_SEED"
+else
+    echo "[t49-score] crps=closed_form"
+fi
 
 mkdir -p "$SCORES"
 python -m candi.bench.external \
