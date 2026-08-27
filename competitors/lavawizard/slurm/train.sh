@@ -18,7 +18,11 @@
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
-#SBATCH --array=0-22
+# fc30560 gave repeated Lustre OSError 108 on files its neighbours read fine (anchor run).
+#SBATCH --exclude=fc30560
+# %12: more than twelve concurrent torch imports off the shared /project venv fail with
+# partial-module ImportErrors. The cap is the fix, and it costs only wall-clock.
+#SBATCH --array=0-22%12
 # `$0` is sbatch's spool copy, not this file, so the path comes from the submit directory.
 ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
 [ -f "$ENV" ] || { echo "[error] no $ENV -- submit from the repo root" >&2; exit 2; }
