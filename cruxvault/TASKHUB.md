@@ -29,6 +29,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS)
 - `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
 - `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories
+- `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards
+- `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract
+- `t64` [implementation] single-chromosome CANDI run: mainline chr19 recipe + signal and peak heads, external-scored, stamped dev+main
+- `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main
+- `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer
 
 ## Blocked
 
@@ -67,6 +72,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *open*
 - `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels — *open*
 - `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories — *open*
+- `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards — *open*
+- `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract — *open*
+- `t64` [implementation] single-chromosome CANDI run: mainline chr19 recipe + signal and peak heads, external-scored, stamped dev+main — *open*
+- `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main — *open*
+- `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer — *open*
 
 ## Done · Dropped
 
