@@ -1,0 +1,29 @@
+{
+ "macro": {
+  "count": {
+   "crps": 0.4,
+   "crps_oracle_scaled": 0.35,
+   "n_tracks": 4
+  },
+  "pval": {
+   "gwcorr": 0.9,
+   "gwspear": 0.9,
+   "mse": 1.0,
+   "mse1obs": 1.0,
+   "n_tracks": 4
+  }
+ },
+ "provenance": {
+  "allow_missing": false,
+  "method": "fixture-bad",
+  "pred_inversion": "external",
+  "pval_pred_space": "-log10p",
+  "regime": "/fake/configs/regime.eic_val.json",
+  "seed": 0,
+  "sigma_table": null,
+  "signal_target_transform": "none",
+  "store": "/fake/CANDI_STORE/eic",
+  "store_manifest": "/fake/CANDI_STORE/eic/manifest.json",
+  "suite": "candi.bench.external"
+ }
+}

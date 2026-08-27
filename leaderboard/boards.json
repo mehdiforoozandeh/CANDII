@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "doc": "LEADERBOARD_PRD.md §3, §4, §6 — one entry per board. The three boards score different data and are never mixed in one table. `frozen` hashes are stamped when the first real row lands (M4); a board whose hashes are still TODO refuses every `add`.",
+  "boards": {
+    "main": {
+      "label": "Main",
+      "subtitle": "P2 — genome-wide",
+      "protocol": "P2",
+      "rows_note": "CANDI versions, retrained rivals, naive baselines.",
+      "eval_set": {
+        "id": "eic_val.P2",
+        "regime": "configs/regime.eic_val.json",
+        "pairs": "declared eval_pairs of regime.eic_val",
+        "chroms": "all 23 store chromosomes",
+        "scorer": "python -m candi.bench.external"
+      },
+      "frozen": {
+        "store_manifest_hash": "TODO-freeze-at-stamping",
+        "regime_sha256": "TODO-freeze-at-stamping"
+      },
+      "views": ["default", "strict"],
+      "strict_view": {
+        "excludes": ["chr19"],
+        "note": "Rescored on P2 minus chr19. CANDI is then fully position-out-of-sample while position-transductive rivals keep their advantage — CANDI's strict number is conservative by construction (PRD §4)."
+      },
+      "caveats": [
+        "CANDI trained on chr19 positions only, so on the default view CANDI is position-in-sample on chr19 and position-out-of-sample on the other 22 chromosomes.",
+        "Position-transductive rivals (Avocado, ChromImpute) train on every genomic position by construction — they are position-in-sample everywhere, on both views. No choice of eval chromosome removes this asymmetry; it is disclosed, badged on every row, and bounded by the strict toggle."
+      ]
+    },
+    "dev": {
+      "label": "Dev",
+      "subtitle": "P1 — chr21",
+      "protocol": "P1",
+      "rows_note": "Same rows as Main; the fast board new CANDI versions hit first.",
+      "eval_set": {
+        "id": "eic_val.P1",
+        "regime": "configs/regime.eic_val.json",
+        "pairs": "declared eval_pairs of regime.eic_val",
+        "chroms": "chr21",
+        "scorer": "python -m candi.bench.external"
+      },
+      "frozen": {
+        "store_manifest_hash": "TODO-freeze-at-stamping",
+        "regime_sha256": "TODO-freeze-at-stamping"
+      },
+      "views": ["default"],
+      "caveats": [
+        "Development board — chr21 only. Numbers here select what goes to the Main board; they are not the headline result.",
+        "CANDI trained on chr19, so it is position-out-of-sample on chr21; position-transductive rivals are position-in-sample here too."
+      ]
+    },
+    "entrants": {
+      "label": "Entrants",
+      "subtitle": "Dataset-3 — EIC blind test",
+      "protocol": "P3",
+      "rows_note": "The 23 EIC entrant submissions + CANDI + baselines.",
+      "eval_set": {
+        "id": "dataset3.blind_test",
+        "regime": "Synapse syn17083203 blind-test tracks",
+        "pairs": "challenge blind-test experiments",
+        "chroms": "challenge evaluation set",
+        "scorer": "Max's vendored 001 scorer (experiment 001)"
+      },
+      "frozen": {
+        "store_manifest_hash": "TODO-freeze-at-stamping",
+        "regime_sha256": "TODO-freeze-at-stamping"
+      },
+      "views": ["default"],
+      "caveats": [
+        "Dataset-3 truth is the signal the 2019 challenge distributed — a different quantity from the Dataset-2 stores the internal boards score. Scores never translate between the two (RIVALS_PLAN.md, Max's 005: 12-66% per-experiment error for that move).",
+        "DNase-seq is excluded from every Dataset-3 row (B3): in Dataset 2 it is read-depth normalized signal, a different physical quantity.",
+        "Entrant rows are the submissions as frozen in 2019, not retrained; CUImpute1, CUWA and ICU submitted identical predictions and count once, not three times."
+      ]
+    }
+  }
+}

@@ -1,0 +1,56 @@
+# The rivals leaderboard — LEADERBOARD_PRD.md §9 (t58 M3).
+#
+# On every push to main that touches the board, run the full gate (`check`: row schemas,
+# provenance, frozen hashes, and a double build diffed bit-exact), then build and deploy
+# _site/ to GitHub Pages. The board is therefore always the latest main, by construction.
+# Scoring never runs here — it stays a manual Fir run; this only compiles what was stamped.
+#
+# One-time setup (a repo setting, not a workflow step): Settings → Pages → Source must be
+# "GitHub Actions". Note of record: Pages makes the page public even while the repo is
+# private; the PI accepted this in the 2026-08-27 quiz session (PRD §9).
+
+name: leaderboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "leaderboard/**"
+      - "tools/leaderboard.py"
+      - ".github/workflows/leaderboard.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # stdlib only — no pip install, by rule (PRD §6)
+      - name: check (row gates + deterministic double build)
+        run: python tools/leaderboard.py check
+      - name: build _site/
+        run: python tools/leaderboard.py build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
