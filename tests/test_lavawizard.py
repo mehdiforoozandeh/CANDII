@@ -527,7 +527,7 @@ def test_manifest_satisfies_the_bench_reader_and_records_the_switch(tmp_path):
     from candi.bench.external import read_manifest
 
     emit.write_manifest(tmp_path, version="0.1.0", generated_by="tests",
-                        contributor_mode="loo", weights="ported-retrain",
+                        contributor_mode="loo", weights="ported-retrain", clip=True,
                         sparse_assays=["H2AFZ"])
     obj = read_manifest(tmp_path)
     assert obj["method"] == "Lavawizard" and obj["arms"] == ["pval"]
@@ -535,6 +535,53 @@ def test_manifest_satisfies_the_bench_reader_and_records_the_switch(tmp_path):
     assert obj["signal_inversion"] == emit.ARCSINH_INVERSION
     assert obj["sparse_assays"] == ["H2AFZ"]
     assert json.loads((tmp_path / "manifest.json").read_text())["upstream"].endswith("@d638b204")
+
+
+# ---------------------------------------------------------------------------
+# the cap on the output (PI ruling, 2026-08-26)
+# ---------------------------------------------------------------------------
+
+def test_clip_caps_the_prediction_in_minus_log10_p_space(tmp_path):
+    """The cap is applied AFTER the inversion, so it bounds `signal_mu` exactly as written."""
+    from candi.bench.external import read_track_arrays, track_dirname
+
+    pair, assay, chrom, n = emit.Pair("T_X", "V_X"), "H3K4me3", "chr21", 8
+    raw = np.array([0.0, 1.0, 2.0, 5.0, 10.0, 15.5, 3.0, 0.5], dtype=np.float32)
+    emit.write_track(tmp_path, pair, assay, chrom, raw, n_bins=n, clip_max=100.0)
+    mu = read_track_arrays(tmp_path / track_dirname(pair, assay), [chrom], {chrom: n})[chrom]
+    assert mu["signal_mu"].max() == pytest.approx(100.0)
+    uncapped = emit.invert_arcsinh(raw)
+    below = uncapped <= 100.0
+    np.testing.assert_allclose(mu["signal_mu"][below], uncapped[below], rtol=1e-6)
+
+
+def test_clip_off_is_the_faithful_port(tmp_path):
+    """Default `clip_max=None` leaves the anchor's arithmetic untouched, blowup and all."""
+    raw = np.array([15.5], dtype=np.float32)
+    p = emit.write_track(tmp_path, emit.Pair("T_X", "V_X"), "H3K4me3", "chr21", raw, n_bins=1)
+    assert float(np.load(p)["signal_mu"][0]) > 2.0e6, "sinh(15.5) is the chr17 defect, unguarded"
+
+
+def test_a_zero_or_nonfinite_cap_is_refused(tmp_path):
+    for bad in (0.0, -1.0, float("nan")):
+        with pytest.raises(ValueError, match="finite and positive"):
+            emit.write_track(tmp_path, emit.Pair("T_X", "V_X"), "H3K4me3", "chr21",
+                             np.ones(4, np.float32), n_bins=4, clip_max=bad)
+
+
+def test_manifest_states_the_cap_either_way(tmp_path):
+    """`clip` is required, not defaulted: absent and false must not look alike to a reader."""
+    import inspect
+
+    par = inspect.signature(emit.write_manifest).parameters["clip"]
+    assert par.default is inspect.Parameter.empty, "a defaulted clip flag can be forgotten silently"
+    for flag in (True, False):
+        d = tmp_path / str(flag)
+        emit.write_manifest(d, version="0.1.0", generated_by="tests",
+                            contributor_mode="loo", weights="ported-retrain", clip=flag)
+        obj = json.loads((d / "manifest.json").read_text())
+        assert obj["clip"] is flag
+        assert obj["clip_rule"] == emit.CLIP_RULE == "training_max_per_mark_per_chrom"
 
 
 # ---------------------------------------------------------------------------
@@ -920,3 +967,195 @@ def test_no_disagreement_flag_when_both_aggregations_agree(tmp_path):
     rec = R.build_report([f])
     assert rec["headline_disagreement"] == "none"
     assert rec["verdict"].startswith("APPROACHES")
+
+
+# ---------------------------------------------------------------------------
+# the our-EIC side: store_eic
+# ---------------------------------------------------------------------------
+
+def _regime(tmp_path, *, train=("T_A", "T_B", "T_C"), pairs=(("T_A", "V_A"),),
+            assays=("H3K4me3", "H3K27ac")):
+    p = tmp_path / "regime.json"
+    p.write_text(json.dumps({
+        "store": str(tmp_path / "store"), "assays": list(assays),
+        "biosamples": {"train": list(train), "eval": [b for _, b in pairs]},
+        "eval_pairs": [list(x) for x in pairs],
+        "train_chroms": ["chr19"], "eval_chroms": ["chr21"],
+    }), encoding="utf-8")
+    return p
+
+
+class _FakeBiosample:
+    def __init__(self, panel, values):
+        self._panel, self._values = list(panel), values
+
+    def assays(self, kind=None):
+        return list(self._panel)
+
+    def pval(self, chrom, start, end, assays=None):
+        names = list(assays) if assays else self._panel
+        return np.stack([self._values[n][start:end] for n in names], axis=1)
+
+
+class _FakeCorpus:
+    """Just enough `CorpusStore` for the cache builder and the predictor."""
+
+    def __init__(self, bios, n_bins):
+        self._bios, self._n = bios, n_bins
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def __getitem__(self, name):
+        return self._bios[name]
+
+    def n_bins(self, chrom=None):
+        return self._n
+
+
+def _install_fake_corpus(monkeypatch, bios, n_bins):
+    import candi.store.reader as R
+    monkeypatch.setattr(R, "CorpusStore", lambda *a, **k: _FakeCorpus(bios, n_bins))
+
+
+def test_cell_index_gives_a_pair_one_embedding_row(tmp_path):
+    from lavawizard import store_eic
+
+    names, ix = store_eic.cell_index(store_eic.load_regime(_regime(tmp_path)))
+    assert names == ["T_A", "T_B", "T_C"], "cells are named in T_ terms and sorted"
+    assert ix["V_A"] == ix["T_A"], "a V_ target with no embedding row cannot be imputed at all"
+    assert "V_A" not in names
+
+
+def test_cell_index_refuses_a_pair_whose_input_is_not_a_training_cell(tmp_path):
+    from lavawizard import store_eic
+
+    r = store_eic.load_regime(_regime(tmp_path, pairs=(("T_Z", "V_Z"),)))
+    with pytest.raises(store_eic.FairnessError, match="no fitted embedding"):
+        store_eic.cell_index(r)
+
+
+def test_train_columns_raises_rather_than_filtering_a_leaked_target(tmp_path):
+    """§6.2 must be auditable: a rule that silently drops a column cannot be checked afterwards."""
+    from lavawizard import store_eic
+
+    r = store_eic.load_regime(_regime(tmp_path, train=("T_A", "V_A"), pairs=(("T_A", "V_A"),)))
+    bios = {b: _FakeBiosample(["H3K4me3"], {"H3K4me3": np.zeros(4, np.float32)})
+            for b in ("T_A", "V_A")}
+    with pytest.raises(store_eic.FairnessError, match="TARGETS"):
+        store_eic.train_columns(r, _FakeCorpus(bios, 4))
+
+
+def test_train_columns_take_only_declared_train_biosamples_and_assays(tmp_path):
+    from lavawizard import store_eic
+
+    r = store_eic.load_regime(_regime(tmp_path))
+    v = {n: np.zeros(4, np.float32) for n in ("H3K4me3", "H3K27ac", "DNase-seq")}
+    bios = {"T_A": _FakeBiosample(["H3K4me3", "DNase-seq"], v),   # DNase-seq is not declared
+            "T_B": _FakeBiosample(["H3K4me3", "H3K27ac"], v),
+            "T_C": _FakeBiosample(["H3K27ac"], v)}
+    cols = store_eic.train_columns(r, _FakeCorpus(bios, 4))
+    assert cols == [("T_A", "H3K4me3"), ("T_B", "H3K4me3"), ("T_B", "H3K27ac"),
+                    ("T_C", "H3K27ac")]
+    assert all(a in r["assays"] for _, a in cols)
+
+
+def _store_cache(tmp_path, monkeypatch, n_bins=64):
+    """Build a real cache through `store_eic` over a fake corpus. Returns (regime path, values)."""
+    from lavawizard import store_eic
+
+    rng = np.random.default_rng(0)
+    vals = {b: {a: rng.random(n_bins).astype(np.float32) * 5.0
+                for a in ("H3K4me3", "H3K27ac")} for b in ("T_A", "T_B", "T_C", "V_A")}
+    bios = {b: _FakeBiosample(["H3K4me3", "H3K27ac"], vals[b]) for b in vals}
+    _install_fake_corpus(monkeypatch, bios, n_bins)
+    rp = _regime(tmp_path)
+    store_eic.build_cache_from_store(rp, "chr21", tmp_path / "cache", verbose=False)
+    return rp, vals
+
+
+def test_store_cache_is_arcsinh_of_the_stores_own_bins(tmp_path, monkeypatch):
+    """No binning: the store's grid is already 25 bp, so the only transform is `arcsinh`."""
+    _, vals = _store_cache(tmp_path, monkeypatch)
+    c = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    i = c.tracks.index(("T_B", "H3K27ac"))
+    np.testing.assert_allclose(c.values[i], np.arcsinh(vals["T_B"]["H3K27ac"]), rtol=1e-6)
+    assert c.cells == ["T_A", "T_B", "T_C"] and c.marks == ["H3K4me3", "H3K27ac"]
+    assert json.loads((c.dir / "index.json").read_text())["grid"] == "store_floor"
+
+
+def test_cache_records_the_per_mark_training_max(tmp_path, monkeypatch):
+    _, vals = _store_cache(tmp_path, monkeypatch)
+    c = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    for j, mark in enumerate(c.marks):
+        want = max(np.arcsinh(vals[b][mark]).max() for b in vals)
+        assert c.mark_max[j] == pytest.approx(want, rel=1e-6)
+
+
+def test_a_cache_without_mark_max_reports_none_rather_than_a_guess(tmp_path, monkeypatch):
+    _store_cache(tmp_path, monkeypatch)
+    d = preprocess.cache_dir(tmp_path / "cache", "chr21")
+    obj = json.loads((d / "index.json").read_text())
+    obj.pop("mark_max")
+    (d / "index.json").write_text(json.dumps(obj), encoding="utf-8")
+    assert preprocess.CachedChrom(tmp_path / "cache", "chr21").mark_max is None
+
+
+def test_prediction_excludes_the_pairs_input_cell_from_the_average(tmp_path, monkeypatch):
+    """§6.2 at predict time: T_A must not be in the average used to impute V_A.
+
+    Checked on the model's own input rather than on its output, because the additive skip makes
+    the average the dominant term — a leak here would look like a good score, not like a bug.
+    """
+    import torch
+    from lavawizard import store_eic
+
+    rp, vals = _store_cache(tmp_path, monkeypatch)
+    cache = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+
+    seen = {}
+
+    class _Spy:
+        def __call__(self, *, celltype, assay, pos25, average, variance):
+            seen.setdefault((int(celltype[0]), int(assay[0])), []).append(average.numpy().copy())
+            return torch.zeros_like(average)
+
+    meta = {"cells": cache.cells, "marks": cache.marks}
+    monkeypatch.setattr(store_eic, "load_checkpoint", lambda *a, **k: (_Spy(), meta),
+                        raising=False)
+    import lavawizard.anchor as A
+    monkeypatch.setattr(A, "load_checkpoint", lambda *a, **k: (_Spy(), meta))
+
+    store_eic.predict_chrom(rp, "chr21", tmp_path / "cache", tmp_path / "ck.pt",
+                            tmp_path / "pred", clip=False, verbose=False)
+
+    got = np.concatenate(seen[(0, 0)])                     # cell T_A, mark H3K4me3
+    excl = np.mean([np.arcsinh(vals[b]["H3K4me3"]) for b in ("T_B", "T_C")], axis=0)
+    incl = np.mean([np.arcsinh(vals[b]["H3K4me3"]) for b in ("T_A", "T_B", "T_C")], axis=0)
+    np.testing.assert_allclose(got, excl, rtol=1e-5)
+    assert not np.allclose(got, incl), "the pooled average would be the leak §6.2 forbids"
+
+
+def test_predict_refuses_a_cap_from_a_cache_that_never_measured_one(tmp_path, monkeypatch):
+    from lavawizard import store_eic
+
+    rp, _ = _store_cache(tmp_path, monkeypatch)
+    d = preprocess.cache_dir(tmp_path / "cache", "chr21")
+    obj = json.loads((d / "index.json").read_text())
+    obj.pop("mark_max")
+    (d / "index.json").write_text(json.dumps(obj), encoding="utf-8")
+    with pytest.raises(ValueError, match="Rebuild"):
+        store_eic.predict_chrom(rp, "chr21", tmp_path / "cache", tmp_path / "ck.pt",
+                                tmp_path / "pred", clip=True, verbose=False)
+
+
+def test_only_the_our_store_module_may_import_candi():
+    """`dataset3`/`emit`/`anchor` run on Fir without `candi`; `store_eic` cannot and must not try."""
+    d = Path(__file__).resolve().parents[1] / "competitors" / "lavawizard"
+    for name in ("dataset3.py", "emit.py", "anchor.py", "model.py", "preprocess.py", "train.py"):
+        src = (d / name).read_text()
+        assert "import candi" not in src and "from candi" not in src, name
+    assert "from candi.store.reader import CorpusStore" in (d / "store_eic.py").read_text()

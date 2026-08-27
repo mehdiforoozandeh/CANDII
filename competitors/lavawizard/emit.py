@@ -32,8 +32,8 @@ from typing import Any, Dict, Mapping, NamedTuple, Optional, Sequence
 
 import numpy as np
 
-__all__ = ["ARCSINH_INVERSION", "Pair", "track_dirname", "invert_arcsinh", "write_track",
-           "write_manifest"]
+__all__ = ["ARCSINH_INVERSION", "CLIP_RULE", "Pair", "track_dirname", "invert_arcsinh",
+           "write_track", "write_manifest"]
 
 
 class Pair(NamedTuple):
@@ -57,6 +57,9 @@ def track_dirname(pair, assay: str) -> str:
 #: Recorded in the manifest so a reader knows which way round the clip and the sinh went.
 ARCSINH_INVERSION = "clip_at_zero_then_sinh"
 
+#: The cap rule, stamped into every manifest whether or not the cap is on. PI ruling, 2026-08-26.
+CLIP_RULE = "training_max_per_mark_per_chrom"
+
 
 def invert_arcsinh(pred: np.ndarray) -> np.ndarray:
     """`arcsinh(-log10 p)` back to `-log10 p`, upstream's way: clip at 0 first, then `sinh`.
@@ -72,7 +75,8 @@ def invert_arcsinh(pred: np.ndarray) -> np.ndarray:
 
 def write_track(root: Path | str, pair: Pair, assay: str, chrom: str,
                 signal_arcsinh: np.ndarray, *, n_bins: int,
-                already_inverted: bool = False) -> Path:
+                already_inverted: bool = False,
+                clip_max: Optional[float] = None) -> Path:
     """One `<pred_root>/<track>/<chrom>.npz` holding `signal_mu` in `-log10 p`.
 
     `signal_arcsinh` is the model's raw output, in `arcsinh(-log10 p)`; pass
@@ -80,6 +84,15 @@ def write_track(root: Path | str, pair: Pair, assay: str, chrom: str,
     store's `floor(chr_len / 25)` for this chromosome and is checked here, not only by the reader —
     a length error found at write time names one track, the same error found at score time has
     already cost the whole run.
+
+    **`clip_max` is a deviation from the faithful port** (PI ruling, 2026-08-26) and is `None` —
+    off — for anything reproducing upstream. The head is `Dense(1)(x) + average` with nothing
+    bounding it, and `sinh` turns a `+6.2` overshoot in `arcsinh` space into a 500x multiplicative
+    one: on the anchor, five bins of `chr17` where the model emitted 15.50 against a truth of 0.57
+    carried the whole of that chromosome's MSE. `clip_max` caps `signal_mu` at the largest value
+    that mark reaches in this chromosome's **training** data — data-derived, never tuned, and never
+    read off the target. Whether it was applied belongs in the manifest, not in a commit message,
+    so a score file says for itself which rule made it.
     """
     vec = np.asarray(signal_arcsinh).reshape(-1)
     if vec.shape[0] != int(n_bins):
@@ -87,6 +100,12 @@ def write_track(root: Path | str, pair: Pair, assay: str, chrom: str,
             f"{pair}/{assay} {chrom}: prediction has {vec.shape[0]} bins, grid wants {int(n_bins)}. "
             f"Index i is the bin at i*25 bp — a length mismatch shifts every downstream bin.")
     mu = np.asarray(vec, dtype=np.float32) if already_inverted else invert_arcsinh(vec)
+    if clip_max is not None:
+        cap = float(clip_max)
+        if not np.isfinite(cap) or cap <= 0.0:
+            raise ValueError(f"{pair}/{assay} {chrom}: clip_max must be finite and positive, "
+                             f"got {clip_max!r}; a cap of zero would erase the track.")
+        mu = np.minimum(mu, np.float32(cap))
     if not np.all(np.isfinite(mu)):
         raise ValueError(f"{pair}/{assay} {chrom}: {int((~np.isfinite(mu)).sum())} non-finite bins; "
                          f"sinh overflows above ~arcsinh(3e38) and the scorer will not accept NaN.")
@@ -98,7 +117,7 @@ def write_track(root: Path | str, pair: Pair, assay: str, chrom: str,
 
 
 def write_manifest(root: Path | str, *, version: str, generated_by: str,
-                   contributor_mode: str, weights: str,
+                   contributor_mode: str, weights: str, clip: bool,
                    notes: str = "", extra: Optional[Mapping[str, Any]] = None,
                    sparse_assays: Sequence[str] = ()) -> Path:
     """`<pred_root>/manifest.json` — §4.1's `{method, version, generated_by, date, arms, notes}`.
@@ -107,6 +126,11 @@ def write_manifest(root: Path | str, *, version: str, generated_by: str,
     is comparable go in as data rather than prose: `contributor_mode` (`loo` for anything we
     report, `upstream` only for a parity run — see `features.py`), `weights` (`ported-retrain` or
     the Synapse id their released weights came from), and `signal_inversion`.
+
+    `clip` is required rather than defaulted, because "was the output capped" is exactly the fact a
+    reader must not have to guess: `false` is a faithful-port root, `true` is a capped one, and a
+    manifest that simply omitted the key would be indistinguishable from one written before the cap
+    existed.
 
     `sparse_assays` carries §5's `<= 2 contributors` flag into every table that reads this root.
     """
@@ -121,6 +145,8 @@ def write_manifest(root: Path | str, *, version: str, generated_by: str,
         "weights": weights,
         "signal_inversion": ARCSINH_INVERSION,
         "signal_space": "-log10 p",
+        "clip": bool(clip),
+        "clip_rule": CLIP_RULE,
         "upstream": "github.com/ccchang0111/ENCODE_imputation_2019@d638b204",
         "sparse_assays": list(sparse_assays),
     }

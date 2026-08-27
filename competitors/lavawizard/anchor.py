@@ -198,6 +198,7 @@ def main(argv=None) -> int:
                             generated_by="lavawizard.anchor",
                             contributor_mode=str(obj.get("contributor_mode")),
                             weights=f"ported-retrain:{Path(ns.checkpoint).name}",
+                            clip=False,          # the anchor reproduces upstream; never capped
                             notes=CAVEAT)
     return 0
 

@@ -12,7 +12,7 @@ The cache for a chromosome is a directory:
   tercile.npy    (n_tracks, n_bins) int8      stage-1 targets, 0/1/2
   sums.npy       (n_marks,   n_bins) float32  per-mark sum over the training pool
   sumsq.npy      (n_marks,   n_bins) float32  per-mark sum of squares
-  index.json     track order, mark order, cell order, counts, provenance
+  index.json     track order, mark order, cell order, counts, per-mark max, provenance
 ```
 
 `sums`/`sumsq` are what make the contributor switch cheap. On Dataset 3 a cell id *is* the cell
@@ -129,6 +129,7 @@ def build_cache(data_dirs: Sequence[Path], meta_tsv: Path, chrom: str, out_root:
     sums = np.zeros((n_marks, n_bins), dtype=np.float64)
     sumsq = np.zeros((n_marks, n_bins), dtype=np.float64)
     counts = np.zeros(n_marks, dtype=np.int64)
+    maxima = np.zeros(n_marks, dtype=np.float64)
     mark_ix = {m: i for i, m in enumerate(marks)}
 
     import pyBigWig
@@ -146,6 +147,7 @@ def build_cache(data_dirs: Sequence[Path], meta_tsv: Path, chrom: str, out_root:
         sums[j] += binned
         sumsq[j] += binned.astype(np.float64) ** 2
         counts[j] += 1
+        maxima[j] = max(maxima[j], float(binned.max()))
         if verbose and (i + 1) % 25 == 0:
             el = time.time() - t0
             print(f"  {i+1}/{n_tracks}  {el/60:.1f} min  "
@@ -159,6 +161,7 @@ def build_cache(data_dirs: Sequence[Path], meta_tsv: Path, chrom: str, out_root:
         "grid": "upstream_ceil",
         "tracks": [list(t) for t in tracks], "cells": cells, "marks": marks,
         "mark_counts": {m: int(counts[mark_ix[m]]) for m in marks},
+        "mark_max": {m: float(maxima[mark_ix[m]]) for m in marks},
         "data_dirs": [str(d) for d in data_dirs], "meta": str(meta_tsv),
         "built": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "upstream": "github.com/ccchang0111/ENCODE_imputation_2019@d638b204",
@@ -205,6 +208,12 @@ class CachedChrom:
         self.cell_ix = np.array([self.cells.index(c) for c, _ in self.tracks], dtype=np.int64)
         self.mark_ix = np.array([self.marks.index(m) for _, m in self.tracks], dtype=np.int64)
         self.mark_count = np.array([idx["mark_counts"][m] for m in self.marks], dtype=np.int64)
+        # arcsinh-space, per mark, over this chromosome's training tracks. Absent from caches built
+        # before the cap existed — the anchor's, for one — and `None` is the honest answer there:
+        # the cap must refuse to run rather than invent a bound from a cache that never measured it.
+        mx = idx.get("mark_max")
+        self.mark_max = (np.array([mx[m] for m in self.marks], dtype=np.float64)
+                         if mx is not None else None)
 
     @property
     def n_tracks(self) -> int:

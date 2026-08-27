@@ -4,9 +4,8 @@ Rival method for the leaderboard, `plan/RIVALS_PLAN.md` §7.4. The PI approved t
 2026-08-25 with one amendment: **their released weights are the primary parity anchor, and reading
 them needs no TensorFlow.**
 
-**Nothing here is imported by `src/candi`, ever** (decision E). The dependency runs one way — this
-package imports `candi.bench.external` for the §4.1 directory-name rule, so the prediction-track
-contract keeps one definition. The port emits §4.1 roots and is scored by `candi.bench.external`.
+**Nothing here is imported by `src/candi`, ever** (decision E). The dependency runs one way: the
+port emits §4.1 roots and is scored by `candi.bench.external`.
 
 | module | what it does |
 |---|---|
@@ -14,11 +13,18 @@ contract keeps one definition. The port emits §4.1 roots and is scored by `cand
 | `keras_weights.py` | their `.h5` into a torch module, `h5py` only |
 | `features.py` | the cross-cell average and variance, and the contributor switch |
 | `dataset3.py` | the challenge's own bigwigs — their grid, their binning, their hyperparameters |
+| `store_eic.py` | **our** store — the same cache from `CANDI_STORE`, and the P1/P2 predictions |
 | `emit.py` | §4.1 prediction roots |
+| `fit_sigma.py` | the §6.1 sigma-table, fitted on V-pair residuals |
 | `parity_keras.py` | **model** parity: our torch module against Keras on their weights |
 | `parity_features.py` | **input** parity: our preprocessing against `00_data_generation.py` |
 
-Tests: `tests/test_lavawizard.py`, 36 checks, seconds, no TensorFlow and no network.
+`store_eic.py` is the only module that imports `candi` — it has to, because the store is `candi`'s.
+Every other module runs on Fir with `candi` nowhere on the path, which is not a preference: an
+earlier version imported `candi.bench.external` for the §4.1 naming rule and died the moment the
+package was rsynced on its own. A test pins the split in both directions.
+
+Tests: `tests/test_lavawizard.py`, 78 checks, seconds, no TensorFlow and no network.
 
 ## Parity, part 1 — the model
 
@@ -347,8 +353,53 @@ no clip either — grep their tree — so this is a property of the method that 
 happened not to trigger as hard. It matters downstream because §6.1 fits `sigma` from squared
 error, and five bins of 1e13 would swallow the fit.
 
-Any guard on this is a **deviation from the port** and is recorded here when it is taken. As of the
-anchor it is **not** taken: every number above is the faithful port.
+Any guard on this is a **deviation from the port**. As of the anchor it is **not** taken: every
+number above is the faithful port. For the deliverable it is — see the next section.
+
+**One chromosome is not the method.** The same blind track scores 1.016 on `chr13` and 1.677 on
+`chr11`: one model is trained per chromosome, and they are not equally good. Any single-chromosome
+ratio here is one of 23 draws, and the verdict is the median over 1173 of them. Do not read a row.
+
+## The deviation on record: the cap
+
+PI ruling, 2026-08-26. `signal_mu` is capped at the largest value that mark reaches in **that
+chromosome's training data**. Data-derived, never tuned, never read off the target.
+
+| | |
+|---|---|
+| where | `emit.write_track(..., clip_max=)`, applied after the `sinh` so it bounds `-log10 p` |
+| the bound | `preprocess`/`store_eic` record `mark_max` per mark per chromosome at cache-build time |
+| the switch | **off** for parity and anchor reproduction; **on** for the our-EIC deliverable |
+| the record | `manifest.json` carries `clip: true/false` and `clip_rule`, so a score file self-describes |
+
+`clip` is a **required** argument of `write_manifest`, not a defaulted one, and `--clip` needs a
+cache that actually measured `mark_max` — a cache built before the cap existed makes the run fail
+rather than invent a bound. Both are tested. The anchor's caches predate it, which is the right
+answer: those runs must stay uncapped.
+
+## The deliverable: retrained on our EIC
+
+Same code, other corpus. `store_eic.py` writes the identical cache layout from `CANDI_STORE`, so
+`train.py` and `model.py` cannot tell which one they are looking at.
+
+- **`--contributor-mode loo`** for everything reported. `upstream` exists only to reproduce their
+  leak for the anchor.
+- **§6.2 is enforced in `store_eic.train_columns`, and it raises rather than filters.** The
+  training pool is `biosamples.train` and nothing else; a train biosample that is also an eval
+  target is an error, not a silent drop. At predict time the pair's own input cell is removed from
+  the mark's average — taken from the declared `eval_pairs`, never by splitting a biosample name
+  (`STORE.md` D16: an id is opaque). A regime declaring `[T_A, V_B]` is honoured as written.
+- **`T_X` and `V_X` share one cell embedding**, fitted from the T_ side alone. Without that a V_
+  target has no cell representation and there is nothing to impute from.
+- **No binning.** The store's grid is already `floor(chr_len / 25)` and `pval` returns decoded
+  `-log10 p` on it, so the only transform is `arcsinh` on the binned value. Upstream applies
+  `arcsinh` per *base* and then averages into the bin; we cannot, and this is the difference.
+- **The grid is one bin shorter** than the anchor's on every chromosome — the store floors where
+  upstream ceils.
+- σ comes from `fit_sigma.py` (§6.1), fitted on the V panel and reused unchanged on B. Under the
+  2026-08-26 ruling in plan §6.4 the resulting Gaussian CRPS is quoted with `pit_ks` and
+  `coverage_95`, with **no** oracle split, and no pval-CRPS gap is significant until that arm's
+  noise floor is measured.
 
 ## Reading an anchor number
 
@@ -389,6 +440,19 @@ python -m lavawizard.anchor --checkpoint runs/anchor/guacamole_chr21.pt --cache 
     --chrom chr21 --their-tracks submitted_tracks/Guacamole \
     --blind-truth $D/blind_truth --meta repo/data/Encode_meta.tsv \
     --out runs/anchor/anchor_chr21.json
+
+# the deliverable: our EIC store, one array task per chromosome
+python -m lavawizard.store_eic cache   --regime configs/regime.eic_val.json --chrom chr21 \
+    --cache $C/eic_cache
+python -m lavawizard.train --cache $C/eic_cache --chrom chr21 --out runs/eic \
+    --contributor-mode loo
+python -m lavawizard.store_eic predict --regime configs/regime.eic_val.json --chrom chr21 \
+    --cache $C/eic_cache --checkpoint runs/eic/guacamole_chr21.pt \
+    --pred-root runs/eic/pred --clip --manifest
+python competitors/lavawizard/fit_sigma.py --regime configs/regime.eic_val.json \
+    --pred runs/eic/pred --out runs/eic/sigma.json
+python -m candi.bench.external --store configs/regime.eic_val.json --pred runs/eic/pred \
+    --sigma-table runs/eic/sigma.json --out runs/eic/P1.json          # P2: add --chroms
 
 # input parity against their own preprocessing, on the landed challenge data
 MAMBA_ROOT_PREFIX=$PWD/mamba ./bin/micromamba run -n lw_period \
