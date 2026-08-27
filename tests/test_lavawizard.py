@@ -1159,3 +1159,33 @@ def test_only_the_our_store_module_may_import_candi():
         src = (d / name).read_text()
         assert "import candi" not in src and "from candi" not in src, name
     assert "from candi.store.reader import CorpusStore" in (d / "store_eic.py").read_text()
+
+
+def test_loo_sampler_skips_a_mark_with_no_leave_one_out_pool(tmp_path, monkeypatch):
+    """Our EIC carries five single-track marks; Dataset 3 carries none. §5 says skip and list."""
+    from lavawizard.train import Sampler
+
+    _store_cache(tmp_path, monkeypatch)
+    cache = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    # make H3K27ac a single-contributor mark by hand, the way our store presents one
+    j = cache.marks.index("H3K27ac")
+    cache.mark_count[j] = 1
+
+    s = Sampler(cache, 32, "loo", seed=0)
+    assert s.skipped_marks == ["H3K27ac"]
+    drawn = {cache.tracks[i][1] for i in np.unique(s._batch()[0])}
+    assert drawn == {"H3K4me3"}, "a skipped mark must never reach a batch"
+
+    keeps_everything = Sampler(cache, 32, "upstream", seed=0)
+    assert keeps_everything.skipped_marks == [], "upstream keeps the target in its own average"
+    assert keeps_everything.eligible.size == cache.n_tracks
+
+
+def test_a_cache_of_only_thin_marks_refuses_rather_than_looping(tmp_path, monkeypatch):
+    from lavawizard.train import Sampler
+
+    _store_cache(tmp_path, monkeypatch)
+    cache = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    cache.mark_count[:] = 1
+    with pytest.raises(ValueError, match="nothing to train on"):
+        Sampler(cache, 32, "loo", seed=0)

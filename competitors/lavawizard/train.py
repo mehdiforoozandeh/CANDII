@@ -64,12 +64,25 @@ class Sampler:
         self.rng = np.random.default_rng(seed)
         self.cursor = 0
         self.steps_per_epoch = int(np.ceil(cache.n_bins / self.batch_size))
+        # A mark carried by a single track has no leave-one-out average: removing the target
+        # empties the pool. §5's answer is to skip and list, and skipping is right rather than
+        # zeroing, because the head is `Dense(1)(x) + average` — a zero average is not a neutral
+        # input, it teaches the trunk to emit the whole signal as a correction on those bins only.
+        # Dataset 3 never hits this; our EIC has five such marks out of 35, none of them on a
+        # declared eval track. `upstream` mode keeps every track, because there the target is in
+        # its own average and the pool is never empty.
+        thin = (cache.mark_count < 2) if mode == "loo" else np.zeros(len(cache.marks), bool)
+        keep = ~thin[cache.mark_ix]
+        self.eligible = np.flatnonzero(keep).astype(np.int64)
+        self.skipped_marks = [m for j, m in enumerate(cache.marks) if thin[j]]
+        if self.eligible.size == 0:
+            raise ValueError("every track is on a single-contributor mark; nothing to train on")
 
     def _batch(self) -> Tuple[np.ndarray, ...]:
         bs, n = self.batch_size, self.c.n_bins
         pos = (np.arange(self.cursor, self.cursor + bs) % n).astype(np.int64)
         self.cursor = (self.cursor + bs) % n
-        tix = self.rng.integers(0, self.c.n_tracks, bs).astype(np.int64)
+        tix = self.eligible[self.rng.integers(0, self.eligible.size, bs)].astype(np.int64)
         x = self.c.values[tix, pos].astype(np.float32)
         avg, var = self.c.moments(tix, pos, x, self.mode)
         return tix, pos, x, avg, var
@@ -185,6 +198,9 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
     common = dict(n_celltypes=len(cache.cells), n_assays=len(cache.marks),
                   n_positions=cache.n_bins, **factors)
     sampler = Sampler(cache, bs, contributor_mode, seed=seed)
+    if sampler.skipped_marks:
+        print(f"{chrom}: {len(sampler.skipped_marks)} mark(s) skipped for having no leave-one-out "
+              f"pool: {sampler.skipped_marks}", flush=True)
 
     pre = Precamole(**common).to(dev)
     n_par = sum(p.numel() for p in pre.parameters())
@@ -215,6 +231,8 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
         "batch_size": bs, "pretrain_epochs": pre_ep, "train_epochs": tr_ep,
         "epoch_scale": epoch_scale, "factors": factors, "tf32": bool(tf32),
         "n_tracks": cache.n_tracks, "n_bins": cache.n_bins,
+        "n_tracks_sampled": int(sampler.eligible.size),
+        "skipped_marks": sampler.skipped_marks,
         "parameters": n_par, "stage1": s1, "stage2": s2,
         "gpu_peak_allocated_gib": round(peak, 3), "gpu_peak_reserved_gib": round(reserved, 3),
         "device": torch.cuda.get_device_name(dev) if dev.type == "cuda" else "cpu",

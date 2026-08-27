@@ -396,6 +396,13 @@ Same code, other corpus. `store_eic.py` writes the identical cache layout from `
   `arcsinh` per *base* and then averages into the bin; we cannot, and this is the difference.
 - **The grid is one bin shorter** than the anchor's on every chromosome — the store floors where
   upstream ceils.
+- **Five marks have a single training track**, so removing the target empties their pool. §5's
+  answer is to skip and list, and the sampler does: `H4K12ac`, `H2AK9ac`, `H3T11ph`, `H3K9me2`,
+  `H3F3A` on chr21, listed in every `train_<chrom>.json` and flagged in the manifest with the three
+  two-track marks. **None of the 45 declared eval tracks is on one**, so no reported number depends
+  on this. Skipping beats zeroing here: the head is `Dense(1)(x) + average`, so a zero average is
+  not a neutral input — it would teach the trunk to emit the whole signal as a correction on those
+  bins alone. Dataset 3 never hits the case, which is why the anchor never surfaced it.
 - σ comes from `fit_sigma.py` (§6.1), fitted on the V panel and reused unchanged on B. Under the
   2026-08-26 ruling in plan §6.4 the resulting Gaussian CRPS is quoted with `pit_ks` and
   `coverage_95`, with **no** oracle split, and no pval-CRPS gap is significant until that arm's

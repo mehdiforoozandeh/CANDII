@@ -305,10 +305,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     predict_chrom(ns.regime, ns.chrom, ns.cache, ns.checkpoint, ns.pred_root,
                   clip=ns.clip, device=ns.device)
     if ns.manifest:
+        cache = preprocess.CachedChrom(ns.cache, ns.chrom, mmap=True)
+        sparse = [m for j, m in enumerate(cache.marks) if int(cache.mark_count[j]) <= 2]
         emit.write_manifest(
             ns.pred_root, version="0.1.0", generated_by="lavawizard.store_eic",
             contributor_mode="loo", weights=f"ported-retrain:{Path(ns.checkpoint).name}",
-            clip=bool(ns.clip),
+            clip=bool(ns.clip), sparse_assays=sparse,
             notes=("Retrained on our EIC store, training-split biosamples only (§6.2). "
                    "Point-only pval arm: sigma comes from the §6.1 table, not from this root."))
     return 0
