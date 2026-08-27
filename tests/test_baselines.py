@@ -132,31 +132,37 @@ def test_one_contributor_takes_the_poisson_floor_and_offers_no_sigma():
         "a single contributor measures no cross-cell spread; a zero sigma would claim certainty"
 
 
-def test_the_preregistered_poisson_floor_is_unscoreable_by_candi_bench():
-    """t49's finding, pinned here rather than left in prose. NOT a property anyone wants.
+def test_the_preregistered_poisson_floor_is_scoreable_by_candi_bench():
+    """t49's finding, closed by t56 — pinned here so a regression reopens it loudly.
 
-    §5.1 pre-registers `n = 1e6` for the Poisson floor. `candi.metrics.nb_crps` evaluates the Gini
-    mean difference as `hyp2f1(0.5, 1 - n, 2, w)` and that term returns NaN above roughly `n = 2e4`
-    at every µ. One floored bin therefore NaNs the whole track's `crps`, `macro_mean` drops the key,
-    and the count arm silently loses `crps`, `crps_oracle_scaled`, `scale_error` and
-    `beats_marginal`. Near-zero bins — where the floor binds most — are most of a punctate track, so
-    this is not a corner case.
+    §5.1 pre-registers `n = 1e6` for the Poisson floor. `candi.metrics.nb_crps` used to evaluate
+    the Gini mean difference as `hyp2f1(0.5, 1 - n, 2, w)`, which returns NaN above roughly
+    `n = 1e4` at every µ — one floored bin NaN'd the whole track's `crps`, `macro_mean` dropped the
+    key, and the count arm silently lost its distributional tier. Since t56 (PR #26), `nb_crps`
+    scores `n > N_GINI_HYP2F1_MAX` in the sd-standardized Poisson limit, so the floor is a number
+    rather than an absence.
 
-    CANDI's own decoder exponentiates a bounded head and never reaches that region, which is why
-    nothing had exercised it. The fix belongs in `candi.metrics`, is a core change, and is not this
-    task's. When it lands, this test is what says so.
+    Finiteness alone would be satisfiable by garbage, so the value is refereed: at `n = 1e6` the NB
+    is Poisson(µ) to a part in ~2e4, and the Poisson CRPS is a finite pmf sum that touches no
+    `candi.metrics` code.
     """
+    from scipy.stats import poisson
+
     from candi.bench.distributional import p_from_mu
     from candi.metrics import nb_crps
 
     mu = np.array([50.0])
     y = np.array([50.0])
     ok = nb_crps(np.array([1e4]), p_from_mu(np.array([1e4]), mu), y)[0]
-    bad = nb_crps(np.array([Hd.POISSON_N]), p_from_mu(np.array([Hd.POISSON_N]), mu), y)[0]
-    assert np.isfinite(ok), "the ceiling moved DOWN — re-measure before generating anything"
-    assert not np.isfinite(bad), (
-        "nb_crps now evaluates the pre-registered Poisson floor. Delete this test, drop the "
-        "`--poisson-n` workaround from the Fir runs, and re-score the count arm at n = 1e6.")
+    floor = nb_crps(np.array([Hd.POISSON_N]), p_from_mu(np.array([Hd.POISSON_N]), mu), y)[0]
+    assert np.isfinite(ok), "the exact hyp2f1 branch broke below the switch — a deeper defect"
+    assert np.isfinite(floor), (
+        "the pre-registered Poisson floor is unscoreable again — the t56 large-dispersion branch "
+        "of nb_crps regressed. Fix it in candi.metrics; do not re-cap `--poisson-n` on the runs.")
+    x = np.arange(int(50.0 + 12.0 * math.sqrt(50.0) + 60.0) + 1)
+    poisson_ref = float(((poisson.cdf(x, 50.0) - (x >= 50.0)) ** 2).sum())
+    assert floor == pytest.approx(poisson_ref, rel=1e-3), \
+        "finite but wrong at the floor — the Poisson-limit branch no longer scores the NB's limit"
 
 
 def test_the_nb_is_never_under_dispersed():
@@ -186,22 +192,24 @@ def test_n_never_exceeds_the_poisson_floor_from_either_branch():
         assert n[0] == floor and n[1] == floor
 
 
-def test_the_nb_crps_ceiling_is_in_n_alone():
-    """Where `candi.metrics.nb_crps` stops working, measured — it is what sizes the Poisson floor.
+def test_the_nb_crps_ceiling_is_gone_at_every_mu():
+    """The ceiling that used to size the Poisson floor, re-measured after t56: there is none.
 
-    Finite up to `n = 1e4` and NaN from `n = 3e4`, at every `mu` from 0.01 to 1e5. Independent of
-    `mu`, which is why capping `n` is a COMPLETE fix for the generator, and why §5.1's 1e6 is not
-    reachable by any choice this package can make on its own.
+    Pre-t56, `nb_crps` was finite up to `n = 1e4` and NaN from `n = 3e4` at every `mu` — which is
+    why the generator capped `n` and why §5.1's 1e6 was unreachable. The t56 branch scores
+    `n > N_GINI_HYP2F1_MAX` in the sd-standardized Poisson limit, so every `n` the generator can
+    emit — both sides of the switch and the pre-registered floor itself — must now be finite at
+    every `mu`. A NaN anywhere on this grid silently re-drops the count arm's CRPS tier.
     """
     from candi.bench.distributional import p_from_mu
     from candi.metrics import nb_crps
 
     for mu in (0.01, 1.0, 100.0, 1e5):
         m, y = np.array([mu]), np.array([float(round(mu))])
-        assert np.isfinite(nb_crps(np.array([1e4]), p_from_mu(np.array([1e4]), m), y)[0]), \
-            f"the ceiling dropped below n=1e4 at mu={mu} — re-measure before generating anything"
-        assert not np.isfinite(nb_crps(np.array([3e4]), p_from_mu(np.array([3e4]), m), y)[0]), \
-            f"nb_crps now evaluates n=3e4 at mu={mu}; re-measure the ceiling and raise the floor"
+        for n in (1e4, 3e4, Hd.POISSON_N):
+            v = nb_crps(np.array([n]), p_from_mu(np.array([n]), m), y)[0]
+            assert np.isfinite(v), \
+                f"nb_crps is NaN again at n={n}, mu={mu} — the t56 large-dispersion branch regressed"
 
 
 def test_L3_arithmetic_is_depth_free():
@@ -310,11 +318,11 @@ def built(tmp_path_factory):
     return _build(tmp_path_factory.mktemp("basestore"))
 
 
-#: The Poisson floor these fixtures generate at. NOT the pre-registered 1e6 — `candi.metrics.nb_crps`
-#: cannot evaluate that (`test_the_preregistered_poisson_floor_is_unscoreable_by_candi_bench`), so a
-#: fixture at the spec value would exercise the whole suite with the count arm's CRPS tier missing
-#: and prove nothing about it. `test_the_preregistered_floor_costs_the_count_arm_its_crps_tier`
-#: covers the spec value itself.
+#: The Poisson floor these fixtures generate at. NOT the pre-registered 1e6 — no longer because
+#: `nb_crps` cannot evaluate it (t56 fixed that; `test_the_preregistered_poisson_floor_is_
+#: scoreable_by_candi_bench`), but because 1e4 keeps every fixture bin on the exact hyp2f1 branch,
+#: bit-identical to the vendored closed form, instead of the t56 Poisson-limit approximation.
+#: `test_the_preregistered_floor_keeps_the_count_arm_its_crps_tier` covers the spec value itself.
 SCOREABLE_POISSON_N = 1e4
 
 
@@ -536,10 +544,11 @@ def test_every_root_scores_through_the_external_entry(built, roots):
         source.close()
 
 
-def test_the_preregistered_floor_costs_the_count_arm_its_crps_tier(built, tmp_path):
-    """The unit-level finding above, seen end to end: generate at §5.1's `n = 1e6` and the count
-    arm's whole distributional tier goes ABSENT from the macro roll-up. This is what the Fir P1 run
-    would report at the pre-registered value, and it is why those runs pass `--poisson-n`."""
+def test_the_preregistered_floor_keeps_the_count_arm_its_crps_tier(built, tmp_path):
+    """The unit-level fix above, seen end to end: generate at §5.1's `n = 1e6` and the count arm's
+    whole distributional tier stays in the macro roll-up. Pre-t56 this exact run came back with the
+    tier ABSENT — the reason the Fir P1 runs passed `--poisson-n`. Once those runs are re-scored at
+    the spec value, that workaround can be dropped."""
     _, regime = built
     root = generate(regime, tmp_path / "spec", methods=["avg"], progress=False)["avg"]
     source = open_source(store=regime)
@@ -550,7 +559,13 @@ def test_the_preregistered_floor_costs_the_count_arm_its_crps_tier(built, tmp_pa
     macro = res["macro"]["count"]
     assert "mse" in macro and "nb_nll" in macro, "the point and loss tiers must be unaffected"
     for k in ("crps", "crps_oracle_scaled", "scale_error"):
-        assert k not in macro, f"{k} survived — re-measure the nb_crps ceiling"
+        assert k in macro and np.isfinite(macro[k]), \
+            f"{k} went absent or NaN at the pre-registered floor — the t56 fix regressed end to end"
+    # t56's other half: `beats_marginal` is None only when a side of the comparison is non-finite,
+    # so at a now-scoreable floor every track must report the boolean, not the absence.
+    for name, t in res["per_track"].items():
+        assert t["count"].get("beats_marginal") is not None, \
+            f"{name}: beats_marginal went absent — a non-finite CRPS reached nb_suite at the floor"
 
 
 def test_the_average_beats_the_marginal_on_pval_mse(built, roots):

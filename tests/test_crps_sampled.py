@@ -3,8 +3,8 @@
 Pure numerics; no store, no model, no h5. Three things are being pinned.
 
 **It estimates the same number.** `nb_crps` is the definition, so every unbiasedness test here is
-against `nb_crps` itself wherever the closed form is computable, and against an independent Poisson
-CRPS where it is not.
+against `nb_crps` itself wherever the closed form is exact, and against an independent Poisson
+CRPS in the large-n regime where `nb_crps` is itself a Poisson-limit approximation (t56).
 
 **It is UNBIASED, not merely close.** The obvious estimator divides the pairwise sum by `k^2` and is
 low by `E|X-X'| / 2k` for every k — an error that survives averaging over 124 M bins, which is the
@@ -42,8 +42,8 @@ def _poisson_crps(mu: float, y: float) -> float:
     """CRPS of Poisson(mu) against integer y = sum_x (F(x) - 1{x >= y})^2.
 
     An INDEPENDENT reference, not a limit of `nb_crps`: it is a finite pmf sum and it does not
-    overflow at the means used here, which is what lets it referee the n -> inf regime where the
-    closed form's 2F1 returns NaN.
+    overflow at the means used here, which is what lets it referee the n -> inf regime — where the
+    closed form is itself a Poisson-limit approximation since t56, not an exact answer.
     """
     hi = max(int(mu + 12.0 * np.sqrt(mu) + 60.0), int(y) + 10)
     x = np.arange(hi + 1)
@@ -111,22 +111,27 @@ def test_sampling_error_falls_as_one_over_sqrt_k() -> None:
 # 2 — the Poisson floor, where the closed form is NaN and this is the only instrument
 # ---------------------------------------------------------------------------
 
-def test_at_n_1e6_the_closed_form_is_nan_and_the_sampler_is_the_poisson_crps() -> None:
-    """`t49`'s pre-registered floor (RIVALS_PLAN.md §5.1) and the reason this task exists.
+def test_at_n_1e6_the_closed_form_and_the_sampler_both_land_on_the_poisson_crps() -> None:
+    """`t49`'s pre-registered floor (RIVALS_PLAN.md §5.1), after the t56 fix.
 
-    `nb_crps`'s Gini term is `2F1(1/2, 1-n; 2; .)`, which stops returning a number long before
-    n = 1e6, so the whole count-arm CRPS tier went absent on the `spec` run. NB(n, n/(n+mu)) tends
-    to Poisson(mu) as n grows, so `_poisson_crps` is the right answer there and the sampler must
-    hit it.
+    `nb_crps`'s hyp2f1 Gini term stops returning numbers long before n = 1e6, so the closed form
+    used to be NaN here and this sampler was the only instrument — the reason this task existed.
+    Since t56, `nb_crps` scores n > N_GINI_HYP2F1_MAX in the sd-standardized Poisson limit, so at
+    the floor there are now three instruments and they must agree: NB(n, n/(n+mu)) tends to
+    Poisson(mu), `_poisson_crps` computes that limit with no `candi.metrics` code in the loop, and
+    both the closed form and the sampler must land on it.
     """
     for mu in (0.5, 2.0, 10.0, 100.0):
         for y in (0.0, 3.0, float(round(mu))):
             n = 1e6
             p = n / (n + mu)
-            assert not np.isfinite(nb_crps(n, p, y)), (mu, y)      # the defect, pinned
+            ref = _poisson_crps(mu, y)
+            closed = float(nb_crps(n, p, y))
+            assert np.isfinite(closed), (mu, y)                    # the t56 fix, pinned
+            assert closed == pytest.approx(ref, rel=1e-3, abs=1e-6), (mu, y, closed, ref)
             got, se = _mean_and_se(n, mu, y, k=500, seeds=range(64))
             assert np.isfinite(got)
-            assert abs(got - _poisson_crps(mu, y)) <= 4.0 * se + 1e-6, (mu, y, got, se)
+            assert abs(got - ref) <= 4.0 * se + 1e-6, (mu, y, got, se)
 
 
 def test_a_whole_vector_at_the_poisson_floor_is_finite() -> None:
