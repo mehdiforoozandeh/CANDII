@@ -38,6 +38,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score
 - `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method
 - `t70` [implementation] explain the peaks fallback on the Peaks tab: coverage ranking vs native peak head, with a per-method badge
+- `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown
 
 ## Blocked
 
@@ -85,6 +86,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score — *open*
 - `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method — *open*
 - `t70` [implementation] explain the peaks fallback on the Peaks tab: coverage ranking vs native peak head, with a per-method badge — *open*
+- `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown — *open*
 
 ## Done · Dropped
 
