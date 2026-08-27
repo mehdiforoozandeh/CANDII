@@ -1,0 +1,41 @@
+{
+ "macro": {
+  "count": {
+   "crps": 0.45,
+   "crps_oracle_scaled": 0.38,
+   "n_tracks": 4,
+   "nb_nll": 1.3,
+   "scale_error": 0.07
+  },
+  "pval": {
+   "auprc": 0.7,
+   "coverage_95": 0.93,
+   "crps": 0.31,
+   "gaussian_nll": 0.6,
+   "gwcorr": 0.8,
+   "gwspear": 0.8,
+   "mse": 2.0,
+   "mse1obs": 2.0,
+   "n_tracks": 4,
+   "peak_base_rate": 0.05,
+   "pit_ks": 0.12
+  }
+ },
+ "provenance": {
+  "allow_missing": false,
+  "method": "fixture-b",
+  "pred_inversion": "external",
+  "pval_pred_space": "-log10p",
+  "regime": "/fake/configs/regime.eic_val.json",
+  "seed": 0,
+  "sigma_table": {
+   "fitted_on": "regime.eic_val eval_pairs",
+   "method": "fixture-b",
+   "path": "/fake/sigma_b.json"
+  },
+  "signal_target_transform": "none",
+  "store": "/fake/CANDI_STORE/eic",
+  "store_manifest": "/fake/CANDI_STORE/eic/manifest.json",
+  "suite": "candi.bench.external"
+ }
+}
