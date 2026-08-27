@@ -51,7 +51,7 @@ TODO_HASH = "TODO-"
 #: provenance keys `add` copies into the row's flags-of-record block when the score json has them.
 FLAG_KEYS = ("crps_estimator", "crps_k", "crps_seed", "allow_missing", "msevar",
              "signal_target_transform", "pval_pred_space", "pred_inversion", "seed",
-             "placement_method", "aggregation", "n_experiments")
+             "placement_method", "aggregation", "n_experiments", "contributor_mode")
 
 LINEAGES = ("candi", "rival", "baseline", "entrant")
 POSITION_CLASSES = {"transductive": "position-transductive", "generalizing": "position-generalizing",
