@@ -251,6 +251,10 @@ Spike done; memo and evidence in `cruxvault/results/t53/SPIKE_MEMO.md`, Fir path
 Port: architecture, weight-loader, feature pipeline, Dataset-3 reader, §4.1 emitter and both parity
 harnesses are in. Model parity passes at 1e-5; input parity passes at 1e-4 on five marks.
 
+The §7.4 anchor is **run and it holds** — see "The anchor result" below. The deliverable stage
+(retrain on our EIC with `--contributor-mode loo`, P1/P2, the §6.1 sigma table,
+`candi.bench.external`) is what remains.
+
 **Their released weights are not obtainable.** `syn21519009` returns
 `403 You lack READ access` to a token that reads every other challenge entity — the project, the
 training and validation data, the submission template, and all of `submissions_round2`. The entity
@@ -271,7 +275,7 @@ compare against their submitted tracks — and both of its inputs are now in han
 
 ## The anchor retrain
 
-Running. `train.sbatch`, 23 array tasks, one per chromosome, MIG `1g.10gb`, `--contributor-mode
+Done. `train.sbatch`, 23 array tasks, one per chromosome, MIG `1g.10gb`, `--contributor-mode
 upstream`, seed 0. Preprocessing is done for all 23 (`cache/<chrom>/`, built once from the
 challenge bigwigs; chr21 took 15 min, 287 tracks).
 
@@ -297,6 +301,54 @@ per step for a 2048-wide MLP and was wrong by roughly 3x even after TF32. Wall-c
 the 23 tasks in parallel. Memory says the MIG slice is still the right ask (1.58 of 10 GiB), so no
 exception is needed under `AGENTS.md`:130 — the constraint here is compute, not memory, and a
 larger slice would only buy wall-clock.
+
+**Actual: 136.5 GPU-hours**, array `56784137`, all 23 tasks `COMPLETED`, longest 8 h 10 m. That is
+17 % over the 117 h projection because the big chromosomes carry both a wider factor table and a
+larger batch, so the per-step cost measured on chr21 is a floor, not a mean.
+
+## The anchor result
+
+23 chromosomes, 51 blind tracks each, **1173 track-chromosomes**. Array `56932672`, one CPU task
+per chromosome. Raw records in `cruxvault/results/t53/anchor/anchor_<chrom>.json`, roll-up in
+`anchor_report.json`.
+
+| | ours | theirs | ours / theirs |
+|---|---|---|---|
+| median per-track MSE ratio | | | **1.023** |
+| macro MSE (mean over tracks) | 5390.18 | 199.50 | 27.02 |
+| macro MSE, **dropping `C38M02`** | 204.44 | 201.77 | **1.013** |
+| macro Pearson vs truth | 0.4461 | 0.4701 | — |
+| tracks where we are worse | | | 65.2 % |
+
+Per-track ratio quantiles: p05 0.891, p25 0.984, **p50 1.023**, p75 1.083, p95 1.346. Sixteen of
+1173 tracks exceed ratio 2, and **eleven of those sixteen are the same track**, `C38M02`; fourteen
+of the sixteen are in cell `C38`.
+
+Scoring cost: the GPU partition was 53 k jobs deep, so the anchor ran on **CPU**, 8 cores and
+16 GB per chromosome, longest task 5 h 35 m. `MaxRSS` came in at 16.3 GB against a 16 GB ask —
+it fit, but ask for 24 GB next time rather than trusting the margin.
+
+**Verdict: APPROACHES** — the port, retrained on the challenge's own training data, lands within
+about 2 % of their submitted tracks on median per-track MSE and about 4 % behind on correlation
+(0.4461 vs 0.4701). Worst mark is `M02` at median 1.180 over 69 tracks, best is `M18` at 1.000.
+Read the median, not the ratio of means: the mean is a ratio of means and one track decides it.
+
+### Defect: unbounded output through the sinh inversion
+
+`C38M02` is not a bad model — it is **five bins**. On `chr17`, bins 900975–900979 carry a
+cross-cell average of 9.26 in `arcsinh` space (a pileup artifact: every contributing cell is loud
+there). The model adds a correction on top of the additive skip and emits 15.50, and
+`sinh(15.50) = 2.687e6`. Truth at that bin is 0.57 and their submission is 212.9. Those five bins
+carry 2.02e13 of squared error, which is the whole of `chr17`'s 6.08e6 MSE over 3.33 M bins.
+
+The cause is structural, not a porting bug: the head is `Dense(1)(x) + average`, nothing bounds it,
+and `sinh` turns a `+6.2` overshoot in `arcsinh` space into a 500x multiplicative one. Upstream has
+no clip either — grep their tree — so this is a property of the method that their own submission
+happened not to trigger as hard. It matters downstream because §6.1 fits `sigma` from squared
+error, and five bins of 1e13 would swallow the fit.
+
+Any guard on this is a **deviation from the port** and is recorded here when it is taken. As of the
+anchor it is **not** taken: every number above is the faithful port.
 
 ## Reading an anchor number
 
