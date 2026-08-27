@@ -643,9 +643,69 @@ def test_the_pval_crps_gap_is_marked_unquotable_until_its_floor_exists():
     assert board["noise_floors"]["macro_crps_target_clustered"] == 0.09
 
 
+def _fake_score(tmp: Path, name: str, *, estimator=None, k=None, seed=None) -> Path:
+    """One minimal count-arm score json, with or without t56's estimator stamp."""
+    count = {"assay": "H3K4me3", "kind": "impute", "crps": 0.44, "crps_oracle_scaled": 0.43,
+             "scale_error": 0.01, "auprc": 0.3, "peak_base_rate": 0.05,
+             "n_star_log2": -0.4, "crps_oracle_scaled_and_n": 0.42}
+    prov = {"method": name, "manifest": {}}
+    if estimator:
+        prov.update(crps_estimator=estimator, crps_k=k, crps_seed=seed)
+    obj = {"provenance": prov, "tracks": ["t"], "per_track": {"t": {"count": count}},
+           "macro": {"count": {**{x: v for x, v in count.items() if x not in ("assay", "kind")},
+                               "n_tracks": 1}},
+           "panel": {}, "ranking": None}
+    p = tmp / f"{name}.json"
+    p.write_text(json.dumps(obj), encoding="utf-8")
+    return p
+
+
+def test_a_sampled_crps_can_never_be_read_as_an_exact_one(tmp_path):
+    """PI 2026-08-26 — t56's estimator is GO for P2 at k=100, so a table may now MIX estimators.
+
+    P2's `avg-arcsinh` has no count arm and was scored before the switch, so a mixed table is a
+    legitimate state — but which method used which must be visible on the row, not inferable from
+    whether an optional key happens to be present.
+    """
+    files = {"sampled": _fake_score(tmp_path, "sampled", estimator="fair_sampled", k=100, seed=0),
+             "exact": _fake_score(tmp_path, "exact")}
+    b = LB.assemble(files, protocol="P2")
+    s = b["methods"]["sampled"]
+    assert s["macro"]["count"]["crps_estimator"] == "fair_sampled"
+    assert s["macro"]["count"]["crps_k"] == 100 and s["macro"]["count"]["crps_seed"] == 0
+    assert s["provenance"]["crps_estimator"] == "fair_sampled"
+    e = b["methods"]["exact"]
+    assert e["provenance"]["crps_estimator"] == "closed_form"
+    assert "crps_estimator" not in e["macro"]["count"], "an exact row must not claim an estimator"
+    assert b["reporting"]["crps_estimator"] == {"sampled": "fair_sampled", "exact": "closed_form"}
+
+
+def test_the_two_n_grid_keys_are_flagged_unreliable_on_a_closed_form_row(tmp_path):
+    """t56 finding: `oracle_scale` searches `n * 2**k` for k in -4..4, so a track whose fitted n is
+    near the Poisson floor is evaluated up to 16x higher — where the closed-form `nb_crps` is NaN.
+    `n_star_log2` and `crps_oracle_scaled_and_n` are read off that grid and must not be quoted from
+    a closed-form score file. The sampled estimator stays finite there, so its rows are not flagged.
+    """
+    files = {"exact": _fake_score(tmp_path, "exact"),
+             "sampled": _fake_score(tmp_path, "sampled", estimator="fair_sampled", k=100, seed=0)}
+    b = LB.assemble(files, protocol="P2")
+    ex = b["methods"]["exact"]["macro"]["count"]
+    for key in ("n_star_log2", "crps_oracle_scaled_and_n"):
+        assert f"{key}_unreliable" in ex, f"{key} not flagged on a closed-form row"
+        assert "NaN" in ex[f"{key}_unreliable"]
+    sm = b["methods"]["sampled"]["macro"]["count"]
+    assert not any(k.endswith("_unreliable") for k in sm), \
+        "the sampled estimator stays finite on the n-grid; its rows must not be flagged"
+
+
 def test_the_reporting_ruling_travels_in_the_header_not_on_an_anchor():
     """A reporting-scoped ruling governs table semantics, so it rides on `reporting` — and must not
     be attached to a §5.5 anchor, where it would read as a verdict on a result."""
+    for key in ("crps_companions_are_per_arm", "sampled_crps_for_p2"):
+        assert LB.PI_RULINGS[key]["scope"] == "reporting"
+        assert LB.PI_RULINGS[key]["date"] == "2026-08-26"
+    assert "k=100" in LB.PI_RULINGS["sampled_crps_for_p2"]["ruling"]
+    assert "0.000087" in LB.PI_RULINGS["sampled_crps_for_p2"]["ruling"]
     rulings = LB.PI_RULINGS["crps_companions_are_per_arm"]
     assert rulings["scope"] == "reporting" and rulings["date"] == "2026-08-26"
     assert "count-arm (NB) only" in rulings["ruling"]

@@ -32,6 +32,14 @@
 # `ReqNodeNotAvail, Reserved for maintenance` whenever a maintenance reservation falls inside the
 # window, so size the walltime to land BEFORE the next one rather than asking for the bin maximum.
 #
+# CRPS_APPROX=100 CRPS_SEED=0 SWITCHES THE COUNT ARM TO t56's FAIR-SAMPLED ESTIMATOR, which the PI
+# approved for P2 on 2026-08-26. That is what makes P2 affordable: ~54 h/method at k=100 against
+# ~117 h exact, and it stays finite at Poisson floors where the closed form is NaN. It needs a
+# checkout carrying the t56 code — `bench.external` rejects the flag otherwise, which is the right
+# failure, because a silent fall-back to the closed form would produce a 117 h job labelled as a
+# 54 h one. Every score json it writes carries provenance.crps_estimator/crps_k/crps_seed, and a
+# count-arm CRPS from such a json is an ESTIMATE and is quoted as one.
+#
 # The leaderboard is NOT assembled here: it needs every method's score file, so run
 # `python -m competitors.baselines.leaderboard --protocol P1|P2 --scores ...` once the array is
 # done. That step is json folding and takes seconds.
@@ -54,6 +62,11 @@ REGIME="${REGIME:-configs/regime.eic_val.json}"
 PRED="${PRED:-/project/def-maxwl/$USER/t49_baselines/p2/preds}"
 SCORES="${SCORES:-/project/def-maxwl/$USER/t49_baselines/p2/scores}"
 VARPOOL="${VARPOOL:-}"
+# t56's fair-sampled NB-CRPS estimator (PI-approved for P2 at k=100, 2026-08-26). Empty = the
+# closed form. Only reachable when the checkout carries the t56 code; on a checkout without it
+# `bench.external` rejects the flag, which is the failure we want rather than a silent exact run.
+CRPS_APPROX="${CRPS_APPROX:-}"
+CRPS_SEED="${CRPS_SEED:-0}"
 CHROMS="${CHROMS:-chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22,chrX}"
 
 METHOD_LIST=(avg avg-arcsinh knn1 knn5 marginal)
@@ -73,7 +86,8 @@ echo "[t49-score] host=$(hostname) commit=$(git rev-parse --short HEAD) method=$
 mkdir -p "$SCORES"
 python -m candi.bench.external \
     --store "$REGIME" --pred "$PRED/$METHOD" --out "$SCORES/$METHOD.json" \
-    --chroms "$CHROMS" ${VARPOOL:+--varpool "$VARPOOL"}
+    --chroms "$CHROMS" ${VARPOOL:+--varpool "$VARPOOL"} \
+    ${CRPS_APPROX:+--crps-approx "$CRPS_APPROX" --crps-seed "$CRPS_SEED"}
 rc=$?
 echo "[t49-score] method=$METHOD exit=$rc"
 exit $rc

@@ -127,6 +127,10 @@ def assemble(scores: Mapping[str, Path | str], *, protocol: str,
     for name, path in scores.items():
         obj = json.loads(Path(path).read_text(encoding="utf-8"))
         prov = obj["provenance"]
+        # ABSENT means the closed form was used. Its PRESENCE is the only thing that says a
+        # count-arm `crps` in this file is an estimate, so it is read once here and carried onto
+        # both the macro row and the method's provenance.
+        estimator = prov.get("crps_estimator")
         by_assay: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
         n_tracks: Dict[str, Dict[str, int]] = {}
         peak_ranking: Dict[str, str] = {}
@@ -174,6 +178,19 @@ def assemble(scores: Mapping[str, Path | str], *, protocol: str,
                     out[f"{k}_gap_not_quotable"] = (
                         f"no {arm}-arm noise floor measured for `{k}` yet (PI 2026-08-26): quote "
                         f"the value, never a between-method gap on it, until the floor lands.")
+            # The count arm's CRPS is either exact or an estimate, and the row must say which.
+            if arm == "count":
+                if estimator:
+                    out["crps_estimator"] = estimator
+                    out["crps_k"] = prov.get("crps_k")
+                    out["crps_seed"] = prov.get("crps_seed")
+                else:
+                    for k in _UNRELIABLE_AT_CLOSED_FORM:
+                        if k in out:
+                            out[f"{k}_unreliable"] = (
+                                f"`{k}` is read off oracle_scale's n-grid, which runs up to 16x the "
+                                f"fitted n and lands where the closed-form nb_crps is NaN. Do not "
+                                f"quote it from a closed-form score file (t56 finding).")
             macro[arm] = out
 
         methods[name] = {
@@ -189,6 +206,9 @@ def assemble(scores: Mapping[str, Path | str], *, protocol: str,
                 "n_scored_tracks": len(obj["tracks"]),
                 "pred_inversion": prov.get("pred_inversion"),
                 "point_only_tracks": prov.get("point_only_tracks", []),
+                "crps_estimator": estimator or "closed_form",
+                "crps_k": prov.get("crps_k"),
+                "crps_seed": prov.get("crps_seed"),
                 "sparse_assays": prov.get("manifest", {}).get("sparse_assays", []),
                 "msevar": prov.get("msevar"),
             },
@@ -216,6 +236,12 @@ def assemble(scores: Mapping[str, Path | str], *, protocol: str,
                     "crps with pit_ks and coverage_95.",
             "pi_rulings": {k: dict(v) for k, v in PI_RULINGS.items()
                            if v.get("scope") == "reporting"},
+            # One line a reader cannot miss when a table mixes the two. `assemble` never refuses a
+            # mix — P2's `avg-arcsinh` has no count arm and was scored before the switch, so a mixed
+            # table is a legitimate state — but it must be visible rather than inferable.
+            "crps_estimator": {
+                m: blk["provenance"]["crps_estimator"] for m, blk in methods.items()
+            },
         },
         "methods": methods,
         "sanity": check_anchors(methods),
@@ -260,7 +286,31 @@ PI_RULINGS: Dict[str, Dict[str, str]] = {
                        "coverage_95) and _GAP_NOT_QUOTABLE (pval crps), which stamps "
                        "`crps_gap_not_quotable` onto the pval macro block.",
     },
+    "sampled_crps_for_p2": {
+        "scope": "reporting",
+        "date": "2026-08-26",
+        "ruling": "GO for the t56 fair-sampled NB-CRPS estimator on P2 at k=100, all four "
+                  "count-arm methods. The rank-flip criterion is read on the MACRO ordering, which "
+                  "never flips at any k or seed — recorded as the PI's reading. The strict "
+                  "per-track reading failed only on a 0.000087 gap, 1000x below the noise floor.",
+        "rules_changed": "none. P1 stays on the closed form; this is a P2 estimator choice, not a "
+                         "change to what a CRPS means.",
+        "enforced_by": "`--crps-approx 100 --crps-seed 0` on candi.bench.external. Every score "
+                       "json it writes stamps provenance.crps_estimator/crps_k/crps_seed, and "
+                       "`assemble` copies those onto the method block and onto "
+                       "`reporting.crps_estimator` so a sampled CRPS can never be read as an exact "
+                       "one — a leaderboard mixing the two says so per method.",
+    },
 }
+
+#: Keys that are UNRELIABLE in any score json produced at the `n1e4` Poisson floor with the CLOSED
+#: FORM, and must not be quoted from one. `oracle_scale` searches an n-grid (`n * 2**k` for k in
+#: -4..4), so a track whose fitted `n` sits near the floor is evaluated at `n` up to 16x higher —
+#: straight into the region where `candi.metrics.nb_crps` returns NaN. `crps` and
+#: `crps_oracle_scaled` survive because their own arguments stay below the ceiling; the two keys
+#: below are read off the n-grid itself and do not. Found by t56; the nb_crps-fix task owns the
+#: repair. Stamped onto the count macro block so the caveat travels with the artifact.
+_UNRELIABLE_AT_CLOSED_FORM: Tuple[str, ...] = ("n_star_log2", "crps_oracle_scaled_and_n")
 
 
 def check_anchors(methods: Mapping[str, Any]) -> Dict[str, Any]:
