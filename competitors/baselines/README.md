@@ -102,6 +102,32 @@ Enforced by `leaderboard.py::_COMPANIONS` and `_GAP_NOT_QUOTABLE`; recorded in `
 `scope: "reporting"` so it is re-attached to the header on every rebuild. No re-scoring was needed —
 the clarification changes what a table may say, not what `candi.bench` computed.
 
+## P2's count-arm CRPS is sampled, not exact (PI ruling, 2026-08-26)
+
+The exact NB CRPS costs ~117 h per method genome-wide. t56 built a fair-sampled estimator, reached
+through `--crps-approx K --crps-seed S` on `python -m candi.bench.external`. The PI ruled it **GO
+for P2 at k = 100 on all four count-arm methods** (`avg`, `knn1`, `knn5`, `marginal`; `avg-arcsinh`
+is pval-only and has no count arm to sample).
+
+The criterion was whether sampling ever reorders the methods. On the **macro** ordering it never
+flips, at any k or seed tried — that is the PI's reading, recorded as such. The stricter per-track
+reading flipped once, on a gap of **0.000087**, roughly 1000x below the noise floor and therefore
+unreadable in either direction. Measured agreement on the chr21 validation panel: macro
+**|Δ| = 6.3e-5**.
+
+A sampled number must never be readable as an exact one, so:
+
+- `bench.external` stamps `provenance.crps_estimator = "fair_sampled"`, `crps_k` and `crps_seed`;
+- `assemble()` reads that stamp and copies all three onto the **count macro row** and into
+  `reporting.crps_estimator`, per method. A run with no stamp reports `closed_form`;
+- `test_a_sampled_crps_can_never_be_read_as_an_exact_one` pins it.
+
+Separately, and true of **every** score json written at the `n1e4` floor: `n_star_log2` and
+`crps_oracle_scaled_and_n` are unreliable, because the exact CRPS goes NaN inside `oracle_scale`'s
+n-grid. `_UNRELIABLE_AT_CLOSED_FORM` stamps both `_unreliable` on any closed-form row, so neither
+can be quoted off a P1 table by accident. That is the nb_crps ceiling above, met from the other
+side; the fix is another session's task.
+
 ## The §5.5 sanity anchors, as ruled on the P1 panel
 
 Measured on `regime.eic_val`, chr21, 45 declared tracks, Poisson floor `1e4`.
