@@ -1,0 +1,426 @@
+{
+ "badges": {
+  "cell_types": "zero-shot cell types",
+  "position": "position-generalizing"
+ },
+ "board": "dev",
+ "date": "2026-08-25",
+ "lineage": "baseline",
+ "method": "knn5",
+ "metrics": {
+  "count": {
+   "crps": 0.4552135703591472,
+   "crps_oracle_scaled": 0.44500915508068484,
+   "nb_nll": 0.9893745699894393,
+   "scale_error": 0.010204415278462355
+  },
+  "pval": {
+   "auprc": 0.30382653418372846,
+   "coverage_95": 0.8523166625544113,
+   "crps": 0.3240142361055762,
+   "gaussian_nll": 157.67400533894826,
+   "gwcorr": 0.5204371688453984,
+   "gwspear": 0.31479353933362714,
+   "mse": 9.22000922643476,
+   "mse1obs": 738.6665553119448,
+   "peak_base_rate": 0.01375317703671551,
+   "pit_ks": 0.3434343386965591
+  }
+ },
+ "missing_metrics": [],
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/t49_baselines/p1v2/n1e4",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "DNase-seq": {
+     "biosamples": [
+      "T_BE2C",
+      "T_BMEC",
+      "T_Caco-2",
+      "T_G401",
+      "T_GM06990",
+      "T_H1-hESC",
+      "T_H9",
+      "T_HAP-1",
+      "T_HL-60",
+      "T_IMR-90",
+      "T_K562",
+      "T_MG63",
+      "T_NCI-H460",
+      "T_SJCRH30",
+      "T_SJSA1",
+      "T_SK-MEL-5",
+      "T_T47D",
+      "T_WERI-Rb-1",
+      "T_adrenal_gland",
+      "T_cardiac_fibroblast",
+      "T_dermis_microvascular_lymphatic_vessel_endothelial_cell",
+      "T_heart_left_ventricle",
+      "T_hematopoietic_multipotent_progenitor_cell",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell",
+      "T_occipital_lobe",
+      "T_omental_fat_pad",
+      "T_skin_fibroblast",
+      "T_skin_of_body",
+      "T_testis",
+      "T_trophoblast_cell",
+      "T_upper_lobe_of_left_lung",
+      "T_urinary_bladder",
+      "T_uterus"
+     ],
+     "n_biosamples": 34,
+     "space": "pval"
+    },
+    "H2AFZ": {
+     "biosamples": [
+      "T_DND-41",
+      "T_H1-hESC",
+      "T_H9",
+      "T_K562",
+      "T_KMS-11",
+      "T_NCI-H929",
+      "T_OCI-LY7",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 8,
+     "space": "pval"
+    },
+    "H2AK5ac": {
+     "biosamples": [
+      "T_IMR-90",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 4,
+     "space": "pval"
+    },
+    "H2BK12ac": {
+     "biosamples": [
+      "T_H1-hESC",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 4,
+     "space": "pval"
+    },
+    "H2BK15ac": {
+     "biosamples": [
+      "T_H1-hESC",
+      "T_IMR-90",
+      "T_mesenchymal_stem_cell"
+     ],
+     "n_biosamples": 3,
+     "space": "pval"
+    },
+    "H2BK5ac": {
+     "biosamples": [
+      "T_H1-hESC",
+      "T_IMR-90",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell"
+     ],
+     "n_biosamples": 4,
+     "space": "pval"
+    },
+    "H3K14ac": {
+     "biosamples": [
+      "T_H9",
+      "T_IMR-90",
+      "T_mesenchymal_stem_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 4,
+     "space": "pval"
+    },
+    "H3K18ac": {
+     "biosamples": [
+      "T_H1-hESC",
+      "T_H9",
+      "T_IMR-90",
+      "T_neural_stem_progenitor_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 5,
+     "space": "pval"
+    },
+    "H3K27ac": {
+     "biosamples": [
+      "T_CD4-positive_alpha-beta_memory_T_cell",
+      "T_H1-hESC",
+      "T_H9",
+      "T_IMR-90",
+      "T_K562",
+      "T_KMS-11",
+      "T_OCI-LY7",
+      "T_RWPE2",
+      "T_adipose_tissue",
+      "T_adrenal_gland",
+      "T_adrenal_gland_embryonic",
+      "T_chorion",
+      "T_endocrine_pancreas",
+      "T_heart_left_ventricle",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell",
+      "T_peripheral_blood_mononuclear_cell",
+      "T_prostate",
+      "T_trophoblast_cell",
+      "T_upper_lobe_of_left_lung",
+      "T_uterus",
+      "T_vagina"
+     ],
+     "n_biosamples": 22,
+     "space": "pval"
+    },
+    "H3K27me3": {
+     "biosamples": [
+      "T_CD4-positive_alpha-beta_memory_T_cell",
+      "T_Caco-2",
+      "T_DND-41",
+      "T_H1-hESC",
+      "T_H9",
+      "T_IMR-90",
+      "T_KMS-11",
+      "T_adrenal_gland_embryonic",
+      "T_amnion",
+      "T_endocrine_pancreas",
+      "T_heart_left_ventricle",
+      "T_mesenchymal_stem_cell",
+      "T_myoepithelial_cell_of_mammary_gland",
+      "T_neural_stem_progenitor_cell",
+      "T_peripheral_blood_mononuclear_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 16,
+     "space": "pval"
+    },
+    "H3K36me3": {
+     "biosamples": [
+      "T_CD4-positive_alpha-beta_memory_T_cell",
+      "T_Caco-2",
+      "T_DND-41",
+      "T_ES-I3",
+      "T_GM06990",
+      "T_H1-hESC",
+      "T_H9",
+      "T_IMR-90",
+      "T_K562",
+      "T_KMS-11",
+      "T_NCI-H929",
+      "T_OCI-LY7",
+      "T_adrenal_gland",
+      "T_adrenal_gland_embryonic",
+      "T_amnion",
+      "T_chorion",
+      "T_endocrine_pancreas",
+      "T_heart_left_ventricle",
+      "T_mesenchymal_stem_cell",
+      "T_myoepithelial_cell_of_mammary_gland",
+      "T_neural_stem_progenitor_cell",
+      "T_urinary_bladder"
+     ],
+     "n_biosamples": 22,
+     "space": "pval"
+    },
+    "H3K4ac": {
+     "biosamples": [
+      "T_H9",
+      "T_IMR-90",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 5,
+     "space": "pval"
+    },
+    "H3K4me1": {
+     "biosamples": [
+      "T_DND-41",
+      "T_ES-I3",
+      "T_H1-hESC",
+      "T_H9",
+      "T_IMR-90",
+      "T_K562",
+      "T_KMS-11",
+      "T_NCI-H929",
+      "T_OCI-LY7",
+      "T_adrenal_gland",
+      "T_adrenal_gland_embryonic",
+      "T_amnion",
+      "T_chorion",
+      "T_heart_left_ventricle",
+      "T_mesenchymal_stem_cell",
+      "T_myoepithelial_cell_of_mammary_gland",
+      "T_peripheral_blood_mononuclear_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 18,
+     "space": "pval"
+    },
+    "H3K4me2": {
+     "biosamples": [
+      "T_DND-41",
+      "T_H1-hESC",
+      "T_IMR-90",
+      "T_K562",
+      "T_NCI-H929",
+      "T_OCI-LY7",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell"
+     ],
+     "n_biosamples": 8,
+     "space": "pval"
+    },
+    "H3K4me3": {
+     "biosamples": [
+      "T_BE2C",
+      "T_BMEC",
+      "T_CD4-positive_alpha-beta_memory_T_cell",
+      "T_Caco-2",
+      "T_DND-41",
+      "T_GM06990",
+      "T_H1-hESC",
+      "T_H9",
+      "T_HL-60",
+      "T_IMR-90",
+      "T_K562",
+      "T_KMS-11",
+      "T_NCI-H929",
+      "T_OCI-LY7",
+      "T_WERI-Rb-1",
+      "T_adrenal_gland_embryonic",
+      "T_amnion",
+      "T_cardiac_fibroblast",
+      "T_chorion",
+      "T_endocrine_pancreas",
+      "T_lower_leg_skin",
+      "T_mesenchymal_stem_cell",
+      "T_myoepithelial_cell_of_mammary_gland",
+      "T_neural_stem_progenitor_cell",
+      "T_peripheral_blood_mononuclear_cell",
+      "T_prostate",
+      "T_trophoblast_cell",
+      "T_upper_lobe_of_left_lung",
+      "T_urinary_bladder",
+      "T_vagina"
+     ],
+     "n_biosamples": 30,
+     "space": "pval"
+    },
+    "H3K79me1": {
+     "biosamples": [
+      "T_H1-hESC",
+      "T_H9",
+      "T_IMR-90",
+      "T_neural_stem_progenitor_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 5,
+     "space": "pval"
+    },
+    "H3K79me2": {
+     "biosamples": [
+      "T_DND-41",
+      "T_H1-hESC",
+      "T_IMR-90",
+      "T_KMS-11",
+      "T_OCI-LY7",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 6,
+     "space": "pval"
+    },
+    "H3K9ac": {
+     "biosamples": [
+      "T_DND-41",
+      "T_ES-I3",
+      "T_H1-hESC",
+      "T_H9",
+      "T_K562",
+      "T_NCI-H929",
+      "T_endocrine_pancreas",
+      "T_myoepithelial_cell_of_mammary_gland",
+      "T_neural_stem_progenitor_cell",
+      "T_peripheral_blood_mononuclear_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 11,
+     "space": "pval"
+    },
+    "H3K9me3": {
+     "biosamples": [
+      "T_CD4-positive_alpha-beta_memory_T_cell",
+      "T_DND-41",
+      "T_ES-I3",
+      "T_H9",
+      "T_IMR-90",
+      "T_K562",
+      "T_OCI-LY7",
+      "T_adrenal_gland",
+      "T_adrenal_gland_embryonic",
+      "T_amnion",
+      "T_endocrine_pancreas",
+      "T_heart_left_ventricle",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell",
+      "T_peripheral_blood_mononuclear_cell",
+      "T_testis",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 17,
+     "space": "pval"
+    },
+    "H4K20me1": {
+     "biosamples": [
+      "T_IMR-90",
+      "T_K562",
+      "T_KMS-11"
+     ],
+     "n_biosamples": 3,
+     "space": "pval"
+    },
+    "H4K8ac": {
+     "biosamples": [
+      "T_H1-hESC",
+      "T_H9",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell",
+      "T_trophoblast_cell"
+     ],
+     "n_biosamples": 5,
+     "space": "pval"
+    },
+    "H4K91ac": {
+     "biosamples": [
+      "T_H1-hESC",
+      "T_IMR-90",
+      "T_mesenchymal_stem_cell",
+      "T_neural_stem_progenitor_cell"
+     ],
+     "n_biosamples": 4,
+     "space": "pval"
+    },
+    "pool": "eic"
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "method_notes": {
+   "notes": "kNN average, k=5 (§5.4). Same similarity ranking as knn1; heads as `avg` over the top 5 contributors."
+  },
+  "regime": "configs/regime.eic_val.json",
+  "score_json": "cruxvault/results/t49/p1_n1e4/knn5.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "3b6c768",
+  "sigma_table": null,
+  "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397"
+ },
+ "schema_version": 1,
+ "version": "v1"
+}

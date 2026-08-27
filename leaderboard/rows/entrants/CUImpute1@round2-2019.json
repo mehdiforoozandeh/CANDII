@@ -1,0 +1,48 @@
+{
+ "badges": {
+  "cell_types": "cell-type class unrecorded",
+  "position": "position class unrecorded"
+ },
+ "board": "entrants",
+ "date": "2026-08-26",
+ "lineage": "entrant",
+ "method": "CUImpute1",
+ "metrics": {
+  "pval": {
+   "gwcorr": 0.4573861034740153,
+   "gwspear": 0.32129210301022487,
+   "mse": 149.5668556008518,
+   "mse1obs": 14910.372188789146
+  }
+ },
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error",
+  "pval/auprc",
+  "pval/coverage_95",
+  "pval/crps",
+  "pval/gaussian_nll",
+  "pval/peak_base_rate",
+  "pval/pit_ks"
+ ],
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/CANDII_t54_work/entrant_scores",
+  "flags": {
+   "aggregation": "bootstrap mean within experiment; median over experiments within assay; mean over assay medians for macro",
+   "n_experiments": 48,
+   "placement_method": "CUImpute1",
+   "pval_pred_space": "-log10p"
+  },
+  "regime": "Synapse syn17083203 blind-test tracks",
+  "score_json": "cruxvault/results/t54/placement.json",
+  "scorer": "vendored-001-scorer (t54)",
+  "scoring_sha": "d28ff60",
+  "sigma_table": null,
+  "store_manifest_hash": "3982e224b235f75fcd03092c05bbcb81acb64b62494080869c110980ec79847f"
+ },
+ "schema_version": 1,
+ "version": "round2-2019"
+}

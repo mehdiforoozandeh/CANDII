@@ -30,6 +30,7 @@ Stdlib only, by rule.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -49,11 +50,18 @@ TODO_HASH = "TODO-"
 
 #: provenance keys `add` copies into the row's flags-of-record block when the score json has them.
 FLAG_KEYS = ("crps_estimator", "crps_k", "crps_seed", "allow_missing", "msevar",
-             "signal_target_transform", "pval_pred_space", "pred_inversion", "seed")
+             "signal_target_transform", "pval_pred_space", "pred_inversion", "seed",
+             "placement_method", "aggregation", "n_experiments")
 
 LINEAGES = ("candi", "rival", "baseline", "entrant")
-POSITION_CLASSES = {"transductive": "position-transductive", "generalizing": "position-generalizing"}
-CELL_CLASSES = {"zero-shot": "zero-shot cell types", "retrained": "retrained per setting"}
+POSITION_CLASSES = {"transductive": "position-transductive", "generalizing": "position-generalizing",
+                    "unrecorded": "position class unrecorded"}
+CELL_CLASSES = {"zero-shot": "zero-shot cell types", "retrained": "retrained per setting",
+                "unrecorded": "cell-type class unrecorded"}
+
+#: the scorer name stamped on Dataset-3 placement rows (t54); `check` uses it to know how to
+#: re-extract such a row from its artifact.
+PLACEMENT_SCORER = "vendored-001-scorer (t54)"
 
 
 class GateError(SystemExit):
@@ -67,9 +75,13 @@ def _refuse_nan(token: str) -> float:
     raise GateError(f"score json carries a non-finite literal ({token}); NaN never enters a row")
 
 
-def load_json(path: Path) -> Any:
+def load_json(path: Path, allow_nonfinite: bool = False) -> Any:
+    """allow_nonfinite is for t54 placement files only: their per_assay blocks carry NaN for
+    assay-specific metrics (prom_corr outside H3K4me3). Nothing non-finite can still enter a
+    row — extract_metrics refuses it per value, and dump_json refuses it on the way out."""
     try:
-        return json.loads(path.read_text(encoding="utf-8"), parse_constant=_refuse_nan)
+        return json.loads(path.read_text(encoding="utf-8"),
+                          parse_constant=None if allow_nonfinite else _refuse_nan)
     except FileNotFoundError:
         raise GateError(f"{path} does not exist")
     except json.JSONDecodeError as e:
@@ -171,6 +183,39 @@ def check_companions(metrics: Mapping[str, Mapping[str, float]],
                                 f"{', '.join(lacked)} — refused (registry companion rule)")
 
 
+def placement_score(placement: Mapping[str, Any], method: str, path: Path) -> Dict[str, Any]:
+    """Shape one method of a t54 Dataset-3 placement.json like a bench score, so the same
+    gates serve both. Numbers are copied from `macro_all`; nothing is computed."""
+    methods = placement.get("methods")
+    if not isinstance(methods, dict) or method not in methods:
+        raise GateError(f"{path} has no method `{method}` "
+                        f"({'not a placement file' if not isinstance(methods, dict) else 'check the spelling'})")
+    return {
+        "provenance": {
+            "suite": PLACEMENT_SCORER,
+            "regime": "Synapse syn17083203 blind-test tracks",
+            "sigma_table": None,
+            # Dataset-3 signal for the scored marks IS -log10 p (t54 caveat 2; DNase excluded)
+            "pval_pred_space": "-log10p",
+            "aggregation": placement.get("aggregation"),
+            "n_experiments": methods[method].get("n_experiments"),
+            "placement_method": method,
+        },
+        "macro": {"pval": methods[method]["macro_all"], "count": {}},
+    }
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def score_path_of_record(path: Path) -> str:
+    """Store vault evidence paths repo-relative, so any checkout resolves them."""
+    s = str(path.resolve())
+    marker = "/cruxvault/results/"
+    return "cruxvault/results/" + s.split(marker, 1)[1] if marker in s else str(path)
+
+
 def build_provenance(score: Mapping[str, Any], args: argparse.Namespace,
                      score_path: Path) -> Dict[str, Any]:
     prov = score.get("provenance")
@@ -192,9 +237,9 @@ def build_provenance(score: Mapping[str, Any], args: argparse.Namespace,
         if not sigma_id["method"] or not sigma_id["fitted_on"]:
             raise GateError("score provenance sigma_table lacks method/fitted_on — no σ-table id")
     flags = {k: prov[k] for k in FLAG_KEYS if k in prov}
-    return {
+    out = {
         "scoring_sha": args.scoring_sha,
-        "score_json": str(args.score),
+        "score_json": score_path_of_record(score_path),
         "fir_path": fir_path,
         "store_manifest_hash": args.store_manifest_hash,
         "regime": prov.get("regime"),
@@ -203,6 +248,13 @@ def build_provenance(score: Mapping[str, Any], args: argparse.Namespace,
         "flags": flags,
         "artifacts_resolved_at_add": score_path.exists(),
     }
+    # method-level caveats recorded by the producer travel on the row (e.g. eDICE's
+    # transductive + masking-rate caveats in its prediction manifest)
+    manifest = prov.get("manifest") if isinstance(prov.get("manifest"), dict) else {}
+    notes = {k: manifest[k] for k in ("notes", "caveat", "masking_caveat") if manifest.get(k)}
+    if notes:
+        out["method_notes"] = notes
+    return out
 
 
 def gate_row_against_board(row: Mapping[str, Any], board: Mapping[str, Any], bid: str) -> None:
@@ -262,7 +314,16 @@ def cmd_add(args: argparse.Namespace) -> int:
                         f"{sorted(boards['boards'])}")
     board = boards["boards"][args.board]
     score_path = Path(args.score)
-    score = load_json(score_path)
+    if args.placement_method:
+        # Dataset-3 rows: the artifact itself is pinned by the board's frozen regime hash
+        digest = sha256_file(score_path)
+        if digest != board["frozen"]["regime_sha256"]:
+            raise GateError(f"{score_path} digests to {digest[:12]}…, not the placement "
+                            f"artifact board `{args.board}` froze — refused")
+        score = placement_score(load_json(score_path, allow_nonfinite=True),
+                                args.placement_method, score_path)
+    else:
+        score = load_json(score_path)
     metrics, missing = extract_metrics(score, registry, args.allow_missing)
     row: Dict[str, Any] = {
         "schema_version": 1,
@@ -518,7 +579,10 @@ def cmd_check(args: argparse.Namespace) -> int:
             if not score_path.is_absolute():
                 score_path = REPO / score_path
             if score_path.exists():
-                fresh, _ = extract_metrics(load_json(score_path), registry, allow_missing=True)
+                pm = row["provenance"]["flags"].get("placement_method")
+                source = placement_score(load_json(score_path, allow_nonfinite=True),
+                                         pm, score_path) if pm else load_json(score_path)
+                fresh, _ = extract_metrics(source, registry, allow_missing=True)
                 stamped = {slot: block for slot, block in row["metrics"].items() if block}
                 if fresh != stamped:
                     raise GateError(f"{path} no longer matches its score json {score_path}")
@@ -571,6 +635,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="run directory on Fir; default reads FIR_PATH.txt beside the score json")
     a.add_argument("--strict-score", default=None,
                    help="score json for the strict view (main board: P2 minus chr19)")
+    a.add_argument("--placement-method", default=None,
+                   help="the score file is a t54 Dataset-3 placement.json; stamp this "
+                        "method's macro_all (the file must digest to the board's frozen "
+                        "regime hash)")
     a.add_argument("--allow-missing", action="store_true",
                    help="record absent registry metrics instead of refusing")
     a.add_argument("--force", action="store_true", help="restamp an existing row")
