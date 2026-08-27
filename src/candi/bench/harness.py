@@ -958,6 +958,7 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
                 var: Optional[Mapping[str, np.ndarray]] = None,
                 seed: int = 0, c_index_pairs: int = 200_000,
                 signal_target_transform: str = "none",
+                crps_approx: Optional[int] = None, crps_seed: int = 0,
                 with_curve: bool = False) -> Dict[str, Dict[str, object]]:
     """Every block this track can carry, per arm — and only the arms whose PREDICTION exists.
 
@@ -992,6 +993,11 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
     every caller written before this existed keeps the arithmetic it had, bit for bit. A caller that
     knows better passes it: `monitor` from its own run config, `run_bench` from the CLI's
     `--arch-from`.
+
+    `crps_approx` reaches the COUNT arm only, and only its CRPS family (`D.nb_suite`). It defaults
+    to `None` = the closed form, so the same "bit for bit" promise covers it; a caller that asks for
+    it must record `K` and `crps_seed` beside the numbers, because a sampled score is not
+    reproducible from the prediction alone.
     """
     arms: Dict[str, Dict[str, object]] = {}
     chroms = rec.chroms
@@ -1004,7 +1010,8 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
             **E.score_track(rec.counts, rec.mu, chroms, gene_annotations=gene_annotations,
                             enh_annotations=enh_annotations),
             **D.nb_suite(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms), y_c,
-                         seed=seed, n_pairs=c_index_pairs),
+                         seed=seed, n_pairs=c_index_pairs,
+                         crps_approx=crps_approx, crps_seed=crps_seed),
             **B.binary_suite(E.dict_to_arr(rec.peaks, chroms).astype(bool),
                              E.dict_to_arr(rec.peak_score, chroms), y_c, with_curve=with_curve),
         }
@@ -1432,6 +1439,7 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
               blocks: Sequence[str] = ("E", "P", "D", "B", "C"),
               c_windows: int = 8, c_resamples: int = 50,
               signal_target_transform: str = "none",
+              crps_approx: Optional[int] = None, crps_seed: int = 0,
               with_curve: bool = False, progress: bool = False,
               extra_provenance: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """Score one checkpoint end to end and return the result JSON of `EVAL_PLAN.md` §4.
@@ -1458,7 +1466,8 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
             per_track[rec.key] = score_track(
                 rec, gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
                 c_index_pairs=c_index_pairs, with_curve=with_curve,
-                signal_target_transform=signal_target_transform)
+                signal_target_transform=signal_target_transform,
+                crps_approx=crps_approx, crps_seed=crps_seed)
             if "P" in blocks and kind == "impute":
                 bits = _binarise(rec, signal_target_transform)
                 if bits is not None:
@@ -1482,6 +1491,13 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
             # scalars), so without this a reader of the macro alone could not tell an inverted run
             # from a pre-contract one.
             "pval_pred_space": D.SIGNAL_EVAL_SPACE,
+            # ABSENT WHEN THE CLOSED FORM WAS USED, and that is deliberate: the default run must
+            # produce the same provenance dict it always did, so the presence of these three keys is
+            # itself the flag that a count-arm CRPS in this file is an ESTIMATE. A sampled score is
+            # not reproducible from the prediction alone — it needs k and the seed too.
+            **({} if crps_approx is None else
+               {"crps_estimator": "fair_sampled", "crps_k": int(crps_approx),
+                "crps_seed": int(crps_seed)}),
             "c_index_note": "the C-index is the ONE documented exception to whole-track scoring "
                             "(EVAL_PLAN.md D3): it is pairwise, so it is estimated over a seeded "
                             "pair sample and never quoted without c_index_se.",

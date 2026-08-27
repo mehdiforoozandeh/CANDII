@@ -545,3 +545,61 @@ def test_the_harness_gates_are_inert_on_the_model_path(recs) -> None:
     for rec in recs:
         assert rec.has_count is True
         assert rec.has_sigma is rec.has_pval is True
+
+
+# ---------------------------------------------------------------------------
+# 7 — t56: the sampled CRPS, end to end through this entry
+# ---------------------------------------------------------------------------
+# The unit-level validation of the estimator lives in `tests/test_crps_sampled.py`. What is pinned
+# HERE is the integration: the flag is off by default, on it reaches only the count arm's CRPS
+# family, and a score file it produced says so.
+
+def test_the_default_run_stamps_no_crps_estimator(external_scores) -> None:
+    """OFF BY DEFAULT, and silent when off. The presence of the key is the flag, so a default run
+    must not carry it — otherwise every pre-t56 score file reads as a different kind of file."""
+    prov = external_scores["provenance"]
+    for key in ("crps_estimator", "crps_k", "crps_seed"):
+        assert key not in prov, key
+
+
+def test_the_sampled_run_stamps_the_estimator_k_and_seed(regime_file, full_root) -> None:
+    src = _source(regime_file)
+    try:
+        got = score_external(src, full_root, seed=0, c_index_pairs=C_PAIRS,
+                             crps_approx=64, crps_seed=5)
+    finally:
+        src.close()
+    prov = got["provenance"]
+    assert prov["crps_estimator"] == "fair_sampled"
+    assert prov["crps_k"] == 64 and prov["crps_seed"] == 5
+
+
+def test_sampling_reproduces_the_exact_crps_and_leaves_every_other_key_alone(
+        regime_file, full_root, external_scores) -> None:
+    """The whole claim of t56, on a real store: swap the instrument, keep the number.
+
+    `c_star`/`n_star_log2` are the oracle ARGMIN, so they may land one grid step away — they are
+    listed with the moved keys rather than asserted equal. Everything else in the count arm, and
+    the entire pval arm, must be untouched: no other measure ever called `nb_crps`.
+    """
+    src = _source(regime_file)
+    try:
+        got = score_external(src, full_root, seed=0, c_index_pairs=C_PAIRS,
+                             crps_approx=512, crps_seed=0)
+    finally:
+        src.close()
+    moved = {"crps", "crps_oracle_scaled", "crps_oracle_scaled_and_n", "scale_error",
+             "c_star", "n_star_log2"}
+    for key in external_scores["tracks"]:
+        exact, sampled = (external_scores["per_track"][key], got["per_track"][key])
+        pa, pb = _numeric(exact["pval"]), _numeric(sampled["pval"])
+        assert set(pa) == set(pb)
+        for k in sorted(pa):
+            assert pb[k] == pa[k] or (np.isnan(pa[k]) and np.isnan(pb[k])), f"{key}/pval/{k}"
+        a, b = _numeric(exact["count"]), _numeric(sampled["count"])
+        assert set(a) == set(b)
+        for k in sorted(set(a) - moved):
+            assert b[k] == a[k] or (np.isnan(a[k]) and np.isnan(b[k])), f"{key}/count/{k}"
+        for k in ("crps", "crps_oracle_scaled", "crps_oracle_scaled_and_n"):
+            assert b[k] == pytest.approx(a[k], rel=0.02), f"{key}/count/{k}"
+        assert sampled["count"]["beats_marginal"] == exact["count"]["beats_marginal"], key
