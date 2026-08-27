@@ -1,0 +1,59 @@
+{
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-transductive"
+ },
+ "board": "dev",
+ "date": "2026-08-26",
+ "lineage": "rival",
+ "method": "ChromImpute",
+ "metrics": {
+  "pval": {
+   "auprc": 0.5173066883845276,
+   "coverage_95": 0.9819835413456476,
+   "crps": 0.6026447938229725,
+   "gaussian_nll": 1.7134204862038884,
+   "gwcorr": 0.6490351910999722,
+   "gwspear": 0.36748168003556064,
+   "mse": 5.564476815197203,
+   "mse1obs": 487.03833778301873,
+   "peak_base_rate": 0.01375317703671551,
+   "pit_ks": 0.39096976640261744
+  }
+ },
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error"
+ ],
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/home/mforooz/scratch/t51_chromimpute/full_genome",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "method_notes": {
+   "notes": "t51 targets.tsv on all, regime.eic_val, ChromImpute paper defaults"
+  },
+  "regime": "/project/def-maxwl/mforooz/CANDII_t51/configs/regime.eic_val.json",
+  "score_json": "cruxvault/results/t51/scores_p1_chr21_sigma.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "fd33b71",
+  "sigma_table": {
+   "fitted_on": "regime.eic_val eval_pairs",
+   "method": "ChromImpute"
+  },
+  "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397"
+ },
+ "schema_version": 1,
+ "version": "eic-r1"
+}

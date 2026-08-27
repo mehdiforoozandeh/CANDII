@@ -23,7 +23,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain
 - `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal
 - `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
+- `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n
+- `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy
 
 ## Blocked
 
@@ -56,7 +58,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *blocked*
 - `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal — *open*
 - `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *open*
+- `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS — *open*
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *open*
+- `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *open*
 
 ## Done · Dropped
 

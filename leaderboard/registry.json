@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "doc": "LEADERBOARD_PRD.md §5.1 — the single source of truth for metrics. The build reads this file; nothing about a metric is hard-coded in the front end. Metric names are EVAL.md names; a metric's identity is the (arm, key) pair, because `crps` exists on both arms and the two are different instruments.",
+  "candi_self_comparison_bar": {
+    "arm": "count",
+    "key": "crps",
+    "value": 0.1195,
+    "source": "AGENTS.md §7.2 — a seed change alone moves pooled imputation CRPS by 0.1195 on the full EIC panel",
+    "note": "CANDI version-over-version delta arrows only. This is NOT a cross-method noise floor; the cross-method floor for count-arm macro CRPS is the metric's own `floor` field."
+  },
+  "categories": {
+    "pointwise": {
+      "label": "Pointwise",
+      "in_composite": true,
+      "note": "The point tier — scoreable for any method."
+    },
+    "distributional": {
+      "label": "Distributional",
+      "in_composite": true,
+      "note": "Pval-arm Gaussian CRPS with its calibration companions. PI ruling 2026-08-26: pval CRPS always renders with pit_ks and coverage_95."
+    },
+    "peaks": {
+      "label": "Peaks",
+      "in_composite": true,
+      "note": "Enters the composite only if every ranked row has it (PRD §5.1) — the §5.2 completeness rule the build applies to every composite category."
+    },
+    "count_arm": {
+      "label": "Count arm",
+      "in_composite": false,
+      "sub_board": true,
+      "note": "PRD §5.2 — pval-only rivals have no count arm and no counts are invented (B1b). Sub-board ranks only the methods that emit counts; the composite does not move when it grows a row."
+    },
+    "loss": {
+      "label": "Loss tier",
+      "in_composite": false,
+      "note": "PRD §5.2 — loss-tier NLLs never enter the composite: different distribution families make them incomparable across methods; they show per-family only."
+    },
+    "covariate_diagnostics": {
+      "label": "Covariate diagnostics",
+      "in_composite": false,
+      "candi_lineage_only": true,
+      "note": "PRD §5.3 — rivals have no covariate-conditioned decoder, so these rank CANDI versions against each other, never methods."
+    }
+  },
+  "metrics": [
+    {"key": "mse", "arm": "pval", "category": "pointwise", "direction": "lower", "role": "ranked", "floor": null, "decimals": 4, "label": "MSE"},
+    {"key": "gwcorr", "arm": "pval", "category": "pointwise", "direction": "higher", "role": "ranked", "floor": null, "decimals": 4, "label": "GW Pearson"},
+    {"key": "gwspear", "arm": "pval", "category": "pointwise", "direction": "higher", "role": "ranked", "floor": null, "decimals": 4, "label": "GW Spearman"},
+    {"key": "mse1obs", "arm": "pval", "category": "pointwise", "direction": "lower", "role": "ranked", "floor": null, "decimals": 4, "label": "MSE top-1% obs"},
+    {"key": "crps", "arm": "pval", "category": "distributional", "direction": "lower", "role": "ranked", "floor": null,
+     "floor_note": "t57 measured this column's floors (results/t57/FLOOR_MEMO.md, floors.json) and found NO single number: the target-clustered floor is per-method (bootstrap SD roughly a tenth of the method's own macro; avg 0.031, eDICE 0.079, marginal 0.277), and a between-method gap is significant only when it clears its PAIRED 95% CI (floor_calc.py, 10,000 replicates, seed 0). ChromImpute-vs-eDICE (+0.0141) sits inside its paired floor; both rivals' gap to the avg baseline (~+0.27, ~5 paired SDs) is real. Until per-pair floors are wired into the tie machinery this column ranks plain and its deltas are not greyed.",
+     "floor_source": {"task": "t57", "kind": "per_method_paired_ci", "artifact": "cruxvault/results/t57/floors.json"},
+     "companions": ["pit_ks", "coverage_95"], "decimals": 4, "label": "CRPS (Gaussian)"},
+    {"key": "pit_ks", "arm": "pval", "category": "distributional", "direction": "lower", "role": "companion", "floor": null, "decimals": 4, "label": "PIT KS"},
+    {"key": "coverage_95", "arm": "pval", "category": "distributional", "direction": null, "role": "companion", "floor": null, "decimals": 3, "label": "Coverage 95",
+     "note": "Nominal 0.95; a companion, never ranked — distance from nominal is not a direction."},
+    {"key": "auprc", "arm": "pval", "category": "peaks", "direction": "higher", "role": "ranked", "floor": null,
+     "companions": ["peak_base_rate"], "decimals": 4, "label": "AUPRC",
+     "note": "EVAL.md — always quoted with peak_base_rate; an auprc from a count-only checkpoint is a coverage ranking, not a peak metric."},
+    {"key": "peak_base_rate", "arm": "pval", "category": "peaks", "direction": null, "role": "companion", "floor": null, "decimals": 4, "label": "Peak base rate"},
+    {"key": "gaussian_nll", "arm": "pval", "category": "loss", "direction": "lower", "role": "per_family", "floor": null, "decimals": 3, "label": "Gaussian NLL",
+     "note": "Quoted with its signal_target_transform or not at all (EVAL.md); shown per distribution family only."},
+    {"key": "crps", "arm": "count", "category": "count_arm", "direction": "lower", "role": "ranked",
+     "floor": 0.09,
+     "floor_note": "Target-clustered bootstrap noise floor on macro CRPS, ~0.09 (AGENTS.md §7.2, frozen pre-CANDII panel).",
+     "companions": ["crps_oracle_scaled", "scale_error"], "decimals": 4, "label": "CRPS (NB)"},
+    {"key": "crps_oracle_scaled", "arm": "count", "category": "count_arm", "direction": "lower", "role": "companion", "floor": null, "decimals": 4, "label": "oracle-scaled"},
+    {"key": "scale_error", "arm": "count", "category": "count_arm", "direction": "lower", "role": "companion", "floor": null, "decimals": 4, "label": "scale error"},
+    {"key": "nb_nll", "arm": "count", "category": "loss", "direction": "lower", "role": "per_family", "floor": null, "decimals": 3, "label": "NB NLL",
+     "note": "Shown per distribution family only; never ranked cross-method."},
+    {"key": "covuse", "arm": null, "category": "covariate_diagnostics", "direction": "higher", "role": "diagnostic", "floor": null, "decimals": 4, "label": "covuse"},
+    {"key": "covshare", "arm": null, "category": "covariate_diagnostics", "direction": null, "role": "diagnostic", "floor": null, "decimals": 4, "label": "covshare"},
+    {"key": "depthdir", "arm": null, "category": "covariate_diagnostics", "direction": "higher", "role": "diagnostic", "floor": null, "decimals": 4, "label": "depthdir"},
+    {"key": "depthcounterfact", "arm": null, "category": "covariate_diagnostics", "direction": "higher", "role": "diagnostic", "floor": null, "decimals": 4, "label": "depthcounterfact",
+     "note": "Quotes with its 0.25 deterministic floor and no ceiling (EVAL.md)."},
+    {"key": "covspec", "arm": null, "category": "covariate_diagnostics", "direction": "higher", "role": "diagnostic", "floor": null, "decimals": 4, "label": "covspec"},
+    {"key": "depthblind", "arm": null, "category": "covariate_diagnostics", "direction": "higher", "role": "diagnostic", "floor": null,
+     "companions": ["biokeep"], "decimals": 4, "label": "depthblind",
+     "note": "Never renders without biokeep (D13)."},
+    {"key": "biokeep", "arm": null, "category": "covariate_diagnostics", "direction": "higher", "role": "diagnostic", "floor": null, "decimals": 4, "label": "biokeep"}
+  ]
+}
