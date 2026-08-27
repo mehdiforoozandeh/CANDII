@@ -28,6 +28,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy
 - `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS)
 - `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
+- `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories
 
 ## Blocked
 
@@ -65,6 +66,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *open*
 - `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *open*
 - `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels — *open*
+- `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories — *open*
 
 ## Done · Dropped
 
