@@ -35,6 +35,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main
 - `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer
 - `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly
+- `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score
 
 ## Blocked
 
@@ -79,6 +80,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main — *open*
 - `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer — *open*
 - `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly — *open*
+- `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score — *open*
 
 ## Done · Dropped
 
