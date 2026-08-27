@@ -26,6 +26,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n
 - `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy
+- `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS)
 
 ## Blocked
 
@@ -61,6 +62,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS — *open*
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *open*
 - `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *open*
+- `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *open*
 
 ## Done · Dropped
 
