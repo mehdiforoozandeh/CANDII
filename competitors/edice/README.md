@@ -248,22 +248,29 @@ read depth to manufacture one — and **no peak head**, so `candi.bench.external
 coverage-ranking fallback and every peak-tier row is labelled as such (B3). The forecast
 distribution arrives from the §6.1 σ-table, not from the model.
 
-### What P1 scoring confirmed (job `56904726`)
+### What P1 and P2 scoring confirmed (jobs `56904726`, `56914129`)
 
-The first time our own instrument read eDICE output, the §4.1 contract held end to end:
+Both protocols are scored — A4 requires both, always. The §4.1 contract held end to end in each:
 
-| | |
-|---|---|
-| `missing_tracks` | `[]` — all 45 declared tracks present, nothing silently dropped |
-| `declared_tracks` | 45, matching the panel dry-run exactly |
-| provenance | `pred_inversion: external`, `signal_target_transform: none`, `pval_pred_space: -log10p` |
-| blocks | `E`, `P`, `D`, `B` — `D` present only because the σ-table supplied a distribution |
-| **`macro.count`** | **`{}`, 0 entries. The count arm is ABSENT, not NaN-filled** |
-| per-track arms | `["pval"]` — no count arm fabricated anywhere |
-| `msevar` | absent, carrying its own note rather than a silent `0.0` |
-| σ-table | 22 assays over 45 tracks, `fitted_on: regime.eic_val.json eval_pairs, chroms ['chr21']` |
+| | P1 (chr21) | P2 (genome-wide) |
+|---|---|---|
+| chromosomes / bins | 1 / 1,868,399 | **23 / ~124 M** |
+| `missing_tracks` | `[]` | `[]` — nothing dropped across 23 chromosomes |
+| `declared_tracks` / scored | 45 / 45 | 45 / 45 |
+| provenance | `pred_inversion: external`, `signal_target_transform: none`, `pval_pred_space: -log10p` | same |
+| blocks | `E`, `P`, `D`, `B` | same — `D` only because the σ-table supplied a distribution |
+| **`macro.count`** | **`{}`, 0 entries — ABSENT, not NaN-filled** | **`{}`** |
+| per-track arms | `["pval"]` | `["pval"]` — no count arm fabricated anywhere |
+| `msevar` | absent, with its own note rather than a silent `0.0` | same |
+| non-finite values | none | none |
 
-No non-finite value anywhere in the macro block.
+**The check that matters most is the σ-table's `fitted_on` string.** In *both* files it reads
+`regime.eic_val.json eval_pairs, chroms ['chr21']` — so P2 reused the P1 V-pair table **unchanged**
+rather than refitting on genome-wide residuals. That is §6.1 as a fact on disk rather than a
+promise: refitting per protocol would have made the CRPS column mean two different things in two
+rows of the same table, and nothing in the output would have said so.
+
+`pit_ks` and `coverage_95` are present in both, satisfying the PI's ruling below.
 
 ### B3's CRPS companions — **ruled (PI, 2026-08-26; plan amendment PR #27)**
 
@@ -279,6 +286,26 @@ not interpretable yet, whatever its size.
 
 Nothing in this method's outputs changes: `pit_ks` and `coverage_95` are already present in every
 macro and per-track block the P1 run produced.
+
+## EIC runs — all compute for t52 is done
+
+| stage | job | result |
+|---|---|---|
+| train, `N_TARGETS=31` | `56847505` | COMPLETED rc=0, 09:15:19, ~660 s/epoch, loss 0.11852 → 0.09568 |
+| P1 score | `56903103` | FAILED — `TrackView.pval()` missing `start` in `fit_sigma.py` |
+| P1 score (retry) | `56904726` | COMPLETED rc=0, 08:51 — resumed the finished predict |
+| P2 score | `56906350` | TIMEOUT at 12:00:23 — predict finished all 23 chroms, wall hit in the bench pass |
+| P2 score (follow-up) | `56914129` | COMPLETED rc=0, 09:00:33 — skipped the 6.1 h predict, scored genome-wide |
+
+**B pairs are untouched.** Per §P1/A4 the `eic_test` regime runs once, at the very end, per
+method. Nothing in this branch has opened a `B_` biosample.
+
+The P2 timeout is why `eic_score.sh` skips a complete prediction root. `56906350` finished all 23
+chromosomes and wrote its manifest before the wall arrived mid-scoring; `56914129` was queued with
+`--dependency=afternotok` and a 24 h wall, found the root complete, and went straight to the bench
+pass. Nothing was recomputed — but the margin was one chromosome, since a *partial* root is redone
+rather than resumed. If P2 ever needs re-running, per-chromosome resume with length validation is
+the fix, not a longer wall.
 
 ## Commands
 
