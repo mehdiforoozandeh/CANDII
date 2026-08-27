@@ -24,7 +24,7 @@ Every other module runs on Fir with `candi` nowhere on the path, which is not a 
 earlier version imported `candi.bench.external` for the §4.1 naming rule and died the moment the
 package was rsynced on its own. A test pins the split in both directions.
 
-Tests: `tests/test_lavawizard.py`, 78 checks, seconds, no TensorFlow and no network.
+Tests: `tests/test_lavawizard.py`, 80 checks, seconds, no TensorFlow and no network.
 
 ## Parity, part 1 — the model
 
