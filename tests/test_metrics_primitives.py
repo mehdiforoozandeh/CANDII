@@ -1,7 +1,8 @@
 """Block test: the REUSED numeric primitives, re-validated at real count magnitudes (q19 §Validation).
 
-Vendored VERBATIM from sandbox/diagnostics/dual_conditioning_real/tests/test_metrics_primitives.py:1-168
-(only the import on line 11 is rewired to candi.metrics).
+Vendored from sandbox/diagnostics/dual_conditioning_real/tests/test_metrics_primitives.py:1-168
+(the import on line 11 is rewired to candi.metrics; the three `dispersion_range` / `large_n` /
+`branch_switch` tests were added by t56 for nb_crps's large-dispersion Poisson-limit branch).
 
 We reuse the testbed `metrics.py` primitives verbatim; this asserts they are correct on real-scale counts
 and encodes the p-from-true-mu convention. No model, no h5 — pure numerics, second-scale.
@@ -70,6 +71,43 @@ def test_nb_crps_finite_at_real_count_magnitudes():
     p = n / (n + mu)
     y = np.maximum(0, np.round(mu * rng.uniform(0, 2, size=5000)))
     assert np.isfinite(nb_crps(n, p, y)).all()
+
+
+def test_nb_crps_finite_across_the_dispersion_range():
+    """t56 regression: scipy's hyp2f1(0.5, 1-n, 2, w) hard-fails to NaN from n ~ 1.04e4 (any mu,
+    any p), which made every large-dispersion track unscoreable — including the pre-registered
+    Poisson-limit floor n = 1e6. nb_crps must be finite over the whole dispersion range."""
+    for n in (1.0, 10.0, 1e2, 1e3, 1e4, 3e4, 1e5, 1e6, 1e7):
+        for mu in (0.5, 5.0, 50.0, 500.0, 5000.0):
+            p = n / (n + mu)
+            for y in (0.0, round(mu), round(2 * mu)):
+                v = nb_crps(n, p, y)
+                assert np.isfinite(v).all(), (n, mu, y, v)
+
+
+def test_nb_crps_large_n_branch_matches_exact_discrete_sum():
+    """Above the hyp2f1 switch the sd-standardized Poisson limit must track the exact discrete
+    sum. Measured worst error over this grid is ~7e-5 relative; asserted at 5e-4."""
+    for n in (1.05e4, 3e4, 1e5, 1e6):
+        for mu in (0.5, 5.0, 50.0, 500.0):
+            p = n / (n + mu)
+            sd = np.sqrt(mu + mu * mu / n)
+            for y in (0.0, float(round(mu)), float(round(mu + 3 * sd))):
+                got = float(nb_crps(n, p, y))
+                exact = _crps_exact(n, p, y)
+                assert abs(got - exact) <= 5e-4 * max(exact, 1e-6), (n, mu, y, got, exact)
+
+
+def test_nb_crps_is_continuous_across_the_branch_switch():
+    """The exact value at n = 1e4 and the Poisson-limit value just above it must agree closely
+    (measured jump <= 7.3e-5 relative): a metric that stepped at the switch would rank models by
+    which side of 1e4 their dispersion lands on."""
+    for mu in (0.5, 5.0, 50.0, 500.0, 5000.0):
+        for y in (0.0, float(round(mu))):
+            n_lo, n_hi = 1e4, 1e4 + 1.0
+            below = float(nb_crps(n_lo, n_lo / (n_lo + mu), y))
+            above = float(nb_crps(n_hi, n_hi / (n_hi + mu), y))
+            assert abs(above - below) <= 3e-4 * max(below, 1e-6), (mu, y, below, above)
 
 
 def test_crps_requires_p_from_true_mu_not_floored_p():

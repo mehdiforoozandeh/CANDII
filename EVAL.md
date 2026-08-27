@@ -268,7 +268,8 @@ this assay" with "the model has the wrong constant in front of it" — and the s
 Report both terms or neither. `AGENTS.md` §7.2 makes this a rule, not a preference.
 
 `marg_crps` is the CRPS-optimal marginal NB fitted to the target itself, so `beats_marginal` is the
-weakest possible bar: it asks whether the model beat a single number per assay.
+weakest possible bar: it asks whether the model beat a single number per assay. It is `null` when
+either side of the comparison is non-finite — an unscoreable track is ABSENT, never a loss (t56).
 
 ### `ece` is PIT, not interval coverage
 

@@ -9,14 +9,24 @@ measurement stack lives in `candi.bench` (`candi.eval`, which held it before, is
 The closed-form NB CRPS (`nb_crps`) is the risky numeric: derived as E|X-y| - 1/2 E|X-X'| with a
 Pfaff-transformed hypergeometric Gini term, verified bit-close to an exact discrete sum and to
 Monte-Carlo across the full parameter range (tests/test_metrics_primitives.py).
+
+One departure from the vendored source (t56): `nb_crps` gained a large-dispersion branch — for
+n > N_GINI_HYP2F1_MAX it scores the sd-standardized Poisson limit, because scipy's hyp2f1 is NaN
+there. The n <= 1e4 path is bit-identical to the vendored original.
 """
 from __future__ import annotations
 
 import numpy as np
-from scipy.stats import nbinom, rankdata
-from scipy.special import hyp2f1
+from scipy.stats import nbinom, poisson, rankdata
+from scipy.special import hyp2f1, ive
 
 P_EPS = 1e-9
+
+# scipy's hyp2f1(0.5, 1-n, 2, w) hard-fails to NaN once n exceeds ~1.04e4 — a function of the 1-n
+# parameter alone, independent of mu, p and y (boundary mapped in t56). Below this the Pfaff-2F1
+# Gini term is verified to <=2e-9 relative against the exact discrete sum; above it nb_crps scores
+# the NB in its Poisson limit, standardized to the NB's own sd (see nb_crps docstring).
+N_GINI_HYP2F1_MAX = 1e4
 
 # NO fp32 FENCE ANYWHERE IN THIS FILE, and that is the answer rather than an omission. The AMP audit
 # lists `metrics.py` among the things evaluation must never autocast; it already cannot be. Every
@@ -49,6 +59,15 @@ def nb_crps(n, p, y) -> np.ndarray:
       E|X-X'|  = (2 mu / p) 2F1(1/2, n+1; 2; z),  z = -4(1-p)/p^2   [Gini mean difference]
     The 2F1 is evaluated via the Pfaff transform 2F1(a,b;c;z)=(1-z)^-a 2F1(a,c-b;c; z/(z-1)) so the
     argument stays in (0,1) and the term is stable at the large means the power family reaches.
+
+    For n > N_GINI_HYP2F1_MAX (scipy's hyp2f1 is NaN there — see the constant above) the NB is
+    scored in its Poisson limit, standardized to the NB's own sd:
+      CRPS_NB(n,p,y) ~ r * CRPS_Pois(mu, mu + (y-mu)/r),  r = sqrt(1 + mu/n) = sd_NB/sd_Pois,
+    with E|X-y| = (mu-y') + 2[y' F(floor(y'); mu) - mu F(floor(y')-1; mu)] valid at real y', and
+    E|X-X'| = 2 mu e^-2mu [I0(2mu) + I1(2mu)] via the exponentially scaled Bessel `ive`. The
+    rescaling restores the variance the plain Poisson limit drops: worst relative error vs the
+    exact discrete sum is ~7e-5 over n in [1e4, 1e7] x mu in [0.5, 5e3] (plain Poisson limit: 18%
+    at the switch), and the jump across the switch itself is <= 7e-5 (t56).
     """
     n_a = np.asarray(n, dtype=float)
     p_a = np.clip(np.asarray(p, dtype=float), P_EPS, 1.0 - P_EPS)
@@ -58,11 +77,25 @@ def nb_crps(n, p, y) -> np.ndarray:
     p = np.broadcast_to(p_a, shape).ravel()
     y = np.broadcast_to(y_a, shape).ravel()
     mu = n * (1.0 - p) / p
-    Exy = (mu - y) + 2.0 * (y * _nb_cdf(y - 1.0, n, p) - mu * _nb_cdf(y - 2.0, n + 1.0, p))
-    z = -4.0 * (1.0 - p) / (p * p)
-    w = z / (z - 1.0)
-    gmd = (2.0 * mu / p) * np.power(1.0 - z, -0.5) * hyp2f1(0.5, 1.0 - n, 2.0, w)
-    return np.maximum(Exy - 0.5 * gmd, 0.0).reshape(shape)
+    out = np.empty(n.shape, dtype=float)
+    big = n > N_GINI_HYP2F1_MAX
+    if not np.all(big):
+        s = ~big
+        ns, ps, ys, ms = n[s], p[s], y[s], mu[s]
+        Exy = (ms - ys) + 2.0 * (ys * _nb_cdf(ys - 1.0, ns, ps) - ms * _nb_cdf(ys - 2.0, ns + 1.0, ps))
+        z = -4.0 * (1.0 - ps) / (ps * ps)
+        w = z / (z - 1.0)
+        gmd = (2.0 * ms / ps) * np.power(1.0 - z, -0.5) * hyp2f1(0.5, 1.0 - ns, 2.0, w)
+        out[s] = Exy - 0.5 * gmd
+    if np.any(big):
+        lam = mu[big]
+        r = np.sqrt(1.0 + lam / n[big])
+        ys = lam + (y[big] - lam) / r
+        yf = np.floor(ys)
+        Exy = (lam - ys) + 2.0 * (ys * poisson.cdf(yf, lam) - lam * poisson.cdf(yf - 1.0, lam))
+        gmd = 2.0 * lam * (ive(0, 2.0 * lam) + ive(1, 2.0 * lam))
+        out[big] = r * (Exy - 0.5 * gmd)
+    return np.maximum(out, 0.0).reshape(shape)
 
 
 def nb_quantile(q: float, n, p) -> np.ndarray:
