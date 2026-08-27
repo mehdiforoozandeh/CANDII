@@ -22,8 +22,10 @@ CI runs it before every deploy.
 The composite (PRD §5.4): per in-composite metric, rows whose gap is under the metric's noise floor
 are tied and share a rank interval; category sub-score = mean rank interval over the category's
 ranked metrics; composite = unweighted mean of category intervals; the displayed rank is the spread
-of best and worst achievable rank. A category enters the composite only when every ranked row on the
-board has all of its ranked metrics (§5.2) — the count arm therefore ranks on its own sub-board.
+of best and worst achievable rank. A category is board-active when at least one row fully covers it
+(every ranked metric present). A row missing any board-active composite category is incomplete, not
+last: it gets no composite and is excluded from the headline ranking, and still ranks inside every
+category it has numbers for (PI ruling 2026-08-27). The count arm ranks on its own sub-board.
 
 Stdlib only, by rule.
 """
@@ -416,33 +418,41 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
         if have:
             metric_ranks[metric_id(m)] = rank_spreads(have, m["direction"], m["floor"])
 
-    # §5.2 — a category enters the composite only when every ranked row has all of its
-    # ranked metrics.
+    # §5.2 / PI 2026-08-27 — a category is board-active when at least one row fully
+    # covers it. A row that misses any active composite category is incomplete, not
+    # last: no composite, no headline rank; it still ranks inside categories it covers.
     cats = registry["categories"]
-    composite_cats = []
-    for cid, cat in sorted(cats.items()):
-        if not cat.get("in_composite"):
-            continue
+    in_composite = [cid for cid, cat in sorted(cats.items()) if cat.get("in_composite")]
+
+    def covers(rid: str, cid: str) -> bool:
         cat_metrics = [m for m in ranked_metrics if m["category"] == cid]
-        if not cat_metrics:
-            continue
-        if all(val(rid, m) is not None for rid in by_id for m in cat_metrics):
-            composite_cats.append(cid)
+        return bool(cat_metrics) and all(val(rid, m) is not None for m in cat_metrics)
+
+    composite_cats = [cid for cid in in_composite
+                      if any(covers(rid, cid) for rid in by_id)]
+    eligible = {rid for rid in by_id
+                if all(covers(rid, cid) for cid in composite_cats)}
 
     out_rows = []
     intervals: Dict[str, Tuple[float, float]] = {}
     for rid, r in by_id.items():
         subscores: Dict[str, Tuple[float, float]] = {}
-        for cid in composite_cats:
+        for cid in in_composite:
+            if not covers(rid, cid):
+                continue
             spreads = [metric_ranks[metric_id(m)][rid]
                        for m in ranked_metrics if m["category"] == cid]
-            subscores[cid] = (sum(s[0] for s in spreads) / len(spreads),
-                              sum(s[1] for s in spreads) / len(spreads))
+            if spreads:
+                subscores[cid] = (sum(s[0] for s in spreads) / len(spreads),
+                                  sum(s[1] for s in spreads) / len(spreads))
         composite = None
-        if subscores:
-            composite = (sum(s[0] for s in subscores.values()) / len(subscores),
-                         sum(s[1] for s in subscores.values()) / len(subscores))
+        partial = rid not in eligible
+        if not partial and composite_cats:
+            used = [subscores[cid] for cid in composite_cats]
+            composite = (sum(s[0] for s in used) / len(used),
+                         sum(s[1] for s in used) / len(used))
             intervals[rid] = composite
+        missing_cats = [cid for cid in composite_cats if not covers(rid, cid)]
         out_rows.append({
             "id": rid,
             "method": r["method"],
@@ -459,6 +469,8 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
                              if rid in rk},
             "category_subscores": {c: list(s) for c, s in subscores.items()},
             "composite": list(composite) if composite else None,
+            "partial_coverage": partial and bool(composite_cats),
+            "missing_composite_categories": missing_cats,
         })
     overall = interval_rank_spreads(intervals) if intervals else {}
     for row in out_rows:

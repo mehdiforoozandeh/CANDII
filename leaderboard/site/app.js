@@ -406,7 +406,7 @@ function mergedTable() {
     boards.flatMap(() => [
       h("th", { colspan: 2, class: "summary-group" }, "Rank",
         helpBtn("composite",
-          "Composite is the mean of category mean-ranks for categories every method on this eval set has. Lower is better. The spread is the best and worst rank given noise-floor ties.")),
+          "Composite is the mean of category mean-ranks for categories at least one method on this eval set fully covers. A method missing any of those categories is incomplete, not last: the composite cell is a dash, and it is left out of the headline ranking. It still ranks inside every category it has numbers for. Lower is better. The spread is the best and worst rank given noise-floor ties.")),
       ...groups.map((g) => {
         const space = g.arm === "count" ? "count space"
           : g.arm === "pval" ? "p-value space" : catSpace(g.cid);
@@ -446,7 +446,7 @@ function mergedTable() {
   return h("section", { class: "panel", id: "table" },
     h("h2", null, "All methods, one table",
       helpBtn("merged",
-        "One row per method. Column groups are the eval set, then the kind of number. A grey 'results computing' cell means that method's scores have not landed yet. 'absent' means the method was scored and did not emit that number — we never invent it.")),
+        "One row per method. Column groups are the eval set, then the kind of number. A grey 'results computing' cell means that method's scores have not landed yet. An em-dash under an eval set means the method never entered that set. 'absent' means the method was scored and did not emit that number — we never invent it.")),
     h("div", { class: "table-scroll" },
       h("table", { class: "board" },
         h("thead", null, evalHead, catHead, colHead),
@@ -477,24 +477,44 @@ function evalCells(entry, bid, groups) {
     ];
   }
   if (!row) {
-    const n = 2 + groups.reduce((k, g) => k + g.metrics.length, 0);
-    const msg = unranked
+    const title = unranked
       ? (unranked.note || "no scores for this chromosome set")
-      : "—";
-    return [h("td", { class: "cell-missing", colspan: n, title: msg }, msg === "—" ? "—" : msg)];
+      : "not scored on this eval set";
+    const dash = (cls) => h("td", { class: `cell-missing ${cls || ""}`.trim(), title }, EN_DASH);
+    return [
+      dash("rank-cell"),
+      dash("num"),
+      ...groups.flatMap((g) => g.metrics.map((m) =>
+        dash(`num ${armClass(m)}`))),
+    ];
   }
   const peers = viewFor(bid).rows;
   return [
     rankCell(row),
-    h("td", { class: "num" },
-      row.composite
-        ? (row.composite[0] === row.composite[1]
-            ? row.composite[0].toFixed(2)
-            : `${row.composite[0].toFixed(2)}${EN_DASH}${row.composite[1].toFixed(2)}`)
-        : "—",
-      candiDelta(row, bid)),
+    compositeCell(row, bid),
     ...groups.flatMap((g) => g.metrics.map((m) => metricCell(row, m, peers))),
   ];
+}
+
+function compositeCell(row, bid) {
+  if (row.composite) {
+    const text = row.composite[0] === row.composite[1]
+      ? row.composite[0].toFixed(2)
+      : `${row.composite[0].toFixed(2)}${EN_DASH}${row.composite[1].toFixed(2)}`;
+    return h("td", { class: "num" }, text, candiDelta(row, bid));
+  }
+  if (row.partial_coverage) {
+    const missing = (row.missing_composite_categories || []).join(", ");
+    return h("td", { class: "num cell-missing",
+        title: missing
+          ? `partial coverage — no ${missing}`
+          : "partial coverage — never entered every composite category" },
+      EN_DASH, " ",
+      h("span", { class: "partial-note" }, "partial coverage"),
+      helpBtn(`partial-${row.id}`,
+        "This method never entered one or more composite categories, so it has no composite rank. Incomplete, not last. It still ranks inside every category it has numbers for."));
+  }
+  return h("td", { class: "num cell-missing" }, EN_DASH);
 }
 
 function methodCellMerged(entry) {

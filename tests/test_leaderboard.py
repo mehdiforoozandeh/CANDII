@@ -7,9 +7,10 @@ untracked and per-machine by design.
 
 The fixture geometry, once: `fixture-a` is best on every composite metric, `b` second, `c` third,
 `d` worst. On the count arm `a` and `b` sit 0.05 apart — under the 0.09 macro-CRPS floor, so they
-tie. `fixture-d` is pval-only (no count arm, no peak metrics), which is what exercises the §5.2
-missing-arm rule: the peaks category drops out of the composite for everyone, and the count
-sub-board ranks three rows, not four.
+tie. `fixture-d` is pval-only (no count arm, no peak metrics), which is what exercises the
+partial-coverage rule: d is missing the peaks category, so it gets no composite and is left out of
+the headline ranking, while still ranking inside pointwise and distributional. Peaks stays in the
+composite for a/b/c. The count sub-board ranks three rows, not four.
 """
 from __future__ import annotations
 
@@ -254,18 +255,86 @@ def test_add_refuses_a_wrong_store_hash(root: Path) -> None:
 def test_plain_ranks_and_the_missing_arm_rule(root: Path) -> None:
     add_all(root)
     view = dev_view(root)
-    # fixture-d has no auprc, so peaks leaves the composite for every row (§5.2);
-    # pointwise and distributional stay because every row has them.
-    assert view["categories_in_composite"] == ["distributional", "pointwise"]
-    ranks = {r["id"]: r["rank"] for r in view["rows"]}
-    assert ranks == {"fixture-a@v1": [1, 1], "fixture-b@v1": [2, 2],
-                     "fixture-c@v1": [3, 3], "fixture-d@v1": [4, 4]}
+    # fixture-d has no auprc (peaks). Peaks stays in the composite for everyone who
+    # covers it; d is incomplete — no composite, no headline rank (PI 2026-08-27).
+    assert view["categories_in_composite"] == ["distributional", "peaks", "pointwise"]
+    by_id = {r["id"]: r for r in view["rows"]}
+    assert by_id["fixture-a@v1"]["rank"] == [1, 1]
+    assert by_id["fixture-b@v1"]["rank"] == [2, 2]
+    assert by_id["fixture-c@v1"]["rank"] == [3, 3]
+    assert by_id["fixture-d@v1"]["rank"] is None
+    assert by_id["fixture-d@v1"]["composite"] is None
+    assert by_id["fixture-d@v1"]["partial_coverage"] is True
+    assert by_id["fixture-d@v1"]["missing_composite_categories"] == ["peaks"]
+    # d still ranks inside every category it covers
+    assert by_id["fixture-d@v1"]["metric_ranks"]["pval/mse"] == [4, 4]
+    assert by_id["fixture-d@v1"]["metric_ranks"]["pval/crps"] == [4, 4]
+    assert "pval/auprc" not in by_id["fixture-d@v1"]["metric_ranks"]
+    assert "peaks" not in by_id["fixture-d@v1"]["category_subscores"]
+    assert "pointwise" in by_id["fixture-d@v1"]["category_subscores"]
+    # a/b/c keep a composite that now includes peaks
+    for rid in ("fixture-a@v1", "fixture-b@v1", "fixture-c@v1"):
+        assert by_id[rid]["partial_coverage"] is False
+        assert by_id[rid]["composite"] is not None
+        assert "peaks" in by_id[rid]["category_subscores"]
     # the count arm is a sub-board, not a composite category, and d is simply not on it
     sub = view["sub_boards"]["count_arm"]
     assert [r["id"] for r in sub["rows"]] == ["fixture-a@v1", "fixture-b@v1", "fixture-c@v1"]
     # a and b sit 0.05 apart on count crps — under the 0.09 floor, so they share "1-2"
     by_id = {r["id"]: r["rank"] for r in sub["rows"]}
     assert by_id == {"fixture-a@v1": [1, 2], "fixture-b@v1": [1, 2], "fixture-c@v1": [3, 3]}
+
+
+def test_partial_coverage_blanks_composite_without_poisoning_peers(root: Path, tmp_path: Path) -> None:
+    """A method missing an entire composite category (distributional) gets a dash,
+    not a zeroed composite, and does not drop that category for complete peers."""
+    add(root, "score_fixture_a.json", "fixture-a", "--allow-missing")
+    add(root, "score_fixture_b.json", "fixture-b", "--allow-missing")
+    score = json.loads((FIX / "score_fixture_c.json").read_text(encoding="utf-8"))
+    for key in ("crps", "pit_ks", "coverage_95", "gaussian_nll"):
+        score["macro"]["pval"].pop(key, None)
+    path = tmp_path / "score_partial.json"
+    path.write_text(json.dumps(score), encoding="utf-8")
+    lb.main(["--root", str(root), "add", str(path),
+             "--board", "dev", "--method", "fixture-partial", "--version", "v1",
+             "--date", "2026-08-27", "--lineage", "baseline",
+             "--position-class", "generalizing", "--cell-class", "zero-shot",
+             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    view = dev_view(root)
+    assert "distributional" in view["categories_in_composite"]
+    by_id = {r["id"]: r for r in view["rows"]}
+    partial = by_id["fixture-partial@v1"]
+    assert partial["composite"] is None and partial["rank"] is None
+    assert partial["partial_coverage"] is True
+    assert "distributional" in partial["missing_composite_categories"]
+    assert "pval/mse" in partial["metric_ranks"]  # still ranks in pointwise
+    assert by_id["fixture-a@v1"]["composite"] is not None
+    assert by_id["fixture-a@v1"]["rank"] == [1, 1]
+    assert "distributional" in by_id["fixture-a@v1"]["category_subscores"]
+
+
+def test_missing_count_arm_alone_does_not_blank_composite(root: Path, tmp_path: Path) -> None:
+    """Count space is a sub-board, not a composite category (B1b). A pval-only row
+    that fully covers pointwise + distributional + peaks still gets a composite."""
+    add(root, "score_fixture_a.json", "fixture-a", "--allow-missing")
+    score = json.loads((FIX / "score_fixture_b.json").read_text(encoding="utf-8"))
+    score["macro"]["count"] = {}
+    path = tmp_path / "score_pval_only.json"
+    path.write_text(json.dumps(score), encoding="utf-8")
+    lb.main(["--root", str(root), "add", str(path),
+             "--board", "dev", "--method", "fixture-pval-only", "--version", "v1",
+             "--date", "2026-08-27", "--lineage", "baseline",
+             "--position-class", "generalizing", "--cell-class", "zero-shot",
+             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    view = dev_view(root)
+    by_id = {r["id"]: r for r in view["rows"]}
+    assert by_id["fixture-pval-only@v1"]["partial_coverage"] is False
+    assert by_id["fixture-pval-only@v1"]["composite"] is not None
+    assert by_id["fixture-pval-only@v1"]["rank"] is not None
+    assert "count" not in by_id["fixture-pval-only@v1"]["metrics"]
+    assert [r["id"] for r in view["sub_boards"]["count_arm"]["rows"]] == ["fixture-a@v1"]
 
 
 def test_floor_ties_propagate_into_composite_spreads(root: Path) -> None:
@@ -280,12 +349,16 @@ def test_floor_ties_propagate_into_composite_spreads(root: Path) -> None:
     rows = {r["id"]: r for r in dev_view(root)["rows"]}
     assert rows["fixture-a@v1"]["metric_ranks"]["pval/crps"] == [1, 2]
     assert rows["fixture-b@v1"]["metric_ranks"]["pval/crps"] == [1, 2]
-    assert rows["fixture-a@v1"]["composite"] == [1.0, 1.5]   # pointwise (1,1) + crps (1,2)
-    assert rows["fixture-b@v1"]["composite"] == [1.5, 2.0]
-    assert rows["fixture-a@v1"]["rank"] == [1, 2]
-    assert rows["fixture-b@v1"]["rank"] == [1, 2]
+    # peaks now stays in the composite (d is incomplete, not a veto).
+    # a: pointwise (1,1) + crps (1,2) + peaks (1,1) → (1.0, 4/3)
+    # b: pointwise (2,2) + crps (1,2) + peaks (2,2) → (5/3, 2.0)
+    assert rows["fixture-a@v1"]["composite"] == [1.0, 4 / 3]
+    assert rows["fixture-b@v1"]["composite"] == [5 / 3, 2.0]
+    assert rows["fixture-a@v1"]["rank"] == [1, 1]
+    assert rows["fixture-b@v1"]["rank"] == [2, 2]
     assert rows["fixture-c@v1"]["rank"] == [3, 3]
-    assert rows["fixture-d@v1"]["rank"] == [4, 4]
+    assert rows["fixture-d@v1"]["rank"] is None
+    assert rows["fixture-d@v1"]["composite"] is None
 
 
 def test_lineage_sub_board_takes_only_candi_diagnostics(root: Path) -> None:
@@ -340,6 +413,9 @@ def test_site_is_a_merged_plain_language_view() -> None:
     assert "helpBtn" in js and "rankBarChart" in js and "radarCard" in js
     assert "ordering only" in js
     assert "oracle-scaled" in js
+    assert "partial coverage" in js
+    assert "not scored on this eval set" in js
+    assert "compositeCell" in js
 
 
 # ---------------------------------------------------------------- site ---

@@ -158,6 +158,8 @@ tr.medal-3 td.rank-cell { color: var(--bronze-ink); }
 .delta { display: block; font-size: 10.5px; color: var(--ink-soft); }
 .delta.subfloor { color: var(--tie); }
 .cell-missing { color: var(--ink-faint); }
+.partial-note { display: block; font-size: 9px; font-weight: 600; color: var(--ink-faint);
+  text-transform: none; letter-spacing: 0; }
 
 /* method cell */
 .method-name { font-weight: 700; }
