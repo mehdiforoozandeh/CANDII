@@ -527,8 +527,11 @@ def cmd_check(args: argparse.Namespace) -> int:
         src = root / "site" / name
         if not src.exists():
             raise GateError(f"site source {src} is missing")
-        if "http://" in src.read_text(encoding="utf-8") or \
-           "https://" in src.read_text(encoding="utf-8"):
+        # the W3C namespace identifier (SVG createElementNS / favicon xmlns) is a name,
+        # not a request; everything else that smells like a URL is refused.
+        text = src.read_text(encoding="utf-8") \
+            .replace("http://www.w3.org/", "").replace("http%3A%2F%2Fwww.w3.org%2F", "")
+        if "http://" in text or "https://" in text:
             raise GateError(f"{src} references an external URL — the site makes no "
                             "external requests (PRD §8)")
     with tempfile.TemporaryDirectory() as tmp:

@@ -222,3 +222,54 @@ def test_empty_state_compiles(root: Path) -> None:
         for view in board["views"].values():
             assert view["rows"] == []
         assert board["climb"] == {}
+
+
+# ---------------------------------------------------------------- site ---
+
+import shutil  # noqa: E402  (kept with the site tests that need it)
+
+
+def with_site(root: Path) -> Path:
+    shutil.copytree(REPO / "leaderboard" / "site", root / "site")
+    return root
+
+
+def test_build_ships_the_site_beside_the_payload(root: Path, tmp_path: Path) -> None:
+    add_all(with_site(root))
+    out = tmp_path / "_site"
+    lb.main(["--root", str(root), "build", "--out", str(out)])
+    assert sorted(p.name for p in out.iterdir()) == ["app.js", "index.html",
+                                                     "leaderboard.json", "style.css"]
+    payload = json.loads((out / "leaderboard.json").read_text(encoding="utf-8"))
+    assert set(payload["boards"]) == {"main", "dev", "entrants"}
+    index = (out / "index.html").read_text(encoding="utf-8")
+    assert 'src="app.js"' in index and 'href="style.css"' in index
+    assert "leaderboard.json" in (out / "app.js").read_text(encoding="utf-8")
+
+
+def test_build_is_bit_identical_between_reruns(root: Path, tmp_path: Path) -> None:
+    add_all(with_site(root))
+    a, b = tmp_path / "a", tmp_path / "b"
+    lb.main(["--root", str(root), "build", "--out", str(a)])
+    lb.main(["--root", str(root), "build", "--out", str(b)])
+    for name in ("leaderboard.json", "index.html", "app.js", "style.css"):
+        assert (a / name).read_bytes() == (b / name).read_bytes()
+
+
+def test_site_makes_no_external_requests() -> None:
+    """PRD §8 — no framework, no chart library, no external requests. The W3C namespace
+    identifier is a name, not a request, and is the only thing allowed to look like a URL."""
+    for name in ("index.html", "app.js", "style.css"):
+        text = (REPO / "leaderboard" / "site" / name).read_text(encoding="utf-8") \
+            .replace("http://www.w3.org/", "").replace("http%3A%2F%2Fwww.w3.org%2F", "")
+        assert "http://" not in text and "https://" not in text, name
+
+
+def test_check_passes_on_the_committed_repo_state() -> None:
+    """`check` is what CI runs; it must pass on the empty-rows repo as committed."""
+    assert lb.main(["check"]) == 0
+
+
+def test_check_passes_with_fixture_rows(root: Path) -> None:
+    add_all(with_site(root))
+    assert lb.main(["--root", str(root), "check"]) == 0
