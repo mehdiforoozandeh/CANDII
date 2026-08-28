@@ -426,6 +426,32 @@ no oracle split — and its provenance carries `clip: true`, `contributor_mode: 
 `pred_inversion: external` and the sigma table's `fitted_on`. That is what the smoke exists to
 prove: every switch this method has reaches the score file as data.
 
+## The deliverable result — P1
+
+Regime `regime.eic_val.json`: 51 training cells, 26 T->V pairs, **45 declared tracks**, every 25 bp
+bin of chr21. `--contributor-mode loo`, cap on, sigma from the §6.1 table fitted on this same panel.
+
+| | mse | gwcorr | crps | pit_ks | coverage_95 | gaussian_nll |
+|---|---|---|---|---|---|---|
+| Lavawizard | 6.2662 | 0.6297 | 0.6023 | 0.3978 | 0.9852 | 1.7535 |
+| *same code, 50-step model* | *6.4319* | *0.5501* | *0.6245* | *0.3763* | *0.9848* | *1.7905* |
+
+The second row is the plumbing smoke, and it is here as a **calibration on how much of this is the
+method**. Training the model properly moved `gwcorr` 0.550 -> 0.630, a real gain — but it moved
+`mse` only 6.43 -> 6.27. That is the additive skip: `y = Dense(1)(x) + average`, so the cross-cell
+average carries most of the squared error and the network earns its keep on correlation. Read the
+correlation columns when asking whether this method works.
+
+**Calibration is poor and the reason is the device, not the method.** `pit_ks` near 0.40 says the
+PIT is far from uniform, and `coverage_95` of 0.985 against a nominal 0.95 says the constant sigma
+is too wide. That is what B1a's homoscedastic Gaussian does to a heavy-tailed residual. Per the
+2026-08-26 ruling (plan §6.4) the CRPS is quoted with both of these and with **no** oracle split,
+and **no pval-CRPS gap is significant until that arm's noise floor is measured**.
+
+Placement is t55's job, not this README's. One row for scale, on the same instrument and the same
+45 tracks: eDICE's P1 reads `mse=6.1572 gwcorr=0.7075 crps=0.5885 pit_ks=0.3868 coverage_95=0.9851`
+— better, and clearly so on correlation.
+
 ## Reading an anchor number
 
 `anchor.py` scores three pairings on the upstream grid in raw `-log10 p`: ours vs `blind_truth`,
