@@ -7,7 +7,7 @@
       "subtitle": "23 chromosomes",
       "protocol": "P2",
       "rows_note": "CANDI versions, retrained rivals, naive baselines.",
-      "eli5": "The same held-out cell-type pairs, scored on every chromosome in the store. Methods that train on every genomic position are still in-sample here, so this column is not a standalone head-to-head.",
+      "eli5": "The same training-to-validation pairs of a cell type the method already saw, scored on every chromosome in the store. This is missing-mark transfer, not an unseen-cell-type test. Methods that train on every genomic position are still in-sample here, so this column is not a standalone head-to-head.",
       "eval_set": {
         "id": "eic_val.P2",
         "regime": "configs/regime.eic_val.json",
@@ -28,20 +28,25 @@
       "strict_view": {
         "excludes": ["chr19"],
         "note": "Drop chromosome 19, the only chromosome CANDI trained on. CANDI is then fully held-out while methods that train on every position keep their advantage — CANDI's number here is conservative by construction.",
-        "eli5": "CANDI saw chromosome 19 in training. This toggle scores the rest of the genome only, so CANDI is fully held-out. Methods that train on every position are still in-sample. Internal code: strict view."
+        "eli5": "CANDI saw chromosome 19 in training. This toggle is for a CANDI row that is not stamped yet: no current row has a chr19-removed score, so flipping it currently ranks nobody (eDICE and ChromImpute show as unranked). Methods that train on every position would still be in-sample here even after those scores land. Internal code: strict view."
       },
       "caveats": [
         "CANDI trained on chromosome-19 positions only, so in the all-chromosomes column CANDI is in-sample on chr19 and held-out on the other 22.",
-        "Methods that train on every genomic position (Avocado, ChromImpute) are in-sample everywhere, on both the all-chromosomes column and the chr19-removed column. No choice of eval chromosome removes this; it is disclosed on every row."
+        "Methods that train on every genomic position (Avocado, ChromImpute) are in-sample everywhere, on both the all-chromosomes column and the chr19-removed column. No choice of eval chromosome removes this; it is disclosed on every row.",
+        "The chromosome-19-removed view has no stamped scores yet; flipping it currently ranks nobody."
       ],
       "reader_badges": [
         {
           "label": "In-sample for position-trained methods",
           "eli5": "Avocado and ChromImpute train on every genomic position, so this column is not a standalone head-to-head. CANDI trained on chromosome 19 only. Internal code: P2 / main board, position transductivity."
+        },
+        {
+          "label": "Same cell type, held-out experiment",
+          "eli5": "Each score is a mark the validation experiment has and the paired training experiment of that same cell type lacks. The method has seen the type. Blind-test pairs (regime.eic_test) are not this board. Internal code: eic_val eval_pairs."
         }
       ],
       "pending": [
-        {"method": "Lavawizard", "lineage": "rival", "note": "results computing"},
+        {"method": "Lavawizard", "lineage": "rival", "note": "Dataset-2 retrain not started"},
         {"method": "avg", "lineage": "baseline", "note": "results computing"},
         {"method": "knn5", "lineage": "baseline", "note": "results computing"}
       ]
@@ -51,7 +56,7 @@
       "subtitle": "development set",
       "protocol": "P1",
       "rows_note": "The fast column new CANDI versions hit first; same methods as the full-genome column.",
-      "eli5": "A fast check on one chromosome, using the same held-out cell-type pairs. Numbers here select what is worth scoring on the whole genome; they are not the headline result.",
+      "eli5": "A fast check on one chromosome, using the same training-to-validation pairs of a seen cell type. This is missing-mark transfer, not an unseen-cell-type test. Numbers here select what is worth scoring on the whole genome; they are not the headline result.",
       "eval_set": {
         "id": "eic_val.P1",
         "regime": "configs/regime.eic_val.json",
@@ -72,9 +77,14 @@
         "Development column — chromosome 21 only. Numbers here select what goes to the full-genome column; they are not the headline result.",
         "CANDI trained on chromosome 19, so it is held-out on chromosome 21; methods that train on every position are in-sample here too."
       ],
-      "reader_badges": [],
+      "reader_badges": [
+        {
+          "label": "Same cell type, held-out experiment",
+          "eli5": "Each score is a mark the validation experiment has and the paired training experiment of that same cell type lacks. The method has seen the type. Blind-test pairs (regime.eic_test) are not this board. Internal code: eic_val eval_pairs."
+        }
+      ],
       "pending": [
-        {"method": "Lavawizard", "lineage": "rival", "note": "results computing"}
+        {"method": "Lavawizard", "lineage": "rival", "note": "Dataset-2 retrain not started"}
       ]
     },
     "entrants": {

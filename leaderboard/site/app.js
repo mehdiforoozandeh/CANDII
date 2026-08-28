@@ -17,6 +17,11 @@ const LINEAGE_LABEL = {
   candi: "CANDI", rival: "retrained rival",
   baseline: "baseline", entrant: "2019 entrant",
 };
+/* Table names that collide across boards. Slugs stay; the gloss is the label. */
+const METHOD_QUALIFIER = {
+  avg: "Dataset-2 · train-only",
+  Average: "2019 · train+validation",
+};
 
 /* Verified 2026-08-27 from fit_sigma / bench.external and the stamped rival rows.
  * Point-only rivals: one σ per assay, V-pair residuals on eval chr21, reused unchanged.
@@ -224,9 +229,21 @@ function applyHash() {
 function armClass(m) {
   return m.arm === "count" ? "arm-count" : m.arm === "pval" ? "arm-pval" : "";
 }
-function spaceTag(m) {
-  const s = m.arm === "count" ? "counts" : m.arm === "pval" ? "p-value" : "diagnostic";
+function spaceTag(m, bid) {
+  let s = "diagnostic";
+  if (m.arm === "count") s = "counts";
+  else if (m.arm === "pval") s = bid === "entrants" ? "2019 signal" : "−log10 p";
   return h("span", { class: "space-tag" }, s);
+}
+
+function cellClassBadge(text) {
+  if (!text) return null;
+  if (text === "zero-shot cell types") {
+    return h("span", { class: "badge",
+      title: "Stored class: zero-shot cell types. In this vocabulary that means no learned per-cell embedding, not a cell type with no training experiment. Dataset-2 scores training→validation of the same type." },
+      "no cell embedding");
+  }
+  return h("span", { class: "badge" }, text);
 }
 
 function hasSigmaTable(row) {
@@ -374,12 +391,13 @@ function readerBadges(meta) {
       b.label, helpBtn(`badge-${meta.protocol}-${i}`, b.eli5)));
 }
 
-function familyTabCaption(cid) {
+function familyTabCaption(cid, bid) {
   if (cid === "summary") return { title: "Summary", sub: "composite rank" };
   const c = catInfo(cid);
   if (!c) return { title: cid, sub: "" };
-  const sub = (c.space_label && c.space_label.toLowerCase() !== c.label.toLowerCase())
+  let sub = (c.space_label && c.space_label.toLowerCase() !== c.label.toLowerCase())
     ? c.space_label : "";
+  if (bid === "entrants" && cid === "pointwise") sub = "2019 signal";
   return { title: c.label, sub };
 }
 
@@ -393,9 +411,12 @@ function familyEli5(cid) {
   return c && c.eli5;
 }
 
-function headEli5(head) {
+function headEli5(head, bid) {
   if (head.id === "pval") {
-    return "P-value space. Ranking uses the same §5.2 composite as the data-level summary. Peak scores live under the Peak head, even though the composite math still includes the peaks category when it is board-active. Count numbers never appear here.";
+    if (bid === "entrants") {
+      return "2019 challenge signal, not store −log10 p. Ranking uses the point-wise composite on this board. The header letters MSE / Pearson / Spearman match Full genome and Chromosome 21; the truth signal does not. Never translate.";
+    }
+    return "P-value space (−log10 p from the store). Ranking uses the same §5.2 composite as the data-level summary. Peak scores live under the Peak head, even though the composite math still includes the peaks category when it is board-active. Count numbers never appear here. The header letters MSE / Pearson / Spearman match the 2019 tab; the truth signal does not.";
   }
   if (head.id === "count") {
     return "Count space. Ranking is Negative Binomial CRPS, always with its oracle-scaled / scale-error split and the ±0.09 noise floor. Covariate sensitivity sits here because the C-block re-decodes (μ, n) against count truth. P-value numbers never appear here.";
@@ -459,7 +480,9 @@ function picker() {
   const midOpts = [
     { id: "summary", label: "Summary", sub: "composite rank", eli5: familyEli5("summary") },
     ...heads.map((hd) => ({
-      id: hd.id, label: hd.label, sub: hd.space, eli5: headEli5(hd),
+      id: hd.id, label: hd.label,
+      sub: (bid === "entrants" && hd.id === "pval") ? "2019 signal" : hd.space,
+      eli5: headEli5(hd, bid),
     })),
     { id: "radar", label: "Shape", sub: "per-method radar",
       eli5: "Each edge is a category. Rank 1 sits on the outer ring; last place sits at the centre. Ranks are within this eval set only." },
@@ -490,7 +513,7 @@ function picker() {
 
   const innerOpts = headReady
     ? [{ id: "summary", ...headSummaryCaption(head.id) },
-       ...families.map((cid) => ({ id: cid, ...familyTabCaption(cid) }))]
+       ...families.map((cid) => ({ id: cid, ...familyTabCaption(cid, bid) }))]
     : [];
   const inner = headReady
     ? h("div", { class: "tabs inner", id: "family-tabs", role: "tablist",
@@ -650,7 +673,7 @@ function entriesForFamily(bid, cid) {
   });
 }
 
-function familyKicker(cid) {
+function familyKicker(cid, bid) {
   if (cid === "summary") {
     return "Headline ranking on the p-value-space composite (best at top). Methods with partial coverage have no composite rank — incomplete, not last. Count-space ranking lives under the Count head; peak ranking lives under the Peak head.";
   }
@@ -660,7 +683,9 @@ function familyKicker(cid) {
   if (cid === "distributional") return DIST_ONELINER;
   if (cid === "peaks") return PEAK_ONELINER;
   if (cid === "pointwise") {
-    return "Point-wise scores in p-value space. Every method that emits a point track can appear here.";
+    return bid === "entrants"
+      ? "Point-wise scores on 2019 challenge signal. The header letters MSE / Pearson / Spearman match Full genome and Chromosome 21; the truth signal does not. Never translate."
+      : "Point-wise scores in store −log10 p. The header letters MSE / Pearson / Spearman match the 2019 tab; the truth signal does not. Never translate.";
   }
   return "";
 }
@@ -680,7 +705,7 @@ function summaryBody(bid) {
   const pending = pendingOf(bid);
   const scored = view.rows.filter((r) => r.rank);
   return h("div", null,
-    h("p", { class: "chart-kicker" }, familyKicker("summary"),
+    h("p", { class: "chart-kicker" }, familyKicker("summary", bid),
       helpBtn("composite", familyEli5("summary"))),
     rankBarChart({
       aria: `Ranked methods on ${metaOf(bid).label}, composite`,
@@ -727,7 +752,7 @@ function headSummaryBody(bid, head) {
   };
   return h("div", { class: "head-summary" },
     h("p", { class: "chart-kicker" }, headKicker(head),
-      helpBtn(`head-sum-${head.id}`, head.id === "peak" ? PEAK_ELI5 : headEli5(head))),
+      helpBtn(`head-sum-${head.id}`, head.id === "peak" ? PEAK_ELI5 : headEli5(head, bid))),
     rankBarChart({
       aria: `Ranked methods on ${metaOf(bid).label}, ${head.label} head`,
       scored,
@@ -751,7 +776,7 @@ function familyChartAndTable(bid, cid, headId) {
   const groups = metricGroups(cid, headId);
   const scored = view.rows.filter((r) => rowHasFamily(r, cid) && familyRankSpread(r, cid, view));
   const primary = catMetrics(cid, ["ranked"]).filter((m) => !headId || headIdOf(m) === headId)[0];
-  const kicker = familyKicker(cid);
+  const kicker = familyKicker(cid, bid);
   const chart = (!scored.length && !pending.length) ? null : rankBarChart({
       aria: `Ranked methods on ${metaOf(bid).label}, ${familyTabCaption(cid).title}`,
       scored,
@@ -939,7 +964,7 @@ function familyTable(bid, cid, groups, opts) {
     ...groups.flatMap((g) => g.metrics.map((m) =>
       h("th", { class: armClass(m), title: metricTitle(m) },
         h("span", { class: "chip-wrap" },
-          m.label, spaceTag(m), helpBtn(`col-${cid}-${metricId(m)}`, metricExplainer(m)))))));
+          m.label, spaceTag(m, bid), helpBtn(`col-${cid}-${metricId(m)}`, metricExplainer(m)))))));
 
   const showSpread = cid === "distributional" || groups.some((g) =>
     g.metrics.some((m) => m.key === "pit_ks" || m.key === "coverage_95"));
@@ -955,7 +980,7 @@ function familyTable(bid, cid, groups, opts) {
       const rest = nCols - 1;
       cells.push(h("td", { class: "rank-cell cell-pending", colspan: rest,
         title: entry.pending.note || "results computing" },
-        "results computing"));
+        entry.pending.note || "results computing"));
     } else if (!entry.row) {
       const title = entry.unranked
         ? (entry.unranked.note || "no scores for this chromosome set")
@@ -1005,21 +1030,27 @@ function medalClass(row, view) {
 function methodCell(entry, bid, opts) {
   const row = entry.row;
   const b = (row && row.badges) || {};
-  const pendingNote = entry.pending && !row
-    ? (metaOf(bid).label)
+  const pendingStatus = entry.pending && !row
+    ? (entry.pending.note || "results computing")
     : null;
   const spreadBadge = (opts && opts.spread) ? deviceBadge("spread", spreadDevice(row)) : null;
   const peakBadge = (opts && opts.peak) ? deviceBadge("peak", peakDevice(row)) : null;
+  const gloss = METHOD_QUALIFIER[entry.method];
   return h("td", { class: "method-col" },
     h("div", { class: "method-line" },
       methodLink(entry.method),
+      gloss
+        ? h("span", { class: "version-chip",
+            title: "avg and Average are different methods. Do not mix them or write “Average vs eDICE” without naming which Average." },
+            gloss)
+        : null,
       h("span", { class: `badge lineage-${entry.lineage}` },
         LINEAGE_LABEL[entry.lineage] || entry.lineage),
       spreadBadge, peakBadge),
     h("div", { class: "method-line" },
       row ? h("span", { class: "version-chip" }, `${row.version} · ${row.date}`) : null,
       b.position ? h("span", { class: "badge" }, b.position) : null,
-      b.cell_types ? h("span", { class: "badge" }, b.cell_types) : null,
+      cellClassBadge(b.cell_types),
       row && row.verified
         ? h("span", { class: "verified", title: "score json resolved when the row was stamped" },
             "✓ verified")
@@ -1027,8 +1058,8 @@ function methodCell(entry, bid, opts) {
           ? h("span", { class: "unverified", title: "artifacts not resolved at stamping" },
               "unverified")
           : null,
-      pendingNote
-        ? h("span", { class: "badge badge-pending" }, "computing · " + pendingNote)
+      pendingStatus
+        ? h("span", { class: "badge badge-pending" }, pendingStatus)
         : null,
       row ? h("button", {
         class: "prov-toggle",
@@ -1568,7 +1599,7 @@ function legendPanel() {
       h("dt", null, "paired columns"),
       h("dd", null, "Count-space CRPS never renders without its oracle-scaled / scale-error split; p-value CRPS never without PIT KS and coverage. Absent means absent — no number is ever invented."),
       h("dt", null, "results computing"),
-      h("dd", null, "A grey row or cell with no numbers: that method is a known entry whose scores have not landed yet. It is not a silent omission."),
+      h("dd", null, "A grey row or cell with no numbers: that method is a known entry whose scores have not landed yet. The italic note is the status (still computing, not started, …). It is not a silent omission."),
       h("dt", null, "✓ verified"),
       h("dd", null, "The row's score json resolved on disk when the row was stamped and `check` re-verifies it wherever the artifact is reachable.")));
 }
