@@ -11,7 +11,8 @@ const HEAD_LABEL = { count: "Count", pval: "P-value", peak: "Peak" };
  * because `harness.c_block(..., kind=kinds[0])` predicts NB (mu, n) against
  * count truth (`_predictor`, `_c_contexts`). kinds[0] defaults to "impute". */
 const COVARIATE_HEAD = "count";
-const RADAR_EDGES = ["pointwise", "distributional", "peaks", "count_arm"];
+const PVAL_RADAR_EDGES = ["pointwise", "distributional", "peaks"];
+const COUNT_RADAR_EDGES = ["count_arm"];
 const EN_DASH = "–";
 const LINEAGE_LABEL = {
   candi: "CANDI", rival: "retrained rival",
@@ -492,7 +493,7 @@ function picker() {
       eli5: headEli5(hd, bid),
     })),
     { id: "radar", label: "Shape", sub: "per-method radar",
-      eli5: "Each edge is a category. Rank 1 sits on the outer ring; last place sits at the centre. Ranks are within this eval set only." },
+      eli5: "P-value-space categories share one polygon; count-space rank is a separate figure beside it. Rank 1 is outer (or the top of the count bar); last place is the centre. Ranks are within this eval set only. Count-space and p-value-space numbers never share an axis." },
   ];
   const mid = h("div", { class: "tabs mid", id: "head-tabs", role: "tablist",
     "aria-label": "Output head" },
@@ -1289,13 +1290,18 @@ function categoryRankMid(row, cid, view) {
   return ranks.reduce((a, rk) => a + (rk[0] + rk[1]) / 2, 0) / ranks.length;
 }
 
-function radarEdges(view) {
-  return RADAR_EDGES.filter((cid) =>
+function radarEdges(view, ids) {
+  return ids.filter((cid) =>
     view.rows.some((r) => categoryRankMid(r, cid, view) !== null));
 }
 
 function axisN(view, cid) {
   return view.rows.filter((r) => categoryRankMid(r, cid, view) !== null).length;
+}
+
+function edgeSpace(cid) {
+  const c = catInfo(cid);
+  return (c && c.space_label) || "";
 }
 
 function radarPanel() {
@@ -1306,44 +1312,50 @@ function radarPanel() {
   }
   const view = viewFor(bid);
   const meta = metaOf(bid);
-  const edges = radarEdges(view);
-  if (edges.length < 3) {
+  const pvalEdges = radarEdges(view, PVAL_RADAR_EDGES);
+  const countEdges = radarEdges(view, COUNT_RADAR_EDGES);
+  if (pvalEdges.length < 3 && !countEdges.length) {
     return h("div", null,
       h("p", { class: "sub" },
-        `${meta.label} has ${edges.length} rankable categor${edges.length === 1 ? "y" : "ies"} — a shape needs three.`));
+        `${meta.label} has ${pvalEdges.length} rankable p-value categor${pvalEdges.length === 1 ? "y" : "ies"} — a p-value shape needs three.`));
   }
-  const cards = view.rows.map((row) => radarCard(row, view, edges));
+  const cards = view.rows.map((row) => radarCard(row, view, pvalEdges, countEdges));
   const pending = pendingOf(bid).map((p) =>
     h("div", { class: "radar-card pending-card" },
       h("div", { class: "radar-name" }, methodLink(p.method)),
       h("p", { class: "computing-note" }, p.note || "results computing")));
   return h("div", { id: "radar" },
     h("p", { class: "sub" },
-      "Each edge is a category. Rank 1 sits on the outer ring; last place sits at the centre. ",
+      "P-value-space categories (point-wise, distributional, peaks) share one polygon. ",
+      "Count-space rank is a separate figure beside it, labeled count space. ",
+      "Rank 1 sits on the outer ring (or the top of the count bar); last place sits at the centre. ",
       "Ranks are computed on ",
       coded(meta.label, `${meta.protocol} / ${bid}`),
-      " — not across eval sets."),
+      " — not across eval sets. Count-space and p-value-space numbers never share an axis."),
     h("div", { class: "radar-grid" }, ...cards, ...pending));
 }
 
-function radarCard(row, view, edges) {
-  const W = 220, H = 248, cx = 110, cy = 118, R = 78;
+function radarPolygon(row, view, edges, color) {
+  const space = edges.length ? edgeSpace(edges[0]) : "";
+  const oneSpace = edges.filter((cid) => edgeSpace(cid) === space);
+  const W = 220, H = 220, cx = 110, cy = 110, R = 78;
   const svg = h("svg:svg", {
     class: "radar-svg", viewBox: `0 0 ${W} ${H}`,
-    role: "img", "aria-label": `Category ranks for ${row.method}`,
+    role: "img", "aria-label": `${space} category ranks for ${row.method}`,
   });
-  const nAx = edges.length;
+  const nAx = oneSpace.length;
+  if (nAx < 3) return svg;
   const pt = (i, t) => {
     const ang = -Math.PI / 2 + i * 2 * Math.PI / nAx;
     return [cx + Math.cos(ang) * R * t, cy + Math.sin(ang) * R * t];
   };
   for (const ring of [0.25, 0.5, 0.75, 1]) {
-    const pts = edges.map((_, i) => pt(i, ring).join(",")).join(" ");
+    const pts = oneSpace.map((_, i) => pt(i, ring).join(",")).join(" ");
     svg.append(h("svg:polygon", {
       points: pts, fill: "none", stroke: "var(--line)", "stroke-width": 1,
     }));
   }
-  edges.forEach((cid, i) => {
+  oneSpace.forEach((cid, i) => {
     const [x, y] = pt(i, 1);
     svg.append(h("svg:line", {
       x1: cx, y1: cy, x2: x, y2: y, stroke: "var(--line)", "stroke-width": 1,
@@ -1356,16 +1368,13 @@ function radarCard(row, view, edges) {
     }, c ? c.label : cid));
   });
   const verts = [];
-  edges.forEach((cid, i) => {
+  oneSpace.forEach((cid, i) => {
     const rank = categoryRankMid(row, cid, view);
     if (rank === null) return;
     const n = axisN(view, cid) || 1;
     const t = n <= 1 ? 1 : (n - rank + 1) / n;
     verts.push(pt(i, t));
   });
-  const colors = { candi: "var(--candi)", rival: "var(--rival)",
-                   baseline: "var(--baseline)", entrant: "var(--entrant)" };
-  const color = colors[row.lineage] || "var(--ink-soft)";
   if (verts.length >= 3) {
     svg.append(h("svg:polygon", {
       points: verts.map((p) => p.join(",")).join(" "),
@@ -1375,10 +1384,77 @@ function radarCard(row, view, edges) {
   verts.forEach(([x, y]) => {
     svg.append(h("svg:circle", { cx: x, cy: y, r: 2.5, fill: color }));
   });
+  return svg;
+}
+
+function radarCountBar(row, view, cid, color) {
+  const W = 88, H = 220, top = 28, bot = 200, x = 34, barW = 20;
+  const c = catInfo(cid);
+  const space = (c && c.space_label) || "count space";
+  const svg = h("svg:svg", {
+    class: "radar-count-svg", viewBox: `0 0 ${W} ${H}`,
+    role: "img", "aria-label": `${space} rank for ${row.method}`,
+  });
+  svg.append(h("svg:text", {
+    x: W / 2, y: 14, "text-anchor": "middle", "font-size": 9,
+    fill: "var(--ink-soft)",
+  }, c ? c.label : cid));
+  svg.append(h("svg:rect", {
+    x, y: top, width: barW, height: bot - top, rx: 3,
+    fill: "none", stroke: "var(--line)", "stroke-width": 1,
+  }));
+  svg.append(h("svg:text", {
+    x: x + barW + 6, y: top + 8, "font-size": 8, fill: "var(--ink-faint)",
+  }, "rank 1"));
+  svg.append(h("svg:text", {
+    x: x + barW + 6, y: bot, "font-size": 8, fill: "var(--ink-faint)",
+  }, "last"));
+  const rank = categoryRankMid(row, cid, view);
+  if (rank === null) return svg;
+  const n = axisN(view, cid) || 1;
+  const t = n <= 1 ? 1 : (n - rank + 1) / n;
+  const barH = Math.max(4, t * (bot - top));
+  svg.append(h("svg:rect", {
+    x, y: bot - barH, width: barW, height: barH, rx: 3,
+    fill: color,
+  }));
+  const rankLabel = rank === Math.round(rank) ? String(rank) : rank.toFixed(1);
+  svg.append(h("svg:text", {
+    x: x + barW / 2, y: bot - barH - 4, "text-anchor": "middle",
+    "font-size": 10, fill: "var(--ink-soft)",
+  }, rankLabel));
+  return svg;
+}
+
+function radarCard(row, view, pvalEdges, countEdges) {
+  const colors = { candi: "var(--candi)", rival: "var(--rival)",
+                   baseline: "var(--baseline)", entrant: "var(--entrant)" };
+  const color = colors[row.lineage] || "var(--ink-soft)";
+  const figures = [];
+  if (pvalEdges.length >= 3) {
+    figures.push(h("div", { class: "radar-space" },
+      h("div", { class: "space-tag" }, "p-value space"),
+      radarPolygon(row, view, pvalEdges, color)));
+  }
+  if (countEdges.length) {
+    const hasCount = countEdges.some((cid) => categoryRankMid(row, cid, view) !== null);
+    let countFig;
+    if (!hasCount) {
+      countFig = h("p", { class: "radar-absent" }, "no count arm");
+    } else if (countEdges.length >= 3) {
+      countFig = radarPolygon(row, view, countEdges, color);
+    } else {
+      countFig = h("div", { class: "radar-count-bars" },
+        ...countEdges.map((cid) => radarCountBar(row, view, cid, color)));
+    }
+    figures.push(h("div", { class: "radar-space" },
+      h("div", { class: "space-tag" }, "count space"),
+      countFig));
+  }
   return h("div", { class: "radar-card" },
     h("div", { class: "radar-name" }, methodLink(row.method),
       h("span", { class: "version-chip" }, row.version)),
-    svg);
+    h("div", { class: "radar-figures" }, ...figures));
 }
 
 /* ------------------------------------------------------------- climb --- */
@@ -1529,11 +1605,12 @@ function methodCardBody(name, info) {
   if (bid && state.data.boards[bid]) {
     const view = viewFor(bid);
     const row = view.rows.find((r) => r.method === name);
-    const edges = radarEdges(view);
-    if (row && edges.length >= 3) {
+    const pvalEdges = radarEdges(view, PVAL_RADAR_EDGES);
+    const countEdges = radarEdges(view, COUNT_RADAR_EDGES);
+    if (row && (pvalEdges.length >= 3 || countEdges.length)) {
       bits.push(
         h("div", { class: "card-label" }, "Shape on this eval set"),
-        radarCard(row, view, edges));
+        radarCard(row, view, pvalEdges, countEdges));
     }
   }
   return h("div", null, ...bits);

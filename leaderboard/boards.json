@@ -46,6 +46,7 @@
         }
       ],
       "pending": [
+        {"method": "CANDI", "lineage": "candi", "note": "mainline (chr19 recipe) training on Fir; genome-wide queued (count+signal+peak)"},
         {"method": "Lavawizard", "lineage": "rival", "note": "Dataset-2 retrain not started"},
         {"method": "avg", "lineage": "baseline", "note": "results computing"},
         {"method": "knn5", "lineage": "baseline", "note": "results computing"}
@@ -84,6 +85,7 @@
         }
       ],
       "pending": [
+        {"method": "CANDI", "lineage": "candi", "note": "mainline (chr19 recipe) training on Fir; genome-wide queued (count+signal+peak)"},
         {"method": "Lavawizard", "lineage": "rival", "note": "Dataset-2 retrain not started"}
       ]
     },

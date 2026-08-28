@@ -115,7 +115,7 @@
         "Quote count CRPS with its oracle-scaled / scale-error split and the noise floor.",
         "The genome-wide run is 4 epochs versus 25 — not a matched compute comparison with the chromosome-19 run or with Avocado’s 60/30.",
         "Blind-test pairs are not these jobs.",
-        "Full genome does not list CANDI as pending."
+        "Full genome and Chromosome 21 list CANDI as pending until a row is stamped."
       ]
     },
     "Average": {
@@ -358,14 +358,14 @@
       "question": "Who ranks highest on the p-value-space composite on the full genome, among methods scored on same-cell-type training-to-validation pairs?",
       "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs of a type the method already saw (not unseen cell types; not EIC stage-2 poorly characterised types; not regime.eic_test). 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
       "instrument": "Composite = mean of category mean-ranks for categories that at least one method on this eval set fully covers (point-wise, distributional, peaks when board-active). A method missing any of those categories is incomplete, not last: the composite cell is a dash. Lower is better. Count-space ranking lives under Count; peak ranking also feeds the composite when every ranked row has AUPRC.",
-      "devices": "Methods with a full p-value-space cover. eDICE and ChromImpute are stamped. avg and knn5 are listed as still computing. Avocado’s full-genome score exists but is not stamped. CANDI is not listed as pending.",
+      "devices": "Methods with a full p-value-space cover. eDICE and ChromImpute are stamped. avg and knn5 are listed as still computing. Avocado’s full-genome score exists but is not stamped. CANDI is listed as pending.",
       "caveats": "Avocado and ChromImpute are in-sample at every position; the chromosome-19-removed toggle does not remove that. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only. Partial coverage is a dash, never last place."
     },
     "dev/summary": {
       "question": "Who ranks highest on the p-value-space composite on chromosome 21, among methods scored on same-cell-type training-to-validation pairs?",
       "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs of a type the method already saw (not unseen cell types; not EIC stage-2 poorly characterised types; not regime.eic_test). 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
       "instrument": "Same composite rule as Full genome, computed only on chromosome 21.",
-      "devices": "Stamped: eDICE, ChromImpute, Avocado, avg, knn5, knn1, avg-arcsinh, marginal. Lavawizard’s Dataset-2 retrain is not started. CANDI is not stamped.",
+      "devices": "Stamped: eDICE, ChromImpute, Avocado, avg, knn5, knn1, avg-arcsinh, marginal. Lavawizard’s Dataset-2 retrain is not started. CANDI is listed as pending and is not stamped.",
       "caveats": "Development column — numbers here select what is worth scoring genome-wide; they are not the headline. Avocado and ChromImpute are in-sample on chromosome 21; CANDI’s chromosome-19 recipe would be held-out; eDICE is position-generalizing. knn1 and avg-arcsinh have no p-value CRPS, so they cannot complete the distributional category."
     },
     "entrants/summary": {
@@ -492,7 +492,7 @@
       "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
       "instrument": "Internal CANDI bench only: the C-block changes the prompt and re-decodes the negative binomial against count truth (imputation kind). Keys include whether covariates are used, how they share, depth direction, a depth counterfactual, and a paired depth-blind / biology-kept check. The external rival scorer cannot produce these numbers.",
       "devices": "CANDI-only. A live checkpoint is required. Rivals, baselines, and 2019 entrants are empty by construction.",
-      "caveats": "Empty until a CANDI checkpoint is scored by the internal bench on this eval set. Chromosome 21 pending lists only Lavawizard, not CANDI."
+      "caveats": "Empty until a CANDI checkpoint is scored by the internal bench on this eval set. Chromosome 21 pending lists Lavawizard and CANDI."
     },
     "entrants/count/covariate_diagnostics": {
       "question": "Not computed. The 2019 scorer cannot re-decode a CANDI prompt.",

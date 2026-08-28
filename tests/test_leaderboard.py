@@ -525,9 +525,14 @@ def test_pending_travels_into_the_payload_and_drops_when_stamped(root: Path) -> 
     method is dropped so a later `add` does not need a boards.json edit to un-grey it."""
     compiled = lb.compile_leaderboard(root)
     assert {p["method"] for p in compiled["boards"]["main"]["pending"]} >= {
-        "Lavawizard", "avg", "knn5"}
-    assert {p["method"] for p in compiled["boards"]["dev"]["pending"]} == {"Lavawizard"}
+        "CANDI", "Lavawizard", "avg", "knn5"}
+    assert {p["method"] for p in compiled["boards"]["dev"]["pending"]} == {"CANDI", "Lavawizard"}
     assert compiled["boards"]["entrants"]["pending"] == []
+    candi = next(p for p in compiled["boards"]["main"]["pending"] if p["method"] == "CANDI")
+    assert candi["lineage"] == "candi"
+    assert candi["note"] == (
+        "mainline (chr19 recipe) training on Fir; genome-wide queued (count+signal+peak)")
+    assert next(p for p in compiled["boards"]["dev"]["pending"] if p["method"] == "CANDI") == candi
     add(root, "score_fixture_a.json", "Lavawizard", "--allow-missing")
     compiled = lb.compile_leaderboard(root)
     assert all(p["method"] != "Lavawizard" for p in compiled["boards"]["dev"]["pending"])
@@ -549,6 +554,10 @@ def test_site_is_a_nested_plain_language_view() -> None:
     assert "Dataset-3" not in index
     assert "results computing" in js
     assert "helpBtn" in js and "rankBarChart" in js and "radarCard" in js
+    assert "PVAL_RADAR_EDGES" in js and "COUNT_RADAR_EDGES" in js
+    assert "radarCountBar" in js and "radarPolygon" in js
+    assert 'RADAR_EDGES = ["pointwise", "distributional", "peaks", "count_arm"]' not in js
+    assert "never share an axis" in js
     assert "ordering only" in js
     assert "oracle-scaled" in js
     assert "partial coverage" in js

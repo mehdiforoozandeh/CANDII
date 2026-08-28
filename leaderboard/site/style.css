@@ -271,13 +271,19 @@ tr.medal-2 td.method-col { background: var(--silver); }
 tr.medal-3 td.method-col { background: var(--bronze); }
 tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
 
-.radar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+.radar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 12px; }
 .radar-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 8px 4px;
   background: var(--bg); }
 .radar-name { font-size: 13px; font-weight: 700; display: flex; gap: 8px; align-items: baseline;
   flex-wrap: wrap; margin-bottom: 2px; }
-.radar-svg { width: 100%; height: auto; display: block; }
+.radar-figures { display: flex; gap: 10px; align-items: flex-start; }
+.radar-space { min-width: 0; }
+.radar-space .space-tag { margin: 2px 0 4px; }
+.radar-svg { width: 100%; max-width: 220px; height: auto; display: block; }
+.radar-count-svg { width: 88px; height: auto; display: block; flex: 0 0 88px; }
+.radar-count-bars { display: flex; gap: 4px; }
+.radar-absent { color: var(--ink-faint); font-size: 12px; font-style: italic; margin: 36px 4px; }
 .pending-card { opacity: 0.7; }
 .computing-note { margin: 18px 8px; color: var(--ink-faint); font-size: 12.5px; font-style: italic; }
 
