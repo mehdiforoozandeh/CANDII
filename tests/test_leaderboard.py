@@ -130,6 +130,24 @@ def test_add_extracts_the_sigma_table_id(root: Path) -> None:
                                                 "fitted_on": "regime.eic_val eval_pairs"}
 
 
+def test_add_carries_contributor_mode_in_flags(root: Path, tmp_path: Path) -> None:
+    """contributor_mode is a FLAG_KEYS member: add copies it and compile keeps it."""
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["provenance"]["contributor_mode"] = True
+    score_path = tmp_path / "score.json"
+    score_path.write_text(json.dumps(score), encoding="utf-8")
+    lb.main(["--root", str(root), "add", str(score_path),
+             "--board", "dev", "--method", "fixture-a", "--version", "v1",
+             "--date", "2026-08-27", "--lineage", "baseline",
+             "--position-class", "generalizing", "--cell-class", "zero-shot",
+             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    row = json.loads((root / "rows" / "dev" / "fixture-a@v1.json").read_text(encoding="utf-8"))
+    assert row["provenance"]["flags"]["contributor_mode"] is True
+    compiled = next(r for r in dev_view(root)["rows"] if r["id"] == "fixture-a@v1")
+    assert compiled["provenance"]["flags"]["contributor_mode"] is True
+
+
 # ---------------------------------------------------------------- refusals ---
 
 def test_add_refuses_nan(root: Path) -> None:
