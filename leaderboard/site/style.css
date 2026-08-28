@@ -345,3 +345,46 @@ tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
 .cov-absent code { font-family: var(--mono); font-size: 12px; }
 .loss-split { display: grid; gap: 28px; }
 .loss-block h3 { font-size: 14px; margin: 0 0 8px; }
+
+/* ------------------------------------------------------------- v5: gated picker, cards --- */
+.picker-hint { margin: 0 0 10px; color: var(--ink-soft); font-size: 13px; }
+.picker-placeholder { color: var(--ink-faint); font-size: 12.5px; padding: 8px 4px; }
+.tab[disabled], .tab[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.method-link {
+  appearance: none; border: none; background: none; font: inherit; font-weight: 700;
+  color: inherit; cursor: pointer; padding: 0;
+  text-decoration: underline dotted; text-underline-offset: 3px;
+}
+.method-link:hover { color: var(--accent); }
+.svg-method { cursor: pointer; }
+.climb-optin { margin: 4px 0 0; }
+.climb-link {
+  appearance: none; border: none; background: none; color: var(--ink-faint);
+  font: inherit; font-size: 12px; cursor: pointer; padding: 0;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.climb-link:hover { color: var(--accent); }
+.card-overlay {
+  position: fixed; inset: 0; background: rgba(20, 24, 28, 0.42); z-index: 50;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 48px 16px 24px; overflow: auto;
+}
+.card-sheet {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong);
+  border-radius: 12px; max-width: 42em; width: 100%; padding: 18px 20px 22px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+.card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.card-sheet h3 { margin: 0; font-size: 18px; }
+.card-close {
+  appearance: none; border: none; background: none; color: var(--accent);
+  font: inherit; font-size: 13px; cursor: pointer; padding: 0;
+}
+.card-close:hover { text-decoration: underline; }
+.card-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ink-faint); margin: 14px 0 4px;
+}
+.card-sheet p { margin: 0 0 8px; color: var(--ink-soft); font-size: 14px; }
+.card-sheet ul { margin: 0 0 8px; padding: 0 0 0 18px; color: var(--ink-soft); font-size: 14px; }
+.card-sheet .radar-card { margin-top: 8px; }

@@ -661,7 +661,7 @@ def compile_leaderboard(root: Path) -> Dict[str, Any]:
     }
 
 
-SITE_FILES = ("index.html", "app.js", "style.css")
+SITE_FILES = ("index.html", "app.js", "style.css", "help.json")
 
 
 def cmd_build(args: argparse.Namespace) -> int:

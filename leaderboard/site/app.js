@@ -28,14 +28,17 @@ const PEAK_ELI5 = "eDICE, Avocado, and ChromImpute do not output a peak probabil
 
 const state = {
   data: null,
+  help: { methods: {}, combos: {} },
   view: "default",
-  outerEval: "main",
-  midHead: "pval",
+  outerEval: null,
+  midHead: null,
   innerFamily: null,
   radarEval: "main",
   climbEval: "main",
+  showClimb: false,
   openProv: new Set(),
   openHelp: null,
+  openCard: null,
 };
 
 /* ------------------------------------------------------------- helpers --- */
@@ -143,6 +146,81 @@ function helpBtn(id, text) {
     },
   }, "?", open ? h("span", { class: "help-tip", role: "tooltip" }, text) : null);
 }
+function comboKey() {
+  if (!state.outerEval) return null;
+  if (state.midHead === "summary") return `${state.outerEval}/summary`;
+  if (!state.midHead || state.midHead === "radar") return null;
+  if (!state.innerFamily) return null;
+  return `${state.outerEval}/${state.midHead}/${state.innerFamily}`;
+}
+function comboComplete() {
+  if (!state.outerEval) return false;
+  if (state.midHead === "summary" || state.midHead === "radar") return true;
+  return !!(state.midHead && state.innerFamily);
+}
+function methodLink(name) {
+  return h("button", {
+    class: "method-link", type: "button",
+    "aria-label": `About ${name}`,
+    onclick: (ev) => {
+      ev.stopPropagation();
+      state.openCard = { kind: "method", id: name };
+      render();
+    },
+  }, name);
+}
+function comboHelpBtn() {
+  const key = comboKey();
+  if (!key) return null;
+  return h("button", {
+    class: "help", type: "button",
+    "aria-label": "What this view scores",
+    onclick: (ev) => {
+      ev.stopPropagation();
+      state.openCard = { kind: "combo", id: key };
+      render();
+    },
+  }, "?");
+}
+function writeHash() {
+  let next = "";
+  if (state.showClimb && !state.outerEval) next = "#over-time";
+  else if (state.outerEval) {
+    const segs = [state.outerEval];
+    if (state.midHead) segs.push(state.midHead);
+    if (state.midHead && state.midHead !== "summary" && state.midHead !== "radar"
+        && state.innerFamily) {
+      segs.push(state.innerFamily);
+    }
+    next = "#" + segs.join("/");
+  }
+  if (location.hash !== next) {
+    history.replaceState(null, "", next || (location.pathname + location.search));
+  }
+}
+function applyHash() {
+  if (!state.data) return;
+  const raw = decodeURIComponent((location.hash || "").replace(/^#/, "")).trim();
+  const ids = Object.keys(state.data.boards);
+  if (!raw) return;
+  if (raw === "over-time") {
+    state.showClimb = true;
+    return;
+  }
+  const parts = raw.split("/").filter(Boolean);
+  if (!ids.includes(parts[0])) return;
+  state.outerEval = parts[0];
+  if (parts[1] === "summary" || parts[1] === "radar") {
+    state.midHead = parts[1];
+    state.innerFamily = null;
+    if (parts[1] === "radar") state.radarEval = parts[0];
+    return;
+  }
+  if (parts[1] && HEAD_ORDER.includes(parts[1])) {
+    state.midHead = parts[1];
+    state.innerFamily = parts[2] || null;
+  }
+}
 function armClass(m) {
   return m.arm === "count" ? "arm-count" : m.arm === "pval" ? "arm-pval" : "";
 }
@@ -224,10 +302,22 @@ async function boot() {
     return;
   }
   state.data = payload;
+  try {
+    state.help = await (await fetch("help.json")).json();
+  } catch (err) {
+    state.help = { methods: {}, combos: {} };
+  }
   const ids = Object.keys(payload.boards);
-  if (!ids.includes(state.outerEval)) state.outerEval = ids[0];
   if (!(state.radarEval in payload.boards)) state.radarEval = ids[0];
   if (!(state.climbEval in payload.boards)) state.climbEval = ids[0];
+  applyHash();
+  window.addEventListener("hashchange", () => { applyHash(); render(); });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && state.openCard) {
+      state.openCard = null;
+      render();
+    }
+  });
   render();
 }
 
@@ -266,32 +356,16 @@ function metricGroups(cid, headId) {
 
 function render() {
   const app = document.getElementById("app");
-  app.replaceChildren(
-    introPanel(),
-    nestedBoard(),
-    radarPanel(),
-    climbPanel(),
-    legendPanel(),
-  );
+  const nodes = [picker()];
+  if (comboComplete()) {
+    nodes.push(comboView());
+    nodes.push(legendPanel());
+  }
+  nodes.push(state.showClimb ? climbPanel() : climbOptIn());
+  const overlay = cardOverlay();
+  if (overlay) nodes.push(overlay);
+  app.replaceChildren(...nodes);
   renderFooter();
-}
-
-function introPanel() {
-  const anyCaveats = boardIds().flatMap((bid) =>
-    (metaOf(bid).caveats || []).map((c) => [bid, c]));
-  return h("section", { class: "panel" },
-    h("h2", null, "How this page is laid out",
-      helpBtn("layout",
-        "Outer tabs pick the data set (what was scored). Directly under that is the composite ranking. Middle tabs pick the output head (count, p-value, peak) — those spaces never mix. Inner tabs pick the metric family for that head. Grey rows with no numbers mean results are still computing.")),
-    h("p", { class: "sub" },
-      "Each data tab opens with the composite ranking. Each head tab opens with a ranking on that head's primary metric, then the families that exist for it. ",
-      "CANDI's version-over-version chart sits at the bottom — it is not the headline."),
-    h("div", { class: "caveats" },
-      h("div", { class: "caveats-title" }, "Read before quoting"),
-      h("ul", { style: "margin:4px 0;padding:0" },
-        anyCaveats.map(([bid, c], i) =>
-          h("li", null, coded(metaOf(bid).label, `${metaOf(bid).protocol} / ${bid}`),
-            " — ", c, " ", helpBtn(`cav-${bid}-${i}`, metaOf(bid).eli5))))));
 }
 
 function readerBadges(meta) {
@@ -331,18 +405,41 @@ function headEli5(head) {
 
 /* ------------------------------------------------------------- nested tabs --- */
 
-function nestedBoard() {
+function pick(patch) {
+  Object.assign(state, patch);
+  writeHash();
+  render();
+}
+
+function headSummaryCaption(headId) {
+  if (headId === "pval") return { title: "Summary", sub: "composite rank" };
+  if (headId === "count") return { title: "Summary", sub: "NB CRPS rank" };
+  return { title: "Summary", sub: "AUPRC rank" };
+}
+
+function picker() {
   const ids = boardIds();
-  if (!ids.includes(state.outerEval)) state.outerEval = ids[0];
-  const bid = state.outerEval;
-  const meta = metaOf(bid);
-  const heads = derivedHeads();
-  if (!heads.some((h) => h.id === state.midHead)) state.midHead = heads[0] ? heads[0].id : "pval";
-  const head = heads.find((h) => h.id === state.midHead) || heads[0];
-  const families = head ? head.families : [];
-  if (!families.includes(state.innerFamily)) {
-    state.innerFamily = families[0] || null;
+  if (state.outerEval && !ids.includes(state.outerEval)) {
+    state.outerEval = null;
+    state.midHead = null;
+    state.innerFamily = null;
   }
+  const bid = state.outerEval;
+  const heads = derivedHeads();
+  if (state.midHead && state.midHead !== "summary" && state.midHead !== "radar"
+      && !heads.some((hd) => hd.id === state.midHead)) {
+    state.midHead = null;
+    state.innerFamily = null;
+  }
+  const head = heads.find((hd) => hd.id === state.midHead) || null;
+  const families = head ? head.families : [];
+  if (state.innerFamily && state.innerFamily !== "summary"
+      && !families.includes(state.innerFamily)) {
+    state.innerFamily = null;
+  }
+  const dataReady = !!bid;
+  const headReady = dataReady && state.midHead && state.midHead !== "summary"
+    && state.midHead !== "radar";
 
   const outer = h("div", { class: "tabs outer", id: "eval-tabs", role: "tablist",
     "aria-label": "Data set" },
@@ -354,68 +451,110 @@ function nestedBoard() {
         "aria-selected": String(id === bid),
         "aria-controls": "eval-board",
         title: `Internal code: ${m.protocol} / ${id}`,
-        onclick: () => { state.outerEval = id; render(); },
+        onclick: () => pick({ outerEval: id, radarEval: id }),
       }, coded(m.label, `${m.protocol} / ${id}`),
         h("span", { class: "tab-sub" }, m.subtitle || ""));
     }));
 
+  const midOpts = [
+    { id: "summary", label: "Summary", sub: "composite rank", eli5: familyEli5("summary") },
+    ...heads.map((hd) => ({
+      id: hd.id, label: hd.label, sub: hd.space, eli5: headEli5(hd),
+    })),
+    { id: "radar", label: "Shape", sub: "per-method radar",
+      eli5: "Each edge is a category. Rank 1 sits on the outer ring; last place sits at the centre. Ranks are within this eval set only." },
+  ];
   const mid = h("div", { class: "tabs mid", id: "head-tabs", role: "tablist",
     "aria-label": "Output head" },
-    heads.map((hd) =>
+    midOpts.map((opt) =>
       h("span", { class: "tab-wrap" },
         h("button", {
           class: "tab mid", type: "button", role: "tab",
-          id: `head-tab-${hd.id}`,
-          "aria-selected": String(hd.id === state.midHead),
+          id: `head-tab-${opt.id}`,
+          "aria-selected": String(dataReady && opt.id === state.midHead),
           "aria-controls": "head-panel",
-          onclick: () => { state.midHead = hd.id; render(); },
-        }, hd.label,
-          h("span", { class: "tab-sub" }, hd.space)),
-        helpBtn(`head-${hd.id}`, headEli5(hd)))));
+          "aria-disabled": String(!dataReady),
+          disabled: dataReady ? null : "disabled",
+          onclick: () => {
+            if (!dataReady) return;
+            const keep = (opt.id !== "summary" && opt.id !== "radar"
+              && state.innerFamily && (state.innerFamily === "summary"
+                || (heads.find((hd) => hd.id === opt.id) || { families: [] })
+                  .families.includes(state.innerFamily)))
+              ? state.innerFamily : null;
+            pick({ midHead: opt.id, innerFamily: keep,
+                   radarEval: opt.id === "radar" ? state.outerEval : state.radarEval });
+          },
+        }, opt.label, h("span", { class: "tab-sub" }, opt.sub)),
+        helpBtn(`head-${opt.id}`, opt.eli5))));
 
-  const inner = h("div", { class: "tabs inner", id: "family-tabs", role: "tablist",
-    "aria-label": "Metric family" },
-    families.map((cid) => {
-      const cap = familyTabCaption(cid);
-      return h("span", { class: "tab-wrap" },
-        h("button", {
-          class: "tab inner", type: "button", role: "tab",
-          id: `fam-tab-${cid}`,
-          "aria-selected": String(cid === state.innerFamily),
-          "aria-controls": "family-panel",
-          onclick: () => { state.innerFamily = cid; render(); },
-        }, cap.title,
-          cap.sub ? h("span", { class: "tab-sub" }, cap.sub) : null),
-        helpBtn(`fam-${cid}`, familyEli5(cid)));
-    }));
+  const innerOpts = headReady
+    ? [{ id: "summary", ...headSummaryCaption(head.id) },
+       ...families.map((cid) => ({ id: cid, ...familyTabCaption(cid) }))]
+    : [];
+  const inner = headReady
+    ? h("div", { class: "tabs inner", id: "family-tabs", role: "tablist",
+        "aria-label": "Metric family" },
+        innerOpts.map((opt) =>
+          h("span", { class: "tab-wrap" },
+            h("button", {
+              class: "tab inner", type: "button", role: "tab",
+              id: `fam-tab-${opt.id}`,
+              "aria-selected": String(opt.id === state.innerFamily),
+              "aria-controls": "family-panel",
+              onclick: () => pick({ innerFamily: opt.id }),
+            }, opt.title,
+              opt.sub ? h("span", { class: "tab-sub" }, opt.sub) : null),
+            helpBtn(`fam-${opt.id}`, familyEli5(opt.id)))))
+    : h("div", { class: "tabs inner", id: "family-tabs", role: "tablist",
+        "aria-label": "Metric family" },
+        h("span", { class: "picker-placeholder" },
+          dataReady
+            ? (state.midHead === "summary" || state.midHead === "radar"
+              ? "This pick is complete — a family is not needed."
+              : "Pick Count, P-value, or Peak to choose a family — or Summary / Shape above.")
+            : "Pick a data set first."));
 
-  return h("div", { class: "nested-wrap" },
-    outer,
-    h("section", { class: "panel eval-board", id: "eval-board", role: "tabpanel",
-      "aria-labelledby": `eval-tab-${bid}` },
-      h("h2", null,
-        coded(meta.label, `${meta.protocol} / ${bid}`),
-        h("span", { class: "h2-note" }, meta.subtitle),
-        helpBtn(`h2-${bid}`, meta.eli5),
-        ...readerBadges(meta)),
-      (meta.caveats || []).length
-        ? h("div", { class: "caveats" },
-            h("div", { class: "caveats-title" }, "On this eval set"),
-            h("ul", { style: "margin:4px 0;padding:0" },
-              meta.caveats.map((c, i) =>
-                h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`, meta.eli5)))))
-        : null,
-      strictToggle(bid),
-      h("div", { class: "data-summary", id: "data-summary" },
-        summaryBody(bid)),
-      mid,
-      h("div", { id: "head-panel", role: "tabpanel",
-        "aria-labelledby": `head-tab-${state.midHead}` },
-        head ? headSummaryBody(bid, head) : null,
-        inner,
-        h("div", { id: "family-panel", role: "tabpanel",
-          "aria-labelledby": state.innerFamily ? `fam-tab-${state.innerFamily}` : null },
-          state.innerFamily ? familyBody(bid, state.innerFamily, head.id) : null))));
+  return h("div", { class: "nested-wrap picker" },
+    h("p", { class: "picker-hint" },
+      "Pick a data set, then a head, then a family. Summary is a full view at the first two steps."),
+    outer, mid, inner);
+}
+
+function comboView() {
+  const bid = state.outerEval;
+  const meta = metaOf(bid);
+  const heads = derivedHeads();
+  const head = heads.find((hd) => hd.id === state.midHead) || null;
+  let body;
+  if (state.midHead === "summary") {
+    body = h("div", { class: "data-summary", id: "data-summary" }, summaryBody(bid));
+  } else if (state.midHead === "radar") {
+    body = radarPanel();
+  } else if (state.innerFamily === "summary") {
+    body = h("div", { class: "head-summary" }, headSummaryBody(bid, head));
+  } else {
+    body = h("div", { id: "family-panel", role: "tabpanel",
+      "aria-labelledby": `fam-tab-${state.innerFamily}` },
+      familyBody(bid, state.innerFamily, head.id));
+  }
+  return h("section", { class: "panel eval-board", id: "eval-board", role: "tabpanel",
+    "aria-labelledby": `eval-tab-${bid}` },
+    h("h2", null,
+      coded(meta.label, `${meta.protocol} / ${bid}`),
+      h("span", { class: "h2-note" }, meta.subtitle),
+      helpBtn(`h2-${bid}`, meta.eli5),
+      comboHelpBtn(),
+      ...readerBadges(meta)),
+    (meta.caveats || []).length
+      ? h("div", { class: "caveats" },
+          h("div", { class: "caveats-title" }, "On this eval set"),
+          h("ul", { style: "margin:4px 0;padding:0" },
+            meta.caveats.map((c, i) =>
+              h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`, meta.eli5)))))
+      : null,
+    strictToggle(bid),
+    body);
 }
 
 function strictToggle(bid) {
@@ -435,7 +574,7 @@ function strictToggle(bid) {
           h("button", {
             class: "chip", "aria-pressed": String(state.view === v),
             title: `Internal code: ${v}`,
-            onclick: () => { state.view = v; render(); },
+            onclick: () => pick({ view: v }),
           }, label), helpBtn(`view-${v}`, tip));
       })));
 }
@@ -765,6 +904,7 @@ function covariateBody(bid) {
       pending: pendingCandi,
       rankOf: (r) => ordered.indexOf(r) + 1,
       labelOf: (r) => `${r.method} ${r.version || ""}`.trim(),
+      methodOf: (r) => r.method,
       noteOf: (r) => familyNote(r, "covariate_diagnostics", rankedDiag),
       lineageOf: (r) => r.lineage || "candi",
     }),
@@ -872,7 +1012,7 @@ function methodCell(entry, bid, opts) {
   const peakBadge = (opts && opts.peak) ? deviceBadge("peak", peakDevice(row)) : null;
   return h("td", { class: "method-col" },
     h("div", { class: "method-line" },
-      h("span", { class: "method-name" }, entry.method),
+      methodLink(entry.method),
       h("span", { class: `badge lineage-${entry.lineage}` },
         LINEAGE_LABEL[entry.lineage] || entry.lineage),
       spreadBadge, peakBadge),
@@ -911,7 +1051,7 @@ function provRow(entry, colspan, bid) {
 
 /* ------------------------------------------------------------- ranking bars --- */
 
-function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageOf }) {
+function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageOf, methodOf }) {
   const n = scored.length;
   const items = scored.slice().sort((a, b) =>
     rankOf(a) - rankOf(b) || labelOf(a).localeCompare(labelOf(b)));
@@ -937,9 +1077,14 @@ function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageO
     const color = colors[lin] || "var(--ink-soft)";
     const rankLabel = typeof rank === "number" && rank === Math.round(rank)
       ? String(rank) : (typeof rank === "number" ? rank.toFixed(1) : String(rank));
+    const methodName = methodOf ? methodOf(row) : labelOf(row);
     svg.append(
       h("svg:text", { x: L - 8, y: y + 16, "text-anchor": "end",
-        "font-size": 12, fill: "var(--ink)" }, labelOf(row)),
+        class: "svg-method", "font-size": 12, fill: "var(--ink)",
+        onclick: () => {
+          state.openCard = { kind: "method", id: methodName };
+          render();
+        } }, labelOf(row)),
       h("svg:rect", { x: L, y: y + 6, width: w, height: 14, rx: 3, fill: color }),
       h("svg:text", { x: L + w + 8, y: y + 16, "font-size": 11,
         fill: "var(--ink-soft)" },
@@ -949,7 +1094,11 @@ function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageO
     const y = T + (items.length + i) * rowH;
     svg.append(
       h("svg:text", { x: L - 8, y: y + 16, "text-anchor": "end",
-        "font-size": 12, fill: "var(--ink-faint)" }, p.method),
+        class: "svg-method", "font-size": 12, fill: "var(--ink-faint)",
+        onclick: () => {
+          state.openCard = { kind: "method", id: p.method };
+          render();
+        } }, p.method),
       h("svg:text", { x: L, y: y + 16, "font-size": 11, fill: "var(--ink-faint)",
         "font-style": "italic" }, p.note || "results computing"));
   });
@@ -1109,45 +1258,30 @@ function axisN(view, cid) {
 }
 
 function radarPanel() {
+  const bid = state.outerEval || state.radarEval;
   const ids = boardIds();
-  if (!ids.includes(state.radarEval)) state.radarEval = ids[0];
-  const bid = state.radarEval;
+  if (!ids.includes(bid)) {
+    return h("p", { class: "empty-note" }, "Pick a data set to see per-method shape.");
+  }
   const view = viewFor(bid);
   const meta = metaOf(bid);
   const edges = radarEdges(view);
-  const chips = ids.map((id) =>
-    h("button", {
-      class: "chip", "aria-pressed": String(id === bid),
-      title: `Internal code: ${metaOf(id).protocol} / ${id}`,
-      onclick: () => { state.radarEval = id; render(); },
-    }, metaOf(id).label));
   if (edges.length < 3) {
-    return h("section", { class: "panel" },
-      h("h2", null, "Per-method shape",
-        helpBtn("radar-need",
-          "A radar needs at least three categories with ranks on one eval set. Rank 1 sits on the outer ring; last place sits at the centre. Ranks are within this eval set only.")),
-      h("div", { class: "controls" },
-        h("span", { class: "chip-group" },
-          h("span", { class: "chip-label" }, "ranks computed on"), ...chips)),
+    return h("div", null,
       h("p", { class: "sub" },
         `${meta.label} has ${edges.length} rankable categor${edges.length === 1 ? "y" : "ies"} — a shape needs three.`));
   }
   const cards = view.rows.map((row) => radarCard(row, view, edges));
   const pending = pendingOf(bid).map((p) =>
     h("div", { class: "radar-card pending-card" },
-      h("div", { class: "radar-name" }, p.method),
+      h("div", { class: "radar-name" }, methodLink(p.method)),
       h("p", { class: "computing-note" }, p.note || "results computing")));
-  return h("section", { class: "panel", id: "radar" },
-    h("h2", null, "Per-method shape",
-      helpBtn("radar",
-        "Each edge is a category. The value is the method's rank in that category on one eval set (1 = best = outer ring; last place = centre). Count-space and p-value-space are different edges, never a shared axis of raw scores.")),
+  return h("div", { id: "radar" },
     h("p", { class: "sub" },
+      "Each edge is a category. Rank 1 sits on the outer ring; last place sits at the centre. ",
       "Ranks are computed on ",
       coded(meta.label, `${meta.protocol} / ${bid}`),
       " — not across eval sets."),
-    h("div", { class: "controls" },
-      h("span", { class: "chip-group" },
-        h("span", { class: "chip-label" }, "ranks computed on"), ...chips)),
     h("div", { class: "radar-grid" }, ...cards, ...pending));
 }
 
@@ -1201,35 +1335,57 @@ function radarCard(row, view, edges) {
     svg.append(h("svg:circle", { cx: x, cy: y, r: 2.5, fill: color }));
   });
   return h("div", { class: "radar-card" },
-    h("div", { class: "radar-name" }, row.method,
+    h("div", { class: "radar-name" }, methodLink(row.method),
       h("span", { class: "version-chip" }, row.version)),
     svg);
 }
 
 /* ------------------------------------------------------------- climb --- */
 
+function climbOptIn() {
+  return h("p", { class: "climb-optin" },
+    h("button", {
+      class: "climb-link", type: "button",
+      onclick: () => { state.showClimb = true; render(); },
+    }, "CANDI progress over time"));
+}
+
 function climbPanel() {
-  const ids = boardIds().filter((bid) => {
+  const hide = h("button", {
+    class: "climb-link", type: "button",
+    onclick: () => { state.showClimb = false; render(); },
+  }, "hide");
+  const empty = h("section", { class: "panel panel-secondary", id: "over-time" },
+    h("h2", null, "CANDI progress over time"),
+    h("p", { class: "empty-note" },
+      "no CANDI versions stamped yet; two runs are training"),
+    hide);
+
+  const candiClimb = (bid) => {
     const climb = state.data.boards[bid].climb;
-    return Object.keys(climb).some((m) => climb[m].some((e) => e.composite));
-  });
-  if (!ids.length) return null;
+    const out = {};
+    for (const [method, series] of Object.entries(climb)) {
+      const candi = series.filter((e) => e.lineage === "candi" && e.composite);
+      if (candi.length) out[method] = candi;
+    }
+    return out;
+  };
+  const ids = boardIds().filter((bid) => Object.keys(candiClimb(bid)).length);
+  if (!ids.length) return empty;
   if (!ids.includes(state.climbEval)) state.climbEval = ids[0];
   const bid = state.climbEval;
-  const board = state.data.boards[bid];
-  const climb = board.climb;
-  const methods = Object.keys(climb).filter((m) => climb[m].some((e) => e.composite));
+  const climb = candiClimb(bid);
+  const methods = Object.keys(climb);
   const W = 900, H = 260, L = 46, R = 150, T = 18, B = 34;
   const entries = methods.flatMap((m) => climb[m]);
   const dates = entries.map((e) => Date.parse(e.date));
   let [d0, d1] = [Math.min(...dates), Math.max(...dates)];
   if (d0 === d1) { d0 -= 864e5 * 7; d1 += 864e5 * 7; }
-  const rMax = Math.max(2, Math.ceil(Math.max(...entries
-    .filter((e) => e.composite).map((e) => e.composite[1]))));
+  const rMax = Math.max(2, Math.ceil(Math.max(...entries.map((e) => e.composite[1]))));
   const x = (t) => L + (t - d0) / (d1 - d0) * (W - L - R);
   const y = (rank) => T + (rank - 1) / (rMax - 1) * (H - T - B);
   const svg = h("svg:svg", { class: "climb-svg", viewBox: `0 0 ${W} ${H}`,
-    role: "img", "aria-label": "Composite rank over time" });
+    role: "img", "aria-label": "CANDI composite rank over time" });
 
   for (let r = 1; r <= rMax; r++) {
     svg.append(
@@ -1253,8 +1409,7 @@ function climbPanel() {
       fill: "var(--band)" }));
   }
 
-  const colors = { candi: "var(--candi)", rival: "var(--rival)",
-                   baseline: "var(--baseline)", entrant: "var(--entrant)" };
+  const color = "var(--candi)";
   let labelY = [];
   const placeLabel = (yy) => {
     let out = yy;
@@ -1263,34 +1418,27 @@ function climbPanel() {
     return out;
   };
   for (const method of methods.sort()) {
-    const series = climb[method].filter((e) => e.composite);
-    const lineage = series[0].lineage;
-    const color = colors[lineage] || "var(--ink-soft)";
-    if (lineage === "candi" && series.length > 0) {
-      const pts = series.map((e) =>
-        [x(Date.parse(e.date)), y((e.composite[0] + e.composite[1]) / 2)]);
-      if (pts.length > 1) {
-        svg.append(h("svg:polyline", {
-          points: pts.map((p) => p.join(",")).join(" "),
-          fill: "none", stroke: color, "stroke-width": 2 }));
-      }
-      for (let i = 0; i < pts.length; i++) {
-        svg.append(
-          h("svg:circle", { cx: pts[i][0], cy: pts[i][1], r: 3.5, fill: color }),
-          h("svg:text", { x: pts[i][0], y: pts[i][1] - 8, "text-anchor": "middle",
-            "font-size": 10, fill: color }, series[i].version));
-      }
-      const last = pts[pts.length - 1];
-      svg.append(h("svg:text", { x: W - R + 8, y: placeLabel(last[1] + 4),
-        "font-size": 11, "font-weight": 700, fill: color }, method));
-    } else {
-      const yy = y((series[0].composite[0] + series[0].composite[1]) / 2);
-      svg.append(
-        h("svg:line", { x1: L, x2: W - R, y1: yy, y2: yy, stroke: color,
-          "stroke-width": 1.5, "stroke-dasharray": "2 5" }),
-        h("svg:text", { x: W - R + 8, y: placeLabel(yy + 4), "font-size": 11,
-          fill: color }, method));
+    const series = climb[method];
+    const pts = series.map((e) =>
+      [x(Date.parse(e.date)), y((e.composite[0] + e.composite[1]) / 2)]);
+    if (pts.length > 1) {
+      svg.append(h("svg:polyline", {
+        points: pts.map((p) => p.join(",")).join(" "),
+        fill: "none", stroke: color, "stroke-width": 2 }));
     }
+    for (let i = 0; i < pts.length; i++) {
+      svg.append(
+        h("svg:circle", { cx: pts[i][0], cy: pts[i][1], r: 3.5, fill: color }),
+        h("svg:text", { x: pts[i][0], y: pts[i][1] - 8, "text-anchor": "middle",
+          "font-size": 10, fill: color }, series[i].version));
+    }
+    const last = pts[pts.length - 1];
+    svg.append(h("svg:text", {
+      class: "svg-method",
+      x: W - R + 8, y: placeLabel(last[1] + 4),
+      "font-size": 11, "font-weight": 700, fill: color,
+      onclick: () => { state.openCard = { kind: "method", id: method }; render(); },
+    }, method));
   }
   svg.append(
     h("svg:text", { x: L, y: H - 10, "font-size": 11, fill: "var(--ink-faint)" },
@@ -1306,18 +1454,89 @@ function climbPanel() {
     }, metaOf(id).label));
 
   return h("section", { class: "panel panel-secondary", id: "over-time" },
-    h("h2", null, "CANDI versions over time",
-      h("span", { class: "h2-note" }, "secondary — not the headline"),
+    h("h2", null, "CANDI progress over time",
       helpBtn("climb",
-        "Each CANDI version is a dated point. Other methods are flat dotted lines (one score, not a trajectory). The shaded band is the leader's rank interval under noise-floor ties.")),
+        "Each CANDI version is a dated point on composite rank. Only CANDI-lineage rows are plotted.")),
+    hide,
     h("div", { class: "controls" },
       h("span", { class: "chip-group" },
         h("span", { class: "chip-label" }, "eval set"), ...chips)),
-    svg,
-    h("div", { class: "legend-row" },
-      Object.entries(colors).map(([lin, c]) =>
-        h("span", null, h("span", { class: "legend-swatch", style: `background:${c}` }),
-          LINEAGE_LABEL[lin] || lin))));
+    svg);
+}
+
+function cardField(label, text) {
+  if (!text) return null;
+  return h("div", null,
+    h("div", { class: "card-label" }, label),
+    Array.isArray(text)
+      ? h("ul", null, text.map((c) => h("li", null, c)))
+      : h("p", null, text));
+}
+
+function methodCardBody(name, info) {
+  if (!info) {
+    return h("p", null, "No help card recorded for this method.");
+  }
+  const bits = [
+    cardField("What it is", info.what),
+    cardField("Training data", info.training),
+    cardField("Classes", info.classes),
+    cardField("How it is scored", info.scoring),
+    cardField("Caveats", info.caveats),
+  ];
+  const bid = state.outerEval || state.radarEval;
+  if (bid && state.data.boards[bid]) {
+    const view = viewFor(bid);
+    const row = view.rows.find((r) => r.method === name);
+    const edges = radarEdges(view);
+    if (row && edges.length >= 3) {
+      bits.push(
+        h("div", { class: "card-label" }, "Shape on this eval set"),
+        radarCard(row, view, edges));
+    }
+  }
+  return h("div", null, ...bits);
+}
+
+function comboTitle(key) {
+  const parts = (key || "").split("/");
+  const labels = {
+    main: "Full genome", dev: "Chromosome 21", entrants: "2019 challenge",
+    count: "Count", pval: "P-value", peak: "Peak", summary: "Summary",
+    count_arm: "Distributional", pointwise: "Point-wise",
+    distributional: "Distributional", loss: "Loss",
+    covariate_diagnostics: "Covariate sensitivity", peaks: "Peaks",
+  };
+  return parts.map((p) => labels[p] || p).join(" · ");
+}
+
+function comboCardBody(info) {
+  if (!info) {
+    return h("p", null, "No help card recorded for this view.");
+  }
+  return h("div", null,
+    cardField("What this view asks", info.question),
+    cardField("Truth source", info.truth),
+    cardField("Instrument", info.instrument),
+    cardField("How each method class is scored", info.devices),
+    cardField("Caveats", info.caveats));
+}
+
+function cardOverlay() {
+  const card = state.openCard;
+  if (!card) return null;
+  const close = () => { state.openCard = null; render(); };
+  const title = card.kind === "method" ? card.id : comboTitle(card.id);
+  const body = card.kind === "method"
+    ? methodCardBody(card.id, state.help.methods[card.id])
+    : comboCardBody(state.help.combos[card.id]);
+  return h("div", { class: "card-overlay", onclick: close },
+    h("div", { class: "card-sheet", role: "dialog", "aria-label": title,
+      onclick: (ev) => ev.stopPropagation() },
+      h("div", { class: "card-head" },
+        h("h3", null, title),
+        h("button", { type: "button", class: "card-close", onclick: close }, "close")),
+      body));
 }
 
 /* ------------------------------------------------------------- legend + footer --- */

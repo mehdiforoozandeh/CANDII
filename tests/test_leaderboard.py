@@ -535,7 +535,7 @@ def test_pending_travels_into_the_payload_and_drops_when_stamped(root: Path) -> 
 
 
 def test_site_is_a_nested_plain_language_view() -> None:
-    """v4: three-layer tabs (data → head → family); v2 science rendering stays."""
+    """v5: gated three-layer picker; v4 science rendering stays behind the pick."""
     index = (REPO / "leaderboard" / "site" / "index.html").read_text(encoding="utf-8")
     js = (REPO / "leaderboard" / "site" / "app.js").read_text(encoding="utf-8")
     assert 'id: "eval-tabs"' in js and 'id: "head-tabs"' in js and 'id: "family-tabs"' in js
@@ -556,6 +556,13 @@ def test_site_is_a_nested_plain_language_view() -> None:
     assert "compositeCell" in js
     assert "absent_note" in js and "will_populate" in js
     assert "No covariate-sensitivity numbers" in js
+    assert "outerEval: null" in js and "showClimb: false" in js
+    assert "comboComplete" in js and "writeHash" in js and "applyHash" in js
+    assert "CANDI progress over time" in js
+    assert "no CANDI versions stamped yet; two runs are training" in js
+    assert "stroke-dasharray" not in js
+    assert "methodLink" in js and "comboHelpBtn" in js and "cardOverlay" in js
+    assert "help.json" in js
 
 
 def test_v4_head_family_mapping_matches_registry() -> None:
@@ -597,7 +604,7 @@ def test_build_ships_the_site_beside_the_payload(root: Path, tmp_path: Path) -> 
     add_all(with_site(root))
     out = tmp_path / "_site"
     lb.main(["--root", str(root), "build", "--out", str(out)])
-    assert sorted(p.name for p in out.iterdir()) == ["app.js", "index.html",
+    assert sorted(p.name for p in out.iterdir()) == ["app.js", "help.json", "index.html",
                                                      "leaderboard.json", "style.css"]
     payload = json.loads((out / "leaderboard.json").read_text(encoding="utf-8"))
     assert set(payload["boards"]) == {"main", "dev", "entrants"}
@@ -611,14 +618,14 @@ def test_build_is_bit_identical_between_reruns(root: Path, tmp_path: Path) -> No
     a, b = tmp_path / "a", tmp_path / "b"
     lb.main(["--root", str(root), "build", "--out", str(a)])
     lb.main(["--root", str(root), "build", "--out", str(b)])
-    for name in ("leaderboard.json", "index.html", "app.js", "style.css"):
+    for name in ("leaderboard.json", "index.html", "app.js", "style.css", "help.json"):
         assert (a / name).read_bytes() == (b / name).read_bytes()
 
 
 def test_site_makes_no_external_requests() -> None:
     """PRD §8 — no framework, no chart library, no external requests. The W3C namespace
     identifier is a name, not a request, and is the only thing allowed to look like a URL."""
-    for name in ("index.html", "app.js", "style.css"):
+    for name in ("index.html", "app.js", "style.css", "help.json"):
         text = (REPO / "leaderboard" / "site" / name).read_text(encoding="utf-8") \
             .replace("http://www.w3.org/", "").replace("http%3A%2F%2Fwww.w3.org%2F", "")
         assert "http://" not in text and "https://" not in text, name
@@ -632,3 +639,48 @@ def test_check_passes_on_the_committed_repo_state() -> None:
 def test_check_passes_with_fixture_rows(root: Path) -> None:
     add_all(with_site(root))
     assert lb.main(["--root", str(root), "check"]) == 0
+
+
+# ---------------------------------------------------------------- help.json ---
+
+SITE_HEAD_FAMILIES = {
+    "count": ["count_arm", "loss", "covariate_diagnostics"],
+    "pval": ["pointwise", "distributional", "loss"],
+    "peak": ["peaks"],
+}
+
+
+def site_combo_keys() -> set[str]:
+    keys = set()
+    for bid in ("main", "dev", "entrants"):
+        keys.add(f"{bid}/summary")
+        for head, fams in SITE_HEAD_FAMILIES.items():
+            keys.add(f"{bid}/{head}/summary")
+            keys.update(f"{bid}/{head}/{fam}" for fam in fams)
+    return keys
+
+
+def test_help_json_covers_combos_and_stamped_methods() -> None:
+    """help.json parses; every site combo has a card; every stamped method has a card."""
+    path = REPO / "leaderboard" / "site" / "help.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert set(payload) >= {"methods", "combos"}
+    methods, combos = payload["methods"], payload["combos"]
+    expected = site_combo_keys()
+    assert set(combos) == expected, (
+        f"help combos extra={set(combos) - expected} missing={expected - set(combos)}")
+    for key, entry in combos.items():
+        for field in ("question", "truth", "instrument", "devices", "caveats"):
+            assert entry.get(field), f"{key} missing {field}"
+        blob = " ".join(str(entry[f]) for f in ("question", "truth", "instrument", "devices", "caveats"))
+        assert "UNKNOWN" not in blob and "UNVERIFIED" not in blob, key
+    stamped = set()
+    for p in (REPO / "leaderboard" / "rows").rglob("*.json"):
+        stamped.add(json.loads(p.read_text(encoding="utf-8"))["method"])
+    missing = sorted(stamped - set(methods))
+    assert missing == [], f"stamped methods with no help card: {missing}"
+    for name, card in methods.items():
+        for field in ("what", "training", "classes", "scoring", "caveats"):
+            assert card.get(field), f"{name} missing {field}"
+        blob = " ".join(str(card[f]) for f in ("what", "training", "classes", "scoring", "caveats"))
+        assert "UNKNOWN" not in blob and "UNVERIFIED" not in blob, name
