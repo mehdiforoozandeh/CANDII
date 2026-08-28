@@ -41,6 +41,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown
 - `t72` [implementation] site v5: minimal gated landing (three-level combo first, board after) and a minimal CANDI-versions-over-time
 - `t73` [implementation] help-system accuracy dossier: per-method training-data truth and per-combo semantics for every data x head x family cell, code-cited, wired into the ? buttons
+- `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
 
 ## Blocked
 
@@ -91,6 +92,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown — *open*
 - `t72` [implementation] site v5: minimal gated landing (three-level combo first, board after) and a minimal CANDI-versions-over-time — *open*
 - `t73` [implementation] help-system accuracy dossier: per-method training-data truth and per-combo semantics for every data x head x family cell, code-cited, wired into the ? buttons — *open*
+- `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
 
 ## Done · Dropped
 
