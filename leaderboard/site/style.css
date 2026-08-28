@@ -282,7 +282,7 @@ tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
 .prov-board { margin-bottom: 10px; }
 .prov-board-title { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 4px; }
 
-/* ------------------------------------------------------------- v3: nested tabs --- */
+/* ------------------------------------------------------------- v3/v4: nested tabs --- */
 .nested-wrap { margin-bottom: 20px; }
 .tabs.outer { padding: 0 4px; flex-wrap: wrap; }
 .tab.outer[aria-selected="true"] {
@@ -291,6 +291,28 @@ tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
   position: relative; top: 1px;
 }
 .panel.eval-board { border-radius: 0 10px 10px 10px; margin-top: 0; }
+.data-summary {
+  margin: 8px 0 4px; padding-bottom: 12px;
+  border-bottom: 1px dashed var(--line);
+}
+.tabs.mid {
+  gap: 6px; flex-wrap: wrap;
+  margin: 12px 0 8px; padding: 0;
+}
+.tab.mid {
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); padding: 8px 14px 9px;
+  position: static; top: 0;
+}
+.tab.mid:hover { color: var(--ink); border-color: var(--accent); }
+.tab.mid[aria-selected="true"] {
+  background: var(--panel); color: var(--ink);
+  border-color: var(--accent); position: static; top: 0;
+}
+.head-summary {
+  margin: 4px 0 12px; padding-bottom: 12px;
+  border-bottom: 1px dashed var(--line);
+}
 .tabs.inner {
   gap: 4px 8px; flex-wrap: wrap;
   border-bottom: 1px solid var(--line);

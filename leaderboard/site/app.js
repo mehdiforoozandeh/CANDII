@@ -5,10 +5,12 @@
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const BOARD_ORDER = ["main", "dev", "entrants"];
-const FAMILY_TABS = [
-  "summary", "pointwise", "distributional", "peaks",
-  "count_arm", "loss", "covariate_diagnostics",
-];
+const HEAD_ORDER = ["count", "pval", "peak"];
+const HEAD_LABEL = { count: "Count", pval: "P-value", peak: "Peak" };
+/* Covariate diagnostics have arm=null in the registry. They sit under Count
+ * because `harness.c_block(..., kind=kinds[0])` predicts NB (mu, n) against
+ * count truth (`_predictor`, `_c_contexts`). kinds[0] defaults to "impute". */
+const COVARIATE_HEAD = "count";
 const RADAR_EDGES = ["pointwise", "distributional", "peaks", "count_arm"];
 const EN_DASH = "–";
 const LINEAGE_LABEL = {
@@ -20,7 +22,8 @@ const state = {
   data: null,
   view: "default",
   outerEval: "main",
-  innerFamily: "summary",
+  midHead: "pval",
+  innerFamily: null,
   radarEval: "main",
   climbEval: "main",
   openProv: new Set(),
@@ -60,6 +63,62 @@ function spreadText(spread) {
   return spread[0] === spread[1] ? String(spread[0]) : `${spread[0]}${EN_DASH}${spread[1]}`;
 }
 function catInfo(cid) { return registry().categories[cid]; }
+
+function headIdOf(m) {
+  if (m.category === "peaks") return "peak";
+  if (m.category === "covariate_diagnostics") return COVARIATE_HEAD;
+  if (m.arm === "count") return "count";
+  if (m.arm === "pval") return "pval";
+  return null;
+}
+
+function derivedHeads() {
+  const cats = registry().categories;
+  const byId = {};
+  for (const hid of HEAD_ORDER) {
+    const space = hid === "peak"
+      ? ((cats.peaks && cats.peaks.space_label) || "p-value space")
+      : hid === "count" ? "count space" : "p-value space";
+    byId[hid] = { id: hid, label: HEAD_LABEL[hid], space, families: [] };
+  }
+  const seen = { count: new Set(), pval: new Set(), peak: new Set() };
+  for (const m of registry().metrics) {
+    const hid = headIdOf(m);
+    if (!hid || !byId[hid] || seen[hid].has(m.category)) continue;
+    if (!(m.category in cats)) continue;
+    seen[hid].add(m.category);
+    byId[hid].families.push(m.category);
+  }
+  return HEAD_ORDER.map((id) => byId[id]).filter((h) => h.families.length);
+}
+
+function overviewMetrics(headId) {
+  return registry().metrics.filter((m) =>
+    headIdOf(m) === headId
+    && m.category !== "loss"
+    && m.category !== "covariate_diagnostics"
+    && (m.role === "ranked" || m.role === "companion"));
+}
+
+function overviewGroups(headId) {
+  const byCat = [];
+  const seen = new Set();
+  for (const m of overviewMetrics(headId)) {
+    if (seen.has(m.category)) continue;
+    seen.add(m.category);
+    byCat.push({
+      arm: m.arm, cid: m.category,
+      metrics: overviewMetrics(headId).filter((x) => x.category === m.category),
+    });
+  }
+  return byCat;
+}
+
+function rankCidForHead(headId) {
+  if (headId === "pval") return "summary";
+  if (headId === "count") return "count_arm";
+  return "peaks";
+}
 function coded(label, code) {
   return h("span", { title: `Internal code: ${code}` }, label);
 }
@@ -122,8 +181,11 @@ function viewFor(bid) {
 function metaOf(bid) { return state.data.boards[bid].meta; }
 function pendingOf(bid) { return state.data.boards[bid].pending || []; }
 
-function metricGroups(cid) {
-  const all = catMetrics(cid);
+function metricGroups(cid, headId) {
+  let all = catMetrics(cid);
+  if (headId === "count") all = all.filter((m) => m.arm === "count" || m.arm == null);
+  else if (headId === "pval") all = all.filter((m) => m.arm === "pval");
+  else if (headId === "peak") all = all.filter((m) => m.category === "peaks");
   if (cid !== "loss") return [{ arm: all[0] ? all[0].arm : null, metrics: all, cid }];
   const pval = all.filter((m) => m.arm === "pval");
   const count = all.filter((m) => m.arm === "count");
@@ -153,9 +215,9 @@ function introPanel() {
   return h("section", { class: "panel" },
     h("h2", null, "How this page is laid out",
       helpBtn("layout",
-        "Outer tabs pick the eval set (what was scored). Inner tabs pick the kind of number. Count-space and p-value-space numbers never share a table or a chart axis. Grey rows with no numbers mean results are still computing.")),
+        "Outer tabs pick the data set (what was scored). Directly under that is the composite ranking. Middle tabs pick the output head (count, p-value, peak) — those spaces never mix. Inner tabs pick the metric family for that head. Grey rows with no numbers mean results are still computing.")),
     h("p", { class: "sub" },
-      "Each inner tab is one family: a ranking chart (best at top) and a compact table of just that family's metrics. ",
+      "Each data tab opens with the composite ranking. Each head tab opens with a ranking on that head's primary metric, then the families that exist for it. ",
       "CANDI's version-over-version chart sits at the bottom — it is not the headline."),
     h("div", { class: "caveats" },
       h("div", { class: "caveats-title" }, "Read before quoting"),
@@ -188,6 +250,16 @@ function familyEli5(cid) {
   return c && c.eli5;
 }
 
+function headEli5(head) {
+  if (head.id === "pval") {
+    return "P-value space. Ranking uses the same §5.2 composite as the data-level summary. Peak scores live under the Peak head, even though the composite math still includes the peaks category when it is board-active. Count numbers never appear here.";
+  }
+  if (head.id === "count") {
+    return "Count space. Ranking is Negative Binomial CRPS, always with its oracle-scaled / scale-error split and the ±0.09 noise floor. Covariate sensitivity sits here because the C-block re-decodes (μ, n) against count truth. P-value numbers never appear here.";
+  }
+  return "Peak detection. Ranking is AUPRC, always with the peak base rate. These scores are stored on the p-value arm in the registry; they are a separate head so they never mix with point-wise or distributional p-value numbers.";
+}
+
 /* ------------------------------------------------------------- nested tabs --- */
 
 function nestedBoard() {
@@ -195,12 +267,16 @@ function nestedBoard() {
   if (!ids.includes(state.outerEval)) state.outerEval = ids[0];
   const bid = state.outerEval;
   const meta = metaOf(bid);
-  const families = FAMILY_TABS.filter((cid) =>
-    cid === "summary" || cid in registry().categories);
-  if (!families.includes(state.innerFamily)) state.innerFamily = "summary";
+  const heads = derivedHeads();
+  if (!heads.some((h) => h.id === state.midHead)) state.midHead = heads[0] ? heads[0].id : "pval";
+  const head = heads.find((h) => h.id === state.midHead) || heads[0];
+  const families = head ? head.families : [];
+  if (!families.includes(state.innerFamily)) {
+    state.innerFamily = families[0] || null;
+  }
 
   const outer = h("div", { class: "tabs outer", id: "eval-tabs", role: "tablist",
-    "aria-label": "Eval set" },
+    "aria-label": "Data set" },
     ids.map((id) => {
       const m = metaOf(id);
       return h("button", {
@@ -213,6 +289,20 @@ function nestedBoard() {
       }, coded(m.label, `${m.protocol} / ${id}`),
         h("span", { class: "tab-sub" }, m.subtitle || ""));
     }));
+
+  const mid = h("div", { class: "tabs mid", id: "head-tabs", role: "tablist",
+    "aria-label": "Output head" },
+    heads.map((hd) =>
+      h("span", { class: "tab-wrap" },
+        h("button", {
+          class: "tab mid", type: "button", role: "tab",
+          id: `head-tab-${hd.id}`,
+          "aria-selected": String(hd.id === state.midHead),
+          "aria-controls": "head-panel",
+          onclick: () => { state.midHead = hd.id; render(); },
+        }, hd.label,
+          h("span", { class: "tab-sub" }, hd.space)),
+        helpBtn(`head-${hd.id}`, headEli5(hd)))));
 
   const inner = h("div", { class: "tabs inner", id: "family-tabs", role: "tablist",
     "aria-label": "Metric family" },
@@ -247,10 +337,16 @@ function nestedBoard() {
                 h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`, meta.eli5)))))
         : null,
       strictToggle(bid),
-      inner,
-      h("div", { id: "family-panel", role: "tabpanel",
-        "aria-labelledby": `fam-tab-${state.innerFamily}` },
-        familyBody(bid, state.innerFamily))));
+      h("div", { class: "data-summary", id: "data-summary" },
+        summaryBody(bid)),
+      mid,
+      h("div", { id: "head-panel", role: "tabpanel",
+        "aria-labelledby": `head-tab-${state.midHead}` },
+        head ? headSummaryBody(bid, head) : null,
+        inner,
+        h("div", { id: "family-panel", role: "tabpanel",
+          "aria-labelledby": state.innerFamily ? `fam-tab-${state.innerFamily}` : null },
+          state.innerFamily ? familyBody(bid, state.innerFamily, head.id) : null))));
 }
 
 function strictToggle(bid) {
@@ -275,11 +371,10 @@ function strictToggle(bid) {
       })));
 }
 
-function familyBody(bid, cid) {
+function familyBody(bid, cid, headId) {
   if (cid === "covariate_diagnostics") return covariateBody(bid);
-  if (cid === "loss") return lossBody(bid);
-  if (cid === "summary") return summaryBody(bid);
-  return familyChartAndTable(bid, cid);
+  if (cid === "loss") return lossBody(bid, headId);
+  return familyChartAndTable(bid, cid, headId);
 }
 
 function rowHasFamily(row, cid) {
@@ -349,7 +444,7 @@ function entriesForFamily(bid, cid) {
 
 function familyKicker(cid) {
   if (cid === "summary") {
-    return "Headline ranking on the p-value-space composite (best at top). Methods with partial coverage have no composite rank — incomplete, not last. Count-space ranking lives in its own tab.";
+    return "Headline ranking on the p-value-space composite (best at top). Methods with partial coverage have no composite rank — incomplete, not last. Count-space ranking lives under the Count head; peak ranking lives under the Peak head.";
   }
   if (cid === "count_arm") {
     return "Count space — Negative Binomial CRPS, ranked separately. Count-space and p-value-space numbers never share an axis.";
@@ -364,6 +459,16 @@ function familyKicker(cid) {
     return "Point-wise scores in p-value space. Every method that emits a point track can appear here.";
   }
   return "";
+}
+
+function headKicker(head) {
+  if (head.id === "pval") {
+    return "P-value head — ranked on the §5.2 composite. Peak metrics are a separate head; count metrics never appear here.";
+  }
+  if (head.id === "count") {
+    return "Count head — ranked on Negative Binomial CRPS, with the oracle-scaled / scale-error split and the ±0.09 noise floor.";
+  }
+  return "Peak head — ranked on AUPRC, always with the peak base rate.";
 }
 
 function summaryBody(bid) {
@@ -389,14 +494,55 @@ function summaryBody(bid) {
     familyTable(bid, "summary", [{ arm: null, metrics: [], cid: "summary" }]));
 }
 
-function familyChartAndTable(bid, cid) {
+function headSummaryBody(bid, head) {
+  const view = viewFor(bid);
+  const rankCid = rankCidForHead(head.id);
+  const pending = head.id === "count"
+    ? pendingOf(bid).filter((p) => p.lineage === "baseline" || p.lineage === "candi")
+    : pendingOf(bid);
+  const scored = view.rows.filter((r) => familyRankSpread(r, rankCid, view));
+  const primary = head.id === "count"
+    ? catMetrics("count_arm", ["ranked"])[0]
+    : head.id === "peak"
+      ? catMetrics("peaks", ["ranked"])[0]
+      : null;
+  const groups = overviewGroups(head.id);
+  const noteOf = (r) => {
+    if (head.id === "pval") {
+      return r.composite
+        ? (r.composite[0] === r.composite[1]
+            ? r.composite[0].toFixed(2)
+            : `${r.composite[0].toFixed(2)}${EN_DASH}${r.composite[1].toFixed(2)}`)
+        : "";
+    }
+    return familyNote(r, rankCid, primary);
+  };
+  return h("div", { class: "head-summary" },
+    h("p", { class: "chart-kicker" }, headKicker(head),
+      helpBtn(`head-sum-${head.id}`, headEli5(head))),
+    rankBarChart({
+      aria: `Ranked methods on ${metaOf(bid).label}, ${head.label} head`,
+      scored,
+      pending,
+      rankOf: (r) => {
+        const s = familyRankSpread(r, rankCid, view);
+        return s ? (s[0] + s[1]) / 2 : 999;
+      },
+      labelOf: (r) => r.method,
+      noteOf,
+      lineageOf: (r) => r.lineage,
+    }),
+    familyTable(bid, rankCid, groups, { showComposite: head.id === "pval" }));
+}
+
+function familyChartAndTable(bid, cid, headId) {
   const view = viewFor(bid);
   const pending = cid === "count_arm"
     ? pendingOf(bid).filter((p) => p.lineage === "baseline" || p.lineage === "candi")
     : pendingOf(bid);
-  const groups = metricGroups(cid);
+  const groups = metricGroups(cid, headId);
   const scored = view.rows.filter((r) => rowHasFamily(r, cid) && familyRankSpread(r, cid, view));
-  const primary = catMetrics(cid, ["ranked"])[0];
+  const primary = catMetrics(cid, ["ranked"]).filter((m) => !headId || headIdOf(m) === headId)[0];
   const kicker = familyKicker(cid);
   const chart = (!scored.length && !pending.length) ? null : rankBarChart({
       aria: `Ranked methods on ${metaOf(bid).label}, ${familyTabCaption(cid).title}`,
@@ -424,13 +570,24 @@ function familyNote(row, cid, primary) {
   let s = v.toFixed(primary.decimals);
   if (primary.floor !== null) s += ` ±${primary.floor}`;
   if (primary.arm === "pval" && primary.key === "crps") s += " · ordering only";
+  if (primary.arm === "count" && primary.key === "crps") {
+    const osc = rowVal(row, { arm: "count", key: "crps_oracle_scaled", decimals: 4 });
+    const se = rowVal(row, { arm: "count", key: "scale_error", decimals: 4 });
+    if (osc !== null && osc !== undefined && se !== null && se !== undefined) {
+      s += ` · ${osc.toFixed(4)} / ${se.toFixed(4)}`;
+    }
+  }
+  if (primary.key === "auprc") {
+    const br = rowVal(row, { arm: "pval", key: "peak_base_rate", decimals: 4 });
+    if (br !== null && br !== undefined) s += ` · base ${br.toFixed(4)}`;
+  }
   return s;
 }
 
-function lossBody(bid) {
+function lossBody(bid, headId) {
   const view = viewFor(bid);
   const pending = pendingOf(bid);
-  const groups = metricGroups("loss");
+  const groups = metricGroups("loss", headId);
   const blocks = groups.map((g) => {
     const m = g.metrics[0];
     const scored = view.rows
@@ -475,6 +632,7 @@ function covariateBody(bid) {
   const has = (sub.rows || []).length > 0;
   const pendingCandi = pendingOf(bid).filter((p) => p.lineage === "candi");
   const nGlobal = cover.n_rows_with_diagnostics || 0;
+  const measuredNote = "These numbers are measured on the count head: the C-block changes the prompt and re-decodes the Negative Binomial (μ, n) against count truth (kind = the first eval kind, impute).";
 
   if (!has) {
     const scorers = cover.scorers || [];
@@ -484,6 +642,7 @@ function covariateBody(bid) {
         h("p", { class: "cov-absent-title" },
           "No covariate-sensitivity numbers on this eval set",
           helpBtn("cov-empty-board", cat.eli5)),
+        h("p", { class: "sub" }, measuredNote),
         h("p", null,
           "These numbers live on CANDI-lineage rows scored by the internal bench. ",
           "They are present on another eval set, not this one."),
@@ -497,6 +656,7 @@ function covariateBody(bid) {
       h("p", { class: "cov-absent-title" },
         "No covariate-sensitivity numbers on any current row",
         helpBtn("cov-empty", cat.eli5)),
+      h("p", { class: "sub" }, measuredNote),
       h("p", null, cat.absent_note),
       h("p", { class: "sub" }, cat.will_populate),
       scorers.length
@@ -524,7 +684,7 @@ function covariateBody(bid) {
     return d || a.method.localeCompare(b.method);
   });
   return h("div", null,
-    h("p", { class: "chart-kicker" }, cat.note,
+    h("p", { class: "chart-kicker" }, measuredNote, " ", cat.note,
       helpBtn("cov", cat.eli5)),
     rankBarChart({
       aria: `CANDI versions on ${metaOf(bid).label}, covariate sensitivity`,
@@ -546,7 +706,8 @@ function familyTable(bid, cid, groups, opts) {
   const view = viewFor(bid);
   const nMetric = groups.reduce((n, g) => n + g.metrics.length, 0);
   const showRank = cid !== "loss";
-  const showComposite = cid === "summary";
+  const showComposite = (opts && opts.showComposite !== undefined)
+    ? opts.showComposite : cid === "summary";
   const nCols = 1 + (showRank ? 1 : 0) + (showComposite ? 1 : 0) + nMetric;
 
   if (!entries.length) {

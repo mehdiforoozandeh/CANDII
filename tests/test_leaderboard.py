@@ -136,9 +136,10 @@ def test_add_extracts_the_sigma_table_id(root: Path) -> None:
 
 
 def test_add_carries_contributor_mode_in_flags(root: Path, tmp_path: Path) -> None:
-    """contributor_mode is a FLAG_KEYS member: add copies it and compile keeps it."""
+    """contributor_mode and clip are FLAG_KEYS members: add copies them and compile keeps them."""
     score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
     score["provenance"]["contributor_mode"] = True
+    score["provenance"]["clip"] = "p99"
     score_path = tmp_path / "score.json"
     score_path.write_text(json.dumps(score), encoding="utf-8")
     lb.main(["--root", str(root), "add", str(score_path),
@@ -149,8 +150,10 @@ def test_add_carries_contributor_mode_in_flags(root: Path, tmp_path: Path) -> No
              "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
     row = json.loads((root / "rows" / "dev" / "fixture-a@v1.json").read_text(encoding="utf-8"))
     assert row["provenance"]["flags"]["contributor_mode"] is True
+    assert row["provenance"]["flags"]["clip"] == "p99"
     compiled = next(r for r in dev_view(root)["rows"] if r["id"] == "fixture-a@v1")
     assert compiled["provenance"]["flags"]["contributor_mode"] is True
+    assert compiled["provenance"]["flags"]["clip"] == "p99"
 
 
 # ---------------------------------------------------------------- refusals ---
@@ -510,11 +513,14 @@ def test_pending_travels_into_the_payload_and_drops_when_stamped(root: Path) -> 
 
 
 def test_site_is_a_nested_plain_language_view() -> None:
-    """v3: outer eval-set tabs, inner metric-family tabs; v2 science rendering stays."""
+    """v4: three-layer tabs (data → head → family); v2 science rendering stays."""
     index = (REPO / "leaderboard" / "site" / "index.html").read_text(encoding="utf-8")
     js = (REPO / "leaderboard" / "site" / "app.js").read_text(encoding="utf-8")
-    assert 'id: "eval-tabs"' in js and 'id: "family-tabs"' in js
-    assert "FAMILY_TABS" in js and "covariate_diagnostics" in js
+    assert 'id: "eval-tabs"' in js and 'id: "head-tabs"' in js and 'id: "family-tabs"' in js
+    assert "derivedHeads" in js and "headIdOf" in js
+    assert "COVARIATE_HEAD" in js and 'COVARIATE_HEAD = "count"' in js
+    assert "covariate_diagnostics" in js
+    assert "data-summary" in js and "headSummaryBody" in js
     assert "All methods, one table" not in js
     assert "Is CANDI climbing?" not in index and "Is CANDI climbing?" not in js
     assert "strict (minus chr19)" not in index and "strict (minus chr19)" not in js
@@ -528,6 +534,31 @@ def test_site_is_a_nested_plain_language_view() -> None:
     assert "compositeCell" in js
     assert "absent_note" in js and "will_populate" in js
     assert "No covariate-sensitivity numbers" in js
+
+
+def test_v4_head_family_mapping_matches_registry() -> None:
+    """Heads partition registry metrics. Covariate has arm=null; it sits under Count
+    because harness.c_block predicts NB (mu, n) against count truth."""
+    reg = json.loads((REPO / "leaderboard" / "registry.json").read_text(encoding="utf-8"))
+    js = (REPO / "leaderboard" / "site" / "app.js").read_text(encoding="utf-8")
+    assert 'COVARIATE_HEAD = "count"' in js
+    cats_by_head: dict[str, set[str]] = {"count": set(), "pval": set(), "peak": set()}
+    for m in reg["metrics"]:
+        if m["category"] == "peaks":
+            cats_by_head["peak"].add(m["category"])
+        elif m["category"] == "covariate_diagnostics":
+            cats_by_head["count"].add(m["category"])
+        elif m["arm"] == "count":
+            cats_by_head["count"].add(m["category"])
+        elif m["arm"] == "pval":
+            cats_by_head["pval"].add(m["category"])
+    assert cats_by_head["pval"] == {"pointwise", "distributional", "loss"}
+    assert cats_by_head["count"] == {"count_arm", "loss", "covariate_diagnostics"}
+    assert cats_by_head["peak"] == {"peaks"}
+    pval_ids = {(m["arm"], m["key"]) for m in reg["metrics"]
+                if m["arm"] == "pval" and m["category"] != "peaks"}
+    count_ids = {(m["arm"], m["key"]) for m in reg["metrics"] if m["arm"] == "count"}
+    assert not (pval_ids & count_ids)
 
 
 # ---------------------------------------------------------------- site ---
