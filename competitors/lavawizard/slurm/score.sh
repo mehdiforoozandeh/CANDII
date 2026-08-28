@@ -26,7 +26,9 @@ PRED="${PRED:-$RUNS/pred}"
 SIGMA="${SIGMA:-$RUNS/sigma.json}"
 case "$PROTOCOL" in
   p1) CH=() ;;
-  p2) CH=(--chroms all) ;;
+  # `--chroms all` is not a value this entry point takes -- it wants the list, and an
+  # unknown name is a hard error rather than a silent all-chromosomes default. Good.
+  p2) CH=(--chroms "$(IFS=,; echo "${CHROMS[*]}")") ;;
   *)  echo "[error] PROTOCOL must be p1 or p2, got '$PROTOCOL'" >&2; exit 2 ;;
 esac
 if [ ! -f "$SIGMA" ]; then
