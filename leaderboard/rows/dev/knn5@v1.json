@@ -411,6 +411,7 @@
    "seed": 0,
    "signal_target_transform": "none"
   },
+  "has_peak_head": true,
   "method_notes": {
    "notes": "kNN average, k=5 (§5.4). Same similarity ranking as knn1; heads as `avg` over the top 5 contributors."
   },

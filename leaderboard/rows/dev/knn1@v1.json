@@ -412,6 +412,7 @@
    "seed": 0,
    "signal_target_transform": "none"
   },
+  "has_peak_head": true,
   "method_notes": {
    "notes": "BestSingle (§5.4): the single most similar training cell, ranked by mean Pearson r with the INPUT cell over their shared assays on the train chromosomes in arcsinh(-log10 p). One contributor, so counts take the Poisson floor and there is no cross-cell sigma."
   },
