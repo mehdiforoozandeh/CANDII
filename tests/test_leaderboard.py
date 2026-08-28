@@ -122,6 +122,7 @@ def test_add_round_trips_a_row(root: Path) -> None:
     prov = row["provenance"]
     assert prov["scoring_sha"] == "deadbeef" and prov["fir_path"] == "fake:/scratch/fixture"
     assert prov["sigma_table"] is None
+    assert prov["has_peak_head"] is False
     assert prov["flags"]["pval_pred_space"] == "-log10p"
     reg = lb.load_registry(root)
     lb.gate_row_shape(row, reg)  # what `add` wrote passes the reader's own gate
@@ -133,6 +134,27 @@ def test_add_extracts_the_sigma_table_id(root: Path) -> None:
     row = json.loads((root / "rows" / "dev" / "fixture-b@v1.json").read_text(encoding="utf-8"))
     assert row["provenance"]["sigma_table"] == {"method": "fixture-b",
                                                 "fitted_on": "regime.eic_val eval_pairs"}
+    compiled = next(r for r in dev_view(root)["rows"] if r["id"] == "fixture-b@v1")
+    assert compiled["provenance"]["sigma_table"]["method"] == "fixture-b"
+    assert compiled["has_peak_head"] is False
+
+
+def test_add_extracts_has_peak_head_from_bernoulli_nll(root: Path, tmp_path: Path) -> None:
+    """A real peak head is the presence of bernoulli_nll in the score macro, not a value range."""
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["macro"]["pval"]["bernoulli_nll"] = 0.42
+    score_path = tmp_path / "score.json"
+    score_path.write_text(json.dumps(score), encoding="utf-8")
+    lb.main(["--root", str(root), "add", str(score_path),
+             "--board", "dev", "--method", "fixture-a", "--version", "v1",
+             "--date", "2026-08-27", "--lineage", "baseline",
+             "--position-class", "generalizing", "--cell-class", "zero-shot",
+             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    row = json.loads((root / "rows" / "dev" / "fixture-a@v1.json").read_text(encoding="utf-8"))
+    assert row["provenance"]["has_peak_head"] is True
+    compiled = next(r for r in dev_view(root)["rows"] if r["id"] == "fixture-a@v1")
+    assert compiled["has_peak_head"] is True
 
 
 def test_add_carries_contributor_mode_in_flags(root: Path, tmp_path: Path) -> None:

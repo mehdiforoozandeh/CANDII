@@ -248,9 +248,13 @@ footer { border-top: 1px solid var(--line); background: var(--panel); margin-top
 .badge-warn { color: var(--warn); border-color: var(--warn); margin-left: 8px; }
 .badge-pending { color: var(--ink-faint); border-style: dashed; text-transform: none;
   letter-spacing: 0; font-weight: 600; }
-.chart-kicker { margin: 4px 0 10px; color: var(--ink-soft); font-size: 13px; }
+.badge-device { text-transform: none; letter-spacing: 0.02em; font-weight: 600; }
+.badge-fitted { color: var(--warn); border-color: var(--warn); }
+.badge-native { color: var(--ok); border-color: var(--ok); }
+.chart-kicker { margin: 4px 0 10px; color: var(--ink-soft); font-size: 13px;
+  max-width: 72em; line-height: 1.45; }
 .count-chart { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--line); }
-.rank-svg { width: 100%; max-width: 820px; height: auto; display: block; }
+.rank-svg { width: 100%; max-width: 880px; height: auto; display: block; }
 .empty-note { color: var(--ink-faint); font-size: 13px; }
 
 .board thead .eval-head th { text-transform: none; letter-spacing: 0.02em; font-size: 12.5px;

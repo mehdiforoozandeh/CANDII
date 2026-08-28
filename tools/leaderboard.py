@@ -267,6 +267,17 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def score_has_peak_head(score: Mapping[str, Any]) -> bool:
+    """True when the score's macro carries `bernoulli_nll` — the stamp `loss_block` emits
+    only if the producer supplied a real `peak_score` (`TrackRecord.has_peak_head`)."""
+    macro = score.get("macro") if isinstance(score.get("macro"), dict) else {}
+    for arm in ("pval", "count"):
+        block = macro.get(arm)
+        if isinstance(block, dict) and "bernoulli_nll" in block:
+            return True
+    return False
+
+
 def score_path_of_record(path: Path) -> str:
     """Store vault evidence paths repo-relative, so any checkout resolves them."""
     s = str(path.resolve())
@@ -302,6 +313,7 @@ def build_provenance(score: Mapping[str, Any], args: argparse.Namespace,
         "store_manifest_hash": args.store_manifest_hash,
         "regime": prov.get("regime"),
         "sigma_table": sigma_id,
+        "has_peak_head": score_has_peak_head(score),
         "scorer": prov["suite"],
         "flags": flags,
         "artifacts_resolved_at_add": score_path.exists(),
@@ -520,6 +532,7 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
             "missing_metrics": r.get("missing_metrics_strict" if view == "strict"
                                      else "missing_metrics", []),
             "provenance": r["provenance"],
+            "has_peak_head": bool((r.get("provenance") or {}).get("has_peak_head")),
             "verified": bool(r["provenance"].get("artifacts_resolved_at_add")),
             "metric_ranks": {mid: list(rk[rid]) for mid, rk in metric_ranks.items()
                              if rid in rk},

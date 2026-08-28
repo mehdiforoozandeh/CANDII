@@ -18,6 +18,14 @@ const LINEAGE_LABEL = {
   baseline: "baseline", entrant: "2019 entrant",
 };
 
+/* Verified 2026-08-27 from fit_sigma / bench.external and the stamped rival rows.
+ * Point-only rivals: one σ per assay, V-pair residuals on eval chr21, reused unchanged.
+ * Homoscedastic per assay. PIT KS 0.367–0.377, coverage_95 0.977–0.984. */
+const DIST_ONELINER = "Point-only rivals get one Gaussian spread per assay, fitted once on validation-pair residuals (eval chromosome chr21) and reused unchanged. The spread does not adapt bin-by-bin. That device is known-miscalibrated (PIT KS 0.367–0.391, 95% coverage 0.977–0.985 on the stamped rival rows), so CRPS here is ordering-only.";
+const DIST_ELI5 = "Most rivals predict one number per bin, not a distribution. To give them CRPS, PIT, and 95% coverage we wrap a Gaussian around that number. The width is one constant per assay: the root-mean-square residual on the validation pairs, chromosome chr21, then frozen. Refitting on a later protocol would leak. Same width at every bin of that assay — the spread does not grow or shrink with the signal. On Avocado, eDICE, and ChromImpute this width is too wide in the same way (PIT KS 0.367–0.391, 95% coverage 0.977–0.985). Rank on CRPS; do not read the absolute as a calibrated score. That is the ordering-only note on this tab. CANDI's Negative Binomial count head and per-bin Gaussian signal head emit a real distribution; they do not use this device. A σ-table on the row means the fitted spread; PIT/coverage without a σ-table means the method emitted its own spread.";
+const PEAK_ONELINER = "For methods with no peak score, AUPRC ranks bins by predicted signal against called peaks — a coverage ranking, not a peak classifier. A Bernoulli peak head is a different device.";
+const PEAK_ELI5 = "eDICE, Avocado, and ChromImpute do not output a peak probability. The scorer then ranks each bin by the predicted p-value level (or the count mean if that is all they have) and asks whether high predicted signal sits on bins the store called as peaks (MACS2 labels). That is a coverage ranking: does the track light up where peaks were called? It is not a peak classifier. CANDI's peak head, when its rows land, emits a per-bin Bernoulli probability and is labeled separately. AUPRC is always shown with the peak base rate.";
+
 const state = {
   data: null,
   view: "default",
@@ -143,6 +151,65 @@ function spaceTag(m) {
   return h("span", { class: "space-tag" }, s);
 }
 
+function hasSigmaTable(row) {
+  return !!(row && row.provenance && row.provenance.sigma_table);
+}
+function hasPeakHead(row) {
+  if (!row) return false;
+  if (row.has_peak_head) return true;
+  return !!(row.provenance && row.provenance.has_peak_head);
+}
+function spreadDevice(row) {
+  if (!row) return null;
+  if (hasSigmaTable(row)) return "fitted";
+  const pval = (row.metrics && row.metrics.pval) || {};
+  if ("pit_ks" in pval || "coverage_95" in pval) return "native";
+  return null;
+}
+function peakDevice(row) {
+  if (!row) return null;
+  const pval = (row.metrics && row.metrics.pval) || {};
+  if (!("auprc" in pval)) return null;
+  return hasPeakHead(row) ? "native" : "coverage";
+}
+function deviceBadge(kind, device) {
+  if (!device) return null;
+  if (kind === "spread") {
+    return device === "fitted"
+      ? h("span", { class: "badge badge-device badge-fitted",
+          title: "Gaussian wrapped around a point prediction. One spread per assay, fitted on validation residuals, reused unchanged. Homoscedastic per assay — the spread does not adapt bin-by-bin." },
+          "fitted spread device")
+      : h("span", { class: "badge badge-device badge-native",
+          title: "This method emitted its own per-bin spread. Not the fitted σ-table device." },
+          "native distribution");
+  }
+  return device === "native"
+    ? h("span", { class: "badge badge-device badge-native",
+        title: "Producer supplied a peak_score. bernoulli_nll is defined. A Bernoulli peak head, not a coverage ranking." },
+        "native peak head")
+    : h("span", { class: "badge badge-device badge-fitted",
+        title: "No peak_score array. AUPRC ranks bins by predicted signal (or count mean) against called peaks — a coverage ranking, not a peak classifier." },
+        "coverage ranking");
+}
+function deviceNote(cid, row) {
+  if (cid === "distributional") {
+    const d = spreadDevice(row);
+    return d === "fitted" ? "fitted spread" : d === "native" ? "native dist" : "";
+  }
+  if (cid === "peaks") {
+    const d = peakDevice(row);
+    return d === "native" ? "native peak" : d === "coverage" ? "coverage ranking" : "";
+  }
+  return "";
+}
+function metricExplainer(m) {
+  if (m.arm === "pval" && (m.key === "crps" || m.key === "pit_ks" || m.key === "coverage_95")) {
+    return DIST_ELI5;
+  }
+  if (m.key === "auprc" || m.key === "peak_base_rate") return PEAK_ELI5;
+  return null;
+}
+
 /* ------------------------------------------------------------- boot --- */
 
 async function boot() {
@@ -246,6 +313,8 @@ function familyEli5(cid) {
   if (cid === "summary") {
     return "Composite is the mean of category mean-ranks for categories at least one method on this eval set fully covers. A method missing any of those categories is incomplete, not last: the composite cell is a dash, and it is left out of the headline ranking. It still ranks inside every category it has numbers for. Lower is better.";
   }
+  if (cid === "distributional") return DIST_ELI5;
+  if (cid === "peaks") return PEAK_ELI5;
   const c = catInfo(cid);
   return c && c.eli5;
 }
@@ -257,7 +326,7 @@ function headEli5(head) {
   if (head.id === "count") {
     return "Count space. Ranking is Negative Binomial CRPS, always with its oracle-scaled / scale-error split and the ±0.09 noise floor. Covariate sensitivity sits here because the C-block re-decodes (μ, n) against count truth. P-value numbers never appear here.";
   }
-  return "Peak detection. Ranking is AUPRC, always with the peak base rate. These scores are stored on the p-value arm in the registry; they are a separate head so they never mix with point-wise or distributional p-value numbers.";
+  return "Peak detection. Ranking is AUPRC, always with the peak base rate. For methods that do not emit a peak score, that AUPRC is a coverage ranking against called peaks, not a peak classifier. These scores are stored on the p-value arm in the registry; they are a separate head so they never mix with point-wise or distributional p-value numbers.";
 }
 
 /* ------------------------------------------------------------- nested tabs --- */
@@ -449,12 +518,8 @@ function familyKicker(cid) {
   if (cid === "count_arm") {
     return "Count space — Negative Binomial CRPS, ranked separately. Count-space and p-value-space numbers never share an axis.";
   }
-  if (cid === "distributional") {
-    return "Distributional scores in p-value space. Rank on CRPS; the absolute value is ordering only. Always shown with PIT KS and 95% coverage.";
-  }
-  if (cid === "peaks") {
-    return "Peak scores in p-value space. AUPRC is always shown with the peak base rate.";
-  }
+  if (cid === "distributional") return DIST_ONELINER;
+  if (cid === "peaks") return PEAK_ONELINER;
   if (cid === "pointwise") {
     return "Point-wise scores in p-value space. Every method that emits a point track can appear here.";
   }
@@ -468,7 +533,7 @@ function headKicker(head) {
   if (head.id === "count") {
     return "Count head — ranked on Negative Binomial CRPS, with the oracle-scaled / scale-error split and the ±0.09 noise floor.";
   }
-  return "Peak head — ranked on AUPRC, always with the peak base rate.";
+  return PEAK_ONELINER;
 }
 
 function summaryBody(bid) {
@@ -508,18 +573,22 @@ function headSummaryBody(bid, head) {
       : null;
   const groups = overviewGroups(head.id);
   const noteOf = (r) => {
+    let note;
     if (head.id === "pval") {
-      return r.composite
+      note = r.composite
         ? (r.composite[0] === r.composite[1]
             ? r.composite[0].toFixed(2)
             : `${r.composite[0].toFixed(2)}${EN_DASH}${r.composite[1].toFixed(2)}`)
         : "";
+    } else {
+      note = familyNote(r, rankCid, primary);
     }
-    return familyNote(r, rankCid, primary);
+    const extra = deviceNote(rankCid, r);
+    return extra ? (note ? `${note} · ${extra}` : extra) : note;
   };
   return h("div", { class: "head-summary" },
     h("p", { class: "chart-kicker" }, headKicker(head),
-      helpBtn(`head-sum-${head.id}`, headEli5(head))),
+      helpBtn(`head-sum-${head.id}`, head.id === "peak" ? PEAK_ELI5 : headEli5(head))),
     rankBarChart({
       aria: `Ranked methods on ${metaOf(bid).label}, ${head.label} head`,
       scored,
@@ -553,12 +622,16 @@ function familyChartAndTable(bid, cid, headId) {
         return s ? (s[0] + s[1]) / 2 : 999;
       },
       labelOf: (r) => r.method,
-      noteOf: (r) => familyNote(r, cid, primary),
+      noteOf: (r) => {
+        const note = familyNote(r, cid, primary);
+        const extra = deviceNote(cid, r);
+        return extra ? (note ? `${note} · ${extra}` : extra) : note;
+      },
       lineageOf: (r) => r.lineage,
     });
   return h("div", null,
     kicker ? h("p", { class: "chart-kicker" }, kicker,
-      helpBtn(`kicker-${cid}`, catInfo(cid) && catInfo(cid).eli5)) : null,
+      helpBtn(`kicker-${cid}`, familyEli5(cid))) : null,
     chart,
     familyTable(bid, cid, groups));
 }
@@ -724,14 +797,20 @@ function familyTable(bid, cid, groups, opts) {
       title: "Mean of category sub-scores. Lower is better. A dash is partial coverage, not last place.",
     }, "composite") : null,
     ...groups.flatMap((g) => g.metrics.map((m) =>
-      h("th", { class: armClass(m), title: metricTitle(m) }, m.label, spaceTag(m)))));
+      h("th", { class: armClass(m), title: metricTitle(m) },
+        h("span", { class: "chip-wrap" },
+          m.label, spaceTag(m), helpBtn(`col-${cid}-${metricId(m)}`, metricExplainer(m)))))));
 
+  const showSpread = cid === "distributional" || groups.some((g) =>
+    g.metrics.some((m) => m.key === "pit_ks" || m.key === "coverage_95"));
+  const showPeak = cid === "peaks" || groups.some((g) =>
+    g.metrics.some((m) => m.key === "auprc"));
   const bodyRows = entries.flatMap((entry) => {
     const pending = entry.pending && !entry.row;
     const cls = pending
       ? "pending-row"
       : (cid === "summary" ? medalClass(entry.row, view) : null);
-    const cells = [methodCell(entry, bid)];
+    const cells = [methodCell(entry, bid, { spread: showSpread, peak: showPeak })];
     if (pending) {
       const rest = nCols - 1;
       cells.push(h("td", { class: "rank-cell cell-pending", colspan: rest,
@@ -783,17 +862,20 @@ function medalClass(row, view) {
   return peers.length > 1 ? null : `medal-${k}`;
 }
 
-function methodCell(entry, bid) {
+function methodCell(entry, bid, opts) {
   const row = entry.row;
   const b = (row && row.badges) || {};
   const pendingNote = entry.pending && !row
     ? (metaOf(bid).label)
     : null;
+  const spreadBadge = (opts && opts.spread) ? deviceBadge("spread", spreadDevice(row)) : null;
+  const peakBadge = (opts && opts.peak) ? deviceBadge("peak", peakDevice(row)) : null;
   return h("td", { class: "method-col" },
     h("div", { class: "method-line" },
       h("span", { class: "method-name" }, entry.method),
       h("span", { class: `badge lineage-${entry.lineage}` },
-        LINEAGE_LABEL[entry.lineage] || entry.lineage)),
+        LINEAGE_LABEL[entry.lineage] || entry.lineage),
+      spreadBadge, peakBadge),
     h("div", { class: "method-line" },
       row ? h("span", { class: "version-chip" }, `${row.version} · ${row.date}`) : null,
       b.position ? h("span", { class: "badge" }, b.position) : null,
@@ -837,7 +919,7 @@ function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageO
   if (!items.length && !extra.length) {
     return h("p", { class: "empty-note" }, "No scores stamped yet.");
   }
-  const rowH = 26, L = 170, R = 110, T = 6, W = 760;
+  const rowH = 26, L = 170, R = 180, T = 6, W = 820;
   const H = T + (items.length + extra.length) * rowH + 8;
   const plotW = W - L - R;
   const svg = h("svg:svg", {
@@ -988,6 +1070,10 @@ function provDl(row) {
   put("regime", p.regime);
   put("store manifest hash", p.store_manifest_hash);
   if (p.sigma_table) put("σ-table", `${p.sigma_table.method} · fitted on ${p.sigma_table.fitted_on}`);
+  if (row.has_peak_head || p.has_peak_head) put("peak head", "native (bernoulli_nll present)");
+  else if (row.metrics && row.metrics.pval && "auprc" in row.metrics.pval) {
+    put("peak head", "absent — AUPRC is a coverage ranking");
+  }
   put("flags of record", JSON.stringify(p.flags));
   if (row.missing_metrics && row.missing_metrics.length) {
     put("declared missing", row.missing_metrics.join(", "));
