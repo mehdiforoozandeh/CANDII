@@ -426,15 +426,27 @@ no oracle split — and its provenance carries `clip: true`, `contributor_mode: 
 `pred_inversion: external` and the sigma table's `fitted_on`. That is what the smoke exists to
 prove: every switch this method has reaches the score file as data.
 
-## The deliverable result — P1
+## The deliverable result — P1 and P2
 
-Regime `regime.eic_val.json`: 51 training cells, 26 T->V pairs, **45 declared tracks**, every 25 bp
-bin of chr21. `--contributor-mode loo`, cap on, sigma from the §6.1 table fitted on this same panel.
+Regime `regime.eic_val.json`: 51 training cells, 26 T->V pairs, **45 declared tracks**, 0 missing.
+`--contributor-mode loo`, cap on, sigma from the §6.1 table fitted **once** on the P1 panel and
+reused unchanged by P2. P1 is every 25 bp bin of chr21; P2 is all 23 chromosomes, 121.2 M bins.
 
 | | mse | gwcorr | crps | pit_ks | coverage_95 | gaussian_nll |
 |---|---|---|---|---|---|---|
-| Lavawizard | 6.2662 | 0.6297 | 0.6023 | 0.3978 | 0.9852 | 1.7535 |
-| *same code, 50-step model* | *6.4319* | *0.5501* | *0.6245* | *0.3763* | *0.9848* | *1.7905* |
+| **P1** (chr21) | 6.2662 | 0.6297 | 0.6023 | 0.3978 | 0.9852 | 1.7535 |
+| **P2** (genome) | 9.2809 | 0.6030 | 0.6407 | 0.3613 | 0.9817 | 1.9575 |
+| *P1, same code, 50-step model* | *6.4319* | *0.5501* | *0.6245* | *0.3763* | *0.9848* | *1.7905* |
+
+**P2 is not a generalisation test for this method.** Guacamole fits genomic factors per chromosome
+and one model per chromosome, so **every** P2 chromosome was trained on. The P1 -> P2 drop in `mse`
+is the other 22 chromosomes having more dynamic range than chr21, not held-out sequence. Plan §2
+warns that P2 structurally favours position-parameterised rivals; that warning applies here in full,
+and it is why both protocols are always reported.
+
+The sigma table is **in-sample on chr21 and out-of-sample on the other 22**, since it was fitted on
+the P1 panel and reused. That is §6.1 working as designed, and it is why the P2 CRPS is the more
+honest of the two — but neither is significant until the pval arm's noise floor is measured.
 
 The second row is the plumbing smoke, and it is here as a **calibration on how much of this is the
 method**. Training the model properly moved `gwcorr` 0.550 -> 0.630, a real gain — but it moved
@@ -451,6 +463,12 @@ and **no pval-CRPS gap is significant until that arm's noise floor is measured**
 Placement is t55's job, not this README's. One row for scale, on the same instrument and the same
 45 tracks: eDICE's P1 reads `mse=6.1572 gwcorr=0.7075 crps=0.5885 pit_ks=0.3868 coverage_95=0.9851`
 — better, and clearly so on correlation.
+
+**Cost, measured.** Training 136.5 GPU-hours over 23 array tasks, longest 8 h 27 m. Prediction:
+6 chromosomes on the MIG slice, then the remaining 17 moved to **CPU** when the GPU partition went
+3765 jobs deep and my tasks sat on `Priority` — 12-way, and the `%12` import cap became the binding
+constraint rather than the queue. Scoring: P1 in minutes, P2 in 7 h 49 m at 0.46 GB peak RSS, so
+the 64 GB ask was far more than P2 needed.
 
 ## Reading an anchor number
 
