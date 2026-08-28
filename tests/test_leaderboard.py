@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -666,6 +667,7 @@ def site_combo_keys() -> set[str]:
     keys = set()
     for bid in ("main", "dev", "entrants"):
         keys.add(f"{bid}/summary")
+        keys.add(f"{bid}/radar")
         for head, fams in SITE_HEAD_FAMILIES.items():
             keys.add(f"{bid}/{head}/summary")
             keys.update(f"{bid}/{head}/{fam}" for fam in fams)
@@ -676,7 +678,7 @@ def test_help_json_covers_combos_and_stamped_methods() -> None:
     """help.json parses; every site combo has a card; every stamped method has a card."""
     path = REPO / "leaderboard" / "site" / "help.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert set(payload) >= {"methods", "combos"}
+    assert set(payload) >= {"methods", "combos", "metrics"}
     methods, combos = payload["methods"], payload["combos"]
     expected = site_combo_keys()
     assert set(combos) == expected, (
@@ -696,3 +698,41 @@ def test_help_json_covers_combos_and_stamped_methods() -> None:
             assert card.get(field), f"{name} missing {field}"
         blob = " ".join(str(card[f]) for f in ("what", "training", "classes", "scoring", "caveats"))
         assert "UNKNOWN" not in blob and "UNVERIFIED" not in blob, name
+
+
+def _metric_id(m: dict) -> str:
+    slot = m["arm"] if m["arm"] in ("pval", "count") else "diagnostics"
+    return f"{slot}/{m['key']}"
+
+
+def test_help_metrics_cover_registry_and_mathml_is_xml() -> None:
+    """Every registry metric has a help entry; every formula_mathml is well-formed MathML."""
+    help_payload = json.loads(
+        (REPO / "leaderboard" / "site" / "help.json").read_text(encoding="utf-8"))
+    metrics = help_payload["metrics"]
+    reg = json.loads((REPO / "leaderboard" / "registry.json").read_text(encoding="utf-8"))
+    expected = {_metric_id(m) for m in reg["metrics"]}
+    assert set(metrics) == expected, (
+        f"help metrics extra={set(metrics) - expected} missing={expected - set(metrics)}")
+    pit = metrics["pval/pit_ks"]
+    for field in ("question", "formula_mathml", "estimator_notes", "read_rules"):
+        assert pit.get(field), f"pval/pit_ks missing {field}"
+    assert "Uniform(0,1)" in pit["question"] or "Uniform" in pit["question"]
+    assert "Kolmogorov" in pit["estimator_notes"] or "PIT" in pit["question"]
+    for mid, entry in metrics.items():
+        for field in ("question", "formula_mathml", "estimator_notes", "read_rules"):
+            assert entry.get(field), f"{mid} missing {field}"
+        blob = " ".join(str(entry[f]) for f in
+                        ("question", "formula_mathml", "estimator_notes", "read_rules"))
+        assert "UNKNOWN" not in blob and "UNVERIFIED" not in blob, mid
+        root = ET.fromstring(entry["formula_mathml"])
+        tag = root.tag.split("}")[-1]
+        assert tag == "math", f"{mid} root is {root.tag}"
+        assert list(root) or (root.text and root.text.strip()), f"{mid} empty math"
+    js = (REPO / "leaderboard" / "site" / "app.js").read_text(encoding="utf-8")
+    assert "metricHelpBtn" in js and "metricCardBody" in js
+    assert 'kind === "metric"' in js or 'card.kind === "metric"' in js
+    assert "formula_mathml" in js
+    assert "familyMetricHelps" in js
+    assert 'state.midHead === "radar"' in js and "${state.outerEval}/radar" in js
+

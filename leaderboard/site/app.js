@@ -28,13 +28,26 @@ const METHOD_QUALIFIER = {
  * Point-only rivals: one σ per assay, V-pair residuals on eval chr21, reused unchanged.
  * Homoscedastic per assay. PIT KS 0.367–0.377, coverage_95 0.977–0.984. */
 const DIST_ONELINER = "Point-only rivals get one Gaussian spread per assay, fitted once on validation-pair residuals (eval chromosome chr21) and reused unchanged. The spread does not adapt bin-by-bin. That device is known-miscalibrated (PIT KS 0.367–0.391, 95% coverage 0.977–0.985 on the stamped rival rows), so CRPS here is ordering-only.";
-const DIST_ELI5 = "Most rivals predict one number per bin, not a distribution. To give them CRPS, PIT, and 95% coverage we wrap a Gaussian around that number. The width is one constant per assay: the root-mean-square residual on the validation pairs, chromosome chr21, then frozen. Refitting on a later protocol would leak. Same width at every bin of that assay — the spread does not grow or shrink with the signal. On Avocado, eDICE, and ChromImpute this width is too wide in the same way (PIT KS 0.367–0.391, 95% coverage 0.977–0.985). Rank on CRPS; do not read the absolute as a calibrated score. That is the ordering-only note on this tab. CANDI's Negative Binomial count head and per-bin Gaussian signal head emit a real distribution; they do not use this device. A σ-table on the row means the fitted spread; PIT/coverage without a σ-table means the method emitted its own spread.";
+const DIST_ELI5 = "Most rivals predict one number per bin, not a distribution. To give them CRPS, PIT, and 95% coverage we wrap a Gaussian around that number. The width is one constant per assay: the root-mean-square residual on the validation pairs, chromosome chr21, then frozen. Refitting on a later protocol would leak. Same width at every bin of that assay — the spread does not grow or shrink with the signal. On Avocado, eDICE, and ChromImpute this width is too wide in the same way (PIT KS 0.367–0.391, 95% coverage 0.977–0.985). Rank on CRPS; do not read the absolute as a calibrated score. That is the ordering-only note on this tab. CANDI's Negative Binomial count head and per-bin Gaussian signal head emit a real distribution; they do not use this device. A σ-table on the row means the fitted spread; PIT/coverage without a σ-table means the method emitted its own spread. PIT KS is the Kolmogorov–Smirnov distance of the probability-integral transform u = Φ((y − μ) / σ) from Uniform(0,1) — a calibration companion, never ranked, not a p-value. Coverage 95 is the fraction of bins inside the central 95% predictive interval. Click a column ? for each formula this code computes.";
 const PEAK_ONELINER = "For methods with no peak score, AUPRC ranks bins by predicted signal against called peaks — a coverage ranking, not a peak classifier. A Bernoulli peak head is a different device.";
-const PEAK_ELI5 = "eDICE, Avocado, and ChromImpute do not output a peak probability. The scorer then ranks each bin by the predicted p-value level (or the count mean if that is all they have) and asks whether high predicted signal sits on bins the store called as peaks (MACS2 labels). That is a coverage ranking: does the track light up where peaks were called? It is not a peak classifier. CANDI's peak head, when its rows land, emits a per-bin Bernoulli probability and is labeled separately. AUPRC is always shown with the peak base rate.";
+const PEAK_ELI5 = "eDICE, Avocado, and ChromImpute do not output a peak probability. The scorer then ranks each bin by the predicted p-value level (or the count mean if that is all they have) and asks whether high predicted signal sits on bins the store called as peaks (MACS2 labels). That is a coverage ranking: does the track light up where peaks were called? It is not a peak classifier. CANDI's peak head, when its rows land, emits a per-bin Bernoulli probability and is labeled separately. AUPRC is always shown with the peak base rate. Click a column ? for the average-precision formula this code computes.";
+const POINTWISE_ELI5 = "Four bin-by-bin scores on the concatenation of scored chromosomes. MSE: mean squared gap (lower; scales with mark range; no extra transform). GW Pearson: linear correlation of predicted and true (higher; a constant forecast is absent, not zero). GW Spearman: rank-order correlation, average ranks on ties (higher). MSE top-1% obs: MSE on bins at or above the 1% tallest observed value (ties can admit more than 1%). Click a column ? for the formula this code computes. The header letters match 2019; the truth signal does not — never translate.";
+const LOSS_ELI5 = "The training loss on data the method did not train on. Ranked only among methods that use this same loss family. Count-space NLL and p-value-space NLL never share a table or an axis. Gaussian NLL is the mean per-bin ½(log v + (μ − y)² / v + log(2π)) with v = max(σ², 10⁻⁶), scored in the training transform: stamped external rows use transform none; a CANDI store path typically uses arcsinh — those are not comparable. NB NLL is −mean log NB(k; n, p) on raw counts. Loss never enters the composite. Click a column ? for the formula this code computes.";
+const POSITION_TIP = {
+  "position-generalizing": "No genomic-position parameters (or none that pin the eval chromosome). Full genome can still be in-sample for other reasons — e.g. a neighbour table fit on chromosome 19.",
+  "position-transductive": "The method trains at genomic positions, including the evaluation chromosome. Full genome is in-sample at every position, including the chromosome-19-removed view.",
+  "position class unrecorded": "Position class is not recorded in this tree. Never invent it.",
+};
+const LINEAGE_TIP = {
+  candi: "A CANDI version. Version-over-version arrows use the 0.1195 seed-alone bar, not the cross-method ±0.09 floor.",
+  rival: "Retrained by us on Dataset-2, not a 2019 submission.",
+  baseline: "A naive baseline we built from training biosamples.",
+  entrant: "A frozen 2019 challenge submission, not retrained. Architecture is not recorded unless the card says otherwise.",
+};
 
 const state = {
   data: null,
-  help: { methods: {}, combos: {} },
+  help: { methods: {}, combos: {}, metrics: {} },
   view: "default",
   outerEval: null,
   midHead: null,
@@ -142,6 +155,7 @@ function coded(label, code) {
 function helpBtn(id, text) {
   if (!text) return null;
   const open = state.openHelp === id;
+  const rich = !!(text && text.nodeType);
   return h("button", {
     class: "help", type: "button",
     "aria-label": "Explain this", "aria-expanded": String(open),
@@ -150,12 +164,30 @@ function helpBtn(id, text) {
       state.openHelp = open ? null : id;
       render();
     },
-  }, "?", open ? h("span", { class: "help-tip", role: "tooltip" }, text) : null);
+  }, "?", open ? h("span", {
+    class: rich ? "help-tip help-tip-metric" : "help-tip", role: "tooltip",
+  }, text) : null);
+}
+function mathNode(mathml) {
+  const wrap = document.createElement("div");
+  wrap.className = "help-math";
+  wrap.innerHTML = mathml;
+  return wrap;
+}
+function metricHelpBody(id) {
+  const spec = (state.help.metrics || {})[id];
+  if (!spec || !spec.question) return null;
+  return h("span", { class: "help-metric" },
+    h("p", { class: "help-q" }, spec.question),
+    spec.formula_mathml ? mathNode(spec.formula_mathml) : null,
+    spec.estimator_notes ? h("p", { class: "help-est" }, spec.estimator_notes) : null,
+    spec.read_rules ? h("p", { class: "help-rules" }, spec.read_rules) : null);
 }
 function comboKey() {
   if (!state.outerEval) return null;
   if (state.midHead === "summary") return `${state.outerEval}/summary`;
-  if (!state.midHead || state.midHead === "radar") return null;
+  if (state.midHead === "radar") return `${state.outerEval}/radar`;
+  if (!state.midHead) return null;
   if (!state.innerFamily) return null;
   return `${state.outerEval}/${state.midHead}/${state.innerFamily}`;
 }
@@ -305,12 +337,44 @@ function deviceNote(cid, row) {
   }
   return "";
 }
+function metricHelpBtn(m, id) {
+  const mid = metricId(m);
+  const spec = (state.help.metrics || {})[mid];
+  if (!spec && !metricExplainer(m)) return null;
+  return h("button", {
+    class: "help", type: "button",
+    "aria-label": `Explain ${m.label}`,
+    title: (spec && spec.question) || m.label,
+    onclick: (ev) => {
+      ev.stopPropagation();
+      state.openCard = { kind: "metric", id: mid };
+      render();
+    },
+  }, "?");
+}
+function metricCardBody(id) {
+  const spec = (state.help.metrics || {})[id];
+  if (!spec || !spec.question) {
+    return h("p", null, "No help card recorded for this metric.");
+  }
+  return h("div", null,
+    cardField("What this number asks", spec.question),
+    spec.formula_mathml
+      ? h("div", null,
+          h("div", { class: "card-label" }, "How this code computes it"),
+          mathNode(spec.formula_mathml))
+      : null,
+    cardField("Estimator notes", spec.estimator_notes),
+    cardField("How to read it", spec.read_rules));
+}
 function metricExplainer(m) {
+  const body = metricHelpBody(metricId(m));
+  if (body) return body;
   if (m.arm === "pval" && (m.key === "crps" || m.key === "pit_ks" || m.key === "coverage_95")) {
     return DIST_ELI5;
   }
   if (m.key === "auprc" || m.key === "peak_base_rate") return PEAK_ELI5;
-  return null;
+  return m.eli5 || m.note || metricTitle(m);
 }
 
 /* ------------------------------------------------------------- boot --- */
@@ -330,7 +394,7 @@ async function boot() {
   try {
     state.help = await (await fetch("help.json")).json();
   } catch (err) {
-    state.help = { methods: {}, combos: {} };
+    state.help = { methods: {}, combos: {}, metrics: {} };
   }
   const ids = Object.keys(payload.boards);
   if (!(state.radarEval in payload.boards)) state.radarEval = ids[0];
@@ -395,7 +459,8 @@ function render() {
 
 function readerBadges(meta) {
   return (meta.reader_badges || []).map((b, i) =>
-    h("span", { class: "badge badge-warn", title: `Internal code lives in the ?` },
+    h("span", { class: "badge badge-warn",
+      title: `${b.eli5} Internal code lives in the ?.` },
       b.label, helpBtn(`badge-${meta.protocol}-${i}`, b.eli5)));
 }
 
@@ -415,6 +480,8 @@ function familyEli5(cid) {
   }
   if (cid === "distributional") return DIST_ELI5;
   if (cid === "peaks") return PEAK_ELI5;
+  if (cid === "pointwise") return POINTWISE_ELI5;
+  if (cid === "loss") return LOSS_ELI5;
   const c = catInfo(cid);
   return c && c.eli5;
 }
@@ -479,7 +546,7 @@ function picker() {
         id: `eval-tab-${id}`,
         "aria-selected": String(id === bid),
         "aria-controls": "eval-board",
-        title: `Internal code: ${m.protocol} / ${id}`,
+        title: m.eli5,
         onclick: () => pick({ outerEval: id, radarEval: id }),
       }, coded(m.label, `${m.protocol} / ${id}`),
         h("span", { class: "tab-sub" }, m.subtitle || ""));
@@ -536,7 +603,8 @@ function picker() {
               onclick: () => pick({ innerFamily: opt.id }),
             }, opt.title,
               opt.sub ? h("span", { class: "tab-sub" }, opt.sub) : null),
-            helpBtn(`fam-${opt.id}`, familyEli5(opt.id)))))
+            helpBtn(`fam-${opt.id}`,
+              opt.id === "summary" ? headEli5(head, bid) : familyEli5(opt.id)))))
     : h("div", { class: "tabs inner", id: "family-tabs", role: "tablist",
         "aria-label": "Metric family" },
         h("span", { class: "picker-placeholder" },
@@ -582,7 +650,8 @@ function comboView() {
           h("div", { class: "caveats-title" }, "On this eval set"),
           h("ul", { style: "margin:4px 0;padding:0" },
             meta.caveats.map((c, i) =>
-              h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`, meta.eli5)))))
+              h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`,
+                `${c} This line is a property of ${meta.label}, not of one method. ${meta.eli5}`)))))
       : null,
     strictToggle(bid),
     body);
@@ -600,11 +669,13 @@ function strictToggle(bid) {
         const label = labels[v] || v;
         const tip = v === "strict"
           ? (main.meta.strict_view && (main.meta.strict_view.eli5 || main.meta.strict_view.note))
-          : "Every chromosome in the store. Internal code: default.";
+          : "Every chromosome in the store, including chromosome 19 (where CANDI would be in-sample). Internal code: default. The chromosome-19-removed toggle is a separate view.";
         return h("span", { class: "chip-wrap" },
           h("button", {
             class: "chip", "aria-pressed": String(state.view === v),
-            title: `Internal code: ${v}`,
+            title: v === "strict"
+              ? ((main.meta.strict_view && main.meta.strict_view.eli5) || `Internal code: ${v}`)
+              : "Every chromosome in the store. Internal code: default.",
             onclick: () => pick({ view: v }),
           }, label), helpBtn(`view-${v}`, tip));
       })));
@@ -688,12 +759,14 @@ function familyKicker(cid, bid) {
   if (cid === "count_arm") {
     return "Count space — Negative Binomial CRPS, ranked separately. Count-space and p-value-space numbers never share an axis.";
   }
-  if (cid === "distributional") return DIST_ONELINER;
+  if (cid === "distributional") {
+    return DIST_ONELINER + " PIT KS is how far the predicted Gaussians’ percentiles sit from Uniform(0,1). Coverage 95 is the fraction of bins inside the central 95% interval. Click a column ? for each formula.";
+  }
   if (cid === "peaks") return PEAK_ONELINER;
   if (cid === "pointwise") {
     return bid === "entrants"
-      ? "Point-wise scores on 2019 challenge signal. The header letters MSE / Pearson / Spearman match Full genome and Chromosome 21; the truth signal does not. Never translate."
-      : "Point-wise scores in store −log10 p. The header letters MSE / Pearson / Spearman match the 2019 tab; the truth signal does not. Never translate.";
+      ? "Point-wise scores on 2019 challenge signal. MSE: mean squared gap. GW Pearson: linear correlation. GW Spearman: rank-order correlation. MSE top-1% obs: MSE on the tallest 1% of observed bins. The header letters match Full genome and Chromosome 21; the truth signal does not. Never translate. Click a column ? for each formula."
+      : "Point-wise scores in store −log10 p. MSE: mean squared gap (scales with mark range). GW Pearson: linear correlation (a constant forecast is absent, not zero). GW Spearman: rank-order correlation. MSE top-1% obs: MSE on the tallest 1% of observed bins. The header letters match the 2019 tab; the truth signal does not. Never translate. Click a column ? for each formula.";
   }
   return "";
 }
@@ -803,9 +876,24 @@ function familyChartAndTable(bid, cid, headId) {
     });
   return h("div", null,
     kicker ? h("p", { class: "chart-kicker" }, kicker,
-      helpBtn(`kicker-${cid}`, familyEli5(cid))) : null,
+      helpBtn(`kicker-${cid}`, familyEli5(cid)),
+      familyMetricHelps(cid, headId)) : familyMetricHelps(cid, headId),
     chart,
     familyTable(bid, cid, groups));
+}
+
+function familyMetricHelps(cid, headId) {
+  const groups = metricGroups(cid, headId);
+  const ms = groups.flatMap((g) => g.metrics);
+  if (!ms.length) return null;
+  return h("p", { class: "kicker-metrics" },
+    "Metrics: ",
+    ...ms.flatMap((m, i) => [
+      i ? " · " : null,
+      h("span", { class: "chip-wrap" },
+        m.label,
+        metricHelpBtn(m)),
+    ]));
 }
 
 function familyNote(row, cid, primary, bid) {
@@ -843,8 +931,8 @@ function lossBody(bid, headId) {
     const space = g.arm === "count" ? "count space" : "p-value space";
     return h("div", { class: "loss-block" },
       h("h3", null, `Loss · ${space}`,
-        helpBtn(`loss-${g.arm}`,
-          "The training loss on data the method did not train on. Ranked only among methods that use this same loss family. Count-space NLL and p-value-space NLL never share a table or an axis.")),
+        helpBtn(`loss-${g.arm}`, LOSS_ELI5)),
+      familyMetricHelps("loss", headId),
       rankBarChart({
         aria: `Ranked methods on ${metaOf(bid).label}, ${space} loss`,
         scored,
@@ -888,6 +976,7 @@ function covariateBody(bid) {
         h("p", { class: "cov-absent-title" },
           "No covariate-sensitivity numbers on this eval set",
           helpBtn("cov-empty-board", cat.eli5)),
+        familyMetricHelps("covariate_diagnostics", "count"),
         h("p", { class: "sub" }, measuredNote),
         h("p", null,
           "These numbers live on CANDI-lineage rows scored by the internal bench. ",
@@ -902,6 +991,7 @@ function covariateBody(bid) {
       h("p", { class: "cov-absent-title" },
         "No covariate-sensitivity numbers on any current row",
         helpBtn("cov-empty", cat.eli5)),
+      familyMetricHelps("covariate_diagnostics", "count"),
       h("p", { class: "sub" }, measuredNote),
       h("p", null, cat.absent_note),
       h("p", { class: "sub" }, cat.will_populate),
@@ -932,6 +1022,7 @@ function covariateBody(bid) {
   return h("div", null,
     h("p", { class: "chart-kicker" }, measuredNote, " ", cat.note,
       helpBtn("cov", cat.eli5)),
+    familyMetricHelps("covariate_diagnostics", "count"),
     rankBarChart({
       aria: `CANDI versions on ${metaOf(bid).label}, covariate sensitivity`,
       scored: ordered,
@@ -964,9 +1055,16 @@ function familyTable(bid, cid, groups, opts) {
         : "No method on this eval set has numbers in this family yet.");
   }
 
+  const RANK_TH_TIP = "Best-to-worst rank in this family on this eval set. A range like 1–3 is a floor-tied spread, not uncertainty. Lower is better. Bar length on the chart is the same rank (rank 1 longest). Gold / silver / bronze on a row marks an unshared 1 / 2 / 3 — the gap to the next row clears the noise floor.";
+  const METHOD_TH_TIP = "Click the method name for what it is, how it was trained, and how it was scored. A missing card says not recorded — never invent architecture.";
   const head = h("tr", null,
-    h("th", { class: "method-col" }, "method"),
-    showRank ? h("th", null, cid === "summary" ? "rank" : "family rank") : null,
+    h("th", { class: "method-col", title: METHOD_TH_TIP },
+      h("span", { class: "chip-wrap" }, "method",
+        helpBtn(`th-method-${cid}`, METHOD_TH_TIP))),
+    showRank ? h("th", { title: RANK_TH_TIP },
+      h("span", { class: "chip-wrap" },
+        cid === "summary" ? "rank" : "family rank",
+        helpBtn(`th-rank-${cid}`, RANK_TH_TIP))) : null,
     showComposite ? h("th", {
       title: "Mean of category sub-scores. Lower is better. A dash is partial coverage, not last place.",
     }, "composite") : null,
@@ -975,7 +1073,7 @@ function familyTable(bid, cid, groups, opts) {
         h("span", { class: "chip-wrap" },
           metricHeaderName(m, bid),
           m.category === "pointwise" ? null : spaceTag(m, bid),
-          helpBtn(`col-${cid}-${metricId(m)}`, metricExplainer(m)))))));
+          metricHelpBtn(m))))));
 
   const showSpread = cid === "distributional" || groups.some((g) =>
     g.metrics.some((m) => m.key === "pit_ks" || m.key === "coverage_95"));
@@ -1017,7 +1115,12 @@ function familyTable(bid, cid, groups, opts) {
         }
       }
     }
-    const tr = h("tr", { class: cls }, cells);
+    const tr = h("tr", {
+      class: cls,
+      title: (cls && String(cls).startsWith("medal-"))
+        ? "Unshared rank: the gap to the next row clears the noise floor. Gold / silver / bronze is 1 / 2 / 3."
+        : null,
+    }, cells);
     const out = [tr];
     if (state.openProv.has(entry.method) && entry.row) {
       out.push(provRow(entry, nCols, bid));
@@ -1055,12 +1158,14 @@ function methodCell(entry, bid, opts) {
             title: "avg and Average are different methods. Do not mix them or write “Average vs eDICE” without naming which Average." },
             gloss)
         : null,
-      h("span", { class: `badge lineage-${entry.lineage}` },
+      h("span", { class: `badge lineage-${entry.lineage}`,
+        title: LINEAGE_TIP[entry.lineage] || entry.lineage },
         LINEAGE_LABEL[entry.lineage] || entry.lineage),
       spreadBadge, peakBadge),
     h("div", { class: "method-line" },
       row ? h("span", { class: "version-chip" }, `${row.version} · ${row.date}`) : null,
-      b.position ? h("span", { class: "badge" }, b.position) : null,
+      b.position ? h("span", { class: "badge",
+        title: POSITION_TIP[b.position] || b.position }, b.position) : null,
       cellClassBadge(b.cell_types),
       row && row.verified
         ? h("span", { class: "verified", title: "score json resolved when the row was stamped" },
@@ -1171,13 +1276,17 @@ function compositeCell(row, bid) {
 }
 
 function metricTitle(m) {
-  const bits = [`${m.arm ? m.arm + " arm" : "diagnostic"} · `
-    + (m.direction ? `${m.direction} is better` : "companion, never ranked")];
+  const spec = (state.help.metrics || {})[metricId(m)];
+  const bits = [];
+  if (spec && spec.question) bits.push(spec.question);
+  bits.push(`${m.arm ? m.arm + " arm" : "diagnostic"} · `
+    + (m.direction ? `${m.direction} is better` : "companion, never ranked"));
   if (m.floor !== null) bits.push(`noise floor ±${m.floor}`);
   if (m.floor_note) bits.push(m.floor_note);
   if (m.calibration_note) bits.push(m.calibration_note);
   if (m.note) bits.push(m.note);
   if (m.eli5) bits.push(m.eli5);
+  bits.push("Click ? for the formula this code computes.");
   return bits.join("\n");
 }
 
@@ -1362,10 +1471,13 @@ function radarPolygon(row, view, edges, color) {
     }));
     const [lx, ly] = pt(i, 1.18);
     const c = catInfo(cid);
-    svg.append(h("svg:text", {
-      x: lx, y: ly, "text-anchor": "middle", "font-size": 9,
-      fill: "var(--ink-soft)",
-    }, c ? c.label : cid));
+    const axisTip = (c && c.eli5) || cid;
+    svg.append(h("svg:g", null,
+      h("svg:title", null, axisTip),
+      h("svg:text", {
+        x: lx, y: ly, "text-anchor": "middle", "font-size": 9,
+        fill: "var(--ink-soft)",
+      }, c ? c.label : cid)));
   });
   const verts = [];
   oneSpace.forEach((cid, i) => {
@@ -1566,14 +1678,14 @@ function climbPanel() {
   const chips = ids.map((id) =>
     h("button", {
       class: "chip", "aria-pressed": String(id === bid),
-      title: `Internal code: ${metaOf(id).protocol} / ${id}`,
+      title: `${metaOf(id).eli5} Internal code: ${metaOf(id).protocol} / ${id}`,
       onclick: () => { state.climbEval = id; render(); },
     }, metaOf(id).label));
 
   return h("section", { class: "panel panel-secondary", id: "over-time" },
     h("h2", null, "CANDI progress over time",
       helpBtn("climb",
-        "Each CANDI version is a dated point on composite rank. Only CANDI-lineage rows are plotted.")),
+        "Each CANDI version is a dated point on composite rank. Only CANDI-lineage rows are plotted. Version-over-version arrows on the table use the 0.1195 seed-alone bar (a seed change alone moves pooled imputation CRPS by 0.1195 on the full EIC panel) — that bar is never a cross-method floor. The cross-method count CRPS floor is ±0.09.")),
     hide,
     h("div", { class: "controls" },
       h("span", { class: "chip-group" },
@@ -1592,7 +1704,7 @@ function cardField(label, text) {
 
 function methodCardBody(name, info) {
   if (!info) {
-    return h("p", null, "No help card recorded for this method.");
+    return h("p", null, "No help card recorded for this method. Architecture, training, and scoring notes for this name are not recorded in this tree. Never invent them.");
   }
   const bits = [
     cardField("What it is", info.what),
@@ -1624,6 +1736,7 @@ function comboTitle(key) {
     count_arm: "Distributional", pointwise: "Point-wise",
     distributional: "Distributional", loss: "Loss",
     covariate_diagnostics: "Covariate sensitivity", peaks: "Peaks",
+    radar: "Shape",
   };
   return parts.map((p) => labels[p] || p).join(" · ");
 }
@@ -1644,10 +1757,19 @@ function cardOverlay() {
   const card = state.openCard;
   if (!card) return null;
   const close = () => { state.openCard = null; render(); };
-  const title = card.kind === "method" ? card.id : comboTitle(card.id);
-  const body = card.kind === "method"
-    ? methodCardBody(card.id, state.help.methods[card.id])
-    : comboCardBody(state.help.combos[card.id]);
+  let title;
+  let body;
+  if (card.kind === "method") {
+    title = card.id;
+    body = methodCardBody(card.id, state.help.methods[card.id]);
+  } else if (card.kind === "metric") {
+    const m = registry().metrics.find((x) => metricId(x) === card.id);
+    title = m ? m.label : card.id;
+    body = metricCardBody(card.id);
+  } else {
+    title = comboTitle(card.id);
+    body = comboCardBody(state.help.combos[card.id]);
+  }
   return h("div", { class: "card-overlay", onclick: close },
     h("div", { class: "card-sheet", role: "dialog", "aria-label": title,
       onclick: (ev) => ev.stopPropagation() },

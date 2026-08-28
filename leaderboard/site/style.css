@@ -245,6 +245,15 @@ footer { border-top: 1px solid var(--line); background: var(--panel); margin-top
   text-transform: none; letter-spacing: 0; line-height: 1.4; text-align: left;
   white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 30;
 }
+.help-tip-metric {
+  width: min(42em, 90vw); max-width: min(42em, 90vw); z-index: 40;
+}
+.help-metric .help-q { font-weight: 600; color: var(--ink); margin: 0 0 8px; }
+.help-metric .help-est, .help-metric .help-rules { margin: 8px 0 0; }
+.help-math { overflow-x: auto; margin: 8px 0; }
+.help-math math { font-size: 1.05em; }
+.kicker-metrics { margin: 0 0 10px; color: var(--ink-soft); font-size: 12.5px;
+  max-width: 72em; line-height: 1.6; }
 .badge-warn { color: var(--warn); border-color: var(--warn); margin-left: 8px; }
 .badge-pending { color: var(--ink-faint); border-style: dashed; text-transform: none;
   letter-spacing: 0; font-weight: 600; }
@@ -377,7 +386,7 @@ tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
 }
 .card-sheet {
   background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong);
-  border-radius: 12px; max-width: 42em; width: 100%; padding: 18px 20px 22px;
+  border-radius: 12px; max-width: 46em; width: 100%; padding: 18px 20px 22px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
 }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
