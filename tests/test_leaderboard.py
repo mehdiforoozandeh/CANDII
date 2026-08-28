@@ -563,6 +563,9 @@ def test_site_is_a_nested_plain_language_view() -> None:
     assert "stroke-dasharray" not in js
     assert "methodLink" in js and "comboHelpBtn" in js and "cardOverlay" in js
     assert "help.json" in js
+    assert "${m.label} (${truthSpace(bid)})" in js
+    assert " · ${truthSpace(bid)}" in js
+    assert 'bid === "entrants" ? "2019 signal" : "−log10 p"' in js
 
 
 def test_v4_head_family_mapping_matches_registry() -> None:

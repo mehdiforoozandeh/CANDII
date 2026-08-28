@@ -229,11 +229,18 @@ function applyHash() {
 function armClass(m) {
   return m.arm === "count" ? "arm-count" : m.arm === "pval" ? "arm-pval" : "";
 }
+function truthSpace(bid) {
+  return bid === "entrants" ? "2019 signal" : "−log10 p";
+}
 function spaceTag(m, bid) {
   let s = "diagnostic";
   if (m.arm === "count") s = "counts";
-  else if (m.arm === "pval") s = bid === "entrants" ? "2019 signal" : "−log10 p";
+  else if (m.arm === "pval") s = truthSpace(bid);
   return h("span", { class: "space-tag" }, s);
+}
+function metricHeaderName(m, bid) {
+  if (m.category === "pointwise") return `${m.label} (${truthSpace(bid)})`;
+  return m.label;
 }
 
 function cellClassBadge(text) {
@@ -745,7 +752,7 @@ function headSummaryBody(bid, head) {
             : `${r.composite[0].toFixed(2)}${EN_DASH}${r.composite[1].toFixed(2)}`)
         : "";
     } else {
-      note = familyNote(r, rankCid, primary);
+      note = familyNote(r, rankCid, primary, bid);
     }
     const extra = deviceNote(rankCid, r);
     return extra ? (note ? `${note} · ${extra}` : extra) : note;
@@ -787,7 +794,7 @@ function familyChartAndTable(bid, cid, headId) {
       },
       labelOf: (r) => r.method,
       noteOf: (r) => {
-        const note = familyNote(r, cid, primary);
+        const note = familyNote(r, cid, primary, bid);
         const extra = deviceNote(cid, r);
         return extra ? (note ? `${note} · ${extra}` : extra) : note;
       },
@@ -800,7 +807,7 @@ function familyChartAndTable(bid, cid, headId) {
     familyTable(bid, cid, groups));
 }
 
-function familyNote(row, cid, primary) {
+function familyNote(row, cid, primary, bid) {
   if (!primary) return "";
   const v = rowVal(row, primary);
   if (v === null || v === undefined) return "";
@@ -818,6 +825,7 @@ function familyNote(row, cid, primary) {
     const br = rowVal(row, { arm: "pval", key: "peak_base_rate", decimals: 4 });
     if (br !== null && br !== undefined) s += ` · base ${br.toFixed(4)}`;
   }
+  if (cid === "pointwise") s += ` · ${truthSpace(bid)}`;
   return s;
 }
 
@@ -930,7 +938,7 @@ function covariateBody(bid) {
       rankOf: (r) => ordered.indexOf(r) + 1,
       labelOf: (r) => `${r.method} ${r.version || ""}`.trim(),
       methodOf: (r) => r.method,
-      noteOf: (r) => familyNote(r, "covariate_diagnostics", rankedDiag),
+      noteOf: (r) => familyNote(r, "covariate_diagnostics", rankedDiag, bid),
       lineageOf: (r) => r.lineage || "candi",
     }),
     familyTable(bid, "covariate_diagnostics",
@@ -964,7 +972,9 @@ function familyTable(bid, cid, groups, opts) {
     ...groups.flatMap((g) => g.metrics.map((m) =>
       h("th", { class: armClass(m), title: metricTitle(m) },
         h("span", { class: "chip-wrap" },
-          m.label, spaceTag(m, bid), helpBtn(`col-${cid}-${metricId(m)}`, metricExplainer(m)))))));
+          metricHeaderName(m, bid),
+          m.category === "pointwise" ? null : spaceTag(m, bid),
+          helpBtn(`col-${cid}-${metricId(m)}`, metricExplainer(m)))))));
 
   const showSpread = cid === "distributional" || groups.some((g) =>
     g.metrics.some((m) => m.key === "pit_ks" || m.key === "coverage_95"));
