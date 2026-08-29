@@ -88,7 +88,10 @@ def test_registry_and_boards_round_trip() -> None:
     bar = reg["candi_self_comparison_bar"]
     assert bar["value"] == 0.1195 and bar["value"] != count_crps["floor"]
     assert set(boards["boards"]) == {"main", "dev", "entrants"}
-    assert boards["boards"]["main"]["views"] == ["default", "strict"]
+    # the chr19-removed view was dropped (PI, 2026-08-28): chr21 and all 23 chromosomes only
+    assert boards["boards"]["main"]["views"] == ["default"]
+    assert all(b["views"] == ["default"] for b in boards["boards"].values())
+    assert "strict_view" not in boards["boards"]["main"]
     cov = reg["categories"]["covariate_diagnostics"]
     assert "absent_note" in cov and "candi.bench.external" in cov["absent_note"]
     assert "will_populate" in cov and "candi.bench" in cov["will_populate"]

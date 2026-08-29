@@ -15,7 +15,7 @@ ruling** — nothing here creates one.
 | decision | ruling |
 |---|---|
 | composite score | mean of category sub-scores; a category sub-score is the mean rank of the method inside that category |
-| headline board | P2 genome-wide, with method-class badges, both leakage caveats printed, and a strict P2-minus-chr19 toggle |
+| headline board | P2 genome-wide, with method-class badges and both leakage caveats printed |
 | hosting | GitHub Pages, rebuilt by a GitHub Action when rows land on `main` |
 | how rows enter | `tools/leaderboard.py add` stamps one score json into a row; full provenance is mandatory; scoring itself stays a manual Fir run |
 
@@ -61,9 +61,9 @@ choice of eval chromosome removes this asymmetry. The board handles it three way
    `zero-shot cell types` / `retrained per setting`.
 2. **Caveats printed on the Main board**, both directions: CANDI is position-in-sample on
    chr19; the transductive rivals are position-in-sample everywhere.
-3. **Strict toggle**: one click rescores the Main board on P2 minus chr19. CANDI is then fully
-   position-out-of-sample while rivals keep their advantage — CANDI's strict number is
-   conservative by construction.
+3. **No P2-minus-chr19 view.** It was specified here and then dropped (PI, 2026-08-28): the
+   board carries two eval scopes only, chr21 and all 23 chromosomes. The chr19 asymmetry is
+   disclosed in the caveats above rather than answered with a second column.
 
 ## 5. Metrics, categories, and the composite
 
@@ -108,7 +108,7 @@ story, not the cross-method composite.
 
 ### 5.4 The composite, exactly
 
-Per board, per view (default / strict):
+Per board:
 
 1. For each in-composite metric: rank the rows by the registry direction. Two rows whose gap
    is under the metric's noise floor are **tied** and share a rank range. A metric with no
@@ -179,7 +179,7 @@ Elements borrowed from the leaderboard survey (2026-08-27):
 
 - **Rank spreads with floor-driven ties** (LMArena) — §5.4.
 - **Score ± floor printed in the cell** (Terminal-Bench).
-- **Paired lax/strict columns** (EvalPlus) — the CRPS split, and default vs strict view.
+- **Paired lax/strict columns** (EvalPlus) — the CRPS split.
 - **Climb chart** (Papers with Code) — composite vs date; CANDI versions as labeled points on
   a line, baselines as flat dotted lines, a ± floor band shaded around the leader.
 - **Version chips + delta arrows** — `candi @ 2026-08-14 · a3f1c2`; arrows grey under the

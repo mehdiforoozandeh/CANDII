@@ -129,7 +129,6 @@ main { max-width: none; margin: 0 auto; padding: 22px 24px 40px; }
 .chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink);
   border-color: var(--chip-on); }
 .chip:hover { border-color: var(--accent); }
-.view-toggle { margin-left: auto; }
 
 /* ------------------------------------------------------------- table --- */
 .table-scroll { overflow-x: auto; }

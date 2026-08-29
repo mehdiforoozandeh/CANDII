@@ -17,10 +17,10 @@
     "ChromImpute": {
       "what": "Jason Ernst’s published Java imputer (jar v1.0.5): an ensemble of regression trees over neighbouring samples and local windows. Retrained by us with paper defaults; we convert store tracks in and out — the jar does the modelling.",
       "training": "Retrained by us on the EIC store, regime eic_val. 267 training tracks, 51 training cells, 35 marks. Trained genome-wide once, then scored as chromosome 21 and as the full genome. Apply target is (training cell, missing mark); truth is that mark on the paired validation cell.",
-      "classes": "Position-transductive: trees train at positions where the target mark was observed in other training samples, including the evaluation chromosome. On Full genome the method is in-sample at every position, including the chromosome-19-removed view. Retrained per setting: one ensemble per (training cell, mark); not zero-shot on a new cell type.",
+      "classes": "Position-transductive: trees train at positions where the target mark was observed in other training samples, including the evaluation chromosome. On Full genome the method is in-sample at every position. Retrained per setting: one ensemble per (training cell, mark); not zero-shot on a new cell type.",
       "scoring": "External predictions scored by candi.bench.external. σ-table fitted on chromosome-21 validation-pair residuals in −log10 p and reused on the full genome. Peak AUPRC is a coverage ranking. Predictions are quantized to 0.01 by the jar. No count arm.",
       "caveats": [
-        "Position-transductive everywhere, including the chromosome-19-removed view.",
+        "Position-transductive everywhere.",
         "Validation-pair CRPS is in-sample for σ; σ fitted on chromosome 21 and applied genome-wide, where mean squared error is about 32% higher.",
         "The fitted Gaussian is heavy-tailed / miscalibrated (95% coverage ~0.98, PIT KS ~0.37).",
         "No count arm.",
@@ -30,7 +30,7 @@
     "Avocado": {
       "what": "Tensor factorisation over (cell, assay, position): one MLP on concatenated cell, assay, and per-position genomic factors (Schreiber, Bilmes & Noble 2020). Max’s PyTorch port, vendored byte-identical, retrained by us. Cannot predict a position it never fitted.",
       "training": "Retrained by us on the EIC store, regime eic_val, 267 training-split columns (51 cells × 35 assays). Seed 0. Target arcsinh(−log10 p). 60-epoch joint fit on chromosome 20, then 30-epoch per-chromosome genomic factors with shared weights frozen — all 23 store chromosomes. Last epoch, not best-on-held-out. Training and validation cells of the same type share one cell index; the embedding is learned only from training-cell tracks.",
-      "classes": "Position-transductive. Full genome is in-sample sequence on every chromosome, including the chromosome-19-removed view. Cell embedding exists for eval cell types via the paired training tracks, not via a never-seen cell type. Retrained per setting.",
+      "classes": "Position-transductive. Full genome is in-sample sequence on every chromosome. Cell embedding exists for eval cell types via the paired training tracks, not via a never-seen cell type. Retrained per setting.",
       "scoring": "External predictions scored by candi.bench.external. σ-table fitted on chromosome-21 validation-pair residuals and reused on a full-genome score that exists but is not stamped. Peak AUPRC is a coverage ranking. No count arm. Stamped only on Chromosome 21. No Full-genome row is stamped; Full-genome pending does not list Avocado.",
       "caveats": [
         "This retrain is separate from the frozen 2019 Avocado_p0 tracks.",
@@ -371,7 +371,7 @@
       "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs of a type the method already saw (not unseen cell types; not EIC stage-2 poorly characterised types; not regime.eic_test). 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
       "instrument": "Composite = mean of category mean-ranks for categories that at least one method on this eval set fully covers (point-wise, distributional, peaks when board-active). A method missing any of those categories is incomplete, not last: the composite cell is a dash. Lower is better. Count-space ranking lives under Count; peak ranking also feeds the composite when every ranked row has AUPRC.",
       "devices": "Methods with a full p-value-space cover. eDICE and ChromImpute are stamped. avg and knn5 are listed as still computing. Avocado’s full-genome score exists but is not stamped. CANDI is listed as pending.",
-      "caveats": "Avocado and ChromImpute are in-sample at every position; the chromosome-19-removed toggle does not remove that. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only. Partial coverage is a dash, never last place."
+      "caveats": "Avocado and ChromImpute are in-sample at every position. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only. Partial coverage is a dash, never last place."
     },
     "dev/summary": {
       "question": "Who ranks highest on the p-value-space composite on chromosome 21, among methods scored on same-cell-type training-to-validation pairs?",
@@ -413,7 +413,7 @@
       "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
       "instrument": "Same composite as the Full-genome summary. Peak scores also live under Peak; count numbers never appear here.",
       "devices": "Stamped: eDICE, ChromImpute.",
-      "caveats": "Avocado and ChromImpute are in-sample at every position; the chromosome-19-removed toggle does not remove that. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only."
+      "caveats": "Avocado and ChromImpute are in-sample at every position. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only."
     },
     "dev/pval/summary": {
       "question": "How do methods rank on the p-value-space composite on chromosome 21?",
@@ -497,7 +497,7 @@
       "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
       "instrument": "Internal CANDI bench only: the C-block changes the prompt and re-decodes the negative binomial against count truth (imputation kind). Keys include whether covariates are used, how they share, depth direction, a depth counterfactual, and a paired depth-blind / biology-kept check. The external rival scorer cannot produce these numbers.",
       "devices": "CANDI-only. A live checkpoint is required. Rivals, baselines, and 2019 entrants are empty by construction.",
-      "caveats": "No stamped CANDI row, so this box is empty. Depth-counterfactual quotes with floor 0.25 and no 0.73 ceiling. Depth-blind is never shown without biology-kept. CANDI-lineage ranking, not cross-method. Whether the chromosome-19-removed view re-runs or subsets C is not recorded — no current row has a strict score json."
+      "caveats": "No stamped CANDI row, so this box is empty. Depth-counterfactual quotes with floor 0.25 and no 0.73 ceiling. Depth-blind is never shown without biology-kept. CANDI-lineage ranking, not cross-method."
     },
     "dev/count/covariate_diagnostics": {
       "question": "Does CANDI’s decoder use the told covariates on the count head, on chromosome 21?",
@@ -518,7 +518,7 @@
       "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
       "instrument": "Point-wise E-block: MSE, genome-wide Pearson, genome-wide Spearman, MSE on the top 1% of observed bins. No σ-table. msevar is not on the public board.",
       "devices": "Every method that emits a predicted p-value track. No σ-table. Peak fallback does not affect these keys. Stamped: eDICE, ChromImpute. Baseline full-genome scores are not recorded as stamped.",
-      "caveats": "Avocado and ChromImpute are in-sample at every position; the chromosome-19-removed toggle does not remove that. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only. MSE scales with mark dynamic range. ChromImpute values are quantized to 0.01. The header letters MSE / GW Pearson / GW Spearman / MSE top-1% obs are shared with the 2019 tab; this truth is store −log10 p, not 2019 challenge signal. Never place a cell from this tab next to a 2019 cell."
+      "caveats": "Avocado and ChromImpute are in-sample at every position. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only. MSE scales with mark dynamic range. ChromImpute values are quantized to 0.01. The header letters MSE / GW Pearson / GW Spearman / MSE top-1% obs are shared with the 2019 tab; this truth is store −log10 p, not 2019 challenge signal. Never place a cell from this tab next to a 2019 cell."
     },
     "dev/pval/pointwise": {
       "question": "How close is the predicted −log10 p track to the validation-cell truth on chromosome 21?",

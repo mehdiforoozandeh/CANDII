@@ -20,20 +20,10 @@
         "regime_sha256": "2526ae55d9904d50ff57a1a183efe0cd67b4796882736af8e894442891bc9829",
         "frozen_note": "store hash = sha256 of fir:/project/def-maxwl/mforooz/CANDI_STORE/eic/manifest.json, read on Fir 2026-08-27 — the manifest path every stamped row's score provenance names; regime hash = sha256 of the tracked configs/regime.eic_val.json (last changed at t31), verified byte-identical to the copies in the t50/t51/t52 Fir checkouts on 2026-08-27."
       },
-      "views": ["default", "strict"],
-      "view_labels": {
-        "default": "All chromosomes",
-        "strict": "chr19 removed"
-      },
-      "strict_view": {
-        "excludes": ["chr19"],
-        "note": "Drop chromosome 19, the only chromosome CANDI trained on. CANDI is then fully held-out while methods that train on every position keep their advantage — CANDI's number here is conservative by construction.",
-        "eli5": "CANDI saw chromosome 19 in training. This toggle is for a CANDI row that is not stamped yet: no current row has a chr19-removed score, so flipping it currently ranks nobody (eDICE and ChromImpute show as unranked). Methods that train on every position would still be in-sample here even after those scores land. Internal code: strict view."
-      },
+      "views": ["default"],
       "caveats": [
-        "CANDI trained on chromosome-19 positions only, so in the all-chromosomes column CANDI is in-sample on chr19 and held-out on the other 22.",
-        "Methods that train on every genomic position (Avocado, ChromImpute) are in-sample everywhere, on both the all-chromosomes column and the chr19-removed column. No choice of eval chromosome removes this; it is disclosed on every row.",
-        "The chromosome-19-removed view has no stamped scores yet; flipping it currently ranks nobody."
+        "CANDI trained on chromosome-19 positions only, so on this board CANDI is in-sample on chr19 and held-out on the other 22.",
+        "Methods that train on every genomic position (Avocado, ChromImpute) are in-sample everywhere. No choice of eval chromosome removes this; it is disclosed on every row."
       ],
       "reader_badges": [
         {

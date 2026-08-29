@@ -365,14 +365,14 @@ def gate_row_shape(row: Mapping[str, Any], registry: Mapping[str, Any]) -> None:
         if not prov.get(field) and prov.get(field) != {}:
             raise GateError(f"row {row['method']}@{row['version']} provenance lacks `{field}` — "
                             "no provenance, no row (PRD §7.2)")
-    for metrics in (row["metrics"], row.get("metrics_strict") or {}):
-        for slot, block in metrics.items():
-            for key, val in block.items():
-                if not isinstance(val, (int, float)) or isinstance(val, bool) \
-                        or not math.isfinite(val):
-                    raise GateError(f"row {row['method']}@{row['version']} metric {slot}/{key} "
-                                    f"is not finite: {val!r}")
-        check_companions(metrics, registry)
+    metrics = row["metrics"]
+    for slot, block in metrics.items():
+        for key, val in block.items():
+            if not isinstance(val, (int, float)) or isinstance(val, bool) \
+                    or not math.isfinite(val):
+                raise GateError(f"row {row['method']}@{row['version']} metric {slot}/{key} "
+                                f"is not finite: {val!r}")
+    check_companions(metrics, registry)
 
 
 def cmd_add(args: argparse.Namespace) -> int:
@@ -410,14 +410,6 @@ def cmd_add(args: argparse.Namespace) -> int:
         "missing_metrics": missing,
         "provenance": build_provenance(score, args, score_path),
     }
-    if args.strict_score:
-        if "strict" not in board.get("views", []):
-            raise GateError(f"board `{args.board}` has no strict view; --strict-score refused")
-        strict_metrics, strict_missing = extract_metrics(load_json(Path(args.strict_score)),
-                                                         registry, args.allow_missing)
-        row["metrics_strict"] = strict_metrics
-        row["missing_metrics_strict"] = strict_missing
-        row["provenance"]["strict_score_json"] = str(args.strict_score)
     gate_row_shape(row, registry)
     gate_row_against_board(row, board, args.board)
     out = root / "rows" / args.board / f"{args.method}@{args.version}.json"
@@ -470,7 +462,7 @@ def interval_rank_spreads(intervals: Mapping[str, Tuple[float, float]]) -> Dict[
 def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
                  view: str) -> Dict[str, Any]:
     """One board view: ranks, category sub-scores, composite spreads, sub-boards."""
-    metrics_field = "metrics_strict" if view == "strict" else "metrics"
+    metrics_field = "metrics"
     ranked = [r for r in rows if r.get(metrics_field)]
     unranked = [r for r in rows if not r.get(metrics_field)]
     by_id = {f"{r['method']}@{r['version']}": r for r in ranked}
@@ -529,8 +521,7 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
             "lineage": r["lineage"],
             "badges": r["badges"],
             "metrics": r[metrics_field],
-            "missing_metrics": r.get("missing_metrics_strict" if view == "strict"
-                                     else "missing_metrics", []),
+            "missing_metrics": r.get("missing_metrics", []),
             "provenance": r["provenance"],
             "has_peak_head": bool((r.get("provenance") or {}).get("has_peak_head")),
             "verified": bool(r["provenance"].get("artifacts_resolved_at_add")),
@@ -752,8 +743,6 @@ def build_parser() -> argparse.ArgumentParser:
                    help="hash of the store manifest the run scored against")
     a.add_argument("--fir-path", default=None,
                    help="run directory on Fir; default reads FIR_PATH.txt beside the score json")
-    a.add_argument("--strict-score", default=None,
-                   help="score json for the strict view (main board: P2 minus chr19)")
     a.add_argument("--placement-method", default=None,
                    help="the score file is a t54 Dataset-3 placement.json; stamp this "
                         "method's macro_all (the file must digest to the board's frozen "

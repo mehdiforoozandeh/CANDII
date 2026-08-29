@@ -35,7 +35,7 @@ const POINTWISE_ELI5 = "Four bin-by-bin scores on the concatenation of scored ch
 const LOSS_ELI5 = "The training loss on data the method did not train on. Ranked only among methods that use this same loss family. Count-space NLL and p-value-space NLL never share a table or an axis. Gaussian NLL is the mean per-bin ½(log v + (μ − y)² / v + log(2π)) with v = max(σ², 10⁻⁶), scored in the training transform: stamped external rows use transform none; a CANDI store path typically uses arcsinh — those are not comparable. NB NLL is −mean log NB(k; n, p) on raw counts. Loss never enters the composite. Click a column ? for the formula this code computes.";
 const POSITION_TIP = {
   "position-generalizing": "No genomic-position parameters (or none that pin the eval chromosome). Full genome can still be in-sample for other reasons — e.g. a neighbour table fit on chromosome 19.",
-  "position-transductive": "The method trains at genomic positions, including the evaluation chromosome. Full genome is in-sample at every position, including the chromosome-19-removed view.",
+  "position-transductive": "The method trains at genomic positions, including the evaluation chromosome. Full genome is in-sample at every position.",
   "position class unrecorded": "Position class is not recorded in this tree. Never invent it.",
 };
 const LINEAGE_TIP = {
@@ -48,7 +48,6 @@ const LINEAGE_TIP = {
 const state = {
   data: null,
   help: { methods: {}, combos: {}, metrics: {} },
-  view: "default",
   outerEval: null,
   midHead: null,
   innerFamily: null,
@@ -419,9 +418,7 @@ function boardIds() {
 }
 
 function viewFor(bid) {
-  const board = state.data.boards[bid];
-  const want = bid === "main" ? state.view : "default";
-  return board.views[want] || board.views.default;
+  return state.data.boards[bid].views.default;
 }
 
 function metaOf(bid) { return state.data.boards[bid].meta; }
@@ -653,32 +650,7 @@ function comboView() {
               h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`,
                 `${c} This line is a property of ${meta.label}, not of one method. ${meta.eli5}`)))))
       : null,
-    strictToggle(bid),
     body);
-}
-
-function strictToggle(bid) {
-  if (bid !== "main") return null;
-  const main = state.data.boards.main;
-  if (!main || (main.meta.views || []).length < 2) return null;
-  return h("div", { class: "controls" },
-    h("span", { class: "chip-group view-toggle" },
-      h("span", { class: "chip-label" }, "full-genome chromosomes"),
-      ...(main.meta.views || []).map((v) => {
-        const labels = main.meta.view_labels || {};
-        const label = labels[v] || v;
-        const tip = v === "strict"
-          ? (main.meta.strict_view && (main.meta.strict_view.eli5 || main.meta.strict_view.note))
-          : "Every chromosome in the store, including chromosome 19 (where CANDI would be in-sample). Internal code: default. The chromosome-19-removed toggle is a separate view.";
-        return h("span", { class: "chip-wrap" },
-          h("button", {
-            class: "chip", "aria-pressed": String(state.view === v),
-            title: v === "strict"
-              ? ((main.meta.strict_view && main.meta.strict_view.eli5) || `Internal code: ${v}`)
-              : "Every chromosome in the store. Internal code: default.",
-            onclick: () => pick({ view: v }),
-          }, label), helpBtn(`view-${v}`, tip));
-      })));
 }
 
 function familyBody(bid, cid, headId) {
@@ -1363,7 +1335,6 @@ function provDl(row) {
   const dl = h("dl", { class: "prov-grid" });
   const put = (k, v) => { if (v) dl.append(h("dt", null, k), h("dd", null, v)); };
   put("score json", p.score_json);
-  put("strict score json", p.strict_score_json);
   put("FIR path", p.fir_path);
   put("scoring SHA", p.scoring_sha);
   put("scorer", p.scorer);
