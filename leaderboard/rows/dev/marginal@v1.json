@@ -6,28 +6,29 @@
  "board": "dev",
  "date": "2026-08-25",
  "lineage": "baseline",
- "method": "knn5",
+ "method": "marginal",
  "metrics": {
   "count": {
-   "crps": 0.4552135703591472,
-   "crps_oracle_scaled": 0.44500915508068484,
-   "nb_nll": 0.9893745699894393,
-   "scale_error": 0.010204415278462355
+   "crps": 0.5770402361743352,
+   "crps_oracle_scaled": 0.5599628124920557,
+   "nb_nll": 1.06755474902555,
+   "scale_error": 0.017077423682279585
   },
   "pval": {
-   "auprc": 0.30382653418372846,
-   "coverage_95": 0.8523166625544113,
-   "crps": 0.3240142361055762,
-   "gaussian_nll": 157.67400533894826,
-   "gwcorr": 0.5204371688453984,
-   "gwspear": 0.31479353933362714,
-   "mse": 9.22000922643476,
-   "mse1obs": 738.6665553119448,
+   "auprc": 0.01375317703671551,
+   "coverage_95": 0.9931204439974782,
+   "crps": 1.6909722000990466,
+   "gaussian_nll": 2.4608666693636017,
+   "mse": 9.312215289773626,
+   "mse1obs": 798.0826903020342,
    "peak_base_rate": 0.01375317703671551,
-   "pit_ks": 0.3434343386965591
+   "pit_ks": 0.4502374167562084
   }
  },
- "missing_metrics": [],
+ "missing_metrics": [
+  "pval/gwcorr",
+  "pval/gwspear"
+ ],
  "provenance": {
   "artifacts_resolved_at_add": true,
   "fir_path": "/project/def-maxwl/mforooz/t49_baselines/p1v2/n1e4",
@@ -411,12 +412,11 @@
    "seed": 0,
    "signal_target_transform": "none"
   },
-  "has_peak_head": true,
   "method_notes": {
-   "notes": "kNN average, k=5 (§5.4). Same similarity ranking as knn1; heads as `avg` over the top 5 contributors."
+   "notes": "per-assay marginal (§5.4), the weakest distributional tier: one constant NB and one constant Gaussian per assay, moment-matched over the training cells' tracks on the TRAIN chromosomes, scaled to the target track's depth. No peak head — a marginal has no per-bin ranking to offer."
   },
   "regime": "configs/regime.eic_val.json",
-  "score_json": "cruxvault/results/t49/p1_n1e4/knn5.json",
+  "score_json": "cruxvault/results/t49/p1_n1e4/marginal.json",
   "scorer": "candi.bench.external",
   "scoring_sha": "3b6c768",
   "sigma_table": null,

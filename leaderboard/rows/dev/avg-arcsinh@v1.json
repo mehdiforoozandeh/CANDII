@@ -6,28 +6,27 @@
  "board": "dev",
  "date": "2026-08-25",
  "lineage": "baseline",
- "method": "knn5",
+ "method": "avg-arcsinh",
  "metrics": {
-  "count": {
-   "crps": 0.4552135703591472,
-   "crps_oracle_scaled": 0.44500915508068484,
-   "nb_nll": 0.9893745699894393,
-   "scale_error": 0.010204415278462355
-  },
   "pval": {
-   "auprc": 0.30382653418372846,
-   "coverage_95": 0.8523166625544113,
-   "crps": 0.3240142361055762,
-   "gaussian_nll": 157.67400533894826,
-   "gwcorr": 0.5204371688453984,
-   "gwspear": 0.31479353933362714,
-   "mse": 9.22000922643476,
-   "mse1obs": 738.6665553119448,
-   "peak_base_rate": 0.01375317703671551,
-   "pit_ks": 0.3434343386965591
+   "auprc": 0.383747520011681,
+   "gwcorr": 0.5504958126493867,
+   "gwspear": 0.31578684963040854,
+   "mse": 7.381929590822094,
+   "mse1obs": 683.3239549073908,
+   "peak_base_rate": 0.01375317703671551
   }
  },
- "missing_metrics": [],
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error",
+  "pval/coverage_95",
+  "pval/crps",
+  "pval/gaussian_nll",
+  "pval/pit_ks"
+ ],
  "provenance": {
   "artifacts_resolved_at_add": true,
   "fir_path": "/project/def-maxwl/mforooz/t49_baselines/p1v2/n1e4",
@@ -411,12 +410,11 @@
    "seed": 0,
    "signal_target_transform": "none"
   },
-  "has_peak_head": true,
   "method_notes": {
-   "notes": "kNN average, k=5 (§5.4). Same similarity ranking as knn1; heads as `avg` over the top 5 contributors."
+   "notes": "VARIANT, NOT THE EIC BASELINE (§5.2): the pval mean taken in arcsinh space and sinh'd back. Point only — a mean in a transformed space carries no cross-cell spread this file is willing to claim in -log10 p."
   },
   "regime": "configs/regime.eic_val.json",
-  "score_json": "cruxvault/results/t49/p1_n1e4/knn5.json",
+  "score_json": "cruxvault/results/t49/p1_n1e4/avg-arcsinh.json",
   "scorer": "candi.bench.external",
   "scoring_sha": "3b6c768",
   "sigma_table": null,

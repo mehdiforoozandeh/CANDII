@@ -22,8 +22,10 @@ CI runs it before every deploy.
 The composite (PRD §5.4): per in-composite metric, rows whose gap is under the metric's noise floor
 are tied and share a rank interval; category sub-score = mean rank interval over the category's
 ranked metrics; composite = unweighted mean of category intervals; the displayed rank is the spread
-of best and worst achievable rank. A category enters the composite only when every ranked row on the
-board has all of its ranked metrics (§5.2) — the count arm therefore ranks on its own sub-board.
+of best and worst achievable rank. A category is board-active when at least one row fully covers it
+(every ranked metric present). A row missing any board-active composite category is incomplete, not
+last: it gets no composite and is excluded from the headline ranking, and still ranks inside every
+category it has numbers for (PI ruling 2026-08-27). The count arm ranks on its own sub-board.
 
 Stdlib only, by rule.
 """
@@ -51,7 +53,8 @@ TODO_HASH = "TODO-"
 #: provenance keys `add` copies into the row's flags-of-record block when the score json has them.
 FLAG_KEYS = ("crps_estimator", "crps_k", "crps_seed", "allow_missing", "msevar",
              "signal_target_transform", "pval_pred_space", "pred_inversion", "seed",
-             "placement_method", "aggregation", "n_experiments", "contributor_mode")
+             "placement_method", "aggregation", "n_experiments", "contributor_mode",
+             "clip")
 
 LINEAGES = ("candi", "rival", "baseline", "entrant")
 POSITION_CLASSES = {"transductive": "position-transductive", "generalizing": "position-generalizing",
@@ -135,6 +138,60 @@ def metric_id(metric: Mapping[str, Any]) -> str:
 
 # ---------------------------------------------------------------- add ---
 
+#: Registry diagnostic keys. `candi.bench.harness.c_block` writes nested dicts under these
+#: names (and under the combined `depthblind_biokeep`); the stamper flattens to scalars.
+DIAGNOSTIC_KEYS: Tuple[str, ...] = (
+    "covuse", "covshare", "depthdir", "depthcounterfact", "covspec", "depthblind", "biokeep")
+
+#: Nested C-block instrument → the field the instrument itself names as the headline.
+#: `covariate.depthdir`: "`monotone_frac` … is the number to read".
+#: `covariate.depthcounterfact` / EVAL.md §C: the quoted number is `frac_min_at_true`.
+#: `covariate.covspec` already averages the per-aspect gaps into `mean_gap`.
+#: Keys not in this map have no code-defined panel scalar (see flatten_c_block).
+_C_HEADLINES: Dict[str, str] = {
+    "depthdir": "monotone_frac",
+    "depthcounterfact": "frac_min_at_true",
+    "covspec": "mean_gap",
+}
+
+
+def _finite_scalar(val: Any) -> Optional[float]:
+    """A real number, not a bool (bool is an int) and not NaN/Inf."""
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        return None
+    out = float(val)
+    return out if math.isfinite(out) else None
+
+
+def flatten_c_block(cblock: Mapping[str, Any]) -> Dict[str, float]:
+    """Lift `harness.c_block`'s nested C json onto the seven registry diagnostic keys.
+
+    Scalars already scalar pass through. Nested instruments take the headline the
+    instrument names (`_C_HEADLINES`). `depthblind_biokeep` splits: `biokeep` is
+    `covariate.biokeep`'s `bio_silhouette`; `depthblind` has no single headline and
+    is omitted. `covuse` and `covshare` are per-covariate and have no code-defined
+    panel aggregate, so a nested form is omitted rather than averaged.
+    """
+    out: Dict[str, float] = {}
+    for key in DIAGNOSTIC_KEYS:
+        raw = cblock.get(key)
+        got = _finite_scalar(raw)
+        if got is not None:
+            out[key] = got
+            continue
+        headline = _C_HEADLINES.get(key)
+        if headline and isinstance(raw, dict):
+            got = _finite_scalar(raw.get(headline))
+            if got is not None:
+                out[key] = got
+    combo = cblock.get("depthblind_biokeep")
+    if isinstance(combo, dict) and "biokeep" not in out:
+        got = _finite_scalar(combo.get("bio_silhouette"))
+        if got is not None:
+            out["biokeep"] = got
+    return out
+
+
 def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
                     allow_missing: bool) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
     """Copy registry metrics out of a bench-shaped score json. Returns (metrics, missing ids)."""
@@ -142,12 +199,13 @@ def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
     if not isinstance(macro, dict):
         raise GateError("score json has no `macro` block — not a candi.bench-shaped file")
     cblock = score.get("C") if isinstance(score.get("C"), dict) else {}
+    diagnostics = flatten_c_block(cblock)
     out: Dict[str, Dict[str, float]] = {}
     missing: List[str] = []
     for m in registry["metrics"]:
         slot = metric_slot(m)
         if slot == "diagnostics":
-            src = cblock
+            src = diagnostics
         else:
             src = macro.get(m["arm"], {}) if isinstance(macro.get(m["arm"]), dict) else {}
         val = src.get(m["key"])
@@ -209,6 +267,17 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def score_has_peak_head(score: Mapping[str, Any]) -> bool:
+    """True when the score's macro carries `bernoulli_nll` — the stamp `loss_block` emits
+    only if the producer supplied a real `peak_score` (`TrackRecord.has_peak_head`)."""
+    macro = score.get("macro") if isinstance(score.get("macro"), dict) else {}
+    for arm in ("pval", "count"):
+        block = macro.get(arm)
+        if isinstance(block, dict) and "bernoulli_nll" in block:
+            return True
+    return False
+
+
 def score_path_of_record(path: Path) -> str:
     """Store vault evidence paths repo-relative, so any checkout resolves them."""
     s = str(path.resolve())
@@ -244,6 +313,7 @@ def build_provenance(score: Mapping[str, Any], args: argparse.Namespace,
         "store_manifest_hash": args.store_manifest_hash,
         "regime": prov.get("regime"),
         "sigma_table": sigma_id,
+        "has_peak_head": score_has_peak_head(score),
         "scorer": prov["suite"],
         "flags": flags,
         "artifacts_resolved_at_add": score_path.exists(),
@@ -295,14 +365,14 @@ def gate_row_shape(row: Mapping[str, Any], registry: Mapping[str, Any]) -> None:
         if not prov.get(field) and prov.get(field) != {}:
             raise GateError(f"row {row['method']}@{row['version']} provenance lacks `{field}` — "
                             "no provenance, no row (PRD §7.2)")
-    for metrics in (row["metrics"], row.get("metrics_strict") or {}):
-        for slot, block in metrics.items():
-            for key, val in block.items():
-                if not isinstance(val, (int, float)) or isinstance(val, bool) \
-                        or not math.isfinite(val):
-                    raise GateError(f"row {row['method']}@{row['version']} metric {slot}/{key} "
-                                    f"is not finite: {val!r}")
-        check_companions(metrics, registry)
+    metrics = row["metrics"]
+    for slot, block in metrics.items():
+        for key, val in block.items():
+            if not isinstance(val, (int, float)) or isinstance(val, bool) \
+                    or not math.isfinite(val):
+                raise GateError(f"row {row['method']}@{row['version']} metric {slot}/{key} "
+                                f"is not finite: {val!r}")
+    check_companions(metrics, registry)
 
 
 def cmd_add(args: argparse.Namespace) -> int:
@@ -340,14 +410,6 @@ def cmd_add(args: argparse.Namespace) -> int:
         "missing_metrics": missing,
         "provenance": build_provenance(score, args, score_path),
     }
-    if args.strict_score:
-        if "strict" not in board.get("views", []):
-            raise GateError(f"board `{args.board}` has no strict view; --strict-score refused")
-        strict_metrics, strict_missing = extract_metrics(load_json(Path(args.strict_score)),
-                                                         registry, args.allow_missing)
-        row["metrics_strict"] = strict_metrics
-        row["missing_metrics_strict"] = strict_missing
-        row["provenance"]["strict_score_json"] = str(args.strict_score)
     gate_row_shape(row, registry)
     gate_row_against_board(row, board, args.board)
     out = root / "rows" / args.board / f"{args.method}@{args.version}.json"
@@ -400,7 +462,7 @@ def interval_rank_spreads(intervals: Mapping[str, Tuple[float, float]]) -> Dict[
 def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
                  view: str) -> Dict[str, Any]:
     """One board view: ranks, category sub-scores, composite spreads, sub-boards."""
-    metrics_field = "metrics_strict" if view == "strict" else "metrics"
+    metrics_field = "metrics"
     ranked = [r for r in rows if r.get(metrics_field)]
     unranked = [r for r in rows if not r.get(metrics_field)]
     by_id = {f"{r['method']}@{r['version']}": r for r in ranked}
@@ -416,33 +478,41 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
         if have:
             metric_ranks[metric_id(m)] = rank_spreads(have, m["direction"], m["floor"])
 
-    # §5.2 — a category enters the composite only when every ranked row has all of its
-    # ranked metrics.
+    # §5.2 / PI 2026-08-27 — a category is board-active when at least one row fully
+    # covers it. A row that misses any active composite category is incomplete, not
+    # last: no composite, no headline rank; it still ranks inside categories it covers.
     cats = registry["categories"]
-    composite_cats = []
-    for cid, cat in sorted(cats.items()):
-        if not cat.get("in_composite"):
-            continue
+    in_composite = [cid for cid, cat in sorted(cats.items()) if cat.get("in_composite")]
+
+    def covers(rid: str, cid: str) -> bool:
         cat_metrics = [m for m in ranked_metrics if m["category"] == cid]
-        if not cat_metrics:
-            continue
-        if all(val(rid, m) is not None for rid in by_id for m in cat_metrics):
-            composite_cats.append(cid)
+        return bool(cat_metrics) and all(val(rid, m) is not None for m in cat_metrics)
+
+    composite_cats = [cid for cid in in_composite
+                      if any(covers(rid, cid) for rid in by_id)]
+    eligible = {rid for rid in by_id
+                if all(covers(rid, cid) for cid in composite_cats)}
 
     out_rows = []
     intervals: Dict[str, Tuple[float, float]] = {}
     for rid, r in by_id.items():
         subscores: Dict[str, Tuple[float, float]] = {}
-        for cid in composite_cats:
+        for cid in in_composite:
+            if not covers(rid, cid):
+                continue
             spreads = [metric_ranks[metric_id(m)][rid]
                        for m in ranked_metrics if m["category"] == cid]
-            subscores[cid] = (sum(s[0] for s in spreads) / len(spreads),
-                              sum(s[1] for s in spreads) / len(spreads))
+            if spreads:
+                subscores[cid] = (sum(s[0] for s in spreads) / len(spreads),
+                                  sum(s[1] for s in spreads) / len(spreads))
         composite = None
-        if subscores:
-            composite = (sum(s[0] for s in subscores.values()) / len(subscores),
-                         sum(s[1] for s in subscores.values()) / len(subscores))
+        partial = rid not in eligible
+        if not partial and composite_cats:
+            used = [subscores[cid] for cid in composite_cats]
+            composite = (sum(s[0] for s in used) / len(used),
+                         sum(s[1] for s in used) / len(used))
             intervals[rid] = composite
+        missing_cats = [cid for cid in composite_cats if not covers(rid, cid)]
         out_rows.append({
             "id": rid,
             "method": r["method"],
@@ -451,14 +521,16 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
             "lineage": r["lineage"],
             "badges": r["badges"],
             "metrics": r[metrics_field],
-            "missing_metrics": r.get("missing_metrics_strict" if view == "strict"
-                                     else "missing_metrics", []),
+            "missing_metrics": r.get("missing_metrics", []),
             "provenance": r["provenance"],
+            "has_peak_head": bool((r.get("provenance") or {}).get("has_peak_head")),
             "verified": bool(r["provenance"].get("artifacts_resolved_at_add")),
             "metric_ranks": {mid: list(rk[rid]) for mid, rk in metric_ranks.items()
                              if rid in rk},
             "category_subscores": {c: list(s) for c, s in subscores.items()},
             "composite": list(composite) if composite else None,
+            "partial_coverage": partial and bool(composite_cats),
+            "missing_composite_categories": missing_cats,
         })
     overall = interval_rank_spreads(intervals) if intervals else {}
     for row in out_rows:
@@ -526,11 +598,49 @@ def compile_leaderboard(root: Path) -> Dict[str, Any]:
                  "composite": r["composite"], "lineage": r["lineage"]})
         for entries in climb.values():
             entries.sort(key=lambda e: (e["date"], e["version"]))
-        out_boards[bid] = {"meta": board, "views": views, "climb": climb}
+        stamped_methods = {r["method"] for r in rows}
+        pending = []
+        raw_pending = board.get("pending") or []
+        if not isinstance(raw_pending, list):
+            raise GateError(f"board `{bid}` pending must be a list")
+        for item in raw_pending:
+            if not isinstance(item, dict) or not item.get("method"):
+                raise GateError(f"board `{bid}` pending entry needs a `method`")
+            if not SLUG.match(item["method"]):
+                raise GateError(f"board `{bid}` pending method `{item['method']}` is not a slug")
+            if item["method"] in stamped_methods:
+                continue
+            lineage = item.get("lineage") or "rival"
+            if lineage not in LINEAGES:
+                raise GateError(f"board `{bid}` pending `{item['method']}` lineage "
+                                f"`{lineage}` is not one of {LINEAGES}")
+            pending.append({
+                "method": item["method"],
+                "version": item.get("version") or "",
+                "lineage": lineage,
+                "note": item.get("note") or "results computing",
+            })
+        pending.sort(key=lambda p: (p["method"], p["version"]))
+        out_boards[bid] = {"meta": board, "views": views, "climb": climb,
+                           "pending": pending}
+    n_diag, scorers, lineages = 0, set(), set()
+    for board in out_boards.values():
+        view = board["views"].get("default") or next(iter(board["views"].values()))
+        n_diag += len(view["sub_boards"]["candi_lineage"]["rows"])
+        for r in view["rows"]:
+            if r.get("provenance", {}).get("scorer"):
+                scorers.add(r["provenance"]["scorer"])
+            if r.get("lineage"):
+                lineages.add(r["lineage"])
     return {
         "schema_version": 1,
         "registry": registry,
         "boards": out_boards,
+        "covariate_coverage": {
+            "n_rows_with_diagnostics": n_diag,
+            "scorers": sorted(scorers),
+            "lineages": sorted(lineages),
+        },
         "reproducibility": {
             "score_command": "python -m candi.bench.external --store <regime.json> "
                              "--pred <pred_root> --out <scores.json>",
@@ -542,7 +652,7 @@ def compile_leaderboard(root: Path) -> Dict[str, Any]:
     }
 
 
-SITE_FILES = ("index.html", "app.js", "style.css")
+SITE_FILES = ("index.html", "app.js", "style.css", "help.json")
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -633,8 +743,6 @@ def build_parser() -> argparse.ArgumentParser:
                    help="hash of the store manifest the run scored against")
     a.add_argument("--fir-path", default=None,
                    help="run directory on Fir; default reads FIR_PATH.txt beside the score json")
-    a.add_argument("--strict-score", default=None,
-                   help="score json for the strict view (main board: P2 minus chr19)")
     a.add_argument("--placement-method", default=None,
                    help="the score file is a t54 Dataset-3 placement.json; stamp this "
                         "method's macro_all (the file must digest to the board's frozen "

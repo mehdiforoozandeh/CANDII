@@ -27,6 +27,23 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n
 - `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy
 - `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS)
+- `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
+- `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories
+- `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards
+- `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract
+- `t64` [implementation] single-chromosome CANDI run: mainline chr19 recipe + signal and peak heads, external-scored, stamped dev+main
+- `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main
+- `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer
+- `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly
+- `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score
+- `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method
+- `t70` [implementation] explain the peaks fallback on the Peaks tab: coverage ranking vs native peak head, with a per-method badge
+- `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown
+- `t72` [implementation] site v5: minimal gated landing (three-level combo first, board after) and a minimal CANDI-versions-over-time
+- `t73` [implementation] help-system accuracy dossier: per-method training-data truth and per-combo semantics for every data x head x family cell, code-cited, wired into the ? buttons
+- `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
+- `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
+- `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
 
 ## Blocked
 
@@ -63,6 +80,23 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *open*
 - `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *open*
 - `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *open*
+- `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels — *open*
+- `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories — *open*
+- `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards — *open*
+- `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract — *open*
+- `t64` [implementation] single-chromosome CANDI run: mainline chr19 recipe + signal and peak heads, external-scored, stamped dev+main — *open*
+- `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main — *open*
+- `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer — *open*
+- `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly — *open*
+- `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score — *open*
+- `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method — *open*
+- `t70` [implementation] explain the peaks fallback on the Peaks tab: coverage ranking vs native peak head, with a per-method badge — *open*
+- `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown — *open*
+- `t72` [implementation] site v5: minimal gated landing (three-level combo first, board after) and a minimal CANDI-versions-over-time — *open*
+- `t73` [implementation] help-system accuracy dossier: per-method training-data truth and per-combo semantics for every data x head x family cell, code-cited, wired into the ? buttons — *open*
+- `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
+- `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
+- `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
 
 ## Done · Dropped
 
