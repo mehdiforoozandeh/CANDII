@@ -750,6 +750,59 @@ diffing `PeakDetect.__call_peaks_wo_control` between `v2.1.1.20160309` and `v2.2
 block byte-identical line for line, with the sole difference in peak-calling cutoff plumbing — the
 one block we discard, since the p-value comes from `bdgcmp -m ppois`.
 
+**MACS2, both arms, 2026-08-30 — the control arm won, and it identified the target.** 58 runs, 0
+failures. MACS2 `2.2.9.1+computecanada` in an isolated scratch venv; store confirmed untouched.
+
+| median over the 34 `T_` | Phase 2, 25 bp, dup-kept | dedup, 25 bp | MACS2 dedup | MACS2 original |
+|---|---|---|---|---|
+| Pearson | 0.8344 | 0.5974 | 0.6576 | — |
+| — single-ended (n=17) | 0.7881 | 0.5250 | 0.5961 | **0.9915** |
+| — paired-ended (n=17) | 0.8454 | 0.6691 | 0.6720 | *pending* |
+| Spearman | 0.5648 | 0.5376 | 0.6939 | 0.7119 (se) |
+| MSE ratio | 1.6386 | 0.0823 | 0.2212 | 0.6705 (se) |
+| top-1 % Jaccard | 0.5649 | 0.5955 | **0.7865** | 0.8264 (se) |
+
+**Base resolution does not rescue single-end dedup.** Holding dedup fixed, 25 bp → base lifts median
+Pearson only 0.5250 → 0.5961 — it helps 17/17 rows and recovers about a sixth of what dedup removed.
+The hypothesis was directionally right and quantitatively far short. It *does* fix the ranking
+deficit Phase 2 flagged, across both run types: Jaccard 0.5649 → 0.7865, Spearman 0.5648 → 0.6939.
+
+**The original arm reproduces the target.** Original beats deduplicated on 16 of 17 single-ended
+rows — median Pearson **0.9915**, with seven rows above 0.997 and none but `T_K562` below 0.918.
+A median of 0.9915 is not "a better layer"; it is the target's own generating process. **The reading
+that fits: the challenge's 2019 DNase tracks were themselves made by MACS2 at base resolution from
+duplicate-kept alignments.** That is a claim about the *target*, and it is the most useful thing
+this programme has found.
+
+`T_BE2C`'s MYCN amplicon settles the mechanism. In `chr2:15.70–16.40 Mb` the challenge target peaks
+at **166,228.8** at `chr2:16,201,975`; the original arm gives **171,502.4 in the same bin**
+(window r = 0.9986), while the dedup arm gives **104.2** — three orders short — and lands elsewhere.
+On chr1, which carries no amplicon, the dedup arm scores `T_BE2C` at 0.8132 against 0.2050
+genome-wide: the collapse is one locus, not a diffuse loss.
+
+`T_K562` is the exact mirror and the sole inversion (0.0091 original vs 0.4271 dedup). In
+`chr11:24.0–24.3 Mb` the challenge's own track maxes at **1.93**; the original arm faithfully
+reproduces the **1.363 × 10⁷** adapter tower. **So the released ENCODE alignment is not the
+alignment the 2019 pipeline used**, and dedup is the only arm that removes that tower.
+
+> **OPEN — the circularity §10 warned about has arrived, by discovery rather than by tuning.**
+> §10 says tuning to match the challenge "would make the truth toggle circular for DNase and
+> permanently exclude accessibility from the robustness story." Nothing was tuned — a
+> pre-specified recipe was run and the match was found. But the consequence for §6 is identical:
+> if the store's DNase p-value is MACS2-on-original, then store truth ≈ challenge truth at r ≈ 0.99
+> for DNase, and the truth toggle measures nothing there. Ruling needed.
+>
+> Also open: whether `T_K562` (and any analogue) is handled separately, since the arm that
+> reproduces the target also reproduces a tower the target does not have. Two treatments inside one
+> assay is what §10 exists to delete, so this is not a free choice.
+
+Correction to the earlier rebuild memo, on record: the depth change on the six scored `V_`/`B_`
+tracks runs **7.9 %** (`V_adrenal_gland_embryonic`) to 30.6 %, not 1.6 % to 30.6 %.
+
+Two items added to the promotion checklist: the layer must carry its MACS2 version, command and
+wheel hash into the store; and the rebuilt counts' `duplicates_removed: False` attribute must be
+renamed — it means "this tool did not do the removing" and reads as the opposite of the truth.
+
 ### The ruling (2026-08-30)
 
 **Take §10's pre-registered fallback, for all 40 DNase experiments, rebuilding `counts` as well as
