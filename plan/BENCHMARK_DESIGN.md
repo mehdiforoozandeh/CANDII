@@ -244,16 +244,30 @@ challenge's panel and no reconciliation is needed. Re-check this if the store is
 > the panel. The rule sentence above describes `H5Source.targets:316-322`; the store's rule is
 > "the eval biosample is the truth cell, and the panel is every assay it holds."
 >
-> **The real problem it exposed — OPEN, and it blocks scoring.** Self-pairing means CANDI's prompt
-> is **the eval cell's other blind assays**, never the paired `T_` cell's tracks. Two consequences,
-> both verified straight from `manifest.json` with no project code. **16 of the 26 `V_` cells hold
-> exactly one blind assay** (sizes `{1:16, 2:5, 3:1, 4:4}`), so leave-one-out empties the encoder
-> input, `prepare_masked_batch` returns `None`, and the track is dropped unscored — **the `V_`
-> panel can pose only 29 of the 45 experiments** §5 and §5.2 promise. `B_` has no singletons and
-> all 51 survive. And more seriously: every rival, and the 2019 challenge, prompt a blind
-> experiment from *everything else known about that cell type*, which here is the `T_` tracks.
-> CANDI on the store path is given a handicapped and simply different exam — which is the
-> comparison this document exists to make sound. Owned by `t80`; needs a ruling before scoring.
+> **The real problem it exposed — FIXED 2026-08-29.** Self-pairing meant CANDI's prompt was **the
+> eval cell's other blind assays**, never the paired `T_` cell's tracks. Two consequences, both
+> verified from `manifest.json` with no project code: **16 of the 26 `V_` cells hold exactly one
+> blind assay** (sizes `{1:16, 2:5, 3:1, 4:4}`), so leave-one-out emptied the encoder input and the
+> track was dropped unscored — the `V_` panel could pose only **29** of the 45 experiments §5 and
+> §5.2 promise; and every rival, and the 2019 challenge, prompt a blind experiment from *everything
+> else known about that cell type*, so CANDI was sitting a handicapped and simply different exam.
+>
+> `StoreSource` now takes its pairs from the regime's **declared** `eval_pairs` (D31), input = the
+> `T_` prompt cell, target = the truth cell, and `targets` reads the *target* — the same rule
+> `H5Source` uses, so the two backends finally mean the same thing by a pair. `tools/declare_eval_pairs.py`
+> now exists and writes the declaration; D16 forced its shape, so the `T_X`→`V_X` string surgery is
+> an explicit **argument** and never a default, and asked to guess it refuses by name. Confirmed
+> three ways on the real store: `V_` **45**, `B_` **51**, zero prompt-holds-target leaks, zero pair
+> overlaps. Gates: 838 tests pass; `golden.py` 0 ULP against the pre-change tree, checked from a
+> clean worktree.
+>
+> **Two things it leaves behind.** Keeping `_apply_loo_mask` means a target column already `MISSING`
+> in the `T_` prompt becomes `CLOZE`, where the h5 path leaves it `MISSING` — `CLOZE` is what the
+> masker writes at training time, so it matches training, but it is a real difference in the model's
+> input for the same experiment and it makes h5 and store numbers non-comparable. And **no shipped
+> regime config declares `eval_pairs` yet**, so every config still runs the self-paired exam —
+> now loudly: `StoreSource` announces it at construction and `provenance()` records
+> `"self_paired": true`, so a scored JSON says which exam produced it.
 
 The organizers chose `B_` to be the six core histone marks plus ATAC and DNase — the marks worth
 imputing. `V_` instead reaches broadly across the assay panel, and **11 of its 22 assays hold a
@@ -823,7 +837,7 @@ Accepted as the price of the corrections above.
 | Avocado returns its random init on an unfitted chromosome; Lavawizard raises | `competitors/avocado/vendor/avocado.py:90-97`; `competitors/lavawizard/dataset3.py:70-71` |
 | per-method training loci and genome fractions across the literature | primary sources in `cruxvault/raw/`, audited 2026-08-29 |
 | `V_`/`B_` panel composition — 45 exp / 22 assays vs 51 exp / 8 assays; splits disjoint on (cell, assay), 0 overlaps over 89 cells | `download_plan_eic.json` (Fir `EpiDenoise/data/`), recounted 2026-08-29 |
-| the scored panel is *assays the truth cell has and the input cell does not* | **citation was wrong and the rule needs re-checking — see the note under §5.1.** `harness.py:526-543` is `StoreSource.counts_at_dsf`; the h5 rule is `H5Source.targets:316-322` and the store rule is `StoreSource.targets:486-488`. **`tools/declare_eval_pairs.py` does not exist in the repo**, no shipped config declares `eval_pairs`, and the store path self-pairs at `harness.py:483-484` |
+| the scored panel is *assays the truth cell has and the input cell does not* | **citation was wrong and the rule needs re-checking — see the note under §5.1.** `harness.py:526-543` is `StoreSource.counts_at_dsf`; the h5 rule is `H5Source.targets:316-322` and the store rule is `StoreSource.targets:486-488`. pairing declared by `tools/declare_eval_pairs.py` (**written 2026-08-29** — it did not exist when this row was first written, and the store path self-paired instead; see §5.1) |
 | eval-scope bin counts, scoring cost and storage | `cruxvault/results/t50/scores_avocado_P2.json` provenance; `cruxvault/results/t51/PILOT_MEMO.md` |
 
 ---

@@ -48,7 +48,7 @@ from candi.bench import partitions as P
 from candi.precision import no_autocast
 
 __all__ = [
-    "Pair", "TrackRecord", "EvalSource", "H5Source", "StoreSource", "open_source",
+    "Pair", "TrackRecord", "EvalSource", "H5Source", "StoreSource", "open_source", "cross_cell",
     "full_tiling", "decode_groups", "stream_tracks", "score_track", "panel_specificity", "c_block",
     "run_bench", "macro_mean",
 ]
@@ -73,7 +73,13 @@ KINDS: Tuple[str, ...] = ("impute", "denoise")
 
 @dataclass(frozen=True)
 class Pair:
-    """One `(input biosample, target biosample)`. They are equal for denoising and for store LOO."""
+    """One `(input biosample, target biosample)`.
+
+    They are equal for denoising, and for a store regime that declares no `eval_pairs` (D31) and so
+    can only pose leave-one-assay-out within one cell. Under a declared pairing they differ on both
+    backends: the input is the `T_` cell whose tracks are the prompt, the target is the `V_`/`B_`
+    cell that holds the truth.
+    """
     input_biosample: str
     target_biosample: str
 
@@ -81,12 +87,26 @@ class Pair:
         return f"{self.input_biosample}->{self.target_biosample}"
 
 
+def cross_cell(pair: Pair, kind: str) -> bool:
+    """Does this pair's ground truth come from a DIFFERENT biosample than the prompt?
+
+    When it does, the truth arrays are the `y_*_imp` keys — the target cell's counts, p-values and
+    peaks — and the decoder prompt has to be spliced with the target's own covariates
+    (`vb_natural_meta`). When it does not, the batch's own `y_*` keys are the truth. Both backends
+    answer this the same way, off the pair alone, because both now emit the same five imputation
+    keys: `H5Source.batch` builds them from the paired `V_`/`B_` biosample and
+    `StoreDataset._imp_keys` builds them from the regime's declared `eval_pairs` (D31).
+    """
+    return kind == "impute" and pair.target_biosample != pair.input_biosample
+
+
 def track_key(pair: Pair, assay: str, kind: str) -> str:
     """`T_cell|imp_cell|assay` for imputation — `EVAL_PLAN.md` §4's key, and `eval.py`'s too.
 
-    Denoising appends a fourth field. On the h5 the imputation target is always a `V_`/`B_` cell so
-    the three-field keys are already distinct; on the store an imputed assay is held out of the same
-    biosample that denoises the others, and without the suffix the two would overwrite each other.
+    Denoising appends a fourth field. Wherever the imputation target is a `V_`/`B_` cell the
+    three-field keys are already distinct; on a self-paired store an imputed assay is held out of
+    the same biosample that denoises the others, and without the suffix the two would overwrite
+    each other.
     """
     base = f"{pair.input_biosample}|{pair.target_biosample}|{assay}"
     return base if kind == "impute" else f"{base}|{kind}"
@@ -437,12 +457,27 @@ class H5Source(EvalSource):
 class StoreSource(EvalSource):
     """A `CANDI_STORE` corpus behind a regime file.
 
-    The store has no `T_`/`V_`/`B_` convention — D16 makes biosample names opaque ids that nothing
-    may parse — so there is no paired cell to impute FROM. Imputation here is leave-one-assay-out
-    within an eval biosample: the assay is masked out of the encoder input exactly as
-    `DataMasker._mask_full_assay` masks it during training (data, metadata rows 0-3 and availability
-    all set to `CLOZE`), and the decoder is asked for it from the prompt alone. That is the same
-    task the model was trained on, and it is the only imputation a store can pose.
+    **The pairing is DECLARED (D31), never inferred (t80).** An imputation prompts with one
+    biosample and scores against a different one that holds the held-out assays — `T_X` prompts,
+    `V_X` and `B_X` are the truth. The bake finds the second by string surgery on the first's name;
+    D16 forbids that here, because store biosample names are opaque ids. So the pairs come off the
+    regime's `eval_pairs` list, which `tools/declare_eval_pairs.py` writes and can re-check against
+    the corpus. `H5Source.pairs` and this now mean the same thing, and a store-scored panel and an
+    h5-scored panel are the same exam.
+
+    **With no `eval_pairs` the source self-pairs, exactly as it did before t80**, and says so out
+    loud. A regime that declares no pairing has not asked for an imputation evaluation (D31's own
+    words), and inventing one from the names is the surgery D16 rules out; but a self-paired run is
+    a *different and harder exam* — the prompt is the eval cell's other blind assays rather than
+    everything else known about that cell type — so it must never be mistaken for the benchmark's.
+    Hence a printed warning rather than a silent fallback or a hard error.
+
+    Imputation is still held out **by mask** on this path: `stream_tracks` calls `_apply_loo_mask`
+    on the target column of every store forward pass and `decode_groups` forces one assay per pass.
+    Under a declared pair the column is already `MISSING` in the prompt (the splits are disjoint on
+    `(cell, assay)`, and `targets` below computes the panel so that it is), so the mask is a
+    tripwire rather than the mechanism — and it is what keeps the path correct on a corpus whose
+    splits are *not* disjoint.
 
     Batch assembly is `StoreDataset._make_batch`, called with a window list this class substitutes
     for the regime's plan. Re-implementing it here would duplicate the thinning, the depth-adjusted
@@ -460,8 +495,12 @@ class StoreSource(EvalSource):
 
         self.regime_path = Path(regime_path)
         regime = Regime.from_file(self.regime_path)
+        declared = [(str(a), str(b)) for a, b in regime.eval_pairs]
+        pool, declared = self._select(declared, biosamples)
         self.ds = StoreDataset(regime, train=False, batch_size=1, dsf_sampling="off",
-                               shuffle=False, deterministic=True, biosamples=biosamples)
+                               shuffle=False, deterministic=True, biosamples=pool)
+        #: D31 — `((input, target), …)` as `Pair`s, restricted to what `--biosamples` asked for.
+        self.eval_pairs: List[Pair] = [Pair(a, b) for a, b in declared]
         self.assays = list(self.ds.assays)
         self.context_bins = int(self.ds.context_bins)
         self.resolution = int(self.ds.resolution)
@@ -473,6 +512,73 @@ class StoreSource(EvalSource):
         if not self.eval_chroms:
             raise ValueError(f"none of {want} is a chromosome of {self.ds.corpus.root}")
         self._run_seed = int(self.ds.run_seed)
+        self.pair_overlaps = self._overlaps()
+        self._announce_pairing()
+
+    @staticmethod
+    def _select(declared: List[Tuple[str, str]], biosamples: Optional[Sequence[str]]
+                ) -> Tuple[Optional[List[str]], List[Tuple[str, str]]]:
+        """Resolve `--biosamples` against the declared pairing. Returns `(loader pool, pairs)`.
+
+        A caller who names a panel names the cells they care about, and under a declared pairing
+        that is almost always the TRUTH cells — `--biosamples V_DND-41` means "score V_DND-41", not
+        "prompt with it". So a named cell selects every declared pair it appears on, either side,
+        and the loader pool becomes those pairs' inputs. Passing the pool through unexamined would
+        hand `StoreDataset` a list of `V_` cells, leave `eval_pairs` matching none of them, and
+        silently drop the panel back to the self-paired exam t80 exists to remove.
+
+        Naming nothing the regime pairs is refused rather than self-paired, for the same reason.
+        """
+        if biosamples is None:
+            return None, declared
+        want = list(biosamples)
+        if not declared:
+            return want, declared
+        keep = [p for p in declared if p[0] in want or p[1] in want]
+        if not keep:
+            raise ValueError(
+                f"--biosamples names {want}, and this regime's `eval_pairs` name none of them on "
+                f"either side. Name an input or a target of a declared pair, or drop the flag to "
+                f"score the whole declared panel."
+            )
+        return list(dict.fromkeys(a for a, _ in keep)), keep
+
+    def _overlaps(self) -> Dict[str, List[str]]:
+        """`{pair: [assay, …]}` — assays a declared pair's INPUT and TARGET cells both hold.
+
+        `BENCHMARK_DESIGN.md` §5.1 records the EIC splits as disjoint on `(cell, assay)`, with zero
+        overlaps over all 89 cells, which is what makes "assays the truth cell has and the input
+        cell does not" (`targets`) and "every assay the truth cell holds" the same set. This
+        measures that claim on the corpus in front of us instead of assuming it. A non-empty result
+        is not fatal — `targets` drops the overlapping assay, so nothing leaks — but it means the
+        panel is SMALLER than the truth cells' assay count, and a shrunken panel that nobody
+        mentioned is the failure this records rather than hides.
+        """
+        out: Dict[str, List[str]] = {}
+        for pair in self.eval_pairs:
+            x = self.ds._availability[pair.input_biosample]
+            t = self.ds._availability[pair.target_biosample]
+            both = [self.assays[a] for a in range(len(self.assays)) if bool(x[a]) and bool(t[a])]
+            if both:
+                out[str(pair)] = both
+        return out
+
+    def _announce_pairing(self) -> None:
+        if not self.eval_pairs:
+            print(
+                f"[bench] {self.regime_path} declares no `eval_pairs` (D31), so every store pair "
+                f"is SELF-PAIRED: the prompt is the eval cell's own other assays, held out by "
+                f"mask, not its paired training cell's tracks. That is a different and harder exam "
+                f"than the benchmark's, and a cell holding one assay has no leave-one-out at all. "
+                f"Run tools/declare_eval_pairs.py to declare the pairing.", flush=True)
+            return
+        n_exp = sum(len(self.targets(p, "impute")) for p in self.eval_pairs)
+        print(f"[bench] {len(self.eval_pairs)} declared eval pair(s), {n_exp} scoreable "
+              f"experiment(s)", flush=True)
+        if self.pair_overlaps:
+            print(f"[bench] {len(self.pair_overlaps)} declared pair(s) are NOT disjoint on "
+                  f"(cell, assay); the shared assays are not scored: {self.pair_overlaps}",
+                  flush=True)
 
     def depth_center(self) -> float:
         return float(self.ds.depth_center())
@@ -481,16 +587,47 @@ class StoreSource(EvalSource):
         return int(self._n_bins[chrom])
 
     def pairs(self, kind: str) -> List[Pair]:
-        return [Pair(b, b) for b in self.ds.biosample_pool]
+        """The declared `T_ -> V_/B_` pairs for imputation; self-pairs for denoising and for a
+        regime that declares none.
+
+        Denoising scores a cell against itself by definition, so its pairs are the prompt pool
+        self-paired — the same `[Pair(t, t) for t in t_bios]` `H5Source.pairs` returns. Note that
+        under a declared pairing `StoreDataset` makes the pool the pair INPUTS, so denoising runs
+        on the `T_` cells, which is again what the h5 path does.
+        """
+        if kind == "denoise" or not self.eval_pairs:
+            return [Pair(b, b) for b in self.ds.biosample_pool]
+        return list(self.eval_pairs)
 
     def targets(self, pair: Pair, kind: str) -> List[int]:
-        avail = self.ds._availability[pair.input_biosample]
-        return [a for a in range(len(self.assays)) if bool(avail[a])]
+        """The assay columns of the **target** biosample this pair supplies ground truth for.
+
+        The panel belongs to the truth cell, never to the prompt: `BENCHMARK_DESIGN.md` §5.1 states
+        it as *assays the truth cell has and the input cell does not*, and §8 says the same thing
+        from the other end — every eval pair is a mark the `V_`/`B_` cell has and its paired `T_`
+        cell lacks. That is `H5Source.targets`' rule, and it is now this one.
+
+        Two degenerate cases keep their old answer. **Denoising** scores the prompt cell against
+        itself, so its panel is the input's own assays. **A self-paired imputation** — the only
+        thing a regime without `eval_pairs` can pose — has one cell playing both roles, where "has
+        and does not have" is empty and "every assay the truth cell holds" is the only usable rule;
+        that is what this returned for every store pair before t80.
+        """
+        if kind == "denoise":
+            avail = self.ds._availability[pair.input_biosample]
+            return [a for a in range(len(self.assays)) if bool(avail[a])]
+        truth = self.ds._availability[pair.target_biosample]
+        if not cross_cell(pair, kind):
+            return [a for a in range(len(self.assays)) if bool(truth[a])]
+        prompt = self.ds._availability[pair.input_biosample]
+        return [a for a in range(len(self.assays)) if bool(truth[a]) and not bool(prompt[a])]
 
     def _raw_batch(self, pair: Pair, chrom: str, starts: Sequence[int]) -> Dict[str, Any]:
         self.ds._windows = [(chrom, int(s)) for s in starts]
         free = np.random.default_rng(self._run_seed)
-        return self.ds._make_batch(pair.input_biosample, list(range(len(starts))), free)
+        imp = pair.target_biosample if pair.target_biosample != pair.input_biosample else None
+        return self.ds._make_batch(pair.input_biosample, list(range(len(starts))), free,
+                                   imp_target=imp)
 
     def batch(self, pair: Pair, chrom: str, starts: Sequence[int], kind: str, *,
               x_dsf: int = 1) -> Dict[str, Any]:
@@ -525,18 +662,29 @@ class StoreSource(EvalSource):
 
     def counts_at_dsf(self, pair: Pair, chrom: str, starts: Sequence[int],
                       dsf: int) -> np.ndarray:
+        """The C-block's depth ladder, thinned off whichever cell holds the ground truth.
+
+        Under a declared pair that is the TARGET cell, and its counts arrive as `y_data_imp`; the
+        prompt cell's `y_data` column for the same assay is `MISSING`, so reading it would hand C3
+        a ladder of `-1`s. The thinning is keyed on the truth cell's own name for the same reason
+        `StoreDataset._imp_keys` keys it there: two pairs sharing a target must see the same ground
+        truth at the same `(window, dsf)`.
+        """
         from candi.store.dataset import draw_seed, dsf_milli, thin_counts
 
         out = self._raw_batch(pair, chrom, starts)
-        y = out["y_data"].numpy().copy()
+        cross = pair.target_biosample != pair.input_biosample
+        truth_bios = pair.target_biosample if cross else pair.input_biosample
+        y = (out["y_data_imp"] if cross else out["y_data"]).numpy().copy()
         if dsf == 1:
             return y
+        avail = self.ds._availability[truth_bios]
         for a, assay in enumerate(self.assays):
-            if float(out["y_avail"][0, a]) <= 0:
+            if not bool(avail[a]):
                 continue
             for j, s in enumerate(starts):
                 rng = np.random.default_rng(
-                    draw_seed(self._run_seed, pair.input_biosample, assay, chrom, int(s),
+                    draw_seed(self._run_seed, truth_bios, assay, chrom, int(s),
                               dsf_milli(dsf)))
                 y[j, :, a] = thin_counts(y[j, :, a].astype(np.int64), dsf, rng).astype(np.float32)
         return y
@@ -560,6 +708,12 @@ class StoreSource(EvalSource):
             "resolution": self.resolution,
             "dsf_levels": list(self.dsf_levels),
             "biosamples": list(self.ds.biosample_pool),
+            # t80 — which exam was sat. `eval_pairs: []` with `self_paired: true` is the pre-t80
+            # leave-one-out-within-the-eval-cell run, and a report carrying it is not comparable
+            # with one carrying a declared pairing.
+            "eval_pairs": [[p.input_biosample, p.target_biosample] for p in self.eval_pairs],
+            "self_paired": not self.eval_pairs,
+            "eval_pair_assay_overlaps": self.pair_overlaps,
         }
 
 
@@ -617,6 +771,12 @@ def decode_groups(source: EvalSource, kind: str, cols: Sequence[int]) -> List[Li
     leave-one-out — it would be "impute all of them from whatever is left", a strictly harder task
     that is not the one the model trained on. On `V_aa`, which carries two assays, it would also
     empty the encoder input entirely.
+
+    That stays true under a declared pairing (t80) even though the target column is then already
+    absent from the `T_` prompt and masking it removes nothing. Grouping there would be free ONLY
+    while the splits stay disjoint on `(cell, assay)`; the moment they are not, one grouped pass
+    would hide several observed tracks at once and quietly change the exam. One assay per pass
+    costs decode time and buys a task definition that does not depend on a corpus property.
     """
     return [list(cols)] if (kind == "denoise" or source.kind != "store") else [[a] for a in cols]
 
@@ -662,7 +822,7 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
                         # dropped, never scored against an all-MISSING buffer.
                         dropped.extend(a for a in group if a not in dropped)
                         continue
-                    if kind == "impute" and source.kind == "h5":
+                    if cross_cell(pair, kind):
                         prep["y_meta"] = vb_natural_meta(prep["y_meta"],
                                                          batch["y_meta_imp"].to(device),
                                                          batch["y_avail"].to(device))
@@ -948,7 +1108,7 @@ def _c_contexts(model, source: EvalSource, device, *, kind: str, pairs: Sequence
                 continue
             y_meta = prep["y_meta"]
             truth_t = batch["y_data"]
-            if kind == "impute" and source.kind == "h5":
+            if cross_cell(pair, kind):
                 y_meta = vb_natural_meta(y_meta, batch["y_meta_imp"].to(device),
                                          batch["y_avail"].to(device))
                 truth_t = batch["y_data_imp"]
