@@ -636,6 +636,7 @@ per invariant 13, **fp32** (`bench/cli.py` wraps eval in `no_autocast`), `--batc
 | one genome-wide track | 851 s = **0.2363 GPU-h** |
 | CANDI's 4 runs (`V_`/`B_` × 2 regimes) | 192 track sweeps = **45.4 GPU-h** (38.0 at `--batch-windows 16`) |
 | the same, held-out only | **2.4 GPU-h** |
+| peak memory | MaxRSS **4.2 GiB** against 32 GB requested — size prediction jobs at 8 GB, not 32 |
 
 **Verdict: §4's `genome-wide` aggregation stays.** Its premium is **43 GPU-h, once** — the size of
 Avocado's already-accepted ≈40 GPU-h, and 2.6 % of the programme against §12.4's ≈4,360 CPU-h.
