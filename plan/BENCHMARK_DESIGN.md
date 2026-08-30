@@ -642,6 +642,40 @@ the known-clean paired-end ATAC band (≤ 0.050 of mass above the ceiling): `B_D
 tower geometry** — the worst is two orders below `T_K562`. **Zero of the 42 `V_` ChIP tracks is
 affected.**
 
+**CONTROL CENSUS 2026-08-30 — the 73 `chipseq-control` tracks, which the model reads as input.**
+**49 of the 58 single-ended controls break the keep-dup-1 ceiling, up to 432×, against 0 of 266
+single-ended ChIP signal tracks.** All 15 paired-ended controls exceed too (median 279×, max 664×),
+outside the 13.1×–54.2× band duplicate-free ATAC occupies. The *median* control's largest-bin mass
+share (6.68 × 10⁻⁵) exceeds the *most* concentrated known-clean ATAC track (6.85 × 10⁻⁵ — it ties).
+Controls look like DNase, not like the ChIP tracks they control for; they stay two orders below
+`T_K562`. Affected: 49 on the provable criterion — `T_` 28, `V_` 21, `B_` 0 (all 9 `B_` controls
+are paired-ended).
+
+**But every control tower is shared and blacklisted, without exception:** 730 of 730 control top-10
+bins are blacklisted, all 36 clusters are `High Signal Region`, and the largest *non*-blacklisted
+bin in the whole control set reaches 0.107× its own ceiling. **No control has a private per-library
+stack.** Six loci are control-only and invisible to a signal-side census (`chr4:49.15 Mb`,
+`chr2:89.83 Mb`, `chr17:21.99 Mb`, `chr4:49.71 Mb`, `chr21:7.26 Mb`, `chr13:18.21 Mb`).
+
+**A third independent line on K562:** `T_K562`'s own control is clean — ceiling 122, max 115, ratio
+**0.94**, zero bins over — while its DNase track reads 108,474×. After the diagnosis (against 39
+other DNase experiments) and the signal census (against K562's own twelve other assays), this
+settles that the stack is a DNase-library fault.
+
+So the DNase-only ruling **narrows** rather than breaks: *private, non-blacklisted, per-library
+towers* are DNase-only; *duplicate load above the ceiling* is not.
+
+> **OPEN 2026-08-30 — "blacklisted" is not the protection both censuses assumed it was.**
+> `genome/mask.h5` is consumed by exactly one thing: `eligible_starts`, i.e. D12 window
+> eligibility. **Nothing in the batch path zeroes or drops bin values at masked positions** —
+> verified by grepping every consumer of the mask across `src/`. Since `min_valid_frac` is 0.9, a
+> 768-bin window may contain up to 76 invalid bins and still be sampled, and those bins' counts
+> reach the encoder unchanged. A control tower cluster of ~19 bins sits comfortably inside that
+> budget. So "all towers are at `mask == 0` loci" does not mean the model never ingests them, and
+> this applies to the DNase shared towers too — and the DNase rebuild will not fix controls, which
+> are not being rebuilt. **What is unmeasured:** how many D12-eligible windows actually contain a
+> bin over the ceiling, and the largest value so ingested. That measurement is running.
+
 ### The ruling (2026-08-30)
 
 **Take §10's pre-registered fallback, for all 40 DNase experiments, rebuilding `counts` as well as
