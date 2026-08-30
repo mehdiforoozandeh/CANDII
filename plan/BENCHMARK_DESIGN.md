@@ -757,7 +757,8 @@ failures. MACS2 `2.2.9.1+computecanada` in an isolated scratch venv; store confi
 |---|---|---|---|---|
 | Pearson | 0.8344 | 0.5974 | 0.6576 | — |
 | — single-ended (n=17) | 0.7881 | 0.5250 | 0.5961 | **0.9915** |
-| — paired-ended (n=17) | 0.8454 | 0.6691 | 0.6720 | *pending* |
+| — paired-ended (n=17) | 0.8454 | 0.6691 | 0.6720 | **0.9765** |
+| — all 34 `T_` | 0.8344 | 0.5974 | 0.6576 | **0.9851** |
 | Spearman | 0.5648 | 0.5376 | 0.6939 | 0.7119 (se) |
 | MSE ratio | 1.6386 | 0.0823 | 0.2212 | 0.6705 (se) |
 | top-1 % Jaccard | 0.5649 | 0.5955 | **0.7865** | 0.8264 (se) |
@@ -792,9 +793,44 @@ alignment the 2019 pipeline used**, and dedup is the only arm that removes that 
 > if the store's DNase p-value is MACS2-on-original, then store truth ≈ challenge truth at r ≈ 0.99
 > for DNase, and the truth toggle measures nothing there. Ruling needed.
 >
-> Also open: whether `T_K562` (and any analogue) is handled separately, since the arm that
-> reproduces the target also reproduces a tower the target does not have. Two treatments inside one
-> assay is what §10 exists to delete, so this is not a free choice.
+**The paired-end control closes the confound, and strengthens the claim.** 22/22 runs. Every sign
+matches the single-ended side at about a third the magnitude — the dedup penalty is −0.1101 paired
+against −0.3265 single, which is exactly what deduplication keying on *both* ends predicts. The
+discriminating point is the absolute level, not the gap: **on paired libraries dedup is faithful, so
+if 0.9915 were merely single-end dedup destroying coverage, the deduplicated arm should have closed
+most of the distance. It does not — 0.6720 against 0.9765.** Near-perfect agreement survives exactly
+where dedup is not the confound. MACS2-original beats Phase 2 on **34/34**.
+
+**New caveat, and it is real: the paired agreement is shape-only.** MSE ratio 0.6705 single against
+**28.15** paired; mean ratio 0.80 against **2.98**. That offset is present in *every* arm including
+Phase 2 (2.30×) and the store's own shipped signal (1.33×), so this run inherited it rather than
+created it — but it means the generating-process claim is about **shape**, and `AGENTS.md` §7.2's
+`oracle_scaled`/`scale_error` split is not optional for DNase. A fragment-versus-mate counting test
+would settle the cause; it needs a third variant and has not been run.
+
+**`T_HAP-1` is a second "released alignment ≠ 2019 alignment", one per run type.** Unlike `T_K562`,
+the challenge's own track *does* carry signal at its tower (`chr17:2,700,525`, 5,972) — ours is
+47.8× higher there and 120.6× at `chr4:31,466,150`. Two bins set its genome-wide number: in its own
+window the original arm scores **0.9975**, and chr1 alone scores 0.6207 against 0.4776 genome-wide,
+which a diffuse loss cannot do.
+
+**`B_DND-41`'s tower survives deduplication** — top bin genome-wide in both arms, cut only 7×
+(63,282 → 9,030). No single-ended track did that. It is a blacklisted `chr1:634,000` mappability
+tower, so dedup is simply the wrong instrument for it. It is scored truth, so no agreement number
+was computed and none exists.
+
+### Rulings on the DNase layer (2026-08-30)
+
+**Adopt the original arm; keep DNase in the truth toggle, with a caveat badge.** MACS2-on-original
+is demonstrably the right pipeline and refusing the correct method to protect a comparison would be
+backwards. §6's DNase toggle therefore prints with a badge stating that the two truths share a
+generating process at r ≈ 0.99, so agreement there is not evidence of robustness.
+
+**`T_K562`: trim adapters, then the original recipe.** Attack the actual defect — 9.73 M untrimmed
+adapter read-throughs — rather than duplication in general, and apply it uniformly to all 40 tracks
+so one assay keeps one treatment, which is what §10 exists to enforce. Expected to fix `T_HAP-1`
+too. Not expected to touch `B_DND-41`, whose tower is mappability and survives every instrument
+tried so far.
 
 Correction to the earlier rebuild memo, on record: the depth change on the six scored `V_`/`B_`
 tracks runs **7.9 %** (`V_adrenal_gland_embryonic`) to 30.6 %, not 1.6 % to 30.6 %.
