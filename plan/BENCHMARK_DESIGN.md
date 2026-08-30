@@ -610,6 +610,56 @@ read is. And **25 of the 34 `T_` DNase tracks exceed the keep-dup-1 ceiling by m
 Whether the 316 ChIP tracks carry it too has not been measured, and it decides whether this is a
 DNase repair or a store-wide one.
 
+**CENSUS 2026-08-30 — the damage is DNase-only, and ChIP is clean.** All 363 signal tracks
+audited against the MACS2 `--keep-dup 1` ceiling `2 × (25 + L − 1)`:
+
+| class | run type | n | tracks with bins over the ceiling | worst ratio | worst single-bin mass share |
+|---|---|---|---|---|---|
+| ChIP-seq | single-ended | 266 | **0** | 1.0 | 8.5 × 10⁻⁶ |
+| ChIP-seq | paired-ended | 50 | 50 | 90.6 | 3.9 × 10⁻⁵ |
+| ATAC-seq | paired-ended | 7 | 7 | 54.2 | 6.9 × 10⁻⁵ |
+| DNase-seq | single / paired | 18 / 22 | 40 | **108,474** | **1.7 × 10⁻²** |
+
+**266 single-ended ChIP tracks never break the bound across 32.25 billion bins.** The 50 ChIP
+tracks that exceed it are *all* paired-ended, and every clean track is single-ended — the ceiling's
+derivation is a single-end argument, so exceedance by a paired-end library is the bound's
+limitation, not contamination. ENCODE ships the ATAC BAMs duplicate-free, and they read 13.1×–54.2×:
+**that band is what correct data looks like.** ChIP tops out at 90.6× against DNase's 108,474×, and
+the worst ChIP single-bin mass share sits *below* the known-clean ATAC maximum.
+
+**Two kinds of tower, and they separate cleanly.** *Shared:* `chr1:629,700–634,775` is the top bin
+of 36 tracks across 33 biosamples and is **inside hg38 blacklist v2**, as are the other large shared
+loci — 78–100 % of every class's top-10 bins are blacklisted, so `mask.h5` is already 0 there.
+(Note `min_valid_frac` is 0.9, so a window may still *contain* them.) *Private:* `T_K562`'s
+`chr11:24,159,5xx` appears in **1 track of 363**, and none of K562's twelve other tracks shows
+anything there — which rules out copy number, since that lifts every assay of a biosample together,
+as it demonstrably does for `B_SJSA1` and `B_SJCRH30` at MDM2/CDK4.
+
+**Six scored-truth tracks are affected, all DNase — but only three meaningfully.** Measured against
+the known-clean paired-end ATAC band (≤ 0.050 of mass above the ceiling): `B_DND-41` **0.472**,
+`V_OCI-LY7` **0.344** and `B_NCI-H929` **0.247** are genuinely elevated; `B_RWPE2` (0.019),
+`V_adrenal_gland_embryonic` (0.005) and `V_vagina` (0.002) sit inside it. **None of the six has
+tower geometry** — the worst is two orders below `T_K562`. **Zero of the 42 `V_` ChIP tracks is
+affected.**
+
+### The ruling (2026-08-30)
+
+**Take §10's pre-registered fallback, for all 40 DNase experiments, rebuilding `counts` as well as
+`pval`.** The root cause is that ENCODE's DNase pipeline keeps duplicates while its ATAC pipeline
+removes them — so a DNase layer built from duplicate-kept counts was never faithful to the ATAC
+template §10 chose, and this is the only route that makes it so. Deduplication needs read start
+positions, which binned counts do not carry, so BAMs are required. A targeted repair of the five
+damaged tracks was rejected: it would build one assay through two pipelines, which is the exact
+inconsistency §10 exists to delete. Capping at the keep-dup-1 ceiling was measured and rejected
+(helps 3 of 34, halves the median).
+
+Three consequences on record. **Scored truth changes for 6 DNase `V_`/`B_` tracks** — legitimate
+under Rule 1, which binds methods and not truths, but the DNase rows are then measured against a
+truth we rebuilt rather than ENCODE's shipped file, and that must be disclosed wherever a DNase
+number appears. **The Phase 2 layer built on 2026-08-29 is superseded** and does not go to Phase 3.
+**Nothing is deleted:** the rebuild produces a new layer beside the existing one, per §10 Phase 3's
+own rule.
+
 **Superseded — kept for the record.** What follows was the reading before the diagnosis above: `T_K562` scores
 Pearson **0.0038** against the challenge where RDNS scores 0.4938, with an MSE ratio of 2,746 and
 `-log10 p` reaching 1.8 × 10⁷ — three orders past what `layout.py`'s codec was written against, on
