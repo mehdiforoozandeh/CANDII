@@ -573,7 +573,44 @@ disagreement is pipeline vintage rather than our method — but our ATAC layer a
 ENCODE's own against that same target, which is the fairer read than quoting 0.8344 against 0.7833
 across two different assays.
 
-**Two experiments are broken, and they look like a bug rather than a finding.** `T_K562` scores
+**DIAGNOSED 2026-08-29 — not a bug. The input is contaminated, and the ATAC gate could not have
+caught it.** `pval_from_counts` is correct: the 1.8 × 10⁷ is the exact Poisson tail of the number
+the store handed it, re-derived from `gammaln` with no `scipy` at 18,245,363.906 against the layer's
+18,245,364.0. Two adjacent bins at `chr11:24,159,500–24,159,550` hold **9,762,321 and 9,762,619
+counts** — a fifth of chr11's entire pileup in 50 bp, against a next-highest bin of 13,114. Reading
+the BAM (`ENCFF257HEE`): 9,762,609 of those reads are **already flagged duplicate by Picard**, 13
+are not, and 9,733,414 carry the identical 20-mer `AAGCAGAAGACGGCATACGA`, whose reverse complement
+is an exact substring of the Illumina TruSeq adapter tail. It is 9.73 M untrimmed adapter
+read-throughs parked on their best 20 bp match in hg38.
+
+**Why Phase 1 could not have caught it.** ENCODE's DNase pipeline *marks* duplicates and keeps them
+(37.4 % of that BAM); ENCODE's ATAC pipeline *removes* them — all four ATAC BAMs report
+`duplicate_reads: 0`. `pval_from_counts` has no duplicate step because binned counts carry no read
+start positions. **On ATAC that omission is a no-op, which is exactly why the gate passed at
+0.9497. On DNase it is the whole failure.** The gate's "ATAC is the template" premise has a hole
+precisely here, and no tightening of the Phase 1 bar would have found it.
+
+`T_HAP-1` is the same cause with different geometry — 57.7 % duplicates spread over thousands of
+towers; dropping its top 1,000 bins (0.0008 % of the track) moves it **0.2943 → 0.8116**. For
+`T_K562`, two bins of 121,241,684 are **99.98 %** of the track's mean square. **`T_adrenal_gland`
+and `T_upper_lobe_of_left_lung` are not this cause** — dropping top bins makes adrenal *worse* — and
+remain undiagnosed. Checked separately: duplicate excess *mass* panel-wide does not predict
+agreement (r = −0.24, and the most-contaminated third scores a higher median than the least), so it
+is tower concentration that breaks a track, not duplication as such.
+
+**The cheap fix was measured and is rejected.** Capping at the MACS2 `--keep-dup 1` ceiling moves
+the two broken rows the right way but improves only 3 of 34 and halves the median, 0.8344 → 0.4630,
+because it flattens real peaks along with artifacts.
+
+**It reaches past the p-value layer.** Those 9.76 M reads are in the store's **counts**, which is
+what §7's count arm scores and what CANDI's Negative Binomial models directly. Re-running MACS2
+would repair `pval` and leave `counts` contaminated, so the two layers would disagree about what a
+read is. And **25 of the 34 `T_` DNase tracks exceed the keep-dup-1 ceiling by more than 100×**
+(median 336×), which says the tower pattern is common even where it happens not to hurt agreement.
+Whether the 316 ChIP tracks carry it too has not been measured, and it decides whether this is a
+DNase repair or a store-wide one.
+
+**Superseded — kept for the record.** What follows was the reading before the diagnosis above: `T_K562` scores
 Pearson **0.0038** against the challenge where RDNS scores 0.4938, with an MSE ratio of 2,746 and
 `-log10 p` reaching 1.8 × 10⁷ — three orders past what `layout.py`'s codec was written against, on
 20 bp reads. `T_HAP-1` regresses similarly, 0.2943 against RDNS's 0.5825. Both are **training**
