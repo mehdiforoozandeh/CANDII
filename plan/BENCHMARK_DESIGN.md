@@ -138,6 +138,13 @@ badge: under `eic.19` CANDI is in-sample on 1 of 23 chromosomes, and that fracti
 number's address. Without both rules the column becomes exactly the mislabelling this document
 exists to delete.
 
+**A blanked cell is not computed** (APPROVED 2026-08-29). Avocado, ChromImpute and Lavawizard are
+predicted and scored on chr20+21+22 only, in both regimes. Their genome-wide number was never going
+to be printed, so producing it buys nothing; it is not withheld evidence, it simply does not exist.
+This is what takes the programme from 40 prediction runs to 30 and from 110 scoring passes to 95
+(§12.3, §12.4). CANDI, eDICE and the naive baselines still run genome-wide, so the `genome-wide`
+column still has entrants.
+
 **Why both.** §11 records that the entire imputation lineage trains and evaluates at the same
 positions, so a held-out-loci-only table has no methodological counterpart in the field; and a
 genome-wide-only table carries the leak Schreiber's own pitfall paper warns about. Reporting both
@@ -166,6 +173,12 @@ baselines train once and produce one model; there is no checkpoint to pick and n
 carries a **"no selection"** marker. The marker is not cosmetic: it says `V_` gave them none of the
 optimistic lift every trainable method got, so their `V_`→`B_` behaviour is not comparable to
 CANDI's without accounting for it.
+
+**"Touched once" means predicted once** (APPROVED 2026-08-29). `B_` predictions are produced one
+time, from the single checkpoint that method selected on `V_`, and *every* `B_` number on the
+board — both aggregations of §4, the three-number split of §5.2, and both truths of §6 — is an
+aggregation of that one prediction set. Re-scoring those stored predictions is free and allowed;
+re-predicting `B_` is not, and needs a new checkpoint selection on `V_` to be legitimate.
 
 **Rendering.** Side by side inside one regime row, never a toggle: a toggle invites treating them
 as two views of one thing and erodes the touch-once discipline on `B_`.
@@ -279,6 +292,15 @@ labelled as an anchor we did not run**. The vendored 001 scorer retires to a one
 proof that our path reproduces the published leaderboard; that proof lives in the vault, not on
 the board.
 
+**One extra figure: CANDI inside the 2019 field** (APPROVED 2026-08-29). Lifting the entrants out
+of the ranked table means CANDI and the 2019 submissions never share a ranking denominator, so
+"CANDI would have placed *N*th" cannot be read off the board. That number is worth having, so it is
+computed once, separately: the challenge ranker over `B_` under challenge truth, with CANDI added to
+the 25-entrant field. It is **a labelled figure, never a board row** — adding CANDI to the field
+changes every entrant's rank denominator, which is the same reason §7 allows only one CANDI row. It
+needs no new prediction and no new scoring pass, only one more run of the ranker over scores we
+already have. It prints the non-independence count below with it.
+
 **Known non-independence in the anchor block.** `CUImpute1`, `CUWA` and `ICU` submitted
 byte-identical tracks for all 26 broad-mark experiments; `ICU`'s H3K4me1 *is* the organizers'
 `Avocado_p0` baseline. The field has fewer distinct methods than rows — any "beats N methods"
@@ -391,6 +413,20 @@ and compare against ENCODE's own ATAC p-value, already held binned in `signal_BW
 per-experiment Pearson, Spearman, MSE ratio, top-1 %-bin agreement. Pre-registered defaults, no
 tuning.
 
+**The pass/fail, pre-registered 2026-08-29 before any ATAC result was computed (APPROVED).** Over
+the 7 ATAC experiments, all four must hold:
+
+| statistic | bar |
+|---|---|
+| Pearson vs ENCODE's ATAC p-value | **median ≥ 0.90** |
+| top-1 %-bin Jaccard | **median ≥ 0.60** |
+| MSE ratio (ours / ENCODE's) | **median in [0.5, 2.0]** |
+| worst single experiment, Pearson | **≥ 0.80** |
+
+Anything short of all four is a **fail**, and a fail means the §10 fallback: re-download the 40
+DNase BAMs to scratch and run MACS2 at base resolution. The bar is not moved after the numbers are
+seen — that is the whole point of writing it here, in a commit that predates the run.
+
 **Phase 2 — build the DNase layer.** Same code, 40 experiments, genome-wide. Second independent
 check against the challenge's DNase p-value tracks, on `T_` experiments only so `V_`/`B_` stay
 untouched under Rule 1. One shot, no tuning — tuning to match would make the truth toggle circular
@@ -464,9 +500,13 @@ The critical path is **G1 → retrain → predict → score**.
 position-parameterised rivals already fit all 23 chromosomes — a genome-wide scoring scope declines
 a saving rather than adding a cost. What forces the retrain is §13, not §4.
 
-Summary of the whole programme: **3 gates, 10 training runs + 5 σ refits, 40 prediction runs
-(≈880 GB scratch), 110 scoring passes (≈6,130 CPU-h)**, plus Avocado's ≈40 GPU-h and CANDI's
+Summary of the whole programme: **3 gates, 10 training runs + 5 σ refits, 30 prediction runs
+(≈434 GB scratch), 95 scoring passes (≈4,360 CPU-h)**, plus Avocado's ≈40 GPU-h and CANDI's
 unmeasured GPU cost. Detail below.
+
+Two rulings of 2026-08-29 cut this from the 40 / 880 GB / 110 / 6,130 CPU-h first estimate: the
+naive baselines collapse to one prediction and one score each (§12.2), and a method whose
+`genome-wide` cell is blank is no longer predicted there (§4).
 
 ### 12.1 The gates — nothing trains until these pass
 
@@ -489,22 +529,35 @@ G1 is the real gate. Skipping it trains every method on 34 tracks of the wrong u
 | Lavawizard | 2 | one per regime | pval |
 | `avg`, `avg-arcsinh`, `marginal`, `knn1`, `knn5` | **1 each** | no fitted position parameters, so the regime's training loci do not enter them — one fit serves both regimes | pval + count + peak |
 
+**The naive baselines collapse to one of everything** (APPROVED 2026-08-29, closing costing 1 of
+the old §12.5). Because their fit is regime-independent, so is their output: the two regimes would
+produce byte-identical predictions. So each is fit once, predicted once and scored once, and the
+one number is printed in both regime rows. First implementation of `avg` asserts this — it predicts
+under both regimes once and checks the two outputs are identical — and the assertion, not the
+argument, is what licenses the collapse for the other four.
+
 Reference budgets on record: Avocado ≈20 GPU-h per model, ChromImpute 128 CPU-core-hours
 genome-wide. CANDI's is G3.
 
 **σ-tables refit for all 10 methods**, on training residuals (§7). Every existing σ was fit on `V_`
 eval pairs and is void under Rule 1. Cheap, but nothing distributional scores until it is done.
 
-### 12.3 Prediction runs — 40, genome-wide, once each
+### 12.3 Prediction runs — 30, once each
 
-121,241,684 bins × 45 tracks (`V_`) or 51 (`B_`), at 485 MB per track.
+There are **15 method-regime units**, not 20: the 5 naive baselines contribute one unit each
+instead of two (§12.2). Nine of the 15 predict genome-wide; six predict on chr20+21+22 only,
+because their `genome-wide` cell is blank (§4).
 
-| panel | runs | storage each | note |
-|---|---|---|---|
-| `V_` | 10 methods × 2 regimes = 20 | ≈22 GB | repeatable |
-| `B_` | 20 | ≈25 GB | **touched once**, at the very end |
+| unit | count | scope | `V_` (45 tracks) | `B_` (51 tracks) |
+|---|---|---|---|---|
+| CANDI, eDICE — 2 methods × 2 regimes | 4 | genome-wide | 21.8 GB | 24.7 GB |
+| `avg`, `avg-arcsinh`, `marginal`, `knn1`, `knn5` — 1 each | 5 | genome-wide | 21.8 GB | 24.7 GB |
+| Avocado, ChromImpute, Lavawizard — 3 × 2 regimes | 6 | chr20+21+22 | 1.17 GB | 1.32 GB |
+| | **15 units → 30 runs** | | **≈419 GB + 15 GB = ≈434 GB** | |
 
-≈880 GB of scratch at peak. Scratch, never `/project`; deletable after scoring.
+485 MB per track genome-wide (121,241,684 bins × 4 bytes); 25.9 MB per track on the 6,478,903
+held-out bins. `B_` is **touched once**, at the very end. Scratch, never `/project`; deletable
+after scoring.
 
 ### 12.4 Scoring runs — ≈6,100 CPU-h
 
@@ -513,11 +566,16 @@ for 20 chr21 tracks (`cruxvault/results/t51/PILOT_MEMO.md`).
 
 | pass | count | CPU-h |
 |---|---|---|
-| `V_`, store truth | 20 | ≈1,000 |
-| `B_`, store truth | 20 | ≈1,140 |
-| `B_`, challenge truth — p-value arm only | 20 | ≈1,140 |
-| the 25 anchor entrants, both truths | 50 | ≈2,850 |
-| | **110** | **≈6,130** |
+| `V_`, store truth | 15 | ≈466 |
+| `B_`, store truth | 15 | ≈528 |
+| `B_`, challenge truth — p-value arm only | 15 | ≈528 |
+| the 25 anchor entrants, both truths | 50 | ≈2,835 |
+| | **95** | **≈4,360** |
+
+Each of the three 15-pass rows is 9 genome-wide passes (≈50 CPU-h on `V_`, ≈57 on `B_`) plus 6
+held-out-only passes at 5.34 % of that (≈2.7 and ≈3.0), matching the 15 units of §12.3. The
+CANDI-inside-the-2019-field figure (§6) adds **no** pass — it is one more run of the ranker over
+the `B_` challenge-truth scores already counted here.
 
 All CPU. Fir's CPU allocation is not the scarce resource. The two aggregations (`held-out`,
 `genome-wide`) and the three `V_` numbers (§5.2) all come out of the same pass — no extra
@@ -525,11 +583,10 @@ inference.
 
 **Check before assuming:** the 23 entrant bigwigs live on scratch, which purges at 60 days.
 
-### 12.5 Two costings left open
+### 12.5 One costing left open
 
-1. **Do the naive baselines need one fit or two?** §12.2 assumes one, because `avg` and `knn` carry
-   no position parameters and so the regime's training loci never enter them. If that is wrong,
-   add 5 training runs.
+1. ~~**Do the naive baselines need one fit or two?**~~ **SETTLED 2026-08-29: one** — one fit, one
+   prediction, one score, printed in both regime rows, with the identity assertion of §12.2.
 2. **Does the truth toggle apply to `V_`, or only to `B_`?** The challenge staged 45–46 round-1
    validation tracks that were never scored, so `V_` under challenge truth is possible. It is
    **excluded** from the §12.4 table. Adding it is +20 passes, ≈1,000 CPU-h.
@@ -537,8 +594,10 @@ inference.
 ### 12.6 Storage, in full
 
 485 MB per track genome-wide (121,241,684 bins × 4 bytes) against ≈1.2 GB per method-regime for the
-three-chromosome subset — a 22 GB / 1.2 GB choice per `V_` method-regime. Everything lives on
-scratch, never `/project`, and is deletable once scored. **Scratch purges at 60 days**, which also
+three-chromosome subset — a 22 GB / 1.2 GB choice per `V_` method-regime, **now decided per method
+by §4**: genome-wide for the nine units whose `genome-wide` cell is printed, three chromosomes for
+the six whose cell is blank. Everything lives on scratch, never `/project`, and is deletable once
+scored. **Scratch purges at 60 days**, which also
 applies to the 23 entrant bigwigs already staged there.
 
 ---
