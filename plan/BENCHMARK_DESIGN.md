@@ -224,6 +224,18 @@ cell has and the input cell does not*, while the challenge's blind set is a hand
 disjointness makes those two definitions the same set by construction, so the computed panel is the
 challenge's panel and no reconciliation is needed. Re-check this if the store is ever rebuilt.
 
+> **OPEN, found 2026-08-29 — the line citation above was wrong, and the rule at the real line does
+> not read the way this paragraph describes.** `harness.py:540` is inside `StoreSource.counts_at_dsf`.
+> The store's actual panel rule is `StoreSource.targets` at **486-488**, and it returns
+> `[a for a in range(len(self.assays)) if bool(avail[a])]` — *the assays the input biosample has* —
+> ignoring `kind` entirely. The h5 path at `H5Source.targets:316-322` is the one that implements
+> "the truth cell has it and the input cell does not". The panel **counts** are right: G3 confirmed
+> the store's availability yields exactly 26 `V_` → 45 tracks and 12 `B_` → 51. Under disjointness
+> the two rules can coincide, which would explain it. But this paragraph currently cites code that
+> does not say what the paragraph says, and that has to be settled — with the pair direction read
+> off `tools/declare_eval_pairs.py` — **before anything is scored**, because if the store path is
+> scoring assays the input already holds, it is denoising and not imputing. Owned by `t80`.
+
 The organizers chose `B_` to be the six core histone marks plus ATAC and DNase — the marks worth
 imputing. `V_` instead reaches broadly across the assay panel, and **11 of its 22 assays hold a
 single track**.
@@ -538,7 +550,7 @@ naive baselines collapse to one prediction and one score each (§12.2), and a me
 |---|---|---|---|
 | **G1** | **`t78` — the DNase p-value layer.** Phase 1 validates `pval_from_counts` against ENCODE's own ATAC p-value on the 7 ATAC experiments; Phase 2 builds the 40 DNase tracks genome-wide (§10) | CPU-only, hours. **Fallback risk:** poor ATAC agreement forces re-downloading 40 DNase BAMs to scratch and running MACS2 at base resolution | **every training run.** 34 of the 267 training tracks change units |
 | **G2** | **`t79` — Pilot Regions to hg38.** UCSC ships `encodeRegions` in hg19 only. Lift the 44 regions, then write the BED-restricted window sampler (§3.1) | small, one-off | the `eic.pilot` regime only |
-| **G3** | **CANDI's genome-wide inference timing.** No measurement exists. The only number on record is the store loader at 404 windows/s, which is a loader rate and not an inference rate | one chromosome, ≈1 GPU-h | the GPU budget for everything below. **Do this first** — it is the only measurement that could change the shape of this plan |
+| ~~**G3**~~ | **DONE 2026-08-29 — the plan's shape does not change.** See §12.7 | job 57482367, 2 min 19 s | — |
 
 G1 is the real gate. Skipping it trains every method on 34 tracks of the wrong units.
 
@@ -607,6 +619,55 @@ inference.
 
 **Check before assuming:** the 23 entrant bigwigs live on scratch, which purges at 60 days.
 
+### 12.7 CANDI's inference cost, measured (G3, 2026-08-29)
+
+Job 57482367 on Fir, whole chr21 (1,868,399 bins), one track end to end through the real
+`StoreSource → stream_tracks → forward` path, harness unmodified. One H100 **MIG 1g.10gb** slice
+per invariant 13, **fp32** (`bench/cli.py` wraps eval in `no_autocast`), `--batch-windows 4`
+(the `candi.bench` default), 768-bin context, 35 assays, 2,353,661 params.
+
+> **The weights are a random init.** No trained CANDI checkpoint exists on Fir — re-verified
+> independently. This is a throughput measurement and carries no accuracy claim.
+
+| | |
+|---|---|
+| rate | **185.6 windows/s = 142,541 bins/s** |
+| split | forward 56 %, store loader 37 %, host copies 7 % — compute-bound, but only just |
+| one genome-wide track | 851 s = **0.2363 GPU-h** |
+| CANDI's 4 runs (`V_`/`B_` × 2 regimes) | 192 track sweeps = **45.4 GPU-h** (38.0 at `--batch-windows 16`) |
+| the same, held-out only | **2.4 GPU-h** |
+
+**Verdict: §4's `genome-wide` aggregation stays.** Its premium is **43 GPU-h, once** — the size of
+Avocado's already-accepted ≈40 GPU-h, and 2.6 % of the programme against §12.4's ≈4,360 CPU-h.
+These are MIG-slice hours, which is the unit invariant 13 makes us allocate in.
+
+Three secondary findings. A perfect loader would buy 1.83×, so the loader is worth attention but is
+not the wall. **The loader's cost is CPU work, not network I/O** — staging the store to node-local
+disk moved the rate +3.4 %, so staging a prediction run buys nothing. And the rate is a property of
+the model, not the cell: three `V_` biosamples spread 2 %.
+
+**A CANDI pass is per-track, not per-eval-pair, on the store path.** `harness.py:621` returns
+`[[a] for a in cols]` for a store source (the h5 path returns one group), consumed by the window
+loop at `harness.py:653`. So the multiplier is 45 / 51 **tracks**, not 26 / 12 pairs. Confirmed
+against the store's own availability, which gives exactly 26 `V_` → 45 and 12 `B_` → 51.
+
+**The 404 windows/s previously on record is doubly incomparable** and should not be quoted again:
+`cruxvault/results/t3/DELIVERABLE.md:34,64` gives it beside "18,209 non-overlapping **6144-bin**
+windows" — a loader rate, on a window 8× the production context. bins/s is the portable unit.
+
+### 12.8 A gap G3 found: there is no track writer
+
+`stream_tracks` yields in-memory `TrackRecord`s straight into `score_track`. **The §12.3 prediction
+run that persists 485 MB per track to scratch does not exist as code.**
+
+This is not optional plumbing. Every "predict once, score many times" claim in this document rests
+on it: the two aggregations of §4, the three `V_` numbers of §5.2, the two truths of §6, and above
+all §5's ruling that `B_` is *predicted* once. Without a writer, each of those re-runs inference,
+which for CANDI is 45.4 GPU-h a time and breaks the touch-once discipline outright.
+
+So the writer is new work on the critical path, and it belongs to `t80`. It is cheap — CANDI's
+whole share is 93 GB, minutes not hours — but it must land before the first prediction run.
+
 ### 12.5 One costing left open
 
 1. ~~**Do the naive baselines need one fit or two?**~~ **SETTLED 2026-08-29: one** — one fit, one
@@ -663,7 +724,7 @@ Accepted as the price of the corrections above.
 | Avocado returns its random init on an unfitted chromosome; Lavawizard raises | `competitors/avocado/vendor/avocado.py:90-97`; `competitors/lavawizard/dataset3.py:70-71` |
 | per-method training loci and genome fractions across the literature | primary sources in `cruxvault/raw/`, audited 2026-08-29 |
 | `V_`/`B_` panel composition — 45 exp / 22 assays vs 51 exp / 8 assays; splits disjoint on (cell, assay), 0 overlaps over 89 cells | `download_plan_eic.json` (Fir `EpiDenoise/data/`), recounted 2026-08-29 |
-| the scored panel is *assays the truth cell has and the input cell does not* | `src/candi/bench/harness.py:526-543`; pairing declared by `tools/declare_eval_pairs.py` |
+| the scored panel is *assays the truth cell has and the input cell does not* | **citation was wrong and the rule needs re-checking — see the note under §5.1.** `harness.py:526-543` is `StoreSource.counts_at_dsf`; the h5 rule is `H5Source.targets:316-322` and the store rule is `StoreSource.targets:486-488`. Pairing declared by `tools/declare_eval_pairs.py` |
 | eval-scope bin counts, scoring cost and storage | `cruxvault/results/t50/scores_avocado_P2.json` provenance; `cruxvault/results/t51/PILOT_MEMO.md` |
 
 ---
