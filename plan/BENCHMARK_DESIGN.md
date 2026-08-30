@@ -665,16 +665,41 @@ settles that the stack is a DNase-library fault.
 So the DNase-only ruling **narrows** rather than breaks: *private, non-blacklisted, per-library
 towers* are DNase-only; *duplicate load above the ceiling* is not.
 
-> **OPEN 2026-08-30 — "blacklisted" is not the protection both censuses assumed it was.**
-> `genome/mask.h5` is consumed by exactly one thing: `eligible_starts`, i.e. D12 window
-> eligibility. **Nothing in the batch path zeroes or drops bin values at masked positions** —
-> verified by grepping every consumer of the mask across `src/`. Since `min_valid_frac` is 0.9, a
-> 768-bin window may contain up to 76 invalid bins and still be sampled, and those bins' counts
-> reach the encoder unchanged. A control tower cluster of ~19 bins sits comfortably inside that
-> budget. So "all towers are at `mask == 0` loci" does not mean the model never ingests them, and
-> this applies to the DNase shared towers too — and the DNase rebuild will not fix controls, which
-> are not being rebuilt. **What is unmeasured:** how many D12-eligible windows actually contain a
-> bin over the ceiling, and the largest value so ingested. That measurement is running.
+> **MEASURED AND CLOSED 2026-08-30 — the mechanism was not the one I guessed, but the concern was
+> real.** `genome/mask.h5` is consumed by exactly one thing, `eligible_starts` (D12 window
+> eligibility); nothing in the batch path zeroes bin values at masked positions. I inferred from
+> that that towers reach the encoder through D12's 10 % invalid-bin budget. **They do not.**
+> Blacklist intervals run 2 kb to 18.4 Mb wide, so 367 of the 373 blacklisted top-1 tiles are
+> 768/768 invalid and D12 rejects them outright; **zero tracks land in the 1–76 invalid-bin band**,
+> and across all 1,744 track × window-set pairs exactly one carries an above-ceiling value on an
+> invalid bin. The shared blacklisted towers are genuinely excluded.
+>
+> **But a different, non-blacklisted population is ingested.** Under `eic.19`, 77 of 436 tracks put
+> an over-ceiling bin inside a D12-eligible window; under `eic.pilot`, 74. **All 40 DNase tracks
+> ingest, in both regimes**, on `mask == 1` bins outside the blacklist — the private per-library
+> class. Worst under a live regime: `T_K562` DNase, **66,660 counts at `chr5:56,896,525`, 740.7×
+> its ceiling**, in an `eic.pilot` training window; under `eic.19`, `T_HAP-1` at 41,214, 352.3×, in
+> 1,182 of 2,848 training windows. The median `T_` DNase track is hit in **25.6 %** of `eic.19`
+> training windows. (`T_HAP-1` reaches 104,516 on chr20–22, but it is a train biosample and no live
+> regime reads it there — that is what a future `eic.gw` would hand the model.)
+>
+> **The two regimes are identical on the eval side** — D32 restricts the train split only, so both
+> draw the same 6,749 eval windows and every `V_`/`B_` number is one number, verified in code across
+> all 436 tracks. On the train side neither is clean: `eic.pilot` carries the larger extreme,
+> `eic.19` the wider exposure and the only control ingestion.
+>
+> **Severity, which is what settles it.** Worst ingested value by group: DNase **740.7×**; control
+> single-ended **6.97×**; control paired-ended 2.11×; ChIP/ATAC paired-ended 13.8× — inside the
+> 13.1–54.2× band duplicate-free ATAC occupies, so not evidence of contamination; **ChIP
+> single-ended 1.0×, never exceeding a bound that is a proof for single-end data.** So the entire
+> serious problem is DNase, and the §10 rebuild fixes all 40 of them.
+>
+> **Residual after the rebuild, accepted and disclosed rather than repaired.** 20 single-ended
+> control tracks provably ingest duplicate-inflated bins — but at **≤ 7×**, two orders below the
+> thing being fixed, on model *input* rather than scored truth. Of the 23 `V_`/`B_` tracks that
+> ingest, 6 are DNase (repaired), and the remaining ChIP and ATAC ones are paired-ended at ≤ 13.8×,
+> which a duplicate-free reference also reaches. A second BAM campaign for controls is not worth
+> that. If this is ever revisited, the number to beat is 6.97×.
 
 ### The ruling (2026-08-30)
 
