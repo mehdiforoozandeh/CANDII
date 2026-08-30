@@ -19,6 +19,14 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe
 - `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only
 - `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak
+- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers
+- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src
+- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address
+- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p
+- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
+- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule
+- `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
 
 ## By category
 
@@ -29,6 +37,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### data-acquisition
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
+
+### hpc-setup
+
+- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *open*
 
 ### implementation
 
@@ -43,6 +55,13 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t34` [implementation] resolve the chr21 bin-grid mismatch: the baked h5 has 1,867,776 bins, the store has 1,868,399 — *open*
 - `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only — *open*
 - `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *open*
+- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers — *open*
+- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *open*
+- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *open*
+- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *open*
+- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *open*
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *open*
+- `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *open*
 
 ## Done · Dropped
 
