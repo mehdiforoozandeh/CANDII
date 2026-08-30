@@ -94,9 +94,15 @@ count is now a containment rule, not a division:** 25,588,197 is not divisible b
 training bins are the 25 bp bins lying wholly inside a region, counted, not a quotient.
 
 Region sizes (≥500 kb for the `ENr` set) are far larger than CANDI's 768-bin (19.2 kb) context, so
-window sampling is unaffected — measured, not assumed: 1,328 fully-contained 768-bin windows hold
-**99.6 %** of the contained bin budget, and the smallest training region (`ENr212`, 499,991 bp)
-still holds 26 of them.
+window sampling is unaffected — measured, not assumed. **OPEN 2026-08-29:** this used to quote
+"1,328 windows = 99.6 %", which is the *region-anchored packing capacity* — how many 768-bin
+windows fit if each region's tiling restarts at that region's own first bin. The sampler as built
+(D32: keep D12's `eligible_starts`, then drop any start whose whole window is not inside one
+region) tiles from **chromosome bin 0**, so 34 of the 40 training regions lose a leading partial
+tile and the real figure is **1,294 windows = 993,792 bins = 97.10 %**. Both are pinned in
+`test_the_pilot_regime_plans_its_training_windows` with the reason. Either is ample; reaching
+1,328 means anchoring the tiling per region, which changes which starts are *candidates* and is a
+redesign of the approved mechanism, not a filter tweak. Awaiting a ruling.
 
 Two costs before this regime can run:
 
