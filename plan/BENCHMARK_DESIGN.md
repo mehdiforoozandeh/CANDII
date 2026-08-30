@@ -94,15 +94,16 @@ count is now a containment rule, not a division:** 25,588,197 is not divisible b
 training bins are the 25 bp bins lying wholly inside a region, counted, not a quotient.
 
 Region sizes (≥500 kb for the `ENr` set) are far larger than CANDI's 768-bin (19.2 kb) context, so
-window sampling is unaffected — measured, not assumed. **OPEN 2026-08-29:** this used to quote
-"1,328 windows = 99.6 %", which is the *region-anchored packing capacity* — how many 768-bin
-windows fit if each region's tiling restarts at that region's own first bin. The sampler as built
-(D32: keep D12's `eligible_starts`, then drop any start whose whole window is not inside one
-region) tiles from **chromosome bin 0**, so 34 of the 40 training regions lose a leading partial
-tile and the real figure is **1,294 windows = 993,792 bins = 97.10 %**. Both are pinned in
-`test_the_pilot_regime_plans_its_training_windows` with the reason. Either is ample; reaching
-1,328 means anchoring the tiling per region, which changes which starts are *candidates* and is a
-redesign of the approved mechanism, not a filter tweak. Awaiting a ruling.
+window sampling is unaffected — measured, not assumed: the sampler plans **1,294 fully-contained
+768-bin windows = 993,792 bins = 97.10 %** of the contained budget. (This paragraph previously
+quoted "1,328 = 99.6 %", which is a different quantity — the *region-anchored packing capacity*, how
+many windows fit if each region's tiling restarts at its own first bin. D32 keeps D12's
+`eligible_starts` and filters afterwards, so the tiling is anchored at chromosome bin 0 and 34 of
+the 40 training regions lose a leading partial tile. **Ruled 2026-08-29: keep 1,294 and correct the
+number.** Anchoring per region would buy 2.5 % more training windows at the price of `eic.pilot` no
+longer sharing a window grid with every other regime — and 2.5 % is noise beside the 0.1195 that a
+seed change alone moves. Both figures are pinned in
+`test_the_pilot_regime_plans_its_training_windows` with the reason.)
 
 Two costs before this regime can run:
 
@@ -526,6 +527,44 @@ reproducing this section's audit precisely.
 check against the challenge's DNase p-value tracks, on `T_` experiments only so `V_`/`B_` stay
 untouched under Rule 1. One shot, no tuning — tuning to match would make the truth toggle circular
 for DNase and permanently exclude accessibility from the robustness story.
+
+**PHASE 2 RESULT 2026-08-29 — the units defect is fixed; two experiments are not.** All 40 DNase
+tracks built genome-wide with the gate-passing code unchanged, in the store's own uint16
+arcsinh×2000 codec, `n_clipped = 0` on all 40, on scratch. The second check ran against the
+challenge's 2019 DNase p-value on the **34 `T_` experiments only** — verified: the
+`ours_vs_challenge` comparison exists on exactly those 34 rows and on no `V_` or `B_` row, so
+Rule 1 held.
+
+| median over the 34 `T_` | our computed layer | the store's RDNS today |
+|---|---|---|
+| Pearson | **0.8344** | 0.5406 |
+| Spearman | 0.5647 | 0.5441 |
+| MSE ratio | 1.6385 | 0.0004 |
+| top-1 % Jaccard | 0.5649 | **0.6273** |
+| mean ratio | **1.2454** | 0.0624 |
+
+**What is decisively fixed is the scale** — mean ratio 0.0624 → 1.2454 — which is the defect §10
+exists to correct. And the improvement is not only at the median: **our layer beats the RDNS track
+it replaces on 26 of the 34**, with Pearson below 0.5 on **4** experiments against RDNS's **14**.
+
+**What is not fixed is the ranking.** Spearman barely moves and top-1 % Jaccard gets *worse* than
+the track it replaces. Local background changes which bins rank highest, so some of this is a real
+methodological difference from the 2019 pipeline rather than an error.
+
+**The honest ceiling.** There is no ENCODE DNase p-value to compare against — that absence is the
+defect. So the same code was run on the 4 `T_` **ATAC** experiments against the *challenge's* ATAC
+tracks: ours scores 0.7055 where ENCODE's own p-value scores **0.7833**, and ENCODE beats us on all
+four. So a 2020 MACS2 run reaches only ~0.78 against a 2019 target, and much of the residual DNase
+disagreement is pipeline vintage rather than our method — but our ATAC layer also sits ~0.08 below
+ENCODE's own against that same target, which is the fairer read than quoting 0.8344 against 0.7833
+across two different assays.
+
+**Two experiments are broken, and they look like a bug rather than a finding.** `T_K562` scores
+Pearson **0.0038** against the challenge where RDNS scores 0.4938, with an MSE ratio of 2,746 and
+`-log10 p` reaching 1.8 × 10⁷ — three orders past what `layout.py`'s codec was written against, on
+20 bp reads. `T_HAP-1` regresses similarly, 0.2943 against RDNS's 0.5825. Both are **training**
+tracks. A `-log10 p` of 10⁷ entering a joint loss would dominate it. Diagnosing this is bug-hunting,
+which §10 permits; it is not tuning. **Phase 3 is held until it is understood.**
 
 **Phase 3 — store layout, nothing deleted.** The read-depth normalized signal moves to its own
 archived kind (`signal_rdns`) and stays queryable. The `pval` kind for DNase becomes the computed
