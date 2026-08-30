@@ -458,27 +458,88 @@ split this document specifies. That is the citation the `held-out` scope is just
 
 ## 12. Compute
 
-**Training: unchanged by any decision here.** Regimes fix training scope, and the
-position-parameterised rivals already fit all 23 chromosomes — the genome-wide scoring scope
-declines a saving rather than adding a cost. Existing budgets for reference: Avocado ≈20 GPU-h per
-model (derived from 005's recorded ~86 GPU-h for two models at double our epoch count),
-ChromImpute 128 CPU-core-hours genome-wide.
+The critical path is **G1 → retrain → predict → score**.
 
-**Scoring: ≈50 CPU-h per pass instead of ≈4.** Measured: `candi.bench.external` took 5 min 09 s on
-4 cores for 20 chr21 tracks; 45 tracks genome-wide projects to ≈50 CPU-h
-(`cruxvault/results/t51/PILOT_MEMO.md`). That is +46 CPU-h per method × regime × panel × truth.
-Upper bound across ~10 methods, 2 regimes, 2 panels and 2 truths is near 4,000 CPU-h against 320,
-but `B_` is scored once at the end and challenge truth covers the p-value arm only, so the real
-figure is well under half. All CPU; Fir's CPU allocation is not the scarce resource.
+**The widened eval scope adds no training cost.** Regimes fix training scope, and the
+position-parameterised rivals already fit all 23 chromosomes — a genome-wide scoring scope declines
+a saving rather than adding a cost. What forces the retrain is §13, not §4.
 
-**Storage: 485 MB per track genome-wide** (121,241,684 bins × 4 bytes), ≈22 GB per method-regime
-for 45 tracks, against ≈1.2 GB for the three-chromosome subset. Scratch, not `/project`, and
-deletable after scoring.
+Summary of the whole programme: **3 gates, 10 training runs + 5 σ refits, 40 prediction runs
+(≈880 GB scratch), 110 scoring passes (≈6,130 CPU-h)**, plus Avocado's ≈40 GPU-h and CANDI's
+unmeasured GPU cost. Detail below.
 
-**Unmeasured, and a prerequisite: CANDI's own genome-wide inference.** No timing exists. The only
-proxy on record is the store loader at 404 windows/s single-threaded, which is a loader rate and
-not an inference rate. A single-chromosome timing run is required before `t65`'s GPU-hour cap can
-be set honestly.
+### 12.1 The gates — nothing trains until these pass
+
+| # | work | cost | blocks |
+|---|---|---|---|
+| **G1** | **`t78` — the DNase p-value layer.** Phase 1 validates `pval_from_counts` against ENCODE's own ATAC p-value on the 7 ATAC experiments; Phase 2 builds the 40 DNase tracks genome-wide (§10) | CPU-only, hours. **Fallback risk:** poor ATAC agreement forces re-downloading 40 DNase BAMs to scratch and running MACS2 at base resolution | **every training run.** 34 of the 267 training tracks change units |
+| **G2** | **`t79` — Pilot Regions to hg38.** UCSC ships `encodeRegions` in hg19 only. Lift the 44 regions, then write the BED-restricted window sampler (§3.1) | small, one-off | the `eic.pilot` regime only |
+| **G3** | **CANDI's genome-wide inference timing.** No measurement exists. The only number on record is the store loader at 404 windows/s, which is a loader rate and not an inference rate | one chromosome, ≈1 GPU-h | the GPU budget for everything below. **Do this first** — it is the only measurement that could change the shape of this plan |
+
+G1 is the real gate. Skipping it trains every method on 34 tracks of the wrong units.
+
+### 12.2 Training runs — 10, plus 5 σ refits
+
+| method | runs | why that count | arms |
+|---|---|---|---|
+| CANDI | 2 | `eic.19` and `eic.pilot` | pval + count + peak |
+| Avocado | 2 | joint fit on chr19 / pilot, then 23 per-chromosome genome-factor fits each | pval |
+| ChromImpute | 2 | one per regime | pval |
+| eDICE | 2 | one per regime | pval |
+| Lavawizard | 2 | one per regime | pval |
+| `avg`, `avg-arcsinh`, `marginal`, `knn1`, `knn5` | **1 each** | no fitted position parameters, so the regime's training loci do not enter them — one fit serves both regimes | pval + count + peak |
+
+Reference budgets on record: Avocado ≈20 GPU-h per model, ChromImpute 128 CPU-core-hours
+genome-wide. CANDI's is G3.
+
+**σ-tables refit for all 10 methods**, on training residuals (§7). Every existing σ was fit on `V_`
+eval pairs and is void under Rule 1. Cheap, but nothing distributional scores until it is done.
+
+### 12.3 Prediction runs — 40, genome-wide, once each
+
+121,241,684 bins × 45 tracks (`V_`) or 51 (`B_`), at 485 MB per track.
+
+| panel | runs | storage each | note |
+|---|---|---|---|
+| `V_` | 10 methods × 2 regimes = 20 | ≈22 GB | repeatable |
+| `B_` | 20 | ≈25 GB | **touched once**, at the very end |
+
+≈880 GB of scratch at peak. Scratch, never `/project`; deletable after scoring.
+
+### 12.4 Scoring runs — ≈6,100 CPU-h
+
+One pass = 45 tracks genome-wide ≈ **50 CPU-h** on 4 cores, projected from a measured 5 min 09 s
+for 20 chr21 tracks (`cruxvault/results/t51/PILOT_MEMO.md`).
+
+| pass | count | CPU-h |
+|---|---|---|
+| `V_`, store truth | 20 | ≈1,000 |
+| `B_`, store truth | 20 | ≈1,140 |
+| `B_`, challenge truth — p-value arm only | 20 | ≈1,140 |
+| the 25 anchor entrants, both truths | 50 | ≈2,850 |
+| | **110** | **≈6,130** |
+
+All CPU. Fir's CPU allocation is not the scarce resource. The two aggregations (`held-out`,
+`genome-wide`) and the three `V_` numbers (§5.2) all come out of the same pass — no extra
+inference.
+
+**Check before assuming:** the 23 entrant bigwigs live on scratch, which purges at 60 days.
+
+### 12.5 Two costings left open
+
+1. **Do the naive baselines need one fit or two?** §12.2 assumes one, because `avg` and `knn` carry
+   no position parameters and so the regime's training loci never enter them. If that is wrong,
+   add 5 training runs.
+2. **Does the truth toggle apply to `V_`, or only to `B_`?** The challenge staged 45–46 round-1
+   validation tracks that were never scored, so `V_` under challenge truth is possible. It is
+   **excluded** from the §12.4 table. Adding it is +20 passes, ≈1,000 CPU-h.
+
+### 12.6 Storage, in full
+
+485 MB per track genome-wide (121,241,684 bins × 4 bytes) against ≈1.2 GB per method-regime for the
+three-chromosome subset — a 22 GB / 1.2 GB choice per `V_` method-regime. Everything lives on
+scratch, never `/project`, and is deletable once scored. **Scratch purges at 60 days**, which also
+applies to the 23 entrant bigwigs already staged there.
 
 ---
 
@@ -544,6 +605,11 @@ Every design question raised in this pingpong is settled. What remains is execut
 `RIVALS_PLAN.md` — which is where a reader looking for design prose will look.
 
 ### The work, as tasks
+
+Execution order and every cost estimate are in §12. The critical path is
+**G1 (`t78`) → retrain → predict → score**, and **G3 (CANDI's genome-wide inference timing) should
+run first** because it is the only measurement that could change the plan's shape.
+
 
 **`t77`** is the parent — *redesign the leaderboard's data regimes, panels and ranking so every
 number has one address*. Its five children land on `t77`'s single branch. Per `CLAUDE.md`, a child
