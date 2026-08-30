@@ -12,7 +12,12 @@ from pathlib import Path
 
 from candi.store import genome as G
 from candi.store import layout as L
-from candi.store.manifest import build_manifest, verify_store, write_manifest
+from candi.store.manifest import (
+    SIGNAL_OUTPUT_TYPE,
+    build_manifest,
+    verify_store,
+    write_manifest,
+)
 from candi.store.writer import build_biosample, discover_biosamples
 
 __all__ = ["main", "build_parser"]
@@ -102,8 +107,17 @@ def build_parser() -> argparse.ArgumentParser:
                    help="npz tree; enables the file_metadata.json cross-check (D20)")
     m.add_argument("--genome", type=Path, default=None,
                    help="genome dir (default: the sibling genome/ of --corpus-root)")
+    m.add_argument("--signal-provenance", type=Path, default=None,
+                   help="JSON from tools/build_signal_provenance.py: the signal bigWig accession "
+                        "and its ENCODE output_type per track. Stamps both into the manifest and "
+                        "fails the build on a track whose output_type is not "
+                        "--signal-output-type (BENCHMARK_DESIGN.md §10)")
+    m.add_argument("--signal-output-type", default=SIGNAL_OUTPUT_TYPE,
+                   help=f"what the corpus declares its pval layer to be (default "
+                        f"{SIGNAL_OUTPUT_TYPE!r}, ENCODE's own name for the quantity)")
     m.add_argument("--no-strict", action="store_true",
-                   help="downgrade a CSV/json conflict to a warning — for triage, not for a build")
+                   help="downgrade a CSV/json or signal-units conflict to a warning — for triage, "
+                        "not for a build. `verify` still reports the units conflict.")
 
     v = sub.add_parser("verify", help="structural check of a built store against its manifest")
     v.add_argument("--corpus-root", required=True, type=Path)
@@ -218,6 +232,8 @@ def _cmd_build_manifest(args) -> int:
         source_root=args.source_root,
         genome=args.genome,
         strict=not args.no_strict,
+        signal_provenance=args.signal_provenance,
+        signal_output_type=args.signal_output_type,
     )
     out = write_manifest(args.corpus_root, manifest)
     n_tracks = sum(len(b["tracks"]) for b in manifest["biosamples"].values())

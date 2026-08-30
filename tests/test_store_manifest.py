@@ -305,3 +305,104 @@ def test_manifest_reads_the_genome_block_from_dna_h5(store):
         f.attrs["fasta_sha256"] = "deadbeef"
     m = build_manifest(store["corpus"], "eic", [store["csv"]])
     assert m["genome"]["build"] == "GRCh38" and m["genome"]["fasta_sha256"] == "deadbeef"
+
+
+# ---------------------------------------------------------------------------------------------
+# §10 Phase 0 — the signal bigWig accession and its units
+# ---------------------------------------------------------------------------------------------
+
+
+def _provenance(path, records, declared="signal p-value"):
+    """`{bios: {assay: {...}}}` from `[(bios, assay, accession, output_type), …]`."""
+    tracks: dict = {}
+    for bios, assay, acc, ot in records:
+        tracks.setdefault(bios, {})[assay] = {
+            "signal_bigwig_accession": acc, "output_type": ot}
+    path.write_text(json.dumps(
+        {"corpus": "eic", "declared_output_type": declared, "tracks": tracks}), encoding="utf-8")
+    return path
+
+
+def test_the_bigwig_accession_and_its_units_land_on_every_pval_track(store):
+    """The gap §10 names: the bigWig behind the pval layer was recorded in no artifact at all."""
+    p = _provenance(store["tmp"] / "prov.json", [
+        ("T_SYNTH", "DNase-seq", "ENCFF000AAA", "signal p-value"),
+        ("T_SYNTH", "H3K4me3", "ENCFF000BBB", "signal p-value"),
+        ("T_SYNTH", "RNA-seq", "ENCFF000CCC", "signal p-value"),
+    ])
+    m = build_manifest(store["corpus"], "eic", [store["csv"]], signal_provenance=p)
+    assert m["signal"]["declared_output_type"] == "signal p-value"
+    tracks = {t["assay"]: t for t in m["biosamples"]["T_SYNTH"]["tracks"]}
+    assert tracks["H3K4me3"]["signal_bigwig_accession"] == "ENCFF000BBB"
+    assert tracks["H3K4me3"]["signal_output_type"] == "signal p-value"
+    # the control has no pval layer, so it claims no signal file rather than borrowing one
+    assert tracks["chipseq-control"]["signal_bigwig_accession"] is None
+    write_manifest(store["corpus"], m)
+    assert verify_store(store["corpus"]) == []
+
+
+def test_a_track_whose_output_type_is_not_the_declared_one_fails_the_build(store):
+    """The DNase defect, in miniature: 40 of EIC's 363 are `read-depth normalized signal`."""
+    p = _provenance(store["tmp"] / "prov.json", [
+        ("T_SYNTH", "DNase-seq", "ENCFF000AAA", "read-depth normalized signal"),
+        ("T_SYNTH", "H3K4me3", "ENCFF000BBB", "signal p-value"),
+        ("T_SYNTH", "RNA-seq", "ENCFF000CCC", "signal p-value"),
+    ])
+    with pytest.raises(StoreError, match="read-depth normalized signal"):
+        build_manifest(store["corpus"], "eic", [store["csv"]], signal_provenance=p)
+
+
+def test_no_strict_records_the_units_defect_and_verify_still_reports_it(store):
+    """--no-strict is for triage. It must not launder a units defect into a clean store."""
+    p = _provenance(store["tmp"] / "prov.json", [
+        ("T_SYNTH", "DNase-seq", "ENCFF000AAA", "read-depth normalized signal"),
+        ("T_SYNTH", "H3K4me3", "ENCFF000BBB", "signal p-value"),
+        ("T_SYNTH", "RNA-seq", "ENCFF000CCC", "signal p-value"),
+    ])
+    m = build_manifest(store["corpus"], "eic", [store["csv"]], signal_provenance=p, strict=False)
+    gaps = [g for g in m["metadata_gaps"] if g["field"] == "signal_output_type"]
+    assert len(gaps) == 1 and gaps[0]["track"] == "DNase-seq"
+    write_manifest(store["corpus"], m)
+    problems = verify_store(store["corpus"])
+    assert any("read-depth normalized signal" in x for x in problems)
+
+
+def test_a_pval_track_with_no_provenance_row_is_a_gap_not_a_guess(store):
+    """D19 — nothing is fabricated. An unknown accession is `null` plus a gap, never a default."""
+    p = _provenance(store["tmp"] / "prov.json", [
+        ("T_SYNTH", "H3K4me3", "ENCFF000BBB", "signal p-value"),
+    ])
+    m = build_manifest(store["corpus"], "eic", [store["csv"]], signal_provenance=p, strict=False)
+    tracks = {t["assay"]: t for t in m["biosamples"]["T_SYNTH"]["tracks"]}
+    assert tracks["DNase-seq"]["signal_bigwig_accession"] is None
+    assert any(g["field"] == "signal_bigwig_accession" and g["track"] == "DNase-seq"
+               for g in m["metadata_gaps"])
+
+
+def test_without_provenance_nothing_is_stamped_and_nothing_is_checked(store):
+    """The flag is opt-in: a corpus with no sweep behind it records `null`, not a false claim."""
+    m = build_manifest(store["corpus"], "eic", [store["csv"]])
+    assert m["signal"]["provenance"] is None
+    tracks = {t["assay"]: t for t in m["biosamples"]["T_SYNTH"]["tracks"]}
+    assert all(t["signal_output_type"] is None for t in tracks.values())
+    write_manifest(store["corpus"], m)
+    assert verify_store(store["corpus"]) == []
+
+
+def test_the_shipped_eic_provenance_table_is_the_sweep_section_10_recorded():
+    """`configs/signal_provenance.eic.json` — 316 ChIP + 7 ATAC p-value, 40 DNase not."""
+    from pathlib import Path
+
+    from candi.store.manifest import read_signal_provenance
+
+    p = Path(__file__).resolve().parents[1] / "configs" / "signal_provenance.eic.json"
+    table = read_signal_provenance(p)
+    assert len(table) == 363
+    by_type: dict = {}
+    for rec in table.values():
+        by_type[rec["output_type"]] = by_type.get(rec["output_type"], 0) + 1
+    assert by_type == {"signal p-value": 323, "read-depth normalized signal": 40}
+    dnase = [r for k, r in table.items() if k[1] == "DNase-seq"]
+    assert len(dnase) == 40
+    assert all(r["output_type"] == "read-depth normalized signal" for r in dnase)
+    assert all(r["assembly"] == "GRCh38" and r["status"] == "released" for r in table.values())

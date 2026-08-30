@@ -1,0 +1,4799 @@
+{
+ "corpus": "eic",
+ "declared_output_type": "signal p-value",
+ "generated_utc": "2026-08-30T04:22:21+00:00",
+ "sources": {
+  "download_plan": "fir:/project/def-maxwl/mforooz/EpiDenoise/data/download_plan_eic.json",
+  "portal": "https://www.encodeproject.org/search/?type=File&accession=\u2026&field=accession&field=output_type&field=assay_term_name&field=file_format&field=assembly&field=status&field=dataset&field=date_created&field=md5sum&field=biological_replicates",
+  "alias_evidence": "T_BMEC (store) and T_brain_microvascular_endothelial_cell (plan) carry the same bios accession ENCBS304AAA and the same BAM accessions ENCFF788MPI (DNase-seq) and ENCFF775JHL (H3K4me3); the store simply spells the cell type short."
+ },
+ "biosample_aliases": {
+  "T_BMEC": "T_brain_microvascular_endothelial_cell"
+ },
+ "summary": {
+  "ChIP-seq / signal p-value": 316,
+  "DNase-seq / read-depth normalized signal": 40,
+  "ATAC-seq / signal p-value": 7
+ },
+ "tracks": {
+  "B_BE2C": {
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF655VZB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "68f47aec1c245c584c8dd9553a87ab95",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF255GOP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "24d6ddc26605b679d998fd5d81cf5caa",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF475MYM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8ee6f4ba4d11bfbac0ffb024b48abc68",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF236EWM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f9bf8cb8c16a8c66f1a069a3121f623d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_BMEC": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF990TGH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9bb9c3d1f46539fce13c904e9de2a84d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF903FRD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d2eddca1be714245ae56f2ba3a71739a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF715QND",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f3fac622dbaa19a67bfec5b6929e9458",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_Caco-2": {
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF111ZPB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "02ea773aa7a1fbc923cf4eb9d058950a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF206MOP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "31607e888e4e5870f0c65ac6e326d94e",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_DND-41": {
+   "ATAC-seq": {
+    "signal_bigwig_accession": "ENCFF631KUG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ATAC-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "75c383bdc07616d3eb5734e63142ab7c",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   },
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF301FDB",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d2259e4326efdbf60e1976655a43505c",
+    "biological_replicates": [
+     2
+    ]
+   }
+  },
+  "B_HAP-1": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF412ZXR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e1c064f177e83769a7834d4d7048715d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF898ETI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "86a9b2167326b53f177ad38a85873611",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF071EYX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d6fbdee705025302452e2ad724675961",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF408MBW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "36e5eb1af5f10aa0b05fd9764e7cf5c1",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF507DOD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e33ed54006dd67b0c6b60ca90c235419",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF782DHX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "094c8c1c6f9027220089a2612f79e5ec",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_HL-60": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF871KQO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1ae6efb5fa4f67b226e29bf5106a7acb",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF630ZSO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "39b23135ad04ae9392d66de7aa40c827",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_MG63": {
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF153STK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "40691fd43907a6d8314a2eebbd3892b4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF619WTL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9b11e45c468a8e4d0de7614146592d47",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF307ZKD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7e74a25a4f3ae673f1490ba7ae406d4c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF608KYZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "83bbb8cd091338cb55da87c9068db311",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_NCI-H929": {
+   "ATAC-seq": {
+    "signal_bigwig_accession": "ENCFF571JLT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ATAC-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c07978b72474e366358bbc9eab2ce258",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   },
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF468HER",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "575592811813d5453d1280cb83e0a5d1",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF612UYR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "82a6e0510043f2c536ba0c7722d4bdfe",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF426TFY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "08f2630ed5ecdf362faf904f30e9e819",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_RWPE2": {
+   "ATAC-seq": {
+    "signal_bigwig_accession": "ENCFF881UWW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ATAC-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1bfc32fd105fe48c188e922ff37a1b63",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   },
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF687TRP",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8d7c0e796df0e22384130316e04e8b4a",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF423IBQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "868cf49dc4928dc28cd24f95e68eeca0",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF761TNP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5fbd436c23b6faa9dbcf6c1f399fe84e",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF344NAT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "639489d269d5ba0a9a5b4073ac52a0a4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF184UXF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e3a06d1e8de687c129f2bcb83c2a0a55",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF883HHA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d0da4b65fb96f3e7e987308732c05f73",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_SJCRH30": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF123OSW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e261dea68a56fc44ae6d7b126d1a6ffe",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF616CFL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0b5c8a7363aaffc617aa062322d43382",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF114ZTD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b7cc6922a1855ecfc8ed46e32662f4d6",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF342SYD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f1d8f280c5717449a330008bcfd983ec",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF530BOQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "3df8cbc292e575818b1eb4af6f4f8e04",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF927GPS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "15fb5d7c42c74379589f5889df8338d1",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_SJSA1": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF005KFY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4b96e4aa90c8c07cd438358723e0516e",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF548QPW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "82b3641098095b118df52b3bb8981119",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF532OYN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0fa5541de757cb73a0bb61b6bcae54e6",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF574PIN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b5ff8effe9a658710b70dcf433e2d9d0",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF596HJB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "57d6e4f67e703aed6ec8840fcb13a786",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF059AXW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bcbfbb88a209bc26cb931bf759d68af6",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "B_WERI-Rb-1": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF877WWU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6aa0511b099f0de3387b5331e64342c3",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF538RNC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a415f8b0f173fbe53c5afbc40e699a9c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF769ZAK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "36bbbd2951aa371ea4ffd09cb640e7d9",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF460VPP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8336ea124dd90b8172b2266a29a52485",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF704QHU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "49b9407e15defbc76cb1bf892471f479",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_BE2C": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF579OJG",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "456d4a1d13a6582761ad781a1102ff69",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF772IBT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "128a98009d8fd7c1fcc8051d5900a4eb",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_BMEC": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF018WSO",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c0a98a1e0f30d59ee6caad47407e155a",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF719JKO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b744e6349978d0f31e7d9c552b5fc926",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_CD4-positive_alpha-beta_memory_T_cell": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF884NBE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7717cf4da89af0a2c7cea56316908b46",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF597EXJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "316232a1a67eead520140ea7fe40bd5d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF936ALJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bd9e3a0f2fa4c01f6ecebf3ddede2986",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF803SUD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4ced91063120e2f2ac89030a6f639a28",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF328DFT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7708c756fba2deb87032ad59754f1ce9",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_Caco-2": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF472DRE",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f86d24cd280dfb2e7ee16c24a8f8c469",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF376XYC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1f132b328291433eee5efc86947288dc",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF693MPJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d118aeb6b26769ee689d322d28502177",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF086CVA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4f8db2b8428e184ac86a54365ffc8963",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_DND-41": {
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF848RJU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4b31090b688fc87cea61141e1577a5cb",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF856PLM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "517274afeb8a964c6a50f88bae967444",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF906BOA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "fc59d12060738b45b5f2552777c512ad",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF738JXM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bf32e2423917194dac423c8a59baf5c6",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF937SCV",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "83109b7154db325fbf01fc5c2c83a969",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF322IYZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "82d8e38b349d654acc31574ac7501a4a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF873VZC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "dd1e603c7a912a9e8198124016f26c80",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF417ESF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "10da53e0d1e54faf68d41b95f61a233b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF122DVA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f7f355a920c5b3392d94123f7b628dc4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_ES-I3": {
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF404LEL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9181d2e8870383252fe9ac34d6143bcd",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF027RHW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e274e142459dd147dd17243bcc2e53d3",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF720YHG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5b1139e3e1b59f03602d52a308bdfc03",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF445HJN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "18a768ceee2a0c103661e3f08f34b1df",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_G401": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF364UAO",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4f3818b382b6240530f9d7e0bb9cfa85",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_GM06990": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF691MRD",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "61085a0fee70e2b7c188255f29b41afd",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF040XXG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "dde981f1e212e230156593dd6b5cbad1",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF659HNT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9316b73a8d387450304878de84419cdc",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_H1-hESC": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF232GUZ",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9f1ff7a0afd481cee30cedf380e830d9",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF519VGB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2c3d78cb2fbd996c34a34a8fd841e6f3",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2BK120ac": {
+    "signal_bigwig_accession": "ENCFF664PDL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2c9edc141dfe73548e998b1ae5f923af",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK12ac": {
+    "signal_bigwig_accession": "ENCFF111JQJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f0d469cc9e15663bf65c3c775fe8e54a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK15ac": {
+    "signal_bigwig_accession": "ENCFF276YTK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ccb5aefba7e9d51f32ed26875f645681",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK20ac": {
+    "signal_bigwig_accession": "ENCFF548DAY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ecf79218335407592a5b06df1de15ca3",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK5ac": {
+    "signal_bigwig_accession": "ENCFF179DYB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "72f6c1d2ae6b73108e7a99e81788338c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K18ac": {
+    "signal_bigwig_accession": "ENCFF339DXG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d34d7cefa40e41f21ae06bc56b5224c3",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K23me2": {
+    "signal_bigwig_accession": "ENCFF490YFM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5445d0423713be779b2816b7fe65c5ac",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF103PND",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2565a783847eae21b95bd90d416c9f2d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF395GVR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8d897cf56d83ca951ad2a0389664cd91",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF734GAZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "54280c88ed81fa2f3af41c390565cb30",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF706CHK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "66282afc2d7ec3a45568e79914975cd0",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF649WBU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7f2ab6b1aca56b0402487dea2ca7b7c4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF698DKQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c28ea6e87e4e13b46a80224d61d660e6",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K56ac": {
+    "signal_bigwig_accession": "ENCFF782SYZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a6c837e44d57c04edd4c0bbcf8a62348",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me1": {
+    "signal_bigwig_accession": "ENCFF940RZG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9b3d1f61a3eae0e5d8f737821371ec04",
+    "biological_replicates": [
+     1,
+     3
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF868TLW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "14b417f5cb978156bf6cbf1c4df32098",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF225ZYN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8b5fea8c49822af2d22c3fbe4a2c5410",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K5ac": {
+    "signal_bigwig_accession": "ENCFF648KXC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7fdac90bc687576be33fabd201dc0d45",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K8ac": {
+    "signal_bigwig_accession": "ENCFF816CJJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8f1686a03dd98670080fed893e45f15a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K91ac": {
+    "signal_bigwig_accession": "ENCFF497QPQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "deb198382d6b762075de0062c8bcf1c9",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_H9": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF405MMH",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b1de4cc7ee89e25d7b530c8a21eecc83",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF360BPO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5c009569ece851bf87fa288f0b6f3d11",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K14ac": {
+    "signal_bigwig_accession": "ENCFF505KQH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "fe0c5138d8a1df40477128c0c8f6ace4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K18ac": {
+    "signal_bigwig_accession": "ENCFF134YSG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e98d319f0f2bcef4622aa07e75267f9f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K23me2": {
+    "signal_bigwig_accession": "ENCFF989FRA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "126ab43a6767a739e39cef75dc5ed8a7",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF223OYF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "51628c09e814e6a3ddc43fb2a2225f68",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF231DDC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "06af621586281961ed031038d466559f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF189TNV",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f115d11b8d2771ebe22694d58ca836d3",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4ac": {
+    "signal_bigwig_accession": "ENCFF921UBQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0253a651eab318435c0dba9ff4ac6f2e",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF107VFB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "79fdf133af7a643915b0661b7d51955b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF995SME",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6a4b3183cf5b1af699d2b179459f18f6",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K56ac": {
+    "signal_bigwig_accession": "ENCFF658RDX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f524dcff41fe73279ff9fb3bec94cf79",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me1": {
+    "signal_bigwig_accession": "ENCFF743QDE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "48735a869abff3f0733c7724648ba809",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF296RPG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f8b966f7c4115ffc563f7059ca33d69b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF143IEH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5e302bedcf0658ada444200363ad3212",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3T11ph": {
+    "signal_bigwig_accession": "ENCFF124KLT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "af18bd96d74b85071cec9497aa005b21",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H4K5ac": {
+    "signal_bigwig_accession": "ENCFF824EPH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0741b0b17d9f1d18347883a8418ec0d5",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K8ac": {
+    "signal_bigwig_accession": "ENCFF504TGP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c8d287983927d1c9974227e305c0779c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_HAP-1": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF314TDG",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8ba3fb8443befdbc4eb4b881a067af01",
+    "biological_replicates": [
+     2
+    ]
+   }
+  },
+  "T_HL-60": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF627AZY",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a50e84c2f8183dd34ade242f309d9269",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF444RAO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bb43dc7bc62d18da59f6868e66371b05",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_IMR-90": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF971HXR",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ec4e2fbb98d4e167241d5d30e62a790d",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2AK5ac": {
+    "signal_bigwig_accession": "ENCFF443FLN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "aee7095367c380e6e5759ea0f1771136",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2AK9ac": {
+    "signal_bigwig_accession": "ENCFF625ZJC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8549a2c427f0269d060c1383121dc7d4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK120ac": {
+    "signal_bigwig_accession": "ENCFF577LCU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "18b0efcaac9dab7f38783e56914c255a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK15ac": {
+    "signal_bigwig_accession": "ENCFF828SKT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7df5765362a2ce13f431a2eebe3fa8fc",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   },
+   "H2BK20ac": {
+    "signal_bigwig_accession": "ENCFF217JTN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "cf11ee3f3187c4b47f51e0474b09baf6",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK5ac": {
+    "signal_bigwig_accession": "ENCFF513DXL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4d950f788ccf972609159415dfb3570d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K14ac": {
+    "signal_bigwig_accession": "ENCFF361LHT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "cd4eb28f6ab218747014cafbaadd52bb",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K18ac": {
+    "signal_bigwig_accession": "ENCFF572ALP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "86caa4bb065b5ba167e76afd4952b937",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K23ac": {
+    "signal_bigwig_accession": "ENCFF873YOP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "479a09ab50a40c2b760a52b5bc865959",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF222IQN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "39877f86744dc6c17fd1d29687cf8d1f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF045HZZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f44493a2f75b97d28a5f13d695d0ea9c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF314QXF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8bace11d91d65cea3dec44871d4fb8f7",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4ac": {
+    "signal_bigwig_accession": "ENCFF411RET",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "795c9eed2046c077e1dc9513d29df42a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF148PNW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "610d2286df1055206e1244b00cbbadb8",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF400CAD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "293618cee74892b9445d021b7d9e41f0",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF518GFI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "153aee7353856c363cc790469d8a3111",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K56ac": {
+    "signal_bigwig_accession": "ENCFF350ATK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7c0bf6e8075bfd5ed5ea01dc86793b32",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me1": {
+    "signal_bigwig_accession": "ENCFF049TRD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "df17219ebe5b6000ad1a156aa96b5279",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF961CWW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5f08e8e2c9b79855a4f4227e49cef8af",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me1": {
+    "signal_bigwig_accession": "ENCFF164FXG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8b6ec609eef8d7a7edd8032e2351fc20",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF733CJA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "132d7cfe1959943872dace25de372c41",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K20me1": {
+    "signal_bigwig_accession": "ENCFF398QPY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1591fa07d8e596d38a582ce69192c499",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K5ac": {
+    "signal_bigwig_accession": "ENCFF524BQQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c131bd06ee6b8040a021597d39bb6837",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K91ac": {
+    "signal_bigwig_accession": "ENCFF335IHO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "fb9a9b2ceed044348e323c29b5c75a45",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_K562": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF972GVB",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1b0432087f9087c0a9e4f0f5a9d08deb",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF202EVH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9a8216ae1fd1ae06ecd0a02fed8ced3b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF465GBD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9346587b9a23a2953b6ab49103e6c112",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF633OZC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4a8dbdc31024795ed8a6f53fba306609",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF287LBI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "28df1a757a2e5517209c10d57f0ce03e",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF054RSU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5a9a282c89fc45d7a729dcc8e7c71c10",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF405ZDL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "eeddd4f2f60f952e3056d0c1bd39c73f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF178QDA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "16bace7252adafc836204f6fce4016ba",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me1": {
+    "signal_bigwig_accession": "ENCFF220RGS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d2b9936c13d8631f7a38d6e8329635bb",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF632NQA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c695b7694f6c8b02e8bf13c871c387cf",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K20me1": {
+    "signal_bigwig_accession": "ENCFF694ODT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "197b9c35ecc18077888bf97780ec6f4b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_KMS-11": {
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF768NKN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a3cc482ec6fbe57636cc17a4c73f4ed8",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF920RKX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "900a0a7468763974fe710263dbd16871",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF386YQT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "020defc17ecdf655fca535be4356ea27",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF237JCO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f9265f3f469be2a03204cb45c5bb69cc",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF300VUR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b8fc892c2f4f1496ac5b2daa53f84a3e",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF919OYN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a3114e39c8532bc60c42b72bede1f463",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF007PDL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "610d89084c5323ac765a3fc99b8cab5c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K20me1": {
+    "signal_bigwig_accession": "ENCFF549QMQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c7a5a5659e762d0714377540821cf943",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_MG63": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF344LQD",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c143ac5b92628e520802fa9f8b2d68e6",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_NCI-H460": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF227KZN",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8be95f3b2d62791e37f6ed311a80fc6a",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_NCI-H929": {
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF665FSX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "3e46f26fe897b4bffa2f2ce37617efcc",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3F3A": {
+    "signal_bigwig_accession": "ENCFF418HSP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "24d97a8ed618c6d84db96d381920c322",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF863VMA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f4b91b72b2c1543470f2e4b114b70c0d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF289DWP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "cdd646545545a49b887f85f0cde3055a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF811HOL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2293b86a7df2e9603fc9306017824fef",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF754JLX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7f22158445ae0566be9b43862ff8d8e8",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF795GES",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7bcb06e58a6d353b56abb4bd537de926",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_OCI-LY7": {
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF460QTP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c1818627abb0288ecab9c0e37ce9d95f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF454CCX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e01843a937fd420e50dbe12b27bd3ac7",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF152FUE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d4ca80c78e2fb3ded1792c1e58512210",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF028IIS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9a98ca240cc6f37ee80dbaff18efc681",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF592CQJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b53e8e7a13d79804e2e31809240d5c60",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF855COE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1e90cbefa980f6cc6d3449afa18c00ec",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF487XPV",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "933783e6321c05b2d4b5f225f0815e6d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me2": {
+    "signal_bigwig_accession": "ENCFF199ZRL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "576ec237717a52e8b7de339ce3782c34",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF183CGU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7f1515c614596a5122539ea82c234856",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_RWPE2": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF376FOP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ec161ef5fb7f0de7d9c56f545a873d94",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_SJCRH30": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF110QOO",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "aa22b417098c97e072ec883b9c31de17",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_SJSA1": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF443TYV",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "51b305d14149da046f203f7121a5b0d3",
+    "biological_replicates": [
+     2
+    ]
+   }
+  },
+  "T_SK-MEL-5": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF627WEJ",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a7acf4e77058fca058ad713b9c5a74a4",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_T47D": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF085GPE",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9b984448207c4f59cd387fdaec4b8fe6",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_WERI-Rb-1": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF667GPM",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "451f7ee45d00e6dd4cf113261a95f6dc",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF437YLQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "85d32ccd1d55dedccb632af31890c4fc",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_adipose_tissue": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF824VRM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "09a852f3d7489c4b2f70e6fc39c7dea7",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_adrenal_gland": {
+   "ATAC-seq": {
+    "signal_bigwig_accession": "ENCFF264BDI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ATAC-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "54abab39058fc9dbe61b5a2c5db549a8",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF231WCT",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "25dcb1b99087b1f3ecc6d4777ee3d268",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF292ERX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6f4539149e5cb7c21a85529c8db490a7",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF580EXN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b4c72d71a9d71b7b18b608bb4285ba8a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF016WYI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "503812d101a334cff746c2c8343f6dc9",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF973FEF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "64174e18abde81f214592e9d944d8ae4",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_adrenal_gland_embryonic": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF798RPA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7bd1e8bd300e288cb6ada6c98a89b1be",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF250RPU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e5b3a65ae44afa9ee569fb1fde0f23a2",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF877CDU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d9873cf88e50d2cf7d5c4ebea34b849c",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF505EAK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2de04b3fb278ac33be70bb06b8f6d337",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF577BED",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "53c351333de6285b9bdadf987afc9efb",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF483VNV",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4844e5283d44bdb162b392537d8c0894",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_amnion": {
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF091UEE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d600fcb339d30fbbf4fe89ebec68ff94",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF242GTB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "74823ea633eebb2b4f6441f3b54c33d0",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF099KAJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b9a859dfb40db19123545dd2d27e6641",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF793PHT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c1aea4a1d9d9a18449f6e370f72c0cac",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF114KOS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c2a9547da789f20566025595983cf422",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_cardiac_fibroblast": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF258OVM",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "905f35650f13e9cf64347bf5c78abdf5",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF740ETU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ca7f4b7000988cb0f57386d0b8844c10",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_chorion": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF740CCS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "35217c9ede0db19c4b7ef6c697002857",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF183LBD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6f49830043d20a865d21d228863992d0",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF226WOL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a570e45bc21aa9fdcf74d14f623072d6",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF462NKZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "96a7c1719602445a200b44f485b865ce",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_dermis_microvascular_lymphatic_vessel_endothelial_cell": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF871HUQ",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "13d6565f3f1e203c2f70fe121da07074",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_endocrine_pancreas": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF184AJS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "95778be0e8fe914662392983c89475ed",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF170FAU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "56cc5ed8209a3f003d1a273098ea770e",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF279WFR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bfc22eee2467c4bfe7d164d377570207",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF619XBH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4c755fab770b13f44dbe54dafe084ed5",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF506FGU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ae3c861cc4fb828e677d742acbcb5d92",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF135GFP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "86cd762090442a6746a0526e05e49f93",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_heart_left_ventricle": {
+   "ATAC-seq": {
+    "signal_bigwig_accession": "ENCFF073QRI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ATAC-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6588aafc729870eea9cdbfe3f6afe86f",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF417JSF",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e46a981b34b0d47224ed192e940431e7",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF929IHB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a7581d22420e2edbcc612b29504490e4",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF475TEQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "086bf3a66544bc9c0b1fb1f513c28804",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF282XIN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8f02041d2771a14d64a41d09d3d57944",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF756WZY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ae7dcb6d88673a589de183b036e1aad8",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF358VCH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d3768bc408321596dc1de9d35605558e",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_hematopoietic_multipotent_progenitor_cell": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF567PRD",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b589ce939cd477140f3a708a8cc25c87",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_lower_leg_skin": {
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF894ILW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "66ab3b6502519be44c7a1206b513f081",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_mesenchymal_stem_cell": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF387STL",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "090dc269390c50752763ed8b5251d44d",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2AK5ac": {
+    "signal_bigwig_accession": "ENCFF720PYW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bada7eb16134d511d635aaa9ca525efd",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK120ac": {
+    "signal_bigwig_accession": "ENCFF846PVA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "afe28258a69955555ebba8ba0b6b3049",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2BK12ac": {
+    "signal_bigwig_accession": "ENCFF805THH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8ddb5b6dcb483e70315e47cbbefe3f04",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2BK15ac": {
+    "signal_bigwig_accession": "ENCFF150NUD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "713448bac430a2ffcf8e56027006339e",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2BK5ac": {
+    "signal_bigwig_accession": "ENCFF713BNJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b8b2a845c1009df09953df3aba4b0e2b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K14ac": {
+    "signal_bigwig_accession": "ENCFF987THO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8ceb0cd666ce74772c3aa33a2fedaff2",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K23ac": {
+    "signal_bigwig_accession": "ENCFF803CNI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "35c05f2ace968f8e4d4b8ac9c1fc800f",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF800CQD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f1c49eb4c15cf35e173632ef27f5369b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF519EFD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a09a2a246493f5f4d4591ca16c8ad0b8",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF403XCA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "45481c08001159faf52bf31497411819",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4ac": {
+    "signal_bigwig_accession": "ENCFF297UVM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4047559f5f5768f4c40480a105ac0446",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF225HZV",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a9255b34cc941762f7785a881dd5a9bc",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF012IME",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5426ef10a036d4af9fd2ca8d7fa1e2b8",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF540NAQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "3ea934534471e7a88c0ff69f85e0c98f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF562YON",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ec2e0e9b992229c63fbcfbe38b51d5f3",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K8ac": {
+    "signal_bigwig_accession": "ENCFF740LIZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2e3c766366697ee25cb43b946f16306f",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H4K91ac": {
+    "signal_bigwig_accession": "ENCFF651WCX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ec7d52610ddc93c9a69b776b02f5ef89",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_myoepithelial_cell_of_mammary_gland": {
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF791QOZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "732c13b76a00d67cf419afa54da4cfdd",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF114ITZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e107db699ba1ebf184b0795888945216",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF616XRO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "aadd59aeef4f8d3d84ce63bbb2b83b4a",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF748JUR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b8fdb660270b038b2983316ca7cdc7e5",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF748HUW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7073263b3a0c259cc05a350f42264626",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_neural_stem_progenitor_cell": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF287XRW",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e749b16651f96810c67f7797c0253771",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2AK5ac": {
+    "signal_bigwig_accession": "ENCFF832VED",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ceb6a068148cb564e431f415b9129be0",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK120ac": {
+    "signal_bigwig_accession": "ENCFF950RAD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ce0162c9349e9b971ee1b88bc7c58e7d",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK12ac": {
+    "signal_bigwig_accession": "ENCFF569QVE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e0d77dee1d4c2fd08bfac0840c5360aa",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2BK5ac": {
+    "signal_bigwig_accession": "ENCFF996YGT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5536d293d6f1a6458944c585a1ef7d6f",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K18ac": {
+    "signal_bigwig_accession": "ENCFF391XQM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "829fcb33384ce8b516ed75f040772c12",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K23ac": {
+    "signal_bigwig_accession": "ENCFF380FEI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "107f46e276fe379656553777e398137a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF362MEV",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "3d68a08a0f60f786293916eb895fa239",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF245CBZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0e496827f35f7519b8b69d0f41cb8c45",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF247LVC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5e616e89cc23d0098aa02575e5aa7526",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4ac": {
+    "signal_bigwig_accession": "ENCFF187MMM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c483a75ec169d4ad8eeb26f25fd9c647",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF084LJK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "24f7cd4453d9c4dba3e1f39523f82ab8",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF017EZJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "3ba941d2577b6394c2e940a56ebbab0c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me1": {
+    "signal_bigwig_accession": "ENCFF352KAK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d28a793f3d8c16661b41b2e057299a32",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF444TGS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9309467f8ad29029400fee7efe409bb5",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF341YBW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0fadd356895329944c186de43920ac32",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   },
+   "H4K8ac": {
+    "signal_bigwig_accession": "ENCFF540VIA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6aea09a463c7f0071a027ff158013daf",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H4K91ac": {
+    "signal_bigwig_accession": "ENCFF277PLB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7323f5621c134246c2be929f34afda7b",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_occipital_lobe": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF935KGD",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9afe8b96697a24624438b01c8f73450d",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_omental_fat_pad": {
+   "ATAC-seq": {
+    "signal_bigwig_accession": "ENCFF403DWZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ATAC-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c67807206af7b924cd133de57cb34879",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF606INL",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "df3ccb9ddd4a82b943c5156494bab0bb",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_peripheral_blood_mononuclear_cell": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF391QSF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "dbd7d991b6664717a7d88e6562f0734e",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF093GGJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "4a9392a54fa3ef942ff0161b3dadccc4",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF721MJJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "25b66742b242fce22fb5c43371de57af",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF158KYG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7822455a4bcf3ce6db93af9ef6bcffda",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF328FUJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "3dd12826d65434c51e99013ac8094594",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF560BSI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a4fe2fc4819a4a501f2cbbbd91b2078d",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_prostate": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF769IGG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "10120bc4ebc08600ad39b662b22d76d3",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF300OWT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2ae2808d25b55cdc54348c502151ea78",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_skin_fibroblast": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF779UTQ",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6fbc44fbe8bc31e9bed57a79a88506cb",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_skin_of_body": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF530QBT",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "319b8a980b23961e105b701d05d6aacb",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_testis": {
+   "ATAC-seq": {
+    "signal_bigwig_accession": "ENCFF690FVX",
+    "output_type": "signal p-value",
+    "assay_term_name": "ATAC-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "28c193e1c10dd38c890520fcca7d7b53",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF428COP",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2e4843d3f9afe80dcf3c5f2b08cdd1e4",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF256XIR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "43663dc70507b65d3056cf051a66c596",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_trophoblast_cell": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF843JKM",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bc0286f3a37210608d8238dd127b8967",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF231TXD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a0ad518622de95aea9c53261bbfa6d29",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2AK5ac": {
+    "signal_bigwig_accession": "ENCFF742MTL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bd85ff9e02f622a732a51d752f8b3466",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK120ac": {
+    "signal_bigwig_accession": "ENCFF615BYJ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2e99d02b7d82f7af8f8aa108b28b0188",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK12ac": {
+    "signal_bigwig_accession": "ENCFF312WJU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b98a6fcb33692b5e6ade57f7d2437d21",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K14ac": {
+    "signal_bigwig_accession": "ENCFF500SQQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "75e902139513b5465f5d93cafca024ca",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K18ac": {
+    "signal_bigwig_accession": "ENCFF009VCO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "800f9de77da07d76eaf872102ccb0c61",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF020JKO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ca050336d0d37077f6d0f6b1f003bc07",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF090DQD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "28a0e1b77a9fd1bc8961ff56ecc40a29",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4ac": {
+    "signal_bigwig_accession": "ENCFF754ZSZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "421a0b36f39917a37ddb81e8b34047f5",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF856LAF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "cf4d9dcb0079da997538fc9de5d5cedb",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF137EUG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "049a53cadd2007f4bdf3bb70f084f863",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me1": {
+    "signal_bigwig_accession": "ENCFF057CJH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "82cb3b7a8725cf80c6559e5f24ed594d",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF085BMC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ea80b3471a34e907910285b5ebcd6aaf",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF025UFC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2bbe99f47ac5ee0f5bd4e30ca7410154",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF924FZA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e3aebbf413a217386e38c11e84d0b0f9",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K12ac": {
+    "signal_bigwig_accession": "ENCFF583NJY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b0f6e5ae6f2f29734b6559298b80a7e7",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K8ac": {
+    "signal_bigwig_accession": "ENCFF219KUK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "ba858e407a4e22aa148d9f28a27ab680",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_upper_lobe_of_left_lung": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF831NQC",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8b920e283d8affbafd74afaadd95b344",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF333RHP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6f846aa5f5bd96fd81c108b07f4f4b8b",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF466ADC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b1043b8a026eb8cfda5f2a639a14c62e",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_urinary_bladder": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF284ARV",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "66258e95a9db61e566a40195c28db37d",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF539VSU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "033f4411338a68cee8e24b0bb3fd0f5e",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF828JSQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "abd6e54465974872033348751c880903",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "T_uterus": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF609VNS",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "59d087c46224c9f6ed67e0c91b91e4e5",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF428HWZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "20783d270cd893bd22c2cfcb030568c4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "T_vagina": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF687QEB",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a3e3d4a8325234dffb6cf5f5224d271c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF523DCO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "584f0cef1c3852eb2aaa9a13a3aeeb34",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_CD4-positive_alpha-beta_memory_T_cell": {
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF695UHG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "b26c85aa282bb8519912e399c2d62802",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_DND-41": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF216MMZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a6fe155b26f79deef4cb7c73865bac32",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K20me1": {
+    "signal_bigwig_accession": "ENCFF427ZFR",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "2145ac349a3150c269a5622c2f44007b",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_GM06990": {
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF610NWE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "12e1481baed7566b2b24ca4b1867309e",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_H1-hESC": {
+   "H2AK5ac": {
+    "signal_bigwig_accession": "ENCFF771GJE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "fdcba9a1daf5d9c1d853ec9cadb1276f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4ac": {
+    "signal_bigwig_accession": "ENCFF382QFM",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "79f77d89dd95c63c768b357693c55dc9",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF385ZBQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0d81397c1b312cbf52b0219304a29098",
+    "biological_replicates": [
+     1,
+     3
+    ]
+   },
+   "H4K20me1": {
+    "signal_bigwig_accession": "ENCFF832YWP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "eaccb3c41c83bc51d433195eb2ff5840",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_H9": {
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF822YAQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "e21b1169e94e4ae7c2153456c338de0a",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF993RJV",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "110e3ea78b62988de841d0f227066afb",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_IMR-90": {
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF987LAC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c46ab009ab4e224aabb3103c273628b9",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H2BK12ac": {
+    "signal_bigwig_accession": "ENCFF213VCW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0dd0bc0cc6898a54ba90858a6895d3b8",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF682HNO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f009dbe8773df2b0fe83dbaf3261fa9f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K8ac": {
+    "signal_bigwig_accession": "ENCFF614CMT",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "cee1df3ea39d44d0b74860959aa49cd0",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_K562": {
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF847BFA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5afea5675fa090dad11c5a5ed9568ce4",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF334HSS",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7f0d8f7287f845f0593eb5cb234d1973",
+    "biological_replicates": [
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  "V_KMS-11": {
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF733UOW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "17843d25fc74f8afcf3956b096e9d955",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF258MHA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "f2f2e70206b29fb0010d9b432ae82352",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_NCI-H929": {
+   "H3K79me2": {
+    "signal_bigwig_accession": "ENCFF387QWN",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "9899134292ffafe43bfb988567d2c5b5",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_OCI-LY7": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF739TLM",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5b3102fe37380e8d78b0374b6cb56a43",
+    "biological_replicates": [
+     2
+    ]
+   },
+   "H4K20me1": {
+    "signal_bigwig_accession": "ENCFF867IFW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "55c68e7a762346a4bbf3b1d7d57a0f84",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_adrenal_gland": {
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF389SDP",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "0439c3331f578791e3f86690c447d6c1",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_adrenal_gland_embryonic": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF967PSY",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "69d404070cbdf356d447361295283b59",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_amnion": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF923UXA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "eb5eeec5cec0fea440ca21056877e729",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_chorion": {
+   "H3K27me3": {
+    "signal_bigwig_accession": "ENCFF788UUK",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "32e970fd55d597476dd552ebc97ea1da",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_endocrine_pancreas": {
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF622NVF",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d50fa2024f6f2ed168379491696792c3",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_heart_left_ventricle": {
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF096UTA",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a9630e41b1714217079e4c80fa03c66d",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_mesenchymal_stem_cell": {
+   "H2AFZ": {
+    "signal_bigwig_accession": "ENCFF974WUO",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1cb65487765114fbbd30427359407b66",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K18ac": {
+    "signal_bigwig_accession": "ENCFF463PAH",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6ed7be242453de843b9f264b60c31fea",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K79me1": {
+    "signal_bigwig_accession": "ENCFF442TXW",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5b581bc0dd3a396ae2d2df415b3d5f43",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K9ac": {
+    "signal_bigwig_accession": "ENCFF086MBQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "192a8b65282aafce894d6187903038ad",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_myoepithelial_cell_of_mammary_gland": {
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF256FOZ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "a76743c581c78928a21604d984fd6431",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_neural_stem_progenitor_cell": {
+   "H2BK15ac": {
+    "signal_bigwig_accession": "ENCFF835FCQ",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "be2e0eb706e5dc202a162f36d1647a71",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K14ac": {
+    "signal_bigwig_accession": "ENCFF916QOI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "975e1761dd61a89af076c8b6c9929c91",
+    "biological_replicates": [
+     1
+    ]
+   },
+   "H3K4me1": {
+    "signal_bigwig_accession": "ENCFF916QYU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "7a93b55b087a568473edf1695b96107f",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_peripheral_blood_mononuclear_cell": {
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF744MKI",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d222dd6ad61e313eba6e8a186b1a46ab",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_prostate": {
+   "H3K9me3": {
+    "signal_bigwig_accession": "ENCFF726YZU",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "1b60fbef60c0cbdb434c9dc023a8736c",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   }
+  },
+  "V_testis": {
+   "H3K4me3": {
+    "signal_bigwig_accession": "ENCFF230ORC",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "8593860f6b10e955ce3bd8c504d157fc",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_trophoblast_cell": {
+   "H2BK5ac": {
+    "signal_bigwig_accession": "ENCFF100UUG",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "d9ca04a1f5351da97876a3f57d72a698",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF294NKY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "6e2f1b5c1299673c008051b0ac4294a5",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H3K4me2": {
+    "signal_bigwig_accession": "ENCFF178OJL",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "75ab690b6906f6e2b94a201f6397d4a7",
+    "biological_replicates": [
+     1,
+     2
+    ]
+   },
+   "H4K91ac": {
+    "signal_bigwig_accession": "ENCFF688ZPD",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "c2889d6a74b301e91e006ed905d8895d",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_upper_lobe_of_left_lung": {
+   "H3K36me3": {
+    "signal_bigwig_accession": "ENCFF084YHY",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "bfa5ab8f81a774d2a7c717f37128410b",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_urinary_bladder": {
+   "H3K27ac": {
+    "signal_bigwig_accession": "ENCFF263ZQE",
+    "output_type": "signal p-value",
+    "assay_term_name": "ChIP-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "5aedb6039484f1ed337a664efdb29a0c",
+    "biological_replicates": [
+     1
+    ]
+   }
+  },
+  "V_vagina": {
+   "DNase-seq": {
+    "signal_bigwig_accession": "ENCFF547JQK",
+    "output_type": "read-depth normalized signal",
+    "assay_term_name": "DNase-seq",
+    "file_format": "bigWig",
+    "assembly": "GRCh38",
+    "status": "released",
+    "md5sum": "07f69d9a1b60b57a45183da97ff8ce5a",
+    "biological_replicates": [
+     1
+    ]
+   }
+  }
+ }
+}

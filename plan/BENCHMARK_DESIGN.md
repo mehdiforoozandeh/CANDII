@@ -224,17 +224,29 @@ cell has and the input cell does not*, while the challenge's blind set is a hand
 disjointness makes those two definitions the same set by construction, so the computed panel is the
 challenge's panel and no reconciliation is needed. Re-check this if the store is ever rebuilt.
 
-> **OPEN, found 2026-08-29 — the line citation above was wrong, and the rule at the real line does
-> not read the way this paragraph describes.** `harness.py:540` is inside `StoreSource.counts_at_dsf`.
-> The store's actual panel rule is `StoreSource.targets` at **486-488**, and it returns
-> `[a for a in range(len(self.assays)) if bool(avail[a])]` — *the assays the input biosample has* —
-> ignoring `kind` entirely. The h5 path at `H5Source.targets:316-322` is the one that implements
-> "the truth cell has it and the input cell does not". The panel **counts** are right: G3 confirmed
-> the store's availability yields exactly 26 `V_` → 45 tracks and 12 `B_` → 51. Under disjointness
-> the two rules can coincide, which would explain it. But this paragraph currently cites code that
-> does not say what the paragraph says, and that has to be settled — with the pair direction read
-> off `tools/declare_eval_pairs.py` — **before anything is scored**, because if the store path is
-> scoring assays the input already holds, it is denoising and not imputing. Owned by `t80`.
+> **SETTLED 2026-08-29 — the code is right, this paragraph is the bug; but it exposed a real
+> problem, below.** The store path scores **imputation**, not denoising. There is no declared pair
+> direction on it at all: no shipped config carries `eval_pairs`, `tools/declare_eval_pairs.py`
+> (cited in §14) does not exist, and `StoreSource.pairs` at `harness.py:483-484` is a hardcoded
+> `[Pair(b, b) for b in self.ds.biosample_pool]` — **self-paired on the eval cell**. Because a `V_`
+> or `B_` cell holds *only* blind assays, "the assays the input has" is the blind panel, so the two
+> rules coincide. Checked on the real store: pair `V_DND-41→V_DND-41` returns `H3K27ac, H4K20me1`,
+> exactly what `V_DND-41` holds, sharing nothing with `T_DND-41`'s nine. The target is masked per
+> forward pass (`stream_tracks:653-657` applies `_apply_loo_mask`; `decode_groups` forces one assay
+> per pass), so `targets` ignoring `kind` is correct — masking separates impute from denoise, not
+> the panel. The rule sentence above describes `H5Source.targets:316-322`; the store's rule is
+> "the eval biosample is the truth cell, and the panel is every assay it holds."
+>
+> **The real problem it exposed — OPEN, and it blocks scoring.** Self-pairing means CANDI's prompt
+> is **the eval cell's other blind assays**, never the paired `T_` cell's tracks. Two consequences,
+> both verified straight from `manifest.json` with no project code. **16 of the 26 `V_` cells hold
+> exactly one blind assay** (sizes `{1:16, 2:5, 3:1, 4:4}`), so leave-one-out empties the encoder
+> input, `prepare_masked_batch` returns `None`, and the track is dropped unscored — **the `V_`
+> panel can pose only 29 of the 45 experiments** §5 and §5.2 promise. `B_` has no singletons and
+> all 51 survive. And more seriously: every rival, and the 2019 challenge, prompt a blind
+> experiment from *everything else known about that cell type*, which here is the `T_` tracks.
+> CANDI on the store path is given a handicapped and simply different exam — which is the
+> comparison this document exists to make sound. Owned by `t80`; needs a ruling before scoring.
 
 The organizers chose `B_` to be the six core histone marks plus ATAC and DNase — the marks worth
 imputing. `V_` instead reaches broadly across the assay panel, and **11 of its 22 assays hold a
@@ -443,8 +455,23 @@ the data; `file_metadata.json` holds only the BAM and `navigation.json` only pat
 
 **Phase 1 — validate the method on ATAC (the gate).** Implement `pval_from_counts`: a
 MACS2-equivalent no-control Poisson p-value at 25 bp from the store's DSF-1 counts, background =
-max of genome-wide λ and local λ at MACS2's `slocal=1000` / `llocal=10000` defaults, with the
-exact λ rule read off the MACS2 source rather than from memory. Run it on the 7 ATAC experiments
+max of genome-wide λ and local λ, with the exact λ rule read off the MACS2 source rather than from
+memory.
+
+> **CORRECTION 2026-08-29, from the source.** This paragraph used to say "`slocal=1000` /
+> `llocal=10000`". **Without a control, MACS2 uses `llocal` alone** — not `slocal`, and not the
+> d-size window either. Read at tag `2.1.0.20140616`,
+> `MACS2/cPeakDetect.pyx::PeakDetect.__call_peaks_wo_control`: `ctrl_d_s = [ self.lregion, ]`,
+> with the comment "slocal and d-size local bias are not calculated!" directly above, and
+> `--slocal`'s own help text reads "Invalid if there is no control data". The score is
+> `-log10 P(X > k)`, a strictly-greater tail. Also: ENCODE's ATAC step ran MACS2 **2.1.1**, not the
+> 2.1.0 named below — the no-control λ block is byte-identical between the two tags, checked by
+> diff.
+
+**`MSE ratio` here means `mean(ours²) / mean(theirs²)`**, a scale comparison — which is what the
+symmetric factor-of-two band below is written for. It is *not* the repo's other "MSE ratio" (two
+methods' error against a shared truth, as in §14); here there is no third truth, only our layer
+against ENCODE's. Run it on the 7 ATAC experiments
 and compare against ENCODE's own ATAC p-value, already held binned in `signal_BW_res25`. Report
 per-experiment Pearson, Spearman, MSE ratio, top-1 %-bin agreement. Pre-registered defaults, no
 tuning.
@@ -462,6 +489,32 @@ the 7 ATAC experiments, all four must hold:
 Anything short of all four is a **fail**, and a fail means the §10 fallback: re-download the 40
 DNase BAMs to scratch and run MACS2 at base resolution. The bar is not moved after the numbers are
 seen — that is the whole point of writing it here, in a commit that predates the run.
+
+**RESULT 2026-08-29 — PASS on all four**, genome-wide over all 7 ATAC experiments.
+
+| statistic | bar | measured | |
+|---|---|---|---|
+| median Pearson | ≥ 0.90 | **0.9532** | pass |
+| median top-1 % Jaccard | ≥ 0.60 | **0.6996** | pass |
+| median MSE ratio | [0.5, 2.0] | **0.5078** | pass |
+| worst single Pearson | ≥ 0.80 | **0.9085** | pass |
+
+**The pass does not depend on which panel is used, and that is the check that matters.** Three of
+the seven rows compare a **one-replicate** store BAM against a **three-replicate** ENCODE bigWig,
+so ENCODE's values there are ~3× larger by depth alone. That depth gap is the whole of their
+0.05–0.07 MSE ratios, and it is what drags the 7-experiment median down to 0.5078 — a mere 0.0078
+above the floor. On the four like-for-like `T_` rows, where the bigWig derives from exactly the BAM
+the store's counts were built from, the same four statistics read **0.9497 / 0.6075 / 0.8260 /
+0.9325**: pass, with the marginal statistic no longer marginal.
+
+**The three depth-mismatched rows stay in, unexcluded and unreweighted.** The bar was pre-registered
+over all 7, and dropping rows after seeing them is precisely what pre-registration exists to forbid.
+The `T_`-only figures are a disclosed sensitivity beside the result, never a substitute for it.
+
+**Phase 2 is therefore authorised.** Phase 0 is already built: 363/363 tracks now carry
+`signal_bigwig_accession` and `signal_output_type`, and a strict build raises
+`SignalSemanticsConflict` on exactly 40 tracks — all DNase-seq, all `read-depth normalized signal`,
+reproducing this section's audit precisely.
 
 **Phase 2 — build the DNase layer.** Same code, 40 experiments, genome-wide. Second independent
 check against the challenge's DNase p-value tracks, on `T_` experiments only so `V_`/`B_` stay
@@ -725,7 +778,7 @@ Accepted as the price of the corrections above.
 | Avocado returns its random init on an unfitted chromosome; Lavawizard raises | `competitors/avocado/vendor/avocado.py:90-97`; `competitors/lavawizard/dataset3.py:70-71` |
 | per-method training loci and genome fractions across the literature | primary sources in `cruxvault/raw/`, audited 2026-08-29 |
 | `V_`/`B_` panel composition — 45 exp / 22 assays vs 51 exp / 8 assays; splits disjoint on (cell, assay), 0 overlaps over 89 cells | `download_plan_eic.json` (Fir `EpiDenoise/data/`), recounted 2026-08-29 |
-| the scored panel is *assays the truth cell has and the input cell does not* | **citation was wrong and the rule needs re-checking — see the note under §5.1.** `harness.py:526-543` is `StoreSource.counts_at_dsf`; the h5 rule is `H5Source.targets:316-322` and the store rule is `StoreSource.targets:486-488`. Pairing declared by `tools/declare_eval_pairs.py` |
+| the scored panel is *assays the truth cell has and the input cell does not* | **citation was wrong and the rule needs re-checking — see the note under §5.1.** `harness.py:526-543` is `StoreSource.counts_at_dsf`; the h5 rule is `H5Source.targets:316-322` and the store rule is `StoreSource.targets:486-488`. **`tools/declare_eval_pairs.py` does not exist in the repo**, no shipped config declares `eval_pairs`, and the store path self-pairs at `harness.py:483-484` |
 | eval-scope bin counts, scoring cost and storage | `cruxvault/results/t50/scores_avocado_P2.json` provenance; `cruxvault/results/t51/PILOT_MEMO.md` |
 
 ---
