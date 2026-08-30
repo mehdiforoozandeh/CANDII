@@ -56,7 +56,7 @@ Two live, both evaluating on the same held-out chromosomes. Everything else is a
 | id | transferable parameters fit on | training bins | scored on |
 |---|---|---|---|
 | `eic.19→20,21,22` | chr19 | 2,344,704 (1.93 %) | chr20 + chr21 + chr22 |
-| `eic.pilot→20,21,22` | the 44 ENCODE Pilot Regions, minus their overlap with the eval chromosomes | 1,022,368 (0.84 %) | chr20 + chr21 + chr22 |
+| `eic.pilot→20,21,22` | the 44 ENCODE Pilot Regions, minus their overlap with the eval chromosomes | 1,023,489 (0.84 %) | chr20 + chr21 + chr22 |
 | `eic.gw→20,21,22` | *deferred — placeholder* | | |
 | `merged.19→…`, `merged.gw→…` | *deferred — placeholder* | | |
 
@@ -79,15 +79,39 @@ chromosomes — 14 hand-picked well-studied loci (`ENm*`, 14,955,138 bp) plus 30
 regions stratified by gene density and non-exonic conservation (`ENr*`, 15,000,058 bp). All 44 are
 used, not the `ENr` half alone.
 
-**4,395,988 bp of them sit on chr20/21/22 and are cut** under Rule 2, leaving 25,559,208 bp =
-1,022,368 bins. Region sizes (≥500 kb for the `ENr` set) are far larger than CANDI's 768-bin
-(19.2 kb) context, so window sampling is unaffected.
+Those are **hg19** figures, and the store is hg38. The liftover is done (below), so the numbers
+that actually govern this regime are the hg38 ones:
 
-Two costs before this regime can run, both real work:
+| | hg19 (the source track) | hg38 (what the regime uses) |
+|---|---|---|
+| all 44 regions | 29,955,196 bp | 29,984,074 bp |
+| cut on chr20/21/22 under Rule 2 | 4,395,988 bp | **4,395,877 bp** |
+| training scope | 25,559,208 bp | **25,588,197 bp** |
+| training bins at 25 bp | 1,022,368 | **1,023,489** |
 
-- **hg38 coordinates.** UCSC ships the `encodeRegions` track for **hg19 only** — no hg38 track
-  exists, and the ENCODE portal has no annotation dataset for it. We own the liftover, and it
-  needs its own provenance record and a check for regions that fail to lift cleanly.
+The shift is +0.11 % of the training scope and changes nothing about the design. **Note the bin
+count is now a containment rule, not a division:** 25,588,197 is not divisible by 25, so the
+training bins are the 25 bp bins lying wholly inside a region, counted, not a quotient.
+
+Region sizes (≥500 kb for the `ENr` set) are far larger than CANDI's 768-bin (19.2 kb) context, so
+window sampling is unaffected — measured, not assumed: 1,328 fully-contained 768-bin windows hold
+**99.6 %** of the contained bin budget, and the smallest training region (`ENr212`, 499,991 bp)
+still holds 26 of them.
+
+Two costs before this regime can run:
+
+- ~~**hg38 coordinates.**~~ **DONE 2026-08-29.** UCSC ships `encodeRegions` for hg19 only
+  (`goldenPath/hg38/…/encodeRegions.txt.gz` returns 404; the hg19 URL returns 200), so we own the
+  lift. UCSC `liftOver`, Kent tools 486, `hg19ToHg38.over.chain`, default options: **44 in, 44 out,
+  0 unmapped, 0 split, 0 chromosome changes.** 41 of 44 regions move by ≤2 bp. Three do not:
+  `ENm006` (chrX) grows +37,180 bp of real hg38 sequence, `ENm007` (chr19) loses 8,201 bp — the
+  only region touching an ALT contig, `chr19_KI270938v1_alt`, which the store excludes by design —
+  and `ENr333` (chr20) loses 119 bp and is cut anyway. Ensembl's independent GRCh37→GRCh38 mapper
+  agrees on 16 of 16 endpoints across 8 regions and reproduces both the `ENm006` growth and the
+  `ENm007` shrink, so those are assembly facts and not chain artefacts. Files:
+  `configs/regions/encode_pilot_hg38.bed`, its hg19 source, and `configs/regions/PROVENANCE.md`.
+  The BED keeps all 44 regions; the Rule 2 cut is declared by the regime's chromosome list, not
+  baked into the file.
 - **A BED-restricted window sampler.** Regimes take chromosome lists today
   (`src/candi/store/regime.py`); training on scattered regions needs the loader to sample windows
   inside a BED. Avocado's per-position stage is unaffected — it already works per chromosome.
@@ -634,6 +658,8 @@ Accepted as the price of the corrections above.
 | DNase output types, all 40 experiments; ATAC and ChIP for contrast | ENCODE portal, per-file sweep of all 363 signal bigwigs, 2026-08-29 |
 | ATAC p-value = MACS2 v2.1.0, alignments only, no control | ENCODE portal analysis step `kundaje-lab-atac-seq-signals-single-rep-step-v-1` |
 | Pilot Regions: 44 regions, 29,955,196 bp, 21 chromosomes, 14 `ENm` / 30 `ENr`, hg19 only | UCSC `encodeRegions` track via `api.genome.ucsc.edu`, 2026-08-29 |
+| the hg38 lift: 44/44 mapped, 0 unmapped/split, 29,984,074 bp, 25,588,197 training bp, 1,023,489 contained bins | `configs/regions/PROVENANCE.md`; recomputed from the shipped BED, 2026-08-29 |
+| the lift cross-checked off UCSC: Ensembl GRCh37→GRCh38 agrees on 16/16 endpoints over 8 regions | `cruxvault/results/t79/G2_PILOT_HG38.md` |
 | Avocado returns its random init on an unfitted chromosome; Lavawizard raises | `competitors/avocado/vendor/avocado.py:90-97`; `competitors/lavawizard/dataset3.py:70-71` |
 | per-method training loci and genome fractions across the literature | primary sources in `cruxvault/raw/`, audited 2026-08-29 |
 | `V_`/`B_` panel composition — 45 exp / 22 assays vs 51 exp / 8 assays; splits disjoint on (cell, assay), 0 overlaps over 89 cells | `download_plan_eic.json` (Fir `EpiDenoise/data/`), recounted 2026-08-29 |
