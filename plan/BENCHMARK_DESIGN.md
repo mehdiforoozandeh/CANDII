@@ -701,6 +701,55 @@ towers* are DNase-only; *duplicate load above the ceiling* is not.
 > which a duplicate-free reference also reaches. A second BAM campaign for controls is not worth
 > that. If this is ever revisited, the number to beat is 6.97×.
 
+**REBUILD 2026-08-30 — dedup and counts are done and verified; the p-value step is not.** All 40
+BAMs re-fetched (246.3 GB; K562's reused from the diagnosis) and deduplicated with
+`samtools view -F 1024`, which drops Picard's `0x400` flag and nothing else. Verified 40/40:
+after-total equals `before − duplicates` on every file, 0 duplicate-flagged reads remain, and there
+are 0 secondary and 0 supplementary reads anywhere, so `-F 1024` and ENCODE's own `-F 1796/1804`
+remove the same reads here. Summed DNase depth 6.314 B → 4.410 B (−30.15 %). The counting rule is
+proven against the store: run on the **raw** K562 BAM it reproduces the existing `counts` column on
+23/23 chromosomes with **0 mismatching bins**.
+
+| | max bin | ratio to ceiling | `-log10 p` max |
+|---|---|---|---|
+| `T_K562` before | 9,762,619 | 108,473× | 1.82 × 10⁷ |
+| `T_K562` after | **90** | **1.0×** | **80.3** |
+| `T_HAP-1` after | 6,677 | 56.6× | 7,607 |
+| `B_DND-41` after | 8,069 | 43.1× (inside the clean-ATAC band) | — |
+
+**All 18 single-ended DNase tracks now satisfy the keep-dup-1 bound exactly as the 266 clean
+single-ended ChIP tracks do** (`frac_mass_over_ceiling` = 0 on all 18, ratio 0.75–1.01).
+
+> **OPEN — dedup is right for paired-end reads and destructive for single-end.** Measured through
+> the old 25 bp approximation as a one-variable control (same λ rule, same statistics, only the
+> counts changed; `encode_rdns_vs_challenge`, where neither side moved, reproduces Phase 2 to
+> 1e-12), median Pearson falls **0.8344 → 0.5974**. The split is diagnostic: **single-ended
+> 0.7881 → 0.5250**, against **0.5482** for the keep-dup-1 cap §10 already rejected — the two agree
+> per track to a median absolute difference of 0.032. **Picard keys a single-end duplicate on start
+> position and strand alone**, so at a genuinely busy locus it marks distinct fragments as copies:
+> `T_BE2C`'s MYCN amplicon — the diagnosis's own example of *real* signal — falls 0.9439 → 0.1929,
+> top bin 116,402 → 123. On the 22 paired-ended libraries, where the key is both ends, dedup beats
+> that cap on **every** row (+0.05 to +0.50) and mean ratio lands at **1.0002**.
+>
+> **Note what this exposes about the template.** §10 chose ATAC as the template because ENCODE's
+> ATAC pipeline removes duplicates — but **all 7 ATAC experiments are paired-ended**, so the
+> template's dedup step was never validated on single-end data, and ENCODE keeps duplicates for
+> single-end DNase by choice rather than oversight.
+>
+> **Not yet settled, because the measurement above is the wrong instrument.** Base-resolution MACS2
+> extends every tag to 150 bp before the Poisson test, so a pileup holding one tag per start still
+> accumulates across 150 distinct starts — the per-bin saturation driving the single-end collapse is
+> exactly what base resolution should undo, and §10 says *base resolution*, not *deduplicate*.
+> **Ruled 2026-08-30: test it rather than assume it.** MACS2 runs on both the deduplicated and the
+> original BAMs for the 18 single-ended tracks, so the question is answered by measurement.
+
+**MACS2, approved 2026-08-30.** Not on Fir — no module, absent from `candi_venv`, no container.
+Installed as `MACS2==2.2.9.1` from the Alliance offline wheelhouse into a **fresh venv on scratch**;
+`candi_venv` untouched. ENCODE ran 2.1.1, which is Python-2.7-only and cannot run on Fir at all;
+diffing `PeakDetect.__call_peaks_wo_control` between `v2.1.1.20160309` and `v2.2.9.1` leaves the λ
+block byte-identical line for line, with the sole difference in peak-calling cutoff plumbing — the
+one block we discard, since the p-value comes from `bdgcmp -m ppois`.
+
 ### The ruling (2026-08-30)
 
 **Take §10's pre-registered fallback, for all 40 DNase experiments, rebuilding `counts` as well as
