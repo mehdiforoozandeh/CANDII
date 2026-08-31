@@ -60,6 +60,12 @@ SEED="${SEED:-0}"
 # changing this: as shipped, any non-zero value also LOGS B_ every eval, which §5 forbids.
 EVAL_EVERY="${EVAL_EVERY:-3}"
 PROBE_STEPS="${PROBE_STEPS:-3000}"
+# EPOCHS/STEPS_PER_EPOCH exist so MODE=full can be DRESS-REHEARSED cheaply: setting
+# STEPS_PER_EPOCH drops --full-coverage, so the whole full-mode path (regime derivation, the eval
+# hook, V_ selection, the .best.ckpt write) runs in minutes instead of hours. Leave both unset for
+# the real retrain.
+EPOCHS="${EPOCHS:-25}"
+STEPS_PER_EPOCH="${STEPS_PER_EPOCH:-}"
 # SELECT_ON=V derives a V_-only eval-pair list so the mid-training eval NEVER READS B_, which is
 # what §5 asks for. SELECT_ON=all uses the shipped regime verbatim (26 V_ + 12 B_ pairs) and so
 # scores B_ at every eval. Selection is on V_imp_crps either way, so the SELECTED CHECKPOINT is the
@@ -200,11 +206,34 @@ else
   echo "[t81]   every checkpoint, which BENCHMARK_DESIGN §5 lists as never. Deliberate only."
 fi
 
+COVERAGE=(--full-coverage)
+TAG="t81_${NAME}_s${SEED}"
+if [ -n "$STEPS_PER_EPOCH" ]; then
+  COVERAGE=(--steps-per-epoch "$STEPS_PER_EPOCH")
+  TAG="dress_${NAME}_s${SEED}"
+  echo "[t81] DRESS REHEARSAL: $EPOCHS epochs x $STEPS_PER_EPOCH steps, NOT --full-coverage."
+  echo "[t81]   This is not a retrain. Its checkpoint is not a board checkpoint."
+fi
+
+echo "[t81] launching: epochs=$EPOCHS coverage=${COVERAGE[*]} eval_every=$EVAL_EVERY tag=$TAG"
 python -m candi.train "${COMMON[@]}" --store "$TRAIN_REGIME" \
-  --tag "t81_${NAME}_s${SEED}" \
-  --epochs 25 --full-coverage \
+  --tag "$TAG" \
+  --epochs "$EPOCHS" "${COVERAGE[@]}" \
   --eval-every "$EVAL_EVERY" --eval-batch-size 4
 rc=$?
+
+# §5's uniform rule is only satisfied if a checkpoint was actually SELECTED on V_. If the eval hook
+# never fired, there is no .best.ckpt and the run yields a last-epoch checkpoint instead — which is
+# a different object than the design asks for. Say so loudly rather than let it pass as success.
+if [ "$EVAL_EVERY" != "0" ] && [ $rc -eq 0 ]; then
+  if [ -f "$OUT/${TAG}.best.ckpt" ]; then
+    echo "[t81] OK: ${TAG}.best.ckpt exists — a checkpoint was selected on V_imp_crps."
+  else
+    echo "[t81] WARNING: eval_every=$EVAL_EVERY but NO ${TAG}.best.ckpt was written. The run did" >&2
+    echo "[t81]   NOT select on V_, so it does not satisfy BENCHMARK_DESIGN §5. Do not use it." >&2
+    rc=90
+  fi
+fi
 
 echo "[t81] DONE regime=$NAME mode=full rc=$rc"
 exit $rc
