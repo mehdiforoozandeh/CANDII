@@ -1068,7 +1068,7 @@ G1 is the real gate. Skipping it trains every method on 34 tracks of the wrong u
 | method | runs | why that count | arms |
 |---|---|---|---|
 | CANDI | 2 | `eic.19` and `eic.pilot` | pval + count + peak |
-| Avocado | 2 | joint fit on chr19 / pilot, then 23 per-chromosome genome-factor fits each | pval |
+| Avocado | 2 | joint fit on chr19 / pilot, then **3** per-chromosome genome-factor fits each | pval |
 | ChromImpute | 2 | one per regime | pval |
 | eDICE | 2 | one per regime | pval |
 | Lavawizard | 2 | one per regime | pval |
@@ -1083,6 +1083,16 @@ argument, is what licenses the collapse for the other four.
 
 Reference budgets on record: Avocado ≈20 GPU-h per model, ChromImpute 128 CPU-core-hours
 genome-wide. CANDI's is G3.
+
+**Avocado fits 3 chromosomes of genomic factors, not 23** (CORRECTED 2026-08-30). Avocado's
+genomic factors are per-position free parameters, so a chromosome it never fitted has no
+representation and cannot be predicted at all — which is why the authors' own scheme refits them
+per chromosome. But §4 blanks Avocado's `genome-wide` cell and rules that a blanked cell is **not
+computed**, so it is only ever predicted on chr20+21+22. Fitting the other 20 chromosomes would
+produce factors for positions nothing is ever scored at. The earlier "23" in this table predated
+the blanking ruling and was never reconciled with it; it is about 20 fits per regime, 40 across
+both. The joint fit's own chromosome (chr19 / the pilot regions) comes free with the shared run and
+is not one of the three.
 
 **σ-tables refit for all 10 methods**, on training residuals (§7). Every existing σ was fit on `V_`
 eval pairs and is void under Rule 1. Cheap, but nothing distributional scores until it is done.
