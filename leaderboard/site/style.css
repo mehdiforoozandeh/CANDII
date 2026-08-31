@@ -402,3 +402,43 @@ tr.pending-row td.method-col { background: var(--bg); font-style: normal; }
 .card-sheet p { margin: 0 0 8px; color: var(--ink-soft); font-size: 14px; }
 .card-sheet ul { margin: 0 0 8px; padding: 0 0 0 18px; color: var(--ink-soft); font-size: 14px; }
 .card-sheet .radar-card { margin-top: 8px; }
+
+/* ---------------------------------------------- t82: the address, markers, anchor, void --- */
+/* §1's address bar. It reads as one control, not three, because the three fields together
+   are one thing: the address of the number underneath. */
+.addr-bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+  padding: 8px 10px; margin: 8px 0 6px; }
+.addr-seg { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.addr-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ink-faint); margin-right: 2px; }
+.addr-chip { text-align: left; line-height: 1.25; }
+.addr-chip.addr-on { background: var(--chip-on); color: var(--chip-on-ink);
+  border-color: var(--chip-on); }
+/* A panel or scope the design reports but never ranks is dashed, everywhere it appears. */
+.addr-chip.addr-unranked { border-style: dashed; }
+.addr-sub { display: block; font-size: 9px; opacity: 0.8; }
+.addr-readout { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft);
+  margin: 2px 0 10px; }
+.picker-deferred { margin: 6px 0 0; font-size: 12px; color: var(--ink-faint); }
+
+.unranked-banner { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+  border-left: 3px solid var(--warn); padding: 6px 0 6px 12px; margin: 10px 0;
+  color: var(--ink-soft); font-size: 13px; max-width: 72em; line-height: 1.45; }
+.badge-unranked { color: var(--warn); border-color: var(--warn); border-style: dashed; }
+.cell-unranked { color: var(--ink-faint); font-style: italic; font-size: 12px; }
+.tab.tab-greyed { opacity: 0.45; }
+
+.badge-marker { text-transform: none; letter-spacing: 0.02em; font-weight: 600;
+  color: var(--warn); border-color: var(--warn); border-style: dashed; }
+
+.panel-anchor { border-style: dashed; border-color: var(--entrant); }
+.panel-anchor h2 { color: var(--entrant); }
+.caveats-hard { border-left-width: 5px; }
+.caveats-hard p { margin: 4px 0; color: var(--ink); font-size: 13px; }
+
+.void-group { margin: 10px 0; }
+.void-group h3 { font-size: 13px; margin: 0 0 2px; color: var(--ink-soft); }
+.void-names { margin: 4px 0 0; line-height: 2; }
+.legend-sub { margin-left: 0; }
+.masthead-warn { color: var(--warn); font-weight: 600; }

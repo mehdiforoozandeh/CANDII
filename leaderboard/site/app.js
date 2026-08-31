@@ -4,7 +4,9 @@
 "use strict";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const BOARD_ORDER = ["main", "dev", "entrants"];
+/* The container that is not a regime: the 2019 field, lifted out of the ranked table
+ * (BENCHMARK_DESIGN §6). It always sorts last and never ranks beside a regime. */
+const ANCHOR_ID = "anchor";
 const HEAD_ORDER = ["count", "pval", "peak"];
 const HEAD_LABEL = { count: "Count", pval: "P-value", peak: "Peak" };
 /* Covariate diagnostics have arm=null in the registry. They sit under Count
@@ -18,42 +20,47 @@ const LINEAGE_LABEL = {
   candi: "CANDI", rival: "retrained rival",
   baseline: "baseline", entrant: "2019 entrant",
 };
-/* Table names that collide across boards. Slugs stay; the gloss is the label. */
+/* Table names that collide across containers. Slugs stay; the gloss is the label. */
 const METHOD_QUALIFIER = {
-  avg: "Dataset-2 · train-only",
-  Average: "2019 · train+validation",
+  avg: "regime baseline · training cells only",
+  Average: "2019 anchor · train + validation",
 };
 
-/* Verified 2026-08-27 from fit_sigma / bench.external and the stamped rival rows.
- * Point-only rivals: one σ per assay, V-pair residuals on eval chr21, reused unchanged.
- * Homoscedastic per assay. PIT KS 0.367–0.377, coverage_95 0.977–0.984. */
-const DIST_ONELINER = "Point-only rivals get one Gaussian spread per assay, fitted once on validation-pair residuals (eval chromosome chr21) and reused unchanged. The spread does not adapt bin-by-bin. That device is known-miscalibrated (PIT KS 0.367–0.391, 95% coverage 0.977–0.985 on the stamped rival rows), so CRPS here is ordering-only.";
-const DIST_ELI5 = "Most rivals predict one number per bin, not a distribution. To give them CRPS, PIT, and 95% coverage we wrap a Gaussian around that number. The width is one constant per assay: the root-mean-square residual on the validation pairs, chromosome chr21, then frozen. Refitting on a later protocol would leak. Same width at every bin of that assay — the spread does not grow or shrink with the signal. On Avocado, eDICE, and ChromImpute this width is too wide in the same way (PIT KS 0.367–0.391, 95% coverage 0.977–0.985). Rank on CRPS; do not read the absolute as a calibrated score. That is the ordering-only note on this tab. CANDI's Negative Binomial count head and per-bin Gaussian signal head emit a real distribution; they do not use this device. A σ-table on the row means the fitted spread; PIT/coverage without a σ-table means the method emitted its own spread. PIT KS is the Kolmogorov–Smirnov distance of the probability-integral transform u = Φ((y − μ) / σ) from Uniform(0,1) — a calibration companion, never ranked, not a p-value. Coverage 95 is the fraction of bins inside the central 95% predictive interval. Click a column ? for each formula this code computes.";
-const PEAK_ONELINER = "For methods with no peak score, AUPRC ranks bins by predicted signal against called peaks — a coverage ranking, not a peak classifier. A Bernoulli peak head is a different device.";
-const PEAK_ELI5 = "eDICE, Avocado, and ChromImpute do not output a peak probability. The scorer then ranks each bin by the predicted p-value level (or the count mean if that is all they have) and asks whether high predicted signal sits on bins the store called as peaks (MACS2 labels). That is a coverage ranking: does the track light up where peaks were called? It is not a peak classifier. CANDI's peak head, when its rows land, emits a per-bin Bernoulli probability and is labeled separately. AUPRC is always shown with the peak base rate. Click a column ? for the average-precision formula this code computes.";
-const POINTWISE_ELI5 = "Four bin-by-bin scores on the concatenation of scored chromosomes. MSE: mean squared gap (lower; scales with mark range; no extra transform). GW Pearson: linear correlation of predicted and true (higher; a constant forecast is absent, not zero). GW Spearman: rank-order correlation, average ranks on ties (higher). MSE top-1% obs: MSE on bins at or above the 1% tallest observed value (ties can admit more than 1%). Click a column ? for the formula this code computes. The header letters match 2019; the truth signal does not — never translate.";
-const LOSS_ELI5 = "The training loss on data the method did not train on. Ranked only among methods that use this same loss family. Count-space NLL and p-value-space NLL never share a table or an axis. Gaussian NLL is the mean per-bin ½(log v + (μ − y)² / v + log(2π)) with v = max(σ², 10⁻⁶), scored in the training transform: stamped external rows use transform none; a CANDI store path typically uses arcsinh — those are not comparable. NB NLL is −mean log NB(k; n, p) on raw counts. Loss never enters the composite. Click a column ? for the formula this code computes.";
+/* §7 — the spread device, and its mandatory badge. σ is fit on training-set residuals only:
+ * never on V_, never on B_. Every σ that was fit on V_ eval pairs is void under Rule 1 and is
+ * being refit (§12.2), so no PIT or coverage figure is quoted here until the refit lands. */
+const DIST_ONELINER = "Point-only methods have no distribution, so their prediction is wrapped in a Gaussian whose width σ is measured on training-set residuals only — never on V_, never on B_. A flat bell cannot track a varying truth, so a point-only method loses on PIT and coverage partly by construction. Every distributional cell carries its device badge, native heteroscedastic or fitted flat σ, and that badge is what stops the loss being read as a modelling result. CRPS here is ordering only.";
+const DIST_ELI5 = "Most rivals predict one number per bin, not a distribution. To give them CRPS, PIT, and 95% coverage we wrap a Gaussian around that number. The width is one constant per assay, measured on residuals from the method's own training set — never on the validation or test panels, which would leak under Rule 1. In-sample training residuals run narrow, and the overconfidence that follows is the method's own calibration failure and should show up as one. Same width at every bin of that assay: the spread does not grow or shrink with the signal. Rank on CRPS; do not read the absolute as a calibrated score. CANDI's Negative Binomial count head and per-bin Gaussian signal head emit a real distribution and do not use this device. A σ-table on the row means the fitted spread; PIT and coverage without a σ-table mean the method emitted its own. Two σs must not be confused: the marginal σ is the spread of the assay's signal itself and is the marginal baseline; the residual σ is the spread of prediction-minus-truth and is what wraps a point prediction. PIT KS is the Kolmogorov–Smirnov distance of the probability-integral transform from Uniform(0,1) — a calibration companion, never ranked, not a p-value. Coverage 95 is the fraction of bins inside the central 95% predictive interval. Click a column ? for each formula this code computes.";
+const PEAK_ONELINER = "The peak arm carries CANDI and the naive baselines only. No rival has a peak head, and the AUPRC they used to carry was a coverage ranking derived from their predicted signal — dropped rather than badged (§7). Under challenge truth the whole arm is greyed out: the 2019 data has no peak calls.";
+const PEAK_ELI5 = "A peak score asks whether the positions a method treats as peaks are the positions the truth calls as peaks. Only CANDI and the naive baselines emit one, so only they appear on this arm. Avocado, eDICE, ChromImpute and Lavawizard predict signal and nothing else; ranking their signal against called peaks produces an AUPRC that measures coverage, not peak detection, and §7 drops it rather than badging it. AUPRC is always shown with the peak base rate. Under challenge truth the arm is greyed out entirely: the 2019 data has no peak calls. Click a column ? for the average-precision formula this code computes.";
+const POINTWISE_ELI5 = "Four bin-by-bin scores on the concatenation of scored chromosomes. MSE: mean squared gap (lower; scales with mark range; no extra transform). GW Pearson: linear correlation of predicted and true (higher; a constant forecast is absent, not zero). GW Spearman: rank-order correlation, average ranks on ties (higher). MSE top-1% obs: MSE on bins at or above the 1% tallest observed value (ties can admit more than 1%). The same four names score both truths, and the truth toggle is the only honest way to move between them — a number measured against store truth is never rescaled into challenge space; that move costs 12–66% per-experiment error. Click a column ? for the formula this code computes.";
 const POSITION_TIP = {
-  "position-generalizing": "No genomic-position parameters (or none that pin the eval chromosome). Full genome can still be in-sample for other reasons — e.g. a neighbour table fit on chromosome 19.",
-  "position-transductive": "The method trains at genomic positions, including the evaluation chromosome. Full genome is in-sample at every position.",
+  "position-generalizing": "No genomic-position parameters, or none that pin the eval chromosomes. A genome-wide cell can still be in-sample for other reasons — for example a neighbour table fit on the training chromosome.",
+  "position-transductive": "The method fits parameters at genomic positions, including the positions it is scored at when the scope is genome-wide. §4 blanks that cell rather than printing a memorisation score.",
   "position class unrecorded": "Position class is not recorded in this tree. Never invent it.",
 };
 const LINEAGE_TIP = {
-  candi: "A CANDI version. Version-over-version arrows use the 0.1195 seed-alone bar, not the cross-method ±0.09 floor.",
-  rival: "Retrained by us on Dataset-2, not a 2019 submission.",
-  baseline: "A naive baseline we built from training biosamples.",
-  entrant: "A frozen 2019 challenge submission, not retrained. Architecture is not recorded unless the card says otherwise.",
+  candi: "A CANDI version. One CANDI row per regime — the current best. Version-over-version arrows use the 0.1195 seed-alone bar, not the cross-method ±0.09 floor.",
+  rival: "Retrained by us under this regime's training loci, not a 2019 submission.",
+  baseline: "A naive baseline we built from training biosamples. Its fit does not depend on the training loci, so one fit serves both regimes and the same number prints in each.",
+  entrant: "A frozen 2019 challenge submission, not retrained. It carries no regime and sits in the anchor block, never in the ranked table. Architecture is not recorded unless the card says otherwise.",
 };
 
 const state = {
   data: null,
   help: { methods: {}, combos: {}, metrics: {} },
   outerEval: null,
+  /* §1's address, minus the method and the metric. The page opens on the ranked address and
+   * cannot show a number until all three are set. */
+  truth: "store",
+  panel: "V_breadth",
+  scope: "held-out",
   midHead: null,
   innerFamily: null,
-  radarEval: "main",
-  climbEval: "main",
+  radarEval: null,
+  climbEval: null,
   showClimb: false,
+  showVoid: false,
   openProv: new Set(),
   openHelp: null,
   openCard: null,
@@ -219,11 +226,13 @@ function comboHelpBtn() {
     },
   }, "?");
 }
+/* The URL carries the whole address, so a link to a number is a link to that exact number
+ * and to nothing else: #<regime>/<truth>.<panel>.<scope>/<head>/<family>. */
 function writeHash() {
   let next = "";
   if (state.showClimb && !state.outerEval) next = "#over-time";
   else if (state.outerEval) {
-    const segs = [state.outerEval];
+    const segs = [state.outerEval, viewKeyFor(state.outerEval)];
     if (state.midHead) segs.push(state.midHead);
     if (state.midHead && state.midHead !== "summary" && state.midHead !== "radar"
         && state.innerFamily) {
@@ -247,22 +256,89 @@ function applyHash() {
   const parts = raw.split("/").filter(Boolean);
   if (!ids.includes(parts[0])) return;
   state.outerEval = parts[0];
-  if (parts[1] === "summary" || parts[1] === "radar") {
-    state.midHead = parts[1];
+  let rest = parts.slice(1);
+  /* An address segment is three dot-joined vocabulary words. Each is checked against the
+   * payload's own vocabulary, so a hand-edited URL cannot invent a truth or a panel. */
+  if (rest[0] && rest[0].split(".").length === 3) {
+    const [t, p, s] = rest[0].split(".");
+    if (t in truths() && p in panels() && s in scopes()) {
+      state.truth = t;
+      state.panel = p;
+      state.scope = s;
+    }
+    rest = rest.slice(1);
+  }
+  if (rest[0] === "summary" || rest[0] === "radar") {
+    state.midHead = rest[0];
     state.innerFamily = null;
-    if (parts[1] === "radar") state.radarEval = parts[0];
+    if (rest[0] === "radar") state.radarEval = parts[0];
     return;
   }
-  if (parts[1] && HEAD_ORDER.includes(parts[1])) {
-    state.midHead = parts[1];
-    state.innerFamily = parts[2] || null;
+  if (rest[0] && HEAD_ORDER.includes(rest[0])) {
+    state.midHead = rest[0];
+    state.innerFamily = rest[1] || null;
   }
 }
 function armClass(m) {
   return m.arm === "count" ? "arm-count" : m.arm === "pval" ? "arm-pval" : "";
 }
+/* --- §1's address: truth, panel, scope. Three fields of the six; the container supplies
+ * the regime, the row supplies the method, the column supplies the metric. --- */
+
+function truths() { return state.data.truths || {}; }
+function panels() { return state.data.panels || {}; }
+function scopes() { return state.data.scopes || {}; }
+function markerSpec(id) { return (state.data.markers || {})[id] || null; }
+
+/* The anchor block exists at one fixed address and it is not the reader's to change; a
+ * regime takes all three from the address bar. A null container falls back to the bar too. */
+function metaOrNull(bid) {
+  const board = bid && state.data.boards[bid];
+  return board ? board.meta : null;
+}
+function truthOf(bid) {
+  const meta = metaOrNull(bid);
+  return (meta && meta.truth) || state.truth;
+}
+function panelOf(bid) {
+  const meta = metaOrNull(bid);
+  return (meta && meta.panel) || state.panel;
+}
+function scopeOf(bid) {
+  const meta = metaOrNull(bid);
+  return (meta && meta.scope) || state.scope;
+}
+function viewKeyFor(bid) {
+  return `${truthOf(bid)}.${panelOf(bid)}.${scopeOf(bid)}`;
+}
+function truthLabel(bid) {
+  const t = truths()[truthOf(bid)];
+  return t ? t.label : truthOf(bid);
+}
+/* Which arms this truth can be scored on. Under challenge truth the 2019 data has no counts
+ * and no peak calls, so those heads are greyed out rather than silently empty (§7). */
+function truthArms(bid) {
+  const t = truths()[truthOf(bid)];
+  return (t && t.arms) || ["count", "pval", "peak"];
+}
+function headIsLive(bid, headId) {
+  return truthArms(bid).includes(headId);
+}
+function headDeadReason(bid) {
+  const t = truths()[truthOf(bid)];
+  return (t && t.greyed_arms_note)
+    || "This arm cannot be scored against the truth currently selected.";
+}
+function addressLine(bid) {
+  const meta = metaOrNull(bid);
+  const regime = meta && meta.regime_id ? meta.regime_id : "no regime (anchor)";
+  const p = panels()[panelOf(bid)], s = scopes()[scopeOf(bid)];
+  return `${regime} · truth: ${truthLabel(bid)} · panel: ${p ? p.label : panelOf(bid)}`
+    + ` · scope: ${s ? s.label : scopeOf(bid)}`;
+}
+
 function truthSpace(bid) {
-  return bid === "entrants" ? "2019 signal" : "−log10 p";
+  return truthOf(bid) === "challenge" ? "challenge −log10 p" : "store −log10 p";
 }
 function spaceTag(m, bid) {
   let s = "diagnostic";
@@ -275,11 +351,24 @@ function metricHeaderName(m, bid) {
   return m.label;
 }
 
+/* §5 and §7 name two row markers. Neither is cosmetic: each says the row's number was
+ * produced under a condition the other rows were not, and names what that costs a reader. */
+function markerBadges(row) {
+  const ids = (row && row.markers) || [];
+  return ids.map((id) => {
+    const spec = markerSpec(id);
+    return h("span", { class: `badge badge-marker marker-${id}`,
+      title: spec ? spec.eli5 : id },
+      spec ? spec.label : id,
+      helpBtn(`marker-${id}-${(row && row.method) || ""}`, spec ? spec.eli5 : null));
+  });
+}
+
 function cellClassBadge(text) {
   if (!text) return null;
   if (text === "zero-shot cell types") {
     return h("span", { class: "badge",
-      title: "Stored class: zero-shot cell types. In this vocabulary that means no learned per-cell embedding, not a cell type with no training experiment. Dataset-2 scores training→validation of the same type." },
+      title: "Stored class: zero-shot cell types. In this vocabulary that means no learned per-cell embedding, not a cell type with no training experiment. Every eval pair on this board is a mark the target cell has and its paired training cell lacks, so the cell type is one the method has seen (§8)." },
       "no cell embedding");
   }
   return h("span", { class: "badge" }, text);
@@ -395,7 +484,14 @@ async function boot() {
   } catch (err) {
     state.help = { methods: {}, combos: {}, metrics: {} };
   }
-  const ids = Object.keys(payload.boards);
+  /* Open on the ranked address the payload names, not on a guess. */
+  const canon = (payload.canonical_view || "store.V_breadth.held-out").split(".");
+  if (canon.length === 3) {
+    state.truth = canon[0];
+    state.panel = canon[1];
+    state.scope = canon[2];
+  }
+  const ids = boardIds();
   if (!(state.radarEval in payload.boards)) state.radarEval = ids[0];
   if (!(state.climbEval in payload.boards)) state.climbEval = ids[0];
   applyHash();
@@ -409,17 +505,33 @@ async function boot() {
   render();
 }
 
+/* Regimes only, in id order. The anchor block is a container too, but it is never a tab
+ * beside a regime — it renders underneath the ranked table (§6). */
 function boardIds() {
-  const ids = Object.keys(state.data.boards);
-  return ids.sort((a, b) => {
-    const [ia, ib] = [BOARD_ORDER.indexOf(a), BOARD_ORDER.indexOf(b)];
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
-  });
+  return Object.keys(state.data.boards)
+    .filter((id) => state.data.boards[id].kind !== "anchor")
+    .sort((a, b) => a.localeCompare(b));
+}
+function anchorId() {
+  const id = state.data.anchor_id;
+  return id && state.data.boards[id] ? id : null;
 }
 
 function viewFor(bid) {
-  return state.data.boards[bid].views.default;
+  const board = state.data.boards[bid];
+  const key = viewKeyFor(bid);
+  /* An address a container does not offer is not an error state — it is a reader asking for
+   * a cell that does not exist. Fall back to the container's own canonical address. */
+  return board.views[key] || board.views[board.canonical_view];
 }
+function viewExists(bid) {
+  return !!state.data.boards[bid].views[viewKeyFor(bid)];
+}
+function rankingOf(bid) {
+  const v = viewFor(bid);
+  return (v && v.ranking) || { state: "ranked", reason: "" };
+}
+function isRanked(bid) { return rankingOf(bid).state === "ranked"; }
 
 function metaOf(bid) { return state.data.boards[bid].meta; }
 function pendingOf(bid) { return state.data.boards[bid].pending || []; }
@@ -445,20 +557,21 @@ function render() {
   const nodes = [picker()];
   if (comboComplete()) {
     nodes.push(comboView());
+    nodes.push(anchorPanel());
     nodes.push(legendPanel());
   }
   nodes.push(state.showClimb ? climbPanel() : climbOptIn());
+  nodes.push(voidPanel());
   const overlay = cardOverlay();
   if (overlay) nodes.push(overlay);
-  app.replaceChildren(...nodes);
+  app.replaceChildren(...nodes.filter(Boolean));
   renderFooter();
 }
 
 function readerBadges(meta) {
   return (meta.reader_badges || []).map((b, i) =>
-    h("span", { class: "badge badge-warn",
-      title: `${b.eli5} Internal code lives in the ?.` },
-      b.label, helpBtn(`badge-${meta.protocol}-${i}`, b.eli5)));
+    h("span", { class: "badge badge-warn", title: b.eli5 },
+      b.label, helpBtn(`badge-${meta.regime_id || meta.label}-${i}`, b.eli5)));
 }
 
 function familyTabCaption(cid, bid) {
@@ -467,13 +580,13 @@ function familyTabCaption(cid, bid) {
   if (!c) return { title: cid, sub: "" };
   let sub = (c.space_label && c.space_label.toLowerCase() !== c.label.toLowerCase())
     ? c.space_label : "";
-  if (bid === "entrants" && cid === "pointwise") sub = "2019 signal";
+  if (bid && cid === "pointwise") sub = truthSpace(bid);
   return { title: c.label, sub };
 }
 
 function familyEli5(cid) {
   if (cid === "summary") {
-    return "Composite is the mean of category mean-ranks for categories at least one method on this eval set fully covers. A method missing any of those categories is incomplete, not last: the composite cell is a dash, and it is left out of the headline ranking. It still ranks inside every category it has numbers for. Lower is better.";
+    return "Composite is the mean of category mean-ranks for categories at least one method at this address fully covers. A method missing any of those categories is incomplete, not last: the composite cell is a dash, and it is left out of the headline ranking. It still ranks inside every category it has numbers for. Lower is better. Nothing is ranked at all until the noise floor on this panel is measured.";
   }
   if (cid === "distributional") return DIST_ELI5;
   if (cid === "peaks") return PEAK_ELI5;
@@ -485,17 +598,16 @@ function familyEli5(cid) {
 
 function headEli5(head, bid) {
   if (head.id === "pval") {
-    if (bid === "entrants") {
-      return "2019 challenge signal, not store −log10 p. Ranking uses the point-wise composite on this board. The header letters MSE / Pearson / Spearman match Full genome and Chromosome 21; the truth signal does not. Never translate.";
-    }
-    return "P-value space (−log10 p from the store). Ranking uses the same §5.2 composite as the data-level summary. Peak scores live under the Peak head, even though the composite math still includes the peaks category when it is board-active. Count numbers never appear here. The header letters MSE / Pearson / Spearman match the 2019 tab; the truth signal does not.";
+    const t = truthOf(bid) === "challenge"
+      ? "Challenge truth: the 2019 organizers' processing of the same experiments, loaded onto the store's grid by the same scorer, so only the pipeline differs."
+      : "Store truth: −log10 p from CANDI_STORE, the ENCODE4 v1.5.1 processing of Aug–Sep 2020.";
+    return `${t} This is the head-to-head arm — every rival predicts signal, so it is the only arm where CANDI meets the published field. Ranking uses the §5.2 composite. Count numbers never appear here. The same metric names score both truths; a number is never rescaled from one into the other.`;
   }
   if (head.id === "count") {
-    return "Count space. Ranking is Negative Binomial CRPS, always with its oracle-scaled / scale-error split and the ±0.09 noise floor. Covariate sensitivity sits here because the C-block re-decodes (μ, n) against count truth. P-value numbers never appear here.";
+    return "Count space — CANDI and the naive baselines only, because no rival has a count head (§7). Ranking is Negative Binomial CRPS, always with its oracle-scaled / scale-error split and the ±0.09 noise floor. Covariate sensitivity sits here because the C-block re-decodes (μ, n) against count truth. P-value numbers never appear here, and under challenge truth the whole arm is greyed out.";
   }
-  return "Peak detection. Ranking is AUPRC, always with the peak base rate. For methods that do not emit a peak score, that AUPRC is a coverage ranking against called peaks, not a peak classifier. These scores are stored on the p-value arm in the registry; they are a separate head so they never mix with point-wise or distributional p-value numbers.";
+  return PEAK_ELI5;
 }
-
 /* ------------------------------------------------------------- nested tabs --- */
 
 function pick(patch) {
@@ -508,6 +620,54 @@ function headSummaryCaption(headId) {
   if (headId === "pval") return { title: "Summary", sub: "composite rank" };
   if (headId === "count") return { title: "Summary", sub: "NB CRPS rank" };
   return { title: "Summary", sub: "AUPRC rank" };
+}
+
+/* The address bar. It is not a filter over one table — it *is* the table's address, and
+ * every one of its three fields must be set before a number is on screen (§1). */
+function addressBar(bid) {
+  const seg = (label, vocab, key, current, onpick, tip) => {
+    const opts = Object.keys(vocab);
+    return h("span", { class: "addr-seg" },
+      h("span", { class: "addr-label" }, label),
+      ...opts.map((id) => {
+        const spec = vocab[id];
+        const on = id === current;
+        return h("button", {
+          class: "chip addr-chip" + (on ? " addr-on" : "")
+            + (spec.ranked === false ? " addr-unranked" : ""),
+          type: "button",
+          "aria-pressed": String(on),
+          title: spec.eli5 || spec.label || id,
+          onclick: () => onpick(id),
+        }, spec.label || id,
+          spec.subtitle ? h("span", { class: "addr-sub" }, spec.subtitle) : null);
+      }),
+      helpBtn(`addr-${key}-${bid}`, tip));
+  };
+  const truthTip = "§6 — the challenge data is not a separate board. It is the same rows, "
+    + "measured a second time: the same 363 ENCODE experiments, bridged 1:1 on accession, and "
+    + "the only difference is which pipeline produced the truth track. If a method's standing "
+    + "holds under both truths, its result is not an artifact of the pipeline that made ours. "
+    + "Nowhere else in this field does the same experiment exist twice, processed independently "
+    + "by different people years apart. Challenge truth exists on EIC regimes only, and it "
+    + "greys out the count and peak arms because the 2019 data has no counts and no peak calls.";
+  const panelTip = "§5 — V_ and B_ are different exams, not two views of one thing. Every "
+    + "trainable method selected its best checkpoint on V_, so V_ is optimistic by "
+    + "construction, identically for everyone. B_ is never read during training and is "
+    + "predicted exactly once. V_ matched is the same V_ predictions aggregated over only the "
+    + "8 assays B_ has; it is never ranked and exists so the V_→B_ step is readable. Never "
+    + "subtract V_ breadth from B_.";
+  const scopeTip = "§4 — predictions are produced and scored once, and reported as two "
+    + "aggregations of the same pass. held-out is chr20+21+22, where no method's transferable "
+    + "parameters were fit: that is the ranked number. genome-wide is all 23 chromosomes, for "
+    + "comparability with a literature that scores that way, and is never ranked. A "
+    + "genome-wide cell is printed only where the method is out-of-sample somewhere; where it "
+    + "is blank the number was never computed, not withheld.";
+  return h("div", { class: "addr-bar", id: "address-bar",
+      "aria-label": "Address: truth, panel, scope" },
+    seg("truth", truths(), "truth", truthOf(bid), (id) => pick({ truth: id }), truthTip),
+    seg("panel", panels(), "panel", panelOf(bid), (id) => pick({ panel: id }), panelTip),
+    seg("scope", scopes(), "scope", scopeOf(bid), (id) => pick({ scope: id }), scopeTip));
 }
 
 function picker() {
@@ -524,6 +684,12 @@ function picker() {
     state.midHead = null;
     state.innerFamily = null;
   }
+  /* An arm the current truth cannot score is not a tab the reader gets to sit on. */
+  if (bid && state.midHead && HEAD_ORDER.includes(state.midHead)
+      && !headIsLive(bid, state.midHead)) {
+    state.midHead = "summary";
+    state.innerFamily = null;
+  }
   const head = heads.find((hd) => hd.id === state.midHead) || null;
   const families = head ? head.families : [];
   if (state.innerFamily && state.innerFamily !== "summary"
@@ -535,7 +701,7 @@ function picker() {
     && state.midHead !== "radar";
 
   const outer = h("div", { class: "tabs outer", id: "eval-tabs", role: "tablist",
-    "aria-label": "Data set" },
+    "aria-label": "Regime" },
     ids.map((id) => {
       const m = metaOf(id);
       return h("button", {
@@ -543,35 +709,39 @@ function picker() {
         id: `eval-tab-${id}`,
         "aria-selected": String(id === bid),
         "aria-controls": "eval-board",
-        title: m.eli5,
+        title: `${m.eli5} Trained on ${m.train_scope}. Scored on ${m.eval_scope}.`,
         onclick: () => pick({ outerEval: id, radarEval: id }),
-      }, coded(m.label, `${m.protocol} / ${id}`),
+      }, m.label,
         h("span", { class: "tab-sub" }, m.subtitle || ""));
     }));
 
   const midOpts = [
-    { id: "summary", label: "Summary", sub: "composite rank", eli5: familyEli5("summary") },
+    { id: "summary", label: "Summary", sub: "composite rank", eli5: familyEli5("summary"),
+      live: true },
     ...heads.map((hd) => ({
       id: hd.id, label: hd.label,
-      sub: (bid === "entrants" && hd.id === "pval") ? "2019 signal" : hd.space,
+      sub: (bid && hd.id === "pval") ? truthSpace(bid) : hd.space,
       eli5: headEli5(hd, bid),
+      live: !bid || headIsLive(bid, hd.id),
     })),
-    { id: "radar", label: "Shape", sub: "per-method radar",
-      eli5: "P-value-space categories share one polygon; count-space rank is a separate figure beside it. Rank 1 is outer (or the top of the count bar); last place is the centre. Ranks are within this eval set only. Count-space and p-value-space numbers never share an axis." },
+    { id: "radar", label: "Shape", sub: "per-method radar", live: true,
+      eli5: "P-value-space categories share one polygon; count-space rank is a separate figure beside it. Rank 1 is outer (or the top of the count bar); last place is the centre. Ranks are within one address only. Count-space and p-value-space numbers never share an axis." },
   ];
   const mid = h("div", { class: "tabs mid", id: "head-tabs", role: "tablist",
     "aria-label": "Output head" },
-    midOpts.map((opt) =>
-      h("span", { class: "tab-wrap" },
+    midOpts.map((opt) => {
+      const usable = dataReady && opt.live;
+      return h("span", { class: "tab-wrap" },
         h("button", {
-          class: "tab mid", type: "button", role: "tab",
+          class: "tab mid" + (opt.live ? "" : " tab-greyed"), type: "button", role: "tab",
           id: `head-tab-${opt.id}`,
-          "aria-selected": String(dataReady && opt.id === state.midHead),
+          "aria-selected": String(usable && opt.id === state.midHead),
           "aria-controls": "head-panel",
-          "aria-disabled": String(!dataReady),
-          disabled: dataReady ? null : "disabled",
+          "aria-disabled": String(!usable),
+          disabled: usable ? null : "disabled",
+          title: opt.live ? null : headDeadReason(bid),
           onclick: () => {
-            if (!dataReady) return;
+            if (!usable) return;
             const keep = (opt.id !== "summary" && opt.id !== "radar"
               && state.innerFamily && (state.innerFamily === "summary"
                 || (heads.find((hd) => hd.id === opt.id) || { families: [] })
@@ -580,8 +750,10 @@ function picker() {
             pick({ midHead: opt.id, innerFamily: keep,
                    radarEval: opt.id === "radar" ? state.outerEval : state.radarEval });
           },
-        }, opt.label, h("span", { class: "tab-sub" }, opt.sub)),
-        helpBtn(`head-${opt.id}`, opt.eli5))));
+        }, opt.label,
+          h("span", { class: "tab-sub" }, opt.live ? opt.sub : "greyed out")),
+        helpBtn(`head-${opt.id}`, opt.live ? opt.eli5 : headDeadReason(bid)));
+    }));
 
   const innerOpts = headReady
     ? [{ id: "summary", ...headSummaryCaption(head.id) },
@@ -609,12 +781,41 @@ function picker() {
             ? (state.midHead === "summary" || state.midHead === "radar"
               ? "This pick is complete — a family is not needed."
               : "Pick Count, P-value, or Peak to choose a family — or Summary / Shape above.")
-            : "Pick a data set first."));
+            : "Pick a regime first."));
 
+  const deferred = (state.data.deferred_regimes || []);
   return h("div", { class: "nested-wrap picker" },
     h("p", { class: "picker-hint" },
-      "Pick a data set, then a head, then a family. Summary is a full view at the first two steps."),
-    outer, mid, inner);
+      "A number on this page is addressed by six fields (§1): method, regime, truth, panel, "
+      + "scope, metric. Pick the regime, then the truth, panel and scope, then a head and a "
+      + "family. A row missing any of the six never enters the ranked table."),
+    outer,
+    dataReady ? addressBar(bid) : null,
+    dataReady ? h("p", { class: "addr-readout" }, "Showing: ", addressLine(bid)) : null,
+    mid, inner,
+    deferred.length
+      ? h("p", { class: "picker-deferred" },
+          "Deferred regimes, named so the axis exists but not yet run: ",
+          ...deferred.flatMap((d, i) => [
+            i ? " · " : null,
+            h("span", { class: "chip-wrap" }, h("code", null, d.id),
+              helpBtn(`deferred-${i}`, d.note)),
+          ]))
+      : null);
+}
+/* "Here is a number, and it is not ranked" is a state of its own, not an error and not an
+ * empty table (§15). It is announced once, at the top, so no reader can miss it. */
+function unrankedBanner(bid) {
+  if (isRanked(bid)) return null;
+  const why = rankingOf(bid).reason;
+  return h("div", { class: "unranked-banner", role: "note" },
+    h("span", { class: "badge badge-unranked" }, "unranked"),
+    h("span", null, " Numbers at this address are reported, not ordered. ", why),
+    helpBtn(`unranked-${bid}`,
+      "A rank is a claim that one method beat another. That claim needs a resolution band, "
+      + "and until the band is measured the honest output is the number without an order. "
+      + "Rows go up unranked; nothing is hidden and nothing is ordered on a gap we cannot "
+      + "resolve. " + why));
 }
 
 function comboView() {
@@ -634,17 +835,23 @@ function comboView() {
       "aria-labelledby": `fam-tab-${state.innerFamily}` },
       familyBody(bid, state.innerFamily, head.id));
   }
+  const scopeSpec = scopes()[scopeOf(bid)];
   return h("section", { class: "panel eval-board", id: "eval-board", role: "tabpanel",
     "aria-labelledby": `eval-tab-${bid}` },
     h("h2", null,
-      coded(meta.label, `${meta.protocol} / ${bid}`),
+      meta.label,
       h("span", { class: "h2-note" }, meta.subtitle),
       helpBtn(`h2-${bid}`, meta.eli5),
       comboHelpBtn(),
       ...readerBadges(meta)),
+    h("p", { class: "addr-readout" }, addressLine(bid)),
+    unrankedBanner(bid),
+    scopeSpec && scopeSpec.blanking_rule
+      ? h("p", { class: "sub" }, scopeSpec.blanking_rule)
+      : null,
     (meta.caveats || []).length
       ? h("div", { class: "caveats" },
-          h("div", { class: "caveats-title" }, "On this eval set"),
+          h("div", { class: "caveats-title" }, "On this regime"),
           h("ul", { style: "margin:4px 0;padding:0" },
             meta.caveats.map((c, i) =>
               h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`,
@@ -694,14 +901,14 @@ function boardEntries(bid) {
   const ensure = (name, lineage) => {
     if (!byName.has(name)) {
       byName.set(name, { method: name, lineage: lineage || "",
-                         row: null, pending: null, unranked: null });
+                         row: null, pending: null, unscored: null });
     }
     const e = byName.get(name);
     if (lineage && !e.lineage) e.lineage = lineage;
     return e;
   };
   for (const row of view.rows) ensure(row.method, row.lineage).row = row;
-  for (const u of view.unranked || []) ensure(u.method).unranked = u;
+  for (const u of view.unscored || []) ensure(u.method).unscored = u;
   for (const p of pendingOf(bid)) ensure(p.method, p.lineage).pending = p;
   const rankKey = (e) => {
     if (e.row && e.row.rank) return (e.row.rank[0] + e.row.rank[1]) / 2;
@@ -716,55 +923,61 @@ function entriesForFamily(bid, cid) {
   return boardEntries(bid).filter((e) => {
     if (e.pending && !e.row) {
       if (cid === "covariate_diagnostics") return e.lineage === "candi";
-      if (cid === "count_arm") return e.lineage === "baseline" || e.lineage === "candi";
+      /* §7 — the count and peak arms carry CANDI and the naive baselines only. */
+      if (cid === "count_arm" || cid === "peaks") {
+        return e.lineage === "baseline" || e.lineage === "candi";
+      }
       return true;
     }
-    if (cid === "summary") return !!(e.row || e.unranked);
+    if (cid === "summary") return !!(e.row || e.unscored);
     return e.row && rowHasFamily(e.row, cid);
   });
 }
 
 function familyKicker(cid, bid) {
   if (cid === "summary") {
-    return "Headline ranking on the p-value-space composite (best at top). Methods with partial coverage have no composite rank — incomplete, not last. Count-space ranking lives under the Count head; peak ranking lives under the Peak head.";
+    return isRanked(bid)
+      ? "Headline ranking on the p-value-space composite (best at top). Methods with partial coverage have no composite rank — incomplete, not last. Count-space ranking lives under the Count head; peak ranking lives under the Peak head."
+      : "Every method with a number at this address, in name order. There is no headline ranking here yet: see the unranked note above for why.";
   }
   if (cid === "count_arm") {
-    return "Count space — Negative Binomial CRPS, ranked separately. Count-space and p-value-space numbers never share an axis.";
+    return "Count space — Negative Binomial CRPS. CANDI and the naive baselines only; no rival has a count head. Count-space and p-value-space numbers never share an axis.";
   }
   if (cid === "distributional") {
-    return DIST_ONELINER + " PIT KS is how far the predicted Gaussians’ percentiles sit from Uniform(0,1). Coverage 95 is the fraction of bins inside the central 95% interval. Click a column ? for each formula.";
+    return DIST_ONELINER + " PIT KS is how far the predicted Gaussians' percentiles sit from Uniform(0,1). Coverage 95 is the fraction of bins inside the central 95% interval. Click a column ? for each formula.";
   }
   if (cid === "peaks") return PEAK_ONELINER;
   if (cid === "pointwise") {
-    return bid === "entrants"
-      ? "Point-wise scores on 2019 challenge signal. MSE: mean squared gap. GW Pearson: linear correlation. GW Spearman: rank-order correlation. MSE top-1% obs: MSE on the tallest 1% of observed bins. The header letters match Full genome and Chromosome 21; the truth signal does not. Never translate. Click a column ? for each formula."
-      : "Point-wise scores in store −log10 p. MSE: mean squared gap (scales with mark range). GW Pearson: linear correlation (a constant forecast is absent, not zero). GW Spearman: rank-order correlation. MSE top-1% obs: MSE on the tallest 1% of observed bins. The header letters match the 2019 tab; the truth signal does not. Never translate. Click a column ? for each formula.";
+    return `Point-wise scores in ${truthSpace(bid)}. MSE: mean squared gap (scales with mark range). GW Pearson: linear correlation (a constant forecast is absent, not zero). GW Spearman: rank-order correlation. MSE top-1% obs: MSE on the tallest 1% of observed bins. The same four names score both truths; the truth toggle above is the only way to move between them, and a number is never rescaled from one into the other. Click a column ? for each formula.`;
   }
   return "";
 }
 
 function headKicker(head) {
   if (head.id === "pval") {
-    return "P-value head — ranked on the §5.2 composite. Peak metrics are a separate head; count metrics never appear here.";
+    return "P-value head — the head-to-head arm. Every rival predicts signal, so this is the only arm where CANDI meets the published field. Peak metrics are a separate head; count metrics never appear here.";
   }
   if (head.id === "count") {
-    return "Count head — ranked on Negative Binomial CRPS, with the oracle-scaled / scale-error split and the ±0.09 noise floor.";
+    return "Count head — Negative Binomial CRPS, with the oracle-scaled / scale-error split and the ±0.09 noise floor. CANDI and the naive baselines only.";
   }
   return PEAK_ONELINER;
 }
-
 function summaryBody(bid) {
   const view = viewFor(bid);
   const pending = pendingOf(bid);
-  const scored = view.rows.filter((r) => r.rank);
+  /* When the address does not rank, the chart still lists every row that has a number —
+   * it just draws no bars and claims no order. */
+  const ranked = isRanked(bid);
+  const scored = ranked ? view.rows.filter((r) => r.rank) : view.rows.slice();
   return h("div", null,
     h("p", { class: "chart-kicker" }, familyKicker("summary", bid),
       helpBtn("composite", familyEli5("summary"))),
     rankBarChart({
-      aria: `Ranked methods on ${metaOf(bid).label}, composite`,
+      aria: `Methods at ${addressLine(bid)}, composite`,
+      ranked,
       scored,
       pending,
-      rankOf: (r) => (r.rank[0] + r.rank[1]) / 2,
+      rankOf: (r) => (r.rank ? (r.rank[0] + r.rank[1]) / 2 : 999),
       labelOf: (r) => r.method,
       noteOf: (r) => r.composite
         ? (r.composite[0] === r.composite[1]
@@ -782,7 +995,10 @@ function headSummaryBody(bid, head) {
   const pending = head.id === "count"
     ? pendingOf(bid).filter((p) => p.lineage === "baseline" || p.lineage === "candi")
     : pendingOf(bid);
-  const scored = view.rows.filter((r) => familyRankSpread(r, rankCid, view));
+  const ranked = isRanked(bid);
+  const scored = ranked
+    ? view.rows.filter((r) => familyRankSpread(r, rankCid, view))
+    : view.rows.filter((r) => rowHasFamily(r, rankCid) || rankCid === "summary");
   const primary = head.id === "count"
     ? catMetrics("count_arm", ["ranked"])[0]
     : head.id === "peak"
@@ -807,7 +1023,8 @@ function headSummaryBody(bid, head) {
     h("p", { class: "chart-kicker" }, headKicker(head),
       helpBtn(`head-sum-${head.id}`, head.id === "peak" ? PEAK_ELI5 : headEli5(head, bid))),
     rankBarChart({
-      aria: `Ranked methods on ${metaOf(bid).label}, ${head.label} head`,
+      aria: `Methods at ${addressLine(bid)}, ${head.label} head`,
+      ranked,
       scored,
       pending,
       rankOf: (r) => {
@@ -827,11 +1044,14 @@ function familyChartAndTable(bid, cid, headId) {
     ? pendingOf(bid).filter((p) => p.lineage === "baseline" || p.lineage === "candi")
     : pendingOf(bid);
   const groups = metricGroups(cid, headId);
-  const scored = view.rows.filter((r) => rowHasFamily(r, cid) && familyRankSpread(r, cid, view));
+  const ranked = isRanked(bid);
+  const scored = view.rows.filter((r) =>
+    rowHasFamily(r, cid) && (!ranked || familyRankSpread(r, cid, view)));
   const primary = catMetrics(cid, ["ranked"]).filter((m) => !headId || headIdOf(m) === headId)[0];
   const kicker = familyKicker(cid, bid);
   const chart = (!scored.length && !pending.length) ? null : rankBarChart({
-      aria: `Ranked methods on ${metaOf(bid).label}, ${familyTabCaption(cid).title}`,
+      aria: `Methods at ${addressLine(bid)}, ${familyTabCaption(cid).title}`,
+      ranked,
       scored,
       pending,
       rankOf: (r) => {
@@ -924,7 +1144,7 @@ function lossBody(bid, headId) {
       }));
   });
   if (!blocks.length) {
-    return h("p", { class: "empty-note" }, "No loss numbers on this eval set.");
+    return h("p", { class: "empty-note" }, "No loss numbers at this address.");
   }
   return h("div", { class: "loss-split" }, ...blocks);
 }
@@ -946,13 +1166,13 @@ function covariateBody(bid) {
     if (nGlobal > 0) {
       return h("div", { class: "cov-absent" },
         h("p", { class: "cov-absent-title" },
-          "No covariate-sensitivity numbers on this eval set",
+          "No covariate-sensitivity numbers at this address",
           helpBtn("cov-empty-board", cat.eli5)),
         familyMetricHelps("covariate_diagnostics", "count"),
         h("p", { class: "sub" }, measuredNote),
         h("p", null,
           "These numbers live on CANDI-lineage rows scored by the internal bench. ",
-          "They are present on another eval set, not this one."),
+          "They are present at another address, not this one."),
         pendingCandi.length
           ? h("p", { class: "computing-note" },
               pendingCandi.map((p) => p.method).join(", "),
@@ -1023,11 +1243,13 @@ function familyTable(bid, cid, groups, opts) {
   if (!entries.length) {
     return h("p", { class: "empty-note" },
       cid === "summary"
-        ? "No scores stamped yet."
-        : "No method on this eval set has numbers in this family yet.");
+        ? "No scores stamped at this address."
+        : "No method at this address has numbers in this family yet.");
   }
 
-  const RANK_TH_TIP = "Best-to-worst rank in this family on this eval set. A range like 1–3 is a floor-tied spread, not uncertainty. Lower is better. Bar length on the chart is the same rank (rank 1 longest). Gold / silver / bronze on a row marks an unshared 1 / 2 / 3 — the gap to the next row clears the noise floor.";
+  const RANK_TH_TIP = isRanked(bid)
+    ? "Best-to-worst rank in this family at this address. A range like 1–3 is a floor-tied spread, not uncertainty. Lower is better. Bar length on the chart is the same rank (rank 1 longest). Gold / silver / bronze on a row marks an unshared 1 / 2 / 3 — the gap to the next row clears the noise floor."
+    : `Nothing at this address is ranked. ${rankingOf(bid).reason}`;
   const METHOD_TH_TIP = "Click the method name for what it is, how it was trained, and how it was scored. A missing card says not recorded — never invent architecture.";
   const head = h("tr", null,
     h("th", { class: "method-col", title: METHOD_TH_TIP },
@@ -1063,9 +1285,9 @@ function familyTable(bid, cid, groups, opts) {
         title: entry.pending.note || "results computing" },
         entry.pending.note || "results computing"));
     } else if (!entry.row) {
-      const title = entry.unranked
-        ? (entry.unranked.note || "no scores for this chromosome set")
-        : "not scored on this eval set";
+      const title = entry.unscored
+        ? (entry.unscored.note || "no scores stamped at this address")
+        : "not scored at this address";
       if (showRank) cells.push(h("td", { class: "cell-missing rank-cell", title }, EN_DASH));
       if (showComposite) cells.push(h("td", { class: "cell-missing num", title }, EN_DASH));
       for (const g of groups) {
@@ -1078,9 +1300,17 @@ function familyTable(bid, cid, groups, opts) {
         const spread = familyRankSpread(entry.row, cid, view);
         cells.push(spread
           ? rankCell({ rank: spread })
-          : h("td", { class: "rank-cell cell-missing" }, EN_DASH));
+          : isRanked(bid)
+            ? h("td", { class: "rank-cell cell-missing" }, EN_DASH)
+            : h("td", { class: "rank-cell cell-unranked",
+                title: rankingOf(bid).reason }, "unranked"));
       }
-      if (showComposite) cells.push(compositeCell(entry.row, bid));
+      if (showComposite) {
+        cells.push(isRanked(bid)
+          ? compositeCell(entry.row, bid)
+          : h("td", { class: "num cell-unranked", title: rankingOf(bid).reason },
+              "unranked"));
+      }
       for (const g of groups) {
         for (const m of g.metrics) {
           cells.push(metricCell(entry.row, m, view.rows));
@@ -1133,7 +1363,8 @@ function methodCell(entry, bid, opts) {
       h("span", { class: `badge lineage-${entry.lineage}`,
         title: LINEAGE_TIP[entry.lineage] || entry.lineage },
         LINEAGE_LABEL[entry.lineage] || entry.lineage),
-      spreadBadge, peakBadge),
+      spreadBadge, peakBadge,
+      ...markerBadges(row || entry.pending)),
     h("div", { class: "method-line" },
       row ? h("span", { class: "version-chip" }, `${row.version} · ${row.date}`) : null,
       b.position ? h("span", { class: "badge",
@@ -1164,16 +1395,21 @@ function provRow(entry, colspan, bid) {
   return h("tr", { class: "prov-row" }, h("td", { colspan },
     h("div", { class: "prov-board" },
       h("div", { class: "prov-board-title" },
-        coded(metaOf(bid).label, `${metaOf(bid).protocol} / ${bid}`)),
+        `${metaOf(bid).label} · ${addressLine(bid)}`),
       provDl(entry.row))));
 }
 
 /* ------------------------------------------------------------- ranking bars --- */
 
-function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageOf, methodOf }) {
+/* `ranked` defaults true. When it is false the figure keeps every row and every number and
+ * drops the bars, the "#3" and the ordering — there is nothing to draw a length against. */
+function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageOf, methodOf,
+                        ranked }) {
+  const ordered = ranked !== false;
   const n = scored.length;
-  const items = scored.slice().sort((a, b) =>
-    rankOf(a) - rankOf(b) || labelOf(a).localeCompare(labelOf(b)));
+  const items = scored.slice().sort((a, b) => ordered
+    ? (rankOf(a) - rankOf(b) || labelOf(a).localeCompare(labelOf(b)))
+    : labelOf(a).localeCompare(labelOf(b)));
   const extra = pending || [];
   if (!items.length && !extra.length) {
     return h("p", { class: "empty-note" }, "No scores stamped yet.");
@@ -1203,11 +1439,20 @@ function rankBarChart({ aria, scored, pending, rankOf, labelOf, noteOf, lineageO
         onclick: () => {
           state.openCard = { kind: "method", id: methodName };
           render();
-        } }, labelOf(row)),
-      h("svg:rect", { x: L, y: y + 6, width: w, height: 14, rx: 3, fill: color }),
-      h("svg:text", { x: L + w + 8, y: y + 16, "font-size": 11,
-        fill: "var(--ink-soft)" },
-        `#${rankLabel}` + (noteOf(row) ? ` · ${noteOf(row)}` : "")));
+        } }, labelOf(row)));
+    if (ordered) {
+      svg.append(
+        h("svg:rect", { x: L, y: y + 6, width: w, height: 14, rx: 3, fill: color }),
+        h("svg:text", { x: L + w + 8, y: y + 16, "font-size": 11,
+          fill: "var(--ink-soft)" },
+          `#${rankLabel}` + (noteOf(row) ? ` · ${noteOf(row)}` : "")));
+    } else {
+      svg.append(
+        h("svg:circle", { cx: L + 7, cy: y + 13, r: 5, fill: color }),
+        h("svg:text", { x: L + 20, y: y + 16, "font-size": 11,
+          fill: "var(--ink-soft)" },
+          "unranked" + (noteOf(row) ? ` · ${noteOf(row)}` : "")));
+    }
   });
   extra.forEach((p, i) => {
     const y = T + (items.length + i) * rowH;
@@ -1410,8 +1655,8 @@ function radarPanel() {
       "Count-space rank is a separate figure beside it, labeled count space. ",
       "Rank 1 sits on the outer ring (or the top of the count bar); last place sits at the centre. ",
       "Ranks are computed on ",
-      coded(meta.label, `${meta.protocol} / ${bid}`),
-      " — not across eval sets. Count-space and p-value-space numbers never share an axis."),
+      meta.label,
+      " — at one address only. Count-space and p-value-space numbers never share an axis."),
     h("div", { class: "radar-grid" }, ...cards, ...pending));
 }
 
@@ -1649,7 +1894,7 @@ function climbPanel() {
   const chips = ids.map((id) =>
     h("button", {
       class: "chip", "aria-pressed": String(id === bid),
-      title: `${metaOf(id).eli5} Internal code: ${metaOf(id).protocol} / ${id}`,
+      title: `${metaOf(id).eli5} Regime: ${metaOf(id).regime_id}.`,
       onclick: () => { state.climbEval = id; render(); },
     }, metaOf(id).label));
 
@@ -1660,7 +1905,7 @@ function climbPanel() {
     hide,
     h("div", { class: "controls" },
       h("span", { class: "chip-group" },
-        h("span", { class: "chip-label" }, "eval set"), ...chips)),
+        h("span", { class: "chip-label" }, "regime"), ...chips)),
     svg);
 }
 
@@ -1692,7 +1937,7 @@ function methodCardBody(name, info) {
     const countEdges = radarEdges(view, COUNT_RADAR_EDGES);
     if (row && (pvalEdges.length >= 3 || countEdges.length)) {
       bits.push(
-        h("div", { class: "card-label" }, "Shape on this eval set"),
+        h("div", { class: "card-label" }, "Shape at this address"),
         radarCard(row, view, pvalEdges, countEdges));
     }
   }
@@ -1702,7 +1947,7 @@ function methodCardBody(name, info) {
 function comboTitle(key) {
   const parts = (key || "").split("/");
   const labels = {
-    main: "Full genome", dev: "Chromosome 21", entrants: "2019 challenge",
+    anchor: "Anchor — the 2019 field",
     count: "Count", pval: "P-value", peak: "Peak", summary: "Summary",
     count_arm: "Distributional", pointwise: "Point-wise",
     distributional: "Distributional", loss: "Loss",
@@ -1750,8 +1995,114 @@ function cardOverlay() {
       body));
 }
 
-/* ------------------------------------------------------------- legend + footer --- */
+/* ------------------------------------------------------------- anchor + void --- */
 
+/* §6 — the 2019 field. It sits under the ranked table, not in it: these rows carry no regime
+ * because we never trained them, so they never share a ranking denominator with ours. */
+function anchorPanel() {
+  const aid = anchorId();
+  if (!aid) return null;
+  const meta = metaOf(aid);
+  const view = viewFor(aid);
+  const pending = pendingOf(aid);
+  const ni = meta.non_independence || {};
+  const groups = overviewGroups("pval");
+  const nMetric = groups.reduce((n, g) => n + g.metrics.length, 0);
+  const head = h("tr", null,
+    h("th", { class: "method-col" }, "method"),
+    ...groups.flatMap((g) => g.metrics.map((m) =>
+      h("th", { class: armClass(m), title: metricTitle(m) },
+        h("span", { class: "chip-wrap" }, m.label, metricHelpBtn(m))))));
+  const byName = new Map();
+  for (const r of view.rows) byName.set(r.method, { method: r.method, row: r });
+  for (const p of pending) {
+    if (!byName.has(p.method)) byName.set(p.method, { method: p.method, pending: p });
+  }
+  const entries = [...byName.values()].sort((a, b) => a.method.localeCompare(b.method));
+  const body = entries.map((e) => h("tr", { class: e.row ? null : "pending-row" },
+    h("td", { class: "method-col" },
+      h("div", { class: "method-line" }, methodLink(e.method),
+        METHOD_QUALIFIER[e.method]
+          ? h("span", { class: "version-chip" }, METHOD_QUALIFIER[e.method])
+          : null,
+        h("span", { class: "badge lineage-entrant", title: LINEAGE_TIP.entrant },
+          LINEAGE_LABEL.entrant))),
+    e.row
+      ? groups.flatMap((g) => g.metrics.map((m) => metricCell(e.row, m, view.rows)))
+      : h("td", { class: "cell-pending", colspan: nMetric,
+          title: e.pending.note }, e.pending.note)));
+
+  return h("section", { class: "panel panel-anchor", id: "anchor-block" },
+    h("h2", null, meta.label,
+      h("span", { class: "h2-note" }, meta.subtitle),
+      helpBtn("anchor-eli5", meta.eli5)),
+    h("p", { class: "chart-kicker" },
+      h("span", { class: "badge badge-warn" }, "anchor — we did not run these"),
+      " ", meta.eli5),
+    h("p", { class: "addr-readout" }, addressLine(aid)),
+    unrankedBanner(aid),
+    ni.headline
+      ? h("div", { class: "caveats caveats-hard" },
+          h("div", { class: "caveats-title" }, "Known non-independence — count, do not read off"),
+          h("p", null, h("strong", null, ni.headline), " ", ni.detail,
+            helpBtn("anchor-ni", `${ni.headline} ${ni.detail}`)),
+          h("ul", { style: "margin:4px 0;padding:0" },
+            (ni.duplicate_groups || []).map((g) =>
+              h("li", null, g.members.join(" = "), " — ", g.extent))))
+      : null,
+    (meta.caveats || []).length
+      ? h("div", { class: "caveats" },
+          h("div", { class: "caveats-title" }, "On the anchor block"),
+          h("ul", { style: "margin:4px 0;padding:0" },
+            meta.caveats.map((c, i) =>
+              h("li", null, c, " ", helpBtn(`anchorcav-${i}`, `${c} ${meta.eli5}`)))))
+      : null,
+    entries.length
+      ? h("div", { class: "table-scroll" },
+          h("table", { class: "board" }, h("thead", null, head), h("tbody", null, body)))
+      : h("p", { class: "empty-note" }, "No anchor rows stamped."));
+}
+
+/* §3.3 — the rows this page used to show. Named, dated, and deliberately not numbered. */
+function voidPanel() {
+  const v = state.data.void;
+  if (!v || !(v.rows || []).length) return null;
+  if (!state.showVoid) {
+    return h("p", { class: "climb-optin" },
+      h("button", {
+        class: "climb-link", type: "button",
+        onclick: () => { state.showVoid = true; render(); },
+      }, `Void rows — ${v.rows.length} retired, not carried forward`));
+  }
+  const byBoard = new Map();
+  for (const r of v.rows) {
+    if (!byBoard.has(r.former_board)) byBoard.set(r.former_board, []);
+    byBoard.get(r.former_board).push(r);
+  }
+  return h("section", { class: "panel panel-secondary", id: "void-block" },
+    h("h2", null, v.meta.label, helpBtn("void-eli5", v.meta.eli5)),
+    h("button", {
+      class: "climb-link", type: "button",
+      onclick: () => { state.showVoid = false; render(); },
+    }, "hide"),
+    h("p", { class: "chart-kicker" }, v.meta.eli5),
+    ...[...byBoard.entries()].sort().map(([former, rows]) =>
+      h("div", { class: "void-group" },
+        h("h3", null, `was: ${former}`),
+        h("p", { class: "sub" }, rows[0].reason),
+        h("p", { class: "void-names" },
+          ...rows.flatMap((r, i) => [
+            i ? " · " : null,
+            h("span", { class: "version-chip", title: `${r.version} · ${r.date}` },
+              r.method),
+          ])))),
+    h("p", { class: "sub" },
+      "No number is shown for any of these rows, and that is the point: a void score under a "
+      + "new label would read as freshly computed. The files stay in leaderboard/void/, so the "
+      + "record is in git rather than on the page."));
+}
+
+/* ------------------------------------------------------------- legend + footer --- */
 function legendPanel() {
   const reg = registry();
   const bar = reg.candi_self_comparison_bar;
@@ -1781,7 +2132,20 @@ function legendPanel() {
       h("dt", null, "results computing"),
       h("dd", null, "A grey row or cell with no numbers: that method is a known entry whose scores have not landed yet. The italic note is the status (still computing, not started, …). It is not a silent omission."),
       h("dt", null, "✓ verified"),
-      h("dd", null, "The row's score json resolved on disk when the row was stamped and `check` re-verifies it wherever the artifact is reachable.")));
+      h("dd", null, "The row's score json resolved on disk when the row was stamped and `check` re-verifies it wherever the artifact is reachable."),
+      h("dt", null, "the address"),
+      h("dd", null, (state.data.address || {}).rule
+        || "Every cell is addressed by method, regime, truth, panel, scope and metric."),
+      h("dt", null, "unranked"),
+      h("dd", null, "A number with no order beside it. A rank is a claim that one method beat another, and that claim needs a resolution band; until the band is measured the honest output is the number alone. Not an error, and not a missing number."),
+      h("dt", null, "the row markers"),
+      ...Object.entries(state.data.markers || {}).flatMap(([id, spec]) => [
+        h("dd", { class: "legend-sub" }, h("strong", null, spec.label), " — ", spec.eli5),
+      ]),
+      h("dt", null, "the anchor block"),
+      h("dd", null, "The 2019 field sits under the ranked table, never in it. Those rows carry no regime because we never trained them, so they and our rows never share a ranking denominator — and the field has fewer distinct methods than rows, so any \"beats N methods\" claim has to be counted."),
+      h("dt", null, "void rows"),
+      h("dd", null, "Rows the design retired. They are named and dated at the foot of the page and carry no number, because a void score under a new label would read as freshly computed.")));
 }
 
 function renderFooter() {
@@ -1789,8 +2153,12 @@ function renderFooter() {
   const hashes = boardIds().map((bid) => {
     const meta = metaOf(bid);
     return h("p", null,
-      coded(meta.label, `${meta.protocol} / ${bid}`),
-      `: store ${meta.frozen.store_manifest_hash} · regime ${meta.frozen.regime_sha256}.`);
+      meta.label,
+      `: store ${meta.frozen.store_manifest_hash} · regime ${meta.frozen.regime_sha256}.`,
+      String(meta.frozen.store_manifest_hash).startsWith("TODO-")
+        ? h("span", { class: "badge badge-warn", title: meta.frozen.frozen_note },
+            "not frozen — no row may be stamped")
+        : null);
   });
   document.getElementById("footer").replaceChildren(
     h("div", { class: "footer-inner" },
