@@ -48,10 +48,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
-- `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
-- `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one
+- `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
 
 ## Blocked
 
@@ -111,10 +110,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *open*
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *open*
 - `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *blocked*
-- `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *open*
-- `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *open*
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
+- `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *open*
 
 ## Done · Dropped
 
@@ -158,5 +156,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
 - `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
+- `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *done* → `results/t82/DELIVERABLE.md`
+- `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *done* → `results/t83/DELIVERABLE.md`
 - `t84` [implementation] vendor Lavawizard — the other three rivals were already implemented — *done* → `results/t84/DELIVERABLE.md`
 - `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *done* → `results/t85/DELIVERABLE.md`

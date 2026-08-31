@@ -1,30 +1,30 @@
 ---
-id: t82
+id: t88
 type: task
-title: apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
+title: a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
 category: implementation
-parent: t77
+parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: done
-created: "2026-08-29T18:42:40"
-updated: "2026-08-31T16:31:35"
+status: open
+created: 2026-08-31T16:31:35
+updated: 2026-08-31T16:31:35
 ---
 
-# t82 — apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
+# t88 — a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
 
 Refs:: _(none)_
 
 ## Why
 
-the board labels a dataset without saying where a method trained or was scored
+found while gating t83: a fresh worktree baseline is 1193+1F not 1195, and every agent given a worktree will hit it
 
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- [The board is addressed, and prints no void number](results/t82/DELIVERABLE.md)
+_(none yet)_
 
 ## Evidence
 

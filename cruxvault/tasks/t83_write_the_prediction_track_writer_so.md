@@ -7,9 +7,9 @@ parent: t77
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-31T00:52:17
-updated: 2026-08-31T00:52:17
+status: done
+created: "2026-08-31T00:52:17"
+updated: "2026-08-31T16:31:35"
 ---
 
 # t83 — write the prediction track writer so a track is predicted once and scored many times
@@ -24,7 +24,7 @@ BENCHMARK_DESIGN 12.8: stream_tracks yields TrackRecords straight into score_tra
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [The writer existed; it now compresses and signs its work](results/t83/DELIVERABLE.md)
 
 ## Evidence
 
