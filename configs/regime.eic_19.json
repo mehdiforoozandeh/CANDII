@@ -312,7 +312,8 @@
   },
   "kinds": [
     "counts",
-    "peaks"
+    "peaks",
+    "pval"
   ],
   "seed": 42
 }
