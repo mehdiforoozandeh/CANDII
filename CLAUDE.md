@@ -20,7 +20,7 @@ and denoising on cell types it has never seen. `README.md` is the five-minute ve
 | pre-CANDII results, and the rules for quoting any number | `AGENTS.md` §7 |
 | h5 schema, masking, the input contract | `DATA.md` |
 | the CANDI_STORE corpus store — how to use it, layout, codecs, manifest | `STORE.md` |
-| what M1/M2/M3/S14 measure and the keys they write | `EVAL.md` |
+| what `candi.bench` and `candi.monitor` measure, the keys they write, quoting rules | `EVAL.md` |
 | every open question, hypothesis, task and result | `cruxvault/` |
 
 Where a doc and the code disagree, **the code is right and the doc is the bug.**

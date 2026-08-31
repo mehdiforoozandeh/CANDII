@@ -385,6 +385,25 @@ def test_a_model_that_forecasts_the_truth_beats_the_marginal_bar() -> None:
     assert D.nb_crps_mean(size, mu, y) < D.marginal_nb(y)["marg_crps"]
 
 
+def test_beats_marginal_is_absent_not_a_loss_when_crps_is_nan() -> None:
+    """t56: `bool(nan < x)` is False, so a NaN pooled CRPS silently recorded the track as a LOSS
+    (a false 0.0 on the leaderboard). An unscoreable comparison must record None (absent); a
+    scoreable one records a real bool."""
+    rng = np.random.default_rng(20)
+    size = np.full(400, 5.0)
+    mu = np.full(400, 20.0)
+    y = nbinom.rvs(size, D.p_from_mu(size, mu), random_state=rng).astype(float)
+    ok = D.nb_suite(size, mu, y, seed=0, n_pairs=2_000)
+    assert isinstance(ok["beats_marginal"], bool)
+    assert isinstance(ok["beats_marginal_oracle_scaled"], bool)
+    y_bad = y.copy()
+    y_bad[0] = np.nan                       # one unscoreable bin poisons the pooled CRPS
+    bad = D.nb_suite(size, mu, y_bad, seed=0, n_pairs=2_000)
+    assert not np.isfinite(bad["crps"])
+    assert bad["beats_marginal"] is None
+    assert bad["beats_marginal_oracle_scaled"] is None
+
+
 # ===========================================================================
 # B-block
 # ===========================================================================
@@ -556,3 +575,240 @@ def test_promoter_windows_are_symmetric_and_differ_from_the_mseprom_region() -> 
     w = P.promoter_windows(genes, "chrT", 10_000)
     assert w == [(2000 - 80, 2000 + 80)]
     assert (w[0][1] - w[0][0]) == 2 * P.PROM_LOC
+
+
+# ===========================================================================
+# the LOSS tier — pinned against the training loop's own arithmetic
+# ===========================================================================
+# `candi.bench` may NOT import `candi.train` (`tests/test_bench_harness.py` pins that in a
+# subprocess), so `bench.distributional` carries its own numpy copy of the three NLLs the objective
+# is built from. A copy with no pin is a copy that drifts, and the drift would be invisible: a
+# val-loss that is off by a constant still goes down.
+#
+# A TEST IS ALLOWED TO IMPORT BOTH SIDES. The boundary is a property of the shipped package, not of
+# the test suite, and this file is the only place the two implementations may meet. That is the whole
+# design: the equivalence is checked once, here, instead of being asserted in a docstring.
+#
+# TOLERANCE, AND WHY IT IS NOT ZERO. The training terms run behind `precision.fp32_fence`, which
+# casts to float32 by construction; the numpy copies are float64 throughout. So the two agree to
+# float32's precision and the numpy side is the more accurate one — a bit-exact assertion here would
+# be asserting that this file reproduces torch's rounding, which is not the claim.
+
+TORCH_F32 = dict(rel=2e-6, abs=2e-6)
+
+
+def _torch():
+    import torch
+    return torch
+
+
+def test_numpy_nb_nll_equals_the_training_loops_nb_nll() -> None:
+    """`D.nb_nll(n, mu, y)` == `train._elem_nb_nll(p, n, y).mean()` at `p = n/(n+mu)`.
+
+    The `p` fed to torch is the one `p_from_mu` derives, because the claim under test is that the
+    two FORMULAS agree — not that two different parameterisations of the same distribution do.
+    """
+    torch = _torch()
+    from candi.train import _elem_nb_nll
+
+    rng = np.random.default_rng(0)
+    n = rng.uniform(0.05, 40.0, size=4096)
+    mu = rng.uniform(1e-3, 500.0, size=4096)
+    y = rng.poisson(mu).astype(np.float64)
+    p = D.p_from_mu(n, mu)
+
+    want = float(_elem_nb_nll(torch.tensor(p, dtype=torch.float32),
+                              torch.tensor(n, dtype=torch.float32),
+                              torch.tensor(y, dtype=torch.float32)).mean())
+    assert D.nb_nll(n, mu, y) == pytest.approx(want, **TORCH_F32)
+
+
+def test_numpy_nb_nll_matches_at_the_clamps_the_training_loop_applies() -> None:
+    """The guards are the pin too: `n` under `eps`, `p` at both ends, a negative target.
+
+    **HANDING TORCH float64 DOES NOT MAKE THIS A float64 COMPARISON.** `_elem_nb_nll` opens with
+    `fp32_fence`, which casts every floating input to float32 unconditionally — that is the fence's
+    job. So the torch side is float32 arithmetic whatever this file passes in, and the tolerance is
+    float32's, elementwise rather than on a mean that could hide one bad position.
+
+    `n` is kept under ~1e3 for a reason worth writing down: `log_prob` differences two lgammas, and
+    at `n = 1e6` those are ~1.28e7 apart in float32, where one ulp IS 1.0. The float32 answer there
+    is wrong by ~1 nat and the float64 one is right — a divergence in torch's precision, not in
+    these two formulas, and a test that asserted on it would be pinning the wrong thing.
+    """
+    torch = _torch()
+    from candi.train import _elem_nb_nll
+
+    n = np.array([1e-9, 1e-6, 1.0, 1e3, 3.0])      # the first two are both floored to eps
+    mu = np.array([1e-9, 1.0, 1e-9, 1.0, 5.0])     # p at both ends of its clamp
+    y = np.array([0.0, 4.0, 0.0, 2.0, -3.0])       # a negative count is floored at 0 on both sides
+    p = D.p_from_mu(n, mu)
+    want = _elem_nb_nll(torch.tensor(p), torch.tensor(n), torch.tensor(y)).numpy()
+    assert np.isfinite(want).all()
+
+    # 5e-4 rather than float32's 1e-7 because the lgamma cancellation above is already visible at
+    # n = 1e3: lgamma(1000) is ~5905, where a float32 ulp is 5e-4. The tolerance tracks that, so it
+    # is the arithmetic's own floor and not a number tuned until the test went green.
+    got = np.array([D.nb_nll(n[i:i + 1], mu[i:i + 1], y[i:i + 1]) for i in range(len(n))])
+    np.testing.assert_allclose(got, want, rtol=5e-4, atol=1e-6)
+    assert D.nb_nll(n, mu, y) == pytest.approx(float(want.mean()), rel=5e-4, abs=1e-6)
+
+
+def test_numpy_gaussian_nll_equals_the_training_loops_gaussian_nll_including_the_constant() -> None:
+    """`full=True`, so the `0.5*log(2*pi)` is in. Dropping it shifts every value by 0.9189385."""
+    torch = _torch()
+    from candi.train import _elem_gaussian_nll
+
+    rng = np.random.default_rng(1)
+    mu = rng.normal(0.0, 3.0, size=4096)
+    var = rng.uniform(1e-8, 9.0, size=4096)        # spans torch's own 1e-6 clamp on `var`
+    y = rng.normal(0.0, 3.0, size=4096)
+
+    want = float(_elem_gaussian_nll(torch.tensor(mu, dtype=torch.float64),
+                                    torch.tensor(var, dtype=torch.float64),
+                                    torch.tensor(y, dtype=torch.float64)).mean())
+    assert D.gaussian_nll(mu, var, y) == pytest.approx(want, rel=1e-9)
+
+    # ... and the constant really is present, rather than the two copies agreeing on omitting it.
+    got_without = float(np.mean(0.5 * (np.log(np.maximum(var, D.GAUSSIAN_VAR_EPS))
+                                       + (mu - y) ** 2 / np.maximum(var, D.GAUSSIAN_VAR_EPS))))
+    assert D.gaussian_nll(mu, var, y) - got_without == pytest.approx(
+        0.5 * np.log(2 * np.pi), abs=1e-12)
+
+
+def test_numpy_bernoulli_nll_equals_the_training_loops_bce_through_the_sigmoid() -> None:
+    """The harness stores `sigmoid(logit)`, so the pin goes logit -> sigmoid -> this function."""
+    torch = _torch()
+    from candi.train import _elem_peak_bce
+
+    rng = np.random.default_rng(2)
+    logit = rng.uniform(-8.0, 8.0, size=4096)
+    y = (rng.random(4096) < 0.2).astype(np.float64)
+
+    want = float(_elem_peak_bce(torch.tensor(logit, dtype=torch.float64),
+                                torch.tensor(y, dtype=torch.float64)).mean())
+    prob = 1.0 / (1.0 + np.exp(-logit))
+    assert D.bernoulli_nll(prob, y) == pytest.approx(want, rel=1e-9)
+
+
+def test_bernoulli_nll_refuses_the_missing_sentinel_exactly_as_the_training_loop_does() -> None:
+    """`y_peaks` holds -1 for an assay the biosample lacks; BCE against -1 is not defined."""
+    with pytest.raises(ValueError, match="outside"):
+        D.bernoulli_nll(np.array([0.5, 0.5]), np.array([1.0, -1.0]))
+
+
+def test_the_signal_target_transform_moves_the_gaussian_loss_and_lands_on_torchs_value() -> None:
+    """D30 — `arcsinh` is not `none`, and the transformed number is the one torch computes.
+
+    This is the whole reason the loss path carries a transform: on a store the head is fit against
+    `arcsinh(-log10 p)`, so scoring it against raw `-log10 p` gives a finite, plausible, wrong loss.
+    """
+    torch = _torch()
+    from candi.train import _elem_gaussian_nll
+
+    rng = np.random.default_rng(3)
+    pval = rng.uniform(0.0, 60.0, size=2048)       # raw -log10 p, which reaches 0 constantly
+    mu = np.abs(rng.normal(1.5, 1.0, size=2048))   # a softplus mean, so non-negative
+    var = rng.uniform(1e-3, 2.0, size=2048)
+
+    plain = D.gaussian_nll(mu, var, D.transform_signal_target(pval, "none"))
+    bent = D.gaussian_nll(mu, var, D.transform_signal_target(pval, "arcsinh"))
+    assert plain != pytest.approx(bent, rel=1e-3), "the transform did nothing"
+
+    want = float(_elem_gaussian_nll(torch.tensor(mu, dtype=torch.float64),
+                                    torch.tensor(var, dtype=torch.float64),
+                                    torch.arcsinh(torch.tensor(pval, dtype=torch.float64))).mean())
+    assert bent == pytest.approx(want, rel=1e-9)
+    # `none` is the identity, bit for bit — the h5 path's whole arithmetic rests on that.
+    np.testing.assert_allclose(D.transform_signal_target(pval, "none"), pval, rtol=0, atol=0)
+
+
+def test_the_transform_vocabulary_matches_the_training_modules() -> None:
+    """Two copies of a vocabulary drift. This is the one place they are compared."""
+    from candi.train import SIGNAL_TARGET_TRANSFORMS as TRAIN_MODES
+
+    assert D.SIGNAL_TARGET_TRANSFORMS == TRAIN_MODES
+    with pytest.raises(ValueError, match="signal_target_transform"):
+        D.transform_signal_target(np.array([1.0]), "sqrt")
+
+
+# ---------------------------------------------------------------------------
+# the OTHER direction — the benchmark path's inversion (the spaces contract)
+# ---------------------------------------------------------------------------
+
+def test_inverting_the_mean_undoes_the_target_transform_exactly() -> None:
+    """`sinh(arcsinh(x)) = x` and `expm1(log1p(x)) = x` — the two are exact inverses on paper.
+
+    The benchmark path's whole claim is that a prediction lands back in `-log10 p`, so the identity
+    is checked on the mean, in both modes, at values that span the corpus range.
+    """
+    x = np.array([0.0, 1e-3, 0.5, 2.0, 17.0, 400.0, 17_731.0])
+    for mode in ("arcsinh", "log1p"):
+        mu_t = D.transform_signal_target(x, mode)
+        mu_back, _ = D.invert_signal_prediction(mu_t, np.ones_like(x), mode)
+        np.testing.assert_allclose(mu_back, x, rtol=1e-12, atol=1e-9)
+
+
+def test_the_inverted_sigma_is_the_derivative_of_the_map_at_the_mean() -> None:
+    """The delta method IS a first derivative: `σ' = |g'(µ)| σ`, `g = sinh` or `expm1`.
+
+    Checked against a central finite difference rather than against a second copy of `cosh`, so a
+    typo in the formula cannot be reproduced by the test.
+    """
+    mu = np.array([-1.0, 0.0, 0.7, 2.5])
+    sigma = np.array([0.1, 0.25, 0.5, 1.0])
+    h = 1e-6
+    for mode, g in (("arcsinh", np.sinh), ("log1p", np.expm1)):
+        _, s = D.invert_signal_prediction(mu, sigma, mode)
+        deriv = (g(mu + h) - g(mu - h)) / (2 * h)
+        np.testing.assert_allclose(s, np.abs(deriv) * sigma, rtol=1e-6)
+
+
+def test_the_delta_method_is_honest_about_being_an_approximation() -> None:
+    """`sinh` of a Gaussian is NOT a Gaussian, and the docstring says so. This is the size of it.
+
+    Monte Carlo the true pushforward of `N(µ, σ²)` through `sinh`. At small `σ` the delta-method
+    `(sinh µ, cosh µ · σ)` matches its mean and sd to a few percent; at large `σ` it does not, and
+    the failure is one-sided — `sinh` is convex above 0, so the true mean exceeds `sinh µ`. A reader
+    of a store-path `pit_ks` or `coverage_95` is reading the first case at best.
+    """
+    rng = np.random.default_rng(11)
+    mu, n = 2.0, 400_000
+    for sigma, tol in ((0.05, 0.02), (0.1, 0.05)):
+        draws = np.sinh(rng.normal(mu, sigma, size=n))
+        m, s = D.invert_signal_prediction(np.array([mu]), np.array([sigma]), "arcsinh")
+        assert abs(draws.mean() - m[0]) / m[0] < tol
+        assert abs(draws.std() - s[0]) / s[0] < tol
+    # ... and at a σ the head could plausibly emit, the approximation is simply wrong.
+    big = np.sinh(rng.normal(mu, 1.5, size=n))
+    m, s = D.invert_signal_prediction(np.array([mu]), np.array([1.5]), "arcsinh")
+    assert big.mean() > 1.5 * m[0], "sinh is convex here; the true mean must exceed sinh(mu)"
+    assert big.std() > 1.5 * s[0]
+
+
+def test_none_is_the_identity_and_hands_back_the_caller_s_own_arrays() -> None:
+    """The h5 path's bit-identity rests on this: not "equal to", the SAME OBJECT.
+
+    A copy in float64 would be equal here and could still change a downstream float32 reduction, so
+    identity is the assertion rather than `allclose`.
+    """
+    mu = np.linspace(0.0, 3.0, 16, dtype=np.float32)
+    sigma = np.full(16, 0.5, dtype=np.float32)
+    m, s = D.invert_signal_prediction(mu, sigma, "none")
+    assert m is mu and s is sigma
+
+
+def test_the_inversion_refuses_a_mode_outside_the_vocabulary() -> None:
+    """Same vocabulary as the forward direction, same refusal — a silent fall-through would score
+    an unbent prediction against a raw truth and call it a benchmark number."""
+    with pytest.raises(ValueError, match="signal_target_transform"):
+        D.invert_signal_prediction(np.array([1.0]), np.array([1.0]), "sqrt")
+
+
+def test_the_nll_eps_constants_are_the_training_loops_own_defaults() -> None:
+    """A constant retyped is a constant that can drift; read it off the signature instead."""
+    import inspect
+
+    from candi.train import _elem_nb_nll
+
+    assert inspect.signature(_elem_nb_nll).parameters["eps"].default == D.NLL_EPS

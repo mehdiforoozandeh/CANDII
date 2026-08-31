@@ -866,7 +866,7 @@ def test_the_fence_is_free_in_fp32():
 
 
 def test_no_autocast_covers_a_whole_call_tree():
-    """`eval.evaluate` / `eval.quick_eval` use this form: the guarantee is 'nothing under here'."""
+    """`bench.cli.main` uses this form: the guarantee is 'nothing under here', not 'not this line'."""
     with autocast_region(DEV, "bf16"):
         with no_autocast(DEV):
             assert not torch.is_autocast_enabled(DEV)

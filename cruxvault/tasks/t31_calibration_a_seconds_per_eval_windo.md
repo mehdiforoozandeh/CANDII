@@ -1,15 +1,15 @@
 ---
 id: t31
 type: task
-title: calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain
+title: "calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain"
 category: implementation
 parent: t30
 blocked_by: t28
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-21T15:02:53
-updated: 2026-08-21T15:02:53
+status: done
+created: "2026-08-21T15:02:53"
+updated: "2026-08-22T17:18:11"
 ---
 
 # t31 — calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain
@@ -24,7 +24,7 @@ sets mid-training coverage; calibration (b) is done and says 0.33% gives 179% re
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Superseded by the direct measurement](results/t30/TIMING.md) — epoch 2237 s, whole-chr21 impute pass 1254 s on the MIG slice (job 56232885); the t31 quick_eval pricing became moot when the monitor moved to bench
 
 ## Evidence
 

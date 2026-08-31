@@ -1,38 +1,33 @@
-"""t28 — the scorer takes a ready dataset, so a store-backed run can actually be scored.
+"""t28 — what survives of it now that the scorer it fixed has been deleted.
 
-`build_eval_units` used to CONSTRUCT its own `CandiKitH5Dataset` from a path, and that single line
-was the whole reason a store-backed run could not be evaluated: `train.py` printed a warning and
-silently set `--eval-every` to 0, so a run on the corpus we are migrating to had no mid-training
-number at all and no best-checkpoint selection.
+t28's finding was that `build_eval_units` CONSTRUCTED its own `CandiKitH5Dataset` from a path, and
+that single line was the whole reason a store-backed run could not be evaluated. The fix made the
+builder take a ready dataset. `candi.eval` — builder, `quick_eval` and all — is now deleted (D15)
+and `candi.monitor` scores every 25 bp bin of the regime's eval chromosomes instead, so the window
+thinning those tests pinned (`batches_per_pair`, the slot arithmetic, the cycle count) describes
+nothing that runs. `tests/test_monitor.py` is where "a store-backed run is scorable" is tested now.
 
-The three names the builder reads off a dataset for its slot arithmetic — `_eval_indices`,
-`_bios_candidates`, `_all_imp_biosamples` — were already spelled identically by `StoreDataset`
-(t14, `store/dataset.py`), deliberately, so that "the eval builder must not be able to tell the two
-datasets apart". With the construction removed, that promise is finally testable, and this file is
-where it is tested.
+Two things t28 established do outlive it, and they are what is left here:
 
-Everything runs against a real synthetic store built by `candi.store.writer`. Nothing here
-hand-rolls a dataset: a test that built its own stand-in would be checking the builder against a
-mock of the thing it is supposed to work with.
+- **`DataSource.eval_pairs_declared()`** — the guard `train.py` still uses to decide whether a
+  mid-training eval has anything to select on. It is `train.py`'s own, not the scorer's.
+- **A store eval dataset re-iterates to the same windows.** The monitor pins its window plan by
+  opening ONE source outside the hook; a loader that handed back different windows on the second
+  pass would break that pairing whatever the scorer is.
 """
 from __future__ import annotations
 
-import inspect
 import json
 from pathlib import Path
 
 import pytest
-import torch
 
-from candi.eval import build_eval_units, eval_cell_cond, quick_eval
 from candi.store import layout as L
 from candi.store.regime import Regime
 from candi.train import DataSource, make_dataset
 
-from tests.test_store_reader import ASSAYS, make_store
-from tests.test_store_regime import CTX, regime_dict
-
-DEVICE = torch.device("cpu")
+from tests.test_store_reader import make_store
+from tests.test_store_regime import regime_dict
 
 
 #: An imputation eval needs a prompt that LACKS something the truth carries: `imp_map` is
@@ -45,7 +40,7 @@ EVAL_TRACKS = {
     "T_aa": ("ATAC-seq", "DNase-seq", L.CONTROL_TRACK),
     "V_aa": ("ATAC-seq", "DNase-seq", "H3K4me3"),
     # TWO pairs, not one. With a single pair the cycle arithmetic below cannot be wrong: every
-    # batch belongs to the only target there is. The bug this file now pins needed two.
+    # batch belongs to the only target there is. The bug this file once pinned needed two.
     "T_bb": ("ATAC-seq", "DNase-seq", L.CONTROL_TRACK),
     "V_bb": ("ATAC-seq", "DNase-seq", "H3K4me3"),
 }
@@ -74,77 +69,20 @@ def bare_source(tmp_path_factory, store) -> DataSource:
     return DataSource(kind="store", regime_path=str(p), regime=Regime.from_file(p))
 
 
-def _eval_ds(source, model, batch_size=2):
-    return make_dataset(source, "type1", train=False, batch_size=batch_size, dsf_sampling="off",
-                        seed=0, shuffle=False, h5_cache_ram=False,
-                        cell_cond=eval_cell_cond(model))
-
-
-def _model(ds):
-    from candi.model import build_model
-    torch.manual_seed(0)
-    return build_model(num_assays=ds.num_assays, context_length=ds.context_bins,
-                       resolution=ds.resolution, num_cells=ds.num_cells,
-                       depth_center=ds.depth_center(), d_model=32, embed_dim=8,
-                       n_transformer_layers=1).eval()
-
-
 # ---------------------------------------------------------------------------------------------
-# the signature: it receives, it does not construct
+# the window plan: one dataset, re-iterated, is the same windows
 # ---------------------------------------------------------------------------------------------
-
-
-def test_the_builder_no_longer_takes_a_path_or_knows_how_to_open_one():
-    """The regression this file exists to prevent: a path parameter invites a hard-coded loader."""
-    params = inspect.signature(build_eval_units).parameters
-    assert "h5_path" not in params and "regime" not in params
-    assert "imp_prefixes" not in params and "reference" not in params
-    # batch_size is read off the dataset -- a caller free to disagree with the loader would
-    # mis-space `batches_per_pair` across the chromosome without saying anything.
-    assert "batch_size" not in params
-
-
-def test_quick_eval_no_longer_takes_a_path_either():
-    params = inspect.signature(quick_eval).parameters
-    assert "h5_path" not in params and "reference" not in params
-    assert inspect.signature(quick_eval).parameters["meta_probe"].default is None
-
-
-# ---------------------------------------------------------------------------------------------
-# the capability: a store-backed run is scorable
-# ---------------------------------------------------------------------------------------------
-
-
-def test_the_builder_scores_a_store_backed_dataset(paired_source):
-    """The point of t28. Before this, these units could not be built at all."""
-    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
-    model = _model(probe)
-    ds = _eval_ds(paired_source, model)
-    units, assays = build_eval_units(model, ds, DEVICE)
-    assert units, "a store-backed eval produced no units"
-    assert list(assays) == list(ds.assays)
-    assert any(u.imp_map is not None for u in units), "no imputation target was scored"
-    assert any(u.imp_biosample == "V_aa" for u in units)
-
-
-def test_quick_eval_returns_a_selection_metric_off_a_store(paired_source):
-    """`train.py` selects on `V_imp_crps`; a NaN here is what "selecting on nothing" looked like."""
-    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
-    model = _model(probe)
-    q = quick_eval(model, _eval_ds(paired_source, model), DEVICE, batches_per_pair=1)
-    assert q["V_n_targets"] > 0
-    assert q["V_imp_crps"] == q["V_imp_crps"], "V_imp_crps is NaN"
 
 
 def test_one_dataset_re_iterated_gives_the_same_windows_every_time(paired_source):
-    """Why `train.py` opens the eval dataset ONCE and re-iterates it.
+    """Why the mid-training eval opens its source ONCE and re-iterates it.
 
     Selection compares epoch 6 against epoch 12, and that comparison is only paired if both saw the
-    same positions. The loop relies on re-iteration being stable; this is that assumption, asserted.
+    same positions. `Monitor.__init__` opens `bench.harness.open_source` outside the hook for
+    exactly this reason. The loader assumption underneath is the same either way, and this is it.
     """
-    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
-    model = _model(probe)
-    ds = _eval_ds(paired_source, model)
+    ds = make_dataset(paired_source, "type1", train=False, batch_size=2, dsf_sampling="off",
+                      seed=0, shuffle=False, h5_cache_ram=False, cell_cond="off")
     first = [int(b["window_idx"][0]) for b in ds]
     second = [int(b["window_idx"][0]) for b in ds]
     assert first and first == second
@@ -170,62 +108,12 @@ def test_a_regime_with_no_declared_pairs_reports_that_it_cannot(bare_source):
 
 
 def test_the_h5_path_always_reports_that_it_can_be_scored(tmp_path_factory):
-    """It derives its pairing from the `T_`/`V_`/`B_` prefixes, so it can never lack one."""
+    """It derives its pairing from the `T_`/`V_`/`B_` prefixes, so it can never lack one.
+
+    Note this no longer means an h5 run gets a mid-training eval: `train.py` turns `--eval-every`
+    off on the h5 path outright, because the scorer that served it was `eval.quick_eval` and
+    `candi.eval` is deleted (D15). What this answers is "could this source supply imputation
+    targets", which is still the right question for a source and still True here.
+    """
     src = DataSource.coerce(str(tmp_path_factory.mktemp("t28h5") / "nothing.h5"))
     assert src.eval_pairs_declared() is True
-
-
-# ---------------------------------------------------------------------------------------------
-# thinning WINDOWS must never thin TARGETS
-# ---------------------------------------------------------------------------------------------
-
-
-def test_batches_per_pair_keeps_every_target_and_shrinks_only_the_windows(paired_source):
-    """The knob's entire reason for existing, and it did not hold on the store.
-
-    `CandiKitH5Dataset` interleaves eval batches across pairs -- batch `bi` belongs to pair
-    `bi % n_pairs` -- while `StoreDataset` groups them pair-major: all of pair 0's batches, then all
-    of pair 1's. `build_eval_units` selected cycles as `bi // n_slots`, which is right for the first
-    ordering and, on the second, picks a contiguous block lying entirely inside the FIRST pair.
-    Measured before the fix: two pairs in, one target scored, one dropped without a word.
-
-    `max_batches` warns when it drops targets. `batches_per_pair` is documented as the knob that
-    CANNOT -- "keeps EVERY entry and thins the WINDOWS" -- which is exactly why its failing silently
-    was worse than the one that shouts.
-    """
-    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
-    model = _model(probe)
-    ds = _eval_ds(paired_source, model)
-    n_pairs = len(paired_source.regime.eval_pairs)
-    assert n_pairs >= 2, "a one-pair fixture cannot see this bug"
-    full, _ = build_eval_units(model, ds, DEVICE)
-    every_target = {u.imp_biosample for u in full if u.imp_biosample}
-    for k in (1, 2):
-        units, _ = build_eval_units(model, ds, DEVICE, batches_per_pair=k)
-        assert {u.imp_biosample for u in units if u.imp_biosample} == every_target, (
-            f"batches_per_pair={k} dropped a target")
-
-
-def test_the_cycle_count_is_asked_of_the_dataset_not_derived_from_the_batch_index(paired_source):
-    """The two loaders divide the eval chromosome differently, so only they can answer this.
-
-    The store hands EVERY window to EVERY pair, so a pair's share is the whole chromosome. The h5
-    walks the pool once and cycles the pair index, so a pair's share is the pool divided by the
-    pair count. That is the "position scope" difference the t22 equivalence report separated out --
-    a real difference in what a target is scored on, not an iteration detail.
-    """
-    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
-    ds = _eval_ds(paired_source, _model(probe))
-    import math
-    assert ds.eval_batches_per_pair() == math.ceil(len(ds._eval_indices) / ds.batch_size)
-
-
-def test_more_coverage_means_more_windows_per_target_not_more_targets(paired_source):
-    probe = make_dataset(paired_source, "type1", train=True, batch_size=2, seed=0)
-    model = _model(probe)
-    ds = _eval_ds(paired_source, model)
-    a, _ = build_eval_units(model, ds, DEVICE, batches_per_pair=1)
-    b, _ = build_eval_units(model, ds, DEVICE, batches_per_pair=2)
-    assert len(b) > len(a)
-    assert ({u.imp_biosample for u in a if u.imp_biosample}
-            == {u.imp_biosample for u in b if u.imp_biosample})

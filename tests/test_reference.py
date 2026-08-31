@@ -246,7 +246,7 @@ def test_G0_offset_moves_log2_mu_by_exactly_the_offset():
         f"offset did not pass through: mean shift {float(d.mean()):.4f}, expected 1.5"
     # ...and mu scales by 2^offset, which is the claim that matters for the NB mean
     assert torch.allclose(shifted["mu"], base["mu"] * (2.0 ** 1.5), rtol=1e-4)
-    # eta is untouched: it stays the offset-free statistic M2 reads
+    # eta is untouched: it stays the offset-free statistic the covariate block reads
     assert torch.equal(shifted["eta"], base["eta"])
 
 

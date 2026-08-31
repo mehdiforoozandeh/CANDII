@@ -263,6 +263,39 @@ def test_missing_semantics_match_the_old_path(store):
             assert torch.all(b["x_avail"][:, j] == 1.0)
 
 
+def test_y_pval_reaches_the_batch_as_raw_minus_log10_p(store):
+    """The second link of the spaces contract (D26), pinned where the model actually sees it.
+
+    `tests/test_store_reader.py` pins that `BiosampleStore.pval` decodes the arcsinh codec. This
+    pins that NOTHING between the reader and the batch bends it again: `y_pval` is the reader's own
+    array, value for value, so the ONLY place a p-value changes space on the way to the loss is
+    `train.py::_apply_signal_target_transform` (D30) — and the only place it changes back is
+    `bench.harness.score_track`. A second transform hiding in the loader would make both of those
+    wrong while every shape and dtype check still passed.
+    """
+    ds = make_ds(store, regime_over={"kinds": ["counts", "peaks", "pval"]},
+                 train=True, shuffle=False, batch_size=2)
+    b = batches(ds)[0]
+    bs = CorpusStore(store)[b["biosample_name"]]
+    checked = 0
+    for j, wi in enumerate(b["window_idx"].tolist()):
+        chrom, start = ds._windows[wi]
+        for assay in ASSAYS:
+            i = ds.assays.index(assay)
+            # An assay the cell does not have is a zero column here, not a read (`want_pval` gates
+            # on availability); the MISSING semantics of that column are pinned elsewhere.
+            if not bs.has(assay, "pval") or float(b["y_avail"][j, i]) != 1.0:
+                continue
+            want = bs.pval(chrom, start, start + CTX, assays=[assay])[:, 0]
+            got = b["y_pval"][j, :, i].numpy()
+            np.testing.assert_array_equal(got, want)
+            checked += 1
+    assert checked, "no pval track was compared — the fixture stopped carrying one"
+    # And it is the DECODED value, not the stored code: the fixture's tracks run well past 1.0,
+    # where the fixed point and the arcsinh of it are both visibly different numbers.
+    assert float(b["y_pval"].max()) > 1.0
+
+
 def test_the_loader_never_emits_cloze(store):
     """CLOZE is the masker's mark. A loader that writes it is masking behind the masker's back."""
     for b in batches(make_ds(store, train=True, shuffle=False))[:3]:

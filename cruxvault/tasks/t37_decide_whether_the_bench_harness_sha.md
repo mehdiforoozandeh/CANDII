@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-21T15:19:56
-updated: 2026-08-21T15:19:56
+status: done
+created: "2026-08-21T15:19:56"
+updated: "2026-08-22T17:18:11"
 ---
 
 # t37 — decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak
@@ -24,7 +24,7 @@ harness.py:519 and harness.py:539 build identical draw_seed tuples; the store's 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Verdict: paired — one ladder read twice](results/t37/FINDING.md) — not the t27 leak; docstrings at both sites + two tripwire tests landed in 2f56cb1
 
 ## Evidence
 

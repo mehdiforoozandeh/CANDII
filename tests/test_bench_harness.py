@@ -29,10 +29,12 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))          # t80 — tools/ is importable
 
+from candi._vendored import MISSING                                   # noqa: E402
 from candi.bench import annotations as ann                            # noqa: E402
 from candi.bench import harness as H
-from candi.bench.harness import Pair, full_tiling, open_source
+from candi.bench.harness import Pair, decode_groups, full_tiling, open_source
 from candi.model import build_model                                   # noqa: E402
+from candi.store import layout as L                                   # noqa: E402
 from candi.store import layout as SL                                  # noqa: E402
 from candi.store.dataset import StoreDataset                          # noqa: E402
 from candi.store.regime import Regime                                 # noqa: E402
@@ -173,6 +175,160 @@ def test_thinning_the_input_moves_the_depth_covariate_with_it(source) -> None:
     assert four["x_data"][:, :, avail].sum() < one["x_data"][:, :, avail].sum()
 
 
+def test_bench_thins_one_ladder_and_reads_it_twice(source) -> None:
+    """t37 — the two bench thinning sites SHARE a seed on a self-pair, and must keep sharing it.
+
+    `_thin_input` and `counts_at_dsf` both call `draw_seed` WITHOUT `side`. On a self-pair that
+    makes them one generator over one array, so the input at depth `d` and the truth at depth `d`
+    are the same bytes. That is the bake's behaviour, not t27's identity-copy leak: `H5Source`
+    serves both reads out of a single `counts_dsf{d}` dataset, and a generated ladder is only a
+    substitute for a stored one if it agrees with itself. Nothing compares the two arrays anyway —
+    `_thin_input` feeds `depthblind`'s latents (no truth) and `counts_at_dsf` feeds `depthcounterfact` (latent at DSF 1).
+
+    Passing `side=` here would move `depthcounterfact` and `depthblind` by pure realization noise and split the store from
+    the h5. This test is the tripwire for that edit.
+    """
+    pair = Pair("T_aa", "T_aa")
+    starts = source.windows("chr2")[:2]
+    avail = (source.batch(pair, "chr2", starts, "denoise")["x_avail"][0] > 0).numpy()
+    assert avail.any()
+    for d in source.dsf_levels:
+        if int(d) == 1:
+            continue
+        x = source.batch(pair, "chr2", starts, "denoise", x_dsf=int(d))["x_data"].numpy()
+        y = source.counts_at_dsf(pair, "chr2", starts, int(d))
+        assert np.array_equal(x[:, :, avail], y[:, :, avail]), (
+            f"the two bench thinning sites diverged at dsf {int(d)}; if a `side=` was added to "
+            f"draw_seed in _thin_input or counts_at_dsf, read cruxvault/results/t37/FINDING.md "
+            f"before keeping it")
+        assert x[:, :, avail].sum() < source.counts_at_dsf(
+            pair, "chr2", starts, 1)[:, :, avail].sum()
+
+
+def test_a_declared_pair_separates_the_two_thinning_sites_on_its_own(source) -> None:
+    """The self-pair collision above is confined to the self-pair.
+
+    `counts_at_dsf` seeds under the TARGET cell's name and `_thin_input` under the INPUT's, so a
+    declared eval pair puts a different biosample in the entropy tuple and the two sites separate
+    with no `side` term needed. This pins WHY §5 of the t37 finding is safe under declared pairs.
+    """
+    from candi.store.dataset import draw_seed, dsf_milli
+
+    a = draw_seed(source._run_seed, "T_aa", "H3K4me3", "chr2", 0, dsf_milli(2))
+    b = draw_seed(source._run_seed, "V_aa", "H3K4me3", "chr2", 0, dsf_milli(2))
+    assert list(a.entropy) != list(b.entropy)
+    assert len(list(a.entropy)) == 6, "bench must keep the pre-t27 six-element tuple"
+
+
+# ---------------------------------------------------------------------------
+# 2b — the DECLARED eval pairs (D31)
+# ---------------------------------------------------------------------------
+#
+# The shared `TRACKS` layout has `V_aa` as a strict subset of `T_aa`, which is the right shape for
+# testing MISSING and the wrong one for testing imputation: an imputation eval needs a prompt that
+# LACKS something the truth carries. Here `T_aa` has no H3K4me3 and `V_aa` has it, so H3K4me3 is a
+# real target — while ATAC-seq, which BOTH carry, is not one, and pins the filter. Two pairs, so
+# declaration order is something the assertions can see.
+
+PAIRED_TRACKS = {
+    "T_aa": ("ATAC-seq", "DNase-seq", L.CONTROL_TRACK),
+    "V_aa": ("ATAC-seq", "H3K4me3"),
+    "T_bb": ("ATAC-seq", "DNase-seq", L.CONTROL_TRACK),
+    "V_bb": ("ATAC-seq", "H3K4me3"),
+}
+IMPUTED = ASSAYS.index("H3K4me3")
+SHARED = ASSAYS.index("ATAC-seq")
+
+
+@pytest.fixture(scope="module")
+def paired_store(tmp_path_factory) -> Path:
+    return make_store(tmp_path_factory.mktemp("pairedstore"), tracks=PAIRED_TRACKS)
+
+
+@pytest.fixture(scope="module")
+def paired_regime_file(paired_store, tmp_path_factory) -> Path:
+    d = tmp_path_factory.mktemp("pairedregime")
+    obj = regime_dict(paired_store,
+                      biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "V_bb"]},
+                      kinds=["counts", "peaks", "pval"],
+                      eval_pairs=[["T_aa", "V_aa"], ["T_bb", "V_bb"]])
+    p = d / "regime.json"
+    p.write_text(json.dumps(obj))
+    return p
+
+
+@pytest.fixture()
+def paired_source(paired_regime_file):
+    s = open_source(store=paired_regime_file)
+    yield s
+    s.close()
+
+
+def test_a_declared_regime_pairs_the_prompt_cell_with_the_cell_holding_the_truth(paired_source):
+    """D31 — the pairing is READ OFF the regime, in declaration order. No name is parsed (D16)."""
+    assert H.cross_cell(Pair("T_aa", "V_aa"), "impute") is True
+    assert paired_source.pairs("impute") == [Pair("T_aa", "V_aa"), Pair("T_bb", "V_bb")]
+    # Denoising reads and scores ONE cell whatever the regime declares.
+    assert H.cross_cell(Pair("T_aa", "T_aa"), "denoise") is False
+    assert paired_source.pairs("denoise") == [Pair("T_aa", "T_aa"), Pair("T_bb", "T_bb")]
+
+
+def test_a_target_is_an_assay_the_truth_cell_has_and_the_prompt_cell_does_not(paired_source):
+    """Both halves of the rule. `H5Source.targets` and `StoreDataset._imp_keys` enforce the same."""
+    cols = paired_source.targets(Pair("T_aa", "V_aa"), "impute")
+    assert cols == [IMPUTED]
+    assert SHARED not in cols, (
+        "ATAC-seq is in the encoder input, so predicting it measures copying, not imputation")
+    # The self-pair is unchanged: everything the cell has is a denoising target.
+    assert paired_source.targets(Pair("T_aa", "T_aa"), "denoise") == [SHARED,
+                                                                     ASSAYS.index("DNase-seq")]
+
+
+def test_a_regime_with_no_declared_pairs_still_imputes_by_leaving_one_assay_out(source):
+    """The pair-less path is untouched: self-pairs, and one forward pass per held-out assay."""
+    assert H.cross_cell(Pair("T_aa", "T_aa"), "impute") is False
+    assert source.pairs("impute") == [Pair("T_aa", "T_aa"), Pair("V_aa", "V_aa")]
+    cols = source.targets(Pair("T_aa", "T_aa"), "impute")
+    assert cols == [0, 1, 2]
+    assert decode_groups(source, "impute", cols) == [[0], [1], [2]]
+
+
+def test_the_batch_carries_the_target_cells_own_truth_and_covariates(paired_source):
+    """The five `y_*_imp` keys come from `StoreDataset`, not from anything re-derived here."""
+    starts = paired_source.windows("chr2")[:2]
+    batch = paired_source.batch(Pair("T_aa", "V_aa"), "chr2", starts, "impute")
+    assert batch["biosample_name"] == "T_aa" and batch["imp_biosample_name"] == "V_aa"
+    assert float(batch["x_avail"][0, IMPUTED]) == 0.0, "T_aa has no H3K4me3 to prompt with"
+    assert float(batch["y_data_imp"][:, :, IMPUTED].max()) > 0, "V_aa's H3K4me3 is the truth"
+    # The prompt for the imputed slot must carry V_aa's depth, not T_aa's — without it every
+    # imputed level is off by the depth ratio between the two cells.
+    mixed = H.vb_natural_meta(batch["y_meta"], batch["y_meta_imp"], batch["y_avail"])
+    assert float(batch["y_meta"][0, 0, IMPUTED]) == float(MISSING)
+    assert float(mixed[0, 0, IMPUTED]) == pytest.approx(
+        float(batch["y_meta_imp"][0, 0, IMPUTED]))
+    assert float(mixed[0, 0, IMPUTED]) != float(MISSING)
+
+
+def test_the_declared_pair_is_scored_against_the_target_cell_end_to_end(paired_source, model):
+    recs = list(H.stream_tracks(model, paired_source, "cpu", kind="impute", batch_windows=4))
+    assert {r.key for r in recs} == {"T_aa|V_aa|H3K4me3", "T_bb|V_bb|H3K4me3"}
+    for rec in recs:
+        assert rec.n_bins() == N_BINS["chr2"]
+        # T_aa carries no H3K4me3 at all, so a non-zero truth can only have come from V_aa.
+        assert rec.counts["chr2"].max() > 0
+
+
+def test_the_dsf_ladder_of_a_declared_pair_is_the_target_cells_ladder(paired_source):
+    """`depthcounterfact`'s ground truth is the cell being scored, and that is the TARGET under a declared pair."""
+    starts = paired_source.windows("chr2")[:2]
+    pair = Pair("T_aa", "V_aa")
+    one = paired_source.counts_at_dsf(pair, "chr2", starts, 1)
+    batch = paired_source.batch(pair, "chr2", starts, "impute")
+    assert np.array_equal(one[:, :, IMPUTED], batch["y_data_imp"][:, :, IMPUTED].numpy())
+    two = paired_source.counts_at_dsf(pair, "chr2", starts, 2)
+    assert two[:, :, IMPUTED].sum() < one[:, :, IMPUTED].sum()
+
+
 # ---------------------------------------------------------------------------
 # 3 — the keys EVAL_PLAN.md §4 names
 # ---------------------------------------------------------------------------
@@ -258,18 +414,19 @@ def test_the_panel_measure_sees_every_cell_type_that_carries_the_assay(scored) -
     assert "note" in scored["panel"]["ATAC-seq"]
 
 
-def test_the_c_block_reports_all_six_instruments_and_what_they_rest_on(scored) -> None:
+def test_the_c_block_reports_all_seven_instruments_and_what_they_rest_on(scored) -> None:
+    # keys renamed from C1..C6 codes to names; `C5_C6_invariance` is now `depthblind_biokeep`.
     c = scored["C"]
-    assert {"C1_use", "C2_share", "C3_direction", "C4_specificity"} <= set(c)
-    assert "C3_depth_counterfactual" in c and "C5_C6_invariance" in c
-    assert c["n_units"] > 0 and c["n_windows"] == 3 and c["C1_n_resamples"] == 6
-    # D13 — C5 never leaves without C6.
-    assert "bio_silhouette" in c["C5_C6_invariance"]
+    assert {"covuse", "covshare", "depthdir", "covspec"} <= set(c)
+    assert "depthcounterfact" in c and "depthblind_biokeep" in c
+    assert c["n_units"] > 0 and c["n_windows"] == 3 and c["covuse_n_resamples"] == 6
+    # D13 — `depthblind` never leaves without `biokeep`, and the shared key is what enforces it.
+    assert "bio_silhouette" in c["depthblind_biokeep"]
 
 
 def test_the_within_batch_tripwire_reads_exactly_zero(scored) -> None:
-    """C1's cheapest falsifier: substitute the value already there and the loss must not move."""
-    for cov, rec in scored["C"]["C1_use"].items():
+    """`covuse`'s cheapest falsifier: substitute the value already there and the loss must not move."""
+    for cov, rec in scored["C"]["covuse"].items():
         assert rec["within_batch_d_crps"] == 0.0, cov
 
 
@@ -294,7 +451,10 @@ def test_bench_never_imports_the_training_module() -> None:
         "import sys, importlib\n"
         "for m in ('candi.bench.harness', 'candi.bench.cli', 'candi.bench.eic'):\n"
         "    importlib.import_module(m)\n"
-        "leaked = [m for m in ('candi.train', 'candi.eval') if m in sys.modules]\n"
+        # `candi.eval` used to be on this list and is deleted (D15), so naming it would assert
+        # nothing. `candi.monitor` takes its place: the direction is bench <- monitor <- train, and
+        # a bench that imported the monitor would close the same loop from the other end.
+        "leaked = [m for m in ('candi.train', 'candi.monitor') if m in sys.modules]\n"
         "print(','.join(leaked))\n"
     )
     env = {**os.environ, "PYTHONPATH": src + os.pathsep + os.environ.get("PYTHONPATH", "")}
@@ -437,7 +597,7 @@ def test_a_gapped_eval_tiling_is_refused_with_the_gap_measured(tmp_path) -> None
 
 
 def test_the_h5_bakes_own_dsf_ladder_is_used_rather_than_a_re_thinning(h5_source) -> None:
-    """S14's ground truth is `counts_dsf{k}` as baked. Re-thinning it here would be a second draw."""
+    """`depthcounterfact`'s ground truth is `counts_dsf{k}` as baked. Re-thinning it here would be a second draw."""
     pair = Pair("T_a", "V_a")
     starts = h5_source.windows("chr21")[:2]
     one = h5_source.counts_at_dsf(pair, "chr21", starts, 1)
@@ -799,13 +959,69 @@ def test_a_pair_whose_cells_share_an_assay_is_recorded_and_the_assay_is_not_scor
         src.close()
 
 
+# the loss tier — val/test loss, and the head gate that keeps it honest
 # ---------------------------------------------------------------------------
-# t80 — tools/declare_eval_pairs.py, the thing §14 says owns the pairing
+#
+# These are the three NLLs the training objective is built from, computed on the eval panel instead
+# of on a training batch. What they must be right about here is not the arithmetic — that is pinned
+# against `candi.train` in `tests/test_bench_analytic.py` — but the PLUMBING: which heads produce
+# which keys, that an absent head means an absent key rather than a nan, and that the target space
+# the Gaussian term was scored in is recorded next to the number.
+
+NLL_KEYS = {"nb_nll", "gaussian_nll", "bernoulli_nll"}
+
+
+def test_the_loss_tier_lands_in_every_arm_because_a_loss_has_no_arm(scored) -> None:
+    """The `count`/`pval` split is between two COMPARISONS; the objective is one scalar."""
+    for arms in scored["per_track"].values():
+        for arm in ("count", "pval"):
+            assert NLL_KEYS <= set(arms[arm]), f"{arm} is missing a loss term"
+            assert all(np.isfinite(arms[arm][k]) for k in NLL_KEYS)
+    for arm in ("count", "pval"):
+        assert NLL_KEYS <= set(scored["macro"][arm]), "the loss did not reach the macro roll-up"
+
+
+def test_the_gaussian_target_space_is_recorded_beside_the_number(scored) -> None:
+    """D30 — the same key in two spaces is two different quantities, both finite and plausible."""
+    assert scored["provenance"]["signal_target_transform"] == "none"
+    for arms in scored["per_track"].values():
+        for arm in ("count", "pval"):
+            assert arms[arm]["signal_target_transform"] == "none"
+    # A string cannot become a macro: `macro_mean` averages scalars only, and averaging a label
+    # would be nonsense even if it were possible.
+    assert "signal_target_transform" not in scored["macro"]["count"]
+
+
+@pytest.fixture(scope="module")
+def count_only_model():
+    """No signal head, no peak head — the checkpoint shape most of this repo's runs have."""
+    torch.manual_seed(0)
+    m = build_model(num_assays=len(ASSAYS), context_length=CTX, resolution=25,
+                    depth_center=24.25, heads=("count",))
+    m.eval()
+    return m
+
+
+def _one_track(model, regime_file, **kw):
+    src = open_source(store=regime_file)
+    try:
+        rec = next(H.stream_tracks(model, src, "cpu", kind="impute", batch_windows=4))
+        return rec, H.score_track(rec, gene_annotations=ann.gene_annotations(),
+                                  enh_annotations=ann.enhancer_annotations(),
+                                  c_index_pairs=500, **kw)
+    finally:
+        src.close()
+
+
+# ---------------------------------------------------------------------------
+# t80 — tools/declare_eval_pairs_d31.py, the thing §14 says owns the pairing. Renamed at the
+# main merge: origin/main already shipped a DIFFERENT tools/declare_eval_pairs.py (7 tests of its
+# own, a slurm caller, two generated configs). Both are kept; t87 reconciles them.
 # ---------------------------------------------------------------------------
 
 def test_the_declaring_tool_derives_the_pairing_and_records_its_provenance(
         pair_store, paired_regime, tmp_path) -> None:
-    from tools.declare_eval_pairs import main as declare_main
+    from tools.declare_eval_pairs_d31 import main as declare_main
 
     out = tmp_path / "pairs.json"
     rc = declare_main(["declare", "--store", str(pair_store), "--input-prefix", "T_",
@@ -824,7 +1040,7 @@ def test_the_declaring_tool_derives_the_pairing_and_records_its_provenance(
 
 def test_the_tool_and_the_harness_read_the_same_panel(pair_store, paired, tmp_path) -> None:
     """Two independent readings of one claim. The tool must never be the harness's echo."""
-    from tools.declare_eval_pairs import main as declare_main
+    from tools.declare_eval_pairs_d31 import main as declare_main
 
     out = tmp_path / "pairs.json"
     declare_main(["declare", "--store", str(pair_store), "--input-prefix", "T_",
@@ -835,7 +1051,7 @@ def test_the_tool_and_the_harness_read_the_same_panel(pair_store, paired, tmp_pa
 
 def test_the_tool_refuses_to_guess_a_pairing(pair_store) -> None:
     """D31 — a default naming rule would make the pairing inferred rather than declared."""
-    from tools.declare_eval_pairs import main as declare_main
+    from tools.declare_eval_pairs_d31 import main as declare_main
 
     with pytest.raises(SystemExit, match="no pairing rule"):
         declare_main(["declare", "--store", str(pair_store)])
@@ -843,7 +1059,7 @@ def test_the_tool_refuses_to_guess_a_pairing(pair_store) -> None:
 
 def test_the_tool_takes_a_csv_so_it_need_not_parse_a_name_at_all(pair_store, tmp_path) -> None:
     """D16-clean input: the operator states the pairing and no string is dissected."""
-    from tools.declare_eval_pairs import main as declare_main
+    from tools.declare_eval_pairs_d31 import main as declare_main
 
     csv = tmp_path / "pairs.csv"
     csv.write_text("input,target\nT_pp,V_pp\nT_qq,V_qq\n", encoding="utf-8")
@@ -855,7 +1071,7 @@ def test_the_tool_takes_a_csv_so_it_need_not_parse_a_name_at_all(pair_store, tmp
 
 def test_the_tool_writes_a_regime_that_loads_and_the_harness_then_pairs(
         bare_regime, pair_store, tmp_path) -> None:
-    from tools.declare_eval_pairs import main as declare_main
+    from tools.declare_eval_pairs_d31 import main as declare_main
 
     paired_out = tmp_path / "regime.paired.json"
     assert declare_main(["declare", "--regime", str(bare_regime), "--input-prefix", "T_",
@@ -870,7 +1086,7 @@ def test_the_tool_writes_a_regime_that_loads_and_the_harness_then_pairs(
 
 def test_check_fails_a_regime_that_declares_nothing_and_passes_one_that_does(
         bare_regime, paired_regime) -> None:
-    from tools.declare_eval_pairs import main as declare_main
+    from tools.declare_eval_pairs_d31 import main as declare_main
 
     assert declare_main(["check", "--regime", str(bare_regime)]) == 1
     assert declare_main(["check", "--regime", str(paired_regime)]) == 0
@@ -900,7 +1116,9 @@ def test_a_paired_run_scores_end_to_end_and_the_c_block_ladder_reads_the_truth_c
     assert res["provenance"]["eval_pairs"] == PAIRS
     assert res["macro"]["count"]["n_tracks"] == 3
     assert res["C"]["n_units"] > 0 and "error" not in res["C"]
-    assert "error" not in res["C"]["C3_depth_counterfactual"]
+    # `C3_depth_counterfactual` was the key when t80 wrote this. origin/main retired the C1-C6 codes
+    # for self-describing names before this branch merged, so the same instrument is `depthcounterfact`.
+    assert "error" not in res["C"]["depthcounterfact"]
 
 
 # ---------------------------------------------------------------------------
@@ -1045,3 +1263,222 @@ def test_the_held_out_scope_cannot_name_an_unscored_chromosome(two_chrom_regime,
                         blocks=("E",), held_out_chroms=["chr3", "chr22"])
     finally:
         src.close()
+
+def test_a_count_only_model_gets_nb_nll_and_the_other_two_keys_are_ABSENT(
+        regime_file, count_only_model) -> None:
+    """Absent, not nan. A nan is skipped by every finiteness filter downstream and then reads as
+    "the head produced garbage" rather than "there is no head"."""
+    rec, arms = _one_track(count_only_model, regime_file)
+    assert set(arms) == {"count"}, "no signal head, so there is no pval arm to score"
+    assert np.isfinite(arms["count"]["nb_nll"])
+    assert "gaussian_nll" not in arms["count"]
+    assert "bernoulli_nll" not in arms["count"]
+    # ... and bench still computes `auprc` off the NB-mean fallback, which is exactly the number
+    # `bernoulli_nll` refuses to take a logarithm of.
+    assert "auprc" in arms["count"]
+
+
+def test_the_peak_head_is_detected_at_stream_time_rather_than_from_the_value_range(
+        regime_file, count_only_model, model) -> None:
+    """`peak_score` is `sigmoid(peak_logit)` OR the NB mean, and the two are not distinguishable
+    afterwards: an NB mean sits inside [0, 1] on most bins of most assays."""
+    rec_count, _ = _one_track(count_only_model, regime_file)
+    rec_all, _ = _one_track(model, regime_file)
+    assert rec_count.has_peak_head is False
+    assert rec_all.has_peak_head is True
+    assert rec_count.has_pval is False and rec_all.has_pval is True
+    # The fallback really is in range, so a range check would have said "peak head" here.
+    vals = np.concatenate([rec_count.peak_score[c] for c in rec_count.chroms])
+    assert ((vals >= 0.0) & (vals <= 1.0)).mean() > 0.5
+
+
+def test_the_transform_moves_the_gaussian_test_loss_and_leaves_the_other_two_alone(
+        regime_file, model) -> None:
+    """The whole reason the loss path carries a transform: on a store the head predicts
+    `arcsinh(-log10 p)`, so scoring it against raw `-log10 p` is a finite, plausible, wrong loss."""
+    _, plain = _one_track(model, regime_file, signal_target_transform="none")
+    _, bent = _one_track(model, regime_file, signal_target_transform="arcsinh")
+    assert plain["count"]["gaussian_nll"] != pytest.approx(bent["count"]["gaussian_nll"], rel=1e-6)
+    assert plain["count"]["nb_nll"] == pytest.approx(bent["count"]["nb_nll"])
+    assert plain["count"]["bernoulli_nll"] == pytest.approx(bent["count"]["bernoulli_nll"])
+    assert bent["pval"]["signal_target_transform"] == "arcsinh"
+
+
+# ---------------------------------------------------------------------------
+# 6 — the spaces contract: every pval-arm BENCHMARK number is in -log10 p
+# ---------------------------------------------------------------------------
+#
+# Storage is transformed, the reader inverts it (pinned in `tests/test_store_reader.py` and, at the
+# batch, in `tests/test_store_dataset.py`), training supervises in transformed space — so the
+# benchmark path has to bend the PREDICTION back. These four tests are that last link: the number
+# emitted is the one computed on the inverted prediction, the loss tier is deliberately NOT
+# inverted, and the `none` path is untouched to the bit.
+
+def _cat(rec, d):
+    from candi.bench import eic as E
+    return E.dict_to_arr(d, rec.chroms)
+
+
+def test_the_pval_arm_scores_the_INVERTED_prediction_against_the_raw_truth(regime_file, model):
+    """The head trained on `arcsinh(-log10 p)`; the truth is `-log10 p`; the metric is `-log10 p`.
+
+    `mse` is the check because it is the least forgiving: it is not rank-based, so the only way to
+    land on the hand-computed value is to have applied `sinh` to the mean before squaring. The
+    uninverted number is computed too and asserted DIFFERENT — a test that only matched one formula
+    would pass on a harness that had silently stopped inverting if the two happened to be close.
+    """
+    from candi.bench import distributional as D
+
+    rec, bent = _one_track(model, regime_file, signal_target_transform="arcsinh")
+    y = _cat(rec, rec.pval)
+    # float64, because that is what the inversion returns and a float32 `sinh` here would differ
+    # from the harness's number at float32's epsilon for a reason that has nothing to do with space.
+    mu_t = _cat(rec, rec.signal_mu).astype(np.float64)     # the head's own output, arcsinh space
+    sig_t = _cat(rec, rec.signal_sigma).astype(np.float64)
+    want = float(np.mean((y - np.sinh(mu_t)) ** 2))
+    naive = float(np.mean((y - mu_t) ** 2))               # what the pre-contract harness computed
+
+    assert bent["pval"]["mse"] == pytest.approx(want, rel=1e-12)
+    assert bent["pval"]["mse"] != pytest.approx(naive, rel=1e-3), "the inversion did nothing"
+    # `crps` reads the whole distribution, so it needs the inverted sigma as well.
+    assert bent["pval"]["crps"] == pytest.approx(
+        D.gauss_crps_mean(np.sinh(mu_t), np.cosh(mu_t) * sig_t, y), rel=1e-12)
+
+
+def test_the_arm_records_the_space_it_was_scored_in(regime_file, model):
+    """A reader must be able to tell an inverted row from a pre-contract one, and `pred_inversion`
+    must say `"none"` out loud rather than being absent — absent is what a pre-contract row is."""
+    from candi.bench import distributional as D
+
+    _, bent = _one_track(model, regime_file, signal_target_transform="arcsinh")
+    _, plain = _one_track(model, regime_file, signal_target_transform="none")
+    assert bent["pval"]["pred_space"] == plain["pval"]["pred_space"] == D.SIGNAL_EVAL_SPACE
+    assert bent["pval"]["pred_inversion"] == "arcsinh"
+    assert plain["pval"]["pred_inversion"] == "none"
+    # A label is not a measure: `macro_mean` averages scalars, so neither key can reach a macro.
+    assert "pred_space" not in H.macro_mean({"k": bent}, "pval", kind=bent["pval"]["kind"])
+
+
+def test_the_inversion_moves_the_measures_and_leaves_the_rank_keys_alone(regime_file, model):
+    """`sinh` is strictly increasing, so anything that reads only the ORDER of the predictions is
+    invariant under it. `gwspear` moving would mean the inversion did something other than a
+    monotone map; `mse` not moving would mean it did nothing at all."""
+    _, plain = _one_track(model, regime_file, signal_target_transform="none")
+    _, bent = _one_track(model, regime_file, signal_target_transform="arcsinh")
+    assert plain["pval"]["mse"] != pytest.approx(bent["pval"]["mse"], rel=1e-6)
+    assert plain["pval"]["gwspear"] == pytest.approx(bent["pval"]["gwspear"], rel=1e-9)
+    # The B-block ranks by `peak_score`, which is the peak head's — no signal-space value reaches it.
+    assert plain["pval"]["auprc"] == bent["pval"]["auprc"]
+    assert plain["pval"]["peak_overlap_0.01"] == bent["pval"]["peak_overlap_0.01"]
+
+
+def test_the_panel_binarisation_thresholds_in_minus_log10_p_as_well(regime_file, model):
+    """`panel_specificity` is the one pval-arm measure that lives at the PANEL level, and its call
+    is `prediction >= 2` — an absolute number in `-log10 p`. So `_binarise` inverts too, or the
+    panel would be scored on a threshold that means something different on a store than on an h5.
+    """
+    from candi.bench import partitions as P
+
+    rec, _ = _one_track(model, regime_file, signal_target_transform="arcsinh")
+    mu = _cat(rec, rec.signal_mu).astype(np.float64)
+    _, call_arc, _ = H._binarise(rec, "arcsinh")
+    _, call_none, _ = H._binarise(rec, "none")
+    assert np.array_equal(call_arc, np.packbits(np.sinh(mu) >= P.BINARISE_THRESHOLD))
+    assert np.array_equal(call_none, np.packbits(mu >= P.BINARISE_THRESHOLD))
+    # Inverting the prediction is the same as moving the threshold to `arcsinh(2)`, so the two calls
+    # differ on exactly the bins that fall between the two cut points — and nowhere else.
+    straddles = bool(((mu >= np.arcsinh(P.BINARISE_THRESHOLD))
+                      & (mu < P.BINARISE_THRESHOLD)).any())
+    assert (not np.array_equal(call_arc, call_none)) is straddles
+
+
+def test_the_loss_tier_is_the_exception_and_keeps_the_UNINVERTED_prediction(regime_file, model):
+    """`gaussian_nll` mirrors the training loss: prediction untouched, TRUTH bent forward. Scoring
+    it on the inverted prediction would give a finite, plausible number that is not the one the
+    training loop prints."""
+    from candi.bench import distributional as D
+
+    rec, bent = _one_track(model, regime_file, signal_target_transform="arcsinh")
+    y_arr = _cat(rec, rec.pval)
+    mu_t = _cat(rec, rec.signal_mu).astype(np.float64)
+    sig_t = _cat(rec, rec.signal_sigma).astype(np.float64)
+    want = D.gaussian_nll(mu_t, sig_t * sig_t, D.transform_signal_target(y_arr, "arcsinh"))
+    assert bent["pval"]["gaussian_nll"] == pytest.approx(want, rel=1e-12)
+    assert bent["count"]["gaussian_nll"] == pytest.approx(want, rel=1e-12)
+    # The inverted alternative is a different number, which is what makes the choice load-bearing.
+    inverted = D.gaussian_nll(np.sinh(mu_t), (np.cosh(mu_t) * sig_t) ** 2, y_arr)
+    assert bent["pval"]["gaussian_nll"] != pytest.approx(inverted, rel=1e-3)
+
+
+def test_the_none_path_is_bit_identical_to_scoring_without_any_inversion(regime_file, model):
+    """The h5 path resolves to `none`, and `none` must be the identity to the BIT — not to a
+    tolerance. `invert_signal_prediction` returns the caller's own arrays there, so the blocks below
+    are handed exactly what `score_track` hands them and `==` is the right comparison."""
+    from candi.bench import distributional as D
+    from candi.bench import eic as E
+
+    rec, plain = _one_track(model, regime_file, signal_target_transform="none")
+    y = _cat(rec, rec.pval)
+    direct = {
+        **E.score_track(rec.pval, rec.signal_mu, rec.chroms,
+                        gene_annotations=ann.gene_annotations(),
+                        enh_annotations=ann.enhancer_annotations()),
+        **D.gauss_suite(_cat(rec, rec.signal_mu), _cat(rec, rec.signal_sigma), y,
+                        seed=0, n_pairs=500),
+    }
+    for key, want in direct.items():
+        if isinstance(want, float):
+            # `assert_array_equal` rather than `==` for one reason only: a block whose window set is
+            # empty on this synthetic panel returns nan, and nan is not equal to itself.
+            np.testing.assert_array_equal(plain["pval"][key], want,
+                                          err_msg=f"{key} moved on the identity path")
+
+
+def test_the_cli_reads_the_target_space_off_the_run_json_and_a_flag_overrides_it(tmp_path) -> None:
+    """The run json holds the RESOLVED value; a checkpoint holds nothing. So the json wins by
+    default — and an explicit flag still wins over the json, because a flag argparse accepts and the
+    program discards is worse than either precedence order."""
+    from candi.bench.cli import build_parser, resolve_signal_target_transform
+
+    run = tmp_path / "run.json"
+    run.write_text(json.dumps({"config": {"signal_target_transform": "arcsinh",
+                                          "arch": {"num_assays": 3}}}))
+    p = build_parser()
+    base = ["--store", "x", "--ckpt", "c", "--out", "o"]
+
+    a = p.parse_args(base)
+    assert resolve_signal_target_transform(a) == ("none", "default")
+
+    a = p.parse_args(base + ["--arch-from", str(run)])
+    got, src = resolve_signal_target_transform(a)
+    assert got == "arcsinh" and str(run) in src
+
+    a = p.parse_args(base + ["--arch-from", str(run), "--signal-target-transform", "log1p"])
+    assert resolve_signal_target_transform(a) == ("log1p", "--signal-target-transform")
+
+    # A run json from before D30 has no such field, and falling back is the whole point.
+    old = tmp_path / "old.json"
+    old.write_text(json.dumps({"config": {"arch": {"num_assays": 3}}}))
+    a = p.parse_args(base + ["--arch-from", str(old)])
+    assert resolve_signal_target_transform(a) == ("none", "default")
+
+
+def test_the_cli_emits_the_test_loss_per_track_and_in_the_macro(regime_file, ckpt,
+                                                                tmp_path) -> None:
+    """`python -m candi.bench` IS the test-loss reporter: the same three keys the training loop
+    prints as `train/nll` and the monitor reports as the val loss."""
+    from candi.bench.cli import main
+
+    out = tmp_path / "loss.json"
+    rc = main(["--store", str(regime_file), "--ckpt", str(ckpt), "--out", str(out),
+               "--heads", "count,signal,peak", "--depth-center", "24.25",
+               "--blocks", "E,D,B", "--c-index-pairs", "500",
+               "--signal-target-transform", "arcsinh", "--quiet"])
+    assert rc == 0
+    res = json.loads(out.read_text())
+    assert res["provenance"]["signal_target_transform"] == "arcsinh"
+    assert res["provenance"]["signal_target_transform_source"] == "--signal-target-transform"
+    assert NLL_KEYS <= set(res["macro"]["count"])
+    for arms in res["per_track"].values():
+        assert NLL_KEYS <= set(arms["count"])
+        assert arms["count"]["signal_target_transform"] == "arcsinh"
