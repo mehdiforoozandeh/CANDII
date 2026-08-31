@@ -28,8 +28,15 @@
 #             way. Hence --array 0-1%1 below: the two regimes are SERIALISED, never co-scheduled.
 #
 #             The reported rate is an AVERAGE over the whole run and so includes warm-up, which
-#             makes it a CONSERVATIVE FLOOR — steady state is faster. That is the right bias for
-#             sizing a walltime.
+#             makes it a CONSERVATIVE FLOOR for a run of the SAME KIND.
+#
+#             IT IS NOT A FLOOR FOR --full-coverage, AND THIS COST A MIS-SIZED JOB. Measured
+#             2026-08-31: the probe (--steps-per-epoch 3000, sampled windows) gave 102.74 windows/s,
+#             while the real --full-coverage run measured live off its own step counter gave
+#             45.9 windows/s — 0.45x, a 2.2x overestimate. Cause is cache locality: the probe
+#             samples a small working set that stays cached, while --full-coverage sweeps all
+#             155,703 windows across all 51 T_ biosamples every epoch and mostly misses. So the
+#             projections below are multiplied by FC_FACTOR. Re-measure it, do not trust it.
 # MODE=full   the retrain. Read the walltime off the probe before submitting; the 05:00:00 below is
 #             train.sh's h5-path figure and is almost certainly wrong for 35 assays.
 #
@@ -60,10 +67,18 @@ SEED="${SEED:-0}"
 # changing this: as shipped, any non-zero value also LOGS B_ every eval, which §5 forbids.
 EVAL_EVERY="${EVAL_EVERY:-3}"
 PROBE_STEPS="${PROBE_STEPS:-3000}"
+# Ratio of real --full-coverage throughput to the sampled probe rate. MEASURED 0.45 on 2026-08-31
+# (job 57620803_0, live step counter). See the probe header.
+FC_FACTOR="${FC_FACTOR:-0.45}"
 # EPOCHS/STEPS_PER_EPOCH exist so MODE=full can be DRESS-REHEARSED cheaply: setting
 # STEPS_PER_EPOCH drops --full-coverage, so the whole full-mode path (regime derivation, the eval
 # hook, V_ selection, the .best.ckpt write) runs in minutes instead of hours. Leave both unset for
 # the real retrain.
+# 25 is carried from slurm/train.sh and t22_equiv.sh — and the carry-over is NOT meaningful, which
+# matters when sizing a walltime. There, 25 epochs x 200 steps = 5,000 steps = 40,000 windows for
+# the WHOLE run, on an 8-assay h5. Here ONE --full-coverage epoch is 19,462 steps / 155,703
+# windows — 4x that entire run. So 6 epochs here is already 23x the recorded recipe, 15 is 58x and
+# 25 is 97x. Pick this off the V_ eval curve (does V_imp_crps still fall?), not off train.sh.
 EPOCHS="${EPOCHS:-25}"
 STEPS_PER_EPOCH="${STEPS_PER_EPOCH:-}"
 # SELECT_ON=V derives a V_-only eval-pair list so the mid-training eval NEVER READS B_, which is
@@ -131,11 +146,14 @@ if [ "$MODE" = "probe" ]; then
   if [ -z "$WALL" ]; then echo "[probe] could not read wall= from $LOG"; tail -20 "$LOG"; exit 4; fi
   echo "[probe] regime=$NAME steps=$PROBE_STEPS wall=${WALL}s  ($NLL)"
   python - <<EOF
-wall, steps, bs = $WALL, $PROBE_STEPS, 8
+wall, steps, bs, fc = $WALL, $PROBE_STEPS, 8, $FC_FACTOR
 rate = steps * bs / wall
-print(f"[probe] regime=$NAME  AVERAGE TRAINING RATE = {rate:.2f} windows/s ({rate/bs:.2f} steps/s)")
-print(f"[probe]   averaged over the whole run, so it INCLUDES warm-up: a conservative floor.")
+fc_rate = rate * fc
+print(f"[probe] regime=$NAME  SAMPLED RATE = {rate:.2f} windows/s ({rate/bs:.2f} steps/s)")
 print(f"[probe]   G3 measured INFERENCE at 185.6 windows/s on the same MIG slice, for scale.")
+print(f"[probe]   x FC_FACTOR {fc} -> --full-coverage rate {fc_rate:.2f} windows/s. The factor is")
+print(f"[probe]   why: a sampled probe keeps a small working set cached; full coverage does not.")
+rate = fc_rate
 # --full-coverage sizes an epoch as (train windows x T_ biosamples), NOT by --steps-per-epoch.
 # 51 T_ biosamples is §5.1; the window counts are §3 (chr19) and §3.1 (pilot, the 1,294 ruling).
 for label, wpe in (("eic_19    chr19: 3,053 win x 51 T_", 3053 * 51),
