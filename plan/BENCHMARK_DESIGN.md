@@ -874,9 +874,36 @@ generating process at r ≈ 0.99, so agreement there is not evidence of robustne
 
 **`T_K562`: trim adapters, then the original recipe.** Attack the actual defect — 9.73 M untrimmed
 adapter read-throughs — rather than duplication in general, and apply it uniformly to all 40 tracks
-so one assay keeps one treatment, which is what §10 exists to enforce. Expected to fix `T_HAP-1`
-too. Not expected to touch `B_DND-41`, whose tower is mappability and survives every instrument
-tried so far.
+so one assay keeps one treatment, which is what §10 exists to enforce. *(This ruling also expected
+the filter to carry `T_HAP-1`. It did not — see the refutation above.)*
+
+### The DNase layer is CLOSED (2026-08-30)
+
+**Adopted: MACS2 at base resolution on adapter-filtered, duplicate-kept alignments.** Median Pearson
+against the challenge **0.9851** over all 34 `T_` (0.9915 single-ended, 0.9765 paired-ended),
+beating Phase 2 on 34/34. Three closing rulings:
+
+1. **Stop at `T_K562` = 0.4559; do not chase the residual.** The junction rule that would reach its
+   `chr5:56,896,525` tower was named only after seeing the number it would fix, and that is tuning
+   whatever its biological justification. **Disclosed:** `T_K562` is the worst DNase row, and its
+   chr5 tower — 66,660 counts, 740.7× its ceiling — continues to enter `eic.pilot` training windows.
+2. **Accept `T_HAP-1` and `B_DND-41`, and disclose them.** Two instruments have now failed on both,
+   and neither defect is one we introduced — they are properties of the released ENCODE alignments.
+   `T_HAP-1` runs 47.8× and 120.6× above the target at two loci and is a training track;
+   **`B_DND-41` is scored truth carrying a known mitochondrial-NUMT artifact for which no agreement
+   number can ever exist.** Both ratios print beside every DNase number.
+3. **Do not adopt fragment counting; disclose the scale offset.** It buys two thirds of the
+   correction and pays in ranking quality (Jaccard 0.6527 → 0.5806) without reaching 1.0.
+   `AGENTS.md` §7.2's `oracle_scaled` / `scale_error` split already separates shape from scale, so
+   the paired ~3× offset is reportable without changing the layer every method trains on.
+
+**What this means for §6.** The adopted layer agrees with challenge truth at r ≈ 0.99 in *shape*,
+so the DNase truth toggle carries the badge ruled above — agreement there is not evidence of
+robustness. The scale disagreement is real and is the one thing the toggle still measures for DNase.
+
+**Still gated: Phase 3, promotion into the store.** Nothing has been promoted; the rebuilt layers
+live on scratch beside a side manifest. The promotion checklist is in
+`cruxvault/results/t78/G1_REBUILD_FROM_BAMS.md` §19.
 
 Correction to the earlier rebuild memo, on record: the depth change on the six scored `V_`/`B_`
 tracks runs **7.9 %** (`V_adrenal_gland_embryonic`) to 30.6 %, not 1.6 % to 30.6 %.
