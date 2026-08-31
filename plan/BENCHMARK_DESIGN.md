@@ -40,7 +40,7 @@ training, and is open to every method.
 
 *Why Rule 2 is written this way, now confirmed from code.* Avocado's genomic factors are
 per-chromosome `nn.Embedding` tables; `replace_genome` allocates a fresh table and re-initialises
-it `uniform_(-0.05, 0.05)` (`competitors/avocado/vendor/avocado.py:90-97`), so on a chromosome it
+it `uniform_(-0.05, 0.05)` (`rivals/avocado/avocado.py:90-97`, vendored into this repo 2026-08-30), so on a chromosome it
 never fit, Avocado returns its random init — not a degraded prediction, noise. Lavawizard raises
 `KeyError` for an unknown chromosome (`dataset3.py:70-71`), and ChromImpute samples its 100,000
 training locations inside the chromosomes it later predicts. Without Rule 2, three of five rivals
@@ -1241,7 +1241,7 @@ Accepted as the price of the corrections above.
 | Pilot Regions: 44 regions, 29,955,196 bp, 21 chromosomes, 14 `ENm` / 30 `ENr`, hg19 only | UCSC `encodeRegions` track via `api.genome.ucsc.edu`, 2026-08-29 |
 | the hg38 lift: 44/44 mapped, 0 unmapped/split, 29,984,074 bp, 25,588,197 training bp, 1,023,489 contained bins | `configs/regions/PROVENANCE.md`; recomputed from the shipped BED, 2026-08-29 |
 | the lift cross-checked off UCSC: Ensembl GRCh37→GRCh38 agrees on 16/16 endpoints over 8 regions | `cruxvault/results/t79/G2_PILOT_HG38.md` |
-| Avocado returns its random init on an unfitted chromosome; Lavawizard raises | `competitors/avocado/vendor/avocado.py:90-97`; `competitors/lavawizard/dataset3.py:70-71` |
+| Avocado returns its random init on an unfitted chromosome; Lavawizard raises | `rivals/avocado/avocado.py:90-97` (vendored here); `competitors/lavawizard/dataset3.py:70-71` (not vendored) |
 | per-method training loci and genome fractions across the literature | primary sources in `cruxvault/raw/`, audited 2026-08-29 |
 | `V_`/`B_` panel composition — 45 exp / 22 assays vs 51 exp / 8 assays; splits disjoint on (cell, assay), 0 overlaps over 89 cells | `download_plan_eic.json` (Fir `EpiDenoise/data/`), recounted 2026-08-29 |
 | the scored panel is *assays the truth cell has and the input cell does not* | **citation was wrong and the rule needs re-checking — see the note under §5.1.** `harness.py:526-543` is `StoreSource.counts_at_dsf`; the h5 rule is `H5Source.targets:316-322` and the store rule is `StoreSource.targets:486-488`. pairing declared by `tools/declare_eval_pairs.py` (**written 2026-08-29** — it did not exist when this row was first written, and the store path self-paired instead; see §5.1) |
