@@ -13,15 +13,23 @@
 #     says "training only" — so those flags are inert here and carrying them would imply a scoring
 #     block that does not run.
 #
-# MODE=probe  measures training throughput and exits. Runs PROBE_LO steps, then PROBE_HI, and
-#             DIFFERENCES them, so the store's manifest read and window planning cancel out of the
-#             rate instead of being amortised into it. The two counts must be FAR apart: the first
-#             attempt used 30 and 90 and was invalid, because startup is 40-55 s while 60 steps cost
+# MODE=probe  measures training throughput and exits. ONE long run, and the rate is read from
+#             train.py's OWN `wall=` line, so process startup is excluded by construction. There is
+#             no measured store-path training throughput on record — G3 (§12.7) timed INFERENCE only
+#             and says so — so this is the number that sizes MODE=full.
+#
+#             Differencing two runs was tried twice and failed both times, for two DIFFERENT reasons,
+#             recorded so nobody retries it. 30 vs 90 steps: startup is 40-55 s and 60 steps cost
 #             under 10 s, so startup variance swamped the signal and one regime reported a negative
-#             rate. 300 vs 1500 puts ~100 s of step work against ~10 s of startup noise. There is no measured store-path training throughput on
-#             record — G3 (§12.7) timed INFERENCE only and says so — and --full-coverage on chr19
-#             across 51 T_ biosamples is ~155,700 windows/epoch, so the full job's walltime is
-#             unknown until this runs. Cheap, and it is the number that sizes MODE=full.
+#             rate. 300 vs 1500: BOTH ARRAY TASKS LANDED ON ONE NODE (fc11013) and competed for 8
+#             CPUs and the same networked store — and the loader is CPU/IO bound (§12.7 puts it at
+#             37 % of inference) — so the 1500-step run came back FASTER than the 300-step one,
+#             123.6 s against 138.9 s, a 5.6x rate difference. Cold-cache warm-up pushes the same
+#             way. Hence --array 0-1%1 below: the two regimes are SERIALISED, never co-scheduled.
+#
+#             The reported rate is an AVERAGE over the whole run and so includes warm-up, which
+#             makes it a CONSERVATIVE FLOOR — steady state is faster. That is the right bias for
+#             sizing a walltime.
 # MODE=full   the retrain. Read the walltime off the probe before submitting; the 05:00:00 below is
 #             train.sh's h5-path figure and is almost certainly wrong for 35 assays.
 #
@@ -38,7 +46,7 @@
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
-#SBATCH --array=0-1
+#SBATCH --array=0-1%1
 
 set -uo pipefail
 
@@ -51,8 +59,7 @@ SEED="${SEED:-0}"
 # §5's uniform rule selects the best checkpoint on V_. See the WARNING under [t81] below before
 # changing this: as shipped, any non-zero value also LOGS B_ every eval, which §5 forbids.
 EVAL_EVERY="${EVAL_EVERY:-3}"
-PROBE_LO="${PROBE_LO:-300}"
-PROBE_HI="${PROBE_HI:-1500}"
+PROBE_STEPS="${PROBE_STEPS:-3000}"
 # SELECT_ON=V derives a V_-only eval-pair list so the mid-training eval NEVER READS B_, which is
 # what §5 asks for. SELECT_ON=all uses the shipped regime verbatim (26 V_ + 12 B_ pairs) and so
 # scores B_ at every eval. Selection is on V_imp_crps either way, so the SELECTED CHECKPOINT is the
@@ -102,45 +109,35 @@ COMMON=(
 )
 
 if [ "$MODE" = "probe" ]; then
-  # Two runs, differenced. --eval-every 0 on purpose: this measures the TRAINING step rate, and a
-  # mid-training eval pass would be counted as training time. It also means the probe reads no B_.
-  for STEPS in "$PROBE_LO" "$PROBE_HI"; do
-    T0=$(date +%s.%N)
-    python -m candi.train "${COMMON[@]}" --store "$REGIME" \
-      --tag "probe_${NAME}_s${SEED}_${STEPS}" \
-      --epochs 1 --steps-per-epoch "$STEPS" --eval-every 0 \
-      > "$OUT/probe_${NAME}_${STEPS}.log" 2>&1
-    rc=$?
-    T1=$(date +%s.%N)
-    D=$(python -c "print(f'{$T1 - $T0:.3f}')")
-    echo "[probe] regime=$NAME steps=$STEPS rc=$rc wall_s=$D"
-    if [ $rc -ne 0 ]; then echo "[probe] FAILED — tail of log:"; tail -30 "$OUT/probe_${NAME}_${STEPS}.log"; exit $rc; fi
-    if [ "$STEPS" = "$PROBE_LO" ]; then WLO="$D"; else WHI="$D"; fi
-  done
+  # --eval-every 0 on purpose: this measures the TRAINING step rate, and a mid-training eval pass
+  # would be counted as training time. It also means the probe reads no B_.
+  LOG="$OUT/probe_${NAME}_${PROBE_STEPS}.log"
+  python -m candi.train "${COMMON[@]}" --store "$REGIME" \
+    --tag "probe_${NAME}_s${SEED}_${PROBE_STEPS}" \
+    --epochs 1 --steps-per-epoch "$PROBE_STEPS" --eval-every 0 \
+    > "$LOG" 2>&1
+  rc=$?
+  if [ $rc -ne 0 ]; then echo "[probe] FAILED rc=$rc — tail:"; tail -30 "$LOG"; exit $rc; fi
+  # train.py's own summary: "... N steps, first nll=X last nll=Y wall=ZZZ.Zs". Reading ITS number
+  # rather than timing the process is what keeps interpreter and import time out of the rate.
+  WALL=$(grep -oE 'wall=[0-9.]+s' "$LOG" | tail -1 | sed 's/wall=//; s/s$//')
+  NLL=$(grep -oE 'first nll=[0-9.]+ last nll=[0-9.]+' "$LOG" | tail -1)
+  if [ -z "$WALL" ]; then echo "[probe] could not read wall= from $LOG"; tail -20 "$LOG"; exit 4; fi
+  echo "[probe] regime=$NAME steps=$PROBE_STEPS wall=${WALL}s  ($NLL)"
   python - <<EOF
-wlo, whi = $WLO, $WHI
-nlo, nhi, bs = $PROBE_LO, $PROBE_HI, 8
-dn = nhi - nlo
-dt = whi - wlo
-print(f"[probe] regime=$NAME  {nlo} steps={wlo:.1f}s  {nhi} steps={whi:.1f}s  delta={dt:.1f}s for {dn} steps")
-# Refuse to report a rate the measurement cannot support. dt must be large against the startup
-# variance we actually observed (about 5-15 s), or the difference is noise and not a rate.
-if dt < 30.0:
-    print(f"[probe] INVALID: delta {dt:.1f}s is not large against startup variance (~5-15s). "
-          f"Raise PROBE_HI and re-run. NO RATE REPORTED.")
-    raise SystemExit(3)
-rate = dn * bs / dt
-startup = wlo - nlo * bs / rate
-print(f"[probe] startup={startup:.1f}s (paid once per run, not per epoch)")
-print(f"[probe] TRAINING RATE = {rate:.2f} windows/s  ({rate/bs:.2f} steps/s)")
-print(f"[probe] for reference, G3 measured INFERENCE at 185.6 windows/s on the same MIG slice")
-# --full-coverage sizes an epoch as (train windows x T_ biosamples), not by --steps-per-epoch, so
-# these are the numbers that set MODE=full's walltime. 51 T_ biosamples is from §5.1.
-for label, wpe in (("chr19 (2,344,704 bins / 768 = 3,053 win x 51 T_)", 3053 * 51),
-                   ("pilot (1,023,489 bins -> 1,294 win x 51 T_)", 1294 * 51)):
+wall, steps, bs = $WALL, $PROBE_STEPS, 8
+rate = steps * bs / wall
+print(f"[probe] regime=$NAME  AVERAGE TRAINING RATE = {rate:.2f} windows/s ({rate/bs:.2f} steps/s)")
+print(f"[probe]   averaged over the whole run, so it INCLUDES warm-up: a conservative floor.")
+print(f"[probe]   G3 measured INFERENCE at 185.6 windows/s on the same MIG slice, for scale.")
+# --full-coverage sizes an epoch as (train windows x T_ biosamples), NOT by --steps-per-epoch.
+# 51 T_ biosamples is §5.1; the window counts are §3 (chr19) and §3.1 (pilot, the 1,294 ruling).
+for label, wpe in (("eic_19    chr19: 3,053 win x 51 T_", 3053 * 51),
+                   ("eic_pilot pilot: 1,294 win x 51 T_", 1294 * 51)):
     ep = wpe / rate
-    print(f"[probe] full-coverage {label}: {wpe:,} win/epoch = {ep/60:.1f} min/epoch "
-          f"-> 25 epochs = {25*ep/3600:.2f} h")
+    h = 25 * ep / 3600
+    print(f"[probe]   full-coverage {label}: {wpe:,} win/epoch = {ep/60:6.1f} min/epoch "
+          f"-> 25 ep = {h:6.2f} h  (request ~{max(1, int(h * 1.5) + 1)}h at 1.5x margin)")
 EOF
   echo "[probe] DONE regime=$NAME"
   exit 0
