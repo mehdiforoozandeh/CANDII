@@ -819,6 +819,52 @@ which a diffuse loss cannot do.
 tower, so dedup is simply the wrong instrument for it. It is scored truth, so no agreement number
 was computed and none exists.
 
+**ADAPTER FILTER 2026-08-30 — the control passes, K562 improves but is not repaired, and the
+`T_HAP-1` prediction is refuted.** Rule: a read is adapter-derived iff its whole sequence fits
+inside a standard Illumina TruSeq adapter (either orientation, no overhang) at Hamming distance
+`d ≤ NM`, the aligner's own edit distance for that read. No count threshold, no position rule, no
+per-track parameter. BAM-level, no realignment — honest here because the defect is *full-length*
+adapter reads carrying no genomic base. 9,902,610 reads removed of 6,319,734,741 (0.157 %), and
+**28 of the 40 filtered BAMs are hard links to the originals**.
+
+| median Pearson, 34 `T_` | MACS2 original | MACS2 adapter-filtered |
+|---|---|---|
+| all 34 | 0.9851 | **0.9851** |
+| single-ended (17) | 0.9915 | **0.9915** |
+| paired-ended (17) | 0.9765 | **0.9765** |
+
+The only median that moves is MSE ratio over all 34, **3.4214 → 2.2235** — `T_K562` alone crossing
+the middle. Only 8 of 34 rows differ beyond 1e-4.
+
+- **`T_BE2C`'s MYCN amplicon survives untouched — the control passes.** Zero reads removed, peak
+  171,502.4 in the target's own bin, window Pearson 0.9986, counts identical to the store's. The
+  filter removes artifact and not biology.
+- **`T_K562`: the adapter defect is fixed, the track is not.** The `chr11` tower is gone (counts
+  9,762,619 → **339**, `-log10 p` 1.363 × 10⁷ → **300.8**), and Pearson moves 0.0091 → **0.4559**.
+  It stops short because the filter *revealed a second private tower* at `chr5:56,896,525` — 66,660
+  counts, 99.97 % duplicate-flagged, **the exact locus flagged above as ingesting into `eic.pilot`
+  training windows**. Its 20-mer is an adapter–adapter *junction*, contained in no single adapter
+  (min Hamming 6 of 20, against 0 for the chr11 one), so the rule cannot reach it. The extension
+  that would — containment in the concatenation of two adapter strands — was named and deliberately
+  **not** run, because naming a rule after seeing the number it would fix is tuning.
+- **`T_HAP-1`: the ruling's prediction is refuted.** 126 reads removed of 243 M; both ratios
+  unchanged to four decimals (47.8× and 120.6×). Its tower 20-mers are Hamming 9 and 8 from the
+  nearest adapter — **not adapter at all**.
+- **`B_DND-41`: unfixed, as predicted.** Zero reads removed. Its tower is mitochondrial sequence on
+  the `chr1` NUMT, Hamming 21 of 36 from any adapter. It is scored truth, so no agreement number
+  exists for it.
+
+**Fragment-versus-mate, run once and left there.** `bamtobed` emits one tag per *record*, so a
+paired fragment currently contributes two tags; `-f 64` halves the tag count exactly. Median paired
+mean ratio **2.9862 → 1.6618** and MSE ratio 28.15 → 5.35, with Pearson flat (+0.0004) — but
+**Jaccard falls 0.6527 → 0.5806 and Spearman 0.6282 → 0.6015**, and per track it overshoots below
+1.0 on some rows while undershooting on others. It removes about two thirds of the excess and does
+not reach 1.0. **Inconclusive; no second variant was run.**
+
+**Correction to the promotion checklist, and it matters.** On the **adopted** arm the six scored
+`V_`/`B_` depth changes are **0 % to 0.000189 %**, not the 7.9 %–30.6 % recorded earlier — that
+range belongs to the deduplicated arm the ruling did **not** adopt.
+
 ### Rulings on the DNase layer (2026-08-30)
 
 **Adopt the original arm; keep DNase in the truth toggle, with a caveat badge.** MACS2-on-original
