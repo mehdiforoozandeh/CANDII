@@ -66,3 +66,22 @@ at. The shared run's own chromosome comes free and is not one of the three.
 Our exporter writes exactly that from CANDI_STORE. **Rule 1 binds it:** the matrix carries the
 `T_` training and validation columns only. A scored `V_`/`B_` track must never appear in it, at
 any stage, and the exporter refuses rather than filters.
+
+## The contract, checked on the real store (2026-08-30)
+
+`tools/avocado_export.py` run in dry form against `configs/regime.eic_19.json` and the promoted
+corpus (`store_manifest_sha256 c9a95e4e…`):
+
+| | |
+|---|---|
+| training biosamples | 51 |
+| matrix columns | **267** — matching §12.1's "267 training tracks" |
+| distinct `cell_id` over the columns | 51 |
+| distinct `cell_id` in total | **51** — so no blind cell invented a cell type of its own |
+| declared pairs sharing a `cell_id` | **38 of 38** |
+| eval-pair targets among the columns | **none** (Rule 1) |
+
+The two numbers to read together are the last three. 51 cell ids in total, 51 over the columns, and
+all 38 pairs sharing one, means every blind cell's factor is learned from its training
+counterpart's tracks and no blind cell got a fresh untrained factor — while no blind track entered
+the matrix.
