@@ -1236,7 +1236,7 @@ that wants its own PR was never a child.
 | `t78` DNase p-value rebuild | recompute the `−log10 p` layer for all 40 DNase experiments from the BAMs on the ATAC template (§10); archive the old layer, do not delete it |
 | `t79` regime rewrite | `eic.19→20,21,22` and `eic.pilot→20,21,22` as the two live regimes; Pilot Regions liftover to hg38; Avocado's joint fit moved to chr19 (§3) |
 | `t80` eval-stack changes | the three-number `V_` aggregation (§5.2); the `held-out` / `genome-wide` split with the blanking rule (§4); the challenge ranker wired as the single ranker (§5.3) |
-| `t81` retrains | every trainable method re-selected on `V_` under the uniform rule; every existing board row is void (§3.3) |
+| ~~`t81` retrains~~ | **de-parented 2026-08-30 — it does not ship with `t77`.** Every trainable method re-selected on `V_` under the uniform rule; every existing board row is void (§3.3). It is blocked on `t78`, `t79` and `t80` and its lane is unresolved: `t77`'s branch is `implementation/`, whose gate is that the PR must not move a number, and a retrain moves every number by construction. It cannot simply be relabelled `exp/` either — the engine computes `experiment` from hypothesis refs and refuses the category by hand (`engine.py:3264`), and `t81` carries none. **PI needed on two counts:** which hypotheses the retrains serve, and the experiment-lane merge gate itself, which `CLAUDE.md` still records as TODO |
 | `t82` board changes | apply the §9 naming across `boards.json`, `help.json`, `app.js`, `index.html` and the PRD; the anchor block; the truth toggle; the eDICE and "no selection" markers |
 
 The §9 naming supersedes the earlier "ENCODE DCC MERGED / DEV-SET / EIC" rename request — the

@@ -1,0 +1,985 @@
+{
+  "tool": "tools/declare_eval_pairs.py",
+  "generated_utc": "2026-08-30T06:35:18Z",
+  "store": "/project/def-maxwl/mforooz/CANDI_STORE/eic",
+  "manifest_sha256": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397",
+  "rule": {
+    "kind": "prefix",
+    "input_prefix": "T_",
+    "target_prefixes": [
+      "V_",
+      "B_"
+    ]
+  },
+  "eval_pairs": [
+    [
+      "T_BE2C",
+      "B_BE2C"
+    ],
+    [
+      "T_BMEC",
+      "B_BMEC"
+    ],
+    [
+      "T_Caco-2",
+      "B_Caco-2"
+    ],
+    [
+      "T_DND-41",
+      "B_DND-41"
+    ],
+    [
+      "T_HAP-1",
+      "B_HAP-1"
+    ],
+    [
+      "T_HL-60",
+      "B_HL-60"
+    ],
+    [
+      "T_MG63",
+      "B_MG63"
+    ],
+    [
+      "T_NCI-H929",
+      "B_NCI-H929"
+    ],
+    [
+      "T_RWPE2",
+      "B_RWPE2"
+    ],
+    [
+      "T_SJCRH30",
+      "B_SJCRH30"
+    ],
+    [
+      "T_SJSA1",
+      "B_SJSA1"
+    ],
+    [
+      "T_WERI-Rb-1",
+      "B_WERI-Rb-1"
+    ],
+    [
+      "T_CD4-positive_alpha-beta_memory_T_cell",
+      "V_CD4-positive_alpha-beta_memory_T_cell"
+    ],
+    [
+      "T_DND-41",
+      "V_DND-41"
+    ],
+    [
+      "T_GM06990",
+      "V_GM06990"
+    ],
+    [
+      "T_H1-hESC",
+      "V_H1-hESC"
+    ],
+    [
+      "T_H9",
+      "V_H9"
+    ],
+    [
+      "T_IMR-90",
+      "V_IMR-90"
+    ],
+    [
+      "T_K562",
+      "V_K562"
+    ],
+    [
+      "T_KMS-11",
+      "V_KMS-11"
+    ],
+    [
+      "T_NCI-H929",
+      "V_NCI-H929"
+    ],
+    [
+      "T_OCI-LY7",
+      "V_OCI-LY7"
+    ],
+    [
+      "T_adrenal_gland",
+      "V_adrenal_gland"
+    ],
+    [
+      "T_adrenal_gland_embryonic",
+      "V_adrenal_gland_embryonic"
+    ],
+    [
+      "T_amnion",
+      "V_amnion"
+    ],
+    [
+      "T_chorion",
+      "V_chorion"
+    ],
+    [
+      "T_endocrine_pancreas",
+      "V_endocrine_pancreas"
+    ],
+    [
+      "T_heart_left_ventricle",
+      "V_heart_left_ventricle"
+    ],
+    [
+      "T_mesenchymal_stem_cell",
+      "V_mesenchymal_stem_cell"
+    ],
+    [
+      "T_myoepithelial_cell_of_mammary_gland",
+      "V_myoepithelial_cell_of_mammary_gland"
+    ],
+    [
+      "T_neural_stem_progenitor_cell",
+      "V_neural_stem_progenitor_cell"
+    ],
+    [
+      "T_peripheral_blood_mononuclear_cell",
+      "V_peripheral_blood_mononuclear_cell"
+    ],
+    [
+      "T_prostate",
+      "V_prostate"
+    ],
+    [
+      "T_testis",
+      "V_testis"
+    ],
+    [
+      "T_trophoblast_cell",
+      "V_trophoblast_cell"
+    ],
+    [
+      "T_upper_lobe_of_left_lung",
+      "V_upper_lobe_of_left_lung"
+    ],
+    [
+      "T_urinary_bladder",
+      "V_urinary_bladder"
+    ],
+    [
+      "T_vagina",
+      "V_vagina"
+    ]
+  ],
+  "panels": {
+    "T_BE2C->B_BE2C": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_BMEC->B_BMEC": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3"
+      ],
+      "panel": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3"
+      ],
+      "overlap": []
+    },
+    "T_Caco-2->B_Caco-2": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_DND-41->B_DND-41": {
+      "input_assays": [
+        "H2AFZ",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K79me2",
+        "H3K9ac",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "ATAC-seq",
+        "DNase-seq"
+      ],
+      "panel": [
+        "ATAC-seq",
+        "DNase-seq"
+      ],
+      "overlap": []
+    },
+    "T_HAP-1->B_HAP-1": {
+      "input_assays": [
+        "DNase-seq"
+      ],
+      "target_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_HL-60->B_HL-60": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K27ac",
+        "H3K27me3"
+      ],
+      "panel": [
+        "H3K27ac",
+        "H3K27me3"
+      ],
+      "overlap": []
+    },
+    "T_MG63->B_MG63": {
+      "input_assays": [
+        "DNase-seq"
+      ],
+      "target_assays": [
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_NCI-H929->B_NCI-H929": {
+      "input_assays": [
+        "H2AFZ",
+        "H3F3A",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K9ac"
+      ],
+      "target_assays": [
+        "ATAC-seq",
+        "DNase-seq",
+        "H3K27ac",
+        "H3K9me3"
+      ],
+      "panel": [
+        "ATAC-seq",
+        "DNase-seq",
+        "H3K27ac",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_RWPE2->B_RWPE2": {
+      "input_assays": [
+        "H3K27ac"
+      ],
+      "target_assays": [
+        "ATAC-seq",
+        "DNase-seq",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "panel": [
+        "ATAC-seq",
+        "DNase-seq",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_SJCRH30->B_SJCRH30": {
+      "input_assays": [
+        "DNase-seq"
+      ],
+      "target_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_SJSA1->B_SJSA1": {
+      "input_assays": [
+        "DNase-seq"
+      ],
+      "target_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_WERI-Rb-1->B_WERI-Rb-1": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_CD4-positive_alpha-beta_memory_T_cell->V_CD4-positive_alpha-beta_memory_T_cell": {
+      "input_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K4me1"
+      ],
+      "panel": [
+        "H3K4me1"
+      ],
+      "overlap": []
+    },
+    "T_DND-41->V_DND-41": {
+      "input_assays": [
+        "H2AFZ",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K79me2",
+        "H3K9ac",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K27ac",
+        "H4K20me1"
+      ],
+      "panel": [
+        "H3K27ac",
+        "H4K20me1"
+      ],
+      "overlap": []
+    },
+    "T_GM06990->V_GM06990": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K36me3",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K27me3"
+      ],
+      "panel": [
+        "H3K27me3"
+      ],
+      "overlap": []
+    },
+    "T_H1-hESC->V_H1-hESC": {
+      "input_assays": [
+        "DNase-seq",
+        "H2AFZ",
+        "H2BK120ac",
+        "H2BK12ac",
+        "H2BK15ac",
+        "H2BK20ac",
+        "H2BK5ac",
+        "H3K18ac",
+        "H3K23me2",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K56ac",
+        "H3K79me1",
+        "H3K79me2",
+        "H3K9ac",
+        "H4K5ac",
+        "H4K8ac",
+        "H4K91ac"
+      ],
+      "target_assays": [
+        "H2AK5ac",
+        "H3K4ac",
+        "H3K9me3",
+        "H4K20me1"
+      ],
+      "panel": [
+        "H2AK5ac",
+        "H3K4ac",
+        "H3K9me3",
+        "H4K20me1"
+      ],
+      "overlap": []
+    },
+    "T_H9->V_H9": {
+      "input_assays": [
+        "DNase-seq",
+        "H2AFZ",
+        "H3K14ac",
+        "H3K18ac",
+        "H3K23me2",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4ac",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K56ac",
+        "H3K79me1",
+        "H3K9ac",
+        "H3K9me3",
+        "H3T11ph",
+        "H4K5ac",
+        "H4K8ac"
+      ],
+      "target_assays": [
+        "H3K4me2",
+        "H3K79me2"
+      ],
+      "panel": [
+        "H3K4me2",
+        "H3K79me2"
+      ],
+      "overlap": []
+    },
+    "T_IMR-90->V_IMR-90": {
+      "input_assays": [
+        "DNase-seq",
+        "H2AK5ac",
+        "H2AK9ac",
+        "H2BK120ac",
+        "H2BK15ac",
+        "H2BK20ac",
+        "H2BK5ac",
+        "H3K14ac",
+        "H3K18ac",
+        "H3K23ac",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4ac",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K56ac",
+        "H3K79me1",
+        "H3K79me2",
+        "H3K9me1",
+        "H3K9me3",
+        "H4K20me1",
+        "H4K5ac",
+        "H4K91ac"
+      ],
+      "target_assays": [
+        "H2AFZ",
+        "H2BK12ac",
+        "H3K9ac",
+        "H4K8ac"
+      ],
+      "panel": [
+        "H2AFZ",
+        "H2BK12ac",
+        "H3K9ac",
+        "H4K8ac"
+      ],
+      "overlap": []
+    },
+    "T_K562->V_K562": {
+      "input_assays": [
+        "DNase-seq",
+        "H2AFZ",
+        "H3K27ac",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K9ac",
+        "H3K9me1",
+        "H3K9me3",
+        "H4K20me1"
+      ],
+      "target_assays": [
+        "H3K27me3",
+        "H3K79me2"
+      ],
+      "panel": [
+        "H3K27me3",
+        "H3K79me2"
+      ],
+      "overlap": []
+    },
+    "T_KMS-11->V_KMS-11": {
+      "input_assays": [
+        "H2AFZ",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K79me2",
+        "H4K20me1"
+      ],
+      "target_assays": [
+        "H3K4me2",
+        "H3K9ac"
+      ],
+      "panel": [
+        "H3K4me2",
+        "H3K9ac"
+      ],
+      "overlap": []
+    },
+    "T_NCI-H929->V_NCI-H929": {
+      "input_assays": [
+        "H2AFZ",
+        "H3F3A",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K9ac"
+      ],
+      "target_assays": [
+        "H3K79me2"
+      ],
+      "panel": [
+        "H3K79me2"
+      ],
+      "overlap": []
+    },
+    "T_OCI-LY7->V_OCI-LY7": {
+      "input_assays": [
+        "H2AFZ",
+        "H3K27ac",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K79me2",
+        "H3K9me2",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "DNase-seq",
+        "H4K20me1"
+      ],
+      "panel": [
+        "DNase-seq",
+        "H4K20me1"
+      ],
+      "overlap": []
+    },
+    "T_adrenal_gland->V_adrenal_gland": {
+      "input_assays": [
+        "ATAC-seq",
+        "DNase-seq",
+        "H3K27ac",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K4me3"
+      ],
+      "panel": [
+        "H3K4me3"
+      ],
+      "overlap": []
+    },
+    "T_adrenal_gland_embryonic->V_adrenal_gland_embryonic": {
+      "input_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "DNase-seq"
+      ],
+      "panel": [
+        "DNase-seq"
+      ],
+      "overlap": []
+    },
+    "T_amnion->V_amnion": {
+      "input_assays": [
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K27ac"
+      ],
+      "panel": [
+        "H3K27ac"
+      ],
+      "overlap": []
+    },
+    "T_chorion->V_chorion": {
+      "input_assays": [
+        "H3K27ac",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K27me3"
+      ],
+      "panel": [
+        "H3K27me3"
+      ],
+      "overlap": []
+    },
+    "T_endocrine_pancreas->V_endocrine_pancreas": {
+      "input_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me3",
+        "H3K9ac",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K4me1"
+      ],
+      "panel": [
+        "H3K4me1"
+      ],
+      "overlap": []
+    },
+    "T_heart_left_ventricle->V_heart_left_ventricle": {
+      "input_assays": [
+        "ATAC-seq",
+        "DNase-seq",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K4me3"
+      ],
+      "panel": [
+        "H3K4me3"
+      ],
+      "overlap": []
+    },
+    "T_mesenchymal_stem_cell->V_mesenchymal_stem_cell": {
+      "input_assays": [
+        "DNase-seq",
+        "H2AK5ac",
+        "H2BK120ac",
+        "H2BK12ac",
+        "H2BK15ac",
+        "H2BK5ac",
+        "H3K14ac",
+        "H3K23ac",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4ac",
+        "H3K4me1",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K9me3",
+        "H4K8ac",
+        "H4K91ac"
+      ],
+      "target_assays": [
+        "H2AFZ",
+        "H3K18ac",
+        "H3K79me1",
+        "H3K9ac"
+      ],
+      "panel": [
+        "H2AFZ",
+        "H3K18ac",
+        "H3K79me1",
+        "H3K9ac"
+      ],
+      "overlap": []
+    },
+    "T_myoepithelial_cell_of_mammary_gland->V_myoepithelial_cell_of_mammary_gland": {
+      "input_assays": [
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9ac"
+      ],
+      "target_assays": [
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_neural_stem_progenitor_cell->V_neural_stem_progenitor_cell": {
+      "input_assays": [
+        "DNase-seq",
+        "H2AK5ac",
+        "H2BK120ac",
+        "H2BK12ac",
+        "H2BK5ac",
+        "H3K18ac",
+        "H3K23ac",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K36me3",
+        "H3K4ac",
+        "H3K4me2",
+        "H3K4me3",
+        "H3K79me1",
+        "H3K9ac",
+        "H3K9me3",
+        "H4K8ac",
+        "H4K91ac"
+      ],
+      "target_assays": [
+        "H2BK15ac",
+        "H3K14ac",
+        "H3K4me1"
+      ],
+      "panel": [
+        "H2BK15ac",
+        "H3K14ac",
+        "H3K4me1"
+      ],
+      "overlap": []
+    },
+    "T_peripheral_blood_mononuclear_cell->V_peripheral_blood_mononuclear_cell": {
+      "input_assays": [
+        "H3K27ac",
+        "H3K27me3",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K9ac",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K36me3"
+      ],
+      "panel": [
+        "H3K36me3"
+      ],
+      "overlap": []
+    },
+    "T_prostate->V_prostate": {
+      "input_assays": [
+        "H3K27ac",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K9me3"
+      ],
+      "panel": [
+        "H3K9me3"
+      ],
+      "overlap": []
+    },
+    "T_testis->V_testis": {
+      "input_assays": [
+        "ATAC-seq",
+        "DNase-seq",
+        "H3K9me3"
+      ],
+      "target_assays": [
+        "H3K4me3"
+      ],
+      "panel": [
+        "H3K4me3"
+      ],
+      "overlap": []
+    },
+    "T_trophoblast_cell->V_trophoblast_cell": {
+      "input_assays": [
+        "DNase-seq",
+        "H2AFZ",
+        "H2AK5ac",
+        "H2BK120ac",
+        "H2BK12ac",
+        "H3K14ac",
+        "H3K18ac",
+        "H3K27ac",
+        "H3K27me3",
+        "H3K4ac",
+        "H3K4me1",
+        "H3K4me3",
+        "H3K79me1",
+        "H3K79me2",
+        "H3K9ac",
+        "H3K9me3",
+        "H4K12ac",
+        "H4K8ac"
+      ],
+      "target_assays": [
+        "H2BK5ac",
+        "H3K36me3",
+        "H3K4me2",
+        "H4K91ac"
+      ],
+      "panel": [
+        "H2BK5ac",
+        "H3K36me3",
+        "H3K4me2",
+        "H4K91ac"
+      ],
+      "overlap": []
+    },
+    "T_upper_lobe_of_left_lung->V_upper_lobe_of_left_lung": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K27ac",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K36me3"
+      ],
+      "panel": [
+        "H3K36me3"
+      ],
+      "overlap": []
+    },
+    "T_urinary_bladder->V_urinary_bladder": {
+      "input_assays": [
+        "DNase-seq",
+        "H3K36me3",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "H3K27ac"
+      ],
+      "panel": [
+        "H3K27ac"
+      ],
+      "overlap": []
+    },
+    "T_vagina->V_vagina": {
+      "input_assays": [
+        "H3K27ac",
+        "H3K4me3"
+      ],
+      "target_assays": [
+        "DNase-seq"
+      ],
+      "panel": [
+        "DNase-seq"
+      ],
+      "overlap": []
+    }
+  },
+  "summary": {
+    "pairs": 38,
+    "experiments": 96,
+    "by_target_prefix": {
+      "B_": {
+        "cells": 12,
+        "experiments": 51
+      },
+      "V_": {
+        "cells": 26,
+        "experiments": 45
+      }
+    }
+  },
+  "disjoint": true,
+  "overlaps": {},
+  "empty_panels": [],
+  "unpaired_targets": [],
+  "self_paired_would_score": 80
+}
