@@ -53,6 +53,11 @@ SEED="${SEED:-0}"
 EVAL_EVERY="${EVAL_EVERY:-3}"
 PROBE_LO="${PROBE_LO:-300}"
 PROBE_HI="${PROBE_HI:-1500}"
+# SELECT_ON=V derives a V_-only eval-pair list so the mid-training eval NEVER READS B_, which is
+# what §5 asks for. SELECT_ON=all uses the shipped regime verbatim (26 V_ + 12 B_ pairs) and so
+# scores B_ at every eval. Selection is on V_imp_crps either way, so the SELECTED CHECKPOINT is the
+# same under both; the difference is whether B_ is touched, plus the eval work saved.
+SELECT_ON="${SELECT_ON:-V}"
 # -------------------------------------------------------------------------------------------------
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
@@ -85,8 +90,11 @@ nvidia-smi -L || true
 # layer supervises it on a plane of zeros in silence (tests/test_train_store.py guards this).
 # --signal-target-transform stays `auto`, which resolves to `arcsinh` on the store path; the
 # RESOLVED value lands in the run config and two runs only compare on the signal head if it matches.
+# NOTE: --store is deliberately NOT in here. probe mode uses $REGIME; full mode may use a derived
+# V_-only copy, and bash array pattern substitution cannot rewrite a flag and its value together
+# because they are separate elements.
 COMMON=(
-  --store "$REGIME" --out-dir "$OUT"
+  --out-dir "$OUT"
   --heads count,signal,peak
   --weight-decay 0.0
   --dsf-sampling uniform --batch-size 8
@@ -98,7 +106,7 @@ if [ "$MODE" = "probe" ]; then
   # mid-training eval pass would be counted as training time. It also means the probe reads no B_.
   for STEPS in "$PROBE_LO" "$PROBE_HI"; do
     T0=$(date +%s.%N)
-    python -m candi.train "${COMMON[@]}" \
+    python -m candi.train "${COMMON[@]}" --store "$REGIME" \
       --tag "probe_${NAME}_s${SEED}_${STEPS}" \
       --epochs 1 --steps-per-epoch "$STEPS" --eval-every 0 \
       > "$OUT/probe_${NAME}_${STEPS}.log" 2>&1
@@ -148,11 +156,54 @@ if [ "$MODE" != "full" ]; then echo "[error] MODE must be probe or full, got $MO
 # EVAL_EVERY=3 satisfies the selection rule and violates the never-touch rule; EVAL_EVERY=0 does the
 # reverse. There is no shipped flag that does both. Do not resolve this by picking one silently.
 echo "[t81] eval_every=$EVAL_EVERY — best checkpoint selected on V_imp_crps, written to *.best.ckpt"
-if [ "$EVAL_EVERY" != "0" ]; then
-  echo "[t81] NOTE: the eval hook also logs B_imp_crps; see the WARNING in this script."
+
+# Derive a V_-only regime rather than shipping a second 340-line config that could drift from its
+# original. `regions.bed` RESOLVES AGAINST THE REGIME FILE'S OWN DIRECTORY (store/regime.py:52), so
+# the derived copy must carry an absolute BED path or the pilot regime fails its sha256 check.
+TRAIN_REGIME="$REGIME"
+if [ "$SELECT_ON" = "V" ]; then
+  TRAIN_REGIME="$OUT/regime.${NAME}.vsel.json"
+  python - "$REGIME" "$TRAIN_REGIME" <<'PYEOF' || exit 1
+import json, sys
+from pathlib import Path
+src, dst = Path(sys.argv[1]), Path(sys.argv[2])
+d = json.loads(src.read_text())
+pairs = [tuple(p) if not isinstance(p, dict) else (p["input"], p["target"]) for p in d["eval_pairs"]]
+kept = [list(p) for p in pairs if str(p[1]).startswith("V_")]
+dropped = [list(p) for p in pairs if not str(p[1]).startswith("V_")]
+if not kept:
+    sys.exit("no V_ pairs to select on")
+d["eval_pairs"] = kept
+# `eval_pairs` being set makes biosamples.eval inert (regime.py:501 — the pool comes from the
+# pairs), but leaving 38 cells in a V_-only config would be a false claim about the eval split.
+d["biosamples"]["eval"] = sorted({p[1] for p in kept})
+if d.get("regions"):
+    d["regions"]["bed"] = str((src.parent / d["regions"]["bed"]).resolve())
+d["_comment"] = ("DERIVED at submit time by slurm/t81_train_candi.sh from " + src.name +
+                 " — eval_pairs filtered to V_ targets only, so the mid-training eval never reads "
+                 "B_ (BENCHMARK_DESIGN.md §5). Selection is on V_imp_crps in both cases, so this "
+                 "does not change which checkpoint is selected. Do not edit; edit the source.")
+dst.write_text(json.dumps(d, indent=2))
+print(f"[t81] derived {dst.name}: kept {len(kept)} V_ pairs, dropped {len(dropped)} B_ pairs")
+print(f"[t81]   eval biosamples now {len(d['biosamples']['eval'])} (V_ only)")
+if d.get("regions"):
+    print(f"[t81]   regions.bed rewritten absolute: {d['regions']['bed']}")
+PYEOF
+  # Prove it parses, and that the hash gate still passes on the rewritten BED path.
+  python -c "
+import sys; sys.path.insert(0, '$KIT/src')
+from candi.store.regime import Regime
+r = Regime.from_file('$TRAIN_REGIME')
+tgts = {t.split('_')[0] + '_' for _, t in r.eval_pairs}
+assert tgts == {'V_'}, f'derived regime still targets {tgts}'
+print(f'[t81] derived regime OK: {len(r.eval_pairs)} pairs, targets {sorted(tgts)}, regions={bool(r.regions)}')
+" || exit 1
+else
+  echo "[t81] SELECT_ON=$SELECT_ON — using the shipped regime verbatim; the eval WILL read B_ at"
+  echo "[t81]   every checkpoint, which BENCHMARK_DESIGN §5 lists as never. Deliberate only."
 fi
 
-python -m candi.train "${COMMON[@]}" \
+python -m candi.train "${COMMON[@]}" --store "$TRAIN_REGIME" \
   --tag "t81_${NAME}_s${SEED}" \
   --epochs 25 --full-coverage \
   --eval-every "$EVAL_EVERY" --eval-batch-size 4
