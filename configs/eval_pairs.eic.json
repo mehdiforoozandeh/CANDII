@@ -2,7 +2,7 @@
   "tool": "tools/declare_eval_pairs.py",
   "generated_utc": "2026-08-30T06:35:18Z",
   "store": "/project/def-maxwl/mforooz/CANDI_STORE/eic",
-  "manifest_sha256": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397",
+  "manifest_sha256": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83",
   "rule": {
     "kind": "prefix",
     "input_prefix": "T_",
@@ -981,5 +981,13 @@
   "overlaps": {},
   "empty_panels": [],
   "unpaired_targets": [],
-  "self_paired_would_score": 80
+  "self_paired_would_score": 80,
+  "rechecked": {
+    "utc": "2026-08-30T00:00:00Z",
+    "against": "the store after t78's DNase promotion",
+    "previous_manifest_sha256": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397",
+    "result": "IDENTICAL \u2014 38 pairs, 96 experiments, V_ 26 cells/45 experiments, B_ 12/51, disjoint",
+    "why_it_could_not_move": "the promotion rewrote layer CONTENTS on 40 biosamples and renamed one layer; it added, removed and renamed no biosample, and the pairing is a function of biosample names alone (D16, D31)",
+    "tool": "tools/declare_eval_pairs.py check --regime configs/regime.eic_19.json"
+  }
 }
