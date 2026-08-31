@@ -87,12 +87,12 @@ than that. Do not invent a gate to unblock yourself — raise it.
 ### Closing the loop
 
 ```bash
-crux task done t12 --output "merged 9a3f1c2" --concluded h7:supported
+crux task done t12 --output "[Merged 9a3f1c2](results/t12/DELIVERABLE.md)" --concluded h7:supported
 crux task accept t12     # the PI's signature — never run this on your own judgement
 ```
 
-An experiment's conclusion does **not** close a hypothesis. `crux close h7` is a separate,
-PI-gated step after the verifiable boxes are ticked.
+An output must **resolve** — a vault file or `[[wikilink]]`, never a bare hash. A conclusion does
+**not** close a hypothesis; `crux close h7` is separate, PI-gated, and needs the boxes ticked.
 
 ## Where numbers live
 
