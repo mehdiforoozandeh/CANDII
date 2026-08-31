@@ -25,8 +25,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
+
+## Blocked
+
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — blocked by `t78`, `t79`, `t80`
 
 ## By category
 
@@ -60,7 +63,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *open*
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *open*
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *open*
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *open*
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *blocked*
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *open*
 
 ## Done · Dropped
@@ -87,5 +90,5 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *done* → `results/t25/DELIVERABLE.md`
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *done* → `results/t26/DELIVERABLE.md`
-- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *done* → `merged-pending`
-- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *done* → `09a0f3e`
+- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *done* → `results/t27/DELIVERABLE.md`
+- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *done* → `results/t28/DELIVERABLE.md`

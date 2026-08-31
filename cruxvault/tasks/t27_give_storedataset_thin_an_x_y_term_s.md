@@ -24,7 +24,7 @@ t16 measured it: D22's counter-based eval RNG seeds each draw from (run_seed, bi
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- merged-pending 5904f70 on implementation/t27-thin-xy-seed; leak under the deterministic RNG 1.00 -> 0.16, survivors are dsf-1 only; 772 pass, golden 0 ULP
+- [Merged 52c8751 (PR #15)](results/t27/DELIVERABLE.md) — `5904f70` on `main`; leak under the deterministic RNG 1.00 -> 0.16, survivors are dsf-1 only; 772 pass, golden 0 ULP
 
 ## Evidence
 
