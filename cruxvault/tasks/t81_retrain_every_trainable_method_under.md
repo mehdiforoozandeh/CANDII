@@ -30,20 +30,33 @@ genuinely infrastructure: t78 (the DNase layer), t79 (the regimes), t80 (the eva
 
 So t77 ships without this: it is de-parented and blocked on t78, t79 and t80 instead.
 
-**Its lane is genuinely unresolved, and that needs the PI.** CLAUDE.md says the lane is `exp` for
-"a task the engine calls an *experiment* (any task carrying hypothesis refs)". This task carries
-**none**, and `experiment` is a reserved category the engine computes and refuses to accept by hand
-(`engine.py:3264`). So it cannot be put in the `exp/` lane by editing a field — it would need
-hypothesis refs, and deciding which hypotheses a retrain serves is a research judgment, not
-bookkeeping. Left as `implementation` with this note rather than guessing.
+**RULED 2026-08-30 (PI): this is not a question or a hypothesis. It belongs in the taskhub only.**
+It carries no `hypothesis_refs` and it is not going to acquire any. The lane question that was
+raised here is therefore closed, and closed the simple way: CLAUDE.md gives the `exp` lane to "a
+task the engine calls an *experiment* (any task carrying hypothesis refs)", and **this task is not
+one**. It stays `implementation`, and it is not an experiment merely because it is expensive and
+moves numbers. Nothing about the crux tree gates it — no null, no verifiables, no `crux close`.
 
-**It cannot start yet, and not because of compute.** CLAUDE.md records the experiment-lane merge
-gate as *"TODO, NOT YET DEFINED"*, and says plainly: do not invent a gate to unblock yourself —
-raise it. It is raised. The gate is the PI's to define, and the note there is worth keeping in view:
-the target-clustered noise floor on macro CRPS is ~0.09 and a seed change alone moves pooled CRPS
-by 0.1195, which is larger than several recorded between-arm gaps. The noise floor on the *new*
-panels is itself deferred and unmeasured (`plan/BENCHMARK_DESIGN.md` §15), so nothing this task
-produces can carry a resolution band until that lands either.
+**What that leaves is a real gate problem, and it is now the only one.** CLAUDE.md's
+`implementation` gate is that the PR must not move a number — `pytest` green plus `tools/golden.py`
+bit-exact — and a retrain moves every number by construction. Three ways out, and they are not
+equally good:
+
+1. **Flag-only.** CLAUDE.md already says work that changes no code runs from `main` and opens no
+   PR, so no gate applies. Retraining under existing configs is exactly that. This is the honest
+   reading for the CANDI and naive-baseline arms, which need no new code at all.
+2. **Split the code from the run.** The launch scripts and any rival vendoring are ordinary
+   `implementation` work that holds golden at 0 ULP and merges normally; the *run* that follows is
+   flag-only. `t79`'s Avocado vendoring already worked this way — 865 passed, golden 0 ULP.
+3. Relabel the task. Rejected: it is not an experiment, per the ruling above.
+
+**What still has no answer is how a retrain's numbers get accepted**, which is a different question
+from how a PR merges. The target-clustered noise floor on macro CRPS is ~0.09 and a seed change
+alone moves pooled CRPS by 0.1195 — larger than several recorded between-arm gaps — and the floor
+on the *new* panels is deferred and unmeasured (`plan/BENCHMARK_DESIGN.md` §15). Ranks are the
+part that reproduces; scores are not (§5.3: 16 of 25 published ranks held exactly, resolution limit
+~0.005 correlation units). So a board row from this task can go up **unranked** before the floor
+lands, and §15 already allows that.
 
 ## Output
 
