@@ -34,7 +34,8 @@ import torch
 
 from candi.bench.distributional import invert_signal_prediction
 from candi.bench.external import _expected, track_dirname
-from candi.bench.harness import EvalSource, TrackRecord, cross_cell, open_source, stream_tracks
+from candi.bench.harness import (EvalSource, TrackRecord, cross_cell, open_source, panel_of,
+                                 stream_tracks)
 from candi.precision import no_autocast
 
 __all__ = ["DumpError", "write_manifest", "arrays_for_chrom", "dump_predictions",
@@ -49,9 +50,79 @@ class DumpError(ValueError):
 # the on-disk contract (§4.1)
 # ---------------------------------------------------------------------------
 
+def _code_sha() -> Optional[str]:
+    """`git rev-parse HEAD` for the checkout this module was imported from, else None.
+
+    `train.py::_git_provenance` runs the same command, and this does not call it: `candi.bench` may
+    never import `candi.train` (`harness.py` header), and a provenance string is not worth closing
+    that cycle for. `slurm/t81_train_candi.sh` logs the short sha; the full one is recorded here
+    because a manifest is read long after the reflog that would disambiguate a prefix is gone.
+    """
+    import subprocess
+    try:
+        done = subprocess.run(["git", "rev-parse", "HEAD"],
+                              cwd=str(Path(__file__).resolve().parent),
+                              capture_output=True, text=True, timeout=30, check=True)
+    except Exception:                            # noqa: BLE001 — provenance is never fatal
+        return None
+    return done.stdout.strip() or None
+
+
+def _store_manifest_sha256(store_root: Optional[Path | str]) -> Optional[str]:
+    """sha256 of the corpus `manifest.json` bytes — the store's content identity, not its path."""
+    if not store_root:
+        return None
+    from candi.store import layout as L
+    from candi.store.genome import sha256_file
+    path = L.manifest_path(store_root)
+    return sha256_file(path) if Path(path).is_file() else None
+
+
 def write_manifest(root: Path, *, method: str, declared_tracks: Sequence[str],
-                   arms: Sequence[str], version: str = "", notes: str = "") -> None:
-    """`<pred_root>/manifest.json` — copied verbatim into every score file's provenance."""
+                   arms: Sequence[str], chroms: Sequence[str] = (),
+                   ckpt: Optional[Path | str] = None, store: Optional[Path | str] = None,
+                   regime_id: Optional[str] = None, panel: Optional[str] = None,
+                   seed: Optional[int] = None, version: str = "", notes: str = "") -> None:
+    """`<pred_root>/manifest.json` — copied verbatim into every score file's provenance.
+
+    The identity half of this file is what makes `BENCHMARK_DESIGN.md` §5's "the `B_` panel is
+    predicted exactly ONCE" a checkable rule rather than a promise. Without `ckpt_sha256` two `B_`
+    roots written by two different checkpoints are indistinguishable on disk, so a re-prediction
+    leaves no trace; `store_manifest_sha256` does the same for the truth the root was aimed at,
+    which `StoreSource.provenance` records only as a path.
+
+    A field nobody could determine is written as an explicit `null` with its reason in `unknown`,
+    never dropped. An absent key and an unknown value must not read the same: the first says the
+    writer predates the field, the second says the writer looked and could not tell.
+    """
+    unknown: Dict[str, str] = {}
+
+    ckpt_sha256 = None
+    if ckpt is None:
+        unknown["ckpt_sha256"] = ("dump_predictions was handed a live model, not a checkpoint "
+                                  "path; the CLI always passes --ckpt")
+    elif not Path(ckpt).is_file():
+        unknown["ckpt_sha256"] = f"{ckpt} is not a file"
+    else:
+        from candi.store.genome import sha256_file
+        ckpt_sha256 = sha256_file(ckpt)
+
+    store_manifest_sha256 = _store_manifest_sha256(store)
+    if store_manifest_sha256 is None:
+        unknown["store_manifest_sha256"] = (
+            f"no manifest.json under {store}" if store else
+            "the source is not a store; only a store corpus carries a manifest.json")
+    if regime_id is None:
+        unknown["regime_id"] = "the source is not a store, so no regime file was read"
+    if panel is None:
+        unknown["panel"] = ("the declared pairs name no single V_/B_ target panel — either they "
+                            "mix the two, or they are self-paired and sit neither exam")
+    if seed is None:
+        unknown["seed"] = "the source exposes no run seed"
+    code_sha = _code_sha()
+    if code_sha is None:
+        unknown["code_sha"] = "git could not name HEAD for the checkout candi.bench.dump ran from"
+
     root.mkdir(parents=True, exist_ok=True)
     (root / "manifest.json").write_text(json.dumps({
         "method": method,
@@ -61,6 +132,15 @@ def write_manifest(root: Path, *, method: str, declared_tracks: Sequence[str],
         "arms": list(arms),
         "declared_tracks": list(declared_tracks),
         "notes": notes,
+        # who wrote this root, and off what — §5's audit trail
+        "ckpt_sha256": ckpt_sha256,
+        "store_manifest_sha256": store_manifest_sha256,
+        "regime_id": regime_id,
+        "panel": panel,
+        "code_sha": code_sha,
+        "seed": None if seed is None else int(seed),
+        "chroms": list(chroms),
+        "unknown": unknown,
     }, indent=2) + "\n", encoding="utf-8")
 
 
@@ -96,22 +176,48 @@ def arrays_for_chrom(rec: TrackRecord, chrom: str, n_bins: int, *,
     return payload
 
 
-def _write_npz(path: Path, payload: Dict[str, np.ndarray]) -> None:
+def _write_npz(path: Path, payload: Dict[str, np.ndarray]) -> tuple[int, int]:
+    """Write one `(track, chrom)` npz. Returns `(bytes on disk, bytes raw)`.
+
+    Compressed, not stored. `np.savez` does not deflate at all, and `external.read_track_arrays`
+    goes through `np.load`, which reads either form — so this costs no consumer a change.
+
+    **Expect about 1.27x, and do not "optimize" this back expecting more.** The 2.69x measured for
+    this corpus was blended over TRUTH layers, where sparse integer counts compress 15x and carry
+    the average. Nothing here is truth: all five prediction arrays are smooth full-mantissa model
+    outputs, and on those zlib gets roughly a quarter. That takes CANDI's genome-wide footprint
+    from about 466 GB to about 367 GB — worth taking, not what makes the plan affordable.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp.npz")
-    np.savez(tmp, **payload)
+    np.savez_compressed(tmp, **payload)
     os.replace(tmp, path)
+    return path.stat().st_size, sum(int(a.nbytes) for a in payload.values())
+
+
+def _panel_of_source(source: EvalSource) -> Optional[str]:
+    """`V` or `B` when every declared pair targets the same panel, else None.
+
+    `harness.panel_of` reads the TARGET cell's prefix, and a root that mixes the two sat no single
+    exam — so the honest answer there is "unknown", not whichever panel happened to come first.
+    """
+    panels = {panel_of(p.target_biosample) for p in source.pairs("impute")}
+    return panels.pop() if len(panels) == 1 else None
 
 
 def dump_predictions(model, source: EvalSource, root: Path | str, *, method: str,
                      signal_target_transform: str = "none", batch_windows: int = 4,
                      version: str = "", notes: str = "", progress: bool = False,
-                     device: Any = "cpu") -> Path:
+                     ckpt: Optional[Path | str] = None, device: Any = "cpu") -> Path:
     """Stream the checkpoint over the regime's declared eval pairs and write a §4.1 root.
 
     Reuses `harness.stream_tracks` — the same windows, the same prompt splice, the same overlap
     rule — so a round-trip through `candi.bench.external` is an equality against `run_bench`,
     not a correlation.
+
+    `ckpt` names the file `model` was loaded from, and is provenance only — nothing here reads it.
+    The CLI always passes it; a caller that built the model some other way gets a manifest whose
+    `ckpt_sha256` is an explicit null.
     """
     if not method:
         raise DumpError("--method is required: provenance.method has nothing to name.")
@@ -131,6 +237,7 @@ def dump_predictions(model, source: EvalSource, root: Path | str, *, method: str
 
     written: Dict[str, TrackRecord] = {}
     arms: list[str] = ["count"]
+    n_disk = n_raw = 0
     with no_autocast(device):
         for rec in stream_tracks(model, source, device, kind="impute",
                                  batch_windows=batch_windows, progress=progress):
@@ -141,9 +248,12 @@ def dump_predictions(model, source: EvalSource, root: Path | str, *, method: str
                     f"{len(expected)} tracks; a dump that writes anything else cannot be scored.")
             track_dir = out / dirname
             for c in rec.chroms:
-                _write_npz(track_dir / f"{c}.npz",
-                           arrays_for_chrom(rec, c, n_bins[c],
-                                            signal_target_transform=signal_target_transform))
+                disk, raw = _write_npz(
+                    track_dir / f"{c}.npz",
+                    arrays_for_chrom(rec, c, n_bins[c],
+                                     signal_target_transform=signal_target_transform))
+                n_disk += disk
+                n_raw += raw
             written[dirname] = rec
             if rec.has_pval and "pval" not in arms:
                 arms.append("pval")
@@ -156,8 +266,26 @@ def dump_predictions(model, source: EvalSource, root: Path | str, *, method: str
             f"{out} is missing {len(missing)} of the {len(declared)} declared tracks — "
             f"{missing[:5]}. A panel scored with holes in it reads as a whole panel (D2).")
 
-    write_manifest(out, method=method, declared_tracks=declared, arms=arms,
-                   version=version, notes=notes)
+    prov = source.provenance()
+    # Hash the regime the source LOADED, not the file as it stands now — a regime edited between
+    # the open and the write would otherwise be recorded as the one this root was predicted under.
+    regime = getattr(getattr(source, "ds", None), "regime", None)
+    write_manifest(
+        out, method=method, declared_tracks=declared, arms=arms, chroms=chroms,
+        ckpt=ckpt, store=prov.get("store"), regime_id=getattr(regime, "sha256", None),
+        panel=_panel_of_source(source),
+        # `StoreSource._run_seed` is the seed every DSF draw in the batch derives from, so it is
+        # the one a re-prediction would have to match. The h5 backend has none.
+        seed=getattr(source, "_run_seed", None),
+        version=version, notes=notes)
+    if progress:
+        # §12.6's storage table is a synthetic estimate. This is the measurement that replaces it.
+        ratio = (n_raw / n_disk) if n_disk else float("nan")
+        # Exact bytes, because §12.6 is rewritten from this line and a rounded GB cannot be summed
+        # back. The GB is beside it so the number is readable at the scale a real run reaches.
+        print(f"[bench.dump] {n_disk:,} B written vs {n_raw:,} B raw ({ratio:.2f}x, "
+              f"{n_disk / 1e9:,.3f} GB on disk) over {len(written)} track(s) x "
+              f"{len(chroms)} chrom(s)", flush=True)
     return out
 
 
@@ -239,7 +367,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         dump_predictions(
             model, source, a.out, method=a.method, signal_target_transform=stt,
             batch_windows=a.batch_windows, version=a.version, notes=a.notes,
-            progress=not a.quiet, device=device)
+            progress=not a.quiet, ckpt=a.ckpt, device=device)
     finally:
         source.close()
     if not a.quiet:

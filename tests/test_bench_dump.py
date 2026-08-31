@@ -11,7 +11,11 @@ does not re-derive either.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
+import shutil
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +23,8 @@ import pytest
 import torch
 
 from candi.bench import harness as H
-from candi.bench.dump import arrays_for_chrom, dump_predictions, main
+from candi.bench.dump import (_write_npz, arrays_for_chrom, dump_predictions, main,
+                              write_manifest)
 from candi.bench.external import score_external, track_dirname
 from candi.bench.harness import Pair, open_source
 from candi.model import build_model
@@ -246,3 +251,180 @@ def test_the_cli_writes_a_root_the_external_entry_can_score(
     for key in got["tracks"]:
         assert got["per_track"][key]["pval"]["mse"] == pytest.approx(
             float(ref["per_track"][key]["pval"]["mse"]), rel=1e-6, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# 4 — t83: the root is deflated on write, and losslessly so
+# ---------------------------------------------------------------------------
+
+def _npz_members(root: Path):
+    for track in sorted(p for p in root.iterdir() if p.is_dir()):
+        for npz in sorted(track.glob("*.npz")):
+            yield npz
+
+
+def test_every_dumped_npz_is_deflated_rather_than_stored(dumped_root) -> None:
+    """§12.6's footprint assumes compression. `np.savez` stores; `savez_compressed` deflates."""
+    seen = 0
+    for npz in _npz_members(dumped_root):
+        with zipfile.ZipFile(npz) as z:
+            members = z.infolist()
+            assert members, f"{npz} holds no arrays"
+            for m in members:
+                assert m.compress_type == zipfile.ZIP_DEFLATED, f"{npz}::{m.filename} is stored"
+                seen += 1
+    assert seen > 0
+
+
+@pytest.fixture(scope="module")
+def stored_root(dumped_root, tmp_path_factory) -> Path:
+    """The same root rewritten with `np.savez` — the uncompressed twin the scores must match."""
+    out = tmp_path_factory.mktemp("dumpstored") / "root"
+    shutil.copytree(dumped_root, out)
+    for npz in _npz_members(out):
+        with np.load(npz) as z:
+            payload = {k: np.asarray(z[k]) for k in z.files}
+        np.savez(npz.with_suffix(""), **payload)          # np.savez appends .npz itself
+    return out
+
+
+def test_compression_loses_no_bit_of_any_prediction_array(regime_file, model, tmp_path) -> None:
+    """One real payload, written both ways, both read back against the arrays in memory.
+
+    Comparing the two FILES would be circular — the uncompressed twin is made by reading the
+    compressed one. The in-memory arrays `arrays_for_chrom` returned are the only reference that
+    predates either write.
+    """
+    src = _source(regime_file)
+    try:
+        rec = next(H.stream_tracks(model, src, "cpu", kind="impute", batch_windows=4))
+        chrom = rec.chroms[0]
+        payload = arrays_for_chrom(rec, chrom, N_BINS[chrom])
+    finally:
+        src.close()
+    assert set(payload) == {"mu", "n", "signal_mu", "signal_sigma", "peak_score"}
+    _write_npz(tmp_path / "deflated.npz", payload)
+    np.savez(tmp_path / "stored", **payload)
+    for name in ("deflated.npz", "stored.npz"):
+        with np.load(tmp_path / name) as z:
+            assert sorted(z.files) == sorted(payload), name
+            for k, want in payload.items():
+                assert z[k].dtype == want.dtype, f"{name} `{k}`"
+                assert np.array_equal(z[k], want), f"{name} `{k}`"
+
+
+def test_a_compressed_root_scores_exactly_as_its_uncompressed_twin(
+        regime_file, external_scores, stored_root) -> None:
+    """Bit-identical arrays must give bit-identical numbers — no tolerance, and none needed."""
+    src = _source(regime_file)
+    try:
+        stored = score_external(src, stored_root, seed=0, c_index_pairs=C_PAIRS)
+    finally:
+        src.close()
+    assert stored["tracks"] == external_scores["tracks"]
+    for key in external_scores["tracks"]:
+        for arm in ("count", "pval"):
+            a = _numeric(external_scores["per_track"][key][arm])
+            b = _numeric(stored["per_track"][key][arm])
+            assert set(a) == set(b), f"{key}/{arm}"
+            for k in sorted(a):
+                if np.isfinite(a[k]) or np.isfinite(b[k]):
+                    assert b[k] == a[k], f"{key}/{arm}/{k}"
+                else:
+                    assert not np.isfinite(a[k]) and not np.isfinite(b[k]), f"{key}/{arm}/{k}"
+
+
+def test_the_dump_reports_bytes_written_against_bytes_raw(regime_file, model, tmp_path,
+                                                          capsys) -> None:
+    """§12.6's table is a synthetic estimate until a real run prints this line."""
+    src = _source(regime_file)
+    try:
+        dump_predictions(model, src, tmp_path / "sized", method=METHOD, batch_windows=4,
+                         device="cpu", progress=True)
+    finally:
+        src.close()
+    line = [ln for ln in capsys.readouterr().out.splitlines() if "written vs" in ln]
+    assert len(line) == 1, "the dump must report its footprint exactly once"
+    disk, raw = (int(x.replace(",", "")) for x in
+                 re.match(r".*?([\d,]+) B written vs ([\d,]+) B raw", line[0]).groups())
+    on_disk = sum(p.stat().st_size for p in _npz_members(tmp_path / "sized"))
+    assert disk == on_disk and raw > disk        # the report is the real footprint, and it shrank
+
+
+# ---------------------------------------------------------------------------
+# 5 — t83: the manifest says which model wrote the root (§5's touch-once rule)
+# ---------------------------------------------------------------------------
+
+#: Every field §5 needs to audit "the B_ panel was predicted exactly once".
+PROVENANCE_FIELDS = ("ckpt_sha256", "store_manifest_sha256", "regime_id", "panel", "code_sha",
+                     "seed", "chroms")
+
+
+def _manifest(root: Path) -> dict:
+    return json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+
+
+def test_the_manifest_carries_every_provenance_field(dumped_root) -> None:
+    man = _manifest(dumped_root)
+    assert all(f in man for f in PROVENANCE_FIELDS), sorted(set(PROVENANCE_FIELDS) - set(man))
+
+
+def test_the_manifest_identifies_the_store_the_regime_and_the_panel(dumped_root, store,
+                                                                    regime_file) -> None:
+    man = _manifest(dumped_root)
+    want = hashlib.sha256(L.manifest_path(store).read_bytes()).hexdigest()
+    assert man["store_manifest_sha256"] == want
+    from candi.store.regime import Regime
+    assert man["regime_id"] == Regime.from_file(regime_file).sha256
+    assert man["panel"] == "V"                     # both declared pairs target a V_ cell
+    assert man["chroms"] == ["chr2"]
+    assert isinstance(man["seed"], int)
+    assert len(str(man["code_sha"])) == 40         # the full HEAD sha, not the short one
+
+
+def test_the_manifest_reaches_the_score_file_verbatim(external_scores, dumped_root) -> None:
+    """`read_manifest` copies the manifest through, so the new fields cost the consumer nothing."""
+    assert external_scores["provenance"]["manifest"] == _manifest(dumped_root)
+
+
+def test_two_checkpoints_write_two_different_ckpt_sha256(tmp_path, model,
+                                                         count_only_model) -> None:
+    """The one field §5 rests on: two B_ roots from two models must be told apart on disk."""
+    roots = []
+    for name, m in (("a", model), ("b", count_only_model)):
+        ck = tmp_path / f"{name}.pt"
+        torch.save(m.state_dict(), ck)
+        root = tmp_path / f"root_{name}"
+        write_manifest(root, method=METHOD, declared_tracks=[], arms=["count"], ckpt=ck)
+        roots.append(_manifest(root))
+    assert roots[0]["ckpt_sha256"] != roots[1]["ckpt_sha256"]
+    assert all(len(r["ckpt_sha256"]) == 64 for r in roots)
+
+
+def test_the_cli_records_the_checkpoint_it_was_given(regime_file, model, tmp_path) -> None:
+    ck = tmp_path / "m.pt"
+    torch.save(model.state_dict(), ck)
+    out = tmp_path / "ckpt_root"
+    assert main(["--store", str(regime_file), "--ckpt", str(ck), "--out", str(out),
+                 "--method", METHOD, "--heads", "count,signal,peak",
+                 "--depth-center", "24.25", "--quiet"]) == 0
+    man = _manifest(out)
+    assert man["ckpt_sha256"] == hashlib.sha256(ck.read_bytes()).hexdigest()
+    assert "ckpt_sha256" not in man["unknown"]
+
+
+def test_an_undeterminable_field_is_an_explicit_null_with_a_reason(dumped_root) -> None:
+    """`dumped_root` was written from a live model, so there is no checkpoint file to hash.
+
+    An absent key and an unknown value must not look the same: the key stays, the value is null,
+    and `unknown` says why. A reader that only sees a missing key cannot tell "not recorded" from
+    "could not be determined".
+    """
+    man = _manifest(dumped_root)
+    assert "ckpt_sha256" in man and man["ckpt_sha256"] is None
+    assert man["unknown"]["ckpt_sha256"]
+    for field in PROVENANCE_FIELDS:
+        if man[field] is None:
+            assert man["unknown"].get(field), f"{field} is null with no reason"
+        else:
+            assert field not in man["unknown"], f"{field} is known and still listed as unknown"
