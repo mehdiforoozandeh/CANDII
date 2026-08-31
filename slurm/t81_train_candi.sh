@@ -13,9 +13,12 @@
 #     says "training only" — so those flags are inert here and carrying them would imply a scoring
 #     block that does not run.
 #
-# MODE=probe  measures training throughput and exits. Runs 30 steps, then 90 steps, and DIFFERENCES
-#             them, so the store's manifest read and window planning cancel out of the rate instead
-#             of being amortised into it. There is no measured store-path training throughput on
+# MODE=probe  measures training throughput and exits. Runs PROBE_LO steps, then PROBE_HI, and
+#             DIFFERENCES them, so the store's manifest read and window planning cancel out of the
+#             rate instead of being amortised into it. The two counts must be FAR apart: the first
+#             attempt used 30 and 90 and was invalid, because startup is 40-55 s while 60 steps cost
+#             under 10 s, so startup variance swamped the signal and one regime reported a negative
+#             rate. 300 vs 1500 puts ~100 s of step work against ~10 s of startup noise. There is no measured store-path training throughput on
 #             record — G3 (§12.7) timed INFERENCE only and says so — and --full-coverage on chr19
 #             across 51 T_ biosamples is ~155,700 windows/epoch, so the full job's walltime is
 #             unknown until this runs. Cheap, and it is the number that sizes MODE=full.
@@ -48,6 +51,8 @@ SEED="${SEED:-0}"
 # §5's uniform rule selects the best checkpoint on V_. See the WARNING under [t81] below before
 # changing this: as shipped, any non-zero value also LOGS B_ every eval, which §5 forbids.
 EVAL_EVERY="${EVAL_EVERY:-3}"
+PROBE_LO="${PROBE_LO:-300}"
+PROBE_HI="${PROBE_HI:-1500}"
 # -------------------------------------------------------------------------------------------------
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
@@ -91,7 +96,7 @@ COMMON=(
 if [ "$MODE" = "probe" ]; then
   # Two runs, differenced. --eval-every 0 on purpose: this measures the TRAINING step rate, and a
   # mid-training eval pass would be counted as training time. It also means the probe reads no B_.
-  for STEPS in 30 90; do
+  for STEPS in "$PROBE_LO" "$PROBE_HI"; do
     T0=$(date +%s.%N)
     python -m candi.train "${COMMON[@]}" \
       --tag "probe_${NAME}_s${SEED}_${STEPS}" \
@@ -102,18 +107,32 @@ if [ "$MODE" = "probe" ]; then
     D=$(python -c "print(f'{$T1 - $T0:.3f}')")
     echo "[probe] regime=$NAME steps=$STEPS rc=$rc wall_s=$D"
     if [ $rc -ne 0 ]; then echo "[probe] FAILED — tail of log:"; tail -30 "$OUT/probe_${NAME}_${STEPS}.log"; exit $rc; fi
-    eval "W$STEPS=$D"
+    if [ "$STEPS" = "$PROBE_LO" ]; then WLO="$D"; else WHI="$D"; fi
   done
   python - <<EOF
-w30, w90 = $W30, $W90
-steps, bs = 60, 8
-dt = w90 - w30
-rate = steps * bs / dt
-print(f"[probe] regime=$NAME  startup={w30 - 30*bs/rate:8.1f}s  steady={dt:8.1f}s for {steps} steps")
+wlo, whi = $WLO, $WHI
+nlo, nhi, bs = $PROBE_LO, $PROBE_HI, 8
+dn = nhi - nlo
+dt = whi - wlo
+print(f"[probe] regime=$NAME  {nlo} steps={wlo:.1f}s  {nhi} steps={whi:.1f}s  delta={dt:.1f}s for {dn} steps")
+# Refuse to report a rate the measurement cannot support. dt must be large against the startup
+# variance we actually observed (about 5-15 s), or the difference is noise and not a rate.
+if dt < 30.0:
+    print(f"[probe] INVALID: delta {dt:.1f}s is not large against startup variance (~5-15s). "
+          f"Raise PROBE_HI and re-run. NO RATE REPORTED.")
+    raise SystemExit(3)
+rate = dn * bs / dt
+startup = wlo - nlo * bs / rate
+print(f"[probe] startup={startup:.1f}s (paid once per run, not per epoch)")
 print(f"[probe] TRAINING RATE = {rate:.2f} windows/s  ({rate/bs:.2f} steps/s)")
-for label, wpe in (("chr19 full-coverage (51 T_ x 3053 win)", 155703),):
+print(f"[probe] for reference, G3 measured INFERENCE at 185.6 windows/s on the same MIG slice")
+# --full-coverage sizes an epoch as (train windows x T_ biosamples), not by --steps-per-epoch, so
+# these are the numbers that set MODE=full's walltime. 51 T_ biosamples is from §5.1.
+for label, wpe in (("chr19 (2,344,704 bins / 768 = 3,053 win x 51 T_)", 3053 * 51),
+                   ("pilot (1,023,489 bins -> 1,294 win x 51 T_)", 1294 * 51)):
     ep = wpe / rate
-    print(f"[probe] {label}: {ep/60:.1f} min/epoch -> 25 epochs = {25*ep/3600:.2f} h")
+    print(f"[probe] full-coverage {label}: {wpe:,} win/epoch = {ep/60:.1f} min/epoch "
+          f"-> 25 epochs = {25*ep/3600:.2f} h")
 EOF
   echo "[probe] DONE regime=$NAME"
   exit 0
