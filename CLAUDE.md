@@ -64,9 +64,13 @@ only there.**
 **Non-experiment lanes** — the branch must not move a number:
 
 ```bash
-pytest tests/ -q          # green
-python tools/golden.py    # bit-exact against the pre-change tree
+python tools/golden.py save <ref.pt>    # BEFORE you touch anything: record the tree
+pytest tests/ -q                        # green
+python tools/golden.py check <ref.pt>   # AFTER: 0 ULP against that recording
 ```
+
+`<ref.pt>` is gitignored and machine-local — name it for the commit you branched from,
+e.g. `.golden_main_80f005d.pt`.
 
 If a `docs/` or `implementation/` branch moves a number, it was mislabelled. Find the bug or
 relabel the task.

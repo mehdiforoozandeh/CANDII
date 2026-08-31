@@ -8,6 +8,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes
+- `t3` [implementation] fix the bit-exactness gate command in CLAUDE.md
 
 ## By category
 
@@ -18,3 +19,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### implementation
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
+- `t3` [implementation] fix the bit-exactness gate command in CLAUDE.md — *open*
