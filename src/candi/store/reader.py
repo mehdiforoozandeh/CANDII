@@ -332,8 +332,24 @@ class BiosampleStore:
         current constant instead would silently reinterpret every unrebuilt file as arcsinh and
         return `sinh` of a number that was never compressed.
         """
-        raw = self._read("pval", chrom, start, end, assays)
-        a = self.attrs("pval")
+        return self._decoded_signal("pval", chrom, start, end, assays)
+
+    def signal_rdns(self, chrom: str, start: int, end: Optional[int] = None,
+                    assays: Optional[Sequence[str]] = None) -> np.ndarray:
+        """`(L, F)` float32 of the ARCHIVED signal layer this corpus's `pval` layer replaced.
+
+        `BENCHMARK_DESIGN.md` §10 Phase 3 — the read-depth normalized signal ENCODE ships for
+        DNase-seq. It is stored in the same fixed-point codec as `pval` and decoded the same way,
+        which is why this is one line: the archive is the predecessor FILE, unmodified, so its
+        codec attrs are its own and are read off it exactly as `pval`'s are. **The units are not
+        `-log10 p`** — that is the whole reason it was archived rather than kept.
+        """
+        return self._decoded_signal("signal_rdns", chrom, start, end, assays)
+
+    def _decoded_signal(self, kind: str, chrom: str, start: int, end: Optional[int],
+                        assays: Optional[Sequence[str]]) -> np.ndarray:
+        raw = self._read(kind, chrom, start, end, assays)
+        a = self.attrs(kind)
         scale = int(a.get(L.ATTR_SCALE, L.PVAL_SCALE_LINEAR_V1))
         transform = str(a.get(L.ATTR_TRANSFORM, L.PVAL_TRANSFORM_LINEAR))
         return L.decode_pval(raw, scale, transform)
@@ -347,9 +363,8 @@ class BiosampleStore:
     def block(self, kind: str, chrom: str, start: int, end: Optional[int] = None,
               assays: Optional[Sequence[str]] = None) -> np.ndarray:
         """Kind-dispatched read, for callers that carry the kind as data."""
-        return {"counts": self.counts, "peaks": self.peaks, "pval": self.pval}[kind](
-            chrom, start, end, assays
-        )
+        return {"counts": self.counts, "peaks": self.peaks, "pval": self.pval,
+                "signal_rdns": self.signal_rdns}[kind](chrom, start, end, assays)
 
     # -- pickling (DataLoader workers under `spawn`) -------------------------------------------
 

@@ -446,6 +446,16 @@ def build_manifest(
             # being declared, and `chipseq-control` has none.
             rec["signal_bigwig_accession"] = None
             rec["signal_output_type"] = None
+            # §10 Phase 3 — two free-form records carried straight through from the provenance
+            # file, because a layer this corpus COMPUTED has no bigWig accession to name and a
+            # layer it ARCHIVED is no longer the one `pval` holds:
+            #   `signal_derivation`  the method, parameters and code sha behind a computed layer
+            #   `signal_archive`     what the same track's `signal_rdns` column is, and where it
+            #                        came from
+            # Nothing here interprets either — they are provenance, and inventing a schema for
+            # them would mean this module deciding what a derivation is.
+            rec["signal_derivation"] = None
+            rec["signal_archive"] = None
             if provenance is not None and "pval" in rec["kinds"]:
                 prec = provenance.get((name, track))
                 if prec is None:
@@ -454,6 +464,8 @@ def build_manifest(
                 else:
                     rec["signal_bigwig_accession"] = _norm_str(prec.get("signal_bigwig_accession"))
                     rec["signal_output_type"] = _norm_str(prec.get("output_type"))
+                    rec["signal_derivation"] = prec.get("derivation")
+                    rec["signal_archive"] = prec.get("archive")
                     if rec["signal_output_type"] != signal_output_type:
                         signal_conflicts.append(
                             {"biosample": name, "track": track,

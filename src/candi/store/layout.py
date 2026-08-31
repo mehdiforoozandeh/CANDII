@@ -36,6 +36,7 @@ __all__ = [
     "SUPPORTED_SCHEMA_VERSIONS",
     "DEFAULT_RESOLUTION",
     "KINDS",
+    "ARCHIVE_KINDS",
     "CONTROL_TRACK",
     "CHUNK_BINS",
     "GZIP_LEVEL",
@@ -108,8 +109,18 @@ SCHEMA_VERSION = 2
 SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 DEFAULT_RESOLUTION = 25
 
-#: The three kinds, in build order (D24). `counts` is the only one training strictly needs.
-KINDS = ("counts", "peaks", "pval")
+#: The kinds, in build order (D24). `counts` is the only one training strictly needs.
+#:
+#: `signal_rdns` is an ARCHIVE kind, added by `BENCHMARK_DESIGN.md` §10 Phase 3. When a corpus's
+#: `pval` layer for an assay is replaced by a computed one, the layer it replaces is not deleted and
+#: not overwritten — it is archived under this name and stays readable through the ordinary reader.
+#: It is NOT built from an npz tree: an archive file is the byte-identical predecessor of `pval.h5`,
+#: so its own `kind` root attr still reads `"pval"`. That is deliberate — byte-identity is the whole
+#: point of an archive, and rewriting one attribute to make it self-describing would destroy it.
+KINDS = ("counts", "peaks", "pval", "signal_rdns")
+
+#: Kinds that are never written by `writer.build_biosample`; they are placed by a promotion.
+ARCHIVE_KINDS = ("signal_rdns",)
 
 #: D18 — the control is a normal column of `counts.h5` under this exact name, flagged by
 #: the `control_col` root attr. It is never an "assay".
