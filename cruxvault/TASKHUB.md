@@ -26,6 +26,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
+- `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times
+- `t84` [implementation] vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored
 
 ## Blocked
 
@@ -65,6 +67,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *open*
 - `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *blocked*
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *open*
+- `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *open*
+- `t84` [implementation] vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored — *open*
 
 ## Done · Dropped
 
