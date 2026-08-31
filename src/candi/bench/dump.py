@@ -34,7 +34,7 @@ import torch
 
 from candi.bench.distributional import invert_signal_prediction
 from candi.bench.external import _expected, track_dirname
-from candi.bench.harness import EvalSource, TrackRecord, open_source, stream_tracks
+from candi.bench.harness import EvalSource, TrackRecord, cross_cell, open_source, stream_tracks
 from candi.precision import no_autocast
 
 __all__ = ["DumpError", "write_manifest", "arrays_for_chrom", "dump_predictions",
@@ -115,7 +115,9 @@ def dump_predictions(model, source: EvalSource, root: Path | str, *, method: str
     """
     if not method:
         raise DumpError("--method is required: provenance.method has nothing to name.")
-    if not source.cross_cell("impute"):
+    # t77 moved `cross_cell` off the source and onto the pair: a regime may declare some pairs that
+    # cross cells and some that do not, so the source-level question is "does any pair cross".
+    if not any(cross_cell(p, "impute") for p in source.pairs("impute")):
         raise DumpError(
             f"{getattr(source, 'regime_path', source)} declares no `eval_pairs`. The external "
             f"format is `<input>__<target>__<assay>` — without declared pairs there is no input "
