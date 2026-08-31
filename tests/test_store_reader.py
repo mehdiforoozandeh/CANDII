@@ -57,8 +57,9 @@ def _npz(path: Path, arr: np.ndarray) -> None:
     np.savez_compressed(path, whatever=arr)
 
 
-def _source_tree(root: Path, tracks_map=None) -> None:
+def _source_tree(root: Path, tracks_map=None, chrom_sizes=None) -> None:
     """`<root>/<BIOS>/<TRACK>/{signal_DSF1_res25,peaks_res25,signal_BW_res25}/chr*.npz`."""
+    n_bins = {c: n // RES for c, n in (chrom_sizes or CHROM_SIZES).items()}
     for bi, (bios, tracks) in enumerate((tracks_map or TRACKS).items()):
         for ti, track in enumerate(tracks):
             tdir = root / bios / track
@@ -86,7 +87,7 @@ def _source_tree(root: Path, tracks_map=None) -> None:
                     (kdir / "metadata.json").write_text(
                         json.dumps({"depth": 20_000_000, "dsf": 1}), encoding="utf-8"
                     )
-                for chrom, nb in N_BINS.items():
+                for chrom, nb in n_bins.items():
                     rng = np.random.default_rng(1000 * bi + 10 * ti + len(chrom) + ord(chrom[-1]))
                     if kind == "counts":
                         # A wide, high-count column: the thinning tests need counts big enough for
@@ -99,32 +100,35 @@ def _source_tree(root: Path, tracks_map=None) -> None:
                     _npz(kdir / f"{chrom}.npz", arr)
 
 
-def _genome_layer(store_root: Path, *, seed: int = 7) -> None:
+def _genome_layer(store_root: Path, *, seed: int = 7, chrom_sizes=None) -> None:
     """`genome/{chrom_sizes.json,dna.h5,mask.h5}` — t7's files, written directly.
 
     t7 owns `genome.py`; this only needs the *files* it produces, so it writes the documented
     shapes (D10: `(chr_len,)` uint8 codes; D11: `(n_bins,)` uint8 0/1) and nothing more.
     """
+    sizes = dict(chrom_sizes or CHROM_SIZES)
+    n_bins = {c: n // RES for c, n in sizes.items()}
     gdir = L.genome_dir(store_root)
     gdir.mkdir(parents=True, exist_ok=True)
-    (gdir / "chrom_sizes.json").write_text(json.dumps(CHROM_SIZES), encoding="utf-8")
+    (gdir / "chrom_sizes.json").write_text(json.dumps(sizes), encoding="utf-8")
     rng = np.random.default_rng(seed)
     with h5py.File(L.dna_path(store_root), "w") as f:
         f.attrs["build"] = "SYNTH38"
         f.attrs["fasta_sha256"] = "0" * 64
         f.attrs["codes"] = json.dumps({"A": 0, "C": 1, "G": 2, "T": 3, "N": 4})
-        for chrom, n in CHROM_SIZES.items():
+        for chrom, n in sizes.items():
             f.create_dataset(chrom, data=rng.integers(0, 4, size=n, dtype=np.uint8))
     with h5py.File(L.mask_path(store_root), "w") as f:
         f.attrs["rule"] = "invalid if any N or blacklist overlap"
-        for chrom, nb in N_BINS.items():
+        for chrom, nb in n_bins.items():
             m = np.ones(nb, dtype=np.uint8)
             if chrom == "chr2":
                 m[BLACKLIST_BINS[0]:BLACKLIST_BINS[1]] = 0
             f.create_dataset(chrom, data=m)
 
 
-def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None) -> Path:
+def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None,
+               chrom_sizes=None) -> Path:
     """Build a whole CANDI_STORE — source tree, two biosamples, manifest, genome layer.
 
     Returns the **corpus root** (`…/CANDI_STORE/eic`), which is what `CorpusStore` takes.
@@ -139,11 +143,12 @@ def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None) -> 
     layout = dict(tracks or TRACKS)
     src, store_root = tmp / "src", tmp / "CANDI_STORE"
     corpus_root = L.corpus_root(store_root, corpus)
-    _source_tree(src, layout)
+    sizes = dict(chrom_sizes or CHROM_SIZES)
+    _source_tree(src, layout, sizes)
     for bios in layout:
-        build_biosample(src, corpus_root, bios, chrom_sizes=CHROM_SIZES,
+        build_biosample(src, corpus_root, bios, chrom_sizes=sizes,
                         kinds=("counts", "peaks", "pval"))
-    _genome_layer(store_root)
+    _genome_layer(store_root, chrom_sizes=sizes)
 
     rows = []
     for bios, tracks in layout.items():

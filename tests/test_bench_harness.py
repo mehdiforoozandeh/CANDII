@@ -901,3 +901,147 @@ def test_a_paired_run_scores_end_to_end_and_the_c_block_ladder_reads_the_truth_c
     assert res["macro"]["count"]["n_tracks"] == 3
     assert res["C"]["n_units"] > 0 and "error" not in res["C"]
     assert "error" not in res["C"]["C3_depth_counterfactual"]
+
+
+# ---------------------------------------------------------------------------
+# t80 — the two scopes and the three panel numbers (plan/BENCHMARK_DESIGN.md §4, §5.2)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def two_chrom_regime(tmp_path_factory) -> Path:
+    """TWO eval chromosomes, so a held-out scope can be a proper SUBSET of what is scored.
+
+    The fixtures above cannot express the split at all. They have two chromosomes total, and a
+    regime refuses to train and evaluate on the same one, so exactly one is left to evaluate on —
+    which makes the held-out scope and the genome-wide scope the same set. That is §4's blanking
+    case, tested separately; a third chromosome is what makes the split itself testable.
+    """
+    sizes = {"chr1": 2_000 * 25 + 7, "chr2": 800 * 25 + 3, "chr3": 600 * 25 + 11}
+    store3 = make_store(tmp_path_factory.mktemp("benchstore3"), chrom_sizes=sizes)
+    d = tmp_path_factory.mktemp("benchregime2")
+    obj = regime_dict(store3, biosamples={"train": ["T_aa"], "eval": ["T_aa", "V_aa"]},
+                      kinds=["counts", "peaks", "pval"],
+                      train_chroms=["chr1"], eval_chroms=["chr2", "chr3"])
+    p = d / "regime.json"
+    p.write_text(json.dumps(obj))
+    return p
+
+
+def test_panel_of_reads_the_target_cell_and_nothing_else() -> None:
+    assert H.panel_of("V_K562") == "V"
+    assert H.panel_of("B_HAP-1") == "B"
+    # A `T_` cell is the PROMPT. Pairing on the input would put every experiment in one panel.
+    assert H.panel_of("T_K562") is None
+
+
+def _fake_track(assay: str, mse: float) -> dict:
+    return {"pval": {"assay": assay, "kind": "impute", "mse": mse, "n_bins": 100}}
+
+
+def test_the_matched_panel_is_measured_from_b_not_listed() -> None:
+    """§5.2's middle number: the same `V_` tracks, over the assays `B_` actually contains.
+
+    The set is read off `B_` at aggregation time on purpose. A literal list here would go stale the
+    first time the blind panel moves, and would go stale silently.
+    """
+    per_track = {
+        "T_a|V_a|H3K4me3": _fake_track("H3K4me3", 1.0),
+        "T_b|V_b|H3K27ac": _fake_track("H3K27ac", 3.0),
+        "T_c|V_c|H3K9me3": _fake_track("H3K9me3", 5.0),      # V_ only — not in B_
+        "T_d|B_d|H3K4me3": _fake_track("H3K4me3", 2.0),
+        "T_e|B_e|H3K27ac": _fake_track("H3K27ac", 4.0),
+    }
+    got = H.panel_macros(per_track, "pval")
+
+    assert got["V_breadth"]["n_experiments"] == 3
+    assert got["V_breadth"]["assays"] == ["H3K27ac", "H3K4me3", "H3K9me3"]
+    assert got["V_breadth"]["mse"] == pytest.approx(3.0)     # (1+3+5)/3
+
+    assert got["V_matched"]["matched_to"] == ["H3K27ac", "H3K4me3"]
+    assert got["V_matched"]["n_experiments"] == 2
+    assert got["V_matched"]["mse"] == pytest.approx(2.0)     # (1+3)/2, H3K9me3 dropped
+
+    assert got["B"]["n_experiments"] == 2
+    assert got["B"]["mse"] == pytest.approx(3.0)             # (2+4)/2
+
+
+def test_only_the_matched_panel_is_unranked() -> None:
+    """It is a reading aid. Ranking it would invent a placement with no counterpart on the board."""
+    per_track = {"T_a|V_a|H3K4me3": _fake_track("H3K4me3", 1.0),
+                 "T_d|B_d|H3K4me3": _fake_track("H3K4me3", 2.0)}
+    got = H.panel_macros(per_track, "pval")
+    assert got["V_breadth"]["ranked"] is True
+    assert got["B"]["ranked"] is True
+    assert got["V_matched"]["ranked"] is False
+
+
+def test_a_scope_is_a_subset_of_what_was_predicted(source, model) -> None:
+    """`score_track` refuses a chromosome the record does not carry, rather than skipping it.
+
+    Skipping would be the dangerous behaviour: a scope quietly narrowed to whatever happened to be
+    present is a number whose address nobody can state, which is the whole failure this design is
+    against.
+    """
+    rec = next(iter(H.stream_tracks(model, source, "cpu", kind="impute", batch_windows=4)))
+    with pytest.raises(ValueError, match="which the record does not carry"):
+        H.score_track(rec, gene_annotations=ann.gene_annotations(),
+                      enh_annotations=ann.enhancer_annotations(), chroms=("chrNope",))
+
+
+def test_the_two_scopes_are_two_aggregations_of_one_pass(two_chrom_regime, model) -> None:
+    """§4. One prediction pass, measures recomputed over two chromosome sets — never rescaled.
+
+    The check that matters is that the held-out numbers and the genome-wide numbers actually
+    DIFFER. If they did not, the split would be decorative and a reader could not tell which one
+    the board is ranking.
+    """
+    src = open_source(store=two_chrom_regime)
+    try:
+        res = H.run_bench(model, src, "cpu", kinds=("impute",), batch_windows=4,
+                          c_index_pairs=2_000, c_windows=3, c_resamples=6, seed=0,
+                          blocks=("E", "D", "B"), held_out_chroms=["chr3"])
+    finally:
+        src.close()
+
+    scope = res["provenance"]["scope"]
+    assert scope["held_out_chroms"] == ["chr3"]
+    assert scope["scored_chroms"] == ["chr2", "chr3"]
+    assert scope["genome_wide_computed"] is True
+    assert "genome_wide" in res
+
+    # the ranked scope is chr2 only; the comparability scope is both
+    for key in res["tracks"]:
+        assert res["per_track"][key]["count"]["chroms"] == ["chr3"]
+        assert res["genome_wide"]["per_track"][key]["count"]["chroms"] == ["chr2", "chr3"]
+        assert (res["genome_wide"]["per_track"][key]["count"]["n_bins"]
+                > res["per_track"][key]["count"]["n_bins"])
+
+    held = res["macro"]["count"]["mse"]
+    gw = res["genome_wide"]["macro"]["count"]["mse"]
+    assert held != gw, "a scope split that does not move a number is not a split"
+    assert set(res["panels"]) == {"count", "pval"}
+    assert set(res["panels"]["count"]) == set(H.PANELS)
+
+
+def test_one_scope_means_the_genome_wide_block_does_not_exist(scored) -> None:
+    """§4's blanking rule: not computed, rather than computed and withheld.
+
+    A method whose transferable parameters were fit at every position has no honest genome-wide
+    number, so the run is given the held-out chromosomes only and the block never exists. The
+    reason is written into the result rather than left for a reader to infer from an absent key.
+    """
+    assert "genome_wide" not in scored
+    scope = scored["provenance"]["scope"]
+    assert scope["genome_wide_computed"] is False
+    assert "NOT COMPUTED" in scope["note"]
+    assert scope["held_out_chroms"] == scope["scored_chroms"]
+
+
+def test_the_held_out_scope_cannot_name_an_unscored_chromosome(two_chrom_regime, model) -> None:
+    src = open_source(store=two_chrom_regime)
+    try:
+        with pytest.raises(ValueError, match="which this run does not score"):
+            H.run_bench(model, src, "cpu", kinds=("impute",), batch_windows=4,
+                        blocks=("E",), held_out_chroms=["chr3", "chr22"])
+    finally:
+        src.close()

@@ -51,6 +51,7 @@ __all__ = [
     "Pair", "TrackRecord", "EvalSource", "H5Source", "StoreSource", "open_source", "cross_cell",
     "full_tiling", "decode_groups", "stream_tracks", "score_track", "panel_specificity", "c_block",
     "run_bench", "macro_mean",
+    "SCOPE_HELD_OUT", "SCOPE_GENOME_WIDE", "SCOPES", "PANELS", "panel_of", "panel_macros",
 ]
 
 #: Metadata row order, as `encoder.py` reads it. Named so nothing here indexes a bare integer.
@@ -65,6 +66,20 @@ ARMS: Tuple[str, ...] = ("count", "pval")
 #: is opt-in, and its key carries a fourth field so the two can never collide on a backend where the
 #: input and target biosample are the same one.
 KINDS: Tuple[str, ...] = ("impute", "denoise")
+
+
+#: The two aggregations of one scoring pass (`plan/BENCHMARK_DESIGN.md` §4). They are aggregations,
+#: not two passes: the model runs once, and every measure is then computed twice, over two different
+#: sets of chromosomes. A metric is not linear in position, so a genome-wide MSE cannot be narrowed
+#: to a held-out MSE afterwards — the split has to happen at the track, which is why `score_track`
+#: takes a `chroms` argument rather than the caller slicing a finished number.
+SCOPE_HELD_OUT = "held-out"
+SCOPE_GENOME_WIDE = "genome-wide"
+SCOPES: Tuple[str, ...] = (SCOPE_HELD_OUT, SCOPE_GENOME_WIDE)
+
+#: The three panels of §5.2. `V_breadth` and `B` are ranked; `V_matched` exists ONLY so the
+#: `V_`→`B_` delta is readable and is never ranked — see `panel_macros`.
+PANELS: Tuple[str, ...] = ("V_breadth", "V_matched", "B")
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +155,8 @@ class TrackRecord:
     def has_pval(self) -> bool:
         return bool(self.signal_mu)
 
-    def n_bins(self) -> int:
-        return int(sum(len(self.counts[c]) for c in self.chroms))
+    def n_bins(self, chroms: Optional[Sequence[str]] = None) -> int:
+        return int(sum(len(self.counts[c]) for c in (self.chroms if chroms is None else chroms)))
 
 
 # ---------------------------------------------------------------------------
@@ -881,15 +896,19 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
 # per-track scoring — D4: the per-track score is the primitive
 # ---------------------------------------------------------------------------
 
-def _chrom_offsets(rec: TrackRecord) -> Dict[str, int]:
+def _chrom_offsets(rec: TrackRecord, chroms: Optional[Sequence[str]] = None) -> Dict[str, int]:
+    """Offsets into the concatenation of `chroms` — which is the SCOPE's chromosomes, not the
+    record's. A held-out concatenation and a genome-wide one place the same chromosome at different
+    positions, so an offset table built for one is wrong for the other."""
     off, acc = {}, 0
-    for c in rec.chroms:
+    for c in (rec.chroms if chroms is None else chroms):
         off[c] = acc
         acc += len(rec.counts[c])
     return off
 
 
-def _p_block(rec: TrackRecord, gene_annotations: Sequence[str]) -> Dict[str, object]:
+def _p_block(rec: TrackRecord, gene_annotations: Sequence[str],
+             chroms: Optional[Sequence[str]] = None) -> Dict[str, object]:
     """The P-block for one track, over the concatenation of every eval chromosome.
 
     Runs on the **pval arm only**, and that is the paper's own scoping rather than a shortcut: the
@@ -902,20 +921,21 @@ def _p_block(rec: TrackRecord, gene_annotations: Sequence[str]) -> Dict[str, obj
     so their windows are built per chromosome and shifted into the concatenation — the same
     construction `eic.dict_to_arr` relies on, for the same reason.
     """
-    sig = E.dict_to_arr(rec.pval, rec.chroms)
-    pred = E.dict_to_arr(rec.signal_mu, rec.chroms)
-    pk = E.dict_to_arr(rec.peaks, rec.chroms).astype(bool)
+    chroms = tuple(rec.chroms if chroms is None else chroms)
+    sig = E.dict_to_arr(rec.pval, chroms)
+    pred = E.dict_to_arr(rec.signal_mu, chroms)
+    pk = E.dict_to_arr(rec.peaks, chroms).astype(bool)
     out: Dict[str, object] = {
         "acc_by_obs_strength": P.accuracy_by_strength(sig, pk, pred, bin_by="obs"),
         "acc_by_imp_strength": P.accuracy_by_strength(sig, pk, pred, bin_by="imp"),
     }
-    off = _chrom_offsets(rec)
+    off = _chrom_offsets(rec, chroms)
     if rec.assay == "H3K4me3":
-        wins = [(lo + off[c], hi + off[c]) for c in rec.chroms
+        wins = [(lo + off[c], hi + off[c]) for c in chroms
                 for lo, hi in P.promoter_windows(gene_annotations, c, len(rec.pval[c]))]
         out["prom_corr_h3k4me3"] = P.region_correlation(sig, pred, wins)
     if rec.assay in ("DNase-seq", "DNase"):
-        wins = [(lo + off[c], hi + off[c]) for c in rec.chroms
+        wins = [(lo + off[c], hi + off[c]) for c in chroms
                 for lo, hi in P.peak_regions(rec.peaks[c].astype(bool))]
         out["peak_shape_corr_dnase"] = P.region_correlation(sig, pred, wins)
     return out
@@ -925,7 +945,8 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
                 enh_annotations: Sequence[str],
                 var: Optional[Mapping[str, np.ndarray]] = None,
                 seed: int = 0, c_index_pairs: int = 200_000,
-                with_curve: bool = False) -> Dict[str, Dict[str, object]]:
+                with_curve: bool = False,
+                chroms: Optional[Sequence[str]] = None) -> Dict[str, Dict[str, object]]:
     """Every block this track can carry, per arm. `count` always; `pval` when the signal head is on.
 
     `var` is the D7 variance pool as `{chrom: vector}`, aligned bin-for-bin with the track. It is
@@ -934,9 +955,19 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
     a number with no interpretation. Omitting it omits `msevar`, which is the honest outcome; the
     organizers' code returns a bare `0.0` there and `annotations.load_variance_pool` says why we do
     not.
+
+    `chroms` restricts the scoring to a SCOPE (§4). It defaults to every chromosome the record
+    carries, which is the whole of the old behaviour. Passing a subset is how one prediction pass
+    yields two aggregations: the measures are recomputed from the same arrays over fewer positions,
+    never rescaled from a finished number, because none of them is linear in position.
     """
     arms: Dict[str, Dict[str, object]] = {}
-    chroms = rec.chroms
+    chroms = tuple(rec.chroms if chroms is None else chroms)
+    unknown = [c for c in chroms if c not in rec.chroms]
+    if unknown:
+        raise ValueError(f"{rec.key}: scope names {unknown}, which the record does not carry "
+                         f"({list(rec.chroms)}). A scope is a subset of what was predicted, and a "
+                         f"missing chromosome is a window-plan bug rather than something to skip.")
 
     y_c = E.dict_to_arr(rec.counts, chroms)
     arms["count"] = {
@@ -958,12 +989,13 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
                             seed=seed, n_pairs=c_index_pairs),
             **B.binary_suite(E.dict_to_arr(rec.peaks, chroms).astype(bool),
                              E.dict_to_arr(rec.peak_score, chroms), y_p, with_curve=with_curve),
-            **_p_block(rec, gene_annotations),
+            **_p_block(rec, gene_annotations, chroms),
         }
     for arm in arms:
         arms[arm]["assay"] = rec.assay
         arms[arm]["kind"] = rec.kind
-        arms[arm]["n_bins"] = rec.n_bins()
+        arms[arm]["n_bins"] = rec.n_bins(chroms)
+        arms[arm]["chroms"] = list(chroms)
     return arms
 
 
@@ -986,6 +1018,78 @@ def macro_mean(per_track: Mapping[str, Mapping[str, Mapping[str, object]]], arm:
             out[k] = float(np.mean(vals))
             out[f"{k}_n_tracks"] = len(vals)
     out["n_tracks"] = len(rows)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# the three panel numbers — plan/BENCHMARK_DESIGN.md 5.2
+# ---------------------------------------------------------------------------
+
+def panel_of(target_biosample: str) -> Optional[str]:
+    """Which panel a scored experiment belongs to, from its TARGET cell's prefix.
+
+    The target, never the input: the prompt is always a `T_` cell, so pairing on the input would
+    put every experiment in one panel. Anything that is neither `V_` nor `B_` returns None and is
+    counted in no panel rather than silently folded into one — a self-paired denoise record is the
+    ordinary case for that.
+    """
+    if target_biosample.startswith("V_"):
+        return "V"
+    if target_biosample.startswith("B_"):
+        return "B"
+    return None
+
+
+def panel_macros(per_track: Mapping[str, Mapping[str, Mapping[str, object]]], arm: str,
+                 kind: str = "impute") -> Dict[str, Dict[str, object]]:
+    """`V_` breadth, `V_` matched and `B_` — the three numbers of 5.2, from one scored pass.
+
+    `V_` and `B_` are different exams: `V_` poses 22 assays and `B_` poses 8. Ranking WITHIN a panel
+    is unaffected by that, but the `V_`->`B_` delta a reader computes by eye is not, and it reads as
+    a generalization gap when most of it is the exam changing. The middle number fixes that and
+    costs nothing: it is the same scored tracks, aggregated over the subset of assays `B_` contains.
+
+    The matched panel's assay set is **measured from `B_`**, never listed here. A hard-coded set
+    would go stale the first time the panel moves and would be wrong silently.
+
+    `V_matched` is marked `ranked: False`. It is a reading aid, and ranking it would invent a fourth
+    placement nobody asked for and that has no counterpart on the board.
+    """
+    def rows(pred) -> Dict[str, Mapping[str, object]]:
+        out = {}
+        for key, arms in per_track.items():
+            a = arms.get(arm)
+            if a is None or a.get("kind") != kind:
+                continue
+            fields = key.split("|")
+            if len(fields) < 3:
+                continue
+            if pred(fields[1], str(a.get("assay", fields[2]))):
+                out[key] = arms
+        return out
+
+    b_rows = rows(lambda tgt, assay: panel_of(tgt) == "B")
+    matched_assays = sorted({str(per_track[k][arm]["assay"]) for k in b_rows})
+
+    out: Dict[str, Dict[str, object]] = {}
+    for name, pred, ranked in (
+        ("V_breadth", lambda tgt, assay: panel_of(tgt) == "V", True),
+        ("V_matched", lambda tgt, assay: panel_of(tgt) == "V" and assay in matched_assays, False),
+        ("B", lambda tgt, assay: panel_of(tgt) == "B", True),
+    ):
+        sel = rows(pred)
+        macro = macro_mean(sel, arm, kind=kind)
+        out[name] = {
+            **macro,
+            "n_experiments": len(sel),
+            "assays": sorted({str(sel[k][arm]["assay"]) for k in sel}),
+            "ranked": ranked,
+        }
+    out["V_matched"]["matched_to"] = matched_assays
+    out["V_matched"]["note"] = (
+        "NOT RANKED. It exists only so the V_->B_ delta is readable: V_ breadth -> V_ matched is "
+        "the exam changing, V_ matched -> B_ is the generalization gap. Never subtract V_ breadth "
+        "from B_ (5.3's reading rule).")
     return out
 
 
@@ -1327,14 +1431,45 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
               blocks: Sequence[str] = ("E", "P", "D", "B", "C"),
               c_windows: int = 8, c_resamples: int = 50,
               with_curve: bool = False, progress: bool = False,
+              held_out_chroms: Optional[Sequence[str]] = None,
               extra_provenance: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-    """Score one checkpoint end to end and return the result JSON of `EVAL_PLAN.md` §4."""
+    """Score one checkpoint end to end and return the result JSON of `EVAL_PLAN.md` §4.
+
+    **`held_out_chroms` turns one pass into two aggregations** (`plan/BENCHMARK_DESIGN.md` §4).
+    Given a proper subset of the scored chromosomes, `per_track`, `macro` and `panels` carry the
+    HELD-OUT scope — the ranked number, where no method's transferable parameters were fit — and a
+    parallel `genome_wide` block carries the same three over every chromosome, for comparability
+    with a literature that scores that way.
+
+    Left `None`, or naming every scored chromosome, there is exactly one scope and no `genome_wide`
+    block is produced. That is not a silent omission: it is §4's blanking rule, and the reason is
+    written into `provenance.scope` rather than left for a reader to infer from an absent key. For
+    a method whose parameters were fit at every position the genome-wide number is a memorisation
+    score, so it is **not computed at all** — the run is given three chromosomes and the block
+    never exists.
+    """
     gene = ann.gene_annotations()
     enh = ann.enhancer_annotations()
     n_bins = {c: source.n_bins(c) for c in source.eval_chroms}
     var_cache: Dict[Tuple[str, str], object] = {}
 
+    scored = tuple(source.eval_chroms)
+    if held_out_chroms is None:
+        held = scored
+    else:
+        held = tuple(c for c in scored if c in set(held_out_chroms))
+        missing = [c for c in held_out_chroms if c not in scored]
+        if missing:
+            raise ValueError(
+                f"held_out_chroms names {missing}, which this run does not score "
+                f"({list(scored)}). The held-out scope is a subset of what was predicted; naming a "
+                f"chromosome outside it would rank on positions that were never scored.")
+        if not held:
+            raise ValueError("held_out_chroms selected nothing from the scored chromosomes")
+    split = len(held) < len(scored)
+
     per_track: Dict[str, Dict[str, Dict[str, object]]] = {}
+    per_track_gw: Dict[str, Dict[str, Dict[str, object]]] = {}
     binarised: Dict[str, List[Tuple[str, np.ndarray, np.ndarray, int]]] = {}
     for kind in kinds:
         if kind not in KINDS:
@@ -1342,9 +1477,12 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
         for rec in stream_tracks(model, source, device, kind=kind,
                                  batch_windows=batch_windows, progress=progress):
             var = _varpool(varpool_root, varpool_corpus, rec.assay, rec.chroms, n_bins, var_cache)
-            per_track[rec.key] = score_track(
-                rec, gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
-                c_index_pairs=c_index_pairs, with_curve=with_curve)
+            common = dict(gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
+                          c_index_pairs=c_index_pairs, with_curve=with_curve)
+            held_here = tuple(c for c in rec.chroms if c in set(held))
+            per_track[rec.key] = score_track(rec, chroms=held_here or None, **common)
+            if split:
+                per_track_gw[rec.key] = score_track(rec, chroms=rec.chroms, **common)
             if "P" in blocks and kind == "impute":
                 bits = _binarise(rec)
                 if bits is not None:
@@ -1372,12 +1510,40 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
         "tracks": sorted(per_track),
         "per_track": per_track,
         "macro": {arm: macro_mean(per_track, arm) for arm in ARMS},
+        "panels": {arm: panel_macros(per_track, arm) for arm in ARMS},
         "panel": panel_specificity(binarised) if binarised else {},
         "ranking": None,
     }
+    result["provenance"]["scope"] = {
+        "ranked": SCOPE_HELD_OUT,
+        "held_out_chroms": list(held),
+        "scored_chroms": list(scored),
+        "genome_wide_computed": bool(split),
+        "note": (
+            "`per_track`, `macro` and `panels` are the HELD-OUT scope, which is the ranked number "
+            "(plan/BENCHMARK_DESIGN.md 4). `genome_wide` carries the same three over every scored "
+            "chromosome."
+            if split else
+            "One scope only: the run scored exactly the held-out chromosomes, so there is no "
+            "genome-wide aggregation to make. Under 4's blanking rule a method fit at every "
+            "position is run this way on purpose -- its genome-wide number would be a memorisation "
+            "score, so it is NOT COMPUTED rather than computed and withheld."),
+    }
+    if split:
+        result["genome_wide"] = {
+            "chroms": list(scored),
+            "per_track": per_track_gw,
+            "macro": {arm: macro_mean(per_track_gw, arm) for arm in ARMS},
+            "panels": {arm: panel_macros(per_track_gw, arm) for arm in ARMS},
+            "note": "Comparability with a literature that scores at the positions it fits. Not "
+                    "ranked, and carries the per-cell in-sample fraction on the board (4).",
+        }
     for kind in kinds:
         if kind != "impute":
             result[f"macro_{kind}"] = {arm: macro_mean(per_track, arm, kind=kind) for arm in ARMS}
+            if split:
+                result["genome_wide"][f"macro_{kind}"] = {
+                    arm: macro_mean(per_track_gw, arm, kind=kind) for arm in ARMS}
     if "C" in blocks:
         result["C"] = c_block(model, source, device, kind=kinds[0], n_windows=c_windows,
                               n_resamples=c_resamples, seed=seed)
