@@ -1233,15 +1233,32 @@ So CANDI's own share is **466 GB raw** across its four `V_`/`B_` × 2-regime uni
 ≈434 GB §12.3 gives for the whole programme. **§12.3's 434 GB total is therefore also low, and by
 about the same factor** — it was summed from the same one-array-per-track assumption.
 
-**Compression is the reason this is affordable.** Measured on Fir against the promoted store,
-chr21 bins 1,000,000–1,600,000, gzip-9 + shuffle: `counts` 5.8×–19.7× (sparse, integer-valued),
-`pval` 1.3×–2.1× (dense continuous floats). Blended **2.69×** → 180 MB per genome-wide array, and
-CANDI's share falls to ≈173 GB.
+**Compression buys much less than first thought, and is not what makes this affordable.** An
+earlier draft here quoted **2.69×** and put CANDI at ≈173 GB. That figure is wrong for
+predictions, for a reason worth stating because it is easy to repeat:
 
-> **The compression ratio was measured on TRUTH arrays, because no trained checkpoint existed when
-> it was taken.** Predictions are smooth full-mantissa floats and may compress worse. At `pval`'s
-> 1.3× floor CANDI's share is 358 GB, not 173. **The first real prediction run records its own
-> ratio and this table is rewritten from it.** Full argument in `plan/T83_PREDICTION_WRITER.md` §4.
+2.69× was a blend of a sparse layer and a dense one — `counts` at 5.8×–19.7× pulling the average
+up, `pval` at 1.3×–2.1× holding it down — measured on **truth** arrays, where the count layer
+really is sparse integers. **A prediction has no sparse layer.** All five of CANDI's prediction
+arrays are model outputs — `mu` and `n` off a softplus, `signal_mu`, `signal_sigma`, `peak_score`
+likewise — and every one is a smooth full-mantissa float. The count arm's 15× never applies on the
+prediction side at all.
+
+| array kind | `np.savez` | `np.savez_compressed` |
+|---|---|---|
+| smooth float32 — **what a prediction is** | 1.00× | **1.27×** |
+| sparse count-like — what truth counts are | 1.00× | 15.39× |
+
+*Measured 2026-08-31 on 2 M-element float32 arrays, and separately reproduced.* `dump.py:102`
+currently calls `np.savez`, which compresses **not at all** — so today CANDI's ≈466 GB is written
+raw. Switching to `savez_compressed` (`t83`) brings it to **≈367 GB**.
+
+> Still an estimate, on synthetic arrays. **The first real prediction run records its own ratio and
+> this table is rewritten from it.** Full argument in `plan/T83_PREDICTION_WRITER.md` §4.2.
+
+**What actually makes the plan affordable is that Fir has room** — 13 TiB free on `/project`,
+17 TiB free on scratch, checked 2026-08-31. Compression is a convenience here, not the load-bearing
+assumption it was written as.
 
 **Where it lives — RULED 2026-08-31 (PI).** `V_` predictions go to **scratch** and are deletable
 once scored. **`B_` predictions go to `/project`.** §5 rules that `B_` is predicted exactly once,
