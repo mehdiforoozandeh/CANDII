@@ -901,9 +901,42 @@ beating Phase 2 on 34/34. Three closing rulings:
 so the DNase truth toggle carries the badge ruled above — agreement there is not evidence of
 robustness. The scale disagreement is real and is the one thing the toggle still measures for DNase.
 
-**Still gated: Phase 3, promotion into the store.** Nothing has been promoted; the rebuilt layers
-live on scratch beside a side manifest. The promotion checklist is in
-`cruxvault/results/t78/G1_REBUILD_FROM_BAMS.md` §19.
+**Phase 3 promoted 2026-08-30.** The rebuilt layers are in the live store. The sequence that was
+run, its gates and the rollback are §25 and §26 of
+`cruxvault/results/t78/G1_REBUILD_FROM_BAMS.md`; the checklist it came from is §19.
+
+> **PHASE 3 PROMOTED 2026-08-30 — the cut-over ran, every gate passed on the first attempt.**
+> The live store at `fir:/project/def-maxwl/mforooz/CANDI_STORE/eic` now carries the rebuilt
+> `counts` and `pval` layers on 40 biosamples and the archived predecessor under the new
+> `signal_rdns` kind. **The new `store_manifest_sha256` is
+> `c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83`** — quote this, not
+> `6c0e0c3e…`, for any run scored after this date. `manifest_equiv.py` reports the promoted
+> manifest `EQUIVALENT` to the staged one and `candi.store verify` reports `OK`; the manifest's one
+> metadata gap (`V_testis/chipseq-control/platform`) is pre-existing and unmoved.
+>
+> **The RDNS constraint holds, and was re-proved after the promotion, not only before it:** all 40
+> archives still hash to the `pval.h5` they archive (`ARCHIVE STILL OK 40/40 POST-PROMOTION`). The
+> archive was made by **renaming** the live file in place — no bytes moved and nothing was copied
+> over it — so byte-identity is a property of the operation, not of a check taken afterwards.
+>
+> The promotion covers **40 of the corpus's 89 biosamples** — exactly the DNase-carrying ones (34
+> `T_`, 3 `B_`, 3 `V_`). The other 49 are untouched: their signal layer was already
+> `signal p-value`, so they end with no `signal_rdns.h5`, and both `build-manifest` and
+> `verify_store` discover kinds per file, so that asymmetry is legal. All 363 track records declare
+> `signal p-value`, so §10's strict units gate passes.
+>
+> Read back on chr21 bins 1,200,000–1,600,000 (30–40 Mb): `T_K562` `pval` max 7486.471 / mean
+> 4.55361 against `signal_rdns` max 21.196 / mean 0.08033, correlating 0.9115 and 0.9435 with the
+> counts they came from; `T_IMR-90` 6521.455 / 7.72938 against 20.807 / 0.06868, at 0.9610 and
+> 0.9729. The 189 non-DNase tracks in those biosamples were bit-identical to the pre-promotion
+> store over 52.4 × 10⁹ compared cells, the per-file `dtype` flips **0 of 89** on the adopted arm
+> (the 11-biosample figure was the deduplicated arm's), and `depth` — covariate row 0 — moves on 12
+> of 40 tracks, materially on `T_K562` alone (Δ log2 −0.0442).
+>
+> **Rollback is still open.** The pre-promotion `counts.h5` survives as `counts.h5.pre_t78p3` on all
+> 40, each hashing to the original, beside `manifest.json.pre_t78p3` and `LIVE_SHA256.pre_t78p3.txt`.
+> §25 Step 7 — deleting those backups — is **deliberately not run**, and does not run until the
+> retrain has landed. Evidence: `cruxvault/results/t78/stage3/` and §25 of the memo above.
 
 Correction to the earlier rebuild memo, on record: the depth change on the six scored `V_`/`B_`
 tracks runs **7.9 %** (`V_adrenal_gland_embryonic`) to 30.6 %, not 1.6 % to 30.6 %.
