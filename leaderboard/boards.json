@@ -1,118 +1,265 @@
 {
-  "schema_version": 1,
-  "doc": "LEADERBOARD_PRD.md §3, §4, §6 — one entry per eval set. The site merges them into one table with labeled column groups; ranks stay within an eval set and are never mixed. `frozen` hashes were stamped at M4 (2026-08-27); each board's `frozen_note` says exactly what artifact its hashes digest. A board whose hashes are still TODO refuses every `add`. `pending` lists methods whose results are still computing; `build` drops an entry once a row for that method is stamped.",
+  "schema_version": 2,
+  "doc": "plan/BENCHMARK_DESIGN.md §1, §3, §4, §5, §6, §9 — one entry per regime, plus the vocabularies every row is addressed by. §9 retires three namings: P1/P2/P3 (they encoded eval scope, which is now one thing for every regime), Dataset 2 / Dataset 3 (they conflated the corpus with the pipeline that produced the truth), and the board ids `main`/`dev`/`entrants` (`main` and `dev` are now the two regime ids; `entrants` is no longer a board at all — it is the anchor block). A board whose `frozen` hashes are still TODO refuses every `add`; both live regimes are in that state, because their store manifest and regime json changed under t78 and t79 and nothing has been rescored against them yet. `pending` lists methods whose results are still computing; `build` drops an entry once a row for that method is stamped.",
+  "address": {
+    "fields": ["method", "regime", "truth", "panel", "scope", "metric"],
+    "rule": "§1 — every cell on the board is addressed by these six. If any field is unknown for a row, the row does not go in the ranked table. `add` refuses such a row and the compiler has no place to put one.",
+    "eli5": "A number on this page is never just a score. It is a score for one method, trained under one regime, measured against one truth, on one panel of experiments, over one set of chromosomes, with one metric. Change any of the six and it is a different number."
+  },
+  "truths": {
+    "store": {
+      "label": "store (ENCODE4 2020)",
+      "short": "store",
+      "eli5": "The truth track as ENCODE4 pipeline v1.5.1 produced it in Aug–Sep 2020, ingested into CANDI_STORE. Counts, −log10 p and peak calls all exist here, so all three arms score.",
+      "arms": ["count", "pval", "peak"]
+    },
+    "challenge": {
+      "label": "challenge (2019)",
+      "short": "challenge",
+      "eli5": "The same ENCODE experiments, bridged 1:1 on accession, but as the 2019 challenge organizers processed them. Only the pipeline differs. If a method's standing holds under both truths, its result is not an artifact of the pipeline that made our truth.",
+      "arms": ["pval"],
+      "eic_only": true,
+      "greyed_arms_note": "§7 — the 2019 data has no counts and no peak calls, so the count and peak arms are greyed out under this truth. Scoring peaks against store truth while the p-value arm used challenge truth would put two truths in one row.",
+      "scorer_note": "§6 — one scorer, one grid, both truths. The Synapse bigwigs load into candi.bench.external on the store's grid, with the store's blacklist policy and the same assay panel on both sides. This view no longer reproduces the published 2019 numbers exactly, and that is accepted."
+    }
+  },
+  "panels": {
+    "V_breadth": {
+      "label": "V_ breadth",
+      "subtitle": "45 experiments, 22 assays",
+      "ranked": true,
+      "eli5": "The whole validation panel. Every trainable method selected its best checkpoint here, by the same rule, so this column is optimistic by construction — identically for everyone. That is why B_ exists."
+    },
+    "V_matched": {
+      "label": "V_ matched",
+      "subtitle": "the 8 assays B_ contains",
+      "ranked": false,
+      "eli5": "The same validation predictions, aggregated over only the assays the test panel has. It is never ranked. It exists so the V_→B_ step is readable: without it a reader attributes the whole drop to the model, when most of it is the exam changing."
+    },
+    "B_": {
+      "label": "B_ test",
+      "subtitle": "51 experiments, 8 assays",
+      "ranked": true,
+      "eli5": "The test panel. Never read during training. Predicted exactly once, from the single checkpoint the method selected on V_. Re-scoring those stored predictions is free; re-predicting is not."
+    }
+  },
+  "panel_rules": {
+    "rendering": "§5 — V_ and B_ render side by side inside one regime, never as two views of one thing.",
+    "subtraction": "§5.3 — never subtract V_ breadth from B_. V_ matched is the only legal subtraction, and it prints the panel caveat with it."
+  },
+  "scopes": {
+    "held-out": {
+      "label": "held-out",
+      "subtitle": "chr20 + chr21 + chr22",
+      "ranked": true,
+      "eli5": "6,478,903 bins, 5.34 % of the store, split 40 / 29 / 31 % so no single chromosome owns the macro average. No method's transferable parameters were fit here, so nothing can be memorised. This is the ranked number."
+    },
+    "genome-wide": {
+      "label": "genome-wide",
+      "subtitle": "all 23 chromosomes",
+      "ranked": false,
+      "eli5": "The same prediction pass, aggregated over all 121,241,684 bins. It is for methodological comparability with a literature that scores this way — it is never ranked.",
+      "blanking_rule": "§4 — printed only where the method is out-of-sample somewhere. For a method whose transferable parameters were fit at every position (Avocado, ChromImpute, Lavawizard, in both regimes) the number is a memorisation score, not an imputation score, and the in-sample-fraction badge is not a strong enough warning to carry it. Those cells are blank, and a blanked cell is not computed — it does not exist."
+    }
+  },
+  "markers": {
+    "edice-embedding-substitution": {
+      "label": "embedding substitution",
+      "applies_to": "eDICE",
+      "eli5": "§7 — eDICE queries a V_ or B_ target using that target's paired T_ cell's learned embedding. Rule 1 permits it: a regime is a data contract, not a parameter contract, and the scored track is still never read. But it is a different kind of access than the other methods get, so the row carries this marker. Comparable, and disclosed."
+    },
+    "no-selection": {
+      "label": "no selection",
+      "applies_to": "methods with no checkpoint to pick",
+      "eli5": "§5 — this method trains once and produces one model. There is no checkpoint to pick and no knob tuned on V_. It keeps its V_ score, which is a same-panel comparison and worth having. The marker is not cosmetic: V_ gave this method none of the optimistic lift every trainable method got, so its V_→B_ behaviour is not comparable to CANDI's without accounting for that."
+    }
+  },
+  "method_markers": {
+    "eDICE": ["edice-embedding-substitution"],
+    "ChromImpute": ["no-selection"],
+    "knn1": ["no-selection"],
+    "knn5": ["no-selection"],
+    "avg": ["no-selection"],
+    "avg-arcsinh": ["no-selection"],
+    "marginal": ["no-selection"]
+  },
   "boards": {
-    "main": {
-      "label": "Full genome",
-      "subtitle": "23 chromosomes",
-      "protocol": "P2",
-      "rows_note": "CANDI versions, retrained rivals, naive baselines.",
-      "eli5": "The same training-to-validation pairs of a cell type the method already saw, scored on every chromosome in the store. This is missing-mark transfer, not an unseen-cell-type test. Methods that train on every genomic position are still in-sample here, so this column is not a standalone head-to-head.",
+    "eic.19": {
+      "label": "eic.19→20,21,22",
+      "subtitle": "trained on chr19",
+      "regime_id": "eic.19→20,21,22",
+      "rows_note": "CANDI, the four retrained rivals, and the five naive baselines. One CANDI row — the current best; version history is a separate figure, never extra rows.",
+      "eli5": "The primary regime. Every method's transferable parameters are fit on chromosome 19 and nothing else, then every method is scored on chromosomes 20, 21 and 22. Per-position adaptation on the eval chromosomes counts as inference, not training, and is open to every method.",
+      "train_scope": "chr19 — 2,344,704 training bins, 1.93 % of the store",
+      "eval_scope": "chr20 + chr21 + chr22 — 6,478,903 bins",
+      "truths": ["store", "challenge"],
       "eval_set": {
-        "id": "eic_val.P2",
-        "regime": "configs/regime.eic_val.json",
-        "pairs": "declared eval_pairs of regime.eic_val",
-        "chroms": "all 23 store chromosomes",
+        "id": "eic.19→20,21,22",
+        "regime": "configs/regime.eic_19.json",
+        "pairs": "declared eval_pairs of the EIC corpus — 26 T_→V_ cell pairs and 12 T_→B_ cell pairs",
+        "chroms": "chr20 + chr21 + chr22 (ranked); all 23 (comparability only)",
         "scorer": "python -m candi.bench.external"
       },
       "frozen": {
-        "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397",
-        "regime_sha256": "2526ae55d9904d50ff57a1a183efe0cd67b4796882736af8e894442891bc9829",
-        "frozen_note": "store hash = sha256 of fir:/project/def-maxwl/mforooz/CANDI_STORE/eic/manifest.json, read on Fir 2026-08-27 — the manifest path every stamped row's score provenance names; regime hash = sha256 of the tracked configs/regime.eic_val.json (last changed at t31), verified byte-identical to the copies in the t50/t51/t52 Fir checkouts on 2026-08-27."
+        "store_manifest_hash": "TODO-eic.19-store-manifest",
+        "regime_sha256": "TODO-eic.19-regime-sha256",
+        "frozen_note": "Not frozen, and no row may be stamped until it is. The old hashes digested a store manifest that predates t78's DNase p-value rebuild and a regime json that predates t79's rewrite; freezing the new pair needs the rebuilt manifest on Fir and the tracked configs/regime.eic_19.json, both read at the same moment the first row is scored."
       },
-      "views": ["default"],
+      "noise_floor": {
+        "measured": false,
+        "note": "§15 — the resolution limit on these panels is not measured yet (t86: two seeds of one method, same data, on the V_ breadth panel and on the 8-assay panels separately, because they do not have the same resolution). Nothing is ranked until it lands; rows go up unranked before then. AGENTS.md §7.2 records that a seed change alone moves pooled CRPS by 0.1195, so this is not a formality."
+      },
       "caveats": [
-        "CANDI trained on chromosome-19 positions only, so on this board CANDI is in-sample on chr19 and held-out on the other 22.",
-        "Methods that train on every genomic position (Avocado, ChromImpute) are in-sample everywhere. No choice of eval chromosome removes this; it is disclosed on every row."
+        "Every row that used to be on this page is void (§3.3): the old board scored all 23 chromosomes, chr19 included, and chr19 is the chromosome CANDI trained on. Those numbers are not carried forward, and no new row has been scored yet.",
+        "Under this regime CANDI is in-sample on 1 of 23 chromosomes. That fraction is part of the number's address and is printed on every genome-wide cell.",
+        "The board measures missing-mark transfer within a seen cell type (§8). Every eval pair is a mark the V_ or B_ cell has and its paired T_ cell lacks, so the model always sees other tracks from the same cell type. CANDI's zero-shot claim is not tested here."
       ],
       "reader_badges": [
         {
-          "label": "In-sample for position-trained methods",
-          "eli5": "Avocado and ChromImpute train on every genomic position, so this column is not a standalone head-to-head. CANDI trained on chromosome 19 only. Internal code: P2 / main board, position transductivity."
+          "label": "held-out chromosomes, seen cell type",
+          "eli5": "No method's transferable parameters were fit on chr20, chr21 or chr22, so the ranked number cannot be memorised. But the cell type is one the method has seen: each score is a mark the target experiment has and the paired training experiment of that same cell type lacks."
+        }
+      ],
+      "pending": [
+        {"method": "CANDI", "lineage": "candi", "note": "retraining on Fir under the uniform V_ selection rule"},
+        {"method": "Avocado", "lineage": "rival", "note": "retrain not started — the joint fit moves to chr19 (§3.2)"},
+        {"method": "ChromImpute", "lineage": "rival", "note": "retrain not started"},
+        {"method": "eDICE", "lineage": "rival", "note": "retrain not started"},
+        {"method": "Lavawizard", "lineage": "rival", "note": "retrain not started"},
+        {"method": "avg", "lineage": "baseline", "note": "refit not started — one fit serves both regimes"},
+        {"method": "avg-arcsinh", "lineage": "baseline", "note": "refit not started — one fit serves both regimes"},
+        {"method": "marginal", "lineage": "baseline", "note": "refit not started — one fit serves both regimes"},
+        {"method": "knn1", "lineage": "baseline", "note": "refit not started — one fit serves both regimes"},
+        {"method": "knn5", "lineage": "baseline", "note": "refit not started — one fit serves both regimes"}
+      ]
+    },
+    "eic.pilot": {
+      "label": "eic.pilot→20,21,22",
+      "subtitle": "trained on the ENCODE Pilot Regions",
+      "regime_id": "eic.pilot→20,21,22",
+      "rows_note": "The same ten methods as eic.19. The naive baselines are fit once and their one number is printed in both regimes, because their fit does not depend on the training loci.",
+      "eli5": "The ablation. Same model, same eval chromosomes, a different training slice of similar size — the 44 ENCODE Pilot Regions, minus their overlap with chr20, chr21 and chr22. It asks whether the choice of slice moves the result. Avocado's own supplement claims it does not, and nobody has checked that for a sequence-conditioned model.",
+      "train_scope": "the 44 ENCODE Pilot Regions in hg38, cut on the eval chromosomes — 25,588,197 bp, 1,023,489 contained training bins, 0.84 % of the store",
+      "eval_scope": "chr20 + chr21 + chr22 — 6,478,903 bins",
+      "truths": ["store", "challenge"],
+      "eval_set": {
+        "id": "eic.pilot→20,21,22",
+        "regime": "configs/regime.eic_pilot.json",
+        "pairs": "the same declared eval_pairs as eic.19 — only the training loci differ",
+        "chroms": "chr20 + chr21 + chr22 (ranked); all 23 (comparability only)",
+        "scorer": "python -m candi.bench.external"
+      },
+      "frozen": {
+        "store_manifest_hash": "TODO-eic.pilot-store-manifest",
+        "regime_sha256": "TODO-eic.pilot-regime-sha256",
+        "frozen_note": "Not frozen, and no row may be stamped until it is. Same store manifest as eic.19 — the two regimes differ only in training loci — but its own regime json, configs/regime.eic_pilot.json, which carries the hg38 Pilot Regions BED."
+      },
+      "noise_floor": {
+        "measured": false,
+        "note": "§15 — same as eic.19. The resolution limit is t86 and is not measured yet. Rows go up unranked until it lands."
+      },
+      "caveats": [
+        "This regime is new work, not a rerun (§13.6). Nothing has trained under it yet.",
+        "Under eic.pilot, Avocado's stage-1 fit returns to the ENCODE Pilot Regions and is faithful to its own paper for the first time (§3.2).",
+        "The training window count is a containment rule, not a division: the sampler plans 1,294 fully-contained 768-bin windows = 993,792 bins = 97.10 % of the contained budget."
+      ],
+      "reader_badges": [
+        {
+          "label": "held-out chromosomes, seen cell type",
+          "eli5": "Same as eic.19: the eval chromosomes are held out from every method's transferable parameters, but the cell type is one the method has seen."
         },
         {
-          "label": "Same cell type, held-out experiment",
-          "eli5": "Each score is a mark the validation experiment has and the paired training experiment of that same cell type lacks. The method has seen the type. Blind-test pairs (regime.eic_test) are not this board. Internal code: eic_val eval_pairs."
+          "label": "ablation, not the headline",
+          "eli5": "eic.19 is primary. This regime exists to ask whether the choice of training slice moves the result; a win here is a statement about slices, not about methods."
         }
       ],
       "pending": [
-        {"method": "CANDI", "lineage": "candi", "note": "mainline (chr19 recipe) training on Fir; genome-wide queued (count+signal+peak)"},
-        {"method": "Lavawizard", "lineage": "rival", "note": "Dataset-2 retrain not started"},
-        {"method": "avg", "lineage": "baseline", "note": "results computing"},
-        {"method": "knn5", "lineage": "baseline", "note": "results computing"}
+        {"method": "CANDI", "lineage": "candi", "note": "blocked on the BED-restricted window sampler (G2)"},
+        {"method": "Avocado", "lineage": "rival", "note": "retrain not started — stage 1 returns to the Pilot Regions"},
+        {"method": "ChromImpute", "lineage": "rival", "note": "retrain not started"},
+        {"method": "eDICE", "lineage": "rival", "note": "retrain not started"},
+        {"method": "Lavawizard", "lineage": "rival", "note": "retrain not started"},
+        {"method": "avg", "lineage": "baseline", "note": "one fit serves both regimes — the same number prints here"},
+        {"method": "avg-arcsinh", "lineage": "baseline", "note": "one fit serves both regimes — the same number prints here"},
+        {"method": "marginal", "lineage": "baseline", "note": "one fit serves both regimes — the same number prints here"},
+        {"method": "knn1", "lineage": "baseline", "note": "one fit serves both regimes — the same number prints here"},
+        {"method": "knn5", "lineage": "baseline", "note": "one fit serves both regimes — the same number prints here"}
+      ]
+    }
+  },
+  "deferred_regimes": [
+    {"id": "eic.gw→20,21,22", "note": "§3 — whole-genome training. Deferred by ruling: it is not needed to settle the current questions and the compute is disproportionate. The placeholder stays so the axis is nameable later."},
+    {"id": "merged.19→…", "note": "§3 — the merged corpus has no declared train/test split, the truth toggle does not exist there, and the zero-shot question of §8 is parked against it."},
+    {"id": "merged.gw→…", "note": "§3 — same, with whole-genome training."}
+  ],
+  "anchor": {
+    "label": "Anchor — the 2019 challenge field",
+    "subtitle": "25 rows we did not run",
+    "eli5": "The 23 ENCODE Imputation Challenge submissions plus the organizers' Average and Avocado_p0 baselines, rescored through our scorer on our grid so they are readable beside our rows. They carry no regime, because we never trained them, so they sit outside the ranked table rather than inside it.",
+    "truth": "challenge",
+    "panel": "B_",
+    "scope": "held-out",
+    "eval_set": {
+      "id": "challenge.B_.held-out",
+      "regime": "no regime — the 2019 submissions were never trained by us",
+      "pairs": "the 51 challenge blind-test experiments, which are our B_ test panel",
+      "chroms": "chr20 + chr21 + chr22, on the store's grid",
+      "scorer": "python -m candi.bench.external, loading the Synapse bigwigs onto the store grid"
+    },
+    "frozen": {
+      "store_manifest_hash": "TODO-anchor-store-manifest",
+      "regime_sha256": "TODO-anchor-submissions-survey",
+      "frozen_note": "Not frozen. The anchor block is rescored through candi.bench.external on the store grid (§6), so it will pin the store manifest the rescore reads and the sha256 of the Synapse submissions survey the predictions come from. The old pair digested cruxvault/results/t54/submissions_survey.json and placement.json, which are the vendored-001-scorer path — retired from the board by §6."
+    },
+    "non_independence": {
+      "headline": "The field has fewer distinct methods than rows.",
+      "detail": "§6 — CUImpute1, CUWA and ICU submitted byte-identical tracks for all 26 broad-mark experiments, and ICU's H3K4me1 is the organizers' Avocado_p0 baseline. Any \"beats N methods\" claim must be counted, never read off the table.",
+      "duplicate_groups": [
+        {"members": ["CUImpute1", "CUWA", "ICU"], "extent": "byte-identical on all 26 broad-mark experiments"},
+        {"members": ["ICU", "Avocado_p0"], "extent": "ICU's H3K4me1 is the organizers' Avocado_p0 baseline"}
       ]
     },
-    "dev": {
-      "label": "Chromosome 21",
-      "subtitle": "development set",
-      "protocol": "P1",
-      "rows_note": "The fast column new CANDI versions hit first; same methods as the full-genome column.",
-      "eli5": "A fast check on one chromosome, using the same training-to-validation pairs of a seen cell type. This is missing-mark transfer, not an unseen-cell-type test. Numbers here select what is worth scoring on the whole genome; they are not the headline result.",
-      "eval_set": {
-        "id": "eic_val.P1",
-        "regime": "configs/regime.eic_val.json",
-        "pairs": "declared eval_pairs of regime.eic_val",
-        "chroms": "chr21",
-        "scorer": "python -m candi.bench.external"
-      },
-      "frozen": {
-        "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397",
-        "regime_sha256": "2526ae55d9904d50ff57a1a183efe0cd67b4796882736af8e894442891bc9829",
-        "frozen_note": "Same store and regime as the full-genome column — two protocols over one eval set. See that column's frozen_note for what each hash digests."
-      },
-      "views": ["default"],
-      "view_labels": {
-        "default": "Chromosome 21"
-      },
-      "caveats": [
-        "Development column — chromosome 21 only. Numbers here select what goes to the full-genome column; they are not the headline result.",
-        "CANDI trained on chromosome 19, so it is held-out on chromosome 21; methods that train on every position are in-sample here too."
-      ],
-      "reader_badges": [
-        {
-          "label": "Same cell type, held-out experiment",
-          "eli5": "Each score is a mark the validation experiment has and the paired training experiment of that same cell type lacks. The method has seen the type. Blind-test pairs (regime.eic_test) are not this board. Internal code: eic_val eval_pairs."
-        }
-      ],
-      "pending": [
-        {"method": "CANDI", "lineage": "candi", "note": "mainline (chr19 recipe) training on Fir; genome-wide queued (count+signal+peak)"},
-        {"method": "Lavawizard", "lineage": "rival", "note": "Dataset-2 retrain not started"}
-      ]
-    },
-    "entrants": {
-      "label": "2019 challenge",
-      "subtitle": "blind test",
-      "protocol": "P3",
-      "rows_note": "The 23 ENCODE Imputation Challenge submissions, plus CANDI and baselines when they land.",
-      "eli5": "The original 2019 challenge's hidden test tracks. This is a different truth signal from the other two columns — a number here cannot be compared to a number there.",
-      "eval_set": {
-        "id": "dataset3.blind_test",
-        "regime": "Synapse syn17083203 blind-test tracks",
-        "pairs": "challenge blind-test experiments",
-        "chroms": "challenge evaluation set",
-        "scorer": "Max's vendored 001 scorer (experiment 001)"
-      },
-      "frozen": {
-        "store_manifest_hash": "3982e224b235f75fcd03092c05bbcb81acb64b62494080869c110980ec79847f",
-        "regime_sha256": "8d60da135a69fef6c5d2fa18824a2f76bdd0be88e287f7ed3fef86eb1c910e44",
-        "frozen_note": "The 2019 challenge has no store manifest and no regime json, so this column pins different artifacts: store hash = sha256 of cruxvault/results/t54/submissions_survey.json (the Synapse manifest — every scored prediction file with its size and md5), regime hash = sha256 of cruxvault/results/t54/placement.json (the ruled placement artifact every entrant row is extracted from; `add --placement-method` verifies the file it reads digests to exactly this)."
-      },
-      "views": ["default"],
-      "view_labels": {
-        "default": "2019 blind test"
-      },
-      "caveats": [
-        "The 2019 challenge used a different truth signal than the other two columns. Scores never translate between them (measured 12–66% per-experiment error for that move).",
-        "DNase-seq is left out of every 2019-challenge row: in the other two columns it is read-depth normalized signal, a different physical quantity.",
-        "Entrant rows are the 2019 submissions as frozen, not retrained; CUImpute1, CUWA and ICU submitted identical predictions and count once, not three times."
-      ],
-      "reader_badges": [
-        {
-          "label": "DNase-seq excluded",
-          "eli5": "In the other two columns, DNase-seq is a different physical quantity (read-depth normalized signal), so it is left out here. Internal code: B3."
-        }
-      ],
-      "pending": []
+    "caveats": [
+      "An anchor, not a competitor. These 25 rows were submitted in 2019 and frozen; we never trained them, they carry no regime, and they are not ranked against our rows.",
+      "Lifting them out of the ranked table means CANDI and the 2019 submissions never share a ranking denominator, so \"CANDI would have placed Nth\" cannot be read off this page. That number is computed once, separately (§6), as a labelled figure — never a board row.",
+      "DNase-seq is left out of every 2019-challenge row: in the store it is a different physical quantity.",
+      "Their bigwigs live on Fir scratch, which purges at 60 days — check before assuming they are still there (§13.4)."
+    ],
+    "pending": [
+      {"method": "Aug2019Imputation", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Average", "lineage": "entrant", "note": "organizers' baseline — awaiting rescore on our grid"},
+      {"method": "Avocado_p0", "lineage": "entrant", "note": "organizers' baseline — awaiting rescore on our grid"},
+      {"method": "BrokenNodes", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "BrokenNodes_v2", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "BrokenNodes_v3", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "CUImpute1", "lineage": "entrant", "note": "awaiting rescore on our grid — not independent of CUWA and ICU"},
+      {"method": "CUWA", "lineage": "entrant", "note": "awaiting rescore on our grid — not independent of CUImpute1 and ICU"},
+      {"method": "CostaLab", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Guacamole", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Hongyang_Li_and_Yuanfang_Guan", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Hongyang_Li_and_Yuanfang_Guan_v1", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Hongyang_Li_and_Yuanfang_Guan_v2", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "ICU", "lineage": "entrant", "note": "awaiting rescore on our grid — not independent of CUImpute1, CUWA or Avocado_p0"},
+      {"method": "KKT-ENCODE-Impute", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Lavawizard", "lineage": "entrant", "note": "the 2019 submission as frozen — the retrained Lavawizard is a separate row under each regime"},
+      {"method": "LiPingChun", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "NittanyLions", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "NittanyLions2", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Song_Lab", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Song_Lab_2", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "Song_Lab_3", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "UIOWA_Michaelson", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "imp", "lineage": "entrant", "note": "awaiting rescore on our grid"},
+      {"method": "imp1", "lineage": "entrant", "note": "awaiting rescore on our grid"}
+    ]
+  },
+  "void": {
+    "label": "Void rows — not carried forward",
+    "eli5": "Every row this page used to show. §3.3 voids them: the old full-genome board scored all 23 chromosomes including chr19, the chromosome CANDI trained on, so those numbers are not portable to the regime design. The entrant rows are void for a second reason — they came from the vendored 001 scorer, which §6 retires to a one-time proof in the vault. The files stay in leaderboard/void/ so the record survives; their numbers are dropped at compile time, on purpose.",
+    "reason_by_board": {
+      "main": "§3.3 — scored all 23 chromosomes, chr19 included.",
+      "dev": "§3.3 — chr21 alone is no longer an eval scope; the ranked scope is chr20+21+22 and the training loci changed.",
+      "entrants": "§6 — scored by the vendored 001 scorer, which retires to a recorded proof in the vault and never scores a board row again."
     }
   }
 }
