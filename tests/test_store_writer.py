@@ -516,6 +516,45 @@ def test_source_layout_paths_match_the_documented_tree(tmp_path):
 
 
 # ---------------------------------------------------------------------------------------------
+# `signal_rdns` is an ARCHIVE kind — the writer does not build it
+#
+# It is the `pval` layer a promotion replaced, kept byte-for-byte under a second name so it stays
+# queryable (`plan/BENCHMARK_DESIGN.md` §10 Phase 3, reaffirmed by the PI 2026-08-30). There is no
+# npz source tree it could be built from, so a build that is asked for it must say so and stop —
+# the failure with no symptom is a writer that accepts the kind and fills a file with something.
+# ---------------------------------------------------------------------------------------------
+
+
+def test_the_writer_refuses_to_build_the_archive_kind_and_says_why(tmp_path):
+    src, corpus = tmp_path / "src", tmp_path / "store" / "eic"
+    make_source_tree(src, tracks=("H3K4me3",), kinds=("counts", "pval"), chroms=("chr2",))
+    with pytest.raises(StoreError) as exc:
+        build_biosample(src, corpus, "T_SYNTH", chrom_sizes=CHROM_SIZES,
+                        kinds=("counts", "signal_rdns"), chroms=["chr2"])
+    msg = str(exc.value)
+    assert "signal_rdns" in msg and "archive" in msg.lower() and "pval" in msg
+    assert not L.kind_path(corpus, "T_SYNTH", "signal_rdns").exists()
+    assert not list((corpus / "biosamples" / "T_SYNTH").glob("*.tmp"))
+
+
+def test_the_archive_kind_asked_for_on_its_own_is_refused_the_same_way(tmp_path):
+    """Not a side effect of `counts` being in the tuple — the kind itself is the thing refused."""
+    src, corpus = tmp_path / "src", tmp_path / "store" / "eic"
+    make_source_tree(src, tracks=("H3K4me3",), kinds=("counts", "pval"), chroms=("chr2",))
+    with pytest.raises(StoreError, match="signal_rdns"):
+        build_biosample(src, corpus, "T_SYNTH", chrom_sizes=CHROM_SIZES,
+                        kinds=("signal_rdns",), chroms=["chr2"])
+    assert not L.kind_path(corpus, "T_SYNTH", "signal_rdns").exists()
+
+
+def test_the_archive_kind_has_no_source_directory_to_be_built_from(tmp_path):
+    """The other three kinds each name an npz directory; this one has nothing to name."""
+    src = SourceLayout(root=tmp_path, resolution=25, dsf=1)
+    with pytest.raises(StoreError, match="signal_rdns"):
+        src.kind_dir("B", "T", "signal_rdns")
+
+
+# ---------------------------------------------------------------------------------------------
 # layout odds and ends the other tasks will lean on
 # ---------------------------------------------------------------------------------------------
 

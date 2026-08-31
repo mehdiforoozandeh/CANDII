@@ -175,6 +175,15 @@ class TrackView:
     def pval(self, chrom: str, start: int, end: Optional[int] = None) -> np.ndarray:
         return self._bs.pval(chrom, start, end, assays=[self.assay])[:, 0]
 
+    def signal_rdns(self, chrom: str, start: int, end: Optional[int] = None) -> np.ndarray:
+        """The archived predecessor of `pval`, read the same way `pval` is.
+
+        An archive kind is reachable by every path a built kind is reachable by — that is the whole
+        of what "stays queryable" means in `BENCHMARK_DESIGN.md` §10 Phase 3, and the per-track view
+        is a documented path in `STORE.md`.
+        """
+        return self._bs.signal_rdns(chrom, start, end, assays=[self.assay])[:, 0]
+
 
 # ---------------------------------------------------------------------------------------------
 # one biosample

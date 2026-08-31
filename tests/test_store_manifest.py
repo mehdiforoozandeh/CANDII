@@ -7,6 +7,7 @@ symptom. So the disagreement case must raise, and the missing case must write `n
 from __future__ import annotations
 
 import json
+import shutil
 
 import h5py
 import numpy as np
@@ -406,3 +407,60 @@ def test_the_shipped_eic_provenance_table_is_the_sweep_section_10_recorded():
     assert len(dnase) == 40
     assert all(r["output_type"] == "read-depth normalized signal" for r in dnase)
     assert all(r["assembly"] == "GRCh38" and r["status"] == "released" for r in table.values())
+
+
+# ---------------------------------------------------------------------------------------------
+# `signal_rdns` — the manifest is where an archived layer is named
+#
+# An archive is a byte-for-byte copy of the `pval.h5` it replaces, so its own root attrs still say
+# `kind = "pval"`: rewriting one attr to make the file self-describing would destroy the identity
+# that is the point of keeping it. The manifest carries what the file therefore cannot.
+# ---------------------------------------------------------------------------------------------
+
+
+def _archive_pval(corpus_root, biosample: str = "T_SYNTH"):
+    """Promote `pval.h5` to `signal_rdns.h5` the only way the constraint allows — copy, not move."""
+    dst = L.kind_path(corpus_root, biosample, "signal_rdns")
+    shutil.copyfile(L.kind_path(corpus_root, biosample, "pval"), dst)
+    return dst
+
+
+def test_the_manifest_records_the_archive_the_file_cannot_name(store):
+    archive = _archive_pval(store["corpus"])
+    m = build_manifest(store["corpus"], "eic", [store["csv"]], source_root=store["src"])
+    assert m["kinds"] == ["counts", "peaks", "pval", "signal_rdns"]
+    entry = m["biosamples"]["T_SYNTH"]
+    assert entry["kinds"] == ["counts", "peaks", "pval", "signal_rdns"]
+    tracks = {t["assay"]: t for t in entry["tracks"]}
+    assert tracks["H3K4me3"]["kinds"] == ["counts", "peaks", "pval", "signal_rdns"]
+    assert tracks["DNase-seq"]["kinds"] == ["counts", "peaks", "pval", "signal_rdns"]
+    # the control has no p-value layer, so there was nothing to archive for it
+    assert tracks["chipseq-control"]["kinds"] == ["counts"]
+    # and the file the manifest just named still calls itself `pval` inside. That is the
+    # requirement, not a defect: see `tests/test_store_reader.py` for why nothing rewrites it.
+    with h5py.File(archive, "r") as f:
+        assert L.read_root_attrs(f)[L.ATTR_KIND] == "pval"
+
+
+def test_verify_passes_on_a_store_that_carries_an_archive(store):
+    """`verify_store` walks the manifest's kinds; a fourth one must not trip it either way."""
+    _archive_pval(store["corpus"])
+    write_manifest(store["corpus"],
+                   build_manifest(store["corpus"], "eic", [store["csv"]],
+                                  source_root=store["src"]))
+    assert verify_store(store["corpus"]) == []
+    L.kind_path(store["corpus"], "T_SYNTH", "signal_rdns").unlink()
+    problems = verify_store(store["corpus"])
+    assert any("signal_rdns" in p and "does not exist" in p for p in problems)
+
+
+def test_a_corpus_with_no_archive_declares_only_the_three_built_kinds(store):
+    """Point 5 at the manifest: adding a kind must not add a name to every existing corpus."""
+    m = build_manifest(store["corpus"], "eic", [store["csv"]], source_root=store["src"])
+    assert m["kinds"] == ["counts", "peaks", "pval"]
+    entry = m["biosamples"]["T_SYNTH"]
+    assert entry["kinds"] == ["counts", "peaks", "pval"]
+    for track in entry["tracks"]:
+        assert "signal_rdns" not in track["kinds"], track["assay"]
+    write_manifest(store["corpus"], m)
+    assert verify_store(store["corpus"]) == []
