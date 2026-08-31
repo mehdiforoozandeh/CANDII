@@ -434,3 +434,83 @@ def test_a_live_regime_loads_the_layer_behind_every_head(name):
         f"{sorted(missing)} would be supervised on a plane of zeros: "
         + ", ".join(f"{h} needs '{k}'" for h, k in sorted(missing.items()))
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# t85 — training stops when the validation metric stops improving
+# ---------------------------------------------------------------------------------------------
+#
+# Job 57620803_0 took its best `V_` checkpoint at epoch 2 and then ran nine more GPU-hours while
+# `V_imp_crps` rose 0.5604 -> 0.5820 -> 0.5864. Nothing in the loop could stop it. These pin the
+# two halves of the fix: `train()` honours a hook that asks to stop, and the patience that decides
+# is counted in EPOCHS.
+
+
+@pytest.mark.parametrize("full_coverage", [False, True],
+                         ids=["sampled-path", "full-coverage-path"])
+def test_a_hook_that_asks_to_stop_stops_the_epoch_loop(regime_file, full_coverage):
+    """Both construction sites, because the break had to be written into each loop separately.
+
+    A stub hook rather than a real metric: whether a 32-unit model's CRPS happens to rise on
+    epoch 3 of a synthetic store is not a property this test may depend on. What is being checked
+    is the wiring — a truthy return ends training — and that is deterministic.
+    """
+    from candi.model import build_model
+    from candi.train import train
+
+    src = DataSource.resolve(store=str(regime_file))
+    ds = make_dataset(src, "type1", train=True, batch_size=2, seed=0)
+    model = build_model(num_cells=0, num_assays=ds.num_assays, context_length=ds.context_bins,
+                        d_model=32, embed_dim=8, n_transformer_layers=1)
+    calls = []
+
+    def hook(step, ep):
+        calls.append(ep)
+        return len(calls) == 2          # stop at the second eval, whatever epoch that is
+
+    train(model, src, "cpu", epochs=8, steps_per_epoch=2, batch_size=2, seed=0,
+          full_coverage=full_coverage, eval_hook=hook, eval_every=1)
+    assert calls == [0, 1], f"the loop ran past the stop request: hook saw epochs {calls}"
+
+
+def test_a_hook_that_returns_none_never_stops_anything(regime_file):
+    """Every caller predating t85 returns None, and none of them may change behaviour."""
+    from candi.model import build_model
+    from candi.train import train
+
+    src = DataSource.resolve(store=str(regime_file))
+    ds = make_dataset(src, "type1", train=True, batch_size=2, seed=0)
+    model = build_model(num_cells=0, num_assays=ds.num_assays, context_length=ds.context_bins,
+                        d_model=32, embed_dim=8, n_transformer_layers=1)
+    calls = []
+    train(model, src, "cpu", epochs=4, steps_per_epoch=2, batch_size=2, seed=0,
+          eval_hook=lambda step, ep: calls.append(ep), eval_every=1)
+    assert calls == [0, 1, 2, 3], f"a None-returning hook changed the epoch count: {calls}"
+
+
+def test_the_patience_is_counted_in_epochs_and_defaults_to_three():
+    """`--early-stop-epochs 3` must mean three EPOCHS, not three evals.
+
+    The distinction is load-bearing: `--eval-every` is 3 by default, so a patience read as three
+    *evals* would be nine epochs, three times what the operator asked for.
+    """
+    import inspect
+    from candi.train import train_and_eval
+
+    assert inspect.signature(train_and_eval).parameters["early_stop_epochs"].default == 3
+    src = inspect.getsource(train_and_eval)
+    assert "(ep - best[\"epoch\"]) > early_stop_epochs" in src, \
+        "the stop condition must compare EPOCH numbers, not a count of evals"
+    assert "if early_stop_epochs and" in src, "0 must switch it off"
+
+
+def test_the_cli_exposes_the_patience_and_says_zero_is_off():
+    import candi.train as T
+
+    ap = T.build_arg_parser() if hasattr(T, "build_arg_parser") else None
+    if ap is None:                       # the parser is built inside main(); read --help instead
+        import subprocess
+        out = subprocess.run([sys.executable, "-m", "candi.train", "--help"],
+                             capture_output=True, text=True).stdout
+        assert "--early-stop-epochs" in out
+        assert "0 = off" in out

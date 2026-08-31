@@ -53,6 +53,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t84` [implementation] vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored
 - `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
+- `t87` [implementation] reconcile the two declare_eval_pairs tools into one
 
 ## Blocked
 
@@ -117,6 +118,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t84` [implementation] vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored — *open*
 - `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *open*
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
+- `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
 
 ## Done · Dropped
 

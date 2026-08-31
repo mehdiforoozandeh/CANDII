@@ -936,7 +936,11 @@ def train(model, source, device, *, regime="type1", epochs=25, steps_per_epoch=2
                               f"imp={terms.get('imp', float('nan')):.3f}) "
                               f"lr={sched.get_last_lr()[0]:.2e}", flush=True)
             if eval_hook and ((ep + 1) % eval_every == 0 or ep == epochs - 1):
-                eval_hook(step, ep)
+                # A hook that returns truthy is asking to stop — see `train_and_eval`'s patience.
+                # A hook that returns None never stops anything, so every caller predating this
+                # (the probes, the tests, `train()` driven directly) is unchanged.
+                if eval_hook(step, ep):
+                    break
         if probe is not None:
             probe.close()
         if meta_probe is not None:
@@ -989,8 +993,10 @@ def train(model, source, device, *, regime="type1", epochs=25, steps_per_epoch=2
                       f"lr={sched.get_last_lr()[0]:.2e}", flush=True)
         # end of epoch: mid-training eval + best-checkpoint selection (h74 fix 4)
         if eval_hook and ((ep + 1) % eval_every == 0 or ep == epochs - 1):
-            eval_hook(step, ep)
+            stop = eval_hook(step, ep)
             model.train()
+            if stop:
+                break
     if probe is not None:
         probe.close()
     if meta_probe is not None:
@@ -1190,7 +1196,8 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    ckpt_path=None, cell_cond="off",
                    wandb_project=None, wandb_run_name=None, reference="off", reference_path=None,
                    reference_pseudocount=None, imp_weight=1.0, unmask_frac=0.0,
-                   eval_every=None, eval_batches_per_pair=4, meta_embed_layernorm=True,
+                   eval_every=None, eval_batches_per_pair=4, early_stop_epochs=3,
+                   meta_embed_layernorm=True,
                    optimizer="adam", trunk_wd=0.0, meta_gain=1.0,
                    meta_probe="off", meta_probe_delta=DEFAULT_META_PROBE_DELTA,
                    precision=DEFAULT_PRECISION,
@@ -1462,6 +1469,20 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
         curve.append(row)
         _keep_best(row["selection"]["value"], step, ep)
         print(format_check(row, best=best), flush=True)
+        # Stop when the selection metric has not improved for more than `early_stop_epochs` epochs.
+        # Counted in EPOCHS, not in evals, because `eval_every` changes how many evals an epoch buys
+        # and the patience the operator asked for is a number of epochs either way. The resolution is
+        # still `eval_every`: at the default 3 the earliest detectable stall is 6 epochs, and a
+        # patience below `eval_every` can therefore never fire. Nothing is lost by stopping — the
+        # best checkpoint is already on disk (`_keep_best` writes it the moment it improves), and the
+        # block below loads it rather than the last one.
+        if early_stop_epochs and best["epoch"] >= 0 and (ep - best["epoch"]) > early_stop_epochs:
+            print(f"[train] EARLY STOP at epoch {ep}: no V_ improvement since epoch "
+                  f"{best['epoch']} ({ep - best['epoch']} epochs > patience "
+                  f"{early_stop_epochs}). Best crps={best['crps']:.4f}, and it is the checkpoint "
+                  f"that will be scored.", flush=True)
+            return True
+        return False
 
     terms_log: list = []
     losses = train(model, source, device, regime=regime, epochs=epochs, steps_per_epoch=steps_per_epoch,
@@ -1890,6 +1911,15 @@ def build_parser() -> argparse.ArgumentParser:
                          "mid-training scorer was `eval.quick_eval` and `candi.eval` is deleted "
                          "(D15), so an h5 run trains only and is scored afterwards with "
                          "`python -m candi.bench --h5 …`.")
+    ap.add_argument("--early-stop-epochs", type=int, default=3,
+                    help="Stop when the mid-training selection metric has not improved for MORE "
+                         "than N epochs (0 = off, train the full --epochs). Counted in epochs, so "
+                         "the effective resolution is --eval-every: at the default 3 the earliest "
+                         "stop is 6 epochs after the best, and N < --eval-every can never fire. "
+                         "Nothing is lost by stopping — the best checkpoint is written the moment "
+                         "it improves and is the one scored. Added after job 57620803_0 took its "
+                         "best V_ checkpoint at epoch 2 and then ran nine more GPU-hours while "
+                         "V_imp_crps rose 0.5604 -> 0.5820 -> 0.5864.")
     ap.add_argument("--eval-batches-per-pair", type=int, default=4,
                     help="INERT. It set the window thinning of `eval.quick_eval`, the h5 path's "
                          "mid-training scorer, and that function was deleted with the rest of "
@@ -1973,7 +2003,8 @@ def main():
         reference=a.reference, reference_path=a.reference_path,
         reference_pseudocount=a.reference_pseudocount, imp_weight=a.imp_weight,
         unmask_frac=a.unmask_frac, eval_every=a.eval_every,
-        eval_batches_per_pair=a.eval_batches_per_pair, meta_embed_layernorm=meta_ln,
+        eval_batches_per_pair=a.eval_batches_per_pair, early_stop_epochs=a.early_stop_epochs,
+        meta_embed_layernorm=meta_ln,
         optimizer=a.optimizer, trunk_wd=a.trunk_wd, meta_gain=a.meta_gain,
         meta_probe=a.meta_probe, meta_probe_delta=a.meta_probe_delta,
         precision=a.precision)
