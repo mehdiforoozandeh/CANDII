@@ -1263,8 +1263,17 @@ Accepted as the price of the corrections above.
    chr20+21+22 (§4), and Avocado's joint fit moves off chr20 (§3.2).
 2. **Every `V_` row rescores** genome-wide, through one scorer, emitting both aggregations.
 3. **`B_` is not touched** until each method's final, once-only run.
-4. **The 23 entrant submissions rescore** through our scorer on our grid. Their bigwigs are on
-   scratch, which purges at 60 days — check before assuming they are still there.
+4. **The 23 entrant submissions rescore** through our scorer on our grid.
+
+   **CHECKED 2026-08-31, and there is a deadline.** All 23 are present at
+   `/scratch/mforooz/t54_submissions_round2` — **960 GB**, one directory per entrant. The oldest
+   file is dated **2026-08-25**, so the 60-day purge clock expires around **2026-10-24**. Either
+   the ≈2,835 CPU-h of anchor scoring (§12.4) completes before then, or the tree moves to
+   `/project` first. `/project` had 13 TiB free at the time of the check, so it fits.
+
+   The challenge **truth** is not at risk and needs no action: 363 bigwigs, 254 GB, already on
+   `/project` at `DATA_EIC_SYNAPSE/` (`blind_truth`, `training_data`, `validation_data`),
+   md5-verified against Nibi. It is the submissions, not the truth, that sit on a purge clock.
 5. **σ-tables refit** on training residuals; every existing σ was fit on `V_` eval pairs and is
    void under Rule 1.
 6. **`eic.pilot` is new work**, not a rerun: the hg38 liftover and the BED-restricted sampler

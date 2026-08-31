@@ -50,7 +50,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
 - `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times
-- `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one
 
@@ -114,7 +113,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *blocked*
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *open*
 - `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *open*
-- `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *open*
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
 
@@ -161,3 +159,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
 - `t84` [implementation] vendor Lavawizard — the other three rivals were already implemented — *done* → `results/t84/DELIVERABLE.md`
+- `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *done* → `results/t85/DELIVERABLE.md`

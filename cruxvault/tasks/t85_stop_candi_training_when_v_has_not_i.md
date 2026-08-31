@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-31T13:16:24
-updated: 2026-08-31T13:16:24
+status: done
+created: "2026-08-31T13:16:24"
+updated: "2026-08-31T15:28:19"
 ---
 
 # t85 — stop CANDI training when V_ has not improved for more than 3 epochs
@@ -24,7 +24,7 @@ the eic.19 retrain burned 9 of 11 GPU-hours after its best epoch; nothing stops 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Early stopping on a stalled V_](results/t85/DELIVERABLE.md)
 
 ## Evidence
 
