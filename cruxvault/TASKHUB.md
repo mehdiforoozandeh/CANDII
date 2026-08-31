@@ -28,6 +28,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers
 - `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times
 - `t84` [implementation] vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored
+- `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs
+- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
 
 ## Blocked
 
@@ -69,6 +71,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *open*
 - `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *open*
 - `t84` [implementation] vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored — *open*
+- `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *open*
+- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
 
 ## Done · Dropped
 
