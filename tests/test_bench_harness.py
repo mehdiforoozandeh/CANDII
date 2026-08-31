@@ -1014,14 +1014,16 @@ def _one_track(model, regime_file, **kw):
 
 
 # ---------------------------------------------------------------------------
-# t80 — tools/declare_eval_pairs_d31.py, the thing §14 says owns the pairing. Renamed at the
-# main merge: origin/main already shipped a DIFFERENT tools/declare_eval_pairs.py (7 tests of its
-# own, a slurm caller, two generated configs). Both are kept; t87 reconciles them.
+# t80 — tools/declare_eval_pairs.py, the thing §14 says owns the pairing. PI ruling 2026-08-31:
+# THIS is the pairing tool. The older same-named tool origin/main shipped is now
+# tools/split_regime_by_panel.py, which is what it does -- it splits one regime into a
+# validation and a test copy off a baked-in V_/B_ convention. This one refuses a baked-in rule
+# (D16, D31) and is why it wins the name.
 # ---------------------------------------------------------------------------
 
 def test_the_declaring_tool_derives_the_pairing_and_records_its_provenance(
         pair_store, paired_regime, tmp_path) -> None:
-    from tools.declare_eval_pairs_d31 import main as declare_main
+    from tools.declare_eval_pairs import main as declare_main
 
     out = tmp_path / "pairs.json"
     rc = declare_main(["declare", "--store", str(pair_store), "--input-prefix", "T_",
@@ -1040,7 +1042,7 @@ def test_the_declaring_tool_derives_the_pairing_and_records_its_provenance(
 
 def test_the_tool_and_the_harness_read_the_same_panel(pair_store, paired, tmp_path) -> None:
     """Two independent readings of one claim. The tool must never be the harness's echo."""
-    from tools.declare_eval_pairs_d31 import main as declare_main
+    from tools.declare_eval_pairs import main as declare_main
 
     out = tmp_path / "pairs.json"
     declare_main(["declare", "--store", str(pair_store), "--input-prefix", "T_",
@@ -1051,7 +1053,7 @@ def test_the_tool_and_the_harness_read_the_same_panel(pair_store, paired, tmp_pa
 
 def test_the_tool_refuses_to_guess_a_pairing(pair_store) -> None:
     """D31 — a default naming rule would make the pairing inferred rather than declared."""
-    from tools.declare_eval_pairs_d31 import main as declare_main
+    from tools.declare_eval_pairs import main as declare_main
 
     with pytest.raises(SystemExit, match="no pairing rule"):
         declare_main(["declare", "--store", str(pair_store)])
@@ -1059,7 +1061,7 @@ def test_the_tool_refuses_to_guess_a_pairing(pair_store) -> None:
 
 def test_the_tool_takes_a_csv_so_it_need_not_parse_a_name_at_all(pair_store, tmp_path) -> None:
     """D16-clean input: the operator states the pairing and no string is dissected."""
-    from tools.declare_eval_pairs_d31 import main as declare_main
+    from tools.declare_eval_pairs import main as declare_main
 
     csv = tmp_path / "pairs.csv"
     csv.write_text("input,target\nT_pp,V_pp\nT_qq,V_qq\n", encoding="utf-8")
@@ -1071,7 +1073,7 @@ def test_the_tool_takes_a_csv_so_it_need_not_parse_a_name_at_all(pair_store, tmp
 
 def test_the_tool_writes_a_regime_that_loads_and_the_harness_then_pairs(
         bare_regime, pair_store, tmp_path) -> None:
-    from tools.declare_eval_pairs_d31 import main as declare_main
+    from tools.declare_eval_pairs import main as declare_main
 
     paired_out = tmp_path / "regime.paired.json"
     assert declare_main(["declare", "--regime", str(bare_regime), "--input-prefix", "T_",
@@ -1086,7 +1088,7 @@ def test_the_tool_writes_a_regime_that_loads_and_the_harness_then_pairs(
 
 def test_check_fails_a_regime_that_declares_nothing_and_passes_one_that_does(
         bare_regime, paired_regime) -> None:
-    from tools.declare_eval_pairs_d31 import main as declare_main
+    from tools.declare_eval_pairs import main as declare_main
 
     assert declare_main(["check", "--regime", str(bare_regime)]) == 1
     assert declare_main(["check", "--regime", str(paired_regime)]) == 0

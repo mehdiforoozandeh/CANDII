@@ -63,8 +63,9 @@ VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 OUT="${OUT:-/scratch/$USER/t81_candi/runs}"
 MODE="${MODE:-probe}"
 SEED="${SEED:-0}"
-# §5's uniform rule selects the best checkpoint on V_. See the WARNING under [t81] below before
-# changing this: as shipped, any non-zero value also LOGS B_ every eval, which §5 forbids.
+# §5's uniform rule selects the best checkpoint on V_. Under SELECT_ON=V (the default) the eval
+# reads V_ only, so a non-zero value here no longer touches B_ — see the PI ruling below.
+# It is also the resolution of EARLY_STOP: a stall is only visible on an eval.
 EVAL_EVERY="${EVAL_EVERY:-3}"
 PROBE_STEPS="${PROBE_STEPS:-3000}"
 # Ratio of real --full-coverage throughput to the sampled probe rate. MEASURED 0.45 on 2026-08-31
@@ -86,6 +87,12 @@ STEPS_PER_EPOCH="${STEPS_PER_EPOCH:-}"
 # scores B_ at every eval. Selection is on V_imp_crps either way, so the SELECTED CHECKPOINT is the
 # same under both; the difference is whether B_ is touched, plus the eval work saved.
 SELECT_ON="${SELECT_ON:-V}"
+# Stop when V_imp_crps has not improved for MORE than this many EPOCHS (0 = off, run all $EPOCHS).
+# Counted in epochs, so the resolution is EVAL_EVERY: at 3/3 the earliest stop is 6 epochs after the
+# best. Nothing is lost — .best.ckpt is written the moment the metric improves and is what gets
+# scored. Added because job 57620803_0 selected at epoch 2 and then ran nine more GPU-hours while
+# V_imp_crps rose 0.5604 -> 0.5820 -> 0.5864, and nothing in the loop could end it.
+EARLY_STOP="${EARLY_STOP:-3}"
 # -------------------------------------------------------------------------------------------------
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
@@ -169,13 +176,15 @@ fi
 
 if [ "$MODE" != "full" ]; then echo "[error] MODE must be probe or full, got $MODE" >&2; exit 1; fi
 
-# WARNING, and it is a §5 compliance question the PI has not ruled on yet.
-# --eval-every N drives best-checkpoint selection on V_imp_crps (train.py:1392) and writes
-# {tag}.best.ckpt — that is §5's uniform selection rule, and every trainable method needs it.
-# But the same hook ALSO computes and prints B_imp_crps every time (train.py:1398-1404), and §5's
-# panel table lists B_ as "used during training: never" on a row that includes MONITORING. So
-# EVAL_EVERY=3 satisfies the selection rule and violates the never-touch rule; EVAL_EVERY=0 does the
-# reverse. There is no shipped flag that does both. Do not resolve this by picking one silently.
+# RULED 2026-08-31 (PI), and this replaces the open question that stood here.
+#
+#   "never ever we use B_ in training — V_ is only for checkpoint selection and monitoring,
+#    not training"
+#
+# So the strict reading of §5 is the right one: B_ is not merely kept out of selection, it is not
+# READ. SELECT_ON=V is the compliant setting and is the default below; SELECT_ON=all now needs a
+# stated reason, because it makes the eval read B_ at every checkpoint.
+# V_ is likewise eval-only — it selects and it monitors, and no gradient is ever taken on it.
 echo "[t81] eval_every=$EVAL_EVERY — best checkpoint selected on V_imp_crps, written to *.best.ckpt"
 
 # Derive a V_-only regime rather than shipping a second 340-line config that could drift from its
@@ -233,11 +242,12 @@ if [ -n "$STEPS_PER_EPOCH" ]; then
   echo "[t81]   This is not a retrain. Its checkpoint is not a board checkpoint."
 fi
 
-echo "[t81] launching: epochs=$EPOCHS coverage=${COVERAGE[*]} eval_every=$EVAL_EVERY tag=$TAG"
+echo "[t81] launching: epochs=$EPOCHS coverage=${COVERAGE[*]} eval_every=$EVAL_EVERY early_stop=$EARLY_STOP tag=$TAG"
 python -m candi.train "${COMMON[@]}" --store "$TRAIN_REGIME" \
   --tag "$TAG" \
   --epochs "$EPOCHS" "${COVERAGE[@]}" \
-  --eval-every "$EVAL_EVERY" --eval-batch-size 4
+  --eval-every "$EVAL_EVERY" --eval-batch-size 4 \
+  --early-stop-epochs "$EARLY_STOP"
 rc=$?
 
 # §5's uniform rule is only satisfied if a checkpoint was actually SELECTED on V_. If the eval hook

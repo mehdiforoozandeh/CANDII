@@ -1,18 +1,18 @@
 ---
 id: t84
 type: task
-title: vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored
+title: vendor Lavawizard — the other three rivals were already implemented
 category: implementation
 parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-31T00:52:17
-updated: 2026-08-31T00:52:17
+status: done
+created: "2026-08-31T00:52:17"
+updated: "2026-08-31T14:55:26"
 ---
 
-# t84 — vendor ChromImpute, eDICE and Lavawizard the way Avocado is vendored
+# t84 — vendor Lavawizard — the other three rivals were already implemented
 
 Refs:: _(none)_
 
@@ -42,7 +42,7 @@ Retitling this to Lavawizard alone is a scope decision and is left to the PI.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Lavawizard merged; the other three were already implemented](results/t84/DELIVERABLE.md)
 
 ## Evidence
 

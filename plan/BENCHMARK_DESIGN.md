@@ -1110,11 +1110,13 @@ because their `genome-wide` cell is blank (§4).
 | Avocado, ChromImpute, Lavawizard — 3 × 2 regimes | 6 | chr20+21+22 | 1.17 GB | 1.32 GB |
 | | **15 units → 30 runs** | | **≈419 GB + 15 GB = ≈434 GB** | |
 
-485 MB per track genome-wide (121,241,684 bins × 4 bytes); 25.9 MB per track on the 6,478,903
-held-out bins. `B_` is **touched once**, at the very end. Scratch, never `/project`; deletable
-after scoring.
+485 MB per **array** genome-wide (121,241,684 bins × 4 bytes); 25.9 MB per array on the 6,478,903
+held-out bins. **The table above counts one array per track and is therefore low — CANDI writes
+five. See §12.6, corrected 2026-08-31.** `B_` is **touched once**, at the very end, and by the
+same ruling `B_` lands on `/project`, not scratch; `V_` stays on scratch and is deletable after
+scoring.
 
-### 12.4 Scoring runs — ≈6,100 CPU-h
+### 12.4 Scoring runs — ≈4,360 CPU-h
 
 One pass = 45 tracks genome-wide ≈ **50 CPU-h** on 4 cores, projected from a measured 5 min 09 s
 for 20 chr21 tracks (`cruxvault/results/t51/PILOT_MEMO.md`).
@@ -1175,7 +1177,23 @@ against the store's own availability, which gives exactly 26 `V_` → 45 and 12 
 `cruxvault/results/t3/DELIVERABLE.md:34,64` gives it beside "18,209 non-overlapping **6144-bin**
 windows" — a loader rate, on a window 8× the production context. bins/s is the portable unit.
 
-### 12.8 A gap G3 found: there is no track writer
+### 12.8 A gap G3 found: there is no track writer — **WRONG, and corrected 2026-08-31**
+
+> **This section's premise was false when it was written.** `src/candi/bench/dump.py` — 249 lines
+> with 248 lines of tests — already wrote a CANDI checkpoint's predictions to disk in the
+> `RIVALS_PLAN.md` §4.1 external contract, including `signal_mu` / `signal_sigma` / `peak_score`.
+> It was on `implementation/t62-candi-rows`, and the survey below read only
+> `implementation/t77-benchmark-design`. Merged onto the working branch 2026-08-31.
+>
+> What remains open is narrower and is `t83`'s real subject: does that writer already satisfy the
+> claims below, or does it still need the multi-array HDF5 layout and the compression of
+> `plan/T83_PREDICTION_WRITER.md` §3? **It is no longer a build from nothing, and it is no longer
+> the thing gating the first prediction run.**
+>
+> Same failure as `t84`'s "only Avocado is vendored": a claim about the repo read off one branch.
+
+The original text follows, for the record.
+
 
 `stream_tracks` yields in-memory `TrackRecord`s straight into `score_track`. **The §12.3 prediction
 run that persists 485 MB per track to scratch does not exist as code.**
@@ -1198,12 +1216,40 @@ whole share is 93 GB, minutes not hours — but it must land before the first pr
 
 ### 12.6 Storage, in full
 
-485 MB per track genome-wide (121,241,684 bins × 4 bytes) against ≈1.2 GB per method-regime for the
-three-chromosome subset — a 22 GB / 1.2 GB choice per `V_` method-regime, **now decided per method
-by §4**: genome-wide for the nine units whose `genome-wide` cell is printed, three chromosomes for
-the six whose cell is blank. Everything lives on scratch, never `/project`, and is deletable once
-scored. **Scratch purges at 60 days**, which also
-applies to the 23 entrant bigwigs already staged there.
+**CORRECTED 2026-08-31 (PI approved). The figures below are per ARRAY; a method writes as many
+arrays as its heads have parameters.** 485 MB per array genome-wide (121,241,684 bins × 4 bytes).
+The old text read that as 485 MB per *track*, which is one array — true of a point predictor and
+false of every distributional one.
+
+A `TrackRecord` (`harness.py:131-159`) carries the prediction arrays, not one number per bin:
+
+| method kind | prediction arrays per track | genome-wide, raw |
+|---|---|---|
+| point (`ChromImpute`, the naive point baselines) | 1 — the value | 485 MB |
+| **CANDI, 3 heads** | **5** — `mu`, `n` (NB), `signal_mu`, `signal_sigma` (Gaussian), `peak_score` | **2.37 GB** |
+| a pval-arm rival with a σ-table | 2 — the value and its σ | 970 MB |
+
+So CANDI's own share is **466 GB raw** across its four `V_`/`B_` × 2-regime units, against the
+≈434 GB §12.3 gives for the whole programme. **§12.3's 434 GB total is therefore also low, and by
+about the same factor** — it was summed from the same one-array-per-track assumption.
+
+**Compression is the reason this is affordable.** Measured on Fir against the promoted store,
+chr21 bins 1,000,000–1,600,000, gzip-9 + shuffle: `counts` 5.8×–19.7× (sparse, integer-valued),
+`pval` 1.3×–2.1× (dense continuous floats). Blended **2.69×** → 180 MB per genome-wide array, and
+CANDI's share falls to ≈173 GB.
+
+> **The compression ratio was measured on TRUTH arrays, because no trained checkpoint existed when
+> it was taken.** Predictions are smooth full-mantissa floats and may compress worse. At `pval`'s
+> 1.3× floor CANDI's share is 358 GB, not 173. **The first real prediction run records its own
+> ratio and this table is rewritten from it.** Full argument in `plan/T83_PREDICTION_WRITER.md` §4.
+
+**Where it lives — RULED 2026-08-31 (PI).** `V_` predictions go to **scratch** and are deletable
+once scored. **`B_` predictions go to `/project`.** §5 rules that `B_` is predicted exactly once,
+so the first prediction set is the only legitimate copy that will ever exist: any measure not
+computed before a purge becomes unreachable, and re-predicting to recover it would break the
+touch-once rule outright. **Scratch purges at 60 days** — which also applies to the 23 entrant
+bigwigs already staged there, and to the one trained CANDI checkpoint (now copied to
+`/project/def-maxwl/mforooz/t81_checkpoints/`).
 
 ---
 
@@ -1253,9 +1299,31 @@ Accepted as the price of the corrections above.
 
 Every design question raised in this pingpong is settled. What remains is execution.
 
+### Rulings of 2026-08-31 (PI)
+
+Taken after the first CANDI retrain was launched, killed, and read.
+
+- **`B_` is never READ during training, not merely never selected on.** "Never ever we use `B_` in
+  training — `V_` is only for checkpoint selection and monitoring, not training." So `SELECT_ON=V`
+  in `slurm/t81_train_candi.sh` is the compliant setting and is now the default; the open question
+  that stood in that script is closed. `V_` is eval-only too: it selects and it monitors, and no
+  gradient is ever taken on it.
+- **Training stops on a stalled `V_`.** `--early-stop-epochs`, default 3, counted in **epochs**.
+  Job 57620803_0 selected its best checkpoint at epoch 2 and then ran nine more GPU-hours while
+  `V_imp_crps` rose 0.5604 → 0.5820 → 0.5864, with nothing in the loop able to end it. This also
+  retires the "how many epochs?" question §12 left open: the answer is read off the curve, not set
+  in advance.
+- **§12.6's storage figures are per array, not per track**, and `B_` predictions live on
+  `/project`. See §12.6.
+- **`t84`'s scope was wrong and is closed**; **`t87`** now owns the two same-named pairing tools
+  the `main` merge collided.
+
 ### Deferred by ruling
 
-- **The noise floor on the new eval panels** (2026-08-29). Two seeds of one method, same data;
+- **The noise floor on the new eval panels** (2026-08-29). **Now `t86`, and cheaper than this
+  entry assumes: seed 0's `eic.19` checkpoint already exists, so the floor costs ONE more training
+  run, not two — and under `--early-stop-epochs` that is hours, not a day.** Two seeds of one
+  method, same data;
   the spread between them is the resolution limit printed beside every rank. Must be measured
   separately for the `V_` breadth panel (22 assays, 11 of them singletons) and for the 8-assay
   panels, because they do not have the same resolution. Nothing is ranked with a resolution band
