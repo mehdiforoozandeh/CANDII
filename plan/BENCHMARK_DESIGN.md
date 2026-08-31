@@ -942,6 +942,13 @@ archived kind (`signal_rdns`) and stays queryable. The `pval` kind for DNase bec
 layer, and only after Phases 1 and 2 pass. Each DNase track records both the archived source
 accession and the derived layer's method, parameters and code sha.
 
+> **Reaffirmed by the PI 2026-08-30, and it is a hard constraint on the promotion.** The original
+> read-depth normalized signal files are **archived, never deleted and never overwritten.** They
+> move to `signal_rdns` and remain readable; what changes is only which kind is the *default* for
+> DNase — that becomes the computed −log10 p-value layer. A promotion that loses, truncates or
+> writes over an RDNS file has failed, whatever else it got right, and the check that it did not is
+> part of the promotion's own verification rather than an afterthought.
+
 **Phase 4 — the consequence.** Methods train jointly across assays, so a changed DNase target is a
 full retrain, not a DNase-only patch.
 
