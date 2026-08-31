@@ -1,4 +1,4 @@
-"""C-block — covariate sensitivity: is the conditioning actually doing anything?
+"""Covariate sensitivity: is the conditioning actually doing anything?
 
 CANDI is told four things about the target it must predict — `[log2 depth, assay_id, read_length,
 run_type]` — on both the input and the output side. Everything downstream of that claim depends on
@@ -6,22 +6,24 @@ the telling mattering. The conditional-generation literature names the failure e
 model is free to ignore its condition by settling on `p(y|c) = p(y)`, and nothing in a likelihood
 curve reveals it.
 
-Six instruments, each answering a different question, each from a literature that already solved it:
+Seven instruments, each answering a different question, each from a literature that already solved
+it:
 
 | | question | instrument |
 |---|---|---|
-| **C1 use** | does the decoder respond to this covariate at all? | holdout randomization test (Tansey et al.), under two nulls |
-| **C2 share** | what fraction of the output does each covariate own? | Shapley effects (Owen), exact over 16 subsets |
-| **C3 direction** | does it move the right way, by the right amount? | dose-response monotonicity + the depth counterfactual with ground truth |
-| **C4 specificity** | does each covariate move what it should? | a covariate x aspect gap, in the shape of MIG |
-| **C5 invariance** | is the latent invariant to depth? | kBET, iLISI, batch ASW (scIB) |
-| **C6 guard** | invariant because it is good, or because it is empty? | bio-conservation, never reported apart from C5 |
+| **covuse** | does the decoder respond to this covariate at all? | holdout randomization test (Tansey et al.), under two nulls |
+| **covshare** | what fraction of the output does each covariate own? | Shapley effects (Owen), exact over 16 subsets |
+| **depthdir** | does depth move the output the right way, by the right amount? | dose-response monotonicity over a told-depth ladder |
+| **depthcounterfact** | told a false depth, what does it predict? | the depth counterfactual, scored against the real downsampled track |
+| **covspec** | does each covariate move what it should, and not what it shouldn't? | a covariate x aspect gap, in the shape of MIG |
+| **depthblind** | is the latent invariant to depth? | kBET, iLISI, batch ASW (scIB) |
+| **biokeep** | invariant because it is good, or because it is empty? | bio-conservation, never reported apart from `depthblind` |
 
-**C6 is not optional decoration.** An encoder that returns the same vector for every input is
-perfectly invariant and scores a perfect C5. `eval.py`'s M3 guarded against that with
-`encoder_eff_rank_pooled > 1.0`, which a latent with two directions clears. The scIB discipline is
-that a batch-removal score is *never* quoted without a biological-conservation score beside it, and
-`c5_invariance` here refuses to return without one.
+**`biokeep` is not optional decoration.** An encoder that returns the same vector for every input is
+perfectly invariant and scores a perfect `depthblind`. The deleted `eval.py` guarded against that
+with `encoder_eff_rank_pooled > 1.0`, which a latent with two directions clears. The scIB discipline
+is that a batch-removal score is *never* quoted without a biological-conservation score beside it,
+and `depthblind` here refuses to return without one.
 
 Everything below takes a `Predictor` — a plain callable from a covariate matrix to predicted
 distribution parameters. That indirection is what makes the block testable: `test_bench_stub_model.py`
@@ -39,14 +41,15 @@ from candi.metrics import nb_crps
 
 __all__ = [
     "COVARIATES", "ASPECTS", "Predictor",
-    "c1_use", "c2_share", "c3_direction", "c4_specificity", "c5_invariance", "c6_conservation",
+    "covuse", "covshare", "depthdir", "depthcounterfact", "covspec", "depthblind", "biokeep",
     "aspects_of", "kbet", "ilisi", "batch_asw", "effective_rank",
 ]
 
 # Row order of CANDI's `y_meta`. Named here so no instrument indexes a bare integer.
 COVARIATES: Tuple[str, ...] = ("depth", "assay_id", "read_length", "run_type")
 
-# C4's output aspects (EVAL_PLAN D11). Four functionals of one predicted distribution over a window.
+# `covspec`'s output aspects (EVAL_PLAN D11). Four functionals of one predicted distribution over a
+# window.
 ASPECTS: Tuple[str, ...] = ("level", "shape", "dispersion", "tail")
 
 # A predictor maps a covariate matrix `(n_units, n_covariates)` to `{"mu": (n_units, L),
@@ -55,7 +58,7 @@ Predictor = Callable[[np.ndarray], Mapping[str, np.ndarray]]
 
 
 # ---------------------------------------------------------------------------
-# output aspects — the columns of C4, and the scalarisation C2 needs
+# output aspects — the columns of `covspec`, and the scalarisation `covshare` needs
 # ---------------------------------------------------------------------------
 
 def aspects_of(mu: np.ndarray, n: np.ndarray) -> Dict[str, np.ndarray]:
@@ -68,8 +71,8 @@ def aspects_of(mu: np.ndarray, n: np.ndarray) -> Dict[str, np.ndarray]:
     - `tail` — the predicted 99th percentile over the mean. Peak height relative to bulk, which is
       what the biology reads and which neither level nor shape captures.
 
-    `shape` is deliberately a *summary* of the profile rather than the profile itself: C4 compares
-    how far each aspect moves under each covariate flip, and that comparison needs commensurable
+    `shape` is deliberately a *summary* of the profile rather than the profile itself: `covspec`
+    compares how far each aspect moves under each covariate flip, and that needs commensurable
     scalars. The full profile distance is available to anyone who wants it via `mu` directly.
     """
     mu = np.asarray(mu, dtype=np.float64)
@@ -85,14 +88,15 @@ def aspects_of(mu: np.ndarray, n: np.ndarray) -> Dict[str, np.ndarray]:
 
 
 # ---------------------------------------------------------------------------
-# C1 — does the decoder use the covariate at all?
+# covuse — does the decoder use the covariate at all?
 # ---------------------------------------------------------------------------
 
 def _marginal_resample(cov: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
     """Replace column `k` with values drawn from its own marginal, independently of the rest.
 
-    This is the null `eval.py`'s M2 ablation already used, and it answers a real question — "does the
-    decoder read this row of the prompt at all" — but it manufactures covariate combinations that
+    This is the null the deleted `eval.py`'s covariate ablation already used, and it answers a real
+    question — "does the decoder read this row of the prompt at all" — but it manufactures
+    covariate combinations that
     cannot occur. `AGENTS.md` §329 records `H(run_type | assay_id, read_length) = 0.000 bits` on 26
     `T_` records, so an independently drawn `run_type` is frequently impossible given the other two.
     """
@@ -113,7 +117,7 @@ def _conditional_resample(cov: np.ndarray, k: int, rng: np.random.Generator, *,
     `H(run_type | assay_id, read_length) = 0` describes — the resample is forced to return the value
     already there. That is not a bug to route around: it means the conditional null is *empty*, the
     covariate carries no information beyond the others, and the resulting p-value of 1.0 is the
-    correct answer. `c1_use` reports `conditional_null_degenerate` so it cannot be misread as the
+    correct answer. `covuse` reports `conditional_null_degenerate` so it cannot be misread as the
     model ignoring the covariate.
     """
     given = [j for j in range(cov.shape[1]) if j != k] if given is None else list(given)
@@ -136,7 +140,7 @@ def _conditional_is_degenerate(cov: np.ndarray, k: int) -> bool:
     return all(len(v) < 2 for v in buckets.values())
 
 
-def c1_use(predict: Predictor, cov: np.ndarray, target: np.ndarray, *,
+def covuse(predict: Predictor, cov: np.ndarray, target: np.ndarray, *,
            n_resamples: int = 200, seed: int = 0,
            covariate_names: Sequence[str] = COVARIATES) -> Dict[str, Dict[str, object]]:
     """Per covariate: is the true value better than a resampled one, and by how much?
@@ -182,7 +186,7 @@ def c1_use(predict: Predictor, cov: np.ndarray, target: np.ndarray, *,
 
 
 # ---------------------------------------------------------------------------
-# C2 — how much of the output does each covariate own?
+# covshare — how much of the output does each covariate own?
 # ---------------------------------------------------------------------------
 
 def _subsets(d: int, exclude: int) -> List[Tuple[int, ...]]:
@@ -191,7 +195,7 @@ def _subsets(d: int, exclude: int) -> List[Tuple[int, ...]]:
     return [c for r in range(len(rest) + 1) for c in combinations(rest, r)]
 
 
-def c2_share(predict: Predictor, cov: np.ndarray, *, scalar: str = "level",
+def covshare(predict: Predictor, cov: np.ndarray, *, scalar: str = "level",
              n_outer: int = 64, n_inner: int = 8, seed: int = 0,
              covariate_names: Sequence[str] = COVARIATES) -> Dict[str, float]:
     """Shapley effects — the normalised variance share of each covariate.
@@ -205,9 +209,9 @@ def c2_share(predict: Predictor, cov: np.ndarray, *, scalar: str = "level",
 
     `V(S) = Var(E[f | X_S])` is estimated the given-data way: draw an outer sample of `X_S` from the
     real covariate rows, average `f` over inner draws of the complement, then take the variance of
-    those conditional means. The scalarisation `f` is one of the C4 aspects — `level` by default,
-    because a covariate that changes nothing about the level of the prediction is a covariate the
-    model is barely using.
+    those conditional means. The scalarisation `f` is one of the `covspec` aspects — `level` by
+    default, because a covariate that changes nothing about the level of the prediction is a
+    covariate the model is barely using.
 
     **The inner-sample bias correction is not optional, and leaving it out is the classic way this
     estimator lies.** A mean over `K` inner draws is itself noisy, so the naive variance of those
@@ -217,9 +221,22 @@ def c2_share(predict: Predictor, cov: np.ndarray, *, scalar: str = "level",
     on the depth-only stub at `n_inner=6`: depth came out at 0.902 with the other three sharing 0.098
     of a quantity they provably do not affect at all.
 
-    Subtracting `mean_outer(inner sample variance) / K` removes the term exactly in expectation. The
-    result is clipped at zero, since a variance estimate below zero is noise around a true value of
-    zero and not a negative variance.
+    Subtracting `mean_outer(inner sample variance) / K` removes the term exactly in expectation.
+    **Both variances are `ddof=1`.** The correction is only exact when they are: `E[s²(means)] =
+    Var(E[f|X_S]) + E[Var(f|X_S)]/K` holds for the unbiased sample variance, and pairing a `ddof=0`
+    outer variance with a `ddof=1` inner one subtracts a term scaled for a different estimator,
+    tilting `V(S)` low by a factor `(n_outer-1)/n_outer`.
+
+    `V(S)` is clipped at zero for the Shapley arithmetic, because a negative variance would make the
+    fifteen paired differences meaningless and the shares stop summing to one. **The clip is not
+    reported as a finding.** It fires whenever the true effect sits below the estimator's resolution,
+    which is a statement about `n_outer` and `n_inner`, not about the model — so the total is also
+    returned unclamped (`total_variance_unclamped`), split into the two terms it is made of
+    (`total_variance_naive`, `total_variance_bias`) and with an error bar
+    (`total_variance_se`), and a reader compares the first against the last rather than reading a
+    boolean. There is deliberately no `output_is_constant` flag: "the output does not vary" and "the
+    effect is smaller than this sampling can see" are different claims and no single bit can carry
+    both.
     """
     rng = np.random.default_rng(seed)
     d = cov.shape[1]
@@ -236,11 +253,14 @@ def c2_share(predict: Predictor, cov: np.ndarray, *, scalar: str = "level",
                  else rng.choice(N, size=n_outer, replace=False))
     inner_idx = rng.integers(0, N, size=(len(outer_idx), n_inner))
 
-    def V(S: Tuple[int, ...]) -> float:
+    n_out = len(outer_idx)
+
+    def V(S: Tuple[int, ...]) -> Tuple[float, float, float, float]:
+        """`(clamped, naive, bias, se)` for one subset. Only the first enters the Shapley sum."""
         if not S:
-            return 0.0
-        means = np.empty(len(outer_idx))
-        inner_vars = np.empty(len(outer_idx))
+            return 0.0, 0.0, 0.0, 0.0
+        means = np.empty(n_out)
+        inner_vars = np.empty(n_out)
         for i, oi in enumerate(outer_idx):
             block = cov[inner_idx[i]].copy()
             block[:, list(S)] = cov[oi, list(S)]
@@ -248,19 +268,30 @@ def c2_share(predict: Predictor, cov: np.ndarray, *, scalar: str = "level",
             vals = np.asarray(aspects_of(pred["mu"], pred["n"])[scalar], dtype=np.float64)
             means[i] = float(vals.mean())
             inner_vars[i] = float(vals.var(ddof=1)) if vals.size > 1 else 0.0
-        naive = float(np.var(means))
+        naive = float(means.var(ddof=1)) if n_out > 1 else 0.0
         bias = float(np.mean(inner_vars)) / max(n_inner, 1)
-        return max(naive - bias, 0.0)
+        # Error bar on `naive − bias`. The first term is the NORMAL-THEORY standard error of a
+        # sample variance, `s²·sqrt(2/(m−1))` — stated rather than assumed away, since the outer
+        # conditional means are not guaranteed Gaussian. The second is the standard error of the
+        # mean inner variance, which is what the correction rests on.
+        se_naive = naive * np.sqrt(2.0 / (n_out - 1)) if n_out > 1 else 0.0
+        se_bias = (float(inner_vars.std(ddof=1)) / np.sqrt(n_out) / max(n_inner, 1)
+                   if n_out > 1 else 0.0)
+        se = float(np.hypot(se_naive, se_bias))
+        return max(naive - bias, 0.0), naive, bias, se
 
-    cache: Dict[Tuple[int, ...], float] = {}
+    cache: Dict[Tuple[int, ...], Tuple[float, float, float, float]] = {}
 
-    def V_cached(S: Tuple[int, ...]) -> float:
+    def V_full(S: Tuple[int, ...]) -> Tuple[float, float, float, float]:
         key = tuple(sorted(S))
         if key not in cache:
             cache[key] = V(key)
         return cache[key]
 
-    total = V_cached(tuple(range(d)))
+    def V_cached(S: Tuple[int, ...]) -> float:
+        return V_full(S)[0]
+
+    total, total_naive, total_bias, total_se = V_full(tuple(range(d)))
     from math import comb
     raw: Dict[str, float] = {}
     for k, name in enumerate(covariate_names):
@@ -270,22 +301,29 @@ def c2_share(predict: Predictor, cov: np.ndarray, *, scalar: str = "level",
             acc += weight * (V_cached(tuple(sorted(S + (k,)))) - V_cached(S))
         raw[name] = acc
 
-    # Shapley effects sum to V(all) by construction; normalise so the report is a share. A total of
-    # ~0 means the output does not vary with the covariates at all -- the "ignored its condition"
-    # failure -- and is reported as such rather than as an undefined 0/0.
+    # Shapley effects sum to V(all) by construction; normalise so the report is a share. When the
+    # total is zero there is no share to take -- 0/0 is undefined and nan says so. What the reader
+    # needs in order to tell "constant output" from "effect below resolution" is the measurement
+    # itself, so the two terms and the error bar ship in every return, not only that one.
+    measurement = {
+        "total_variance": float(total),
+        "total_variance_unclamped": float(total_naive - total_bias),
+        "total_variance_naive": float(total_naive),
+        "total_variance_bias": float(total_bias),
+        "total_variance_se": float(total_se),
+        "n_outer_used": int(n_out),
+    }
     if total <= 1e-12:
-        return {**{k: float("nan") for k in raw}, "total_variance": float(total),
-                "output_is_constant": True}
-    shares = {k: float(v / total) for k, v in raw.items()}
-    return {**shares, "total_variance": float(total), "output_is_constant": False}
+        return {**{k: float("nan") for k in raw}, **measurement}
+    return {**{k: float(v / total) for k, v in raw.items()}, **measurement}
 
 
 # ---------------------------------------------------------------------------
-# C3 — does it move the right way, by the right amount?
+# depthdir / depthcounterfact — does depth move it the right way, by the right amount?
 # ---------------------------------------------------------------------------
 
-def c3_direction(predict: Predictor, cov: np.ndarray, *, depth_col: int = 0,
-                 ladder: Sequence[float] = (0.0, -1.0, -2.0, -3.0)) -> Dict[str, float]:
+def depthdir(predict: Predictor, cov: np.ndarray, *, depth_col: int = 0,
+             ladder: Sequence[float] = (0.0, -1.0, -2.0, -3.0)) -> Dict[str, float]:
     """Dose-response over told depth: does the predicted level fall as the told depth falls?
 
     `ladder` is in log2 units relative to the row's own depth, so `(0, -1, -2, -3)` is the DSF
@@ -318,30 +356,66 @@ def c3_direction(predict: Predictor, cov: np.ndarray, *, depth_col: int = 0,
     }
 
 
-def depth_counterfactual(pred_by_told: Mapping[float, Mapping[str, np.ndarray]],
-                         true_by_level: Mapping[float, np.ndarray]) -> Dict[str, float]:
-    """The half of C3 that has ground truth: score each told-depth prediction against the real track.
+def depthcounterfact(pred_by_told: Mapping[float, Mapping[str, np.ndarray]],
+                     true_by_level: Mapping[float, np.ndarray], *,
+                     fg_frac: float = 0.02, min_n: int = 5,
+                     seed: int = 0) -> Dict[str, float]:
+    """Told a false depth, what does it predict? The depth arm that has ground truth.
 
-    This is `eval.py::_dsf_counterfactual` (S14) as a pure function. For each true downsampling level
+    This is `eval.py::_dsf_counterfactual` as a pure function. For each true downsampling level
     `k`, score every told-depth prediction against `counts_dsf{k}` and ask whether the prediction
     told the *true* depth wins.
 
-    **Two calibrations must travel with the number, and neither is visible in it** (`EVAL.md`):
-    `0.25` is the deterministic value of always putting the argmin at told-depth 1 — not a chance
-    baseline — and a perfect model caps near `0.73`, because the foreground is the top slice of the
-    level-*k* realization being scored rather than of the truth. A value of 0.30 has not "beaten
-    chance"; it has barely moved off the constant answer.
+    **ONE FIXED FOREGROUND, chosen on the full-depth truth and reused at every ladder level.** The
+    `eval.py` version re-selected the top `fg_frac` positions from the level-*k* realization it was
+    about to score, and that is the whole reason a perfect model there capped short of 1: positions
+    selected for being high in a realization are high by noise as well as by signal, so the level-*k*
+    counts on the mask read above their own mean and a told depth *higher* than *k* fits them
+    better. The mask is a
+    property of the truth, not of the level being scored, so it is drawn once — from the level whose
+    counts are largest, which is the undownsampled track under any key convention (`pred_by_told` and
+    `true_by_level` are keyed by DSF factor in `bench.harness` and by log2 offset in the stub tests,
+    and the two run in opposite directions).
+
+    Selection is by RANK, not by `truth >= quantile`: with 36-67% exact zeros a 98th-percentile
+    threshold is often 0 and selects everything (`eval.py::_foreground_mask`). Ties are broken by a
+    seeded jitter, and `truth >= 1` is applied as a purity filter whenever it still leaves `min_n`
+    positions.
+
+    **The one calibration that still travels with the number** (`EVAL.md`): `constant_answer_value`
+    is the deterministic value of always putting the argmin at the full-depth level — not a chance
+    baseline — so a value just above it has not "beaten chance". The old companion constant, a
+    perfect-model ceiling of `0.73`, was a consequence of the per-level mask this function no longer
+    uses; it is **not** restated here, and a replacement is a measurement someone has to make, not a
+    number to carry over.
     """
     levels = sorted(true_by_level)
     told_values = sorted(pred_by_told)
+    if not levels:
+        return {"frac_min_at_true": float("nan"), "frac_beats_told1": float("nan"), "n_levels": 0,
+                "crps_at_true_level": {}, "constant_answer_value": float("nan")}
+
+    # the fixed foreground, on the deepest truth
+    fg_level = max(levels, key=lambda k: float(np.asarray(true_by_level[k], dtype=np.float64).sum()))
+    deep = np.asarray(true_by_level[fg_level], dtype=np.float64).reshape(-1)
+    k_fg = int(min(deep.size, max(min_n, round(fg_frac * deep.size))))
+    fg = np.zeros(deep.size, bool)
+    jitter = np.random.default_rng(seed).random(deep.size)
+    fg[np.lexsort((jitter, deep))[-k_fg:]] = True
+    pos = deep >= 1.0
+    purity_dropped = int(pos.sum()) < min(min_n, deep.size)
+    if not purity_dropped:
+        fg &= pos
+
     hits, beats, n = 0, 0, 0
     per_level: Dict[str, float] = {}
     for lvl in levels:
-        y = np.asarray(true_by_level[lvl])
+        y = np.asarray(true_by_level[lvl], dtype=np.float64).reshape(-1)[fg]
         scores = {}
         for told in told_values:
             p = pred_by_told[told]
-            scores[told] = nb_crps_mean(p["n"], p["mu"], y)
+            scores[told] = nb_crps_mean(np.asarray(p["n"]).reshape(-1)[fg],
+                                        np.asarray(p["mu"]).reshape(-1)[fg], y)
         argmin = min(scores, key=scores.get)
         hits += int(abs(argmin - lvl) < 1e-9)
         beats += int(scores[lvl] <= scores[told_values[0]])
@@ -353,15 +427,20 @@ def depth_counterfactual(pred_by_told: Mapping[float, Mapping[str, np.ndarray]],
         "n_levels": n,
         "crps_at_true_level": per_level,
         "constant_answer_value": 1.0 / len(levels) if levels else float("nan"),
+        "fg_frac_requested": float(fg_frac),
+        "n_fg": int(fg.sum()),
+        "n_positions": int(deep.size),
+        "fg_level": float(fg_level),
+        "fg_purity_filter_dropped": bool(purity_dropped),
     }
 
 
 # ---------------------------------------------------------------------------
-# C4 — does each covariate move what it should?
+# covspec — does each covariate move what it should, and not what it shouldn't?
 # ---------------------------------------------------------------------------
 
-def c4_specificity(predict: Predictor, cov: np.ndarray, *, seed: int = 0,
-                   covariate_names: Sequence[str] = COVARIATES) -> Dict[str, object]:
+def covspec(predict: Predictor, cov: np.ndarray, *, seed: int = 0,
+            covariate_names: Sequence[str] = COVARIATES) -> Dict[str, object]:
     """A covariate x aspect matrix, scored by the top-vs-runner-up gap, in the shape of MIG.
 
     Each entry is the mean absolute change in one aspect when one covariate is marginally resampled,
@@ -406,7 +485,7 @@ def c4_specificity(predict: Predictor, cov: np.ndarray, *, seed: int = 0,
 
 
 # ---------------------------------------------------------------------------
-# C5 / C6 — latent invariance, and the guard it is never quoted without
+# depthblind / biokeep — latent invariance, and the guard it is never quoted without
 # ---------------------------------------------------------------------------
 
 def _knn(Z: np.ndarray, k: int) -> np.ndarray:
@@ -424,9 +503,9 @@ def kbet(Z: np.ndarray, batch: np.ndarray, *, k: int = 20, alpha: float = 0.05,
     composition with a chi-square test. Well-mixed batches give a rejection rate at the nominal
     `alpha`; a latent that encodes the batch gives a rejection rate near 1.
 
-    This is what M3's cosine ratio lacked: a **null**. A within/between ratio of 0.3 is a number
-    someone chose; a rejection rate of 0.05 is what chance produces, so any excess is measurable
-    rather than declared.
+    This is what the deleted `eval.py`'s cosine ratio lacked: a **null**. A within/between ratio of
+    0.3 is a number someone chose; a rejection rate of 0.05 is what chance produces, so any excess
+    is measurable rather than declared.
     """
     rng = np.random.default_rng(seed)
     Z, batch = np.asarray(Z, dtype=np.float64), np.asarray(batch)
@@ -514,7 +593,7 @@ def effective_rank(Z: np.ndarray) -> float:
     return float(np.exp(-(p * np.log(p)).sum()))
 
 
-def c6_conservation(Z: np.ndarray, bio_label: np.ndarray) -> Dict[str, float]:
+def biokeep(Z: np.ndarray, bio_label: np.ndarray) -> Dict[str, float]:
     """The guard: does the latent still separate the things it is supposed to separate?
 
     `bio_label` is the biological identity that must survive — for the depth-invariance measurement
@@ -523,7 +602,8 @@ def c6_conservation(Z: np.ndarray, bio_label: np.ndarray) -> Dict[str, float]:
 
     Reported as a silhouette over `bio_label` (1 = perfectly separated, 0 = indistinguishable) plus
     the latent's effective rank. A collapsed encoder scores ~0 on the first and ~0-1 on the second
-    while scoring perfectly on every C5 metric, which is precisely the failure this exists to catch.
+    while scoring perfectly on every `depthblind` metric, which is precisely the failure this exists
+    to catch.
     """
     Z = np.asarray(Z, dtype=np.float64)
     s = _silhouette(Z, np.asarray(bio_label))
@@ -534,9 +614,9 @@ def c6_conservation(Z: np.ndarray, bio_label: np.ndarray) -> Dict[str, float]:
     }
 
 
-def c5_invariance(Z: np.ndarray, batch: np.ndarray, bio_label: np.ndarray, *,
-                  k: int = 20, alpha: float = 0.05, seed: int = 0) -> Dict[str, float]:
-    """C5 and C6 together, because C5 alone is not reportable (D13).
+def depthblind(Z: np.ndarray, batch: np.ndarray, bio_label: np.ndarray, *,
+               k: int = 20, alpha: float = 0.05, seed: int = 0) -> Dict[str, float]:
+    """`depthblind` and `biokeep` together, because `depthblind` alone is not reportable (D13).
 
     `batch` is the nuisance the latent should be invariant to (DSF level); `bio_label` is the signal
     it must keep (the region). This function will not return one without the other — there is no
@@ -550,7 +630,7 @@ def c5_invariance(Z: np.ndarray, batch: np.ndarray, bio_label: np.ndarray, *,
     out["ilisi_k"] = int(k_ilisi)                  # reported: it decides the reachable floor
     out["ilisi_max"] = float(len(np.unique(batch)))
     out["batch_asw"] = batch_asw(Z, batch)
-    out.update(c6_conservation(Z, bio_label))
+    out.update(biokeep(Z, bio_label))
     # The verdict needs BOTH halves. Invariance alone is satisfied by a constant encoder.
     out["invariance_ok"] = bool(
         out["kbet_rejection_rate"] < 0.25

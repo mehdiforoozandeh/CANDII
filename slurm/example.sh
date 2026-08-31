@@ -39,6 +39,7 @@ if [ -n "$VENV" ]; then
 else
   echo "[error] no environment: set VENV=/path/to/venv, or sbatch from an active venv" >&2; exit 1
 fi
+source "$KIT/slurm/_kit_pin.sh"
 
 mkdir -p "$(dirname "$H5")" "$OUT"
 

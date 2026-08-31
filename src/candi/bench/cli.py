@@ -25,7 +25,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -125,6 +125,14 @@ def build_parser() -> argparse.ArgumentParser:
                           "count arm works on every checkpoint. Must match the checkpoint.")
     mdl.add_argument("--meta-embed-layernorm", default="on", choices=["on", "off"],
                      help="MUST match how the checkpoint was trained, or the strict load fails.")
+    mdl.add_argument("--signal-target-transform", dest="signal_target_transform", default=None,
+                     choices=["none", "arcsinh", "log1p"],
+                     help="D30 — the space the Gaussian head was TRAINED in, which is what the "
+                          "test-loss `gaussian_nll` scores against. Unset (the default) reads the "
+                          "resolved value out of --arch-from's `config.signal_target_transform`, "
+                          "and falls back to `none` when there is no run json to read. Pass it only "
+                          "for a checkpoint whose run json is lost: it OVERRIDES the recorded "
+                          "value, and a wrong one gives a finite, plausible, wrong loss.")
     mdl.add_argument("--device", default=None, help="default: cuda when available, else cpu")
 
     run = p.add_argument_group("what to run")
@@ -143,10 +151,16 @@ def build_parser() -> argparse.ArgumentParser:
                      help="D3 — the one documented exception to whole-track scoring. The C-index "
                           "is pairwise (1.7e12 pairs on chr21), so it is estimated over this many "
                           "seeded pairs and always reported beside its Monte-Carlo SE.")
+    run.add_argument("--crps-approx", type=int, default=None, metavar="K",
+                     help="score the COUNT arm's CRPS from K sampled draws per bin instead of the "
+                          "closed form. Off by default; see `python -m candi.bench.external "
+                          "--help` for what it does and does not move.")
+    run.add_argument("--crps-seed", type=int, default=0,
+                     help="RNG seed for --crps-approx. Inert without it.")
     run.add_argument("--c-windows", type=int, default=8,
-                     help="C-block: counterfactual contexts, spread across the chromosome")
+                     help="covariate block: counterfactual contexts, spread across the chromosome")
     run.add_argument("--c-resamples", type=int, default=50,
-                     help="C1: randomization-test resamples per covariate per null")
+                     help="covuse: randomization-test resamples per covariate per null")
     run.add_argument("--varpool", default=None,
                      help="root of the D7 msevar variance pools. Without it msevar is ABSENT "
                           "rather than the organizers' bare 0.0.")
@@ -195,6 +209,30 @@ def _build_model(a, source, device):
     model.load_state_dict(torch.load(a.ckpt, map_location=device), strict=True)
     model.eval()
     return model
+
+
+def resolve_signal_target_transform(a) -> Tuple[str, str]:
+    """`(value, where it came from)` for D30 — the run json first, a flag second, `none` last.
+
+    THE RUN JSON IS THE AUTHORITY because it holds the RESOLVED value (`train.py` writes
+    `config.signal_target_transform` as the answer, never `auto`), and the checkpoint holds nothing:
+    a Gaussian head trained on `arcsinh(-log10 p)` and one trained on the raw value are the same
+    file. So an operator who has the run json should never have to know this flag exists — which is
+    why the flag defaults to unset rather than to `none`.
+
+    An EXPLICIT flag still wins over the recorded value, and that is a deliberate departure from a
+    literal reading of "json, else flag": a flag that argparse accepts and the program silently
+    discards is worse than either order. The source is returned so the caller can print it and
+    record it, so an override is visible rather than inferred.
+    """
+    if a.signal_target_transform is not None:
+        return str(a.signal_target_transform), "--signal-target-transform"
+    if a.arch_from:
+        cfg = json.loads(Path(a.arch_from).read_text()).get("config") or {}
+        got = cfg.get("signal_target_transform")
+        if got:
+            return str(got), f"{a.arch_from}:config.signal_target_transform"
+    return "none", "default"
 
 
 def _ranking(result: dict, competitors: str) -> dict:
@@ -292,6 +330,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         kw["regime"] = a.regime
     else:
         kw["biosamples"] = bios
+    stt, stt_src = resolve_signal_target_transform(a)
     source = open_source(h5=a.h5, store=a.store, **kw)
     device = torch.device(a.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     try:
@@ -300,6 +339,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             n = sum(p.numel() for p in model.parameters())
             print(f"[bench] {n:,} params on {device}; {len(source.assays)} assays; "
                   f"eval chroms {list(source.eval_chroms)}", flush=True)
+            print(f"[bench] signal_target_transform={stt} (from {stt_src}) — the space the "
+                  f"test-loss gaussian_nll scores in", flush=True)
         # EVALUATION IS NEVER AUTOCAST. Every recorded number in this repo is fp32, and a metric
         # measured at a different precision than the one it is compared against is a difference
         # nobody declared.
@@ -309,9 +350,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 batch_windows=a.batch_windows, c_index_pairs=a.c_index_pairs,
                 varpool_root=a.varpool, varpool_corpus=a.varpool_corpus,
                 c_windows=a.c_windows, c_resamples=a.c_resamples,
+                signal_target_transform=stt,
+                crps_approx=a.crps_approx, crps_seed=a.crps_seed,
                 with_curve=a.with_curve, progress=not a.quiet, held_out_chroms=held_out,
                 extra_provenance={"ckpt": str(a.ckpt), "arch_from": a.arch_from,
-                                  "heads": a.heads, "offset": a.offset, "device": str(device)})
+                                  "heads": a.heads, "offset": a.offset, "device": str(device),
+                                  "signal_target_transform_source": stt_src})
     finally:
         source.close()
 
@@ -325,7 +369,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for arm in ARMS:
             m = result["macro"].get(arm) or {}
             if m:
-                head = ", ".join(f"{k}={m[k]:.4f}" for k in ("mse", "gwcorr", "crps")
+                # The three NLLs ride in the banner because they are the TEST LOSS: the one line an
+                # operator reads should carry the same quantity the training loop printed, not only
+                # the benchmark measures. Absent keys are absent heads, so they simply drop out.
+                head = ", ".join(f"{k}={m[k]:.4f}" for k in
+                                 ("mse", "gwcorr", "crps", "nb_nll", "gaussian_nll",
+                                  "bernoulli_nll")
                                  if k in m and np.isfinite(m[k]))
                 print(f"[bench] macro {arm}: {m['n_tracks']} tracks — {head}", flush=True)
         print(f"[bench] wrote {out}", flush=True)

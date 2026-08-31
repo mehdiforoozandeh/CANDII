@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """t22 — the key-by-key equivalence report between `candi.eval` and `candi.bench`.
 
+HISTORICAL. It documents the cutover; `candi.eval` has since been deleted (D15), so the left-hand
+side of every mapping below names a module that no longer exists. Nothing here imports it — the
+report is generated from recorded jsons — so the script still runs against the files it reads.
+
     python tools/equivalence.py map                        the rule table, and nothing else
     python tools/equivalence.py cover  <run.json>          every eval.py key accounted for?
     python tools/equivalence.py report <run.json> <bench.json> [--out report.md]
@@ -143,8 +147,8 @@ M1_RULES: Tuple[Rule, ...] = (
          "bool means to its rate. Read it as a proportion, never as the old integer."),
     Rule("M1.imp_beats_marginal_oracle_scaled_n", "moved",
          "macro.count.beats_marginal_oracle_scaled", "a count of assays becomes a fraction of tracks, as imp_beats_marginal_n"),
-    Rule("M1.encoder_eff_rank_perpos", "moved", "C.C5_C6_invariance.encoder_eff_rank",
-         "the effective rank moves into the C6 guard, where it belongs: it was never a health "
+    Rule("M1.encoder_eff_rank_perpos", "moved", "C.depthblind_biokeep.encoder_eff_rank",
+         "the effective rank moves into the `biokeep` guard, where it belongs: it was never a health "
          "statistic on its own, it was the tripwire on M3's invariance claim (D13)"),
 )
 
@@ -152,47 +156,47 @@ M1_RULES: Tuple[Rule, ...] = (
 # M2 — the covariate counterfactuals
 # ---------------------------------------------------------------------------
 M2_RULES: Tuple[Rule, ...] = (
-    Rule("M2.ablation.*.mean_d_crps", "moved", "C.C1_use.*.marginal_mean_d_crps",
+    Rule("M2.ablation.*.mean_d_crps", "moved", "C.covuse.*.marginal_mean_d_crps",
          "the same marginal-substitution null, now reported beside the HRT conditional null it was "
          "always missing (D9) and with a randomization-test p-value rather than a bare effect size"),
-    Rule("M2.ablation.*.uses_covariate", "moved", "C.C1_use.*.uses_covariate",
+    Rule("M2.ablation.*.uses_covariate", "moved", "C.covuse.*.uses_covariate",
          "the verdict is now `marginal_p < 0.05` from an exact randomization test, not a threshold "
          "on an effect size"),
-    Rule("M2.ablation.*.frac_true_better", "replaced", "C.C1_use.*.marginal_p",
+    Rule("M2.ablation.*.frac_true_better", "replaced", "C.covuse.*.marginal_p",
          "the fraction of targets where the true value beat the substituted one is a sign test in "
          "disguise; the randomization-test p-value is the same evidence stated exactly"),
     Rule("M2.ablation.*.d_crps_clustered", "dropped", None,
-         "the target-clustered bootstrap CI has no counterpart: C1's p-value comes from the "
+         "the target-clustered bootstrap CI has no counterpart: `covuse`'s p-value comes from the "
          "randomization null itself, which needs no asymptotics and no cluster correction. THIS IS "
          "A REAL LOSS OF A CONFIDENCE INTERVAL and is the one entry in this table that should be "
          "argued rather than accepted — see the report's Open Items."),
     Rule("M2.ablation.*.mean_abs_d_mu", "dropped", None,
-         "an unnormalised effect size in mu units, not comparable across covariates or assays; C2's "
+         "an unnormalised effect size in mu units, not comparable across covariates or assays; `covshare`'s "
          "Shapley share answers the question it was reaching for (D10)"),
-    Rule("M2.ablation.*.mean_abs_d_eta", "dropped", None, "an unnormalised effect size, as mean_abs_d_mu; C2's Shapley share replaces it"),
-    Rule("M2.ablation.*.max_abs_d_eta", "dropped", None, "an unnormalised effect size, as mean_abs_d_mu; C2's Shapley share replaces it"),
+    Rule("M2.ablation.*.mean_abs_d_eta", "dropped", None, "an unnormalised effect size, as mean_abs_d_mu; `covshare`'s Shapley share replaces it"),
+    Rule("M2.ablation.*.max_abs_d_eta", "dropped", None, "an unnormalised effect size, as mean_abs_d_mu; `covshare`'s Shapley share replaces it"),
     Rule("M2.ablation.*.n_sentinel_skipped", "dropped", None,
          "bookkeeping for the cross-target substitution's sentinel guard; bench's resamplers draw "
          "from the observed covariate rows, so a sentinel is never manufactured"),
     Rule("M2.ablation.*.per_target", "dropped", None,
          "the per-target record backed the clustered CI; without the CI it has no consumer"),
-    Rule("M2.ablation.*.covariate", "same", "C.C1_use.*", "the covariate name is the KEY in bench, not a value inside it"),
+    Rule("M2.ablation.*.covariate", "same", "C.covuse.*", "the covariate name is the KEY in bench, not a value inside it"),
     Rule("M2.ablation.*.row", "dropped", None, "the metadata row index is an implementation detail"),
     Rule("M2.ablation.*.mode", "dropped", None,
          "`cross_target` was the only null; bench names its two nulls in the key instead"),
     Rule("M2.ablation.*.n_targets", "moved", "C.n_units",
          "targets become units: one (window, assay) counterfactual slot each"),
     Rule("M2.ablation_within_batch.*.mean_d_crps", "same",
-         "C.C1_use.*.within_batch_d_crps",
+         "C.covuse.*.within_batch_d_crps",
          "THE TRIPWIRE. Substitute the value already present; the difference is arithmetically "
          "zero. It must read exactly 0.0 in both suites, and a delta here is a bug in the probe."),
     Rule("M2.ablation_within_batch.*", "dropped", None,
          "the tripwire's remaining fields mirror `ablation`'s and are dropped for the same reasons"),
 
-    Rule("M2.depth.median_total_slope", "replaced", "C.C3_direction.mean_dose_response_corr",
-         "a single fitted slope cannot see a curve that wanders; C3 reports the correlation of "
+    Rule("M2.depth.median_total_slope", "replaced", "C.depthdir.mean_dose_response_corr",
+         "a single fitted slope cannot see a curve that wanders; `depthdir` reports the correlation of "
          "predicted level against told depth AND monotone_frac, the step-by-step check"),
-    Rule("M2.depth.total_slope_err", "dropped", None, "the standard error of a retired statistic; C3 reports monotonicity instead"),
+    Rule("M2.depth.total_slope_err", "dropped", None, "the standard error of a retired statistic; `depthdir` reports monotonicity instead"),
     Rule("M2.depth.total_slope_clamp_saturated", "dropped", None, "clamp telemetry, as frac_targets_any_clamp — see the report's Open Items"),
     Rule("M2.depth.frac_targets_any_clamp", "dropped", None,
          "CLAMP TELEMETRY HAS NO COUNTERPART. `log2_mu` is clamped in the decoder head, and these "
@@ -205,48 +209,48 @@ M2_RULES: Tuple[Rule, ...] = (
          "as M2.ablation.*.d_crps_clustered — the clustered CI has no counterpart"),
     Rule("M2.depth.per_target", "dropped", None, "the per-target record existed to back the clustered CI; without it there is no consumer"),
     Rule("M2.depth.n_targets", "moved", "C.n_units", "targets become units, as M2.ablation.*.n_targets"),
-    Rule("M2.depth.covariate", "same", "C.C1_use.depth", "the covariate name is the KEY in bench, not a value inside it"),
+    Rule("M2.depth.covariate", "same", "C.covuse.depth", "the covariate name is the KEY in bench, not a value inside it"),
 
-    Rule("M2.run_type.mean_responsiveness", "replaced", "C.C1_use.run_type.marginal_mean_d_crps",
+    Rule("M2.run_type.mean_responsiveness", "replaced", "C.covuse.run_type.marginal_mean_d_crps",
          "responsiveness to a run_type flip becomes the covariate's effect size under the same "
          "null every other covariate is measured under, so the four are finally commensurable"),
-    Rule("M2.run_type.model_unresponsive", "replaced", "C.C1_use.run_type.uses_covariate",
+    Rule("M2.run_type.model_unresponsive", "replaced", "C.covuse.run_type.uses_covariate",
          "the same verdict with its sign flipped and a p-value behind it"),
     Rule("M2.run_type.*_clustered.*", "dropped", None,
          "as M2.ablation.*.d_crps_clustered — the clustered CIs have no counterpart"),
     Rule("M2.run_type.per_target", "dropped", None, "the per-target record existed to back the clustered CIs; without them there is no consumer"),
     Rule("M2.run_type.n_targets", "moved", "C.n_units", "targets become units, as M2.ablation.*.n_targets"),
-    Rule("M2.run_type.covariate", "same", "C.C1_use.run_type", "the covariate name is the KEY in bench, not a value inside it"),
+    Rule("M2.run_type.covariate", "same", "C.covuse.run_type", "the covariate name is the KEY in bench, not a value inside it"),
 )
 
 # ---------------------------------------------------------------------------
 # M3 / S14
 # ---------------------------------------------------------------------------
 M3_RULES: Tuple[Rule, ...] = (
-    Rule("M3.ratio", "replaced", "C.C5_C6_invariance.kbet_rejection_rate",
+    Rule("M3.ratio", "replaced", "C.depthblind_biokeep.kbet_rejection_rate",
          "D12 — M3's within/between cosine-distance RATIO does not survive. It was read against an "
          "arbitrary 0.3 threshold, and a ratio of two distance means has no null distribution to "
          "test against. kBET, iLISI and batch ASW are the scIB instruments for exactly this "
          "question and each has a reachable floor and ceiling. RECORDED M3 NUMBERS ARE "
          "INCOMPARABLE TO THESE and the report must say so rather than tabulate a delta."),
-    Rule("M3.within", "replaced", "C.C5_C6_invariance.batch_asw", "replaced together with M3.ratio; the cosine-distance family goes as one (D12)"),
-    Rule("M3.between", "replaced", "C.C5_C6_invariance.ilisi", "replaced together with M3.ratio; the cosine-distance family goes as one (D12)"),
-    Rule("M3.invariance_ok", "replaced", "C.C5_C6_invariance.invariance_ok",
+    Rule("M3.within", "replaced", "C.depthblind_biokeep.batch_asw", "replaced together with M3.ratio; the cosine-distance family goes as one (D12)"),
+    Rule("M3.between", "replaced", "C.depthblind_biokeep.ilisi", "replaced together with M3.ratio; the cosine-distance family goes as one (D12)"),
+    Rule("M3.invariance_ok", "replaced", "C.depthblind_biokeep.invariance_ok",
          "same name, DIFFERENT RULE: the old one was `ratio < 0.3 and eff_rank > 1.0`; the new one "
          "requires kBET rejection < 0.25, batch ASW > 0.8 AND bio_silhouette > 0.25 — the last of "
-         "which is the C6 guard a collapsed encoder fails (D13)"),
-    Rule("M3.encoder_eff_rank_pooled", "moved", "C.C5_C6_invariance.encoder_eff_rank",
+         "which is the `biokeep` guard a collapsed encoder fails (D13)"),
+    Rule("M3.encoder_eff_rank_pooled", "moved", "C.depthblind_biokeep.encoder_eff_rank",
          "kept, but demoted: it is far too weak a guard on its own, since a latent with two "
          "directions clears `> 1.0` while being nearly collapsed"),
-    Rule("M3.n_regions", "moved", "C.C5_n_latents", "regions become pooled latent vectors"),
-    Rule("M3.n_between_pairs", "dropped", None, "the pair count of a retired statistic; nothing in C5 is built from cosine pairs"),
+    Rule("M3.n_regions", "moved", "C.depthblind_n_latents", "regions become pooled latent vectors"),
+    Rule("M3.n_between_pairs", "dropped", None, "the pair count of a retired statistic; nothing in `depthblind` is built from cosine pairs"),
 )
 
 S14_RULES: Tuple[Rule, ...] = (
     # NOT `moved`. This rule used to claim "same definition, same calibration" and the run refuted
     # both halves of that in one line: eval.py 0.25 against bench 1.00, where 0.73 was supposed to
     # be the ceiling.
-    Rule("S14.frac_min_at_true", "replaced", "C.C3_depth_counterfactual.frac_min_at_true",
+    Rule("S14.frac_min_at_true", "replaced", "C.depthcounterfact.frac_min_at_true",
          "THE UNIT CHANGED AND SO DID THE CALIBRATION. eval.py's denominator is the TARGET -- 12 "
          "held-out tracks, each asked whether its argmin over told-depths lands on the true one, "
          "and each scored on a FOREGROUND mask (the top 2% of the level-k realization). bench "
@@ -258,15 +262,15 @@ S14_RULES: Tuple[Rule, ...] = (
          "not produce. The `0.25` coincidence is a trap: in eval.py it is the deterministic value "
          "of always answering told-depth 1, in bench it is 1/4 levels. The two numbers may not be "
          "differenced, and this report shows no delta for them."),
-    Rule("S14.frac_beats_told1", "replaced", "C.C3_depth_counterfactual.frac_beats_told1",
+    Rule("S14.frac_beats_told1", "replaced", "C.depthcounterfact.frac_beats_told1",
          "per LEVEL over four levels on the whole track, not per TARGET over twelve on a "
          "foreground mask -- as frac_min_at_true, and undifferenceable for the same reason"),
-    Rule("S14.n_targets", "moved", "C.C3_depth_counterfactual.n_levels",
+    Rule("S14.n_targets", "moved", "C.depthcounterfact.n_levels",
          "the unit is the DSF level being scored, not the target"),
-    Rule("S14.per_target", "moved", "C.C3_depth_counterfactual.crps_at_true_level",
+    Rule("S14.per_target", "moved", "C.depthcounterfact.crps_at_true_level",
          "per-level CRPS rather than per-target"),
     Rule("S14.dsf_counterfactual_ok", "dropped", None,
-         "a boolean over frac_min_at_true against a threshold that was never registered; C3 ships "
+         "a boolean over frac_min_at_true against a threshold that was never registered; `depthcounterfact` ships "
          "the number and its two calibrations instead of a verdict nobody agreed"),
 )
 
@@ -312,9 +316,10 @@ NEW_BLOCKS = {
          "coverage — none of which eval.py computed.",
     "B": "AUPRC, peak overlap and the correspondence curve against the MACS2 calls. AUROC is "
          "excluded deliberately (D14).",
-    "C2": "Shapley effects — what FRACTION of the output each covariate owns. eval.py could say a "
-          "covariate mattered; it could not say how much, or compare two of them.",
-    "C4": "the covariate x aspect specificity matrix: does each covariate move what it should.",
+    "covshare": "Shapley effects — what FRACTION of the output each covariate owns. eval.py could "
+                "say a covariate mattered; it could not say how much, or compare two of them.",
+    "covspec": "the covariate x aspect specificity matrix: does each covariate move what it "
+               "should, and not what it shouldn't.",
     "pval arm": "every block above, run a second time against the -log10 p-value track (D1). "
                 "eval.py scored the count head only.",
 }
@@ -354,15 +359,15 @@ HEADLINE: Tuple[Tuple[str, ...], ...] = (
     ("  ... scale error", "", "macro_denoise.count.scale_error"),
     ("denoise macro Spearman", "M1.den_macro_spearman_raw", "macro_denoise.count.gwspear"),
     ("S14 frac_min_at_true", "S14.frac_min_at_true",
-     "C.C3_depth_counterfactual.frac_min_at_true",
+     "C.depthcounterfact.frac_min_at_true",
      "NO DELTA: different denominators. eval.py asks the question once per TARGET (12) on a "
      "foreground mask; bench asks it once per LEVEL (4) on the whole track. The old instrument "
      "capped near 0.73 *because of* the foreground; the new one has no such cap."),
     ("S14 frac_beats_told1", "S14.frac_beats_told1",
-     "C.C3_depth_counterfactual.frac_beats_told1",
+     "C.depthcounterfact.frac_beats_told1",
      "NO DELTA: per level over four, not per target over twelve. See the row above."),
-    ("C1 tripwire (must be 0.0)", "M2.ablation_within_batch.depth.mean_d_crps",
-     "C.C1_use.depth.within_batch_d_crps"),
+    ("covuse tripwire (must be 0.0)", "M2.ablation_within_batch.depth.mean_d_crps",
+     "C.covuse.depth.within_batch_d_crps"),
     ("scored positions", "M1.imp.n_points", "macro.count.n_points",
      "DIFFERENT FOOTINGS, so no delta is shown. eval.py's is the POOLED length of the concatenated "
      "arrays over every imputation track, after `--eval-budget` subsampling. bench's is the mean "
@@ -735,7 +740,7 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
              "whole reason this document exists.\n")
     L.append("1. **The target-clustered bootstrap CIs are gone.** `M2.*.d_crps_clustered`, "
              "`direction_clustered`, `overall_clustered`, `single_clustered`, `paired_clustered`. "
-             "C1's randomization test gives an exact p-value and needs no cluster correction, so "
+             "`covuse`'s randomization test gives an exact p-value and needs no cluster correction, so "
              "nothing here is wrong — but an interval is not a p-value, and the two are not "
              "interchangeable for an arm-vs-arm claim. **Accepted.** The statistic itself survives "
              "the cutover: it moved to `candi.stats.cluster_bootstrap_ci` ahead of it, so "
@@ -743,9 +748,9 @@ def report(run: Dict[str, Any], bench: Dict[str, Any]) -> str:
     L.append("2. **Clamp telemetry has no counterpart.** `log2_mu` is clamped in the decoder head, "
              "and `M2.depth.*_clamp*` reported how often the depth sweep drove it into the clamp — "
              "which is how a flat depth response can have a cause other than the model ignoring "
-             "depth. C3 reports monotonicity and dose-response correlation, and would read a "
+             "depth. `depthdir` reports monotonicity and dose-response correlation, and would read a "
              "clamp-saturated model as unresponsive without saying why. **Accepted**, with the "
-             "consequence stated: a C3 near zero is 'no response', not 'no sensitivity'.")
+             "consequence stated: a `depthdir` near zero is 'no response', not 'no sensitivity'.")
     return "\n".join(L)
 
 

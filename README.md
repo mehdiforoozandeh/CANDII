@@ -61,7 +61,7 @@ tests/           the suite; no GPU required
 ```bash
 pip install -e .
 python -m candi.train --h5 <panel.h5> --out-dir <runs> --epochs 10 --steps-per-epoch 2000
-python -m candi.eval  --h5 <panel.h5> --ckpt <run.ckpt> --arch-from <run.json>
+python -m candi.bench --h5 <panel.h5> --ckpt <run.ckpt> --arch-from <run.json> --out <scores.json>
 pytest tests/ -q
 ```
 

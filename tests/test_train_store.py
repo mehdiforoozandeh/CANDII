@@ -327,6 +327,57 @@ def test_full_coverage_needs_the_regime_to_declare_its_train_split(tmp_path, sto
         _coverage_biosamples(DataSource.resolve(store=str(p)))
 
 
+@pytest.fixture(scope="module")
+def monitored_run(tmp_path_factory) -> dict:
+    """A REAL run with the monitor live: a regime that declares `eval_pairs`, `--eval-every 1`.
+
+    The store above declares no pairs, so `--eval-every` resolves to 0 there and the whole
+    monitor branch of `train_and_eval` goes unexercised. This is the fixture that drives it, and it
+    is the only place the CADENCE wiring is checked end to end — `tests/test_monitor.py` checks what
+    `check()` and `final_check()` each produce, not which one the training loop calls.
+    """
+    from candi.train import train_and_eval
+    from tests.test_monitor import EVAL_TRACKS
+
+    root = tmp_path_factory.mktemp("monrun")
+    st = make_store(root / "store", tracks=EVAL_TRACKS)
+    p = root / "regime.json"
+    p.write_text(json.dumps(regime_dict(
+        st, biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "V_bb"]},
+        kinds=["counts", "peaks", "pval"],
+        eval_pairs=[["T_aa", "V_aa"]]), indent=2), encoding="utf-8")
+    out = root / "out"
+    # Created here rather than left to `train_and_eval`: `_keep_best` writes `<tag>.best.ckpt` from
+    # inside the eval hook, which runs BEFORE the `mkdir` that guards the last-checkpoint write.
+    # That ordering is a pre-existing bug in `train.py` and is not this test's subject.
+    out.mkdir(parents=True, exist_ok=True)
+    return train_and_eval(store=str(p), out_dir=str(out), epochs=1,
+                          steps_per_epoch=2, batch_size=2, d_model=32, embed_dim=8,
+                          n_transformer_layers=1, seed=0, eval_every=1, eval_batch_size=2,
+                          ckpt_path=str(out / "cadence.ckpt"))
+
+
+def test_mid_training_checks_run_the_impute_dial_alone(monitored_run) -> None:
+    """The PI's cost ruling, as the shape of the run json (`cruxvault/results/t30/TIMING.md`)."""
+    curve = monitored_run["eval_curve"]
+    assert curve, "the monitor never fired, so this test asserted nothing"
+    for row in curve:
+        assert row["impute"]["n_tracks"] > 0
+        assert "denoise" not in row, "the denoise dial rode along on a mid-training check"
+        assert "gap" not in row, "an impute-only row cannot carry the overfitting alarm"
+
+
+def test_the_end_of_run_check_is_the_one_that_carries_both_dials_and_the_gap(monitored_run) -> None:
+    fin = monitored_run["final_check"]
+    assert fin is not None and fin["final"] is True
+    assert fin["impute"]["n_tracks"] > 0 and fin["denoise"]["n_tracks"] > 0
+    assert fin["gap"], "the end-of-run overfitting alarm reported nothing"
+    for k, v in fin["gap"].items():
+        assert v == pytest.approx(fin["impute"]["macro"][k] - fin["denoise"]["macro"][k])
+    # It names the weights it scored, because "best" and "last" are not the same model.
+    assert fin["selected"] == monitored_run["best_checkpoint"]["scored"]
+
+
 def test_the_store_run_records_num_cells_zero_and_scores_nothing(store_run):
     cfg = store_run["config"]
     assert cfg["num_cells"] == 0 and cfg["cell_cond"] == "off"

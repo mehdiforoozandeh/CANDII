@@ -1,15 +1,15 @@
 ---
 id: t22
 type: task
-title: eval.py cutover: publish the key-by-key equivalence report, then delete the old harness
+title: "eval.py cutover: publish the key-by-key equivalence report, then delete the old harness"
 category: implementation
 parent: t17
 blocked_by: t20, t21
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-19T23:52:14
-updated: 2026-08-19T23:52:14
+status: done
+created: "2026-08-19T23:52:14"
+updated: "2026-08-22T17:18:11"
 ---
 
 # t22 — eval.py cutover: publish the key-by-key equivalence report, then delete the old harness
@@ -24,7 +24,7 @@ the equivalence table is the only thing that lets a pre-cutover number be read a
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Cutover deliverable](results/t22/DELIVERABLE.md) — equivalence report published (results/equivalence); candi.eval deleted with every reader repointed in 2f56cb1 (D15)
 
 ## Evidence
 

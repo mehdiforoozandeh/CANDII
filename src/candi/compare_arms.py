@@ -1,5 +1,9 @@
 """Paired arm-vs-arm comparison for the cell-identity conditioning experiment.
 
+HISTORICAL FORMAT. Every `M1` / `M2` key below is an h5-era `candi.eval` key, and `candi.eval` is
+deleted (D15). Nothing writes those keys any more, so this compares ARCHIVED run jsons and nothing
+this repo produces. A bench json is a different file with different keys — `EVAL.md` maps the two.
+
     python -m candi.compare_arms --case run_cell-id.json --control run_cell-off.json
     python -m candi.compare_arms --case A.json --control B.json --control C.json --md out.md
     python -m candi.compare_arms --case A.json --control B.json \
@@ -75,13 +79,14 @@ import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-# t22: the statistic lives in `candi.stats` now — `candi.eval` is being deleted (D15)
+# t22: the statistic lives in `candi.stats` now — `candi.eval` has since been deleted (D15)
 from candi.stats import cluster_bootstrap_ci as _cluster_bootstrap_ci
 
 METRICS = ("crps", "crps_oracle_scaled", "scale_error")
 LOWER_IS_BETTER = {"crps": True, "crps_oracle_scaled": True, "scale_error": True}
 
-# `M2.ablation` rows, in `eval.META_ROWS` order.
+# `M2.ablation` rows, in the metadata row order the deleted `eval.META_ROWS` fixed. This module
+# reads RECORDED run jsons, so the order is a property of those files, not of any live code.
 ABLATION_ROWS = ("depth", "assay_id", "read_length", "run_type")
 # Steering magnitudes: mean and max |d eta| over the foreground. LARGER IS BETTER on both.
 ABLATION_METRICS = ("d_eta", "d_eta_max")

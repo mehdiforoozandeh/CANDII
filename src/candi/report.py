@@ -1,5 +1,10 @@
 """candi report generator — reads a results `*.json` ONLY and regenerates the figures + report.md.
 
+HISTORICAL FORMAT. Every `M1` / `M2` / `M3` / `S14` key below is an h5-era `candi.eval` key, and
+`candi.eval` is deleted (D15). Nothing writes those keys any more, so this renders ARCHIVED run
+jsons and nothing this repo produces. A bench json is a different file with different keys —
+`EVAL.md` maps the two.
+
 VENDORED (COPY+EDIT) of sandbox/diagnostics/dual_conditioning_real/report.py:1-225.
 
 Fully regenerable (no re-inference). Figures are best-effort (matplotlib lives in the [report] extra and
@@ -216,8 +221,14 @@ def _scorecard(res) -> str:
         f"| M3 within/between ratio | {_f(m3.get('ratio'))} | ≤ 0.3 (same-region pairs excluded) |",
         f"| M3 encoder eff-rank (pooled) | {_f(m3.get('encoder_eff_rank_pooled'), 2)} | > 1 (guard) |",
         f"| M3 invariance_ok | {m3.get('invariance_ok')} | — |",
+        # The ≈0.73 ceiling belongs to the RETIRED `eval.py` S14 and to it alone: it followed from
+        # re-selecting the foreground out of the level-k realization being scored. `bench.covariate
+        # .depthcounterfact` draws ONE foreground on the deepest truth and reuses it at every
+        # level, so it has no such ceiling and nobody has measured what a perfect model caps at
+        # there. This generator reads eval.py-era jsons, so the number still describes its input —
+        # it must not be carried across to a bench number.
         f"| S14 frac_min_at_true | {_f(s14.get('frac_min_at_true'), 3)} "
-        f"| 0.25 is NOT chance; a perfect model caps at ≈0.73 |",
+        f"| 0.25 is NOT chance; ≈0.73 ceiling — eval.py-era S14 ONLY, not bench depthcounterfact |",
         f"| S14 frac_beats_told1 | {_f(s14.get('frac_beats_told1'), 3)} | > 0.5 |",
     ]
     for row, d in sorted(abl.items()):

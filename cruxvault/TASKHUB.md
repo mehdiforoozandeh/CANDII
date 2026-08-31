@@ -9,18 +9,41 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes
 - `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI
-- `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store
-- `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb
-- `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain
-- `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- cause only, no fix
-- `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- cause only, no fix
 - `t34` [implementation] resolve the chr21 bin-grid mismatch: the baked h5 has 1,867,776 bins, the store has 1,868,399
-- `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe
 - `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only
-- `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak
-- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers
-- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src
+- `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term
+- `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1
+- `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1
+- `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project
+- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal
+- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2
+- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid
+- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC
+- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain
+- `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal
+- `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
+- `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS
+- `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n
+- `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy
+- `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS)
+- `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
+- `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories
+- `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards
+- `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract
+- `t64` [implementation] single-chromosome CANDI run: mainline chr19 recipe + signal and peak heads, external-scored, stamped dev+main
+- `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main
+- `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer
+- `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly
+- `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score
+- `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method
+- `t70` [implementation] explain the peaks fallback on the Peaks tab: coverage ranking vs native peak head, with a per-method badge
+- `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown
+- `t72` [implementation] site v5: minimal gated landing (three-level combo first, board after) and a minimal CANDI-versions-over-time
+- `t73` [implementation] help-system accuracy dossier: per-method training-data truth and per-combo semantics for every data x head x family cell, code-cited, wired into the ? buttons
+- `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
+- `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
+- `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
 - `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
@@ -31,36 +54,57 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 ## Blocked
 
+- `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
+- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
 - `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — blocked by `t78`, `t79`, `t80`
 
 ## By category
 
-### admin
-
-- `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe — *open*
-
 ### data-acquisition
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
-
-### hpc-setup
-
-- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *open*
+- `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *open*
 
 ### implementation
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
 - `t17` [implementation] build the CANDII evaluation suite: EIC, post-hoc, distributional, peak and covariate-sensitivity blocks under one CLI — *open*
-- `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — *open*
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store — *open*
-- `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb — *open*
-- `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain — *open*
-- `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- cause only, no fix — *open*
-- `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- cause only, no fix — *open*
 - `t34` [implementation] resolve the chr21 bin-grid mismatch: the baked h5 has 1,867,776 bins, the store has 1,868,399 — *open*
 - `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only — *open*
-- `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *open*
-- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers — *open*
+- `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term — *open*
+- `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1 — *open*
+- `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1 — *open*
+- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — *open*
+- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — *open*
+- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — *open*
+- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — *open*
+- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — *open*
+- `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — *blocked*
+- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *blocked*
+- `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal — *open*
+- `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *open*
+- `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS — *open*
+- `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *open*
+- `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *open*
+- `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *open*
+- `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels — *open*
+- `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories — *open*
+- `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards — *open*
+- `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract — *open*
+- `t64` [implementation] single-chromosome CANDI run: mainline chr19 recipe + signal and peak heads, external-scored, stamped dev+main — *open*
+- `t65` [implementation] whole-genome CANDI run: challenge training tracks, genome-wide scope, GPU-hour cap at costliest rival with monitor early-stop, external-scored, stamped dev+main — *open*
+- `t66` [implementation] CANDI entry for the community-entrants board via the vendored challenge placement scorer — *open*
+- `t67` [implementation] site v3: nested tab structure (outer eval set, inner metric family), split the merged table, surface covariate sensitivity explicitly — *open*
+- `t68` [implementation] flatten the internal bench C-block (nested covariate dicts) into scalar registry keys so add can stamp a CANDI-lineage score — *open*
+- `t69` [implementation] explain the point-to-Gaussian spread device on the distributional tabs: fit granularity (homo vs heteroscedastic), reuse rule, native-vs-device badge per method — *open*
+- `t70` [implementation] explain the peaks fallback on the Peaks tab: coverage ranking vs native peak head, with a per-method badge — *open*
+- `t71` [implementation] site v4: three-layer tabs — data set, then head (count/pval/peak) with per-head summaries, then eval family with the finest metric breakdown — *open*
+- `t72` [implementation] site v5: minimal gated landing (three-level combo first, board after) and a minimal CANDI-versions-over-time — *open*
+- `t73` [implementation] help-system accuracy dossier: per-method training-data truth and per-combo semantics for every data x head x family cell, code-cited, wired into the ? buttons — *open*
+- `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
+- `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
+- `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
 - `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *open*
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *open*
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *open*
@@ -90,9 +134,23 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t19` [implementation] bench primitives plus the three verification layers: vendored-reference bit-match, analytic arrays, stub model — *done* → `results/t19/DELIVERABLE.md`
 - `t20` [implementation] whole-chromosome bench harness and CLI, both pval and count arms — *done* → `results/t20/DELIVERABLE.md`
 - `t21` [implementation] the C-block: six covariate-sensitivity instruments (use, share, direction, specificity, invariance, bio-conservation guard) — *done* → `results/t21/DELIVERABLE.md`
+- `t22` [implementation] eval.py cutover: publish the key-by-key equivalence report, then delete the old harness — *done* → `results/t22/DELIVERABLE.md`
 - `t23` [implementation] teach train.py to open a CANDI_STORE, not only a baked h5 — *done* → `results/t23/DELIVERABLE.md`
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *done* → `results/t25/DELIVERABLE.md`
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *done* → `results/t26/DELIVERABLE.md`
 - `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *done* → `results/t27/DELIVERABLE.md`
 - `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *done* → `results/t28/DELIVERABLE.md`
+- `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb — *done* → `results/t30/TIMING.md`
+- `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain — *done* → `results/t30/TIMING.md`
+- `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- [Cause](results/t32/FINDING.md) — per-level foreground; 0.73 unattainable (quantised to quarters). Fix ruled and landed in 2f56cb1: one fixed foreground on the deepest truth, ceiling constant deleted, perfect model measures 1.000 — *done* → `results/t32/FINDING.md`
+- `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- [Cause](results/t33/FINDING.md) — clamp below estimator resolution + ddof mismatch. Fix landed in 2f56cb1: unclamped total with naive/bias/se split, ddof=1 both, output_is_constant retired — *done* → `results/t33/FINDING.md`
+- `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe — *done* → `results/t22/SEED_FLOOR.md`
+- `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *done* → `results/t37/FINDING.md`
+- `t38` [implementation] teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does — *done* → `results/t38/DELIVERABLE.md`
+- `t39` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `results/t39/DELIVERABLE.md`
+- `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
+- `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
+- `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
+- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
+- `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`

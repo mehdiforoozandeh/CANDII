@@ -1,0 +1,57 @@
+{
+ "badges": {
+  "cell_types": "zero-shot cell types",
+  "position": "position-generalizing"
+ },
+ "board": "main",
+ "date": "2026-08-26",
+ "lineage": "baseline",
+ "method": "avg-arcsinh",
+ "metrics": {
+  "pval": {
+   "auprc": 0.40443599700282634,
+   "gwcorr": 0.5536016782886681,
+   "gwspear": 0.2812979924910217,
+   "mse": 9.67439368305107,
+   "mse1obs": 877.8568886611197,
+   "peak_base_rate": 0.016861527774739767
+  }
+ },
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error",
+  "pval/coverage_95",
+  "pval/crps",
+  "pval/gaussian_nll",
+  "pval/pit_ks"
+ ],
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/t49_baselines/p2/scores",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "has_peak_head": false,
+  "method_notes": {
+   "notes": "VARIANT, NOT THE EIC BASELINE (§5.2): the pval mean taken in arcsinh space and sinh'd back. Point only — a mean in a transformed space carries no cross-cell spread this file is willing to claim in -log10 p."
+  },
+  "regime": "configs/regime.eic_val.json",
+  "score_json": "cruxvault/results/t49/p2/avg-arcsinh.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "3b6c768",
+  "sigma_table": null,
+  "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397"
+ },
+ "schema_version": 1,
+ "version": "v1"
+}

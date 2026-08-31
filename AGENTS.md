@@ -194,8 +194,12 @@ comparability rule that follows.
 ### 4.5 Evaluate a checkpoint
 
 ```bash
-python -m candi.eval --h5 <panel.h5> --ckpt <run.ckpt> --arch-from <run.json>
+python -m candi.bench --store <regime.json> --ckpt <run.ckpt> --arch-from <run.json> \
+    --out <scores.json>
 ```
+
+`--h5 <panel.h5>` in place of `--store` scores a baked h5 instead. `python -m candi.eval` was the
+old command and no longer exists — `candi.eval` is deleted (D15).
 
 **Always pass `--arch-from`.** Every architecture flag changes the `state_dict`, and that file
 carries the exact arguments the checkpoint was built from, so nothing has to be retyped and nothing
@@ -254,13 +258,14 @@ Three things that will bite, all in `STORE.md` *Using the store*, which owns the
 
 - **`--regime` is NOT `--store`.** `--regime` is the *masking* regime (`type1` / `type2_loci`) and
   predates the store. `type2_loci` is h5-only and is refused with `--store`.
-- **A store run is still training only.** Since `t14` `StoreDataset` emits the five imputation keys
-  (`y_data_imp` / `y_pval_imp` / `y_peaks_imp` / `y_meta_imp` / `imp_biosample_name`), but only when
-  the regime declares `eval_pairs` — D16 forbids deriving the `T_X` → `V_X` pairing from the name, so
-  it is written down. `log_ref` is not emitted: it is the h74 reference table, which pins itself to
-  an h5 fingerprint. `eval.py`'s own dataset factory is h5-only, so `--store` still skips
-  `evaluate()`, forces `--eval-every` off, and writes a run json with no M1/M2/M3/S14 keys at all
-  rather than empty ones.
+- **A store run watches held-out imputation; it does not score the checkpoint.** Since `t14`
+  `StoreDataset` emits the five imputation keys (`y_data_imp` / `y_pval_imp` / `y_peaks_imp` /
+  `y_meta_imp` / `imp_biosample_name`), but only when the regime declares `eval_pairs` — D16 forbids
+  deriving the `T_X` → `V_X` pairing from the name, so it is written down. `log_ref` is not emitted:
+  it is the h74 reference table, which pins itself to an h5 fingerprint. `--eval-every` is
+  **regime-aware**, not forced off: with `eval_pairs` declared it resolves to 3 and `candi.monitor`
+  runs; with none declared it resolves to 0 and says why. No run json from either path carries
+  M1/M2/M3/S14 any more — scoring is `python -m candi.bench`, a separate command.
 - **`--reference on` is refused** on the store path: the table pins itself to an h5 fingerprint.
 
 `cell_cond` is refused rather than defaulted (D16) — a ported training command that passes it stops,
@@ -430,12 +435,26 @@ Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2)
    [+0.004, +0.217]). The other three are statistically indistinguishable; the target-level sign test
    `main` vs `offoff` is 7+/5−, p = 0.77, and P(`main` worst of four) = 0.54. The published 4-dp
    ordering is the modal bootstrap ordering at only 45% of replicates.
-2. **Quote the noise floor with every number.** Effective replication is **12 held-out targets / 5
+2. **Quote the noise floor with every number — and the floor of the panel and recipe that number was
+   measured on.** Effective replication is **12 held-out targets / 5
    biosample pairs / 4 cell types**, with `(T_RWPE2, B_RWPE2)` supplying 7 of the 12. Target-clustered
    bootstrap noise floor on macro CRPS is **~0.09**; per-comparison uncertainty ±0.13. A single **seed**
    change moves pooled imputation CRPS by 0.1195, Spearman by 0.0562, ECE by 0.0354, M3 ratio by
    0.0479 — comparable to or larger than several between-arm gaps. Sign-test resolution at n=12 is
    quantized: 10/12 → p=0.039, 11/12 → 0.0063, 12/12 → 0.00049.
+
+   **Amended 2026-08-22** — a PI-approved, in-place break of the §7 freeze, and the only one. The
+   seed figures above are the **full EIC panel under the production architecture**, and borrowing
+   them to read a CANDII run makes a real difference look like noise. Re-measured on the CANDII q19
+   recipe — one paired seed change over an otherwise identical 284 k-parameter smoke-scale recipe,
+   jobs `55883172` / `55883173` — a seed moves pooled imputation CRPS by **0.0463** (macro 0.0327)
+   under `eval.py`, and macro CRPS by **0.0608** under `bench`: **2-4× below 0.1195**. Not every
+   figure shrinks — pooled ECE moved **0.0422**, *larger* than 0.0354 — and the per-track floor is
+   several times either macro, so a single-track claim must clear the track number. The **~0.09
+   target-clustered floor and the ±0.13 stand unamended**: two seeds are one paired difference, not
+   a bootstrap, and nothing has re-measured them. Quote the q19 floor beside a CANDII number and the
+   frozen floor only for the panel it came from. Full record, per-track tables included:
+   `cruxvault/results/t22/SEED_FLOOR.md`.
 3. **The offset head is a real Pareto, not a solved problem.** Offset ON gives the best imputation
    (macro CRPS 1.3413, macro Spearman 0.5653, ECE 0.0533, beating an honest per-assay marginal on 7/8
    assays) but its covariate steering is **functionally null**: sentinel-free real→real assay ablation

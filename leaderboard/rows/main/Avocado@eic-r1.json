@@ -1,0 +1,60 @@
+{
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-transductive"
+ },
+ "board": "main",
+ "date": "2026-08-27",
+ "lineage": "rival",
+ "method": "Avocado",
+ "metrics": {
+  "pval": {
+   "auprc": 0.4185946600302124,
+   "coverage_95": 0.9802952506004453,
+   "crps": 0.6564502425119595,
+   "gaussian_nll": 1.929321682069094,
+   "gwcorr": 0.5456481816015109,
+   "gwspear": 0.31855299640965085,
+   "mse": 8.898261977401045,
+   "mse1obs": 828.5113611340523,
+   "peak_base_rate": 0.016861527774739767,
+   "pit_ks": 0.359159827261248
+  }
+ },
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error"
+ ],
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/scratch/mforooz/t50_avocado/scores",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "has_peak_head": false,
+  "method_notes": {
+   "notes": "Avocado retrained on CANDI_STORE eic, regime.eic_val: 267 T_-split training tracks (51 cells x 35 assays), 60 epoch chr20 joint fit + 30 epoch per-chromosome genomic factors, seed 0, arcsinh target with sinh+clip inversion. signal_mu only: no count head (B1b), no peak head, sigma supplied by the 6.1 table."
+  },
+  "regime": "/project/def-maxwl/mforooz/CANDII_t50/configs/regime.eic_val.json",
+  "score_json": "cruxvault/results/t50/scores_avocado_P2.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "938b8e1",
+  "sigma_table": {
+   "fitted_on": "regime.eic_val.json eval_pairs",
+   "method": "Avocado"
+  },
+  "store_manifest_hash": "6c0e0c3e371383eaa75a078e663ee6593af127cc96241dc53e9e26d4c7c89397"
+ },
+ "schema_version": 1,
+ "version": "eic-r1"
+}

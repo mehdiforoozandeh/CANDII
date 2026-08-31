@@ -1,0 +1,750 @@
+{
+  "doc": "Help cards. methods: stamped (and queued) method name → card. combos: <board>/<head>/<family> using site ids (main=Full genome, dev=Chromosome 21, entrants=2019 challenge; count_arm is the Count-head distributional family). Every fact is from the 2026-08-27 dossier or from registry/boards/rows. Where the dossier says UNKNOWN/UNVERIFIED, this file says not recorded. metrics: <arm>/<key> (diagnostics/<key> when arm is null) → question, formula_mathml, estimator_notes, read_rules. Formulas are MathML of what this repo computes. Where a fact is not recorded, the card says not recorded.",
+  "methods": {
+    "eDICE": {
+      "what": "A per-bin attention imputer (PyTorch reimplementation of Hawkins-Hooker et al. 2023): one ~6 million-parameter model with no positional parameters, so one set of weights predicts any genomic position. Retrained by us on Dataset-2 EIC — not the 2019 submission.",
+      "training": "Retrained by us on the EIC store, regime eic_val. 51 training cells, 267 p-value tracks, 35 assays. Train chromosomes: chromosome 19 only. Seed 211, paper defaults, 50 epochs. Target is arcsinh(−log10 p), MSE loss. Masks 31 of 267 tracks per bin (the paper’s 11.6% rate). No validation or blind-test track in the model’s training or support. σ-fit is a scoring step, not training: it uses validation-pair residuals (see How it is scored).",
+      "classes": "Position-generalizing (no genomic-position parameters; Full genome is still held-out sequence because training used chromosome-19 bins only). Retrained per setting: a validation cell has no learned embedding; prediction uses the paired training-cell embedding. That is same-cell-type transduction, not an unseen cell type.",
+      "scoring": "External predictions scored by candi.bench.external. σ-table fitted on validation-pair residuals, chromosome 21 only, and reused unchanged on the full genome. PIT KS and 95% coverage on this row describe that wrap, not a forecast eDICE emitted. No peak head: peak AUPRC is a coverage ranking from the predicted signal. No count arm.",
+      "caveats": [
+        "Masks 31 of 267 tracks per bin, not a fixed 120.",
+        "Uses the paired training-cell embedding for the validation cell.",
+        "Predicted signal is clipped at 0.",
+        "Validation-pair CRPS is in-sample for the fitted spread.",
+        "No count head and no peak head."
+      ]
+    },
+    "ChromImpute": {
+      "what": "Jason Ernst’s published Java imputer (jar v1.0.5): an ensemble of regression trees over neighbouring samples and local windows. Retrained by us with paper defaults; we convert store tracks in and out — the jar does the modelling.",
+      "training": "Retrained by us on the EIC store, regime eic_val. 267 training tracks, 51 training cells, 35 marks. Trained genome-wide once, then scored as chromosome 21 and as the full genome. Apply target is (training cell, missing mark); truth is that mark on the paired validation cell.",
+      "classes": "Position-transductive: trees train at positions where the target mark was observed in other training samples, including the evaluation chromosome. On Full genome the method is in-sample at every position. Retrained per setting: one ensemble per (training cell, mark); not zero-shot on a new cell type.",
+      "scoring": "External predictions scored by candi.bench.external. σ-table fitted on chromosome-21 validation-pair residuals in −log10 p and reused on the full genome. Peak AUPRC is a coverage ranking. Predictions are quantized to 0.01 by the jar. No count arm.",
+      "caveats": [
+        "Position-transductive everywhere.",
+        "Validation-pair CRPS is in-sample for σ; σ fitted on chromosome 21 and applied genome-wide, where mean squared error is about 32% higher.",
+        "The fitted Gaussian is heavy-tailed / miscalibrated (95% coverage ~0.98, PIT KS ~0.37).",
+        "No count arm.",
+        "Pilot chromosome-21-only numbers are not results."
+      ]
+    },
+    "Avocado": {
+      "what": "Tensor factorisation over (cell, assay, position): one MLP on concatenated cell, assay, and per-position genomic factors (Schreiber, Bilmes & Noble 2020). Max’s PyTorch port, vendored byte-identical, retrained by us. Cannot predict a position it never fitted.",
+      "training": "Retrained by us on the EIC store, regime eic_val, 267 training-split columns (51 cells × 35 assays). Seed 0. Target arcsinh(−log10 p). 60-epoch joint fit on chromosome 20, then 30-epoch per-chromosome genomic factors with shared weights frozen — all 23 store chromosomes. Last epoch, not best-on-held-out. Training and validation cells of the same type share one cell index; the embedding is learned only from training-cell tracks.",
+      "classes": "Position-transductive. Full genome is in-sample sequence on every chromosome. Cell embedding exists for eval cell types via the paired training tracks, not via a never-seen cell type. Retrained per setting.",
+      "scoring": "External predictions scored by candi.bench.external. σ-table fitted on chromosome-21 validation-pair residuals and reused on a full-genome score that exists but is not stamped. Peak AUPRC is a coverage ranking. No count arm. Stamped only on Chromosome 21. No Full-genome row is stamped; Full-genome pending does not list Avocado.",
+      "caveats": [
+        "This retrain is separate from the frozen 2019 Avocado_p0 tracks.",
+        "Full genome structurally favours this method versus chromosome-19-only CANDI.",
+        "The fitted-spread miscalibration (PIT KS ~0.37, 95% coverage ~0.98) is a property of the wrap, not of Avocado’s point predictions.",
+        "Validation-pair CRPS is in-sample for σ.",
+        "AUPRC is a coverage ranking; quote it with the peak base rate.",
+        "Why the full-genome score was not stamped is not recorded.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "avg": {
+      "what": "Leave-one-out cross-cell average: the EIC Average definition on Dataset-2, built by us from training biosamples only (not the 2019 Average bigwigs).",
+      "training": "Not a trained model. Contributors are training biosamples that carry the assay, minus any cell sharing the input’s or target’s cell-type suffix. P-value: plain mean of −log10 p. Spread: cross-cell standard deviation. Counts: moment-matched negative binomial after depth-rescaling to the target. Peak: fraction of contributors with a store peak at the bin. Poisson floor on the stamped row is n=1e4, not the pre-registered 1e6. Train chromosomes do not enter the average itself; exclusion is over cells.",
+      "classes": "Position-generalizing, zero-shot cell types (no positional parameters and no learned cell embedding). On Full genome, neighbour methods that use chromosome 19 would be in-sample there; avg’s exclusion is over cells, not positions. Still zero-shot only in the “no cell embedding” sense: this round is not a fully-unseen-cell-type split.",
+      "scoring": "External scorer. Native heteroscedastic spread (no σ-table). Native peak score, so this is a peak head, not a coverage ranking. Count arm present. Stamped only on Chromosome 21. Full genome lists avg as still computing. Whether full-genome count-arm scoring finished after 2026-08-26 is not recorded.",
+      "caveats": [
+        "Distinct from the 2019 Average submission. The table names differ by a capital A and three letters; 2019 Average uses train+validation contributors, this avg uses train-only.",
+        "Count CRPS used n=1e4 floor, not 1e6.",
+        "Native spread, not the rival common-mode wrap — calibration on chromosome 21 (PIT KS 0.336, 95% coverage 0.888) is not the rival common-mode.",
+        "Beats the marginal baseline on 38 of 45 tracks; that is an accepted finding.",
+        "Some count-scale companion numbers are unreliable at this floor."
+      ]
+    },
+    "knn5": {
+      "what": "k-nearest-neighbour average, k=5: same heads as avg, but only over the five training cells most similar to the input cell.",
+      "training": "Same contributor pool and exclusion as avg. Similarity: mean Pearson correlation over assays both cells carry, on train chromosomes only (chromosome 19), in arcsinh(−log10 p) — cell-level, not per-assay. Same n=1e4 count floor. EIC store, regime eic_val.",
+      "classes": "Position-generalizing, zero-shot cell types (no learned cell embedding — not a cell type with no training experiment). On Full genome the similarity table, and therefore neighbour choice, is in-sample on chromosome 19. This round is not a fully-unseen-cell-type split.",
+      "scoring": "Same as avg: native spread and native peak score, no σ-table. Stamped on Chromosome 21 only; Full genome lists knn5 as still computing.",
+      "caveats": [
+        "Same floor and sampling notes as avg.",
+        "On chromosome 21, p-value CRPS 0.3240 vs avg 0.3237 is not a significant gap."
+      ]
+    },
+    "knn1": {
+      "what": "BestSingle: copy the single most similar training cell (same similarity table as knn5).",
+      "training": "Same pool, exclusion, and similarity as knn5; k=1. P-value: that cell’s −log10 p (no spread). Counts: that cell, Poisson floor. Peak: that cell’s peak calls. n=1e4 floor on the stamped count arm.",
+      "classes": "Position-generalizing, zero-shot cell types (no learned cell embedding — not a cell type with no training experiment). Same chromosome-19 in-sample note for similarity as knn5. This round is not a fully-unseen-cell-type split.",
+      "scoring": "External scorer; no σ-table. No p-value CRPS, PIT KS, 95% coverage, or Gaussian NLL — there is no p-value distribution. Peak is native (copied calls). Count arm present. Stamped on Chromosome 21 only; not listed as pending on Full genome.",
+      "caveats": [
+        "No cross-cell spread, so no p-value CRPS. One contributor."
+      ]
+    },
+    "avg-arcsinh": {
+      "what": "Variant of the cross-cell average: the mean is taken in arcsinh space, then sinh back. Not the EIC Average.",
+      "training": "Same contributors as avg. Emits a point p-value track only — no spread, no counts, no peak score.",
+      "classes": "Position-generalizing, zero-shot cell types (no learned cell embedding — not a cell type with no training experiment). This round is not a fully-unseen-cell-type split.",
+      "scoring": "External scorer, no σ-table. Missing count arm and p-value distributional/loss keys. Peak AUPRC is a coverage ranking from the predicted signal. Stamped on Chromosome 21. A full-genome score exists but no Full-genome row is stamped, and it is not listed as pending.",
+      "caveats": [
+        "Never present as the EIC baseline.",
+        "Down-weights tall bins."
+      ]
+    },
+    "marginal": {
+      "what": "Weakest distributional baseline: one constant Gaussian and one constant negative binomial per assay, fitted on training cells × train chromosomes, scaled to the target track’s depth. No per-bin ranking.",
+      "training": "Moment match over all bins of training cells’ tracks on train chromosomes only (chromosome 19), then depth-scale to the target. No peak score. EIC store, regime eic_val.",
+      "classes": "Position-generalizing, zero-shot cell types (no learned cell embedding — not a cell type with no training experiment). On Full genome the constants are in-sample on chromosome 19. This round is not a fully-unseen-cell-type split.",
+      "scoring": "Native constant spread (no σ-table). Count arm present. Genome-wide Pearson and Spearman are missing — a constant has no rank correlation. AUPRC equals the peak base rate (0.01375 on chromosome 21): coverage ranking of a constant, which is the chance line. Stamped on Chromosome 21 only.",
+      "caveats": [
+        "No peak head.",
+        "P-value CRPS 1.691 with PIT KS 0.450 and 95% coverage 0.993 — a different calibration failure from the rival wrap.",
+        "On Full genome, in-sample on chromosome 19 for the fitted constants."
+      ]
+    },
+    "Lavawizard": {
+      "what": "Two different rows share this name. Dataset-2: a planned retrain of the 2019 Guacamole/Lavawizard architecture (Avocado-style tensor factorisation plus a cross-cell average skip). That retrain is not done. 2019: the frozen round-2 submission of the same team (joint second in the challenge). Do not treat the 2019 row as the Dataset-2 retrain.",
+      "training": "Dataset-2 training is not recorded — no EIC retrain exists. Planned: EIC store, regime eic_val, same σ-fit rule as other rivals. Upstream weights live on Synapse; they are not in this tree. Whether the average feature may include the target cell, and whether the average is train-only or train+validation, is not recorded as decided. 2019 training is not recorded beyond “2019 challenge training.”",
+      "classes": "Not stamped on Full genome or Chromosome 21 (listed with note “Dataset-2 retrain not started”). Architecture would be position-transductive if retrained like Avocado — not recorded until a Dataset-2 row is stamped. The 2019 row has position class unrecorded and cell-type class unrecorded.",
+      "scoring": "Dataset-2: planned external scorer plus σ-table; no Dataset-2 score json is in this tree. 2019: same 2019 scorer path as the other frozen submissions, 48 experiments.",
+      "caveats": [
+        "The Dataset-2 port is not gated (parity versus Keras weights was not run).",
+        "The competitor directory named in the memo is not in this worktree.",
+        "Same team as Guacamole; the two 2019 submissions are not identical tracks."
+      ]
+    },
+    "CANDI": {
+      "what": "The CANDI model: grouped Conv1D plus a DNA tower plus a RoPE transformer, then a grouped decoder with FiLM and a depth-offset negative-binomial count head. The queued runs also train a Gaussian signal head and a Bernoulli peak head. No CANDI row is stamped yet; two runs are training.",
+      "training": "Both queued runs use the store, heads count+signal+peak, offset on, seed 0, weight decay 0, width 288. Chromosome-19 / mainline: regime eic_val, 25 epochs; train on chromosome 19; eval on chromosome 21; 51 training cells, 35 assays, 26 pairs. Genome-wide: regime eic_gw, 4 epochs; train on every store chromosome except chromosome 21. Neither script has been observed to complete here. Job status and checkpoints are not recorded.",
+      "classes": "Not stamped. Intended reading: the chromosome-19 recipe is position-generalizing except that the all-chromosomes view is in-sample on chromosome 19. The genome-wide recipe would be in-sample on 22 of 23 chromosomes — the Main-board in-sample caveat written for chromosome-19-only CANDI would be wrong for that run unless restated. Cell: CANDI conditions on covariates, not a per-cell embedding; this round is still training-to-validation of seen cell types. Position and cell badges are not recorded until stamped.",
+      "scoring": "Internal bench (not the external rival scorer). That path emits a native negative binomial on counts, a native Gaussian on p-values, and a native peak probability. Covariate-sensitivity numbers can only come from this internal path. Count CRPS is closed form unless an approximation flag is set.",
+      "caveats": [
+        "Training count+signal+peak is a different objective from count-only.",
+        "Quote count CRPS with its oracle-scaled / scale-error split and the noise floor.",
+        "The genome-wide run is 4 epochs versus 25 — not a matched compute comparison with the chromosome-19 run or with Avocado’s 60/30.",
+        "Blind-test pairs are not these jobs.",
+        "Full genome and Chromosome 21 list CANDI as pending until a row is stamped."
+      ]
+    },
+    "Average": {
+      "what": "Organizer Average baseline, scored from published 2019 bigwigs on the official grid. Frozen 2019 baseline, not our Dataset-2 avg.",
+      "training": "Round-2 “training set” = train + validation, not train alone (ATAC has no validation experiments; train-only fails the published match). 287 contributor tracks over 23 assays from 312 train+val bigwigs. A bit-identical gate versus the original scorer matched 510 rows × 8 measures at relative difference 0.0.",
+      "classes": "Position-generalizing, zero-shot cell types (no learned cell embedding). This is the 2019 organizer Average, not Dataset-2 avg.",
+      "scoring": "Same 2019 scorer path as the other frozen submissions; 48 experiments after dropping DNase-seq.",
+      "caveats": [
+        "Do not mix with Dataset-2 avg. The table names differ by a capital A and three letters; the contributor sets differ (2019 Average is train+validation; Dataset-2 avg is train-only).",
+        "Competitive with most submissions under the challenge recipe.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Avocado_p0": {
+      "what": "Organizers’ Avocado baseline tracks, frozen. Not our Dataset-2 Avocado retrain.",
+      "training": "Challenge train+validation as of the 2019 organizer run. Exact epochs and factors are not recorded in this tree.",
+      "classes": "Position-transductive, retrained per setting — “retrained” here means the 2019 organizer fit, not our EIC retrain.",
+      "scoring": "Same 2019 scorer path.",
+      "caveats": [
+        "Distinct from Avocado on Chromosome 21.",
+        "Rank 23/25 on the published 51-experiment / 9-measure recipe, 24/25 on our 48/8 recipe.",
+        "ICU’s H3K4me1 tracks are byte-identical to this baseline."
+      ]
+    },
+    "Guacamole": {
+      "what": "Frozen 2019 submission; stage-2 name of the same architecture as Lavawizard. Not retrained.",
+      "training": "Not recorded (2019).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Same 2019 scorer path, 48 experiments.",
+      "caveats": [
+        "Pair with Lavawizard as two submissions from one method family; they are not identical tracks (separate rows, different metrics).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "CUImpute1": {
+      "what": "Frozen 2019 submission. Not independent on broad marks: CUImpute1, CUWA, and ICU submitted byte-identical tracks for all 26 broad-mark experiments; they differ only on some punctate marks. CUImpute1 and ICU are also identical on H3K27ac.",
+      "training": "Not recorded (2019). Identical files mean identical 2019 outputs, not necessarily identical code.",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Same 2019 scorer path, 48 experiments.",
+      "caveats": [
+        "Count once on broad marks, not three times. Never write “N methods beat X” from a raw row count.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "CUWA": {
+      "what": "Frozen 2019 submission. Byte-identical to CUImpute1 and ICU on all 26 broad-mark experiments; they differ only on some punctate marks.",
+      "training": "Not recorded (2019).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Same 2019 scorer path, 48 experiments.",
+      "caveats": [
+        "Count once on broad marks, not three times. Never write “N methods beat X” from a raw row count.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "ICU": {
+      "what": "Frozen 2019 submission. Byte-identical to CUImpute1 and CUWA on all 26 broad-mark experiments. Also identical to CUImpute1 on H3K27ac. ICU H3K4me1 is Avocado_p0.",
+      "training": "Not recorded (2019).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Same 2019 scorer path, 48 experiments.",
+      "caveats": [
+        "Count once on broad marks, not three times.",
+        "ICU H3K4me1 tracks are the organizer Avocado_p0 baseline.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "UIOWA_Michaelson": {
+      "what": "Frozen 2019 submission.",
+      "training": "Not recorded (2019).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "50 Synapse files, not 51; missing C38M18 (RWPE2, H3K36me3). After dropping DNase-seq: 47 of 48 experiments. The H3K36me3 median is over 7 experiments.",
+      "caveats": [
+        "The gap is in the 2019 upload, not a transfer failure.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Hongyang_Li_and_Yuanfang_Guan": {
+      "what": "Frozen 2019 submission (one of three versions from this team).",
+      "training": "Not recorded (2019).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Same 2019 scorer path, 48 experiments.",
+      "caveats": [
+        "This version and _v1 submitted identical ATAC-seq, and the same single file for all three ATAC cells — a cell-agnostic ATAC prediction.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Hongyang_Li_and_Yuanfang_Guan_v1": {
+      "what": "Frozen 2019 submission (second of three versions from this team).",
+      "training": "Not recorded (2019).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Same 2019 scorer path, 48 experiments.",
+      "caveats": [
+        "Identical ATAC-seq to Hongyang_Li_and_Yuanfang_Guan, including the same single file for all three ATAC cells.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Hongyang_Li_and_Yuanfang_Guan_v2": {
+      "what": "Frozen 2019 submission (third of three versions from this team).",
+      "training": "Not recorded (2019).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Same 2019 scorer path, 48 experiments.",
+      "caveats": [
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "BrokenNodes": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Treat as three submissions; independence is not flagged as byte-identical.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "BrokenNodes_v2": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Treat as three submissions; independence is not flagged as byte-identical.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "BrokenNodes_v3": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Treat as three submissions; independence is not flagged as byte-identical.",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Song_Lab": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Song_Lab_2": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Song_Lab_3": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "NittanyLions": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "NittanyLions2": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "imp": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Under the 48-experiment / 8-measure challenge recipe this row sits at the top of a published-order check; that is a ranking fact, not a description of the method. Architecture is not recorded."
+      ]
+    },
+    "imp1": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Under the 48-experiment / 8-measure challenge recipe this row sits at the top of a published-order check; that is a ranking fact, not a description of the method. Architecture is not recorded."
+      ]
+    },
+    "CostaLab": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "LiPingChun": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "KKT-ENCODE-Impute": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    },
+    "Aug2019Imputation": {
+      "what": "Frozen 2019 ENCODE Imputation Challenge round-2 submission. Not retrained. We scored the published tracks; we did not re-run the trainer.",
+      "training": "Not recorded. Each team used whatever they used in 2019 on Dataset-3. Challenge training+validation bigwigs are 312 files; blind truth is 51 experiments. Per-team train set, chromosomes, and assays are not recorded except for the organizer baselines (Average, Avocado_p0).",
+      "classes": "Position class unrecorded. Cell-type class unrecorded.",
+      "scoring": "Vendored 2019 scorer on the official grid (chromosome 1–22 and X). DNase-seq is not scored: 3 of 51 experiments dropped, 48 remain. Only point-wise signal scores appear on this board (MSE, GW Pearson, GW Spearman, MSE on the top 1% of observed bins). No count arm, no CRPS, no AUPRC, no σ-table. Ranking on this site is not the challenge’s second-best-of-ten-bootstrap-ranks recipe.",
+      "caveats": [
+        "A number here cannot be compared to Full genome or Chromosome 21 — the 2019 truth is a different physical signal (measured 12–66% per-experiment error for that translation).",
+        "Architecture is not recorded in this tree."
+      ]
+    }
+  },
+  "combos": {
+    "main/summary": {
+      "question": "Who ranks highest on the p-value-space composite on the full genome, among methods scored on same-cell-type training-to-validation pairs?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs of a type the method already saw (not unseen cell types; not EIC stage-2 poorly characterised types; not regime.eic_test). 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Composite = mean of category mean-ranks for categories that at least one method on this eval set fully covers (point-wise, distributional, peaks when board-active). A method missing any of those categories is incomplete, not last: the composite cell is a dash. Lower is better. Count-space ranking lives under Count; peak ranking also feeds the composite when every ranked row has AUPRC.",
+      "devices": "Methods with a full p-value-space cover. eDICE and ChromImpute are stamped. avg and knn5 are listed as still computing. Avocado’s full-genome score exists but is not stamped. CANDI is listed as pending.",
+      "caveats": "Avocado and ChromImpute are in-sample at every position. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only. Partial coverage is a dash, never last place."
+    },
+    "dev/summary": {
+      "question": "Who ranks highest on the p-value-space composite on chromosome 21, among methods scored on same-cell-type training-to-validation pairs?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs of a type the method already saw (not unseen cell types; not EIC stage-2 poorly characterised types; not regime.eic_test). 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Same composite rule as Full genome, computed only on chromosome 21.",
+      "devices": "Stamped: eDICE, ChromImpute, Avocado, avg, knn5, knn1, avg-arcsinh, marginal. Lavawizard’s Dataset-2 retrain is not started. CANDI is listed as pending and is not stamped.",
+      "caveats": "Development column — numbers here select what is worth scoring genome-wide; they are not the headline. Avocado and ChromImpute are in-sample on chromosome 21; CANDI’s chromosome-19 recipe would be held-out; eDICE is position-generalizing. knn1 and avg-arcsinh have no p-value CRPS, so they cannot complete the distributional category."
+    },
+    "entrants/summary": {
+      "question": "Who ranks highest among frozen 2019 submissions on the challenge blind test?",
+      "truth": "Synapse blind-test bigwigs, 48 experiments after dropping 3 DNase-seq (26 broad + 22 punctate). Grid is ceil(chromosome length / 25), chromosomes 1–22 and X. This is challenge signal, not store −log10 p.",
+      "instrument": "Only point-wise signal metrics are in the registry, so the composite on this board is built from those. Distributional, peak, and count categories are missing on every row.",
+      "devices": "Direct bigwig versus truth. No σ-table, no inversion.",
+      "caveats": "Different truth signal — never translate to Full genome or Chromosome 21. DNase-seq excluded because Dataset-2 DNase is read-depth-normalized signal. CUImpute1 / CUWA / ICU count once on broad marks. Board order is not the challenge rank recipe."
+    },
+    "main/count/summary": {
+      "question": "How do methods rank on count-space negative-binomial CRPS, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Ranking is negative-binomial CRPS, always with its oracle-scaled / scale-error split and the ±0.09 noise floor (frozen pre-CANDII target-clustered floor — not a cross-method full-genome measurement).",
+      "devices": "Only methods that emit a negative-binomial mean and dispersion: avg, knn1, knn5, marginal, and CANDI when it lands. eDICE, ChromImpute, Avocado, avg-arcsinh, and the 2019 submissions have no count arm — those keys are absent, not invented. Full genome has no count-arm rows stamped yet (only eDICE and ChromImpute, both missing count keys).",
+      "caveats": "Quote CRPS with the split. A sampled number must show its sample size and seed. The in-sample-position warning for Avocado/ChromImpute does not apply to count-native baselines the same way."
+    },
+    "dev/count/summary": {
+      "question": "How do methods rank on count-space negative-binomial CRPS on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Same ranking rule as Full genome Count, chromosome 21 only. Stamped baseline rows use closed-form CRPS at n=1e4.",
+      "devices": "Only methods that emit a negative-binomial mean and dispersion: avg, knn1, knn5, marginal, and CANDI when it lands. eDICE, ChromImpute, Avocado, avg-arcsinh, and the 2019 submissions have no count arm — those keys are absent, not invented. Stamped: avg, knn5, knn1, marginal. Rivals absent. CANDI not stamped.",
+      "caveats": "Development column. Floor ±0.09 still applies when quoting. Some count-scale companions are unreliable at the n=1e4 floor."
+    },
+    "entrants/count/summary": {
+      "question": "The 2019 column has no count-space scores. Those submissions are signal tracks.",
+      "truth": "Not applicable. Dataset-3 submissions are point tracks of challenge signal, not raw counts. Inventing counts is forbidden.",
+      "instrument": "None. The 2019 scorer has no count CRPS.",
+      "devices": "None. A future CANDI score on the official grid would need count predictions; none exist here.",
+      "caveats": "The 2019 column has no count-space scores. Those submissions are signal tracks."
+    },
+    "main/pval/summary": {
+      "question": "How do methods rank on the p-value-space composite, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Same composite as the Full-genome summary. Peak scores also live under Peak; count numbers never appear here.",
+      "devices": "Stamped: eDICE, ChromImpute.",
+      "caveats": "Avocado and ChromImpute are in-sample at every position. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only."
+    },
+    "dev/pval/summary": {
+      "question": "How do methods rank on the p-value-space composite on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Same composite rule, chromosome 21 only.",
+      "devices": "Stamped rivals and baselines as on Chromosome 21 summary.",
+      "caveats": "Development column. Position in-sample for Avocado/ChromImpute."
+    },
+    "entrants/pval/summary": {
+      "question": "How close is each 2019 submission to Dataset-3 blind-test signal, after dropping DNase?",
+      "truth": "Synapse blind-test bigwigs, 48 experiments. Not store −log10 p.",
+      "instrument": "Vendored 2019 scorer: MSE, GW Pearson, GW Spearman, MSE top-1% observed. Macro is mean of assay medians of bootstrap means.",
+      "devices": "Direct bigwig versus truth. No σ-table.",
+      "caveats": "Different truth — never translate. DNase excluded. msevar out. CUImpute1/CUWA/ICU dedup on broad marks. UIOWA missing one experiment. ICU H3K4me1 = Avocado_p0. Hongyang ATAC is cell-agnostic."
+    },
+    "main/peak/summary": {
+      "question": "Are positions the method ranks as peaks the MACS2 peaks in the validation cell, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Peak base rate about 0.0169 macro on the full genome.",
+      "instrument": "AUPRC plus peak base rate. Ranking is AUPRC.",
+      "devices": "eDICE, ChromImpute, Avocado, avg-arcsinh, and marginal have no peak-score array. AUPRC then ranks bins by predicted signal (or the count mean if that is all they have) against called peaks — a coverage ranking, not a peak classifier. avg / knn5 / knn1 emit a native peak score (fraction of contributors, or copied calls). CANDI’s peak head, when its rows land, emits a per-bin Bernoulli probability. Always quote AUPRC with the peak base rate. AUROC is not on the board. Current Full-genome rows both have AUPRC as coverage ranking.",
+      "caveats": "Always quote the peak base rate. An AUPRC off a point-only rival is a coverage ranking, not a peak classifier. 2019 has no MACS2 AUPRC — a peak number there would not be this instrument."
+    },
+    "dev/peak/summary": {
+      "question": "Are positions the method ranks as peaks the MACS2 peaks in the validation cell, on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Peak base rate 0.01375 on every stamped p-value row that has it.",
+      "instrument": "AUPRC plus peak base rate.",
+      "devices": "eDICE, ChromImpute, Avocado, avg-arcsinh, and marginal have no peak-score array. AUPRC then ranks bins by predicted signal (or the count mean if that is all they have) against called peaks — a coverage ranking, not a peak classifier. avg / knn5 / knn1 emit a native peak score (fraction of contributors, or copied calls). CANDI’s peak head, when its rows land, emits a per-bin Bernoulli probability. Always quote AUPRC with the peak base rate. AUROC is not on the board. Native peak score: avg, knn5, knn1. Coverage ranking: Avocado, eDICE, ChromImpute, avg-arcsinh, marginal (marginal AUPRC = base rate).",
+      "caveats": "Quote the base rate. Development column, not the headline."
+    },
+    "entrants/peak/summary": {
+      "question": "2019 has no MACS2 AUPRC. A peak number here would not be the same instrument as Full genome / Peak.",
+      "truth": "Dataset-3 has no MACS2 calls. A challenge peak-style number used signal ≥ 2 on both sides; those numbers exist off-board and are not stamped.",
+      "instrument": "Not the store-peak AUPRC instrument. Not on this board.",
+      "devices": "No native peak scores from the submissions.",
+      "caveats": "2019 has no MACS2 AUPRC. A peak number here would not be the same instrument as Full genome / Peak."
+    },
+    "main/count/count_arm": {
+      "question": "Does the method’s negative-binomial forecast of raw read counts match the held-out validation-cell counts, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Negative-binomial CRPS and companions (oracle-scaled and scale error), macro = unweighted mean over tracks. External scorer for stamped baselines. CANDI’s default is closed-form CRPS unless an approximation flag is set.",
+      "devices": "Only methods that emit a negative-binomial mean and dispersion: avg, knn1, knn5, marginal, and CANDI when it lands. eDICE, ChromImpute, Avocado, avg-arcsinh, and the 2019 submissions have no count arm — those keys are absent, not invented. No σ-table on the count arm. Full-genome count CRPS for baselines would be fair-sampled (k=100, seed 0) if/when those jsons land — whether those jobs finished is not recorded.",
+      "caveats": "Quote crps with crps_oracle_scaled and scale_error. Floor ~0.09 is the frozen pre-CANDII floor. Main board: no count-arm rows stamped yet."
+    },
+    "dev/count/count_arm": {
+      "question": "Does the method’s negative-binomial forecast of raw read counts match the held-out validation-cell counts on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Negative-binomial CRPS and companions (oracle-scaled and scale error), macro = unweighted mean over tracks. External scorer for stamped baselines. CANDI’s default is closed-form CRPS unless an approximation flag is set.",
+      "devices": "Only methods that emit a negative-binomial mean and dispersion: avg, knn1, knn5, marginal, and CANDI when it lands. eDICE, ChromImpute, Avocado, avg-arcsinh, and the 2019 submissions have no count arm — those keys are absent, not invented. Stamped rows use closed-form CRPS at n=1e4.",
+      "caveats": "Development column. Floor ~0.09 still applies. knn/marginal similarity and fit used chromosome 19 only, so chromosome 21 is held-out for those tables. CANDI’s chromosome-19 recipe is held-out on chromosome 21; Avocado/ChromImpute are in-sample on chromosome 21 (they have no count arm anyway)."
+    },
+    "entrants/count/count_arm": {
+      "question": "The 2019 column has no count-space scores. Those submissions are signal tracks.",
+      "truth": "Not applicable.",
+      "instrument": "The 2019 scorer has no CRPS.",
+      "devices": "None. Do not wrap Dataset-3 rows in a Gaussian and call it this board — that is not what was scored.",
+      "caveats": "The 2019 column has no count-space scores. Those submissions are signal tracks."
+    },
+    "main/count/loss": {
+      "question": "What is the negative-binomial training-style NLL on held-out counts, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Negative-binomial training-style negative log-likelihood on held-out counts. Not comparable to Gaussian NLL. Not ranked across loss families. Loss never enters the composite.",
+      "devices": "Only methods that emit a negative-binomial mean and dispersion: avg, knn1, knn5, marginal, and CANDI when it lands. eDICE, ChromImpute, Avocado, avg-arcsinh, and the 2019 submissions have no count arm — those keys are absent, not invented. P-value-only rivals: absent.",
+      "caveats": "No stamped Full-genome count-loss row yet. Sampled CRPS does not change NLL."
+    },
+    "dev/count/loss": {
+      "question": "What is the negative-binomial NLL on chromosome 21 held-out counts?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Negative-binomial training-style negative log-likelihood on held-out counts. Not comparable to Gaussian NLL. Not ranked across loss families. Loss never enters the composite.",
+      "devices": "Only methods that emit a negative-binomial mean and dispersion: avg, knn1, knn5, marginal, and CANDI when it lands. eDICE, ChromImpute, Avocado, avg-arcsinh, and the 2019 submissions have no count arm — those keys are absent, not invented. P-value-only rivals: absent.",
+      "caveats": "Present on avg, knn5, knn1, marginal. Per-family; not in the composite."
+    },
+    "entrants/count/loss": {
+      "question": "Not computed. No count NLL on 2019 placement rows.",
+      "truth": "Not applicable.",
+      "instrument": "None.",
+      "devices": "None.",
+      "caveats": "The 2019 column has no count-space scores. Those submissions are signal tracks."
+    },
+    "main/count/covariate_diagnostics": {
+      "question": "Does CANDI’s decoder use the told covariates (depth, assay, read length, run type) on the count head under imputation, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Internal CANDI bench only: the C-block changes the prompt and re-decodes the negative binomial against count truth (imputation kind). Keys include whether covariates are used, how they share, depth direction, a depth counterfactual, and a paired depth-blind / biology-kept check. The external rival scorer cannot produce these numbers.",
+      "devices": "CANDI-only. A live checkpoint is required. Rivals, baselines, and 2019 entrants are empty by construction.",
+      "caveats": "No stamped CANDI row, so this box is empty. Depth-counterfactual quotes with floor 0.25 and no 0.73 ceiling. Depth-blind is never shown without biology-kept. CANDI-lineage ranking, not cross-method."
+    },
+    "dev/count/covariate_diagnostics": {
+      "question": "Does CANDI’s decoder use the told covariates on the count head, on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Internal CANDI bench only: the C-block changes the prompt and re-decodes the negative binomial against count truth (imputation kind). Keys include whether covariates are used, how they share, depth direction, a depth counterfactual, and a paired depth-blind / biology-kept check. The external rival scorer cannot produce these numbers.",
+      "devices": "CANDI-only. A live checkpoint is required. Rivals, baselines, and 2019 entrants are empty by construction.",
+      "caveats": "Empty until a CANDI checkpoint is scored by the internal bench on this eval set. Chromosome 21 pending lists Lavawizard and CANDI."
+    },
+    "entrants/count/covariate_diagnostics": {
+      "question": "Not computed. The 2019 scorer cannot re-decode a CANDI prompt.",
+      "truth": "Not applicable.",
+      "instrument": "None. Empty even for a future CANDI 2019-grid score unless scored with the internal bench on Dataset-3 — that path is not recorded.",
+      "devices": "None.",
+      "caveats": "Not computed. Frozen bigwigs have no covariate-conditioned decoder."
+    },
+    "main/pval/pointwise": {
+      "question": "How close is the predicted −log10 p track to the validation-cell truth, bin by bin, and does it rank the tallest bins correctly — over the whole genome?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Point-wise E-block: MSE, genome-wide Pearson, genome-wide Spearman, MSE on the top 1% of observed bins. No σ-table. msevar is not on the public board.",
+      "devices": "Every method that emits a predicted p-value track. No σ-table. Peak fallback does not affect these keys. Stamped: eDICE, ChromImpute. Baseline full-genome scores are not recorded as stamped.",
+      "caveats": "Avocado and ChromImpute are in-sample at every position. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19. Stamped Full-genome rows today: eDICE and ChromImpute only. MSE scales with mark dynamic range. ChromImpute values are quantized to 0.01. The header letters MSE / GW Pearson / GW Spearman / MSE top-1% obs are shared with the 2019 tab; this truth is store −log10 p, not 2019 challenge signal. Never place a cell from this tab next to a 2019 cell."
+    },
+    "dev/pval/pointwise": {
+      "question": "How close is the predicted −log10 p track to the validation-cell truth on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Point-wise E-block: MSE, genome-wide Pearson, genome-wide Spearman, MSE on the top 1% of observed bins. No σ-table. msevar is not on the public board.",
+      "devices": "Every method that emits a predicted p-value track. Stamped: Avocado, eDICE, ChromImpute, avg, knn5, knn1, avg-arcsinh, marginal (marginal missing Pearson/Spearman).",
+      "caveats": "Development column. Avg vs marginal macro MSE 7.128 vs 9.312 is a recorded anchor. The header letters MSE / GW Pearson / GW Spearman / MSE top-1% obs are shared with the 2019 tab; this truth is store −log10 p, not 2019 challenge signal. Never place a cell from this tab next to a 2019 cell."
+    },
+    "entrants/pval/pointwise": {
+      "question": "How close is each 2019 submission to Dataset-3 blind-test signal, on the official grid, after dropping DNase?",
+      "truth": "Synapse blind-test bigwigs, 48 experiments (26 broad + 22 punctate). Assays: H3K27me3 ×9, H3K9me3 ×9, H3K36me3 ×8, H3K27ac ×7, H3K4me1 ×7, H3K4me3 ×5, ATAC-seq ×3. Not store −log10 p.",
+      "instrument": "Vendored 2019 scorer. Ten fixed chromosome-subset bootstraps. Macro: mean of assay medians of bootstrap means. Blacklist deleted for these measures.",
+      "devices": "Direct bigwig versus truth. No σ-table. No inversion.",
+      "caveats": "Different truth — never translate. The header letters MSE / GW Pearson / GW Spearman / MSE top-1% obs are shared with Full genome / Chromosome 21; this truth is 2019 challenge signal, not store −log10 p. Never place a cell from this tab next to a Dataset-2 cell. DNase excluded. msevar out. Board order ≠ challenge rank recipe. CUImpute1/CUWA/ICU dedup on broad. UIOWA missing C38M18. ICU H3K4me1 = Avocado_p0. Hongyang ATAC cell-agnostic."
+    },
+    "main/pval/distributional": {
+      "question": "Does a Gaussian forecast in −log10 p match the validation-cell p-value track, genome-wide — not just its centre?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Gaussian CRPS, PIT KS, and 95% coverage. No oracle-scaled split on this arm. Rank on CRPS; always show PIT KS and coverage beside it. There is no single p-value-CRPS noise floor; per-method paired intervals exist from a later check.",
+      "devices": "Point-only rivals (eDICE, ChromImpute, Avocado) get a Gaussian spread device: one σ per assay, fitted on validation-pair residuals on chromosome 21, then reused unchanged. That wrap is known-miscalibrated (PIT KS about 0.37, 95% coverage about 0.98 on the stamped rival rows). Rank on CRPS; do not read the absolute as a calibrated score. avg / knn5 / marginal emit their own spread (not this table). knn1 and avg-arcsinh have no p-value spread, so CRPS is absent. CANDI, when it lands, emits its own per-bin Gaussian; it does not use this device. 2019 is not this board. avg / knn5 / marginal native spread is not stamped on Full genome yet.",
+      "caveats": "Rank on CRPS; do not read absolute CRPS as calibrated. ChromImpute σ is too narrow versus full-genome MSE yet coverage stays high — heavy tails. Validation-pair CRPS is in-sample for the rival wrap."
+    },
+    "dev/pval/distributional": {
+      "question": "Does a Gaussian forecast in −log10 p match the validation-cell p-value track on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Gaussian CRPS, PIT KS, and 95% coverage. No oracle-scaled split on this arm. Rank on CRPS; always show PIT KS and coverage beside it. There is no single p-value-CRPS noise floor; per-method paired intervals exist from a later check.",
+      "devices": "Point-only rivals (eDICE, ChromImpute, Avocado) get a Gaussian spread device: one σ per assay, fitted on validation-pair residuals on chromosome 21, then reused unchanged. That wrap is known-miscalibrated (PIT KS about 0.37, 95% coverage about 0.98 on the stamped rival rows). Rank on CRPS; do not read the absolute as a calibrated score. avg / knn5 / marginal emit their own spread (not this table). knn1 and avg-arcsinh have no p-value spread, so CRPS is absent. CANDI, when it lands, emits its own per-bin Gaussian; it does not use this device. Rival σ was fitted on these same chromosome-21 validation-pair residuals — more in-sample than on Full genome. Native σ on avg/knn5/marginal. Absent on knn1 and avg-arcsinh.",
+      "caveats": "avg vs knn5 CRPS gap 0.0003 is not significant. Development column."
+    },
+    "entrants/pval/distributional": {
+      "question": "The 2019 column has no distributional scores. The challenge scored points.",
+      "truth": "Not applicable for CRPS. 2019 tracks are points; no σ-table was attached. Rows list CRPS, PIT KS, 95% coverage, and Gaussian NLL as missing.",
+      "instrument": "None on this board.",
+      "devices": "None.",
+      "caveats": "The 2019 column has no distributional scores. The challenge scored points."
+    },
+    "main/pval/loss": {
+      "question": "Gaussian NLL of the p-value head / wrapped Gaussian on held-out −log10 p, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. All 23 store chromosomes.",
+      "instrument": "Gaussian negative log-likelihood. Needs a spread (σ-table or native). knn1 and avg-arcsinh: absent. Stamped external rows record no extra transform on the prediction. CANDI on the store would score NLL in a different transform — that is a different quantity and is not comparable.",
+      "devices": "Same spread requirement as p-value distributional.",
+      "caveats": "Per-family only; not in the composite. No CANDI row yet, so no store-path transformed NLL on this board."
+    },
+    "dev/pval/loss": {
+      "question": "Gaussian NLL on chromosome 21 p-values?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Chromosome 21 only (development column, not the headline).",
+      "instrument": "Gaussian negative log-likelihood. Needs a spread (σ-table or native). knn1 and avg-arcsinh: absent. Stamped external rows record no extra transform on the prediction. CANDI on the store would score NLL in a different transform — that is a different quantity and is not comparable.",
+      "devices": "Same spread requirement as p-value distributional.",
+      "caveats": "Present for methods with a spread. Not comparable to a future CANDI store-path NLL."
+    },
+    "entrants/pval/loss": {
+      "question": "Not computed (no Gaussian NLL on 2019 placement rows).",
+      "truth": "Not applicable.",
+      "instrument": "None.",
+      "devices": "None.",
+      "caveats": "The 2019 column has no distributional scores. The challenge scored points."
+    },
+    "main/peak/peaks": {
+      "question": "Are positions the method ranks as peaks the MACS2 peaks in the validation cell, genome-wide?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Base rate ~0.0169 macro on Full genome.",
+      "instrument": "AUPRC against store peak calls, always with the peak base rate. This is the Peak tab — not the point-wise E-block. Peak loss (Bernoulli NLL) is not in the registry, so it does not render. There is no peak-head CRPS.",
+      "devices": "eDICE, ChromImpute, Avocado, avg-arcsinh, and marginal have no peak-score array. AUPRC then ranks bins by predicted signal (or the count mean if that is all they have) against called peaks — a coverage ranking, not a peak classifier. avg / knn5 / knn1 emit a native peak score (fraction of contributors, or copied calls). CANDI’s peak head, when its rows land, emits a per-bin Bernoulli probability. Always quote AUPRC with the peak base rate. AUROC is not on the board. Current Full-genome rows both have AUPRC as coverage ranking. Peak category enters the composite only if every ranked row has it; both current rows do.",
+      "caveats": "Always quote peak_base_rate. Exact ENCODE peak-call pipeline behind store peaks (IDR versus MACS2 p-value) is not recorded beyond “MACS2 membership.”"
+    },
+    "dev/peak/peaks": {
+      "question": "Are positions the method ranks as peaks the MACS2 peaks in the validation cell on chromosome 21?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs, 45 tracks / 22 marks (assays the target has and the input lacks). P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Chromosome 21 has 1,868,399 bins; the full genome has 23 chromosomes and 121,241,684 bins. Blind test pairs (regime.eic_test) are not these boards. Base rate 0.01375.",
+      "instrument": "AUPRC against store peak calls, always with the peak base rate. This is the Peak tab — not the point-wise E-block. Peak loss (Bernoulli NLL) is not in the registry, so it does not render. There is no peak-head CRPS.",
+      "devices": "eDICE, ChromImpute, Avocado, avg-arcsinh, and marginal have no peak-score array. AUPRC then ranks bins by predicted signal (or the count mean if that is all they have) against called peaks — a coverage ranking, not a peak classifier. avg / knn5 / knn1 emit a native peak score (fraction of contributors, or copied calls). CANDI’s peak head, when its rows land, emits a per-bin Bernoulli probability. Always quote AUPRC with the peak base rate. AUROC is not on the board. Native peak_score: avg, knn5, knn1. Coverage ranking: Avocado, eDICE, ChromImpute, avg-arcsinh, marginal (AUPRC = base rate — the chance line for a constant).",
+      "caveats": "Quote the base rate. Development column."
+    },
+    "entrants/peak/peaks": {
+      "question": "2019 has no MACS2 AUPRC. A peak number here would not be the same instrument as Full genome / Peak.",
+      "truth": "No peak file on Dataset-3. A challenge-style binarisation (signal ≥ 2 on both sides) was computed off-board and is not stamped. All entrant rows list AUPRC and peak base rate as missing.",
+      "instrument": "Not binary_suite versus store peaks. Not comparable to Dataset-2 AUPRC.",
+      "devices": "No native peak scores from submissions.",
+      "caveats": "2019 has no MACS2 AUPRC. A peak number here would not be the same instrument as Full genome / Peak."
+    },
+    "main/radar": {
+      "question": "What is each method’s shape on the full genome — p-value categories as one polygon, count-space rank as a separate figure?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs of a type the method already saw (not unseen cell types; not EIC stage-2 poorly characterised types; not regime.eic_test). 45 tracks / 22 marks. P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Ranks are within this eval set only. All 23 store chromosomes.",
+      "instrument": "P-value-space categories (point-wise, distributional, peaks) share one polygon. Count-space rank is a separate figure beside it. Rank 1 is the outer ring (or the top of the count bar); last place is the centre. Count-space and p-value-space numbers never share an axis. A p-value shape needs three rankable categories.",
+      "devices": "Each card is one method on this eval set. Click the method name for its help card. Axis labels are the category names; each category’s ? on the family tabs defines the metric. Stamped Full-genome rows today: eDICE and ChromImpute.",
+      "caveats": "Ranks are within Full genome, not across eval sets. Avocado and ChromImpute are in-sample at every position. eDICE is position-generalizing (trained on chromosome 19 bins, no position parameters). CANDI’s chromosome-19 recipe would be in-sample only on chromosome 19."
+    },
+    "dev/radar": {
+      "question": "What is each method’s shape on chromosome 21 — p-value categories as one polygon, count-space rank as a separate figure?",
+      "truth": "Dataset-2 store (CANDI_STORE eic), 25 bp bins. 26 declared training-to-validation cell pairs of a type the method already saw (not unseen cell types; not EIC stage-2 poorly characterised types; not regime.eic_test). 45 tracks / 22 marks. P-value truth is store p-value decoded to −log10 p. Count truth is store counts. Peak truth is store peaks, 0/1, documented as MACS2 membership. Ranks are within this eval set only. Chromosome 21 only (development column, not the headline).",
+      "instrument": "P-value-space categories (point-wise, distributional, peaks) share one polygon. Count-space rank is a separate figure beside it. Rank 1 is the outer ring (or the top of the count bar); last place is the centre. Count-space and p-value-space numbers never share an axis. A p-value shape needs three rankable categories.",
+      "devices": "Each card is one method on this eval set. Click the method name for its help card. Development column — numbers here select what is worth scoring genome-wide.",
+      "caveats": "Development column, not the headline. Avocado and ChromImpute are in-sample on chromosome 21; CANDI’s chromosome-19 recipe would be held-out; eDICE is position-generalizing."
+    },
+    "entrants/radar": {
+      "question": "What is each frozen 2019 submission’s shape on the challenge blind test?",
+      "truth": "Synapse blind-test bigwigs, 48 experiments after dropping 3 DNase-seq. This is challenge signal, not store −log10 p. Only point-wise signal metrics are in the registry, so a p-value polygon that needs three categories will not draw.",
+      "instrument": "P-value-space categories share one polygon when three are rankable; 2019 has only point-wise, so the polygon is omitted. Count-space is absent on every 2019 row. Rank 1 outer, last at centre, within this eval set only.",
+      "devices": "Direct bigwig versus truth. No σ-table, no inversion, no count arm.",
+      "caveats": "Different truth signal — never translate to Full genome or Chromosome 21. A missing polygon here means this eval set does not have three rankable p-value categories, not that the methods have no shape."
+    }
+  },
+  "metrics": {
+    "pval/mse": {
+      "question": "On average, how far is the predicted track from the truth, bin by bin, in squared units?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>MSE</mi><mo>=</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover><msup><mrow><mo>(</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo stretchy=\"false\">^</mo></mover><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow></math>",
+      "estimator_notes": "Mean squared error on the concatenation of scored chromosomes (eic.dict_to_arr). No ddof. No transform. Track wrap is eic.py::mse; board number is the unweighted mean over tracks (harness.py::macro_mean). 2019 uses the same letters on a different signal, with a different macro recipe (bootstrap mean within experiment; median within assay; mean over assay medians). Computed from eic.py::mse.",
+      "read_rules": "Lower is better; ranked; no floor. P-value space (pred_space: −log10 p). 2019 uses the same letters on a different signal — never place cells next to Dataset-2. MSE scales with mark range."
+    },
+    "pval/gwcorr": {
+      "question": "Do predicted and true values rise and fall together in a straight line, over the whole scored genome?",
+      "formula_mathml": "<math display=\"block\"><mi>r</mi><mo>=</mo><mfrac><mrow><msub><mi>∑</mi><mi>i</mi></msub><mo>(</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><mover><mi>y</mi><mo>¯</mo></mover><mo>)</mo><mo>(</mo><msub><mover><mi>y</mi><mo>^</mo></mover><mi>i</mi></msub><mo>−</mo><mover><mover><mi>y</mi><mo>^</mo></mover><mo>¯</mo></mover><mo>)</mo></mrow><mrow><msqrt><mrow><msub><mi>∑</mi><mi>i</mi></msub><msup><mrow><mo>(</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><mover><mi>y</mi><mo>¯</mo></mover><mo>)</mo></mrow><mn>2</mn></msup></mrow></msqrt><msqrt><mrow><msub><mi>∑</mi><mi>i</mi></msub><msup><mrow><mo>(</mo><msub><mover><mi>y</mi><mo>^</mo></mover><mi>i</mi></msub><mo>−</mo><mover><mover><mi>y</mi><mo>^</mo></mover><mo>¯</mo></mover><mo>)</mo></mrow><mn>2</mn></msup></mrow></msqrt></mrow></mfrac></math>",
+      "estimator_notes": "Pearson r = np.corrcoef(y, ŷ)[0, 1] on concatenated chromosomes. A constant input returns NaN (eic.py::gwcorr). Correlation is scale-invariant (ddof cancels). Computed from eic.py::gwcorr.",
+      "read_rules": "Higher is better; ranked; no floor. A constant forecast (marginal) is absent, not zero. 2019 vs Dataset-2: different truth — never translate."
+    },
+    "pval/gwspear": {
+      "question": "Do predicted and true values share the same rank order over the scored genome?",
+      "formula_mathml": "<math display=\"block\"><mi>ρ</mi><mo>=</mo><mi>Pearson</mi><mo>(</mo><mi>rank</mi><mo>(</mo><mi>y</mi><mo>)</mo><mo>,</mo><mi>rank</mi><mo>(</mo><mover><mi>y</mi><mo>^</mo></mover><mo>)</mo><mo>)</mo></math>",
+      "estimator_notes": "ρ = scipy.stats.spearmanr(y, ŷ)[0] (eic.py::gwspear). Scipy default: average ranks on ties. Concatenated chromosomes. Computed from eic.py::gwspear.",
+      "read_rules": "Higher is better; ranked; no floor. Do not quote Pearson and Spearman as a pair across spaces. Same 2019 / Dataset-2 warning: different truth — never translate."
+    },
+    "pval/mse1obs": {
+      "question": "On the tallest 1% of observed bins, how far is the prediction?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>MSE</mi><msub><mrow></mrow><mtext>top-1% obs</mtext></msub><mo>=</mo><mfrac><mn>1</mn><mrow><mo>|</mo><mi>S</mi><mo>|</mo></mrow></mfrac><munder><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>S</mi></mrow></munder><msup><mrow><mo>(</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo>^</mo></mover><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>,</mo><mi>S</mi><mo>=</mo><mo>{</mo><mi>i</mi><mo>:</mo><msub><mi>y</mi><mi>i</mi></msub><mo>≥</mo><mi>τ</mi><mo>}</mo></mrow></math>",
+      "estimator_notes": "N = |y|, n = int(N * 0.01), τ = np.sort(y)[-n] (so N < 100 selects the minimum and thus the whole array). Mask y_i ≥ τ (ties admit more than 1%). Then MSE on the mask. Top-1% is over the concatenation of all scored chromosomes, not per chromosome. Computed from eic.py::mse1obs and _top1_mask.",
+      "read_rules": "Lower is better; ranked; no floor. The chromosome set is part of the number. 2019 vs Dataset-2: different truth — never translate."
+    },
+    "pval/crps": {
+      "question": "If each bin is a Gaussian forecast in −log10 p, how far is that whole distribution from the observed value — not just the centre?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>CRPS</mi><mo>=</mo><mi>σ</mi><mo>[</mo><mi>z</mi><mo>(</mo><mn>2</mn><mi>Φ</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>+</mo><mn>2</mn><mi>φ</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>−</mo><msup><mi>π</mi><mrow><mo>−</mo><mn>1</mn><mo>/</mo><mn>2</mn></mrow></msup><mo>]</mo><mo>,</mo><mi>z</mi><mo>=</mo><mo>(</mo><mi>y</mi><mo>−</mo><mi>μ</mi><mo>)</mo><mo>/</mo><mi>σ</mi></mrow></math>",
+      "estimator_notes": "Per bin, Gneiting–Raftery 2007 closed form (distributional.py::gauss_crps): z = (y − μ) / σ with σ ← max(σ, 10⁻¹²). Track score = mean over bins; board = unweighted mean over tracks. No oracle-scaled split on this arm. Closed form only — no sampled Gaussian CRPS in this code. Rivals: σ is one constant per assay from the fitted table, not per-bin. CANDI store path: μ, σ are the delta-method pushforward of the training-space Gaussian when signal_target_transform ≠ none (invert_signal_prediction). Computed from distributional.py::gauss_crps / gauss_suite.",
+      "read_rules": "Lower is better; ranked but ordering-only. Always show PIT KS and Coverage 95 beside it. No single noise floor (t57 per-method paired CIs; ties not greyed yet). Rival wrap CRPS is in-sample for σ on chromosome 21. Never quote as a calibrated absolute. Point-only rivals get one Gaussian spread per assay, fitted once on validation-pair residuals (eval chromosome chr21) and reused unchanged. That device is known-miscalibrated (PIT KS 0.367–0.391, 95% coverage 0.977–0.985 on the stamped rival rows). CANDI's per-bin Gaussian signal head does not use this device. Count and p-value CRPS never share a column."
+    },
+    "pval/pit_ks": {
+      "question": "If the predicted Gaussians were correct, the observed values’ percentiles would be Uniform(0,1) — how far from uniform are they?",
+      "formula_mathml": "<math display=\"block\"><mrow><msub><mi>u</mi><mi>i</mi></msub><mo>=</mo><mi>Φ</mi><mo>(</mo><mo>(</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>)</mo><mo>/</mo><msub><mi>σ</mi><mi>i</mi></msub><mo>)</mo><mo>,</mo><mi>D</mi><mo>=</mo><munder><mi>sup</mi><mi>t</mi></munder><mo>|</mo><msub><mi>F</mi><mi>n</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>−</mo><mi>t</mi><mo>|</mo></mrow></math>",
+      "estimator_notes": "PIT KS is the Kolmogorov–Smirnov distance of the probability-integral transform from Uniform(0,1). Continuous (non-randomised) PIT u_i = Φ((y_i − μ_i) / σ_i) with σ_i ← max(σ_i, 10⁻¹²). Then PIT-KS = scipy.stats.kstest(u, \"uniform\").statistic — two-sided D = sup_t |F_n(t) − t|, not a p-value. Discrete PIT (calibration_pit_curve) is not used on this arm. No jitter / randomised PIT. Computed from distributional.py::gauss_suite.",
+      "read_rules": "Lower is better; companion, never ranked. Always beside p-value CRPS. On rivals this scores the wrap (one σ per assay, fitted on chromosome-21 validation-pair residuals), not a forecast the method emitted. Store-path CANDI: calibration of the delta-method Gaussian, not the head. Known-miscalibrated wrap: PIT KS 0.367–0.391 on the stamped rival rows."
+    },
+    "pval/coverage_95": {
+      "question": "What fraction of observed bins fall inside the forecast’s central 95% interval?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>cov</mi><mo>=</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover><mn>1</mn><mo>[</mo><msub><mi>q</mi><mn>0.025</mn></msub><mo>≤</mo><msub><mi>y</mi><mi>i</mi></msub><mo>≤</mo><msub><mi>q</mi><mn>0.975</mn></msub><mo>]</mo></mrow></math>",
+      "estimator_notes": "α = 0.025, lo = Φ⁻¹(α; μ, σ), hi = Φ⁻¹(1 − α; μ, σ), coverage = mean(lo ≤ y ≤ hi). σ ← max(σ, 10⁻¹²). Nominal 0.95. This is interval coverage, not ECE. Computed from distributional.py::coverage_gauss, emitted in gauss_suite.",
+      "read_rules": "No direction; companion, never ranked. Distance from 0.95 is not a sort key. Quote with CRPS + PIT KS. Rival wrap ~0.98 is known miscalibration. On rivals this scores the wrap, not a native forecast."
+    },
+    "pval/auprc": {
+      "question": "Ranking bins by the method’s peak score (or, if none, by predicted signal), how well are MACS2 peak bins placed above background?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>AP</mi><mo>=</mo><munder><mo>∑</mo><mi>k</mi></munder><mo>(</mo><msub><mi>R</mi><mi>k</mi></msub><mo>−</mo><msub><mi>R</mi><mrow><mi>k</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>)</mo><msub><mi>P</mi><mi>k</mi></msub></mrow></math>",
+      "estimator_notes": "Step-wise average precision, ties collapsed to one threshold (binary.py::average_precision): AP = Σ_k (R_k − R_{k−1}) P_k, with P_k = TP / (TP + FP) and R_k = TP / TP_end. Scores sorted descending (mergesort); equal scores share one threshold (last-of-tie). No positives → NaN. Score vector = peak_score if a peak head exists, else predicted p-value (or count mean). Computed from binary.py::average_precision / binary_suite.",
+      "read_rules": "Higher is better; ranked; always quote peak_base_rate. AUROC is not on the board. A point-only rival’s AUPRC is a coverage ranking, not a peak classifier: eDICE, Avocado, and ChromImpute do not output a peak probability, so the scorer ranks each bin by predicted signal against MACS2 labels. CANDI's peak head, when its rows land, emits a per-bin Bernoulli probability and is labeled separately. 2019 has no MACS2 AUPRC (absent, not invented)."
+    },
+    "pval/peak_base_rate": {
+      "question": "What fraction of scored bins are MACS2 peaks in the validation cell?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>base</mi><mo>=</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mi>i</mi><mi>N</mi></munderover><mn>1</mn><mo>[</mo><msubsup><mi>y</mi><mi>i</mi><mtext>peak</mtext></msubsup><mo>]</mo></mrow></math>",
+      "estimator_notes": "peak_base_rate = mean(1[y^peak]) over scored bins (binary.py::binary_suite). Board number is the unweighted mean over tracks.",
+      "read_rules": "Companion, never ranked; no direction. About 0.01375 on chromosome 21, about 0.0169 macro genome-wide. A random ranker’s AUPRC equals this rate. Always quote AUPRC with this number."
+    },
+    "pval/gaussian_nll": {
+      "question": "What mean per-bin Gaussian negative log-likelihood does the p-value head (or wrapped Gaussian) assign to held-out truth in the training transform?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>NLL</mi><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover><mo>(</mo><mi>log</mi><msub><mi>v</mi><mi>i</mi></msub><mo>+</mo><msup><mrow><mo>(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>−</mo><msub><mi>y</mi><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>/</mo><msub><mi>v</mi><mi>i</mi></msub><mo>+</mo><mi>log</mi><mo>(</mo><mn>2</mn><mi>π</mi><mo>)</mo><mo>)</mo></mrow></math>",
+      "estimator_notes": "full=True Gaussian NLL (distributional.py::gaussian_nll): (1/N) Σ ½(log v_i + (μ_i − y_i)² / v_i + log(2π)), v_i = max(σ_i², 10⁻⁶). Truth is bent forward with transform_signal_target; prediction is not inverted (harness.py::loss_block). External stamped rows: transform none. Future CANDI store path: typically arcsinh — not comparable (D30). Computed from distributional.py::gaussian_nll.",
+      "read_rules": "Lower is better; per_family, never in the composite. Quote with signal_target_transform or not at all. Needs a spread (knn1 / avg-arcsinh absent). Not comparable to NB NLL. Count-space NLL and p-value-space NLL never share a table."
+    },
+    "count/crps": {
+      "question": "If each bin is a negative-binomial forecast of raw counts, how far is that whole distribution from the held-out count?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>CRPS</mi><mo>=</mo><mi>𝔼</mi><mo>|</mo><mi>X</mi><mo>−</mo><mi>y</mi><mo>|</mo><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>𝔼</mi><mo>|</mo><mi>X</mi><mo>−</mo><msup><mi>X</mi><mo>′</mo></msup><mo>|</mo></mrow></math>",
+      "estimator_notes": "Default: closed-form CRPS = E|X − y| − ½ E|X − X′| (metrics.py::nb_crps), p = n / (n + μ) clipped to [10⁻⁹, 1 − 10⁻⁹], y ← max(y, 0). For n ≤ 10⁴: Pfaff-transformed ₂F₁ Gini term; result clamped max(·, 0). For n > 10⁴: Poisson-limit branch with sd ratio r = √(1 + μ/n). Track mean then macro mean. Opt-in --crps-approx K: fair sampled CRPS (nb_crps_sampled), k = K (full-genome baselines planned k=100, seed 0), gamma–Poisson draws, Ferro 2008 denominator k(k−1), no clamp at 0. Provenance then carries crps_estimator=fair_sampled, crps_k, crps_seed. Stamped chromosome-21 baselines: closed form at producer floor n=10⁴, not the pre-registered 10⁶. Computed from metrics.py::nb_crps and distributional.py::nb_suite.",
+      "read_rules": "Lower is better; ranked; floor ±0.09 (frozen pre-CANDII target-clustered; not a full-genome cross-method remeasure). Always quote crps_oracle_scaled and scale_error. If sampled, also quote k and seed. CANDI self-arrows use the 0.1195 seed-alone bar, not this floor. Count and p-value CRPS never share a column."
+    },
+    "count/crps_oracle_scaled": {
+      "question": "After giving the forecast a free per-assay multiplicative rescale of the mean, how good is the distribution (capability)?",
+      "formula_mathml": "<math display=\"block\"><mrow><msup><mi>c</mi><mo>∗</mo></msup><mo>=</mo><munder><mi>arg min</mi><mi>c</mi></munder><mi>CRPS</mi><mo>(</mo><mi>NB</mi><mo>(</mo><mi>n</mi><mo>,</mo><mi>μ</mi><mo>⋅</mo><msup><mn>2</mn><mi>c</mi></msup><mo>)</mo><mo>,</mo><mi>y</mi><mo>)</mo></mrow></math>",
+      "estimator_notes": "c* = arg min_c CRPS(NB(n, μ · 2^c), y) on grid c ∈ [−6, 6] step 0.25 then refine ±0.25 at 0.01 (distributional.py::oracle_scale). Grid search may subsample fit_budget=20,000 positions (seed=0); reported CRPS is on the full track at chosen c*. Dispersion n is not rescaled for this key. Same estimator as crps (closed form or sampled with shared seed). In-sample oracle: scale_error may be slightly negative. Computed from distributional.py::oracle_scale / nb_suite.",
+      "read_rules": "Lower is better; companion. Never quote without raw crps and scale_error. Not a cross-method rank column by itself."
+    },
+    "count/scale_error": {
+      "question": "How much of the count CRPS would one per-assay mean rescale remove?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>scale_error</mi><mo>=</mo><mi>CRPS</mi><mo>−</mo><msub><mi>CRPS</mi><mtext>oracle</mtext></msub></mrow></math>",
+      "estimator_notes": "scale_error = crps − crps_oracle_scaled (distributional.py::nb_suite). Same estimator on both terms (common random numbers if sampled).",
+      "read_rules": "Lower is better (can be slightly negative); companion. Quote the triple or none."
+    },
+    "count/nb_nll": {
+      "question": "What mean per-bin negative-binomial NLL does the count head assign to held-out raw counts?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>NLL</mi><mo>=</mo><mo>−</mo><mi>mean</mi><mo>[</mo><mi>log</mi><mi>NB</mi><mo>(</mo><mi>k</mi><mo>;</mo><mi>n</mi><mo>,</mo><mi>p</mi><mo>)</mo><mo>]</mo></mrow></math>",
+      "estimator_notes": "Training twin (distributional.py::nb_nll): p = n / (n + μ), probs = clip(1 − p, [10⁻⁶, 1 − 10⁻⁶]), total = max(n, 10⁻⁶), k = max(counts, 0), NLL = −mean[total log(1 − probs) + k log(probs) − log Γ(total + k) + log Γ(1 + k) + log Γ(total)]. Mean over all eval bins of the track (the imp population, not a training mask). Computed from distributional.py::nb_nll / harness.py::loss_block.",
+      "read_rules": "Lower is better; per_family; never in the composite; never ranked against Gaussian NLL. Sampled CRPS does not change NLL. Count-space NLL and p-value-space NLL never share a table."
+    },
+    "diagnostics/covuse": {
+      "question": "Does scrambling one told covariate make the count-head CRPS worse than the true prompt?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>p</mi><mo>=</mo><mo>(</mo><mn>1</mn><mo>+</mo><mo>#</mo><mo>{</mo><msub><mi>L</mi><mi>r</mi></msub><mo>≤</mo><msub><mi>L</mi><mtext>obs</mtext></msub><mo>}</mo><mo>)</mo><mo>/</mo><mo>(</mo><mi>R</mi><mo>+</mo><mn>1</mn><mo>)</mo></mrow></math>",
+      "estimator_notes": "Per covariate k, L_obs = mean CRPS_NB(predict(cov)). For R = 200 resamples (default, seed 0): marginal and conditional nulls; p = (1 + #{L_r ≤ L_obs}) / (R + 1); uses_covariate = 1[p_marginal < 0.05]. within_batch_d_crps must be exactly 0 (covariate.py::covuse). Board scalar: flatten_c_block has no headline for nested covuse — omitted unless already a finite scalar. Computed from covariate.py::covuse.",
+      "read_rules": "Registry direction is higher, but no panel aggregate is defined in code. CANDI-lineage only; empty for every stamped row; never invent for rivals."
+    },
+    "diagnostics/covshare": {
+      "question": "Of the variance in predicted level, what share does each covariate own (Shapley, not Sobol)?",
+      "formula_mathml": "<math display=\"block\"><mrow><msub><mi>φ</mi><mi>k</mi></msub><mo>=</mo><munder><mo>∑</mo><mrow><mi>S</mi><mo>∌</mo><mi>k</mi></mrow></munder><mfrac><mrow><mo>|</mo><mi>S</mi><mo>|</mo><mo>!</mo><mo>(</mo><mi>d</mi><mo>−</mo><mo>|</mo><mi>S</mi><mo>|</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>!</mo></mrow><mrow><mi>d</mi><mo>!</mo></mrow></mfrac><mo>(</mo><mi>V</mi><mo>(</mo><mi>S</mi><mo>∪</mo><mo>{</mo><mi>k</mi><mo>}</mo><mo>)</mo><mo>−</mo><mi>V</mi><mo>(</mo><mi>S</mi><mo>)</mo><mo>)</mo></mrow></math>",
+      "estimator_notes": "Shapley effects on V(S) = Var(E[f | X_S]) with inner-sample bias correction, both variances ddof=1, n_outer=64, n_inner=8, seed 0, f = level (covariate.py::covshare). Four covariates → 16 subsets exact. Shares sum to 1 when total > 10⁻¹². Board scalar: none (per-covariate dict omitted by flatten).",
+      "read_rules": "No direction on the registry; no board number today; CANDI-only. Never invent for rivals."
+    },
+    "diagnostics/depthdir": {
+      "question": "As told depth is stepped down the DSF ladder, does predicted level fall at every step?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>monotone_frac</mi><mo>=</mo><mi>mean</mi><mo>[</mo><mi>Δ</mi><mi>level</mi><mo>≤</mo><mn>0</mn><mo>]</mo></mrow></math>",
+      "estimator_notes": "Ladder offsets (0, −1, −2, −3) log2 (covariate.py::depthdir). monotone_frac = mean(Δlevel ≤ 0) over adjacent steps × units. Headline on the board = monotone_frac.",
+      "read_rules": "Higher is better; diagnostic; CANDI-only; not in the composite. Never invent for rivals."
+    },
+    "diagnostics/depthcounterfact": {
+      "question": "Told a false depth, does the count forecast whose told depth matches the real downsampled track win?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>frac_min_at_true</mi><mo>=</mo><mfrac><mn>1</mn><mrow><mo>#</mo><mi>levels</mi></mrow></mfrac><munder><mo>∑</mo><mi>ℓ</mi></munder><mn>1</mn><mo>[</mo><mi>arg min</mi><msub><mi>CRPS</mi><mtext>told</mtext></msub><mo>=</mo><mi>ℓ</mi><mo>]</mo></mrow></math>",
+      "estimator_notes": "One foreground: top 2% (min 5) of the deepest truth, jitter seed 0, optional truth ≥ 1 purity (covariate.py::depthcounterfact). For each true DSF level, argmin CRPS over told depths. Board headline = frac_min_at_true. constant_answer_value = 1 / n_levels (0.25 on a four-level ladder).",
+      "read_rules": "Higher is better; quote with the 0.25 floor and no 0.73 ceiling. 0.25 is “always answer full depth”, not chance. CANDI-only."
+    },
+    "diagnostics/covspec": {
+      "question": "When each covariate is scrambled, does each aspect of the NB profile move mainly under one covariate?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>gap</mi><mo>=</mo><mo>(</mo><msub><mi>m</mi><mn>1</mn></msub><mo>−</mo><msub><mi>m</mi><mn>2</mn></msub><mo>)</mo><mo>/</mo><msub><mi>m</mi><mn>1</mn></msub></mrow></math>",
+      "estimator_notes": "Aspects = level, shape, dispersion, tail (aspects_of). Matrix entry = mean |Δaspect| / std(base aspect) under marginal resample. Per aspect, gap = (m_1 − m_2) / m_1. Board headline = mean_gap (covariate.py::covspec). Construction is local (EVAL_PLAN D11), not a standard MIG of latents.",
+      "read_rules": "Higher is better; diagnostic; CANDI-only; not in the composite."
+    },
+    "diagnostics/depthblind": {
+      "question": "Is the encoder latent invariant to input depth (DSF batch), by kBET / iLISI / batch ASW?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>kBET</mi><mo>=</mo><mi>mean</mi><mo>[</mo><msup><mi>χ</mi><mn>2</mn></msup><mi>p</mi><mo>&lt;</mo><mi>α</mi><mo>]</mo></mrow></math>",
+      "estimator_notes": "depthblind returns kBET rejection rate (k=20, α=0.05, n_test=200, seed 0), iLISI (k capped), batch_asw = mean(1 − |s|), plus biokeep fields (covariate.py::depthblind). Board: flatten_c_block omits depthblind — no single headline. Site cannot show a number until a headline is chosen. Computed from covariate.py::depthblind / kBET.",
+      "read_rules": "Higher better on the registry, but no scalar is extracted. Never quote without biokeep (D13). CANDI-only."
+    },
+    "diagnostics/biokeep": {
+      "question": "Did the latent stay invariant because it still separates regions, or because it collapsed?",
+      "formula_mathml": "<math display=\"block\"><mrow><mi>bio_silhouette</mi><mo>=</mo><mi>mean</mi><mo>[</mo><mo>(</mo><mi>b</mi><mo>−</mo><mi>a</mi><mo>)</mo><mo>/</mo><mi>max</mi><mo>(</mo><mi>a</mi><mo>,</mo><mi>b</mi><mo>)</mo><mo>]</mo></mrow></math>",
+      "estimator_notes": "Mean silhouette over bio_label (region) (covariate.py::biokeep). Board headline from depthblind_biokeep.bio_silhouette (flatten_c_block).",
+      "read_rules": "Higher is better; companion of depthblind; never render depth-blind without this; CANDI-only."
+    }
+  }
+}
