@@ -92,3 +92,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
 - `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
+- `t57` [implementation] measure the pval-arm Gaussian-CRPS noise floors: q19 seed-pair re-aggregation + target-clustered bootstrap on eic_val — *done* → `results/t57/FLOOR_MEMO.md`
