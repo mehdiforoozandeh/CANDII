@@ -8,9 +8,9 @@ The three: the bin grid (an off-by-one shifts every score), the fairness filter 
 `inputinfofile.txt` invalidates every number the method produces), and the directory name (a track
 the bench cannot match to a declared pair is a track it drops).
 
-A fourth since D32: the training grid a `regions` regime declares. The jar samples anywhere in a
-chromosome it is given, so the only thing that can be checked is the grid — that every base it is
-allowed to reach in training lies inside the BED.
+A fourth: the training grid. `GenerateTrainData` samples anywhere in a chromosome it is given and
+nowhere outside one, so the only thing that can be checked here is the grid — that every base the
+jar is allowed to reach in training is a base Rule 2 allows.
 """
 from __future__ import annotations
 
@@ -160,12 +160,15 @@ def test_inputinfo_is_three_tab_columns(tmp_path):
 
 
 # ---------------------------------------------------------------------------------------------
-# D32 — the training grid a `regions` regime declares
+# the training grid — Rule 2's locus scope
 # ---------------------------------------------------------------------------------------------
 
 REPO = Path(__file__).resolve().parents[3]
 PILOT = REPO / "configs" / "regime.eic_pilot.json"
 NO_REGIONS = REPO / "configs" / "regime.eic_19.json"
+
+#: The store's bin table for the chromosomes these tests reach, from BENCHMARK_DESIGN.md §3.
+N_BINS = {"chr19": 2344704, "chr20": 2577766, "chr21": 1868399, "chr22": 2032738}
 
 
 def _bed_intervals(path):
@@ -198,9 +201,63 @@ def _regions_regime(tmp_path, rows, train_chroms):
     return regime
 
 
-def test_a_regime_without_a_regions_block_declares_no_training_grid():
-    """Absent `regions`, nothing about the run may change — the whole point of D32 being optional."""
+def test_a_regime_without_a_regions_block_declares_no_region_scope():
+    """`region_scope` is the BED reader and nothing else; absent a BED it has nothing to say."""
     assert prepare.region_scope(prepare.load_json(NO_REGIONS), NO_REGIONS) == []
+
+
+def test_no_sampled_training_location_can_fall_on_an_evaluation_chromosome():
+    """The requirement, in both live regimes. `GenerateTrainData` samples anywhere in a declared
+    chromosome, so the guarantee has to be that the eval chromosomes are not declared to it —
+    not that the sampler behaves. Rule 2 (§2) is about the loci the predictors are fit on."""
+    for path in (NO_REGIONS, PILOT):
+        regime = prepare.load_json(path)
+        scope = prepare.training_scope(regime, path, N_BINS)
+        assert scope, path.name
+        assert not {c for _, c, _, _ in scope} & set(regime["eval_chroms"]), path.name
+
+
+def test_the_training_grid_is_the_regimes_train_chroms_without_a_bed():
+    """The PI ruling of 2026-09-01: the sampler goes where the regime says the transferable
+    parameters may be fit, which without a BED is `train_chroms` whole."""
+    regime = prepare.load_json(NO_REGIONS)
+    assert prepare.training_scope(regime, NO_REGIONS, N_BINS) == [("chr19", "chr19", 0, 2344704)]
+    assert regime["train_chroms"] == ["chr19"]
+
+
+def test_a_bed_narrows_the_training_grid_further_but_never_widens_it():
+    """A `regions` regime restricts the same scope; it never adds a locus `train_chroms` excludes."""
+    regime = prepare.load_json(PILOT)
+    scope = prepare.training_scope(regime, PILOT, N_BINS)
+    assert scope == prepare.region_scope(regime, PILOT)
+    assert {c for _, c, _, _ in scope} <= set(regime["train_chroms"])
+
+
+def test_widening_the_training_grid_does_not_widen_the_compendium():
+    """Rule 1 does not move when Rule 2's scope does. The grid decides which BASES are written;
+    `training_tracks` alone decides which TRACKS are, and it is the only gate on the scored ones."""
+    tracks = prepare.training_tracks(_manifest(), _regime())
+    for scope in ([("chr19", "chr19", 0, 10)], [("R1", "chr1", 0, 10), ("R2", "chr2", 0, 10)]):
+        names = {prepare.signal_filename(s, m) for s, m in tracks
+                 for _ in prepare.signal_slices(["chr20"], {"chr20": 10}, scope)}
+        assert not {n for n in names if n.startswith(("V_", "B_"))}
+        assert {n.split(".")[0] for n in names} == {"T_K562", "T_H9"}
+
+
+def test_a_regime_that_names_no_training_loci_is_refused(tmp_path):
+    """Silence is the failure mode this replaces: a regime with no scope used to fall through to
+    the eval chromosomes, which is exactly what Rule 2 forbids."""
+    regime = tmp_path / "regime.json"
+    regime.write_text(json.dumps({"train_chroms": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="no locus scope"):
+        prepare.training_scope(prepare.load_json(regime), regime, N_BINS)
+
+
+def test_a_training_chromosome_the_store_does_not_carry_is_named(tmp_path):
+    regime = tmp_path / "regime.json"
+    regime.write_text(json.dumps({"train_chroms": ["chrZZ"]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="chrZZ"):
+        prepare.training_scope(prepare.load_json(regime), regime, N_BINS)
 
 
 def test_every_training_location_the_jar_can_reach_lies_inside_the_bed():
@@ -217,7 +274,7 @@ def test_every_training_location_the_jar_can_reach_lies_inside_the_bed():
         assert stop * prepare.RESOLUTION <= e
 
 
-def test_no_training_location_falls_on_an_evaluation_chromosome():
+def test_the_bed_keeps_its_regions_on_the_evaluation_chromosomes_and_the_scope_drops_them():
     """Rule 2's cut is the regime's chromosome list, not the BED — four Pilot Regions sit on
     chr20/21/22 and the BED keeps all 44 so it stays correct for any other split (§3.1)."""
     regime = prepare.load_json(PILOT)
@@ -285,13 +342,143 @@ def test_the_declared_region_length_makes_convert_emit_exactly_the_contained_bin
 
 
 def test_the_signal_writer_covers_the_apply_grid_and_the_training_grid_and_nothing_else():
-    """One list drives the writer, so a region declared in `chrominfo.train.txt` and never written
+    """One list drives the writer, so a locus declared in `chrominfo.train.txt` and never written
     as a bedgraph — the failure `Convert` reports as a warning and skips — cannot happen."""
     scope = prepare.region_scope(prepare.load_json(PILOT), PILOT)
     slices = prepare.signal_slices(["chr20", "chr21"], {"chr20": 100, "chr21": 200}, scope)
     assert slices[:2] == [("chr20", "chr20", 0, 100), ("chr21", "chr21", 0, 200)]
     assert slices[2:] == scope
     assert len({name for name, _, _, _ in slices}) == len(slices)
+
+
+def test_the_signal_writer_covers_a_training_chromosome_the_apply_grid_does_not_name():
+    """The training chromosome needs its own bedgraphs — `Convert` skips a missing input with a
+    warning, so an unwritten chr19 would leave the predictors fitted on nothing at all."""
+    scope = prepare.training_scope(prepare.load_json(NO_REGIONS), NO_REGIONS, N_BINS)
+    slices = prepare.signal_slices(["chr20", "chr21", "chr22"], N_BINS, scope)
+    assert ("chr19", "chr19", 0, N_BINS["chr19"]) in slices
+    assert [name for name, _, _, _ in slices] == ["chr20", "chr21", "chr22", "chr19"]
+
+
+def test_a_chromosome_on_both_grids_is_written_once():
+    """The two grids may name the same chromosome; one bedgraph serves both, and writing it twice
+    would be the same bytes at twice the cost."""
+    slices = prepare.signal_slices(["chr19", "chr20"], N_BINS,
+                                   [("chr19", "chr19", 0, N_BINS["chr19"])])
+    assert [name for name, _, _, _ in slices] == ["chr19", "chr20"]
+
+
+# ---------------------------------------------------------------------------------------------
+# which chrominfo each jar command is handed — `stage.sh`, driven against a recording `java`
+# ---------------------------------------------------------------------------------------------
+
+STAGE_SH = REPO / "competitors" / "chromimpute" / "slurm" / "stage.sh"
+SCORE_SH = REPO / "competitors" / "chromimpute" / "slurm" / "score.sh"
+
+
+def _shim(bin_dir: Path, name: str, body: str) -> None:
+    p = bin_dir / name
+    p.write_text("#!/bin/bash\n" + body, encoding="utf-8")
+    p.chmod(0o755)
+
+
+def _run_stage(tmp_path, stage, item, *, write_train_grid=True):
+    """Run one `stage.sh` stage with `java` replaced by a recorder. Returns (proc, arg lines)."""
+    import subprocess
+    run, bin_dir = tmp_path / "run", tmp_path / "bin"
+    (run / "input").mkdir(parents=True)
+    (run / "lists").mkdir()
+    bin_dir.mkdir()
+    log = tmp_path / "java.log"
+    _shim(bin_dir, "java", f'printf "%s\\n" "$*" >> {log}\n')
+    _shim(bin_dir, "module", "true\n")
+    (run / "input" / "chrominfo.txt").write_text(
+        "chr20\t100\nchr21\t100\nchr22\t100\n", encoding="utf-8")
+    if write_train_grid:
+        (run / "input" / "chrominfo.train.txt").write_text("chr19\t100\n", encoding="utf-8")
+    (run / "input" / "inputinfofile.txt").write_text(
+        "T_K562\tH3K4me3\tT_K562.H3K4me3.bedgraph.gz\n", encoding="utf-8")
+    (run / "lists" / f"{stage}.txt").write_text(item + "\n", encoding="utf-8")
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path),
+        "CI_STAGE": stage, "CI_RUN": str(run), "CI_REGIME": str(NO_REGIONS),
+        "CI_CHROMS": "chr20,chr21,chr22", "CI_PY": sys.executable,
+        "CI_JAR": str(tmp_path / "ChromImpute.jar"), "SLURM_ARRAY_TASK_ID": "0",
+        "SLURM_JOB_ID": "1", "CI_KEEP_BEDGRAPH": "1",
+    }
+    proc = subprocess.run(["bash", str(STAGE_SH)], env=env, capture_output=True, text=True)
+    lines = log.read_text().splitlines() if log.exists() else []
+    return proc, lines
+
+
+def test_generate_train_data_is_handed_the_training_grid_and_never_the_apply_grid():
+    """The requirement, at the only place it can be enforced: which file reaches the sampler."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        proc, lines = _run_stage(Path(d), "gtd", "H3K4me3")
+    assert proc.returncode == 0, proc.stderr
+    gtd = [ln for ln in lines if "GenerateTrainData" in ln]
+    assert len(gtd) == 1, lines
+    assert "chrominfo.train.txt" in gtd[0]
+    assert "input/chrominfo.txt" not in gtd[0]
+
+
+def test_the_correlation_table_is_computed_on_the_training_grid_too():
+    """`ComputeGlobalDist` writes one sample ranking reused at every predicted position, so it is
+    a transferable parameter and belongs on the training loci with the predictors."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        proc, lines = _run_stage(Path(d), "dist", "H3K4me3")
+    assert proc.returncode == 0, proc.stderr
+    dist = [ln for ln in lines if "ComputeGlobalDist" in ln]
+    assert len(dist) == 1 and "chrominfo.train.txt" in dist[0]
+
+
+def test_apply_still_runs_on_every_evaluation_chromosome():
+    """§2 Rule 2 names per-position adaptation on the scored chromosomes as inference and open to
+    every method, and lists ChromImpute's neighbour features. Moving the sampler must not move it."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        proc, lines = _run_stage(Path(d), "apply", "T_K562\tH3K4me3")
+    assert proc.returncode == 0, proc.stderr
+    applied = [ln for ln in lines if " Apply " in f" {ln} "]
+    assert sorted(ln.split("-c ")[1].split()[0] for ln in applied) == ["chr20", "chr21", "chr22"]
+    assert all("input/chrominfo.txt" in ln for ln in applied)
+    assert not any("chrominfo.train.txt" in ln for ln in applied)
+
+
+def test_convert_prepares_the_training_chromosome_as_well_as_the_evaluation_ones():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        proc, lines = _run_stage(Path(d), "convert", "H3K4me3")
+    conv = [ln for ln in lines if "Convert" in ln]
+    assert sorted(ln.split("-c ")[1].split()[0] for ln in conv) == \
+        ["chr19", "chr20", "chr21", "chr22"]
+
+
+def test_a_missing_training_grid_refuses_instead_of_falling_back_to_the_apply_grid():
+    """The fallback was the bug: it silently fitted the predictors on the scored chromosomes."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        proc, lines = _run_stage(Path(d), "gtd", "H3K4me3", write_train_grid=False)
+    assert proc.returncode == 2
+    assert "REFUSING" in proc.stderr
+    assert not lines
+
+
+def test_a_void_sigma_table_is_refused_rather_than_scored():
+    """§12.2 voids every sigma this tree can produce — `fit_sigma.fit` pools residuals against V_
+    truth. Avocado, eDICE and Lavawizard refuse to fit one; this script refuses to use one."""
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        (tmp / "sigma.json").write_text("{}", encoding="utf-8")
+        env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "CI_RUN": str(tmp),
+               "CI_SIGMA": str(tmp / "sigma.json")}
+        proc = subprocess.run(["bash", str(SCORE_SH)], env=env, capture_output=True, text=True)
+    assert proc.returncode == 3
+    assert "REFUSING" in proc.stderr
 
 
 # ---------------------------------------------------------------------------------------------
