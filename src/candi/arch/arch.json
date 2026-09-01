@@ -1,0 +1,2064 @@
+{
+ "_generated_by": "tools/arch_diagram.py \u2014 do not edit; run `python tools/arch_diagram.py build`",
+ "arch_defaults": {
+  "embed_dim": 32,
+  "dropout": 0.1,
+  "decoder_lane": 8,
+  "depth_center": 25.1,
+  "use_offset": true,
+  "num_assays": 35,
+  "context_length": 768,
+  "d_model": 0,
+  "nhead": 4,
+  "n_transformer_layers": 2,
+  "num_cells": 0,
+  "meta_embed_layernorm": true,
+  "meta_gain": 1.0,
+  "deconv_norm": "lane",
+  "resolution": 25,
+  "n_cnn_layers": 3,
+  "conv_kernel_size": 3,
+  "pool_size": 2,
+  "expansion_factor": 2,
+  "n_deconv_layers": 3,
+  "deconv_upsample": 2,
+  "deconv_kernel_size": 3,
+  "conv_norm": "layer",
+  "transformer_norm": "layer",
+  "transformer_norm_placement": "pre",
+  "attn_qk_norm": false,
+  "film_taps": [
+   "per_conv",
+   "pre_deconv",
+   "per_deconv"
+  ],
+  "film_init_encoder": "xavier",
+  "film_init_decoder": "zero",
+  "head_sharing": "shared",
+  "head_hidden": 0,
+  "heads": [
+   "count"
+  ]
+ },
+ "derived": {
+  "num_tracks": 36,
+  "context_bins": 768,
+  "latent_bins": 96,
+  "resolution_bp": 25,
+  "dna_length_bp": 19200,
+  "span_bp": 19200,
+  "signal_tower_out_channels": 288,
+  "signal_tower_out_per_assay": 8,
+  "signal_tower_lane_shapes": [
+   "[B, 768, 36, 1]",
+   "[B, 384, 36, 2]",
+   "[B, 192, 36, 4]",
+   "[B, 96, 36, 8]"
+  ],
+  "dna_tower_out_channels": 288,
+  "dna_tower_n_blocks": 5,
+  "d_model": 288,
+  "d_model_is_auto": true,
+  "encoder_film_mode": "per_conv",
+  "film_taps_on": [
+   "per_conv",
+   "pre_deconv",
+   "per_deconv"
+  ],
+  "film_taps_off": [
+   "pre_conv",
+   "post_conv",
+   "per_transformer",
+   "post_head"
+  ],
+  "decoder_lane": 8,
+  "decoder_n_blocks": 3,
+  "heads": [
+   "count"
+  ],
+  "head_arithmetic": {
+   "use_offset": true,
+   "depth_center": 25.1,
+   "log2_mu_clamp": [
+    -15.0,
+    30.0
+   ],
+   "mu_eps": 1e-06,
+   "depth_row": 0
+  }
+ },
+ "params": {
+  "total": 2353634,
+  "encoder": 2234984,
+  "decoder": 118650,
+  "by_part": {
+   "encoder.metadata_embedding": 6848,
+   "encoder.signal_tower": 8988,
+   "encoder.mask_injector": 288,
+   "encoder.dna_tower": 131148,
+   "encoder.fusion": 166176,
+   "encoder.transformer_blocks": 1921536,
+   "decoder.input_proj": 80920,
+   "decoder.blocks": 28608,
+   "decoder.film_layers": 2112,
+   "decoder.head_eta": 81,
+   "decoder.head_n": 81,
+   "decoder.meta_embedding": 6848
+  }
+ },
+ "io": {
+  "inputs": {
+   "x_data": [
+    "B",
+    768,
+    36
+   ],
+   "x_dna": [
+    "B",
+    4,
+    19200
+   ],
+   "x_meta": [
+    "B",
+    4,
+    36
+   ],
+   "y_meta": [
+    "B",
+    4,
+    35
+   ]
+  },
+  "outputs": {
+   "p": [
+    "B",
+    768,
+    35
+   ],
+   "n": [
+    "B",
+    768,
+    35
+   ],
+   "eta": [
+    "B",
+    768,
+    35
+   ],
+   "log2_mu": [
+    "B",
+    768,
+    35
+   ],
+   "mu": [
+    "B",
+    768,
+    35
+   ]
+  }
+ },
+ "modules": [
+  {
+   "path": "encoder",
+   "class": "V2Encoder",
+   "params": 2234984,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.metadata_embedding",
+   "class": "MetadataEmbedding",
+   "params": 6848,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.depth_proj",
+   "class": "Linear",
+   "params": 64,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.read_length_proj",
+   "class": "Linear",
+   "params": 64,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.assay_embedding",
+   "class": "Embedding",
+   "params": 1216,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.runtype_embedding",
+   "class": "Embedding",
+   "params": 128,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.fusion",
+   "class": "Sequential",
+   "params": 5248,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.fusion.0",
+   "class": "Linear",
+   "params": 4128,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.fusion.1",
+   "class": "GELU",
+   "params": 0,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.fusion.2",
+   "class": "Linear",
+   "params": 1056,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.metadata_embedding.fusion.3",
+   "class": "LayerNorm",
+   "params": 64,
+   "out_shape": [
+    1,
+    36,
+    32
+   ]
+  },
+  {
+   "path": "encoder.signal_tower",
+   "class": "SignalConvTower",
+   "params": 8988,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks",
+   "class": "ModuleList",
+   "params": 8064,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.signal_tower.blocks.0",
+   "class": "ConvTower",
+   "params": 576,
+   "out_shape": [
+    1,
+    72,
+    384
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.0.conv1",
+   "class": "ConvBlock",
+   "params": 432,
+   "out_shape": [
+    1,
+    72,
+    768
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.0.conv1.conv",
+   "class": "Conv1d",
+   "params": 288,
+   "out_shape": [
+    1,
+    72,
+    768
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.0.conv1.norm",
+   "class": "LayerNorm",
+   "params": 144,
+   "out_shape": [
+    1,
+    768,
+    72
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.0.rconv",
+   "class": "Conv1d",
+   "params": 144,
+   "out_shape": [
+    1,
+    72,
+    768
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.0.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    72,
+    384
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.1",
+   "class": "ConvTower",
+   "params": 1728,
+   "out_shape": [
+    1,
+    144,
+    192
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.1.conv1",
+   "class": "ConvBlock",
+   "params": 1296,
+   "out_shape": [
+    1,
+    144,
+    384
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.1.conv1.conv",
+   "class": "Conv1d",
+   "params": 1008,
+   "out_shape": [
+    1,
+    144,
+    384
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.1.conv1.norm",
+   "class": "LayerNorm",
+   "params": 288,
+   "out_shape": [
+    1,
+    384,
+    144
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.1.rconv",
+   "class": "Conv1d",
+   "params": 432,
+   "out_shape": [
+    1,
+    144,
+    384
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.1.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    144,
+    192
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.2",
+   "class": "ConvTower",
+   "params": 5760,
+   "out_shape": [
+    1,
+    288,
+    96
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.2.conv1",
+   "class": "ConvBlock",
+   "params": 4320,
+   "out_shape": [
+    1,
+    288,
+    192
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.2.conv1.conv",
+   "class": "Conv1d",
+   "params": 3744,
+   "out_shape": [
+    1,
+    288,
+    192
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.2.conv1.norm",
+   "class": "LayerNorm",
+   "params": 576,
+   "out_shape": [
+    1,
+    192,
+    288
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.2.rconv",
+   "class": "Conv1d",
+   "params": 1440,
+   "out_shape": [
+    1,
+    288,
+    192
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.blocks.2.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    288,
+    96
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.per_conv_film_layers",
+   "class": "ModuleList",
+   "params": 924,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.signal_tower.per_conv_film_layers.0",
+   "class": "FiLMLayer",
+   "params": 132,
+   "out_shape": [
+    1,
+    72,
+    384
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.per_conv_film_layers.0.proj",
+   "class": "Linear",
+   "params": 132,
+   "out_shape": [
+    1,
+    36,
+    4
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.per_conv_film_layers.1",
+   "class": "FiLMLayer",
+   "params": 264,
+   "out_shape": [
+    1,
+    144,
+    192
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.per_conv_film_layers.1.proj",
+   "class": "Linear",
+   "params": 264,
+   "out_shape": [
+    1,
+    36,
+    8
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.per_conv_film_layers.2",
+   "class": "FiLMLayer",
+   "params": 528,
+   "out_shape": [
+    1,
+    288,
+    96
+   ]
+  },
+  {
+   "path": "encoder.signal_tower.per_conv_film_layers.2.proj",
+   "class": "Linear",
+   "params": 528,
+   "out_shape": [
+    1,
+    36,
+    16
+   ]
+  },
+  {
+   "path": "encoder.mask_injector",
+   "class": "MaskTokenInjector",
+   "params": 288,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.dna_tower",
+   "class": "DNAConvTower",
+   "params": 131148,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks",
+   "class": "ModuleList",
+   "params": 131148,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.dna_tower.blocks.0",
+   "class": "ConvTower",
+   "params": 80,
+   "out_shape": [
+    1,
+    4,
+    9600
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.0.conv1",
+   "class": "ConvBlock",
+   "params": 60,
+   "out_shape": [
+    1,
+    4,
+    19200
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.0.conv1.conv",
+   "class": "Conv1d",
+   "params": 52,
+   "out_shape": [
+    1,
+    4,
+    19200
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.0.conv1.norm",
+   "class": "LayerNorm",
+   "params": 8,
+   "out_shape": [
+    1,
+    19200,
+    4
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.0.rconv",
+   "class": "Conv1d",
+   "params": 20,
+   "out_shape": [
+    1,
+    4,
+    19200
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.0.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    9600
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.1",
+   "class": "ConvTower",
+   "params": 240,
+   "out_shape": [
+    1,
+    12,
+    4800
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.1.conv1",
+   "class": "ConvBlock",
+   "params": 180,
+   "out_shape": [
+    1,
+    12,
+    9600
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.1.conv1.conv",
+   "class": "Conv1d",
+   "params": 156,
+   "out_shape": [
+    1,
+    12,
+    9600
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.1.conv1.norm",
+   "class": "LayerNorm",
+   "params": 24,
+   "out_shape": [
+    1,
+    9600,
+    12
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.1.rconv",
+   "class": "Conv1d",
+   "params": 60,
+   "out_shape": [
+    1,
+    12,
+    9600
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.1.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    12,
+    4800
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.2",
+   "class": "ConvTower",
+   "params": 1768,
+   "out_shape": [
+    1,
+    34,
+    2400
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.2.conv1",
+   "class": "ConvBlock",
+   "params": 1326,
+   "out_shape": [
+    1,
+    34,
+    4800
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.2.conv1.conv",
+   "class": "Conv1d",
+   "params": 1258,
+   "out_shape": [
+    1,
+    34,
+    4800
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.2.conv1.norm",
+   "class": "LayerNorm",
+   "params": 68,
+   "out_shape": [
+    1,
+    4800,
+    34
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.2.rconv",
+   "class": "Conv1d",
+   "params": 442,
+   "out_shape": [
+    1,
+    34,
+    4800
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.2.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    34,
+    2400
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.3",
+   "class": "ConvTower",
+   "params": 13860,
+   "out_shape": [
+    1,
+    99,
+    480
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.3.conv1",
+   "class": "ConvBlock",
+   "params": 10395,
+   "out_shape": [
+    1,
+    99,
+    2400
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.3.conv1.conv",
+   "class": "Conv1d",
+   "params": 10197,
+   "out_shape": [
+    1,
+    99,
+    2400
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.3.conv1.norm",
+   "class": "LayerNorm",
+   "params": 198,
+   "out_shape": [
+    1,
+    2400,
+    99
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.3.rconv",
+   "class": "Conv1d",
+   "params": 3465,
+   "out_shape": [
+    1,
+    99,
+    2400
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.3.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    99,
+    480
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.4",
+   "class": "ConvTower",
+   "params": 115200,
+   "out_shape": [
+    1,
+    288,
+    96
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.4.conv1",
+   "class": "ConvBlock",
+   "params": 86400,
+   "out_shape": [
+    1,
+    288,
+    480
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.4.conv1.conv",
+   "class": "Conv1d",
+   "params": 85824,
+   "out_shape": [
+    1,
+    288,
+    480
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.4.conv1.norm",
+   "class": "LayerNorm",
+   "params": 576,
+   "out_shape": [
+    1,
+    480,
+    288
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.4.rconv",
+   "class": "Conv1d",
+   "params": 28800,
+   "out_shape": [
+    1,
+    288,
+    480
+   ]
+  },
+  {
+   "path": "encoder.dna_tower.blocks.4.pool",
+   "class": "MaxPool1d",
+   "params": 0,
+   "out_shape": [
+    1,
+    288,
+    96
+   ]
+  },
+  {
+   "path": "encoder.fusion",
+   "class": "LinearFusion",
+   "params": 166176,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.fusion.fusion_proj",
+   "class": "Linear",
+   "params": 166176,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.fusion.gelu",
+   "class": "GELU",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.fusion.hidden_projs",
+   "class": "ModuleList",
+   "params": 0,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.fusion.norm",
+   "class": "Identity",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.fusion.dropout",
+   "class": "Dropout",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks",
+   "class": "ModuleList",
+   "params": 1921536,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0",
+   "class": "Encoder",
+   "params": 960768,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers",
+   "class": "ModuleList",
+   "params": 960480,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0",
+   "class": "ModuleList",
+   "params": 295200,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.0",
+   "class": "ModuleList",
+   "params": 288,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.0.0",
+   "class": "LayerNorm",
+   "params": 288,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.0.0.ln",
+   "class": "LayerNorm",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1",
+   "class": "Attention",
+   "params": 294912,
+   "out_shape": [
+    [
+     1,
+     96,
+     288
+    ],
+    null
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.to_q",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.to_k",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.to_v",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.split_q_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    64
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.split_k_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    64
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.split_v_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    64
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.merge_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.attend",
+   "class": "Attend",
+   "params": 0,
+   "out_shape": [
+    [
+     1,
+     4,
+     96,
+     64
+    ],
+    null
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.attend.attn_dropout",
+   "class": "Dropout",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    96
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.1.to_out",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.0.2",
+   "class": "Residual",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1",
+   "class": "ModuleList",
+   "params": 665280,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.0",
+   "class": "ModuleList",
+   "params": 288,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.0.0",
+   "class": "LayerNorm",
+   "params": 288,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.0.0.ln",
+   "class": "LayerNorm",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.1",
+   "class": "FeedForward",
+   "params": 664992,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.1.ff",
+   "class": "Sequential",
+   "params": 664992,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.1.ff.0",
+   "class": "Sequential",
+   "params": 332928,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.1.ff.0.0",
+   "class": "Linear",
+   "params": 332928,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.1.ff.0.1",
+   "class": "GELU",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.1.ff.1",
+   "class": "Dropout",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.1.ff.2",
+   "class": "Linear",
+   "params": 332064,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layers.1.2",
+   "class": "Residual",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.layer_integrators",
+   "class": "ModuleList",
+   "params": 0,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0.rotary_pos_emb",
+   "class": "RotaryEmbedding",
+   "params": 0,
+   "out_shape": [
+    [
+     1,
+     96,
+     32
+    ],
+    null
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.adaptive_mlp",
+   "class": "Identity",
+   "params": 0,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.0.final_norm",
+   "class": "LayerNorm",
+   "params": 288,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.final_norm.ln",
+   "class": "LayerNorm",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.0.skip_combines",
+   "class": "ModuleList",
+   "params": 0,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1",
+   "class": "Encoder",
+   "params": 960768,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers",
+   "class": "ModuleList",
+   "params": 960480,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0",
+   "class": "ModuleList",
+   "params": 295200,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.0",
+   "class": "ModuleList",
+   "params": 288,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.0.0",
+   "class": "LayerNorm",
+   "params": 288,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.0.0.ln",
+   "class": "LayerNorm",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1",
+   "class": "Attention",
+   "params": 294912,
+   "out_shape": [
+    [
+     1,
+     96,
+     288
+    ],
+    null
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.to_q",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.to_k",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.to_v",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.split_q_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    64
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.split_k_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    64
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.split_v_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    64
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.merge_heads",
+   "class": "Rearrange",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    256
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.attend",
+   "class": "Attend",
+   "params": 0,
+   "out_shape": [
+    [
+     1,
+     4,
+     96,
+     64
+    ],
+    null
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.attend.attn_dropout",
+   "class": "Dropout",
+   "params": 0,
+   "out_shape": [
+    1,
+    4,
+    96,
+    96
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.1.to_out",
+   "class": "Linear",
+   "params": 73728,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.0.2",
+   "class": "Residual",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1",
+   "class": "ModuleList",
+   "params": 665280,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.0",
+   "class": "ModuleList",
+   "params": 288,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.0.0",
+   "class": "LayerNorm",
+   "params": 288,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.0.0.ln",
+   "class": "LayerNorm",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.1",
+   "class": "FeedForward",
+   "params": 664992,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.1.ff",
+   "class": "Sequential",
+   "params": 664992,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.1.ff.0",
+   "class": "Sequential",
+   "params": 332928,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.1.ff.0.0",
+   "class": "Linear",
+   "params": 332928,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.1.ff.0.1",
+   "class": "GELU",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.1.ff.1",
+   "class": "Dropout",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    1152
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.1.ff.2",
+   "class": "Linear",
+   "params": 332064,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layers.1.2",
+   "class": "Residual",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.layer_integrators",
+   "class": "ModuleList",
+   "params": 0,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1.rotary_pos_emb",
+   "class": "RotaryEmbedding",
+   "params": 0,
+   "out_shape": [
+    [
+     1,
+     96,
+     32
+    ],
+    null
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.adaptive_mlp",
+   "class": "Identity",
+   "params": 0,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.transformer_blocks.1.final_norm",
+   "class": "LayerNorm",
+   "params": 288,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.final_norm.ln",
+   "class": "LayerNorm",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "encoder.transformer_blocks.1.skip_combines",
+   "class": "ModuleList",
+   "params": 0,
+   "out_shape": null
+  },
+  {
+   "path": "encoder.output_norm",
+   "class": "Identity",
+   "params": 0,
+   "out_shape": [
+    1,
+    96,
+    288
+   ]
+  },
+  {
+   "path": "decoder",
+   "class": "SymmetricDecoder",
+   "params": 118650,
+   "out_shape": {
+    "p": [
+     1,
+     768,
+     35
+    ],
+    "n": [
+     1,
+     768,
+     35
+    ],
+    "eta": [
+     1,
+     768,
+     35
+    ],
+    "log2_mu": [
+     1,
+     768,
+     35
+    ],
+    "mu": [
+     1,
+     768,
+     35
+    ]
+   }
+  },
+  {
+   "path": "decoder.input_proj",
+   "class": "Linear",
+   "params": 80920,
+   "out_shape": [
+    1,
+    96,
+    280
+   ]
+  },
+  {
+   "path": "decoder.blocks",
+   "class": "ModuleList",
+   "params": 28608,
+   "out_shape": null
+  },
+  {
+   "path": "decoder.blocks.0",
+   "class": "LaneDeconvBlock",
+   "params": 9536,
+   "out_shape": [
+    1,
+    192,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.blocks.0.deconv",
+   "class": "ConvTranspose1d",
+   "params": 7000,
+   "out_shape": [
+    1,
+    280,
+    192
+   ]
+  },
+  {
+   "path": "decoder.blocks.0.rdeconv",
+   "class": "ConvTranspose1d",
+   "params": 2520,
+   "out_shape": [
+    1,
+    280,
+    192
+   ]
+  },
+  {
+   "path": "decoder.blocks.0.norm",
+   "class": "LaneNorm",
+   "params": 16,
+   "out_shape": [
+    1,
+    192,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.blocks.1",
+   "class": "LaneDeconvBlock",
+   "params": 9536,
+   "out_shape": [
+    1,
+    384,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.blocks.1.deconv",
+   "class": "ConvTranspose1d",
+   "params": 7000,
+   "out_shape": [
+    1,
+    280,
+    384
+   ]
+  },
+  {
+   "path": "decoder.blocks.1.rdeconv",
+   "class": "ConvTranspose1d",
+   "params": 2520,
+   "out_shape": [
+    1,
+    280,
+    384
+   ]
+  },
+  {
+   "path": "decoder.blocks.1.norm",
+   "class": "LaneNorm",
+   "params": 16,
+   "out_shape": [
+    1,
+    384,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.blocks.2",
+   "class": "LaneDeconvBlock",
+   "params": 9536,
+   "out_shape": [
+    1,
+    768,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.blocks.2.deconv",
+   "class": "ConvTranspose1d",
+   "params": 7000,
+   "out_shape": [
+    1,
+    280,
+    768
+   ]
+  },
+  {
+   "path": "decoder.blocks.2.rdeconv",
+   "class": "ConvTranspose1d",
+   "params": 2520,
+   "out_shape": [
+    1,
+    280,
+    768
+   ]
+  },
+  {
+   "path": "decoder.blocks.2.norm",
+   "class": "LaneNorm",
+   "params": 16,
+   "out_shape": [
+    1,
+    768,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.film_layers",
+   "class": "ModuleList",
+   "params": 2112,
+   "out_shape": null
+  },
+  {
+   "path": "decoder.film_layers.0",
+   "class": "PerLaneFiLM",
+   "params": 528,
+   "out_shape": [
+    1,
+    96,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.film_layers.0.proj",
+   "class": "Linear",
+   "params": 528,
+   "out_shape": [
+    1,
+    35,
+    16
+   ]
+  },
+  {
+   "path": "decoder.film_layers.1",
+   "class": "PerLaneFiLM",
+   "params": 528,
+   "out_shape": [
+    1,
+    192,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.film_layers.1.proj",
+   "class": "Linear",
+   "params": 528,
+   "out_shape": [
+    1,
+    35,
+    16
+   ]
+  },
+  {
+   "path": "decoder.film_layers.2",
+   "class": "PerLaneFiLM",
+   "params": 528,
+   "out_shape": [
+    1,
+    384,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.film_layers.2.proj",
+   "class": "Linear",
+   "params": 528,
+   "out_shape": [
+    1,
+    35,
+    16
+   ]
+  },
+  {
+   "path": "decoder.film_layers.3",
+   "class": "PerLaneFiLM",
+   "params": 528,
+   "out_shape": [
+    1,
+    768,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.film_layers.3.proj",
+   "class": "Linear",
+   "params": 528,
+   "out_shape": [
+    1,
+    35,
+    16
+   ]
+  },
+  {
+   "path": "decoder.head_eta",
+   "class": "Sequential",
+   "params": 81,
+   "out_shape": [
+    1,
+    768,
+    35,
+    1
+   ]
+  },
+  {
+   "path": "decoder.head_eta.0",
+   "class": "Linear",
+   "params": 72,
+   "out_shape": [
+    1,
+    768,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.head_eta.1",
+   "class": "GELU",
+   "params": 0,
+   "out_shape": [
+    1,
+    768,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.head_eta.2",
+   "class": "Linear",
+   "params": 9,
+   "out_shape": [
+    1,
+    768,
+    35,
+    1
+   ]
+  },
+  {
+   "path": "decoder.head_n",
+   "class": "Sequential",
+   "params": 81,
+   "out_shape": [
+    1,
+    768,
+    35,
+    1
+   ]
+  },
+  {
+   "path": "decoder.head_n.0",
+   "class": "Linear",
+   "params": 72,
+   "out_shape": [
+    1,
+    768,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.head_n.1",
+   "class": "GELU",
+   "params": 0,
+   "out_shape": [
+    1,
+    768,
+    35,
+    8
+   ]
+  },
+  {
+   "path": "decoder.head_n.2",
+   "class": "Linear",
+   "params": 9,
+   "out_shape": [
+    1,
+    768,
+    35,
+    1
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding",
+   "class": "MetadataEmbedding",
+   "params": 6848,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.depth_proj",
+   "class": "Linear",
+   "params": 64,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.read_length_proj",
+   "class": "Linear",
+   "params": 64,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.assay_embedding",
+   "class": "Embedding",
+   "params": 1216,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.runtype_embedding",
+   "class": "Embedding",
+   "params": 128,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.fusion",
+   "class": "Sequential",
+   "params": 5248,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.fusion.0",
+   "class": "Linear",
+   "params": 4128,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.fusion.1",
+   "class": "GELU",
+   "params": 0,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.fusion.2",
+   "class": "Linear",
+   "params": 1056,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  },
+  {
+   "path": "decoder.meta_embedding.fusion.3",
+   "class": "LayerNorm",
+   "params": 64,
+   "out_shape": [
+    1,
+    35,
+    32
+   ]
+  }
+ ]
+}

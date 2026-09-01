@@ -51,6 +51,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
+- `t89` [visualization] generate the architecture README and diagram from the code
 
 ## Blocked
 
@@ -113,6 +114,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *open*
+
+### visualization
+
+- `t89` [visualization] generate the architecture README and diagram from the code — *open*
 
 ## Done · Dropped
 
