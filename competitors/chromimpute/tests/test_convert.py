@@ -7,10 +7,15 @@ Run from the method directory (it is a standalone tool, not part of the `candi` 
 The three: the bin grid (an off-by-one shifts every score), the fairness filter (a `V_` cell in
 `inputinfofile.txt` invalidates every number the method produces), and the directory name (a track
 the bench cannot match to a declared pair is a track it drops).
+
+A fourth since D32: the training grid a `regions` regime declares. The jar samples anywhere in a
+chromosome it is given, so the only thing that can be checked is the grid — that every base it is
+allowed to reach in training lies inside the BED.
 """
 from __future__ import annotations
 
 import gzip
+import json
 import sys
 from pathlib import Path
 
@@ -152,6 +157,141 @@ def test_inputinfo_is_three_tab_columns(tmp_path):
     p = prepare.write_inputinfo(tmp_path / "i.txt", [("T_K562", "H3K4me3")])
     line = p.read_text().splitlines()[0]
     assert line.split("\t") == ["T_K562", "H3K4me3", "T_K562.H3K4me3.bedgraph.gz"]
+
+
+# ---------------------------------------------------------------------------------------------
+# D32 — the training grid a `regions` regime declares
+# ---------------------------------------------------------------------------------------------
+
+REPO = Path(__file__).resolve().parents[3]
+PILOT = REPO / "configs" / "regime.eic_pilot.json"
+NO_REGIONS = REPO / "configs" / "regime.eic_19.json"
+
+
+def _bed_intervals(path):
+    """The BED read independently of `candi.store.regime`, so the check is not the code again."""
+    out = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        f = line.split("\t")
+        out.append((f[0], int(f[1]), int(f[2]), f[3]))
+    return out
+
+
+def _bed(tmp_path, rows):
+    p = tmp_path / "r.bed"
+    p.write_text("".join(f"{c}\t{s}\t{e}\t{n}\n" for c, s, e, n in rows), encoding="utf-8")
+    return p
+
+
+def _regions_regime(tmp_path, rows, train_chroms):
+    import hashlib
+    bed = _bed(tmp_path, rows)
+    regime = tmp_path / "regime.json"
+    regime.write_text(json.dumps({
+        "train_chroms": list(train_chroms),
+        "regions": {"bed": bed.name,
+                    "sha256": hashlib.sha256(bed.read_bytes()).hexdigest(),
+                    "policy": "contain"},
+    }), encoding="utf-8")
+    return regime
+
+
+def test_a_regime_without_a_regions_block_declares_no_training_grid():
+    """Absent `regions`, nothing about the run may change — the whole point of D32 being optional."""
+    assert prepare.region_scope(prepare.load_json(NO_REGIONS), NO_REGIONS) == []
+
+
+def test_every_training_location_the_jar_can_reach_lies_inside_the_bed():
+    """The requirement. The jar samples anywhere in a declared chromosome, so the guarantee has to
+    be that no declared training base is outside a region — not that the sampler behaves."""
+    regime = prepare.load_json(PILOT)
+    scope = prepare.region_scope(regime, PILOT)
+    bed = _bed_intervals(REPO / "configs" / regime["regions"]["bed"])
+    for name, chrom, first, stop in scope:
+        inside = [(s, e) for c, s, e, n in bed if c == chrom and n == name]
+        assert len(inside) == 1, name
+        s, e = inside[0]
+        assert s <= first * prepare.RESOLUTION
+        assert stop * prepare.RESOLUTION <= e
+
+
+def test_no_training_location_falls_on_an_evaluation_chromosome():
+    """Rule 2's cut is the regime's chromosome list, not the BED — four Pilot Regions sit on
+    chr20/21/22 and the BED keeps all 44 so it stays correct for any other split (§3.1)."""
+    regime = prepare.load_json(PILOT)
+    scope = prepare.region_scope(regime, PILOT)
+    assert not {c for _, c, _, _ in scope} & set(regime["eval_chroms"])
+    assert len(_bed_intervals(REPO / "configs" / regime["regions"]["bed"])) == 44
+
+
+def test_the_pilot_training_scope_is_the_one_section_3_1_pins():
+    scope = prepare.region_scope(prepare.load_json(PILOT), PILOT)
+    assert len(scope) == 40
+    assert sum(stop - first for _, _, first, stop in scope) == 1_023_489
+
+
+def test_containment_is_counted_the_same_way_the_window_sampler_counts_it():
+    """CANDI's loader and this share one rule and must not drift; `bin_spans` is the authority."""
+    from candi.store.regime import RegionSet
+    regime = prepare.load_json(PILOT)
+    rs = RegionSet.from_obj(regime["regions"], base=REPO / "configs")
+    scope = prepare.region_scope(regime, PILOT)
+    for chrom in {c for _, c, _, _ in scope}:
+        mine = sorted((f, s) for _, c, f, s in scope if c == chrom)
+        assert mine == sorted(rs.bin_spans(chrom, prepare.RESOLUTION))
+
+
+def test_a_region_edge_off_the_bin_grid_loses_its_partial_bin(tmp_path):
+    """25,588,197 bp is not divisible by 25, so the scope is a containment count and a bin only
+    half-covered by a region is not a training location."""
+    regime = _regions_regime(tmp_path, [("chr1", 1010, 2490, "R1")], ["chr1"])
+    assert prepare.region_scope(prepare.load_json(regime), regime) == [("R1", "chr1", 41, 99)]
+
+
+def test_the_training_grid_is_anchored_at_chromosome_bin_zero(tmp_path):
+    """§3.1 rejected re-anchoring the tiling per region, so a region's bins keep the chromosome's
+    own indices and two regions on one chromosome cannot claim the same bin number."""
+    regime = _regions_regime(tmp_path, [("chr1", 1000, 2000, "R1"), ("chr1", 5000, 6000, "R2")],
+                             ["chr1"])
+    assert prepare.region_scope(prepare.load_json(regime), regime) == [
+        ("R1", "chr1", 40, 80), ("R2", "chr1", 200, 240)]
+
+
+def test_a_region_scope_with_nothing_on_the_training_chromosomes_is_refused(tmp_path):
+    regime = _regions_regime(tmp_path, [("chr21", 0, 1000, "R1")], ["chr1"])
+    with pytest.raises(ValueError, match="no region on train_chroms"):
+        prepare.region_scope(prepare.load_json(regime), regime)
+
+
+def test_a_region_named_after_a_chromosome_is_refused(tmp_path):
+    """Each region becomes a declared chromosome, so a name that is already one would make the
+    training grid and the apply grid write to the same converted file."""
+    regime = _regions_regime(tmp_path, [("chr1", 0, 1000, "chr1")], ["chr1"])
+    with pytest.raises(ValueError, match="collisions"):
+        prepare.region_scope(prepare.load_json(regime), regime)
+
+
+def test_the_declared_region_length_makes_convert_emit_exactly_the_contained_bins(tmp_path):
+    """The same `n_bins*25` trap as a real chromosome — one extra bin here is a training location
+    outside the BED."""
+    scope = prepare.region_scope(prepare.load_json(PILOT), PILOT)
+    bins = {name: stop - first for name, _, first, stop in scope}
+    path = prepare.write_chrominfo(tmp_path / "chrominfo.train.txt", bins, sorted(bins))
+    for line in path.read_text().splitlines():
+        name, length = line.split("\t")
+        assert (int(length) - 1) // prepare.RESOLUTION + 1 == bins[name]
+
+
+def test_the_signal_writer_covers_the_apply_grid_and_the_training_grid_and_nothing_else():
+    """One list drives the writer, so a region declared in `chrominfo.train.txt` and never written
+    as a bedgraph — the failure `Convert` reports as a warning and skips — cannot happen."""
+    scope = prepare.region_scope(prepare.load_json(PILOT), PILOT)
+    slices = prepare.signal_slices(["chr20", "chr21"], {"chr20": 100, "chr21": 200}, scope)
+    assert slices[:2] == [("chr20", "chr20", 0, 100), ("chr21", "chr21", 0, 200)]
+    assert slices[2:] == scope
+    assert len({name for name, _, _, _ in slices}) == len(slices)
 
 
 # ---------------------------------------------------------------------------------------------

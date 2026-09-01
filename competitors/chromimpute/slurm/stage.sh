@@ -46,6 +46,32 @@ else
   CHROM_LIST=${CI_CHROMS//,/ }
 fi
 
+# D32. Under a `regions` regime `prepare.py` also writes `chrominfo.train.txt`, one declared
+# chromosome per Pilot Region, and THAT is the grid the transferable parameters are fit on:
+# `GenerateTrainData` spreads its 100,000 locations over everything the chrominfo it is handed
+# declares, so handing it the eval chromosomes as well would put most of the sample outside the
+# BED. `Apply` keeps the real chromosomes. Without a `regions` regime the file is absent, both
+# grids are `chrominfo.txt`, and every command below is what it was.
+if [ -s "$IN/chrominfo.train.txt" ]; then
+  TRAIN_INFO=$IN/chrominfo.train.txt
+  TRAIN_LIST=$(cut -f1 "$TRAIN_INFO" | tr '\n' ' ')
+else
+  TRAIN_INFO=$IN/chrominfo.txt
+  TRAIN_LIST=""
+  # The fallback is silent and it is the one that costs a whole run: a `regions` regime whose
+  # training grid was never written would fit its predictors on chr20+21+22 and look fine. Refuse.
+  # `prepare` is exempt — it is the stage that writes the file.
+  if [ "$CI_STAGE" != "prepare" ] \
+     && $CI_PY -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" \
+        "$CI_REGIME"; then
+    echo "[$CI_STAGE] REFUSING: $CI_REGIME declares a \`regions\` BED but $IN/chrominfo.train.txt" >&2
+    echo "      does not exist. Re-run the prepare stage; without that grid GenerateTrainData" >&2
+    echo "      would sample outside the Pilot Regions (D32, BENCHMARK_DESIGN.md §3.1)." >&2
+    exit 2
+  fi
+fi
+GRID_LIST="$CHROM_LIST $TRAIN_LIST"
+
 LIST=$CI_RUN/lists/$CI_STAGE.txt
 ITEM=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$LIST")
 [ -n "$ITEM" ] || { echo "no item $SLURM_ARRAY_TASK_ID in $LIST"; exit 1; }
@@ -82,6 +108,9 @@ case "$CI_STAGE" in
     for C in $CHROM_LIST; do
       CI Convert -c "$C" -m "$ITEM" "$IN/signal" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$CONV"
     done
+    for C in $TRAIN_LIST; do
+      CI Convert -c "$C" -m "$ITEM" "$IN/signal" "$IN/inputinfofile.txt" "$TRAIN_INFO" "$CONV"
+    done
     # The bedgraphs are 161 GB and ~6 000 inodes of pure intermediate genome-wide, on a scratch
     # quota shared with other tasks, so they go as soon as `Convert` has consumed them. Verify
     # FIRST: `Convert` warns and skips a missing input rather than failing, so a resumed run that
@@ -89,7 +118,7 @@ case "$CI_STAGE" in
     MISSING=0
     while IFS=$'\t' read -r _S _M FNAME _REST; do
       [ "$_M" = "$ITEM" ] || continue
-      for C in $CHROM_LIST; do
+      for C in $GRID_LIST; do
         [ -s "$CONV/${C}_${FNAME}.wig.gz" ] || { echo "MISSING $CONV/${C}_${FNAME}.wig.gz"; MISSING=1; }
       done
     done < "$IN/inputinfofile.txt"
@@ -98,13 +127,17 @@ case "$CI_STAGE" in
       NDEL=0
       while IFS=$'\t' read -r _S _M FNAME _REST; do
         [ "$_M" = "$ITEM" ] || continue
-        for C in $CHROM_LIST; do rm -f "$IN/signal/${C}_${FNAME}" && NDEL=$((NDEL + 1)); done
+        for C in $GRID_LIST; do rm -f "$IN/signal/${C}_${FNAME}" && NDEL=$((NDEL + 1)); done
       done < "$IN/inputinfofile.txt"
       echo "[convert] $ITEM: converted output verified, $NDEL bedgraph file(s) deleted"
     fi
     ;;
   dist)      # item: a mark
-    CI ComputeGlobalDist -m "$ITEM" "$CONV" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$DIST"
+    # On the TRAINING grid. The correlation table it writes is one sample ranking reused at every
+    # position `Apply` predicts, so it is a transferable parameter and Rule 2 puts it on the
+    # training loci with the predictors. Without a `regions` regime this is `chrominfo.txt` and
+    # the command is unchanged.
+    CI ComputeGlobalDist -m "$ITEM" "$CONV" "$IN/inputinfofile.txt" "$TRAIN_INFO" "$DIST"
     ;;
   gtd)       # item: <mark>, or <mark> <TAB> <chrom>
     # The manual's own recommended parallelization for this command is over chromosomes, and it has
@@ -112,13 +145,17 @@ case "$CI_STAGE" in
     # walltime bin we want. `-c` subsets the sampled locations to that chromosome and prefixes the
     # traindata file, and `Train` takes the union of the prefixed files when no unprefixed one
     # exists — so the 100 000 instances are the same either way, just spread over more files.
+    # Under a `regions` regime `submit.sh` emits a bare mark instead: the whole D32 training grid
+    # is 1,023,489 bins, a fortieth of one real chromosome, so one unsplit task per mark is minutes
+    # — and one task is the only way the 100,000 locations are 100,000 rather than 100,000 per
+    # region, which the manual does not settle for `-c`.
     M=$(echo "$ITEM" | cut -f1); C=$(echo "$ITEM" | cut -f2)
     if [ "$C" = "$M" ]; then
-      CI GenerateTrainData "$CONV" "$DIST" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" \
+      CI GenerateTrainData "$CONV" "$DIST" "$IN/inputinfofile.txt" "$TRAIN_INFO" \
          "$TRAINDATA" "$M"
     else
       CI GenerateTrainData -c "$C" "$CONV" "$DIST" "$IN/inputinfofile.txt" \
-         "$IN/chrominfo.txt" "$TRAINDATA" "$M"
+         "$TRAIN_INFO" "$TRAINDATA" "$M"
     fi
     ;;
   train)     # item: <sample> <TAB> <mark>

@@ -33,13 +33,59 @@ Two consequences worth stating rather than discovering later:
   the answer is scored against `V_X`'s `A`. `prepare.impute_targets` builds that set as
   `assays(V_X) − assays(T_X)`.
 - ChromImpute is **position-transductive by construction**. Its trees are trained at genomic
-  positions where the target mark was observed *in other samples*, and those positions include the
-  evaluation chromosome. That is the published method, not a choice of ours, and it is why P1 and
-  P2 are both reported (§2). It leaks no held-out *experiment*: the cells supplying those positions
-  are training-split cells.
+  positions where the target mark was observed *in other samples*. That is the published method,
+  not a choice of ours. It leaks no held-out *experiment* — the cells supplying those positions
+  are training-split cells, so `BENCHMARK_DESIGN.md` Rule 1 is intact — but the positions
+  themselves are the regime's business, and **which chromosomes they come from is decided by the
+  chrominfo `GenerateTrainData` is handed**, not by the method. Under a `regions` regime that is
+  the D32 training grid below. Under `eic_19` it is still `CI_CHROMS`, i.e. chr20+21+22, and that
+  is an open Rule 2 question flagged in `slurm/submit.sh`, not something this directory decides.
 
 `chipseq-control` appears in the store manifest but not in the regime's assay list, and the same
 filter drops it. It is a control column, not an assay.
+
+## The training grid under a `regions` regime (D32)
+
+`eic.pilot` restricts the loci a method's **transferable** parameters may be fit on to the 44
+ENCODE Pilot Regions (`BENCHMARK_DESIGN.md` §3.1), and the jar has no flag for a BED: the smallest
+scope any of its commands understands is a chromosome out of `chrominfo`. So we declare the scope
+as a grid instead of asking the sampler to respect one.
+
+**What containment means for a point sampler.** D32's rule is written for CANDI's 768-bin windows
+— a locus counts only if the *whole* window lies inside one region, on the chromosome's own bin
+grid. ChromImpute samples 100,000 single 25 bp locations, so the same rule at a window of one bin
+is: bin `i` is a legal training location iff `[i*25, (i+1)*25)` lies inside one region, i.e. bins
+`ceil(start/25)` up to `end//25`. It is a containment **count**, not `bp // 25` — the hg38 regions
+do not begin or end on the grid — and the indices are chromosome bin indices, so the grid stays
+anchored at chromosome bin 0 and is never re-anchored at a region start, which is what §3.1 ruled.
+On `eic.pilot` that is **40 regions, 1,023,489 bins**, the same two numbers §3.1 pins for CANDI.
+`test_containment_is_counted_the_same_way_the_window_sampler_counts_it` holds the two to one rule
+by checking `region_scope` against `RegionSet.bin_spans`.
+
+**Each region becomes one declared chromosome.** `prepare.py` writes `chrominfo.train.txt` (one
+line per region, `n_contained_bins * 25`) and a bedgraph per region per training track, and
+`stage.sh` hands that file to `ComputeGlobalDist` and `GenerateTrainData` while `Apply` keeps the
+real `chrominfo.txt`. Two consequences are the reason for the shape:
+
+- **Two files, not one.** `GenerateTrainData` spreads its 100,000 locations over everything the
+  chrominfo it is given declares. Put chr20+21+22 in the same file and most of the sample lands
+  outside the BED, which is the one thing this exists to prevent.
+- **One task per mark, no `-c`.** The whole training grid is a fortieth of a real chromosome, so
+  splitting it buys nothing and would raise a question the manual does not answer — whether `-c`
+  divides the 100,000 or repeats them per declared chromosome. Unsplit, the count is 100,000
+  either way, which is the number §11 prices the method at.
+- **No feature window spans two regions.** 400 bins is the widest neighbour window and every
+  region is ≥500 kb, so keeping the regions apart costs edge truncation on ~2 % of the scope and
+  buys never averaging two loci megabases apart. Concatenating them into one pseudo-chromosome
+  would have done the opposite.
+
+**The density changes and the row should say so.** 100,000 locations over 1,023,489 bins is 9.8 %
+of the `eic.pilot` training scope, against the 0.08 % of the genome §11 records as ChromImpute's
+convention and the ~2.6 % `eic.19` gives it over chr20+21+22. Same jar, same defaults, ~120× the
+sampling density — a difference between the two regime rows that is not the regime's slice.
+
+Without a `regions` block nothing above happens: `chrominfo.train.txt` is not written, both grids
+are `chrominfo.txt`, and every command is the one that ran before.
 
 ## The grid
 
