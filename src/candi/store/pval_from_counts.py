@@ -43,7 +43,7 @@ and every one of them is piled up from the CONTROL, not from the treatment:
         ctrl_d_s.append( self.lregion )
         ctrl_scale_s.append( float(self.d)/self.lregion*self.ratio_treat2control )
 
-with `self.ratio_treat2control = float(treat_sum)/control_sum` (line 158, `treat_sum` and
+with `self.ratio_treat2control = float(treat_sum)/control_sum` (line 159, `treat_sum` and
 `control_sum` both being `total * d`, so in single-end mode the ratio is just the read-count
 ratio) and `lambda_bg = float(treat_sum)/self.gsize` (line 172). `pileup_a_chromosome` then takes
 the elementwise max over all of them with `lambda_bg` as the floor, exactly as in the no-control
