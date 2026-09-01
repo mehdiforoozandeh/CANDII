@@ -1,16 +1,19 @@
 #!/bin/bash
 # predict -> σ-fit -> score, in one job. Runs after eic_train.sh for the same N_TARGETS.
 #
-#   N_TARGETS=31 PROTOCOL=p1 sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
-#   N_TARGETS=31 PROTOCOL=p2 sbatch --time=12:00:00 --mem=96G competitors/edice/slurm/eic_score.sh
+#   N_TARGETS=31 SCOPE=heldout   sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
+#   N_TARGETS=31 SCOPE=genomewide sbatch --time=12:00:00 --mem=96G competitors/edice/slurm/eic_score.sh
 #
-# P1 = the regime's eval chroms (chr21, 1,868,399 bins). P2 = every chromosome the store carries,
-# which is ~66x the bins, ~66x the store reads, and ~22 GB of npz -- hence the bigger ask.
+# RETARGETED 2026-08-31. `P1`/`P2` are RETIRED (BENCHMARK_DESIGN.md §9) and replaced by §4's two
+# SCOPES of one prediction pass. eDICE is one of the methods whose `genome-wide` cell is PRINTED
+# (§4), so unlike Avocado, ChromImpute and Lavawizard it does still predict genome-wide.
+#   heldout    = the regime's eval_chroms, chr20+21+22, 6,478,903 bins. THE RANKED NUMBER.
+#   genomewide = every chromosome the store carries, 121,241,684 bins — ~19x, and ~22 GB of npz.
 #
-# The σ-table is fitted ONCE, on the P1 (V-pair) residuals, and is reused unchanged by any later
-# B-pair run (§6.1). P2 therefore reuses the P1 table rather than fitting its own: refitting σ on a
-# genome-wide pass would silently change what the CRPS column means between two rows of the same
-# table.
+# THE σ-FIT IS REFUSED, AND THAT IS THE RULING, NOT A BUG. `fit_sigma.py` fits on V_ eval-pair
+# residuals. §7 rules "σ is fit on training-set residuals only — never on V_, never on B_", and
+# §12.2 declares every existing σ VOID under Rule 1. A training-residual σ needs predictions on
+# TRAINING tracks, which this prediction root does not contain, so it is new work, not a flag.
 #
 # --gres is the AGENTS.md hard-rule MIG slice and is never any other spec.
 #SBATCH --account=def-maxwl
@@ -27,17 +30,21 @@ set -uo pipefail
 if [ -z "${N_TARGETS:-}" ]; then
   echo "[error] N_TARGETS is required -- it names which trained model to score." >&2; exit 2
 fi
-PROTOCOL="${PROTOCOL:-p1}"
+SCOPE="${SCOPE:-heldout}"
 
-REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t52}"
-VENV="${VENV:-/project/def-maxwl/mforooz/candi_venv}"
-REGIME="${REGIME:-$REPO/configs/regime.eic_val.json}"
+REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}"
+VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
+REGIME="${REGIME:-$REPO/configs/regime.eic_19.json}"
+REGIME_NAME="$(basename "$REGIME" .json)"; REGIME_NAME="${REGIME_NAME#regime.}"
 RUNS="${RUNS:-/project/def-maxwl/mforooz/rivals_src/edice_runs}"
-MODEL="${MODEL:-$RUNS/eic_nt${N_TARGETS}/model.pt}"
-PRED="${PRED:-$RUNS/eic_nt${N_TARGETS}/preds_${PROTOCOL}}"
-# The σ-table lives with the P1 run whatever protocol is being scored -- see the header.
-SIGMA="${SIGMA:-$RUNS/eic_nt${N_TARGETS}/preds_p1/sigma.json}"
-SCORES="${SCORES:-$RUNS/eic_nt${N_TARGETS}/scores_${PROTOCOL}.json}"
+# model.SELECTED.pt, not model.pt: §5 ranks the checkpoint the run chose on V_, and model.pt is
+# always the last epoch. eic_train.sh fails the run if the selected file is missing, so there is
+# no legitimate board run where this default does not exist.
+MODEL="${MODEL:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/model.selected.pt}"
+PRED="${PRED:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/preds_${SCOPE}}"
+# The σ-table lives with the run, not with a scope -- see the header.
+SIGMA="${SIGMA:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/sigma.json}"
+SCORES="${SCORES:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/scores_${SCOPE}.json}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
 export MPLBACKEND=Agg
@@ -46,17 +53,17 @@ source "$VENV/bin/activate"
 cd "$REPO/competitors/edice"
 export PYTHONPATH="$PWD:$REPO/src"
 
-case "$PROTOCOL" in
-  p1) CHROMS=() ;;                       # default: the regime's eval_chroms
-  p2) CHROMS=(--chroms all) ;;
-  *)  echo "[error] PROTOCOL must be p1 or p2, got '$PROTOCOL'" >&2; exit 2 ;;
+case "$SCOPE" in
+  heldout)    CHROMS=() ;;                 # default: the regime's eval_chroms
+  genomewide) CHROMS=(--chroms all) ;;
+  *)  echo "[error] SCOPE must be heldout or genomewide, got '$SCOPE'" >&2; exit 2 ;;
 esac
 
 if [ ! -f "$MODEL" ]; then
   echo "[error] no model at $MODEL -- run eic_train.sh for N_TARGETS=$N_TARGETS first" >&2; exit 2
 fi
 
-echo "[edice] EIC $PROTOCOL  n_targets=$N_TARGETS  model=$MODEL  pred=$PRED"
+echo "[edice] EIC $SCOPE  n_targets=$N_TARGETS  model=$MODEL  pred=$PRED"
 echo "[edice] host=$(hostname)"; nvidia-smi -L || true
 
 # Skip the predict pass when this root is ALREADY COMPLETE. The σ-fit died once on a signature
@@ -67,18 +74,18 @@ echo "[edice] host=$(hostname)"; nvidia-smi -L || true
 # FORCE_PREDICT=1 overrides.
 complete=no
 if [ -z "${FORCE_PREDICT:-}" ] && [ -f "$PRED/manifest.json" ]; then
-  if python - "$PRED" "$PROTOCOL" "$REGIME" <<'PYEOF'
+  if python - "$PRED" "$SCOPE" "$REGIME" <<'PYEOF'
 import json, sys
 from pathlib import Path
-root, protocol, regime_path = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+root, scope, regime_path = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 m = json.loads((root / "manifest.json").read_text())
 have = list(m["chroms"])
 
-# What THIS invocation would ask for. p1 = the regime's eval_chroms; p2 = every chromosome the
-# store carries. Checked rather than assumed: the root is keyed by protocol today, but a root
-# recorded under a regime with different eval_chroms must not be silently reused.
+# What THIS invocation would ask for. heldout = the regime's eval_chroms; genomewide = every
+# chromosome the store carries. Checked rather than assumed: the root is keyed by scope today, but
+# a root recorded under a regime with different eval_chroms must not be silently reused.
 regime = json.loads(Path(regime_path).read_text())
-if protocol == "p1":
+if scope == "heldout":
     want = list(regime["eval_chroms"])
 else:
     # candi is on PYTHONPATH already (exported above); a heredoc has no __file__ to derive it from.
@@ -104,10 +111,15 @@ if [ "$complete" = "no" ]; then
     --regime "$REGIME" --model "$MODEL" --out "$PRED" "${CHROMS[@]}" || exit $?
 fi
 
-if [ "$PROTOCOL" = "p1" ]; then
+if [ ! -f "$SIGMA" ]; then
+  if [ "${SIGMA_RULE1_OVERRIDE:-0}" != "1" ]; then
+    echo "[error] REFUSING to fit $SIGMA: fit_sigma.py fits on V_ eval-pair residuals, which" >&2
+    echo "        BENCHMARK_DESIGN.md Rule 1 forbids and §7 rules out explicitly. A training-" >&2
+    echo "        residual σ needs predictions on TRAINING tracks, which this root does not" >&2
+    echo "        contain. Raise it; do not override." >&2
+    exit 3
+  fi
   python fit_sigma.py --regime "$REGIME" --pred "$PRED" --out "$SIGMA" || exit $?
-elif [ ! -f "$SIGMA" ]; then
-  echo "[error] P2 reuses the P1 σ-table and $SIGMA does not exist. Score P1 first." >&2; exit 2
 fi
 
 mkdir -p "$(dirname "$SCORES")"
@@ -120,5 +132,5 @@ python -m candi.bench.external \
   --store "$REGIME" --pred "$PRED" --out "$SCORES" --sigma-table "$SIGMA" --chroms "$BENCH_CHROMS"
 rc=$?
 
-echo "[edice] DONE eic-score $PROTOCOL n_targets=$N_TARGETS rc=$rc  scores=$SCORES"
+echo "[edice] DONE eic-score $SCOPE n_targets=$N_TARGETS rc=$rc  scores=$SCORES"
 exit $rc

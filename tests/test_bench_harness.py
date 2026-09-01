@@ -20,20 +20,24 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 
-from candi._vendored import MISSING
-from candi.bench import annotations as ann
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))          # t80 — tools/ is importable
+
+from candi._vendored import MISSING                                   # noqa: E402
+from candi.bench import annotations as ann                            # noqa: E402
 from candi.bench import harness as H
 from candi.bench.harness import Pair, decode_groups, full_tiling, open_source
-from candi.model import build_model
-from candi.store import layout as L
-from candi.store.dataset import StoreDataset
-from candi.store.regime import Regime
+from candi.model import build_model                                   # noqa: E402
+from candi.store import layout as L                                   # noqa: E402
+from candi.store import layout as SL                                  # noqa: E402
+from candi.store.dataset import StoreDataset                          # noqa: E402
+from candi.store.regime import Regime                                 # noqa: E402
 
 from tests.test_store_reader import ASSAYS, N_BINS, make_store
 from tests.test_store_regime import CTX, regime_dict
@@ -262,10 +266,10 @@ def paired_source(paired_regime_file):
 
 def test_a_declared_regime_pairs_the_prompt_cell_with_the_cell_holding_the_truth(paired_source):
     """D31 — the pairing is READ OFF the regime, in declaration order. No name is parsed (D16)."""
-    assert paired_source.cross_cell("impute") is True
+    assert H.cross_cell(Pair("T_aa", "V_aa"), "impute") is True
     assert paired_source.pairs("impute") == [Pair("T_aa", "V_aa"), Pair("T_bb", "V_bb")]
     # Denoising reads and scores ONE cell whatever the regime declares.
-    assert paired_source.cross_cell("denoise") is False
+    assert H.cross_cell(Pair("T_aa", "T_aa"), "denoise") is False
     assert paired_source.pairs("denoise") == [Pair("T_aa", "T_aa"), Pair("T_bb", "T_bb")]
 
 
@@ -280,15 +284,9 @@ def test_a_target_is_an_assay_the_truth_cell_has_and_the_prompt_cell_does_not(pa
                                                                      ASSAYS.index("DNase-seq")]
 
 
-def test_declared_pairs_answer_every_target_in_one_forward_pass(paired_source):
-    """Nothing is hidden, so nothing forces one pass per assay."""
-    cols = paired_source.targets(Pair("T_aa", "V_aa"), "impute")
-    assert decode_groups(paired_source, "impute", cols) == [cols]
-
-
 def test_a_regime_with_no_declared_pairs_still_imputes_by_leaving_one_assay_out(source):
     """The pair-less path is untouched: self-pairs, and one forward pass per held-out assay."""
-    assert source.cross_cell("impute") is False
+    assert H.cross_cell(Pair("T_aa", "T_aa"), "impute") is False
     assert source.pairs("impute") == [Pair("T_aa", "T_aa"), Pair("V_aa", "V_aa")]
     cols = source.targets(Pair("T_aa", "T_aa"), "impute")
     assert cols == [0, 1, 2]
@@ -736,6 +734,231 @@ def test_gwcorr_of_a_track_against_itself_is_one_through_the_whole_stack(baked, 
 
 
 # ---------------------------------------------------------------------------
+# t80 — the declared pairing: the T_ cell prompts, the V_ cell holds the truth
+# ---------------------------------------------------------------------------
+#
+# `StoreSource.pairs` used to be a hardcoded `[Pair(b, b) for b in biosample_pool]`, so CANDI's
+# prompt on the store path was the eval cell's OTHER blind assays — never the paired training
+# cell's tracks. Two things follow, and this layout reproduces both in miniature.
+#
+# `V_pp` holds exactly ONE assay, the shape 16 of the 26 EIC `V_` cells have. Self-paired, holding
+# it out empties the encoder input, `prepare_masked_batch` returns None and the track is dropped
+# unscored — the collapse that left the `V_` panel able to pose 29 of its 45 experiments. Paired
+# with `T_pp` it is an ordinary experiment. `V_qq` holds two, so the panel is three, not two, and
+# the self-paired panel is two, not three.
+#
+# Both pairs are DISJOINT on (cell, assay), which is what `BENCHMARK_DESIGN.md` §5.1 measured over
+# all 89 EIC cells and what makes the panel rule and "every assay the truth cell holds" agree.
+
+PAIR_TRACKS = {
+    "T_pp": ("ATAC-seq", "DNase-seq", SL.CONTROL_TRACK),
+    "V_pp": ("H3K4me3",),
+    "T_qq": ("ATAC-seq", SL.CONTROL_TRACK),
+    "V_qq": ("DNase-seq", "H3K4me3"),
+}
+PAIRS = [["T_pp", "V_pp"], ["T_qq", "V_qq"]]
+#: `{f"{input}->{target}": [assay, …]}` — the panel each declared pair poses, by hand off the
+#: layout above, so the assertions do not re-derive the rule they are checking.
+PAIR_PANEL = {"T_pp->V_pp": ["H3K4me3"], "T_qq->V_qq": ["DNase-seq", "H3K4me3"]}
+
+
+@pytest.fixture(scope="module")
+def pair_store(tmp_path_factory) -> Path:
+    return make_store(tmp_path_factory.mktemp("t80store"), tracks=PAIR_TRACKS)
+
+
+def _pair_regime(dirpath: Path, store: Path, **over) -> Path:
+    obj = regime_dict(store, biosamples={"train": ["T_pp", "T_qq"], "eval": ["V_pp", "V_qq"]},
+                      kinds=["counts", "peaks", "pval"], **over)
+    p = dirpath / "regime.json"
+    p.write_text(json.dumps(obj, indent=2), encoding="utf-8")
+    return p
+
+
+@pytest.fixture(scope="module")
+def paired_regime(pair_store, tmp_path_factory) -> Path:
+    return _pair_regime(tmp_path_factory.mktemp("t80paired"), pair_store, eval_pairs=PAIRS)
+
+
+@pytest.fixture(scope="module")
+def bare_regime(pair_store, tmp_path_factory) -> Path:
+    """The same store with no `eval_pairs` — the pre-t80 self-paired exam."""
+    return _pair_regime(tmp_path_factory.mktemp("t80bare"), pair_store)
+
+
+@pytest.fixture()
+def paired(paired_regime):
+    s = open_source(store=paired_regime)
+    yield s
+    s.close()
+
+
+@pytest.fixture()
+def bare(bare_regime):
+    s = open_source(store=bare_regime)
+    yield s
+    s.close()
+
+
+def _panel(src) -> dict:
+    return {str(p): [src.assays[a] for a in src.targets(p, "impute")]
+            for p in src.pairs("impute")}
+
+
+def test_the_store_prompts_with_the_paired_training_cell_not_the_eval_cell(paired) -> None:
+    """The headline. `pairs` is the regime's declared list, and both halves differ."""
+    assert [(p.input_biosample, p.target_biosample) for p in paired.pairs("impute")] == [
+        ("T_pp", "V_pp"), ("T_qq", "V_qq")]
+    assert all(H.cross_cell(p, "impute") for p in paired.pairs("impute"))
+    # …and the loader is prompted with the T_ cells, so `depth_center` is the training population's.
+    assert paired.ds.biosample_pool == ["T_pp", "T_qq"]
+
+
+def test_the_scored_panel_belongs_to_the_truth_cell_not_the_prompt(paired) -> None:
+    """`assays the truth cell has and the input cell does not` — §5.1, §8, `H5Source.targets`."""
+    assert _panel(paired) == PAIR_PANEL
+
+
+def test_denoising_stays_self_paired_and_keeps_the_prompt_cells_own_panel(paired) -> None:
+    assert [(p.input_biosample, p.target_biosample) for p in paired.pairs("denoise")] == [
+        ("T_pp", "T_pp"), ("T_qq", "T_qq")]
+    got = {p.input_biosample: [paired.assays[a] for a in paired.targets(p, "denoise")]
+           for p in paired.pairs("denoise")}
+    assert got == {"T_pp": ["ATAC-seq", "DNase-seq"], "T_qq": ["ATAC-seq"]}
+
+
+def test_a_regime_that_declares_no_pairs_keeps_the_old_self_paired_behaviour(bare) -> None:
+    """D31 — absent means "no imputation declared", never "infer it from the names" (D16)."""
+    assert [(p.input_biosample, p.target_biosample) for p in bare.pairs("impute")] == [
+        ("V_pp", "V_pp"), ("V_qq", "V_qq")]
+    assert _panel(bare) == {"V_pp->V_pp": ["H3K4me3"],
+                            "V_qq->V_qq": ["DNase-seq", "H3K4me3"]}
+    assert bare.provenance()["self_paired"] is True and bare.provenance()["eval_pairs"] == []
+
+
+def test_pairing_restores_the_experiments_leave_one_out_could_not_pose(paired, bare, model) -> None:
+    """The 45-vs-29 collapse, in miniature: `V_pp` holds one assay and self-pairing drops it.
+
+    The paired source scores every experiment in the panel; the self-paired one scores the panel
+    minus every single-assay truth cell, because holding out its only assay empties the encoder
+    input and `prepare_masked_batch` returns `None`.
+    """
+    def scored(src):
+        return sorted(f"{r.pair}|{r.assay}"
+                      for r in H.stream_tracks(model, src, "cpu", batch_windows=4))
+
+    assert scored(paired) == ["T_pp->V_pp|H3K4me3", "T_qq->V_qq|DNase-seq",
+                              "T_qq->V_qq|H3K4me3"]
+    assert scored(bare) == ["V_qq->V_qq|DNase-seq", "V_qq->V_qq|H3K4me3"]
+    assert sum(len(v) for v in PAIR_PANEL.values()) == 3
+
+
+def test_the_prompt_never_carries_the_target_assay(paired) -> None:
+    """No leak, checked two ways, for every declared (pair, assay).
+
+    First the corpus: the `T_` cell must not hold the assay at all — that is the disjointness
+    `BENCHMARK_DESIGN.md` §5.1 claims and `_overlaps` measures. Then the tensor the model actually
+    sees: after `_apply_loo_mask` the target column is `CLOZE` in data, metadata and availability,
+    so `prepare_masked_batch` classes it masked rather than observed however the corpus is shaped.
+    """
+    from candi._vendored import CLOZE
+
+    assert paired.pair_overlaps == {}
+    chrom = paired.eval_chroms[0]
+    starts = paired.windows(chrom)[:2]
+    for pair in paired.pairs("impute"):
+        prompt_has = paired.ds._availability[pair.input_biosample]
+        for a in paired.targets(pair, "impute"):
+            assert not bool(prompt_has[a]), f"{pair} prompt holds its own target {paired.assays[a]}"
+            batch = paired.batch(pair, chrom, starts, "impute")
+            assert H.decode_groups(paired, "impute",
+                                   paired.targets(pair, "impute")) == [
+                [c] for c in paired.targets(pair, "impute")]
+            H._apply_loo_mask(batch, a)
+            assert float(batch["x_avail"][0, a]) == float(CLOZE)
+            assert bool((batch["x_data"][:, :, a] == float(CLOZE)).all())
+            assert bool((batch["x_meta"][:, :4, a] == float(CLOZE)).all())
+
+
+def test_the_truth_is_the_target_cells_track_read_off_the_store(paired) -> None:
+    """`y_data_imp`, not `y_data`. The prompt cell has no such column to give."""
+    from candi._vendored import MISSING
+
+    chrom = paired.eval_chroms[0]
+    starts = paired.windows(chrom)[:2]
+    pair = paired.pairs("impute")[0]
+    a = paired.targets(pair, "impute")[0]
+    batch = paired.batch(pair, chrom, starts, "impute")
+    assert batch["imp_biosample_name"] == pair.target_biosample
+    assert bool((batch["y_data"][:, :, a] == float(MISSING)).all())
+    want = paired.ds.corpus[pair.target_biosample].counts(
+        chrom, starts[0], starts[0] + paired.context_bins, assays=[paired.assays[a]])[:, 0]
+    assert np.array_equal(batch["y_data_imp"][0, :, a].numpy(), want.astype(np.float32))
+    # …and the DSF-1 rung of the C-block ladder reads the same cell, not the prompt's MISSING.
+    ladder = paired.counts_at_dsf(pair, chrom, starts, 1)
+    assert np.array_equal(ladder[:, :, a], batch["y_data_imp"][:, :, a].numpy())
+
+
+def test_the_decoder_is_prompted_with_the_target_cells_own_covariates(paired, model) -> None:
+    """Without this the depth head is told the `T_` cell's depth for a `V_` cell's track."""
+    from candi._vendored import MISSING
+    from candi.batch import make_masker, prepare_masked_batch
+
+    chrom = paired.eval_chroms[0]
+    starts = paired.windows(chrom)[:1]
+    pair = paired.pairs("impute")[0]
+    a = paired.targets(pair, "impute")[0]
+    batch = paired.batch(pair, chrom, starts, "impute")
+    H._apply_loo_mask(batch, a)
+    noop = make_masker(p_full_loci=0.0, p_full_assay=0.0, p_chunks=0.0, mask_fraction=0.0)
+    prep = prepare_masked_batch(batch, noop, "cpu", apply_mask=False)
+    assert prep is not None, "the T_ prompt still carries its own tracks"
+    assert float(prep["y_meta"][0, H.DEPTH_ROW, a]) == float(MISSING)
+    mixed = H.vb_natural_meta(prep["y_meta"], batch["y_meta_imp"], batch["y_avail"])
+    want = float(paired.ds._meta[pair.target_biosample][H.DEPTH_ROW, a])
+    assert float(mixed[0, H.DEPTH_ROW, a]) == pytest.approx(want)
+
+
+def test_biosamples_selects_a_declared_pair_from_either_side(paired_regime) -> None:
+    """`--biosamples V_pp` means "score V_pp", and must not drop the panel back to self-pairing."""
+    for named in ("V_pp", "T_pp"):
+        src = open_source(store=paired_regime, biosamples=[named])
+        try:
+            assert [(p.input_biosample, p.target_biosample) for p in src.pairs("impute")] == [
+                ("T_pp", "V_pp")]
+        finally:
+            src.close()
+    with pytest.raises(ValueError, match="none of them"):
+        open_source(store=paired_regime, biosamples=["T_qq_nope"])
+
+
+def test_the_provenance_records_which_exam_was_sat(paired) -> None:
+    prov = paired.provenance()
+    assert prov["eval_pairs"] == PAIRS
+    assert prov["self_paired"] is False
+    assert prov["eval_pair_assay_overlaps"] == {}
+
+
+def test_a_pair_whose_cells_share_an_assay_is_recorded_and_the_assay_is_not_scored(
+        tmp_path_factory) -> None:
+    """Disjointness is measured, not assumed. A shared assay drops out of the panel and is named."""
+    store = make_store(tmp_path_factory.mktemp("t80overlap"), tracks={
+        "T_rr": ("ATAC-seq", "DNase-seq", SL.CONTROL_TRACK),
+        "V_rr": ("DNase-seq", "H3K4me3"),
+    })
+    d = tmp_path_factory.mktemp("t80overlapregime")
+    p = d / "regime.json"
+    p.write_text(json.dumps(regime_dict(
+        store, biosamples={"train": ["T_rr"], "eval": ["V_rr"]},
+        eval_pairs=[["T_rr", "V_rr"]])), encoding="utf-8")
+    src = open_source(store=p)
+    try:
+        assert src.pair_overlaps == {"T_rr->V_rr": ["DNase-seq"]}
+        assert _panel(src) == {"T_rr->V_rr": ["H3K4me3"]}
+    finally:
+        src.close()
+
+
 # the loss tier — val/test loss, and the head gate that keeps it honest
 # ---------------------------------------------------------------------------
 #
@@ -789,6 +1012,259 @@ def _one_track(model, regime_file, **kw):
     finally:
         src.close()
 
+
+# ---------------------------------------------------------------------------
+# t80 — tools/declare_eval_pairs.py, the thing §14 says owns the pairing. PI ruling 2026-08-31:
+# THIS is the pairing tool. The older same-named tool origin/main shipped is now
+# tools/split_regime_by_panel.py, which is what it does -- it splits one regime into a
+# validation and a test copy off a baked-in V_/B_ convention. This one refuses a baked-in rule
+# (D16, D31) and is why it wins the name.
+# ---------------------------------------------------------------------------
+
+def test_the_declaring_tool_derives_the_pairing_and_records_its_provenance(
+        pair_store, paired_regime, tmp_path) -> None:
+    from tools.declare_eval_pairs import main as declare_main
+
+    out = tmp_path / "pairs.json"
+    rc = declare_main(["declare", "--store", str(pair_store), "--input-prefix", "T_",
+                       "--target-prefix", "V_", "--out", str(out)])
+    rec = json.loads(out.read_text())
+    assert rc == 0
+    assert rec["eval_pairs"] == PAIRS
+    assert rec["disjoint"] is True and rec["overlaps"] == {}
+    assert rec["summary"] == {"pairs": 2, "experiments": 3,
+                              "by_target_prefix": {"V_": {"cells": 2, "experiments": 3}}}
+    # the pre-t80 exam, recorded beside the fix so the gap stays legible
+    assert rec["self_paired_would_score"] == 2
+    assert rec["rule"] == {"kind": "prefix", "input_prefix": "T_", "target_prefixes": ["V_"]}
+    assert rec["store"] == str(pair_store) and len(rec["manifest_sha256"]) == 64
+
+
+def test_the_tool_and_the_harness_read_the_same_panel(pair_store, paired, tmp_path) -> None:
+    """Two independent readings of one claim. The tool must never be the harness's echo."""
+    from tools.declare_eval_pairs import main as declare_main
+
+    out = tmp_path / "pairs.json"
+    declare_main(["declare", "--store", str(pair_store), "--input-prefix", "T_",
+                  "--target-prefix", "V_", "--out", str(out)])
+    rec = json.loads(out.read_text())
+    assert {k: v["panel"] for k, v in rec["panels"].items()} == _panel(paired) == PAIR_PANEL
+
+
+def test_the_tool_refuses_to_guess_a_pairing(pair_store) -> None:
+    """D31 — a default naming rule would make the pairing inferred rather than declared."""
+    from tools.declare_eval_pairs import main as declare_main
+
+    with pytest.raises(SystemExit, match="no pairing rule"):
+        declare_main(["declare", "--store", str(pair_store)])
+
+
+def test_the_tool_takes_a_csv_so_it_need_not_parse_a_name_at_all(pair_store, tmp_path) -> None:
+    """D16-clean input: the operator states the pairing and no string is dissected."""
+    from tools.declare_eval_pairs import main as declare_main
+
+    csv = tmp_path / "pairs.csv"
+    csv.write_text("input,target\nT_pp,V_pp\nT_qq,V_qq\n", encoding="utf-8")
+    out = tmp_path / "pairs.json"
+    assert declare_main(["declare", "--store", str(pair_store), "--pairs-from", str(csv),
+                         "--out", str(out)]) == 0
+    assert json.loads(out.read_text())["eval_pairs"] == PAIRS
+
+
+def test_the_tool_writes_a_regime_that_loads_and_the_harness_then_pairs(
+        bare_regime, pair_store, tmp_path) -> None:
+    from tools.declare_eval_pairs import main as declare_main
+
+    paired_out = tmp_path / "regime.paired.json"
+    assert declare_main(["declare", "--regime", str(bare_regime), "--input-prefix", "T_",
+                         "--target-prefix", "V_", "--regime-out", str(paired_out)]) == 0
+    assert Regime.from_file(paired_out).eval_pairs == (("T_pp", "V_pp"), ("T_qq", "V_qq"))
+    src = open_source(store=paired_out)
+    try:
+        assert _panel(src) == PAIR_PANEL
+    finally:
+        src.close()
+
+
+def test_check_fails_a_regime_that_declares_nothing_and_passes_one_that_does(
+        bare_regime, paired_regime) -> None:
+    from tools.declare_eval_pairs import main as declare_main
+
+    assert declare_main(["check", "--regime", str(bare_regime)]) == 1
+    assert declare_main(["check", "--regime", str(paired_regime)]) == 0
+
+
+def test_a_paired_run_scores_end_to_end_and_the_c_block_ladder_reads_the_truth_cell(
+        paired_regime, model) -> None:
+    """`run_bench` over a declared pairing, C-block included.
+
+    The C-block is the other half of the fix: `_c_contexts` has to take its truth from `y_data_imp`
+    like `stream_tracks` does, and `counts_at_dsf` has to thin the TARGET cell's counts — the
+    prompt cell's column for a held-out assay is `MISSING`, so a depth ladder read off it would be
+    a ladder of `-1`s and C3 would score noise against noise.
+    """
+    src = open_source(store=paired_regime)
+    try:
+        res = H.run_bench(model, src, "cpu", batch_windows=4, c_windows=2, c_resamples=2,
+                          c_index_pairs=500)
+        for d in src.dsf_levels:
+            ladder = src.counts_at_dsf(src.pairs("impute")[1], src.eval_chroms[0],
+                                       src.windows(src.eval_chroms[0])[:2], int(d))
+            for a in src.targets(src.pairs("impute")[1], "impute"):
+                assert (ladder[:, :, a] >= 0).all(), f"dsf {d} read the prompt cell's MISSING"
+    finally:
+        src.close()
+    assert res["tracks"] == ["T_pp|V_pp|H3K4me3", "T_qq|V_qq|DNase-seq", "T_qq|V_qq|H3K4me3"]
+    assert res["provenance"]["eval_pairs"] == PAIRS
+    assert res["macro"]["count"]["n_tracks"] == 3
+    assert res["C"]["n_units"] > 0 and "error" not in res["C"]
+    # `C3_depth_counterfactual` was the key when t80 wrote this. origin/main retired the C1-C6 codes
+    # for self-describing names before this branch merged, so the same instrument is `depthcounterfact`.
+    assert "error" not in res["C"]["depthcounterfact"]
+
+
+# ---------------------------------------------------------------------------
+# t80 — the two scopes and the three panel numbers (plan/BENCHMARK_DESIGN.md §4, §5.2)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def two_chrom_regime(tmp_path_factory) -> Path:
+    """TWO eval chromosomes, so a held-out scope can be a proper SUBSET of what is scored.
+
+    The fixtures above cannot express the split at all. They have two chromosomes total, and a
+    regime refuses to train and evaluate on the same one, so exactly one is left to evaluate on —
+    which makes the held-out scope and the genome-wide scope the same set. That is §4's blanking
+    case, tested separately; a third chromosome is what makes the split itself testable.
+    """
+    sizes = {"chr1": 2_000 * 25 + 7, "chr2": 800 * 25 + 3, "chr3": 600 * 25 + 11}
+    store3 = make_store(tmp_path_factory.mktemp("benchstore3"), chrom_sizes=sizes)
+    d = tmp_path_factory.mktemp("benchregime2")
+    obj = regime_dict(store3, biosamples={"train": ["T_aa"], "eval": ["T_aa", "V_aa"]},
+                      kinds=["counts", "peaks", "pval"],
+                      train_chroms=["chr1"], eval_chroms=["chr2", "chr3"])
+    p = d / "regime.json"
+    p.write_text(json.dumps(obj))
+    return p
+
+
+def test_panel_of_reads_the_target_cell_and_nothing_else() -> None:
+    assert H.panel_of("V_K562") == "V"
+    assert H.panel_of("B_HAP-1") == "B"
+    # A `T_` cell is the PROMPT. Pairing on the input would put every experiment in one panel.
+    assert H.panel_of("T_K562") is None
+
+
+def _fake_track(assay: str, mse: float) -> dict:
+    return {"pval": {"assay": assay, "kind": "impute", "mse": mse, "n_bins": 100}}
+
+
+def test_the_matched_panel_is_measured_from_b_not_listed() -> None:
+    """§5.2's middle number: the same `V_` tracks, over the assays `B_` actually contains.
+
+    The set is read off `B_` at aggregation time on purpose. A literal list here would go stale the
+    first time the blind panel moves, and would go stale silently.
+    """
+    per_track = {
+        "T_a|V_a|H3K4me3": _fake_track("H3K4me3", 1.0),
+        "T_b|V_b|H3K27ac": _fake_track("H3K27ac", 3.0),
+        "T_c|V_c|H3K9me3": _fake_track("H3K9me3", 5.0),      # V_ only — not in B_
+        "T_d|B_d|H3K4me3": _fake_track("H3K4me3", 2.0),
+        "T_e|B_e|H3K27ac": _fake_track("H3K27ac", 4.0),
+    }
+    got = H.panel_macros(per_track, "pval")
+
+    assert got["V_breadth"]["n_experiments"] == 3
+    assert got["V_breadth"]["assays"] == ["H3K27ac", "H3K4me3", "H3K9me3"]
+    assert got["V_breadth"]["mse"] == pytest.approx(3.0)     # (1+3+5)/3
+
+    assert got["V_matched"]["matched_to"] == ["H3K27ac", "H3K4me3"]
+    assert got["V_matched"]["n_experiments"] == 2
+    assert got["V_matched"]["mse"] == pytest.approx(2.0)     # (1+3)/2, H3K9me3 dropped
+
+    assert got["B"]["n_experiments"] == 2
+    assert got["B"]["mse"] == pytest.approx(3.0)             # (2+4)/2
+
+
+def test_only_the_matched_panel_is_unranked() -> None:
+    """It is a reading aid. Ranking it would invent a placement with no counterpart on the board."""
+    per_track = {"T_a|V_a|H3K4me3": _fake_track("H3K4me3", 1.0),
+                 "T_d|B_d|H3K4me3": _fake_track("H3K4me3", 2.0)}
+    got = H.panel_macros(per_track, "pval")
+    assert got["V_breadth"]["ranked"] is True
+    assert got["B"]["ranked"] is True
+    assert got["V_matched"]["ranked"] is False
+
+
+def test_a_scope_is_a_subset_of_what_was_predicted(source, model) -> None:
+    """`score_track` refuses a chromosome the record does not carry, rather than skipping it.
+
+    Skipping would be the dangerous behaviour: a scope quietly narrowed to whatever happened to be
+    present is a number whose address nobody can state, which is the whole failure this design is
+    against.
+    """
+    rec = next(iter(H.stream_tracks(model, source, "cpu", kind="impute", batch_windows=4)))
+    with pytest.raises(ValueError, match="which the record does not carry"):
+        H.score_track(rec, gene_annotations=ann.gene_annotations(),
+                      enh_annotations=ann.enhancer_annotations(), chroms=("chrNope",))
+
+
+def test_the_two_scopes_are_two_aggregations_of_one_pass(two_chrom_regime, model) -> None:
+    """§4. One prediction pass, measures recomputed over two chromosome sets — never rescaled.
+
+    The check that matters is that the held-out numbers and the genome-wide numbers actually
+    DIFFER. If they did not, the split would be decorative and a reader could not tell which one
+    the board is ranking.
+    """
+    src = open_source(store=two_chrom_regime)
+    try:
+        res = H.run_bench(model, src, "cpu", kinds=("impute",), batch_windows=4,
+                          c_index_pairs=2_000, c_windows=3, c_resamples=6, seed=0,
+                          blocks=("E", "D", "B"), held_out_chroms=["chr3"])
+    finally:
+        src.close()
+
+    scope = res["provenance"]["scope"]
+    assert scope["held_out_chroms"] == ["chr3"]
+    assert scope["scored_chroms"] == ["chr2", "chr3"]
+    assert scope["genome_wide_computed"] is True
+    assert "genome_wide" in res
+
+    # the ranked scope is chr2 only; the comparability scope is both
+    for key in res["tracks"]:
+        assert res["per_track"][key]["count"]["chroms"] == ["chr3"]
+        assert res["genome_wide"]["per_track"][key]["count"]["chroms"] == ["chr2", "chr3"]
+        assert (res["genome_wide"]["per_track"][key]["count"]["n_bins"]
+                > res["per_track"][key]["count"]["n_bins"])
+
+    held = res["macro"]["count"]["mse"]
+    gw = res["genome_wide"]["macro"]["count"]["mse"]
+    assert held != gw, "a scope split that does not move a number is not a split"
+    assert set(res["panels"]) == {"count", "pval"}
+    assert set(res["panels"]["count"]) == set(H.PANELS)
+
+
+def test_one_scope_means_the_genome_wide_block_does_not_exist(scored) -> None:
+    """§4's blanking rule: not computed, rather than computed and withheld.
+
+    A method whose transferable parameters were fit at every position has no honest genome-wide
+    number, so the run is given the held-out chromosomes only and the block never exists. The
+    reason is written into the result rather than left for a reader to infer from an absent key.
+    """
+    assert "genome_wide" not in scored
+    scope = scored["provenance"]["scope"]
+    assert scope["genome_wide_computed"] is False
+    assert "NOT COMPUTED" in scope["note"]
+    assert scope["held_out_chroms"] == scope["scored_chroms"]
+
+
+def test_the_held_out_scope_cannot_name_an_unscored_chromosome(two_chrom_regime, model) -> None:
+    src = open_source(store=two_chrom_regime)
+    try:
+        with pytest.raises(ValueError, match="which this run does not score"):
+            H.run_bench(model, src, "cpu", kinds=("impute",), batch_windows=4,
+                        blocks=("E",), held_out_chroms=["chr3", "chr22"])
+    finally:
+        src.close()
 
 def test_a_count_only_model_gets_nb_nll_and_the_other_two_keys_are_ABSENT(
         regime_file, count_only_model) -> None:

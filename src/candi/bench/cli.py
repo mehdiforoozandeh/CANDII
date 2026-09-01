@@ -94,6 +94,14 @@ def build_parser() -> argparse.ArgumentParser:
                      help="h5 window regime. Nothing to do with --store.")
     src.add_argument("--chroms", default=None,
                      help="comma-separated subset of the eval chromosomes (default: all of them)")
+    src.add_argument("--held-out-chroms", default=None,
+                     help="comma-separated: the RANKED scope (plan/BENCHMARK_DESIGN.md \u00a74), e.g. "
+                          "chr20,chr21,chr22. Must be a subset of what is scored. Given a proper "
+                          "subset, one pass yields two aggregations -- `macro`/`panels` are the "
+                          "held-out numbers and a `genome_wide` block carries the same over every "
+                          "scored chromosome. Omitted, or naming everything scored, there is one "
+                          "scope and no genome-wide block: that is \u00a74's blanking rule, and a "
+                          "method fit at every position is run that way on purpose.")
     src.add_argument("--biosamples", default=None,
                      help="store only: comma-separated eval biosamples (default: the regime's)")
 
@@ -242,7 +250,8 @@ def _ranking(result: dict, competitors: str) -> dict:
     from collections import defaultdict
 
     from candi.bench.eic import MEASURES
-    from candi.bench.ranking import aggregate_ranks
+    from candi.bench.harness import SCOPE_HELD_OUT, panel_of
+    from candi.bench.ranking import MISSING_SCORE, aggregate_ranks
 
     path = Path(competitors)
     opener = gzip.open if path.suffix == ".gz" else open
@@ -252,7 +261,12 @@ def _ranking(result: dict, competitors: str) -> dict:
             table[int(row["bootstrap_id"])][row["cell"] + row["assay"]][row["team_id"]] = {
                 m: float(row[m]) for m in MEASURES}
 
+    # THE HELD-OUT SCOPE, always. A placement is a claim about loci where nothing was fit, so
+    # ranking the genome-wide aggregation would place a memorisation score in a field of
+    # imputation scores. `result["per_track"]` IS the held-out scope by construction (see
+    # `run_bench`); `result["genome_wide"]` is deliberately not read here.
     ours: dict = {}
+    panels: dict = {}
     for key, arms in result["per_track"].items():
         arm = arms.get("pval") or arms.get("count")
         if arm is None or arms is None:
@@ -260,6 +274,7 @@ def _ranking(result: dict, competitors: str) -> dict:
         fields = key.split("|")
         exp = f"{fields[1]}{fields[2]}"
         ours[exp] = {m: float(arm[m]) for m in MEASURES if m in arm}
+        panels[exp] = panel_of(fields[1])
     placed, absent = 0, []
     for b in table:
         for exp, cell in table[b].items():
@@ -269,6 +284,19 @@ def _ranking(result: dict, competitors: str) -> dict:
             else:
                 absent.append(exp)
     agg = aggregate_ranks(table)
+    agg["ranker"] = "candi.bench.ranking.aggregate_ranks"
+    agg["scope"] = SCOPE_HELD_OUT
+    agg["scope_chroms"] = list((result.get("provenance", {}).get("scope") or {})
+                               .get("held_out_chroms", []))
+    agg["panels_placed"] = {p: sum(1 for e in ours if panels.get(e) == p)
+                            for p in ("V", "B") if any(panels.get(e) == p for e in ours)}
+    agg["missing_score"] = MISSING_SCORE
+    agg["single_ranker_note"] = (
+        "plan/BENCHMARK_DESIGN.md 5.3 -- this is the ONLY ranker, for every arm, every regime and "
+        "both truths. Quote the resolution limit with every placement: two methods separated by "
+        "less than it are not separated. A method missing an arm scores MISSING_SCORE, equal to "
+        "the cap, i.e. below-median rather than disqualified. Ranks are computed WITHIN a panel; "
+        "never subtract V_ breadth from B_.")
     agg["candi_experiments_placed"] = placed // max(1, len(table))
     agg["candi_experiments_absent"] = sorted(set(absent))[:20]
     agg["candi_bootstrap_caveat"] = (
@@ -293,6 +321,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     kinds = tuple(k.strip() for k in a.kinds.split(",") if k.strip())
     blocks = tuple(b.strip().upper() for b in a.blocks.split(",") if b.strip())
     chroms = tuple(c.strip() for c in a.chroms.split(",")) if a.chroms else None
+    held_out = (tuple(c.strip() for c in a.held_out_chroms.split(",") if c.strip())
+                if a.held_out_chroms else None)
     bios = tuple(b.strip() for b in a.biosamples.split(",")) if a.biosamples else None
 
     kw: dict = {"chroms": chroms}
@@ -322,7 +352,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 c_windows=a.c_windows, c_resamples=a.c_resamples,
                 signal_target_transform=stt,
                 crps_approx=a.crps_approx, crps_seed=a.crps_seed,
-                with_curve=a.with_curve, progress=not a.quiet,
+                with_curve=a.with_curve, progress=not a.quiet, held_out_chroms=held_out,
                 extra_provenance={"ckpt": str(a.ckpt), "arch_from": a.arch_from,
                                   "heads": a.heads, "offset": a.offset, "device": str(device),
                                   "signal_target_transform_source": stt_src})

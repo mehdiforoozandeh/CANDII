@@ -24,7 +24,7 @@ t14 made StoreDataset emit the five imputation keys off a declared eval_pairs (D
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- 09a0f3e on implementation/t28-store-eval-units; build_eval_units and quick_eval take a ready dataset, store guard narrowed to eval_pairs_declared(); 780 pass, golden 0 ULP
+- [Merged ce212d0 (PR #16, squash)](results/t28/DELIVERABLE.md) — build_eval_units and quick_eval take a ready dataset, store guard narrowed to eval_pairs_declared(); 780 pass, golden 0 ULP. The old record named `09a0f3e`, which the squash left off `main`.
 
 ## Evidence
 

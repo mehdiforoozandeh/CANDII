@@ -46,7 +46,7 @@ import numpy as np
 from candi.bench import annotations as ann
 from candi.bench import distributional as D
 from candi.bench.harness import (
-    ARMS, EvalSource, Pair, TrackRecord, _binarise, _varpool, macro_mean, open_source,
+    ARMS, EvalSource, Pair, TrackRecord, _binarise, _varpool, cross_cell, macro_mean, open_source,
     panel_specificity, score_track, track_key,
 )
 
@@ -302,7 +302,10 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
     root = Path(pred_root)
     if not root.is_dir():
         raise ExternalError(f"--pred {root} is not a directory")
-    if not source.cross_cell("impute"):
+    # t77 moved `cross_cell` off the source and onto the pair: a regime may declare some pairs that
+    # cross cells and some that do not, so "is this source cross-cell" is only answerable as "does
+    # any declared pair cross". `EvalSource.cross_cell(kind)` no longer exists.
+    if not any(cross_cell(p, "impute") for p in source.pairs("impute")):
         raise ExternalError(
             f"{getattr(source, 'regime_path', source)} declares no `eval_pairs`. The external "
             f"format is `<input>{SEP}<target>{SEP}<assay>` — without declared pairs there is no "

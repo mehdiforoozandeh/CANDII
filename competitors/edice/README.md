@@ -248,6 +248,55 @@ read depth to manufacture one — and **no peak head**, so `candi.bench.external
 coverage-ranking fallback and every peak-tier row is labelled as such (B3). The forecast
 distribution arrives from the §6.1 σ-table, not from the model.
 
+## Checkpoint selection on `V_` (§5) — built 2026-08-31, PI ruling
+
+`run_eic.py train` used to run `--epochs` and keep the last state. It now selects, by the rule
+`plan/BENCHMARK_DESIGN.md` §5 asks of every trainable method:
+
+- it derives a **`V_`-only regime** from the one it was given (26 of the 38 declared pairs; the 12
+  `B_` pairs are dropped before any track is opened), the same derivation
+  `slurm/t81_train_candi.sh` performs for CANDI. `Selector.__init__` asserts no `B_` target is
+  reachable — the PI's 2026-08-31 ruling is that `B_` is never *read*, not merely never ranked;
+- every `--eval-every` epochs it writes that panel to a §4.1 prediction root and scores it with
+  **`candi.bench.external.score_external`** — the same instrument that produces a board row.
+  eDICE's own `edice_torch/metrics.py` is *not* used. It is **848x cheaper** — 0.018 µs per
+  (track × bin) against `score_external`'s ~15 µs, so 5 seconds a check instead of 73 minutes —
+  and that is exactly why it is tempting and exactly why it must not be used: selecting on it
+  would make the rule non-uniform, which is the only thing §5 asks for;
+- `model.best.pt` is written **the moment the metric improves**, so a walltime kill still leaves a
+  validly selected checkpoint. `model.selected.pt` (weights + vocabulary, the scorable object) is
+  written at the end; `model.pt` is always the last epoch and is **not** what gets scored;
+- `--early-stop-epochs` counts **epochs**, so its resolution is `--eval-every`.
+
+**The selection key is not CANDI's.** CANDI selects on count-arm `crps`. eDICE emits `signal_mu`
+and no `signal_sigma`, so `score_external` records a point-only track and computes no
+distributional key at all — and B1b forbids inventing a read depth to give it a count arm. So the
+panel, the instrument, the scope and the cadence are uniform, and the **key is not**: eDICE selects
+on macro pval `mse` (`--select-metric`, which offers only keys the instrument can produce for a
+point track). **This is a real gap in §5's "same rule" and it is for the PI, not for this file.**
+
+**It costs more than training.** One check is ~38 min of GPU prediction plus ~73 min of CPU
+scoring, ≈1.9 h; 17 checks at `EVAL_EVERY=3` is 31.8 h against 8.8 h of `eic.19` training. The
+arithmetic, its two measured anchors and the sized walltime are in `slurm/eic_train.sh`'s header.
+
+## Training loci under a `regions` BED (D32) — built 2026-08-31
+
+`configs/regime.eic_pilot.json` restricts training to the 44 ENCODE Pilot Regions lifted to hg38.
+eDICE honours it now; `slurm/eic_train.sh` used to refuse the regime and no longer does.
+
+D32's rule is containment: a training window counts only if it lies **wholly** inside a region, on
+a tiling anchored at chromosome bin 0 and never re-anchored per region. **eDICE's window is one
+25 bp bin** — it carries no positional parameters and no context — so containment here is per bin,
+and the scope is the regime's own declared figure: **40 regions, 25,588,197 bp, 1,023,489 bins**,
+printed by the launcher before the run starts.
+
+CANDI's 768-bin context cannot fit inside the leading or trailing partial tile of 34 of those 40
+regions, so it plans 993,792 bins, 97.10 % of the same scope (§3.1). The two methods therefore see
+the same **regions** and not the identical bin set. Narrowing eDICE to CANDI's 1,294 windows was
+rejected: the 2.9 % is an artefact of CANDI's context length, and D32 states a containment rule,
+not a window grid. Reads walk region by region so a slab stays contiguous — a scattered fancy
+index over chr1 would have spanned ~10 M bins and needed ~10 GB to materialise.
+
 ### What P1 and P2 scoring confirmed (jobs `56904726`, `56914129`)
 
 Both protocols are scored — A4 requires both, always. The §4.1 contract held end to end in each:
@@ -310,18 +359,23 @@ the fix, not a longer wall.
 ## Commands
 
 ```bash
-# unit tests (21) -- NOT part of the core `pytest tests/ -q` gate
-cd competitors/edice && PYTHONPATH=. pytest tests/ -q
+# unit tests (41) -- NOT part of the core `pytest tests/ -q` gate. The §5 and D32 tests build a
+# real CANDI_STORE with the repo's own writer, so they need `src` on the path as well.
+cd competitors/edice && PYTHONPATH=.:../../src pytest tests/ -q
 
 # the panel, without touching a GPU
-PYTHONPATH=.:../../src python run_eic.py panel --regime ../../configs/regime.eic_val.json
+PYTHONPATH=.:../../src python run_eic.py panel --regime ../../configs/regime.eic_19.json
 
-# EIC, on Fir. BLOCKED until the gate is recorded AND the PI has called --n-targets.
+# EIC, on Fir. §12.2: eDICE is a pval-arm method and runs ONCE PER REGIME.
 mkdir -p slurm-logs
-N_TARGETS=31 sbatch --time=24:00:00 competitors/edice/slurm/eic_train.sh   # DECIDED, PI 2026-08-25
-N_TARGETS=31 PROTOCOL=p1 sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
-N_TARGETS=31 PROTOCOL=p2 sbatch --time=12:00:00 --mem=96G competitors/edice/slurm/eic_score.sh
+N_TARGETS=31 REGIME=$REPO/configs/regime.eic_19.json    sbatch competitors/edice/slurm/eic_train.sh
+N_TARGETS=31 REGIME=$REPO/configs/regime.eic_pilot.json sbatch competitors/edice/slurm/eic_train.sh
+N_TARGETS=31 SCOPE=heldout    sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
+N_TARGETS=31 SCOPE=genomewide sbatch --time=12:00:00 --mem=96G competitors/edice/slurm/eic_score.sh
 ```
+
+`eic_train.sh` carries its own `--time=60:00:00`, sized for 50 epochs plus 17 `V_` selection checks
+— read its header before overriding it, because the eval is 78 % of the band.
 
 `N_TARGETS=120` with `--time=48:00:00` runs the absolute reading instead; nothing else changes, and
 the manifest's `masking_caveat` describes whichever reading was actually run. Both `eic_train.sh`

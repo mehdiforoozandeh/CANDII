@@ -48,8 +48,8 @@ import numpy as np
 
 from candi.bench.eic import MEASURES, RANK_DIRECTION
 
-__all__ = ["MISSING_SCORE", "RESOLUTION_LIMIT_CORR", "rank_within_cell", "aggregate_ranks",
-           "bootstrap_positions"]
+__all__ = ["MISSING_SCORE", "RESOLUTION_LIMIT_CORR", "UNSEPARABLE_ADJACENT_PAIRS",
+           "rank_within_cell", "aggregate_ranks", "bootstrap_positions"]
 
 #: What a team absent from a bootstrap-experiment cell scores. Equal to the cap, by design.
 MISSING_SCORE = 0.5

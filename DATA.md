@@ -31,7 +31,8 @@ properties of the baked file (`dataset.py::CandiKitH5Dataset`). You cannot silen
     <ASSAY>/                         # e.g. H3K4me3, DNase-seq, ATAC-seq
       file_metadata.json
       signal_DSF{1,2,4,8}_res25/     { chr*.npz, metadata.json }
-      signal_BW_res25/               { chr*.npz }   # -log10 p-value track
+      signal_BW_res25/               { chr*.npz }   # the assay's signal bigWig, binned — NOT
+                                                    # -log10 p for DNase-seq; see below
       peaks_res25/                   { chr*.npz }   # 0/1 peak call mask
     chipseq-control/                 # optional but strongly recommended
       file_metadata.json
@@ -54,8 +55,21 @@ Only `data.files[0]` is read, so the array key is irrelevant (`handler.py::_load
 | directory | dtype on disk | length (bins) | contents |
 |---|---|---|---|
 | `signal_DSF{d}_res25/chr*.npz` | integer | **`ceil(chr_len / resolution)`** | **raw, unnormalized read counts** at downsampling factor `d` |
-| `signal_BW_res25/chr*.npz` | `float32` | **`floor(chr_len / resolution)`** | -log10 p-value, untransformed on disk |
+| `signal_BW_res25/chr*.npz` | `float32` | **`floor(chr_len / resolution)`** | whatever ENCODE's signal bigWig for that experiment holds, mean-binned and untransformed on disk. `-log10 p` for ChIP-seq and ATAC-seq; **`read-depth normalized signal` for DNase-seq** |
 | `peaks_res25/chr*.npz` | integer | **`floor(chr_len / resolution)`** | 0/1 peak indicator |
+
+### `signal_BW_res25` is not one quantity — 40 of EIC's 363 tracks are not a p-value
+
+ENCODE ships **no** p-value track for DNase-seq. Swept per file against the portal for all 363
+EIC signal bigWigs on 2026-08-29: 316 ChIP-seq and 7 ATAC-seq carry `signal p-value`, and 40
+DNase-seq carry `read-depth normalized signal` — all released, bigWig, GRCh38. 34 of the 267
+training tracks are therefore in different units from the rest of the layer, and any macro that
+pools assays pools a probability with a scaled read count.
+
+The accession and its `output_type` are now recorded per track in the store manifest
+(`STORE.md`), from `configs/signal_provenance.eic.json`, and a build whose recorded `output_type`
+disagrees with the corpus's declared signal semantics fails. The rebuild of the DNase layer from
+alignments is `plan/BENCHMARK_DESIGN.md` §10 and crux task `t78`.
 
 The ceil/floor difference is real, not a typo — measured on the reference corpus,
 `T_DND-41/H3K27me3/chr19` gives counts `2,344,705 = ceil(58,617,616/25)` against `2,344,704` for BW

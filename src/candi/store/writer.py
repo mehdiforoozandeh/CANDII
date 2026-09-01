@@ -61,6 +61,11 @@ class SourceLayout:
             return base / f"peaks_res{self.resolution}"
         if kind == "pval":
             return base / f"signal_BW_res{self.resolution}"
+        if kind in L.ARCHIVE_KINDS:
+            raise StoreError(
+                f"{kind!r} is an archive kind and has no npz source — it is the byte-identical "
+                f"predecessor of pval.h5, placed by a promotion, never built here."
+            )
         raise StoreError(f"unknown kind {kind!r}; expected one of {list(L.KINDS)}")
 
     def npz_path(self, biosample: str, track: str, kind: str, chrom: str) -> Path:
