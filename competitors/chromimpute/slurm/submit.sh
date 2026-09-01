@@ -12,20 +12,18 @@
 # the only scope is the regime's eval_chroms — chr20+21+22. `CI_REGIME` selects which live regime
 # (eic_19 or eic_pilot); `CI_CHROMS` defaults to that regime's eval_chroms.
 #
-# TWO THINGS THIS SCRIPT DOES NOT DO, AND THEY ARE BLOCKERS, NOT OVERSIGHTS:
+# RULE 2, SETTLED 2026-09-01 (PI ruling). `dist` and `gtd` run on the regime's TRAINING loci, in
+# every regime and not only under a `regions` BED: `prepare.py` always writes `chrominfo.train.txt`
+# and `stage.sh` hands that file, and only that file, to ComputeGlobalDist and GenerateTrainData.
+# `Apply` keeps `chrominfo.txt` — its neighbour features are per-position inference, which §2 Rule 2
+# names as legitimate on the eval chromosomes. This DEPARTS from the published recipe, which samples
+# inside the predicted chromosomes; the departure is recorded in `../README.md`.
 #
-#  1. UNDER A REGIME WITH NO `regions` — eic_19 — `gtd` (GenerateTrainData) SAMPLES ITS 100,000
-#     TRAINING LOCATIONS INSIDE $CI_CHROMS, i.e. inside the eval chromosomes. The predictors
-#     trained on them are TRANSFERABLE parameters, so under Rule 2 (§2) they belong on the
-#     regime's train_chroms instead. Nothing here reads the scored track, so Rule 1 is intact; it
-#     is the scope NAME that would be wrong. Moving it is a PI decision, not ours, and it is left
-#     alone deliberately. Raise it before launching eic_19.
-#     A `regions` regime is a different case and IS handled: `prepare.py` writes a separate D32
-#     training grid and `stage.sh` points `dist` and `gtd` at it, so under eic_pilot the
-#     transferable parameters are fit inside the Pilot Regions and nowhere near chr20/21/22.
-#  2. `targets.tsv` is EVERY declared eval pair, and the live regimes declare 38 — 26 V_ AND 12 B_.
-#     §5 rules B_ is touched ONCE, at the very end. Filter the target list to V_ before running
-#     anything but the final B_ pass.
+# ONE THING THIS SCRIPT DOES NOT DO, AND IT IS A BLOCKER, NOT AN OVERSIGHT:
+#
+#   `targets.tsv` is EVERY declared eval pair, and the live regimes declare 38 — 26 V_ AND 12 B_.
+#   §5 rules B_ is touched ONCE, at the very end. Filter the target list to V_ before running
+#   anything but the final B_ pass.
 #
 # Nothing here decides science. The compendium is every training track the regime declares (§6.2,
 # enforced in prepare.training_tracks); the pilot targets come from prepare.pilot_subset; every
@@ -47,9 +45,10 @@ STAGE=$HERE/slurm/stage.sh
 
 mkdir -p "$RUN"/{lists,logs,timing}
 
-# --- the three text files, and the target lists -------------------------------------------------
-# Deleted first, not overwritten: `prepare.py` only writes it for a `regions` regime, and a file
-# left behind by an earlier run of a different regime would silently retarget `dist` and `gtd`.
+# --- the four text files, and the target lists -------------------------------------------------
+# Deleted first, not overwritten: a training grid left behind by an earlier run of a different
+# regime would retarget `dist` and `gtd`, and it would do it silently. `prepare.py` writes a fresh
+# one below, so the only way this file survives the delete is a prepare that did not run.
 rm -f "$RUN/input/chrominfo.train.txt"
 PYTHONPATH=$REPO/src $PY "$HERE/prepare.py" --store "$STORE" \
     --regime "$REGIME" --out "$RUN/input" --chroms "$CHROMS" \
@@ -67,24 +66,33 @@ cut -f2 "$RUN/input/inputinfofile.txt" | sort -u            > "$RUN/lists/conver
 # GenerateTrainData's loadDistInfo opens DISTANCEDIR/<sample>_<mark>.txt for every (sample, mark)
 # pair in inputinfofile before it looks at the target, so one missing mark fails every target.
 cp "$RUN/lists/convert.txt"                                   "$RUN/lists/dist.txt"
-# GenerateTrainData parallelizes over chromosomes as well as marks whenever there is more than one
-# chromosome — one mark genome-wide is hours of scanning in a single task.
+# GenerateTrainData parallelizes over chromosomes as well as marks — one mark over a wide grid is
+# hours of scanning in a single task. The chromosomes it may be split over are the TRAINING grid's,
+# never `chrominfo.txt`: `-c` picks a chromosome out of the chrominfo the command is handed, and
+# the command is handed `chrominfo.train.txt`. Naming an eval chromosome here is what used to put
+# the sample on the scored chromosomes.
 #
-# A D32 training grid is the exception: one mark over the whole of it is minutes, and splitting it
-# would raise a question the manual does not answer — whether `-c` divides the 100,000 locations or
-# repeats them per declared chromosome. One task per mark makes the count exactly 100,000 whichever
-# it is, which is the number §11 prices the method at.
-if [ -s "$RUN/input/chrominfo.train.txt" ]; then
-  cut -f3 "$RUN/input/$TARGETS" | sort -u                          > "$RUN/lists/gtd.txt"
-  echo "D32 training grid: $(wc -l < "$RUN/input/chrominfo.train.txt") region(s), \
-$(awk -F'\t' '{s += $2 / 25} END {printf "%d", s}' "$RUN/input/chrominfo.train.txt") bins"
-elif [ "$(wc -l < "$RUN/input/chrominfo.txt")" -gt 1 ]; then
-  while read -r M; do
-    while read -r C; do printf '%s\t%s\n' "$M" "$C"; done < <(cut -f1 "$RUN/input/chrominfo.txt")
-  done < <(cut -f3 "$RUN/input/$TARGETS" | sort -u)                > "$RUN/lists/gtd.txt"
+# A D32 region grid is the exception and stays unsplit: the whole of it is 1,023,489 bins, a
+# fortieth of one real chromosome, so one task per mark is minutes and 40 array tasks per mark buy
+# nothing.
+NTRAIN=$(wc -l < "$RUN/input/chrominfo.train.txt")
+if $PY -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" \
+       "$REGIME"; then
+  REGIONS=1
 else
-  cut -f3 "$RUN/input/$TARGETS" | sort -u                          > "$RUN/lists/gtd.txt"
+  REGIONS=0
 fi
+if [ "$REGIONS" = 1 ] || [ "$NTRAIN" -le 1 ]; then
+  cut -f3 "$RUN/input/$TARGETS" | sort -u                          > "$RUN/lists/gtd.txt"
+else
+  while read -r M; do
+    while read -r C; do printf '%s\t%s\n' "$M" "$C"
+    done < <(cut -f1 "$RUN/input/chrominfo.train.txt")
+  done < <(cut -f3 "$RUN/input/$TARGETS" | sort -u)                > "$RUN/lists/gtd.txt"
+fi
+echo "training grid: $NTRAIN declared chromosome(s)/region(s), \
+$(awk -F'\t' '{s += $2 / 25} END {printf "%d", s}' "$RUN/input/chrominfo.train.txt") bins \
+(regions=$REGIONS) | apply grid: $CHROMS"
 cut -f1,3 "$RUN/input/$TARGETS"                               > "$RUN/lists/train.txt"
 cp "$RUN/lists/train.txt"                                     "$RUN/lists/apply.txt"
 
