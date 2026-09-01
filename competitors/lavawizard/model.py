@@ -20,6 +20,13 @@ Four details are load-bearing and none of them are PyTorch defaults:
 
 The signal space is `arcsinh(-log10 p)` throughout. Inversion (`sinh`, then clip at 0) belongs to
 whoever writes tracks, not here — see `emit.py`.
+
+**One thing here is ours and not upstream's: the parameter split.** `Factors.GENOME_TABLES`,
+`Guacamole.genome_parameters` and `Guacamole.transferable_parameters` cut the model in two along
+BENCHMARK_DESIGN.md §2's line — position tables on one side, everything Rule 2 binds on the other.
+Upstream never needed the cut because it fit one whole model per chromosome. Nothing about the
+architecture, the forward pass or the Keras names changes; the methods only name a partition of
+tensors that was always there. See `train.py` for what the two stages then do with it.
 """
 from __future__ import annotations
 
@@ -60,11 +67,19 @@ class Factors(nn.Module):
     two chances to get it wrong.
     """
 
+    #: The three tables indexed by POSITION. BENCHMARK_DESIGN.md §2 counts fitting these on an eval
+    #: chromosome as inference, not training, so they are the half a transfer throws away and
+    #: refits. Everything else in the model — the cell table, the assay table and the dense network
+    #: — is a *transferable* parameter and is bound by Rule 2. Named here rather than in `train.py`
+    #: because the split is a fact about the architecture.
+    GENOME_TABLES = ("genome_25bp_embedding", "genome_250bp_embedding", "genome_5kbp_embedding")
+
     def __init__(self, n_celltypes: int, n_assays: int, n_positions: int,
                  n_celltype_factors: int = 45, n_assay_factors: int = 65,
                  n_25bp_factors: int = 25, n_250bp_factors: int = 30, n_5kbp_factors: int = 60):
         super().__init__()
         self.n_positions = int(n_positions)
+        self._widths = (n_25bp_factors, n_250bp_factors, n_5kbp_factors)
         self.celltype_embedding = nn.Embedding(n_celltypes, n_celltype_factors)
         self.assay_embedding = nn.Embedding(n_assays, n_assay_factors)
         # Upstream sizes the coarse tables `n // 10 + 1` and `n // 200 + 1` with integer division on
@@ -76,6 +91,24 @@ class Factors(nn.Module):
         #: Width of the concatenation — `dense_1`'s input, 225 with the defaults.
         self.out_features = (n_celltype_factors + n_assay_factors
                              + n_25bp_factors + n_250bp_factors + n_5kbp_factors)
+
+    def genome_tables(self):
+        return [getattr(self, n) for n in self.GENOME_TABLES]
+
+    def replace_genome(self, n_positions: int, device=None) -> None:
+        """Swap in fresh, untrained position tables sized for a different scope.
+
+        The coarse table sizes are re-derived by upstream's own `n // 10 + 1` and `n // 200 + 1`
+        rather than scaled, so a re-sized model is built the way `__init__` would have built it.
+        """
+        f25, f250, f5k = self._widths
+        self.n_positions = int(n_positions)
+        self.genome_25bp_embedding = nn.Embedding(n_positions, f25)
+        self.genome_250bp_embedding = nn.Embedding(n_positions // 10 + 1, f250)
+        self.genome_5kbp_embedding = nn.Embedding(n_positions // 200 + 1, f5k)
+        if device is not None:
+            for e in self.genome_tables():
+                e.to(device)
 
     def forward(self, celltype: Tensor, assay: Tensor, pos25: Tensor) -> Tensor:
         """`pos25` is the absolute 25 bp bin index; the coarse indices are derived, as upstream."""
@@ -135,6 +168,58 @@ class Guacamole(nn.Module):
         x = self.block2(self.block1(self.factors(celltype, assay, pos25)))
         x = torch.cat([variance.unsqueeze(-1), average.unsqueeze(-1), x], dim=-1)
         return self.y_pred(self.block3(x)).squeeze(-1) + average
+
+    # -- the Rule 2 parameter split -------------------------------------------------------------
+    #
+    # Prefix of every tensor in `state_dict()` that belongs to a position table. One string, used
+    # by the three methods below and by `train.transfer_transferable`, so "which half is which" is
+    # written down once and cannot drift between the freeze and the load.
+    _GENOME_PREFIXES = tuple(f"factors.{n}." for n in Factors.GENOME_TABLES)
+
+    def genome_parameters(self):
+        return [p for t in self.factors.genome_tables() for p in t.parameters()]
+
+    def transferable_parameters(self):
+        """Cell factors, assay factors and the whole dense network — everything Rule 2 binds."""
+        genome = {id(p) for p in self.genome_parameters()}
+        return [p for p in self.parameters() if id(p) not in genome]
+
+    def transferable_state(self, state=None) -> dict:
+        """`state_dict()` minus the position tables — what one scope hands the next."""
+        state = self.state_dict() if state is None else state
+        return {k: v for k, v in state.items() if not k.startswith(self._GENOME_PREFIXES)}
+
+    def freeze_transferable(self) -> "Guacamole":
+        """Stop the transferable half learning. Chains, so a caller reads as one statement.
+
+        BatchNorm's running estimates are NOT parameters and keep moving in `train()` mode, so the
+        three blocks are put in `eval()` too: a frozen trunk whose normalisation statistics drift to
+        the eval chromosome's would be fitting the trunk to that chromosome by another route.
+        """
+        for p in self.transferable_parameters():
+            p.requires_grad_(False)
+        for b in (self.block1, self.block2, self.block3):
+            b.bn.eval()
+        return self
+
+    @torch.no_grad()
+    def load_transferable(self, state: dict) -> "Guacamole":
+        """Copy another scope's transferable half in, leaving the position tables untouched.
+
+        Strict on its own half: every transferable tensor must be present and the right shape, so a
+        checkpoint from a model with different factor widths — `dataset3.UPSTREAM_HYPERPARAMS`
+        varies them by chromosome, and they set `dense_1`'s input width — fails here rather than
+        producing a silently mis-shaped transfer.
+        """
+        incoming = self.transferable_state(state)
+        want = set(self.transferable_state())
+        missing, extra = sorted(want - set(incoming)), sorted(set(incoming) - want)
+        if missing or extra:
+            raise ValueError(f"the checkpoint's transferable half is not this model's: "
+                             f"missing {missing}, unexpected {extra}")
+        res = self.load_state_dict(incoming, strict=False)
+        assert not res.unexpected_keys, res.unexpected_keys
+        return self
 
     @torch.no_grad()
     def from_precamole(self, pre: Precamole) -> "Guacamole":
