@@ -4,6 +4,24 @@ Stage 1 (`Precamole`) is 3-way classification on terciles; stage 2 (`Guacamole`)
 regression that starts from stage 1's trunk. Epoch counts, batch sizes and factor widths are
 upstream's own, per chromosome, from `dataset3.UPSTREAM_HYPERPARAMS`.
 
+**`--stage` is OURS, and it is the one place this file departs from upstream's method.** Upstream
+fits one whole independent model per chromosome — cell factors, assay factors, dense network and
+position tables together, all on that chromosome's own bins. `BENCHMARK_DESIGN.md` §2 Rule 2 says a
+regime names the loci where a method's *transferable* parameters were fit, and the cell and assay
+factors are transferable, so upstream's scheme fits them on the chromosomes it is then scored on.
+Two stages fix that, and they are Avocado's own scheme (`competitors/avocado/train.py`, §3.2 and
+§12.2), not Guacamole's:
+
+    --stage full     upstream, unchanged. Everything, on one chromosome. The Dataset-3 anchor.
+    --stage shared   everything, on the REGIME'S TRAINING SCOPE. Run once. Its product is the
+                     transferable half; its position tables are thrown away.
+    --stage genome   load a `shared` run's transferable half, FREEZE it, re-init the position
+                     tables at this chromosome's size and fit only those. Once per eval chromosome.
+
+So the run that predicts chr20 has never taken a gradient on chr20 in any parameter Rule 2 binds.
+**This makes the board row our two-stage variant of Lavawizard and not the published one** — see
+`README.md`; the 2019 submission itself stays on the board unmodified as one of the 23 entrants.
+
 **The sampler is the one deliberate departure.** Upstream builds a batch with a Python loop over
 `batch_size` samples (`03_guacamole6_train.py:174-183`) — 10 000 to 21 000 iterations per step. On
 CPU that cost 0.2 % of a 2.7 s step and did not matter; against a GPU step it would be the whole
@@ -34,7 +52,9 @@ exactly as it did before and selects nothing.
 ```bash
 python -m lavawizard.train --cache <cache> --chrom chr21 --out <run> \
     --contributor-mode upstream                                    # anchor: no selection
-python -m lavawizard.store_eic train --regime <regime> --chrom chr21 \
+python -m lavawizard.store_eic train --regime <regime> --stage shared \
+    --cache <cache> --out <run>                                    # the transferable half, once
+python -m lavawizard.store_eic train --regime <regime> --stage genome --chrom chr21 \
     --cache <cache> --out <run> --select-every 50                  # the board run: selects on V_
 ```
 """
@@ -154,9 +174,14 @@ def _run_stage(model: nn.Module, sampler: Sampler, *, epochs: int, lr: float, lo
                batch_fn, device, label: str, log_every: int = 50,
                max_steps: Optional[int] = None,
                eval_hook: Optional[Callable[[int, int], bool]] = None,
-               eval_every: int = 0) -> Dict[str, float]:
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
-    model.train()
+               eval_every: int = 0, params=None,
+               set_train: Optional[Callable[[], None]] = None) -> Dict[str, float]:
+    # `params` and `set_train` are how the genome stage keeps the transferable half out of the
+    # optimiser and out of `train()` mode. Both default to the whole model, so every other caller
+    # is the call it always was.
+    opt = torch.optim.Adam(model.parameters() if params is None else params, lr=lr)
+    set_train = set_train or model.train
+    set_train()
     spe = sampler.steps_per_epoch
     total = min(epochs * spe, max_steps) if max_steps else epochs * spe
     print(f"{label}: {epochs} epochs x {spe} steps = {epochs*spe} steps"
@@ -183,11 +208,10 @@ def _run_stage(model: nn.Module, sampler: Sampler, *, epochs: int, lr: float, lo
         if eval_hook and eval_every and (step % spe == 0 or step == total):
             ep = (step - 1) // spe
             if (ep + 1) % eval_every == 0 or step == total:
-                was_training = model.training
                 te = time.time()
                 stop = eval_hook(step, ep)
                 eval_s += time.time() - te
-                model.train(was_training)
+                set_train()
                 if stop:
                     stopped = True
                     break
@@ -224,8 +248,18 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
                      epoch_scale: float = 1.0, tf32: bool = True,
                      select_fn: Optional[Callable[["Guacamole", int, int], float]] = None,
                      select_every: int = 0, select_metric: str = "",
-                     early_stop_epochs: int = 0) -> Dict:
+                     early_stop_epochs: int = 0, stage: str = "full",
+                     init: Optional[Path] = None, hparams_chrom: str = "") -> Dict:
     """Both stages for one chromosome. Writes `guacamole_<chrom>.pt` and `train_<chrom>.json`.
+
+    `stage` is `full` (upstream, and the default, so nothing that existed before this flag moved),
+    `shared`, or `genome` — see the module docstring. `full` and `shared` run the same code and
+    differ only in the scope the caller points them at, which is the honest way to say it: the
+    transferable stage is upstream's own fit, moved to loci Rule 2 allows. `genome` needs `init`.
+
+    `hparams_chrom` names the chromosome whose `dataset3.UPSTREAM_HYPERPARAMS` row to use when the
+    cache stem is not itself one of the 23 — the packed multi-chromosome scope a `regions` regime's
+    shared fit trains on. Empty means "use the stem", which is every other case.
 
     **`select_fn` is how BENCHMARK_DESIGN.md §5's uniform selection reaches this method.** It is
     injected rather than built here because scoring a `V_` panel means reading the store, and the
@@ -238,22 +272,33 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
     no stage-1 checkpoint anyone could select and scoring one would be scoring a classifier against
     a regression panel.
     """
+    if stage not in ("full", "shared", "genome"):
+        raise ValueError(f"stage must be full, shared or genome, got {stage!r}")
+    if (stage == "genome") != bool(init):
+        raise ValueError("--stage genome needs an --init shared checkpoint, and no other stage "
+                         "may take one: a `full` or `shared` fit that started from someone else's "
+                         "transferable half was not fit on the loci its regime names.")
     torch.manual_seed(seed)
     np.random.seed(seed)
     dev = torch.device(device)
     if dev.type == "cuda":
         enable_tf32(tf32)
     cache = CachedChrom(cache_root, chrom)
-    sched = dataset3.schedule(chrom)
-    factors = dataset3.factor_sizes(chrom)
+    hp = hparams_chrom or chrom
+    sched = dataset3.schedule(hp)
+    factors = dataset3.factor_sizes(hp)
     bs = sched["batch_size"]
-    pre_ep = max(int(round(sched["pretrain_epochs"] * epoch_scale)), 1)
+    # The genome stage takes no stage 1. Stage 1 pretrains the TRUNK, the trunk is transferable, and
+    # this stage's whole point is that the trunk arrives already fitted and frozen — re-running it
+    # here would take a gradient on the eval chromosome in exactly the parameters Rule 2 binds.
+    pre_ep = 0 if stage == "genome" else max(int(round(sched["pretrain_epochs"] * epoch_scale)), 1)
     tr_ep = max(int(round(sched["train_epochs"] * epoch_scale)), 1)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"{chrom}: {cache.n_tracks} tracks, {cache.n_bins} bins, {len(cache.cells)} cells, "
-          f"{len(cache.marks)} marks | bs={bs} pre={pre_ep} train={tr_ep} | {factors} | "
-          f"mode={contributor_mode}", flush=True)
+          f"{len(cache.marks)} marks | stage={stage} bs={bs} pre={pre_ep} train={tr_ep} | "
+          f"{factors} | mode={contributor_mode}"
+          + (f" | hparams from {hp}" if hparams_chrom else ""), flush=True)
 
     common = dict(n_celltypes=len(cache.cells), n_assays=len(cache.marks),
                   n_positions=cache.n_bins, **factors)
@@ -262,17 +307,38 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
         print(f"{chrom}: {len(sampler.skipped_marks)} mark(s) skipped for having no leave-one-out "
               f"pool: {sampler.skipped_marks}", flush=True)
 
-    pre = Precamole(**common).to(dev)
-    n_par = sum(p.numel() for p in pre.parameters())
-    print(f"Precamole: {n_par:,} parameters", flush=True)
-    s1 = _run_stage(pre, sampler, epochs=pre_ep, lr=5e-4,
-                    loss_fn=nn.CrossEntropyLoss(), batch_fn=sampler.stage1, device=dev,
-                    label="stage1", max_steps=max_steps_per_stage)
-
-    gua = Guacamole(**common).to(dev).from_precamole(pre)
-    del pre
-    if dev.type == "cuda":
-        torch.cuda.empty_cache()
+    s1: Dict[str, float] = {"steps": 0, "final_loss": float("nan"), "seconds": 0.0,
+                            "planned_steps": 0, "early_stopped": False, "eval_seconds": 0.0,
+                            "ms_per_step": 0.0, "skipped": "the genome stage takes no stage 1"}
+    # CONSTRUCTION ORDER IS FROZEN, and it is `Precamole` then `Guacamole` on every stage that
+    # builds both. Both draw from torch's global RNG, so swapping them re-rolls every tensor in the
+    # run — including the Guacamole-only `block3` and `y_pred`, which init AFTER stage 1 has already
+    # advanced the stream. Building Guacamole first reads better and would silently make `--stage
+    # full` a different run from the anchor it exists to reproduce.
+    if stage == "genome":
+        gua = Guacamole(**common).to(dev)
+        # The checkpoint's position tables belong to the shared scope and are a different length, so
+        # `load_transferable` never looks at them: this chromosome's tables were freshly built above
+        # and stay at their init. The transferable half is loaded and then frozen, so every gradient
+        # this stage takes lands on a position table.
+        obj = torch.load(str(init), map_location=dev, weights_only=False)
+        gua.load_transferable(obj["state_dict"]).freeze_transferable()
+        n_tr = sum(p.numel() for p in gua.transferable_parameters())
+        n_gen = sum(p.numel() for p in gua.genome_parameters())
+        print(f"{chrom}: loaded {n_tr:,} transferable parameters from {Path(init).name} "
+              f"(stage={obj.get('stage')}, scope={obj.get('chrom')}) and FROZE them; fitting "
+              f"{n_gen:,} position-factor parameters on {chrom} alone", flush=True)
+    else:
+        pre = Precamole(**common).to(dev)
+        n_par = sum(p.numel() for p in pre.parameters())
+        print(f"Precamole: {n_par:,} parameters", flush=True)
+        s1 = _run_stage(pre, sampler, epochs=pre_ep, lr=5e-4,
+                        loss_fn=nn.CrossEntropyLoss(), batch_fn=sampler.stage1, device=dev,
+                        label="stage1", max_steps=max_steps_per_stage)
+        gua = Guacamole(**common).to(dev).from_precamole(pre)
+        del pre
+        if dev.type == "cuda":
+            torch.cuda.empty_cache()
     n_par = sum(p.numel() for p in gua.parameters())
     print(f"Guacamole: {n_par:,} parameters", flush=True)
 
@@ -282,7 +348,12 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
     def _save(path: Path) -> None:
         torch.save({"state_dict": gua.state_dict(), "chrom": chrom, "config": common,
                     "contributor_mode": contributor_mode, "seed": seed,
-                    "cells": cache.cells, "marks": cache.marks}, path)
+                    "cells": cache.cells, "marks": cache.marks,
+                    # STAMPED, so a checkpoint can never be mistaken for the other kind. A `shared`
+                    # file's position tables are the training scope's and mean nothing anywhere
+                    # else; a `genome` file is the only one that may be predicted from.
+                    "stage": stage, "init": (str(init) if init else None),
+                    "train_scope": cache.train_scope}, path)
 
     best = {"value": float("inf"), "epoch": -1, "step": -1}
     curve: list = []
@@ -311,10 +382,21 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
             return True
         return False
 
+    # `lr` stays upstream's 1e-3 in both stages. Avocado gives its genomic factors a HIGHER rate
+    # than its shared ones because a position is visited once per epoch there; Guacamole's sampler
+    # walks positions contiguously and visits each exactly once per epoch too, so the same argument
+    # would apply — but 1e-3 is the rate upstream fit these very tables at, and inventing a second
+    # one would make the genome stage differ from upstream in a way nothing measured.
+    def _set_train() -> None:
+        gua.train()
+        if stage == "genome":
+            gua.freeze_transferable()          # `train()` un-does the BatchNorm eval; put it back
     s2 = _run_stage(gua, sampler, epochs=tr_ep, lr=1e-3,
                     loss_fn=nn.MSELoss(), batch_fn=sampler.stage2, device=dev,
                     label="stage2", max_steps=max_steps_per_stage,
-                    eval_hook=(eval_hook if select_fn else None), eval_every=select_every)
+                    eval_hook=(eval_hook if select_fn else None), eval_every=select_every,
+                    params=(gua.genome_parameters() if stage == "genome" else None),
+                    set_train=_set_train)
 
     peak = (torch.cuda.max_memory_allocated(dev) / 2**30) if dev.type == "cuda" else 0.0
     reserved = (torch.cuda.max_memory_reserved(dev) / 2**30) if dev.type == "cuda" else 0.0
@@ -322,6 +404,13 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
 
     record = {
         "chrom": chrom, "contributor_mode": contributor_mode, "seed": seed,
+        # §2 Rule 2's answer for this run, in the run's own record: which stage it was, where the
+        # transferable half came from, and how many parameters each half held.
+        "stage": stage, "init": (str(init) if init else None),
+        "hparams_chrom": hp,
+        "transferable_parameters": sum(p.numel() for p in gua.transferable_parameters()),
+        "genome_parameters": sum(p.numel() for p in gua.genome_parameters()),
+        "transferable_frozen": (stage == "genome"),
         "batch_size": bs, "pretrain_epochs": pre_ep, "train_epochs": tr_ep,
         "epoch_scale": epoch_scale, "factors": factors, "tf32": bool(tf32),
         "n_tracks": cache.n_tracks, "n_bins": cache.n_bins,
@@ -379,11 +468,21 @@ def main(argv=None) -> int:
                    help="scale upstream's epoch counts; 1.0 is their schedule")
     p.add_argument("--no-tf32", action="store_true",
                    help="force fp32 matmuls; 2.4x slower, and only needed for a numerical study")
+    p.add_argument("--stage", default="full", choices=("full", "shared", "genome"),
+                   help="`full` is upstream and is the anchor's path; `shared` fits the "
+                        "transferable half on the regime's training scope; `genome` freezes it and "
+                        "fits this chromosome's position tables alone (BENCHMARK_DESIGN.md §2)")
+    p.add_argument("--init", type=Path, default=None,
+                   help="the `--stage shared` checkpoint a `--stage genome` run transfers from")
+    p.add_argument("--hparams-chrom", default="",
+                   help="borrow this chromosome's UPSTREAM_HYPERPARAMS row; needed when the cache "
+                        "stem is a packed multi-chromosome scope rather than one of the 23")
     ns = p.parse_args(argv)
     train_chromosome(ns.cache, ns.chrom, ns.out, contributor_mode=ns.contributor_mode,
                      device=ns.device, seed=ns.seed,
                      max_steps_per_stage=ns.max_steps_per_stage, epoch_scale=ns.epoch_scale,
-                     tf32=not ns.no_tf32)
+                     tf32=not ns.no_tf32, stage=ns.stage, init=ns.init,
+                     hparams_chrom=ns.hparams_chrom)
     return 0
 
 
