@@ -1097,6 +1097,24 @@ is not one of the three.
 **σ-tables refit for all 10 methods**, on training residuals (§7). Every existing σ was fit on `V_`
 eval pairs and is void under Rule 1. Cheap, but nothing distributional scores until it is done.
 
+**MID-TRAINING EVAL IS NOW MORE EXPENSIVE THAN TRAINING (measured 2026-08-31).** A full-coverage
+`V_` pass costs **5,446.6 s = 91 minutes**, not the ~13 minutes every earlier estimate here assumed.
+The merged monitor scores all 12 tiered keys over **every 25 bp bin of chr20+21+22 on 45 tracks** —
+`gwspear` alone is a rank sort over the whole scope. At `EVAL_EVERY=3` across 25 epochs that is 8–9
+checks ≈ **12–14 GPU-h of evaluation**, against ~10–17 GPU-h of training for the same run.
+
+The 12.9-minute figure that preceded it was a *different estimator*: `candi.eval.quick_eval`, which
+sampled **16 windows per track** (~0.24 % of the scope) and was deleted from the tree in `2f56cb1`
+when `candi/monitor.py` replaced it. Same collapse rule, same 45 tracks, 400× the coverage.
+
+Two consequences, and neither is optional:
+
+- **Size a retrain's walltime with the eval included**, or lengthen `EVAL_EVERY`. A 16 h band that
+  fits the training does not fit the run.
+- **`--early-stop-epochs` now watches a trustworthy number.** Its resolution is `EVAL_EVERY`, so
+  the patience trades directly against 91 minutes a check. That trade is the reason to think about
+  `EVAL_EVERY`, not the training cost.
+
 ### 12.3 Prediction runs — 30, once each
 
 There are **15 method-regime units**, not 20: the 5 naive baselines contribute one unit each
@@ -1339,6 +1357,16 @@ Taken after the first CANDI retrain was launched, killed, and read.
   `V_imp_crps` rose 0.5604 → 0.5820 → 0.5864, with nothing in the loop able to end it. This also
   retires the "how many epochs?" question §12 left open: the answer is read off the curve, not set
   in advance.
+
+  > **AMENDED 2026-08-31, and the amendment matters.** That 0.5604 → 0.5820 → 0.5864 curve was
+  > measured by `candi.eval.quick_eval` on **16 windows per track** — 0.24 % of the eval scope, by
+  > an estimator the merge has since deleted. Re-scoring the same epoch-2 checkpoint under the
+  > merged full-coverage monitor gives **0.6252**, and that +0.0648 shift is **three times** the
+  > 0.0216 margin by which epoch 2 beat epoch 5. **So the curve does not establish that the model
+  > overfitted after epoch 2.** It may have; it cannot be shown from that data, and it never will
+  > be, because `_keep_best` writes only on improvement and the epoch-5 and epoch-8 weights were
+  > never saved. The early-stopping rule is still right — it now watches a full-coverage number —
+  > but the evidence that motivated it was thinner than it looked.
 - **§12.6's storage figures are per array, not per track**, and `B_` predictions live on
   `/project`. See §12.6.
 - **`t84`'s scope was wrong and is closed**; **`t87`** now owns the two same-named pairing tools
