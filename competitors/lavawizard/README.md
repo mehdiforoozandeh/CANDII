@@ -492,9 +492,11 @@ predicted from anyway.
 Lavawizard, not the published Lavawizard.** Nothing about the architecture, the objective, the
 schedule or the learning rates changed — `model.py`'s forward pass is untouched and the two stages
 run upstream's own `dataset3.UPSTREAM_HYPERPARAMS` row — but the *training procedure* is ours, and
-a two-stage fit is not the fit the 2019 submission made. The alternative was collapsing the regime
-axis to one regime-invariant row that breached Rule 2 in both directions, and the PI took this
-knowingly. **The original 2019 Lavawizard submission remains on the board unmodified as one of the
+a two-stage fit is not the fit the 2019 submission made. That "nothing else changed" is checked
+rather than asserted: `--stage full` and `--stage shared` on one cache and one seed are bit
+identical to the trainer at `12c268c`, all 31 tensors, and a test holds the two stages equal to
+each other. The alternative was collapsing the regime axis to one regime-invariant row that
+breached Rule 2 in both directions, and the PI took this knowingly. **The original 2019 Lavawizard submission remains on the board unmodified as one of the
 23 anchor entrants** (`competitors/entrants/`, §7.5), so a reader has both readings side by side:
 the published method as it was scored in the challenge, and our Rule-2-compliant retrain.
 
