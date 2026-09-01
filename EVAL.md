@@ -445,6 +445,63 @@ What this means for a reader of a run json:
 `monitor.check(..., kinds=("impute",))` is the training hook's call; `monitor.final_check()` is the
 end-of-run one. `impute` cannot be dropped from either — it is what produces the selection metric.
 
+### `--eval-regions` — the selection scope, and why it is a region set rather than a sample
+
+The cadence ruling above did not go far enough. Measured on the live `eic_pilot` retrain
+(`57674899_1`): one `V_` check is **94 min** and one epoch is **28 min**, so the check cost more
+than three times the training it supervises. The PI's requirement is that a check cost at most one
+epoch.
+
+`--eval-regions <BED>` cuts the **mid-training** scope down to the bins inside a window the BED
+wholly contains — D32's `contain` rule, the one the train split already uses, applied to the eval
+window plan. `configs/regions/encode_pilot_hg38.bed` is the 44 ENCODE Pilot Regions, which cut to
+**172,800 of 6,478,903 bins (2.67 %) of chr20/21/22, in 225 windows** — a ~37x saving.
+
+**It is not a thinner sample, and the difference is the whole reason it is defensible.** The
+deleted `eval.quick_eval` dropped WINDOWS PER TRACK — 16 windows, 0.24 % — so its number was a
+draw, and re-scoring one of its checkpoints at full coverage moved the value by 0.0648 against a
+0.0216 margin it had been used to decide on. This drops no track and no window inside its scope:
+all 45 tracks are still scored end to end, over a **named, fixed, published** region set chosen in
+2007 and stratified by gene density and non-exonic conservation, not chosen by us.
+
+What it costs, stated rather than discovered:
+
+| | full (the default) | `--eval-regions` |
+|---|---|---|
+| positions | every bin of every eval chromosome | every bin of every wholly-contained window |
+| tracks | all of them | all of them |
+| `mse`, `gwcorr`, `gwspear`, `mse1obs`, the D tier, the B tier, the loss tier | present | present |
+| `mseprom`, `msegene`, `mseenh`, the whole P block | present | **absent** |
+| bit-identical to the full pass on the same bins? | — | **no** — see below |
+
+The positional measures are absent because the arrays are **compacted**: after the gather, index
+`i` is no longer the bin at `i * 25` bp, so an annotation interval would land on whatever sequence
+the gather put there. Absent rather than NaN, so nothing can average them into a macro.
+
+The predictions are not bit-identical either, and that is float32 rather than a bug: a scoped plan
+skips windows, so a window's batch-mates in the forward pass change, and float32 addition is not
+associative. The gap is last-ulp — nowhere near the ~0.09 noise floor a decision is read against —
+but a scoped run does not reproduce the full pass exactly and must not be sold as doing so.
+
+**Where it is recorded.** `config.eval_scope` in the run json and `eval_scope` on every
+`eval_curve` row and in every `provenance` block, carrying the BED, its **sha256** and the window
+and bin counts. Two runs are comparable on the mid-training curve only if that block matches; the
+path alone will not do, because a BED is a mutable file.
+
+**The end-of-run check stays full coverage** whatever the flag says. `train.py` opens a second
+monitor for it. Cheap enough to select on every check; the number a run reports is the thorough one.
+
+**Every method gets the same flag.** The scope lives on `EvalSource`, which both entry points take,
+so `bench.external.score_external(source, pred_root, …)` honours it by opening its source with
+`eval_regions=` — the rival still hands over full-length arrays (§4.1's length assertion is what
+makes bin `i` the bin at `i * 25` bp) and the cut happens on our side, with the same index. A rival
+selecting on a different scope from CANDI would break §5's one-number rule, so the flag is not
+CANDI's.
+
+`--eval-regions` is **store-only** (a bake's eval windows are frozen rows and cannot be re-tiled;
+`open_source` refuses the combination by name) and **inert without a mid-training check** (with
+`--eval-every` at 0 it is blanked and says so, rather than recording a scope no curve used).
+
 ### The tiers it reports, and why they are detected rather than assumed
 
 `monitor.tiers(model)` reads the heads off the decoder that built them:

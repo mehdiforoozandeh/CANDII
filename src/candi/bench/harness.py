@@ -152,6 +152,12 @@ class TrackRecord:
     #: most bins of most assays. `binary_suite` is rank-based and survives either, but a Bernoulli
     #: NLL of an unbounded count is meaningless, so `loss_block` gates on this.
     has_peak_head: bool = False
+    #: t89 — the BIN SCOPE these arrays were COMPACTED to, or `None` when index `i` is still the bin
+    #: starting at `i * resolution`. It travels on the record rather than beside it because the
+    #: compaction is invisible in the data: a gathered array is a perfectly ordinary float32 vector,
+    #: and the only thing that can tell `score_track` its indices are no longer genomic positions is
+    #: the record itself. Every POSITIONAL measure is refused while it is set.
+    bin_scope: Optional[str] = None
 
     @property
     def key(self) -> str:
@@ -260,6 +266,18 @@ class EvalSource:
     dsf_levels: Tuple[int, ...]
     meta_rows: int
     kind: str
+    #: t89 — the EVAL SCOPE: a region set the scored window plan is cut down to, or `None` for every
+    #: window of every eval chromosome, which is what every source did before this existed. It is
+    #: the same `contain` rule D32 applies to the TRAIN split (`store.regime.RegionSet`) and the same
+    #: chromosome-0-anchored tiling, so a regime that trains and evaluates on one BED shares a
+    #: window grid with every other regime rather than re-anchoring per region.
+    #:
+    #: WHY IT LIVES ON THE SOURCE. `stream_tracks`, `external.stream_truth` and `c_block` all walk
+    #: `windows()`, so one attribute here restricts a checkpoint's eval and a rival's eval by the
+    #: same rule, in the same positions. A scope threaded through the scoring calls instead would
+    #: have to be threaded through each of them separately, and the first one anybody forgot would
+    #: score two methods on two different exams while both banners said `crps`.
+    eval_regions: Optional[Any] = None
 
     def depth_center(self) -> float:
         raise NotImplementedError
@@ -275,7 +293,52 @@ class EvalSource:
         raise NotImplementedError
 
     def windows(self, chrom: str) -> List[int]:
-        return full_tiling(self.n_bins(chrom), self.context_bins)
+        starts = full_tiling(self.n_bins(chrom), self.context_bins)
+        if self.eval_regions is None:
+            return starts
+        return [int(s) for s in self.eval_regions.contained_starts(
+            chrom, starts, self.context_bins, self.resolution)]
+
+    def scored_bins(self, chrom: str) -> Optional[np.ndarray]:
+        """The bins this source will actually predict on `chrom`, or `None` for all of them.
+
+        `None` rather than `arange(n_bins)` is the load-bearing part: it is what lets every caller
+        below keep the untouched path bit for bit, instead of gathering a full-length array through
+        an identity index and hoping numpy gives back the same floats.
+
+        Derived from `windows()` rather than from the region set, so it cannot disagree with what
+        was predicted. `unique` because `full_tiling` pulls its last window back to end on the
+        chromosome, and two windows may therefore claim the same bin — scoring it twice would
+        weight it twice.
+        """
+        if self.eval_regions is None:
+            return None
+        s = np.asarray(self.windows(chrom), dtype=np.int64)
+        if s.size == 0:
+            return s
+        cb = int(self.context_bins)
+        return np.unique(np.repeat(s, cb) + np.tile(np.arange(cb, dtype=np.int64), s.size))
+
+    def scope(self) -> Dict[str, Any]:
+        """The eval scope, for `provenance`. Two runs are comparable only if these match."""
+        if self.eval_regions is None:
+            return {"name": "full", "note": "every window of every eval chromosome"}
+        kept = {c: self.scored_bins(c) for c in self.eval_chroms}
+        n_scored = int(sum(len(v) for v in kept.values()))
+        n_full = int(sum(self.n_bins(c) for c in self.eval_chroms))
+        return {
+            "name": "regions",
+            **self.eval_regions.to_dict(),
+            "n_regions": len(self.eval_regions.intervals),
+            "windows": {c: len(self.windows(c)) for c in self.eval_chroms},
+            "scored_bins": n_scored,
+            "full_bins": n_full,
+            "fraction": (n_scored / n_full) if n_full else 0.0,
+            "note": "SELECTION SCOPE, not the leaderboard's. Positional measures (mseprom, "
+                    "msegene, mseenh, the P-block) are ABSENT here — a compacted array's index is "
+                    "no longer a genomic position, so an annotation interval would read the wrong "
+                    "loci.",
+        }
 
     def batch(self, pair: Pair, chrom: str, starts: Sequence[int], kind: str, *,
               x_dsf: int = 1) -> Dict[str, Any]:
@@ -366,6 +429,9 @@ class H5Source(EvalSource):
         return int(self._n_bins[chrom])
 
     def windows(self, chrom: str) -> List[int]:
+        # NO EVAL SCOPE HERE, and it is a data property rather than an omission: a bake's windows
+        # are frozen rows of `counts_dsf1`, so this backend cannot re-tile and a region cut would
+        # have to drop whole baked rows. `open_source` refuses the combination by name.
         return sorted(self._rows[chrom])
 
     def pairs(self, kind: str) -> List[Pair]:
@@ -534,12 +600,18 @@ class StoreSource(EvalSource):
     kind = "store"
 
     def __init__(self, regime_path: Path | str, *, chroms: Optional[Sequence[str]] = None,
-                 biosamples: Optional[Sequence[str]] = None):
+                 biosamples: Optional[Sequence[str]] = None,
+                 eval_regions: Optional[Path | str] = None):
         from candi.store.dataset import StoreDataset
-        from candi.store.regime import Regime
+        from candi.store.regime import Regime, RegionSet
 
         self.regime_path = Path(regime_path)
         regime = Regime.from_file(self.regime_path)
+        # A PATH, not the regime's own `regions` block, and not a boolean pointing at it. D32's
+        # block says what the TRAIN split is cut to; `regime.eic_19` declares none and still has to
+        # be able to select cheaply, and under `regime.eic_pilot` the two scopes being the same BED
+        # is a fact worth reading off the run record rather than one the code assumes.
+        self.eval_regions = None if eval_regions is None else RegionSet.from_bed(eval_regions)
         declared = [(str(a), str(b)) for a, b in regime.eval_pairs]
         pool, declared = self._select(declared, biosamples)
         self.ds = StoreDataset(regime, train=False, batch_size=1, dsf_sampling="off",
@@ -773,6 +845,9 @@ class StoreSource(EvalSource):
             "eval_pairs": [[p.input_biosample, p.target_biosample] for p in self.eval_pairs],
             "self_paired": not self.eval_pairs,
             "eval_pair_assay_overlaps": self.pair_overlaps,
+            # t89 — WHICH POSITIONS WERE SCORED. Two runs are comparable only if this matches; a
+            # `full` run and a `regions` run are not two measurements of one quantity.
+            "eval_scope": self.scope(),
         }
 
 
@@ -793,8 +868,14 @@ def open_source(*, h5: Optional[Path | str] = None, store: Optional[Path | str] 
             f"store={store!r}."
         )
     if h5 is not None:
-        return H5Source(h5, **kw)
-    return StoreSource(store, **{k: v for k, v in kw.items() if k in ("chroms", "biosamples")})
+        if kw.get("eval_regions") is not None:
+            raise ValueError(
+                "eval_regions= is a store-only scope. A bake's eval windows are frozen rows of "
+                "`counts_dsf1` and cannot be re-tiled, so restricting them would drop whole baked "
+                "rows rather than cut the genome. Score an h5 at full coverage, or use a store.")
+        return H5Source(h5, **{k: v for k, v in kw.items() if k != "eval_regions"})
+    return StoreSource(store, **{k: v for k, v in kw.items()
+                                 if k in ("chroms", "biosamples", "eval_regions")})
 
 
 # ---------------------------------------------------------------------------
@@ -929,9 +1010,18 @@ def stream_tracks(model, source: EvalSource, device, *, kind: str = "impute",
                                     torch.sigmoid(out["peak_logit"][j, :, a]).float().cpu().numpy())
                             else:
                                 b["peak_score"][sl] = b["mu"][sl]
+            # t89 — COMPACT to the scope, here rather than at scoring time. The buffers are
+            # chromosome-length and only the planned windows were written into them, so under a
+            # restricted plan every unwritten bin is still the zero it was allocated as, and a
+            # scorer handed the whole vector would score a genome of mostly zeros. `None` keeps the
+            # untouched path bit for bit: the arrays are the same objects they always were.
+            keep = source.scored_bins(chrom)
             for a in cols:
                 r, b = recs[a], buf[a]
                 r.has_peak_head = bool(have_peak)
+                if keep is not None:
+                    b = {k: v[keep] for k, v in b.items()}
+                    r.bin_scope = "regions"
                 r.mu[chrom], r.n[chrom], r.counts[chrom] = b["mu"], b["n"], b["counts"]
                 r.peaks[chrom], r.peak_score[chrom] = b["peaks"], b["peak_score"]
                 if have_signal:
@@ -1091,6 +1181,14 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
     never rescaled from a finished number, because none of them is linear in position. The scope
     reaches `loss_block` too, so a scoped arm's `n_bins` and its NLLs count the same positions.
 
+    **A BIN SCOPE is the finer cut of the same idea, and it arrives on the RECORD.** t89's eval
+    scope (`EvalSource.eval_regions`) compacts each chromosome's arrays down to the bins that were
+    actually predicted, and `rec.bin_scope` says so. Every measure that is a function of the two
+    vectors alone survives that untouched; the ones that look a genomic coordinate up in the array —
+    `mseprom`, `msegene`, `mseenh` and the whole P-block — are ABSENT, because after a gather index
+    `i` is no longer the bin at `i * 25` bp and an annotation interval would land on the wrong
+    sequence. Absent rather than NaN so nothing can average them into a macro by mistake.
+
     **THE SPACE CONTRACT, AND WHERE `signal_target_transform` LANDS.** Storage is transformed (the
     store codec holds `arcsinh(-log10 p)`) and the reader inverts it, so the truth reaching this
     function is raw `-log10 p` on BOTH data paths. Training supervises in transformed space, so on a
@@ -1124,13 +1222,17 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
                          f"({list(rec.chroms)}). A scope is a subset of what was predicted, and a "
                          f"missing chromosome is a window-plan bug rather than something to skip.")
     loss = loss_block(rec, signal_target_transform=signal_target_transform, chroms=chroms)
+    # t89 — a COMPACTED record's index is no longer a genomic position, so every measure that looks
+    # one up is absent instead of wrong. It is read off the record rather than taken as an argument
+    # because a gathered array is an ordinary float32 vector and nothing else can tell them apart.
+    positional = rec.bin_scope is None
 
     if rec.has_count:
         y_c = E.dict_to_arr(rec.counts, chroms)
         arms["count"] = {
             **loss,
             **E.score_track(rec.counts, rec.mu, chroms, gene_annotations=gene_annotations,
-                            enh_annotations=enh_annotations),
+                            enh_annotations=enh_annotations, positional=positional),
             **D.nb_suite(E.dict_to_arr(rec.n, chroms), E.dict_to_arr(rec.mu, chroms), y_c,
                          seed=seed, n_pairs=c_index_pairs,
                          crps_approx=crps_approx, crps_seed=crps_seed),
@@ -1153,7 +1255,7 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
         arms["pval"] = {
             **loss,
             **E.score_track(rec.pval, mu_p, chroms, gene_annotations=gene_annotations,
-                            enh_annotations=enh_annotations, var=pool),
+                            enh_annotations=enh_annotations, var=pool, positional=positional),
             # ABSENT, NOT NAN, when the track predicts a point and nothing else. Every key here is a
             # property of a FORECAST DISTRIBUTION — CRPS, PIT, 95% coverage, the C-index — and a
             # point track has none, so scoring it against a spread of zero would answer a question
@@ -1168,7 +1270,10 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
             # strictly increasing, so they would be unchanged even if one did.
             **B.binary_suite(E.dict_to_arr(rec.peaks, chroms).astype(bool),
                              E.dict_to_arr(rec.peak_score, chroms), y_p, with_curve=with_curve),
-            **_p_block(rec, gene_annotations, chroms, signal_mu=mu_p),
+            # POSITIONAL, and therefore absent under a scope: the two region correlations build
+            # their windows from gene coordinates, and `accuracy_by_strength` rides along in the
+            # same block. See `positional` above.
+            **(_p_block(rec, gene_annotations, chroms, signal_mu=mu_p) if positional else {}),
             # WHICH SPACE THESE NUMBERS ARE IN, on the row itself. `pred_space` is the answer and
             # `pred_inversion` is how it was reached — `"none"` means the head already predicted
             # `-log10 p`, not that the question was skipped. A row from before the contract carries
@@ -1181,6 +1286,9 @@ def score_track(rec: TrackRecord, *, gene_annotations: Sequence[str],
         arms[arm]["kind"] = rec.kind
         arms[arm]["n_bins"] = rec.n_bins(chroms)
         arms[arm]["chroms"] = list(chroms)
+        # On the row, not only in provenance: `n_bins` alone cannot tell a scoped track from a
+        # short chromosome, and a reader diffing two per-track tables needs to know which.
+        arms[arm]["bin_scope"] = rec.bin_scope
     return arms
 
 

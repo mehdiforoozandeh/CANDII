@@ -16,8 +16,8 @@ import pytest
 from candi.store import layout as L
 from candi.store.reader import CorpusStore
 from candi.store.regime import (
-    DEFAULT_DSF_LEVELS, DEFAULT_MIN_VALID_FRAC, DsfPolicy, Regime, RegimeError, WindowPlan,
-    eligible_starts,
+    DEFAULT_DSF_LEVELS, DEFAULT_MIN_VALID_FRAC, DsfPolicy, Regime, RegimeError, RegionSet,
+    WindowPlan, eligible_starts,
 )
 
 from tests.test_store_reader import (
@@ -553,3 +553,31 @@ def test_the_pilot_regime_plans_its_training_windows(tmp_path):
         assert all(any(a <= s and s + ctx <= b for a, b in spans) for s in kept.tolist())
         planned += int(kept.size)
     assert planned == 1_294
+
+
+def test_a_bed_named_on_a_command_line_is_hashed_rather_than_hash_checked(tmp_path):
+    """`from_obj` checks a DECLARED hash because the regime cannot pin the BED any other way. A
+    scope named on a command line (t89's `--eval-regions`) has no declaration to check against, so
+    the hash is computed and travels in the run's provenance instead — which is what makes two runs
+    comparable or not. Same object, same intervals, same `contain` rule."""
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    got = RegionSet.from_bed(bed)
+    assert got.sha256 == hashlib.sha256(bed.read_bytes()).hexdigest()
+    assert got.policy == "contain"
+    assert got.intervals == RegionSet.from_obj(_regions(bed), base=tmp_path).intervals
+    assert got.to_dict()["sha256"] == got.sha256
+
+
+def test_the_shipped_pilot_bed_reads_as_the_44_regions_the_design_names():
+    """Read off the file, not off the doc. §3.1 pins 44 regions and 29,984,074 bp in hg38, and the
+    same BED is the eval scope t89 offers — so a lift that silently changed would move the training
+    scope and the selection scope at once."""
+    rs = RegionSet.from_bed(PILOT_BED)
+    assert len(rs.intervals) == 44
+    assert sum(e - s for _, s, e, _ in rs.intervals) == 29_984_074
+    assert rs.sha256 == "13e11a198fdee08edb7797d1e402b5d985846b5a7d973ade91e8511462acb7a3"
+
+
+def test_a_bed_that_is_not_there_is_refused_by_name(tmp_path):
+    with pytest.raises(RegimeError, match="is not a file"):
+        RegionSet.from_bed(tmp_path / "absent.bed")

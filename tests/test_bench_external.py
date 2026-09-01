@@ -603,3 +603,77 @@ def test_sampling_reproduces_the_exact_crps_and_leaves_every_other_key_alone(
         for k in ("crps", "crps_oracle_scaled", "crps_oracle_scaled_and_n"):
             assert b[k] == pytest.approx(a[k], rel=0.02), f"{key}/count/{k}"
         assert sampled["count"]["beats_marginal"] == exact["count"]["beats_marginal"], key
+
+
+# ---------------------------------------------------------------------------
+# 8 — t89: a rival selects on the SAME positions CANDI does
+# ---------------------------------------------------------------------------
+# §5's whole point is that every method selects on one number. A cheap selection scope that only
+# `candi.monitor` could reach would give CANDI the fast path and leave the rivals on the slow one,
+# and the two numbers would stop being the same measurement. The scope therefore lives on the
+# EvalSource, which both entry points already take, and these tests are what says the external path
+# honours it bin for bin rather than merely accepting the flag.
+
+@pytest.fixture(scope="module")
+def ext_scope_bed(tmp_path_factory) -> Path:
+    """Part of the eval chromosome, edges off the 25 bp bin grid, as the hg38 Pilot Regions are."""
+    p = tmp_path_factory.mktemp("extscope") / "scope.bed"
+    p.write_text("chr2\t3210\t11190\tR0\n", encoding="utf-8")
+    return p
+
+
+def test_a_rival_scored_under_a_scope_is_scored_on_exactly_the_scoped_bins(
+        regime_file, full_root, ext_scope_bed, recs) -> None:
+    """THE UNIFORMITY PROPERTY. The rival still hands over FULL-LENGTH arrays — §4.1's length
+    assertion is what makes bin `i` the bin at `i * 25` bp — and the cut happens on our side, with
+    the same index the model path uses. Compared against the same records compacted by hand, so
+    nothing here can pass by both paths making the same mistake about which bins those are.
+    """
+    from candi.bench import annotations as ann
+
+    src = _source(regime_file, eval_regions=ext_scope_bed)
+    try:
+        got = score_external(src, full_root, seed=0, c_index_pairs=C_PAIRS)
+        idx = {c: src.scored_bins(c) for c in src.eval_chroms}
+        want = {}
+        for rec in recs:
+            cut = H.TrackRecord(pair=rec.pair, assay=rec.assay, kind=rec.kind,
+                                chroms=rec.chroms, has_peak_head=rec.has_peak_head,
+                                bin_scope="regions")
+            for name in ("mu", "n", "counts", "signal_mu", "signal_sigma", "pval",
+                         "peak_score", "peaks"):
+                src_d, dst_d = getattr(rec, name), getattr(cut, name)
+                for c in rec.chroms:
+                    if c in src_d:
+                        dst_d[c] = np.asarray(src_d[c])[idx[c]]
+            want[rec.key] = H.score_track(
+                cut, gene_annotations=ann.gene_annotations(),
+                enh_annotations=ann.enhancer_annotations(), seed=0, c_index_pairs=C_PAIRS)
+    finally:
+        src.close()
+
+    assert set(got["per_track"]) == set(want)
+    for key in want:
+        for arm in ("count", "pval"):
+            a, b = _numeric(want[key][arm]), _numeric(got["per_track"][key][arm])
+            assert set(a) == set(b), f"{key}/{arm} key sets differ"
+            for k in sorted(a):
+                if np.isfinite(a[k]) or np.isfinite(b[k]):
+                    assert b[k] == pytest.approx(a[k], rel=1e-6, abs=1e-6), f"{key}/{arm}/{k}"
+
+
+def test_a_rivals_score_file_says_which_positions_it_was_measured_over(
+        regime_file, full_root, ext_scope_bed, external_scores) -> None:
+    """A leaderboard that mixed a scoped row with a full-coverage one would rank two exams. The
+    scope block is the same shape on both paths, so one reader can tell them apart."""
+    src = _source(regime_file, eval_regions=ext_scope_bed)
+    try:
+        scoped = score_external(src, full_root, seed=0, c_index_pairs=C_PAIRS)
+    finally:
+        src.close()
+    assert external_scores["provenance"]["eval_scope"]["name"] == "full"
+    sc = scoped["provenance"]["eval_scope"]
+    assert sc["name"] == "regions" and 0.0 < sc["fraction"] < 1.0
+    assert sc["bed"] == str(ext_scope_bed)
+    for key, arms in scoped["per_track"].items():
+        assert arms["count"]["bin_scope"] == "regions", key

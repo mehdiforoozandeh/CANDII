@@ -1484,3 +1484,147 @@ def test_the_cli_emits_the_test_loss_per_track_and_in_the_macro(regime_file, ckp
     for arms in res["per_track"].values():
         assert NLL_KEYS <= set(arms["count"])
         assert arms["count"]["signal_target_transform"] == "arcsinh"
+
+
+# ---------------------------------------------------------------------------
+# 5 — t89: the EVAL SCOPE. A cheap selection number, measured rather than sampled.
+# ---------------------------------------------------------------------------
+# The requirement, in one line: a run may cut the mid-training scope down to a named BED, and the
+# number it gets must be the number it would have got by scoring every bin and then keeping only
+# those. Everything below is a way that could be false — a window plan that re-tiles instead of
+# filtering, a buffer of unwritten zeros reaching a metric, a positional measure read off a
+# gathered array, a scope nobody can recover from the result file.
+
+@pytest.fixture(scope="module")
+def scope_bed(tmp_path_factory) -> Path:
+    """Two regions on chr2, in BIN coordinates, sized so the `contain` rule keeps some and not all.
+
+    `make_store`'s chr2 is 800 bins and the context is 64, so [128, 448) admits the tiles at 128,
+    192, 256, 320, 384 and [500, 700) admits 512 and 576 — the tile at 640 ends at 704 and is
+    dropped, which is the containment rule doing its job on a region edge. chr1 gets NOTHING, which
+    is the case that matters most: a chromosome the BED does not name must drop out of the scored
+    positions rather than quietly stay whole.
+
+    The second region's edges are deliberately OFF the bin grid (12500 bp is bin 500 exactly, but
+    17500 is bin 700 exactly and 3200/11200 are bins 128/448) — the hg38 Pilot Regions do not sit on
+    the grid either, and `bin_spans` is a containment count rather than a division for that reason.
+    """
+    p = tmp_path_factory.mktemp("scopebed") / "scope.bed"
+    p.write_text("chr2\t3200\t11200\tR0\nchr2\t12510\t17490\tR1\n", encoding="utf-8")
+    return p
+
+
+@pytest.fixture()
+def scoped_source(regime_file, scope_bed):
+    s = open_source(store=regime_file, eval_regions=scope_bed)
+    yield s
+    s.close()
+
+
+def test_an_unscoped_source_plans_and_scores_exactly_what_it_did_before(source, scope_bed) -> None:
+    """The scope is additive: the default is `None` and `None` is the untouched path."""
+    assert source.eval_regions is None
+    for c in source.eval_chroms:
+        assert source.windows(c) == full_tiling(N_BINS[c], source.context_bins)
+        assert source.scored_bins(c) is None
+    assert source.scope()["name"] == "full"
+
+
+def test_a_scoped_source_keeps_only_the_windows_the_bed_wholly_contains(scoped_source) -> None:
+    assert scoped_source.windows("chr1") == []
+    assert scoped_source.windows("chr2") == [128, 192, 256, 320, 384, 512, 576]
+
+
+def test_the_scored_bins_are_the_bins_of_the_kept_windows_and_nothing_else(scoped_source) -> None:
+    """The scope is what was PREDICTED, not what the BED covers: region bins that no whole window
+    fits into are never predicted, so scoring them would score an unwritten buffer."""
+    got = scoped_source.scored_bins("chr2")
+    want = np.concatenate([np.arange(s, s + scoped_source.context_bins)
+                           for s in scoped_source.windows("chr2")])
+    assert np.array_equal(got, np.sort(want))
+    assert scoped_source.scored_bins("chr1").size == 0
+
+
+def test_the_scoped_record_is_the_full_record_gathered_at_the_scoped_bins(
+        source, scoped_source, model) -> None:
+    """THE PROPERTY THE WHOLE THING RESTS ON.
+
+    A cheap number is only worth having if it is the number the expensive one would have reported
+    over those positions. Two passes over one model and one store, one scoped and one not.
+
+    THE TRUTH IS BIT-EXACT and the PREDICTION IS NOT, and the split is the point. The truth is read
+    off the store at an absolute bin, so a scoped pass that lands one byte differently has scored a
+    different place and the test must say so. The prediction goes through a GEMM whose batch is
+    whatever windows the plan put next to each other — the scoped plan skips windows, so a window's
+    batch-mates change, and float32 addition is not associative. The gap is last-ulp (~1e-7
+    relative), which is nowhere near the 0.09 noise floor a selection decision is read against, but
+    it is not zero and a run must not be sold as reproducing the full pass exactly.
+    """
+    pair = Pair("V_aa", "V_aa")
+    full = next(H.stream_tracks(model, source, "cpu", kind="impute", batch_windows=2, pairs=[pair]))
+    cut = next(H.stream_tracks(model, scoped_source, "cpu", kind="impute", batch_windows=2,
+                               pairs=[pair]))
+    assert full.key == cut.key
+    for c in ("chr1", "chr2"):
+        idx = scoped_source.scored_bins(c)
+        for fieldname in ("counts", "peaks", "pval"):
+            a, b = getattr(full, fieldname), getattr(cut, fieldname)
+            if c in a:
+                assert np.array_equal(b[c], a[c][idx]), f"truth {fieldname} on {c} moved"
+        for fieldname in ("mu", "n", "peak_score", "signal_mu", "signal_sigma"):
+            a, b = getattr(full, fieldname), getattr(cut, fieldname)
+            if c in a:
+                assert np.allclose(b[c], a[c][idx], rtol=1e-5, atol=1e-6), f"{fieldname} on {c}"
+
+
+def test_a_scoped_record_says_so_and_an_unscoped_one_does_not(source, scoped_source,
+                                                              model) -> None:
+    pair = Pair("V_aa", "V_aa")
+    assert next(H.stream_tracks(model, source, "cpu", batch_windows=2,
+                                pairs=[pair])).bin_scope is None
+    assert next(H.stream_tracks(model, scoped_source, "cpu", batch_windows=2,
+                                pairs=[pair])).bin_scope == "regions"
+
+
+def test_the_positional_measures_are_absent_on_a_scoped_track_rather_than_wrong(
+        source, scoped_source, model) -> None:
+    """After a gather, index `i` is no longer the bin at `i * 25` bp, so a promoter interval would
+    land on whatever sequence the gather put there. Absent, not NaN — a NaN can be averaged."""
+    positional = {"mseprom", "msegene", "mseenh"}
+    common = dict(gene_annotations=ann.gene_annotations(),
+                  enh_annotations=ann.enhancer_annotations(), c_index_pairs=200)
+    pair = Pair("V_aa", "V_aa")
+    full = H.score_track(next(H.stream_tracks(model, source, "cpu", batch_windows=2,
+                                              pairs=[pair])), **common)
+    cut = H.score_track(next(H.stream_tracks(model, scoped_source, "cpu", batch_windows=2,
+                                             pairs=[pair])), **common)
+    assert positional <= set(full["count"]), "the unscoped path lost a measure it used to have"
+    assert not (positional & set(cut["count"]))
+    assert "acc_by_obs_strength" in full["pval"] and "acc_by_obs_strength" not in cut["pval"]
+    # the selection metric and its split survive the scope — they are functions of the vectors
+    assert {"crps", "crps_oracle_scaled", "scale_error"} <= set(cut["count"])
+    assert cut["count"]["bin_scope"] == "regions" and full["count"]["bin_scope"] is None
+
+
+def test_the_result_file_says_which_positions_were_scored_and_pins_the_bed(
+        source, scoped_source, scope_bed) -> None:
+    """Two runs are comparable only if this block matches, so a path alone will not do — the BED is
+    a mutable file and the hash is what says the scope did not move under it."""
+    import hashlib
+
+    assert source.provenance()["eval_scope"]["name"] == "full"
+    sc = scoped_source.provenance()["eval_scope"]
+    assert sc["name"] == "regions"
+    assert sc["sha256"] == hashlib.sha256(scope_bed.read_bytes()).hexdigest()
+    assert sc["policy"] == "contain" and sc["n_regions"] == 2
+    assert sc["scored_bins"] == sum(len(scoped_source.scored_bins(c))
+                                    for c in scoped_source.eval_chroms)
+    assert sc["full_bins"] == sum(N_BINS[c] for c in scoped_source.eval_chroms)
+    assert 0.0 < sc["fraction"] < 1.0
+
+
+def test_a_bake_refuses_the_scope_by_name_rather_than_ignoring_it(tmp_path) -> None:
+    """An h5's eval windows are frozen rows, so a region cut would drop baked rows rather than cut
+    the genome. Silently ignoring the flag would score full coverage under a cheap-scope label."""
+    with pytest.raises(ValueError, match="store-only scope"):
+        open_source(h5=tmp_path / "nope.h5", eval_regions=tmp_path / "nope.bed")

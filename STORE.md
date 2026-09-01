@@ -291,6 +291,7 @@ What the store path does differently:
 | `num_cells` / `--cell-cond` | as baked | **0**, and any `--cell-cond` other than `off` **raises** (D16) |
 | `--reference on` | supported | **refused** — the table pins itself to an h5 fingerprint |
 | `--eval-every` | forced **off**, loudly — its scorer was deleted | mid-training monitor + best-ckpt selection, when the regime declares `eval_pairs` |
+| `--eval-regions` | **refused** — a bake's eval windows are frozen rows and cannot be re-tiled | cuts the mid-training scope to a BED; unset = every window, which is the default |
 | scoring a checkpoint | `python -m candi.bench --h5 …` | `python -m candi.bench --store …` — a separate command on both paths |
 
 Every dataset on either path is built by `train.py::make_dataset(source, mask_regime, …)`, the one
@@ -342,6 +343,12 @@ and `candi.monitor` scores every 25 bp bin of the regime's eval chromosomes ever
 which is what selects the best checkpoint. With none declared it resolves to 0, because there is
 nothing to impute. On the h5 path it is forced to 0 outright — the scorer that served it was
 `eval.quick_eval`, and an h5 run now trains only.
+
+`--eval-regions <BED>` narrows **which positions** that check scores, without dropping a track: the
+bins inside a window the BED wholly contains, by the same `contain` rule D32 applies to the train
+split. Unset is the default and is every window of every eval chromosome. The BED is hashed into
+`config.eval_scope`, and the end-of-run check stays full coverage. `EVAL.md` has the cost, the
+absent positional keys and the rule for comparing two runs.
 
 #### `cell_cond` is refused, not defaulted
 

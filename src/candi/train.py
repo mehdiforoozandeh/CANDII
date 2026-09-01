@@ -1197,6 +1197,7 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    wandb_project=None, wandb_run_name=None, reference="off", reference_path=None,
                    reference_pseudocount=None, imp_weight=1.0, unmask_frac=0.0,
                    eval_every=None, eval_batches_per_pair=4, early_stop_epochs=3,
+                   eval_regions=None,
                    meta_embed_layernorm=True,
                    optimizer="adam", trunk_wd=0.0, meta_gain=1.0,
                    meta_probe="off", meta_probe_delta=DEFAULT_META_PROBE_DELTA,
@@ -1373,6 +1374,24 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
             print(f"[train] NOTE {len(zero)} assays have zero T_ contributors, so their reference is "
                   f"the pseudocount floor and carries no information: {zero}", flush=True)
 
+    # t89 — WHICH POSITIONS SELECT THE CHECKPOINT. Hashed from the BED here, before the monitor
+    # exists, so the dashboard config carries the pin from the first logged step; the monitor
+    # upgrades it below with the window and bin counts it actually planned. The sha256 is the
+    # load-bearing half — `configs/regions/…` is a mutable file, and the path alone would let two
+    # runs claim the same scope while scoring different loci.
+    eval_scope_cfg: dict = {"name": "full", "note": "every window of every eval chromosome"}
+    if eval_regions is not None and not eval_every:
+        # A scope with nothing to score is a claim in the run json about a curve that does not
+        # exist. Blanked here rather than recorded, which is the same rule D32 follows for an
+        # unset `regions` and the same one the h5 degradation notice above follows.
+        print(f"[train] --eval-regions {eval_regions} is INERT: --eval-every resolved to 0, so "
+              f"there is no mid-training check to scope. config.eval_scope stays `full`.",
+              flush=True)
+        eval_regions = None
+    if eval_regions is not None:
+        from candi.store.regime import RegionSet
+        eval_scope_cfg = {"name": "regions", **RegionSet.from_bed(eval_regions).to_dict()}
+
     run_cfg = dict(regime=regime, epochs=epochs, steps_per_epoch=steps_per_epoch,
                    batch_size=batch_size, lr=lr, weight_decay=weight_decay, seed=seed,
                    cell_cond=cell_cond, num_cells=int(ds.num_cells), num_assays=ds.num_assays,
@@ -1384,6 +1403,13 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                    **source.provenance(),
                    reference=reference, imp_weight=imp_weight, unmask_frac=unmask_frac,
                    eval_every=eval_every, eval_batches_per_pair=eval_batches_per_pair,
+                   # t89 — WHICH POSITIONS SELECTED THIS CHECKPOINT. `source.provenance()` above
+                   # describes the TRAINING source and says nothing about the monitor's scope, so
+                   # without this key a `regions` run and a `full` run produce config blocks that
+                   # are identical while their curves are not comparable. The path alone would not
+                   # do: `configs/regions/…` is a mutable file, and it is the sha256 that pins what
+                   # was actually scored. Resolved below, once the monitor has hashed the BED.
+                   eval_scope=eval_scope_cfg,
                    meta_embed_layernorm=bool(meta_embed_layernorm),
                    # h51: the two arms differ ONLY in trunk_wd, so both values ride into the
                    # dashboard config — a run whose arm has to be inferred is a run that can be
@@ -1431,21 +1457,45 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
     # used was `eval.quick_eval`, and `candi.eval` is deleted; the monitor is store-only because
     # `Monitor.__init__` opens its source with `open_source(store=…)`, and teaching it the h5 would
     # be new code written against a data path that is being retired.
+    # TWO MONITORS, NOT ONE, and only when `--eval-regions` narrows the selection scope (t89).
+    # `monitor` is the one the hook calls every `eval_every` epochs and is the one that may be
+    # cheap; `final_monitor` is the end-of-run check and is ALWAYS full coverage. The split is the
+    # PI's ruling and not an optimisation: a cheap number is good enough to say which of two
+    # checkpoints is better, and not good enough to be the number a run reports. Both are opened
+    # here rather than inside the hook for the reason below — one source is one window plan, and
+    # selection is only a paired comparison if every epoch saw the same positions.
     monitor = None
+    final_monitor = None
     if eval_every and source.is_store:
         # `batch_windows` IS the eval batch size — how many context windows go through the model in
         # one forward pass — so the existing flag keeps its meaning rather than gaining a twin.
         monitor = Monitor(store=source.regime_path, device=device, seed=seed,
-                          batch_windows=eval_batch_size,
+                          batch_windows=eval_batch_size, eval_regions=eval_regions,
                           signal_target_transform=signal_target_transform, log_fn=log_fn)
-        print(f"[train] monitor: every {eval_every} epoch(s), "
-              f"{','.join(monitor.source.eval_chroms)} end to end — imputation ONLY (it is what "
+        final_monitor = monitor if eval_regions is None else Monitor(
+            store=source.regime_path, device=device, seed=seed, batch_windows=eval_batch_size,
+            signal_target_transform=signal_target_transform, log_fn=log_fn)
+        sc = monitor.source.scope()
+        where = (f"{','.join(monitor.source.eval_chroms)} end to end" if sc["name"] == "full" else
+                 f"{sc['scored_bins']:,} of {sc['full_bins']:,} bins "
+                 f"({sc['fraction']:.2%}) of {','.join(monitor.source.eval_chroms)}, inside "
+                 f"{sc['n_regions']} regions of {sc['bed']}")
+        print(f"[train] monitor: every {eval_every} epoch(s), {where} — imputation ONLY (it is what "
               f"selects), count arm, val loss in "
               f"signal_target_transform={signal_target_transform}. Reported: "
               f"{', '.join(tiered_keys(model))}", flush=True)
         print("[train] monitor: the denoising dial (watch-only) and the overfitting gap run ONCE, "
               "at the end, on the SELECTED checkpoint — the PI's cost ruling, measured in "
               "cruxvault/results/t30/TIMING.md.", flush=True)
+        run_cfg["eval_scope"] = eval_scope_cfg = sc
+        if sc["name"] != "full":
+            print(f"[train] monitor: the SELECTION scope above is NARROWER than the eval scope. "
+                  f"Two runs are comparable on the mid-training curve only if their "
+                  f"`eval_scope` blocks match — the BED, its sha256 {sc['sha256'][:12]} and the "
+                  f"chromosome list. The END-OF-RUN check on the selected checkpoint is FULL "
+                  f"COVERAGE and is the number to quote; the positional measures (mseprom, "
+                  f"msegene, mseenh, the P-block) are absent mid-training because a compacted "
+                  f"array's index is no longer a genomic position.", flush=True)
 
     def _keep_best(value, step, ep):
         """Lower is better, and only a finite number may select."""
@@ -1535,13 +1585,17 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
         # W&B: `Monitor.log_fn` is the same `log_fn` the loop logs through, so the row reaches the
         # dashboard from inside `final_check` — under its own `monitor_final/...` keys, at the last
         # training step, which is the step below.
-        final_row = monitor.final_check(model, epoch=int(final_epoch),
-                                        step=int(curve[-1]["step"]), selected=selected)
+        # `final_monitor`, not `monitor` — under `--eval-regions` the mid-training one is cut down
+        # to the selection scope, and the row a run REPORTS is full coverage whatever the curve that
+        # picked the weights was measured on. They are the same object when no scope was asked for.
+        final_row = final_monitor.final_check(model, epoch=int(final_epoch),
+                                              step=int(curve[-1]["step"]), selected=selected)
         print(format_check(final_row), flush=True)
-    if monitor is not None:
+    for m in {id(x): x for x in (monitor, final_monitor) if x is not None}.values():
         # The store handle pool is the monitor's, not the training loader's, so it has to be given
-        # back explicitly — nothing below reads the eval chromosomes again.
-        monitor.close()
+        # back explicitly — nothing below reads the eval chromosomes again. Keyed by identity so the
+        # unscoped case, where both names are one object, closes it once.
+        m.close()
     # h64: THE PROBE IS NOW APPLIED IN TRAINING ONLY, ON EVERY PATH. `quick_eval` took
     # `meta_probe=mprobe` and transformed the assembled batch, and it retired with `candi.eval`
     # (D15); the monitor scores through `candi.bench`, which knows nothing about h64 and must not be
@@ -1635,6 +1689,10 @@ def train_and_eval(*, h5_path=None, out_dir, store=None, regime="type1", epochs=
                      signal_target_transform=str(signal_target_transform),
                      **h64_cfg,
                      eval_every=eval_every, eval_batches_per_pair=eval_batches_per_pair,
+                     # t89 — the SELECTION scope. Not the same statement as `eval_chroms` below:
+                     # that says which chromosomes were predicted, this says how much of them the
+                     # curve that picked these weights was measured over.
+                     eval_scope=eval_scope_cfg,
                      out_dir=str(out_dir),
                      # t23: the same provenance block `run_cfg` carries. On the store path
                      # that is the regime file VERBATIM plus its sha256 and the store
@@ -1911,6 +1969,22 @@ def build_parser() -> argparse.ArgumentParser:
                          "mid-training scorer was `eval.quick_eval` and `candi.eval` is deleted "
                          "(D15), so an h5 run trains only and is scored afterwards with "
                          "`python -m candi.bench --h5 …`.")
+    ap.add_argument("--eval-regions", default=None, metavar="BED",
+                    help="STORE ONLY — cut the MID-TRAINING selection scope down to a BED, "
+                         "measured rather than sampled: every 25 bp bin of every window that lies "
+                         "WHOLLY inside one region, and nothing else. UNSET is the default and is "
+                         "today's behaviour, every window of every eval chromosome. This is a "
+                         "COST flag with a scientific price: it does not thin the panel — all 45 "
+                         "tracks are still scored end to end — but it scores them over a named, "
+                         "fixed, published region set instead of the whole chromosome. "
+                         "configs/regions/encode_pilot_hg38.bed is the 44 ENCODE Pilot Regions, "
+                         "which cut to 2.67%% of chr20/21/22 for a ~37x saving. The BED is hashed "
+                         "and the hash goes in `config.eval_scope`: two runs are comparable on "
+                         "the mid-training curve only if that block matches. The END-OF-RUN check "
+                         "on the selected checkpoint is FULL COVERAGE whatever this says, and the "
+                         "positional measures (mseprom, msegene, mseenh, the P-block) are absent "
+                         "mid-training because a compacted array's index is no longer a genomic "
+                         "position.")
     ap.add_argument("--early-stop-epochs", type=int, default=3,
                     help="Stop when the mid-training selection metric has not improved for MORE "
                          "than N epochs (0 = off, train the full --epochs). Counted in epochs, so "
@@ -2002,7 +2076,7 @@ def main():
         wandb_project=a.wandb_project, wandb_run_name=(a.wandb_run_name or tag),
         reference=a.reference, reference_path=a.reference_path,
         reference_pseudocount=a.reference_pseudocount, imp_weight=a.imp_weight,
-        unmask_frac=a.unmask_frac, eval_every=a.eval_every,
+        unmask_frac=a.unmask_frac, eval_every=a.eval_every, eval_regions=a.eval_regions,
         eval_batches_per_pair=a.eval_batches_per_pair, early_stop_epochs=a.early_stop_epochs,
         meta_embed_layernorm=meta_ln,
         optimizer=a.optimizer, trunk_wd=a.trunk_wd, meta_gain=a.meta_gain,
