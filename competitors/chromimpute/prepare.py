@@ -3,8 +3,8 @@
 `RIVALS_PLAN.md` §7.2 runs ChromImpute as published: their jar, their seven commands. Everything
 on this side of the boundary is I/O. This module writes
 
-    <out>/chrominfo.txt            chrom <TAB> n_bins*25          (see `write_chrominfo`)
-    <out>/chrominfo.train.txt      the D32 training grid          ONLY under a `regions` regime
+    <out>/chrominfo.txt            chrom <TAB> n_bins*25          the grid `Apply` predicts on
+    <out>/chrominfo.train.txt      chrom <TAB> n_bins*25          the grid the predictors are fit on
     <out>/inputinfofile.txt        sample <TAB> mark <TAB> file   TRAINING CELLS ONLY (§6.2)
     <out>/targets.tsv              input_bios <TAB> target_bios <TAB> assay
     <out>/signal/<chrom>_<sample>.<mark>.bedgraph.gz
@@ -34,14 +34,19 @@ a `NumberFormat` with `setMaximumFractionDigits(2)`, so anything below the secon
 invisible downstream no matter what we hand it. Four decimals is the safety margin, and rounding
 before the run-length pass is what makes the runs long.
 
-**A `regions` regime becomes a second, separate declared grid.** `eic.pilot` restricts the
-training loci to a BED (D32), and the jar has no flag for that: the smallest scope it understands
-is a chromosome out of `chrominfo`. So `region_scope` declares each training region as its own
-chromosome and `chrominfo.train.txt` is the grid `GenerateTrainData` is pointed at, while
-`chrominfo.txt` stays the real chromosomes `Apply` predicts on. Two grids rather than one file
-because `GenerateTrainData` spreads its 100,000 locations over everything `chrominfo` declares:
-put the eval chromosomes in the same file and most of the sample lands outside the BED, which is
-the one thing this is here to prevent.
+**The training grid is always declared separately from the apply grid.** `GenerateTrainData`
+spreads its 100,000 locations over everything the `chrominfo` it is handed declares, and the
+predictors `Train` fits from them are reused at every position `Apply` predicts — transferable
+parameters, so Rule 2 (`BENCHMARK_DESIGN.md` §2) puts them on the regime's training loci. The jar
+has no flag for a locus scope: the smallest thing any command understands is a chromosome out of
+`chrominfo`. So `training_scope` declares that scope as a second grid, `chrominfo.train.txt`, and
+`chrominfo.txt` stays the real chromosomes `Apply` predicts on. Two files rather than one because
+one file cannot say two things: put the eval chromosomes in the training grid and the sample lands
+on them, which is the whole of what this prevents.
+
+The scope is the regime's `train_chroms`, or — under a `regions` regime (`eic.pilot`, D32) — each
+training region declared as its own chromosome. Departure from published practice, recorded in
+`README.md`: ChromImpute as published samples inside the chromosomes it later predicts.
 """
 from __future__ import annotations
 
@@ -139,7 +144,7 @@ def signal_filename(sample: str, mark: str) -> str:
 
 
 # ---------------------------------------------------------------------------------------------
-# D32 — the training grid a `regions` regime declares
+# the training grid — Rule 2's locus scope, declared as chromosomes because the jar has nothing else
 # ---------------------------------------------------------------------------------------------
 
 
@@ -192,15 +197,54 @@ def region_scope(regime: dict, regime_path: str | Path) -> List[Tuple[str, str, 
     return sorted(out, key=lambda r: (r[1], r[2]))
 
 
+def training_scope(regime: dict, regime_path: str | Path, n_bins: Dict[str, int]
+                   ) -> List[Tuple[str, str, int, int]]:
+    """`(name, source_chrom, first_bin, end_bin)` per declared training locus. Never empty.
+
+    Rule 2 (§2) names the loci a method's transferable parameters may be fit on, and ChromImpute's
+    predictors are transferable — `Train` turns the sampled instances into one predictor per
+    (sample, mark) that `Apply` then reuses at every position. So the sampler goes on the regime's
+    training loci, and this is the list that becomes `chrominfo.train.txt`.
+
+    A `regions` regime narrows those loci further, to the BED (D32); without one the scope is the
+    regime's `train_chroms` whole. Rule 1 is untouched either way — neither branch decides which
+    *tracks* the method sees, and no scored track is written into the run at all (`training_tracks`).
+    """
+    regions = region_scope(regime, regime_path)
+    if regions:
+        return regions
+    if not regime.get("train_chroms"):
+        raise ValueError(
+            "the regime declares no `train_chroms` and no `regions`, so there is no locus scope to "
+            "fit predictors on. Rule 2 needs one named; refusing to fall back to the eval "
+            "chromosomes, which is the bug this function exists to prevent.")
+    missing = [c for c in regime["train_chroms"] if c not in n_bins]
+    if missing:
+        raise ValueError(
+            f"the regime's train_chroms name {missing}, which the store's bin table does not "
+            f"carry: {sorted(n_bins)}")
+    return [(c, c, 0, int(n_bins[c])) for c in regime["train_chroms"]]
+
+
 def signal_slices(chroms: Sequence[str], n_bins: Dict[str, int],
-                  regions: Sequence[Tuple[str, str, int, int]]
+                  training: Sequence[Tuple[str, str, int, int]]
                   ) -> List[Tuple[str, str, int, int]]:
     """Every grid the signal writer emits, as `(declared_name, source_chrom, first_bin, end_bin)`.
 
     A real chromosome is the whole of itself; a D32 region is a slice of the chromosome it sits
     on. One list so the apply grid and the training grid cannot drift apart in the writer.
+
+    Deduplicated on the declared name, because the two grids may name the same chromosome: a regime
+    whose `train_chroms` and eval chromosomes overlap declares it in both files, and one bedgraph
+    serves both. Writing it twice would be the same bytes at twice the cost.
     """
-    return [(c, c, 0, int(n_bins[c])) for c in chroms] + list(regions)
+    out: List[Tuple[str, str, int, int]] = []
+    seen: set = set()
+    for sl in [(c, c, 0, int(n_bins[c])) for c in chroms] + list(training):
+        if sl[0] not in seen:
+            seen.add(sl[0])
+            out.append(sl)
+    return out
 
 
 # ---------------------------------------------------------------------------------------------
@@ -351,15 +395,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     write_targets(out / "targets.tsv", targets)
     print(f"[prepare] {len(tracks)} training tracks, {len(targets)} imputation targets, "
           f"{len(chroms)} chromosome(s) -> {out}")
-    regions = region_scope(regime, args.regime)
-    if regions:
-        write_chrominfo(out / "chrominfo.train.txt",
-                        {name: stop - first for name, _, first, stop in regions},
-                        [name for name, _, _, _ in regions])
-        print(f"[prepare] D32 training grid: {len(regions)} region(s) over "
-              f"{len({c for _, c, _, _ in regions})} chromosome(s), "
-              f"{sum(stop - first for _, _, first, stop in regions):,} contained bins "
-              f"-> chrominfo.train.txt")
+    training = training_scope(regime, args.regime, n_bins)
+    write_chrominfo(out / "chrominfo.train.txt",
+                    {name: stop - first for name, _, first, stop in training},
+                    [name for name, _, _, _ in training])
+    overlap = sorted({c for _, c, _, _ in training} & set(chroms))
+    print(f"[prepare] training grid: {len(training)} declared locus/loci over "
+          f"{len({c for _, c, _, _ in training})} chromosome(s), "
+          f"{sum(stop - first for _, _, first, stop in training):,} bins "
+          f"-> chrominfo.train.txt")
+    # Not fatal — a smoke regime may legitimately train and score on one chromosome — but it is the
+    # condition Rule 2 is about, so it is said out loud rather than left to be read off two files.
+    if overlap:
+        print(f"[prepare] WARNING: the training grid sits on {', '.join(overlap)}, which is also "
+              f"being predicted. Under BENCHMARK_DESIGN.md Rule 2 that makes the regime's scope "
+              f"name wrong for this run.")
     if args.pilot:
         sub = pilot_subset(targets, args.pilot)
         write_targets(out / "targets_pilot.tsv", sub)
@@ -376,7 +426,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not todo:
         raise SystemExit("[prepare] the sample/mark/shard filters selected no track")
 
-    slices = signal_slices(chroms, n_bins, regions)
+    slices = signal_slices(chroms, n_bins, training)
     sig = out / "signal"
     for sample, mark in todo:
         view = store[sample][mark]
