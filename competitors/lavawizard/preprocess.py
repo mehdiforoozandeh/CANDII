@@ -12,6 +12,7 @@ The cache for a chromosome is a directory:
   tercile.npy    (n_tracks, n_bins) int8      stage-1 targets, 0/1/2
   sums.npy       (n_marks,   n_bins) float32  per-mark sum over the training pool
   sumsq.npy      (n_marks,   n_bins) float32  per-mark sum of squares
+  train_bins.npy (n_eligible,)      int64     D32 only — the bins training may sample
   index.json     track order, mark order, cell order, counts, per-mark max, provenance
 ```
 
@@ -214,6 +215,15 @@ class CachedChrom:
         mx = idx.get("mark_max")
         self.mark_max = (np.array([mx[m] for m in self.marks], dtype=np.float64)
                          if mx is not None else None)
+        # D32 — the bins this chromosome may be TRAINED on, when the regime restricts them to a BED.
+        # A plain `.npy` and not a re-read of the regime, because `train.py` never imports `candi`
+        # and the BED lives behind `candi.store.regime`'s hash gate: `store_eic` resolves the scope
+        # once, at cache time, and the cache carries the answer. Absent means "the whole
+        # chromosome", which is every regime without a `regions` key and every Dataset-3 cache.
+        tb = d / "train_bins.npy"
+        self.train_bins = np.load(tb).astype(np.int64) if tb.exists() else None
+        #: What the scope came from, for the run record. `None` on a whole-chromosome cache.
+        self.train_scope = idx.get("train_scope")
 
     @property
     def n_tracks(self) -> int:
