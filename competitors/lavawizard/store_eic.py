@@ -744,11 +744,10 @@ def train_shared(regime_path: Path | str, cache_root: Path | str, out_dir: Path 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     regime = load_regime(regime_path)
-    record = train_chromosome(Path(cache_root), SHARED_STEM, out_dir, device=device, seed=seed,
-                              stage="shared", hparams_chrom=shared_hparams_chrom(regime), **kw)
-    (out_dir / f"train_{SHARED_STEM}.json").write_text(json.dumps(record, indent=1) + "\n",
-                                                       encoding="utf-8")
-    return record
+    # `train_chromosome` writes `train_shared.json` itself; nothing is added to it here, because
+    # this stage has no selection panel to record.
+    return train_chromosome(Path(cache_root), SHARED_STEM, out_dir, device=device, seed=seed,
+                            stage="shared", hparams_chrom=shared_hparams_chrom(regime), **kw)
 
 
 def train_chrom(regime_path: Path | str, chrom: str, cache_root: Path | str, out_dir: Path | str,
