@@ -1369,6 +1369,12 @@ Taken after the first CANDI retrain was launched, killed, and read.
   > but the evidence that motivated it was thinner than it looked.
 - **§12.6's storage figures are per array, not per track**, and `B_` predictions live on
   `/project`. See §12.6.
+- **The noise floor runs AFTER the retrains, not before.** `t86` competes with them for the same
+  GPU, and it grew from one training run to two when the `eic.19` checkpoint proved unusable. Rows
+  therefore go up **unranked** in the interim, which §15's deferral already allows.
+- **`t82`'s two judgment calls are accepted as shipped.** The board stays locked — both regimes
+  unfrozen, so `add` refuses every row until a retrain produces one — and `no-selection` marks all
+  five naive baselines rather than only the two kNNs §5 names.
 - **`t84`'s scope was wrong and is closed**; **`t87`** now owns the two same-named pairing tools
   the `main` merge collided.
 
