@@ -1,12 +1,28 @@
 #!/bin/bash
 # Lay out a run directory, build the work-item lists, and submit the six stages as one dependency
-# chain of SLURM arrays. Drives all three runs — the §7.2 pilot, the full P1 grid, and P2.
+# chain of SLURM arrays.
 #
 #   bash submit.sh [RUNDIR] [FROM_STAGE] [TARGETS]
 #
-#   pilot   bash submit.sh $S/pilot_chr21                                  # 20 targets, chr21
-#   P1      bash submit.sh $S/p1_chr21    prepare targets.tsv              # 45 targets, chr21
-#   P2      CI_CHROMS=all bash submit.sh $S/p2_genome prepare targets.tsv  # 45 targets, 23 chroms
+#   pilot  bash submit.sh $S/pilot                             # 20 targets, the eval scope
+#   full   bash submit.sh $S/eic_19 prepare targets.tsv        # every declared target
+#
+# RETARGETED 2026-08-31. `P1`/`P2` are RETIRED (BENCHMARK_DESIGN.md §9), and the genome-wide run is
+# GONE: §4 blanks ChromImpute's `genome-wide` cell and rules that a blanked cell is not computed, so
+# the only scope is the regime's eval_chroms — chr20+21+22. `CI_REGIME` selects which live regime
+# (eic_19 or eic_pilot); `CI_CHROMS` defaults to that regime's eval_chroms.
+#
+# TWO THINGS THIS SCRIPT DOES NOT DO, AND THEY ARE BLOCKERS, NOT OVERSIGHTS:
+#
+#  1. `gtd` (GenerateTrainData) SAMPLES ITS 100,000 TRAINING LOCATIONS INSIDE $CI_CHROMS — i.e.
+#     inside the eval chromosomes. The predictors trained on them are TRANSFERABLE parameters, so
+#     under Rule 2 (§2) they must be fit on the regime's train_chroms instead. Doing that means
+#     Converting chr19 as well and running `gtd -c chr19` while `apply -c` runs on chr20/21/22, and
+#     whether ComputeGlobalDist's correlation table moves with it is the same question. That is a
+#     PI decision plus a restructure of the chain. Raise it before launching.
+#  2. `targets.tsv` is EVERY declared eval pair, and the live regimes declare 38 — 26 V_ AND 12 B_.
+#     §5 rules B_ is touched ONCE, at the very end. Filter the target list to V_ before running
+#     anything but the final B_ pass.
 #
 # Nothing here decides science. The compendium is every training track the regime declares (§6.2,
 # enforced in prepare.training_tracks); the pilot targets come from prepare.pilot_subset; every
@@ -16,10 +32,11 @@ set -euo pipefail
 RUN=${1:-$HOME/scratch/t51_chromimpute/pilot_chr21}
 FROM=${2:-prepare}
 TARGETS=${3:-targets_pilot.tsv}
-CHROMS=${CI_CHROMS:-chr21}
-REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t51}
+CHROMS=${CI_CHROMS:-chr20,chr21,chr22}
+REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}
 STORE=${CI_STORE:-/project/def-maxwl/mforooz/CANDI_STORE/eic}
-PY=${CI_PY:-/project/def-maxwl/mforooz/candi_venv/bin/python}
+PY=${CI_PY:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}
+REGIME=${CI_REGIME:-$REPO/configs/regime.eic_19.json}
 JAR=${CI_JAR:-$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}
 ACCT=${CI_ACCT:-def-maxwl}
 HERE=$REPO/competitors/chromimpute
@@ -29,7 +46,7 @@ mkdir -p "$RUN"/{lists,logs,timing}
 
 # --- the three text files, and the target lists -------------------------------------------------
 PYTHONPATH=$REPO/src $PY "$HERE/prepare.py" --store "$STORE" \
-    --regime "$REPO/configs/regime.eic_val.json" --out "$RUN/input" --chroms "$CHROMS" \
+    --regime "$REGIME" --out "$RUN/input" --chroms "$CHROMS" \
     --pilot 20 --no-signal
 
 NTRACK=$(wc -l < "$RUN/input/inputinfofile.txt")
@@ -60,7 +77,7 @@ echo "compendium: $NTRACK tracks | convert marks: $(wc -l < "$RUN/lists/convert.
 targets: $(wc -l < "$RUN/lists/train.txt")"
 
 # --- the chain ----------------------------------------------------------------------------------
-ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS"
+ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS,CI_REGIME=$REGIME"
 
 # `CI_THROTTLE` caps how many array tasks of one stage run at once. GenerateTrainData and Apply
 # each hold ONE OPEN gzip reader per compendium track — 267 of them — so an unthrottled array puts
@@ -106,7 +123,7 @@ set -euo pipefail
 PYTHONPATH=$REPO/src $PY $HERE/collect.py --store $STORE \\
     --targets $RUN/input/$TARGETS --impute-dir $RUN/OUTPUTIMPUTEDIR \\
     --pred-root $RUN/pred --chroms \$(cut -f1 $RUN/input/chrominfo.txt | paste -sd, -) \\
-    --jar $JAR --notes "t51 $TARGETS on $CHROMS, regime.eic_val, ChromImpute paper defaults"
+    --jar $JAR --notes "$TARGETS on $CHROMS, $(basename $REGIME), ChromImpute paper defaults"
 EOF
 chmod +x "$RUN/collect.sh"
 echo "collect with: $RUN/collect.sh"
