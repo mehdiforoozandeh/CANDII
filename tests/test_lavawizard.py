@@ -1622,6 +1622,57 @@ def test_the_transferable_stage_fits_no_parameter_on_an_eval_chromosome(tmp_path
         "the position tables are the only thing this stage is allowed to fit, and it must fit them"
 
 
+def test_the_transferable_stage_is_upstreams_own_fit_moved_and_not_a_different_one(
+        tmp_path, monkeypatch):
+    """`--stage shared` and `--stage full` must be the SAME fit on the same cache and seed.
+
+    The whole claim about what this change costs rests on it: the transferable stage is upstream's
+    own two-stage fit pointed at loci Rule 2 allows, not a new objective, schedule or optimiser. If
+    the two ever diverged, the board row would differ from the published method by more than where
+    it trained, and the README's honesty note would be understating it.
+    """
+    from lavawizard import train as TR
+    from lavawizard.anchor import load_checkpoint
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=3)
+    got = {}
+    for stage in ("full", "shared"):
+        TR.train_chromosome(root, "chrT", tmp_path / stage, contributor_mode="upstream",
+                            device="cpu", seed=0, stage=stage)
+        got[stage] = load_checkpoint(tmp_path / stage / "guacamole_chrT.pt")[0].state_dict()
+    for k, v in got["full"].items():
+        assert torch.equal(v, got["shared"][k]), f"{k} differs between `full` and `shared`"
+
+
+def test_precamole_is_built_and_trained_before_guacamole_exists(tmp_path, monkeypatch):
+    """The construction order is frozen, and the reason is the RNG stream, not tidiness.
+
+    Both models draw from torch's global RNG. `Guacamole`'s own layers — `block3` and `y_pred` —
+    init AFTER stage 1 has already advanced it, so building Guacamole earlier re-rolls every tensor
+    in the run and `--stage full` stops reproducing the §7.4 anchor it exists to reproduce. Checked
+    by order rather than by a stored checksum, which would only pin one torch version.
+    """
+    from lavawizard import model, train as TR
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=1)
+    seen = []
+    for cls in ("Precamole", "Guacamole"):
+        real = getattr(model, cls).__init__
+
+        def spy(self, *a, _n=cls, _f=real, **k):
+            seen.append(_n)
+            _f(self, *a, **k)
+        monkeypatch.setattr(getattr(TR, cls), "__init__", spy)
+    real_stage = TR._run_stage
+    monkeypatch.setattr(TR, "_run_stage",
+                        lambda m, s, **k: seen.append(k["label"]) or real_stage(m, s, **k))
+
+    TR.train_chromosome(root, "chrT", tmp_path / "out", contributor_mode="upstream", device="cpu")
+    assert seen == ["Precamole", "stage1", "Guacamole", "stage2"]
+
+
 def test_a_run_that_never_saw_a_shared_fit_is_refused_rather_than_started(tmp_path, monkeypatch):
     """Falling back to a fresh init would fit the cell and assay factors on the eval chromosome."""
     from lavawizard import store_eic, train as TR

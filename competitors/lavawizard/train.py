@@ -310,12 +310,17 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
     s1: Dict[str, float] = {"steps": 0, "final_loss": float("nan"), "seconds": 0.0,
                             "planned_steps": 0, "early_stopped": False, "eval_seconds": 0.0,
                             "ms_per_step": 0.0, "skipped": "the genome stage takes no stage 1"}
-    gua = Guacamole(**common).to(dev)
+    # CONSTRUCTION ORDER IS FROZEN, and it is `Precamole` then `Guacamole` on every stage that
+    # builds both. Both draw from torch's global RNG, so swapping them re-rolls every tensor in the
+    # run — including the Guacamole-only `block3` and `y_pred`, which init AFTER stage 1 has already
+    # advanced the stream. Building Guacamole first reads better and would silently make `--stage
+    # full` a different run from the anchor it exists to reproduce.
     if stage == "genome":
+        gua = Guacamole(**common).to(dev)
         # The checkpoint's position tables belong to the shared scope and are a different length, so
-        # `load_transferable` never looks at them: this chromosome's tables were freshly built by
-        # `Guacamole(**common)` above and stay at their init. The transferable half is loaded and
-        # then frozen, so every gradient this stage takes lands on a position table.
+        # `load_transferable` never looks at them: this chromosome's tables were freshly built above
+        # and stay at their init. The transferable half is loaded and then frozen, so every gradient
+        # this stage takes lands on a position table.
         obj = torch.load(str(init), map_location=dev, weights_only=False)
         gua.load_transferable(obj["state_dict"]).freeze_transferable()
         n_tr = sum(p.numel() for p in gua.transferable_parameters())
@@ -330,7 +335,7 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
         s1 = _run_stage(pre, sampler, epochs=pre_ep, lr=5e-4,
                         loss_fn=nn.CrossEntropyLoss(), batch_fn=sampler.stage1, device=dev,
                         label="stage1", max_steps=max_steps_per_stage)
-        gua.from_precamole(pre)
+        gua = Guacamole(**common).to(dev).from_precamole(pre)
         del pre
         if dev.type == "cuda":
             torch.cuda.empty_cache()
