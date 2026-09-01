@@ -92,8 +92,13 @@ def _val_loss(model: CellAssayCrossFactoriser, sampler: FixedTargetSampler,
 
 def train(model: CellAssayCrossFactoriser, train_sampler: TrainSampler, cfg: Config,
           device: torch.device, val_sampler: Optional[FixedTargetSampler] = None,
-          on_epoch: Optional[Callable[[int, Dict], None]] = None) -> List[Dict]:
-    """MSE in arcsinh space, Adam, no schedule. Returns the per-epoch log."""
+          on_epoch: Optional[Callable[[int, Dict], Optional[bool]]] = None) -> List[Dict]:
+    """MSE in arcsinh space, Adam, no schedule. Returns the per-epoch log.
+
+    `on_epoch` returning True ends the run — the contract `candi.train`'s `eval_hook` uses, so an
+    early stop reads the same way in both loops. Nothing is lost by stopping: the selector writes
+    its best weights the moment the metric improves, not here.
+    """
     model.to(device)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     history: List[Dict] = []
@@ -117,6 +122,6 @@ def train(model: CellAssayCrossFactoriser, train_sampler: TrainSampler, cfg: Con
         history.append(row)
         print(f"epoch {epoch:3d}  " + "  ".join(f"{k}={v}" for k, v in row.items() if k != "epoch"),
               flush=True)
-        if on_epoch is not None:
-            on_epoch(epoch, row)
+        if on_epoch is not None and on_epoch(epoch, row):
+            break
     return history
