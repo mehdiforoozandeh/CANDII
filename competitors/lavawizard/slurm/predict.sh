@@ -1,11 +1,18 @@
 #!/bin/bash
-# The 45 declared tracks, one array task per chromosome, into a single §4.1 root.
+# The declared tracks, one array task per eval chromosome, into a single §4.1 root.
 #
-#   sbatch competitors/lavawizard/slurm/predict.sh                    # all 23 -> P2 (P1 inside it)
-#   sbatch --array=20 competitors/lavawizard/slurm/predict.sh         # chr21 alone -> P1
+# WARNING: the regime now declares 38 eval_pairs — 26 V_ AND 12 B_. §5 rules B_ is touched
+# ONCE, at the very end, from the selected checkpoint. `store_eic.py predict` walks every
+# declared pair, so running this against the shipped regime SPENDS the B_ touch. Derive a
+# V_-only regime first (slurm/t81_train_candi.sh shows how) for anything but the final run.
+#
+#   sbatch competitors/lavawizard/slurm/predict.sh                    # the regime eval scope
+#   sbatch --array=1 competitors/lavawizard/slurm/predict.sh          # one chromosome alone
 #
 # `--clip` is ON here and OFF on the anchor: PI ruling 2026-08-26, recorded in the manifest.
-# The manifest is written by the chr21 task alone — 23 tasks racing on one json buys nothing.
+# The manifest is written by array task 0 alone — three tasks racing on one json buys nothing.
+# Keyed on the INDEX, not on the name `chr21`: a name key silently writes no manifest at all
+# the first time eval_chroms changes.
 #
 # --gres is the AGENTS.md hard-rule MIG slice and is never any other spec.
 #SBATCH --account=def-maxwl
@@ -18,18 +25,17 @@
 #SBATCH --mem=24G
 # fc30560 gave repeated Lustre OSError 108 on files its neighbours read fine (anchor run).
 #SBATCH --exclude=fc30560
-# %12: more than twelve concurrent torch imports off the shared /project venv fail with
-# partial-module ImportErrors. The cap is the fix, and it costs only wall-clock.
-#SBATCH --array=0-22%12
+# THREE tasks, not 23: the list is the regime's eval_chroms (see _env.sh).
+#SBATCH --array=0-2%3
 # `$0` is sbatch's spool copy, not this file, so the path comes from the submit directory.
 ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
 [ -f "$ENV" ] || { echo "[error] no $ENV -- submit from the repo root" >&2; exit 2; }
 source "$ENV"
 C=${CHROMS[$SLURM_ARRAY_TASK_ID]:-}
-[ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome" >&2; exit 2; }
+[ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome; this regime has $NCHROM (${CHROMS[*]})" >&2; exit 2; }
 PRED="${PRED:-$RUNS/pred}"
 CKPT="${CKPT:-$RUNS/ckpt}"
-MAN=(); [ "$C" = "chr21" ] && MAN=(--manifest)
+MAN=(); [ "${SLURM_ARRAY_TASK_ID:-0}" = "0" ] && MAN=(--manifest)
 echo "[predict] $C -> $PRED  host=$(hostname)"
 srun python -u -m lavawizard.store_eic predict --regime "$REGIME" --chrom "$C" \
      --cache "$CACHE" --checkpoint "$CKPT/guacamole_${C}.pt" \
