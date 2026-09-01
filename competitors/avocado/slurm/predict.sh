@@ -43,6 +43,6 @@ fi
 
 python "$AVO/predict.py" \
     --regime "$REGIME" --chrom "$CHROM" \
-    --shared "$WS/ckpt/shared_${JOINT_CHROM}.pt" \
+    --shared "$WS/ckpt/shared_${SHARED_SCOPE}.pt" \
     --genome "$WS/ckpt/genome_${CHROM}.pt" \
     --out "${PRED:-$WS/pred}"
