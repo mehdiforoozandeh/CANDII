@@ -24,14 +24,25 @@ place, checkable side by side.
 **Two things live here that `train.py` cannot hold.** BENCHMARK_DESIGN.md §5's checkpoint selection
 scores a written prediction root with `candi.bench.external`, and D32's training scope is a BED
 behind `candi.store.regime`'s hash gate — both need `candi`, and `train.py` must keep running on
-Fir without it. So `selector` builds the selection callable the trainer is handed, and
-`build_cache_from_store` resolves the BED once and writes the eligible bins into the cache.
+Fir without it. So `selector` builds the selection callable the trainer is handed, and the cache
+builders resolve the BED once and write the eligible bins into the cache.
+
+**The regime axis is here, and it is the packed shared cache.** `train.py --stage shared` fits every
+transferable parameter on `shared_layout`'s scope — chr19 under `eic.19`, the Pilot Regions of
+eighteen chromosomes under `eic.pilot` — and neither scope contains one bin of chr20, chr21 or
+chr22. Before that stage existed, every key this method read was identical between the two live
+regimes and the two rows would have been the same run twice. `shared_layout` is the only reader of
+`train_chroms` and `regions`, so it is the whole axis.
 
 ```bash
+python -m lavawizard.store_eic cache-shared --regime configs/regime.eic_19.json \
+       --cache /scratch/.../eic_cache                                   # the transferable scope
 python -m lavawizard.store_eic cache   --regime configs/regime.eic_19.json --chrom chr21 \
-       --cache /scratch/.../eic_cache
-python -m lavawizard.store_eic train   --regime configs/regime.eic_19.json --chrom chr21 \
-       --cache /scratch/.../eic_cache --out runs/eic/ckpt --select-every 50
+       --cache /scratch/.../eic_cache                                   # one eval chromosome
+python -m lavawizard.store_eic train   --regime configs/regime.eic_19.json --stage shared \
+       --cache /scratch/.../eic_cache --out runs/eic/ckpt --select-every 0
+python -m lavawizard.store_eic train   --regime configs/regime.eic_19.json --stage genome \
+       --chrom chr21 --cache /scratch/.../eic_cache --out runs/eic/ckpt --select-every 50
 python -m lavawizard.store_eic predict --regime configs/regime.eic_19.json --chrom chr21 \
        --cache /scratch/.../eic_cache --checkpoint runs/eic/ckpt/guacamole_chr21.best.pt \
        --pred-root runs/eic/pred --clip
@@ -49,15 +60,26 @@ import numpy as np
 
 from . import emit, preprocess
 
-__all__ = ["FairnessError", "ScopeError", "RESOLUTION", "SELECT_KEY", "load_regime", "cell_index",
-           "train_columns", "contained_bins", "derive_v_only", "write_v_only_regime",
-           "build_cache_from_store", "write_predictions", "predict_chrom", "selector",
-           "train_chrom"]
+__all__ = ["FairnessError", "ScopeError", "RESOLUTION", "SELECT_KEY", "SHARED_STEM",
+           "load_regime", "cell_index", "train_columns", "contained_spans", "contained_bins",
+           "shared_layout", "shared_hparams_chrom", "derive_v_only", "write_v_only_regime",
+           "build_cache_from_store", "build_shared_cache_from_store", "write_predictions",
+           "predict_chrom", "selector", "shared_checkpoint", "train_chrom", "train_shared"]
 
 CHUNK_BINS = 1_000_000
 
 #: The store's bin width. `STORE.md`'s grid, and D32's containment is counted against it.
 RESOLUTION = 25
+
+#: The cache stem the transferable (`shared`) stage trains on — never a chromosome name, because
+#: under a `regions` regime the axis is a packing of bins from eighteen of them. One stem for both
+#: live regimes, so no launcher has to branch on which regime it was handed.
+SHARED_STEM = "shared"
+
+#: The coarsest position table's stride, `model.Factors.genome_5kbp_embedding` at `pos25 // 200`.
+#: `shared_layout` aligns on it, and 200 is a multiple of the 250 bp table's 10, so aligning on the
+#: coarsest aligns both.
+COARSE_STRIDE = 200
 
 #: BENCHMARK_DESIGN.md §5's selection number for this method, as `<arm>:<key>` into the `macro`
 #: block `candi.bench.external.score_external` returns. Lower is better.
@@ -86,7 +108,7 @@ class FairnessError(RuntimeError):
 
 
 class ScopeError(RuntimeError):
-    """The regime names a training scope this method's per-chromosome fit cannot express."""
+    """A training scope, or a stage, that this method cannot honour as the regime declares it."""
 
 
 def load_regime(path: str | Path) -> dict:
@@ -161,45 +183,113 @@ def contained_bins(regime: dict, chrom: str, *, base: Path | str,
     not re-anchored per region — D32's choice, and the reason `eic.pilot` shares a grid with every
     other regime.
     """
-    from candi.store.regime import RegionSet
-
-    rs = RegionSet.from_obj(regime.get("regions"), base=Path(base))
-    if rs is None:
+    spans = contained_spans(regime, chrom, base=base, resolution=resolution)
+    if spans is None:
         return None
-    spans = rs.bin_spans(chrom, resolution)
     if not spans:
         return np.zeros(0, dtype=np.int64)
     return np.concatenate([np.arange(a, b, dtype=np.int64) for a, b in spans])
 
 
-def _assert_scope_is_expressible(regime: dict, chrom: str) -> None:
-    """Refuse a `regions` regime on a chromosome the regime does not train on.
+def contained_spans(regime: dict, chrom: str, *, base: Path | str,
+                    resolution: int = RESOLUTION) -> Optional[List[Tuple[int, int]]]:
+    """`contained_bins` as half-open `[(first_bin, end_bin), ...]`. `None` without a BED.
 
-    THIS IS NOT "BED SUPPORT IS MISSING" — it is built, and `contained_bins` above is it. The
-    refusal is about WHICH CHROMOSOME. `train.py` fits one independent Guacamole per chromosome,
-    cell and assay embeddings included, on that chromosome's own bins; `predict_chrom` then indexes
-    the genome tables by that chromosome's bin numbers, so the model that predicts chr20 can only
-    have been fit on chr20. Under `eic.pilot` that puts the fit on the eval chromosomes, while the
-    regime's `train_chroms` deliberately CUT the four Pilot Regions that fall there
-    (BENCHMARK_DESIGN.md §3.1). Restricting the fit to those four would train this method on
-    precisely the loci the regime excluded — the complement of the declared scope, wearing its name.
-
-    So the scope is refused until the method has a transferable stage the regime can reach. That is
-    the same PI decision the regime-collapse finding needs, and one ruling settles both.
+    The span form is what `shared_layout` packs; the flat form is what a single-chromosome cache
+    walks. One resolution of the BED behind both, so the two can never disagree.
     """
-    if not regime.get("regions"):
-        return
-    train = list(regime.get("train_chroms") or [])
-    if chrom in train:
-        return
-    raise ScopeError(
-        f"{chrom}: this regime restricts training to a BED (D32) and its train_chroms are {train}, "
-        f"which do not include {chrom}. Lavawizard fits one model per chromosome on that "
-        f"chromosome's own bins, so a model for {chrom} can only be fit on {chrom} — and under this "
-        f"regime {chrom}'s regions are the ones train_chroms cut. Training there would fit the "
-        f"complement of the declared scope and label it with the regime's name. The BED restriction "
-        f"itself is implemented and tested (`contained_bins`); what is missing is a transferable "
-        f"stage this regime can reach. Raise it — it is the same ruling the regime-collapse needs.")
+    from candi.store.regime import RegionSet
+
+    rs = RegionSet.from_obj(regime.get("regions"), base=Path(base))
+    if rs is None:
+        return None
+    return [(int(a), int(b)) for a, b in rs.bin_spans(chrom, resolution)]
+
+
+def shared_layout(regime: dict, n_bins_of: Callable[[str], int], *, base: Path | str,
+                  resolution: int = RESOLUTION,
+                  coarse_stride: int = COARSE_STRIDE) -> Tuple[List[Tuple[str, int, int, int]], int]:
+    """`([(chrom, first_bin, end_bin, slot0), ...], n_slots)` — the transferable stage's coordinate.
+
+    The shared fit trains on the regime's `train_chroms`, restricted to the BED where there is one
+    (D32). Guacamole holds a free parameter per position, so it can no more carry position tables
+    for eighteen whole chromosomes than Avocado can — the bins of the scope are PACKED onto one
+    compact axis and the model's `n_positions` is that axis. Those tables are thrown away at the end
+    of the stage anyway; only the transferable half crosses into the genome stage.
+
+    The packing preserves the property §3.1 insists on, that the grid is anchored at chromosome
+    bin 0 and never re-anchored per region:
+
+    * each region's `slot0` satisfies `slot0 % coarse_stride == first_bin % coarse_stride`, so
+      `slot // 10` and `slot // 200` — the 250 bp and 5 kbp tables of `model.Factors` — cut the
+      genome at exactly the absolute coordinates a whole-chromosome fit would have cut it at;
+    * `slot0` is searched from the next `coarse_stride` boundary, so no coarse factor is shared by
+      two regions or by two chromosomes.
+
+    The alignment costs under `2 * coarse_stride` unused slots per region. Those slots hold no data
+    and are never trained on: the cache's `train_bins` names the real ones and `train.Sampler` walks
+    those alone.
+
+    A regime with no `regions` contributes each train chromosome whole, so `eic.19` packs to chr19
+    itself — one span, `slot0 = 0`, no waste — and the two regimes go down one code path.
+    """
+    chroms = list(regime.get("train_chroms") or [])
+    if not chroms:
+        raise ScopeError("this regime names no train_chroms, so there are no loci Rule 2 would "
+                         "let the transferable stage fit on")
+    if len(chroms) > 1 and not regime.get("regions"):
+        # `eic.gw` is a §3 placeholder and is deferred; a packed whole-genome axis would be ~121 M
+        # slots and ~129 GiB of cache. Refused by name rather than attempted.
+        raise ScopeError(
+            f"this regime declares {len(chroms)} train chromosomes and no `regions` BED, so the "
+            f"shared scope is {chroms}. Packing whole chromosomes end to end is the deferred "
+            f"whole-genome regime (BENCHMARK_DESIGN.md §3), not a scope this method should build "
+            f"by accident: it is ~121 M slots and ~129 GiB of cache. Declare a BED or one "
+            f"chromosome.")
+    spans: List[Tuple[str, int, int, int]] = []
+    slot = 0
+    for c in chroms:
+        got = contained_spans(regime, c, base=base, resolution=resolution)
+        for a, b in (got if got is not None else [(0, int(n_bins_of(c)))]):
+            boundary = -(-slot // coarse_stride) * coarse_stride
+            slot0 = boundary + ((a - boundary) % coarse_stride)
+            spans.append((c, int(a), int(b), int(slot0)))
+            slot = slot0 + (b - a)
+    if not spans:
+        raise ScopeError(
+            f"no bin of any train chromosome {chroms} lies wholly inside a region of the regime's "
+            f"BED, so the transferable stage has no training scope at all under D32.")
+    return spans, int(slot)
+
+
+def shared_hparams_chrom(regime: dict) -> str:
+    """The chromosome whose `UPSTREAM_HYPERPARAMS` row the packed shared stem borrows.
+
+    `dataset3.UPSTREAM_HYPERPARAMS` is keyed on the 23 chromosomes and a packed axis is not one of
+    them, so the shared stage has to borrow a row. It borrows the EVAL chromosomes', because the
+    row fixes the three position-factor widths and those widths set `dense_1`'s input width — a
+    transferable tensor, which must have the same shape in both stages or the transfer cannot load.
+    Borrowing from the chromosomes the transfer lands on is therefore the only choice that works,
+    and it is checkable: the eval chromosomes must agree, and this refuses when they do not.
+
+    Under both live regimes chr20, chr21 and chr22 carry the same row — and it is also chr19's own
+    row, so `eic.19`'s shared fit runs the schedule it would have run as a chr19 fit.
+    """
+    from . import dataset3
+
+    ev = list(regime.get("eval_chroms") or [])
+    if not ev:
+        raise ScopeError("this regime names no eval_chroms, so there is no row to borrow")
+    rows = {c: (tuple(dataset3.schedule(c).items()), tuple(dataset3.factor_sizes(c).items()))
+            for c in ev}
+    if len(set(rows.values())) != 1:
+        raise ScopeError(
+            f"the eval chromosomes {ev} do not share one UPSTREAM_HYPERPARAMS row, so the packed "
+            f"shared stem has no unambiguous schedule or factor widths to borrow. The widths set "
+            f"dense_1's input width, which is a transferable tensor, so a fit under one row cannot "
+            f"transfer to a chromosome under another. Rows: "
+            f"{ {c: dict(rows[c][1]) for c in ev} }")
+    return ev[0]
 
 
 def derive_v_only(regime: dict) -> dict:
@@ -250,19 +340,72 @@ def build_cache_from_store(regime_path: Path | str, chrom: str, out_root: Path |
     Idempotent: an existing `index.json` returns early, so a re-run of a partly finished array
     costs nothing.
 
-    **The D32 training scope is resolved here, once, and written into the cache** as
-    `train_bins.npy`. It belongs at cache time and not in the trainer because the BED sits behind
-    `candi.store.regime`'s hash gate and `train.py` never imports `candi`. The whole chromosome's
-    signal is still cached either way — prediction covers every bin whatever the training scope is.
+    **The D32 BED restricts a TRAIN chromosome and never an eval one.** BENCHMARK_DESIGN.md §2
+    Rule 2 counts per-position adaptation on the eval chromosomes as inference, and the genome
+    stage — the only thing an eval chromosome's cache now feeds — fits nothing but position tables.
+    So an eval chromosome caches whole, with no `train_bins`, under either regime. A chromosome the
+    regime does name in `train_chroms` still carries the restriction, which is the degenerate
+    single-chromosome shared scope; `build_shared_cache_from_store` is the general one.
+    """
+    regime = load_regime(regime_path)
+    # The BED applies only where the regime says it trains. On an eval chromosome `train_bins`
+    # stays `None` and every bin is trainable, which is what the genome stage needs. The whole
+    # chromosome is CACHED either way — prediction covers every bin whatever the training scope is.
+    train_bins = None
+    if chrom in (regime.get("train_chroms") or []):
+        train_bins = contained_bins(regime, chrom, base=Path(regime_path).parent)
+        if train_bins is not None and train_bins.size == 0:
+            raise ScopeError(f"{chrom}: no bin lies wholly inside a region of the regime's BED, so "
+                             f"this chromosome has no training scope at all under D32.")
+    return _build_cache(regime, regime_path, chrom, out_root, spans=None, n_slots=0,
+                        train_bins=train_bins, chunk_bins=chunk_bins, verbose=verbose)
+
+
+def build_shared_cache_from_store(regime_path: Path | str, out_root: Path | str,
+                                  *, chunk_bins: int = CHUNK_BINS, verbose: bool = True) -> Path:
+    """Write `<cache>/shared/` — the transferable stage's scope, packed by `shared_layout`.
+
+    This is the cache that makes the regime axis real. Under `eic.19` it is chr19; under
+    `eic.pilot` it is the contained bins of eighteen chromosomes on one compact coordinate. Neither
+    holds a single bin of chr20, chr21 or chr22, so no transferable parameter can be fit there.
+
+    Alignment slots carry zeros and are excluded from `train_bins`, from the tercile ranking and
+    from the per-mark maximum, so nothing they contain reaches the fit or the cap.
     """
     from candi.store.reader import CorpusStore
 
     regime = load_regime(regime_path)
-    _assert_scope_is_expressible(regime, chrom)
-    out = preprocess.cache_dir(out_root, chrom)
+    with CorpusStore(regime["store"]) as corpus:
+        spans, n_slots = shared_layout(regime, lambda c: int(corpus.n_bins(c)),
+                                       base=Path(regime_path).parent)
+    real = np.concatenate([np.arange(s0, s0 + (b - a), dtype=np.int64) for _, a, b, s0 in spans])
+    return _build_cache(regime, regime_path, SHARED_STEM, out_root, spans=spans, n_slots=n_slots,
+                        train_bins=real, chunk_bins=chunk_bins, verbose=verbose)
+
+
+def _build_cache(regime: dict, regime_path: Path | str, stem: str, out_root: Path | str, *,
+                 spans: Optional[Sequence[Tuple[str, int, int, int]]], n_slots: int,
+                 train_bins: Optional[np.ndarray], chunk_bins: int, verbose: bool) -> Path:
+    """The one cache writer. `spans` is the READ plan, `[(chrom, first_bin, end_bin, slot0), ...]`.
+
+    `spans=None` means "the whole of `stem`", resolved off the corpus this already has open rather
+    than by the caller opening it a second time.
+
+    A whole chromosome is the degenerate one-span case, so the read plan, the §6.2 column list and
+    the moment accumulation are written once and cannot drift between the two scopes.
+
+    `spans` and `train_bins` answer different questions and are not the same set. `spans` is what
+    the array HOLDS: a whole chromosome for a per-chromosome cache, the packed regions for the
+    shared one. `train_bins` is what training may SAMPLE, and `None` means every covered slot. A
+    per-chromosome cache under a `regions` regime holds the whole chromosome and trains on part of
+    it — prediction needs every bin whatever the training scope is.
+    """
+    from candi.store.reader import CorpusStore
+
+    out = preprocess.cache_dir(out_root, stem)
     if (out / "index.json").exists():
         if verbose:
-            print(f"{chrom}: cache already present at {out}", flush=True)
+            print(f"{stem}: cache already present at {out}", flush=True)
         return out
     out.mkdir(parents=True, exist_ok=True)
 
@@ -272,18 +415,26 @@ def build_cache_from_store(regime_path: Path | str, chrom: str, out_root: Path |
 
     with CorpusStore(regime["store"]) as corpus:
         cols = train_columns(regime, corpus)
-        n_bins = int(corpus.n_bins(chrom))
+        if spans is None:
+            n_slots = int(corpus.n_bins(stem))
+            spans = [(stem, 0, n_slots, 0)]
+        # Every slot the read plan fills. `arange(n_slots)` on a whole-chromosome cache; on the
+        # packed shared axis it leaves out the alignment slots, which hold no data at all.
+        covered = np.concatenate([np.arange(s0, s0 + (b - a), dtype=np.int64)
+                                  for _, a, b, s0 in spans])
+        whole = covered.size == n_slots
         n_tracks, n_marks = len(cols), len(marks)
         if verbose:
-            print(f"{chrom}: {n_tracks} tracks x {n_bins} bins, {len(cells)} cells, {n_marks} "
-                  f"marks ({n_tracks * n_bins * 4 / 2**30:.1f} GiB)", flush=True)
+            print(f"{stem}: {n_tracks} tracks x {n_slots} slots over {len(spans)} span(s), "
+                  f"{covered.size} covered, {len(cells)} cells, {n_marks} marks "
+                  f"({n_tracks * n_slots * 4 / 2**30:.1f} GiB)", flush=True)
 
         arr = np.lib.format.open_memmap(out / "tracks.npy", mode="w+",
-                                        dtype=np.float32, shape=(n_tracks, n_bins))
+                                        dtype=np.float32, shape=(n_tracks, n_slots))
         ter = np.lib.format.open_memmap(out / "tercile.npy", mode="w+",
-                                        dtype=np.int8, shape=(n_tracks, n_bins))
-        sums = np.zeros((n_marks, n_bins), dtype=np.float64)
-        sumsq = np.zeros((n_marks, n_bins), dtype=np.float64)
+                                        dtype=np.int8, shape=(n_tracks, n_slots))
+        sums = np.zeros((n_marks, n_slots), dtype=np.float64)
+        sumsq = np.zeros((n_marks, n_slots), dtype=np.float64)
         counts = np.zeros(n_marks, dtype=np.int64)
         maxima = np.zeros(n_marks, dtype=np.float64)
 
@@ -295,19 +446,33 @@ def build_cache_from_store(regime_path: Path | str, chrom: str, out_root: Path |
         for k, (b, rows) in enumerate(sorted(by_bios.items())):
             names = [nm for _, nm in rows]
             bs = corpus[b]
-            block = np.empty((len(rows), n_bins), dtype=np.float32)
-            for s in range(0, n_bins, chunk_bins):
-                e = min(s + chunk_bins, n_bins)
-                block[:, s:e] = np.arcsinh(
-                    np.asarray(bs.pval(chrom, s, e, assays=names), dtype=np.float32)).T
+            block = np.zeros((len(rows), n_slots), dtype=np.float32)
+            for chrom, first, end, slot0 in spans:
+                for s in range(first, end, chunk_bins):
+                    e = min(s + chunk_bins, end)
+                    block[:, slot0 + s - first:slot0 + e - first] = np.arcsinh(
+                        np.asarray(bs.pval(chrom, s, e, assays=names), dtype=np.float32)).T
             for (i, assay), row in zip(rows, block):
                 arr[i] = row
-                ter[i] = preprocess._terciles(row)
+                # Ranked over the REAL slots alone. The tercile is an equal-count cut of the
+                # training scope, and an alignment slot is not in the training scope; letting its
+                # zero into the ranking would move the two thresholds for every track.
+                #
+                # `Sampler._pooled_tercile`'s own thresholds are NOT corrected the same way — it
+                # quantiles `sums[j] / mark_count[j]` over the whole axis, alignment slots and all.
+                # Left as it is: that is 0.75 % zeros under `eic.pilot`, it feeds stage 1 alone, and
+                # stage 1's head is discarded by `from_precamole`. Correcting it would mean teaching
+                # `train.py` about a packing it must not know about, since it never imports `candi`.
+                if whole:
+                    ter[i] = preprocess._terciles(row)
+                else:
+                    ter[i, covered] = preprocess._terciles(row[covered])
                 j = mark_ix[assay]
                 sums[j] += row
                 sumsq[j] += row.astype(np.float64) ** 2
                 counts[j] += 1
-                maxima[j] = max(maxima[j], float(row.max()))
+                maxima[j] = max(maxima[j], float(row.max() if whole
+                                                 else row[covered].max()))
             if verbose:
                 print(f"  [{k+1}/{len(by_bios)}] {b}: {len(rows)} track(s) "
                       f"({time.time()-t0:.0f}s)", flush=True)
@@ -316,19 +481,18 @@ def build_cache_from_store(regime_path: Path | str, chrom: str, out_root: Path |
     np.save(out / "sums.npy", sums.astype(np.float32))
     np.save(out / "sumsq.npy", sumsq.astype(np.float32))
     scope = None
-    bins = contained_bins(regime, chrom, base=Path(regime_path).parent)
-    if bins is not None:
-        if bins.size == 0:
-            raise ScopeError(f"{chrom}: no bin lies wholly inside a region of the regime's BED, so "
-                             f"this chromosome has no training scope at all under D32.")
-        np.save(out / "train_bins.npy", bins)
-        scope = {"policy": "contain", "resolution": RESOLUTION, "n_bins": int(bins.size),
-                 **{k: regime["regions"][k] for k in ("bed", "sha256") if k in regime["regions"]}}
+    if train_bins is not None:
+        np.save(out / "train_bins.npy", train_bins)
+        scope = {"policy": "contain", "resolution": RESOLUTION, "n_bins": int(train_bins.size),
+                 "chroms": sorted({c for c, _, _, _ in spans}),
+                 "spans": [[c, a, b, s0] for c, a, b, s0 in spans],
+                 **{k: regime["regions"][k] for k in ("bed", "sha256")
+                    if k in (regime.get("regions") or {})}}
         if verbose:
-            print(f"{chrom}: D32 training scope {bins.size} of {n_bins} bins "
-                  f"({100.0 * bins.size / n_bins:.2f} %) inside the BED", flush=True)
+            print(f"{stem}: training scope {train_bins.size} of {n_slots} slots "
+                  f"({100.0 * train_bins.size / n_slots:.2f} %)", flush=True)
     index = {
-        "chrom": chrom, "n_bins": int(n_bins), "grid": "store_floor",
+        "chrom": stem, "n_bins": int(n_slots), "grid": "store_floor",
         "tracks": [list(t) for t in cols], "cells": cells, "marks": marks,
         "mark_counts": {m: int(counts[mark_ix[m]]) for m in marks},
         "mark_max": {m: float(maxima[mark_ix[m]]) for m in marks},
@@ -343,7 +507,7 @@ def build_cache_from_store(regime_path: Path | str, chrom: str, out_root: Path |
     }
     (out / "index.json").write_text(json.dumps(index, indent=1) + "\n", encoding="utf-8")
     if verbose:
-        print(f"{chrom}: done in {(time.time()-t0)/60:.1f} min -> {out}", flush=True)
+        print(f"{stem}: done in {(time.time()-t0)/60:.1f} min -> {out}", flush=True)
     return out
 
 
@@ -436,6 +600,16 @@ def predict_chrom(regime_path: Path | str, chrom: str, cache_root: Path | str,
                          f"the cache; a cap guessed from a cache that never measured one is worse "
                          f"than no cap.")
     model, meta = load_checkpoint(checkpoint, device=device)
+    # A `shared` checkpoint's position tables belong to the packed training axis and index nothing
+    # on this chromosome; `full` predates the transferable stage and was fit on the chromosome it
+    # predicts. Both would produce a full set of plausible-looking arrays, so this refuses by the
+    # stamp rather than trusting the filename.
+    if meta.get("stage", "full") != "genome":
+        raise ScopeError(
+            f"{chrom}: {Path(checkpoint).name} was written by the `{meta.get('stage', 'full')}` "
+            f"stage and only a `genome` checkpoint may be predicted from. A `shared` file holds "
+            f"position tables for the packed training axis, which addresses no chromosome; a "
+            f"`full` file was fit on the chromosome it predicts, which is what §2 Rule 2 forbids.")
     cells, cix = cell_index(regime)
     if meta["cells"] != cells or meta["marks"] != cache.marks:
         raise ValueError(
@@ -544,20 +718,66 @@ def selector(regime_path: Path | str, chrom: str, cache, work_dir: Path | str, *
     return select_fn, info
 
 
-def train_chrom(regime_path: Path | str, chrom: str, cache_root: Path | str, out_dir: Path | str,
-                *, select_every: int = 0, select_key: str = SELECT_KEY, clip: bool = True,
-                early_stop_epochs: int = 0, device: str = "cuda", seed: int = 0,
-                select_device: str = "", **kw) -> dict:
-    """`train.train_chromosome` with §5's selection loop attached. `select_every=0` turns it off.
+def shared_checkpoint(out_dir: Path | str) -> Path:
+    """Where the transferable stage writes, and where the genome stage reads. One name, one place."""
+    return Path(out_dir) / f"guacamole_{SHARED_STEM}.pt"
 
-    This is the entry point a board run uses. `train.py` cannot build the selector itself — scoring
-    reads the store and the store is `candi`'s — so the wiring lives here, on the one side of the
-    split that is allowed to import it.
+
+def train_shared(regime_path: Path | str, cache_root: Path | str, out_dir: Path | str,
+                 *, device: str = "cuda", seed: int = 0, **kw) -> dict:
+    """The transferable stage: everything, on the regime's own training scope. Run once.
+
+    Its product is `guacamole_shared.pt`, and only its transferable half is ever read again — the
+    position tables it fits belong to a packed axis that means nothing on any chromosome.
+
+    **This stage does not select, in either regime, and that is a choice rather than a limitation.**
+    Under `eic.pilot` the scope is a packing of eighteen chromosomes, `candi.bench.external` scores
+    whole chromosomes, and there is no panel to score — the same wall `competitors/avocado/train.py`
+    hits and refuses at. Under `eic.19` the scope IS a whole chromosome and chr19's `V_` panel could
+    be scored. Selecting there and not under the ablation would put a difference into the regime
+    axis that is not the regime, which is the one thing the ablation exists to measure. So selection
+    attaches to the genome stage in both, and the genome stage is the one whose checkpoint is
+    predicted from anyway.
     """
     from .train import train_chromosome
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    regime = load_regime(regime_path)
+    # `train_chromosome` writes `train_shared.json` itself; nothing is added to it here, because
+    # this stage has no selection panel to record.
+    return train_chromosome(Path(cache_root), SHARED_STEM, out_dir, device=device, seed=seed,
+                            stage="shared", hparams_chrom=shared_hparams_chrom(regime), **kw)
+
+
+def train_chrom(regime_path: Path | str, chrom: str, cache_root: Path | str, out_dir: Path | str,
+                *, select_every: int = 0, select_key: str = SELECT_KEY, clip: bool = True,
+                early_stop_epochs: int = 0, device: str = "cuda", seed: int = 0,
+                select_device: str = "", stage: str = "genome",
+                init: Optional[Path] = None, **kw) -> dict:
+    """One eval chromosome's genome stage, with §5's selection loop attached.
+
+    This is the entry point a board run uses. `train.py` cannot build the selector itself — scoring
+    reads the store and the store is `candi`'s — so the wiring lives here, on the one side of the
+    split that is allowed to import it.
+
+    `stage` defaults to `genome`, so `init` defaults to `shared_checkpoint(out_dir)` — the file
+    `train_shared` just wrote. Pass `stage="full"` for the one-stage fit this method used before
+    the transferable stage existed; it is kept because the Dataset-3 anchor runs it, and it is NOT
+    a legitimate board run under either regime (§2 Rule 2).
+    """
+    from .train import train_chromosome
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if stage == "genome" and init is None:
+        init = shared_checkpoint(out_dir)
+    if stage == "genome" and not Path(init).exists():
+        raise ScopeError(
+            f"the genome stage needs the transferable half, and there is no {init}. Run "
+            f"`store_eic train --stage shared` first: fitting this chromosome from a fresh init "
+            f"would fit the cell and assay factors on {chrom}, which is a chromosome this regime "
+            f"scores on (BENCHMARK_DESIGN.md §2 Rule 2).")
     select_fn = None
     info: dict = {}
     if select_every:
@@ -570,7 +790,8 @@ def train_chrom(regime_path: Path | str, chrom: str, cache_root: Path | str, out
         record = train_chromosome(Path(cache_root), chrom, out_dir, device=device, seed=seed,
                                   select_fn=select_fn, select_every=select_every,
                                   select_metric=(select_key if select_fn else ""),
-                                  early_stop_epochs=early_stop_epochs, **kw)
+                                  early_stop_epochs=early_stop_epochs, stage=stage,
+                                  init=(init if stage == "genome" else None), **kw)
     finally:
         if select_fn is not None:
             select_fn.close()
@@ -591,6 +812,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     c.add_argument("--cache", type=Path, required=True)
     c.add_argument("--chunk-bins", type=int, default=CHUNK_BINS)
 
+    h = sub.add_parser("cache-shared",
+                       help="build the transferable stage's packed cache over train_chroms")
+    h.add_argument("--regime", required=True)
+    h.add_argument("--cache", type=Path, required=True)
+    h.add_argument("--chunk-bins", type=int, default=CHUNK_BINS)
+
     q = sub.add_parser("predict", help="write one chromosome's declared §4.1 tracks")
     q.add_argument("--regime", required=True)
     q.add_argument("--chrom", required=True)
@@ -606,7 +833,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     t = sub.add_parser("train", help="train one chromosome, selecting the checkpoint on V_ (§5)")
     t.add_argument("--regime", required=True)
-    t.add_argument("--chrom", required=True)
+    # `--stage shared` names no chromosome: its scope is the regime's, and the cache stem is fixed.
+    t.add_argument("--stage", default="genome", choices=("full", "shared", "genome"),
+                   help="`shared` fits the transferable half on the regime's training scope; "
+                        "`genome` freezes it and fits one eval chromosome's position tables, and "
+                        "is the stage a board run predicts from; `full` is the pre-transfer "
+                        "one-stage fit and breaches §2 Rule 2 under both live regimes")
+    t.add_argument("--chrom", help="the eval chromosome; omitted (and refused) with --stage shared")
+    t.add_argument("--init", type=Path, default=None,
+                   help="the shared checkpoint to transfer from; defaults to <out>/"
+                        f"guacamole_{SHARED_STEM}.pt")
     t.add_argument("--cache", type=Path, required=True)
     t.add_argument("--out", type=Path, required=True)
     t.add_argument("--contributor-mode", default="loo", choices=("upstream", "loo"))
@@ -648,13 +884,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         build_cache_from_store(ns.regime, ns.chrom, ns.cache, chunk_bins=ns.chunk_bins)
         return 0
 
+    if ns.cmd == "cache-shared":
+        build_shared_cache_from_store(ns.regime, ns.cache, chunk_bins=ns.chunk_bins)
+        return 0
+
     if ns.cmd == "train":
+        common = dict(contributor_mode=ns.contributor_mode, epoch_scale=ns.epoch_scale,
+                      max_steps_per_stage=ns.max_steps_per_stage)
+        if ns.stage == "shared":
+            if ns.chrom:
+                p.error("--stage shared takes no --chrom: its scope is the regime's train_chroms "
+                        "and its cache stem is always `%s`" % SHARED_STEM)
+            if ns.select_every:
+                p.error("--stage shared cannot select — see `train_shared`. Pass --select-every 0 "
+                        "here and let the genome stage select, in both regimes.")
+            train_shared(ns.regime, ns.cache, ns.out, device=ns.device, seed=ns.seed, **common)
+            return 0
+        if not ns.chrom:
+            p.error(f"--stage {ns.stage} needs a --chrom")
         train_chrom(ns.regime, ns.chrom, ns.cache, ns.out,
                     select_every=ns.select_every, select_key=ns.select_key,
                     clip=not ns.no_clip, early_stop_epochs=ns.early_stop_epochs,
                     device=ns.device, seed=ns.seed, select_device=ns.select_device,
-                    contributor_mode=ns.contributor_mode, epoch_scale=ns.epoch_scale,
-                    max_steps_per_stage=ns.max_steps_per_stage)
+                    stage=ns.stage, init=ns.init, **common)
         return 0
 
     predict_chrom(ns.regime, ns.chrom, ns.cache, ns.checkpoint, ns.pred_root,
