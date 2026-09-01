@@ -37,7 +37,10 @@ VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 REGIME="${REGIME:-$REPO/configs/regime.eic_19.json}"
 REGIME_NAME="$(basename "$REGIME" .json)"; REGIME_NAME="${REGIME_NAME#regime.}"
 RUNS="${RUNS:-/project/def-maxwl/mforooz/rivals_src/edice_runs}"
-MODEL="${MODEL:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/model.pt}"
+# model.SELECTED.pt, not model.pt: §5 ranks the checkpoint the run chose on V_, and model.pt is
+# always the last epoch. eic_train.sh fails the run if the selected file is missing, so there is
+# no legitimate board run where this default does not exist.
+MODEL="${MODEL:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/model.selected.pt}"
 PRED="${PRED:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/preds_${SCOPE}}"
 # The σ-table lives with the run, not with a scope -- see the header.
 SIGMA="${SIGMA:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}/sigma.json}"
