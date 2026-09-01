@@ -347,7 +347,10 @@ nothing to impute. On the h5 path it is forced to 0 outright — the scorer that
 `--eval-regions <BED>` narrows **which positions** that check scores, without dropping a track: the
 bins inside a window the BED wholly contains, by the same `contain` rule D32 applies to the train
 split. Unset is the default and is every window of every eval chromosome. The BED is hashed into
-`config.eval_scope`, and the end-of-run check stays full coverage. `EVAL.md` has the cost, the
+`config.eval_scope`, and the end-of-run check stays full coverage. Measured: a 2.67 % scope is
+5.85 min against a 94 min full check, 21 % of one epoch. **Do not point it at
+`configs/regions/encode_pilot_hg38.bed`** — that BED is the `eic.pilot` TRAINING scope and was
+measured to flip checkpoint selections when used to score; `EVAL.md` has the numbers, the cost, the
 absent positional keys and the rule for comparing two runs.
 
 #### `cell_cond` is refused, not defaulted
