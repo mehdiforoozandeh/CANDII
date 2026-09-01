@@ -514,3 +514,104 @@ def test_the_cli_exposes_the_patience_and_says_zero_is_off():
                              capture_output=True, text=True).stdout
         assert "--early-stop-epochs" in out
         assert "0 = off" in out
+
+
+# ---------------------------------------------------------------------------------------------
+# t89 — the selection scope, wired end to end through the training loop
+# ---------------------------------------------------------------------------------------------
+# `tests/test_bench_harness.py` checks that a scoped source scores the scoped bins and
+# `tests/test_monitor.py` checks that a scoped row still selects. Neither can see the thing that
+# only exists here: the loop runs TWO monitors, a cheap one for the curve and a full-coverage one
+# for the row the run reports, and the run json has to say which was which.
+
+@pytest.fixture(scope="module")
+def scoped_run(tmp_path_factory):
+    """The same one-epoch monitored run as `monitored_run`, with `--eval-regions` on.
+
+    The BED covers part of the eval chromosome and its edges are off the 25 bp bin grid, as the
+    hg38 Pilot Regions' are.
+    """
+    from candi.train import train_and_eval
+    from tests.test_monitor import EVAL_TRACKS
+
+    root = tmp_path_factory.mktemp("scopedrun")
+    st = make_store(root / "store", tracks=EVAL_TRACKS)
+    bed = root / "scope.bed"
+    bed.write_text("chr2\t3210\t11190\tR0\n", encoding="utf-8")
+    p = root / "regime.json"
+    p.write_text(json.dumps(regime_dict(
+        st, biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "V_bb"]},
+        kinds=["counts", "peaks", "pval"],
+        eval_pairs=[["T_aa", "V_aa"]]), indent=2), encoding="utf-8")
+    out = root / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    res = train_and_eval(store=str(p), out_dir=str(out), epochs=1,
+                         steps_per_epoch=2, batch_size=2, d_model=32, embed_dim=8,
+                         n_transformer_layers=1, seed=0, eval_every=1, eval_batch_size=2,
+                         eval_regions=str(bed), ckpt_path=str(out / "scoped.ckpt"))
+    return res, bed
+
+
+def test_the_run_json_says_which_positions_selected_the_checkpoint(scoped_run,
+                                                                   monitored_run) -> None:
+    """Two runs are comparable only if this matches. An unscoped run says `full` rather than
+    omitting the key — "scored everything" and "the field was forgotten" must not look alike."""
+    import hashlib
+
+    res, bed = scoped_run
+    assert monitored_run["config"]["eval_scope"]["name"] == "full"
+    sc = res["config"]["eval_scope"]
+    assert sc["name"] == "regions"
+    assert sc["sha256"] == hashlib.sha256(bed.read_bytes()).hexdigest()
+    assert 0.0 < sc["fraction"] < 1.0
+
+
+def test_the_curve_is_cheap_and_the_end_of_run_row_is_not(scoped_run) -> None:
+    """THE RULING THIS TEST EXISTS FOR. Cheap enough to select on every check; the number the run
+    REPORTS is the thorough one. A run whose final row inherited the selection scope would report a
+    region cut as if it were the panel."""
+    res, _ = scoped_run
+    curve = res["eval_curve"]
+    assert curve, "the monitor never fired, so this test asserted nothing"
+    for row in curve:
+        assert row["eval_scope"]["name"] == "regions"
+    fin = res["final_check"]
+    assert fin is not None and fin["final"] is True
+    assert fin["eval_scope"]["name"] == "full"
+    assert fin["impute"]["n_tracks"] > 0 and fin["denoise"]["n_tracks"] > 0
+
+
+def test_a_scoped_curve_scores_fewer_bins_than_the_row_the_run_reports(scoped_run) -> None:
+    """The saving is in the BINS, not in the tracks — the same panel over fewer positions. That is
+    the whole difference between this and the sampled scorer that was deleted, which bought its
+    speed by dropping windows per track and therefore selected on a draw."""
+    res, _ = scoped_run
+    mid = res["eval_curve"][-1]
+    fin = res["final_check"]
+    assert set(mid["impute"]["per_track"]) == set(fin["impute"]["per_track"])
+    assert mid["impute"]["n_tracks"] == fin["impute"]["n_tracks"] > 0
+    assert mid["eval_scope"]["scored_bins"] < fin["eval_scope"]["scored_bins"]
+    assert fin["eval_scope"]["fraction"] == 1.0
+    assert mid["eval_scope"]["full_bins"] == fin["eval_scope"]["full_bins"]
+
+
+def test_a_scope_with_no_check_to_scope_is_blanked_rather_than_recorded(tmp_path) -> None:
+    """A `regions` block in a run json is a claim about a curve. With `--eval-every 0` there is no
+    curve, so the claim would be about nothing."""
+    from candi.train import train_and_eval
+    from tests.test_monitor import EVAL_TRACKS
+
+    st = make_store(tmp_path / "store", tracks=EVAL_TRACKS)
+    bed = tmp_path / "scope.bed"
+    bed.write_text("chr2\t3210\t11190\tR0\n", encoding="utf-8")
+    p = tmp_path / "regime.json"
+    p.write_text(json.dumps(regime_dict(
+        st, biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "V_bb"]},
+        kinds=["counts", "peaks", "pval"]), indent=2), encoding="utf-8")
+    out = tmp_path / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    res = train_and_eval(store=str(p), out_dir=str(out), epochs=1, steps_per_epoch=2,
+                         batch_size=2, d_model=32, embed_dim=8, n_transformer_layers=1,
+                         seed=0, eval_every=0, eval_batch_size=2, eval_regions=str(bed))
+    assert res["config"]["eval_scope"]["name"] == "full"
+    assert not res["eval_curve"]

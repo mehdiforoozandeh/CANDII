@@ -320,12 +320,17 @@ class EvalSource:
         return np.unique(np.repeat(s, cb) + np.tile(np.arange(cb, dtype=np.int64), s.size))
 
     def scope(self) -> Dict[str, Any]:
-        """The eval scope, for `provenance`. Two runs are comparable only if these match."""
-        if self.eval_regions is None:
-            return {"name": "full", "note": "every window of every eval chromosome"}
-        kept = {c: self.scored_bins(c) for c in self.eval_chroms}
-        n_scored = int(sum(len(v) for v in kept.values()))
+        """The eval scope, for `provenance`. Two runs are comparable only if these match.
+
+        ONE SHAPE FOR BOTH CASES — `scored_bins`, `full_bins` and `fraction` are present even when
+        nothing was cut, so a reader diffing a mid-training row against an end-of-run one compares
+        two numbers rather than an absent key against a number.
+        """
         n_full = int(sum(self.n_bins(c) for c in self.eval_chroms))
+        if self.eval_regions is None:
+            return {"name": "full", "scored_bins": n_full, "full_bins": n_full, "fraction": 1.0,
+                    "note": "every window of every eval chromosome"}
+        n_scored = int(sum(len(self.scored_bins(c)) for c in self.eval_chroms))
         return {
             "name": "regions",
             **self.eval_regions.to_dict(),
@@ -562,6 +567,9 @@ class H5Source(EvalSource):
             "context_bins": self.context_bins,
             "resolution": self.resolution,
             "dsf_levels": list(self.dsf_levels),
+            # t89 — always `full` on a bake, and written anyway: a reader of a result file should
+            # not have to know which backend produced it to learn which positions were scored.
+            "eval_scope": self.scope(),
         }
 
 
@@ -1786,6 +1794,16 @@ def run_bench(model, source: EvalSource, device, *, kinds: Sequence[str] = ("imp
         if not held:
             raise ValueError("held_out_chroms selected nothing from the scored chromosomes")
     split = len(held) < len(scored)
+    if split and getattr(source, "eval_regions", None) is not None:
+        # t89 — the `genome_wide` block below is named for what it means, and under an eval scope it
+        # would carry a region-restricted number under that name. Refused rather than relabelled:
+        # §4's whole point is that the two aggregations differ ONLY in which chromosomes they cover,
+        # and a scope moves the other axis at the same time. The selection scope is for selection.
+        raise ValueError(
+            f"held_out_chroms splits the scope in two, but this source is restricted to "
+            f"{source.eval_regions.resolved}. `genome_wide` means every bin of every scored "
+            f"chromosome and would be a region cut under that name. Score the leaderboard at full "
+            f"coverage (open the source without eval_regions=), or drop held_out_chroms.")
 
     per_track: Dict[str, Dict[str, Dict[str, object]]] = {}
     per_track_gw: Dict[str, Dict[str, Dict[str, object]]] = {}

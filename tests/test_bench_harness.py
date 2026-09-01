@@ -1628,3 +1628,30 @@ def test_a_bake_refuses_the_scope_by_name_rather_than_ignoring_it(tmp_path) -> N
     the genome. Silently ignoring the flag would score full coverage under a cheap-scope label."""
     with pytest.raises(ValueError, match="store-only scope"):
         open_source(h5=tmp_path / "nope.h5", eval_regions=tmp_path / "nope.bed")
+
+
+def test_a_scoped_run_cannot_produce_a_block_called_genome_wide(scope_bed, model,
+                                                                tmp_path_factory) -> None:
+    """§4's two aggregations differ ONLY in which chromosomes they cover. A scope moves the other
+    axis at the same time, so `genome_wide` under a scope would be a region cut wearing that name.
+    Refused rather than relabelled.
+
+    Its own THREE-chromosome store, because the split this is about needs two eval chromosomes and
+    D-disjointness forbids reusing the train one.
+    """
+    d = tmp_path_factory.mktemp("gwscope")
+    st = make_store(d, chrom_sizes={"chr1": 2_000 * 25 + 7, "chr2": 800 * 25 + 3,
+                                    "chr3": 900 * 25 + 11})
+    rf = d / "regime.json"
+    rf.write_text(json.dumps(regime_dict(
+        st, biosamples={"train": ["T_aa"], "eval": ["T_aa", "V_aa"]},
+        kinds=["counts", "peaks", "pval"], train_chroms=["chr1"],
+        eval_chroms=["chr2", "chr3"])), encoding="utf-8")
+    src = open_source(store=rf, eval_regions=scope_bed)
+    try:
+        assert len(src.eval_chroms) == 2, "the split this test needs did not exist"
+        with pytest.raises(ValueError, match="genome_wide"):
+            H.run_bench(model, src, "cpu", kinds=("impute",), batch_windows=2,
+                        blocks=("E",), held_out_chroms=["chr3"])
+    finally:
+        src.close()
