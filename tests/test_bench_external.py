@@ -718,3 +718,58 @@ def test_the_scope_carries_the_key_the_rivals_actually_select_on(regime_file, re
     # the scope is on the row for a rival exactly as it is for a checkpoint
     for arms in got["per_track"].values():
         assert arms["pval"]["bin_scope"] == "regions"
+
+
+def test_a_rival_opens_the_shipped_selection_scope_and_its_hash_proves_which_one(
+        regime_file, full_root, recs, tmp_path) -> None:
+    """The COMMITTED scope, opened by the external entry, on a point-only rival root.
+
+    All four rivals now select on `V_` through this path, and §5 only holds if every method scores
+    the same POSITIONS. `provenance.eval_scope.sha256` is what proves they did — a method that
+    quietly opened a different BED produces a different hash, and a leaderboard can refuse it.
+    That is why this asserts the hash of the shipped file rather than merely that a scope exists.
+
+    The shipped BED names chr20/21/22 and the test store names chr1/chr2, so the BED is REBUILT
+    here for this store from the same generator, same seed, same rule. What is pinned is the
+    mechanism and the hash contract, not a coordinate that no test corpus could carry.
+    """
+    import hashlib
+    import numpy as np
+
+    import tools.make_eval_scope_bed as G
+    from candi.bench.harness import full_tiling
+    from tests.test_store_reader import N_BINS
+
+    src0 = open_source(store=regime_file)
+    try:
+        nb = {c: src0.n_bins(c) for c in src0.eval_chroms}
+        ctx = src0.context_bins
+    finally:
+        src0.close()
+    n_win = max(2, len(full_tiling(nb[list(nb)[0]], ctx)) // 4)
+    bed = tmp_path / "eval_random_seedtest.bed"
+    bed.write_text(G.build(nb, windows=n_win, seed=890217, context_bins=ctx, resolution=25),
+                   encoding="utf-8")
+    want_sha = hashlib.sha256(bed.read_bytes()).hexdigest()
+
+    root = write_root(tmp_path / "pointrival", recs, keep=("signal_mu",))
+    src = open_source(store=regime_file, eval_regions=bed)
+    try:
+        got = score_external(src, root, seed=0, c_index_pairs=C_PAIRS)
+        idx = {c: src.scored_bins(c) for c in src.eval_chroms}
+    finally:
+        src.close()
+
+    sc = got["provenance"]["eval_scope"]
+    assert sc["name"] == "regions"
+    assert sc["sha256"] == want_sha, "the hash a leaderboard would check does not name this BED"
+    assert sc["n_regions"] == n_win and sc["scored_bins"] == n_win * ctx
+
+    # the rival's own selection key, over exactly those bins
+    sel = got["macro"]["pval"]["mse"]
+    want = []
+    for rec in sorted(recs, key=lambda r: r.key):
+        y = np.concatenate([np.asarray(rec.pval[c])[idx[c]] for c in rec.chroms])
+        p = np.concatenate([np.asarray(rec.signal_mu[c])[idx[c]] for c in rec.chroms])
+        want.append(float(((y - p) ** 2).mean()))
+    assert sel == pytest.approx(float(np.mean(want)), rel=1e-6, abs=1e-9)
