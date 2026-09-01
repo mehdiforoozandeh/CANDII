@@ -1,4 +1,8 @@
-"""MACS2-equivalent no-control Poisson p-value at bin resolution, from binned read counts.
+"""MACS2-equivalent Poisson p-value at bin resolution, from binned read counts.
+
+Two rules live here, and MACS2 keeps them in two separate methods: `pval_from_counts` is the
+no-control rule, `pval_from_counts_with_control` is the rule a run with an input/control track
+uses. They differ ONLY in how the local lambda is built; the tail is the same function.
 
 The rule implemented here is read off the MACS2 source, not off the paper. Anchors, at tag
 `2.1.0.20140616` of `macs3-project/MACS` (the no-control lambda block is byte-identical at
@@ -25,6 +29,50 @@ So the whole no-control rule is three lines:
     observed_i = the bin's own pileup, floored to an int
     score_i    = -log10 P(Poisson(lambda_i) > observed_i)
 
+## With a control
+
+`MACS2/cPeakDetect.pyx::PeakDetect.__call_peaks_w_control` builds a LIST of windows instead of one,
+and every one of them is piled up from the CONTROL, not from the treatment:
+
+    ctrl_d_s     = [ self.d ]                                    # line 183
+    ctrl_scale_s = [ self.ratio_treat2control ]                  # lines 186-193, `not tocontrol`
+    if self.sregion:                                             # line 196
+        ctrl_d_s.append( self.sregion )
+        ctrl_scale_s.append( float(self.d)/self.sregion*self.ratio_treat2control )
+    if self.lregion and self.lregion > self.sregion:             # line 206
+        ctrl_d_s.append( self.lregion )
+        ctrl_scale_s.append( float(self.d)/self.lregion*self.ratio_treat2control )
+
+with `self.ratio_treat2control = float(treat_sum)/control_sum` (line 158, `treat_sum` and
+`control_sum` both being `total * d`, so in single-end mode the ratio is just the read-count
+ratio) and `lambda_bg = float(treat_sum)/self.gsize` (line 172). `pileup_a_chromosome` then takes
+the elementwise max over all of them with `lambda_bg` as the floor, exactly as in the no-control
+case. Three things follow, and all three are the opposite of the no-control path:
+
+* **`slocal` IS live with a control.** The no-control path disables it in so many words; the
+  with-control path adds it whenever `--slocal` is non-zero, which it is by default (1000).
+* **The d-size window is live too** — `ctrl_d_s` always starts at `[ self.d ]`. It is not a
+  "window" in the smoothing sense: it is the control's own pileup at fragment resolution.
+* **Every window is read off the control and scaled by the depth ratio.** The treatment's own
+  neighbourhood does not enter the lambda at all once a control exists.
+
+So the with-control rule is:
+
+    lambda_i = max( lambda_bg,
+                    r * control pileup at bin i,
+                    r * mean of the control counts over a centred slocal-wide window,
+                    r * mean of the control counts over a centred llocal-wide window )
+
+with `r = treat_reads / control_reads`. The `d`-size term needs no window because the store's
+control counts ARE a fragment-extended pileup already: bin `i` holds the number of control
+fragments overlapping it, which is what `pileup_a_chromosome(..., [d], ...)` computes. The
+`slocal`/`llocal` terms reuse `local_lambda` for the same reason the no-control path does —
+`sum(pileup over a W-wide window)/n_bins` equals MACS2's `reads_in_W * d / W`.
+
+Not modelled, because ENCODE's signal step does not use them: `--to-small` (which flips the
+scaling onto the treatment and takes `lambda_bg` from the control instead), `--nolambda`, and
+paired-end mode.
+
 This module is deliberately dependency-light (numpy + scipy only) and imports nothing from the
 rest of `candi`, so it can be dropped onto a cluster and run beside a store without the package.
 """
@@ -41,11 +89,13 @@ __all__ = [
     "local_lambda",
     "log10_upper_tail",
     "pval_from_counts",
+    "pval_from_counts_with_control",
 ]
 
 #: `--llocal` default, `bin/macs2` argparse. The only local window a no-control run uses.
 MACS2_LLOCAL = 10000
-#: `--slocal` default. Recorded because the plan named it; MACS2 does NOT use it without a control.
+#: `--slocal` default. MACS2 uses it only WITH a control — `--slocal` is documented as "Invalid if
+#: there is no control data", and `__call_peaks_wo_control` honours that.
 MACS2_SLOCAL = 1000
 #: `MACS2/OptValidator.py::efgsize["hs"]` — the effective human genome size behind `-g hs`.
 MACS2_GSIZE_HS = 2.7e9
@@ -137,6 +187,65 @@ def pval_from_counts(
     lam = local_lambda(counts, window_bins)
     np.maximum(lam, lambda_bg, out=lam)
     obs = np.asarray(counts)
+    if not np.issubdtype(obs.dtype, np.integer):
+        obs = np.floor(obs).astype(np.int64)      # MACS2 does `int(array1[i])`
+    return log10_upper_tail(obs, lam).astype(np.float32)
+
+
+def pval_from_counts_with_control(
+    counts: np.ndarray,
+    control_counts: np.ndarray,
+    *,
+    lambda_bg: float,
+    ratio_treat2control: float,
+    slocal: int = MACS2_SLOCAL,
+    llocal: int = MACS2_LLOCAL,
+    resolution: int = 25,
+) -> np.ndarray:
+    """`-log10 p` per bin for one chromosome, MACS2's rule for a run that HAS a control.
+
+    `counts` is the treatment's DSF-1 bin counts and `control_counts` the control's, on the same
+    bins and the same chromosome. `lambda_bg` is the genome-wide background in the units of one
+    bin, computed from the TREATMENT — `genome_lambda_bg(counts.sum())` — because MACS2 takes
+    `lambda_bg = treat_sum/gsize` whenever it scales the control up to the treatment, which is
+    every run that does not pass `--to-small`.
+
+    `ratio_treat2control` is MACS2's `treat_sum/control_sum`, which in single-end mode is the
+    read-count ratio `treat_reads/control_reads`. It has no default on purpose: `counts.sum() /
+    control_counts.sum()` is only the same number when the two libraries were extended to the same
+    fragment length, and a silently wrong depth ratio rescales every lambda in the chromosome.
+
+    `slocal` and `llocal` are in base pairs. Either may be `0` to switch that window off, which is
+    how MACS2 reads a `--slocal 0` / `--llocal 0`; `llocal` is used only when it is strictly larger
+    than `slocal`, again following the source. MACS2 asserts `d <= slocal <= llocal`, and here the
+    fragment is one bin, so both windows must cover at least one bin.
+    """
+    if lambda_bg <= 0:
+        raise ValueError(f"lambda_bg must be > 0 (MACS2 asserts the same), got {lambda_bg}")
+    if ratio_treat2control <= 0:
+        raise ValueError(f"ratio_treat2control must be > 0, got {ratio_treat2control}")
+    counts = np.asarray(counts)
+    control_counts = np.asarray(control_counts)
+    if counts.shape != control_counts.shape:
+        raise ValueError(
+            f"treatment and control must be binned the same: {counts.shape} vs {control_counts.shape}"
+        )
+    if slocal and llocal and slocal > llocal:
+        raise ValueError(f"llocal can't be smaller than slocal (MACS2 asserts it): {llocal} < {slocal}")
+
+    ctrl = control_counts.astype(np.float64)
+    # ctrl_d_s[0] = d: the control's own pileup, which the store's control counts already are.
+    lam = ctrl * ratio_treat2control
+    np.maximum(lam, lambda_bg, out=lam)
+    for window in (slocal, llocal if llocal > slocal else 0):
+        if not window:
+            continue
+        window_bins = int(round(window / resolution))
+        if window_bins < 1:
+            raise ValueError(f"a {window} bp local window is under one {resolution} bp bin")
+        np.maximum(lam, local_lambda(ctrl, window_bins) * ratio_treat2control, out=lam)
+
+    obs = counts
     if not np.issubdtype(obs.dtype, np.integer):
         obs = np.floor(obs).astype(np.int64)      # MACS2 does `int(array1[i])`
     return log10_upper_tail(obs, lam).astype(np.float32)
