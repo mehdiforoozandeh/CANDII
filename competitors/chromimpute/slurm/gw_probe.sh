@@ -5,8 +5,12 @@
 #SBATCH --mem=16000M
 #SBATCH --time=6:00:00
 #
-# The genome-wide half of the §7.2 pilot gate: one track, all 23 chromosomes, through `prepare` and
-# `Convert`, timed and sized.
+# The genome-wide half of the old §7.2 pilot gate: one track, all 23 chromosomes, through `prepare`
+# and `Convert`, timed and sized.
+#
+# HISTORICAL AS OF 2026-08-31. §4 blanks ChromImpute's `genome-wide` cell and rules that a blanked
+# cell is not computed, so no genome-wide ChromImpute run is planned any more. Kept because it is
+# the only measurement of `Convert`'s cost per chromosome, which still sizes the eval-scope run.
 #
 # Why one *track* and not the "one genome-wide pair" §7.2 asks for: `Apply -c chrom` needs the whole
 # compendium converted for that chromosome, because it opens a reader per (mark, cell) in
@@ -16,9 +20,10 @@
 # is 64.9 (121 241 684 genome bins / 1 868 399 chr21 bins).
 set -euo pipefail
 
-REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t51}
+REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}
 STORE=${CI_STORE:-/project/def-maxwl/mforooz/CANDI_STORE/eic}
-PY=${CI_PY:-/project/def-maxwl/mforooz/candi_venv/bin/python}
+PY=${CI_PY:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}
+REGIME=${CI_REGIME:-$REPO/configs/regime.eic_19.json}
 JAR=${CI_JAR:-$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}
 RUN=${CI_RUN:-$HOME/scratch/t51_chromimpute/gw_probe}
 SAMPLE=${CI_SAMPLE:-T_K562}
@@ -30,7 +35,7 @@ mkdir -p "$RUN/CONVERTEDDIR"
 
 START=$SECONDS
 PYTHONPATH=$REPO/src $PY "$REPO/competitors/chromimpute/prepare.py" --store "$STORE" \
-    --regime "$REPO/configs/regime.eic_val.json" --out "$RUN/input" --chroms all \
+    --regime "$REGIME" --out "$RUN/input" --chroms all \
     --only-sample "$SAMPLE" --only-mark "$MARK" --force
 T_PREP=$((SECONDS - START))
 echo "prepare(1 track, 23 chroms): ${T_PREP}s"

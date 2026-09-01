@@ -16,10 +16,15 @@ set -euo pipefail
 : "${CI_STAGE:?set CI_STAGE}"
 : "${CI_RUN:?set CI_RUN}"
 : "${CI_STORE:=/project/def-maxwl/mforooz/CANDI_STORE/eic}"
-: "${CI_REPO:=/project/def-maxwl/mforooz/CANDII_t51}"
-: "${CI_PY:=/project/def-maxwl/mforooz/candi_venv/bin/python}"
+: "${CI_REPO:=/project/def-maxwl/mforooz/CANDII_t78_code}"
+: "${CI_PY:=/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}"
+# RETARGETED 2026-08-31: was a baked configs/regime.eic_val.json (train chr19, eval chr21).
+# The live regimes are eic_19 and eic_pilot (BENCHMARK_DESIGN.md §3) and submit.sh passes
+# this through, so the prepare stage and the scorer cannot disagree about which one ran.
+: "${CI_REGIME:=$CI_REPO/configs/regime.eic_19.json}"
 : "${CI_JAR:=$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}"
-: "${CI_CHROMS:=chr21}"
+# The regime's eval_chroms under §4. chr21 alone was the old eval scope.
+: "${CI_CHROMS:=chr20,chr21,chr22}"
 : "${CI_MX:=8000M}"
 
 module load java/21.0.1
@@ -70,7 +75,7 @@ case "$CI_STAGE" in
     # a half-read module back as "cannot import name 'graph' ... circular import".
     export PYTHONPATH=$CI_REPO/src
     RETRY $CI_PY "$CI_REPO/competitors/chromimpute/prepare.py" \
-        --store "$CI_STORE" --regime "$CI_REPO/configs/regime.eic_val.json" \
+        --store "$CI_STORE" --regime "$CI_REGIME" \
         --out "$IN" --chroms "$CI_CHROMS" --shard "$ITEM"
     ;;
   convert)   # item: a mark. Reads only inputinfofile.txt, so only training cells are converted.

@@ -1,13 +1,19 @@
 #!/bin/bash
 # sigma-fit then score. CPU: this is store reads and numpy, no model.
 #
-#   PROTOCOL=p1 sbatch competitors/lavawizard/slurm/score.sh
-#   PROTOCOL=p2 sbatch --time=08:00:00 --mem=64G competitors/lavawizard/slurm/score.sh
+#   sbatch competitors/lavawizard/slurm/score.sh
 #
-# The sigma-table is fitted ONCE, on the P1 (V-pair) residuals, and reused unchanged by P2 and by
-# any later B-pair run (§6.1). Refitting it genome-wide would silently change what the CRPS column
-# means between two rows of one table. The MaxRSS on the anchor's scorer came in at 16.3 GB against
-# a 16 GB ask, so P1 asks 32 and P2 asks 64.
+# RETARGETED 2026-08-31. `P1`/`P2` are RETIRED (BENCHMARK_DESIGN.md §9) and the genome-wide pass is
+# gone: §4 blanks Lavawizard's `genome-wide` cell and rules that a blanked cell is not computed, so
+# there is one pass — the regime's eval_chroms. The MaxRSS on the anchor's chr21 scorer came in at
+# 16.3 GB against a 16 GB ask; chr20+21+22 is 3.47x chr21, so 32 G is the right ask and the wall is
+# ~20 minutes of scorer, not hours.
+#
+# THE SIGMA FIT IS REFUSED, AND THAT IS THE RULING, NOT A BUG. `fit_sigma.py` fits on V_ eval-pair
+# residuals. §7 rules "sigma is fit on training-set residuals only — never on V_, never on B_", and
+# §12.2 declares every existing sigma VOID under Rule 1. A training-residual sigma needs predictions
+# on TRAINING tracks, which this prediction root does not contain, so it is new work rather than a
+# flag. Refuse rather than write a void table that looks like a valid one.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t53_score
 #SBATCH --output=slurm-logs/%x_%j.out
@@ -21,18 +27,17 @@
 ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
 [ -f "$ENV" ] || { echo "[error] no $ENV -- submit from the repo root" >&2; exit 2; }
 source "$ENV"
-PROTOCOL="${PROTOCOL:-p1}"
 PRED="${PRED:-$RUNS/pred}"
 SIGMA="${SIGMA:-$RUNS/sigma.json}"
-case "$PROTOCOL" in
-  p1) CH=() ;;
-  # `--chroms all` is not a value this entry point takes -- it wants the list, and an
-  # unknown name is a hard error rather than a silent all-chromosomes default. Good.
-  p2) CH=(--chroms "$(IFS=,; echo "${CHROMS[*]}")") ;;
-  *)  echo "[error] PROTOCOL must be p1 or p2, got '$PROTOCOL'" >&2; exit 2 ;;
-esac
+CH=(--chroms "$(IFS=,; echo "${CHROMS[*]}")")
 if [ ! -f "$SIGMA" ]; then
-  echo "[sigma] fitting on the P1 panel (eval_chroms), whatever protocol is being scored"
+  if [ "${SIGMA_RULE1_OVERRIDE:-0}" != "1" ]; then
+    echo "[sigma] REFUSING to fit $SIGMA: fit_sigma.py fits on V_ eval-pair residuals, which" >&2
+    echo "[sigma]   BENCHMARK_DESIGN.md Rule 1 forbids and §7 rules out explicitly. A training-" >&2
+    echo "[sigma]   residual sigma needs predictions on TRAINING tracks, which this root does not" >&2
+    echo "[sigma]   contain. Raise it; do not override." >&2
+    exit 3
+  fi
   srun python -u competitors/lavawizard/fit_sigma.py --regime "$REGIME" --pred "$PRED" \
        --out "$SIGMA"
 fi
@@ -50,4 +55,4 @@ else
 fi
 
 srun python -u -m candi.bench.external --store "$REGIME" --pred "$PRED" \
-     --sigma-table "$SIGMA" --out "$RUNS/scores_${PROTOCOL}.json" "${CH[@]}" "${CRPS[@]}"
+     --sigma-table "$SIGMA" --out "$RUNS/scores_${REGIME_NAME}_heldout.json" "${CH[@]}" "${CRPS[@]}"

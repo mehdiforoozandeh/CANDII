@@ -15,14 +15,13 @@
 #SBATCH --mem=24G
 # fc30560 gave repeated Lustre OSError 108 on files its neighbours read fine (anchor run).
 #SBATCH --exclude=fc30560
-# %12: more than twelve concurrent torch imports off the shared /project venv fail with
-# partial-module ImportErrors. The cap is the fix, and it costs only wall-clock.
-#SBATCH --array=0-22%12
+# THREE tasks, not 23: the list is the regime's eval_chroms (see _env.sh).
+#SBATCH --array=0-2%3
 # `$0` is sbatch's spool copy, not this file, so the path comes from the submit directory.
 ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
 [ -f "$ENV" ] || { echo "[error] no $ENV -- submit from the repo root" >&2; exit 2; }
 source "$ENV"
 C=${CHROMS[$SLURM_ARRAY_TASK_ID]:-}
-[ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome" >&2; exit 2; }
+[ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome; this regime has $NCHROM (${CHROMS[*]})" >&2; exit 2; }
 echo "[cache] $C  host=$(hostname)"
 srun python -u -m lavawizard.store_eic cache --regime "$REGIME" --chrom "$C" --cache "$CACHE"
