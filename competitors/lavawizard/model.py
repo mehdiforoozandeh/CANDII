@@ -79,7 +79,6 @@ class Factors(nn.Module):
                  n_25bp_factors: int = 25, n_250bp_factors: int = 30, n_5kbp_factors: int = 60):
         super().__init__()
         self.n_positions = int(n_positions)
-        self._widths = (n_25bp_factors, n_250bp_factors, n_5kbp_factors)
         self.celltype_embedding = nn.Embedding(n_celltypes, n_celltype_factors)
         self.assay_embedding = nn.Embedding(n_assays, n_assay_factors)
         # Upstream sizes the coarse tables `n // 10 + 1` and `n // 200 + 1` with integer division on
@@ -94,21 +93,6 @@ class Factors(nn.Module):
 
     def genome_tables(self):
         return [getattr(self, n) for n in self.GENOME_TABLES]
-
-    def replace_genome(self, n_positions: int, device=None) -> None:
-        """Swap in fresh, untrained position tables sized for a different scope.
-
-        The coarse table sizes are re-derived by upstream's own `n // 10 + 1` and `n // 200 + 1`
-        rather than scaled, so a re-sized model is built the way `__init__` would have built it.
-        """
-        f25, f250, f5k = self._widths
-        self.n_positions = int(n_positions)
-        self.genome_25bp_embedding = nn.Embedding(n_positions, f25)
-        self.genome_250bp_embedding = nn.Embedding(n_positions // 10 + 1, f250)
-        self.genome_5kbp_embedding = nn.Embedding(n_positions // 200 + 1, f5k)
-        if device is not None:
-            for e in self.genome_tables():
-                e.to(device)
 
     def forward(self, celltype: Tensor, assay: Tensor, pos25: Tensor) -> Tensor:
         """`pos25` is the absolute 25 bp bin index; the coarse indices are derived, as upstream."""
@@ -171,9 +155,9 @@ class Guacamole(nn.Module):
 
     # -- the Rule 2 parameter split -------------------------------------------------------------
     #
-    # Prefix of every tensor in `state_dict()` that belongs to a position table. One string, used
-    # by the three methods below and by `train.transfer_transferable`, so "which half is which" is
-    # written down once and cannot drift between the freeze and the load.
+    # Prefix of every tensor in `state_dict()` that belongs to a position table. Derived from
+    # `Factors.GENOME_TABLES` rather than typed out, so "which half is which" is written down once
+    # and cannot drift between the freeze, the load and the state filter.
     _GENOME_PREFIXES = tuple(f"factors.{n}." for n in Factors.GENOME_TABLES)
 
     def genome_parameters(self):
