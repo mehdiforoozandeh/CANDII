@@ -1378,6 +1378,46 @@ Taken after the first CANDI retrain was launched, killed, and read.
 - **`t84`'s scope was wrong and is closed**; **`t87`** now owns the two same-named pairing tools
   the `main` merge collided.
 
+### Rulings of 2026-09-01 (PI) — the selection rule, and two rivals
+
+Taken after all four rivals gained a `V_` selection loop and each independently hit the same wall.
+
+- **THE SELECTION KEY IS DELIBERATELY NOT UNIFORM.** CANDI selects on a **count-arm `crps`**
+  (`monitor.py`'s `SELECTION_KEY`); Avocado, eDICE and Lavawizard select on **`pval:mse`**.
+  §5's uniform rule therefore binds the **panel, the instrument, the scope and the cadence — but
+  not the key**, and this is now the rule rather than a gap in it.
+
+  The reason it cannot bind the key: §7 gives no rival a count head, and the pval `crps` needs a
+  σ-table, which Rule 1 forbids fitting on `V_`. The third option — build the training-residual σ
+  pass first so every method selects on `crps` — was rejected because that pass does not exist
+  anywhere in the tree and would block all nine retrains behind it.
+
+  **Which way the asymmetry cuts, stated so nobody has to re-derive it:** CANDI is tuned on an arm
+  no rival can enter, while the head-to-head is the pval arm (§7). So CANDI is selected on a
+  *different* objective from the one it is compared on, and the rivals are not. That **handicaps**
+  CANDI rather than favouring it — the asymmetry is a legibility problem, not a fairness risk in
+  our own direction. Every rival row carries it as a marker.
+
+- **Lavawizard gets a transferable stage built** — a shared fit on `train_chroms` (or the BED under
+  `eic.pilot`) producing the cell and assay factors, then per-chromosome position factors, which is
+  Avocado's scheme. Without it its factors sit on chr20/21/22 and breach Rule 2 in **both** regimes,
+  and its two regime rows are the same run twice. Accepted knowingly: this is **our two-stage
+  variant of Lavawizard, not the published Lavawizard.** The original 2019 submission stays on the
+  board unmodified as one of the 23 anchor entrants, so both readings are available to a reader.
+
+- **ChromImpute's training sampler moves to `train_chroms`.** `GenerateTrainData` sampled its
+  100,000 locations inside the chromosomes it predicts, and `Train` turns those into one predictor
+  per (sample, mark) reused everywhere — transferable, so Rule 2's inference exemption does not
+  reach it. Exempting it instead (amending §2's rule text to match its own rationale paragraph) was
+  rejected: a transferable predictor that names no loci would weaken what a regime id means for
+  every method. **This departs from the published recipe** and is recorded in §11 with the rest of
+  the per-method departures. `Apply`'s neighbour features are untouched — §2 already names those as
+  legitimate per-position inference.
+
+  Rule 1 was checked and is **intact**, by a stronger argument than the audit's: the scored track is
+  never written into the run directory at all, because only `biosamples.train` becomes
+  `inputinfofile.txt` and that is the one file every jar command is handed.
+
 ### Deferred by ruling
 
 - **The noise floor on the new eval panels** (2026-08-29). **Now `t86`, and cheaper than this
