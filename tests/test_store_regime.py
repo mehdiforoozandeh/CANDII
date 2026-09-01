@@ -360,11 +360,23 @@ def test_a_regime_without_regions_plans_exactly_what_it_planned_before(store, tm
     assert r.windows(corpus, "eval") == [("chr2", s) for s in (0, 448, 512, 576, 640, 704)]
 
 
-def test_every_shipped_regime_without_regions_still_parses_with_none():
-    for name in ("regime.eic_smoke.json", "regime.equiv.json"):
-        assert Regime.from_file(REPO / "configs" / name).regions is None
-    for name in ("regime.t9_768.json", "regime.t9_6144.json"):
-        assert Regime.from_file(REPO / "cruxvault" / "results" / "t9" / name).regions is None
+def test_every_shipped_regime_carries_regions_exactly_when_its_json_declares_them():
+    """Sweeps `configs/`, so a regime added tomorrow is covered without editing this test.
+
+    Both sides of D32 are live in the shipped set — `regime.eic_pilot.json` declares a `regions`
+    BED and the rest omit the key — so this checks the mapping, not just the None half. It reads
+    only tracked files on purpose: it used to pin two regimes under `cruxvault/results/t9/`, which
+    is gitignored, and so it failed in every fresh clone and worktree.
+    """
+    shipped = sorted((REPO / "configs").glob("regime.*.json"))
+    assert len(shipped) >= 2, "configs/ should ship regimes; the glob found none to check"
+    declared = [p.name for p in shipped if "regions" in json.loads(p.read_text(encoding="utf-8"))]
+    assert declared, "no shipped regime declares regions — the set-case is no longer covered"
+    assert len(declared) < len(shipped), "every shipped regime declares regions — None is uncovered"
+    for path in shipped:
+        has_block = "regions" in json.loads(path.read_text(encoding="utf-8"))
+        regions = Regime.from_file(path).regions
+        assert (regions is not None) == has_block, path.name
 
 
 def test_to_dict_omits_regions_when_unset(store, tmp_path):
