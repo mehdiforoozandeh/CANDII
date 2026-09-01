@@ -677,3 +677,44 @@ def test_a_rivals_score_file_says_which_positions_it_was_measured_over(
     assert sc["bed"] == str(ext_scope_bed)
     for key, arms in scoped["per_track"].items():
         assert arms["count"]["bin_scope"] == "regions", key
+
+
+def test_the_scope_carries_the_key_the_rivals_actually_select_on(regime_file, recs,
+                                                                 ext_scope_bed,
+                                                                 tmp_path_factory) -> None:
+    """`pval:mse`, on a POINT-ONLY track, under a scope.
+
+    The selection key is NOT uniform across methods (PI ruling, 2026-09-01): CANDI selects on
+    count-arm `crps`, and Avocado / eDICE / Lavawizard select on `pval:mse`, because no rival has a
+    count head and the pval CRPS would need a σ-table that Rule 1 forbids fitting on `V_`. A scope
+    that only kept CANDI's key working would give the rivals a cheap eval that cannot select.
+
+    It holds for a structural reason worth stating: the scope lives on `EvalSource` and cuts
+    POSITIONS, while a selection key is a function of the two vectors at those positions. The keys
+    the scope withholds are exactly the ones that read a genomic coordinate out of the array, and
+    neither `count:crps` nor `pval:mse` is one of them.
+    """
+    root = write_root(tmp_path_factory.mktemp("extpointscope"), recs, keep=("signal_mu",))
+    src = open_source(store=regime_file, eval_regions=ext_scope_bed)
+    try:
+        got = score_external(src, root, seed=0, c_index_pairs=C_PAIRS)
+        idx = {c: src.scored_bins(c) for c in src.eval_chroms}
+    finally:
+        src.close()
+
+    assert "count" not in got["macro"] or not got["macro"]["count"], "a point track has no count arm"
+    sel = got["macro"]["pval"]["mse"]
+    assert np.isfinite(sel), "the rivals' selection key is not finite under the scope"
+
+    # and it is the number a hand-compacted rescore gives, not merely a finite one
+    per = [got["per_track"][k]["pval"]["mse"] for k in sorted(got["per_track"])]
+    want = []
+    for rec in sorted(recs, key=lambda r: r.key):
+        y = np.concatenate([np.asarray(rec.pval[c])[idx[c]] for c in rec.chroms])
+        p = np.concatenate([np.asarray(rec.signal_mu[c])[idx[c]] for c in rec.chroms])
+        want.append(float(((y - p) ** 2).mean()))
+    assert per == pytest.approx(want, rel=1e-6, abs=1e-9)
+    assert sel == pytest.approx(float(np.mean(want)), rel=1e-6, abs=1e-9)
+    # the scope is on the row for a rival exactly as it is for a checkpoint
+    for arms in got["per_track"].values():
+        assert arms["pval"]["bin_scope"] == "regions"
