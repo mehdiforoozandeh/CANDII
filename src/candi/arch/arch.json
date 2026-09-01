@@ -2060,5 +2060,12 @@
     32
    ]
   }
- ]
+ ],
+ "cost": {
+  "trace_batch": 1,
+  "mult_adds": 116284736,
+  "param_bytes": 9406600,
+  "activation_bytes": 39073152,
+  "input_bytes": 419216
+ }
 }

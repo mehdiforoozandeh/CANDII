@@ -306,7 +306,13 @@ def render_svg(dot_source: str) -> bytes:
                           stdout=subprocess.PIPE).stdout
 
 
-def render_torchinfo() -> str:
+def render_torchinfo() -> Tuple[str, Dict[str, Any]]:
+    """The layer table, and the cost numbers torchinfo derives while building it.
+
+    The cost block is the one thing on the page that is not visible in the module tree: how much
+    arithmetic and how much activation memory one window of this model actually costs. It rides in
+    `arch.json` so it is gated like everything else.
+    """
     from torchinfo import summary
 
     torch.manual_seed(0)
@@ -315,7 +321,14 @@ def render_torchinfo() -> str:
         model, input_data=trace_inputs(model), depth=3, device="cpu", verbose=0,
         col_names=("input_size", "output_size", "num_params"), row_settings=("var_names",),
     )
-    return str(stats) + "\n"
+    cost = {
+        "trace_batch": TRACE_BATCH,
+        "mult_adds": int(stats.total_mult_adds),
+        "param_bytes": int(stats.total_param_bytes),
+        "activation_bytes": int(stats.total_output_bytes),
+        "input_bytes": int(stats.total_input),
+    }
+    return str(stats) + "\n", cost
 
 
 # ---------------------------------------------------------------------------
@@ -472,6 +485,14 @@ def _tap_table(spec: Dict[str, Any]) -> str:
     return "\n".join(rows)
 
 
+def _biggest(spec: Dict[str, Any]) -> Tuple[str, float]:
+    """The heaviest single part, and its share. Derived, because prose like "four fifths of the
+    model is the transformer" is exactly the kind of sentence that survives the change that falsifies
+    it."""
+    part, n = max(spec["params"]["by_part"].items(), key=lambda kv: kv[1])
+    return part, 100.0 * n / spec["params"]["total"]
+
+
 def _param_table(spec: Dict[str, Any]) -> str:
     total = spec["params"]["total"]
     rows = []
@@ -584,6 +605,11 @@ it relearn scale.
 |---|---:|---:|
 {_param_table(spec)}
 
+The single largest part is `{_biggest(spec)[0]}`, at {_biggest(spec)[1]:.1f}% of the weights. One window of {a['context_length']} bins costs
+**{spec['cost']['mult_adds'] / 1e6:.0f} M multiply-adds** at batch {spec['cost']['trace_batch']}, {spec['cost']['param_bytes'] / 1e6:.1f} MB of fp32 weights and
+{spec['cost']['activation_bytes'] / 1e6:.0f} MB of activations — the last of those scales with batch size and is what
+`--precision bf16` halves.
+
 ## Every architecture flag, at its default
 
 These are the keyword defaults of `CandiModel.__init__`, which `build_model_from_arch()` reads back
@@ -603,6 +629,12 @@ come from the panel at train time; the rest are the model's own.
 
 Source: [`arch/candi_graph.dot`](arch/candi_graph.dot). The DOT is what the gate compares; the SVG is
 a picture of it, and graphviz's layout is only stable within one version.
+
+The tall run of `_eq` / `any` / `where` / `full_like` nodes above the coloured modules is real, not
+noise: `CandiModel.forward` calls `encoder.encode(...)` rather than `encoder(...)`, so `V2Encoder`
+never appears as a module box and the sentinel-availability bookkeeping inside `_prepare_signal`
+surfaces as top-level ops. The Mermaid diagram at the top of this page is the readable view; this one
+is the literal one.
 
 </details>
 
@@ -640,12 +672,13 @@ Needs the `test` extra (`pip install -e '.[test]'`) and graphviz's `dot` on PATH
 def generate() -> Dict[str, Any]:
     """Every artifact, as in-memory bytes. `build` writes them; `check` compares them."""
     spec = introspect()
+    info_text, spec["cost"] = render_torchinfo()
     dot = render_graph()
     return {
         str(ARCH_JSON): (json.dumps(spec, indent=1, sort_keys=False) + "\n").encode(),
         str(DOT_FILE): dot.encode(),
         str(SVG_FILE): render_svg(dot),
-        str(INFO_FILE): render_torchinfo().encode(),
+        str(INFO_FILE): info_text.encode(),
         str(README): readme(spec).encode(),
     }
 

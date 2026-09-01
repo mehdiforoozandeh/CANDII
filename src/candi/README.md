@@ -168,6 +168,11 @@ it relearn scale.
 | `decoder.meta_embedding` | 6,848 | 0.3% |
 | **total** | **2,353,634** | **100.0%** |
 
+The single largest part is `encoder.transformer_blocks`, at 81.6% of the weights. One window of 768 bins costs
+**116 M multiply-adds** at batch 1, 9.4 MB of fp32 weights and
+39 MB of activations — the last of those scales with batch size and is what
+`--precision bf16` halves.
+
 ## Every architecture flag, at its default
 
 These are the keyword defaults of `CandiModel.__init__`, which `build_model_from_arch()` reads back
@@ -218,6 +223,12 @@ come from the panel at train time; the rest are the model's own.
 
 Source: [`arch/candi_graph.dot`](arch/candi_graph.dot). The DOT is what the gate compares; the SVG is
 a picture of it, and graphviz's layout is only stable within one version.
+
+The tall run of `_eq` / `any` / `where` / `full_like` nodes above the coloured modules is real, not
+noise: `CandiModel.forward` calls `encoder.encode(...)` rather than `encoder(...)`, so `V2Encoder`
+never appears as a module box and the sentinel-availability bookkeeping inside `_prepare_signal`
+surfaces as top-level ops. The Mermaid diagram at the top of this page is the readable view; this one
+is the literal one.
 
 </details>
 
