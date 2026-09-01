@@ -6,9 +6,12 @@ Root: [[candii]]
 
 ## Question tree
 
+- ○ `q1` [Q] [[q1_do_the_recorded_experimental_covariates_|**Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?**]] — *open*
+  - · `h1` [H] [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+  - · `h2` [H] [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
 
 ## Dashboard
 
-- **Questions** (0): open 0 · review 0 · resolved 0
-- **Hypotheses** (0): idea 0 · staged 0 · running 0 · done 0
+- **Questions** (1): open 1 · review 0 · resolved 0
+- **Hypotheses** (2): idea 2 · staged 0 · running 0 · done 0
 - **Verdicts**: supported 0 · partial 0 · refuted 0 · inconclusive 0 · invalid-run 0

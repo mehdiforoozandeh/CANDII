@@ -52,12 +52,20 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
 - `t89` [visualization] generate the architecture README and diagram from the code
+- `t90` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t91` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 
 ## Blocked
 
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
 - `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — blocked by `t78`, `t79`, `t80`
+- `t92` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t90`
+- `t93` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t91`, `t92`
+- `t94` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — blocked by `t93`
+- `t95` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — blocked by `t93`
+- `t96` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — blocked by `t93`
+- `t97` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t93`
 
 ## By category
 
@@ -65,6 +73,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
 - `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *open*
+- `t90` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t92` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 
 ### implementation
 
@@ -114,6 +124,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *open*
+- `t91` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t93` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
+- `t94` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — *blocked*
+- `t95` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — *blocked*
+- `t96` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — *blocked*
+- `t97` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 
 ### visualization
 
