@@ -339,7 +339,8 @@ def cmd_train(args) -> int:
 
     selector, v_regime_path = None, None
     if args.eval_every:
-        v_regime_path = out / f"regime.{Path(args.regime).stem}.vsel.json"
+        name = Path(args.regime).stem.removeprefix("regime.")
+        v_regime_path = out / f"regime.{name}.vsel.json"
         v_regime_path.write_text(json.dumps(derive_v_only_regime(regime, args.regime), indent=2))
         # OPENED ONCE, outside the hook, for `candi.train`'s reason: one source is what pins one
         # eval scope across every epoch, and selection only compares epoch 6 against epoch 12 if

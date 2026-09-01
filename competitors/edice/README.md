@@ -259,8 +259,10 @@ distribution arrives from the §6.1 σ-table, not from the model.
   reachable — the PI's 2026-08-31 ruling is that `B_` is never *read*, not merely never ranked;
 - every `--eval-every` epochs it writes that panel to a §4.1 prediction root and scores it with
   **`candi.bench.external.score_external`** — the same instrument that produces a board row.
-  eDICE's own `edice_torch/metrics.py` is *not* used: it is far cheaper, and selecting on it would
-  make the rule non-uniform, which is the only thing §5 asks for;
+  eDICE's own `edice_torch/metrics.py` is *not* used. It is **848x cheaper** — 0.018 µs per
+  (track × bin) against `score_external`'s ~15 µs, so 5 seconds a check instead of 73 minutes —
+  and that is exactly why it is tempting and exactly why it must not be used: selecting on it
+  would make the rule non-uniform, which is the only thing §5 asks for;
 - `model.best.pt` is written **the moment the metric improves**, so a walltime kill still leaves a
   validly selected checkpoint. `model.selected.pt` (weights + vocabulary, the scorable object) is
   written at the end; `model.pt` is always the last epoch and is **not** what gets scored;
