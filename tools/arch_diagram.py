@@ -362,6 +362,49 @@ def _params(n: int) -> str:
     return str(n)
 
 
+def mermaid_overview(spec: Dict[str, Any]) -> str:
+    """The conventional block diagram: what goes in, what comes out, and the four boxes between.
+
+    Deliberately the SHORT one. It carries no parameter counts, no per-block channel schedule and no
+    FiLM taps, because a reader who has never seen this model needs the shape of the thing before
+    any of that. `mermaid()` below is the same model with everything left in; the two are rendered
+    from the same spec, so they cannot disagree.
+    """
+    d = spec["derived"]
+    a = spec["arch_defaults"]
+    io = spec["io"]["inputs"]
+    heads_note = "" if list(d["heads"]) == ["count"] else f"<br/>heads: {', '.join(d['heads'])}"
+
+    return f"""%%{{init: {{"flowchart": {{"htmlLabels": true, "wrappingWidth": 320, "nodeSpacing": 40, "rankSpacing": 55, "curve": "basis"}}}}}}%%
+flowchart LR
+
+  XD["<b>x_data</b><br/>{a['num_assays']} assays + 1 control<br/>x {a['context_length']} bins of raw counts"]
+  DNA["<b>x_dna</b><br/>one-hot DNA<br/>{d['span_bp'] / 1000:g} kb, same window"]
+  XM["<b>x_meta</b><br/>4 covariates per input track<br/><i>depth · assay · read len · run type</i>"]
+
+  ENC["<b>ENCODER</b><br/>one conv lane per assay<br/>+ a conv tower over DNA<br/>+ {a['n_transformer_layers']} transformer layers"]
+  Z(["<b>latent</b><br/>{d['latent_bins']} tokens x {d['d_model']}<br/><i>1 token per {d['resolution_bp'] * a['pool_size'] ** a['n_cnn_layers']} bp</i>"])
+  DEC["<b>DECODER</b><br/>the encoder's lanes, run backwards<br/>+ a Negative Binomial head"]
+  YM["<b>y_meta</b><br/>the same 4 covariates,<br/>for the {a['num_assays']} tracks to PREDICT"]
+  OUT(["<b>output</b><br/>a Negative Binomial (n, p)<br/>per assay, per {d['resolution_bp']} bp bin{heads_note}"])
+
+  XD --> ENC
+  DNA --> ENC
+  XM --> ENC
+  ENC ==> Z ==> DEC ==> OUT
+  YM --> DEC
+
+  classDef inp fill:#e8f0fe,stroke:#4285f4,stroke-width:1.5px,color:#12304f;
+  classDef ask fill:#fff4e5,stroke:#f0a04b,stroke-width:1.5px,color:#4a3213;
+  classDef box fill:#eaf6ec,stroke:#4caf72,stroke-width:2px,color:#12351f;
+  classDef lat fill:#fdecef,stroke:#e05a72,stroke-width:2px,color:#4a1220;
+  class XD,DNA,XM inp;
+  class YM ask;
+  class ENC,DEC box;
+  class Z,OUT lat;
+"""
+
+
 def mermaid(spec: Dict[str, Any]) -> str:
     d = spec["derived"]
     a = spec["arch_defaults"]
@@ -544,7 +587,21 @@ denoising on an unseen cell type possible.
       each {_dims(['B'] + first_out[1:])}
 ```
 
-## The graph
+## At a glance
+
+Four boxes: everything you have goes into an encoder, becomes one latent per {d['resolution_bp'] * a['pool_size'] ** a['n_cnn_layers']} bp, and a decoder
+turns that back into a distribution over counts. `y_meta` is the ask — it names which tracks to
+predict and at what sequencing depth, and it enters at the *decoder*, which is why the same trained
+model can be pointed at an assay it never saw in this cell type.
+
+```mermaid
+{mermaid_overview(spec).rstrip()}
+```
+
+## The same model, with the detail left in
+
+Channel widths, sequence lengths, parameter counts per part, and every FiLM tap. Both diagrams are
+rendered from the same `arch.json`, so they cannot disagree with each other or with the model.
 
 ```mermaid
 {mermaid(spec).rstrip()}

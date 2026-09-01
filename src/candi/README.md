@@ -24,7 +24,47 @@ denoising on an unseen cell type possible.
       each B x 768 x 35
 ```
 
-## The graph
+## At a glance
+
+Four boxes: everything you have goes into an encoder, becomes one latent per 200 bp, and a decoder
+turns that back into a distribution over counts. `y_meta` is the ask — it names which tracks to
+predict and at what sequencing depth, and it enters at the *decoder*, which is why the same trained
+model can be pointed at an assay it never saw in this cell type.
+
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": true, "wrappingWidth": 320, "nodeSpacing": 40, "rankSpacing": 55, "curve": "basis"}}}%%
+flowchart LR
+
+  XD["<b>x_data</b><br/>35 assays + 1 control<br/>x 768 bins of raw counts"]
+  DNA["<b>x_dna</b><br/>one-hot DNA<br/>19.2 kb, same window"]
+  XM["<b>x_meta</b><br/>4 covariates per input track<br/><i>depth · assay · read len · run type</i>"]
+
+  ENC["<b>ENCODER</b><br/>one conv lane per assay<br/>+ a conv tower over DNA<br/>+ 2 transformer layers"]
+  Z(["<b>latent</b><br/>96 tokens x 288<br/><i>1 token per 200 bp</i>"])
+  DEC["<b>DECODER</b><br/>the encoder's lanes, run backwards<br/>+ a Negative Binomial head"]
+  YM["<b>y_meta</b><br/>the same 4 covariates,<br/>for the 35 tracks to PREDICT"]
+  OUT(["<b>output</b><br/>a Negative Binomial (n, p)<br/>per assay, per 25 bp bin"])
+
+  XD --> ENC
+  DNA --> ENC
+  XM --> ENC
+  ENC ==> Z ==> DEC ==> OUT
+  YM --> DEC
+
+  classDef inp fill:#e8f0fe,stroke:#4285f4,stroke-width:1.5px,color:#12304f;
+  classDef ask fill:#fff4e5,stroke:#f0a04b,stroke-width:1.5px,color:#4a3213;
+  classDef box fill:#eaf6ec,stroke:#4caf72,stroke-width:2px,color:#12351f;
+  classDef lat fill:#fdecef,stroke:#e05a72,stroke-width:2px,color:#4a1220;
+  class XD,DNA,XM inp;
+  class YM ask;
+  class ENC,DEC box;
+  class Z,OUT lat;
+```
+
+## The same model, with the detail left in
+
+Channel widths, sequence lengths, parameter counts per part, and every FiLM tap. Both diagrams are
+rendered from the same `arch.json`, so they cannot disagree with each other or with the model.
 
 ```mermaid
 %%{init: {"flowchart": {"htmlLabels": true, "wrappingWidth": 460, "nodeSpacing": 34, "rankSpacing": 40, "curve": "basis"}}}%%
