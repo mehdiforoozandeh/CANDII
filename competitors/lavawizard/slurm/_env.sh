@@ -13,16 +13,29 @@
 #     scored on is the regime's eval_chroms — three chromosomes, not 23. The list is now read off
 #     the regime, so it cannot drift from it.
 #
-# READ THIS BEFORE LAUNCHING: WHAT "REGIME" MEANS FOR LAVAWIZARD IS AN OPEN QUESTION.
+# READ THIS BEFORE LAUNCHING: THE REGIME AXIS IS EMPTY FOR LAVAWIZARD. CONFIRMED 2026-09-01.
 # `train.py` fits ONE INDEPENDENT Guacamole PER CHROMOSOME — cell factors, assay factors, the dense
 # network and the three genome-factor tables, all from a fresh init, all on that chromosome's own
-# bins. The cell and assay factors are TRANSFERABLE parameters by §2's own definition, and under
-# this scheme they are fit ON chr20/21/22 — the eval chromosomes. §2 exempts per-position adaptation
+# bins. `store_eic.predict_chrom` then indexes the genome tables by that chromosome's own bin
+# numbers and refuses a checkpoint from a different index space, and `predict.sh` passes
+# `guacamole_$C.pt` for C in eval_chroms. So the model that predicts chr20 was FIT ON chr20.
+#
+# The cell and assay factors are TRANSFERABLE parameters by §2's own definition, and under this
+# scheme they are fit on chr20/21/22 — the eval chromosomes. §2 exempts per-position adaptation
 # (Avocado's genomic factors, ChromImpute's neighbour features); it does not exempt a cell
-# embedding. So as the code stands, Lavawizard's two "regime" runs would differ in NOTHING —
-# `train_chroms` never reaches this method — and the row's regime label would be a claim the run
-# does not support. Splitting it into a joint fit on train_chroms plus per-chromosome genome factors
-# is Avocado's scheme, not upstream Guacamole's, and is a PI decision plus new code. Raise it.
+# embedding. Two consequences, both verified against the code rather than argued:
+#
+#   1. `train_chroms` and `regions` are read by NO lavawizard module (grep both, across the package
+#      — the only hits are this file's own refusal). The two live regimes differ ONLY in those two
+#      keys plus `_comment`; every key this method reads — store, assays, biosamples.train,
+#      eval_pairs, eval_chroms — is identical. So `eic.19` and `eic.pilot` would be the same run,
+#      same seed, same cache, and two identical rows under two regime labels.
+#   2. This is not "no transferable parameters". It is transferable parameters fit at the wrong
+#      loci, which breaks Rule 2 in BOTH regimes, not only in the ablation.
+#
+# Collapsing the axis to one row is a PI decision, not a launcher's. So is the fix — a joint fit on
+# train_chroms plus per-chromosome genome factors, which is Avocado's scheme and not upstream
+# Guacamole's. Raise it; one ruling settles the collapse and the pilot refusal below together.
 set -uo pipefail
 REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}"
 VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
@@ -44,21 +57,32 @@ CACHE="${CACHE:-$RUNS/eic_cache}"
 # by the caching array too and concurrent torch imports off /project are what the %3 array cap
 # exists for.
 #
-# A `regions` regime (eic.pilot) is refused: `store_eic.build_cache_from_store` caches a whole
-# chromosome and `train.py` trains on all of it, so neither can express a BED-restricted scope.
+# D32 IS IMPLEMENTED — `store_eic.contained_bins` resolves the BED through
+# `candi.store.regime.RegionSet` and writes the contained bins into the cache, and the sampler walks
+# them (`test_under_a_regions_regime_every_training_locus_lies_inside_the_bed`). What is refused
+# below is narrower and is the header's finding, not a missing feature: a `regions` regime whose
+# eval chromosomes are NOT in its `train_chroms`. Lavawizard can only fit a chromosome's model on
+# that chromosome, and under eic.pilot the regions on chr20/21/22 are precisely the four the regime
+# CUT (§3.1). Training there would fit the COMPLEMENT of the declared scope and call it eic.pilot.
+# `store_eic` refuses the same case in Python; this is the same refusal before 3 array tasks queue.
 _lava_chroms() {
     python - "$REGIME" <<'PYEOF'
 import json, sys
 d = json.load(open(sys.argv[1]))
+ev = list(d["eval_chroms"])
 if d.get("regions"):
-    sys.exit("REGIONS")
-print(" ".join(d["eval_chroms"]))
+    outside = [c for c in ev if c not in set(d.get("train_chroms") or [])]
+    if outside:
+        sys.exit("SCOPE " + ",".join(outside))
+print(" ".join(ev))
 PYEOF
 }
 _LAVA_CH="$(_lava_chroms)" || {
-    echo "[env] $REGIME declares a \`regions\` BED (the eic.pilot Pilot-Region scope, D32)." >&2
-    echo "[env] store_eic.py caches whole chromosomes and train.py trains on all of them, so" >&2
-    echo "[env] Lavawizard CANNOT express this regime's training scope. Raise it." >&2
+    echo "[env] $REGIME declares a \`regions\` BED (the eic.pilot Pilot-Region scope, D32) and" >&2
+    echo "[env] its train_chroms do NOT contain the eval chromosomes this method must fit on." >&2
+    echo "[env] The BED restriction itself is built and tested; the blocker is that Lavawizard's" >&2
+    echo "[env] transferable parameters are fit on the eval chromosomes at all — see the header." >&2
+    echo "[env] Raise it. One ruling settles this and the regime collapse together." >&2
     exit 1
 }
 CHROMS=($_LAVA_CH)
