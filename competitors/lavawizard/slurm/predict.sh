@@ -36,7 +36,17 @@ C=${CHROMS[$SLURM_ARRAY_TASK_ID]:-}
 PRED="${PRED:-$RUNS/pred}"
 CKPT="${CKPT:-$RUNS/ckpt}"
 MAN=(); [ "${SLURM_ARRAY_TASK_ID:-0}" = "0" ] && MAN=(--manifest)
-echo "[predict] $C -> $PRED  host=$(hostname)"
+# §5: every board number comes from the checkpoint the run SELECTED on V_, so `.best.pt` is what is
+# predicted from. The last-epoch file is used only when the run deliberately selected nothing
+# (SELECT_EVERY=0, the anchor path), and the fallback is announced rather than silent — a B_ touch
+# spent on unselected weights cannot be taken back.
+W="$CKPT/guacamole_${C}.best.pt"
+if [ ! -f "$W" ]; then
+  W="$CKPT/guacamole_${C}.pt"
+  echo "[predict] NO .best.pt for $C — predicting from the LAST-epoch checkpoint, which does not" >&2
+  echo "[predict]   satisfy BENCHMARK_DESIGN.md §5. Correct only for a run with no selection." >&2
+fi
+echo "[predict] $C -> $PRED  weights=$(basename "$W")  host=$(hostname)"
 srun python -u -m lavawizard.store_eic predict --regime "$REGIME" --chrom "$C" \
-     --cache "$CACHE" --checkpoint "$CKPT/guacamole_${C}.pt" \
+     --cache "$CACHE" --checkpoint "$W" \
      --pred-root "$PRED" --device "${DEVICE:-cuda}" --clip "${MAN[@]}"

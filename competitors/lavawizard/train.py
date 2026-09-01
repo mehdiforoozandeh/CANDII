@@ -24,9 +24,18 @@ average, in both modes. In `loo` mode the correct tercile would differ by one co
 whose head is discarded — only the trunk survives into stage 2 — so this affects initialisation
 alone. Stage 2, which produces every prediction, uses the mode-correct average and variance.
 
+**Checkpoint selection is injected, not built here.** `BENCHMARK_DESIGN.md` §5 makes every
+trainable method select its checkpoint on the `V_` panel by the same rule, and that rule is
+`candi.bench.external.score_external` on a written prediction root. Scoring needs the store, the
+store is `candi`'s, and this module must keep running on Fir with `candi` nowhere on the path — so
+`train_chromosome` takes a `select_fn` and `store_eic.py` supplies it. Without one this file trains
+exactly as it did before and selects nothing.
+
 ```bash
 python -m lavawizard.train --cache <cache> --chrom chr21 --out <run> \
-    --contributor-mode upstream
+    --contributor-mode upstream                                    # anchor: no selection
+python -m lavawizard.store_eic train --regime <regime> --chrom chr21 \
+    --cache <cache> --out <run> --select-every 50                  # the board run: selects on V_
 ```
 """
 from __future__ import annotations
@@ -35,7 +44,7 @@ import argparse
 import json
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -54,7 +63,8 @@ class Sampler:
     Both halves are theirs: `genomic_25bp_idxs = arange(start, start+bs) % n_positions` with a
     cursor that advances every batch, and `idxs = np.random.randint(len(data), size=batch_size)`.
     Keeping the contiguous position walk matters — it is why an epoch is defined as
-    `ceil(n_bins / batch_size)` steps and therefore covers the chromosome once.
+    `ceil(n_positions / batch_size)` steps and therefore covers the training scope once. That scope
+    is the whole chromosome unless the cache carries a `regions` restriction (D32).
     """
 
     def __init__(self, cache: CachedChrom, batch_size: int, mode: str, seed: int = 0):
@@ -63,7 +73,19 @@ class Sampler:
         self.mode = mode
         self.rng = np.random.default_rng(seed)
         self.cursor = 0
-        self.steps_per_epoch = int(np.ceil(cache.n_bins / self.batch_size))
+        # D32 — under a `regions` regime the cache carries `train_bins`, the chromosome bins lying
+        # WHOLLY inside a BED region. The walk moves to those bins and nothing else changes: the
+        # indices stay absolute chromosome bins, so the embedding tables and every prediction are
+        # still addressed the way they were, and the tiling is anchored at chromosome bin 0 rather
+        # than re-anchored per region. Deriving `steps_per_epoch` from the walk's own length is what
+        # keeps an epoch meaning "the training scope once" — a scope 40x smaller must buy 40x fewer
+        # steps, not the same steps over the same bins 40 times.
+        self.positions = (cache.train_bins if cache.train_bins is not None
+                          else np.arange(cache.n_bins, dtype=np.int64))
+        if self.positions.size == 0:
+            raise ValueError("the training scope is empty: no bin of this chromosome lies inside "
+                             "a region of the regime's BED")
+        self.steps_per_epoch = int(np.ceil(self.positions.size / self.batch_size))
         # A mark carried by a single track has no leave-one-out average: removing the target
         # empties the pool. §5's answer is to skip and list, and skipping is right rather than
         # zeroing, because the head is `Dense(1)(x) + average` — a zero average is not a neutral
@@ -79,8 +101,8 @@ class Sampler:
             raise ValueError("every track is on a single-contributor mark; nothing to train on")
 
     def _batch(self) -> Tuple[np.ndarray, ...]:
-        bs, n = self.batch_size, self.c.n_bins
-        pos = (np.arange(self.cursor, self.cursor + bs) % n).astype(np.int64)
+        bs, n = self.batch_size, self.positions.size
+        pos = self.positions[np.arange(self.cursor, self.cursor + bs) % n].astype(np.int64)
         self.cursor = (self.cursor + bs) % n
         tix = self.eligible[self.rng.integers(0, self.eligible.size, bs)].astype(np.int64)
         x = self.c.values[tix, pos].astype(np.float32)
@@ -130,7 +152,9 @@ class Sampler:
 
 def _run_stage(model: nn.Module, sampler: Sampler, *, epochs: int, lr: float, loss_fn,
                batch_fn, device, label: str, log_every: int = 50,
-               max_steps: Optional[int] = None) -> Dict[str, float]:
+               max_steps: Optional[int] = None,
+               eval_hook: Optional[Callable[[int, int], bool]] = None,
+               eval_every: int = 0) -> Dict[str, float]:
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     model.train()
     spe = sampler.steps_per_epoch
@@ -140,6 +164,10 @@ def _run_stage(model: nn.Module, sampler: Sampler, *, epochs: int, lr: float, lo
     t0 = time.time()
     step = 0
     last = float("nan")
+    stopped = False
+    # Kept out of `ms_per_step`. A step rate that silently included the selection pass would make
+    # the cadence look free and would make two runs at different cadences incomparable.
+    eval_s = 0.0
     while step < total:
         d, y = batch_fn(device)
         opt.zero_grad(set_to_none=True)
@@ -148,12 +176,29 @@ def _run_stage(model: nn.Module, sampler: Sampler, *, epochs: int, lr: float, lo
         opt.step()
         last = float(loss.detach())
         step += 1
+        # The hook fires on an EPOCH boundary and on the last step, mirroring `candi.train`'s
+        # `(ep + 1) % eval_every == 0 or ep == epochs - 1`. Boundaries, not step counts, because the
+        # position walk covers the training scope exactly once per epoch and a mid-epoch checkpoint
+        # would have seen a prefix of the chromosome more often than the rest of it.
+        if eval_hook and eval_every and (step % spe == 0 or step == total):
+            ep = (step - 1) // spe
+            if (ep + 1) % eval_every == 0 or step == total:
+                was_training = model.training
+                te = time.time()
+                stop = eval_hook(step, ep)
+                eval_s += time.time() - te
+                model.train(was_training)
+                if stop:
+                    stopped = True
+                    break
         if step % log_every == 0 or step == total:
-            el = time.time() - t0
+            el = time.time() - t0 - eval_s
             print(f"  {label} {step}/{total}  loss {last:.6f}  "
                   f"{el/step*1000:.1f} ms/step  eta {(total-step)*el/step/60:.1f} min", flush=True)
-    el = time.time() - t0
-    return {"steps": step, "final_loss": last, "seconds": el, "ms_per_step": el / max(step, 1) * 1000}
+    el = time.time() - t0 - eval_s
+    return {"steps": step, "final_loss": last, "seconds": el, "planned_steps": total,
+            "early_stopped": stopped, "eval_seconds": round(eval_s, 1),
+            "ms_per_step": el / max(step, 1) * 1000}
 
 
 def enable_tf32(on: bool = True) -> None:
@@ -176,8 +221,23 @@ def enable_tf32(on: bool = True) -> None:
 def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
                      contributor_mode: str = "upstream", device: str = "cuda",
                      seed: int = 0, max_steps_per_stage: Optional[int] = None,
-                     epoch_scale: float = 1.0, tf32: bool = True) -> Dict:
-    """Both stages for one chromosome. Writes `guacamole_<chrom>.pt` and `train_<chrom>.json`."""
+                     epoch_scale: float = 1.0, tf32: bool = True,
+                     select_fn: Optional[Callable[["Guacamole", int, int], float]] = None,
+                     select_every: int = 0, select_metric: str = "",
+                     early_stop_epochs: int = 0) -> Dict:
+    """Both stages for one chromosome. Writes `guacamole_<chrom>.pt` and `train_<chrom>.json`.
+
+    **`select_fn` is how BENCHMARK_DESIGN.md §5's uniform selection reaches this method.** It is
+    injected rather than built here because scoring a `V_` panel means reading the store, and the
+    store is `candi`'s — `store_eic.py` is the one module allowed to import it (see the README's
+    split, pinned by `test_only_the_our_store_module_may_import_candi`). It takes
+    `(model, epoch, step)` and returns the selection metric, lower better; `store_eic.selector`
+    builds the one this method actually uses.
+
+    Selection runs on **stage 2 only**. Stage 1's head is discarded by `from_precamole`, so there is
+    no stage-1 checkpoint anyone could select and scoring one would be scoring a classifier against
+    a regression panel.
+    """
     torch.manual_seed(seed)
     np.random.seed(seed)
     dev = torch.device(device)
@@ -215,16 +275,50 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
         torch.cuda.empty_cache()
     n_par = sum(p.numel() for p in gua.parameters())
     print(f"Guacamole: {n_par:,} parameters", flush=True)
+
+    ckpt = out_dir / f"guacamole_{chrom}.pt"
+    best_path = out_dir / f"guacamole_{chrom}.best.pt"
+
+    def _save(path: Path) -> None:
+        torch.save({"state_dict": gua.state_dict(), "chrom": chrom, "config": common,
+                    "contributor_mode": contributor_mode, "seed": seed,
+                    "cells": cache.cells, "marks": cache.marks}, path)
+
+    best = {"value": float("inf"), "epoch": -1, "step": -1}
+    curve: list = []
+
+    def eval_hook(step: int, ep: int) -> bool:
+        t0 = time.time()
+        value = float(select_fn(gua, ep, step))
+        wall = time.time() - t0
+        # WRITTEN THE MOMENT IT IMPROVES, before anything else happens, so a run killed by walltime
+        # still leaves a checkpoint that was selected rather than merely the last one reached.
+        improved = bool(np.isfinite(value)) and value < best["value"]
+        if improved:
+            best.update(value=value, epoch=ep, step=step)
+            _save(best_path)
+        curve.append({"epoch": ep, "step": step, "value": value, "wall_s": round(wall, 1),
+                      "improved": improved})
+        verdict = "BEST" if improved else f"(best {best['value']:.6f} @ epoch {best['epoch']})"
+        print(f"  select epoch {ep} step {step}: {select_metric or 'metric'}={value:.6f} "
+              f"{verdict}  [{wall/60:.1f} min]", flush=True)
+        # Patience is counted in EPOCHS, as `candi.train --early-stop-epochs` counts it, so the two
+        # methods are stopped by the same rule even though an epoch is a different amount of work.
+        if early_stop_epochs and best["epoch"] >= 0 and (ep - best["epoch"]) > early_stop_epochs:
+            print(f"  EARLY STOP at epoch {ep}: no improvement since epoch {best['epoch']} "
+                  f"(> patience {early_stop_epochs}). {best_path.name} is what gets predicted.",
+                  flush=True)
+            return True
+        return False
+
     s2 = _run_stage(gua, sampler, epochs=tr_ep, lr=1e-3,
                     loss_fn=nn.MSELoss(), batch_fn=sampler.stage2, device=dev,
-                    label="stage2", max_steps=max_steps_per_stage)
+                    label="stage2", max_steps=max_steps_per_stage,
+                    eval_hook=(eval_hook if select_fn else None), eval_every=select_every)
 
     peak = (torch.cuda.max_memory_allocated(dev) / 2**30) if dev.type == "cuda" else 0.0
     reserved = (torch.cuda.max_memory_reserved(dev) / 2**30) if dev.type == "cuda" else 0.0
-    ckpt = out_dir / f"guacamole_{chrom}.pt"
-    torch.save({"state_dict": gua.state_dict(), "chrom": chrom, "config": common,
-                "contributor_mode": contributor_mode, "seed": seed,
-                "cells": cache.cells, "marks": cache.marks}, ckpt)
+    _save(ckpt)                                    # the LAST weights, always written
 
     record = {
         "chrom": chrom, "contributor_mode": contributor_mode, "seed": seed,
@@ -232,8 +326,20 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
         "epoch_scale": epoch_scale, "factors": factors, "tf32": bool(tf32),
         "n_tracks": cache.n_tracks, "n_bins": cache.n_bins,
         "n_tracks_sampled": int(sampler.eligible.size),
+        # D32 — how many of this chromosome's bins were TRAINABLE, and where that scope came from.
+        # Equal to `n_bins` on every regime without a `regions` key.
+        "n_train_bins": int(sampler.positions.size),
+        "train_scope": cache.train_scope,
         "skipped_marks": sampler.skipped_marks,
         "parameters": n_par, "stage1": s1, "stage2": s2,
+        "selection": {
+            "metric": select_metric or None,
+            "every_epochs": int(select_every) if select_fn else 0,
+            "early_stop_epochs": int(early_stop_epochs),
+            "best": (dict(best) if best["epoch"] >= 0 else None),
+            "checkpoint": (str(best_path) if best["epoch"] >= 0 else None),
+            "curve": curve,
+        },
         "gpu_peak_allocated_gib": round(peak, 3), "gpu_peak_reserved_gib": round(reserved, 3),
         "device": torch.cuda.get_device_name(dev) if dev.type == "cuda" else "cpu",
         "checkpoint": str(ckpt),
@@ -244,6 +350,18 @@ def train_chromosome(cache_root: Path, chrom: str, out_dir: Path, *,
     print(f"\n{chrom}: peak GPU {peak:.2f} GiB allocated / {reserved:.2f} GiB reserved", flush=True)
     print(f"{chrom}: stage1 {s1['ms_per_step']:.1f} ms/step, stage2 {s2['ms_per_step']:.1f} ms/step",
           flush=True)
+    if select_fn:
+        # SAY IT LOUDLY EITHER WAY. §5 asks for a checkpoint selected on V_, and a run that
+        # produced only a last-epoch checkpoint does not satisfy it however well it trained.
+        if best["epoch"] >= 0:
+            print(f"{chrom}: SELECTED epoch {best['epoch']} on {select_metric}="
+                  f"{best['value']:.6f} -> {best_path.name}; {len(curve)} check(s), "
+                  f"{s2['eval_seconds']/60:.1f} min of selection against "
+                  f"{s2['seconds']/60:.1f} min of stage-2 training", flush=True)
+        else:
+            print(f"{chrom}: NO CHECKPOINT WAS SELECTED — every check was non-finite. This run does "
+                  f"NOT satisfy BENCHMARK_DESIGN.md §5; only the last-epoch weights exist.",
+                  flush=True)
     return record
 
 

@@ -24,7 +24,7 @@ Every other module runs on Fir with `candi` nowhere on the path, which is not a 
 earlier version imported `candi.bench.external` for the §4.1 naming rule and died the moment the
 package was rsynced on its own. A test pins the split in both directions.
 
-Tests: `tests/test_lavawizard.py`, 80 checks, seconds, no TensorFlow and no network.
+Tests: `tests/test_lavawizard.py`, 99 checks, seconds, no TensorFlow and no network.
 
 ## Parity, part 1 — the model
 
@@ -408,6 +408,62 @@ Same code, other corpus. `store_eic.py` writes the identical cache layout from `
   `coverage_95`, with **no** oracle split, and no pval-CRPS gap is significant until that arm's
   noise floor is measured.
 
+### Checkpoint selection on the `V_` panel (§5)
+
+`BENCHMARK_DESIGN.md` §5 makes every trainable method pick its checkpoint on `V_`, by the same
+rule. For this method a check is: write the current model's `V_` predictions for this chromosome
+into a scratch §4.1 root, hand the root to `candi.bench.external.score_external`, and read one
+number off it — the same instrument that scores CANDI and the same one that produces the board row.
+
+- **`B_` is never opened.** `store_eic.derive_v_only` filters `eval_pairs` to `V_` targets and the
+  scoring source is opened on the derived copy, so both the declared track list and the truth reads
+  are `V_` only. Same filter as `slurm/t81_train_candi.sh` applies for CANDI, including the
+  absolute-BED rewrite the D32 hash gate needs.
+- **The selected weights are written the moment the metric improves**, before the next check runs,
+  so a run killed by walltime still yields a selected checkpoint. `predict.sh` predicts from
+  `guacamole_<chrom>.best.pt` and says so loudly if it has to fall back.
+- **The metric is `pval:mse`, not CANDI's `count:crps`,** and that is forced rather than chosen.
+  This method has no count arm (B1b), and the pval arm's distributional keys — CRPS included — are
+  *absent* on a point-only track until a σ-table supplies a spread, which §7 forbids fitting on
+  `V_`. `pval:mse` is the arm's own point key, present on every scored track, and it is what stage 2
+  minimises. `--select-key` moves it; the value is stamped into `train_<chrom>.json` either way.
+- **Selection is stage 2 only.** `from_precamole` discards stage 1's head, so there is no stage-1
+  checkpoint anyone could select.
+- **Cost per check, chr20** (45 `V_` tracks × 2,577,766 bins): ~3.1 min of forward on a `1g.10gb`
+  slice, 0.3 min of npz, 2.3 min of metrics, plus the store's truth reads — the part that makes
+  CANDI's three-chromosome pass 91 minutes. Default cadence is 50 epochs = 16 checks over stage 2's
+  800; `stage2.eval_seconds` sits beside `stage2.seconds` in the run json so the first real run says
+  what it actually cost.
+
+### The BED-restricted training scope (D32), and why `eic.pilot` still cannot run
+
+A `regions` regime restricts training to the bins lying **wholly inside** a BED region.
+`store_eic.contained_bins` resolves it through `candi.store.regime.RegionSet` — one parser, one
+hash gate, one containment rule — and writes the eligible bins into the cache as `train_bins.npy`,
+because `train.py` never imports `candi`. The sampler walks those bins and `steps_per_epoch` falls
+with the scope, so an epoch still means the training scope once. A locus here is one 25 bp bin, so
+the scope is §3.1's containment count of **1,023,489** bins, not its 1,294-window / 993,792-bin
+figure, which is CANDI's 768-bin planner. A test pins the 1,023,489 against the shipped BED.
+
+**That capability is built and does not unblock `eic.pilot`,** and the reason is not the BED:
+
+> `train.py` fits one independent Guacamole per chromosome — cell factors, assay factors, dense
+> network, genome tables — on that chromosome's own bins, and `predict_chrom` indexes the genome
+> tables by that chromosome's bin numbers. So the model that predicts chr20 was fit on chr20.
+
+The cell and assay factors are transferable parameters by §2's own definition, and this scheme fits
+them on the eval chromosomes. Two things follow. First, `train_chroms` and `regions` reached no
+lavawizard module at all before this change, and those two keys plus `_comment` are the **only**
+difference between the two live regimes — so `eic.19` and `eic.pilot` would have been the same run
+twice. Second, under `eic.pilot` the pilot regions on chr20/21/22 are exactly the four the regime
+**cut**; restricting the fit to them would train on the complement of the declared scope and label
+it with the regime's name. So `store_eic` refuses a `regions` regime on a chromosome outside its
+`train_chroms`, and `_env.sh` refuses it before the array queues.
+
+Both need one PI ruling: whether Lavawizard gets a transferable stage the regime can reach — a
+joint fit on `train_chroms` plus per-chromosome genome factors, which is Avocado's scheme and not
+upstream Guacamole's — or whether it collapses to one regime-invariant row.
+
 ### The smoke, end to end
 
 Before the 23 GPU jobs, the whole chain ran on chr21 from a **50-step** checkpoint — plumbing
@@ -510,13 +566,15 @@ python -m lavawizard.anchor --checkpoint runs/anchor/guacamole_chr21.pt --cache 
     --blind-truth $D/blind_truth --meta repo/data/Encode_meta.tsv \
     --out runs/anchor/anchor_chr21.json
 
-# the deliverable: our EIC store, one array task per chromosome
-python -m lavawizard.store_eic cache   --regime configs/regime.eic_val.json --chrom chr21 \
+# the deliverable: our EIC store, one array task per eval chromosome
+python -m lavawizard.store_eic cache   --regime configs/regime.eic_19.json --chrom chr21 \
     --cache $C/eic_cache
-python -m lavawizard.train --cache $C/eic_cache --chrom chr21 --out runs/eic \
-    --contributor-mode loo
-python -m lavawizard.store_eic predict --regime configs/regime.eic_val.json --chrom chr21 \
-    --cache $C/eic_cache --checkpoint runs/eic/guacamole_chr21.pt \
+# `store_eic train`, not `lavawizard.train`: §5's selection scores through candi.bench.external,
+# which needs the store. `--select-every 0` is the no-selection path the anchor uses.
+python -m lavawizard.store_eic train   --regime configs/regime.eic_19.json --chrom chr21 \
+    --cache $C/eic_cache --out runs/eic --select-every 50
+python -m lavawizard.store_eic predict --regime configs/regime.eic_19.json --chrom chr21 \
+    --cache $C/eic_cache --checkpoint runs/eic/guacamole_chr21.best.pt \
     --pred-root runs/eic/pred --clip --manifest
 python competitors/lavawizard/fit_sigma.py --regime configs/regime.eic_val.json \
     --pred runs/eic/pred --out runs/eic/sigma.json
