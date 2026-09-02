@@ -18,6 +18,11 @@
 #   sapply   Apply it on the TRAINING grid, into SIGMAIMPUTEDIR
 #   fit      collect.py -> a §4.1 root -> competitors.sigma_pass -> the pinned σ table
 #
+# `strain` and `sapply` walk ONE list, `lists/sigma_items.txt`, written once below and read by both
+# verbs of `stage.sh`. They have to: `sapply` asks the jar for the classifier set `strain` wrote,
+# under a name built from the item, so an item either verb has and the other does not is a job that
+# fails after the whole chain has been queued.
+#
 # The traindata `strain` reads was already written by the run's `gtd` stage, on the training grid,
 # so nothing here is fit on an eval chromosome.
 #
@@ -102,26 +107,57 @@ if draw.get("eval_pairs"):
              f"regime is the NO-PAIRING shape: candi.store.regime refuses a self-pair, and a "
              f"cross-cell pair here would be an eval pair, which Rule 1 forbids a sigma to see.")
 
+# THE PANEL THE JAR SEES, off `inputinfofile.txt` and not off the manifest. `Train` builds a
+# target's features out of the OTHER tracks that target's cell carries — it holds the track being
+# trained out, which is what makes the residual a real one — so a cell listed with a SINGLE track
+# has an empty feature panel for its one item. ChromImpute answers that by writing the
+# `useattributes_<cell>_<mark>_<i>_<j>` masks, NO `classifier_` file, and exit 0; `sapply` then dies
+# on the jar's own "No previously trained classifiers for mark <mark>". Measured on Fir, run
+# /scratch/mforooz/t81_chromimpute/eic_19/V_, jobs 57807329 (strain, 22/22 COMPLETED) and 57807330
+# (sapply, task 5 failed 3×): the two items with zero classifiers were exactly the two one-track
+# cells, T_SK-MEL-5 and T_skin_of_body; all six cells with two or more tracks got a classifier set
+# for every one of their marks.
+panel = {}
+for ln in (run / "input" / "inputinfofile.txt").read_text().splitlines():
+    f = ln.split("\t")
+    if len(f) >= 2 and f[0].strip():
+        panel.setdefault(f[0], set()).add(f[1])
+
 kept, dropped, items = [], [], []
 for cell in cells:
     marks = [m for m in manifest_assays(manifest, cell, "pval") if m in allowed]
     missing = [m for m in marks if m not in avail]
-    if not marks or missing:
-        dropped.append((cell, missing or ["no pval mark in the regime's assays"]))
+    tracks = sorted(panel.get(cell, ()))
+    if not marks:
+        dropped.append((cell, "no pval mark in the regime's assays"))
+        continue
+    if missing:
+        dropped.append((cell, f"no ChromImpute training data for {missing}"))
+        continue
+    # ALL OR NOTHING, the same rule as above and for the same reason: a self-pair's target panel is
+    # every mark the cell holds, so a cell that cannot be trained whole is dropped whole.
+    if len(tracks) < 2:
+        dropped.append((cell, f"only {len(tracks)} track(s) in inputinfofile.txt ({tracks}) — Train "
+                              f"holds the target's own track out, so a one-track cell has no "
+                              f"features left and Train writes no classifier at all"))
         continue
     kept.append(cell)
     items.extend((cell, m) for m in marks)
 
 print(f"[ci_sigma] drawn cells: {len(cells)} | kept: {len(kept)} | dropped: {len(dropped)}")
 for cell, why in dropped:
-    print(f"[ci_sigma]   dropped {cell}: no training data for {why}")
+    print(f"[ci_sigma]   dropped {cell}: {why}")
 if len(kept) < 3:
     sys.exit(f"[ci_sigma] REFUSING: only {len(kept)} cell(s) survive. A σ per assay off fewer than "
              f"three cells is not a spread estimate. Widen the gtd mark set and re-run.")
 
+# ONE LIST, READ BY BOTH VERBS. `stage.sh` resolves `strain` and `sapply` to this one file, so the
+# two cannot enumerate different items: a `sapply` item with no `strain` item behind it asks the jar
+# for a classifier set nobody trained, and that is the failure this file is repairing.
 lines = "\n".join(f"{c}\t{m}" for c, m in items) + "\n"
-(run / "lists" / "strain.txt").write_text(lines, encoding="utf-8")
-(run / "lists" / "sapply.txt").write_text(lines, encoding="utf-8")
+(run / "lists" / "sigma_items.txt").write_text(lines, encoding="utf-8")
+for stale in ("strain.txt", "sapply.txt"):     # what earlier runs of this stage left behind
+    (run / "lists" / stale).unlink(missing_ok=True)
 write_targets(run / "input" / "targets_sigma.tsv", [(c, c, m) for c, m in items])
 
 out = json.loads(json.dumps(draw))
@@ -132,9 +168,11 @@ if kept != cells:
     out["biosamples"]["eval"] = list(kept)
     out["_comment"] = (str(draw.get("_comment", "")) + " NARROWED by "
                        "competitors/chromimpute/slurm/sigma.sh: a drawn cell is kept only when "
-                       "every mark it carries has ChromImpute training data, because a self-pair's "
-                       "target panel is all of the cell's marks and a partial cell would send the "
-                       "fitter looking for a track that was never applied.")
+                       "every mark it carries has ChromImpute training data AND the cell carries "
+                       "at least two tracks, because a self-pair's target panel is all of the "
+                       "cell's marks, a partial cell would send the fitter looking for a track "
+                       "that was never applied, and a one-track cell trains no classifier at all "
+                       "(Train holds the target's own track out).")
 out_p.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
 print(f"[ci_sigma] {len(items)} (cell, mark) items over {len(kept)} cells -> {out_p.name}")
 print(f"[ci_sigma] training grid: {grid}")
@@ -172,7 +210,9 @@ THROTTLE=${CI_THROTTLE:-10}
 
 sub() {  # sub <stage> <time> <mem> <mx> [afterok-jobid]
   local stage=$1 time=$2 mem=$3 mx=$4 dep=${5:-}
-  local n; n=$(wc -l < "$RUN/lists/$stage.txt")
+  # BOTH arrays are sized off the ONE item list, the same file `stage.sh` reads for either verb.
+  # Sizing them off two per-stage files is how `sapply` could be handed an item `strain` never saw.
+  local n; n=$(wc -l < "$RUN/lists/sigma_items.txt")
   local depflag=(); [ -n "$dep" ] && depflag=(--dependency="afterok:$dep")
   # Exported, not listed, for the same reason as the block above: `sbatch --export=<list>` splits
   # its argument on commas, so no assignment goes on that line at all.
