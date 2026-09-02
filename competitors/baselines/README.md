@@ -107,8 +107,9 @@ Exactly two things read it, and they are the only two here that pool over traini
 
 It is the **train** split's scope and nothing else's: `Regime.windows` applies `regions` to the train
 split only, and every baseline still writes whole eval chromosomes, exactly as a rival does. A BED
-with no region on `train_chroms` leaves `fit_marginal` an empty pool, and it writes no `marginal`
-track rather than a NaN constant.
+with no region on `train_chroms` leaves `fit_marginal` and `similarity_table` an empty pool, and
+both refuse outright (a `ValueError` naming the chromosomes and the BED) rather than write a NaN
+constant or an alphabetical ranking.
 
 ## No `eval_pairs` — the self-paired shape
 
