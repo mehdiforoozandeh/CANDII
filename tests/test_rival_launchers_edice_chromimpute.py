@@ -1010,3 +1010,279 @@ def test_no_assignment_rides_on_an_sbatch_export_list(script: Path):
                 f"{script.name} submits with --export={arg!r}. sbatch splits that list on commas, "
                 f"so a comma-valued variable in it is truncated and its tail is read as variable "
                 f"names. Export the variables and pass --export=ALL.")
+
+
+# ---------------------------------------------------------------------------------------------
+# the dispatch block, RUN — predict+score vs score-only, and the challenge truth
+# ---------------------------------------------------------------------------------------------
+#
+# `eic_score.sh` does predict -> score in ONE job, so its once-only `B_` guard and its scorer could
+# not be reached independently: the guard fired on `PANEL=B_` alone and sat BEFORE the
+# skip-when-complete test, so the store pass's own manifest made every later `B_` invocation exit 4
+# — including the challenge-truth score, which writes no prediction and so cannot spend the one
+# `B_` shot. ChromImpute and Lavawizard were never blocked because they have a separate score-only
+# `score.sh`.
+#
+# The tests above read the launcher as text. These RUN the dispatch half of it — the completeness
+# test, the guard, the challenge chromosome resolution, the predict and the score — against a fake
+# `$PRED` tree and a stub `python`, and assert on the argv `candi.bench.external` would have got.
+
+#: Everything from this line to EOF is the dispatch, and it reads only variables the harness sets.
+DISPATCH_MARK = "# === DISPATCH: predict then score, or score a root that is already there"
+
+#: What the fake store carries, and so what a `SCOPE=genomewide` root must list to count complete.
+#: The launcher compares the manifest's list to this one element by element, so the order matters.
+GW_CHROMS = [f"chr{i}" for i in range(1, 23)] + ["chrX"]
+#: The held-out three: the derived regime's `eval_chroms`, and all the challenge truth root covers.
+HELD_OUT_THREE = ["chr20", "chr21", "chr22"]
+
+
+def _dispatch_block() -> str:
+    text = _text(EDICE / "eic_score.sh")
+    assert DISPATCH_MARK in text, (
+        "eic_score.sh no longer carries the dispatch marker, so this harness would run nothing")
+    return text[text.index(DISPATCH_MARK):]
+
+
+#: Stands in for the venv python inside the dispatch block. `-c` and `-` are the launcher's OWN
+#: inline programs and run for real — they are the code under test. `run_eic.py` and
+#: `-m candi.bench.external` are recorded instead of run, and the predict stub writes the manifest
+#: a real predict pass would leave behind, because the score step reads it back.
+_EDICE_FAKE_PY = r'''#!{python}
+import json, os, sys
+from pathlib import Path
+
+argv = sys.argv[1:]
+if argv and argv[0] in ("-c", "-"):
+    os.execv(sys.executable, [sys.executable, *argv])
+
+with open(os.environ["EDICE_RECORD"], "a") as fh:
+    fh.write(json.dumps(argv) + "\n")
+
+if argv and argv[0].endswith("run_eic.py"):
+    out = Path(argv[argv.index("--out") + 1])
+    out.mkdir(parents=True, exist_ok=True)
+    gw = "--chroms" in argv and argv[argv.index("--chroms") + 1] == "all"
+    chroms = os.environ["EDICE_GW_CHROMS" if gw else "EDICE_HELD_CHROMS"].split(",")
+    (out / "manifest.json").write_text(json.dumps({{"chroms": chroms, "n_tracks": 1}}))
+sys.exit(0)
+'''
+
+#: The completeness test imports the store reader to learn what `genomewide` means. A laptop has no
+#: store, so these two stand in for `candi.store` on the harness's PYTHONPATH — the launcher exports
+#: its own PYTHONPATH above the dispatch marker, so nothing here shadows the real package.
+_SHIM_READER = '''import os
+
+
+class CorpusStore:
+    def __init__(self, path):
+        self.path = path
+
+    def n_bins(self):
+        return {c: 1 for c in os.environ["EDICE_GW_CHROMS"].split(",")}
+'''
+_SHIM_LAYOUT = '''import os
+
+
+def sort_chroms(chroms):
+    order = os.environ["EDICE_GW_CHROMS"].split(",")
+    return [c for c in order if c in set(chroms)]
+'''
+
+
+def _complete_root(root: Path, chroms, n_tracks: int = 2) -> None:
+    """A prediction root the launcher must call COMPLETE: manifest, n_tracks dirs, every npz."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "manifest.json").write_text(
+        json.dumps({"chroms": list(chroms), "n_tracks": n_tracks}), encoding="utf-8")
+    for k in range(n_tracks):
+        d = root / f"C{k}_H3K4me3"
+        d.mkdir(exist_ok=True)
+        for c in chroms:
+            (d / f"{c}.npz").write_text("", encoding="utf-8")
+
+
+def _run_dispatch(tmp_path: Path, *, panel: str, scope: str, truth: str,
+                  pred_chroms=None, other_b_root_manifest: bool = False,
+                  truth_chroms=HELD_OUT_THREE, extra_env=None):
+    """Run eic_score.sh's dispatch block against a fake world; return the process and its calls.
+
+    `pred_chroms=None` leaves `$PRED` ABSENT; a list writes a COMPLETE root listing those
+    chromosomes. `truth_chroms=None` writes a truth manifest with no `chroms` key, which is what
+    the fallback exists for. No GPU, no store, no model, no network.
+    """
+    if shutil.which("bash") is None:
+        pytest.skip("no bash on this host")
+
+    stub = tmp_path / "stub"
+    stub.mkdir()
+    py = stub / "python"
+    py.write_text(_EDICE_FAKE_PY.format(python=sys.executable), encoding="utf-8")
+    py.chmod(0o755)
+
+    store_pkg = tmp_path / "shim" / "candi" / "store"
+    store_pkg.mkdir(parents=True)
+    (store_pkg.parent / "__init__.py").write_text("", encoding="utf-8")
+    (store_pkg / "__init__.py").write_text("", encoding="utf-8")
+    (store_pkg / "reader.py").write_text(_SHIM_READER, encoding="utf-8")
+    (store_pkg / "layout.py").write_text(_SHIM_LAYOUT, encoding="utf-8")
+
+    # The roots, shaped as the launcher's own defaults shape them: a genome-wide root is a
+    # `.genomewide` SIBLING of the panel root, which is what makes the two-root guard necessary.
+    pred_root_b = tmp_path / "pred_B" / "B_"
+    base = pred_root_b if panel == "B_" else tmp_path / "pred_V" / "V_"
+    pred = base.with_name(base.name + ".genomewide") if scope == "genomewide" else base
+    if pred_chroms is not None:
+        _complete_root(pred, pred_chroms)
+    if other_b_root_manifest:
+        pred_root_b.mkdir(parents=True, exist_ok=True)
+        (pred_root_b / "manifest.json").write_text(
+            json.dumps({"chroms": HELD_OUT_THREE, "n_tracks": 2}), encoding="utf-8")
+
+    panel_regime = tmp_path / f"regime.test.{panel}.json"
+    panel_regime.write_text(
+        json.dumps({"eval_chroms": HELD_OUT_THREE, "store": str(tmp_path / "store")}),
+        encoding="utf-8")
+    truth_root = tmp_path / "truth" / "B_"
+    truth_root.mkdir(parents=True)
+    manifest = {"kind": "truth"}
+    if truth_chroms is not None:
+        manifest["chroms"] = list(truth_chroms)
+    (truth_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    record = tmp_path / "calls.jsonl"
+    env = {
+        "PATH": f"{stub}{os.pathsep}{os.environ['PATH']}",
+        "PYTHONPATH": str(tmp_path / "shim"),
+        "EDICE_RECORD": str(record),
+        "EDICE_GW_CHROMS": ",".join(GW_CHROMS),
+        "EDICE_HELD_CHROMS": ",".join(HELD_OUT_THREE),
+        "PANEL": panel, "SCOPE": scope, "TRUTH": truth,
+        "PRED": str(pred), "PRED_ROOT_B": str(pred_root_b),
+        "PANEL_REGIME": str(panel_regime), "TRUTH_ROOT": str(truth_root),
+        "SCORES": str(tmp_path / "scores" / f"{truth}.{panel}.json"),
+        "SIGMA": str(tmp_path / "sigma.json"),
+        "MODEL": str(tmp_path / "model.selected.pt"),
+        "N_TARGETS": "31", "PREDICT_BATCH": "1024",
+    }
+    env.update(extra_env or {})
+
+    runner = tmp_path / "dispatch.sh"
+    runner.write_text("set -uo pipefail\n" + _dispatch_block(), encoding="utf-8")
+    r = subprocess.run(["bash", str(runner)], env=env, cwd=str(tmp_path),
+                       capture_output=True, text=True)
+    calls = ([json.loads(ln) for ln in record.read_text().splitlines() if ln.strip()]
+             if record.exists() else [])
+    return r, calls
+
+
+def _predict_calls(calls):
+    return [c for c in calls if c and c[0].endswith("run_eic.py")]
+
+
+def _score_calls(calls):
+    return [c for c in calls if c[:2] == ["-m", "candi.bench.external"]]
+
+
+def _flag(argv, name):
+    return argv[argv.index(name) + 1] if name in argv else None
+
+
+def test_a_complete_b_root_is_scored_against_the_challenge_truth_without_predicting(tmp_path):
+    """The pass that was unreachable: TRUTH=challenge over the B_ root the store pass wrote.
+
+    Held-out only — `--chroms` comes from the TRUTH root's manifest, not from the prediction's 23,
+    and no `--held-out-chroms` means no `genome_wide` block. B_ONCE is deliberately NOT set: a pass
+    that predicts nothing cannot spend the one B_ prediction and does not claim to.
+    """
+    r, calls = _run_dispatch(tmp_path, panel="B_", scope="genomewide", truth="challenge",
+                             pred_chroms=GW_CHROMS)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert not _predict_calls(calls), (
+        f"a COMPLETE root was re-predicted under TRUTH=challenge: {_predict_calls(calls)}")
+    assert "mode=score-only" in r.stdout, r.stdout
+    assert "truth_chroms=chr20,chr21,chr22" in r.stdout, r.stdout
+    scored = _score_calls(calls)
+    assert len(scored) == 1, f"{len(scored)} score passes, not 1: {calls}"
+    argv = scored[0]
+    assert _flag(argv, "--truth-root") == str(tmp_path / "truth" / "B_"), argv
+    assert _flag(argv, "--chroms") == "chr20,chr21,chr22", (
+        f"the challenge pass scores {_flag(argv, '--chroms')!r}, not the truth root's own "
+        f"chromosomes — read_truth_root_arrays would be sent after npz files that do not exist")
+    assert "--held-out-chroms" not in argv, (
+        f"the challenge json would carry a `genome_wide` block: {argv}")
+
+
+def test_a_complete_root_scored_against_the_store_still_splits_off_the_held_out_scope(tmp_path):
+    """Same root, TRUTH=store: still score-only, and still the genome-wide superset json."""
+    r, calls = _run_dispatch(tmp_path, panel="B_", scope="genomewide", truth="store",
+                             pred_chroms=GW_CHROMS)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert not _predict_calls(calls), "a COMPLETE root was re-predicted under TRUTH=store"
+    assert "mode=score-only" in r.stdout and "truth_chroms=-" in r.stdout, r.stdout
+    argv = _score_calls(calls)[0]
+    assert _flag(argv, "--chroms") == ",".join(GW_CHROMS), argv
+    assert _flag(argv, "--held-out-chroms") == "chr20,chr21,chr22", argv
+    assert "--truth-root" not in argv, argv
+
+
+def test_a_b_prediction_without_the_once_only_verb_is_refused(tmp_path):
+    """Root absent, so a prediction WOULD be written — and that is what B_ONCE=1 licenses."""
+    r, calls = _run_dispatch(tmp_path, panel="B_", scope="genomewide", truth="store")
+    assert r.returncode == 4, f"exited {r.returncode}, not 4:\n{r.stdout}\n{r.stderr}"
+    assert not calls, f"the refusal came after work was done: {calls}"
+    assert "B_ONCE=1" in r.stderr, r.stderr
+
+
+def test_a_b_prediction_is_refused_when_the_OTHER_b_root_holds_a_manifest(tmp_path):
+    """The two-root rule survives the reordering: `.../B_` refuses a `.../B_.genomewide` predict."""
+    r, calls = _run_dispatch(tmp_path, panel="B_", scope="genomewide", truth="store",
+                             other_b_root_manifest=True, extra_env={"B_ONCE": "1"})
+    assert r.returncode == 4, f"exited {r.returncode}, not 4:\n{r.stdout}\n{r.stderr}"
+    assert not _predict_calls(calls), "a second B_ prediction was made"
+    assert "already holds a manifest.json" in r.stderr, r.stderr
+
+
+def test_the_v_panel_predicts_and_scores_exactly_as_before(tmp_path):
+    """No B_ONCE, a B_ root full of manifests, and V_ is untouched by any of it."""
+    r, calls = _run_dispatch(tmp_path, panel="V_", scope="genomewide", truth="store",
+                             other_b_root_manifest=True)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert "mode=predict+score" in r.stdout, r.stdout
+    predicts = _predict_calls(calls)
+    assert len(predicts) == 1, f"{len(predicts)} predict passes, not 1: {calls}"
+    assert _flag(predicts[0], "--batch-size") == "1024", predicts[0]
+    assert predicts[0][-2:] == ["--chroms", "all"], (
+        f"--chroms is nargs=+, so anything written after it is eaten: {predicts[0]}")
+    argv = _score_calls(calls)[0]
+    assert _flag(argv, "--chroms") == ",".join(GW_CHROMS), argv
+    assert _flag(argv, "--held-out-chroms") == "chr20,chr21,chr22", argv
+    assert "--truth-root" not in argv, argv
+
+
+def test_a_truth_manifest_with_no_chroms_falls_back_to_the_held_out_three(tmp_path):
+    """The converter writes `chroms`; a root whose manifest lost it is still the held-out three."""
+    r, calls = _run_dispatch(tmp_path, panel="B_", scope="genomewide", truth="challenge",
+                             pred_chroms=GW_CHROMS, truth_chroms=None)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert "falling back to chr20,chr21,chr22" in r.stderr, r.stderr
+    assert _flag(_score_calls(calls)[0], "--chroms") == "chr20,chr21,chr22"
+
+
+def test_the_b_guard_is_reached_only_when_a_prediction_would_be_written():
+    """As text, so the ordering that the harness above exercises cannot silently come apart."""
+    text = _code(EDICE / "eic_score.sh")
+    assert 'if [ "$PANEL" = "B_" ] && [ "$complete" = "no" ]; then' in text, (
+        "eic_score.sh's B_ guard is not gated on the completeness test, so scoring a complete "
+        "root would be refused again")
+    assert text.index("complete=no") < text.index('[ "$complete" = "no" ]; then'), (
+        "the guard runs before the completeness test that decides whether it applies")
+    assert text.index('"${B_ONCE:-0}" != "1"') > text.index("complete=no"), (
+        "B_ONCE is demanded before it is known whether this invocation would predict at all")
+
+
+def test_the_banner_says_which_of_the_two_modes_the_job_is():
+    text = _code(EDICE / "eic_score.sh")
+    assert "mode=$MODE" in text, "eic_score.sh's banner does not say predict+score or score-only"
+    assert "truth_chroms=$TRUTH_CHROMS" in text, (
+        "eic_score.sh's banner does not say which chromosomes the truth covers")

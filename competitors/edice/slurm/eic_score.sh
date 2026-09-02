@@ -5,14 +5,34 @@
 #   N_TARGETS=31                                            sbatch --time=03:00:00 …/eic_score.sh
 #   N_TARGETS=31 SCOPE=genomewide                           sbatch --time=12:00:00 --mem=96G …
 #   N_TARGETS=31 PANEL=B_ SCOPE=genomewide B_ONCE=1         sbatch --time=12:00:00 --mem=96G …
-#   N_TARGETS=31 PANEL=B_ SCOPE=genomewide TRUTH=challenge B_ONCE=1  sbatch --time=12:00:00 …
+#   N_TARGETS=31 PANEL=B_ SCOPE=genomewide TRUTH=challenge   sbatch --time=03:00:00 …
+#
+# THE LAST LINE IS A SCORE OF A ROOT THAT IS ALREADY THERE, AND PREDICTS NOTHING. This job does
+# predict -> score in one command, so it has to be able to tell the two apart. It resolves $PRED,
+# asks whether that root is COMPLETE, and only then decides:
+#   complete             -> mode=score-only. No predict, no B_ guard, any TRUTH. This is how the
+#                           challenge-truth score of the one B_ prediction is reached.
+#   absent or partial    -> mode=predict+score. A prediction WOULD be written, so PANEL=B_ meets
+#                           the once-only guard here: B_ONCE=1 required, and either B_ root
+#                           already carrying a manifest is a refusal (exit 4).
 #
 # PANEL IS THE WHOLE OF §5's "B_ IS TOUCHED ONCE". The live regimes declare 38 eval pairs in one
 # file -- 26 V_ and 12 B_ -- so predicting from the shipped regime opens both. This job predicts
 # from a DERIVED single-panel regime instead (tools/declare_eval_pairs.py split), and that derived
-# file is the only thing run_eic.py ever sees. PANEL=V_ is the default and is re-runnable; PANEL=B_
-# needs B_ONCE=1 on the launch line AND both B_ prediction roots absent, so a second B_ pass is a
-# refusal (exit 4) and not a silent overwrite.
+# file is the only thing run_eic.py ever sees. PANEL=V_ is the default and is re-runnable; a B_
+# PREDICTION needs B_ONCE=1 on the launch line AND both B_ prediction roots absent, so a second B_
+# prediction is a refusal (exit 4) and not a silent overwrite. Scoring a complete B_ root spends no
+# prediction and is therefore not refused -- the rule is one B_ PREDICTION, not one B_ invocation.
+#
+# TRUTH PICKS WHAT THE PREDICTIONS ARE COMPARED AGAINST, AND HOW WIDE THE SCORE IS.
+#   store      = the CANDI store, over the chromosomes the PREDICTION manifest names.
+#   challenge  = the 2019 blind bigwigs under $TRUTH_ROOT, over the chromosomes the TRUTH root's
+#                manifest names -- chr20,chr21,chr22, because tools/challenge_bigwigs.py converted
+#                the held-out chromosomes alone. A challenge pass is HELD-OUT ONLY: it never adds
+#                --held-out-chroms and its json carries no `genome_wide` block, exactly like every
+#                sibling method's challenge.B_.json. Asking for the prediction root's 23
+#                chromosomes instead would send read_truth_root_arrays after npz files the truth
+#                root does not have.
 #
 # SCOPE picks the chromosome set, not the output file. §4 gives eDICE a PRINTED genome-wide cell,
 # so unlike Avocado, ChromImpute and Lavawizard it does still predict genome-wide.
@@ -78,14 +98,11 @@ MODEL="${MODEL:-$WS/model.selected.pt}"
 # the MIG slice; 1024 fits both and costs no measurable time, the pass being bin-count bound.
 PREDICT_BATCH="${PREDICT_BATCH:-1024}"
 
+# B_ONCE is NOT checked here. It licenses a B_ PREDICTION, and whether this invocation would make
+# one is not known until $PRED has been resolved and asked whether it is already complete -- so the
+# check lives with the rest of the once-only guard, below the completeness test.
 case "$PANEL" in
-  V_) ;;
-  B_) if [ "${B_ONCE:-0}" != "1" ]; then
-        echo "[error] PANEL=B_ needs B_ONCE=1 on the launch line. BENCHMARK_DESIGN §5 rules that" >&2
-        echo "        B_ is predicted ONCE, at the very end, and the flag is how that decision" >&2
-        echo "        lands in this job's log instead of only in someone's memory." >&2
-        exit 2
-      fi ;;
+  V_|B_) ;;
   *)  echo "[error] PANEL must be V_ or B_, got '$PANEL'" >&2; exit 2 ;;
 esac
 case "$SCOPE" in heldout|genomewide) ;;
@@ -174,6 +191,11 @@ PYEOF
 # genome-wide pass had ever happened. Refuse (exit 5) rather than overwrite; a genome-wide pass may
 # always replace a held-out json, because it carries everything the held-out one did.
 # Checked HERE, beside the σ check, so the refusal costs no GPU.
+#
+# N/A UNDER TRUTH=challenge, and unreachable there: challenge forces PANEL=B_, which forces
+# SCOPE=genomewide, so the condition below is false. It is also moot -- a challenge pass writes
+# `challenge.B_.json`, a different file from the store pass's `store.B_.json`, and never carries a
+# `genome_wide` block for a later pass to drop.
 if [ "$SCOPE" = "heldout" ] && [ -f "$SCORES" ]; then
   python - "$SCORES" <<'PYEOF' || exit 5
 import json, sys
@@ -206,44 +228,30 @@ python "$REPO/tools/declare_eval_pairs.py" split \
     --regime "$REGIME" --panel "$PANEL" --out "$PANEL_REGIME" || exit $?
 echo "[edice] panel regime: $PANEL_REGIME"
 
+# === DISPATCH: predict then score, or score a root that is already there ========================
+# The order below is load-bearing.
+#   (a) $PRED, resolved above, is the root this invocation would write;
+#   (b) ask whether that root is already COMPLETE;
+#   (c) complete -> predict nothing, and score it under whatever TRUTH was asked for;
+#   (d) absent or partial -> a prediction WOULD be written, so PANEL=B_ meets the once-only guard.
+# The guard used to sit BEFORE (b) and to fire on PANEL=B_ alone, so the store pass's own manifest
+# made every later B_ invocation exit 4 -- including the challenge-truth score, which writes no
+# prediction at all and therefore cannot spend the one B_ shot. Nothing about "B_ is predicted
+# ONCE, EVER" is loosened: every invocation that would PREDICT is still checked against BOTH B_
+# roots. All of this runs before the GPU is touched.
+
 case "$SCOPE" in
   heldout)    CHROMS=() ;;                 # default: the derived regime's eval_chroms
   genomewide) CHROMS=(--chroms all) ;;
 esac
 
-# --- the once-only B_ guard, over BOTH B_ ROOTS ---------------------------------------------------
-# Exit 4, and B_ONCE=1 does NOT lift it: the flag says "this is the one B_ pass", and a root that
-# already carries a manifest proves it is not. Overwriting is how a second, differently-selected
-# checkpoint gets scored on the blind panel with nothing in the record to say so.
-#
-# EVERY B_ ROOT IS CHECKED, NOT THE ONE THIS INVOCATION WOULD WRITE. A guard that read only $PRED
-# is no guard at all: SCOPE appends `.genomewide` to the root, so two launches with different
-# scopes would each find their own root absent and each predict B_. The rule is one B_ prediction
-# EVER, so any manifest under either root refuses the next one. $PRED is checked too, in case it
-# was overridden on the launch line to a third place.
-if [ "$PANEL" = "B_" ]; then
-  for B_ROOT in "$PRED_ROOT_B" "${PRED_ROOT_B}.genomewide" "$PRED"; do
-    [ -f "$B_ROOT/manifest.json" ] || continue
-    echo "[error] $B_ROOT already holds a manifest.json. B_ is predicted ONCE, EVER (§5), across" >&2
-    echo "        both the held-out root and its .genomewide sibling; this one has been written." >&2
-    echo "        Delete it deliberately, or score the root that is there." >&2
-    exit 4
-  done
-fi
-
-echo "[edice] EIC $SCOPE  panel=$PANEL  truth=$TRUTH  n_targets=$N_TARGETS"
-echo "[edice]   model=$MODEL"
-echo "[edice]   pred=$PRED"
-echo "[edice]   scores=$SCORES"
-echo "[edice]   predict_batch=$PREDICT_BATCH"
-echo "[edice] host=$(hostname)"; nvidia-smi -L || true
-
-# Skip the predict pass when this root is ALREADY COMPLETE. A downstream step died once after a
-# finished predict and threw away work that had succeeded; for the held-out scope that is minutes,
-# for genome-wide it is hours. "Complete" means the manifest lists exactly the chromosomes asked
-# for AND every track directory holds every one of them -- a partial root is redone, never resumed,
-# because a half-written npz is the failure mode the §4.1 grid assertion exists to catch.
-# FORCE_PREDICT=1 overrides.
+# --- (b) is the root this invocation would write ALREADY COMPLETE? ------------------------------
+# A downstream step died once after a finished predict and threw away work that had succeeded; for
+# the held-out scope that is minutes, for genome-wide it is hours. "Complete" means the manifest
+# lists exactly the chromosomes asked for AND every track directory holds every one of them -- a
+# partial root is redone, never resumed, because a half-written npz is the failure mode the §4.1
+# grid assertion exists to catch. FORCE_PREDICT=1 overrides, and for B_ then meets the guard below,
+# which is what keeps it from re-predicting the blind panel.
 complete=no
 if [ -z "${FORCE_PREDICT:-}" ] && [ -f "$PRED/manifest.json" ]; then
   if python - "$PRED" "$SCOPE" "$PANEL_REGIME" <<'PYEOF'
@@ -277,35 +285,99 @@ sys.exit(0 if ok else 1)
 PYEOF
   then complete=yes; fi
 fi
+# (c) vs (d), in one word, so a log says which of the two this job was.
+if [ "$complete" = "yes" ]; then MODE=score-only; else MODE=predict+score; fi
 
-if [ "$complete" = "no" ]; then
+# --- (d) the once-only B_ guard, over BOTH B_ ROOTS ---------------------------------------------
+# Reached only when a PREDICTION would be written. Exit 4, and B_ONCE=1 does NOT lift the manifest
+# clause: the flag says "this is the one B_ pass", and a root that already carries a manifest
+# proves it is not. Overwriting is how a second, differently-selected checkpoint gets scored on the
+# blind panel with nothing in the record to say so.
+#
+# EVERY B_ ROOT IS CHECKED, NOT THE ONE THIS INVOCATION WOULD WRITE. A guard that read only $PRED
+# is no guard at all: SCOPE appends `.genomewide` to the root, so two launches with different
+# scopes would each find their own root absent and each predict B_. The rule is one B_ prediction
+# EVER, so any manifest under either root refuses the next one. $PRED is checked too, in case it
+# was overridden on the launch line to a third place.
+if [ "$PANEL" = "B_" ] && [ "$complete" = "no" ]; then
+  if [ "${B_ONCE:-0}" != "1" ]; then
+    echo "[error] a B_ PREDICTION needs B_ONCE=1 on the launch line. BENCHMARK_DESIGN §5 rules" >&2
+    echo "        that B_ is predicted ONCE, at the very end, and the flag is how that decision" >&2
+    echo "        lands in this job's log instead of only in someone's memory. Scoring a B_ root" >&2
+    echo "        that is already COMPLETE predicts nothing and does not ask for the flag." >&2
+    exit 4
+  fi
+  for B_ROOT in "$PRED_ROOT_B" "${PRED_ROOT_B}.genomewide" "$PRED"; do
+    [ -f "$B_ROOT/manifest.json" ] || continue
+    echo "[error] $B_ROOT already holds a manifest.json. B_ is predicted ONCE, EVER (§5), across" >&2
+    echo "        both the held-out root and its .genomewide sibling; this one has been written." >&2
+    echo "        Delete it deliberately, or SCORE the root that is there -- a complete root is" >&2
+    echo "        scored by this job without predicting, under either TRUTH." >&2
+    exit 4
+  done
+fi
+
+# --- the chromosomes the SCORE pass runs over, when the truth is the challenge bigwigs ----------
+# Resolved here rather than beside the score command so the banner can print them, and so a missing
+# truth root refuses before a predict rather than after one. tools/challenge_bigwigs.py writes
+# `chroms` into the truth root's manifest; the fallback is the held-out three, with a warning,
+# because a truth root whose manifest lost that key is still the held-out conversion.
+TRUTH_CHROMS="-"
+if [ "$TRUTH" = "challenge" ]; then
+  if [ ! -f "$TRUTH_ROOT/manifest.json" ]; then
+    echo "[error] TRUTH=challenge but no manifest.json under $TRUTH_ROOT" >&2; exit 2
+  fi
+  TRUTH_CHROMS=$(python -c \
+      "import json,sys; print(','.join(json.load(open(sys.argv[1])).get('chroms') or []))" \
+      "$TRUTH_ROOT/manifest.json")
+  if [ -z "$TRUTH_CHROMS" ]; then
+    TRUTH_CHROMS="chr20,chr21,chr22"
+    echo "[warn] $TRUTH_ROOT/manifest.json names no chroms; falling back to $TRUTH_CHROMS" >&2
+  fi
+fi
+
+echo "[edice] EIC $SCOPE  panel=$PANEL  truth=$TRUTH  n_targets=$N_TARGETS  mode=$MODE"
+echo "[edice]   model=$MODEL"
+echo "[edice]   pred=$PRED"
+echo "[edice]   scores=$SCORES"
+echo "[edice]   predict_batch=$PREDICT_BATCH"
+echo "[edice]   truth_chroms=$TRUTH_CHROMS"
+echo "[edice] host=$(hostname)"; nvidia-smi -L || true
+
+if [ "$MODE" = "predict+score" ]; then
   python run_eic.py predict \
     --regime "$PANEL_REGIME" --model "$MODEL" --out "$PRED" \
     --batch-size "$PREDICT_BATCH" "${CHROMS[@]}" || exit $?
 fi
 
 mkdir -p "$(dirname "$SCORES")"
-# `candi.bench.external` takes --chroms as ONE comma-separated string; run_eic.py takes a list. Read
-# the chromosomes back out of the manifest the predict pass just wrote rather than re-deriving them,
-# so the set scored is exactly the set emitted.
-BENCH_CHROMS=$(python -c "import json,sys; print(','.join(json.load(open(sys.argv[1]))['chroms']))" \
-                 "$PRED/manifest.json") || exit $?
 EXTRA=()
-# The held-out chromosomes are the derived regime's own eval_chroms -- chr20,chr21,chr22 in both
-# live regimes -- read from the file rather than typed here, so the flag cannot disagree with the
-# config the predictions were made under.
-if [ "$SCOPE" = "genomewide" ]; then
-  HELD_OUT=$(python -c "import json,sys; print(','.join(json.load(open(sys.argv[1]))['eval_chroms']))" \
-                 "$PANEL_REGIME") || exit $?
-  EXTRA+=(--held-out-chroms "$HELD_OUT")
-  echo "[edice] genome-wide pass: --held-out-chroms $HELD_OUT"
-fi
 if [ "$TRUTH" = "challenge" ]; then
-  if [ ! -f "$TRUTH_ROOT/manifest.json" ]; then
-    echo "[error] TRUTH=challenge but no manifest.json under $TRUTH_ROOT" >&2; exit 2
-  fi
+  # HELD-OUT ONLY, for every panel. --held-out-chroms is what turns one pass into two aggregations
+  # and adds the `genome_wide` block, and a challenge json must not carry one: the truth root
+  # covers the held-out chromosomes alone, so there is no wider scope to aggregate over. Every
+  # sibling method's challenge.B_.json is shaped the same way. The prediction manifest is NOT the
+  # source of the chromosome set here -- a B_.genomewide root names 23, and asking
+  # read_truth_root_arrays for those would send it after npz files the truth root does not have.
+  BENCH_CHROMS="$TRUTH_CHROMS"
   EXTRA+=(--truth-root "$TRUTH_ROOT")
   echo "[edice] truth: challenge bigwigs at $TRUTH_ROOT (count and peak arms are ABSENT there)"
+  echo "[edice] challenge pass: --chroms $BENCH_CHROMS, and no --held-out-chroms"
+else
+  # `candi.bench.external` takes --chroms as ONE comma-separated string; run_eic.py takes a list.
+  # Read the chromosomes back out of the manifest under $PRED rather than re-deriving them, so the
+  # set scored is exactly the set emitted.
+  BENCH_CHROMS=$(python -c "import json,sys; print(','.join(json.load(open(sys.argv[1]))['chroms']))" \
+                   "$PRED/manifest.json") || exit $?
+  # The held-out chromosomes are the derived regime's own eval_chroms -- chr20,chr21,chr22 in both
+  # live regimes -- read from the file rather than typed here, so the flag cannot disagree with the
+  # config the predictions were made under.
+  if [ "$SCOPE" = "genomewide" ]; then
+    HELD_OUT=$(python -c "import json,sys; print(','.join(json.load(open(sys.argv[1]))['eval_chroms']))" \
+                   "$PANEL_REGIME") || exit $?
+    EXTRA+=(--held-out-chroms "$HELD_OUT")
+    echo "[edice] genome-wide pass: --held-out-chroms $HELD_OUT"
+  fi
 fi
 
 python -m candi.bench.external \
@@ -313,5 +385,5 @@ python -m candi.bench.external \
   --chroms "$BENCH_CHROMS" "${EXTRA[@]}"
 rc=$?
 
-echo "[edice] DONE eic-score scope=$SCOPE panel=$PANEL truth=$TRUTH rc=$rc  scores=$SCORES"
+echo "[edice] DONE eic-score scope=$SCOPE panel=$PANEL truth=$TRUTH mode=$MODE rc=$rc  scores=$SCORES"
 exit $rc
