@@ -141,7 +141,24 @@ print(f"[ci_sigma] training grid: {grid}")
 PYEOF
 
 # --- 3. the chain --------------------------------------------------------------------------------
-ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS,CI_REGIME=$SIGMA_REGIME"
+# THE STAGE ENVIRONMENT IS EXPORTED HERE, NOT LISTED ON THE `sbatch` LINE — the same repair as
+# `submit.sh`, and the same rule behind it: `sbatch --export=<list>` is a COMMA-SEPARATED list of
+# `NAME` / `NAME=VALUE` entries, so a comma-valued variable cannot be passed in it.
+# `CI_CHROMS=chr20,chr21,chr22` inside the list reached the stage as `CI_CHROMS=chr20`, with
+# `chr21` / `chr22` read as bare variable names that do not exist — silently. Measured on Fir, job
+# 57806189 (cruxvault/results/t81/W3_EARLY.md §1).
+#
+# It bit this script less than `submit.sh` only by luck of which grid the σ stages loop over
+# (`strain`/`sapply` use `TRAIN_LIST`, not `CHROM_LIST`), and it bites a pilot σ hard: under a
+# `regions` regime the grid is a comma list of Pilot Region names, so the truncation would leave
+# `sapply` writing one region's wig. `--export=ALL` hands the submitting shell's environment over
+# verbatim, commas intact; the list it replaces already began with `ALL`, so nothing was scrubbed
+# and nothing else the stages see changes.
+#
+# The explicit `export` keeps the values THIS SCRIPT's own rather than the operator's login shell's
+# — every one was resolved from this file's own defaults at the top.
+export CI_RUN="$RUN" CI_REPO="$REPO" CI_STORE="$STORE" CI_PY="$PY" CI_JAR="$JAR"
+export CI_CHROMS="$CHROMS" CI_REGIME="$SIGMA_REGIME"
 # `%THROTTLE` caps how many array tasks of one stage run at once. It is the SAME courtesy cap
 # `submit.sh` uses on `gtd` and `apply`, and for the same reason: the jar holds one open gzip reader
 # per compendium track, and an unthrottled array puts thousands of concurrent handles on Lustre.
@@ -157,10 +174,16 @@ sub() {  # sub <stage> <time> <mem> <mx> [afterok-jobid]
   local stage=$1 time=$2 mem=$3 mx=$4 dep=${5:-}
   local n; n=$(wc -l < "$RUN/lists/$stage.txt")
   local depflag=(); [ -n "$dep" ] && depflag=(--dependency="afterok:$dep")
+  # Exported, not listed, for the same reason as the block above: `sbatch --export=<list>` splits
+  # its argument on commas, so no assignment goes on that line at all.
+  export CI_STAGE="$stage" CI_MX="$mx"
+  # `${depflag[@]+"${depflag[@]}"}` and not a bare `"${depflag[@]}"`: identical on Fir's bash, and
+  # the only form bash 3.2 accepts for an EMPTY array under `set -u` — which is `strain`, the first
+  # link of this chain, and is what the regression test in tests/ submits.
   sbatch --parsable --account="$ACCT" --nodes=1 --ntasks=1 --cpus-per-task=1 \
          --job-name="ci_$stage" --array="0-$((n - 1))%$THROTTLE" --time="$time" --mem="$mem" \
          --output="$RUN/logs/%x_%A_%a.out" --error="$RUN/logs/%x_%A_%a.err" \
-         "${depflag[@]}" --export="$ENV_COMMON,CI_STAGE=$stage,CI_MX=$mx" "$STAGE"
+         ${depflag[@]+"${depflag[@]}"} --export=ALL "$STAGE"
 }
 
 D1=$(sub strain 6:00:00 24000M 20000M)

@@ -8,6 +8,12 @@
 #   B_    CI_REGIME=$REPO/configs/regime.eic_19.json CI_PANEL=B_ B_ONCE=1 bash submit.sh
 #   pilot CI_REGIME=... bash submit.sh "" prepare targets_pilot.tsv     # 20 targets, a cost probe
 #
+# `FROM_STAGE` resumes the chain; there is NO stop-after verb, and this script does not offer one.
+# `STAGES` runs from `FROM_STAGE` through `apply` to the end of the list, so any invocation that
+# reaches `convert` also re-runs `dist`, `gtd` and `train` — and the chain's own `ci_checkpoint`
+# job then copies that refit over the recorded /project checkpoint. A partial re-predict is not
+# something this driver can express; sbatch the stages directly for that.
+#
 # RETARGETED 2026-08-31. `P1`/`P2` are RETIRED (BENCHMARK_DESIGN.md §9), and the genome-wide run is
 # GONE: §4 blanks ChromImpute's `genome-wide` cell and rules that a blanked cell is not computed, so
 # the only scope is the regime's eval_chroms — chr20+21+22. `CI_REGIME` selects which live regime
@@ -145,7 +151,25 @@ echo "compendium: $NTRACK tracks | convert marks: $(wc -l < "$RUN/lists/convert.
 targets: $(wc -l < "$RUN/lists/train.txt")"
 
 # --- the chain ----------------------------------------------------------------------------------
-ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS,CI_REGIME=$REGIME"
+# THE STAGE ENVIRONMENT IS EXPORTED HERE, NOT LISTED ON THE `sbatch` LINE. `--export=<list>` is a
+# COMMA-SEPARATED list of `NAME` / `NAME=VALUE` entries, so a value that itself contains a comma
+# cannot be passed in it: `...,CI_CHROMS=chr20,chr21,chr22,...` reaches the stage as
+# `CI_CHROMS=chr20`, and `chr21` / `chr22` are taken as bare variable names to copy from the
+# environment. They do not exist, and sbatch says nothing. Measured on Fir, job 57806189
+# (cruxvault/results/t81/W3_EARLY.md §1) — and that truncation is why wave 2's `convert` and
+# `apply` ran on chr20 alone. Every comma-valued variable had the same hole, so the fix is the form
+# and not one variable: nothing is passed as `--export=<list>` any more.
+#
+# `--export=ALL` hands the submitting shell's environment to the job verbatim, commas intact. The
+# list this replaces already began with `ALL`, so no environment was being scrubbed and nothing
+# else about what the stages see changes.
+#
+# The explicit `export` is what keeps the values THIS SCRIPT's own. A stale `CI_CHROMS=chr20` left
+# sitting in the operator's login shell is the other half of the wave-2 defect; every value below
+# was resolved from this file's own defaults at the top, so the stage reads what the driver
+# decided. Add a variable to this block whenever the stages learn to read a new one.
+export CI_RUN="$RUN" CI_REPO="$REPO" CI_STORE="$STORE" CI_PY="$PY" CI_JAR="$JAR"
+export CI_CHROMS="$CHROMS" CI_REGIME="$REGIME"
 
 # `CI_THROTTLE` caps how many array tasks of one stage run at once. GenerateTrainData and Apply
 # each hold ONE OPEN gzip reader per compendium track — 267 of them — so an unthrottled array puts
@@ -158,10 +182,16 @@ sub() {  # sub <stage> <time> <mem> <mx> [afterok-jobid]
   local n; n=$(wc -l < "$RUN/lists/$stage.txt")
   local cap=""; case $stage in gtd|apply|train) cap="%$THROTTLE" ;; esac
   local depflag=(); [ -n "$dep" ] && depflag=(--dependency="afterok:$dep")
+  # Exported, not listed, for the same reason as the block above: `sbatch --export=<list>` splits
+  # its argument on commas, so no assignment goes on that line at all.
+  export CI_STAGE="$stage" CI_MX="$mx"
+  # `${depflag[@]+"${depflag[@]}"}` and not a bare `"${depflag[@]}"`: identical on Fir's bash, and
+  # the only form bash 3.2 accepts for an EMPTY array under `set -u` — which is the first stage of
+  # every chain, and is what the regression test in tests/ submits.
   sbatch --parsable --account="$ACCT" --nodes=1 --ntasks=1 --cpus-per-task=1 \
          --job-name="ci_$stage" --array="0-$((n - 1))$cap" --time="$time" --mem="$mem" \
          --output="$RUN/logs/%x_%A_%a.out" --error="$RUN/logs/%x_%A_%a.err" \
-         "${depflag[@]}" --export="$ENV_COMMON,CI_STAGE=$stage,CI_MX=$mx" "$STAGE"
+         ${depflag[@]+"${depflag[@]}"} --export=ALL "$STAGE"
 }
 
 # `FROM` resumes the chain at a stage whose inputs already exist on disk — a stage that failed on

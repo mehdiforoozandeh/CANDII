@@ -21,8 +21,12 @@ close is not visible by eye.
 """
 from __future__ import annotations
 
+import json
+import os
+import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -465,3 +469,282 @@ def test_the_jar_default_is_the_pinned_one(script: Path):
             continue
         if "CI_JAR:-" in line or "CI_JAR:=" in line:
             assert JAR in line, f"{script.name}: {line.strip()!r} does not default to {JAR}"
+
+
+# ---------------------------------------------------------------------------------------------
+# the sbatch --export hand-off — a comma-valued variable must reach the stage whole
+# ---------------------------------------------------------------------------------------------
+#
+# `sbatch --export=<[ALL,]environment variables>` takes a COMMA-SEPARATED list of `NAME` /
+# `NAME=VALUE` entries, so a value that itself contains a comma cannot ride in it.
+# `--export=ALL,CI_CHROMS=chr20,chr21,chr22` hands the job `CI_CHROMS=chr20` and reads `chr21` /
+# `chr22` as bare variable names to copy from the submitting environment; they do not exist, and
+# sbatch reports nothing. Measured on Fir, job 57806189 (cruxvault/results/t81/W3_EARLY.md §1) --
+# and that truncation is why wave 2's ChromImpute `convert` and `apply` ran on chr20 alone while
+# `chrominfo.txt` named three chromosomes.
+#
+# The drivers export their variables and submit with `--export=ALL`. The tests below run both
+# ChromImpute drivers against a stub `sbatch`, then put every recorded submission back through an
+# emulator of that comma rule -- so the assertion is on the value the STAGE would read, and not on
+# the shape of a command line.
+
+CHROMS_THREE = "chr20,chr21,chr22"
+
+
+def _sbatch_export_env(export_arg: str | None, caller_env: dict) -> dict:
+    """The environment `sbatch --export=<export_arg>` hands the job, given the submitting env.
+
+    Implements the one rule that matters here: the argument is split on commas FIRST, and only then
+    is each token read as `NAME=VALUE` or as a bare `NAME` to copy from the caller. A value with a
+    comma in it is therefore cut at the comma, and its tail is swallowed as variable names.
+    """
+    if export_arg is None:
+        return dict(caller_env)                       # sbatch's own default is ALL
+    out: dict = {}
+    for token in export_arg.split(","):
+        if token.upper() == "ALL":
+            out.update(caller_env)
+        elif token.upper() == "NONE":
+            out.clear()
+        elif "=" in token:
+            name, value = token.split("=", 1)
+            out[name] = value
+        elif token in caller_env:
+            out[token] = caller_env[token]
+        # a bare name the caller's environment does not carry is dropped, silently
+    return out
+
+
+def _export_arg(argv: list) -> str | None:
+    """The `--export` argument of one recorded sbatch call, or None if it passed none."""
+    for k, a in enumerate(argv):
+        if a.startswith("--export="):
+            return a.split("=", 1)[1]
+        if a == "--export":
+            return argv[k + 1]
+    return None
+
+
+def test_the_export_emulator_reproduces_the_measured_truncation():
+    """The guard needs a guard of its own: this is job 57806189's output, verbatim."""
+    caller = {"CI_SHELLCH": CHROMS_THREE}
+    seen = _sbatch_export_env(f"ALL,CI_LISTCH={CHROMS_THREE},CI_TAIL=xyz", caller)
+    assert seen["CI_LISTCH"] == "chr20"               # the list form, TRUNCATED
+    assert seen["CI_TAIL"] == "xyz"                   # so chr21 and chr22 were eaten as names
+    assert seen["CI_SHELLCH"] == CHROMS_THREE         # the shell-export + ALL form survives whole
+    assert _sbatch_export_env("ALL", caller)["CI_SHELLCH"] == CHROMS_THREE
+    assert _sbatch_export_env(None, caller)["CI_SHELLCH"] == CHROMS_THREE
+
+
+#: Stands in for the Fir venv python on the login node. The drivers call it for the panel split,
+#: `prepare.py`, the sigma draw and the sigma stage's inline program -- every one of which reads a
+#: CANDI store that does not exist on a laptop -- and then read the files those calls wrote. So the
+#: stub writes those files. `-c` is the driver's OWN inline python and runs for real.
+_FAKE_PY = r'''#!{python}
+import json, os, sys
+from pathlib import Path
+
+argv = sys.argv[1:]
+
+
+def opt(name, default=None):
+    return argv[argv.index(name) + 1] if name in argv else default
+
+
+if argv and argv[0] == "-c":
+    os.execv(sys.executable, [sys.executable, *argv])
+
+REGIME = {{
+    "eval_chroms": ["chr20", "chr21", "chr22"],
+    "train_chroms": ["chr18", "chr19"],
+    "assays": ["H3K4me3", "H3K27ac"],
+    "biosamples": {{"train": ["C1", "C2", "C3"], "eval": ["C1", "C2", "C3"]}},
+    "eval_pairs": [["C1", "T1"], ["C2", "T2"]],
+}}
+ITEMS = [("C1", "H3K4me3"), ("C2", "H3K4me3"), ("C3", "H3K27ac")]
+
+if argv and argv[0] == "-":
+    sys.stdin.read()                       # the sigma stage's inline program, stubbed
+    draw, out, run = Path(argv[1]), Path(argv[2]), Path(argv[3])
+    lines = "".join("%s\t%s\n" % it for it in ITEMS)
+    (run / "lists" / "strain.txt").write_text(lines)
+    (run / "lists" / "sapply.txt").write_text(lines)
+    (run / "input" / "targets_sigma.tsv").write_text(
+        "".join("%s\t%s\t%s\n" % (c, c, m) for c, m in ITEMS))
+    drawn = json.loads(draw.read_text())
+    drawn["eval_pairs"] = []
+    out.write_text(json.dumps(drawn))
+    sys.exit(0)
+
+prog = Path(argv[0]).name if argv else ""
+if prog == "declare_eval_pairs.py":
+    Path(opt("--out")).write_text(json.dumps(REGIME))
+elif prog == "sigma_training_regime.py":
+    Path(opt("--out")).write_text(json.dumps(dict(REGIME, eval_pairs=[])))
+elif prog == "prepare.py":
+    out = Path(opt("--out"))
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "inputinfofile.txt").write_text(
+        "".join("%s\t%s\t%s_%s.bedgraph\n" % (c, m, c, m) for c, m in ITEMS))
+    (out / "chrominfo.txt").write_text(
+        "".join("%s\t50000000\n" % c for c in opt("--chroms", "").split(",") if c))
+    (out / "chrominfo.train.txt").write_text("chr18\t80373285\nchr19\t58617616\n")
+    targets = "".join("T%d\t%s\t%s\n" % (k, c, m) for k, (c, m) in enumerate(ITEMS))
+    (out / "targets.tsv").write_text(targets)
+    (out / "targets_pilot.tsv").write_text(targets)
+else:
+    sys.exit("[fake py] unexpected program: %r" % (argv,))
+'''
+
+#: Records what would have been submitted, AND the environment it would have been submitted in --
+#: which is the half `--export=ALL` propagates. Prints a job id, because `--parsable` is captured.
+_FAKE_SBATCH = r'''#!{python}
+import json, os, sys
+from pathlib import Path
+
+d = Path(os.environ["SBATCH_RECORD_DIR"])
+d.mkdir(parents=True, exist_ok=True)
+n = len(list(d.glob("*.json")))
+(d / ("%03d.json" % n)).write_text(json.dumps({{"argv": sys.argv[1:], "env": dict(os.environ)}}))
+print(57800000 + n)
+'''
+
+
+@pytest.fixture(scope="module")
+def chromimpute_submissions(tmp_path_factory):
+    """Run both ChromImpute drivers with a stub `sbatch` and a stub python, and record the calls.
+
+    Nothing real is submitted and nothing real is computed. What IS real is every driver line
+    between those stubs -- including the one that decides what environment the stage jobs get.
+    `sigma.sh` runs second and against the same run directory, because it reads the work lists and
+    the training grid `submit.sh` just laid out.
+    """
+    if shutil.which("bash") is None:
+        pytest.skip("no bash on this host")
+    tmp = tmp_path_factory.mktemp("ci_submit")
+    stub = tmp / "stub"
+    stub.mkdir()
+    for name, template in (("fake_py", _FAKE_PY), ("sbatch", _FAKE_SBATCH)):
+        p = stub / name
+        p.write_text(template.format(python=sys.executable), encoding="utf-8")
+        p.chmod(0o755)
+
+    src_regime = tmp / "regime.eic_19.json"
+    src_regime.write_text("{}\n", encoding="utf-8")
+    run, records = tmp / "run", tmp / "records"
+
+    env = dict(os.environ)
+    env.update({
+        "PATH": f"{stub}{os.pathsep}{env['PATH']}",
+        "SBATCH_RECORD_DIR": str(records),
+        "CI_REPO": str(REPO),
+        "CI_STORE": str(tmp / "store"),
+        "CI_PY": str(stub / "fake_py"),
+        "CI_JAR": str(tmp / "ChromImpute.jar"),
+        "CI_REGIME": str(src_regime),
+        "CI_CHROMS": CHROMS_THREE,
+        "CI_ACCT": "def-test",
+        "CI_PRED_ROOT": str(tmp / "pred"),
+        "CI_CKPT_DIR": str(tmp / "ckpt"),
+    })
+    out = {"run": run}
+    for driver, args, extra in (
+        ("submit.sh", [str(run)], {}),
+        ("sigma.sh", [], {"CI_RUN": str(run),
+                          "CI_SIGMA_OUT": str(tmp / "sigma.json"),
+                          "CI_TRAIN_PRED": str(tmp / "train_pred")}),
+    ):
+        before = len(list(records.glob("*.json"))) if records.exists() else 0
+        r = subprocess.run(["bash", str(CHROMIMPUTE / driver), *args],
+                           env={**env, **extra}, cwd=str(tmp),
+                           capture_output=True, text=True)
+        assert r.returncode == 0, f"{driver} exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+        out[driver] = [json.loads(p.read_text())
+                       for p in sorted(records.glob("*.json"))[before:]]
+        assert out[driver], f"{driver} submitted nothing, so nothing below is checked"
+    return out
+
+
+#: What each driver's array stages are called, so a fixture that submitted half a chain is caught.
+STAGES_SUBMITTED = {"submit.sh": {"prepare", "convert", "dist", "gtd", "train", "apply"},
+                    "sigma.sh": {"strain", "sapply"}}
+
+
+@pytest.mark.parametrize("driver", sorted(STAGES_SUBMITTED))
+def test_a_stage_job_sees_the_whole_chromosome_list(chromimpute_submissions, driver):
+    """The wave-2 defect, as a test: `CI_CHROMS` must arrive as three chromosomes, not one."""
+    stage_calls = [c for c in chromimpute_submissions[driver]
+                   if c["argv"] and c["argv"][-1].endswith("stage.sh")]
+    assert stage_calls, f"{driver} submitted no array stage against stage.sh"
+    for call in stage_calls:
+        seen = _sbatch_export_env(_export_arg(call["argv"]), call["env"])
+        assert seen.get("CI_CHROMS") == CHROMS_THREE, (
+            f"{driver} hands stage {seen.get('CI_STAGE')!r} CI_CHROMS={seen.get('CI_CHROMS')!r}, "
+            f"not {CHROMS_THREE!r}. sbatch splits an --export list on commas, so a comma-valued "
+            f"variable cannot be passed in one -- export it and submit with --export=ALL. "
+            f"--export was {_export_arg(call['argv'])!r}.")
+
+
+@pytest.mark.parametrize("driver", sorted(STAGES_SUBMITTED))
+def test_a_stage_job_sees_the_rest_of_its_environment_too(chromimpute_submissions, driver):
+    """Fixing the comma must not drop what the list used to carry: same names, same values."""
+    run = chromimpute_submissions["run"]
+    stages = set()
+    for call in chromimpute_submissions[driver]:
+        if not call["argv"] or not call["argv"][-1].endswith("stage.sh"):
+            continue
+        seen = _sbatch_export_env(_export_arg(call["argv"]), call["env"])
+        for var in sorted(_ci_vars_stage_reads()):
+            assert seen.get(var), f"{driver}: the stage would read no {var}"
+        assert seen["CI_RUN"] == str(run)
+        assert Path(seen["CI_REGIME"]).is_file(), (
+            f"{driver} hands the stage CI_REGIME={seen['CI_REGIME']!r}, which is not a file")
+        assert seen["CI_MX"].endswith("M")
+        stages.add(seen["CI_STAGE"])
+    assert stages == STAGES_SUBMITTED[driver], (
+        f"{driver} submitted stages {sorted(stages)}, not {sorted(STAGES_SUBMITTED[driver])}")
+
+
+def test_the_login_node_prepare_call_gets_the_whole_chromosome_list(chromimpute_submissions):
+    """`prepare.py` takes `--chroms` as an ordinary argument, so its grid proves the driver's own
+    value was three chromosomes -- and `chrominfo.txt` is what `Apply` is then handed."""
+    grid = (chromimpute_submissions["run"] / "input" / "chrominfo.txt").read_text().split()
+    assert [g for g in grid if g.startswith("chr")] == CHROMS_THREE.split(",")
+
+
+def _ci_vars_stage_reads() -> set:
+    """The `CI_*` names `stage.sh` reads with a default or a `:?` requirement.
+
+    Read off the RECEIVING side on purpose: a variable the stage learns to read has to be exported
+    by both drivers, and this is what makes forgetting one a failure rather than an empty default.
+    """
+    names = set(re.findall(r':\s*"\$\{(CI_[A-Z_]+)[:?]', _text(CHROMIMPUTE / "stage.sh")))
+    assert len(names) >= 8, f"stage.sh's variable block did not parse: {names}"
+    return names
+
+
+@pytest.mark.parametrize("driver", sorted(STAGES_SUBMITTED))
+def test_every_variable_the_stage_reads_is_exported_by_the_driver(driver):
+    text = _code(CHROMIMPUTE / driver)
+    missing = [v for v in sorted(_ci_vars_stage_reads())
+               if not re.search(rf"^\s*export .*\b{v}=", text, re.M)]
+    assert not missing, (
+        f"{driver} never exports {missing}, and it cannot pass them on the sbatch line either -- "
+        f"an --export list is split on commas. Add them to the export block.")
+
+
+@pytest.mark.parametrize("script", sorted(CHROMIMPUTE.glob("*.sh")), ids=lambda p: p.name)
+def test_no_assignment_rides_on_an_sbatch_export_list(script: Path):
+    """`--export=ALL` or nothing. An assignment on that line is the wave-2 defect's shape.
+
+    Checked as a form and not per variable: today only `CI_CHROMS` holds a comma, but a pilot
+    sigma grid is a comma list of region names and the next comma-valued variable would land the
+    same way, silently.
+    """
+    for line in _code(script).splitlines():
+        for hit in re.finditer(r"--export[= ](\S+)", line):
+            arg = hit.group(1).strip("\"'")
+            assert arg.upper() in {"ALL", "NONE"}, (
+                f"{script.name} submits with --export={arg!r}. sbatch splits that list on commas, "
+                f"so a comma-valued variable in it is truncated and its tail is read as variable "
+                f"names. Export the variables and pass --export=ALL.")
