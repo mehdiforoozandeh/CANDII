@@ -143,7 +143,9 @@ import json, sys
 from pathlib import Path
 from candi.store import layout as L
 d = json.loads(Path(sys.argv[1]).read_text())
-sizes = L.load_chrom_sizes(L.chrom_sizes_path(d["store"]))
+# The genome layer is SHARED and lives one level above the corpus store (CANDI_STORE/genome, not
+# CANDI_STORE/eic/genome) — layout.corpus_genome_dir is the helper for that; chrom_sizes_path is not.
+sizes = L.load_chrom_sizes(L.corpus_genome_dir(d["store"]) / "chrom_sizes.json")
 print(",".join(L.sort_chroms(sizes)))
 PYEOF
 )" || { echo "[error] could not read the store's chromosome list from $REGIME" >&2; exit 1; }
