@@ -70,6 +70,13 @@ WS="${WS:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}}"
 # always the last epoch. eic_train.sh fails the run if the selected file is missing, so there is
 # no legitimate board run where this default does not exist.
 MODEL="${MODEL:-$WS/model.selected.pt}"
+# Rows per forward pass in the predict pass. NOT a science knob: predict is `model.eval()` with no
+# normalisation layer anywhere in the net and one independent row per bin, so the batch only sets
+# how much VRAM one decoder activation costs -- `batch x n_targets x 2048 x 4 B`. Held here at the
+# same value sigma.sh uses, so both stages of one method predict under one shape. run_eic.py's own
+# default of 4096 fits the 45-track V_ panel (1.41 GiB) but not the 98-track σ panel (3.06 GiB) on
+# the MIG slice; 1024 fits both and costs no measurable time, the pass being bin-count bound.
+PREDICT_BATCH="${PREDICT_BATCH:-1024}"
 
 case "$PANEL" in
   V_) ;;
@@ -228,6 +235,7 @@ echo "[edice] EIC $SCOPE  panel=$PANEL  truth=$TRUTH  n_targets=$N_TARGETS"
 echo "[edice]   model=$MODEL"
 echo "[edice]   pred=$PRED"
 echo "[edice]   scores=$SCORES"
+echo "[edice]   predict_batch=$PREDICT_BATCH"
 echo "[edice] host=$(hostname)"; nvidia-smi -L || true
 
 # Skip the predict pass when this root is ALREADY COMPLETE. A downstream step died once after a
@@ -272,7 +280,8 @@ fi
 
 if [ "$complete" = "no" ]; then
   python run_eic.py predict \
-    --regime "$PANEL_REGIME" --model "$MODEL" --out "$PRED" "${CHROMS[@]}" || exit $?
+    --regime "$PANEL_REGIME" --model "$MODEL" --out "$PRED" \
+    --batch-size "$PREDICT_BATCH" "${CHROMS[@]}" || exit $?
 fi
 
 mkdir -p "$(dirname "$SCORES")"

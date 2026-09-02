@@ -51,6 +51,13 @@ MODEL="${MODEL:-$WS/model.selected.pt}"
 # σ difference between methods is a difference of method and not of which cells were drawn.
 N_CELLS="${N_CELLS:-12}"
 SIGMA_SEED="${SIGMA_SEED:-890217}"
+# Rows per forward pass in step 2. NOT a science knob: the predict pass is `model.eval()` with no
+# normalisation layer anywhere in the net and one independent row per bin, so the batch only sets
+# how much VRAM one decoder activation costs. run_eic.py's own default of 4096 does not fit the σ
+# panel on the MIG slice -- σ is self-paired over 98 declared tracks against V_'s 45, and the
+# decoder is 2048 wide, so 4096 x 98 x 2048 x 4 B = 3.06 GiB per activation and the job OOM'd at
+# 30 s. 1024 is 0.77 GiB and costs no measurable time, because the pass is bound by the bin count.
+PREDICT_BATCH="${PREDICT_BATCH:-1024}"
 TRAIN_PRED="${TRAIN_PRED:-/scratch/mforooz/t81_sigma/eDICE/${REGIME_NAME}/train_pred}"
 SIGMA_OUT="${SIGMA_OUT:-/project/def-maxwl/mforooz/t81_sigma/eDICE/sigma_${REGIME_NAME}.json}"
 
@@ -73,6 +80,7 @@ mkdir -p "$WS" "$(dirname "$SIGMA_OUT")"
 SIGMA_REGIME="$WS/regime.${REGIME_NAME}.sigma.json"
 
 echo "[edice-σ] regime=$REGIME_NAME  n_targets=$N_TARGETS  n_cells=$N_CELLS  seed=$SIGMA_SEED"
+echo "[edice-σ] predict_batch=$PREDICT_BATCH"
 echo "[edice-σ] host=$(hostname)"; nvidia-smi -L || true
 
 # --- 1. the training regime ----------------------------------------------------------------------
@@ -105,7 +113,8 @@ if [ -z "${FORCE_PREDICT:-}" ] && [ -f "$TRAIN_PRED/manifest.json" ]; then
   echo "[edice-σ] $TRAIN_PRED already has a manifest.json -- reusing it (FORCE_PREDICT=1 to redo)."
 else
   python run_eic.py predict \
-      --regime "$SIGMA_REGIME" --model "$MODEL" --out "$TRAIN_PRED" "${CHROMS[@]}" || exit $?
+      --regime "$SIGMA_REGIME" --model "$MODEL" --out "$TRAIN_PRED" \
+      --batch-size "$PREDICT_BATCH" "${CHROMS[@]}" || exit $?
 fi
 
 # --- 3. the fit ----------------------------------------------------------------------------------

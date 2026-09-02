@@ -21,6 +21,7 @@ close is not visible by eye.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -149,6 +150,81 @@ def test_a_predict_pass_derives_a_single_panel_regime(script: Path):
         f"{script.name} does not derive a single-panel regime, so a predict pass would read the "
         f"shipped 38-pair config and open B_")
     assert "split" in text
+
+
+# ---------------------------------------------------------------------------------------------
+# the predict batch — a VRAM knob, and the σ stage does not fit the MIG slice without it
+# ---------------------------------------------------------------------------------------------
+
+#: eDICE stages that run `run_eic.py predict` and must therefore choose a batch size.
+EDICE_PREDICT_STAGES = (EDICE / "sigma.sh", EDICE / "eic_score.sh")
+
+#: What both stages pass. `run_eic.py`'s own default is 4096, which at the σ panel's 98 declared
+#: tracks costs `4096 x 98 x 2048 x 4 B` = 3.06 GiB for one decoder activation and OOM'd the slice.
+PREDICT_BATCH_DEFAULT = "1024"
+
+
+@pytest.mark.parametrize("script", EDICE_PREDICT_STAGES, ids=lambda p: p.name)
+def test_the_predict_batch_is_reachable_from_the_launch_line(script: Path):
+    """Both eDICE predict stages take PREDICT_BATCH, and default it to the value that fits.
+
+    The σ job died on a CUDA OOM inside the decoder ReLU with no operator-side fix: the stage's
+    whole env surface reached neither `--batch-size` nor `--slab`, so the only way to lower the
+    per-batch shape was to edit the file. This is that knob.
+    """
+    text = _code(script)
+    assert f'PREDICT_BATCH="${{PREDICT_BATCH:-{PREDICT_BATCH_DEFAULT}}}"' in text, (
+        f"{script.name} does not default PREDICT_BATCH to {PREDICT_BATCH_DEFAULT}, so the σ "
+        f"panel's 98-track decoder activation is back over the MIG slice")
+
+
+@pytest.mark.parametrize("script", EDICE_PREDICT_STAGES, ids=lambda p: p.name)
+def test_the_predict_batch_reaches_the_predict_command(script: Path):
+    """On the predict line itself — not merely somewhere in the file.
+
+    `_continued` joins the one `run_eic.py predict` command, so a PREDICT_BATCH that were set and
+    then never passed on would fail here rather than pass on the assignment alone.
+    """
+    cmd = _continued(_code(script), "run_eic.py predict")
+    assert '--batch-size "$PREDICT_BATCH"' in cmd, (
+        f"{script.name}'s predict command does not pass PREDICT_BATCH, so run_eic.py falls back "
+        f"to its own 4096 default:\n  {cmd}")
+    # `--chroms` is nargs="+", so its expansion must stay LAST in the ARGV: any flag written after
+    # it is swallowed as another chromosome name and never reaches --batch-size. `|| exit $?` is
+    # shell control rather than an argument, so the argv ends at the first `||`.
+    argv = cmd.split("||")[0].rstrip()
+    assert argv.endswith('"${CHROMS[@]}"'), (
+        f"{script.name} writes an argument after the nargs=+ --chroms expansion, which would "
+        f"swallow it as a chromosome name:\n  {argv}")
+
+
+@pytest.mark.parametrize("script", EDICE_PREDICT_STAGES, ids=lambda p: p.name)
+def test_the_predict_batch_is_printed_in_the_banner(script: Path):
+    """The log must say which batch a root was written under, since the flag is now settable."""
+    text = _code(script)
+    assert any("echo" in ln and "predict_batch=$PREDICT_BATCH" in ln
+               for ln in text.splitlines()), (
+        f"{script.name} does not echo predict_batch, so a log cannot say which shape it ran")
+
+
+@pytest.mark.parametrize("script", EDICE_PREDICT_STAGES, ids=lambda p: p.name)
+def test_the_predict_batch_echo_is_not_inside_a_heredoc(script: Path):
+    """A previous edit put a banner echo inside a python heredoc and broke the stage on a
+    SyntaxError. `echo "..."` is not python, so it must sit in the shell."""
+    inside, delim = set(), None
+    lines = _text(script).splitlines()
+    for i, ln in enumerate(lines, 1):
+        if delim is None:
+            m = re.search(r"<<-?\s*'?\"?([A-Za-z_][A-Za-z0-9_]*)'?\"?", ln)
+            if m:
+                delim = m.group(1)
+        elif ln.strip() == delim:
+            delim = None
+        else:
+            inside.add(i)
+    offenders = [(i, lines[i - 1].strip()) for i in sorted(inside)
+                 if "PREDICT_BATCH" in lines[i - 1] or "[banner]" in lines[i - 1]]
+    assert not offenders, f"{script.name} has shell lines inside a heredoc body: {offenders}"
 
 
 @pytest.mark.parametrize("script", PREDICT_LAUNCHERS, ids=lambda p: p.parent.parent.name)
