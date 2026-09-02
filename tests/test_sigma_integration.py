@@ -21,6 +21,11 @@ Two consumers did not, and both failures were silent:
 
 A test per consumer would have caught neither: each one's own contract was satisfied. So the chain
 is run, once, on a real synthetic store.
+
+The last section is a fourth agreement, and it is Lavawizard's alone: WHICH training chromosome its
+σ stage may take residuals on. It is here rather than in `tests/test_lavawizard.py` because it is a
+property of the chain — the derived regime hands the launcher the training slice, and only some of
+that slice is a chromosome the shared stem can transfer into.
 """
 from __future__ import annotations
 
@@ -36,6 +41,8 @@ from candi.bench.harness import Pair, open_source
 from candi.store.reader import CorpusStore
 from competitors import sigma_pass as SP
 from competitors.baselines import generate as Gen
+from competitors.lavawizard import sigma_chrom as SC
+from competitors.lavawizard.store_eic import ScopeError, load_regime, shared_hparams_chrom
 from tests.test_store_reader import make_store
 from tests.test_store_regime import regime_dict
 
@@ -215,3 +222,114 @@ def test_the_two_pair_readers_agree_on_the_declared_shape_too(store, tmp_path):
     finally:
         source.close()
         panel.close()
+
+
+# ---------------------------------------------------------------------------
+# which training chromosome Lavawizard's σ stage may use (`lavawizard.sigma_chrom`)
+# ---------------------------------------------------------------------------
+#
+# Fir job 57833682 (eic_pilot, 2026-09-02) took the launcher's old default -- the FIRST entry of the
+# regime's `train_chroms`, chr1 -- built a cache for 7 minutes and died in
+# `model.load_transferable` with `size mismatch for block1.dense.weight: [2048, 225] vs
+# [2048, 175]`. The three position-factor widths come from `dataset3.UPSTREAM_HYPERPARAMS`, keyed
+# per chromosome, and they set the width of a TRANSFERABLE tensor. Under eic_19 the first training
+# chromosome IS chr19, on the shared stem's borrowed row, so the default had never had to choose.
+#
+# These run on the SHIPPED configs, not on a synthetic regime: what failed was a real config's real
+# `train_chroms` order, and a synthetic one would only test the code against itself.
+
+LIVE_REGIMES = ("eic_19", "eic_pilot")
+
+
+def _config(name: str) -> dict:
+    return load_regime(REPO / "configs" / f"regime.{name}.json")
+
+
+@pytest.mark.parametrize("name", LIVE_REGIMES)
+def test_the_default_sigma_chromosome_is_one_the_shared_stem_can_transfer_into(name: str):
+    """chr19 under both live regimes -- unchanged under eic_19, and the fix under eic_pilot."""
+    regime = _config(name)
+    chosen, stem_row = SC.choose(regime)
+    assert chosen == ["chr19"], f"regime.{name} would take its σ residuals on {chosen}"
+
+    stem = shared_hparams_chrom(regime)
+    assert SC.row(chosen[0]) == SC.row(stem), (
+        f"regime.{name}: the σ chromosome's row is not the stem's, so `load_transferable` would "
+        f"refuse `block1.dense.weight`")
+    assert stem in stem_row and "position width 115" in stem_row, \
+        "the banner line does not name the stem's row"
+
+
+@pytest.mark.parametrize("name", LIVE_REGIMES)
+def test_the_default_is_a_training_chromosome_and_the_first_eligible_one(name: str):
+    """§7 fits on training residuals, and "first" has to be `train_chroms` order, not sorted."""
+    regime = _config(name)
+    train = regime["train_chroms"]
+    stem, candidates = SC.on_row_chroms(regime)
+    assert candidates == ["chr19"], f"regime.{name} offers σ candidates {candidates}"
+    assert candidates[0] in train and stem not in train, \
+        "the stem borrows an EVAL chromosome's row and the σ residual is taken on a TRAINING one"
+    assert SC.choose(regime)[0] == [candidates[0]]
+
+
+def test_the_pilots_first_training_chromosome_is_not_the_choice():
+    """Without this the eic_pilot case above could pass on a `%%,*` default and prove nothing."""
+    regime = _config("eic_pilot")
+    assert regime["train_chroms"][0] == "chr1" != SC.choose(regime)[0][0]
+    assert len(regime["train_chroms"]) == 18 and len(SC.on_row_chroms(regime)[1]) == 1, (
+        "seventeen of eighteen eic_pilot training chromosomes are off the stem's row; if that "
+        "changed, the constraint this module exists for changed too")
+
+
+def test_a_named_sigma_chromosome_off_the_stems_row_is_refused_naming_both_rows():
+    """`SIGMA_CHROMS=chr1` on the pilot -- the exact launch that lost job 57833682."""
+    regime = _config("eic_pilot")
+    with pytest.raises(ScopeError) as exc:
+        SC.choose(regime, ["chr1"])
+    msg = str(exc.value)
+    # Both rows, by name and by width, or an operator cannot see which of the two to change.
+    assert "chr1" in msg and "position width 65" in msg, f"the named row is missing: {msg}"
+    assert shared_hparams_chrom(regime) in msg and "position width 115" in msg, \
+        f"the stem's row is missing: {msg}"
+    assert "block1.dense.weight" in msg, "the refusal does not say what would fail"
+    assert "['chr19']" in msg, "the refusal does not say what WOULD be accepted"
+
+
+def test_widening_the_sigma_scope_is_refused_when_the_second_chromosome_is_off_the_row():
+    """The header's own `SIGMA_CHROMS=chr19,chr7` example: every named chromosome is checked."""
+    regime = _config("eic_pilot")
+    assert SC.choose(regime, ["chr19"])[0] == ["chr19"]
+    with pytest.raises(ScopeError) as exc:
+        SC.choose(regime, ["chr19", "chr7"])
+    assert "chr7" in str(exc.value) and "position width 100" in str(exc.value)
+
+
+def test_an_eval_chromosome_is_refused_as_a_rule_1_problem_not_a_shape_one():
+    """chr20 sits on the stem's row and is still the one chromosome σ may never be fit on."""
+    regime = _config("eic_pilot")
+    with pytest.raises(ScopeError) as exc:
+        SC.choose(regime, ["chr20"])
+    assert "train_chroms" in str(exc.value) and "TRAINING residuals" in str(exc.value)
+
+
+@pytest.mark.parametrize("name", LIVE_REGIMES)
+def test_the_cli_prints_two_lines_and_an_empty_override_means_the_default(name: str, capsys):
+    """The launcher passes `--chroms "$SIGMA_CHROMS"` unconditionally and reads two lines."""
+    path = str(REPO / "configs" / f"regime.{name}.json")
+    assert SC.main(["--regime", path, "--chroms", ""]) == 0
+    blank = capsys.readouterr().out.splitlines()
+    assert SC.main(["--regime", path]) == 0
+    assert capsys.readouterr().out.splitlines() == blank, \
+        "an empty --chroms is not the same as no --chroms, so sigma.sh needs two command lines"
+    assert len(blank) == 2, f"sigma.sh reads exactly two lines, got {blank}"
+    assert blank[0] == "chr19" and "n_5kbp_factors=60" in blank[1]
+
+
+def test_the_cli_refuses_with_exit_3_and_writes_the_reason_to_stderr(capsys):
+    """`exit 3` is what sigma.sh branches on, and it must cost no GPU: json and two tables."""
+    path = str(REPO / "configs" / "regime.eic_pilot.json")
+    assert SC.main(["--regime", path, "--chroms", "chr1"]) == SC.EXIT_OFF_ROW == 3
+    cap = capsys.readouterr()
+    assert cap.out == "", "a refusal that still prints a chromosome would be read as a choice"
+    assert "REFUSING" in cap.err and "position width 65" in cap.err \
+        and "position width 115" in cap.err

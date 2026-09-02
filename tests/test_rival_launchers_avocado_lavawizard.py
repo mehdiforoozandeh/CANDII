@@ -4,7 +4,7 @@ These are TEXT checks, in the style of `tests/test_slurm_kit_pin.py`, and for th
 real assertion lives on Fir, inside a job nobody can run from a laptop, so what a test here can add
 is that the script would have made the right call had it run.
 
-Four things are held. Each one is a mistake that already happened once, on this benchmark or the
+Five things are held. Each one is a mistake that already happened once, on this benchmark or the
 one before it:
 
   * A predict stage that walks the SHIPPED regime spends the B_ touch. BENCHMARK_DESIGN.md §5 reads
@@ -18,6 +18,9 @@ one before it:
     on t77; the programme's checkout is `CANDII_main`.
   * An output path invented per script drifts between stages. Every root a launcher defaults to is
     one of the programme's pinned roots.
+  * A σ chromosome the shared stem cannot transfer into loses the whole stage after the cache build
+    (Fir 57833682). Lavawizard's `sigma.sh` must choose one on the stem's `UPSTREAM_HYPERPARAMS`
+    row and refuse one off it -- the rule itself is tested in `tests/test_sigma_integration.py`.
 """
 from __future__ import annotations
 
@@ -134,6 +137,49 @@ def test_no_launcher_keeps_the_void_sigma_path_or_its_override(method: str, stag
         assert dead not in t, (
             f"competitors/{method}/slurm/{stage} still names `{dead}`, which BENCHMARK_DESIGN.md "
             f"§7 and §12.2 rule out")
+
+
+# ------------------------------------------------------- the σ chromosome (Lavawizard only)
+#
+# Lavawizard is the only method whose transferable widths are keyed per chromosome, so it is the
+# only launcher that has to choose. Avocado's σ stage may take any training chromosome and these
+# checks would be false there.
+
+
+def test_lavawizard_sigma_chooses_its_chromosome_with_the_chooser_not_the_first_entry():
+    """The old default was `${_SIG_ALL%%,*}` -- chr1 under eic_pilot, and 175 != 225."""
+    t = _read("lavawizard", "sigma.sh")
+    assert "lavawizard.sigma_chrom" in t, (
+        "lavawizard/sigma.sh does not call `python -m lavawizard.sigma_chrom`, so nothing holds "
+        "its σ chromosome to the row the shared stem borrows")
+    assert 'SIGMA_CHROMS:-${_SIG_ALL%%,*}' not in t, (
+        "lavawizard/sigma.sh still defaults its σ chromosome to the FIRST training chromosome of "
+        "the regime, which is chr1 under eic_pilot and off the stem's row")
+    assert 'lavawizard.sigma_chrom --regime "$REGIME"' in t, (
+        "the chooser must read the SOURCE regime -- the derived σ regime's `eval_chroms` are the "
+        "training slice, so its row is not the one the stem borrows")
+    assert '--chroms "${SIGMA_CHROMS:-}"' in t, (
+        "lavawizard/sigma.sh does not pass SIGMA_CHROMS through the chooser, so an operator's "
+        "override would not be validated at all")
+
+
+def test_lavawizard_sigma_refuses_an_off_row_chromosome_before_the_gpu():
+    """A header note is not a guard. `exit 3` before the cache loop is."""
+    t = _read("lavawizard", "sigma.sh")
+    assert "exit 3" in t.split("# 2. predict the self-pairs")[0], (
+        "lavawizard/sigma.sh names the chooser but does not refuse on it before the cache build "
+        "and the position-table fit")
+    assert "SIGMA_CHROMS" in t, "lavawizard/sigma.sh no longer honours a SIGMA_CHROMS override"
+
+
+def test_lavawizard_sigma_documents_the_rule_and_prints_the_row():
+    """The choice has to be readable in the header and in the job log, not only in the module."""
+    t = _read("lavawizard", "sigma.sh")
+    for phrase in ("UPSTREAM_HYPERPARAMS", "shared_hparams_chrom", "block1.dense"):
+        assert phrase in t, f"lavawizard/sigma.sh's header does not name `{phrase}`"
+    assert "_SIG_ROW" in t and "[sigma] on the shared stem" in t, (
+        "lavawizard/sigma.sh does not print the chosen chromosome's row, so a log cannot be read "
+        "back to see which row the σ table was fit under")
 
 
 # --------------------------------------------------------------------------- the pinned roots

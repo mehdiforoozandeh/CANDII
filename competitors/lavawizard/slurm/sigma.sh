@@ -30,10 +30,29 @@
 # regime, and predict goes through `_declared_tracks`, not `train_columns`, so the split each guard
 # was written for is the split it sees.
 #
+# WHICH TRAINING CHROMOSOME, AND WHY IT IS NOT THE FIRST ONE. The σ chromosome must be a TRAINING
+# chromosome of the regime whose `dataset3.UPSTREAM_HYPERPARAMS` row is the row the shared stem
+# borrows (`store_eic.shared_hparams_chrom`). That row fixes the three position-factor widths,
+# `model.Factors.out_features` sums them into `block1.dense`'s input width, and that weight is a
+# TRANSFERABLE tensor — a stem fit under one row cannot load into a model built under another.
+# `python -m lavawizard.sigma_chrom` is the whole rule: the default is the first training
+# chromosome on that row, in the regime's own `train_chroms` order, and a SIGMA_CHROMS the operator
+# names is held to the same rule and refused with exit 3 before any GPU is spent.
+#
+# It is a real constraint and not a formality. Fir job 57833682 (eic_pilot, 2026-09-02) took the
+# old default — the FIRST `train_chroms` entry, chr1 — built its cache for 7 minutes, and died in
+# `model.load_transferable` with `size mismatch for block1.dense.weight: [2048, 225] vs
+# [2048, 175]`: chr1 is `(10, 10, 45)` and the stem's borrowed chr20 row is `(25, 30, 60)`. Under
+# eic_19 the first training chromosome IS chr19, on the eval row, so the default had never had to
+# choose. Both live regimes now answer chr19, and neither offers a second candidate — of
+# eic_pilot's eighteen training chromosomes only chr19 carries the eval row.
+#
 # ONE CHROMOSOME BY DEFAULT, and that is a sizing choice worth stating. A σ entry is one scalar per
 # assay pooled over 12 cells; on chr19 that is ~2.3 M bins x 12 cells per assay, and adding
 # chromosomes moves the third decimal while costing a full cache build and a position-table fit
-# each. Set SIGMA_CHROMS=chr19,chr7 to widen it; the fitter records what it actually read.
+# each. SIGMA_CHROMS=chr19,chr7 is how one WOULD widen it, and it is refused here — chr7 is off the
+# row. Widening is an affordance for a later regime, not one either live regime can use; the fitter
+# records what it actually read.
 #
 # KNOWN INTEGRATION EDGE, recorded rather than worked around: `candi.store.regime:597` refuses a
 # regime whose eval_pairs target a train biosample, and `:589` refuses train_chroms and eval_chroms
@@ -88,9 +107,35 @@ print((d.get("regions") or {}).get("bed", ""))
 PYEOF
 )" || exit 1
 { read -r _SIG_ALL; read -r _SIG_BED; } <<< "$_SIG_RG"
-SIGMA_CHROMS="${SIGMA_CHROMS:-${_SIG_ALL%%,*}}"
+
+# WHICH of them, and the one constraint only this method has — see the header. Reads the SOURCE
+# regime, because the row the stem borrows is the SOURCE's eval_chroms' row and the derived file's
+# `eval_chroms` are the training slice. Seconds on a login node: json and two small tables, no
+# torch. Line 1 of its stdout is the chromosomes, line 2 is the stem's row for the banner.
+#
+# `--chroms ""` and no `--chroms` mean the same thing to the module, which is what lets an unset
+# SIGMA_CHROMS ride through one unconditional command line rather than an array this script would
+# then have to expand under `set -u`.
+if ! _SIG_PICK="$(python -m lavawizard.sigma_chrom --regime "$REGIME" \
+                         --chroms "${SIGMA_CHROMS:-}")"; then
+  echo "[sigma] refusing to spend a cache build and a GPU on a σ chromosome the shared stem cannot" \
+       "transfer into. Set SIGMA_CHROMS to one of the chromosomes named above, or leave it unset." >&2
+  exit 3
+fi
+{ read -r SIGMA_CHROMS; read -r _SIG_ROW; } <<< "$_SIG_PICK"
 IFS=, read -r -a SIG_CHROMS <<< "$SIGMA_CHROMS"
+# The chooser read the source and the predict/fit steps below read the derived file. They agree by
+# construction (`sigma_training_regime.derive` sets eval_chroms = the source's train_chroms), and
+# this is where a drift between the two would show up instead of in a cache build.
+for C in "${SIG_CHROMS[@]}"; do
+  case ",$_SIG_ALL," in
+    *",$C,"*) ;;
+    *) echo "[sigma] $C is on the stem's row but the derived regime offers only $_SIG_ALL" >&2
+       exit 3 ;;
+  esac
+done
 echo "[sigma] residual chromosomes: ${SIG_CHROMS[*]}  (regime offers $_SIG_ALL)"
+echo "[sigma] on the shared stem's borrowed row: $_SIG_ROW"
 
 # 2. predict the self-pairs, one chromosome at a time.
 FIRST=1
