@@ -1,6 +1,7 @@
 """external — score prediction tracks somebody else wrote to disk (`RIVALS_PLAN.md` §4).
 
     python -m candi.bench.external --store regime.json --pred <pred_root> --out scores.json
+    python -m candi.bench.external fill-panels --v store.V_.json --b store.B_.json
 
 `candi.bench` scores a checkpoint: it opens a corpus, prompts a model, and compares what came back
 to the truth. A rival method has no checkpoint we can load — Avocado is a TensorFlow port,
@@ -40,15 +41,21 @@ are measured against the same bytes the entrants were originally ranked on. It s
 the store still owns the grid, the declared track list and the provenance, and the scoring is the
 same `score_track`. What the challenge never distributed — read counts, peak calls — is absent from
 the row rather than filled in (`WITHHELD_WITHOUT_PEAK_TRUTH`).
+
+**And one thing it does with no scoring at all.** `fill-panels` measures a `V_` pass's `V_matched`
+from the sibling `B_` pass's already-scored rows, because §5.2's matched panel is defined by the
+assays `B_` poses and the two panels are scored in separate passes here. See the block above
+`panel_union` for why that is an aggregation and not a re-score.
 """
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
@@ -56,13 +63,14 @@ from candi.bench import annotations as ann
 from candi.bench import distributional as D
 from candi.bench.harness import (
     ARMS, SCOPE_HELD_OUT, EvalSource, Pair, TrackRecord, _binarise, _varpool, cross_cell,
-    macro_mean, open_source, panel_macros, panel_specificity, score_track, track_key,
+    macro_mean, open_source, panel_macros, panel_of, panel_specificity, score_track, track_key,
 )
 
 __all__ = [
-    "PRED_ARRAYS", "WITHHELD_WITHOUT_PEAK_TRUTH", "track_dirname", "read_manifest",
+    "PRED_ARRAYS", "WITHHELD_WITHOUT_PEAK_TRUTH", "FILL_PANELS", "track_dirname", "read_manifest",
     "read_truth_manifest", "read_sigma_table", "read_track_arrays", "read_truth_root_arrays",
-    "stream_truth", "build_record", "score_external", "build_parser", "main",
+    "stream_truth", "build_record", "score_external", "panel_union", "fill_panels",
+    "build_parser", "build_fill_parser", "main_fill_panels", "main",
 ]
 
 #: The arrays §4.1 recognises inside a `chr*.npz`. Anything else in the file is ignored — a producer
@@ -74,6 +82,12 @@ PRED_ARRAYS: Tuple[str, ...] = ("signal_mu", "signal_sigma", "mu", "n", "peak_sc
 #: `kind` is `impute` and is implied: `denoise` has no external producer, since a rival that denoises
 #: a cell's own tracks is a different task from the one this leaderboard ranks.
 SEP = "__"
+
+#: The one named sub-command. `python -m candi.bench.external --store … --pred … --out …` is the
+#: default and is NOT spelled `score`: four launchers already invoke it that way, and a required
+#: positional would break every one of them. So the dispatch below is "first token names the
+#: sub-command, or there is no sub-command", not an `add_subparsers`.
+FILL_PANELS = "fill-panels"
 
 #: §4.1 — external `signal_mu` is ALWAYS already in `-log10 p`. A rival carries no training-space
 #: transform of ours, so there is nothing to invert and the identity is the honest answer. Recorded
@@ -652,6 +666,211 @@ def _withhold(arms: Dict[str, Dict[str, object]], truth_signal_only: bool
 
 
 # ---------------------------------------------------------------------------
+# fill-panels — `V_matched` measured from the sibling `B_` pass (§5.2)
+# ---------------------------------------------------------------------------
+# `harness.panel_macros` computes the three §5.2 numbers from ONE scored pass, and the matched
+# panel's assay set is MEASURED from the `B_` rows of that pass rather than listed — a hard-coded
+# list would go stale the first time the panel moves, and silently.
+#
+# The rivals programme scores the two panels in SEPARATE passes: the regimes are panel-derived
+# (`tools/declare_eval_pairs.py split`), and the prediction roots are split too. A `V_` pass
+# therefore contains no `B_` row, so `panel_macros` measures an EMPTY matched set and every
+# `V_matched` block on the board is blank — the one number §5.3's reading rule needs.
+#
+# Nothing here re-scores. Both passes already carry their `per_track` blocks, and a per-track score
+# is independent of which other tracks shared the pass, so `V_matched` can be measured from the
+# sibling pass's rows by handing `panel_macros` the UNION of the two tables. That is the whole
+# mechanism: the same function, the same definition, more rows.
+
+def _renan(per_track: Mapping[str, Mapping[str, Mapping[str, Any]]]
+           ) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """Undo `cli.jsonable`'s `NaN -> null` on the NUMERIC keys of a scored per-track table.
+
+    JSON has no NaN, so every non-finite score is written `null` — and `macro_mean` reads a row by
+    asking `isinstance(v, (int, float, bool))`. A `null` is neither, so a key that is nan in ONE
+    row and finite in another would be dropped from that row's contribution here and averaged in a
+    joint pass: the same rows, two different numbers. Worse, `macro_mean` then calls
+    `float(row[k])` on it and raises.
+
+    So a `null` is restored to a nan exactly when the key is a real (non-bool) number in some row
+    of the table — which is what it must have been. A `null` under a key that is numeric NOWHERE is
+    left alone: `bin_scope` is `None` on an unscoped run and is not a measure, and both spellings
+    are equally invisible to `macro_mean`.
+
+    Call it on the MERGED table, never on one side: a key finite only in the `B_` pass still has to
+    restore the `V_` pass's nulls, or the union would disagree with a joint pass.
+    """
+    numeric: Dict[str, Set[str]] = {}
+    for arms in per_track.values():
+        for arm, row in arms.items():
+            for k, v in row.items():
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    numeric.setdefault(arm, set()).add(k)
+    return {
+        key: {arm: {k: (float("nan") if v is None and k in numeric.get(arm, ()) else v)
+                    for k, v in row.items()}
+              for arm, row in arms.items()}
+        for key, arms in per_track.items()
+    }
+
+
+def _row_arms(per_track: Mapping[str, Mapping[str, Any]]) -> Set[str]:
+    return {str(arm) for arms in per_track.values() for arm in arms}
+
+
+def _panel_counts(per_track: Mapping[str, Mapping[str, Any]]) -> Dict[Optional[str], int]:
+    """How many rows each §5.2 panel holds, by the TARGET cell's prefix (`harness.panel_of`)."""
+    out: Dict[Optional[str], int] = {}
+    for key in per_track:
+        fields = str(key).split("|")
+        p = panel_of(fields[1]) if len(fields) >= 3 else None
+        out[p] = out.get(p, 0) + 1
+    return out
+
+
+def _regime_family(prov: Mapping[str, Any]) -> Optional[str]:
+    """`regime.eic_r1.V_.json` -> `regime.eic_r1` — the two panel regimes' common ancestor.
+
+    `tools/declare_eval_pairs.py split` writes `<workspace>/regime.<name>.<panel>.json`, so the
+    derived siblings differ from each other in exactly one dot-separated segment: the panel, which
+    is the only segment that ends in `_`. Dropping those segments is what lets a `V_` json and a
+    `B_` json be recognised as two halves of ONE exam without either one carrying a shared id.
+
+    `None` when the name carries no panel segment — the caller refuses rather than guessing.
+    """
+    regime = prov.get("regime")
+    if not regime:
+        return None
+    stem = Path(str(regime)).name
+    if stem.endswith(".json"):
+        stem = stem[: -len(".json")]
+    parts = [s for s in stem.split(".") if not s.endswith("_")]
+    return ".".join(parts) if len(parts) < len(stem.split(".")) else None
+
+
+def panel_union(v_per_track: Mapping[str, Mapping[str, Mapping[str, Any]]],
+                b_per_track: Mapping[str, Mapping[str, Mapping[str, Any]]],
+                *, what: str = "per_track") -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """`{**B, **V}`, with a key COLLISION refused and `jsonable`'s nulls restored.
+
+    A shared `track_key` means the same experiment was scored in both passes, and a merge would
+    keep one of the two silently. Whichever one that is, the union is no longer "the rows a joint
+    pass would have had", so it is an error rather than a precedence rule.
+    """
+    clash = sorted(set(v_per_track) & set(b_per_track))
+    if clash:
+        raise ExternalError(
+            f"the two passes share {len(clash)} {what} key(s) — {clash[:5]}. The `V_` and `B_` "
+            f"passes must score DISJOINT track sets (that is what makes their union the rows one "
+            f"joint pass would have held); a shared key means one of the two files is not the "
+            f"sibling it claims to be, or a regime declares a pair on both panels.")
+    return _renan({**b_per_track, **v_per_track})
+
+
+def fill_panels(v: Dict[str, Any], b: Mapping[str, Any], *, b_json: Path | str,
+                filled: Optional[str] = None) -> Dict[str, Any]:
+    """Fill a `V_` pass's `V_matched` from the sibling `B_` pass's SCORED ROWS. Mutates `v`.
+
+    What is written is exactly `harness.panel_macros(union, arm)["V_matched"]` — the block with its
+    `matched_to`, its `note` and `ranked: False` — and nothing else. `V_breadth` is the `V_` pass's
+    own and is not recomputed (it is the same rows either way). `B` is NOT written: the `B_` json is
+    the file that describes the `B_` panel, and a `V_` json that also carried `B`'s numbers would be
+    two rows in one file, which is the thing the split passes exist to keep apart.
+
+    The refusals are all one question — are these two files halves of ONE exam? Same corpus, same
+    assay order, same chromosomes, same scored POSITIONS, same method, same truth, same arms, same
+    regime family, disjoint tracks, and one of each panel. Anything else and the filled `V_matched`
+    would be a number measured against a different exam's assay set.
+
+    `genome_wide.panels` gets the same treatment when both files carry the block; carrying it on
+    one side only means the two passes were given different `--held-out-chroms`, and the held-out
+    aggregation they do agree on would still be two different scopes.
+    """
+    for name, obj in (("--v", v), ("--b", b)):
+        for k in ("provenance", "per_track", "panels"):
+            if k not in obj:
+                raise ExternalError(f"{name} carries no `{k}` — that is not a bench score file.")
+    vp, bp = v["provenance"], b["provenance"]
+
+    for key in ("data_source", "store", "h5", "assays", "eval_chroms", "eval_scope", "method"):
+        mine, theirs = vp.get(key), bp.get(key)
+        if mine != theirs:
+            raise ExternalError(
+                f"the two passes disagree on `provenance.{key}` ({mine!r} vs {theirs!r}). "
+                f"`V_matched` is the `V_` rows aggregated over the assays `B_` poses, so the two "
+                f"files must be one exam scored in two passes — same corpus, same assay order, "
+                f"same chromosomes, same scored positions, same method.")
+    vt = (vp.get("truth") or {}).get("source")
+    bt = (bp.get("truth") or {}).get("source")
+    if vt != bt:
+        raise ExternalError(
+            f"`provenance.truth.source` is {vt!r} on --v and {bt!r} on --b. A challenge-truth row "
+            f"and a store-truth row are two different exams and must never be quoted in one "
+            f"column (EVAL.md), so one cannot supply the other's matched assay set.")
+    if set(v["panels"]) != set(b["panels"]) or _row_arms(v["per_track"]) != _row_arms(
+            b["per_track"]):
+        raise ExternalError(
+            f"the two passes carry different arms — panels {sorted(v['panels'])} vs "
+            f"{sorted(b['panels'])}, scored rows {sorted(_row_arms(v['per_track']))} vs "
+            f"{sorted(_row_arms(b['per_track']))}. An arm present on one side only (a σ-table "
+            f"passed to one pass and not the other, say) would put an empty `V_matched` on the "
+            f"board under a heading that has numbers everywhere else.")
+
+    vfam, bfam = _regime_family(vp), _regime_family(bp)
+    if vfam is None or bfam is None:
+        raise ExternalError(
+            f"cannot tell which regime family these two passes belong to — "
+            f"{vp.get('regime')!r} / {bp.get('regime')!r}. A panel regime is named "
+            f"`regime.<name>.<panel>.json` (`tools/declare_eval_pairs.py split`), and the panel "
+            f"segment is what says the two files are siblings of one exam rather than two "
+            f"revisions of it. Re-derive the regimes with `split` and re-score, or rename them.")
+    if vfam != bfam:
+        raise ExternalError(
+            f"--v was scored on regime family {vfam!r} and --b on {bfam!r}. Two revisions of a "
+            f"regime declare different panels; measuring one's matched set from the other would "
+            f"quote an assay set no `V_` row was ever scored on.")
+
+    vc, bc = _panel_counts(v["per_track"]), _panel_counts(b["per_track"])
+    if not vc.get("V"):
+        raise ExternalError(
+            f"--v holds no row whose TARGET cell starts `V_` (panels present: "
+            f"{sorted(str(k) for k in vc)}). There is no breadth panel to narrow. Did --v and --b "
+            f"get swapped?")
+    if not bc.get("B"):
+        raise ExternalError(
+            f"--b holds no row whose TARGET cell starts `B_` (panels present: "
+            f"{sorted(str(k) for k in bc)}). The matched assay set is MEASURED from scored `B_` "
+            f"rows, so this would fill `V_matched` with the same empty block it already has.")
+
+    union = panel_union(v["per_track"], b["per_track"])
+    for arm in sorted(v["panels"]):
+        v["panels"][arm]["V_matched"] = panel_macros(union, arm)["V_matched"]
+
+    gw = ("genome_wide" in v, "genome_wide" in b)
+    if gw[0] != gw[1]:
+        raise ExternalError(
+            f"`genome_wide` is present on {'--v' if gw[0] else '--b'} and absent on "
+            f"{'--b' if gw[0] else '--v'}. The block exists only when --held-out-chroms named a "
+            f"proper subset of what was scored, so the two passes were run over different scopes "
+            f"and neither aggregation is comparable with the other's.")
+    if gw[0]:
+        gwu = panel_union(v["genome_wide"]["per_track"], b["genome_wide"]["per_track"],
+                          what="genome_wide.per_track")
+        for arm in sorted(v["genome_wide"]["panels"]):
+            v["genome_wide"]["panels"][arm]["V_matched"] = panel_macros(gwu, arm)["V_matched"]
+
+    v["provenance"]["panels_from"] = {
+        "b_json": str(b_json),
+        # The prediction manifest is copied VERBATIM into a score file's provenance and is not
+        # hashed there, so this is `None` on a pass that recorded no hash of its own rather than a
+        # hash of a re-serialised dict — which would name bytes that never existed on disk.
+        "b_pred_manifest_sha256": bp.get("pred_manifest_sha256", bp.get("manifest_sha256")),
+        "filled": filled or datetime.date.today().isoformat(),
+    }
+    return v
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -660,6 +879,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m candi.bench.external",
         description="Score externally-produced prediction tracks with candi.bench's own "
                     "instruments (RIVALS_PLAN.md §4).",
+        epilog=f"There is one named sub-command, `{FILL_PANELS}` (see `{FILL_PANELS} --help`): it "
+               f"fills a scored `V_` json's `V_matched` from the sibling `B_` pass. Scoring is the "
+               f"default and has no sub-command name.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--store", required=True,
@@ -719,10 +941,66 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def build_fill_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog=f"python -m candi.bench.external {FILL_PANELS}",
+        description="Recompute a scored `V_` json's `V_matched` from the sibling `B_` pass's "
+                    "scored rows (plan/BENCHMARK_DESIGN.md §5.2). Scores nothing.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p.add_argument("--v", required=True,
+                   help="the `V_` pass's score json. Its `panels[arm].V_matched` (and "
+                        "`genome_wide.panels[arm].V_matched`, when the block is there) is the only "
+                        "thing rewritten; `V_breadth` and `B` are left as they are.")
+    p.add_argument("--b", required=True,
+                   help="the SIBLING `B_` pass's score json — same corpus, same positions, same "
+                        "method, same truth, same regime family, disjoint tracks. The matched "
+                        "assay set is MEASURED from its scored `B_` rows, never listed.")
+    p.add_argument("--out", default=None,
+                   help="where to write. Default: rewrite --v in place, after copying the "
+                        "original once to `<--v>.bak` (an existing .bak is never overwritten, so "
+                        "the pre-fill file survives a second run).")
+    p.add_argument("--quiet", action="store_true")
+    return p
+
+
+def main_fill_panels(argv: Sequence[str]) -> int:
+    from candi.bench.cli import jsonable
+
+    a = build_fill_parser().parse_args(list(argv))
+    vpath, bpath = Path(a.v), Path(a.b)
+    v = json.loads(vpath.read_text(encoding="utf-8"))
+    b = json.loads(bpath.read_text(encoding="utf-8"))
+    got = fill_panels(v, b, b_json=bpath)
+
+    out = Path(a.out) if a.out else vpath
+    if out.resolve() == vpath.resolve():
+        bak = vpath.with_name(vpath.name + ".bak")
+        if not bak.exists():
+            # The bytes AS THEY ARE ON DISK, before anything is written over them. Once only: a
+            # second fill must not turn the backup into a copy of an already-filled file.
+            bak.write_bytes(vpath.read_bytes())
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(jsonable(got), indent=2))
+    if not a.quiet:
+        for arm in sorted(got["panels"]):
+            m = got["panels"][arm]["V_matched"]
+            print(f"[bench.external] {FILL_PANELS} {arm}: V_matched over "
+                  f"{m.get('matched_to')} — {m.get('n_experiments')} experiment(s)", flush=True)
+        print(f"[bench.external] wrote {out}", flush=True)
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     from candi.bench.cli import jsonable
 
-    a = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
+    args = list(sys.argv[1:] if argv is None else argv)
+    # The default command is the one four launchers already spell `--store … --pred … --out …`,
+    # so the sub-command is recognised by its own name and nothing else changes shape.
+    if args and args[0] == FILL_PANELS:
+        return main_fill_panels(args[1:])
+
+    a = build_parser().parse_args(args)
     chroms = tuple(c.strip() for c in a.chroms.split(",")) if a.chroms else None
     bios = tuple(b.strip() for b in a.biosamples.split(",")) if a.biosamples else None
     held = (tuple(c.strip() for c in a.held_out_chroms.split(","))
