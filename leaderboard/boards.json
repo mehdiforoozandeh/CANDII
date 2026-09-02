@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "doc": "plan/BENCHMARK_DESIGN.md §1, §3, §4, §5, §6, §9 — one entry per regime, plus the vocabularies every row is addressed by. §9 retires three namings: P1/P2/P3 (they encoded eval scope, which is now one thing for every regime), Dataset 2 / Dataset 3 (they conflated the corpus with the pipeline that produced the truth), and the board ids `main`/`dev`/`entrants` (`main` and `dev` are now the two regime ids; `entrants` is no longer a board at all — it is the anchor block). A board whose `frozen` hashes are still TODO refuses every `add`; both live regimes are in that state, because their store manifest and regime json changed under t78 and t79 and nothing has been rescored against them yet. `pending` lists methods whose results are still computing; `build` drops an entry once a row for that method is stamped.",
+  "doc": "plan/BENCHMARK_DESIGN.md §1, §3, §4, §5, §6, §9 — one entry per regime, plus the vocabularies every row is addressed by. §9 retires three namings: P1/P2/P3 (they encoded eval scope, which is now one thing for every regime), Dataset 2 / Dataset 3 (they conflated the corpus with the pipeline that produced the truth), and the board ids `main`/`dev`/`entrants` (`main` and `dev` are now the two regime ids; `entrants` is no longer a board at all — it is the anchor block). A board whose `frozen` hashes are still TODO refuses every `add`. Both live regimes and the anchor block were frozen on 2026-09-02 — the store manifest re-read on Fir after t78's DNase p-value rebuild, the regime jsons as t79 rewrote them and this repo tracks them — so a row scored against that pair now lands and a row scored against anything else still cannot. `pending` lists methods whose results are still computing; `build` drops an entry once a row for that method is stamped.",
   "address": {
     "fields": ["method", "regime", "truth", "panel", "scope", "metric"],
     "rule": "§1 — every cell on the board is addressed by these six. If any field is unknown for a row, the row does not go in the ranked table. `add` refuses such a row and the compiler has no place to put one.",
@@ -109,9 +109,9 @@
         "scorer": "python -m candi.bench.external"
       },
       "frozen": {
-        "store_manifest_hash": "TODO-eic.19-store-manifest",
-        "regime_sha256": "TODO-eic.19-regime-sha256",
-        "frozen_note": "Not frozen, and no row may be stamped until it is. The old hashes digested a store manifest that predates t78's DNase p-value rebuild and a regime json that predates t79's rewrite; freezing the new pair needs the rebuilt manifest on Fir and the tracked configs/regime.eic_19.json, both read at the same moment the first row is scored."
+        "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83",
+        "regime_sha256": "6843317fefba9c9da6ebad49ab0302969107542e7f2e109742fbe6a7955a042d",
+        "frozen_note": "Frozen 2026-09-02, when the first rows were stamped. `store_manifest_hash` is `sha256sum /project/def-maxwl/mforooz/CANDI_STORE/eic/manifest.json` read on Fir at that moment; that file's mtime is 2026-08-30 22:22 PDT, so it predates every scoring pass on this board and no pass read a different build of it. `regime_sha256` is `sha256sum configs/regime.eic_19.json` as this repo tracks it. A real pass never reads the shipped regime — `tools/declare_eval_pairs.py split` cuts it to one panel first — so the row gate accepts the shipped name or the derived single-panel sibling of the row's own panel."
       },
       "noise_floor": {
         "measured": false,
@@ -120,7 +120,9 @@
       "caveats": [
         "Every row that used to be on this page is void (§3.3): the old board scored all 23 chromosomes, chr19 included, and chr19 is the chromosome CANDI trained on. Those numbers are not carried forward, and no new row has been scored yet.",
         "Under this regime CANDI is in-sample on 1 of 23 chromosomes. That fraction is part of the number's address, and the page prints it beside any row whose score json carries a per-cell fraction. No producer writes one yet, so no row shows a figure — an absent fraction is drawn as nothing rather than as zero.",
-        "The board measures missing-mark transfer within a seen cell type (§8). Every eval pair is a mark the V_ or B_ cell has and its paired T_ cell lacks, so the model always sees other tracks from the same cell type. CANDI's zero-shot claim is not tested here."
+        "The board measures missing-mark transfer within a seen cell type (§8). Every eval pair is a mark the V_ or B_ cell has and its paired T_ cell lacks, so the model always sees other tracks from the same cell type. CANDI's zero-shot claim is not tested here.",
+        "Nothing on this board is ranked yet, and no gap between two rows is readable yet. §15's resolution limit (t86) is not measured, and AGENTS.md §7.2 records that a seed change alone moves pooled CRPS by 0.1195 while the target-clustered noise floor on macro CRPS is ~0.09. Until t86 lands, read a row as a number that exists, never as a number that beats another.",
+        "ChromImpute's B_ rows are point-only on 3 of their 51 tracks. Its σ table was fitted on a 6-cell training draw that carries no ATAC-seq, so the three ATAC-seq B_ experiments (T_DND-41, T_NCI-H929, T_RWPE2) got no spread and every σ-derived key on them was withheld: the distributional metrics on those rows are aggregated over 48 tracks, the point metrics over 51. Named in each json as `provenance.point_only_tracks`; recorded in cruxvault/results/t81/PRED_B_CI.md. Widening the σ draw would break the uniform 12-cell draw, so the gap is disclosed rather than closed."
       ],
       "reader_badges": [
         {
@@ -158,9 +160,9 @@
         "scorer": "python -m candi.bench.external"
       },
       "frozen": {
-        "store_manifest_hash": "TODO-eic.pilot-store-manifest",
-        "regime_sha256": "TODO-eic.pilot-regime-sha256",
-        "frozen_note": "Not frozen, and no row may be stamped until it is. Same store manifest as eic.19 — the two regimes differ only in training loci — but its own regime json, configs/regime.eic_pilot.json, which carries the hg38 Pilot Regions BED."
+        "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83",
+        "regime_sha256": "9a1741b179200738c6a9fdb0ee0bd79ee8a359e6a51cd3713b8731e587b45acc",
+        "frozen_note": "Frozen 2026-09-02, with eic.19 and from the same read. `store_manifest_hash` is the SAME store manifest as eic.19 — the two regimes differ only in training loci, and `sha256sum /project/def-maxwl/mforooz/CANDI_STORE/eic/manifest.json` on Fir returns one digest for both. `regime_sha256` is `sha256sum configs/regime.eic_pilot.json` as this repo tracks it: the file that carries the hg38 Pilot Regions BED. As on eic.19, a real pass reads a derived single-panel regime, so the row gate accepts the shipped name or the derived sibling of the row's own panel."
       },
       "noise_floor": {
         "measured": false,
@@ -169,7 +171,9 @@
       "caveats": [
         "This regime is new work, not a rerun (§13.6). Nothing has trained under it yet.",
         "Under eic.pilot, Avocado's stage-1 fit returns to the ENCODE Pilot Regions and is faithful to its own paper for the first time (§3.2).",
-        "The training window count is a containment rule, not a division: the sampler plans 1,294 fully-contained 768-bin windows = 993,792 bins = 97.10 % of the contained budget."
+        "The training window count is a containment rule, not a division: the sampler plans 1,294 fully-contained 768-bin windows = 993,792 bins = 97.10 % of the contained budget.",
+        "Nothing on this board is ranked yet, and no gap between two rows is readable yet. Same as eic.19: §15's resolution limit (t86) is not measured, and AGENTS.md §7.2 records that a seed change alone moves pooled CRPS by 0.1195 while the target-clustered noise floor on macro CRPS is ~0.09.",
+        "ChromImpute's B_ rows are point-only on 3 of their 51 tracks, exactly as under eic.19: no ATAC-seq in the σ draw, so the three ATAC-seq B_ experiments carry no spread and the distributional metrics on those rows are aggregated over 48 tracks against 51 for the point metrics (`provenance.point_only_tracks`; cruxvault/results/t81/PRED_B_CI.md). Lavawizard's pilot σ table has a second, separate gap: it was fitted on 12 cells with 2 rare-mark self-pair tracks skipped, so H2AK9ac and H4K12ac have no σ row at all. Neither mark appears in this regime's V_ panel, so the V_ rows are unaffected; a later panel carrying either would be point-only for it (cruxvault/results/t81/W3_LAVA_PILOT.md §S.7)."
       ],
       "reader_badges": [
         {
@@ -205,6 +209,8 @@
     "subtitle": "25 rows we did not run",
     "eli5": "The 23 ENCODE Imputation Challenge submissions plus the organizers' Average and Avocado_p0 baselines, rescored through our scorer on our grid so they are readable beside our rows. They carry no regime, because we never trained them, so they sit outside the ranked table rather than inside it.",
     "truth": "challenge",
+    "truths": ["challenge", "store"],
+    "truths_note": "§6 — `truth` is the measurement the 2019 field was ranked under and stays the block's default view. `truths` is what the rescore actually read: the same 25 prediction roots were scored TWICE on the store's grid, once against the 2019 truth and once against the ENCODE4 store truth, so the entrants answer the same truth toggle our own rows do. Added 2026-09-02, when both halves landed; before that the block offered challenge alone and a store-truth entrant row was refused.",
     "panel": "B_",
     "scope": "held-out",
     "eval_set": {
@@ -215,9 +221,9 @@
       "scorer": "python -m candi.bench.external, loading the Synapse bigwigs onto the store grid"
     },
     "frozen": {
-      "store_manifest_hash": "TODO-anchor-store-manifest",
-      "regime_sha256": "TODO-anchor-submissions-survey",
-      "frozen_note": "Not frozen. The anchor block is rescored through candi.bench.external on the store grid (§6), so it will pin the store manifest the rescore reads and the sha256 of the Synapse submissions survey the predictions come from. The old pair digested cruxvault/results/t54/submissions_survey.json and placement.json, which are the vendored-001-scorer path — retired from the board by §6."
+      "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83",
+      "regime_sha256": "2f9d57d2d236eadb624b64694df04bca93a61864cd4d47cee3a42c2501400e08",
+      "frozen_note": "Frozen 2026-09-02, when the 25 entrants were stamped. `store_manifest_hash` is the same store manifest both regimes pin: the rescore runs on the store's grid (§6), so the grid is the store's whichever truth the numbers are compared against. The anchor has no regime to freeze, so `regime_sha256` holds the sha256 of the challenge truth root's manifest instead — `sha256sum /project/def-maxwl/mforooz/t81_truth_challenge/B_/manifest.json`, the value every challenge-truth entrant json carries as `provenance.truth.manifest_sha256`. The old pair digested cruxvault/results/t54/submissions_survey.json and placement.json, which are the vendored-001-scorer path — retired from the board by §6."
     },
     "non_independence": {
       "headline": "The field has fewer distinct methods than rows.",
@@ -231,7 +237,10 @@
       "An anchor, not a competitor. These 25 rows were submitted in 2019 and frozen; we never trained them, they carry no regime, and they are not ranked against our rows.",
       "Lifting them out of the ranked table means CANDI and the 2019 submissions never share a ranking denominator, so \"CANDI would have placed Nth\" cannot be read off this page. That number is computed once, separately (§6), as a labelled figure — never a board row.",
       "DNase-seq is left out of every 2019-challenge row: in the store it is a different physical quantity.",
-      "Their bigwigs live on Fir scratch, which purges at 60 days — check before assuming they are still there (§13.4)."
+      "Their bigwigs live on Fir scratch, which purges at 60 days — check before assuming they are still there (§13.4).",
+      "Every entrant row is point-only. The 2019 submissions are single p-value tracks with no per-bin spread, and no σ table was fitted for them, so the whole distributional cell — crps, pit_ks, coverage_95, gaussian_nll — is absent from all 50 rows rather than filled with an invented spread. An empty distributional column here is a fact about what was submitted, not a scoring failure (cruxvault/results/t81/SCORES_ANCHORS.md).",
+      "No gap between two entrants is readable yet either. §15's resolution limit is not measured on this panel, and the block is unranked for a second, independent reason: these rows carry no regime, so they share no ranking denominator with ours.",
+      "UIOWA_Michaelson is scored over 50 of the 51 B_ experiments, not 51. The team never submitted C38M18, so its prediction root has 50 tracks and both its rows were scored with --allow-missing; the row's own `panel_counts` records 50. Its macro is over a different denominator from every other entrant's."
     ],
     "pending": [
       {"method": "Aug2019Imputation", "lineage": "entrant", "note": "awaiting rescore on our grid"},

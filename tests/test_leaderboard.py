@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -208,7 +209,11 @@ def test_registry_and_boards_round_trip() -> None:
     assert boards["truths"]["challenge"]["arms"] == ["pval"]
     assert len(view_keys := lb.view_keys(boards, "eic.19")) == 12
     assert lb.CANONICAL_VIEW in view_keys
-    assert lb.view_keys(boards, lb.ANCHOR) == ["challenge.B_.held-out"]
+    # §6 — the anchor block sits at one panel and one scope, under BOTH truths: the same 25
+    # prediction roots were rescored against the 2019 truth and against the store truth, so the
+    # entrants answer the same toggle our rows do. `truth` stays the default view.
+    assert boards["anchor"]["truth"] == "challenge"
+    assert lb.view_keys(boards, lb.ANCHOR) == ["challenge.B_.held-out", "store.B_.held-out"]
     assert [d["id"] for d in boards["deferred_regimes"]][0] == "eic.gw→20,21,22"
     cov = reg["categories"]["covariate_diagnostics"]
     assert "absent_note" in cov and "candi.bench.external" in cov["absent_note"]
@@ -355,18 +360,68 @@ def test_add_refuses_an_unfrozen_board(tmp_path: Path) -> None:
         add(root, "score_fixture_a.json", "fixture-a", "--allow-missing")
 
 
-def test_committed_boards_refuse_every_add_until_they_are_frozen() -> None:
-    """The two live regimes are deliberately NOT frozen, and that is the §3.3 enforcement.
+#: What the three `frozen` blocks were pinned to on 2026-09-02, when the first rows were stamped.
+#: Not a fixture: these are the live artefacts, and the point of the test is that the committed
+#: boards still name them. `store` is `sha256sum /project/def-maxwl/mforooz/CANDI_STORE/eic/
+#: manifest.json` on Fir; the two regime values are `sha256sum` of the tracked config beside this
+#: test; `anchor` is `sha256sum /project/def-maxwl/mforooz/t81_truth_challenge/B_/manifest.json`,
+#: which is what the anchor freezes in place of a regime it never had.
+FROZEN_STORE_MANIFEST = "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83"
+FROZEN_REGIME_SHA = {
+    "eic.19": "6843317fefba9c9da6ebad49ab0302969107542e7f2e109742fbe6a7955a042d",
+    "eic.pilot": "9a1741b179200738c6a9fdb0ee0bd79ee8a359e6a51cd3713b8731e587b45acc",
+}
+FROZEN_ANCHOR_TRUTH_MANIFEST = \
+    "2f9d57d2d236eadb624b64694df04bca93a61864cd4d47cee3a42c2501400e08"
 
-    The old hashes digested a store manifest from before t78's DNase rebuild and a regime json
-    from before t79's rewrite. Freezing them again is part of stamping the first retrained row;
-    until then the TODO hash is what stops a row landing against the wrong data.
+
+def test_committed_boards_are_frozen_to_the_live_store_and_the_tracked_regimes() -> None:
+    """All three `frozen` blocks are pinned, and pinned to the artefacts they claim to digest.
+
+    This replaces the pre-M4 assertion that they were all still TODO. The freeze happened on
+    2026-09-02, with the first rows: the store manifest was re-read on Fir after t78's DNase
+    p-value rebuild, the two regime jsons are hashed from the files this repo tracks, and the
+    anchor — which has no regime, because we never trained those rows — pins the sha256 of the
+    2019 truth root's manifest instead.
+
+    Two of the four values are checkable from this checkout alone and are recomputed here rather
+    than compared to a constant, so editing `configs/regime.*.json` without re-freezing fails.
+    The store manifest and the truth-root manifest live on Fir and are not reachable from a test,
+    so those two are held against the recorded constants above.
     """
     boards = lb.load_boards(REPO / "leaderboard")
     for bid, b in list(boards["boards"].items()) + [(lb.ANCHOR, boards["anchor"])]:
+        frozen = b["frozen"]
         for field in ("store_manifest_hash", "regime_sha256"):
-            assert b["frozen"][field].startswith(lb.TODO_HASH), (bid, field)
-        assert b["frozen"].get("frozen_note"), f"board {bid} must say what its hashes will digest"
+            assert not str(frozen[field]).startswith(lb.TODO_HASH), (bid, field)
+            assert re.fullmatch(r"[0-9a-f]{64}", frozen[field]), (bid, field)
+        assert frozen["store_manifest_hash"] == FROZEN_STORE_MANIFEST, bid
+        note = frozen.get("frozen_note") or ""
+        assert note, f"board {bid} must say what its hashes digest"
+        assert "2026-09-02" in note, f"board {bid} frozen_note must carry the freeze date"
+    for bid, want in FROZEN_REGIME_SHA.items():
+        board = boards["boards"][bid]
+        assert board["frozen"]["regime_sha256"] == want, bid
+        # the regime json this board names, hashed here: the freeze must still describe the tree
+        regime = REPO / board["eval_set"]["regime"]
+        assert regime.exists(), regime
+        assert lb.sha256_file(regime) == want, (
+            f"{regime} changed since board `{bid}` was frozen; re-freeze it or revert the file")
+    assert boards["anchor"]["frozen"]["regime_sha256"] == FROZEN_ANCHOR_TRUTH_MANIFEST
+    # and the committed anchor rows agree with it — a challenge-truth entrant row carries the
+    # same manifest sha, which is the only thing tying those rows to a build of the 2019 truth
+    stamped = sorted((REPO / "leaderboard" / lb.ANCHOR / "challenge.B_.held-out").glob("*.json"))
+    assert stamped, "the anchor block is empty; the 2019 field was not stamped"
+    for p in stamped:
+        row = json.loads(p.read_text(encoding="utf-8"))
+        assert row["provenance"]["truth_manifest_hash"] == FROZEN_ANCHOR_TRUTH_MANIFEST, p.name
+
+
+def test_no_committed_board_field_is_still_a_placeholder() -> None:
+    """Nothing anywhere in boards.json still says TODO-. The freeze is the whole file's, not
+    just the six hashes': a TODO left in a caveat or an eval_set would print on the page."""
+    text = (REPO / "leaderboard" / "boards.json").read_text(encoding="utf-8")
+    assert lb.TODO_HASH not in text, "boards.json still carries a TODO- placeholder"
 
 
 TRUTH_SHA = "b99dde1107125311d5af3b68964f56b77cc5d568c7e846d76aa1718290216284"
@@ -469,10 +524,14 @@ def test_an_anchor_row_cannot_be_addressed_off_the_anchor_block(tmp_path: Path) 
 
 
 def test_the_anchor_offers_only_the_truths_boards_json_lists(tmp_path: Path) -> None:
-    """The committed anchor names one truth — the 2019 measurement the field was ranked under — so
-    a store-truth anchor row is refused. It lands the moment boards.json offers both, and nothing
-    in the code hard-codes which."""
+    """Which truths the anchor offers is read off boards.json; nothing in the code hard-codes it.
+
+    The committed block now lists both, because the 25 roots were rescored under each. The test
+    still drives the transition, from the other end: strip `truths` back to the single `truth`
+    the field was ranked under, watch a store-truth row be refused, put both back, watch it land.
+    """
     root = anchor_root(tmp_path)
+    edit_boards(root, lambda b: b["anchor"].pop("truths", None))
     store_score = fixture_score(root, "score_fixture_a.json")  # no truth block → store
     with pytest.raises(SystemExit, match="not offered by"):
         add_entrant(root, store_score, "fixture-entrant", "--truth", "store")
@@ -895,8 +954,12 @@ def test_the_compiled_payload_makes_the_address_rule_structural() -> None:
             assert view["ranking"]["state"] == "unranked", (bid, key)
             assert view["ranking"]["reason"], (bid, key)
     anchor = compiled["boards"][lb.ANCHOR]
-    assert list(anchor["views"]) == ["challenge.B_.held-out"]
-    assert "no regime" in anchor["views"]["challenge.B_.held-out"]["ranking"]["reason"]
+    # one panel, one scope, both truths (§6) — and `challenge` stays the view the block opens on,
+    # because that is the measurement the 2019 field was ranked under
+    assert list(anchor["views"]) == ["challenge.B_.held-out", "store.B_.held-out"]
+    assert anchor["canonical_view"] == "challenge.B_.held-out"
+    for view in anchor["views"].values():
+        assert "no regime" in view["ranking"]["reason"]
     # §3.3 — the void rows are named and dated, and carry no number at all
     assert len(compiled["void"]["rows"]) == 37
     blob = json.dumps(compiled["void"])
