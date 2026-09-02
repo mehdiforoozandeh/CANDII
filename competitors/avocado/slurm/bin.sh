@@ -10,7 +10,14 @@
 # requests one: no GPU compute happens here, the smallest slice only routes the job through the GPU
 # account, and AGENTS.md 3.13 permits no other gres spec.
 #
-#   mkdir -p slurm-logs && sbatch --array=0-3 competitors/avocado/slurm/bin.sh
+#   mkdir -p slurm-logs && sbatch --array=0-3%12 competitors/avocado/slurm/bin.sh
+#
+# `%12` is the torch-import cap: more than twelve concurrent imports off the shared /project venv
+# fail with partial-module ImportErrors. Four tasks never reach it, but the cap is written into the
+# command so that a longer list does not have to remember it.
+#
+# The σ stage bins its own training chromosomes inline (`sigma.sh`) rather than through this array:
+# it wants one chromosome and is already holding the workspace.
 #
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t81_avo_bin

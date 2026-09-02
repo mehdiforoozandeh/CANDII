@@ -1,13 +1,21 @@
 #!/bin/bash
-# The declared tracks, one array task per eval chromosome, into a single §4.1 root.
+# One PANEL's declared tracks, one array task per eval chromosome, into a single §4.1 root.
 #
-# WARNING: the regime now declares 38 eval_pairs — 26 V_ AND 12 B_. §5 rules B_ is touched
-# ONCE, at the very end, from the selected checkpoint. `store_eic.py predict` walks every
-# declared pair, so running this against the shipped regime SPENDS the B_ touch. Derive a
-# V_-only regime first (slurm/t81_train_candi.sh shows how) for anything but the final run.
+# THE PANEL AXIS, ADDED 2026-09-01, AND IT REPLACES A WARNING WITH A MECHANISM. The header used to
+# say: the regime declares 38 eval_pairs, `store_eic.py predict` walks every one of them, so running
+# this against the shipped regime SPENDS the B_ touch — derive a V_-only regime first. That put the
+# rule in a comment and left the breach one `sbatch` away. It is the code now: this script derives a
+# PANEL-only regime with `tools/declare_eval_pairs.py split` and predicts from that, always.
 #
-#   sbatch competitors/lavawizard/slurm/predict.sh                    # the regime eval scope
+#   PANEL=V_   the default. Rerunnable, into /scratch. Everything but the final board row is
+#              scored from this root.
+#   PANEL=B_   needs B_ONCE=1 AND a root that does not exist yet, and writes to /project. §5 spends
+#              the blind panel once, from the SELECTED checkpoint, at the end; the guard below
+#              exits 4 rather than overwriting.
+#
+#   sbatch competitors/lavawizard/slurm/predict.sh                    # V_, the regime eval scope
 #   sbatch --array=1 competitors/lavawizard/slurm/predict.sh          # one chromosome alone
+#   sbatch --export=ALL,PANEL=B_,B_ONCE=1 competitors/lavawizard/slurm/predict.sh
 #
 # `--clip` is ON here and OFF on the anchor: PI ruling 2026-08-26, recorded in the manifest.
 # The manifest is written by array task 0 alone — three tasks racing on one json buys nothing.
@@ -25,7 +33,8 @@
 #SBATCH --mem=24G
 # fc30560 gave repeated Lustre OSError 108 on files its neighbours read fine (anchor run).
 #SBATCH --exclude=fc30560
-# THREE tasks, not 23: the list is the regime's eval_chroms (see _env.sh).
+# THREE tasks, not 23: the list is the regime's eval_chroms (see _env.sh). %3 sits under the %12
+# torch-import cap the shared /project venv needs.
 #SBATCH --array=0-2%3
 # `$0` is sbatch's spool copy, not this file, so the path comes from the submit directory.
 ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
@@ -33,8 +42,34 @@ ENV="${SLURM_SUBMIT_DIR:-$PWD}/competitors/lavawizard/slurm/_env.sh"
 source "$ENV"
 C=${CHROMS[$SLURM_ARRAY_TASK_ID]:-}
 [ -n "$C" ] || { echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome; this regime has $NCHROM (${CHROMS[*]})" >&2; exit 2; }
-PRED="${PRED:-$RUNS/pred}"
+PRED="${PRED:-$PRED_PANEL}"
 CKPT="${CKPT:-$RUNS/ckpt}"
+
+# THE ONCE-ONLY B_ VERB.
+#
+# `manifest.json` is the proof that a B_ pass finished in this root, so its presence is the refusal.
+# The marker is what lets the THREE TASKS OF ONE ARRAY through while still refusing a later,
+# different one: every task of this array writes the same `.b_once.<array job id>` name, so a
+# sibling finds a marker that is its own and a re-submission six weeks later finds one that is not.
+if [ "$PANEL" = "B_" ]; then
+  MARK="$PRED/.b_once.${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-manual}}"
+  if [ "${B_ONCE:-0}" != "1" ]; then
+    echo "[predict] REFUSING PANEL=B_ without B_ONCE=1. §5 spends the blind panel once, from the" >&2
+    echo "[predict]   SELECTED checkpoint, at the end. Say B_ONCE=1 to mean it." >&2
+    exit 4
+  fi
+  if [ -e "$PRED/manifest.json" ] ||
+     { compgen -G "$PRED/.b_once.*" >/dev/null 2>&1 && [ ! -e "$MARK" ]; }; then
+    echo "[predict] REFUSING: $PRED already holds a B_ pass. B_ is written ONCE (§5) and a second" >&2
+    echo "[predict]   one is a second look at the blind panel, not a retry. If that root really is" >&2
+    echo "[predict]   a failed write, move it aside by hand and say so." >&2
+    exit 4
+  fi
+  mkdir -p "$PRED" && : > "$MARK"
+fi
+
+derive_panel_regime || exit 1
+
 MAN=(); [ "${SLURM_ARRAY_TASK_ID:-0}" = "0" ] && MAN=(--manifest)
 # §5: every board number comes from the checkpoint the run SELECTED on V_, so `.best.pt` is what is
 # predicted from. The last-epoch file is used only when the run deliberately selected nothing
@@ -46,7 +81,7 @@ if [ ! -f "$W" ]; then
   echo "[predict] NO .best.pt for $C — predicting from the LAST-epoch checkpoint, which does not" >&2
   echo "[predict]   satisfy BENCHMARK_DESIGN.md §5. Correct only for a run with no selection." >&2
 fi
-echo "[predict] $C -> $PRED  weights=$(basename "$W")  host=$(hostname)"
-srun python -u -m lavawizard.store_eic predict --regime "$REGIME" --chrom "$C" \
+echo "[predict] $C panel=$PANEL -> $PRED  weights=$(basename "$W")  host=$(hostname)"
+srun python -u -m lavawizard.store_eic predict --regime "$PANEL_REGIME" --chrom "$C" \
      --cache "$CACHE" --checkpoint "$W" \
      --pred-root "$PRED" --device "${DEVICE:-cuda}" --clip "${MAN[@]}"

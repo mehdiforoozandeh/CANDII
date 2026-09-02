@@ -97,3 +97,19 @@ fi
 echo "[avo_train] regime=$REGIME_NAME mode=$MODE chrom=$CHROM shared_scope=$SHARED_SCOPE select_every=$SELECTEVERY host=$(hostname)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 python "$AVO/train.py" "${ARGS[@]}"
+rc=$?
+[ $rc -ne 0 ] && exit $rc
+
+# KEEP THE SELECTED CHECKPOINT. $WS is /scratch, which purges after 60 days, and the board row this
+# fit produced outlives that. `--out` holds the SELECTED weights -- train.py leaves the last epoch
+# beside it as `.last.pt` and nothing copies that -- so this is the file a re-score or a provenance
+# question needs. A wall-clock kill leaves a `.partial` and no `--out`, so a stage that did not
+# finish copies nothing and says so.
+SEL="$WS/ckpt/${MODE}_${CHROM}.pt"
+if [ -s "$SEL" ]; then
+    mkdir -p "$CKPT_KEEP"
+    cp -p "$SEL" "$CKPT_KEEP/" && echo "[avo_train] kept $CKPT_KEEP/$(basename "$SEL")"
+else
+    echo "[avo_train] no $SEL to keep -- this stage wrote no selected checkpoint" >&2
+fi
+exit $rc
