@@ -2,7 +2,8 @@
 """The TRAINING-RESIDUAL σ pass — one fitter for every point-only method (D2).
 
     python -m competitors.sigma_pass --regime <derived.json> --pred <training_pred_root> \
-        --out sigma.json --method Avocado [--chroms chr19] [--eval-regions <abs bed>]
+        --out sigma.json --method Avocado [--chroms chr19] [--eval-regions <abs bed>] \
+        [--allow-missing]
 
     sigma[assay] = sqrt( mean over bins and over tracks of (signal_mu - truth pval)^2 ),
                    in -log10 p, over the TRAINING cells scored against THEMSELVES.
@@ -25,9 +26,29 @@ those characters and a training-residual table cannot fail to.
 
 WHAT IT REFUSES
 ---------------
-Any regime that names a `V_` or `B_` cell — as an `eval_pairs` target, or in `biosamples.eval` —
-exits **3** before the store is opened. Rule 1 is not a warning here: a fitter that can be pointed at
-the eval panel by a typo in a launcher is a fitter that eventually is.
+Three refusals, all of them Rule 1 wearing a different hat, and the first two exit **3**:
+
+* **A regime that names a `V_` or `B_` cell** — as an `eval_pairs` target, or in `biosamples.eval` —
+  exits before the store is opened. A fitter that can be pointed at the eval panel by a typo in a
+  launcher is a fitter that eventually is.
+* **A `--chroms` that is not a chromosome the SOURCE regime trained on.** The derived file's
+  `eval_chroms` IS the source's `train_chroms`, so a chromosome outside that list is a held-out
+  position however the store spells it. Filtering against the store's chromosomes — which is what
+  `StoreSource` does with `chroms=` — would have accepted `--chroms chr21` under `eic_pilot` and
+  still written the `training-residuals:` prefix over eval positions.
+* **A prediction root missing a declared track directory**, unless `--allow-missing` is passed. A
+  half-written root would otherwise produce a σ over whichever tracks happened to finish, with
+  nothing in the table saying so; with the flag the gap is named in `skipped_tracks`.
+
+THE SCOPE IS THE REGIME'S, NOT AN OPTIONAL FLAG
+-----------------------------------------------
+`Regime.windows` applies a `regions` block to the **train** split only (`store/regime.py`), and the
+derived regime trains on nothing — so the block it carries is inert and the eval windows would be
+genome-wide. Under `eic_pilot` that is 18 chromosomes of scope for a σ whose rivals hold factors on
+40 Pilot Regions: a silently corrupt σ whose only symptom is a `fitted_on` missing its `, regions
+<sha>` suffix. So when the derived regime declares `regions` and `--eval-regions` is absent, that
+BED **is adopted** as the eval scope and recorded exactly as if it had been passed. Passing both is
+allowed only when they are the same bytes; two different BEDs exit **4** rather than one winning.
 
 HOW THE TRUTH IS READ
 ---------------------
@@ -69,8 +90,14 @@ SIGMA_FITTED_ON_PREFIX = "training-residuals:"
 #: The panels a σ fit may never touch (§6.2, Rule 1).
 EVAL_PANEL_PREFIXES = ("V_", "B_")
 
-#: Exit code for "this regime names an eval-panel cell". Shared with `tools/sigma_training_regime.py`.
+#: Exit code for "this run would touch a held-out position" — an eval-panel cell, or a chromosome
+#: the source regime did not train on. Shared with `tools/sigma_training_regime.py`: one number for
+#: one rule, so a launcher branches on it once.
 EXIT_EVAL_PANEL = 3
+
+#: Exit code for "`--eval-regions` and the derived regime's `regions` block are two different BEDs".
+#: Its own number because it is not a leak — it is an ambiguity, and the caller has to say which.
+EXIT_SCOPE_CONFLICT = 4
 
 #: Used only when `competitors.baselines.heads` cannot be imported — a rival's job may run with
 #: `competitors/` on the path but not the baselines tree. `read_sigma_table` refuses a non-positive
@@ -140,13 +167,69 @@ def eval_panel_names(obj: Dict[str, Any]) -> List[str]:
     return sorted({n for n in names if n.startswith(EVAL_PANEL_PREFIXES)})
 
 
-def fit(source: Any, root: Path, *, batch_windows: int = 4, progress: bool = True
-        ) -> Tuple[Dict[str, float], Dict[str, int], Dict[str, int], List[str]]:
-    """`(sse, n_points, n_tracks, cells)` — the pooled squared residual per assay.
+class ScopeConflict(Exception):
+    """`--eval-regions` and the regime's `regions` block name two different BEDs (`EXIT_SCOPE_CONFLICT`)."""
+
+
+def regime_regions_bed(obj: Dict[str, Any], regime_path: Path) -> Optional[Path]:
+    """The absolute BED the regime's D32 `regions` block names, or `None` when it declares none.
+
+    Read off the JSON rather than off a loaded `Regime`, because the answer decides what
+    `open_source` is CALLED with — the source cannot be opened first and re-scoped afterwards. A
+    relative `bed` resolves against the regime file's own directory, which is `RegionSet.from_obj`'s
+    rule; `tools/sigma_training_regime.py` already writes an absolute one.
+    """
+    block = obj.get("regions")
+    if not isinstance(block, dict) or not block.get("bed"):
+        return None
+    p = Path(str(block["bed"]))
+    if not p.is_absolute():
+        p = regime_path.parent / p
+    return p.resolve()
+
+
+def resolve_scope(obj: Dict[str, Any], regime_path: Path, given: Optional[str]
+                  ) -> Tuple[Optional[str], bool]:
+    """`(the BED to score over, was it adopted from the regime)`, or raise on a genuine conflict.
+
+    The whole reason this is not just `given`: `Regime.windows` restricts to `regions` on the TRAIN
+    split only, and the derived regime's train split is empty (see the module docstring). The block
+    is therefore inert unless something adopts it, and nothing else does.
+
+    Two BEDs at two paths with the same bytes are the same scope, so the comparison is on the bytes
+    and the paths only appear in the message.
+    """
+    declared = regime_regions_bed(obj, regime_path)
+    if declared is None:
+        return given, False
+    if given is None:
+        return str(declared), True
+    want = Path(given).resolve()
+    if want == declared:
+        return str(want), False
+    same = (want.is_file() and declared.is_file()
+            and hashlib.sha256(want.read_bytes()).digest()
+            == hashlib.sha256(declared.read_bytes()).digest())
+    if same:
+        return str(want), False
+    raise ScopeConflict(
+        f"REFUSING {regime_path}: --eval-regions {want} and the regime's own `regions` block "
+        f"{declared} are two different BEDs. The regime's block is the scope every other consumer "
+        f"of this run reads; picking one silently would make the sigma's scope depend on a flag "
+        f"nobody records. Pass the regime's BED, or drop the flag and let it be adopted.")
+
+
+def fit(source: Any, root: Path, *, batch_windows: int = 4, allow_missing: bool = False,
+        progress: bool = True
+        ) -> Tuple[Dict[str, float], Dict[str, int], Dict[str, int], List[str], List[str]]:
+    """`(sse, n_points, n_tracks, cells, skipped)` — the pooled squared residual per assay.
 
     Pair-outer, chromosome-inner, track-innermost: one pass over the store per (cell, chromosome),
     and each prediction npz read exactly once.
     """
+    # PRIVATE IMPORT — `_expected` is the ONE map from a declared `(pair, assay)` to its §4.1
+    # directory name, and a copy here would drift from the scorer's. If it is ever renamed, this
+    # line is where the σ pass breaks: keep the two together rather than re-deriving the name.
     from candi.bench.external import ExternalError, _expected, read_track_arrays, stream_truth
 
     expected = _expected(source)
@@ -155,14 +238,27 @@ def fit(source: Any, root: Path, *, batch_windows: int = 4, progress: bool = Tru
     scoped = {c: source.scored_bins(c) for c in chroms}
 
     by_pair: Dict[Any, List[Tuple[str, str]]] = {}
+    skipped: List[str] = []
     for d, (pair, assay) in sorted(expected.items()):
         if (root / d).is_dir():
             by_pair.setdefault(pair, []).append((assay, d))
+        else:
+            skipped.append(d)
     if not by_pair:
         raise SystemExit(
             f"{root} covers none of the {len(expected)} tracks {source.regime_path} declares. The "
             f"σ pass fits on the TRAINING tracks of the derived regime — point --pred at the "
             f"training-track prediction root, not at the V_/B_ one.")
+    if skipped and not allow_missing:
+        # A half-written root is the failure mode this catches: the fit succeeds, the table looks
+        # ordinary, and σ is the spread of whichever tracks finished. `score_external` refuses the
+        # same shape for the same reason, and takes the same flag to record it instead.
+        raise SystemExit(
+            f"{root} has no directory for {len(skipped)} of the {len(expected)} tracks the derived "
+            f"regime declares — {skipped[:5]}. A σ pooled over whichever tracks happened to finish "
+            f"reads as a σ over the whole training panel in every table downstream. Finish the "
+            f"predictions, or pass --allow-missing to fit on what is there and name the gap in "
+            f"`skipped_tracks`.")
 
     sse: Dict[str, float] = defaultdict(float)
     n_points: Dict[str, int] = defaultdict(int)
@@ -194,7 +290,7 @@ def fit(source: Any, root: Path, *, batch_windows: int = 4, progress: bool = Tru
             print(f"[sigma] {k + 1}/{len(by_pair)} {pair} — {len(rows)} track(s)", flush=True)
 
     cells = sorted({p.target_biosample for p in by_pair})
-    return dict(sse), dict(n_points), dict(n_tracks), cells
+    return dict(sse), dict(n_points), dict(n_tracks), cells, skipped
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -207,9 +303,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True)
     p.add_argument("--method", required=True, help="the method slug written into the table")
     p.add_argument("--chroms", default=None,
-                   help="comma-separated; default every chromosome the derived regime scores")
+                   help="comma-separated, and every one of them must be a chromosome the SOURCE "
+                        "regime trained on; default every chromosome the derived regime scores")
     p.add_argument("--eval-regions", default=None,
-                   help="absolute BED the residual is cut to (eic_pilot: the Pilot BED)")
+                   help="absolute BED the residual is cut to. Usually omitted: when the derived "
+                        "regime declares `regions` (eic_pilot: the Pilot BED) that BED is adopted")
+    p.add_argument("--allow-missing", action="store_true",
+                   help="fit over a prediction root that is missing declared track directories, "
+                        "and name them in `skipped_tracks`; without it a missing dir is an error")
     p.add_argument("--batch-windows", type=int, default=4)
     return p
 
@@ -227,6 +328,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
               f"tools/sigma_training_regime.py writes.", file=sys.stderr)
         return EXIT_EVAL_PANEL
 
+    # The derived file's `eval_chroms` IS the source regime's `train_chroms` (see
+    # `tools/sigma_training_regime.py`), so this list is exactly "the chromosomes it is legal to fit
+    # a training residual on". Filtering against the STORE's chromosomes instead — what passing
+    # `chroms=` to `StoreSource` alone would do — accepts a held-out chromosome and still writes the
+    # `training-residuals:` prefix over it.
+    trainable = [str(c) for c in (obj.get("eval_chroms") or ())]
+    chroms: Optional[Tuple[str, ...]] = None
+    if a.chroms:
+        chroms = tuple(c.strip() for c in a.chroms.split(",") if c.strip())
+        held_out = [c for c in chroms if c not in trainable]
+        if held_out:
+            print(f"REFUSING --chroms {list(chroms)}: {held_out} is not a chromosome "
+                  f"{regime_path.name} fits on. It scores {trainable}, which is the SOURCE "
+                  f"regime's training slice; anything else is a held-out position, and a σ fitted "
+                  f"there is void under Rule 1 (BENCHMARK_DESIGN.md 12.2) exactly as a V_/B_ cell "
+                  f"is.", file=sys.stderr)
+            return EXIT_EVAL_PANEL
+
+    try:
+        eval_regions, adopted = resolve_scope(obj, regime_path, a.eval_regions)
+    except ScopeConflict as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_SCOPE_CONFLICT
+    if adopted:
+        print(f"[sigma] adopting the regime's `regions` BED as the eval scope: {eval_regions}. "
+              f"`Regime.windows` restricts to it on the TRAIN split only and this regime trains on "
+              f"nothing, so without this the fit would be genome-wide.", flush=True)
+
     from candi.bench.external import read_manifest
     from candi.bench.harness import open_source
 
@@ -236,8 +365,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     manifest_path = root / "manifest.json"
     read_manifest(root)                       # §4.1 — refuses a root with no `method`
 
-    chroms = tuple(c.strip() for c in a.chroms.split(",")) if a.chroms else None
-    source = open_source(store=regime_path, chroms=chroms, eval_regions=a.eval_regions)
+    source = open_source(store=regime_path, chroms=chroms, eval_regions=eval_regions)
     try:
         # The same refusal again, on what the source RESOLVED rather than on what the file says.
         # The two can differ (`--biosamples`, a regime edited after it was derived), and this one is
@@ -249,7 +377,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                   file=sys.stderr)
             return EXIT_EVAL_PANEL
         used = list(source.eval_chroms)
-        sse, n_points, n_tracks, cells = fit(source, root, batch_windows=a.batch_windows)
+        sse, n_points, n_tracks, cells, skipped = fit(
+            source, root, batch_windows=a.batch_windows, allow_missing=a.allow_missing)
         scope = source.scope()
         regions_sha = None if source.eval_regions is None else source.eval_regions.sha256
     finally:
@@ -280,6 +409,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "cells": cells,
         "chroms": used,
         "eval_scope": scope,
+        # NO `adopted` FLAG, DELIBERATELY. A run that adopted the regime's BED and a run handed the
+        # same BED on the command line fit the same σ over the same bins, so the table must not be
+        # able to tell them apart — `fitted_on` carries the scope's sha either way, which is the
+        # thing a reader has to check. A key here would make two identical fits diff.
+        "skipped_tracks": skipped,
+        "allow_missing": bool(a.allow_missing),
         "note": ("D2. sigma = sqrt(pooled mean squared residual) per assay, over the TRAINING "
                  "cells scored against themselves on the training chromosomes, in -log10 p. No "
                  "V_/B_ track is opened, so no leaderboard number is in-sample for this sigma."),
@@ -292,6 +427,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"  sigma[{k}] = {sigma[k]:.4f}  (n_tracks={n_tracks[k]}, n={n_points[k]:,})")
     if floored:
         print(f"[sigma] {len(floored)} assay(s) at the floor {floor:g}: {floored}")
+    if skipped:
+        print(f"[sigma] --allow-missing: {len(skipped)} declared track(s) had no directory and are "
+              f"in `skipped_tracks`: {skipped[:5]}")
     print(f"[sigma] {fitted_on}")
     print(f"[sigma] wrote {out_path}", flush=True)
     return 0

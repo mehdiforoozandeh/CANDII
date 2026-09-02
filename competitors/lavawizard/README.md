@@ -406,7 +406,13 @@ Same code, other corpus. `store_eic.py` writes the identical cache layout from `
 - σ comes from `python -m competitors.sigma_pass` (§6.1, D2), fitted on a seeded sample of TRAINING
   cells scored against themselves and reused unchanged on both panels. It used to be fitted on the V
   panel; Rule 1 (§12.2) voids every table produced that way, and the fitter now refuses (exit 3) any
-  regime naming a `V_`/`B_` cell. Under the 2026-08-26 ruling in plan §6.4 the resulting Gaussian
+  regime naming a `V_`/`B_` cell, or a `--chroms` outside the source regime's training slice. **The
+  σ scope is not a flag.** On the pilot arm the derived regime carries `regime.eic_pilot`'s own
+  `regions` block and the fitter ADOPTS that BED: `Regime.windows` restricts to a `regions` block on
+  the TRAIN split only and the derived regime trains on nothing, so left alone the fit would go
+  genome-wide over 18 chromosomes where Guacamole holds no factors. `--eval-regions` may name the
+  same BED; a different one exits 4 rather than one of the two winning silently.
+  Under the 2026-08-26 ruling in plan §6.4 the resulting Gaussian
   CRPS is quoted with `pit_ks` and `coverage_95`, with **no** oracle split, and no pval-CRPS gap is
   significant until that arm's noise floor is measured.
 

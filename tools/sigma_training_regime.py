@@ -90,6 +90,12 @@ def derive(obj: Dict[str, Any], regime: Regime, *, cells: Sequence[str], seed: i
     different context is not a σ for this run.
     """
     out = dict(obj)
+    regions_note = "" if regime.regions is None else (
+        " The `regions` block rides along from the source and is INERT to candi.store here "
+        "(Regime.windows restricts to it on the train split only, and this file trains on "
+        "nothing); competitors.sigma_pass adopts it as the eval scope instead, so the sigma is "
+        "fitted over the same BED the transferable parameters were."
+    )
     out["_comment"] = (
         f"{COMMENT_PREFIX} written by tools/sigma_training_regime.py from {source_path.name} "
         f"(sha256 {regime.sha256}): {len(cells)} training cell(s) drawn with seed {seed}, each "
@@ -101,6 +107,7 @@ def derive(obj: Dict[str, Any], regime: Regime, *, cells: Sequence[str], seed: i
         f"bench.harness.StoreSource self-pairs them (its documented no-pairing path). Fit with "
         f"`python -m competitors.sigma_pass`. NOT a scoring regime -- "
         f"bench.external.score_external refuses it, because it declares no cross-cell pair."
+        f"{regions_note}"
     )
     out["_source_regime"] = {
         "path": str(source_path),
@@ -120,6 +127,12 @@ def derive(obj: Dict[str, Any], regime: Regime, *, cells: Sequence[str], seed: i
         # An absolute path, because the derived file lives beside the run and `RegionSet.from_obj`
         # resolves a relative `bed` against the regime file's OWN directory. The sha256 is the same
         # bytes, so a moved BED is still caught.
+        #
+        # THIS BLOCK IS INERT TO THE LOADER AND IS CARRIED ANYWAY. `Regime.windows` restricts to
+        # `regions` on the TRAIN split only, and this file's train split is empty — so nothing in
+        # `candi.store` will ever read it here. It is written because `competitors.sigma_pass`
+        # ADOPTS it as its `--eval-regions` scope: without the block the fit would silently go
+        # genome-wide over `eic_pilot`'s 18 training chromosomes, where the rivals hold no factors.
         out["regions"] = {**dict(obj.get("regions") or {}),
                           "bed": str(Path(regime.regions.resolved).resolve())}
     return out
@@ -171,7 +184,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for c in cells:
         print(f"  {c}")
     print(f"chroms   {list(derived.eval_chroms)}")
-    print(f"regions  {derived.regions.resolved if derived.regions else 'none (full coverage)'}")
+    if derived.regions is None:
+        print("regions  none (full coverage)")
+    else:
+        print(f"regions  {derived.regions.resolved}")
+        print("         competitors.sigma_pass ADOPTS this as its eval scope — `Regime.windows` "
+              "applies a `regions` block to the train split only, and this file trains on nothing.")
     print(f"wrote    {out_path}  sha256 {hashlib.sha256(out_path.read_bytes()).hexdigest()[:12]}  "
           f"{_dt.datetime.now(_dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}")
     return 0

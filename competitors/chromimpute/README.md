@@ -233,7 +233,12 @@ python -m competitors.sigma_pass --regime $CI_RUN/regime.eic_19.sigma.json \
     --pred $CI_RUN/train_pred --out $CI_RUN/sigma.json --method ChromImpute
 ```
 
-It needs ChromImpute's predictions for the sampled **training** tracks, not the `V_` panel's. A table
+It needs ChromImpute's predictions for the sampled **training** tracks, not the `V_` panel's, and it
+refuses a half-written one — a missing track directory is an error unless `--allow-missing` names the
+gap in `skipped_tracks`. **No `--eval-regions` here, deliberately:** `eic_19` declares no `regions`,
+and on the pilot arm the derived regime carries the Pilot BED and the fitter ADOPTS it as the scope
+(`Regime.windows` applies a `regions` block to the train split only, and the derived regime trains on
+nothing). Passing a *different* BED exits 4. A table
 is usable exactly when its `fitted_on` starts with `training-residuals:`; given one, the run scores
 the D block too. Given none, it scores the E and P blocks and writes no `gauss_suite` — absent keys,
 not NaN.

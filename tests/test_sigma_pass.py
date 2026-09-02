@@ -4,13 +4,20 @@ Nothing is mocked. `make_store` writes an actual `CANDI_STORE`, `tools/sigma_tra
 derives a regime from a realistic source one, and `competitors/sigma_pass.py` fits σ over
 predictions written in the §4.1 on-disk format — the same thing a rival's `predict` script emits.
 
-Three properties carry the whole point of the pass and each has a test that would fail without it:
+Five properties carry the whole point of the pass and each has a test that would fail without it:
 
 * **σ is the root mean squared TRAINING residual.** A prediction offset from truth by a known
   constant must produce exactly that constant, per assay, pooled over tracks and bins.
 * **No `V_`/`B_` track is ever opened (Rule 1).** Asserted twice: the fitter exits 3 on a regime
   that names one, and a spy on `CorpusStore.__getitem__` proves the happy path never reaches one
   even though the store holds one.
+* **No held-out POSITION is fitted on either.** `--chroms` is filtered against the derived regime's
+  own `eval_chroms` — the source's training slice — not against the store's chromosomes, and a
+  chromosome outside it exits 3 like an eval-panel cell does.
+* **The scope does not depend on remembering a flag.** A derived regime carrying a `regions` block
+  has that BED adopted as the eval scope, because `Regime.windows` would apply it to the train
+  split only and the derived regime trains on nothing. The adopted table is compared line for line
+  against one produced by passing the same BED explicitly.
 * **`fitted_on` says which.** The prefix is the only thing that tells a leak-free table from a leaky
   one months later, so it is checked as a string, and the four eval-pair fitters that could write
   the leaky one are asserted gone.
@@ -108,6 +115,12 @@ def _truth(store: Path, cell: str, assay: str, chrom: str = "chr1") -> np.ndarra
         return np.asarray(c[cell][assay].pval(chrom, 0), dtype=np.float32)
     finally:
         c.close()
+
+
+def _regions_block(bed: Path) -> dict:
+    import hashlib
+    return {"bed": bed.name, "sha256": hashlib.sha256(bed.read_bytes()).hexdigest(),
+            "policy": "contain"}
 
 
 def _write_pred(root: Path, store: Path, derived: Path, *, offset=OFFSET,
@@ -316,6 +329,143 @@ def test_eval_regions_cuts_the_residual_to_the_bed(store, tmp_path):
     assert f"regions {hashlib.sha256(bed.read_bytes()).hexdigest()[:12]}" in table["fitted_on"]
     # The offset is constant, so cutting the positions must not move σ.
     assert table["sigma"]["DNase-seq"] == pytest.approx(0.5, rel=1e-4)
+
+
+def _without_date(path: Path) -> str:
+    return "\n".join(l for l in path.read_text(encoding="utf-8").splitlines()
+                     if '"date"' not in l)
+
+
+def test_the_regimes_regions_bed_is_adopted_when_eval_regions_is_absent(store, tmp_path):
+    """The scope may not depend on remembering a flag.
+
+    `Regime.windows` applies a `regions` block to the TRAIN split only, and the derived regime
+    trains on nothing — so the block it carries is inert and, without this adoption, an `eic_pilot`
+    σ run that omitted `--eval-regions` would fit genome-wide over 18 chromosomes where the rivals
+    hold no factors. The only symptom would be a `fitted_on` missing its `, regions <sha>` suffix.
+
+    Adopting must also be INDISTINGUISHABLE from passing the same BED: the two tables are compared
+    line for line, `date` excluded.
+    """
+    import hashlib
+
+    bed = _bed(tmp_path)
+    src = _source_regime(store, tmp_path, regions=_regions_block(bed))
+    derived = _derive(src, tmp_path / "regime.sigma.json")
+    root = _write_pred(tmp_path / "pred", store, derived)
+
+    adopted = tmp_path / "adopted.json"
+    assert SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(adopted),
+                    "--method", "Avocado"]) == 0
+    table = json.loads(adopted.read_text())
+
+    assert f"regions {hashlib.sha256(bed.read_bytes()).hexdigest()[:12]}" in table["fitted_on"]
+    assert table["eval_scope"]["name"] == "regions"
+    # 20 whole 64-bin windows inside chr1:0-32000, against 2000 bins at full coverage.
+    assert table["n_points"]["DNase-seq"] == 20 * CTX
+
+    explicit = tmp_path / "explicit.json"
+    assert SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(explicit),
+                    "--method", "Avocado", "--eval-regions", str(bed.resolve())]) == 0
+    assert _without_date(adopted) == _without_date(explicit)
+
+
+def test_a_second_different_bed_on_the_command_line_is_refused_rather_than_ranked(store, tmp_path):
+    bed = _bed(tmp_path)
+    other = tmp_path / "other.bed"
+    other.write_text("chr1\t0\t16000\thalf\n", encoding="utf-8")
+    src = _source_regime(store, tmp_path, regions=_regions_block(bed))
+    derived = _derive(src, tmp_path / "regime.sigma.json")
+    out = tmp_path / "s.json"
+    assert SP.main(["--regime", str(derived), "--pred", str(tmp_path), "--out", str(out),
+                    "--method", "Avocado", "--eval-regions", str(other)]) == SP.EXIT_SCOPE_CONFLICT
+    assert not out.exists()
+
+
+def test_the_same_bed_at_a_second_path_is_not_a_conflict(store, tmp_path):
+    """The scope is the BED's bytes; two paths holding them are one scope."""
+    bed = _bed(tmp_path)
+    copy = tmp_path / "copy.bed"
+    copy.write_bytes(bed.read_bytes())
+    src = _source_regime(store, tmp_path, regions=_regions_block(bed))
+    derived = _derive(src, tmp_path / "regime.sigma.json")
+    root = _write_pred(tmp_path / "pred", store, derived)
+    out = tmp_path / "s.json"
+    assert SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(out),
+                    "--method", "Avocado", "--eval-regions", str(copy)]) == 0
+    assert json.loads(out.read_text())["n_points"]["DNase-seq"] == 20 * CTX
+
+
+# ---------------------------------------------------------------------------
+# --chroms is filtered against the SOURCE's training slice, not against the store
+# ---------------------------------------------------------------------------
+
+def test_a_chromosome_the_source_regime_did_not_train_on_exits_3(store, tmp_path):
+    """`chr2` is a chromosome of the STORE and an EVAL chromosome of the source regime.
+
+    Filtering `--chroms` against the store — which is all `StoreSource(chroms=…)` does — accepted it
+    and wrote the `training-residuals:` prefix over held-out positions. It is the same rule as the
+    panel refusal, so it is the same exit code.
+    """
+    derived = _derive(_source_regime(store, tmp_path), tmp_path / "regime.sigma.json")
+    root = _write_pred(tmp_path / "pred", store, derived)
+    out = tmp_path / "s.json"
+    assert json.loads(derived.read_text())["eval_chroms"] == ["chr1"]
+    assert SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(out),
+                    "--method", "Avocado", "--chroms", "chr2"]) == SP.EXIT_EVAL_PANEL
+    assert not out.exists()
+    # The training chromosome itself is still accepted.
+    assert SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(out),
+                    "--method", "Avocado", "--chroms", "chr1"]) == 0
+    assert json.loads(out.read_text())["chroms"] == ["chr1"]
+
+
+# ---------------------------------------------------------------------------
+# a half-written prediction root
+# ---------------------------------------------------------------------------
+
+def test_a_missing_track_directory_is_a_hard_error(store, tmp_path):
+    """A σ pooled over whichever tracks finished reads as a whole-panel σ downstream."""
+    import re
+    import shutil
+
+    derived = _derive(_source_regime(store, tmp_path), tmp_path / "regime.sigma.json")
+    root = _write_pred(tmp_path / "pred", store, derived)
+    gone = sorted(p.name for p in root.iterdir() if p.is_dir())[0]
+    shutil.rmtree(root / gone)
+
+    out = tmp_path / "s.json"
+    with pytest.raises(SystemExit, match=re.escape(gone)):
+        SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(out),
+                 "--method", "Avocado"])
+    assert not out.exists()
+
+
+def test_allow_missing_fits_on_what_is_there_and_names_the_gap(store, tmp_path):
+    import shutil
+
+    derived = _derive(_source_regime(store, tmp_path), tmp_path / "regime.sigma.json")
+    root = _write_pred(tmp_path / "pred", store, derived)
+    gone = sorted(p.name for p in root.iterdir() if p.is_dir())[0]
+    shutil.rmtree(root / gone)
+
+    out = tmp_path / "s.json"
+    assert SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(out),
+                    "--method", "Avocado", "--allow-missing"]) == 0
+    table = json.loads(out.read_text())
+    assert table["skipped_tracks"] == [gone] and table["allow_missing"] is True
+    # The surviving tracks still fit their own offset exactly.
+    assert table["sigma"]["H3K4me3"] == pytest.approx(OFFSET["H3K4me3"], rel=1e-4)
+
+
+def test_a_complete_root_records_an_empty_gap(store, tmp_path):
+    derived = _derive(_source_regime(store, tmp_path), tmp_path / "regime.sigma.json")
+    root = _write_pred(tmp_path / "pred", store, derived)
+    out = tmp_path / "s.json"
+    assert SP.main(["--regime", str(derived), "--pred", str(root), "--out", str(out),
+                    "--method", "Avocado"]) == 0
+    table = json.loads(out.read_text())
+    assert table["skipped_tracks"] == [] and table["allow_missing"] is False
 
 
 def test_a_prediction_root_that_covers_none_of_the_training_tracks_is_refused(store, tmp_path):
