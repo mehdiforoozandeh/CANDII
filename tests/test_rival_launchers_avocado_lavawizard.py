@@ -380,3 +380,14 @@ def test_the_manifest_stays_keyed_on_array_index_zero(method: str):
     assert '"${SLURM_ARRAY_TASK_ID:-0}" = "0"' in t, (
         f"{method}/predict.sh no longer keys the manifest on array index 0, so a completion task "
         f"could rewrite manifest.json")
+
+
+def test_avocado_sigma_predict_passes_a_batch_positions_knob():
+    """The sigma self-pair predict (98 tracks/cell) OOMs a MIG slice at predict.py's default 8192
+    positions; sigma.sh must pass SIGMA_PREDICT_BATCHPOS (default 2048) on the predict.py line."""
+    text = open("competitors/avocado/slurm/sigma.sh", encoding="utf-8").read()
+    assert 'SIGMA_PREDICT_BATCHPOS:-2048' in text
+    # the knob rides the predict.py command, not train.py's
+    import re
+    block = re.search(r"predict\.py.*?(?:\n(?!\s*#).*?)*?--batch-positions \"\$\{SIGMA_PREDICT_BATCHPOS", text, re.S)
+    assert block, "--batch-positions with SIGMA_PREDICT_BATCHPOS must follow the predict.py call"

@@ -28,6 +28,10 @@
 # ONE CHROMOSOME BY DEFAULT, and that is a sizing choice worth stating. A σ entry is one scalar per
 # assay pooled over 12 cells; on chr19 that is ~2.3 M bins x 12 cells per assay, and adding
 # chromosomes moves the third decimal while costing a full binning pass and a genomic-factor fit
+# SIGMA_PREDICT_BATCHPOS (default 2048): positions per forward in the self-pair predict. The sigma
+# panel is 98 tracks/cell (V_ is 45); at predict.py's default 8192 the bf16 activation is
+# 8192 x 98 x 2048 x 2 B = 3.06 GiB and OOMs a 1g.10gb MIG slice (jobs 57865902/57865905,
+# 2026-09-02). The batch only chunks a stateless forward, so the arrays are bit-identical.
 # each. Set SIGMA_CHROMS=chr19,chr7 to widen it; the fitter records what it actually read.
 #
 # HOW THE SELF-PAIRING IS SPELLED, AND WHY AVOCADO NEEDS NO CHANGE FOR IT. `candi.store.regime`
@@ -115,7 +119,8 @@ for C in "${SIG_CHROMS[@]}"; do
     fi
     echo "[avo_sigma] predicting the self-pairs on $C -> $PRED"
     python "$AVO/predict.py" --regime "$SIGMA_REGIME" --chrom "$C" \
-        --shared "$SHARED_CK" --genome "$CK" --out "$PRED" || exit 1
+        --shared "$SHARED_CK" --genome "$CK" --out "$PRED" || exit 1 \
+            --batch-positions "${SIGMA_PREDICT_BATCHPOS:-2048}"
 done
 python "$AVO/predict.py" --regime "$SIGMA_REGIME" --out "$PRED" --write-manifest \
     --version 005-port \
