@@ -17,11 +17,18 @@ tie. `fixture-d` is pval-only (no count arm, no peak metrics), which is what exe
 partial-coverage rule: d is missing the peaks category, so it gets no composite and is left out of
 the headline ranking, while still ranking inside pointwise and distributional. Peaks stays in the
 composite for a/b/c. The count sub-board ranks three rows, not four.
+
+The committed fixtures predate §5.2's three panels, so `panelled()` gives each one the `panels`
+block `harness.panel_macros` would have written, with the SAME numbers under all three panels —
+`add` reading a panel is a lookup, and a test of a lookup must be able to say which key was read.
+The last section of this file drops the synthetic fixtures entirely and stamps a score json the
+real `candi.bench.external` produced over a real store, under both truths and both scopes.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -39,6 +46,47 @@ _spec.loader.exec_module(lb)
 
 
 # ---------------------------------------------------------------- fixtures ---
+
+def panelled(score: dict) -> dict:
+    """A fixture score json, plus the `panels` block §5.2 requires.
+
+    Every panel gets the arm's own macro numbers, so a test can assert WHICH panel `add` read only
+    by the key it used — nothing here is invented, and `n_experiments` / `ranked` / `matched_to`
+    are the non-metric keys `harness.panel_macros` really writes. `matched_to` is non-empty because
+    the fixture stands for a pass that scored `B_` rows: an empty one is the unfilled panel `add`
+    refuses, and the real-score section of this file builds that from the scorer itself.
+    """
+    out = json.loads(json.dumps(score))
+    out["panels"] = {
+        arm: {"V_breadth": {**block, "n_experiments": 1, "ranked": True},
+              "V_matched": {**block, "n_experiments": 1, "ranked": False,
+                            "matched_to": ["H3K4me3"]},
+              "B": {**block, "n_experiments": 1, "ranked": True}}
+        for arm, block in (out.get("macro") or {}).items()
+    }
+    return out
+
+
+def write_score(path: Path, score: dict) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(panelled(score)), encoding="utf-8")
+    return path
+
+
+#: The fixtures were written when a σ table could be fitted on eval pairs; §7 now refuses that, so
+#: `fixture_score` rewrites `fitted_on` into the form `competitors/sigma_pass.py` produces. The raw
+#: fixture value is fed in untouched by `test_add_refuses_a_sigma_table_fitted_on_the_eval_panel`.
+FITTED_ON = "training-residuals: regime.eic_19.sigma.json T_ self-pairs, 12 cells, chroms chr19"
+
+
+def fixture_score(root: Path, name: str) -> Path:
+    """One committed fixture, panelled and with a legal σ `fitted_on`, beside the root."""
+    score = json.loads((FIX / name).read_text(encoding="utf-8"))
+    sigma = (score.get("provenance") or {}).get("sigma_table")
+    if isinstance(sigma, dict):
+        sigma["fitted_on"] = FITTED_ON
+    return write_score(root.parent / "scores" / name, score)
+
 
 @pytest.fixture
 def root(tmp_path: Path) -> Path:
@@ -60,13 +108,33 @@ def root(tmp_path: Path) -> Path:
     return root
 
 
+def edit_boards(root: Path, edit) -> None:
+    """Rewrite the root's boards.json through `edit`, which mutates the loaded dict in place."""
+    boards = json.loads((root / "boards.json").read_text(encoding="utf-8"))
+    edit(boards)
+    (root / "boards.json").write_text(json.dumps(boards), encoding="utf-8")
+
+
 def add(root: Path, score: str, method: str, *extra: str) -> None:
-    lb.main(["--root", str(root), "add", str(FIX / score), *ADDRESS,
+    lb.main(["--root", str(root), "add", str(fixture_score(root, score)), *ADDRESS,
              "--board", BOARD, "--method", method, "--version", "v1",
              "--date", "2026-08-27", "--lineage", "baseline",
              "--position-class", "generalizing", "--cell-class", "zero-shot",
              "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
              "--fir-path", "fake:/scratch/fixture", *extra])
+
+
+def add_path(root: Path, score: Path, method: str, *extra: str) -> None:
+    """`add` on an already-written score json — the address flags default to the canonical view."""
+    argv = ["--root", str(root), "add", str(score),
+            "--board", BOARD, "--method", method, "--version", "v1",
+            "--date", "2026-08-27", "--lineage", "baseline",
+            "--position-class", "generalizing", "--cell-class", "zero-shot",
+            "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+            "--fir-path", "fake:/scratch/fixture", *extra]
+    if "--panel" not in extra:
+        argv += ADDRESS
+    lb.main(argv)
 
 
 def add_all(root: Path) -> None:
@@ -118,9 +186,22 @@ def test_registry_and_boards_round_trip() -> None:
     assert set(boards["scopes"]) == {"held-out", "genome-wide"}
     assert boards["panels"]["V_matched"]["ranked"] is False
     assert boards["scopes"]["genome-wide"]["ranked"] is False
-    assert set(boards["markers"]) == {"edice-embedding-substitution", "no-selection"}
-    assert boards["method_markers"]["eDICE"] == ["edice-embedding-substitution"]
+    assert set(boards["markers"]) == {"edice-embedding-substitution", "no-selection",
+                                      "selection-key-pval-mse"}
+    assert "edice-embedding-substitution" in boards["method_markers"]["eDICE"]
     assert "no-selection" in boards["method_markers"]["ChromImpute"]
+    # the 2026-09-01 ruling: the three trainable rivals select on pval mse, CANDI on count crps
+    for method in ("Avocado", "eDICE", "Lavawizard"):
+        assert "selection-key-pval-mse" in boards["method_markers"][method], method
+    assert "selection-key-pval-mse" not in boards["method_markers"].get("CANDI", [])
+    key_marker = boards["markers"]["selection-key-pval-mse"]["eli5"]
+    assert "count-arm CRPS" in key_marker and "handicaps CANDI" in key_marker
+    assert "2026-09-01" in key_marker
+    # §4's blanking rule and the code that enforces it name the same three methods
+    rule = boards["scopes"]["genome-wide"]["blanking_rule"]
+    assert set(lb.GENOME_WIDE_BLANKED) == {"Avocado", "ChromImpute", "Lavawizard"}
+    for method in lb.GENOME_WIDE_BLANKED:
+        assert method in rule, method
     assert boards["truths"]["challenge"]["arms"] == ["pval"]
     assert len(view_keys := lb.view_keys(boards, "eic.19")) == 12
     assert lb.CANONICAL_VIEW in view_keys
@@ -166,58 +247,61 @@ def test_add_round_trips_a_row(root: Path) -> None:
     assert row["metrics"]["pval"]["mse"] == 1.0
     assert row["metrics"]["count"]["crps"] == 0.40
     assert row["badges"] == {"position": "position-generalizing",
-                             "cell_types": "zero-shot cell types"}
+                             "cell_types": "zero-shot cell types",
+                             "sigma": lb.SIGMA_BADGE_NATIVE}
+    assert row["ranked"] is True
+    assert row["in_sample_fraction"] is None
     prov = row["provenance"]
     assert prov["scoring_sha"] == "deadbeef" and prov["fir_path"] == "fake:/scratch/fixture"
     assert prov["sigma_table"] is None
     assert prov["has_peak_head"] is False
     assert prov["flags"]["pval_pred_space"] == "-log10p"
+    assert "truth_manifest_hash" not in prov, "a store row pins the store manifest, nothing else"
     reg = lb.load_registry(root)
     lb.gate_row_shape(row, reg)  # what `add` wrote passes the reader's own gate
 
 
-def test_add_extracts_the_sigma_table_id(root: Path) -> None:
-    """B1a rows carry their σ-table id, mechanically, from the score json's provenance."""
+def test_add_extracts_the_sigma_table_id_and_badges_the_fitted_spread(root: Path) -> None:
+    """§7 — a σ table on the row is the fitted-flat-σ badge, and its `fitted_on` travels with it."""
     add(root, "score_fixture_b.json", "fixture-b", "--allow-missing")
     row = json.loads(row_path(root, "fixture-b@v1").read_text(encoding="utf-8"))
-    assert row["provenance"]["sigma_table"] == {"method": "fixture-b",
-                                                "fitted_on": "regime.eic_val eval_pairs"}
+    assert row["provenance"]["sigma_table"] == {"method": "fixture-b", "fitted_on": FITTED_ON}
+    assert row["badges"]["sigma"] == lb.SIGMA_BADGE_FITTED == "fitted flat σ"
     compiled = next(r for r in board_view(root)["rows"] if r["id"] == "fixture-b@v1")
     assert compiled["provenance"]["sigma_table"]["method"] == "fixture-b"
+    assert compiled["badges"]["sigma"] == lb.SIGMA_BADGE_FITTED
     assert compiled["has_peak_head"] is False
 
 
-def test_add_extracts_has_peak_head_from_bernoulli_nll(root: Path, tmp_path: Path) -> None:
+def test_add_refuses_a_sigma_table_fitted_on_the_eval_panel(root: Path) -> None:
+    """The committed fixture's σ table says `regime.eic_val eval_pairs` — a Rule 1 leak. §7 fits σ
+    on training residuals only, so the row is refused rather than badged."""
+    raw = json.loads((FIX / "score_fixture_b.json").read_text(encoding="utf-8"))
+    assert raw["provenance"]["sigma_table"]["fitted_on"] == "regime.eic_val eval_pairs"
+    with pytest.raises(SystemExit, match="training-residuals:"):
+        add_path(root, write_score(root.parent / "sigma_leak.json", raw), "fixture-b",
+                 "--allow-missing")
+    assert not row_path(root, "fixture-b@v1").exists()
+
+
+def test_add_extracts_has_peak_head_from_bernoulli_nll(root: Path) -> None:
     """A real peak head is the presence of bernoulli_nll in the score macro, not a value range."""
     score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
     score["macro"]["pval"]["bernoulli_nll"] = 0.42
-    score_path = tmp_path / "score.json"
-    score_path.write_text(json.dumps(score), encoding="utf-8")
-    lb.main(["--root", str(root), "add", str(score_path),
-             *ADDRESS, "--board", BOARD, "--method", "fixture-a", "--version", "v1",
-             "--date", "2026-08-27", "--lineage", "baseline",
-             "--position-class", "generalizing", "--cell-class", "zero-shot",
-             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
-             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    add_path(root, write_score(root.parent / "peakhead.json", score), "fixture-a",
+             "--allow-missing")
     row = json.loads(row_path(root, "fixture-a@v1").read_text(encoding="utf-8"))
     assert row["provenance"]["has_peak_head"] is True
     compiled = next(r for r in board_view(root)["rows"] if r["id"] == "fixture-a@v1")
     assert compiled["has_peak_head"] is True
 
 
-def test_add_carries_contributor_mode_in_flags(root: Path, tmp_path: Path) -> None:
+def test_add_carries_contributor_mode_in_flags(root: Path) -> None:
     """contributor_mode and clip are FLAG_KEYS members: add copies them and compile keeps them."""
     score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
     score["provenance"]["contributor_mode"] = True
     score["provenance"]["clip"] = "p99"
-    score_path = tmp_path / "score.json"
-    score_path.write_text(json.dumps(score), encoding="utf-8")
-    lb.main(["--root", str(root), "add", str(score_path),
-             *ADDRESS, "--board", BOARD, "--method", "fixture-a", "--version", "v1",
-             "--date", "2026-08-27", "--lineage", "baseline",
-             "--position-class", "generalizing", "--cell-class", "zero-shot",
-             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
-             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    add_path(root, write_score(root.parent / "flags.json", score), "fixture-a", "--allow-missing")
     row = json.loads(row_path(root, "fixture-a@v1").read_text(encoding="utf-8"))
     assert row["provenance"]["flags"]["contributor_mode"] is True
     assert row["provenance"]["flags"]["clip"] == "p99"
@@ -276,20 +360,26 @@ def test_committed_boards_refuse_every_add_until_they_are_frozen() -> None:
         assert b["frozen"].get("frozen_note"), f"board {bid} must say what its hashes will digest"
 
 
-def test_placement_mode_stamps_an_anchor_row(tmp_path: Path) -> None:
-    """`add --placement-method` copies macro_all out of a t54-style placement file, and
-    refuses a file that does not digest to the board's frozen regime hash."""
-    placement = {
-        "aggregation": "bootstrap mean; median within assay; mean over assay medians",
-        "methods": {"fixture-entrant": {
-            "n_experiments": 48,
-            # per_assay NaN (prom_corr outside H3K4me3) must not block macro_all extraction
-            "per_assay": {"H3K27me3": {"prom_corr": float("nan")}},
-            "macro_all": {"n_assays": 7, "mse": 1.5, "gwcorr": 0.4, "gwspear": 0.3,
-                          "mse1obs": 20.0}}},
-    }
-    pfile = tmp_path / "placement.json"
-    pfile.write_text(json.dumps(placement), encoding="utf-8")
+TRUTH_SHA = "b99dde1107125311d5af3b68964f56b77cc5d568c7e846d76aa1718290216284"
+
+
+def entrant_score(root: Path, *, manifest_sha: str = TRUTH_SHA) -> Path:
+    """One 2019 entrant's own score json, as `candi.bench.external --truth-root` writes it.
+
+    pval only, `truth.source == "challenge"`, and a truth manifest hash — which is what the anchor
+    block freezes in place of a regime, because we never trained these rows (§6).
+    """
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["macro"]["count"] = {}
+    for key in ("auprc", "peak_base_rate"):  # no 2019 peak calls to score against
+        score["macro"]["pval"].pop(key, None)
+    score["provenance"]["truth"] = {"source": "challenge", "root": "/x/truth",
+                                    "manifest_sha256": manifest_sha}
+    return write_score(root.parent / f"entrant_{manifest_sha[:8]}.json", score)
+
+
+def anchor_root(tmp_path: Path, *, truth_sha: str = TRUTH_SHA) -> Path:
+    """A leaderboard root whose anchor block is frozen to a challenge truth root's manifest."""
     root = tmp_path / "leaderboard"
     (root / "rows").mkdir(parents=True)
     root.joinpath("registry.json").write_text(
@@ -298,41 +388,151 @@ def test_placement_mode_stamps_an_anchor_row(tmp_path: Path) -> None:
     for b in list(boards["boards"].values()) + [boards["anchor"]]:
         b["frozen"]["store_manifest_hash"] = "fixhash-store"
         b["frozen"]["regime_sha256"] = "fixhash-regime"
-    boards["anchor"]["frozen"]["regime_sha256"] = lb.sha256_file(pfile)
+    boards["anchor"]["frozen"]["regime_sha256"] = truth_sha
     root.joinpath("boards.json").write_text(json.dumps(boards), encoding="utf-8")
+    return root
 
-    argv = ["--root", str(root), "add", str(pfile), "--board", lb.ANCHOR,
-            "--truth", "challenge", "--panel", "B_", "--scope", "held-out",
-            "--method", "fixture-entrant", "--version", "round2-2019",
-            "--date", "2026-08-26", "--lineage", "entrant",
-            "--position-class", "unrecorded", "--cell-class", "unrecorded",
-            "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
-            "--fir-path", "fake:/x", "--allow-missing",
-            "--placement-method", "fixture-entrant"]
-    lb.main(argv)
+
+def add_entrant(root: Path, score: Path, method: str, *extra: str) -> None:
+    lb.main(["--root", str(root), "add", str(score), "--board", lb.ANCHOR,
+             "--truth", "challenge", "--panel", "B_", "--scope", "held-out",
+             "--method", method, "--version", "2019-submission",
+             "--date", "2026-09-02", "--lineage", "entrant",
+             "--position-class", "unrecorded", "--cell-class", "unrecorded",
+             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
+             "--fir-path", "fake:/x", "--allow-missing", *extra])
+
+
+def test_an_anchor_row_is_one_entrants_own_score_json(tmp_path: Path) -> None:
+    """§6 — the 25 anchor rows are rescored through our scorer, one score json each. No regime,
+    `--lineage entrant`, and pval only."""
+    root = anchor_root(tmp_path)
+    add_entrant(root, entrant_score(root), "fixture-entrant")
     row = json.loads((root / lb.ANCHOR / "challenge.B_.held-out"
-                      / "fixture-entrant@round2-2019.json").read_text(encoding="utf-8"))
-    # §6 — an anchor row carries no regime, because we never trained it
+                      / "fixture-entrant@2019-submission.json").read_text(encoding="utf-8"))
     assert row["address"] == {"regime": None, "truth": "challenge",
                               "panel": "B_", "scope": "held-out"}
-    assert row["metrics"]["pval"] == {"mse": 1.5, "gwcorr": 0.4, "gwspear": 0.3,
-                                      "mse1obs": 20.0}
+    assert row["lineage"] == "entrant"
+    assert row["metrics"]["pval"]["mse"] == 1.0
     assert "count" not in row["metrics"]
-    assert row["provenance"]["flags"]["placement_method"] == "fixture-entrant"
-    # a tampered placement file no longer digests to the frozen hash and is refused
-    pfile.write_text(json.dumps(placement).replace("1.5", "1.4"), encoding="utf-8")
-    with pytest.raises(SystemExit, match="digests to"):
-        lb.main(argv + ["--force"])
+    assert row["ranked"] is False, "§6 — an anchor row shares no denominator with ours"
+    assert row["provenance"]["truth_manifest_hash"] == TRUTH_SHA
+    compiled = lb.compile_leaderboard(root)["boards"][lb.ANCHOR]
+    ids = [r["id"] for r in compiled["views"]["challenge.B_.held-out"]["rows"]]
+    assert ids == ["fixture-entrant@2019-submission"]
+
+
+def test_the_anchor_gate_is_the_truth_roots_manifest_hash(tmp_path: Path) -> None:
+    """The anchor has no regime to freeze, so `frozen.regime_sha256` is the sha256 of the challenge
+    truth root's manifest.json. A row rescored against another build of that truth is refused."""
+    root = anchor_root(tmp_path)
+    other = "0" * 64
+    with pytest.raises(SystemExit, match="truth manifest hash"):
+        add_entrant(root, entrant_score(root, manifest_sha=other), "fixture-entrant")
+    assert not (root / lb.ANCHOR / "challenge.B_.held-out").exists()
+    # and an unfrozen anchor takes no row at all
+    root2 = anchor_root(tmp_path / "second", truth_sha="TODO-anchor-truth-manifest")
+    with pytest.raises(SystemExit, match="not frozen"):
+        add_entrant(root2, entrant_score(root2), "fixture-entrant")
+
+
+def test_an_anchor_row_carries_no_method_marker_of_ours(tmp_path: Path) -> None:
+    """`Lavawizard` is both a retrained rival and a frozen 2019 entrant. Every marker names
+    something a method did while WE trained it, so the anchor block takes none of them."""
+    root = anchor_root(tmp_path)
+    add_entrant(root, entrant_score(root), "Lavawizard")
+    row = json.loads((root / lb.ANCHOR / "challenge.B_.held-out"
+                      / "Lavawizard@2019-submission.json").read_text(encoding="utf-8"))
+    assert row["markers"] == []
+    anchor = lb.compile_leaderboard(root)["boards"][lb.ANCHOR]
+    assert all(p["markers"] == [] for p in anchor["pending"])
+
+
+def test_an_anchor_row_cannot_be_addressed_off_the_anchor_block(tmp_path: Path) -> None:
+    """§6 — the anchor block is one address: `B_`, held-out. A row anywhere else in that directory
+    would rank beside ours by living in the same tree."""
+    root = anchor_root(tmp_path)
+    score = entrant_score(root)
+    with pytest.raises(SystemExit, match="panel `V_breadth`"):
+        add_entrant(root, score, "fixture-entrant", "--panel", "V_breadth")
+    with pytest.raises(SystemExit, match="scope `genome-wide`"):
+        add_entrant(root, score, "fixture-entrant", "--scope", "genome-wide")
+
+
+def test_the_anchor_offers_only_the_truths_boards_json_lists(tmp_path: Path) -> None:
+    """The committed anchor names one truth — the 2019 measurement the field was ranked under — so
+    a store-truth anchor row is refused. It lands the moment boards.json offers both, and nothing
+    in the code hard-codes which."""
+    root = anchor_root(tmp_path)
+    store_score = fixture_score(root, "score_fixture_a.json")  # no truth block → store
+    with pytest.raises(SystemExit, match="not offered by"):
+        add_entrant(root, store_score, "fixture-entrant", "--truth", "store")
+    assert lb.view_keys(lb.load_boards(root), lb.ANCHOR) == ["challenge.B_.held-out"]
+    edit_boards(root, lambda b: b["anchor"].update(truths=["challenge", "store"]))
+    assert lb.view_keys(lb.load_boards(root), lb.ANCHOR) == ["challenge.B_.held-out",
+                                                             "store.B_.held-out"]
+    add_entrant(root, store_score, "fixture-entrant", "--truth", "store")
+    row = json.loads((root / lb.ANCHOR / "store.B_.held-out"
+                      / "fixture-entrant@2019-submission.json").read_text(encoding="utf-8"))
+    # a store-truth row is pinned by the store manifest; the truth-manifest gate is the
+    # challenge row's, because that is the only truth a manifest hash names
+    assert row["address"]["truth"] == "store"
+    assert "truth_manifest_hash" not in row["provenance"]
+    anchor = lb.compile_leaderboard(root)["boards"][lb.ANCHOR]
+    assert [r["id"] for r in anchor["views"]["store.B_.held-out"]["rows"]] == [
+        "fixture-entrant@2019-submission"]
+
+
+def test_the_placement_path_is_gone() -> None:
+    """§6 retires the vendored 001 scorer from the board, so the t54 placement path goes with it:
+    no flag, no shaper, no `check` branch keyed on the old scorer's name."""
+    src = (REPO / "tools" / "leaderboard.py").read_text(encoding="utf-8")
+    assert "--placement-method" not in lb.build_parser().format_help()
+    assert not hasattr(lb, "placement_score")
+    assert not hasattr(lb, "PLACEMENT_SCORER")
+    assert "placement_method" not in lb.FLAG_KEYS
+    # at most one line may still say the word, and only to record the retirement
+    said = [ln for ln in src.splitlines() if "placement" in ln]
+    assert len(said) <= 1, said
+    for ln in said:
+        assert ln.lstrip().startswith("#"), ln
 
 
 def test_add_refuses_a_wrong_store_hash(root: Path) -> None:
     with pytest.raises(SystemExit, match="does not match"):
-        lb.main(["--root", str(root), "add", str(FIX / "score_fixture_a.json"),
+        lb.main(["--root", str(root), "add", str(fixture_score(root, "score_fixture_a.json")),
                  *ADDRESS, "--board", BOARD, "--method", "fixture-a", "--version", "v1",
                  "--date", "2026-08-27", "--lineage", "baseline",
                  "--position-class", "generalizing", "--cell-class", "zero-shot",
                  "--scoring-sha", "deadbeef", "--store-manifest-hash", "some-other-store",
                  "--fir-path", "fake:/x", "--allow-missing"])
+
+
+def test_add_refuses_a_score_json_with_no_panels_block(root: Path) -> None:
+    """§5.2 — `macro` pools every scored track and is not any one panel. A pre-panels file has
+    nothing to stamp under a panel label, and reading its macro as one would print a 22-assay
+    number beneath an 8-assay heading."""
+    raw = root.parent / "nopanels.json"
+    raw.parent.mkdir(parents=True, exist_ok=True)
+    raw.write_text((FIX / "score_fixture_a.json").read_text(encoding="utf-8"), encoding="utf-8")
+    with pytest.raises(SystemExit, match="no `panels`"):
+        add_path(root, raw, "fixture-a", "--allow-missing")
+
+
+def test_add_refuses_a_blanked_genome_wide_cell(root: Path) -> None:
+    """§4 — Avocado, ChromImpute and Lavawizard were fit at every position, so their genome-wide
+    number is a memorisation score. A blanked cell is not computed, and is not stamped."""
+    score = fixture_score(root, "score_fixture_a.json")
+    for method in lb.GENOME_WIDE_BLANKED:
+        with pytest.raises(SystemExit, match="no genome-wide cell") as e:
+            add_path(root, score, method, "--panel", "V_breadth", "--scope", "genome-wide",
+                     "--truth", "store", "--allow-missing")
+        assert "blank" in str(e.value), "the refusal must name §4's blanking rule"
+    # a method that is out-of-sample somewhere is refused for a different reason: this score json
+    # was never given --held-out-chroms, so its genome-wide number was NOT COMPUTED
+    with pytest.raises(SystemExit, match="genome_wide"):
+        add_path(root, score, "eDICE", "--panel", "V_breadth", "--scope", "genome-wide",
+                 "--truth", "store", "--allow-missing")
 
 
 # ---------------------------------------------------------------- composite ---
@@ -370,7 +570,7 @@ def test_plain_ranks_and_the_missing_arm_rule(root: Path) -> None:
     assert by_id == {"fixture-a@v1": [1, 2], "fixture-b@v1": [1, 2], "fixture-c@v1": [3, 3]}
 
 
-def test_partial_coverage_blanks_composite_without_poisoning_peers(root: Path, tmp_path: Path) -> None:
+def test_partial_coverage_blanks_composite_without_poisoning_peers(root: Path) -> None:
     """A method missing an entire composite category (distributional) gets a dash,
     not a zeroed composite, and does not drop that category for complete peers."""
     add(root, "score_fixture_a.json", "fixture-a", "--allow-missing")
@@ -378,14 +578,8 @@ def test_partial_coverage_blanks_composite_without_poisoning_peers(root: Path, t
     score = json.loads((FIX / "score_fixture_c.json").read_text(encoding="utf-8"))
     for key in ("crps", "pit_ks", "coverage_95", "gaussian_nll"):
         score["macro"]["pval"].pop(key, None)
-    path = tmp_path / "score_partial.json"
-    path.write_text(json.dumps(score), encoding="utf-8")
-    lb.main(["--root", str(root), "add", str(path),
-             *ADDRESS, "--board", BOARD, "--method", "fixture-partial", "--version", "v1",
-             "--date", "2026-08-27", "--lineage", "baseline",
-             "--position-class", "generalizing", "--cell-class", "zero-shot",
-             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
-             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    add_path(root, write_score(root.parent / "score_partial.json", score), "fixture-partial",
+             "--allow-missing")
     view = board_view(root)
     assert "distributional" in view["categories_in_composite"]
     by_id = {r["id"]: r for r in view["rows"]}
@@ -399,20 +593,15 @@ def test_partial_coverage_blanks_composite_without_poisoning_peers(root: Path, t
     assert "distributional" in by_id["fixture-a@v1"]["category_subscores"]
 
 
-def test_missing_count_arm_alone_does_not_blank_composite(root: Path, tmp_path: Path) -> None:
+def test_missing_count_arm_alone_does_not_blank_composite(root: Path) -> None:
     """Count space is a sub-board, not a composite category (B1b). A pval-only row
     that fully covers pointwise + distributional + peaks still gets a composite."""
     add(root, "score_fixture_a.json", "fixture-a", "--allow-missing")
     score = json.loads((FIX / "score_fixture_b.json").read_text(encoding="utf-8"))
     score["macro"]["count"] = {}
-    path = tmp_path / "score_pval_only.json"
-    path.write_text(json.dumps(score), encoding="utf-8")
-    lb.main(["--root", str(root), "add", str(path),
-             *ADDRESS, "--board", BOARD, "--method", "fixture-pval-only", "--version", "v1",
-             "--date", "2026-08-27", "--lineage", "baseline",
-             "--position-class", "generalizing", "--cell-class", "zero-shot",
-             "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
-             "--fir-path", "fake:/scratch/fixture", "--allow-missing"])
+    score["provenance"]["sigma_table"]["fitted_on"] = FITTED_ON
+    add_path(root, write_score(root.parent / "score_pval_only.json", score),
+             "fixture-pval-only", "--allow-missing")
     view = board_view(root)
     by_id = {r["id"]: r for r in view["rows"]}
     assert by_id["fixture-pval-only@v1"]["partial_coverage"] is False
@@ -464,8 +653,7 @@ def test_candi_diagnostics_surface_when_present(root: Path, tmp_path: Path) -> N
         "depthcounterfact": 0.50, "covspec": 0.70,
         "depthblind": 0.60, "biokeep": 0.55,
     }
-    path = tmp_path / "score_candi.json"
-    path.write_text(json.dumps(score), encoding="utf-8")
+    path = write_score(tmp_path / "score_candi.json", score)
     lb.main(["--root", str(root), "add", str(path),
              *ADDRESS, "--board", BOARD, "--method", "CANDI", "--version", "v0",
              "--date", "2026-08-27", "--lineage", "candi",
@@ -521,8 +709,7 @@ def test_nested_c_block_flattens_to_registry_scalars(root: Path, tmp_path: Path)
                                "bio_silhouette": 0.55, "effective_rank": 4.0,
                                "invariance_ok": True},
     }
-    path = tmp_path / "score_nested_c.json"
-    path.write_text(json.dumps(score), encoding="utf-8")
+    path = write_score(tmp_path / "score_nested_c.json", score)
     lb.main(["--root", str(root), "add", str(path),
              *ADDRESS, "--board", BOARD, "--method", "CANDI", "--version", "nested-c",
              "--date", "2026-08-27", "--lineage", "candi",
@@ -594,7 +781,7 @@ def test_pending_travels_into_the_payload_and_drops_when_stamped(root: Path) -> 
     assert candi["lineage"] == "candi" and candi["markers"] == []
     # §5 and §7 — a pending row already says which markers it will carry
     edice = next(p for p in compiled["boards"]["eic.19"]["pending"] if p["method"] == "eDICE")
-    assert edice["markers"] == ["edice-embedding-substitution"]
+    assert edice["markers"] == ["edice-embedding-substitution", "selection-key-pval-mse"]
     ci = next(p for p in compiled["boards"]["eic.19"]["pending"] if p["method"] == "ChromImpute")
     assert ci["markers"] == ["no-selection"]
     add(root, "score_fixture_a.json", "Lavawizard", "--allow-missing")
@@ -656,7 +843,7 @@ def test_the_site_carries_no_retired_vocabulary() -> None:
             assert tok not in blob, (bid, tok)
 
 
-def test_the_site_expresses_the_address_the_truth_toggle_and_the_two_markers() -> None:
+def test_the_site_expresses_the_address_the_truth_toggle_and_the_row_markers() -> None:
     """The five pieces of t82, each pinned to the code that renders it."""
     js = (REPO / "leaderboard" / "site" / "app.js").read_text(encoding="utf-8")
     index = (REPO / "leaderboard" / "site" / "index.html").read_text(encoding="utf-8")
@@ -671,8 +858,11 @@ def test_the_site_expresses_the_address_the_truth_toggle_and_the_two_markers() -
     # §6 — the anchor block and its non-independence warning
     assert "anchorPanel" in js and 'id: "anchor-block"' in js
     assert "non_independence" in js and "anchor — we did not run these" in js
-    # §5, §7 — the two row markers
+    # §5, §7 — the row markers, and §7's mandatory spread badge read off the stamped row
     assert "markerBadges" in js and "badge-marker" in js
+    assert "row.badges && row.badges.sigma" in js
+    assert "fitted flat σ" in js and "native heteroscedastic" in js
+    assert "TRAINING-set residuals" in js, "the fitted-σ badge must name §7's rule"
     # §15 — unranked is a state, not an error
     assert "unrankedBanner" in js and "cell-unranked" in js
     assert "rankingOf" in js and "isRanked" in js
@@ -706,7 +896,7 @@ def test_the_compiled_payload_makes_the_address_rule_structural() -> None:
 def test_add_refuses_a_row_whose_address_does_not_resolve(root: Path) -> None:
     """§1 — if any field is unknown, the row does not go in the ranked table. `add` has no
     default for truth, panel or scope, and it checks each against boards.json's vocabulary."""
-    base = ["--root", str(root), "add", str(FIX / "score_fixture_a.json"),
+    base = ["--root", str(root), "add", str(fixture_score(root, "score_fixture_a.json")),
             "--board", BOARD, "--method", "fixture-a", "--version", "v1",
             "--date", "2026-08-27", "--lineage", "baseline",
             "--position-class", "generalizing", "--cell-class", "zero-shot",
@@ -728,15 +918,52 @@ def test_add_refuses_a_row_whose_address_does_not_resolve(root: Path) -> None:
 
 def test_challenge_truth_refuses_a_count_or_peak_metric(root: Path) -> None:
     """§7 — the 2019 data has no counts and no peak calls, so two truths never share a row."""
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["provenance"]["truth"] = {"source": "challenge", "root": "/x",
+                                    "manifest_sha256": "fixhash-regime"}
     with pytest.raises(SystemExit, match="challenge truth"):
-        lb.main(["--root", str(root), "add", str(FIX / "score_fixture_a.json"),
-                 "--board", BOARD, "--truth", "challenge",
-                 "--panel", "V_breadth", "--scope", "held-out",
-                 "--method", "fixture-a", "--version", "v1",
-                 "--date", "2026-08-27", "--lineage", "baseline",
-                 "--position-class", "generalizing", "--cell-class", "zero-shot",
-                 "--scoring-sha", "deadbeef", "--store-manifest-hash", "fixhash-store",
-                 "--fir-path", "fake:/x", "--allow-missing"])
+        add_path(root, write_score(root.parent / "challenge_counts.json", score), "fixture-a",
+                 "--truth", "challenge", "--panel", "V_breadth", "--scope", "held-out",
+                 "--allow-missing")
+
+
+def test_a_challenge_row_must_come_from_a_challenge_truth_pass(root: Path) -> None:
+    """§6 — the toggle measures the pipeline and nothing else, so a row's truth is the score json's
+    own `provenance.truth.source`, never a label the stamper chose."""
+    with pytest.raises(SystemExit, match="measured against `store` truth"):
+        add(root, "score_fixture_a.json", "fixture-a", "--allow-missing",
+            "--truth", "challenge")
+    # ... and a challenge pass cannot be stamped as a store row either
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["provenance"]["truth"] = {"source": "challenge", "root": "/x",
+                                    "manifest_sha256": "abc"}
+    path = write_score(root.parent / "challenge_pass.json", score)
+    with pytest.raises(SystemExit, match="measured against `challenge` truth"):
+        add_path(root, path, "fixture-a", "--allow-missing")
+
+
+def test_a_challenge_row_names_which_build_of_the_2019_truth_it_read(root: Path) -> None:
+    """A challenge row copies `provenance.truth.manifest_sha256` onto itself: the store manifest
+    pins the grid, and only the truth manifest says what the numbers were compared against."""
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["macro"]["count"] = {}
+    for key in ("auprc", "peak_base_rate"):
+        score["macro"]["pval"].pop(key, None)
+    score["provenance"]["truth"] = {"source": "challenge", "root": "/x/truth",
+                                    "manifest_sha256": TRUTH_SHA}
+    add_path(root, write_score(root.parent / "challenge_ok.json", score), "fixture-a",
+             "--truth", "challenge", "--panel", "B_", "--scope", "held-out", "--allow-missing")
+    row = json.loads((root / "rows" / BOARD / "challenge.B_.held-out"
+                      / "fixture-a@v1.json").read_text(encoding="utf-8"))
+    assert row["provenance"]["truth_manifest_hash"] == TRUTH_SHA
+    assert "count" not in row["metrics"], "no count truth, so no count arm — not a zero"
+    assert "auprc" not in row["metrics"]["pval"]
+    # the same file with the hash removed cannot say which truth it read, and is refused
+    score["provenance"]["truth"].pop("manifest_sha256")
+    with pytest.raises(SystemExit, match="manifest_sha256"):
+        add_path(root, write_score(root.parent / "challenge_nohash.json", score), "fixture-a",
+                 "--truth", "challenge", "--panel", "B_", "--scope", "held-out",
+                 "--allow-missing")
 
 
 def test_a_reported_only_address_keeps_its_numbers_and_drops_its_order(root: Path) -> None:
@@ -769,14 +996,18 @@ def test_a_reported_only_address_keeps_its_numbers_and_drops_its_order(root: Pat
 
 
 def test_a_stamped_row_carries_its_method_markers(root: Path) -> None:
-    """§5, §7 — markers come from boards.json, not from the stamper's memory."""
+    """§5, §7 and the 2026-09-01 ruling — markers come from boards.json, not from the stamper's
+    memory, and a rival that selects on pval mse says so on every row."""
     add(root, "score_fixture_a.json", "eDICE", "--allow-missing")
     add(root, "score_fixture_b.json", "ChromImpute", "--allow-missing")
-    add(root, "score_fixture_c.json", "fixture-c", "--allow-missing")
+    add(root, "score_fixture_c.json", "Avocado", "--allow-missing")
+    add(root, "score_fixture_d.json", "fixture-d", "--allow-missing")
     rows = {r["method"]: r for r in board_view(root)["rows"]}
-    assert rows["eDICE"]["markers"] == ["edice-embedding-substitution"]
+    assert rows["eDICE"]["markers"] == ["edice-embedding-substitution",
+                                        "selection-key-pval-mse"]
     assert rows["ChromImpute"]["markers"] == ["no-selection"]
-    assert rows["fixture-c"]["markers"] == []
+    assert rows["Avocado"]["markers"] == ["selection-key-pval-mse"]
+    assert rows["fixture-d"]["markers"] == []
 
 
 def test_v4_head_family_mapping_matches_registry() -> None:
@@ -899,6 +1130,291 @@ def test_help_json_covers_combos_and_stamped_methods() -> None:
             assert card.get(field), f"{name} missing {field}"
         blob = " ".join(str(card[f]) for f in ("what", "training", "classes", "scoring", "caveats"))
         assert "UNKNOWN" not in blob and "UNVERIFIED" not in blob, name
+
+
+def test_the_in_sample_fraction_is_copied_when_a_producer_writes_one(root: Path) -> None:
+    """§4 — the genome-wide cell carries the per-cell in-sample fraction. Nothing writes it today,
+    so the row records an explicit `null`; the moment a producer does, `add` copies it."""
+    assert lb.IN_SAMPLE_KEY == "in_sample_fraction"
+    add(root, "score_fixture_a.json", "fixture-a", "--allow-missing")
+    assert json.loads(row_path(root, "fixture-a@v1").read_text())["in_sample_fraction"] is None
+    score = json.loads((FIX / "score_fixture_a.json").read_text(encoding="utf-8"))
+    score["provenance"][lb.IN_SAMPLE_KEY] = 1 / 23
+    add_path(root, write_score(root.parent / "insample.json", score), "fixture-a",
+             "--allow-missing", "--force")
+    row = json.loads(row_path(root, "fixture-a@v1").read_text(encoding="utf-8"))
+    assert row["in_sample_fraction"] == 1 / 23
+    compiled = next(r for r in board_view(root)["rows"] if r["id"] == "fixture-a@v1")
+    assert compiled["in_sample_fraction"] == 1 / 23
+    score["provenance"][lb.IN_SAMPLE_KEY] = "most of it"
+    with pytest.raises(SystemExit, match="in_sample_fraction"):
+        add_path(root, write_score(root.parent / "insample_bad.json", score), "fixture-a",
+                 "--allow-missing", "--force")
+
+
+def test_a_reported_only_panel_is_stamped_ranked_false(root: Path) -> None:
+    """§5.2 — `V_matched` exists so the V_→B_ step is readable and is never ranked. The row says so
+    itself; the compiler then drops every order at that address."""
+    score = fixture_score(root, "score_fixture_a.json")
+    for panel, ranked in (("V_breadth", True), ("V_matched", False), ("B_", True)):
+        add_path(root, score, "fixture-a", "--truth", "store", "--panel", panel,
+                 "--scope", "held-out", "--allow-missing")
+        row = json.loads((root / "rows" / BOARD / f"store.{panel}.held-out"
+                          / "fixture-a@v1.json").read_text(encoding="utf-8"))
+        assert row["ranked"] is ranked, panel
+        assert row["address"]["panel"] == panel
+    views = lb.compile_leaderboard(root)["boards"][BOARD]["views"]
+    matched = views["store.V_matched.held-out"]
+    assert matched["ranking"]["state"] == "unranked"
+    assert matched["rows"][0]["ranked"] is False
+    assert matched["rows"][0]["rank"] is None
+    assert matched["rows"][0]["metrics"]["pval"]["mse"] == 1.0, "the number itself stays"
+    assert views["store.V_breadth.held-out"]["rows"][0]["ranked"] is True
+
+
+# ------------------------------------------------- a real candi.bench.external score json ---
+#
+# Everything above runs on hand-written fixtures. This section stamps the thing `add` will really
+# be given: a score json `candi.bench.external` produced over a real store, with §5.2's `panels`,
+# §4's `genome_wide` block, and both truths of §6. It is what makes "the address is a lookup" a
+# fact about the scorer's own output rather than about `panelled()`.
+
+REAL_TRACKS = {
+    "T_aa": ("ATAC-seq", "DNase-seq"),
+    "V_aa": ("ATAC-seq", "H3K4me3"),
+    "T_bb": ("ATAC-seq", "DNase-seq"),
+    "B_bb": ("ATAC-seq", "H3K4me3"),
+}
+REAL_ASSAY = "H3K4me3"
+
+
+@pytest.fixture(scope="module")
+def real_scores(tmp_path_factory) -> dict:
+    """`{truth: path}` — two score jsons written by `candi.bench.external`'s own CLI.
+
+    Built from `tests/test_bench_external.py`'s own pieces: its §4.1 prediction manifest, its
+    `kind: "truth"` manifest, the real store writer and the real regime shape. The files are
+    written by `external.main`, so they are byte-for-byte what a Fir scoring pass hands `add` —
+    including `null` where a metric is undefined, which is the spelling `jsonable` uses.
+
+    One `V_` target and one `B_` target, so all three panels of §5.2 carry a number, and chr2 of
+    two chromosomes is held out, so §4's `genome_wide` block exists.
+    """
+    np = pytest.importorskip("numpy", reason="a real score json needs the scorer")
+    external = pytest.importorskip("candi.bench.external", reason="the scorer needs candi")
+    from candi.bench.harness import Pair
+    from tests.test_bench_external import MANIFEST, TRUTH_MANIFEST
+    from tests.test_store_reader import N_BINS, make_store
+    from tests.test_store_regime import regime_dict
+
+    tmp = tmp_path_factory.mktemp("lbreal")
+    store = make_store(tmp / "s", tracks=REAL_TRACKS)
+    regime = tmp / "regime.json"
+    regime.write_text(json.dumps(regime_dict(
+        store, biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "B_bb"]},
+        kinds=["counts", "peaks", "pval"], train_chroms=[], eval_chroms=["chr1", "chr2"],
+        eval_pairs=[["T_aa", "V_aa"], ["T_bb", "B_bb"]])), encoding="utf-8")
+
+    pred, truth = tmp / "pred", tmp / "truth"
+    for d, man in ((pred, MANIFEST), (truth, {**TRUTH_MANIFEST, "chroms": ["chr1", "chr2"]})):
+        d.mkdir()
+        (d / "manifest.json").write_text(json.dumps(man), encoding="utf-8")
+    rng = np.random.default_rng(4)
+    for pair in (Pair("T_aa", "V_aa"), Pair("T_bb", "B_bb")):
+        # the §4.1 directory name is the scorer's own, never spelled out here
+        name = external.track_dirname(pair, REAL_ASSAY)
+        (pred / name).mkdir()
+        (truth / name).mkdir()
+        for c, n in N_BINS.items():
+            np.savez(pred / name / f"{c}.npz",
+                     signal_mu=rng.gamma(1.0, 2.0, n).astype(np.float32),
+                     signal_sigma=np.full(n, 0.7, np.float32),
+                     mu=rng.gamma(2.0, 3.0, n).astype(np.float32),
+                     n=np.full(n, 5.0, np.float32),
+                     peak_score=rng.random(n).astype(np.float32))
+            np.savez(truth / name / f"{c}.npz",
+                     signal_mu=rng.gamma(1.0, 2.0, n).astype(np.float32))
+
+    # `v_only` and `b_only` are the two passes the real programme runs: `V_` and `B_` are predicted
+    # and scored separately, off panel-derived regimes and separate prediction roots. They are what
+    # makes the unfilled `V_matched` block a fact about the pipeline, not a hand-edited json.
+    roots = {"store": pred, "challenge": pred}
+    for name, pair, ev in (("v_only", Pair("T_aa", "V_aa"), ["V_aa"]),
+                           ("b_only", Pair("T_bb", "B_bb"), ["B_bb"])):
+        (tmp / f"regime.{name}.json").write_text(json.dumps(regime_dict(
+            store, biosamples={"train": ["T_aa", "T_bb"], "eval": ev},
+            kinds=["counts", "peaks", "pval"], train_chroms=[], eval_chroms=["chr1", "chr2"],
+            eval_pairs=[[pair.input_biosample, pair.target_biosample]])),
+            encoding="utf-8")
+        panel_root = tmp / f"pred.{name}"
+        panel_root.mkdir()
+        (panel_root / "manifest.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        shutil.copytree(pred / external.track_dirname(pair, REAL_ASSAY),
+                        panel_root / external.track_dirname(pair, REAL_ASSAY))
+        roots[name] = panel_root
+
+    out = {"truth_root": truth}
+    for name in ("store", "challenge", "v_only", "b_only"):
+        path = tmp / f"score.{name}.json"
+        cfg = regime if name in ("store", "challenge") else tmp / f"regime.{name}.json"
+        argv = ["--store", str(cfg), "--pred", str(roots[name]), "--out", str(path),
+                "--held-out-chroms", "chr2", "--c-index-pairs", "2000", "--quiet"]
+        if name == "challenge":
+            argv += ["--truth-root", str(truth)]
+        assert external.main(argv) == 0
+        out[name] = path
+    return out
+
+
+@pytest.fixture
+def real_root(root: Path, real_scores: dict) -> Path:
+    """The fixture leaderboard root — site copied in, anchor frozen to the real truth manifest,
+    and both regimes pointed at the real regime json the pass actually read."""
+    sha = lb.sha256_file(real_scores["truth_root"] / "manifest.json")
+
+    def edit(b: dict) -> None:
+        b["anchor"]["frozen"]["regime_sha256"] = sha
+        for board in b["boards"].values():
+            board["eval_set"]["regime"] = "regime.json"
+
+    edit_boards(root, edit)
+    return with_site(root)
+
+
+def real_score(real_scores: dict, truth: str) -> dict:
+    return json.loads(real_scores[truth].read_text(encoding="utf-8"))
+
+
+def point_the_board_at(root: Path, regime_name: str) -> None:
+    """Name the regime file a pass actually read, on every board of `root`.
+
+    A panel pass reads a DERIVED regime (`tools/declare_eval_pairs.py split` writes
+    `regime.<name>.<panel>.json`), and `gate_row_against_board` matches the row's recorded regime
+    against `eval_set.regime` by basename — so the two must be the same file, not two spellings.
+    """
+    edit_boards(root, lambda b: [board["eval_set"].update(regime=regime_name)
+                                 for board in b["boards"].values()])
+
+
+def test_the_address_reads_the_panel_and_scope_the_scorer_wrote(real_root: Path,
+                                                                real_scores: dict) -> None:
+    """§1, §4, §5.2 — four addresses over ONE score json, and each row carries exactly the numbers
+    that address names. Nothing is recomputed: every value is compared back to the source block."""
+    score = real_score(real_scores, "store")
+    path = real_scores["store"]
+    for panel, scope in (("V_breadth", "held-out"), ("V_matched", "held-out"),
+                         ("B_", "held-out"), ("B_", "genome-wide")):
+        add_path(real_root, path, "CANDI", "--truth", "store", "--panel", panel,
+                 "--scope", scope, "--lineage", "candi", "--allow-missing")
+        row = json.loads((real_root / "rows" / BOARD / f"store.{panel}.{scope}"
+                          / "CANDI@v1.json").read_text(encoding="utf-8"))
+        block = score if scope == "held-out" else score["genome_wide"]
+        key = lb.PANEL_JSON_KEY[panel]
+        for arm in ("pval", "count"):
+            for metric, val in row["metrics"].get(arm, {}).items():
+                assert block["panels"][arm][key][metric] == val, (panel, scope, arm, metric)
+        assert row["metrics"]["pval"]["mse"] == block["panels"]["pval"][key]["mse"]
+        # the count arm rides on the same lookup, companions and all (registry companion rule)
+        assert set(row["metrics"]["count"]) >= {"crps", "crps_oracle_scaled", "scale_error"}
+        assert row["metrics"]["count"]["crps"] == block["panels"]["count"][key]["crps"]
+        assert row["ranked"] is (panel != "V_matched" and scope == "held-out")
+    # the four rows are four different numbers, not one number stamped four times
+    seen = {(p, s): json.loads((real_root / "rows" / BOARD / f"store.{p}.{s}"
+                                / "CANDI@v1.json").read_text())["metrics"]["pval"]["mse"]
+            for p, s in (("V_breadth", "held-out"), ("B_", "held-out"), ("B_", "genome-wide"))}
+    assert len(set(seen.values())) == 3, seen
+    assert lb.main(["--root", str(real_root), "check"]) == 0
+
+
+def test_a_real_challenge_row_carries_neither_the_count_nor_the_peak_arm(real_root: Path,
+                                                                        real_scores: dict) -> None:
+    """§7 — under challenge truth `panel_macros` writes a count block with no metrics in it and the
+    scorer withholds every peak-derived key. The row carries none of them: absent, not zero."""
+    score = real_score(real_scores, "challenge")
+    assert score["panels"]["count"]["B"]["n_experiments"] == 0
+    path = real_scores["challenge"]
+    add_path(real_root, path, "CANDI", "--truth", "challenge", "--panel", "B_",
+             "--scope", "held-out", "--lineage", "candi", "--allow-missing")
+    row = json.loads((real_root / "rows" / BOARD / "challenge.B_.held-out"
+                      / "CANDI@v1.json").read_text(encoding="utf-8"))
+    assert "count" not in row["metrics"]
+    assert "auprc" not in row["metrics"]["pval"] and "peak_base_rate" not in row["metrics"]["pval"]
+    assert row["metrics"]["pval"]["mse"] == score["panels"]["pval"]["B"]["mse"]
+    assert "count/crps" in row["missing_metrics"] and "pval/auprc" in row["missing_metrics"]
+    assert row["provenance"]["truth_manifest_hash"] == \
+        score["provenance"]["truth"]["manifest_sha256"]
+
+
+def test_a_real_entrant_score_json_stamps_an_anchor_row(real_root: Path,
+                                                        real_scores: dict) -> None:
+    """§6 — the anchor block, end to end: one entrant's own challenge-truth score json, gated on
+    the sha256 of the truth root's manifest.json rather than on a regime."""
+    add_entrant(real_root, real_scores["challenge"], "Lavawizard")
+    row = json.loads((real_root / lb.ANCHOR / "challenge.B_.held-out"
+                      / "Lavawizard@2019-submission.json").read_text(encoding="utf-8"))
+    assert row["address"]["regime"] is None and row["lineage"] == "entrant"
+    assert row["markers"] == [], "the 2019 submission is not the rival we retrained"
+    assert row["provenance"]["truth_manifest_hash"] == lb.sha256_file(
+        real_scores["truth_root"] / "manifest.json")
+    assert lb.main(["--root", str(real_root), "check"]) == 0
+
+
+def test_add_refuses_a_V_matched_panel_no_B_pass_ever_filled(real_root: Path,
+                                                             real_scores: dict) -> None:
+    """§5.2 — the matched assay set is MEASURED from the pass's own `B_` rows. The real programme
+    scores `V_` and `B_` in separate passes, so a `V_` json's `V_matched` block comes out empty:
+    no experiments, no `matched_to`. That is no number, not a number of zero, and `add` refuses it
+    and names the verb that fixes it. The same file's `V_breadth` is untouched and still lands."""
+    point_the_board_at(real_root, "regime.v_only.json")
+    score = real_score(real_scores, "v_only")
+    matched = score["panels"]["pval"]["V_matched"]
+    assert matched["matched_to"] == [] and matched["n_experiments"] == 0
+    assert score["panels"]["pval"]["V_breadth"]["n_experiments"] > 0
+    with pytest.raises(SystemExit, match="fill-panels") as e:
+        add_path(real_root, real_scores["v_only"], "CANDI", "--truth", "store",
+                 "--panel", "V_matched", "--scope", "held-out", "--lineage", "candi",
+                 "--allow-missing")
+    assert "matched_to" in str(e.value) and "no scored experiments" in str(e.value)
+    assert not (real_root / "rows" / BOARD / "store.V_matched.held-out").exists()
+    add_path(real_root, real_scores["v_only"], "CANDI", "--truth", "store",
+             "--panel", "V_breadth", "--scope", "held-out", "--lineage", "candi",
+             "--allow-missing")
+    row = json.loads((real_root / "rows" / BOARD / "store.V_breadth.held-out"
+                      / "CANDI@v1.json").read_text(encoding="utf-8"))
+    assert row["metrics"]["pval"]["mse"] == score["panels"]["pval"]["V_breadth"]["mse"]
+    assert "panels_from" not in row["provenance"], "this pass measured its own panels"
+
+
+def test_a_filled_V_matched_row_records_where_its_panels_came_from(real_root: Path,
+                                                                   real_scores: dict) -> None:
+    """`fill-panels` re-measures `panels` over the union of a `V_` and a `B_` pass's `per_track`
+    and records `provenance.panels_from`. `add` then stamps the matched cell — unranked (§5.2) —
+    and carries that provenance onto the row, so a reader is told the middle number's `B_` rows
+    came from a sibling pass. The union here is `harness.panel_macros`' own, not a hand-written
+    block: the same function `fill-panels` calls, over the same two jsons."""
+    point_the_board_at(real_root, "regime.v_only.json")
+    panel_macros = pytest.importorskip("candi.bench.harness").panel_macros
+    v, b = real_score(real_scores, "v_only"), real_score(real_scores, "b_only")
+    filled = json.loads(json.dumps(v))
+    union = {**v["per_track"], **b["per_track"]}
+    filled["panels"] = {arm: panel_macros(union, arm) for arm in ("pval", "count")}
+    filled["provenance"]["panels_from"] = {
+        "v": str(real_scores["v_only"]), "b": str(real_scores["b_only"]),
+        "tool": "candi.bench.external fill-panels"}
+    path = real_root.parent / "filled.json"
+    path.write_text(json.dumps(filled), encoding="utf-8")  # NOT panelled(): these are real panels
+    add_path(real_root, path, "CANDI", "--truth", "store", "--panel", "V_matched",
+             "--scope", "held-out", "--lineage", "candi", "--allow-missing")
+    row = json.loads((real_root / "rows" / BOARD / "store.V_matched.held-out"
+                      / "CANDI@v1.json").read_text(encoding="utf-8"))
+    assert row["ranked"] is False, "§5.2 — the matched panel is reported, never ranked"
+    assert row["provenance"]["panels_from"]["tool"] == "candi.bench.external fill-panels"
+    assert row["metrics"]["pval"]["mse"] == filled["panels"]["pval"]["V_matched"]["mse"]
+    assert filled["panels"]["pval"]["V_matched"]["matched_to"] == [REAL_ASSAY]
+    compiled = lb.compile_leaderboard(real_root)["boards"][BOARD]["views"][
+        "store.V_matched.held-out"]
+    assert compiled["ranking"]["state"] == "unranked"
+    assert compiled["rows"][0]["provenance"]["panels_from"]["v"].endswith("score.v_only.json")
 
 
 def _metric_id(m: dict) -> str:

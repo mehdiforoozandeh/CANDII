@@ -382,8 +382,14 @@ function hasPeakHead(row) {
   if (row.has_peak_head) return true;
   return !!(row.provenance && row.provenance.has_peak_head);
 }
+/* §7's mandatory spread badge. The STAMPER decides it: `add` writes badges.sigma from the score
+ * json's provenance.sigma_table and refuses a table not fitted on training residuals, so a stamped
+ * row is read rather than re-derived. A row stamped before the badge existed falls back to the
+ * same rule applied here. */
 function spreadDevice(row) {
   if (!row) return null;
+  const stamped = row.badges && row.badges.sigma;
+  if (stamped) return stamped.indexOf("fitted") === 0 ? "fitted" : "native";
   if (hasSigmaTable(row)) return "fitted";
   const pval = (row.metrics && row.metrics.pval) || {};
   if ("pit_ks" in pval || "coverage_95" in pval) return "native";
@@ -400,11 +406,11 @@ function deviceBadge(kind, device) {
   if (kind === "spread") {
     return device === "fitted"
       ? h("span", { class: "badge badge-device badge-fitted",
-          title: "Gaussian wrapped around a point prediction. One spread per assay, fitted on validation residuals, reused unchanged. Homoscedastic per assay — the spread does not adapt bin-by-bin." },
-          "fitted spread device")
+          title: "Gaussian wrapped around a point prediction. One spread per assay, fitted on TRAINING-set residuals (§7 — never on V_, never on B_), reused unchanged. Homoscedastic per assay — the spread does not adapt bin-by-bin, so this method loses on PIT and coverage partly by construction." },
+          "fitted flat σ")
       : h("span", { class: "badge badge-device badge-native",
           title: "This method emitted its own per-bin spread. Not the fitted σ-table device." },
-          "native distribution");
+          "native heteroscedastic");
   }
   return device === "native"
     ? h("span", { class: "badge badge-device badge-native",
