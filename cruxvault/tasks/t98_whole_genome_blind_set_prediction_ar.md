@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-09-01T19:00:40
-updated: 2026-09-01T19:00:40
+status: done
+created: "2026-09-01T19:00:40"
+updated: "2026-09-02T01:56:58"
 ---
 
 # t98 — Whole-genome blind-set prediction arrays from the existing eDICE and ChromImpute checkpoints (throwaway preview)
@@ -24,7 +24,7 @@ PI-authorised throwaway preview (2026-09-01): B_ predictions from the checkpoint
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Blind preview arrays README](results/t98/README.md)
 
 ## Evidence
 
