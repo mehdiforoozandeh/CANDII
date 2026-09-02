@@ -275,3 +275,108 @@ def test_the_b_once_manifest_clause_lets_a_sibling_task_of_the_same_array_throug
         text = open(f, encoding="utf-8").read()
         assert re.search(r'\{ \[ -e "\$PRED/manifest.json" \] && \[ ! -e "\$MARK" \]; \}', text), f
         assert 'if [ -e "$PRED/manifest.json" ] ||' not in text, f
+
+
+# ------------------------------------------------ B_COMPLETE_ARRAY, the completion knob (K10)
+#
+# eic_pilot array 57849734 wrote chr20 and chr21 into the Lavawizard B_ root and its chr22 task was
+# refused by a guard bug. No NEW job can ever present that array's marker -- Slurm overwrites an
+# exported SLURM_ARRAY_JOB_ID -- so completing that root needs the caller to name the array. The
+# knob must be able to FILL a chromosome only, never to re-predict one, which is what separates it
+# from a plain FORCE flag.
+
+#: The name each launcher gives the chromosome its own array task writes.
+_CHROM_VAR = {"lavawizard": "C", "avocado": "CHROM"}
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_the_marker_reads_b_complete_array_before_any_slurm_id(method: str):
+    """The knob is the FIRST fallback in MARK, so a completion job addresses the marker of the array
+    that claimed the root rather than the marker of its own new job id."""
+    t = _read(method, "predict.sh")
+    assert ('MARK="$PRED/.b_once.${B_COMPLETE_ARRAY:-${SLURM_ARRAY_JOB_ID:-'
+            '${SLURM_JOB_ID:-manual}}}"') in t, (
+        f"{method}/predict.sh does not derive MARK from B_COMPLETE_ARRAY first, so no caller can "
+        f"name the array that already claimed the root")
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_the_completion_knob_requires_all_three_checks(method: str):
+    """Manifest present, that array's own marker present, and the chromosome genuinely absent. Drop
+    any one and the knob becomes a way to spend a second B_ touch."""
+    t = _read(method, "predict.sh")
+    chrom = _CHROM_VAR[method]
+    assert 'if [ -n "${B_COMPLETE_ARRAY:-}" ]; then' in t, (
+        f"{method}/predict.sh has no B_COMPLETE_ARRAY block, so the knob is unguarded")
+    assert '[ ! -e "$PRED/manifest.json" ]' in t, (
+        f"{method}/predict.sh does not require a manifest under the knob -- it would accept a fresh "
+        f"root as a partial pass")
+    assert '[ ! -e "$MARK" ]' in t, (
+        f"{method}/predict.sh does not require the named array's marker, so the knob could point at "
+        f"a root some other array claimed")
+    assert f'compgen -G "$PRED/*/${{{chrom}}}.npz"' in t, (
+        f"{method}/predict.sh does not check for an existing ${chrom}.npz, so the knob could "
+        f"RE-PREDICT a chromosome -- a second look at the blind panel")
+    # Every one of the three refuses with exit 4, the same code the once-only guard uses.
+    knob = t.split('if [ -n "${B_COMPLETE_ARRAY:-}" ]; then', 1)[1]
+    knob = knob.split("# A manifest refuses only a LATER submission", 1)[0]
+    assert knob.count("exit 4") == 3, (
+        f"{method}/predict.sh: the knob block has {knob.count('exit 4')} refusals, not 3")
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_the_completion_knob_runs_before_anything_is_predicted(method: str):
+    """A check after `derive_panel_regime` would already have written to the run directory."""
+    t = _read(method, "predict.sh")
+    assert t.index('if [ -n "${B_COMPLETE_ARRAY:-}" ]; then') < t.index("derive_panel_regime ||"), (
+        f"{method}/predict.sh checks the knob after deriving the panel regime")
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_b_once_is_still_required_with_the_knob(method: str):
+    """The knob says WHICH array; it never says the blind panel may be spent."""
+    t = _read(method, "predict.sh")
+    assert t.index('"${B_ONCE:-0}" != "1"') < t.index('if [ -n "${B_COMPLETE_ARRAY:-}" ]; then'), (
+        f"{method}/predict.sh checks the knob before B_ONCE, so a completion without B_ONCE=1 could "
+        f"report a knob refusal instead of the B_ONCE one")
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_the_once_only_refusal_still_stands_with_the_knob_unset(method: str):
+    """Unset, nothing changes: a manifest without this array's marker, or a foreign `.b_once.*`,
+    is still a later submission and still exits 4."""
+    t = _read(method, "predict.sh")
+    assert '{ [ -e "$PRED/manifest.json" ] && [ ! -e "$MARK" ]; } ||' in t, (
+        f"{method}/predict.sh lost the manifest clause of the once-only refusal")
+    assert 'compgen -G "$PRED/.b_once.*" >/dev/null 2>&1 && [ ! -e "$MARK" ]' in t, (
+        f"{method}/predict.sh lost the foreign-marker clause of the once-only refusal")
+    # The refusal is NOT inside the knob's `else`: it must fire for an ordinary submission too.
+    assert t.index('{ [ -e "$PRED/manifest.json" ] && [ ! -e "$MARK" ]; } ||') > t.index(
+        'if [ -n "${B_COMPLETE_ARRAY:-}" ]; then'), (
+        f"{method}/predict.sh runs the once-only refusal before the knob's own checks")
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_the_banner_names_the_completion_array(method: str):
+    """`-` when nobody said, so a log says which of the two paths a root was written by."""
+    t = _read(method, "predict.sh")
+    assert "b_complete_array=${B_COMPLETE_ARRAY:--}" in t, (
+        f"{method}/predict.sh does not print b_complete_array=<id|->")
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_the_knob_is_documented_in_the_header_with_the_job_it_was_written_for(method: str):
+    head = "\n".join(_read(method, "predict.sh").splitlines()[:45])
+    assert "B_COMPLETE_ARRAY" in head, f"{method}/predict.sh does not document the knob"
+    assert "57849734" in head, (
+        f"{method}/predict.sh documents the knob without naming the array it was written for")
+
+
+@pytest.mark.parametrize("method", _every("predict.sh"))
+def test_the_manifest_stays_keyed_on_array_index_zero(method: str):
+    """A `--array=2` completion must leave manifest.json alone, so the root's manifest keeps naming
+    what the original pass wrote."""
+    t = _read(method, "predict.sh")
+    assert '"${SLURM_ARRAY_TASK_ID:-0}" = "0"' in t, (
+        f"{method}/predict.sh no longer keys the manifest on array index 0, so a completion task "
+        f"could rewrite manifest.json")
