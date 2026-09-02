@@ -11,12 +11,19 @@
 <header class="masthead">
   <div class="masthead-inner">
     <h1>CANDI imputation leaderboard</h1>
-    <p class="tagline">Self-supervised epigenome imputation, scored against retrained rivals,
-      naive baselines and the 2019 ENCODE Imputation Challenge submissions — every number with its
-      noise floor, every row with its provenance. Count-space and p-value-space numbers never share
-      a column. Full genome and Chromosome 21 score missing-mark transfer between two experiments
-      of the same cell type (training cell → validation cell), not unseen cell types and not the
-      2019 blind test.</p>
+    <p class="tagline">Self-supervised epigenome imputation, scored against retrained rivals and
+      naive baselines, with the 2019 ENCODE Imputation Challenge field as an anchor underneath.
+      Every cell is addressed by six fields — method, regime, truth, panel, scope, metric — and a
+      row missing any of them never enters the ranked table. Two regimes are live,
+      <code>eic.19→20,21,22</code> and <code>eic.pilot→20,21,22</code>: they differ only in the
+      loci each method's transferable parameters were fit on, and both score chr20 + chr21 +
+      chr22. The truth toggle measures the same rows a second time against the 2019 pipeline.
+      Count-space and p-value-space numbers never share a column. The board measures missing-mark
+      transfer within a cell type the method has seen — not unseen cell types.</p>
+    <p class="tagline masthead-warn">Every row this page used to carry is void: the old board
+      scored all 23 chromosomes, chr19 included, and chr19 is the chromosome CANDI trained on.
+      The retrains are running. Nothing is ranked until the noise floor on the new panels is
+      measured.</p>
   </div>
 </header>
 

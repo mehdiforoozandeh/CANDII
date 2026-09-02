@@ -1,7 +1,7 @@
 """t31 — declaring what a store eval imputes, and keeping the test set out of the loop.
 
 D31 says the pairing is DECLARED, never inferred, because D16 makes biosample names opaque ids no
-loader may parse. `tools/declare_eval_pairs.py` is the one place a person parses them, deliberately,
+loader may parse. `tools/split_regime_by_panel.py` is the one place a person parses them, deliberately,
 and writes the result somewhere it can be audited.
 
 The claim these tests defend is not that suffix matching works — it is that the VALIDATION and TEST
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from tools.declare_eval_pairs import TRUTH_PREFIX, main, pair_by_suffix   # noqa: E402
+from tools.split_regime_by_panel import TRUTH_PREFIX, main, pair_by_suffix   # noqa: E402
 
 TRAIN = ["T_K562", "T_HepG2", "T_lonely"]
 POOL = ["V_K562", "V_HepG2", "B_K562", "B_other"]

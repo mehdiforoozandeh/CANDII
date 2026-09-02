@@ -99,8 +99,26 @@ Output JSON:
 
 ```
 { provenance, tracks, per_track: { "<T_cell|imp_cell|assay>": { count: {...}, pval: {...} } },
-  macro: { count: {...}, pval: {...} }, C: {...}, baselines: {...}, ranking: null|{...} }
+  macro: { count: {...}, pval: {...} }, panels: { count: {...}, pval: {...} },
+  genome_wide: { chroms, per_track, macro, panels } | absent,
+  C: {...}, baselines: {...}, ranking: null|{...} }
 ```
+
+**`per_track`, `macro` and `panels` are the HELD-OUT scope** — the ranked one
+(`BENCHMARK_DESIGN.md` §4). `--held-out-chroms` names it; without the flag there is one scope and
+`provenance.scope` records which, so an absent `genome_wide` is never ambiguous.
+
+`genome_wide` is the same three keys over every scored chromosome, and it is **absent, not empty,
+when it was not computed**. For a method whose transferable parameters were fit at every position
+the number would be a memorisation score, so §4's blanking rule runs it on the held-out
+chromosomes only and the block never exists. Every measure in both scopes comes from **one**
+prediction pass — none of them is linear in position, so the narrower scope is recomputed from the
+arrays, never rescaled from the wider one.
+
+`panels` carries §5.2's three numbers per arm — `V_breadth`, `V_matched`, `B` — each with
+`n_experiments`, `assays` and `ranked`. `V_matched` is the only one with `ranked: false`: it exists
+so the `V_`→`B_` delta is readable and has no counterpart on the board. Its assay set is measured
+off `B_` at aggregation time rather than listed, so it cannot go stale silently.
 
 ### 4.1 E-block — the nine EIC measures
 

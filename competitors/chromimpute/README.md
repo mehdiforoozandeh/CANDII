@@ -33,13 +33,97 @@ Two consequences worth stating rather than discovering later:
   the answer is scored against `V_X`'s `A`. `prepare.impute_targets` builds that set as
   `assays(V_X) − assays(T_X)`.
 - ChromImpute is **position-transductive by construction**. Its trees are trained at genomic
-  positions where the target mark was observed *in other samples*, and those positions include the
-  evaluation chromosome. That is the published method, not a choice of ours, and it is why P1 and
-  P2 are both reported (§2). It leaks no held-out *experiment*: the cells supplying those positions
-  are training-split cells.
+  positions where the target mark was observed *in other samples*. That is the published method,
+  not a choice of ours. It leaks no held-out *experiment* — the cells supplying those positions
+  are training-split cells, so `BENCHMARK_DESIGN.md` Rule 1 is intact — but the positions
+  themselves are the regime's business, and **which chromosomes they come from is decided by the
+  chrominfo `GenerateTrainData` is handed**, not by the method. We hand it the regime's training
+  loci, in every regime. See *The training grid* below, which is also where the departure from the
+  published recipe is recorded.
 
 `chipseq-control` appears in the store manifest but not in the regime's assay list, and the same
 filter drops it. It is a control column, not an assay.
+
+## The training grid
+
+**A departure from published practice, on the record.** ChromImpute as published samples its
+100,000 training locations inside the chromosomes it later predicts; the ENCODE Imputation
+Challenge and the rest of the imputation lineage do the same (§11). We do not. `BENCHMARK_DESIGN.md`
+§2 Rule 2 names the loci a method's **transferable** parameters may be fit on, `Train` turns the
+sampled instances into one predictor per (sample, mark) that `Apply` reuses at every position it
+predicts — so the predictor is transferable and Rule 2 reaches it. **The sampler is pointed at the
+regime's `train_chroms`.** Numbers this directory produces are therefore *our* ChromImpute under
+this benchmark's rule, not the paper's, and a row carrying them says so.
+
+What does **not** move: `Apply`'s neighbour features still work on the eval chromosomes. §2 Rule 2
+names per-position adaptation on the scored chromosomes as inference, open to every method, and
+lists ChromImpute's neighbour features by name.
+
+**Two chrominfo files, because one file cannot say two things.** `GenerateTrainData` spreads its
+100,000 locations over everything the chrominfo it is handed declares — verified by running it
+against two grids that differ only in which chromosomes they declare, with the same converted
+directory: the training instances came back byte-identical, so the converted files of an undeclared
+chromosome are never read. So `prepare.py` writes `chrominfo.train.txt` (the training loci) beside
+`chrominfo.txt` (the chromosomes `Apply` predicts), and `stage.sh` hands the first to
+`ComputeGlobalDist` and `GenerateTrainData` and the second to `Apply`. There is no fallback from one
+to the other: a missing `chrominfo.train.txt` makes every stage but `prepare` refuse, because the
+fallback *was* the bug.
+
+Fitting on one chromosome set and applying to another is something the jar does without complaint —
+predictor files are named `classifier_<sample>_<mark>_<i>_<j>.txt.gz`, with no chromosome in the
+name, and a `Train`-on-chrT / `Apply`-on-chrE smoke run end to end returns ordinary predictions.
+
+**The sampling density changes, and the row should say so.**
+
+| grid | training bins | 100,000 locations are |
+|---|---|---|
+| ChromImpute as published (genome-wide) | 121,241,684 | **0.08 %** — the §11 convention |
+| `eic.19`, our training grid (chr19) | 2,344,704 | **4.3 %**, ~53× the convention |
+| `eic.pilot`, our training grid (40 Pilot Regions) | 1,023,489 | **9.8 %**, ~122× the convention |
+
+The published 0.08 % *is* 100,000 locations over the whole genome — we change the scope, never `-f`
+— so all three rows run the same jar at the same default and differ only in how much genome the
+sample is spread over. That is a difference between the two regime rows which is not the regime's
+scored slice, and it is larger for `eic.pilot` than for `eic.19`.
+
+(An earlier draft of this file put `eic.19` at ~2.6 %. That number was 100,000 over chr21+chr22 and
+had dropped chr20; it also described the *old* behaviour, sampling on the eval chromosomes, which
+would have been 1.5 %. Both are superseded by the table above.)
+
+### What containment means under a `regions` regime (D32)
+
+`eic.pilot` narrows the training loci further, to the 44 ENCODE Pilot Regions
+(`BENCHMARK_DESIGN.md` §3.1), and the jar has no flag for a BED: the smallest scope any of its
+commands understands is a chromosome out of `chrominfo`. So we declare the scope as a grid instead
+of asking the sampler to respect one.
+
+D32's rule is written for CANDI's 768-bin windows — a locus counts only if the *whole* window lies
+inside one region, on the chromosome's own bin grid. ChromImpute samples 100,000 single 25 bp
+locations, so the same rule at a window of one bin
+is: bin `i` is a legal training location iff `[i*25, (i+1)*25)` lies inside one region, i.e. bins
+`ceil(start/25)` up to `end//25`. It is a containment **count**, not `bp // 25` — the hg38 regions
+do not begin or end on the grid — and the indices are chromosome bin indices, so the grid stays
+anchored at chromosome bin 0 and is never re-anchored at a region start, which is what §3.1 ruled.
+On `eic.pilot` that is **40 regions, 1,023,489 bins**, the same two numbers §3.1 pins for CANDI.
+`test_containment_is_counted_the_same_way_the_window_sampler_counts_it` holds the two to one rule
+by checking `region_scope` against `RegionSet.bin_spans`.
+
+**Each region becomes one declared chromosome**, one line of `chrominfo.train.txt` at
+`n_contained_bins * 25`, with a bedgraph per region per training track. Two consequences are the
+reason for the shape:
+
+- **One task per mark, no `-c`.** The whole region grid is a fortieth of a real chromosome, so
+  splitting it buys nothing. `-c` would be safe — it **divides** the sample rather than repeating
+  it per declared chromosome, measured on a two-chromosome grid at `-f 400`: unsplit gave 400
+  instances, the two `-c` tasks gave 193 + 207 — but 40 array tasks per mark for minutes of work is
+  not worth the file count. `submit.sh` splits only a training grid of more than one *chromosome*.
+- **No feature window spans two regions.** 400 bins is the widest neighbour window and every
+  region is ≥500 kb, so keeping the regions apart costs edge truncation on ~2 % of the scope and
+  buys never averaging two loci megabases apart. Concatenating them into one pseudo-chromosome
+  would have done the opposite.
+
+Without a `regions` block the training grid is the regime's `train_chroms` whole — `chr19` under
+`eic.19`, one declared chromosome — and everything above about the two files still holds.
 
 ## The grid
 
@@ -86,29 +170,36 @@ concatenates them — so the separator is ours to pick.
 
 ```bash
 STORE=/project/def-maxwl/mforooz/CANDI_STORE/eic
-REPO=/project/def-maxwl/mforooz/CANDII_t51
-RUN=~/scratch/t51_chromimpute/pilot_chr21
+REPO=/project/def-maxwl/mforooz/CANDII_t78_code
+RUN=~/scratch/t51_chromimpute/eic_19
 JAR=~/scratch/t51_chromimpute/tool/ChromImpute.jar
 
-# 0. the three files + the run-length bedgraphs        (python, array over --shard i/N)
+# 0. the four files + the run-length bedgraphs         (python, array over --shard i/N)
 PYTHONPATH=$REPO/src python prepare.py --store $STORE \
-    --regime $REPO/configs/regime.eic_val.json --out $RUN/input --chroms chr21 --pilot 20
+    --regime $REPO/configs/regime.eic_19.json --out $RUN/input --chroms chr20,chr21,chr22 --pilot 20
 
-# 1..5, one SLURM array per stage, chained with --dependency=afterok
-java -mx6000M  -jar $JAR Convert          -c chr21 -m $MARK $RUN/input/signal $II $CI $CONV
-java -mx12000M -jar $JAR ComputeGlobalDist -m $MARK          $CONV $II $CI $DIST
-java -mx20000M -jar $JAR GenerateTrainData -c chr21          $CONV $DIST $II $CI $TRAINDATA $MARK
-java -mx20000M -jar $JAR Train                               $TRAINDATA $II $PRED $SAMPLE $MARK
-java -mx8000M  -jar $JAR Apply -c chr21 -o impute.$SAMPLE.$MARK.wig \
-                                                             $CONV $DIST $PRED $II $CI $IMP $SAMPLE $MARK
+# 1..5, one SLURM array per stage, chained with --dependency=afterok. Note WHICH chrominfo each
+# command gets: the two stages that fit transferable parameters get $CI_TRAIN, Apply gets $CI.
+for C in chr20 chr21 chr22; do
+java -mx6000M  -jar $JAR Convert          -c $C -m $MARK $RUN/input/signal $II $CI       $CONV
+done
+java -mx6000M  -jar $JAR Convert       -c chr19 -m $MARK $RUN/input/signal $II $CI_TRAIN $CONV
+java -mx12000M -jar $JAR ComputeGlobalDist -m $MARK       $CONV $II $CI_TRAIN $DIST
+java -mx20000M -jar $JAR GenerateTrainData                $CONV $DIST $II $CI_TRAIN $TRAINDATA $MARK
+java -mx20000M -jar $JAR Train                            $TRAINDATA $II $PRED $SAMPLE $MARK
+for C in chr20 chr21 chr22; do
+java -mx8000M  -jar $JAR Apply -c $C -o impute.$SAMPLE.$MARK.wig \
+                                                          $CONV $DIST $PRED $II $CI $IMP $SAMPLE $MARK
+done
 
 # 6. back to the §4.1 contract
 PYTHONPATH=$REPO/src python collect.py --store $STORE --targets $RUN/input/targets_pilot.tsv \
-    --impute-dir $RUN/OUTPUTIMPUTEDIR --pred-root $RUN/pred --chroms chr21 --jar $JAR
+    --impute-dir $RUN/OUTPUTIMPUTEDIR --pred-root $RUN/pred --chroms chr20,chr21,chr22 --jar $JAR
 ```
 
-`II` is `$RUN/input/inputinfofile.txt`, `CI` is `$RUN/input/chrominfo.txt`. `slurm/submit.sh`
-does all of it; `slurm/stage.sh` is the one array script every stage runs through.
+`II` is `$RUN/input/inputinfofile.txt`, `CI` is `$RUN/input/chrominfo.txt` (the apply grid) and
+`CI_TRAIN` is `$RUN/input/chrominfo.train.txt` (the training grid). `slurm/submit.sh` does all of
+it; `slurm/stage.sh` is the one array script every stage runs through.
 
 **`unset JAVA_TOOL_OPTIONS`** before any `java` call on Fir. The `java` module exports `-Xmx2g`,
 which silently overrides the `-mx` on the command line and turns a large stage into an
@@ -125,10 +216,17 @@ do pass select what to parallelize over (`-c`, `-m`, `-l`) or name an output fil
 
 ## Arms
 
-`pval` only. ChromImpute predicts a point in `-log10 p`: no spread, so `signal_sigma` comes later
-from the §6.1 σ-table and not from the method; no count prediction, because B1b forbids inventing a
-read depth; no peak score, so the bench falls back to coverage ranking and records
+`pval` only. ChromImpute predicts a point in `-log10 p`: no spread, so `signal_sigma` would have to
+come from the §6.1 σ-table and not from the method; no count prediction, because B1b forbids
+inventing a read depth; no peak score, so the bench falls back to coverage ranking and records
 `has_peak_head=False` (§6.4 requires every ChromImpute peak row be labelled that way).
+
+**There is no usable σ, so the CRPS tier is shut.** `fit_sigma.py` pools the bench's per-track
+`mse` — already a mean squared residual against `V_` truth — and returns its square root; its own
+table says `IN-SAMPLE for the V panel`. §12.2 makes every such σ void under Rule 1, and no
+training-residual σ pass exists anywhere in this tree. `slurm/score.sh` therefore **refuses** a
+`CI_SIGMA` rather than warning about it, matching the guards Avocado, eDICE and Lavawizard carry.
+Without one the run scores the E and P blocks and writes no `gauss_suite` — absent keys, not NaN.
 
 ## Correctness check (§7.2, "the no-retraining check")
 

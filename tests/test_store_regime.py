@@ -6,6 +6,7 @@ the coverage on the *failure* paths, not only the happy one.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -15,12 +16,12 @@ import pytest
 from candi.store import layout as L
 from candi.store.reader import CorpusStore
 from candi.store.regime import (
-    DEFAULT_DSF_LEVELS, DEFAULT_MIN_VALID_FRAC, DsfPolicy, Regime, RegimeError, WindowPlan,
-    eligible_starts,
+    DEFAULT_DSF_LEVELS, DEFAULT_MIN_VALID_FRAC, DsfPolicy, Regime, RegimeError, RegionSet,
+    WindowPlan, eligible_starts,
 )
 
 from tests.test_store_reader import (
-    ASSAYS, BIOSAMPLES, BLACKLIST_BINS, CHROM_SIZES, N_BINS, make_store,
+    ASSAYS, BIOSAMPLES, BLACKLIST_BINS, CHROM_SIZES, N_BINS, RES, make_store,
 )
 
 CTX = 64
@@ -323,3 +324,333 @@ def test_a_pair_naming_a_biosample_the_store_lacks_is_refused(store, corpus):
     r = Regime.from_dict(regime_dict(store, eval_pairs=[["T_aa", "Z_nope"]]))
     with pytest.raises(RegimeError, match="not in"):
         r.validate_against(corpus)
+
+
+# ---------------------------------------------------------------------------------------------
+# D32 — restricting the train split to a BED (t79)
+# ---------------------------------------------------------------------------------------------
+
+PILOT_BED = REPO / "configs" / "regions" / "encode_pilot_hg38.bed"
+PILOT_REGIME = REPO / "configs" / "regime.eic_pilot.json"
+
+
+def _bed(path: Path, spans_in_bins) -> Path:
+    """Write a BED4 whose intervals are given in BIN coordinates, so the tests read as bins."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(f"{c}\t{a * RES}\t{b * RES}\tR{i}\n" for i, (c, a, b) in enumerate(spans_in_bins)),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _regions(path: Path, **over) -> dict:
+    obj = {"bed": path.name,
+           "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+           "policy": "contain"}
+    obj.update(over)
+    return obj
+
+
+def test_a_regime_without_regions_plans_exactly_what_it_planned_before(store, tmp_path, corpus):
+    """D32 is additive. Pinned lists, not a re-derivation — a re-derivation cannot catch a drift."""
+    r = _regime(store, tmp_path)
+    assert r.regions is None
+    assert r.windows(corpus, "train") == [("chr1", 64 * i) for i in range(31)]
+    assert r.windows(corpus, "eval") == [("chr2", s) for s in (0, 448, 512, 576, 640, 704)]
+
+
+def test_every_shipped_regime_carries_regions_exactly_when_its_json_declares_them():
+    """Sweeps `configs/`, so a regime added tomorrow is covered without editing this test.
+
+    Both sides of D32 are live in the shipped set — `regime.eic_pilot.json` declares a `regions`
+    BED and the rest omit the key — so this checks the mapping, not just the None half. It reads
+    only tracked files on purpose: it used to pin two regimes under `cruxvault/results/t9/`, which
+    is gitignored, and so it failed in every fresh clone and worktree.
+    """
+    shipped = sorted((REPO / "configs").glob("regime.*.json"))
+    assert len(shipped) >= 2, "configs/ should ship regimes; the glob found none to check"
+    declared = [p.name for p in shipped if "regions" in json.loads(p.read_text(encoding="utf-8"))]
+    assert declared, "no shipped regime declares regions — the set-case is no longer covered"
+    assert len(declared) < len(shipped), "every shipped regime declares regions — None is uncovered"
+    for path in shipped:
+        has_block = "regions" in json.loads(path.read_text(encoding="utf-8"))
+        regions = Regime.from_file(path).regions
+        assert (regions is not None) == has_block, path.name
+
+
+def test_to_dict_omits_regions_when_unset(store, tmp_path):
+    """A `"regions": null` in run.json would be a claim about the training scope no run made."""
+    d = _regime(store, tmp_path).to_dict()
+    assert "regions" not in d
+    assert Regime.from_dict(d).to_dict() == d
+
+
+def test_to_dict_writes_regions_back_verbatim_when_set(store, tmp_path):
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    r = _regime(store, tmp_path, regions=_regions(bed))
+    assert r.to_dict()["regions"] == {"bed": "r.bed", "sha256": r.regions.sha256,
+                                      "policy": "contain"}
+
+
+def test_every_planned_train_window_lies_inside_one_region(store, tmp_path, corpus):
+    """Hand-computed: bins [100,400) admits 128/192/256/320; bins [500,756) admits 512/576/640."""
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400), ("chr1", 500, 756)])
+    wins = _regime(store, tmp_path, regions=_regions(bed)).windows(corpus, "train")
+    assert wins == [("chr1", s) for s in (128, 192, 256, 320, 512, 576, 640)]
+    spans = ((100, 400), (500, 756))
+    assert all(any(a <= s and s + CTX <= b for a, b in spans) for _, s in wins)
+
+
+def test_regions_do_not_touch_the_eval_split(store, tmp_path, corpus):
+    """Rule 2 is about training loci; eval is whole chromosomes."""
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    r = _regime(store, tmp_path, regions=_regions(bed))
+    assert r.windows(corpus, "eval") == _regime(store, tmp_path).windows(corpus, "eval")
+
+
+def test_a_window_straddling_a_region_edge_is_dropped_even_at_90_percent(store, tmp_path, corpus):
+    """The test that separates containment from mask-ANDing.
+
+    Region bins [0,122). The tile at 64 has 58 of its 64 bins inside — 90.6 %, above
+    `min_valid_frac` — so ANDing the region into the mask would keep it and admit 6 bins of
+    non-region sequence. Containment drops it.
+    """
+    bed = _bed(tmp_path / "r.bed", [("chr1", 0, 122)])
+    wins = _regime(store, tmp_path, regions=_regions(bed)).windows(corpus, "train")
+    assert wins == [("chr1", 0)]
+    assert (122 - 64) / CTX >= DEFAULT_MIN_VALID_FRAC        # it would have survived semantics (i)
+
+
+def test_d12_still_rejects_a_masked_window_inside_a_region(store, tmp_path, corpus):
+    """chr2 is blacklisted over bins [100,400). A region around it does not resurrect them."""
+    bed = _bed(tmp_path / "r.bed", [("chr2", 64, 512)])
+    r = _regime(store, tmp_path, train_chroms=["chr2"], eval_chroms=["chr1"],
+                regions=_regions(bed))
+    assert r.windows(corpus, "train") == [("chr2", 448)]
+
+
+def test_a_region_on_a_chromosome_outside_train_chroms_contributes_nothing(store, tmp_path, corpus):
+    """The chromosome list is consulted first — that is how the chr20/21/22 cut is declared."""
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400), ("chr2", 500, 700)])
+    wins = _regime(store, tmp_path, regions=_regions(bed)).windows(corpus, "train")
+    assert wins == [("chr1", s) for s in (128, 192, 256, 320)]
+
+
+def test_regions_shorter_than_the_context_name_the_bed_as_the_cause(store, tmp_path, corpus):
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 150), ("chr1", 300, 340)])
+    r = _regime(store, tmp_path, regions=_regions(bed))
+    with pytest.raises(RegimeError, match=r"no eligible train window.*wholly inside a region"):
+        r.windows(corpus, "train")
+
+
+def test_a_bed_whose_hash_does_not_match_is_loud(store, tmp_path):
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    wrong = "0" * 64
+    with pytest.raises(RegimeError, match=r"r\.bed.*" + wrong):
+        _regime(store, tmp_path, regions=_regions(bed, sha256=wrong))
+    bed.write_text(bed.read_text() + "chr1\t20000\t30000\tRx\n", encoding="utf-8")
+    with pytest.raises(RegimeError, match=r"r\.bed"):
+        Regime.from_file(tmp_path / "regime.json")
+
+
+def test_the_sha256_is_required_not_optional(store, tmp_path):
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    obj = _regions(bed)
+    obj.pop("sha256")
+    with pytest.raises(RegimeError, match="sha256"):
+        _regime(store, tmp_path, regions=obj)
+
+
+@pytest.mark.parametrize(
+    "over, match",
+    [
+        ({"policy": "intersect"}, "policy"),
+        ({"bed": "nope.bed"}, "not a file"),
+    ],
+)
+def test_a_malformed_regions_block_names_the_field(store, tmp_path, over, match):
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    with pytest.raises(RegimeError, match=match):
+        _regime(store, tmp_path, regions=_regions(bed, **over))
+
+
+def test_the_bed_resolves_against_the_regime_files_own_directory(store, tmp_path, corpus):
+    """The regime is copied into run.json and read back from elsewhere; cwd must not decide."""
+    bed = _bed(tmp_path / "sub" / "r.bed", [("chr1", 100, 400)])
+    r = _regime(store, tmp_path, regions=_regions(bed, bed="sub/r.bed"))
+    assert Path(r.regions.resolved) == bed
+    absolute = _regime(store, tmp_path, regions=_regions(bed, bed=str(bed)))
+    assert Path(absolute.regions.resolved) == bed
+
+
+@pytest.mark.parametrize("bad", ["chr1\t100\n", "chr1\tx\t200\n", "chr1\t200\t100\n", "# only\n"])
+def test_a_malformed_bed_line_is_named(store, tmp_path, bad):
+    p = tmp_path / "r.bed"
+    p.write_text(bad, encoding="utf-8")
+    with pytest.raises(RegimeError, match="BED"):
+        _regime(store, tmp_path, regions=_regions(p))
+
+
+# -- the shipped ENCODE Pilot Regions ---------------------------------------------------------
+
+
+def _pilot_spans(r: Regime, chroms):
+    return [(c, a, b) for c in chroms for a, b in r.regions.bin_spans(c, RES)]
+
+
+def test_the_shipped_pilot_bed_is_pinned():
+    """Catches a regeneration of the BED under different liftOver options (t79 §3)."""
+    r = Regime.from_file(PILOT_REGIME)
+    iv = r.regions.intervals
+    assert len(iv) == 44 and sum(e - s for _, s, e, _ in iv) == 29_984_074
+    assert r.regions.sha256 == hashlib.sha256(PILOT_BED.read_bytes()).hexdigest()
+    assert len(r.regions.chroms) == 21
+    cut = [x for x in iv if x[0] in set(r.eval_chroms)]
+    assert len(cut) == 4 and sum(e - s for _, s, e, _ in cut) == 4_395_877
+    train = [x for x in iv if x[0] not in set(r.eval_chroms)]
+    assert len(train) == 40 and sum(e - s for _, s, e, _ in train) == 25_588_197
+    assert sorted({x[0] for x in train}) == sorted(r.train_chroms) and "chrX" in r.train_chroms
+    assert len(r.train_chroms) == 18 and r.eval_chroms == ("chr20", "chr21", "chr22")
+
+
+def test_the_pilot_training_scope_is_a_containment_count_not_a_division():
+    r = Regime.from_file(PILOT_REGIME)
+    spans = _pilot_spans(r, r.train_chroms)
+    assert sum(b - a for _, a, b in spans) == 1_023_489
+    assert 25_588_197 % RES != 0                 # so `bp // 25` is the wrong rule, and is not used
+
+
+def test_the_pilot_regime_plans_its_training_windows(tmp_path):
+    """The contained-window count at context_bins=768, stride=768, over an all-valid mask.
+
+    TWO numbers, and they are not the same number.
+
+    * **1,328** is the region-anchored packing CAPACITY — how many disjoint 768-bin windows fit
+      inside the regions if each region's tiling starts at that region's own first bin. This is
+      the figure in `plan/BENCHMARK_DESIGN.md` §3.1 and in `cruxvault/results/t79/G2_PILOT_HG38.md`
+      §5.3 ("1,328 fully-contained windows = 1,019,904 bins = 99.6 %").
+    * **1,294** is what the APPROVED sampler produces. D32 filters the tiling `eligible_starts`
+      already lays down, and that tiling is anchored at bin 0 of the CHROMOSOME, not at each
+      region. 34 of the 40 training regions therefore lose their leading partial tile.
+
+    Both are pinned so the gap cannot be lost. Which one the regime should produce is a PI
+    decision: reaching 1,328 means anchoring the tiling per region, which changes the candidate
+    starts and is not what §5.3 approved.
+    """
+    r = Regime.from_file(PILOT_REGIME)
+    ctx = r.context_bins
+    stride = r.window_plan.stride(ctx)
+    capacity = sum((b - a) // ctx for _, a, b in _pilot_spans(r, r.train_chroms))
+    assert capacity == 1_328 and capacity * ctx == 1_019_904
+
+    planned = 0
+    for chrom in r.train_chroms:
+        end = max(b for _, a, b in _pilot_spans(r, [chrom]))
+        cand = np.arange(0, end + ctx, stride, dtype=np.int64)
+        kept = r.regions.contained_starts(chrom, cand, ctx, RES)
+        spans = r.regions.bin_spans(chrom, RES)
+        assert all(any(a <= s and s + ctx <= b for a, b in spans) for s in kept.tolist())
+        planned += int(kept.size)
+    assert planned == 1_294
+
+
+def test_a_bed_named_on_a_command_line_is_hashed_rather_than_hash_checked(tmp_path):
+    """`from_obj` checks a DECLARED hash because the regime cannot pin the BED any other way. A
+    scope named on a command line (t89's `--eval-regions`) has no declaration to check against, so
+    the hash is computed and travels in the run's provenance instead — which is what makes two runs
+    comparable or not. Same object, same intervals, same `contain` rule."""
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    got = RegionSet.from_bed(bed)
+    assert got.sha256 == hashlib.sha256(bed.read_bytes()).hexdigest()
+    assert got.policy == "contain"
+    assert got.intervals == RegionSet.from_obj(_regions(bed), base=tmp_path).intervals
+    assert got.to_dict()["sha256"] == got.sha256
+
+
+def test_the_shipped_pilot_bed_reads_as_the_44_regions_the_design_names():
+    """Read off the file, not off the doc. §3.1 pins 44 regions and 29,984,074 bp in hg38, and the
+    same BED is the eval scope t89 offers — so a lift that silently changed would move the training
+    scope and the selection scope at once."""
+    rs = RegionSet.from_bed(PILOT_BED)
+    assert len(rs.intervals) == 44
+    assert sum(e - s for _, s, e, _ in rs.intervals) == 29_984_074
+    assert rs.sha256 == "13e11a198fdee08edb7797d1e402b5d985846b5a7d973ade91e8511462acb7a3"
+
+
+def test_a_bed_that_is_not_there_is_refused_by_name(tmp_path):
+    with pytest.raises(RegimeError, match="is not a file"):
+        RegionSet.from_bed(tmp_path / "absent.bed")
+
+
+# ---------------------------------------------------------------------------------------------
+# the SEEDED selection scope (`configs/regions/eval_random450_seed890217.bed`)
+# ---------------------------------------------------------------------------------------------
+# The property that makes a seeded scope defensible is that nobody chose the loci and the choice
+# is checkable — so the check is a test, not a claim in a doc. `PROVENANCE.md` records the seed,
+# the window count, the pool and the bin counts; a reader with that file must be able to
+# regenerate this exact BED, and these fail if they cannot.
+
+SCOPE_BED = REPO / "configs" / "regions" / "eval_random450_seed890217.bed"
+SCOPE_SEED, SCOPE_WINDOWS, SCOPE_CTX = 890217, 450, 768
+SCOPE_NBINS = {"chr20": 2577766, "chr21": 1868399, "chr22": 2032738}
+
+
+def test_the_selection_scope_bed_regenerates_from_its_recorded_seed_alone():
+    """Byte for byte, from the seed and the grid in PROVENANCE.md — no store, no network.
+
+    This is the whole audit trail. A BED that cannot be re-derived is a set of loci somebody could
+    have edited after seeing a number, which is exactly what a seed is supposed to rule out.
+    """
+    import tools.make_eval_scope_bed as G
+
+    assert SCOPE_BED.is_file(), f"{SCOPE_BED} is committed; the scope is nothing without it"
+    again = G.build(SCOPE_NBINS, windows=SCOPE_WINDOWS, seed=SCOPE_SEED,
+                    context_bins=SCOPE_CTX, resolution=RES)
+    assert again == SCOPE_BED.read_text(encoding="utf-8")
+
+
+def test_the_selection_scope_is_drawn_from_the_plan_the_full_pass_walks():
+    """A subset of exactly what it estimates. Every interval is one window of `full_tiling` — not
+    a re-tiling, not an arbitrary interval — so the cheap number is an estimator of the expensive
+    one rather than of something adjacent to it."""
+    from candi.bench.harness import full_tiling
+
+    rs = RegionSet.from_bed(SCOPE_BED)
+    assert len(rs.intervals) == SCOPE_WINDOWS
+    plan = {c: set(full_tiling(n, SCOPE_CTX)) for c, n in SCOPE_NBINS.items()}
+    for c, s, e, _ in rs.intervals:
+        assert s % RES == 0 and e % RES == 0, (c, s, e)
+        assert (e - s) == SCOPE_CTX * RES, "an interval must be exactly one window"
+        assert (s // RES) in plan[c], f"{c}:{s} is not a start the full-coverage pass walks"
+
+
+def test_the_selection_scope_round_trips_through_the_contain_rule_exactly():
+    """450 intervals in, 450 windows out. Verified at this size rather than assumed to scale from
+    the smaller set it was first checked at — a merged or off-grid interval would admit a different
+    set than was drawn, and nothing downstream could tell."""
+    from candi.bench.harness import full_tiling
+
+    rs = RegionSet.from_bed(SCOPE_BED)
+    total = 0
+    for c, n in SCOPE_NBINS.items():
+        got = [int(x) for x in rs.contained_starts(
+            c, np.asarray(full_tiling(n, SCOPE_CTX), dtype=np.int64), SCOPE_CTX, RES)]
+        want = sorted(s // RES for cc, s, _, _ in rs.intervals if cc == c)
+        assert got == want, c
+        total += len(got)
+    assert total == SCOPE_WINDOWS
+    assert total * SCOPE_CTX == 345_600
+
+
+def test_the_selection_scope_is_not_stratified_by_chromosome():
+    """A uniform draw, so the split tracks chromosome LENGTH rather than a rule we imposed. The
+    Pilot cut is the counter-example that motivated this: it put over half its windows on chr21,
+    the shortest of the three."""
+    rs = RegionSet.from_bed(SCOPE_BED)
+    drawn = {c: sum(1 for cc, _, _, _ in rs.intervals if cc == c) for c in SCOPE_NBINS}
+    total_bins = sum(SCOPE_NBINS.values())
+    for c, n in SCOPE_NBINS.items():
+        expected = SCOPE_WINDOWS * n / total_bins
+        # a uniform draw of 450 from 8437 — Poisson-ish scatter, so a loose band is the honest test
+        assert abs(drawn[c] - expected) < 4 * expected ** 0.5, (c, drawn[c], expected)

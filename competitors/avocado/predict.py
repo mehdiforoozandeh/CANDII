@@ -44,7 +44,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--regime", required=True)
     ap.add_argument("--chrom", help="required unless --write-manifest")
-    ap.add_argument("--shared", help="chr20 shared-mode checkpoint")
+    ap.add_argument("--shared", help="the shared-mode checkpoint (chr19, or the BED scope)")
     ap.add_argument("--genome", help="this chromosome's genome-mode checkpoint")
     ap.add_argument("--out", required=True, help="prediction root (RIVALS_PLAN.md 4.1)")
     ap.add_argument("--batch-positions", type=int, default=8192)
@@ -100,35 +100,52 @@ def main(argv=None) -> int:
     model.load_state_dict(state, strict=True)
     model.eval()
 
+    t0 = time.time()
+    out = write_predictions(model, expected=expected, cix=cix, aix=aix, chrom=a.chrom,
+                            n_bins=n_bins, root=Path(a.out), device=dev,
+                            batch_positions=a.batch_positions, compress=a.compress)
+    print(f"[pred {a.chrom}] wrote {len(expected)} tracks in {time.time() - t0:.0f}s; "
+          f"mean={out.mean():.4f} max={out.max():.1f}", flush=True)
+    return 0
+
+
+def write_predictions(model, *, expected, cix, aix, chrom, n_bins, root, device,
+                      batch_positions=8192, compress=False):
+    """Forward `model` over every bin of `chrom` and write the 4.1 root. Returns the predictions.
+
+    Split out of `main` because the mid-training selection loop in `train.py` needs exactly this and
+    a second copy of a `sinh`-and-clip would be a second chance to invert the target differently.
+    The model comes in already assembled -- `main` merges a shared and a genome checkpoint, the
+    selection loop hands over the model it is training.
+    """
     order = sorted(expected)
     ci = torch.tensor([cix[expected[d][0].target_biosample] for d in order],
-                      dtype=torch.int64, device=dev)
-    ai = torch.tensor([aix[expected[d][1]] for d in order], dtype=torch.int64, device=dev)
+                      dtype=torch.int64, device=device)
+    ai = torch.tensor([aix[expected[d][1]] for d in order], dtype=torch.int64, device=device)
 
     out = np.empty((len(order), n_bins), dtype=np.float32)
-    B = a.batch_positions
-    t0 = time.time()
+    was_training = model.training
+    model.eval()
     with torch.no_grad():
-        for s in range(0, n_bins, B):
-            e = min(s + B, n_bins)
-            pos = torch.arange(s, e, dtype=torch.int64, device=dev)
-            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=(dev.type == "cuda")):
+        for s in range(0, n_bins, batch_positions):
+            e = min(s + batch_positions, n_bins)
+            pos = torch.arange(s, e, dtype=torch.int64, device=device)
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=(device.type == "cuda")):
                 yh = model(pos, ci, ai)
             y = torch.sinh(yh.float()).clamp_(min=0.0)
             out[:, s:e] = y.T.cpu().numpy()
+    model.train(was_training)
 
-    root = Path(a.out)
+    root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
-    save = np.savez_compressed if a.compress else np.savez
+    save = np.savez_compressed if compress else np.savez
     for i, d in enumerate(order):
         td = root / d
         td.mkdir(exist_ok=True)
-        tmp = td / f"{a.chrom}.npz.tmp.npz"
+        tmp = td / f"{chrom}.npz.tmp.npz"
         save(tmp, signal_mu=out[i])
-        os.replace(tmp, td / f"{a.chrom}.npz")
-    print(f"[pred {a.chrom}] wrote {len(order)} tracks in {time.time() - t0:.0f}s; "
-          f"mean={out.mean():.4f} max={out.max():.1f}", flush=True)
-    return 0
+        os.replace(tmp, td / f"{chrom}.npz")
+    return out
 
 
 def write_manifest(root: Path, *, version: str, notes: str) -> None:

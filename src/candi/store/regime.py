@@ -42,6 +42,22 @@ Two decisions carry the weight:
   and nothing may parse them. So the pairing is a list of `[input, target]` in the regime. It is
   OPTIONAL: without it the eval split iterates `biosamples.eval` exactly as it did before t14 and
   emits no imputation keys, which is the training-only mode `train.py` already documents.
+* **D32 (t79) — a regime MAY restrict its TRAIN windows to a BED, by strict containment.**
+  `eic.pilot` trains on the 44 ENCODE Pilot Regions, which a chromosome list cannot express, so
+  the optional `regions` key names a BED4, its sha256 and a policy:
+  `{"bed": "regions/encode_pilot_hg38.bed", "sha256": "13e1…", "policy": "contain"}`. Three
+  things are deliberate. **The sha256 is required and checked at load**: the regime is recorded
+  verbatim plus its own hash in `run.json`, but a BED referenced by path sits OUTSIDE that hash,
+  so without the pin the training scope could change while the regime hash swore nothing did —
+  the exact failure the regime file exists to prevent. **`bed` resolves against the regime file's
+  own directory**, because the regime is copied into `run.json` and read back from elsewhere.
+  **Containment is a SECOND rule, not an edit to D12**: `eligible_starts` runs unchanged, then a
+  start is dropped unless the whole window `[s, s+context_bins)` lies inside one region. ANDing
+  the region indicator into the mask was rejected — it lets a window straddling a region edge
+  pass on 90 % coverage, admitting ~1.5 Mb of non-pilot sequence, ~6 % of the scope. Bin
+  *validity* and region *membership* stay two separate rules. The key applies to the **train**
+  split only: Rule 2 is about training loci, and eval is whole chromosomes. Absent, nothing
+  changes — `to_dict()` omits it, so a re-serialised regime is byte-identical to today's.
 """
 from __future__ import annotations
 
@@ -62,6 +78,7 @@ __all__ = [
     "RegimeError",
     "DsfPolicy",
     "WindowPlan",
+    "RegionSet",
     "Regime",
     "eligible_starts",
 ]
@@ -225,6 +242,128 @@ class WindowPlan:
 
 
 # ---------------------------------------------------------------------------------------------
+# D32 — restricting the train split to a BED
+# ---------------------------------------------------------------------------------------------
+
+
+def _parse_bed4(text: str) -> Tuple[Tuple[str, int, int, str], ...]:
+    """BED4 → `((chrom, start_bp, end_bp, name), …)`. Half-open, 0-based, as BED is."""
+    out: List[Tuple[str, int, int, str]] = []
+    for i, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith(("#", "track ", "browser ")):
+            continue
+        f = line.split()
+        if len(f) < 3:
+            raise RegimeError(f"regions BED line {i} has {len(f)} field(s); BED needs chrom start end")
+        try:
+            s, e = int(f[1]), int(f[2])
+        except ValueError as exc:
+            raise RegimeError(f"regions BED line {i}: start/end are not integers — {line!r}") from exc
+        if e <= s:
+            raise RegimeError(f"regions BED line {i} is empty or reversed: {line!r}")
+        out.append((f[0], s, e, f[3] if len(f) > 3 else ""))
+    if not out:
+        raise RegimeError("regions BED has no intervals")
+    return tuple(out)
+
+
+@dataclass(frozen=True)
+class RegionSet:
+    """D32 — the BED the train split is restricted to, its pinned hash, and its parsed intervals."""
+
+    bed: str                                       # as declared, verbatim — what `to_dict` writes
+    sha256: str                                    # of the BED's bytes, checked at load
+    policy: str = "contain"
+    resolved: Optional[str] = None                 # the path the declaration resolved to
+    intervals: Tuple[Tuple[str, int, int, str], ...] = ()
+
+    @classmethod
+    def from_obj(cls, obj: Optional[Mapping[str, Any]], *, base: Optional[Path] = None
+                 ) -> Optional["RegionSet"]:
+        """Parse, resolve and hash-check. `base` is the regime file's own directory."""
+        if obj is None:
+            return None
+        if not isinstance(obj, Mapping):
+            raise RegimeError('regime.regions must be an object: {"bed": …, "sha256": …}')
+        missing = [k for k in ("bed", "sha256") if k not in obj]
+        if missing:
+            raise RegimeError(
+                f"regime.regions is missing key(s) {missing}. `sha256` is REQUIRED (D32): the BED "
+                f"is outside the regime's own hash, so without it the training scope could change "
+                f"while the regime hash stayed identical."
+            )
+        policy = str(obj.get("policy", "contain"))
+        if policy != "contain":
+            raise RegimeError(
+                f"regime.regions.policy {policy!r} is not supported; 'contain' is the only rule — "
+                f"the whole window must lie inside one region (D32)."
+            )
+        bed = str(obj["bed"])
+        p = Path(bed)
+        if not p.is_absolute():
+            p = (Path(base) if base is not None else Path.cwd()) / p
+        if not p.is_file():
+            raise RegimeError(f"regime.regions.bed {bed!r} resolves to {p}, which is not a file")
+        data = p.read_bytes()
+        got = hashlib.sha256(data).hexdigest()
+        want = str(obj["sha256"]).strip().lower()
+        if got != want:
+            raise RegimeError(
+                f"regime.regions.bed {p} has sha256 {got}, but the regime declares {want}. The BED "
+                f"defines the training scope and is pinned by hash (D32) — a mismatch means the "
+                f"scope moved under a regime whose own hash did not."
+            )
+        return cls(bed=bed, sha256=want, policy=policy, resolved=str(p),
+                   intervals=_parse_bed4(data.decode("utf-8")))
+
+    @classmethod
+    def from_bed(cls, path: Path | str) -> "RegionSet":
+        """A region set read straight off a BED, hashing it rather than checking a declared hash.
+
+        `from_obj` is the REGIME's constructor and demands a `sha256` because the BED sits outside
+        the regime's own hash — without one the training scope could move while the regime hash
+        stayed identical. This one is for a scope named on a COMMAND LINE (t89's eval scope), where
+        there is no declaration to check against; the hash is computed here and travels in the run's
+        provenance instead, which is what makes two runs comparable or not.
+        """
+        p = Path(path)
+        if not p.is_file():
+            raise RegimeError(f"region BED {p} is not a file")
+        data = p.read_bytes()
+        return cls(bed=str(p), sha256=hashlib.sha256(data).hexdigest(), policy="contain",
+                   resolved=str(p), intervals=_parse_bed4(data.decode("utf-8")))
+
+    def to_dict(self) -> dict:
+        return {"bed": self.bed, "sha256": self.sha256, "policy": self.policy}
+
+    @property
+    def chroms(self) -> Tuple[str, ...]:
+        return tuple(L.sort_chroms(c for c, _, _, _ in self.intervals))
+
+    def bin_spans(self, chrom: str, resolution: int) -> Tuple[Tuple[int, int], ...]:
+        """`[first_bin, end_bin)` per region on `chrom`, over bins lying WHOLLY inside it.
+
+        A region boundary need not sit on the bin grid — the hg38 Pilot Regions do not — so the
+        bin count is a containment count, never `bp // resolution`.
+        """
+        res = int(resolution)
+        spans = [(-(-s // res), e // res) for c, s, e, _ in self.intervals if c == chrom]
+        return tuple(sorted((a, b) for a, b in spans if b > a))
+
+    def contained_starts(self, chrom: str, starts, context_bins: int, resolution: int) -> np.ndarray:
+        """The subset of `starts` whose whole window `[s, s+context_bins)` is inside ONE region."""
+        s = np.asarray(starts, dtype=np.int64)
+        spans = self.bin_spans(chrom, resolution)
+        if s.size == 0 or not spans:
+            return s[:0]
+        keep = np.zeros(s.shape, dtype=bool)
+        for a, b in spans:
+            keep |= (s >= a) & (s + int(context_bins) <= b)
+        return s[keep]
+
+
+# ---------------------------------------------------------------------------------------------
 # the regime
 # ---------------------------------------------------------------------------------------------
 
@@ -243,6 +382,8 @@ class Regime:
     train_chroms: Tuple[str, ...] = ()
     eval_chroms: Tuple[str, ...] = ()
     window_plan: WindowPlan = field(default_factory=WindowPlan)
+    #: D32 — optional. Restricts the TRAIN split's windows to a BED, by strict containment.
+    regions: Optional[RegionSet] = None
     dsf: DsfPolicy = field(default_factory=DsfPolicy)
     kinds: Tuple[str, ...] = ("counts", "peaks")
     seed: int = 42
@@ -304,6 +445,9 @@ class Regime:
             train_chroms=tuple(str(c) for c in obj.get("train_chroms", ())),
             eval_chroms=tuple(str(c) for c in obj.get("eval_chroms", ())),
             window_plan=WindowPlan.from_obj(obj.get("window_plan")),
+            regions=RegionSet.from_obj(
+                obj.get("regions"), base=None if path is None else Path(path).parent
+            ),
             dsf=DsfPolicy.from_obj(obj.get("dsf")),
             kinds=kinds,
             seed=int(obj.get("seed", 42)),
@@ -327,7 +471,7 @@ class Regime:
 
     def to_dict(self) -> dict:
         """The regime as JSON, round-trippable through `from_dict`."""
-        return {
+        out = {
             "store": self.store,
             "assays": list(self.assays),
             "biosamples": {"train": list(self.train_biosamples), "eval": list(self.eval_biosamples)},
@@ -340,6 +484,11 @@ class Regime:
             "kinds": list(self.kinds),
             "seed": self.seed,
         }
+        # D32 — OMITTED when unset. A `"regions": null` in `run.json` would be a claim about the
+        # training scope that the run never made.
+        if self.regions is not None:
+            out["regions"] = self.regions.to_dict()
+        return out
 
     # -- derived ------------------------------------------------------------------------------
 
@@ -472,6 +621,10 @@ class Regime:
         window is eligible** — the mask is t7's and a store mid-build legitimately has none. That
         is stated rather than silent: `mask_available()` says which case you are in, and the
         `StoreDataset` prints it once.
+
+        D32 adds a SECOND, independent rule on the **train** split only: with `regions` declared,
+        a start survives only if its whole window lies inside one region. D12 is untouched — a
+        window inside a region can still fail it on blacklist or `N`.
         """
         chrom_list = list(chroms if chroms is not None else self.chroms(split))
         if not chrom_list:
@@ -481,6 +634,7 @@ class Regime:
         n_bins = corpus.n_bins()
         stride = self.window_plan.stride(self.context_bins)
         have_mask = self.mask_available(corpus)
+        regions = self.regions if split == "train" else None
         out: List[Tuple[str, int]] = []
         for chrom in L.sort_chroms(chrom_list):
             n = int(n_bins[chrom])
@@ -491,12 +645,20 @@ class Regime:
             starts = eligible_starts(
                 mask, self.context_bins, self.window_plan.min_valid_frac, stride
             )
+            if regions is not None:
+                starts = regions.contained_starts(
+                    chrom, starts, self.context_bins, corpus.resolution
+                )
             out.extend((chrom, int(s)) for s in starts)
         if not out:
+            because = "" if regions is None else (
+                f" No window fits wholly inside a region of {regions.resolved} "
+                f"({len(regions.intervals)} regions, D32), which is checked after the mask."
+            )
             raise RegimeError(
                 f"no eligible {split} window on {chrom_list} at context_bins={self.context_bins}, "
                 f"stride={stride}, min_valid_frac={self.window_plan.min_valid_frac}. Either the "
-                f"context is longer than the chromosome or the mask rejects everything."
+                f"context is longer than the chromosome or the mask rejects everything.{because}"
             )
         return out
 

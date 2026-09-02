@@ -21,12 +21,13 @@ import pytest
 import torch
 
 from candi.dataset import CandiKitH5Dataset
+from candi.decoder import HEADS
 from candi.store.layout import StoreError
 from candi.store.regime import Regime
 from candi.train import DataSource, build_parser, make_dataset
 
 from tests.test_store_reader import ASSAYS, make_store
-from tests.test_store_regime import CTX, regime_dict
+from tests.test_store_regime import CTX, REPO, regime_dict
 
 
 # ---------------------------------------------------------------------------------------------
@@ -384,3 +385,233 @@ def test_the_store_run_records_num_cells_zero_and_scores_nothing(store_run):
     # t14: no eval keys at all, rather than an M1 pooled over zero targets that reads as a result.
     for key in ("M1", "M2", "M3", "S14"):
         assert key not in store_run, f"{key} must be absent on the store path, not empty"
+
+
+# ---------------------------------------------------------------------------------------------
+# a head is supervised by a store layer, and the regime is what loads the layer
+# ---------------------------------------------------------------------------------------------
+
+#: Which store layer carries each head's target. Driven off `decoder.HEADS` by the test below, so a
+#: fourth head cannot be added without declaring the layer that supervises it.
+HEAD_TARGET_KIND = {"count": "counts", "signal": "pval", "peak": "peaks"}
+
+#: The two live regimes of `plan/BENCHMARK_DESIGN.md` §3. `regime.eic_smoke.json` and
+#: `regime.equiv.json` are not here on purpose: neither trains a board row.
+LIVE_REGIMES = ("regime.eic_19.json", "regime.eic_pilot.json")
+
+
+def test_every_head_declares_the_layer_that_supervises_it():
+    """Fails when a head is added to `decoder.HEADS` and nothing says what its target layer is."""
+    assert set(HEAD_TARGET_KIND) == set(HEADS), (
+        f"HEADS={HEADS} but HEAD_TARGET_KIND covers {sorted(HEAD_TARGET_KIND)}; a head with no "
+        "declared target layer cannot be checked against a regime's `kinds`"
+    )
+
+
+@pytest.mark.parametrize("name", LIVE_REGIMES)
+def test_a_live_regime_loads_the_layer_behind_every_head(name):
+    """A live regime must declare `kinds` for every head, because omitting one is SILENT.
+
+    `StoreDataset._batch` allocates `y_pval` and `y_peaks` as `torch.zeros` and fills a column only
+    when `"<kind>" in self.regime.kinds` (`store/dataset.py:605-606`). When the regime omits the
+    kind the tensor stays **all zero** and is emitted anyway.
+
+    Nothing downstream catches that. `batch.prepare_masked_batch` gates the auxiliary heads on
+    `signal_observed_map` / `signal_masked_map`, which require `y_avail > 0` — and `y_avail` is set
+    from the **counts** availability (`store/dataset.py:601`), not from the layer the head actually
+    reads. So a `--heads count,signal` run off a regime whose `kinds` lacks `pval` trains its
+    Gaussian head against a target of 0.0 on every present column. A softplus mean reaches 0
+    happily, so the loss descends and the head learns to predict nothing, with no error raised.
+    That is `AGENTS.md` invariant 8's failure family, and this test is what stands in for it.
+
+    The narrower case the same mechanism produces — a regime that DOES declare `pval` but a column
+    whose biosample lacks that layer — is not covered here and is on record as needing a ruling.
+    """
+    kinds = set(Regime.from_file(REPO / "configs" / name).kinds)
+    missing = {h: k for h, k in HEAD_TARGET_KIND.items() if k not in kinds}
+    assert not missing, (
+        f"configs/{name} declares kinds={sorted(kinds)}, so head(s) "
+        f"{sorted(missing)} would be supervised on a plane of zeros: "
+        + ", ".join(f"{h} needs '{k}'" for h, k in sorted(missing.items()))
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# t85 — training stops when the validation metric stops improving
+# ---------------------------------------------------------------------------------------------
+#
+# Job 57620803_0 took its best `V_` checkpoint at epoch 2 and then ran nine more GPU-hours while
+# `V_imp_crps` rose 0.5604 -> 0.5820 -> 0.5864. Nothing in the loop could stop it. These pin the
+# two halves of the fix: `train()` honours a hook that asks to stop, and the patience that decides
+# is counted in EPOCHS.
+
+
+@pytest.mark.parametrize("full_coverage", [False, True],
+                         ids=["sampled-path", "full-coverage-path"])
+def test_a_hook_that_asks_to_stop_stops_the_epoch_loop(regime_file, full_coverage):
+    """Both construction sites, because the break had to be written into each loop separately.
+
+    A stub hook rather than a real metric: whether a 32-unit model's CRPS happens to rise on
+    epoch 3 of a synthetic store is not a property this test may depend on. What is being checked
+    is the wiring — a truthy return ends training — and that is deterministic.
+    """
+    from candi.model import build_model
+    from candi.train import train
+
+    src = DataSource.resolve(store=str(regime_file))
+    ds = make_dataset(src, "type1", train=True, batch_size=2, seed=0)
+    model = build_model(num_cells=0, num_assays=ds.num_assays, context_length=ds.context_bins,
+                        d_model=32, embed_dim=8, n_transformer_layers=1)
+    calls = []
+
+    def hook(step, ep):
+        calls.append(ep)
+        return len(calls) == 2          # stop at the second eval, whatever epoch that is
+
+    train(model, src, "cpu", epochs=8, steps_per_epoch=2, batch_size=2, seed=0,
+          full_coverage=full_coverage, eval_hook=hook, eval_every=1)
+    assert calls == [0, 1], f"the loop ran past the stop request: hook saw epochs {calls}"
+
+
+def test_a_hook_that_returns_none_never_stops_anything(regime_file):
+    """Every caller predating t85 returns None, and none of them may change behaviour."""
+    from candi.model import build_model
+    from candi.train import train
+
+    src = DataSource.resolve(store=str(regime_file))
+    ds = make_dataset(src, "type1", train=True, batch_size=2, seed=0)
+    model = build_model(num_cells=0, num_assays=ds.num_assays, context_length=ds.context_bins,
+                        d_model=32, embed_dim=8, n_transformer_layers=1)
+    calls = []
+    train(model, src, "cpu", epochs=4, steps_per_epoch=2, batch_size=2, seed=0,
+          eval_hook=lambda step, ep: calls.append(ep), eval_every=1)
+    assert calls == [0, 1, 2, 3], f"a None-returning hook changed the epoch count: {calls}"
+
+
+def test_the_patience_is_counted_in_epochs_and_defaults_to_three():
+    """`--early-stop-epochs 3` must mean three EPOCHS, not three evals.
+
+    The distinction is load-bearing: `--eval-every` is 3 by default, so a patience read as three
+    *evals* would be nine epochs, three times what the operator asked for.
+    """
+    import inspect
+    from candi.train import train_and_eval
+
+    assert inspect.signature(train_and_eval).parameters["early_stop_epochs"].default == 3
+    src = inspect.getsource(train_and_eval)
+    assert "(ep - best[\"epoch\"]) > early_stop_epochs" in src, \
+        "the stop condition must compare EPOCH numbers, not a count of evals"
+    assert "if early_stop_epochs and" in src, "0 must switch it off"
+
+
+def test_the_cli_exposes_the_patience_and_says_zero_is_off():
+    import candi.train as T
+
+    ap = T.build_arg_parser() if hasattr(T, "build_arg_parser") else None
+    if ap is None:                       # the parser is built inside main(); read --help instead
+        import subprocess
+        out = subprocess.run([sys.executable, "-m", "candi.train", "--help"],
+                             capture_output=True, text=True).stdout
+        assert "--early-stop-epochs" in out
+        assert "0 = off" in out
+
+
+# ---------------------------------------------------------------------------------------------
+# t89 — the selection scope, wired end to end through the training loop
+# ---------------------------------------------------------------------------------------------
+# `tests/test_bench_harness.py` checks that a scoped source scores the scoped bins and
+# `tests/test_monitor.py` checks that a scoped row still selects. Neither can see the thing that
+# only exists here: the loop runs TWO monitors, a cheap one for the curve and a full-coverage one
+# for the row the run reports, and the run json has to say which was which.
+
+@pytest.fixture(scope="module")
+def scoped_run(tmp_path_factory):
+    """The same one-epoch monitored run as `monitored_run`, with `--eval-regions` on.
+
+    The BED covers part of the eval chromosome and its edges are off the 25 bp bin grid, as the
+    hg38 Pilot Regions' are.
+    """
+    from candi.train import train_and_eval
+    from tests.test_monitor import EVAL_TRACKS
+
+    root = tmp_path_factory.mktemp("scopedrun")
+    st = make_store(root / "store", tracks=EVAL_TRACKS)
+    bed = root / "scope.bed"
+    bed.write_text("chr2\t3210\t11190\tR0\n", encoding="utf-8")
+    p = root / "regime.json"
+    p.write_text(json.dumps(regime_dict(
+        st, biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "V_bb"]},
+        kinds=["counts", "peaks", "pval"],
+        eval_pairs=[["T_aa", "V_aa"]]), indent=2), encoding="utf-8")
+    out = root / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    res = train_and_eval(store=str(p), out_dir=str(out), epochs=1,
+                         steps_per_epoch=2, batch_size=2, d_model=32, embed_dim=8,
+                         n_transformer_layers=1, seed=0, eval_every=1, eval_batch_size=2,
+                         eval_regions=str(bed), ckpt_path=str(out / "scoped.ckpt"))
+    return res, bed
+
+
+def test_the_run_json_says_which_positions_selected_the_checkpoint(scoped_run,
+                                                                   monitored_run) -> None:
+    """Two runs are comparable only if this matches. An unscoped run says `full` rather than
+    omitting the key — "scored everything" and "the field was forgotten" must not look alike."""
+    import hashlib
+
+    res, bed = scoped_run
+    assert monitored_run["config"]["eval_scope"]["name"] == "full"
+    sc = res["config"]["eval_scope"]
+    assert sc["name"] == "regions"
+    assert sc["sha256"] == hashlib.sha256(bed.read_bytes()).hexdigest()
+    assert 0.0 < sc["fraction"] < 1.0
+
+
+def test_the_curve_is_cheap_and_the_end_of_run_row_is_not(scoped_run) -> None:
+    """THE RULING THIS TEST EXISTS FOR. Cheap enough to select on every check; the number the run
+    REPORTS is the thorough one. A run whose final row inherited the selection scope would report a
+    region cut as if it were the panel."""
+    res, _ = scoped_run
+    curve = res["eval_curve"]
+    assert curve, "the monitor never fired, so this test asserted nothing"
+    for row in curve:
+        assert row["eval_scope"]["name"] == "regions"
+    fin = res["final_check"]
+    assert fin is not None and fin["final"] is True
+    assert fin["eval_scope"]["name"] == "full"
+    assert fin["impute"]["n_tracks"] > 0 and fin["denoise"]["n_tracks"] > 0
+
+
+def test_a_scoped_curve_scores_fewer_bins_than_the_row_the_run_reports(scoped_run) -> None:
+    """The saving is in the BINS, not in the tracks — the same panel over fewer positions. That is
+    the whole difference between this and the sampled scorer that was deleted, which bought its
+    speed by dropping windows per track and therefore selected on a draw."""
+    res, _ = scoped_run
+    mid = res["eval_curve"][-1]
+    fin = res["final_check"]
+    assert set(mid["impute"]["per_track"]) == set(fin["impute"]["per_track"])
+    assert mid["impute"]["n_tracks"] == fin["impute"]["n_tracks"] > 0
+    assert mid["eval_scope"]["scored_bins"] < fin["eval_scope"]["scored_bins"]
+    assert fin["eval_scope"]["fraction"] == 1.0
+    assert mid["eval_scope"]["full_bins"] == fin["eval_scope"]["full_bins"]
+
+
+def test_a_scope_with_no_check_to_scope_is_blanked_rather_than_recorded(tmp_path) -> None:
+    """A `regions` block in a run json is a claim about a curve. With `--eval-every 0` there is no
+    curve, so the claim would be about nothing."""
+    from candi.train import train_and_eval
+    from tests.test_monitor import EVAL_TRACKS
+
+    st = make_store(tmp_path / "store", tracks=EVAL_TRACKS)
+    bed = tmp_path / "scope.bed"
+    bed.write_text("chr2\t3210\t11190\tR0\n", encoding="utf-8")
+    p = tmp_path / "regime.json"
+    p.write_text(json.dumps(regime_dict(
+        st, biosamples={"train": ["T_aa", "T_bb"], "eval": ["V_aa", "V_bb"]},
+        kinds=["counts", "peaks", "pval"]), indent=2), encoding="utf-8")
+    out = tmp_path / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    res = train_and_eval(store=str(p), out_dir=str(out), epochs=1, steps_per_epoch=2,
+                         batch_size=2, d_model=32, embed_dim=8, n_transformer_layers=1,
+                         seed=0, eval_every=0, eval_batch_size=2, eval_regions=str(bed))
+    assert res["config"]["eval_scope"]["name"] == "full"
+    assert not res["eval_curve"]

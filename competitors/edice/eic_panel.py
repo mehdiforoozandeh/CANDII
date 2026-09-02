@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 __all__ = ["Panel", "TrackRequest", "load_regime", "training_panel", "requested_tracks",
-           "assert_no_eval_leakage", "read_slab"]
+           "assert_no_eval_leakage", "read_slab", "derive_v_only_regime", "train_bin_spans"]
 
 
 @dataclass(frozen=True)
@@ -119,6 +119,67 @@ def requested_tracks(source, panel: Panel) -> List[TrackRequest]:
     if not out:
         raise ValueError("the regime declares no (pair, assay) target")
     return out
+
+
+def derive_v_only_regime(regime: dict, src: Path | str) -> dict:
+    """A copy of `regime` whose `eval_pairs` keep only `V_` targets — §5's selection panel.
+
+    PI ruling of 2026-08-31: "never ever we use B_ in training — V_ is only for checkpoint
+    selection and monitoring, not training." Both live regimes declare all 38 pairs (26 `V_` +
+    12 `B_`) in one file, so the filter is what keeps the selection eval from OPENING a `B_`
+    track, not merely from ranking on one. Same derivation as `slurm/t81_train_candi.sh`, so
+    CANDI and eDICE select on the same panel.
+
+    `regions.bed` resolves against the regime file's own directory (`store/regime.py:52`), so the
+    derived copy is written elsewhere and must carry an absolute path or its sha256 gate fails.
+    """
+    out = json.loads(json.dumps(regime))
+    pairs = [tuple(p) if not isinstance(p, dict) else (p["input"], p["target"])
+             for p in regime.get("eval_pairs") or []]
+    kept = [list(p) for p in pairs if str(p[1]).startswith("V_")]
+    if not kept:
+        raise ValueError(
+            f"{src} declares no `V_` eval pair, so there is nothing to select a checkpoint on. "
+            f"BENCHMARK_DESIGN.md §5 asks every trainable method to select on the V_ panel.")
+    out["eval_pairs"] = kept
+    # `eval_pairs` makes `biosamples.eval` inert (the pool comes from the pairs), but leaving the
+    # 38 eval cells in a V_-only config would be a false claim about which panel this run reads.
+    out["biosamples"] = dict(out["biosamples"], eval=sorted({p[1] for p in kept}))
+    if out.get("regions"):
+        out["regions"] = dict(out["regions"],
+                              bed=str((Path(src).parent / out["regions"]["bed"]).resolve()))
+    out["_comment"] = (
+        f"DERIVED by competitors/edice/run_eic.py from {Path(src).name} — eval_pairs filtered to "
+        f"V_ targets only, so the mid-training selection eval never reads B_ "
+        f"(plan/BENCHMARK_DESIGN.md §5). Do not edit; edit the source.")
+    return out
+
+
+def train_bin_spans(regime: dict, src: Path | str, chrom: str, n_bins: int,
+                    resolution: int) -> List[Tuple[int, int]]:
+    """`[(first_bin, end_bin), …]` eDICE may train on — D32 containment, at eDICE's own unit.
+
+    Without a `regions` key this is the whole chromosome, which is what eDICE has always read.
+
+    With one, D32's rule is that a training window counts only if it lies WHOLLY inside a region.
+    eDICE's window is one 25 bp bin — it carries no positional parameters and no context — so
+    containment here is per bin, and `RegionSet.bin_spans` is exactly that: `ceil(start/res)` to
+    `floor(end/res)` on the chromosome's own bin grid, never re-anchored per region. On
+    `eic.pilot` that is the regime's declared training scope, 1,023,489 bins over 40 regions.
+
+    CANDI's 768-bin window loses the leading and trailing partial tile of 34 of those 40 regions
+    and so plans 993,792 bins, 97.10 % of the same scope (§3.1). The two methods therefore see the
+    same REGIONS and not the identical bin set; the 2.9 % is a window-granularity artefact of
+    CANDI's context, and imposing it on a method with no context would be inventing a rule D32
+    does not state.
+    """
+    if not regime.get("regions"):
+        return [(0, int(n_bins))]
+    from candi.store.regime import RegionSet
+
+    regions = RegionSet.from_obj(regime["regions"], base=Path(src).parent)
+    return [(a, min(b, int(n_bins))) for a, b in regions.bin_spans(chrom, resolution)
+            if a < min(b, int(n_bins))]
 
 
 def read_slab(store, panel: Panel, chrom: str, lo: int, hi: int) -> np.ndarray:

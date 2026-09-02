@@ -1,12 +1,29 @@
 #!/bin/bash
 # Lay out a run directory, build the work-item lists, and submit the six stages as one dependency
-# chain of SLURM arrays. Drives all three runs — the §7.2 pilot, the full P1 grid, and P2.
+# chain of SLURM arrays.
 #
 #   bash submit.sh [RUNDIR] [FROM_STAGE] [TARGETS]
 #
-#   pilot   bash submit.sh $S/pilot_chr21                                  # 20 targets, chr21
-#   P1      bash submit.sh $S/p1_chr21    prepare targets.tsv              # 45 targets, chr21
-#   P2      CI_CHROMS=all bash submit.sh $S/p2_genome prepare targets.tsv  # 45 targets, 23 chroms
+#   pilot  bash submit.sh $S/pilot                             # 20 targets, the eval scope
+#   full   bash submit.sh $S/eic_19 prepare targets.tsv        # every declared target
+#
+# RETARGETED 2026-08-31. `P1`/`P2` are RETIRED (BENCHMARK_DESIGN.md §9), and the genome-wide run is
+# GONE: §4 blanks ChromImpute's `genome-wide` cell and rules that a blanked cell is not computed, so
+# the only scope is the regime's eval_chroms — chr20+21+22. `CI_REGIME` selects which live regime
+# (eic_19 or eic_pilot); `CI_CHROMS` defaults to that regime's eval_chroms.
+#
+# RULE 2, SETTLED 2026-09-01 (PI ruling). `dist` and `gtd` run on the regime's TRAINING loci, in
+# every regime and not only under a `regions` BED: `prepare.py` always writes `chrominfo.train.txt`
+# and `stage.sh` hands that file, and only that file, to ComputeGlobalDist and GenerateTrainData.
+# `Apply` keeps `chrominfo.txt` — its neighbour features are per-position inference, which §2 Rule 2
+# names as legitimate on the eval chromosomes. This DEPARTS from the published recipe, which samples
+# inside the predicted chromosomes; the departure is recorded in `../README.md`.
+#
+# ONE THING THIS SCRIPT DOES NOT DO, AND IT IS A BLOCKER, NOT AN OVERSIGHT:
+#
+#   `targets.tsv` is EVERY declared eval pair, and the live regimes declare 38 — 26 V_ AND 12 B_.
+#   §5 rules B_ is touched ONCE, at the very end. Filter the target list to V_ before running
+#   anything but the final B_ pass.
 #
 # Nothing here decides science. The compendium is every training track the regime declares (§6.2,
 # enforced in prepare.training_tracks); the pilot targets come from prepare.pilot_subset; every
@@ -16,10 +33,11 @@ set -euo pipefail
 RUN=${1:-$HOME/scratch/t51_chromimpute/pilot_chr21}
 FROM=${2:-prepare}
 TARGETS=${3:-targets_pilot.tsv}
-CHROMS=${CI_CHROMS:-chr21}
-REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t51}
+CHROMS=${CI_CHROMS:-chr20,chr21,chr22}
+REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}
 STORE=${CI_STORE:-/project/def-maxwl/mforooz/CANDI_STORE/eic}
-PY=${CI_PY:-/project/def-maxwl/mforooz/candi_venv/bin/python}
+PY=${CI_PY:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}
+REGIME=${CI_REGIME:-$REPO/configs/regime.eic_19.json}
 JAR=${CI_JAR:-$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}
 ACCT=${CI_ACCT:-def-maxwl}
 HERE=$REPO/competitors/chromimpute
@@ -27,9 +45,13 @@ STAGE=$HERE/slurm/stage.sh
 
 mkdir -p "$RUN"/{lists,logs,timing}
 
-# --- the three text files, and the target lists -------------------------------------------------
+# --- the four text files, and the target lists -------------------------------------------------
+# Deleted first, not overwritten: a training grid left behind by an earlier run of a different
+# regime would retarget `dist` and `gtd`, and it would do it silently. `prepare.py` writes a fresh
+# one below, so the only way this file survives the delete is a prepare that did not run.
+rm -f "$RUN/input/chrominfo.train.txt"
 PYTHONPATH=$REPO/src $PY "$HERE/prepare.py" --store "$STORE" \
-    --regime "$REPO/configs/regime.eic_val.json" --out "$RUN/input" --chroms "$CHROMS" \
+    --regime "$REGIME" --out "$RUN/input" --chroms "$CHROMS" \
     --pilot 20 --no-signal
 
 NTRACK=$(wc -l < "$RUN/input/inputinfofile.txt")
@@ -44,15 +66,33 @@ cut -f2 "$RUN/input/inputinfofile.txt" | sort -u            > "$RUN/lists/conver
 # GenerateTrainData's loadDistInfo opens DISTANCEDIR/<sample>_<mark>.txt for every (sample, mark)
 # pair in inputinfofile before it looks at the target, so one missing mark fails every target.
 cp "$RUN/lists/convert.txt"                                   "$RUN/lists/dist.txt"
-# GenerateTrainData parallelizes over chromosomes as well as marks whenever there is more than one
-# chromosome — one mark genome-wide is hours of scanning in a single task.
-if [ "$(wc -l < "$RUN/input/chrominfo.txt")" -gt 1 ]; then
-  while read -r M; do
-    while read -r C; do printf '%s\t%s\n' "$M" "$C"; done < <(cut -f1 "$RUN/input/chrominfo.txt")
-  done < <(cut -f3 "$RUN/input/$TARGETS" | sort -u)                > "$RUN/lists/gtd.txt"
+# GenerateTrainData parallelizes over chromosomes as well as marks — one mark over a wide grid is
+# hours of scanning in a single task. The chromosomes it may be split over are the TRAINING grid's,
+# never `chrominfo.txt`: `-c` picks a chromosome out of the chrominfo the command is handed, and
+# the command is handed `chrominfo.train.txt`. Naming an eval chromosome here is what used to put
+# the sample on the scored chromosomes.
+#
+# A D32 region grid is the exception and stays unsplit: the whole of it is 1,023,489 bins, a
+# fortieth of one real chromosome, so one task per mark is minutes and 40 array tasks per mark buy
+# nothing.
+NTRAIN=$(wc -l < "$RUN/input/chrominfo.train.txt")
+if $PY -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" \
+       "$REGIME"; then
+  REGIONS=1
 else
-  cut -f3 "$RUN/input/$TARGETS" | sort -u                          > "$RUN/lists/gtd.txt"
+  REGIONS=0
 fi
+if [ "$REGIONS" = 1 ] || [ "$NTRAIN" -le 1 ]; then
+  cut -f3 "$RUN/input/$TARGETS" | sort -u                          > "$RUN/lists/gtd.txt"
+else
+  while read -r M; do
+    while read -r C; do printf '%s\t%s\n' "$M" "$C"
+    done < <(cut -f1 "$RUN/input/chrominfo.train.txt")
+  done < <(cut -f3 "$RUN/input/$TARGETS" | sort -u)                > "$RUN/lists/gtd.txt"
+fi
+echo "training grid: $NTRAIN declared chromosome(s)/region(s), \
+$(awk -F'\t' '{s += $2 / 25} END {printf "%d", s}' "$RUN/input/chrominfo.train.txt") bins \
+(regions=$REGIONS) | apply grid: $CHROMS"
 cut -f1,3 "$RUN/input/$TARGETS"                               > "$RUN/lists/train.txt"
 cp "$RUN/lists/train.txt"                                     "$RUN/lists/apply.txt"
 
@@ -60,7 +100,7 @@ echo "compendium: $NTRACK tracks | convert marks: $(wc -l < "$RUN/lists/convert.
 targets: $(wc -l < "$RUN/lists/train.txt")"
 
 # --- the chain ----------------------------------------------------------------------------------
-ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS"
+ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS,CI_REGIME=$REGIME"
 
 # `CI_THROTTLE` caps how many array tasks of one stage run at once. GenerateTrainData and Apply
 # each hold ONE OPEN gzip reader per compendium track — 267 of them — so an unthrottled array puts
@@ -106,7 +146,7 @@ set -euo pipefail
 PYTHONPATH=$REPO/src $PY $HERE/collect.py --store $STORE \\
     --targets $RUN/input/$TARGETS --impute-dir $RUN/OUTPUTIMPUTEDIR \\
     --pred-root $RUN/pred --chroms \$(cut -f1 $RUN/input/chrominfo.txt | paste -sd, -) \\
-    --jar $JAR --notes "t51 $TARGETS on $CHROMS, regime.eic_val, ChromImpute paper defaults"
+    --jar $JAR --notes "$TARGETS on $CHROMS, $(basename $REGIME), ChromImpute paper defaults"
 EOF
 chmod +x "$RUN/collect.sh"
 echo "collect with: $RUN/collect.sh"

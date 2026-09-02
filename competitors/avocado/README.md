@@ -37,9 +37,9 @@ vendored files are the record of what the adapters were derived from, so a revie
 
 | file | changed from 005 | why |
 |---|---|---|
-| `bin_store.py` | reads `CANDI_STORE` through `candi.store.reader` instead of binning bigWigs | the store is already on the `floor(chr_len/25)` grid; there is nothing to bin |
-| `index.py` | new — the (cell, assay) index space | 005 read a challenge `bridge.csv` of `C##`/`M##` codes; we have `T_`/`V_` biosample ids |
-| `train.py` | columns from `tracks.csv`; **resume**; `--seed` a flag | the MIG slice may not finish a chromosome inside one job's walltime |
+| `bin_store.py` | reads `CANDI_STORE` through `candi.store.reader` instead of binning bigWigs; `--regions` | the store is already on the `floor(chr_len/25)` grid; and §3.1 restricts `eic.pilot`'s scope to a BED |
+| `index.py` | new — the (cell, assay) index space, the `V_` selection panel, the BED scope | 005 read a challenge `bridge.csv` of `C##`/`M##` codes; we have `T_`/`V_` biosample ids |
+| `train.py` | columns from `tracks.csv`; **resume**; `--seed` a flag; **`V_` checkpoint selection**; `--positions` | the MIG slice may not finish a chromosome inside one job's walltime; §5 asks every method to select on `V_` |
 | `predict.py` | predicts the regime's declared tracks; writes §4.1 npz | 005 wrote a fixed 51-experiment `.npy` and bigWigs |
 | `fit_sigma.py` | new — the §6.1 σ-table | 005 had no CRPS arm |
 
@@ -104,11 +104,12 @@ On its d3 chr20 joint fit the held-out MSE falls 0.14495 → 0.07206 by epoch 15
 keeps falling — mild overfitting of the genomic factors. Halving is not a saving on a converged
 run; it is the better run. (Source: `005/output/train_logs/d3_train_log.jsonl`.)
 
-Checkpoint selection follows 005 exactly — **the last epoch, not the best on held-out**. 005's own
-Limitations section recommends best-on-held-out for a future run; adopting it here would make our
-Avocado and 005's Avocado two different procedures and break the convergence-shape comparison that
-is this task's gate. The full held-out curve is in `logs/train_*.jsonl` if the PI wants the other
-choice made later.
+Checkpoint selection **no longer follows 005** — see §7. It used to: the last epoch, not the best on
+held-out, so that our Avocado and 005's Avocado stayed one procedure and the convergence-shape
+comparison below stayed readable. `plan/BENCHMARK_DESIGN.md` §5 overrides that, and the PI ruled on
+2026-08-31 that Avocado gets a real selection loop rather than a "no selection" marker. The
+convergence gate below was measured on a last-epoch run and stands as recorded; the shape it reads
+is the whole held-out curve, which is still logged in full.
 
 ### The convergence gate, measured (§7.1)
 
@@ -295,3 +296,106 @@ Broad (H3K27me3/H3K36me3/H3K9me3) vs punctate medians, never pooled — P1: `mse
 cannot cover residuals running from near-zero background to tall peaks. That is a property of the
 B1a point→Gaussian device, not of Avocado's point predictions, and every point-only rival inherits
 it. `mse`/`gwcorr`/`gwspear` and the partition MSEs are unaffected.
+
+---
+
+## 7. Checkpoint selection on `V_`, and the BED training scope
+
+Two capabilities added 2026-08-31 on the PI's rulings. Both are held by
+`tests/test_avocado_selection.py` and `tests/test_avocado_regions.py`.
+
+### 7.1 The selection loop
+
+Every `--select-every` epochs, `train.py` writes this model's `V_` predictions to a §4.1 root and
+scores them with `candi.bench.external.score_external` — **the same function that scores CANDI**,
+reading truth through the same window walk. Nothing here computes a metric of its own, which is what
+makes §5's "by the same rule" checkable rather than asserted. The best weights are written the moment
+the metric improves, so a run killed by walltime still leaves a selected checkpoint.
+
+`--out` ends up holding the **selected** checkpoint, and the last epoch sits beside it as
+`.last.pt`. Nothing downstream resolves that name, so no stage can predict from the unselected model
+by accident.
+
+**`B_` is never read.** `index.py::write_select_regime` derives a `V_`-only regime — 26 pairs kept,
+12 `B_` pairs dropped — and writes it next to the checkpoint as `<out>.select_regime.json`, so the
+panel a run selected on is auditable after the fact instead of being an argument.
+
+**Where it can select, and one place it cannot.** `score_external` scores whole chromosomes, and
+Avocado can only be scored where it has genomic factors:
+
+| stage | scope | selects on |
+|---|---|---|
+| `MODE=genome`, chr20 / chr21 / chr22 | one whole eval chromosome | that chromosome's `V_` panel |
+| `MODE=shared` under `eic.19` | chr19 | chr19's `V_` panel |
+| `MODE=shared` under `eic.pilot` | 1,023,489 bins scattered over 18 chromosomes | **nothing — it cannot** |
+
+The last row is a property of Avocado's shape, not a missing feature: a BED-scoped fit holds factors
+only inside the regions, so it cannot produce the whole-chromosome array the scorer demands.
+`train.py` refuses `--select-every` with `--positions` outright rather than downgrading in silence,
+and `slurm/train.sh` forces `SELECTEVERY=0` for that one stage and says so. The stage that produces
+the shipped predictions — `MODE=genome` — still selects under both regimes.
+
+**Which number.** `--select-metric` defaults to `mse` on the pval arm. CANDI selects on `crps`, and
+Avocado has none: it emits a point, and CRPS exists for it only through a §6.1 σ-table, which is
+fitted *after* training. Asking for `crps` without `--select-sigma-table` is refused rather than
+silently answered with a different key. **This is a real divergence from CANDI's selection rule and
+is the PI's to close** — the same σ table would let every point-only rival select on `crps`.
+
+### 7.2 What selection costs — measured, and it is not free
+
+`score_external` was timed on a synthetic store at three sizes (50 k / 200 k / 800 k bins × 6
+tracks); it is linear above ~200 k bins at **7.16 µs per (bin × track)** on a laptop CPU. The Fir
+anchor for the same panel is §12.2's measured CANDI monitor — 5,446.6 s over chr20+21+22 × 45
+tracks = **19.1 µs per (bin × track)** — a different estimator on different hardware, and the
+pessimistic end. One check of the 45-track `V_` panel therefore costs:
+
+| | laptop rate | Fir anchor |
+|---|--:|--:|
+| chr19 (2,344,704 bins) | 12.6 min | 33.6 min |
+| chr20 (2,577,766) | 13.8 min | 36.9 min |
+| chr21 / chr22 | ~10.1 min | ~27.0 min |
+
+Prediction is negligible beside it: 45 tracks over one chromosome is ~26 s on the MIG slice, at the
+rate §5 measured.
+
+Against a regime's ~12.9 GPU-h of training (6.12 h shared on chr19 at the measured 6.23 steps/s,
+plus 2.76 + 2.00 + 2.03 h of genome fits at 7.60 steps/s), `SELECTEVERY=10` buys 6 checks on the
+shared fit and 3 on each genome fit:
+
+| | added | total per regime |
+|---|--:|--:|
+| at the laptop rate | +2.95 h (+23 %) | 15.9 GPU-h |
+| at the Fir anchor | +7.9 h (+61 %) | 20.8 GPU-h |
+
+**It does not triple the run; it adds a quarter to two thirds.** `SELECTEVERY=10` is the default for
+that reason, and it is a flag: lengthen it before reaching for a bigger walltime. Two consequences
+worth stating —
+
+- **`MAXHOURS` must leave room for one check.** `train.py` tests the deadline before starting a
+  selection and skips it if it is past, so the overrun is bounded, but a 12 h job whose `MAXHOURS`
+  is 11.5 has less slack than a 34-minute check wants.
+- **Patience is coupled to the cadence.** `slurm/train.sh` defaults `SELECTPATIENCE` to
+  `SELECTEVERY`; a patience below the cadence can never fire, which is the trap CANDI's launcher
+  documents.
+
+### 7.3 The BED scope
+
+Under `configs/regime.eic_pilot.json` the shared fit trains on the ENCODE Pilot Regions. **The rule
+is D32's containment at Avocado's own unit: a 25 bp bin counts only if the bin lies wholly inside a
+region.** CANDI applies containment to a 768-bin window and gets 1,294 windows = 993,792 bins;
+Avocado is per-position, so it applies it to a bin and gets **1,023,489** — the figure §3.1 pins for
+the training scope. Both come from `RegionSet.bin_spans`, the same primitive, so the two scopes
+cannot drift apart.
+
+`bin_store.py --regions` writes those bins as one `regions.npy` over every train chromosome (1.1 GB,
+against 2.7 GB for a single whole chromosome) plus a `regions_layout.csv` naming the absolute bin
+behind every row. The rows are **packed**, because factors for 18 whole chromosomes would be ~11 G
+parameters, and the packing keeps the grid anchored at chromosome bin 0 exactly as §3.1 requires:
+each region's offset is a whole number of 5 kbp cells away from its own first bin, so `pos // 10`
+and `pos // 200` — the 250 bp and 5 kbp factor grids — cut the genome where a whole-chromosome fit
+would have cut it, and no coarse factor is shared by two regions. The alignment costs 7,775 unused
+slots (0.75 %), which are never drawn and whose factors stay at their initialisation.
+
+The genome stage is untouched by the BED. It fits one whole eval chromosome, because §4's eval scope
+is the whole chromosome and Rule 2 cuts the four Pilot Regions on chr20/21/22 by the regime's
+chromosome list, not by the BED.

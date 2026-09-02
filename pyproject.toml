@@ -32,7 +32,12 @@ dependencies = [
 prepare = ["pysam==0.22.1", "intervaltree==3.1.0", "pandas==2.2.3"]
 # candi.report — requires MPLBACKEND=Agg.
 report = ["matplotlib==3.10.0", "pandas==2.2.3"]
-test = ["pytest==9.0.3"]
+# PINNED EXACTLY, for the same reason x-transformers is. `tools/arch_diagram.py` writes files that
+# `tests/test_arch_readme.py` compares BYTE FOR BYTE, and both torchview's DOT and torchinfo's table
+# are that library's output format. A minor bump reformats them and fails a test about a model
+# nobody touched. graphviz here is the python binding; the `dot` binary is a system package and the
+# test skips without it.
+test = ["pytest==9.0.3", "torchview==0.2.7", "torchinfo==1.8.0", "graphviz==0.21"]
 
 [tool.setuptools.dynamic]
 version = { attr = "candi.__version__" }

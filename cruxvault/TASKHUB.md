@@ -44,6 +44,13 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
+- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule
+- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
+- `t87` [implementation] reconcile the two declare_eval_pairs tools into one
+- `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
+- `t89` [visualization] generate the architecture README and diagram from the code
+- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge
 
 ## Blocked
 
@@ -97,6 +104,16 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
+- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *open*
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *open*
+- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
+- `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
+- `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *open*
+- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *open*
+
+### visualization
+
+- `t89` [visualization] generate the architecture README and diagram from the code — *open*
 
 ## Done · Dropped
 
@@ -123,18 +140,27 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t24` [implementation] re-encode the store pval layer as arcsinh fixed point so peak summits stop truncating — *done* → `results/t24/DELIVERABLE.md`
 - `t25` [implementation] rebuild the pval layer of the EIC and MERGED stores under the arcsinh codec — *done* → `results/t25/DELIVERABLE.md`
 - `t26` [implementation] make the signal head's target transform a training-loop option (D30), not the loader's job — *done* → `results/t26/DELIVERABLE.md`
-- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *done* → `merged-pending`
-- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *done* → `09a0f3e`
+- `t27` [implementation] give StoreDataset._thin an x/y term so the deterministic RNG stops making x and y identical at equal DSF — *done* → `results/t27/DELIVERABLE.md`
+- `t28` [implementation] teach eval.py::build_eval_units to take a StoreDataset, so a store-backed run can actually be scored — *done* → `results/t28/DELIVERABLE.md`
 - `t30` [implementation] build the mid-training/test-time monitor module: two metric tiers, V_/T_ dials, fixed window sets, wandb — *done* → `results/t30/TIMING.md`
 - `t31` [implementation] calibration (a): seconds per eval window on the store, and the real epoch-to-epoch gain — *done* → `results/t30/TIMING.md`
 - `t32` [implementation] diagnose C3's perfect_model_ceiling 0.73 sitting beside a measured 1.00 -- [Cause](results/t32/FINDING.md) — per-level foreground; 0.73 unattainable (quantised to quarters). Fix ruled and landed in 2f56cb1: one fixed foreground on the deepest truth, ceiling constant deleted, perfect model measures 1.000 — *done* → `results/t32/FINDING.md`
 - `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- [Cause](results/t33/FINDING.md) — clamp below estimator resolution + ddof mismatch. Fix landed in 2f56cb1: unclamped total with naive/bias/se split, ddof=1 both, output_is_constant retired — *done* → `results/t33/FINDING.md`
 - `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe — *done* → `results/t22/SEED_FLOOR.md`
 - `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *done* → `results/t37/FINDING.md`
+- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers — *done*
 - `t38` [implementation] teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does — *done* → `results/t38/DELIVERABLE.md`
+- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *done*
 - `t39` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `results/t39/DELIVERABLE.md`
 - `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
 - `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
 - `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
+- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *done* → `results/t78/G1_PHASE2_DNASE.md`
+- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *done* → `results/t79/G2_PILOT_HG38.md`
+- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *done* → `results/t80/PANEL_RULE.md`
+- `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *done* → `results/t82/DELIVERABLE.md`
+- `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *done* → `results/t83/DELIVERABLE.md`
+- `t84` [implementation] vendor Lavawizard — the other three rivals were already implemented — *done* → `results/t84/DELIVERABLE.md`
+- `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *done* → `results/t85/DELIVERABLE.md`

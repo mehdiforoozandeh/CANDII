@@ -9,31 +9,20 @@ zero-shot imputation and denoising on cell types it has never seen.
 
 ## The model
 
-~2.35 M parameters. Per assay, per 25 bp bin, it outputs a Negative Binomial `(n̂, p̂)` over raw counts.
+**→ [`src/candi/README.md`](src/candi/README.md) — the diagram, the shapes, and every architecture
+flag at its default.**
 
-```
-x_data  [B, 768, A+1]     counts: A assays + 1 ChIP control   (CLOZE = -2, MISSING = -1)
-x_dna   [B, 4, 19200]     one-hot DNA over the same 30 kb
-x_meta  [B, 4, A+1]       log2(depth), assay_id, read_length, run_type — INPUT tracks
-y_meta  [B, 4, A]         the same four rows — TARGET tracks
-   -> {p, n, eta, log2_mu, mu}   each [B, 768, A]
-```
+That page is *generated*, by `tools/arch_diagram.py`, from a real forward pass through
+`build_model()`. Nothing on it is typed by hand and nothing on it can drift:
+`tests/test_arch_readme.py` fails the suite the moment the page and the model disagree. This section
+stays a pointer for exactly that reason — a second hand-written copy is a second thing to go stale.
 
-**Encoder.** A Conv1D tower grouped by track (`groups = A+1`), so each assay's channels stay
-disjoint, with per-assay FiLM after every block; a dense Conv1D tower over DNA; a linear fusion; and
-two RoPE transformer layers.
-
-**Decoder.** A grouped deconv mirror of the signal tower at constant lane width, with a per-assay
-FiLM tap after the input projection and after each deconv block, then a weight-shared head per assay.
-The mean uses a depth-offset log link, so telling the model a different sequencing depth scales the
-prediction rather than requiring it to relearn scale:
-
-```
-log2_mu = (d - depth_center) + eta        # d = log2 depth, sentinel-guarded
-mu      = 2 ** clamp(log2_mu, -15, 30)
-n       = softplus(raw_n) + 1e-6
-p       = n / (n + mu)
-```
+In one paragraph: a Conv1D tower grouped by track (`groups = A+1`), so each assay's channels stay
+disjoint, with per-assay FiLM after every block; a dense Conv1D tower over DNA; a linear fusion; two
+RoPE transformer layers; then a grouped deconv mirror of the signal tower at constant lane width,
+with a FiLM tap after the input projection and after each deconv block, and a weight-shared
+Negative Binomial head per assay. The mean uses a depth-offset log link, so telling the model a
+different sequencing depth *scales* the prediction rather than making it relearn scale.
 
 ## Two conventions that trip everyone up
 
@@ -45,6 +34,8 @@ p       = n / (n + mu)
 
 ```
 src/candi/
+  README.md      the generated architecture page — diagram, shapes, every default
+  arch/          what generates it reads and writes: arch.json, the graph, the layer table
   model.py       the model, and the batch helpers train/eval/healthcheck share
   encoder.py     conv towers, metadata embedding, FiLM, mask token, transformer
   decoder.py     grouped deconv trunk, per-lane norm and FiLM, NB head
@@ -53,6 +44,7 @@ src/candi/
   prep/          bake an H5 from ENCODE tracks
   store/         the whole-genome corpus store — reader, regime, StoreDataset
 tools/golden.py  bit-exactness gate — every change must clear it before the next one starts
+tools/arch_diagram.py  writes src/candi/README.md from a real forward pass; `build` / `check`
 tests/           the suite; no GPU required
 ```
 

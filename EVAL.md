@@ -445,6 +445,120 @@ What this means for a reader of a run json:
 `monitor.check(..., kinds=("impute",))` is the training hook's call; `monitor.final_check()` is the
 end-of-run one. `impute` cannot be dropped from either — it is what produces the selection metric.
 
+### `--eval-regions` — the selection scope, and which region sets are fit to select on
+
+The cadence ruling above did not go far enough. Measured on the live `eic_pilot` retrain
+(`57674899_1`): one `V_` check is **94 min** and one epoch is **28 min**, so the check cost more
+than three times the training it supervises. The PI's requirement is that a check cost at most one
+epoch.
+
+Profiled before anything was changed, per track over chr20/21/22: the forward walk is **60 %** of a
+check (store read 34.3 s, GPU 27.1 s) and the metrics **40 %** (44.4 s). Computing only the twelve
+keys the monitor reports buys ~1.25x, and metrics made entirely free would buy 1.65x. **No amount
+of key-pruning reaches the required 3.4x** — the saving has to come from scoring fewer POSITIONS.
+
+`--eval-regions <BED>` cuts the **mid-training** scope down to the bins inside a window the BED
+wholly contains — D32's `contain` rule, the one the train split already uses, applied to the eval
+window plan. It is scope-AGNOSTIC: any BED whose intervals are whole windows on the chromosome-0
+anchored grid works, and swapping one region set for another is a file swap, not a code change.
+
+Measured cost of a 2.67 % scope (225 windows, 172,800 of 6,478,903 bins), through the shipped
+`Monitor` on the real corpus: **5.85 min, 45 tracks — 16.1x, or 21 % of one epoch.** Note 16.1x and
+not the 37.5x the bin count implies: about **206 s of the check is scope-invariant**, so shrinking
+the BED further buys almost nothing, while there is room to BUY PRECISION — ~1800 windows still
+fits inside one epoch.
+
+#### The ENCODE Pilot Regions were the first candidate, and the measurement rejected them
+
+`configs/regions/encode_pilot_hg38.bed` is the obvious BED: 44 regions chosen in 2007, stratified
+by gene density and non-exonic conservation, cutting chr20/21/22 to exactly the 2.67 % above. The
+argument for it was that it is **named, fixed, published and not chosen by us** — so nobody could
+be accused of picking loci that flatter a method.
+
+**That argument was wrong, and it was wrong in an instructive way: pedigree is not faithfulness.**
+Who chose the loci governs whether the choice is *corrupt*. It says nothing about whether the loci
+*track the genome-wide number*, and that is the only property selection needs. Measured against
+full coverage on an 8-checkpoint ladder (`cruxvault` t89 evidence, chr21, 32 tracks):
+
+| | Pilot Regions | fixed random windows, same size |
+|---|---|---|
+| terrain vs 200 random matched subsets | mean count median **z = +7.1**, peak fraction **z = +4.2** | 0 by construction |
+| level offset from full | **+0.30 … +0.41**, and it GROWS with training | −0.0024 … −0.0034, near-constant |
+| sign flips, 10 checkpoint pairs | **2** — at gaps of 0.069 and 0.066 | 0 on every pair with a real gap |
+| median delta error vs the 0.03 margin | **0.057 (1.9x)**, max 0.110 (3.67x) | 0.005 (0.16x) |
+| reproduces the full ordering | no | 194/200 draws (97 %) |
+
+**The failure is not "it picks the wrong final model" — it is that it cannot say whether the model
+is improving.** Between two checkpoints that improved by 0.069 genome-wide, the Pilot number got
+slightly WORSE. A curve like that reads as a stall, and a false stall is what trips
+`--early-stop-epochs` and kills a run that was still learning. It also writes the wrong
+`.best.ckpt` for the stretch it is wrong about.
+
+The mechanism is in the offset row: the Pilot bias **drifts with the model** (+0.3044, +0.3390,
++0.4144 over three checkpoints), so it does not cancel in a difference — which is the entire
+assumption behind "a constant offset is harmless for selection". Nor is it a scale factor that
+could be calibrated away: the errors change sign, understating one gap by 0.071 and overstating
+another by 0.029.
+
+**Subsetting at 2.67 % is not the problem.** 200 random matched subsets centre on 0.6261 against a
+full-coverage 0.6285 — unbiased to a tenth of a standard deviation. The Pilot Regions specifically
+are the problem. So the fix is a scope nobody's judgement picked either: a **fixed, seeded,
+sha256-pinned random window set**, drawn once and committed before any number exists. Auditable in
+a different way from a published set — by seed and hash rather than by citation — and, unlike a
+published set, measured to be faithful.
+
+**STATUS: `encode_pilot_hg38.bed` MUST NOT be used as a selection scope.** It remains correct as
+the `eic.pilot` TRAINING scope (D32), which is a different claim about a different split. Which BED
+replaces it as the selection scope, and at what size, is the PI's call and is not settled here.
+
+#### What the scope costs, stated rather than discovered
+
+| | full (the default) | `--eval-regions` |
+|---|---|---|
+| positions | every bin of every eval chromosome | every bin of every wholly-contained window |
+| tracks | all of them | all of them |
+| `mse`, `gwcorr`, `gwspear`, `mse1obs`, the D tier, the B tier, the loss tier | present | present |
+| `mseprom`, `msegene`, `mseenh`, the whole P block | present | **absent** |
+| bit-identical to the full pass on the same bins? | — | **no** — see below |
+
+It is **not** the sampling failure that was deleted. `eval.quick_eval` dropped WINDOWS PER TRACK —
+16 windows, 0.24 % — so its number was a draw, and re-scoring one of its checkpoints at full
+coverage moved the value by 0.0648 against a 0.0216 margin it had decided on. This drops no track
+and no window inside its scope. That is a necessary property, and the Pilot result above is the
+proof that it is not a sufficient one.
+
+The positional measures are absent because the arrays are **compacted**: after the gather, index
+`i` is no longer the bin at `i * 25` bp, so an annotation interval would land on whatever sequence
+the gather put there. Absent rather than NaN, so nothing can average them into a macro.
+
+The predictions are not bit-identical either, and that is float32 rather than a bug: a scoped plan
+skips windows, so a window's batch-mates in the forward pass change, and float32 addition is not
+associative. The gap is last-ulp — seven orders of magnitude below the differences that decide a
+selection — but a scoped run does not reproduce the full pass exactly and must not be sold as doing
+so.
+
+**Where it is recorded.** `config.eval_scope` in the run json and `eval_scope` on every
+`eval_curve` row and in every `provenance` block, carrying the BED, its **sha256** and the window
+and bin counts. Two runs are comparable on the mid-training curve only if that block matches; the
+path alone will not do, because a BED is a mutable file.
+
+**The end-of-run check stays full coverage** whatever the flag says. `train.py` opens a second
+monitor for it. Cheap enough to select on every check; the number a run reports is the thorough one.
+
+**Every method gets the same flag, and must get the same BED.** The scope lives on `EvalSource`,
+which both entry points take, so `bench.external.score_external(source, pred_root, …)` honours it
+by opening its source with `eval_regions=` — its own signature is unchanged. The rival still hands
+over full-length arrays (§4.1's length assertion is what makes bin `i` the bin at `i * 25` bp) and
+the cut happens on our side, with the same index. The selection KEY is not uniform across methods
+(CANDI on count-arm `crps`, the rivals on `pval:mse`), and the scope is correct for both because it
+cuts positions rather than metrics. A rival selecting on a different scope from CANDI would break
+§5 as surely as one selecting on a different metric; `provenance.eval_scope.sha256` is what proves
+they did not.
+
+`--eval-regions` is **store-only** (a bake's eval windows are frozen rows and cannot be re-tiled;
+`open_source` refuses the combination by name) and **inert without a mid-training check** (with
+`--eval-every` at 0 it is blanked and says so, rather than recording a scope no curve used).
+
 ### The tiers it reports, and why they are detected rather than assumed
 
 `monitor.tiers(model)` reads the heads off the decoder that built them:

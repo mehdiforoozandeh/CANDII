@@ -16,10 +16,15 @@ set -euo pipefail
 : "${CI_STAGE:?set CI_STAGE}"
 : "${CI_RUN:?set CI_RUN}"
 : "${CI_STORE:=/project/def-maxwl/mforooz/CANDI_STORE/eic}"
-: "${CI_REPO:=/project/def-maxwl/mforooz/CANDII_t51}"
-: "${CI_PY:=/project/def-maxwl/mforooz/candi_venv/bin/python}"
+: "${CI_REPO:=/project/def-maxwl/mforooz/CANDII_t78_code}"
+: "${CI_PY:=/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}"
+# RETARGETED 2026-08-31: was a baked configs/regime.eic_val.json (train chr19, eval chr21).
+# The live regimes are eic_19 and eic_pilot (BENCHMARK_DESIGN.md §3) and submit.sh passes
+# this through, so the prepare stage and the scorer cannot disagree about which one ran.
+: "${CI_REGIME:=$CI_REPO/configs/regime.eic_19.json}"
 : "${CI_JAR:=$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}"
-: "${CI_CHROMS:=chr21}"
+# The regime's eval_chroms under §4. chr21 alone was the old eval scope.
+: "${CI_CHROMS:=chr20,chr21,chr22}"
 : "${CI_MX:=8000M}"
 
 module load java/21.0.1
@@ -40,6 +45,33 @@ if [ "$CI_CHROMS" = "all" ]; then
 else
   CHROM_LIST=${CI_CHROMS//,/ }
 fi
+
+# The two grids. `prepare.py` ALWAYS writes `chrominfo.train.txt` — the regime's `train_chroms`,
+# or one declared chromosome per Pilot Region under a `regions` regime (D32) — and THAT is the grid
+# the transferable parameters are fit on: `GenerateTrainData` spreads its 100,000 locations over
+# everything the chrominfo it is handed declares, and `Train` turns them into predictors `Apply`
+# reuses everywhere. `Apply` keeps `chrominfo.txt`, the real chromosomes being predicted.
+#
+# There is no fallback to `chrominfo.txt` and there must not be one: that fallback is exactly how
+# the sampler used to land on the eval chromosomes, and it did it silently. A missing training grid
+# is a failed `prepare`, not a default. `prepare` itself is exempt — it is the stage that writes it.
+if [ ! -s "$IN/chrominfo.train.txt" ]; then
+  if [ "$CI_STAGE" != "prepare" ]; then
+    echo "[$CI_STAGE] REFUSING: $IN/chrominfo.train.txt does not exist. Re-run the prepare stage;" >&2
+    echo "      without that grid there is nothing to fit predictors on but the chromosomes being" >&2
+    echo "      predicted, which BENCHMARK_DESIGN.md Rule 2 (§2) forbids for transferable" >&2
+    echo "      parameters. Falling back to chrominfo.txt is the bug, not the recovery." >&2
+    exit 2
+  fi
+  TRAIN_INFO=$IN/chrominfo.txt
+  TRAIN_LIST=""
+else
+  TRAIN_INFO=$IN/chrominfo.train.txt
+  TRAIN_LIST=$(cut -f1 "$TRAIN_INFO" | tr '\n' ' ')
+fi
+# Deduplicated: a regime whose training grid names a chromosome that is also predicted needs its
+# bedgraph converted once, and the delete pass below must not count it twice.
+GRID_LIST=$(printf '%s\n' $CHROM_LIST $TRAIN_LIST | awk '!seen[$0]++' | tr '\n' ' ')
 
 LIST=$CI_RUN/lists/$CI_STAGE.txt
 ITEM=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$LIST")
@@ -70,12 +102,18 @@ case "$CI_STAGE" in
     # a half-read module back as "cannot import name 'graph' ... circular import".
     export PYTHONPATH=$CI_REPO/src
     RETRY $CI_PY "$CI_REPO/competitors/chromimpute/prepare.py" \
-        --store "$CI_STORE" --regime "$CI_REPO/configs/regime.eic_val.json" \
+        --store "$CI_STORE" --regime "$CI_REGIME" \
         --out "$IN" --chroms "$CI_CHROMS" --shard "$ITEM"
     ;;
   convert)   # item: a mark. Reads only inputinfofile.txt, so only training cells are converted.
     for C in $CHROM_LIST; do
       CI Convert -c "$C" -m "$ITEM" "$IN/signal" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$CONV"
+    done
+    for C in $TRAIN_LIST; do
+      # Skipped when the apply grid already declared it: same name, same declared length, so the
+      # second Convert would rewrite the identical file.
+      case " $CHROM_LIST " in *" $C "*) continue ;; esac
+      CI Convert -c "$C" -m "$ITEM" "$IN/signal" "$IN/inputinfofile.txt" "$TRAIN_INFO" "$CONV"
     done
     # The bedgraphs are 161 GB and ~6 000 inodes of pure intermediate genome-wide, on a scratch
     # quota shared with other tasks, so they go as soon as `Convert` has consumed them. Verify
@@ -84,7 +122,7 @@ case "$CI_STAGE" in
     MISSING=0
     while IFS=$'\t' read -r _S _M FNAME _REST; do
       [ "$_M" = "$ITEM" ] || continue
-      for C in $CHROM_LIST; do
+      for C in $GRID_LIST; do
         [ -s "$CONV/${C}_${FNAME}.wig.gz" ] || { echo "MISSING $CONV/${C}_${FNAME}.wig.gz"; MISSING=1; }
       done
     done < "$IN/inputinfofile.txt"
@@ -93,27 +131,33 @@ case "$CI_STAGE" in
       NDEL=0
       while IFS=$'\t' read -r _S _M FNAME _REST; do
         [ "$_M" = "$ITEM" ] || continue
-        for C in $CHROM_LIST; do rm -f "$IN/signal/${C}_${FNAME}" && NDEL=$((NDEL + 1)); done
+        for C in $GRID_LIST; do rm -f "$IN/signal/${C}_${FNAME}" && NDEL=$((NDEL + 1)); done
       done < "$IN/inputinfofile.txt"
       echo "[convert] $ITEM: converted output verified, $NDEL bedgraph file(s) deleted"
     fi
     ;;
   dist)      # item: a mark
-    CI ComputeGlobalDist -m "$ITEM" "$CONV" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" "$DIST"
+    # On the TRAINING grid. The correlation table it writes is one sample ranking reused at every
+    # position `Apply` predicts, so it is a transferable parameter and Rule 2 puts it on the
+    # training loci with the predictors — never on the chromosomes being scored.
+    CI ComputeGlobalDist -m "$ITEM" "$CONV" "$IN/inputinfofile.txt" "$TRAIN_INFO" "$DIST"
     ;;
-  gtd)       # item: <mark>, or <mark> <TAB> <chrom>
-    # The manual's own recommended parallelization for this command is over chromosomes, and it has
-    # to be used genome-wide: one mark over all 23 chromosomes is ~7.6 h of scanning, past any
-    # walltime bin we want. `-c` subsets the sampled locations to that chromosome and prefixes the
-    # traindata file, and `Train` takes the union of the prefixed files when no unprefixed one
-    # exists — so the 100 000 instances are the same either way, just spread over more files.
+  gtd)       # item: <mark>, or <mark> <TAB> <chrom> — the chrom is off the TRAINING grid
+    # The manual's own recommended parallelization for this command is over chromosomes, and it is
+    # needed on a wide training grid: one mark over all 23 chromosomes is ~7.6 h of scanning, past
+    # any walltime bin we want. `-c` divides the sampled locations between the declared chromosomes
+    # and prefixes the traindata file, and `Train` takes the union of the prefixed files when no
+    # unprefixed one exists — so the total is 100,000 either way, just spread over more files.
+    # Measured, not assumed: on a two-chromosome grid at `-f 400`, unsplit gave 400 instances and
+    # the two `-c` tasks gave 193 + 207. `submit.sh` splits only when the training grid is more
+    # than one chromosome and is not a D32 region grid, where the whole scope is minutes anyway.
     M=$(echo "$ITEM" | cut -f1); C=$(echo "$ITEM" | cut -f2)
     if [ "$C" = "$M" ]; then
-      CI GenerateTrainData "$CONV" "$DIST" "$IN/inputinfofile.txt" "$IN/chrominfo.txt" \
+      CI GenerateTrainData "$CONV" "$DIST" "$IN/inputinfofile.txt" "$TRAIN_INFO" \
          "$TRAINDATA" "$M"
     else
       CI GenerateTrainData -c "$C" "$CONV" "$DIST" "$IN/inputinfofile.txt" \
-         "$IN/chrominfo.txt" "$TRAINDATA" "$M"
+         "$TRAIN_INFO" "$TRAINDATA" "$M"
     fi
     ;;
   train)     # item: <sample> <TAB> <mark>

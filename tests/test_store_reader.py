@@ -9,8 +9,10 @@ and `test_store_dataset.py` import it.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 
 import h5py
@@ -36,6 +38,8 @@ TRACKS = {
 BIOSAMPLES = tuple(TRACKS)
 #: chr2 gets a blacklisted run so D12 has something to reject.
 BLACKLIST_BINS = (100, 400)
+#: The archive kind. It is not built from anything; it is a former `pval` layer, kept.
+RDNS = "signal_rdns"
 
 CSV_HEADER = (
     "biosample_name,assay_name,bios_accession,exp_accession,file_accession,assembly,"
@@ -53,8 +57,9 @@ def _npz(path: Path, arr: np.ndarray) -> None:
     np.savez_compressed(path, whatever=arr)
 
 
-def _source_tree(root: Path, tracks_map=None) -> None:
+def _source_tree(root: Path, tracks_map=None, chrom_sizes=None) -> None:
     """`<root>/<BIOS>/<TRACK>/{signal_DSF1_res25,peaks_res25,signal_BW_res25}/chr*.npz`."""
+    n_bins = {c: n // RES for c, n in (chrom_sizes or CHROM_SIZES).items()}
     for bi, (bios, tracks) in enumerate((tracks_map or TRACKS).items()):
         for ti, track in enumerate(tracks):
             tdir = root / bios / track
@@ -82,7 +87,7 @@ def _source_tree(root: Path, tracks_map=None) -> None:
                     (kdir / "metadata.json").write_text(
                         json.dumps({"depth": 20_000_000, "dsf": 1}), encoding="utf-8"
                     )
-                for chrom, nb in N_BINS.items():
+                for chrom, nb in n_bins.items():
                     rng = np.random.default_rng(1000 * bi + 10 * ti + len(chrom) + ord(chrom[-1]))
                     if kind == "counts":
                         # A wide, high-count column: the thinning tests need counts big enough for
@@ -95,32 +100,35 @@ def _source_tree(root: Path, tracks_map=None) -> None:
                     _npz(kdir / f"{chrom}.npz", arr)
 
 
-def _genome_layer(store_root: Path, *, seed: int = 7) -> None:
+def _genome_layer(store_root: Path, *, seed: int = 7, chrom_sizes=None) -> None:
     """`genome/{chrom_sizes.json,dna.h5,mask.h5}` — t7's files, written directly.
 
     t7 owns `genome.py`; this only needs the *files* it produces, so it writes the documented
     shapes (D10: `(chr_len,)` uint8 codes; D11: `(n_bins,)` uint8 0/1) and nothing more.
     """
+    sizes = dict(chrom_sizes or CHROM_SIZES)
+    n_bins = {c: n // RES for c, n in sizes.items()}
     gdir = L.genome_dir(store_root)
     gdir.mkdir(parents=True, exist_ok=True)
-    (gdir / "chrom_sizes.json").write_text(json.dumps(CHROM_SIZES), encoding="utf-8")
+    (gdir / "chrom_sizes.json").write_text(json.dumps(sizes), encoding="utf-8")
     rng = np.random.default_rng(seed)
     with h5py.File(L.dna_path(store_root), "w") as f:
         f.attrs["build"] = "SYNTH38"
         f.attrs["fasta_sha256"] = "0" * 64
         f.attrs["codes"] = json.dumps({"A": 0, "C": 1, "G": 2, "T": 3, "N": 4})
-        for chrom, n in CHROM_SIZES.items():
+        for chrom, n in sizes.items():
             f.create_dataset(chrom, data=rng.integers(0, 4, size=n, dtype=np.uint8))
     with h5py.File(L.mask_path(store_root), "w") as f:
         f.attrs["rule"] = "invalid if any N or blacklist overlap"
-        for chrom, nb in N_BINS.items():
+        for chrom, nb in n_bins.items():
             m = np.ones(nb, dtype=np.uint8)
             if chrom == "chr2":
                 m[BLACKLIST_BINS[0]:BLACKLIST_BINS[1]] = 0
             f.create_dataset(chrom, data=m)
 
 
-def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None) -> Path:
+def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None,
+               chrom_sizes=None) -> Path:
     """Build a whole CANDI_STORE — source tree, two biosamples, manifest, genome layer.
 
     Returns the **corpus root** (`…/CANDI_STORE/eic`), which is what `CorpusStore` takes.
@@ -135,11 +143,12 @@ def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None) -> 
     layout = dict(tracks or TRACKS)
     src, store_root = tmp / "src", tmp / "CANDI_STORE"
     corpus_root = L.corpus_root(store_root, corpus)
-    _source_tree(src, layout)
+    sizes = dict(chrom_sizes or CHROM_SIZES)
+    _source_tree(src, layout, sizes)
     for bios in layout:
-        build_biosample(src, corpus_root, bios, chrom_sizes=CHROM_SIZES,
+        build_biosample(src, corpus_root, bios, chrom_sizes=sizes,
                         kinds=("counts", "peaks", "pval"))
-    _genome_layer(store_root)
+    _genome_layer(store_root, chrom_sizes=sizes)
 
     rows = []
     for bios, tracks in layout.items():
@@ -155,6 +164,27 @@ def make_store(tmp: Path, *, corpus: str = "eic", drop_meta=(), tracks=None) -> 
     return corpus_root
 
 
+def make_store_with_rdns_archive(tmp: Path, *, corpus: str = "eic", tracks=None) -> Path:
+    """The same store, after the `pval` layer has been ARCHIVED under `signal_rdns`.
+
+    This is the promotion §10 Phase 3 of `plan/BENCHMARK_DESIGN.md` describes, done the only way
+    the PI's constraint allows: the replaced layer is **copied**, never moved and never rewritten,
+    and the manifest is regenerated afterwards. Nothing here touches the copy's bytes — see
+    `test_an_archive_is_byte_identical_and_therefore_still_calls_itself_pval` for why not.
+
+    The store it returns therefore carries four kinds, and no writer built the fourth.
+    """
+    layout = dict(tracks or TRACKS)
+    corpus_root = make_store(tmp, corpus=corpus, tracks=layout)
+    for bios in layout:
+        shutil.copyfile(L.kind_path(corpus_root, bios, "pval"), L.kind_path(corpus_root, bios, RDNS))
+    write_manifest(
+        corpus_root,
+        build_manifest(corpus_root, corpus, [tmp / "meta.csv"], source_root=tmp / "src"),
+    )
+    return corpus_root
+
+
 @pytest.fixture(scope="module")
 def store(tmp_path_factory) -> Path:
     return make_store(tmp_path_factory.mktemp("store"))
@@ -163,6 +193,18 @@ def store(tmp_path_factory) -> Path:
 @pytest.fixture()
 def corpus(store):
     c = CorpusStore(store)
+    yield c
+    c.close()
+
+
+@pytest.fixture(scope="module")
+def archive_store(tmp_path_factory) -> Path:
+    return make_store_with_rdns_archive(tmp_path_factory.mktemp("archive"))
+
+
+@pytest.fixture()
+def archive_corpus(archive_store):
+    c = CorpusStore(archive_store)
     yield c
     c.close()
 
@@ -423,3 +465,190 @@ def test_the_store_objects_pickle_for_spawn_workers(store):
     clone = pickle.loads(pickle.dumps(c))
     assert np.array_equal(clone["T_aa"].counts("chr1", 0, 16), want)
     assert np.array_equal(pickle.loads(pickle.dumps(c["T_aa"])).counts("chr1", 0, 16), want)
+
+
+# ---------------------------------------------------------------------------------------------
+# `signal_rdns` — the archive kind
+#
+# A corpus's `pval` layer for an assay may be replaced by a newly computed one. The layer it
+# replaces is never deleted and never overwritten: it is archived under `signal_rdns` and stays
+# queryable, and only the DEFAULT kind for that assay changes. That rule is the PI's, reaffirmed
+# 2026-08-30 against the DNase rebuild, and everything below is a check on one clause of it.
+# ---------------------------------------------------------------------------------------------
+
+
+def test_the_archive_is_one_of_the_stores_kinds(tmp_path):
+    """It is a kind, not a filename convention agreed on out of band."""
+    assert RDNS in L.KINDS
+    assert set(L.KINDS) >= {"counts", "peaks", "pval", RDNS}
+    assert len(set(L.KINDS)) == len(L.KINDS)
+    root = L.corpus_root(tmp_path, "eic")
+    assert L.kind_path(root, "T_X", RDNS) == root / "biosamples" / "T_X" / f"{RDNS}.h5"
+
+
+def test_a_corpus_carries_the_archive_beside_the_three_built_kinds(archive_corpus):
+    assert set(archive_corpus["T_aa"].kinds) == {"counts", "peaks", "pval", RDNS}
+    assert set(archive_corpus["V_aa"].kinds) == {"counts", "peaks", "pval", RDNS}
+    assert set(archive_corpus["T_aa"]["H3K4me3"].kinds) == {"counts", "peaks", "pval", RDNS}
+    assert archive_corpus["T_aa"].has("H3K4me3", RDNS)
+    # The control gets no p-value layer in the source corpus, so there is nothing to archive.
+    assert archive_corpus["T_aa"][L.CONTROL_TRACK].kinds == ["counts"]
+    assert not archive_corpus["T_aa"].has(L.CONTROL_TRACK, RDNS)
+
+
+def test_the_archive_reads_by_every_path_the_other_kinds_read_by(archive_corpus):
+    """"Stays queryable" is worth nothing if it means one bespoke accessor.
+
+    The archive must come back through the block read, the named per-biosample read and the
+    per-track view, with `assays=` honoured as the permutation it is for every other kind (D14),
+    and with the same errors on a window or an assay that is not there.
+    """
+    bs = archive_corpus["T_aa"]
+    block = bs.block(RDNS, "chr1", 0, 64, assays=["H3K4me3", "DNase-seq"])
+    assert block.shape == (64, 2) and block.dtype == np.float32
+    reversed_ = bs.block(RDNS, "chr1", 0, 64, assays=["DNase-seq", "H3K4me3"])
+    assert np.array_equal(block[:, ::-1], reversed_)
+    assert not np.array_equal(block, reversed_)                  # the columns really moved
+    assert np.array_equal(bs.signal_rdns("chr1", 0, 64, assays=["H3K4me3"])[:, 0], block[:, 0])
+    with pytest.raises(StoreError, match="not inside"):
+        bs.block(RDNS, "chr2", N_BINS["chr2"] - 10, N_BINS["chr2"] + 10)
+    with pytest.raises(StoreError, match="ATAC-seq"):
+        archive_corpus["V_aa"].block(RDNS, "chr1", 0, 10, assays=["ATAC-seq"])
+
+
+def test_the_per_track_view_reads_the_archive_the_way_it_reads_pval(archive_corpus):
+    """`bs[assay].pval(...)` is one of the store's documented reads; the archive answers it too.
+
+    Nothing above the reader knows a column came from an archive, so a caller holding a track view
+    has no way to fall back — it would have to reach back up to the biosample and re-slice, which
+    is the coupling the track view exists to remove.
+    """
+    tv = archive_corpus["T_aa"]["H3K4me3"]
+    want = archive_corpus["T_aa"].signal_rdns("chr1", 0, 64, assays=["H3K4me3"])[:, 0]
+    got = tv.signal_rdns("chr1", 0, 64)
+    assert got.shape == (64,) and got.dtype == np.float32
+    assert np.array_equal(got, want)
+    # the view is a column of THIS assay, not of whichever column happens to be first
+    other = archive_corpus["T_aa"]["DNase-seq"].signal_rdns("chr1", 0, 64)
+    assert not np.array_equal(got, other)
+
+
+def test_the_archive_decodes_through_the_pval_codec_because_it_is_a_pval_file(archive_corpus):
+    """An archive file IS a former `pval` file, so the same D25/D27 decode applies to it.
+
+    The two negative asserts are the ones that matter. A reader that forgot to decode would return
+    the raw uint16 codes, and a reader that reached for the schema-1 linear codec would return
+    `code/2000` — both are finite, both are plausible-looking `-log10 p`, and neither raises.
+    """
+    got = archive_corpus["T_aa"].block(RDNS, "chr1", 0, 64, assays=["H3K4me3"])[:, 0]
+    with h5py.File(L.kind_path(archive_corpus.root, "T_aa", RDNS), "r") as f:
+        a = L.read_root_attrs(f)
+        j = list(a[L.ATTR_TRACKS]).index("H3K4me3")
+        raw = f["chr1"][0:64, j].astype(np.float64)
+    assert a[L.ATTR_TRANSFORM] == "arcsinh" and a[L.ATTR_SCALE] == L.PVAL_SCALE
+    assert got.dtype == np.float32 and got.max() > 1.0
+    assert np.allclose(got, np.sinh(raw / float(L.PVAL_SCALE)), rtol=1e-6)
+    assert not np.allclose(got, raw)                             # undecoded codes
+    assert not np.allclose(got, raw / float(L.PVAL_SCALE))       # the wrong (linear) codec
+
+
+def test_the_archive_and_the_pval_layer_are_never_confused_for_each_other(tmp_path):
+    """Two layers, two answers — checked where the bytes DISAGREE.
+
+    Everywhere else in this file the archive is a byte-for-byte copy, so a reader that silently
+    served `pval` for `signal_rdns` (or the reverse) would pass every one of those tests. Here the
+    archive is zeroed and the `pval` layer left alone, which is exactly the state a promotion
+    creates: two different layers for the same assay, and a caller who must get the one asked for.
+    """
+    root = make_store_with_rdns_archive(tmp_path / "distinct")
+    with h5py.File(L.kind_path(root, "T_aa", RDNS), "r+") as f:
+        for chrom in ("chr1", "chr2"):
+            f[chrom][...] = np.zeros_like(f[chrom][...])
+    c = CorpusStore(root)
+    try:
+        archived = c["T_aa"].block(RDNS, "chr1", 0, 64, assays=["H3K4me3", "DNase-seq"])
+        live = c["T_aa"].pval("chr1", 0, 64, assays=["H3K4me3", "DNase-seq"])
+        assert np.count_nonzero(archived) == 0        # the archive, not the p-value layer
+        assert live.max() > 1.0                       # the p-value layer, not the archive
+        assert c["T_aa"]["H3K4me3"].signal_rdns("chr1", 0, 64).max() == 0.0
+        assert c["T_aa"]["H3K4me3"].pval("chr1", 0, 64).max() > 1.0
+        # the other kinds are untouched by any of this
+        assert c["T_aa"].counts("chr1", 0, 64).max() > 0
+    finally:
+        c.close()
+
+
+def test_an_archive_is_byte_identical_and_therefore_still_calls_itself_pval(archive_corpus):
+    """The consequence the requirement accepts on purpose, asserted so nobody "fixes" it.
+
+    Byte-identity to the file being archived is the whole point of the rule, and rewriting even one
+    root attr to make the archive self-describing would destroy it. So the archive's own `kind`
+    attr reads `pval` — the OPPOSITE of what a naive test would demand — and the reader must serve
+    it anyway. Which layer a column actually holds is the manifest's record, not the file's; see
+    `tests/test_store_manifest.py::test_the_manifest_records_the_archive_the_file_cannot_name`.
+    """
+    for bios in BIOSAMPLES:
+        pval_path = L.kind_path(archive_corpus.root, bios, "pval")
+        rdns_path = L.kind_path(archive_corpus.root, bios, RDNS)
+        assert rdns_path.is_file() and pval_path.is_file()
+        assert hashlib.sha256(rdns_path.read_bytes()).hexdigest() == (
+            hashlib.sha256(pval_path.read_bytes()).hexdigest()
+        )
+        with h5py.File(rdns_path, "r") as f:
+            assert L.read_root_attrs(f)[L.ATTR_KIND] == "pval"
+    got = archive_corpus["T_aa"].block(RDNS, "chr1", 0, 8, assays=["H3K4me3"])
+    assert got.shape == (8, 1) and got.dtype == np.float32
+
+
+# ---------------------------------------------------------------------------------------------
+# and the regression that would be invisible: a corpus that never heard of the archive
+# ---------------------------------------------------------------------------------------------
+
+
+def test_a_corpus_without_the_archive_reads_exactly_as_it_did_before(corpus, store):
+    """Every existing corpus is a three-kind corpus. Adding a fourth kind must not reach them.
+
+    A regression here has no symptom at the call site — an extra name in `kinds` iterates one file
+    that is not there, or a manifest that claims a layer nobody wrote. So this asserts the three-
+    kind surface EXACTLY rather than by containment: the kind lists, the files on disk, the
+    manifest, and the dtype of every read.
+    """
+    assert corpus["T_aa"].kinds == ["counts", "peaks", "pval"]
+    assert corpus["V_aa"].kinds == ["counts", "peaks", "pval"]
+    assert corpus["T_aa"]["H3K4me3"].kinds == ["counts", "peaks", "pval"]
+    assert corpus["T_aa"][L.CONTROL_TRACK].kinds == ["counts"]
+    assert not corpus["T_aa"].has("H3K4me3", RDNS)
+
+    bios_dir = L.kind_path(store, "T_aa", "counts").parent
+    assert sorted(p.name for p in bios_dir.glob("*.h5")) == ["counts.h5", "peaks.h5", "pval.h5"]
+    assert not L.kind_path(store, "T_aa", RDNS).exists()
+
+    manifest = json.loads(L.manifest_path(store).read_text(encoding="utf-8"))
+    assert manifest["kinds"] == ["counts", "peaks", "pval"]
+    for bios, entry in manifest["biosamples"].items():
+        assert RDNS not in entry["kinds"], bios
+        for track in entry["tracks"]:
+            assert RDNS not in track["kinds"], (bios, track["assay"])
+
+    assert corpus["T_aa"].counts("chr1", 0, 64).dtype == np.int32
+    assert corpus["T_aa"].peaks("chr1", 0, 64, assays=["H3K4me3"]).dtype == np.uint8
+    assert corpus["T_aa"].pval("chr1", 0, 64, assays=["H3K4me3"]).dtype == np.float32
+    assert corpus["T_aa"].block("pval", "chr1", 0, 64, assays=["H3K4me3"]).shape == (64, 1)
+
+
+def test_asking_a_three_kind_corpus_for_the_archive_raises_instead_of_serving_pval(corpus):
+    """The failure mode with no symptom: the archive is absent, so `pval` is returned in its place.
+
+    That would read as a successful query of a layer that does not exist — the store answering for
+    a file it does not have. It must raise, and it must name what is missing.
+    """
+    with pytest.raises(StoreError, match=RDNS):
+        corpus["T_aa"].block(RDNS, "chr1", 0, 16, assays=["H3K4me3"])
+    with pytest.raises(StoreError, match=RDNS):
+        corpus["T_aa"].signal_rdns("chr1", 0, 16, assays=["H3K4me3"])
+    with pytest.raises(StoreError, match=RDNS):
+        corpus["T_aa"]["H3K4me3"].signal_rdns("chr1", 0, 16)
+    # and a name that is not a kind at all raises rather than resolving to some nearby layer.
+    # The exception type is not part of this requirement; that it does not RETURN is.
+    with pytest.raises(Exception):
+        corpus["T_aa"].block("not_a_kind", "chr1", 0, 16, assays=["H3K4me3"])
