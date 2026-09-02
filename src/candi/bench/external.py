@@ -211,7 +211,9 @@ def stream_truth(source: EvalSource, pair: Pair, cols: Sequence[int], *,
 def build_record(pair: Pair, assay: str, chroms: Sequence[str],
                  truth: Mapping[str, Mapping[str, np.ndarray]],
                  pred: Mapping[str, Mapping[str, np.ndarray]],
-                 sigma_table: Optional[Mapping[str, Any]] = None) -> Tuple[TrackRecord, str]:
+                 sigma_table: Optional[Mapping[str, Any]] = None,
+                 bins: Optional[Mapping[str, np.ndarray]] = None,
+                 bin_scope: Optional[str] = None) -> Tuple[TrackRecord, str]:
     """One `(record, σ source)` — the truth from the store, the prediction from the npz.
 
     The peak tier follows the harness exactly: `peak_score` when the producer supplies one,
@@ -219,8 +221,16 @@ def build_record(pair: Pair, assay: str, chroms: Sequence[str],
     `loss_block` withholds `bernoulli_nll` and every table can label the row (B3). No rival has a
     peak head; the naive fraction-of-contributors baseline (§5.3) is the one producer that will
     supply a real `peak_score`.
+
+    `bins` is t89's eval scope, `{chrom: bin indices}` from `EvalSource.scored_bins`. The rival
+    still hands over a FULL-LENGTH array per chromosome — §4.1's length assertion is what makes bin
+    `i` the bin at `i * 25` bp, and a producer allowed to emit a short array could not be checked at
+    all — so the cut happens here, on both the truth and the prediction, with the same index. That
+    is what makes a rival's selection number and CANDI's the same measurement: not the same flag,
+    the same positions.
     """
-    rec = TrackRecord(pair=pair, assay=assay, kind="impute", chroms=tuple(chroms))
+    rec = TrackRecord(pair=pair, assay=assay, kind="impute", chroms=tuple(chroms),
+                      bin_scope=(None if bins is None else (bin_scope or "regions")))
     sigma_const = None
     if sigma_table is not None:
         got = sigma_table.get("sigma", {}).get(assay)
@@ -243,20 +253,26 @@ def build_record(pair: Pair, assay: str, chroms: Sequence[str],
             f"(`mu`+`n`) is present. There is nothing to score.")
 
     for c in chroms:
-        rec.counts[c] = np.asarray(truth[c]["counts"], dtype=np.float32)
-        rec.peaks[c] = np.asarray(truth[c]["peaks"], dtype=np.float32)
+        # `cut` is the identity when there is no scope, and it hands back the caller's own object,
+        # so an unscoped run builds the record it always built — the same arrays, not copies.
+        def cut(v, _c=c):
+            a = np.asarray(v, dtype=np.float32)
+            return a if bins is None else a[bins[_c]]
+
+        rec.counts[c] = cut(truth[c]["counts"])
+        rec.peaks[c] = cut(truth[c]["peaks"])
         if has_count:
-            rec.mu[c] = pred[c]["mu"]
-            rec.n[c] = pred[c]["n"]
+            rec.mu[c] = cut(pred[c]["mu"])
+            rec.n[c] = cut(pred[c]["n"])
         if has_signal:
-            rec.pval[c] = np.asarray(truth[c]["pval"], dtype=np.float32)
-            rec.signal_mu[c] = pred[c]["signal_mu"]
+            rec.pval[c] = cut(truth[c]["pval"])
+            rec.signal_mu[c] = cut(pred[c]["signal_mu"])
             if has_own_sigma:
-                rec.signal_sigma[c] = pred[c]["signal_sigma"]
+                rec.signal_sigma[c] = cut(pred[c]["signal_sigma"])
             elif sigma_const is not None:
-                rec.signal_sigma[c] = np.full_like(pred[c]["signal_mu"], sigma_const)
+                rec.signal_sigma[c] = np.full_like(rec.signal_mu[c], sigma_const)
         if has_peak:
-            rec.peak_score[c] = pred[c]["peak_score"]
+            rec.peak_score[c] = cut(pred[c]["peak_score"])
         else:
             rec.peak_score[c] = rec.signal_mu[c] if has_signal else rec.mu[c]
     rec.has_peak_head = bool(has_peak)
@@ -334,6 +350,12 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
     enh = ann.enhancer_annotations()
     chroms = list(source.eval_chroms)
     n_bins = {c: source.n_bins(c) for c in chroms}
+    # t89 — the source's eval scope, or `None` for every bin. Taken off the SOURCE rather than
+    # added as a parameter here: `stream_truth` already walks `source.windows()`, so the truth is
+    # cut by opening the source and the prediction has to be cut by the same index or the two would
+    # not line up. A caller selects the cheap scope by opening the source with `eval_regions=`.
+    scoped = {c: source.scored_bins(c) for c in chroms}
+    bins = None if any(v is None for v in scoped.values()) else scoped
     var_cache: Dict[Tuple[str, str], object] = {}
 
     per_track: Dict[str, Dict[str, Dict[str, object]]] = {}
@@ -349,8 +371,13 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
         truth = stream_truth(source, pair, cols, batch_windows=batch_windows)
         for (assay, dirname), col in zip(rows, cols):
             pred = read_track_arrays(root / dirname, chroms, n_bins)
-            rec, sig_src = build_record(pair, assay, chroms, truth[col], pred, sigma_table)
-            var = _varpool(varpool_root, varpool_corpus, assay, rec.chroms, n_bins, var_cache)
+            rec, sig_src = build_record(pair, assay, chroms, truth[col], pred, sigma_table,
+                                        bins=bins)
+            # The D7 pool is aligned bin-for-bin with the WHOLE chromosome, so under a scope it
+            # would be the one vector still on the genomic grid while the track is not. Dropped
+            # rather than gathered: `msevar` is a leaderboard key and the scope is for selection.
+            var = (None if bins is not None else
+                   _varpool(varpool_root, varpool_corpus, assay, rec.chroms, n_bins, var_cache))
             per_track[rec.key] = score_track(
                 rec, gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
                 c_index_pairs=c_index_pairs, with_curve=with_curve,

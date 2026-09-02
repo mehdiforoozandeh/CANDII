@@ -255,11 +255,20 @@ def dict_to_arr(d: Mapping[str, np.ndarray], chroms: Sequence[str]) -> np.ndarra
 def score_track(y_true_dict: Mapping[str, np.ndarray], y_pred_dict: Mapping[str, np.ndarray],
                 chroms: Sequence[str], *, gene_annotations: Sequence[str],
                 enh_annotations: Sequence[str], var: Optional[np.ndarray] = None,
-                window_size: int = WINDOW_SIZE, prom_loc: int = PROM_LOC) -> Dict[str, float]:
+                window_size: int = WINDOW_SIZE, prom_loc: int = PROM_LOC,
+                positional: bool = True) -> Dict[str, float]:
     """All nine measures for one (cell, assay) track. The per-track score is the primitive (D4).
 
     `var` is the concatenated variance vector, aligned with `dict_to_arr(..., chroms)`. Omitting it
     omits `msevar` from the result rather than scoring it 0.0.
+
+    `positional=False` drops `mseprom`, `msegene` and `mseenh` — the three that look an annotation
+    coordinate up in the array. Those are the only measures here that read index `i` as the bin at
+    `i * 25` bp; the rest are functions of the two vectors and of nothing else. A caller passes
+    `False` when the arrays have been COMPACTED to a scope (t89), where that identity no longer
+    holds and a promoter interval would land on whatever sequence the gather happened to put there.
+    ABSENT rather than NaN, for the reason `msevar` is: a key that is not there cannot be averaged
+    into a macro by mistake.
     """
     y_true = dict_to_arr(y_true_dict, chroms)
     y_pred = dict_to_arr(y_pred_dict, chroms)
@@ -267,15 +276,18 @@ def score_track(y_true_dict: Mapping[str, np.ndarray], y_pred_dict: Mapping[str,
         "mse": mse(y_true, y_pred),
         "gwcorr": gwcorr(y_true, y_pred),
         "gwspear": gwspear(y_true, y_pred),
-        "mseprom": mseprom(y_true_dict, y_pred_dict, chroms, gene_annotations,
-                           window_size=window_size, prom_loc=prom_loc),
-        "msegene": msegene(y_true_dict, y_pred_dict, chroms, gene_annotations,
-                           window_size=window_size),
-        "mseenh": mseenh(y_true_dict, y_pred_dict, chroms, enh_annotations,
-                         window_size=window_size),
         "mse1obs": mse1obs(y_true, y_pred),
         "mse1imp": mse1imp(y_true, y_pred),
     }
+    if positional:
+        out.update(
+            mseprom=mseprom(y_true_dict, y_pred_dict, chroms, gene_annotations,
+                            window_size=window_size, prom_loc=prom_loc),
+            msegene=msegene(y_true_dict, y_pred_dict, chroms, gene_annotations,
+                            window_size=window_size),
+            mseenh=mseenh(y_true_dict, y_pred_dict, chroms, enh_annotations,
+                          window_size=window_size),
+        )
     if var is not None:
         out["msevar"] = msevar(y_true, y_pred, var)
     return out

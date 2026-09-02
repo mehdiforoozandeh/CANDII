@@ -317,6 +317,23 @@ class RegionSet:
         return cls(bed=bed, sha256=want, policy=policy, resolved=str(p),
                    intervals=_parse_bed4(data.decode("utf-8")))
 
+    @classmethod
+    def from_bed(cls, path: Path | str) -> "RegionSet":
+        """A region set read straight off a BED, hashing it rather than checking a declared hash.
+
+        `from_obj` is the REGIME's constructor and demands a `sha256` because the BED sits outside
+        the regime's own hash — without one the training scope could move while the regime hash
+        stayed identical. This one is for a scope named on a COMMAND LINE (t89's eval scope), where
+        there is no declaration to check against; the hash is computed here and travels in the run's
+        provenance instead, which is what makes two runs comparable or not.
+        """
+        p = Path(path)
+        if not p.is_file():
+            raise RegimeError(f"region BED {p} is not a file")
+        data = p.read_bytes()
+        return cls(bed=str(p), sha256=hashlib.sha256(data).hexdigest(), policy="contain",
+                   resolved=str(p), intervals=_parse_bed4(data.decode("utf-8")))
+
     def to_dict(self) -> dict:
         return {"bed": self.bed, "sha256": self.sha256, "policy": self.policy}
 
