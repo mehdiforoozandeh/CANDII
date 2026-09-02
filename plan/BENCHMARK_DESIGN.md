@@ -1072,14 +1072,36 @@ G1 is the real gate. Skipping it trains every method on 34 tracks of the wrong u
 | ChromImpute | 2 | one per regime | pval |
 | eDICE | 2 | one per regime | pval |
 | Lavawizard | 2 | one per regime | pval |
-| `avg`, `avg-arcsinh`, `marginal`, `knn1`, `knn5` | **1 each** | no fitted position parameters, so the regime's training loci do not enter them — one fit serves both regimes | pval + count + peak |
+| `avg`, `avg-arcsinh` **1 each**; `marginal`, `knn1`, `knn5` **2 each** | 8 | `avg`/`avg-arcsinh` have no fitted position parameters, so one fit serves both regimes; the other three fit on the regime's training chromosomes (D1). With the 10 above, **18 method-regime units** | pval + count + peak |
 
-**The naive baselines collapse to one of everything** (APPROVED 2026-08-29, closing costing 1 of
-the old §12.5). Because their fit is regime-independent, so is their output: the two regimes would
-produce byte-identical predictions. So each is fit once, predicted once and scored once, and the
-one number is printed in both regime rows. First implementation of `avg` asserts this — it predicts
-under both regimes once and checks the two outputs are identical — and the assertion, not the
-argument, is what licenses the collapse for the other four.
+**Two of the five naive baselines collapse, not five** (CORRECTED 2026-09-01, D1; the 2026-08-29
+approval of "one of everything" was right about `avg` and `avg-arcsinh` and wrong about the other
+three). The collapse rests on the fit being regime-independent, and that is a claim about the code:
+
+- `avg`, `avg-arcsinh` — every written bin is a function of the contributors' values **at the
+  predicted position**, and the contributor set is `biosamples.train` minus the target's cell type.
+  No training locus enters, so the two regimes produce identical predictions. One fit, one
+  prediction, printed in both regime rows.
+- `knn1`, `knn5` — `competitors/baselines/generate.py::similarity_table` correlates over
+  `panel.train_chroms`. A different training slice gives a different ranking and different
+  predictions.
+- `marginal` — `generate.py::fit_marginal` pools over `panel.train_chroms` for the same reason.
+
+**The identity assertion this section used to claim now exists**, and until 2026-09-01 it did not:
+`python -m competitors.baselines.generate --store <regime A> --out <root> --methods
+avg,avg-arcsinh --assert-regime-independent <regime B>` re-predicts under B for the first
+chromosome of the pass, compares every array with `np.array_equal`, and writes
+`regime_independent` into each manifest; a difference exits 5 and leaves no manifest behind. The
+flag is refused for `marginal`, `knn1` and `knn5` (exit 2) — asserting it of them would be
+asserting something false. `tests/test_baselines.py` runs both halves: the assertion passes for the
+collapsed pair on a two-regime store, and fails on `marginal` when the training slice is changed.
+**The assertion, not the argument, is what licenses printing one number in two rows.**
+
+**The second pilot fit for `marginal`, `knn1` and `knn5` is blocked and is not scheduled here.**
+`generate.py` reads `train_chroms` raw and has no `regions` support, so under `eic.pilot` those
+three would fit over 18 whole chromosomes (~2.7 Gbp) instead of the 25,588,197 bp §3.1 declares —
+a Rule 2 break, and every launcher refuses it (exit 3). It needs either `regions` support in
+`generate.py` or a recorded PI ruling that the whole-chromosome fit is acceptable.
 
 Reference budgets on record: Avocado ≈20 GPU-h per model, ChromImpute 128 CPU-core-hours
 genome-wide. CANDI's is G3.
@@ -1115,24 +1137,37 @@ Two consequences, and neither is optional:
   the patience trades directly against 91 minutes a check. That trade is the reason to think about
   `EVAL_EVERY`, not the training cost.
 
-### 12.3 Prediction runs — 30, once each
+### 12.3 Prediction runs — 36, once each
 
-There are **15 method-regime units**, not 20: the 5 naive baselines contribute one unit each
-instead of two (§12.2). Nine of the 15 predict genome-wide; six predict on chr20+21+22 only,
-because their `genome-wide` cell is blank (§4).
+There are **18 method-regime units**, not 20 and not the 15 this section carried until 2026-09-01:
+only 2 of the 5 naive baselines contribute one unit instead of two (§12.2, D1). Twelve of the 18
+predict genome-wide; six predict on chr20+21+22 only, because their `genome-wide` cell is blank
+(§4). Each unit predicts `V_` and `B_`, so 18 units are 36 runs.
 
 | unit | count | scope | `V_` (45 tracks) | `B_` (51 tracks) |
 |---|---|---|---|---|
 | CANDI, eDICE — 2 methods × 2 regimes | 4 | genome-wide | 21.8 GB | 24.7 GB |
-| `avg`, `avg-arcsinh`, `marginal`, `knn1`, `knn5` — 1 each | 5 | genome-wide | 21.8 GB | 24.7 GB |
+| `avg`, `avg-arcsinh` — 1 each; `marginal`, `knn1`, `knn5` — 2 each | 8 | genome-wide | 21.8 GB | 24.7 GB |
 | Avocado, ChromImpute, Lavawizard — 3 × 2 regimes | 6 | chr20+21+22 | 1.17 GB | 1.32 GB |
-| | **15 units → 30 runs** | | **≈419 GB + 15 GB = ≈434 GB** | |
+| | **18 units → 36 runs** | | **≈558 GB + 15 GB = ≈573 GB** | |
+
+**A unit is a prediction root, and it is not the same thing as a board row.** The one `avg` root
+and the one `avg-arcsinh` root are **scored twice** — once against each regime file — because
+`tools/leaderboard.py::gate_row_against_board` requires a row's regime name to match the board it
+is added to. So those two contribute one prediction and two scoring passes each, and every other
+unit contributes one of each. `slurm/t49_baselines_score.sh` addresses the score file by the
+BOARD's regime and the prediction root by the GENERATION regime, and it refuses to score a
+collapsed root against the other board unless that root's manifest carries the
+`regime_independent` stamp of §12.2.
 
 485 MB per **array** genome-wide (121,241,684 bins × 4 bytes); 25.9 MB per array on the 6,478,903
 held-out bins. **The table above counts one array per track and is therefore low — CANDI writes
 five. See §12.6, corrected 2026-08-31.** `B_` is **touched once**, at the very end, and by the
 same ruling `B_` lands on `/project`, not scratch; `V_` stays on scratch and is deletable after
 scoring.
+
+The §12 summary line above and §12.4's scoring table still quote the pre-D1 counts (30 runs,
+≈434 GB, 15 passes a row); correcting them is a separate edit and is not made here.
 
 ### 12.4 Scoring runs — ≈4,360 CPU-h
 
@@ -1224,13 +1259,20 @@ which for CANDI is 45.4 GPU-h a time and breaks the touch-once discipline outrig
 So the writer is new work on the critical path, and it belongs to `t80`. It is cheap — CANDI's
 whole share is 93 GB, minutes not hours — but it must land before the first prediction run.
 
-### 12.5 One costing left open
+### 12.5 The costings, both settled
 
-1. ~~**Do the naive baselines need one fit or two?**~~ **SETTLED 2026-08-29: one** — one fit, one
-   prediction, one score, printed in both regime rows, with the identity assertion of §12.2.
-2. **Does the truth toggle apply to `V_`, or only to `B_`?** The challenge staged 45–46 round-1
-   validation tracks that were never scored, so `V_` under challenge truth is possible. It is
-   **excluded** from the §12.4 table. Adding it is +20 passes, ≈1,000 CPU-h.
+1. ~~**Do the naive baselines need one fit or two?**~~ **SETTLED 2026-08-29: one** — and
+   **AMENDED 2026-09-01 (D1): one for `avg` and `avg-arcsinh`, two for `marginal`, `knn1` and
+   `knn5`.** The 2026-08-29 ruling was taken on the argument that the fit is regime-independent;
+   three of the five fit on `train_chroms` and are not. The collapsed pair keeps one fit, one
+   prediction and one root, scored once per board, with the identity assertion of §12.2 —
+   which now exists.
+2. ~~**Does the truth toggle apply to `V_`, or only to `B_`?**~~
+   **SETTLED 2026-09-01 (D3): excluded.**
+   The challenge staged 45–46 round-1 validation tracks that were never scored, so `V_`
+   under challenge truth is possible; it stays **excluded** from the §12.4 table, as §12.4 already
+   has it. It is +20 passes, ≈1,000 CPU-h, and answers nothing §6 asks. The exclusion is recorded
+   on the board.
 
 ### 12.6 Storage, in full
 

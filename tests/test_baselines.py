@@ -36,13 +36,14 @@ from candi.bench.harness import Pair, open_source
 from candi.store import layout as L
 from candi.store.reader import CorpusStore
 
+from competitors.baselines import generate as Gen
 from competitors.baselines import heads as Hd
 from competitors.baselines import leaderboard as LB
 from competitors.baselines.generate import (
-    METHODS, Panel, available, cell_type, depth_center, generate, log2_depth, similarity_table,
-    top_k,
+    METHODS, REGIME_DEPENDENT, REGIME_INDEPENDENT, Panel, RegimeIdentityError, available,
+    cell_type, depth_center, generate, log2_depth, similarity_table, top_k,
 )
-from tests.test_store_reader import make_store
+from tests.test_store_reader import RES, make_store
 from tests.test_store_regime import regime_dict
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -291,9 +292,15 @@ def _structure_pval(corpus_root: Path, assay: str, cells, seed: int = 11) -> Non
                                            L.PVAL_UINT16_MAX).astype(np.uint16)
 
 
-def _build(tmp: Path, *, deeper: bool = False) -> tuple:
-    """A store + a regime declaring two imputation pairs. `deeper` doubles T_bb's H3K4me3 exposure."""
-    root = make_store(tmp, tracks=TRACKS)
+def _build(tmp: Path, *, deeper: bool = False, chrom_sizes=None) -> tuple:
+    """A store + a regime declaring two imputation pairs. `deeper` doubles T_bb's H3K4me3 exposure.
+
+    `chrom_sizes` overrides the two-chromosome default. The D1 identity assertion needs THREE — two
+    disjoint training slices and one eval chromosome — because a regime whose train and eval
+    chromosomes overlap is refused by `Regime.check_against_store` and would be a fixture that no
+    real regime resembles.
+    """
+    root = make_store(tmp, tracks=TRACKS, chrom_sizes=chrom_sizes)
     # `make_store` gives every track the same depth; a baseline that never sees two depths never
     # exercises the rescale it is built around.
     for i, b in enumerate(TRAIN):
@@ -467,6 +474,100 @@ def test_top_k_is_deterministic_under_ties():
     sim = {("T_aa", "T_bb"): 0.5, ("T_aa", "T_cc"): 0.5}
     assert top_k(sim, "T_aa", ["T_dd", "T_cc", "T_bb"], 2) == ["T_bb", "T_cc"]
     assert top_k(sim, "T_aa", ["T_dd", "T_cc", "T_bb"], 3)[-1] == "T_dd"   # -inf sorts last
+
+
+# ---------------------------------------------------------------------------
+# D1 — which of the five collapse to one run, asserted rather than argued
+# ---------------------------------------------------------------------------
+#
+# `BENCHMARK_DESIGN.md` §12.2 ruled all five naive baselines run once rather than once per regime,
+# "because their fit is regime-independent", and said the first implementation of `avg` asserts it.
+# It did not: there was no test anywhere that predicted under two regimes and compared. These are
+# that assertion, and they also pin the half §12.2 got wrong — `knn1`, `knn5` and `marginal` fit on
+# the regime's training chromosomes and do NOT collapse.
+#
+# The fixture is one store with three chromosomes and two regimes over it that differ in NOTHING
+# but the training slice: chr1 against chr3, both predicting chr2, the same declared pairs.
+
+_ASSERT_SIZES = {"chr1": 400 * RES + 7, "chr2": 300 * RES + 3, "chr3": 500 * RES + 11}
+
+
+@pytest.fixture(scope="module")
+def two_regimes(tmp_path_factory):
+    """`(store, regime_A, regime_B)` — same store, same pairs, disjoint training chromosomes."""
+    tmp = tmp_path_factory.mktemp("tworegime")
+    root, a = _build(tmp, chrom_sizes=_ASSERT_SIZES)
+    obj = json.loads(a.read_text(encoding="utf-8"))
+    assert obj["train_chroms"] == ["chr1"] and obj["eval_chroms"] == ["chr2"]
+    obj["train_chroms"] = ["chr3"]
+    b = tmp / "regime_b.json"
+    b.write_text(json.dumps(obj), encoding="utf-8")
+    return root, a, b
+
+
+def test_the_collapsed_methods_are_identical_under_two_training_slices(two_regimes, tmp_path):
+    """§12.2's claim, for the two methods it is true of — and the manifest records that it was run."""
+    _, a, b = two_regimes
+    out = tmp_path / "preds"
+    roots = generate(a, out, methods=list(REGIME_INDEPENDENT), poisson_n=SCOREABLE_POISSON_N,
+                     progress=False, assert_against=b)
+    assert sorted(roots) == sorted(REGIME_INDEPENDENT)
+    for m, root in roots.items():
+        got = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        assert got["regime_independent"] == {"asserted_against": "regime_b.json",
+                                             "chrom": "chr2", "identical": True}, m
+        assert got["tracks"], f"{m} wrote a manifest with no track — the comparison saw nothing"
+
+
+def test_the_assertion_fails_when_the_training_slice_is_made_to_matter(two_regimes, tmp_path):
+    """The other half of D1: `marginal` pools over `train_chroms`, so the two regimes disagree.
+
+    This is the control. An identity check that cannot fail licenses nothing, and the failure is
+    produced by a real regime-dependent method rather than by a doctored one.
+    """
+    _, a, b = two_regimes
+    out = tmp_path / "preds"
+    with pytest.raises(RegimeIdentityError) as exc:
+        generate(a, out, methods=["marginal"], poisson_n=SCOREABLE_POISSON_N,
+                 progress=False, assert_against=b)
+    assert "marginal/" in str(exc.value) and "differ" in str(exc.value)
+    assert not (out / "marginal" / "manifest.json").exists(), \
+        "a failed assertion left a manifest behind that a reader could quote"
+
+
+def test_the_assertion_refuses_a_panel_the_other_regime_does_not_declare(two_regimes, tmp_path):
+    """Identical output for two DIFFERENT panels is an identity between two different objects."""
+    _, a, b = two_regimes
+    obj = json.loads(b.read_text(encoding="utf-8"))
+    obj["eval_pairs"] = [PAIRS[0]]
+    narrow = tmp_path / "regime_narrow.json"
+    narrow.write_text(json.dumps(obj), encoding="utf-8")
+    with pytest.raises(ValueError, match="SAME panel"):
+        generate(a, tmp_path / "preds", methods=["avg"], poisson_n=SCOREABLE_POISSON_N,
+                 progress=False, assert_against=narrow)
+
+
+def test_the_cli_never_asserts_regime_independence_for_a_fitted_method(two_regimes, tmp_path):
+    """Exit 2, and before any store is opened: the flag is not offered for the fitted three."""
+    _, a, b = two_regimes
+    for m in REGIME_DEPENDENT:
+        rc = Gen.main(["--store", str(a), "--out", str(tmp_path / m), "--methods", m,
+                       "--assert-regime-independent", str(b), "--quiet"])
+        assert rc == 2, m
+        assert not (tmp_path / m).exists(), f"{m} was generated before the flag was refused"
+
+
+def test_a_difference_leaves_the_cli_with_exit_5(two_regimes, tmp_path, monkeypatch):
+    """The exit code the launchers branch on. `marginal` is let past the CLI guard to produce one."""
+    _, a, b = two_regimes
+    monkeypatch.setattr(Gen, "REGIME_INDEPENDENT", ("avg", "avg-arcsinh", "marginal"))
+    rc = Gen.main(["--store", str(a), "--out", str(tmp_path / "preds"), "--methods", "marginal",
+                   "--assert-regime-independent", str(b), "--poisson-n",
+                   str(SCOREABLE_POISSON_N), "--quiet"])
+    assert rc == 5
+    assert Gen.main(["--store", str(a), "--out", str(tmp_path / "ok"), "--methods", "avg",
+                     "--assert-regime-independent", str(b), "--poisson-n",
+                     str(SCOREABLE_POISSON_N), "--quiet"]) == 0
 
 
 # ---------------------------------------------------------------------------
