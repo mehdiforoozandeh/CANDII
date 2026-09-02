@@ -169,12 +169,21 @@ def _table_rows(md: str) -> List[List[str]]:
     return rows
 
 
-def _expected_ranks(tool, field) -> Dict[str, int]:
-    """The ranking, from the ONLY ranker, computed independently of the report."""
+def _expected(tool, field) -> Dict[str, object]:
+    """The ranking, from the ONLY ranker, computed independently of the report.
+
+    `measures=keep` is part of the contract, not a detail: `aggregate_ranks` defaults to all nine of
+    `MEASURES`, so a call that omits it ranks over measures the cells do not carry. See
+    `test_the_ranker_averages_over_the_kept_measures_only`.
+    """
     entries = [tool.load_score(field["candi"])] + [
         tool.load_score(field["anchors"] / n / "challenge.B_.json") for n in ENTRANTS]
-    table, _exps, _dropped = tool.build_table(entries)
-    return ranking.aggregate_ranks(table)["final_rank"]
+    table, _exps, keep, _dropped = tool.build_table(entries)
+    return ranking.aggregate_ranks(table, measures=keep)
+
+
+def _expected_ranks(tool, field) -> Dict[str, int]:
+    return _expected(tool, field)["final_rank"]
 
 
 # ---------------------------------------------------------------------------
@@ -225,11 +234,130 @@ def test_the_placement_and_the_resolution_limit_travel_together(tool, field):
             assert "correlation units" in line
 
 
+def test_the_limit_says_which_quantity_it_is_in(tool, field):
+    """0.005 is in CORRELATION units; the figure's axis is the capped rank fraction.
+
+    Two different quantities, and the report shows both. A reader who takes 0.005 as a distance on
+    the rank axis reads two rows 0.004 apart there as unseparable, which does not follow from
+    archive `h77` — so the report and the caption both name the quantity the limit governs.
+    """
+    assert _run(tool, field) == 0
+    md = _md(field)
+    units = ("the limit is on the per-experiment correlation measures the ranks are BUILT FROM "
+             "(gwcorr, gwspear), NOT on the capped rank fraction plotted and tabulated here")
+    assert units in md
+    assert "The figure's axis is the **capped rank fraction**" in md
+    assert "is in CORRELATION units" in md
+    # the same clause reaches the figure, where the axis it warns about actually is
+    assert units in _caption(field)
+    assert "capped rank fraction" in (field["out"] / "candi_in_2019_field.svg").read_text(
+        encoding="utf-8")
+
+
+def test_the_md_embeds_the_figure_it_wrote(tool, field):
+    """A report whose figure is named in prose is a report the figure is missing from."""
+    assert _run(tool, field) == 0
+    md = _md(field)
+    assert md.count("](candi_in_2019_field.svg)") == 1
+    assert "![" in md.split("](candi_in_2019_field.svg)")[0].splitlines()[-1]
+    assert (field["out"] / "candi_in_2019_field.svg").exists()
+    # --basename moves both files, so the embed must follow them rather than stay hardcoded
+    assert _run(tool, field, "--basename", "fig_alt") == 0
+    alt = (field["out"] / "fig_alt.md").read_text(encoding="utf-8")
+    assert "](fig_alt.svg)" in alt and (field["out"] / "fig_alt.svg").exists()
+    assert "candi_in_2019_field.svg" not in alt
+
+
 def test_one_bootstrap_is_declared_not_hidden(tool, field):
     assert _run(tool, field) == 0
     md = _md(field)
     assert "| bootstraps | 1 |" in md
     assert "second-best of ten" in md
+
+
+def test_the_rank_column_does_not_claim_a_second_best_of_one(tool, field):
+    """At `n_bootstraps == 1` the column IS the single bootstrap's rank, and must say so.
+
+    Stage 4 takes the second-best of ten bootstrap ranks. With one bootstrap there is no second
+    best to take — `aggregate_ranks` returns the only rank there is — so a header still reading
+    "2nd-best" names a statistic that was never computed.
+    """
+    assert _run(tool, field) == 0
+    md = _md(field)
+    assert "| bootstraps | 1 |" in md
+    assert "| single bootstrap rank |" in md
+    assert "2nd-best bootstrap rank" not in md
+
+
+def test_the_ranker_averages_over_the_kept_measures_only(tool, field):
+    """`aggregate_ranks` must be called with `measures=<the kept set>`, never bare.
+
+    Its `measures` default is all NINE of `MEASURES`, and `msevar` is in no cell here (it is
+    excluded everywhere, entrants README §1). `rank_within_cell` ranks a missing measure LAST, so
+    when a measure is missing for EVERY team the tie-average hands all `n` teams `(n+1)/2` on that
+    slot. That phantom rank pulls every stage-2 mean toward `(n+1)/2` — i.e. toward the stage-3 cap
+    — so `min(0.5, r/n)` stops biting in the cells where it should, and the "measures used" count in
+    the report is then not the set that produced the placement.
+
+    This FAILS on a bare `aggregate_ranks(table)`: the printed score column is the qualified number
+    (CANDI 0.0385 on this fixture) and the bare call prints the compressed one (0.0919).
+    """
+    assert _run(tool, field) == 0
+    md = _md(field)
+
+    entries = [tool.load_score(field["candi"])] + [
+        tool.load_score(field["anchors"] / n / "challenge.B_.json") for n in ENTRANTS]
+    table, _exps, keep, dropped = tool.build_table(entries)
+    # `msevar` is excluded before the keep test, so it is not in `dropped` — and it is still one of
+    # the nine measures the bare call would average over. That is exactly the phantom.
+    assert keep == list(USED) and dropped == []
+    assert "msevar" in MEASURES and "msevar" not in keep
+
+    qualified = ranking.aggregate_ranks(table, measures=keep)
+    unqualified = ranking.aggregate_ranks(table)          # the bare call, over nine measures
+
+    rows = {r[1].strip("*"): r for r in _table_rows(md)}
+    assert {t: int(r[0]) for t, r in rows.items()} == qualified["final_rank"]
+    for team, row in rows.items():
+        assert row[4] == f"{qualified['mean_bootstrap_score'][team]:.4f}", team
+    # not cosmetic: the bare call would have printed a different number in that column
+    assert f"{unqualified['mean_bootstrap_score']['CANDI']:.4f}" \
+        != f"{qualified['mean_bootstrap_score']['CANDI']:.4f}"
+    # and the report declares the set the placement was actually averaged over
+    assert f"| measures used | {len(keep)} —" in md
+    assert "`measures=`" in md
+
+    # the phantom slot itself, in one cell: exactly (n+1)/2 for every team on the absent measure
+    cell = table[0][sorted(table[0])[0]]
+    n_teams = len(cell)
+    honest = ranking.rank_within_cell(cell, keep)
+    phantom = ranking.rank_within_cell(cell)
+    for team, r in honest.items():
+        assert phantom[team] == pytest.approx(
+            (len(keep) * r + (n_teams + 1) / 2) / len(MEASURES))
+        assert phantom[team] != pytest.approx(r)
+
+
+def test_the_phantom_measure_can_move_a_placement_not_only_a_score(tool):
+    """Minimal and hand-checkable: the phantom slot reorders teams, it does not merely shift them.
+
+    Three teams, four experiments, two measures in the cells, `ccc` best on both in every
+    experiment. Honest (`measures=keep`): per-cell ranks 1/2/3, capped to 0.333/0.5/0.5, so `ccc`
+    wins. Bare (nine measures, seven of them absent): every rank becomes `(2r + 7*2)/9`, i.e.
+    1.78/2.0/2.22, all of which divided by three exceed the 0.5 cap — so every team is capped in
+    every cell, the field ties, and the order falls back to team name. `ccc` goes from first to
+    last. Same mechanism as the 26-team field, sized so the arithmetic can be checked by eye.
+    """
+    keep = ["mse", "gwcorr"]
+    quality = {"aaa": 0.3, "bbb": 0.2, "ccc": 0.1}      # lower is better on mse
+    table = {0: {f"T_{e:02d}|B_{e:02d}|H3K4me3":
+                 {t: {"mse": q, "gwcorr": 1.0 - q} for t, q in quality.items()}
+                 for e in range(4)}}
+    honest = ranking.aggregate_ranks(table, measures=keep)["final_rank"]
+    phantom = ranking.aggregate_ranks(table)["final_rank"]
+    assert honest["ccc"] == 1, "best on every measure in every experiment"
+    assert phantom["ccc"] == 3, "the phantom caps the whole field and the tie falls back to name"
+    assert phantom != honest
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +485,12 @@ def test_no_text_runs_off_the_canvas(tool, field):
 
     The longest entrant name is 32 characters and the caption sentences are ~200, so this is the
     check that keeps the head block, the name column and the captions inside the box.
+
+    It measures with the tool's OWN `_text_w`, so what it proves is SELF-CONSISTENCY: every label
+    the tool placed fits the box the tool sized from the same width model. It is not a check
+    against real glyph metrics — a wrong `_CHAR_W` would move the box and the labels together and
+    this test would still pass. Real metrics need a renderer, which a unit test does not have; the
+    constant is deliberately generous instead.
     """
     assert _run(tool, field) == 0
     root = ET.fromstring((field["out"] / "candi_in_2019_field.svg").read_text(encoding="utf-8"))

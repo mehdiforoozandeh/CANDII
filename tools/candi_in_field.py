@@ -24,9 +24,11 @@ blind experiments are the only place CANDI and an entrant were measured on the s
 with it rather than left to a reader:
 
 1. The ORDER reproduces the published ranking and the SCORES do not (archive `h71`/`h77`). The
-   resolution limit is ~0.005 correlation units and 5 of 24 adjacent pairs in the reference invert
-   on three or more of the ten chromosome subsets. A placement that separates two entries by less
-   than that is not a placement.
+   resolution limit is ~0.005 CORRELATION units — it is on the per-experiment measures the ranks
+   are built from, NOT on the capped rank fraction the figure's axis carries, and both the report
+   and the caption say so — and 5 of 24 adjacent pairs in the reference invert on three or more of
+   the ten chromosome subsets. Two entries the underlying measures cannot separate are not
+   separated by their placement here.
 2. The field has fewer distinct methods than it has rows — three groups of entrants submitted
    byte-identical tracks (`competitors/entrants/README.md` §7). Any "beats N methods" claim must be
    COUNTED over distinct submissions, never read off the row count. This tool counts it.
@@ -95,11 +97,19 @@ IDENTICAL_GROUPS: Tuple[Dict[str, Any], ...] = (
 
 #: Copied from `plan/BENCHMARK_DESIGN.md` §7.3 / the `candi.bench.ranking` docstring, and BUILT FROM
 #: the module's own constants so the sentence cannot drift away from the code that enforces it.
+#:
+#: It names the quantity the limit is IN, because the figure's axis is a different quantity. The
+#: 0.005 is in the units of the per-experiment measures the ranks are computed from — a correlation
+#: — and NOT in the units of stage 3's capped rank fraction, which is what the axis and the
+#: `mean capped score` column carry. Without that clause a reader applies 0.005 to the rank axis
+#: and reads two rows 0.004 apart there as unseparable, which does not follow.
 RESOLUTION_LIMIT_SENTENCE = (
-    f"Ranking resolution limit: ≈ {ranking.RESOLUTION_LIMIT_CORR} correlation units; "
+    f"Ranking resolution limit: ≈ {ranking.RESOLUTION_LIMIT_CORR} correlation units — the limit is "
+    f"on the per-experiment correlation measures the ranks are BUILT FROM (gwcorr, gwspear), NOT "
+    f"on the capped rank fraction plotted and tabulated here; "
     f"{ranking.UNSEPARABLE_ADJACENT_PAIRS} of 24 adjacent pairs invert on ≥ 3 of the ten "
-    f"chromosome subsets. A placement that separates two entries by less than that is not a "
-    f"placement."
+    f"chromosome subsets. Two entries whose underlying measures differ by less than that are not "
+    f"separated by their placement."
 )
 
 COUNTED_SENTENCE = ("Any “beats N methods” claim must be counted, never read off the "
@@ -203,13 +213,23 @@ def resolve_anchors(spec: str) -> List[Path]:
 
 def build_table(entries: Sequence[Mapping[str, Any]]
                 ) -> Tuple[Dict[int, Dict[str, Dict[str, Dict[str, float]]]],
-                           List[str], List[str]]:
-    """`table[bootstrap][experiment][team][measure]`, with the usable measures decided by the data.
+                           List[str], List[str], List[str]]:
+    """`table`, the experiments, the KEPT measures and the dropped ones.
+
+    `table[bootstrap][experiment][team][measure]`. The kept set is returned rather than left
+    implicit in the cells because `aggregate_ranks` averages over ITS OWN `measures` argument, which
+    defaults to all nine of `MEASURES`. Handing it a table whose cells carry only the kept eight (or
+    seven) and letting the default stand is not a no-op: `rank_within_cell` ranks a missing measure
+    LAST, and when a measure is missing for EVERY team the tie-average hands all `n` teams
+    `(n+1)/2` on that slot. That phantom rank pulls every stage-2 mean toward `(n+1)/2`, i.e. toward
+    the stage-3 cap, so `min(0.5, r/n)` stops biting in the cells where it should; the plotted score
+    moves for every team and placements can swap. The caller must pass this list back as
+    `measures=`, so that the set named in "measures used" is the set that produced the placement.
 
     A measure is kept only when EVERY team carries it in EVERY cell that team scored. Keeping a
-    partly-present measure would not drop it quietly — `rank_within_cell` ranks a missing value
-    LAST — so a team that happened to lose one key would take a rank penalty for the gap rather than
-    for its predictions. Dropped measures are returned and printed, never swallowed.
+    partly-present measure would not drop it quietly — same missing-ranks-last rule — so a team that
+    happened to lose one key would take a rank penalty for the gap rather than for its predictions.
+    Dropped measures are returned and printed, never swallowed.
 
     A team absent from an experiment is not repaired here: `aggregate_ranks` scores it
     `MISSING_SCORE` (0.5, equal to the cap), which is the challenge's own rule for an absent team.
@@ -230,7 +250,7 @@ def build_table(entries: Sequence[Mapping[str, Any]]
             if e in ent["cells"]:
                 cell[ent["method"]] = {m: ent["cells"][e][m] for m in keep}
         table[0][e] = cell
-    return table, experiments, dropped
+    return table, experiments, keep, dropped
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +323,8 @@ def _fmt(v: Optional[float], nd: int = 4) -> str:
 def render_md(*, result: Mapping[str, Any], entries: Sequence[Mapping[str, Any]],
               candi: str, experiments: Sequence[str], measures: Sequence[str],
               dropped: Sequence[str], groups: Sequence[Mapping[str, Any]],
-              anchor_paths: Sequence[Path], candi_path: Path) -> str:
+              anchor_paths: Sequence[Path], candi_path: Path,
+              basename: str = "candi_in_2019_field") -> str:
     order = sorted(result["final_rank"], key=lambda t: result["final_rank"][t])
     tag_of: Dict[str, List[str]] = {}
     for g in groups:
@@ -340,7 +361,9 @@ def render_md(*, result: Mapping[str, Any], entries: Sequence[Mapping[str, Any]]
     lines.append(f"| distinct submissions in the field | **{field_distinct}** of "
                  f"{len(entries)} rows |")
     lines.append(f"| experiments | {len(experiments)} |")
-    lines.append(f"| measures used | {len(measures)} — {', '.join(f'`{m}`' for m in measures)} |")
+    lines.append(f"| measures used | {len(measures)} — {', '.join(f'`{m}`' for m in measures)}"
+                 f" — passed to the ranker as `measures=`, so this is the set the placement was "
+                 f"averaged over, not merely the set present in the cells |")
     lines.append(f"| measures dropped | "
                  f"{', '.join(f'`{m}`' for m in dropped) if dropped else 'none'}"
                  f" — `msevar` is excluded everywhere (`competitors/entrants/README.md` §1); "
@@ -364,8 +387,12 @@ def render_md(*, result: Mapping[str, Any], entries: Sequence[Mapping[str, Any]]
     lines.append("")
     lines.append("## The ranked table")
     lines.append("")
-    lines.append("| rank | method | ident. group | 2nd-best bootstrap rank | "
-                 "mean capped score (lower is better) | experiments scored | |")
+    # At one bootstrap there is no "2nd best" to take: stage 4 returns the only bootstrap's rank,
+    # and a header that still says "2nd-best" would be describing a statistic that was not computed.
+    rank_col = ("single bootstrap rank" if int(result["n_bootstraps"]) == 1
+                else "2nd-best bootstrap rank")
+    lines.append(f"| rank | method | ident. group | {rank_col} | "
+                 f"mean capped score (lower is better) | experiments scored | |")
     lines.append("|---:|---|:---:|---:|---:|---:|---|")
     for t in order:
         is_candi = t == candi
@@ -429,7 +456,15 @@ def render_md(*, result: Mapping[str, Any], entries: Sequence[Mapping[str, Any]]
         lines.append("")
         lines.append("Panels with recorded holes (`provenance.missing_tracks`): " + ", ".join(gaps))
     lines.append("")
-    lines.append("Figure: `candi_in_2019_field.svg`.")
+    lines.append("## Figure")
+    lines.append("")
+    lines.append(f"![CANDI inside the 2019 challenge field — the challenge ranker's stage-3 mean "
+                 f"capped rank fraction per method, lower is better]({basename}.svg)")
+    lines.append("")
+    lines.append(f"The figure's axis is the **capped rank fraction**, the same quantity as the "
+                 f"`mean capped score` column. The ≈ {ranking.RESOLUTION_LIMIT_CORR} resolution "
+                 f"limit above is in CORRELATION units — it governs the per-experiment measures the "
+                 f"ranks are built from, and must not be read as a distance on this axis.")
     lines.append("")
     return "\n".join(lines)
 
@@ -709,19 +744,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return EXIT_REFUSED
     candi = candi_entry["method"]
 
-    table, experiments, dropped = build_table(entries)
-    result = ranking.aggregate_ranks(table)
+    table, experiments, measures, dropped = build_table(entries)
+    # `measures=` is not optional. Left off, the ranker averages over its own nine-measure default
+    # and scores every dropped measure as a phantom (n+1)/2 tie for every team — see `build_table`.
+    result = ranking.aggregate_ranks(table, measures=measures)
 
     order = sorted(result["final_rank"], key=lambda t: result["final_rank"][t])
     below = [t for t in order if result["final_rank"][t] > result["final_rank"][candi]]
     n_distinct, _ = count_distinct(below, groups)
-    measures = sorted({m for cell in table[0].values() for row in cell.values() for m in row})
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     md = render_md(result=result, entries=entries, candi=candi, experiments=experiments,
                    measures=measures, dropped=dropped, groups=groups,
-                   anchor_paths=anchor_paths, candi_path=candi_path)
+                   anchor_paths=anchor_paths, candi_path=candi_path,
+                   basename=args.basename)
     svg = render_svg(result=result, candi=candi, groups=groups, n_experiments=len(experiments),
                      n_distinct_below=n_distinct, n_rows_below=len(below))
     md_path = out / f"{args.basename}.md"
