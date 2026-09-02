@@ -33,7 +33,8 @@
 # `gate_row_against_board` requires a row's regime name to match the board it is added to. So the
 # score file is addressed by the BOARD's regime and the prediction root by the GENERATION regime,
 # and those two differ for exactly these two methods. `knn1`, `knn5` and `marginal` fit on
-# `train_chroms` and have a root of their own per regime.
+# `train_chroms` — cut to the `regions` BED wherever the regime declares one (D32, since
+# 2026-09-01) — and have a root of their own per regime, `eic_pilot` included.
 #
 # A collapsed method whose root carries no `regime_independent` stamp is REFUSED against the other
 # board (exit 5): the one number is printed in two rows only because a comparison licensed it.

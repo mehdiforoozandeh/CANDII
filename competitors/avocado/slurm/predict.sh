@@ -48,6 +48,12 @@ echo "[avo_pred] regime=$REGIME_NAME panel=$PANEL chrom=$CHROM pred=$PRED host=$
 # later, different one: every task of this array writes the same `.b_once.<array job id>` name, so
 # a sibling finds a marker that is its own and a re-submission six weeks later finds one that is
 # not.
+#
+# THE MARKER IS WRITTEN LAST, AFTER EVERY PRECONDITION. It used to be dropped here, before the
+# panel regime was derived and before the checkpoint was known to exist — so a missing checkpoint,
+# or a `split` that could not run, left a `.b_once.*` in the root and every LATER submission read
+# it as "the blind panel has already been spent". A trivial failure must not poison a root that
+# holds nothing. The refusals stay here, where they cost nothing and fire early.
 if [ "$PANEL" = "B_" ]; then
     MARK="$PRED/.b_once.${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-manual}}"
     if [ "${B_ONCE:-0}" != "1" ]; then
@@ -62,7 +68,6 @@ if [ "$PANEL" = "B_" ]; then
         echo "[avo_pred]   root really is a failed write, move it aside by hand and say so." >&2
         exit 4
     fi
-    mkdir -p "$PRED" && : > "$MARK"
 fi
 
 derive_panel_regime || exit 1
@@ -82,6 +87,11 @@ if [ ! -s "$CK" ]; then
         echo "[avo_pred] $CHROM: no $CK and no .partial -- its genome fit never ran." >&2
     fi
     exit 1
+fi
+
+# Every precondition has passed, so this array is the B_ pass it says it is: claim the root now.
+if [ "$PANEL" = "B_" ]; then
+    mkdir -p "$PRED" && : > "$MARK" || exit 1
 fi
 
 python "$AVO/predict.py" \

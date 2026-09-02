@@ -21,6 +21,7 @@ would make every baseline number wrong in the same direction.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -1097,3 +1098,211 @@ def test_candi_never_imports_competitors():
             if re.search(r"^\s*(import\s+competitors|from\s+competitors)", p.read_text("utf-8"),
                          re.M)]
     assert not hits, f"core imports the competitors tree: {hits}"
+
+
+# ---------------------------------------------------------------------------
+# D32 — a `regions` BED is the TRAINING scope, and only the fitted three read it
+# ---------------------------------------------------------------------------
+#
+# `slurm/t49_baselines_*.sh` refused `regime.eic_pilot.json` for `knn1`, `knn5` and `marginal` with
+# exit 3 until 2026-09-01, because this module read `train_chroms` RAW: those three would have been
+# fitted over 18 whole chromosomes where every other method under that regime sees the Pilot Regions
+# alone. That is a Rule 2 break, and these tests are what let the guard go.
+#
+# THE FIXTURE TRAINS ON TWO CHROMOSOMES AND CUTS THE BED TO ONE, and that is what makes the kNN half
+# measurable. `_similarity_ladder` ranks the seven contributors c1 > … > c7 on chr1 and exactly the
+# reverse on chr3, so a fit pooled over BOTH chromosomes has no clean order left, while a fit cut to
+# an interval of chr1 recovers c1…c5. A BED that merely shortened one chromosome would leave the
+# monotone ladder — and the top five — untouched, and the test would pass without measuring
+# anything.
+
+
+def _bed_regime(tmp_path, src, chrom, first_bin, end_bin, *, name, train_chroms=None):
+    """`src` with a D32 `regions` block over `[first_bin, end_bin)` of `chrom`, in BASE PAIRS."""
+    bed = tmp_path / f"{name}.bed"
+    bed.write_text(f"{chrom}\t{first_bin * RES}\t{end_bin * RES}\tpilot1\n", encoding="utf-8")
+    obj = json.loads(Path(src).read_text(encoding="utf-8"))
+    if train_chroms is not None:
+        obj["train_chroms"] = list(train_chroms)
+    obj["regions"] = {"bed": bed.name, "sha256": hashlib.sha256(bed.read_bytes()).hexdigest(),
+                      "policy": "contain"}
+    out = tmp_path / f"{name}.json"
+    out.write_text(json.dumps(obj), encoding="utf-8")
+    return out
+
+
+def _drop_regions(tmp_path, src, *, name, train_chroms=None):
+    """The same regime with no `regions` block — the whole-chromosome fit to compare against."""
+    obj = json.loads(Path(src).read_text(encoding="utf-8"))
+    obj.pop("regions", None)
+    if train_chroms is not None:
+        obj["train_chroms"] = list(train_chroms)
+    out = tmp_path / f"{name}.json"
+    out.write_text(json.dumps(obj), encoding="utf-8")
+    return out
+
+
+def test_contained_bins_is_the_d32_containment_rule_and_none_without_a_bed(two_regimes, tmp_path):
+    """Bins whose whole 25 bp lies inside a region, counted the way `Regime.windows` counts them."""
+    _, a, _ = two_regimes
+    plain, cut = Panel(a), Panel(_bed_regime(tmp_path, a, "chr1", 10, 60, name="c"))
+    try:
+        assert plain.contained_bins("chr1") is None, \
+            "a regime with no BED must keep the untouched path, not gather through an identity index"
+        assert np.array_equal(cut.contained_bins("chr1"), np.arange(10, 60))
+        # A region edge off the bin grid loses its partial bin, exactly as D32's window rule does.
+        edge = Panel(_bed_regime(tmp_path, a, "chr1", 0, 1, name="e"))
+        try:
+            bed = tmp_path / "edge.bed"
+            bed.write_text("chr1\t10\t99\tpilot1\n", encoding="utf-8")
+            obj = json.loads(Path(a).read_text(encoding="utf-8"))
+            obj["regions"] = {"bed": bed.name,
+                              "sha256": hashlib.sha256(bed.read_bytes()).hexdigest(),
+                              "policy": "contain"}
+            rp = tmp_path / "edge.json"
+            rp.write_text(json.dumps(obj), encoding="utf-8")
+            part = Panel(rp)
+            try:
+                assert np.array_equal(part.contained_bins("chr1"), np.arange(1, 3)), \
+                    "bp 10-99 covers whole bins 1 and 2 only; 0 and 3 are partial"
+            finally:
+                part.close()
+        finally:
+            edge.close()
+    finally:
+        plain.close()
+        cut.close()
+
+
+def test_a_regions_bed_moves_the_fitted_three_and_leaves_the_collapsed_two_alone(two_regimes,
+                                                                                tmp_path):
+    """The whole of D32 support here: `knn5` and `marginal` move, `avg` and `avg-arcsinh` do not."""
+    _, a, _ = two_regimes
+    both = ["chr1", "chr3"]
+    full = _drop_regions(tmp_path, a, name="full", train_chroms=both)
+    cut = _bed_regime(tmp_path, a, "chr1", 0, 200, name="cut", train_chroms=both)
+    rf = generate(full, tmp_path / "F", chroms=["chr2"], methods=list(METHODS),
+                  poisson_n=SCOREABLE_POISSON_N, progress=False)
+    rc = generate(cut, tmp_path / "C", chroms=["chr2"], methods=list(METHODS),
+                  poisson_n=SCOREABLE_POISSON_N, progress=False)
+    same = {}
+    for m in METHODS:
+        A, B = _arrays_of(rf[m], "chr2"), _arrays_of(rc[m], "chr2")
+        assert A and set(A) == set(B), m
+        same[m] = all(np.array_equal(A[k], B[k]) for k in A)
+    for m in REGIME_INDEPENDENT:
+        assert same[m], (f"{m} moved when the TRAINING scope was cut to a BED. No training locus "
+                         f"enters it, so nothing about `regions` may reach it — and its one root is "
+                         f"printed in both regime rows")
+    for m in REGIME_DEPENDENT:
+        assert not same[m], (f"{m} fits on the training loci and did not move when the BED cut them "
+                             f"from two chromosomes to one interval of one — it is still reading "
+                             f"train_chroms raw, which is the Rule 2 break the exit-3 guard covered")
+
+
+def test_the_knn_similarity_table_is_correlated_over_the_bed_and_not_the_chromosome(two_regimes,
+                                                                                    tmp_path):
+    """knn's fit IS the table, so this is where the scope has to bite for `knn1`/`knn5`."""
+    _, a, _ = two_regimes
+    both = ["chr1", "chr3"]
+    pf = Panel(_drop_regions(tmp_path, a, name="sfull", train_chroms=both))
+    pc = Panel(_bed_regime(tmp_path, a, "chr1", 0, 200, name="scut", train_chroms=both))
+    try:
+        contribs = pf.contributors(("T_aa", "V_aa"), TARGET)
+        picked_full = top_k(similarity_table(pf, pf.train, progress=False), "T_aa", contribs, 5)
+        picked_cut = top_k(similarity_table(pc, pc.train, progress=False), "T_aa", contribs, 5)
+        assert picked_cut == list(WIDE_CONTRIBUTORS[:5]), \
+            f"cut to chr1 the ladder is c1…c5; got {picked_cut}"
+        assert set(picked_full) != set(picked_cut), \
+            "pooling chr1 and chr3 cancels the ladder, so the two fits must not choose the same five"
+    finally:
+        pf.close()
+        pc.close()
+
+
+def test_a_marginal_with_no_region_on_the_training_chromosomes_writes_no_track(two_regimes,
+                                                                              tmp_path):
+    """An empty pool is `None` — no `marginal` track — rather than a NaN constant in every bin."""
+    _, a, _ = two_regimes
+    off = _bed_regime(tmp_path, a, "chr3", 0, 100, name="off", train_chroms=["chr1"])
+    panel = Panel(off)
+    try:
+        assert panel.contained_bins("chr1").size == 0
+        assert Gen.fit_marginal(panel, TARGET) is None
+    finally:
+        panel.close()
+
+
+# ---------------------------------------------------------------------------
+# D31 — no `eval_pairs` at all: the self-paired shape the sigma regime is
+# ---------------------------------------------------------------------------
+#
+# `tools/sigma_training_regime.py` writes `eval_pairs: []` with the drawn training cells in
+# `biosamples.eval`, and it can write nothing else — `candi.store.regime` refuses a `[c, c]` literal
+# outright. `Panel` read `eval_pairs` alone until 2026-09-01, so `--methods avg-arcsinh --store
+# <derived>` wrote an empty root and the training-residual σ pass had no residual to take.
+
+
+def _no_pairs_regime(tmp_path, src, cells, *, name="sigma_shape"):
+    """The σ regime's shape: no pairs, the drawn cells in `biosamples.eval`, train chroms scored."""
+    obj = json.loads(Path(src).read_text(encoding="utf-8"))
+    obj["biosamples"] = {"train": list(obj["biosamples"]["train"]), "eval": list(cells)}
+    obj["eval_pairs"] = []
+    obj["eval_chroms"] = list(obj["train_chroms"])
+    obj["train_chroms"] = []
+    out = tmp_path / f"{name}.json"
+    out.write_text(json.dumps(obj), encoding="utf-8")
+    return out
+
+
+def test_a_regime_with_no_eval_pairs_self_pairs_its_eval_biosamples(two_regimes, tmp_path):
+    """`Panel` must answer what `harness.StoreSource` answers, pair for pair and assay for assay."""
+    _, a, _ = two_regimes
+    cells = ["T_c1", "T_c2"]
+    rp = _no_pairs_regime(tmp_path, a, cells)
+    panel = Panel(rp)
+    source = open_source(store=rp)
+    try:
+        assert panel.declared_pairs == []
+        assert panel.pairs == [(c, c) for c in cells]
+        assert source.pairs("impute") == [Pair(c, c) for c in cells]
+        for pair in panel.pairs:
+            want = sorted(source.assays[i] for i in source.targets(Pair(*pair), "impute"))
+            assert sorted(panel.targets(pair)) == want, \
+                f"{pair}: the generator and bench disagree about a self-pair's panel"
+            assert want, "a self-paired cell with no target assay makes the fixture vacuous"
+    finally:
+        source.close()
+        panel.close()
+
+
+def test_a_self_paired_track_is_never_averaged_from_its_own_answer(two_regimes, tmp_path):
+    """§5's exclusion is the leave-one-out on this path: `T_c1` contributes nothing to `T_c1`."""
+    _, a, _ = two_regimes
+    panel = Panel(_no_pairs_regime(tmp_path, a, ["T_c1"]))
+    try:
+        contribs = panel.contributors(("T_c1", "T_c1"), TARGET)
+        assert "T_c1" not in contribs
+        assert sorted(contribs) == sorted(set(WIDE_CONTRIBUTORS) - {"T_c1"})
+    finally:
+        panel.close()
+
+
+def test_the_self_paired_root_covers_the_tracks_the_scorer_will_look_for(two_regimes, tmp_path):
+    """`avg-arcsinh` under the σ shape: the directory names `bench.external._expected` asks for."""
+    _, a, _ = two_regimes
+    rp = _no_pairs_regime(tmp_path, a, ["T_c1", "T_c2"])
+    roots = generate(rp, tmp_path / "sig", chroms=["chr1"], methods=["avg-arcsinh"],
+                     poisson_n=SCOREABLE_POISSON_N, progress=False)
+    source = open_source(store=rp, chroms=("chr1",))
+    try:
+        want = set(_expected(source))
+        assert want, "the source declares no track, so this proves nothing"
+        got = {d.name for d in roots["avg-arcsinh"].iterdir() if d.is_dir()}
+        assert got == want, f"root covers {sorted(got)[:3]}…, the source expects {sorted(want)[:3]}…"
+        for d in sorted(want):
+            with np.load(roots["avg-arcsinh"] / d / "chr1.npz") as z:
+                assert list(z.keys()) == ["signal_mu"]
+                assert np.isfinite(z["signal_mu"]).all()
+    finally:
+        source.close()

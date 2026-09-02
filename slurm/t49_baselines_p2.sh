@@ -24,8 +24,10 @@
 # every written bin is a function of the contributors AT THE PREDICTED POSITION, and it is false for
 # `knn1`/`knn5` (`generate.similarity_table` correlates over `panel.train_chroms`) and `marginal`
 # (`generate.fit_marginal` pools over them). Eight baseline method-regime units, not five.
-# `slurm/t49_baselines_p1.sh`'s header carries the full statement, the identity assertion that
-# licenses the collapse, and why `regime.eic_pilot.json` is still refused for the fitted three.
+# `slurm/t49_baselines_p1.sh`'s header carries the full statement and the identity assertion that
+# licenses the collapse. `regime.eic_pilot.json` is accepted for the fitted three since 2026-09-01:
+# `generate.py` honours the regime's `regions` block (`Panel.contained_bins`), so their fit is cut
+# to the declared Pilot Regions on the train split instead of running over 18 whole chromosomes.
 #
 # THIS ARRAY DOES NOT STAMP `regime_independent`, and a root without that stamp is refused against
 # the other board by `t49_baselines_score.sh`. After the array finishes — never before, because a
@@ -120,14 +122,6 @@ if [ -n "$COLLAPSED" ] && [ "$REGNAME" != "$COLLAPSE_REGIME" ]; then
     echo "[t49-p2] REFUSING:$COLLAPSED collapse to ONE run (D1), under $COLLAPSE_REGIME. Drop" >&2
     echo "         them from METHODS for a $REGNAME pass." >&2
     exit 2
-fi
-
-if [ -n "$DEPENDENT" ] && \
-   python -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" "$REGIME"; then
-    echo "[t49-p2] REFUSING: $REGIME declares a \`regions\` BED and$DEPENDENT fit on the regime's" >&2
-    echo "         training loci. generate.py has no regions support, so they would fit over WHOLE" >&2
-    echo "         chromosomes instead of the declared region set. Rule 2 break — raise it." >&2
-    exit 3
 fi
 
 # The panel regime: the DECLARED eval_pairs filtered to V_. Both live regimes carry all 38 pairs

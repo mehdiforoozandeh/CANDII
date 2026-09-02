@@ -467,15 +467,27 @@ def test_a_missing_training_grid_refuses_instead_of_falling_back_to_the_apply_gr
 
 
 def test_a_void_sigma_table_is_refused_rather_than_scored():
-    """§12.2 voids every sigma this tree can produce — `fit_sigma.fit` pools residuals against V_
-    truth. Avocado, eDICE and Lavawizard refuse to fit one; this script refuses to use one."""
+    """§12.2 voids every sigma fitted on V_ residuals, so a table that does not say it was fitted on
+    TRAINING residuals is refused before any scoring is done (exit 3).
+
+    `CI_PY` AND `CI_REPO` ARE NOW PART OF THE FIXTURE, and that is a change in `score.sh`, not a
+    weakening here. Since its 2026-09-01 rewrite the script derives the single-panel regime with
+    `tools/declare_eval_pairs.py split` BEFORE it reads the σ table, so with the default `$CI_PY`
+    (the Fir venv) it dies at that line off-cluster and the gate is never reached at all. Pointing
+    the two at this interpreter and this checkout runs the derivation for real — no store is
+    touched, `split` only filters the declared pairs — and the refusal is then measured where it
+    actually sits. It is still worth saying that the cheap refusal belongs ABOVE the work it
+    guards; `score.sh` is not this chunk's file.
+    """
     import subprocess
+    import sys
     import tempfile
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         (tmp / "sigma.json").write_text("{}", encoding="utf-8")
         env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp), "CI_RUN": str(tmp),
-               "CI_SIGMA": str(tmp / "sigma.json")}
+               "CI_SIGMA": str(tmp / "sigma.json"),
+               "CI_PY": sys.executable, "CI_REPO": str(REPO)}
         proc = subprocess.run(["bash", str(SCORE_SH)], env=env, capture_output=True, text=True)
     assert proc.returncode == 3
     assert "REFUSING" in proc.stderr
@@ -553,61 +565,217 @@ def test_apply_output_name_is_splittable_on_our_separator():
 
 
 # ---------------------------------------------------------------------------------------------
-# the §6.1 sigma-table
+# the return leg on a D32 REGION grid — Apply's pseudo-chromosomes back onto the store's grid
 # ---------------------------------------------------------------------------------------------
+#
+# Under a `regions` regime the TRAINING grid is one declared pseudo-chromosome per region
+# (`prepare.region_scope`, written as `chrominfo.train.txt`), and that is the grid the §7 sigma pass
+# applies its predictors on. Those names are not chromosomes of the store, so `collect.py` needs the
+# regime to put each wig back at its true offset.
 
 
-def _scores(rows):
-    """rows: (assay, mse, n_points) -> a minimal scores json shaped like bench.external's."""
-    return {"provenance": {"method": "ChromImpute"},
-            "per_track": {f"T_x|V_x|{a}#{i}": {"pval": {
-                "assay": a, "mse": m, "n_points": n, "signal_target_transform": "none"}}
-                for i, (a, m, n) in enumerate(rows)}}
+def _store_manifest(root, n_bins):
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "manifest.json").write_text(
+        json.dumps({"genome": {"n_bins": dict(n_bins)}}), encoding="utf-8")
+    return root
 
 
-def test_sigma_is_the_root_of_the_pooled_mean_squared_residual():
-    import fit_sigma
-    out = fit_sigma.fit(_scores([("H3K4me3", 4.0, 100), ("H3K4me3", 16.0, 100)]))
+def test_a_whole_chromosome_grid_needs_no_regime():
+    assert collect.resolve_grid(["chr21"], {"chr21": 40}, None) == [("chr21", "chr21", 0, 40)]
+
+
+def test_a_region_pseudo_chromosome_without_a_regime_says_what_is_missing():
+    with pytest.raises(SystemExit) as exc:
+        collect.resolve_grid(["pilot1"], {"chr21": 40}, None)
+    assert "--regime" in str(exc.value)
+
+
+def test_a_region_grid_maps_back_to_the_chromosome_and_offset_prepare_declared(tmp_path):
+    """The map is `region_scope`'s own, so a wig lands at the offset its signal was cut at."""
+    regime = _regions_regime(tmp_path, [("chr21", 250, 750, "pilot1"),
+                                        ("chr21", 5000, 6000, "pilot2")], ["chr21"])
+    grid = collect.resolve_grid(["pilot1", "pilot2"], {"chr21": 400}, str(regime))
+    assert grid == [("pilot1", "chr21", 10, 30), ("pilot2", "chr21", 200, 240)]
+    assert grid == prepare.region_scope(prepare.load_json(regime), regime)
+
+
+def test_a_grid_the_regime_cannot_explain_is_refused(tmp_path):
+    regime = _regions_regime(tmp_path, [("chr21", 250, 750, "pilot1")], ["chr21"])
+    with pytest.raises(SystemExit) as exc:
+        collect.resolve_grid(["pilot9"], {"chr21": 400}, str(regime))
+    assert "pilot9" in str(exc.value)
+
+
+def test_a_derived_sigma_regime_is_named_as_the_wrong_regime_to_hand_in(tmp_path):
+    """`region_scope` cuts the BED to `train_chroms`, which a derived sigma regime empties.
+
+    The message has to name the SOURCE regime, or the operator reads "no region on train_chroms"
+    and goes looking for a broken BED.
+    """
+    regime = _regions_regime(tmp_path, [("chr21", 250, 750, "pilot1")], [])
+    with pytest.raises(SystemExit) as exc:
+        collect.resolve_grid(["pilot1"], {"chr21": 400}, str(regime))
+    assert "SOURCE regime" in str(exc.value)
+
+
+def test_a_chromosome_named_both_whole_and_by_region_is_refused(tmp_path):
+    """Both write chr21.npz, from two different grids, and the last one would win in silence."""
+    regime = _regions_regime(tmp_path, [("chr21", 250, 750, "pilot1")], ["chr21"])
+    with pytest.raises(SystemExit) as exc:
+        collect.resolve_grid(["chr21", "pilot1"], {"chr21": 400}, str(regime))
+    assert "chr21" in str(exc.value)
+
+
+def test_a_region_track_lands_on_the_store_grid_with_nan_outside_the_regions(tmp_path):
+    """End to end: two region wigs -> one full-length chr21 array at the declared offsets.
+
+    NaN outside, not zero. `bench.external.read_track_arrays` demands the full length, and
+    `competitors.sigma_pass` cuts the residual to `scored_bins` — under the same BED a subset of
+    the contained bins — so a correct run never reads one, and a run whose scope slipped gets a NaN
+    instead of a confident -log10 p of 0 at a locus nothing predicted.
+    """
+    regime = _regions_regime(tmp_path, [("chr21", 250, 750, "pilot1"),
+                                        ("chr21", 5000, 6000, "pilot2")], ["chr21"])
+    store = _store_manifest(tmp_path / "store", {"chr21": 400})
+    impute = tmp_path / "imp"
+    impute.mkdir()
+    name = collect.apply_output_name("T_K562", "H3K4me3")
+    _wig(impute / f"pilot1_{name}.gz", [1.0] * 20)
+    _wig(impute / f"pilot2_{name}.gz", [2.0] * 40)
+    targets = tmp_path / "targets.tsv"
+    prepare.write_targets(targets, [("T_K562", "T_K562", "H3K4me3")])
+    pred = tmp_path / "pred"
+    assert collect.main(["--store", str(store), "--targets", str(targets),
+                         "--impute-dir", str(impute), "--pred-root", str(pred),
+                         "--chroms", "pilot1,pilot2", "--regime", str(regime)]) == 0
+    with np.load(pred / "T_K562__T_K562__H3K4me3" / "chr21.npz") as z:
+        got = z["signal_mu"]
+    assert got.shape == (400,)
+    assert np.array_equal(got[10:30], np.ones(20, dtype=np.float32))
+    assert np.array_equal(got[200:240], np.full(40, 2.0, dtype=np.float32))
+    assert np.isnan(got[:10]).all() and np.isnan(got[30:200]).all() and np.isnan(got[240:]).all()
+    notes = json.loads((pred / "manifest.json").read_text())["notes"]
+    assert "chroms=chr21" in notes and "NaN outside the regions" in notes
+
+
+# ---------------------------------------------------------------------------------------------
+# the §6.1 sigma-table — `competitors.sigma_pass`, the one fitter every method now shares
+# ---------------------------------------------------------------------------------------------
+#
+# The five tests here used to run against `competitors/chromimpute/fit_sigma.py`, which squared the
+# residuals recorded in a V_ SCORES JSON. §12.2 declared every table it could produce void (Rule 1)
+# and the file is deleted, so the two tests that were about that json and nothing else go with it:
+# "refuses a track scored through a transform" has no subject left — this fitter never reads a
+# scores json, it reads truth off the store and a point prediction off a §4.1 root — and the two
+# table-shape tests collapse into the one boundary check below.
+#
+# What survives is what they were really asserting: sigma is the root of the POOLED mean squared
+# residual, pooled by BIN and not by track. `sigma_pass.fit` is unit-tested here the same way, over
+# a panel of known residuals with the truth injected; `tests/test_sigma_pass.py` runs the whole
+# fitter against a real store.
+
+class _Panel:
+    """The little of an `EvalSource` that `sigma_pass.fit` reads: the declared panel and the grid.
+
+    `stream_truth` is monkeypatched in the tests below, so nothing here opens a store. The subject
+    is the arithmetic over a known set of residuals; `tests/test_sigma_pass.py` owns the store read.
+    """
+
+    def __init__(self, assays, tracks, n_bins):
+        self.assays = list(assays)
+        self.tracks = list(tracks)              # [(cell, assay), ...], self-paired
+        self.eval_chroms = ("chr19",)
+        self._n = int(n_bins)
+        self.regime_path = Path("regime.sigma.json")
+
+    def pairs(self, kind):
+        from candi.bench.harness import Pair
+        return [Pair(c, c) for c in dict.fromkeys(c for c, _ in self.tracks)]
+
+    def targets(self, pair, kind):
+        return [self.assays.index(a) for c, a in self.tracks if c == pair.target_biosample]
+
+    def n_bins(self, chrom):
+        return self._n
+
+    def scored_bins(self, chrom):
+        return None
+
+
+def _fit(monkeypatch, tmp_path, rows):
+    """rows: `(cell, assay, residual, n_bins)` -> `{assay: {mse_pooled, sigma, n_tracks}}`.
+
+    Tracks of different lengths need different panels — `read_track_arrays` checks every track of a
+    pass against ONE grid — so the rows are grouped by bin count and the per-assay sums added up,
+    which is what `fit` does inside a panel anyway.
+    """
+    import candi.bench.external as EX
+    from competitors import sigma_pass as SP
+
+    monkeypatch.setattr(EX, "stream_truth", lambda src, pair, cols, **kw: {
+        col: {"chr19": {"pval": np.zeros(src.n_bins("chr19"), dtype=np.float32)}}
+        for col in cols})
+    assays = sorted({a for _, a, _, _ in rows})
+    acc = {}
+    for nb in sorted({r[3] for r in rows}):
+        group = [r for r in rows if r[3] == nb]
+        panel = _Panel(assays, [(c, a) for c, a, _, _ in group], nb)
+        root = tmp_path / f"root{nb}"
+        for dirname, (pair, assay) in EX._expected(panel).items():
+            (root / dirname).mkdir(parents=True)
+            res = next(r for c, a, r, _ in group
+                       if c == pair.target_biosample and a == assay)
+            np.savez(root / dirname / "chr19.npz",
+                     signal_mu=np.full(nb, res, dtype=np.float32))
+        sse, n_points, n_tracks, _, _ = SP.fit(panel, root, progress=False)
+        for a in sse:
+            v = acc.setdefault(a, [0.0, 0, 0])
+            v[0] += sse[a]
+            v[1] += n_points[a]
+            v[2] += n_tracks[a]
+    return {a: {"mse_pooled": v[0] / v[1], "sigma": (v[0] / v[1]) ** 0.5, "n_tracks": v[2]}
+            for a, v in acc.items()}
+
+
+def test_sigma_is_the_root_of_the_pooled_mean_squared_residual(monkeypatch, tmp_path):
+    out = _fit(monkeypatch, tmp_path,
+               [("T_a", "H3K4me3", 2.0, 100), ("T_b", "H3K4me3", 4.0, 100)])
     assert out["H3K4me3"]["mse_pooled"] == pytest.approx(10.0)
     assert out["H3K4me3"]["sigma"] == pytest.approx(10.0 ** 0.5)
     assert out["H3K4me3"]["n_tracks"] == 2
 
 
-def test_sigma_pooling_is_weighted_by_bins_not_by_tracks():
-    import fit_sigma
-    out = fit_sigma.fit(_scores([("H3K9me3", 1.0, 900), ("H3K9me3", 11.0, 100)]))
-    assert out["H3K9me3"]["mse_pooled"] == pytest.approx(2.0)
+def test_sigma_pooling_is_weighted_by_bins_not_by_tracks(monkeypatch, tmp_path):
+    """900 bins at a residual of 1 and 100 at 4: pooled is 2.5, track-weighted would be 8.5."""
+    out = _fit(monkeypatch, tmp_path,
+               [("T_a", "H3K9me3", 1.0, 900), ("T_b", "H3K9me3", 4.0, 100)])
+    assert out["H3K9me3"]["mse_pooled"] == pytest.approx(2.5)
 
 
-def test_sigma_refuses_a_track_scored_through_a_transform():
-    import fit_sigma
-    s = _scores([("H3K4me3", 4.0, 100)])
-    next(iter(s["per_track"].values()))["pval"]["signal_target_transform"] = "arcsinh"
-    with pytest.raises(ValueError, match="raw -log10 p"):
-        fit_sigma.fit(s)
+def test_the_prefix_score_sh_greps_for_is_the_fitters_own_constant():
+    """The two sides of the boundary must agree letter for letter, not by our reading of §4.2.
+
+    `score.sh` refuses a table whose `fitted_on` does not start with the prefix, and it spells the
+    prefix out in bash because a launcher cannot import a python constant. This is the only thing
+    tying that literal to `competitors.sigma_pass`.
+    """
+    from competitors.sigma_pass import SIGMA_FITTED_ON_PREFIX
+    assert f'SIGMA_FITTED_ON_PREFIX="{SIGMA_FITTED_ON_PREFIX}"' in \
+        SCORE_SH.read_text(encoding="utf-8")
 
 
-def test_sigma_table_has_the_three_fields_bench_external_reads(tmp_path):
-    import json
-    import fit_sigma
-    src = tmp_path / "s.json"
-    src.write_text(json.dumps(_scores([("H3K4me3", 4.0, 100)])))
-    out = tmp_path / "sigma.json"
-    fit_sigma.main([str(src), "--out", str(out)])
-    obj = json.loads(out.read_text())
-    assert obj["method"] == "ChromImpute"
-    assert obj["fitted_on"] == "regime.eic_val eval_pairs"
-    assert obj["sigma"]["H3K4me3"] == pytest.approx(2.0)
-
-
-def test_sigma_table_is_accepted_by_the_bench_reader(tmp_path):
-    """The two sides of the boundary must agree on the §4.2 shape, not just on our reading of it."""
-    import json
-    import fit_sigma
+def test_a_training_residual_table_is_accepted_by_the_bench_reader(tmp_path):
+    """§4.2's shape, as `sigma_pass.main` writes it, against the reader that has to take it."""
     from candi.bench.external import read_sigma_table
-    src = tmp_path / "s.json"
-    src.write_text(json.dumps(_scores([("H3K4me3", 4.0, 100), ("H3K9me3", 9.0, 100)])))
+    from competitors.sigma_pass import SIGMA_FITTED_ON_PREFIX
     out = tmp_path / "sigma.json"
-    fit_sigma.main([str(src), "--out", str(out)])
+    out.write_text(json.dumps({
+        "method": "ChromImpute",
+        "fitted_on": f"{SIGMA_FITTED_ON_PREFIX} regime.eic_19.sigma.json T_ self-pairs, "
+                     f"12 cells, chroms ['chr19']",
+        "sigma": {"H3K4me3": 2.0, "H3K9me3": 3.0},
+    }), encoding="utf-8")
     table = read_sigma_table(out)
     assert table["sigma"]["H3K9me3"] == pytest.approx(3.0)
+    assert str(table["fitted_on"]).startswith(SIGMA_FITTED_ON_PREFIX)

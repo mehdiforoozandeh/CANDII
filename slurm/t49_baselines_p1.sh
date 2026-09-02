@@ -47,16 +47,16 @@
 # `tests/test_baselines.py::test_the_assertion_pass_changes_nothing_but_the_manifest` holds it there
 # byte for byte.
 #
-# WHY eic_pilot IS STILL REFUSED FOR knn/marginal (exit 3)
-# --------------------------------------------------------
-# `competitors/baselines/generate.py` reads `train_chroms` RAW and has no `regions` support, so
-# under `regime.eic_pilot.json` the kNN similarity table and the per-assay marginal would fit over
-# 18 WHOLE chromosomes (~2.7 Gbp) instead of the 25,588,197 bp the regime declares — every other
-# method under that regime sees the Pilot Regions only. That is a Rule 2 break, so the guard below
-# refuses it, and D1's second pilot unit for those three is blocked until either `generate.py`
-# honours `regions` or the PI rules the whole-chromosome fit acceptable and on the record. `avg` and
-# `avg-arcsinh` are unaffected: no training locus enters them, which is why the guard fires only
-# when a regime-dependent method is requested.
+# eic_pilot IS NO LONGER REFUSED FOR knn/marginal — the exit-3 guard is gone (2026-09-01)
+# ----------------------------------------------------------------------------------------
+# It refused because `competitors/baselines/generate.py` read `train_chroms` RAW: under
+# `regime.eic_pilot.json` the kNN similarity table and the per-assay marginal would have been fitted
+# over 18 WHOLE chromosomes (~2.7 Gbp) instead of the 25,588,197 bp the regime declares, where every
+# other method under that regime sees the Pilot Regions only. That is a Rule 2 break. `generate.py`
+# now honours the `regions` block: `Panel.contained_bins` cuts `similarity_table` and `fit_marginal`
+# to the bins lying wholly inside a declared region, on the TRAIN split only (D32), so the pilot
+# unit for those three is a fit on the loci the regime names. `avg` and `avg-arcsinh` are unaffected
+# either way — no training locus enters them, which is what makes them the collapsed two.
 #
 # CPU ONLY, AND NO GRES ANY MORE. The arithmetic is numpy over h5py reads and NOTHING HERE OPENS
 # CUDA. It does load torch — `generate.py` imports `candi.store.reader`, and `candi/__init__.py`
@@ -138,15 +138,6 @@ if [ -n "$COLLAPSED" ] && [ "$REGNAME" != "$COLLAPSE_REGIME" ]; then
     echo "      for one unit. Drop them from METHODS, or set COLLAPSE_REGIME if the canonical" >&2
     echo "      regime has changed." >&2
     exit 2
-fi
-
-if [ -n "$DEPENDENT" ] && \
-   python -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" "$REGIME"; then
-    echo "[t49] REFUSING: $REGIME declares a \`regions\` BED and$DEPENDENT fit on the regime's" >&2
-    echo "      training loci. generate.py reads train_chroms RAW and has no regions support, so" >&2
-    echo "      they would fit over WHOLE chromosomes instead of the declared region set. Rule 2" >&2
-    echo "      break — see this script's header. Raise it; do not add a flag to get past it." >&2
-    exit 3
 fi
 
 # The panel regime: the DECLARED eval_pairs filtered to this panel's targets. Both live regimes

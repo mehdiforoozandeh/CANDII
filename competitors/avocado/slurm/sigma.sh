@@ -12,9 +12,9 @@
 # THE SHAPE, in three steps and no more:
 #
 #   1. DERIVE a training regime -- `tools/sigma_training_regime.py` samples 12 training cells with
-#      seed 890217 and declares them as SELF pairs, [T_x, T_x]. A self-pair's "imputation" target
-#      is a track the model was fit on, so the residual is a training residual by construction and
-#      no V_ or B_ track is opened at any point.
+#      seed 890217 and writes them into `biosamples.eval` with NO `eval_pairs` at all. A self-pair's
+#      "imputation" target is a track the model was fit on, so the residual is a training residual
+#      by construction and no V_ or B_ track is opened at any point.
 #   2. PREDICT those self-pairs into the σ prediction root on /scratch. Avocado needs this
 #      chromosome's genomic factors to predict it at all, and the eval-side fits cover chr20/21/22
 #      only, so a σ chromosome gets its own frozen-trunk fit here (`sigma_<chrom>.pt`). That fit is
@@ -30,11 +30,18 @@
 # chromosomes moves the third decimal while costing a full binning pass and a genomic-factor fit
 # each. Set SIGMA_CHROMS=chr19,chr7 to widen it; the fitter records what it actually read.
 #
-# KNOWN INTEGRATION EDGE, recorded rather than worked around: both `competitors/avocado/index.py:82`
-# and `candi.store.regime:597` refuse a regime whose eval_pairs target a biosample that is also in
-# `biosamples.train`, which is exactly the shape of a self-pair, and `regime:589` refuses
-# train_chroms and eval_chroms that overlap. `tools/sigma_training_regime.py` is what has to come
-# out the far side of those two guards; this launcher only names it.
+# HOW THE SELF-PAIRING IS SPELLED, AND WHY AVOCADO NEEDS NO CHANGE FOR IT. `candi.store.regime`
+# refuses a `[c, c]` pair outright, refuses an eval_pairs target that is also in `biosamples.train`
+# (as does `competitors/avocado/index.py`), and refuses train_chroms overlapping eval_chroms. So the
+# derived file carries NO eval_pairs and names the drawn cells in `biosamples.eval`, which is
+# `bench.harness.StoreSource`'s documented no-pairing path: it self-pairs every cell of the pool and
+# `targets` is every assay that cell holds. `predict.py` walks `_expected(open_source(...))` — the
+# harness itself — so it reads that path for free and this launcher only names it.
+#
+# A METHOD THAT READS `eval_pairs` DIRECTLY DOES NOT GET IT FOR FREE, and Lavawizard's
+# `store_eic._declared_tracks` is the one that did: on this shape it returned an empty track list
+# and wrote a manifest over an empty root. It now takes the same self-pairing fallback (2026-09-01).
+# ChromImpute reaches its targets through `targets_sigma.tsv`, written by its own σ launcher.
 #
 #   mkdir -p slurm-logs && sbatch competitors/avocado/slurm/sigma.sh
 #   mkdir -p slurm-logs && sbatch --export=ALL,REGIME=$PWD/configs/regime.eic_pilot.json \
