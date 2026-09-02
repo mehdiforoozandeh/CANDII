@@ -72,10 +72,18 @@
       "label": "no selection",
       "applies_to": "methods with no checkpoint to pick",
       "eli5": "§5 — this method trains once and produces one model. There is no checkpoint to pick and no knob tuned on V_. It keeps its V_ score, which is a same-panel comparison and worth having. The marker is not cosmetic: V_ gave this method none of the optimistic lift every trainable method got, so its V_→B_ behaviour is not comparable to CANDI's without accounting for that."
+    },
+    "selection-key-pval-mse": {
+      "label": "selected on pval mse",
+      "applies_to": "trainable rivals — Avocado, eDICE, Lavawizard",
+      "eli5": "selects its checkpoint on pval mse, not count-arm CRPS; a deliberate asymmetry that handicaps CANDI — PI ruling 2026-09-01",
+      "detail": "§5 and the 2026-09-01 ruling — the uniform selection rule binds the panel, the instrument, the scope and the cadence, but NOT the key. §7 gives no rival a count head, and the pval CRPS needs a σ-table Rule 1 forbids fitting on V_. So CANDI selects on count-arm CRPS and these three select on pval mse. Which way it cuts, stated so nobody has to re-derive it: CANDI is tuned on an arm no rival can enter while the head-to-head is the pval arm, so CANDI is selected on a different objective from the one it is compared on and the rivals are not. That handicaps CANDI."
     }
   },
   "method_markers": {
-    "eDICE": ["edice-embedding-substitution"],
+    "Avocado": ["selection-key-pval-mse"],
+    "eDICE": ["edice-embedding-substitution", "selection-key-pval-mse"],
+    "Lavawizard": ["selection-key-pval-mse"],
     "ChromImpute": ["no-selection"],
     "knn1": ["no-selection"],
     "knn5": ["no-selection"],
@@ -111,7 +119,7 @@
       },
       "caveats": [
         "Every row that used to be on this page is void (§3.3): the old board scored all 23 chromosomes, chr19 included, and chr19 is the chromosome CANDI trained on. Those numbers are not carried forward, and no new row has been scored yet.",
-        "Under this regime CANDI is in-sample on 1 of 23 chromosomes. That fraction is part of the number's address and is printed on every genome-wide cell.",
+        "Under this regime CANDI is in-sample on 1 of 23 chromosomes. That fraction is part of the number's address, and the page prints it beside any row whose score json carries a per-cell fraction. No producer writes one yet, so no row shows a figure — an absent fraction is drawn as nothing rather than as zero.",
         "The board measures missing-mark transfer within a seen cell type (§8). Every eval pair is a mark the V_ or B_ cell has and its paired T_ cell lacks, so the model always sees other tracks from the same cell type. CANDI's zero-shot claim is not tested here."
       ],
       "reader_badges": [
