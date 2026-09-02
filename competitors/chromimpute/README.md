@@ -221,12 +221,22 @@ come from the §6.1 σ-table and not from the method; no count prediction, becau
 inventing a read depth; no peak score, so the bench falls back to coverage ranking and records
 `has_peak_head=False` (§6.4 requires every ChromImpute peak row be labelled that way).
 
-**There is no usable σ, so the CRPS tier is shut.** `fit_sigma.py` pools the bench's per-track
-`mse` — already a mean squared residual against `V_` truth — and returns its square root; its own
-table says `IN-SAMPLE for the V panel`. §12.2 makes every such σ void under Rule 1, and no
-training-residual σ pass exists anywhere in this tree. `slurm/score.sh` therefore **refuses** a
-`CI_SIGMA` rather than warning about it, matching the guards Avocado, eDICE and Lavawizard carry.
-Without one the run scores the E and P blocks and writes no `gauss_suite` — absent keys, not NaN.
+**σ comes from the training-residual pass, and from nowhere in this tree (D2).** The retired fitter
+here pooled the bench's per-track `mse` — already a mean squared residual against `V_` truth — and
+returned its square root; its own table said `IN-SAMPLE for the V panel`, and §12.2 voids every such
+σ under Rule 1. It is deleted. The replacement is shared with every other point-only method:
+
+```bash
+python tools/sigma_training_regime.py --regime configs/regime.eic_19.json \
+    --n-cells 12 --seed 890217 --out $CI_RUN/regime.eic_19.sigma.json
+python -m competitors.sigma_pass --regime $CI_RUN/regime.eic_19.sigma.json \
+    --pred $CI_RUN/train_pred --out $CI_RUN/sigma.json --method ChromImpute
+```
+
+It needs ChromImpute's predictions for the sampled **training** tracks, not the `V_` panel's. A table
+is usable exactly when its `fitted_on` starts with `training-residuals:`; given one, the run scores
+the D block too. Given none, it scores the E and P blocks and writes no `gauss_suite` — absent keys,
+not NaN.
 
 ## Correctness check (§7.2, "the no-retraining check")
 
