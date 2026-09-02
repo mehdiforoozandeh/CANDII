@@ -2,44 +2,51 @@
 # The naive baselines, GENERATED genome-wide — §4's `genome-wide` scope, which these five do
 # still print (unlike Avocado/ChromImpute/Lavawizard, whose cell §4 blanks).
 #
-# RETARGETED 2026-08-31 for plan/BENCHMARK_DESIGN.md's two live regimes, and READ THE NEXT
-# PARAGRAPH BEFORE LAUNCHING — the §12.2 collapse does NOT hold for all five methods.
+#   mkdir -p slurm-logs
+#   REGIME=configs/regime.eic_19.json PANEL=V_ sbatch --array=0-22%12 slurm/t49_baselines_p2.sh
 #
-# §12.2 rules that the five naive baselines run ONCE, not once per regime, "because their fit is
-# regime-independent, so is their output: the two regimes would produce byte-identical predictions",
-# and asks for an ASSERTION rather than an argument. THE ASSERTION DOES NOT EXIST — there is no test
-# in tests/ or in competitors/ that predicts under both regimes and compares — AND THE CODE SAYS THE
-# CLAIM IS FALSE FOR THREE OF THE FIVE:
+# BOTH HALVES OF `0-22%12` ARE DELIBERATE, and the script declares it below so an omitted `--array`
+# gets the same thing. `0-22`, not `0-23`: `CHROM_LIST` holds 23 chromosomes (chr1..chr22, chrX), so
+# task 23 indexes past the end and dies on `set -u` with an unbound variable. `%12`, because every
+# task imports torch off the shared `/project` venv — `generate.py` imports `candi.store.reader`,
+# and `candi/__init__.py` imports `candi.encoder` — and more than about twelve concurrent imports
+# off that venv fail with partial-module ImportErrors. Nothing here opens CUDA; the cap is about the
+# import, not the GPU. Override the range if you must, but keep a cap of 12 or less.
 #
-#   avg, avg-arcsinh   regime-independent. The contributor set is `biosamples.train` minus the
-#                      target's cell type, and the prediction is a per-bin function of the
-#                      contributors AT THE PREDICTED POSITION. No training locus enters. Collapse
-#                      to one run: correct.
-#   knn1, knn5         `generate.similarity_table` correlates over `panel.train_chroms`
-#                      (generate.py:207-241). Different train_chroms -> a different similarity
-#                      ranking -> different predictions. NOT regime-independent.
-#   marginal           `generate.fit_marginal` pools over `panel.train_chroms`
-#                      (generate.py:262-300). NOT regime-independent.
+# One array task per chromosome, all writing into the SAME pinned prediction roots — a track
+# directory collects one `chr*.npz` per task and is only complete when every task has finished,
+# which is why scoring is a separate, dependent job (`slurm/t49_baselines_score.sh`).
+# `bench.external` refuses a track that covers only some of the scored chromosomes, so a partial
+# array is a loud failure at score time rather than a quiet one.
 #
-# So it is 2 runs collapsed and 3 runs x 2 regimes = 8 method-regime units, not 5 — unless the PI
-# rules otherwise. And `generate.py` reads `train_chroms` RAW: it has no `regions` support at all,
-# so under eic.pilot knn/marginal would fit over 18 WHOLE chromosomes (~2.7 Gbp) instead of the
-# 25,588,197 bp the regime declares. That is a Rule 2 break, and it is why REGIME defaults to
-# eic_19 here and eic_pilot is refused below.
+# HOW MANY TIMES EACH BASELINE RUNS — D1, SETTLED 2026-09-01. `plan/BENCHMARK_DESIGN.md` §12.2 first
+# ruled all five run ONCE rather than once per regime. That holds for `avg` and `avg-arcsinh`, whose
+# every written bin is a function of the contributors AT THE PREDICTED POSITION, and it is false for
+# `knn1`/`knn5` (`generate.similarity_table` correlates over `panel.train_chroms`) and `marginal`
+# (`generate.fit_marginal` pools over them). Eight baseline method-regime units, not five.
+# `slurm/t49_baselines_p1.sh`'s header carries the full statement, the identity assertion that
+# licenses the collapse, and why `regime.eic_pilot.json` is still refused for the fitted three.
 #
-#   mkdir -p slurm-logs && sbatch --array=0-22 slurm/t49_baselines_p2.sh
+# THIS ARRAY DOES NOT STAMP `regime_independent`, and a root without that stamp is refused against
+# the other board by `t49_baselines_score.sh`. After the array finishes — never before, because a
+# generation pass into a stamped root drops the stamp on the manifest merge — stamp it once:
 #
-# One array task per chromosome, all writing into the SAME prediction roots — a track directory
-# collects one `chr*.npz` per task and is only complete when every task has finished, which is why
-# scoring is a separate, dependent job (`t49_baselines_p2_score.sh`). `bench.external` refuses a
-# track that covers only some of the scored chromosomes, so a partial array is a loud failure at
-# score time rather than a quiet one.
+#   ASSERT_ONLY=1 METHODS=avg,avg-arcsinh REGIME=$REGIME PANEL=V_ sbatch slurm/t49_baselines_p1.sh
 #
-# THE POISSON FLOOR HERE IS 1e4, NOT §5.1's 1e6, and that is a deviation on the record.
-# `candi.metrics.nb_crps` cannot evaluate 1e6 (see `competitors/baselines/README.md`), so at the
-# pre-registered value P2's count arm would ship with no CRPS tier at all. P1 is generated at BOTH
-# values so the PI can see the difference cheaply; P2 reads ~370 GB off the store per pass and is
-# not run twice to make the same point. The value is stamped in every manifest as `poisson_n`.
+# One chromosome, two pval-cheap methods, minutes. It is a separate job because the check is a
+# read-modify-write on a shared manifest and 23 concurrent tasks would race it.
+#
+# THIS ARRAY IS `V_` ONLY. `B_` is written ONCE (§5) and the once-only guard is a check on the
+# target root, which every task of an array would race. A genome-wide `B_` root comes from
+# `t49_baselines_p1.sh` with `PANEL=B_ B_ONCE=1` and `CHROMS` set to all 23 — one job, one root, one
+# manifest. Generation is the cheap half (~4.5 min for all five methods on chr21, so ~5 h
+# genome-wide), so serialising it costs far less than a raced blind panel.
+#
+# THE POISSON FLOOR IS §5.1's PRE-REGISTERED 1e6 AGAIN. It was 1e4 here because
+# `candi.metrics.nb_crps` returned NaN above ~2e4 and the count arm shipped with no CRPS tier at
+# all; t56 fixed that (`test_the_preregistered_poisson_floor_is_scoreable_by_candi_bench`). The
+# value is stamped in every manifest as `poisson_n`, and it is part of `_MANIFEST_IDENTITY`, so two
+# tasks generating at different floors into one root fail loudly instead of merging.
 #
 # READ GENOME-WIDE NUMBERS WITH §4's IN-SAMPLE BADGE IN MIND, plus one specific to these baselines:
 # the pass covers the regime's TRAIN chromosomes, so the kNN similarity ranking and the per-assay
@@ -47,28 +54,42 @@
 # positions, which is the same fact that makes `avg` and `avg-arcsinh` the only two of the five that
 # genuinely collapse to one run.
 #
-# WHY --gres ON A CPU-ONLY JOB: see slurm/bake.sh.
+# CPU ONLY, AND NO GRES ANY MORE: the arithmetic is numpy over h5py reads and no task opens CUDA.
+# It does load torch, through `candi.store.reader` -> `candi/__init__.py` -> `candi.encoder`, which
+# is what the `%12` cap on the array is for. The MIG slice this script used to request was a
+# fairshare workaround (slurm/bake.sh) for a job that never opened CUDA. Invariant 13 allows the
+# 1g.10gb slice or nothing; this is nothing.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=candi_t49_p2gen
 #SBATCH --output=slurm-logs/t49_p2gen_%A_%a.out
 #SBATCH --error=slurm-logs/t49_p2gen_%A_%a.err
+#SBATCH --array=0-22%12
 #SBATCH --time=11:00:00
-#SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=4
 
 set -uo pipefail
 
-KIT="${KIT:-/project/def-maxwl/$USER/CANDII_t78_code}"
+KIT="${KIT:-/project/def-maxwl/mforooz/CANDII_main}"
 VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 REGIME="${REGIME:-configs/regime.eic_19.json}"
-PRED="${PRED:-/project/def-maxwl/$USER/t49_baselines/p2/preds}"
+PANEL="${PANEL:-V_}"
 METHODS="${METHODS:-avg,avg-arcsinh,knn1,knn5,marginal}"
-POISSON_N="${POISSON_N:-1e4}"
+COLLAPSE_REGIME="${COLLAPSE_REGIME:-eic_19}"
+POISSON_N="${POISSON_N:-1e6}"
+V_PRED_ROOT="${V_PRED_ROOT:-/scratch/$USER/t81_pred}"
 
 CHROM_LIST=(chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12 chr13 chr14 chr15 \
             chr16 chr17 chr18 chr19 chr20 chr21 chr22 chrX)
-CHROM="${CHROM_LIST[${SLURM_ARRAY_TASK_ID:-20}]}"
+TASK="${SLURM_ARRAY_TASK_ID:-20}"
+# A `--array` that runs past the list is a silent hole in the root — the pass would finish with one
+# chromosome missing and only `bench.external` would notice, hours later. Name it here instead.
+if [ "$TASK" -ge "${#CHROM_LIST[@]}" ]; then
+    echo "[t49-p2] REFUSING: task $TASK, but there are only ${#CHROM_LIST[@]} chromosomes " >&2
+    echo "         (indices 0-$(( ${#CHROM_LIST[@]} - 1 ))). The array is 0-22%12." >&2
+    exit 2
+fi
+CHROM="${CHROM_LIST[$TASK]}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
 export MPLBACKEND=Agg
@@ -78,34 +99,76 @@ cd "$KIT"
 source "$KIT/slurm/_kit_pin.sh"
 export PYTHONPATH="$KIT/src:$KIT"
 
-# The old guard refused regime.eic_test.json, the separate B-pair regime. THE LIVE REGIMES CARRY
-# THE B_ PAIRS INSIDE THEM — eic_19 and eic_pilot each declare 38 eval_pairs, 26 V_ and 12 B_ — so
-# a name check protects nothing any more. §5 rules B_ is touched ONCE, at the very end. Derive a
-# V_-only regime the way slurm/t81_train_candi.sh does, and refuse a regime that still has B_ in it
-# unless this IS the once-only B_ run.
-case "$REGIME" in *eic_test*) echo "[t49] REFUSING: $REGIME is the B-pair regime (A4)"; exit 2;; esac
-if [ "${ALLOW_B_PAIRS:-0}" != "1" ]; then
-  python - "$REGIME" <<'PYEOF' || exit 2
-import json, sys
-d = json.load(open(sys.argv[1]))
-b = [p for p in d.get("eval_pairs", []) if str(p[1]).startswith("B_")]
-if b:
-    sys.exit(f"[t49] REFUSING: {sys.argv[1]} declares {len(b)} B_ eval pair(s). BENCHMARK_DESIGN "
-             f"\u00a75 touches B_ ONCE, from the selected checkpoint. Derive a V_-only regime "
-             f"(see slurm/t81_train_candi.sh), or set ALLOW_B_PAIRS=1 if this IS the final B_ run.")
-PYEOF
+if [ "$PANEL" != "V_" ]; then
+    echo "[t49-p2] REFUSING: PANEL=$PANEL. This array is V_ only — B_ is written once and an" >&2
+    echo "         array would race the once-only guard. Use t49_baselines_p1.sh with PANEL=B_," >&2
+    echo "         B_ONCE=1 and CHROMS set to all 23." >&2
+    exit 4
 fi
-if python -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" "$REGIME"; then
-  echo "[t49] REFUSING: $REGIME declares a \`regions\` BED. competitors/baselines/generate.py reads" >&2
-  echo "      train_chroms raw and has no regions support, so knn1/knn5/marginal would fit over" >&2
-  echo "      WHOLE chromosomes instead of the Pilot Regions. Rule 2 break. Raise it." >&2
-  exit 3
-fi
-echo "[t49-p2] host=$(hostname) commit=$(git rev-parse --short HEAD) chrom=$CHROM n=$POISSON_N"
+REGNAME="$(basename "$REGIME" .json)"; REGNAME="${REGNAME#regime.}"
 
-mkdir -p "$PRED"
+COLLAPSED=""; DEPENDENT=""
+for M in ${METHODS//,/ }; do
+    case "$M" in
+        avg|avg-arcsinh)     COLLAPSED="$COLLAPSED $M" ;;
+        knn1|knn5|marginal)  DEPENDENT="$DEPENDENT $M" ;;
+        *) echo "[t49-p2] REFUSING: $M is not a baseline method." >&2; exit 2 ;;
+    esac
+done
+
+if [ -n "$COLLAPSED" ] && [ "$REGNAME" != "$COLLAPSE_REGIME" ]; then
+    echo "[t49-p2] REFUSING:$COLLAPSED collapse to ONE run (D1), under $COLLAPSE_REGIME. Drop" >&2
+    echo "         them from METHODS for a $REGNAME pass." >&2
+    exit 2
+fi
+
+if [ -n "$DEPENDENT" ] && \
+   python -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" "$REGIME"; then
+    echo "[t49-p2] REFUSING: $REGIME declares a \`regions\` BED and$DEPENDENT fit on the regime's" >&2
+    echo "         training loci. generate.py has no regions support, so they would fit over WHOLE" >&2
+    echo "         chromosomes instead of the declared region set. Rule 2 break — raise it." >&2
+    exit 3
+fi
+
+# The panel regime: the DECLARED eval_pairs filtered to V_. Both live regimes carry all 38 pairs
+# (26 V_ + 12 B_), so without this the array would predict B_ on the way past.
+#
+# IT LIVES BESIDE THE ROOTS, NOT IN $SLURM_TMPDIR, AND THAT IS LOAD-BEARING. `generate.py` records
+# the regime PATH in each manifest and `regime` is one of the `_MANIFEST_IDENTITY` fields, so every
+# task of this array must be handed the SAME path or the second one to finish refuses to merge and
+# the root loses a chromosome. $SLURM_TMPDIR is per node. Written through a rename so a task never
+# reads a half-file; the content is a deterministic function of $REGIME and $PANEL.
+WORK="${SLURM_TMPDIR:-/tmp}/t49_${SLURM_JOB_ID:-$$}_${SLURM_ARRAY_TASK_ID:-0}"
+REG_DIR="$V_PRED_ROOT/_regimes"
+mkdir -p "$WORK" "$REG_DIR"
+PANEL_REGIME="$REG_DIR/regime.$REGNAME.$PANEL.json"
+python tools/declare_eval_pairs.py split --regime "$REGIME" --panel "$PANEL" \
+    --out "$PANEL_REGIME.$$.tmp" && mv -f "$PANEL_REGIME.$$.tmp" "$PANEL_REGIME" \
+    || { echo "[t49-p2] could not derive the $PANEL regime" >&2; exit 2; }
+python - "$PANEL_REGIME" "$PANEL" <<'PYEOF' || exit 2
+import json, sys
+pairs = json.load(open(sys.argv[1])).get("eval_pairs", [])
+bad = [p for p in pairs if not str(p[1]).startswith(sys.argv[2])]
+if bad or not pairs:
+    sys.exit(f"[t49-p2] REFUSING: {sys.argv[1]} carries {len(bad)} pair(s) outside {sys.argv[2]} "
+             f"({len(pairs)} declared). The split did not do what its name says.")
+PYEOF
+
+# The pinned roots are <Method>/<regime>/V_ and `generate.py` writes <out>/<method>, so each
+# method's root is reached through a per-task symlink named for the method. One pass over the store
+# then serves every method — this array reads ~370 GB in total and must not read it once per method.
+STAGE="$WORK/roots"
+mkdir -p "$STAGE"
+for M in ${METHODS//,/ }; do
+    R="$V_PRED_ROOT/$M/$REGNAME/$PANEL"
+    mkdir -p "$R" && ln -sfn "$R" "$STAGE/$M" || exit 1
+done
+
+echo "[t49-p2] host=$(hostname) commit=$(git rev-parse --short HEAD) regime=$REGNAME panel=$PANEL"
+echo "[t49-p2] chrom=$CHROM methods=$METHODS n=$POISSON_N roots=$V_PRED_ROOT/<M>/$REGNAME/$PANEL"
+
 python -m competitors.baselines.generate \
-    --store "$REGIME" --out "$PRED" --chroms "$CHROM" --methods "$METHODS" \
+    --store "$PANEL_REGIME" --out "$STAGE" --chroms "$CHROM" --methods "$METHODS" \
     --poisson-n "$POISSON_N"
 rc=$?
 echo "[t49-p2] chrom=$CHROM exit=$rc"
