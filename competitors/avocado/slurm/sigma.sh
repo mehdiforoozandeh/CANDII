@@ -43,6 +43,11 @@
 # and wrote a manifest over an empty root. It now takes the same self-pairing fallback (2026-09-01).
 # ChromImpute reaches its targets through `targets_sigma.tsv`, written by its own σ launcher.
 #
+# SIGMA_ALLOW_MISSING=1 fits over the tracks the predict pass DID write, instead of refusing the
+# root. Set it only after reading the predictor's own skip lines and confirming every skipped track
+# is a rare-mark empty leave-one-out pool -- the json's `skipped_tracks` then names them and the
+# board quotes them. Default 0, because the refusal is what catches a half-written root.
+#
 #   mkdir -p slurm-logs && sbatch competitors/avocado/slurm/sigma.sh
 #   mkdir -p slurm-logs && sbatch --export=ALL,REGIME=$PWD/configs/regime.eic_pilot.json \
 #       competitors/avocado/slurm/sigma.sh
@@ -63,7 +68,9 @@ SIGMA="${SIGMA:-$SIGMA_JSON}"
 PRED="${PRED:-$TRAIN_PRED}"
 SIGMA_REGIME="$WS/regime.${REGIME_NAME}.sigma_train.json"
 SHARED_CK="$WS/ckpt/shared_${SHARED_SCOPE}.pt"
+SIGMA_ALLOW_MISSING="${SIGMA_ALLOW_MISSING:-0}"
 mkdir -p "$(dirname "$SIGMA")" "$PRED"
+echo "[avo_sigma] sigma_allow_missing=$SIGMA_ALLOW_MISSING"
 
 if [ -s "$SIGMA" ]; then
     echo "[avo_sigma] $SIGMA exists, keeping it (a refit would change what every CRPS means)"
@@ -118,6 +125,8 @@ python "$AVO/predict.py" --regime "$SIGMA_REGIME" --out "$PRED" --write-manifest
 FIT=(--regime "$SIGMA_REGIME" --pred "$PRED" --out "$SIGMA" --method "$METHOD"
      --chroms "$SIGMA_CHROMS")
 [ -n "$_SIG_BED" ] && FIT+=(--eval-regions "$_SIG_BED")
+# See the header: on 1 the fitter fits the present tracks and names the rest in `skipped_tracks`.
+[ "$SIGMA_ALLOW_MISSING" = "1" ] && FIT+=(--allow-missing)
 python -m competitors.sigma_pass "${FIT[@]}" || exit 1
 
 # It has to say what it is, or score.sh will refuse it in three hours' time instead of now.

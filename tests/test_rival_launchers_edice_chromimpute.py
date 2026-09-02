@@ -477,6 +477,64 @@ def test_the_chromimpute_sigma_fit_does_not_pass_the_apply_grid_as_chromosomes()
     assert "--regime $SIGMA_REGIME" in fit, "the fit must read the DERIVED sigma regime"
 
 
+# ---------------------------------------------------------------------------------------------
+# the missing-track hatch on the σ fit
+# ---------------------------------------------------------------------------------------------
+#
+# A rare mark held by ONE training cell has an empty leave-one-out pool, so no method can predict
+# it on a self-pair. Lavawizard's eic_pilot σ predict pass wrote 96 of the 98 declared tracks and
+# skipped `T_IMR-90 H2AK9ac` and `T_trophoblast_cell H4K12ac` (Fir 57836027,
+# cruxvault/results/t81/W3_LAVA_PILOT.md); `competitors/sigma_pass.py` then refused the partial
+# root, because a σ pooled over whichever tracks finished reads as a σ over the whole training
+# panel in every table downstream. `--allow-missing` fits on what is there and names the gap in
+# `skipped_tracks`. Each launcher must be able to say it from the launch line, and must not say it
+# by default.
+
+
+@pytest.mark.parametrize("script", SIGMA_LAUNCHERS, ids=lambda p: p.parent.parent.name)
+def test_the_sigma_stage_takes_allow_missing_from_the_environment(script: Path):
+    text = _code(script)
+    assert "SIGMA_ALLOW_MISSING:-0" in text, (
+        f"{script.name} has no SIGMA_ALLOW_MISSING pass-through defaulting to 0, so a root "
+        f"missing a rare mark's track can only be fit by editing the file")
+    assert any("echo" in ln and "sigma_allow_missing=$SIGMA_ALLOW_MISSING" in ln
+               for ln in text.splitlines()), (
+        f"{script.name} does not echo sigma_allow_missing, so a log cannot say whether the table "
+        f"it wrote was pooled over a partial panel")
+    for phrase in ("skipped_tracks", "leave-one-out"):
+        assert phrase in _text(script), (
+            f"{script.name}'s header does not name `{phrase}` -- the operator has to be told what "
+            f"to confirm before setting the flag, and where the gap is then recorded")
+
+
+def test_the_edice_sigma_fit_appends_allow_missing_only_when_asked():
+    """`EXTRA` is the fit's own argument array, and it must stay last on the fitter's argv."""
+    text = _code(EDICE / "sigma.sh")
+    hits = [ln.strip() for ln in text.splitlines() if "--allow-missing" in ln]
+    assert hits == ['[ "$SIGMA_ALLOW_MISSING" = "1" ] && EXTRA+=(--allow-missing)'], (
+        f"edice/sigma.sh does not append `--allow-missing` conditionally: {hits}")
+    fit = _continued(text, "competitors.sigma_pass")
+    assert fit.rstrip().endswith('"${EXTRA[@]}"'), (
+        f"edice/sigma.sh's fit does not end on the EXTRA expansion, so the flag may not reach "
+        f"the fitter at all:\n  {fit}")
+
+
+def test_the_chromimpute_sigma_fit_decides_the_flag_when_it_writes_the_fit_script():
+    """The fit is a separate job hours later, so the flag has to be baked into `sigma_fit.sh`.
+
+    `$RUN/sigma_fit.sh` is written by an UNQUOTED heredoc, so `$ALLOW_MISSING_ARG` is expanded as
+    the file is written and the file itself records which way the fit was asked to go. A runtime
+    read inside the generated script would depend on what that job's environment happened to
+    carry, and `--export=ALL` is not what submits it.
+    """
+    text = _code(CHROMIMPUTE / "sigma.sh")
+    assert 'if [ "$SIGMA_ALLOW_MISSING" = "1" ]; then ALLOW_MISSING_ARG="--allow-missing"; fi' \
+        in text, "chromimpute/sigma.sh does not resolve ALLOW_MISSING_ARG on the login node"
+    assert "EXTRA=($ALLOW_MISSING_ARG)" in text, (
+        "chromimpute/sigma.sh's generated fit script does not seed EXTRA from ALLOW_MISSING_ARG, "
+        "so the flag never reaches the job that runs the fit")
+
+
 def test_the_sigma_array_throttle_is_not_confused_with_the_torch_import_cap():
     """Two different numbers, two different reasons; conflating them moved the wrong one once."""
     text = _text(CHROMIMPUTE / "sigma.sh")
@@ -808,12 +866,16 @@ def chromimpute_submissions(tmp_path_factory):
         "CI_PRED_ROOT": str(tmp / "pred"),
         "CI_CKPT_DIR": str(tmp / "ckpt"),
     })
-    out = {"run": run}
+    # The σ stage reads this one off the plain environment, so a value in the operator's own shell
+    # would decide what the fixture generates. The default is what is under test here.
+    env.pop("SIGMA_ALLOW_MISSING", None)
+    sigma_env = {"CI_RUN": str(run),
+                 "CI_SIGMA_OUT": str(tmp / "sigma.json"),
+                 "CI_TRAIN_PRED": str(tmp / "train_pred")}
+    out = {"run": run, "env": env, "sigma_env": sigma_env}
     for driver, args, extra in (
         ("submit.sh", [str(run)], {}),
-        ("sigma.sh", [], {"CI_RUN": str(run),
-                          "CI_SIGMA_OUT": str(tmp / "sigma.json"),
-                          "CI_TRAIN_PRED": str(tmp / "train_pred")}),
+        ("sigma.sh", [], sigma_env),
     ):
         before = len(list(records.glob("*.json"))) if records.exists() else 0
         r = subprocess.run(["bash", str(CHROMIMPUTE / driver), *args],
@@ -871,6 +933,45 @@ def test_the_login_node_prepare_call_gets_the_whole_chromosome_list(chromimpute_
     value was three chromosomes -- and `chrominfo.txt` is what `Apply` is then handed."""
     grid = (chromimpute_submissions["run"] / "input" / "chrominfo.txt").read_text().split()
     assert [g for g in grid if g.startswith("chr")] == CHROMS_THREE.split(",")
+
+
+def test_the_generated_fit_script_refuses_a_partial_root_by_default(chromimpute_submissions):
+    """The fixture ran the driver with SIGMA_ALLOW_MISSING unset, so the flag must not be there."""
+    gen = (chromimpute_submissions["run"] / "sigma_fit.sh").read_text(encoding="utf-8")
+    assert "competitors.sigma_pass" in gen, (
+        "the generated sigma_fit.sh does not call the shared fitter at all")
+    assert "--allow-missing" not in gen, (
+        "the generated sigma_fit.sh passes --allow-missing with SIGMA_ALLOW_MISSING unset, so a "
+        "half-written apply pass would be pooled into σ with nothing in the table saying so")
+    assert "EXTRA=()" in gen, (
+        f"the generated sigma_fit.sh does not seed an empty EXTRA:\n{gen}")
+
+
+def test_the_generated_fit_script_carries_allow_missing_when_the_environment_sets_it(
+        chromimpute_submissions, tmp_path):
+    """Same driver, same run directory, one variable different -- and it reaches the fit args.
+
+    Run against a COPY of the fixture's run directory, so the default-off artifact the test above
+    reads is not rewritten out from under it.
+    """
+    run = tmp_path / "run"
+    shutil.copytree(chromimpute_submissions["run"], run)
+    env = {**chromimpute_submissions["env"], **chromimpute_submissions["sigma_env"],
+           "CI_RUN": str(run),
+           "SBATCH_RECORD_DIR": str(tmp_path / "records"),
+           "SIGMA_ALLOW_MISSING": "1"}
+    r = subprocess.run(["bash", str(CHROMIMPUTE / "sigma.sh")], env=env, cwd=str(tmp_path),
+                       capture_output=True, text=True)
+    assert r.returncode == 0, f"sigma.sh exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert "sigma_allow_missing=1" in r.stdout, (
+        f"the driver does not say in its log that it took the flag:\n{r.stdout}")
+    gen = (run / "sigma_fit.sh").read_text(encoding="utf-8")
+    assert "EXTRA=(--allow-missing)" in gen, (
+        f"SIGMA_ALLOW_MISSING=1 did not reach the generated fit script:\n{gen}")
+    fit = _continued(gen, "competitors.sigma_pass")
+    assert '"${EXTRA[@]}"' in fit, (
+        f"the generated fit command does not expand EXTRA, so the flag is set and never passed:\n"
+        f"  {fit}")
 
 
 def _ci_vars_stage_reads() -> set:

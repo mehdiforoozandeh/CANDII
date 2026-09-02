@@ -128,6 +128,45 @@ def test_sigma_derives_a_training_regime_and_fits_with_the_shared_pass(method: s
         f"table and every pinned root would be keyed on the wrong name")
 
 
+# ------------------------------------------------- the missing-track hatch on the σ fit
+#
+# A rare mark held by ONE training cell has an empty leave-one-out pool, so no method can predict
+# it on a self-pair: Lavawizard's eic_pilot σ predict pass wrote 96 of the 98 declared tracks and
+# skipped `T_IMR-90 H2AK9ac` and `T_trophoblast_cell H4K12ac` (Fir 57836027,
+# cruxvault/results/t81/W3_LAVA_PILOT.md). `competitors/sigma_pass.py` refuses a partial root by
+# default -- a σ pooled over whichever tracks finished reads as a σ over the whole panel -- and
+# takes `--allow-missing` to fit on what is there and name the gap in `skipped_tracks`. So the
+# launcher needs a way to say it from the launch line, and the refusal has to stay the default.
+
+
+@pytest.mark.parametrize("method", _every("sigma.sh"))
+def test_sigma_takes_allow_missing_from_the_environment_and_defaults_to_the_refusal(method: str):
+    t = _read(method, "sigma.sh")
+    assert 'SIGMA_ALLOW_MISSING="${SIGMA_ALLOW_MISSING:-0}"' in t, (
+        f"{method}/sigma.sh has no SIGMA_ALLOW_MISSING pass-through, so a root missing a rare "
+        f"mark's track can only be fit by editing the file")
+    code = [ln.strip() for ln in t.splitlines() if not ln.strip().startswith("#")]
+    hits = [ln for ln in code if "--allow-missing" in ln]
+    assert hits == ['[ "$SIGMA_ALLOW_MISSING" = "1" ] && FIT+=(--allow-missing)'], (
+        f"{method}/sigma.sh does not append `--allow-missing` to the fit args conditionally on "
+        f"SIGMA_ALLOW_MISSING: {hits}. Unconditional, it would wave through the half-written "
+        f"prediction root the refusal exists to catch.")
+
+
+@pytest.mark.parametrize("method", _every("sigma.sh"))
+def test_sigma_says_in_the_log_and_in_the_header_which_way_it_was_fit(method: str):
+    """A σ fitted over 96 of 98 tracks and one fitted over all 98 look identical in the table."""
+    t = _read(method, "sigma.sh")
+    assert any("echo" in ln and "sigma_allow_missing=$SIGMA_ALLOW_MISSING" in ln
+               for ln in t.splitlines()), (
+        f"{method}/sigma.sh does not echo sigma_allow_missing, so a log cannot say whether the "
+        f"table it wrote was pooled over a partial panel")
+    for phrase in ("skipped_tracks", "leave-one-out"):
+        assert phrase in t, (
+            f"{method}/sigma.sh's header does not name `{phrase}` -- the operator has to be told "
+            f"what to confirm before setting the flag, and where the gap is then recorded")
+
+
 @pytest.mark.parametrize("stage", ["score.sh", "sigma.sh", "predict.sh", "train.sh", "_env.sh"])
 @pytest.mark.parametrize("method", list(METHODS))
 def test_no_launcher_keeps_the_void_sigma_path_or_its_override(method: str, stage: str):

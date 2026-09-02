@@ -29,6 +29,13 @@
 # A `regions` REGIME IS RUN LIKE ANY OTHER (2026-09-01). Its training grid is one declared
 # pseudo-chromosome per Pilot Region, and `collect.py --regime` maps each of those back to its
 # chromosome and bin offset — so the fit below is handed the SOURCE regime, not the derived one.
+#
+# SIGMA_ALLOW_MISSING=1 fits over the tracks the apply pass DID write, instead of refusing the
+# root. Set it only after reading the predictor's own skip lines and confirming every skipped track
+# is a rare-mark empty leave-one-out pool -- the json's `skipped_tracks` then names them and the
+# board quotes them. Default 0, because the refusal is what catches a half-written root. It is read
+# HERE, on the login node, and written into `$RUN/sigma_fit.sh`: the fit runs hours later in a
+# different job, so the generated script is what has to record which way it was fit.
 set -euo pipefail
 
 REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_main}
@@ -48,6 +55,11 @@ N_CELLS=${CI_SIGMA_CELLS:-12}
 SIGMA_SEED=${CI_SIGMA_SEED:-890217}
 TRAIN_PRED=${CI_TRAIN_PRED:-/scratch/mforooz/t81_sigma/ChromImpute/$REGIME_NAME/train_pred}
 SIGMA_OUT=${CI_SIGMA_OUT:-/project/def-maxwl/mforooz/t81_sigma/ChromImpute/sigma_$REGIME_NAME.json}
+# The header says when to set it. `ALLOW_MISSING_ARG` is what the generated fit script below gets:
+# empty by default, so the flag appears in `$RUN/sigma_fit.sh` only when it was asked for.
+SIGMA_ALLOW_MISSING=${SIGMA_ALLOW_MISSING:-0}
+ALLOW_MISSING_ARG=""
+if [ "$SIGMA_ALLOW_MISSING" = "1" ]; then ALLOW_MISSING_ARG="--allow-missing"; fi
 
 for f in "$RUN/input/inputinfofile.txt" "$RUN/input/chrominfo.train.txt" "$RUN/lists/gtd.txt"; do
   [ -s "$f" ] || { echo "[error] $f is missing or empty — run submit.sh through gtd first"; exit 2; }
@@ -76,6 +88,7 @@ echo "[ci_sigma] drawn training regime: $DRAW"
 # wrote. Dropping the whole cell keeps the regime and the prediction root describing the same thing.
 cd "$HERE"
 echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
+echo "[ci_sigma] sigma_allow_missing=$SIGMA_ALLOW_MISSING"
 PYTHONPATH=$REPO/src:$HERE $PY - "$DRAW" "$SIGMA_REGIME" "$RUN" "$STORE" <<'PYEOF'
 import json, sys
 from pathlib import Path
@@ -254,7 +267,9 @@ BED=\$(PYTHONPATH=$REPO/src $PY -c "
 import json,sys
 d=json.load(open(sys.argv[1]))
 print((d.get('regions') or {}).get('bed',''))" $SIGMA_REGIME)
-EXTRA=()
+# \`\$ALLOW_MISSING_ARG\` is expanded HERE, when this script is written: empty unless the login-node
+# run had SIGMA_ALLOW_MISSING=1, so the file itself says which way the fit was asked to go.
+EXTRA=($ALLOW_MISSING_ARG)
 [ -n "\$BED" ] && EXTRA+=(--eval-regions "\$BED")
 cd $REPO
 # NO \`--chroms\`. \$GRID is the APPLY grid, whose names under a \`regions\` regime are region

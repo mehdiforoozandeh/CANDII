@@ -54,6 +54,11 @@
 # row. Widening is an affordance for a later regime, not one either live regime can use; the fitter
 # records what it actually read.
 #
+# SIGMA_ALLOW_MISSING=1 fits over the tracks the predict pass DID write, instead of refusing the
+# root. Set it only after reading the predictor's own skip lines and confirming every skipped track
+# is a rare-mark empty leave-one-out pool -- the json's `skipped_tracks` then names them and the
+# board quotes them. Default 0, because the refusal is what catches a half-written root.
+#
 # KNOWN INTEGRATION EDGE, recorded rather than worked around: `candi.store.regime:597` refuses a
 # regime whose eval_pairs target a train biosample, and `:589` refuses train_chroms and eval_chroms
 # that overlap. `tools/sigma_training_regime.py` is what has to come out the far side of both; this
@@ -84,7 +89,9 @@ PRED="${PRED:-$TRAIN_PRED}"
 CKPT="${CKPT:-$RUNS/ckpt}"
 SIGMA_REGIME="$RUNS/regime.${REGIME_NAME}.sigma_train.json"
 SHARED_CK="$CKPT/guacamole_${SHARED_STEM}.pt"
+SIGMA_ALLOW_MISSING="${SIGMA_ALLOW_MISSING:-0}"
 mkdir -p "$(dirname "$SIGMA")" "$PRED"
+echo "[sigma] sigma_allow_missing=$SIGMA_ALLOW_MISSING"
 
 if [ -s "$SIGMA" ]; then
   echo "[sigma] $SIGMA exists, keeping it (a refit would change what every CRPS means)"
@@ -163,6 +170,8 @@ done
 FIT=(--regime "$SIGMA_REGIME" --pred "$PRED" --out "$SIGMA" --method "$METHOD"
      --chroms "$SIGMA_CHROMS")
 [ -n "$_SIG_BED" ] && FIT+=(--eval-regions "$_SIG_BED")
+# See the header: on 1 the fitter fits the present tracks and names the rest in `skipped_tracks`.
+[ "$SIGMA_ALLOW_MISSING" = "1" ] && FIT+=(--allow-missing)
 srun python -u -m competitors.sigma_pass "${FIT[@]}" || exit 1
 
 # It has to say what it is, or score.sh will refuse it in three hours' time instead of now.

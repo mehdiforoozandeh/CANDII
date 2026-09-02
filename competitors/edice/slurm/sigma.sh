@@ -24,6 +24,11 @@
 # eighteen. A pilot fit is not a whole-genome pass -- narrow it with SIGMA_CHROMS and let the
 # regime's own Pilot Regions restrict the residuals inside what is written.
 #
+# SIGMA_ALLOW_MISSING=1 fits over the tracks the predict pass DID write, instead of refusing the
+# root. Set it only after reading the predictor's own skip lines and confirming every skipped track
+# is a rare-mark empty leave-one-out pool -- the json's `skipped_tracks` then names them and the
+# board quotes them. Default 0, because the refusal is what catches a half-written root.
+#
 # --gres is the AGENTS.md hard-rule MIG slice and is never any other spec.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t81_edice_sigma
@@ -58,6 +63,7 @@ SIGMA_SEED="${SIGMA_SEED:-890217}"
 # decoder is 2048 wide, so 4096 x 98 x 2048 x 4 B = 3.06 GiB per activation and the job OOM'd at
 # 30 s. 1024 is 0.77 GiB and costs no measurable time, because the pass is bound by the bin count.
 PREDICT_BATCH="${PREDICT_BATCH:-1024}"
+SIGMA_ALLOW_MISSING="${SIGMA_ALLOW_MISSING:-0}"
 TRAIN_PRED="${TRAIN_PRED:-/scratch/mforooz/t81_sigma/eDICE/${REGIME_NAME}/train_pred}"
 SIGMA_OUT="${SIGMA_OUT:-/project/def-maxwl/mforooz/t81_sigma/eDICE/sigma_${REGIME_NAME}.json}"
 
@@ -80,7 +86,7 @@ mkdir -p "$WS" "$(dirname "$SIGMA_OUT")"
 SIGMA_REGIME="$WS/regime.${REGIME_NAME}.sigma.json"
 
 echo "[edice-σ] regime=$REGIME_NAME  n_targets=$N_TARGETS  n_cells=$N_CELLS  seed=$SIGMA_SEED"
-echo "[edice-σ] predict_batch=$PREDICT_BATCH"
+echo "[edice-σ] predict_batch=$PREDICT_BATCH  sigma_allow_missing=$SIGMA_ALLOW_MISSING"
 echo "[edice-σ] host=$(hostname)"; nvidia-smi -L || true
 
 # --- 1. the training regime ----------------------------------------------------------------------
@@ -131,6 +137,8 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 print((d.get('regions') or {}).get('bed',''))" "$SIGMA_REGIME") || exit $?
 [ -n "$BED" ] && EXTRA+=(--eval-regions "$BED")
+# See the header: on 1 the fitter fits the present tracks and names the rest in `skipped_tracks`.
+[ "$SIGMA_ALLOW_MISSING" = "1" ] && EXTRA+=(--allow-missing)
 
 cd "$REPO"
 python -m competitors.sigma_pass \
