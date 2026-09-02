@@ -13,9 +13,19 @@
 #              the blind panel once, from the SELECTED checkpoint, at the end; the guard below
 #              exits 4 rather than overwriting.
 #
+# B_COMPLETE_ARRAY=<array job id> FILLS a chromosome that array never wrote, and can do nothing else.
+# Set it and all three of these must hold before a byte is predicted, or the task exits 4: manifest.json
+# present in $PRED, `.b_once.<that id>` present (so the knob only ever fills a root its OWN array
+# claimed), and NO <chrom>.npz for this task's chromosome (so it can never re-predict one). Written for
+# eic_pilot array 57849734, whose chr22 task a since-fixed guard bug refused: chr20/21 must not be
+# re-predicted, and no NEW job can present that marker (Slurm overwrites SLURM_ARRAY_JOB_ID). B_ONCE=1
+# is still required.
+#
 #   sbatch competitors/lavawizard/slurm/predict.sh                    # V_, the regime eval scope
 #   sbatch --array=1 competitors/lavawizard/slurm/predict.sh          # one chromosome alone
 #   sbatch --export=ALL,PANEL=B_,B_ONCE=1 competitors/lavawizard/slurm/predict.sh
+#   sbatch --array=2 --export=ALL,PANEL=B_,B_ONCE=1,B_COMPLETE_ARRAY=57849734 \
+#       competitors/lavawizard/slurm/predict.sh                       # fill the one missing chromosome
 #
 # `--clip` is ON here and OFF on the anchor: PI ruling 2026-08-26, recorded in the manifest.
 # The manifest is written by array task 0 alone — three tasks racing on one json buys nothing.
@@ -58,11 +68,41 @@ CKPT="${CKPT:-$RUNS/ckpt}"
 # been spent". A trivial failure must not poison a root that holds nothing. The refusals stay here,
 # where they cost nothing and fire early.
 if [ "$PANEL" = "B_" ]; then
-  MARK="$PRED/.b_once.${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-manual}}"
+  MARK="$PRED/.b_once.${B_COMPLETE_ARRAY:-${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-manual}}}"
   if [ "${B_ONCE:-0}" != "1" ]; then
     echo "[predict] REFUSING PANEL=B_ without B_ONCE=1. §5 spends the blind panel once, from the" >&2
     echo "[predict]   SELECTED checkpoint, at the end. Say B_ONCE=1 to mean it." >&2
     exit 4
+  fi
+  # THE COMPLETION KNOB, AND WHY IT DOES NOT BREAK B_-ONCE. With B_COMPLETE_ARRAY set, MARK names
+  # the marker of the array the caller says already claimed this root, so the refusal below cannot
+  # fire on it. All three checks run FIRST, before the panel regime is derived and before anything
+  # is predicted, and each names itself when it refuses. Check 3 is the one that makes the knob
+  # safe: a chromosome that exists is never re-predicted, so the knob can only ever ADD what the
+  # named array left out.
+  if [ -n "${B_COMPLETE_ARRAY:-}" ]; then
+    if [ ! -e "$PRED/manifest.json" ]; then
+      echo "[predict] REFUSING B_COMPLETE_ARRAY=$B_COMPLETE_ARRAY: check 1 (manifest) failed — no" >&2
+      echo "[predict]   $PRED/manifest.json. This knob FILLS a partial pass; a root with no manifest" >&2
+      echo "[predict]   is a fresh B_ claim, which is what a submission WITHOUT the knob is for." >&2
+      exit 4
+    fi
+    if [ ! -e "$MARK" ]; then
+      echo "[predict] REFUSING B_COMPLETE_ARRAY=$B_COMPLETE_ARRAY: check 2 (marker) failed — no" >&2
+      echo "[predict]   $MARK. Array $B_COMPLETE_ARRAY never claimed this root, so this would be a" >&2
+      echo "[predict]   SECOND B_ claim wearing another array's name. The knob fills only a root its" >&2
+      echo "[predict]   own array already spent." >&2
+      exit 4
+    fi
+    if compgen -G "$PRED/*/${C}.npz" >/dev/null 2>&1; then
+      echo "[predict] REFUSING B_COMPLETE_ARRAY=$B_COMPLETE_ARRAY: check 3 (absent chromosome)" >&2
+      echo "[predict]   failed — $C.npz already exists under $PRED. This knob fills a chromosome the" >&2
+      echo "[predict]   named array never wrote. It NEVER re-predicts one: that would be a second" >&2
+      echo "[predict]   look at the blind panel." >&2
+      exit 4
+    fi
+    echo "[predict] B_COMPLETE_ARRAY=$B_COMPLETE_ARRAY: manifest present, marker present, no $C.npz" \
+         "— filling $C into the pass array $B_COMPLETE_ARRAY claimed."
   fi
   # A manifest refuses only a LATER submission: a serialised sibling task of THIS array (its
    # own `.b_once.<array job id>` marker present) may still be writing its chromosome after
@@ -78,6 +118,9 @@ fi
 
 derive_panel_regime || exit 1
 
+# CONFIRMED, and B_COMPLETE_ARRAY relies on it: this is keyed on the array INDEX, so a `--array=2`
+# completion gets MAN=() and `manifest.json` is LEFT ALONE. The manifest keeps naming the weights
+# task 0 predicted from — a known property of that root, not a new one.
 MAN=(); [ "${SLURM_ARRAY_TASK_ID:-0}" = "0" ] && MAN=(--manifest)
 # §5: every board number comes from the checkpoint the run SELECTED on V_, so `.best.pt` is what is
 # predicted from. The last-epoch file is used only when the run deliberately selected nothing
@@ -105,7 +148,8 @@ fi
 if [ "$PANEL" = "B_" ]; then
   mkdir -p "$PRED" && : > "$MARK" || exit 1
 fi
-echo "[predict] $C panel=$PANEL -> $PRED  weights=$(basename "$W")  host=$(hostname)"
+echo "[predict] $C panel=$PANEL b_complete_array=${B_COMPLETE_ARRAY:--} -> $PRED" \
+     "weights=$(basename "$W")  host=$(hostname)"
 srun python -u -m lavawizard.store_eic predict --regime "$PANEL_REGIME" --chrom "$C" \
      --cache "$CACHE" --checkpoint "$W" \
      --pred-root "$PRED" --device "${DEVICE:-cuda}" --clip "${MAN[@]}"
