@@ -3,7 +3,15 @@
 # still print (unlike Avocado/ChromImpute/Lavawizard, whose cell §4 blanks).
 #
 #   mkdir -p slurm-logs
-#   REGIME=configs/regime.eic_19.json PANEL=V_ sbatch --array=0-23 slurm/t49_baselines_p2.sh
+#   REGIME=configs/regime.eic_19.json PANEL=V_ sbatch --array=0-22%12 slurm/t49_baselines_p2.sh
+#
+# BOTH HALVES OF `0-22%12` ARE DELIBERATE, and the script declares it below so an omitted `--array`
+# gets the same thing. `0-22`, not `0-23`: `CHROM_LIST` holds 23 chromosomes (chr1..chr22, chrX), so
+# task 23 indexes past the end and dies on `set -u` with an unbound variable. `%12`, because every
+# task imports torch off the shared `/project` venv — `generate.py` imports `candi.store.reader`,
+# and `candi/__init__.py` imports `candi.encoder` — and more than about twelve concurrent imports
+# off that venv fail with partial-module ImportErrors. Nothing here opens CUDA; the cap is about the
+# import, not the GPU. Override the range if you must, but keep a cap of 12 or less.
 #
 # One array task per chromosome, all writing into the SAME pinned prediction roots — a track
 # directory collects one `chr*.npz` per task and is only complete when every task has finished,
@@ -20,7 +28,8 @@
 # licenses the collapse, and why `regime.eic_pilot.json` is still refused for the fitted three.
 #
 # THIS ARRAY DOES NOT STAMP `regime_independent`, and a root without that stamp is refused against
-# the other board by `t49_baselines_score.sh`. After the array finishes, stamp it once:
+# the other board by `t49_baselines_score.sh`. After the array finishes — never before, because a
+# generation pass into a stamped root drops the stamp on the manifest merge — stamp it once:
 #
 #   ASSERT_ONLY=1 METHODS=avg,avg-arcsinh REGIME=$REGIME PANEL=V_ sbatch slurm/t49_baselines_p1.sh
 #
@@ -45,13 +54,16 @@
 # positions, which is the same fact that makes `avg` and `avg-arcsinh` the only two of the five that
 # genuinely collapse to one run.
 #
-# CPU ONLY, AND NO GRES ANY MORE: `generate.py` is numpy + h5py and imports no torch. The MIG slice
-# this script used to request was a fairshare workaround (slurm/bake.sh) for a job that never opened
-# CUDA. Invariant 13 allows the 1g.10gb slice or nothing; this is nothing.
+# CPU ONLY, AND NO GRES ANY MORE: the arithmetic is numpy over h5py reads and no task opens CUDA.
+# It does load torch, through `candi.store.reader` -> `candi/__init__.py` -> `candi.encoder`, which
+# is what the `%12` cap on the array is for. The MIG slice this script used to request was a
+# fairshare workaround (slurm/bake.sh) for a job that never opened CUDA. Invariant 13 allows the
+# 1g.10gb slice or nothing; this is nothing.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=candi_t49_p2gen
 #SBATCH --output=slurm-logs/t49_p2gen_%A_%a.out
 #SBATCH --error=slurm-logs/t49_p2gen_%A_%a.err
+#SBATCH --array=0-22%12
 #SBATCH --time=11:00:00
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=4
@@ -69,7 +81,15 @@ V_PRED_ROOT="${V_PRED_ROOT:-/scratch/$USER/t81_pred}"
 
 CHROM_LIST=(chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12 chr13 chr14 chr15 \
             chr16 chr17 chr18 chr19 chr20 chr21 chr22 chrX)
-CHROM="${CHROM_LIST[${SLURM_ARRAY_TASK_ID:-20}]}"
+TASK="${SLURM_ARRAY_TASK_ID:-20}"
+# A `--array` that runs past the list is a silent hole in the root — the pass would finish with one
+# chromosome missing and only `bench.external` would notice, hours later. Name it here instead.
+if [ "$TASK" -ge "${#CHROM_LIST[@]}" ]; then
+    echo "[t49-p2] REFUSING: task $TASK, but there are only ${#CHROM_LIST[@]} chromosomes " >&2
+    echo "         (indices 0-$(( ${#CHROM_LIST[@]} - 1 ))). The array is 0-22%12." >&2
+    exit 2
+fi
+CHROM="${CHROM_LIST[$TASK]}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
 export MPLBACKEND=Agg

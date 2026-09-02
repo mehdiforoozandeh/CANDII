@@ -1089,13 +1089,23 @@ three). The collapse rests on the fit being regime-independent, and that is a cl
 
 **The identity assertion this section used to claim now exists**, and until 2026-09-01 it did not:
 `python -m competitors.baselines.generate --store <regime A> --out <root> --methods
-avg,avg-arcsinh --assert-regime-independent <regime B>` re-predicts under B for the first
-chromosome of the pass, compares every array with `np.array_equal`, and writes
-`regime_independent` into each manifest; a difference exits 5 and leaves no manifest behind. The
-flag is refused for `marginal`, `knn1` and `knn5` (exit 2) — asserting it of them would be
-asserting something false. `tests/test_baselines.py` runs both halves: the assertion passes for the
-collapsed pair on a two-regime store, and fails on `marginal` when the training slice is changed.
-**The assertion, not the argument, is what licenses printing one number in two rows.**
+avg,avg-arcsinh --assert-regime-independent <regime B> [--assert-only]` re-predicts under B for the
+first chromosome of the pass **into a temporary directory**, compares every array with
+`np.array_equal`, and writes `regime_independent` into each manifest; a difference exits 5 and
+leaves no manifest behind, and under `--assert-only` the stamp is the only byte of the prediction
+root that changes. The flag is refused for `marginal`, `knn1` and `knn5` (exit 2) — asserting it of
+them would be asserting something false. `tests/test_baselines.py` runs both halves: the assertion
+passes for the collapsed pair on a two-regime store, and fails on `marginal` when the training
+slice is changed. **The assertion, not the argument, is what licenses printing one number in two
+rows.**
+
+**And the assertion caught a real one on its first honest fixture (2026-09-01).** `avg-arcsinh` was
+averaging the **top five contributors by kNN similarity** rather than all of them, which made it
+regime-DEPENDENT while this section printed its one number in both regime rows; §5.2 and t49 define
+it as the leave-one-out mean over every eligible contributor, taken in arcsinh space, and it now
+takes the contributor set `avg` takes. The three-contributor test fixture hid it because
+`top_k(…, 5)` over three contributors returns all three; the identity tests run on seven now. No
+board row quotes a number from the old path — see `competitors/baselines/README.md`.
 
 **The second pilot fit for `marginal`, `knn1` and `knn5` is blocked and is not scheduled here.**
 `generate.py` reads `train_chroms` raw and has no `regions` support, so under `eic.pilot` those

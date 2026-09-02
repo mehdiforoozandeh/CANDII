@@ -23,9 +23,13 @@ HOW MANY TIMES EACH OF THEM RUNS (D1, 2026-09-01)
 training chromosomes. `REGIME_INDEPENDENT` / `REGIME_DEPENDENT` below carry the reasoning, and
 
     python -m competitors.baselines.generate --store <regime A> --out <root> \\
-        --methods avg,avg-arcsinh --assert-regime-independent <regime B>
+        --methods avg,avg-arcsinh --assert-regime-independent <regime B> [--assert-only]
 
-is the assertion that licenses the collapse: it re-predicts under B and compares every array.
+is the assertion that licenses the collapse: it re-predicts under B INTO A TEMPORARY DIRECTORY and
+compares every array. With `--assert-only` it generates nothing at all and the `regime_independent`
+stamp in each manifest is the only byte of the prediction root that changes, which is what a root
+built by the P2 array needs — re-generating the collapsed methods into it would overwrite the npz
+of the very chromosome the check reads.
 
 WHAT THIS FILE IS ALLOWED TO SEE (§6.2, and it is checkable)
 ------------------------------------------------------------
@@ -69,7 +73,7 @@ from competitors.baselines import heads as Hd
 __all__ = [
     "METHODS", "VERSION", "REGIME_INDEPENDENT", "REGIME_DEPENDENT", "cell_type", "available",
     "log2_depth", "depth_center", "Panel", "RegimeIdentityError", "assert_regime_independent",
-    "generate", "build_parser", "main",
+    "stamp_regime_independent", "generate", "build_parser", "main",
 ]
 
 VERSION = "0.1.0"
@@ -394,6 +398,10 @@ def _merge_manifest(old: Mapping[str, object], new: Dict[str, object],
     collide, and `bench.external` reads the grid off the store rather than off this field, so the
     worst case is an understated provenance line, not a mis-scored track. Check `chroms` against the
     directory listing before quoting a P2 row.
+
+    A `regime_independent` stamp on the old manifest does NOT survive this merge, and that is the
+    safe direction: a generation pass that added a chromosome has not been shown identical under
+    the other regime. Stamp after the last generation pass, not before.
     """
     bad = {k: (old.get(k), new.get(k)) for k in _MANIFEST_IDENTITY if old.get(k) != new.get(k)}
     if bad:
@@ -485,6 +493,71 @@ def assert_regime_independent(roots: Mapping[str, Path], panel: Panel, regime_b:
     return {"asserted_against": b_path.name, "chrom": chrom, "identical": True}
 
 
+def stamp_regime_independent(regime_path: Path | str, out_root: Path | str,
+                             regime_b: Path | str, *, methods: Sequence[str] = REGIME_INDEPENDENT,
+                             chroms: Optional[Sequence[str]] = None,
+                             poisson_n: float = Hd.POISSON_N,
+                             progress: bool = True) -> Dict[str, object]:
+    """Assert roots that ALREADY EXIST regime-independent, and stamp them. Writes no array.
+
+    THE STAMP IS THE ONLY MUTATION OF THE PREDICTION ROOT, and that is the whole point of this
+    entry. The regime-B side is regenerated into a `TemporaryDirectory` inside
+    `assert_regime_independent` and removed; nothing under `out_root` is touched except each
+    method's `manifest.json`, which gains `regime_independent`. Re-generating the A side into the
+    root to run the check — which is what `slurm/t49_baselines_p1.sh` did until 2026-09-01 —
+    OVERWRITES the npz of whichever chromosome the check runs on, so the stamped root is no longer
+    the root that was scored.
+
+    The comparison chromosome is `chroms[0]`, defaulting to the regime's first eval chromosome, and
+    every root must already hold it. `regime` and `poisson_n` are checked against each manifest
+    first: a stamp pass at a different floor, or against a different regime file, would report
+    differences that say nothing about the collapse and would exit 5 as if the collapse were false.
+    """
+    out_root = Path(out_root)
+    roots = {m: out_root / m for m in methods}
+    manifests: Dict[str, Dict[str, object]] = {}
+    for m, r in roots.items():
+        path = r / "manifest.json"
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"{path} does not exist — there is nothing to assert. This entry stamps a root "
+                f"that has already been generated; generate it first.")
+        manifests[m] = json.loads(path.read_text(encoding="utf-8"))
+    panel = Panel(regime_path, chroms=chroms)
+    try:
+        chrom = panel.chroms[0]
+        for m, r in roots.items():
+            got_reg, got_n = manifests[m].get("regime"), manifests[m].get("poisson_n")
+            if got_reg != str(panel.regime_path):
+                raise ValueError(
+                    f"{r}/manifest.json was written under {got_reg}, not {panel.regime_path}. "
+                    f"Hand this pass the regime the root was GENERATED under, or the comparison "
+                    f"is between two regimes neither of which wrote what is on disk.")
+            if got_n is not None and float(got_n) != float(poisson_n):
+                raise ValueError(
+                    f"{r}/manifest.json was generated at poisson_n={got_n} and this pass would "
+                    f"compare against {poisson_n}; the count arm would differ for that reason "
+                    f"alone and exit 5 would say the collapse is false when it is not.")
+            if not any((d / f"{chrom}.npz").is_file() for d in r.iterdir() if d.is_dir()):
+                raise FileNotFoundError(
+                    f"{r} holds no {chrom}.npz, so there is nothing to compare on {chrom}. Name a "
+                    f"chromosome the root actually carries with --chroms.")
+        stamp = assert_regime_independent(roots, panel, regime_b, poisson_n=poisson_n,
+                                          progress=progress)
+    finally:
+        panel.close()
+    for m, r in roots.items():
+        path = r / "manifest.json"
+        obj = dict(manifests[m])
+        obj["regime_independent"] = dict(stamp)
+        path.write_text(json.dumps(obj, indent=2), encoding="utf-8")
+        if progress:
+            print(f"[baselines] {m}: stamped regime_independent against "
+                  f"{stamp['asserted_against']} on {stamp['chrom']}; no array was rewritten",
+                  flush=True)
+    return stamp
+
+
 def generate(regime_path: Path | str, out_root: Path | str, *,
              chroms: Optional[Sequence[str]] = None, methods: Sequence[str] = METHODS,
              poisson_n: float = Hd.POISSON_N, progress: bool = True,
@@ -556,8 +629,17 @@ def generate(regime_path: Path | str, out_root: Path | str, *,
                 dirname = f"{pair[0]}__{pair[1]}__{assay}"
                 d_t = log2_depth(panel.corpus, pair[1], assay)
                 for m in methods:
-                    pick = (contribs if m in ("avg", "marginal") else
-                            top_k(sim, pair[0], contribs, 1 if m == "knn1" else 5))
+                    # ONLY `knn1`/`knn5` SELECT. Every other method averages over EVERY eligible
+                    # contributor, and `avg-arcsinh` is one of them: §5.2 defines it as the same
+                    # leave-one-out mean as `avg`, taken in arcsinh space, so it has no fitted
+                    # position parameter and `train_chroms` cannot move it. Written as
+                    # `contribs if m in ("avg", "marginal") else top_k(…, 5)` until 2026-09-01, it
+                    # fell through to the top 5 by kNN similarity — a selection method wearing the
+                    # name of a mean, regime-DEPENDENT because `similarity_table` reads
+                    # `train_chroms`, and a third answer again when it was generated without
+                    # knn1/knn5 in the list (no `sim` is built, so `top_k` ranked alphabetically).
+                    pick = (top_k(sim, pair[0], contribs, 1 if m == "knn1" else 5)
+                            if m.startswith("knn") else contribs)
                     sel = np.array([idx[b] for b in pick])
                     arrays = _arrays(m, norm[sel], pvals[sel], peaks[sel], d_t,
                                      panel.depth_center, marginals.get(assay),
@@ -689,6 +771,13 @@ def build_parser() -> argparse.ArgumentParser:
                         f"carries `regime_independent`. Accepted only for {list(REGIME_INDEPENDENT)}"
                         f" — {list(REGIME_DEPENDENT)} fit on the regime's training loci and are "
                         f"generated once per regime (exit 2).")
+    p.add_argument("--assert-only", action="store_true",
+                   help="run ONLY the assertion above, against roots that already exist under "
+                        "--out, and write nothing but `regime_independent` into their manifests. "
+                        "Every array stays byte-identical. This is how a root the P2 array built "
+                        "gets its stamp; re-generating the collapsed methods into the root to run "
+                        "the check would overwrite the npz of the chromosome it checks. Requires "
+                        "--assert-regime-independent.")
     p.add_argument("--quiet", action="store_true")
     return p
 
@@ -705,11 +794,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                   f"would be asserting something false. Generate them once per regime "
                   f"(BENCHMARK_DESIGN.md §12.2, D1).", file=sys.stderr)
             return 2
+    elif a.assert_only:
+        print("[baselines] --assert-only needs --assert-regime-independent REGIME_B: there is "
+              "nothing to assert against.", file=sys.stderr)
+        return 2
+    chroms = [c.strip() for c in a.chroms.split(",")] if a.chroms else None
     try:
-        generate(a.store, a.out,
-                 chroms=[c.strip() for c in a.chroms.split(",")] if a.chroms else None,
-                 methods=methods, poisson_n=a.poisson_n, progress=not a.quiet,
-                 assert_against=a.assert_regime_independent)
+        if a.assert_only:
+            stamp_regime_independent(a.store, a.out, a.assert_regime_independent,
+                                     methods=methods, chroms=chroms, poisson_n=a.poisson_n,
+                                     progress=not a.quiet)
+        else:
+            generate(a.store, a.out, chroms=chroms, methods=methods, poisson_n=a.poisson_n,
+                     progress=not a.quiet, assert_against=a.assert_regime_independent)
     except RegimeIdentityError as exc:
         print(f"[baselines] {exc}", file=sys.stderr)
         return 5

@@ -31,12 +31,21 @@
 # `marginal` once per regime. §12.2 and §12.3 now say so.
 #
 # THE ASSERTION EXISTS NOW and this script runs it, as a second pass over ONE chromosome once the
-# main generation is done: `--assert-regime-independent $ASSERT_AGAINST` re-predicts the collapsed
-# methods under the OTHER regime and compares every array with `np.array_equal`, then merges
-# `regime_independent` into their manifests. A difference exits **5** and writes no manifest — the
-# collapse is licensed by the comparison, never by this comment. `ASSERT_AGAINST=none` skips it, and
-# a root that carries no stamp is refused against the other board by t49_baselines_score.sh.
-# `ASSERT_ONLY=1` runs the stamping pass alone, which is how a root built by the p2 array gets it.
+# main generation is done: `--assert-regime-independent $ASSERT_AGAINST --assert-only` re-predicts
+# the collapsed methods under the OTHER regime INTO A TEMPORARY DIRECTORY, compares every array with
+# `np.array_equal`, and writes `regime_independent` into their manifests. A difference exits **5**
+# and stamps nothing — the collapse is licensed by the comparison, never by this comment.
+# `ASSERT_AGAINST=none` skips it, and a root that carries no stamp is refused against the other
+# board by t49_baselines_score.sh. `ASSERT_ONLY=1` runs this pass alone, which is how a root built
+# by the p2 array gets its stamp.
+#
+# `--assert-only` IS LOAD-BEARING AND WAS MISSING UNTIL 2026-09-01. This pass used to re-run
+# `--methods avg,avg-arcsinh` into the SAME roots, which OVERWROTE the checked chromosome's npz and
+# then stamped `identical: true` on arrays that were not the ones the generation pass wrote (and,
+# with no knn method in that second list, on arrays computed a third way again — see the D1 note in
+# `generate.py`). The stamp is now the only mutation of the prediction root, and
+# `tests/test_baselines.py::test_the_assertion_pass_changes_nothing_but_the_manifest` holds it there
+# byte for byte.
 #
 # WHY eic_pilot IS STILL REFUSED FOR knn/marginal (exit 3)
 # --------------------------------------------------------
@@ -49,10 +58,13 @@
 # `avg-arcsinh` are unaffected: no training locus enters them, which is why the guard fires only
 # when a regime-dependent method is requested.
 #
-# CPU ONLY, AND NO GRES ANY MORE. `generate.py` is numpy + h5py and imports no torch; nothing here
-# touches a GPU. The MIG slice this script used to request was a fairshare workaround (see
-# slurm/bake.sh) and it parked a 10 GB H100 slice for a job that never opened CUDA. Invariant 13
-# allows the 1g.10gb slice or nothing; this is nothing.
+# CPU ONLY, AND NO GRES ANY MORE. The arithmetic is numpy over h5py reads and NOTHING HERE OPENS
+# CUDA. It does load torch — `generate.py` imports `candi.store.reader`, and `candi/__init__.py`
+# imports `candi.encoder`, which imports torch — so the job pays the import and the RSS, and that is
+# the reason to keep the array cap on the p2 script. It never allocates a device. The MIG slice this
+# script used to request was a fairshare workaround (see slurm/bake.sh) and it parked a 10 GB H100
+# slice for a job that never opened CUDA. Invariant 13 allows the 1g.10gb slice or nothing; this is
+# nothing.
 #
 # ONE POISSON FLOOR, THE PRE-REGISTERED ONE. This script used to generate at 1e6 AND 1e4 because
 # `candi.metrics.nb_crps` returned NaN above ~2e4 and the count arm lost its whole distributional
@@ -214,11 +226,14 @@ if [ "$ASSERT_ONLY" != "1" ]; then
     rc=$?
 fi
 
-# THE IDENTITY ASSERTION IS ITS OWN PASS, over ONE chromosome. It re-predicts the collapsed methods
-# under $ASSERT_AGAINST, compares every array, and merges `regime_independent` into their manifests
-# — so a mixed METHODS list still gets its stamp, which a single flag on the pass above could not
-# give it: `generate.py` refuses the flag outright when any fitted method is in the list, and
-# refusing it there is the point. Cost is one chromosome for two pval-cheap methods.
+# THE IDENTITY ASSERTION IS ITS OWN PASS, over ONE chromosome, AND IT GENERATES NOTHING INTO THE
+# ROOT. `--assert-only` re-predicts the collapsed methods under $ASSERT_AGAINST into a temporary
+# directory, compares every array, and writes `regime_independent` into their manifests — nothing
+# else under the root is touched, so the arrays that get stamped are the arrays the pass above
+# wrote. It is a separate pass rather than a flag on that one because `generate.py` refuses
+# `--assert-regime-independent` outright when any fitted method is in the list, and refusing it
+# there is the point: a mixed METHODS list still gets its stamp this way. Cost is one chromosome
+# for two pval-cheap methods.
 #
 # ASSERT_ONLY=1 runs THIS AND NOTHING ELSE, which is how a root built by the p2 array gets stamped:
 #   ASSERT_ONLY=1 METHODS=avg,avg-arcsinh REGIME=... PANEL=V_ sbatch slurm/t49_baselines_p1.sh
@@ -233,7 +248,7 @@ if [ $rc -eq 0 ] && [ -n "$COLLAPSED" ] && [ "$ASSERT_AGAINST" != "none" ]; then
     python -m competitors.baselines.generate \
         --store "$PANEL_REGIME" --out "$STAGE" --chroms "${CHROMS%%,*}" \
         --methods "$(echo $COLLAPSED | tr ' ' ',')" --poisson-n "$POISSON_N" \
-        --assert-regime-independent "$ASSERT_REGIME"
+        --assert-regime-independent "$ASSERT_REGIME" --assert-only
     rc=$?
 fi
 

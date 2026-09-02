@@ -2,12 +2,27 @@
 # Score the baseline prediction roots. ONE ARRAY TASK PER METHOD, either §4 scope.
 #
 #   mkdir -p slurm-logs
-#   # held-out, eic_19, V_
-#   REGIME=configs/regime.eic_19.json PANEL=V_ CHROMS=chr20,chr21,chr22 \
-#       sbatch --array=0-4 --time=3:00:00 --mem=24G slurm/t49_baselines_score.sh
-#   # genome-wide, after the generation array
-#   sbatch --array=0-4 --dependency=afterok:<gen_array_jobid> --time=5-18:00:00 --mem=96G \
-#       slurm/t49_baselines_score.sh
+#   # held-out, eic_19, V_ — chr20+21+22 only, one aggregation
+#   REGIME=configs/regime.eic_19.json PANEL=V_ SCOPE=heldout \
+#       sbatch --array=0-4%5 --time=3:00:00 --mem=24G slurm/t49_baselines_score.sh
+#   # genome-wide, after the generation array — all 23, and BOTH aggregations in one json
+#   SCOPE=genomewide sbatch --array=0-4%5 --dependency=afterok:<gen_array_jobid> \
+#       --time=5-18:00:00 --mem=96G slurm/t49_baselines_score.sh
+#
+# THE TWO SCOPES OF §4, AND WHY THE GENOME-WIDE PASS NAMES THE HELD-OUT CHROMOSOMES
+# ---------------------------------------------------------------------------------
+# `SCOPE=heldout` scores chr20+21+22 and the json carries one aggregation. `SCOPE=genomewide` scores
+# all 23 AND passes `--held-out-chroms chr20,chr21,chr22`, which is what turns one pass into the
+# held-out numbers plus a parallel `genome_wide` block (`plan/EVAL_PLAN.md`; `provenance.scope`
+# records which, so an absent block is never ambiguous). Until 2026-09-01 this script passed 23
+# chromosomes and no `--held-out-chroms`, so the genome-wide pass produced NO `genome_wide` block —
+# and these five baselines are among the methods whose genome-wide cell §4 does not blank, so that
+# block is a cell of the board rather than an extra.
+#
+# `--held-out-chroms` IS CHUNK J's FLAG ON `candi.bench.external`. It is already on `candi.bench.cli`
+# and on `harness.run_bench`. On a checkout where `bench.external` has not got it yet this pass dies
+# with an argparse error, which is the right failure: silently dropping it would produce a
+# genome-wide job whose json has no genome-wide block, at ~54 h a method.
 #
 # THE COLLAPSED TWO ARE SCORED TWICE, OUT OF ONE ROOT — D1, 2026-09-01
 # --------------------------------------------------------------------
@@ -55,14 +70,15 @@
 # `python -m competitors.baselines.leaderboard --protocol P1|P2 --scores ...` once the array is
 # done. That step is json folding and takes seconds.
 #
-# WHY --gres ON A CPU-ONLY JOB: see slurm/bake.sh. (The two generation scripts dropped theirs —
-# `generate.py` is numpy + h5py and imports no torch at all — but the scorer still pulls torch in
-# through `bench.harness`, so this one is left on the GPU account's fairshare. Invariant 13: the
-# 1g.10gb slice is the only sanctioned gres.)
+# WHY --gres ON A CPU-ONLY JOB: see slurm/bake.sh. (The two generation scripts dropped theirs. They
+# load torch too — everything that imports `candi` does, through `candi/__init__.py` ->
+# `candi.encoder` — but they never open CUDA, so the slice bought them nothing. This one is left on
+# the GPU account's fairshare. Invariant 13: the 1g.10gb slice is the only sanctioned gres.)
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=candi_t49_score
 #SBATCH --output=slurm-logs/t49_score_%A_%a.out
 #SBATCH --error=slurm-logs/t49_score_%A_%a.err
+#SBATCH --array=0-4%5
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --mem=96G
@@ -84,7 +100,17 @@ VARPOOL="${VARPOOL:-}"
 # rejects the flag, which is the failure we want rather than a silent exact run.
 CRPS_APPROX="${CRPS_APPROX:-}"
 CRPS_SEED="${CRPS_SEED:-0}"
-CHROMS="${CHROMS:-chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22,chrX}"
+# §4's two scopes. `heldout` is the default because it is the cheap one and the one every board row
+# needs; `genomewide` is opted into, sized by hand, and is the only one that names --held-out-chroms.
+SCOPE="${SCOPE:-heldout}"
+HELD_OUT="${HELD_OUT:-chr20,chr21,chr22}"
+ALL_CHROMS="chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22,chrX"
+case "$SCOPE" in
+    heldout)    CHROMS="${CHROMS:-$HELD_OUT}"; HELD_ARG="" ;;
+    genomewide) CHROMS="${CHROMS:-$ALL_CHROMS}"; HELD_ARG="--held-out-chroms $HELD_OUT" ;;
+    *) echo "[t49-score] REFUSING: SCOPE=$SCOPE. §4 has two scopes: heldout, genomewide." >&2
+       exit 2 ;;
+esac
 
 METHOD_LIST=(avg avg-arcsinh knn1 knn5 marginal)
 METHOD="${METHOD:-${METHOD_LIST[${SLURM_ARRAY_TASK_ID:-0}]}}"
@@ -149,6 +175,7 @@ python tools/declare_eval_pairs.py split --regime "$REGIME" --panel "$PANEL" \
 
 echo "[t49-score] host=$(hostname) commit=$(git rev-parse --short HEAD) method=$METHOD"
 echo "[t49-score] board=$REGNAME panel=$PANEL pred=$PRED out=$OUT"
+echo "[t49-score] scope=$SCOPE chroms=$CHROMS held_out=${HELD_OUT:-none} arg=${HELD_ARG:-none}"
 # Which CRPS estimator ran is a PI-ruled fact about the numbers, so it belongs in the log and not
 # only in whoever's memory of the submit line. The score json carries its own stamp; this is the
 # copy you can read after the job is gone.
@@ -161,7 +188,7 @@ fi
 mkdir -p "$(dirname "$OUT")"
 python -m candi.bench.external \
     --store "$PANEL_REGIME" --pred "$PRED" --out "$OUT" \
-    --chroms "$CHROMS" ${VARPOOL:+--varpool "$VARPOOL"} \
+    --chroms "$CHROMS" $HELD_ARG ${VARPOOL:+--varpool "$VARPOOL"} \
     ${CRPS_APPROX:+--crps-approx "$CRPS_APPROX" --crps-seed "$CRPS_SEED"}
 rc=$?
 echo "[t49-score] method=$METHOD exit=$rc"
