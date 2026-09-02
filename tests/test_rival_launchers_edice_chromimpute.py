@@ -178,6 +178,52 @@ def test_b_predictions_land_on_project_and_v_on_scratch():
     assert PRED_V.startswith("/scratch/")
 
 
+def test_the_edice_b_once_guard_watches_both_prediction_roots():
+    """One root guarded is no guard: SCOPE picks the root, so two scopes are two B_ predictions.
+
+    `SCOPE=genomewide` appends `.genomewide` to the panel root. A guard that only tested the root
+    THIS invocation would write lets `PANEL=B_ SCOPE=heldout` and `PANEL=B_ SCOPE=genomewide` each
+    find their own root absent and each predict B_ — two predictions of the blind panel, both
+    passing the once-guard, with nothing in the record to say so.
+    """
+    text = _code(EDICE / "eic_score.sh")
+    loops = [ln for ln in text.splitlines()
+             if "PRED_ROOT_B" in ln and ".genomewide" in ln and "for " in ln]
+    assert loops, (
+        "eic_score.sh's B_ once-guard does not iterate over both the panel root and its "
+        ".genomewide sibling, so a second B_ prediction would pass it")
+    assert "exit 4" in text
+
+
+def test_the_edice_b_panel_is_genome_wide_only():
+    """eDICE's one permitted B_ prediction is the genome-wide one, so held-out B_ is refused.
+
+    §4 prints eDICE's genome-wide cell, and the genome-wide scoring pass carries the ranked
+    held-out `macro` and `panels` in the same json through `--held-out-chroms`. So genome-wide is
+    the strictly larger scope and a held-out B_ pass could only SPEND the one permitted B_
+    prediction on the smaller of the two.
+    """
+    text = _code(EDICE / "eic_score.sh")
+    refusals = [ln for ln in text.splitlines()
+                if 'PANEL" = "B_"' in ln and 'SCOPE" != "genomewide"' in ln]
+    assert refusals, (
+        "eic_score.sh does not refuse SCOPE=heldout with PANEL=B_, so the one permitted B_ "
+        "prediction could be spent on the smaller scope")
+    assert "--held-out-chroms" in text, (
+        "the refusal above is only honest if the genome-wide pass really does emit the held-out "
+        "numbers too")
+
+
+def test_a_held_out_score_never_overwrites_a_genome_wide_one():
+    """Both scopes write ONE path, so held-out-after-genome-wide would drop the bigger block."""
+    text = _code(EDICE / "eic_score.sh")
+    assert "genome_wide" in text, (
+        "eic_score.sh does not look at the existing scores json's `genome_wide` block, so a "
+        "held-out pass would silently overwrite a genome-wide result at the same path")
+    assert "exit 5" in text or "SystemExit(5)" in text, (
+        "that overwrite must be a refusal with its own exit code, not a warning")
+
+
 # ---------------------------------------------------------------------------------------------
 # the Rule 1 σ guard
 # ---------------------------------------------------------------------------------------------
@@ -250,6 +296,62 @@ def test_the_sigma_stage_writes_the_pinned_paths(script: Path, method: str):
     assert "train_pred" in text
     assert f"{SIGMA_ROOT}/{method}/sigma_" in text
     assert f"--method {method}" in text
+
+
+def _eval_pairs_assignments(text: str) -> list[str]:
+    """Every line that ASSIGNS to an `eval_pairs` key — not the ones that merely read it."""
+    out = []
+    for line in text.splitlines():
+        if "eval_pairs" not in line:
+            continue
+        tail = line.split("eval_pairs", 1)[1][:6]     # past the key, before its value
+        if "=" in tail and "==" not in tail:
+            out.append(line.strip())
+    return out
+
+
+@pytest.mark.parametrize("script", SIGMA_LAUNCHERS, ids=lambda p: p.parent.parent.name)
+def test_a_sigma_regime_never_carries_a_self_pair(script: Path):
+    """`regime.py` REFUSES `[[c, c]]`, so a stage that writes one writes a file that cannot load.
+
+    `tools/sigma_training_regime.py` spells the self-pairing the one way the code allows: no pairs
+    at all, with the drawn cells in `biosamples.eval`, which `bench.harness.StoreSource` then
+    self-pairs on its documented no-pairing path. A launcher that narrows the derived regime must
+    keep that shape — narrow `biosamples.eval`, and leave `eval_pairs` empty.
+    """
+    for line in _eval_pairs_assignments(_code(script)):
+        rhs = line.split("=", 1)[1].strip()
+        assert rhs.startswith("[]"), (
+            f"{script.name} assigns eval_pairs a non-empty value: {line!r}. "
+            f"candi.store.regime._parse_eval_pairs refuses a pair of a cell with itself, so the "
+            f"regime this writes would not load and the fit would die on its first read.")
+
+
+def test_the_chromimpute_sigma_stage_reads_the_drawn_cells_off_biosamples_eval():
+    """The draw's `eval_pairs` is EMPTY, so counting cells from it counts zero.
+
+    That is the failure this test exists for: an empty cell list makes every cell "dropped", the
+    `len(kept) < 3` guard below it fires, and the stage refuses every legitimate run with a message
+    about missing training data.
+    """
+    text = _code(CHROMIMPUTE / "sigma.sh")
+    assert "biosamples" in text and '"eval"' in text, (
+        "chromimpute/sigma.sh does not read the drawn cells out of `biosamples.eval`")
+    assert 'for _, t in draw["eval_pairs"]' not in text, (
+        "chromimpute/sigma.sh still counts cells off the draw's eval_pairs, which is empty on the "
+        "shape tools/sigma_training_regime.py writes")
+    assert "len(kept) < 3" in text, "the survivor guard this defect defeated is gone"
+
+
+def test_the_sigma_array_throttle_is_not_confused_with_the_torch_import_cap():
+    """Two different numbers, two different reasons; conflating them moved the wrong one once."""
+    text = _text(CHROMIMPUTE / "sigma.sh")
+    assert "THROTTLE=${CI_THROTTLE:-10}" in text
+    assert "torch" in text, (
+        "chromimpute/sigma.sh's array throttle is a queue courtesy cap on java-only stages; the "
+        "comment must say so, because the neighbouring CI_NSHARD=12 IS the torch-import cap and "
+        "the two look alike")
+    assert "NSHARD=${CI_NSHARD:-12}" in _text(CHROMIMPUTE / "submit.sh")
 
 
 # ---------------------------------------------------------------------------------------------

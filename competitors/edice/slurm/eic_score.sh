@@ -2,17 +2,17 @@
 # predict -> score ONE panel, in one job. Runs after eic_train.sh (for the model) and sigma.sh
 # (for the σ table) with the same N_TARGETS and REGIME.
 #
-#   N_TARGETS=31                           sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
-#   N_TARGETS=31 SCOPE=genomewide          sbatch --time=12:00:00 --mem=96G competitors/edice/slurm/eic_score.sh
-#   N_TARGETS=31 PANEL=B_ B_ONCE=1         sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
-#   N_TARGETS=31 PANEL=B_ TRUTH=challenge  sbatch --time=03:00:00 competitors/edice/slurm/eic_score.sh
+#   N_TARGETS=31                                            sbatch --time=03:00:00 …/eic_score.sh
+#   N_TARGETS=31 SCOPE=genomewide                           sbatch --time=12:00:00 --mem=96G …
+#   N_TARGETS=31 PANEL=B_ SCOPE=genomewide B_ONCE=1         sbatch --time=12:00:00 --mem=96G …
+#   N_TARGETS=31 PANEL=B_ SCOPE=genomewide TRUTH=challenge B_ONCE=1  sbatch --time=12:00:00 …
 #
 # PANEL IS THE WHOLE OF §5's "B_ IS TOUCHED ONCE". The live regimes declare 38 eval pairs in one
 # file -- 26 V_ and 12 B_ -- so predicting from the shipped regime opens both. This job predicts
 # from a DERIVED single-panel regime instead (tools/declare_eval_pairs.py split), and that derived
 # file is the only thing run_eic.py ever sees. PANEL=V_ is the default and is re-runnable; PANEL=B_
-# needs B_ONCE=1 on the launch line AND an absent prediction root, so a second B_ pass is a refusal
-# (exit 4) and not a silent overwrite.
+# needs B_ONCE=1 on the launch line AND both B_ prediction roots absent, so a second B_ pass is a
+# refusal (exit 4) and not a silent overwrite.
 #
 # SCOPE picks the chromosome set, not the output file. §4 gives eDICE a PRINTED genome-wide cell,
 # so unlike Avocado, ChromImpute and Lavawizard it does still predict genome-wide.
@@ -21,6 +21,17 @@
 # A genomewide pass adds --held-out-chroms, so its ONE scores json carries the held-out `macro` and
 # `panels` blocks AND a `genome_wide` block. That is why both scopes write the same path: the
 # genome-wide json is a superset of the held-out one, not a rival to it.
+#
+# TWO CONSEQUENCES OF THAT SUPERSET, BOTH ENFORCED BELOW.
+#  * B_ IS GENOME-WIDE OR NOTHING (exit 2). The scope changes the prediction ROOT -- genomewide is
+#    a `.genomewide` sibling -- so "B_ held-out" and "B_ genome-wide" are two predictions of B_,
+#    each of which would pass a guard that watched only its own root. eDICE has a printed
+#    genome-wide cell and the genome-wide pass yields the held-out macro anyway, so the ONE
+#    permitted B_ prediction is the genome-wide one; SCOPE=heldout PANEL=B_ is refused. And the
+#    once-guard watches BOTH roots, not the one this invocation happens to point at.
+#  * A HELD-OUT SCORE NEVER OVERWRITES A GENOME-WIDE ONE (exit 5). Same path, smaller content: a
+#    held-out pass run second would drop the `genome_wide` block and leave nothing in the file to
+#    say a genome-wide pass had ever been made.
 #
 # THE σ TABLE IS AN INPUT AND IS NEVER FIT HERE. §7: "σ is fit on training-set residuals only --
 # never on V_, never on B_", and §12.2 voided every table fit on eval-pair residuals. This job
@@ -73,6 +84,20 @@ esac
 case "$SCOPE" in heldout|genomewide) ;;
   *) echo "[error] SCOPE must be heldout or genomewide, got '$SCOPE'" >&2; exit 2 ;;
 esac
+# B_ IS GENOME-WIDE OR NOTHING. The scope picks the prediction root as well as the chromosome set,
+# so allowing both scopes on B_ would allow TWO B_ predictions -- one under `.../B_`, one under
+# `.../B_.genomewide` -- and §5 permits one, ever. eDICE is the one method with a printed
+# genome-wide cell (§4), and the genome-wide pass carries the ranked held-out `macro` and `panels`
+# in the same scores json via --held-out-chroms, so the genome-wide scope is the strictly larger
+# of the two and there is nothing a held-out B_ pass could add.
+if [ "$PANEL" = "B_" ] && [ "$SCOPE" != "genomewide" ]; then
+  echo "[error] SCOPE=$SCOPE with PANEL=B_ is refused. B_ is predicted ONCE, EVER (§5), and each" >&2
+  echo "        scope writes its own prediction root, so a held-out B_ pass would SPEND that one" >&2
+  echo "        prediction on the smaller scope. eDICE prints a genome-wide cell (§4) and its" >&2
+  echo "        genome-wide scoring pass already emits the held-out macro and panels through" >&2
+  echo "        --held-out-chroms. Relaunch with SCOPE=genomewide." >&2
+  exit 2
+fi
 case "$TRUTH" in
   store) ;;
   challenge) if [ "$PANEL" != "B_" ]; then
@@ -134,6 +159,35 @@ if not got.startswith(prefix):
 print(f"[edice] σ OK: {p.name}  fitted_on = {got}")
 PYEOF
 
+# --- the scores json a held-out pass would replace ------------------------------------------------
+# Both scopes write the SAME path on purpose -- the genome-wide json is a superset of the held-out
+# one -- and that makes the reverse order LOSSY. A held-out pass run after a genome-wide one would
+# rewrite the file without its `genome_wide` block, and nothing left in the result would say a
+# genome-wide pass had ever happened. Refuse (exit 5) rather than overwrite; a genome-wide pass may
+# always replace a held-out json, because it carries everything the held-out one did.
+# Checked HERE, beside the σ check, so the refusal costs no GPU.
+if [ "$SCOPE" = "heldout" ] && [ -f "$SCORES" ]; then
+  python - "$SCORES" <<'PYEOF' || exit 5
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+try:
+    d = json.loads(p.read_text())
+except Exception as exc:                                   # a truncated json is not a genome-wide
+    print(f"[edice] existing {p.name} does not parse ({exc}); a held-out pass will replace it.")
+    raise SystemExit(0)
+if "genome_wide" in d:
+    sys.stderr.write(
+        f"[error] REFUSING to overwrite {p}: it carries a `genome_wide` block, so it was written\n"
+        f"        by a SCOPE=genomewide pass and already holds everything this held-out pass\n"
+        f"        would write, plus the genome-wide aggregation. Running held-out over it would\n"
+        f"        drop that block silently. Rerun with SCOPE=genomewide, or send this pass\n"
+        f"        somewhere else with SCORES=<path>.\n")
+    raise SystemExit(5)
+print(f"[edice] existing {p.name} carries no genome_wide block; a held-out pass may replace it.")
+PYEOF
+fi
+
 # --- the panel regime ---------------------------------------------------------------------------
 # Derived, never a second shipped config: two files declaring one panel drift, and the drift is
 # silent. `split` rewrites regions.bed absolute, because a regime file's BED resolves against its
@@ -149,14 +203,24 @@ case "$SCOPE" in
   genomewide) CHROMS=(--chroms all) ;;
 esac
 
-# --- the once-only B_ guard ---------------------------------------------------------------------
+# --- the once-only B_ guard, over BOTH B_ ROOTS ---------------------------------------------------
 # Exit 4, and B_ONCE=1 does NOT lift it: the flag says "this is the one B_ pass", and a root that
 # already carries a manifest proves it is not. Overwriting is how a second, differently-selected
 # checkpoint gets scored on the blind panel with nothing in the record to say so.
-if [ "$PANEL" = "B_" ] && [ -f "$PRED/manifest.json" ]; then
-  echo "[error] $PRED already holds a manifest.json. B_ is predicted ONCE (§5); this root has" >&2
-  echo "        been written. Delete it deliberately, or score the root that is there." >&2
-  exit 4
+#
+# EVERY B_ ROOT IS CHECKED, NOT THE ONE THIS INVOCATION WOULD WRITE. A guard that read only $PRED
+# is no guard at all: SCOPE appends `.genomewide` to the root, so two launches with different
+# scopes would each find their own root absent and each predict B_. The rule is one B_ prediction
+# EVER, so any manifest under either root refuses the next one. $PRED is checked too, in case it
+# was overridden on the launch line to a third place.
+if [ "$PANEL" = "B_" ]; then
+  for B_ROOT in "$PRED_ROOT_B" "${PRED_ROOT_B}.genomewide" "$PRED"; do
+    [ -f "$B_ROOT/manifest.json" ] || continue
+    echo "[error] $B_ROOT already holds a manifest.json. B_ is predicted ONCE, EVER (§5), across" >&2
+    echo "        both the held-out root and its .genomewide sibling; this one has been written." >&2
+    echo "        Delete it deliberately, or score the root that is there." >&2
+    exit 4
+  done
 fi
 
 echo "[edice] EIC $SCOPE  panel=$PANEL  truth=$TRUTH  n_targets=$N_TARGETS"

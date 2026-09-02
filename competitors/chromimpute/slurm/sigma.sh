@@ -58,10 +58,18 @@ $PY "$REPO/tools/sigma_training_regime.py" \
 echo "[ci_sigma] drawn training regime: $DRAW"
 
 # --- 2. the work lists, and the regime that matches them -----------------------------------------
-# A cell is kept ALL OR NOTHING. `sigma_pass` walks the regime's self-pairs and a self-pair's target
-# panel is every assay the cell holds, so a cell whose marks are not all trainable would send it
-# looking for a track this chain never wrote. Dropping the whole cell keeps the regime and the
-# prediction root describing the same thing.
+# THE DRAW CARRIES NO PAIRS, AND THE NARROWED REGIME MUST NOT EITHER. `sigma_training_regime.py`
+# writes `eval_pairs: []` and puts the drawn cells in `biosamples.eval`, because
+# `candi.store.regime._parse_eval_pairs` REFUSES a pair of a cell with itself outright. A regime
+# narrowed by rewriting eval_pairs to a list of self-pairs would not load at all, and the fit would
+# die on its first read of the file this stage just wrote. On the empty-pairs shape
+# `bench.harness.StoreSource` self-pairs every cell in `biosamples.eval` — its documented
+# no-pairing path — and `sigma_pass` walks those. So: read the cells out of `biosamples.eval`, and
+# narrow `biosamples.eval` and nothing else.
+#
+# A cell is kept ALL OR NOTHING. A self-pair's target panel is every assay the cell holds, so a
+# cell whose marks are not all trainable would send the fitter looking for a track this chain never
+# wrote. Dropping the whole cell keeps the regime and the prediction root describing the same thing.
 cd "$HERE"
 PYTHONPATH=$REPO/src:$HERE $PY - "$DRAW" "$SIGMA_REGIME" "$RUN" "$STORE" <<'PYEOF'
 import json, sys
@@ -90,7 +98,18 @@ if unknown:
 avail = {ln.split("\t")[0] for ln in (run / "lists" / "gtd.txt").read_text().splitlines() if ln.strip()}
 allowed = [a for a in draw["assays"] if a not in NOT_AN_ASSAY]
 
-cells = sorted({t for _, t in draw["eval_pairs"]})
+# The drawn cells, off `biosamples.eval`. NOT off `eval_pairs`: the draw declares none, so reading
+# pairs here would find no cells at all and the `len(kept) < 3` guard below would refuse every run.
+cells = [str(c) for c in ((draw.get("biosamples") or {}).get("eval") or [])]
+if not cells:
+    sys.exit("[ci_sigma] REFUSING: the draw declares no `biosamples.eval`. That is where "
+             "tools/sigma_training_regime.py puts the sampled training cells; an empty list means "
+             "the draw failed, or its shape changed and this stage has not been told.")
+if draw.get("eval_pairs"):
+    sys.exit(f"[ci_sigma] REFUSING: the draw declares {len(draw['eval_pairs'])} eval_pairs. A sigma "
+             f"regime is the NO-PAIRING shape: candi.store.regime refuses a self-pair, and a "
+             f"cross-cell pair here would be an eval pair, which Rule 1 forbids a sigma to see.")
+
 kept, dropped, items = [], [], []
 for cell in cells:
     marks = [m for m in manifest_assays(manifest, cell, "pval") if m in allowed]
@@ -114,8 +133,10 @@ lines = "\n".join(f"{c}\t{m}" for c, m in items) + "\n"
 write_targets(run / "input" / "targets_sigma.tsv", [(c, c, m) for c, m in items])
 
 out = json.loads(json.dumps(draw))
+# Stays EMPTY. regime.py refuses a [cell, cell] pair, and the narrowing is expressed by which cells
+# `biosamples.eval` names — StoreSource self-pairs exactly those.
+out["eval_pairs"] = []
 if kept != cells:
-    out["eval_pairs"] = [[c, c] for c in kept]
     out["biosamples"]["eval"] = list(kept)
     out["_comment"] = (str(draw.get("_comment", "")) + " NARROWED by "
                        "competitors/chromimpute/slurm/sigma.sh: a drawn cell is kept only when "
@@ -129,6 +150,15 @@ PYEOF
 
 # --- 3. the chain --------------------------------------------------------------------------------
 ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS,CI_REGIME=$SIGMA_REGIME"
+# `%THROTTLE` caps how many array tasks of one stage run at once. It is the SAME courtesy cap
+# `submit.sh` uses on `gtd` and `apply`, and for the same reason: the jar holds one open gzip reader
+# per compendium track, and an unthrottled array puts thousands of concurrent handles on Lustre.
+#
+# IT IS NOT THE TORCH-IMPORT CAP. Both stages below are java-only — `stage.sh` runs the jar for
+# `strain` and `sapply` and imports nothing — so the twelve-way limit is irrelevant here. That
+# limit lives on `CI_NSHARD=12` in `submit.sh`, where `prepare.py` DOES import torch off the shared
+# /project venv and more than twelve concurrent imports return half-read modules. Move this number
+# for queue etiquette; move that one never.
 THROTTLE=${CI_THROTTLE:-10}
 
 sub() {  # sub <stage> <time> <mem> <mx> [afterok-jobid]
