@@ -384,10 +384,12 @@ def test_the_manifest_stays_keyed_on_array_index_zero(method: str):
 
 def test_avocado_sigma_predict_passes_a_batch_positions_knob():
     """The sigma self-pair predict (98 tracks/cell) OOMs a MIG slice at predict.py's default 8192
-    positions; sigma.sh must pass SIGMA_PREDICT_BATCHPOS (default 2048) on the predict.py line."""
-    text = open("competitors/avocado/slurm/sigma.sh", encoding="utf-8").read()
-    assert 'SIGMA_PREDICT_BATCHPOS:-2048' in text
-    # the knob rides the predict.py command, not train.py's
+    positions; sigma.sh must pass SIGMA_PREDICT_BATCHPOS (default 2048) on the per-chromosome
+    predict.py command, BEFORE its `|| exit 1` (a flag after `exit 1` is an argument to exit)."""
     import re
-    block = re.search(r"predict\.py.*?(?:\n(?!\s*#).*?)*?--batch-positions \"\$\{SIGMA_PREDICT_BATCHPOS", text, re.S)
-    assert block, "--batch-positions with SIGMA_PREDICT_BATCHPOS must follow the predict.py call"
+    text = open("competitors/avocado/slurm/sigma.sh", encoding="utf-8").read()
+    m = re.search(r'python "\$AVO/predict.py" --regime "\$SIGMA_REGIME" --chrom "\$C" \\\n'
+                  r'\s*--shared "\$SHARED_CK" --genome "\$CK" --out "\$PRED" \\\n'
+                  r'\s*--batch-positions "\$\{SIGMA_PREDICT_BATCHPOS:-2048\}" \|\| exit 1', text)
+    assert m, "the per-chrom predict.py call must carry --batch-positions before `|| exit 1`"
+    assert "exit 1 \\" not in text.split("predicting the self-pairs")[1].split("done")[0]

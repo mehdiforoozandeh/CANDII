@@ -119,8 +119,8 @@ for C in "${SIG_CHROMS[@]}"; do
     fi
     echo "[avo_sigma] predicting the self-pairs on $C -> $PRED"
     python "$AVO/predict.py" --regime "$SIGMA_REGIME" --chrom "$C" \
-        --shared "$SHARED_CK" --genome "$CK" --out "$PRED" || exit 1 \
-            --batch-positions "${SIGMA_PREDICT_BATCHPOS:-2048}"
+        --shared "$SHARED_CK" --genome "$CK" --out "$PRED" \
+        --batch-positions "${SIGMA_PREDICT_BATCHPOS:-2048}" || exit 1
 done
 python "$AVO/predict.py" --regime "$SIGMA_REGIME" --out "$PRED" --write-manifest \
     --version 005-port \
