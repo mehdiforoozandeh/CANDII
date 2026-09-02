@@ -53,6 +53,7 @@ module load StdEnv/2023 python/3.11 >/dev/null 2>&1 || true
 source "$VENV/bin/activate"
 cd "$REPO"
 export PYTHONPATH="$REPO/src:$REPO/competitors"
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 
 [ -s "$REGIME" ] || { echo "[env] no regime at $REGIME" >&2; exit 1; }
 REGIME_NAME="$(basename "$REGIME" .json)"; REGIME_NAME="${REGIME_NAME#regime.}"

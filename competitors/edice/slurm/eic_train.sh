@@ -94,6 +94,7 @@ source "$VENV/bin/activate"
 
 cd "$REPO/competitors/edice"
 export PYTHONPATH="$PWD:$REPO/src"
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 mkdir -p "$OUT"
 
 # D32 IS HONOURED NOW. This block used to REFUSE a `regions` regime, because reading train_chroms

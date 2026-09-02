@@ -33,6 +33,7 @@ METHOD=Avocado
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
 export PYTHONPATH="$REPO/src"
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MPLBACKEND=Agg
 

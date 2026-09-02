@@ -60,6 +60,7 @@ source "$VENV/bin/activate"
 # The venv's editable install does NOT put `candi` on the path -- its .pth names a checkout that
 # carries `candi_kit` instead. $REPO/src is not optional.
 export PYTHONPATH="$REPO/competitors/edice:$REPO/src"
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 
 if [ ! -f "$MODEL" ]; then
   echo "[error] no model at $MODEL -- run eic_train.sh for N_TARGETS=$N_TARGETS first." >&2

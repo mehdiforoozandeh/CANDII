@@ -72,6 +72,7 @@ echo "[ci_sigma] drawn training regime: $DRAW"
 # wrote. Dropping the whole cell keeps the regime and the prediction root describing the same thing.
 cd "$HERE"
 PYTHONPATH=$REPO/src:$HERE $PY - "$DRAW" "$SIGMA_REGIME" "$RUN" "$STORE" <<'PYEOF'
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 import json, sys
 from pathlib import Path
 from prepare import load_json, manifest_assays, write_targets, NOT_AN_ASSAY
