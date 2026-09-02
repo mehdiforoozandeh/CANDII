@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write and re-check a regime's `eval_pairs` — the DECLARED imputation pairing (D31, t80).
+"""Write, re-check and split a regime's `eval_pairs` — the DECLARED imputation pairing (D31, t80).
 
     python tools/declare_eval_pairs.py declare --regime configs/regime.equiv.json \
         --input-prefix T_ --target-prefix V_ --target-prefix B_ \
@@ -7,9 +7,19 @@
 
     python tools/declare_eval_pairs.py check --regime /tmp/regime.paired.json
 
+    python tools/declare_eval_pairs.py split --regime configs/regime.eic_pilot.json \
+        --panel B_ --out $WORKSPACE/regime.eic_pilot.B_.json
+
 `plan/BENCHMARK_DESIGN.md` §14 names this file as the thing that owns the pairing. It did not
 exist, no shipped config declared `eval_pairs`, and `StoreSource` self-paired as a result — CANDI
 sat a different exam from every rival on the board. This is the other half of that fix.
+
+**One tool, three verbs (t87).** A second script called `declare_eval_pairs.py` used to ship
+alongside this one, deriving a `T_X -> V_X` / `T_X -> B_X` pairing from a baked-in table and
+writing one regime per split. Two files of that name, disagreeing about what declaring means, is
+how a caller ends up running the wrong one. It is retired: `declare` derives the pairing from an
+operator's argument, and `split` — below — cuts an already-declared pairing down to one panel.
+Neither invents a rule; both take the prefix as an argument.
 
 **Why a tool and not a library rule.** D16 makes store biosample names opaque ids that nothing may
 parse, and D31 says the pairing is DECLARED, never inferred. Both would be violated by a
@@ -26,6 +36,15 @@ surgery at all. Neither is baked in, and `declare` refuses to run without one of
 later and fails loudly if the corpus moved under it. It is the same three questions the design
 asks of the panel — do the names exist, are the splits disjoint on `(cell, assay)`, and how many
 experiments does each pair pose — answered against `manifest.json` rather than against a memo.
+
+**What `split` is for.** A shipped regime declares every pair — on EIC, 26 `V_` and 12 `B_`. A run
+wants ONE panel: the selection loop watches `V_`, and the held-out panel is touched once, at the
+end. A single regime carrying both would put the held-out set inside the selection loop, and no
+amount of care downstream would get it back out. `split` is the cut: it keeps the declared pairs
+whose TARGET starts with `--panel`, drops the rest, and writes a derived regime beside the run.
+It reads a prefix off a name, which D16 forbids a *loader* to do — the licence is `declare`'s: an
+operator, one explicit argument, one auditable file. There is no default panel for the same reason
+there is no default pairing rule.
 """
 from __future__ import annotations
 
@@ -72,6 +91,18 @@ def pairs_by_prefix(names: Sequence[str], input_prefix: str,
         else:
             orphans.append(name)
     return pairs, orphans
+
+
+def pairs_on_panel(pairs: Pairing, panel: str) -> Tuple[Pairing, Pairing]:
+    """`(kept, dropped)` — the declared pairs whose TARGET starts with `panel`, and the rest.
+
+    The prompt end is not consulted. On EIC a `T_` cell prompts for both panels (`T_DND-41` is the
+    input of `V_DND-41` and of `B_DND-41`), so a rule reading the input would keep every pair or
+    none. It is the truth cell that says which exam this is.
+    """
+    kept = [(i, t) for i, t in pairs if t.startswith(panel)]
+    dropped = [(i, t) for i, t in pairs if not t.startswith(panel)]
+    return kept, dropped
 
 
 def pairs_from_csv(path: Path) -> Pairing:
@@ -242,6 +273,59 @@ def cmd_check(a: argparse.Namespace) -> int:
     return 0 if (rec["disjoint"] or a.allow_overlap) and not rec["empty_panels"] else 1
 
 
+def cmd_split(a: argparse.Namespace) -> int:
+    src = Path(a.regime)
+    reg = Regime.from_file(src)                     # the source must be a loadable regime first
+    kept, dropped = pairs_on_panel([(i, t) for i, t in reg.eval_pairs], a.panel)
+    if not kept:
+        print(f"{src} declares {len(reg.eval_pairs)} eval pair(s) and none has a target starting "
+              f"{a.panel!r}. An empty panel reads as 'declared, none' and would silently disable "
+              f"the eval, so nothing is written. Check the prefix, or run `declare` first.",
+              file=sys.stderr)
+        return 2
+
+    obj = json.loads(src.read_text(encoding="utf-8"))
+    obj["eval_pairs"] = [list(p) for p in kept]
+    targets = list(dict.fromkeys(t for _, t in kept))
+    obj["biosamples"] = {**(obj.get("biosamples") or {}), "eval": targets}
+
+    # `regions.bed` resolves against the REGIME FILE's own directory (D32). The derived file lives
+    # beside the run, not beside the source, so a relative BED would resolve somewhere else or
+    # nowhere. Absolute here is what keeps the training scope the source's.
+    regions = obj.get("regions")
+    if isinstance(regions, dict) and "bed" in regions:
+        bed = Path(str(regions["bed"]))
+        if not bed.is_absolute():
+            bed = src.resolve().parent / bed
+        obj["regions"] = {**regions, "bed": str(bed.resolve())}
+
+    obj["_comment"] = (
+        f"DERIVED by tools/declare_eval_pairs.py split --panel {a.panel} from {src.name} "
+        f"(sha256 {reg.sha256[:12]}…). {len(kept)} of {len(reg.eval_pairs)} declared eval_pairs "
+        f"kept, by TARGET prefix {a.panel!r}; `biosamples.eval` is exactly those {len(targets)} "
+        f"target(s). Everything else — store, assays, biosamples.train, chromosomes, window plan, "
+        f"regions, dsf, kinds, seed — is the source's verbatim, except `regions.bed`, rewritten "
+        f"absolute because this file does not sit beside the source. A derived regime is "
+        f"single-panel BY DESIGN: one file carrying two panels would put the held-out panel inside "
+        f"the selection loop, and nothing downstream could get it back out. Do not edit by hand; "
+        f"re-derive."
+    )
+
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
+    Regime.from_file(out)                           # it must still load, from wherever it landed
+
+    print(f"[split] {a.panel}: {len(kept)} of {len(reg.eval_pairs)} declared pair(s) kept, "
+          f"{len(dropped)} dropped")
+    print(f"[split]   e.g. {[list(p) for p in kept[:3]]}")
+    if dropped:
+        heads = sorted({t.split('_', 1)[0] + '_' if '_' in t else t for _, t in dropped})
+        print(f"[split]   dropped target prefixes: {heads}")
+    print(f"wrote {out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -264,6 +348,16 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--regime", required=True)
     c.add_argument("--allow-overlap", action="store_true")
     c.set_defaults(fn=cmd_check)
+
+    s = sub.add_parser("split", help="cut a declared pairing down to one target panel")
+    s.add_argument("--regime", required=True, help="the regime whose `eval_pairs` are declared")
+    s.add_argument("--panel", required=True,
+                   help="a TARGET prefix, e.g. V_ or B_ on the EIC corpus. REQUIRED and never "
+                        "defaulted: the panel is the operator's argument, as the pairing rule is")
+    s.add_argument("--out", required=True,
+                   help="the derived regime, conventionally "
+                        "<workspace>/regime.<regime_name>.<panel>.json")
+    s.set_defaults(fn=cmd_split)
     return p
 
 
