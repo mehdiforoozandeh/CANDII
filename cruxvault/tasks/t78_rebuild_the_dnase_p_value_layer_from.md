@@ -7,9 +7,9 @@ parent: t77
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-29T18:42:15
-updated: 2026-08-29T18:42:15
+status: done
+created: "2026-08-29T18:42:15"
+updated: "2026-09-01T18:24:40"
 ---
 
 # t78 — rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p
@@ -24,7 +24,7 @@ Refs:: _(none)_
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [The DNase p-value layer, rebuilt from alignments](results/t78/G1_PHASE2_DNASE.md)
 
 ## Evidence
 

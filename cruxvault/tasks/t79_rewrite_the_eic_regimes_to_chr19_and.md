@@ -7,9 +7,9 @@ parent: t77
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-29T18:42:15
-updated: 2026-08-29T18:42:15
+status: done
+created: "2026-08-29T18:42:15"
+updated: "2026-09-01T18:24:40"
 ---
 
 # t79 — rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
@@ -24,7 +24,7 @@ a regime must name its training loci and its eval loci; the current ones do not,
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [The Pilot Regions in hg38, and the two live regimes](results/t79/G2_PILOT_HG38.md)
 
 ## Evidence
 

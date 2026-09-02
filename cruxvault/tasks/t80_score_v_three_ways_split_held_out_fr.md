@@ -7,9 +7,9 @@ parent: t77
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-29T18:42:15
-updated: 2026-08-29T18:42:15
+status: done
+created: "2026-08-29T18:42:15"
+updated: "2026-09-01T18:24:40"
 ---
 
 # t80 — score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
@@ -24,7 +24,7 @@ V_ tests 22 assays and B_ tests 8, so the validation-to-blind delta is unreadabl
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Two scopes from one pass, three panel numbers, one ranker](results/t80/PANEL_RULE.md)
 
 ## Evidence
 

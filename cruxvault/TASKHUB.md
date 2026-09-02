@@ -45,19 +45,17 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
 - `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address
-- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p
-- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
-- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
 - `t89` [visualization] generate the architecture README and diagram from the code
+- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge
 
 ## Blocked
 
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — blocked by `t78`, `t79`, `t80`
 
 ## By category
 
@@ -107,13 +105,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
 - `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *open*
-- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *open*
-- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *open*
-- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *open*
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *blocked*
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *open*
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *open*
+- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *open*
 
 ### visualization
 
@@ -161,6 +157,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
 - `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
+- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *done* → `results/t78/G1_PHASE2_DNASE.md`
+- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *done* → `results/t79/G2_PILOT_HG38.md`
+- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *done* → `results/t80/PANEL_RULE.md`
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *done* → `results/t82/DELIVERABLE.md`
 - `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *done* → `results/t83/DELIVERABLE.md`
 - `t84` [implementation] vendor Lavawizard — the other three rivals were already implemented — *done* → `results/t84/DELIVERABLE.md`
