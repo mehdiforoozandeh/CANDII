@@ -149,9 +149,9 @@ def select_pairs(regime: dict, prefix: str = SELECT_PREFIX):
     """`(kept, dropped)` -- the declared eval pairs whose TARGET is on the selection panel.
 
     This reads a prefix off a biosample name, which D16 forbids a *loader* to do.  The licence is
-    `tools/split_regime_by_panel.py`'s: a person may parse a name deliberately, once, somewhere it
-    can be audited, and record the result.  This is that one place for Avocado, it is called at the
-    top of a run and never inside the data path, and the derived list is written to disk beside the
+    `tools/declare_eval_pairs.py split`'s: a person may parse a name deliberately, once, somewhere
+    it can be audited, and record the result.  This is that one place for Avocado, it is called at
+    the top of a run, never inside the data path, and the derived list is written to disk beside the
     checkpoint so a reviewer can count the pairs instead of trusting this docstring.
     """
     pairs = [_pair_ends(r) for r in regime.get("eval_pairs", [])]

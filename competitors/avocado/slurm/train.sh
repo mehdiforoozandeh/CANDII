@@ -49,8 +49,13 @@
 # ~7x slower -- MEASURE the smoke run's steps/s before trusting that number here, and if the
 # projection does not fit, raise the rule rather than reaching for another spec.
 #
-#   sbatch --array=0-0  --export=ALL,MODE=shared,EPOCHS=60 <this>
-#   sbatch --array=0-2  --export=ALL,MODE=genome,EPOCHS=30 <this>
+# `%12` IS THE TORCH-IMPORT CAP, not queue etiquette: more than about twelve concurrent torch
+# imports off the shared /project venv return half-read modules as `ImportError`s. Every array in
+# this tree carries it, including the one-task shared fit, so the number is never dropped by
+# copying a line.
+#
+#   sbatch --array=0-0%12  --export=ALL,MODE=shared,EPOCHS=60 <this>
+#   sbatch --array=0-2%12  --export=ALL,MODE=genome,EPOCHS=30 <this>
 #
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t81_avo_train
@@ -97,3 +102,19 @@ fi
 echo "[avo_train] regime=$REGIME_NAME mode=$MODE chrom=$CHROM shared_scope=$SHARED_SCOPE select_every=$SELECTEVERY host=$(hostname)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 python "$AVO/train.py" "${ARGS[@]}"
+rc=$?
+[ $rc -ne 0 ] && exit $rc
+
+# KEEP THE SELECTED CHECKPOINT. $WS is /scratch, which purges after 60 days, and the board row this
+# fit produced outlives that. `--out` holds the SELECTED weights -- train.py leaves the last epoch
+# beside it as `.last.pt` and nothing copies that -- so this is the file a re-score or a provenance
+# question needs. A wall-clock kill leaves a `.partial` and no `--out`, so a stage that did not
+# finish copies nothing and says so.
+SEL="$WS/ckpt/${MODE}_${CHROM}.pt"
+if [ -s "$SEL" ]; then
+    mkdir -p "$CKPT_KEEP"
+    cp -p "$SEL" "$CKPT_KEEP/" && echo "[avo_train] kept $CKPT_KEEP/$(basename "$SEL")"
+else
+    echo "[avo_train] no $SEL to keep -- this stage wrote no selected checkpoint" >&2
+fi
+exit $rc

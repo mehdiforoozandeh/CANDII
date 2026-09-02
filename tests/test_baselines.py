@@ -21,6 +21,7 @@ would make every baseline number wrong in the same direction.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -36,13 +37,14 @@ from candi.bench.harness import Pair, open_source
 from candi.store import layout as L
 from candi.store.reader import CorpusStore
 
+from competitors.baselines import generate as Gen
 from competitors.baselines import heads as Hd
 from competitors.baselines import leaderboard as LB
 from competitors.baselines.generate import (
-    METHODS, Panel, available, cell_type, depth_center, generate, log2_depth, similarity_table,
-    top_k,
+    METHODS, REGIME_DEPENDENT, REGIME_INDEPENDENT, Panel, RegimeIdentityError, available,
+    cell_type, depth_center, generate, log2_depth, similarity_table, top_k,
 )
-from tests.test_store_reader import make_store
+from tests.test_store_reader import RES, make_store
 from tests.test_store_regime import regime_dict
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -291,9 +293,15 @@ def _structure_pval(corpus_root: Path, assay: str, cells, seed: int = 11) -> Non
                                            L.PVAL_UINT16_MAX).astype(np.uint16)
 
 
-def _build(tmp: Path, *, deeper: bool = False) -> tuple:
-    """A store + a regime declaring two imputation pairs. `deeper` doubles T_bb's H3K4me3 exposure."""
-    root = make_store(tmp, tracks=TRACKS)
+def _build(tmp: Path, *, deeper: bool = False, chrom_sizes=None) -> tuple:
+    """A store + a regime declaring two imputation pairs. `deeper` doubles T_bb's H3K4me3 exposure.
+
+    `chrom_sizes` overrides the two-chromosome default. The D1 identity assertion needs THREE — two
+    disjoint training slices and one eval chromosome — because a regime whose train and eval
+    chromosomes overlap is refused by `Regime.check_against_store` and would be a fixture that no
+    real regime resembles.
+    """
+    root = make_store(tmp, tracks=TRACKS, chrom_sizes=chrom_sizes)
     # `make_store` gives every track the same depth; a baseline that never sees two depths never
     # exercises the rescale it is built around.
     for i, b in enumerate(TRAIN):
@@ -467,6 +475,318 @@ def test_top_k_is_deterministic_under_ties():
     sim = {("T_aa", "T_bb"): 0.5, ("T_aa", "T_cc"): 0.5}
     assert top_k(sim, "T_aa", ["T_dd", "T_cc", "T_bb"], 2) == ["T_bb", "T_cc"]
     assert top_k(sim, "T_aa", ["T_dd", "T_cc", "T_bb"], 3)[-1] == "T_dd"   # -inf sorts last
+
+
+# ---------------------------------------------------------------------------
+# D1 — which of the five collapse to one run, asserted rather than argued
+# ---------------------------------------------------------------------------
+#
+# `BENCHMARK_DESIGN.md` §12.2 ruled all five naive baselines run once rather than once per regime,
+# "because their fit is regime-independent", and said the first implementation of `avg` asserts it.
+# It did not: there was no test anywhere that predicted under two regimes and compared. These are
+# that assertion, and they also pin the half §12.2 got wrong — `knn1`, `knn5` and `marginal` fit on
+# the regime's training chromosomes and do NOT collapse.
+#
+# The fixture is one store with three chromosomes and two regimes over it that differ in NOTHING
+# but the training slice: chr1 against chr3, both predicting chr2, the same declared pairs.
+#
+# IT CARRIES SEVEN CONTRIBUTORS, AND THE SEVEN ARE LOAD-BEARING. The rest of this file runs on three
+# (`TRACKS`), and with three `top_k(…, 5)` returns all three — so a method that wrongly went through
+# the kNN top-5 would still be averaging every contributor and every identity test would pass. That
+# is exactly how `avg-arcsinh` shipped selecting the top 5 by similarity on 2026-09-01 with a green
+# suite. Seven contributors and a k of 5 make the two paths produce different numbers.
+#
+# The similarity LADDER below is what makes the difference visible rather than a coin toss: the
+# seven contributors are given a per-chromosome correlation with the prompt cells that ranks them
+# c1 > c2 > … > c7 on chr1 and exactly the reverse on chr3. Under regime A the top 5 are c1…c5 and
+# under regime B they are c3…c7, so anything selecting on similarity MUST move and anything
+# averaging every contributor MUST NOT.
+
+_ASSERT_SIZES = {"chr1": 400 * RES + 7, "chr2": 300 * RES + 3, "chr3": 500 * RES + 11}
+
+#: Seven, because `knn5` takes five: a fixture with `k <= 5` contributors cannot tell a mean over
+#: all of them from a mean over the top five.
+WIDE_CONTRIBUTORS = tuple(f"T_c{i}" for i in range(1, 8))
+WIDE_PROMPTS = ("T_aa", "T_ee")
+WIDE_TRACKS = {b: ("ATAC-seq", "DNase-seq", L.CONTROL_TRACK) for b in WIDE_PROMPTS}
+WIDE_TRACKS.update({b: ("ATAC-seq", "DNase-seq", "H3K4me3", L.CONTROL_TRACK)
+                    for b in WIDE_CONTRIBUTORS})
+WIDE_TRACKS.update({"V_aa": ("ATAC-seq", "H3K4me3"), "V_ee": ("ATAC-seq", "H3K4me3")})
+WIDE_TRAIN = list(WIDE_PROMPTS) + list(WIDE_CONTRIBUTORS)
+WIDE_PAIRS = [["T_aa", "V_aa"], ["T_ee", "V_ee"]]
+
+#: `+1` ranks c1 first, `-1` ranks c7 first. chr1 is regime A's training slice and chr3 is regime
+#: B's; chr2 is what both predict and no similarity is ever read there.
+_LADDER = {"chr1": 1, "chr2": 1, "chr3": -1}
+
+
+def _similarity_ladder(corpus_root: Path, assays=("ATAC-seq", "DNase-seq")) -> None:
+    """Give the seven contributors a known, per-chromosome similarity order to the prompt cells.
+
+    Each cell's `-log10 p` on the assays it shares with the prompts becomes
+    `w * shared(assay, chrom) + (1 - w) * private(cell, assay, chrom)`, with `w` stepping from 0.95
+    down to 0.35 across the seven; a prompt cell gets `shared` itself. Pearson `r` with the prompt
+    is monotone in `w`, so the rank order is the `w` order, and `_LADDER` reverses it on chr3.
+
+    Written through the file's own codec (scale and transform off the root attrs) so the store
+    stays a store the real reader can open.
+    """
+    def draw(tag: str, n: int) -> np.ndarray:
+        return np.abs(np.random.default_rng(zlib.crc32(tag.encode())).normal(8.0, 6.0, n))
+
+    for b in WIDE_TRAIN:
+        with h5py.File(str(L.kind_path(corpus_root, b, "pval")), "r+") as f:
+            attrs = L.read_root_attrs(f)
+            names = list(attrs[L.ATTR_TRACKS])
+            scale = int(attrs.get(L.ATTR_SCALE, L.PVAL_SCALE))
+            transform = str(attrs.get(L.ATTR_TRANSFORM, L.PVAL_TRANSFORM))
+            for assay in assays:
+                if assay not in names:
+                    continue
+                col = names.index(assay)
+                for chrom in list(f.keys()):
+                    n = f[chrom].shape[0]
+                    shared = draw(f"shared/{assay}/{chrom}", n)
+                    if b in WIDE_CONTRIBUTORS:
+                        rank = WIDE_CONTRIBUTORS.index(b)
+                        if _LADDER[chrom] < 0:
+                            rank = len(WIDE_CONTRIBUTORS) - 1 - rank
+                        w = 0.95 - 0.1 * rank
+                        v = w * shared + (1.0 - w) * draw(f"{b}/{assay}/{chrom}", n)
+                    else:
+                        v = shared
+                    enc = v if transform == "linear" else np.arcsinh(v)
+                    f[chrom][:, col] = np.clip(np.round(enc * scale), 0,
+                                               L.PVAL_UINT16_MAX).astype(np.uint16)
+
+
+@pytest.fixture(scope="module")
+def two_regimes(tmp_path_factory):
+    """`(store, regime_A, regime_B)` — same store, same pairs, disjoint training chromosomes."""
+    tmp = tmp_path_factory.mktemp("tworegime")
+    root = make_store(tmp, tracks=WIDE_TRACKS, chrom_sizes=_ASSERT_SIZES)
+    for i, b in enumerate(WIDE_TRAIN):
+        _set_depth(root, b, "ATAC-seq", 10_000_000 * (i + 1))
+        if "H3K4me3" in WIDE_TRACKS[b]:
+            _set_depth(root, b, "H3K4me3", 8_000_000 * (i + 1))
+    _set_depth(root, "V_aa", "H3K4me3", 25_000_000)
+    _set_depth(root, "V_ee", "H3K4me3", 12_000_000)
+    _similarity_ladder(root)
+    obj = regime_dict(root, biosamples={"train": WIDE_TRAIN, "eval": ["V_aa", "V_ee"]},
+                      kinds=["counts", "peaks", "pval"], eval_pairs=WIDE_PAIRS)
+    a = tmp / "regime.json"
+    a.write_text(json.dumps(obj), encoding="utf-8")
+    assert obj["train_chroms"] == ["chr1"] and obj["eval_chroms"] == ["chr2"]
+    obj = dict(obj, train_chroms=["chr3"])
+    b = tmp / "regime_b.json"
+    b.write_text(json.dumps(obj), encoding="utf-8")
+    return root, a, b
+
+
+def test_the_fixture_really_does_hold_seven_contributors_and_a_ranking_that_flips(two_regimes):
+    """The fixture's own gate. If either half stops holding, every test below it goes vacuous."""
+    _, a, b = two_regimes
+    picks = {}
+    for name, rp in (("A", a), ("B", b)):
+        panel = Panel(rp)
+        try:
+            contribs = panel.contributors(("T_aa", "V_aa"), TARGET)
+            assert sorted(contribs) == sorted(WIDE_CONTRIBUTORS), \
+                f"{name}: {len(contribs)} contributors — the fixture must carry seven, or " \
+                f"top_k(…, 5) returns all of them and selection cannot be told from averaging"
+            sim = similarity_table(panel, panel.train, progress=False)
+            picks[name] = top_k(sim, "T_aa", contribs, 5)
+        finally:
+            panel.close()
+    assert picks["A"] == list(WIDE_CONTRIBUTORS[:5]), picks["A"]
+    assert picks["B"] == list(reversed(WIDE_CONTRIBUTORS[2:])), picks["B"]
+    assert set(picks["A"]) != set(picks["B"]), \
+        "the two training slices choose the same five, so nothing here can detect a selection"
+
+
+def _arrays_of(root: Path, chrom: str) -> dict:
+    """`{(track, array name): ndarray}` for one chromosome of one prediction root."""
+    out = {}
+    for d in sorted(p for p in root.iterdir() if p.is_dir()):
+        f = d / f"{chrom}.npz"
+        if f.is_file():
+            with np.load(f) as z:
+                for k in z.files:
+                    out[(d.name, k)] = z[k]
+    return out
+
+
+def test_only_the_fitted_three_move_when_the_training_slice_moves(two_regimes, tmp_path):
+    """D1, measured on every method at once: who is regime-independent and who is not.
+
+    The reviewer's defect was exactly here. `avg-arcsinh` fell through to `top_k(…, 5)`, so it
+    averaged the top five by kNN similarity and moved with `train_chroms` like the fitted three —
+    while §12.2 printed its one number in both regime rows.
+    """
+    _, a, b = two_regimes
+    ra = generate(a, tmp_path / "A", chroms=["chr2"], methods=list(METHODS),
+                  poisson_n=SCOREABLE_POISSON_N, progress=False)
+    rb = generate(b, tmp_path / "B", chroms=["chr2"], methods=list(METHODS),
+                  poisson_n=SCOREABLE_POISSON_N, progress=False)
+    same = {}
+    for m in METHODS:
+        A, B = _arrays_of(ra[m], "chr2"), _arrays_of(rb[m], "chr2")
+        assert A and set(A) == set(B), m
+        same[m] = all(np.array_equal(A[k], B[k]) for k in A)
+    for m in REGIME_INDEPENDENT:
+        assert same[m], (f"{m} is printed in BOTH regime rows out of ONE root, and it just wrote "
+                         f"different arrays under two regimes that differ only in train_chroms")
+    for m in REGIME_DEPENDENT:
+        assert not same[m], (f"{m} fits on train_chroms, so a fixture in which it does not move "
+                             f"cannot tell a regime-independent method from a fitted one")
+
+
+def test_avg_arcsinh_is_the_same_array_whether_or_not_knn_is_in_the_pass(two_regimes, tmp_path):
+    """A method's output may not depend on which OTHER methods were asked for in the same run.
+
+    `sim` is built only when `knn1`/`knn5` are requested, so a method that went through `top_k`
+    silently changed definition — top 5 by similarity in a full pass, top 5 alphabetically in a
+    collapsed-only pass — and both were stamped with the same manifest.
+    """
+    _, a, _ = two_regimes
+    full = generate(a, tmp_path / "full", chroms=["chr2"], methods=list(METHODS),
+                    poisson_n=SCOREABLE_POISSON_N, progress=False)
+    alone = generate(a, tmp_path / "alone", chroms=["chr2"], methods=list(REGIME_INDEPENDENT),
+                     poisson_n=SCOREABLE_POISSON_N, progress=False)
+    for m in REGIME_INDEPENDENT:
+        A, B = _arrays_of(full[m], "chr2"), _arrays_of(alone[m], "chr2")
+        assert set(A) == set(B) and A, m
+        for k in A:
+            assert np.array_equal(A[k], B[k]), f"{m}/{k[0]}[{k[1]}] moved with the METHODS list"
+    for m in REGIME_INDEPENDENT:
+        got = json.loads((full[m] / "manifest.json").read_text(encoding="utf-8"))
+        for row in got["tracks"].values():
+            assert row["n_contributors"] == row["n_eligible"] == len(WIDE_CONTRIBUTORS), \
+                f"{m} averaged {row['n_contributors']} of {row['n_eligible']} eligible " \
+                f"contributors; §12.2's 'no fitted position parameters' means all of them"
+
+
+def test_the_collapsed_methods_are_identical_under_two_training_slices(two_regimes, tmp_path):
+    """§12.2's claim, for the two methods it is true of — and the manifest records that it was run."""
+    _, a, b = two_regimes
+    out = tmp_path / "preds"
+    roots = generate(a, out, methods=list(REGIME_INDEPENDENT), poisson_n=SCOREABLE_POISSON_N,
+                     progress=False, assert_against=b)
+    assert sorted(roots) == sorted(REGIME_INDEPENDENT)
+    for m, root in roots.items():
+        got = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        assert got["regime_independent"] == {"asserted_against": "regime_b.json",
+                                             "chrom": "chr2", "identical": True}, m
+        assert got["tracks"], f"{m} wrote a manifest with no track — the comparison saw nothing"
+
+
+def test_the_assertion_fails_when_the_training_slice_is_made_to_matter(two_regimes, tmp_path):
+    """The other half of D1: `marginal` pools over `train_chroms`, so the two regimes disagree.
+
+    This is the control. An identity check that cannot fail licenses nothing, and the failure is
+    produced by a real regime-dependent method rather than by a doctored one.
+    """
+    _, a, b = two_regimes
+    out = tmp_path / "preds"
+    with pytest.raises(RegimeIdentityError) as exc:
+        generate(a, out, methods=["marginal"], poisson_n=SCOREABLE_POISSON_N,
+                 progress=False, assert_against=b)
+    assert "marginal/" in str(exc.value) and "differ" in str(exc.value)
+    assert not (out / "marginal" / "manifest.json").exists(), \
+        "a failed assertion left a manifest behind that a reader could quote"
+
+
+def test_the_assertion_refuses_a_panel_the_other_regime_does_not_declare(two_regimes, tmp_path):
+    """Identical output for two DIFFERENT panels is an identity between two different objects."""
+    _, a, b = two_regimes
+    obj = json.loads(b.read_text(encoding="utf-8"))
+    obj["eval_pairs"] = [WIDE_PAIRS[0]]
+    narrow = tmp_path / "regime_narrow.json"
+    narrow.write_text(json.dumps(obj), encoding="utf-8")
+    with pytest.raises(ValueError, match="SAME panel"):
+        generate(a, tmp_path / "preds", methods=["avg"], poisson_n=SCOREABLE_POISSON_N,
+                 progress=False, assert_against=narrow)
+
+
+def test_the_cli_never_asserts_regime_independence_for_a_fitted_method(two_regimes, tmp_path):
+    """Exit 2, and before any store is opened: the flag is not offered for the fitted three."""
+    _, a, b = two_regimes
+    for m in REGIME_DEPENDENT:
+        rc = Gen.main(["--store", str(a), "--out", str(tmp_path / m), "--methods", m,
+                       "--assert-regime-independent", str(b), "--quiet"])
+        assert rc == 2, m
+        assert not (tmp_path / m).exists(), f"{m} was generated before the flag was refused"
+
+
+def test_a_difference_leaves_the_cli_with_exit_5(two_regimes, tmp_path, monkeypatch):
+    """The exit code the launchers branch on. `marginal` is let past the CLI guard to produce one."""
+    _, a, b = two_regimes
+    monkeypatch.setattr(Gen, "REGIME_INDEPENDENT", ("avg", "avg-arcsinh", "marginal"))
+    rc = Gen.main(["--store", str(a), "--out", str(tmp_path / "preds"), "--methods", "marginal",
+                   "--assert-regime-independent", str(b), "--poisson-n",
+                   str(SCOREABLE_POISSON_N), "--quiet"])
+    assert rc == 5
+    assert Gen.main(["--store", str(a), "--out", str(tmp_path / "ok"), "--methods", "avg",
+                     "--assert-regime-independent", str(b), "--poisson-n",
+                     str(SCOREABLE_POISSON_N), "--quiet"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# the assertion pass may not touch the numbers it is asserting about
+# ---------------------------------------------------------------------------
+#
+# `slurm/t49_baselines_p1.sh` ran the assertion by RE-GENERATING `avg,avg-arcsinh` into the same
+# prediction roots, which overwrote the checked chromosome's npz and then stamped `identical: true`
+# on top of arrays nobody had scored. The stamp must be the only mutation of the root: the regime-B
+# side goes to a temporary directory and is removed with it.
+
+def _tree(root: Path) -> dict:
+    """`{relative path: bytes}` for every file under a prediction root."""
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def test_the_assertion_pass_changes_nothing_but_the_manifest(two_regimes, tmp_path):
+    """Every array byte-identical before and after; only `regime_independent` is added."""
+    _, a, b = two_regimes
+    out = tmp_path / "preds"
+    generate(a, out, chroms=["chr2"], methods=list(METHODS), poisson_n=SCOREABLE_POISSON_N,
+             progress=False)
+    before = _tree(out)
+    rc = Gen.main(["--store", str(a), "--out", str(out), "--methods", ",".join(REGIME_INDEPENDENT),
+                   "--chroms", "chr2", "--poisson-n", str(SCOREABLE_POISSON_N),
+                   "--assert-regime-independent", str(b), "--assert-only", "--quiet"])
+    assert rc == 0
+    after = _tree(out)
+    assert set(before) == set(after), \
+        f"the assertion pass added or removed files: {set(after) ^ set(before)}"
+    for rel, blob in before.items():
+        method = rel.split("/")[0]
+        if rel.endswith(".npz") or method in REGIME_DEPENDENT:
+            assert after[rel] == blob, f"{rel} was rewritten by a pass that only had to compare"
+    for m in REGIME_INDEPENDENT:
+        old = json.loads(before[f"{m}/manifest.json"])
+        new = json.loads(after[f"{m}/manifest.json"])
+        assert new.pop("regime_independent") == {"asserted_against": "regime_b.json",
+                                                 "chrom": "chr2", "identical": True}, m
+        assert new == old, f"{m}'s manifest changed in more than the stamp"
+
+
+def test_the_assertion_pass_refuses_a_root_generated_at_another_floor(two_regimes, tmp_path):
+    """A stamp pass at the wrong Poisson floor would exit 5 and read as 'the collapse is false'."""
+    _, a, b = two_regimes
+    out = tmp_path / "preds"
+    generate(a, out, chroms=["chr2"], methods=["avg"], poisson_n=SCOREABLE_POISSON_N,
+             progress=False)
+    with pytest.raises(ValueError, match="poisson_n"):
+        Gen.stamp_regime_independent(a, out, b, methods=["avg"], chroms=["chr2"],
+                                     poisson_n=2 * SCOREABLE_POISSON_N, progress=False)
+
+
+def test_assert_only_without_a_second_regime_is_refused(two_regimes, tmp_path):
+    _, a, _ = two_regimes
+    assert Gen.main(["--store", str(a), "--out", str(tmp_path / "preds"), "--methods", "avg",
+                     "--assert-only", "--quiet"]) == 2
+    assert not (tmp_path / "preds").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -778,3 +1098,235 @@ def test_candi_never_imports_competitors():
             if re.search(r"^\s*(import\s+competitors|from\s+competitors)", p.read_text("utf-8"),
                          re.M)]
     assert not hits, f"core imports the competitors tree: {hits}"
+
+
+# ---------------------------------------------------------------------------
+# D32 — a `regions` BED is the TRAINING scope, and only the fitted three read it
+# ---------------------------------------------------------------------------
+#
+# `slurm/t49_baselines_*.sh` refused `regime.eic_pilot.json` for `knn1`, `knn5` and `marginal` with
+# exit 3 until 2026-09-01, because this module read `train_chroms` RAW: those three would have been
+# fitted over 18 whole chromosomes where every other method under that regime sees the Pilot Regions
+# alone. That is a Rule 2 break, and these tests are what let the guard go.
+#
+# THE FIXTURE TRAINS ON TWO CHROMOSOMES AND CUTS THE BED TO ONE, and that is what makes the kNN half
+# measurable. `_similarity_ladder` ranks the seven contributors c1 > … > c7 on chr1 and exactly the
+# reverse on chr3, so a fit pooled over BOTH chromosomes has no clean order left, while a fit cut to
+# an interval of chr1 recovers c1…c5. A BED that merely shortened one chromosome would leave the
+# monotone ladder — and the top five — untouched, and the test would pass without measuring
+# anything.
+
+
+def _bed_regime(tmp_path, src, chrom, first_bin, end_bin, *, name, train_chroms=None):
+    """`src` with a D32 `regions` block over `[first_bin, end_bin)` of `chrom`, in BASE PAIRS."""
+    bed = tmp_path / f"{name}.bed"
+    bed.write_text(f"{chrom}\t{first_bin * RES}\t{end_bin * RES}\tpilot1\n", encoding="utf-8")
+    obj = json.loads(Path(src).read_text(encoding="utf-8"))
+    if train_chroms is not None:
+        obj["train_chroms"] = list(train_chroms)
+    obj["regions"] = {"bed": bed.name, "sha256": hashlib.sha256(bed.read_bytes()).hexdigest(),
+                      "policy": "contain"}
+    out = tmp_path / f"{name}.json"
+    out.write_text(json.dumps(obj), encoding="utf-8")
+    return out
+
+
+def _drop_regions(tmp_path, src, *, name, train_chroms=None):
+    """The same regime with no `regions` block — the whole-chromosome fit to compare against."""
+    obj = json.loads(Path(src).read_text(encoding="utf-8"))
+    obj.pop("regions", None)
+    if train_chroms is not None:
+        obj["train_chroms"] = list(train_chroms)
+    out = tmp_path / f"{name}.json"
+    out.write_text(json.dumps(obj), encoding="utf-8")
+    return out
+
+
+def test_contained_bins_is_the_d32_containment_rule_and_none_without_a_bed(two_regimes, tmp_path):
+    """Bins whose whole 25 bp lies inside a region, counted the way `Regime.windows` counts them."""
+    _, a, _ = two_regimes
+    plain, cut = Panel(a), Panel(_bed_regime(tmp_path, a, "chr1", 10, 60, name="c"))
+    try:
+        assert plain.contained_bins("chr1") is None, \
+            "a regime with no BED must keep the untouched path, not gather through an identity index"
+        assert np.array_equal(cut.contained_bins("chr1"), np.arange(10, 60))
+        # A region edge off the bin grid loses its partial bin, exactly as D32's window rule does.
+        edge = Panel(_bed_regime(tmp_path, a, "chr1", 0, 1, name="e"))
+        try:
+            bed = tmp_path / "edge.bed"
+            bed.write_text("chr1\t10\t99\tpilot1\n", encoding="utf-8")
+            obj = json.loads(Path(a).read_text(encoding="utf-8"))
+            obj["regions"] = {"bed": bed.name,
+                              "sha256": hashlib.sha256(bed.read_bytes()).hexdigest(),
+                              "policy": "contain"}
+            rp = tmp_path / "edge.json"
+            rp.write_text(json.dumps(obj), encoding="utf-8")
+            part = Panel(rp)
+            try:
+                assert np.array_equal(part.contained_bins("chr1"), np.arange(1, 3)), \
+                    "bp 10-99 covers whole bins 1 and 2 only; 0 and 3 are partial"
+            finally:
+                part.close()
+        finally:
+            edge.close()
+    finally:
+        plain.close()
+        cut.close()
+
+
+def test_a_regions_bed_moves_the_fitted_three_and_leaves_the_collapsed_two_alone(two_regimes,
+                                                                                tmp_path):
+    """The whole of D32 support here: `knn5` and `marginal` move, `avg` and `avg-arcsinh` do not."""
+    _, a, _ = two_regimes
+    both = ["chr1", "chr3"]
+    full = _drop_regions(tmp_path, a, name="full", train_chroms=both)
+    cut = _bed_regime(tmp_path, a, "chr1", 0, 200, name="cut", train_chroms=both)
+    rf = generate(full, tmp_path / "F", chroms=["chr2"], methods=list(METHODS),
+                  poisson_n=SCOREABLE_POISSON_N, progress=False)
+    rc = generate(cut, tmp_path / "C", chroms=["chr2"], methods=list(METHODS),
+                  poisson_n=SCOREABLE_POISSON_N, progress=False)
+    same = {}
+    for m in METHODS:
+        A, B = _arrays_of(rf[m], "chr2"), _arrays_of(rc[m], "chr2")
+        assert A and set(A) == set(B), m
+        same[m] = all(np.array_equal(A[k], B[k]) for k in A)
+    for m in REGIME_INDEPENDENT:
+        assert same[m], (f"{m} moved when the TRAINING scope was cut to a BED. No training locus "
+                         f"enters it, so nothing about `regions` may reach it — and its one root is "
+                         f"printed in both regime rows")
+    for m in REGIME_DEPENDENT:
+        assert not same[m], (f"{m} fits on the training loci and did not move when the BED cut them "
+                             f"from two chromosomes to one interval of one — it is still reading "
+                             f"train_chroms raw, which is the Rule 2 break the exit-3 guard covered")
+
+
+def test_the_knn_similarity_table_is_correlated_over_the_bed_and_not_the_chromosome(two_regimes,
+                                                                                    tmp_path):
+    """knn's fit IS the table, so this is where the scope has to bite for `knn1`/`knn5`."""
+    _, a, _ = two_regimes
+    both = ["chr1", "chr3"]
+    pf = Panel(_drop_regions(tmp_path, a, name="sfull", train_chroms=both))
+    pc = Panel(_bed_regime(tmp_path, a, "chr1", 0, 200, name="scut", train_chroms=both))
+    try:
+        contribs = pf.contributors(("T_aa", "V_aa"), TARGET)
+        picked_full = top_k(similarity_table(pf, pf.train, progress=False), "T_aa", contribs, 5)
+        picked_cut = top_k(similarity_table(pc, pc.train, progress=False), "T_aa", contribs, 5)
+        assert picked_cut == list(WIDE_CONTRIBUTORS[:5]), \
+            f"cut to chr1 the ladder is c1…c5; got {picked_cut}"
+        assert set(picked_full) != set(picked_cut), \
+            "pooling chr1 and chr3 cancels the ladder, so the two fits must not choose the same five"
+    finally:
+        pf.close()
+        pc.close()
+
+
+def test_a_bed_with_no_region_on_the_training_chromosomes_refuses_both_fitted_reads(two_regimes,
+                                                                                   tmp_path):
+    """An empty D32 pool is a REFUSAL naming the chromosomes and the BED — not a quiet answer.
+
+    Both readers used to give one. `fit_marginal` returned `None`, which is also what it says when
+    no training cell carries the assay, so the row simply vanished with nothing pointing at the
+    BED. `similarity_table` was worse: `Z` has zero columns, `Z @ Z.T / 0` is an all-NaN table, and
+    `top_k` reads a missing similarity as `-inf` and breaks the tie on the biosample name — so
+    `knn1` and `knn5` would have written an alphabetical sort wearing a fit's name.
+    """
+    _, a, _ = two_regimes
+    off = _bed_regime(tmp_path, a, "chr3", 0, 100, name="off", train_chroms=["chr1"])
+    panel = Panel(off)
+    try:
+        assert panel.contained_bins("chr1").size == 0
+        with pytest.raises(ValueError, match="chr1"):
+            Gen.fit_marginal(panel, TARGET)
+        with pytest.raises(ValueError, match="off.bed"):
+            similarity_table(panel, panel.train, progress=False)
+    finally:
+        panel.close()
+
+
+def test_a_bed_that_does_cover_the_training_chromosomes_still_fits(two_regimes, tmp_path):
+    """The refusal above is about an EMPTY pool, not about having a BED at all."""
+    _, a, _ = two_regimes
+    on = _bed_regime(tmp_path, a, "chr1", 0, 100, name="on", train_chroms=["chr1"])
+    panel = Panel(on)
+    try:
+        assert panel.contained_bins("chr1").size == 100
+        fit = Gen.fit_marginal(panel, TARGET)
+        assert fit is not None and fit["n_bins"] > 0
+        assert similarity_table(panel, panel.train, progress=False)
+    finally:
+        panel.close()
+
+
+# ---------------------------------------------------------------------------
+# D31 — no `eval_pairs` at all: the self-paired shape the sigma regime is
+# ---------------------------------------------------------------------------
+#
+# `tools/sigma_training_regime.py` writes `eval_pairs: []` with the drawn training cells in
+# `biosamples.eval`, and it can write nothing else — `candi.store.regime` refuses a `[c, c]` literal
+# outright. `Panel` read `eval_pairs` alone until 2026-09-01, so `--methods avg-arcsinh --store
+# <derived>` wrote an empty root and the training-residual σ pass had no residual to take.
+
+
+def _no_pairs_regime(tmp_path, src, cells, *, name="sigma_shape"):
+    """The σ regime's shape: no pairs, the drawn cells in `biosamples.eval`, train chroms scored."""
+    obj = json.loads(Path(src).read_text(encoding="utf-8"))
+    obj["biosamples"] = {"train": list(obj["biosamples"]["train"]), "eval": list(cells)}
+    obj["eval_pairs"] = []
+    obj["eval_chroms"] = list(obj["train_chroms"])
+    obj["train_chroms"] = []
+    out = tmp_path / f"{name}.json"
+    out.write_text(json.dumps(obj), encoding="utf-8")
+    return out
+
+
+def test_a_regime_with_no_eval_pairs_self_pairs_its_eval_biosamples(two_regimes, tmp_path):
+    """`Panel` must answer what `harness.StoreSource` answers, pair for pair and assay for assay."""
+    _, a, _ = two_regimes
+    cells = ["T_c1", "T_c2"]
+    rp = _no_pairs_regime(tmp_path, a, cells)
+    panel = Panel(rp)
+    source = open_source(store=rp)
+    try:
+        assert panel.declared_pairs == []
+        assert panel.pairs == [(c, c) for c in cells]
+        assert source.pairs("impute") == [Pair(c, c) for c in cells]
+        for pair in panel.pairs:
+            want = sorted(source.assays[i] for i in source.targets(Pair(*pair), "impute"))
+            assert sorted(panel.targets(pair)) == want, \
+                f"{pair}: the generator and bench disagree about a self-pair's panel"
+            assert want, "a self-paired cell with no target assay makes the fixture vacuous"
+    finally:
+        source.close()
+        panel.close()
+
+
+def test_a_self_paired_track_is_never_averaged_from_its_own_answer(two_regimes, tmp_path):
+    """§5's exclusion is the leave-one-out on this path: `T_c1` contributes nothing to `T_c1`."""
+    _, a, _ = two_regimes
+    panel = Panel(_no_pairs_regime(tmp_path, a, ["T_c1"]))
+    try:
+        contribs = panel.contributors(("T_c1", "T_c1"), TARGET)
+        assert "T_c1" not in contribs
+        assert sorted(contribs) == sorted(set(WIDE_CONTRIBUTORS) - {"T_c1"})
+    finally:
+        panel.close()
+
+
+def test_the_self_paired_root_covers_the_tracks_the_scorer_will_look_for(two_regimes, tmp_path):
+    """`avg-arcsinh` under the σ shape: the directory names `bench.external._expected` asks for."""
+    _, a, _ = two_regimes
+    rp = _no_pairs_regime(tmp_path, a, ["T_c1", "T_c2"])
+    roots = generate(rp, tmp_path / "sig", chroms=["chr1"], methods=["avg-arcsinh"],
+                     poisson_n=SCOREABLE_POISSON_N, progress=False)
+    source = open_source(store=rp, chroms=("chr1",))
+    try:
+        want = set(_expected(source))
+        assert want, "the source declares no track, so this proves nothing"
+        got = {d.name for d in roots["avg-arcsinh"].iterdir() if d.is_dir()}
+        assert got == want, f"root covers {sorted(got)[:3]}…, the source expects {sorted(want)[:3]}…"
+        for d in sorted(want):
+            with np.load(roots["avg-arcsinh"] / d / "chr1.npz") as z:
+                assert list(z.keys()) == ["signal_mu"]
+                assert np.isfinite(z["signal_mu"]).all()
+    finally:
+        source.close()

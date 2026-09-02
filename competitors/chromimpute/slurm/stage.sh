@@ -16,13 +16,13 @@ set -euo pipefail
 : "${CI_STAGE:?set CI_STAGE}"
 : "${CI_RUN:?set CI_RUN}"
 : "${CI_STORE:=/project/def-maxwl/mforooz/CANDI_STORE/eic}"
-: "${CI_REPO:=/project/def-maxwl/mforooz/CANDII_t78_code}"
+: "${CI_REPO:=/project/def-maxwl/mforooz/CANDII_main}"
 : "${CI_PY:=/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}"
 # RETARGETED 2026-08-31: was a baked configs/regime.eic_val.json (train chr19, eval chr21).
 # The live regimes are eic_19 and eic_pilot (BENCHMARK_DESIGN.md §3) and submit.sh passes
 # this through, so the prepare stage and the scorer cannot disagree about which one ran.
 : "${CI_REGIME:=$CI_REPO/configs/regime.eic_19.json}"
-: "${CI_JAR:=$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}"
+: "${CI_JAR:=/project/def-maxwl/mforooz/tools/ChromImpute.jar}"
 # The regime's eval_chroms under §4. chr21 alone was the old eval scope.
 : "${CI_CHROMS:=chr20,chr21,chr22}"
 : "${CI_MX:=8000M}"
@@ -36,7 +36,16 @@ DIST=$CI_RUN/DISTANCEDIR
 TRAINDATA=$CI_RUN/TRAINDATADIR
 PRED=$CI_RUN/PREDICTORDIR
 IMP=$CI_RUN/OUTPUTIMPUTEDIR
-mkdir -p "$CONV" "$DIST" "$TRAINDATA" "$PRED" "$IMP" "$CI_RUN/timing"
+# The sigma stage's Apply output, kept apart from the board one on purpose: these are TRAINING
+# self-pairs on the TRAINING grid, and a wig of theirs landing in OUTPUTIMPUTEDIR would be
+# collected into a board prediction root as though it were an eval target.
+SIMP=$CI_RUN/SIGMAIMPUTEDIR
+# The sigma stage's own predictors. Disjoint from PREDICTORDIR by construction — a board predictor
+# is (T_x, mark) for a mark T_x does NOT carry, a sigma predictor is (T_x, mark) for one it does —
+# but kept apart anyway, so the checkpoint copied to /project is the fitted parameters the board
+# rows were made with and nothing else.
+SPRED=$CI_RUN/SIGMAPREDICTORDIR
+mkdir -p "$CONV" "$DIST" "$TRAINDATA" "$PRED" "$IMP" "$SIMP" "$SPRED" "$CI_RUN/timing"
 
 # `CI_CHROMS=all` is `prepare.py`'s spelling, not a chromosome. Everything downstream loops over the
 # real names, and `chrominfo.txt` is the list `prepare.py` just wrote.
@@ -169,6 +178,27 @@ case "$CI_STAGE" in
     for C in $CHROM_LIST; do
       CI Apply -c "$C" -o "impute.$S.$M.wig" "$CONV" "$DIST" "$PRED" "$IN/inputinfofile.txt" \
          "$IN/chrominfo.txt" "$IMP" "$S" "$M"
+    done
+    ;;
+  strain)    # item: <training sample> <TAB> <mark> — a predictor for a mark the sample HAS
+    # THE BOARD'S PREDICTORS ARE NO USE TO A sigma FIT, and this is why the sigma stage has a
+    # Train step of its own. `lists/train.txt` is `cut -f1,3 targets.tsv`, so its every (T_x, mark)
+    # is a mark T_x does NOT carry — there is no truth in the store to take a residual against.
+    # §7 wants residuals on TRAINING tracks, so the sigma stage trains and applies (T_x, mark)
+    # for marks T_x DOES carry. ChromImpute leaves the target sample's own track out of its fit,
+    # which is what makes the residual a real one and not a copy.
+    S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)
+    CI Train "$TRAINDATA" "$IN/inputinfofile.txt" "$SPRED" "$S" "$M"
+    ;;
+  sapply)    # item: <training sample> <TAB> <mark> — the sigma stage's training self-pairs
+    # Same distance tables, the sigma stage's own predictors, THE OTHER GRID. §7 fits sigma on
+    # training residuals only, so this Apply runs over `chrominfo.train.txt` and writes to
+    # SIGMAIMPUTEDIR — never into OUTPUTIMPUTEDIR, where `collect.py` would pick it up as a board
+    # target.
+    S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)
+    for C in $TRAIN_LIST; do
+      CI Apply -c "$C" -o "impute.$S.$M.wig" "$CONV" "$DIST" "$SPRED" "$IN/inputinfofile.txt" \
+         "$TRAIN_INFO" "$SIMP" "$S" "$M"
     done
     ;;
   *) echo "unknown CI_STAGE=$CI_STAGE"; exit 2 ;;

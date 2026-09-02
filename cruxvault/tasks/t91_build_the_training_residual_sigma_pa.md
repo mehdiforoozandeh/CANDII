@@ -1,30 +1,30 @@
 ---
-id: t88
+id: t91
 type: task
-title: a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
+title: build the training-residual sigma pass so every point-only method gets a leak-free spread
 category: implementation
 parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: done
-created: "2026-08-31T16:31:35"
-updated: "2026-09-01T19:52:55"
+status: open
+created: 2026-09-01T19:52:45
+updated: 2026-09-01T19:52:45
 ---
 
-# t88 — a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
+# t91 — build the training-residual sigma pass so every point-only method gets a leak-free spread
 
 Refs:: _(none)_
 
 ## Why
 
-found while gating t83: a fresh worktree baseline is 1193+1F not 1195, and every agent given a worktree will hit it
+D2: without it the pval arm has no rival distributional entries; all four score.sh refuse
 
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- [Fresh-worktree pytest](results/t88/FRESH_WORKTREE_PYTEST.md)
+_(none yet)_
 
 ## Evidence
 
