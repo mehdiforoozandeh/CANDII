@@ -1,0 +1,85 @@
+{
+ "address": {
+  "panel": "B_",
+  "regime": "eic.19→20,21,22",
+  "scope": "held-out",
+  "truth": "challenge"
+ },
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-transductive",
+  "sigma": "fitted flat σ",
+  "sigma_fitted_on": "training-residuals: regime.eic_19.sigma.json T_ self-pairs, 6 cells, chroms ['chr19']",
+  "sigma_state": "fitted-flat"
+ },
+ "board": "eic.19",
+ "date": "2026-09-02",
+ "in_sample_fraction": null,
+ "lineage": "rival",
+ "markers": [
+  "no-selection"
+ ],
+ "method": "ChromImpute",
+ "metrics": {
+  "pval": {
+   "coverage_95": 0.9905247012238544,
+   "crps": 2.310438127194189,
+   "gaussian_nll": 3.3196806046628624,
+   "gwcorr": 0.46249924422987304,
+   "gwspear": 0.41137231115681727,
+   "mse": 260.4901660856079,
+   "mse1obs": 24878.272632374483,
+   "pit_ks": 0.38398502670906026
+  }
+ },
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error",
+  "pval/auprc",
+  "pval/peak_base_rate"
+ ],
+ "panel_counts": {
+  "count": {
+   "n_assays": 0,
+   "n_experiments": 0
+  },
+  "pval": {
+   "n_assays": 8,
+   "n_experiments": 51
+  }
+ },
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/t81_scores/ChromImpute/eic_19",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "has_peak_head": false,
+  "method_notes": {
+   "notes": "targets.tsv on chr20,chr21,chr22, panel B_, regime.eic_19.json, ChromImpute paper defaults, B_ONCE=1"
+  },
+  "regime": "/scratch/mforooz/t81_chromimpute/eic_19/B_/regime.eic_19.B_.json",
+  "score_json": "cruxvault/results/t81/scores/ChromImpute/eic_19/challenge.B_.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "f99c5a6",
+  "sigma_table": {
+   "fitted_on": "training-residuals: regime.eic_19.sigma.json T_ self-pairs, 6 cells, chroms ['chr19']",
+   "method": "ChromImpute"
+  },
+  "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83",
+  "truth_manifest_hash": "2f9d57d2d236eadb624b64694df04bca93a61864cd4d47cee3a42c2501400e08"
+ },
+ "ranked": true,
+ "schema_version": 2,
+ "version": "2026-09-02"
+}
