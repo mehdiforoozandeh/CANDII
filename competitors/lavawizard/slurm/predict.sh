@@ -64,7 +64,10 @@ if [ "$PANEL" = "B_" ]; then
     echo "[predict]   SELECTED checkpoint, at the end. Say B_ONCE=1 to mean it." >&2
     exit 4
   fi
-  if [ -e "$PRED/manifest.json" ] ||
+  # A manifest refuses only a LATER submission: a serialised sibling task of THIS array (its
+   # own `.b_once.<array job id>` marker present) may still be writing its chromosome after
+   # task 0 finished and wrote manifest.json (Lavawizard eic_pilot chr22, job 57849734_2, 2026-09-02).
+   if { [ -e "$PRED/manifest.json" ] && [ ! -e "$MARK" ]; } ||
      { compgen -G "$PRED/.b_once.*" >/dev/null 2>&1 && [ ! -e "$MARK" ]; }; then
     echo "[predict] REFUSING: $PRED already holds a B_ pass. B_ is written ONCE (§5) and a second" >&2
     echo "[predict]   one is a second look at the blind panel, not a retry. If that root really is" >&2

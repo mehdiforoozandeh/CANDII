@@ -265,3 +265,13 @@ def test_train_keeps_the_selected_checkpoint_off_scratch(method: str):
     t = _read(method, "train.sh")
     assert "CKPT_KEEP" in t and "cp -p" in t, (
         f"{method}/train.sh does not copy its selected checkpoint to the pinned checkpoint root")
+
+
+def test_the_b_once_manifest_clause_lets_a_sibling_task_of_the_same_array_through():
+    """A serialised sibling of the SAME array must not be refused once task 0 wrote manifest.json:
+    the manifest refuses only when this array's own marker is absent (a later submission)."""
+    import re
+    for f in ("competitors/lavawizard/slurm/predict.sh", "competitors/avocado/slurm/predict.sh"):
+        text = open(f, encoding="utf-8").read()
+        assert re.search(r'\{ \[ -e "\$PRED/manifest.json" \] && \[ ! -e "\$MARK" \]; \}', text), f
+        assert 'if [ -e "$PRED/manifest.json" ] ||' not in text, f
