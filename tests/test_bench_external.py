@@ -17,15 +17,17 @@ declared, a panel with holes in it — must be loud and must name the offending 
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from candi.bench import harness as H
+from candi.bench.cli import jsonable
 from candi.bench.external import (
-    WITHHELD_WITHOUT_PEAK_TRUTH, ExternalError, main, read_sigma_table, score_external,
-    track_dirname,
+    FILL_PANELS, SEP, WITHHELD_WITHOUT_PEAK_TRUTH, ExternalError, main, panel_union,
+    read_sigma_table, score_external, track_dirname,
 )
 from candi.bench.harness import Pair, open_source, track_key
 from candi.model import build_model
@@ -1096,3 +1098,469 @@ def test_the_cli_takes_both_new_flags(regime_file, full_root, challenge_scores,
     for key in got["tracks"]:
         assert got["per_track"][key]["pval"]["mse"] == pytest.approx(
             float(direct["per_track"][key]["pval"]["mse"]), rel=1e-9, abs=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 12 — `fill-panels`: `V_matched` measured from the SIBLING `B_` pass (§5.2)
+# ---------------------------------------------------------------------------
+# `panel_macros` measures the matched panel's assay set from the `B_` rows OF THE PASS IT IS GIVEN,
+# deliberately never from a list. The rivals programme scores the two panels in separate passes —
+# panel-derived regimes, and split prediction roots — so a `V_` pass holds no `B_` row and its
+# `V_matched` comes out empty. `fill-panels` hands `panel_macros` the union of the two passes'
+# `per_track` tables instead.
+#
+# The claim is an EQUALITY, exactly as §4.3's round-trip is: what the split passes plus the fill
+# produce must be what ONE joint pass would have produced. So the fixture below scores the same 38
+# predictions three ways — jointly, and once per panel through `declare_eval_pairs.py split` — and
+# the tests diff the panels. That is what makes "the same definition, more rows" a fact instead of
+# an argument.
+
+#: 26 `V_` experiments and 12 `B_` — the shape of the real §5.2 panels, at test scale. `V_` cells
+#: pose TWO assays and `B_` cells pose one, which is the asymmetry the matched panel exists to
+#: correct: without it most of a reader's `V_ -> B_` delta is the exam changing, not a model
+#: generalizing worse.
+PANEL_V_CELLS, PANEL_B_CELLS = 13, 12
+PANEL_TRACKS = {
+    "T_0": ("ATAC-seq", L.CONTROL_TRACK),
+    # In the TRAIN pool and in no eval pair. A panel-derived regime keeps the source's `assays`
+    # (the column order, D14) and its train list verbatim, and `Regime.validate_against` refuses a
+    # declared assay that no biosample of the pool carries — which DNase-seq would be on the `B_`
+    # side, since only the `V_` cells are targets there.
+    "T_1": ("DNase-seq", L.CONTROL_TRACK),
+    **{f"V_{i}": ("DNase-seq", "H3K4me3") for i in range(PANEL_V_CELLS)},
+    **{f"B_{i}": ("H3K4me3",) for i in range(PANEL_B_CELLS)},
+}
+
+
+@pytest.fixture(scope="module")
+def panel_store(tmp_path_factory) -> Path:
+    return make_store(tmp_path_factory.mktemp("panelstore"), tracks=PANEL_TRACKS)
+
+
+@pytest.fixture(scope="module")
+def panel_regime(panel_store, tmp_path_factory) -> Path:
+    """25 declared pairs — 13 on `V_`, 12 on `B_` — which pose 38 scoreable experiments.
+
+    Two chromosomes with an empty `train_chroms`, so `--held-out-chroms chr2` splits the scope and
+    every pass carries a `genome_wide` block as well as the ranked one. The fill has to hold on
+    both, and one fixture proves both.
+    """
+    d = tmp_path_factory.mktemp("panelregime")
+    pairs = ([["T_0", f"V_{i}"] for i in range(PANEL_V_CELLS)]
+             + [["T_0", f"B_{i}"] for i in range(PANEL_B_CELLS)])
+    obj = regime_dict(panel_store,
+                      biosamples={"train": ["T_0", "T_1"],
+                                  "eval": [c for c in PANEL_TRACKS if c[0] in "VB"]},
+                      kinds=["counts", "peaks", "pval"], eval_pairs=pairs,
+                      train_chroms=[], eval_chroms=["chr1", "chr2"])
+    # `regime.<name>.<panel>.json` is what `split` writes and what `external._regime_family` reads
+    # to recognise two files as halves of one exam, so the source is named `regime.<name>.json`.
+    p = d / "regime.panel.json"
+    p.write_text(json.dumps(obj), encoding="utf-8")
+    return p
+
+
+@pytest.fixture(scope="module")
+def panel_roots(panel_regime, tmp_path_factory) -> dict:
+    """A full prediction root plus the two PANEL roots, holding the very same bytes.
+
+    Written by hand rather than streamed from a model: what is under test is an aggregation, and
+    the panel roots are COPIES of the joint one so that a difference between the joint panels and
+    the filled ones cannot be the predictions.
+
+    A heteroscedastic POINT rival — `signal_mu` + `signal_sigma`, which is what §4.2 says a rival
+    hands over — so the pval arm carries the E, P, D and B blocks and there is no count arm. Not a
+    shortcut: the count arm's oracle CRPS scan is seconds per track per scope, and 38 tracks x 2
+    scopes x 3 passes of it is not a unit test. Nothing under test here is arm-specific — the fill
+    walks whatever arms `panels` carries and both are still walked below — and the `_renan` test
+    covers the one place where a row's contents can change the aggregation.
+    """
+    d = tmp_path_factory.mktemp("panelpred")
+    src = open_source(store=panel_regime)
+    try:
+        want = sorted(track_dirname(p, src.assays[a])
+                      for p in src.pairs("impute") for a in src.targets(p, "impute"))
+        nb = {c: src.n_bins(c) for c in src.eval_chroms}
+    finally:
+        src.close()
+    assert len(want) == 38, want
+
+    full = d / "full"
+    full.mkdir()
+    (full / "manifest.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+    for i, name in enumerate(want):
+        (full / name).mkdir()
+        rng = np.random.default_rng(1000 + i)
+        for c, n in nb.items():
+            np.savez(full / name / f"{c}.npz",
+                     signal_mu=rng.gamma(1.0, 2.0, n).astype(np.float32),
+                     signal_sigma=(0.5 + rng.gamma(1.0, 1.0, n)).astype(np.float32))
+
+    roots = {"tracks": want, "full": full}
+    for panel in ("V_", "B_"):
+        r = d / panel
+        r.mkdir()
+        shutil.copyfile(full / "manifest.json", r / "manifest.json")
+        for name in want:
+            if name.split(SEP)[1].startswith(panel):
+                shutil.copytree(full / name, r / name)
+        roots[panel] = r
+    return roots
+
+
+@pytest.fixture(scope="module")
+def panel_passes(panel_regime, panel_roots, tmp_path_factory) -> dict:
+    """`{"joint": result, "V_": path, "B_": path}` — one joint pass and the two the programme runs.
+
+    The panel regimes come from `tools/declare_eval_pairs.py split`, the real deriver, so the test
+    exercises the same pair of files a run on Fir produces. The two panel results are written to
+    disk through `cli.jsonable` because that is what `fill-panels` reads, and the JSON round trip
+    is not lossless: every non-finite score becomes `null` on the way out.
+    """
+    import tools.declare_eval_pairs as DEP
+
+    d = tmp_path_factory.mktemp("panelpass")
+
+    def _score(regime, root):
+        s = open_source(store=regime)
+        try:
+            return score_external(s, root, seed=0, c_index_pairs=C_PAIRS,
+                                  held_out_chroms=["chr2"])
+        finally:
+            s.close()
+
+    out = {"joint": _score(panel_regime, panel_roots["full"])}
+    for panel in ("V_", "B_"):
+        reg = d / f"regime.panel.{panel}.json"
+        assert DEP.main(["split", "--regime", str(panel_regime), "--panel", panel,
+                         "--out", str(reg)]) == 0
+        p = d / f"store.{panel}.json"
+        p.write_text(json.dumps(jsonable(_score(reg, panel_roots[panel])), indent=2))
+        out[panel] = p
+    return out
+
+
+def _mine(panel_passes, tmp_path, panel="V_") -> Path:
+    """A private copy of one pass's score file. `fill-panels` rewrites `--v` IN PLACE."""
+    p = tmp_path / f"store.{panel}.json"
+    shutil.copyfile(panel_passes[panel], p)
+    return p
+
+
+def _fill(vp: Path, bp: Path, *extra) -> int:
+    return main([FILL_PANELS, "--v", str(vp), "--b", str(bp), "--quiet", *extra])
+
+
+def _doctor(path: Path, edit) -> Path:
+    obj = json.loads(path.read_text())
+    edit(obj)
+    path.write_text(json.dumps(obj, indent=2))
+    return path
+
+
+def test_the_split_passes_carry_the_same_rows_a_joint_pass_would_have(panel_passes) -> None:
+    """THE FOUNDATION. A per-track score does not depend on which other tracks shared the pass, so
+    the two panel passes' rows are the joint pass's rows — which is the only reason `V_matched` can
+    be measured from a sibling file at all instead of by re-scoring."""
+    joint = json.loads(json.dumps(jsonable(panel_passes["joint"])))
+    seen = {}
+    for panel in ("V_", "B_"):
+        got = json.loads(panel_passes[panel].read_text())
+        for key, arms in got["per_track"].items():
+            assert arms == joint["per_track"][key], key
+            seen[key] = True
+        for key, arms in got["genome_wide"]["per_track"].items():
+            assert arms == joint["genome_wide"]["per_track"][key], key
+    assert sorted(seen) == sorted(joint["per_track"]), "the two panels must cover the joint pass"
+    assert len(seen) == 38
+
+
+def test_a_v_pass_on_its_own_has_a_blank_matched_panel(panel_passes) -> None:
+    """The bug the step exists for: with no `B_` row in the pass there is no assay set to measure,
+    so the board's `V_ matched` cell is blank for every unit."""
+    got = json.loads(panel_passes["V_"].read_text())
+    for arm in ("count", "pval"):
+        for block in (got["panels"][arm], got["genome_wide"]["panels"][arm]):
+            assert block["V_matched"]["matched_to"] == []
+            assert block["V_matched"]["n_experiments"] == 0
+            assert block["B"]["n_experiments"] == 0
+    for block in (got["panels"]["pval"], got["genome_wide"]["panels"]["pval"]):
+        assert block["V_breadth"]["n_experiments"] == 26
+        assert block["V_breadth"]["assays"] == ["DNase-seq", "H3K4me3"]
+
+
+def test_fill_panels_reproduces_a_joint_passs_matched_panel_exactly(panel_passes,
+                                                                    tmp_path) -> None:
+    """THE IDENTITY, on the ranked (held-out) scope. Split passes + fill == one joint pass."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    before = json.loads(vp.read_text())
+    assert _fill(vp, bp) == 0
+    got = json.loads(vp.read_text())
+    ref = json.loads(json.dumps(jsonable(panel_passes["joint"])))
+
+    for arm in ("count", "pval"):
+        assert got["panels"][arm]["V_matched"] == ref["panels"][arm]["V_matched"], arm
+        assert got["panels"][arm]["V_matched"]["ranked"] is False
+        assert "NOT RANKED" in got["panels"][arm]["V_matched"]["note"]
+        # `V_breadth` is the `V_` pass's own — the same rows either way, so it is not recomputed
+        assert got["panels"][arm]["V_breadth"] == before["panels"][arm]["V_breadth"], arm
+        assert got["panels"][arm]["V_breadth"] == ref["panels"][arm]["V_breadth"], arm
+        # `B` is the `B_` json's to describe. The `V_` pass's own empty block is left alone, and
+        # the joint pass's `B` is what the `B_` json already carries.
+        assert got["panels"][arm]["B"] == before["panels"][arm]["B"], arm
+        assert json.loads(bp.read_text())["panels"][arm]["B"] == ref["panels"][arm]["B"], arm
+
+    pv = got["panels"]["pval"]
+    assert pv["V_matched"]["matched_to"] == ["H3K4me3"]
+    assert pv["V_matched"]["n_experiments"] == 13, "the H3K4me3 half of the 26 `V_` experiments"
+    assert pv["V_matched"]["assays"] == ["H3K4me3"]
+    # the middle number is a real narrowing, not a relabelled breadth panel
+    assert pv["V_matched"]["mse"] != pv["V_breadth"]["mse"]
+    # and nothing else in the file moved
+    for k in ("tracks", "per_track", "macro", "panel", "ranking"):
+        assert got[k] == before[k], k
+
+
+def test_fill_panels_reproduces_the_joint_genome_wide_matched_panel_too(panel_passes,
+                                                                        tmp_path) -> None:
+    """§4's second aggregation is a second set of rows, so it needs its own union — the held-out
+    one would be the wrong scope under the right name."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    before = json.loads(vp.read_text())
+    assert _fill(vp, bp) == 0
+    got = json.loads(vp.read_text())
+    ref = json.loads(json.dumps(jsonable(panel_passes["joint"])))
+    assert got["genome_wide"]["chroms"] == ["chr1", "chr2"]
+    for arm in ("count", "pval"):
+        mine = got["genome_wide"]["panels"][arm]
+        assert mine["V_matched"] == ref["genome_wide"]["panels"][arm]["V_matched"], arm
+        assert mine["V_breadth"] == ref["genome_wide"]["panels"][arm]["V_breadth"], arm
+        assert mine["B"] == before["genome_wide"]["panels"][arm]["B"], arm
+    # the two scopes are genuinely different numbers, so neither test is passing on a copy
+    assert (got["genome_wide"]["panels"]["pval"]["V_matched"]["mse"]
+            != got["panels"]["pval"]["V_matched"]["mse"])
+    assert got["genome_wide"]["panels"]["pval"]["V_matched"]["n_experiments"] == 13
+    assert got["genome_wide"]["per_track"] == before["genome_wide"]["per_track"]
+    assert got["genome_wide"]["macro"] == before["genome_wide"]["macro"]
+
+
+def test_the_filled_file_says_which_b_pass_filled_it(panel_passes, tmp_path) -> None:
+    """A `V_matched` measured from another file is not reproducible unless the file is named."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    assert "panels_from" not in json.loads(vp.read_text())["provenance"]
+    assert _fill(vp, bp) == 0
+    pf = json.loads(vp.read_text())["provenance"]["panels_from"]
+    assert set(pf) == {"b_json", "b_pred_manifest_sha256", "filled"}
+    assert pf["b_json"] == str(bp)
+    assert len(pf["filled"]) == 10 and pf["filled"].count("-") == 2
+    # `None` rather than a hash of a re-serialised dict: `score_external` copies the prediction
+    # manifest verbatim and records no hash of its bytes, and inventing one would name bytes that
+    # were never on disk.
+    assert pf["b_pred_manifest_sha256"] is None
+
+
+def test_the_original_is_backed_up_once_and_never_overwritten(panel_passes, tmp_path) -> None:
+    """The default rewrites `--v` in place, so the pre-fill file has to survive somewhere — and it
+    has to survive a SECOND fill, which would otherwise back up an already-filled file."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    original = vp.read_bytes()
+    bak = vp.with_name(vp.name + ".bak")
+    assert not bak.exists()
+
+    assert _fill(vp, bp) == 0
+    assert bak.read_bytes() == original
+    filled = json.loads(vp.read_text())
+    assert vp.read_bytes() != original
+
+    assert _fill(vp, bp) == 0
+    assert bak.read_bytes() == original
+    again = json.loads(vp.read_text())
+    for arm in ("count", "pval"):
+        assert again["panels"][arm] == filled["panels"][arm], arm
+
+
+def test_an_out_path_leaves_the_v_json_and_its_backup_alone(panel_passes, tmp_path) -> None:
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    original = vp.read_bytes()
+    out = tmp_path / "filled" / "store.V_.filled.json"
+    assert _fill(vp, bp, "--out", str(out)) == 0
+    assert vp.read_bytes() == original
+    assert not vp.with_name(vp.name + ".bak").exists()
+    ref = json.loads(json.dumps(jsonable(panel_passes["joint"])))
+    for arm in ("count", "pval"):
+        assert json.loads(out.read_text())["panels"][arm]["V_matched"] == \
+            ref["panels"][arm]["V_matched"], arm
+
+
+# --- the refusals: is this pair of files ONE exam scored in two passes? -----------------------
+
+def test_a_shared_track_key_between_the_two_passes_is_refused(panel_passes, tmp_path) -> None:
+    """A key in both passes means the union is not the rows a joint pass would have held, and a
+    merge would keep one of the two silently."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    victim = sorted(json.loads(vp.read_text())["per_track"])[0]
+
+    def collide(obj):
+        obj["per_track"][victim] = json.loads(vp.read_text())["per_track"][victim]
+    _doctor(bp, collide)
+    with pytest.raises(ExternalError, match="share 1 per_track key"):
+        _fill(vp, bp)
+
+
+def test_two_passes_measured_against_different_truth_are_refused(panel_passes, tmp_path) -> None:
+    """A challenge-truth row and a store-truth row are two different exams (EVAL.md), so one
+    cannot supply the other's matched assay set."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    _doctor(bp, lambda o: o["provenance"]["truth"].update(source="challenge"))
+    with pytest.raises(ExternalError, match="truth.source"):
+        _fill(vp, bp)
+
+
+def test_two_passes_over_different_positions_are_refused(panel_passes, tmp_path) -> None:
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    _doctor(bp, lambda o: o["provenance"]["eval_scope"].update(name="regions", fraction=0.1))
+    with pytest.raises(ExternalError, match="eval_scope"):
+        _fill(vp, bp)
+
+
+def test_two_passes_of_different_methods_are_refused(panel_passes, tmp_path) -> None:
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    _doctor(bp, lambda o: o["provenance"].update(method="somebody-else"))
+    with pytest.raises(ExternalError, match="provenance.method"):
+        _fill(vp, bp)
+
+
+def test_two_revisions_of_a_regime_are_not_two_panels_of_one(panel_passes, tmp_path) -> None:
+    """`regime.<name>.<panel>.json` — the panel is the only segment that differs between siblings.
+    A different `<name>` is a different exam, on the same corpus."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    _doctor(bp, lambda o: o["provenance"].update(regime="/x/regime.panel_r2.B_.json"))
+    with pytest.raises(ExternalError, match="regime family"):
+        _fill(vp, bp)
+
+
+def test_a_regime_name_with_no_panel_segment_cannot_be_paired(panel_passes, tmp_path) -> None:
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    _doctor(bp, lambda o: o["provenance"].update(regime="/x/whatever.json"))
+    with pytest.raises(ExternalError, match="which regime family"):
+        _fill(vp, bp)
+
+
+def test_two_passes_carrying_different_arms_are_refused(panel_passes, tmp_path) -> None:
+    """A σ-table given to one pass and not the other would leave `V_matched` empty on one arm under
+    a heading that has numbers everywhere else."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+
+    def add_count(obj):
+        for arms in obj["per_track"].values():
+            arms["count"] = {"assay": "H3K4me3", "kind": "impute", "nb_nll": 1.0}
+    _doctor(bp, add_count)
+    with pytest.raises(ExternalError, match="different arms"):
+        _fill(vp, bp)
+
+
+def test_swapping_v_and_b_is_refused_rather_than_filling_a_blank(panel_passes, tmp_path) -> None:
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    with pytest.raises(ExternalError, match="no row whose TARGET cell starts `V_`"):
+        _fill(bp, vp)
+
+
+def test_a_b_json_with_no_b_row_is_refused(panel_passes, tmp_path) -> None:
+    """Otherwise the step reports success and writes the same empty block back.
+
+    `harness.panel_of` counts a target that is neither `V_` nor `B_` in no panel at all — a
+    self-paired denoise record is the ordinary case — so a `B_` json whose targets have drifted
+    off the panel is a `B_` json with nothing to measure.
+    """
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+
+    def off_panel(obj):
+        obj["per_track"] = {k.replace("|B_", "|Z_"): r for k, r in obj["per_track"].items()}
+    _doctor(bp, off_panel)
+    with pytest.raises(ExternalError, match="no row whose TARGET cell starts `B_`"):
+        _fill(vp, bp)
+
+
+def test_a_genome_wide_block_on_one_side_only_is_refused(panel_passes, tmp_path) -> None:
+    """The block exists only under a split scope, so one-sided means the two passes were given
+    different `--held-out-chroms` and the held-out halves are not comparable either."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    _doctor(bp, lambda o: o.pop("genome_wide"))
+    with pytest.raises(ExternalError, match="genome_wide"):
+        _fill(vp, bp)
+
+
+def test_a_pair_of_passes_with_no_split_scope_fills_the_one_panel_block(panel_passes,
+                                                                        tmp_path) -> None:
+    """The ordinary rivals case: `--held-out-chroms` names everything scored, so there is one
+    scope and no `genome_wide` block, and the fill must not look for one."""
+    vp, bp = _mine(panel_passes, tmp_path), _mine(panel_passes, tmp_path, "B_")
+    for p in (vp, bp):
+        _doctor(p, lambda o: o.pop("genome_wide"))
+    assert _fill(vp, bp) == 0
+    got = json.loads(vp.read_text())
+    assert "genome_wide" not in got
+    ref = json.loads(json.dumps(jsonable(panel_passes["joint"])))
+    for arm in ("count", "pval"):
+        assert got["panels"][arm]["V_matched"] == ref["panels"][arm]["V_matched"], arm
+
+
+def test_a_file_that_is_not_a_score_json_is_refused(panel_passes, tmp_path) -> None:
+    vp = _mine(panel_passes, tmp_path)
+    junk = tmp_path / "junk.json"
+    junk.write_text(json.dumps({"hello": 1}))
+    with pytest.raises(ExternalError, match="not a bench score file"):
+        _fill(vp, junk)
+
+
+# --- the JSON round trip is not lossless, and the fill has to undo that ----------------------
+
+def test_a_null_score_in_a_json_is_restored_to_the_nan_it_was() -> None:
+    """JSON has no NaN, so `cli.jsonable` writes every non-finite score as `null` — and
+    `macro_mean` reads a row by asking `isinstance(v, (int, float, bool))`, which a `null` is not.
+
+    A key that is nan in one row and finite in another would therefore be averaged over a
+    DIFFERENT set of rows here than in a joint pass, and `float(None)` raises before it even gets
+    that far. `bin_scope` is the other case and must stay untouched: `None` there is not a nan, it
+    is an unscoped run, and both spellings are equally invisible to `macro_mean`.
+    """
+    live = {
+        "T_0|V_a|H3K4me3": {"pval": {"assay": "H3K4me3", "kind": "impute", "bin_scope": None,
+                                     "mse": 1.0, "mseprom": float("nan")}},
+        "T_0|V_b|H3K4me3": {"pval": {"assay": "H3K4me3", "kind": "impute", "bin_scope": None,
+                                     "mse": 3.0, "mseprom": 5.0}},
+        "T_0|B_a|H3K4me3": {"pval": {"assay": "H3K4me3", "kind": "impute", "bin_scope": None,
+                                     "mse": 7.0, "mseprom": 9.0}},
+    }
+    joint = H.panel_macros(live, "pval")
+    on_wire = json.loads(json.dumps(jsonable(live)))
+    v = {k: r for k, r in on_wire.items() if "|V_" in k}
+    b = {k: r for k, r in on_wire.items() if "|B_" in k}
+    assert v["T_0|V_a|H3K4me3"]["pval"]["mseprom"] is None
+
+    got = H.panel_macros(panel_union(v, b), "pval")
+    assert got["V_matched"] == joint["V_matched"]
+    assert got["V_breadth"] == joint["V_breadth"]
+    assert got["V_matched"]["mseprom"] == 5.0 and got["V_matched"]["mseprom_n_tracks"] == 1
+    assert "bin_scope" not in got["V_matched"], "not a measure, and not a nan either"
+    # and the naive merge does not merely differ — it raises
+    with pytest.raises(TypeError):
+        H.panel_macros({**b, **v}, "pval")
+
+
+# --- the sub-command must not have changed the invocation four launchers use ------------------
+
+def test_the_sub_command_does_not_shadow_the_scoring_invocation(regime_file, full_root,
+                                                                external_scores,
+                                                                tmp_path) -> None:
+    """`--store … --pred … --out …` with no sub-command name is the DEFAULT command. Every rival
+    launcher spells it that way, so `fill-panels` is dispatched on its own first token rather than
+    through `add_subparsers`, which would have made a sub-command name mandatory."""
+    out = tmp_path / "scores.json"
+    assert main(["--store", str(regime_file), "--pred", str(full_root), "--out", str(out),
+                 "--chroms", "chr2", "--c-index-pairs", str(C_PAIRS), "--quiet"]) == 0
+    got = json.loads(out.read_text())
+    assert got["provenance"]["suite"] == "candi.bench.external"
+    assert got["tracks"] == external_scores["tracks"]
+    assert "panels_from" not in got["provenance"], (
+        "a default scoring run must be byte-identical to what it always was")

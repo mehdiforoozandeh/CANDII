@@ -171,6 +171,37 @@ name.
 on this path exactly as `run_bench` emits it, so a board never has to re-derive a panel number from
 a macro that has already dropped the panel labels.
 
+### `fill-panels` — `V_matched` filled from the sibling `B_` pass
+
+```bash
+python -m candi.bench.external fill-panels --v <store.V_.json> --b <store.B_.json> [--out <path>]
+```
+
+The matched panel's assay set is **measured from the `B_` rows of the pass it is given**, never
+listed — a hard-coded list would go stale the first time the panel moves, and silently. But the
+rivals programme scores the two panels in **separate passes**: the regimes are panel-derived
+(`tools/declare_eval_pairs.py split`) and the prediction roots are split too, so a `V_` pass holds
+no `B_` row, measures an empty set, and leaves the board's `V_ matched` cell blank for every unit.
+
+`fill-panels` fixes that without re-scoring anything. A per-track score does not depend on which
+other tracks shared the pass, so the two passes' `per_track` tables ARE the rows one joint pass
+would have held: the step hands `panel_macros` their union and writes back only `V_matched` — with
+its `matched_to`, its `note` and `ranked: False`. `V_breadth` stays the `V_` pass's own (the same
+rows either way) and `B` is not written at all, because the `B_` json is the file that describes the
+`B_` panel. `genome_wide.panels` gets the same treatment when both files carry the block.
+`tests/test_bench_external.py` scores 38 synthetic predictions jointly and as two panel passes and
+requires the filled `V_matched` to equal the joint one exactly, on both scopes.
+
+By default `--v` is rewritten in place after its original bytes are copied once to `<--v>.bak` (an
+existing `.bak` is never overwritten, so the pre-fill file survives a second run), and
+`provenance.panels_from` records `{b_json, b_pred_manifest_sha256, filled}` — a `V_matched` measured
+from another file is not reproducible unless that file is named. The refusals are all one question:
+are these two files halves of **one** exam? Same corpus, assay order, chromosomes, scored positions,
+method, `truth.source`, arms and regime family (`regime.<name>.<panel>.json` — the panel is the only
+segment that differs between siblings), with disjoint track keys and one of each panel. Scoring is
+unaffected: `python -m candi.bench.external --store … --pred … --out …` is still the default command
+and carries no sub-command name.
+
 ### `--truth-root` — somebody else's truth, our instrument
 
 The 2019 ENCODE Imputation Challenge ranked its entrants — 23 teams plus the two organizer
