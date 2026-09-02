@@ -83,11 +83,55 @@ roots, which overwrote the checked chromosome's arrays and then stamped `identic
 numbers nobody had scored. Stamp **after** the last generation pass: a later generation into a
 stamped root drops the stamp on the manifest merge, which is the safe direction but is silent.
 
-**`regime.eic_pilot.json` is refused for `knn1`, `knn5` and `marginal` (exit 3).** This module reads
-`train_chroms` raw and has no `regions` support, so under the pilot regime those three would fit
-over 18 whole chromosomes instead of the 25,588,197 bp the regime declares — a Rule 2 break. D1's
-second pilot unit for those three is blocked until either `generate.py` honours `regions` or the PI
-rules the whole-chromosome fit acceptable, on the record. `avg` and `avg-arcsinh` are unaffected.
+**`regime.eic_pilot.json` is accepted for `knn1`, `knn5` and `marginal` (2026-09-01).** It used to be
+refused with exit 3: this module read `train_chroms` raw, so under the pilot regime those three
+would have been fitted over 18 whole chromosomes instead of the 25,588,197 bp the regime declares —
+a Rule 2 break, because every other method under that regime sees the Pilot Regions only. The module
+honours the regime's `regions` block now, so D1's second pilot unit for those three is a fit on the
+loci the regime names, and the exit-3 guard is gone from all three `slurm/t49_baselines_*.sh`.
+
+## The training scope — a `regions` regime (D32)
+
+`Panel.contained_bins(chrom)` is the whole of it: the bins of a chromosome lying **wholly inside**
+one region of the regime's BED, counted by `RegionSet.contained_starts` at a window of one bin — the
+same D32 containment rule the training window plan is cut by, asked at the resolution a pooled fit
+reads. `None` without a BED, so a regime that declares none keeps the untouched path bit for bit.
+
+Exactly two things read it, and they are the only two here that pool over training loci at all:
+
+| | reads the training scope | what changes under `eic_pilot` |
+|---|---|---|
+| `similarity_table` (`knn1`, `knn5`) | yes | the Pearson ranking is correlated over the Pilot Regions of `train_chroms`, not over whole chromosomes |
+| `fit_marginal` (`marginal`) | yes | the per-assay NB and Gaussian are moment-matched over the same bins |
+| `avg`, `avg-arcsinh` | **no** | nothing — no training locus enters them, which is what makes them the collapsed two |
+
+It is the **train** split's scope and nothing else's: `Regime.windows` applies `regions` to the train
+split only, and every baseline still writes whole eval chromosomes, exactly as a rival does. A BED
+with no region on `train_chroms` leaves `fit_marginal` an empty pool, and it writes no `marginal`
+track rather than a NaN constant.
+
+## No `eval_pairs` — the self-paired shape
+
+A regime that declares no pairing has not asked for a cross-cell imputation (D31), and
+`bench.harness.StoreSource` answers it by self-pairing every cell of `biosamples.eval`; a
+self-pair's targets are every assay that cell holds. `Panel.self_pairs` takes the same path, so
+
+```bash
+python -m competitors.baselines.generate --store <derived sigma regime> --out <root> \
+    --methods avg-arcsinh
+```
+
+writes `T_x__T_x__<assay>` tracks instead of nothing.
+
+This is not a corner case. `tools/sigma_training_regime.py` writes that shape and **can write no
+other** — `candi.store.regime` refuses a `[c, c]` literal outright — and it is what the
+training-residual σ pass (`competitors.sigma_pass`, `plan/BENCHMARK_DESIGN.md` §7) takes its
+residual against. Until 2026-09-01 `Panel.pairs` read `eval_pairs` alone, so that pass wrote an
+empty root and the `avg-arcsinh` tier could get no σ table at all.
+
+The assay is still held out. `contributors` drops every training cell sharing the **target's**
+cell-type suffix, which on `T_x -> T_x` is `T_x` itself, so a self-paired track is never averaged
+from its own answer.
 
 ## Environment and how to run it
 

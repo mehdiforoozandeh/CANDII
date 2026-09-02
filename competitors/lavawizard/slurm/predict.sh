@@ -51,6 +51,12 @@ CKPT="${CKPT:-$RUNS/ckpt}"
 # The marker is what lets the THREE TASKS OF ONE ARRAY through while still refusing a later,
 # different one: every task of this array writes the same `.b_once.<array job id>` name, so a
 # sibling finds a marker that is its own and a re-submission six weeks later finds one that is not.
+#
+# THE MARKER IS WRITTEN LAST, AFTER EVERY PRECONDITION. It used to be dropped here, before the panel
+# regime was derived and before the weights were resolved — so a `split` that could not run left a
+# `.b_once.*` in an empty root, and every LATER submission read it as "the blind panel has already
+# been spent". A trivial failure must not poison a root that holds nothing. The refusals stay here,
+# where they cost nothing and fire early.
 if [ "$PANEL" = "B_" ]; then
   MARK="$PRED/.b_once.${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-manual}}"
   if [ "${B_ONCE:-0}" != "1" ]; then
@@ -65,7 +71,6 @@ if [ "$PANEL" = "B_" ]; then
     echo "[predict]   a failed write, move it aside by hand and say so." >&2
     exit 4
   fi
-  mkdir -p "$PRED" && : > "$MARK"
 fi
 
 derive_panel_regime || exit 1
@@ -80,6 +85,10 @@ if [ ! -f "$W" ]; then
   W="$CKPT/guacamole_${C}.pt"
   echo "[predict] NO .best.pt for $C — predicting from the LAST-epoch checkpoint, which does not" >&2
   echo "[predict]   satisfy BENCHMARK_DESIGN.md §5. Correct only for a run with no selection." >&2
+fi
+# Every precondition has passed, so this array is the B_ pass it says it is: claim the root now.
+if [ "$PANEL" = "B_" ]; then
+  mkdir -p "$PRED" && : > "$MARK" || exit 1
 fi
 echo "[predict] $C panel=$PANEL -> $PRED  weights=$(basename "$W")  host=$(hostname)"
 srun python -u -m lavawizard.store_eic predict --regime "$PANEL_REGIME" --chrom "$C" \

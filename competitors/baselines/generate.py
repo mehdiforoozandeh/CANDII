@@ -46,6 +46,22 @@ cells over training chromosomes for the same reason.
 `sparse_assays` — §5 requires that flag to travel into any table that quotes such a row. A track with
 `k = 0` is skipped and listed under `skipped_tracks`; scoring it would need `--allow-missing`.
 
+TWO REGIME SHAPES, AND THE TRAINING SCOPE (2026-09-01)
+------------------------------------------------------
+* **No `eval_pairs` — the SELF-PAIRED shape.** `bench.harness.StoreSource`'s documented no-pairing
+  path (D31): the panel is `biosamples.eval` self-paired, and a self-pair's targets are every assay
+  the cell holds. `tools/sigma_training_regime.py` writes exactly that shape and can write no other
+  — `candi.store.regime` refuses a `[c, c]` literal — so without the fallback in `Panel.self_pairs`
+  a `--methods avg-arcsinh --store <derived>` pass wrote an empty root and the training-residual σ
+  pass (`competitors.sigma_pass`) had nothing to fit on.
+* **A `regions` BED — the D32 training scope.** `similarity_table` and `fit_marginal` are the only
+  two things here that pool over TRAINING loci, and they now pool over the contained bins of
+  `train_chroms` rather than the whole chromosomes (`Panel.contained_bins`). Under `eic_pilot` that
+  is the 25,588,197 bp the regime declares instead of ~2.7 Gbp — Rule 2, and the reason
+  `slurm/t49_baselines_*.sh` used to refuse the pilot regime for `knn1`, `knn5` and `marginal`.
+  `avg` and `avg-arcsinh` are untouched by both: no training locus enters them, which is what
+  `REGIME_INDEPENDENT` below means and what the identity assertion measures.
+
 WHAT IS DELIBERATELY NOT HERE
 -----------------------------
 The exact empirical-ensemble marginal (§5.4 "Follow-up") — it needs an ensemble-CRPS extension to
@@ -187,7 +203,11 @@ class Panel:
         self.corpus = CorpusStore(self.regime.store)
         self.assays: List[str] = list(self.regime.assays)
         self.train: List[str] = [b for b in self.regime.biosamples("train")]
-        self.pairs: List[Tuple[str, str]] = [tuple(p) for p in self.regime.eval_pairs]
+        self.eval: List[str] = [b for b in self.regime.biosamples("eval")]
+        #: The pairing as DECLARED, before the no-pairing fallback. `assert_regime_independent`
+        #: compares panels and has to compare like with like; everything else uses `pairs`.
+        self.declared_pairs: List[Tuple[str, str]] = [tuple(p) for p in self.regime.eval_pairs]
+        self.pairs: List[Tuple[str, str]] = self.declared_pairs or self.self_pairs()
         want = list(chroms) if chroms else list(self.regime.eval_chroms)
         nb = self.corpus.n_bins()
         missing = [c for c in want if c not in nb]
@@ -197,17 +217,69 @@ class Panel:
         self.n_bins: Dict[str, int] = {c: int(nb[c]) for c in want}
         self.train_chroms: List[str] = [c for c in self.regime.train_chroms if c in nb]
         self.depth_center = depth_center(self.corpus, self.train, self.assays)
+        #: D32 — the BED the TRAIN split is cut to, or None. `contained_bins` below is the only
+        #: reader; the eval side is whole chromosomes either way, exactly as it is for a rival.
+        self.regions = self.regime.regions
+        self._contained: Dict[str, np.ndarray] = {}
+
+    def self_pairs(self) -> List[Tuple[str, str]]:
+        """`[(c, c), …]` over `biosamples.eval` — `harness.StoreSource`'s no-pairing path.
+
+        A regime that declares no `eval_pairs` has not asked for a cross-cell imputation (D31), and
+        `StoreSource.pairs` answers it by self-pairing every cell of the loader pool. The training-
+        residual σ regime `tools/sigma_training_regime.py` writes is exactly that shape — it CANNOT
+        be anything else, because `candi.store.regime` refuses a `[c, c]` literal outright — so a
+        generator that read `eval_pairs` alone wrote nothing at all under it, and the σ pass had no
+        `avg-arcsinh` training-track root to take a residual against.
+        """
+        return [(b, b) for b in self.eval]
 
     def close(self) -> None:
         self.corpus.close()
+
+    def contained_bins(self, chrom: str) -> Optional[np.ndarray]:
+        """Bins of `chrom` lying wholly inside one declared region (D32), or None without a BED.
+
+        `None` rather than `arange(n_bins)`, for `harness.EvalSource.scored_bins`' reason: it is
+        what lets a regime with no `regions` keep the untouched path bit for bit instead of
+        gathering a full track through an identity index.
+
+        Containment is `RegionSet.contained_starts` at a window of ONE BIN rather than a second copy
+        of the span arithmetic — the same D32 rule the training window plan is cut by, asked at the
+        resolution a pooled fit actually reads. It is the TRAIN split's scope and nothing else's:
+        `Regime.windows` applies `regions` to the train split only, and the two readers below
+        (`similarity_table`, `fit_marginal`) are the only two things here that pool over training
+        loci at all.
+        """
+        if self.regions is None:
+            return None
+        got = self._contained.get(chrom)
+        if got is None:
+            n = int(self.corpus.n_bins()[chrom])
+            got = self.regions.contained_starts(
+                chrom, np.arange(n, dtype=np.int64), 1, self.corpus.resolution)
+            self._contained[chrom] = got
+        return got
+
+    def train_slice(self, arr: np.ndarray, chrom: str) -> np.ndarray:
+        """`arr` cut to `contained_bins(chrom)`. The whole array when the regime declares no BED."""
+        idx = self.contained_bins(chrom)
+        return arr if idx is None else arr[idx]
 
     def targets(self, pair: Tuple[str, str]) -> List[str]:
         """Assays the TARGET cell has and the INPUT cell does not — `harness.StoreSource.targets`.
 
         The same rule, spelled the same way: an assay neither cell has has no truth, and an assay
         both cells have can be read straight off the prompt, so neither is imputation.
+
+        A SELF-PAIR is the degenerate case `StoreSource.targets` keeps its old answer for: one cell
+        plays both roles, "has and does not have" is empty, and every assay the cell holds is the
+        panel. The assay is still held out — `contributors` drops every biosample sharing the
+        target's cell-type suffix, which on `T_x -> T_x` is `T_x` itself.
         """
         x, y = pair
+        if x == y:
+            return [a for a in self.assays if available(self.corpus, y, a)]
         return [a for a in self.assays
                 if available(self.corpus, y, a) and not available(self.corpus, x, a)]
 
@@ -251,7 +323,11 @@ def similarity_table(panel: Panel, cells: Sequence[str],
     every pairwise correlation for that assay at once. Pair-outer with `np.corrcoef` would re-read
     the same 51 cells for each of the 26 declared pairs — the same track read 26 times.
 
-    Only `panel.train_chroms` and only training cells are ever read here (§5.4).
+    Only `panel.train_chroms` are ever read here, only training cells, and — when the regime
+    declares a D32 `regions` BED — only the bins of those chromosomes lying wholly inside one
+    region (§5.4, and Rule 2: under `eic_pilot` every other method's transferable parameters see
+    the Pilot Regions and nothing else, so a ranking correlated over 18 whole chromosomes would be
+    fitted on loci no rival was allowed).
     """
     tot: Dict[Tuple[str, str], float] = {}
     cnt: Dict[Tuple[str, str], int] = {}
@@ -263,7 +339,8 @@ def similarity_table(panel: Panel, cells: Sequence[str],
         rows = []
         for b in have:
             t = np.arcsinh(np.concatenate(
-                [panel.corpus[b][assay].pval(c, 0) for c in panel.train_chroms]).astype(np.float64))
+                [panel.train_slice(panel.corpus[b][assay].pval(c, 0), c)
+                 for c in panel.train_chroms]).astype(np.float64))
             sd = t.std()
             rows.append((t - t.mean()) / sd if sd > 0 else np.zeros_like(t))
         Z = np.stack(rows)
@@ -316,6 +393,11 @@ def fit_marginal(panel: Panel, assay: str) -> Optional[Dict[str, float]]:
 
     No leave-one-out here, and §5.4 does not ask for one: the pool is training cells on training
     chromosomes, and the target cell (a `V_`/`B_`) is in neither.
+
+    **A `regions` regime narrows the pool to the BED (D32), by `panel.train_slice`.** The constant
+    this returns is the whole method, so under `eic_pilot` a marginal pooled over 18 whole
+    chromosomes would be a different method from the one the row names — fitted over ~2.7 Gbp where
+    every rival's transferable parameters saw 25.6 Mbp.
     """
     cells = [b for b in panel.train if available(panel.corpus, b, assay)]
     if not cells or not panel.train_chroms:
@@ -325,9 +407,16 @@ def fit_marginal(panel: Panel, assay: str) -> Optional[Dict[str, float]]:
     for b in cells:
         scale = Hd.depth_scale(log2_depth(panel.corpus, b, assay), panel.depth_center)
         for c in panel.train_chroms:
-            cs.append(panel.corpus[b][assay].counts(c, 0).astype(np.float64) * scale)
-            ps.append(panel.corpus[b][assay].pval(c, 0).astype(np.float64))
+            cs.append(panel.train_slice(
+                panel.corpus[b][assay].counts(c, 0).astype(np.float64) * scale, c))
+            ps.append(panel.train_slice(
+                panel.corpus[b][assay].pval(c, 0).astype(np.float64), c))
     cc, pp = np.concatenate(cs), np.concatenate(ps)
+    if cc.size == 0:
+        # A `regions` BED with nothing on the training chromosomes. `None` writes no `marginal`
+        # track for this assay, which is the same answer as "no contributing cell" above; a mean
+        # over an empty pool would be a NaN constant written into every bin of the panel.
+        return None
     return {"count_mean": float(cc.mean()), "count_var": float(cc.var(ddof=1)),
             "pval_mean": float(pp.mean()), "pval_std": float(pp.std(ddof=1)),
             "n_cells": len(cells), "n_bins": int(cc.size)}
@@ -454,7 +543,11 @@ def assert_regime_independent(roots: Mapping[str, Path], panel: Panel, regime_b:
     — `tests/test_baselines.py` runs it on `marginal` for exactly that reason.
     """
     b_path = Path(regime_b)
-    b_pairs = [tuple(p) for p in Regime.from_file(b_path).eval_pairs]
+    # The EFFECTIVE panel of B, derived exactly as `Panel` derives its own: a regime that declares
+    # no pairing self-pairs `biosamples.eval` (D31). Comparing B's declared list against A's
+    # effective one would call two σ-shaped regimes with different drawn cells the same panel.
+    rb = Regime.from_file(b_path)
+    b_pairs = [tuple(p) for p in rb.eval_pairs] or [(b, b) for b in rb.biosamples("eval")]
     if b_pairs != panel.pairs:
         raise ValueError(
             f"{b_path} declares {len(b_pairs)} eval pair(s) and {panel.regime_path} declares "

@@ -49,8 +49,13 @@
 # ~7x slower -- MEASURE the smoke run's steps/s before trusting that number here, and if the
 # projection does not fit, raise the rule rather than reaching for another spec.
 #
-#   sbatch --array=0-0  --export=ALL,MODE=shared,EPOCHS=60 <this>
-#   sbatch --array=0-2  --export=ALL,MODE=genome,EPOCHS=30 <this>
+# `%12` IS THE TORCH-IMPORT CAP, not queue etiquette: more than about twelve concurrent torch
+# imports off the shared /project venv return half-read modules as `ImportError`s. Every array in
+# this tree carries it, including the one-task shared fit, so the number is never dropped by
+# copying a line.
+#
+#   sbatch --array=0-0%12  --export=ALL,MODE=shared,EPOCHS=60 <this>
+#   sbatch --array=0-2%12  --export=ALL,MODE=genome,EPOCHS=30 <this>
 #
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t81_avo_train
