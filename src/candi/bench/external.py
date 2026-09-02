@@ -32,10 +32,19 @@ record the model path builds satisfies both, so the model path is untouched.
 
 The C block is absent by construction and not by omission: every covariate instrument perturbs a
 prompt and re-decodes, which needs the model.
+
+**And the truth itself can come from somewhere else.** `--truth-root` reads the pval truth from a
+second §4.1-layout root — the 2019 challenge's own blind-truth bigwigs, converted by
+`tools/challenge_bigwigs.py` — instead of from the store, so a CANDI row and a 2019 entrant's row
+are measured against the same bytes the entrants were originally ranked on. It swaps ONE input:
+the store still owns the grid, the declared track list and the provenance, and the scoring is the
+same `score_track`. What the challenge never distributed — read counts, peak calls — is absent from
+the row rather than filled in (`WITHHELD_WITHOUT_PEAK_TRUTH`).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -46,12 +55,13 @@ import numpy as np
 from candi.bench import annotations as ann
 from candi.bench import distributional as D
 from candi.bench.harness import (
-    ARMS, EvalSource, Pair, TrackRecord, _binarise, _varpool, cross_cell, macro_mean, open_source,
-    panel_specificity, score_track, track_key,
+    ARMS, SCOPE_HELD_OUT, EvalSource, Pair, TrackRecord, _binarise, _varpool, cross_cell,
+    macro_mean, open_source, panel_macros, panel_specificity, score_track, track_key,
 )
 
 __all__ = [
-    "PRED_ARRAYS", "track_dirname", "read_manifest", "read_sigma_table", "read_track_arrays",
+    "PRED_ARRAYS", "WITHHELD_WITHOUT_PEAK_TRUTH", "track_dirname", "read_manifest",
+    "read_truth_manifest", "read_sigma_table", "read_track_arrays", "read_truth_root_arrays",
     "stream_truth", "build_record", "score_external", "build_parser", "main",
 ]
 
@@ -70,6 +80,23 @@ SEP = "__"
 #: in provenance as `pred_inversion: "external"` so a reader can tell "already in the eval space"
 #: from "a CANDI head trained in it".
 SIGNAL_TARGET_TRANSFORM = "none"
+
+#: The pval-arm keys that read a PEAK CALL, withheld under `--truth-root`.
+#:
+#: A challenge truth root is one number per bin — the organizers' `-log10 p` signal — and the 2019
+#: challenge distributed no peak calls at all. So the count arm has no truth (it is absent by
+#: `has_count`) and every measure below has no truth either. They are REMOVED from the row rather
+#: than computed against a zero-filled stand-in, for the same reason §4.2 gives for an unpredicted
+#: arm: `peak_base_rate` would be a finite 0.0 that `macro_mean` averages, and `auprc` a nan a
+#: reader cannot tell from a real undefined one.
+#:
+#: `peak_overlap_<p>` and `n_points` are NOT here, and that is not an oversight: `binary_suite`
+#: computes both from the truth SIGNAL and the ranking score, never from `y_peaks`.
+#: `prom_corr_h3k4me3` stays for the same reason — its windows come from the gene annotation.
+WITHHELD_WITHOUT_PEAK_TRUTH: Tuple[str, ...] = (
+    "acc_by_imp_strength", "acc_by_obs_strength", "auprc", "bernoulli_nll", "peak_base_rate",
+    "peak_shape_corr_dnase",
+)
 
 
 class ExternalError(ValueError):
@@ -100,6 +127,49 @@ def read_manifest(root: Path) -> Dict[str, Any]:
     if not isinstance(obj, dict) or not obj.get("method"):
         raise ExternalError(f"{path} carries no `method` — provenance.method has nothing to name.")
     return obj
+
+
+def read_truth_manifest(root: Path) -> Tuple[Dict[str, Any], str]:
+    """`(manifest, sha256 of manifest.json)` for a TRUTH root — the challenge's own signal tracks.
+
+    A truth root is the same on-disk layout as a prediction root and is deliberately NOT the same
+    kind of thing, so it carries `kind: "truth"` instead of `method` and is refused here when it
+    does not. Passing a prediction root to `--truth-root` would otherwise score a method against
+    itself and produce a perfect, meaningless row.
+
+    The hash is of the manifest bytes, not of the arrays: it is what a score file quotes to say
+    WHICH build of the truth it was measured against, and `tools/challenge_bigwigs.py` writes the
+    source directory, the bridge hash and the bin rule into that manifest for exactly that purpose.
+    """
+    path = root / "manifest.json"
+    if not path.exists():
+        raise ExternalError(
+            f"--truth-root {root} has no manifest.json. A truth root must say which bigwigs it was "
+            f"built from and under which bin rule, or a score file cannot name its own truth.")
+    raw = path.read_bytes()
+    obj = json.loads(raw.decode("utf-8"))
+    if not isinstance(obj, dict) or obj.get("kind") != "truth":
+        raise ExternalError(
+            f"{path} is not a truth manifest (`kind` is {obj.get('kind')!r} and must be 'truth'). "
+            f"A PREDICTION root passed as --truth-root would score a method against its own output.")
+    return obj, hashlib.sha256(raw).hexdigest()
+
+
+def read_truth_root_arrays(track_dir: Path, chroms: Sequence[str],
+                           n_bins: Mapping[str, int]) -> Dict[str, Dict[str, np.ndarray]]:
+    """One track's TRUTH from a §4.1-layout root — `signal_mu`, on the same length assertion.
+
+    The same loader as the prediction side, with one extra requirement: `signal_mu` must be there.
+    A truth root built from a bigwig has exactly one array per bin, and a root that carried `mu`/`n`
+    instead would be a prediction root that slipped through `read_truth_manifest`.
+    """
+    got = read_track_arrays(track_dir, chroms, n_bins)
+    for c in chroms:
+        if "signal_mu" not in got[c]:
+            raise ExternalError(
+                f"{track_dir.name}/{c}.npz carries {sorted(got[c])} and no `signal_mu`. A truth "
+                f"root holds the experimental signal, one value per bin.")
+    return got
 
 
 def read_sigma_table(path: Optional[Path | str]) -> Optional[Dict[str, Any]]:
@@ -213,7 +283,8 @@ def build_record(pair: Pair, assay: str, chroms: Sequence[str],
                  pred: Mapping[str, Mapping[str, np.ndarray]],
                  sigma_table: Optional[Mapping[str, Any]] = None,
                  bins: Optional[Mapping[str, np.ndarray]] = None,
-                 bin_scope: Optional[str] = None) -> Tuple[TrackRecord, str]:
+                 bin_scope: Optional[str] = None,
+                 truth_signal_only: bool = False) -> Tuple[TrackRecord, str]:
     """One `(record, σ source)` — the truth from the store, the prediction from the npz.
 
     The peak tier follows the harness exactly: `peak_score` when the producer supplies one,
@@ -228,6 +299,15 @@ def build_record(pair: Pair, assay: str, chroms: Sequence[str],
     all — so the cut happens here, on both the truth and the prediction, with the same index. That
     is what makes a rival's selection number and CANDI's the same measurement: not the same flag,
     the same positions.
+
+    `truth_signal_only` is the `--truth-root` case: `truth` then carries `pval` alone, because the
+    2019 challenge distributed one signal track per experiment and no counts and no peak calls. The
+    count arm is forced absent — a count PREDICTION with no count truth is not scoreable — and
+    `counts`/`peaks` are filled with zeros of the scored length purely as carriers, since
+    `TrackRecord.n_bins` measures the track off `counts` and `score_track` reads `peaks`
+    unconditionally. Nothing in `WITHHELD_WITHOUT_PEAK_TRUTH` survives into the row, so no number a
+    reader sees was computed against those zeros. The truth is cut with the SAME index as the
+    prediction, exactly as the store truth is.
     """
     rec = TrackRecord(pair=pair, assay=assay, kind="impute", chroms=tuple(chroms),
                       bin_scope=(None if bins is None else (bin_scope or "regions")))
@@ -238,19 +318,27 @@ def build_record(pair: Pair, assay: str, chroms: Sequence[str],
 
     has_signal = all("signal_mu" in pred[c] for c in chroms)
     has_own_sigma = all("signal_sigma" in pred[c] for c in chroms)
-    has_count = all("mu" in pred[c] for c in chroms)
+    has_count_pred = all("mu" in pred[c] for c in chroms)
     has_peak = all("peak_score" in pred[c] for c in chroms)
     for name, seen in (("signal_mu", has_signal), ("signal_sigma", has_own_sigma),
-                       ("mu", has_count), ("peak_score", has_peak)):
+                       ("mu", has_count_pred), ("peak_score", has_peak)):
         if not seen and any(name in pred[c] for c in chroms):
             raise ExternalError(
                 f"{track_dirname(pair, assay)}: `{name}` is present on some chromosomes and absent "
                 f"on others. A track is scored over the CONCATENATION of every eval chromosome, so "
                 f"an arm exists for all of them or for none.")
-    if not (has_signal or has_count):
+    if not (has_signal or has_count_pred):
         raise ExternalError(
             f"{track_dirname(pair, assay)}: neither the pval arm (`signal_mu`) nor the count arm "
             f"(`mu`+`n`) is present. There is nothing to score.")
+    if truth_signal_only and not has_signal:
+        raise ExternalError(
+            f"{track_dirname(pair, assay)}: the truth root carries a SIGNAL track only, and this "
+            f"prediction has no `signal_mu`. A count prediction has no truth under challenge "
+            f"truth — score it against the store instead (drop --truth-root).")
+    # The count arm needs count TRUTH, and a challenge truth root has none. Absent rather than
+    # scored, by the same rule §4.2 states for an arm the producer never predicted.
+    has_count = has_count_pred and not truth_signal_only
 
     for c in chroms:
         # `cut` is the identity when there is no scope, and it hands back the caller's own object,
@@ -259,8 +347,15 @@ def build_record(pair: Pair, assay: str, chroms: Sequence[str],
             a = np.asarray(v, dtype=np.float32)
             return a if bins is None else a[bins[_c]]
 
-        rec.counts[c] = cut(truth[c]["counts"])
-        rec.peaks[c] = cut(truth[c]["peaks"])
+        if truth_signal_only:
+            # CARRIERS, NEVER SCORED. One array serves both slots — every consumer of `peaks`
+            # copies it (`.astype(bool)`) and nothing writes through either dict.
+            zero = np.zeros_like(cut(truth[c]["pval"]))
+            rec.counts[c] = zero
+            rec.peaks[c] = zero
+        else:
+            rec.counts[c] = cut(truth[c]["counts"])
+            rec.peaks[c] = cut(truth[c]["peaks"])
         if has_count:
             rec.mu[c] = cut(pred[c]["mu"])
             rec.n[c] = cut(pred[c]["n"])
@@ -307,6 +402,8 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
                    sigma_table_path: Optional[str] = None, allow_missing: bool = False,
                    batch_windows: int = 4, with_curve: bool = False,
                    crps_approx: Optional[int] = None, crps_seed: int = 0,
+                   truth_root: Optional[Path | str] = None,
+                   held_out_chroms: Optional[Sequence[str]] = None,
                    progress: bool = False) -> Dict[str, Any]:
     """Score a whole prediction root and return `run_bench`'s result shape (§4.2).
 
@@ -314,6 +411,19 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
     rival and a leaderboard row from CANDI are read by the same code and diffed against each other
     without a translation step. `ranking` is `None` here as it is in `run_bench`: the rank
     aggregation is the CLI's `--competitors` path and is inert without a competitor table (D4).
+
+    **`truth_root` swaps the truth, not the instrument** (`plan/BENCHMARK_DESIGN.md` §4.1). Given a
+    §4.1-layout root of the challenge's own blind-truth tracks, the pval truth is read from there
+    instead of from the store, cut with the same index as the prediction, and scored by the same
+    `score_track`. That is what puts CANDI and a 2019 entrant on one row: the entrants were ranked
+    against those bigwigs, and our store's `-log10 p` is our own MACS2 recomputation of the same
+    experiments. The store remains the authority for the GRID, the declared track list and the
+    provenance — only the numbers being compared against change. `provenance.truth` says which.
+
+    **`held_out_chroms` turns one pass into two aggregations**, exactly as `run_bench` does it:
+    `per_track`/`macro`/`panels` carry the held-out scope and a `genome_wide` block carries the
+    same over every scored chromosome. Left `None`, there is one scope and no block — §4's blanking
+    rule, with the reason written into `provenance.scope`.
     """
     root = Path(pred_root)
     if not root.is_dir():
@@ -338,10 +448,24 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
             f"{unknown[:5]}. The regime declares {len(expected)} tracks. A directory whose "
             f"biosamples are not a declared eval pair, or whose assay the input cell already "
             f"carries, is not a track this regime can score.")
-    missing = [d for d in sorted(expected) if d not in set(found)]
+    have = set(found)
+    truth_sha: Optional[str] = None
+    troot: Optional[Path] = None
+    if truth_root is not None:
+        troot = Path(truth_root)
+        if not troot.is_dir():
+            raise ExternalError(f"--truth-root {troot} is not a directory")
+        # The manifest is read to be CHECKED (`kind: "truth"`) and hashed; `provenance.truth` names
+        # it by hash rather than copying it, since the root itself is the thing to go back to.
+        _truth_manifest, truth_sha = read_truth_manifest(troot)
+        # A track the TRUTH root does not cover is a hole in exactly the sense D2 means, so it
+        # joins the same `missing` list rather than getting a second, quieter one.
+        have &= {p.name for p in troot.iterdir() if p.is_dir()}
+    missing = [d for d in sorted(expected) if d not in have]
     if missing and not allow_missing:
+        where = f"{root}" if truth_root is None else f"{root} / --truth-root {troot}"
         raise ExternalError(
-            f"{root} is missing {len(missing)} of the {len(expected)} declared tracks — "
+            f"{where} is missing {len(missing)} of the {len(expected)} declared tracks — "
             f"{missing[:5]}. A panel scored with holes in it reads as a whole panel in every table "
             f"downstream (D2). Emit them, or pass --allow-missing to record the gap in "
             f"provenance.missing_tracks and score what is there.")
@@ -358,33 +482,74 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
     bins = None if any(v is None for v in scoped.values()) else scoped
     var_cache: Dict[Tuple[str, str], object] = {}
 
+    # §4's two aggregations, shaped exactly as `run_bench` shapes them. The split happens at the
+    # TRACK — no measure is linear in position, so a genome-wide number cannot be narrowed to a
+    # held-out one afterwards.
+    scored_chroms = tuple(chroms)
+    if held_out_chroms is None:
+        held = scored_chroms
+    else:
+        held = tuple(c for c in scored_chroms if c in set(held_out_chroms))
+        absent = [c for c in held_out_chroms if c not in scored_chroms]
+        if absent:
+            raise ExternalError(
+                f"--held-out-chroms names {absent}, which this run does not score "
+                f"({list(scored_chroms)}). The held-out scope is a subset of what was predicted; "
+                f"naming a chromosome outside it would rank on positions that were never scored.")
+        if not held:
+            raise ExternalError("--held-out-chroms selected nothing from the scored chromosomes")
+    split = len(held) < len(scored_chroms)
+    if split and getattr(source, "eval_regions", None) is not None:
+        raise ExternalError(
+            f"--held-out-chroms splits the scope in two, but this source is restricted to "
+            f"{source.eval_regions.resolved}. `genome_wide` means every bin of every scored "
+            f"chromosome and would be a region cut under that name. Score the leaderboard at full "
+            f"coverage (open the source without eval_regions=), or drop --held-out-chroms.")
+
     per_track: Dict[str, Dict[str, Dict[str, object]]] = {}
+    per_track_gw: Dict[str, Dict[str, Dict[str, object]]] = {}
     binarised: Dict[str, List[Tuple[str, np.ndarray, np.ndarray, int]]] = {}
     sigma_sources: Dict[str, str] = {}
-    todo = [(pair, assay, d) for d, (pair, assay) in sorted(expected.items()) if d in set(found)]
+    todo = [(pair, assay, d) for d, (pair, assay) in sorted(expected.items()) if d in have]
     by_pair: Dict[Pair, List[Tuple[str, str]]] = {}
     for pair, assay, d in todo:
         by_pair.setdefault(pair, []).append((assay, d))
 
     for pi, (pair, rows) in enumerate(by_pair.items()):
         cols = [source.assays.index(assay) for assay, _ in rows]
-        truth = stream_truth(source, pair, cols, batch_windows=batch_windows)
+        # Under a truth root the store is never read for truth at all — the walk it would do is
+        # the expensive half of this entry point, and none of what it returns would be used.
+        truth = (None if troot is not None else
+                 stream_truth(source, pair, cols, batch_windows=batch_windows))
         for (assay, dirname), col in zip(rows, cols):
             pred = read_track_arrays(root / dirname, chroms, n_bins)
-            rec, sig_src = build_record(pair, assay, chroms, truth[col], pred, sigma_table,
-                                        bins=bins)
+            if troot is None:
+                truth_here: Mapping[str, Mapping[str, np.ndarray]] = truth[col]
+            else:
+                truth_here = {c: {"pval": v["signal_mu"]} for c, v in
+                              read_truth_root_arrays(troot / dirname, chroms, n_bins).items()}
+            rec, sig_src = build_record(pair, assay, chroms, truth_here, pred, sigma_table,
+                                        bins=bins, truth_signal_only=troot is not None)
             # The D7 pool is aligned bin-for-bin with the WHOLE chromosome, so under a scope it
             # would be the one vector still on the genomic grid while the track is not. Dropped
             # rather than gathered: `msevar` is a leaderboard key and the scope is for selection.
             var = (None if bins is not None else
                    _varpool(varpool_root, varpool_corpus, assay, rec.chroms, n_bins, var_cache))
-            per_track[rec.key] = score_track(
-                rec, gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
-                c_index_pairs=c_index_pairs, with_curve=with_curve,
-                signal_target_transform=SIGNAL_TARGET_TRANSFORM,
-                crps_approx=crps_approx, crps_seed=crps_seed)
+            common = dict(gene_annotations=gene, enh_annotations=enh, var=var, seed=seed,
+                          c_index_pairs=c_index_pairs, with_curve=with_curve,
+                          signal_target_transform=SIGNAL_TARGET_TRANSFORM,
+                          crps_approx=crps_approx, crps_seed=crps_seed)
+            held_here = tuple(c for c in rec.chroms if c in set(held))
+            per_track[rec.key] = _withhold(score_track(rec, chroms=held_here or None, **common),
+                                           troot is not None)
+            if split:
+                per_track_gw[rec.key] = _withhold(score_track(rec, chroms=rec.chroms, **common),
+                                                  troot is not None)
             sigma_sources[rec.key] = sig_src
-            bits = _binarise(rec, SIGNAL_TARGET_TRANSFORM)
+            # `panel_specificity` compares a `>= 2` CALL against MACS2 peak membership, and a
+            # challenge truth root has no peak calls — so the panel block is absent there rather
+            # than computed against the zero carriers.
+            bits = None if troot is not None else _binarise(rec, SIGNAL_TARGET_TRANSFORM)
             if bits is not None:
                 binarised.setdefault(assay, []).append((rec.key, *bits))
         del truth
@@ -392,7 +557,7 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
             print(f"[bench.external] {pi + 1}/{len(by_pair)} {pair} — {len(rows)} track(s)",
                   flush=True)
 
-    return {
+    result: Dict[str, Any] = {
         "provenance": {
             **source.provenance(),
             "suite": "candi.bench.external",
@@ -420,6 +585,11 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
             "declared_tracks": len(expected),
             "missing_tracks": missing,
             "allow_missing": bool(allow_missing),
+            # WHICH TRUTH these numbers were measured against. Written on both paths, because a
+            # score file that carries the key only when the answer is unusual leaves every older
+            # file ambiguous.
+            "truth": ({"source": "store"} if troot is None else
+                      {"source": "challenge", "root": str(troot), "manifest_sha256": truth_sha}),
             "sigma_table": (None if sigma_table is None else
                             {"path": sigma_table_path, "method": sigma_table.get("method"),
                              "fitted_on": sigma_table.get("fitted_on"),
@@ -435,9 +605,50 @@ def score_external(source: EvalSource, pred_root: Path | str, *, seed: int = 0,
         "tracks": sorted(per_track),
         "per_track": per_track,
         "macro": {arm: macro_mean(per_track, arm) for arm in ARMS},
+        "panels": {arm: panel_macros(per_track, arm) for arm in ARMS},
         "panel": panel_specificity(binarised) if binarised else {},
         "ranking": None,
     }
+    result["provenance"]["scope"] = {
+        "ranked": SCOPE_HELD_OUT,
+        "held_out_chroms": list(held),
+        "scored_chroms": list(scored_chroms),
+        "genome_wide_computed": bool(split),
+        "note": (
+            "`per_track`, `macro` and `panels` are the HELD-OUT scope, which is the ranked number "
+            "(plan/BENCHMARK_DESIGN.md 4). `genome_wide` carries the same three over every scored "
+            "chromosome."
+            if split else
+            "One scope only: the run scored exactly the held-out chromosomes, so there is no "
+            "genome-wide aggregation to make. Under 4's blanking rule a method fit at every "
+            "position is run this way on purpose -- its genome-wide number would be a memorisation "
+            "score, so it is NOT COMPUTED rather than computed and withheld."),
+    }
+    if split:
+        result["genome_wide"] = {
+            "chroms": list(scored_chroms),
+            "per_track": per_track_gw,
+            "macro": {arm: macro_mean(per_track_gw, arm) for arm in ARMS},
+            "panels": {arm: panel_macros(per_track_gw, arm) for arm in ARMS},
+            "note": "Comparability with a literature that scores at the positions it fits. Not "
+                    "ranked, and carries the per-cell in-sample fraction on the board (4).",
+        }
+    return result
+
+
+def _withhold(arms: Dict[str, Dict[str, object]], truth_signal_only: bool
+              ) -> Dict[str, Dict[str, object]]:
+    """Remove every key of `WITHHELD_WITHOUT_PEAK_TRUTH` when the truth carried no peak calls.
+
+    The identity on the store path — it hands back the caller's own dict untouched — so a run with
+    no `--truth-root` produces the row it always produced, key for key.
+    """
+    if not truth_signal_only:
+        return arms
+    for row in arms.values():
+        for k in WITHHELD_WITHOUT_PEAK_TRUTH:
+            row.pop(k, None)
+    return arms
 
 
 # ---------------------------------------------------------------------------
@@ -456,9 +667,24 @@ def build_parser() -> argparse.ArgumentParser:
                         "the declared track list all come from it.")
     p.add_argument("--pred", required=True, help="prediction root: manifest.json + one dir per track")
     p.add_argument("--out", required=True, help="results JSON to write")
+    p.add_argument("--truth-root", default=None,
+                   help="score against SOMEBODY ELSE'S TRUTH: a §4.1-layout root of `signal_mu` "
+                        "tracks (`tools/challenge_bigwigs.py truth-root`) whose manifest carries "
+                        "`kind: \"truth\"`. The store still owns the grid, the declared track list "
+                        "and the provenance; only what the prediction is compared against changes. "
+                        "The challenge distributed signal and no peak calls, so the count arm and "
+                        "every peak-derived key are ABSENT rather than nan. Without this flag "
+                        "provenance.truth.source is `store`.")
     p.add_argument("--chroms", default=None,
                    help="comma-separated subset of the eval chromosomes (default: all of them). "
                         "P2 (genome-wide) is this flag with every chromosome the store carries.")
+    p.add_argument("--held-out-chroms", default=None,
+                   help="comma-separated: the RANKED scope (plan/BENCHMARK_DESIGN.md §4), e.g. "
+                        "chr20,chr21,chr22. Must be a subset of what is scored. Given a proper "
+                        "subset, one pass yields two aggregations -- `macro`/`panels` are the "
+                        "held-out numbers and a `genome_wide` block carries the same over every "
+                        "scored chromosome. Omitted, or naming everything scored, there is one "
+                        "scope and no genome-wide block.")
     p.add_argument("--biosamples", default=None,
                    help="comma-separated eval biosamples (default: the regime's)")
     p.add_argument("--sigma-table", default=None,
@@ -499,6 +725,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     a = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
     chroms = tuple(c.strip() for c in a.chroms.split(",")) if a.chroms else None
     bios = tuple(b.strip() for b in a.biosamples.split(",")) if a.biosamples else None
+    held = (tuple(c.strip() for c in a.held_out_chroms.split(","))
+            if a.held_out_chroms else None)
     table = read_sigma_table(a.sigma_table)
     source = open_source(store=a.store, chroms=chroms, biosamples=bios)
     try:
@@ -507,7 +735,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             varpool_root=a.varpool, varpool_corpus=a.varpool_corpus, sigma_table=table,
             sigma_table_path=a.sigma_table, allow_missing=a.allow_missing,
             batch_windows=a.batch_windows, with_curve=a.with_curve,
-            crps_approx=a.crps_approx, crps_seed=a.crps_seed, progress=not a.quiet)
+            crps_approx=a.crps_approx, crps_seed=a.crps_seed,
+            truth_root=a.truth_root, held_out_chroms=held, progress=not a.quiet)
     finally:
         source.close()
 
