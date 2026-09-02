@@ -17,6 +17,28 @@ The gitignored file is the live one; this memo is refreshed when a phase closes.
 
 ## Unit table
 
+Rendered 2026-09-01 from `cruxvault/results/t81/state/*.tsv` — 19 training units,
+seeded from §4.2 under D1. The convention and the one-line renderer are in
+`cruxvault/results/t81/state/README.md`.
+
 | unit | phase | slurm job | state | artifact path | number | date |
 |---|---|---|---|---|---|---|
-| (none yet) | | | | | | |
+| train.Avocado.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.Avocado.eic_pilot.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.CANDI.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.CANDI.eic_19.s1 | train | - | blocked | - | - | 2026-09-01 |
+| train.CANDI.eic_pilot.s0 | train | 57674899_1 | done | /project/def-maxwl/mforooz/t81_checkpoints/t81_eic_pilot_s0.best.ckpt | impute macro CRPS 0.5386 (n=45, chr20-22, full coverage; selected epoch 5) | 2026-09-01 |
+| train.ChromImpute.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.ChromImpute.eic_pilot.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.Lavawizard.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.Lavawizard.eic_pilot.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.avg-arcsinh.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.avg.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.eDICE.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.eDICE.eic_pilot.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.knn1.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.knn1.eic_pilot.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.knn5.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.knn5.eic_pilot.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.marginal.eic_19.s0 | train | - | blocked | - | - | 2026-09-01 |
+| train.marginal.eic_pilot.s0 | train | - | blocked | - | - | 2026-09-01 |
