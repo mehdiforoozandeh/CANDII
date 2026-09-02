@@ -21,8 +21,9 @@ composite for a/b/c. The count sub-board ranks three rows, not four.
 The committed fixtures predate §5.2's three panels, so `panelled()` gives each one the `panels`
 block `harness.panel_macros` would have written, with the SAME numbers under all three panels —
 `add` reading a panel is a lookup, and a test of a lookup must be able to say which key was read.
-The last section of this file drops the synthetic fixtures entirely and stamps a score json the
-real `candi.bench.external` produced over a real store, under both truths and both scopes.
+The last section of this file drops the synthetic fixtures entirely and stamps score jsons the
+real `candi.bench.external` produced over a real store — under both truths, both scopes, both
+single-panel passes, and all three of §7's spread devices.
 """
 from __future__ import annotations
 
@@ -51,17 +52,19 @@ def panelled(score: dict) -> dict:
     """A fixture score json, plus the `panels` block §5.2 requires.
 
     Every panel gets the arm's own macro numbers, so a test can assert WHICH panel `add` read only
-    by the key it used — nothing here is invented, and `n_experiments` / `ranked` / `matched_to`
-    are the non-metric keys `harness.panel_macros` really writes. `matched_to` is non-empty because
-    the fixture stands for a pass that scored `B_` rows: an empty one is the unfilled panel `add`
-    refuses, and the real-score section of this file builds that from the scorer itself.
+    by the key it used — nothing here is invented, and `n_experiments` / `assays` / `ranked` /
+    `matched_to` are the non-metric keys `harness.panel_macros` really writes. `matched_to` is
+    non-empty because the fixture stands for a pass that scored `B_` rows: an empty one is the
+    unfilled panel `add` refuses, and the real-score section of this file builds that from the
+    scorer itself.
     """
     out = json.loads(json.dumps(score))
+    counted = {"n_experiments": 1, "assays": ["H3K4me3"]}
     out["panels"] = {
-        arm: {"V_breadth": {**block, "n_experiments": 1, "ranked": True},
-              "V_matched": {**block, "n_experiments": 1, "ranked": False,
+        arm: {"V_breadth": {**block, **counted, "ranked": True},
+              "V_matched": {**block, **counted, "ranked": False,
                             "matched_to": ["H3K4me3"]},
-              "B": {**block, "n_experiments": 1, "ranked": True}}
+              "B": {**block, **counted, "ranked": True}}
         for arm, block in (out.get("macro") or {}).items()
     }
     return out
@@ -248,8 +251,12 @@ def test_add_round_trips_a_row(root: Path) -> None:
     assert row["metrics"]["count"]["crps"] == 0.40
     assert row["badges"] == {"position": "position-generalizing",
                              "cell_types": "zero-shot cell types",
-                             "sigma": lb.SIGMA_BADGE_NATIVE}
+                             "sigma": lb.SIGMA_BADGE_NATIVE,
+                             "sigma_state": lb.SIGMA_STATE_NATIVE,
+                             "sigma_fitted_on": None}
     assert row["ranked"] is True
+    assert row["panel_counts"]["pval"] == {"n_experiments": 1, "n_assays": 1}, \
+        "the panel's own size, from the block the address read"
     assert row["in_sample_fraction"] is None
     prov = row["provenance"]
     assert prov["scoring_sha"] == "deadbeef" and prov["fir_path"] == "fake:/scratch/fixture"
@@ -267,6 +274,8 @@ def test_add_extracts_the_sigma_table_id_and_badges_the_fitted_spread(root: Path
     row = json.loads(row_path(root, "fixture-b@v1").read_text(encoding="utf-8"))
     assert row["provenance"]["sigma_table"] == {"method": "fixture-b", "fitted_on": FITTED_ON}
     assert row["badges"]["sigma"] == lb.SIGMA_BADGE_FITTED == "fitted flat σ"
+    assert row["badges"]["sigma_state"] == lb.SIGMA_STATE_FITTED == "fitted-flat"
+    assert row["badges"]["sigma_fitted_on"] == FITTED_ON, "the badge carries what it was fitted on"
     compiled = next(r for r in board_view(root)["rows"] if r["id"] == "fixture-b@v1")
     assert compiled["provenance"]["sigma_table"]["method"] == "fixture-b"
     assert compiled["badges"]["sigma"] == lb.SIGMA_BADGE_FITTED
@@ -860,9 +869,13 @@ def test_the_site_expresses_the_address_the_truth_toggle_and_the_row_markers() -
     assert "non_independence" in js and "anchor — we did not run these" in js
     # §5, §7 — the row markers, and §7's mandatory spread badge read off the stamped row
     assert "markerBadges" in js and "badge-marker" in js
-    assert "row.badges && row.badges.sigma" in js
+    assert "badges.sigma_state" in js, "the three-state spread badge is read off the stamped row"
+    assert 'badges.sigma_state === "fitted-flat"' in js and 'badges.sigma_state === "native"' in js
     assert "fitted flat σ" in js and "native heteroscedastic" in js
     assert "TRAINING-set residuals" in js, "the fitted-σ badge must name §7's rule"
+    assert "hasDistributional" in js, "a row with no σ-derived number gets no spread note"
+    # §4 — the in-sample fraction is rendered when a producer wrote one
+    assert "inSampleBadge" in js and "in-sample " in js
     # §15 — unranked is a state, not an error
     assert "unrankedBanner" in js and "cell-unranked" in js
     assert "rankingOf" in js and "isRanked" in js
@@ -1187,18 +1200,27 @@ REAL_TRACKS = {
 }
 REAL_ASSAY = "H3K4me3"
 
+#: The name `tools/declare_eval_pairs.py split --panel <P>` gives the regime it derives from
+#: `configs/regime.eic_19.json` — the file a real single-panel pass reads, and therefore the one
+#: `harness.StoreSource.provenance` records and the board's regime gate has to accept.
+BOARD_REGIME = "configs/regime.eic_19.json"
+DERIVED_REGIME = {"v_only": "regime.eic_19.V_.json", "b_only": "regime.eic_19.B_.json"}
+
 
 @pytest.fixture(scope="module")
 def real_scores(tmp_path_factory) -> dict:
-    """`{truth: path}` — two score jsons written by `candi.bench.external`'s own CLI.
+    """`{name: path}` — six score jsons written by `candi.bench.external`'s own CLI.
 
     Built from `tests/test_bench_external.py`'s own pieces: its §4.1 prediction manifest, its
     `kind: "truth"` manifest, the real store writer and the real regime shape. The files are
     written by `external.main`, so they are byte-for-byte what a Fir scoring pass hands `add` —
     including `null` where a metric is undefined, which is the spelling `jsonable` uses.
 
-    One `V_` target and one `B_` target, so all three panels of §5.2 carry a number, and chr2 of
-    two chromosomes is held out, so §4's `genome_wide` block exists.
+    `store` and `challenge` score one `V_` and one `B_` target, so all three panels of §5.2 carry
+    a number, under each truth of §6; chr2 of two chromosomes is held out, so §4's `genome_wide`
+    block exists. `v_only` and `b_only` are the two single-panel passes the real programme runs.
+    `point_only` and `fitted_flat` are the same `V_` prediction with its per-bin σ removed, scored
+    without and with a training-residual σ table — §7's other two spread states.
     """
     np = pytest.importorskip("numpy", reason="a real score json needs the scorer")
     external = pytest.importorskip("candi.bench.external", reason="the scorer needs candi")
@@ -1237,11 +1259,13 @@ def real_scores(tmp_path_factory) -> dict:
 
     # `v_only` and `b_only` are the two passes the real programme runs: `V_` and `B_` are predicted
     # and scored separately, off panel-derived regimes and separate prediction roots. They are what
-    # makes the unfilled `V_matched` block a fact about the pipeline, not a hand-edited json.
+    # makes the unfilled `V_matched` block a fact about the pipeline, not a hand-edited json. Their
+    # regime files carry the name `tools/declare_eval_pairs.py split` gives a derived regime, which
+    # is what the regime gate has to accept (`lb.accepted_regime_names`).
     roots = {"store": pred, "challenge": pred}
     for name, pair, ev in (("v_only", Pair("T_aa", "V_aa"), ["V_aa"]),
                            ("b_only", Pair("T_bb", "B_bb"), ["B_bb"])):
-        (tmp / f"regime.{name}.json").write_text(json.dumps(regime_dict(
+        (tmp / DERIVED_REGIME[name]).write_text(json.dumps(regime_dict(
             store, biosamples={"train": ["T_aa", "T_bb"], "eval": ev},
             kinds=["counts", "peaks", "pval"], train_chroms=[], eval_chroms=["chr1", "chr2"],
             eval_pairs=[[pair.input_biosample, pair.target_biosample]])),
@@ -1253,14 +1277,36 @@ def real_scores(tmp_path_factory) -> dict:
                         panel_root / external.track_dirname(pair, REAL_ASSAY))
         roots[name] = panel_root
 
-    out = {"truth_root": truth}
-    for name in ("store", "challenge", "v_only", "b_only"):
+    # §7's third spread state. A point-only producer's npz carries `signal_mu` and no
+    # `signal_sigma`, which is what `avg`, `marginal`, `knn1` and `knn5` hand over. Scored twice
+    # off the SAME root: once with no σ table at all (no spread — `SIGMA` is optional in
+    # `slurm/t81_score_external.sh`) and once with a training-residual table (fitted flat σ).
+    point_root = tmp / "pred.point_only"
+    point_root.mkdir()
+    (point_root / "manifest.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+    track = external.track_dirname(Pair("T_aa", "V_aa"), REAL_ASSAY)
+    (point_root / track).mkdir()
+    for c, n in N_BINS.items():
+        keep = dict(np.load(pred / track / f"{c}.npz"))
+        keep.pop("signal_sigma")
+        np.savez(point_root / track / f"{c}.npz", **keep)
+    roots["point_only"] = roots["fitted_flat"] = point_root
+    sigma_table = tmp / "sigma.json"
+    sigma_table.write_text(json.dumps(
+        {"method": "point-only-fixture", "fitted_on": FITTED_ON, "sigma": {REAL_ASSAY: 0.7}}),
+        encoding="utf-8")
+
+    out = {"truth_root": truth, "sigma_table": sigma_table}
+    for name in ("store", "challenge", "v_only", "b_only", "point_only", "fitted_flat"):
         path = tmp / f"score.{name}.json"
-        cfg = regime if name in ("store", "challenge") else tmp / f"regime.{name}.json"
+        cfg = (regime if name in ("store", "challenge")
+               else tmp / DERIVED_REGIME.get(name, DERIVED_REGIME["v_only"]))
         argv = ["--store", str(cfg), "--pred", str(roots[name]), "--out", str(path),
                 "--held-out-chroms", "chr2", "--c-index-pairs", "2000", "--quiet"]
         if name == "challenge":
             argv += ["--truth-root", str(truth)]
+        if name == "fitted_flat":
+            argv += ["--sigma-table", str(sigma_table)]
         assert external.main(argv) == 0
         out[name] = path
     return out
@@ -1286,11 +1332,12 @@ def real_score(real_scores: dict, truth: str) -> dict:
 
 
 def point_the_board_at(root: Path, regime_name: str) -> None:
-    """Name the regime file a pass actually read, on every board of `root`.
+    """Set `eval_set.regime` on every board of `root`, the way a frozen board names its regime.
 
-    A panel pass reads a DERIVED regime (`tools/declare_eval_pairs.py split` writes
-    `regime.<name>.<panel>.json`), and `gate_row_against_board` matches the row's recorded regime
-    against `eval_set.regime` by basename — so the two must be the same file, not two spellings.
+    A single-panel pass never reads that file: `tools/declare_eval_pairs.py split` cuts it down to
+    `regime.<name>.<panel>.json` first, and that derived path is what the pass records. So a board
+    is pointed at the SHIPPED name here and `gate_row_against_board` is what has to accept the
+    derived sibling of the row's own panel (`lb.accepted_regime_names`).
     """
     edit_boards(root, lambda b: [board["eval_set"].update(regime=regime_name)
                                  for board in b["boards"].values()])
@@ -1318,6 +1365,12 @@ def test_the_address_reads_the_panel_and_scope_the_scorer_wrote(real_root: Path,
         assert set(row["metrics"]["count"]) >= {"crps", "crps_oracle_scaled", "scale_error"}
         assert row["metrics"]["count"]["crps"] == block["panels"]["count"][key]["crps"]
         assert row["ranked"] is (panel != "V_matched" and scope == "held-out")
+        # §5.2 — and how big the exam at THIS address was, per arm, out of the same block. The
+        # pass-level count in `flags` cannot say it: all three panels come from one pass.
+        for arm in ("pval", "count"):
+            src = block["panels"][arm][key]
+            assert row["panel_counts"][arm] == {"n_experiments": src["n_experiments"],
+                                                "n_assays": len(src["assays"])}, (panel, scope, arm)
     # the four rows are four different numbers, not one number stamped four times
     seen = {(p, s): json.loads((real_root / "rows" / BOARD / f"store.{p}.{s}"
                                 / "CANDI@v1.json").read_text())["metrics"]["pval"]["mse"]
@@ -1343,6 +1396,31 @@ def test_a_real_challenge_row_carries_neither_the_count_nor_the_peak_arm(real_ro
     assert "count/crps" in row["missing_metrics"] and "pval/auprc" in row["missing_metrics"]
     assert row["provenance"]["truth_manifest_hash"] == \
         score["provenance"]["truth"]["manifest_sha256"]
+    assert row["panel_counts"]["count"]["n_experiments"] == 0, "the arm is absent, so it is 0"
+
+
+def test_an_arm_this_truth_cannot_score_needs_no_allow_missing(real_root: Path,
+                                                               real_scores: dict) -> None:
+    """§7 — the 2019 data has no counts and no peak calls, so under challenge truth those arms are
+    empty in EVERY score json, by rule rather than by accident. Demanding `--allow-missing` for
+    them made the flag meaningless on this truth: it was always on, so it silenced the pval gaps it
+    exists to declare. The count and peak arms are recorded as missing and cost no flag; a pval key
+    the pass genuinely failed to produce still does."""
+    add_path(real_root, real_scores["challenge"], "CANDI", "--truth", "challenge", "--panel", "B_",
+             "--scope", "held-out", "--lineage", "candi")
+    row = json.loads((real_root / "rows" / BOARD / "challenge.B_.held-out"
+                      / "CANDI@v1.json").read_text(encoding="utf-8"))
+    assert "count/crps" in row["missing_metrics"] and "pval/auprc" in row["missing_metrics"]
+    assert row["metrics"]["pval"]["crps"] > 0
+    # one pval key removed from the block the address reads — a real gap, and still gated
+    holed = real_score(real_scores, "challenge")
+    del holed["panels"]["pval"]["B"]["gwcorr"]
+    path = real_root.parent / "challenge_holed.json"
+    path.write_text(json.dumps(holed), encoding="utf-8")
+    with pytest.raises(SystemExit, match="pval/gwcorr") as e:
+        add_path(real_root, path, "CANDI", "--truth", "challenge", "--panel", "B_",
+                 "--scope", "held-out", "--lineage", "candi", "--force")
+    assert "count/crps" not in str(e.value), "the refusal names the real gap only"
 
 
 def test_a_real_entrant_score_json_stamps_an_anchor_row(real_root: Path,
@@ -1365,7 +1443,7 @@ def test_add_refuses_a_V_matched_panel_no_B_pass_ever_filled(real_root: Path,
     scores `V_` and `B_` in separate passes, so a `V_` json's `V_matched` block comes out empty:
     no experiments, no `matched_to`. That is no number, not a number of zero, and `add` refuses it
     and names the verb that fixes it. The same file's `V_breadth` is untouched and still lands."""
-    point_the_board_at(real_root, "regime.v_only.json")
+    point_the_board_at(real_root, BOARD_REGIME)
     score = real_score(real_scores, "v_only")
     matched = score["panels"]["pval"]["V_matched"]
     assert matched["matched_to"] == [] and matched["n_experiments"] == 0
@@ -1392,7 +1470,7 @@ def test_a_filled_V_matched_row_records_where_its_panels_came_from(real_root: Pa
     and carries that provenance onto the row, so a reader is told the middle number's `B_` rows
     came from a sibling pass. The union here is `harness.panel_macros`' own, not a hand-written
     block: the same function `fill-panels` calls, over the same two jsons."""
-    point_the_board_at(real_root, "regime.v_only.json")
+    point_the_board_at(real_root, BOARD_REGIME)
     panel_macros = pytest.importorskip("candi.bench.harness").panel_macros
     v, b = real_score(real_scores, "v_only"), real_score(real_scores, "b_only")
     filled = json.loads(json.dumps(v))
@@ -1415,6 +1493,127 @@ def test_a_filled_V_matched_row_records_where_its_panels_came_from(real_root: Pa
         "store.V_matched.held-out"]
     assert compiled["ranking"]["state"] == "unranked"
     assert compiled["rows"][0]["provenance"]["panels_from"]["v"].endswith("score.v_only.json")
+    matched = filled["panels"]["pval"]["V_matched"]
+    assert row["panel_counts"]["pval"] == {"n_experiments": matched["n_experiments"],
+                                           "n_assays": len(matched["assays"])}, \
+        "§5.2 — the matched row says how many experiments IT aggregated"
+    assert compiled["rows"][0]["panel_counts"] == row["panel_counts"]
+
+
+def test_add_refuses_a_V_matched_panel_off_a_B_only_pass(real_root: Path,
+                                                         real_scores: dict) -> None:
+    """§5.2, the other half of the split. The `B_` pass's own `V_matched` block is empty because it
+    scored no `V_` rows at all — both `V_` blocks are — so nothing here is the matched number and
+    `--allow-missing` would stamp a metric-less row under the panel's heading. Refused by name,
+    pointing at the file the matched cell is filled into."""
+    score = real_score(real_scores, "b_only")
+    assert score["panels"]["pval"]["V_breadth"]["n_experiments"] == 0
+    assert score["panels"]["pval"]["V_matched"]["n_experiments"] == 0
+    assert score["panels"]["pval"]["B"]["n_experiments"] > 0, "it IS the B_ pass"
+    with pytest.raises(SystemExit, match="no V_ rows") as e:
+        add_path(real_root, real_scores["b_only"], "CANDI", "--truth", "store",
+                 "--panel", "V_matched", "--scope", "held-out", "--lineage", "candi",
+                 "--allow-missing")
+    assert "fill-panels" in str(e.value)
+    assert not (real_root / "rows" / BOARD / "store.V_matched.held-out").exists()
+    # the same file at its OWN address lands, once the board names the B_ regime it read
+    point_the_board_at(real_root, BOARD_REGIME)
+    add_path(real_root, real_scores["b_only"], "CANDI", "--truth", "store", "--panel", "B_",
+             "--scope", "held-out", "--lineage", "candi", "--allow-missing")
+    row = json.loads((real_root / "rows" / BOARD / "store.B_.held-out"
+                      / "CANDI@v1.json").read_text(encoding="utf-8"))
+    assert row["metrics"]["pval"]["mse"] == score["panels"]["pval"]["B"]["mse"]
+
+
+def test_the_regime_gate_takes_the_derived_regime_of_the_rows_own_panel(real_root: Path,
+                                                                       real_scores: dict) -> None:
+    """A real pass never reads the board's shipped regime — `declare_eval_pairs.py split` cuts it
+    to one panel first — so the gate accepts `regime.<name>.<panel>.json` as well. The row's OWN
+    panel's, and no other: a `B_` row scored under the `V_` regime read the selection panel, and
+    another board's derived regime is another board's."""
+    point_the_board_at(real_root, BOARD_REGIME)
+    v = real_score(real_scores, "v_only")
+    assert Path(v["provenance"]["regime"]).name == DERIVED_REGIME["v_only"]
+    assert lb.accepted_regime_names(BOARD_REGIME, "V_breadth") == (
+        "regime.eic_19.json", "regime.eic_19.V_.json")
+    add_path(real_root, real_scores["v_only"], "CANDI", "--truth", "store",
+             "--panel", "V_breadth", "--scope", "held-out", "--lineage", "candi",
+             "--allow-missing")
+    assert (real_root / "rows" / BOARD / "store.V_breadth.held-out" / "CANDI@v1.json").exists()
+    # the same json addressed as the test panel: the file says V_, so the row is refused
+    with pytest.raises(SystemExit, match="regime") as e:
+        add_path(real_root, real_scores["v_only"], "CANDI", "--truth", "store", "--panel", "B_",
+                 "--scope", "held-out", "--lineage", "candi", "--allow-missing")
+    assert "regime.eic_19.B_.json" in str(e.value)
+    assert not (real_root / "rows" / BOARD / "store.B_.held-out").exists()
+    # and the pilot board's derived regime is not this board's. Only `provenance.regime` moves:
+    # the two regimes differ in training loci alone, so the numbers would look plausible.
+    other = json.loads(json.dumps(v))
+    other["provenance"]["regime"] = str(
+        Path(v["provenance"]["regime"]).parent / "regime.eic_pilot.V_.json")
+    path = real_root.parent / "pilot_regime.json"
+    path.write_text(json.dumps(other), encoding="utf-8")
+    with pytest.raises(SystemExit, match="regime.eic_pilot.V_.json"):
+        add_path(real_root, path, "CANDI", "--truth", "store", "--panel", "V_breadth",
+                 "--scope", "held-out", "--lineage", "candi", "--allow-missing", "--force")
+
+
+def test_the_spread_badge_has_three_states_on_real_score_jsons(real_root: Path,
+                                                               real_scores: dict) -> None:
+    """§7's spread device, all three states, each from a pass `candi.bench.external` really ran.
+
+    `v_only` predicted `signal_sigma` per bin (native). `point_only` is the same prediction with
+    that array removed — what `avg`, `marginal`, `knn1` and `knn5` hand over — scored with no σ
+    table, which the launcher allows: there is then NO spread, the scorer withholds every
+    σ-derived key, and the badge must say so instead of claiming the method's own. `fitted_flat` is
+    that same point-only root scored WITH a training-residual table: one flat σ per assay, and the
+    distributional cell comes back."""
+    point_the_board_at(real_root, BOARD_REGIME)
+    want = {"v_only": (lb.SIGMA_STATE_NATIVE, True), "point_only": (lb.SIGMA_STATE_NONE, False),
+            "fitted_flat": (lb.SIGMA_STATE_FITTED, True)}
+    for name, (state, distributional) in want.items():
+        add_path(real_root, real_scores[name], name, "--truth", "store", "--panel", "V_breadth",
+                 "--scope", "held-out", "--lineage", "baseline", "--allow-missing")
+        row = json.loads((real_root / "rows" / BOARD / "store.V_breadth.held-out"
+                          / f"{name}@v1.json").read_text(encoding="utf-8"))
+        assert row["badges"]["sigma_state"] == state, name
+        assert row["badges"]["sigma"] == lb.SIGMA_BADGE[state], name
+        # the badge is a fact about the pass, and the numbers agree with it
+        assert ("crps" in row["metrics"]["pval"]) is distributional, name
+        assert ("pit_ks" in row["metrics"]["pval"]) is distributional, name
+    # native: the pass says every track brought its own spread, and there is no table to name
+    v = real_score(real_scores, "v_only")
+    assert set(v["provenance"]["sigma_source"].values()) == {lb.SIGMA_SOURCE_OWN}
+    assert v["provenance"]["sigma_table"] is None
+    # none: no table AND the pass's own point-only list names the track
+    point = real_score(real_scores, "point_only")
+    assert point["provenance"]["sigma_table"] is None
+    assert point["provenance"]["point_only_tracks"] == list(point["provenance"]["sigma_source"])
+    none_row = json.loads((real_root / "rows" / BOARD / "store.V_breadth.held-out"
+                           / "point_only@v1.json").read_text(encoding="utf-8"))
+    assert none_row["badges"]["sigma_fitted_on"] is None
+    assert "pval/crps" in none_row["missing_metrics"], "declared missing, not silently absent"
+    # fitted-flat: the table travels with the badge, and its `fitted_on` is the row's warrant
+    fitted = json.loads((real_root / "rows" / BOARD / "store.V_breadth.held-out"
+                         / "fitted_flat@v1.json").read_text(encoding="utf-8"))
+    assert fitted["badges"]["sigma_fitted_on"] == FITTED_ON
+    assert fitted["provenance"]["sigma_table"]["method"] == "point-only-fixture"
+    assert lb.main(["--root", str(real_root), "check"]) == 0
+
+
+def test_a_pass_that_mixes_spread_devices_gets_no_badge(real_root: Path,
+                                                        real_scores: dict) -> None:
+    """One badge stands over every number in the row, so a pass whose tracks used two different
+    spread devices cannot be badged at all. Refused rather than badged by majority."""
+    mixed = real_score(real_scores, "v_only")
+    mixed["provenance"]["sigma_source"] = {
+        **{k: lb.SIGMA_SOURCE_OWN for k in mixed["provenance"]["sigma_source"]},
+        "T_zz|V_zz|H3K4me3": lb.SIGMA_SOURCE_NONE}
+    path = real_root.parent / "mixed_sigma.json"
+    path.write_text(json.dumps(mixed), encoding="utf-8")
+    with pytest.raises(SystemExit, match="mixes spread devices"):
+        add_path(real_root, path, "CANDI", "--truth", "store", "--panel", "V_breadth",
+                 "--scope", "held-out", "--lineage", "candi", "--allow-missing")
 
 
 def _metric_id(m: dict) -> str:

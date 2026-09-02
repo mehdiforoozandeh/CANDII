@@ -119,7 +119,7 @@
       },
       "caveats": [
         "Every row that used to be on this page is void (§3.3): the old board scored all 23 chromosomes, chr19 included, and chr19 is the chromosome CANDI trained on. Those numbers are not carried forward, and no new row has been scored yet.",
-        "Under this regime CANDI is in-sample on 1 of 23 chromosomes. That fraction is part of the number's address and is printed on every genome-wide cell.",
+        "Under this regime CANDI is in-sample on 1 of 23 chromosomes. That fraction is part of the number's address, and the page prints it beside any row whose score json carries a per-cell fraction. No producer writes one yet, so no row shows a figure — an absent fraction is drawn as nothing rather than as zero.",
         "The board measures missing-mark transfer within a seen cell type (§8). Every eval pair is a mark the V_ or B_ cell has and its paired T_ cell lacks, so the model always sees other tracks from the same cell type. CANDI's zero-shot claim is not tested here."
       ],
       "reader_badges": [

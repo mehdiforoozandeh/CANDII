@@ -107,7 +107,13 @@ SCOPE_GENOME_WIDE = "genome-wide"
 #: re-measures `panels` over the union of the two passes' `per_track` and records `panels_from`.
 PANEL_MATCHED = "V_matched"
 PANEL_BREADTH = "V_breadth"
+PANEL_TEST = "B_"
 FILL_PANELS_CMD = "python -m candi.bench.external fill-panels --v <store.V_.json> --b <store.B_.json>"
+
+#: Which single-panel regime a row's panel implies (t80). `V_breadth` and `V_matched` are two
+#: aggregations of ONE `V_` pass, so both read the `V_` regime; `B_` reads the `B_` one. Used by
+#: `accepted_regime_names` to keep the regime gate tied to the row's OWN declared panel.
+PANEL_REGIME_PREFIX = {PANEL_BREADTH: "V_", PANEL_MATCHED: "V_", PANEL_TEST: "B_"}
 
 #: §4's blanking rule, as method slugs. A method whose transferable parameters were fit at every
 #: position has no genome-wide cell: the number would be a memorisation score, and "a blanked cell
@@ -116,11 +122,35 @@ FILL_PANELS_CMD = "python -m candi.bench.external fill-panels --v <store.V_.json
 #: quotes, and `tests/test_leaderboard.py` holds the two in step.
 GENOME_WIDE_BLANKED = ("Avocado", "ChromImpute", "Lavawizard")
 
-#: §7's mandatory spread badge. A point-only method's prediction is wrapped in a Gaussian whose σ
-#: is FITTED and flat per assay; a method that emitted its own per-bin spread is native. Which one
-#: a row is, is a fact about the score json's `provenance.sigma_table`, never a judgement.
+#: §7's mandatory spread badge, in the THREE states §7's spread device really has. Which one a row
+#: is, is a fact about the score json, never a judgement:
+#:
+#:   `native`      the method emitted its own per-bin spread — CANDI's heteroscedastic heads, or any
+#:                 rival whose npz carries `signal_sigma` (`sigma_source` says `track`).
+#:   `fitted-flat` a flat per-assay Gaussian from a training-residual table was wrapped around a
+#:                 point prediction (`provenance.sigma_table`). Legal, and disclosed.
+#:   `none`        NO SPREAD AT ALL: a point-only pass scored without a σ table. `SIGMA` is optional
+#:                 in `slurm/t81_score_external.sh`, and only five methods have a table (the four
+#:                 rivals and `avg-arcsinh`), so `avg`, `marginal`, `knn1` and `knn5` land here. The
+#:                 row then carries no distributional cell for that arm — the scorer withholds
+#:                 every σ-derived key — and the site draws no spread badge. A two-state badge
+#:                 called this `native`, which claims a per-bin spread the pass never had.
+SIGMA_STATE_NATIVE = "native"
+SIGMA_STATE_FITTED = "fitted-flat"
+SIGMA_STATE_NONE = "none"
 SIGMA_BADGE_NATIVE = "native heteroscedastic"
 SIGMA_BADGE_FITTED = "fitted flat σ"
+SIGMA_BADGE_NONE = "point-only — no spread"
+SIGMA_BADGE = {SIGMA_STATE_NATIVE: SIGMA_BADGE_NATIVE,
+               SIGMA_STATE_FITTED: SIGMA_BADGE_FITTED,
+               SIGMA_STATE_NONE: SIGMA_BADGE_NONE}
+
+#: `candi.bench.external.build_record`'s own spellings, in `provenance.sigma_source` (per track).
+#: `n/a` is a track with no pval arm at all, which is an absent arm rather than an absent spread.
+SIGMA_SOURCE_OWN = "track"
+SIGMA_SOURCE_TABLE = "sigma_table"
+SIGMA_SOURCE_NONE = "none"
+SIGMA_SOURCE_NO_SIGNAL = "n/a"
 
 #: §7 — σ is fit on training-set residuals ONLY, never on `V_`, never on `B_`.
 #: `competitors/sigma_pass.py` writes this prefix into `fitted_on`; a table without it was fit on
@@ -395,6 +425,20 @@ def refuse_an_unfilled_matched_panel(arm_panels: Mapping[str, Any], arm: str, sc
     """
     breadth = arm_panels.get(PANEL_BREADTH)
     if not isinstance(breadth, dict) or not int(breadth.get("n_experiments") or 0):
+        # No `V_` rows in the pass at all. If it scored `B_` rows, this is the `B_` half of the
+        # programme being addressed as the middle number: both `V_` blocks come out empty, every
+        # metric goes missing, and `--allow-missing` would stamp a metric-less row under a panel
+        # heading. Refused by name instead. (An arm with no `B_` rows either — the count arm under
+        # challenge truth — is an absent ARM, which the address already handles.)
+        b_rows = arm_panels.get(PANEL_JSON_KEY[PANEL_TEST]) or {}
+        if int(b_rows.get("n_experiments") or 0):
+            raise GateError(
+                f"this json has no V_ rows ({scope} panels[{arm}][{PANEL_BREADTH}] scored "
+                f"{breadth.get('n_experiments') if isinstance(breadth, dict) else None} "
+                f"experiments) while it scored {b_rows.get('n_experiments')} on `B_`, so it is the "
+                f"`B_` pass. `{PANEL_MATCHED}` is the `V_` predictions aggregated over `B_`'s "
+                f"assays: it is filled into the V_ json by fill-panels, and there is no matched "
+                f"number in a B_ json to stamp. {FILL_PANELS_CMD}")
         return
     matched = arm_panels.get(PANEL_MATCHED) or {}
     if int(matched.get("n_experiments") or 0) and list(matched.get("matched_to") or []):
@@ -410,14 +454,23 @@ def refuse_an_unfilled_matched_panel(arm_panels: Mapping[str, Any], arm: str, sc
 
 
 def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
-                    allow_missing: bool, *, panel: str,
-                    scope: str) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
+                    allow_missing: bool, *, panel: str, scope: str,
+                    truth_arms: Sequence[str] = ()
+                    ) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
     """Copy registry metrics out of a bench-shaped score json, at one address.
 
     Returns (metrics, missing ids). Diagnostics come from the top-level `C` block on both scopes:
     `C` re-decodes perturbed prompts over the source's windows, so it is a property of the run and
     not of either aggregation — neither `harness.run_bench` nor `score_external` writes a
     genome-wide counterpart to divide it into.
+
+    `truth_arms` is `boards.json` `truths[<truth>]["arms"]` — the arms this truth can be scored on
+    at all. An arm it does not offer is ABSENT BY RULE, not a gap: the 2019 challenge data carries
+    no counts and no peak calls, so under `--truth challenge` the count arm and every peak-category
+    key are empty in every score json, on purpose, and `gate_row_address` refuses a row that
+    carries them. They are still recorded in `missing_metrics`, so the row says what it lacks —
+    they just do not demand `--allow-missing`, which is left meaning what it says: a pval key this
+    pass genuinely failed to produce.
     """
     if not isinstance(score.get("macro"), dict):
         raise GateError("score json has no `macro` block — not a candi.bench-shaped file")
@@ -426,6 +479,7 @@ def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
     diagnostics = flatten_c_block(cblock)
     out: Dict[str, Dict[str, float]] = {}
     missing: List[str] = []
+    needs_flag: List[str] = []
     for m in registry["metrics"]:
         slot = metric_slot(m)
         if slot == "diagnostics":
@@ -438,13 +492,16 @@ def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
             # their absence never needs --allow-missing.
             if slot != "diagnostics":
                 missing.append(metric_id(m))
+                arm = "peak" if m["category"] == "peaks" else m["arm"]
+                if not truth_arms or arm in truth_arms:
+                    needs_flag.append(metric_id(m))
             continue
         if not isinstance(val, (int, float)) or isinstance(val, bool) or not math.isfinite(val):
             raise GateError(f"metric {metric_id(m)} is not a finite number: {val!r}")
         out.setdefault(slot, {})[m["key"]] = float(val)
-    if missing and not allow_missing:
+    if needs_flag and not allow_missing:
         raise GateError("score json lacks registry metrics "
-                        f"{', '.join(missing)}; re-run with --allow-missing to record the gap")
+                        f"{', '.join(needs_flag)}; re-run with --allow-missing to record the gap")
     check_companions(out, registry)
     return out, sorted(missing)
 
@@ -499,26 +556,57 @@ def truth_manifest_hash(score: Mapping[str, Any], truth: str) -> Optional[str]:
     return None
 
 
-def sigma_badge(score: Mapping[str, Any]) -> str:
-    """§7's mandatory spread badge, and the Rule 1 refusal that comes with it.
+def sigma_state(score: Mapping[str, Any]) -> Tuple[str, Optional[str]]:
+    """§7's spread device as `(state, fitted_on)`, and the Rule 1 refusal that comes with it.
 
-    No σ table in the score's provenance means the method emitted its own per-bin spread. A table
-    means a flat per-assay Gaussian was wrapped around a point prediction — which is fine, and
-    disclosed — but only if it was fitted on TRAINING residuals. A table fitted on `V_` or `B_`
-    read the panel it is scored on, so the row is refused instead of badged.
+    Three states, read off two provenance keys and nothing else (see `SIGMA_BADGE`):
+
+    * `provenance.sigma_table` present → `fitted-flat`, and the table must have been fitted on
+      TRAINING residuals. A table fitted on `V_` or `B_` read the panel the row is scored on, so
+      the row is refused instead of badged.
+    * no table, and `provenance.sigma_source` says every scored track brought its own
+      `signal_sigma` → `native`.
+    * no table, and every scored track's spread source is `none` → `none`: a point-only pass. It
+      has no spread, so it has no distributional cell either.
+
+    A pass that mixes the devices across its own tracks gets no badge at all: one label would be
+    false for half the rows it stands over. A score json with no σ bookkeeping is a `candi.bench`
+    harness pass, whose heads are heteroscedastic by construction — `native`.
     """
     prov = score.get("provenance") if isinstance(score.get("provenance"), dict) else {}
     sigma = prov.get("sigma_table")
-    if not isinstance(sigma, dict):
-        return SIGMA_BADGE_NATIVE
-    fitted_on = str(sigma.get("fitted_on") or "")
-    if not fitted_on.startswith(SIGMA_FITTED_ON_PREFIX):
+    if isinstance(sigma, dict):
+        fitted_on = str(sigma.get("fitted_on") or "")
+        if not fitted_on.startswith(SIGMA_FITTED_ON_PREFIX):
+            raise GateError(
+                f"σ table `fitted_on` is {fitted_on!r}, which does not start with "
+                f"{SIGMA_FITTED_ON_PREFIX!r}. §7 fits σ on training-set residuals only — never on "
+                "`V_`, never on `B_` — so this table read the panel the row is scored on and the "
+                "row is refused rather than badged")
+        return SIGMA_STATE_FITTED, fitted_on
+    sources = prov.get("sigma_source")
+    kinds = ({str(v) for v in sources.values()} - {SIGMA_SOURCE_NO_SIGNAL}
+             if isinstance(sources, dict) else set())
+    if not kinds:
+        # No `sigma_source` at all. `point_only_tracks` is the older half of the same pair, so it
+        # is read before falling back to the harness's native heads.
+        point_only = prov.get("point_only_tracks")
+        if isinstance(point_only, list) and point_only:
+            return SIGMA_STATE_NONE, None
+        return SIGMA_STATE_NATIVE, None
+    if SIGMA_SOURCE_TABLE in kinds:
         raise GateError(
-            f"σ table `fitted_on` is {fitted_on!r}, which does not start with "
-            f"{SIGMA_FITTED_ON_PREFIX!r}. §7 fits σ on training-set residuals only — never on "
-            "`V_`, never on `B_` — so this table read the panel the row is scored on and the row "
-            "is refused rather than badged")
-    return SIGMA_BADGE_FITTED
+            f"provenance.sigma_source says a σ table filled the spread on {sorted(kinds)} tracks, "
+            "but provenance.sigma_table is absent — the row cannot name the table its numbers "
+            "came from, so §7's badge cannot be stamped")
+    if kinds == {SIGMA_SOURCE_OWN}:
+        return SIGMA_STATE_NATIVE, None
+    if kinds == {SIGMA_SOURCE_NONE}:
+        return SIGMA_STATE_NONE, None
+    raise GateError(
+        f"provenance.sigma_source mixes spread devices across this pass's tracks ({sorted(kinds)}) "
+        "— §7's badge stands over every number in the row, and one badge cannot say two things. "
+        "Score the tracks that have their own `signal_sigma` separately from the point-only ones")
 
 
 def in_sample_fraction(score: Mapping[str, Any]) -> Optional[float]:
@@ -710,6 +798,26 @@ def gate_row_address(row: Mapping[str, Any], boards: Mapping[str, Any], bid: str
     return view_key(addr["truth"], addr["panel"], addr["scope"])
 
 
+def accepted_regime_names(board_regime: str, panel: str) -> Tuple[str, ...]:
+    """The regime file names a row at `panel` may have been scored under (t80's derived regimes).
+
+    A real pass never reads the board's shipped regime. `tools/declare_eval_pairs.py split` cuts it
+    down to ONE panel first — `regime.eic_19.V_.json` out of `configs/regime.eic_19.json` — because
+    one file carrying both panels would put the held-out panel inside the selection loop and
+    nothing downstream could get it back out. `harness.StoreSource.provenance` then records that
+    derived path, so comparing the board's basename alone would refuse every real row.
+
+    So the gate accepts the shipped name, or the derived sibling of THE ROW'S OWN PANEL. Not any
+    suffix: a `B_` row that names the `V_` regime was scored on the selection panel and is still
+    refused, and so is `regime.eic_19.sigma.json`, which is a σ-fitting regime and no panel at all.
+    """
+    shipped = Path(board_regime).name
+    prefix = PANEL_REGIME_PREFIX.get(panel)
+    if prefix is None or not shipped.endswith(".json"):
+        return (shipped,)
+    return (shipped, f"{shipped[:-len('.json')]}.{prefix}.json")
+
+
 def gate_row_against_board(row: Mapping[str, Any], board: Mapping[str, Any], bid: str) -> None:
     frozen = board["frozen"]
     for field in ("store_manifest_hash", "regime_sha256"):
@@ -735,9 +843,12 @@ def gate_row_against_board(row: Mapping[str, Any], board: Mapping[str, Any], bid
     board_regime = board["eval_set"].get("regime", "")
     if board_regime.endswith(".json"):
         row_regime = prov.get("regime") or ""
-        if Path(row_regime).name != Path(board_regime).name:
-            raise GateError(f"row regime `{row_regime}` is not board `{bid}`'s "
-                            f"regime `{board_regime}`")
+        allowed = accepted_regime_names(board_regime, row["address"]["panel"])
+        if Path(row_regime).name not in allowed:
+            raise GateError(f"row regime `{row_regime}` is not board `{bid}`'s regime "
+                            f"`{board_regime}`: a row at panel `{row['address']['panel']}` reads "
+                            f"either that file or its derived single-panel sibling, so this gate "
+                            f"accepts {list(allowed)} and nothing else")
     if row["metrics"].get("pval") and prov["flags"].get("pval_pred_space") != "-log10p":
         raise GateError("pval metrics extracted but provenance lacks pval_pred_space=-log10p — "
                         "the row predates the spaces contract and is not quotable (EVAL.md)")
@@ -783,8 +894,18 @@ def cmd_add(args: argparse.Namespace) -> int:
     score = load_json(score_path)
     truth_hash = truth_manifest_hash(score, args.truth)
     metrics, missing = extract_metrics(score, registry, args.allow_missing,
-                                       panel=args.panel, scope=args.scope)
+                                       panel=args.panel, scope=args.scope,
+                                       truth_arms=boards["truths"][args.truth].get("arms") or ())
+    # §5.2 — how big the exam this address names actually was, per arm, straight off the block the
+    # address read (`harness.panel_macros` writes `n_experiments` and `assays` into every panel).
+    # `V_breadth` and `V_matched` come out of ONE pass, so the pass-level count in
+    # `provenance.flags.n_experiments` cannot say what the matched number aggregated; this can.
+    panel_counts = {
+        arm: {"n_experiments": int(block.get("n_experiments") or 0),
+              "n_assays": len(block.get("assays") or [])}
+        for arm, block in address_macro(score, args.panel, args.scope).items()}
     provenance = build_provenance(score, args, score_path)
+    sigma_st, sigma_fitted_on = sigma_state(score)
     if truth_hash is not None:
         provenance["truth_manifest_hash"] = truth_hash
     row: Dict[str, Any] = {
@@ -806,12 +927,17 @@ def cmd_add(args: argparse.Namespace) -> int:
         "badges": {
             "position": POSITION_CLASSES[args.position_class],
             "cell_types": CELL_CLASSES[args.cell_class],
-            # §7 — every distributional cell says which spread device produced it.
-            "sigma": sigma_badge(score),
+            # §7 — every distributional cell says which spread device produced it, in the three
+            # states there are. `sigma` is the label a reader sees; `sigma_state` is what the site
+            # switches on, so "no spread at all" cannot be read as "its own spread".
+            "sigma": SIGMA_BADGE[sigma_st],
+            "sigma_state": sigma_st,
+            "sigma_fitted_on": sigma_fitted_on,
         },
         # §4, §5.2, §6 — whether this address ranks at all. The board's noise floor is applied on
         # top of it at compile time; this is the address's own answer.
         "ranked": address_ranks(boards, args.board, args.panel, args.scope),
+        "panel_counts": panel_counts,
         "in_sample_fraction": in_sample_fraction(score),
         "metrics": metrics,
         "missing_metrics": missing,
@@ -944,6 +1070,9 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
             # §4, §5.2 — the row's own rankability, and the fraction §4 wants printed beside a
             # genome-wide number (`null` until a producer writes one — see `IN_SAMPLE_KEY`).
             "ranked": bool(r.get("ranked")),
+            # §5.2 — the size of the exam this row's own address named, per arm. Absent on a row
+            # stamped before it was recorded, which is why the site treats it as optional.
+            "panel_counts": r.get("panel_counts") or {},
             "in_sample_fraction": r.get("in_sample_fraction"),
             "has_peak_head": bool((r.get("provenance") or {}).get("has_peak_head")),
             "verified": bool(r["provenance"].get("artifacts_resolved_at_add")),
