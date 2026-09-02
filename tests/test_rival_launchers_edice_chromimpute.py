@@ -536,6 +536,93 @@ def test_the_sigma_apply_is_kept_out_of_the_board_output_directory():
     assert '"$TRAIN_INFO" "$SIMP" "$S" "$M"' in text
 
 
+# ---------------------------------------------------------------------------------------------
+# `strain` writes what `sapply` reads — one item list, one classifier name
+# ---------------------------------------------------------------------------------------------
+#
+# `sapply` task 5 of Fir job 57807330 died three times on the jar's own
+#
+#     java.lang.IllegalArgumentException: No previously trained classifiers for mark DNase-seq were
+#     found available to load!    at ernst.ChromImpute.ChromImpute.executeApply(...:2344)
+#
+# and `afterok` then cancelled the fit — while `strain` (57807329) had reported 22/22 COMPLETED.
+# `Train` had written the 33 `useattributes_T_SK-MEL-5_DNase-seq_<i>_<j>.txt.gz` masks, no
+# `classifier_` file, and exit 0. Two things keep that from being a silent success: the two verbs
+# must walk ONE list and spell the classifier name in ONE place, and each must check the set it
+# writes or reads.
+
+
+def _verb(code: str, verb: str) -> str:
+    """One `case` branch of `stage.sh`, from `<verb>)` to its `;;`."""
+    i = code.index(f"  {verb})")
+    return code[i:code.index("\n    ;;", i)]
+
+
+def test_the_two_sigma_verbs_read_one_shared_item_list():
+    """A row `sapply` has and `strain` does not is a task asking for a set nobody trained."""
+    stage = _code(CHROMIMPUTE / "stage.sh")
+    assert re.search(r"strain\|sapply\)\s*LIST=\$CI_RUN/lists/sigma_items\.txt", stage), (
+        "stage.sh does not resolve both sigma verbs to the one shared item list")
+    for stale in ("lists/strain.txt", "lists/sapply.txt"):
+        assert stale not in stage, (
+            f"stage.sh still reads a per-verb {stale}; two files can drift, one cannot")
+
+    sigma = _code(CHROMIMPUTE / "sigma.sh")
+    assert '(run / "lists" / "sigma_items.txt").write_text' in sigma, (
+        "chromimpute/sigma.sh does not write the shared item list stage.sh reads")
+    for stale in ('"strain.txt").write_text', '"sapply.txt").write_text'):
+        assert stale not in sigma, f"chromimpute/sigma.sh still writes a per-verb list ({stale})"
+    assert 'wc -l < "$RUN/lists/sigma_items.txt"' in sigma, (
+        "chromimpute/sigma.sh sizes an array off something other than the shared list, so the two "
+        "arrays could have different lengths even with one list on disk")
+
+
+def test_the_sigma_verbs_spell_the_classifier_set_name_in_one_place():
+    """The writer and the reader cannot disagree about a name only one line spells."""
+    stage = _code(CHROMIMPUTE / "stage.sh")
+    spelled = [ln.strip() for ln in stage.splitlines() if "classifier_" in ln]
+    assert spelled == ['CLASSIFIERS="$SPRED/classifier_${S}_${M}_"'], (
+        f"stage.sh spells the classifier-set name on {len(spelled)} line(s): {spelled}")
+    for verb in ("strain", "sapply"):
+        assert '"$CLASSIFIERS"*' in _verb(stage, verb), (
+            f"stage.sh's {verb} does not check the shared classifier-set name")
+
+
+def test_strain_refuses_when_train_exits_zero_having_written_nothing():
+    """22/22 COMPLETED with an empty predictor directory is the failure this catches one stage up."""
+    strain = _verb(_code(CHROMIMPUTE / "stage.sh"), "strain")
+    assert strain.index("CI Train") < strain.index('"$CLASSIFIERS"*'), (
+        "strain must count the classifier files AFTER Train, not before")
+    assert "exit 3" in strain, "strain does not fail when Train wrote no classifier"
+
+
+def test_sapply_checks_the_classifier_set_before_it_starts_the_jar():
+    """An absent set is deterministic, so it must not ride the transient-Lustre retry three times."""
+    sapply = _verb(_code(CHROMIMPUTE / "stage.sh"), "sapply")
+    assert sapply.index('"$CLASSIFIERS"*') < sapply.index("CI Apply"), (
+        "sapply calls the jar before it checks that there is a classifier set to load — the jar's "
+        "own error names only the mark, and RETRY repeats it three times")
+    assert "exit 3" in sapply
+    check = [ln.strip() for ln in sapply.splitlines() if '"$CLASSIFIERS"*' in ln]
+    assert check and all(ln.startswith("NCLS=") for ln in check), (
+        f"sapply's classifier check is not a plain test outside RETRY/CI: {check}")
+
+
+def test_the_sigma_stage_drops_a_cell_train_can_fit_nothing_for():
+    """`Train` holds the target's own track out, so a one-track cell has no features left.
+
+    Measured, not reasoned: of the 22 items of Fir strain 57807329, the only two that left zero
+    `classifier_` files were the two cells with a single row in `inputinfofile.txt`
+    (`T_SK-MEL-5`, `T_skin_of_body`); every cell with two rows or more got a set for every mark.
+    """
+    sigma = _code(CHROMIMPUTE / "sigma.sh")
+    assert 'run / "input" / "inputinfofile.txt"' in sigma, (
+        "chromimpute/sigma.sh judges the cell panel off the manifest alone; the panel that decides "
+        "whether Train has features is the one in inputinfofile.txt, which is what the jar reads")
+    assert "len(tracks) < 2" in sigma, (
+        "chromimpute/sigma.sh keeps a one-track cell, whose one item trains no classifier at all")
+
+
 @pytest.mark.parametrize("script", sorted(CHROMIMPUTE.glob("*.sh")), ids=lambda p: p.name)
 def test_the_jar_default_is_the_pinned_one(script: Path):
     text = _text(script)
@@ -642,8 +729,7 @@ if argv and argv[0] == "-":
     sys.stdin.read()                       # the sigma stage's inline program, stubbed
     draw, out, run = Path(argv[1]), Path(argv[2]), Path(argv[3])
     lines = "".join("%s\t%s\n" % it for it in ITEMS)
-    (run / "lists" / "strain.txt").write_text(lines)
-    (run / "lists" / "sapply.txt").write_text(lines)
+    (run / "lists" / "sigma_items.txt").write_text(lines)   # the ONE list both verbs read
     (run / "input" / "targets_sigma.tsv").write_text(
         "".join("%s\t%s\t%s\n" % (c, c, m) for c, m in ITEMS))
     drawn = json.loads(draw.read_text())

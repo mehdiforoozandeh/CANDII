@@ -7,7 +7,8 @@
 # The stage names are the manual's command names, lowercased. `CI_RUN` is a run directory laid out
 # by `submit.sh`; every path below is derived from it, so nothing but the stage and the array
 # index changes between submissions. The work-item list for a stage is `$CI_RUN/lists/<stage>.txt`,
-# one item per line, read by `$SLURM_ARRAY_TASK_ID`.
+# one item per line, read by `$SLURM_ARRAY_TASK_ID` — except the two sigma verbs, `strain` and
+# `sapply`, which share `$CI_RUN/lists/sigma_items.txt` because one writes what the other reads.
 #
 # Timing goes to `$CI_RUN/timing/<stage>.<taskid>.tsv` — stage, item, seconds, MaxRSS is read back
 # out of `sacct` afterwards. That file is the pilot memo's raw material.
@@ -82,10 +83,28 @@ fi
 # bedgraph converted once, and the delete pass below must not count it twice.
 GRID_LIST=$(printf '%s\n' $CHROM_LIST $TRAIN_LIST | awk '!seen[$0]++' | tr '\n' ' ')
 
-LIST=$CI_RUN/lists/$CI_STAGE.txt
+# ONE LIST FOR BOTH SIGMA VERBS. `strain` trains a classifier set and `sapply` loads it back, so an
+# item one verb has and the other does not is not a missing row — it is a `sapply` task asking the
+# jar for a set nobody trained, and the jar's answer is the MARK-level
+# "No previously trained classifiers for mark <mark> were found available to load!", which names
+# neither the cell nor the file it looked for. Two per-stage files can drift apart; one cannot.
+# `sigma.sh` writes `lists/sigma_items.txt` and sizes both arrays off it.
+case "$CI_STAGE" in
+  strain|sapply) LIST=$CI_RUN/lists/sigma_items.txt ;;
+  *)             LIST=$CI_RUN/lists/$CI_STAGE.txt ;;
+esac
 ITEM=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$LIST")
 [ -n "$ITEM" ] || { echo "no item $SLURM_ARRAY_TASK_ID in $LIST"; exit 1; }
 echo "[$CI_STAGE] task $SLURM_ARRAY_TASK_ID item: $ITEM"
+
+# THE CLASSIFIER SET IS NAMED ONCE, HERE, for both sigma verbs — the writer and the reader cannot
+# spell it differently if only one line spells it. `Train` writes
+# `classifier_<sample>_<mark>_<i>_<j>.txt.gz` into the predictor directory, one per training sample
+# it could use; `Apply` loads every file under that prefix.
+if [ "$CI_STAGE" = strain ] || [ "$CI_STAGE" = sapply ]; then
+  S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)
+  CLASSIFIERS="$SPRED/classifier_${S}_${M}_"
+fi
 
 # Retry, because `GenerateTrainData` and `Apply` open one gzip reader per compendium track — 267 at
 # once — and Lustre answers a few of those with a transient
@@ -187,15 +206,46 @@ case "$CI_STAGE" in
     # §7 wants residuals on TRAINING tracks, so the sigma stage trains and applies (T_x, mark)
     # for marks T_x DOES carry. ChromImpute leaves the target sample's own track out of its fit,
     # which is what makes the residual a real one and not a copy.
-    S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)
     CI Train "$TRAINDATA" "$IN/inputinfofile.txt" "$SPRED" "$S" "$M"
+    # `Train` EXITS 0 WHEN IT TRAINS NOTHING. Holding the target's own track out leaves a one-track
+    # cell with no features, and the jar answers that by writing the `useattributes_` masks, no
+    # classifier, and status 0 — so the array task reports COMPLETED and `sapply` inherits the
+    # failure. Measured on Fir: strain 57807329 was 22/22 COMPLETED, and two of its items
+    # (T_SK-MEL-5 DNase-seq, T_skin_of_body DNase-seq) had left SIGMAPREDICTORDIR with 33
+    # `useattributes_` files and zero `classifier_` files each. `sigma.sh` now drops a one-track
+    # cell before it gets here; this is the check that says so if it ever gets here anyway.
+    # Outside RETRY on purpose: nothing about this repeats differently.
+    NCLS=$(ls -1 "$CLASSIFIERS"* 2>/dev/null | wc -l | tr -d "[:space:]") || NCLS=0
+    [ "$NCLS" -gt 0 ] || {
+      echo "[strain] REFUSING: Train exited 0 but wrote no $CLASSIFIERS* — it trained nothing for" >&2
+      echo "      $S / $M. The usual cause is that $S carries a single track in" >&2
+      echo "      $IN/inputinfofile.txt: Train holds the target's own track out, so there is" >&2
+      echo "      nothing left to build features from. Drop the cell in sigma.sh rather than" >&2
+      echo "      letting sapply discover it." >&2
+      exit 3
+    }
+    echo "[strain] $S $M: $NCLS classifier file(s)"
     ;;
   sapply)    # item: <training sample> <TAB> <mark> — the sigma stage's training self-pairs
     # Same distance tables, the sigma stage's own predictors, THE OTHER GRID. §7 fits sigma on
     # training residuals only, so this Apply runs over `chrominfo.train.txt` and writes to
     # SIGMAIMPUTEDIR — never into OUTPUTIMPUTEDIR, where `collect.py` would pick it up as a board
     # target.
-    S=$(echo "$ITEM" | cut -f1); M=$(echo "$ITEM" | cut -f2)
+    #
+    # THE CLASSIFIER SET IS CHECKED BEFORE THE JAR RUNS, and outside `RETRY`. An absent set is a
+    # deterministic error — `strain` never wrote it — but the jar spells it
+    # "No previously trained classifiers for mark <mark> were found available to load!", which
+    # names only the mark, and `RETRY` repeated that three times with a 30 s and a 60 s sleep in
+    # between before the array task failed and `afterok` cancelled the fit (Fir, sapply 57807330
+    # task 5, 2026-09-02). Fail in one second, and say which file was looked for.
+    NCLS=$(ls -1 "$CLASSIFIERS"* 2>/dev/null | wc -l | tr -d "[:space:]") || NCLS=0
+    [ "$NCLS" -gt 0 ] || {
+      echo "[sapply] REFUSING: no $CLASSIFIERS* in $SPRED, so there is nothing for Apply to load" >&2
+      echo "      for $S / $M. This item is in $LIST, which strain read too, so strain either did" >&2
+      echo "      not run or trained nothing for it — read logs/ci_strain_*.out for this index." >&2
+      echo "      Not retried: a missing classifier set does not become present on a second try." >&2
+      exit 3
+    }
     for C in $TRAIN_LIST; do
       CI Apply -c "$C" -o "impute.$S.$M.wig" "$CONV" "$DIST" "$SPRED" "$IN/inputinfofile.txt" \
          "$TRAIN_INFO" "$SIMP" "$S" "$M"
