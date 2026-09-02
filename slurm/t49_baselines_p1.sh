@@ -121,13 +121,14 @@ case "$PANEL" in
 esac
 REGNAME="$(basename "$REGIME" .json)"; REGNAME="${REGNAME#regime.}"
 
-# Which of the requested methods collapse and which are fitted — the D1 split, the same two lists
-# `competitors/baselines/generate.py` exports as REGIME_INDEPENDENT / REGIME_DEPENDENT.
-COLLAPSED=""; DEPENDENT=""
+# Which of the requested methods collapse to ONE run (D1) — the list `generate.py` exports for the
+# regime-independent pair. The fitted three are named below only to be admitted: nothing here
+# branches on them, so collecting them into a variable was a write nobody read.
+COLLAPSED=""
 for M in ${METHODS//,/ }; do
     case "$M" in
         avg|avg-arcsinh)     COLLAPSED="$COLLAPSED $M" ;;
-        knn1|knn5|marginal)  DEPENDENT="$DEPENDENT $M" ;;
+        knn1|knn5|marginal)  : ;;
         *) echo "[t49] REFUSING: $M is not a baseline method." >&2; exit 2 ;;
     esac
 done

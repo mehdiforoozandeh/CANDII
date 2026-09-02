@@ -1107,11 +1107,14 @@ takes the contributor set `avg` takes. The three-contributor test fixture hid it
 `top_k(…, 5)` over three contributors returns all three; the identity tests run on seven now. No
 board row quotes a number from the old path — see `competitors/baselines/README.md`.
 
-**The second pilot fit for `marginal`, `knn1` and `knn5` is blocked and is not scheduled here.**
-`generate.py` reads `train_chroms` raw and has no `regions` support, so under `eic.pilot` those
-three would fit over 18 whole chromosomes (~2.7 Gbp) instead of the 25,588,197 bp §3.1 declares —
-a Rule 2 break, and every launcher refuses it (exit 3). It needs either `regions` support in
-`generate.py` or a recorded PI ruling that the whole-chromosome fit is acceptable.
+**The second pilot fit for `marginal`, `knn1` and `knn5` is scheduled (UNBLOCKED 2026-09-01).** It
+was blocked until then because `generate.py` read `train_chroms` raw and had no `regions` support,
+so under `eic.pilot` those three would have been fitted over 18 whole chromosomes (~2.7 Gbp)
+instead of the 25,588,197 bp §3.1 declares — a Rule 2 break every launcher refused with exit 3.
+`generate.py` now cuts both fitted quantities — `similarity_table` and `fit_marginal` — to the
+regime's `regions` through `RegionSet.contained_starts` (D32, the train split only, at a window of
+one bin), and refuses outright when that BED leaves the pool empty. The three pilot units are
+scheduled here; the launchers' exit-3 guard is gone.
 
 Reference budgets on record: Avocado ≈20 GPU-h per model, ChromImpute 128 CPU-core-hours
 genome-wide. CANDI's is G3.

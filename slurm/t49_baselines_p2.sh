@@ -109,11 +109,13 @@ if [ "$PANEL" != "V_" ]; then
 fi
 REGNAME="$(basename "$REGIME" .json)"; REGNAME="${REGNAME#regime.}"
 
-COLLAPSED=""; DEPENDENT=""
+# Only the collapsed pair is collected: the fitted three are named here to be admitted, and
+# nothing below branches on them.
+COLLAPSED=""
 for M in ${METHODS//,/ }; do
     case "$M" in
         avg|avg-arcsinh)     COLLAPSED="$COLLAPSED $M" ;;
-        knn1|knn5|marginal)  DEPENDENT="$DEPENDENT $M" ;;
+        knn1|knn5|marginal)  : ;;
         *) echo "[t49-p2] REFUSING: $M is not a baseline method." >&2; exit 2 ;;
     esac
 done

@@ -80,9 +80,21 @@ MAN=(); [ "${SLURM_ARRAY_TASK_ID:-0}" = "0" ] && MAN=(--manifest)
 # predicted from. The last-epoch file is used only when the run deliberately selected nothing
 # (SELECT_EVERY=0, the anchor path), and the fallback is announced rather than silent — a B_ touch
 # spent on unselected weights cannot be taken back.
+#
+# AND THE FALLBACK IS NOT A LICENCE TO PREDICT FROM NOTHING. With neither file present the task
+# used to warn, keep an unreadable `$W`, claim the root with the `.b_once` marker, and only then
+# die inside `store_eic predict` — spending the blind panel on a run that never trained. Exit here,
+# BEFORE the marker, exactly as `competitors/avocado/slurm/predict.sh` exits 1 on a missing genome
+# checkpoint.
 W="$CKPT/guacamole_${C}.best.pt"
 if [ ! -f "$W" ]; then
   W="$CKPT/guacamole_${C}.pt"
+  if [ ! -f "$W" ]; then
+    echo "[predict] $C: no $CKPT/guacamole_${C}.best.pt and no $W — this chromosome's fit never" >&2
+    echo "[predict]   ran, or its checkpoints are under another CKPT. Nothing is predicted and no" >&2
+    echo "[predict]   marker is written, so the B_ root is untouched and can still be claimed." >&2
+    exit 1
+  fi
   echo "[predict] NO .best.pt for $C — predicting from the LAST-epoch checkpoint, which does not" >&2
   echo "[predict]   satisfy BENCHMARK_DESIGN.md §5. Correct only for a run with no selection." >&2
 fi

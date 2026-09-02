@@ -118,8 +118,42 @@ def resolve_grid(names: Sequence[str], n_bins: Dict[str, int], regime_path: str 
 
     A store chromosome named BOTH whole and by region is refused: the two would write the same
     `<chrom>.npz` from two different grids and the last one would win silently.
+
+    So is a BED whose region NAME is a chromosome of the store. `region_scope` refuses a name that
+    collides with a `train_chroms` entry, but says nothing about one that collides with a held-out
+    chromosome — and such a name IS in `n_bins`, so the whole-chromosome branch below would claim
+    it and write a region's short wig as though it were the whole of that chromosome. The regime is
+    therefore read whenever it is given, not only when some name is unknown.
     """
     unknown = [c for c in names if c not in n_bins]
+    spans: Dict[str, Tuple[str, int, int]] = {}
+    if regime_path:
+        from candi.store.regime import RegimeError  # local: competitors are never imported by candi
+
+        regime = load_json(Path(regime_path))
+        try:
+            spans = {name: (chrom, first, stop)
+                     for name, chrom, first, stop in region_scope(regime, regime_path)}
+        except (ValueError, RegimeError) as exc:
+            # `region_scope` cuts the BED to `train_chroms`, so an empty list here is almost always
+            # a DERIVED regime being handed in: the sigma tool moves the training slice to
+            # `eval_chroms` and leaves `train_chroms` empty. Say that rather than repeating its
+            # message. `RegimeError` is a `StoreError`, NOT a `ValueError` — it is what a missing
+            # BED or a `regions.sha256` that no longer matches raises, and it used to fall through
+            # this handler as a traceback.
+            raise SystemExit(
+                f"[collect] {Path(regime_path).name} cannot describe the grid "
+                f"{(unknown or list(names))[:3]}: {exc} Hand this the SOURCE regime the training "
+                f"grid was written from — a derived sigma regime declares no `train_chroms`, so "
+                f"its BED cuts to nothing.")
+        collide = sorted(set(spans) & set(n_bins))
+        if collide:
+            raise SystemExit(
+                f"[collect] {Path(regime_path).name} names the region(s) {collide}, which are also "
+                f"chromosomes of the store. prepare.region_scope only refuses a region name that "
+                f"collides with a `train_chroms` entry, so one named after a HELD-OUT chromosome "
+                f"reaches this pass — and would be read as the WHOLE of that chromosome instead of "
+                f"as the region. Rename the region in the BED.")
     if not unknown:
         return [(c, c, 0, int(n_bins[c])) for c in names]
     if not regime_path:
@@ -128,18 +162,6 @@ def resolve_grid(names: Sequence[str], n_bins: Dict[str, int], regime_path: str 
             f"({sorted(n_bins)[:5]}…). Under a D32 `regions` regime the training grid is one "
             f"declared pseudo-chromosome per region (prepare.region_scope), and only the regime can "
             f"say which chromosome each sits on and at which bin. Pass --regime.")
-    regime = load_json(Path(regime_path))
-    try:
-        spans = {name: (chrom, first, stop)
-                 for name, chrom, first, stop in region_scope(regime, regime_path)}
-    except ValueError as exc:
-        # `region_scope` cuts the BED to `train_chroms`, so an empty list here is almost always a
-        # DERIVED regime being handed in: the sigma tool moves the training slice to `eval_chroms`
-        # and leaves `train_chroms` empty. Say that rather than repeating its message.
-        raise SystemExit(
-            f"[collect] {Path(regime_path).name} cannot describe the grid {unknown[:3]}: {exc} "
-            f"Hand this the SOURCE regime the training grid was written from — a derived sigma "
-            f"regime declares no `train_chroms`, so its BED cuts to nothing.")
     if not spans:
         raise SystemExit(
             f"[collect] {Path(regime_path).name} declares no `regions`, so it cannot explain the "
@@ -263,7 +285,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     written = sorted({chrom for _, chrom, _, _ in grid})
     # The APPLY grid and the STORE chromosomes it landed on are two different lists under a region
     # grid, and a reader of this root has to be able to tell that the arrays are region-sparse.
-    scope = (f"chroms={','.join(written)}" if written == chroms else
+    # Compared as SETS: `written` is sorted and deduplicated, `--chroms` is neither, so
+    # `--chroms chr21,chr20` on a whole-chromosome grid used to read as region-sparse and stamp a
+    # "NaN outside the regions" note on a root that has no regions.
+    scope = (f"chroms={','.join(written)}" if set(written) == set(chroms) else
              f"chroms={','.join(written)} from the {len(grid)}-region grid {','.join(chroms[:3])}…, "
              f"NaN outside the regions")
     notes = args.notes or (f"Apply output, {len(done)} target(s), {scope}. "

@@ -343,6 +343,61 @@ def test_the_chromimpute_sigma_stage_reads_the_drawn_cells_off_biosamples_eval()
     assert "len(kept) < 3" in text, "the survivor guard this defect defeated is gone"
 
 
+def _continued(text: str, needle: str) -> str:
+    """The ONE command containing `needle`, with its backslash continuations joined into a line.
+
+    A flag check that read the whole file cannot tell which command a flag is on, and these stages
+    run two in a row that take the same flag names with different values.
+    """
+    lines = text.splitlines()
+    hits = [k for k, ln in enumerate(lines) if needle in ln]
+    assert len(hits) == 1, f"{needle} appears on {len(hits)} lines, not one: {hits}"
+    i = hits[0]
+    parts = [lines[i]]
+    while parts[-1].rstrip().endswith("\\") and i + 1 < len(lines):
+        i += 1
+        parts.append(lines[i])
+    return " ".join(p.rstrip().rstrip("\\").rstrip() for p in parts)
+
+
+def test_the_chromimpute_sigma_stage_collects_a_region_grid_rather_than_refusing_it():
+    """A `regions` regime's training grid is region pseudo-chromosomes, and collect.py maps it back.
+
+    The stage used to refuse that grid outright — `collect.py` looked every wig chromosome up in
+    the store's `genome.n_bins`, which carries no region name, so the `eic_pilot` σ table could not
+    be collected at all. `collect.py --regime` is the map, and it takes the SOURCE regime:
+    `prepare.region_scope` cuts the BED to `train_chroms`, and the derived σ regime empties that
+    list, so handing in the derived file is refused by name.
+    """
+    text = _text(CHROMIMPUTE / "sigma.sh")
+    assert "PILOT REGIME IS REFUSED" not in text, (
+        "chromimpute/sigma.sh still carries the pilot refusal, which collect.py --regime lifted")
+    assert "D32 region training grid" not in text, (
+        "the in-script refusal of a region grid is still there")
+    call = _continued(_code(CHROMIMPUTE / "sigma.sh"), "collect.py")
+    assert "--regime $SRC_REGIME" in call, (
+        f"collect.py is called without the SOURCE regime, so a region grid cannot be mapped back "
+        f"onto the store: {call!r}")
+    assert "$SIGMA_REGIME" not in call, (
+        "collect.py is handed the DERIVED regime; region_scope cuts its BED to `train_chroms`, "
+        "which tools/sigma_training_regime.py empties, and collect.py refuses it by name")
+    assert "--notes" not in call, (
+        "a --notes of ours replaces collect.py's own note, which is the only place a reader of a "
+        "region-sparse root is told the arrays are NaN outside the regions")
+
+
+def test_the_chromimpute_sigma_fit_does_not_pass_the_apply_grid_as_chromosomes():
+    """`collect.py` writes `<real chrom>.npz`; the grid names are the wigs', not the store's.
+
+    `sigma_pass --chroms` is checked against the σ regime's `eval_chroms` and would refuse a region
+    pseudo-chromosome as held out. Left off, the fit takes those `eval_chroms` — which ARE the
+    source regime's `train_chroms`, the same loci the grid was cut from.
+    """
+    fit = _continued(_code(CHROMIMPUTE / "sigma.sh"), "competitors.sigma_pass")
+    assert "--chroms" not in fit, f"the fit still passes the Apply grid as chromosomes: {fit!r}"
+    assert "--regime $SIGMA_REGIME" in fit, "the fit must read the DERIVED sigma regime"
+
+
 def test_the_sigma_array_throttle_is_not_confused_with_the_torch_import_cap():
     """Two different numbers, two different reasons; conflating them moved the wrong one once."""
     text = _text(CHROMIMPUTE / "sigma.sh")

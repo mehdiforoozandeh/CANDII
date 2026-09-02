@@ -332,6 +332,18 @@ def similarity_table(panel: Panel, cells: Sequence[str],
     tot: Dict[Tuple[str, str], float] = {}
     cnt: Dict[Tuple[str, str], int] = {}
     cells = list(cells)
+    # AN EMPTY D32 POOL IS A REFUSAL, NOT A TABLE. With no contained bin on any training
+    # chromosome every row of `Z` has zero columns, `Z @ Z.T / 0` is all-NaN, and `top_k` reads a
+    # missing similarity as `-inf` and falls through to its tie-break — so `knn1`/`knn5` would
+    # write a ranking by BIOSAMPLE NAME and nothing would say the fit never happened.
+    if panel.regions is not None and panel.train_chroms:
+        pool = sum(int(panel.contained_bins(c).size) for c in panel.train_chroms)
+        if pool == 0:
+            raise ValueError(
+                f"no bin of {list(panel.train_chroms)} lies wholly inside a region of "
+                f"{panel.regions.resolved or panel.regions.bed}, so the kNN similarity pool is "
+                f"empty. Every correlation would be NaN and top_k would rank the contributors "
+                f"alphabetically. Point `regions.bed` at the training chromosomes, or drop it.")
     for assay in panel.assays:
         have = [b for b in cells if available(panel.corpus, b, assay)]
         if len(have) < 2:
@@ -398,10 +410,23 @@ def fit_marginal(panel: Panel, assay: str) -> Optional[Dict[str, float]]:
     this returns is the whole method, so under `eic_pilot` a marginal pooled over 18 whole
     chromosomes would be a different method from the one the row names — fitted over ~2.7 Gbp where
     every rival's transferable parameters saw 25.6 Mbp.
+
+    `None` means NO DATA — no training cell carries the assay, or the regime declares no training
+    chromosome. A BED that leaves the pool EMPTY is a different thing and raises: it is a regime
+    that cannot be fitted at all, and returning `None` for it silently dropped `marginal` from the
+    panel while `knn1`/`knn5` went on writing an alphabetical ranking off the same empty pool.
     """
     cells = [b for b in panel.train if available(panel.corpus, b, assay)]
     if not cells or not panel.train_chroms:
         return None
+    if panel.regions is not None:
+        pool = sum(int(panel.contained_bins(c).size) for c in panel.train_chroms)
+        if pool == 0:
+            raise ValueError(
+                f"no bin of {list(panel.train_chroms)} lies wholly inside a region of "
+                f"{panel.regions.resolved or panel.regions.bed}, so the {assay} marginal has an "
+                f"empty pool. Its moments would be NaN constants written into every bin of the "
+                f"panel. Point `regions.bed` at the training chromosomes, or drop it.")
     cs: List[np.ndarray] = []
     ps: List[np.ndarray] = []
     for b in cells:
@@ -412,11 +437,12 @@ def fit_marginal(panel: Panel, assay: str) -> Optional[Dict[str, float]]:
             ps.append(panel.train_slice(
                 panel.corpus[b][assay].pval(c, 0).astype(np.float64), c))
     cc, pp = np.concatenate(cs), np.concatenate(ps)
+    # Unreachable: the guard above refused an empty `regions` pool, and without a BED every
+    # training chromosome contributes `n_bins` values. Kept so a future change to the scope cannot
+    # turn a mean over nothing into a written constant.
     if cc.size == 0:
-        # A `regions` BED with nothing on the training chromosomes. `None` writes no `marginal`
-        # track for this assay, which is the same answer as "no contributing cell" above; a mean
-        # over an empty pool would be a NaN constant written into every bin of the panel.
-        return None
+        raise ValueError(f"the {assay} marginal pooled no bin at all over "
+                         f"{list(panel.train_chroms)}, and the region guard above did not fire")
     return {"count_mean": float(cc.mean()), "count_var": float(cc.var(ddof=1)),
             "pval_mean": float(pp.mean()), "pval_std": float(pp.std(ddof=1)),
             "n_cells": len(cells), "n_bins": int(cc.size)}

@@ -21,10 +21,9 @@
 # The traindata `strain` reads was already written by the run's `gtd` stage, on the training grid,
 # so nothing here is fit on an eval chromosome.
 #
-# THE PILOT REGIME IS REFUSED, AND IT IS A GAP AND NOT A RULING. Under a `regions` regime the
-# training grid is one declared pseudo-chromosome per Pilot Region (D32), and `collect.py` maps a
-# wig's chromosome through the store manifest's `genome.n_bins`, which has no entry for a region
-# name. Fixing that is a change to `collect.py`, which this stage may not make. Raise it.
+# A `regions` REGIME IS RUN LIKE ANY OTHER (2026-09-01). Its training grid is one declared
+# pseudo-chromosome per Pilot Region, and `collect.py --regime` maps each of those back to its
+# chromosome and bin offset — so the fit below is handed the SOURCE regime, not the derived one.
 set -euo pipefail
 
 REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_main}
@@ -71,8 +70,8 @@ echo "[ci_sigma] drawn training regime: $DRAW"
 # cell whose marks are not all trainable would send the fitter looking for a track this chain never
 # wrote. Dropping the whole cell keeps the regime and the prediction root describing the same thing.
 cd "$HERE"
-PYTHONPATH=$REPO/src:$HERE $PY - "$DRAW" "$SIGMA_REGIME" "$RUN" "$STORE" <<'PYEOF'
 echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
+PYTHONPATH=$REPO/src:$HERE $PY - "$DRAW" "$SIGMA_REGIME" "$RUN" "$STORE" <<'PYEOF'
 import json, sys
 from pathlib import Path
 from prepare import load_json, manifest_assays, write_targets, NOT_AN_ASSAY
@@ -81,18 +80,10 @@ draw_p, out_p, run, store = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[
 draw = json.loads(draw_p.read_text())
 manifest = load_json(store / "manifest.json")
 
-# REFUSE a D32 region training grid. `collect.py` looks every wig chromosome up in the store
-# manifest's n_bins, and a Pilot Region pseudo-chromosome is not in it.
+# The grid `sapply` writes wigs on: store chromosomes under a plain regime, one Pilot Region
+# pseudo-chromosome per line under a `regions` one. `collect.py --regime` reads both.
 grid = [ln.split("\t")[0] for ln in
         (run / "input" / "chrominfo.train.txt").read_text().splitlines() if ln.strip()]
-n_bins = dict(manifest["genome"]["n_bins"])
-unknown = [c for c in grid if c not in n_bins]
-if unknown:
-    sys.exit(
-        f"[ci_sigma] REFUSING: the training grid declares {unknown[:3]}... which the store's "
-        f"genome.n_bins does not carry. That is a D32 region grid, and collect.py maps a wig's "
-        f"chromosome through n_bins, so it cannot write a prediction root for one. This is a gap "
-        f"in collect.py, not a ruling; raise it rather than working around it here.")
 
 # The marks `gtd` produced training data for. Read off the work list rather than off filenames in
 # TRAINDATADIR, so the check does not depend on the jar's naming.
@@ -180,14 +171,22 @@ printf '%-8s %s\n' "sapply" "$D2"
 # The fit. `--eval-regions` is the regime's own BED, passed explicitly: redundant if `sigma_pass`
 # reads `regions` off the regime, and load-bearing if it does not — and a fit outside the Pilot
 # Regions would be taken on loci the model never trained on.
+#
+# `collect.py --regime` is handed $SRC_REGIME, the SOURCE regime — never $SIGMA_REGIME. The map from
+# a region pseudo-chromosome back to its offset is `prepare.region_scope`, which cuts the BED to
+# `train_chroms`, and the derived σ regime empties that list; collect.py refuses the derived file by
+# name for exactly that reason.
+#
+# NO `--notes`. collect.py's own note records the grid it collapsed and says "NaN outside the
+# regions", which under a region grid is the one fact a reader of this root needs; a note of ours
+# would replace it with prose that cannot know how many regions there were.
 cat > "$RUN/sigma_fit.sh" <<EOF
 #!/bin/bash
 set -euo pipefail
 GRID=\$(cut -f1 $RUN/input/chrominfo.train.txt | paste -sd, -)
 PYTHONPATH=$REPO/src $PY $HERE/collect.py --store $STORE \\
     --targets $RUN/input/targets_sigma.tsv --impute-dir $RUN/SIGMAIMPUTEDIR \\
-    --pred-root $TRAIN_PRED --chroms "\$GRID" --jar $JAR \\
-    --notes "training self-pairs on \$GRID, $REGIME_NAME, for the BENCHMARK_DESIGN §7 sigma fit"
+    --pred-root $TRAIN_PRED --chroms "\$GRID" --jar $JAR --regime $SRC_REGIME
 BED=\$(PYTHONPATH=$REPO/src $PY -c "
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -195,9 +194,13 @@ print((d.get('regions') or {}).get('bed',''))" $SIGMA_REGIME)
 EXTRA=()
 [ -n "\$BED" ] && EXTRA+=(--eval-regions "\$BED")
 cd $REPO
+# NO \`--chroms\`. \$GRID is the APPLY grid, whose names under a \`regions\` regime are region
+# pseudo-chromosomes; collect.py has already written the arrays back onto real chromosomes, and
+# sigma_pass would refuse those names as held out. Left off, it fits on the σ regime's own
+# \`eval_chroms\` — which IS the source regime's \`train_chroms\`, the same loci.
 PYTHONPATH=$REPO/src $PY -m competitors.sigma_pass \\
     --regime $SIGMA_REGIME --pred $TRAIN_PRED --out $SIGMA_OUT \\
-    --method ChromImpute --chroms "\$GRID" "\${EXTRA[@]}"
+    --method ChromImpute "\${EXTRA[@]}"
 PYTHONPATH=$REPO/src $PY -c "
 import json,sys
 d=json.load(open(sys.argv[1]))

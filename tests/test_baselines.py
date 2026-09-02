@@ -1220,15 +1220,39 @@ def test_the_knn_similarity_table_is_correlated_over_the_bed_and_not_the_chromos
         pc.close()
 
 
-def test_a_marginal_with_no_region_on_the_training_chromosomes_writes_no_track(two_regimes,
-                                                                              tmp_path):
-    """An empty pool is `None` — no `marginal` track — rather than a NaN constant in every bin."""
+def test_a_bed_with_no_region_on_the_training_chromosomes_refuses_both_fitted_reads(two_regimes,
+                                                                                   tmp_path):
+    """An empty D32 pool is a REFUSAL naming the chromosomes and the BED — not a quiet answer.
+
+    Both readers used to give one. `fit_marginal` returned `None`, which is also what it says when
+    no training cell carries the assay, so the row simply vanished with nothing pointing at the
+    BED. `similarity_table` was worse: `Z` has zero columns, `Z @ Z.T / 0` is an all-NaN table, and
+    `top_k` reads a missing similarity as `-inf` and breaks the tie on the biosample name — so
+    `knn1` and `knn5` would have written an alphabetical sort wearing a fit's name.
+    """
     _, a, _ = two_regimes
     off = _bed_regime(tmp_path, a, "chr3", 0, 100, name="off", train_chroms=["chr1"])
     panel = Panel(off)
     try:
         assert panel.contained_bins("chr1").size == 0
-        assert Gen.fit_marginal(panel, TARGET) is None
+        with pytest.raises(ValueError, match="chr1"):
+            Gen.fit_marginal(panel, TARGET)
+        with pytest.raises(ValueError, match="off.bed"):
+            similarity_table(panel, panel.train, progress=False)
+    finally:
+        panel.close()
+
+
+def test_a_bed_that_does_cover_the_training_chromosomes_still_fits(two_regimes, tmp_path):
+    """The refusal above is about an EMPTY pool, not about having a BED at all."""
+    _, a, _ = two_regimes
+    on = _bed_regime(tmp_path, a, "chr1", 0, 100, name="on", train_chroms=["chr1"])
+    panel = Panel(on)
+    try:
+        assert panel.contained_bins("chr1").size == 100
+        fit = Gen.fit_marginal(panel, TARGET)
+        assert fit is not None and fit["n_bins"] > 0
+        assert similarity_table(panel, panel.train, progress=False)
     finally:
         panel.close()
 

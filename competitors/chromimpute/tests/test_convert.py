@@ -627,6 +627,61 @@ def test_a_chromosome_named_both_whole_and_by_region_is_refused(tmp_path):
     assert "chr21" in str(exc.value)
 
 
+def test_a_region_named_after_a_held_out_chromosome_is_refused(tmp_path):
+    """`region_scope` only refuses a name that collides with a `train_chroms` entry.
+
+    A region named after an EVAL chromosome passes its check, and the name is then a chromosome of
+    the store — so the whole-chromosome branch would claim it and write a 500 bp region's wig as
+    the whole of chr20, at bin 0, silently. The refusal has to live here, where `n_bins` is known.
+    """
+    regime = _regions_regime(tmp_path, [("chr21", 250, 750, "chr20")], ["chr21"])
+    assert prepare.region_scope(prepare.load_json(regime), regime) == [("chr20", "chr21", 10, 30)]
+    with pytest.raises(SystemExit) as exc:
+        collect.resolve_grid(["chr20"], {"chr20": 100, "chr21": 400}, str(regime))
+    assert "chr20" in str(exc.value) and "HELD-OUT" in str(exc.value)
+
+
+def test_a_bed_whose_hash_no_longer_matches_is_refused_not_raised(tmp_path):
+    """`RegimeError` is a `StoreError`, not a `ValueError`, and used to escape as a traceback.
+
+    A `regions.sha256` that no longer matches the BED is the D32 tripwire — the training scope
+    changed while the regime hash stayed the same — and the operator has to read a sentence, not a
+    stack, because the fix is to hand in a different regime file.
+    """
+    regime = _regions_regime(tmp_path, [("chr21", 250, 750, "pilot1")], ["chr21"])
+    obj = json.loads(regime.read_text(encoding="utf-8"))
+    obj["regions"]["sha256"] = "0" * 64
+    regime.write_text(json.dumps(obj), encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        collect.resolve_grid(["pilot1"], {"chr21": 400}, str(regime))
+    assert "SOURCE regime" in str(exc.value)
+
+
+def test_a_whole_chromosome_grid_out_of_sorted_order_is_not_called_region_sparse(tmp_path):
+    """`--chroms chr22,chr21` is the same grid as `chr21,chr22`; only the order differs.
+
+    The note compared a SORTED, deduplicated list of the chromosomes written against the `--chroms`
+    string in the order it was given, so a caller that did not happen to sort got a manifest saying
+    the arrays are NaN outside regions that do not exist.
+    """
+    store = _store_manifest(tmp_path / "store", {"chr21": 40, "chr22": 20})
+    impute = tmp_path / "imp"
+    impute.mkdir()
+    name = collect.apply_output_name("T_K562", "H3K4me3")
+    _wig(impute / f"chr21_{name}.gz", [1.0] * 40)
+    _wig(impute / f"chr22_{name}.gz", [2.0] * 20)
+    targets = tmp_path / "targets.tsv"
+    prepare.write_targets(targets, [("T_K562", "T_K562", "H3K4me3")])
+    pred = tmp_path / "pred"
+    assert collect.main(["--store", str(store), "--targets", str(targets),
+                         "--impute-dir", str(impute), "--pred-root", str(pred),
+                         "--chroms", "chr22,chr21"]) == 0
+    notes = json.loads((pred / "manifest.json").read_text())["notes"]
+    assert "chroms=chr21,chr22" in notes
+    assert "NaN outside the regions" not in notes, \
+        f"a whole-chromosome root reads as region-sparse: {notes}"
+
+
 def test_a_region_track_lands_on_the_store_grid_with_nan_outside_the_regions(tmp_path):
     """End to end: two region wigs -> one full-length chr21 array at the declared offsets.
 
