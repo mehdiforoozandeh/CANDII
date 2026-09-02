@@ -50,7 +50,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
 - `t89` [visualization] generate the architecture README and diagram from the code
-- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge
+- `t98` [implementation] Whole-genome blind-set prediction arrays from the existing eDICE and ChromImpute checkpoints (throwaway preview)
 
 ## Blocked
 
@@ -109,7 +109,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
 - `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *open*
-- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *open*
+- `t98` [implementation] Whole-genome blind-set prediction arrays from the existing eDICE and ChromImpute checkpoints (throwaway preview) — *open*
 
 ### visualization
 
