@@ -5,13 +5,67 @@
 # ONE JOB = ONE (regime, panel). Not an array: the four units differ in walltime by 2x, in output
 # ROOT (V_ goes to /scratch, B_ goes to /project because it is written once and must survive the
 # purge), and B_ carries a guard the V_ runs must not inherit. An array index that means four
-# different things is how a B_ root gets overwritten by a rerun of the V_ task.
+# different things is how a B_ root gets overwritten by a rerun of the V_ task. (SHARD_CHROMS=1
+# below IS an array, and does not break that rule: its index means ONE thing, a chromosome of the
+# one unit the submit line already fixed, and every task writes into that unit's own root.)
 #
 #   mkdir -p slurm-logs
 #   REGIME_NAME=eic_19    PANEL=V_ sbatch slurm/t81_predict_candi.sh
 #   REGIME_NAME=eic_pilot PANEL=V_ sbatch slurm/t81_predict_candi.sh
 #   REGIME_NAME=eic_19    PANEL=B_ B_ONCE=1 sbatch --time=06:00:00 slurm/t81_predict_candi.sh
 #   REGIME_NAME=eic_pilot PANEL=B_ B_ONCE=1 sbatch --time=06:00:00 slurm/t81_predict_candi.sh
+#
+# THE CPU ROUTE (DEVICE + SHARD_CHROMS), and why it is sharded by chromosome.
+#
+# Every GPU predict job sat PENDING on def-maxwl_gpu with no start estimate while the CPU
+# partitions started in minutes. Nothing here needs a GPU to be correct: `bench.dump` already takes
+# a real --device, evaluation runs under `no_autocast` so no bf16 path is exercised, and nothing in
+# `src/candi` calls `.cuda()`. What a CPU cannot do is a whole 45-track genome-wide pass in one
+# job: the measured 10.6 GPU-h becomes an estimated 71-143 CPU-h, over the 60 h cpubase_bycore_b4
+# band. So the pass is SHARDED BY CHROMOSOME -- 23 array tasks, one chromosome each, into the SAME
+# root -- and the shards are assembled into one manifest afterwards.
+#
+#   export DEVICE=cpu SHARD_CHROMS=1 REGIME_NAME=eic_19 PANEL=V_
+#   AID=$(sbatch --parsable --export=ALL --array=0-22%12 --gres=none --cpus-per-task=8 \
+#         --mem=16G --time=12:00:00 slurm/t81_predict_candi.sh)
+#   export SHARD_MERGE=1 SHARD_ARRAY=$AID
+#   sbatch --export=ALL --dependency=afterok:$AID --gres=none --cpus-per-task=1 --mem=8G \
+#         --time=00:20:00 slurm/t81_predict_candi.sh
+#
+# EXPORT, THEN `--export=ALL`. A comma-valued variable inside `--export=ALL,VAR=a,b,c` arrives
+# truncated at the first comma, and CHROMS is comma-valued. `%12` is the cap the shared /project
+# venv needs: more than 12 simultaneous torch imports off it fail with partial-module ImportErrors.
+#
+# THE SHARD INDEX NAMES A CHROMOSOME BY POSITION in the list the PLAN block below derives -- the
+# same list, in the same order, an unsharded run would have dumped. The array must therefore be
+# exactly as long as that list (23 for the eic corpus); a mismatch exits 6 rather than silently
+# leaving a chromosome unpredicted or running the same one twice.
+#
+# THE MANIFEST IS THE WHOLE REASON FOR THE SECOND JOB. `bench.dump` builds `manifest.json` from the
+# chromosomes THIS invocation was given, so 23 shards racing on one root would leave a manifest
+# naming one chromosome -- and `slurm/t81_score_external.sh` reads `manifest.chroms` and scores
+# exactly those. So in sharded mode each shard RENAMES the manifest it wrote to
+# `$OUT/.shard_manifest.<chrom>.json` and the root carries none until every shard is done. Then the
+# SHARD_MERGE=1 step takes any one of those as its template, VERIFIES that every declared track
+# holds an npz for every planned chromosome, and writes the single manifest naming all 23. It adds
+# `device=` and `sharded: true` with the array id to `notes`; no key the scorer reads changes.
+#
+# A FILE, NOT A DIRECTORY, and that is not cosmetic: `bench.external` lists every DIRECTORY under a
+# prediction root and refuses the whole pass if one names no declared track (external.py, the
+# `track directory(ies) name no declared pair` refusal). A `.shards/` holding pen would have cost
+# the score pass, hours in. `.b_once.<id>` is a file for the same reason.
+#
+# AND THE B_ GUARD STILL HOLDS. Unsharded, a manifest in the root means B_ was spent -- unchanged.
+# Sharded, that clause alone would refuse the array's own later tasks, so the guard keys on a
+# `.b_once.<array job id>` MARKER as well (the same shape `competitors/*/slurm/predict.sh` use):
+# every task of one array writes the same marker name, so a sibling finds its own and a later,
+# different submission finds one that is not. The marker is written after every precondition and
+# before the first byte is predicted: later than that and a second submission arriving mid-array
+# would find nothing to refuse it; earlier and a split that cannot run would leave an empty root
+# claimed for good. Because the root carries no manifest until the
+# merge step, a half-finished array can never be read as a finished pass -- by the guard or by the
+# scorer. SHARD_ARRAY presents an array's marker and is accepted ONLY with SHARD_MERGE=1, which
+# predicts nothing; it is not a way to join an array that is still predicting.
 #
 # B_ IS WRITTEN ONCE, EVER (BENCHMARK_DESIGN.md §5). The test panel is not a dial to turn while
 # looking at the answer, so this refuses a B_ run twice over: once unless B_ONCE=1 is set on the
@@ -67,12 +121,27 @@ WORKSPACE="${WORKSPACE:-}"
 VERSION="${VERSION:-$(date +%F)}"
 CHROMS="${CHROMS:-}"                           # empty = every chromosome the store carries
 BATCH_WINDOWS="${BATCH_WINDOWS:-4}"
+DEVICE="${DEVICE:-}"                           # empty = bench.dump chooses (cuda if available)
+SHARD_CHROMS="${SHARD_CHROMS:-0}"              # 1 = one array task per planned chromosome
+SHARD_MERGE="${SHARD_MERGE:-0}"                # 1 = assemble the one manifest, predict nothing
+SHARD_ARRAY="${SHARD_ARRAY:-}"                 # the array job id a SHARD_MERGE=1 step assembles
 # -------------------------------------------------------------------------------------------------
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MPLBACKEND=Agg
 export WANDB_MODE=disabled
+
+# THREADS, ON THE CPU ROUTE ONLY. Nothing in `candi` calls `torch.set_num_threads`, so the whole
+# knob is the environment: torch takes its default thread count from OMP_NUM_THREADS at import
+# (checked -- OMP_NUM_THREADS=3 gives torch.get_num_threads()==3), and a plain sbatch script is not
+# handed one. Left unset the OpenMP runtime sizes itself off the node rather than the allocation,
+# which on a shared cpubase node is oversubscription, and it is the one knob between a shard that
+# fits its walltime and one that does not. Set on DEVICE=cpu only, so the GPU path is untouched.
+if [ "$DEVICE" = "cpu" ]; then
+  export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+  export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+fi
 
 case "$PANEL" in
   V_|B_) ;;
@@ -83,6 +152,25 @@ case "$REGIME_NAME" in
   *) echo "[error] REGIME_NAME must be eic_19 or eic_pilot, got '$REGIME_NAME'" >&2; exit 1;;
 esac
 REGIME="configs/regime.${REGIME_NAME}.json"
+
+# --- what the sharding flags may and may not mean (exit 6) ---------------------------------------
+if [ "$SHARD_MERGE" = "1" ]; then
+  if [ "$SHARD_CHROMS" != "1" ]; then
+    echo "[error] SHARD_MERGE=1 is the tail of a SHARD_CHROMS=1 run and assembles its shards." >&2
+    echo "        Set SHARD_CHROMS=1 too, or drop it: an unsharded dump writes its own manifest." >&2
+    exit 6
+  fi
+  if [ -z "$SHARD_ARRAY" ]; then
+    echo "[error] SHARD_MERGE=1 needs SHARD_ARRAY=<array job id>: the merged manifest records" >&2
+    echo "        which array wrote the root, and for PANEL=B_ that id is also the marker the" >&2
+    echo "        once-only guard checks. Read it off the sbatch --parsable of the array." >&2
+    exit 6
+  fi
+elif [ -n "$SHARD_ARRAY" ]; then
+  echo "[error] SHARD_ARRAY names the array a SHARD_MERGE=1 step assembles, and predicts nothing." >&2
+  echo "        It is not a way to join an array that is still predicting. Refusing." >&2
+  exit 6
+fi
 
 # THE PINNED ROOTS (BENCHMARK_DESIGN.md §4.1). V_ lives on scratch and may be regenerated; B_ lives
 # on /project because it is written once and scratch is purged 60 days after the oldest file.
@@ -106,13 +194,34 @@ if [ "$PANEL" = "B_" ]; then
   # so a root with track dirs and no manifest is a dump that was killed part-way. Keying on the
   # directory would make that case unrecoverable without the PI; keying on the manifest lets a
   # killed dump be rerun and still refuses a completed one.
-  if [ -f "$OUT/manifest.json" ]; then
-    echo "[error] $OUT/manifest.json already exists. B_ was already predicted for" >&2
-    echo "        $REGIME_NAME, and §5 allows exactly one. There is no --force here: move the old" >&2
-    echo "        root aside by hand, with the PI, and record why. REFUSING." >&2
-    exit 4
+  if [ "$SHARD_CHROMS" = "1" ]; then
+    # SHARDED. 23 tasks of ONE array must all get through, and a later, different submission must
+    # not. The marker is what tells them apart: every task of this array writes the same
+    # `.b_once.<array job id>` name, so a sibling finds its own and a re-submission six weeks later
+    # finds one that is not. A manifest still refuses, but only a submission carrying no marker of
+    # its own -- and the root carries none until the SHARD_MERGE=1 step, so a half-finished array
+    # cannot be read as a spent panel by this guard or by the scorer. The marker is DROPPED further
+    # down, after every precondition and before the dump: a split that cannot run must not leave an
+    # empty root claimed, and a second submission arriving mid-array must still find it there.
+    MARK="$OUT/.b_once.${SHARD_ARRAY:-${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-manual}}}"
+    if { [ -f "$OUT/manifest.json" ] && [ ! -e "$MARK" ]; } ||
+       { compgen -G "$OUT/.b_once.*" >/dev/null 2>&1 && [ ! -e "$MARK" ]; }; then
+      echo "[error] $OUT already holds a B_ pass claimed by another array (no $MARK)." >&2
+      echo "        B_ is written ONCE (§5) and a second one is a second look at the blind panel," >&2
+      echo "        not a retry. There is no --force: move the old root aside by hand, with the" >&2
+      echo "        PI, and record why. REFUSING." >&2
+      exit 4
+    fi
+    echo "[t81-pred] B_ONCE=1, shard marker $MARK — this array is the once-only test-panel run."
+  else
+    if [ -f "$OUT/manifest.json" ]; then
+      echo "[error] $OUT/manifest.json already exists. B_ was already predicted for" >&2
+      echo "        $REGIME_NAME, and §5 allows exactly one. There is no --force here: move the old" >&2
+      echo "        root aside by hand, with the PI, and record why. REFUSING." >&2
+      exit 4
+    fi
+    echo "[t81-pred] B_ONCE=1 and $OUT carries no manifest — this is the once-only test-panel run."
   fi
-  echo "[t81-pred] B_ONCE=1 and $OUT carries no manifest — this is the once-only test-panel run."
 fi
 
 if [ ! -d "$VENV" ]; then echo "[error] no venv at $VENV" >&2; exit 1; fi
@@ -145,6 +254,9 @@ echo "[t81-pred] regime=$REGIME_NAME panel=$PANEL seed=$SEED version=$VERSION"
 echo "[t81-pred] ckpt=$CKPT"
 echo "[t81-pred] arch-from=$ARCH_FROM"
 echo "[t81-pred] out=$OUT"
+echo "[t81-pred] device=${DEVICE:-auto} sharded=$SHARD_CHROMS merge=$SHARD_MERGE" \
+     "array=${SHARD_ARRAY:-${SLURM_ARRAY_JOB_ID:--}} task=${SLURM_ARRAY_TASK_ID:--}" \
+     "threads=${OMP_NUM_THREADS:-default}"
 nvidia-smi -L || true
 
 # --- derive the panel regime ---------------------------------------------------------------------
@@ -244,25 +356,143 @@ N_TRACKS="$(echo "$PLAN" | sed -n 2p)"
 WANT_TIME="$(echo "$PLAN" | sed -n 3p)"
 echo "[t81-pred] tracks=$N_TRACKS recommended --time=$WANT_TIME"
 
-# --- the dump ------------------------------------------------------------------------------------
-python -m candi.bench.dump \
-  --store "$DERIVED" \
-  --ckpt "$CKPT" \
-  --arch-from "$ARCH_FROM" \
-  --out "$OUT" \
-  --method CANDI \
-  --version "$VERSION" \
-  --chroms "$CHROMS" \
-  --batch-windows "$BATCH_WINDOWS"
-rc=$?
+# --- shard index -> chromosome, by POSITION in the list the plan just derived ----------------------
+# The same list, in the same order, an unsharded run would have dumped, so shard i and an unsharded
+# run agree on what chromosome i is. The array must be exactly as long as the list: a shorter one
+# leaves chromosomes unpredicted and a longer one runs indices that name nothing, and both are found
+# out only when the merge step refuses hours later.
+ALL_CHROMS="$CHROMS"
+SHARD_CHROM=""
+if [ "$SHARD_CHROMS" = "1" ] && [ "$SHARD_MERGE" != "1" ]; then
+  IFS=',' read -r -a SHARD_LIST <<< "$ALL_CHROMS"
+  N_SHARDS="${#SHARD_LIST[@]}"
+  if [ -z "${SLURM_ARRAY_TASK_ID:-}" ]; then
+    echo "[error] SHARD_CHROMS=1 predicts ONE chromosome per array task and this job is not an" >&2
+    echo "        array. Submit it with --array=0-$((N_SHARDS - 1))%12." >&2
+    exit 6
+  fi
+  if [ -n "${SLURM_ARRAY_TASK_COUNT:-}" ] && [ "$SLURM_ARRAY_TASK_COUNT" != "$N_SHARDS" ]; then
+    echo "[error] this array has $SLURM_ARRAY_TASK_COUNT tasks and the plan plans $N_SHARDS" >&2
+    echo "        chromosomes ($ALL_CHROMS). One task is one chromosome, by position, so a" >&2
+    echo "        mismatch either leaves chromosomes unpredicted or predicts one twice." >&2
+    echo "        Resubmit with --array=0-$((N_SHARDS - 1))%12." >&2
+    exit 6
+  fi
+  SHARD_CHROM="${SHARD_LIST[$SLURM_ARRAY_TASK_ID]:-}"
+  if [ -z "$SHARD_CHROM" ]; then
+    echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome; the plan has $N_SHARDS" >&2
+    echo "        ($ALL_CHROMS). Indices run 0-$((N_SHARDS - 1))." >&2
+    exit 6
+  fi
+  CHROMS="$SHARD_CHROM"
+  echo "[t81-pred] shard $SLURM_ARRAY_TASK_ID/$N_SHARDS -> $SHARD_CHROM (the --time above is the" \
+       "GPU figure for the WHOLE panel, not for one chromosome)"
+fi
 
-if [ $rc -eq 0 ] && [ ! -f "$OUT/manifest.json" ]; then
+# --- the dump ------------------------------------------------------------------------------------
+# --device only when one was named, so the default path hands `bench.dump` the same argv it always
+# did and keeps its own cuda-if-available choice. --notes rides along with it because the device a
+# root was predicted on is the one thing about a CPU pass a reader cannot recover from the arrays.
+DUMP_ARGS=()
+if [ -n "$DEVICE" ]; then DUMP_ARGS+=(--device "$DEVICE" --notes "device=$DEVICE"); fi
+
+# CLAIM THE B_ ROOT NOW, and not after the dump. Every precondition has passed — B_ONCE, the guard,
+# the venv, the kit, the arch json, the checkpoint, the panel split, the plan, the shard index — so
+# this array is the pass it says it is. Written before a byte is predicted because the marker is
+# what makes a DIFFERENT submission arriving mid-array a refusal rather than a second B_ pass; a
+# marker written afterwards would leave that whole window open.
+if [ "$PANEL" = "B_" ] && [ "$SHARD_CHROMS" = "1" ] && [ "$SHARD_MERGE" != "1" ]; then
+  mkdir -p "$OUT" && : > "$MARK" || exit 1
+fi
+
+rc=0
+if [ "$SHARD_MERGE" != "1" ]; then
+  python -m candi.bench.dump \
+    --store "$DERIVED" \
+    --ckpt "$CKPT" \
+    --arch-from "$ARCH_FROM" \
+    --out "$OUT" \
+    --method CANDI \
+    --version "$VERSION" \
+    --chroms "$CHROMS" \
+    --batch-windows "$BATCH_WINDOWS" \
+    ${DUMP_ARGS[@]+"${DUMP_ARGS[@]}"}
+  rc=$?
+fi
+
+if [ $rc -eq 0 ] && [ "$SHARD_CHROMS" = "1" ] && [ "$SHARD_MERGE" != "1" ]; then
+  # A SHARD writes a manifest naming its ONE chromosome, because that is what it was given. Left in
+  # the root, the last shard to finish would leave the scorer reading `chroms: [chr7]` and scoring
+  # one chromosome as if it were the genome. So it is moved aside, and the root carries no manifest
+  # until the merge step verifies the whole thing.
+  if [ -f "$OUT/manifest.json" ]; then
+    mv -f "$OUT/manifest.json" "$OUT/.shard_manifest.${SHARD_CHROM}.json" || rc=5
+  elif compgen -G "$OUT/.shard_manifest.*.json" >/dev/null 2>&1; then
+    # Two shards finishing in the same instant: the other one wrote the root manifest over ours and
+    # moved it before we looked. Harmless -- the shard manifests differ only in `chroms`, which the
+    # merge step derives from the plan and checks against the npz on disk, never from them.
+    echo "[t81-pred] $SHARD_CHROM: a sibling shard moved the root manifest first; its arrays are" >&2
+    echo "[t81-pred]   written and a shard-manifest template is already there. Continuing." >&2
+  else
+    echo "[t81-pred] WARNING: dump returned 0 but $OUT/manifest.json is absent and no shard" >&2
+    echo "[t81-pred]   manifest is there. bench.dump writes the manifest LAST, so this shard is incomplete." >&2
+    rc=5
+  fi
+elif [ $rc -eq 0 ] && [ "$SHARD_MERGE" != "1" ] && [ ! -f "$OUT/manifest.json" ]; then
   echo "[t81-pred] WARNING: dump returned 0 but $OUT/manifest.json is absent. bench.dump writes" >&2
   echo "[t81-pred]   the manifest LAST, so a root without one is incomplete and cannot be scored." >&2
   rc=5
 fi
 
+# --- the merge: ONE manifest over the whole root ---------------------------------------------------
+# Takes any shard manifest as its template -- they are `bench.dump`'s own output and differ only in
+# `chroms`, so nothing about the identity half is retyped here -- then REFUSES unless every declared
+# track holds an npz for every planned chromosome. Only `chroms` and `notes` are rewritten; no key
+# `slurm/t81_score_external.sh` reads changes shape.
+if [ $rc -eq 0 ] && [ "$SHARD_MERGE" = "1" ]; then
+  python - "$OUT" "$ALL_CHROMS" "${DEVICE:-auto}" "$SHARD_ARRAY" <<'PYEOF'
+import json, os, sys
+from pathlib import Path
+
+out, chroms_arg, device, array_id = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+chroms = [c for c in chroms_arg.split(",") if c]
+shards = sorted(out.glob(".shard_manifest.*.json"))
+if not shards:
+    print(f"[t81-pred] REFUSING: no {out}/.shard_manifest.*.json. Each shard of a SHARD_CHROMS=1 "
+          f"array renames the manifest it wrote to one of those; with none there, no shard "
+          f"finished and there is nothing to assemble.", file=sys.stderr)
+    raise SystemExit(5)
+man = json.loads(shards[0].read_text())
+declared = [str(t) for t in (man.get("declared_tracks") or [])]
+if not declared:
+    print(f"[t81-pred] REFUSING: {shards[0]} names no declared_tracks, so there is nothing to "
+          f"check the root against.", file=sys.stderr)
+    raise SystemExit(5)
+missing = [f"{t}/{c}.npz" for t in declared for c in chroms
+           if not (out / t / f"{c}.npz").is_file()]
+if missing:
+    print(f"[t81-pred] REFUSING: {len(missing)} of {len(declared) * len(chroms)} shard outputs are "
+          f"absent under {out} -- {missing[:5]}. A manifest naming all {len(chroms)} chromosomes "
+          f"over a root that does not hold them is a panel scored with holes in it.",
+          file=sys.stderr)
+    raise SystemExit(5)
+prev = str(man.get("notes") or "").strip()
+note = f"device={device}; sharded: true; array={array_id}; shards={len(shards)}"
+man["chroms"] = list(chroms)
+# The shard already recorded the device, and this line says it again with the sharding beside it.
+# Keeping both would put `device=cpu device=cpu; ...` into every score file that copies provenance.
+man["notes"] = note if (not prev or prev in note) else (prev + " " + note)
+tmp = out / "manifest.json.merge.tmp"
+tmp.write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+os.replace(tmp, out / "manifest.json")
+print(f"[t81-pred] merged {len(shards)} shard manifest(s) into {out}/manifest.json: "
+      f"{len(chroms)} chromosomes x {len(declared)} declared tracks, {note}", file=sys.stderr)
+PYEOF
+  rc=$?
+fi
+
 # The derived regime is named again here because it is the score pass's --store, and reading it off
 # this line beats re-deriving it and hoping the two agree.
-echo "[t81-pred] DONE regime=$REGIME_NAME panel=$PANEL rc=$rc out=$OUT derived=$DERIVED"
+echo "[t81-pred] DONE regime=$REGIME_NAME panel=$PANEL rc=$rc out=$OUT derived=$DERIVED" \
+     "chroms=$CHROMS merge=$SHARD_MERGE"
 exit $rc
