@@ -327,6 +327,12 @@ def cmd_split(a: argparse.Namespace) -> int:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(json.dumps(obj, indent=2) + "\n")
+            # Flush the DATA before the rename, not only the name. On Lustre a client on another
+            # node can see the renamed inode before this node's dirty pages reach the OST, and
+            # reads a zero-length file: task 57953595_11 did exactly that on 2026-09-03, 12 tasks
+            # starting in one second, with the rename already atomic.
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp_name, out)               # same directory, so the rename cannot cross a fs
     except BaseException:
         Path(tmp_name).unlink(missing_ok=True)
