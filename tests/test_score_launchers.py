@@ -72,26 +72,80 @@ def opt(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
 
 
+def record():
+    d = Path(os.environ["SCORE_RECORD_DIR"])
+    d.mkdir(parents=True, exist_ok=True)
+    n = len(list(d.glob("*.json")))
+    (d / ("%03d.json" % n)).write_text(json.dumps({"argv": argv[2:], "env": dict(os.environ)}))
+
+
 if argv and argv[0] == "-":
     # `python - a b c <<EOF` -- the launchers' inline programs. Run them, do not fake them.
+    if os.environ.get("FAKE_HARNESS"):
+        # K15: the predict launcher's PLAN block counts declared tracks through
+        # `harness.open_source`, which wants a real StoreDataset over real h5. The chromosome
+        # derivation beside it is the logic under test and stays entirely real.
+        import types
+        _stub = types.ModuleType("candi.bench.harness")
+
+        class _Src:
+            def pairs(self, kind):
+                return [("T_C1", os.environ.get("PANEL", "V_") + "C1")]
+
+            def targets(self, pair, kind):
+                return ["H3K4me3", "H3K27ac"]
+
+            def close(self):
+                pass
+
+        _stub.open_source = lambda **kw: _Src()
+        sys.modules["candi.bench.harness"] = _stub
     src = sys.stdin.read()
     sys.argv = list(argv)
     exec(compile(src, "<launcher-heredoc>", "exec"), {"__name__": "__main__"})
     sys.exit(0)
 
 if argv[:2] == ["-m", "candi.bench.external"]:
-    d = Path(os.environ["SCORE_RECORD_DIR"])
-    d.mkdir(parents=True, exist_ok=True)
-    n = len(list(d.glob("*.json")))
-    (d / ("%03d.json" % n)).write_text(json.dumps({"argv": argv[2:], "env": dict(os.environ)}))
+    record()
     out = opt("--out")
     if out:                                   # else the launcher's own rc=5 guard fires
         Path(out).parent.mkdir(parents=True, exist_ok=True)
         Path(out).write_text("{}")
     sys.exit(0)
 
+if argv[:2] == ["-m", "candi.bench.dump"]:
+    # K15. Writes what a real dump writes, in the order it writes it: one npz per declared track
+    # per chromosome it was GIVEN, then manifest.json last, naming only those chromosomes. That
+    # last property is the whole reason the sharded run needs a merge step.
+    record()
+    out = Path(opt("--out"))
+    chroms = [c for c in (opt("--chroms") or "").split(",") if c]
+    tracks = json.loads(os.environ.get("FAKE_DUMP_TRACKS",
+                                       '["T_C1__V_C1__H3K4me3", "T_C1__V_C1__H3K27ac"]'))
+    for t in tracks:
+        (out / t).mkdir(parents=True, exist_ok=True)
+        for c in chroms:
+            (out / t / ("%s.npz" % c)).write_bytes(b"")
+    (out / "manifest.json").write_text(json.dumps({
+        "method": opt("--method"), "version": opt("--version", ""),
+        "generated_by": "candi.bench.dump", "date": "2026-09-03",
+        "arms": ["count", "pval"], "declared_tracks": list(tracks),
+        "notes": opt("--notes", ""), "ckpt_sha256": "ckptsha", "store_manifest_sha256": "storesha",
+        "regime_id": "regimesha", "panel": "V", "code_sha": "codesha", "seed": 0,
+        "chroms": list(chroms), "unknown": {},
+    }, indent=2) + "\\n")
+    sys.exit(0)
+
 if argv and Path(argv[0]).name == "declare_eval_pairs.py":
-    Path(opt("--out")).write_text(json.dumps({"panel": opt("--panel"), "eval_pairs": []}))
+    # `split` copies the store through and keeps the pairs whose TARGET sits this panel -- the one
+    # property the launchers downstream of it read back out of the derived file.
+    panel = opt("--panel")
+    src_regime = json.loads(Path(opt("--regime")).read_text())
+    pairs = [p for p in src_regime.get("eval_pairs", [])
+             if str(p[1] if isinstance(p, list) else p["target"]).startswith(panel)]
+    Path(opt("--out")).write_text(json.dumps(
+        {"panel": panel, "store": src_regime.get("store"), "eval_pairs": pairs,
+         "eval_chroms": src_regime.get("eval_chroms", [])}))
     sys.exit(0)
 
 sys.exit("[fake py] unexpected program: %r" % (argv,))
@@ -130,7 +184,13 @@ def _stub_env(tmp: Path) -> dict:
     })
     for leak in ("SCOPE", "SIGMA", "TRUTH", "TRUTH_ROOT", "CHROMS", "HELD_OUT",
                  "HELD_OUT_CHROMS", "EXTRA", "VARPOOL", "METHOD", "PANEL", "REGIME",
-                 "PRED", "OUT", "CRPS_APPROX", "SLURM_ARRAY_TASK_ID"):
+                 "PRED", "OUT", "CRPS_APPROX", "SLURM_ARRAY_TASK_ID",
+                 # K15 -- the sharding and device knobs of slurm/t81_predict_candi.sh
+                 "DEVICE", "SHARD_CHROMS", "SHARD_MERGE", "SHARD_ARRAY", "FAKE_HARNESS",
+                 "FAKE_DUMP_TRACKS", "B_ONCE", "SEED", "CKPT", "CKPT_DIR", "ARCH_FROM",
+                 "WORKSPACE", "VERSION", "BATCH_WINDOWS", "REGIME_NAME", "OMP_NUM_THREADS",
+                 "MKL_NUM_THREADS", "SLURM_CPUS_PER_TASK", "SLURM_ARRAY_TASK_COUNT",
+                 "SLURM_ARRAY_JOB_ID", "SLURM_JOB_ID"):
         env.pop(leak, None)          # the operator's own shell must not decide what is tested
     return env
 
@@ -612,3 +672,321 @@ def test_a_corpus_sharing_no_chromosome_with_the_genome_layer_is_refused(tmp_pat
     r = _plan(tmp_path, corpus_chroms=["chrZ1", "chrZ2"])
     assert r.returncode != 0, f"it planned a dump of nothing:\n{r.stdout}"
     assert "REFUSING" in (r.stdout + r.stderr), f"{r.stdout}\n{r.stderr}"
+
+
+# ---------------------------------------------------------------------------------------------
+# (D) slurm/t81_predict_candi.sh -- the CPU, chromosome-sharded route (K15)
+# ---------------------------------------------------------------------------------------------
+# Every CANDI predict job sat PENDING on the GPU partition with no start estimate while the CPU
+# partitions started in minutes, and a whole 45-track genome-wide pass does not fit one CPU job
+# (10.6 GPU-h measured -> 71-143 CPU-h estimated, over the 60 h band). So DEVICE=cpu SHARD_CHROMS=1
+# splits the pass into one array task per chromosome, into ONE root -- which puts the manifest at
+# risk, because `bench.dump` builds it from the chromosomes THIS invocation was given and the
+# scorer reads `manifest.chroms` and scores exactly those.
+#
+# The whole launcher runs here, against the stub `python` of section (A/B): the real plan, the real
+# shard mapping, the real B_ guard, the real merge. Only the venv, the kit, the checkpoint and
+# `bench.dump` itself are fakes -- and the fake dump writes what a real one writes, in the order it
+# writes it, so the one-chromosome manifest a shard leaves behind is real behaviour, not a prop.
+
+#: What the fake dump declares. Two, so the merge's per-track completeness check has something to
+#: be wrong about.
+DUMP_TRACKS = ["T_C1__V_C1__H3K4me3", "T_C1__V_C1__H3K27ac"]
+
+
+def _predict_env(tmp: Path, *, panel: str = "V_", corpus_chroms=ROOT_CHROMS, **over) -> dict:
+    """The predict launcher against a fake kit, a fake checkpoint and the shared fake store."""
+    env = _stub_env(tmp)
+    kit = tmp / "kit"
+    corpus = _store(tmp, STORE_CHROMS, corpus_chroms)
+    (kit / "configs").mkdir(parents=True, exist_ok=True)
+    # The SHIPPED regime declares both panels; `declare_eval_pairs.py split` is what narrows it,
+    # and the launcher refuses a derived regime that targets the other one.
+    (kit / "configs" / "regime.eic_19.json").write_text(json.dumps({
+        "store": str(corpus), "eval_pairs": [["T_C1", "V_C1"], ["T_C2", "B_C2"]],
+        "eval_chroms": HELD_OUT.split(",")}), encoding="utf-8")
+    ck = tmp / "ckpts"
+    ck.mkdir(parents=True, exist_ok=True)
+    (ck / "t81_eic_19_s0.best.ckpt").write_bytes(b"")
+    (ck / "t81_eic_19_s0.json").write_text("{}", encoding="utf-8")
+    env.update({
+        "REGIME_NAME": "eic_19",
+        "PANEL": panel,
+        "SEED": "0",
+        "CKPT_DIR": str(ck),
+        "OUT": str(tmp / "pred" / panel),
+        "FAKE_HARNESS": "1",
+        "FAKE_DUMP_TRACKS": json.dumps(DUMP_TRACKS),
+        "SLURM_CPUS_PER_TASK": "8",
+    })
+    env.update(over)
+    return env
+
+
+def _shard(tmp: Path, env: dict, index: int, *, count: int = len(ROOT_CHROMS)):
+    e = dict(env)
+    e.update({"SHARD_CHROMS": "1", "SLURM_ARRAY_TASK_ID": str(index),
+              "SLURM_ARRAY_TASK_COUNT": str(count)})
+    return _run(PREDICT, e, tmp), e
+
+
+def test_the_default_predict_path_names_no_device_and_writes_its_own_manifest(tmp_path):
+    """Byte-for-byte the argv the GPU route always sent: no --device, no --notes, all 23 at once.
+
+    `bench.dump` picks cuda-if-available on its own, and a launcher that started naming a device
+    would pin every unsharded run to whatever the last CPU submit line happened to leave exported.
+    """
+    env = _predict_env(tmp_path)
+    r = _run(PREDICT, env, tmp_path)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    argv = _calls(env)[0]["argv"]
+    assert _flag(argv, "--chroms").split(",") == ROOT_CHROMS, argv
+    assert "--device" not in argv, f"the default path pinned a device: {argv}"
+    assert "--notes" not in argv, f"the default path started writing notes: {argv}"
+    out = Path(env["OUT"])
+    assert (out / "manifest.json").is_file(), "the unsharded root lost its manifest"
+    assert not list(out.glob(".shard_manifest.*")), "the unsharded path built shard machinery"
+    assert json.loads((out / "manifest.json").read_text())["chroms"] == ROOT_CHROMS
+
+
+def test_device_reaches_the_dump_and_sets_the_thread_count_from_the_allocation(tmp_path):
+    """`--device` is a real flag on `bench.dump`; OMP_NUM_THREADS is what torch reads at import.
+
+    Unset, torch takes a thread per core on the NODE rather than per core in the ALLOCATION, which
+    on a shared cpubase node is oversubscription.
+    """
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r = _run(PREDICT, env, tmp_path)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    call = _calls(env)[0]
+    assert _flag(call["argv"], "--device") == "cpu", call["argv"]
+    assert _flag(call["argv"], "--notes") == "device=cpu", call["argv"]
+    assert call["env"].get("OMP_NUM_THREADS") == "8", (
+        f"OMP_NUM_THREADS is {call['env'].get('OMP_NUM_THREADS')}, not SLURM_CPUS_PER_TASK")
+    assert call["env"].get("MKL_NUM_THREADS") == "8"
+
+
+def test_a_gpu_run_never_pins_the_thread_count(tmp_path):
+    """The knob is the CPU route only -- 4 OMP threads on the GPU path is a change nobody asked."""
+    env = _predict_env(tmp_path)
+    r = _run(PREDICT, env, tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert "OMP_NUM_THREADS" not in _calls(env)[0]["env"]
+
+
+@pytest.mark.parametrize("index", [0, 7, 22])
+def test_a_shard_predicts_exactly_the_chromosome_its_index_names(tmp_path, index):
+    """Index -> chromosome by POSITION in the planned list, so shard i and an unsharded run agree."""
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r, env = _shard(tmp_path, env, index)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    argv = _calls(env)[0]["argv"]
+    assert _flag(argv, "--chroms") == ROOT_CHROMS[index], argv
+    assert _flag(argv, "--out") == env["OUT"], "a shard must write into the SAME root"
+    assert f"shard {index}/{len(ROOT_CHROMS)} -> {ROOT_CHROMS[index]}" in r.stdout, r.stdout
+
+
+def test_a_shard_leaves_no_manifest_in_the_root(tmp_path):
+    """A one-chromosome manifest left in the root is a genome-wide score over one chromosome.
+
+    `slurm/t81_score_external.sh` reads `manifest.chroms` and scores exactly those, and the B_
+    once-guard reads the manifest as proof the panel was spent. Neither may see a partial array.
+    """
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r, env = _shard(tmp_path, env, 3)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    out = Path(env["OUT"])
+    assert not (out / "manifest.json").exists(), "a shard left its one-chromosome manifest behind"
+    kept = out / f".shard_manifest.{ROOT_CHROMS[3]}.json"
+    assert kept.is_file(), f"the shard manifest was not kept as a template: {list(out.iterdir())}"
+    assert (out / DUMP_TRACKS[0] / f"{ROOT_CHROMS[3]}.npz").is_file()
+
+
+def test_the_sharded_root_holds_no_directory_that_is_not_a_declared_track(tmp_path):
+    """`bench.external` lists every DIRECTORY under a prediction root and refuses the pass if one
+    names no declared track. So the shard bookkeeping has to be FILES: a `.shards/` holding pen
+    would have cost the whole score pass, hours in, for a root that was otherwise perfect.
+    """
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    for i in (0, 1):
+        r, _ = _shard(tmp_path, env, i)
+        assert r.returncode == 0, f"shard {i} exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    out = Path(env["OUT"])
+    _fill_root(out, ROOT_CHROMS[2:])
+    r, _ = _merged(tmp_path, env)
+    assert r.returncode == 0, f"the merge exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    dirs = sorted(p.name for p in out.iterdir() if p.is_dir())
+    assert dirs == sorted(DUMP_TRACKS), (
+        f"{dirs} — bench.external refuses a root holding a directory that is not a declared track")
+
+
+def test_an_array_shorter_than_the_planned_list_is_refused_before_any_dump(tmp_path):
+    """23 chromosomes and 3 tasks leaves 20 unpredicted, found out only at the merge hours later."""
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r, env = _shard(tmp_path, env, 1, count=3)
+    assert r.returncode == 6, f"exit {r.returncode}, not 6:\n{r.stdout}\n{r.stderr}"
+    assert "3 tasks" in r.stderr and str(len(ROOT_CHROMS)) in r.stderr, r.stderr
+    assert not _calls(env), "the dump ran anyway"
+
+
+def test_an_index_past_the_end_of_the_planned_list_is_refused(tmp_path):
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r, env = _shard(tmp_path, env, len(ROOT_CHROMS), count=len(ROOT_CHROMS))
+    assert r.returncode == 6, f"exit {r.returncode}, not 6:\n{r.stdout}\n{r.stderr}"
+    assert not _calls(env)
+
+
+def test_sharded_without_an_array_is_refused(tmp_path):
+    env = _predict_env(tmp_path, DEVICE="cpu", SHARD_CHROMS="1")
+    r = _run(PREDICT, env, tmp_path)
+    assert r.returncode == 6, f"exit {r.returncode}, not 6:\n{r.stdout}\n{r.stderr}"
+    assert "--array" in r.stderr, r.stderr
+    assert not _calls(env)
+
+
+def _fill_root(out: Path, chroms) -> None:
+    """Stand in for the shards this test does not pay to run: the npz they would have written."""
+    for t in DUMP_TRACKS:
+        (out / t).mkdir(parents=True, exist_ok=True)
+        for c in chroms:
+            (out / t / f"{c}.npz").write_bytes(b"")
+
+
+def _merged(tmp: Path, env: dict, *, array: str = "57999001"):
+    e = dict(env)
+    e.update({"SHARD_CHROMS": "1", "SHARD_MERGE": "1", "SHARD_ARRAY": array})
+    e.pop("SLURM_ARRAY_TASK_ID", None)
+    return _run(PREDICT, e, tmp), e
+
+
+def test_the_merge_step_writes_one_manifest_naming_every_planned_chromosome(tmp_path):
+    """The point of the whole exercise: 23 shards, then ONE manifest the scorer can read.
+
+    Two shards run for real and the other 21 are filled in, because 23 real launcher runs buys
+    nothing this does not already prove -- the merge reads the npz on disk, not the shard count.
+    """
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    for i in (0, 1):
+        r, _ = _shard(tmp_path, env, i)
+        assert r.returncode == 0, f"shard {i} exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    out = Path(env["OUT"])
+    _fill_root(out, ROOT_CHROMS[2:])
+    r, _ = _merged(tmp_path, env)
+    assert r.returncode == 0, f"the merge exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    man = json.loads((out / "manifest.json").read_text())
+    assert man["chroms"] == ROOT_CHROMS, man["chroms"]
+    assert man["declared_tracks"] == DUMP_TRACKS, "the identity half must come from a real shard"
+    assert man["ckpt_sha256"] == "ckptsha", "the merge retyped the provenance instead of copying it"
+    assert man["notes"] == "device=cpu; sharded: true; array=57999001; shards=2", man["notes"]
+
+
+def test_the_merge_step_refuses_a_root_missing_a_chromosome(tmp_path):
+    """A manifest naming 23 over a root holding 22 is a panel scored with a hole in it (D2)."""
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r, _ = _shard(tmp_path, env, 0)
+    assert r.returncode == 0, r.stderr
+    out = Path(env["OUT"])
+    _fill_root(out, [c for c in ROOT_CHROMS[1:] if c != "chr17"])
+    r, _ = _merged(tmp_path, env)
+    assert r.returncode == 5, f"exit {r.returncode}, not 5:\n{r.stdout}\n{r.stderr}"
+    assert "chr17" in r.stderr, r.stderr
+    assert not (out / "manifest.json").exists(), "an incomplete root was given a manifest"
+
+
+def test_the_merge_step_refuses_a_root_no_shard_ever_finished(tmp_path):
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r, _ = _merged(tmp_path, env)
+    assert r.returncode == 5, f"exit {r.returncode}, not 5:\n{r.stdout}\n{r.stderr}"
+    assert ".shard_manifest" in r.stderr, r.stderr
+
+
+def test_a_merge_without_the_array_it_assembles_is_refused(tmp_path):
+    env = _predict_env(tmp_path, DEVICE="cpu", SHARD_CHROMS="1", SHARD_MERGE="1")
+    r = _run(PREDICT, env, tmp_path)
+    assert r.returncode == 6, f"exit {r.returncode}, not 6:\n{r.stdout}\n{r.stderr}"
+    assert "SHARD_ARRAY" in r.stderr, r.stderr
+
+
+def test_shard_array_is_refused_on_anything_that_predicts(tmp_path):
+    """It presents another array's B_ marker, so it may only ride on a step that writes no bytes."""
+    env = _predict_env(tmp_path, DEVICE="cpu", SHARD_ARRAY="57999001")
+    r, env = _shard(tmp_path, env, 0)
+    assert r.returncode == 6, f"exit {r.returncode}, not 6:\n{r.stdout}\n{r.stderr}"
+    assert not _calls(env)
+
+
+# --- the B_ once-guard, under sharding -------------------------------------------------------
+
+def _b_shard(tmp: Path, env: dict, index: int, array: str):
+    e = dict(env)
+    e.update({"SHARD_CHROMS": "1", "SLURM_ARRAY_TASK_ID": str(index),
+              "SLURM_ARRAY_TASK_COUNT": str(len(ROOT_CHROMS)),
+              "SLURM_ARRAY_JOB_ID": array, "B_ONCE": "1"})
+    return _run(PREDICT, e, tmp), e
+
+
+def test_the_sharded_b_guard_lets_this_arrays_siblings_through_and_refuses_a_later_one(tmp_path):
+    """23 tasks of ONE array must all predict; a second submission must not.
+
+    The marker is what tells them apart -- every task of one array writes the same
+    `.b_once.<array job id>` name -- and it is what keeps the sharded pass from having to leave a
+    manifest in the root, which is how a half-finished array would read as a spent panel.
+    """
+    env = _predict_env(tmp_path, panel="B_", DEVICE="cpu")
+    first, _ = _b_shard(tmp_path, env, 0, "57999100")
+    assert first.returncode == 0, f"exited {first.returncode}:\n{first.stdout}\n{first.stderr}"
+    out = Path(env["OUT"])
+    assert (out / ".b_once.57999100").exists(), "the array never claimed the root"
+
+    sibling, senv = _b_shard(tmp_path, env, 1, "57999100")
+    assert sibling.returncode == 0, (
+        f"a sibling of the claiming array was refused:\n{sibling.stdout}\n{sibling.stderr}")
+    assert _flag(_calls(senv)[-1]["argv"], "--chroms") == ROOT_CHROMS[1]
+
+    later, _ = _b_shard(tmp_path, env, 2, "57999200")
+    assert later.returncode == 4, f"exit {later.returncode}, not 4:\n{later.stdout}\n{later.stderr}"
+    assert "REFUSING" in later.stderr or "already holds a B_ pass" in later.stderr, later.stderr
+
+
+def test_the_b_merge_step_is_spared_by_the_marker_of_the_array_it_assembles(tmp_path):
+    """The merge writes no prediction, so it may present the claiming array's marker -- and must.
+
+    Without this the once-only pass could never be finished: the shards leave the root with no
+    manifest on purpose, and the step that writes one is a different job.
+    """
+    env = _predict_env(tmp_path, panel="B_", DEVICE="cpu")
+    r, _ = _b_shard(tmp_path, env, 0, "57999400")
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    out = Path(env["OUT"])
+    _fill_root(out, ROOT_CHROMS[1:])
+    merged, _ = _merged(tmp_path, dict(env, B_ONCE="1"), array="57999400")
+    assert merged.returncode == 0, f"exited {merged.returncode}:\n{merged.stdout}\n{merged.stderr}"
+    assert json.loads((out / "manifest.json").read_text())["chroms"] == ROOT_CHROMS
+
+    # And a merge naming an array that never claimed this root is still a second B_ claim.
+    (out / "manifest.json").unlink()
+    stranger, _ = _merged(tmp_path, dict(env, B_ONCE="1"), array="57999500")
+    assert stranger.returncode == 4, (
+        f"exit {stranger.returncode}, not 4:\n{stranger.stdout}\n{stranger.stderr}")
+
+
+def test_a_b_shard_without_b_once_is_still_refused(tmp_path):
+    env = _predict_env(tmp_path, panel="B_", DEVICE="cpu")
+    e = dict(env)
+    e.update({"SHARD_CHROMS": "1", "SLURM_ARRAY_TASK_ID": "0",
+              "SLURM_ARRAY_TASK_COUNT": str(len(ROOT_CHROMS)), "SLURM_ARRAY_JOB_ID": "57999300"})
+    r = _run(PREDICT, e, tmp_path)
+    assert r.returncode == 4, f"exit {r.returncode}, not 4:\n{r.stdout}\n{r.stderr}"
+    assert not Path(e["OUT"]).exists() or not list(Path(e["OUT"]).glob(".b_once.*")), (
+        "a refused submission claimed the root")
+
+
+def test_the_unsharded_b_guard_still_refuses_a_root_that_carries_a_manifest(tmp_path):
+    """The default route is untouched: a manifest in the root means B_ was spent, full stop."""
+    env = _predict_env(tmp_path, panel="B_", DEVICE="")
+    out = Path(env["OUT"])
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "manifest.json").write_text("{}", encoding="utf-8")
+    r = _run(PREDICT, dict(env, B_ONCE="1"), tmp_path)
+    assert r.returncode == 4, f"exit {r.returncode}, not 4:\n{r.stdout}\n{r.stderr}"
+    assert not _calls(env)
