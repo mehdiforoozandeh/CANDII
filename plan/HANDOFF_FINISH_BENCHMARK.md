@@ -474,3 +474,119 @@ it is frozen.
 **Report faithfully.** If a run fails, say so with the output. If a step is skipped, say that. Do
 not narrow the scope quietly — if something turns out to be blocked, finish everything else in full
 and say explicitly what you left out and why.
+
+---
+
+## What this programme found the handoff had wrong (2026-09-02/03)
+
+Nothing above is edited. This is an append-only record of where this document's premises did not
+survive contact with the code, the cluster and the artefacts — each item as **what the handoff said
+→ what was true → where it is recorded.** No score is quoted anywhere in it: the target-clustered
+noise floor is not yet measured (t86), so every figure below is a cost, a count, a size, a ratio or
+a timing.
+
+- **The challenge-truth path did not exist at all.** §4.5 and `leaderboard/boards.json` assumed the
+  Synapse bigwigs "load into `candi.bench.external`". → There was **no bigwig reader anywhere** —
+  not in `src/candi/bench/*`, not in `src/candi/store/*`, on no local or remote ref; `score_external`
+  returned `per_track` + `macro` only, with no `panels` block, no `genome_wide` block and no
+  `--held-out-chroms`; and anchor rows went through a retired `--placement-method` gate. → Built:
+  `tools/challenge_bigwigs.py` (`truth-root` and `pred-root` verbs), `--truth-root` and
+  `--held-out-chroms` on `candi.bench.external`, and the `panels` block. Recorded in
+  `.orchestrate/plan.md` "Verified ground truth", `cruxvault/results/t81/ANCHOR_ROOTS.md`,
+  `SCORES_ANCHORS.md`.
+
+- **`tools/seed_floor.py` already existed.** §4.6 reads as if it were still to be written ("Until it
+  lands, rows go up unranked"). → It existed — 195 lines with its own tests. What it lacked was a
+  `--panel` option: it read only `macro`, never `panels`, so it could not produce the per-panel
+  floor §4.6 itself asks for (the `V_` breadth panel against the 8-assay panels). The option was
+  added rather than the tool. Recorded in `.orchestrate/plan.md` "Verified ground truth".
+
+- **The finished `eic.pilot` run's json was lost, so the checkpoint alone was unusable.** §1 said
+  "Do not retrain it. Re-verify the checkpoint's md5". → The md5 was fine and the checkpoint is a
+  bare `state_dict` of 155 tensors that **holds no architecture**: job 57674899_1 was cancelled at
+  its 16 h limit *during the final full-coverage check*, and `train.py` writes the run json only
+  after that check, so there was nothing to rebuild the model with. → `t81_eic_pilot_s0.arch.json`
+  was reconstructed from the probe run's `config.arch`, copied verbatim by script, and proved by a
+  strict load: `missing=[] unexpected=[] params=2,353,661`, matching the training banner. Recorded
+  in `cruxvault/results/t81/PILOT_ARCH.md`. **Lesson: size a band with the final check inside it.**
+
+- **The anchor block is held-out only, so its costing was ~20× too high — and the measured cost is
+  lower again.** §4.5 put the 50 anchor passes inside a ≈4,400 CPU-h total sized on genome-wide
+  passes. → `leaderboard/boards.json` declares that block `truth=challenge`, `panel=B_`,
+  `scope=held-out`; held-out is 5.34 % of genome-wide, which alone takes it to ≈150 CPU-h. Measured,
+  it is far under even that: the 50 passes ran in **2–4 min each under challenge truth and 8–13 min
+  under store truth**, the whole block finishing in about **40 min of wall clock**, because an
+  entrant carries no σ and none of the distributional work runs. Recorded in
+  `cruxvault/results/t81/SCORES_ANCHORS.md` §6 and §9.1, and in `BENCHMARK_DESIGN.md` §12.4.
+
+- **t88 and t89 had already landed.** §3F lists t88 as Phase-1 work and §3 lists t89 as "also open".
+  → t88's fix was already on `origin/main` (commit `a2a47b1`, arrived through the t77 merge; the
+  shipped-regime test now sweeps `configs/`), and a fresh detached worktree at HEAD ran **1,294
+  passed, 1 skipped**, the single skip being by design. t89's `src/candi/README.md`,
+  `tools/arch_diagram.py` and `tests/test_arch_readme.py` existed and passed. Only the crux closes
+  remained. Recorded in `.orchestrate/plan.md` "Verified ground truth",
+  `cruxvault/results/t88/FRESH_WORKTREE_PYTEST.md`, `cruxvault/results/t89/DELIVERABLE.md`.
+
+- **A regime file cannot carry the σ pass's self-pairs.** §3A's design (and the programme plan's
+  pinned interface) had the derived σ regime hold `eval_pairs = [[T_x, T_x] …]`. →
+  `candi.store.regime` **refuses** a pair whose target is its own source. The derived file therefore
+  carries `eval_pairs: []` with `biosamples.eval` set to the drawn cells, and every method reaches
+  the self-pairs through the store's **no-pairing path**. Three predict entry points read
+  `regime["eval_pairs"]` directly and silently wrote nothing under that shape until the fallback was
+  added. Recorded in `cruxvault/results/t81/W3_CI_SIGMA.md`, `SIGMA_AVGARCSINH.md`, and
+  `BENCHMARK_DESIGN.md` §12.2.
+
+- **`V_matched` needs the sibling `B_` pass; it does not come out of the `V_` pass.** §4.5 says all
+  three `V_` numbers come out of one pass. → True of a joint pass, false once the passes are split
+  by panel: `harness.panel_macros` measures the matched assay set from the `B_` rows **of the same
+  pass**, and our `V_` and `B_` passes run off panel-derived regimes, so `panels.V_matched` came out
+  **empty in every `store.V_.json`** and the matched board cell would have been blank for all 18
+  units. → Fixed by a merge, not a re-score: `candi.bench.external fill-panels --v … --b …`
+  recomputes `panels` over the union of the two files' `per_track` and records
+  `provenance.panels_from`; measured `V_matched.n_experiments` **0 → 21** with `V_breadth`
+  byte-identical either side. Recorded in `cruxvault/results/t81/FILL_PANELS.md`.
+
+- **Three of the five naive baselines are regime-dependent, and `avg-arcsinh` had a live bug
+  underneath that.** §3D's "correct the collapse to 2 + 3×2 = 8 units" was right: `similarity_table`
+  and `fit_marginal` read `panel.train_chroms`, so `marginal`, `knn1` and `knn5` fit differently per
+  regime. → The identity assertion, once it existed, caught what the argument could not:
+  **`avg-arcsinh` was averaging the top five contributors by kNN similarity** rather than every
+  eligible one, which made it regime-dependent too while its one number was being printed in both
+  regime rows. The three-contributor test fixture hid it (`top_k(…, 5)` over three returns all
+  three); the identity tests run on seven contributors now. The pilot trio also needed `regions`
+  support before they could be fitted at all. No board row quotes the old path. Recorded in
+  `cruxvault/results/t81/BASELINES.md`, `competitors/baselines/README.md`, and
+  `BENCHMARK_DESIGN.md` §12.2.
+
+- **`sbatch --export=ALL,VAR=a,b,c` truncates a comma-valued variable — and it cost a whole apply
+  stage.** Nothing here warned of it. → `CI_CHROMS=chr20,chr21,chr22` passed inside `--export=…`
+  arrived at the job as `CI_CHROMS=chr20` (measured in the running job's environment), so
+  ChromImpute's first `V_` apply ran **chr20 only**; chr21 and chr22 were never converted. Those
+  outputs were discarded and the chain re-run with the variables exported in the shell and
+  `--export=ALL`. The trained predictors were unaffected. Recorded in
+  `cruxvault/results/t81/W3_EARLY.md`, `W3_CHECK_2.md`.
+
+- **The real critical path was the GPU fairshare queue, not any CPU-h total.** §4.5's "Fir's CPU
+  allocation is not the scarce resource" held — every CPU scoring pass ran unimpeded. → But with
+  this programme holding ~39 % of the account's GPU use, `sprio` put essentially the whole of a
+  pending job's priority in fairshare (631,533 of 631,602), the scheduler offered **no start time
+  at all**, and six GPU jobs — both CANDI `V_` predicts, both Avocado σ runs, both eDICE `B_` runs —
+  sat `PENDING (Priority)` for hours. **The CANDI rows are the last on the board to land, and the
+  reason is queueing, not compute.** Recorded in `cruxvault/results/t81/TRAIN_CANDI_EIC19.md` and
+  the `pred.V_.CANDI.*` rows of `PROGRAMME_STATE.md`.
+
+- **The baseline prediction roots are uncompressed.** This document inherited §12.6's "deflates"
+  claim from t83. → True of CANDI, eDICE, Lavawizard and ChromImpute, which all call
+  `savez_compressed`. **Not** of the naive baselines: `competitors/baselines/generate.py:458` calls
+  `np.savez`, and the measured ratio is **1.000×**, with on-disk **1,250 bytes larger** than raw
+  (the zip container header). That is the largest class of roots on `/project` — **744 G** across
+  the eight baseline `B_` roots. eDICE, measured on a real root, deflates at **1.208×**; CANDI's
+  ratio is still unmeasured and is deliberately left blank in §12.6 rather than estimated. Recorded
+  in `cruxvault/results/t81/SCORES_BASELINES_B.md` §1.3, `PRED_B_EDICE.md` §4, and
+  `BENCHMARK_DESIGN.md` §12.6.
+
+**The pattern in all eleven.** Nine of them are a claim about an artefact taken from a description of
+it — a section of this handoff, a launcher header, a doc comment, a manifest that records no sizes.
+Every one was settled by opening the thing itself: the npz's key list, the job's own banner, the
+regime loader's refusal, a strict `load_state_dict`. **Where a doc and the code disagree, the code is
+right and the doc is the bug** — and that includes this document.
