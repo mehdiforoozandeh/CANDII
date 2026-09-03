@@ -165,6 +165,7 @@ from pathlib import Path
 
 from candi.bench.harness import open_source
 from candi.store import layout as L
+from candi.store.reader import CorpusStore
 
 derived, panel, chroms_arg = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 d = json.loads(derived.read_text())
@@ -180,8 +181,39 @@ if bad:
 if chroms_arg:
     chroms = [c.strip() for c in chroms_arg.split(",") if c.strip()]
 else:
-    sizes = L.load_chrom_sizes(L.chrom_sizes_path(d["store"]))
-    chroms = L.sort_chroms(sizes)
+    # The genome layer is SHARED and lives one level ABOVE the corpus store: CANDI_STORE/genome,
+    # not CANDI_STORE/eic/genome. `layout.corpus_genome_dir` is the helper that knows that;
+    # `layout.chrom_sizes_path` takes CANDI_STORE itself and so pointed at a directory that has
+    # never existed. Every submission leaving CHROMS unset died right here with exit 1, at PLAN
+    # time — cheap to see once you read the log, and invisible until then (observed 2026-09-03).
+    sizes = L.load_chrom_sizes(L.corpus_genome_dir(d["store"]) / "chrom_sizes.json")
+    # THE SHARED LAYER CARRIES MORE THAN THE CORPUS DOES, so its list is not the default on its
+    # own: CANDI_STORE/genome declares 24 (chrY included) and the eic corpus holds 23 (chr1-22,
+    # chrX). A dump cannot write a track for a chromosome the store has no data for, and both
+    # readers this job drives have to hold it — the corpus tracks AND the shared DNA/mask layer —
+    # so the default is the INTERSECTION. `CorpusStore.n_bins()` is the record a corpus keeps of
+    # what it holds (manifest `genome.n_bins`, else the h5 attrs of its first biosample), and it
+    # is the rule the two rival §4.1 writers already derive their chromosome list from —
+    # `competitors/edice/run_eic.py --chroms all` and the `Panel` of `competitors/baselines`, both
+    # of them off the same n_bins map — so these roots come out over the same 23 those do.
+    #
+    # NOTE ON STYLE, because it costs an hour to rediscover: this heredoc sits inside a "$( )",
+    # and bash pairs up quote characters in the BODY even though the delimiter is quoted. An odd
+    # apostrophe anywhere below turns the next "(" into `syntax error near unexpected token`, at
+    # PARSE time, for the whole script. Prose here therefore carries no apostrophe at all, and
+    # the message below reads `store` out of a variable rather than subscripting with quotes.
+    store = d["store"]
+    have = CorpusStore(store).n_bins()
+    ranked = L.sort_chroms(sizes)
+    chroms = [c for c in ranked if c in have]
+    dropped = [c for c in ranked if c not in have]
+    if not chroms:
+        sys.exit(f"[t81-pred] REFUSING: the shared genome layer at "
+                 f"{L.corpus_genome_dir(store)} and the corpus at {store} have no chromosome in "
+                 f"common, so this dump would write nothing at all.")
+    if dropped:
+        print(f"[t81-pred]   the shared genome layer also declares {dropped}, which this corpus "
+              f"holds no data for — dropped from the default", file=sys.stderr)
 
 src = open_source(store=str(derived), chroms=chroms)
 try:

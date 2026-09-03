@@ -18,6 +18,12 @@ Both are argument-shaping bugs, so both are testable without a cluster. Each tes
 launcher with a stub `python` on PATH that records what `candi.bench.external` would have been
 called with. Everything between the stubs is the real script: the real chromosome intersection, the
 real Rule 1 sigma gate, the real stamp gate. Only the venv, the kit and the scorer are fakes.
+
+K14 adds section (C): `slurm/t81_predict_candi.sh` had the SAME sizes-path defect in the heredoc
+that plans its run, and it is worse there -- the plan runs before the dump, so with `CHROMS` unset
+EVERY submission exited 1 at PLAN and no root was written at all. The predict launcher cannot be
+run whole here (checkpoint, arch json, GPU, a real store behind `open_source`), so that one program
+is lifted out of the script text and run against the same fake store.
 """
 from __future__ import annotations
 
@@ -34,10 +40,17 @@ REPO = Path(__file__).resolve().parents[1]
 SLURM = REPO / "slurm"
 GENERIC = SLURM / "t81_score_external.sh"
 BASELINES = SLURM / "t49_baselines_score.sh"
+#: K14 -- `slurm/t81_predict_candi.sh` carried the SAME chrom_sizes defect, in the heredoc that
+#: plans its run. It is not a scorer, so only that one program is exercised below.
+PREDICT = SLURM / "t81_predict_candi.sh"
 
-#: The 23 every prediction root carries, in `layout.sort_chroms` order.
+#: The 23 every prediction root carries, in `layout.sort_chroms` order. Also what the eic CORPUS
+#: holds data for: `manifest.json` -> `genome.n_bins` names exactly these (checked on Fir,
+#: as does every biosample entry), and it is the map `CorpusStore.n_bins()` reads -- which is where
+#: the eDICE and baselines writers get their §4.1 list, hence roots that agree.
 ROOT_CHROMS = [f"chr{i}" for i in range(1, 23)] + ["chrX"]
-#: What the STORE carries. One more than the roots do, and that one is the whole bug.
+#: What the SHARED GENOME LAYER declares -- `CANDI_STORE/genome/chrom_sizes.json`, one level above
+#: the corpus. One more than the corpus holds, and that one is the whole bug.
 STORE_CHROMS = ROOT_CHROMS + ["chrY"]
 HELD_OUT = "chr20,chr21,chr22"
 #: The one prefix a sigma table must carry, on either launcher.
@@ -122,19 +135,29 @@ def _stub_env(tmp: Path) -> dict:
     return env
 
 
-def _store(tmp: Path, chroms=STORE_CHROMS) -> Path:
+def _store(tmp: Path, chroms=STORE_CHROMS, corpus_chroms=ROOT_CHROMS) -> Path:
     """A CANDI_STORE with a shared genome layer, and one corpus under it. Returns the CORPUS root.
 
     `layout.corpus_genome_dir` is `<corpus>/../genome`, so the corpus has to be a real sibling of
     `genome/` -- the launcher reads the sizes through that helper and a flat directory would not
     exercise it.
+
+    `chroms` is what the SHARED layer declares; `corpus_chroms` is what the corpus holds DATA for,
+    recorded the way the real store records it -- `manifest.json` -> `genome.n_bins`, which is what
+    `CorpusStore.n_bins()` reads. On Fir the two differ by chrY, and that difference is the defect
+    both launchers had. The `biosamples/` directory is empty on purpose: `CorpusStore` requires it
+    to exist, and a manifest means nothing under it is ever opened.
     """
     genome = tmp / "CANDI_STORE" / "genome"
     genome.mkdir(parents=True, exist_ok=True)
     (genome / "chrom_sizes.json").write_text(
         json.dumps({c: 50_000_000 for c in chroms}), encoding="utf-8")
     corpus = tmp / "CANDI_STORE" / "eic"
-    corpus.mkdir(parents=True, exist_ok=True)
+    (corpus / "biosamples").mkdir(parents=True, exist_ok=True)
+    (corpus / "manifest.json").write_text(json.dumps({
+        "schema": 2, "corpus": "eic", "resolution": 25,
+        "genome": {"build": "GRCh38", "n_bins": {c: 2_000_000 for c in corpus_chroms}},
+    }), encoding="utf-8")
     return corpus
 
 
@@ -186,12 +209,17 @@ pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="no bash on
 
 
 # ---------------------------------------------------------------------------------------------
-# text — the two files still parse, and still say the things the launchers are for
+# text — the three files still parse, and still say the things the launchers are for
 # ---------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("script", [GENERIC, BASELINES], ids=lambda p: p.name)
+@pytest.mark.parametrize("script", [GENERIC, BASELINES, PREDICT], ids=lambda p: p.name)
 def test_the_launcher_parses(script: Path):
-    """Both carry inline heredocs, and a heredoc that does not close is invisible by eye."""
+    """All carry inline heredocs, and a heredoc that does not close is invisible by eye.
+
+    On `t81_predict_candi.sh` this is a live guard, not a formality: its heredoc sits inside a
+    `"$( )"`, where bash pairs up quote characters in the BODY even though the delimiter is
+    quoted. One apostrophe in a comment there is a parse error for the whole script.
+    """
     r = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
     assert r.returncode == 0, f"{script.name} does not parse:\n{r.stderr}"
 
@@ -454,3 +482,133 @@ def test_the_stamped_collapsed_pair_reaches_the_other_board_with_both_new_flags(
     assert _flag(argv, "--truth-root") == str(truth)
     assert "collapse asserted against" in r.stdout, (
         f"the stamp gate did not report passing:\n{r.stdout}")
+
+
+# ---------------------------------------------------------------------------------------------
+# (C) slurm/t81_predict_candi.sh -- dump over the chromosomes the STORE holds data for
+# ---------------------------------------------------------------------------------------------
+# The same defect as (A), one launcher over: with `CHROMS` unset the plan read its sizes through
+# `layout.chrom_sizes_path(store)`, which is `<store>/genome/chrom_sizes.json` -- but the genome
+# layer is SHARED and sits one level ABOVE the corpus, so on Fir that path names a directory that
+# has never existed and every default submission died at PLAN with exit 1 (2026-09-03).
+#
+# The whole launcher cannot be run here: it wants a checkpoint, an arch json, a GPU and a real
+# store behind `open_source`. Its chromosome program CAN, so the program is lifted out of the
+# script text and run for real -- against the same fake store the scorer tests use -- with only
+# `open_source` stubbed, since the track COUNT is not what is under test.
+
+def _plan_program(script: Path = PREDICT) -> str:
+    """The launcher's PLAN heredoc, lifted verbatim from the script text.
+
+    Lifted rather than copied so it cannot drift: a rewrite of the plan is tested as it is, and a
+    rename of the heredoc marker fails here loudly instead of testing a stale copy.
+    """
+    lines = script.read_text(encoding="utf-8").splitlines()
+    starts = [i for i, ln in enumerate(lines) if ln.startswith('PLAN="$(python - ')]
+    assert len(starts) == 1, f"{script.name} has {len(starts)} PLAN heredocs, expected 1"
+    body = lines[starts[0] + 1:]
+    end = next(i for i, ln in enumerate(body) if ln.strip() == "PYEOF")
+    return "\n".join(body[:end]) + "\n"
+
+
+#: Runs the lifted program with `candi.bench.harness` replaced. `open_source` there needs a real
+#: StoreDataset over real h5; the plan uses it ONLY to count declared tracks, so a stub that
+#: answers one pair with one target leaves the chromosome derivation entirely real.
+_PLAN_RUNNER = '''
+import sys, types
+
+sys.path.insert(0, {src!r})
+
+_stub = types.ModuleType("candi.bench.harness")
+
+
+class _Src:
+    def pairs(self, kind):
+        return [("T_C1", "V_C1")]
+
+    def targets(self, pair, kind):
+        return ["H3K4me3"]
+
+    def close(self):
+        pass
+
+
+_stub.open_source = lambda **kw: _Src()
+sys.modules["candi.bench.harness"] = _stub
+
+sys.argv = ["-", {derived!r}, {panel!r}, {chroms!r}]
+exec(compile(open({program!r}, encoding="utf-8").read(), "<launcher-heredoc>", "exec"),
+     {{"__name__": "__main__"}})
+'''
+
+
+def _plan(tmp: Path, *, chroms_arg: str = "", store_chroms=STORE_CHROMS,
+          corpus_chroms=ROOT_CHROMS, panel: str = "V_") -> subprocess.CompletedProcess:
+    corpus = _store(tmp, store_chroms, corpus_chroms)
+    derived = tmp / f"regime.eic_19.{panel}.json"
+    derived.write_text(json.dumps({"store": str(corpus),
+                                   "eval_pairs": [["T_C1", f"{panel}C1"]]}), encoding="utf-8")
+    program = tmp / "plan_program.py"
+    program.write_text(_plan_program(), encoding="utf-8")
+    runner = tmp / "run_plan.py"
+    runner.write_text(_PLAN_RUNNER.format(src=str(REPO / "src"), derived=str(derived),
+                                          panel=panel, chroms=chroms_arg,
+                                          program=str(program)), encoding="utf-8")
+    return subprocess.run([sys.executable, str(runner)], capture_output=True, text=True,
+                          cwd=str(tmp))
+
+
+def test_the_predict_launcher_no_longer_asks_for_the_corpus_own_genome_dir():
+    """`chrom_sizes_path(<corpus>)` is `<corpus>/genome/...`, which no corpus has.
+
+    Comment lines are dropped before the check: the block above the fix EXPLAINS the helper it
+    replaced, and a check reading the prose could not tell the explanation from the code.
+    """
+    code = "\n".join(ln for ln in PREDICT.read_text(encoding="utf-8").splitlines()
+                     if not ln.strip().startswith("#"))
+    assert "chrom_sizes_path(" not in code, (
+        "the plan still resolves its sizes through layout.chrom_sizes_path, which takes "
+        "CANDI_STORE and is handed the CORPUS -- the path it builds does not exist")
+    assert "corpus_genome_dir(" in code, (
+        "the plan must reach the shared genome layer through layout.corpus_genome_dir")
+    assert "chrom_sizes.json" in code, "it must still read the shared sizes file"
+    assert "chroms ({len(chroms)})" in PREDICT.read_text(encoding="utf-8"), (
+        "the `[t81-pred]   chroms (N): ...` line is how an operator checks the plan before the "
+        "dump spends 14 GPU-h; it must survive")
+
+
+def test_the_default_chromosomes_are_the_ones_the_corpus_holds_data_for(tmp_path):
+    """24 declared by the shared layer, 23 held by the corpus, and the dump gets the 23.
+
+    A chromosome the store has no data for cannot be dumped at all, and `bench.dump` finds that
+    out per track rather than up front -- so leaving chrY in costs the walltime before it fails.
+    """
+    r = _plan(tmp_path)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    planned = r.stdout.splitlines()[0].split(",")
+    assert planned == ROOT_CHROMS, f"the plan chose {planned}"
+    assert "chrY" not in planned, (
+        "the shared genome layer's chrY reached the dump; the corpus holds no chrY track")
+    assert f"chroms ({len(ROOT_CHROMS)})" in r.stderr, (
+        f"the plan does not print the list it chose:\n{r.stderr}")
+    assert "chrY" in r.stderr, f"the dropped chromosome is not reported anywhere:\n{r.stderr}"
+
+
+def test_an_explicit_chroms_is_passed_through_untouched(tmp_path):
+    """The operator override is not the bug and must not acquire the intersection.
+
+    `EXTRA="--chroms chr21"`-style hand-holding is how the two jobs that survived the defect
+    survived it, and a run pinned to one chromosome must stay pinned to it.
+    """
+    r = _plan(tmp_path, chroms_arg="chr21,chr22")
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert r.stdout.splitlines()[0] == "chr21,chr22", r.stdout
+    assert "dropped from the default" not in r.stderr, (
+        "the explicit path must not report a drop -- it did not derive a default")
+
+
+def test_a_corpus_sharing_no_chromosome_with_the_genome_layer_is_refused(tmp_path):
+    """Empty is not "dump nothing", it is a store that does not go with this genome layer."""
+    r = _plan(tmp_path, corpus_chroms=["chrZ1", "chrZ2"])
+    assert r.returncode != 0, f"it planned a dump of nothing:\n{r.stdout}"
+    assert "REFUSING" in (r.stdout + r.stderr), f"{r.stdout}\n{r.stderr}"
