@@ -73,6 +73,15 @@
 # --force: the way to redo a B_ prediction is for the PI to move the old root aside, by hand, and
 # say why. A V_ run has neither guard and may be rerun freely.
 #
+# EXIT CODES ADDED HERE: 5 = a shard or the merge found the root incomplete (a shard whose dump
+# wrote no manifest; a merge missing an npz for some track x chromosome); 6 = the sharding flags
+# or the array shape do not fit the plan. Two holes are known and left open on purpose: a shard
+# killed between dump writing manifest.json and the mv leaves a one-chromosome manifest in the
+# root (the merge overwrites it; a scorer started before the merge would read it -- chain scorers
+# afterok on the merge, never on the array); and an UNSHARDED B_ submission over a sharded B_ root
+# that was never merged sees no manifest and passes the guard -- the sharded marker is not read on
+# the unsharded path. Run the merge, or move the root aside by hand, before any such resubmit.
+#
 # WALLTIME. Measured: CANDI inference is 0.2363 GPU-h per GENOME-WIDE track on this MIG slice, at
 # MaxRSS 4.2 GiB (hence --mem=8G, which is 2x headroom, not a guess). A TRACK is not a PAIR — it is
 # (declared pair x an assay the target cell holds and the input cell does not) — and the V_ panel is
@@ -378,6 +387,12 @@ if [ "$SHARD_CHROMS" = "1" ] && [ "$SHARD_MERGE" != "1" ]; then
     echo "        Resubmit with --array=0-$((N_SHARDS - 1))%12." >&2
     exit 6
   fi
+  if [ "${SLURM_ARRAY_TASK_MIN:-0}" != "0" ]; then
+    echo "[error] this array starts at task ${SLURM_ARRAY_TASK_MIN}, not 0: positions are 0-based, so" >&2
+    echo "        chromosome 0 would never be predicted and the last task would run off the list." >&2
+    echo "        Resubmit with --array=0-$((N_SHARDS - 1))%12." >&2
+    exit 6
+  fi
   SHARD_CHROM="${SHARD_LIST[$SLURM_ARRAY_TASK_ID]:-}"
   if [ -z "$SHARD_CHROM" ]; then
     echo "[error] array index $SLURM_ARRAY_TASK_ID names no chromosome; the plan has $N_SHARDS" >&2
@@ -426,7 +441,10 @@ if [ $rc -eq 0 ] && [ "$SHARD_CHROMS" = "1" ] && [ "$SHARD_MERGE" != "1" ]; then
   # one chromosome as if it were the genome. So it is moved aside, and the root carries no manifest
   # until the merge step verifies the whole thing.
   if [ -f "$OUT/manifest.json" ]; then
-    mv -f "$OUT/manifest.json" "$OUT/.shard_manifest.${SHARD_CHROM}.json" || rc=5
+    # The mv can lose a race with a sibling that saw the same file: then the file is gone, the
+    # sibling holds a template, and the arrays of this shard are on disk all the same.
+    mv -f "$OUT/manifest.json" "$OUT/.shard_manifest.${SHARD_CHROM}.json" \
+      || compgen -G "$OUT/.shard_manifest.*.json" >/dev/null 2>&1 || rc=5
   elif compgen -G "$OUT/.shard_manifest.*.json" >/dev/null 2>&1; then
     # Two shards finishing in the same instant: the other one wrote the root manifest over ours and
     # moved it before we looked. Harmless -- the shard manifests differ only in `chroms`, which the
