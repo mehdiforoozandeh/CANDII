@@ -24,6 +24,12 @@ that plans its run, and it is worse there -- the plan runs before the dump, so w
 EVERY submission exited 1 at PLAN and no root was written at all. The predict launcher cannot be
 run whole here (checkpoint, arch json, GPU, a real store behind `open_source`), so that one program
 is lifted out of the script text and run against the same fake store.
+
+K16 adds section (C2), and changes a fixture rather than only adding checks: the stub `open_source`
+now PRINTS the `[bench] N declared eval pair(s), M scoreable experiment(s)` banner the real one
+prints on stdout. The K15 stub was silent, so every test here passed on a plan whose first line was
+that banner -- and all 92 array tasks of 2026-09-03 read it as their chromosome list. A stub quieter
+than the library it stands for cannot see a defect about what the library says out loud.
 """
 from __future__ import annotations
 
@@ -98,7 +104,17 @@ if argv and argv[0] == "-":
             def close(self):
                 pass
 
-        _stub.open_source = lambda **kw: _Src()
+        def _open_source(**kw):
+            # K16: THE STUB IS NOISY ON PURPOSE, because the real one is. `open_source` prints
+            # `[bench] N declared eval pair(s), M scoreable experiment(s)` on STDOUT with
+            # flush=True, and the plan is captured whole by PLAN="$( ... )". The K15 stub was
+            # silent, so every test here passed while all 92 array tasks of 2026-09-03 read that
+            # banner as line 1 of the plan. A silent stub cannot see this defect at all.
+            print("[bench] 1 declared eval pair(s), 2 scoreable experiment(s)", flush=True)
+            print("[bench] 0 declared pair(s) are NOT disjoint on (cell, assay)", flush=True)
+            return _Src()
+
+        _stub.open_source = _open_source
         sys.modules["candi.bench.harness"] = _stub
     src = sys.stdin.read()
     sys.argv = list(argv)
@@ -574,6 +590,11 @@ def _plan_program(script: Path = PREDICT) -> str:
 #: Runs the lifted program with `candi.bench.harness` replaced. `open_source` there needs a real
 #: StoreDataset over real h5; the plan uses it ONLY to count declared tracks, so a stub that
 #: answers one pair with one target leaves the chromosome derivation entirely real.
+#:
+#: K16 -- and the stub PRINTS, because the real `open_source` prints. Its `[bench] N declared eval
+#: pair(s), M scoreable experiment(s)` banner goes to stdout with flush=True, and the launcher
+#: captures this program whole with PLAN="$( ... )". The K15 stub was silent, which is exactly why
+#: every test in this section passed on a plan that no array task could read.
 _PLAN_RUNNER = '''
 import sys, types
 
@@ -593,7 +614,12 @@ class _Src:
         pass
 
 
-_stub.open_source = lambda **kw: _Src()
+def _open_source(**kw):
+    print("[bench] 1 declared eval pair(s), 1 scoreable experiment(s)", flush=True)
+    return _Src()
+
+
+_stub.open_source = _open_source
 sys.modules["candi.bench.harness"] = _stub
 
 sys.argv = ["-", {derived!r}, {panel!r}, {chroms!r}]
@@ -616,6 +642,16 @@ def _plan(tmp: Path, *, chroms_arg: str = "", store_chroms=STORE_CHROMS,
                                           program=str(program)), encoding="utf-8")
     return subprocess.run([sys.executable, str(runner)], capture_output=True, text=True,
                           cwd=str(tmp))
+
+
+def _plan_values(r: subprocess.CompletedProcess) -> dict:
+    """The plan as the launcher now reads it: by `PLAN:` marker, never by line number.
+
+    K16. `sed -n 1p` made every field hostage to anything the library chose to print first, and
+    `open_source` prints. Parsing the same way bash does keeps this helper honest about it.
+    """
+    return dict(ln[len("PLAN:"):].split("=", 1)
+                for ln in r.stdout.splitlines() if ln.startswith("PLAN:"))
 
 
 def test_the_predict_launcher_no_longer_asks_for_the_corpus_own_genome_dir():
@@ -645,7 +681,7 @@ def test_the_default_chromosomes_are_the_ones_the_corpus_holds_data_for(tmp_path
     """
     r = _plan(tmp_path)
     assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
-    planned = r.stdout.splitlines()[0].split(",")
+    planned = _plan_values(r)["chroms"].split(",")
     assert planned == ROOT_CHROMS, f"the plan chose {planned}"
     assert "chrY" not in planned, (
         "the shared genome layer's chrY reached the dump; the corpus holds no chrY track")
@@ -662,9 +698,48 @@ def test_an_explicit_chroms_is_passed_through_untouched(tmp_path):
     """
     r = _plan(tmp_path, chroms_arg="chr21,chr22")
     assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
-    assert r.stdout.splitlines()[0] == "chr21,chr22", r.stdout
+    assert _plan_values(r)["chroms"] == "chr21,chr22", r.stdout
     assert "dropped from the default" not in r.stderr, (
         "the explicit path must not report a drop -- it did not derive a default")
+
+
+# ---------------------------------------------------------------------------------------------
+# (C2) the plan is the only thing on stdout, and bash reads it by marker (K16)
+# ---------------------------------------------------------------------------------------------
+# `harness.open_source` prints `[bench] N declared eval pair(s), M scoreable experiment(s)` on
+# STDOUT with flush=True, and the launcher captures the plan whole with PLAN="$( ... )". So the
+# banner became line 1 and `sed -n 1p` handed it to CHROMS: the sharded path exited 6 having
+# counted 2 chromosomes in the sentence, the unsharded one passed the sentence to --chroms. All 92
+# array tasks of 2026-09-03 died of it (jobs 57949917/57949921/57949968/57949996).
+#
+# `open_source` is not changed -- other callers and tests read that banner. The plan is what has to
+# survive it, so the two checks are: the library keeps its stdout OUT of the plan, and bash reads
+# fields by name rather than by position.
+
+def test_library_chatter_stays_out_of_the_plan_and_lands_on_stderr(tmp_path):
+    """The stub prints the banner the real `open_source` prints; only PLAN: lines may be captured."""
+    r = _plan(tmp_path)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    stray = [ln for ln in r.stdout.splitlines() if ln and not ln.startswith("PLAN:")]
+    assert not stray, f"the plan carries lines bash would misread as fields: {stray}"
+    assert "[bench]" in r.stderr, (
+        "the banner did not reach the job .err either -- redirecting it must not silence it")
+
+
+def test_every_plan_field_is_named_so_a_stray_line_cannot_shift_one(tmp_path):
+    """Three fields, each behind its own marker, in any order. Position is not a contract."""
+    r = _plan(tmp_path)
+    got = _plan_values(r)
+    assert set(got) == {"chroms", "n_tracks", "want_time"}, got
+    assert got["chroms"].split(",") == ROOT_CHROMS
+    assert got["n_tracks"] == "1", got                     # the stub declares one target
+    assert got["want_time"] == "00:18:00", got             # 0.2363 * 1 * 1.3 h
+    # Comments dropped first: the block above the fix NAMES the `sed -n 1p` it replaced, and a
+    # check reading the prose could not tell the explanation from the code.
+    code = "\n".join(ln for ln in PREDICT.read_text(encoding="utf-8").splitlines()
+                     if not ln.strip().startswith("#"))
+    assert "sed -n 1p" not in code and "sed -n 2p" not in code and "sed -n 3p" not in code, (
+        "the launcher still reads the plan by line number, so any library print shifts a field")
 
 
 def test_a_corpus_sharing_no_chromosome_with_the_genome_layer_is_refused(tmp_path):
@@ -747,6 +822,40 @@ def test_the_default_predict_path_names_no_device_and_writes_its_own_manifest(tm
     assert (out / "manifest.json").is_file(), "the unsharded root lost its manifest"
     assert not list(out.glob(".shard_manifest.*")), "the unsharded path built shard machinery"
     assert json.loads((out / "manifest.json").read_text())["chroms"] == ROOT_CHROMS
+
+
+def test_the_unsharded_path_reads_its_plan_past_the_libraries_banner(tmp_path):
+    """K16, end to end through the real bash: the whole launcher, with a NOISY `open_source`.
+
+    The stub now prints the `[bench] ...` banner the real one prints. Before the fix that banner
+    was line 1 of the plan and CHROMS became the sentence, so `bench.dump` was handed
+    `--chroms "[bench] 1 declared eval pair(s), 2 scoreable experiment(s)"`. N_TRACKS and
+    WANT_TIME were the two lines after it, shifted by one.
+    """
+    env = _predict_env(tmp_path)
+    r = _run(PREDICT, env, tmp_path)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    argv = _calls(env)[0]["argv"]
+    assert _flag(argv, "--chroms").split(",") == ROOT_CHROMS, argv
+    assert "[bench]" not in _flag(argv, "--chroms"), (
+        f"the library banner reached --chroms: {argv}")
+    # 2 declared tracks -> 0.2363 * 2 * 1.3 h. Both fields, not just the one that crashed.
+    assert "[t81-pred] tracks=2 recommended --time=00:36:00" in r.stdout, r.stdout
+    assert "[bench]" in r.stderr, "the banner must still be readable in the job .err"
+
+
+@pytest.mark.parametrize("index", [0, 5, 22])
+def test_a_shard_reads_its_plan_past_the_libraries_banner(tmp_path, index):
+    """The path that actually died: 12 shards, every one exiting 6 on a 2-word chromosome list.
+
+    `IFS=, read -a` over `[bench] 1 declared eval pair(s), 2 scoreable experiment(s)` yields two
+    entries, so the array-length guard refused an array of 23 against a plan of 2.
+    """
+    env = _predict_env(tmp_path, DEVICE="cpu")
+    r, env = _shard(tmp_path, env, index)
+    assert r.returncode == 0, f"exited {r.returncode}:\n{r.stdout}\n{r.stderr}"
+    assert _flag(_calls(env)[0]["argv"], "--chroms") == ROOT_CHROMS[index]
+    assert f"shard {index}/{len(ROOT_CHROMS)} -> {ROOT_CHROMS[index]}" in r.stdout, r.stdout
 
 
 def test_device_reaches_the_dump_and_sets_the_thread_count_from_the_allocation(tmp_path):

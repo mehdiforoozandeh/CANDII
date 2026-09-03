@@ -14,6 +14,7 @@ somewhere else or nowhere, and the training scope would silently move.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,6 +24,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "src"))
 
+import tools.declare_eval_pairs as tool                                  # noqa: E402
 from tools.declare_eval_pairs import main as tool_main, pairs_on_panel   # noqa: E402
 
 from candi.store.regime import Regime                                    # noqa: E402
@@ -130,6 +132,73 @@ def test_the_comment_says_it_is_derived_and_by_what(tmp_path) -> None:
     c = json.loads(out.read_text())["_comment"]
     assert c.startswith("DERIVED by tools/declare_eval_pairs.py split")
     assert "--panel V_" in c and "regime.src.json" in c
+
+
+# ---------------------------------------------------------------------------------------------
+# the write itself — one path, many writers (K16)
+# ---------------------------------------------------------------------------------------------
+# `--out` is a SHARED path. `slurm/t81_predict_candi.sh` derives the panel regime into
+# `$WORKSPACE/regime.<name>.<panel>.json`, the same name for every task of a sharded array, because
+# each shard's manifest records `regime` and the shards of one root must not differ in it. So the
+# 12 tasks that start together all run this verb over the same destination, and a `write_text`
+# there is a truncate followed by a fill: on 2026-09-03 six of the twelve re-read a sibling's
+# half-written file and exited 1. The launcher's path is not the bug and does not move; the write
+# is. Every writer produces identical bytes, so making the swap indivisible is the whole fix.
+#
+# Both checks are deterministic. A race is not reproducible on demand, but the rename is: patch
+# `os.replace` and the ordering is fixed by the patch rather than by the scheduler.
+
+def test_the_derived_file_lands_by_rename_never_by_writing_the_shared_path(tmp_path,
+                                                                           monkeypatch) -> None:
+    """The destination is only ever touched by one `os.replace`, from a temp file beside it."""
+    seen = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        seen.append((Path(src), Path(dst), Path(dst).exists()))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(tool.os, "replace", spy)
+    out = tmp_path / "workspace" / "regime.eic_19.B_.json"
+    assert _split(_regime(tmp_path), "B_", out) == 0
+    assert len(seen) == 1, f"the split renamed {len(seen)} times, expected exactly 1"
+    src, dst, existed_before = seen[0]
+    assert dst == out
+    assert src != out, "the split wrote the shared path directly; a reader can see it truncated"
+    assert src.parent == out.parent, (
+        f"the temp file is in {src.parent}, not beside the destination -- a rename across a "
+        f"filesystem is a copy, and a copy is not atomic")
+    assert not existed_before, "nothing reached the destination before the rename"
+    assert not list(out.parent.glob(".*.tmp")), "the temp file was left behind"
+    Regime.from_file(out)
+
+
+def test_a_second_writer_to_the_same_out_never_exposes_a_partial_file(tmp_path,
+                                                                     monkeypatch) -> None:
+    """What a concurrent reader gets at the last instant before writer two lands: writer one, whole.
+
+    This is the shard case in one process: two `split` runs, same `--out`, and the destination is
+    a loadable regime at every point where the second one could be interrupted.
+    """
+    src_regime = _regime(tmp_path)
+    out = tmp_path / "regime.shared.json"
+    assert _split(src_regime, "B_", out) == 0
+    first_bytes = out.read_bytes()
+
+    observed = []
+    real_replace = os.replace
+
+    def spy(tmp_name, dst):
+        observed.append(json.loads(Path(dst).read_text(encoding="utf-8")))
+        real_replace(tmp_name, dst)
+
+    monkeypatch.setattr(tool.os, "replace", spy)
+    assert _split(src_regime, "B_", out) == 0
+    assert len(observed) == 1
+    assert [t for _, t in observed[0]["eval_pairs"]] == ["B_K562", "B_lonely"], (
+        "the shared path held something other than a complete derived regime mid-write")
+    assert out.read_bytes() == first_bytes, (
+        "two writers of the same panel disagreed on the bytes -- then which one wins matters")
 
 
 # ---------------------------------------------------------------------------------------------

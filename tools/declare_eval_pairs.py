@@ -52,7 +52,9 @@ import argparse
 import datetime as _dt
 import hashlib
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -313,7 +315,22 @@ def cmd_split(a: argparse.Namespace) -> int:
 
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
+    # ATOMIC, because `--out` is a SHARED path. `slurm/t81_predict_candi.sh` derives the panel
+    # regime into `$WORKSPACE/regime.<name>.<panel>.json`, one path for every task of a sharded
+    # array, on purpose: the manifest each shard writes records `regime`, and shard manifests of
+    # one root must not differ in it. A plain `write_text` truncates and then fills, so a reader
+    # arriving between the two syscalls gets half a file -- on 2026-09-03 six of twelve shards
+    # started together and died on their own read-back. Writing to a temp file in the SAME
+    # directory and renaming it into place makes the swap a single indivisible step on POSIX, and
+    # since every writer produces identical bytes, whichever whole file a reader sees is correct.
+    fd, tmp_name = tempfile.mkstemp(dir=str(out.parent), prefix=f".{out.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(obj, indent=2) + "\n")
+        os.replace(tmp_name, out)               # same directory, so the rename cannot cross a fs
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
     Regime.from_file(out)                           # it must still load, from wherever it landed
 
     print(f"[split] {a.panel}: {len(kept)} of {len(reg.eval_pairs)} declared pair(s) kept, "

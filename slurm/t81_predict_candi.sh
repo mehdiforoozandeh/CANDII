@@ -281,7 +281,7 @@ python tools/declare_eval_pairs.py split --regime "$REGIME" --panel "$PANEL" --o
 # count is computed with the same public API `bench.dump` uses to enumerate what it must write
 # (source.pairs / source.targets), so the walltime figure below cannot drift from the real work.
 PLAN="$(python - "$DERIVED" "$PANEL" "$CHROMS" <<'PYEOF'
-import json, sys
+import contextlib, json, sys
 from pathlib import Path
 
 from candi.bench.harness import open_source
@@ -289,80 +289,101 @@ from candi.store import layout as L
 from candi.store.reader import CorpusStore
 
 derived, panel, chroms_arg = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-d = json.loads(derived.read_text())
-# Both spellings, the same way slurm/t81_train_candi.sh reads them: a regime may write a pair as a
-# two-element list or as {"input", "target"}, and this refusal must not become a crash on the form.
-pairs = [(str(p["input"]), str(p["target"])) if isinstance(p, dict) else (str(p[0]), str(p[1]))
-         for p in d["eval_pairs"]]
-bad = sorted({t for _, t in pairs if not t.startswith(panel)})
-if bad:
-    sys.exit(f"[t81-pred] REFUSING: the derived regime {derived.name} targets {bad}, which are not "
-             f"{panel}. Predicting them would write the wrong panel into this root.")
 
-if chroms_arg:
-    chroms = [c.strip() for c in chroms_arg.split(",") if c.strip()]
-else:
-    # The genome layer is SHARED and lives one level ABOVE the corpus store: CANDI_STORE/genome,
-    # not CANDI_STORE/eic/genome. `layout.corpus_genome_dir` is the helper that knows that;
-    # `layout.chrom_sizes_path` takes CANDI_STORE itself and so pointed at a directory that has
-    # never existed. Every submission leaving CHROMS unset died right here with exit 1, at PLAN
-    # time — cheap to see once you read the log, and invisible until then (observed 2026-09-03).
-    sizes = L.load_chrom_sizes(L.corpus_genome_dir(d["store"]) / "chrom_sizes.json")
-    # THE SHARED LAYER CARRIES MORE THAN THE CORPUS DOES, so its list is not the default on its
-    # own: CANDI_STORE/genome declares 24 (chrY included) and the eic corpus holds 23 (chr1-22,
-    # chrX). A dump cannot write a track for a chromosome the store has no data for, and both
-    # readers this job drives have to hold it — the corpus tracks AND the shared DNA/mask layer —
-    # so the default is the INTERSECTION. `CorpusStore.n_bins()` is the record a corpus keeps of
-    # what it holds (manifest `genome.n_bins`, else the h5 attrs of its first biosample), and it
-    # is the rule the two rival §4.1 writers already derive their chromosome list from —
-    # `competitors/edice/run_eic.py --chroms all` and the `Panel` of `competitors/baselines`, both
-    # of them off the same n_bins map — so these roots come out over the same 23 those do.
-    #
-    # NOTE ON STYLE, because it costs an hour to rediscover: this heredoc sits inside a "$( )",
-    # and bash pairs up quote characters in the BODY even though the delimiter is quoted. An odd
-    # apostrophe anywhere below turns the next "(" into `syntax error near unexpected token`, at
-    # PARSE time, for the whole script. Prose here therefore carries no apostrophe at all, and
-    # the message below reads `store` out of a variable rather than subscripting with quotes.
-    store = d["store"]
-    have = CorpusStore(store).n_bins()
-    ranked = L.sort_chroms(sizes)
-    chroms = [c for c in ranked if c in have]
-    dropped = [c for c in ranked if c not in have]
-    if not chroms:
-        sys.exit(f"[t81-pred] REFUSING: the shared genome layer at "
-                 f"{L.corpus_genome_dir(store)} and the corpus at {store} have no chromosome in "
-                 f"common, so this dump would write nothing at all.")
-    if dropped:
-        print(f"[t81-pred]   the shared genome layer also declares {dropped}, which this corpus "
-              f"holds no data for — dropped from the default", file=sys.stderr)
+# THE PLAN LINES BELOW ARE THE ONLY THING THIS PROGRAM MAY PUT ON STDOUT. bash captures the
+# whole of it with PLAN="$( ... )", and the library writes to stdout too: harness.open_source
+# announces `[bench] N declared eval pair(s), M scoreable experiment(s)` with flush=True, and
+# that banner landed on line 1 of the plan. Every one of the 92 array tasks of 2026-09-03 read
+# the banner as its chromosome list -- the sharded path exited 6 counting 2 chromosomes in it,
+# the unsharded one handed the sentence to --chroms. So the body runs with stdout redirected
+# onto stderr, where the job .err already collects the rest of this commentary, and each plan
+# value is printed after it behind a PLAN: marker that the bash side greps for. Position is not
+# a contract: a future stray line must not be able to shift a field again.
+with contextlib.redirect_stdout(sys.stderr):
+    d = json.loads(derived.read_text())
+    # Both spellings, the same way slurm/t81_train_candi.sh reads them: a regime may write a pair as a
+    # two-element list or as {"input", "target"}, and this refusal must not become a crash on the form.
+    pairs = [(str(p["input"]), str(p["target"])) if isinstance(p, dict) else (str(p[0]), str(p[1]))
+             for p in d["eval_pairs"]]
+    bad = sorted({t for _, t in pairs if not t.startswith(panel)})
+    if bad:
+        sys.exit(f"[t81-pred] REFUSING: the derived regime {derived.name} targets {bad}, which are not "
+                 f"{panel}. Predicting them would write the wrong panel into this root.")
 
-src = open_source(store=str(derived), chroms=chroms)
-try:
-    tracks = sum(len(src.targets(p, "impute")) for p in src.pairs("impute"))
-finally:
-    src.close()
+    if chroms_arg:
+        chroms = [c.strip() for c in chroms_arg.split(",") if c.strip()]
+    else:
+        # The genome layer is SHARED and lives one level ABOVE the corpus store: CANDI_STORE/genome,
+        # not CANDI_STORE/eic/genome. `layout.corpus_genome_dir` is the helper that knows that;
+        # `layout.chrom_sizes_path` takes CANDI_STORE itself and so pointed at a directory that has
+        # never existed. Every submission leaving CHROMS unset died right here with exit 1, at PLAN
+        # time — cheap to see once you read the log, and invisible until then (observed 2026-09-03).
+        sizes = L.load_chrom_sizes(L.corpus_genome_dir(d["store"]) / "chrom_sizes.json")
+        # THE SHARED LAYER CARRIES MORE THAN THE CORPUS DOES, so its list is not the default on its
+        # own: CANDI_STORE/genome declares 24 (chrY included) and the eic corpus holds 23 (chr1-22,
+        # chrX). A dump cannot write a track for a chromosome the store has no data for, and both
+        # readers this job drives have to hold it — the corpus tracks AND the shared DNA/mask layer —
+        # so the default is the INTERSECTION. `CorpusStore.n_bins()` is the record a corpus keeps of
+        # what it holds (manifest `genome.n_bins`, else the h5 attrs of its first biosample), and it
+        # is the rule the two rival §4.1 writers already derive their chromosome list from —
+        # `competitors/edice/run_eic.py --chroms all` and the `Panel` of `competitors/baselines`, both
+        # of them off the same n_bins map — so these roots come out over the same 23 those do.
+        #
+        # NOTE ON STYLE, because it costs an hour to rediscover: this heredoc sits inside a "$( )",
+        # and bash pairs up quote characters in the BODY even though the delimiter is quoted. An odd
+        # apostrophe anywhere below turns the next "(" into `syntax error near unexpected token`, at
+        # PARSE time, for the whole script. Prose here therefore carries no apostrophe at all, and
+        # the message below reads `store` out of a variable rather than subscripting with quotes.
+        store = d["store"]
+        have = CorpusStore(store).n_bins()
+        ranked = L.sort_chroms(sizes)
+        chroms = [c for c in ranked if c in have]
+        dropped = [c for c in ranked if c not in have]
+        if not chroms:
+            sys.exit(f"[t81-pred] REFUSING: the shared genome layer at "
+                     f"{L.corpus_genome_dir(store)} and the corpus at {store} have no chromosome in "
+                     f"common, so this dump would write nothing at all.")
+        if dropped:
+            print(f"[t81-pred]   the shared genome layer also declares {dropped}, which this corpus "
+                  f"holds no data for — dropped from the default", file=sys.stderr)
 
-hours = 0.2363 * tracks * 1.3
-print(",".join(chroms))
-print(tracks)
-print(f"{int(hours):02d}:{int(hours % 1 * 60):02d}:00")
-print(f"[t81-pred] derived {derived.name}: {len(pairs)} {panel} pairs -> {tracks} declared tracks",
-      file=sys.stderr)
-print(f"[t81-pred]   chroms ({len(chroms)}): {','.join(chroms)}", file=sys.stderr)
-print(f"[t81-pred]   WALLTIME for this panel = 0.2363 GPU-h/track x {tracks} x 1.3 = {hours:.2f} h.",
-      file=sys.stderr)
-print(f"[t81-pred]   If this job was submitted with less, it will be killed mid-dump and the root",
-      file=sys.stderr)
-print(f"[t81-pred]   will be INCOMPLETE (bench.dump writes the manifest last, so an incomplete root",
-      file=sys.stderr)
-print(f"[t81-pred]   carries none — which is what the B_ guard above keys on). Resubmit with",
-      file=sys.stderr)
-print(f"[t81-pred]   --time above that figure.", file=sys.stderr)
+    src = open_source(store=str(derived), chroms=chroms)
+    try:
+        tracks = sum(len(src.targets(p, "impute")) for p in src.pairs("impute"))
+    finally:
+        src.close()
+
+    hours = 0.2363 * tracks * 1.3
+    print(f"[t81-pred] derived {derived.name}: {len(pairs)} {panel} pairs -> {tracks} declared tracks",
+          file=sys.stderr)
+    print(f"[t81-pred]   chroms ({len(chroms)}): {','.join(chroms)}", file=sys.stderr)
+    print(f"[t81-pred]   WALLTIME for this panel = 0.2363 GPU-h/track x {tracks} x 1.3 = {hours:.2f} h.",
+          file=sys.stderr)
+    print(f"[t81-pred]   If this job was submitted with less, it will be killed mid-dump and the root",
+          file=sys.stderr)
+    print(f"[t81-pred]   will be INCOMPLETE (bench.dump writes the manifest last, so an incomplete root",
+          file=sys.stderr)
+    print(f"[t81-pred]   carries none — which is what the B_ guard above keys on). Resubmit with",
+          file=sys.stderr)
+    print(f"[t81-pred]   --time above that figure.", file=sys.stderr)
+
+print(f"PLAN:chroms={','.join(chroms)}")
+print(f"PLAN:n_tracks={tracks}")
+print(f"PLAN:want_time={int(hours):02d}:{int(hours % 1 * 60):02d}:00")
 PYEOF
 )" || exit 1
-CHROMS="$(echo "$PLAN" | sed -n 1p)"
-N_TRACKS="$(echo "$PLAN" | sed -n 2p)"
-WANT_TIME="$(echo "$PLAN" | sed -n 3p)"
+# By MARKER, never by line number: `sed -n 1p` made the plan hostage to anything the library
+# chose to print. The heredoc emits exactly one line per value; an absent one is a bug, not a
+# default, so the run stops here rather than dumping the wrong chromosomes for 14 GPU-h.
+CHROMS="$(printf '%s\n' "$PLAN" | sed -n 's/^PLAN:chroms=//p')"
+N_TRACKS="$(printf '%s\n' "$PLAN" | sed -n 's/^PLAN:n_tracks=//p')"
+WANT_TIME="$(printf '%s\n' "$PLAN" | sed -n 's/^PLAN:want_time=//p')"
+if [ -z "$CHROMS" ] || [ -z "$N_TRACKS" ] || [ -z "$WANT_TIME" ]; then
+  echo "[error] the plan emitted no PLAN:chroms / PLAN:n_tracks / PLAN:want_time line." >&2
+  echo "        What it did put on stdout:" >&2
+  printf '%s\n' "$PLAN" >&2
+  exit 1
+fi
 echo "[t81-pred] tracks=$N_TRACKS recommended --time=$WANT_TIME"
 
 # --- shard index -> chromosome, by POSITION in the list the plan just derived ----------------------
