@@ -1226,9 +1226,11 @@ min/epoch in `cruxvault/results/t81/WAVE2_PREPARE.md` §4 is a projection off a 
 through an `FC_FACTOR` — the probe never runs full coverage — and that file still carries it.
 
 The 23:59 band was a bet that early stopping would fire in time for both full-coverage dials, and it
-paid with 5.7 h to spare. One arithmetic lesson: an earlier pass scaled the scoped 426.1 s check by
-1/0.0533 and predicted ≈7.3 h for the end-of-run check, which took **5.06 h** — a full-coverage pass
-is not a linear multiple of a sampled one, and the error was pessimistic, so nothing was at risk.
+paid with 5.7 h to spare. One arithmetic lesson: an earlier pass budgeted ≈3 h for the end-of-run
+check (two dials at ~90 min each); the run's own measurement (`TRAIN_CANDI_EIC19.md`) put the
+impute dial at 133 min and the denoise dial at ≈306 min, ≈7.3 h projected, and the check took
+**5.06 h** — a full-coverage pass is not a linear multiple of a sampled one, and both errors were
+pessimistic, so nothing was at risk.
 
 ### 12.3 Prediction runs — 36, once each
 
@@ -1278,7 +1280,7 @@ board reads `V_matched` only from a filled file.
 
 485 MB per **array** genome-wide (121,241,684 bins × 4 bytes); 25.9 MB per array on the 6,478,903
 held-out bins. **The table above counts one array per track and is therefore low for CANDI, which
-writes five, and for three of the naive baselines, which write four or five. See §12.6, rewritten
+writes five, and for four of the naive baselines, which write four or five (`avg-arcsinh` writes one). See §12.6, rewritten
 from measurement 2026-09-03.** `B_` is **touched once**, at the very end, and by the same ruling
 `B_` lands on `/project`, not scratch; `V_` stays on scratch and is deletable after scoring.
 
@@ -1472,7 +1474,7 @@ array counts below are **counted in the written roots**, not inferred from the h
 |---|---|---|
 | `ChromImpute`, `Lavawizard`, `eDICE`, `avg-arcsinh` | **1** — `signal_mu` | 485 MB |
 | `marginal`, `knn1` | **4** | 1.94 GB |
-| `avg`, `knn5` | **5** | 2.37 GB |
+| `avg`, `knn5` | **5** | 2.42 GB |
 | **CANDI, 3 heads** | **5** — `mu`, `n` (NB), `signal_mu`, `signal_sigma` (Gaussian), `peak_score` | **2.37 GB** |
 
 Avocado is deliberately absent from that table: its roots exist (45 tracks, 135 npz per `V_` root,
