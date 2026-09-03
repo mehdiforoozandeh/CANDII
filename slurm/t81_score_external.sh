@@ -13,7 +13,8 @@
 #   OUT=/project/def-maxwl/mforooz/t81_scores/CANDI/eic_19/store.V_.json \
 #   SCOPE=heldout sbatch slurm/t81_score_external.sh
 #
-#   # genome-wide: 23 chromosomes, with chr20-22 broken out as `genome_wide`'s counterpart
+#   # genome-wide: every chromosome THE ROOT CARRIES, with chr20-22 broken out as `genome_wide`'s
+#   # counterpart. 23 for every root written so far — the store has chrY and no root does.
 #   ... SCOPE=genomewide sbatch --time=60:00:00 slurm/t81_score_external.sh
 #
 #   # a point-only method, so a sigma table supplies the Gaussian arm
@@ -31,6 +32,10 @@
 # CONCATENATION of its chromosomes — the top-1 % thresholds of mse1obs/mse1imp are taken over all of
 # them at once — so a per-chromosome run is a DIFFERENT metric, not a cheaper estimate of this one.
 # It is also why a prediction root missing a chromosome cannot be scored genome-wide at all.
+#
+# EXIT CODES. 1 = a bad or missing argument, 3 = a sigma table that breaks Rule 1, 5 = exit 0 with
+# no json written, 6 = the genome-wide chromosome set could not be settled (the root and the store
+# share none, or the root is missing one of $HELD_OUT_CHROMS). 6 is refused before any read.
 #
 # NO --gres HERE, unlike slurm/t49_baselines_score.sh and slurm/bake.sh. Those request the smallest
 # MIG slice to route a CPU job through the def-maxwl_gpu account, whose fairshare is 5x the CPU
@@ -130,30 +135,77 @@ fi
 mkdir -p "$(dirname "$OUT")"
 
 # --- what gets scored, and where ------------------------------------------------------------------
-# held-out is chr20-22 and nothing else. genome-wide is EVERY chromosome the store carries, with
-# chr20-22 named again through --held-out-chroms so the result carries both aggregations: `macro`
-# and `panels` stay held-out, and `genome_wide.macro` / `genome_wide.panels` are the 23-chromosome
-# roll-up. One pass, two numbers — scoring twice would double a 50 CPU-h bill for the same reads.
+# held-out is chr20-22 and nothing else. genome-wide is every chromosome THE PREDICTION ROOT CARRIES
+# that the store also has, with chr20-22 named again through --held-out-chroms so the result carries
+# both aggregations: `macro` and `panels` stay held-out, and `genome_wide.macro` /
+# `genome_wide.panels` are the whole-root roll-up. One pass, two numbers — scoring twice would
+# double a 50 CPU-h bill for the same reads.
 ARGS=(--store "$REGIME" --pred "$PRED" --out "$OUT")
 if [ "$SCOPE" = "heldout" ]; then
-  ARGS+=(--chroms "$HELD_OUT_CHROMS")
+  SCORED_CHROMS="$HELD_OUT_CHROMS"
+  ARGS+=(--chroms "$SCORED_CHROMS")
 else
-  ALL_CHROMS="$(python - "$REGIME" <<'PYEOF'
+  # THE ROOT DECIDES WHICH CHROMOSOMES, NOT THE STORE. Until 2026-09-02 this printed the store's
+  # list alone, which is 24: the store carries chrY and no §4.1 prediction root does.
+  # `external.read_track_arrays` does not skip a chromosome a track lacks, it RAISES — and it
+  # raises at the first TRACK read, after the first pair's truth has already been streamed, so the
+  # job dies hours in rather than at argument time (job 57911698, and 57853765 before it, which
+  # survived only because a hand-written EXTRA="--chroms <23>" overrode the list). Intersecting the
+  # two lists here turns that into a fact known before any read.
+  SCORED_CHROMS="$(python - "$REGIME" "$PRED" "$HELD_OUT_CHROMS" <<'PYEOF'
 import json, sys
 from pathlib import Path
 from candi.store import layout as L
-d = json.loads(Path(sys.argv[1]).read_text())
+
+regime, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+d = json.loads(regime.read_text())
 # The genome layer is SHARED and lives one level above the corpus store (CANDI_STORE/genome, not
 # CANDI_STORE/eic/genome) — layout.corpus_genome_dir is the helper for that; chrom_sizes_path is not.
 sizes = L.load_chrom_sizes(L.corpus_genome_dir(d["store"]) / "chrom_sizes.json")
-print(",".join(L.sort_chroms(sizes)))
+store = L.sort_chroms(sizes)
+
+# What the ROOT carries. Every §4.1 writer records it under `chroms` — `candi.bench.dump`,
+# `competitors/baselines/generate.py`, `tools/challenge_bigwigs.py`, `competitors/edice/run_eic.py`
+# — so the manifest is read first. A root written by something that does not record it is read off
+# the npz filenames of its first track directory instead, which is the same set by construction.
+man = json.loads((pred / "manifest.json").read_text())
+have = [c for c in (man.get("chroms") or []) if isinstance(c, str)]
+src = "manifest.json"
+if not have:
+    dirs = sorted(p for p in pred.iterdir()
+                  if p.is_dir() and not p.name.startswith((".", "_")))
+    if not dirs:
+        sys.exit(f"[t81-score] REFUSING: {pred}/manifest.json records no `chroms` and the root "
+                 f"holds no track directory to read them off. Nothing on disk says which "
+                 f"chromosomes this root covers, and a genome-wide pass may not guess.")
+    have = sorted(p.stem for p in dirs[0].glob("*.npz"))
+    src = f"{dirs[0].name}/*.npz"
+
+scored = [c for c in store if c in set(have)]
+dropped = [c for c in store if c not in set(have)]
+extra = [c for c in have if c not in set(store)]
+if not scored:
+    sys.exit(f"[t81-score] REFUSING: the store's chromosomes {store} and this root's "
+             f"{sorted(have)} ({src}) have none in common, so a genome-wide pass would score "
+             f"nothing at all.")
+missing = [c for c in (x.strip() for x in held.split(",")) if c and c not in set(scored)]
+if missing:
+    sys.exit(f"[t81-score] REFUSING: this root does not carry {missing}, which --held-out-chroms "
+             f"names. `bench.external` requires the held-out scope to be a SUBSET of what is "
+             f"scored, so the RANKED `macro` block could not be computed — and the pass would "
+             f"raise at its first track read, hours in. Root chromosomes ({src}): {sorted(have)}.")
+print(",".join(scored))
+sys.stderr.write(
+    f"[t81-score] genome-wide over {len(scored)} chromosomes, taken from {src}"
+    + (f"; the store also has {dropped}, which this root does not" if dropped else "")
+    + (f"; the root also has {extra}, which the store does not" if extra else "") + "\n")
 PYEOF
-)" || { echo "[error] could not read the store's chromosome list from $REGIME" >&2; exit 1; }
+)" || exit 6
   # --held-out-chroms is candi.bench.external's genome-wide flag. On a checkout that predates it the
   # parser rejects the flag outright, which is the failure we want: a genome-wide pass that silently
   # dropped it would write a result labelled genome-wide whose `macro` block was genome-wide too,
   # and nothing in the json would say the held-out aggregation was missing.
-  ARGS+=(--chroms "$ALL_CHROMS" --held-out-chroms "$HELD_OUT_CHROMS")
+  ARGS+=(--chroms "$SCORED_CHROMS" --held-out-chroms "$HELD_OUT_CHROMS")
 fi
 if [ -n "$SIGMA" ]; then ARGS+=(--sigma-table "$SIGMA"); fi
 if [ -n "$TRUTH_ROOT" ]; then ARGS+=(--truth-root "$TRUTH_ROOT"); fi
@@ -165,6 +217,7 @@ echo "[t81-score] pred=$PRED"
 echo "[t81-score] out=$OUT"
 echo "[t81-score] truth=$([ -n "$TRUTH_ROOT" ] && echo "challenge ($TRUTH_ROOT)" || echo "store")"
 echo "[t81-score] sigma=${SIGMA:-none}"
+echo "[t81-score] chroms=$SCORED_CHROMS"
 # shellcheck disable=SC2086
 echo "[t81-score] python -m candi.bench.external ${ARGS[*]} $EXTRA"
 
