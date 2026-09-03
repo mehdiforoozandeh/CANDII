@@ -8,6 +8,21 @@
 #   # genome-wide, after the generation array — all 23, and BOTH aggregations in one json
 #   SCOPE=genomewide sbatch --array=0-4%5 --dependency=afterok:<gen_array_jobid> \
 #       --time=5-18:00:00 --mem=96G slurm/t49_baselines_score.sh
+#   # a point-only baseline, so a σ table supplies the Gaussian arm
+#   METHOD=avg-arcsinh SIGMA=/project/def-maxwl/mforooz/t81_sigma/avg-arcsinh/sigma_eic_19.json \
+#       REGIME=configs/regime.eic_pilot.json PANEL=B_ sbatch --array=0 …
+#   # the challenge truth (the 2019 blind bigwigs) instead of the store — writes challenge.B_.json
+#   TRUTH=challenge PANEL=B_ sbatch --array=0-4%5 …
+#
+# SIGMA AND TRUTH ARE HERE BECAUSE THE STAMP GATE IS HERE. This is the only launcher that addresses
+# a COLLAPSED root (`avg`, `avg-arcsinh`, generated once under $COLLAPSE_REGIME) against the other
+# board, and it does so behind the `regime_independent` check below. `slurm/t81_score_external.sh`
+# carries the same two flags but takes `OUT` verbatim and runs no gate at all, so reaching for it to
+# get a σ table or the challenge truth would put the number in a board with the gate skipped. The
+# four `eic.pilot` units that blocked on exactly that (SCORES_BASELINES_B.md §4) are what these two
+# pass-throughs unblock. Both obey the same rules the generic launcher obeys: a σ table whose
+# `fitted_on` does not start `training-residuals:` is refused (exit 3), and a challenge pass is
+# held-out only.
 #
 # THE TWO SCOPES OF §4, AND WHY THE GENOME-WIDE PASS NAMES THE HELD-OUT CHROMOSOMES
 # ---------------------------------------------------------------------------------
@@ -106,12 +121,39 @@ CRPS_SEED="${CRPS_SEED:-0}"
 SCOPE="${SCOPE:-heldout}"
 HELD_OUT="${HELD_OUT:-chr20,chr21,chr22}"
 ALL_CHROMS="chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22,chrX"
+# A point-only method has no `signal_sigma`, so its Gaussian arm comes from a σ table or not at all.
+# `avg-arcsinh` is the baseline that needs one. Empty = no table and no gauss_suite keys.
+SIGMA="${SIGMA:-}"
+# What the predictions are compared against. `store` is the CANDI store. `challenge` is the 2019
+# blind bigwigs, which `tools/challenge_bigwigs.py` converted for the HELD-OUT chromosomes alone —
+# so a challenge pass is held-out only and genome-wide is refused below rather than dying at the
+# first missing truth npz. TRUTH also names the score file: `<TRUTH>.<PANEL>.json`.
+TRUTH="${TRUTH:-store}"
+TRUTH_ROOT="${TRUTH_ROOT:-/project/def-maxwl/mforooz/t81_truth_challenge/B_}"
+case "$TRUTH" in
+    store) ;;
+    challenge)
+        if [ "$SCOPE" = "genomewide" ]; then
+            echo "[t49-score] REFUSING: TRUTH=challenge with SCOPE=genomewide. The challenge truth" >&2
+            echo "        root holds $HELD_OUT and nothing else, so a genome-wide pass would ask" >&2
+            echo "        read_truth_root_arrays for npz files that do not exist — hours in, not" >&2
+            echo "        at argument time. A challenge pass is held-out only." >&2
+            exit 2
+        fi ;;
+    *) echo "[t49-score] REFUSING: TRUTH=$TRUTH. It is store or challenge." >&2; exit 2 ;;
+esac
 case "$SCOPE" in
     heldout)    CHROMS="${CHROMS:-$HELD_OUT}"; HELD_ARG="" ;;
     genomewide) CHROMS="${CHROMS:-$ALL_CHROMS}"; HELD_ARG="--held-out-chroms $HELD_OUT" ;;
     *) echo "[t49-score] REFUSING: SCOPE=$SCOPE. §4 has two scopes: heldout, genomewide." >&2
        exit 2 ;;
 esac
+# Held-out only, said once rather than assumed from the refusal above. A challenge json carries no
+# `genome_wide` block, exactly like every sibling method's `challenge.B_.json`.
+if [ "$TRUTH" = "challenge" ] && [ "$CHROMS" != "$HELD_OUT" ]; then
+    echo "[t49-score] CHROMS=$CHROMS is ignored under TRUTH=challenge; scoring $HELD_OUT." >&2
+    CHROMS="$HELD_OUT"
+fi
 
 METHOD_LIST=(avg avg-arcsinh knn1 knn5 marginal)
 METHOD="${METHOD:-${METHOD_LIST[${SLURM_ARRAY_TASK_ID:-0}]}}"
@@ -139,7 +181,8 @@ case "$METHOD" in
     *) echo "[t49-score] REFUSING: $METHOD is not a baseline method." >&2; exit 2 ;;
 esac
 PRED="$PRED_BASE/$METHOD/$PRED_REGNAME/$PANEL"
-OUT="$SCORES_ROOT/$METHOD/$REGNAME/store.$PANEL.json"
+# The truth names the file, so a store pass and a challenge pass of the same unit never collide.
+OUT="$SCORES_ROOT/$METHOD/$REGNAME/$TRUTH.$PANEL.json"
 
 if [ ! -f "$PRED/manifest.json" ]; then
     echo "[t49-score] REFUSING: no manifest at $PRED — that unit has not been generated." >&2
@@ -162,6 +205,47 @@ print(f"[t49-score] collapse asserted against {m['regime_independent']['asserted
 PYEOF
 fi
 
+# --- the challenge truth root ---------------------------------------------------------------------
+# Checked here rather than discovered by `read_truth_root_arrays` after the first pair is streamed.
+CHALLENGE_ROOT=""
+if [ "$TRUTH" = "challenge" ]; then
+    if [ ! -f "$TRUTH_ROOT/manifest.json" ]; then
+        echo "[t49-score] REFUSING: TRUTH=challenge but no manifest.json under $TRUTH_ROOT." >&2
+        echo "        Build it with tools/challenge_bigwigs.py truth-root." >&2
+        exit 2
+    fi
+    CHALLENGE_ROOT="$TRUTH_ROOT"
+fi
+
+# --- the sigma-table rule (the same gate slurm/t81_score_external.sh runs) -------------------------
+# A sigma fitted on the EVAL pairs is fitted on the answer sheet: it is a free look at the held-out
+# truth, and a Gaussian arm calibrated that way flatters the method against every method that did
+# not do it. Only a table fitted on TRAINING residuals is admissible, and the table says so in its
+# own `fitted_on` string. Checked rather than trusted, because the legacy fit_sigma.py scripts still
+# write eval-pair tables and they sit next to the good ones on disk.
+if [ -n "$SIGMA" ]; then
+    if [ ! -f "$SIGMA" ]; then echo "[t49-score] REFUSING: no sigma table at $SIGMA" >&2; exit 2; fi
+    python - "$SIGMA" <<'PYEOF' || exit 3
+import json, sys
+from pathlib import Path
+
+PREFIX = "training-residuals:"
+p = Path(sys.argv[1])
+try:
+    d = json.loads(p.read_text())
+except Exception as e:
+    sys.exit(f"[t49-score] REFUSING: {p} is not readable json ({e}).")
+fitted = d.get("fitted_on")
+if not isinstance(fitted, str) or not fitted.startswith(PREFIX):
+    sys.exit(f"[t49-score] REFUSING sigma table {p}: fitted_on = {fitted!r}, which does not start "
+             f"with {PREFIX!r}. A sigma fitted on the EVAL pairs is fitted on the answer sheet — it "
+             f"is a free look at held-out truth and it flatters this method against every method "
+             f"that did not take one. Refit on training residuals "
+             f"(python -m competitors.sigma_pass) and rerun.")
+print(f"[t49-score] sigma OK: {p.name} fitted_on {fitted!r}")
+PYEOF
+fi
+
 # The panel regime: the DECLARED eval_pairs filtered to this panel's targets, so `_expected` covers
 # exactly the tracks the root holds. Both live regimes carry all 38 pairs (26 V_ + 12 B_). It goes
 # beside the roots, not in $SLURM_TMPDIR, for the same reason the generators put it there: the score
@@ -177,6 +261,7 @@ python tools/declare_eval_pairs.py split --regime "$REGIME" --panel "$PANEL" \
 echo "[t49-score] host=$(hostname) commit=$(git rev-parse --short HEAD) method=$METHOD"
 echo "[t49-score] board=$REGNAME panel=$PANEL pred=$PRED out=$OUT"
 echo "[t49-score] scope=$SCOPE chroms=$CHROMS held_out=${HELD_OUT:-none} arg=${HELD_ARG:-none}"
+echo "[t49-score] truth=$TRUTH${CHALLENGE_ROOT:+ ($CHALLENGE_ROOT)} sigma=${SIGMA:-none}"
 # Which CRPS estimator ran is a PI-ruled fact about the numbers, so it belongs in the log and not
 # only in whoever's memory of the submit line. The score json carries its own stamp; this is the
 # copy you can read after the job is gone.
@@ -190,6 +275,8 @@ mkdir -p "$(dirname "$OUT")"
 python -m candi.bench.external \
     --store "$PANEL_REGIME" --pred "$PRED" --out "$OUT" \
     --chroms "$CHROMS" $HELD_ARG ${VARPOOL:+--varpool "$VARPOOL"} \
+    ${SIGMA:+--sigma-table "$SIGMA"} \
+    ${CHALLENGE_ROOT:+--truth-root "$CHALLENGE_ROOT"} \
     ${CRPS_APPROX:+--crps-approx "$CRPS_APPROX" --crps-seed "$CRPS_SEED"}
 rc=$?
 echo "[t49-score] method=$METHOD exit=$rc"
