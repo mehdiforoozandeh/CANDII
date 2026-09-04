@@ -803,7 +803,10 @@ def test_committed_rows_have_no_covariate_diagnostics() -> None:
     compiled = lb.compile_leaderboard(REPO / "leaderboard")
     assert compiled["covariate_coverage"]["n_rows_with_diagnostics"] == 0
     assert "candi.bench" not in compiled["covariate_coverage"]["scorers"]
-    assert "candi" not in compiled["covariate_coverage"]["lineages"]
+    # `lineages` is the set of lineages present on the board, not of rows carrying diagnostics:
+    # since stamp-13 (2026-09-03) CANDI rows exist, scored by candi.bench.external with no
+    # diagnostics block, so `candi` in that set is expected. The tab stays empty because no row
+    # carries diagnostics -- which is what the loop below checks.
     for base in ("rows", lb.ANCHOR):
         for p in (REPO / "leaderboard" / base).rglob("*.json"):
             row = json.loads(p.read_text(encoding="utf-8"))
