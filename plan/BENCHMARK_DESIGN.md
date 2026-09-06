@@ -296,8 +296,8 @@ Costs nothing: same predictions, a second aggregation over a subset of the same 
 
 **Also note** the per-assay macro is where the imbalance bites hardest — 11 singleton assays are
 24 % of `V_` under per-track pooling but **50 %** of it under a per-assay macro. That is a
-precision problem, not a fairness problem, and the noise floor (§15) has to be measured on the
-`V_` breadth panel separately for that reason.
+precision problem, not a fairness problem, and the noise floor has to be measured on the
+`V_` breadth panel separately for that reason. **It now is, on all three panels — §12.9.**
 
 ### 5.3 The ranking rule (APPROVED)
 
@@ -329,6 +329,13 @@ two places.
 **Reading rule.** Ranks are computed within a panel. Never subtract `V_` (breadth) from `B_` —
 the matched number is the only legal subtraction, and it prints the panel caveat with it. **Rank
 stability** between `V_` and `B_` is informative and is worth surfacing.
+
+**Every panel now has a measured seed band, and they are not the same size — §12.9.** Held-out macro
+count CRPS moves between two seeds of one recipe by 0.0139 on `V_breadth` (`crps_oracle_scaled`
+0.0108, `scale_error` 0.0031), 0.0115 on `V_matched` (0.0094 / 0.0020) and **0.2033 on `B_`**
+(0.2091 / 0.0058) — against `AGENTS.md` §7.2's frozen target-clustered floor of ~0.09 on macro CRPS
+and its 0.1195 pooled-CRPS seed shift. A band belongs to its own panel and may never be borrowed
+onto another.
 
 ---
 
@@ -1522,19 +1529,37 @@ The ratio is measured, not read off the manifest — the manifest records no arr
 raw is `n_tracks × bins × itemsize` with the itemsize read out of an actual npz.
 (`cruxvault/results/t81/PRED_B_EDICE.md` §4)
 
-**(c) CANDI's five-array root: TO BE MEASURED OFF ITS FIRST `B_` ROOT. No number is written here.**
-`src/candi/bench/dump.py:193` calls `savez_compressed` — t83 landed, so the "`dump.py:102` calls
-`np.savez`" claim this section used to carry is stale and the code is what to trust. **Do not
-estimate this ratio; the writer prints it.** `dump.py` emits one line per root:
+**(c) CANDI's five-array root deflates at 1.177×. MEASURED 2026-09-03 on the finished `eic_19`
+`B_` root**, which replaces the "no number is written here" this section carried while that root
+was still queued. `src/candi/bench/dump.py:193` calls `savez_compressed` — t83 landed, so the
+"`dump.py:102` calls `np.savez`" claim this section used to carry is stale and the code is what to
+trust. Root: `/project/def-maxwl/mforooz/t81_pred_B/CANDI/eic_19/B_`.
 
-```bash
-hpc run fir 'grep "\[bench.dump\]" /project/def-maxwl/mforooz/CANDII_main/slurm-logs/t81_pred_<jobid>.out'
-# -> [bench.dump] <n> B written vs <n> B raw (<r>x, <n> GB on disk) over 51 track(s) x 23 chrom(s)
-```
+| | `B_` genome-wide, measured |
+|---|---|
+| npz files | 51 tracks × 23 chroms = **1,173**, counted; no `.tmp.npz` left, so the root is complete |
+| arrays per file | **5** — `mu`, `n`, `signal_mu`, `signal_sigma`, `peak_score`, all `float32` |
+| how the array count was got | four npz opened, across histone marks, ATAC-seq and DNase-seq — all five arrays present in every one |
+| compression | **deflate**, `zipfile.compress_type = 8` |
+| raw = 51 × 121,241,684 bins × 4 B × 5 arrays | 123,666,517,680 B = **115.17 GiB** |
+| on disk, summed file sizes | 105,111,670,879 B = **98 GB** (`du -sb` agrees to within 54 KB) |
+| **raw / on-disk** | **1.177×** |
 
-Copy that line here with its job id and date. Until then **CANDI's row has no ratio** — not 1.27×,
-not 2.69×, and not the "≈466 GB raw → ≈367 GB compressed" this section used to assert. Its `B_`
-predicts were still `PENDING (Priority)` on the GPU fairshare queue when this was written (§12.4).
+The `V_` root is the consistency check, not a second claim: `V_cpu`, 45 tracks × 23 chroms = 1,035
+npz, the same five arrays, **1.167×**.
+
+**The comparables, in one line: baselines 1.000×, CANDI 1.177×, eDICE 1.208×.** CANDI writes five
+arrays and still deflates a shade less than eDICE's one, which is what (b)'s reasoning predicts — a
+prediction root has no sparse layer, so every array is a smooth full-mantissa model output, and
+about 1.2× is what smooth floats buy.
+
+**Two notes for whoever owns the launchers.** `dump.py`'s manifest `"arms"` list holds
+`["count","pval"]` and never a peak entry, so it **undercounts the arrays by one**; the 5 above was
+read by opening files, not off the manifest. And the sharded predict job's `#SBATCH --output` has
+no `%a`, so all 22 array tasks shared one log file and only the last task's `[bench.dump]` line
+survived — which is why this section could not simply copy the writer's own line as it planned to,
+and why the manual formula above is the root's real measurement. Recorded in
+`cruxvault/results/t81/TRAIN_CANDI_EIC19.md` §"§12.6 compression ratio".
 
 **Why 2.69× was wrong, kept because it is easy to repeat.** It blended a sparse layer with a dense
 one — `counts` at 5.8×–19.7× pulling the average up, `pval` at 1.3×–2.1× holding it down — measured
@@ -1542,8 +1567,10 @@ on **truth** arrays, where the count layer really is sparse integers. **A predic
 layer.** All five of CANDI's prediction arrays are smooth full-mantissa model outputs, so the count
 arm's 15× never applies on the prediction side. On synthetic 2 M-element float32 arrays,
 `savez_compressed` bought **1.27×** on smooth floats against 15.39× on sparse count-like ones; the
-measured 1.208× on eDICE's real root is close to that 1.27×, which is the first evidence the
-synthetic number was the right order.
+measured 1.208× on eDICE's real root is close to that 1.27×, which was the first evidence the
+synthetic number was the right order. **CANDI's own 1.177×, measured in (c) on the five-array root
+the 2.69× was invented for, closes the question**: the smooth-float estimate was right and the
+blended one was wrong by more than a factor of two.
 
 **The `/project` footprint so far, summed from the recorded `du` figures.** The eight baseline `B_`
 roots are **744 G** (442 G under `eic_19`, 302 G under `eic_pilot`); the anchor subtree is **32.3 G**
@@ -1569,6 +1596,81 @@ missing chromosome could be completed **without re-predicting anything already w
 **Scratch purges at 60 days**, which is why the CANDI checkpoints were copied to
 `/project/def-maxwl/mforooz/t81_checkpoints/` and why t90 moved the 23 entrant bigwigs off scratch
 (§12.4).
+
+### 12.9 The seed noise floor, measured (2026-09-05)
+
+**What §15 deferred is done.** `t86` trained CANDI a second time on `eic_19` under the same recipe
+and scored both seeds through the same passes. This is the resolution band §5.2 and §5.3 say the
+board needs before any row is read as a rank.
+
+**What was run.** Seed 0 is the checkpoint every CANDI board row uses. Seed 1 trained 2026-09-03
+under the same config with `config.seed = 1`; it selected its best checkpoint at **epoch 5** and
+early-stopped at **epoch 11**, where seed 0 selected epoch 14 and stopped at 20. Both seeds
+predicted on **CPU**, over the sharded route §12.3 describes, and both were scored by the same
+scorer against the same store truth, the same regime json and the same held-out chromosomes. The
+two checkpoints differ and nothing else does: each score json records the sha256 of its own weights
+and it equals the file on disk, which rules out the one failure that would silently destroy the
+measurement — two jsons scored from one checkpoint. **Two seeds give one paired `|Δ|` per metric.
+It is a magnitude, not a distribution:** no standard deviation, no interval, no significance.
+
+**The three panels, held-out scope — the scope the board ranks.** Every CRPS travels with its
+`crps_oracle_scaled` and `scale_error` split, as `AGENTS.md` §7.2 rule 2 requires:
+
+| panel | count macro CRPS \|Δ\| | `crps_oracle_scaled` \|Δ\| | `scale_error` \|Δ\| | pval macro CRPS \|Δ\| |
+|---|---|---|---|---|
+| `V_breadth` — 45 experiments, 22 assays | **0.0139** | 0.0108 | 0.0031 | 0.0215 |
+| `V_matched` — 21 experiments, 7 assays | **0.0115** | 0.0094 | 0.0020 | 0.0200 |
+| **`B`** — 51 experiments, 8 assays | **0.2033** | **0.2091** | 0.0058 | 0.0069 |
+
+Genome-wide is quieter on all three — `V_breadth` 0.0103 (oracle-scaled 0.0063, `scale_error`
+0.0040), `V_matched` 0.0023 (0.0009 / 0.0014), `B` 0.1668 (0.1132 / 0.0536). **The ranked scope is
+held-out**, so the held-out column is the band; quoting the genome-wide figure as the board's floor
+would be flattering and wrong. `V_matched` is 7 assays and `B` is 8, because the `V_` side of
+`eic_19` holds no ATAC-seq track at all — they are not the same exam even where they look it.
+
+**One small number in that table is not good news, and must not be read as one.** `B`'s pval macro
+CRPS `|Δ|` is 0.0069 held-out and 0.0004 genome-wide, while that same arm's `gwspear` moves 0.1786
+and 0.0986 on the same rows. A metric that holds to four decimal places while the ranking under it
+swings by a sixth of its range is not measuring the ranking. Read 0.0069 as the floor of **that
+metric only**, never as evidence that the `pval` arm's `B_` predictions are seed-stable.
+
+**The reading, which is the point of this subsection.** `AGENTS.md` §7.2's frozen references are a
+target-clustered bootstrap noise floor on macro CRPS of **~0.09**, with per-comparison uncertainty
+±0.13, and a **0.1195** shift in pooled imputation CRPS from a seed change alone. The two `V_`
+panels sit six to nine times **under** both, at about 0.01–0.02, for reasons the source memo sets
+out: more experiments, every bin of three whole chromosomes, and a track-mean rather than an
+assay-mean all make a quieter mean. **`B` breaks that pattern and sits above them — 0.2033 is 1.7×
+the 0.1195 and 2.3× the ~0.09.** More tracks did not buy quiet there. The task did the opposite:
+`B_` cells are the combinations the model has never seen, and a seed change shows up in exactly
+that place.
+
+**So, plainly: on the `B_` panel, two rows whose held-out macro count CRPS differ by less than
+about 0.2 are the same row on this evidence.** A single-track `B_` claim needs more again — the
+per-track median `|Δ|` is **0.196** and the worst track moves 1.24. And on `B` the two seeds
+disagree about **ranking**, not scale: the oracle-scaled band (0.2091) is *larger* than the raw one
+(0.2033) while `scale_error` moves only 0.0058, and `beats_marginal` falls 0.686 → 0.451 — seed 0
+beats the marginal baseline on 35 of 51 tracks, seed 1 on 23. An oracle-scaled number is therefore
+no escape from it. **No between-method gap is computed or called here**; that reading is the PI's,
+panel by panel and metric by metric, with these bands beside the board.
+
+Four limits bind every figure above and none of them is softenable.
+
+1. **The band includes the selection rule.** The two seeds stopped at different epochs, so it is the
+   floor of "re-run this recipe end to end, selection included" — not of "the same training length
+   at two seeds".
+2. **Each band governs only its own panel.** §5.3 forbids subtracting `V_breadth` from `B` outright,
+   and the same bar forbids borrowing one panel's band onto another.
+3. **None of these is a clustered floor.** A target-clustered bootstrap resamples the *targets*, a
+   different and generally larger question than resampling the seed. The **~0.09 and the ±0.13 stand
+   unamended**, and a clustered floor on these three panels is still owed.
+4. **`V_matched` has no per-track band at all**, because the tool cannot derive the matched track set
+   from a `V_` json alone. No single-track `V_matched` claim can be made.
+
+`gaussian_nll` is unusable on every panel here: its seed `|Δ|` is the size of the metric itself (325
+on `V_breadth`, 924 genome-wide on `B`). No claim on this board may rest on it. One regime, one
+method — nothing here says a rival's seed sensitivity is the same, and with `B` this noisy that is
+now an open question rather than a formality. Full tables, both scopes, both arms, per track, and
+the verbatim tool output: `cruxvault/results/t86/SEED_FLOOR.md`.
 
 ---
 
@@ -1625,7 +1727,56 @@ Accepted as the price of the corrections above.
 
 ## 15. Status
 
-Every design question raised in this pingpong is settled. What remains is execution.
+**As of 2026-09-05.** Every design question raised in this pingpong is settled. The execution this
+section used to defer has, with two exceptions named below, happened. What follows is the state
+first, then the dated rulings that produced it, unedited.
+
+**What is executed.** All **18 method-regime units** (§12.2, decision D1) are trained, predicted and
+scored, and **every CANDI cell is scored** — both regimes, both truths, both panels, both scopes.
+The last CANDI score pass landed 2026-09-05 04:18 PDT. The 25-entrant anchor block is scored under
+both truths. The boards stand at about **168 rows as of stamp-22** — 146 rows before it (96 unit
+rows and 50 anchor rows), and stamp-22 adds the last CANDI cells. **Read the count off the row tree,
+never off this document:** `leaderboard/rows/` and `leaderboard/anchor/`, against the board
+definition in `leaderboard/boards.json`.
+
+**What is still running.** Two `marginal` store-truth `B_` score passes, and nothing else. On
+`eic_19`, job `57911697_4` had reached 59.6 h of its 60 h band on 2026-09-05 and was expected to
+time out; if it did, it must be rescued in the 138 h band. On `eic_pilot`, job `57918113_4` was at
+37.6 h. Neither is a CANDI cell, and neither blocks any reading of the CANDI rows.
+
+**What is measured that this section used to defer.**
+
+- **The seed noise floor, on all three panels — §12.9.** Between two seeds of one recipe, held-out
+  macro count CRPS moves **0.0139** on `V_breadth` (`crps_oracle_scaled` 0.0108, `scale_error`
+  0.0031), **0.0115** on `V_matched` (0.0094 / 0.0020), and **0.2033** on **`B`** (0.2091 / 0.0058).
+  `AGENTS.md` §7.2's frozen references are a target-clustered noise floor on macro CRPS of **~0.09**
+  and a **0.1195** pooled-CRPS seed shift. The two `V_` panels sit far under those. `B` sits 1.7–2.3×
+  **above** them.
+- **The storage ratios — §12.6.** CANDI's five-array roots deflate **1.177×** (`B_`) and **1.167×**
+  (`V_`), against baselines at 1.000× and eDICE at 1.208×. Every compression figure in §12.6 is now
+  a measurement.
+- **CANDI's placement inside the 2019 field.** One run of the challenge ranker over the `B_` panel
+  under challenge truth, with CANDI added to the 25 anchor entrants: **19 of 26 rows**, in a field of
+  **22 distinct submissions**, with **7 distinct submissions below CANDI**. This is a figure, never a
+  board row (§6), and it carries the ranker's own ~0.005 correlation-unit resolution limit.
+  **No seed floor exists on the capped-rank-fraction axis** — §12.9's bands are in CRPS units and do
+  not transfer to it — so that placement has no measured band of its own.
+  (`cruxvault/results/t81/CANDI_IN_2019_FIELD.md`)
+
+**What is NOT ranked, and why.** Nothing on either board is ranked, and none of the numbers above
+changes that. `CLAUDE.md`'s gate for an experiment lane is explicit: nothing merges on anyone's
+judgement that a number looks better. Having the floor on record makes a ranking **readable**; it
+does not make one. **Reading the board is the PI's act, and it is separate from landing the work.**
+Two consequences are worth stating in advance. On the `V_` panels the bands are small enough that
+ordinary differences are legible. On `B_` — the panel the generalization claim rests on — two rows
+whose held-out macro count CRPS differ by less than about **0.2** are not separated by this
+evidence, and that bar is coarser than either frozen reference. **No between-method gap is computed
+or called anywhere in this document.**
+
+**What the PI must do.** Merge the umbrella branch `implementation/t81-finish-benchmark` into
+`main`. The GitHub Pages deploy of the board follows that merge; it is the last step, not a parallel
+one. The `marginal` `B_` rescue above and the closing memo in `cruxvault/results/t81/` are the only
+work items that outlive it.
 
 ### Rulings of 2026-08-31 (PI)
 
@@ -1713,6 +1864,12 @@ Taken after all four rivals gained a `V_` selection loop and each independently 
   panels, because they do not have the same resolution. Nothing is ranked with a resolution band
   until it is done; rows may go up unranked before then. `AGENTS.md` §7.2 records that a seed
   change alone moves pooled CRPS by 0.1195, so this is not a formality.
+
+  > **DONE 2026-09-05 — no longer deferred. The measurement is §12.9,** and it went the way this
+  > entry feared on one panel of the three: `B`'s band is 0.2033 held-out macro count CRPS
+  > (`crps_oracle_scaled` 0.2091, `scale_error` 0.0058), which is 1.7× the 0.1195 this entry cites
+  > and 2.3× the frozen ~0.09. The `V_` panels came in an order of magnitude smaller. Rows are still
+  > unranked: a band makes a rank readable, it does not authorise one.
 - **Whole-genome training** — a placeholder regime only (§3).
 - **The `merged` corpus regimes** — placeholders. The zero-shot claim is tested there later, and
   only ChromImpute and the naive baselines can stand beside CANDI on it.
