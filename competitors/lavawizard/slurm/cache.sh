@@ -4,6 +4,11 @@
 #   sbatch competitors/lavawizard/slurm/cache.sh                       # the three eval chromosomes
 #   STAGE=shared sbatch --array=0 competitors/lavawizard/slurm/cache.sh   # the transferable scope
 #
+# A THIRD CALLER, 2026-09-01: `sigma.sh` caches its own training chromosomes inline rather than
+# through this array — it wants one stem and is already holding the workspace. It passes the SOURCE
+# regime here for the same reason this script does, because `train_columns` reads the training
+# split and a self-pair regime would trip its §6.2 guard.
+#
 # TWO KINDS OF CACHE, because there are two stages (see _env.sh):
 #
 #   * one per EVAL chromosome, whole, with no training restriction. The genome stage fits position

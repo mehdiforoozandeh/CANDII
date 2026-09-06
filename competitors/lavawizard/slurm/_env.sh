@@ -37,8 +37,13 @@
 # This is new code, so the board row is OUR TWO-STAGE VARIANT of Lavawizard and not the published
 # one. The 2019 submission stays on the board unmodified as one of the 23 anchor entrants, so both
 # readings are available — see README.md.
+#
+# RETARGETED AGAIN 2026-09-01 for the t81 programme. REPO moves off the dead t78 checkout, parked
+# on the t77 branch, and onto CANDII_main -- the one clone the programme's banner check reads.
+# Every OUTPUT path a job defaults to is now one of the programme's pinned roots and is written
+# here rather than in each script, so a root cannot drift between stages.
 set -uo pipefail
-REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}"
+REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_main}"
 VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 RUNS="${RUNS:-/project/def-maxwl/mforooz/rivals_src/lavawizard_runs}"
 REGIME="${REGIME:-$REPO/configs/regime.eic_19.json}"
@@ -48,6 +53,7 @@ module load StdEnv/2023 python/3.11 >/dev/null 2>&1 || true
 source "$VENV/bin/activate"
 cd "$REPO"
 export PYTHONPATH="$REPO/src:$REPO/competitors"
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 
 [ -s "$REGIME" ] || { echo "[env] no regime at $REGIME" >&2; exit 1; }
 REGIME_NAME="$(basename "$REGIME" .json)"; REGIME_NAME="${REGIME_NAME#regime.}"
@@ -77,5 +83,51 @@ NCHROM=${#CHROMS[@]}
 # because under eic.pilot the axis is a packing of eighteen of them. Written out here rather than
 # read from Python for the same reason as above: this file must not import candi.
 SHARED_STEM=shared
+METHOD=Lavawizard
 
 mkdir -p "$RUNS" slurm-logs
+
+# -------------------------------------------------------------------------------------------------
+# The panel axis, and the programme's pinned roots.
+#
+# PANEL is V_ or B_ and NOTHING ELSE. BENCHMARK_DESIGN.md §5 rules that B_ is read ONCE, from the
+# selected checkpoint, at the very end — so V_ is the default and B_ additionally needs B_ONCE=1
+# and a root that does not exist yet. predict.sh holds that guard; the default here only decides
+# which panel a stage means when nobody said.
+PANEL="${PANEL:-V_}"
+case "$PANEL" in
+  V_|B_) ;;
+  *) echo "[env] PANEL must be V_ or B_, got '$PANEL'" >&2; exit 2 ;;
+esac
+
+# Written once, read by predict.sh, score.sh and sigma.sh. Overridable one at a time, but the
+# default of every one is a programme root and nothing else writes there.
+PRED_V="/scratch/mforooz/t81_pred/$METHOD/$REGIME_NAME/V_"
+PRED_B="/project/def-maxwl/mforooz/t81_pred_B/$METHOD/$REGIME_NAME/B_"
+PRED_PANEL="$PRED_V"; [ "$PANEL" = "B_" ] && PRED_PANEL="$PRED_B"
+TRAIN_PRED="${TRAIN_PRED:-/scratch/mforooz/t81_sigma/$METHOD/$REGIME_NAME/train_pred}"
+SIGMA_JSON="/project/def-maxwl/mforooz/t81_sigma/$METHOD/sigma_$REGIME_NAME.json"
+SCORES_DIR="/project/def-maxwl/mforooz/t81_scores/$METHOD/$REGIME_NAME"
+CKPT_KEEP="${CKPT_KEEP:-/project/def-maxwl/mforooz/t81_checkpoints/$METHOD/$REGIME_NAME}"
+TRUTH_CHALLENGE="${TRUTH_CHALLENGE:-/project/def-maxwl/mforooz/t81_truth_challenge/B_}"
+
+# A σ table is accepted only when it says, in its own file, that it was fit on TRAINING residuals.
+# BENCHMARK_DESIGN.md §7: "sigma is fit on training-set residuals only — never on V_, never on B_".
+# The prefix is the whole contract with `competitors.sigma_pass`; scripts compare against this name
+# rather than retyping the string.
+SIGMA_FITTED_ON_PREFIX="training-residuals:"
+
+# Derive the PANEL-only regime this stage predicts or scores. The filter lives in ONE tool for every
+# method (tools/declare_eval_pairs.py split) so that a panel cannot mean one set of pairs for
+# Lavawizard and another for CANDI, and the derived file sits beside the run rather than in
+# configs/, where it could drift from the regime it came from.
+#
+# `store_eic.derive_v_only` still exists and still serves the SELECTOR, which runs inside training
+# and must not depend on a file some launcher wrote. This is the launcher-side path, and the two
+# agree on what V_ means because both filter on the target's prefix.
+PANEL_REGIME="$RUNS/regime.${REGIME_NAME}.${PANEL}.json"
+derive_panel_regime() {
+    python "$REPO/tools/declare_eval_pairs.py" split \
+        --regime "$REGIME" --panel "$PANEL" --out "$PANEL_REGIME" || return 1
+    echo "[env] panel regime: $PANEL_REGIME (PANEL=$PANEL)"
+}

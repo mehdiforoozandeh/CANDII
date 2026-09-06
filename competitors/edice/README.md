@@ -37,9 +37,9 @@ ce35c0c11c8c0dd31786d6ca3402a30e  sample_data/roadmap/predictd_splits.json
 
 Fir, `/project/def-maxwl/mforooz/candi_venv` (torch 2.6.0, h5py 3.12.0, numpy 1.26.4). No new
 dependency: the reimplementation needs torch, numpy and h5py, all of which the CANDI environment
-already carries. Nothing under `competitors/` is importable from `candi`; `run_eic.py` and
-`fit_sigma.py` read `candi.store` and `candi.bench.harness` in the other direction, which is how the
-emitted track set is guaranteed to be the set the scorer demands.
+already carries. Nothing under `competitors/` is importable from `candi`; `run_eic.py` and the
+shared σ pass (`competitors/sigma_pass.py`) read `candi.store` and `candi.bench.harness` in the
+other direction, which is how the emitted track set is guaranteed to be the set the scorer demands.
 
 ## The model
 
@@ -190,9 +190,13 @@ Two further properties, measured on the real store (`run_eic.py panel`, 2026-08-
   prompting `T_` cell (`harness.StoreSource.targets`: an assay the target cell has and the input
   cell does not), so it cannot be copied off the support panel.
 
-No `V_` or `B_` track enters training, the support panel, fine-tuning, or the σ table. The σ table
-is fitted on V-pair residuals and the B-pair run reuses it unchanged (§6.1), which makes B-pair CRPS
-leak-free and V-pair CRPS **in-sample for σ** — every table showing the latter must say so.
+No `V_` or `B_` track enters training, the support panel, fine-tuning, or the σ table. **Since D2 the
+σ table costs the eval panel nothing at all.** It used to be fitted on V-pair residuals and reused
+unchanged on B, which made B-pair CRPS leak-free but V-pair CRPS in-sample for σ; Rule 1 (§12.2)
+voids every table fitted that way. `python -m competitors.sigma_pass` fits instead on a seeded sample
+of TRAINING cells scored against themselves on the training chromosomes, and refuses (exit 3) any
+regime naming a `V_`/`B_` cell. Both panels' CRPS are now out-of-sample for σ, and a table is
+leak-free exactly when its `fitted_on` starts with `training-residuals:`.
 
 ## Transductive (§7.3) — the caveat that travels with every row
 
@@ -317,7 +321,9 @@ Both protocols are scored — A4 requires both, always. The §4.1 contract held 
 `regime.eic_val.json eval_pairs, chroms ['chr21']` — so P2 reused the P1 V-pair table **unchanged**
 rather than refitting on genome-wide residuals. That is §6.1 as a fact on disk rather than a
 promise: refitting per protocol would have made the CRPS column mean two different things in two
-rows of the same table, and nothing in the output would have said so.
+rows of the same table, and nothing in the output would have said so. **Both strings also mark the
+run as pre-D2**: they say `eval_pairs`, so Rule 1 voids their CRPS. A current table says
+`training-residuals:` instead, and nothing else counts.
 
 `pit_ks` and `coverage_95` are present in both, satisfying the PI's ruling below.
 
@@ -341,7 +347,7 @@ macro and per-track block the P1 run produced.
 | stage | job | result |
 |---|---|---|
 | train, `N_TARGETS=31` | `56847505` | COMPLETED rc=0, 09:15:19, ~660 s/epoch, loss 0.11852 → 0.09568 |
-| P1 score | `56903103` | FAILED — `TrackView.pval()` missing `start` in `fit_sigma.py` |
+| P1 score | `56903103` | FAILED — the retired eval-pair σ fitter called `TrackView.pval()` with no `start` |
 | P1 score (retry) | `56904726` | COMPLETED rc=0, 08:51 — resumed the finished predict |
 | P2 score | `56906350` | TIMEOUT at 12:00:23 — predict finished all 23 chroms, wall hit in the bench pass |
 | P2 score (follow-up) | `56914129` | COMPLETED rc=0, 09:00:33 — skipped the 6.1 h predict, scored genome-wide |

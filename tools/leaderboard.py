@@ -10,7 +10,7 @@
 
 `add` stamps one `candi.bench.external`-shaped score json into one row file under
 `leaderboard/rows/<regime>/<truth>.<panel>.<scope>/<method>@<version>.json`. It computes nothing:
-every number in a row is copied from the score file's macro block, gated on the way in — NaN
+every number in a row is copied from the block the row's address names, gated on the way in — NaN
 refused, provenance mandatory, the board's frozen eval-set hash enforced, and the companion rules
 of the registry (count `crps` never without `crps_oracle_scaled` + `scale_error`; pval `crps`
 never without `pit_ks` + `coverage_95`) applied as refusals rather than as conventions.
@@ -19,6 +19,12 @@ BENCHMARK_DESIGN §1 — a cell is addressed by method · regime · truth · pan
 "if any field is unknown for a row, the row does not go in the ranked table". Here that is
 structural rather than documented: the first five fields are the row's own path, `add` has no
 default for any of them, and a row whose address does not resolve has nowhere on disk to live.
+
+**The address is a lookup, never an aggregation.** `--scope` picks which aggregation of the one
+scoring pass to read (the top level, or the `genome_wide` block `--held-out-chroms` produces) and
+`--panel` picks one of the three numbers `harness.panel_macros` wrote inside it (§5.2). `--truth`
+must agree with `provenance.truth.source`, so a store pass can never be relabelled as a challenge
+one, and a challenge row carries the sha256 of the truth root's manifest.
 
 Three kinds of row file, three directories:
 
@@ -75,8 +81,7 @@ CANONICAL_VIEW = "store.V_breadth.held-out"
 #: provenance keys `add` copies into the row's flags-of-record block when the score json has them.
 FLAG_KEYS = ("crps_estimator", "crps_k", "crps_seed", "allow_missing", "msevar",
              "signal_target_transform", "pval_pred_space", "pred_inversion", "seed",
-             "placement_method", "aggregation", "n_experiments", "contributor_mode",
-             "clip")
+             "aggregation", "n_experiments", "contributor_mode", "clip")
 
 LINEAGES = ("candi", "rival", "baseline", "entrant")
 POSITION_CLASSES = {"transductive": "position-transductive", "generalizing": "position-generalizing",
@@ -84,9 +89,80 @@ POSITION_CLASSES = {"transductive": "position-transductive", "generalizing": "po
 CELL_CLASSES = {"zero-shot": "zero-shot cell types", "retrained": "retrained per setting",
                 "unrecorded": "cell-type class unrecorded"}
 
-#: the scorer name stamped on Dataset-3 placement rows (t54); `check` uses it to know how to
-#: re-extract such a row from its artifact.
-PLACEMENT_SCORER = "vendored-001-scorer (t54)"
+#: The board's panel vocabulary → the key `harness.panel_macros` writes for it. The two spellings
+#: of the test panel are deliberate and both are load-bearing: the score json says `B` (the panel
+#: letter `harness.panel_of` returns) and the board says `B_` (the biosample prefix a reader sees
+#: in `B_bb`), so the map is the one place the two meet.
+PANEL_JSON_KEY = {"V_breadth": "V_breadth", "V_matched": "V_matched", "B_": "B"}
+
+#: the `scopes` value whose numbers live in the score json's `genome_wide` block
+SCOPE_GENOME_WIDE = "genome-wide"
+
+#: §5.2's middle number, and the one panel a single scoring pass can fail to populate.
+#: `harness.panel_macros` MEASURES the matched assay set from the `B_` rows of the pass it is given
+#: (`matched_to`), so a pass that scored only `V_` targets writes a `V_matched` block with an empty
+#: `matched_to` and no experiments in it. That is not an 8-assay number of zero — it is no number,
+#: and `add` refuses it rather than printing an empty aggregation under a panel heading. The fix is
+#: `python -m candi.bench.external fill-panels --v <store.V_.json> --b <store.B_.json>`, which
+#: re-measures `panels` over the union of the two passes' `per_track` and records `panels_from`.
+PANEL_MATCHED = "V_matched"
+PANEL_BREADTH = "V_breadth"
+PANEL_TEST = "B_"
+FILL_PANELS_CMD = "python -m candi.bench.external fill-panels --v <store.V_.json> --b <store.B_.json>"
+
+#: Which single-panel regime a row's panel implies (t80). `V_breadth` and `V_matched` are two
+#: aggregations of ONE `V_` pass, so both read the `V_` regime; `B_` reads the `B_` one. Used by
+#: `accepted_regime_names` to keep the regime gate tied to the row's OWN declared panel.
+PANEL_REGIME_PREFIX = {PANEL_BREADTH: "V_", PANEL_MATCHED: "V_", PANEL_TEST: "B_"}
+
+#: §4's blanking rule, as method slugs. A method whose transferable parameters were fit at every
+#: position has no genome-wide cell: the number would be a memorisation score, and "a blanked cell
+#: is not computed". `add` refuses one rather than letting a badge carry it. The prose these three
+#: names come from is `boards.json` `scopes["genome-wide"]["blanking_rule"]`, which the refusal
+#: quotes, and `tests/test_leaderboard.py` holds the two in step.
+GENOME_WIDE_BLANKED = ("Avocado", "ChromImpute", "Lavawizard")
+
+#: §7's mandatory spread badge, in the THREE states §7's spread device really has. Which one a row
+#: is, is a fact about the score json, never a judgement:
+#:
+#:   `native`      the method emitted its own per-bin spread — CANDI's heteroscedastic heads, or any
+#:                 rival whose npz carries `signal_sigma` (`sigma_source` says `track`).
+#:   `fitted-flat` a flat per-assay Gaussian from a training-residual table was wrapped around a
+#:                 point prediction (`provenance.sigma_table`). Legal, and disclosed.
+#:   `none`        NO SPREAD AT ALL: a point-only pass scored without a σ table. `SIGMA` is optional
+#:                 in `slurm/t81_score_external.sh`, and only five methods have a table (the four
+#:                 rivals and `avg-arcsinh`), so `avg`, `marginal`, `knn1` and `knn5` land here. The
+#:                 row then carries no distributional cell for that arm — the scorer withholds
+#:                 every σ-derived key — and the site draws no spread badge. A two-state badge
+#:                 called this `native`, which claims a per-bin spread the pass never had.
+SIGMA_STATE_NATIVE = "native"
+SIGMA_STATE_FITTED = "fitted-flat"
+SIGMA_STATE_NONE = "none"
+SIGMA_BADGE_NATIVE = "native heteroscedastic"
+SIGMA_BADGE_FITTED = "fitted flat σ"
+SIGMA_BADGE_NONE = "point-only — no spread"
+SIGMA_BADGE = {SIGMA_STATE_NATIVE: SIGMA_BADGE_NATIVE,
+               SIGMA_STATE_FITTED: SIGMA_BADGE_FITTED,
+               SIGMA_STATE_NONE: SIGMA_BADGE_NONE}
+
+#: `candi.bench.external.build_record`'s own spellings, in `provenance.sigma_source` (per track).
+#: `n/a` is a track with no pval arm at all, which is an absent arm rather than an absent spread.
+SIGMA_SOURCE_OWN = "track"
+SIGMA_SOURCE_TABLE = "sigma_table"
+SIGMA_SOURCE_NONE = "none"
+SIGMA_SOURCE_NO_SIGNAL = "n/a"
+
+#: §7 — σ is fit on training-set residuals ONLY, never on `V_`, never on `B_`.
+#: `competitors/sigma_pass.py` writes this prefix into `fitted_on`; a table without it was fit on
+#: eval positions, which is a Rule 1 leak, and a row built on one is refused rather than badged.
+SIGMA_FITTED_ON_PREFIX = "training-residuals:"
+
+#: §4 — where the per-cell in-sample fraction would be read from. NOTHING WRITES IT TODAY: no key
+#: of `candi.bench`'s or `candi.bench.external`'s score json holds it (checked 2026-09-02 across
+#: `harness.run_bench` and `score_external`). `add` copies it the moment a producer starts writing
+#: `provenance.in_sample_fraction`, and records an explicit `null` until then — so the row says the
+#: fraction is unknown instead of implying it by an absent key.
+IN_SAMPLE_KEY = "in_sample_fraction"
 
 
 class GateError(SystemExit):
@@ -100,13 +176,9 @@ def _refuse_nan(token: str) -> float:
     raise GateError(f"score json carries a non-finite literal ({token}); NaN never enters a row")
 
 
-def load_json(path: Path, allow_nonfinite: bool = False) -> Any:
-    """allow_nonfinite is for t54 placement files only: their per_assay blocks carry NaN for
-    assay-specific metrics (prom_corr outside H3K4me3). Nothing non-finite can still enter a
-    row — extract_metrics refuses it per value, and dump_json refuses it on the way out."""
+def load_json(path: Path) -> Any:
     try:
-        return json.loads(path.read_text(encoding="utf-8"),
-                          parse_constant=None if allow_nonfinite else _refuse_nan)
+        return json.loads(path.read_text(encoding="utf-8"), parse_constant=_refuse_nan)
     except FileNotFoundError:
         raise GateError(f"{path} does not exist")
     except json.JSONDecodeError as e:
@@ -183,6 +255,20 @@ def view_key(truth: str, panel: str, scope: str) -> str:
     return f"{truth}.{panel}.{scope}"
 
 
+def container_truths(spec: Mapping[str, Any], bid: str) -> List[str]:
+    """Which truths a container offers.
+
+    A regime lists `truths`. The anchor block names one `truth` — the 2019 measurement the field
+    was ranked under — and may list `truths` instead when the same rescore is also read against
+    store truth. Read rather than assumed, so a store-truth anchor row is refused while the
+    committed anchor offers challenge truth alone, and lands the moment it offers both.
+    """
+    if bid != ANCHOR:
+        return list(spec["truths"])
+    listed = spec.get("truths")
+    return list(listed) if listed else [spec["truth"]]
+
+
 def view_keys(boards: Mapping[str, Any], bid: str) -> List[str]:
     """Every address a container offers — one view per (truth, panel, scope).
 
@@ -190,7 +276,7 @@ def view_keys(boards: Mapping[str, Any], bid: str) -> List[str]:
     all three, which is what makes §1's rule structural instead of documented.
     """
     spec = board_spec(boards, bid)
-    truths = [spec["truth"]] if bid == ANCHOR else list(spec["truths"])
+    truths = container_truths(spec, bid)
     panels = [spec["panel"]] if bid == ANCHOR else list(boards["panels"])
     scopes = [spec["scope"]] if bid == ANCHOR else list(boards["scopes"])
     return [view_key(t, p, s) for t in truths for p in panels for s in scopes]
@@ -282,16 +368,118 @@ def flatten_c_block(cblock: Mapping[str, Any]) -> Dict[str, float]:
     return out
 
 
+def address_macro(score: Mapping[str, Any], panel: str, scope: str) -> Dict[str, Any]:
+    """The `macro`-shaped block ONE ADDRESS names (§1, §4, §5.2). A lookup, never an aggregation.
+
+    The scope picks which aggregation of the single scoring pass to read — the top level, or the
+    `genome_wide` block a pass given `--held-out-chroms` also wrote — and the panel picks one of
+    the three numbers `harness.panel_macros` put inside it.
+
+    A score json with no `panels` block is refused rather than read as though its `macro` were one
+    panel: `macro` pools every scored track, so stamping it under `V_matched` or `B_` would print a
+    22-assay number beneath an 8-assay label, which is the single mislabelling this board exists to
+    prevent. Re-score it — `panels` costs no extra inference.
+    """
+    if panel not in PANEL_JSON_KEY:
+        raise GateError(f"panel `{panel}` names no block in a score json; the addressable panels "
+                        f"are {sorted(PANEL_JSON_KEY)}")
+    block: Any = score
+    if scope == SCOPE_GENOME_WIDE:
+        block = score.get("genome_wide")
+        if not isinstance(block, dict):
+            raise GateError(
+                "score json carries no `genome_wide` block, so it holds no genome-wide number to "
+                "stamp. One pass yields two aggregations only when the scorer was given "
+                "--held-out-chroms; without it §4's blanking rule means the genome-wide number was "
+                "NOT COMPUTED, and `add` never computes one")
+    panels = block.get("panels")
+    if not isinstance(panels, dict):
+        raise GateError(
+            f"score json's {scope} block has no `panels` — it predates §5.2's three numbers. Its "
+            "`macro` pools every scored track and is not any one panel, so there is nothing here "
+            f"to stamp under `{panel}`. Re-score with a scorer that writes `panels`")
+    key = PANEL_JSON_KEY[panel]
+    macro: Dict[str, Any] = {}
+    for arm in ("pval", "count"):
+        arm_panels = panels.get(arm)
+        if not isinstance(arm_panels, dict):
+            raise GateError(f"score json's panels block has no `{arm}` arm")
+        got = arm_panels.get(key)
+        if not isinstance(got, dict):
+            raise GateError(f"score json's panels[{arm}] has no `{key}` block; it carries "
+                            f"{sorted(arm_panels)}")
+        if panel == PANEL_MATCHED:
+            refuse_an_unfilled_matched_panel(arm_panels, arm, scope)
+        macro[arm] = got
+    return macro
+
+
+def refuse_an_unfilled_matched_panel(arm_panels: Mapping[str, Any], arm: str, scope: str) -> None:
+    """`V_matched` from a pass that scored no `B_` targets is no number at all. See `PANEL_MATCHED`.
+
+    The check is per arm and conditional on the same arm's `V_breadth`, because an arm the pass
+    could not score at all (the count arm under challenge truth: no counts in the 2019 data) has an
+    empty `V_breadth` too, and that is an absence the address already handles. What is refused is
+    the one case where `V_` rows WERE scored and the matched subset came out empty anyway — which
+    can only mean the `B_` rows the subset is measured from were in a different pass.
+    """
+    breadth = arm_panels.get(PANEL_BREADTH)
+    if not isinstance(breadth, dict) or not int(breadth.get("n_experiments") or 0):
+        # No `V_` rows in the pass at all. If it scored `B_` rows, this is the `B_` half of the
+        # programme being addressed as the middle number: both `V_` blocks come out empty, every
+        # metric goes missing, and `--allow-missing` would stamp a metric-less row under a panel
+        # heading. Refused by name instead. (An arm with no `B_` rows either — the count arm under
+        # challenge truth — is an absent ARM, which the address already handles.)
+        b_rows = arm_panels.get(PANEL_JSON_KEY[PANEL_TEST]) or {}
+        if int(b_rows.get("n_experiments") or 0):
+            raise GateError(
+                f"this json has no V_ rows ({scope} panels[{arm}][{PANEL_BREADTH}] scored "
+                f"{breadth.get('n_experiments') if isinstance(breadth, dict) else None} "
+                f"experiments) while it scored {b_rows.get('n_experiments')} on `B_`, so it is the "
+                f"`B_` pass. `{PANEL_MATCHED}` is the `V_` predictions aggregated over `B_`'s "
+                f"assays: it is filled into the V_ json by fill-panels, and there is no matched "
+                f"number in a B_ json to stamp. {FILL_PANELS_CMD}")
+        return
+    matched = arm_panels.get(PANEL_MATCHED) or {}
+    if int(matched.get("n_experiments") or 0) and list(matched.get("matched_to") or []):
+        return
+    raise GateError(
+        f"score json's {scope} panels[{arm}][{PANEL_MATCHED}] has no scored experiments "
+        f"(matched_to={list(matched.get('matched_to') or [])!r}, "
+        f"n_experiments={matched.get('n_experiments')!r}) while V_breadth scored "
+        f"{breadth.get('n_experiments')}. The matched assay set is MEASURED from the pass's own "
+        f"`B_` rows, and this pass had none, so there is no 8-assay number here to stamp — an "
+        f"empty aggregation under a panel heading is exactly the mislabelling §5.2 exists to stop. "
+        f"Fill it from the sibling `B_` pass first: {FILL_PANELS_CMD}")
+
+
 def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
-                    allow_missing: bool) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
-    """Copy registry metrics out of a bench-shaped score json. Returns (metrics, missing ids)."""
-    macro = score.get("macro")
-    if not isinstance(macro, dict):
+                    allow_missing: bool, *, panel: str, scope: str,
+                    truth_arms: Sequence[str] = ()
+                    ) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
+    """Copy registry metrics out of a bench-shaped score json, at one address.
+
+    Returns (metrics, missing ids). Diagnostics come from the top-level `C` block on both scopes:
+    `C` re-decodes perturbed prompts over the source's windows, so it is a property of the run and
+    not of either aggregation — neither `harness.run_bench` nor `score_external` writes a
+    genome-wide counterpart to divide it into.
+
+    `truth_arms` is `boards.json` `truths[<truth>]["arms"]` — the arms this truth can be scored on
+    at all. An arm it does not offer is ABSENT BY RULE, not a gap: the 2019 challenge data carries
+    no counts and no peak calls, so under `--truth challenge` the count arm and every peak-category
+    key are empty in every score json, on purpose, and `gate_row_address` refuses a row that
+    carries them. They are still recorded in `missing_metrics`, so the row says what it lacks —
+    they just do not demand `--allow-missing`, which is left meaning what it says: a pval key this
+    pass genuinely failed to produce.
+    """
+    if not isinstance(score.get("macro"), dict):
         raise GateError("score json has no `macro` block — not a candi.bench-shaped file")
+    macro = address_macro(score, panel, scope)
     cblock = score.get("C") if isinstance(score.get("C"), dict) else {}
     diagnostics = flatten_c_block(cblock)
     out: Dict[str, Dict[str, float]] = {}
     missing: List[str] = []
+    needs_flag: List[str] = []
     for m in registry["metrics"]:
         slot = metric_slot(m)
         if slot == "diagnostics":
@@ -304,13 +492,16 @@ def extract_metrics(score: Mapping[str, Any], registry: Mapping[str, Any],
             # their absence never needs --allow-missing.
             if slot != "diagnostics":
                 missing.append(metric_id(m))
+                arm = "peak" if m["category"] == "peaks" else m["arm"]
+                if not truth_arms or arm in truth_arms:
+                    needs_flag.append(metric_id(m))
             continue
         if not isinstance(val, (int, float)) or isinstance(val, bool) or not math.isfinite(val):
             raise GateError(f"metric {metric_id(m)} is not a finite number: {val!r}")
         out.setdefault(slot, {})[m["key"]] = float(val)
-    if missing and not allow_missing:
+    if needs_flag and not allow_missing:
         raise GateError("score json lacks registry metrics "
-                        f"{', '.join(missing)}; re-run with --allow-missing to record the gap")
+                        f"{', '.join(needs_flag)}; re-run with --allow-missing to record the gap")
     check_companions(out, registry)
     return out, sorted(missing)
 
@@ -331,29 +522,142 @@ def check_companions(metrics: Mapping[str, Mapping[str, float]],
                                 f"{', '.join(lacked)} — refused (registry companion rule)")
 
 
-def placement_score(placement: Mapping[str, Any], method: str, path: Path) -> Dict[str, Any]:
-    """Shape one method of a t54 Dataset-3 placement.json like a bench score, so the same
-    gates serve both. Numbers are copied from `macro_all`; nothing is computed."""
-    methods = placement.get("methods")
-    if not isinstance(methods, dict) or method not in methods:
-        raise GateError(f"{path} has no method `{method}` "
-                        f"({'not a placement file' if not isinstance(methods, dict) else 'check the spelling'})")
-    return {
-        "provenance": {
-            "suite": PLACEMENT_SCORER,
-            "regime": "Synapse syn17083203 blind-test tracks",
-            "sigma_table": None,
-            # Dataset-3 signal for the scored marks IS -log10 p (t54 caveat 2; DNase excluded)
-            "pval_pred_space": "-log10p",
-            "aggregation": placement.get("aggregation"),
-            "n_experiments": methods[method].get("n_experiments"),
-            "placement_method": method,
-        },
-        "macro": {"pval": methods[method]["macro_all"], "count": {}},
-    }
+# The t54 `--placement-method` path is RETIRED (§6): anchor rows are per-entrant score jsons now.
+
+
+def truth_manifest_hash(score: Mapping[str, Any], truth: str) -> Optional[str]:
+    """Check the score json's own truth against the row's address, and pin the challenge one.
+
+    `candi.bench.external` writes `provenance.truth` on BOTH paths, so an absent block can only be
+    an older file, which had no `--truth-root` to read and therefore read the store. Returns the
+    truth root's `manifest_sha256` for a challenge row and `None` for a store row: under challenge
+    truth the store manifest pins the grid but not what the numbers were compared against, and a
+    row that cannot say which build of the 2019 truth it read is not reproducible (§6).
+    """
+    prov = score.get("provenance") if isinstance(score.get("provenance"), dict) else {}
+    block = prov.get("truth") if isinstance(prov.get("truth"), dict) else None
+    source = "store" if block is None else block.get("source")
+    if truth == "challenge":
+        if source != "challenge":
+            raise GateError(
+                f"--truth challenge, but this score json was measured against `{source}` truth "
+                "(provenance.truth.source). A challenge row comes from a pass run with "
+                "--truth-root; relabelling a store pass would put two truths on one page (§6)")
+        sha = (block or {}).get("manifest_sha256")
+        if not sha:
+            raise GateError("challenge-truth score json names no provenance.truth.manifest_sha256 "
+                            "— without it the row cannot say WHICH build of the 2019 truth it was "
+                            "measured against")
+        return str(sha)
+    if source != "store":
+        raise GateError(
+            f"--truth store, but this score json was measured against `{source}` truth "
+            "(provenance.truth.source). Address it as that truth, or score it against the store")
+    return None
+
+
+def sigma_state(score: Mapping[str, Any]) -> Tuple[str, Optional[str]]:
+    """§7's spread device as `(state, fitted_on)`, and the Rule 1 refusal that comes with it.
+
+    Three states, read off two provenance keys and nothing else (see `SIGMA_BADGE`):
+
+    * `provenance.sigma_table` present → `fitted-flat`, and the table must have been fitted on
+      TRAINING residuals. A table fitted on `V_` or `B_` read the panel the row is scored on, so
+      the row is refused instead of badged.
+    * no table, and `provenance.sigma_source` says every scored track brought its own
+      `signal_sigma` → `native`.
+    * no table, and every scored track's spread source is `none` → `none`: a point-only pass. It
+      has no spread, so it has no distributional cell either.
+
+    A pass that mixes the devices across its own tracks gets no badge at all: one label would be
+    false for half the rows it stands over. A score json with no σ bookkeeping is a `candi.bench`
+    harness pass, whose heads are heteroscedastic by construction — `native`.
+    """
+    prov = score.get("provenance") if isinstance(score.get("provenance"), dict) else {}
+    sigma = prov.get("sigma_table")
+    if isinstance(sigma, dict):
+        fitted_on = str(sigma.get("fitted_on") or "")
+        if not fitted_on.startswith(SIGMA_FITTED_ON_PREFIX):
+            raise GateError(
+                f"σ table `fitted_on` is {fitted_on!r}, which does not start with "
+                f"{SIGMA_FITTED_ON_PREFIX!r}. §7 fits σ on training-set residuals only — never on "
+                "`V_`, never on `B_` — so this table read the panel the row is scored on and the "
+                "row is refused rather than badged")
+        return SIGMA_STATE_FITTED, fitted_on
+    sources = prov.get("sigma_source")
+    kinds = ({str(v) for v in sources.values()} - {SIGMA_SOURCE_NO_SIGNAL}
+             if isinstance(sources, dict) else set())
+    if not kinds:
+        # No `sigma_source` at all. `point_only_tracks` is the older half of the same pair, so it
+        # is read before falling back to the harness's native heads.
+        point_only = prov.get("point_only_tracks")
+        if isinstance(point_only, list) and point_only:
+            return SIGMA_STATE_NONE, None
+        return SIGMA_STATE_NATIVE, None
+    if SIGMA_SOURCE_TABLE in kinds:
+        raise GateError(
+            f"provenance.sigma_source says a σ table filled the spread on {sorted(kinds)} tracks, "
+            "but provenance.sigma_table is absent — the row cannot name the table its numbers "
+            "came from, so §7's badge cannot be stamped")
+    if kinds == {SIGMA_SOURCE_OWN}:
+        return SIGMA_STATE_NATIVE, None
+    if kinds == {SIGMA_SOURCE_NONE}:
+        return SIGMA_STATE_NONE, None
+    raise GateError(
+        f"provenance.sigma_source mixes spread devices across this pass's tracks ({sorted(kinds)}) "
+        "— §7's badge stands over every number in the row, and one badge cannot say two things. "
+        "Score the tracks that have their own `signal_sigma` separately from the point-only ones")
+
+
+def in_sample_fraction(score: Mapping[str, Any]) -> Optional[float]:
+    """§4's per-cell in-sample fraction, copied when a producer writes one. See `IN_SAMPLE_KEY`."""
+    prov = score.get("provenance") if isinstance(score.get("provenance"), dict) else {}
+    val = prov.get(IN_SAMPLE_KEY)
+    if val is None:
+        return None
+    got = _finite_scalar(val)
+    if got is None:
+        raise GateError(f"provenance.{IN_SAMPLE_KEY} is not a finite number: {val!r}")
+    return got
+
+
+def address_ranks(boards: Mapping[str, Any], bid: str, panel: str, scope: str) -> bool:
+    """Does the row's own address rank at all (§4, §5.2, §6)?
+
+    The address alone: `V_matched` and `genome-wide` are reported and never ranked, and the anchor
+    block shares no ranking denominator with a regime. The board's noise floor is a property of the
+    board rather than of the row, so §15's "nothing ranks until the floor lands" stays where it
+    can be lifted by one edit — `view_is_ranked`, at compile time.
+    """
+    if bid == ANCHOR:
+        return False
+    return bool(boards["panels"][panel].get("ranked")) and bool(boards["scopes"][scope].get("ranked"))
+
+
+def method_markers(boards: Mapping[str, Any], bid: str) -> Mapping[str, Any]:
+    """The markers a container's rows carry, by method.
+
+    Every marker in the registry says what a method did while we trained it — an embedding
+    substitution, no checkpoint to select, a selection key that is not CANDI's. None of that is
+    true of an anchor row: those are 2019 submissions we never trained, and a shared slug
+    (`Lavawizard` is both a retrained rival and a frozen entrant) must not carry our marker into
+    the anchor block. So the anchor block takes no method markers at all.
+    """
+    if bid == ANCHOR:
+        return {}
+    return boards.get("method_markers") or {}
+
+
+def refuse_a_blanked_cell(boards: Mapping[str, Any], method: str, scope: str) -> None:
+    """§4 — a blanked genome-wide cell is not computed, so it is not stamped either."""
+    if scope != SCOPE_GENOME_WIDE or method not in GENOME_WIDE_BLANKED:
+        return
+    rule = boards["scopes"][SCOPE_GENOME_WIDE].get("blanking_rule", "")
+    raise GateError(f"`{method}` has no genome-wide cell on this board. {rule}")
 
 
 def sha256_file(path: Path) -> str:
+    """What a board's `frozen` hashes digest: a regime json, or the truth root's manifest.json."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -408,6 +712,12 @@ def build_provenance(score: Mapping[str, Any], args: argparse.Namespace,
         "flags": flags,
         "artifacts_resolved_at_add": score_path.exists(),
     }
+    # §5.2 — a `panels` block re-measured from a sibling pass says so, and the row says so too:
+    # `V_matched` on such a row was measured from `B_` rows the SAME method scored in a different
+    # pass, which a reader checking the number back to one score json needs to be told. Copied
+    # verbatim (whatever `fill-panels` recorded), never summarised.
+    if prov.get("panels_from") is not None:
+        out["panels_from"] = prov["panels_from"]
     # method-level caveats recorded by the producer travel on the row (e.g. eDICE's
     # transductive + masking-rate caveats in its prediction manifest)
     manifest = prov.get("manifest") if isinstance(prov.get("manifest"), dict) else {}
@@ -415,6 +725,31 @@ def build_provenance(score: Mapping[str, Any], args: argparse.Namespace,
     if notes:
         out["method_notes"] = notes
     return out
+
+
+def gate_address(boards: Mapping[str, Any], bid: str, truth: str, panel: str, scope: str) -> str:
+    """§1's three reader-picked fields, against boards.json's own vocabulary. Returns the view key.
+
+    Checked BEFORE any number is read, so an unknown truth, panel or scope is refused as the typo
+    it is rather than as a missing block in the score json. Shared with `gate_row_address` so the
+    stamper and the reader cannot drift apart on what an address is.
+    """
+    for field, value, vocab in (("truth", truth, "truths"), ("panel", panel, "panels"),
+                                ("scope", scope, "scopes")):
+        if value not in boards[vocab]:
+            raise GateError(f"unknown {field} `{value}`; boards.json has "
+                            f"{sorted(boards[vocab])}")
+    offered = container_truths(board_spec(boards, bid), bid)
+    if truth not in offered:
+        raise GateError(f"truth `{truth}` is not offered by `{bid}` (it offers {sorted(offered)})")
+    if bid == ANCHOR:
+        # The anchor block sits at ONE address (§6): the 2019 field's own panel and scope. A row
+        # anywhere else would rank beside our rows by living in the same directory tree.
+        for field, value in (("panel", panel), ("scope", scope)):
+            if value != boards["anchor"][field]:
+                raise GateError(f"an anchor row is addressed {field} `{value}`, but the anchor "
+                                f"block is `{boards['anchor'][field]}` only (§6)")
+    return view_key(truth, panel, scope)
 
 
 def gate_row_address(row: Mapping[str, Any], boards: Mapping[str, Any], bid: str,
@@ -441,12 +776,7 @@ def gate_row_address(row: Mapping[str, Any], boards: Mapping[str, Any], bid: str
         if addr["regime"] != want:
             raise GateError(f"row {row['method']}@{row['version']} says regime "
                             f"`{addr['regime']}` but lives under `{bid}` (`{want}`)")
-    for field, vocab in (("truth", "truths"), ("panel", "panels"), ("scope", "scopes")):
-        if addr[field] not in boards[vocab]:
-            raise GateError(f"row {row['method']}@{row['version']} names unknown {field} "
-                            f"`{addr[field]}`; boards.json has {sorted(boards[vocab])}")
-    if bid != ANCHOR and addr["truth"] not in boards["boards"][bid]["truths"]:
-        raise GateError(f"truth `{addr['truth']}` does not exist on regime `{bid}`")
+    gate_address(boards, bid, addr["truth"], addr["panel"], addr["scope"])
     # §7 — the 2019 data has no counts and no peak calls, so those arms cannot be scored
     # against it. A row that carries them under challenge truth has two truths in it.
     if addr["truth"] == "challenge":
@@ -468,22 +798,57 @@ def gate_row_address(row: Mapping[str, Any], boards: Mapping[str, Any], bid: str
     return view_key(addr["truth"], addr["panel"], addr["scope"])
 
 
+def accepted_regime_names(board_regime: str, panel: str) -> Tuple[str, ...]:
+    """The regime file names a row at `panel` may have been scored under (t80's derived regimes).
+
+    A real pass never reads the board's shipped regime. `tools/declare_eval_pairs.py split` cuts it
+    down to ONE panel first — `regime.eic_19.V_.json` out of `configs/regime.eic_19.json` — because
+    one file carrying both panels would put the held-out panel inside the selection loop and
+    nothing downstream could get it back out. `harness.StoreSource.provenance` then records that
+    derived path, so comparing the board's basename alone would refuse every real row.
+
+    So the gate accepts the shipped name, or the derived sibling of THE ROW'S OWN PANEL. Not any
+    suffix: a `B_` row that names the `V_` regime was scored on the selection panel and is still
+    refused, and so is `regime.eic_19.sigma.json`, which is a σ-fitting regime and no panel at all.
+    """
+    shipped = Path(board_regime).name
+    prefix = PANEL_REGIME_PREFIX.get(panel)
+    if prefix is None or not shipped.endswith(".json"):
+        return (shipped,)
+    return (shipped, f"{shipped[:-len('.json')]}.{prefix}.json")
+
+
 def gate_row_against_board(row: Mapping[str, Any], board: Mapping[str, Any], bid: str) -> None:
     frozen = board["frozen"]
-    if str(frozen["store_manifest_hash"]).startswith(TODO_HASH):
-        raise GateError(f"board `{bid}` eval-set hashes are not frozen yet; "
-                        "stamp boards.json `frozen` before adding rows")
+    for field in ("store_manifest_hash", "regime_sha256"):
+        if str(frozen[field]).startswith(TODO_HASH):
+            raise GateError(f"board `{bid}` eval-set hashes are not frozen yet; "
+                            "stamp boards.json `frozen` before adding rows")
     prov = row["provenance"]
     if prov["store_manifest_hash"] != frozen["store_manifest_hash"]:
         raise GateError(f"row store manifest hash {prov['store_manifest_hash']} does not match "
                         f"board `{bid}` frozen hash {frozen['store_manifest_hash']} — "
                         "nobody quietly scores on easier data")
+    if bid == ANCHOR and row["address"]["truth"] == "challenge":
+        # The anchor block has no regime — we never trained these rows — so its second frozen hash
+        # pins the TRUTH the rescore read instead: the sha256 of the truth root's manifest.json,
+        # which every challenge score json carries as `provenance.truth.manifest_sha256`. A row
+        # rescored against a different build of the 2019 truth is a different measurement.
+        got = prov.get("truth_manifest_hash")
+        if got != frozen["regime_sha256"]:
+            raise GateError(
+                f"anchor row truth manifest hash {got} does not match the anchor block's frozen "
+                f"hash {frozen['regime_sha256']} — the anchor freezes the sha256 of the challenge "
+                "truth root's manifest.json, because it has no regime to freeze")
     board_regime = board["eval_set"].get("regime", "")
     if board_regime.endswith(".json"):
         row_regime = prov.get("regime") or ""
-        if Path(row_regime).name != Path(board_regime).name:
-            raise GateError(f"row regime `{row_regime}` is not board `{bid}`'s "
-                            f"regime `{board_regime}`")
+        allowed = accepted_regime_names(board_regime, row["address"]["panel"])
+        if Path(row_regime).name not in allowed:
+            raise GateError(f"row regime `{row_regime}` is not board `{bid}`'s regime "
+                            f"`{board_regime}`: a row at panel `{row['address']['panel']}` reads "
+                            f"either that file or its derived single-panel sibling, so this gate "
+                            f"accepts {list(allowed)} and nothing else")
     if row["metrics"].get("pval") and prov["flags"].get("pval_pred_space") != "-log10p":
         raise GateError("pval metrics extracted but provenance lacks pval_pred_space=-log10p — "
                         "the row predates the spaces contract and is not quotable (EVAL.md)")
@@ -522,17 +887,27 @@ def cmd_add(args: argparse.Namespace) -> int:
     boards = load_boards(root)
     board = board_spec(boards, args.board)
     score_path = Path(args.score)
-    if args.placement_method:
-        # Dataset-3 rows: the artifact itself is pinned by the board's frozen regime hash
-        digest = sha256_file(score_path)
-        if digest != board["frozen"]["regime_sha256"]:
-            raise GateError(f"{score_path} digests to {digest[:12]}…, not the placement "
-                            f"artifact board `{args.board}` froze — refused")
-        score = placement_score(load_json(score_path, allow_nonfinite=True),
-                                args.placement_method, score_path)
-    else:
-        score = load_json(score_path)
-    metrics, missing = extract_metrics(score, registry, args.allow_missing)
+    # §1 first: the address is resolved against boards.json before a single number is read, so a
+    # field that does not exist is refused as a typo and not as a hole in the score json.
+    gate_address(boards, args.board, args.truth, args.panel, args.scope)
+    refuse_a_blanked_cell(boards, args.method, args.scope)
+    score = load_json(score_path)
+    truth_hash = truth_manifest_hash(score, args.truth)
+    metrics, missing = extract_metrics(score, registry, args.allow_missing,
+                                       panel=args.panel, scope=args.scope,
+                                       truth_arms=boards["truths"][args.truth].get("arms") or ())
+    # §5.2 — how big the exam this address names actually was, per arm, straight off the block the
+    # address read (`harness.panel_macros` writes `n_experiments` and `assays` into every panel).
+    # `V_breadth` and `V_matched` come out of ONE pass, so the pass-level count in
+    # `provenance.flags.n_experiments` cannot say what the matched number aggregated; this can.
+    panel_counts = {
+        arm: {"n_experiments": int(block.get("n_experiments") or 0),
+              "n_assays": len(block.get("assays") or [])}
+        for arm, block in address_macro(score, args.panel, args.scope).items()}
+    provenance = build_provenance(score, args, score_path)
+    sigma_st, sigma_fitted_on = sigma_state(score)
+    if truth_hash is not None:
+        provenance["truth_manifest_hash"] = truth_hash
     row: Dict[str, Any] = {
         "schema_version": 2,
         "board": args.board,
@@ -544,7 +919,7 @@ def cmd_add(args: argparse.Namespace) -> int:
             "panel": args.panel,
             "scope": args.scope,
         },
-        "markers": sorted((boards.get("method_markers") or {}).get(args.method, [])),
+        "markers": sorted(method_markers(boards, args.board).get(args.method, [])),
         "method": args.method,
         "version": args.version,
         "date": args.date,
@@ -552,10 +927,21 @@ def cmd_add(args: argparse.Namespace) -> int:
         "badges": {
             "position": POSITION_CLASSES[args.position_class],
             "cell_types": CELL_CLASSES[args.cell_class],
+            # §7 — every distributional cell says which spread device produced it, in the three
+            # states there are. `sigma` is the label a reader sees; `sigma_state` is what the site
+            # switches on, so "no spread at all" cannot be read as "its own spread".
+            "sigma": SIGMA_BADGE[sigma_st],
+            "sigma_state": sigma_st,
+            "sigma_fitted_on": sigma_fitted_on,
         },
+        # §4, §5.2, §6 — whether this address ranks at all. The board's noise floor is applied on
+        # top of it at compile time; this is the address's own answer.
+        "ranked": address_ranks(boards, args.board, args.panel, args.scope),
+        "panel_counts": panel_counts,
+        "in_sample_fraction": in_sample_fraction(score),
         "metrics": metrics,
         "missing_metrics": missing,
-        "provenance": build_provenance(score, args, score_path),
+        "provenance": provenance,
     }
     gate_row_shape(row, registry)
     view = gate_row_address(row, boards, args.board, registry)
@@ -681,6 +1067,13 @@ def compile_view(rows: Sequence[Mapping[str, Any]], registry: Mapping[str, Any],
             "provenance": r["provenance"],
             "address": r.get("address"),
             "markers": r.get("markers", []),
+            # §4, §5.2 — the row's own rankability, and the fraction §4 wants printed beside a
+            # genome-wide number (`null` until a producer writes one — see `IN_SAMPLE_KEY`).
+            "ranked": bool(r.get("ranked")),
+            # §5.2 — the size of the exam this row's own address named, per arm. Absent on a row
+            # stamped before it was recorded, which is why the site treats it as optional.
+            "panel_counts": r.get("panel_counts") or {},
+            "in_sample_fraction": r.get("in_sample_fraction"),
             "has_peak_head": bool((r.get("provenance") or {}).get("has_peak_head")),
             "verified": bool(r["provenance"].get("artifacts_resolved_at_add")),
             "metric_ranks": {mid: list(rk[rid]) for mid, rk in metric_ranks.items()
@@ -833,7 +1226,6 @@ def compile_void(root: Path, boards: Mapping[str, Any],
 def compile_leaderboard(root: Path) -> Dict[str, Any]:
     registry = load_registry(root)
     boards = load_boards(root)
-    markers = boards.get("method_markers") or {}
     out_boards: Dict[str, Any] = {}
     for bid in sorted(list(boards["boards"]) + [ANCHOR]):
         board = board_spec(boards, bid)
@@ -857,7 +1249,8 @@ def compile_leaderboard(root: Path) -> Dict[str, Any]:
             "canonical_view": canonical,
             "views": views,
             "climb": climb,
-            "pending": compile_pending(board, bid, sorted(stamped_methods), markers),
+            "pending": compile_pending(board, bid, sorted(stamped_methods),
+                                       method_markers(boards, bid)),
         }
     n_diag, scorers, lineages = 0, set(), set()
     for board in out_boards.values():
@@ -938,10 +1331,11 @@ def cmd_check(args: argparse.Namespace) -> int:
             if not score_path.is_absolute():
                 score_path = REPO / score_path
             if score_path.exists():
-                pm = row["provenance"]["flags"].get("placement_method")
-                source = placement_score(load_json(score_path, allow_nonfinite=True),
-                                         pm, score_path) if pm else load_json(score_path)
-                fresh, _ = extract_metrics(source, registry, allow_missing=True)
+                # re-extracted at the ROW'S OWN ADDRESS: a row that silently started reading a
+                # different panel or scope of the same file would still match otherwise.
+                fresh, _ = extract_metrics(load_json(score_path), registry, allow_missing=True,
+                                           panel=row["address"]["panel"],
+                                           scope=row["address"]["scope"])
                 stamped = {slot: block for slot, block in row["metrics"].items() if block}
                 if fresh != stamped:
                     raise GateError(f"{path} no longer matches its score json {score_path}")
@@ -988,9 +1382,13 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--board", required=True,
                    help=f"a regime id, or `{ANCHOR}` for a 2019-field row")
     # §1's address. No default on any of the three: an unknown field is a refused row.
-    a.add_argument("--truth", required=True, help="store | challenge")
-    a.add_argument("--panel", required=True, help="V_breadth | V_matched | B_")
-    a.add_argument("--scope", required=True, help="held-out | genome-wide")
+    a.add_argument("--truth", required=True,
+                   help="store | challenge — must agree with the score json's "
+                        "provenance.truth.source")
+    a.add_argument("--panel", required=True,
+                   help="V_breadth | V_matched | B_ — read from the score json's `panels` block")
+    a.add_argument("--scope", required=True,
+                   help="held-out | genome-wide — genome-wide reads the `genome_wide` block")
     a.add_argument("--method", required=True)
     a.add_argument("--version", required=True)
     a.add_argument("--date", required=True, help="YYYY-MM-DD the scores landed")
@@ -1002,10 +1400,6 @@ def build_parser() -> argparse.ArgumentParser:
                    help="hash of the store manifest the run scored against")
     a.add_argument("--fir-path", default=None,
                    help="run directory on Fir; default reads FIR_PATH.txt beside the score json")
-    a.add_argument("--placement-method", default=None,
-                   help="the score file is a t54 Dataset-3 placement.json; stamp this "
-                        "method's macro_all (the file must digest to the board's frozen "
-                        "regime hash)")
     a.add_argument("--allow-missing", action="store_true",
                    help="record absent registry metrics instead of refusing")
     a.add_argument("--force", action="store_true", help="restamp an existing row")

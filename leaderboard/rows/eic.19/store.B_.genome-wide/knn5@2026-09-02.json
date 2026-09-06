@@ -1,0 +1,82 @@
+{
+ "address": {
+  "panel": "B_",
+  "regime": "eic.19→20,21,22",
+  "scope": "genome-wide",
+  "truth": "store"
+ },
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-transductive",
+  "sigma": "native heteroscedastic",
+  "sigma_fitted_on": null,
+  "sigma_state": "native"
+ },
+ "board": "eic.19",
+ "date": "2026-09-04",
+ "in_sample_fraction": null,
+ "lineage": "baseline",
+ "markers": [
+  "no-selection"
+ ],
+ "method": "knn5",
+ "metrics": {
+  "count": {
+   "crps": 2.704604676413961,
+   "crps_oracle_scaled": 2.6490717557940853,
+   "nb_nll": 3.05815859941711,
+   "scale_error": 0.055532920619876254
+  },
+  "pval": {
+   "auprc": 0.2620379243203371,
+   "coverage_95": 0.8756787582570829,
+   "crps": 1.5716106841612876,
+   "gaussian_nll": 17108.85510129047,
+   "gwcorr": 0.38967055001787826,
+   "gwspear": 0.3094828813376515,
+   "mse": 3028.736715274699,
+   "mse1obs": 301034.6993413439,
+   "peak_base_rate": 0.02085484420830503,
+   "pit_ks": 0.3862553285824116
+  }
+ },
+ "missing_metrics": [],
+ "panel_counts": {
+  "count": {
+   "n_assays": 8,
+   "n_experiments": 51
+  },
+  "pval": {
+   "n_assays": 8,
+   "n_experiments": 51
+  }
+ },
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/t81_scores/knn5/eic_19",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "has_peak_head": true,
+  "method_notes": {
+   "notes": "kNN average, k=5 (§5.4). Same similarity ranking as knn1; heads as `avg` over the top 5 contributors."
+  },
+  "regime": "/project/def-maxwl/mforooz/t81_pred_B/_regimes/regime.eic_19.B_.json",
+  "score_json": "cruxvault/results/t81/scores/knn5/eic_19/store.B_.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "1c54a25",
+  "sigma_table": null,
+  "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83"
+ },
+ "ranked": false,
+ "schema_version": 2,
+ "version": "2026-09-02"
+}

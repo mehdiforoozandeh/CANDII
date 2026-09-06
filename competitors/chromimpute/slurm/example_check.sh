@@ -21,7 +21,7 @@
 set -euo pipefail
 
 E=${CI_EXAMPLE:-$HOME/scratch/t51_chromimpute/EXAMPLE}
-JAR=${CI_JAR:-$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}
+JAR=${CI_JAR:-/project/def-maxwl/mforooz/tools/ChromImpute.jar}
 OUT=$E/OUTPUTDATA
 
 module load java/21.0.1

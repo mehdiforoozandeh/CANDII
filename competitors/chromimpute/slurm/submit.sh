@@ -4,13 +4,29 @@
 #
 #   bash submit.sh [RUNDIR] [FROM_STAGE] [TARGETS]
 #
-#   pilot  bash submit.sh $S/pilot                             # 20 targets, the eval scope
-#   full   bash submit.sh $S/eic_19 prepare targets.tsv        # every declared target
+#   V_    CI_REGIME=$REPO/configs/regime.eic_19.json bash submit.sh
+#   B_    CI_REGIME=$REPO/configs/regime.eic_19.json CI_PANEL=B_ B_ONCE=1 bash submit.sh
+#   pilot CI_REGIME=... bash submit.sh "" prepare targets_pilot.tsv     # 20 targets, a cost probe
+#
+# `FROM_STAGE` resumes the chain; there is NO stop-after verb, and this script does not offer one.
+# `STAGES` runs from `FROM_STAGE` through `apply` to the end of the list, so any invocation that
+# reaches `convert` also re-runs `dist`, `gtd` and `train` — and the chain's own `ci_checkpoint`
+# job then copies that refit over the recorded /project checkpoint. A partial re-predict is not
+# something this driver can express; sbatch the stages directly for that.
 #
 # RETARGETED 2026-08-31. `P1`/`P2` are RETIRED (BENCHMARK_DESIGN.md §9), and the genome-wide run is
 # GONE: §4 blanks ChromImpute's `genome-wide` cell and rules that a blanked cell is not computed, so
 # the only scope is the regime's eval_chroms — chr20+21+22. `CI_REGIME` selects which live regime
 # (eic_19 or eic_pilot); `CI_CHROMS` defaults to that regime's eval_chroms.
+#
+# THE B_ BLOCKER IS CLOSED, AND CI_PANEL IS HOW. It used to read: "targets.tsv is EVERY declared
+# eval pair, and the live regimes declare 38 — 26 V_ AND 12 B_. §5 rules B_ is touched ONCE, at the
+# very end. Filter the target list to V_ before running anything but the final B_ pass." That
+# filter is no longer a thing anyone has to remember: this script derives a SINGLE-PANEL regime
+# with `tools/declare_eval_pairs.py split` and hands only that to `prepare.py`, so `targets.tsv` is
+# already the panel's targets and nothing downstream can reach the other panel. `CI_PANEL=V_` is
+# the default and is re-runnable; `CI_PANEL=B_` needs `B_ONCE=1` AND an absent B_ prediction root,
+# and refuses with exit 4 otherwise.
 #
 # RULE 2, SETTLED 2026-09-01 (PI ruling). `dist` and `gtd` run on the regime's TRAINING loci, in
 # every regime and not only under a `regions` BED: `prepare.py` always writes `chrominfo.train.txt`
@@ -19,31 +35,66 @@
 # names as legitimate on the eval chromosomes. This DEPARTS from the published recipe, which samples
 # inside the predicted chromosomes; the departure is recorded in `../README.md`.
 #
-# ONE THING THIS SCRIPT DOES NOT DO, AND IT IS A BLOCKER, NOT AN OVERSIGHT:
-#
-#   `targets.tsv` is EVERY declared eval pair, and the live regimes declare 38 — 26 V_ AND 12 B_.
-#   §5 rules B_ is touched ONCE, at the very end. Filter the target list to V_ before running
-#   anything but the final B_ pass.
-#
 # Nothing here decides science. The compendium is every training track the regime declares (§6.2,
 # enforced in prepare.training_tracks); the pilot targets come from prepare.pilot_subset; every
 # ChromImpute flag is a paper default except the ones that only choose what to parallelize over.
 set -euo pipefail
 
-RUN=${1:-$HOME/scratch/t51_chromimpute/pilot_chr21}
-FROM=${2:-prepare}
-TARGETS=${3:-targets_pilot.tsv}
-CHROMS=${CI_CHROMS:-chr20,chr21,chr22}
-REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}
+REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_main}
 STORE=${CI_STORE:-/project/def-maxwl/mforooz/CANDI_STORE/eic}
 PY=${CI_PY:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}
-REGIME=${CI_REGIME:-$REPO/configs/regime.eic_19.json}
-JAR=${CI_JAR:-$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}
+SRC_REGIME=${CI_REGIME:-$REPO/configs/regime.eic_19.json}
+REGIME_NAME=$(basename "$SRC_REGIME" .json); REGIME_NAME=${REGIME_NAME#regime.}
+PANEL=${CI_PANEL:-V_}
+CHROMS=${CI_CHROMS:-chr20,chr21,chr22}
+JAR=${CI_JAR:-/project/def-maxwl/mforooz/tools/ChromImpute.jar}
 ACCT=${CI_ACCT:-def-maxwl}
 HERE=$REPO/competitors/chromimpute
 STAGE=$HERE/slurm/stage.sh
 
+case "$PANEL" in
+  V_) ;;
+  B_) if [ "${B_ONCE:-0}" != "1" ]; then
+        echo "[error] CI_PANEL=B_ needs B_ONCE=1 on the launch line. §5 rules that B_ is predicted"
+        echo "        ONCE, at the very end, and the flag is how that decision lands in the log."
+        exit 2
+      fi ;;
+  *)  echo "[error] CI_PANEL must be V_ or B_, got '$PANEL'"; exit 2 ;;
+esac
+
+# The pinned prediction roots. V_ on scratch and re-runnable; B_ on /project because it is written
+# once and must outlive a scratch purge.
+if [ "$PANEL" = "B_" ]; then
+  PRED_ROOT=${CI_PRED_ROOT:-/project/def-maxwl/mforooz/t81_pred_B/ChromImpute/$REGIME_NAME/B_}
+else
+  PRED_ROOT=${CI_PRED_ROOT:-/scratch/mforooz/t81_pred/ChromImpute/$REGIME_NAME/V_}
+fi
+# Exit 4, and B_ONCE=1 does NOT lift it: the flag says "this is the one B_ pass", and a root that
+# already carries a manifest proves it is not. Checked HERE, before a six-stage chain is queued,
+# rather than at collect time when the compute is already spent.
+if [ "$PANEL" = "B_" ] && [ -f "$PRED_ROOT/manifest.json" ]; then
+  echo "[error] $PRED_ROOT already holds a manifest.json. B_ is predicted ONCE (§5); this root"
+  echo "        has been written. Delete it deliberately, or score the root that is there."
+  exit 4
+fi
+
+RUN=${1:-}
+[ -n "$RUN" ] || RUN=/scratch/mforooz/t81_rivals/ChromImpute/$REGIME_NAME/$PANEL
+FROM=${2:-prepare}
+TARGETS=${3:-targets.tsv}
+CKPT_DIR=${CI_CKPT_DIR:-/project/def-maxwl/mforooz/t81_checkpoints/ChromImpute/$REGIME_NAME}
+
 mkdir -p "$RUN"/{lists,logs,timing}
+
+# --- the single-panel regime ---------------------------------------------------------------------
+# Derived, never a second shipped config: two files declaring one panel drift, and the drift is
+# silent. `split` rewrites regions.bed absolute, because a regime file's BED resolves against its
+# own directory and this copy lives beside the run. Everything downstream — prepare, the scorer,
+# collect — is handed THIS file, so no stage can disagree about which panel ran.
+REGIME=$RUN/regime.$REGIME_NAME.$PANEL.json
+$PY "$REPO/tools/declare_eval_pairs.py" split \
+    --regime "$SRC_REGIME" --panel "$PANEL" --out "$REGIME"
+echo "panel regime: $REGIME (from $(basename "$SRC_REGIME"))"
 
 # --- the four text files, and the target lists -------------------------------------------------
 # Deleted first, not overwritten: a training grid left behind by an earlier run of a different
@@ -58,7 +109,7 @@ NTRACK=$(wc -l < "$RUN/input/inputinfofile.txt")
 # 12 and no higher. `prepare.py` reaches the store through `candi.store.reader`, which imports
 # `candi`, which imports torch; forty-eight processes loading torch off /project at once get a
 # half-read module back as "cannot import name 'graph' ... circular import", and retries do not
-# clear it. Four at a time is clean.
+# clear it. Twelve at a time is clean.
 NSHARD=${CI_NSHARD:-12}
 seq 0 $((NSHARD - 1)) | sed "s|\$|/$NSHARD|" > "$RUN/lists/prepare.txt"
 cut -f2 "$RUN/input/inputinfofile.txt" | sort -u            > "$RUN/lists/convert.txt"
@@ -92,7 +143,7 @@ else
 fi
 echo "training grid: $NTRAIN declared chromosome(s)/region(s), \
 $(awk -F'\t' '{s += $2 / 25} END {printf "%d", s}' "$RUN/input/chrominfo.train.txt") bins \
-(regions=$REGIONS) | apply grid: $CHROMS"
+(regions=$REGIONS) | apply grid: $CHROMS | panel: $PANEL"
 cut -f1,3 "$RUN/input/$TARGETS"                               > "$RUN/lists/train.txt"
 cp "$RUN/lists/train.txt"                                     "$RUN/lists/apply.txt"
 
@@ -100,7 +151,25 @@ echo "compendium: $NTRACK tracks | convert marks: $(wc -l < "$RUN/lists/convert.
 targets: $(wc -l < "$RUN/lists/train.txt")"
 
 # --- the chain ----------------------------------------------------------------------------------
-ENV_COMMON="ALL,CI_RUN=$RUN,CI_REPO=$REPO,CI_STORE=$STORE,CI_PY=$PY,CI_JAR=$JAR,CI_CHROMS=$CHROMS,CI_REGIME=$REGIME"
+# THE STAGE ENVIRONMENT IS EXPORTED HERE, NOT LISTED ON THE `sbatch` LINE. `--export=<list>` is a
+# COMMA-SEPARATED list of `NAME` / `NAME=VALUE` entries, so a value that itself contains a comma
+# cannot be passed in it: `...,CI_CHROMS=chr20,chr21,chr22,...` reaches the stage as
+# `CI_CHROMS=chr20`, and `chr21` / `chr22` are taken as bare variable names to copy from the
+# environment. They do not exist, and sbatch says nothing. Measured on Fir, job 57806189
+# (cruxvault/results/t81/W3_EARLY.md §1) — and that truncation is why wave 2's `convert` and
+# `apply` ran on chr20 alone. Every comma-valued variable had the same hole, so the fix is the form
+# and not one variable: nothing is passed as `--export=<list>` any more.
+#
+# `--export=ALL` hands the submitting shell's environment to the job verbatim, commas intact. The
+# list this replaces already began with `ALL`, so no environment was being scrubbed and nothing
+# else about what the stages see changes.
+#
+# The explicit `export` is what keeps the values THIS SCRIPT's own. A stale `CI_CHROMS=chr20` left
+# sitting in the operator's login shell is the other half of the wave-2 defect; every value below
+# was resolved from this file's own defaults at the top, so the stage reads what the driver
+# decided. Add a variable to this block whenever the stages learn to read a new one.
+export CI_RUN="$RUN" CI_REPO="$REPO" CI_STORE="$STORE" CI_PY="$PY" CI_JAR="$JAR"
+export CI_CHROMS="$CHROMS" CI_REGIME="$REGIME"
 
 # `CI_THROTTLE` caps how many array tasks of one stage run at once. GenerateTrainData and Apply
 # each hold ONE OPEN gzip reader per compendium track — 267 of them — so an unthrottled array puts
@@ -113,10 +182,16 @@ sub() {  # sub <stage> <time> <mem> <mx> [afterok-jobid]
   local n; n=$(wc -l < "$RUN/lists/$stage.txt")
   local cap=""; case $stage in gtd|apply|train) cap="%$THROTTLE" ;; esac
   local depflag=(); [ -n "$dep" ] && depflag=(--dependency="afterok:$dep")
+  # Exported, not listed, for the same reason as the block above: `sbatch --export=<list>` splits
+  # its argument on commas, so no assignment goes on that line at all.
+  export CI_STAGE="$stage" CI_MX="$mx"
+  # `${depflag[@]+"${depflag[@]}"}` and not a bare `"${depflag[@]}"`: identical on Fir's bash, and
+  # the only form bash 3.2 accepts for an EMPTY array under `set -u` — which is the first stage of
+  # every chain, and is what the regression test in tests/ submits.
   sbatch --parsable --account="$ACCT" --nodes=1 --ntasks=1 --cpus-per-task=1 \
          --job-name="ci_$stage" --array="0-$((n - 1))$cap" --time="$time" --mem="$mem" \
          --output="$RUN/logs/%x_%A_%a.out" --error="$RUN/logs/%x_%A_%a.err" \
-         "${depflag[@]}" --export="$ENV_COMMON,CI_STAGE=$stage,CI_MX=$mx" "$STAGE"
+         ${depflag[@]+"${depflag[@]}"} --export=ALL "$STAGE"
 }
 
 # `FROM` resumes the chain at a stage whose inputs already exist on disk — a stage that failed on
@@ -141,12 +216,45 @@ done
 
 cat > "$RUN/collect.sh" <<EOF
 #!/bin/bash
-# after ci_apply: Apply's wigs -> the RIVALS_PLAN.md §4.1 prediction root
+# after ci_apply: Apply's wigs -> the RIVALS_PLAN.md §4.1 prediction root, at the pinned path.
 set -euo pipefail
+# The once-only B_ guard again, at the moment the root is actually written: a chain queued while
+# the root was absent must still refuse if something else wrote it in the meantime.
+if [ "$PANEL" = "B_" ] && [ -f "$PRED_ROOT/manifest.json" ]; then
+  echo "[collect] REFUSING: $PRED_ROOT already holds a manifest.json. B_ is written once (§5)."
+  exit 4
+fi
 PYTHONPATH=$REPO/src $PY $HERE/collect.py --store $STORE \\
     --targets $RUN/input/$TARGETS --impute-dir $RUN/OUTPUTIMPUTEDIR \\
-    --pred-root $RUN/pred --chroms \$(cut -f1 $RUN/input/chrominfo.txt | paste -sd, -) \\
-    --jar $JAR --notes "$TARGETS on $CHROMS, $(basename $REGIME), ChromImpute paper defaults"
+    --pred-root $PRED_ROOT --chroms \$(cut -f1 $RUN/input/chrominfo.txt | paste -sd, -) \\
+    --jar $JAR --notes "$TARGETS on $CHROMS, panel $PANEL, $(basename "$SRC_REGIME"), ChromImpute paper defaults"
 EOF
 chmod +x "$RUN/collect.sh"
-echo "collect with: $RUN/collect.sh"
+
+# ChromImpute's "selected checkpoint" is its fitted parameters: the per-(sample, mark) predictors
+# `Train` wrote, the sample ranking `ComputeGlobalDist` wrote, and the three text files that say
+# what they were fit on. Copied to /project because the run directory is on scratch and scratch is
+# purged; the σ stage reads them back from the run directory, not from here.
+cat > "$RUN/checkpoint.sh" <<EOF
+#!/bin/bash
+set -euo pipefail
+mkdir -p $CKPT_DIR
+# -T so a second run REPLACES the directory instead of nesting a copy inside the first one.
+cp -rT $RUN/PREDICTORDIR $CKPT_DIR/PREDICTORDIR
+cp -rT $RUN/DISTANCEDIR  $CKPT_DIR/DISTANCEDIR
+cp $RUN/input/inputinfofile.txt $RUN/input/chrominfo.txt $RUN/input/chrominfo.train.txt $CKPT_DIR/
+cp $REGIME $CKPT_DIR/
+du -sh $CKPT_DIR
+echo "[checkpoint] ChromImpute $REGIME_NAME predictors -> $CKPT_DIR"
+EOF
+chmod +x "$RUN/checkpoint.sh"
+
+if [ -n "$DEP" ]; then
+  CK=$(sbatch --parsable --account="$ACCT" --nodes=1 --ntasks=1 --cpus-per-task=1 \
+       --job-name=ci_checkpoint --time=1:00:00 --mem=4000M \
+       --output="$RUN/logs/%x_%j.out" --error="$RUN/logs/%x_%j.err" \
+       --dependency="afterok:$DEP" --wrap "$RUN/checkpoint.sh")
+  printf '%-8s %s\n' "ckpt" "$CK"
+fi
+
+echo "collect with: $RUN/collect.sh   -> $PRED_ROOT"

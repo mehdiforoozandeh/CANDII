@@ -1,82 +1,108 @@
 #!/bin/bash
-# The naive baseline suite — generate + score on the regime's eval scope (§4 `held-out`).
+# The naive baseline suite — GENERATION, one job, one (regime, panel) unit.
 #
-#   mkdir -p slurm-logs && sbatch slurm/t49_baselines_p1.sh
-#   REGIME=configs/regime.eic_19.json sbatch slurm/t49_baselines_p1.sh
+#   mkdir -p slurm-logs
+#   # eic_19, V_: all five methods, with the D1 identity assertion on the collapsed two
+#   REGIME=configs/regime.eic_19.json PANEL=V_ sbatch slurm/t49_baselines_p1.sh
+#   # eic_pilot, V_: ONLY the three that fit on the regime's training loci (D1)
+#   REGIME=configs/regime.eic_pilot.json PANEL=V_ METHODS=knn1,knn5,marginal \
+#       sbatch slurm/t49_baselines_p1.sh
+#   # the once-only B_ pass, genome-wide, to /project
+#   GW=$(printf 'chr%s,' 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X); GW=${GW%,}
+#   PANEL=B_ B_ONCE=1 CHROMS=$GW sbatch slurm/t49_baselines_p1.sh
+#   # stamp a root the p2 array built (one chromosome, two methods, minutes)
+#   ASSERT_ONLY=1 METHODS=avg,avg-arcsinh PANEL=V_ sbatch slurm/t49_baselines_p1.sh
 #
-# RETARGETED 2026-08-31 for plan/BENCHMARK_DESIGN.md's two live regimes, and READ THE NEXT
-# PARAGRAPH BEFORE LAUNCHING — the §12.2 collapse does NOT hold for all five methods.
-#
-# §12.2 rules that the five naive baselines run ONCE, not once per regime, "because their fit is
-# regime-independent, so is their output: the two regimes would produce byte-identical predictions",
-# and asks for an ASSERTION rather than an argument. THE ASSERTION DOES NOT EXIST — there is no test
-# in tests/ or in competitors/ that predicts under both regimes and compares — AND THE CODE SAYS THE
-# CLAIM IS FALSE FOR THREE OF THE FIVE:
+# HOW MANY TIMES EACH BASELINE RUNS — D1, SETTLED 2026-09-01
+# ----------------------------------------------------------
+# `plan/BENCHMARK_DESIGN.md` §12.2 first ruled all five naive baselines run ONCE rather than once
+# per regime, "because their fit is regime-independent", and asked for an ASSERTION rather than an
+# argument. Read against the code the claim is true of two of the five and false of three:
 #
 #   avg, avg-arcsinh   regime-independent. The contributor set is `biosamples.train` minus the
-#                      target's cell type, and the prediction is a per-bin function of the
-#                      contributors AT THE PREDICTED POSITION. No training locus enters. Collapse
-#                      to one run: correct.
-#   knn1, knn5         `generate.similarity_table` correlates over `panel.train_chroms`
-#                      (generate.py:207-241). Different train_chroms -> a different similarity
-#                      ranking -> different predictions. NOT regime-independent.
-#   marginal           `generate.fit_marginal` pools over `panel.train_chroms`
-#                      (generate.py:262-300). NOT regime-independent.
+#                      target's cell type, and every written bin is a function of the contributors
+#                      AT THE PREDICTED POSITION. No training locus enters. Collapse: correct.
+#   knn1, knn5         `generate.similarity_table` correlates over `panel.train_chroms`. Different
+#                      train chromosomes -> a different ranking -> different predictions.
+#   marginal           `generate.fit_marginal` pools over `panel.train_chroms`.
 #
-# So it is 2 runs collapsed and 3 runs x 2 regimes = 8 method-regime units, not 5 — unless the PI
-# rules otherwise. And `generate.py` reads `train_chroms` RAW: it has no `regions` support at all,
-# so under eic.pilot knn/marginal would fit over 18 WHOLE chromosomes (~2.7 Gbp) instead of the
-# 25,588,197 bp the regime declares. That is a Rule 2 break, and it is why REGIME defaults to
-# eic_19 here and eic_pilot is refused below.
+# So the baselines are **8 method-regime units**, not 5: `avg` and `avg-arcsinh` once (under
+# $COLLAPSE_REGIME, and this script refuses to generate them under any other), `knn1`, `knn5` and
+# `marginal` once per regime. §12.2 and §12.3 now say so.
 #
-# Generate five prediction roots, score each through `python -m candi.bench.external`, and fold the
-# score files into one leaderboard json. Pure numpy + h5py; no GPU compute.
+# THE ASSERTION EXISTS NOW and this script runs it, as a second pass over ONE chromosome once the
+# main generation is done: `--assert-regime-independent $ASSERT_AGAINST --assert-only` re-predicts
+# the collapsed methods under the OTHER regime INTO A TEMPORARY DIRECTORY, compares every array with
+# `np.array_equal`, and writes `regime_independent` into their manifests. A difference exits **5**
+# and stamps nothing — the collapse is licensed by the comparison, never by this comment.
+# `ASSERT_AGAINST=none` skips it, and a root that carries no stamp is refused against the other
+# board by t49_baselines_score.sh. `ASSERT_ONLY=1` runs this pass alone, which is how a root built
+# by the p2 array gets its stamp.
 #
-# DO_SCORE=0 STOPS AFTER GENERATION, and on a real panel that is usually what you want. Measured on
-# Fir, chr21, 45 declared tracks: generating all five roots takes ~4.5 minutes and scoring takes
-# ~110 minutes PER METHOD. Five methods at two floors inside one job is eighteen hours of serial
-# work for something that is ten independent runs, so generate here and hand the scoring to
-# `slurm/t49_baselines_score.sh --array=0-4`, one task per method. Scoring in-line is kept for a
-# small panel, where the whole thing is minutes and one job is simpler than three.
+# `--assert-only` IS LOAD-BEARING AND WAS MISSING UNTIL 2026-09-01. This pass used to re-run
+# `--methods avg,avg-arcsinh` into the SAME roots, which OVERWROTE the checked chromosome's npz and
+# then stamped `identical: true` on arrays that were not the ones the generation pass wrote (and,
+# with no knn method in that second list, on arrays computed a third way again — see the D1 note in
+# `generate.py`). The stamp is now the only mutation of the prediction root, and
+# `tests/test_baselines.py::test_the_assertion_pass_changes_nothing_but_the_manifest` holds it there
+# byte for byte.
 #
-
-# WHY IT RUNS TWICE, AT TWO POISSON FLOORS. §5.1 pre-registers `n = 1e6` for the NB's Poisson floor
-# and `candi.metrics.nb_crps` returns NaN above about `n = 2e4`, which costs the count arm its whole
-# distributional tier — `crps`, `crps_oracle_scaled`, `scale_error`, `beats_marginal` — and with it
-# §5.5's second sanity anchor. So both are produced: `spec/` is the pre-registered value and is what
-# §5.1 says the baseline IS; `n1e4/` is the largest scoreable floor and is the only one of the two
-# that can answer the anchor. Measured against the exact Poisson CRPS the two agree to 0.01 % at
-# µ = 0.1 and 0.5 % at µ = 100, and where the floor actually binds they are the same number. Which
-# one becomes the row of record is the PI's call, not this script's — see
-# `competitors/baselines/README.md`.
+# eic_pilot IS NO LONGER REFUSED FOR knn/marginal — the exit-3 guard is gone (2026-09-01)
+# ----------------------------------------------------------------------------------------
+# It refused because `competitors/baselines/generate.py` read `train_chroms` RAW: under
+# `regime.eic_pilot.json` the kNN similarity table and the per-assay marginal would have been fitted
+# over 18 WHOLE chromosomes (~2.7 Gbp) instead of the 25,588,197 bp the regime declares, where every
+# other method under that regime sees the Pilot Regions only. That is a Rule 2 break. `generate.py`
+# now honours the `regions` block: `Panel.contained_bins` cuts `similarity_table` and `fit_marginal`
+# to the bins lying wholly inside a declared region, on the TRAIN split only (D32), so the pilot
+# unit for those three is a fit on the loci the regime names. `avg` and `avg-arcsinh` are unaffected
+# either way — no training locus enters them, which is what makes them the collapsed two.
 #
-# WHY --gres ON A CPU-ONLY JOB: see slurm/bake.sh. Without it this routes to def-maxwl_cpu
-# (fairshare 0.088 vs the gpu account's 0.435) and effectively never starts. Project hard rule: the
-# smallest MIG slice, and never any other gres spec.
+# CPU ONLY, AND NO GRES ANY MORE. The arithmetic is numpy over h5py reads and NOTHING HERE OPENS
+# CUDA. It does load torch — `generate.py` imports `candi.store.reader`, and `candi/__init__.py`
+# imports `candi.encoder`, which imports torch — so the job pays the import and the RSS, and that is
+# the reason to keep the array cap on the p2 script. It never allocates a device. The MIG slice this
+# script used to request was a fairshare workaround (see slurm/bake.sh) and it parked a 10 GB H100
+# slice for a job that never opened CUDA. Invariant 13 allows the 1g.10gb slice or nothing; this is
+# nothing.
+#
+# ONE POISSON FLOOR, THE PRE-REGISTERED ONE. This script used to generate at 1e6 AND 1e4 because
+# `candi.metrics.nb_crps` returned NaN above ~2e4 and the count arm lost its whole distributional
+# tier at the pre-registered value. t56 fixed that (`nb_crps` scores the large-dispersion case in
+# the Poisson limit; `test_the_preregistered_poisson_floor_is_scoreable_by_candi_bench` pins it), so
+# there is one floor again and it is §5.1's. Two floors could not share a pinned root anyway —
+# `poisson_n` is in `_MANIFEST_IDENTITY`, so the second pass would refuse to merge.
+#
+# GENERATION ONLY. Scoring is `slurm/t49_baselines_score.sh`, one array task per method: measured on
+# Fir, chr21, 45 declared tracks, generation is ~4.5 minutes for all five methods and
+# `bench.external` is ~110 minutes PER METHOD. Scoring inside this job made it eighteen hours of
+# serial work for something that is independent runs.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=candi_t49_p1
 #SBATCH --output=slurm-logs/t49_p1_%j.out
 #SBATCH --error=slurm-logs/t49_p1_%j.err
 #SBATCH --time=11:00:00
-#SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --mem=48G
 #SBATCH --cpus-per-task=4
 
 set -uo pipefail
 
-KIT="${KIT:-/project/def-maxwl/$USER/CANDII_t78_code}"
+KIT="${KIT:-/project/def-maxwl/mforooz/CANDII_main}"
 VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 REGIME="${REGIME:-configs/regime.eic_19.json}"
-# The regime's eval_chroms under §4. chr21 alone was the old eval scope.
-CHROMS="${CHROMS:-chr20,chr21,chr22}"
-OUT="${OUT:-/project/def-maxwl/$USER/t49_baselines/p1}"
+PANEL="${PANEL:-V_}"                     # V_ or B_. Nothing else is a panel.
 METHODS="${METHODS:-avg,avg-arcsinh,knn1,knn5,marginal}"
-VARPOOL="${VARPOOL:-}"          # D7 msevar pools; without it msevar is ABSENT, never a bare 0.0
-# Which Poisson floors to run. Both by default. `FLOORS=n1e4 METHODS=avg,marginal` with
-# `--time=2:30:00` is the b1-bin version that answers §5.5's two sanity anchors and nothing else —
-# worth having when the b2 queue is 300 jobs deep and the anchors are what gate the rest of the work.
-FLOORS="${FLOORS:-spec n1e4}"
-DO_SCORE="${DO_SCORE:-1}"       # 0 = generate only; score with slurm/t49_baselines_score.sh
+# The regime the two collapsed methods are generated under, once, and printed in both board rows.
+COLLAPSE_REGIME="${COLLAPSE_REGIME:-eic_19}"
+ASSERT_AGAINST="${ASSERT_AGAINST:-configs/regime.eic_pilot.json}"   # `none` to skip
+ASSERT_ONLY="${ASSERT_ONLY:-0}"          # 1 = stamp an existing root and generate nothing
+# The regime's eval scope. Genome-wide `V_` comes from the p2 array; genome-wide `B_` comes from
+# this script with CHROMS set to all 23, because p2's array cannot hold the once-only B_ guard.
+CHROMS="${CHROMS:-chr20,chr21,chr22}"
+POISSON_N="${POISSON_N:-1e6}"            # §5.1's pre-registered floor, scoreable since t56
+# The pinned prediction roots. `V_` is deletable scratch; `B_` lands on /project and is written once.
+V_PRED_ROOT="${V_PRED_ROOT:-/scratch/$USER/t81_pred}"
+B_PRED_ROOT="${B_PRED_ROOT:-/project/def-maxwl/$USER/t81_pred_B}"
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1; unset PYTHONPATH || true
 export MPLBACKEND=Agg
@@ -88,66 +114,140 @@ source "$KIT/slurm/_kit_pin.sh"
 # anywhere, so the repo root goes on the path too — AFTER src, so the pin's guarantee still holds.
 export PYTHONPATH="$KIT/src:$KIT"
 
-# The old guard refused regime.eic_test.json, the separate B-pair regime. THE LIVE REGIMES CARRY
-# THE B_ PAIRS INSIDE THEM — eic_19 and eic_pilot each declare 38 eval_pairs, 26 V_ and 12 B_ — so
-# a name check protects nothing any more. §5 rules B_ is touched ONCE, at the very end. Derive a
-# V_-only regime the way slurm/t81_train_candi.sh does, and refuse a regime that still has B_ in it
-# unless this IS the once-only B_ run.
-case "$REGIME" in *eic_test*) echo "[t49] REFUSING: $REGIME is the B-pair regime (A4)"; exit 2;; esac
-if [ "${ALLOW_B_PAIRS:-0}" != "1" ]; then
-  python - "$REGIME" <<'PYEOF' || exit 2
-import json, sys
-d = json.load(open(sys.argv[1]))
-b = [p for p in d.get("eval_pairs", []) if str(p[1]).startswith("B_")]
-if b:
-    sys.exit(f"[t49] REFUSING: {sys.argv[1]} declares {len(b)} B_ eval pair(s). BENCHMARK_DESIGN "
-             f"\u00a75 touches B_ ONCE, from the selected checkpoint. Derive a V_-only regime "
-             f"(see slurm/t81_train_candi.sh), or set ALLOW_B_PAIRS=1 if this IS the final B_ run.")
-PYEOF
-fi
-if python -c "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('regions') else 1)" "$REGIME"; then
-  echo "[t49] REFUSING: $REGIME declares a \`regions\` BED. competitors/baselines/generate.py reads" >&2
-  echo "      train_chroms raw and has no regions support, so knn1/knn5/marginal would fit over" >&2
-  echo "      WHOLE chromosomes instead of the Pilot Regions. Rule 2 break. Raise it." >&2
-  exit 3
-fi
-echo "[t49] host=$(hostname) commit=$(git rev-parse --short HEAD) regime=$REGIME chroms=$CHROMS"
+case "$PANEL" in
+    V_) PRED_BASE="$V_PRED_ROOT" ;;
+    B_) PRED_BASE="$B_PRED_ROOT" ;;
+    *)  echo "[t49] REFUSING: PANEL=$PANEL is not a panel; it is V_ or B_ (§5)." >&2; exit 2 ;;
+esac
+REGNAME="$(basename "$REGIME" .json)"; REGNAME="${REGNAME#regime.}"
 
-rc=0
-for FLOOR in $FLOORS; do
-    case "$FLOOR" in
-        spec) N=1e6 ;;
-        n1e4) N=1e4 ;;
+# Which of the requested methods collapse to ONE run (D1) — the list `generate.py` exports for the
+# regime-independent pair. The fitted three are named below only to be admitted: nothing here
+# branches on them, so collecting them into a variable was a write nobody read.
+COLLAPSED=""
+for M in ${METHODS//,/ }; do
+    case "$M" in
+        avg|avg-arcsinh)     COLLAPSED="$COLLAPSED $M" ;;
+        knn1|knn5|marginal)  : ;;
+        *) echo "[t49] REFUSING: $M is not a baseline method." >&2; exit 2 ;;
     esac
-    PRED="$OUT/$FLOOR/preds"
-    SCORES="$OUT/$FLOOR/scores"
-    mkdir -p "$PRED" "$SCORES"
-    echo "=== [t49] floor=$FLOOR poisson_n=$N ==============================================="
-
-    python -m competitors.baselines.generate \
-        --store "$REGIME" --out "$PRED" --chroms "$CHROMS" --methods "$METHODS" \
-        --poisson-n "$N" || { rc=1; continue; }
-
-    if [ "$DO_SCORE" != "1" ]; then
-        echo "[t49] DO_SCORE=0 — generated only; score with slurm/t49_baselines_score.sh"
-        continue
-    fi
-
-    ARGS=()
-    for M in ${METHODS//,/ }; do
-        python -m candi.bench.external \
-            --store "$REGIME" --pred "$PRED/$M" --out "$SCORES/$M.json" \
-            --chroms "$CHROMS" ${VARPOOL:+--varpool "$VARPOOL"} || { rc=1; continue; }
-        ARGS+=("$M=$SCORES/$M.json")
-    done
-
-    python -m competitors.baselines.leaderboard --protocol P1 \
-        --scores "${ARGS[@]}" --out "$OUT/$FLOOR/leaderboard.json" \
-        --notes "P1, $REGIME, chroms=$CHROMS, poisson_n=$N ($FLOOR)"
-    # NOT --check-anchors: a failed anchor must be REPORTED, and a non-zero exit here would look
-    # like a crashed job. §5.5 says stop and report, and the verdicts are in the leaderboard json.
 done
 
+if [ -n "$COLLAPSED" ] && [ "$REGNAME" != "$COLLAPSE_REGIME" ]; then
+    echo "[t49] REFUSING:$COLLAPSED collapse to ONE run (D1) and that run is under" >&2
+    echo "      $COLLAPSE_REGIME. Generating them again under $REGNAME would put two roots on disk" >&2
+    echo "      for one unit. Drop them from METHODS, or set COLLAPSE_REGIME if the canonical" >&2
+    echo "      regime has changed." >&2
+    exit 2
+fi
+
+# The panel regime: the DECLARED eval_pairs filtered to this panel's targets. Both live regimes
+# carry all 38 pairs (26 V_ + 12 B_), so a V_ run must be given a V_-only regime or it would predict
+# B_ on the way past — and §5 touches B_ once, at the very end.
+#
+# IT LIVES BESIDE THE ROOTS, NOT IN $SLURM_TMPDIR, AND THAT IS LOAD-BEARING. `generate.py` records
+# the regime PATH in each manifest and `regime` is one of the `_MANIFEST_IDENTITY` fields, so two
+# passes into one root (this script for chr20-22 and the p2 array for the rest) must be handed the
+# same path or the second refuses to merge. Written through a rename so concurrent tasks never see
+# a half-file; the content is a deterministic function of $REGIME and $PANEL.
+WORK="${SLURM_TMPDIR:-/tmp}/t49_${SLURM_JOB_ID:-$$}"
+REG_DIR="$PRED_BASE/_regimes"
+mkdir -p "$WORK" "$REG_DIR"
+PANEL_REGIME="$REG_DIR/regime.$REGNAME.$PANEL.json"
+python tools/declare_eval_pairs.py split --regime "$REGIME" --panel "$PANEL" \
+    --out "$PANEL_REGIME.$$.tmp" && mv -f "$PANEL_REGIME.$$.tmp" "$PANEL_REGIME" \
+    || { echo "[t49] could not derive the $PANEL regime" >&2; exit 2; }
+python - "$PANEL_REGIME" "$PANEL" <<'PYEOF' || exit 2
+import json, sys
+pairs = json.load(open(sys.argv[1])).get("eval_pairs", [])
+bad = [p for p in pairs if not str(p[1]).startswith(sys.argv[2])]
+if bad or not pairs:
+    sys.exit(f"[t49] REFUSING: {sys.argv[1]} carries {len(bad)} pair(s) outside {sys.argv[2]} "
+             f"({len(pairs)} declared). The split did not do what its name says.")
+PYEOF
+
+if [ "$ASSERT_ONLY" = "1" ]; then
+    if [ -z "$COLLAPSED" ]; then
+        echo "[t49] REFUSING: ASSERT_ONLY=1 with METHODS=$METHODS has nothing to assert — the" >&2
+        echo "      stamp belongs to avg and avg-arcsinh only." >&2
+        exit 2
+    fi
+    if [ "$PANEL" = "B_" ]; then
+        echo "[t49] REFUSING: ASSERT_ONLY=1 with PANEL=B_. The B_ pass is one job and stamps its" >&2
+        echo "      own roots as it goes; there is no array to stamp after the fact." >&2
+        exit 2
+    fi
+fi
+
+# B_ IS WRITTEN ONCE (§5), TO /project. An explicit B_ONCE=1, and a root with no manifest in it.
+if [ "$PANEL" = "B_" ]; then
+    if [ "${B_ONCE:-0}" != "1" ]; then
+        echo "[t49] REFUSING: PANEL=B_ without B_ONCE=1. B_ is predicted once, from the selected" >&2
+        echo "      artefact, at the very end. Set B_ONCE=1 when this IS that run." >&2
+        exit 4
+    fi
+    for M in ${METHODS//,/ }; do
+        if [ -e "$PRED_BASE/$M/$REGNAME/B_/manifest.json" ]; then
+            echo "[t49] REFUSING: $PRED_BASE/$M/$REGNAME/B_/manifest.json exists — that root has" >&2
+            echo "      already been written. A second B_ pass is a second look at the blind panel." >&2
+            exit 4
+        fi
+    done
+fi
+
+# The pinned roots are <Method>/<regime>/<panel> and `generate.py` writes <out>/<method>, so each
+# method's root is reached through a symlink named for the method. One pass over the store then
+# serves every method — which is the whole shape of generate.py, and a genome-wide pass reads
+# ~370 GB, so five one-method passes would read it five times.
+STAGE="$WORK/roots"
+mkdir -p "$STAGE"
+for M in ${METHODS//,/ }; do
+    R="$PRED_BASE/$M/$REGNAME/$PANEL"
+    mkdir -p "$R" && ln -sfn "$R" "$STAGE/$M" || exit 1
+done
+
+echo "[t49] host=$(hostname) commit=$(git rev-parse --short HEAD) regime=$REGNAME panel=$PANEL"
+echo "[t49] methods=$METHODS chroms=$CHROMS poisson_n=$POISSON_N roots=$PRED_BASE/<M>/$REGNAME/$PANEL"
+echo "[t49] assert_only=$ASSERT_ONLY assert_against=$ASSERT_AGAINST"
+
+rc=0
+if [ "$ASSERT_ONLY" != "1" ]; then
+    python -m competitors.baselines.generate \
+        --store "$PANEL_REGIME" --out "$STAGE" --chroms "$CHROMS" --methods "$METHODS" \
+        --poisson-n "$POISSON_N"
+    rc=$?
+fi
+
+# THE IDENTITY ASSERTION IS ITS OWN PASS, over ONE chromosome, AND IT GENERATES NOTHING INTO THE
+# ROOT. `--assert-only` re-predicts the collapsed methods under $ASSERT_AGAINST into a temporary
+# directory, compares every array, and writes `regime_independent` into their manifests — nothing
+# else under the root is touched, so the arrays that get stamped are the arrays the pass above
+# wrote. It is a separate pass rather than a flag on that one because `generate.py` refuses
+# `--assert-regime-independent` outright when any fitted method is in the list, and refusing it
+# there is the point: a mixed METHODS list still gets its stamp this way. Cost is one chromosome
+# for two pval-cheap methods.
+#
+# ASSERT_ONLY=1 runs THIS AND NOTHING ELSE, which is how a root built by the p2 array gets stamped:
+#   ASSERT_ONLY=1 METHODS=avg,avg-arcsinh REGIME=... PANEL=V_ sbatch slurm/t49_baselines_p1.sh
+if [ $rc -eq 0 ] && [ -n "$COLLAPSED" ] && [ "$ASSERT_AGAINST" != "none" ]; then
+    AREG="$(basename "$ASSERT_AGAINST" .json)"; AREG="${AREG#regime.}"
+    # Beside the roots as well: the manifest records this file's NAME as `asserted_against`, and a
+    # name that resolves to nothing is not provenance.
+    ASSERT_REGIME="$REG_DIR/regime.$AREG.$PANEL.json"
+    python tools/declare_eval_pairs.py split --regime "$ASSERT_AGAINST" --panel "$PANEL" \
+        --out "$ASSERT_REGIME.$$.tmp" && mv -f "$ASSERT_REGIME.$$.tmp" "$ASSERT_REGIME" || exit 2
+    echo "[t49] asserting$COLLAPSED regime-independent against $AREG on ${CHROMS%%,*}"
+    python -m competitors.baselines.generate \
+        --store "$PANEL_REGIME" --out "$STAGE" --chroms "${CHROMS%%,*}" \
+        --methods "$(echo $COLLAPSED | tr ' ' ',')" --poisson-n "$POISSON_N" \
+        --assert-regime-independent "$ASSERT_REGIME" --assert-only
+    rc=$?
+fi
+
+# 5 is the identity assertion failing: a method claimed regime-independent was not. Not a crash.
+[ $rc -eq 5 ] && echo "[t49] the collapse assertion FAILED — that method runs once per regime (D1)"
 echo "[t49] exit=$rc"
-find "$OUT" -name '*.json' -maxdepth 3 -exec ls -la {} \; 2>/dev/null | head -30
+for M in ${METHODS//,/ }; do
+    ls -la "$PRED_BASE/$M/$REGNAME/$PANEL/manifest.json" 2>/dev/null
+done
 exit $rc

@@ -20,12 +20,12 @@
 # is 64.9 (121 241 684 genome bins / 1 868 399 chr21 bins).
 set -euo pipefail
 
-REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}
+REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_main}
 STORE=${CI_STORE:-/project/def-maxwl/mforooz/CANDI_STORE/eic}
 PY=${CI_PY:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv/bin/python}
 REGIME=${CI_REGIME:-$REPO/configs/regime.eic_19.json}
-JAR=${CI_JAR:-$HOME/scratch/t51_chromimpute/tool/ChromImpute.jar}
-RUN=${CI_RUN:-$HOME/scratch/t51_chromimpute/gw_probe}
+JAR=${CI_JAR:-/project/def-maxwl/mforooz/tools/ChromImpute.jar}
+RUN=${CI_RUN:-/scratch/mforooz/t81_rivals/ChromImpute/gw_probe}
 SAMPLE=${CI_SAMPLE:-T_K562}
 MARK=${CI_MARK:-H3K4me3}
 

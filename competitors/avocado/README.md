@@ -41,7 +41,7 @@ vendored files are the record of what the adapters were derived from, so a revie
 | `index.py` | new — the (cell, assay) index space, the `V_` selection panel, the BED scope | 005 read a challenge `bridge.csv` of `C##`/`M##` codes; we have `T_`/`V_` biosample ids |
 | `train.py` | columns from `tracks.csv`; **resume**; `--seed` a flag; **`V_` checkpoint selection**; `--positions` | the MIG slice may not finish a chromosome inside one job's walltime; §5 asks every method to select on `V_` |
 | `predict.py` | predicts the regime's declared tracks; writes §4.1 npz | 005 wrote a fixed 51-experiment `.npy` and bigWigs |
-| `fit_sigma.py` | new — the §6.1 σ-table | 005 had no CRPS arm |
+| (the σ-table) | fitted OUTSIDE this directory, by `python -m competitors.sigma_pass` | 005 had no CRPS arm; D2 gives every point-only method one fitter |
 
 Untouched from 005: the architecture, the arcsinh target and `sinh`+clip inversion, the MSE
 objective, Adam with two learning rates (`1e-3` shared / `1e-2` genomic), batch = 1024 positions ×
@@ -67,7 +67,9 @@ columns from it. It does two things:
 
 `bin_store.py` writes those columns and only those to `<chrom>.npy`, and records them in
 `tracks.csv`. **A `V_` or `B_` track has no column in the matrix `train.py` loads, so there is
-nothing for it to be trained on.** The σ-fit reads predictions and truth, never a second fit.
+nothing for it to be trained on.** The σ-fit reads predictions and truth, never a second fit — and
+since D2 it does not read an eval-panel track either: `competitors/sigma_pass.py` fits on the
+TRAINING cells scored against themselves, and refuses (exit 3) any regime naming a `V_`/`B_` cell.
 
 The other half of the rule is subtler and worth stating. Avocado needs a cell embedding for the
 target cell of every pair, or it has nothing to impute from. `index.py::cell_index` gives `T_X` and
@@ -257,8 +259,11 @@ sbatch --array=0-0 --export=ALL,MODE=shared,CHROMFILE=$WS/chrom20.txt,EPOCHS=60,
 Avocado emits a **point in `-log10 p` and nothing else**. So:
 
 - pval arm only. No count arm — B1b forbids inventing a read depth to manufacture one.
-- CRPS exists only through the §6.1 σ-table, and **V-pair CRPS is in-sample for σ**. Any table
-  showing it says so. The B-pair run reuses the V-fitted table unchanged.
+- CRPS exists only through the §6.1 σ-table. **Every number below predates D2** and was fitted on
+  the declared eval pairs, which Rule 1 (§12.2) voids: V-pair CRPS was in-sample for σ, and any
+  table showing it says so. The replacement fits on TRAINING residuals
+  (`python -m competitors.sigma_pass`), so no panel pays for σ and neither panel's CRPS is
+  in-sample. A table is leak-free exactly when its `fitted_on` starts with `training-residuals:`.
 - The peak tier is **coverage ranking**: `signal_mu` used as the ranking score, `has_peak_head=False`
   recorded by the scorer. Every AUPRC row carries that label and its `peak_base_rate` (B3).
 - Numbers from this method are **not quotable** until the t49 leaderboard exists.

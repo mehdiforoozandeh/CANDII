@@ -474,3 +474,230 @@ it is frozen.
 **Report faithfully.** If a run fails, say so with the output. If a step is skipped, say that. Do
 not narrow the scope quietly — if something turns out to be blocked, finish everything else in full
 and say explicitly what you left out and why.
+
+---
+
+## What this programme found the handoff had wrong (2026-09-02/03)
+
+Nothing above is edited. This is an append-only record of where this document's premises did not
+survive contact with the code, the cluster and the artefacts — each item as **what the handoff said
+→ what was true → where it is recorded.** No score is quoted anywhere in it: the target-clustered
+noise floor is not yet measured (t86), so every figure below is a cost, a count, a size, a ratio or
+a timing.
+
+- **The challenge-truth path did not exist at all.** §4.5 and `leaderboard/boards.json` assumed the
+  Synapse bigwigs "load into `candi.bench.external`". → There was **no bigwig reader anywhere** —
+  not in `src/candi/bench/*`, not in `src/candi/store/*`, on no local or remote ref; `score_external`
+  returned `per_track` + `macro` only, with no `panels` block, no `genome_wide` block and no
+  `--held-out-chroms`; and anchor rows went through a retired `--placement-method` gate. → Built:
+  `tools/challenge_bigwigs.py` (`truth-root` and `pred-root` verbs), `--truth-root` and
+  `--held-out-chroms` on `candi.bench.external`, and the `panels` block. Recorded in
+  `.orchestrate/plan.md` "Verified ground truth", `cruxvault/results/t81/ANCHOR_ROOTS.md`,
+  `SCORES_ANCHORS.md`.
+
+- **`tools/seed_floor.py` already existed.** §4.6 reads as if it were still to be written ("Until it
+  lands, rows go up unranked"). → It existed — 195 lines with its own tests. What it lacked was a
+  `--panel` option: it read only `macro`, never `panels`, so it could not produce the per-panel
+  floor §4.6 itself asks for (the `V_` breadth panel against the 8-assay panels). The option was
+  added rather than the tool. Recorded in `.orchestrate/plan.md` "Verified ground truth".
+
+- **The finished `eic.pilot` run's json was lost, so the checkpoint alone was unusable.** §1 said
+  "Do not retrain it. Re-verify the checkpoint's md5". → The md5 was fine and the checkpoint is a
+  bare `state_dict` of 155 tensors that **holds no architecture**: job 57674899_1 was cancelled at
+  its 16 h limit *during the final full-coverage check*, and `train.py` writes the run json only
+  after that check, so there was nothing to rebuild the model with. → `t81_eic_pilot_s0.arch.json`
+  was reconstructed from the probe run's `config.arch`, copied verbatim by script, and proved by a
+  strict load: `missing=[] unexpected=[] params=2,353,661`, matching the training banner. Recorded
+  in `cruxvault/results/t81/PILOT_ARCH.md`. **Lesson: size a band with the final check inside it.**
+
+- **The anchor block is held-out only, so its costing was ~20× too high — and the measured cost is
+  lower again.** §4.5 put the 50 anchor passes inside a ≈4,400 CPU-h total sized on genome-wide
+  passes. → `leaderboard/boards.json` declares that block `truth=challenge`, `panel=B_`,
+  `scope=held-out`; held-out is 5.34 % of genome-wide, which alone takes it to ≈150 CPU-h. Measured,
+  it is far under even that: the 50 passes ran in **2–4 min each under challenge truth and 8–13 min
+  under store truth**, the whole block finishing in about **40 min of wall clock**, because an
+  entrant carries no σ and none of the distributional work runs. Recorded in
+  `cruxvault/results/t81/SCORES_ANCHORS.md` §6 and §9.1, and in `BENCHMARK_DESIGN.md` §12.4.
+
+- **t88 and t89 had already landed.** §3F lists t88 as Phase-1 work and §3 lists t89 as "also open".
+  → t88's fix was already on `origin/main` (commit `a2a47b1`, arrived through the t77 merge; the
+  shipped-regime test now sweeps `configs/`), and a fresh detached worktree at HEAD ran **1,294
+  passed, 1 skipped**, the single skip being by design. t89's `src/candi/README.md`,
+  `tools/arch_diagram.py` and `tests/test_arch_readme.py` existed and passed. Only the crux closes
+  remained. Recorded in `.orchestrate/plan.md` "Verified ground truth",
+  `cruxvault/results/t88/FRESH_WORKTREE_PYTEST.md`, `cruxvault/results/t89/DELIVERABLE.md`.
+
+- **A regime file cannot carry the σ pass's self-pairs.** §3A's design (and the programme plan's
+  pinned interface) had the derived σ regime hold `eval_pairs = [[T_x, T_x] …]`. →
+  `candi.store.regime` **refuses** a pair whose target is its own source. The derived file therefore
+  carries `eval_pairs: []` with `biosamples.eval` set to the drawn cells, and every method reaches
+  the self-pairs through the store's **no-pairing path**. Three predict entry points read
+  `regime["eval_pairs"]` directly and silently wrote nothing under that shape until the fallback was
+  added. Recorded in `cruxvault/results/t81/W3_CI_SIGMA.md`, `SIGMA_AVGARCSINH.md`, and
+  `BENCHMARK_DESIGN.md` §12.2.
+
+- **`V_matched` needs the sibling `B_` pass; it does not come out of the `V_` pass.** §4.5 says all
+  three `V_` numbers come out of one pass. → True of a joint pass, false once the passes are split
+  by panel: `harness.panel_macros` measures the matched assay set from the `B_` rows **of the same
+  pass**, and our `V_` and `B_` passes run off panel-derived regimes, so `panels.V_matched` came out
+  **empty in every `store.V_.json`** and the matched board cell would have been blank for all 18
+  units. → Fixed by a merge, not a re-score: `candi.bench.external fill-panels --v … --b …`
+  recomputes `panels` over the union of the two files' `per_track` and records
+  `provenance.panels_from`; measured `V_matched.n_experiments` **0 → 21** with `V_breadth`
+  byte-identical either side. Recorded in `cruxvault/results/t81/FILL_PANELS.md`.
+
+- **Three of the five naive baselines are regime-dependent, and `avg-arcsinh` had a live bug
+  underneath that.** §3D's "correct the collapse to 2 + 3×2 = 8 units" was right: `similarity_table`
+  and `fit_marginal` read `panel.train_chroms`, so `marginal`, `knn1` and `knn5` fit differently per
+  regime. → The identity assertion, once it existed, caught what the argument could not:
+  **`avg-arcsinh` was averaging the top five contributors by kNN similarity** rather than every
+  eligible one, which made it regime-dependent too while its one number was being printed in both
+  regime rows. The three-contributor test fixture hid it (`top_k(…, 5)` over three returns all
+  three); the identity tests run on seven contributors now. The pilot trio also needed `regions`
+  support before they could be fitted at all. No board row quotes the old path. Recorded in
+  `cruxvault/results/t81/BASELINES.md`, `competitors/baselines/README.md`, and
+  `BENCHMARK_DESIGN.md` §12.2.
+
+- **`sbatch --export=ALL,VAR=a,b,c` truncates a comma-valued variable — and it cost a whole apply
+  stage.** Nothing here warned of it. → `CI_CHROMS=chr20,chr21,chr22` passed inside `--export=…`
+  arrived at the job as `CI_CHROMS=chr20` (measured in the running job's environment), so
+  ChromImpute's first `V_` apply ran **chr20 only**; chr21 and chr22 were never converted. Those
+  outputs were discarded and the chain re-run with the variables exported in the shell and
+  `--export=ALL`. The trained predictors were unaffected. Recorded in
+  `cruxvault/results/t81/W3_EARLY.md`, `W3_CHECK_2.md`.
+
+- **The real critical path was the GPU fairshare queue, not any CPU-h total.** §4.5's "Fir's CPU
+  allocation is not the scarce resource" held — every CPU scoring pass ran unimpeded. → But with
+  this programme holding ~39 % of the account's GPU use, `sprio` put essentially the whole of a
+  pending job's priority in fairshare (631,533 of 631,602), the scheduler offered **no start time
+  at all**, and six GPU jobs — both CANDI `V_` predicts, both Avocado σ runs, both eDICE `B_` runs —
+  sat `PENDING (Priority)` for hours. **The CANDI rows are the last on the board to land, and the
+  reason is queueing, not compute.** Recorded in `cruxvault/results/t81/TRAIN_CANDI_EIC19.md` and
+  the `pred.V_.CANDI.*` rows of `PROGRAMME_STATE.md`.
+
+- **The baseline prediction roots are uncompressed.** This document inherited §12.6's "deflates"
+  claim from t83. → True of CANDI, eDICE, Lavawizard and ChromImpute, which all call
+  `savez_compressed`. **Not** of the naive baselines: `competitors/baselines/generate.py:458` calls
+  `np.savez`, and the measured ratio is **1.000×**, with on-disk **1,250 bytes larger** than raw
+  (the zip container header). That is the largest class of roots on `/project` — **744 G** across
+  the eight baseline `B_` roots. eDICE, measured on a real root, deflates at **1.208×**; CANDI's
+  ratio is still unmeasured and is deliberately left blank in §12.6 rather than estimated. Recorded
+  in `cruxvault/results/t81/SCORES_BASELINES_B.md` §1.3, `PRED_B_EDICE.md` §4, and
+  `BENCHMARK_DESIGN.md` §12.6.
+
+**The pattern in all eleven.** Nine of them are a claim about an artefact taken from a description of
+it — a section of this handoff, a launcher header, a doc comment, a manifest that records no sizes.
+Every one was settled by opening the thing itself: the npz's key list, the job's own banner, the
+regime loader's refusal, a strict `load_state_dict`. **Where a doc and the code disagree, the code is
+right and the doc is the bug** — and that includes this document.
+
+### Second batch (2026-09-03/05) — the CANDI runs themselves
+
+Six more, in the same form. Two of the eleven above have since been overtaken by measurement, and
+are left standing rather than edited: the seed floor **is** measured now, on all three panels, in
+`plan/BENCHMARK_DESIGN.md` §12.9, and CANDI's compression ratio is no longer blank — §12.6 carries
+1.177× on the `B_` root. The preamble's discipline still holds below: **nothing here is a score.**
+Every figure is a defect, a device, a memory size, a count or a date.
+
+- **The CANDI predict launcher had never run end to end, and three defects were stacked in it
+  (2026-09-03).** §4.4 treats prediction as a solved step to be scheduled. → No CANDI predict had
+  ever passed its own plan step, so nothing had ever exercised the path. **K14:**
+  `slurm/t81_predict_candi.sh` read chromosome sizes from `CANDI_STORE/eic/genome/chrom_sizes.json`,
+  which does not exist — the genome layer is `CANDI_STORE/genome`, the same bug K13 had already
+  fixed in the scorer — so the chromosome list came out empty and the plan step exited 1 at start.
+  **K16, defect 1:** with that fixed, the launcher still captured the plan heredoc's **stdout**
+  positionally (`sed -n 1p/2p/3p`), and `harness.py:701` prints a `[bench] … declared eval pair(s)`
+  banner to stdout with no `file=sys.stderr`, so every field arrived shifted by one line and the
+  chromosome list became that banner. This predates K15 — the chunk-C script at `1633756` has the
+  same capture — and K15 only made it fail loudly, because the sharded path counts the chromosomes
+  and refuses a mismatch. It broke the unsharded GPU path too, and exporting `CHROMS` did not save
+  it, because the launcher overwrote the exported value unconditionally. **K16, defect 2:**
+  `tools/declare_eval_pairs.py` wrote the derived regime json with `write_text` and read it back at
+  once, and every shard of an array wrote the **same** path, so one shard read a half-written file;
+  the fix was `mkstemp` + `os.replace`. A **third** defect appeared the next day when a seed-1 shard
+  still read zero bytes back from another node — on Lustre an atomic rename can be visible before
+  its data is flushed — and the foreman added an `fsync` of the temp file before the replace. All 92
+  tasks of the first CPU launch failed at plan time. Nothing was written, and the `B_` once-only
+  budget stayed intact, because the marker guard sits after the shard-index check. Recorded in
+  `cruxvault/results/t81/TRAIN_CANDI_EIC19.md` §"CPU-sharded launches" §5 and §"CPU-sharded relaunch
+  (2026-09-03, K16)".
+
+- **The GPU queue starved, so CANDI predicted on CPU — and two memory ceilings nobody had chosen bit
+  in turn (2026-09-03/04).** §4.4 sizes CANDI's prediction runs in GPU-hours. → With this programme
+  holding about 39 % of the account's GPU use, `sprio` put essentially all of a pending job's
+  priority in fairshare and `squeue --start` gave no estimate at all; CANDI's predicts sat `PENDING`
+  for nine hours. A read-only check found a real `--device cpu` path in `dump.py` and no CUDA-only
+  code, and measured throughput said one unsharded CPU pass would need 71–143 h — over the 60 h band
+  — while 23 per-chromosome shards of about 6 h each would fit. **K15** built that sharded mode: a
+  per-shard dump, a merge job that verifies every track × chromosome before writing one manifest,
+  thread count from `--cpus-per-task`, and the device recorded in the manifest. It worked, at
+  1:15–1:35 h a shard. Two ceilings then failed. **16 GB is too small for a `chr1` shard at 51
+  tracks:** `MaxRSS` is linear in chromosome length at about 0.0688 GiB/Mb + 0.86, so `chr2` peaked
+  at 15.99 G and `chr1` needed ~18 G; three `B_` arrays — `eic_19`, `eic_pilot` and seed 1 — each
+  lost their `chr1` task, and each needed an unsharded 32 GB repair into the same root, plus a fresh
+  merge behind it. **32 GB is far too small for a CANDI score pass:**
+  `slurm/t81_score_external.sh`'s header `--mem=32G` was inherited by all six CANDI genome-wide
+  passes, and a CANDI track holds five `float32` arrays — about 4.8 GB live per track genome-wide,
+  against ~1 GB for a one-array rival. Two passes died hours in; the other four all sat at exactly
+  32.0 GiB, were duplicated at raised memory pre-emptively, and then died as predicted. The
+  replacements ran at 128 GB (`V_`) and 256 GB (`B_`), with `--cpus-per-task` raised to 33 and 66 so
+  that the 4000 MB-per-core rule kept them on `cpubase` instead of a large-memory pool six days out.
+  The live peak turned out to be 34–41 GB, far under the 148 GiB projection: the `eic_19` `B_` pass
+  ran at 256 GB and landed, while 128 GB duplicates covered the `eic_pilot` and seed-1 `B_` passes
+  and their 256 GB backstops were cancelled. One trap for a reader: the score launcher prints
+  `DONE … rc=137` after a kernel-killed python, so a grep for `DONE` reads an OOM as a success.
+  Recorded in
+  `cruxvault/results/t81/TRAIN_CANDI_EIC19.md` §"eic_19 B_ shard repair", §"eic_pilot B_ shard
+  repair" and §"Score-pass OOMs and resubmissions".
+
+- **Avocado's `V_` and `B_` roots are not the same numerical path (2026-09-03).** Nothing here warns
+  that a device fallback changes the arithmetic. → The same starvation pushed Avocado's `B_`
+  predicts to CPU, where they finished in 13–19 min a chromosome. But `predict.py:133` enables
+  autocast only when the device is CUDA, so Avocado's `V_` roots were predicted on a MIG slice under
+  **bf16** autocast and its `B_` roots on CPU in **fp32**. Same checkpoints, same inversion, same
+  chromosomes, same declared panel — only the precision of the forward differs, and no reader can
+  infer that from the score json. Avocado's `V_`↔`B_` gap therefore carries a precision term that no
+  other method's gap carries, and the size of that term is **unmeasured**: a CPU `V_` re-run to
+  measure it was not in scope. Both boards carry it as a device note from stamp-10. CANDI has no
+  such term — `candi.bench` wraps eval in `no_autocast`, so it is fp32 on either device. Recorded in
+  `cruxvault/results/t81/W3_AVOCADO.md` §26.
+
+- **The PI ruled that CANDI's CPU prediction roots are canonical (2026-09-04).** §4.4 assumes one
+  prediction root per unit and says nothing about a second. → Because the doomed GPU jobs still held
+  the canonical `V_` path when the CPU route launched, the CPU `V_` passes wrote to a **sibling
+  root**, `…/CANDI/<regime>/V_cpu`, while `B_` went to its canonical root, which no GPU job had ever
+  claimed. That left two candidate `V_` roots on paper. The PI ruled that **the CPU roots are
+  canonical** and are not to be renamed — the score passes were already reading them — so `V_cpu` is
+  the only CANDI `V_` root there is. The CANDI caveats on both boards were rewritten to say so at
+  stamp-20. Recorded in `.orchestrate/plan.md` (PI rulings, 00:13 PDT 2026-09-04) and in the CANDI
+  caveats of `leaderboard/boards.json`.
+
+- **Ten queued GPU jobs were doomed from the moment they were submitted, and were left in the queue
+  on purpose (2026-09-03/05).** §4.4's model is submit and wait. → Every CANDI GPU predict queued
+  before K16 carried the stdout-capture defect above — `57910740`, `57914202`, `57942777`,
+  `57942786`, `57943014`, `57943025`, `57944437`, `57944438`, and two chained score jobs — and each
+  would have burned a GPU allocation before failing, less legibly than the CPU route did, because
+  the model loads first. SLURM removed the dependants itself as `DependencyNeverSatisfied`; the
+  predicts needed a `scancel`, which is the PI's call and not an agent's, so they were left queued
+  and the PI cancelled them. **The general lesson:** a queued job carries the code it was submitted
+  against, so a defect found after submission is still sitting in the queue, and only a human
+  decides whether it is cancelled or allowed to fail. Recorded in
+  `cruxvault/results/t81/TRAIN_CANDI_EIC19.md` §"CPU-sharded launches" §7 and `.orchestrate/plan.md`.
+
+- **The board carried no caveat about the D1 collapse until stamp-10 (2026-09-03).** §7.3 lists the
+  badges and markers a row must carry, and does not name this one. → Under decision D1, `avg` and
+  `avg-arcsinh` are fitted once and scored twice, so their `eic.pilot` rows are the **`eic_19` root
+  scored at pilot addresses**. That is provable, and was proved by the identity assertion, but it is
+  invisible to anyone reading the pilot board: `boards.json` said nothing about it, while the σ badge
+  on the `avg-arcsinh` pilot rows names `sigma.eic_19.json` and `avg` fits no σ table at all. A
+  factual caveat was added on `eic.pilot` at stamp-10 — a statement of what the row is, not a
+  judgement of it. Recorded in `plan/BENCHMARK_DESIGN.md` §12.2 (D1) and the `eic.pilot` caveats in
+  `leaderboard/boards.json`.
+
+**The pattern in these six is not the pattern in the first eleven, and is worth naming separately.**
+Only one of them is a stale description. The rest are the price of a path nobody had walked: a
+launcher with three defects stacked in it, because nothing had ever reached the second one; two
+memory ceilings inherited from headers nobody had revisited; a device fallback that changed the
+arithmetic silently; and a queue holding jobs built against code that no longer existed. **A step
+that has never run end to end is not a scheduled step. It is unbuilt work with a job id.** Run the
+whole path once before queueing twenty of it, and size every band with the final check inside it.

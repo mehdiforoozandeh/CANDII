@@ -129,7 +129,8 @@ A C-index without its SE is not quotable. The C-block is sampled too and says so
 
 ```bash
 python -m candi.bench.external --store <regime.json> --pred <pred_root> --out <scores.json> \
-    [--chroms chr21,...] [--sigma-table <sigma.json>] [--varpool ...] [--allow-missing] \
+    [--chroms chr21,...] [--held-out-chroms chr20,chr21,chr22] [--truth-root <truth_root>] \
+    [--sigma-table <sigma.json>] [--varpool ...] [--allow-missing] \
     [--crps-approx K --crps-seed S]
 ```
 
@@ -154,6 +155,92 @@ invent an arm the producer did not predict: a point-only track carries the E and
 `signal_mu` is always already in `-log10 p`, so nothing is inverted and provenance says
 `pred_inversion: "external"`. There is no C block: every covariate instrument re-decodes a perturbed
 prompt, which needs the model.
+
+### `--held-out-chroms` — one pass, two aggregations
+
+The same flag `python -m candi.bench` takes, with the same meaning (`plan/BENCHMARK_DESIGN.md` §4):
+given a proper subset of the scored chromosomes, `per_track` / `macro` / `panels` carry the HELD-OUT
+scope — the ranked number — and a parallel `genome_wide` block carries the same three over every
+scored chromosome. Omitted, or naming everything scored, there is one scope and no block, and
+`provenance.scope` says which case it was rather than leaving a reader to infer it from an absent
+key. It cannot be combined with an `--eval-regions` selection scope: `genome_wide` means every bin
+of every scored chromosome, and under a region cut it would be a different measurement under that
+name.
+
+`panels` is `harness.panel_macros` per arm — `V_breadth`, `V_matched`, `B` (§5.2) — and is emitted
+on this path exactly as `run_bench` emits it, so a board never has to re-derive a panel number from
+a macro that has already dropped the panel labels.
+
+### `fill-panels` — `V_matched` filled from the sibling `B_` pass
+
+```bash
+python -m candi.bench.external fill-panels --v <store.V_.json> --b <store.B_.json> [--out <path>]
+```
+
+The matched panel's assay set is **measured from the `B_` rows of the pass it is given**, never
+listed — a hard-coded list would go stale the first time the panel moves, and silently. But the
+rivals programme scores the two panels in **separate passes**: the regimes are panel-derived
+(`tools/declare_eval_pairs.py split`) and the prediction roots are split too, so a `V_` pass holds
+no `B_` row, measures an empty set, and leaves the board's `V_ matched` cell blank for every unit.
+
+`fill-panels` fixes that without re-scoring anything. A per-track score does not depend on which
+other tracks shared the pass, so the two passes' `per_track` tables ARE the rows one joint pass
+would have held: the step hands `panel_macros` their union and writes back only `V_matched` — with
+its `matched_to`, its `note` and `ranked: False`. `V_breadth` stays the `V_` pass's own (the same
+rows either way) and `B` is not written at all, because the `B_` json is the file that describes the
+`B_` panel. `genome_wide.panels` gets the same treatment when both files carry the block.
+`tests/test_bench_external.py` scores 38 synthetic predictions jointly and as two panel passes and
+requires the filled `V_matched` to equal the joint one exactly, on both scopes.
+
+By default `--v` is rewritten in place after its original bytes are copied once to `<--v>.bak` (an
+existing `.bak` is never overwritten, so the pre-fill file survives a second run), and
+`provenance.panels_from` records `{b_json, b_pred_manifest_sha256, filled}` — a `V_matched` measured
+from another file is not reproducible unless that file is named. The refusals are all one question:
+are these two files halves of **one** exam? Same corpus, assay order, chromosomes, scored positions,
+method, `truth.source`, arms and regime family (`regime.<name>.<panel>.json` — the panel is the only
+segment that differs between siblings), with disjoint track keys and one of each panel. Scoring is
+unaffected: `python -m candi.bench.external --store … --pred … --out …` is still the default command
+and carries no sub-command name.
+
+### `--truth-root` — somebody else's truth, our instrument
+
+The 2019 ENCODE Imputation Challenge ranked its entrants — 23 teams plus the two organizer
+baselines, the 25 anchor rows — against its own blind-truth bigwigs. Our store's `-log10 p` is *our*
+MACS2 recomputation of the same experiments, and the two are not the same numbers
+(`competitors/entrants/README.md` §3). So to put a CANDI row beside a 2019 row, the truth has to be
+theirs:
+
+```bash
+# the truth root, and one entrant's submission, both from bigwigs (Fir only — pyBigWig)
+python tools/challenge_bigwigs.py truth-root --bigwig-dir <DATA_EIC_SYNAPSE/blind_truth> \
+    --bridge <eic_bridge.csv> --regime <B_-derived regime> \
+    --chrom-sizes <CANDI_STORE/eic/genome/chrom_sizes.json> --chroms chr20,chr21,chr22 --out <root>
+python tools/challenge_bigwigs.py pred-root --bigwig-dir <entrant dir> --method <entrant> ...
+```
+
+`--truth-root` swaps **one** input. The store still owns the grid, the declared track list and the
+provenance; the truth root is the same `<input>__<target>__<assay>` layout holding `signal_mu`, is
+cut with the same index as the prediction, and is scored by the same `score_track`. Its manifest
+carries `kind: "truth"` — a prediction root passed here is refused, since scoring a method against
+its own output is a perfect row and a meaningless one. `provenance.truth` is
+`{source, root, manifest_sha256}` under the flag and `{source: "store"}` without it, on every file,
+so no score file is ambiguous about what it was measured against.
+
+The challenge distributed signal tracks and **no peak calls and no read counts**, so under a truth
+root the count arm is absent and so is every pval-arm key that reads a peak call —
+`auprc`, `peak_base_rate`, `bernoulli_nll`, `acc_by_obs_strength`, `acc_by_imp_strength`,
+`peak_shape_corr_dnase` (`external.WITHHELD_WITHOUT_PEAK_TRUTH`), plus `nb_nll`, which the loss tier
+spreads into both arms. Absent keys, never nan — `peak_base_rate` in particular would be a finite
+`0.0` that `macro_mean` would average. `peak_overlap_<p>`, `n_points` and `prom_corr_h3k4me3` stay:
+none of them reads a peak call. The `panel` block (`panel_specificity`) is empty for the same
+reason. **A challenge-truth row and a store-truth row are two different exams and must never be
+quoted in one column.**
+
+The converter bins at `floor(chrom_len / 25)`, NaN → 0, anchored at position 0 — our grid (D13), not
+the challenge's `ceil` with its partial-last-window fix. A converted track is therefore one bin
+shorter than the 2019 arrays and numbers from the two grids are not interchangeable. The ID join is
+`eic_bridge.csv` (`biosample_dir` + `assay_name` → `filename`), never name munging. pyBigWig is
+imported lazily and is deliberately in no requirements file here: bigwigs never reach the laptop.
 
 ## The output is per-track first, macro second
 
