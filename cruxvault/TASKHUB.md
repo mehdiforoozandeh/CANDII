@@ -155,3 +155,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t89` [visualization] generate the architecture README and diagram from the code — *done* → `results/t89/DELIVERABLE.md`
 - `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *done* → `results/t90/MOVE.md`
 - `t91` [implementation] build the training-residual sigma pass so every point-only method gets a leak-free spread — *done* → `results/t91/DELIVERABLE.md`
+- `t98` [implementation] Whole-genome blind-set prediction arrays from the existing eDICE and ChromImpute checkpoints (throwaway preview) — *done* → `results/t98/README.md`
