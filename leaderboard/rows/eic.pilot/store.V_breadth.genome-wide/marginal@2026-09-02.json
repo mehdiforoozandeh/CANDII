@@ -1,0 +1,83 @@
+{
+ "address": {
+  "panel": "V_breadth",
+  "regime": "eic.pilot→20,21,22",
+  "scope": "genome-wide",
+  "truth": "store"
+ },
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-transductive",
+  "sigma": "native heteroscedastic",
+  "sigma_fitted_on": null,
+  "sigma_state": "native"
+ },
+ "board": "eic.pilot",
+ "date": "2026-09-04",
+ "in_sample_fraction": null,
+ "lineage": "baseline",
+ "markers": [
+  "no-selection"
+ ],
+ "method": "marginal",
+ "metrics": {
+  "count": {
+   "crps": 0.6977620725408759,
+   "crps_oracle_scaled": 0.690832586826147,
+   "nb_nll": 1.273080883994519,
+   "scale_error": 0.006929485714728704
+  },
+  "pval": {
+   "auprc": 0.016861527774739767,
+   "coverage_95": 0.9882135437841657,
+   "crps": 2.4771779905709788,
+   "gaussian_nll": 2.7096961773148944,
+   "mse": 228.46890996528995,
+   "mse1obs": 22746.102324961623,
+   "peak_base_rate": 0.016861527774739767,
+   "pit_ks": 0.42279914649595557
+  }
+ },
+ "missing_metrics": [
+  "pval/gwcorr",
+  "pval/gwspear"
+ ],
+ "panel_counts": {
+  "count": {
+   "n_assays": 22,
+   "n_experiments": 45
+  },
+  "pval": {
+   "n_assays": 22,
+   "n_experiments": 45
+  }
+ },
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/t81_scores/marginal/eic_pilot",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "has_peak_head": false,
+  "method_notes": {
+   "notes": "per-assay marginal (§5.4), the weakest distributional tier: one constant NB and one constant Gaussian per assay, moment-matched over the training cells' tracks on the TRAIN chromosomes, scaled to the target track's depth. No peak head — a marginal has no per-bin ranking to offer."
+  },
+  "regime": "/scratch/mforooz/t81_pred/_regimes/regime.eic_pilot.V_.json",
+  "score_json": "cruxvault/results/t81/scores/marginal/eic_pilot/store.V_.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "bd71b25",
+  "sigma_table": null,
+  "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83"
+ },
+ "ranked": false,
+ "schema_version": 2,
+ "version": "2026-09-02"
+}
