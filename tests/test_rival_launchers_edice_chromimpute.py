@@ -692,7 +692,7 @@ def test_the_sigma_stage_drops_a_cell_train_can_fit_nothing_for():
         "chromimpute/sigma.sh keeps a one-track cell, whose one item trains no classifier at all")
 
 
-@pytest.mark.parametrize("script", sorted(CHROMIMPUTE.glob("*.sh")), ids=lambda p: p.name)
+@pytest.mark.parametrize("script", [p for p in sorted(CHROMIMPUTE.glob("*.sh")) if p.name not in _NOT_A_BENCHMARK_LAUNCHER], ids=lambda p: p.name)
 def test_the_jar_default_is_the_pinned_one(script: Path):
     text = _text(script)
     for line in text.splitlines():
@@ -1006,7 +1006,7 @@ def test_every_variable_the_stage_reads_is_exported_by_the_driver(driver):
         f"an --export list is split on commas. Add them to the export block.")
 
 
-@pytest.mark.parametrize("script", sorted(CHROMIMPUTE.glob("*.sh")), ids=lambda p: p.name)
+@pytest.mark.parametrize("script", [p for p in sorted(CHROMIMPUTE.glob("*.sh")) if p.name not in _NOT_A_BENCHMARK_LAUNCHER], ids=lambda p: p.name)
 def test_no_assignment_rides_on_an_sbatch_export_list(script: Path):
     """`--export=ALL` or nothing. An assignment on that line is the wave-2 defect's shape.
 
