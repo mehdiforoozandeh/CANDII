@@ -37,15 +37,28 @@
 #
 # Env vars, all with the pinned defaults:
 #   CIRUN CI_REPO CI_STORE CI_PY CI_JAR FULL OUTROOT REGIME CI_THROTTLE ACCT
+#
+# 2026-09-05 — three fixes so this script obeys the ChromImpute launcher rules in
+# `tests/test_rival_launchers_edice_chromimpute.py`, which it is now checked by. What it submits,
+# in what order, with what guards, is unchanged.
+#   * CI_JAR defaults to the pinned jar under /project/def-maxwl/mforooz/tools, because the old
+#     default named the retired scratch checkout's tool directory, which is purge-eligible.
+#   * CI_REPO defaults to the pinned checkout CANDII_main, the one clone the programme runs
+#     scripts from; the HEAD guard below still pins fd33b71, so a run needs CI_REPO pointed at a
+#     clone parked on that commit.
+#   * the stage variables are EXPORTED and `sbatch` is given a bare `--export=ALL`, because sbatch
+#     splits an --export list on commas and truncates any comma-valued value in it silently (Fir
+#     job 57806189); the list this replaces already began with ALL, so the job sees the same
+#     environment it always did.
 set -euo pipefail
 
 CIRUN=${CIRUN:-/home/mforooz/scratch/blind_preview_chromimpute}
 OUTROOT=${OUTROOT:-/project/def-maxwl/mforooz/blind_preview_2026-09-01}
 FULL=${FULL:-/home/mforooz/scratch/t51_chromimpute/full_genome}
-CI_REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_t51}
+CI_REPO=${CI_REPO:-/project/def-maxwl/mforooz/CANDII_main}
 CI_STORE=${CI_STORE:-/project/def-maxwl/mforooz/CANDI_STORE/eic}
 CI_PY=${CI_PY:-/project/def-maxwl/mforooz/candi_venv/bin/python}
-CI_JAR=${CI_JAR:-/home/mforooz/scratch/t51_chromimpute/tool/ChromImpute.jar}
+CI_JAR=${CI_JAR:-/project/def-maxwl/mforooz/tools/ChromImpute.jar}
 REGIME=${REGIME:-/project/def-maxwl/mforooz/CANDII_t52/configs/regime.eic_test.json}
 CI_THROTTLE=${CI_THROTTLE:-10}
 ACCT=${ACCT:-def-maxwl}
@@ -138,7 +151,16 @@ NAPPLY=$(wc -l < "$CIRUN/lists/apply.txt")
 echo "[bp-ci] lists: gtd $NGTD | train $NTRAIN | apply $NAPPLY"
 
 # --- (4) the chain ------------------------------------------------------------------------------
-ENV_COMMON="ALL,CI_RUN=$CIRUN,CI_REPO=$CI_REPO,CI_STORE=$CI_STORE,CI_PY=$CI_PY,CI_JAR=$CI_JAR,CI_CHROMS=all"
+# THE STAGE ENVIRONMENT IS EXPORTED HERE, NOT LISTED ON THE `sbatch` LINE, exactly as `submit.sh`
+# and `sigma.sh` do it. `--export=<list>` is a COMMA-SEPARATED list of `NAME` / `NAME=VALUE`
+# entries, so a value carrying a comma is cut at the comma and its tail is read as bare variable
+# names to copy from the environment; they do not exist, and sbatch says nothing (measured on Fir,
+# job 57806189). None of the values below holds a comma today, but the next one would land the same
+# way, so the fix is the form: nothing is passed as `--export=<list>` at all. `--export=ALL` hands
+# the submitting shell's environment over verbatim, and the list this replaces already began with
+# `ALL`, so no environment was being scrubbed and the stages see what they always saw.
+export CI_RUN="$CIRUN" CI_REPO="$CI_REPO" CI_STORE="$CI_STORE" CI_PY="$CI_PY" CI_JAR="$CI_JAR"
+export CI_CHROMS="all"
 
 # `CI_THROTTLE` caps how many array tasks of one stage run at once. GenerateTrainData and Apply
 # each hold ONE OPEN gzip reader per compendium track — 267 of them — so an unthrottled array puts
@@ -148,11 +170,14 @@ sub() {  # sub <stage> <time> <mem> <mx> [afterok-jobid]
   local stage=$1 time=$2 mem=$3 mx=$4 dep=${5:-}
   local n; n=$(wc -l < "$CIRUN/lists/$stage.txt")
   local depflag=(); [ -n "$dep" ] && depflag=(--dependency=afterok:"$dep")
+  # Exported, not listed, for the same reason as the block above: `sbatch --export=<list>` splits
+  # its argument on commas, so no assignment goes on that line at all.
+  export CI_STAGE="$stage" CI_MX="$mx"
   sbatch --parsable --account="$ACCT" --nodes=1 --ntasks=1 --cpus-per-task=1 \
          --job-name="bp_ci_$stage" --array="0-$((n - 1))%$CI_THROTTLE" \
          --time="$time" --mem="$mem" \
          --output="$CIRUN/logs/%x_%A_%a.out" --error="$CIRUN/logs/%x_%A_%a.err" \
-         "${depflag[@]}" --export="$ENV_COMMON,CI_STAGE=$stage,CI_MX=$mx" "$STAGE_SH"
+         "${depflag[@]}" --export=ALL "$STAGE_SH"
 }
 
 JOB_GTD=$(sub gtd   12:00:00 24000M 20000M)
