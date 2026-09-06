@@ -8,8 +8,9 @@ untracked and per-machine by design.
 Two vocabularies the fixtures use throughout. `BOARD` is a regime id — the retired ids
 `main` / `dev` / `entrants` are gone (§9), and so is the `protocol` field that carried
 P1 / P2 / P3. `VIEW` is one address: truth, panel and scope joined by dots (§1). The `root`
-fixture also flips `noise_floor.measured` on, because the committed regimes have no measured
-noise floor and so rank nothing (§15) — the ranking tests below need a board that ranks.
+fixture also pins `noise_floor.measured` on with a fixture floor, so the ranking tests below do
+not depend on what the committed regimes happen to carry (§15). Since 2026-09-05 those regimes
+do carry a measured floor — t86 — and their ranked addresses compile `ranked`.
 
 The fixture geometry, once: `fixture-a` is best on every composite metric, `b` second, `c` third,
 `d` worst. On the count arm `a` and `b` sit 0.05 apart — under the 0.09 macro-CRPS floor, so they
@@ -952,10 +953,18 @@ def test_the_compiled_payload_makes_the_address_rule_structural() -> None:
     assert compiled["canonical_view"] == lb.CANONICAL_VIEW
     assert set(compiled["address"]["fields"]) == {
         "method", "regime", "truth", "panel", "scope", "metric"}
+    # §15 — the committed boards' noise floor was measured on 2026-09-05 (t86) and the PI turned
+    # ranking on that day, so a ranked address now compiles `ranked`. The three reasons an address
+    # still does not rank are unchanged and all three are exercised here: the anchor carries no
+    # regime (§6), `V_matched` is reported and never ranked (§5.2), and `genome-wide` likewise (§4).
     for bid, board in compiled["boards"].items():
         for key, view in board["views"].items():
-            assert view["ranking"]["state"] == "unranked", (bid, key)
-            assert view["ranking"]["reason"], (bid, key)
+            _truth, panel, scope = key.split(".", 2)
+            expected = "ranked" if (
+                bid != lb.ANCHOR and panel != "V_matched" and scope == "held-out") else "unranked"
+            assert view["ranking"]["state"] == expected, (bid, key)
+            if expected == "unranked":
+                assert view["ranking"]["reason"], (bid, key)
     anchor = compiled["boards"][lb.ANCHOR]
     # one panel, one scope, both truths (§6) — and `challenge` stays the view the block opens on,
     # because that is the measurement the 2019 field was ranked under
