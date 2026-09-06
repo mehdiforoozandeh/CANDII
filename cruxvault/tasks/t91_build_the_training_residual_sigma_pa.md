@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-09-01T19:52:45
-updated: 2026-09-01T19:52:45
+status: done
+created: "2026-09-01T19:52:45"
+updated: "2026-09-05T17:33:58"
 ---
 
 # t91 — build the training-residual sigma pass so every point-only method gets a leak-free spread
@@ -24,7 +24,7 @@ D2: without it the pval arm has no rival distributional entries; all four score.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Deliverable — the training-residual sigma pass](results/t91/DELIVERABLE.md)
 
 ## Evidence
 

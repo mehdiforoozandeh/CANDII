@@ -24,7 +24,7 @@ RIVALS_PLAN.md par.4: one scorer for every baseline and rival; round-trip accept
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- [merged 6125789 — candi.bench.external, round-trip gate exact, 913 tests green, golden 0 ULP](https://github.com/mehdiforoozandeh/CANDII/pull/18)
+- [merged 6125789 — candi.bench.external, round-trip gate exact, 913 tests green, golden 0 ULP; PR link inside](results/t47/LINK.md)
 
 ## Evidence
 

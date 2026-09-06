@@ -44,12 +44,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
-- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule
-- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
-- `t87` [implementation] reconcile the two declare_eval_pairs tools into one
-- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge
-- `t91` [implementation] build the training-residual sigma pass so every point-only method gets a leak-free spread
 
 ## Blocked
 
@@ -103,12 +97,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
-- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *open*
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *open*
-- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
-- `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
-- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *open*
-- `t91` [implementation] build the training-residual sigma pass so every point-only method gets a leak-free spread — *open*
 
 ## Done · Dropped
 
@@ -150,14 +138,20 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
 - `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
-- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
+- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `results/t47/LINK.md`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
+- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *done* → `results/t77/DELIVERABLE.md`
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *done* → `results/t78/G1_PHASE2_DNASE.md`
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *done* → `results/t79/G2_PILOT_HG38.md`
 - `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *done* → `results/t80/PANEL_RULE.md`
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *done* → `results/t81/DELIVERABLE.md`
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *done* → `results/t82/DELIVERABLE.md`
 - `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *done* → `results/t83/DELIVERABLE.md`
 - `t84` [implementation] vendor Lavawizard — the other three rivals were already implemented — *done* → `results/t84/DELIVERABLE.md`
 - `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *done* → `results/t85/DELIVERABLE.md`
+- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *done* → `results/t86/DELIVERABLE.md`
+- `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *done* → `results/t87/DELIVERABLE.md`
 - `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *done* → `results/t88/FRESH_WORKTREE_PYTEST.md`
 - `t89` [visualization] generate the architecture README and diagram from the code — *done* → `results/t89/DELIVERABLE.md`
+- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *done* → `results/t90/MOVE.md`
+- `t91` [implementation] build the training-residual sigma pass so every point-only method gets a leak-free spread — *done* → `results/t91/DELIVERABLE.md`

@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-29T18:41:10
-updated: 2026-08-29T18:41:10
+status: done
+created: "2026-08-29T18:41:10"
+updated: "2026-09-05T17:33:58"
 ---
 
 # t77 — redesign the leaderboard's data regimes, panels and ranking so every number has one address
@@ -24,7 +24,7 @@ the board's rows are labelled with regimes that do not say where a method traine
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Deliverable — one address per number](results/t77/DELIVERABLE.md)
 
 ## Evidence
 
