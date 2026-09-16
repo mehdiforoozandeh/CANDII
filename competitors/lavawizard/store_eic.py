@@ -517,11 +517,26 @@ def _declared_tracks(regime: dict, corpus) -> List[Tuple[str, str, str]]:
     An assay is declared for a pair when the **target** biosample carries it, because the target is
     where the truth comes from. Read from the store rather than assumed, so a pair with a partial
     panel produces exactly the tracks the scorer will look for.
+
+    **With no `eval_pairs` the pairing is `biosamples.eval` SELF-PAIRED**, mirroring
+    `bench.harness.StoreSource`'s no-pairing path (D31) — which is the same list
+    `candi.bench.external._expected` will ask this root for, so the two sides name the same
+    directories. That shape is not hypothetical: `tools/sigma_training_regime.py` writes it and can
+    write nothing else, because `candi.store.regime` refuses a `[c, c]` literal outright. Reading
+    `eval_pairs` alone returned `[]` there, and `write_predictions` then wrote ZERO tracks while the
+    caller still wrote a manifest — a σ prediction root that looks finished and holds nothing.
+
+    The target rule needs no branch: it was always the TRUTH cell's own rule, and a self-pair's
+    truth cell is the pair. §6.2's exclusion still holds the assay out — `write_predictions` drops
+    the INPUT cell's own track of the mark from the contributor pool, and on a self-pair the input
+    cell is the target, so the answer is never in the average it predicts from.
     """
     declared = list(regime["assays"])
+    pairs = [(str(row[0]), str(row[1])) for row in regime.get("eval_pairs", [])]
+    if not pairs:
+        pairs = [(str(b), str(b)) for b in (regime.get("biosamples") or {}).get("eval", [])]
     out: List[Tuple[str, str, str]] = []
-    for row in regime.get("eval_pairs", []):
-        src, tgt = str(row[0]), str(row[1])
+    for src, tgt in pairs:
         have = set(corpus[tgt].assays())
         out.extend((src, tgt, a) for a in declared if a in have)
     return out

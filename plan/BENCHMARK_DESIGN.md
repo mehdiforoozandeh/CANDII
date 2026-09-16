@@ -296,8 +296,8 @@ Costs nothing: same predictions, a second aggregation over a subset of the same 
 
 **Also note** the per-assay macro is where the imbalance bites hardest — 11 singleton assays are
 24 % of `V_` under per-track pooling but **50 %** of it under a per-assay macro. That is a
-precision problem, not a fairness problem, and the noise floor (§15) has to be measured on the
-`V_` breadth panel separately for that reason.
+precision problem, not a fairness problem, and the noise floor has to be measured on the
+`V_` breadth panel separately for that reason. **It now is, on all three panels — §12.9.**
 
 ### 5.3 The ranking rule (APPROVED)
 
@@ -329,6 +329,13 @@ two places.
 **Reading rule.** Ranks are computed within a panel. Never subtract `V_` (breadth) from `B_` —
 the matched number is the only legal subtraction, and it prints the panel caveat with it. **Rank
 stability** between `V_` and `B_` is informative and is worth surfacing.
+
+**Every panel now has a measured seed band, and they are not the same size — §12.9.** Held-out macro
+count CRPS moves between two seeds of one recipe by 0.0139 on `V_breadth` (`crps_oracle_scaled`
+0.0108, `scale_error` 0.0031), 0.0115 on `V_matched` (0.0094 / 0.0020) and **0.2033 on `B_`**
+(0.2091 / 0.0058) — against `AGENTS.md` §7.2's frozen target-clustered floor of ~0.09 on macro CRPS
+and its 0.1195 pooled-CRPS seed shift. A band belongs to its own panel and may never be borrowed
+onto another.
 
 ---
 
@@ -1045,13 +1052,18 @@ The critical path is **G1 → retrain → predict → score**.
 position-parameterised rivals already fit all 23 chromosomes — a genome-wide scoring scope declines
 a saving rather than adding a cost. What forces the retrain is §13, not §4.
 
-Summary of the whole programme: **3 gates, 10 training runs + 5 σ refits, 30 prediction runs
-(≈434 GB scratch), 95 scoring passes (≈4,360 CPU-h)**, plus Avocado's ≈40 GPU-h and CANDI's
-unmeasured GPU cost. Detail below.
+Summary of the whole programme, **CORRECTED 2026-09-03 from what ran**: 3 gates, **10 training runs
+(plus the seed-1 repeat t86 needs) + 9 σ refits**, **36 prediction runs**, **110 scoring passes**,
+plus Avocado's ≈40 GPU-h and CANDI's inference cost (§12.7).
 
-Two rulings of 2026-08-29 cut this from the 40 / 880 GB / 110 / 6,130 CPU-h first estimate: the
-naive baselines collapse to one prediction and one score each (§12.2), and a method whose
-`genome-wide` cell is blank is no longer predicted there (§4).
+The line here used to read "10 training runs + 5 σ refits, 30 prediction runs (≈434 GB scratch), 95
+scoring passes (≈4,360 CPU-h)". Three of those figures were wrong and one was two figures short:
+D1 makes it 18 units and 36 runs (§12.3), the σ tables are **9 over five methods**, not 5 over ten
+(§12.2), the passes are 60 unit passes + 50 anchor passes (§12.4), and both the ≈434 GB and the
+≈4,360 CPU-h were built from costings §12.6 and §12.4 now replace with measurements. Two earlier
+rulings of 2026-08-29 had already cut this from a 40 / 880 GB / 110 / 6,130 CPU-h first estimate:
+the naive baselines collapse (§12.2, amended by D1) and a method whose `genome-wide` cell is blank
+is no longer predicted there (§4).
 
 ### 12.1 The gates — nothing trains until these pass
 
@@ -1063,7 +1075,7 @@ naive baselines collapse to one prediction and one score each (§12.2), and a me
 
 G1 is the real gate. Skipping it trains every method on 34 tracks of the wrong units.
 
-### 12.2 Training runs — 10, plus 5 σ refits
+### 12.2 Training runs — 10, plus 9 σ refits
 
 | method | runs | why that count | arms |
 |---|---|---|---|
@@ -1072,14 +1084,49 @@ G1 is the real gate. Skipping it trains every method on 34 tracks of the wrong u
 | ChromImpute | 2 | one per regime | pval |
 | eDICE | 2 | one per regime | pval |
 | Lavawizard | 2 | one per regime | pval |
-| `avg`, `avg-arcsinh`, `marginal`, `knn1`, `knn5` | **1 each** | no fitted position parameters, so the regime's training loci do not enter them — one fit serves both regimes | pval + count + peak |
+| `avg`, `avg-arcsinh` **1 each**; `marginal`, `knn1`, `knn5` **2 each** | 8 | `avg`/`avg-arcsinh` have no fitted position parameters, so one fit serves both regimes; the other three fit on the regime's training chromosomes (D1). With the 10 above, **18 method-regime units** | pval + count + peak |
 
-**The naive baselines collapse to one of everything** (APPROVED 2026-08-29, closing costing 1 of
-the old §12.5). Because their fit is regime-independent, so is their output: the two regimes would
-produce byte-identical predictions. So each is fit once, predicted once and scored once, and the
-one number is printed in both regime rows. First implementation of `avg` asserts this — it predicts
-under both regimes once and checks the two outputs are identical — and the assertion, not the
-argument, is what licenses the collapse for the other four.
+**Two of the five naive baselines collapse, not five** (CORRECTED 2026-09-01, D1; the 2026-08-29
+approval of "one of everything" was right about `avg` and `avg-arcsinh` and wrong about the other
+three). The collapse rests on the fit being regime-independent, and that is a claim about the code:
+
+- `avg`, `avg-arcsinh` — every written bin is a function of the contributors' values **at the
+  predicted position**, and the contributor set is `biosamples.train` minus the target's cell type.
+  No training locus enters, so the two regimes produce identical predictions. One fit, one
+  prediction, printed in both regime rows.
+- `knn1`, `knn5` — `competitors/baselines/generate.py::similarity_table` correlates over
+  `panel.train_chroms`. A different training slice gives a different ranking and different
+  predictions.
+- `marginal` — `generate.py::fit_marginal` pools over `panel.train_chroms` for the same reason.
+
+**The identity assertion this section used to claim now exists**, and until 2026-09-01 it did not:
+`python -m competitors.baselines.generate --store <regime A> --out <root> --methods
+avg,avg-arcsinh --assert-regime-independent <regime B> [--assert-only]` re-predicts under B for the
+first chromosome of the pass **into a temporary directory**, compares every array with
+`np.array_equal`, and writes `regime_independent` into each manifest; a difference exits 5 and
+leaves no manifest behind, and under `--assert-only` the stamp is the only byte of the prediction
+root that changes. The flag is refused for `marginal`, `knn1` and `knn5` (exit 2) — asserting it of
+them would be asserting something false. `tests/test_baselines.py` runs both halves: the assertion
+passes for the collapsed pair on a two-regime store, and fails on `marginal` when the training
+slice is changed. **The assertion, not the argument, is what licenses printing one number in two
+rows.**
+
+**And the assertion caught a real one on its first honest fixture (2026-09-01).** `avg-arcsinh` was
+averaging the **top five contributors by kNN similarity** rather than all of them, which made it
+regime-DEPENDENT while this section printed its one number in both regime rows; §5.2 and t49 define
+it as the leave-one-out mean over every eligible contributor, taken in arcsinh space, and it now
+takes the contributor set `avg` takes. The three-contributor test fixture hid it because
+`top_k(…, 5)` over three contributors returns all three; the identity tests run on seven now. No
+board row quotes a number from the old path — see `competitors/baselines/README.md`.
+
+**The second pilot fit for `marginal`, `knn1` and `knn5` is scheduled (UNBLOCKED 2026-09-01).** It
+was blocked until then because `generate.py` read `train_chroms` raw and had no `regions` support,
+so under `eic.pilot` those three would have been fitted over 18 whole chromosomes (~2.7 Gbp)
+instead of the 25,588,197 bp §3.1 declares — a Rule 2 break every launcher refused with exit 3.
+`generate.py` now cuts both fitted quantities — `similarity_table` and `fit_marginal` — to the
+regime's `regions` through `RegionSet.contained_starts` (D32, the train split only, at a window of
+one bin), and refuses outright when that BED leaves the pool empty. The three pilot units are
+scheduled here; the launchers' exit-3 guard is gone.
 
 Reference budgets on record: Avocado ≈20 GPU-h per model, ChromImpute 128 CPU-core-hours
 genome-wide. CANDI's is G3.
@@ -1094,8 +1141,61 @@ the blanking ruling and was never reconciled with it; it is about 20 fits per re
 both. The joint fit's own chromosome (chr19 / the pilot regions) comes free with the shared run and
 is not one of the three.
 
-**σ-tables refit for all 10 methods**, on training residuals (§7). Every existing σ was fit on `V_`
-eval pairs and is void under Rule 1. Cheap, but nothing distributional scores until it is done.
+**The σ pass on training residuals EXISTS now (BUILT 2026-09-02).** Every earlier σ was fit on `V_`
+eval pairs and is void under Rule 1, and until this programme nothing in the tree fit one anywhere
+else — a search over every local and remote ref found no file fitting on training tracks, and all
+four rival `score.sh` refused outright. What was built: `tools/sigma_training_regime.py` derives the
+σ regime from a regime file, `competitors/sigma_pass.py` fits σ per assay from the residuals, the
+four `competitors/*/fit_sigma.py` are deleted, each method's `sigma.sh` calls the pass, and every
+consumer refuses a table whose `fitted_on` does not start `training-residuals:`.
+
+**Nine tables, not ten.** Avocado, ChromImpute, eDICE and Lavawizard get one per regime;
+`avg-arcsinh` gets one, under the D1 collapse. CANDI's spread is native; `avg`, `knn5` and
+`marginal` write their own `signal_sigma`; `knn1` alone stays point-only and needs no table.
+
+**The draw is 12 training cells** — `tools/sigma_training_regime.py --n-cells 12 --seed 890217` —
+and the residual is the method's own prediction on that cell's `T_x → T_x` self-pairs over the
+regime's training chromosomes. **The derived file cannot carry those pairs literally:**
+`candi.store.regime` refuses a pair whose target is its own source, so the file carries
+`eval_pairs: []` with `biosamples.eval` set to the 12 drawn cells, and every method reaches the
+self-pairs through the store's no-pairing path. That path had to be added to three predict entry
+points that read `regime["eval_pairs"]` directly and would otherwise have written nothing (K, K2).
+
+**What the draw could not cover, measured 2026-09-02:**
+
+- **ChromImpute keeps 6 of the 12 cells** — the same 6 under both regimes, since both share one
+  compendium: four lack training data for the rare acetylation marks, and two hold a single track,
+  which yields no classifier at all because `Train` holds the target's own track out. 20 (cell,
+  mark) items, 8 assays with σ > 0, against a launcher refusal at fewer than 3 kept cells.
+  (`cruxvault/results/t81/W3_CI_SIGMA.md`) Every other table keeps all 12.
+- **Two rare marks are skipped in every table.** `T_IMR-90 H2AK9ac` and
+  `T_trophoblast_cell H4K12ac` are each carried by one training cell on chr19, so the leave-one-out
+  pool is empty and no method writes them: the fits run with `--allow-missing` over 96 of 98 tracks
+  and name both in `skipped_tracks`. Neither mark is in any eval panel, so nothing scored falls
+  back. (`cruxvault/results/t81/W3_LAVA_PILOT.md`, `SIGMA_AVGARCSINH.md`)
+- **No σ table carries an ATAC-seq row, and 3 of the 51 `B_` targets are ATAC-seq.** So for every
+  method scored off a fitted table those three tracks are point-only: `crps`, `gaussian_nll`,
+  `coverage_95` and `pit_ks` land on **48 of 51** experiments while `mse` and `gwcorr` land on 51.
+  It is the same three targets every time — `T_DND-41`, `T_NCI-H929`, `T_RWPE2`. Widening the draw
+  to reach ATAC-seq would break the uniform 12-cell draw, so the gap is recorded rather than
+  patched. (`cruxvault/results/t81/PRED_B_CI.md`, `PRED_B_EDICE.md`, `PRED_B_LAVA_PILOT.md`)
+
+**Every σ is quoted with its `fitted_on`**, which names the derived regime, the kept-cell count, the
+chromosomes and, under `eic.pilot`, the Pilot BED — e.g. `training-residuals:
+regime.eic_19.sigma.json T_ self-pairs, 6 cells, chroms ['chr19']`. A table on 6 cells and a table
+on 12 are not the same instrument, and the count travels with the number.
+
+**The `eic.pilot` CANDI run's json was lost, and the architecture record was reconstructed
+(2026-09-01, `cruxvault/results/t81/PILOT_ARCH.md`).** `train.py` writes the run json only after the
+final full-coverage check, and job 57674899_1 was cancelled at its 16 h limit while that check was
+running. The checkpoint is a bare `state_dict` of 155 tensors and holds no architecture, so without
+a record it cannot be reloaded at all. `t81_eic_pilot_s0.arch.json` copies `config.arch` **verbatim,
+by script** out of the probe run's json — the probe was launched with the same COMMON flags — and
+the claim is settled by a strict load, not by argument: `load_state_dict(strict=True)` against the
+real checkpoint on a Fir node, empty missing list, empty unexpected list, `params=2,353,661` equal
+to the training job's own banner and to the probe json's `config.n_params`. The file carries a `why`
+key marking it reconstructed rather than recorded, and any manifest naming it as `--arch-from`
+carries that mark. **Size a band with the final check inside it, or this happens again.**
 
 **MID-TRAINING EVAL IS NOW MORE EXPENSIVE THAN TRAINING (measured 2026-08-31).** A full-coverage
 `V_` pass costs **5,446.6 s = 91 minutes**, not the ~13 minutes every earlier estimate here assumed.
@@ -1115,48 +1215,165 @@ Two consequences, and neither is optional:
   the patience trades directly against 91 minutes a check. That trade is the reason to think about
   `EVAL_EVERY`, not the training cost.
 
-### 12.3 Prediction runs — 30, once each
+**The `eic.19` retrain, MEASURED (2026-09-02, `cruxvault/results/t81/TRAIN_CANDI_EIC19.md`).** These
+are costs. No number from a training log is a benchmark number, and none of them may reach a board.
 
-There are **15 method-regime units**, not 20: the 5 naive baselines contribute one unit each
-instead of two (§12.2). Nine of the 15 predict genome-wide; six predict on chr20+21+22 only,
-because their `genome-wide` cell is blank (§4).
+| | |
+|---|---|
+| band, ruled by the PI | **23:59:00** in the 1-day GPU partition, against the launcher's derived 47 h |
+| elapsed | **18:16:39**, `COMPLETED`, 5.7 h of the band unused |
+| training | **381,276 steps in a 65,768.1 s wall** over 20 epochs |
+| early stop | **epoch 20** — no `V_` improvement since epoch 14, patience 3 |
+| the end-of-run check, both dials | **18,207.3 s = 5.06 h**, printed as one line after both |
+| one epoch | **145,248 windows**, not the launcher's projected 155,703 (7 % high) |
+
+That 65,768.1 s wall covers the epochs, the scoped mid-training monitor checks at `EVAL_EVERY=3`
+(426.1 s each) and the final check, so it is **not** divisible into a per-epoch cost. The 87.2
+min/epoch in `cruxvault/results/t81/WAVE2_PREPARE.md` §4 is a projection off a sampled probe rate
+through an `FC_FACTOR` — the probe never runs full coverage — and that file still carries it.
+
+The 23:59 band was a bet that early stopping would fire in time for both full-coverage dials, and it
+paid with 5.7 h to spare. One arithmetic lesson: an earlier pass budgeted ≈3 h for the end-of-run
+check (two dials at ~90 min each); the run's own measurement (`TRAIN_CANDI_EIC19.md`) put the
+impute dial at 133 min and the denoise dial at ≈306 min, ≈7.3 h projected, and the check took
+**5.06 h** — a full-coverage pass is not a linear multiple of a sampled one, and both errors were
+pessimistic, so nothing was at risk.
+
+### 12.3 Prediction runs — 36, once each
+
+There are **18 method-regime units**, not 20 and not the 15 this section carried until 2026-09-01:
+only 2 of the 5 naive baselines contribute one unit instead of two (§12.2, D1). Twelve of the 18
+predict genome-wide; six predict on chr20+21+22 only, because their `genome-wide` cell is blank
+(§4). Each unit predicts `V_` and `B_`, so 18 units are 36 runs.
 
 | unit | count | scope | `V_` (45 tracks) | `B_` (51 tracks) |
 |---|---|---|---|---|
 | CANDI, eDICE — 2 methods × 2 regimes | 4 | genome-wide | 21.8 GB | 24.7 GB |
-| `avg`, `avg-arcsinh`, `marginal`, `knn1`, `knn5` — 1 each | 5 | genome-wide | 21.8 GB | 24.7 GB |
+| `avg`, `avg-arcsinh` — 1 each; `marginal`, `knn1`, `knn5` — 2 each | 8 | genome-wide | 21.8 GB | 24.7 GB |
 | Avocado, ChromImpute, Lavawizard — 3 × 2 regimes | 6 | chr20+21+22 | 1.17 GB | 1.32 GB |
-| | **15 units → 30 runs** | | **≈419 GB + 15 GB = ≈434 GB** | |
+| | **18 units → 36 runs** | | **≈558 GB + 15 GB = ≈573 GB** | |
+
+**A unit is a prediction root, and it is not the same thing as a board row.** The one `avg` root
+and the one `avg-arcsinh` root are **scored twice** — once against each regime file — because
+`tools/leaderboard.py::gate_row_against_board` requires a row's regime name to match the board it
+is added to. So those two contribute one prediction and two scoring passes each, and every other
+unit contributes one of each. `slurm/t49_baselines_score.sh` addresses the score file by the
+BOARD's regime and the prediction root by the GENERATION regime, and it refuses to score a
+collapsed root against the other board unless that root's manifest carries the
+`regime_independent` stamp of §12.2.
+
+**MEASURED 2026-09-02: the collapsed pair's one root really is scored once per regime file.** `avg`
+and `avg-arcsinh` generate under `eic_19` and are then scored against the `eic.pilot` board off that
+same root, licensed by the `regime_independent` stamp their manifests carry — `identical: true`,
+asserted against `regime.eic_pilot.V_.json` on chr20 for the `V_` roots and against
+`regime.eic_pilot.B_.json` on chr1 for the `B_` roots, all four checked on Fir. That is **2 extra
+store `V_` passes and 2 extra store `B_` passes**, plus 2 extra challenge `B_` passes — six passes,
+no extra prediction. Four of the six were blocked until `slurm/t49_baselines_score.sh` gained
+`SIGMA` and `TRUTH` pass-through behind its stamp gate (K13).
+(`cruxvault/results/t81/BASELINES.md`, `SCORES_BASELINES_B.md`)
+
+**`V_matched` is filled from the sibling `B_` pass, not from a joint one (2026-09-02,
+`cruxvault/results/t81/FILL_PANELS.md`).** `harness.panel_macros` measures the matched assay set
+from the `B_` rows *of the same scored pass*, and our `V_` and `B_` passes are split by
+panel-derived regimes — so `panels.V_matched` came out **empty in every `store.V_.json`** and the
+matched board cell would have been blank for all 18 units. The fix is a merge, not a re-score:
+`python -m candi.bench.external fill-panels --v <store.V_.json> --b <store.B_.json>` recomputes
+`panels` (and `genome_wide.panels`) over the union of the two files' `per_track` and records
+`provenance.panels_from`. The matched set is still MEASURED from scored `B_` rows, only from the
+sibling pass. First real use, on both ChromImpute units: `panels.pval.V_matched.n_experiments`
+**0 → 21** over the 8 `B_` assays, `V_breadth` byte-identical before and after (same sha256 over
+the whole block), `.bak` kept. Every unit's `V_` json is filled once its `B_` json lands, and the
+board reads `V_matched` only from a filled file.
 
 485 MB per **array** genome-wide (121,241,684 bins × 4 bytes); 25.9 MB per array on the 6,478,903
-held-out bins. **The table above counts one array per track and is therefore low — CANDI writes
-five. See §12.6, corrected 2026-08-31.** `B_` is **touched once**, at the very end, and by the
-same ruling `B_` lands on `/project`, not scratch; `V_` stays on scratch and is deletable after
-scoring.
+held-out bins. **The table above counts one array per track and is therefore low for CANDI, which
+writes five, and for four of the naive baselines, which write four or five (`avg-arcsinh` writes one). See §12.6, rewritten
+from measurement 2026-09-03.** `B_` is **touched once**, at the very end, and by the same ruling
+`B_` lands on `/project`, not scratch; `V_` stays on scratch and is deletable after scoring.
 
-### 12.4 Scoring runs — ≈4,360 CPU-h
+The §12 summary line and §12.4's costings, which used to quote the pre-D1 counts, are corrected as
+of 2026-09-03.
 
-One pass = 45 tracks genome-wide ≈ **50 CPU-h** on 4 cores, projected from a measured 5 min 09 s
-for 20 chr21 tracks (`cruxvault/results/t51/PILOT_MEMO.md`).
+### 12.4 Scoring runs — 110 passes, costed from measurement
 
-| pass | count | CPU-h |
+**REWRITTEN 2026-09-03 from the passes that ran.** Both costings this section used to carry were
+wrong by large factors, in opposite directions.
+
+**The counts.** 18 units × {store `V_`, store `B_`, challenge `B_`} = **54** unit passes, plus the
+collapsed pair's 6 extra board passes (§12.3) = **60**, plus the 25 anchor entrants under both
+truths = **50**. **110 passes.** The CANDI-inside-the-2019-field figure (§6) adds none — it is one
+more run of the ranker over the `B_` challenge-truth scores already counted here.
+
+**A genome-wide store-truth pass costs ≈30 h of wall clock on 4 cores, not ≈12.5 h.** The old
+≈50 CPU-h came from a 20-track chr21 pilot (`cruxvault/results/t51/PILOT_MEMO.md`). Measured off
+the real genome-wide `V_` passes, with per-track times read from the flushed
+`[bench.external] k/26` lines (`cruxvault/results/t81/W3_CHECK_2.md` §3.2):
+
+| method | per-track | 45 tracks + startup |
 |---|---|---|
-| `V_`, store truth | 15 | ≈466 |
-| `B_`, store truth | 15 | ≈528 |
-| `B_`, challenge truth — p-value arm only | 15 | ≈528 |
-| the 25 anchor entrants, both truths | 50 | ≈2,835 |
-| | **95** | **≈4,360** |
+| `avg` | **38.7 min** | ≈29.5 h |
+| `knn1` | **29.7 min** | ≈22.8 h |
+| `knn5` | **23.6 min** | ≈18.2 h |
 
-Each of the three 15-pass rows is 9 genome-wide passes (≈50 CPU-h on `V_`, ≈57 on `B_`) plus 6
-held-out-only passes at 5.34 % of that (≈2.7 and ≈3.0), matching the 15 units of §12.3. The
-CANDI-inside-the-2019-field figure (§6) adds **no** pass — it is one more run of the ranker over
-the `B_` challenge-truth scores already counted here.
+Startup is **30 min 20 s with zero tracks scored**, measured directly rather than assumed, and is
+common to all four jobs (same launcher, same store open, same split). So a genome-wide pass is about
+**120 core-hours**, roughly 2.4× the old projection. The launcher's `--time=60:00:00` band
+(partition `b4`) holds all three with about 2× headroom. `marginal` shared a node with `avg` and its
+first track ran over two hours, so its rate can only be **bounded** from below — a bound, not a
+measurement, and the two readings it admits (node contention against a pathologically slow first
+track) cannot be separated by one snapshot.
 
-All CPU. Fir's CPU allocation is not the scarce resource. The two aggregations (`held-out`,
-`genome-wide`) and the three `V_` numbers (§5.2) all come out of the same pass — no extra
-inference.
+**Held-out passes cost minutes, not hours.** Measured on the Lavawizard and `avg-arcsinh` units: a
+51-track `B_` pass runs in **4–7 min** under challenge truth and **12–14 min** under store truth,
+and a 45-track `V_` pass in **≈22 min** under store truth. Store truth costs more than the
+pre-built challenge truth root every time.
 
-**Check before assuming:** the 23 entrant bigwigs live on scratch, which purges at 60 days.
+**Challenge-truth rows are held-out only — a blanked cell, not a gap.** The challenge truth root at
+`/project/def-maxwl/mforooz/t81_truth_challenge/B_` is built on chr20+21+22 only, so a challenge
+pass carries **no `genome_wide` block at all**: `scope.genome_wide_computed` is `false` and the
+scored chromosomes are the three. K12 made eDICE's launcher take its chromosome list from the truth
+root's own manifest under `TRUTH=challenge`; K13 refuses `genomewide` together with `challenge`
+outright (exit 2). (`cruxvault/results/t81/PRED_B_CI.md`, `SCORES_ANCHORS.md`)
+
+**The anchor block is held-out only, so ≈2,835 CPU-h was ~20× too high — and the measured cost is
+lower again.** `leaderboard/boards.json` declares the anchor block `truth=challenge`, `panel=B_`,
+`scope=held-out`; the old figure assumed genome-wide. Held-out is 5.34 % of genome-wide, which alone
+takes it to **≈150 CPU-h**. Measured, it is far under even that: 50 passes, **2–4 min each under
+challenge truth and 8–13 min each under store truth**, the whole block finished in about **40 min of
+wall clock** at 12-way concurrency (canary `57852673` 3 min 10 s, then array `57852939` 49/49
+between 2 min 20 s and 13 min 10 s). The reason is in the score file: **an entrant carries no σ**,
+so none of the distributional work runs. The store passes cost more than the challenge ones only
+because the store truth is read out of `CANDI_STORE` rather than out of a small pre-built truth
+root. (`cruxvault/results/t81/SCORES_ANCHORS.md` §6, §9.1)
+
+**Conversion cost, for whoever rebuilds those roots.** The 26-task array that wrote the challenge
+truth root plus the 25 anchor prediction roots ran 2–3 min a task with peak **MaxRSS 15.61 GiB**
+against a `--mem=16000M` (15.63 GiB) request — one task away from an OOM kill. Ask **24–32 G** on a
+re-run. Sizes: truth root 1.3 G, the 25 anchor roots 31 G together.
+(`cruxvault/results/t81/ANCHOR_ROOTS.md`)
+
+All CPU, and Fir's CPU allocation was never the scarce resource — the **GPU fairshare queue** was.
+With this programme holding ~39 % of the account's GPU use, `sprio` put essentially the whole of a
+pending job's priority in fairshare (631,533 of 631,602) and the scheduler offered no start time at
+all; six GPU jobs sat `PENDING (Priority)` for hours while every CPU scoring pass ran unimpeded.
+That queue, not any CPU-h total, is what the schedule actually turned on.
+(`cruxvault/results/t81/TRAIN_CANDI_EIC19.md`, `PROGRAMME_STATE.md`)
+
+The two aggregations (`held-out`, `genome-wide`) and the three `V_` numbers (§5.2) still all come
+out of the same pass — no extra inference.
+
+**The purge clock is retired.** The 23 entrant bigwigs no longer live only on scratch: t90 copied
+all 23 (960 G) plus the two organizer baselines the anchor block needs (90 G) to `/project`, each
+with a `VERIFIED.txt` checksum proof.
+
+> **Footnote — the store↔root chromosome-list defect (found 2026-09-02, fixed by K13).**
+> `slurm/t81_score_external.sh` built its genome-wide `--chroms` list from the **store**, which
+> carries 24 chromosomes including chrY, while every prediction root holds 23. `read_track_arrays`
+> then raised **late** — hours into a pass that had already started — and the same defect reached
+> the CANDI and eDICE genome-wide passes, not only the baselines. The launcher now takes `--chroms`
+> = store ∩ root (from the root's `manifest.json` `chroms`, else the first track's npz) and exits 6
+> when a held-out chromosome is missing from the root. A doc that lists a scope must be checked
+> against the artefact's own manifest, not against the corpus.
 
 ### 12.7 CANDI's inference cost, measured (G3, 2026-08-29)
 
@@ -1178,8 +1395,11 @@ per invariant 13, **fp32** (`bench/cli.py` wraps eval in `no_autocast`), `--batc
 | peak memory | MaxRSS **4.2 GiB** against 32 GB requested — size prediction jobs at 8 GB, not 32 |
 
 **Verdict: §4's `genome-wide` aggregation stays.** Its premium is **43 GPU-h, once** — the size of
-Avocado's already-accepted ≈40 GPU-h, and 2.6 % of the programme against §12.4's ≈4,360 CPU-h.
-These are MIG-slice hours, which is the unit invariant 13 makes us allocate in.
+Avocado's already-accepted ≈40 GPU-h, and a small fraction of the programme's CPU scoring cost,
+which §12.4 now measures rather than projects (the ≈4,360 CPU-h this line used to divide into no
+longer stands). These are MIG-slice hours, which is the unit invariant 13 makes us allocate in.
+**Cross-reference corrected 2026-09-03.** What actually rationed CANDI's GPU work was not the hour
+count but the fairshare queue — see §12.4's last paragraph.
 
 Three secondary findings. A perfect loader would buy 1.83×, so the loader is worth attention but is
 not the wall. **The loader's cost is CPU work, not network I/O** — staging the store to node-local
@@ -1224,67 +1444,233 @@ which for CANDI is 45.4 GPU-h a time and breaks the touch-once discipline outrig
 So the writer is new work on the critical path, and it belongs to `t80`. It is cheap — CANDI's
 whole share is 93 GB, minutes not hours — but it must land before the first prediction run.
 
-### 12.5 One costing left open
+### 12.5 The costings, both settled
 
-1. ~~**Do the naive baselines need one fit or two?**~~ **SETTLED 2026-08-29: one** — one fit, one
-   prediction, one score, printed in both regime rows, with the identity assertion of §12.2.
-2. **Does the truth toggle apply to `V_`, or only to `B_`?** The challenge staged 45–46 round-1
-   validation tracks that were never scored, so `V_` under challenge truth is possible. It is
-   **excluded** from the §12.4 table. Adding it is +20 passes, ≈1,000 CPU-h.
+1. ~~**Do the naive baselines need one fit or two?**~~ **SETTLED 2026-08-29: one** — and
+   **AMENDED 2026-09-01 (D1): one for `avg` and `avg-arcsinh`, two for `marginal`, `knn1` and
+   `knn5`.** The 2026-08-29 ruling was taken on the argument that the fit is regime-independent;
+   three of the five fit on `train_chroms` and are not. The collapsed pair keeps one fit, one
+   prediction and one root, scored once per board, with the identity assertion of §12.2 —
+   which now exists.
+2. ~~**Does the truth toggle apply to `V_`, or only to `B_`?**~~
+   **SETTLED 2026-09-01 (D3): excluded.**
+   The challenge staged 45–46 round-1 validation tracks that were never scored, so `V_`
+   under challenge truth is possible; it stays **excluded** from the §12.4 table, as §12.4 already
+   has it. It is +20 passes, ≈1,000 CPU-h, and answers nothing §6 asks. The exclusion is recorded
+   on the board.
+
+**One costing moved, and the ruling does not (2026-09-03).** The "≈1,000 CPU-h" in item 2 was sized
+off the same ≈50 CPU-h genome-wide figure §12.4 has now replaced with a measurement, and a
+challenge-truth pass is held-out only anyway (§12.4), so the true price of the excluded work is
+minutes a pass, not hours. **D3 stands regardless:** it was ruled on the ground that `V_` under
+challenge truth answers nothing §6 asks, and that ground is unchanged by the price.
 
 ### 12.6 Storage, in full
 
-**CORRECTED 2026-08-31 (PI approved). The figures below are per ARRAY; a method writes as many
-arrays as its heads have parameters.** 485 MB per array genome-wide (121,241,684 bins × 4 bytes).
-The old text read that as 485 MB per *track*, which is one array — true of a point predictor and
-false of every distributional one.
+**REWRITTEN 2026-09-03 from real prediction roots on Fir.** The per-array arithmetic of 2026-08-31
+survived contact with the roots; every compression figure did not. The rule stays: **the figures
+below are per ARRAY, and a method writes as many arrays as the arms it enters** — 485 MB per array
+genome-wide, from 121,241,684 bins × 4 bytes. That bin count was re-derived on the cluster from
+`CANDI_STORE/genome/chrom_sizes.json` over a root's own 23 chromosomes and reproduced exactly by
+three independent passes, so it is settled.
 
-A `TrackRecord` (`harness.py:131-159`) carries the prediction arrays, not one number per bin:
+A `TrackRecord` (`harness.py:131-159`) carries the prediction arrays, not one number per bin. The
+array counts below are **counted in the written roots**, not inferred from the heads:
 
-| method kind | prediction arrays per track | genome-wide, raw |
+| method | arrays per track, counted | genome-wide, raw |
 |---|---|---|
-| point (`ChromImpute`, the naive point baselines) | 1 — the value | 485 MB |
+| `ChromImpute`, `Lavawizard`, `eDICE`, `avg-arcsinh` | **1** — `signal_mu` | 485 MB |
+| `marginal`, `knn1` | **4** | 1.94 GB |
+| `avg`, `knn5` | **5** | 2.42 GB |
 | **CANDI, 3 heads** | **5** — `mu`, `n` (NB), `signal_mu`, `signal_sigma` (Gaussian), `peak_score` | **2.37 GB** |
-| a pval-arm rival with a σ-table | 2 — the value and its σ | 970 MB |
 
-So CANDI's own share is **466 GB raw** across its four `V_`/`B_` × 2-regime units, against the
-≈434 GB §12.3 gives for the whole programme. **§12.3's 434 GB total is therefore also low, and by
-about the same factor** — it was summed from the same one-array-per-track assumption.
+Avocado is deliberately absent from that table: its roots exist (45 tracks, 135 npz per `V_` root,
+chr20+21+22) but nobody has counted their keys, so **its array count is unmeasured** and is not
+guessed here. Count it the way eDICE's was — open one npz and read its key list.
 
-**Compression buys much less than first thought, and is not what makes this affordable.** An
-earlier draft here quoted **2.69×** and put CANDI at ≈173 GB. That figure is wrong for
-predictions, for a reason worth stating because it is easy to repeat:
+**One correction to the old table: a pval-arm rival with a σ-table writes ONE array, not two.** Its
+σ is a **flat per-assay table**, one float per assay in a json — not an array per bin. `eDICE`'s
+finished genome-wide root was opened and its npz files carry a single key, `signal_mu`, `float32`.
+The "2 — the value and its σ" row was an inference from the σ mechanism and it was wrong.
 
-2.69× was a blend of a sparse layer and a dense one — `counts` at 5.8×–19.7× pulling the average
-up, `pval` at 1.3×–2.1× holding it down — measured on **truth** arrays, where the count layer
-really is sparse integers. **A prediction has no sparse layer.** All five of CANDI's prediction
-arrays are model outputs — `mu` and `n` off a softplus, `signal_mu`, `signal_sigma`, `peak_score`
-likewise — and every one is a smooth full-mantissa float. The count arm's 15× never applies on the
-prediction side at all.
+**(a) The baseline roots are UNCOMPRESSED, and the ratio is 1.000× — measured, not 3–5×.**
+`competitors/baselines/generate.py:458` calls `np.savez`, which deflates **not at all**, so on-disk
+is raw plus a zip header. Measured on the first track of two roots, arrays' `nbytes` against file
+size:
 
-| array kind | `np.savez` | `np.savez_compressed` |
-|---|---|---|
-| smooth float32 — **what a prediction is** | 1.00× | **1.27×** |
-| sparse count-like — what truth counts are | 1.00× | 15.39× |
+```
+avg          chr1.npz  raw=199,165,120 B  on-disk=199,166,370 B  ratio=1.000x  (5 arrays)
+avg-arcsinh  chr1.npz  raw= 39,833,024 B  on-disk= 39,833,296 B  ratio=1.000x  (1 array)
+```
 
-*Measured 2026-08-31 on 2 M-element float32 arrays, and separately reproduced.* `dump.py:102`
-currently calls `np.savez`, which compresses **not at all** — so today CANDI's ≈466 GB is written
-raw. Switching to `savez_compressed` (`t83`) brings it to **≈367 GB**.
+On-disk is **1,250 bytes larger** than raw. So the footprint is arithmetic, and `du -sh` confirms
+it to the gigabyte — 5 arrays × 121 M bins × 4 B × 51 tracks ≈ 116 G, which is `avg` exactly:
 
-> Still an estimate, on synthetic arrays. **The first real prediction run records its own ratio and
-> this table is rewritten from it.** Full argument in `plan/T83_PREDICTION_WRITER.md` §4.2.
+```
+eic_19:     116G avg    116G knn5    93G marginal    93G knn1    24G avg-arcsinh
+eic_pilot:  116G knn5    93G marginal    93G knn1
+```
 
-**What actually makes the plan affordable is that Fir has room** — 13 TiB free on `/project`,
-17 TiB free on scratch, checked 2026-08-31. Compression is a convenience here, not the load-bearing
-assumption it was written as.
+**The spread is the arm count, not the content.** (`cruxvault/results/t81/SCORES_BASELINES_B.md`
+§1.1, §1.3)
 
-**Where it lives — RULED 2026-08-31 (PI).** `V_` predictions go to **scratch** and are deletable
-once scored. **`B_` predictions go to `/project`.** §5 rules that `B_` is predicted exactly once,
-so the first prediction set is the only legitimate copy that will ever exist: any measure not
-computed before a purge becomes unreachable, and re-predicting to recover it would break the
-touch-once rule outright. **Scratch purges at 60 days** — which also applies to the 23 entrant
-bigwigs already staged there, and to the one trained CANDI checkpoint (now copied to
-`/project/def-maxwl/mforooz/t81_checkpoints/`).
+**(b) eDICE deflates at 1.208×, measured on its finished genome-wide `V_` root.**
+`competitors/edice/run_eic.py:150` calls `savez_compressed`, as do `lavawizard/emit.py:115` and
+`chromimpute/collect.py:191`:
+
+| | `V_` genome-wide, measured |
+|---|---|
+| npz files | 45 tracks × 23 chroms = **1,035**, counted |
+| raw = 45 × 121,241,684 bins × 4 B | 21,823,503,120 B = **20.32 GiB** |
+| on disk, `du -s --block-size=1` | **18,070,847,488 B** = 16.83 GiB |
+| **raw / on-disk** | **1.208×** |
+
+The ratio is measured, not read off the manifest — the manifest records no array sizes at all, so
+raw is `n_tracks × bins × itemsize` with the itemsize read out of an actual npz.
+(`cruxvault/results/t81/PRED_B_EDICE.md` §4)
+
+**(c) CANDI's five-array root deflates at 1.177×. MEASURED 2026-09-03 on the finished `eic_19`
+`B_` root**, which replaces the "no number is written here" this section carried while that root
+was still queued. `src/candi/bench/dump.py:193` calls `savez_compressed` — t83 landed, so the
+"`dump.py:102` calls `np.savez`" claim this section used to carry is stale and the code is what to
+trust. Root: `/project/def-maxwl/mforooz/t81_pred_B/CANDI/eic_19/B_`.
+
+| | `B_` genome-wide, measured |
+|---|---|
+| npz files | 51 tracks × 23 chroms = **1,173**, counted; no `.tmp.npz` left, so the root is complete |
+| arrays per file | **5** — `mu`, `n`, `signal_mu`, `signal_sigma`, `peak_score`, all `float32` |
+| how the array count was got | four npz opened, across histone marks, ATAC-seq and DNase-seq — all five arrays present in every one |
+| compression | **deflate**, `zipfile.compress_type = 8` |
+| raw = 51 × 121,241,684 bins × 4 B × 5 arrays | 123,666,517,680 B = **115.17 GiB** |
+| on disk, summed file sizes | 105,111,670,879 B = **98 GB** (`du -sb` agrees to within 54 KB) |
+| **raw / on-disk** | **1.177×** |
+
+The `V_` root is the consistency check, not a second claim: `V_cpu`, 45 tracks × 23 chroms = 1,035
+npz, the same five arrays, **1.167×**.
+
+**The comparables, in one line: baselines 1.000×, CANDI 1.177×, eDICE 1.208×.** CANDI writes five
+arrays and still deflates a shade less than eDICE's one, which is what (b)'s reasoning predicts — a
+prediction root has no sparse layer, so every array is a smooth full-mantissa model output, and
+about 1.2× is what smooth floats buy.
+
+**Two notes for whoever owns the launchers.** `dump.py`'s manifest `"arms"` list holds
+`["count","pval"]` and never a peak entry, so it **undercounts the arrays by one**; the 5 above was
+read by opening files, not off the manifest. And the sharded predict job's `#SBATCH --output` has
+no `%a`, so all 22 array tasks shared one log file and only the last task's `[bench.dump]` line
+survived — which is why this section could not simply copy the writer's own line as it planned to,
+and why the manual formula above is the root's real measurement. Recorded in
+`cruxvault/results/t81/TRAIN_CANDI_EIC19.md` §"§12.6 compression ratio".
+
+**Why 2.69× was wrong, kept because it is easy to repeat.** It blended a sparse layer with a dense
+one — `counts` at 5.8×–19.7× pulling the average up, `pval` at 1.3×–2.1× holding it down — measured
+on **truth** arrays, where the count layer really is sparse integers. **A prediction has no sparse
+layer.** All five of CANDI's prediction arrays are smooth full-mantissa model outputs, so the count
+arm's 15× never applies on the prediction side. On synthetic 2 M-element float32 arrays,
+`savez_compressed` bought **1.27×** on smooth floats against 15.39× on sparse count-like ones; the
+measured 1.208× on eDICE's real root is close to that 1.27×, which was the first evidence the
+synthetic number was the right order. **CANDI's own 1.177×, measured in (c) on the five-array root
+the 2.69× was invented for, closes the question**: the smooth-float estimate was right and the
+blended one was wrong by more than a factor of two.
+
+**The `/project` footprint so far, summed from the recorded `du` figures.** The eight baseline `B_`
+roots are **744 G** (442 G under `eic_19`, 302 G under `eic_pilot`); the anchor subtree is **32.3 G**
+(truth root 1.3 G + 25 entrant roots 31 G); the two ChromImpute `B_` roots are **641 M** together
+(held-out only, 325 M + 316 M); Lavawizard's two `B_` roots are ~**1.1 G** each. That is about
+**780 G** on `/project`, against 13 TiB free — and the two eDICE `B_` roots still to land are
+projected at ~19.07 GiB each from the measured `V_` ratio. Both figures cited to
+`cruxvault/results/t81/SCORES_BASELINES_B.md` §1.1, `ANCHOR_ROOTS.md`, `PRED_B_CI.md`,
+`PRED_B_LAVA_PILOT.md`, `PRED_B_EDICE.md`.
+
+**What makes the plan affordable is that Fir has room** — 13 TiB free on `/project`, 17 TiB free on
+scratch, checked 2026-08-31 and unchanged in kind. **Compression is a convenience here, not a
+load-bearing assumption**, and the measurements above are why: the largest single class of roots on
+`/project` deflates by exactly nothing and still fits.
+
+**Where it lives — RULED 2026-08-31 (PI), and unchanged.** `V_` predictions go to **scratch** and
+are deletable once scored. **`B_` predictions go to `/project`.** §5 rules that `B_` is predicted
+exactly once, so the first prediction set is the only legitimate copy that will ever exist: any
+measure not computed before a purge becomes unreachable, and re-predicting to recover it would break
+the touch-once rule outright. That ruling was tested twice in practice — a launcher's once-guard had
+to gain a marker-aware clause and then a fill-only `B_COMPLETE_ARRAY` knob before one array's
+missing chromosome could be completed **without re-predicting anything already written** (K10).
+**Scratch purges at 60 days**, which is why the CANDI checkpoints were copied to
+`/project/def-maxwl/mforooz/t81_checkpoints/` and why t90 moved the 23 entrant bigwigs off scratch
+(§12.4).
+
+### 12.9 The seed noise floor, measured (2026-09-05)
+
+**What §15 deferred is done.** `t86` trained CANDI a second time on `eic_19` under the same recipe
+and scored both seeds through the same passes. This is the resolution band §5.2 and §5.3 say the
+board needs before any row is read as a rank.
+
+**What was run.** Seed 0 is the checkpoint every CANDI board row uses. Seed 1 trained 2026-09-03
+under the same config with `config.seed = 1`; it selected its best checkpoint at **epoch 5** and
+early-stopped at **epoch 11**, where seed 0 selected epoch 14 and stopped at 20. Both seeds
+predicted on **CPU**, over the sharded route §12.3 describes, and both were scored by the same
+scorer against the same store truth, the same regime json and the same held-out chromosomes. The
+two checkpoints differ and nothing else does: each score json records the sha256 of its own weights
+and it equals the file on disk, which rules out the one failure that would silently destroy the
+measurement — two jsons scored from one checkpoint. **Two seeds give one paired `|Δ|` per metric.
+It is a magnitude, not a distribution:** no standard deviation, no interval, no significance.
+
+**The three panels, held-out scope — the scope the board ranks.** Every CRPS travels with its
+`crps_oracle_scaled` and `scale_error` split, as `AGENTS.md` §7.2 rule 2 requires:
+
+| panel | count macro CRPS \|Δ\| | `crps_oracle_scaled` \|Δ\| | `scale_error` \|Δ\| | pval macro CRPS \|Δ\| |
+|---|---|---|---|---|
+| `V_breadth` — 45 experiments, 22 assays | **0.0139** | 0.0108 | 0.0031 | 0.0215 |
+| `V_matched` — 21 experiments, 7 assays | **0.0115** | 0.0094 | 0.0020 | 0.0200 |
+| **`B`** — 51 experiments, 8 assays | **0.2033** | **0.2091** | 0.0058 | 0.0069 |
+
+Genome-wide is quieter on all three — `V_breadth` 0.0103 (oracle-scaled 0.0063, `scale_error`
+0.0040), `V_matched` 0.0023 (0.0009 / 0.0014), `B` 0.1668 (0.1132 / 0.0536). **The ranked scope is
+held-out**, so the held-out column is the band; quoting the genome-wide figure as the board's floor
+would be flattering and wrong. `V_matched` is 7 assays and `B` is 8, because the `V_` side of
+`eic_19` holds no ATAC-seq track at all — they are not the same exam even where they look it.
+
+**One small number in that table is not good news, and must not be read as one.** `B`'s pval macro
+CRPS `|Δ|` is 0.0069 held-out and 0.0004 genome-wide, while that same arm's `gwspear` moves 0.1786
+and 0.0986 on the same rows. A metric that holds to four decimal places while the ranking under it
+swings by a sixth of its range is not measuring the ranking. Read 0.0069 as the floor of **that
+metric only**, never as evidence that the `pval` arm's `B_` predictions are seed-stable.
+
+**The reading, which is the point of this subsection.** `AGENTS.md` §7.2's frozen references are a
+target-clustered bootstrap noise floor on macro CRPS of **~0.09**, with per-comparison uncertainty
+±0.13, and a **0.1195** shift in pooled imputation CRPS from a seed change alone. The two `V_`
+panels sit six to nine times **under** both, at about 0.01–0.02, for reasons the source memo sets
+out: more experiments, every bin of three whole chromosomes, and a track-mean rather than an
+assay-mean all make a quieter mean. **`B` breaks that pattern and sits above them — 0.2033 is 1.7×
+the 0.1195 and 2.3× the ~0.09.** More tracks did not buy quiet there. The task did the opposite:
+`B_` cells are the combinations the model has never seen, and a seed change shows up in exactly
+that place.
+
+**So, plainly: on the `B_` panel, two rows whose held-out macro count CRPS differ by less than
+about 0.2 are the same row on this evidence.** A single-track `B_` claim needs more again — the
+per-track median `|Δ|` is **0.196** and the worst track moves 1.24. And on `B` the two seeds
+disagree about **ranking**, not scale: the oracle-scaled band (0.2091) is *larger* than the raw one
+(0.2033) while `scale_error` moves only 0.0058, and `beats_marginal` falls 0.686 → 0.451 — seed 0
+beats the marginal baseline on 35 of 51 tracks, seed 1 on 23. An oracle-scaled number is therefore
+no escape from it. **No between-method gap is computed or called here**; that reading is the PI's,
+panel by panel and metric by metric, with these bands beside the board.
+
+Four limits bind every figure above and none of them is softenable.
+
+1. **The band includes the selection rule.** The two seeds stopped at different epochs, so it is the
+   floor of "re-run this recipe end to end, selection included" — not of "the same training length
+   at two seeds".
+2. **Each band governs only its own panel.** §5.3 forbids subtracting `V_breadth` from `B` outright,
+   and the same bar forbids borrowing one panel's band onto another.
+3. **None of these is a clustered floor.** A target-clustered bootstrap resamples the *targets*, a
+   different and generally larger question than resampling the seed. The **~0.09 and the ±0.13 stand
+   unamended**, and a clustered floor on these three panels is still owed.
+4. **`V_matched` has no per-track band at all**, because the tool cannot derive the matched track set
+   from a `V_` json alone. No single-track `V_matched` claim can be made.
+
+`gaussian_nll` is unusable on every panel here: its seed `|Δ|` is the size of the metric itself (325
+on `V_breadth`, 924 genome-wide on `B`). No claim on this board may rest on it. One regime, one
+method — nothing here says a rival's seed sensitivity is the same, and with `B` this noisy that is
+now an open question rather than a formality. Full tables, both scopes, both arms, per track, and
+the verbatim tool output: `cruxvault/results/t86/SEED_FLOOR.md`.
 
 ---
 
@@ -1341,7 +1727,56 @@ Accepted as the price of the corrections above.
 
 ## 15. Status
 
-Every design question raised in this pingpong is settled. What remains is execution.
+**As of 2026-09-05.** Every design question raised in this pingpong is settled. The execution this
+section used to defer has, with two exceptions named below, happened. What follows is the state
+first, then the dated rulings that produced it, unedited.
+
+**What is executed.** All **18 method-regime units** (§12.2, decision D1) are trained, predicted and
+scored, and **every CANDI cell is scored** — both regimes, both truths, both panels, both scopes.
+The last CANDI score pass landed 2026-09-05 04:18 PDT. The 25-entrant anchor block is scored under
+both truths. The boards stand at about **168 rows as of stamp-22** — 146 rows before it (96 unit
+rows and 50 anchor rows), and stamp-22 adds the last CANDI cells. **Read the count off the row tree,
+never off this document:** `leaderboard/rows/` and `leaderboard/anchor/`, against the board
+definition in `leaderboard/boards.json`.
+
+**What is still running.** Two `marginal` store-truth `B_` score passes, and nothing else. On
+`eic_19`, job `57911697_4` had reached 59.6 h of its 60 h band on 2026-09-05 and was expected to
+time out; if it did, it must be rescued in the 138 h band. On `eic_pilot`, job `57918113_4` was at
+37.6 h. Neither is a CANDI cell, and neither blocks any reading of the CANDI rows.
+
+**What is measured that this section used to defer.**
+
+- **The seed noise floor, on all three panels — §12.9.** Between two seeds of one recipe, held-out
+  macro count CRPS moves **0.0139** on `V_breadth` (`crps_oracle_scaled` 0.0108, `scale_error`
+  0.0031), **0.0115** on `V_matched` (0.0094 / 0.0020), and **0.2033** on **`B`** (0.2091 / 0.0058).
+  `AGENTS.md` §7.2's frozen references are a target-clustered noise floor on macro CRPS of **~0.09**
+  and a **0.1195** pooled-CRPS seed shift. The two `V_` panels sit far under those. `B` sits 1.7–2.3×
+  **above** them.
+- **The storage ratios — §12.6.** CANDI's five-array roots deflate **1.177×** (`B_`) and **1.167×**
+  (`V_`), against baselines at 1.000× and eDICE at 1.208×. Every compression figure in §12.6 is now
+  a measurement.
+- **CANDI's placement inside the 2019 field.** One run of the challenge ranker over the `B_` panel
+  under challenge truth, with CANDI added to the 25 anchor entrants: **19 of 26 rows**, in a field of
+  **22 distinct submissions**, with **7 distinct submissions below CANDI**. This is a figure, never a
+  board row (§6), and it carries the ranker's own ~0.005 correlation-unit resolution limit.
+  **No seed floor exists on the capped-rank-fraction axis** — §12.9's bands are in CRPS units and do
+  not transfer to it — so that placement has no measured band of its own.
+  (`cruxvault/results/t81/CANDI_IN_2019_FIELD.md`)
+
+**What is NOT ranked, and why.** Nothing on either board is ranked, and none of the numbers above
+changes that. `CLAUDE.md`'s gate for an experiment lane is explicit: nothing merges on anyone's
+judgement that a number looks better. Having the floor on record makes a ranking **readable**; it
+does not make one. **Reading the board is the PI's act, and it is separate from landing the work.**
+Two consequences are worth stating in advance. On the `V_` panels the bands are small enough that
+ordinary differences are legible. On `B_` — the panel the generalization claim rests on — two rows
+whose held-out macro count CRPS differ by less than about **0.2** are not separated by this
+evidence, and that bar is coarser than either frozen reference. **No between-method gap is computed
+or called anywhere in this document.**
+
+**What the PI must do.** Merge the umbrella branch `implementation/t81-finish-benchmark` into
+`main`. The GitHub Pages deploy of the board follows that merge; it is the last step, not a parallel
+one. The `marginal` `B_` rescue above and the closing memo in `cruxvault/results/t81/` are the only
+work items that outlive it.
 
 ### Rulings of 2026-08-31 (PI)
 
@@ -1429,6 +1864,12 @@ Taken after all four rivals gained a `V_` selection loop and each independently 
   panels, because they do not have the same resolution. Nothing is ranked with a resolution band
   until it is done; rows may go up unranked before then. `AGENTS.md` §7.2 records that a seed
   change alone moves pooled CRPS by 0.1195, so this is not a formality.
+
+  > **DONE 2026-09-05 — no longer deferred. The measurement is §12.9,** and it went the way this
+  > entry feared on one panel of the three: `B`'s band is 0.2033 held-out macro count CRPS
+  > (`crps_oracle_scaled` 0.2091, `scale_error` 0.0058), which is 1.7× the 0.1195 this entry cites
+  > and 2.3× the frozen ~0.09. The `V_` panels came in an order of magnitude smaller. Rows are still
+  > unranked: a band makes a rank readable, it does not authorise one.
 - **Whole-genome training** — a placeholder regime only (§3).
 - **The `merged` corpus regimes** — placeholders. The zero-shot claim is tested there later, and
   only ChromImpute and the naive baselines can stand beside CANDI on it.

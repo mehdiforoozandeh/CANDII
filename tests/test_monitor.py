@@ -485,3 +485,83 @@ def test_the_banner_tells_the_two_cadences_apart(mid_row, row) -> None:
     fin = MON.format_check(row)
     assert "monitor@final" in fin and "best" in fin
     assert "end-of-run overfitting alarm" in fin
+
+
+# ---------------------------------------------------------------------------
+# 6 — t89: the SELECTION SCOPE. Cheap enough to run every check, and it says so.
+# ---------------------------------------------------------------------------
+# One V_ eval cost more than three times the epoch it supervises (`cruxvault/results/t89/`), and the
+# PI's ruling is that it must cost at most one. The answer is a NAMED REGION SET rather than a
+# thinner sample: every declared pair, every target track, every 25 bp bin of every window the BED
+# wholly contains. What must stay true is that the row still selects, and that nothing downstream
+# can mistake a scoped number for a full-coverage one.
+
+@pytest.fixture(scope="module")
+def sel_scope_bed(tmp_path_factory) -> Path:
+    """A BED over part of the eval chromosome, edges deliberately off the 25 bp bin grid."""
+    p = tmp_path_factory.mktemp("selscope") / "scope.bed"
+    p.write_text("chr2\t3210\t11190\tR0\n", encoding="utf-8")
+    return p
+
+
+@pytest.fixture(scope="module")
+def scoped_row(regime_file, count_model, sel_scope_bed):
+    m = _monitor(regime_file, eval_regions=sel_scope_bed)
+    try:
+        return m.check(count_model, epoch=2, step=120, kinds=("impute",))
+    finally:
+        m.close()
+
+
+def test_the_default_is_full_coverage_so_an_untouched_run_is_untouched(mid_row) -> None:
+    """The flag is opt-in. A run that does not pass it must produce the row it always produced."""
+    assert mid_row["eval_scope"]["name"] == "full"
+
+
+def test_a_scoped_check_still_produces_the_number_that_selects(scoped_row) -> None:
+    """Cheap is only worth having if it still selects: the same key, off the same dial, finite."""
+    assert scoped_row["selection"]["metric"] == MON.SELECTION_KEY == "crps"
+    assert scoped_row["selection"]["kind"] == "impute"
+    assert np.isfinite(scoped_row["selection"]["value"])
+    assert scoped_row["selection"]["n_tracks"] == scoped_row["impute"]["n_tracks"] > 0
+
+
+def test_a_scoped_check_scores_the_whole_panel_and_only_narrows_the_positions(
+        scoped_row, mid_row) -> None:
+    """It is NOT a thinner sample. Every track the full check scored is still scored end to end —
+    the deleted `eval.quick_eval` failed by dropping windows per track, and this drops none."""
+    assert set(scoped_row["impute"]["per_track"]) == set(mid_row["impute"]["per_track"])
+    sc = scoped_row["eval_scope"]
+    assert 0.0 < sc["fraction"] < 1.0
+    assert sc["scored_bins"] < sc["full_bins"]
+
+
+def test_the_row_records_which_positions_the_number_was_measured_over(scoped_row, mid_row,
+                                                                      sel_scope_bed) -> None:
+    """`chroms` cannot answer it: a full check and a scoped one name the SAME chromosomes and score
+    different amounts of them, so the scope block is the only thing that tells the rows apart. The
+    sha256 is the load-bearing field — a BED is a mutable file and a path pins nothing."""
+    import hashlib
+
+    sc = scoped_row["eval_scope"]
+    assert sc["name"] == "regions" and sc["policy"] == "contain"
+    assert sc["sha256"] == hashlib.sha256(sel_scope_bed.read_bytes()).hexdigest()
+    assert scoped_row["chroms"] == mid_row["chroms"], "the chromosome list did NOT distinguish them"
+    assert scoped_row["eval_scope"] != mid_row["eval_scope"]
+
+
+def test_the_banner_says_when_the_number_is_not_full_coverage(scoped_row, mid_row) -> None:
+    """A reader scrolling a log compares banners across epochs, and a `regions` number and a `full`
+    number are not two measurements of one quantity. The full-coverage banner is unchanged."""
+    assert "@regions" in MON.format_check(scoped_row)
+    assert "@regions" not in MON.format_check(mid_row)
+
+
+def test_the_tiers_are_the_same_tiers_minus_nothing_the_monitor_reported(scoped_row,
+                                                                         mid_row) -> None:
+    """The positional measures the scope drops were never in the monitor's tiers, so a scoped row
+    carries every key a full row carries — only measured over fewer positions."""
+    assert scoped_row["tiers"] == mid_row["tiers"]
+    for tier_keys in scoped_row["tiers"].values():
+        for k in tier_keys:
+            assert (k in scoped_row["impute"]["macro"]) == (k in mid_row["impute"]["macro"]), k

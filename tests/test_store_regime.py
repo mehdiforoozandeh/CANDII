@@ -16,8 +16,8 @@ import pytest
 from candi.store import layout as L
 from candi.store.reader import CorpusStore
 from candi.store.regime import (
-    DEFAULT_DSF_LEVELS, DEFAULT_MIN_VALID_FRAC, DsfPolicy, Regime, RegimeError, WindowPlan,
-    eligible_starts,
+    DEFAULT_DSF_LEVELS, DEFAULT_MIN_VALID_FRAC, DsfPolicy, Regime, RegimeError, RegionSet,
+    WindowPlan, eligible_starts,
 )
 
 from tests.test_store_reader import (
@@ -553,3 +553,104 @@ def test_the_pilot_regime_plans_its_training_windows(tmp_path):
         assert all(any(a <= s and s + ctx <= b for a, b in spans) for s in kept.tolist())
         planned += int(kept.size)
     assert planned == 1_294
+
+
+def test_a_bed_named_on_a_command_line_is_hashed_rather_than_hash_checked(tmp_path):
+    """`from_obj` checks a DECLARED hash because the regime cannot pin the BED any other way. A
+    scope named on a command line (t89's `--eval-regions`) has no declaration to check against, so
+    the hash is computed and travels in the run's provenance instead — which is what makes two runs
+    comparable or not. Same object, same intervals, same `contain` rule."""
+    bed = _bed(tmp_path / "r.bed", [("chr1", 100, 400)])
+    got = RegionSet.from_bed(bed)
+    assert got.sha256 == hashlib.sha256(bed.read_bytes()).hexdigest()
+    assert got.policy == "contain"
+    assert got.intervals == RegionSet.from_obj(_regions(bed), base=tmp_path).intervals
+    assert got.to_dict()["sha256"] == got.sha256
+
+
+def test_the_shipped_pilot_bed_reads_as_the_44_regions_the_design_names():
+    """Read off the file, not off the doc. §3.1 pins 44 regions and 29,984,074 bp in hg38, and the
+    same BED is the eval scope t89 offers — so a lift that silently changed would move the training
+    scope and the selection scope at once."""
+    rs = RegionSet.from_bed(PILOT_BED)
+    assert len(rs.intervals) == 44
+    assert sum(e - s for _, s, e, _ in rs.intervals) == 29_984_074
+    assert rs.sha256 == "13e11a198fdee08edb7797d1e402b5d985846b5a7d973ade91e8511462acb7a3"
+
+
+def test_a_bed_that_is_not_there_is_refused_by_name(tmp_path):
+    with pytest.raises(RegimeError, match="is not a file"):
+        RegionSet.from_bed(tmp_path / "absent.bed")
+
+
+# ---------------------------------------------------------------------------------------------
+# the SEEDED selection scope (`configs/regions/eval_random450_seed890217.bed`)
+# ---------------------------------------------------------------------------------------------
+# The property that makes a seeded scope defensible is that nobody chose the loci and the choice
+# is checkable — so the check is a test, not a claim in a doc. `PROVENANCE.md` records the seed,
+# the window count, the pool and the bin counts; a reader with that file must be able to
+# regenerate this exact BED, and these fail if they cannot.
+
+SCOPE_BED = REPO / "configs" / "regions" / "eval_random450_seed890217.bed"
+SCOPE_SEED, SCOPE_WINDOWS, SCOPE_CTX = 890217, 450, 768
+SCOPE_NBINS = {"chr20": 2577766, "chr21": 1868399, "chr22": 2032738}
+
+
+def test_the_selection_scope_bed_regenerates_from_its_recorded_seed_alone():
+    """Byte for byte, from the seed and the grid in PROVENANCE.md — no store, no network.
+
+    This is the whole audit trail. A BED that cannot be re-derived is a set of loci somebody could
+    have edited after seeing a number, which is exactly what a seed is supposed to rule out.
+    """
+    import tools.make_eval_scope_bed as G
+
+    assert SCOPE_BED.is_file(), f"{SCOPE_BED} is committed; the scope is nothing without it"
+    again = G.build(SCOPE_NBINS, windows=SCOPE_WINDOWS, seed=SCOPE_SEED,
+                    context_bins=SCOPE_CTX, resolution=RES)
+    assert again == SCOPE_BED.read_text(encoding="utf-8")
+
+
+def test_the_selection_scope_is_drawn_from_the_plan_the_full_pass_walks():
+    """A subset of exactly what it estimates. Every interval is one window of `full_tiling` — not
+    a re-tiling, not an arbitrary interval — so the cheap number is an estimator of the expensive
+    one rather than of something adjacent to it."""
+    from candi.bench.harness import full_tiling
+
+    rs = RegionSet.from_bed(SCOPE_BED)
+    assert len(rs.intervals) == SCOPE_WINDOWS
+    plan = {c: set(full_tiling(n, SCOPE_CTX)) for c, n in SCOPE_NBINS.items()}
+    for c, s, e, _ in rs.intervals:
+        assert s % RES == 0 and e % RES == 0, (c, s, e)
+        assert (e - s) == SCOPE_CTX * RES, "an interval must be exactly one window"
+        assert (s // RES) in plan[c], f"{c}:{s} is not a start the full-coverage pass walks"
+
+
+def test_the_selection_scope_round_trips_through_the_contain_rule_exactly():
+    """450 intervals in, 450 windows out. Verified at this size rather than assumed to scale from
+    the smaller set it was first checked at — a merged or off-grid interval would admit a different
+    set than was drawn, and nothing downstream could tell."""
+    from candi.bench.harness import full_tiling
+
+    rs = RegionSet.from_bed(SCOPE_BED)
+    total = 0
+    for c, n in SCOPE_NBINS.items():
+        got = [int(x) for x in rs.contained_starts(
+            c, np.asarray(full_tiling(n, SCOPE_CTX), dtype=np.int64), SCOPE_CTX, RES)]
+        want = sorted(s // RES for cc, s, _, _ in rs.intervals if cc == c)
+        assert got == want, c
+        total += len(got)
+    assert total == SCOPE_WINDOWS
+    assert total * SCOPE_CTX == 345_600
+
+
+def test_the_selection_scope_is_not_stratified_by_chromosome():
+    """A uniform draw, so the split tracks chromosome LENGTH rather than a rule we imposed. The
+    Pilot cut is the counter-example that motivated this: it put over half its windows on chr21,
+    the shortest of the three."""
+    rs = RegionSet.from_bed(SCOPE_BED)
+    drawn = {c: sum(1 for cc, _, _, _ in rs.intervals if cc == c) for c in SCOPE_NBINS}
+    total_bins = sum(SCOPE_NBINS.values())
+    for c, n in SCOPE_NBINS.items():
+        expected = SCOPE_WINDOWS * n / total_bins
+        # a uniform draw of 450 from 8437 — Poisson-ish scatter, so a loose band is the honest test
+        assert abs(drawn[c] - expected) < 4 * expected ** 0.5, (c, drawn[c], expected)

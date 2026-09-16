@@ -63,13 +63,20 @@ if [ -z "${N_TARGETS:-}" ]; then
   exit 2
 fi
 
-REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}"
+REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_main}"
 VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 # RETARGETED 2026-08-31: was configs/regime.eic_val.json (train chr19, eval chr21, 26 V_ pairs).
 # The two live regimes are eic_19 and eic_pilot (BENCHMARK_DESIGN.md §3); run this once per regime.
 REGIME="${REGIME:-$REPO/configs/regime.eic_19.json}"
 REGIME_NAME="$(basename "$REGIME" .json)"; REGIME_NAME="${REGIME_NAME#regime.}"
-OUT="${OUT:-/project/def-maxwl/mforooz/rivals_src/edice_runs/${REGIME_NAME}_nt${N_TARGETS}}"
+# The t81 workspace, and NOT rivals_src/edice_runs any more: every run under that root was fit
+# against a retired regime or carries a sigma table Rule 1 voided, and a board run must not land
+# beside one it could be confused with. Scratch, because the selection preds are tens of GB; the
+# one file the programme reads back is copied to $CKPT_DIR at the end.
+RUNS="${RUNS:-/scratch/mforooz/t81_rivals/eDICE}"
+OUT="${OUT:-$RUNS/${REGIME_NAME}_nt${N_TARGETS}}"
+# Where the programme reads a selected checkpoint from -- one directory per (method, regime).
+CKPT_DIR="${CKPT_DIR:-/project/def-maxwl/mforooz/t81_checkpoints/eDICE/${REGIME_NAME}}"
 EPOCHS="${EPOCHS:-50}"
 # §5's uniform rule. EVAL_EVERY is CANDI's cadence; see the cost table in the header before
 # changing it, and note EARLY_STOP's resolution is EVAL_EVERY, so a patience below it never fires.
@@ -87,6 +94,7 @@ source "$VENV/bin/activate"
 
 cd "$REPO/competitors/edice"
 export PYTHONPATH="$PWD:$REPO/src"
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 mkdir -p "$OUT"
 
 # D32 IS HONOURED NOW. This block used to REFUSE a `regions` regime, because reading train_chroms
@@ -131,6 +139,15 @@ if [ "$EVAL_EVERY" != "0" ] && [ $rc -eq 0 ]; then
   if [ -f "$OUT/model.selected.pt" ]; then
     echo "[edice] OK: model.selected.pt exists -- a checkpoint was selected on V_ $SELECT_METRIC."
     echo "[edice]   SCORE THAT FILE, not model.pt. eic_score.sh's MODEL= must name it."
+    # Copy, never move: eic_score.sh and sigma.sh both default to the workspace copy. train.json
+    # and select.json travel with it, because they carry the selected epoch and the selection
+    # curve -- without them the checkpoint directory cannot say which run made this file.
+    mkdir -p "$CKPT_DIR"
+    cp -f "$OUT/model.selected.pt" "$CKPT_DIR/model.selected.pt"
+    for j in train.json select.json; do
+      [ -f "$OUT/$j" ] && cp -f "$OUT/$j" "$CKPT_DIR/$j"
+    done
+    echo "[edice] selected checkpoint copied to $CKPT_DIR/model.selected.pt"
   else
     echo "[edice] WARNING: eval_every=$EVAL_EVERY but NO model.selected.pt was written. This run" >&2
     echo "[edice]   did NOT select on V_, so it does not satisfy BENCHMARK_DESIGN §5. Do not use." >&2

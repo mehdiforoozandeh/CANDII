@@ -263,6 +263,7 @@ class Monitor:
                  signal_target_transform: str = "none",
                  kinds: Sequence[str] = ("impute", "denoise"),
                  arm: str = COUNT_ARM,
+                 eval_regions: Optional[Any] = None,
                  log_fn: Optional[Callable[[int, Mapping[str, Any]], None]] = None) -> None:
         from candi.bench import annotations as ann
         from candi.bench.harness import KINDS, open_source
@@ -285,7 +286,8 @@ class Monitor:
         self.c_index_pairs = int(c_index_pairs)
         self.signal_target_transform = str(signal_target_transform)
         self.log_fn = log_fn
-        self.source = open_source(store=store, **({"chroms": list(chroms)} if chroms else {}))
+        self.source = open_source(store=store, eval_regions=eval_regions,
+                                  **({"chroms": list(chroms)} if chroms else {}))
         # Loaded once. These are pinned repo assets (`bench.annotations.verify_assets`), so this is
         # a read of files already on disk rather than a new dependency of the training loop.
         self._gene = ann.gene_annotations()
@@ -365,6 +367,11 @@ class Monitor:
             "heads": list(model_heads(model)),
             "tiers": {t: list(ks) for t, ks in tiers(model).items()},
             "chroms": list(self.source.eval_chroms),
+            # t89 — WHICH POSITIONS this number was measured over, on the row itself. `chroms` alone
+            # no longer answers it: a `full` check and a `regions` check name the same three
+            # chromosomes and score 37x different amounts of them, and a curve that silently
+            # changed scope mid-run would read as the model moving.
+            "eval_scope": self.source.scope(),
         }
         for k, d in dials.items():
             row[k] = d.as_dict()
@@ -436,8 +443,15 @@ def format_check(row: Mapping[str, Any], *, best: Optional[Mapping[str, Any]] = 
     imp, sel = row["impute"], row["selection"]
     tag = (f"[monitor@final:{row.get('selected', 'best')} ckpt, ep{row['epoch']}]"
            if row.get("final") else f"[monitor@ep{row['epoch']}]")
+    # The SCOPE is in the banner because the banner is what a reader compares across epochs, and a
+    # `regions` number and a `full` number are not two measurements of one quantity. Printed only
+    # when it is not the full scope, so an untouched run's log is byte-for-byte what it was.
+    scope = row.get("eval_scope") or {}
+    where = ",".join(row["chroms"])
+    if scope.get("name") not in (None, "full"):
+        where += f" @{scope['name']} {scope.get('fraction', float('nan')):.2%}"
     head = (f"{tag} impute {sel['metric']}={sel['value']:.4f} "
-            f"(n={imp['n_tracks']} tracks, {','.join(row['chroms'])})")
+            f"(n={imp['n_tracks']} tracks, {where})")
     if "denoise" in row:
         den = row["denoise"]
         gap = row.get("gap", {}).get(sel["metric"])

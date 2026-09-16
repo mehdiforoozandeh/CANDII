@@ -16,6 +16,21 @@ Six roots come out of one pass over the store, because they all read the same co
 `avg` is the baseline of record. Scoring is not this module's job: every root goes through
 `python -m candi.bench.external` exactly as a rival's would.
 
+HOW MANY TIMES EACH OF THEM RUNS (D1, 2026-09-01)
+-------------------------------------------------
+`avg` and `avg-arcsinh` are generated ONCE and their one root is printed in both regime rows;
+`knn1`, `knn5` and `marginal` are generated once per regime, because their fit reads the regime's
+training chromosomes. `REGIME_INDEPENDENT` / `REGIME_DEPENDENT` below carry the reasoning, and
+
+    python -m competitors.baselines.generate --store <regime A> --out <root> \\
+        --methods avg,avg-arcsinh --assert-regime-independent <regime B> [--assert-only]
+
+is the assertion that licenses the collapse: it re-predicts under B INTO A TEMPORARY DIRECTORY and
+compares every array. With `--assert-only` it generates nothing at all and the `regime_independent`
+stamp in each manifest is the only byte of the prediction root that changes, which is what a root
+built by the P2 array needs — re-generating the collapsed methods into it would overwrite the npz
+of the very chromosome the check reads.
+
 WHAT THIS FILE IS ALLOWED TO SEE (§6.2, and it is checkable)
 ------------------------------------------------------------
 `_contributors` below is where the fairness rule lives, and it is the ONLY place a contributor set
@@ -31,6 +46,22 @@ cells over training chromosomes for the same reason.
 `sparse_assays` — §5 requires that flag to travel into any table that quotes such a row. A track with
 `k = 0` is skipped and listed under `skipped_tracks`; scoring it would need `--allow-missing`.
 
+TWO REGIME SHAPES, AND THE TRAINING SCOPE (2026-09-01)
+------------------------------------------------------
+* **No `eval_pairs` — the SELF-PAIRED shape.** `bench.harness.StoreSource`'s documented no-pairing
+  path (D31): the panel is `biosamples.eval` self-paired, and a self-pair's targets are every assay
+  the cell holds. `tools/sigma_training_regime.py` writes exactly that shape and can write no other
+  — `candi.store.regime` refuses a `[c, c]` literal — so without the fallback in `Panel.self_pairs`
+  a `--methods avg-arcsinh --store <derived>` pass wrote an empty root and the training-residual σ
+  pass (`competitors.sigma_pass`) had nothing to fit on.
+* **A `regions` BED — the D32 training scope.** `similarity_table` and `fit_marginal` are the only
+  two things here that pool over TRAINING loci, and they now pool over the contained bins of
+  `train_chroms` rather than the whole chromosomes (`Panel.contained_bins`). Under `eic_pilot` that
+  is the 25,588,197 bp the regime declares instead of ~2.7 Gbp — Rule 2, and the reason
+  `slurm/t49_baselines_*.sh` used to refuse the pilot regime for `knn1`, `knn5` and `marginal`.
+  `avg` and `avg-arcsinh` are untouched by both: no training locus enters them, which is what
+  `REGIME_INDEPENDENT` below means and what the identity assertion measures.
+
 WHAT IS DELIBERATELY NOT HERE
 -----------------------------
 The exact empirical-ensemble marginal (§5.4 "Follow-up") — it needs an ensemble-CRPS extension to
@@ -42,6 +73,7 @@ import argparse
 import json
 import math
 import sys
+import tempfile
 import time
 from datetime import date
 from pathlib import Path
@@ -55,8 +87,9 @@ from candi.store.regime import Regime
 from competitors.baselines import heads as Hd
 
 __all__ = [
-    "METHODS", "VERSION", "cell_type", "available", "log2_depth", "depth_center",
-    "Panel", "generate", "build_parser", "main",
+    "METHODS", "VERSION", "REGIME_INDEPENDENT", "REGIME_DEPENDENT", "cell_type", "available",
+    "log2_depth", "depth_center", "Panel", "RegimeIdentityError", "assert_regime_independent",
+    "stamp_regime_independent", "generate", "build_parser", "main",
 ]
 
 VERSION = "0.1.0"
@@ -64,6 +97,27 @@ VERSION = "0.1.0"
 #: Every root this module can write. `avg` is the baseline of record (§5.2: "the row that must exist
 #: for comparability"); the rest are variants and weaker tiers, each labelled as such in its manifest.
 METHODS: Tuple[str, ...] = ("avg", "avg-arcsinh", "knn1", "knn5", "marginal")
+
+#: WHICH METHODS COLLAPSE TO ONE RUN ACROSS REGIMES, AND WHICH DO NOT (D1, 2026-09-01).
+#:
+#: `BENCHMARK_DESIGN.md` §12.2 first ruled that all five naive baselines run ONCE rather than once
+#: per regime, "because their fit is regime-independent". Read against the code that is true of two
+#: of them and false of three:
+#:
+#:   avg, avg-arcsinh   every written bin is a function of the contributors' values AT THE PREDICTED
+#:                      POSITION plus the contributor set, and the contributor set is
+#:                      `biosamples.train` minus the target's cell type. No training LOCUS enters,
+#:                      so `train_chroms` and `regions` cannot move the output. Collapse: correct.
+#:   knn1, knn5         `similarity_table` correlates over `panel.train_chroms`. Different train
+#:                      chromosomes -> a different ranking -> different predictions.
+#:   marginal           `fit_marginal` pools over `panel.train_chroms`.
+#:
+#: So the collapse holds for `REGIME_INDEPENDENT` and the three in `REGIME_DEPENDENT` are generated
+#: once per regime. §12.2 asks for an ASSERTION rather than an argument, and
+#: `assert_regime_independent` below is it: the two collapsed roots are re-predicted under the other
+#: regime and every array is compared.
+REGIME_INDEPENDENT: Tuple[str, ...] = ("avg", "avg-arcsinh")
+REGIME_DEPENDENT: Tuple[str, ...] = ("knn1", "knn5", "marginal")
 
 #: `store/dataset.py::_RUN_TYPE_ID`. A track whose run type is neither of these is NOT available, and
 #: guessing at single-ended is the fallback D19 deleted.
@@ -149,7 +203,11 @@ class Panel:
         self.corpus = CorpusStore(self.regime.store)
         self.assays: List[str] = list(self.regime.assays)
         self.train: List[str] = [b for b in self.regime.biosamples("train")]
-        self.pairs: List[Tuple[str, str]] = [tuple(p) for p in self.regime.eval_pairs]
+        self.eval: List[str] = [b for b in self.regime.biosamples("eval")]
+        #: The pairing as DECLARED, before the no-pairing fallback. `assert_regime_independent`
+        #: compares panels and has to compare like with like; everything else uses `pairs`.
+        self.declared_pairs: List[Tuple[str, str]] = [tuple(p) for p in self.regime.eval_pairs]
+        self.pairs: List[Tuple[str, str]] = self.declared_pairs or self.self_pairs()
         want = list(chroms) if chroms else list(self.regime.eval_chroms)
         nb = self.corpus.n_bins()
         missing = [c for c in want if c not in nb]
@@ -159,17 +217,69 @@ class Panel:
         self.n_bins: Dict[str, int] = {c: int(nb[c]) for c in want}
         self.train_chroms: List[str] = [c for c in self.regime.train_chroms if c in nb]
         self.depth_center = depth_center(self.corpus, self.train, self.assays)
+        #: D32 — the BED the TRAIN split is cut to, or None. `contained_bins` below is the only
+        #: reader; the eval side is whole chromosomes either way, exactly as it is for a rival.
+        self.regions = self.regime.regions
+        self._contained: Dict[str, np.ndarray] = {}
+
+    def self_pairs(self) -> List[Tuple[str, str]]:
+        """`[(c, c), …]` over `biosamples.eval` — `harness.StoreSource`'s no-pairing path.
+
+        A regime that declares no `eval_pairs` has not asked for a cross-cell imputation (D31), and
+        `StoreSource.pairs` answers it by self-pairing every cell of the loader pool. The training-
+        residual σ regime `tools/sigma_training_regime.py` writes is exactly that shape — it CANNOT
+        be anything else, because `candi.store.regime` refuses a `[c, c]` literal outright — so a
+        generator that read `eval_pairs` alone wrote nothing at all under it, and the σ pass had no
+        `avg-arcsinh` training-track root to take a residual against.
+        """
+        return [(b, b) for b in self.eval]
 
     def close(self) -> None:
         self.corpus.close()
+
+    def contained_bins(self, chrom: str) -> Optional[np.ndarray]:
+        """Bins of `chrom` lying wholly inside one declared region (D32), or None without a BED.
+
+        `None` rather than `arange(n_bins)`, for `harness.EvalSource.scored_bins`' reason: it is
+        what lets a regime with no `regions` keep the untouched path bit for bit instead of
+        gathering a full track through an identity index.
+
+        Containment is `RegionSet.contained_starts` at a window of ONE BIN rather than a second copy
+        of the span arithmetic — the same D32 rule the training window plan is cut by, asked at the
+        resolution a pooled fit actually reads. It is the TRAIN split's scope and nothing else's:
+        `Regime.windows` applies `regions` to the train split only, and the two readers below
+        (`similarity_table`, `fit_marginal`) are the only two things here that pool over training
+        loci at all.
+        """
+        if self.regions is None:
+            return None
+        got = self._contained.get(chrom)
+        if got is None:
+            n = int(self.corpus.n_bins()[chrom])
+            got = self.regions.contained_starts(
+                chrom, np.arange(n, dtype=np.int64), 1, self.corpus.resolution)
+            self._contained[chrom] = got
+        return got
+
+    def train_slice(self, arr: np.ndarray, chrom: str) -> np.ndarray:
+        """`arr` cut to `contained_bins(chrom)`. The whole array when the regime declares no BED."""
+        idx = self.contained_bins(chrom)
+        return arr if idx is None else arr[idx]
 
     def targets(self, pair: Tuple[str, str]) -> List[str]:
         """Assays the TARGET cell has and the INPUT cell does not — `harness.StoreSource.targets`.
 
         The same rule, spelled the same way: an assay neither cell has has no truth, and an assay
         both cells have can be read straight off the prompt, so neither is imputation.
+
+        A SELF-PAIR is the degenerate case `StoreSource.targets` keeps its old answer for: one cell
+        plays both roles, "has and does not have" is empty, and every assay the cell holds is the
+        panel. The assay is still held out — `contributors` drops every biosample sharing the
+        target's cell-type suffix, which on `T_x -> T_x` is `T_x` itself.
         """
         x, y = pair
+        if x == y:
+            return [a for a in self.assays if available(self.corpus, y, a)]
         return [a for a in self.assays
                 if available(self.corpus, y, a) and not available(self.corpus, x, a)]
 
@@ -213,11 +323,27 @@ def similarity_table(panel: Panel, cells: Sequence[str],
     every pairwise correlation for that assay at once. Pair-outer with `np.corrcoef` would re-read
     the same 51 cells for each of the 26 declared pairs — the same track read 26 times.
 
-    Only `panel.train_chroms` and only training cells are ever read here (§5.4).
+    Only `panel.train_chroms` are ever read here, only training cells, and — when the regime
+    declares a D32 `regions` BED — only the bins of those chromosomes lying wholly inside one
+    region (§5.4, and Rule 2: under `eic_pilot` every other method's transferable parameters see
+    the Pilot Regions and nothing else, so a ranking correlated over 18 whole chromosomes would be
+    fitted on loci no rival was allowed).
     """
     tot: Dict[Tuple[str, str], float] = {}
     cnt: Dict[Tuple[str, str], int] = {}
     cells = list(cells)
+    # AN EMPTY D32 POOL IS A REFUSAL, NOT A TABLE. With no contained bin on any training
+    # chromosome every row of `Z` has zero columns, `Z @ Z.T / 0` is all-NaN, and `top_k` reads a
+    # missing similarity as `-inf` and falls through to its tie-break — so `knn1`/`knn5` would
+    # write a ranking by BIOSAMPLE NAME and nothing would say the fit never happened.
+    if panel.regions is not None and panel.train_chroms:
+        pool = sum(int(panel.contained_bins(c).size) for c in panel.train_chroms)
+        if pool == 0:
+            raise ValueError(
+                f"no bin of {list(panel.train_chroms)} lies wholly inside a region of "
+                f"{panel.regions.resolved or panel.regions.bed}, so the kNN similarity pool is "
+                f"empty. Every correlation would be NaN and top_k would rank the contributors "
+                f"alphabetically. Point `regions.bed` at the training chromosomes, or drop it.")
     for assay in panel.assays:
         have = [b for b in cells if available(panel.corpus, b, assay)]
         if len(have) < 2:
@@ -225,7 +351,8 @@ def similarity_table(panel: Panel, cells: Sequence[str],
         rows = []
         for b in have:
             t = np.arcsinh(np.concatenate(
-                [panel.corpus[b][assay].pval(c, 0) for c in panel.train_chroms]).astype(np.float64))
+                [panel.train_slice(panel.corpus[b][assay].pval(c, 0), c)
+                 for c in panel.train_chroms]).astype(np.float64))
             sd = t.std()
             rows.append((t - t.mean()) / sd if sd > 0 else np.zeros_like(t))
         Z = np.stack(rows)
@@ -278,18 +405,44 @@ def fit_marginal(panel: Panel, assay: str) -> Optional[Dict[str, float]]:
 
     No leave-one-out here, and §5.4 does not ask for one: the pool is training cells on training
     chromosomes, and the target cell (a `V_`/`B_`) is in neither.
+
+    **A `regions` regime narrows the pool to the BED (D32), by `panel.train_slice`.** The constant
+    this returns is the whole method, so under `eic_pilot` a marginal pooled over 18 whole
+    chromosomes would be a different method from the one the row names — fitted over ~2.7 Gbp where
+    every rival's transferable parameters saw 25.6 Mbp.
+
+    `None` means NO DATA — no training cell carries the assay, or the regime declares no training
+    chromosome. A BED that leaves the pool EMPTY is a different thing and raises: it is a regime
+    that cannot be fitted at all, and returning `None` for it silently dropped `marginal` from the
+    panel while `knn1`/`knn5` went on writing an alphabetical ranking off the same empty pool.
     """
     cells = [b for b in panel.train if available(panel.corpus, b, assay)]
     if not cells or not panel.train_chroms:
         return None
+    if panel.regions is not None:
+        pool = sum(int(panel.contained_bins(c).size) for c in panel.train_chroms)
+        if pool == 0:
+            raise ValueError(
+                f"no bin of {list(panel.train_chroms)} lies wholly inside a region of "
+                f"{panel.regions.resolved or panel.regions.bed}, so the {assay} marginal has an "
+                f"empty pool. Its moments would be NaN constants written into every bin of the "
+                f"panel. Point `regions.bed` at the training chromosomes, or drop it.")
     cs: List[np.ndarray] = []
     ps: List[np.ndarray] = []
     for b in cells:
         scale = Hd.depth_scale(log2_depth(panel.corpus, b, assay), panel.depth_center)
         for c in panel.train_chroms:
-            cs.append(panel.corpus[b][assay].counts(c, 0).astype(np.float64) * scale)
-            ps.append(panel.corpus[b][assay].pval(c, 0).astype(np.float64))
+            cs.append(panel.train_slice(
+                panel.corpus[b][assay].counts(c, 0).astype(np.float64) * scale, c))
+            ps.append(panel.train_slice(
+                panel.corpus[b][assay].pval(c, 0).astype(np.float64), c))
     cc, pp = np.concatenate(cs), np.concatenate(ps)
+    # Unreachable: the guard above refused an empty `regions` pool, and without a BED every
+    # training chromosome contributes `n_bins` values. Kept so a future change to the scope cannot
+    # turn a mean over nothing into a written constant.
+    if cc.size == 0:
+        raise ValueError(f"the {assay} marginal pooled no bin at all over "
+                         f"{list(panel.train_chroms)}, and the region guard above did not fire")
     return {"count_mean": float(cc.mean()), "count_var": float(cc.var(ddof=1)),
             "pval_mean": float(pp.mean()), "pval_std": float(pp.std(ddof=1)),
             "n_cells": len(cells), "n_bins": int(cc.size)}
@@ -360,6 +513,10 @@ def _merge_manifest(old: Mapping[str, object], new: Dict[str, object],
     collide, and `bench.external` reads the grid off the store rather than off this field, so the
     worst case is an understated provenance line, not a mis-scored track. Check `chroms` against the
     directory listing before quoting a P2 row.
+
+    A `regime_independent` stamp on the old manifest does NOT survive this merge, and that is the
+    safe direction: a generation pass that added a chromosome has not been shown identical under
+    the other regime. Stamp after the last generation pass, not before.
     """
     bad = {k: (old.get(k), new.get(k)) for k in _MANIFEST_IDENTITY if old.get(k) != new.get(k)}
     if bad:
@@ -378,14 +535,161 @@ def _merge_manifest(old: Mapping[str, object], new: Dict[str, object],
     return merged
 
 
+# ---------------------------------------------------------------------------
+# §12.2's identity assertion — the thing that licenses the collapse (D1)
+# ---------------------------------------------------------------------------
+
+class RegimeIdentityError(Exception):
+    """A method that was claimed regime-independent wrote a different array under the other regime.
+
+    Raised by `assert_regime_independent`; the CLI turns it into exit code 5. It is never a reason
+    to relabel the method — it is a reason to run that method once per regime.
+    """
+
+
+def assert_regime_independent(roots: Mapping[str, Path], panel: Panel, regime_b: Path | str, *,
+                              poisson_n: float = Hd.POISSON_N,
+                              progress: bool = False) -> Dict[str, object]:
+    """Re-predict `roots`' methods under `regime_b` and require every array to be identical.
+
+    This is the assertion `BENCHMARK_DESIGN.md` §12.2 claims exists and did not: one run of the
+    collapsed methods is printed in BOTH regime rows, and nothing but a comparison licenses that.
+
+    IT COMPARES ARRAYS, NOT MANIFESTS. `_MANIFEST_IDENTITY` includes `regime`, so two manifests from
+    two regime files never match and never could; what has to match is what a scorer reads, which is
+    the npz payload. One chromosome is enough and all that is affordable — `panel.chroms[0]`, the
+    first chromosome this pass actually wrote — because the collapsed heads are per-bin functions of
+    the contributors at that bin, so a regime that moved any bin would move every chromosome.
+
+    The two regimes must declare the SAME `eval_pairs`: identical predictions for different panels
+    would be an identity between two different objects, which licenses nothing.
+
+    Returns the stamp `generate` writes into each manifest. Raises `RegimeIdentityError` listing the
+    first differences on any mismatch, and that is the correct outcome for a regime-DEPENDENT method
+    — `tests/test_baselines.py` runs it on `marginal` for exactly that reason.
+    """
+    b_path = Path(regime_b)
+    # The EFFECTIVE panel of B, derived exactly as `Panel` derives its own: a regime that declares
+    # no pairing self-pairs `biosamples.eval` (D31). Comparing B's declared list against A's
+    # effective one would call two σ-shaped regimes with different drawn cells the same panel.
+    rb = Regime.from_file(b_path)
+    b_pairs = [tuple(p) for p in rb.eval_pairs] or [(b, b) for b in rb.biosamples("eval")]
+    if b_pairs != panel.pairs:
+        raise ValueError(
+            f"{b_path} declares {len(b_pairs)} eval pair(s) and {panel.regime_path} declares "
+            f"{len(panel.pairs)}; the two must declare the SAME panel or an identity between their "
+            f"outputs says nothing about the collapse.")
+    chrom = panel.chroms[0]
+    diffs: List[str] = []
+    with tempfile.TemporaryDirectory(prefix="baselines-regime-assert-") as tmp:
+        other = generate(b_path, tmp, chroms=[chrom], methods=list(roots),
+                         poisson_n=poisson_n, progress=progress)
+        for m, a_root in roots.items():
+            a_root, b_root = Path(a_root), Path(other[m])
+            a_dirs = {d.name for d in a_root.iterdir() if (d / f"{chrom}.npz").is_file()}
+            b_dirs = {d.name for d in b_root.iterdir() if (d / f"{chrom}.npz").is_file()}
+            if a_dirs != b_dirs:
+                diffs.append(f"{m}: track sets differ on {chrom} — only under "
+                             f"{panel.regime_path.name}: {sorted(a_dirs - b_dirs)[:3]}; only under "
+                             f"{b_path.name}: {sorted(b_dirs - a_dirs)[:3]}")
+                continue
+            for dirname in sorted(a_dirs):
+                with np.load(a_root / dirname / f"{chrom}.npz") as A, \
+                        np.load(b_root / dirname / f"{chrom}.npz") as B:
+                    if set(A.files) != set(B.files):
+                        diffs.append(f"{m}/{dirname}: array names differ — "
+                                     f"{sorted(A.files)} vs {sorted(B.files)}")
+                        continue
+                    for k in sorted(A.files):
+                        if not np.array_equal(A[k], B[k]):
+                            n = int(np.sum(A[k] != B[k]))
+                            diffs.append(f"{m}/{dirname}/{chrom}.npz[{k}]: {n} bin(s) differ")
+    if diffs:
+        raise RegimeIdentityError(
+            f"{len(diffs)} difference(s) between {panel.regime_path.name} and {b_path.name} on "
+            f"{chrom}: {diffs[:5]}. These method(s) are NOT regime-independent and must be "
+            f"generated once per regime (BENCHMARK_DESIGN.md §12.2, D1).")
+    return {"asserted_against": b_path.name, "chrom": chrom, "identical": True}
+
+
+def stamp_regime_independent(regime_path: Path | str, out_root: Path | str,
+                             regime_b: Path | str, *, methods: Sequence[str] = REGIME_INDEPENDENT,
+                             chroms: Optional[Sequence[str]] = None,
+                             poisson_n: float = Hd.POISSON_N,
+                             progress: bool = True) -> Dict[str, object]:
+    """Assert roots that ALREADY EXIST regime-independent, and stamp them. Writes no array.
+
+    THE STAMP IS THE ONLY MUTATION OF THE PREDICTION ROOT, and that is the whole point of this
+    entry. The regime-B side is regenerated into a `TemporaryDirectory` inside
+    `assert_regime_independent` and removed; nothing under `out_root` is touched except each
+    method's `manifest.json`, which gains `regime_independent`. Re-generating the A side into the
+    root to run the check — which is what `slurm/t49_baselines_p1.sh` did until 2026-09-01 —
+    OVERWRITES the npz of whichever chromosome the check runs on, so the stamped root is no longer
+    the root that was scored.
+
+    The comparison chromosome is `chroms[0]`, defaulting to the regime's first eval chromosome, and
+    every root must already hold it. `regime` and `poisson_n` are checked against each manifest
+    first: a stamp pass at a different floor, or against a different regime file, would report
+    differences that say nothing about the collapse and would exit 5 as if the collapse were false.
+    """
+    out_root = Path(out_root)
+    roots = {m: out_root / m for m in methods}
+    manifests: Dict[str, Dict[str, object]] = {}
+    for m, r in roots.items():
+        path = r / "manifest.json"
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"{path} does not exist — there is nothing to assert. This entry stamps a root "
+                f"that has already been generated; generate it first.")
+        manifests[m] = json.loads(path.read_text(encoding="utf-8"))
+    panel = Panel(regime_path, chroms=chroms)
+    try:
+        chrom = panel.chroms[0]
+        for m, r in roots.items():
+            got_reg, got_n = manifests[m].get("regime"), manifests[m].get("poisson_n")
+            if got_reg != str(panel.regime_path):
+                raise ValueError(
+                    f"{r}/manifest.json was written under {got_reg}, not {panel.regime_path}. "
+                    f"Hand this pass the regime the root was GENERATED under, or the comparison "
+                    f"is between two regimes neither of which wrote what is on disk.")
+            if got_n is not None and float(got_n) != float(poisson_n):
+                raise ValueError(
+                    f"{r}/manifest.json was generated at poisson_n={got_n} and this pass would "
+                    f"compare against {poisson_n}; the count arm would differ for that reason "
+                    f"alone and exit 5 would say the collapse is false when it is not.")
+            if not any((d / f"{chrom}.npz").is_file() for d in r.iterdir() if d.is_dir()):
+                raise FileNotFoundError(
+                    f"{r} holds no {chrom}.npz, so there is nothing to compare on {chrom}. Name a "
+                    f"chromosome the root actually carries with --chroms.")
+        stamp = assert_regime_independent(roots, panel, regime_b, poisson_n=poisson_n,
+                                          progress=progress)
+    finally:
+        panel.close()
+    for m, r in roots.items():
+        path = r / "manifest.json"
+        obj = dict(manifests[m])
+        obj["regime_independent"] = dict(stamp)
+        path.write_text(json.dumps(obj, indent=2), encoding="utf-8")
+        if progress:
+            print(f"[baselines] {m}: stamped regime_independent against "
+                  f"{stamp['asserted_against']} on {stamp['chrom']}; no array was rewritten",
+                  flush=True)
+    return stamp
+
+
 def generate(regime_path: Path | str, out_root: Path | str, *,
              chroms: Optional[Sequence[str]] = None, methods: Sequence[str] = METHODS,
-             poisson_n: float = Hd.POISSON_N, progress: bool = True) -> Dict[str, Path]:
+             poisson_n: float = Hd.POISSON_N, progress: bool = True,
+             assert_against: Optional[Path | str] = None) -> Dict[str, Path]:
     """Write one §4.1 prediction root per method. Returns `{method: root}`.
 
     The loop is chromosome -> assay -> the pairs that need it, so each contributor's track is read
     ONCE per (assay, chromosome) and serves every target that assay has. Reading pair-first would
     re-read the same 51 cells for every pair.
+
+    `assert_against` names a SECOND regime file. With it set, the same methods are re-predicted
+    under that regime for the first chromosome of this pass and every array is compared; each
+    manifest then carries `regime_independent`. See `assert_regime_independent`.
     """
     bad = [m for m in methods if m not in METHODS]
     if bad:
@@ -444,8 +748,17 @@ def generate(regime_path: Path | str, out_root: Path | str, *,
                 dirname = f"{pair[0]}__{pair[1]}__{assay}"
                 d_t = log2_depth(panel.corpus, pair[1], assay)
                 for m in methods:
-                    pick = (contribs if m in ("avg", "marginal") else
-                            top_k(sim, pair[0], contribs, 1 if m == "knn1" else 5))
+                    # ONLY `knn1`/`knn5` SELECT. Every other method averages over EVERY eligible
+                    # contributor, and `avg-arcsinh` is one of them: §5.2 defines it as the same
+                    # leave-one-out mean as `avg`, taken in arcsinh space, so it has no fitted
+                    # position parameter and `train_chroms` cannot move it. Written as
+                    # `contribs if m in ("avg", "marginal") else top_k(…, 5)` until 2026-09-01, it
+                    # fell through to the top 5 by kNN similarity — a selection method wearing the
+                    # name of a mean, regime-DEPENDENT because `similarity_table` reads
+                    # `train_chroms`, and a third answer again when it was generated without
+                    # knn1/knn5 in the list (no `sim` is built, so `top_k` ranked alphabetically).
+                    pick = (top_k(sim, pair[0], contribs, 1 if m == "knn1" else 5)
+                            if m.startswith("knn") else contribs)
                     sel = np.array([idx[b] for b in pick])
                     arrays = _arrays(m, norm[sel], pvals[sel], peaks[sel], d_t,
                                      panel.depth_center, marginals.get(assay),
@@ -487,10 +800,22 @@ def generate(regime_path: Path | str, out_root: Path | str, *,
     arms = {"avg": ["pval", "count", "peak"], "avg-arcsinh": ["pval"],
             "knn1": ["pval", "count", "peak"], "knn5": ["pval", "count", "peak"],
             "marginal": ["pval", "count"]}
+    # Before any manifest is written: a root that claims `regime_independent` must have earned it,
+    # and a failure here must leave no stamped manifest behind to be quoted.
+    stamp: Optional[Dict[str, object]] = None
+    if assert_against is not None:
+        stamp = assert_regime_independent(roots, panel, assert_against,
+                                          poisson_n=poisson_n, progress=progress)
+        if progress:
+            print(f"[baselines] regime-independent against {stamp['asserted_against']} on "
+                  f"{stamp['chrom']}: every array identical", flush=True)
+
     out: Dict[str, Path] = {}
     for m in methods:
         path = roots[m] / "manifest.json"
         obj = _manifest(m, panel, notes[m], arms[m], tracks[m], skipped, poisson_n)
+        if stamp is not None:
+            obj["regime_independent"] = dict(stamp)
         if path.exists():
             obj = _merge_manifest(json.loads(path.read_text(encoding="utf-8")), obj, path)
         path.write_text(json.dumps(obj, indent=2), encoding="utf-8")
@@ -558,16 +883,52 @@ def build_parser() -> argparse.ArgumentParser:
                         "default; `candi.metrics.nb_crps` returns NaN above about 2e4, which costs "
                         "the count arm its whole CRPS tier. See heads.POISSON_N before changing it "
                         "— an amended value belongs in RIVALS_PLAN.md §5.1 first.")
+    p.add_argument("--assert-regime-independent", default=None, metavar="REGIME_B",
+                   help=f"a SECOND regime file. After writing under --store, re-predict the same "
+                        f"methods under this one for the first chromosome of the pass and require "
+                        f"every array to be identical (exit 5 otherwise); each manifest then "
+                        f"carries `regime_independent`. Accepted only for {list(REGIME_INDEPENDENT)}"
+                        f" — {list(REGIME_DEPENDENT)} fit on the regime's training loci and are "
+                        f"generated once per regime (exit 2).")
+    p.add_argument("--assert-only", action="store_true",
+                   help="run ONLY the assertion above, against roots that already exist under "
+                        "--out, and write nothing but `regime_independent` into their manifests. "
+                        "Every array stays byte-identical. This is how a root the P2 array built "
+                        "gets its stamp; re-generating the collapsed methods into the root to run "
+                        "the check would overwrite the npz of the chromosome it checks. Requires "
+                        "--assert-regime-independent.")
     p.add_argument("--quiet", action="store_true")
     return p
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     a = build_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
-    generate(a.store, a.out,
-             chroms=[c.strip() for c in a.chroms.split(",")] if a.chroms else None,
-             methods=[m.strip() for m in a.methods.split(",")],
-             poisson_n=a.poisson_n, progress=not a.quiet)
+    methods = [m.strip() for m in a.methods.split(",")]
+    if a.assert_regime_independent is not None:
+        dependent = [m for m in methods if m not in REGIME_INDEPENDENT]
+        if dependent:
+            print(f"[baselines] REFUSING --assert-regime-independent with {dependent}: those "
+                  f"methods fit on the regime's training loci (similarity_table and fit_marginal "
+                  f"both read train_chroms), so they are NOT regime-independent and asserting it "
+                  f"would be asserting something false. Generate them once per regime "
+                  f"(BENCHMARK_DESIGN.md §12.2, D1).", file=sys.stderr)
+            return 2
+    elif a.assert_only:
+        print("[baselines] --assert-only needs --assert-regime-independent REGIME_B: there is "
+              "nothing to assert against.", file=sys.stderr)
+        return 2
+    chroms = [c.strip() for c in a.chroms.split(",")] if a.chroms else None
+    try:
+        if a.assert_only:
+            stamp_regime_independent(a.store, a.out, a.assert_regime_independent,
+                                     methods=methods, chroms=chroms, poisson_n=a.poisson_n,
+                                     progress=not a.quiet)
+        else:
+            generate(a.store, a.out, chroms=chroms, methods=methods, poisson_n=a.poisson_n,
+                     progress=not a.quiet, assert_against=a.assert_regime_independent)
+    except RegimeIdentityError as exc:
+        print(f"[baselines] {exc}", file=sys.stderr)
+        return 5
     return 0
 
 

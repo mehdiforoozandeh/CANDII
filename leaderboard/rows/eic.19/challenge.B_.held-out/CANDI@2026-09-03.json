@@ -1,0 +1,80 @@
+{
+ "address": {
+  "panel": "B_",
+  "regime": "eic.19→20,21,22",
+  "scope": "held-out",
+  "truth": "challenge"
+ },
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-generalizing",
+  "sigma": "native heteroscedastic",
+  "sigma_fitted_on": null,
+  "sigma_state": "native"
+ },
+ "board": "eic.19",
+ "date": "2026-09-03",
+ "in_sample_fraction": null,
+ "lineage": "candi",
+ "markers": [],
+ "method": "CANDI",
+ "metrics": {
+  "pval": {
+   "coverage_95": 0.8811257393540899,
+   "crps": 0.6981229684057874,
+   "gaussian_nll": 333.8616938726258,
+   "gwcorr": 0.34723658950786906,
+   "gwspear": 0.3440041401815444,
+   "mse": 274.74277978083666,
+   "mse1obs": 25173.383757254658,
+   "pit_ks": 0.24567310518253127
+  }
+ },
+ "missing_metrics": [
+  "count/crps",
+  "count/crps_oracle_scaled",
+  "count/nb_nll",
+  "count/scale_error",
+  "pval/auprc",
+  "pval/peak_base_rate"
+ ],
+ "panel_counts": {
+  "count": {
+   "n_assays": 0,
+   "n_experiments": 0
+  },
+  "pval": {
+   "n_assays": 8,
+   "n_experiments": 51
+  }
+ },
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/t81_pred_B/CANDI/eic_19/B_",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "has_peak_head": false,
+  "method_notes": {
+   "notes": "device=cpu; sharded: true; array=57953581; shards=22"
+  },
+  "regime": "/project/def-maxwl/mforooz/t81_pred_B/CANDI/eic_19/regime.eic_19.B_.json",
+  "score_json": "cruxvault/results/t81/scores/CANDI/eic_19/challenge.B_.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "0229e56",
+  "sigma_table": null,
+  "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83",
+  "truth_manifest_hash": "2f9d57d2d236eadb624b64694df04bca93a61864cd4d47cee3a42c2501400e08"
+ },
+ "ranked": true,
+ "schema_version": 2,
+ "version": "2026-09-03"
+}
