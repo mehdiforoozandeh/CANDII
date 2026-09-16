@@ -11,7 +11,9 @@ replicates: "TODO(PI) — source→target pairs per arm x seeds, on the panel t1
 verdict: 
 metric: 
 created: "2026-09-01T02:16:44"
-updated: "2026-09-01T02:16:44"
+updated: "2026-09-16T16:52:41"
+null_approved: "2026-09-16T16:52:41"
+null_hash: 8e4d67b544ab2035
 ---
 
 # h1 — Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does
@@ -52,8 +54,8 @@ The literature names a stronger competitor than `onewarp`. `[[signal-normalizati
 and `[[quantile-normalization]]` record that the field's own post-mortem concludes a single global
 transform is insufficient and recommends quantile normalisation applied to signal in peaks and
 signal in background **separately**, which S3norm already fits as a two-component monotone
-transform. Whether a fifth `splitwarp` rung replaces `onewarp` as the headline denominator is
-`TODO(PI)`.
+transform. PI ruling 2026-09-16: `onewarp` stays the headline denominator; `splitwarp` is not a rung, and
+the stronger competitor is recorded here as the reading a `onewarp` win must survive.
 
 The 93%/96% figure that motivates `onewarp` being the competitor at all is `TODO(PI): provenance` —
 it is not recorded anywhere in this repository.
@@ -160,15 +162,15 @@ loosened to compensate.
 
 - (i) name the distance `D` that gap-closed is a fraction of — macro NB CRPS against the real
   target, or level-only via `aspects_of(...)["level"]`;
-- (ii) is the `oracle` rung two **Poisson** draws or two **NB** draws? The model emits NB. If the
-  target is overdispersed, a Poisson oracle sits below anything reachable and gap-closed has no
+- (ii) **decided — PI ruling 2026-09-16: the `oracle` rung is two NB draws.** The model emits NB, and on an
+  overdispersed target a Poisson oracle would sit below anything reachable, leaving gap-closed no
   ceiling of 1;
-- (iii) `onewarp` or a peak/background-split `splitwarp` as the headline denominator;
+- (iii) **decided — PI ruling 2026-09-16: `onewarp` is the headline denominator; `splitwarp` is not a rung;**
 - (iv) every `TODO(PI)` threshold above.
 
-**Not yet done: `crux approve-null` has not been run on this node.** The checks above were authored
-by the PI and every bar in them is still `TODO(PI)`, so nothing is locked; the signature is still
-outstanding.
+**The null was approved on 2026-09-16 (`crux approve-null`), so checks may be written against it.**
+Every bar in the checks above is still `TODO(PI)`, so nothing is locked yet; the checks, their kinds
+and the rule content-hash when the node goes running.
 
 ## Planned Intervention
 
@@ -179,7 +181,7 @@ A four-rung ladder is fit on paired real tracks and every rung is scored on the 
 | `blind` | no covariates |
 | `onewarp` | one global monotone value-axis map, no covariates — **the competitor** |
 | `model` | covariate-conditioned |
-| `oracle` | two independent draws from the same eta at the target depth — the irreducible floor |
+| `oracle` | two independent **NB** draws from the same eta at the target depth — the irreducible floor (PI ruling 2026-09-16) |
 
 Headline gap-closed is `(D_onewarp − D_model) / (D_onewarp − D_oracle)`, never measured from
 `blind`. `blind` and `onewarp` emit point maps, so they are made CRPS-scorable through the
