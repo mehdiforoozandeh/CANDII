@@ -1015,10 +1015,10 @@ def _one_track(model, regime_file, **kw):
 
 # ---------------------------------------------------------------------------
 # t80 — tools/declare_eval_pairs.py, the thing §14 says owns the pairing. PI ruling 2026-08-31:
-# THIS is the pairing tool. The older same-named tool origin/main shipped is now
-# tools/split_regime_by_panel.py, which is what it does -- it splits one regime into a
-# validation and a test copy off a baked-in V_/B_ convention. This one refuses a baked-in rule
-# (D16, D31) and is why it wins the name.
+# THIS is the pairing tool. The older same-named tool origin/main shipped is retired (t87):
+# what it did -- cut one declared regime down to a single target panel -- is now this file's
+# `split` verb, which takes the panel prefix as an explicit argument. This one refuses a
+# baked-in rule (D16, D31) and is why it wins the name.
 # ---------------------------------------------------------------------------
 
 def test_the_declaring_tool_derives_the_pairing_and_records_its_provenance(

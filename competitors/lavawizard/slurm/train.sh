@@ -69,6 +69,20 @@ STAGE="${STAGE:?set STAGE=shared|genome}"
 CKPT="${CKPT:-$RUNS/ckpt}"
 EXTRA=(); [ -n "${MAX_STEPS:-}" ] && EXTRA=(--max-steps-per-stage "$MAX_STEPS")
 
+# KEEP THE SELECTED CHECKPOINT somewhere the board can still reach it. $RUNS is a working area that
+# gets rebuilt whenever a regime is re-run, and the row this fit produced outlives that. Both stages
+# call this with the ONE file downstream resolves by name — `.best.pt` for the genome stage, because
+# §5 ranks the checkpoint the run chose on V_ and the last-epoch file is a different object. A run
+# that wrote nothing copies nothing and says so.
+keep_ckpt() {
+  if [ -s "$1" ]; then
+    mkdir -p "$CKPT_KEEP"
+    cp -p "$1" "$CKPT_KEEP/" && echo "[train] kept $CKPT_KEEP/$(basename "$1")"
+  else
+    echo "[train] no $1 to keep -- this stage wrote no selected checkpoint" >&2
+  fi
+}
+
 if [ "$STAGE" = "shared" ]; then
   echo "[train] $SHARED_STEM (the transferable half of $REGIME_NAME)  host=$(hostname)"; nvidia-smi -L || true
   srun python -u -m lavawizard.store_eic train --regime "$REGIME" --cache "$CACHE" \
@@ -81,6 +95,7 @@ if [ "$STAGE" = "shared" ]; then
     echo "[train] ERROR: no $CKPT/guacamole_${SHARED_STEM}.pt. The genome stage cannot run." >&2
     rc=91
   fi
+  keep_ckpt "$CKPT/guacamole_${SHARED_STEM}.pt"
   exit $rc
 fi
 
@@ -105,4 +120,5 @@ if [ "$SELECT_EVERY" != "0" ] && [ $rc -eq 0 ] && [ ! -f "$CKPT/guacamole_${C}.b
   echo "[train]   does not satisfy BENCHMARK_DESIGN.md §5. Do not predict from it." >&2
   rc=90
 fi
+keep_ckpt "$CKPT/guacamole_${C}.best.pt"
 exit $rc

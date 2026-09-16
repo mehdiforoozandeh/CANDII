@@ -40,9 +40,24 @@
 # MODE=full   the retrain. Read the walltime off the probe before submitting; the 05:00:00 below is
 #             train.sh's h5-path figure and is almost certainly wrong for 35 assays.
 #
+# THE MID-TRAINING SELECTION SCOPE IS A BED, AND THAT IS WHY MODE=full IS NOW AFFORDABLE. The pilot
+# job died at its walltime DURING the final full-coverage check and so wrote no run json at all —
+# every mid-training check was full coverage (91-94 min each) and there was no budget left. Under
+# EVAL_REGIONS (the default below) a check costs ~9 min instead, and the END-OF-RUN check is full
+# coverage whatever this says, which is the number that gets quoted. Set EVAL_REGIONS=full to go
+# back to the old, expensive behaviour; nothing else about the run changes.
+#
 #   mkdir -p slurm-logs
-#   MODE=probe sbatch slurm/t81_train_candi.sh          # start here
+#   MODE=probe sbatch slurm/t81_train_candi.sh          # start here, BOTH regimes, serialised
 #   MODE=full  sbatch --time=HH:MM:SS slurm/t81_train_candi.sh
+#
+# --array=0-1%1 below runs BOTH regimes, one after the other, and never side by side (see the probe
+# header for what co-scheduling cost us). To run ONE regime, override the array on the submit line:
+#
+#   MODE=full sbatch --array=0 --time=HH:MM:SS slurm/t81_train_candi.sh   # eic.19 only
+#   MODE=full sbatch --array=1 --time=HH:MM:SS slurm/t81_train_candi.sh   # eic.pilot only
+#
+# `%1` is inert on a single-element array, so no `%1` is needed on those lines.
 #
 # Logs resolve against the SUBMITTING cwd, not the script's location, so mkdir -p slurm-logs first.
 #SBATCH --account=def-maxwl
@@ -58,7 +73,7 @@
 set -uo pipefail
 
 # --- edit these ---------------------------------------------------------------------------------
-KIT="${KIT:-/project/def-maxwl/mforooz/CANDII_t78_code}"
+KIT="${KIT:-/project/def-maxwl/mforooz/CANDII_main}"
 VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 OUT="${OUT:-/scratch/$USER/t81_candi/runs}"
 MODE="${MODE:-probe}"
@@ -67,6 +82,22 @@ SEED="${SEED:-0}"
 # reads V_ only, so a non-zero value here no longer touches B_ — see the PI ruling below.
 # It is also the resolution of EARLY_STOP: a stall is only visible on an eval.
 EVAL_EVERY="${EVAL_EVERY:-3}"
+# WHICH POSITIONS SELECT THE CHECKPOINT (train.py --eval-regions, t89). A seeded random window set,
+# NOT the pilot's training BED: configs/regions/encode_pilot_hg38.bed was MEASURED to flip checkpoint
+# selections on gaps of 0.069, because its bias drifts with the model and so does not cancel in a
+# difference; a random set of the same size did not. See EVAL.md before choosing another one.
+#
+# The BED is a scope, not a panel — all 45 declared tracks are still scored end to end, over fewer
+# POSITIONS. The END-OF-RUN check on the SELECTED checkpoint is FULL COVERAGE whatever this says,
+# and that is the number a run reports.
+#
+# EVAL_REGIONS=full restores the old every-window-of-every-eval-chromosome behaviour and skips the
+# assertion below. Any other value is a path to a BED.
+EVAL_REGIONS="${EVAL_REGIONS:-$KIT/configs/regions/eval_random450_seed890217.bed}"
+# The sha256 of the BED above, pinned HERE and checked against the RUN JSON after training, because
+# `configs/regions/` is a mutable directory: a path alone would let two runs claim the same
+# selection scope while selecting on different loci. Override only together with EVAL_REGIONS.
+EVAL_SCOPE_SHA256="${EVAL_SCOPE_SHA256:-24d9cb9cf6f5db696e4a47e85960f4cee7cc1c98a5bdbd75f1976f755b214ea7}"
 PROBE_STEPS="${PROBE_STEPS:-3000}"
 # Ratio of real --full-coverage throughput to the sampled probe rate. MEASURED 0.45 on 2026-08-31
 # (job 57620803_0, live step counter). See the probe header.
@@ -120,6 +151,31 @@ python -c "import candi, sys; print('[t81] candi from', candi.__file__)" || exit
 python -c "import json; d=json.load(open('$REGIME')); print('[t81] kinds =', d['kinds'], '| train =', d['train_chroms'], '| eval =', d['eval_chroms'], '| pairs =', len(d.get('eval_pairs') or []))" || exit 1
 nvidia-smi -L || true
 
+# --- the mid-training selection scope -------------------------------------------------------------
+# Resolved and PRINTED WITH ITS HASH in both modes: probe needs the region count to size a check,
+# and full mode needs the hash in the log so the run can be read back without the submit line.
+N_SCOPE_WINDOWS=0
+if [ "$EVAL_REGIONS" = "full" ]; then
+  echo "[t81] eval scope: FULL — every window of every eval chromosome, no --eval-regions passed."
+  echo "[t81]   Each mid-training check is then a full-coverage pass (91-94 min measured), and the"
+  echo "[t81]   run json's config.eval_scope says name=full. The sha assertion is SKIPPED."
+else
+  if [ ! -f "$EVAL_REGIONS" ]; then
+    echo "[error] EVAL_REGIONS=$EVAL_REGIONS is not a file. Point it at a BED, or set" >&2
+    echo "        EVAL_REGIONS=full to select on every window of every eval chromosome." >&2
+    exit 1
+  fi
+  BED_SHA="$(sha256sum "$EVAL_REGIONS" | awk '{print $1}')"
+  N_SCOPE_WINDOWS="$(awk '/^[[:space:]]*$/ {next} /^[[:space:]]*(#|track|browser)/ {next} {n++} END {print n+0}' "$EVAL_REGIONS")"
+  echo "[t81] eval scope: $EVAL_REGIONS"
+  echo "[t81]   sha256  = $BED_SHA"
+  echo "[t81]   regions = $N_SCOPE_WINDOWS (this BED's regions are one 768-bin context window each)"
+  if [ "$BED_SHA" != "$EVAL_SCOPE_SHA256" ]; then
+    echo "[t81]   NOTE: that hash is NOT the pinned EVAL_SCOPE_SHA256=$EVAL_SCOPE_SHA256, so the" >&2
+    echo "[t81]   post-run assertion will exit 91. EVAL_REGIONS and EVAL_SCOPE_SHA256 move together." >&2
+  fi
+fi
+
 # `--heads count,signal,peak` is what §12.2 asks of CANDI, and it is the reason the regime must
 # declare the `pval` kind: the signal head's target is y_pval, and a regime that does not load the
 # layer supervises it on a plane of zeros in silence (tests/test_train_store.py guards this).
@@ -154,6 +210,7 @@ if [ "$MODE" = "probe" ]; then
   echo "[probe] regime=$NAME steps=$PROBE_STEPS wall=${WALL}s  ($NLL)"
   python - <<EOF
 wall, steps, bs, fc = $WALL, $PROBE_STEPS, 8, $FC_FACTOR
+epochs, eval_every, n_scope = $EPOCHS, $EVAL_EVERY, $N_SCOPE_WINDOWS
 rate = steps * bs / wall
 fc_rate = rate * fc
 print(f"[probe] regime=$NAME  SAMPLED RATE = {rate:.2f} windows/s ({rate/bs:.2f} steps/s)")
@@ -161,14 +218,47 @@ print(f"[probe]   G3 measured INFERENCE at 185.6 windows/s on the same MIG slice
 print(f"[probe]   x FC_FACTOR {fc} -> --full-coverage rate {fc_rate:.2f} windows/s. The factor is")
 print(f"[probe]   why: a sampled probe keeps a small working set cached; full coverage does not.")
 rate = fc_rate
+
+# A MODE=full walltime is THREE costs, not one, and the pilot died because only the first was
+# budgeted. The two check costs below are MEASURED and are NOT projected off the probe above: a
+# check is an inference pass over the whole V_ panel and does not scale with the training rate.
+#
+#   full-coverage V_ check   91 min PER DIAL (the range on record is 91-94)
+#   225-window scoped check  5.85 min total, of which ~206 s is SCOPE-INVARIANT setup
+#
+# so a scoped check is a fixed floor plus a per-window slope — 450 windows is NOT twice 225.
+# train.py's own --eval-regions help calls that check "21% of one epoch". Do not read that as a
+# constant: it is a ratio against the epoch of the run it was measured on, and the epoch here is
+# sized by --full-coverage. The ratio printed below is against THIS regime's epoch.
+FULL_CHECK_MIN = 91.0
+FLOOR_MIN = 206.0 / 60.0
+PER_WINDOW_MIN = (5.85 - FLOOR_MIN) / 225.0
+scoped = (FLOOR_MIN + PER_WINDOW_MIN * n_scope) if n_scope else FULL_CHECK_MIN
+n_checks = epochs // eval_every if eval_every else 0
+# The END-OF-RUN check runs BOTH dials on the selected checkpoint — the imputation dial that
+# selected it and the denoising dial that only watches — and is FULL COVERAGE whatever
+# --eval-regions says. It is where the pilot ran out of time, so it is budgeted explicitly.
+final = 2 * FULL_CHECK_MIN
+scope_label = f"{n_scope} regions" if n_scope else "FULL coverage"
+print(f"[probe]   sizing MODE=full: epochs={epochs} eval_every={eval_every} scope={scope_label}")
+print(f"[probe]   (EARLY_STOP can only make it shorter, so this is the ceiling to request.)")
+
 # --full-coverage sizes an epoch as (train windows x T_ biosamples), NOT by --steps-per-epoch.
 # 51 T_ biosamples is §5.1; the window counts are §3 (chr19) and §3.1 (pilot, the 1,294 ruling).
 for label, wpe in (("eic_19    chr19: 3,053 win x 51 T_", 3053 * 51),
                    ("eic_pilot pilot: 1,294 win x 51 T_", 1294 * 51)):
-    ep = wpe / rate
-    h = 25 * ep / 3600
-    print(f"[probe]   full-coverage {label}: {wpe:,} win/epoch = {ep/60:6.1f} min/epoch "
-          f"-> 25 ep = {h:6.2f} h  (request ~{max(1, int(h * 1.5) + 1)}h at 1.5x margin)")
+    ep = wpe / rate / 60.0
+    train_min, check_min = epochs * ep, n_checks * scoped
+    total = train_min + check_min + final
+    ask = total * 1.25
+    print(f"[probe]   full-coverage {label}: {wpe:,} win/epoch = {ep:6.1f} min/epoch")
+    print(f"[probe]     training     {epochs:3d} ep x {ep:6.1f} min = {train_min/60:6.2f} h")
+    print(f"[probe]     mid-training {n_checks:3d} ck x {scoped:6.1f} min = {check_min/60:6.2f} h"
+          f"  ({scoped/ep:.2f} of one epoch each)")
+    print(f"[probe]     final check    2 dials x {FULL_CHECK_MIN:5.1f} min = {final/60:6.2f} h"
+          f"  (FULL COVERAGE, always)")
+    print(f"[probe]     TOTAL {total/60:6.2f} h  ->  MODE=full sbatch "
+          f"--time={int(ask//60):02d}:{int(ask%60):02d}:00  (1.25x margin)")
 EOF
   echo "[probe] DONE regime=$NAME"
   exit 0
@@ -242,18 +332,85 @@ if [ -n "$STEPS_PER_EPOCH" ]; then
   echo "[t81]   This is not a retrain. Its checkpoint is not a board checkpoint."
 fi
 
+# The scope flag is built as an array so `full` passes NOTHING rather than a sentinel string —
+# train.py's own default IS full coverage, and a flag whose value means "unset" is the kind of thing
+# that ends up in a run json as a claim. --eval-batch-size rides along only so the array is never
+# empty, which `set -u` would otherwise trip over.
+EVALFLAGS=(--eval-batch-size 4)
+if [ "$EVAL_REGIONS" != "full" ]; then
+  EVALFLAGS+=(--eval-regions "$EVAL_REGIONS")
+fi
+
 echo "[t81] launching: epochs=$EPOCHS coverage=${COVERAGE[*]} eval_every=$EVAL_EVERY early_stop=$EARLY_STOP tag=$TAG"
+echo "[t81]   eval flags: ${EVALFLAGS[*]}"
 python -m candi.train "${COMMON[@]}" --store "$TRAIN_REGIME" \
   --tag "$TAG" \
   --epochs "$EPOCHS" "${COVERAGE[@]}" \
-  --eval-every "$EVAL_EVERY" --eval-batch-size 4 \
+  --eval-every "$EVAL_EVERY" "${EVALFLAGS[@]}" \
   --early-stop-epochs "$EARLY_STOP"
 rc=$?
+TRAIN_RC=$rc
+
+# WHICH POSITIONS SELECTED THIS CHECKPOINT — asserted against the run json, not against the submit
+# line. train.py hashes the BED into `config.eval_scope` and the monitor upgrades that block with
+# the window and bin counts it actually planned, so the run json is the only place that records
+# what was SCORED rather than what was ASKED FOR. Two runs are comparable on the mid-training curve
+# only if this hash matches.
+#
+# THE JSON IS WRITTEN LAST, AFTER THE FINAL FULL-COVERAGE CHECK (train.py:2092). That is exactly
+# how the pilot lost its json: it hit the walltime during that check, so a run that had trained for
+# hours and selected a checkpoint recorded nothing about itself. A missing json is therefore NOT a
+# reason to skip this assertion — it is the loudest thing it can report.
+if [ "$EVAL_REGIONS" != "full" ] && [ "$TRAIN_RC" -eq 0 ]; then
+  python - "$OUT/${TAG}.json" "$EVAL_SCOPE_SHA256" "$EVAL_REGIONS" <<'PYEOF'
+import json, sys
+from pathlib import Path
+
+run_json, want, bed = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+if not run_json.is_file():
+    sys.exit(f"[t81] eval-scope assertion FAILED: {run_json} does not exist. train.py writes it "
+             f"LAST, after the final full-coverage check, so this run either died in that check "
+             f"(the pilot's failure — raise the walltime) or never reached it. There is no record "
+             f"of which positions selected the checkpoint, so the checkpoint is not usable.")
+try:
+    cfg = (json.loads(run_json.read_text()).get("config") or {})
+except Exception as e:
+    sys.exit(f"[t81] eval-scope assertion FAILED: {run_json} is not readable json ({e}).")
+scope = cfg.get("eval_scope")
+if not isinstance(scope, dict):
+    sys.exit(f"[t81] eval-scope assertion FAILED: {run_json} carries no config.eval_scope block. "
+             f"--eval-regions {bed} was passed, so one was expected; a run json without it "
+             f"predates the scope machinery or the monitor never opened.")
+got = scope.get("sha256")
+if scope.get("name") == "full":
+    # train.py blanks --eval-regions back to `full` when --eval-every resolves to 0: there is no
+    # mid-training check to scope, and it refuses to record a claim about a curve that does not
+    # exist. So this is EVAL_EVERY=0 with a BED set, which is a contradiction in the submit line.
+    sys.exit(f"[t81] eval-scope assertion FAILED: config.eval_scope says name='full', but "
+             f"--eval-regions {bed} was passed. train.py blanks the scope when --eval-every is 0 — "
+             f"there is no mid-training check to scope, and nothing selected this checkpoint. Set "
+             f"EVAL_EVERY>0, or EVAL_REGIONS=full if a full-coverage selection is what you meant.")
+if got != want:
+    sys.exit(f"[t81] eval-scope assertion FAILED: config.eval_scope.sha256 = {got!r}, pinned "
+             f"{want!r} (name={scope.get('name')!r}, bed={scope.get('bed')!r}). The checkpoint was "
+             f"selected on DIFFERENT positions than this launcher claims. Do not compare it with "
+             f"anything.")
+n, tot = scope.get("scored_bins"), scope.get("full_bins")
+frac = f", {scope.get('fraction'):.2%} of the eval chromosomes" if scope.get("fraction") else ""
+print(f"[t81] eval-scope OK: sha256 {got[:12]} matches the pin; {scope.get('n_regions')} regions, "
+      f"{n:,} of {tot:,} bins{frac}." if n and tot else
+      f"[t81] eval-scope OK: sha256 {got[:12]} matches the pin.")
+PYEOF
+  if [ $? -ne 0 ]; then rc=91; fi
+elif [ "$EVAL_REGIONS" = "full" ]; then
+  echo "[t81] eval-scope assertion SKIPPED: EVAL_REGIONS=full, so selection was full coverage."
+fi
 
 # §5's uniform rule is only satisfied if a checkpoint was actually SELECTED on V_. If the eval hook
 # never fired, there is no .best.ckpt and the run yields a last-epoch checkpoint instead — which is
 # a different object than the design asks for. Say so loudly rather than let it pass as success.
-if [ "$EVAL_EVERY" != "0" ] && [ $rc -eq 0 ]; then
+# Gated on TRAIN_RC, not rc: a failed scope assertion must not hide a missing checkpoint.
+if [ "$EVAL_EVERY" != "0" ] && [ "$TRAIN_RC" -eq 0 ]; then
   if [ -f "$OUT/${TAG}.best.ckpt" ]; then
     echo "[t81] OK: ${TAG}.best.ckpt exists — a checkpoint was selected on V_imp_crps."
   else

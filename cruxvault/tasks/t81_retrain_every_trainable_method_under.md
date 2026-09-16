@@ -7,9 +7,9 @@ parent:
 blocked_by: t78, t79, t80
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-29T18:42:39
-updated: 2026-08-29T18:42:39
+status: done
+created: "2026-08-29T18:42:39"
+updated: "2026-09-05T17:33:58"
 ---
 
 # t81 — retrain every trainable method under the uniform V_ selection rule
@@ -62,7 +62,7 @@ lands, and §15 already allows that.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Deliverable — the benchmark programme](results/t81/DELIVERABLE.md)
 
 ## Evidence
 

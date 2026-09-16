@@ -1,0 +1,83 @@
+{
+ "address": {
+  "panel": "B_",
+  "regime": "eic.19→20,21,22",
+  "scope": "held-out",
+  "truth": "store"
+ },
+ "badges": {
+  "cell_types": "retrained per setting",
+  "position": "position-transductive",
+  "sigma": "native heteroscedastic",
+  "sigma_fitted_on": null,
+  "sigma_state": "native"
+ },
+ "board": "eic.19",
+ "date": "2026-09-05",
+ "in_sample_fraction": null,
+ "lineage": "baseline",
+ "markers": [
+  "no-selection"
+ ],
+ "method": "marginal",
+ "metrics": {
+  "count": {
+   "crps": 2.8945021765026038,
+   "crps_oracle_scaled": 2.857399684563461,
+   "nb_nll": 2.686962340659168,
+   "scale_error": 0.037102491939142286
+  },
+  "pval": {
+   "auprc": 0.025956109799306896,
+   "coverage_95": 0.9866407213399805,
+   "crps": 4.6938502545901,
+   "gaussian_nll": 6.056542037531716,
+   "mse": 3599.7767420633168,
+   "mse1obs": 359534.7156948015,
+   "peak_base_rate": 0.025956109799306896,
+   "pit_ks": 0.4345389365266102
+  }
+ },
+ "missing_metrics": [
+  "pval/gwcorr",
+  "pval/gwspear"
+ ],
+ "panel_counts": {
+  "count": {
+   "n_assays": 8,
+   "n_experiments": 51
+  },
+  "pval": {
+   "n_assays": 8,
+   "n_experiments": 51
+  }
+ },
+ "provenance": {
+  "artifacts_resolved_at_add": true,
+  "fir_path": "/project/def-maxwl/mforooz/t81_scores/marginal/eic_19",
+  "flags": {
+   "allow_missing": false,
+   "msevar": {
+    "note": "no --varpool given, so msevar is ABSENT rather than 0.0",
+    "pool": null
+   },
+   "pred_inversion": "external",
+   "pval_pred_space": "-log10p",
+   "seed": 0,
+   "signal_target_transform": "none"
+  },
+  "has_peak_head": false,
+  "method_notes": {
+   "notes": "per-assay marginal (§5.4), the weakest distributional tier: one constant NB and one constant Gaussian per assay, moment-matched over the training cells' tracks on the TRAIN chromosomes, scaled to the target track's depth. No peak head — a marginal has no per-bin ranking to offer."
+  },
+  "regime": "/project/def-maxwl/mforooz/t81_pred_B/_regimes/regime.eic_19.B_.json",
+  "score_json": "cruxvault/results/t81/scores/marginal/eic_19/store.B_.json",
+  "scorer": "candi.bench.external",
+  "scoring_sha": "0229e56",
+  "sigma_table": null,
+  "store_manifest_hash": "c9a95e4e424d94496be7197ad4aa3d08cd9d7d31144bcf72f53ca50505a2fd83"
+ },
+ "ranked": true,
+ "schema_version": 2,
+ "version": "2026-09-02"
+}

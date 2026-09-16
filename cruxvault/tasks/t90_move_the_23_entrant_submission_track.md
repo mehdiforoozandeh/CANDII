@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-09-01T16:14:34
-updated: 2026-09-01T16:14:34
+status: done
+created: "2026-09-01T16:14:34"
+updated: "2026-09-05T17:33:58"
 ---
 
 # t90 — move the 23 entrant submission tracks off scratch to /project before the 60-day purge
@@ -24,7 +24,7 @@ the 960 GB tree at fir:/scratch/mforooz/t54_submissions_round2 is the only copy 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [The move, checksum-verified](results/t90/MOVE.md)
 
 ## Evidence
 

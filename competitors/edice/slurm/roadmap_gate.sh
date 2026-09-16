@@ -27,8 +27,10 @@
 set -uo pipefail
 
 MODE="${MODE:-sample}"
-REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t52}"
-VENV="${VENV:-/project/def-maxwl/mforooz/candi_venv}"
+# CANDII_t52 and /project/def-maxwl/mforooz/candi_venv are both dead: the checkout was retired
+# and the venv is not the one the programme runs on. CANDII_main is the clone every t81 job uses.
+REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_main}"
+VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 EDICE_SRC="${EDICE_SRC:-/project/def-maxwl/mforooz/rivals_src/eDICE}"
 DATA="${DATA:-/project/def-maxwl/mforooz/rivals_src/edice_data}"
 OUT="${OUT:-/project/def-maxwl/mforooz/rivals_src/edice_runs/${MODE}}"

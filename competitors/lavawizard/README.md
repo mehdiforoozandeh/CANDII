@@ -15,7 +15,7 @@ port emits §4.1 roots and is scored by `candi.bench.external`.
 | `dataset3.py` | the challenge's own bigwigs — their grid, their binning, their hyperparameters |
 | `store_eic.py` | **our** store — the same cache from `CANDI_STORE`, and the P1/P2 predictions |
 | `emit.py` | §4.1 prediction roots |
-| `fit_sigma.py` | the §6.1 sigma-table, fitted on V-pair residuals |
+| (the sigma-table) | not here — `python -m competitors.sigma_pass`, fitted on TRAINING residuals (D2) |
 | `parity_keras.py` | **model** parity: our torch module against Keras on their weights |
 | `parity_features.py` | **input** parity: our preprocessing against `00_data_generation.py` |
 
@@ -403,10 +403,18 @@ Same code, other corpus. `store_eic.py` writes the identical cache layout from `
   on this. Skipping beats zeroing here: the head is `Dense(1)(x) + average`, so a zero average is
   not a neutral input — it would teach the trunk to emit the whole signal as a correction on those
   bins alone. Dataset 3 never hits the case, which is why the anchor never surfaced it.
-- σ comes from `fit_sigma.py` (§6.1), fitted on the V panel and reused unchanged on B. Under the
-  2026-08-26 ruling in plan §6.4 the resulting Gaussian CRPS is quoted with `pit_ks` and
-  `coverage_95`, with **no** oracle split, and no pval-CRPS gap is significant until that arm's
-  noise floor is measured.
+- σ comes from `python -m competitors.sigma_pass` (§6.1, D2), fitted on a seeded sample of TRAINING
+  cells scored against themselves and reused unchanged on both panels. It used to be fitted on the V
+  panel; Rule 1 (§12.2) voids every table produced that way, and the fitter now refuses (exit 3) any
+  regime naming a `V_`/`B_` cell, or a `--chroms` outside the source regime's training slice. **The
+  σ scope is not a flag.** On the pilot arm the derived regime carries `regime.eic_pilot`'s own
+  `regions` block and the fitter ADOPTS that BED: `Regime.windows` restricts to a `regions` block on
+  the TRAIN split only and the derived regime trains on nothing, so left alone the fit would go
+  genome-wide over 18 chromosomes where Guacamole holds no factors. `--eval-regions` may name the
+  same BED; a different one exits 4 rather than one of the two winning silently.
+  Under the 2026-08-26 ruling in plan §6.4 the resulting Gaussian
+  CRPS is quoted with `pit_ks` and `coverage_95`, with **no** oracle split, and no pval-CRPS gap is
+  significant until that arm's noise floor is measured.
 
 ### Checkpoint selection on the `V_` panel (§5)
 
@@ -630,8 +638,12 @@ python -m lavawizard.store_eic train   --regime configs/regime.eic_19.json --sta
 python -m lavawizard.store_eic predict --regime configs/regime.eic_19.json --chrom chr21 \
     --cache $C/eic_cache --checkpoint runs/eic/guacamole_chr21.best.pt \
     --pred-root runs/eic/pred --clip --manifest
-python competitors/lavawizard/fit_sigma.py --regime configs/regime.eic_val.json \
-    --pred runs/eic/pred --out runs/eic/sigma.json
+# the sigma-table is fitted on TRAINING residuals (D2), so it needs its own derived regime and its
+# own prediction root over the TRAINING tracks -- never `runs/eic/pred`, which is the V_ panel.
+python tools/sigma_training_regime.py --regime configs/regime.eic_19.json \
+    --n-cells 12 --seed 890217 --out runs/eic/regime.eic_19.sigma.json
+python -m competitors.sigma_pass --regime runs/eic/regime.eic_19.sigma.json \
+    --pred runs/eic/train_pred --out runs/eic/sigma.json --method Lavawizard
 python -m candi.bench.external --store configs/regime.eic_val.json --pred runs/eic/pred \
     --sigma-table runs/eic/sigma.json --out runs/eic/P1.json          # P2: add --chroms
 

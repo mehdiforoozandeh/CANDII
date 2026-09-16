@@ -18,15 +18,22 @@
 #     23 (§12.2, corrected). chroms.txt stays on disk because bin_store.py can still be pointed at
 #     any single chromosome by hand.
 #   * WS is keyed by the regime name, so the two regimes cannot overwrite each other's matrices.
+#
+# RETARGETED AGAIN 2026-09-01 for the t81 programme. REPO moves off the dead t78 checkout, parked
+# on the t77 branch, and onto CANDII_main -- the one clone the programme's banner check reads.
+# Every OUTPUT path a job defaults to is now one of the programme's pinned roots and is written
+# here rather than in each script, so a root cannot drift between stages.
 set -uo pipefail
 
-REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_t78_code}"
+REPO="${REPO:-/project/def-maxwl/mforooz/CANDII_main}"
 VENV="${VENV:-/project/def-maxwl/mforooz/EpiDenoise/candi_venv}"
 REGIME="${REGIME:-$REPO/configs/regime.eic_19.json}"
 AVO="$REPO/competitors/avocado"
+METHOD=Avocado
 
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
 export PYTHONPATH="$REPO/src"
+echo "[banner] code=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) kit=$REPO"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MPLBACKEND=Agg
 
@@ -73,3 +80,48 @@ SHARED_SCOPE="${_AVO_SCOPE:-$JOINT_CHROM}"
 unset _AVO_RG _AVO_TRAIN _AVO_EVAL _AVO_SCOPE
 
 mkdir -p "$WS/binned" "$WS/ckpt" "$WS/pred" "$WS/logs"
+
+# -------------------------------------------------------------------------------------------------
+# The panel axis, and the programme's pinned roots.
+#
+# PANEL is V_ or B_ and NOTHING ELSE. BENCHMARK_DESIGN.md §5 rules that B_ is read ONCE, from the
+# selected checkpoint, at the very end -- so V_ is the default and B_ additionally needs B_ONCE=1
+# and a root that does not exist yet. predict.sh holds that guard; the default here only decides
+# which panel a stage means when nobody said.
+PANEL="${PANEL:-V_}"
+case "$PANEL" in
+  V_|B_) ;;
+  *) echo "[env] PANEL must be V_ or B_, got '$PANEL'" >&2; exit 2 ;;
+esac
+
+# Written once, read by predict.sh, score.sh and sigma.sh. Overridable one at a time, but the
+# default of every one is a programme root and nothing else writes there.
+PRED_V="/scratch/mforooz/t81_pred/$METHOD/$REGIME_NAME/V_"
+PRED_B="/project/def-maxwl/mforooz/t81_pred_B/$METHOD/$REGIME_NAME/B_"
+PRED_PANEL="$PRED_V"; [ "$PANEL" = "B_" ] && PRED_PANEL="$PRED_B"
+TRAIN_PRED="${TRAIN_PRED:-/scratch/mforooz/t81_sigma/$METHOD/$REGIME_NAME/train_pred}"
+SIGMA_JSON="/project/def-maxwl/mforooz/t81_sigma/$METHOD/sigma_$REGIME_NAME.json"
+SCORES_DIR="/project/def-maxwl/mforooz/t81_scores/$METHOD/$REGIME_NAME"
+CKPT_KEEP="${CKPT_KEEP:-/project/def-maxwl/mforooz/t81_checkpoints/$METHOD/$REGIME_NAME}"
+TRUTH_CHALLENGE="${TRUTH_CHALLENGE:-/project/def-maxwl/mforooz/t81_truth_challenge/B_}"
+
+# A σ table is accepted only when it says, in its own file, that it was fit on TRAINING residuals.
+# BENCHMARK_DESIGN.md §7: "sigma is fit on training-set residuals only -- never on V_, never on B_".
+# The prefix is the whole contract with `competitors.sigma_pass`; scripts compare against this name
+# rather than retyping the string.
+SIGMA_FITTED_ON_PREFIX="training-residuals:"
+
+# Derive the PANEL-only regime this stage predicts or scores. The filter lives in ONE tool for
+# every method (tools/declare_eval_pairs.py split) so that a panel cannot mean one set of pairs for
+# Avocado and another for CANDI, and the derived file sits beside the run rather than in configs/,
+# where it could drift from the regime it came from.
+#
+# `regions.bed` resolves against the regime file's own directory (store/regime.py:52), which is why
+# the tool rewrites it absolute -- a derived copy in $WS would otherwise fail the pilot regime's
+# sha256 check.
+PANEL_REGIME="$WS/regime.${REGIME_NAME}.${PANEL}.json"
+derive_panel_regime() {
+    python "$REPO/tools/declare_eval_pairs.py" split \
+        --regime "$REGIME" --panel "$PANEL" --out "$PANEL_REGIME" || return 1
+    echo "[env] panel regime: $PANEL_REGIME (PANEL=$PANEL)"
+}
