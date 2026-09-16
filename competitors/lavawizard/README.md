@@ -15,7 +15,7 @@ port emits §4.1 roots and is scored by `candi.bench.external`.
 | `dataset3.py` | the challenge's own bigwigs — their grid, their binning, their hyperparameters |
 | `store_eic.py` | **our** store — the same cache from `CANDI_STORE`, and the P1/P2 predictions |
 | `emit.py` | §4.1 prediction roots |
-| `fit_sigma.py` | the §6.1 sigma-table, fitted on V-pair residuals |
+| (the sigma-table) | not here — `python -m competitors.sigma_pass`, fitted on TRAINING residuals (D2) |
 | `parity_keras.py` | **model** parity: our torch module against Keras on their weights |
 | `parity_features.py` | **input** parity: our preprocessing against `00_data_generation.py` |
 
@@ -24,7 +24,7 @@ Every other module runs on Fir with `candi` nowhere on the path, which is not a 
 earlier version imported `candi.bench.external` for the §4.1 naming rule and died the moment the
 package was rsynced on its own. A test pins the split in both directions.
 
-Tests: `tests/test_lavawizard.py`, 80 checks, seconds, no TensorFlow and no network.
+Tests: `tests/test_lavawizard.py`, 99 checks, seconds, no TensorFlow and no network.
 
 ## Parity, part 1 — the model
 
@@ -403,10 +403,124 @@ Same code, other corpus. `store_eic.py` writes the identical cache layout from `
   on this. Skipping beats zeroing here: the head is `Dense(1)(x) + average`, so a zero average is
   not a neutral input — it would teach the trunk to emit the whole signal as a correction on those
   bins alone. Dataset 3 never hits the case, which is why the anchor never surfaced it.
-- σ comes from `fit_sigma.py` (§6.1), fitted on the V panel and reused unchanged on B. Under the
-  2026-08-26 ruling in plan §6.4 the resulting Gaussian CRPS is quoted with `pit_ks` and
-  `coverage_95`, with **no** oracle split, and no pval-CRPS gap is significant until that arm's
-  noise floor is measured.
+- σ comes from `python -m competitors.sigma_pass` (§6.1, D2), fitted on a seeded sample of TRAINING
+  cells scored against themselves and reused unchanged on both panels. It used to be fitted on the V
+  panel; Rule 1 (§12.2) voids every table produced that way, and the fitter now refuses (exit 3) any
+  regime naming a `V_`/`B_` cell, or a `--chroms` outside the source regime's training slice. **The
+  σ scope is not a flag.** On the pilot arm the derived regime carries `regime.eic_pilot`'s own
+  `regions` block and the fitter ADOPTS that BED: `Regime.windows` restricts to a `regions` block on
+  the TRAIN split only and the derived regime trains on nothing, so left alone the fit would go
+  genome-wide over 18 chromosomes where Guacamole holds no factors. `--eval-regions` may name the
+  same BED; a different one exits 4 rather than one of the two winning silently.
+  Under the 2026-08-26 ruling in plan §6.4 the resulting Gaussian
+  CRPS is quoted with `pit_ks` and `coverage_95`, with **no** oracle split, and no pval-CRPS gap is
+  significant until that arm's noise floor is measured.
+
+### Checkpoint selection on the `V_` panel (§5)
+
+`BENCHMARK_DESIGN.md` §5 makes every trainable method pick its checkpoint on `V_`, by the same
+rule. For this method a check is: write the current model's `V_` predictions for this chromosome
+into a scratch §4.1 root, hand the root to `candi.bench.external.score_external`, and read one
+number off it — the same instrument that scores CANDI and the same one that produces the board row.
+
+- **`B_` is never opened.** `store_eic.derive_v_only` filters `eval_pairs` to `V_` targets and the
+  scoring source is opened on the derived copy, so both the declared track list and the truth reads
+  are `V_` only. Same filter as `slurm/t81_train_candi.sh` applies for CANDI, including the
+  absolute-BED rewrite the D32 hash gate needs.
+- **The selected weights are written the moment the metric improves**, before the next check runs,
+  so a run killed by walltime still yields a selected checkpoint. `predict.sh` predicts from
+  `guacamole_<chrom>.best.pt` and says so loudly if it has to fall back.
+- **The metric is `pval:mse`, not CANDI's `count:crps`,** and that is forced rather than chosen.
+  This method has no count arm (B1b), and the pval arm's distributional keys — CRPS included — are
+  *absent* on a point-only track until a σ-table supplies a spread, which §7 forbids fitting on
+  `V_`. `pval:mse` is the arm's own point key, present on every scored track, and it is what stage 2
+  minimises. `--select-key` moves it; the value is stamped into `train_<chrom>.json` either way.
+- **Selection is stage 2 only.** `from_precamole` discards stage 1's head, so there is no stage-1
+  checkpoint anyone could select.
+- **Cost per check, chr20** (45 `V_` tracks × 2,577,766 bins): ~3.1 min of forward on a `1g.10gb`
+  slice, 0.3 min of npz, 2.3 min of metrics, plus the store's truth reads — the part that makes
+  CANDI's three-chromosome pass 91 minutes. Default cadence is 50 epochs = 16 checks over stage 2's
+  800; `stage2.eval_seconds` sits beside `stage2.seconds` in the run json so the first real run says
+  what it actually cost.
+
+### The BED-restricted training scope (D32)
+
+A `regions` regime restricts training to the bins lying **wholly inside** a BED region.
+`store_eic.contained_bins` resolves it through `candi.store.regime.RegionSet` — one parser, one
+hash gate, one containment rule — and the eligible bins go into the cache as `train_bins.npy`,
+because `train.py` never imports `candi`. The sampler walks those bins and `steps_per_epoch` falls
+with the scope, so an epoch still means the training scope once. A locus here is one 25 bp bin, so
+the scope is §3.1's containment count of **1,023,489** bins, not its 1,294-window / 993,792-bin
+figure, which is CANDI's 768-bin planner. A test pins the 1,023,489 against the shipped BED.
+
+The BED restricts **where transferable parameters are fit**, and nothing else. An eval chromosome
+caches whole and carries no restriction under either regime, because the only thing fitted there is
+a position table and §2 Rule 2 counts that as inference.
+
+### The transferable stage, and what it costs scientifically (PI ruling 2026-09-01)
+
+**Upstream fits one independent Guacamole per chromosome** — cell factors, assay factors, dense
+network and position tables — on that chromosome's own bins. The cell and assay factors are
+*transferable* parameters by §2's own definition, so upstream's scheme fits them on chr20/21/22:
+the chromosomes the method is scored on. That breached Rule 2 in **both** regimes, not only in the
+ablation. It had a second consequence: `train_chroms` and `regions` reached no lavawizard module at
+all, and those two keys plus `_comment` are the *only* difference between the two live regimes — so
+`eic.19` and `eic.pilot` would have been the same run twice, under two labels.
+
+The ruling is a transferable stage on **Avocado's scheme** (§3.2, §12.2), not upstream Guacamole's:
+
+| stage | scope | what is fitted | how many runs |
+|---|---|---|---|
+| `shared` | the regime's own training scope | everything | 1 |
+| `genome` | one eval chromosome, whole | the three position tables alone, the rest frozen | 3 |
+
+`store_eic.shared_layout` builds the shared scope and is the **only** reader of `train_chroms` and
+`regions`, so it is the entire regime axis. Under `eic.19` it is chr19 whole, 2,344,704 bins, one
+span, no packing. Under `eic.pilot` it is the contained bins of eighteen train chromosomes packed
+onto one 1,031,264-slot axis: 40 spans, **1,023,489 real bins** and 7,775 alignment slots (0.75 %)
+that hold no data and are never sampled. Each span's `slot0` is congruent to its first chromosome
+bin modulo 200, so the 250 bp and 5 kbp tables cut the genome at the absolute coordinates a
+whole-chromosome fit would have cut it at, and no two spans share a coarse factor. Neither scope
+contains a single bin of chr20, chr21 or chr22.
+
+The genome stage takes **no stage 1** — stage 1 pretrains the trunk, the trunk is transferable, and
+it arrives already fitted and frozen. `freeze_transferable` also puts the three BatchNorms in
+`eval()`, because running estimates are not parameters and would otherwise drift to the eval
+chromosome's statistics: a frozen trunk fitted to chr20 by another route. A checkpoint is stamped
+with its stage and `predict_chrom` refuses anything but `genome`.
+
+**Selection attaches to the genome stage, in both regimes.** Under `eic.pilot` the shared scope is
+not a chromosome and `candi.bench.external` scores whole chromosomes, so there is no panel — the
+same wall `competitors/avocado/train.py` refuses at. Under `eic.19` the scope *is* chr19 and there
+would be one. Selecting in one regime and not the other would put a difference into the ablation
+that is not the regime, so it selects in neither; the genome stage is the one whose checkpoint is
+predicted from anyway.
+
+**What this costs, stated plainly. This is new code, so the board row is our two-stage variant of
+Lavawizard, not the published Lavawizard.** Nothing about the architecture, the objective, the
+schedule or the learning rates changed — `model.py`'s forward pass is untouched and the two stages
+run upstream's own `dataset3.UPSTREAM_HYPERPARAMS` row — but the *training procedure* is ours, and
+a two-stage fit is not the fit the 2019 submission made. That "nothing else changed" is checked
+rather than asserted: `--stage full` and `--stage shared` on one cache and one seed are bit
+identical to the trainer at `12c268c`, all 31 tensors, and a test holds the two stages equal to
+each other. The alternative was collapsing the regime axis to one regime-invariant row that
+breached Rule 2 in both directions, and the PI took this knowingly. **The original 2019 Lavawizard submission remains on the board unmodified as one of the
+23 anchor entrants** (`competitors/entrants/`, §7.5), so a reader has both readings side by side:
+the published method as it was scored in the challenge, and our Rule-2-compliant retrain.
+
+The packed stem borrows the eval chromosomes' `UPSTREAM_HYPERPARAMS` row rather than inventing one,
+because that row fixes the three factor widths and the widths set `dense_1`'s input width — a
+transferable tensor, which must have the same shape in both stages or the transfer cannot load.
+chr20, chr21 and chr22 agree on that row, and it is chr19's own row, so `eic.19`'s shared fit runs
+the schedule it would have run as a plain chr19 fit. `shared_hparams_chrom` refuses when the eval
+chromosomes disagree rather than picking one.
+
+Walltime at the anchor's measured 63 ms/step on a `1g.10gb` slice: the shared stage is 4.1 GPU-h
+under `eic.19` and 1.8 under `eic.pilot`; the genome stage is 9.1 GPU-h over three tasks, the
+largest (chr20) 3.6 h. That is 13.2 and 10.9 GPU-h per regime against 11.4 for the one-stage fit it
+replaces — the shared stage is added, and stage 1 comes off each of the three eval chromosomes.
+Freezing saves little: the position tables are 72.9 M of chr20's 81.8 M parameters, so the
+optimiser's cost barely moves. `train_<chrom>.json` records the real `ms_per_step`.
 
 ### The smoke, end to end
 
@@ -510,16 +624,26 @@ python -m lavawizard.anchor --checkpoint runs/anchor/guacamole_chr21.pt --cache 
     --blind-truth $D/blind_truth --meta repo/data/Encode_meta.tsv \
     --out runs/anchor/anchor_chr21.json
 
-# the deliverable: our EIC store, one array task per chromosome
-python -m lavawizard.store_eic cache   --regime configs/regime.eic_val.json --chrom chr21 \
+# the deliverable: our EIC store. ONE shared stage, then one array task per eval chromosome.
+python -m lavawizard.store_eic cache-shared --regime configs/regime.eic_19.json \
     --cache $C/eic_cache
-python -m lavawizard.train --cache $C/eic_cache --chrom chr21 --out runs/eic \
-    --contributor-mode loo
-python -m lavawizard.store_eic predict --regime configs/regime.eic_val.json --chrom chr21 \
-    --cache $C/eic_cache --checkpoint runs/eic/guacamole_chr21.pt \
+python -m lavawizard.store_eic cache   --regime configs/regime.eic_19.json --chrom chr21 \
+    --cache $C/eic_cache
+# `store_eic train`, not `lavawizard.train`: §5's selection scores through candi.bench.external,
+# which needs the store. `--select-every 0` is the no-selection path the anchor uses.
+python -m lavawizard.store_eic train   --regime configs/regime.eic_19.json --stage shared \
+    --cache $C/eic_cache --out runs/eic --select-every 0
+python -m lavawizard.store_eic train   --regime configs/regime.eic_19.json --stage genome \
+    --chrom chr21 --cache $C/eic_cache --out runs/eic --select-every 50
+python -m lavawizard.store_eic predict --regime configs/regime.eic_19.json --chrom chr21 \
+    --cache $C/eic_cache --checkpoint runs/eic/guacamole_chr21.best.pt \
     --pred-root runs/eic/pred --clip --manifest
-python competitors/lavawizard/fit_sigma.py --regime configs/regime.eic_val.json \
-    --pred runs/eic/pred --out runs/eic/sigma.json
+# the sigma-table is fitted on TRAINING residuals (D2), so it needs its own derived regime and its
+# own prediction root over the TRAINING tracks -- never `runs/eic/pred`, which is the V_ panel.
+python tools/sigma_training_regime.py --regime configs/regime.eic_19.json \
+    --n-cells 12 --seed 890217 --out runs/eic/regime.eic_19.sigma.json
+python -m competitors.sigma_pass --regime runs/eic/regime.eic_19.sigma.json \
+    --pred runs/eic/train_pred --out runs/eic/sigma.json --method Lavawizard
 python -m candi.bench.external --store configs/regime.eic_val.json --pred runs/eic/pred \
     --sigma-table runs/eic/sigma.json --out runs/eic/P1.json          # P2: add --chroms
 

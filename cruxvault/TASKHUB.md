@@ -44,28 +44,19 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
-- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address
-- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p
-- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored
-- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker
-- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels
-- `t87` [implementation] reconcile the two declare_eval_pairs tools into one
-- `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone
-- `t89` [visualization] generate the architecture README and diagram from the code
-- `t90` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
-- `t91` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 
 ## Blocked
 
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — blocked by `t78`, `t79`, `t80`
-- `t92` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t90`
-- `t93` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t91`, `t92`
-- `t94` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — blocked by `t93`
-- `t95` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — blocked by `t93`
-- `t96` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — blocked by `t93`
-- `t97` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t93`
+- `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t100`
+- `t103` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t101`, `t102`
+- `t104` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — blocked by `t103`
+- `t105` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — blocked by `t103`
+- `t106` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — blocked by `t103`
+- `t107` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t103`
 
 ## By category
 
@@ -73,8 +64,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
 - `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *open*
-- `t90` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
-- `t92` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
+- `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 
 ### implementation
 
@@ -116,24 +107,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
-- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *open*
-- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *open*
-- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *open*
-- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *open*
-- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *blocked*
-- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *open*
-- `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *open*
-- `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *open*
-- `t91` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
-- `t93` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
-- `t94` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — *blocked*
-- `t95` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — *blocked*
-- `t96` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — *blocked*
-- `t97` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
-
-### visualization
-
-- `t89` [visualization] generate the architecture README and diagram from the code — *open*
+- `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t103` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
+- `t104` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — *blocked*
+- `t105` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — *blocked*
+- `t106` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — *blocked*
+- `t107` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 
 ## Done · Dropped
 
@@ -175,9 +154,21 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
 - `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
-- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/18`
+- `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `results/t47/LINK.md`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
+- `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *done* → `results/t77/DELIVERABLE.md`
+- `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *done* → `results/t78/G1_PHASE2_DNASE.md`
+- `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *done* → `results/t79/G2_PILOT_HG38.md`
+- `t80` [implementation] score V_ three ways, split held-out from genome-wide, and wire the challenge ranker as the only ranker — *done* → `results/t80/PANEL_RULE.md`
+- `t81` [implementation] retrain every trainable method under the uniform V_ selection rule — *done* → `results/t81/DELIVERABLE.md`
 - `t82` [implementation] apply the regime naming across the board, add the truth toggle, the anchor block and the row markers — *done* → `results/t82/DELIVERABLE.md`
 - `t83` [implementation] write the prediction track writer so a track is predicted once and scored many times — *done* → `results/t83/DELIVERABLE.md`
 - `t84` [implementation] vendor Lavawizard — the other three rivals were already implemented — *done* → `results/t84/DELIVERABLE.md`
 - `t85` [implementation] stop CANDI training when V_ has not improved for more than 3 epochs — *done* → `results/t85/DELIVERABLE.md`
+- `t86` [implementation] measure the seed-to-seed noise floor on the V_ breadth panel and the 8-assay panels — *done* → `results/t86/DELIVERABLE.md`
+- `t87` [implementation] reconcile the two declare_eval_pairs tools into one — *done* → `results/t87/DELIVERABLE.md`
+- `t88` [implementation] a shipped-regime test reads gitignored cruxvault/results, so it fails in every fresh clone — *done* → `results/t88/FRESH_WORKTREE_PYTEST.md`
+- `t89` [visualization] generate the architecture README and diagram from the code — *done* → `results/t89/DELIVERABLE.md`
+- `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *done* → `results/t90/MOVE.md`
+- `t91` [implementation] build the training-residual sigma pass so every point-only method gets a leak-free spread — *done* → `results/t91/DELIVERABLE.md`
+- `t98` [implementation] Whole-genome blind-set prediction arrays from the existing eDICE and ChromImpute checkpoints (throwaway preview) — *done* → `results/t98/README.md`

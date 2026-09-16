@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -974,15 +975,29 @@ def test_no_disagreement_flag_when_both_aggregations_agree(tmp_path):
 # ---------------------------------------------------------------------------
 
 def _regime(tmp_path, *, train=("T_A", "T_B", "T_C"), pairs=(("T_A", "V_A"),),
-            assays=("H3K4me3", "H3K27ac")):
+            assays=("H3K4me3", "H3K27ac"), train_chroms=("chr19",), regions=None):
     p = tmp_path / "regime.json"
-    p.write_text(json.dumps({
+    obj = {
         "store": str(tmp_path / "store"), "assays": list(assays),
         "biosamples": {"train": list(train), "eval": [b for _, b in pairs]},
         "eval_pairs": [list(x) for x in pairs],
-        "train_chroms": ["chr19"], "eval_chroms": ["chr21"],
-    }), encoding="utf-8")
+        "train_chroms": list(train_chroms), "eval_chroms": ["chr21"],
+    }
+    if regions is not None:
+        obj["regions"] = regions
+    p.write_text(json.dumps(obj), encoding="utf-8")
     return p
+
+
+def _bed(tmp_path, intervals, name="regions.bed"):
+    """A BED4 plus the `{bed, sha256, policy}` block D32 requires, pinned on its own bytes."""
+    import hashlib
+
+    p = tmp_path / name
+    text = "".join(f"{c}\t{s}\t{e}\tR{i}\n" for i, (c, s, e) in enumerate(intervals))
+    p.write_text(text, encoding="utf-8")
+    return {"bed": p.name, "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+            "policy": "contain"}
 
 
 class _FakeBiosample:
@@ -1123,7 +1138,7 @@ def test_prediction_excludes_the_pairs_input_cell_from_the_average(tmp_path, mon
             seen.setdefault((int(celltype[0]), int(assay[0])), []).append(average.numpy().copy())
             return torch.zeros_like(average)
 
-    meta = {"cells": cache.cells, "marks": cache.marks}
+    meta = {"cells": cache.cells, "marks": cache.marks, "stage": "genome"}
     monkeypatch.setattr(store_eic, "load_checkpoint", lambda *a, **k: (_Spy(), meta),
                         raising=False)
     import lavawizard.anchor as A
@@ -1189,3 +1204,654 @@ def test_a_cache_of_only_thin_marks_refuses_rather_than_looping(tmp_path, monkey
     cache.mark_count[:] = 1
     with pytest.raises(ValueError, match="nothing to train on"):
         Sampler(cache, 32, "loo", seed=0)
+
+
+# ---------------------------------------------------------------------------
+# BENCHMARK_DESIGN.md §5 — the V_ selection panel
+# ---------------------------------------------------------------------------
+
+REGIMES = Path(__file__).resolve().parents[1] / "configs"
+
+
+@pytest.mark.parametrize("name", ["regime.eic_19.json", "regime.eic_pilot.json"])
+def test_the_derived_selection_panel_holds_no_B_target_at_all(tmp_path, name):
+    """§5, PI ruling 2026-08-31: B_ is not merely kept out of selection, it is never READ.
+
+    Both live regimes declare all 38 pairs inside them, so a selection pass that took the regime
+    verbatim would open B_ at every check and spend the one touch the design allows.
+    """
+    from lavawizard import store_eic
+
+    src = REGIMES / name
+    if not src.exists():                       # pragma: no cover - the shipped configs are tracked
+        pytest.skip(f"{name} is not in this checkout")
+    dst = store_eic.write_v_only_regime(src, tmp_path / "vsel.json")
+    out = json.loads(dst.read_text())
+    targets = [t for _, t in out["eval_pairs"]]
+    assert len(targets) == 26, "the V_ panel is 26 T_->V_ cell pairs (§5)"
+    assert [t for t in targets if t.startswith("B_")] == []
+    assert all(t.startswith("V_") for t in targets)
+    assert sorted(out["biosamples"]["eval"]) == sorted(set(targets)), \
+        "leaving the B_ cells in biosamples.eval would be a false claim about the split"
+    # Everything that is not the panel is carried through unchanged — a derived regime that also
+    # moved the corpus, the assay order or the eval scope would select on a different exam.
+    keep = json.loads(src.read_text())
+    for k in ("store", "assays", "eval_chroms", "train_chroms", "context_bins", "seed"):
+        if k in keep:
+            assert out[k] == keep[k], k
+
+
+def test_the_derived_selection_regime_points_at_the_bed_it_was_pinned_on(tmp_path):
+    """A derived copy lands elsewhere, and `regions.bed` resolves against the regime's OWN dir."""
+    from lavawizard import store_eic
+
+    src = REGIMES / "regime.eic_pilot.json"
+    if not src.exists():                       # pragma: no cover
+        pytest.skip("the pilot regime is not in this checkout")
+    dst = store_eic.write_v_only_regime(src, tmp_path / "deep" / "vsel.json")
+    bed = json.loads(dst.read_text())["regions"]["bed"]
+    assert Path(bed).is_absolute() and Path(bed).is_file()
+    # The hash gate is the point of the rewrite: it must still pass from the new location.
+    from candi.store.regime import Regime
+    r = Regime.from_file(dst)
+    assert r.regions is not None, "the derived copy must still carry the D32 scope"
+    assert all(t.startswith("V_") for _, t in r.eval_pairs)
+
+
+def test_a_regime_with_no_V_pair_is_refused_rather_than_selecting_on_B(tmp_path):
+    from lavawizard import store_eic
+
+    r = store_eic.load_regime(_regime(tmp_path, pairs=(("T_A", "B_A"),)))
+    with pytest.raises(store_eic.ScopeError, match="no V_ eval pair"):
+        store_eic.derive_v_only(r)
+
+
+def test_the_selection_metric_must_be_a_number_the_scorer_actually_produced():
+    """A metric the run cannot compute selects nothing, so it raises instead of scoring +inf."""
+    from lavawizard import store_eic
+
+    result = {"macro": {"pval": {"mse": 0.25, "gwcorr": 0.8, "n_tracks": 3}, "count": {}}}
+    assert store_eic._macro_value(result, "pval:mse") == 0.25
+    with pytest.raises(ValueError, match="no `crps` on the count arm"):
+        store_eic._macro_value(result, "count:crps")
+    with pytest.raises(ValueError, match="<arm>:<key>"):
+        store_eic._macro_value(result, "mse")
+
+
+# ---------------------------------------------------------------------------
+# the selection loop inside training
+# ---------------------------------------------------------------------------
+
+def _shrink(monkeypatch, TR, *, pretrain, train, batch=8):
+    """Upstream's per-chromosome schedule, shrunk to something a laptop runs in seconds.
+
+    Both `schedule` and `factor_sizes` are keyed on the 23 real chromosome names and raise
+    `KeyError` for anything else (`dataset3.py`) — which is the behaviour `BENCHMARK_DESIGN.md` §2
+    cites as the reason Rule 2 exempts per-position adaptation, so it is patched here rather than
+    weakened there.
+    """
+    monkeypatch.setattr(TR.dataset3, "schedule",
+                        lambda c: {"batch_size": batch, "pretrain_epochs": pretrain,
+                                   "train_epochs": train})
+    monkeypatch.setattr(TR.dataset3, "factor_sizes",
+                        lambda c: {"n_25bp_factors": 25, "n_250bp_factors": 30,
+                                   "n_5kbp_factors": 60})
+
+
+def _tiny_train(tmp_path, monkeypatch, values, **kw):
+    """`train_chromosome` on the fake cache, with upstream's schedule shrunk to something local.
+
+    The chromosome is `chr21` so `dataset3` has hyperparameters for it; `epoch_scale` and the batch
+    size are what make it seconds rather than hours.
+    """
+    from lavawizard import train as TR
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=8)
+    calls = {"n": 0}
+
+    def select_fn(model, epoch, step):
+        v = values[min(calls["n"], len(values) - 1)]
+        calls["n"] += 1
+        return float(v)
+
+    rec = TR.train_chromosome(root, "chrT", tmp_path / "out", contributor_mode="upstream",
+                              device="cpu", seed=0, select_fn=select_fn, select_metric="pval:mse",
+                              **kw)
+    return rec, calls
+
+
+def test_the_best_weights_are_written_the_moment_the_metric_improves(tmp_path, monkeypatch):
+    """A run killed by walltime must still leave a SELECTED checkpoint, not just the last one."""
+    from lavawizard import train as TR
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=4)
+    out = tmp_path / "out"
+    best = out / "guacamole_chrT.best.pt"
+    seen = []
+
+    def select_fn(model, epoch, step):
+        # Read the file's existence BEFORE returning, so the assertion is about ordering: the
+        # improving check at epoch 0 must have put a file on disk before the next check runs.
+        seen.append(best.exists())
+        return [0.9, 0.4, 0.7, 0.8][len(seen) - 1]
+
+    TR.train_chromosome(root, "chrT", out, contributor_mode="upstream", device="cpu",
+                        select_fn=select_fn, select_every=1, select_metric="pval:mse")
+    assert seen == [False, True, True, True], "the first improvement writes before the next check"
+    assert best.exists()
+    rec = json.loads((out / "train_chrT.json").read_text())
+    sel = rec["selection"]
+    assert sel["best"]["epoch"] == 1 and sel["best"]["value"] == pytest.approx(0.4)
+    assert [c["improved"] for c in sel["curve"]] == [True, True, False, False]
+    assert sel["metric"] == "pval:mse"
+
+
+def test_the_selected_checkpoint_is_not_the_last_one_when_the_metric_worsened(tmp_path, monkeypatch):
+    from lavawizard.anchor import load_checkpoint
+
+    rec, _ = _tiny_train(tmp_path, monkeypatch, [0.5, 0.2, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9],
+                         select_every=1)
+    out = tmp_path / "out"
+    best, last = out / "guacamole_chrT.best.pt", out / "guacamole_chrT.pt"
+    assert best.exists() and last.exists()
+    a, _ = load_checkpoint(best)
+    b, _ = load_checkpoint(last)
+    same = all(torch.equal(x, y) for x, y in zip(a.state_dict().values(), b.state_dict().values()))
+    assert not same, "the run kept training after the best epoch, so the two files must differ"
+    assert rec["selection"]["best"]["epoch"] == 1
+
+
+def test_a_run_with_no_selection_writes_no_best_checkpoint_and_says_so(tmp_path, monkeypatch):
+    """`select_every=0` is the anchor path: it trains exactly as it did before selection existed."""
+    from lavawizard import train as TR
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=2)
+    rec = TR.train_chromosome(root, "chrT", tmp_path / "out", contributor_mode="upstream",
+                              device="cpu")
+    assert not (tmp_path / "out" / "guacamole_chrT.best.pt").exists()
+    assert rec["selection"]["best"] is None and rec["selection"]["every_epochs"] == 0
+
+
+def test_selection_stops_a_run_that_has_not_improved_for_the_patience_in_epochs(tmp_path, monkeypatch):
+    """Patience is counted in EPOCHS, the unit `candi.train --early-stop-epochs` counts it in."""
+    rec, calls = _tiny_train(tmp_path, monkeypatch, [0.5] + [0.9] * 10,
+                             select_every=1, early_stop_epochs=2)
+    assert rec["stage2"]["early_stopped"] is True
+    assert rec["stage2"]["steps"] < rec["stage2"]["planned_steps"]
+    # best at epoch 0; the stop fires at the first epoch MORE than 2 after it, which is epoch 3.
+    assert rec["selection"]["best"]["epoch"] == 0
+    assert calls["n"] == 4
+
+
+def test_a_non_finite_check_never_selects(tmp_path, monkeypatch):
+    """NaN is not an improvement, and a run that only ever saw NaN selected nothing."""
+    rec, _ = _tiny_train(tmp_path, monkeypatch, [float("nan")] * 8, select_every=1)
+    assert rec["selection"]["best"] is None
+    assert not (tmp_path / "out" / "guacamole_chrT.best.pt").exists()
+
+
+def test_the_selection_pass_is_kept_out_of_the_step_rate(tmp_path, monkeypatch):
+    """A cadence that inflated ms/step would make two runs at different cadences incomparable."""
+    def slow(model, epoch, step):
+        time.sleep(0.5)
+        return 0.5 - epoch * 0.01
+
+    from lavawizard import train as TR
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=3)
+    rec = TR.train_chromosome(root, "chrT", tmp_path / "out", contributor_mode="upstream",
+                              device="cpu", select_fn=slow, select_every=1,
+                              select_metric="pval:mse")
+    s2 = rec["stage2"]
+    assert s2["eval_seconds"] >= 1.5, "three checks at 0.5 s each were timed as selection"
+    # 1.5 s of selection over 15 steps is 100 ms/step of it. The step rate must be well under that,
+    # and the stage's own `seconds` must not carry it either.
+    assert s2["ms_per_step"] < 100 and s2["seconds"] < 1.5
+
+
+def test_the_selector_scores_the_V_panel_with_the_bench_scorer(tmp_path, monkeypatch):
+    """The wiring: a live model in, one number out, and the panel it scored carries no B_.
+
+    `score_external` itself is stubbed — it needs the real store and the annotation assets — but
+    everything around it is the production path: the derived regime, the declared track list, the
+    §4.1 root, and the macro key that comes back.
+    """
+    from lavawizard import store_eic
+
+    rng = np.random.default_rng(0)
+    n_bins = 64
+    names = ("T_A", "T_B", "T_C", "V_A", "B_A")
+    vals = {b: {a: rng.random(n_bins).astype(np.float32) * 5.0
+                for a in ("H3K4me3", "H3K27ac")} for b in names}
+    bios = {b: _FakeBiosample(["H3K4me3", "H3K27ac"], vals[b]) for b in names}
+    _install_fake_corpus(monkeypatch, bios, n_bins)
+    rp = _regime(tmp_path, pairs=(("T_A", "V_A"), ("T_B", "B_A")))
+    store_eic.build_cache_from_store(rp, "chr21", tmp_path / "cache", verbose=False)
+    cache = preprocess.CachedChrom(tmp_path / "cache", "chr21", mmap=True)
+
+    opened = {}
+    import candi.bench.external as X
+    import candi.bench.harness as H
+    monkeypatch.setattr(H, "open_source", lambda **kw: opened.update(kw) or "SOURCE")
+    monkeypatch.setattr(X, "score_external",
+                        lambda source, root, **kw: {"macro": {"pval": {"mse": 0.125}}})
+
+    fn, info = store_eic.selector(rp, "chr21", cache, tmp_path / "work", clip=False,
+                                  verbose=False)
+    assert info["pairs"] == 1 and info["b_pairs"] == 0, "B_A was declared and must be dropped"
+    assert opened["chroms"] == ("chr21",), "a per-chromosome model is only scored on its own chrom"
+
+    model = Guacamole(n_celltypes=len(cache.cells), n_assays=len(cache.marks),
+                      n_positions=cache.n_bins)
+    assert fn(model, 0, 0) == pytest.approx(0.125)
+    root = Path(info["pred_root"])
+    assert (root / "manifest.json").exists()
+    written = sorted(p.name for p in root.iterdir() if p.is_dir())
+    assert written == ["T_A__V_A__H3K27ac", "T_A__V_A__H3K4me3"], \
+        "only the V_ pair's tracks are written, and B_A's truth is never opened"
+
+
+# ---------------------------------------------------------------------------
+# D32 — the BED-restricted training scope
+# ---------------------------------------------------------------------------
+
+def test_the_pilot_regions_contain_the_training_bins_the_design_pins():
+    """§3.1 pins 1,023,489 contained 25 bp bins for `eic.pilot`'s training scope.
+
+    That is a CONTAINMENT count and not `bp // 25` — 25,588,197 bp is not divisible by 25. It is
+    also not §3.1's other number: 1,294 windows / 993,792 bins is the 768-bin WINDOW count CANDI's
+    sampler plans, and Guacamole samples single bins.
+    """
+    from lavawizard import store_eic
+
+    src = REGIMES / "regime.eic_pilot.json"
+    if not src.exists():                       # pragma: no cover
+        pytest.skip("the pilot regime is not in this checkout")
+    r = store_eic.load_regime(src)
+    total = sum(store_eic.contained_bins(r, c, base=src.parent).size for c in r["train_chroms"])
+    assert total == 1_023_489
+    assert store_eic.contained_bins(
+        store_eic.load_regime(REGIMES / "regime.eic_19.json"), "chr19", base=src.parent) is None, \
+        "a regime with no `regions` key restricts nothing"
+
+
+def test_a_training_locus_counts_only_if_it_lies_wholly_inside_a_region(tmp_path):
+    """Containment, on the chromosome bin grid, anchored at bin 0 — never re-anchored per region."""
+    from lavawizard import store_eic
+
+    # 30..80 bp is bins 2 (50..75) alone: bin 1 starts at 25 and ends at 50, inside; bin 0 is not.
+    reg = _bed(tmp_path, [("chr21", 30, 80), ("chr21", 200, 260)])
+    r = store_eic.load_regime(_regime(tmp_path, regions=reg))
+    got = store_eic.contained_bins(r, "chr21", base=tmp_path)
+    # 30..80: the first whole bin starts at ceil(30/25)=2, the last ends at 80//25=3 -> bin 2.
+    # 200..260: ceil(200/25)=8 to 260//25=10 -> bins 8, 9.
+    np.testing.assert_array_equal(got, [2, 8, 9])
+    assert store_eic.contained_bins(r, "chr22", base=tmp_path).size == 0, \
+        "a chromosome the BED never names has no training scope"
+
+
+def _regions_cache(tmp_path, monkeypatch, reg, *, n_bins=64, chrom="chr21"):
+    from lavawizard import store_eic
+
+    rng = np.random.default_rng(1)
+    vals = {b: {a: rng.random(n_bins).astype(np.float32) * 5.0
+                for a in ("H3K4me3", "H3K27ac")} for b in ("T_A", "T_B", "T_C", "V_A")}
+    bios = {b: _FakeBiosample(["H3K4me3", "H3K27ac"], vals[b]) for b in vals}
+    _install_fake_corpus(monkeypatch, bios, n_bins)
+    rp = _regime(tmp_path, regions=reg, train_chroms=(chrom,))
+    store_eic.build_cache_from_store(rp, chrom, tmp_path / "cache", verbose=False)
+    return rp
+
+
+def test_under_a_regions_regime_every_training_locus_lies_inside_the_bed(tmp_path, monkeypatch):
+    """The requirement: with a `regions` BED declared, training samples nothing outside it."""
+    from lavawizard.train import Sampler
+
+    reg = _bed(tmp_path, [("chr21", 250, 500), ("chr21", 1000, 1200)])
+    _regions_cache(tmp_path, monkeypatch, reg)
+    cache = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    inside = set(range(10, 20)) | set(range(40, 48))       # 250..500 -> 10..19, 1000..1200 -> 40..47
+    assert set(cache.train_bins.tolist()) == inside
+
+    s = Sampler(cache, batch_size=4, mode="upstream", seed=0)
+    drawn = set()
+    for _ in range(4 * s.steps_per_epoch):
+        drawn.update(s._batch()[1].tolist())
+    assert drawn <= inside, "a bin outside the BED reached a training batch"
+    assert drawn == inside, "and every bin inside it is reachable"
+
+
+def test_the_bed_scope_sets_the_epoch_length_rather_than_repeating_the_chromosome(tmp_path, monkeypatch):
+    """An epoch is the training scope once. A 40x smaller scope must buy 40x fewer steps."""
+    from lavawizard.train import Sampler
+
+    reg = _bed(tmp_path, [("chr21", 250, 500)])            # 10 of the chromosome's 64 bins
+    _regions_cache(tmp_path, monkeypatch, reg)
+    restricted = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    assert restricted.train_bins.size == 10
+    assert Sampler(restricted, 4, "upstream", seed=0).steps_per_epoch == 3      # ceil(10/4)
+    assert restricted.train_scope["n_bins"] == 10 and restricted.train_scope["policy"] == "contain"
+
+
+def test_a_cache_with_no_bed_still_trains_on_the_whole_chromosome(tmp_path, monkeypatch):
+    """Absent means every bin — every regime without `regions`, and every Dataset-3 cache."""
+    from lavawizard.train import Sampler
+
+    _store_cache(tmp_path, monkeypatch)
+    cache = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    assert cache.train_bins is None and cache.train_scope is None
+    s = Sampler(cache, 8, "upstream", seed=0)
+    assert s.steps_per_epoch == 8 and s.positions.size == cache.n_bins
+
+
+def test_a_bed_that_no_bin_of_the_chromosome_falls_inside_is_refused(tmp_path, monkeypatch):
+    from lavawizard import store_eic
+
+    reg = _bed(tmp_path, [("chr21", 3, 20)])               # inside one bin, containing none
+    with pytest.raises(store_eic.ScopeError, match="no training scope"):
+        _regions_cache(tmp_path, monkeypatch, reg)
+
+
+def test_an_eval_chromosome_caches_whole_even_under_a_regions_regime(tmp_path, monkeypatch):
+    """The BED restricts where TRANSFERABLE parameters are fit, and nothing else.
+
+    Under `eic.pilot` the BED's chr21 regions are exactly the ones `train_chroms` CUT, so the old
+    per-chromosome fit had to be refused there. The genome stage fits position tables alone, which
+    §2 Rule 2 counts as inference and allows anywhere, so an eval chromosome now caches whole and
+    carries no training restriction at all — the restriction lives on the shared cache instead.
+    """
+    from lavawizard import store_eic
+
+    reg = _bed(tmp_path, [("chr21", 250, 500)])
+    rng = np.random.default_rng(1)
+    vals = {b: {a: rng.random(64).astype(np.float32) * 5.0 for a in ("H3K4me3", "H3K27ac")}
+            for b in ("T_A", "T_B", "T_C", "V_A")}
+    _install_fake_corpus(monkeypatch, {b: _FakeBiosample(["H3K4me3", "H3K27ac"], vals[b])
+                                       for b in vals}, 64)
+    rp = _regime(tmp_path, regions=reg, train_chroms=("chr19",))
+    store_eic.build_cache_from_store(rp, "chr21", tmp_path / "cache", verbose=False)
+    cache = preprocess.CachedChrom(tmp_path / "cache", "chr21")
+    assert cache.train_bins is None and cache.train_scope is None
+    assert cache.n_bins == 64, "prediction needs every bin, whatever the training scope is"
+    np.testing.assert_allclose(cache.values[cache.tracks.index(("T_B", "H3K27ac"))],
+                               np.arcsinh(vals["T_B"]["H3K27ac"]), rtol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# §2 Rule 2 — the transferable stage
+# ---------------------------------------------------------------------------
+
+def test_the_transferable_stage_fits_no_parameter_on_an_eval_chromosome(tmp_path, monkeypatch):
+    """The requirement, stated as a diff: the genome stage must move the position tables and
+    nothing else.
+
+    §2 Rule 2 binds the cell factors, the assay factors and the dense network — every parameter that
+    is not indexed by position. Those arrive from the shared fit and must come out of an eval
+    chromosome's stage bit for bit unchanged, or the chromosome the method is scored on has entered
+    a parameter the regime claims was fit elsewhere.
+    """
+    from lavawizard import train as TR
+    from lavawizard.anchor import load_checkpoint
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=3)
+    shared = tmp_path / "shared"
+    TR.train_chromosome(root, "chrT", shared, contributor_mode="upstream", device="cpu",
+                        stage="shared")
+    before, meta = load_checkpoint(shared / "guacamole_chrT.pt")
+    assert meta["stage"] == "shared"
+
+    TR.train_chromosome(root, "chrT", tmp_path / "gen", contributor_mode="upstream", device="cpu",
+                        stage="genome", init=shared / "guacamole_chrT.pt")
+    after, gmeta = load_checkpoint(tmp_path / "gen" / "guacamole_chrT.pt")
+    assert gmeta["stage"] == "genome"
+
+    kept = before.transferable_state()
+    for k, v in after.transferable_state().items():
+        assert torch.equal(v, kept[k]), f"{k} took a gradient on the chromosome it is scored on"
+    moved = [k for k in after.state_dict()
+             if k.startswith("factors.genome_") and
+             not torch.equal(after.state_dict()[k], before.state_dict()[k])]
+    assert sorted(moved) == ["factors.genome_250bp_embedding.weight",
+                             "factors.genome_25bp_embedding.weight",
+                             "factors.genome_5kbp_embedding.weight"], \
+        "the position tables are the only thing this stage is allowed to fit, and it must fit them"
+
+
+def test_the_transferable_stage_is_upstreams_own_fit_moved_and_not_a_different_one(
+        tmp_path, monkeypatch):
+    """`--stage shared` and `--stage full` must be the SAME fit on the same cache and seed.
+
+    The whole claim about what this change costs rests on it: the transferable stage is upstream's
+    own two-stage fit pointed at loci Rule 2 allows, not a new objective, schedule or optimiser. If
+    the two ever diverged, the board row would differ from the published method by more than where
+    it trained, and the README's honesty note would be understating it.
+    """
+    from lavawizard import train as TR
+    from lavawizard.anchor import load_checkpoint
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=3)
+    got = {}
+    for stage in ("full", "shared"):
+        TR.train_chromosome(root, "chrT", tmp_path / stage, contributor_mode="upstream",
+                            device="cpu", seed=0, stage=stage)
+        got[stage] = load_checkpoint(tmp_path / stage / "guacamole_chrT.pt")[0].state_dict()
+    for k, v in got["full"].items():
+        assert torch.equal(v, got["shared"][k]), f"{k} differs between `full` and `shared`"
+
+
+def test_precamole_is_built_and_trained_before_guacamole_exists(tmp_path, monkeypatch):
+    """The construction order is frozen, and the reason is the RNG stream, not tidiness.
+
+    Both models draw from torch's global RNG. `Guacamole`'s own layers — `block3` and `y_pred` —
+    init AFTER stage 1 has already advanced it, so building Guacamole earlier re-rolls every tensor
+    in the run and `--stage full` stops reproducing the §7.4 anchor it exists to reproduce. Checked
+    by order rather than by a stored checksum, which would only pin one torch version.
+    """
+    from lavawizard import model, train as TR
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=1)
+    seen = []
+    for cls in ("Precamole", "Guacamole"):
+        real = getattr(model, cls).__init__
+
+        def spy(self, *a, _n=cls, _f=real, **k):
+            seen.append(_n)
+            _f(self, *a, **k)
+        monkeypatch.setattr(getattr(TR, cls), "__init__", spy)
+    real_stage = TR._run_stage
+    monkeypatch.setattr(TR, "_run_stage",
+                        lambda m, s, **k: seen.append(k["label"]) or real_stage(m, s, **k))
+
+    TR.train_chromosome(root, "chrT", tmp_path / "out", contributor_mode="upstream", device="cpu")
+    assert seen == ["Precamole", "stage1", "Guacamole", "stage2"]
+
+
+def test_a_run_that_never_saw_a_shared_fit_is_refused_rather_than_started(tmp_path, monkeypatch):
+    """Falling back to a fresh init would fit the cell and assay factors on the eval chromosome."""
+    from lavawizard import store_eic, train as TR
+
+    with pytest.raises(ValueError, match="needs an --init"):
+        TR.train_chromosome(tmp_path / "nope", "chr21", tmp_path / "out", stage="genome")
+    with pytest.raises(store_eic.ScopeError, match="Rule 2"):
+        store_eic.train_chrom(_regime(tmp_path), "chr21", tmp_path / "cache", tmp_path / "out")
+
+
+def test_a_shared_checkpoint_is_never_predicted_from(tmp_path, monkeypatch):
+    """Its position tables address a packed axis, so every array it wrote would be plausible junk."""
+    from lavawizard import store_eic, train as TR
+
+    root, _, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=40, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=1)
+    TR.train_chromosome(root, "chrT", tmp_path / "ck", contributor_mode="upstream", device="cpu",
+                        stage="shared")
+    rp, _ = _store_cache(tmp_path, monkeypatch)
+    with pytest.raises(store_eic.ScopeError, match="only a `genome` checkpoint"):
+        store_eic.predict_chrom(rp, "chr21", tmp_path / "cache",
+                                tmp_path / "ck" / "guacamole_chrT.pt", tmp_path / "pred",
+                                clip=False, verbose=False)
+
+
+def test_the_two_live_regimes_fit_the_transferable_half_on_different_loci(tmp_path):
+    """THE POINT OF THE WHOLE STAGE. Before it, every key this method read was identical between
+    `eic.19` and `eic.pilot`, so the two rows were one run under two labels.
+
+    `shared_layout` is now the only reader of `train_chroms` and `regions`, and it answers
+    differently for the two — different chromosomes, different bin counts, no overlap. And neither
+    answer names an eval chromosome, which is what Rule 2 asks of it.
+    """
+    from lavawizard import store_eic
+
+    if not (REGIMES / "regime.eic_pilot.json").exists():   # pragma: no cover
+        pytest.skip("the live regimes are not in this checkout")
+    scopes = {}
+    for name in ("regime.eic_19.json", "regime.eic_pilot.json"):
+        src = REGIMES / name
+        r = store_eic.load_regime(src)
+        spans, n_slots = store_eic.shared_layout(
+            r, lambda c: 2_344_704, base=src.parent)       # chr19's bin count, for the no-BED case
+        scopes[name] = (spans, n_slots, {c for c, _, _, _ in spans},
+                        sum(b - a for _, a, b, _ in spans))
+        assert not (scopes[name][2] & set(r["eval_chroms"])), \
+            f"{name}: the transferable stage would touch an eval chromosome"
+
+    a, b = scopes["regime.eic_19.json"], scopes["regime.eic_pilot.json"]
+    assert a[2] == {"chr19"} and a[3] == 2_344_704, "eic.19's transferable scope is chr19 whole"
+    assert len(b[2]) == 18, "eic.pilot's is the Pilot Regions over eighteen train chromosomes"
+    assert b[3] == 1_023_489, "and it is §3.1's own contained-bin count, not a fraction of it"
+    assert a[3] != b[3], "two regimes that trained on the same loci would be one run twice"
+
+
+def test_the_two_regimes_produce_different_shared_factors(tmp_path, monkeypatch):
+    """The axis is real only if the same code on the two scopes yields two different fits.
+
+    Same seed, same schedule, same index space, same tracks — only the training loci differ. If the
+    cell and assay factors came out equal, the regime label would still be decorative.
+    """
+    from lavawizard import train as TR
+
+    root, values, _ = _fake_cache(tmp_path, n_tracks=6, n_bins=80, n_marks=2)
+    _shrink(monkeypatch, TR, pretrain=1, train=4)
+    fits = {}
+    for label, bins in (("left", np.arange(0, 40)), ("right", np.arange(40, 80))):
+        np.save(root / "chrT" / "train_bins.npy", bins.astype(np.int64))
+        rec = TR.train_chromosome(root, "chrT", tmp_path / label, contributor_mode="upstream",
+                                  device="cpu", seed=0, stage="shared")
+        assert rec["n_train_bins"] == 40
+        from lavawizard.anchor import load_checkpoint
+        fits[label] = load_checkpoint(tmp_path / label / "guacamole_chrT.pt")[0]
+
+    for name in ("factors.celltype_embedding.weight", "factors.assay_embedding.weight"):
+        x, y = fits["left"].state_dict()[name], fits["right"].state_dict()[name]
+        assert not torch.equal(x, y), f"{name} did not move when the training loci moved"
+
+
+def test_the_packed_axis_cuts_the_coarse_factors_where_the_chromosome_would(tmp_path):
+    """A slot's 250 bp and 5 kbp factors must be the ones its absolute chromosome bin would have.
+
+    Packing regions end to end is what lets the shared fit hold eighteen chromosomes at all, and it
+    is only sound if it does not re-anchor the grid: a region starting at chromosome bin 4,321 must
+    land on a slot congruent to 4,321 modulo the coarsest stride, or its coarse factors are cut at
+    coordinates that exist nowhere in the genome. Two regions must also never share one.
+    """
+    from lavawizard import store_eic
+
+    reg = _bed(tmp_path, [("chr19", 25 * 4321, 25 * 4400), ("chr19", 25 * 9000, 25 * 9100),
+                          ("chr20", 25 * 77, 25 * 500)])
+    r = store_eic.load_regime(_regime(tmp_path, regions=reg, train_chroms=("chr19", "chr20")))
+    spans, n_slots = store_eic.shared_layout(r, lambda c: 10_000, base=tmp_path)
+
+    stride = store_eic.COARSE_STRIDE
+    for _, first, _, slot0 in spans:
+        assert slot0 % stride == first % stride, "the coarse grid was re-anchored on this region"
+    coarse = [set(range(s0 // stride, (s0 + (b - a) - 1) // stride + 1))
+              for _, a, b, s0 in spans]
+    for i in range(len(coarse)):
+        for j in range(i + 1, len(coarse)):
+            assert not (coarse[i] & coarse[j]), "two regions share a 5 kbp factor"
+    assert n_slots >= sum(b - a for _, a, b, _ in spans)
+
+
+def test_under_the_pilot_regime_the_shared_fit_lies_inside_the_bed(tmp_path, monkeypatch):
+    """Every slot the transferable stage may sample maps back to a bin inside a BED region, on a
+    chromosome the regime declares it trains on. That is what makes `eic.pilot` legitimate."""
+    from lavawizard import store_eic
+    from lavawizard.train import Sampler
+
+    reg = _bed(tmp_path, [("chr19", 250, 500), ("chr20", 1000, 1200)])
+    rng = np.random.default_rng(2)
+    vals = {b: {a: rng.random(64).astype(np.float32) * 5.0 for a in ("H3K4me3", "H3K27ac")}
+            for b in ("T_A", "T_B", "T_C", "V_A")}
+    _install_fake_corpus(monkeypatch, {b: _FakeBiosample(["H3K4me3", "H3K27ac"], vals[b])
+                                       for b in vals}, 64)
+    rp = _regime(tmp_path, regions=reg, train_chroms=("chr19", "chr20"))
+    store_eic.build_shared_cache_from_store(rp, tmp_path / "cache", verbose=False)
+    cache = preprocess.CachedChrom(tmp_path / "cache", store_eic.SHARED_STEM)
+
+    r = store_eic.load_regime(rp)
+    spans, _ = store_eic.shared_layout(r, lambda c: 64, base=tmp_path)
+    allowed = {c: set(store_eic.contained_bins(r, c, base=tmp_path).tolist())
+               for c in r["train_chroms"]}
+    assert allowed["chr19"] == {10, 11, 12, 13, 14, 15, 16, 17, 18, 19}
+    assert allowed["chr20"] == set(range(40, 48))
+
+    slot_to = {}
+    for c, a, b, s0 in spans:
+        slot_to.update({s0 + k: (c, a + k) for k in range(b - a)})
+    s = Sampler(cache, batch_size=4, mode="upstream", seed=0)
+    drawn = set()
+    for _ in range(6 * s.steps_per_epoch):
+        drawn.update(s._batch()[1].tolist())
+    assert drawn == set(slot_to), "the fit must reach every contained bin and no other slot"
+    for slot in drawn:
+        c, bin_ = slot_to[slot]
+        assert bin_ in allowed[c], f"slot {slot} is {c}:{bin_}, outside the BED"
+        assert c not in r["eval_chroms"]
+
+
+def test_the_transferable_stage_does_not_select_in_either_regime(tmp_path):
+    """Selection attaches to the genome stage alone — see `store_eic.train_shared`.
+
+    Under `eic.pilot` the shared scope is not a chromosome and there is no panel to score; under
+    `eic.19` it is one and there would be. Selecting in one regime and not the other would put a
+    difference into the ablation that is not the regime, so it selects in neither.
+    """
+    from lavawizard import store_eic
+
+    with pytest.raises(SystemExit):
+        store_eic.main(["train", "--regime", str(_regime(tmp_path)), "--stage", "shared",
+                        "--cache", str(tmp_path / "c"), "--out", str(tmp_path / "o"),
+                        "--select-every", "50"])
+    with pytest.raises(SystemExit):
+        store_eic.main(["train", "--regime", str(_regime(tmp_path)), "--stage", "shared",
+                        "--chrom", "chr19", "--cache", str(tmp_path / "c"),
+                        "--out", str(tmp_path / "o"), "--select-every", "0"])
+
+
+def test_a_shared_scope_the_hyperparameter_table_cannot_name_is_refused(tmp_path):
+    """The packed stem borrows the eval chromosomes' UPSTREAM_HYPERPARAMS row, because the row sets
+    the factor widths and those set `dense_1`'s input width — a transferable tensor. Chromosomes
+    that disagree have no row to borrow, and guessing one would break the transfer silently."""
+    from lavawizard import store_eic
+
+    r = store_eic.load_regime(_regime(tmp_path))
+    r["eval_chroms"] = ["chr20", "chr21", "chr22"]
+    assert store_eic.shared_hparams_chrom(r) == "chr20"
+    r["eval_chroms"] = ["chr1", "chr21"]                   # chr1 is (10, 10, 45), chr21 is (25, 30, 60)
+    with pytest.raises(store_eic.ScopeError, match="do not share one"):
+        store_eic.shared_hparams_chrom(r)
+
+
+def test_the_deferred_whole_genome_scope_is_refused_by_name(tmp_path):
+    """Packing 22 whole chromosomes end to end is `eic.gw`, which §3 defers — and ~129 GiB."""
+    from lavawizard import store_eic
+
+    r = store_eic.load_regime(_regime(tmp_path, train_chroms=("chr1", "chr2", "chr3")))
+    with pytest.raises(store_eic.ScopeError, match="whole-genome regime"):
+        store_eic.shared_layout(r, lambda c: 10_000, base=tmp_path)

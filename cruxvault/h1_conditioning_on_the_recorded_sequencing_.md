@@ -7,7 +7,7 @@ parent: q1
 status: idea
 rule: all
 measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, from paired real tracks in CANDI_STORE; instrument is a standalone encoder/decoder testbed with log d pinned as a fixed offset of coefficient exactly 1, scored through bench.distributional.nb_suite and bench.covariate
-replicates: "TODO(PI) — source→target pairs per arm x seeds, on the panel t90 selects. Whatever it is, it must clear the seed floor: one paired seed change on the q19 recipe moves pooled imputation CRPS by 0.0463 (macro 0.0327) under eval.py and macro CRPS by 0.0608 under bench, and the per-track floor is several times either macro. The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
+replicates: "TODO(PI) — source→target pairs per arm x seeds, on the panel t100 selects. Whatever it is, it must clear the seed floor: one paired seed change on the q19 recipe moves pooled imputation CRPS by 0.0463 (macro 0.0327) under eval.py and macro CRPS by 0.0608 under bench, and the per-track floor is several times either macro. The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
 verdict: 
 metric: 
 created: "2026-09-01T02:16:44"

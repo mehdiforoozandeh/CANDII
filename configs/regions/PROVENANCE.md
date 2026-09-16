@@ -49,3 +49,67 @@ cross-check against Ensembl's GRCh37→GRCh38 mapper: `cruxvault/results/t79/G2_
 Neither file has the chr20/21/22 cut applied. The cut is Rule 2's, it belongs to the regime that
 declares the eval chromosomes, and baking it into the BED would silently make the file wrong for
 any other split. A consumer intersects the BED with the regime's own chromosome list.
+
+## `eval_random450_seed890217.bed` — the mid-training SELECTION scope
+
+**This is not a training scope and not a published region set.** It is 450 windows drawn by a seed
+from the full-coverage eval window plan, and its only job is to make the mid-training check cheap
+enough to run every `--eval-every` epochs without changing which checkpoint gets selected.
+
+### Why a seeded draw and not the Pilot Regions
+
+`encode_pilot_hg38.bed` was tried first, on the argument that a named, fixed, published set chosen
+in 2007 is one nobody here could be accused of picking to flatter a method. Measured against full
+coverage on an 8-checkpoint ladder (32 tracks, chr21), it **flipped 4 of 15 checkpoint
+comparisons**, at gaps up to 0.069 — because its bias *drifts with the model* (+0.3044 … +0.4144
+across six checkpoints) instead of cancelling in a difference. **Pedigree is not faithfulness.**
+Who chose the loci governs whether the choice is corrupt; it says nothing about whether the loci
+track the genome-wide number, which is the only property selection needs. `EVAL.md` has the table.
+
+Subsetting at this size was never the problem: 200 random matched subsets centre on the
+full-coverage value to a tenth of a standard deviation, and 194/200 reproduce the full checkpoint
+ordering exactly. So the loci here are chosen by a seed, and the seed is committed before any
+number is produced with it.
+
+### The draw, exactly
+
+| field | value |
+|---|---|
+| generator | `tools/make_eval_scope_bed.py make` |
+| seed | **890217** |
+| windows | **450**, drawn uniformly WITHOUT replacement, **no stratification** |
+| pool | `harness.full_tiling` of the eval chromosomes — **8,437** starts, the same chromosome-0-anchored grid the full-coverage pass walks |
+| chromosomes and bin counts | `chr20=2577766, chr21=1868399, chr22=2032738` (from `CANDI_STORE/eic`) |
+| context_bins / resolution | 768 / 25 bp (one BED interval = one 19,200 bp window) |
+| draw split, measured | chr20 199, chr21 117, chr22 134 |
+| scored bins | **345,600 of 6,478,903 = 5.334 %** |
+| sha256 of the BED | `24d9cb9cf6f5db696e4a47e85960f4cee7cc1c98a5bdbd75f1976f755b214ea7` |
+
+**No stratification, deliberately.** Not by chromosome, not by signal, not by anything. The uniform
+draw is what the evidence covers, and every stratification is a choice we made — which is the thing
+the seed exists to remove. The Pilot Regions are what a well-motivated non-uniform choice looks like
+when it goes wrong.
+
+**450 rather than 225.** 225 (the Pilot-sized scope) already resolves the 0.03 margin with headroom.
+450 was taken because the headroom exists inside the one-epoch budget and it buys insurance against
+a comparison turning on a gap tighter than any in the ladder that was measured.
+
+### Regenerating it
+
+Reproducible from the recorded numbers alone — no store needed, because the bin counts are in the
+table above:
+
+```bash
+python tools/make_eval_scope_bed.py check --windows 450 --seed 890217 --context-bins 768 \
+    --n-bins chr20=2577766,chr21=1868399,chr22=2032738 \
+    --bed configs/regions/eval_random450_seed890217.bed
+```
+
+`tests/test_store_regime.py` runs that same re-derivation, so a BED edited by hand fails the suite.
+
+### What it is not
+
+Not a training scope — the train split's region rule is D32's `regime.regions`, a different key on a
+different split. Not a leaderboard scope — the end-of-run check and every published number stay full
+coverage. Not a substitute for full coverage in any quoted result: a scoped curve carries
+`eval_scope` in its provenance, and two runs are comparable on it only if that block matches.

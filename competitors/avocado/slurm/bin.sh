@@ -10,7 +10,14 @@
 # requests one: no GPU compute happens here, the smallest slice only routes the job through the GPU
 # account, and AGENTS.md 3.13 permits no other gres spec.
 #
-#   mkdir -p slurm-logs && sbatch --array=0-3 competitors/avocado/slurm/bin.sh
+#   mkdir -p slurm-logs && sbatch --array=0-3%12 competitors/avocado/slurm/bin.sh
+#
+# `%12` is the torch-import cap: more than twelve concurrent imports off the shared /project venv
+# fail with partial-module ImportErrors. Four tasks never reach it, but the cap is written into the
+# command so that a longer list does not have to remember it.
+#
+# The σ stage bins its own training chromosomes inline (`sigma.sh`) rather than through this array:
+# it wants one chromosome and is already holding the workspace.
 #
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t81_avo_bin
@@ -28,11 +35,17 @@
 
 source "${SLURM_SUBMIT_DIR:-$PWD}/competitors/avocado/slurm/_env.sh"
 
-# train_chroms first, then eval_chroms: index 0 is the joint fit's chromosome, which is the one
-# stage 2 needs before anything else can start.
-NEEDED=("${JOINT_CHROMS[@]}" "${EVAL_CHROMS[@]}")
-CHROM="${NEEDED[${SLURM_ARRAY_TASK_ID:-0}]:-}"
-[ -z "$CHROM" ] && { echo "no chromosome for index ${SLURM_ARRAY_TASK_ID:-0}; this regime needs ${#NEEDED[@]} (${NEEDED[*]})"; exit 1; }
+# The shared fit's scope first, then eval_chroms: index 0 is what stage 2 needs before anything
+# else can start. Under a `regions` regime index 0 is the whole BED scope in ONE task, not one task
+# per train chromosome -- the pilot scope is 1,023,489 bins over 18 chromosomes, 1.1 GB against a
+# whole chromosome's 2.7 GB, so splitting it would cost more in re-reads than it saves.
+NEEDED=("$SHARED_SCOPE" "${EVAL_CHROMS[@]}")
+SCOPE="${NEEDED[${SLURM_ARRAY_TASK_ID:-0}]:-}"
+[ -z "$SCOPE" ] && { echo "no scope for index ${SLURM_ARRAY_TASK_ID:-0}; this regime needs ${#NEEDED[@]} (${NEEDED[*]})"; exit 1; }
 
-echo "[avo_bin] regime=$REGIME_NAME chrom=$CHROM host=$(hostname) ws=$WS"
-python "$AVO/bin_store.py" --regime "$REGIME" --out "$WS/binned" --chrom "$CHROM"
+echo "[avo_bin] regime=$REGIME_NAME scope=$SCOPE host=$(hostname) ws=$WS"
+if [ "$SCOPE" = "regions" ]; then
+    python "$AVO/bin_store.py" --regime "$REGIME" --out "$WS/binned" --regions
+else
+    python "$AVO/bin_store.py" --regime "$REGIME" --out "$WS/binned" --chrom "$SCOPE"
+fi

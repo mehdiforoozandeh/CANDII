@@ -56,14 +56,14 @@ branch for `t12`, and land every child on it. A child that wants its own PR was 
 Flag-only work changes no code — so an experiment that only moves flags still runs from `main`.
 
 ```bash
-git switch -c <lane>/<taskid>-<slug>       # e.g. exp/t12-peak-head
+git fetch origin && git switch -c <lane>/<taskid>-<slug> origin/main   # e.g. exp/t12-peak-head
 git push -u origin <lane>/<taskid>-<slug>  # AT CREATION, not when it is finished
 gh pr create --draft --fill                # same moment — the PR is where the work is reviewed
 ```
 
-The lane is `exp` for a task the engine calls an *experiment* (any task carrying hypothesis
-refs), otherwise the task's own category. Pushing at creation is not style: work that lives on
-one laptop is already lost. `origin` is the record; `firmerge` is a truck to Fir — never a home.
+The lane is `exp` for a task with hypothesis refs (an *experiment*), else the task's category. A
+branch starts at fresh `origin/main`, never at a sibling. Push at creation, not at the end: work
+on one laptop is already lost. `origin` is the record; `firmerge` is a truck to Fir, not a home.
 
 ### What lets a PR merge
 

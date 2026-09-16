@@ -7,7 +7,7 @@ parent: q1
 status: idea
 rule: all
 measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, over a paired-end arm against its single-end rebuild; instrument is a standalone encoder/decoder testbed with log d pinned as a fixed offset of coefficient exactly 1, scored through bench.distributional.nb_suite and bench.covariate
-replicates: "TODO(PI) — source→target pairs per arm x seeds, on the panel t90 selects. Whatever it is, it must clear the seed floor: one paired seed change on the q19 recipe moves pooled imputation CRPS by 0.0463 (macro 0.0327) under eval.py and macro CRPS by 0.0608 under bench, and the per-track floor is several times either macro. The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
+replicates: "TODO(PI) — source→target pairs per arm x seeds, on the panel t100 selects. Whatever it is, it must clear the seed floor: one paired seed change on the q19 recipe moves pooled imputation CRPS by 0.0463 (macro 0.0327) under eval.py and macro CRPS by 0.0608 under bench, and the per-track floor is several times either macro. The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
 verdict: 
 metric: 
 created: "2026-09-01T02:16:44"
@@ -54,7 +54,7 @@ impossible there as a property of the data rather than of the architecture. A fi
 361-track control metadata (`results/t10/eic_control_metadata.csv`, 73 usable rows, 58 single-ended
 / 15 paired-ended) gives `H(run_type) = 0.733` bits falling to **0.124** bits given `read_length`,
 and 0.119 given `read_length` and `lab` — thin but non-zero. That is controls, not the signal
-tracks this will use, so it settles nothing; `t90` measures it on the panel actually selected, and
+tracks this will use, so it settles nothing; `t100` measures it on the panel actually selected, and
 that measurement gates this node.
 
 The literature names a stronger competitor than `onewarp` — the peak/background-split transform

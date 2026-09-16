@@ -364,6 +364,16 @@ function markerBadges(row) {
   });
 }
 
+/* §4 — the per-cell in-sample fraction, printed beside the row when a producer wrote one. `null`
+ * means the score json did not carry it: unknown, and drawn as nothing rather than as 0. */
+function inSampleBadge(row) {
+  const f = row && row.in_sample_fraction;
+  if (typeof f !== "number" || !isFinite(f)) return null;
+  return h("span", { class: "badge",
+    title: `§4 — ${(f * 100).toFixed(1)}% of the positions this row is scored at were inside the data the method's transferable parameters were fitted on. A genome-wide number over a large fraction is partly a memorisation score; the held-out scope is the ranked one.` },
+    `in-sample ${(f * 100).toFixed(0)}%`);
+}
+
 function cellClassBadge(text) {
   if (!text) return null;
   if (text === "zero-shot cell types") {
@@ -377,17 +387,38 @@ function cellClassBadge(text) {
 function hasSigmaTable(row) {
   return !!(row && row.provenance && row.provenance.sigma_table);
 }
+/* Does this row carry any σ-derived number at all? A point-only pass carries none — the scorer
+ * withholds every one of them — so there is nothing for a spread note to stand over. */
+function hasDistributional(row) {
+  const pval = (row && row.metrics && row.metrics.pval) || {};
+  return "crps" in pval || "pit_ks" in pval || "coverage_95" in pval;
+}
 function hasPeakHead(row) {
   if (!row) return false;
   if (row.has_peak_head) return true;
   return !!(row.provenance && row.provenance.has_peak_head);
 }
+/* §7's mandatory spread badge, in the THREE states the spread device has: the method's own per-bin
+ * spread, a fitted flat σ, or NO SPREAD AT ALL. The STAMPER decides which — `add` reads the score
+ * json's provenance.sigma_table together with its sigma_source / point_only_tracks, and refuses a
+ * table not fitted on training residuals — so a stamped row is read here rather than re-derived.
+ * A point-only pass (no σ table and no per-bin spread; the scoring launcher's SIGMA is optional)
+ * stamps `none` and returns null: it has no distributional numbers, so it gets no spread badge
+ * rather than a "native" one claiming a spread it never emitted. A row stamped before the states
+ * existed falls back to the same rule applied here, over the numbers it actually carries. */
 function spreadDevice(row) {
   if (!row) return null;
-  if (hasSigmaTable(row)) return "fitted";
+  const badges = row.badges || {};
+  if (badges.sigma_state) {
+    return badges.sigma_state === "fitted-flat" ? "fitted"
+      : badges.sigma_state === "native" ? "native"
+      : null;
+  }
   const pval = (row.metrics && row.metrics.pval) || {};
-  if ("pit_ks" in pval || "coverage_95" in pval) return "native";
-  return null;
+  const distributional = "pit_ks" in pval || "coverage_95" in pval || "crps" in pval;
+  if (hasSigmaTable(row)) return "fitted";
+  if (badges.sigma && badges.sigma.indexOf("fitted") === 0) return "fitted";
+  return distributional ? "native" : null;
 }
 function peakDevice(row) {
   if (!row) return null;
@@ -400,11 +431,11 @@ function deviceBadge(kind, device) {
   if (kind === "spread") {
     return device === "fitted"
       ? h("span", { class: "badge badge-device badge-fitted",
-          title: "Gaussian wrapped around a point prediction. One spread per assay, fitted on validation residuals, reused unchanged. Homoscedastic per assay — the spread does not adapt bin-by-bin." },
-          "fitted spread device")
+          title: "Gaussian wrapped around a point prediction. One spread per assay, fitted on TRAINING-set residuals (§7 — never on V_, never on B_), reused unchanged. Homoscedastic per assay — the spread does not adapt bin-by-bin, so this method loses on PIT and coverage partly by construction." },
+          "fitted flat σ")
       : h("span", { class: "badge badge-device badge-native",
           title: "This method emitted its own per-bin spread. Not the fitted σ-table device." },
-          "native distribution");
+          "native heteroscedastic");
   }
   return device === "native"
     ? h("span", { class: "badge badge-device badge-native",
@@ -417,7 +448,8 @@ function deviceBadge(kind, device) {
 function deviceNote(cid, row) {
   if (cid === "distributional") {
     const d = spreadDevice(row);
-    return d === "fitted" ? "fitted spread" : d === "native" ? "native dist" : "";
+    if (!d || !hasDistributional(row)) return "";
+    return d === "fitted" ? "fitted spread" : "native dist";
   }
   if (cid === "peaks") {
     const d = peakDevice(row);
@@ -1370,6 +1402,7 @@ function methodCell(entry, bid, opts) {
       b.position ? h("span", { class: "badge",
         title: POSITION_TIP[b.position] || b.position }, b.position) : null,
       cellClassBadge(b.cell_types),
+      inSampleBadge(row),
       row && row.verified
         ? h("span", { class: "verified", title: "score json resolved when the row was stamped" },
             "✓ verified")
@@ -1586,6 +1619,20 @@ function provDl(row) {
   put("regime", p.regime);
   put("store manifest hash", p.store_manifest_hash);
   if (p.sigma_table) put("σ-table", `${p.sigma_table.method} · fitted on ${p.sigma_table.fitted_on}`);
+  else if (row.badges && row.badges.sigma_state === "none") {
+    put("spread", "none — point-only pass, scored with no σ table. No distributional cell.");
+  }
+  /* §5.2 — how big the exam at THIS address was. The pass-level count in `flags` cannot say it:
+   * V_ breadth and V_ matched come out of one pass and aggregate different numbers of it. */
+  const pc = row.panel_counts || {};
+  Object.keys(pc).sort().forEach((arm) => {
+    const c = pc[arm] || {};
+    if (!c.n_experiments) return;
+    put(`${arm} panel`, `${c.n_experiments} experiment(s) · ${c.n_assays} assay(s)`);
+  });
+  if (typeof row.in_sample_fraction === "number") {
+    put("in-sample fraction", row.in_sample_fraction.toFixed(4));
+  }
   if (row.has_peak_head || p.has_peak_head) put("peak head", "native (bernoulli_nll present)");
   else if (row.metrics && row.metrics.pval && "auprc" in row.metrics.pval) {
     put("peak head", "absent — AUPRC is a coverage ranking");

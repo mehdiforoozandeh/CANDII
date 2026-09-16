@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-31T13:53:28
-updated: 2026-08-31T13:53:28
+status: done
+created: "2026-08-31T13:53:28"
+updated: "2026-09-05T17:33:58"
 ---
 
 # t87 — reconcile the two declare_eval_pairs tools into one
@@ -24,7 +24,7 @@ the main merge found both branches had written a tool of that name for the same 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Deliverable — one pairing tool](results/t87/DELIVERABLE.md)
 
 ## Evidence
 
