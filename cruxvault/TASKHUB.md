@@ -45,6 +45,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
 - `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05
+- `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
 
 ## Blocked
 
@@ -102,6 +103,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### visualization
 
 - `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05 — *open*
+- `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 
 ## Done · Dropped
 
