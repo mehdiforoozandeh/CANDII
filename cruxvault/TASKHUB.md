@@ -44,6 +44,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
+- `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
 
 ## Blocked
 
@@ -97,6 +98,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
+
+### visualization
+
+- `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 
 ## Done · Dropped
 
