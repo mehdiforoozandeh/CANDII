@@ -5,8 +5,16 @@ processing knob. This file holds the facts those products are built from — the
 3 controls, the arm table, and the knob value each (track, arm, level) takes — and nothing else.
 Sibling tools (`bam_arm.py`, `fastq_arms.py`, `records.py`, `checks.py`) read its TSV or import it.
 
-Values verified on Nibi 2026-09-17: read counts are `head -1` of each nodup `samstats.qc`, fraglen
-is field 3 of the track's `qc_report_*cc.qc`, read length sampled from the BAM.
+Values verified on Nibi 2026-09-17. A read count is the number of mapped primary records in the
+nodup BAM (`samtools idxstats | awk '{m+=$3}'`), which is exactly the line count of the tagAlign
+the pipeline's own `bam2ta` makes from that BAM. The `*.samstats.qc` files sitting beside these
+BAMs describe a **different** run and must not be read for these counts. fraglen is `--fraglen` of
+`calls["chip.macs2_signal_track"][0]["commandLine"]` in the track's `metadata.json`; read length is
+sampled from the BAM.
+
+A control read count is therefore the FULL control tagAlign: the base runs called `bam2ta_ctl` with
+`--subsample 0` and `choose_ctl` returned `chosen_ctl_ta_subsample = [0]`, so MACS2 saw every read
+of the control. `ctl_subsample_reads` and `macs2_ratio` are derived from that full count.
 
 Two decisions are open with the PI and are **switches, not constants** here:
 
@@ -49,18 +57,18 @@ def _chip(track, cell, assay, tacc, reads, cacc, fraglen):
 
 #: table order is the row order of every TSV.
 TRACKS = {
-    "C19M16": _chip("C19M16", "C19", "H3K27ac", "ENCFF254LWX", 111248957, "ENCFF433TZR", 180),
-    "C40M17": _chip("C40M17", "C40", "H3K27me3", "ENCFF581NOL", 120905207, "ENCFF337JNL", 200),
-    "C40M18": _chip("C40M18", "C40", "H3K36me3", "ENCFF443KLR", 136153965, "ENCFF337JNL", 210),
-    "C07M20": _chip("C07M20", "C07", "H3K4me1", "ENCFF458MVX", 121400818, "ENCFF164WQW", 215),
-    "C19M22": _chip("C19M22", "C19", "H3K4me3", "ENCFF748TKZ", 109295943, "ENCFF433TZR", 205),
-    "C07M29": _chip("C07M29", "C07", "H3K9me3", "ENCFF777XCR", 134868671, "ENCFF164WQW", 200),
+    "C19M16": _chip("C19M16", "C19", "H3K27ac", "ENCFF254LWX", 176237758, "ENCFF433TZR", 180),
+    "C40M17": _chip("C40M17", "C40", "H3K27me3", "ENCFF581NOL", 207716224, "ENCFF337JNL", 200),
+    "C40M18": _chip("C40M18", "C40", "H3K36me3", "ENCFF443KLR", 239733719, "ENCFF337JNL", 210),
+    "C07M20": _chip("C07M20", "C07", "H3K4me1", "ENCFF458MVX", 205681163, "ENCFF164WQW", 215),
+    "C19M22": _chip("C19M22", "C19", "H3K4me3", "ENCFF748TKZ", 174409214, "ENCFF433TZR", 205),
+    "C07M29": _chip("C07M29", "C07", "H3K9me3", "ENCFF777XCR", 217273310, "ENCFF164WQW", 200),
     "C12M02": {
         "cell": "C12", "assay": "DNase-seq",
         "pipeline": None,  # set by --dnase (Decision D1); rows carry the switch's value
         "treat_acc": "ENCFF211XVI",
         "treat_bam": f"{EIC}/results/C12M02/filter_shard0_ENCFF211XVI.merged.srt.nodup.no_chrM_MT.bam",
-        "treat_reads": 84335213,
+        "treat_reads": 134815660,
         "ctl_acc": None,
         "fraglen": 150, "fraglen_kind": "smooth_win",
         "read_length": 76, "run_type": "single-ended",
@@ -73,11 +81,11 @@ TRACKS = {
 DNASE_TRACK = "C12M02"
 
 CONTROLS = {
-    "ENCFF433TZR": {"cell": "C19", "reads": 58073570, "read_length": 101, "run_type": "single-ended",
+    "ENCFF433TZR": {"cell": "C19", "reads": 107039349, "read_length": 101, "run_type": "single-ended",
                     "bam": f"{EIC}/results/C19M16/filter_ctl_shard0_ENCFF433TZR.merged.srt.nodup.bam"},
-    "ENCFF337JNL": {"cell": "C40", "reads": 90252661, "read_length": 101, "run_type": "single-ended",
+    "ENCFF337JNL": {"cell": "C40", "reads": 150302589, "read_length": 101, "run_type": "single-ended",
                     "bam": f"{EIC}/results/C40M17/filter_ctl_shard0_ENCFF337JNL.merged.srt.nodup.bam"},
-    "ENCFF164WQW": {"cell": "C07", "reads": 94905112, "read_length": 101, "run_type": "single-ended",
+    "ENCFF164WQW": {"cell": "C07", "reads": 160028104, "read_length": 101, "run_type": "single-ended",
                     "bam": f"{EIC}/results/C07M20/filter_ctl_shard0_ENCFF164WQW.merged.srt.nodup.bam"},
 }
 
