@@ -103,9 +103,15 @@ pairs**, never in absolute terms. Measured absolutely, the null passes `qqresidu
 
 - [ ] `gapclosed` [claim-directed, DISCRIMINATES against the null] — `(D_onewarp − D_model) /
       (D_onewarp − D_oracle)`, stratified per signal decile and per mark class. The distance `D` is
-      macro NB CRPS against the real target (PI ruling 2026-09-16). Threshold: `TODO(PI)`.
+      macro NB CRPS against the real target (PI ruling 2026-09-16). **Threshold (PI ruling 2026-09-16):**
+      passes when, in every mark class, gap-closed ≥ 0.5 AND the absolute gain
+      `D_onewarp − D_model` exceeds 2 × the seed |Δ| of `D_model` — the paired |Δ| between two
+      seeds of the same model recipe on the same pairs, measured before the real run in the
+      way t86 measured the benchmark's floor. Plainly: the model must climb at least halfway
+      from the rescale rung to the oracle rung, and the climb must be larger than the wobble a
+      seed change alone produces; a smaller climb cannot be told from luck.
       *Fails if:* `onewarp` already closes the source-to-target gap and conditioning adds nothing
-      beyond it.
+      beyond it, or the gain is inside the seed wobble.
 - [ ] `qqresidual` [claim-directed] — max |log multiplier| of the post-model quantile-quantile
       curve MINUS `onewarp`'s own, with tail quantiles reported separately from the bulk.
       Threshold: `TODO(PI)`. Reuses the `calib_grid` grid convention rather than inventing a second
