@@ -1,4 +1,6 @@
-"""`pval_from_counts.py` — MACS2's no-control Poisson rule, checked against the source it copies.
+"""`pval_from_counts.py` — MACS2's Poisson rule, checked against the source it copies.
+
+Two halves: the no-control rule first, then the with-control rule after the divider.
 
 The three things worth a test are the three things a reimplementation gets wrong: which tail the
 p-value is (MACS2 uses `P(X > k)`, strictly greater), which local window a no-control run uses
@@ -15,10 +17,12 @@ from scipy.stats import poisson
 from candi.store.pval_from_counts import (
     MACS2_GSIZE_HS,
     MACS2_LLOCAL,
+    MACS2_SLOCAL,
     genome_lambda_bg,
     local_lambda,
     log10_upper_tail,
     pval_from_counts,
+    pval_from_counts_with_control,
 )
 
 
@@ -98,3 +102,131 @@ def test_a_zero_background_is_refused_rather_than_producing_infinities():
     significant, which is a silent all-peaks track rather than an error."""
     with pytest.raises(ValueError, match="lambda_bg"):
         pval_from_counts(np.zeros(10, dtype=np.int32), lambda_bg=0.0)
+
+
+# --- the with-control branch -------------------------------------------------------------------
+#
+# What separates it from the no-control rule is not the tail but the lambda: with a control, the
+# local lambda is read off the CONTROL and is a max over three windows (d, slocal, llocal) instead
+# of one, each scaled by the treatment/control depth ratio. Every test below aims at that.
+
+
+def test_the_with_control_lambda_is_the_hand_computed_max_of_four_terms():
+    """`ctrl_d_s = [d, sregion, lregion]` with scales `[r, r*d/sregion, r*d/lregion]`, and
+    `pileup_a_chromosome` maxes them together over a `lambda_bg` floor. Worked by hand on eight
+    bins so the expected lambda is written out rather than recomputed by the code under test."""
+    counts = np.array([0, 0, 5, 0, 0, 0, 0, 0], dtype=np.int32)
+    control = np.array([1, 0, 0, 0, 0, 0, 0, 2], dtype=np.int32)
+    # r * control                     = [2, 0, 0, 0, 0, 0, 0, 4]
+    # r * 2-bin centred window mean   = [1, 1, 0, 0, 0, 0, 0, 2]
+    # r * 4-bin centred window mean   = [.5,.5,.5, 0, 0, 0, 1, 1]
+    # floor                           = 0.1
+    want_lam = np.array([2.0, 1.0, 0.5, 0.1, 0.1, 0.1, 1.0, 4.0])
+    got = pval_from_counts_with_control(
+        counts, control, lambda_bg=0.1, ratio_treat2control=2.0,
+        slocal=50, llocal=100, resolution=25,
+    )
+    assert np.allclose(got, -np.log10(poisson.sf(counts, want_lam)), rtol=1e-6)
+
+
+def test_slocal_comes_back_when_a_control_is_present():
+    """The no-control path says 'slocal and d-size local bias are not calculated!'. The
+    with-control path adds `sregion` whenever `--slocal` is non-zero, and 1000 is its default,
+    so switching it off has to change the answer."""
+    assert MACS2_SLOCAL == 1000
+    rng = np.random.default_rng(7)
+    ctrl = rng.poisson(1.5, 4000).astype(np.int32)
+    ctrl[1900:2100] += 20                        # a control bump narrower than llocal
+    counts = rng.poisson(1.5, 4000).astype(np.int32)
+    kw = dict(lambda_bg=0.5, ratio_treat2control=1.0, resolution=25)
+    with_slocal = pval_from_counts_with_control(counts, ctrl, slocal=1000, llocal=10000, **kw)
+    without = pval_from_counts_with_control(counts, ctrl, slocal=0, llocal=10000, **kw)
+    assert not np.allclose(with_slocal, without)
+    # slocal only ever ADDS a term to a max, so it can only lower the score
+    assert np.all(with_slocal <= without + 1e-6)
+
+
+def test_the_d_size_window_is_the_control_pileup_itself():
+    """`ctrl_d_s` always starts at `[ self.d ]`, so a one-bin control spike raises the lambda at
+    that bin alone. A rule that only had slocal and llocal would smear it over 40 bins."""
+    counts = np.full(400, 3, dtype=np.int32)
+    ctrl = np.zeros(400, dtype=np.int32)
+    ctrl[200] = 500
+    got = pval_from_counts_with_control(
+        counts, ctrl, lambda_bg=0.5, ratio_treat2control=1.0,
+        slocal=1000, llocal=10000, resolution=25,
+    )
+    assert got[200] == pytest.approx(-np.log10(poisson.sf(3, 500.0)), rel=1e-5)
+    assert got[199] > got[200] and got[201] > got[200]
+
+
+def test_the_treatment_neighbourhood_stops_mattering_once_there_is_a_control():
+    """Every entry of `ctrl_d_s` is piled up from `self.ctrl`. So two treatments that agree bin by
+    bin but differ everywhere else must score identically at the bins they share, which is exactly
+    what the no-control rule cannot do."""
+    ctrl = np.full(2000, 2, dtype=np.int32)
+    a = np.zeros(2000, dtype=np.int32)
+    a[1000] = 30
+    b = a.copy()
+    b[1100:1300] = 25                            # a big treatment feature inside llocal of bin 1000
+    kw = dict(lambda_bg=0.4, ratio_treat2control=1.0, resolution=25)
+    pa = pval_from_counts_with_control(a, ctrl, **kw)
+    pb = pval_from_counts_with_control(b, ctrl, **kw)
+    assert pa[1000] == pb[1000]
+    # the no-control rule is the contrast: there the treatment's own neighbours move the score
+    na = pval_from_counts(a, lambda_bg=0.4)
+    nb = pval_from_counts(b, lambda_bg=0.4)
+    assert na[1000] != nb[1000]
+
+
+def test_the_depth_ratio_scales_the_local_terms_and_not_the_floor():
+    """`ctrl_scale_s` carries `ratio_treat2control` on every entry; `lambda_bg` does not. Doubling
+    the ratio therefore doubles the local lambda wherever it is already above the floor."""
+    ctrl = np.full(600, 4, dtype=np.int32)
+    counts = np.full(600, 10, dtype=np.int32)
+    kw = dict(lambda_bg=1e-6, slocal=1000, llocal=10000, resolution=25)
+    one = pval_from_counts_with_control(counts, ctrl, ratio_treat2control=1.0, **kw)
+    two = pval_from_counts_with_control(counts, ctrl, ratio_treat2control=2.0, **kw)
+    assert np.allclose(one, -np.log10(poisson.sf(10, 4.0)), rtol=1e-5)
+    assert np.allclose(two, -np.log10(poisson.sf(10, 8.0)), rtol=1e-5)
+
+
+def test_llocal_is_ignored_when_it_is_not_larger_than_slocal():
+    """`if self.lregion and self.lregion > self.sregion:` — a `--llocal` equal to `--slocal` adds
+    no second window, and the guard is what stops the same window being counted twice."""
+    rng = np.random.default_rng(3)
+    ctrl = rng.poisson(2.0, 3000).astype(np.int32)
+    counts = rng.poisson(2.0, 3000).astype(np.int32)
+    kw = dict(lambda_bg=0.3, ratio_treat2control=1.0, resolution=25)
+    equal = pval_from_counts_with_control(counts, ctrl, slocal=1000, llocal=1000, **kw)
+    dropped = pval_from_counts_with_control(counts, ctrl, slocal=1000, llocal=0, **kw)
+    assert np.array_equal(equal, dropped)
+
+
+def test_the_with_control_tail_is_strictly_greater_too():
+    """`get_pscore` is the same function on both paths — `P(X > k)`, not `P(X >= k)`."""
+    counts = np.arange(6, dtype=np.int32)
+    ctrl = np.full(6, 4, dtype=np.int32)
+    got = pval_from_counts_with_control(
+        counts, ctrl, lambda_bg=1e-9, ratio_treat2control=1.0, slocal=0, llocal=0, resolution=25,
+    )
+    assert np.allclose(got, -np.log10(poisson.sf(counts, 4.0)), rtol=1e-6)
+
+
+def test_the_with_control_inputs_that_would_be_silently_wrong_are_refused():
+    """A depth ratio the caller forgot to compute rescales every lambda on the chromosome, and a
+    control binned differently from the treatment lines the two up off by a bin. Both are loud."""
+    c = np.zeros(10, dtype=np.int32)
+    with pytest.raises(ValueError, match="lambda_bg"):
+        pval_from_counts_with_control(c, c, lambda_bg=0.0, ratio_treat2control=1.0)
+    with pytest.raises(ValueError, match="ratio_treat2control"):
+        pval_from_counts_with_control(c, c, lambda_bg=1.0, ratio_treat2control=0.0)
+    with pytest.raises(ValueError, match="binned the same"):
+        pval_from_counts_with_control(c, np.zeros(11, dtype=np.int32),
+                                      lambda_bg=1.0, ratio_treat2control=1.0)
+    with pytest.raises(ValueError, match="llocal can't be smaller"):
+        pval_from_counts_with_control(c, c, lambda_bg=1.0, ratio_treat2control=1.0,
+                                      slocal=10000, llocal=1000)
+    with pytest.raises(ValueError, match="under one 25 bp bin"):
+        pval_from_counts_with_control(c, c, lambda_bg=1.0, ratio_treat2control=1.0,
+                                      slocal=10, llocal=10000)

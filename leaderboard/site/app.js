@@ -34,6 +34,7 @@ const DIST_ELI5 = "Most rivals predict one number per bin, not a distribution. T
 const PEAK_ONELINER = "The peak arm carries CANDI and the naive baselines only. No rival has a peak head, and the AUPRC they used to carry was a coverage ranking derived from their predicted signal — dropped rather than badged (§7). Under challenge truth the whole arm is greyed out: the 2019 data has no peak calls.";
 const PEAK_ELI5 = "A peak score asks whether the positions a method treats as peaks are the positions the truth calls as peaks. Only CANDI and the naive baselines emit one, so only they appear on this arm. Avocado, eDICE, ChromImpute and Lavawizard predict signal and nothing else; ranking their signal against called peaks produces an AUPRC that measures coverage, not peak detection, and §7 drops it rather than badging it. AUPRC is always shown with the peak base rate. Under challenge truth the arm is greyed out entirely: the 2019 data has no peak calls. Click a column ? for the average-precision formula this code computes.";
 const POINTWISE_ELI5 = "Four bin-by-bin scores on the concatenation of scored chromosomes. MSE: mean squared gap (lower; scales with mark range; no extra transform). GW Pearson: linear correlation of predicted and true (higher; a constant forecast is absent, not zero). GW Spearman: rank-order correlation, average ranks on ties (higher). MSE top-1% obs: MSE on bins at or above the 1% tallest observed value (ties can admit more than 1%). The same four names score both truths, and the truth toggle is the only honest way to move between them — a number measured against store truth is never rescaled into challenge space; that move costs 12–66% per-experiment error. Click a column ? for the formula this code computes.";
+const LOSS_ELI5 = "The training loss on data the method did not train on. Ranked only among methods that use this same loss family. Count-space NLL and p-value-space NLL never share a table or an axis. Gaussian NLL is the mean per-bin ½(log v + (μ − y)² / v + log(2π)) with v = max(σ², 10⁻⁶), scored in the training transform: stamped external rows use transform none; a CANDI store path typically uses arcsinh — those are not comparable. NB NLL is −mean log NB(k; n, p) on raw counts. Loss never enters the composite. Click a column ? for the formula this code computes.";
 const POSITION_TIP = {
   "position-generalizing": "No genomic-position parameters, or none that pin the eval chromosomes. A genome-wide cell can still be in-sample for other reasons — for example a neighbour table fit on the training chromosome.",
   "position-transductive": "The method fits parameters at genomic positions, including the positions it is scored at when the scope is genome-wide. §4 blanks that cell rather than printing a memorisation score.",
@@ -850,6 +851,24 @@ function unrankedBanner(bid) {
       + "resolve. " + why));
 }
 
+// The notes under a board: one headline per note, the full record folded under it. The
+// headlines are `caveat_heads` in boards.json, parallel to `caveats` (the gate enforces it);
+// nothing is dropped — every word of the record is still on the page, one click away.
+function noteList(meta, title, idPrefix, helpText) {
+  const heads = meta.caveat_heads || [];
+  const n = meta.caveats.length;
+  return h("div", { class: "caveats" },
+    h("div", { class: "caveats-title" },
+      `${title} — ${n} note${n === 1 ? "" : "s"}`,
+      h("span", { class: "caveats-hint" }, " · click a line for the full record")),
+    h("ul", { class: "notes" },
+      meta.caveats.map((c, i) =>
+        h("li", null,
+          h("details", { class: "note" },
+            h("summary", null, heads[i] || c.split(/(?<=[.!?])\s/)[0]),
+            h("p", { class: "note-body" }, c, " ", helpBtn(`${idPrefix}-${i}`, helpText(c))))))));
+}
+
 function comboView() {
   const bid = state.outerEval;
   const meta = metaOf(bid);
@@ -882,12 +901,8 @@ function comboView() {
       ? h("p", { class: "sub" }, scopeSpec.blanking_rule)
       : null,
     (meta.caveats || []).length
-      ? h("div", { class: "caveats" },
-          h("div", { class: "caveats-title" }, "On this regime"),
-          h("ul", { style: "margin:4px 0;padding:0" },
-            meta.caveats.map((c, i) =>
-              h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`,
-                `${c} This line is a property of ${meta.label}, not of one method. ${meta.eli5}`)))))
+      ? noteList(meta, "On this regime", `tabcav-${bid}`,
+          (c) => `${c} This line is a property of ${meta.label}, not of one method. ${meta.eli5}`)
       : null,
     body);
 }
@@ -2098,11 +2113,7 @@ function anchorPanel() {
               h("li", null, g.members.join(" = "), " — ", g.extent))))
       : null,
     (meta.caveats || []).length
-      ? h("div", { class: "caveats" },
-          h("div", { class: "caveats-title" }, "On the anchor block"),
-          h("ul", { style: "margin:4px 0;padding:0" },
-            meta.caveats.map((c, i) =>
-              h("li", null, c, " ", helpBtn(`anchorcav-${i}`, `${c} ${meta.eli5}`)))))
+      ? noteList(meta, "On the anchor block", "anchorcav", (c) => `${c} ${meta.eli5}`)
       : null,
     entries.length
       ? h("div", { class: "table-scroll" },

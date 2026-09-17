@@ -46,6 +46,9 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05
+- `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board
+- `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
 
 ## Blocked
 
@@ -113,6 +116,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t105` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — *blocked*
 - `t106` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — *blocked*
 - `t107` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
+
+### visualization
+
+- `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05 — *open*
+- `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board — *open*
+- `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 
 ## Done · Dropped
 

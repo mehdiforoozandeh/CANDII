@@ -114,6 +114,15 @@ main { max-width: none; margin: 0 auto; padding: 22px 24px 40px; }
 }
 .caveats { border-left: 3px solid var(--warn); padding: 2px 0 2px 12px; margin: 10px 0 2px; }
 .caveats li { margin: 4px 0 4px 14px; color: var(--ink-soft); font-size: 13px; }
+.caveats .notes { margin: 4px 0; padding: 0; }
+.caveats .notes li { list-style: none; margin: 1px 0; }
+.caveats-hint { font-weight: 400; text-transform: none; color: var(--ink-soft); }
+.caveats details.note summary { cursor: pointer; font-size: 13px; line-height: 1.4; color: var(--ink);
+  padding: 2px 0; }
+.caveats details.note summary::marker { color: var(--warn); }
+.caveats details.note[open] summary { font-weight: 600; }
+.caveats details.note .note-body { margin: 4px 0 10px 18px; color: var(--ink-soft); font-size: 13px;
+  line-height: 1.45; }
 .caveats-title { font-size: 12px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--warn); }
 
