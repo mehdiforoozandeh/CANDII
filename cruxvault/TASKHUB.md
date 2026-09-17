@@ -44,6 +44,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
+- `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
@@ -52,6 +54,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
+- `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t100`
+- `t103` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t101`, `t102`
+- `t104` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — blocked by `t103`
+- `t105` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — blocked by `t103`
+- `t106` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — blocked by `t103`
+- `t107` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t103`
 
 ## By category
 
@@ -59,6 +67,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
 - `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *open*
+- `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 
 ### implementation
 
@@ -100,6 +110,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
+- `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t103` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
+- `t104` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — *blocked*
+- `t105` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — *blocked*
+- `t106` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — *blocked*
+- `t107` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 
 ### visualization
 
