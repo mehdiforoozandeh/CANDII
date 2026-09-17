@@ -17,6 +17,7 @@ The laptop has no pyBigWig, so nothing here imports it; `bin25` is imported only
 from __future__ import annotations
 
 import gzip
+import hashlib
 import importlib.util
 import json
 import sys
@@ -164,6 +165,14 @@ def test_build_signal_command_replaces_only_what_it_may():
     assert "--fraglen 180" in bam_arm.build_signal_command(p, ["/ta/T.tagAlign.gz"], "/out")
 
 
+def test_build_signal_command_refuses_foreign_recorded_values():
+    """`--gensz hs` and `--pval-thresh 0.01` are the plan's pinned values, not just flags."""
+    for bad, good in (("--gensz hs", "--gensz mm"), ("--pval-thresh 0.01", "--pval-thresh 0.05")):
+        p = bam_arm.parse_signal_command(RECORDED.replace(bad, good))
+        with pytest.raises(ValueError, match="recorded --"):
+            bam_arm.build_signal_command(p, ["/ta/T.tagAlign.gz"], "/out")
+
+
 def test_build_signal_command_refuses_a_foreign_chrsz():
     p = bam_arm.parse_signal_command(RECORDED)
     with pytest.raises(ValueError, match="basename"):
@@ -301,7 +310,9 @@ def test_ratio_patch_changes_exactly_one_line(tmp_path, monkeypatch):
     assert text.count(bam_arm.RATIO_OLD) == 1
     src.write_text(text.replace(bam_arm.RATIO_OLD, new))
 
-    got = bam_arm.apply_patch({"copy": str(src), "old": bam_arm.RATIO_OLD, "new": new})
+    original_md5 = hashlib.md5(text.encode()).hexdigest()
+    got = bam_arm.apply_patch({"copy": str(src), "old": bam_arm.RATIO_OLD, "new": new,
+                               "expect_md5": original_md5})
     assert got["original_md5"] != got["patched_md5"]
     assert got["diff"].count("\n-") + got["diff"].startswith("-") >= 1
     removed = [d for d in got["diff"].splitlines() if d.startswith("-") and not d.startswith("---")]
@@ -316,7 +327,32 @@ def test_apply_patch_rejects_a_file_it_did_not_edit(tmp_path):
     src = tmp_path / "s.py"
     src.write_text("nothing to see\n")
     with pytest.raises(SystemExit, match="single expected substitution"):
-        bam_arm.apply_patch({"copy": str(src), "old": bam_arm.RATIO_OLD, "new": "x"})
+        bam_arm.apply_patch({"copy": str(src), "old": bam_arm.RATIO_OLD, "new": "x",
+                             "expect_md5": bam_arm.RATIO_SCRIPT_MD5})
+
+
+def test_apply_patch_refuses_a_script_whose_unpatched_md5_moved(tmp_path):
+    """The plan pins the SIF's signal script at 6039e1c3...; a copy that reverses to anything else
+    is a different recipe, and the arm must stop rather than record a false provenance."""
+    body = ("run_shell_cmd(\n    ' macs2 callpeak '\n    '"
+            + bam_arm.RATIO_OLD + ".format(\n        ta=ta,\n    )\n)\n")
+    new = bam_arm.ratio_new(0.5)
+    src = tmp_path / "encode_task_macs2_signal_track_chip.py"
+    src.write_text(body.replace(bam_arm.RATIO_OLD, new))
+    args = {"copy": str(src), "old": bam_arm.RATIO_OLD, "new": new}
+
+    with pytest.raises(SystemExit, match="!= pinned " + bam_arm.RATIO_SCRIPT_MD5):
+        bam_arm.apply_patch(dict(args, expect_md5=bam_arm.RATIO_SCRIPT_MD5))
+    # the same file passes once the expectation is the md5 it really reverses to
+    got = bam_arm.apply_patch(dict(args, expect_md5=hashlib.md5(body.encode()).hexdigest()))
+    assert got["original_md5"] == hashlib.md5(body.encode()).hexdigest()
+
+
+def test_the_ratio_plan_pins_the_sif_script_md5(eic, ta, tmp_path):
+    p = bam_arm.plan(row("ratio", "k2"), str(tmp_path / "cf"), eic, tmp=str(tmp_path / "tmp"),
+                     ta_dir=ta)
+    assert p["patch"]["expect_md5"] == bam_arm.RATIO_SCRIPT_MD5 == \
+        "6039e1c382ef1e8afa3dbfd5ea103ba8"
 
 
 # ---------------------------------------------------------------------------- guards
@@ -402,7 +438,7 @@ def test_sbatch_script_matches_the_python_row_index(tmp_path):
 
 def test_preflight_inputs_are_only_files_that_must_already_exist(eic, ta, tmp_path):
     """`inputs` is checked before the first command runs, so a tagAlign the arm is about to build
-    belongs in `fed`, not in `inputs` (job 22149600_1 died on exactly this)."""
+    belongs in `fed`, not in `inputs` (job 22149600_0 died on exactly this)."""
     depth = bam_arm.plan(row("depth", "15M"), str(tmp_path / "cf"), eic,
                          tmp=str(tmp_path / "tmp"), ta_dir=ta)
     assert all(Path(f).is_file() for f in depth["inputs"])

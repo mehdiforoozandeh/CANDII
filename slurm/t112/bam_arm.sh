@@ -21,6 +21,10 @@
 # 8 h and 48 GB leaves room for the two genome-wide bigwig binnings this task adds.
 #
 # Usage, from the Nibi login node, after snapshotting the repo to $CF/code/<chunk>:
+#   mkdir -p $CF/logs/bamarms $CF/bamarms   # THE LAUNCHER MUST DO THIS. SLURM opens --output
+#                                           # before the script body runs, so a job cannot create
+#                                           # its own log directory: without it every task dies at
+#                                           # launch with no log at all.
 #   R=$CF/bamarms/rows_chip.tsv
 #   python3 $CF/code/C9/tools/t112/arms.py rows --route bam --dnase none --ratio yes > $R
 #   sbatch --test-only --array=0-83 $CF/code/C9/slurm/t112/bam_arm.sh $R

@@ -230,9 +230,13 @@ def build_signal_command(parsed: dict, tas, out_dir, *, fraglen=None, chrsz=CHRS
         out.append(name)
         if value is not None:
             out.append(value)
-    for required in ("--gensz", "--chrsz", "--pval-thresh", "--fraglen"):
+    for required, value in (("--gensz", "hs"), ("--chrsz", None), ("--pval-thresh", "0.01"),
+                            ("--fraglen", None)):
         if required not in seen:
             raise ValueError(f"recorded command has no {required}: {parsed['flags']}")
+        if value is not None and dict(parsed["flags"])[required] != value:
+            raise ValueError(f"recorded {required} is "
+                             f"{dict(parsed['flags'])[required]!r}, not {value!r}")
     return " ".join(out + ["--out-dir", str(out_dir)])
 
 
@@ -372,7 +376,8 @@ def plan(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, product
         inner = build_signal_command(
             parsed, tas, OUT, fraglen=fraglen, chrsz=chrsz,
             invocation=[f"PYTHONPATH={CHIP_SRC_DIR}", "python3", copy])
-        patch = {"script": RATIO_SCRIPT, "copy": copy, "old": RATIO_OLD, "new": new}
+        patch = {"script": RATIO_SCRIPT, "copy": copy, "old": RATIO_OLD, "new": new,
+                 "expect_md5": RATIO_SCRIPT_MD5}
     else:
         inner = build_signal_command(parsed, tas, OUT, fraglen=fraglen, chrsz=chrsz)
 
@@ -439,21 +444,29 @@ def check_sif(sif: str, repo: str = "ENCODE-DCC/chip-seq-pipeline2") -> tuple:
 
 
 def apply_patch(p: dict) -> dict:
-    """Read back the ratio arm's copy, prove the edit is one line, and return the provenance block."""
+    """Read back the ratio arm's copy, prove the edit is one line, and return the provenance block.
+
+    Reversing the edit must reproduce the SIF's own script byte for byte: `p["expect_md5"]` is
+    checked against the md5 of that reconstruction, so an image whose signal script has moved on
+    stops the arm here instead of silently producing a product from a different recipe.
+    """
     import difflib
+    import hashlib
     copy = Path(p["copy"])
     patched = copy.read_text()
     original = patched.replace(p["new"], p["old"])
     if original.count(p["old"]) != 1 or p["new"] not in patched:
         raise SystemExit(f"{copy}: the --ratio edit is not the single expected substitution")
+    original_md5 = hashlib.md5(original.encode()).hexdigest()
+    if original_md5 != p["expect_md5"]:
+        raise SystemExit(f"{copy}: unpatched md5 {original_md5} != pinned {p['expect_md5']}")
     diff = list(difflib.unified_diff(original.splitlines(True), patched.splitlines(True),
                                      "original", "patched", n=1))
     removed = [d for d in diff if d.startswith("-") and not d.startswith("---")]
     added = [d for d in diff if d.startswith("+") and not d.startswith("+++")]
     if len(removed) != 1 or len(added) != 1:
         raise SystemExit(f"{copy}: diff changed {len(removed)} lines, expected exactly 1")
-    import hashlib
-    return {"original_md5": hashlib.md5(original.encode()).hexdigest(),
+    return {"original_md5": original_md5,
             "patched_md5": hashlib.md5(patched.encode()).hexdigest(),
             "diff": "".join(diff)}
 
