@@ -357,6 +357,32 @@ def test_stage_refuses_a_missing_genome_tsv(fa, env, tmp_path):
                  tmp_path / "nope.tsv")
 
 
+def test_restage_of_a_failed_pid_rewrites_and_returns_to_staged(fa, env, gtsv):
+    """C19M16__mapq__10: leader 22148552 died in 21 s on the dead genome_tsv URL. Nothing live
+    holds that JSON, so the local TSV goes in and the pid goes back to `staged`."""
+    row = _row(fa, env, "C19M16__mapq__10")
+    fa.stage(row, env["cf"], env["eic"], env["ref"])
+    fa.write_state(env["cf"], row["pid"], status="failed", leader_job_id="22148552", attempts=1)
+    st = fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    assert st["status"] == "staged"
+    assert st["leader_job_id"] == "22148552" and st["attempts"] == 1  # history kept
+    assert st["genome_tsv"] == str(gtsv)
+    assert st["genome_tsv_md5"] == hashlib.md5(gtsv.read_bytes()).hexdigest()
+    written = json.loads(fa.paths(env["cf"], row["pid"])["input"].read_text())
+    assert written["chip.genome_tsv"] == str(gtsv) and written["chip.mapq_thresh"] == 10
+
+
+def test_restage_of_a_failed_pid_still_refuses_a_non_genome_difference(fa, env, gtsv):
+    row = _row(fa, env, "C19M16__crop__36")
+    fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    fa.write_state(env["cf"], row["pid"], status="failed", attempts=1)
+    (env["eic"] / "inputs_bwa" / "C19M16.bwa.se.json").write_text(
+        json.dumps(dict(SE_JSON, **{"chip.xcor_cpu": 16}), indent=2) + "\n")
+    with pytest.raises(SystemExit, match="not in genome_tsv alone"):
+        fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    assert fa.read_state(env["cf"], row["pid"])["status"] == "failed"
+
+
 @pytest.mark.parametrize("status", ["submitted", "succeeded", "harvested"])
 def test_a_launched_pid_is_never_restaged_with_a_new_genome_tsv(fa, env, gtsv, tmp_path, status):
     row = _row(fa, env, "C19M16__mapq__0")
@@ -453,6 +479,20 @@ def test_retry_goes_to_a_fresh_out_dir(fa, env, monkeypatch):
     fa.write_state(env["cf"], row["pid"], status="failed")
     with pytest.raises(SystemExit, match="max-attempts"):
         fa.submit(row, env["cf"], env["eic"], retry=True)
+
+
+def test_submit_after_a_failed_pid_is_restaged(fa, env, gtsv, monkeypatch):
+    """A failed pid re-staged with the local TSV needs no --retry, and still gets a fresh out dir."""
+    row = _staged(fa, env, "C19M16__mapq__10")
+    monkeypatch.setattr(fa, "sh", FakeSh(out="Submitted batch job 22148552"))
+    fa.submit(row, env["cf"], env["eic"])
+    fa.write_state(env["cf"], row["pid"], status="failed")
+    assert fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)["status"] == "staged"
+    monkeypatch.setattr(fa, "sh", FakeSh(out="Submitted batch job 22150000"))
+    st = fa.submit(row, env["cf"], env["eic"])
+    assert st["attempts"] == 2 and st["leader_job_id"] == "22150000"
+    assert st["cromwell_dir"].endswith("cromwell/C19M16__mapq__10__attempt2")
+    assert st["genome_tsv"] == str(gtsv)
 
 
 # --- fake Cromwell tree --------------------------------------------------------------------------

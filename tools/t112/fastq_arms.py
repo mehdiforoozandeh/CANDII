@@ -289,9 +289,11 @@ def stage(row, cf, eic, refcache=REFCACHE, genome_tsv=None):
     """Write the input JSON and fill the loc dir with hard links.
 
     Re-staging is idempotent, and the one thing it may rewrite is `<pipeline>.genome_tsv`: the local
-    TSV is built outside this file (C7) and may be rebuilt after a pid was staged. A pid that is
-    past `staged` has a leader that already read its JSON, so a rewrite there is refused rather than
-    silently making the state file and the running workflow disagree.
+    TSV is built outside this file (C7) and may be rebuilt after a pid was staged. A `failed` pid
+    has no live leader, so it is re-staged and set back to `staged`; its `attempts` and
+    `leader_job_id` are left as they are, so the resubmit still goes to a fresh out dir.
+    `submitted`/`succeeded`/`harvested` have a leader that already read the JSON, so a rewrite there
+    is refused rather than silently making the state file and the workflow disagree.
     """
     pid = row["pid"]
     pfx = pipeline_spec(row)["prefix"]
@@ -300,7 +302,7 @@ def stage(row, cf, eic, refcache=REFCACHE, genome_tsv=None):
         if not os.path.isfile(genome_tsv):
             raise SystemExit(f"{pid}: --genome-tsv {genome_tsv} is not a file (C7 builds it)")
     st = read_state(cf, pid)
-    if st and st["status"] != "staged":
+    if st and st["status"] not in ("staged", "failed"):
         if genome_tsv != st.get("genome_tsv"):
             raise SystemExit(
                 f"{pid}: REFUSING to re-stage with genome_tsv {genome_tsv!r}: status is "
@@ -308,6 +310,9 @@ def stage(row, cf, eic, refcache=REFCACHE, genome_tsv=None):
                 f"genome_tsv {st.get('genome_tsv')!r}. Nothing is rewritten here.")
         log(f"{pid}: skip stage, status {st['status']}")
         return st
+    if st and st["status"] == "failed":
+        log(f"{pid}: re-staging a failed pid (leader {st.get('leader_job_id')}, "
+            f"{st['attempts']} attempt(s) kept) → staged")
     p = paths(cf, pid)
     sources = [Path(cf) / "fastq_cache", Path(refcache)]
     for src in sources:
