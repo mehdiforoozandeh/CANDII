@@ -62,10 +62,18 @@ DRY_RUN="${DRY_RUN:-0}"
 PY_MODULES="StdEnv/2023 python/3.11 scipy-stack"
 
 # Fail here, not 10 s into the venv build, if the kit is wrong or the old argument order was used.
-for f in tools/t112/bin25.py tools/t112/records.py tools/t112/arms.py tools/dnase_macs2_pval.py GIT_SHA; do
+for f in tools/t112/bin25.py tools/t112/records.py tools/t112/arms.py tools/dnase_macs2_pval.py; do
     [ -f "$KIT/$f" ] || { echo "kit_dir '$KIT' has no $f. $USAGE" >&2; exit 2; }
 done
 KIT=$(cd "$KIT" && pwd)
+# records.py refuses a provenance with no git sha, so settle it here, not after an hour of binning:
+# the environment, else the snapshot's GIT_SHA file (cluster), else the checkout itself (laptop).
+if [ -z "${T112_GIT_SHA:-}" ]; then
+    if [ -f "$KIT/GIT_SHA" ]; then T112_GIT_SHA=$(tr -d '[:space:]' < "$KIT/GIT_SHA")
+    else T112_GIT_SHA=$(git -C "$KIT" rev-parse HEAD 2>/dev/null || true); fi
+fi
+[ -n "$T112_GIT_SHA" ] || { echo "kit_dir '$KIT' has neither GIT_SHA nor a git checkout; write GIT_SHA (the snapshot's sha) beside tools/. $USAGE" >&2; exit 2; }
+export T112_GIT_SHA
 
 : "${SLURM_ARRAY_TASK_ID:?array task only}"
 
@@ -157,7 +165,6 @@ run python3 "$BIN25" pval --bigwig "$PVAL_BW" --chrsz "$CHRSZ" --tmpdir "$STAGE/
 # --- covariates.json and provenance.json --------------------------------------------------------
 export T112_KIT="$KIT" T112_PID="$PID" T112_ROW="$LINE" T112_STAGE="$STAGE" \
        T112_PRODUCT="$PRODUCT" T112_HARVEST_TSV="$HTSV" T112_STATE="$STATE" T112_CMDLOG="$CMDLOG"
-if [ -f "$KIT/GIT_SHA" ]; then T112_GIT_SHA=$(cat "$KIT/GIT_SHA"); export T112_GIT_SHA; fi
 echo "+ python3 - # covariates.json + provenance.json via $KIT/tools/t112/records.py"
 if [ "$DRY_RUN" != "1" ]; then
     printf '%s\n' "python3 - # covariates.json + provenance.json via records.py ($PID)" >> "$CMDLOG"
