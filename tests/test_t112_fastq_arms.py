@@ -207,6 +207,68 @@ def test_atac_row_refused_until_c13(fa, env):
         fa.build_json(row, env["eic"])
 
 
+# --- the local genome TSV (the encode-pipeline-genome-data bucket is gone) -----------------------
+
+@pytest.fixture()
+def gtsv(tmp_path):
+    """A stand-in for C7's `$CF/fastqarms/genome/hg38.local.tsv`."""
+    p = tmp_path / "genome" / "hg38.local.tsv"
+    p.parent.mkdir(parents=True)
+    p.write_text("hg38\t/scratch/mforooz/EIC_REPRO/003/refcache/abc/GRCh38.fa\n")
+    return p
+
+
+@pytest.mark.parametrize("pid,knob", [
+    ("C19M16__dedup__off", "chip.no_dup_removal"),
+    ("C19M16__crop__36", "chip.crop_length"),
+    ("C19M16__mapq__10", "chip.mapq_thresh"),
+])
+def test_build_json_genome_tsv_widens_the_allowed_set_by_one_key(fa, env, gtsv, pid, knob):
+    new = fa.build_json(_row(fa, env, pid), env["eic"], gtsv)
+    assert fa.diff_keys(SE_JSON, new) == {knob, "chip.title", "chip.description", "chip.genome_tsv"}
+    assert new["chip.genome_tsv"] == str(gtsv)
+    assert SE_JSON["chip.genome_tsv"].startswith("https://storage.googleapis.com/")
+    for k, v in SE_JSON.items():
+        if k not in (knob, "chip.title", "chip.description", "chip.genome_tsv"):
+            assert json.dumps(new[k]) == json.dumps(v), k
+
+
+def test_build_json_genome_tsv_pe(fa, env, gtsv):
+    new = fa.build_json(_row(fa, env, "C19M16__pe__pe"), env["eic"], gtsv)
+    assert fa.diff_keys(SE_JSON, new) == {
+        "chip.paired_end", "chip.ctl_paired_end", "chip.fastqs_rep1_R1", "chip.fastqs_rep1_R2",
+        "chip.ctl_fastqs_rep1_R1", "chip.ctl_fastqs_rep1_R2", "chip.title", "chip.description",
+        "chip.genome_tsv"}
+    assert fa.diff_keys(PE_JSON, new) == {"chip.title", "chip.description", "chip.genome_tsv"}
+
+
+def test_build_json_without_the_flag_is_unchanged(fa, env):
+    for pid in ("C19M16__crop__50", "C19M16__pe__pe"):
+        row = _row(fa, env, pid)
+        assert fa.build_json(row, env["eic"]) == fa.build_json(row, env["eic"], None)
+        assert fa.build_json(row, env["eic"])["chip.genome_tsv"] == SE_JSON["chip.genome_tsv"]
+
+
+def test_build_json_genome_tsv_uses_the_rows_pipeline_prefix(fa, env, gtsv, tmp_path, monkeypatch):
+    """The override key is `<pipeline>.genome_tsv`. C13 owns the real atac branch; this only pins
+    that the DNase JSON gets `atac.genome_tsv`, not `chip.genome_tsv`."""
+    atac_base = {"atac.pipeline_type": "dnase", "atac.paired_end": False,
+                 "atac.genome_tsv": SE_JSON["chip.genome_tsv"], "atac.mapq_thresh": 30,
+                 "atac.title": "ENCODE Imputation Challenge C12M02", "atac.description": "base"}
+    base = tmp_path / "inputs_dnase" / "C12M02.dnase.se.json"
+    base.parent.mkdir(parents=True)
+    base.write_text(json.dumps(atac_base, indent=2) + "\n")
+    monkeypatch.setitem(fa.PIPELINES, "atac",
+                        {"prefix": "atac", "wdl": "atac-seq-pipeline/atac.wdl", "sif": "sif/atac.sif"})
+    monkeypatch.setattr(fa, "base_json_path", lambda row, eic_dir, tag: base)
+    row = {"pid": "C12M02__mapq__0", "arm": "mapq", "knob": "atac.mapq_thresh", "knob_value": 0,
+           "pipeline": "atac", "track": "C12M02", "route": "fastq"}
+    new = fa.build_json(row, env["eic"], gtsv)
+    assert fa.diff_keys(atac_base, new) == {"atac.mapq_thresh", "atac.title", "atac.description",
+                                            "atac.genome_tsv"}
+    assert new["atac.genome_tsv"] == str(gtsv) and "chip.genome_tsv" not in new
+
+
 # --- stage -------------------------------------------------------------------------------------
 
 def test_stage_hardlinks_and_state(fa, env):
@@ -244,6 +306,72 @@ def test_stage_refuses_foreign_file_in_loc(fa, env):
     impostor.write_text("genome")
     with pytest.raises(SystemExit, match="not a hard link"):
         fa.stage(row, env["cf"], env["eic"], env["ref"])
+
+
+def test_stage_records_the_genome_tsv_and_its_md5(fa, env, gtsv):
+    row = _row(fa, env, "C19M16__mapq__10")
+    st = fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    assert st["genome_tsv"] == str(gtsv)
+    assert st["genome_tsv_md5"] == hashlib.md5(gtsv.read_bytes()).hexdigest()
+    written = json.loads(fa.paths(env["cf"], row["pid"])["input"].read_text())
+    assert written["chip.genome_tsv"] == str(gtsv)
+    # same flag again: idempotent
+    again = fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    assert (again["genome_tsv"], again["genome_tsv_md5"]) == (st["genome_tsv"], st["genome_tsv_md5"])
+    assert json.loads(fa.paths(env["cf"], row["pid"])["input"].read_text()) == written
+
+
+def test_stage_without_the_flag_records_none(fa, env):
+    st = fa.stage(_row(fa, env, "C19M16__mapq__10"), env["cf"], env["eic"], env["ref"])
+    assert st["genome_tsv"] is None and st["genome_tsv_md5"] is None
+    written = json.loads(fa.paths(env["cf"], "C19M16__mapq__10")["input"].read_text())
+    assert written["chip.genome_tsv"] == SE_JSON["chip.genome_tsv"]
+
+
+def test_restage_with_a_different_genome_tsv_overwrites_json_and_state(fa, env, gtsv, tmp_path):
+    row = _row(fa, env, "C19M16__crop__36")
+    fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    other = tmp_path / "genome2" / "hg38.local.tsv"
+    other.parent.mkdir()
+    other.write_text("hg38\t/scratch/mforooz/EIC_REPRO/003/refcache/def/GRCh38.fa\n")
+    st = fa.stage(row, env["cf"], env["eic"], env["ref"], other)
+    assert st["genome_tsv"] == str(other)
+    assert st["genome_tsv_md5"] == hashlib.md5(other.read_bytes()).hexdigest()
+    written = json.loads(fa.paths(env["cf"], row["pid"])["input"].read_text())
+    assert written["chip.genome_tsv"] == str(other)
+    assert written["chip.crop_length"] == 36  # nothing else moved
+
+
+def test_restage_refuses_a_difference_that_is_not_the_genome_tsv(fa, env, gtsv):
+    row = _row(fa, env, "C19M16__crop__36")
+    fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    (env["eic"] / "inputs_bwa" / "C19M16.bwa.se.json").write_text(
+        json.dumps(dict(SE_JSON, **{"chip.xcor_cpu": 16}), indent=2) + "\n")
+    with pytest.raises(SystemExit, match="not in genome_tsv alone"):
+        fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+
+
+def test_stage_refuses_a_missing_genome_tsv(fa, env, tmp_path):
+    with pytest.raises(SystemExit, match="is not a file"):
+        fa.stage(_row(fa, env, "C19M16__crop__36"), env["cf"], env["eic"], env["ref"],
+                 tmp_path / "nope.tsv")
+
+
+@pytest.mark.parametrize("status", ["submitted", "succeeded", "harvested"])
+def test_a_launched_pid_is_never_restaged_with_a_new_genome_tsv(fa, env, gtsv, tmp_path, status):
+    row = _row(fa, env, "C19M16__mapq__0")
+    fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)
+    before = fa.paths(env["cf"], row["pid"])["input"].read_text()
+    fa.write_state(env["cf"], row["pid"], status=status)
+    other = tmp_path / "genome3" / "hg38.local.tsv"
+    other.parent.mkdir()
+    other.write_text("a different TSV\n")
+    with pytest.raises(SystemExit, match="REFUSING to re-stage"):
+        fa.stage(row, env["cf"], env["eic"], env["ref"], other)
+    assert fa.paths(env["cf"], row["pid"])["input"].read_text() == before
+    assert fa.read_state(env["cf"], row["pid"])["genome_tsv"] == str(gtsv)
+    # the same TSV is the no-op it always was
+    assert fa.stage(row, env["cf"], env["eic"], env["ref"], gtsv)["status"] == status
 
 
 # --- submit ------------------------------------------------------------------------------------
@@ -557,3 +685,19 @@ def test_cli_stage_subset(fa, env):
     r = subprocess.run([sys.executable, str(TOOL), "poll", "--rows", str(env["rows"]),
                         "--cf", str(env["cf"]), "--pids", "C19M16__nope__x"], capture_output=True, text=True)
     assert r.returncode != 0 and "not in the rows TSV" in r.stderr
+
+
+def test_cli_stage_genome_tsv(fa, env, gtsv):
+    for argv in ([str(TOOL), "--help"], [str(TOOL), "stage", "--help"]):
+        r = subprocess.run([sys.executable] + argv, capture_output=True, text=True)
+        assert r.returncode == 0 and "--genome-tsv" in r.stdout, argv
+    r = subprocess.run([sys.executable, str(TOOL), "stage", "--rows", str(env["rows"]),
+                        "--cf", str(env["cf"]), "--eic", str(env["eic"]), "--refcache", str(env["ref"]),
+                        "--pids", "C19M16__mapq__10", "--genome-tsv", str(gtsv)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    st = json.loads((env["cf"] / "fastqarms" / "state" / "C19M16__mapq__10.json").read_text())
+    assert st["genome_tsv"] == str(gtsv)
+    assert st["genome_tsv_md5"] == hashlib.md5(gtsv.read_bytes()).hexdigest()
+    assert json.loads((env["cf"] / "fastqarms" / "inputs" / "C19M16__mapq__10.json").read_text()
+                      )["chip.genome_tsv"] == str(gtsv)

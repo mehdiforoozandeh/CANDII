@@ -30,13 +30,23 @@ in Cromwell's metadata), never from a downstream call's `inputs/`, and each base
 against that call's recorded output. This file never deletes anything: `cleanup-candidates` only
 lists trees whose keepers re-verify.
 
+Every base JSON points `<pipeline>.genome_tsv` at
+`storage.googleapis.com/encode-pipeline-genome-data/genome_tsv/v3/hg38.tsv`. That bucket no longer
+exists (404 on the bucket itself), and autouri localizes a `.tsv` source recursively — it *reads*
+the file before any name_size_match check — so pre-staging a copy under the loc dir cannot help and
+the leader dies in ~21 s. `stage --genome-tsv PATH` points the input JSON at a local copy instead;
+the path and the md5 of its bytes go into the pid's state file. Building that file (the base runs'
+own localized `hg38.local.tsv` with every reference path rewritten to the 0444 refcache) is C7's
+job, not this file's: nothing here downloads anything.
+
 Pipelines: histone ChIP (`chip-seq-pipeline2` v2.2.2) only. The DNase (atac) branch is added to
 `PIPELINES`, `base_json_path` and `harvest_roles` by chunk C13; until then an atac row is refused.
 
 Deliberately stdlib only: it runs on the Nibi login node.
 
     python3 tools/t112/fastq_arms.py {stage|submit|poll|harvest|cleanup-candidates} \\
-        --rows rows.tsv --cf /scratch/mforooz/t112_cf --eic $EIC [--pids p1,p2]
+        --rows rows.tsv --cf /scratch/mforooz/t112_cf --eic $EIC [--pids p1,p2] \\
+        [--genome-tsv /scratch/mforooz/t112_cf/fastqarms/genome/hg38.local.tsv]
 """
 from __future__ import annotations
 
@@ -165,7 +175,7 @@ def diff_keys(base: dict, new: dict) -> set:
     return {k for k in set(base) | set(new) if k not in base or k not in new or base[k] != new[k]}
 
 
-def build_json(row, eic_dir) -> dict:
+def build_json(row, eic_dir, genome_tsv=None) -> dict:
     """The arm's input JSON: its base JSON with one knob set, plus a unique title and description.
 
     Every arm starts from `<track>.bwa.se.json`. The `pe` arm takes only the run-type keys
@@ -174,6 +184,9 @@ def build_json(row, eic_dir) -> dict:
     its pe JSON does not, so starting from the pe file would move two more keys than the arm names.
     Key order is kept, so a new key lands at the end. Raises if the result differs from the se base
     in any key other than the ones the arm is allowed to move.
+
+    `genome_tsv` additionally sets `<pipeline>.genome_tsv` to that path (the base JSON's URL is
+    dead, see the module docstring), which widens the allowed set by exactly that one key.
     """
     spec = pipeline_spec(row)
     pfx = spec["prefix"]
@@ -191,8 +204,12 @@ def build_json(row, eic_dir) -> dict:
     new[row["knob"]] = row["knob_value"]
     new[f"{pfx}.title"] = f"CF {row['pid']}"
     new[f"{pfx}.description"] = f"t112 counterfactual arm {row['pid']}"
+    if genome_tsv is not None:
+        new[f"{pfx}.genome_tsv"] = str(genome_tsv)
 
     moved = {row["knob"], f"{pfx}.title", f"{pfx}.description"}
+    if genome_tsv is not None and new[f"{pfx}.genome_tsv"] != se.get(f"{pfx}.genome_tsv"):
+        moved |= {f"{pfx}.genome_tsv"}
     if row["arm"] == "pe":
         moved |= {f"{pfx}.{k}" for k in PE_KEYS}
     got = diff_keys(se, new)
@@ -268,10 +285,27 @@ def link_tree(src: Path, dst: Path) -> int:
     return n
 
 
-def stage(row, cf, eic, refcache=REFCACHE):
+def stage(row, cf, eic, refcache=REFCACHE, genome_tsv=None):
+    """Write the input JSON and fill the loc dir with hard links.
+
+    Re-staging is idempotent, and the one thing it may rewrite is `<pipeline>.genome_tsv`: the local
+    TSV is built outside this file (C7) and may be rebuilt after a pid was staged. A pid that is
+    past `staged` has a leader that already read its JSON, so a rewrite there is refused rather than
+    silently making the state file and the running workflow disagree.
+    """
     pid = row["pid"]
+    pfx = pipeline_spec(row)["prefix"]
+    if genome_tsv is not None:
+        genome_tsv = os.path.abspath(genome_tsv)
+        if not os.path.isfile(genome_tsv):
+            raise SystemExit(f"{pid}: --genome-tsv {genome_tsv} is not a file (C7 builds it)")
     st = read_state(cf, pid)
     if st and st["status"] != "staged":
+        if genome_tsv != st.get("genome_tsv"):
+            raise SystemExit(
+                f"{pid}: REFUSING to re-stage with genome_tsv {genome_tsv!r}: status is "
+                f"{st['status']!r}, so its leader has already read the input JSON written for "
+                f"genome_tsv {st.get('genome_tsv')!r}. Nothing is rewritten here.")
         log(f"{pid}: skip stage, status {st['status']}")
         return st
     p = paths(cf, pid)
@@ -282,16 +316,23 @@ def stage(row, cf, eic, refcache=REFCACHE):
         if os.stat(src).st_dev != os.stat(p["loc"].parent).st_dev:
             raise SystemExit(f"stage: {src} and {p['loc']} are on different filesystems")
 
-    text = json_text(build_json(row, eic))
+    text = json_text(build_json(row, eic, genome_tsv))
     if p["input"].exists() and p["input"].read_text() != text:
-        raise SystemExit(f"stage REFUSING: {p['input']} exists with different content")
-    if not p["input"].exists():
+        move = diff_keys(json.loads(p["input"].read_text()), json.loads(text))
+        if move != {f"{pfx}.genome_tsv"}:
+            raise SystemExit(f"stage REFUSING: {p['input']} exists and differs in {sorted(move)}, "
+                             "not in genome_tsv alone")
+        log(f"{pid}: rewriting input JSON, genome_tsv → {genome_tsv}")
+        write_atomic(p["input"], text)
+    elif not p["input"].exists():
         write_atomic(p["input"], text)
 
     p["loc"].mkdir(parents=True, exist_ok=True)
     n = sum(link_tree(src, p["loc"]) for src in sources)
     log(f"{pid}: staged ({n} new links in {p['loc']})")
-    return write_state(cf, pid, status="staged", input_json=str(p["input"]), loc_dir=str(p["loc"]))
+    return write_state(cf, pid, status="staged", input_json=str(p["input"]), loc_dir=str(p["loc"]),
+                       genome_tsv=genome_tsv,
+                       genome_tsv_md5=md5_file(genome_tsv) if genome_tsv else None)
 
 
 # --- submit ------------------------------------------------------------------------------------
@@ -579,17 +620,22 @@ def main(argv=None) -> int:
     ap.add_argument("--eic", default=EIC)
     ap.add_argument("--pids", default=None, help="comma-separated subset of the rows")
     ap.add_argument("--refcache", default=REFCACHE, help="stage: reference bundle to hard-link")
+    ap.add_argument("--genome-tsv", default=None,
+                    help="stage: local genome TSV to put in `<pipeline>.genome_tsv` instead of the "
+                         "base JSON's dead encode-pipeline-genome-data URL (C7 builds the file)")
     ap.add_argument("--retry", action="store_true", help="submit: also resubmit failed pids")
     ap.add_argument("--max-attempts", type=int, default=2)
     args = ap.parse_args(argv)
 
     rows = select_rows(read_rows(args.rows), args.pids.split(",") if args.pids else None)
+    if args.genome_tsv and args.cmd != "stage":
+        log(f"--genome-tsv is read by `stage` only; ignored for `{args.cmd}`")
     if args.cmd == "cleanup-candidates":
         cleanup_candidates(rows, args.cf)
         return 0
     for row in rows:
         if args.cmd == "stage":
-            stage(row, args.cf, args.eic, args.refcache)
+            stage(row, args.cf, args.eic, args.refcache, args.genome_tsv)
         elif args.cmd == "submit":
             submit(row, args.cf, args.eic, retry=args.retry, max_attempts=args.max_attempts)
         elif args.cmd == "poll":
