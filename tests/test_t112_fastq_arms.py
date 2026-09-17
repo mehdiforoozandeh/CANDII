@@ -201,10 +201,242 @@ def test_build_json_refuses_a_knob_that_does_not_move(fa, env):
         fa.build_json(_row(fa, env, "C19M16__mapq__10"), env["eic"])
 
 
-def test_atac_row_refused_until_c13(fa, env):
-    row = dict(_row(fa, env, "C19M16__mapq__0"), pipeline="atac", knob="atac.mapq_thresh")
-    with pytest.raises(SystemExit, match="C13"):
+def test_an_unknown_pipeline_is_refused(fa, env):
+    row = dict(_row(fa, env, "C19M16__mapq__0"), pipeline="dnase", knob="dnase.mapq_thresh")
+    with pytest.raises(SystemExit, match="no FASTQ branch"):
         fa.build_json(row, env["eic"])
+
+
+# --- the DNase (atac) lane, Decision D1 = atac ---------------------------------------------------
+#
+# `$EIC/inputs_dnase/C12M02.dnase.se.json` read on Nibi 2026-09-17: all 8 FASTQs of the experiment
+# sit in `atac.fastqs_rep1_R1` as single-end runs, and there is no pe companion file.
+
+ATAC_ACCS = ("ENCFF211XVI", "ENCFF806NNB", "ENCFF375KOZ", "ENCFF174PWC",
+             "ENCFF690RZO", "ENCFF536DVA", "ENCFF334QZB", "ENCFF910LVG")
+ATAC_SIF = ("/project/def-maxwl/mforooz/EIC_REPRO/003_pipeline/sif/"
+            "atac-seq-pipeline_v2.2.3.sif")
+
+DNASE_JSON = {
+    "atac.pipeline_type": "dnase",
+    "atac.genome_tsv": SE_JSON["chip.genome_tsv"],
+    "atac.genome_name": "hg38",
+    "atac.paired_end": False,
+    "atac.subsample_reads": 50000000,
+    "atac.filter_cpu": 4,
+    "atac.xcor_cpu": 8,
+    "atac.bam2ta_cpu": 8,
+    "atac.bam2ta_mem_factor": 6,
+    "atac.title": "ENCODE Imputation Challenge C12M02",
+    "atac.description": "Running ENCSR903SKE from the challenge with single-end settings.",
+    "atac.fastqs_rep1_R1": [URL.format(a) for a in ATAC_ACCS],
+    "atac.singularity": ATAC_SIF,
+}
+
+
+@pytest.fixture()
+def atac_env(tmp_path):
+    """A fake $EIC and $CF for the DNase lane, plus the 4 `arms.py` DNase fastq rows."""
+    eic, cf, ref = tmp_path / "eic", tmp_path / "cf", tmp_path / "refcache"
+    (eic / "inputs_dnase").mkdir(parents=True)
+    (eic / "inputs_dnase" / "C12M02.dnase.se.json").write_text(
+        json.dumps(DNASE_JSON, indent=2) + "\n")
+    (eic / "atac-seq-pipeline").mkdir()
+    (eic / "atac-seq-pipeline" / "atac.wdl").write_text("version 1.0\n")
+    (eic / "sif").mkdir()
+    (eic / "sif" / "atac-seq-pipeline_v2.2.3.sif").write_text("sif")
+    (eic / "runner").mkdir()
+    (eic / "runner" / "env.sh").write_text("")
+
+    for acc in ATAC_ACCS:
+        f = cf / "fastq_cache" / hashlib.md5(URL.format(acc).encode()).hexdigest() / f"{acc}.fastq.gz"
+        f.parent.mkdir(parents=True)
+        f.write_text(acc)
+        f.chmod(0o444)
+    g = ref / "3ff4ac4c3f59d096b1a3842a182072ae" / "ENCFF110MCL.tar.gz"
+    g.parent.mkdir(parents=True)
+    g.write_text("the atac bowtie2 index")
+    g.chmod(0o444)
+
+    tsv = subprocess.run([sys.executable, str(ARMS), "rows", "--route", "fastq", "--dnase", "atac",
+                          "--ratio", "no", "--tracks", "C12M02"],
+                         capture_output=True, text=True, check=True).stdout
+    rows_path = tmp_path / "rows_dnase.tsv"
+    rows_path.write_text(tsv)
+    return {"eic": eic, "cf": cf, "ref": ref, "rows": rows_path, "tmp": tmp_path}
+
+
+def test_dnase_rows_are_the_four_arms_py_rows(fa, atac_env):
+    rows = fa.select_rows(fa.read_rows(atac_env["rows"]))
+    assert [r["pid"] for r in rows] == ["C12M02__pe__pe", "C12M02__dedup__off",
+                                        "C12M02__mapq__0", "C12M02__mapq__10"]
+    assert {r["pipeline"] for r in rows} == {"atac"}
+    # crop has no atac.wdl input, so arms.py never emits it for this track
+    assert "crop" not in {r["arm"] for r in rows}
+
+
+def test_dnase_base_json_is_the_inputs_dnase_file(fa, atac_env):
+    row = _row(fa, atac_env, "C12M02__mapq__0")
+    assert fa.base_json_path(row, atac_env["eic"], "se") == \
+        atac_env["eic"] / "inputs_dnase" / "C12M02.dnase.se.json"
+
+
+@pytest.mark.parametrize("pid,knob,value", [
+    ("C12M02__dedup__off", "atac.no_dup_removal", True),
+    ("C12M02__mapq__0", "atac.mapq_thresh", 0),
+    ("C12M02__mapq__10", "atac.mapq_thresh", 10),
+])
+def test_dnase_build_json_one_knob(fa, atac_env, pid, knob, value):
+    new = fa.build_json(_row(fa, atac_env, pid), atac_env["eic"])
+    assert fa.diff_keys(DNASE_JSON, new) == {knob, "atac.title", "atac.description"}
+    assert new[knob] == value and type(new[knob]) is type(value)
+    assert new["atac.title"] == f"CF {pid}"
+    assert new["atac.pipeline_type"] == "dnase"          # the mode is never touched
+    assert "atac.auto_detect_adapter" not in new         # absent in base, so false, so left alone
+
+
+def test_dnase_pe_repairs_the_base_jsons_own_fastqs(fa, atac_env):
+    new = fa.build_json(_row(fa, atac_env, "C12M02__pe__pe"), atac_env["eic"])
+    assert fa.diff_keys(DNASE_JSON, new) == {"atac.paired_end", "atac.fastqs_rep1_R1",
+                                             "atac.fastqs_rep1_R2", "atac.title",
+                                             "atac.description"}
+    assert new["atac.paired_end"] is True
+    r1, r2 = new["atac.fastqs_rep1_R1"], new["atac.fastqs_rep1_R2"]
+    assert len(r1) == len(r2) == 4
+    assert r1 == [URL.format(a) for a in ("ENCFF211XVI", "ENCFF806NNB", "ENCFF375KOZ",
+                                          "ENCFF174PWC")]
+    assert r2 == [URL.format(a) for a in ("ENCFF690RZO", "ENCFF536DVA", "ENCFF334QZB",
+                                          "ENCFF910LVG")]
+    # the arm may only re-pair what the base run read — never reach for a FASTQ outside the cache
+    assert sorted(r1 + r2) == sorted(DNASE_JSON["atac.fastqs_rep1_R1"])
+
+
+def test_dnase_pe_refuses_a_pairing_that_is_not_the_base_set(fa, atac_env):
+    short = dict(DNASE_JSON, **{"atac.fastqs_rep1_R1": DNASE_JSON["atac.fastqs_rep1_R1"][:6]})
+    (atac_env["eic"] / "inputs_dnase" / "C12M02.dnase.se.json").write_text(json.dumps(short))
+    with pytest.raises(SystemExit, match="re-pair"):
+        fa.build_json(_row(fa, atac_env, "C12M02__pe__pe"), atac_env["eic"])
+
+
+def test_dnase_genome_tsv_widens_the_allowed_set_by_one_key(fa, atac_env, gtsv):
+    new = fa.build_json(_row(fa, atac_env, "C12M02__mapq__10"), atac_env["eic"], gtsv)
+    assert fa.diff_keys(DNASE_JSON, new) == {"atac.mapq_thresh", "atac.title", "atac.description",
+                                             "atac.genome_tsv"}
+    assert new["atac.genome_tsv"] == str(gtsv) and "chip.genome_tsv" not in new
+
+
+def test_dnase_stage_links_the_atac_bundle_and_submits_the_atac_wdl(fa, atac_env, monkeypatch):
+    row = _row(fa, atac_env, "C12M02__mapq__0")
+    fa.stage(row, atac_env["cf"], atac_env["eic"], atac_env["ref"])
+    loc = fa.paths(atac_env["cf"], row["pid"])["loc"]
+    bundle = loc / "3ff4ac4c3f59d096b1a3842a182072ae" / "ENCFF110MCL.tar.gz"
+    assert bundle.is_file()                      # the atac bowtie2 index, not the chip bwa one
+    for acc in ATAC_ACCS:
+        assert (loc / hashlib.md5(URL.format(acc).encode()).hexdigest()
+                / f"{acc}.fastq.gz").is_file()
+
+    monkeypatch.setattr(fa, "sh", FakeSh(out="Submitted batch job 4242"))
+    fa.submit(row, atac_env["cf"], atac_env["eic"])
+    argv = fa.submit_command(row, atac_env["cf"], atac_env["eic"])
+    assert argv[:2] == ["bash", "-lc"]
+    assert "atac-seq-pipeline/atac.wdl" in argv[2]
+    assert "atac-seq-pipeline_v2.2.3.sif" in argv[2]
+    assert "chip-seq-pipeline" not in argv[2]
+
+
+# --- the DNase harvest roles ---------------------------------------------------------------------
+
+def _atac_run(fa, env, pid, status="Succeeded"):
+    """An atac (dnase-mode) workflow tree: no control call, no xcor, chrM/MT stripped after dedup."""
+    row = _row(fa, env, pid)
+    cdir = fa.paths(env["cf"], pid)["cromwell"]
+    wfid = "80c3fab7-7bf6-4099-8165-d58370ddd3a6"
+    root = cdir / "atac" / wfid
+    t = "ENCFF211XVI"
+    stem = "filt" if row["arm"] == "dedup" else "nodup"
+    final = f"{t}.merged.srt.{stem}.no_chrM_MT"
+    spec = {
+        "filter": {"nodup_bam": f"{final}.bam", "nodup_bai": f"{final}.bam.bai",
+                   "_": [f"{final}.samstats.qc", f"{t}.merged.srt.dup.qc"]},
+        "bam2ta": {"ta": f"{final}.50M.tagAlign.gz"},
+        "macs2_signal_track": {"pval_bw": f"{final}.50M.pval.signal.bigwig",
+                               "fc_bw": f"{final}.50M.fc.signal.bigwig"},
+        "qc_report": {"qc_json": "qc.json", "report": "qc.html"},
+        "align": {"bam": f"{t}.merged.srt.bam", "bai": f"{t}.merged.srt.bam.bai",
+                  "_": [f"{t}.merged.srt.no_chrM.samstats.qc"]},
+        "align_mito": {"bam": f"{t}.merged.srt.bam"},   # a call the DNase harvest must ignore
+    }
+    calls = {}
+    for call, outs in spec.items():
+        shard = -1 if call == "qc_report" else 0
+        call_root = root / f"call-{call}" / ("" if shard < 0 else "shard-0")
+        ex = call_root / "execution"
+        recorded = {}
+        for i, (key, name) in enumerate([(k, v) for k, v in outs.items() if k != "_"]
+                                        + [(None, v) for v in outs.get("_", [])]):
+            g = ex / f"glob-{i:032x}" / name
+            g.parent.mkdir(parents=True, exist_ok=True)
+            g.write_text(f"{call}:{name}")
+            os.link(g, ex / name)
+            if key:
+                recorded[key] = str(g)
+        inp = call_root / "inputs" / "-123" / f"{final}.bam"
+        inp.parent.mkdir(parents=True, exist_ok=True)
+        inp.write_text("localized copy")
+        calls[f"atac.{call}"] = [{"shardIndex": shard, "attempt": 1, "executionStatus": "Done",
+                                  "callRoot": str(call_root), "outputs": recorded}]
+    meta = {"id": wfid, "status": status, "workflowRoot": str(root), "calls": calls}
+    (root / "metadata.json").write_text(json.dumps(meta))
+    return root / "metadata.json"
+
+
+def _atac_succeeded(fa, env, pid, monkeypatch):
+    row = _row(fa, env, pid)
+    fa.stage(row, env["cf"], env["eic"], env["ref"])
+    monkeypatch.setattr(fa, "sh", FakeSh(out="Submitted batch job 777"))
+    fa.submit(row, env["cf"], env["eic"])
+    _atac_run(fa, env, pid)
+    monkeypatch.setattr(fa, "sh", FakeSh(squeue=(1, "Invalid job id specified")))
+    assert fa.poll(row, env["cf"])["status"] == "succeeded"
+    return row
+
+
+DNASE_ROLES = ["treat_bam", "treat_bai", "treat_ta", "pval_bigwig", "qc_json", "metadata"]
+
+
+def test_dnase_harvest_has_no_control_and_no_xcor(fa, atac_env, monkeypatch):
+    row = _atac_succeeded(fa, atac_env, "C12M02__mapq__0", monkeypatch)
+    assert fa.harvest(row, atac_env["cf"])["status"] == "harvested"
+    recs = _harvest_tsv(fa, atac_env, row["pid"])
+    # mapq additionally keeps the unfiltered BAM, so the base roles come first
+    assert [r["role"] for r in recs][:4] == DNASE_ROLES[:4]
+    roles = {r["role"] for r in recs}
+    assert not roles & {"ctl_bam", "ctl_bai", "ctl_ta", "xcor_qc"}
+    by = {r["role"]: r for r in recs}
+    assert by["treat_bam"]["dest"].endswith("ENCFF211XVI.merged.srt.nodup.no_chrM_MT.bam")
+    assert by["treat_ta"]["dest"].endswith(".nodup.no_chrM_MT.50M.tagAlign.gz")
+    assert by["unfiltered_bam"]["dest"].endswith("ENCFF211XVI.merged.srt.bam")
+    for r in recs:
+        assert "/inputs/" not in r["src"]
+        assert fa.md5_file(Path(r["src"])) == fa.md5_file(Path(r["dest"])) == r["md5"]
+
+
+def test_dnase_harvest_dedup_off_takes_the_filt_no_chrm_bam(fa, atac_env, monkeypatch):
+    row = _atac_succeeded(fa, atac_env, "C12M02__dedup__off", monkeypatch)
+    fa.harvest(row, atac_env["cf"])
+    recs = {r["role"]: r for r in _harvest_tsv(fa, atac_env, row["pid"])}
+    assert [*recs] == DNASE_ROLES
+    assert recs["treat_bam"]["dest"].endswith("ENCFF211XVI.merged.srt.filt.no_chrM_MT.bam")
+    assert recs["treat_bai"]["dest"].endswith(".filt.no_chrM_MT.bam.bai")
+    assert "unfiltered_bam" not in recs
+
+
+def test_dnase_harvest_roles_never_reach_a_chip_call(fa, atac_env):
+    for pid in ("C12M02__pe__pe", "C12M02__dedup__off", "C12M02__mapq__10"):
+        roles = fa.harvest_roles(_row(fa, atac_env, pid))
+        calls = {call for _role, call, _pat, _key in roles}
+        assert calls <= {"filter", "bam2ta", "macs2_signal_track", "qc_report", "align"}
+        assert not [c for c in calls if c.endswith("_ctl")]
 
 
 # --- the local genome TSV (the encode-pipeline-genome-data bucket is gone) -----------------------

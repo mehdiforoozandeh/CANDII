@@ -39,8 +39,12 @@ the path and the md5 of its bytes go into the pid's state file. Building that fi
 own localized `hg38.local.tsv` with every reference path rewritten to the 0444 refcache) is C7's
 job, not this file's: nothing here downloads anything.
 
-Pipelines: histone ChIP (`chip-seq-pipeline2` v2.2.2) only. The DNase (atac) branch is added to
-`PIPELINES`, `base_json_path` and `harvest_roles` by chunk C13; until then an atac row is refused.
+Pipelines: histone ChIP (`chip-seq-pipeline2` v2.2.2), and under Decision D1 = atac the DNase track
+through `atac-seq-pipeline` v2.2.3 in `dnase` mode — which is exactly what the C12M02 base run is.
+The atac branch differs in three places and nowhere else: its base input JSON lives in
+`inputs_dnase/` and has no pe companion (the pe arm re-pairs the base JSON's own FASTQs, see
+`ATAC_PE_FASTQS`); the run has no control and no `xcor` call at all; and its `filter` task strips
+chrM/MT after dedup, so the BAM it keeps is `*.nodup.no_chrM_MT.bam`.
 
 Deliberately stdlib only: it runs on the Nibi login node.
 
@@ -76,12 +80,20 @@ HEADER = ("pid", "biosample", "track", "cell", "assay", "arm", "level", "route",
 
 STATUSES = ("staged", "submitted", "succeeded", "failed", "harvested")
 
-#: per `pipeline` column value. C13 adds "atac".
+#: per `pipeline` column value. `base_json` is formatted with `track` and `tag` (se|pe).
 PIPELINES = {
     "chip": {
         "prefix": "chip",
         "wdl": "chip-seq-pipeline2/chip.wdl",
         "sif": "sif/chip-seq-pipeline_v2.2.2.sif",
+        "base_json": "inputs_bwa/{track}.bwa.{tag}.json",
+    },
+    "atac": {
+        "prefix": "atac",
+        "wdl": "atac-seq-pipeline/atac.wdl",
+        "sif": "sif/atac-seq-pipeline_v2.2.3.sif",
+        # one file only: there is no pe companion, so `{tag}` is deliberately unused
+        "base_json": "inputs_dnase/{track}.dnase.se.json",
     },
 }
 
@@ -89,6 +101,19 @@ PIPELINES = {
 #: description. Read off C19M16 on Nibi 2026-09-17.
 PE_KEYS = ("paired_end", "ctl_paired_end", "fastqs_rep1_R1", "fastqs_rep1_R2",
            "ctl_fastqs_rep1_R1", "ctl_fastqs_rep1_R2")
+
+FASTQ_URL = "https://www.encodeproject.org/files/{0}/@@download/{0}.fastq.gz"
+
+#: the atac pe arm has no pre-written pe JSON: `$EIC/inputs_dnase/C12M02.dnase.se.json` lists all 8
+#: FASTQs of the experiment in `atac.fastqs_rep1_R1`, read as 8 single-end runs. The pe arm re-pairs
+#: those same 8 files into the 4 mates the portal records (`paired_with`), in the base JSON's own
+#: order; `build_json` refuses to write the arm unless the split is exactly the base JSON's set, so
+#: the arm can never reach for a FASTQ that is not in the sealed cache.
+ATAC_PE_FASTQS = {
+    "C12M02": (("ENCFF211XVI", "ENCFF690RZO"), ("ENCFF806NNB", "ENCFF536DVA"),
+               ("ENCFF375KOZ", "ENCFF334QZB"), ("ENCFF174PWC", "ENCFF910LVG")),
+}
+ATAC_PE_KEYS = ("paired_end", "fastqs_rep1_R1", "fastqs_rep1_R2")
 
 HARVEST_COLUMNS = ("role", "src", "dest", "bytes", "md5")
 
@@ -158,16 +183,16 @@ def select_rows(rows, pids=None) -> list[dict]:
 def pipeline_spec(row) -> dict:
     spec = PIPELINES.get(row["pipeline"])
     if spec is None:
-        raise SystemExit(f"{row['pid']}: pipeline {row['pipeline']!r} has no FASTQ branch here yet "
-                         "(the atac/DNase branch is added by C13)")
+        raise SystemExit(f"{row['pid']}: pipeline {row['pipeline']!r} has no FASTQ branch here "
+                         f"(known: {sorted(PIPELINES)})")
     return spec
 
 
 # --- input JSON --------------------------------------------------------------------------------
 
 def base_json_path(row, eic_dir, tag) -> Path:
-    pipeline_spec(row)
-    return Path(eic_dir) / "inputs_bwa" / f"{row['track']}.bwa.{tag}.json"
+    spec = pipeline_spec(row)
+    return Path(eic_dir) / spec["base_json"].format(track=row["track"], tag=tag)
 
 
 def diff_keys(base: dict, new: dict) -> set:
@@ -178,12 +203,14 @@ def diff_keys(base: dict, new: dict) -> set:
 def build_json(row, eic_dir, genome_tsv=None) -> dict:
     """The arm's input JSON: its base JSON with one knob set, plus a unique title and description.
 
-    Every arm starts from `<track>.bwa.se.json`. The `pe` arm takes only the run-type keys
-    (`PE_KEYS`) from `<track>.bwa.pe.json`, not the whole file: on Nibi 2026-09-17 C07M29's se JSON
-    carries `align_cpu 12, filter_cpu 8` (`apply_axis4.py`, added after the pe JSON was written) and
-    its pe JSON does not, so starting from the pe file would move two more keys than the arm names.
-    Key order is kept, so a new key lands at the end. Raises if the result differs from the se base
-    in any key other than the ones the arm is allowed to move.
+    Every arm starts from the pipeline's single-end base JSON. The ChIP `pe` arm takes only the
+    run-type keys (`PE_KEYS`) from `<track>.bwa.pe.json`, not the whole file: on Nibi 2026-09-17
+    C07M29's se JSON carries `align_cpu 12, filter_cpu 8` (`apply_axis4.py`, added after the pe JSON
+    was written) and its pe JSON does not, so starting from the pe file would move two more keys
+    than the arm names. The atac `pe` arm has no pe JSON to take keys from, so it re-pairs the base
+    JSON's own 8 FASTQs (`ATAC_PE_FASTQS`) and moves `ATAC_PE_KEYS`. Key order is kept, so a new key
+    lands at the end. Raises if the result differs from the base in any key other than the ones the
+    arm is allowed to move.
 
     `genome_tsv` additionally sets `<pipeline>.genome_tsv` to that path (the base JSON's URL is
     dead, see the module docstring), which widens the allowed set by exactly that one key.
@@ -192,12 +219,27 @@ def build_json(row, eic_dir, genome_tsv=None) -> dict:
     pfx = spec["prefix"]
     se = json.loads(base_json_path(row, eic_dir, "se").read_text())
     new = dict(se)
-    if row["arm"] == "pe":
+    pe_keys = ATAC_PE_KEYS if pfx == "atac" else PE_KEYS
+    if row["arm"] == "pe" and pfx == "atac":
+        pairs = ATAC_PE_FASTQS.get(row["track"])
+        if pairs is None:
+            raise SystemExit(f"{row['pid']}: no ATAC_PE_FASTQS pairing for {row['track']}")
+        r1 = [FASTQ_URL.format(a) for a, _ in pairs]
+        r2 = [FASTQ_URL.format(b) for _, b in pairs]
+        single = se.get(f"{pfx}.fastqs_rep1_R1", [])
+        if sorted(r1 + r2) != sorted(single):
+            raise SystemExit(f"{row['pid']}: the pe pairing names {len(r1) + len(r2)} FASTQs that "
+                             f"are not the base JSON's {len(single)}; the arm may only re-pair the "
+                             "files the base run read")
+        new[f"{pfx}.paired_end"] = True
+        new[f"{pfx}.fastqs_rep1_R1"] = r1
+        new[f"{pfx}.fastqs_rep1_R2"] = r2
+    elif row["arm"] == "pe":
         pe = json.loads(base_json_path(row, eic_dir, "pe").read_text())
-        missing = [k for k in PE_KEYS if f"{pfx}.{k}" not in pe]
+        missing = [k for k in pe_keys if f"{pfx}.{k}" not in pe]
         if missing:
             raise SystemExit(f"{row['pid']}: pe base JSON lacks {missing}")
-        for k in PE_KEYS:
+        for k in pe_keys:
             new[f"{pfx}.{k}"] = pe[f"{pfx}.{k}"]
     if not row["knob"].startswith(pfx + "."):
         raise SystemExit(f"{row['pid']}: knob {row['knob']!r} is not a {pfx}.* input")
@@ -211,7 +253,7 @@ def build_json(row, eic_dir, genome_tsv=None) -> dict:
     if genome_tsv is not None and new[f"{pfx}.genome_tsv"] != se.get(f"{pfx}.genome_tsv"):
         moved |= {f"{pfx}.genome_tsv"}
     if row["arm"] == "pe":
-        moved |= {f"{pfx}.{k}" for k in PE_KEYS}
+        moved |= {f"{pfx}.{k}" for k in pe_keys}
     got = diff_keys(se, new)
     if got != moved:
         raise SystemExit(f"{row['pid']}: input JSON moves {sorted(got)}, expected {sorted(moved)}")
@@ -450,7 +492,24 @@ def poll(row, cf):
 
 def harvest_roles(row) -> list[tuple]:
     """(role, call, glob pattern, metadata output key) for one arm."""
-    pipeline_spec(row)
+    if pipeline_spec(row)["prefix"] == "atac":
+        # The atac filter task strips chrM/MT AFTER dedup (`remove_chrs_from_bam`, suffix
+        # `.no_chrM_MT`), and with atac.no_dup_removal the dedup step is skipped so its `.filt.bam`
+        # is what gets stripped and returned as `nodup_bam`. A DNase run has no control and, in
+        # dnase mode, no `atac.xcor` call at all (checked in the C12M02 base metadata), so there is
+        # no ctl_* role and no xcor_qc: C14 takes fraglen from `atac.smooth_win`.
+        stem = "filt" if row["arm"] == "dedup" else "nodup"
+        bam = f"*.{stem}.no_chrM_MT.bam"
+        roles = [
+            ("treat_bam", "filter", bam, "nodup_bam"),
+            ("treat_bai", "filter", bam + ".bai", "nodup_bai"),
+            ("treat_ta", "bam2ta", "*.tagAlign.gz", "ta"),
+            ("pval_bigwig", "macs2_signal_track", "*.pval.signal.bigwig", "pval_bw"),
+            ("qc_json", "qc_report", "qc.json", "qc_json"),
+        ]
+        if row["arm"] == "mapq":
+            roles.append(("unfiltered_bam", "align", "*.merged.srt.bam", "bam"))
+        return roles
     # with chip.no_dup_removal the filter task returns its .filt.bam as `nodup_bam`
     # (encode_task_filter.py: `if args.no_dup_removal: nodup_bam = filt_bam`)
     bam = "*.filt.bam" if row["arm"] == "dedup" else "*.nodup*.bam"

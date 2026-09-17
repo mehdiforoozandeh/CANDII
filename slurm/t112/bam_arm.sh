@@ -20,15 +20,21 @@
 # RESOURCES. The pipeline's own macs2_signal_track for C19M16 took 64 min at 14.9 GB on 1 core;
 # 8 h and 48 GB leaves room for the two genome-wide bigwig binnings this task adds.
 #
+# THE KIT ROOT IS AN ARGUMENT. SLURM runs its own spool copy of this file, so under sbatch
+# `dirname "${BASH_SOURCE[0]}"` is /var/spool/... and not the snapshot: deriving $KIT from it gave
+# every task `/var/spool/tools/t112/bam_arm.py: No such file` (C9, 2026-09-17). It is now the first
+# positional and the script refuses to start without a kit that actually holds the tool.
+#
 # Usage, from the Nibi login node, after snapshotting the repo to $CF/code/<chunk>:
+#   KIT=$CF/code/C9
 #   mkdir -p $CF/logs/bamarms $CF/bamarms   # THE LAUNCHER MUST DO THIS. SLURM opens --output
 #                                           # before the script body runs, so a job cannot create
 #                                           # its own log directory: without it every task dies at
 #                                           # launch with no log at all.
 #   R=$CF/bamarms/rows_chip.tsv
-#   python3 $CF/code/C9/tools/t112/arms.py rows --route bam --dnase none --ratio yes > $R
-#   sbatch --test-only --array=0-83 $CF/code/C9/slurm/t112/bam_arm.sh $R
-#   sbatch --parsable --array=0-83 $CF/code/C9/slurm/t112/bam_arm.sh $R
+#   python3 $KIT/tools/t112/arms.py rows --route bam --dnase none --ratio yes > $R
+#   sbatch --test-only --array=0-83 $KIT/slurm/t112/bam_arm.sh $KIT $R
+#   sbatch --parsable --array=0-83 $KIT/slurm/t112/bam_arm.sh $KIT $R
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t112_bam_arm
 #SBATCH --output=/scratch/mforooz/t112_cf/logs/bamarms/%x_%A_%a.out
@@ -39,13 +45,19 @@
 
 set -euo pipefail
 
-ROWS="${1:?usage: bam_arm.sh <rows.tsv> [products_dir] [work_dir] [ta_dir]}"
+USAGE="usage: bam_arm.sh <kit_dir> <rows.tsv> [products_dir] [work_dir] [ta_dir]"
+KIT="${1:?$USAGE — kit_dir is the code snapshot, e.g. \$CF/code/C9}"
+ROWS="${2:?$USAGE}"
 CF=/scratch/mforooz/t112_cf
-PRODUCTS="${2:-$CF/products}"
-WORK="${3:-$CF/bamarms}"
-TA_DIR="${4:-$CF/ta}"
-KIT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+PRODUCTS="${3:-$CF/products}"
+WORK="${4:-$CF/bamarms}"
+TA_DIR="${5:-$CF/ta}"
 PY_MODULES="StdEnv/2023 python/3.11 scipy-stack"
+
+# Fail here, not 10 s into the venv build, if the kit is wrong or the old argument order was used.
+[ -f "$KIT/tools/t112/bam_arm.py" ] || {
+    echo "kit_dir '$KIT' has no tools/t112/bam_arm.py. $USAGE" >&2; exit 2; }
+KIT=$(cd "$KIT" && pwd)
 
 : "${SLURM_ARRAY_TASK_ID:?array task only}"
 mkdir -p "$CF/logs/bamarms"

@@ -20,6 +20,7 @@ import gzip
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -355,17 +356,161 @@ def test_the_ratio_plan_pins_the_sif_script_md5(eic, ta, tmp_path):
         "6039e1c382ef1e8afa3dbfd5ea103ba8"
 
 
+# ---------------------------------------------------------------------- the DNase (atac) lane
+#
+# The atac pieces the ChIP tests never touch: a different signal script, `--smooth-win` where chip
+# has `--fraglen`, one tagAlign because a DNase run has no control, and the atac image.
+
+#: the real recorded atac command (C12M02, read from Nibi 2026-09-17), with the Cromwell input
+#: paths that no longer exist. Note it carries no `--fraglen` at all.
+RECORDED_ATAC = (
+    "set -e\npython3 $(which encode_task_macs2_signal_track_atac.py) \\\n"
+    "    /crom/inputs/-455205790/ENCFF211XVI.merged.srt.nodup.no_chrM_MT.50M.tagAlign.gz \\\n"
+    "    --gensz hs \\\n    --chrsz /crom/inputs/-2134521918/GRCh38_EBV.chrom.sizes.tsv \\\n"
+    "    --pval-thresh 0.01 \\\n    --smooth-win 150 \\\n    --mem-gb 9.398508861660957"
+)
+
+#: C5 built this one, at exactly this name (`$CF/ta/LINES.tsv`, 50000000 lines).
+DNASE_TA = "ENCFF211XVI.merged.srt.nodup.no_chrM_MT.50M.tagAlign.gz"
+
+
+@pytest.fixture
+def atac_eic(tmp_path):
+    """A fake `$EIC` holding the C12M02 base run's recorded atac signal commandLine."""
+    d = tmp_path / "eic_atac" / "results" / "C12M02"
+    d.mkdir(parents=True)
+    (d / "metadata.json").write_text(json.dumps(
+        {"calls": {"atac.macs2_signal_track": [{"commandLine": RECORDED_ATAC,
+                                                "executionStatus": "Done"}]}}))
+    return str(tmp_path / "eic_atac")
+
+
+@pytest.fixture
+def atac_ta(tmp_path):
+    d = tmp_path / "cf_atac" / "ta"
+    d.mkdir(parents=True)
+    with gzip.open(d / DNASE_TA, "wt") as f:
+        for i in range(60):
+            f.write(f"chr21\t{1000 + i}\t{1076 + i}\tN\t1000\t+\n")   # 76 bp reads
+    return str(d)
+
+
+def atac_row(arm, level):
+    rows = {(r["arm"], r["level"]): r
+            for r in arms.rows("bam", dnase="atac", ratio="no", tracks=["C12M02"])}
+    r = rows[(arm, level)]
+    return {k: (json.dumps(v) if k == "knob_value" else str(v)) for k, v in r.items()}
+
+
+def atac_plan(arm, level, atac_eic, atac_ta, tmp_path, **kw):
+    return bam_arm.plan(atac_row(arm, level), str(tmp_path / "cf"), atac_eic,
+                        tmp=str(tmp_path / "tmp"), ta_dir=atac_ta, **kw)
+
+
+def test_dnase_base_runs_the_recorded_atac_command_on_one_tagalign(atac_eic, atac_ta, tmp_path):
+    p = atac_plan("base", "base", atac_eic, atac_ta, tmp_path)
+    assert p["pipeline"] == "atac" and p["sif"].endswith("atac-seq-pipeline_v2.2.3.sif")
+    assert p["control"] is None and p["control_accession"] is None
+    assert p["fed"] == [f"{atac_ta}/{DNASE_TA}"]              # one tagAlign, no control
+    signal = [c for c in p["commands"] if "--gensz" in c]
+    assert len(signal) == 1
+    cmd = signal[0]
+    assert "encode_task_macs2_signal_track_atac.py" in cmd
+    assert "encode_task_macs2_signal_track_chip.py" not in cmd
+    assert "--smooth-win 150" in cmd and "--fraglen" not in cmd
+    assert f"--chrsz {CHRSZ}" in cmd and "--pval-thresh 0.01" in cmd
+    assert cmd.count(".tagAlign.gz") == 1
+    # the base arm bins the pipeline's own bigwig and keeps a rebuild beside it
+    assert p["pipeline_bigwig"] == arms.TRACKS["C12M02"]["pval_bigwig"]
+    assert p["kept_bigwig"].endswith(
+        "ENCFF211XVI.merged.srt.nodup.no_chrM_MT.50M.pval.signal.bigwig")
+
+
+@pytest.mark.parametrize("level,smooth_win", [("k0.5", 75), ("k2", 300)])
+def test_dnase_extsize_moves_smooth_win_only(atac_eic, atac_ta, tmp_path, level, smooth_win):
+    p = atac_plan("extsize", level, atac_eic, atac_ta, tmp_path)
+    assert p["knob_value"] == smooth_win and p["fraglen"] == smooth_win
+    cmd = next(c for c in p["commands"] if "--gensz" in c)
+    assert f"--smooth-win {smooth_win}" in cmd and "--smooth-win 150" not in cmd
+    assert "--fraglen" not in cmd
+    # everything else the base run recorded is carried through untouched
+    assert "--pval-thresh 0.01" in cmd and "--mem-gb 9.398508861660957" in cmd
+
+
+@pytest.mark.parametrize("level,n", [("15M", 15000000), ("7.5M", 7500000), ("3.75M", 3750000)])
+def test_dnase_depth_thins_the_50m_base_with_the_pipeline_subsampler(atac_eic, atac_ta, tmp_path,
+                                                                    level, n):
+    p = atac_plan("depth", level, atac_eic, atac_ta, tmp_path)
+    sub = next(c for c in p["commands"] if "encode_task_subsample_ctl.py" in c)
+    assert f"{atac_ta}/{DNASE_TA} --subsample {n}" in sub
+    assert "atac-seq-pipeline_v2.2.3.sif" in sub          # the atac image, not the chip one
+    assert p["subsample_inputs"] == [f"{atac_ta}/{DNASE_TA}"]   # thinned FROM base, so it nests
+    assert p["fed"][0].endswith(f".50M.{bam_arm.human_readable_number(n)}.tagAlign.gz")
+    assert p["fed"][0] not in p["inputs"]                 # it does not exist until the job runs
+
+
+def test_dnase_arms_are_only_base_depth_extsize(atac_eic, atac_ta, tmp_path):
+    assert bam_arm.DNASE_BAM_ARMS == ("base", "depth", "extsize")
+    assert {r["arm"] for r in arms.rows("bam", dnase="atac", ratio="no", tracks=["C12M02"])} \
+        == set(bam_arm.DNASE_BAM_ARMS)
+    # an arm that turns a control cannot exist here, whatever a hand-made row says
+    bogus = dict(atac_row("base", "base"), arm="ctlid", level="other", pid="C12M02__ctlid__other")
+    with pytest.raises(ValueError, match="not a atac bam arm"):
+        bam_arm.plan(bogus, str(tmp_path / "cf"), atac_eic, tmp=str(tmp_path), ta_dir=atac_ta)
+
+
+def test_the_cli_knows_every_smoke_part():
+    """A part the CLI does not accept is a job that dies after the venv build (22178020)."""
+    import argparse
+    import contextlib
+    import io
+    for part in ("ab", "c", "ok", "dnase-a", "dnase-c", "dnase-ok"):
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            try:
+                bam_arm.main(["smoke", "--part", part, "--cf", "/nonexistent"])
+            except (argparse.ArgumentError, SystemExit) as e:
+                assert "invalid choice" not in buf.getvalue(), part
+                assert getattr(e, "code", 1) != 2, part      # 2 is argparse refusing the argument
+            except Exception:
+                pass                                        # a missing $CF is fine here
+        assert "invalid choice" not in buf.getvalue(), part
+
+
+def test_dnase_smoke_rows_cover_every_dnase_arm_kind():
+    rows = bam_arm.dnase_smoke_rows()
+    assert [(r["arm"], r["level"]) for r in rows] == list(bam_arm.DNASE_SMOKE_LEVELS)
+    assert {r["arm"] for r in rows} == set(bam_arm.DNASE_BAM_ARMS)
+    assert [r["pid"] for r in rows][0] == "C12M02__base__base"
+
+
+def test_every_dnase_bam_row_plans(atac_eic, atac_ta, tmp_path):
+    made = 0
+    for r in arms.rows("bam", dnase="atac", ratio="no", tracks=["C12M02"]):
+        tr = {k: (json.dumps(v) if k == "knob_value" else str(v)) for k, v in r.items()}
+        cs = bam_arm.plan_commands(tr, str(tmp_path / "cf"), atac_eic, tmp=str(tmp_path / "tmp"),
+                                   ta_dir=atac_ta)
+        assert cs[0].startswith("mkdir -p ")
+        assert cs[-1].startswith("cp ") and ".pval.signal.bigwig" in cs[-1]
+        assert sum("--gensz" in c for c in cs) == 1
+        assert not [c for c in cs if "chip-seq-pipeline" in c]
+        made += 1
+    assert made == 6                       # base 1 + depth 3 + extsize 2
+
+
 # ---------------------------------------------------------------------------- guards
 
-def test_fastq_and_atac_rows_are_refused(eic, ta, tmp_path):
+def test_fastq_rows_are_refused(eic, ta, tmp_path):
     fastq = [r for r in arms.rows("fastq", dnase="none", ratio="yes", tracks=[TRACK])][0]
     fastq = {k: (json.dumps(v) if k == "knob_value" else str(v)) for k, v in fastq.items()}
     with pytest.raises(ValueError, match="route"):
         bam_arm.plan(fastq, str(tmp_path / "cf"), eic, tmp=str(tmp_path), ta_dir=ta)
-    dnase = [r for r in arms.rows("bam", dnase="atac", ratio="no", tracks=["C12M02"])][0]
-    dnase = {k: (json.dumps(v) if k == "knob_value" else str(v)) for k, v in dnase.items()}
-    with pytest.raises(ValueError, match="atac branch"):
-        bam_arm.plan(dnase, str(tmp_path / "cf"), eic, tmp=str(tmp_path), ta_dir=ta)
+
+
+def test_an_unknown_pipeline_is_refused(eic, ta, tmp_path):
+    bogus = dict(row("base", "base"), pipeline="dnase-seq-pipeline")
+    with pytest.raises(ValueError, match="pipeline"):
+        bam_arm.plan(bogus, str(tmp_path / "cf"), eic, tmp=str(tmp_path), ta_dir=ta)
 
 
 def test_every_bam_arm_of_every_chip_track_plans(eic, ta, tmp_path):
@@ -411,6 +556,60 @@ def test_publish_refuses_an_empty_file_and_verifies_the_copy(tmp_path):
     src.write_bytes(b"payload")
     bam_arm.publish([(src, dst)])
     assert dst.read_bytes() == b"payload"
+
+
+def test_row_at_round_trips_every_knob_value_through_the_real_tsv(tmp_path):
+    """`row_at` must hand `plan` the knob_value `arms.py` wrote, ctlid's JSON string included.
+
+    The rows TSV holds `knob_value` as JSON text, so a ctlid row reads `"ENCFF337JNL"` WITH its
+    quotes. A csv reader at the default quoting strips them and `plan`'s `json.loads` then dies —
+    which is what held all 12 ctlid rows of the first ChIP array (`$CF/logs/bamarms/HELD_ctlid.txt`).
+    Every other arm's value is a bare number, `true` or `null` and survives the stripping, so this
+    test drives the real file rather than the hand-built dicts the smoke uses.
+    """
+    rs = arms.rows("bam", dnase="none", ratio="yes")
+    tsv = tmp_path / "rows_chip.tsv"
+    tsv.write_text(arms.to_tsv(rs))
+    assert len(rs) == 84
+    seen = set()
+    for i, want in enumerate(rs):
+        got = bam_arm.row_at(tsv, i)
+        assert got["pid"] == want["pid"]
+        value = json.loads(got["knob_value"])
+        assert value == want["knob_value"] and type(value) is type(want["knob_value"])
+        seen.add(want["arm"])
+    assert "ctlid" in seen and seen == set(bam_arm.BAM_ARMS)
+    # the exact failure, spelled out: the quotes must still be there for the arm that has them
+    ctlid = next(bam_arm.row_at(tsv, i) for i, r in enumerate(rs)
+                 if (r["arm"], r["level"]) == ("ctlid", "other"))
+    assert ctlid["knob_value"] == '"ENCFF337JNL"'
+
+
+def test_row_at_reads_a_dnase_rows_file(tmp_path):
+    tsv = tmp_path / "rows_dnase.tsv"
+    rs = arms.rows("all", dnase="atac", ratio="no", tracks=["C12M02"])
+    tsv.write_text(arms.to_tsv(rs))
+    bam = [r for r in rs if r["route"] == "bam"]
+    assert len(rs) == 10 and len(bam) == 6
+    assert json.loads(bam_arm.row_at(tsv, 0)["knob_value"]) is None      # base
+    assert json.loads(bam_arm.row_at(tsv, 1)["knob_value"]) == 15000000  # depth 15M
+
+
+def test_sbatch_script_takes_the_kit_root_as_an_argument(tmp_path):
+    """SLURM runs a spool copy, so $KIT can never be derived from $BASH_SOURCE (C9, 2026-09-17)."""
+    sh = (Path(__file__).resolve().parents[1] / "slurm" / "t112" / "bam_arm.sh").read_text()
+    code = [ln for ln in sh.splitlines() if not ln.lstrip().startswith("#")]
+    assert not [ln for ln in code if "BASH_SOURCE" in ln]
+    assert 'KIT="${1:?' in sh and 'ROWS="${2:?' in sh
+    assert '[ -f "$KIT/tools/t112/bam_arm.py" ]' in sh           # fails loudly, not 10 s later
+
+    import subprocess
+    script = Path(__file__).resolve().parents[1] / "slurm" / "t112" / "bam_arm.sh"
+    for argv in ([], [str(tmp_path)], [str(tmp_path), "rows.tsv"]):
+        p = subprocess.run(["bash", str(script)] + argv, capture_output=True, text=True,
+                           env={"PATH": os.environ["PATH"], "SLURM_ARRAY_TASK_ID": "0"})
+        assert p.returncode != 0
+        assert "usage: bam_arm.sh <kit_dir> <rows.tsv>" in p.stderr
 
 
 def test_sbatch_script_matches_the_python_row_index(tmp_path):

@@ -39,11 +39,20 @@ own rebuild into `<work>/<pid>/rebuild_pval25.npz`, which is what the `base_rebu
 `run` will execute, in order, and those strings are what `provenance.commands` records. Binning is
 not in that list: it is this module calling `bin25`, pinned by `provenance.code.git_sha`.
 
-Only `pipeline == "chip"` rows are handled; C13 adds the atac branch for C12M02.
+Two pipelines: `chip` (histone ChIP, `chip-seq-pipeline2` v2.2.2) and, under Decision D1 = atac,
+`atac` for the DNase track C12M02 (`atac-seq-pipeline` v2.2.3 in dnase mode, which is what its base
+run is). The atac side is the same shape with three differences, each read off the base run's own
+`metadata.json` rather than assumed: the signal script is `encode_task_macs2_signal_track_atac.py`;
+its fragment knob is `--smooth-win`, not `--fraglen`; and a DNase run has no control, so only
+`base`, `depth` and `extsize` exist there (`DNASE_BAM_ARMS`), MACS2 is given one tagAlign, and
+`covariates.control` is null. `encode_task_subsample_ctl.py` is byte-identical in both images
+(md5 4d6216ec2766b9029352fc4d0bd70361, checked 2026-09-17), so `depth` thins the DNase base
+tagAlign exactly as it thins a ChIP one.
 
     python3 bam_arm.py plan  --rows ROWS.tsv --index I
     python3 bam_arm.py run   --rows ROWS.tsv --index I [--products DIR] [--work DIR] [--ta-dir DIR]
-    python3 bam_arm.py smoke --part ab|c|ok [--cf DIR]
+    python3 bam_arm.py smoke --part ab|c|ok [--cf DIR]            # chunk C8, ChIP
+    python3 bam_arm.py smoke --part dnase-a|dnase-c|dnase-ok      # chunk C13, DNase
 """
 from __future__ import annotations
 
@@ -73,6 +82,8 @@ SIF = {"chip": f"{EIC}/sif/chip-seq-pipeline_v2.2.2.sif",
 SIGNAL_CALL = {"chip": "chip.macs2_signal_track", "atac": "atac.macs2_signal_track"}
 SIGNAL_SCRIPT = {"chip": "encode_task_macs2_signal_track_chip.py",
                  "atac": "encode_task_macs2_signal_track_atac.py"}
+#: the signal script's fragment-length flag, per pipeline. Both are the arm-10 knob.
+FRAGLEN_FLAG = {"chip": "--fraglen", "atac": "--smooth-win"}
 SUBSAMPLE_SCRIPT = "encode_task_subsample_ctl.py"
 
 #: the signal script inside the chip SIF, and its md5 (verified 2026-09-17). The `ratio` arm copies
@@ -100,6 +111,8 @@ MAIN_CHROMS = tuple(f"chr{i}" for i in range(1, 23)) + ("chrX",)
 
 #: the ChIP arms this module builds, and the shape of each one's input.
 BAM_ARMS = ("base", "depth", "abproxy", "ratio", "ctlid", "ctldepth", "extsize")
+#: the DNase (atac) ones. Four of the ChIP arms turn a control and a DNase run has none.
+DNASE_BAM_ARMS = ("base", "depth", "extsize")
 
 
 # --------------------------------------------------------------------------------------------
@@ -209,8 +222,9 @@ def parse_signal_command(cmdline: str, pipeline: str = "chip") -> dict:
 
 
 def build_signal_command(parsed: dict, tas, out_dir, *, fraglen=None, chrsz=CHRSZ,
-                         invocation=None) -> str:
-    """The recorded command with only the tagAligns, `--fraglen`, `--chrsz` and `--out-dir` set.
+                         invocation=None, fraglen_flag="--fraglen") -> str:
+    """The recorded command with only the tagAligns, the fragment flag, `--chrsz` and `--out-dir`
+    set. `fraglen_flag` is `--fraglen` for chip and `--smooth-win` for atac (`FRAGLEN_FLAG`).
 
     `--chrsz` is relocated, not changed: the recorded path is a Cromwell input copy that no longer
     exists, so its basename is asserted against `chrsz` and the path replaced.
@@ -221,7 +235,7 @@ def build_signal_command(parsed: dict, tas, out_dir, *, fraglen=None, chrsz=CHRS
         seen.add(name)
         if name == "--out-dir":
             continue
-        if name == "--fraglen" and fraglen is not None:
+        if name == fraglen_flag and fraglen is not None:
             value = str(fraglen)
         if name == "--chrsz":
             if os.path.basename(value) != os.path.basename(chrsz):
@@ -231,7 +245,7 @@ def build_signal_command(parsed: dict, tas, out_dir, *, fraglen=None, chrsz=CHRS
         if value is not None:
             out.append(value)
     for required, value in (("--gensz", "hs"), ("--chrsz", None), ("--pval-thresh", "0.01"),
-                            ("--fraglen", None)):
+                            (fraglen_flag, None)):
         if required not in seen:
             raise ValueError(f"recorded command has no {required}: {parsed['flags']}")
         if value is not None and dict(parsed["flags"])[required] != value:
@@ -292,11 +306,12 @@ def plan(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, product
     pid = row["pid"]
     if row.get("route") != "bam":
         raise ValueError(f"{pid}: route {row.get('route')!r}, not 'bam'")
-    if row.get("pipeline") != "chip":
-        raise ValueError(f"{pid}: pipeline {row.get('pipeline')!r}; only 'chip' is implemented "
-                         "(C13 adds the atac branch)")
-    if arm not in BAM_ARMS:
-        raise ValueError(f"{pid}: unknown bam arm {arm!r}")
+    pipeline = row.get("pipeline")
+    if pipeline not in SIF:
+        raise ValueError(f"{pid}: pipeline {row.get('pipeline')!r}, not one of {sorted(SIF)}")
+    allowed = BAM_ARMS if pipeline == "chip" else DNASE_BAM_ARMS
+    if arm not in allowed:
+        raise ValueError(f"{pid}: {arm!r} is not a {pipeline} bam arm {allowed}")
 
     t = arms.TRACKS[track]
     kv = json.loads(row["knob_value"]) if isinstance(row["knob_value"], str) else row["knob_value"]
@@ -304,7 +319,7 @@ def plan(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, product
     ta_dir = str(ta_dir or f"{cf}/ta")
     work = f"{work or f'{cf}/bamarms'}/{pid}"
     product = f"{products or f'{cf}/products'}/{pid}"
-    sif = SIF["chip"]
+    sif = SIF[pipeline]
 
     W = f"{tmp}/work"           # cwd of every container command
     TAOUT = f"{tmp}/ta"         # tagAligns this arm builds
@@ -314,8 +329,10 @@ def plan(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, product
     cmds = [f"mkdir -p {W} {TAOUT} {OUT} {work} {product}"]
 
     treatment = src_treatment = treatment_tagalign(track, ta_dir)
-    control = control_tagalign(t["ctl_acc"], ta_dir)
-    control_acc, control_source = t["ctl_acc"], "matched"
+    # a DNase run has no control: MACS2 is given the one tagAlign, as the base run gave it.
+    control = control_tagalign(t["ctl_acc"], ta_dir) if t["ctl_acc"] else None
+    control_acc = t["ctl_acc"]
+    control_source = "matched" if control else None
     fraglen = t["fraglen"]
     subsamples = []          # provenance.subsample_seed entries are filled in by run()
     patch = None
@@ -358,7 +375,8 @@ def plan(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, product
         fraglen = kv
 
     tas = [treatment] + ([control] if control else [])
-    parsed = parse_signal_command(signal_command_line(track, eic), "chip")
+    parsed = parse_signal_command(signal_command_line(track, eic, pipeline), pipeline)
+    fraglen_flag = FRAGLEN_FLAG[pipeline]
 
     if arm == "ratio":
         # never the rows TSV column: that is k * 30000000 / a pinned BAM read count, and the BAM
@@ -374,12 +392,13 @@ def plan(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, product
             f"{shlex.quote(new)}",
         ]
         inner = build_signal_command(
-            parsed, tas, OUT, fraglen=fraglen, chrsz=chrsz,
+            parsed, tas, OUT, fraglen=fraglen, chrsz=chrsz, fraglen_flag=fraglen_flag,
             invocation=[f"PYTHONPATH={CHIP_SRC_DIR}", "python3", copy])
         patch = {"script": RATIO_SCRIPT, "copy": copy, "old": RATIO_OLD, "new": new,
                  "expect_md5": RATIO_SCRIPT_MD5}
     else:
-        inner = build_signal_command(parsed, tas, OUT, fraglen=fraglen, chrsz=chrsz)
+        inner = build_signal_command(parsed, tas, OUT, fraglen=fraglen, chrsz=chrsz,
+                                     fraglen_flag=fraglen_flag)
 
     cmds.append(apptainer(inner, sif, tmp, W))
     bigwig = signal_bigwig(tas, OUT)
@@ -388,7 +407,8 @@ def plan(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, product
     pipeline_bigwig = t["pval_bigwig"] if (arm == "base" and pipeline_pval) else None
     return {
         "pid": pid, "track": track, "arm": arm, "level": level, "knob_value": kv,
-        "sif": sif, "tmp": tmp, "work": work, "product": product, "out_dir": OUT,
+        "pipeline": pipeline, "sif": sif, "tmp": tmp, "work": work, "product": product,
+        "out_dir": OUT,
         "treatment": treatment, "control": control,
         "control_accession": control_acc, "control_source": control_source,
         "fraglen": fraglen, "commands": cmds,
@@ -433,7 +453,11 @@ def _lines(path) -> int:
 
 
 def check_sif(sif: str, repo: str = "ENCODE-DCC/chip-seq-pipeline2") -> tuple:
-    """(md5, sha256) of the image, refusing to run if the md5 is not the pinned one."""
+    """(md5, sha256) of the image, refusing to run if the md5 is not the pinned one.
+
+    `repo` is `records.PIPELINE_REPO[<pipeline>]`, so the DNase arms are checked against the atac
+    image's pinned md5 and never against the ChIP one.
+    """
     md5 = records.md5_file(sif)
     pinned = records.PIPELINES[repo][1]
     if md5 != pinned:
@@ -478,7 +502,8 @@ def run(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, products
 
     p = plan(row, cf, eic, tmp=tmp, ta_dir=ta_dir, work=work, products=products, chrsz=chrsz,
              pipeline_pval=pipeline_pval)
-    md5, sha = check_sif(p["sif"])
+    repo = records.PIPELINE_REPO[p["pipeline"]]
+    md5, sha = check_sif(p["sif"], repo)
     for f in p["inputs"]:
         if not Path(f).is_file():
             raise SystemExit(f"{p['pid']}: input missing: {f}")
@@ -544,7 +569,7 @@ def run(row: dict, cf=CF, eic=EIC, *, tmp=None, ta_dir=None, work=None, products
     git_sha = git_sha or os.environ.get("T112_GIT_SHA") or _git_sha(code_dir)
     records.write_provenance(
         stage / "provenance.json", pid=p["pid"], route="bam",
-        pipeline={"repo": "ENCODE-DCC/chip-seq-pipeline2", "release": "v2.2.2", "sif": p["sif"],
+        pipeline={"repo": repo, "release": records.PIPELINES[repo][0], "sif": p["sif"],
                   "sif_md5": md5, "sif_sha256": sha},
         commands=p["commands"],
         inputs=[{"path": f, "md5": records.md5_file(f)}
@@ -599,8 +624,19 @@ def _git_sha(code_dir) -> str:
 
 
 def read_rows(path) -> list:
+    """A rows TSV from `arms.py rows`, `knob_value` still JSON *text*.
+
+    `QUOTE_NONE`, as `records.read_rows` and `checks.read_rows` already do. `arms.to_tsv` writes
+    `knob_value` as JSON, so the `ctlid` arm's value arrives as `"ENCFF337JNL"` with its quotes and
+    the default csv dialect would eat them — `plan` would then be handed the bare word and
+    `json.loads` would raise. Every other arm's value is a bare number, a bare `true` or `null`,
+    which survives the stripping, so `ctlid` was the only arm that died (C9, all 12 rows held,
+    `$CF/logs/bamarms/HELD_ctlid.txt`). The TSV itself must stay byte-identical to `arms.py rows`
+    output — C15 validates the products against an arms.py-generated file — so the reader is what
+    changes here, never the file.
+    """
     with open(path, newline="") as f:
-        rows = list(csv.DictReader(f, delimiter="\t"))
+        rows = list(csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE))
     if rows and tuple(rows[0]) != arms.HEADER:
         raise SystemExit(f"{path}: header {tuple(rows[0])} != {arms.HEADER}")
     return rows
@@ -803,6 +839,87 @@ def smoke_c(cf=CF, eic=EIC, chrsz=CHRSZ, tmp=None) -> dict:
     return part_c
 
 
+# --------------------------------------------------------------------------------------------
+# smoke (chunk C13, the DNase lane; everything under $CF/smoke/C13/)
+
+#: one row per DNase arm kind, for the chr21 structure smoke. There is no ratio part: the DNase
+#: run has no control, so arm 7 does not exist for it (Decision D2 does not reach this lane).
+DNASE_SMOKE_LEVELS = (("base", "base"), ("depth", "15M"), ("extsize", "k0.5"))
+
+
+def dnase_smoke_rows(track=arms.DNASE_TRACK) -> list:
+    want = set(DNASE_SMOKE_LEVELS)
+    return [r for r in arms.rows("bam", dnase="atac", ratio="no", tracks=[track])
+            if (r["arm"], r["level"]) in want]
+
+
+def smoke_dnase_a(cf=CF, eic=EIC, chrsz=CHRSZ, tmp=None) -> dict:
+    """(a) one row of every DNase arm kind, on a chr21 copy of the 50M base tagAlign."""
+    import bin25
+
+    smoke = Path(f"{cf}/smoke/C13")
+    ta = f"{smoke}/ta"
+    tmp = str(tmp or os.environ.get("SLURM_TMPDIR") or tempfile.gettempdir())
+    rows = dnase_smoke_rows()
+    make_chr21_tas(rows, cf, f"{cf}/ta", ta, tmp=f"{tmp}/mk")
+    sizes = bin25.load_chrsz(chrsz)
+
+    detail = {}
+    for i, r in enumerate(rows):
+        tr = _tsv_row(r)
+        run(tr, cf, eic, tmp=f"{tmp}/a{i}", ta_dir=ta, work=f"{smoke}/work_chr21",
+            products=f"{smoke}/products_chr21", chrsz=chrsz, pipeline_pval=False)
+        detail[r["pid"]] = structure_problems(Path(f"{smoke}/products_chr21/{r['pid']}"), tr, sizes)
+    part = {"pass": all(not v for v in detail.values()), "n_rows": len(rows),
+            "arms": [[r["arm"], r["level"]] for r in rows],
+            "problems": {k: v for k, v in detail.items() if v}}
+    (smoke / "part_a.json").write_text(json.dumps(part, indent=1) + "\n")
+    return part
+
+
+def smoke_dnase_c(cf=CF, eic=EIC, chrsz=CHRSZ, tmp=None) -> dict:
+    """(c) C12M02 base genome-wide: the rebuilt bigwig against the pipeline's own, on chr21.
+
+    This is the gate on the atac recipe. If the recorded `macs2_signal_track` command has been
+    reproduced, the two agree bin for bin; if a substitution is wrong, it shows up here and the
+    lane stops before any arm is launched.
+    """
+    import numpy as np
+    import bin25
+
+    smoke = Path(f"{cf}/smoke/C13")
+    row = _tsv_row(dnase_smoke_rows()[0])
+    # part (a) runs the same pid on chr21, so the genome-wide product needs its own root; the
+    # rebuild alone goes to $CF/bamarms/<pid>/, where the `base_rebuild` check reads it.
+    p = run(row, cf, eic, tmp=tmp, ta_dir=f"{cf}/ta", work=f"{cf}/bamarms",
+            products=f"{smoke}/products_gw", chrsz=chrsz, pipeline_pval=True)
+    pipeline = bin25.read_npz(f"{p['product']}/pval25.npz")["chr21"]
+    rebuild = bin25.read_npz(p["rebuild_npz"])["chr21"]
+    same = pipeline.shape == rebuild.shape
+    diff = (float(np.max(np.abs(pipeline.astype(np.float64) - rebuild.astype(np.float64))))
+            if same else float("inf"))
+    part_c = {"pid": p["pid"], "n_bins": int(rebuild.shape[0]),
+              "n_bins_pipeline": int(pipeline.shape[0]), "same_n_bins": bool(same),
+              "max_abs_diff": diff, "n_nan_rebuild": int(np.isnan(rebuild).sum()),
+              "pass": bool(same and diff <= 1e-6),
+              "rebuild_npz": p["rebuild_npz"], "pipeline_bigwig": p["pipeline_bigwig"]}
+    (smoke / "base_rebuild_C12M02.json").write_text(json.dumps(part_c, indent=1) + "\n")
+    return part_c
+
+
+def smoke_dnase_ok(cf=CF) -> dict:
+    """Collect the DNase parts into $CF/smoke/C13/SMOKE_OK.json. stdlib only (login node)."""
+    smoke = Path(f"{cf}/smoke/C13")
+    parts = {}
+    for key, name in (("a", "part_a.json"), ("c", "base_rebuild_C12M02.json")):
+        f = smoke / name
+        parts[key] = json.loads(f.read_text()) if f.is_file() else {"missing": str(f)}
+    ok = {"pass": bool(parts["a"].get("pass") and parts["c"].get("pass")), "parts": parts}
+    (smoke / "SMOKE_OK.json").write_text(json.dumps(ok, indent=1) + "\n")
+    print(json.dumps({"pass": ok["pass"]}))
+    return ok
+
+
 def smoke_ok(cf=CF) -> dict:
     """Collect the three parts into SMOKE_OK.json. stdlib only, so it runs on the login node."""
     smoke = Path(f"{cf}/smoke/C8")
@@ -836,7 +953,8 @@ def main(argv=None) -> int:
         p.add_argument("--products", default=None)
         p.add_argument("--tmp", default=None)
     ps = sub.add_parser("smoke")
-    ps.add_argument("--part", choices=("ab", "c", "ok"), required=True)
+    ps.add_argument("--part", choices=("ab", "c", "ok", "dnase-a", "dnase-c", "dnase-ok"),
+                    required=True, help="ab|c|ok are chunk C8 (ChIP); dnase-* are C13 (DNase)")
     ps.add_argument("--cf", default=CF)
     ps.add_argument("--eic", default=EIC)
     ps.add_argument("--chrsz", default=CHRSZ)
@@ -848,6 +966,12 @@ def main(argv=None) -> int:
             smoke_ab(args.cf, args.eic, args.chrsz, args.tmp)
         elif args.part == "c":
             smoke_c(args.cf, args.eic, args.chrsz, args.tmp)
+        elif args.part == "dnase-a":
+            smoke_dnase_a(args.cf, args.eic, args.chrsz, args.tmp)
+        elif args.part == "dnase-c":
+            smoke_dnase_c(args.cf, args.eic, args.chrsz, args.tmp)
+        elif args.part == "dnase-ok":
+            return 0 if smoke_dnase_ok(args.cf)["pass"] else 1
         else:
             return 0 if smoke_ok(args.cf)["pass"] else 1
         return 0
