@@ -49,6 +49,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
+- `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t112` [data-acquisition] build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 
 ## Blocked
 
@@ -69,6 +71,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *open*
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
+- `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t112` [data-acquisition] build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 
 ### implementation
 
