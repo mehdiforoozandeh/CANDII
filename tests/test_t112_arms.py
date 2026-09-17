@@ -48,13 +48,13 @@ CHIP = ("C19M16", "C40M17", "C40M18", "C07M20", "C19M22", "C07M29")
 
 def test_tracks_pinned(arms):
     exp = {  # cell, assay, treat acc, treat reads, ctl acc, fraglen, read_length, subsample
-        "C19M16": ("C19", "H3K27ac", "ENCFF254LWX", 111248957, "ENCFF433TZR", 180, 101, 30000000),
-        "C40M17": ("C40", "H3K27me3", "ENCFF581NOL", 120905207, "ENCFF337JNL", 200, 101, 30000000),
-        "C40M18": ("C40", "H3K36me3", "ENCFF443KLR", 136153965, "ENCFF337JNL", 210, 101, 30000000),
-        "C07M20": ("C07", "H3K4me1", "ENCFF458MVX", 121400818, "ENCFF164WQW", 215, 101, 30000000),
-        "C19M22": ("C19", "H3K4me3", "ENCFF748TKZ", 109295943, "ENCFF433TZR", 205, 101, 30000000),
-        "C07M29": ("C07", "H3K9me3", "ENCFF777XCR", 134868671, "ENCFF164WQW", 200, 101, 30000000),
-        "C12M02": ("C12", "DNase-seq", "ENCFF211XVI", 84335213, None, 150, 76, 50000000),
+        "C19M16": ("C19", "H3K27ac", "ENCFF254LWX", 176237758, "ENCFF433TZR", 180, 101, 30000000),
+        "C40M17": ("C40", "H3K27me3", "ENCFF581NOL", 207716224, "ENCFF337JNL", 200, 101, 30000000),
+        "C40M18": ("C40", "H3K36me3", "ENCFF443KLR", 239733719, "ENCFF337JNL", 210, 101, 30000000),
+        "C07M20": ("C07", "H3K4me1", "ENCFF458MVX", 205681163, "ENCFF164WQW", 215, 101, 30000000),
+        "C19M22": ("C19", "H3K4me3", "ENCFF748TKZ", 174409214, "ENCFF433TZR", 205, 101, 30000000),
+        "C07M29": ("C07", "H3K9me3", "ENCFF777XCR", 217273310, "ENCFF164WQW", 200, 101, 30000000),
+        "C12M02": ("C12", "DNase-seq", "ENCFF211XVI", 134815660, None, 150, 76, 50000000),
     }
     assert list(arms.TRACKS) == list(exp)
     for track, e in exp.items():
@@ -81,13 +81,13 @@ def test_tracks_pinned(arms):
 def test_controls_pinned(arms):
     eic = "/project/def-maxwl/mforooz/EIC_REPRO/003_pipeline"
     assert arms.CONTROLS == {
-        "ENCFF433TZR": {"cell": "C19", "reads": 58073570, "read_length": 101,
+        "ENCFF433TZR": {"cell": "C19", "reads": 107039349, "read_length": 101,
                         "run_type": "single-ended",
                         "bam": f"{eic}/results/C19M16/filter_ctl_shard0_ENCFF433TZR.merged.srt.nodup.bam"},
-        "ENCFF337JNL": {"cell": "C40", "reads": 90252661, "read_length": 101,
+        "ENCFF337JNL": {"cell": "C40", "reads": 150302589, "read_length": 101,
                         "run_type": "single-ended",
                         "bam": f"{eic}/results/C40M17/filter_ctl_shard0_ENCFF337JNL.merged.srt.nodup.bam"},
-        "ENCFF164WQW": {"cell": "C07", "reads": 94905112, "read_length": 101,
+        "ENCFF164WQW": {"cell": "C07", "reads": 160028104, "read_length": 101,
                         "run_type": "single-ended",
                         "bam": f"{eic}/results/C07M20/filter_ctl_shard0_ENCFF164WQW.merged.srt.nodup.bam"},
     }
@@ -100,8 +100,8 @@ def test_ids_and_rounding(arms):
     assert arms.pid("C19M16", "depth", "7.5M") == "C19M16__depth__7.5M"
     assert arms.biosample("C19", "depth", "7.5M") == "CF_C19__depth__7.5M"
     assert arms.round_half_up(102.5) == 103
-    assert arms.round_half_up(14518392.5) == 14518393
-    assert arms.round_half_up(22563165.25) == 22563165
+    assert arms.round_half_up(53519674.5) == 53519675
+    assert arms.round_half_up(26759837.25) == 26759837
     assert arms.round_half_up(7.49) == 7
     assert arms.abproxy_n_ctl(0.5) == 15000000
     assert arms.abproxy_n_ctl(0.9) == 27000000
@@ -214,8 +214,8 @@ def test_ctlid_rotation(arms):
 
 def test_ctldepth_values(arms):
     rs = _by_pid(arms, dnase="none", ratio="yes")
-    exp = {"ENCFF433TZR": (29036785, 14518393), "ENCFF337JNL": (45126331, 22563165),
-           "ENCFF164WQW": (47452556, 23726278)}
+    exp = {"ENCFF433TZR": (53519675, 26759837), "ENCFF337JNL": (75151295, 37575647),
+           "ENCFF164WQW": (80014052, 40007026)}
     for track in CHIP:
         half, quarter = exp[arms.TRACKS[track]["ctl_acc"]]
         assert rs[f"{track}__ctldepth__q0.5"]["knob_value"] == half
@@ -236,7 +236,7 @@ def test_extsize_values(arms):
 
 def test_ratio_values(arms):
     rs = _by_pid(arms, dnase="none", ratio="yes")
-    reads = {"ENCFF433TZR": 58073570, "ENCFF337JNL": 90252661, "ENCFF164WQW": 94905112}
+    reads = {"ENCFF433TZR": 107039349, "ENCFF337JNL": 150302589, "ENCFF164WQW": 160028104}
     for track in CHIP:
         c = reads[arms.TRACKS[track]["ctl_acc"]]
         for lvl, k in (("k0.5", 0.5), ("k2", 2)):
@@ -244,8 +244,8 @@ def test_ratio_values(arms):
             assert isinstance(got, float)
             assert got == float(f"{k * 30000000 / c:.10g}")
             assert abs(got - k * 30000000 / c) < 1e-9
-    assert rs["C19M16__ratio__k0.5"]["knob_value"] == 0.2582930583
-    assert arms.ratio_value(1, 58073570) == 0.5165861165
+    assert rs["C19M16__ratio__k0.5"]["knob_value"] == 0.1401353814
+    assert arms.ratio_value(1, 107039349) == 0.2802707629
 
 
 def test_dnase_rows(arms):
