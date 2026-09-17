@@ -367,3 +367,13 @@ pages. Two gap notes on the page: eleven cited papers are not in `raw/` (their n
 and the depth-linearity of −log10 p is a derivation, not a result. No contradiction with existing pages
 found; the aligner row corrects a widely repeated but unsourced "30% more peaks with bwa" claim, which no
 existing page carried.
+
+## [2026-09-16] ingest | Systematic evaluation of factors influencing ChIP-seq fidelity — Yiwen Chen, Nicolas Negre, Qunhua Li, Joanna O. Mieczkowska, Matthew Slattery, Tao Liu, Yong Zhang, Tae-Kyung Kim, Housheng Hansen He, Jennifer Zieba, Yijun Ruan, Peter J. Bickel, Richard M. Myers, Barbara J. Wold, Kevin P. White, Jason D. Lieb, X. Shirley Liu (2012)
+
+## [2026-09-16] ingest | Normalization, bias correction, and peak calling for ChIP-seq — Aaron Diaz, Kiyoub Park, Daniel A. Lim, Jun S. Song (2012)
+
+## [2026-09-16] ingest | WACS: improving ChIP-seq peak calling by optimally weighting controls — Aseel Awdeh, Marcel Turcotte, Theodore J. Perkins (2021)
+
+## [2026-09-16] ingest | Detrimental effects of duplicate reads and low complexity regions on RNA- and ChIP-seq data — Mikhail G Dozmorov, Indra Adrianto, Cory B Giles, Edmund Glass, Stuart B Glenn, Courtney Montgomery, Kathy L Sivils, Lorin E Olson, Tomoaki Iwayama, Willard M Freeman, Christopher J Lessard, Jonathan D Wren (2015)
+
+## [2026-09-16] ingest | Identification of factors associated with duplicate rate in ChIP-seq data — Shulan Tian, Shuxia Peng, Michael Kalmbach, Krutika S. Gaonkar, Aditya Bhagwate, Wei Ding, Jeanette Eckel-Passow, Huihuang Yan, Susan L. Slager (2019)
