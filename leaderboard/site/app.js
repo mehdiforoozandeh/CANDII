@@ -850,6 +850,24 @@ function unrankedBanner(bid) {
       + "resolve. " + why));
 }
 
+// The notes under a board: one headline per note, the full record folded under it. The
+// headlines are `caveat_heads` in boards.json, parallel to `caveats` (the gate enforces it);
+// nothing is dropped — every word of the record is still on the page, one click away.
+function noteList(meta, title, idPrefix, helpText) {
+  const heads = meta.caveat_heads || [];
+  const n = meta.caveats.length;
+  return h("div", { class: "caveats" },
+    h("div", { class: "caveats-title" },
+      `${title} — ${n} note${n === 1 ? "" : "s"}`,
+      h("span", { class: "caveats-hint" }, " · click a line for the full record")),
+    h("ul", { class: "notes" },
+      meta.caveats.map((c, i) =>
+        h("li", null,
+          h("details", { class: "note" },
+            h("summary", null, heads[i] || c.split(/(?<=[.!?])\s/)[0]),
+            h("p", { class: "note-body" }, c, " ", helpBtn(`${idPrefix}-${i}`, helpText(c))))))));
+}
+
 function comboView() {
   const bid = state.outerEval;
   const meta = metaOf(bid);
@@ -882,12 +900,8 @@ function comboView() {
       ? h("p", { class: "sub" }, scopeSpec.blanking_rule)
       : null,
     (meta.caveats || []).length
-      ? h("div", { class: "caveats" },
-          h("div", { class: "caveats-title" }, "On this regime"),
-          h("ul", { style: "margin:4px 0;padding:0" },
-            meta.caveats.map((c, i) =>
-              h("li", null, c, " ", helpBtn(`tabcav-${bid}-${i}`,
-                `${c} This line is a property of ${meta.label}, not of one method. ${meta.eli5}`)))))
+      ? noteList(meta, "On this regime", `tabcav-${bid}`,
+          (c) => `${c} This line is a property of ${meta.label}, not of one method. ${meta.eli5}`)
       : null,
     body);
 }
@@ -2098,11 +2112,7 @@ function anchorPanel() {
               h("li", null, g.members.join(" = "), " — ", g.extent))))
       : null,
     (meta.caveats || []).length
-      ? h("div", { class: "caveats" },
-          h("div", { class: "caveats-title" }, "On the anchor block"),
-          h("ul", { style: "margin:4px 0;padding:0" },
-            meta.caveats.map((c, i) =>
-              h("li", null, c, " ", helpBtn(`anchorcav-${i}`, `${c} ${meta.eli5}`)))))
+      ? noteList(meta, "On the anchor block", "anchorcav", (c) => `${c} ${meta.eli5}`)
       : null,
     entries.length
       ? h("div", { class: "table-scroll" },

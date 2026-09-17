@@ -232,6 +232,17 @@ def load_boards(root: Path) -> Dict[str, Any]:
         for field in ("store_manifest_hash", "regime_sha256"):
             if field not in b.get("frozen", {}):
                 raise GateError(f"board `{bid}` frozen block is missing `{field}`")
+        # every caveat carries a one-line headline the page shows collapsed; the two
+        # arrays are parallel, so a caveat without a headline (or a stale extra one) is a gate
+        heads = b.get("caveat_heads")
+        n_cav = len(b.get("caveats", []))
+        if heads is None or len(heads) != n_cav:
+            raise GateError(f"board `{bid}`: `caveat_heads` must carry one headline per caveat "
+                            f"({n_cav} caveats, {0 if heads is None else len(heads)} headlines)")
+        for i, hd in enumerate(heads):
+            if not isinstance(hd, str) or not hd.strip() or len(hd.split()) > 24:
+                raise GateError(f"board `{bid}` caveat_heads[{i}] must be one short line "
+                                f"(1–24 words), got {hd!r}")
     if ANCHOR in boards["boards"]:
         raise GateError("`anchor` is not a regime; it is the block underneath the ranked table")
     for method, marks in (boards.get("method_markers") or {}).items():
