@@ -66,7 +66,7 @@ def _manifest_row(p, products):
 
 def _make_products(tmp_path, rng):
     products = tmp_path / "products"
-    arrays = {}
+    arrays, ctl_arrays = {}, {}
     for p in PRODUCTS:
         pid, ctl, reads = p[0], p[9], p[10]
         d = products / pid
@@ -78,7 +78,9 @@ def _make_products(tmp_path, rng):
         arrays[pid] = {"counts": counts, "pval": pval}
         control = None
         if ctl:
-            ctl_counts = {c: rng.integers(0, 9, nb).astype(np.uint32) for c, nb in N_BINS.items()}
+            # one control per accession: both C19 tracks carry the same control, as in the real tree
+            ctl_counts = ctl_arrays.setdefault(
+                ctl, {c: rng.integers(0, 9, nb).astype(np.uint32) for c, nb in N_BINS.items()})
             np.savez_compressed(d / "control_counts25.npz", **ctl_counts)
             arrays[pid]["control"] = ctl_counts
             control = {"accession": ctl, "source": "matched", "reads": reads}
@@ -170,6 +172,17 @@ def test_export_then_real_store_cli_builds_and_verifies(setup):
         np.testing.assert_allclose(got, arr["C12M02__depth__15M"]["pval"]["chrX"], rtol=tol, atol=tol)
 
 
+def _export(t):
+    return export_store.export(t["products"], t["manifest"], t["tmp"] / "src", t["chrsz"])
+
+
+def _set_control(t, pid, **fields):
+    path = t["products"] / pid / "covariates.json"
+    cov = json.loads(path.read_text())
+    cov["control"].update(fields)
+    path.write_text(json.dumps(cov))
+
+
 def test_tracks_naming_different_controls_raise(setup):
     t = setup
     rows = t["rows"]
@@ -178,8 +191,54 @@ def test_tracks_naming_different_controls_raise(setup):
         w = csv.DictWriter(fh, fieldnames=MANIFEST_COLUMNS, delimiter="\t", lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
+    _set_control(t, "C19M22__base__base", accession="ENCFF337JNL")
     with pytest.raises(ValueError, match="different controls"):
-        export_store.export(t["products"], t["manifest"], t["tmp"] / "src", t["chrsz"])
+        _export(t)
+
+
+def test_manifest_accession_disagreeing_with_covariates_raises(setup):
+    t = setup
+    _set_control(t, "C19M22__base__base", accession="ENCFF337JNL")
+    with pytest.raises(ValueError, match="MANIFEST control_accession"):
+        _export(t)
+
+
+def test_same_accession_different_reads_raises(setup):
+    """The ctldepth case: both C19 tracks name ENCFF433TZR at every level; only `reads` differs."""
+    t = setup
+    _set_control(t, "C19M22__base__base", reads=29036785)
+    with pytest.raises(ValueError, match="different controls"):
+        _export(t)
+
+
+def test_same_control_object_different_control_array_raises(setup):
+    t = setup
+    d = t["products"] / "C19M22__base__base"
+    ctl = dict(np.load(d / "control_counts25.npz"))
+    ctl["chrX"] = ctl["chrX"].copy()
+    ctl["chrX"][3] += 1
+    np.savez_compressed(d / "control_counts25.npz", **ctl)
+    with pytest.raises(ValueError, match="differs"):
+        _export(t)
+
+
+def test_identical_controls_pass_and_carry_the_shared_depth(setup):
+    t = setup
+    # rewritten with the same arrays: a different npz file (zip timestamps), the same control
+    d = t["products"] / "C19M22__base__base"
+    np.savez_compressed(d / "control_counts25.npz", **dict(np.load(d / "control_counts25.npz")))
+    _export(t)
+    meta = t["tmp"] / "src" / "CF_C19__base__base" / "chipseq-control" / "signal_DSF1_res25" / "metadata.json"
+    assert json.loads(meta.read_text()) == {"depth": 58073570, "dsf": 1}
+
+
+def test_counts_outside_uint32_raise(setup):
+    t = setup
+    d = t["products"] / "C12M02__depth__15M"
+    np.savez_compressed(d / "counts25.npz", chr21=np.full(N_BINS["chr21"], -1, np.int64),
+                        chrX=np.zeros(N_BINS["chrX"], np.int64))
+    with pytest.raises(ValueError, match="do not fit uint32"):
+        _export(t)
 
 
 def test_wrong_length_array_and_non_empty_source_root_raise(setup):

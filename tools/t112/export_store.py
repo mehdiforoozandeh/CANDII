@@ -19,8 +19,9 @@ signal_provenance.cf.json       the shape of configs/signal_provenance.eic.json;
                                 is MACS2 -log10 p, so every track is `signal p-value`
 ```
 
-Every track of a biosample must name the same control accession, or this raises: one biosample has
-one `chipseq-control` column. Whether two tracks' control ARRAYS agree is not checked here (C10).
+Every track of a biosample must carry the same covariates `control` object (accession, source,
+reads) AND equal `control_counts25.npz` arrays, chromosome by chromosome, or this raises: one
+biosample has one `chipseq-control` column.
 Fields the products do not carry (`bios_accession`, `exp_accession`, `lab`, `sequencing_platform`)
 are left empty, so the manifest records them as gaps instead of inventing them (D19).
 
@@ -69,8 +70,13 @@ def _write_chroms(out_dir: Path, npz_path: Path, dtype, n_bins: dict) -> None:
             arr = z[chrom]
             if arr.shape != (nb,):
                 raise ValueError(f"{npz_path}:{chrom}: shape {arr.shape} != ({nb},) = len // {RES}")
-            if np.dtype(dtype).kind == "u" and arr.dtype.kind not in "ui":
-                raise ValueError(f"{npz_path}:{chrom}: counts must be integer, got {arr.dtype}")
+            if np.dtype(dtype).kind == "u":
+                if arr.dtype.kind not in "ui":
+                    raise ValueError(f"{npz_path}:{chrom}: counts must be integer, got {arr.dtype}")
+                info = np.iinfo(dtype)
+                if arr.size and (int(arr.min()) < info.min or int(arr.max()) > info.max):
+                    raise ValueError(f"{npz_path}:{chrom}: values [{int(arr.min())}, {int(arr.max())}] "
+                                     f"do not fit {np.dtype(dtype).name}")
             np.savez_compressed(out_dir / f"{chrom}.npz", **{chrom: arr.astype(dtype)})
 
 
@@ -106,10 +112,31 @@ def export(products_dir, manifest_tsv, source_root, chrsz, genome_json=None) -> 
         assays = [r["assay"] for r in rows]
         if len(set(assays)) != len(assays) or CONTROL_TRACK in assays:
             raise ValueError(f"{bios}: assays {assays} are not distinct store tracks")
-        controls = {r["control_accession"] for r in rows}
-        if len(controls) != 1:
-            raise ValueError(f"{bios}: tracks name different controls "
-                             f"{ {r['pid']: r['control_accession'] for r in rows} }")
+        # one chipseq-control column: every track's control must be the SAME control — the whole
+        # covariates `control` object (accession, source, reads) and the arrays, chrom by chrom.
+        # Accession alone is not enough: at every ctldepth level both tracks name the same accession.
+        cov_ctl = {r["pid"]: json.loads((products_dir / r["pid"] / "covariates.json")
+                                        .read_text("utf-8"))["control"] for r in rows}
+        for r in rows:
+            if (cov_ctl[r["pid"]] or {}).get("accession", "") != r["control_accession"]:
+                raise ValueError(f"{r['pid']}: MANIFEST control_accession {r['control_accession']!r} "
+                                 f"!= covariates.json control {cov_ctl[r['pid']]}")
+        if len({json.dumps(c, sort_keys=True) for c in cov_ctl.values()}) != 1:
+            raise ValueError(f"{bios}: tracks name different controls {cov_ctl}")
+        ctl = cov_ctl[rows[0]["pid"]]
+        if ctl is not None and len(rows) > 1:
+            npzs = [np.load(products_dir / r["pid"] / "control_counts25.npz", allow_pickle=False)
+                    for r in rows]
+            try:
+                for chrom in n_bins:
+                    ref = npzs[0][chrom]
+                    for r, z in zip(rows[1:], npzs[1:]):
+                        if not np.array_equal(z[chrom], ref):
+                            raise ValueError(f"{bios}: control_counts25.npz of {r['pid']} differs from "
+                                             f"{rows[0]['pid']} on {chrom} (same control object)")
+            finally:
+                for z in npzs:
+                    z.close()
 
         for r in rows:
             pdir, tdir = products_dir / r["pid"], source_root / bios / r["assay"]
@@ -134,11 +161,8 @@ def export(products_dir, manifest_tsv, source_root, chrsz, genome_json=None) -> 
                                                  "pval25_md5")},
             }
 
-        ctl_acc = controls.pop()
-        if ctl_acc:
-            first = rows[0]
-            cov = json.loads((products_dir / first["pid"] / "covariates.json").read_text("utf-8"))
-            reads = int(cov["control"]["reads"])
+        if ctl is not None:
+            first, ctl_acc, reads = rows[0], ctl["accession"], int(ctl["reads"])
             cdir = source_root / bios / CONTROL_TRACK
             _write_chroms(cdir / f"signal_DSF1_res{RES}",
                           products_dir / first["pid"] / "control_counts25.npz", np.uint32, n_bins)
