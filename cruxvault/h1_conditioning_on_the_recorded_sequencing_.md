@@ -103,7 +103,7 @@ pairs**, never in absolute terms. Measured absolutely, the null passes `qqresidu
 
 - [ ] `gapclosed` [claim-directed, DISCRIMINATES against the null] — `(D_onewarp − D_model) /
       (D_onewarp − D_oracle)`, stratified per signal decile and per mark class. The distance `D` is
-      `TODO(PI)` — see the open decisions below. Threshold: `TODO(PI)`.
+      macro NB CRPS against the real target (PI ruling 2026-09-16). Threshold: `TODO(PI)`.
       *Fails if:* `onewarp` already closes the source-to-target gap and conditioning adds nothing
       beyond it.
 - [ ] `qqresidual` [claim-directed] — max |log multiplier| of the post-model quantile-quantile
@@ -160,8 +160,8 @@ loosened to compensate.
 
 **Open decisions for the PI, blocking `test --to running`:**
 
-- (i) name the distance `D` that gap-closed is a fraction of — macro NB CRPS against the real
-  target, or level-only via `aspects_of(...)["level"]`;
+- (i) **decided — PI ruling 2026-09-16: `D` is macro NB CRPS against the real target**, not the
+  level-only `aspects_of(...)["level"]` reading;
 - (ii) **decided — PI ruling 2026-09-16: the `oracle` rung is two NB draws.** The model emits NB, and on an
   overdispersed target a Poisson oracle would sit below anything reachable, leaving gap-closed no
   ceiling of 1;
