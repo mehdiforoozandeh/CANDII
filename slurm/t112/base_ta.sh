@@ -24,11 +24,21 @@
 # arguments on a tagAlign of the same name and bytes. The command form is chip.wdl v2.2.2
 # `task subsample_ctl` (cwd = output dir, no --out-dir).
 #
+# RE-RUN MODE. A task whose output tagAlign is already published is not rebuilt: the task measures
+# the published file, refuses to go on unless its line count is the expected one, and skips bam2ta.
+# So re-running a control task rebuilds only its arm-9 thinned controls, and cannot disturb the
+# tagAligns MACS2 will read. The measurement is also the assertion that the arm-9 N were computed
+# from the file being thinned: N = round_half_up(q * arms.CONTROLS[acc]["reads"]) and a control
+# row's expected_lines is that same constant, so one comparison binds them.
+#
 # Usage, from the Nibi login node, after snapshotting the repo to $CF/code/C5:
 #   bash   $CF/code/C5/slurm/t112/base_ta.sh --make-tasks          # tasks.tsv + cmd/*.sh from metadata
 #   A=$(sbatch --parsable --array=0-9 $CF/code/C5/slurm/t112/base_ta.sh)
 #   sbatch --dependency=afterany:$A --time=0:30:00 --cpus-per-task=1 --mem=2G \
 #          $CF/code/C5/slurm/t112/base_ta.sh --collect                   # LINES.tsv, LINES_CHECK.tsv
+# Re-run of the arm-9 thinning alone (rows 7-9 are the controls; 64G because the first pass peaked
+# at 31.5 GiB of 32G on the 160M-line control):
+#   A=$(sbatch --parsable --array=7-9 --mem=64G $CF/code/C5/slurm/t112/base_ta.sh)
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t112_base_ta
 #SBATCH --output=/scratch/mforooz/t112_cf/logs/base_ta/%x_%A_%a.out
@@ -124,9 +134,18 @@ fi
 
 # ---------------------------------------------------------------------------------------------------
 if [ "${1:-}" = "--collect" ]; then
+  # Every artifact this step produces is written before the step can exit non-zero: a failing check
+  # has to leave the evidence of its own failure behind. The first pass exited 1 inside the
+  # line-count python, so CTL_BAM_IDENTITY.tsv below was never reached under `set -e`.
+  if ls "$TA"/ctl_identity/*.tsv >/dev/null 2>&1; then
+    { printf 'control\tpinned_bam\tpinned_md5\tsibling_bam\tsibling_md5\tidentical\n'; cat "$TA"/ctl_identity/*.tsv; } \
+      > "$TA/CTL_BAM_IDENTITY.tsv"
+  fi
+
   # LINES.tsv in task order (treatment 30M/50M, control, then its ctldepth files), and the check
   # of every line count against the expected value. A missing fragment is a MISSING row, not a skip.
-  python3 - "$TASKS" "$TA" <<'PY'
+  BAD=0
+  python3 - "$TASKS" "$TA" <<'PY' || BAD=1
 import sys
 from pathlib import Path
 tasks, ta = Path(sys.argv[1]), Path(sys.argv[2])
@@ -159,10 +178,30 @@ with open(ta / "LINES.tsv", "w") as out, open(ta / "LINES_CHECK.tsv", "w") as ch
 print(f"{len(want)} files expected, {bad} not OK")
 sys.exit(1 if bad else 0)
 PY
-  if ls "$TA"/ctl_identity/*.tsv >/dev/null 2>&1; then
-    { printf 'control\tpinned_bam\tpinned_md5\tsibling_bam\tsibling_md5\tidentical\n'; cat "$TA"/ctl_identity/*.tsv; } \
-      > "$TA/CTL_BAM_IDENTITY.tsv"
-  fi
+
+  # Every provenance JSON back out through records.write_provenance, which validates the record and
+  # writes `created_utc` in the one form records.py itself writes. The first pass wrote
+  # "2026-09-17T17:36:04Z", which datetime.fromisoformat rejects on python 3.10 (the laptop env),
+  # so every record failed validation there. Only the timestamp changes; the md5s already in the
+  # file stand, and nothing is re-hashed.
+  python3 - "$TA" "$CODE" <<'PY'
+import json, sys
+from pathlib import Path
+ta, code = Path(sys.argv[1]), Path(sys.argv[2])
+sys.path.insert(0, str(code / "tools" / "t112"))
+import records
+n = 0
+for p in sorted((ta / "provenance").glob("*.json")):
+    d = json.loads(p.read_text())
+    t = d.get("created_utc")
+    if isinstance(t, str) and t.endswith("Z"):
+        d["created_utc"] = t[:-1] + "+00:00"
+    records.write_provenance(p, **d)   # raises ValueError naming the offending key
+    n += 1
+print(f"{n} provenance JSONs validated and normalised")
+PY
+
+  [ "$BAD" = 0 ] || { echo "line-count check failed; see $TA/LINES_CHECK.tsv" >&2; exit 1; }
   exit 0
 fi
 
@@ -215,28 +254,28 @@ publish() {
 # prov <out json> <input path> <input md5> <output path> <output md5> <seed file|-> <seed bytes|-> <cmd>...
 prov() {
   python3 - "$@" <<'PY'
-import datetime, json, os, sys
+import os, sys
+from pathlib import Path
+code = os.environ["CODE"]
+sys.path.insert(0, os.path.join(code, "tools", "t112"))
+import records   # stdlib only; it validates the record and owns the created_utc format
 out, ipath, imd5, opath, omd5, sfile, sbytes, *cmds = sys.argv[1:]
-d = {
-    "schema": 1,
-    "pid": os.path.basename(opath),  # a shared input tagAlign, not a product: named by its file
-    "route": "bam",
-    "pipeline": {"repo": os.environ["REPO"], "release": os.environ["REL"], "sif": os.environ["SIF"],
-                 "sif_md5": os.environ["SIF_MD5"], "sif_sha256": os.environ["SIF_SHA256"]},
-    "commands": cmds,
-    "inputs": [{"path": ipath, "md5": imd5}],
-    "outputs": [{"path": opath, "md5": omd5}],
-    "subsample_seed": [] if sfile == "-" else [{"file": sfile, "uncompressed_bytes": int(sbytes)}],
-    "patched_script": None,
-    "caper": None,
-    "slurm_job_ids": [os.environ["JOBTAG"]],
-    "code": {"snapshot_dir": os.environ["CODE"],
-             "git_sha": open(os.path.join(os.environ["CODE"], "GIT_SHA")).read().strip()},
-    "created_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-}
-with open(out, "w") as f:
-    json.dump(d, f, indent=1)
-    f.write("\n")
+records.write_provenance(
+    out,
+    pid=os.path.basename(opath),  # a shared input tagAlign, not a product: named by its file
+    route="bam",
+    pipeline={"repo": os.environ["REPO"], "release": os.environ["REL"], "sif": os.environ["SIF"],
+              "sif_md5": os.environ["SIF_MD5"], "sif_sha256": os.environ["SIF_SHA256"]},
+    commands=cmds,
+    inputs=[{"path": ipath, "md5": imd5}],
+    outputs=[{"path": opath, "md5": omd5}],
+    subsample_seed=[] if sfile == "-" else [{"file": sfile, "uncompressed_bytes": int(sbytes)}],
+    patched_script=None,
+    caper=None,
+    slurm_job_ids=[os.environ["JOBTAG"]],
+    code={"snapshot_dir": code,
+          "git_sha": (Path(code) / "GIT_SHA").read_text().strip()},
+)
 PY
 }
 export REPO REL SIF SIF_MD5 SIF_SHA256 JOBTAG CODE
@@ -248,7 +287,26 @@ echo "$BAM_MD5  $BAM"
 RUN_CMD="$APPT --pwd $W $SIF /bin/bash cmd.sh"
 echo "--- $RUN_CMD"; cat "$W/cmd.sh"
 
+# Re-run mode (see the header). A published output is measured, never rebuilt, and a line count
+# other than the expected one stops the task before anything downstream is derived from it.
+REUSE=no
+if [ -s "$TA/$OUT" ]; then
+  echo "--- $TA/$OUT is already published: measuring it instead of running bam2ta"
+  ST=$(stats "$TA/$OUT")
+  HAVE=$(cut -f1 <<< "$ST")
+  [ "$HAVE" = "$EXPECTED" ] \
+    || { echo "PUBLISHED_LINES_MISMATCH $TA/$OUT has $HAVE lines, expected $EXPECTED" >&2; exit 7; }
+  printf '%s\t%s\t%s\n' "$TA/$OUT" "$ST" "$EXPECTED" > "$TA/lines.d/$(basename "$OUT").tsv"
+  echo "reuse $TA/$OUT $ST expected_lines=$EXPECTED"
+  REUSE=yes
+fi
+
 if [ "$KIND" = "treat" ]; then
+  if [ "$REUSE" = yes ]; then
+    echo "re-run: $NAME is already published and correct; nothing to rebuild"
+    echo "=== $NAME done $(date -u) ==="
+    exit 0
+  fi
   # The subsample seed is the uncompressed byte count of the full tagAlign, which bam2ta deletes;
   # measure it with the same bamtobed | awk pipeline, in parallel with the real run.
   cat > "$W/seed.sh" <<'EOF'
@@ -268,13 +326,24 @@ EOF
        "${LINK%.bam}.tagAlign.gz" "$FULL_BYTES" \
        "ln -s $BAM $W/$LINK" "$RUN_CMD" "$(cat "$W/cmd.sh")"
 else
-  $APPT --pwd "$W" "$SIF" /bin/bash cmd.sh
-  ls -la "$W"
-  [ -s "$W/$OUT" ] || { echo "expected output $OUT not produced" >&2; exit 5; }
-  publish "$W/$OUT" "$TA/$OUT" "$EXPECTED"
-  CTL_MD5=$(cut -f4 "$TA/lines.d/$OUT.tsv"); CTL_BYTES=$(cut -f3 "$TA/lines.d/$OUT.tsv")
-  prov "$TA/provenance/$OUT.json" "$BAM" "$BAM_MD5" "$TA/$OUT" "$CTL_MD5" - - \
-       "ln -s $BAM $W/$LINK" "$RUN_CMD" "$(cat "$W/cmd.sh")"
+  if [ "$REUSE" = no ]; then
+    $APPT --pwd "$W" "$SIF" /bin/bash cmd.sh
+    ls -la "$W"
+    [ -s "$W/$OUT" ] || { echo "expected output $OUT not produced" >&2; exit 5; }
+    publish "$W/$OUT" "$TA/$OUT" "$EXPECTED"
+    prov "$TA/provenance/$OUT.json" "$BAM" "$BAM_MD5" "$TA/$OUT" \
+         "$(cut -f4 "$TA/lines.d/$OUT.tsv")" - - \
+         "ln -s $BAM $W/$LINK" "$RUN_CMD" "$(cat "$W/cmd.sh")"
+  fi
+  CTL_LINES=$(cut -f2 "$TA/lines.d/$OUT.tsv")
+  CTL_BYTES=$(cut -f3 "$TA/lines.d/$OUT.tsv")
+  CTL_MD5=$(cut -f4 "$TA/lines.d/$OUT.tsv")
+  # The arm-9 N below are round_half_up(q * arms.CONTROLS[acc]["reads"]) and EXPECTED is that same
+  # constant, so this one comparison says the N were computed from the file about to be thinned.
+  # The first pass thinned to N from a constant 58073570 while the tagAlign held 107039349 lines.
+  [ "$CTL_LINES" = "$EXPECTED" ] \
+    || { echo "CTLDEPTH_BASE_MISMATCH $TA/$OUT has $CTL_LINES lines but the arm-9 N were computed "\
+"from $EXPECTED; refusing to thin" >&2; exit 7; }
 
   # The base run of the sibling track aligned this control itself; its MACS2 saw that BAM's tagAlign.
   SIB_MD5=$(md5sum "$SIB_BAM" | cut -d' ' -f1)
