@@ -62,7 +62,7 @@ DRY_RUN="${DRY_RUN:-0}"
 PY_MODULES="StdEnv/2023 python/3.11 scipy-stack"
 
 # Fail here, not 10 s into the venv build, if the kit is wrong or the old argument order was used.
-for f in tools/t112/bin25.py tools/t112/records.py tools/t112/arms.py; do
+for f in tools/t112/bin25.py tools/t112/records.py tools/t112/arms.py tools/dnase_macs2_pval.py GIT_SHA; do
     [ -f "$KIT/$f" ] || { echo "kit_dir '$KIT' has no $f. $USAGE" >&2; exit 2; }
 done
 KIT=$(cd "$KIT" && pwd)
