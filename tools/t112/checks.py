@@ -27,16 +27,25 @@ Per-k means and variances go into the detail as information only. The thresholds
 data checks (plan Log, re-ruled 2026-09-17). They are not an experiment gate, and they are not to be
 tuned to make a product pass.
 
-Every check writes `<cf>/checks/<name>/<pid>.json` = `{name, pid, pass, detail}`; `summary` rolls
-them into `<cf>/checks/summary.json` and `<cf>/checks/CHECKS.md`. `run` first writes the (check, pid)
-list it is about to do to `<cf>/checks/expected/<name>.json`, so a job killed half way leaves
-records missing, and `summary` counts each missing record as a failure rather than a smaller total.
-`run` deletes a check's old records and expected list before it reads anything, and `summary`
-counts a check with no expected list as a failure: a check that did not run on this tree (an
-`--only` run, or a run that crashed while planning) can never read as passed.
+Every check writes `<cf>/checks/<name>/<pid>.json` = `{name, pid, pass, detail, run_id,
+created_utc}`; `summary` rolls them into `<cf>/checks/summary.json` and `<cf>/checks/CHECKS.md`.
+`run` stamps one `run_id` on everything it writes: `<cf>/checks/RUN.json` = `{run_id, created_utc,
+only, rows}` names the newest run, and the (check, pid) list `run` is about to do goes to
+`<cf>/checks/expected/<name>.json` = `{run_id, created_utc, pids}` before any product is read. A job
+killed half way therefore leaves records missing, and `summary` counts each missing record as a
+failure rather than as a smaller total.
 
-The verdict is `summary` — its exit code and `summary.json["all_pass"]`. `run` exits 0 whenever it
-finishes, whatever the checks found.
+`summary` trusts nothing that RUN.json's `run_id` does not stamp. A check whose expected list — or
+whose records — come from an older run is a failure `{name, pid: "*", detail: {"reason": "not run in
+the newest run", ...}}`, exactly as a check with no expected list at all is. `run` deletes a check's
+old records and expected list before it reads anything, and writes RUN.json before it plans. So
+`all_pass` needs one run that covered every check on this tree: an `--only` run leaves the other
+checks stamped with the older run and is reported as `partial`, and a run that crashed while
+planning leaves nothing fresh at all. Neither can read as passed, whatever the tree held before.
+
+The verdict is `summary` — its exit code and `summary.json["all_pass"]`; C15 gates on `summary`, not
+on `run`. `summary` exits 1 if any check failed, is missing, or is stale, and 0 only on a full pass.
+`run` exits 0 whenever it finishes, whatever the checks found.
 
 numpy + pandas (pandas only because C2's `bin25.py` imports it) and no `candi` import: it runs on
 Nibi against a code snapshot. The npz reader, chrom-sizes parser and chromosome set are C2's
@@ -51,10 +60,12 @@ import argparse
 import csv
 import json
 import math
+import os
 import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -89,6 +100,9 @@ DEPTH_MIN_BINS = 100000
 #: the record name of the one C8 smoke check; not a product pid (those are track__arm__level).
 RATIO_K1_RECORD = "smoke_C8_ratio_k1"
 
+#: `summary`'s word for a check that carries no stamp from the newest run.
+STALE_REASON = "not run in the newest run"
+
 
 def read_npz(path: Path) -> dict:
     return bin25.read_npz(path)
@@ -117,8 +131,33 @@ def _num(x):
     return x if math.isfinite(x) else str(x)
 
 
-def write_record(cf: Path, name: str, pid: str, ok: bool, detail: dict) -> dict:
-    rec = {"name": name, "pid": pid, "pass": bool(ok), "detail": detail}
+def utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def new_run_id() -> str:
+    """UTC to the second plus a random suffix: two runs in the same second are still two runs."""
+    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + uuid.uuid4().hex[:6]
+
+
+def write_json_atomic(path: Path, obj) -> None:
+    """Temp file in the same directory, then `os.replace`: a reader never sees a half-written file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(json.dumps(obj, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def write_record(cf: Path, name: str, pid: str, ok: bool, detail: dict,
+                 run_id: str, created_utc: str) -> dict:
+    rec = {"name": name, "pid": pid, "pass": bool(ok), "detail": detail,
+           "run_id": run_id, "created_utc": created_utc}
     out = Path(cf) / "checks" / name / f"{pid}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
@@ -278,13 +317,13 @@ def check_structure(cf: Path, pid: str, sizes: dict, header: str, line: str):
 # ---------------------------------------------------------------------------------------------
 
 
-def _guarded(cf, name, pid, fn, *args):
+def _guarded(cf, name, pid, fn, args, run_id, created_utc):
     """A missing or unreadable input is a failed check, not a crashed run."""
     try:
         ok, detail = fn(*args)
     except Exception as e:  # noqa: BLE001 — recorded, not swallowed
         ok, detail = False, {"error": f"{type(e).__name__}: {e}"}
-    rec = write_record(cf, name, pid, ok, detail)
+    rec = write_record(cf, name, pid, ok, detail, run_id, created_utc)
     print(f"{'PASS' if ok else 'FAIL'} {name} {pid}", flush=True)
     return rec
 
@@ -324,52 +363,94 @@ def plan(cf, rows_tsv, names, chrsz=CHRSZ) -> list:
 def run(cf, rows_tsv, only=None, chrsz=CHRSZ) -> list:
     cf = Path(cf)
     names = [only] if only else list(CHECK_NAMES)
+    run_id, created = new_run_id(), utc_now()
     # Clear first, plan second: if planning raises (bad rows TSV, missing chrom sizes), the old
     # records and expected lists are already gone, so `summary` cannot pass on a previous tree.
     for name in names:
         for old in (cf / "checks" / name).glob("*.json"):
             old.unlink()
         (cf / "checks" / "expected" / f"{name}.json").unlink(missing_ok=True)
+    # RUN.json before planning too: from here on, every check this run does not reach — including
+    # the ones `--only` skipped, and every check at all if planning raises — reads as stale.
+    write_json_atomic(cf / "checks" / "RUN.json",
+                      {"run_id": run_id, "created_utc": created,
+                       "only": [only] if only else None, "rows": str(rows_tsv)})
     jobs = plan(cf, rows_tsv, names, chrsz)
     for name in names:
-        exp = cf / "checks" / "expected" / f"{name}.json"
-        exp.parent.mkdir(parents=True, exist_ok=True)
-        exp.write_text(json.dumps([pid for n, pid, _, _ in jobs if n == name], indent=1) + "\n")
-    return [_guarded(cf, name, pid, fn, *args) for name, pid, fn, args in jobs]
+        write_json_atomic(cf / "checks" / "expected" / f"{name}.json",
+                          {"run_id": run_id, "created_utc": created,
+                           "pids": [pid for n, pid, _, _ in jobs if n == name]})
+    return [_guarded(cf, name, pid, fn, args, run_id, created) for name, pid, fn, args in jobs]
+
+
+def _expected_pids(cf: Path, name: str, run_id):
+    """`(pids, None)` if the expected list carries RUN.json's stamp, else `([], why_it_does_not)`."""
+    exp = cf / "checks" / "expected" / f"{name}.json"
+    if run_id is None:
+        return [], {"reason": STALE_REASON, "run_id": None,
+                    "note": "no checks/RUN.json: no run has stamped this tree"}
+    if not exp.exists():
+        return [], {"reason": STALE_REASON, "run_id": run_id, "expected_run_id": None,
+                    "note": f"no expected list {exp.relative_to(cf)}"}
+    obj = json.loads(exp.read_text())
+    obj = obj if isinstance(obj, dict) else {}
+    if obj.get("run_id") != run_id:
+        return [], {"reason": STALE_REASON, "run_id": run_id, "expected_run_id": obj.get("run_id"),
+                    "note": f"expected list {exp.relative_to(cf)} is from an older run"}
+    return list(obj.get("pids", [])), None
 
 
 def summary(cf) -> dict:
     cf = Path(cf)
-    recs = []
+    run_path = cf / "checks" / "RUN.json"
+    run_info = json.loads(run_path.read_text()) if run_path.exists() else {}
+    run_id = run_info.get("run_id")
+    only = run_info.get("only")
+    partial = run_id is None or (only is not None and set(only) != set(CHECK_NAMES))
+
+    recs, stale = [], {}
     for name in CHECK_NAMES:
         for path in sorted((cf / "checks" / name).glob("*.json")):
-            recs.append(json.loads(path.read_text()))
+            rec = json.loads(path.read_text())
+            if run_id is not None and rec.get("run_id") == run_id:
+                recs.append(rec)
+            else:  # written by some older run: it says nothing about the tree as it stands now
+                stale.setdefault(name, []).append(rec.get("pid", path.stem))
     failures = [{"name": r["name"], "pid": r["pid"], "detail": r["detail"]}
                 for r in recs if not r["pass"]]
     expected = {}
     for name in CHECK_NAMES:
-        exp = cf / "checks" / "expected" / f"{name}.json"
-        if not exp.exists():
-            expected[name] = []
-            failures.append({"name": name, "pid": "*",
-                             "detail": {"error": "not run on this tree: no expected list "
-                                                 f"{exp.relative_to(cf)}"}})
+        expected[name], why = _expected_pids(cf, name, run_id)
+        if why is None and stale.get(name):
+            why = {"reason": STALE_REASON, "run_id": run_id}
+        if why is not None:
+            if stale.get(name):
+                why["stale_records"] = sorted(stale[name])
+            failures.append({"name": name, "pid": "*", "detail": why})
             continue
-        expected[name] = json.loads(exp.read_text())
         have = {r["pid"] for r in recs if r["name"] == name}
         failures += [{"name": name, "pid": pid, "detail": {"error": "no record: the run did not reach it"}}
                      for pid in expected[name] if pid not in have]
     n_checks = sum(len({r["pid"] for r in recs if r["name"] == name} | set(expected[name]))
                    for name in CHECK_NAMES)
-    out = {"all_pass": bool(recs) and not failures, "n_checks": n_checks,
-           "failures": failures,
-           "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    out = {"all_pass": bool(recs) and not failures and not partial, "partial": bool(partial),
+           "n_checks": n_checks, "run_id": run_id, "failures": failures,
+           "created_utc": utc_now()}
     (cf / "checks").mkdir(parents=True, exist_ok=True)
     (cf / "checks" / "summary.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
 
+    if run_id is None:
+        stamp = "No `checks/RUN.json`: nothing on this tree is stamped, so nothing reads as a pass."
+    elif partial:
+        stamp = (f"Run `{run_id}` covered only `{', '.join(only)}`: a partial run, which never reads "
+                 "as a pass — every check it skipped is reported stale.")
+    else:
+        stamp = f"Run `{run_id}` covered every check."
     md = ["# t112 pre-use checks", "",
           f"All pass: **{out['all_pass']}** ({out['n_checks']} checks, {len(failures)} failures). "
-          f"Written {out['created_utc']}.", "",
+          f"Written {out['created_utc']}.", "", stamp, "",
+          "`ratio_k1_identity` records under the sentinel pid `smoke_C8_ratio_k1` and "
+          "`fastq_control_identity` under a biosample id; every other pid is a product pid.", "",
           "| check | pass | total |", "|---|---|---|"]
     for name in CHECK_NAMES:
         mine = [r for r in recs if r["name"] == name]
@@ -399,7 +480,8 @@ def main(argv=None) -> int:
         print(f"{len(recs)} checks, {n_fail} failed")
         return 0
     out = summary(args.cf)
-    print(f"all_pass={out['all_pass']} n_checks={out['n_checks']} failures={len(out['failures'])}")
+    print(f"all_pass={out['all_pass']} partial={out['partial']} n_checks={out['n_checks']} "
+          f"failures={len(out['failures'])}")
     return 0 if out["all_pass"] else 1
 
 

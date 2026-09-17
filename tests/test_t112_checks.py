@@ -219,7 +219,9 @@ def test_depth_law_through_run_and_summary(checks, genome, tmp_path):
         f"{track}__depth__half": True, f"{track}__depth__eighth": True,
         f"{track}__depth__superset": False}
     rec = json.loads((cf / "checks" / "depth_law" / f"{track}__depth__eighth.json").read_text())
-    assert set(rec) == {"name", "pid", "pass", "detail"}
+    assert set(rec) == {"name", "pid", "pass", "detail", "run_id", "created_utc"}
+    run_json = json.loads((cf / "checks" / "RUN.json").read_text())
+    assert run_json["only"] == ["depth_law"] and rec["run_id"] == run_json["run_id"]
     d = rec["detail"]
     assert d["base_depth"] == n and abs(d["p"] - 0.125) < 1e-6
     assert {"nested", "n_bins_violating", "frac", "D", "n_bins"} <= set(d)
@@ -488,6 +490,52 @@ def test_partial_run_is_not_a_pass(checks, tree):
     assert all(f["pid"] == "*" for f in out["failures"])
 
 
+def test_green_only_run_cannot_pass_on_the_previous_run_s_records(checks, tree):
+    """A full green run, one product changed under a check that `--only` skips, then
+    `run --only counts_identity` — all 18 of which pass. The five checks the partial run did not do
+    carry the older run's stamp, so `summary` must fail and name them."""
+    checks.run(tree["cf"], tree["rows"], chrsz=tree["chrsz"])
+    first = checks.summary(tree["cf"])
+    assert first["all_pass"] is True and first["partial"] is False
+
+    # chr3 cast to int64: `counts_identity` compares values, so it still passes; only `structure`
+    # sees the dtype — and `--only counts_identity` never runs `structure`.
+    _npz_edit(tree["cf"] / "products/C19M16__ratio__k2/counts25.npz",
+              lambda a: a.__setitem__("chr3", a["chr3"].astype(np.int64)))
+
+    recs = checks.run(tree["cf"], tree["rows"], only="counts_identity")
+    assert len(recs) == 18 and all(r["pass"] for r in recs)
+    out = checks.summary(tree["cf"])
+    assert out["all_pass"] is False and out["partial"] is True
+    stale = [f for f in out["failures"] if f["pid"] == "*"]
+    assert sorted(f["name"] for f in stale) == sorted(set(checks.CHECK_NAMES) - {"counts_identity"})
+    assert {f["detail"]["reason"] for f in stale} == {"not run in the newest run"}
+    assert json.loads((tree["cf"] / "checks" / "summary.json").read_text())["all_pass"] is False
+
+
+def test_full_rerun_after_the_mutation_reports_it_and_is_not_partial(checks, tree):
+    """The same tree run in full again: the changed product is the only failure, and `partial` is
+    False because this run covered every check."""
+    checks.run(tree["cf"], tree["rows"], chrsz=tree["chrsz"])
+    assert checks.summary(tree["cf"])["all_pass"] is True
+    _npz_edit(tree["cf"] / "products/C19M16__ratio__k2/counts25.npz", _bump("chr4", 1))
+    checks.run(tree["cf"], tree["rows"], chrsz=tree["chrsz"])
+    out = checks.summary(tree["cf"])
+    assert out["all_pass"] is False and out["partial"] is False
+    assert sorted((f["name"], f["pid"]) for f in out["failures"]) == [
+        ("counts_identity", "C19M16__ratio__k2")]
+
+
+def test_summary_without_run_json_passes_nothing(checks, tree):
+    """RUN.json gone (a hand-copied checks/ tree): every check reads as stale, nothing passes."""
+    checks.run(tree["cf"], tree["rows"], chrsz=tree["chrsz"])
+    (tree["cf"] / "checks" / "RUN.json").unlink()
+    out = checks.summary(tree["cf"])
+    assert out["all_pass"] is False and out["partial"] is True and out["run_id"] is None
+    assert sorted(f["name"] for f in out["failures"]) == sorted(checks.CHECK_NAMES)
+    assert all(f["pid"] == "*" for f in out["failures"])
+
+
 def test_run_that_fails_to_plan_leaves_no_stale_pass(checks, tree):
     """A full pass, then a corrupted product and a run that raises while planning (no chrom sizes):
     the old records must be gone, so summary fails."""
@@ -510,7 +558,8 @@ def test_cli_run_then_summary(tree):
     s = subprocess.run([sys.executable, str(TOOL), "summary", "--cf", cf],
                        capture_output=True, text=True)
     d = json.load(open(Path(cf) / "checks" / "summary.json"))
-    assert set(d) == {"all_pass", "n_checks", "failures", "created_utc"}
+    assert set(d) == {"all_pass", "partial", "n_checks", "run_id", "failures", "created_utc"}
+    assert d["partial"] is False
     if RECORDS.exists():   # the CLI runs the real sibling records.py; no stub can be injected
         assert s.returncode == 0, s.stdout + s.stderr
         assert d["all_pass"] is True and len(d["failures"]) == 0
