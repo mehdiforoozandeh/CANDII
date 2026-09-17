@@ -1,18 +1,20 @@
 """t112 C10 — `tools/t112/checks.py`: the step-5 pre-use checks and the structural ones beside them.
 
 The depth-law tests build reads, thin them the way the pipeline's subsampler does (a draw of L reads
-without replacement), and bin both sides with the store overlap rule. A thinned arm must pass; two
-arms of the same size that were NOT made by thinning reads must fail. The thresholds come from the
-plan Log and are not restated here as tunables: the tests read them from the module and check them
-against the plan's numbers once.
+without replacement), and bin both sides with the store overlap rule. An honest thinning at
+p = 0.125 must pass; a scaled copy rint(base·p), a thinning from a superset of base's reads, and a
+thinning from an independent read set must each fail (plan C10 Test line). The thresholds are the
+plan's and are checked against its numbers once, never tuned here.
 
-C3's `records.py` is written in parallel, so `structure` runs against a stub validator that honours
-C3's pinned CLI (`validate --products D --rows R --expect N` → problem lines, then `OK <n>`).
+The product tree carries covariates/provenance records valid under C3's pinned schema. `structure`
+runs C3's real `tools/t112/records.py` when it is on disk; a branch cut before C3 merged falls back
+to a stub honouring C3's pinned CLI (`validate --products D --rows R --expect N` → `OK <n>`).
 """
 from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -23,6 +25,7 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 TOOL = REPO / "tools" / "t112" / "checks.py"
 ARMS = REPO / "tools" / "t112" / "arms.py"
+RECORDS = REPO / "tools" / "t112" / "records.py"
 RES = 25
 
 
@@ -78,92 +81,101 @@ def thin_reads(rng, reads, n_keep):
     return out
 
 
-def first_reads(reads, n_keep):
-    """NOT thinning: the first n_keep reads in file (genome) order, as a `head -n` would give."""
-    out, left = {}, n_keep
-    for c, (s, _) in reads.items():
-        take = min(left, s.size)
-        m = np.zeros(s.size, dtype=bool)
-        m[:take] = True
-        out[c] = m
-        left -= take
-    return out
-
-
 @pytest.fixture(scope="module")
 def genome(checks):
     rng = np.random.default_rng(112)
     reads, length = make_reads(rng, checks.MAIN_CHROMS, bins_per_chrom=100_000)
     n_reads = sum(s.size for s, _ in reads.values())
-    base = counts_of(reads, {c: np.ones(s.size, bool) for c, (s, _) in reads.items()}, length)
+    base = counts_of(reads, _all(reads), length)
     return {"reads": reads, "length": length, "n_reads": n_reads, "base": base, "rng": rng}
 
 
 # --- constants --------------------------------------------------------------------------------------
 
-def test_thresholds_are_the_plan_log_values(checks):
+def test_thresholds_are_the_plan_values(checks):
     assert checks.DEPTH_TOTAL_TOL == 0.005
-    assert checks.DEPTH_MEAN_TOL == 0.02
-    assert (checks.DEPTH_VAR_LO, checks.DEPTH_VAR_HI) == (0.85, 1.15)
+    assert (checks.DEPTH_D_LO, checks.DEPTH_D_HI) == (0.90, 1.10)
     assert checks.DEPTH_K_MAX == 10
-    assert checks.DEPTH_MIN_BINS == 10000
+    assert checks.DEPTH_MIN_BINS == 100000
     assert checks.BASE_REBUILD_TOL == 1e-6 and checks.BASE_REBUILD_CHROM == "chr21"
     assert len(checks.MAIN_CHROMS) == 23 and checks.MAIN_CHROMS[-1] == "chrX"
     assert checks.P_ONLY_ARMS == ("ratio", "ctlid", "ctldepth", "extsize")
+    assert checks.RATIO_K1_RECORD.count("__") != 2   # cannot parse as track__arm__level
 
 
 # --- depth_law ----------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("p", [0.5, 0.25])
-def test_depth_law_passes_a_per_read_thinned_arm(checks, genome, p):
+def _all(reads):
+    return {c: np.ones(s.size, bool) for c, (s, _) in reads.items()}
+
+
+@pytest.mark.parametrize("p", [0.125, 0.5])
+def test_depth_law_passes_honest_per_read_thinning(checks, genome, p):
     n_keep = int(round(p * genome["n_reads"]))
     arm = counts_of(genome["reads"], thin_reads(genome["rng"], genome["reads"], n_keep),
                     genome["length"])
     ok, detail = checks.depth_law(genome["base"], arm, n_keep / genome["n_reads"])
     assert ok, detail
-    assert detail["total_pass"] and detail["n_k_tested"] >= 3
-    assert all(v["pass"] for v in detail["per_k"].values())
-    assert all(v["n_bins"] >= 10000 for v in detail["per_k"].values())
+    assert detail["nested"] and detail["n_bins_violating"] == 0
+    assert detail["n_bins"] >= 100000 and 0.9 <= detail["D"] <= 1.1
+    assert abs(detail["frac"] - p) <= 0.005
 
 
-def test_depth_law_fails_first_reads_not_thinned(checks, genome):
-    """Same read count, but a prefix of the file: the total and the mean are right (half the genome
-    kept whole, half dropped), the Binomial variance is not (it is k²p(1−p), not kp(1−p))."""
-    p = 0.5
-    n_keep = int(round(p * genome["n_reads"]))
-    arm = counts_of(genome["reads"], first_reads(genome["reads"], n_keep), genome["length"])
-    ok, detail = checks.depth_law(genome["base"], arm, n_keep / genome["n_reads"])
-    assert not ok
-    assert detail["total_pass"]                      # it fails on the law, not on the total
-    assert not all(v["pass"] for v in detail["per_k"].values())
-
-
-def test_depth_law_fails_bin_scaled_counts(checks, genome):
-    """Bins scaled and rounded: the mean is near k·p but the Binomial variance is gone."""
-    p = 0.5
-    arm = {c: np.floor(b * p + 0.5).astype(np.uint32) for c, b in genome["base"].items()}
+def test_depth_law_fails_scaled_copy(checks, genome):
+    """rint(base·p): nested, but no Binomial spread (D = 0) and the wrong total at p = 0.125."""
+    p = 0.125
+    arm = {c: np.rint(b * p).astype(np.uint32) for c, b in genome["base"].items()}
     ok, detail = checks.depth_law(genome["base"], arm, p)
     assert not ok
-    assert any(not (0.85 <= v["var_ratio"] <= 1.15) for v in detail["per_k"].values())
+    assert detail["nested"] and not detail["D_pass"]
+
+
+def test_depth_law_fails_thinning_from_a_superset(checks, genome):
+    """Base is itself a 1/1.5 draw of the reads; the arm is drawn from all of them, not from base."""
+    p, rng, reads = 0.125, genome["rng"], genome["reads"]
+    n_base = int(round(genome["n_reads"] / 1.5))
+    base = counts_of(reads, thin_reads(rng, reads, n_base), genome["length"])
+    n_arm = int(round(p * n_base))
+    arm = counts_of(reads, thin_reads(rng, reads, n_arm), genome["length"])
+    ok, detail = checks.depth_law(base, arm, n_arm / n_base)
+    assert not ok
+    assert not detail["nested"] and detail["n_bins_violating"] > 0
+
+
+def test_depth_law_fails_thinning_from_an_independent_read_set(checks, genome):
+    p = 0.125
+    rng = np.random.default_rng(2112)
+    other, length = make_reads(rng, checks.MAIN_CHROMS, bins_per_chrom=100_000)
+    n_other = sum(s.size for s, _ in other.values())
+    arm = counts_of(other, thin_reads(rng, other, int(round(p * n_other))), length)
+    ok, detail = checks.depth_law(genome["base"], arm, p)
+    assert not ok
+    assert not detail["nested"] and detail["n_bins_violating"] > 0
 
 
 def test_depth_law_fails_on_wrong_p_and_on_missing_chrom(checks, genome):
-    n_keep = int(round(0.5 * genome["n_reads"]))
+    n_keep = int(round(0.125 * genome["n_reads"]))
     arm = counts_of(genome["reads"], thin_reads(genome["rng"], genome["reads"], n_keep),
                     genome["length"])
-    ok, detail = checks.depth_law(genome["base"], arm, 0.49)
+    ok, detail = checks.depth_law(genome["base"], arm, 0.25)   # claimed level != drawn level
     assert not ok and not detail["total_pass"]
     short = dict(arm)
     del short["chr21"]
     ok, detail = checks.depth_law(genome["base"], short, n_keep / genome["n_reads"])
-    assert not ok and detail["missing_or_misshapen"] == ["chr21"]
+    assert not ok and not detail["nested"] and detail["missing_or_misshapen"] == ["chr21"]
 
 
-def test_depth_law_fails_when_no_k_has_enough_bins(checks):
-    base = {c: np.full(100, 3, np.uint32) for c in checks.MAIN_CHROMS}
-    arm = {c: np.full(100, 1, np.uint32) for c in checks.MAIN_CHROMS}
-    ok, detail = checks.depth_law(base, arm, 1 / 3)
-    assert not ok and detail["n_k_tested"] == 0
+def test_depth_law_fails_with_too_few_bins(checks):
+    """An honest thinning, but only 23 × 4000 bins with base in 1..10 (< 100000)."""
+    rng = np.random.default_rng(5)
+    reads, length = make_reads(rng, checks.MAIN_CHROMS, bins_per_chrom=4000, cover=6.0)
+    n = sum(s.size for s, _ in reads.values())
+    base = counts_of(reads, _all(reads), length)
+    n_keep = int(round(0.5 * n))
+    ok, detail = checks.depth_law(base, counts_of(reads, thin_reads(rng, reads, n_keep), length),
+                                  n_keep / n)
+    assert not ok and detail["n_bins"] < 100000 and not detail["n_bins_pass"]
+    assert detail["nested"]
 
 
 def _write_npz(path, arrays):
@@ -180,13 +192,23 @@ def test_depth_law_through_run_and_summary(checks, genome, tmp_path):
     (cf / "products" / f"{track}__base__base" / "covariates.json").write_text(json.dumps({"depth": n}))
     header = "pid\tbiosample\ttrack\tcell\tassay\tarm\tlevel\troute\tknob\tknob_value\tpipeline"
     lines = [header]
-    for level, frac, how in (("half", 0.5, "thin"), ("quarter", 0.25, "thin"), ("prefix", 0.5, "first")):
+    for level, frac, how in (("half", 0.5, "thin"), ("eighth", 0.125, "thin"),
+                             ("superset", 0.125, "superset")):
         keep = int(round(frac * n))
-        mask = (thin_reads(genome["rng"], genome["reads"], keep) if how == "thin"
-                else first_reads(genome["reads"], keep))
+        if how == "thin":
+            mask = thin_reads(genome["rng"], genome["reads"], keep)
+        else:  # drawn from a larger read set than base holds: base plus an extra 10 %
+            extra, _ = make_reads(np.random.default_rng(9), checks.MAIN_CHROMS, 100_000, cover=0.2)
+            both = {c: (np.concatenate([genome["reads"][c][0], extra[c][0]]),
+                        np.concatenate([genome["reads"][c][1], extra[c][1]]))
+                    for c in checks.MAIN_CHROMS}
+            _write_npz(cf / "products" / f"{track}__depth__{level}" / "counts25.npz",
+                       counts_of(both, thin_reads(genome["rng"], both, keep), genome["length"]))
+            mask = None
         pid = f"{track}__depth__{level}"
-        _write_npz(cf / "products" / pid / "counts25.npz",
-                   counts_of(genome["reads"], mask, genome["length"]))
+        if mask is not None:
+            _write_npz(cf / "products" / pid / "counts25.npz",
+                       counts_of(genome["reads"], mask, genome["length"]))
         lines.append(f"{pid}\tCF_C19__depth__{level}\t{track}\tC19\tH3K27ac\tdepth\t{level}\tbam\t"
                      f"treatment_reads\t{keep}\tchip")
     rows = tmp_path / "rows.tsv"
@@ -194,14 +216,20 @@ def test_depth_law_through_run_and_summary(checks, genome, tmp_path):
 
     recs = checks.run(cf, rows, only="depth_law")
     assert {r["pid"]: r["pass"] for r in recs} == {
-        f"{track}__depth__half": True, f"{track}__depth__quarter": True,
-        f"{track}__depth__prefix": False}
-    rec = json.loads((cf / "checks" / "depth_law" / f"{track}__depth__quarter.json").read_text())
+        f"{track}__depth__half": True, f"{track}__depth__eighth": True,
+        f"{track}__depth__superset": False}
+    rec = json.loads((cf / "checks" / "depth_law" / f"{track}__depth__eighth.json").read_text())
     assert set(rec) == {"name", "pid", "pass", "detail"}
-    assert rec["detail"]["base_depth"] == n and abs(rec["detail"]["p"] - 0.25) < 1e-6
+    d = rec["detail"]
+    assert d["base_depth"] == n and abs(d["p"] - 0.125) < 1e-6
+    assert {"nested", "n_bins_violating", "frac", "D", "n_bins"} <= set(d)
     out = checks.summary(cf)
-    assert out["all_pass"] is False and out["n_checks"] == 3
-    assert [(f["name"], f["pid"]) for f in out["failures"]] == [("depth_law", f"{track}__depth__prefix")]
+    assert out["all_pass"] is False
+    depth_fail = [(f["name"], f["pid"]) for f in out["failures"] if f["name"] == "depth_law"]
+    assert depth_fail == [("depth_law", f"{track}__depth__superset")]
+    # the other five checks did not run on this tree: each is a failure, not a silent pass
+    assert sorted(f["name"] for f in out["failures"] if f["pid"] == "*") == sorted(
+        set(checks.CHECK_NAMES) - {"depth_law"})
 
 
 # --- the full tree: every other check on real C1 rows ---------------------------------------------
@@ -222,16 +250,62 @@ if bad or (a.expect is not None and len(pids) != a.expect):
 print(f"OK {len(pids)}")
 '''
 
+# The pinned C3 schema (plan C3 Interfaces), typed in so the tree is valid for the real validator.
+COUNT_RULE = ("store overlap rule: +1 to bins floor(start/25)..floor(end/25) inclusive, "
+              "grid floor(len/25)")
+WORDING_NOTE = ("t112 says read-start counts; products use the store overlap rule so the loader "
+                "reads them unchanged")
+PIPE = {"chip": ("ENCODE-DCC/chip-seq-pipeline2", "v2.2.2", "f6e408f7e77bafde4556883f33552191"),
+        "atac": ("ENCODE-DCC/atac-seq-pipeline", "v2.2.3", "04d9fa482d67cf633845653750f58cef")}
+MATCHED = {"C19": ("ENCFF433TZR", 58073570)}
+
+
+def write_records(pdir, row, has_control):
+    kv = json.loads(row["knob_value"])
+    control = None
+    if has_control:
+        acc, reads = MATCHED[row["cell"]]
+        source = "matched"
+        if row["arm"] == "ctlid":
+            acc, source = kv, "other"
+        control = {"accession": acc, "source": source, "reads": reads}
+    depth = 50000000 if row["pipeline"] == "atac" else 30000000
+    cov = {"schema": 1, "pid": row["pid"], "biosample": row["biosample"], "track": row["track"],
+           "cell": row["cell"], "assay": row["assay"], "arm": row["arm"], "level": row["level"],
+           "knob": row["knob"], "knob_value": kv, "depth": depth, "log2_depth": math.log2(depth),
+           "read_length": 76 if row["pipeline"] == "atac" else 101,
+           "run_type": "paired-ended" if row["arm"] == "pe" else "single-ended",
+           "fraglen": 150 if row["pipeline"] == "atac" else 180, "control": control,
+           "count_rule": COUNT_RULE, "wording_note": WORDING_NOTE}
+    repo, release, md5 = PIPE[row["pipeline"]]
+    fastq = row["route"] == "fastq"
+    prov = {"schema": 1, "pid": row["pid"], "route": row["route"],
+            "pipeline": {"repo": repo, "release": release, "sif": "/x/pipeline.sif",
+                         "sif_md5": md5, "sif_sha256": None},
+            "commands": ["true"], "inputs": [{"path": "/x/in", "md5": "0" * 32}],
+            "outputs": [{"path": "/x/out", "md5": "1" * 32}], "subsample_seed": [],
+            "patched_script": None,
+            "caper": ({"input_json": "/x/i.json", "workflow_id": "w1", "metadata_json": "/x/m.json"}
+                      if fastq else None),
+            "slurm_job_ids": ["123"], "code": {"snapshot_dir": "/x/code", "git_sha": "abcdef1"},
+            "created_utc": "2026-09-17T00:00:00+00:00"}
+    (pdir / "covariates.json").write_text(json.dumps(cov))
+    (pdir / "provenance.json").write_text(json.dumps(prov))
+
+
 CHROM_LEN = {c: 1000 for c in [f"chr{i}" for i in range(1, 23)] + ["chrX"]}
 CHROM_LEN["chr21"] = 1013   # a remainder, so n_bins == len // 25 is actually exercised
 
 
 @pytest.fixture()
 def tree(checks, tmp_path, monkeypatch):
-    """A clean product tree for the two C19 tracks (real `arms.py rows`), depth rows left out."""
-    stub = tmp_path / "records_stub.py"
-    stub.write_text(STUB_RECORDS)
-    monkeypatch.setattr(checks, "RECORDS_PY", stub)
+    """A clean product tree for C19M16, C19M22 and C12M02 (real `arms.py rows`), depth rows left out."""
+    if not RECORDS.exists():   # branch cut before C3 merged: the stub honours C3's pinned CLI
+        stub = tmp_path / "records_stub.py"
+        stub.write_text(STUB_RECORDS)
+        monkeypatch.setattr(checks, "RECORDS_PY", stub)
+    else:
+        assert checks.RECORDS_PY == RECORDS
     chrsz = tmp_path / "chrom.sizes.tsv"
     chrsz.write_text("".join(f"{c}\t{n}\n" for c, n in CHROM_LEN.items()) + "chrEBV\t171823\n")
 
@@ -259,13 +333,14 @@ def tree(checks, tmp_path, monkeypatch):
         _write_npz(pdir / "pval25.npz", p)
         if r["arm"] == "base":
             _write_npz(cf / "bamarms" / r["pid"] / "rebuild_pval25.npz", p)
-        if r["pipeline"] == "chip":
+        has_control = r["pipeline"] == "chip" and not (r["arm"] == "ctlid" and r["level"] == "none")
+        if has_control:
             if r["route"] == "fastq":
                 ctl = fastq_ctl.setdefault(r["biosample"], counts())
             else:
                 ctl = counts()
             _write_npz(pdir / "control_counts25.npz", ctl)
-        (pdir / "covariates.json").write_text(json.dumps({"pid": r["pid"], "depth": 30000000}))
+        write_records(pdir, r, has_control)
     (cf / "smoke" / "C8").mkdir(parents=True)
     (cf / "smoke" / "C8" / "ratio_k1.json").write_text(json.dumps({"bit_identical": True}))
     return {"cf": cf, "rows": rows, "chrsz": chrsz, "parsed": parsed}
@@ -330,9 +405,13 @@ DEFECTS = {
     "extsize_counts_moved": (
         lambda cf: _npz_edit(cf / "products/C19M22__extsize__k2/counts25.npz", _bump("chrX", 1)),
         [("counts_identity", "C19M22__extsize__k2")]),
+    "rebuild_nan": (
+        lambda cf: _npz_edit(cf / "bamarms/C19M16__base__base/rebuild_pval25.npz",
+                             _bump("chr21", np.float32(np.nan))),
+        [("base_rebuild", "C19M16__base__base")]),
     "ratio_k1_not_identical": (
         lambda cf: (cf / "smoke/C8/ratio_k1.json").write_text(json.dumps({"bit_identical": False})),
-        [("ratio_k1_identity", "C19M16__ratio__k1")]),
+        [("ratio_k1_identity", "smoke_C8_ratio_k1")]),
     "fastq_control_differs": (
         lambda cf: _npz_edit(cf / "products/C19M22__mapq__10/control_counts25.npz", _bump("chr1", 1)),
         [("fastq_control_identity", "CF_C19__mapq__10")]),
@@ -353,11 +432,17 @@ DEFECTS = {
     "records_validate_fails": (
         lambda cf: (cf / "products/C19M22__dedup__off/covariates.json").unlink(),
         [("structure", "C19M22__dedup__off")]),
+    "control_npz_without_control": (      # only the real C3 validator can see this one
+        lambda cf: (cf / "products/C19M16__ctlid__none/control_counts25.npz").write_bytes(
+            (cf / "products/C19M16__base__base/control_counts25.npz").read_bytes()),
+        [("structure", "C19M16__ctlid__none")]),
 }
 
 
 @pytest.mark.parametrize("defect", list(DEFECTS))
 def test_each_defect_fails_exactly_its_check(checks, tree, defect):
+    if defect == "control_npz_without_control" and not RECORDS.exists():
+        pytest.skip("needs C3's real records.py (the stub checks only that covariates.json exists)")
     apply, expected = DEFECTS[defect]
     apply(tree["cf"])
     checks.run(tree["cf"], tree["rows"], chrsz=tree["chrsz"])
@@ -392,15 +477,46 @@ def test_rerun_replaces_a_stale_record(checks, tree):
     assert not stale.exists()
 
 
+def test_partial_run_is_not_a_pass(checks, tree):
+    """`run --only counts_identity` on a fresh checks/ must not let summary say all_pass."""
+    recs = checks.run(tree["cf"], tree["rows"], only="counts_identity")
+    assert len(recs) == 18 and all(r["pass"] for r in recs)
+    out = checks.summary(tree["cf"])
+    assert out["all_pass"] is False
+    assert sorted(f["name"] for f in out["failures"]) == sorted(
+        set(checks.CHECK_NAMES) - {"counts_identity"})
+    assert all(f["pid"] == "*" for f in out["failures"])
+
+
+def test_run_that_fails_to_plan_leaves_no_stale_pass(checks, tree):
+    """A full pass, then a corrupted product and a run that raises while planning (no chrom sizes):
+    the old records must be gone, so summary fails."""
+    checks.run(tree["cf"], tree["rows"], chrsz=tree["chrsz"])
+    assert checks.summary(tree["cf"])["all_pass"] is True
+    _npz_edit(tree["cf"] / "products/C19M16__ratio__k2/counts25.npz", _bump("chr4", 1))
+    with pytest.raises(FileNotFoundError):
+        checks.run(tree["cf"], tree["rows"], chrsz=tree["cf"] / "no_such.chrom.sizes")
+    out = checks.summary(tree["cf"])
+    assert out["all_pass"] is False
+    assert sorted(f["name"] for f in out["failures"]) == sorted(checks.CHECK_NAMES)
+    assert not list((tree["cf"] / "checks" / "counts_identity").glob("*.json"))
+
+
 def test_cli_run_then_summary(tree):
     cf, rows = str(tree["cf"]), str(tree["rows"])
     r = subprocess.run([sys.executable, str(TOOL), "run", "--cf", cf, "--rows", rows,
-                        "--only", "counts_identity"], capture_output=True, text=True)
+                        "--chrsz", str(tree["chrsz"])], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
-    assert r.stdout.strip().splitlines()[-1] == "18 checks, 0 failed"
     s = subprocess.run([sys.executable, str(TOOL), "summary", "--cf", cf],
                        capture_output=True, text=True)
-    assert s.returncode == 0, s.stderr
     d = json.load(open(Path(cf) / "checks" / "summary.json"))
-    assert d["all_pass"] is True and len(d["failures"]) == 0
     assert set(d) == {"all_pass", "n_checks", "failures", "created_utc"}
+    if RECORDS.exists():   # the CLI runs the real sibling records.py; no stub can be injected
+        assert s.returncode == 0, s.stdout + s.stderr
+        assert d["all_pass"] is True and len(d["failures"]) == 0
+    else:
+        assert s.returncode == 1 and d["all_pass"] is False
+        assert {f["name"] for f in d["failures"]} == {"structure"}
+    r = subprocess.run([sys.executable, str(TOOL), "run", "--cf", cf, "--rows", rows,
+                        "--only", "counts_identity"], capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip().splitlines()[-1] == "18 checks, 0 failed"

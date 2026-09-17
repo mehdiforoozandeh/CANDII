@@ -7,8 +7,9 @@ three things; this module adds three structural ones the plan pins beside them:
                             bigwig binned the same way, chr21, same n_bins, max |diff| <= 1e-6
     counts_identity         arms that only move p (ratio, ctlid, ctldepth, extsize) carry counts
                             bit-identical to their base, all 23 chromosomes
-    depth_law               a depth arm reproduces the store's `thin_counts` law in expectation:
-                            conditional on base == k, arm ~ Binomial(k, p), p = L / base depth
+    depth_law               a depth arm is nested in its base and reproduces the store's
+                            `thin_counts` law: conditional on base == k, arm ~ Binomial(k, p),
+                            p = L / base depth, tested as pooled within-k dispersion
     ratio_k1_identity       the one-token `--ratio` patch at k = 1 is bit-identical to the
                             unpatched script (C8 smoke record)
     fastq_control_identity  a FASTQ re-run re-aligns the control; the two tracks of one cell must
@@ -18,15 +19,24 @@ three things; this module adds three structural ones the plan pins beside them:
 
 `src/candi/store/dataset.py::thin_counts` is `rng.binomial(counts, 1/d)` per bin. The depth arms
 are made by thinning *reads* with the pipeline's own subsampler, not bins, so the law only holds
-to first order — hence tolerances, not equality. The thresholds (0.005 on the total fraction, 2 %
-on the conditional mean, 0.85–1.15 on the variance ratio, k <= 10, >= 10000 base bins) are
-planner-set data checks. They are not an experiment gate, and they are not to be tuned to make a
-product pass.
+to first order — hence tolerances, not equality. `depth_law` passes iff ALL of: (1) nesting, every
+one of the 23 chromosomes the same shape and arm <= base in every bin; (2) |Σarm/Σbase − p| <=
+0.005; (3) >= 100000 bins with base k in 1..10; (4) pooled within-k dispersion
+D = Σ_k Σ_{base=k} (arm − mean(arm | base=k))² / Σ_k n_k·k·p·(1−p), k = 1..10, in [0.90, 1.10].
+Per-k means and variances go into the detail as information only. The thresholds are planner-set
+data checks (plan Log, re-ruled 2026-09-17). They are not an experiment gate, and they are not to be
+tuned to make a product pass.
 
 Every check writes `<cf>/checks/<name>/<pid>.json` = `{name, pid, pass, detail}`; `summary` rolls
 them into `<cf>/checks/summary.json` and `<cf>/checks/CHECKS.md`. `run` first writes the (check, pid)
 list it is about to do to `<cf>/checks/expected/<name>.json`, so a job killed half way leaves
 records missing, and `summary` counts each missing record as a failure rather than a smaller total.
+`run` deletes a check's old records and expected list before it reads anything, and `summary`
+counts a check with no expected list as a failure: a check that did not run on this tree (an
+`--only` run, or a run that crashed while planning) can never read as passed.
+
+The verdict is `summary` — its exit code and `summary.json["all_pass"]`. `run` exits 0 whenever it
+finishes, whatever the checks found.
 
 numpy + pandas (pandas only because C2's `bin25.py` imports it) and no `candi` import: it runs on
 Nibi against a code snapshot. The npz reader, chrom-sizes parser and chromosome set are C2's
@@ -72,10 +82,12 @@ P_ONLY_ARMS = ("ratio", "ctlid", "ctldepth", "extsize")
 BASE_REBUILD_CHROM = "chr21"
 BASE_REBUILD_TOL = 1e-6
 DEPTH_TOTAL_TOL = 0.005
-DEPTH_MEAN_TOL = 0.02
-DEPTH_VAR_LO, DEPTH_VAR_HI = 0.85, 1.15
+DEPTH_D_LO, DEPTH_D_HI = 0.90, 1.10
 DEPTH_K_MAX = 10
-DEPTH_MIN_BINS = 10000
+DEPTH_MIN_BINS = 100000
+
+#: the record name of the one C8 smoke check; not a product pid (those are track__arm__level).
+RATIO_K1_RECORD = "smoke_C8_ratio_k1"
 
 
 def read_npz(path: Path) -> dict:
@@ -126,14 +138,13 @@ def check_base_rebuild(cf: Path, pid: str):
     if pipe.size != rebuilt.size:
         return False, detail
     a, b = pipe.astype(np.float64), rebuilt.astype(np.float64)
-    nan_a, nan_b = np.isnan(a), np.isnan(b)
-    detail["n_nan_pipeline"], detail["n_nan_rebuild"] = int(nan_a.sum()), int(nan_b.sum())
-    same_nan = bool(np.array_equal(nan_a, nan_b))
-    ok = ~nan_a & ~nan_b
-    mad = float(np.max(np.abs(a[ok] - b[ok]))) if ok.any() else 0.0
-    detail["nan_mask_equal"] = same_nan
+    n_nan_a, n_nan_b = int(np.isnan(a).sum()), int(np.isnan(b).sum())
+    detail["n_nan_pipeline"], detail["n_nan_rebuild"] = n_nan_a, n_nan_b
+    if n_nan_a or n_nan_b:  # a NaN is a defect in its own right, never masked out of the diff
+        return False, detail
+    mad = float(np.max(np.abs(a - b))) if a.size else 0.0
     detail["max_abs_diff"] = _num(mad)
-    return same_nan and mad <= BASE_REBUILD_TOL, detail
+    return mad <= BASE_REBUILD_TOL, detail
 
 
 def check_counts_identity(cf: Path, pid: str, base: str):
@@ -145,19 +156,22 @@ def check_counts_identity(cf: Path, pid: str, base: str):
 
 
 def depth_law(base_counts: dict, arm_counts: dict, p: float):
-    """The `thin_counts` law in expectation, over all main chromosomes. Pure; tested directly."""
+    """Nesting + total fraction + pooled within-k dispersion, over the 23 main chromosomes.
+
+    Pure; tested directly. Returns (pass, detail).
+    """
     sum_b = sum_a = 0
+    n_violating = 0
     n = np.zeros(DEPTH_K_MAX + 1, dtype=np.int64)
     s = np.zeros(DEPTH_K_MAX + 1, dtype=np.float64)
     ss = np.zeros(DEPTH_K_MAX + 1, dtype=np.float64)
-    missing = [c for c in MAIN_CHROMS if c not in base_counts or c not in arm_counts]
+    missing = []
     for c in MAIN_CHROMS:
-        if c in missing:
-            continue
-        b, a = base_counts[c], arm_counts[c]
-        if b.shape != a.shape:
+        if c not in base_counts or c not in arm_counts or base_counts[c].shape != arm_counts[c].shape:
             missing.append(c)
             continue
+        b, a = base_counts[c], arm_counts[c]
+        n_violating += int(np.count_nonzero(a.astype(np.int64) > b.astype(np.int64)))
         sum_b += int(b.sum(dtype=np.int64))
         sum_a += int(a.sum(dtype=np.int64))
         sel = (b >= 1) & (b <= DEPTH_K_MAX)
@@ -166,29 +180,29 @@ def depth_law(base_counts: dict, arm_counts: dict, p: float):
         n += np.bincount(bk, minlength=DEPTH_K_MAX + 1)
         s += np.bincount(bk, weights=ak, minlength=DEPTH_K_MAX + 1)
         ss += np.bincount(bk, weights=ak * ak, minlength=DEPTH_K_MAX + 1)
+    nested = not missing and n_violating == 0
     frac = sum_a / sum_b if sum_b else float("nan")
     total_ok = sum_b > 0 and abs(frac - p) <= DEPTH_TOTAL_TOL
-    per_k, all_k_ok = {}, True
-    for k in range(1, DEPTH_K_MAX + 1):
-        if n[k] < DEPTH_MIN_BINS:
-            continue
-        mean = s[k] / n[k]
-        var = ss[k] / n[k] - mean * mean
-        mean_ratio = mean / (k * p)
-        var_ratio = var / (k * p * (1 - p)) if p < 1 else float("nan")
-        ok = (abs(mean_ratio - 1) <= DEPTH_MEAN_TOL
-              and DEPTH_VAR_LO <= var_ratio <= DEPTH_VAR_HI)
-        all_k_ok &= bool(ok)
-        per_k[str(k)] = {"n_bins": int(n[k]), "mean_ratio": _num(mean_ratio),
-                         "var_ratio": _num(var_ratio), "pass": bool(ok)}
-    detail = {"p": _num(p), "sum_base": sum_b, "sum_arm": sum_a, "frac": _num(frac),
-              "total_pass": bool(total_ok), "per_k": per_k, "n_k_tested": len(per_k),
-              "missing_or_misshapen": missing,
-              "thresholds": {"total": DEPTH_TOTAL_TOL, "mean": DEPTH_MEAN_TOL,
-                             "var": [DEPTH_VAR_LO, DEPTH_VAR_HI], "k_max": DEPTH_K_MAX,
-                             "min_bins": DEPTH_MIN_BINS}}
-    ok = total_ok and all_k_ok and not missing and len(per_k) > 0
-    return ok, detail
+    k = np.arange(DEPTH_K_MAX + 1)
+    has = n > 0
+    within = float(np.sum(ss[has] - s[has] ** 2 / n[has]))
+    expect = float(np.sum(n[has] * k[has] * p * (1 - p)))
+    d_stat = within / expect if expect > 0 else float("nan")
+    n_bins = int(n[1:].sum())
+    bins_ok = n_bins >= DEPTH_MIN_BINS
+    d_ok = DEPTH_D_LO <= d_stat <= DEPTH_D_HI  # False for NaN
+    per_k = {str(i): {"n_bins": int(n[i]), "mean": _num(s[i] / n[i]),
+                      "var": _num(ss[i] / n[i] - (s[i] / n[i]) ** 2),
+                      "binomial_mean": _num(i * p), "binomial_var": _num(i * p * (1 - p))}
+             for i in range(1, DEPTH_K_MAX + 1) if n[i] > 0}
+    detail = {"p": _num(p), "nested": bool(nested), "n_bins_violating": n_violating,
+              "missing_or_misshapen": missing, "sum_base": sum_b, "sum_arm": sum_a,
+              "frac": _num(frac), "total_pass": bool(total_ok), "n_bins": n_bins,
+              "n_bins_pass": bool(bins_ok), "D": _num(d_stat), "D_pass": bool(d_ok),
+              "per_k_info_only": per_k,
+              "thresholds": {"total": DEPTH_TOTAL_TOL, "D": [DEPTH_D_LO, DEPTH_D_HI],
+                             "k_max": DEPTH_K_MAX, "min_bins": DEPTH_MIN_BINS}}
+    return bool(nested and total_ok and bins_ok and d_ok), detail
 
 
 def check_depth_law(cf: Path, pid: str, base: str, reads_kept: int):
@@ -290,8 +304,7 @@ def plan(cf, rows_tsv, names, chrsz=CHRSZ) -> list:
         jobs += [("depth_law", r["pid"], check_depth_law, (cf, r["pid"], base_pid(r), r["knob_value"]))
                  for r in rows if r["arm"] == "depth"]
     if "ratio_k1_identity" in names and any(r["arm"] == "ratio" for r in rows):
-        track = next(r["track"] for r in rows if r["arm"] == "ratio")
-        jobs.append(("ratio_k1_identity", f"{track}__ratio__k1", check_ratio_k1, (cf,)))
+        jobs.append(("ratio_k1_identity", RATIO_K1_RECORD, check_ratio_k1, (cf,)))
     if "fastq_control_identity" in names:
         groups = {}
         for r in rows:  # the biosample is exactly (cell, arm, level)
@@ -311,10 +324,14 @@ def plan(cf, rows_tsv, names, chrsz=CHRSZ) -> list:
 def run(cf, rows_tsv, only=None, chrsz=CHRSZ) -> list:
     cf = Path(cf)
     names = [only] if only else list(CHECK_NAMES)
-    jobs = plan(cf, rows_tsv, names, chrsz)
-    for name in names:  # a rerun replaces its records; a stale pass must not survive
+    # Clear first, plan second: if planning raises (bad rows TSV, missing chrom sizes), the old
+    # records and expected lists are already gone, so `summary` cannot pass on a previous tree.
+    for name in names:
         for old in (cf / "checks" / name).glob("*.json"):
             old.unlink()
+        (cf / "checks" / "expected" / f"{name}.json").unlink(missing_ok=True)
+    jobs = plan(cf, rows_tsv, names, chrsz)
+    for name in names:
         exp = cf / "checks" / "expected" / f"{name}.json"
         exp.parent.mkdir(parents=True, exist_ok=True)
         exp.write_text(json.dumps([pid for n, pid, _, _ in jobs if n == name], indent=1) + "\n")
@@ -332,7 +349,13 @@ def summary(cf) -> dict:
     expected = {}
     for name in CHECK_NAMES:
         exp = cf / "checks" / "expected" / f"{name}.json"
-        expected[name] = json.loads(exp.read_text()) if exp.exists() else []
+        if not exp.exists():
+            expected[name] = []
+            failures.append({"name": name, "pid": "*",
+                             "detail": {"error": "not run on this tree: no expected list "
+                                                 f"{exp.relative_to(cf)}"}})
+            continue
+        expected[name] = json.loads(exp.read_text())
         have = {r["pid"] for r in recs if r["name"] == name}
         failures += [{"name": name, "pid": pid, "detail": {"error": "no record: the run did not reach it"}}
                      for pid in expected[name] if pid not in have]
