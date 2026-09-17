@@ -947,6 +947,137 @@ def test_cleanup_candidates_lists_and_deletes_nothing(fa, env, monkeypatch):
     assert fa.harvest_verified(env["cf"], "C19M16__mapq__0") is False
 
 
+# --- cleanup (early D3) --------------------------------------------------------------------------
+
+def _harvested(fa, env, pid, monkeypatch):
+    row = _succeeded(fa, env, pid, monkeypatch)
+    fa.harvest(row, env["cf"])
+    return row
+
+
+def _deleted_tsv(env):
+    f = env["cf"] / "fastqarms" / "deleted.tsv"
+    if not f.exists():
+        return []
+    lines = f.read_text().rstrip("\n").split("\n")
+    assert lines[0] == "pid\ttree\tbytes_freed\tharvest_tsv_md5\tdeleted_utc"
+    return [dict(zip(lines[0].split("\t"), ln.split("\t"))) for ln in lines[1:]]
+
+
+def test_cleanup_deletes_only_the_cromwell_tree(fa, env, monkeypatch):
+    row = _harvested(fa, env, "C19M16__mapq__0", monkeypatch)
+    tree = fa.paths(env["cf"], row["pid"])["cromwell"]
+    assert tree.is_dir()
+    assert fa.cleanup([row], env["cf"]) == 0
+
+    assert not tree.exists()
+    p = fa.paths(env["cf"], row["pid"])
+    assert p["loc"].is_dir() and p["input"].is_file() and p["state"].is_file()
+    assert (p["harvest"] / "HARVEST.tsv").is_file()
+    assert all(Path(r["dest"]).is_file() for r in _harvest_tsv(fa, env, row["pid"]))
+
+    recs = _deleted_tsv(env)
+    assert [r["pid"] for r in recs] == [row["pid"]]
+    assert Path(recs[0]["tree"]) == tree and int(recs[0]["bytes_freed"]) > 0
+    assert recs[0]["harvest_tsv_md5"] == fa.md5_file(p["harvest"] / "HARVEST.tsv")
+    assert recs[0]["deleted_utc"].endswith("Z")
+    st = fa.read_state(env["cf"], row["pid"])
+    assert st["status"] == "harvested" and st["cleaned_utc"].endswith("Z")
+    assert st["bytes_freed"] == int(recs[0]["bytes_freed"])
+
+
+def test_cleanup_deletes_attempt_trees_too(fa, env, monkeypatch):
+    row = _harvested(fa, env, "C19M16__mapq__10", monkeypatch)
+    attempt2 = fa.paths(env["cf"], row["pid"], attempt=2)["cromwell"]
+    (attempt2 / "chip").mkdir(parents=True)
+    (attempt2 / "chip" / "leftover").write_text("a dead second attempt")
+    assert fa.cleanup([row], env["cf"]) == 0
+    assert not attempt2.exists()
+    assert {Path(r["tree"]).name for r in _deleted_tsv(env)} == {
+        row["pid"], f"{row['pid']}__attempt2"}
+
+
+def test_cleanup_is_idempotent(fa, env, monkeypatch):
+    row = _harvested(fa, env, "C19M16__mapq__0", monkeypatch)
+    assert fa.cleanup([row], env["cf"]) == 0
+    first = _deleted_tsv(env)
+    assert fa.cleanup([row], env["cf"]) == 0
+    assert _deleted_tsv(env) == first
+
+
+def test_cleanup_refuses_an_unharvested_pid(fa, env, monkeypatch):
+    row = _succeeded(fa, env, "C19M16__crop__36", monkeypatch)   # succeeded, never harvested
+    tree = fa.paths(env["cf"], row["pid"])["cromwell"]
+    assert fa.cleanup([row], env["cf"]) == 1
+    assert tree.is_dir()
+    assert _deleted_tsv(env) == []
+
+
+def test_cleanup_refuses_a_missing_role(fa, env, monkeypatch):
+    row = _harvested(fa, env, "C19M16__crop__50", monkeypatch)
+    tsv = fa.paths(env["cf"], row["pid"])["harvest"] / "HARVEST.tsv"
+    kept = [ln for ln in tsv.read_text().rstrip("\n").split("\n")
+            if ln.split("\t")[0] != "ctl_ta"]
+    tsv.write_text("\n".join(kept) + "\n")
+    assert fa.cleanup([row], env["cf"]) == 1
+    assert fa.paths(env["cf"], row["pid"])["cromwell"].is_dir()
+    assert _deleted_tsv(env) == []
+
+
+def test_cleanup_refuses_an_md5_mismatch(fa, env, monkeypatch):
+    row = _harvested(fa, env, "C19M16__crop__36", monkeypatch)
+    dest = Path({r["role"]: r for r in _harvest_tsv(fa, env, row["pid"])}["treat_ta"]["dest"])
+    dest.write_text("x" * dest.stat().st_size)      # same bytes, different content
+    assert fa.cleanup([row], env["cf"]) == 1
+    assert fa.paths(env["cf"], row["pid"])["cromwell"].is_dir()
+    assert _deleted_tsv(env) == []
+
+
+def test_cleanup_refuses_a_truncated_keeper(fa, env, monkeypatch):
+    row = _harvested(fa, env, "C19M16__crop__36", monkeypatch)
+    dest = Path({r["role"]: r for r in _harvest_tsv(fa, env, row["pid"])}["pval_bigwig"]["dest"])
+    dest.unlink()
+    assert fa.cleanup([row], env["cf"]) == 1
+    assert fa.paths(env["cf"], row["pid"])["cromwell"].is_dir()
+
+
+def test_cleanup_refuses_one_pid_and_still_cleans_the_others(fa, env, monkeypatch):
+    good = _harvested(fa, env, "C19M16__mapq__0", monkeypatch)
+    bad = _succeeded(fa, env, "C19M16__mapq__10", monkeypatch)
+    assert fa.cleanup([good, bad], env["cf"]) == 1
+    assert not fa.paths(env["cf"], good["pid"])["cromwell"].exists()
+    assert fa.paths(env["cf"], bad["pid"])["cromwell"].is_dir()
+    assert [r["pid"] for r in _deleted_tsv(env)] == [good["pid"]]
+
+
+def test_cleanup_tree_list_never_reaches_loc(fa, env, monkeypatch):
+    row = _harvested(fa, env, "C19M16__mapq__0", monkeypatch)
+    trees = fa.cromwell_trees(env["cf"], row["pid"])
+    assert [t.parent.name for t in trees] == ["cromwell"]
+    assert fa.paths(env["cf"], row["pid"])["loc"] not in trees
+
+
+def test_cli_cleanup_refuses_without_pids(fa, env, monkeypatch):
+    _harvested(fa, env, "C19M16__mapq__0", monkeypatch)
+    r = subprocess.run([sys.executable, str(TOOL), "cleanup", "--rows", str(env["rows"]),
+                        "--cf", str(env["cf"]), "--eic", str(env["eic"])],
+                       capture_output=True, text=True)
+    assert r.returncode != 0 and "REFUSES to run without --pids" in r.stderr
+    assert fa.paths(env["cf"], "C19M16__mapq__0")["cromwell"].is_dir()
+
+
+def test_cli_cleanup_one_pid(fa, env, monkeypatch):
+    _harvested(fa, env, "C19M16__mapq__0", monkeypatch)
+    _harvested(fa, env, "C19M16__mapq__10", monkeypatch)
+    r = subprocess.run([sys.executable, str(TOOL), "cleanup", "--rows", str(env["rows"]),
+                        "--cf", str(env["cf"]), "--eic", str(env["eic"]),
+                        "--pids", "C19M16__mapq__0"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert not fa.paths(env["cf"], "C19M16__mapq__0")["cromwell"].exists()
+    assert fa.paths(env["cf"], "C19M16__mapq__10")["cromwell"].is_dir()
+    assert [r["pid"] for r in _deleted_tsv(env)] == ["C19M16__mapq__0"]
+
+
 def test_cli_stage_subset(fa, env):
     r = subprocess.run([sys.executable, str(TOOL), "stage", "--rows", str(env["rows"]),
                         "--cf", str(env["cf"]), "--eic", str(env["eic"]), "--refcache", str(env["ref"]),

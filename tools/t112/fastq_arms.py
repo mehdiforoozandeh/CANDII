@@ -27,8 +27,10 @@ refuses a source with any file not 0444.
 
 Keepers are harvested from the producing call's own `execution/` tree (the final Done attempt named
 in Cromwell's metadata), never from a downstream call's `inputs/`, and each basename is cross-checked
-against that call's recorded output. This file never deletes anything: `cleanup-candidates` only
-lists trees whose keepers re-verify.
+against that call's recorded output. `cleanup-candidates` only lists trees; the one subcommand that
+deletes is `cleanup`, added for the PI's early-D3 ruling of 2026-09-17 (scratch at 4.6 TB), and it
+deletes a pid's Cromwell trees only after naming that pid on `--pids` and re-verifying its harvest
+role by role and md5 by md5 at that moment.
 
 Every base JSON points `<pipeline>.genome_tsv` at
 `storage.googleapis.com/encode-pipeline-genome-data/genome_tsv/v3/hg38.tsv`. That bucket no longer
@@ -48,9 +50,11 @@ chrM/MT after dedup, so the BAM it keeps is `*.nodup.no_chrM_MT.bam`.
 
 Deliberately stdlib only: it runs on the Nibi login node.
 
-    python3 tools/t112/fastq_arms.py {stage|submit|poll|harvest|cleanup-candidates} \\
+    python3 tools/t112/fastq_arms.py {stage|submit|poll|harvest|cleanup-candidates|cleanup} \\
         --rows rows.tsv --cf /scratch/mforooz/t112_cf --eic $EIC [--pids p1,p2] \\
         [--genome-tsv /scratch/mforooz/t112_cf/fastqarms/genome/hg38.local.tsv]
+
+`cleanup` requires `--pids`.
 """
 from __future__ import annotations
 
@@ -654,6 +658,113 @@ def harvest_verified(cf, pid) -> bool:
     return True
 
 
+def harvest_problems(row, cf) -> list:
+    """Every reason this pid's harvest is not a complete, byte-verified replacement for its tree.
+
+    Stricter than `harvest_verified`, which cannot see the row and so cannot know which roles the
+    arm needed: a HARVEST.tsv listing nine of ten roles re-hashes perfectly. Re-read and re-hash
+    here, never trust `cleanup_candidates.tsv` — it is written at another time.
+    """
+    pid = row["pid"]
+    probs = []
+    st = read_state(cf, pid)
+    if st is None:
+        return [f"{pid}: no state file"]
+    if st["status"] != "harvested":
+        return [f"{pid}: status is {st['status']!r}, not 'harvested'"]
+    tsv = paths(cf, pid)["harvest"] / "HARVEST.tsv"
+    if not tsv.exists():
+        return [f"{pid}: no {tsv}"]
+    lines = tsv.read_text().rstrip("\n").split("\n")
+    if tuple(lines[0].split("\t")) != HARVEST_COLUMNS:
+        return [f"{pid}: {tsv} header is not {HARVEST_COLUMNS}"]
+    recs = {}
+    for ln in lines[1:]:
+        r = dict(zip(HARVEST_COLUMNS, ln.split("\t")))
+        recs[r["role"]] = r
+    for role in [r[0] for r in harvest_roles(row)] + ["metadata"]:
+        if role not in recs:
+            probs.append(f"{pid}: HARVEST.tsv has no {role!r} role")
+    for role, r in sorted(recs.items()):
+        dest = Path(r["dest"])
+        if not dest.is_file():
+            probs.append(f"{pid}: {role} {dest} is missing")
+        elif dest.stat().st_size != int(r["bytes"]):
+            probs.append(f"{pid}: {role} {dest} is {dest.stat().st_size} B, "
+                         f"HARVEST.tsv recorded {r['bytes']} B")
+        elif md5_file(dest) != r["md5"]:
+            probs.append(f"{pid}: {role} {dest} md5 != the md5 HARVEST.tsv recorded")
+    return probs
+
+
+def cromwell_trees(cf, pid) -> list:
+    """This pid's Cromwell out dirs, attempts included. Never `loc/`, `inputs/`, `state/`,
+    `harvest/`: only real directories whose parent is `fastqarms/cromwell` and whose name is the
+    pid or `<pid>__attempt<n>`."""
+    cromwell = Path(cf) / "fastqarms" / "cromwell"
+    out = []
+    for t in [cromwell / pid] + sorted(cromwell.glob(f"{pid}__attempt*")):
+        if not t.is_dir() or t.is_symlink() or t.parent != cromwell:
+            continue
+        if not (t.name == pid or t.name.startswith(pid + "__attempt")):
+            continue
+        out.append(t)
+    return out
+
+
+def cleanup(rows, cf) -> int:
+    """Delete each pid's Cromwell tree once its harvest re-verifies (Decision D3, PI 2026-09-17).
+
+    Refuses a pid whose state is not `harvested`, whose HARVEST.tsv is missing a role its arm
+    needed, or any of whose keepers no longer re-hashes to the md5 recorded at harvest time; a
+    refused pid loses nothing and the call exits non-zero. A pid whose trees are already gone is a
+    no-op, so a second call is idempotent. `loc/` is never touched: its files are hard links into
+    the sealed FASTQ cache and the refcache, so deleting them frees nothing.
+
+    `bytes_freed` is the tree's apparent size with each inode counted once. Cromwell hard-links a
+    localized input into the call's `inputs/`, so a tree's own links back to `loc/` are counted but
+    not actually reclaimed: the number is an upper bound, as `cleanup_candidates`' is.
+
+    Returns the process exit code (0 = every named pid is either cleaned or was already clean).
+    """
+    fa = Path(cf) / "fastqarms"
+    deleted_tsv = fa / "deleted.tsv"
+    columns = "pid\ttree\tbytes_freed\tharvest_tsv_md5\tdeleted_utc"
+    refused = []
+    for row in rows:
+        pid = row["pid"]
+        trees = cromwell_trees(cf, pid)
+        if not trees:
+            log(f"{pid}: no cromwell tree left, nothing to clean")
+            continue
+        probs = harvest_problems(row, cf)
+        if probs:
+            refused.append(pid)
+            for p in probs:
+                log(f"REFUSING {p}")
+            log(f"{pid}: {len(trees)} tree(s) KEPT")
+            continue
+        tsv_md5 = md5_file(paths(cf, pid)["harvest"] / "HARVEST.tsv")
+        freed = 0
+        for t in trees:
+            n = tree_bytes(t)
+            shutil.rmtree(t)
+            freed += n
+            line = f"{pid}\t{t}\t{n}\t{tsv_md5}\t{utc_now()}\n"
+            if not deleted_tsv.exists():
+                write_atomic(deleted_tsv, columns + "\n")
+            with open(deleted_tsv, "a") as fh:
+                fh.write(line)
+            log(f"{pid}: deleted {t} ({n} B)")
+        st = read_state(cf, pid)
+        write_state(cf, pid, cleaned_utc=utc_now(),
+                    bytes_freed=(st.get("bytes_freed") or 0) + freed)
+    if refused:
+        log(f"cleanup REFUSED {len(refused)} pid(s), deleted nothing for them: {refused}")
+        return 1
+    return 0
+
+
 def cleanup_candidates(rows, cf) -> Path:
     """List every Cromwell tree and loc dir of these pids with its size. Deletes nothing."""
     fa = Path(cf) / "fastqarms"
@@ -678,7 +789,8 @@ def cleanup_candidates(rows, cf) -> Path:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("cmd", choices=("stage", "submit", "poll", "harvest", "cleanup-candidates"))
+    ap.add_argument("cmd", choices=("stage", "submit", "poll", "harvest", "cleanup-candidates",
+                                    "cleanup"))
     ap.add_argument("--rows", required=True, help="TSV from `arms.py rows --route fastq`")
     ap.add_argument("--cf", default=CF)
     ap.add_argument("--eic", default=EIC)
@@ -691,12 +803,18 @@ def main(argv=None) -> int:
     ap.add_argument("--max-attempts", type=int, default=2)
     args = ap.parse_args(argv)
 
+    if args.cmd == "cleanup" and not args.pids:
+        raise SystemExit("cleanup REFUSES to run without --pids: it deletes Cromwell trees, and "
+                         "'every pid in the rows TSV' is never a thing to ask for by accident. "
+                         "Name the pids whose products validated.")
     rows = select_rows(read_rows(args.rows), args.pids.split(",") if args.pids else None)
     if args.genome_tsv and args.cmd != "stage":
         log(f"--genome-tsv is read by `stage` only; ignored for `{args.cmd}`")
     if args.cmd == "cleanup-candidates":
         cleanup_candidates(rows, args.cf)
         return 0
+    if args.cmd == "cleanup":
+        return cleanup(rows, args.cf)
     for row in rows:
         if args.cmd == "stage":
             stage(row, args.cf, args.eic, args.refcache, args.genome_tsv)
