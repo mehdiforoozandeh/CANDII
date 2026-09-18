@@ -15,18 +15,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1
-- `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project
-- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal
-- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2
-- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid
-- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC
-- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain
+- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly
 - `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal
 - `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
 - `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n
-- `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy
-- `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS)
 - `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
 - `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories
 - `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards
@@ -45,7 +38,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
-- `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
@@ -54,8 +46,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 ## Blocked
 
-- `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — blocked by `t46`
-- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — blocked by `t49`
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t100`
 - `t103` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t101`, `t102`
 - `t104` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — blocked by `t103`
@@ -68,7 +58,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### data-acquisition
 
 - `t2` [data-acquisition] reconstruct research/METADATA_AUDIT.md, which is 0 bytes — *open*
-- `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *open*
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
@@ -84,19 +73,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term — *open*
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1 — *open*
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1 — *open*
-- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — *open*
-- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — *open*
-- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — *open*
-- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — *open*
-- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — *open*
-- `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — *blocked*
-- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *blocked*
+- `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *open*
 - `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal — *open*
 - `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *open*
 - `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS — *open*
 - `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *open*
-- `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *open*
-- `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *open*
 - `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels — *open*
 - `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories — *open*
 - `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards — *open*
@@ -114,7 +95,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t74` [implementation] adversarial field-review loop over the leaderboard page: literature-expert reviewer agent vs defender agent; worklist of valid critiques, rebuttals plus minor page fixes for invited misconceptions — *open*
 - `t75` [implementation] metric-level help: every ? carries the metric's exact question and its formula (no-dependency math rendering); breadth audit of all combos finds thin spots — *open*
 - `t76` [implementation] coverage-fill program: matrix of every combo x method (has / pending / impossible / fillable), and the Fir jobs that fill every fillable cell within days — *open*
-- `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t103` [implementation] build the in-vitro covariate testbed: encoder/decoder over paired tracks, with log depth pinned as a fixed offset of coefficient exactly 1 — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 - `t104` [implementation] the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable — *blocked*
 - `t105` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — *blocked*
@@ -167,8 +147,17 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
 - `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
+- `t46` [data-acquisition] stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project — *done* → `results/t46/STAGING_RECORD.md`
 - `t47` [implementation] bench external-track entry: the prediction-track contract plus python -m candi.bench.external — *done* → `results/t47/LINK.md`
 - `t48` [implementation] Enformer Celltyping feasibility spike: four go/no-go gates, 2-day box — *done* → `results/t48/SPIKE_MEMO.md`
+- `t49` [implementation] naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal — *done* → `results/t49/ANCHORS.md`
+- `t50` [implementation] Avocado on our EIC: vendor Max's 005 PyTorch port, retrain at halved epochs, score P1+P2 — *done* → `results/t50/CAVEATS.md`
+- `t51` [implementation] ChromImpute on our EIC: 20-pair cost pilot, then the full declared-pair grid — *done* → `results/t51/PILOT_MEMO.md`
+- `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — *done* → `results/t52/README_snapshot.md`
+- `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — *done* → `results/t53/SPIKE_MEMO.md`
+- `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — *done* → `results/t54/DATASET3_GAP.md`
+- `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *done* → `results/t58/MERGED.md`
+- `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *done* → `results/t59/MERGED.md`
 - `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *done* → `results/t77/DELIVERABLE.md`
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *done* → `results/t78/G1_PHASE2_DNASE.md`
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *done* → `results/t79/G2_PILOT_HG38.md`
@@ -185,3 +174,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t90` [implementation] move the 23 entrant submission tracks off scratch to /project before the 60-day purge — *done* → `results/t90/MOVE.md`
 - `t91` [implementation] build the training-residual sigma pass so every point-only method gets a leak-free spread — *done* → `results/t91/DELIVERABLE.md`
 - `t98` [implementation] Whole-genome blind-set prediction arrays from the existing eDICE and ChromImpute checkpoints (throwaway preview) — *done* → `results/t98/README.md`
+- `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *done* → `results/t101/MERGED.md`
