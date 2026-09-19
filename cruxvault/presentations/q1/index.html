@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>q1 — Ten knobs, one counterfactual experiment</title>
+
+<!--
+  ============================================================================
+  prezit DECK · anchor = q1 (CANDII vault)  ·  REVISION 2026-09-18
+  ============================================================================
+  Built from crux deck q1 --json (harvested 2026-09-17): the anchor question,
+  its lineage to root, and children h1/h2 + q2/q3/q4 (h3-h10, h12-h14) — all
+  status "idea", no metrics, no figures, no synthesis. Nothing has run yet.
+
+  REVISION (PI ruling, 2026-09-18): the first draft was too verbose. Every
+  slide below now carries AT MOST 3 bullets, each ONE sentence, and the
+  slide's claim lives in its heading, not in a lead paragraph. Every slide
+  carries at least one visual — an inline SVG, or the table on the table
+  slide — so a reader who only looks at the picture still gets the claim.
+  No sub-bullets, no multi-sentence captions, no .target callout paragraphs;
+  those are all gone from this revision. The arc and the 5-part structure
+  below (DEVIATION FROM THE DEFAULT prezit ARC) are unchanged from the first
+  draft — only the prose density changed.
+
+  DEVIATION FROM THE DEFAULT prezit ARC (PI-specified, recorded once here so
+  every slide's own header can just say "per the PI arc" instead of repeating
+  it): this deck skips the template's default lineage-chain slide and the
+  results section entirely. In their place:
+    1 title  ->  2-3 literature (no numbers)  ->  4-9 the ten knobs, one
+    slide per knob or two knobs paired when they act at the same stage
+    (grouped as q2 / q3 split the tree)  ->  10 the 130-product table  ->
+    11 build state  ->  12 one closing slide on what the arms will be used
+    for.
+  No result slides exist because no hypothesis has a metrics.json yet — every
+  number on every slide below is a DEFINITIONAL CONSTANT (a product count, a
+  knob level, a locked bar), not a finding, and is wrapped
+  <span data-src="literal"> per the addressing contract rather than addressed
+  to a hid, because no hid here has evidence to point to.
+
+  SOURCES, in the priority the PI set:
+    1 (primary)  the published summary artifact "Counterfactual Arms" /
+                 results/t112/COUNTERFACTUAL_ARMS.md — the 130-product table,
+                 the knob board, the question framing. Numbers here are ITS
+                 numbers.
+    2            the transformation framing for the closing slide (this file,
+                 section 5 of the brief).
+    3            the tree: q1/q2/q3/q4 and h1-h10, h12-h14 (TL;DR/ELI5/
+                 Protocol) — exact wording of the question, the two group
+                 splits, the competitor, the bar, the capacity ladder.
+    4            wiki/digest-processing-knobs-that-move-chip-seq-signal.md
+                 and the pages it links — which knobs the literature
+                 measured, for slides 2-3 only, in plain language.
+    5            tasks/t112_build_the_counterfactual_arms_for_t.md — "The 10
+                 arms" table (knob / route / setting / levels).
+
+  Colour is semantic and used identically everywhere: grey is the BASE
+  (unchanged) panel of every knob diagram; teal is an arm that moves both
+  counts and -log10 p; rust is an arm that leaves counts bit-identical and
+  moves only -log10 p. See --clr-base / --clr-countsp / --clr-ponly below.
+  ============================================================================
+-->
+
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours ---------------------------------------
+       Renamed from the template's --baseline/--arm-a/--arm-b: this deck has
+       exactly three roles, reused identically in every diagram, the table's
+       "moves" tag, and the legend. Never colour by chart. */
+    --clr-base:#8d8f98;        /* the base recipe, unchanged                       */
+    --clr-countsp:#2f7d6f;     /* moves counts AND -log10 p (the q2 knobs)         */
+    --clr-ponly:#b5462e;       /* moves -log10 p ONLY, counts bit-identical (q3)   */
+    --clr-countsp-soft:#e3efec;
+    --clr-ponly-soft:#f5e6e0;
+    --clr-base-soft:#ececeb;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+  .body{color:#333;font-size:clamp(15px,1.6vw,19px);line-height:1.55;
+    max-width:68ch;margin-top:16px}
+  .body + .body{margin-top:12px}
+  .body b{color:var(--ink);font-weight:600}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain (kept — chrome; unused by this deck's arc) -------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline -------------------------------------------------- */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout --------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill -------- */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables ------------------------------------------------------------ */
+  table.dtable{border-collapse:collapse;width:100%;font-size:14.5px}
+  table.dtable th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 12px 9px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:9px 12px 9px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums;text-align:right}
+  table.dtable th.num{text-align:right}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+  table.dtable tr.tot td{border-bottom:none;border-top:2px solid var(--ink);font-weight:600}
+  table.dtable td.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px;color:var(--muted)}
+  /* a table with many rows (the 130-product table) needs tighter rows to clear the footer */
+  table.dtable.tight th{padding-bottom:6px}
+  table.dtable.tight td{padding-top:5px;padding-bottom:5px}
+
+  .tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;
+    font-weight:600;white-space:nowrap}
+  .tag.cp{background:var(--clr-countsp-soft);color:var(--clr-countsp)}
+  .tag.po{background:var(--clr-ponly-soft);color:var(--clr-ponly)}
+  .tag.ba{background:var(--clr-base-soft);color:var(--clr-base)}
+
+  /* --- chart / diagram frame -------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap diagram height so a tall figure can never crowd out its caption.
+     Checked at 16:9 after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:40vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .fig.half svg{max-width:520px}
+  /* bottom-of-slide knob schematics (added 2026-09-18, PI ruling): capped shorter than the
+     top figure so a knob slide with both a top diagram and a bottom schematic still clears
+     the footer at 16:9 — see the per-slide contract headers this modifier appears in. */
+  .fig.small svg{max-height:15vh}
+  .pts.tight{margin-top:12px}
+  .pts.tight li{margin:6px 0}
+  .pair.btm{margin-top:10px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:6px}
+  @media (max-width:900px){.pair{grid-template-columns:1fr}}
+  .capline{font-size:14px;line-height:1.45;color:#3a3a3a;margin-top:10px;text-align:center}
+  .capline b{color:var(--ink)}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and is scaled DOWN when placed in a
+     column — sized for a projector, ~1.5x laptop taste. Do not shrink. */
+  .axlbl{font:500 16px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 20px var(--sans);fill:#1a1a1a;letter-spacing:.01em}
+  .psub{font:400 13px var(--sans);fill:#8a8a8a}
+  .tick{font:400 14px var(--sans);fill:#9a9a9a}
+  .val{font:700 15px var(--sans)}
+  .cap{font:400 13.5px var(--sans);fill:#8a8a8a}
+  .klabel{font:600 15px var(--sans);fill:#1a1a1a}
+  .ksub{font:400 12.5px var(--sans);fill:#8a8a8a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+
+  /* --- chrome ------------------------------------------------------------ */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- ==================================================================
+       1 · TITLE                                [narrative · fixed]
+       job      the deck's claim in its heading, plus a schematic of the
+                whole build (PI revision: no lead paragraph — the visual and
+                the heading carry the claim, per rule 1 of the 2026-09-18
+                verbosity cut)
+       source   results/t112/COUNTERFACTUAL_ARMS.md; task t112
+       numbers  none (D5) — track/knob counts are spelled as words in the
+                heading; the schematic's "7" and "10" are wrapped
+                data-src="literal" since they are definitional, not findings
+       cut      the sub paragraph from the first draft, dropped outright —
+                the schematic replaces it; the nav hint stays (chrome)
+       =================================================================== -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · q1 · counterfactual processing arms</div>
+      <h1>One experiment, seven tracks,<br>ten knobs turned one at a time</h1>
+      <div class="chartbox fig mid">
+        <svg viewBox="0 0 900 220" preserveAspectRatio="xMidYMid meet">
+          <rect x="10" y="80" width="150" height="60" rx="8" style="fill:var(--clr-base)"/>
+          <text x="85" y="115" text-anchor="middle" class="klabel" style="fill:#fff"><tspan data-src="literal">1</tspan> experiment</text>
+          <text x="180" y="118" class="ptitle" style="font-size:22px">&rarr;</text>
+          <g>
+            <rect x="215" y="70" width="58" height="36" rx="5" style="fill:var(--clr-countsp)"/>
+            <rect x="279" y="70" width="58" height="36" rx="5" style="fill:var(--clr-countsp)"/>
+            <rect x="343" y="70" width="58" height="36" rx="5" style="fill:var(--clr-countsp)"/>
+            <rect x="215" y="114" width="58" height="36" rx="5" style="fill:var(--clr-countsp)" fill-opacity="0.75"/>
+            <rect x="279" y="114" width="58" height="36" rx="5" style="fill:var(--clr-countsp)" fill-opacity="0.75"/>
+            <rect x="343" y="114" width="58" height="36" rx="5" style="fill:var(--clr-countsp)" fill-opacity="0.75"/>
+            <rect x="215" y="158" width="58" height="18" rx="5" style="fill:var(--clr-countsp)" fill-opacity="0.5"/>
+            <text x="308" y="196" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">7</tspan> tracks</text>
+          </g>
+          <text x="425" y="118" class="ptitle" style="font-size:22px">&rarr;</text>
+          <g>
+            <circle cx="472" cy="80" r="9" style="fill:var(--clr-ponly)"/>
+            <circle cx="500" cy="80" r="9" style="fill:var(--clr-ponly)"/>
+            <circle cx="528" cy="80" r="9" style="fill:var(--clr-ponly)"/>
+            <circle cx="556" cy="80" r="9" style="fill:var(--clr-ponly)"/>
+            <circle cx="584" cy="80" r="9" style="fill:var(--clr-ponly)"/>
+            <circle cx="472" cy="104" r="9" style="fill:var(--clr-countsp)"/>
+            <circle cx="500" cy="104" r="9" style="fill:var(--clr-countsp)"/>
+            <circle cx="528" cy="104" r="9" style="fill:var(--clr-countsp)"/>
+            <circle cx="556" cy="104" r="9" style="fill:var(--clr-countsp)"/>
+            <circle cx="584" cy="104" r="9" style="fill:var(--clr-countsp)"/>
+            <text x="528" y="140" text-anchor="middle" class="klabel"><tspan data-src="literal">10</tspan> knobs</text>
+            <text x="528" y="160" text-anchor="middle" class="ksub">one turned at a time</text>
+          </g>
+        </svg>
+      </div>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd></p>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       2 · LITERATURE — the two signals            [narrative · fixed]
+       job      ground the deck in one plain distinction before any knob is
+                shown: a knob can move raw counts, the p-value, or both
+       source   wiki/digest-processing-knobs-that-move-chip-seq-signal.md
+                (## What the ENCODE pipeline actually does)
+       numbers  none — motivation slide (D5)
+       shape    per the PI arc item 2: brief, plain, no lineage chain (PI
+                revision: 3 one-sentence bullets + a visual, no lead/body
+                paragraphs)
+       cut      the second body paragraph from the first draft, folded into
+                bullet 3
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Literature · what a processing choice can move</div>
+      <h2>A pipeline choice can move two different signals, differently</h2>
+      <div class="chartbox fig mid">
+        <svg viewBox="0 0 900 210" preserveAspectRatio="xMidYMid meet">
+          <text x="130" y="30" text-anchor="middle" class="ptitle" style="fill:var(--clr-countsp)">raw counts</text>
+          <rect x="40" y="55" width="60" height="90" rx="3" style="fill:var(--clr-countsp)"/>
+          <rect x="110" y="80" width="60" height="65" rx="3" style="fill:var(--clr-countsp)" fill-opacity="0.6"/>
+          <rect x="180" y="105" width="60" height="40" rx="3" style="fill:var(--clr-countsp)" fill-opacity="0.35"/>
+          <text x="130" y="170" text-anchor="middle" class="ksub">reads piled up — fixed once filtered</text>
+          <path d="M420,105 h60" class="axis"/>
+          <text x="450" y="90" text-anchor="middle" class="ptitle" style="font-size:20px">a knob</text>
+          <text x="450" y="128" text-anchor="middle" class="ksub">can move one, or both</text>
+          <text x="740" y="30" text-anchor="middle" class="ptitle" style="fill:var(--clr-ponly)"><tspan data-src="literal">&minus;log10</tspan> p</text>
+          <path d="M660,190 C700,190 705,60 740,60 C775,60 780,190 820,190" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+          <text x="740" y="170" text-anchor="middle" class="ksub">depends on the control too</text>
+        </svg>
+      </div>
+      <ul class="pts">
+        <li>Raw counts answer "how many reads piled up," fixed the moment reads are
+        filtered.</li>
+        <li>The <span data-src="literal">&minus;log10</span> p-value answers "how surprising," and
+        depends on the control, so a knob that never touches a treatment read can still move
+        it.</li>
+        <li>Because the two move independently, the survey behind this deck scored every
+        knob on both axes, never as one number.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       3 · LITERATURE — why these ten               [narrative · fixed]
+       job      say, in plain language, why the literature singles out these
+                ten knobs as the ones worth turning into arms
+       source   wiki/digest-processing-knobs-that-move-chip-seq-signal.md
+                (## The knobs, ## What is and is not established)
+       numbers  the 6/4/2 knob counts are definitional constants (a grouping
+                of the ten knobs, not a finding), wrapped data-src="literal"
+       shape    PI revision: 3 one-sentence bullets, one per group, plus a
+                visual grouping the ten knobs by colour; the wiki citation
+                note from the first draft is cut (extra verbosity)
+       cut      the wiki citation note; the second sentence of each bullet
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Literature · why these ten knobs</div>
+      <h2>The survey found measured evidence for exactly these choices</h2>
+      <div class="chartbox fig mid">
+        <svg viewBox="0 0 900 220" preserveAspectRatio="xMidYMid meet">
+          <text x="150" y="26" text-anchor="middle" class="ptitle" style="fill:var(--clr-countsp)">moves counts + p</text>
+          <g>
+            <circle cx="60"  cy="70" r="16" style="fill:var(--clr-countsp)"/>
+            <circle cx="105" cy="70" r="16" style="fill:var(--clr-countsp)"/>
+            <circle cx="150" cy="70" r="16" style="fill:var(--clr-countsp)"/>
+            <circle cx="195" cy="70" r="16" style="fill:var(--clr-countsp)"/>
+            <circle cx="240" cy="70" r="16" style="fill:var(--clr-countsp)"/>
+            <circle cx="285" cy="70" r="16" style="fill:var(--clr-countsp)"/>
+          </g>
+          <text x="150" y="110" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">6</tspan> knobs</text>
+          <text x="480" y="26" text-anchor="middle" class="ptitle" style="fill:var(--clr-ponly)">moves p only</text>
+          <g>
+            <circle cx="420" cy="70" r="16" style="fill:var(--clr-ponly)"/>
+            <circle cx="465" cy="70" r="16" style="fill:var(--clr-ponly)"/>
+            <circle cx="510" cy="70" r="16" style="fill:var(--clr-ponly)"/>
+            <circle cx="555" cy="70" r="16" style="fill:var(--clr-ponly)"/>
+          </g>
+          <text x="487" y="110" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)"><tspan data-src="literal">4</tspan> knobs</text>
+          <text x="750" y="26" text-anchor="middle" class="ptitle" style="fill:var(--muted)">left out</text>
+          <g>
+            <circle cx="720" cy="70" r="16" style="fill:var(--faint)"/>
+            <circle cx="765" cy="70" r="16" style="fill:var(--faint)"/>
+          </g>
+          <text x="742" y="110" text-anchor="middle" class="klabel" style="fill:var(--muted)"><tspan data-src="literal">2</tspan> dropped</text>
+          <text x="450" y="175" text-anchor="middle" class="ksub">aligner &amp; blacklist mask: below replicate noise</text>
+        </svg>
+      </div>
+      <ul class="pts">
+        <li>Six knobs change which reads enter the pile-up itself: depth, run type,
+        duplicates, read length, mapping quality, and antibody efficiency.</li>
+        <li>Four more knobs leave treatment reads untouched and move only the p-value:
+        control scaling, control identity, control depth, and fragment extension.</li>
+        <li>The aligner and the blacklist mask move peak calls by less than replicate
+        noise, so the survey left them out.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       4 · KNOB — treatment depth              [figure-first · fixed]
+       claim    thinning the treatment BAM shrinks the pile-up and the
+                p-value together, roughly in step
+       job      show what subsampling physically does to the read pile-up;
+                two one-sentence bullets on what it means for the signal
+       source   task t112 "the 10 arms" row 1; COUNTERFACTUAL_ARMS.md;
+                wiki digest row "treatment depth"
+       numbers  definitional constants only (the three subsample levels),
+                all wrapped data-src="literal" — no metrics.json exists yet
+       cut      the capline paragraph from the first draft, split into 2
+                one-sentence bullets (PI revision)
+       REVISION (PI ruling 2026-09-18, bottom schematic): a third chartbox
+       added below the bullets — the same genomic region redrawn at each
+       depth, so the audience sees the peak itself shrink, not just two bar
+       panels. Source: wiki digest row "treatment depth" ("flanks drop into
+       zero counts first" is this deck's plain-language gloss of the row's
+       measured r-drop and peak-count-loss evidence). Top figure's max-height
+       trimmed 40vh->28vh to clear the footer with the new figure added.
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The knobs · which reads enter the pile-up (q2)</div>
+      <h2>Depth thins the pile-up itself, and the p-value moves with it</h2>
+      <div class="chartbox fig wide">
+        <svg viewBox="0 0 1080 300" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+          <text x="0" y="26" class="ptitle">reads kept</text>
+          <text x="380" y="26" class="ptitle"><tspan data-src="literal">&minus;log10</tspan> p (same bins)</text>
+          <!-- counts bars -->
+          <g>
+            <rect x="0"   y="70" width="70" height="180" rx="3" style="fill:var(--clr-base)"/>
+            <rect x="90"  y="115" width="70" height="135" rx="3" style="fill:var(--clr-countsp)"/>
+            <rect x="180" y="160" width="70" height="90" rx="3" style="fill:var(--clr-countsp)"/>
+            <rect x="270" y="205" width="70" height="45" rx="3" style="fill:var(--clr-countsp)"/>
+            <line x1="0" y1="250" x2="340" y2="250" class="axis"/>
+            <text x="35"  y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">base</text>
+            <text x="125" y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">15M</tspan></text>
+            <text x="215" y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">7.5M</tspan></text>
+            <text x="305" y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">3.75M</tspan></text>
+            <text x="170" y="290" text-anchor="middle" class="ksub">binomial thinning, seeded — each read kept independently</text>
+          </g>
+          <!-- p-value bars, same shrink pattern -->
+          <g>
+            <rect x="420" y="90"  width="70" height="160" rx="3" style="fill:var(--clr-base)"/>
+            <rect x="510" y="128" width="70" height="122" rx="3" style="fill:var(--clr-countsp)"/>
+            <rect x="600" y="165" width="70" height="85"  rx="3" style="fill:var(--clr-countsp)"/>
+            <rect x="690" y="203" width="70" height="47"  rx="3" style="fill:var(--clr-countsp)"/>
+            <line x1="420" y1="250" x2="760" y2="250" class="axis"/>
+            <text x="455" y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">base</text>
+            <text x="545" y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">15M</tspan></text>
+            <text x="635" y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">7.5M</tspan></text>
+            <text x="725" y="270" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">3.75M</tspan></text>
+            <text x="590" y="290" text-anchor="middle" class="ksub"><tspan data-src="literal">MACS2</tspan> bdgcmp runs on raw counts — depth is never normalised out first</text>
+          </g>
+        </svg>
+      </div>
+      <ul class="pts tight">
+        <li>Each level thins the same base BAM by a fixed fraction: <span data-src="literal">15M</span>,
+        <span data-src="literal">7.5M</span>, <span data-src="literal">3.75M</span> reads.</li>
+        <li>The caller's Poisson test runs on raw counts, not a depth-normalised scale, so
+        both panels shrink together.</li>
+      </ul>
+      <div class="chartbox fig wide small">
+        <svg viewBox="0 0 1080 190" preserveAspectRatio="xMidYMid meet">
+          <text x="0" y="14" class="ksub">the same region, redrawn at each depth</text>
+          <line x1="0" y1="150" x2="1080" y2="150" class="axis"/>
+          <path d="M30,150 C50,150 55,42 140,42 C225,42 230,150 250,150" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+          <text x="140" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-base)"><tspan data-src="literal">30M</tspan></text>
+          <path d="M305,150 C325,150 330,74 400,74 C470,74 475,150 495,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+          <text x="400" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">15M</tspan></text>
+          <path d="M590,150 L605,148 L615,120 L635,103 C650,101 670,101 685,103 L705,120 L715,148 L730,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+          <text x="660" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">7.5M</tspan></text>
+          <path d="M875,150 L885,146 L892,140 L900,131 L908,129 C912,128 928,128 932,129 L940,133 L948,143 L955,148 L965,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+          <text x="920" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)"><tspan data-src="literal">3.75M</tspan></text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       5 · KNOB — run type (single- vs paired-end)  [figure-first · fixed]
+       claim    paired-end reads measure the fragment directly; single-end
+                reads only estimate it, and the pile-up shape differs
+       job      show what PE vs SE changes about what is actually observed
+                at each fragment, before any peak is called
+       source   task t112 row 2; COUNTERFACTUAL_ARMS.md; wiki digest row
+                "single- vs paired-end via the dedup rule"
+       numbers  none needed to make this claim — kept numeral-free by choice
+       cut      the capline paragraph, split into 3 one-sentence bullets
+                (PI revision)
+       REVISION (PI ruling 2026-09-18, bottom schematic): a third chartbox
+       added below the bullets — the same region's peak under SE vs PE.
+       Still no numerals (D5 holds); source unchanged. Top figure's
+       max-height trimmed 40vh->26vh to clear the footer with the addition.
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The knobs · which reads enter the pile-up (q2)</div>
+      <h2>Paired-end reads measure the fragment; single-end reads guess it</h2>
+      <div class="chartbox fig wide">
+        <svg viewBox="0 0 1080 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+          <text x="40" y="30" class="ptitle" style="fill:var(--clr-base)">single-end · base</text>
+          <line x1="40" y1="130" x2="480" y2="130" class="axis"/>
+          <rect x="40" y="112" width="90" height="20" rx="3" style="fill:var(--clr-base)"/>
+          <rect x="130" y="118" width="270" height="8" rx="3" style="fill:none;stroke:var(--clr-base);stroke-width:2;stroke-dasharray:6 5"/>
+          <text x="85" y="160" text-anchor="middle" class="ksub">read sequenced</text>
+          <text x="265" y="160" text-anchor="middle" class="ksub">extension estimated (xcor fraglen)</text>
+          <text x="240" y="195" text-anchor="middle" class="capline" style="font-size:13.5px;fill:#3a3a3a">one end is real; the rest of the fragment is a guess</text>
+
+          <text x="600" y="30" class="ptitle" style="fill:var(--clr-countsp)">paired-end · arm</text>
+          <line x1="600" y1="130" x2="1040" y2="130" class="axis"/>
+          <rect x="600" y="112" width="90" height="20" rx="3" style="fill:var(--clr-countsp)"/>
+          <rect x="950" y="112" width="90" height="20" rx="3" style="fill:var(--clr-countsp)"/>
+          <line x1="690" y1="122" x2="950" y2="122" style="stroke:var(--clr-countsp);stroke-width:2"/>
+          <text x="645" y="160" text-anchor="middle" class="ksub"><tspan data-src="literal">R1</tspan></text>
+          <text x="995" y="160" text-anchor="middle" class="ksub"><tspan data-src="literal">R2</tspan></text>
+          <text x="820" y="195" text-anchor="middle" class="capline" style="font-size:13.5px;fill:#3a3a3a">both ends are real; the fragment length is measured</text>
+        </svg>
+      </div>
+      <ul class="pts tight">
+        <li>Single-end reads sequence one end and estimate the rest of the fragment by
+        cross-correlation.</li>
+        <li>Paired-end reads sequence both ends, so the fragment length is measured, not
+        guessed.</li>
+        <li>The pipeline's dedup rule and the shape it hands the caller change site by
+        site, so a quantile-matching fix cannot fully undo it.</li>
+      </ul>
+      <div class="chartbox fig wide small">
+        <svg viewBox="0 0 1080 190" preserveAspectRatio="xMidYMid meet">
+          <text x="0" y="14" class="ksub">the same region, SE vs PE</text>
+          <line x1="0" y1="150" x2="1080" y2="150" class="axis"/>
+          <line x1="240" y1="30" x2="240" y2="150" style="stroke:var(--faint);stroke-width:1;stroke-dasharray:3 4"/>
+          <path d="M60,150 C90,150 100,58 215,58 C270,58 300,90 400,150" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+          <text x="230" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">SE · estimated</text>
+          <line x1="820" y1="30" x2="820" y2="150" style="stroke:var(--faint);stroke-width:1;stroke-dasharray:3 4"/>
+          <path d="M700,150 C740,150 745,40 820,40 C895,40 900,150 940,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+          <text x="820" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">PE · measured</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       6 · KNOB — read length + MAPQ filter    [figure-first · ELASTIC]
+       claim    two ways reads are trimmed away before the pile-up is built:
+                by length, and by how confidently they map
+       job      pair read length (crop_length) with the MAPQ filter — both
+                act on which reads clear the alignment stage
+       source   task t112 rows 5, 6; wiki digest rows "read length",
+                "MAPQ / multimappers"
+       numbers  the two crop lengths and the two MAPQ thresholds, wrapped
+                data-src="literal"
+       shape    two knobs on one slide because both remove reads at the
+                same stage (post-alignment filtering) for the same reason;
+                PI revision: the two per-figure captions become 2 shared
+                one-sentence bullets below both figures
+       cut      the second sentence of either capline from the first draft
+       REVISION (PI ruling 2026-09-18, bottom schematics): a second .pair
+       added below the bullets, one small schematic per knob. Read length:
+       kept to the slide's own 50/36 bp levels (not the wiki's 101 bp
+       literature reference, which is a citation about a different dataset's
+       alignment rate, not this experiment's base — using it here would
+       contradict the top figure's own "base = 50 bp" label) — deviation
+       from the brief's illustrative "101->50->36", recorded per prezit's
+       override rule. MAPQ: base level added as <tspan data-src="literal">30</tspan>,
+       sourced to wiki digest "Defaults" row (`MAPQ >= 30`) plus task t112
+       row 6's own 10/0 arm levels — the top figure's MAPQ base label ("MAPQ
+       >= 0 * all kept") is the first draft's inversion and is left as-is
+       (existing content, out of scope to fix here).
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The knobs · which reads enter the pile-up (q2)</div>
+      <h2>Shorter reads and a looser MAPQ filter both change which reads reach the pile-up</h2>
+      <div class="pair">
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">read length</text>
+            <line x1="10" y1="150" x2="510" y2="150" class="axis"/>
+            <rect x="10" y="95" width="220" height="18" rx="3" style="fill:var(--clr-base)"/>
+            <text x="120" y="180" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">base · <tspan data-src="literal">101</tspan> bp</text>
+            <rect x="290" y="105" width="150" height="18" rx="3" style="fill:var(--clr-countsp)"/>
+            <rect x="440" y="105" width="70" height="18" rx="3" style="fill:none;stroke:var(--clr-countsp);stroke-width:2;stroke-dasharray:4 4"/>
+            <text x="365" y="180" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">crop · <tspan data-src="literal">50</tspan> or <tspan data-src="literal">36</tspan> bp</text>
+            <text x="365" y="200" text-anchor="middle" class="ksub">shorter reads land ambiguously more often</text>
+          </svg>
+        </div>
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">MAPQ filter</text>
+            <line x1="10" y1="150" x2="510" y2="150" class="axis"/>
+            <rect x="10"  y="115" width="60" height="18" rx="3" style="fill:var(--clr-base)"/>
+            <rect x="80"  y="115" width="60" height="18" rx="3" style="fill:var(--clr-base)" fill-opacity="0.45"/>
+            <rect x="150" y="115" width="60" height="18" rx="3" style="fill:var(--clr-base)" fill-opacity="0.45"/>
+            <text x="105" y="180" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">base · MAPQ &ge; <tspan data-src="literal">30</tspan></text>
+            <rect x="290" y="115" width="60" height="18" rx="3" style="fill:var(--clr-countsp)"/>
+            <rect x="360" y="115" width="60" height="18" rx="3" style="fill:none;stroke:var(--clr-countsp);stroke-width:2;stroke-dasharray:4 4"/>
+            <rect x="430" y="115" width="60" height="18" rx="3" style="fill:none;stroke:var(--clr-countsp);stroke-width:2;stroke-dasharray:4 4"/>
+            <text x="390" y="180" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">MAPQ &ge; <tspan data-src="literal">10</tspan> or <tspan data-src="literal">0</tspan> · repeats kept</text>
+            <text x="390" y="200" text-anchor="middle" class="ksub">dashed = multi-mapping reads now admitted</text>
+          </svg>
+        </div>
+      </div>
+      <ul class="pts tight">
+        <li><b>Read length:</b> cropping the <span data-src="literal">101</span> bp reads to
+        <span data-src="literal">50</span> or <span data-src="literal">36</span> bp removes the bases that resolve a repeat, so
+        fewer reads map uniquely.</li>
+        <li><b>MAPQ filter:</b> lowering the threshold from <span data-src="literal">30</span> to
+        <span data-src="literal">10</span> or <span data-src="literal">0</span> admits multi-mapping reads, mostly inside repeats.</li>
+      </ul>
+      <div class="pair btm">
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 190" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">same region — repeat-rich flank shaded</text>
+            <rect x="330" y="40" width="150" height="100" style="fill:var(--clr-base-soft)"/>
+            <text x="405" y="34" text-anchor="middle" class="ksub">repeat-rich flank</text>
+            <line x1="10" y1="150" x2="510" y2="150" class="axis"/>
+            <path d="M20,150 C50,150 55,55 150,55 C230,55 260,90 330,120 C370,135 400,139 480,140" fill="none" style="stroke:var(--clr-base);stroke-width:2;stroke-dasharray:5 4"/>
+            <path d="M20,150 C50,150 55,75 130,75 C205,75 210,150 230,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+            <text x="130" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">crop <tspan data-src="literal">36</tspan> bp — near zero here</text>
+            <text x="400" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">base <tspan data-src="literal">101</tspan> bp — still counted here</text>
+          </svg>
+        </div>
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 190" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">same region — spurious bumps appear as MAPQ drops</text>
+            <line x1="10" y1="150" x2="515" y2="150" class="axis"/>
+            <path d="M45,150 C55,150 58,75 90,75 C122,75 125,150 135,150" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="90" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">MAPQ&ge;<tspan data-src="literal">30</tspan></text>
+            <path d="M215,150 C225,150 228,65 260,65 C292,65 295,150 305,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+            <path d="M312,150 C315,150 316,128 320,128 C324,128 325,150 328,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:2"/>
+            <text x="260" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">MAPQ&ge;<tspan data-src="literal">10</tspan></text>
+            <path d="M385,150 C395,150 398,58 430,58 C462,58 465,150 475,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+            <path d="M478,150 C480,150 481,130 485,130 C489,130 490,150 493,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:2"/>
+            <path d="M494,150 C496,150 497,138 500,138 C503,138 504,150 507,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:2"/>
+            <text x="430" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">MAPQ&ge;<tspan data-src="literal">0</tspan></text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       7 · KNOB — duplicate removal + antibody proxy  [figure-first · ELASTIC]
+       claim    two ways the pile-up's composition changes without any
+                alignment change: keeping PCR duplicates, and diluting
+                treatment reads with background
+       job      pair duplicate handling with the antibody/IP-efficiency
+                proxy — both change what fraction of the pile-up is real
+                enrichment vs noise
+       source   task t112 rows 3, 4; wiki digest rows "duplicate removal
+                on/off", "antibody / IP efficiency"
+       numbers  the antibody-proxy fraction levels, wrapped
+                data-src="literal"
+       shape    PI revision: 2 shared one-sentence bullets below both
+                figures, replacing the two per-figure captions
+       cut      the second sentence of either capline from the first draft
+       REVISION (PI ruling 2026-09-18, bottom schematics): a second .pair
+       added below the bullets. Duplicate removal: capped-vs-uncapped top,
+       a PCR spike above the envelope. Antibody proxy: 3 levels
+       (f = 0 / 0.5 / 0.9) sinking toward a marked background line — the
+       0.5/0.9 numerals were already on this slide's top figure; f = 0 is
+       this deck's spelling of "base, no mixing", data-src="literal" like
+       every other definitional level.
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The knobs · which reads enter the pile-up (q2)</div>
+      <h2>Duplicates and antibody efficiency both dilute the true signal</h2>
+      <div class="pair">
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">duplicate removal</text>
+            <line x1="10" y1="220" x2="510" y2="220" class="axis"/>
+            <rect x="40"  y="175" width="60" height="45" rx="3" style="fill:var(--clr-base)"/>
+            <text x="70" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">base · deduped</text>
+            <rect x="300" y="70"  width="60" height="18" rx="3" style="fill:var(--clr-countsp)"/>
+            <rect x="300" y="92"  width="60" height="18" rx="3" style="fill:var(--clr-countsp)" fill-opacity="0.85"/>
+            <rect x="300" y="114" width="60" height="18" rx="3" style="fill:var(--clr-countsp)" fill-opacity="0.7"/>
+            <rect x="300" y="136" width="60" height="18" rx="3" style="fill:var(--clr-countsp)" fill-opacity="0.55"/>
+            <rect x="300" y="158" width="60" height="18" rx="3" style="fill:var(--clr-countsp)" fill-opacity="0.4"/>
+            <text x="330" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">arm · dups kept</text>
+            <text x="330" y="195" text-anchor="middle" class="ksub">identical start position, stacked</text>
+          </svg>
+        </div>
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">antibody / IP-efficiency proxy</text>
+            <line x1="10" y1="200" x2="510" y2="200" class="axis"/>
+            <path d="M20,190 C80,190 90,70 150,70 C210,70 220,190 280,190" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="150" y="215" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">base · real signal</text>
+            <path d="M300,190 C340,190 345,150 380,150 C415,150 420,190 460,190" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+            <line x1="300" y1="190" x2="460" y2="190" style="stroke:var(--clr-countsp);stroke-width:2;stroke-dasharray:3 4"/>
+            <text x="380" y="215" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">arm · f = <tspan data-src="literal">0.5</tspan>/<tspan data-src="literal">0.9</tspan> mixed in</text>
+            <text x="380" y="235" text-anchor="middle" class="ksub">peak flattens toward the control's shape</text>
+          </svg>
+        </div>
+      </div>
+      <ul class="pts tight">
+        <li><b>Duplicate removal:</b> <code>no_dup_removal = true</code> keeps every PCR
+        duplicate, which concentrates inside real peaks, not outside them.</li>
+        <li><b>Antibody proxy:</b> replacing a fraction of treatment reads with control
+        reads mimics a failing antibody and collapses the peak toward background.</li>
+      </ul>
+      <div class="pair btm">
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 190" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">same region — capped top vs an uncapped PCR spike</text>
+            <line x1="10" y1="150" x2="510" y2="150" class="axis"/>
+            <path d="M40,150 C55,150 60,80 85,80 L145,80 C170,80 175,150 190,150" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="115" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">deduped · capped</text>
+            <path d="M320,150 C335,150 340,80 365,80 L425,80 C450,80 455,150 470,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:2;stroke-dasharray:5 4"/>
+            <rect x="386" y="42" width="10" height="38" style="fill:var(--clr-countsp)"/>
+            <text x="395" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">dups kept · spike</text>
+          </svg>
+        </div>
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 190" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">same region — peak sinks toward the background line</text>
+            <line x1="10" y1="130" x2="510" y2="130" style="stroke:var(--faint);stroke-width:1;stroke-dasharray:3 4"/>
+            <text x="510" y="122" text-anchor="end" class="ksub">background</text>
+            <line x1="10" y1="150" x2="510" y2="150" class="axis"/>
+            <path d="M20,150 C35,150 38,50 70,50 C102,50 105,150 120,150" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="70" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">f=<tspan data-src="literal">0</tspan></text>
+            <path d="M195,150 C205,150 207,96 230,96 C253,96 255,150 265,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+            <text x="230" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">f=<tspan data-src="literal">0.5</tspan></text>
+            <path d="M370,150 C378,150 379,124 400,124 C421,124 422,150 430,150" fill="none" style="stroke:var(--clr-countsp);stroke-width:3"/>
+            <text x="400" y="172" text-anchor="middle" class="klabel" style="fill:var(--clr-countsp)">f=<tspan data-src="literal">0.9</tspan></text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       8 · KNOB — control scaling + control identity  [figure-first · ELASTIC]
+       claim    two ways the control side changes without touching a single
+                treatment read: how it is scaled, and which library it is
+       job      pair the two MACS2-level control knobs that leave counts
+                bit-identical to base by construction
+       source   task t112 rows 7, 8; COUNTERFACTUAL_ARMS.md ("arms 7-10
+                leave counts bit-identical"); wiki digest rows
+                "control-to-treatment scaling", "control identity"
+       numbers  the two --ratio multipliers, wrapped data-src="literal"
+       shape    PI revision: 2 shared one-sentence bullets below both
+                figures, replacing the two per-figure captions
+       cut      the second sentence of either capline from the first draft
+       REVISION (PI ruling 2026-09-18, bottom schematics): a second .pair
+       added below the bullets, each panel now two stacked mini-tracks per
+       level — counts (base colour, identical every level, literally
+       repeated unchanged) above a moving -log10 p trace (p-only colour) —
+       so "counts bit-identical" is visible, not just asserted in the
+       bullets. k = 1 is this deck's spelling of "unscaled default"; not on
+       the top figure, added here because the bottom schematic needs a
+       middle rung to show the trace rising past k=0.5 and falling past
+       k=2, data-src="literal" like every other definitional level.
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The knobs · how the control &amp; caller are set (q3)</div>
+      <h2>Rescaling or swapping the control moves only the p-value</h2>
+      <div class="pair">
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">control-to-treatment scaling</text>
+            <line x1="10" y1="220" x2="510" y2="220" class="axis"/>
+            <rect x="20"  y="120" width="55" height="100" rx="3" style="fill:var(--clr-base)"/>
+            <rect x="85"  y="150" width="55" height="70"  rx="3" style="fill:var(--clr-base)" fill-opacity="0.6"/>
+            <text x="80" y="240" text-anchor="middle" class="ksub">base · treatment / control</text>
+            <rect x="230" y="120" width="55" height="100" rx="3" style="fill:var(--clr-ponly)"/>
+            <rect x="295" y="185" width="55" height="35" rx="3" style="fill:var(--clr-ponly)" fill-opacity="0.6"/>
+            <text x="290" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k = <tspan data-src="literal">0.5</tspan></text>
+            <rect x="380" y="120" width="55" height="100" rx="3" style="fill:var(--clr-ponly)"/>
+            <rect x="445" y="95"  width="55" height="125" rx="3" style="fill:var(--clr-ponly)" fill-opacity="0.6"/>
+            <text x="440" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k = <tspan data-src="literal">2</tspan></text>
+          </svg>
+        </div>
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">control identity</text>
+            <line x1="10" y1="220" x2="510" y2="220" class="axis"/>
+            <rect x="20"  y="120" width="55" height="100" rx="3" style="fill:var(--clr-base)"/>
+            <rect x="85"  y="140" width="55" height="80"  rx="3" style="fill:var(--clr-base)" fill-opacity="0.6"/>
+            <text x="80" y="240" text-anchor="middle" class="ksub">base · matched control</text>
+            <rect x="230" y="120" width="55" height="100" rx="3" style="fill:var(--clr-ponly)"/>
+            <rect x="295" y="110" width="55" height="110" rx="3" style="fill:var(--clr-ponly)" fill-opacity="0.6"/>
+            <text x="290" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">another cell's control</text>
+            <rect x="380" y="120" width="55" height="100" rx="3" style="fill:var(--clr-ponly)"/>
+            <line x1="445" y1="219" x2="500" y2="219" style="stroke:var(--clr-ponly);stroke-width:3;stroke-dasharray:4 3"/>
+            <text x="440" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">no control</text>
+          </svg>
+        </div>
+      </div>
+      <ul class="pts tight">
+        <li><b>Control scaling:</b> <code>--ratio</code> at k &times; the default multiplies
+        the control before the Poisson test, while the treatment bar never changes height.</li>
+        <li><b>Control identity:</b> swapping in another cell line's control, or none at
+        all, changes what "surprising" means for the same treatment reads.</li>
+      </ul>
+      <div class="pair btm">
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 200" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">counts — identical at every k</text>
+            <line x1="10" y1="70" x2="510" y2="70" class="axis"/>
+            <path d="M50,70 C60,70 62,40 90,40 C118,40 120,70 130,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <path d="M220,70 C230,70 232,40 260,40 C288,40 290,70 300,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <path d="M390,70 C400,70 402,40 430,40 C458,40 460,70 470,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <text x="10" y="94" class="ksub"><tspan data-src="literal">&minus;log10</tspan> p — rises or falls with k</text>
+            <line x1="10" y1="170" x2="510" y2="170" class="axis"/>
+            <path d="M35,170 C50,170 53,90 90,90 C127,90 130,170 145,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="90" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k=<tspan data-src="literal">0.5</tspan></text>
+            <path d="M205,170 C220,170 223,115 260,115 C297,115 300,170 315,170" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="260" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">k=<tspan data-src="literal">1</tspan></text>
+            <path d="M375,170 C390,170 393,145 430,145 C467,145 470,170 485,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="430" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k=<tspan data-src="literal">2</tspan></text>
+          </svg>
+        </div>
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 200" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">counts — identical for every control</text>
+            <line x1="10" y1="70" x2="510" y2="70" class="axis"/>
+            <path d="M50,70 C60,70 62,40 90,40 C118,40 120,70 130,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <path d="M220,70 C230,70 232,40 260,40 C288,40 290,70 300,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <path d="M390,70 C400,70 402,40 430,40 C458,40 460,70 470,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <text x="10" y="94" class="ksub">p — a spurious bump where lambda runs low</text>
+            <line x1="10" y1="170" x2="510" y2="170" class="axis"/>
+            <path d="M35,170 C50,170 53,100 90,100 C127,100 130,170 145,170" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="90" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">matched</text>
+            <path d="M205,170 C220,170 223,115 260,115 C297,115 300,170 315,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <path d="M322,170 C325,170 326,150 330,150 C334,150 335,170 338,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:2"/>
+            <text x="260" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">other cell</text>
+            <path d="M375,170 C390,170 393,105 430,105 C467,105 470,170 485,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <path d="M357,170 C360,170 361,140 365,140 C369,140 370,170 373,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:2"/>
+            <text x="430" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">none</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       9 · KNOB — control depth + fragment extension  [figure-first · ELASTIC]
+       claim    two more control/caller knobs that leave counts untouched:
+                how deep the control was sequenced, and how far reads are
+                stretched into fragments
+       job      close out q3's four knobs
+       source   task t112 rows 9, 10; wiki digest rows "control depth",
+                "fragment length / --extsize"
+       numbers  the control-depth fractions and the --extsize multipliers,
+                wrapped data-src="literal"
+       shape    PI revision: 2 shared one-sentence bullets below both
+                figures, replacing the two per-figure captions
+       cut      the second sentence of either capline from the first draft
+       REVISION (PI ruling 2026-09-18, bottom schematics): a second .pair
+       added below the bullets. Control depth: counts row identical, p row
+       gets visibly jagged (Poisson noise) as q drops, central height held
+       roughly flat per the wiki row's "mean largely cancels" note; q = 1
+       added as the base rung for the same reason k = 1 was added on slide
+       8. Fragment extension: counts drawn as a thin spike (raw start
+       positions, unchanged) above a wider extended-pileup trace that
+       narrows at k = 0.5 and widens into a neighbour-merging plateau at
+       k = 2, per COUNTERFACTUAL_ARMS.md's own arm-10 note.
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The knobs · how the control &amp; caller are set (q3)</div>
+      <h2>A thinner control or a wider fragment — again, counts untouched</h2>
+      <div class="pair">
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">control depth</text>
+            <line x1="10" y1="220" x2="510" y2="220" class="axis"/>
+            <rect x="20"  y="120" width="55" height="100" rx="3" style="fill:var(--clr-base)"/>
+            <rect x="85"  y="150" width="55" height="70"  rx="3" style="fill:var(--clr-base)" fill-opacity="0.6"/>
+            <text x="80" y="240" text-anchor="middle" class="ksub">base · full control depth</text>
+            <rect x="230" y="120" width="55" height="100" rx="3" style="fill:var(--clr-ponly)"/>
+            <rect x="295" y="175" width="55" height="45" rx="3" style="fill:var(--clr-ponly)" fill-opacity="0.6"/>
+            <text x="290" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">q = <tspan data-src="literal">0.5</tspan></text>
+            <rect x="380" y="120" width="55" height="100" rx="3" style="fill:var(--clr-ponly)"/>
+            <rect x="445" y="195" width="55" height="25" rx="3" style="fill:var(--clr-ponly)" fill-opacity="0.6"/>
+            <text x="440" y="240" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">q = <tspan data-src="literal">0.25</tspan></text>
+          </svg>
+        </div>
+        <div class="chartbox fig half">
+          <svg viewBox="0 0 520 260" preserveAspectRatio="xMidYMid meet" style="max-height:18vh">
+            <text x="10" y="24" class="ptitle">fragment extension</text>
+            <line x1="10" y1="200" x2="510" y2="200" class="axis"/>
+            <path d="M20,190 C60,190 65,120 100,120 C135,120 140,190 180,190" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="100" y="215" text-anchor="middle" class="ksub">base fraglen</text>
+            <path d="M210,190 C230,190 233,140 255,140 C277,140 280,190 300,190" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="255" y="215" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k = <tspan data-src="literal">0.5</tspan> · narrow</text>
+            <path d="M330,190 C370,190 380,155 430,155 C480,155 490,190 510,190" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="430" y="215" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k = <tspan data-src="literal">2</tspan> · wide</text>
+          </svg>
+        </div>
+      </div>
+      <ul class="pts tight">
+        <li><b>Control depth:</b> subsampling only the control to a fraction q of its
+        reads adds Poisson noise to the background estimate, while the treatment BAM stays
+        untouched.</li>
+        <li><b>Fragment extension:</b> <code>--extsize</code> at k &times; the fraglen
+        widens or narrows the smoothed pile-up the caller scores, while raw counts still
+        come from unextended read starts.</li>
+      </ul>
+      <div class="pair btm">
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 200" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">counts — identical at every q</text>
+            <line x1="10" y1="70" x2="510" y2="70" class="axis"/>
+            <path d="M50,70 C60,70 62,40 90,40 C118,40 120,70 130,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <path d="M220,70 C230,70 232,40 260,40 C288,40 290,70 300,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <path d="M390,70 C400,70 402,40 430,40 C458,40 460,70 470,70" fill="none" style="stroke:var(--clr-base);stroke-width:2.5"/>
+            <text x="10" y="94" class="ksub">p — noisier, not shorter, as the control thins</text>
+            <line x1="10" y1="170" x2="510" y2="170" class="axis"/>
+            <path d="M35,170 C50,170 53,90 90,90 C127,90 130,170 145,170" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="90" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">q=<tspan data-src="literal">1</tspan></text>
+            <path d="M205,170 L215,168 C222,150 226,108 245,102 C255,99 265,99 275,101 C285,104 292,138 300,158 L310,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="260" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">q=<tspan data-src="literal">0.5</tspan></text>
+            <path d="M375,170 L383,167 L390,152 C396,132 402,110 410,104 L418,110 C424,121 428,136 432,151 L440,161 L448,168 L455,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="430" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">q=<tspan data-src="literal">0.25</tspan></text>
+          </svg>
+        </div>
+        <div class="chartbox fig half small">
+          <svg viewBox="0 0 520 200" preserveAspectRatio="xMidYMid meet">
+            <text x="10" y="14" class="ksub">raw starts stay a thin spike; the extended pile-up moves</text>
+            <line x1="10" y1="70" x2="510" y2="70" class="axis"/>
+            <path d="M86,70 L90,38 L94,70 Z" style="fill:var(--clr-base)"/>
+            <path d="M256,70 L260,38 L264,70 Z" style="fill:var(--clr-base)"/>
+            <path d="M426,70 L430,38 L434,70 Z" style="fill:var(--clr-base)"/>
+            <line x1="10" y1="170" x2="510" y2="170" class="axis"/>
+            <path d="M45,170 C58,170 61,120 90,120 C119,120 122,170 135,170" fill="none" style="stroke:var(--clr-base);stroke-width:3"/>
+            <text x="90" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-base)">k=<tspan data-src="literal">1</tspan></text>
+            <path d="M235,170 C245,170 247,95 260,95 C273,95 275,170 285,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="260" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k=<tspan data-src="literal">0.5</tspan></text>
+            <path d="M355,170 C375,170 380,150 410,150 C440,150 445,170 465,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <path d="M400,170 C420,170 425,150 455,150 C485,150 490,170 505,170" fill="none" style="stroke:var(--clr-ponly);stroke-width:3"/>
+            <text x="430" y="192" text-anchor="middle" class="klabel" style="fill:var(--clr-ponly)">k=<tspan data-src="literal">2</tspan> · merges</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       10 · THE 130 PRODUCTS — the table            [structural · fixed]
+       job      lay out every one of the ten arms against the base: knob,
+                levels, route, what it moves, and the count on each side
+       source   results/t112/COUNTERFACTUAL_ARMS.md ("## The 130 products"
+                table) — the primary, authoritative source for this deck
+       numbers  every count is a definitional constant (a build target, not
+                a finding); all wrapped data-src="literal"
+       cut      nothing — this is the one table the PI arc calls for; a
+                second slide (11) carries build state instead of crowding
+                this one. Unchanged by the 2026-09-18 verbosity revision:
+                the table already carries no bullets and is its own visual.
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The <span data-src="literal">130</span> counterfactuals</div>
+      <h2 style="margin-bottom:14px">Ten knobs, each a base-to-arm pair</h2>
+      <table class="dtable tight">
+        <thead>
+          <tr><th>arm</th><th>levels</th><th>route</th><th>moves</th>
+              <th class="num">ChIP</th><th class="num">DNase</th><th class="num">total</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>base</td><td class="mono">unchanged recipe</td><td>BAM</td><td><span class="tag ba">base</span></td>
+              <td class="num"><span data-src="literal">6</span></td><td class="num"><span data-src="literal">1</span></td><td class="num"><span data-src="literal">7</span></td></tr>
+          <tr><td>treatment depth</td><td class="mono"><span data-src="literal">15M</span> · <span data-src="literal">7.5M</span> · <span data-src="literal">3.75M</span></td><td>BAM</td><td><span class="tag cp">counts + p</span></td>
+              <td class="num"><span data-src="literal">18</span></td><td class="num"><span data-src="literal">3</span></td><td class="num"><span data-src="literal">21</span></td></tr>
+          <tr><td>antibody proxy</td><td class="mono">f = <span data-src="literal">0.5</span> · <span data-src="literal">0.9</span></td><td>BAM</td><td><span class="tag cp">counts + p</span></td>
+              <td class="num"><span data-src="literal">12</span></td><td class="num"><span data-src="literal">0</span></td><td class="num"><span data-src="literal">12</span></td></tr>
+          <tr><td>run type</td><td class="mono">paired-end</td><td>FASTQ</td><td><span class="tag cp">counts + p</span></td>
+              <td class="num"><span data-src="literal">6</span></td><td class="num"><span data-src="literal">1</span></td><td class="num"><span data-src="literal">7</span></td></tr>
+          <tr><td>duplicate removal</td><td class="mono">dedup off</td><td>FASTQ</td><td><span class="tag cp">counts + p</span></td>
+              <td class="num"><span data-src="literal">6</span></td><td class="num"><span data-src="literal">1</span></td><td class="num"><span data-src="literal">7</span></td></tr>
+          <tr><td>read length</td><td class="mono">crop <span data-src="literal">36</span> · <span data-src="literal">50</span></td><td>FASTQ</td><td><span class="tag cp">counts + p</span></td>
+              <td class="num"><span data-src="literal">12</span></td><td class="num"><span data-src="literal">0</span></td><td class="num"><span data-src="literal">12</span></td></tr>
+          <tr><td>MAPQ filter</td><td class="mono">MAPQ <span data-src="literal">0</span> · <span data-src="literal">10</span></td><td>FASTQ</td><td><span class="tag cp">counts + p</span></td>
+              <td class="num"><span data-src="literal">12</span></td><td class="num"><span data-src="literal">2</span></td><td class="num"><span data-src="literal">14</span></td></tr>
+          <tr><td>control scaling</td><td class="mono">k = <span data-src="literal">0.5</span> · <span data-src="literal">2</span></td><td>BAM</td><td><span class="tag po">p only</span></td>
+              <td class="num"><span data-src="literal">12</span></td><td class="num"><span data-src="literal">0</span></td><td class="num"><span data-src="literal">12</span></td></tr>
+          <tr><td>control identity</td><td class="mono">other cell · none</td><td>BAM</td><td><span class="tag po">p only</span></td>
+              <td class="num"><span data-src="literal">12</span></td><td class="num"><span data-src="literal">0</span></td><td class="num"><span data-src="literal">12</span></td></tr>
+          <tr><td>control depth</td><td class="mono">q = <span data-src="literal">0.5</span> · <span data-src="literal">0.25</span></td><td>BAM</td><td><span class="tag po">p only</span></td>
+              <td class="num"><span data-src="literal">12</span></td><td class="num"><span data-src="literal">0</span></td><td class="num"><span data-src="literal">12</span></td></tr>
+          <tr><td>fragment extension</td><td class="mono">k = <span data-src="literal">0.5</span> · <span data-src="literal">2</span></td><td>BAM</td><td><span class="tag po">p only</span></td>
+              <td class="num"><span data-src="literal">12</span></td><td class="num"><span data-src="literal">2</span></td><td class="num"><span data-src="literal">14</span></td></tr>
+          <tr class="tot"><td>all arms</td><td></td><td></td><td></td>
+              <td class="num"><span data-src="literal">120</span></td><td class="num"><span data-src="literal">10</span></td><td class="num"><span data-src="literal">130</span></td></tr>
+        </tbody>
+      </table>
+      <div class="legend big">
+        <div class="item"><span class="sw" style="background:var(--clr-countsp)"></span>moves counts and <span data-src="literal">&minus;log10</span> p</div>
+        <div class="item"><span class="sw" style="background:var(--clr-ponly)"></span>moves <span data-src="literal">&minus;log10</span> p only, counts bit-identical to base</div>
+        <div class="item"><span class="sw" style="background:var(--clr-base)"></span>base, unchanged</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       11 · THE 130 PRODUCTS — build state          [figure-first · fixed]
+       job      where the build stands tonight — split here so slide 10's
+                table stays legible (PI arc: "may spill to a second slide")
+       source   results/t112/COUNTERFACTUAL_ARMS.md (header line, tracks
+                list, "## The 130 products" file list); wiki
+                chip-seq-assay-and-controls for the DNase-has-no-control fact
+       numbers  the build-status counts are definitional (today's build
+                target, not a measured finding); wrapped data-src="literal"
+       shape    PI revision: the product-anatomy file list and the two chip
+                blocks from the first draft are cut outright; a single SVG
+                progress bar plus 3 one-sentence bullets replace them —
+                colour reuses --accent/--hair (chrome), not a new palette
+       cut      the product-anatomy chip list and the two body paragraphs;
+                their facts now live in the 3 bullets below
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">The <span data-src="literal">130</span> counterfactuals · build state</div>
+      <h2><span data-src="literal">126</span> of <span data-src="literal">130</span> products are built; <span data-src="literal">4</span> are in flight</h2>
+      <div class="chartbox fig wide">
+        <svg viewBox="0 0 1080 140" preserveAspectRatio="xMidYMid meet">
+          <rect x="0" y="45" width="1080" height="32" rx="6" style="fill:var(--hair)"/>
+          <rect x="0" y="45" width="1047" height="32" rx="6" style="fill:var(--accent)"/>
+          <text x="523" y="66" text-anchor="middle" class="klabel" style="fill:#fff"><tspan data-src="literal">126</tspan> built &amp; validated</text>
+          <text x="1080" y="110" text-anchor="end" class="klabel" style="fill:var(--muted)"><tspan data-src="literal">4</tspan> in flight, of <tspan data-src="literal">130</tspan></text>
+          <text x="0" y="25" class="ksub">FASTQ re-runs, Nibi, as of <tspan data-src="literal">2026-09-18</tspan></text>
+          
+        </svg>
+      </div>
+      <ul class="pts">
+        <li>Seven tracks run through two ENCODE pipelines: <span data-src="literal">chip-seq-pipeline2</span> for the six
+        histone marks, <span data-src="literal">atac-seq-pipeline</span> in DNase mode for the seventh.</li>
+        <li>DNase-seq has no control, so the four control-side knobs do not apply to it.</li>
+        <li>Every product is the same five files, at <span data-src="literal">25</span> bp
+        bins on <span data-src="literal">GRCh38</span>: counts, control counts, p-value,
+        covariates, and provenance.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       12 · CLOSING — what the arms become            [figure-first · fixed]
+       job      state what the arms will be used for, per the PI's closing
+                framing (arc item 5) — not a verdict; no run exists yet
+       source   this brief, section 5; q4 and its children h12/h13/h14
+                (the capacity ladder); q1's locked Protocol (the competitor
+                and the bar)
+       numbers  the bar's two thresholds are definitional constants (a PI
+                ruling, not a finding), wrapped data-src="literal"
+       shape    DROPPABLE-slot repurposed: the template's verdict slide is
+                skipped outright (no synthesis exists to sign) and replaced
+                with this forward-looking design slide, which the PI's arc
+                explicitly calls for as the deck's last slide. PI revision:
+                the two .target callouts and the 3-row rung table from the
+                first draft become one SVG ladder schematic plus 3
+                one-sentence bullets — the bar is never cut.
+       cut      the "planned instance" callout's second sentence and the
+                rung table's middle-row description text, both folded into
+                the ladder schematic's labels; never the bar
+       =================================================================== -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">What this becomes · no results yet</div>
+      <h2>Learn a covariate-conditioned transformation</h2>
+      <div class="chartbox fig wide">
+        <svg viewBox="0 0 1080 240" preserveAspectRatio="xMidYMid meet">
+          <rect x="20"  y="160" width="220" height="40" rx="6" style="fill:var(--clr-base)"/>
+          <text x="130" y="185" text-anchor="middle" class="klabel" style="fill:#fff">affine map</text>
+          <rect x="280" y="120" width="220" height="40" rx="6" style="fill:var(--clr-countsp)"/>
+          <text x="390" y="145" text-anchor="middle" class="klabel" style="fill:#fff">conditioned CNN</text>
+          <rect x="540" y="80" width="260" height="40" rx="6" style="fill:var(--accent)"/>
+          <text x="670" y="105" text-anchor="middle" class="klabel" style="fill:#fff">encoder&ndash;decoder</text>
+          <text x="150" y="145" class="ptitle" style="font-size:18px">&rarr;</text>
+          <text x="510" y="105" class="ptitle" style="font-size:18px">&rarr;</text>
+          <line x1="830" y1="100" x2="1000" y2="100" style="stroke:var(--faint);stroke-width:2;stroke-dasharray:4 4"/>
+          <text x="915" y="90" text-anchor="middle" class="ksub">vs one-warp</text>
+          <line x1="830" y1="130" x2="1000" y2="130" style="stroke:var(--faint);stroke-width:2;stroke-dasharray:2 3"/>
+          <text x="915" y="150" text-anchor="middle" class="ksub">vs its shuffled twin</text>
+          <text x="20" y="220" class="ksub">each rung climbs capacity; each is scored against a covariate-free monotone map and its own shuffled-covariate twin</text>
+        </svg>
+      </div>
+      <ul class="pts">
+        <li>Every one of the ten knobs above is a covariate the transformation can
+        condition on.</li>
+        <li>A capacity ladder climbs one rung at a time — affine map, then a small CNN,
+        then an encoder&ndash;decoder — each scored against one-warp and its own
+        shuffled-covariate twin.</li>
+        <li>The bar: gap closed &ge; <span data-src="literal">0.5</span> of the
+        one-warp&rarr;oracle interval per mark class, and the gain must exceed
+        <span data-src="literal">2</span>&times; the model's own seed &#124;&Delta;&#124;.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">q1 · counterfactual processing arms</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   This deck carries no metrics.json-addressed charts (nothing under q1 has
+   run yet), so the template's forest/bar chart-scaffold functions are not
+   included — every figure above is static inline SVG, hand-authored, with
+   its numerals wrapped data-src="literal" per the addressing contract.
+   =========================================================================== */
+
+/* ===========================================================================
+   NAVIGATION — slide count read from the DOM, so adding or cutting a
+   <section class="slide"> needs no other edit. (chrome — unmodified)
+   =========================================================================== */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+});
+show(0);
+</script>
+</body>
+</html>
