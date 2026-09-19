@@ -1,15 +1,15 @@
 ---
 id: t60
 type: task
-title: leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
+title: "leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels"
 category: implementation
 parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-27T13:02:38
-updated: 2026-08-27T13:02:38
+status: done
+created: "2026-08-27T13:02:38"
+updated: "2026-09-19T00:25:00"
 ---
 
 # t60 — leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
@@ -24,7 +24,7 @@ PI page ruling 2026-08-27: absence must be visible (pending rows), headline per 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged PRs #33 and #35](results/t60/MERGED.md)
 
 ## Evidence
 

@@ -1,5 +1,5 @@
 ---
-id: t57
+id: t116
 type: task
 title: retire the four tests that pin nb_crps's pre-fix NaN at large n
 category: implementation
@@ -7,12 +7,12 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-27T11:25:14
-updated: 2026-08-27T11:25:14
+status: done
+created: "2026-08-27T11:25:14"
+updated: "2026-09-19T00:25:00"
 ---
 
-# t57 — retire the four tests that pin nb_crps's pre-fix NaN at large n
+# t116 — retire the four tests that pin nb_crps's pre-fix NaN at large n
 
 Refs:: _(none)_
 
@@ -24,7 +24,7 @@ PR #26 (t56) fixed the nb_crps large-dispersion NaN, but four tests merged from 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged PR #30](results/t116/MERGED.md)
 
 ## Evidence
 

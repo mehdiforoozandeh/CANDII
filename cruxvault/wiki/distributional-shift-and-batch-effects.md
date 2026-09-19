@@ -49,4 +49,4 @@ This is the same finding as the ENCODE challenge's deduplication artefact, reach
 
 ## See also
 
-Related:: [[encode-imputation-challenge]], [[signal-normalization-in-epigenomics]], [[quantile-normalization]], [[read-processing-and-artifact-regions]], [[chip-seq-assay-and-controls]], [[sequencing-depth-and-coverage]]
+Related:: [[encode-imputation-challenge]], [[signal-normalization-in-epigenomics]], [[quantile-normalization]], [[read-processing-and-artifact-regions]], [[chip-seq-assay-and-controls]], [[sequencing-depth-and-coverage]], [[digest-processing-knobs-that-move-chip-seq-signal]]

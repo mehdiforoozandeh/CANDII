@@ -47,4 +47,4 @@ Bismap extends the same computation to bisulfite-converted genomes, where C→T 
 
 ## See also
 
-Related:: [[chip-seq-assay-and-controls]], [[signal-normalization-in-epigenomics]], [[count-distributions-for-sequencing-data]], [[distributional-shift-and-batch-effects]]
+Related:: [[chip-seq-assay-and-controls]], [[signal-normalization-in-epigenomics]], [[count-distributions-for-sequencing-data]], [[distributional-shift-and-batch-effects]], [[digest-processing-knobs-that-move-chip-seq-signal]]

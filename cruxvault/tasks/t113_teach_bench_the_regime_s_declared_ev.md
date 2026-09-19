@@ -1,5 +1,5 @@
 ---
-id: t38
+id: t113
 type: task
 title: "teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does"
 category: implementation
@@ -12,7 +12,7 @@ created: "2026-08-22T17:18:18"
 updated: "2026-08-22T17:18:35"
 ---
 
-# t38 — teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does
+# t113 — teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does
 
 Refs:: _(none)_
 

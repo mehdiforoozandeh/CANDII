@@ -9,9 +9,23 @@ Root: [[candii]]
 - ○ `q1` [Q] [[q1_do_the_recorded_experimental_covariates_|**Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?**]] — *open*
   - · `h1` [H] [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
   - · `h2` [H] [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+  - ○ `q2` [Q] [[q2_do_the_covariates_that_record_which_read|**Do the covariates that record which reads entered the treatment pileup carry enough information to map a track across a change in one of them?**]] — *open*
+    - · `h3` [H] [[h3_conditioning_on_the_recorded_read_length|Conditioning on the recorded read length predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+    - · `h4` [H] [[h4_conditioning_on_the_recorded_duplicate_h|Conditioning on the recorded duplicate handling predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+    - · `h5` [H] [[h5_conditioning_on_the_recorded_mapping_qua|Conditioning on the recorded mapping-quality filter predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+    - · `h6` [H] [[h6_conditioning_on_the_recorded_antibody_ef|Conditioning on the recorded antibody-efficiency proxy predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+  - ○ `q3` [Q] [[q3_do_the_covariates_that_record_how_the_co|**Do the covariates that record how the control and the peak caller were configured carry enough information to map the p-value track across a change in one of them?**]] — *open*
+    - · `h7` [H] [[h7_conditioning_on_the_recorded_control_to_|Conditioning on the recorded control-to-treatment scaling predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+    - · `h8` [H] [[h8_conditioning_on_the_recorded_control_ide|Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+    - · `h9` [H] [[h9_conditioning_on_the_recorded_control_dep|Conditioning on the recorded control depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+    - · `h10` [H] [[h10_conditioning_on_the_recorded_fragment_ex|Conditioning on the recorded fragment extension predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+  - ○ `q4` [Q] [[q4_how_much_capacity_does_a_covariate_condi|**How much capacity does a covariate-conditioned transformation need before it closes the gap that a covariate-free monotone map leaves?**]] — *open*
+    - · `h12` [H] [[h12_a_covariate_conditioned_affine_map_on_th|A covariate-conditioned affine map on the log-count axis closes at least half of the gap that the covariate-free monotone map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
+    - · `h13` [H] [[h13_a_small_covariate_conditioned_convolutio|A small covariate-conditioned convolutional map over neighbouring bins closes gap that the conditioned affine map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
+    - · `h14` [H] [[h14_an_encoder_decoder_with_the_encoder_cond|An encoder–decoder with the encoder conditioned on the source covariates and the decoder on the target covariates closes gap that the conditioned convolutional map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
 
 ## Dashboard
 
-- **Questions** (1): open 1 · review 0 · resolved 0
-- **Hypotheses** (2): idea 2 · staged 0 · running 0 · done 0
+- **Questions** (4): open 4 · review 0 · resolved 0
+- **Hypotheses** (13): idea 13 · staged 0 · running 0 · done 0
 - **Verdicts**: supported 0 · partial 0 · refuted 0 · inconclusive 0 · invalid-run 0

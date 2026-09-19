@@ -1,5 +1,5 @@
 ---
-id: t39
+id: t114
 type: task
 title: rename the covariate metric keys from codes to names (covuse..biokeep)
 category: implementation
@@ -12,7 +12,7 @@ created: "2026-08-22T17:18:35"
 updated: "2026-08-22T17:18:35"
 ---
 
-# t39 — rename the covariate metric keys from codes to names (covuse..biokeep)
+# t114 — rename the covariate metric keys from codes to names (covuse..biokeep)
 
 Refs:: _(none)_
 
