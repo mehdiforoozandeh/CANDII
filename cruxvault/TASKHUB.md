@@ -12,15 +12,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store
 - `t34` [implementation] resolve the chr21 bin-grid mismatch: the baked h5 has 1,867,776 bins, the store has 1,868,399
 - `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only
+- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers
+- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src
 - `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly
-- `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal
-- `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
-- `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS
-- `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n
-- `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels
 - `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories
 - `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards
 - `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract
@@ -63,6 +60,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t112` [data-acquisition] build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 
+### hpc-setup
+
+- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *open*
+
 ### implementation
 
 - `t1` [implementation] build the imputation-methods leaderboard that defines the exp/ merge gate — *open*
@@ -70,15 +71,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t29` [implementation] decide what a store-backed h74 reference table is, so --reference on stops being refused under --store — *open*
 - `t34` [implementation] resolve the chr21 bin-grid mismatch: the baked h5 has 1,867,776 bins, the store has 1,868,399 — *open*
 - `t36` [implementation] retire the h5 path: delete CandiKitH5Dataset and every h5 branch in train, eval, bench and healthcheck -- CANDI_STORE only — *open*
+- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers — *open*
 - `t43` [implementation] fix covshare's variance attribution: the harness predictor maps inner-block rows to different units, leaking across-unit variance into the bias term — *open*
 - `t44` [implementation] close the covariate block's denoise-arm input leak: no leave-one-out mask under kind=denoise, so the target column sits verbatim in the encoder input at DSF 1 — *open*
 - `t45` [implementation] sweep the dead h5-era code and stale plan docs: train.py's inert M1-era wandb block and 'M1 not in res' branch, plan/EVAL_PLAN.md owed items 4-5, plan/PVAL_CODEC_PLAN.md §1.1 — *open*
 - `t55` [implementation] ensemble-CRPS bench extension: score the empirical cross-cell marginal directly — *open*
-- `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal — *open*
-- `t56` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *open*
-- `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS — *open*
-- `t57` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *open*
-- `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels — *open*
 - `t61` [implementation] partial-arm methods: stamp avg-arcsinh, knn1, marginal with a blank composite (dash + partial-coverage note), ranked only within covered categories — *open*
 - `t62` [implementation] put CANDI on the leaderboard: two fresh runs (count+signal+peak heads), external-contract scoring, rows on all three boards — *open*
 - `t63` [implementation] dump-predictions CLI: write a CANDI checkpoint's predictions to the external prediction-track contract — *open*
@@ -140,10 +137,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t33` [implementation] diagnose C2 reporting output_is_constant=true while C1, C3 and C4 all show the output varying -- [Cause](results/t33/FINDING.md) — clamp below estimator resolution + ddof mismatch. Fix landed in 2f56cb1: unclamped total with naive/bias/se split, ddof=1 both, output_is_constant retired — *done* → `results/t33/FINDING.md`
 - `t35` [admin] amend AGENTS.md 7.2's noise floor: it is 2-4x too large for this recipe — *done* → `results/t22/SEED_FLOOR.md`
 - `t37` [implementation] decide whether the bench harness sharing one thinning seed between input and target is a paired depth sweep or the same identity-copy leak — *done* → `results/t37/FINDING.md`
-- `t38` [implementation] rename every metric key to a self-describing name in the EIC style -- retire C1-C6, M1-M3, S14 as primary identifiers — *done*
-- `t38` [implementation] teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does — *done* → `results/t38/DELIVERABLE.md`
-- `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *done*
-- `t39` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `results/t39/DELIVERABLE.md`
 - `t40` [implementation] fix the two stale banners: train.sh 2.9-min header and the train.py store training-only banner — *done* → `results/t40/DELIVERABLE.md`
 - `t41` [implementation] add the loss tier: nb/gaussian/bernoulli NLL in bench, the monitor and the CLI — *done* → `results/t41/DELIVERABLE.md`
 - `t42` [implementation] rule and implement the pval spaces contract: eval metrics in -log10 p, predictions inverted — *done* → `results/t42/DELIVERABLE.md`
@@ -156,8 +149,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t52` [implementation] eDICE PyTorch reimplementation: Roadmap-demo validation gate, then retrain on our EIC — *done* → `results/t52/README_snapshot.md`
 - `t53` [implementation] Lavawizard: 1-day spike on the 2019 Keras repo, port, anchor to their submitted tracks, retrain — *done* → `results/t53/SPIKE_MEMO.md`
 - `t54` [implementation] score the 23 EIC entrant submissions on Dataset-3 truth: 001 scorer plus ported partition metrics — *done* → `results/t54/DATASET3_GAP.md`
+- `t56` [implementation] fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal — *done* → `results/t56/MERGED.md`
+- `t57` [implementation] measure the pval-arm noise floor for Gaussian CRPS — *done* → `results/t57/FLOOR_MEMO.md`
 - `t58` [implementation] build the rivals leaderboard: score compiler, static HTML board, Pages deploy — *done* → `results/t58/MERGED.md`
 - `t59` [implementation] carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS) — *done* → `results/t59/MERGED.md`
+- `t60` [implementation] leaderboard site v2: pending rows, merged single-board view, ranking barcharts, per-method radar, plain-language labels — *done* → `results/t60/MERGED.md`
 - `t77` [implementation] redesign the leaderboard's data regimes, panels and ranking so every number has one address — *done* → `results/t77/DELIVERABLE.md`
 - `t78` [implementation] rebuild the DNase p-value layer from alignments so all 40 DNase experiments are -log10 p — *done* → `results/t78/G1_PHASE2_DNASE.md`
 - `t79` [implementation] rewrite the eic regimes to chr19 and pilot-regions training with chr20+21+22 scored — *done* → `results/t79/G2_PILOT_HG38.md`
@@ -175,3 +171,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t91` [implementation] build the training-residual sigma pass so every point-only method gets a leak-free spread — *done* → `results/t91/DELIVERABLE.md`
 - `t98` [implementation] Whole-genome blind-set prediction arrays from the existing eDICE and ChromImpute checkpoints (throwaway preview) — *done* → `results/t98/README.md`
 - `t101` [implementation] extend pval_from_counts to the with-control MACS2 branch — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *done* → `results/t101/MERGED.md`
+- `t113` [implementation] teach bench the regime's declared eval_pairs: StoreSource imputes cross-cell as training does — *done* → `results/t38/DELIVERABLE.md`
+- `t114` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `results/t39/DELIVERABLE.md`
+- `t115` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *done* → `results/t115/MERGED.md`
+- `t116` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *done* → `results/t116/MERGED.md`

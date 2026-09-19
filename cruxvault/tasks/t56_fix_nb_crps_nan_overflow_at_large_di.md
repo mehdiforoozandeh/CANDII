@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-25T23:43:38
-updated: 2026-08-25T23:43:38
+status: done
+created: "2026-08-25T23:43:38"
+updated: "2026-09-19T00:24:58"
 ---
 
 # t56 — fix nb_crps NaN overflow at large dispersion n and NaN-as-loss in beats_marginal
@@ -24,7 +24,7 @@ the pre-registered Poisson-limit floor n=1e6 in EVAL 5.1 is unscoreable: nb_crps
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged PR #26](results/t56/MERGED.md)
 
 ## Evidence
 

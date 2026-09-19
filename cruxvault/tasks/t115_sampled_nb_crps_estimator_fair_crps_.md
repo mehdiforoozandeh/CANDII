@@ -1,18 +1,18 @@
 ---
-id: t56
+id: t115
 type: task
-title: sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
+title: "sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag"
 category: implementation
 parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-26T12:04:34
-updated: 2026-08-26T12:04:34
+status: done
+created: "2026-08-26T12:04:34"
+updated: "2026-09-19T00:25:00"
 ---
 
-# t56 — sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
+# t115 — sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag
 
 Refs:: _(none)_
 
@@ -24,7 +24,7 @@ PI 2026-08-26: P2 count-arm exact CRPS costs ~117 CPU-h per method; a validated 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged PR #28](results/t115/MERGED.md)
 
 ## Evidence
 
