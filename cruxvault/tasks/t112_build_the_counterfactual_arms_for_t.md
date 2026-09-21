@@ -1,15 +1,15 @@
 ---
 id: t112
 type: task
-title: build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi
+title: "build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi"
 category: data-acquisition
 parent: 
 blocked_by: None
 refs: h1, h2
 hypothesis_refs: 
-status: open
-created: 2026-09-16T23:25:09
-updated: 2026-09-16T23:25:09
+status: done
+created: "2026-09-16T23:25:09"
+updated: "2026-09-21T16:31:57"
 ---
 
 # t112 — build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi
@@ -86,7 +86,9 @@ Children: t111 (arm 2). Every other arm lands on this task's branch.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [manifest of all 130 products](results/t112/MANIFEST.tsv)
+- [counterfactual arms write-up](results/t112/COUNTERFACTUAL_ARMS.md)
+- [checks](results/t112/CHECKS.md)
 
 ## Evidence
 
