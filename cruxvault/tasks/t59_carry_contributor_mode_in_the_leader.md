@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-27T13:01:44
-updated: 2026-08-27T13:01:44
+status: done
+created: "2026-08-27T13:01:44"
+updated: "2026-09-17T21:54:21"
 ---
 
 # t59 — carry contributor_mode in the leaderboard provenance flags (FLAG_KEYS)
@@ -24,7 +24,7 @@ clip is carried but contributor_mode is silently dropped from stamped rows; prov
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged a90539f](results/t59/MERGED.md)
 
 ## Evidence
 

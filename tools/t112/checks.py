@@ -1,0 +1,489 @@
+"""t112 step 5 — the checks every counterfactual product must pass before anything reads it.
+
+The task body (`cruxvault/tasks/t112_build_the_counterfactual_arms_for_t.md`, Plan step 5) asks for
+three things; this module adds three structural ones the plan pins beside them:
+
+    base_rebuild            base pval25 rebuilt from the kept tagAligns == the pipeline's own
+                            bigwig binned the same way, chr21, same n_bins, max |diff| <= 1e-6
+    counts_identity         arms that only move p (ratio, ctlid, ctldepth, extsize) carry counts
+                            bit-identical to their base, all 23 chromosomes
+    depth_law               a depth arm is nested in its base and reproduces the store's
+                            `thin_counts` law: conditional on base == k, arm ~ Binomial(k, p),
+                            p = L / base depth, tested as pooled within-k dispersion
+    ratio_k1_identity       the one-token `--ratio` patch at k = 1 is bit-identical to the
+                            unpatched script (C8 smoke record)
+    fastq_control_identity  a FASTQ re-run re-aligns the control; the two tracks of one cell must
+                            still land on the same control counts
+    structure               records.py validate, 23 chromosomes, n_bins == len // 25, counts
+                            uint32, pval float32, finite, >= 0
+
+`src/candi/store/dataset.py::thin_counts` is `rng.binomial(counts, 1/d)` per bin. The depth arms
+are made by thinning *reads* with the pipeline's own subsampler, not bins, so the law only holds
+to first order — hence tolerances, not equality. `depth_law` passes iff ALL of: (1) nesting, every
+one of the 23 chromosomes the same shape and arm <= base in every bin; (2) |Σarm/Σbase − p| <=
+0.005; (3) >= 100000 bins with base k in 1..10; (4) pooled within-k dispersion
+D = Σ_k Σ_{base=k} (arm − mean(arm | base=k))² / Σ_k n_k·k·p·(1−p), k = 1..10, in [0.90, 1.10].
+Per-k means and variances go into the detail as information only. The thresholds are planner-set
+data checks (plan Log, re-ruled 2026-09-17). They are not an experiment gate, and they are not to be
+tuned to make a product pass.
+
+Every check writes `<cf>/checks/<name>/<pid>.json` = `{name, pid, pass, detail, run_id,
+created_utc}`; `summary` rolls them into `<cf>/checks/summary.json` and `<cf>/checks/CHECKS.md`.
+`run` stamps one `run_id` on everything it writes: `<cf>/checks/RUN.json` = `{run_id, created_utc,
+only, rows}` names the newest run, and the (check, pid) list `run` is about to do goes to
+`<cf>/checks/expected/<name>.json` = `{run_id, created_utc, pids}` before any product is read. A job
+killed half way therefore leaves records missing, and `summary` counts each missing record as a
+failure rather than as a smaller total.
+
+`summary` trusts nothing that RUN.json's `run_id` does not stamp. A check whose expected list — or
+whose records — come from an older run is a failure `{name, pid: "*", detail: {"reason": "not run in
+the newest run", ...}}`, exactly as a check with no expected list at all is. `run` deletes a check's
+old records and expected list before it reads anything, and writes RUN.json before it plans. So
+`all_pass` needs one run that covered every check on this tree: an `--only` run leaves the other
+checks stamped with the older run and is reported as `partial`, and a run that crashed while
+planning leaves nothing fresh at all. Neither can read as passed, whatever the tree held before.
+
+The verdict is `summary` — its exit code and `summary.json["all_pass"]`; C15 gates on `summary`, not
+on `run`. `summary` exits 1 if any check failed, is missing, or is stale, and 0 only on a full pass.
+`run` exits 0 whenever it finishes, whatever the checks found.
+
+numpy + pandas (pandas only because C2's `bin25.py` imports it) and no `candi` import: it runs on
+Nibi against a code snapshot. The npz reader, chrom-sizes parser and chromosome set are C2's
+(`bin25.py`), and product validation is C3's (`records.py validate`), both siblings here.
+
+    python checks.py run --cf /scratch/mforooz/t112_cf --rows checks/rows_all.tsv [--only NAME]
+    python checks.py summary --cf /scratch/mforooz/t112_cf
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+import os
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import bin25  # noqa: E402  (C2, sibling)
+
+#: C3's validator, run as its pinned CLI. A module attribute so tests can point it at a stub.
+RECORDS_PY = HERE / "records.py"
+
+#: the pipeline's chrom sizes on Nibi (plan shorthand CHRSZ).
+CHRSZ = "/scratch/mforooz/EIC_REPRO/003/refcache/c52f52c7bfa357f55a39b1de7e4d0b0c/GRCh38_EBV.chrom.sizes.tsv"
+
+MAIN_CHROMS = bin25.MAIN_CHROMS
+RES = 25
+
+CHECK_NAMES = ("base_rebuild", "counts_identity", "depth_law", "ratio_k1_identity",
+               "fastq_control_identity", "structure")
+
+#: arms whose knob sits after counting: counts must equal base bit for bit.
+P_ONLY_ARMS = ("ratio", "ctlid", "ctldepth", "extsize")
+
+# planner-set thresholds (plan Log, 2026-09-17). Do not tune.
+BASE_REBUILD_CHROM = "chr21"
+BASE_REBUILD_TOL = 1e-6
+DEPTH_TOTAL_TOL = 0.005
+DEPTH_D_LO, DEPTH_D_HI = 0.90, 1.10
+DEPTH_K_MAX = 10
+DEPTH_MIN_BINS = 100000
+
+#: the record name of the one C8 smoke check; not a product pid (those are track__arm__level).
+RATIO_K1_RECORD = "smoke_C8_ratio_k1"
+
+#: `summary`'s word for a check that carries no stamp from the newest run.
+STALE_REASON = "not run in the newest run"
+
+
+def read_npz(path: Path) -> dict:
+    return bin25.read_npz(path)
+
+
+def load_chrsz(path) -> dict:
+    return bin25.load_chrsz(path)
+
+
+def read_rows(path: Path) -> list:
+    """A C1 `arms.py rows` TSV; `knob_value` is JSON text (QUOTE_NONE, or csv eats its quotes)."""
+    with open(path, newline="") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t", quoting=csv.QUOTE_NONE))
+    for r in rows:
+        r["knob_value"] = json.loads(r["knob_value"]) if r["knob_value"] != "" else None
+    return rows
+
+
+def base_pid(row: dict) -> str:
+    return f"{row['track']}__base__base"
+
+
+def _num(x):
+    """JSON-safe float: NaN / inf become strings rather than invalid JSON."""
+    x = float(x)
+    return x if math.isfinite(x) else str(x)
+
+
+def utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def new_run_id() -> str:
+    """UTC to the second plus a random suffix: two runs in the same second are still two runs."""
+    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + uuid.uuid4().hex[:6]
+
+
+def write_json_atomic(path: Path, obj) -> None:
+    """Temp file in the same directory, then `os.replace`: a reader never sees a half-written file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(json.dumps(obj, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def write_record(cf: Path, name: str, pid: str, ok: bool, detail: dict,
+                 run_id: str, created_utc: str) -> dict:
+    rec = {"name": name, "pid": pid, "pass": bool(ok), "detail": detail,
+           "run_id": run_id, "created_utc": created_utc}
+    out = Path(cf) / "checks" / name / f"{pid}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
+    return rec
+
+
+# ---------------------------------------------------------------------------------------------
+# the checks: each returns (pass, detail) for one pid, and raises if an input is missing
+# ---------------------------------------------------------------------------------------------
+
+
+def check_base_rebuild(cf: Path, pid: str):
+    pipe = read_npz(cf / "products" / pid / "pval25.npz")[BASE_REBUILD_CHROM]
+    rebuilt = read_npz(cf / "bamarms" / pid / "rebuild_pval25.npz")[BASE_REBUILD_CHROM]
+    detail = {"chrom": BASE_REBUILD_CHROM, "n_bins_pipeline": int(pipe.size),
+              "n_bins_rebuild": int(rebuilt.size), "tol": BASE_REBUILD_TOL}
+    if pipe.size != rebuilt.size:
+        return False, detail
+    a, b = pipe.astype(np.float64), rebuilt.astype(np.float64)
+    n_nan_a, n_nan_b = int(np.isnan(a).sum()), int(np.isnan(b).sum())
+    detail["n_nan_pipeline"], detail["n_nan_rebuild"] = n_nan_a, n_nan_b
+    if n_nan_a or n_nan_b:  # a NaN is a defect in its own right, never masked out of the diff
+        return False, detail
+    mad = float(np.max(np.abs(a - b))) if a.size else 0.0
+    detail["max_abs_diff"] = _num(mad)
+    return mad <= BASE_REBUILD_TOL, detail
+
+
+def check_counts_identity(cf: Path, pid: str, base: str):
+    arm = read_npz(cf / "products" / pid / "counts25.npz")
+    ref = read_npz(cf / "products" / base / "counts25.npz")
+    differ = [c for c in MAIN_CHROMS
+              if c not in arm or c not in ref or not np.array_equal(arm[c], ref[c])]
+    return not differ, {"base": base, "n_chroms": len(MAIN_CHROMS), "differ": differ}
+
+
+def depth_law(base_counts: dict, arm_counts: dict, p: float):
+    """Nesting + total fraction + pooled within-k dispersion, over the 23 main chromosomes.
+
+    Pure; tested directly. Returns (pass, detail).
+    """
+    sum_b = sum_a = 0
+    n_violating = 0
+    n = np.zeros(DEPTH_K_MAX + 1, dtype=np.int64)
+    s = np.zeros(DEPTH_K_MAX + 1, dtype=np.float64)
+    ss = np.zeros(DEPTH_K_MAX + 1, dtype=np.float64)
+    missing = []
+    for c in MAIN_CHROMS:
+        if c not in base_counts or c not in arm_counts or base_counts[c].shape != arm_counts[c].shape:
+            missing.append(c)
+            continue
+        b, a = base_counts[c], arm_counts[c]
+        n_violating += int(np.count_nonzero(a.astype(np.int64) > b.astype(np.int64)))
+        sum_b += int(b.sum(dtype=np.int64))
+        sum_a += int(a.sum(dtype=np.int64))
+        sel = (b >= 1) & (b <= DEPTH_K_MAX)
+        bk = b[sel].astype(np.int64)
+        ak = a[sel].astype(np.float64)
+        n += np.bincount(bk, minlength=DEPTH_K_MAX + 1)
+        s += np.bincount(bk, weights=ak, minlength=DEPTH_K_MAX + 1)
+        ss += np.bincount(bk, weights=ak * ak, minlength=DEPTH_K_MAX + 1)
+    nested = not missing and n_violating == 0
+    frac = sum_a / sum_b if sum_b else float("nan")
+    total_ok = sum_b > 0 and abs(frac - p) <= DEPTH_TOTAL_TOL
+    k = np.arange(DEPTH_K_MAX + 1)
+    has = n > 0
+    within = float(np.sum(ss[has] - s[has] ** 2 / n[has]))
+    expect = float(np.sum(n[has] * k[has] * p * (1 - p)))
+    d_stat = within / expect if expect > 0 else float("nan")
+    n_bins = int(n[1:].sum())
+    bins_ok = n_bins >= DEPTH_MIN_BINS
+    d_ok = DEPTH_D_LO <= d_stat <= DEPTH_D_HI  # False for NaN
+    per_k = {str(i): {"n_bins": int(n[i]), "mean": _num(s[i] / n[i]),
+                      "var": _num(ss[i] / n[i] - (s[i] / n[i]) ** 2),
+                      "binomial_mean": _num(i * p), "binomial_var": _num(i * p * (1 - p))}
+             for i in range(1, DEPTH_K_MAX + 1) if n[i] > 0}
+    detail = {"p": _num(p), "nested": bool(nested), "n_bins_violating": n_violating,
+              "missing_or_misshapen": missing, "sum_base": sum_b, "sum_arm": sum_a,
+              "frac": _num(frac), "total_pass": bool(total_ok), "n_bins": n_bins,
+              "n_bins_pass": bool(bins_ok), "D": _num(d_stat), "D_pass": bool(d_ok),
+              "per_k_info_only": per_k,
+              "thresholds": {"total": DEPTH_TOTAL_TOL, "D": [DEPTH_D_LO, DEPTH_D_HI],
+                             "k_max": DEPTH_K_MAX, "min_bins": DEPTH_MIN_BINS}}
+    return bool(nested and total_ok and bins_ok and d_ok), detail
+
+
+def check_depth_law(cf: Path, pid: str, base: str, reads_kept: int):
+    base_cov = json.loads((cf / "products" / base / "covariates.json").read_text())
+    p = int(reads_kept) / int(base_cov["depth"])
+    ok, detail = depth_law(read_npz(cf / "products" / base / "counts25.npz"),
+                           read_npz(cf / "products" / pid / "counts25.npz"), p)
+    detail.update(base=base, reads_kept=int(reads_kept), base_depth=int(base_cov["depth"]))
+    return ok, detail
+
+
+def check_ratio_k1(cf: Path):
+    path = cf / "smoke" / "C8" / "ratio_k1.json"
+    rec = json.loads(path.read_text())
+    return rec.get("bit_identical") is True, {"source": str(path), "record": rec}
+
+
+def check_fastq_control_identity(cf: Path, pids: list):
+    arrays = [read_npz(cf / "products" / p / "control_counts25.npz") for p in pids]
+    differ = [c for c in MAIN_CHROMS
+              if any(c not in a for a in arrays)
+              or not all(np.array_equal(arrays[0][c], a[c]) for a in arrays[1:])]
+    return not differ, {"pids": pids, "differ": differ}
+
+
+def check_structure(cf: Path, pid: str, sizes: dict, header: str, line: str):
+    problems = []
+    with tempfile.TemporaryDirectory() as td:
+        # C3's validator on a one-row copy of the rows TSV: its problem lines are then this pid's.
+        rows_tsv = Path(td) / "rows.tsv"
+        rows_tsv.write_text(header + "\n" + line + "\n")
+        res = subprocess.run([sys.executable, str(RECORDS_PY), "validate",
+                              "--products", str(cf / "products"), "--rows", str(rows_tsv),
+                              "--expect", "1"], capture_output=True, text=True)
+    lines = res.stdout.strip().splitlines()
+    validate_ok = res.returncode == 0 and bool(lines) and lines[-1].strip() == "OK 1"
+    if not validate_ok:
+        problems.append({"records_validate": lines[-20:], "stderr": res.stderr.strip()[-2000:],
+                         "returncode": res.returncode})
+    pdir = cf / "products" / pid
+    files = [("counts25.npz", np.uint32), ("pval25.npz", np.float32)]
+    if (pdir / "control_counts25.npz").exists():
+        files.append(("control_counts25.npz", np.uint32))
+    for fname, dtype in files:
+        path = pdir / fname
+        if not path.exists():
+            problems.append(f"{fname}: missing")
+            continue
+        arrs = read_npz(path)
+        if sorted(arrs) != sorted(MAIN_CHROMS):
+            problems.append(f"{fname}: chroms {sorted(arrs)} != the 23 main chroms")
+        for c in MAIN_CHROMS:
+            if c not in arrs:
+                continue
+            a = arrs[c]
+            if a.ndim != 1 or a.size != sizes[c] // RES:
+                problems.append(f"{fname}:{c}: shape {a.shape} != ({sizes[c] // RES},)")
+            if a.dtype != dtype:
+                problems.append(f"{fname}:{c}: dtype {a.dtype} != {np.dtype(dtype)}")
+            if a.dtype.kind == "f":
+                n_bad = int((~np.isfinite(a)).sum())
+                n_neg = int((a < 0).sum())
+                if n_bad:
+                    problems.append(f"{fname}:{c}: {n_bad} non-finite")
+                if n_neg:
+                    problems.append(f"{fname}:{c}: {n_neg} negative")
+    return not problems, {"records_validate_ok": validate_ok,
+                          "files": [f for f, _ in files], "problems": problems}
+
+
+# ---------------------------------------------------------------------------------------------
+# run / summary
+# ---------------------------------------------------------------------------------------------
+
+
+def _guarded(cf, name, pid, fn, args, run_id, created_utc):
+    """A missing or unreadable input is a failed check, not a crashed run."""
+    try:
+        ok, detail = fn(*args)
+    except Exception as e:  # noqa: BLE001 — recorded, not swallowed
+        ok, detail = False, {"error": f"{type(e).__name__}: {e}"}
+    rec = write_record(cf, name, pid, ok, detail, run_id, created_utc)
+    print(f"{'PASS' if ok else 'FAIL'} {name} {pid}", flush=True)
+    return rec
+
+
+def plan(cf, rows_tsv, names, chrsz=CHRSZ) -> list:
+    """Every (name, pid, fn, args) the rows call for, for the checks in `names`."""
+    cf = Path(cf)
+    rows = read_rows(Path(rows_tsv))
+    jobs = []
+    if "base_rebuild" in names:
+        jobs += [("base_rebuild", r["pid"], check_base_rebuild, (cf, r["pid"]))
+                 for r in rows if r["arm"] == "base"]
+    if "counts_identity" in names:
+        jobs += [("counts_identity", r["pid"], check_counts_identity, (cf, r["pid"], base_pid(r)))
+                 for r in rows if r["arm"] in P_ONLY_ARMS]
+    if "depth_law" in names:
+        jobs += [("depth_law", r["pid"], check_depth_law, (cf, r["pid"], base_pid(r), r["knob_value"]))
+                 for r in rows if r["arm"] == "depth"]
+    if "ratio_k1_identity" in names and any(r["arm"] == "ratio" for r in rows):
+        jobs.append(("ratio_k1_identity", RATIO_K1_RECORD, check_ratio_k1, (cf,)))
+    if "fastq_control_identity" in names:
+        groups = {}
+        for r in rows:  # the biosample is exactly (cell, arm, level)
+            if r["route"] == "fastq" and r["pipeline"] != "atac":
+                groups.setdefault(r["biosample"], []).append(r["pid"])
+        jobs += [("fastq_control_identity", bios, check_fastq_control_identity, (cf, pids))
+                 for bios, pids in groups.items() if len(pids) >= 2]
+    if "structure" in names:
+        sizes = load_chrsz(chrsz)
+        header, *lines = Path(rows_tsv).read_text().splitlines()
+        raw = {ln.split("\t", 1)[0]: ln for ln in lines if ln.strip()}
+        jobs += [("structure", r["pid"], check_structure, (cf, r["pid"], sizes, header, raw[r["pid"]]))
+                 for r in rows]
+    return jobs
+
+
+def run(cf, rows_tsv, only=None, chrsz=CHRSZ) -> list:
+    cf = Path(cf)
+    names = [only] if only else list(CHECK_NAMES)
+    run_id, created = new_run_id(), utc_now()
+    # Clear first, plan second: if planning raises (bad rows TSV, missing chrom sizes), the old
+    # records and expected lists are already gone, so `summary` cannot pass on a previous tree.
+    for name in names:
+        for old in (cf / "checks" / name).glob("*.json"):
+            old.unlink()
+        (cf / "checks" / "expected" / f"{name}.json").unlink(missing_ok=True)
+    # RUN.json before planning too: from here on, every check this run does not reach — including
+    # the ones `--only` skipped, and every check at all if planning raises — reads as stale.
+    write_json_atomic(cf / "checks" / "RUN.json",
+                      {"run_id": run_id, "created_utc": created,
+                       "only": [only] if only else None, "rows": str(rows_tsv)})
+    jobs = plan(cf, rows_tsv, names, chrsz)
+    for name in names:
+        write_json_atomic(cf / "checks" / "expected" / f"{name}.json",
+                          {"run_id": run_id, "created_utc": created,
+                           "pids": [pid for n, pid, _, _ in jobs if n == name]})
+    return [_guarded(cf, name, pid, fn, args, run_id, created) for name, pid, fn, args in jobs]
+
+
+def _expected_pids(cf: Path, name: str, run_id):
+    """`(pids, None)` if the expected list carries RUN.json's stamp, else `([], why_it_does_not)`."""
+    exp = cf / "checks" / "expected" / f"{name}.json"
+    if run_id is None:
+        return [], {"reason": STALE_REASON, "run_id": None,
+                    "note": "no checks/RUN.json: no run has stamped this tree"}
+    if not exp.exists():
+        return [], {"reason": STALE_REASON, "run_id": run_id, "expected_run_id": None,
+                    "note": f"no expected list {exp.relative_to(cf)}"}
+    obj = json.loads(exp.read_text())
+    obj = obj if isinstance(obj, dict) else {}
+    if obj.get("run_id") != run_id:
+        return [], {"reason": STALE_REASON, "run_id": run_id, "expected_run_id": obj.get("run_id"),
+                    "note": f"expected list {exp.relative_to(cf)} is from an older run"}
+    return list(obj.get("pids", [])), None
+
+
+def summary(cf) -> dict:
+    cf = Path(cf)
+    run_path = cf / "checks" / "RUN.json"
+    run_info = json.loads(run_path.read_text()) if run_path.exists() else {}
+    run_id = run_info.get("run_id")
+    only = run_info.get("only")
+    partial = run_id is None or (only is not None and set(only) != set(CHECK_NAMES))
+
+    recs, stale = [], {}
+    for name in CHECK_NAMES:
+        for path in sorted((cf / "checks" / name).glob("*.json")):
+            rec = json.loads(path.read_text())
+            if run_id is not None and rec.get("run_id") == run_id:
+                recs.append(rec)
+            else:  # written by some older run: it says nothing about the tree as it stands now
+                stale.setdefault(name, []).append(rec.get("pid", path.stem))
+    failures = [{"name": r["name"], "pid": r["pid"], "detail": r["detail"]}
+                for r in recs if not r["pass"]]
+    expected = {}
+    for name in CHECK_NAMES:
+        expected[name], why = _expected_pids(cf, name, run_id)
+        if why is None and stale.get(name):
+            why = {"reason": STALE_REASON, "run_id": run_id}
+        if why is not None:
+            if stale.get(name):
+                why["stale_records"] = sorted(stale[name])
+            failures.append({"name": name, "pid": "*", "detail": why})
+            continue
+        have = {r["pid"] for r in recs if r["name"] == name}
+        failures += [{"name": name, "pid": pid, "detail": {"error": "no record: the run did not reach it"}}
+                     for pid in expected[name] if pid not in have]
+    n_checks = sum(len({r["pid"] for r in recs if r["name"] == name} | set(expected[name]))
+                   for name in CHECK_NAMES)
+    out = {"all_pass": bool(recs) and not failures and not partial, "partial": bool(partial),
+           "n_checks": n_checks, "run_id": run_id, "failures": failures,
+           "created_utc": utc_now()}
+    (cf / "checks").mkdir(parents=True, exist_ok=True)
+    (cf / "checks" / "summary.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
+
+    if run_id is None:
+        stamp = "No `checks/RUN.json`: nothing on this tree is stamped, so nothing reads as a pass."
+    elif partial:
+        stamp = (f"Run `{run_id}` covered only `{', '.join(only)}`: a partial run, which never reads "
+                 "as a pass — every check it skipped is reported stale.")
+    else:
+        stamp = f"Run `{run_id}` covered every check."
+    md = ["# t112 pre-use checks", "",
+          f"All pass: **{out['all_pass']}** ({out['n_checks']} checks, {len(failures)} failures). "
+          f"Written {out['created_utc']}.", "", stamp, "",
+          "`ratio_k1_identity` records under the sentinel pid `smoke_C8_ratio_k1` and "
+          "`fastq_control_identity` under a biosample id; every other pid is a product pid.", "",
+          "| check | pass | total |", "|---|---|---|"]
+    for name in CHECK_NAMES:
+        mine = [r for r in recs if r["name"] == name]
+        total = len({r["pid"] for r in mine} | set(expected[name]))
+        md.append(f"| {name} | {sum(r['pass'] for r in mine)} | {total} |")
+    if failures:
+        md += ["", "## Failures", ""]
+        md += [f"- `{f['name']}` `{f['pid']}`" for f in failures]
+    (cf / "checks" / "CHECKS.md").write_text("\n".join(md) + "\n")
+    return out
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+    pr = sub.add_parser("run", help="run the checks; one JSON record per (check, pid)")
+    pr.add_argument("--cf", required=True, help="the t112 root, e.g. /scratch/mforooz/t112_cf")
+    pr.add_argument("--rows", required=True, help="`arms.py rows --route all` TSV")
+    pr.add_argument("--only", choices=CHECK_NAMES, default=None)
+    pr.add_argument("--chrsz", default=CHRSZ, help="chrom sizes for `structure` (default: CHRSZ)")
+    ps = sub.add_parser("summary", help="write checks/summary.json and checks/CHECKS.md")
+    ps.add_argument("--cf", required=True)
+    args = p.parse_args(argv)
+    if args.cmd == "run":
+        recs = run(args.cf, args.rows, args.only, args.chrsz)
+        n_fail = sum(not r["pass"] for r in recs)
+        print(f"{len(recs)} checks, {n_fail} failed")
+        return 0
+    out = summary(args.cf)
+    print(f"all_pass={out['all_pass']} partial={out['partial']} n_checks={out['n_checks']} "
+          f"failures={len(out['failures'])}")
+    return 0 if out["all_pass"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

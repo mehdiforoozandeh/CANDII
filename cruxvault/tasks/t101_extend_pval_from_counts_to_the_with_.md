@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: h1, h2
 hypothesis_refs: 
-status: open
-created: 2026-09-01T02:19:02
-updated: 2026-09-01T02:19:02
+status: done
+created: "2026-09-01T02:19:02"
+updated: "2026-09-17T21:54:21"
 ---
 
 # t101 — extend pval_from_counts to the with-control MACS2 branch
@@ -24,7 +24,7 @@ the testbed's y-prime target is -log10 p; the no-control rule bakes the control 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 08c31f8](results/t101/MERGED.md)
 
 ## Evidence
 
