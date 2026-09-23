@@ -656,7 +656,9 @@ def write_seeds(pr=PR) -> None:
 
 def smoke(pid: str, chrom: str, tmp=None, pr=PR, products=PRODUCTS) -> dict:
     """Split a one-chromosome copy of `pid`'s read set, run both halves' MACS2 on it with the
-    product's control cut to the same chromosome, and check that chromosome against the product."""
+    product's control cut to the same chromosome, and check that chromosome against the product.
+
+    Every step shares the one `tmp`, because each container binds only its own `tmp`."""
     tmp = tmpdir(tmp)
     spr_root = f"{pr}/smoke/{pid}__{chrom}"
     row = row_of(pid)
@@ -665,10 +667,10 @@ def smoke(pid: str, chrom: str, tmp=None, pr=PR, products=PRODUCTS) -> dict:
     Path(f"{tmp}/c").mkdir(parents=True, exist_ok=True)
     ta_c = f"{tmp}/c/{os.path.basename(src['treatment'])}"
     sh(f"zcat {shlex.quote(src['treatment'])} | awk '$1==\"{chrom}\"' | gzip -nc > {ta_c}")
-    rec = run_readset(rs, f"{tmp}/a", pr=spr_root, products=products, chrom=chrom,
+    rec = run_readset(rs, tmp, pr=spr_root, products=products, chrom=chrom,
                       ta_override=ta_c)
     # the control, cut to the same chromosome, at the same basename: MACS2 on one chromosome
-    ctl = signal_plan(row, ta_c, f"{tmp}/probe", products)["control"]
+    ctl = signal_plan(row, ta_c, tmp, products)["control"]
     ctl_c = None
     if ctl:
         ctl_c = f"{tmp}/c/ctl/{os.path.basename(ctl)}"
@@ -677,7 +679,7 @@ def smoke(pid: str, chrom: str, tmp=None, pr=PR, products=PRODUCTS) -> dict:
     dirs = {}
     for h in HALVES:
         dirs[h] = Path(f"{spr_root}/{pid}/{h}")
-        run_half({"pid": pid, "half": h, "readset": rs["readset"]}, f"{tmp}/b_{h}", pr=spr_root,
+        run_half({"pid": pid, "half": h, "readset": rs["readset"]}, tmp, pr=spr_root,
                  products=products, chrom=chrom, out_override=dirs[h],
                  control_swap=(ctl, ctl_c) if ctl else None)
     res = check_pid(pid, spr_root, products, chrom=chrom, half_dirs=dirs)
