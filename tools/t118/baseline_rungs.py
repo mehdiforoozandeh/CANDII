@@ -456,16 +456,19 @@ def aggregate(manifest, out_dir, tsv_path=None, md_path=None) -> dict:
             w.writerow({k: ("" if v is None else v) for k, v in r.items()})
 
     # PI ruling 2026-09-23: count pairs whose counts are bit-identical to base (the p-only arms)
+    # and, in both spaces, the DNase MAPQ arms (a t112 defect: their reads equal the DNase base's)
     # stay in the TSV but are left out of the markdown tables.
     scored = [r for r in rows if r["eval"] == "score"
-              and not (r["space"] == "counts" and r.get("source_equals_target"))]
+              and not (r["space"] == "counts" and r.get("source_equals_target"))
+              and not (r["track"] == "C12M02" and r["arm"] == "mapq")]
     lines = [f"# t118 baseline rungs — scored on {' + '.join(SCORE_CHROMS)}, blacklist removed",
              "",
              f"{len(pairs) - len(missing)} of {len(pairs)} pairs present. Counts: NB CRPS "
              f"(mean floored at {NB_MEAN_FLOOR}); p: Gaussian CRPS in -log10 p. `point` = CRPS of "
              "the point forecast = MAE. QuantileMatching ties: tie-block mean. Mark class = mean "
              "over tracks of each track's mean over pairs. Count pairs identical to base (p-only arms) are "
-             "left out of these tables and kept in the TSV.", ""]
+             "left out of these tables and kept in the TSV, as are both spaces of the DNase MAPQ arms "
+             "(identical to the DNase base, a t112 defect).", ""]
     if missing:
         lines += [f"Missing: {', '.join(missing)}", ""]
 
