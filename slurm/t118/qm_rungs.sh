@@ -20,9 +20,11 @@
 # and scipy; torch and h5py come from the Alliance wheelhouse with --no-index (compute nodes have no
 # internet). The venv is built per task in $SLURM_TMPDIR, never on a shared filesystem.
 #
-# RESOURCES. One core. Measured locally on a synthetic pair scaled to the real track length:
-# see the t118 return notes for the estimate; 3 h keeps the job in the b1 bin, 16G leaves
-# headroom over the measured peak.
+# RESOURCES. One core. Measured locally (M-series laptop) on a synthetic pair with full-length
+# chr19/21/22 and 17.6 M training bins (1/6.7 of the real 117.6 M): 135 s, peak RSS 2.6 GB. The
+# p-space fit (distinct-value histograms, worst case every bin distinct) was 45 s of it and scales
+# with training bins; scoring (~75 s) does not. Extrapolated per real pair: ~8-12 min, peak RSS
+# ~3-6 GB. 3 h keeps the job in the b1 bin; 16G covers the worst-case distinct-value merge.
 #
 # Usage, from the Nibi login node, after snapshotting the repo to $KIT:
 #   OUT=<results dir>; mkdir -p $OUT/logs   # SLURM opens --output before the body runs
@@ -51,6 +53,7 @@ PY_MODULES="StdEnv/2023 python/3.11 scipy-stack"
 [ -f "$KIT/tools/t118/baseline_rungs.py" ] || { echo "no tools/t118/baseline_rungs.py under $KIT" >&2; exit 2; }
 [ -f "$PRODUCTS/MANIFEST.tsv" ] || { echo "no $PRODUCTS/MANIFEST.tsv" >&2; exit 2; }
 [ -s "$BLACKLIST" ] || { echo "blacklist $BLACKLIST missing or empty" >&2; exit 2; }
+KIT=$(cd "$KIT" && pwd)
 mkdir -p "$OUT"
 
 echo "=== t118 qm_rungs idx=$SLURM_ARRAY_TASK_ID job ${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID} host=$(hostname) $(date -u)"
@@ -66,7 +69,12 @@ pip install --no-index torch h5py
 export PYTHONPATH="$KIT/src${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
 if [ -f "$KIT/GIT_SHA" ]; then export T118_GIT_SHA=$(cat "$KIT/GIT_SHA"); fi
-python3 -c "import candi.metrics, candi.bench.distributional, candi.store.genome; print('venv ok')"
+python3 -c "import candi.metrics, candi.bench.distributional, candi.store.genome; print('venv ok', candi.__file__)"
+# the library must come from this kit, not from some other install (tests/test_slurm_kit_pin.py)
+case "$(python3 -c 'import candi; print(candi.__file__)')" in
+  "$KIT"/src/*) ;;
+  *) echo "candi does not import from $KIT/src" >&2; exit 3 ;;
+esac
 
 /usr/bin/time -v python3 "$KIT/tools/t118/baseline_rungs.py" run \
     --manifest "$PRODUCTS/MANIFEST.tsv" --products "$PRODUCTS" --blacklist "$BLACKLIST" \
