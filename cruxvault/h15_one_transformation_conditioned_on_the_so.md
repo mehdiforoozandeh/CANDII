@@ -57,7 +57,9 @@ A transformation per assay, conditioned on the source and target covariates, map
 
 ## Planned Intervention
 
-Distances D, all on held-out chromosomes, mean per track then macro:
+Split (PI ruling 2026-09-23): train on every chromosome except chr19, chr21, chr22; validate (early stopping, run selection) on chr22; score on chr19 + chr21. chrY and chrM dropped everywhere; ENCODE hg38 blacklist regions excluded from scoring, kept in training.
+
+Distances D, all on the scored chromosomes, mean per track then macro:
 
 | space | CRPS | Spearman |
 |---|---|---|
