@@ -32,9 +32,11 @@ For BAM-route products the command list `bam_arm.plan` gives today must equal th
 provenance recorded, after swapping the old `$SLURM_TMPDIR` for this one. That proves the MACS2
 settings used here are the product's.
 
-THE RATIO ARM IS HELD. What `--ratio` a half should get (the product's literal number, or the same
-k times the half's own treatment/control quotient) is a PI decision. `--ratio-mode` has no default
-and `half` refuses a ratio product without it.
+THE RATIO ARM: `--ratio-mode k` (PI ruling 2026-09-23). A ratio half's MACS2 gets the product's k
+times the half's OWN default treatment/control quotient, `k * lines(half tagAlign) / lines(control
+tagAlign)` (`bam_arm.ratio_for`, same 10-significant-digit rounding as the product), not the
+product's literal `--ratio`. `literal` stays available but is not the ruling. `half` still refuses
+a ratio product with no `--ratio-mode`, and the rule is written into each ratio half's provenance.
 
     python3 pseudoreps.py tasks    --out-dir DIR                  # readsets.tsv + halves.tsv
     python3 pseudoreps.py readset  --tasks readsets.tsv --index I [--tmp T]
@@ -76,6 +78,15 @@ SPR_MD5 = "077aa84a7cdffc2e2c8489d514869eee"
 REUSE_BASE = ("base", "ratio", "ctlid", "ctldepth", "extsize")
 #: BAM-route arms with their own treatment read set, rebuilt from the recorded commands.
 OWN_BAM = ("depth", "abproxy")
+
+#: what each `--ratio-mode` gives a ratio half's MACS2, written into its provenance.
+RATIO_RULES = {
+    "k": ("--ratio = k * lines(this half's treatment tagAlign) / lines(control tagAlign), "
+          "k from the product's level, rounded to 10 significant digits (bam_arm.ratio_for); "
+          "k applied to the half's own default MACS2 treatment/control depth ratio "
+          "(PI ruling 2026-09-23)"),
+    "literal": "--ratio = the product's own recorded --ratio value, unchanged",
+}
 
 READSET_HEADER = ("index", "readset", "owner_pid", "track", "route", "pipeline", "users")
 HALF_HEADER = ("index", "pid", "half", "readset", "arm", "route", "pipeline")
@@ -446,7 +457,9 @@ def signal_plan(row: dict, pr_ta: str, tmp: str, products=PRODUCTS, chrsz=CHRSZ,
     return {"sif": sif, "commands": [f"mkdir -p {tmp}/work {out}"] + pre + [cmd],
             "signal_command": cmd, "tas": tas, "control": control, "fraglen": fraglen,
             "bigwig": bam_arm.signal_bigwig(tas, out), "patch": patch, "ratio": ratio,
-            "ratio_mode": ratio_mode if row["arm"] == "ratio" else None, "source": source}
+            "ratio_mode": ratio_mode if row["arm"] == "ratio" else None,
+            "ratio_rule": (RATIO_RULES[ratio_mode] if row["arm"] == "ratio" else None),
+            "source": source}
 
 
 def run_half(task: dict, tmp=None, pr=PR, products=PRODUCTS, chrsz=CHRSZ, ratio_mode=None,
@@ -514,7 +527,8 @@ def run_half(task: dict, tmp=None, pr=PR, products=PRODUCTS, chrsz=CHRSZ, ratio_
         "macs2": {"commands": sp["commands"], "treatment": pr_ta,
                   "control": sp["control"], "control_md5": control_md5,
                   "fraglen_or_smooth_win": sp["fraglen"], "ratio": sp["ratio"],
-                  "ratio_mode": sp["ratio_mode"], "patched_script": patch,
+                  "ratio_mode": sp["ratio_mode"], "ratio_rule": sp["ratio_rule"],
+                  "patched_script": patch,
                   "settings_from": sp["source"], "bigwig_md5": records.md5_file(bw)},
         "pval_n_nan": n_nan, "chrom_only": chrom,
         "outputs": [{"path": str(dest / n), "md5": records.md5_file(stage / n)}
@@ -619,7 +633,7 @@ def run_checks(pids=None, pr=PR, products=PRODUCTS) -> dict:
 
 MANIFEST_HEADER = ("pid", "half", "readset", "arm", "level", "route", "pipeline", "n_lines",
                    "product_lines", "seed_effective", "paired_end", "control", "fraglen_or_smooth_win",
-                   "counts25_md5", "pval25_md5", "tagalign", "slurm_job_ids", "dir")
+                   "ratio", "counts25_md5", "pval25_md5", "tagalign", "slurm_job_ids", "dir")
 
 
 def write_manifest(rows, pr=PR) -> None:
@@ -635,7 +649,8 @@ def write_manifest(rows, pr=PR) -> None:
                     p["split"]["n_lines"], p["split"]["product_treatment"]["n_lines"],
                     p["split"]["seed"]["effective"], p["split"]["seed"]["paired_end"],
                     os.path.basename(p["macs2"]["control"]) if p["macs2"]["control"] else "none",
-                    p["macs2"]["fraglen_or_smooth_win"], md5["counts25.npz"], md5["pval25.npz"],
+                    p["macs2"]["fraglen_or_smooth_win"],
+                    "" if p["macs2"]["ratio"] is None else p["macs2"]["ratio"], md5["counts25.npz"], md5["pval25.npz"],
                     p["split"]["tagalign"], ",".join(p["slurm_job_ids"]), str(d)]
             lines.append("\t".join(str(v) for v in vals))
     Path(f"{pr}/MANIFEST.tsv").write_text("\n".join(lines) + "\n")
