@@ -7,7 +7,7 @@ parent: q1
 status: idea
 rule: all
 measurement: CRPS gap-closed (D_QM − D_f)/(D_QM − D_oracle) on held-out chromosomes, pooled over arms, per mark class, counts (NB CRPS) and −log10 p (Gaussian CRPS) separately; QM = QuantileMatching fitted once per arm on training chromosomes; oracle = one pseudoreplicate of the target predicting the other; f is a covariate-conditioned model, one per assay (7 f's, the unit the checks judge), trained on base↔arm pairs in both directions of the t112 counterfactual corpus; C and C' are the full knob vector plus the assay
-replicates: 7 tracks (1 DNase, 3 narrow, 3 broad marks) x base↔arm pairs in both directions (19 arms per histone track, 7 per DNase track) x 3 seeds of each of the 7 per-assay f's
+replicates: 7 tracks (1 DNase, 3 narrow, 3 broad marks) x base↔arm pairs in both directions (19 arm products per histone track, 9 for DNase; 246 pairs) x 3 seeds of each of the 7 per-assay f's
 neutral_optout: "PI ruling 2026-09-23: no check voids the run; the swap check (C' = C returns X) gates the claim instead of acting as a control"
 verdict: 
 metric: 
