@@ -579,6 +579,14 @@ def check_pid(pid: str, pr=PR, products=PRODUCTS, chrom=None, half_dirs=None) ->
     nan = {h: int(sum(np.isnan(hp[h][k]).sum() for k in chroms)) for h in HALVES}
     res["pval_nan"] = nan
     res["checks"]["no_nan"] = all(v == 0 for v in nan.values())
+    # sanity only, not a pass/fail: how each half's p track tracks the product's, on one chromosome
+    k = chroms[0]
+    res["pval_pearson_vs_product"] = {
+        "chrom": k, **{h: float(np.corrcoef(hp[h][k].astype(np.float64),
+                                             pv[k].astype(np.float64))[0, 1]) for h in HALVES}}
+    res["pval_mean_ratio_vs_product"] = {
+        h: float(np.mean(hp[h][k], dtype=np.float64) / np.mean(pv[k], dtype=np.float64))
+        for h in HALVES}
     res["pass"] = all(res["checks"].values()) and not res["problems"]
     return res
 
