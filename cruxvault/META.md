@@ -9,6 +9,7 @@ Root: [[candii]]
 - ○ `q1` [Q] [[q1_do_the_recorded_experimental_covariates_|**Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?**]] — *open*
   - · `h1` [H] [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
   - · `h2` [H] [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+  - · `h15` [H] [[h15_one_transformation_conditioned_on_the_so|One transformation conditioned on the source and target covariates maps a track's base onto each of its counterfactual arms and back, in both count and −log10 p space, beyond per-arm quantile matching]] — *idea*
   - ○ `q2` [Q] [[q2_do_the_covariates_that_record_which_read|**Do the covariates that record which reads entered the treatment pileup carry enough information to map a track across a change in one of them?**]] — *open*
     - · `h3` [H] [[h3_conditioning_on_the_recorded_read_length|Conditioning on the recorded read length predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
     - · `h4` [H] [[h4_conditioning_on_the_recorded_duplicate_h|Conditioning on the recorded duplicate handling predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
@@ -27,5 +28,5 @@ Root: [[candii]]
 ## Dashboard
 
 - **Questions** (4): open 4 · review 0 · resolved 0
-- **Hypotheses** (13): idea 13 · staged 0 · running 0 · done 0
+- **Hypotheses** (14): idea 14 · staged 0 · running 0 · done 0
 - **Verdicts**: supported 0 · partial 0 · refuted 0 · inconclusive 0 · invalid-run 0
