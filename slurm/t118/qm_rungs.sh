@@ -15,10 +15,12 @@
 # NO --export. Alliance arrays truncate a comma-valued --export variable, so every input is a
 # POSITIONAL argument.
 #
-# THE VENV. `import candi.metrics` runs candi/__init__.py, which imports torch (not x_transformers,
-# which the encoder imports lazily); `candi.store.genome` imports h5py. scipy-stack supplies numpy
-# and scipy; torch and h5py come from the Alliance wheelhouse with --no-index (compute nodes have no
-# internet). The venv is built per task in $SLURM_TMPDIR, never on a shared filesystem.
+# THE VENV. `import candi.metrics` runs candi/__init__.py, which imports torch, einops, einx, loguru
+# and x_transformers (eagerly, through candi.encoder), so the venv is the repo's own pinned recipe,
+# as slurm/t112/build_store.sh builds it: python/3.10.13, requirements-fir.txt from the CVMFS
+# wheelhouse, then requirements-pypi.txt (x-transformers only) from $KIT/wheels with --no-index
+# --find-links (x-transformers is not in the wheelhouse; compute nodes have no internet). Built per
+# task in $SLURM_TMPDIR, never on a shared filesystem.
 #
 # RESOURCES. One core. Measured locally (M-series laptop) on a synthetic pair with full-length
 # chr19/21/22 and 17.6 M training bins (1/6.7 of the real 117.6 M): 135 s, peak RSS 2.6 GB. The
@@ -47,7 +49,7 @@ KIT="${1:?$USAGE}"
 PRODUCTS="${2:?$USAGE}"
 BLACKLIST="${3:?$USAGE}"
 OUT="${4:?$USAGE}"
-PY_MODULES="StdEnv/2023 python/3.11 scipy-stack"
+PY_MODULES="python/3.10.13"
 : "${SLURM_ARRAY_TASK_ID:?array task only}"
 
 [ -f "$KIT/tools/t118/baseline_rungs.py" ] || { echo "no tools/t118/baseline_rungs.py under $KIT" >&2; exit 2; }
@@ -64,9 +66,11 @@ set +u; module load $PY_MODULES; set -u
 virtualenv --no-download "$SLURM_TMPDIR/venv"
 source "$SLURM_TMPDIR/venv/bin/activate"
 pip install --no-index --upgrade pip
-pip install --no-index torch h5py
-# PREPEND, never replace: scipy-stack puts numpy/scipy on PYTHONPATH (see slurm/t112/bam_arm.sh).
-export PYTHONPATH="$KIT/src${PYTHONPATH:+:$PYTHONPATH}"
+ls "$KIT"/wheels/x_transformers-*-py3-none-any.whl >/dev/null 2>&1 \
+  || { echo "no x_transformers wheel in $KIT/wheels" >&2; exit 2; }
+pip install --no-index -r "$KIT/requirements-fir.txt"
+pip install --no-index --find-links "$KIT/wheels" -r "$KIT/requirements-pypi.txt"
+export PYTHONPATH="$KIT/src"
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
 if [ -f "$KIT/GIT_SHA" ]; then export T118_GIT_SHA=$(cat "$KIT/GIT_SHA"); fi
 python3 -c "import candi.metrics, candi.bench.distributional, candi.store.genome; print('venv ok', candi.__file__)"
