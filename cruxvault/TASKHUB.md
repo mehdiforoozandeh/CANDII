@@ -39,7 +39,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
-- `t117` [data-acquisition] make ENCODE pseudoreplicates (pr1, pr2: counts and MACS2 -log10 p) for all 130 counterfactual-arm products on Nibi — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 
 ## Blocked
 
@@ -58,7 +57,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
-- `t117` [data-acquisition] make ENCODE pseudoreplicates (pr1, pr2: counts and MACS2 -log10 p) for all 130 counterfactual-arm products on Nibi — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 
 ### hpc-setup
 
@@ -176,3 +174,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t114` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `results/t39/DELIVERABLE.md`
 - `t115` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *done* → `results/t115/MERGED.md`
 - `t116` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *done* → `results/t116/MERGED.md`
+- `t117` [data-acquisition] make ENCODE pseudoreplicates (pr1, pr2: counts and MACS2 -log10 p) for all 130 counterfactual-arm products on Nibi — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *done* → `results/t117/CHECKS.md`, `results/t117/MANIFEST.tsv`

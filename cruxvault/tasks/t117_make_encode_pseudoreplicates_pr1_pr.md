@@ -1,15 +1,15 @@
 ---
 id: t117
 type: task
-title: make ENCODE pseudoreplicates (pr1, pr2: counts and MACS2 -log10 p) for all 130 counterfactual-arm products on Nibi
+title: "make ENCODE pseudoreplicates (pr1, pr2: counts and MACS2 -log10 p) for all 130 counterfactual-arm products on Nibi"
 category: data-acquisition
 parent: 
 blocked_by: None
 refs: h1, h2
 hypothesis_refs: 
-status: open
-created: 2026-09-23T14:20:03
-updated: 2026-09-23T14:20:03
+status: done
+created: "2026-09-23T14:20:03"
+updated: "2026-09-23T22:57:09"
 ---
 
 # t117 — make ENCODE pseudoreplicates (pr1, pr2: counts and MACS2 -log10 p) for all 130 counterfactual-arm products on Nibi
@@ -24,7 +24,8 @@ oracle for the counterfactual-mapping f: a second measurement of the same materi
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [pseudoreplicate checks, 130/130 on all four](results/t117/CHECKS.md)
+- [per-half manifest](results/t117/MANIFEST.tsv)
 
 ## Evidence
 
