@@ -80,7 +80,7 @@ case "$(python3 -c 'import candi; print(candi.__file__)')" in
   *) echo "candi does not import from $KIT/src" >&2; exit 3 ;;
 esac
 
-/usr/bin/time -v python3 "$KIT/tools/t118/baseline_rungs.py" run \
+python3 "$KIT/tools/t118/baseline_rungs.py" run   # no /usr/bin/time on Nibi compute nodes; peak RSS is in sacct MaxRSS \
     --manifest "$PRODUCTS/MANIFEST.tsv" --products "$PRODUCTS" --blacklist "$BLACKLIST" \
     --out "$OUT" --index "$SLURM_ARRAY_TASK_ID"
 
