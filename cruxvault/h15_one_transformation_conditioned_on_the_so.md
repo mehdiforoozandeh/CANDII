@@ -6,7 +6,7 @@ title: A transformation per assay, conditioned on the source and target covariat
 parent: q1
 status: idea
 rule: all
-measurement: CRPS gap-closed (D_QM − D_f)/(D_QM − D_oracle) on held-out chromosomes, pooled over arms, per mark class, counts (NB CRPS) and −log10 p (Gaussian CRPS) separately; QM = QuantileMatching fitted once per arm on training chromosomes; oracle = one pseudoreplicate of the target predicting the other; f is a covariate-conditioned model, one per assay (7 f's, the unit the checks judge), trained on base↔arm pairs in both directions of the t112 counterfactual corpus; C and C' are the full knob vector plus the assay
+measurement: CRPS gap-closed (D_QM − D_f)/(D_QM − D_oracle) on held-out chromosomes, pooled over arms, per mark class, counts (NB CRPS) and −log10 p (log-normal CRPS) separately; QM = QuantileMatching fitted once per arm on training chromosomes; oracle = one pseudoreplicate of the target predicting the other (both directions, averaged); f predicts both distribution parameters in every bin — NB (n, p) for counts, log-normal (μ, σ) for −log10 p; f is a covariate-conditioned model, one per assay (7 f's, the unit the checks judge), trained on base↔arm pairs in both directions of the t112 counterfactual corpus; C and C' are the full knob vector plus the assay
 replicates: 7 tracks (1 DNase, 3 narrow, 3 broad marks) x base↔arm pairs in both directions (19 arm products per histone track, 9 for DNase; 246 pairs) x 3 seeds of each of the 7 per-assay f's
 neutral_optout: "PI ruling 2026-09-23: no check voids the run; the swap check (C' = C returns X) gates the claim instead of acting as a control"
 verdict: 
@@ -64,9 +64,13 @@ Distances D, all on the scored chromosomes, mean per track then macro:
 | space | CRPS | Spearman |
 |---|---|---|
 | counts | NB CRPS: all bins, non-zero bins, top 1% by real X' | all, non-zero, top 1% |
-| −log10 p | plain Gaussian CRPS: same three subsets | same three |
+| −log10 p | log-normal CRPS: same three subsets | same three |
 
 Three versions of f are trained (PI ruling 2026-09-23): one per assay — the one the checks judge — plus one per arm (C and C' never vary, so it is a flexible known-arm rescale; shuffle and swap do not apply) and one across all 7 tracks with the assay as context; the last two are reported. C and C' are the full knob vector on both sides plus the assay, encoded as one standardised concatenation — continuous knobs as z-scores (depth as log2 reads), binary as 0/1, categorical one-hot, MAPQ numeric; f is never handed C' − C and must infer the change itself. No identity pairs (C' = C) are trained, so swap tests "no change" out of training.
+
+−log10 p is log-normal, not Gaussian (measured 2026-09-24 on the 7 base tracks, chr1, pseudoreplicate halves: skew of x 2.9–17.6 against −0.56–0.51 for log x; SD between halves grows with level at slope 0.81–1.32; log-normal fits better at 40 of 40 levels on every track), so p-space CRPS is log-normal throughout (PI ruling 2026-09-24).
+
+Rungs that emit one value per bin (noSolution, QuantileMatching, the oracle) get their second parameter from a fixed rule: counts are Poisson with that mean; −log10 p is log-normal with median at the prediction and one σ per arm, fitted on the training chromosomes (a fixed σ already makes SD ∝ mean). Their predictions are floored at 1e-3 before the log; f needs no floor (PI rulings 2026-09-24).
 
 Reported, never gating: the CRPS split (capability vs scale error) beside every gap-closed; Spearman of f minus that of QM (QM keeps ranks, so a gain means f re-orders bins) against 2× seed wobble; CRPS on non-zero bins; gap-closed per arm; a point-output f (MAE/MSE — a point forecast's CRPS is its absolute error) against the distribution-output f.
 
