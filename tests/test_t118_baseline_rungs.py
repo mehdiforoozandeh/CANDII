@@ -1,4 +1,4 @@
-"""t118 — `tools/t118/baseline_rungs.py`: the noSolution and QuantileMatching rungs.
+"""t118 — `tools/t118/baseline_rungs.py`: the noSolution, QuantileMatching and oracle rungs.
 
 Products are written with the t112 writer itself (`tools/t112/bin25.py::write_npz`), so the loader
 is tested against the exact layout the corpus has: one npz per product and space, one array per
@@ -15,8 +15,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from candi.bench.distributional import gauss_crps, p_from_mu
-from candi.metrics import nb_crps, spearman
+from scipy import integrate
+from scipy.stats import norm, poisson
+
+from candi.metrics import spearman
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -140,7 +142,7 @@ def test_point_crps_is_mae_and_subsets():
     assert sub["top1"].size == 10
     assert set(sub["nonzero"]) == set(np.flatnonzero(y > 0))
     assert y[sub["top1"]].min() >= np.sort(y)[-10]
-    out = br.score_rung(pred, y, "counts", {"n": 2.0}, sub)
+    out = br.score_rung(pred, y, "counts", {}, sub)
     assert out["point_crps_all"] == pytest.approx(np.mean(np.abs(pred - y)))
     nz = y > 0
     assert out["point_crps_nonzero"] == pytest.approx(np.mean(np.abs(pred[nz] - y[nz])))
@@ -154,44 +156,86 @@ def test_top1_ties_broken_by_position():
     assert list(_subsets(y)["top1"]) == [5, 50, 100]
 
 
-def test_nb_spread_crps_matches_repo_nb_crps_hand_case():
-    pred = np.array([0.0, 0.5, 3.0, 10.0, 2.0])                       # 0 exercises the floor
-    y = np.array([0, 1, 2, 15, 0], np.uint32)
-    n = 1.7
-    out = br.score_rung(pred, y, "counts", {"n": n}, _subsets(y))
-    mu = np.maximum(pred, br.NB_MEAN_FLOOR)
-    nn = np.full(5, n)
-    ref = nb_crps(nn, p_from_mu(nn, mu), y.astype(float))
-    assert out["spread_crps_all"] == pytest.approx(ref.mean(), rel=1e-12)
-    nz = y > 0
-    assert out["spread_crps_nonzero"] == pytest.approx(ref[nz].mean(), rel=1e-12)
-    assert out["crps_all"] == out["spread_crps_all"]
-    assert out["scale_error_all"] == pytest.approx(out["crps_all"] - out["crps_oracle_scaled_all"])
-    assert out["frac_bins_at_nb_floor"] == pytest.approx(0.2)
+def _poisson_crps_direct(lam, y, kmax=None):
+    """CRPS = sum_k (F(k) - 1{k >= y})^2 over the integers: the definition, summed directly."""
+    kmax = kmax or int(max(y, lam) + 40 * math.sqrt(lam + 1) + 50)
+    k = np.arange(kmax + 1)
+    return float(np.sum((poisson.cdf(k, lam) - (k >= y)) ** 2))
 
 
-def test_gauss_spread_crps_matches_repo_gauss_crps():
-    rng = np.random.default_rng(5)
-    y = rng.gamma(0.5, 2.0, 400).astype(np.float32)
-    pred = y + rng.normal(0, 0.3, 400)
-    out = br.score_rung(pred, y, "pval", {"sigma": 0.3}, _subsets(y))
-    ref = gauss_crps(pred, np.full(400, 0.3), y.astype(np.float64))
-    assert out["spread_crps_all"] == pytest.approx(ref.mean(), rel=1e-12)
-    # closed form at z = 0: sigma * (2 phi(0) - 1/sqrt(pi))
-    one = br.score_rung(np.array([1.0]), np.array([1.0], np.float32), "pval", {"sigma": 2.0},
-                        {"all": np.array([0])})
-    assert one["spread_crps_all"] == pytest.approx(2.0 * (2 / math.sqrt(2 * math.pi)
-                                                          - 1 / math.sqrt(math.pi)))
+def test_poisson_crps_matches_direct_sum():
+    lams = [1e-3, 0.05, 0.7, 1.0, 3.3, 12.0, 85.0, 400.0]
+    ys = [0, 1, 2, 5, 17, 90, 420]
+    got = br.poisson_crps(np.repeat(lams, len(ys)), np.tile(ys, len(lams)))
+    ref = np.array([_poisson_crps_direct(lam, y) for lam in lams for y in ys])
+    np.testing.assert_allclose(got, ref, rtol=1e-9, atol=1e-12)
 
 
-def test_nb_dispersion_mle_recovers_known_n():
+def _lognormal_crps_numeric(median, sigma, y):
+    """CRPS = int_0^inf (F(x) - 1{x >= y})^2 dx, integrated numerically (split at y)."""
+    def F(x):
+        return norm.cdf((math.log(x) - math.log(median)) / sigma) if x > 0 else 0.0
+    kw = {"limit": 400, "epsabs": 1e-12, "epsrel": 1e-10}
+    lo = integrate.quad(lambda x: F(x) ** 2, 0.0, y, **kw)[0] if y > 0 else 0.0
+    hi = integrate.quad(lambda x: (1.0 - F(x)) ** 2, y, np.inf, **kw)[0]
+    return lo + hi
+
+
+def test_lognormal_crps_matches_numeric_integral():
+    cases = [(1.0, 0.5, 0.0), (1.0, 0.5, 1.0), (0.04, 0.3, 0.05), (2.5, 1.2, 0.3),
+             (2.5, 1.2, 40.0), (1e-3, 0.8, 0.0), (1e-3, 0.8, 0.02), (30.0, 0.05, 29.0)]
+    got = br.lognormal_crps(*[np.array(c) for c in zip(*cases)])
+    ref = np.array([_lognormal_crps_numeric(*c) for c in cases])
+    np.testing.assert_allclose(got, ref, rtol=1e-6, atol=1e-10)
+
+
+def test_lognormal_crps_tiny_sigma_is_absolute_error():
+    y = np.array([0.0, 0.5, 2.0, 7.0])
+    np.testing.assert_allclose(br.lognormal_crps(np.full(4, 2.0), 0.0, y), np.abs(y - 2.0),
+                               atol=1e-9)
+
+
+def test_sigma_ml_recovers_known_sigma():
     rng = np.random.default_rng(6)
-    mu = rng.gamma(1.0, 5.0, 200_000) + 0.1
-    n_true = 2.0
-    y = rng.negative_binomial(n_true, n_true / (n_true + mu))
-    fit = br.nb_fit_dispersion(mu, y, np.ones_like(mu))
-    assert fit["n"] == pytest.approx(n_true, rel=0.05)
-    assert not fit["at_bound"]
+    pred = rng.gamma(0.8, 2.0, 400_000) + 0.01
+    sigma = 0.37
+    y = pred * np.exp(sigma * rng.standard_normal(pred.size))
+    y[:50] = 0.0                                                    # zero targets leave the fit
+    ss, n_pos, n_zero = br.log_residual_sums(pred, y)
+    fit = br.sigma_from_sums(ss, n_pos, n_zero)
+    assert fit["sigma"] == pytest.approx(sigma, rel=0.01)
+    assert (fit["n_pos_target"], fit["n_zero_target"]) == (pred.size - 50, 50)
+    # the floor applies to the prediction before the log
+    ss2, _, _ = br.log_residual_sums(np.array([0.0]), np.array([1.0]))
+    assert ss2 == pytest.approx(math.log(1.0 / br.PRED_FLOOR) ** 2)
+
+
+def test_poisson_spread_crps_and_split():
+    rng = np.random.default_rng(9)
+    lam = rng.gamma(1.0, 4.0, 5000)
+    y = rng.poisson(lam).astype(np.uint32)
+    pred = lam / 4.0                                                # 4x too low: c* ~ +2
+    pred[:10] = 0.0                                                 # exercises the floor
+    out = br.score_rung(pred, y, "counts", {}, _subsets(y))
+    ref = br.poisson_crps(np.maximum(pred, br.PRED_FLOOR), y.astype(float))
+    assert out["spread_crps_all"] == pytest.approx(ref.mean(), rel=1e-12)
+    assert out["c_star_all"] == pytest.approx(2.0, abs=0.1)
+    assert out["scale_error_all"] == pytest.approx(out["spread_crps_all"]
+                                                   - out["crps_oracle_scaled_all"])
+    assert out["scale_error_all"] > 0
+    assert out["frac_bins_at_floor"] == pytest.approx(10 / 5000)
+
+
+def test_lognormal_spread_crps_and_split():
+    rng = np.random.default_rng(5)
+    med = rng.gamma(0.5, 2.0, 4000) + 0.02
+    y = (med * np.exp(0.4 * rng.standard_normal(med.size))).astype(np.float32)
+    pred = med * 0.5                                                # median half: c* ~ +1
+    out = br.score_rung(pred, y, "pval", {"sigma": 0.4}, _subsets(y))
+    ref = br.lognormal_crps(pred, 0.4, y.astype(np.float64))
+    assert out["spread_crps_all"] == pytest.approx(ref.mean(), rel=1e-12)
+    assert out["c_star_all"] == pytest.approx(1.0, abs=0.1)
+    assert out["crps_oracle_scaled_all"] < out["spread_crps_all"]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -282,19 +326,35 @@ def test_identity_pair_scores_zero_crps(tmp_path):
     for space in br.SPACES:
         assert res["spaces"][space]["source_equals_target_train"] is True
         assert res["spaces"][space]["evals"]["score"]["n_bins_blacklisted"] == 11
-    assert res["spaces"]["pval"]["spread"]["noSolution"]["sigma"] == 0.0
+    # X' == X, so the log residual is non-zero only where the 1e-3 floor lifts the prediction
+    y = np.concatenate([pval[c] for c in ("chr1", "chr2", "chrX")]).astype(np.float64)
+    y = y[y > 0]
+    r = np.log(y) - np.log(np.maximum(y, br.PRED_FLOOR))
+    assert res["spaces"]["pval"]["spread"]["noSolution"]["sigma"] == pytest.approx(
+        math.sqrt(np.mean(r ** 2)), rel=1e-9)
+    assert res["spaces"]["counts"]["spread"]["noSolution"] == {}           # Poisson: no fit
 
 
-def test_end_to_end_run_and_aggregate(tmp_path):
+def _write_pseudoreps(root: Path, pid: str, counts: dict, pval: dict, rng) -> None:
+    """pr1/pr2: binomial halves of the counts; p halved with multiplicative noise."""
+    for half in ("pr1", "pr2"):
+        c = {k: rng.binomial(v, 0.5) for k, v in counts.items()}
+        q = {k: (v * 0.6 * np.exp(0.3 * rng.standard_normal(v.size))) for k, v in pval.items()}
+        _write_product(root / pid, half, c, q)
+
+
+def test_end_to_end_run_oracle_and_aggregate(tmp_path):
     rng = np.random.default_rng(7)
     counts, pval = _synthetic(0)
     # the arm: roughly half depth, and a monotone bend of p plus noise
     arm_counts = {c: rng.binomial(v, 0.5) for c, v in counts.items()}
     arm_pval = {c: (np.sqrt(v) * 1.5 + np.abs(rng.normal(0, 0.1, v.size)) * (v > 0))
                 .astype(np.float32) for c, v in pval.items()}
-    products = tmp_path / "products"
+    products, preps = tmp_path / "products", tmp_path / "pseudoreps"
     _write_product(products, "T1__base__base", counts, pval)
     _write_product(products, "T1__depth__15M", arm_counts, arm_pval)
+    _write_pseudoreps(preps, "T1__base__base", counts, pval, rng)
+    _write_pseudoreps(preps, "T1__depth__15M", arm_counts, arm_pval, rng)
     m = _manifest(tmp_path, [
         ("T1__base__base", "T1", "C19", "H3K27ac", "base", "base", "none"),
         ("T1__depth__15M", "T1", "C19", "H3K27ac", "depth", "15M", "treatment_reads")])
@@ -303,16 +363,60 @@ def test_end_to_end_run_and_aggregate(tmp_path):
     for i in range(2):
         assert br.main(["run", "--manifest", str(m), "--products", str(products),
                         "--blacklist", str(bl), "--out", str(out), "--index", str(i)]) == 0
+    # without the oracle, aggregate reports it missing and exits 1
+    assert br.main(["aggregate", "--manifest", str(m), "--out", str(out)]) == 1
+    prods = br.list_products(br.read_manifest(m))
+    assert [p["pid"] for p in prods] == ["T1__base__base", "T1__depth__15M"]
+    for i in range(2):
+        assert br.main(["oracle", "--manifest", str(m), "--pseudoreps", str(preps),
+                        "--blacklist", str(bl), "--out", str(out), "--index", str(i)]) == 0
     res = json.loads((out / "T1__depth__15M__base_to_arm.json").read_text())
     by = {(r["space"], r["rung"], r["eval"]): r for r in res["records"]}
     # QM fixes the level: it must beat identity on counts at half depth
     assert (by[("counts", "QuantileMatching", "score")]["point_crps_all"]
             < by[("counts", "noSolution", "score")]["point_crps_all"])
-    fit_n = res["spaces"]["counts"]["spread"]["QuantileMatching"]["n"]
-    assert br.DISPERSION_BOUNDS[0] < fit_n <= br.DISPERSION_BOUNDS[1]
+    assert res["spaces"]["pval"]["spread"]["QuantileMatching"]["sigma"] > 0
+    orc = json.loads((out / "oracle" / "T1__depth__15M.json").read_text())
+    assert orc["depth"].startswith("half")
+    assert len(orc["records"]) == 2 * 2 * 2                           # space x direction x eval
+    # the oracle's sigma is fitted per direction on the training chromosomes: ~0.3 * sqrt(2)
+    for d in br.ORACLE_DIRECTIONS:
+        assert orc["spaces"]["pval"][d]["spread"]["sigma"] == pytest.approx(0.3 * math.sqrt(2),
+                                                                          rel=0.1)
     assert br.main(["aggregate", "--manifest", str(m), "--out", str(out)]) == 0
-    with (out / "baseline_rungs.tsv").open() as fh:
+    with (out / "rungs_v2.tsv").open() as fh:
         rows = list(csv.DictReader(fh, delimiter="\t"))
-    assert len(rows) == 2 * 8
-    md = (out / "baseline_rungs.md").read_text()
-    assert "By mark class" in md and "| narrow | counts | QuantileMatching |" in md
+    assert len(rows) == 2 * (8 + 2 * 2 * 3)             # pairs x (own rows + space x eval x 3)
+
+    def rec_of(pid, space, direction):
+        return next(r for r in json.loads((out / "oracle" / f"{pid}.json").read_text())["records"]
+                    if r["space"] == space and r["eval"] == "score" and r["direction"] == direction)
+
+    # the join: base_to_arm takes the ARM's oracle, arm_to_base the BASE's; `oracle` = the mean
+    for pair_dir, target in (("base_to_arm", "T1__depth__15M"), ("arm_to_base", "T1__base__base")):
+        for space in br.SPACES:
+            sel = {r["rung"]: r for r in rows if r["direction"] == pair_dir
+                   and r["space"] == space and r["eval"] == "score"}
+            a, b = rec_of(target, space, "pr1_to_pr2"), rec_of(target, space, "pr2_to_pr1")
+            assert float(sel["oracle_pr1_to_pr2"]["spread_crps_all"]) == pytest.approx(
+                a["spread_crps_all"])
+            assert float(sel["oracle_pr2_to_pr1"]["spread_crps_all"]) == pytest.approx(
+                b["spread_crps_all"])
+            for k in ("spread_crps_all", "spread_crps_top1", "spearman_all"):
+                assert float(sel["oracle"][k]) == pytest.approx((a[k] + b[k]) / 2)
+            assert sel["oracle"]["target_pid"] == target
+    md = (out / "rungs_v2.md").read_text()
+    assert "By mark class — counts" in md and "| narrow | QuantileMatching |" in md
+    assert "| narrow | oracle |" in md and "fraction closed" in md
+    p_table = md.split("## By mark class — pval")[1].split("##")[0]
+    assert "spread_crps_nonzero" not in p_table
+    assert "spread_crps_nonzero" in md.split("## By mark class — counts")[1].split("##")[0]
+
+
+def test_gap_fraction():
+    assert br.gap_fraction(1.0, 0.6, 0.2) == pytest.approx(0.5)
+    assert br.gap_fraction(0.2, 0.1, 0.3) is None                     # noSolution below oracle
+    assert br.gap_fraction(0.3, 0.1, 0.3) is None
+    assert br.gap_fraction(0.5, 0.5, 0.9, higher_is_better=True) == pytest.approx(0.0)
+    assert br.gap_fraction(0.9, 0.9, 0.5, higher_is_better=True) is None
+    assert br.gap_fraction(None, 0.1, 0.0) is None

@@ -1,27 +1,45 @@
-"""t118 — the two baseline rungs for X' = f(X | C, C'): noSolution (identity) and QuantileMatching.
+"""t118 — the baseline rungs for X' = f(X | C, C'): noSolution (identity), QuantileMatching, oracle.
 
 A *pair* is one (track, arm product, direction): `base_to_arm` predicts the arm product from the
 track's base product, `arm_to_base` the reverse. Every non-base row of the t112 MANIFEST.tsv gives
 two pairs. Counts (`counts25.npz`) and -log10 p (`pval25.npz`) are two separate spaces; each pair
 is fitted and scored in both.
 
-**Rungs.**
+**Rungs.** All three emit one value per bin.
   noSolution        the prediction of X' is X itself.
   QuantileMatching  a monotone value-axis map g, fitted once per (pair, space) on the training
                     chromosomes by matching empirical quantiles. Source bins are sorted; a distinct
                     source value v that occupies the rank block [a, b) maps to the MEAN of the
                     sorted target values at ranks [a, b) (the tie-block mean — most bins are 0, so
                     ties are the rule). Values not seen in training are linearly interpolated
-                    between the neighbouring fitted source values and clamped at both ends.
+                    between the neighbouring fitted source values and clamped at both ends (flat
+                    above the training maximum).
+  oracle            per PRODUCT, not per pair: pseudoreplicate pr1 of the product predicts pr2, and
+                    pr2 predicts pr1 (identity prediction, two directions). Each pseudoreplicate
+                    holds HALF the product's reads, so the oracle is a half-depth repeat. A pair is
+                    joined to the oracle of its TARGET product in `aggregate` (base_to_arm -> the
+                    arm's oracle, arm_to_base -> the base's), the pair's oracle metric being the
+                    mean of the two directions.
+
+**Distribution of a one-value rung** (PI rulings 2026-09-24). The prediction is first floored at
+PRED_FLOOR = 1e-3 (targets are never floored).
+  counts  Poisson with mean = the floored prediction. `poisson_crps` is the closed form.
+  p       log-normal with median = the floored prediction and ONE sigma per (pair or oracle
+          direction, rung), the ML estimate on the training chromosomes of the log residual
+          r = log(target) - log(prediction) with the median fixed: sigma^2 = mean(r^2). Bins whose
+          target is exactly 0 have log(target) = -inf, zero likelihood under every log-normal,
+          and are left out of the sigma fit; their count is recorded (`fit_n_zero_target`).
+          `lognormal_crps` is the closed form (Baran & Lerch 2015).
 
 **Scoring, each rung two ways.**
-  point   CRPS of a point forecast = |prediction - X'|.
-  spread  counts: NB with mean = max(prediction, NB_MEAN_FLOOR) and one dispersion n per
-          (pair, rung), fitted by maximum likelihood on the training chromosomes;
-          p: Gaussian with mean = prediction and one sigma per (pair, rung), the ML estimate
-          sqrt(mean squared training residual). NB CRPS and the CRPS split come from
-          `candi.bench.distributional.nb_suite` (which calls `candi.metrics.nb_crps`); Gaussian
-          CRPS is `candi.bench.distributional.gauss_crps`. Nothing here re-derives a CRPS.
+  point   CRPS of a point forecast = |prediction - X'| on the UNfloored prediction (= MAE).
+  spread  the Poisson / log-normal CRPS above, with its split (`scale_split`): crps, the best
+          single multiplier c* = 2^c_star on the predicted mean (counts) or median (p), and
+          crps_oracle_scaled / scale_error = crps - crps_oracle_scaled. The c search is the grid
+          of `candi.bench.distributional.oracle_scale` (c in [-6, 6] step 0.25, then +-0.25 step
+          0.01, on a 20 000-bin subsample, seed 0; both CRPS on the full input). `nb_suite` is not
+          used: `p_from_mu` clips p at 1 - 1e-9, so an NB cannot be pushed to its Poisson limit.
+  Spearman on the unfloored prediction.
 
 **Chromosomes.** Fit on every chromosome in the npz except chr19, chr21, chr22 (chrY, chrM dropped
 everywhere; the t112 npz never holds them). chr22 is validation: these rungs do not use it, it is
@@ -38,15 +56,19 @@ removed from BOTH evaluation sets and kept in training.
 **Input layout** (t112, `tools/t112/bin25.py::write_npz`, checked by `tools/t112/checks.py::
 check_structure`): `<products>/<pid>/counts25.npz` and `pval25.npz`, one npz per product, one array
 per main chromosome (chr1..chr22, chrX) keyed by the chromosome name; counts uint32, p float32
-(finite, >= 0), each of length floor(chrom_len / 25).
+(finite, >= 0), each of length floor(chrom_len / 25). Pseudoreplicates have the same layout at
+`<pseudoreps>/<pid>/pr1/` and `<pseudoreps>/<pid>/pr2/`.
 
 Memory is bounded by streaming: training is one chromosome at a time and keeps only histograms
-(counts: value histograms and the joint (X, X') histogram; p: distinct values with counts), plus a
-second chromosome-at-a-time pass for the p QuantileMatching residuals. Only the evaluation
-chromosomes (chr19 + chr21, ~4.2 M bins; chr22 ~0.8 M) are held whole.
+(QuantileMatching) and running sums (sigma), plus a second chromosome-at-a-time pass for the p
+QuantileMatching residuals. Only the evaluation chromosomes (chr19 + chr21, ~4.2 M bins; chr22
+~0.8 M) are held whole.
 
     python tools/t118/baseline_rungs.py pairs --manifest MANIFEST.tsv
+    python tools/t118/baseline_rungs.py products --manifest MANIFEST.tsv
     python tools/t118/baseline_rungs.py run --manifest MANIFEST.tsv --products DIR \
+        --blacklist hg38-blacklist.v2.bed --out DIR --index I
+    python tools/t118/baseline_rungs.py oracle --manifest MANIFEST.tsv --pseudoreps DIR \
         --blacklist hg38-blacklist.v2.bed --out DIR --index I
     python tools/t118/baseline_rungs.py aggregate --manifest MANIFEST.tsv --out DIR
 """
@@ -65,10 +87,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-from scipy.optimize import minimize_scalar
-from scipy.special import gammaln
+from scipy.special import ive
+from scipy.stats import norm, poisson
 
-from candi.bench.distributional import gauss_crps, nb_suite, p_from_mu
 from candi.metrics import spearman
 from candi.store.genome import blacklist_bin_flags, read_blacklist
 
@@ -76,29 +97,26 @@ RES = 25
 SCORE_CHROMS = ("chr19", "chr21")
 VAL_CHROMS = ("chr22",)
 DROP_CHROMS = frozenset({"chrY", "chrM"})
-#: floor on the NB mean. The identity rung predicts 0 wherever X = 0, and an NB with mean 0 is a
-#: point mass that gives any X' > 0 zero likelihood. 1e-3 is the floor `marginal_nb` already uses.
-NB_MEAN_FLOOR = 1e-3
-#: search interval of the NB dispersion n (size). The upper end is reached when X' equals the
-#: prediction (the Poisson limit is still wider than a zero residual); nb_crps scores n > 1e4 in
-#: its sd-standardised Poisson limit, so a fit at the bound is still scoreable. The cap is 1e6
-#: and not higher because `p_from_mu` clips p at 1 - P_EPS (1e-9): above n = 1e6 that clip, not
-#: NB_MEAN_FLOOR, would set the smallest mean (n * 1e-9), silently raising the floor.
-DISPERSION_BOUNDS = (1e-4, 1e6)
+#: floor on every one-value rung's prediction before its distribution is formed (PI ruling
+#: 2026-09-24): a log-normal median of 0 has log -inf, and a Poisson of mean 0 is a point mass.
+PRED_FLOOR = 1e-3
 TOP_FRACTION = 0.01
 SUBSETS = ("all", "nonzero", "top1")
 RUNGS = ("noSolution", "QuantileMatching")
 SPACES = {"counts": ("counts25.npz", np.uint32), "pval": ("pval25.npz", np.float32)}
 DIRECTIONS = ("base_to_arm", "arm_to_base")
+ORACLE_DIRECTIONS = ("pr1_to_pr2", "pr2_to_pr1")
 MARK_CLASS = {"DNase-seq": "DNase",
               "H3K27ac": "narrow", "H3K4me3": "narrow", "H3K4me1": "narrow",
               "H3K27me3": "broad", "H3K36me3": "broad", "H3K9me3": "broad"}
-SPLIT_KEYS = ("crps", "crps_oracle_scaled", "scale_error", "crps_oracle_scaled_and_n",
-              "c_star", "n_star_log2", "coverage_95", "ece", "marg_crps", "beats_marginal")
+SPLIT_KEYS = ("crps_oracle_scaled", "scale_error", "c_star")
+#: `candi.bench.distributional.oracle_scale`'s search, reused for the Poisson and log-normal split
+SCALE_FIT_BUDGET = 20_000
+SCALE_SEED = 0
 
 
 # ---------------------------------------------------------------------------------------------
-# manifest -> pairs
+# manifest -> pairs, products
 # ---------------------------------------------------------------------------------------------
 
 
@@ -133,6 +151,15 @@ def list_pairs(rows: list[dict]) -> list[dict]:
                     "source_pid": src["pid"], "target_pid": tgt["pid"],
                 })
     return pairs
+
+
+def list_products(rows: list[dict]) -> list[dict]:
+    """Every product of the manifest sorted by pid; the list index is the oracle array index."""
+    pids = [r["pid"] for r in rows]
+    if len(set(pids)) != len(pids):
+        raise ValueError("duplicate pid in the manifest")
+    return [{"index": i, **{k: r[k] for k in ("pid", "track", "assay", "arm", "level")}}
+            for i, r in enumerate(sorted(rows, key=lambda r: r["pid"]))]
 
 
 def pair_name(p: dict) -> str:
@@ -252,27 +279,83 @@ def qm_apply(knots, x) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------------------------
-# spreads
+# the two predictive distributions of a one-value rung, and their CRPS
 # ---------------------------------------------------------------------------------------------
 
 
-def nb_loglik(n: float, mu, y, w) -> float:
-    """Weighted NB log-likelihood, mean parameterisation, p = n / (n + mu) as `p_from_mu`."""
-    p = p_from_mu(np.full(mu.shape, n), mu)
-    return float(np.dot(w, gammaln(y + n) - gammaln(n) - gammaln(y + 1.0)
-                        + n * np.log(p) + y * np.log1p(-p)))
+def poisson_crps(lam, y) -> np.ndarray:
+    """Closed-form CRPS of Poisson(lam) against integer y >= 0, element-wise.
+
+    CRPS = E|X - y| - 1/2 E|X - X'| with
+      E|X - y|  = (lam - y) + 2 [y F(y; lam) - lam F(y - 1; lam)]
+      E|X - X'| = 2 lam e^{-2 lam} [I0(2 lam) + I1(2 lam)]   (exponentially scaled Bessel `ive`)
+    The Poisson limit `candi.metrics.nb_crps` uses above its hyp2f1 range, at r = 1.
+    """
+    lam = np.asarray(lam, np.float64)
+    y = np.asarray(y, np.float64)
+    exy = (lam - y) + 2.0 * (y * poisson.cdf(y, lam) - lam * poisson.cdf(y - 1.0, lam))
+    gmd = 2.0 * lam * (ive(0, 2.0 * lam) + ive(1, 2.0 * lam))
+    return np.maximum(exy - 0.5 * gmd, 0.0)
 
 
-def nb_fit_dispersion(mu, y, w) -> dict:
-    """ML dispersion n of NB(mean = mu) for observations y with weights w; log n bounded."""
-    mu = np.maximum(np.asarray(mu, np.float64), NB_MEAN_FLOOR)
-    y, w = np.asarray(y, np.float64), np.asarray(w, np.float64)
-    lo, hi = np.log(DISPERSION_BOUNDS[0]), np.log(DISPERSION_BOUNDS[1])
-    res = minimize_scalar(lambda t: -nb_loglik(float(np.exp(t)), mu, y, w), bounds=(lo, hi),
-                          method="bounded", options={"xatol": 1e-6})
-    n = float(np.exp(res.x))
-    return {"n": n, "at_bound": bool(min(res.x - lo, hi - res.x) < 1e-2),
-            "mean_loglik": float(-res.fun / w.sum())}
+def lognormal_crps(median, sigma, y) -> np.ndarray:
+    """Closed-form CRPS of LogNormal(mu = log median, sigma) against y >= 0 (Baran & Lerch 2015):
+
+        CRPS = y [2 Phi(z) - 1] - 2 e^{mu + sigma^2/2} [Phi(z - sigma) + Phi(sigma / sqrt 2) - 1],
+        z = (log y - mu) / sigma.
+
+    At y = 0, z = -inf and the expression is 2 e^{mu + sigma^2/2} [1 - Phi(sigma / sqrt 2)] (the
+    mean minus half the Gini mean difference). sigma is floored at 1e-12 as `gauss_crps` floors
+    it, so sigma -> 0 gives the point-forecast limit |y - median|.
+    """
+    mu = np.log(np.asarray(median, np.float64))
+    sigma = np.maximum(np.asarray(sigma, np.float64), 1e-12)
+    y = np.asarray(y, np.float64)
+    with np.errstate(divide="ignore"):
+        z = (np.log(y) - mu) / sigma                      # -inf where y == 0
+    mean = np.exp(mu + 0.5 * sigma * sigma)
+    return (y * (2.0 * norm.cdf(z) - 1.0)
+            - 2.0 * mean * (norm.cdf(z - sigma) + norm.cdf(sigma / math.sqrt(2.0)) - 1.0))
+
+
+def log_residual_sums(pred, y) -> tuple[float, int, int]:
+    """(sum of r^2, bins used, bins left out) for r = log(y) - log(max(pred, PRED_FLOOR)), y > 0.
+
+    The ML sigma of a log-normal with its median fixed at the prediction is sqrt(sum r^2 / used);
+    a target of exactly 0 has zero likelihood under every log-normal and is left out.
+    """
+    y = np.asarray(y, np.float64)
+    pos = y > 0
+    r = np.log(y[pos]) - np.log(np.maximum(np.asarray(pred, np.float64)[pos], PRED_FLOOR))
+    return float(np.dot(r, r)), int(pos.sum()), int(y.size - pos.sum())
+
+
+def sigma_from_sums(ss: float, n_pos: int, n_zero: int) -> dict:
+    return {"sigma": math.sqrt(ss / n_pos) if n_pos else float("nan"),
+            "n_pos_target": n_pos, "n_zero_target": n_zero}
+
+
+def scale_split(m, y, crps_fn, *, fit_budget: int = SCALE_FIT_BUDGET,
+                seed: int = SCALE_SEED) -> dict:
+    """crps, and c* = argmin_c mean crps_fn(m 2^c, y): the same search as `oracle_scale`.
+
+    `m` is the predicted mean (Poisson) or median (log-normal); the spread parameter is held.
+    The grid runs on a `fit_budget` subsample; both reported CRPS are on every bin.
+    """
+    m = np.asarray(m, np.float64)
+    y = np.asarray(y, np.float64)
+    crps = float(np.mean(crps_fn(m, y)))
+    sel = (np.arange(m.size) if m.size <= fit_budget
+           else np.random.default_rng(seed).choice(m.size, fit_budget, replace=False))
+    mf, yf = m[sel], y[sel]
+
+    def fit(c: float) -> float:
+        return float(np.mean(crps_fn(mf * 2.0 ** c, yf)))
+
+    c = float(min(np.arange(-6.0, 6.001, 0.25), key=fit))
+    c = float(min(np.arange(c - 0.25, c + 0.2501, 0.01), key=fit))
+    cs = float(np.mean(crps_fn(m * 2.0 ** c, y)))
+    return {"crps": crps, "crps_oracle_scaled": cs, "scale_error": crps - cs, "c_star": c}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -282,47 +365,37 @@ def nb_fit_dispersion(mu, y, w) -> dict:
 
 def fit_space(src: Track, tgt: Track, train_chroms, space: str) -> dict:
     n_train, identical = 0, True
-    if space == "counts":
-        sh, th, joint = [], [], []
-        for c in train_chroms:
-            x, y = paired(src, tgt, c)
-            n_train += x.size
-            identical = identical and bool(np.array_equal(x, y))
+    sh, th = [], []
+    ss_id, pos_id, zero_id = 0.0, 0, 0
+    for c in train_chroms:
+        x, y = paired(src, tgt, c)
+        n_train += x.size
+        identical = identical and bool(np.array_equal(x, y))
+        if space == "counts":
             for arr, acc in ((x, sh), (y, th)):
                 h = np.bincount(arr)
                 nz = np.flatnonzero(h)
                 acc.append((nz, h[nz]))
-            key = (x.astype(np.uint64) << np.uint64(32)) | y.astype(np.uint64)
-            joint.append(np.unique(key, return_counts=True))
-            del x, y, key
-        knots = qm_fit(*merge_hist(sh), *merge_hist(th))
-        keys, w = merge_hist(joint)
-        xu = (keys >> np.uint64(32)).astype(np.float64)
-        yu = (keys & np.uint64(0xFFFFFFFF)).astype(np.float64)
-        means = {"noSolution": xu, "QuantileMatching": qm_apply(knots, xu)}
-        spread = {r: nb_fit_dispersion(m, yu, w) for r, m in means.items()}
-        extra = {"n_joint_pairs": int(keys.size)}
-    else:
-        sh, th, ss_id = [], [], 0.0
-        for c in train_chroms:
-            x, y = paired(src, tgt, c)
-            n_train += x.size
-            identical = identical and bool(np.array_equal(x, y))
+        else:
             sh.append(np.unique(x, return_counts=True))
             th.append(np.unique(y, return_counts=True))
-            ss_id += float(np.sum((y.astype(np.float64) - x) ** 2))
-            del x, y
-        knots = qm_fit(*merge_hist(sh), *merge_hist(th))
-        ss_qm = 0.0                                   # second pass: residuals need the fitted g
+            s, p, z = log_residual_sums(x, y)
+            ss_id, pos_id, zero_id = ss_id + s, pos_id + p, zero_id + z
+        del x, y
+    knots = qm_fit(*merge_hist(sh), *merge_hist(th))
+    if space == "counts":
+        spread = {r: {} for r in RUNGS}                       # Poisson: nothing to fit
+    else:
+        ss_qm, pos_qm, zero_qm = 0.0, 0, 0                    # second pass: needs the fitted g
         for c in train_chroms:
             x, y = paired(src, tgt, c)
-            ss_qm += float(np.sum((y.astype(np.float64) - qm_apply(knots, x)) ** 2))
+            s, p, z = log_residual_sums(qm_apply(knots, x), y)
+            ss_qm, pos_qm, zero_qm = ss_qm + s, pos_qm + p, zero_qm + z
             del x, y
-        spread = {"noSolution": {"sigma": math.sqrt(ss_id / n_train)},
-                  "QuantileMatching": {"sigma": math.sqrt(ss_qm / n_train)}}
-        extra = {}
+        spread = {"noSolution": sigma_from_sums(ss_id, pos_id, zero_id),
+                  "QuantileMatching": sigma_from_sums(ss_qm, pos_qm, zero_qm)}
     return {"n_train_bins": n_train, "source_equals_target_train": identical,
-            "qm_n_knots": int(knots[0].size), "spread": spread, "knots": knots, **extra}
+            "qm_n_knots": int(knots[0].size), "spread": spread, "knots": knots}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -338,48 +411,65 @@ def subset_index(y: np.ndarray) -> dict:
 
 
 def score_rung(pred: np.ndarray, y: np.ndarray, space: str, spread: dict, subsets: dict) -> dict:
+    """Point CRPS, spread CRPS with its split, Spearman, per subset (see module docstring)."""
+    pred = np.asarray(pred, np.float64)
     y64 = y.astype(np.float64)
+    m = np.maximum(pred, PRED_FLOOR)
+    if space == "counts":
+        def crps_fn(mm, yy):
+            return poisson_crps(mm, yy)
+    else:
+        sigma = spread["sigma"]
+
+        def crps_fn(mm, yy):
+            return lognormal_crps(mm, sigma, yy)
     out: dict = {}
     abs_err = np.abs(pred - y64)
-    if space == "pval":
-        per_bin = gauss_crps(pred, np.full(pred.shape, spread["sigma"]), y64)
     for s, idx in subsets.items():
-        m = idx.size
-        out[f"n_{s}"] = int(m)
-        if m == 0:
-            for key in ("point_crps", "spread_crps", "spearman"):
+        out[f"n_{s}"] = int(idx.size)
+        if idx.size == 0:
+            for key in ("point_crps", "spread_crps", "spearman") + SPLIT_KEYS:
                 out[f"{key}_{s}"] = None
             continue
         out[f"point_crps_{s}"] = float(abs_err[idx].mean())
         out[f"spearman_{s}"] = spearman(pred[idx], y64[idx])
-        if space == "pval":
-            out[f"spread_crps_{s}"] = float(per_bin[idx].mean())
-        else:
-            mu = np.maximum(pred[idx], NB_MEAN_FLOOR)
-            suite = nb_suite(np.full(m, spread["n"]), mu, y64[idx], with_marginal=True)
-            out[f"spread_crps_{s}"] = suite["crps"]
-            for key in SPLIT_KEYS:
-                v = suite.get(key)
-                out[f"{key}_{s}"] = v if v is None or isinstance(v, bool) else float(v)
-    if space == "counts":
-        out["frac_bins_at_nb_floor"] = float(np.mean(pred < NB_MEAN_FLOOR))
+        split = scale_split(m[idx], y64[idx], crps_fn)
+        out[f"spread_crps_{s}"] = split["crps"]
+        for key in SPLIT_KEYS:
+            out[f"{key}_{s}"] = split[key]
+    out["frac_bins_at_floor"] = float(np.mean(pred < PRED_FLOOR))
     return out
+
+
+def _config(blacklist_path) -> dict:
+    return {"score_chroms": list(SCORE_CHROMS), "val_chroms": list(VAL_CHROMS),
+            "dropped_chroms": sorted(DROP_CHROMS), "pred_floor": PRED_FLOOR,
+            "top_fraction": TOP_FRACTION,
+            "counts_distribution": "Poisson, mean = max(prediction, pred_floor)",
+            "pval_distribution": "log-normal, median = max(prediction, pred_floor), one sigma "
+                                 "per (pair or oracle direction, rung): ML of log(target) - "
+                                 "log(median) on the training chromosomes, target > 0 bins",
+            "scale_split": "c* = 2^c_star on the mean/median; oracle_scale grid, "
+                           f"fit_budget {SCALE_FIT_BUDGET}, seed {SCALE_SEED}",
+            "qm_ties": "tie-block mean of the matched target quantiles",
+            "qm_unseen": "linear interpolation between fitted source values, clamped",
+            "blacklist": str(blacklist_path),
+            "blacklist_sha256": hashlib.sha256(Path(blacklist_path).read_bytes()).hexdigest()}
+
+
+def _write_json(out: dict, path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+    return path
 
 
 def run_pair(pair: dict, products, blacklist_path, out_dir, git_sha: str = "") -> Path:
     t0 = time.time()
     blacklist = read_blacklist(blacklist_path)
     out = {"pair": pair, "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-           "git_sha": git_sha,
-           "config": {"score_chroms": list(SCORE_CHROMS), "val_chroms": list(VAL_CHROMS),
-                      "dropped_chroms": sorted(DROP_CHROMS), "nb_mean_floor": NB_MEAN_FLOOR,
-                      "dispersion_bounds": list(DISPERSION_BOUNDS), "top_fraction": TOP_FRACTION,
-                      "qm_ties": "tie-block mean of the matched target quantiles",
-                      "qm_unseen": "linear interpolation between fitted source values, clamped",
-                      "blacklist": str(blacklist_path),
-                      "blacklist_sha256": hashlib.sha256(Path(blacklist_path).read_bytes())
-                      .hexdigest()},
-           "spaces": {}, "records": []}
+           "git_sha": git_sha, "config": _config(blacklist_path), "spaces": {}, "records": []}
     for space in SPACES:
         with Track(Path(products) / pair["source_pid"], space) as src, \
                 Track(Path(products) / pair["target_pid"], space) as tgt:
@@ -406,36 +496,120 @@ def run_pair(pair: dict, products, blacklist_path, out_dir, git_sha: str = "") -
                 del d, sub, preds
             out["spaces"][space] = sp
     out["seconds"] = round(time.time() - t0, 1)
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{pair_name(pair)}.json"
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
-    return path
+    return _write_json(out, Path(out_dir) / f"{pair_name(pair)}.json")
+
+
+def run_oracle(product: dict, pseudoreps, blacklist_path, out_dir, git_sha: str = "") -> Path:
+    """pr1 -> pr2 and pr2 -> pr1 of one product, both spaces, as the identity rung."""
+    t0 = time.time()
+    blacklist = read_blacklist(blacklist_path)
+    root = Path(pseudoreps) / product["pid"]
+    out = {"product": product, "rung": "oracle",
+           "depth": "half: each pseudoreplicate holds half of the product's reads",
+           "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "git_sha": git_sha, "config": _config(blacklist_path),
+           "pseudoreps": {h: str(root / h) for h in ("pr1", "pr2")}, "spaces": {}, "records": []}
+    for space in SPACES:
+        sp = {}
+        for direction in ORACLE_DIRECTIONS:
+            a, b = ("pr1", "pr2") if direction == "pr1_to_pr2" else ("pr2", "pr1")
+            with Track(root / a, space) as src, Track(root / b, space) as tgt:
+                if src.chroms != tgt.chroms:
+                    raise ValueError(f"{space}: {a} chroms {src.chroms} != {b} {tgt.chroms}")
+                train, val, score = split_chroms(src.chroms)
+                n_train, identical, ss, n_pos, n_zero = 0, True, 0.0, 0, 0
+                for c in train:
+                    x, y = paired(src, tgt, c)
+                    n_train += x.size
+                    identical = identical and bool(np.array_equal(x, y))
+                    if space == "pval":
+                        s, p, z = log_residual_sums(x, y)
+                        ss, n_pos, n_zero = ss + s, n_pos + p, n_zero + z
+                    del x, y
+                spread = sigma_from_sums(ss, n_pos, n_zero) if space == "pval" else {}
+                dd = {"train_chroms": train, "n_train_bins": n_train,
+                      "source_equals_target_train": identical, "spread": spread, "evals": {}}
+                for ev, chroms in (("score", score), ("val", val)):
+                    d = load_eval(src, tgt, chroms, blacklist)
+                    sub = subset_index(d["y"])
+                    same = bool(np.array_equal(d["x"], d["y"]))
+                    dd["evals"][ev] = {"chroms": chroms, "n_bins_total": d["n_bins_total"],
+                                       "n_bins_blacklisted": d["n_bins_blacklisted"],
+                                       "source_equals_target": same}
+                    out["records"].append({
+                        "space": space, "rung": "oracle", "direction": direction, "eval": ev,
+                        "source_equals_target": same,
+                        **{f"fit_{k}": v for k, v in spread.items()},
+                        **score_rung(d["x"].astype(np.float64), d["y"], space, spread, sub)})
+                    del d, sub
+                sp[direction] = dd
+        out["spaces"][space] = sp
+    out["seconds"] = round(time.time() - t0, 1)
+    return _write_json(out, Path(out_dir) / "oracle" / f"{product['pid']}.json")
 
 
 # ---------------------------------------------------------------------------------------------
 # aggregate
 # ---------------------------------------------------------------------------------------------
 
-TABLE_METRICS = ("spread_crps_all", "spread_crps_nonzero", "spread_crps_top1", "point_crps_all",
-                 "spearman_all", "spearman_top1")
+#: the rung tables; p drops `nonzero` (the p tracks have next to no exact zeros), the TSV keeps it
+TABLE_METRICS = {
+    "counts": ("spread_crps_all", "crps_oracle_scaled_all", "scale_error_all",
+               "spread_crps_nonzero", "spread_crps_top1", "point_crps_all",
+               "spearman_all", "spearman_top1"),
+    "pval": ("spread_crps_all", "crps_oracle_scaled_all", "scale_error_all",
+             "spread_crps_top1", "point_crps_all", "spearman_all", "spearman_top1"),
+}
+#: the gap tables: D_noSolution, D_QM, D_oracle and the fraction of noSolution -> oracle QM closes
+GAP_METRICS = ("spread_crps_all", "spread_crps_top1", "point_crps_all", "spearman_all")
+TABLE_RUNGS = RUNGS + ("oracle",)
 
 
 def _mean(vals):
-    v = [x for x in vals if x is not None and np.isfinite(x)]
+    v = [x for x in vals if x is not None and not isinstance(x, bool) and np.isfinite(x)]
     return float(np.mean(v)) if v else None
+
+
+def _oracle_mean(recs: list[dict]) -> dict:
+    """The mean over the two oracle directions of every numeric key (bools dropped)."""
+    keys = [k for k in recs[0] if all(k in r for r in recs)]
+    out = {}
+    for k in keys:
+        vals = [r[k] for r in recs]
+        if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals):
+            out[k] = float(np.mean(vals))
+        elif all(v is None for v in vals):
+            out[k] = None
+    return out
+
+
+def gap_fraction(d_none, d_qm, d_oracle, higher_is_better: bool = False):
+    """(D_noSolution - D_QM) / (D_noSolution - D_oracle); None where noSolution is already at or
+    past the oracle (D_noSolution <= D_oracle, or >= for a higher-is-better metric)."""
+    if d_none is None or d_qm is None or d_oracle is None:
+        return None
+    if (d_none >= d_oracle) if higher_is_better else (d_none <= d_oracle):
+        return None
+    return (d_none - d_qm) / (d_none - d_oracle)
 
 
 def aggregate(manifest, out_dir, tsv_path=None, md_path=None) -> dict:
     """One TSV row per (pair, space, rung, eval); a markdown summary of the scored set.
 
+    The oracle rows of a pair are its target product's oracle: `oracle` (mean of the two
+    directions, the rung the tables show) and `oracle_pr1_to_pr2` / `oracle_pr2_to_pr1`.
     Per mark class: mean over the class's tracks of each track's mean over its pairs (both
     directions pooled). Per track and per arm: mean over pairs.
     """
     out_dir = Path(out_dir)
     pairs = list_pairs(read_manifest(manifest))
+    oracle, missing_oracle = {}, []
+    for pid in sorted({p["target_pid"] for p in pairs}):
+        f = out_dir / "oracle" / f"{pid}.json"
+        if f.is_file():
+            oracle[pid] = json.loads(f.read_text("utf-8"))["records"]
+        else:
+            missing_oracle.append(pid)
     rows, missing = [], []
     for p in pairs:
         f = out_dir / f"{pair_name(p)}.json"
@@ -443,12 +617,29 @@ def aggregate(manifest, out_dir, tsv_path=None, md_path=None) -> dict:
             missing.append(pair_name(p))
             continue
         res = json.loads(f.read_text("utf-8"))
+        meta = {k: p[k] for k in ("index", "track", "assay", "mark_class", "arm", "level",
+                                  "arm_pid", "direction", "source_pid", "target_pid")}
         for rec in res["records"]:
-            rows.append({**{k: p[k] for k in ("index", "track", "assay", "mark_class", "arm",
-                                              "level", "arm_pid", "direction", "source_pid",
-                                              "target_pid")}, **rec})
+            rows.append({**meta, **rec})
+        for space in SPACES:
+            for ev in ("score", "val"):
+                pair_same = next(r["source_equals_target"] for r in res["records"]
+                                 if r["space"] == space and r["eval"] == ev)
+                orc = [r for r in oracle.get(p["target_pid"], [])
+                       if r["space"] == space and r["eval"] == ev]
+                if len(orc) != len(ORACLE_DIRECTIONS):
+                    continue
+                base = {**meta, "space": space, "eval": ev, "source_equals_target": pair_same}
+                for r in orc:
+                    rows.append({**base, **{k: v for k, v in r.items() if k not in base},
+                                 "rung": f"oracle_{r['direction']}",
+                                 "oracle_source_equals_target": r["source_equals_target"]})
+                rows.append({**base, **_oracle_mean(orc), "rung": "oracle",
+                             "direction": p["direction"],
+                             "oracle_source_equals_target":
+                                 any(r["source_equals_target"] for r in orc)})
     cols = list(dict.fromkeys(k for r in rows for k in r))
-    tsv_path = Path(tsv_path or out_dir / "baseline_rungs.tsv")
+    tsv_path = Path(tsv_path or out_dir / "rungs_v2.tsv")
     with tsv_path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t", restval="")
         w.writeheader()
@@ -458,45 +649,90 @@ def aggregate(manifest, out_dir, tsv_path=None, md_path=None) -> dict:
     # PI ruling 2026-09-23: count pairs whose counts are bit-identical to base (the p-only arms)
     # and, in both spaces, the DNase MAPQ arms (a t112 defect: their reads equal the DNase base's)
     # stay in the TSV but are left out of the markdown tables.
-    scored = [r for r in rows if r["eval"] == "score"
+    scored = [r for r in rows if r["eval"] == "score" and r["rung"] in TABLE_RUNGS
               and not (r["space"] == "counts" and r.get("source_equals_target"))
               and not (r["track"] == "C12M02" and r["arm"] == "mapq")]
-    lines = [f"# t118 baseline rungs — scored on {' + '.join(SCORE_CHROMS)}, blacklist removed",
+    n_orc = len(oracle)
+    lines = [f"# t118 baseline rungs v2 — scored on {' + '.join(SCORE_CHROMS)}, blacklist removed",
              "",
-             f"{len(pairs) - len(missing)} of {len(pairs)} pairs present. Counts: NB CRPS "
-             f"(mean floored at {NB_MEAN_FLOOR}); p: Gaussian CRPS in -log10 p. `point` = CRPS of "
-             "the point forecast = MAE. QuantileMatching ties: tie-block mean. Mark class = mean "
-             "over tracks of each track's mean over pairs. Count pairs identical to base (p-only arms) are "
-             "left out of these tables and kept in the TSV, as are both spaces of the DNase MAPQ arms "
-             "(identical to the DNase base, a t112 defect).", ""]
+             f"{len(pairs) - len(missing)} of {len(pairs)} pairs present; oracle for {n_orc} of "
+             f"{n_orc + len(missing_oracle)} target products. Every rung emits one value per bin, "
+             f"floored at {PRED_FLOOR} for its distribution: counts are Poisson with that mean; "
+             "-log10 p is log-normal with that median and one sigma per (pair, rung), fitted by "
+             "ML on the training chromosomes. `spread_crps` = CRPS of that distribution; "
+             "`crps_oracle_scaled` = the same after the best single multiplier on the mean/median "
+             "(c*), `scale_error` = the difference; `point_crps` = CRPS of the point forecast = "
+             "MAE. The **oracle** is one pseudoreplicate of the target product predicting the "
+             "other, mean of both directions — each half holds HALF the reads, so it is a "
+             "half-depth repeat and a noisier bar than a full-depth one. Mark class = mean over "
+             "tracks of each track's mean over pairs. Count pairs identical to base (p-only arms) "
+             "are left out of these tables and kept in the TSV, as are both spaces of the DNase "
+             "MAPQ arms (identical to the DNase base, a t112 defect). `nonzero` is dropped from "
+             "the p tables (kept in the TSV).", ""]
     if missing:
-        lines += [f"Missing: {', '.join(missing)}", ""]
+        lines += [f"Missing pairs: {', '.join(missing)}", ""]
+    if missing_oracle:
+        lines += [f"Missing oracle products: {', '.join(missing_oracle)}", ""]
+
+    def group_value(sel, m, macro_over_tracks):
+        if macro_over_tracks:
+            return _mean([_mean([r.get(m) for r in sel if r["track"] == t])
+                          for t in sorted({r["track"] for r in sel})])
+        return _mean([r.get(m) for r in sel])
+
+    def fmt(v):
+        return "—" if v is None else f"{v:.4f}"
+
+    def gap_table(title, key_fn, macro_over_tracks):
+        lines.extend([f"## {title}", "",
+                      "Fraction closed = (D_noSolution − D_QM) / (D_noSolution − D_oracle): the "
+                      "share of the noSolution → oracle interval that QuantileMatching closes. "
+                      "“—” where noSolution is already at or past the oracle (for Spearman, "
+                      "higher is better, so where ρ_noSolution ≥ ρ_oracle).", "",
+                      "| group | space | metric | D_noSolution | D_QM | D_oracle | fraction closed |",
+                      "|---|---|---|---|---|---|---|"])
+        n_dash, n_all = 0, 0
+        for space in SPACES:
+            for g in sorted({key_fn(r) for r in scored if r["space"] == space}):
+                sel = {rung: [r for r in scored if key_fn(r) == g and r["space"] == space
+                              and r["rung"] == rung] for rung in TABLE_RUNGS}
+                for m in GAP_METRICS:
+                    d = {rung: group_value(sel[rung], m, macro_over_tracks) for rung in TABLE_RUNGS}
+                    f = gap_fraction(d["noSolution"], d["QuantileMatching"], d["oracle"],
+                                     higher_is_better=m.startswith("spearman"))
+                    n_all += 1
+                    n_dash += f is None
+                    lines.append(f"| {g} | {space} | {m} | {fmt(d['noSolution'])} | "
+                                 f"{fmt(d['QuantileMatching'])} | {fmt(d['oracle'])} | {fmt(f)} |")
+        lines.extend(["", f"{n_dash} of {n_all} rows are “—”.", ""])
 
     def table(title, key_fn, macro_over_tracks):
-        lines.extend([f"## {title}", "",
-                      "| group | space | rung | " + " | ".join(TABLE_METRICS) + " |",
-                      "|---|---|---|" + "---|" * len(TABLE_METRICS)])
-        groups = sorted({(key_fn(r), r["space"], r["rung"]) for r in scored})
-        for g, space, rung in groups:
-            sel = [r for r in scored if key_fn(r) == g and r["space"] == space and r["rung"] == rung]
-            vals = []
-            for m in TABLE_METRICS:
-                if macro_over_tracks:
-                    per_track = [_mean([r.get(m) for r in sel if r["track"] == t])
-                                 for t in sorted({r["track"] for r in sel})]
-                    v = _mean(per_track)
-                else:
-                    v = _mean([r.get(m) for r in sel])
-                vals.append("—" if v is None else f"{v:.4f}")
-            lines.append(f"| {g} | {space} | {rung} | " + " | ".join(vals) + " |")
-        lines.append("")
+        for space in SPACES:
+            metrics = TABLE_METRICS[space]
+            lines.extend([f"## {title} — {space}", "",
+                          "| group | rung | " + " | ".join(metrics) + " |",
+                          "|---|---|" + "---|" * len(metrics)])
+            for g in sorted({key_fn(r) for r in scored if r["space"] == space}):
+                for rung in TABLE_RUNGS:
+                    sel = [r for r in scored if key_fn(r) == g and r["space"] == space
+                           and r["rung"] == rung]
+                    if not sel:
+                        continue
+                    vals = [fmt(group_value(sel, m, macro_over_tracks)) for m in metrics]
+                    lines.append(f"| {g} | {rung} | " + " | ".join(vals) + " |")
+            lines.append("")
 
+    gap_table("QuantileMatching's share of the noSolution → oracle interval, by mark class",
+              lambda r: r["mark_class"], True)
+    gap_table("QuantileMatching's share of the noSolution → oracle interval, by track",
+              lambda r: f"{r['track']} {r['assay']}", False)
     table("By mark class", lambda r: r["mark_class"], True)
     table("By track", lambda r: f"{r['track']} {r['assay']}", False)
     table("By arm", lambda r: r["arm"], False)
-    md_path = Path(md_path or out_dir / "baseline_rungs.md")
+    md_path = Path(md_path or out_dir / "rungs_v2.md")
     md_path.write_text("\n".join(lines), encoding="utf-8")
-    return {"n_rows": len(rows), "missing": missing, "tsv": str(tsv_path), "md": str(md_path)}
+    return {"n_rows": len(rows), "missing": missing, "missing_oracle": missing_oracle,
+            "tsv": str(tsv_path), "md": str(md_path)}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -519,6 +755,8 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("pairs", help="print the pair table; its row index is the array index")
     a.add_argument("--manifest", required=True, type=Path)
+    b = sub.add_parser("products", help="print the product table (oracle array index)")
+    b.add_argument("--manifest", required=True, type=Path)
     r = sub.add_parser("run", help="fit and score one pair")
     r.add_argument("--manifest", required=True, type=Path)
     r.add_argument("--products", required=True, type=Path)
@@ -526,12 +764,20 @@ def main(argv=None) -> int:
     r.add_argument("--out", required=True, type=Path)
     r.add_argument("--index", required=True, type=int)
     r.add_argument("--overwrite", action="store_true")
-    g = sub.add_parser("aggregate", help="per-pair JSONs -> TSV + markdown")
+    o = sub.add_parser("oracle", help="score one product's pseudoreplicate oracle")
+    o.add_argument("--manifest", required=True, type=Path)
+    o.add_argument("--pseudoreps", required=True, type=Path)
+    o.add_argument("--blacklist", required=True, type=Path)
+    o.add_argument("--out", required=True, type=Path)
+    o.add_argument("--index", required=True, type=int)
+    o.add_argument("--overwrite", action="store_true")
+    g = sub.add_parser("aggregate", help="per-pair and oracle JSONs -> TSV + markdown")
     g.add_argument("--manifest", required=True, type=Path)
     g.add_argument("--out", required=True, type=Path)
     args = ap.parse_args(argv)
 
-    pairs = list_pairs(read_manifest(args.manifest))
+    rows = read_manifest(args.manifest)
+    pairs = list_pairs(rows)
     if args.cmd == "pairs":
         cols = ("index", "track", "assay", "mark_class", "arm", "level", "direction",
                 "source_pid", "target_pid")
@@ -539,21 +785,34 @@ def main(argv=None) -> int:
         for p in pairs:
             print("\t".join(str(p[c]) for c in cols))
         return 0
-    if args.cmd == "run":
-        if not 0 <= args.index < len(pairs):
-            print(f"index {args.index} outside 0..{len(pairs) - 1}", file=sys.stderr)
+    if args.cmd == "products":
+        prods = list_products(rows)
+        print("\t".join(prods[0]))
+        for p in prods:
+            print("\t".join(str(v) for v in p.values()))
+        return 0
+    if args.cmd in ("run", "oracle"):
+        items = pairs if args.cmd == "run" else list_products(rows)
+        if not 0 <= args.index < len(items):
+            print(f"index {args.index} outside 0..{len(items) - 1}", file=sys.stderr)
             return 2
-        p = pairs[args.index]
-        dest = args.out / f"{pair_name(p)}.json"
+        it = items[args.index]
+        name = pair_name(it) if args.cmd == "run" else it["pid"]
+        dest = (args.out / f"{name}.json" if args.cmd == "run"
+                else args.out / "oracle" / f"{name}.json")
         if dest.exists() and not args.overwrite:
             print(f"{dest} exists; pass --overwrite to redo")
             return 0
-        path = run_pair(p, args.products, args.blacklist, args.out, _git_sha())
-        print(f"{pair_name(p)} -> {path}")
+        if args.cmd == "run":
+            path = run_pair(it, args.products, args.blacklist, args.out, _git_sha())
+        else:
+            path = run_oracle(it, args.pseudoreps, args.blacklist, args.out, _git_sha())
+        print(f"{name} -> {path}")
         return 0
     s = aggregate(args.manifest, args.out)
-    print(f"{s['n_rows']} rows -> {s['tsv']}; summary {s['md']}; missing {len(s['missing'])}")
-    return 0 if not s["missing"] else 1
+    print(f"{s['n_rows']} rows -> {s['tsv']}; summary {s['md']}; missing {len(s['missing'])} "
+          f"pairs, {len(s['missing_oracle'])} oracle products")
+    return 0 if not (s["missing"] or s["missing_oracle"]) else 1
 
 
 if __name__ == "__main__":
