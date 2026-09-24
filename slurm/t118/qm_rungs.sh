@@ -22,7 +22,7 @@
 # --find-links (x-transformers is not in the wheelhouse; compute nodes have no internet). Built per
 # task in $SLURM_TMPDIR, never on a shared filesystem.
 #
-# RESOURCES. One core. Measured locally (M-series laptop) on a synthetic pair with full-length
+# RESOURCES (no /usr/bin/time on Nibi compute nodes: read peak RSS from sacct MaxRSS). One core. Measured locally (M-series laptop) on a synthetic pair with full-length
 # chr19/21/22 and 17.6 M training bins (1/6.7 of the real 117.6 M): 135 s, peak RSS 2.6 GB. The
 # p-space fit (distinct-value histograms, worst case every bin distinct) was 45 s of it and scales
 # with training bins; scoring (~75 s) does not. Extrapolated per real pair: ~8-12 min, peak RSS
@@ -80,7 +80,7 @@ case "$(python3 -c 'import candi; print(candi.__file__)')" in
   *) echo "candi does not import from $KIT/src" >&2; exit 3 ;;
 esac
 
-python3 "$KIT/tools/t118/baseline_rungs.py" run   # no /usr/bin/time on Nibi compute nodes; peak RSS is in sacct MaxRSS \
+python3 "$KIT/tools/t118/baseline_rungs.py" run \
     --manifest "$PRODUCTS/MANIFEST.tsv" --products "$PRODUCTS" --blacklist "$BLACKLIST" \
     --out "$OUT" --index "$SLURM_ARRAY_TASK_ID"
 
