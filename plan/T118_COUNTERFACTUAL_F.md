@@ -68,7 +68,7 @@ checkout, gitignored) and `nibi:/project/def-maxwl/mforooz/t118/pval_dist/`.
 ### What f outputs (2026-09-24)
 
 f predicts **both parameters of the distribution in every bin**, as CANDI does: NB (n, p) for
-counts, log-normal (μ, σ) for −log10 p. A point-output f (trained with MAE or MSE) is a planned
+counts, log-normal (μ, σ) for −log10 p. A point-output version (g trained with MAE or MSE) is a planned
 comparison (2026-09-23).
 
 ### Rungs that output one value per bin (2026-09-24)
@@ -92,29 +92,34 @@ parameter comes from a fixed rule:
   ENCODE hg38 blacklist regions excluded from scoring, kept in training. Blacklist on Nibi:
   `/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed`
   (sha256 31c69342…9251737, same as Fir).
-- **Three versions of f:** one per assay (7 models) — **the version the pass/fail checks judge**;
-  one per arm; one across all 7 tracks. The last two are reported only.
+- **What is trained is g, not f.** f is only what g outputs for one (C, C'); no f is trained on its
+  own (wording fixed 2026-09-25).
+- **Two versions of g (PI ruling 2026-09-25):** one g per track (7 g's, each trained on that
+  track's pairs only; the assay entry of C is constant inside it) and one g across all 7 tracks
+  (all 246 pairs, the assay in C). Both are run and scored under the same checks. Which version
+  decides pass/fail: TODO(PI). The earlier "one per arm" version is dropped: a g trained on one
+  arm's pairs sees a single (C, C') per direction and cannot learn anything about C.
 - **Covariates:** C and C' are the **full** knob vector on both sides plus the assay: depth,
   run type, read length, dedup, MAPQ, control fraction, ratio k, control identity, control depth,
   extsize k, assay. Encoding: one standardised concatenation — continuous knobs as z-scores (depth
-  as log2 reads), binary as 0/1, categorical one-hot, MAPQ as a number. f is **never** given
+  as log2 reads), binary as 0/1, categorical one-hot, MAPQ as a number. g is **never** given
   C' − C; it must infer the change itself.
 
 ### Pass/fail thresholds (2026-09-23; the denominator is now void, see section 5)
 
 Pooled over arms, per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad
-H3K27me3/H3K36me3/H3K9me3), counts and p separately, 3 seeds of each per-assay f:
+H3K27me3/H3K36me3/H3K9me3), counts and p separately, 3 seeds of each g:
 
 1. CRPS gap-closed on all bins ≥ 0.5.
-2. Gain > 2 × f's seed wobble (the largest pairwise |Δ| of D over 3 seeds).
+2. Gain > 2 × the model's seed wobble (the largest pairwise |Δ| of D over 3 seeds).
 3. Top 1% of bins: gap-closed ≥ 0.5 and gain > 2 × seed wobble.
 4. Shuffle check: at scoring, C' replaced by the C' of another arm of the same track whose target
    differs; gap-closed against the true X' ≤ 0.1. Gates the claim.
-5. Swap check: at scoring, C' = C; f must return X (gap-closed toward X ≥ 0.5). Gates the claim.
+5. Swap check: at scoring, C' = C; the f that g outputs must return X (gap-closed toward X ≥ 0.5). Gates the claim.
    No check voids the run.
 
 The boring explanation to rule out: **the covariates are ignored.** Reported only: Spearman
-gains, CRPS on non-zero bins, per-arm results, the CRPS split, the point-output f.
+gains, CRPS on non-zero bins, per-arm results, the CRPS split, the point-output version.
 
 ### Final design (2026-09-25)
 
@@ -193,7 +198,7 @@ Spearman (all bins), noSolution / QM / oracle: DNase counts 0.670 / 0.667 / 0.49
 2. **Thresholds** for the final design: the bar against the scrambled twin and the bar for the
    arm → arm law test are not set. The "2 × seed wobble" rule and the shuffle and swap checks are
    carried over; the gap-closed ≥ 0.5 rules wait for the oracle.
-3. **f's architecture** — not chosen. Drafted options in the vault: a covariate-conditioned affine
+3. **The architecture** (the form of f, and how g produces it) — not chosen. Drafted options in the vault: a covariate-conditioned affine
    map (h12), a small conditioned convolutional network (h13), an encoder–decoder (h14). The
    shape part needs f to see neighbouring bins.
 4. t119 — rebuild the DNase MAPQ arms with multimapping off.
