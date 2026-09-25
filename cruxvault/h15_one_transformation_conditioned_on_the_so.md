@@ -2,81 +2,70 @@
 id: h15
 type: idea
 schema: 2
-title: A transformation per assay, conditioned on the source and target covariates, maps a track's base onto each of its counterfactual arms and back, in both count and −log10 p space, beyond per-arm quantile matching
+title: A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates
 parent: q1
 status: idea
 rule: all
-measurement: CRPS gap-closed (D_QM − D_f)/(D_QM − D_oracle) on held-out chromosomes, pooled over arms, per mark class, counts (NB CRPS) and −log10 p (log-normal CRPS) separately; QM = QuantileMatching fitted once per arm on training chromosomes; oracle = one pseudoreplicate of the target predicting the other (both directions, averaged); f predicts both distribution parameters in every bin — NB (n, p) for counts, log-normal (μ, σ) for −log10 p; f is a covariate-conditioned model, one per assay (7 f's, the unit the checks judge), trained on base↔arm pairs in both directions of the t112 counterfactual corpus; C and C' are the full knob vector plus the assay
+measurement: g(C, C') outputs f, and f(X) predicts X' as NB (n, p) per bin for counts and log-normal (μ, σ) per bin for −log10 p; one model per assay (7, the unit the checks judge); trained on base↔arm pairs of the t112 counterfactual corpus in both directions, validated on chr22, scored on chr19 + chr21 (blacklist removed) and on never-trained arm→arm pairs; D = NB CRPS / log-normal CRPS and Spearman, on all, non-zero and top-1% bins; competitor = the same model trained with C and C' scrambled across pairs; design record plan/T118_COUNTERFACTUAL_F.md
 replicates: 7 tracks (1 DNase, 3 narrow, 3 broad marks) x base↔arm pairs in both directions (19 arm products per histone track, 9 for DNase; 246 pairs) x 3 seeds of each of the 7 per-assay f's
 neutral_optout: "PI ruling 2026-09-23: no check voids the run; the swap check (C' = C returns X) gates the claim instead of acting as a control"
 verdict: 
 metric: 
 created: "2026-09-23T14:40:11"
-updated: "2026-09-23T14:40:27"
-null_approved: "2026-09-23T14:40:27"
-null_hash: 97c5dcf070e375f7
+updated: "2026-09-25T00:36:55"
+null_approved: "2026-09-25T00:36:55"
+null_hash: ea3c8984092dbed3
 ---
 
-# h15 — A transformation per assay, conditioned on the source and target covariates, maps a track's base onto each of its counterfactual arms and back, in both count and −log10 p space, beyond per-arm quantile matching
+# h15 — A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates
 
 Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
 
-If you know exactly how two versions of the same experiment were processed, one learned function can turn either version into the other — better than just re-scaling the numbers.
+If you know exactly how two versions of the same experiment were processed, a model can work out how to turn one into the other — and not just by memorising each case.
 
 ## TL;DR
 
-We learn one f with X' = f(X | C, C'): X is a track, C the covariates it was made with, C' those of the wanted track. Pairs come from the counterfactual corpus of [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]] — 7 tracks, each with a base and arms that change one processing knob — taken base → arm and arm → base. one f per assay is trained on all of that track's arms pooled, in both directions, and scored on held-out chromosomes against QuantileMatching (a monotone value-axis map fitted once per arm) and an oracle (one pseudoreplicate of the target predicting the other). Settled by CRPS gap-closed ≥ 0.5 in every mark class, in both output spaces, with the gain beyond 2× seed wobble, and by f collapsing when told a wrong C'.
+A generator g reads the full covariate vectors C (how X was made) and C' (how the wanted track is made) and outputs a transformation f; f(X) predicts X' as a distribution per bin. Pairs come from [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]: 7 tracks, each a base plus arms that change one processing knob. The model trains on base ↔ arm and is scored on held-out chromosomes against its own twin trained with scrambled covariates, and on arm → arm pairs it never saw, which only a model that learned how C and C' relate can answer. Settled when f beats the twin beyond seed wobble and gets the arm → arm pairs right.
 
 ## Null
-Normalization: the covariates are ignored — f does no better than a covariate-free monotone rescale fitted per arm.
+Normalization: the covariates are ignored — f does no better than the same model trained with C and C' scrambled across pairs.
 
 ## Problem Statement
 
-CANDI's zero-shot claims rest on its covariate conditioning doing real work, and inside CANDI that cannot be isolated. Here the truth is known: each pair differs in one recorded knob. Arm → arm pairs (two knobs at once) are left out on purpose (PI ruling 2026-09-23) and are the natural next test of whether f combines effects it saw one at a time.
+CANDI's zero-shot claims rest on its covariate conditioning doing real work, and inside CANDI that cannot be isolated. Here each training pair differs in one recorded knob, so the effect of each covariate on signal magnitude and shape is known to exist. The open question is whether the covariate values alone carry enough to reproduce it, as a relation between C and C' rather than a table of per-pair maps (PI ruling 2026-09-25).
 
 ## Idea / Hypothesis
 
-A transformation per assay, conditioned on the source and target covariates, maps a track's base onto each of its counterfactual arms and back, in both count and −log10 p space, beyond per-arm quantile matching
+A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates
 
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-- [ ] gapclosed_all: CRPS gap-closed on all bins >= 0.5 in every mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately; counts as failed wherever D_QM <= D_oracle
-      fails-if:: per-arm QuantileMatching already closes the source-to-target gap, so conditioning on (C, C') adds nothing
+<!-- Bars marked TODO(PI) are not set; CLAUDE.md forbids inventing a gate. -->
+- [ ] beatstwin: D_twin − D_f > 2 x f's seed wobble (max pairwise |Δ| of D_f over 3 seeds), per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately, CRPS all bins and top 1%, on chr19 + chr21. Further bar on the size of the gain: TODO(PI) — the earlier gap-closed ≥ 0.5 waits for a redefined oracle
+      fails-if:: the covariates add nothing a scrambled-covariate twin of equal capacity cannot already do
       discriminates:: true
-- [ ] seedgain_all: D_QM − D_f > 2 x f's seed wobble (max pairwise |Δ| of D_f over 3 seeds) in every mark class, counts and p separately
-      fails-if:: f's gain over QuantileMatching is inside the wobble a seed change alone produces
-- [ ] gapclosed_top1: on the top 1% of bins ranked by the real X', CRPS gap-closed >= 0.5 AND D_QM − D_f > 2 x seed wobble, in every mark class, counts and p separately
-      fails-if:: f matches the bulk of the genome but not the peaks, where the knobs change the shape of the signal
-- [ ] shufflecollapse: at scoring, C' replaced by the C' of another arm of the same track whose target differs (drawn separately for counts and p); CRPS gap-closed against the true X' <= 0.1 in every mark class
+- [ ] lawtest: on never-trained arm → arm pairs within each track, scored on chr19 + chr21 and reported by knob combination, f beats the scrambled twin by more than 2 x seed wobble; bar: TODO(PI). For depth → depth pairs the predicted count scale must follow the depth ratio (tolerance TODO(PI))
+      fails-if:: f keeps one map per trained (C, C') pair and has no answer for a combination it never saw
+- [ ] shufflecollapse: at scoring, C' replaced by the C' of another arm of the same track whose target differs (drawn separately for counts and p); f's advantage over the twin must vanish; bar: TODO(PI) — previously gap-closed ≤ 0.1 against the void oracle
       fails-if:: f does not use C': its output does not change when told the wrong target covariates
-- [ ] swapreturn: at scoring, C' set equal to C; CRPS gap-closed toward X (the source) >= 0.5 in every mark class, counts and p separately
-      fails-if:: told the target is the source itself, f still transforms X, so its output is not steered by C' as the claim requires
+- [ ] swapreturn: at scoring, C' set equal to C; f must return X; bar: TODO(PI) — previously gap-closed toward X ≥ 0.5 against the void oracle
+      fails-if:: told the target is the source itself, f still transforms X, so its output is not steered by C'
 
 ## Planned Intervention
 
-Split (PI ruling 2026-09-23): train on every chromosome except chr19, chr21, chr22; validate (early stopping, run selection) on chr22; score on chr19 + chr21. chrY and chrM dropped everywhere; ENCODE hg38 blacklist regions excluded from scoring, kept in training.
+Full design, rulings and run record: `plan/T118_COUNTERFACTUAL_F.md`.
 
-Distances D, all on the scored chromosomes, mean per track then macro:
-
-| space | CRPS | Spearman |
-|---|---|---|
-| counts | NB CRPS: all bins, non-zero bins, top 1% by real X' | all, non-zero, top 1% |
-| −log10 p | log-normal CRPS: same three subsets | same three |
-
-Three versions of f are trained (PI ruling 2026-09-23): one per assay — the one the checks judge — plus one per arm (C and C' never vary, so it is a flexible known-arm rescale; shuffle and swap do not apply) and one across all 7 tracks with the assay as context; the last two are reported. C and C' are the full knob vector on both sides plus the assay, encoded as one standardised concatenation — continuous knobs as z-scores (depth as log2 reads), binary as 0/1, categorical one-hot, MAPQ numeric; f is never handed C' − C and must infer the change itself. No identity pairs (C' = C) are trained, so swap tests "no change" out of training.
-
-−log10 p is log-normal, not Gaussian (measured 2026-09-24 on the 7 base tracks, chr1, pseudoreplicate halves: skew of x 2.9–17.6 against −0.56–0.51 for log x; SD between halves grows with level at slope 0.81–1.32; log-normal fits better at 40 of 40 levels on every track), so p-space CRPS is log-normal throughout (PI ruling 2026-09-24).
-
-Rungs that emit one value per bin (noSolution, QuantileMatching, the oracle) get their second parameter from a fixed rule: counts are Poisson with that mean; −log10 p is log-normal with median at the prediction and one σ per arm, fitted on the training chromosomes (a fixed σ already makes SD ∝ mean). Their predictions are floored at 1e-3 before the log; f needs no floor (PI rulings 2026-09-24).
-
-Reported, never gating: the CRPS split (capability vs scale error) beside every gap-closed; Spearman of f minus that of QM (QM keeps ranks, so a gain means f re-orders bins) against 2× seed wobble; CRPS on non-zero bins; gap-closed per arm; a point-output f (MAE/MSE — a point forecast's CRPS is its absolute error) against the distribution-output f.
-
-Caveat: each pseudoreplicate holds half the reads, so the oracle is noisier than a full-depth repeat and gap-closed reads optimistic.
-
-Five claim-directed checks under `all` at 80% power each give 33% joint power; the thresholds may not be loosened to compensate.
+- Training pairs base ↔ arm, both directions; no arm → arm and no identity pairs in training. Train on all chromosomes but chr19, chr21, chr22; chr22 validates; chr19 + chr21 score. chrY, chrM dropped; blacklist out of scoring only.
+- C and C' are the full knob vector plus the assay, one standardised concatenation; f never sees C' − C.
+- Three versions: one per assay (judged), one per arm and one across all tracks (reported).
+- p space is log-normal, measured 2026-09-24 (skew of x 2.9–17.6 vs log x −0.56–0.51; SD between pseudoreplicate halves ∝ level, slope 0.81–1.32).
+- References, never pass/fail: noSolution (X' = X) and per-pair QuantileMatching, which reads no covariates. One-value rungs are Poisson (counts) and log-normal with one σ per arm (p), floored at 1e-3.
+- Reported only: Spearman, CRPS on non-zero bins, the CRPS split, per-arm results, a point-output f.
+- The pseudoreplicate oracle is not a floor (on Spearman it beats both references in only 1 of 142 count pairs and 18 of 242 p pairs), because a base and its arm share reads and the halves share none. It must be redefined before any gap-closed bar applies.
+- Five claim-directed checks became four; under `all` at 80% power each that is 41% joint power, and bars may not be loosened to compensate.
 
 ## Run Links
 
