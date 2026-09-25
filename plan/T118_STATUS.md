@@ -47,6 +47,7 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 | 22656702 | pilot, law test of the same 6 runs (starts per task after its train task) | 2026-09-25 ~06:50 | completed, 6/6 exit 0 |
 | **22657297** | **full run, train + score: all 576 runs, array 0-575 %40, A → B → C → D (code 34e5705)** | 2026-09-25 ~07:10 | submitted |
 | **22657301** | **full run, law test: 576 tasks, each starts after its train task (`aftercorr`)** | 2026-09-25 ~07:10 | submitted |
+| 22657365 | trial aggregation of rung A on the 6 pilot runs (tests figures and report on real data; overwritten by the real one) | 2026-09-25 ~07:15 | completed, 2 min, 7 GB; 9 figures + report + checks JSON |
 
 ## Output paths
 
