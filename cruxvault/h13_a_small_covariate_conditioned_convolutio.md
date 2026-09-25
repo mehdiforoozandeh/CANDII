@@ -68,7 +68,12 @@ _(none yet)_
 
 <!-- what the run produced. Keep files under results/h13/ and link at least the report:
      - [Report](results/h13/report.md)   - results/h13/curve.png -->
-_(none yet)_
+- [Report: design C, kernel then curve — all 144 runs, drafted check readings](results/h13/report.md)
+- [Checks: value against bar for every check, both versions of g](results/h13/checks_C.json)
+- results/h13/figures/fig1_ladder.png ladder: CRPS by model, class and space
+- results/h13/figures/fig3_law_grid.png law test: never-trained arm → arm pairs
+- results/h13/figures/fig5_learned_f.png the learned f made visible
+- results/h13/FIR_PATH.txt Nibi run and aggregation directory
 
 ## Findings
 

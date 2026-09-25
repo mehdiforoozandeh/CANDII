@@ -79,7 +79,9 @@ _(none yet)_
 
 <!-- what the run produced. Keep files under results/h15/ and link at least the report:
      - [Report](results/h15/report.md)   - results/h15/curve.png -->
-_(none yet)_
+- [Main claim: which design is judged, and its drafted readings](results/h15/report.md)
+- [Checks of the chosen designs, with shuffle and swap](results/h15/checks_main.json)
+- results/h15/results_summary.tsv every run's scores per track and class
 
 ## Findings
 

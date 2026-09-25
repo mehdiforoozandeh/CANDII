@@ -68,7 +68,12 @@ _(none yet)_
 
 <!-- what the run produced. Keep files under results/h14/ and link at least the report:
      - [Report](results/h14/report.md)   - results/h14/curve.png -->
-_(none yet)_
+- [Report: design D, the FiLM-conditioned CNN — all 144 runs, drafted check readings](results/h14/report.md)
+- [Checks: value against bar for every check, both versions of g](results/h14/checks_D.json)
+- results/h14/figures/fig1_ladder.png ladder: CRPS by model, class and space
+- results/h14/figures/fig3_law_grid.png law test: never-trained arm → arm pairs
+- results/h14/figures/fig5_learned_f.png the learned f made visible
+- results/h14/FIR_PATH.txt Nibi run and aggregation directory
 
 ## Findings
 

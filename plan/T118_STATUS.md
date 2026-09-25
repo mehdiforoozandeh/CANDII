@@ -5,9 +5,11 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Now
 
-- **All 576 runs trained and scored** (25 Sep). Law test: A 144/144, B 143, C 138, D 119 (15:15 UTC),
-  still running. Design A aggregated (job 22678427) and its evidence copied to
-  `cruxvault/results/h12/` and linked from the hypothesis. B, C, D follow as their law tests finish.
+- **Done: all 576 runs trained, scored and law-tested; all four designs aggregated on the final data**
+  (jobs 22682907–10) and linked in the notebook: `cruxvault/results/h12` (A), `h17` (B), `h13` (C),
+  `h14` (D), `h15` (main claim, drafted readings). Checks met: A 45/78, B 67/102, C 68/102, D 41/102.
+- Running: an exploratory design X (the PI's idea: g also reads the bin value), 24 runs, array
+  22683580, output `ladder/explore_x/` — outside the pre-registered ladder.
 - Team overview page (design + pilot numbers): https://claude.ai/artifact/Gj3KNBCaK1efJpfTQ8KV7V
 
 
@@ -41,8 +43,8 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 |---|---|---|---|---|---|
 | A — per-bin affine | yes | yes | yes | yes, 144/144 + law | yes: `cruxvault/results/h12/report.md` |
 | B — per-bin monotone curve | yes | — | yes | yes, 144/144 + law | yes: `cruxvault/results/h17/report.md` |
-| C — kernel, then curve | no | no | no | no | no |
-| D — conditioned CNN | no | no | no | no | no |
+| C — kernel, then curve | yes | — | yes | yes, 144/144 + law | yes: `cruxvault/results/h13/report.md` |
+| D — conditioned CNN | yes | — | yes | yes, 144/144 + law | yes: `cruxvault/results/h14/report.md` |
 
 ## Nibi jobs
 
@@ -163,6 +165,20 @@ B's curve fixes count space, as expected (3 → 11 against the twin). In p space
 this matches the exploding upscaling pairs below, which hit B and D and barely A (A has one σ for
 the whole track). Depth law still unmet (largest error 0.30–0.52). Design B: 67 of 102 checks met.
 
+## All four designs (drafted readings met; 12 per cell unless noted)
+
+| check | A counts | B counts | C counts | D counts | A p | B p | C p | D p |
+|---|---|---|---|---|---|---|---|---|
+| beats the no-covariates twin | 3 | 11 | 11 | 11 | 12 | 7 | 11 | 3 |
+| law test vs the no-covariates twin | 6 | 8 | 12 | 9 | 4 | 1 | 4 | 1 |
+| law test vs the labels-as-ids twin | 10 | 12 | 12 | 11 | 10 | 11 | 11 | 5 |
+| beats the design below | — | 9 | 5 | 1 | — | 8 | 2 | 0 |
+| depth law (of 6) | 0 | 0 | 0 | 0 | — | — | — | — |
+
+Main claim (chr22 rule): C for the across-track g in both spaces, D per track in counts, A per track in
+p. Shuffle met almost everywhere; swap unmet everywhere; depth law unmet everywhere. Details:
+`cruxvault/results/h15/report.md`.
+
 ## A decision for the PI: a few p-space pairs explode the mean
 
 In 32 of 576 run × split combinations, one or two pairs (of 14–242) score CRPS from ~25 to ~10⁷,
@@ -173,11 +189,15 @@ zero it tells little about the target, so the log-normal fit learns a large σ a
 fine for the likelihood, but a log-normal's mean is median × exp(σ²/2), so its CRPS explodes. One
 such pair then dominates the mean over pairs, and with it the seed wobble.
 
-This is a property of the log-normal choice, not a code bug; I changed nothing. Options, for you:
-(a) keep as is; (b) cap σ in p space (e.g. σ ≤ 2) and rerun the p-space half (288 runs, ~3 h);
-(c) keep the runs and report the median over pairs beside the mean. My recommendation: (c) now
-(no rerun, no change to the pre-registered mean), and (b) only if you want the p-space rung
-comparison to be readable.
+**Corrected diagnosis (checked 2026-09-25 with the PI).** In the worst pair (DNase depth 3.75M →
+base, design B, across-track g) the lowest knot sits at x = log(1e-3), the floor, and its learned σ
+is 10.9. But only 0.1% of source bins sit at the floor, and there the target's log-space SD is 1.8.
+So the 10.9 is not what the data ask for: the lowest knot has almost no training data, its σ drifts,
+and linear interpolation spreads the large σ over every bin between the floor and the median, where
+exp(σ²/2) makes the CRPS explode. The PI rejected capping σ and reporting-only as not a fix. The
+earlier idea of a censored log-normal is withdrawn (it rested on the wrong diagnosis). Open: D also
+explodes and has no knots — to be checked. The PI proposed that g also read the bin value (design X
+above); it is being tested.
 
 ## Failures and fixes
 
