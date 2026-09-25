@@ -165,6 +165,21 @@ expressiveness, all to be built:
 - **Which rung the main claim judges** (PI 2026-09-25): the lowest rung within seed wobble of the
   best on chr22, then scored once on chr19 + chr21.
 
+- **Two twins, both trained** (PI 2026-09-25), because they answer different questions. Scoring is
+  on held-out chromosomes of the *trained* pairs, so:
+  - **no-covariates twin** — (C, C') re-scrambled across pairs at every step: the covariates carry
+    no information, the twin learns one average map. Beating it shows conditioning helps at all
+    (even if g only uses C as a pair label).
+  - **labels-as-ids twin** — one fixed permutation of (C, C') across pairs for all of training: the
+    wrong label still identifies its pair, so the twin can learn one map per pair. On trained pairs
+    it can match g; only the law test (never-trained pairs) separates them.
+  Which twin gates which check: TODO(PI).
+- **Loss** (PI 2026-09-25): negative log-likelihood — NB for counts, log-normal for −log10 p. A p
+  target of exactly 0 has zero log-normal likelihood, so p targets are floored at 1e-3 in the
+  training loss only; scoring uses the real values.
+- **One g per space** (PI 2026-09-25): a counts g whose f reads the count track X only, and a p g
+  whose f reads the p track X only.
+
 g sees few distinct (C, C') points (38 per histone track, 18 for DNase, 246 across tracks), so g
 stays small in A–D and the capacity goes into f's form.
 
