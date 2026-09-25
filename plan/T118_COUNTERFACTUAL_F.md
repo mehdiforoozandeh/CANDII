@@ -229,11 +229,15 @@ All nine kept; calibration secondary.
 5. The learned f made visible — A: a and b against each knob value (depth: slope 1 expected);
    B: g's curve per arm over QuantileMatching's per-pair curve; C: the kernel per knob.
 6. Peak meta-profiles — mean signal ±2 kb around the top peaks of X', for X, X' and each rung.
-7. Track snippets — X, X', predicted mean with a 90% interval, over multi-kb loci (not single bins)
+7. Track snippets — X, X', predicted mean with a 90% interval, over 10 kb loci (not single bins; PI 2026-09-25)
    picked by a fixed rule, never by eye: per knob, the locus around the top-1% bin with the largest
    |X' − X|, one around a random top-1% bin, one around a random background bin; chr19/chr21 only.
 8. Calibration (secondary) — PIT histograms per rung.
 9. Checks card — each check's value against its bar, per version of g.
+
+Order of work (PI 2026-09-25): (1) full covariate table; (2) pilot of design A with both twins on
+one track, timing one run; (3) the PI decides the full budget (576 runs = 4 rungs × 3 models × 8 g's
+× 2 spaces × 3 seeds) from the measured time.
 
 Format: one markdown report with PNGs per rung under `results/<rung>/`, linked from the notebook;
 an interactive page later, once results exist.
