@@ -159,6 +159,12 @@ expressiveness, all to be built:
 - **E — g also reads DNA sequence: PARKED** (PI 2026-09-25); recorded as its own hypothesis under
   the capacity question. g would output per-bin parameters of f.
 
+- **Rung checks** (PI 2026-09-25): each rung must beat its own scrambled twin, pass the arm → arm
+  law test, and (B, C, D) beat the rung below; the same boring explanation as the main claim,
+  signed for all four. Shuffle and swap checks are reported for each rung, gating only the main claim.
+- **Which rung the main claim judges** (PI 2026-09-25): the lowest rung within seed wobble of the
+  best on chr22, then scored once on chr19 + chr21.
+
 g sees few distinct (C, C') points (38 per histone track, 18 for DNase, 246 across tracks), so g
 stays small in A–D and the capacity goes into f's form.
 

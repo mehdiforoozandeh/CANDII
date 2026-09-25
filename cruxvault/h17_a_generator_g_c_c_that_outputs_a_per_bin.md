@@ -10,8 +10,10 @@ measurement: "design B of the architecture ladder. f: a monotone spline on the l
 replicates: 7 tracks x base↔arm pairs in both directions (246 pairs; DNase MAPQ arms excluded) x 3 seeds of each g (7 per-track g's and 1 across-track g), and of each twin
 verdict: 
 metric: 
-created: 2026-09-25T01:26:25
-updated: "2026-09-25T12:00:00"
+created: "2026-09-25T01:26:25"
+updated: "2026-09-25T01:30:29"
+null_approved: "2026-09-25T01:30:29"
+null_hash: 15406e39fd11a69f
 ---
 
 # h17 — A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design

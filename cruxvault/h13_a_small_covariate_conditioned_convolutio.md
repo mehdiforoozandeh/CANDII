@@ -11,7 +11,9 @@ replicates: 7 tracks x base↔arm pairs in both directions (246 pairs; DNase MAP
 verdict: 
 metric: 
 created: "2026-09-17T21:47:47"
-updated: "2026-09-25T12:00:00"
+updated: "2026-09-25T01:30:29"
+null_approved: "2026-09-25T01:30:29"
+null_hash: 15406e39fd11a69f
 ---
 
 # h13 — A generator g(C, C') that outputs a convolution kernel followed by a monotone curve beats its scrambled-covariate twin and the per-bin monotone-curve design

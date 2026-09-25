@@ -60,6 +60,7 @@ Full design, rulings and run record: `plan/T118_COUNTERFACTUAL_F.md`.
 
 - Training pairs base ↔ arm, both directions; no arm → arm and no identity pairs in training. Train on all chromosomes but chr19, chr21, chr22; chr22 validates; chr19 + chr21 score. chrY, chrM dropped; blacklist out of scoring only.
 - C and C' are the full knob vector plus the assay, one standardised concatenation; g never sees C' − C.
+- Which design is judged (PI ruling 2026-09-25): of the ladder rungs A–D ([[q4_how_much_capacity_does_a_covariate_condi|the capacity question]]), the one chosen on chr22 as the lowest rung within seed wobble of the best, then scored once on chr19 + chr21. The shuffle and swap checks gate this claim only; the rungs report them without gating.
 - g is trained, f is its output. Two versions of g: one per track (7 g's; the assay entry is constant inside each) and one across all 7 tracks. Both are scored under the same checks; both decide pass/fail — every check must pass for both (PI ruling 2026-09-25). No per-arm version.
 - p space is log-normal, measured 2026-09-24 (skew of x 2.9–17.6 vs log x −0.56–0.51; SD between pseudoreplicate halves ∝ level, slope 0.81–1.32).
 - References, never pass/fail: noSolution (X' = X) and per-pair QuantileMatching, which reads no covariates. One-value rungs are Poisson (counts) and log-normal with one σ per arm (p), floored at 1e-3.
