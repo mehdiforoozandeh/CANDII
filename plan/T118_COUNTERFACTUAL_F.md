@@ -238,6 +238,9 @@ All nine kept; calibration secondary.
 Order of work (PI 2026-09-25): (1) full covariate table; (2) pilot of design A with both twins on
 one track, timing one run; (3) the PI decides the full budget (576 runs = 4 rungs × 3 models × 8 g's
 × 2 spaces × 3 seeds) from the measured time.
+**Superseded the same day (PI 2026-09-25):** no budget stop — run all 576 overnight, even if not
+all finish by morning; A and B first. A fresh agent does the work from `plan/T118_HANDOFF.md`, with
+the PI's approval to follow the plan without asking; verdicts, ticks and merges stay the PI's.
 
 Format: one markdown report with PNGs per rung under `results/<rung>/`, linked from the notebook;
 an interactive page later, once results exist.
