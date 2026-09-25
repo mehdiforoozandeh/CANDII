@@ -39,7 +39,7 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 | job | what | submitted | state |
 |---|---|---|---|
 | 22654779 | `t118L_cache`: memory-mapped cache, 130 products × 2 spaces | 2026-09-25 ~05:45 | running (≈1 min, 3.6 GB per product) |
-| 22655875 | early real-data check: design A, H3K27ac track, real g, seed 0, counts and p (code a0abc6f), output in `ladder/pilot0/` (never used by the full run) | 2026-09-25 ~06:10 | submitted |
+| 22655875 | early real-data check: design A, H3K27ac track, real g, seed 0, counts and p (code a0abc6f), output in `ladder/pilot0/` (never used by the full run) | 2026-09-25 ~06:10 | completed, both tasks exit 0 |
 
 ## Output paths
 
@@ -47,7 +47,33 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Measured time per run
 
-(pilot not yet run)
+Early check (job 22655875, design A, one H3K27ac g, 38 training pairs, 1 MIG slice + 4 cores):
+
+| run | venv | train | score | wall | peak host memory (sacct) |
+|---|---|---|---|---|---|
+| counts, real g, seed 0 | ~1 min | 361 s (2 000 steps, best at 1 000) | ~5 min | 12.2 min | 12.3 GB |
+| −log10 p, real g, seed 0 | ~1 min | 561 s (3 750 steps, best at 2 750) | 70 s | 12.1 min | 13.5 GB |
+
+Peak memory includes the memory-mapped cache pages, so the full run asks for 32 GB (command-line
+`--mem`) instead of the script's 16 GB.
+
+### What the early check showed (one seed, real g only — not a result, no twins yet)
+
+Design A, H3K27ac track, mean CRPS over its 38 trained pairs on chr19 + chr21, blacklist removed;
+references are the v2 baseline numbers for the same pairs:
+
+| space | bins | real g, design A | noSolution | QuantileMatching |
+|---|---|---|---|---|
+| counts | all | 0.421 | 0.503 | 0.437 |
+| counts | top 1% | 5.30 | 2.40 | 1.87 |
+| −log10 p | all | 0.164 | 0.253 | 0.215 |
+| −log10 p | top 1% | 3.27 | 2.70 | 2.31 |
+
+On the top 1% of bins design A is worse than both references. The likely cause is design A's one
+dispersion value for the whole track: fitted mostly on near-zero bins, it makes the predicted
+distribution too wide at peaks (the references use a Poisson, which is narrow). Design B gives a
+dispersion per level, which should fix this. I read it as a property of design A, not a bug, and did
+not change anything. Seed wobble is not known yet, so none of these gaps can be judged.
 
 ## Choices I made
 
