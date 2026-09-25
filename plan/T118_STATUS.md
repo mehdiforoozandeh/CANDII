@@ -8,8 +8,10 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 - **Done: all 576 runs trained, scored and law-tested; all four designs aggregated on the final data**
   (jobs 22682907–10) and linked in the notebook: `cruxvault/results/h12` (A), `h17` (B), `h13` (C),
   `h14` (D), `h15` (main claim, drafted readings). Checks met: A 45/78, B 67/102, C 68/102, D 41/102.
-- Running: an exploratory design X (the PI's idea: g also reads the bin value), 24 runs, array
-  22683580, output `ladder/explore_x/` — outside the pre-registered ladder.
+- Running: an exploratory design X (the PI's idea: g also reads the bin value), 24 runs on CPU,
+  array 22688594, output `ladder/explore_x/` — outside the pre-registered ladder. The GPU version
+  (22683580) never started: every 10 GB-slice node was held by the scheduler for a higher-priority
+  job, so it was cancelled and moved to CPU nodes.
 - Team overview page (design + pilot numbers): https://claude.ai/artifact/Gj3KNBCaK1efJpfTQ8KV7V
 
 
@@ -225,5 +227,4 @@ above); it is being tested.
 
 ## Blocked on the PI
 
-- **Nibi tunnel down (2026-09-25 15:10 local), third time.** Nibi work stopped; I did not authenticate. Design X
-  (array 22683580) keeps running; its results wait for `hpc up nibi`.
+- (nothing blocking)
