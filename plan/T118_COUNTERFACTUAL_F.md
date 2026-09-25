@@ -218,6 +218,26 @@ stays small in A–D and the capacity goes into f's form.
 - Shuffle: with a wrong C', the advantage over the no-covariates twin falls to within 2 × seed wobble.
 - Swap: with C' = C, median |log(predicted mean / X)| over bins with X > 0 is below 0.1.
 
+### Visualizations and report (PI 2026-09-25)
+
+All nine kept; calibration secondary.
+1. Ladder plot — per mark class × space: noSolution, both twins, A, B, C, D, QuantileMatching on x;
+   CRPS all bins and top 1% on y; seed range as bars.
+2. Knob × rung heatmap — 10 knobs × rungs, cell = relative gain over the no-covariates twin.
+3. Law-test grid — per track, arm × arm matrix of never-trained pairs, colour = gain over each twin.
+4. Depth-law plot — true log2 depth ratio vs predicted log2 count scale, identity line, ±10% band.
+5. The learned f made visible — A: a and b against each knob value (depth: slope 1 expected);
+   B: g's curve per arm over QuantileMatching's per-pair curve; C: the kernel per knob.
+6. Peak meta-profiles — mean signal ±2 kb around the top peaks of X', for X, X' and each rung.
+7. Track snippets — X, X', predicted mean with a 90% interval, over multi-kb loci (not single bins)
+   picked by a fixed rule, never by eye: per knob, the locus around the top-1% bin with the largest
+   |X' − X|, one around a random top-1% bin, one around a random background bin; chr19/chr21 only.
+8. Calibration (secondary) — PIT histograms per rung.
+9. Checks card — each check's value against its bar, per version of g.
+
+Format: one markdown report with PNGs per rung under `results/<rung>/`, linked from the notebook;
+an interactive page later, once results exist.
+
 ## 4. What ran
 
 | step | where | jobs | result |
@@ -276,7 +296,7 @@ Spearman (all bins), noSolution / QM / oracle: DNase counts 0.670 / 0.667 / 0.49
 2. ~~Thresholds~~ — **set** (see "Bars", 2026-09-25). Under `all`, 4 checks × 2 versions of g:
    at 80% power each, joint power ≈ 17% if independent.
 3. ~~The architecture~~ — **chosen**: ladder A–D (see "Architecture ladder"); E parked.
-3a. **Visualizations and the results report** — being designed (2026-09-25).
+3a. ~~Visualizations~~ — **set** (see "Visualizations and report").
 3b. **Full covariate table** per product — approved as the first build step.
 4. t119 — rebuild the DNase MAPQ arms with multimapping off.
 5. PR #47 (pseudoreplicates) is ready for the PI's review and merge.
