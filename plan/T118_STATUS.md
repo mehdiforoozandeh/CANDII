@@ -5,7 +5,6 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Now
 
-- **Waiting on the PI: Nibi tunnel down since 2026-09-25 08:30 (see Blocked on the PI).**
 
 - Ground truth checked 2026-09-25: branch `exp/t118-counterfactual-f` in sync with origin, 0
   commits behind `origin/main`; Nibi reachable; 130 product dirs + `MANIFEST.tsv`, md5
@@ -47,8 +46,12 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 | 22655875 | early real-data check: design A, H3K27ac track, real g, seed 0, counts and p (code a0abc6f), output in `ladder/pilot0/` (never used by the full run) | 2026-09-25 ~06:10 | completed, both tasks exit 0 |
 | 22656701 | pilot, train: design A, H3K27ac, 3 models × 2 spaces, seed 0 (code 34e5705) | 2026-09-25 ~06:50 | completed, 6/6 exit 0 |
 | 22656702 | pilot, law test of the same 6 runs (starts per task after its train task) | 2026-09-25 ~06:50 | completed, 6/6 exit 0 |
-| **22657297** | **full run, train + score: all 576 runs, array 0-575 %40, A → B → C → D (code 34e5705)** | 2026-09-25 ~07:10 | submitted |
-| **22657301** | **full run, law test: 576 tasks, each starts after its train task (`aftercorr`)** | 2026-09-25 ~07:10 | submitted |
+| **22657297** | **full run, train + score: all 576 runs, array 0-575 %40, A → B → C → D (code 34e5705)** | 2026-09-25 ~07:10 | at 11:30 UTC: 544 done, 24 running, 8 failed (a shared-file race on /project, before training; fixed in 82cf8db and retried) |
+| 22657301 | full run, law test (`aftercorr`) | 2026-09-25 ~07:10 | 17 done; the rest never started (SLURM held the whole array on the train array) and was cancelled, replaced by 22667088/90/91 |
+| 22667088 | law test, re-submitted without a dependency for the 527 runs already trained (code 82cf8db) | 2026-09-25 ~11:50 | submitted |
+| 22667089 | retry of the 8 train tasks that failed (92, 99, 209, 244, 280, 304, 340, 353) | 2026-09-25 ~11:50 | submitted |
+| 22667090 | law test of those 8 (after each retry) | 2026-09-25 ~11:50 | submitted |
+| 22667091 | law test of the 24 runs still training at 11:30 (starts when train array 22657297 ends) | 2026-09-25 ~11:50 | submitted |
 | 22657365 | trial aggregation of rung A on the 6 pilot runs (tests figures and report on real data; overwritten by the real one) | 2026-09-25 ~07:15 | completed, 2 min, 7 GB; 9 figures + report + checks JSON |
 
 ## Output paths
@@ -116,6 +119,16 @@ Science choices the plan does not settle; each is the most conservative option.
     be an extrapolation rather than "one average map". This is the conservative reading: it gives
     the twin its best average map, so "beats the twin" is not made easier.
 
+## Failures and fixes
+
+- 8 of 576 train tasks failed in their first 35 s: every task rewrote the shared `tasks.tsv`, and
+  concurrent readers on /project got "Stale file handle". Fix (82cf8db, shell only; the Python code
+  is unchanged from the run's 34e5705): each task reads its own copy and the shared one is never
+  replaced. Retried as 22667089.
+- The law-test array (`aftercorr` on the train array) never released a task while the train array
+  was still running, and would never have run for the 8 failed tasks. Cancelled the pending part and
+  re-submitted the law test directly for every trained run.
+
 ## Disagreements with the plan
 
 - The design plan says the across-track g has "all 246 pairs". With both DNase MAPQ arms excluded
@@ -129,7 +142,4 @@ Science choices the plan does not settle; each is the most conservative option.
 
 ## Blocked on the PI
 
-- **Nibi tunnel down (2026-09-25 08:30 local).** `ssh -o BatchMode=yes nibi` exits 255 (multifactor prompt).
-  All Nibi work is stopped; I did not try to authenticate. The submitted arrays (train 22657297,
-  law 22657301) keep running on Nibi without the tunnel. Needed: the PI runs `hpc up nibi`; then I
-  check progress, aggregate each finished rung, copy the evidence down and link it in the notebook.
+- (nothing) — the Nibi tunnel was down for a while on 2026-09-25 and is back; the runs kept going.
