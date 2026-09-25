@@ -5,6 +5,8 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Now
 
+- **Waiting on the PI: Nibi tunnel down since 2026-09-25 08:30 (see Blocked on the PI).**
+
 - Ground truth checked 2026-09-25: branch `exp/t118-counterfactual-f` in sync with origin, 0
   commits behind `origin/main`; Nibi reachable; 130 product dirs + `MANIFEST.tsv`, md5
   `599e2ca607961fe550b477558f894edf` (matches the handoff).
@@ -127,4 +129,7 @@ Science choices the plan does not settle; each is the most conservative option.
 
 ## Blocked on the PI
 
-(nothing)
+- **Nibi tunnel down (2026-09-25 08:30 local).** `ssh -o BatchMode=yes nibi` exits 255 (multifactor prompt).
+  All Nibi work is stopped; I did not try to authenticate. The submitted arrays (train 22657297,
+  law 22657301) keep running on Nibi without the tunnel. Needed: the PI runs `hpc up nibi`; then I
+  check progress, aggregate each finished rung, copy the evidence down and link it in the notebook.
