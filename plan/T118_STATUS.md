@@ -17,8 +17,9 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 - Wave 0 done and merged: covariate table (`tools/t118/covariates.tsv`, 130 products, source named
   for every base value) and the ladder core (pair counts verified on the real manifest: 38 per
   histone track, 14 DNase, 242 across tracks, 2 094 never-trained arm→arm pairs, 576 runs).
-- Wave 1: forms A–D and the SLURM scripts merged; the training harness and the scorer are under
-  review before merge; figures/report still building.
+- Wave 1 done and merged (a0abc6f): harness, forms A–D, scorer, figures/report, SLURM. The harness
+  and the scorer each passed an independent review, with fixes. 218 t118 tests pass.
+- Wave 2 building: the end-to-end CPU run of every rung on synthetic data, to find the seams.
 - The cache build runs on Nibi now (it needs only merged code), so the pilot will not wait on it.
 - Planner's estimate, to be checked by the pilot: per-track run ≈ 20 min on a MIG slice,
   across-track ≈ 35 min; law test 10–90 min on CPU per run; A and B done ≈ 3 h after submission
@@ -37,7 +38,8 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 | job | what | submitted | state |
 |---|---|---|---|
-| 22654779 | `t118L_cache`: memory-mapped cache, 130 products × 2 spaces | 2026-09-25 ~05:45 | submitted |
+| 22654779 | `t118L_cache`: memory-mapped cache, 130 products × 2 spaces | 2026-09-25 ~05:45 | running (≈1 min, 3.6 GB per product) |
+| 22655875 | early real-data check: design A, H3K27ac track, real g, seed 0, counts and p (code a0abc6f), output in `ladder/pilot0/` (never used by the full run) | 2026-09-25 ~06:10 | submitted |
 
 ## Output paths
 
