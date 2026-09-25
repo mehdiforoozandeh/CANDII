@@ -40,7 +40,7 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 | rung | built | pilot | submitted | finished | report |
 |---|---|---|---|---|---|
 | A — per-bin affine | yes | yes | yes | yes, 144/144 + law | yes: `cruxvault/results/h12/report.md` |
-| B — per-bin monotone curve | no | no | no | no | no |
+| B — per-bin monotone curve | yes | — | yes | yes, 144/144 + law | yes: `cruxvault/results/h17/report.md` |
 | C — kernel, then curve | no | no | no | no | no |
 | D — conditioned CNN | no | no | no | no | no |
 
@@ -61,6 +61,7 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 | 22669098 | retry of law task 110 (transient CVMFS read error while building the venv) | 2026-09-25 ~12:10 | submitted |
 | 22676228 | retry of law tasks 433–440 (the same CVMFS read error) | 2026-09-25 ~14:30 | submitted |
 | 22678427 | aggregation of design A (retry of 22678258, which hit the CVMFS error; node c537 excluded) | 2026-09-25 ~15:10 | completed, 2.6 min |
+| 22678919 | aggregation of design B | 2026-09-25 ~15:40 | completed, 3 min |
 | 22657365 | trial aggregation of rung A on the 6 pilot runs (tests figures and report on real data; overwritten by the real one) | 2026-09-25 ~07:15 | completed, 2 min, 7 GB; 9 figures + report + checks JSON |
 
 ## Output paths
@@ -148,7 +149,21 @@ Shape of the result, in plain terms:
   validation does not depend on them):** C for the across-track g in both spaces; D per track in
   counts; A per track in p space, because B, C and D have runs that blow up there (next item).
 
-### A decision for the PI: a few p-space pairs explode the mean
+### Design B against design A (drafted readings met, of 12 per cell unless noted)
+
+| check | A counts | B counts | A p | B p |
+|---|---|---|---|---|
+| beats the no-covariates twin (held-out chromosomes) | 3 | 11 | 12 | 7 |
+| law test: beats the no-covariates twin | 6 | 8 | 4 | 1 |
+| law test: beats the labels-as-ids twin | 10 | 12 | 10 | 11 |
+| beats the design below (B > A) | — | 9 | — | 8 |
+| depth law (of 6; counts only) | 0 | 0 | — | — |
+
+B's curve fixes count space, as expected (3 → 11 against the twin). In p space B does worse than A;
+this matches the exploding upscaling pairs below, which hit B and D and barely A (A has one σ for
+the whole track). Depth law still unmet (largest error 0.30–0.52). Design B: 67 of 102 checks met.
+
+## A decision for the PI: a few p-space pairs explode the mean
 
 In 32 of 576 run × split combinations, one or two pairs (of 14–242) score CRPS from ~25 to ~10⁷,
 almost all in −log10 p space and mostly in designs B and D. They are all **upscaling** pairs: a

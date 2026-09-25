@@ -68,7 +68,13 @@ _(none yet)_
 
 <!-- what the run produced. Keep files under results/h17/ and link at least the report:
      - [Report](results/h17/report.md)   - results/h17/curve.png -->
-_(none yet)_
+- [Report: design B, the per-bin monotone curve — all 144 runs, drafted check readings](results/h17/report.md)
+- [Checks: value against bar for every check, both versions of g](results/h17/checks_B.json)
+- results/h17/figures/fig1_ladder.png ladder: CRPS by model, class and space
+- results/h17/figures/fig3_law_grid.png law test: never-trained arm → arm pairs, gain over each twin
+- results/h17/figures/fig4_depth_law.png depth law: predicted count scale against the depth ratio
+- results/h17/figures/fig5_learned_f.png g's curve per arm over QuantileMatching's per-pair curve
+- results/h17/FIR_PATH.txt Nibi run and aggregation directory
 
 ## Findings
 
