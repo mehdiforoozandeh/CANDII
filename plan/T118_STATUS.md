@@ -72,6 +72,11 @@ Science choices the plan does not settle; each is the most conservative option.
 11. A memory-mapped cache of all 130 products × 2 spaces (≈126 GB) goes under
     `/project/def-maxwl/mforooz/t118/ladder/cache/`. I will not delete it; that is the PI's call
     once the runs are scored.
+12. At test time the no-covariates twin predicts with one θ for every query: the mean of its g's
+    outputs over the training pairs. Otherwise g, which learned to ignore covariates, would be
+    queried on covariate pairs it never saw (law test, shuffle, swap), and its answer there would
+    be an extrapolation rather than "one average map". This is the conservative reading: it gives
+    the twin its best average map, so "beats the twin" is not made easier.
 
 ## Disagreements with the plan
 
