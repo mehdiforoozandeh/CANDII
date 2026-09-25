@@ -8,7 +8,16 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 - Ground truth checked 2026-09-25: branch `exp/t118-counterfactual-f` in sync with origin, 0
   commits behind `origin/main`; Nibi reachable; 130 product dirs + `MANIFEST.tsv`, md5
   `599e2ca607961fe550b477558f894edf` (matches the handoff).
-- Planning the build chunks (covariate table, harness, the four f forms, scorer, figures, SLURM).
+- Notebook: the four rungs and the main claim are now `running` (opt-out field added to the four
+  rungs, citing the PI ruling of 2026-09-23). Commit 74ff2e2.
+- Build plan written (git-excluded, `.orchestrate/plan.md` in this worktree). Waves: 0 = covariate
+  table + ladder core (contracts, data reader, pair and task tables, synthetic products); 1 =
+  training harness, the four f forms, scorer, figures/report, SLURM scripts (8 builders in
+  parallel); 2 = end-to-end CPU smoke of all four rungs; 3 = pilot on Nibi, then all 576 runs.
+- Wave 0 building (started 2026-09-25 ~02:30).
+- Planner's estimate, to be checked by the pilot: per-track run ≈ 20 min on a MIG slice,
+  across-track ≈ 35 min; law test 10–90 min on CPU per run; A and B done ≈ 3 h after submission
+  if 40 slices run at once, all four ≈ 6–8 h.
 
 ## Per rung
 
@@ -33,11 +42,34 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Choices I made
 
-(none yet)
+Science choices the plan does not settle; each is the most conservative option.
+
+1. Fragment length is not a covariate. Only the extsize factor k is encoded; the actual fragment
+   length (which also moves on the paired-end and MAPQ arms) is recorded in the table, unencoded.
+2. Products with no control (DNase and the control-identity = none arms): control fraction,
+   ratio k and control depth are 0, identity = none, has-control = 0 (the DNase rule applied to
+   both).
+3. Count-space pairs whose target counts equal the source counts (p-only arms as targets) are kept
+   and flagged; the headline numbers include them, and a variant without them is reported beside.
+4. The labels-as-ids twin's fixed permutation is a derangement (no pair keeps its own covariates).
+5. Rung B's curve above the last knot continues with the last segment's slope (QuantileMatching
+   stays flat there).
+6. The across-track g gets the same step budget as a per-track g.
+7. The depth law is computed in count space only.
+8. The main claim's rung choice on chr22 uses CRPS on all bins (real g, mean over seeds, macro over
+   tracks), per version of g and per space.
+9. The law test scores all chr19 + chr21 bins, in a separate CPU job per run, regenerating
+   predictions from the checkpoint.
+10. Figures are drawn with matplotlib. The local `candii` env lacks it, so figures are tested with
+    `/Users/mforooz/miniforge3/bin/python`; on Nibi the job venv has it. No environment changed.
+11. A memory-mapped cache of all 130 products × 2 spaces (≈126 GB) goes under
+    `/project/def-maxwl/mforooz/t118/ladder/cache/`. I will not delete it; that is the PI's call
+    once the runs are scored.
 
 ## Disagreements with the plan
 
-(none yet)
+- The design plan says the across-track g has "all 246 pairs". With both DNase MAPQ arms excluded
+  (the handoff's rule) it is 242: 6 histone tracks × 38 + DNase 14. The code uses 242.
 
 ## Blocked on the PI
 
