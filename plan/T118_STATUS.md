@@ -14,7 +14,12 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
   table + ladder core (contracts, data reader, pair and task tables, synthetic products); 1 =
   training harness, the four f forms, scorer, figures/report, SLURM scripts (8 builders in
   parallel); 2 = end-to-end CPU smoke of all four rungs; 3 = pilot on Nibi, then all 576 runs.
-- Wave 0 building (started 2026-09-25 ~02:30).
+- Wave 0 done and merged: covariate table (`tools/t118/covariates.tsv`, 130 products, source named
+  for every base value) and the ladder core (pair counts verified on the real manifest: 38 per
+  histone track, 14 DNase, 242 across tracks, 2 094 never-trained arm→arm pairs, 576 runs).
+- Wave 1: forms A–D and the SLURM scripts merged; the training harness and the scorer are under
+  review before merge; figures/report still building.
+- The cache build runs on Nibi now (it needs only merged code), so the pilot will not wait on it.
 - Planner's estimate, to be checked by the pilot: per-track run ≈ 20 min on a MIG slice,
   across-track ≈ 35 min; law test 10–90 min on CPU per run; A and B done ≈ 3 h after submission
   if 40 slices run at once, all four ≈ 6–8 h.
@@ -30,7 +35,9 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Nibi jobs
 
-(none yet)
+| job | what | submitted | state |
+|---|---|---|---|
+| 22654779 | `t118L_cache`: memory-mapped cache, 130 products × 2 spaces | 2026-09-25 ~05:45 | submitted |
 
 ## Output paths
 
@@ -65,11 +72,22 @@ Science choices the plan does not settle; each is the most conservative option.
 11. A memory-mapped cache of all 130 products × 2 spaces (≈126 GB) goes under
     `/project/def-maxwl/mforooz/t118/ladder/cache/`. I will not delete it; that is the PI's call
     once the runs are scored.
+12. At test time the no-covariates twin predicts with one θ for every query: the mean of its g's
+    outputs over the training pairs. Otherwise g, which learned to ignore covariates, would be
+    queried on covariate pairs it never saw (law test, shuffle, swap), and its answer there would
+    be an extrapolation rather than "one average map". This is the conservative reading: it gives
+    the twin its best average map, so "beats the twin" is not made easier.
 
 ## Disagreements with the plan
 
 - The design plan says the across-track g has "all 246 pairs". With both DNase MAPQ arms excluded
   (the handoff's rule) it is 242: 6 histone tracks × 38 + DNase 14. The code uses 242.
+- **Swap check vs the input scale (for the PI; bar not changed).** f reads x = log(1 + counts), so
+  the identity map predicts a mean of X + 1, not X; at X = 1 that alone gives |log ratio| = 0.69.
+  The swap bar (median |log(predicted mean / X)| over bins with X > 0 below 0.1) can still be met
+  by forms whose curve or head can bend at low counts (B, C, D), but design A (one line in log1p
+  space) may miss it by construction in count space. Swap gates only the main claim. I report the
+  number as measured.
 
 ## Blocked on the PI
 
