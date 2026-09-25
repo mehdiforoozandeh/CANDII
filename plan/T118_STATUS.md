@@ -82,6 +82,12 @@ Science choices the plan does not settle; each is the most conservative option.
 
 - The design plan says the across-track g has "all 246 pairs". With both DNase MAPQ arms excluded
   (the handoff's rule) it is 242: 6 histone tracks × 38 + DNase 14. The code uses 242.
+- **Swap check vs the input scale (for the PI; bar not changed).** f reads x = log(1 + counts), so
+  the identity map predicts a mean of X + 1, not X; at X = 1 that alone gives |log ratio| = 0.69.
+  The swap bar (median |log(predicted mean / X)| over bins with X > 0 below 0.1) can still be met
+  by forms whose curve or head can bend at low counts (B, C, D), but design A (one line in log1p
+  space) may miss it by construction in count space. Swap gates only the main claim. I report the
+  number as measured.
 
 ## Blocked on the PI
 
