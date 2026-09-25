@@ -32,9 +32,10 @@ Locked before any run: every rung is compared to the same one-warp fit and to it
 _(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
 
 <!-- crux:ledger:start -->
-**3 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
+**4 children** · ideas 0/4 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
 
 - `h12` [[h12_a_covariate_conditioned_affine_map_on_th|A covariate-conditioned affine map on the log-count axis closes at least half of the gap that the covariate-free monotone map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
 - `h13` [[h13_a_small_covariate_conditioned_convolutio|A small covariate-conditioned convolutional map over neighbouring bins closes gap that the conditioned affine map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
 - `h14` [[h14_an_encoder_decoder_with_the_encoder_cond|An encoder–decoder with the encoder conditioned on the source covariates and the decoder on the target covariates closes gap that the conditioned convolutional map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
+- `h16` [[h16_a_generator_that_reads_the_dna_sequence_|A generator that reads the DNA sequence as well as the source and target covariates outputs a position-dependent transformation that beats the same design without sequence on the knobs that act through mappability and GC]] — *idea*
 <!-- crux:ledger:end -->
