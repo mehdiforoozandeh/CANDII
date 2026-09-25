@@ -162,6 +162,24 @@ expressiveness, all to be built:
 g sees few distinct (C, C') points (38 per histone track, 18 for DNase, 246 across tracks), so g
 stays small in A–D and the capacity goes into f's form.
 
+### Data and covariate rulings (2026-09-25)
+
+- **Control identity** is encoded as three categories — matched, other, none — not as the ENCODE
+  accession, so it means the same thing across tracks.
+- **DNase has no control:** its control entries are 0, plus one "has control" flag.
+- **The two DNase MAPQ arms** (byte-identical to the DNase base, a t112 defect) are **excluded from
+  training** as well as from scoring, until t119 rebuilds them; they would teach g that MAPQ does
+  nothing.
+- **The p-only arms train in count space** (ratio, control identity, control depth, extsize): their
+  counts equal the base, which correctly teaches that these knobs do not move counts. Verified from
+  the t112 MANIFEST counts md5: all 50 of these arm products match their base; the only other
+  matches are the 2 DNase MAPQ arms.
+- The full covariate vector of each product must be assembled: the manifest records depth, read
+  length, run type and fragment length for every product, but dedup, MAPQ, control fraction, ratio,
+  control depth and extsize only for the arm that changes them; base values come from the pipeline
+  defaults and must be verified.
+- The capacity-question notes were rewritten for A–D (A, B, C, D as four rungs; E parked).
+
 ## 4. What ran
 
 | step | where | jobs | result |

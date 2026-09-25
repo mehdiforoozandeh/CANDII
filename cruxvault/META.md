@@ -20,14 +20,15 @@ Root: [[candii]]
     - · `h8` [H] [[h8_conditioning_on_the_recorded_control_ide|Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
     - · `h9` [H] [[h9_conditioning_on_the_recorded_control_dep|Conditioning on the recorded control depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
     - · `h10` [H] [[h10_conditioning_on_the_recorded_fragment_ex|Conditioning on the recorded fragment extension predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
-  - ○ `q4` [Q] [[q4_how_much_capacity_does_a_covariate_condi|**How much capacity does a covariate-conditioned transformation need before it closes the gap that a covariate-free monotone map leaves?**]] — *open*
-    - · `h12` [H] [[h12_a_covariate_conditioned_affine_map_on_th|A covariate-conditioned affine map on the log-count axis closes at least half of the gap that the covariate-free monotone map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
-    - · `h13` [H] [[h13_a_small_covariate_conditioned_convolutio|A small covariate-conditioned convolutional map over neighbouring bins closes gap that the conditioned affine map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
-    - · `h14` [H] [[h14_an_encoder_decoder_with_the_encoder_cond|An encoder–decoder with the encoder conditioned on the source covariates and the decoder on the target covariates closes gap that the conditioned convolutional map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
+  - ○ `q4` [Q] [[q4_how_much_capacity_does_a_covariate_condi|**How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?**]] — *open*
+    - · `h12` [H] [[h12_a_covariate_conditioned_affine_map_on_th|A generator g(C, C') that outputs a per-bin affine map on the log scale beats the same design trained with scrambled covariates, in count and −log10 p space]] — *idea*
+    - · `h13` [H] [[h13_a_small_covariate_conditioned_convolutio|A generator g(C, C') that outputs a convolution kernel followed by a monotone curve beats its scrambled-covariate twin and the per-bin monotone-curve design]] — *idea*
+    - · `h14` [H] [[h14_an_encoder_decoder_with_the_encoder_cond|A generator g(C, C') that modulates a small dilated convolutional network beats its scrambled-covariate twin and the kernel-and-curve design]] — *idea*
     - · `h16` [H] [[h16_a_generator_that_reads_the_dna_sequence_|A generator that reads the DNA sequence as well as the source and target covariates outputs a position-dependent transformation that beats the same design without sequence on the knobs that act through mappability and GC]] — *idea*
+    - · `h17` [H] [[h17_a_generator_g_c_c_that_outputs_a_per_bin|A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design]] — *idea*
 
 ## Dashboard
 
 - **Questions** (4): open 4 · review 0 · resolved 0
-- **Hypotheses** (15): idea 15 · staged 0 · running 0 · done 0
+- **Hypotheses** (16): idea 16 · staged 0 · running 0 · done 0
 - **Verdicts**: supported 0 · partial 0 · refuted 0 · inconclusive 0 · invalid-run 0
