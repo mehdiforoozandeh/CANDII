@@ -210,6 +210,14 @@ stays small in A–D and the capacity goes into f's form.
   defaults and must be verified.
 - The capacity-question notes were rewritten for A–D (A, B, C, D as four rungs; E parked).
 
+### Bars (PI 2026-09-25 — defaults accepted; pass/fail is not the priority now)
+
+- Every gain check (beat the twin, law test, beat the rung below): gain > 2 × seed wobble; no
+  further bar on the size of the gain.
+- Depth law: on depth → depth pairs the predicted total count scale is within 10% of the depth ratio.
+- Shuffle: with a wrong C', the advantage over the no-covariates twin falls to within 2 × seed wobble.
+- Swap: with C' = C, median |log(predicted mean / X)| over bins with X > 0 is below 0.1.
+
 ## 4. What ran
 
 | step | where | jobs | result |
@@ -265,13 +273,11 @@ Spearman (all bins), noSolution / QM / oracle: DNase counts 0.670 / 0.667 / 0.49
 1. ~~The oracle~~ — **dropped** (PI ruling 2026-09-25). The two boring explanations (the scrambled
    twin, and the arm → arm law test) and the two references (noSolution, QuantileMatching) replace
    it. The v2 oracle numbers stay in section 4 as history; nothing is judged against them.
-2. **Thresholds** for the final design: the bar against the scrambled twin and the bar for the
-   arm → arm law test are not set. The "2 × seed wobble" rule and the shuffle and swap checks are
-   carried over; the gap-closed rules are gone with the oracle.
-   Under `all`, 4 checks × 2 versions of g: at 80% power each, joint power ≈ 17% if independent.
-3. **The architecture** (the form of f, and how g produces it) — not chosen. Drafted options in the vault: a covariate-conditioned affine
-   map (h12), a small conditioned convolutional network (h13), an encoder–decoder (h14). The
-   shape part needs f to see neighbouring bins.
+2. ~~Thresholds~~ — **set** (see "Bars", 2026-09-25). Under `all`, 4 checks × 2 versions of g:
+   at 80% power each, joint power ≈ 17% if independent.
+3. ~~The architecture~~ — **chosen**: ladder A–D (see "Architecture ladder"); E parked.
+3a. **Visualizations and the results report** — being designed (2026-09-25).
+3b. **Full covariate table** per product — approved as the first build step.
 4. t119 — rebuild the DNase MAPQ arms with multimapping off.
 5. PR #47 (pseudoreplicates) is ready for the PI's review and merge.
-6. `/scratch/mforooz` is over its soft quota (1746 GiB against 1024 GiB before t117, +90 GB).
+6. `/scratch/mforooz` is over its soft quota (1826 GiB against 1024 GiB on 2026-09-25); write outputs to /project (370 GiB free).

@@ -43,13 +43,13 @@ A generator g(C, C') that outputs a convolution kernel followed by a monotone cu
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-<!-- Bars marked TODO(PI) are not set; CLAUDE.md forbids inventing a gate. -->
-- [ ] beatstwin: (twin = the no-covariates twin, (C, C') re-scrambled at every step) D_twin − D > 2 x the seed wobble of D (max pairwise |Δ| over 3 seeds), per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately, CRPS all bins and top 1%, on chr19 + chr21, for both versions of g. Further bar on the size of the gain: TODO(PI)
+<!-- Bars set by the PI 2026-09-25 (defaults accepted: pass/fail is not the priority now). -->
+- [ ] beatstwin: (twin = the no-covariates twin, (C, C') re-scrambled at every step) D_twin − D > 2 x the seed wobble of D (max pairwise |Δ| over 3 seeds), per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately, CRPS all bins and top 1%, on chr19 + chr21, for both versions of g; no further bar on the size of the gain (PI 2026-09-25)
       fails-if:: the covariates add nothing a scrambled-covariate twin of the same design cannot already do
       discriminates:: true
-- [ ] lawtest: (against both twins: no-covariates and labels-as-ids) on never-trained arm → arm pairs within each track, scored on chr19 + chr21 and reported by knob combination, this design beats each twin by more than 2 x seed wobble, for both versions of g; bar: TODO(PI). For depth → depth pairs the predicted count scale must follow the depth ratio (tolerance TODO(PI))
+- [ ] lawtest: (against both twins: no-covariates and labels-as-ids) on never-trained arm → arm pairs within each track, scored on chr19 + chr21 and reported by knob combination, this design beats each twin by more than 2 x seed wobble, for both versions of g. For depth → depth pairs the predicted count scale must follow the depth ratio (within 10% of the depth ratio; PI 2026-09-25)
       fails-if:: g keeps one map per trained (C, C') pair and has no answer for a combination it never saw
-- [ ] beatsbelow: D of design B ([[h17_a_generator_g_c_c_that_outputs_a_per_bin|the per-bin monotone-curve design]]) − D of this design > 2 x the larger of the two seed wobbles, per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately, CRPS all bins and top 1%, on chr19 + chr21, for both versions of g; bar: TODO(PI)
+- [ ] beatsbelow: D of design B ([[h17_a_generator_g_c_c_that_outputs_a_per_bin|the per-bin monotone-curve design]]) − D of this design > 2 x the larger of the two seed wobbles, per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately, CRPS all bins and top 1%, on chr19 + chr21, for both versions of g
       fails-if:: the extra form adds nothing: design B already captures what the covariates do
 
 ## Planned Intervention
