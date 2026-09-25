@@ -8,10 +8,10 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 - **Done: all 576 runs trained, scored and law-tested; all four designs aggregated on the final data**
   (jobs 22682907–10) and linked in the notebook: `cruxvault/results/h12` (A), `h17` (B), `h13` (C),
   `h14` (D), `h15` (main claim, drafted readings). Checks met: A 45/78, B 67/102, C 68/102, D 41/102.
-- Running: an exploratory design X (the PI's idea: g also reads the bin value), 24 runs on CPU,
-  array 22688594, output `ladder/explore_x/` — outside the pre-registered ladder. The GPU version
-  (22683580) never started: every 10 GB-slice node was held by the scheduler for a higher-priority
-  job, so it was cancelled and moved to CPU nodes.
+- Done: exploratory design X (the PI's idea: g also reads the bin value), 24 runs on CPU (array
+  22688594, all completed, 4–51 min each), output `ladder/explore_x/` — outside the pre-registered
+  ladder. The GPU version (22683580) never started (every 10 GB-slice node was held by the scheduler
+  for a higher-priority job). Result below, under "Design X".
 - Team overview page (design + pilot numbers): https://claude.ai/artifact/Gj3KNBCaK1efJpfTQ8KV7V
 
 
@@ -180,6 +180,26 @@ the whole track). Depth law still unmet (largest error 0.30–0.52). Design B: 6
 Main claim (chr22 rule): C for the across-track g in both spaces, D per track in counts, A per track in
 p. Shuffle met almost everywhere; swap unmet everywhere; depth law unmet everywhere. Details:
 `cruxvault/results/h15/report.md`.
+
+## Design X (exploratory, not pre-registered): g also reads the bin value
+
+g outputs a 32-number pair vector from (C, C′); a shared MLP reads [bin value, pair vector] and gives
+each bin its own mean and spread. One g per track, H3K27ac and DNase, both spaces, real g and the
+no-covariates twin, 3 seeds; held-out chromosomes only (no law test). Real g, mean CRPS all bins
+(seed wobble), pairs with CRPS > 20 summed over the 3 seeds, and the gain over the twin against
+2 × wobble:
+
+| track | space | A | B | C | D | X | exploding pairs A/B/C/D/X | X beats twin |
+|---|---|---|---|---|---|---|---|---|
+| H3K27ac | counts | 0.419 | 0.378 | 0.364 | 0.363 | 0.376 | 0/0/0/0/0 | met (0.085 > 0.002) |
+| H3K27ac | p | 0.165 | 0.441 (0.80) | 1.04 (2.59) | 0.144 | 0.151 | 0/1/1/0/0 | met (0.036 > 0.004) |
+| DNase | counts | 3.06 | 0.824 | 0.818 | 0.772 | 1.32 (0.21) | 3/0/0/0/0 | unmet (0.30 < 0.42) |
+| DNase | p | 0.752 | 0.541 | 0.526 | 18 500 | 0.659 | 0/0/0/3/0 | met (0.16 > 0.13) |
+
+Reading: in p space X had no exploding pair on either track and beats its twin on both; B, C and D
+each exploded somewhere. In counts X is close to B on H3K27ac but clearly worse than B–D on DNase
+(larger wobble, top-1% CRPS 68 against ~20). Caveats: two tracks, per-track g only, 6 runs per cell,
+and the explosions are sporadic (1–3 pairs per design), so "none in X" is suggestive, not proof.
 
 ## A decision for the PI: a few p-space pairs explode the mean
 
