@@ -15,7 +15,10 @@ starts at noSolution (theta = the identity map for every input).
 **Predictor** (`load_run`). Rebuilds the Ladder from `ckpt.pt` and predicts whole chromosomes in
 chunks of 65 536 bins with the form's context halo. The covariate pids may differ from the source
 pid — that is how shuffle and swap are made. For the labels-as-ids twin, the covariates of trained
-pair i are those of pair perm[i], exactly as in training; any other (src, tgt) gets its own.
+pair i are those of pair perm[i], exactly as in training; any other (src, tgt) gets its own. The
+no-covariates twin is one average map: its Predictor uses ONE theta for every query — the mean of
+g's theta over the run's training pairs — so g is never asked about a (C, C') it never saw
+(foreman's ruling, 2026-09-25).
 """
 from __future__ import annotations
 
@@ -59,22 +62,33 @@ def transform_x(X: np.ndarray, space: str) -> np.ndarray:
 
 
 def nb_nll(loc: torch.Tensor, disp: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """Per-bin NB negative log-likelihood of count y, mean exp(loc), size exp(disp)."""
+    """Per-bin NB negative log-likelihood of count y, mean exp(loc), size exp(disp).
+
+    Computed in float64 and returned in loc's dtype: in float32 the lgamma differences lose
+    ~1e-3 nats per bin at large n, a systematic error at small mu.
+    """
+    out_dtype = loc.dtype
+    loc, disp, y = loc.double(), disp.double(), y.double()
     log_mu = loc.clamp(math.log(MU_MIN), math.log(MU_MAX))
     log_n = disp.clamp(math.log(N_MIN), math.log(N_MAX))
     n = log_n.exp()
     log_n_mu = torch.logaddexp(log_n, log_mu)          # log(n + mu)
     ll = (torch.lgamma(y + n) - torch.lgamma(n) - torch.lgamma(y + 1.0)
           + n * (log_n - log_n_mu) + y * (log_mu - log_n_mu))
-    return -ll
+    return (-ll).to(out_dtype)
 
 
 def lognormal_nll(loc: torch.Tensor, disp: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """Per-bin log-normal negative log-likelihood of y floored at 1e-3 (the floor is the loss's)."""
+    """Per-bin log-normal negative log-likelihood of y floored at 1e-3 (the floor is the loss's).
+
+    Computed in float64 and returned in loc's dtype, as `nb_nll`.
+    """
+    out_dtype = loc.dtype
+    loc, disp, y = loc.double(), disp.double(), y.double()
     t = torch.log(y.clamp(min=P_FLOOR))
     log_s = disp.clamp(math.log(SIGMA_MIN), math.log(SIGMA_MAX))
     z = (t - loc) / log_s.exp()
-    return t + log_s + _HALF_LOG_2PI + 0.5 * z * z
+    return (t + log_s + _HALF_LOG_2PI + 0.5 * z * z).to(out_dtype)
 
 
 class G(torch.nn.Module):
@@ -164,6 +178,13 @@ def ids_cov_map(train_pairs: list[dict], perm) -> dict:
     return {keys[i]: keys[int(perm[i])] for i in range(len(keys))}
 
 
+@torch.no_grad()
+def nocov_theta(ladder: Ladder, cov_train: torch.Tensor) -> torch.Tensor:
+    """The no-covariates twin's single theta [n_theta]: g's theta averaged over the training pairs'
+    (C, C') vectors `cov_train` [n_pairs, 40]."""
+    return ladder.theta(cov_train).mean(0)
+
+
 class Predictor:
     """A trained run, ready to predict. Built by `load_run`."""
 
@@ -184,12 +205,19 @@ class Predictor:
         self.n_theta = ladder.n_theta
         self._cov_map = (ids_cov_map(self.train_pairs, config["ids_perm"])
                          if self.model == "ids" else {})
+        self._nocov_theta = None
+        if self.model == "nocov":
+            cov = torch.from_numpy(np.stack([
+                encoder.encode_pair(p["source_pid"], p["target_pid"]) for p in self.train_pairs]))
+            self._nocov_theta = nocov_theta(self.ladder, cov.to(device))
 
     def cov_pids(self, cov_src_pid: str, cov_tgt_pid: str) -> tuple[str, str]:
         """The pids whose covariates g actually receives (differs only for the ids twin)."""
         return self._cov_map.get((cov_src_pid, cov_tgt_pid), (cov_src_pid, cov_tgt_pid))
 
     def _theta_t(self, cov_src_pid: str, cov_tgt_pid: str) -> torch.Tensor:
+        if self._nocov_theta is not None:
+            return self._nocov_theta
         s, t = self.cov_pids(cov_src_pid, cov_tgt_pid)
         cov = torch.from_numpy(self.encoder.encode_pair(s, t)).to(self.device).reshape(1, -1)
         with torch.no_grad():

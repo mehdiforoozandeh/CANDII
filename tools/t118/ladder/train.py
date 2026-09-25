@@ -17,7 +17,8 @@ chromosome), y = the target's window. `<data_dir>` is a products dir or the memo
 **Models.** real = the pair's own (C, C'); nocov = at every step each sample takes the (C, C') of a
 uniformly random training pair (its own rng, so the window stream is the same for all three
 models); ids = pair i takes the (C, C') of pair perm[i], perm = `pairs.ids_permutation(n, seed)`,
-fixed for the run. Same architecture, data, steps and seed for all three.
+fixed for the run. Same architecture, data, steps and seed for all three. The nocov twin is
+validated (and predicted, `model.Predictor`) with one theta: g's mean theta over the training pairs.
 
 **Schedule** (defaults pinned in DEFAULTS): Adam lr 1e-3 with a 100-step linear warmup, grad-clip
 1.0, float32, 4000 steps; validation = mean over the trained pairs of the mean NLL over the whole of
@@ -41,6 +42,7 @@ import resource
 import subprocess
 import sys
 import time
+import warnings
 from pathlib import Path
 
 _T118 = Path(__file__).resolve().parents[1]
@@ -142,17 +144,23 @@ class Sampler:
         return pi, self.cov_index(pi), xs, ys, mask
 
 
-def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device) -> float:
-    """Mean over the trained pairs of the mean per-bin NLL over the whole of chr22."""
+def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
+             average_theta: bool = False) -> float:
+    """Mean over the trained pairs of the mean per-bin NLL over the whole of chr22.
+
+    `average_theta` (the nocov twin): every pair uses one theta, the mean over `cov_val`, exactly
+    as the twin's Predictor does, so early stopping selects the model that is scored.
+    """
     chrom = pairs.VAL_CHROMS[0]
     was_training = ladder.training
     ladder.eval()
     per_pair = []
     with torch.no_grad():
+        theta_avg = model.nocov_theta(ladder, cov_val) if average_theta else None
         for i, p in enumerate(train_pairs):
             X = corpus.get(p["source_pid"], space, chrom)
             Y = corpus.get(p["target_pid"], space, chrom)
-            theta = ladder.theta(cov_val[i:i + 1])[0]
+            theta = theta_avg if average_theta else ladder.theta(cov_val[i:i + 1])[0]
             loc, disp = model.predict_chrom(ladder, X, theta, device)
             y = torch.from_numpy(np.array(Y, dtype=np.float32)).to(device)
             per_pair.append(float(ladder.nll(torch.from_numpy(loc).to(device),
@@ -169,6 +177,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     and device). `cov_rows` replaces the rows read from `covariates` (tests only).
     """
     t0 = time.time()
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     if space not in pairs.SPACES:
         raise ValueError(f"space {space!r} not in {pairs.SPACES}")
     if model_name not in pairs.MODELS:
@@ -199,6 +209,10 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     if len(tp) < 2:
         raise ValueError(f"g {g!r}: {len(tp)} training pairs")
     corpus = data.Corpus(data_dir)
+    if not corpus.is_cache:
+        warnings.warn(f"{data_dir} is a products dir of npz files, not the memory-mapped cache: "
+                      f"every window decompresses a chromosome — slow, meant for synthetic data "
+                      f"only; build the cache with `train.py cache` for real runs", stacklevel=2)
     enc = encoding.Encoder.fit(cov_rows, fit)
     perm = pairs.ids_permutation(len(tp), seed)
     cov_all = np.stack([enc.encode_pair(p["source_pid"], p["target_pid"]) for p in tp])
@@ -241,7 +255,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     t_setup = time.time() - t0
     t1 = time.time()
     log = []
-    val = validate(ladder, corpus, tp, cov_val, space, dev)
+    val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov")
     log.append((0, float("nan"), val, time.time() - t1))
     best = {"val": val, "step": 0, "g": copy.deepcopy(ladder.g.state_dict()),
             "form": copy.deepcopy(ladder.form.state_dict())}
@@ -261,7 +275,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         sched.step()
         losses.append(float(loss))
         if step % cfg["eval_every"] == 0 or step == cfg["max_steps"]:
-            val = validate(ladder, corpus, tp, cov_val, space, dev)
+            val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov")
             log.append((step, float(np.mean(losses)), val, time.time() - t1))
             losses = []
             if val < best["val"]:

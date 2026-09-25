@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "tools" / "t118"))
 
 from ladder import base, data, encoding, model, pairs, synth, train  # noqa: E402
 
+pytestmark = pytest.mark.filterwarnings("ignore:.*meant for synthetic data only")
 PY = sys.executable
 TRAIN_PY = ROOT / "tools" / "t118" / "ladder" / "train.py"
 FAST = {"window": 256, "batch": 16, "knot_sample": 20_000, "knot_block": 256}
@@ -142,6 +143,22 @@ def test_nb_nll_matches_scipy():
     assert np.allclose(got.numpy(), want, rtol=1e-8, atol=1e-8)
 
 
+@pytest.mark.parametrize("n", [1.0, 1e2, 1e4])
+@pytest.mark.parametrize("mu", [0.05, 1.0, 50.0])
+def test_nb_nll_float32_inputs_match_scipy_at_large_n(n, mu):
+    """float32 in, float64 arithmetic inside: rtol 1e-6 against scipy even at n = 1e4."""
+    y = np.arange(0, 200, dtype=np.float64)
+    y = y[nbinom.pmf(y, n, n / (n + mu)) > 1e-30]
+    L = y.size
+    got = model.nb_nll(torch.full((L,), math.log(mu), dtype=torch.float32),
+                       torch.full((L,), math.log(n), dtype=torch.float32),
+                       torch.tensor(y, dtype=torch.float32))
+    assert got.dtype == torch.float32
+    mu32, n32 = float(np.float32(math.log(mu))), float(np.float32(math.log(n)))
+    want = -nbinom.logpmf(y, np.exp(n32), np.exp(n32) / (np.exp(n32) + np.exp(mu32)))
+    assert np.allclose(got.double().numpy(), want, rtol=1e-6, atol=0)
+
+
 def test_lognormal_nll_matches_scipy_with_floor_in_loss_only():
     rng = np.random.default_rng(1)
     y = np.concatenate([np.zeros(50), rng.gamma(1.0, 2.0, 450)])
@@ -227,6 +244,40 @@ def test_nocov_twin_ignores_the_covariate_table(prod):
 
 
 # -- the whole loop -------------------------------------------------------------------------------
+
+def test_nocov_predictor_uses_one_average_theta(prod):
+    rd = train.run_training(prod["manifest"], prod["cov"], prod["products"], prod["root"] / "rnc",
+                            "zaffine", "T1", "counts", "nocov", 0, max_steps=60, eval_every=30,
+                            device="cpu", lr=1e-2, **FAST)
+    pr = model.load_run(rd, prod["products"], prod["cov"], prod["manifest"], device="cpu")
+    tp = pr.train_pairs
+    with torch.no_grad():
+        cov = torch.from_numpy(np.stack([pr.encoder.encode_pair(p["source_pid"], p["target_pid"])
+                                         for p in tp]))
+        per_pair = pr.ladder.theta(cov).numpy()
+    want = per_pair.mean(0)
+    assert np.ptp(per_pair[:, 0]) > 0                  # g itself does vary with (C, C') ...
+    queries = [(p["source_pid"], p["target_pid"]) for p in tp]           # trained pairs
+    queries += [("T1__depth__15M", "T1__pe__pe"), ("T1__pe__pe", "T1__pe__pe"),  # law, swap
+                ("T1__base__base", "T2__depth__7.5M"), ("T2__pe__pe", "T1__extsize__k2")]
+    for s_, t_ in queries:                             # ... but the twin answers with one theta
+        assert np.allclose(pr.theta(s_, t_), want, atol=1e-7)
+    loc1, _ = pr.predict("T1__base__base", "T1__base__base", "T1__depth__15M", "chr19")
+    loc2, _ = pr.predict("T1__base__base", "T2__pe__pe", "T1__pe__pe", "chr19")
+    assert np.array_equal(loc1, loc2)
+    # the covariate pids are not even looked up: the one theta applied by hand
+    X = pr.corpus.get(tp[0]["source_pid"], "counts", "chr22")
+    assert np.allclose(pr.predict(tp[0]["source_pid"], "x", "y", "chr22")[0],
+                       want[0] + want[1] * np.log1p(X.astype(np.float64)), atol=1e-5)
+
+
+def test_npz_products_dir_warns(prod):
+    with pytest.warns(UserWarning, match="synthetic data only"):
+        train.run_training(prod["manifest"], prod["cov"], prod["products"], prod["root"] / "rw",
+                           "identity", "T2", "counts", "real", 0, max_steps=2, eval_every=1,
+                           device="cpu", **FAST)
+    assert torch.backends.cudnn.deterministic and not torch.backends.cudnn.benchmark
+
 
 def test_planted_depth_effect_is_recovered(prod, affine_run):
     """g must learn, from the covariates alone, the total-count scale of each depth pair."""
