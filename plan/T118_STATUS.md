@@ -14,7 +14,10 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
   table + ladder core (contracts, data reader, pair and task tables, synthetic products); 1 =
   training harness, the four f forms, scorer, figures/report, SLURM scripts (8 builders in
   parallel); 2 = end-to-end CPU smoke of all four rungs; 3 = pilot on Nibi, then all 576 runs.
-- Wave 0 building (started 2026-09-25 ~02:30).
+- Wave 0 done and merged: covariate table (`tools/t118/covariates.tsv`, 130 products, source named
+  for every base value) and the ladder core (pair counts verified on the real manifest: 38 per
+  histone track, 14 DNase, 242 across tracks, 2 094 never-trained arm→arm pairs, 576 runs).
+- Wave 1 building: 8 builders in parallel (harness, forms A–D, scorer, figures/report, SLURM).
 - Planner's estimate, to be checked by the pilot: per-track run ≈ 20 min on a MIG slice,
   across-track ≈ 35 min; law test 10–90 min on CPU per run; A and B done ≈ 3 h after submission
   if 40 slices run at once, all four ≈ 6–8 h.
