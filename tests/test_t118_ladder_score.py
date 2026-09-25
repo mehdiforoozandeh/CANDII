@@ -66,7 +66,7 @@ class FakePredictor:
     def quantiles(self, loc, disp, q):
         loc, disp = np.asarray(loc, np.float64), np.asarray(disp, np.float64)
         if self.space == "counts":
-            n = np.exp(disp)
+            n = score.spread_of("counts", disp)            # clipped, as the real Predictor does
             return nbinom.ppf(q, n, p_from_mu(n, np.exp(loc)))
         return np.exp(loc + np.exp(disp) * norm.ppf(q))
 
@@ -303,7 +303,9 @@ def _fab_run(runs_dir: Path, rows, rung, model, seed):
         return r
 
     for p in pairs.train_pairs(rows, g):
-        recs.append(rec("trained", "score", p, v))
+        recs.append(rec("trained", "score", p, v, crps_oracle_scaled_all=0.9 * v,
+                        scale_error_all=0.1 * v, c_star_all=0.0, pit_hist=[1] * 20,
+                        describe={"a": 0.0, "b": 1.0}))
         recs.append(rec("trained", "val", p, FAB_VAL[rung][seed] if model == "real" else 9.0))
         recs.append(rec("shuffle", "score", p, v + 0.5 if model == "real" else v))
         if {p["arm_src"], p["arm_tgt"]} == {"base", "depth"}:
@@ -311,12 +313,18 @@ def _fab_run(runs_dir: Path, rows, rung, model, seed):
                           / float(next(r for r in rows if r["pid"] == p["source_pid"])["depth"]))
             recs.append(rec("depthlaw", "score", p, v, depth_source="trained",
                             depth_log2_ratio_true=t,
-                            depth_log2_scale_pred=t + DEPTH_DELTA[seed]))
+                            depth_log2_scale_pred=t + 0.5))      # never read by the check
     by_pid = {r["pid"]: r for r in pairs.usable_products(rows)}
     for pid in pairs.fit_pids(rows, g):
         p = pairs._pair(by_pid[pid], by_pid[pid], "swap")
         recs.append(rec("swap", "score", p, v, swap_median_abs_log_ratio=0.02 * (seed + 1)))
     law = [rec("law", "score", p, v + 0.1) for p in pairs.law_pairs(rows, g)]
+    dep = {r["pid"]: float(r["depth"]) for r in rows}
+    for p in pairs.law_pairs(rows, g):
+        if p["arm_src"] == p["arm_tgt"] == "depth":
+            t = math.log2(dep[p["target_pid"]] / dep[p["source_pid"]])
+            law.append(rec("depthlaw", "score", p, v, depth_source="law", depth_log2_ratio_true=t,
+                           depth_log2_scale_pred=t + DEPTH_DELTA[seed]))
     run = {"run_name": name, "rung": rung, "g": g, "g_version": "per_track", "space": space,
            "model": model, "seed": seed, "steps": 10, "best_step": 10, "val_nll": 1.0}
     (d / "scores.json").write_text(json.dumps({"run": run, "records": recs, "snippets": []}))
@@ -366,7 +374,22 @@ def test_aggregate_schema_and_missing(fabricated):
     for f in ("results.json", "results_summary.tsv", "checks_A.json", "checks_B.json",
               "checks_main.json"):
         assert (agg / f).is_file()
-    json.loads((agg / "results.json").read_text())
+    text = (agg / "results.json").read_text()
+    assert "\n " not in text                           # compact JSON
+    on_disk = json.loads(text)
+    assert {(r["kind"], r["eval"]) for r in on_disk["per_pair"]} == {("trained", "score"),
+                                                                    ("swap", "score")}
+    assert all(r["metric"] in score.METRICS for r in on_disk["per_class"] + on_disk["per_track"])
+    import gzip
+    with gzip.open(agg / "per_pair_rest.jsonl.gz", "rt") as fh:
+        rest = [json.loads(line) for line in fh]
+    assert {r["kind"] for r in rest} == {"trained", "shuffle", "law", "depthlaw"}
+    assert {r["eval"] for r in rest if r["kind"] == "trained"} == {"val"}
+    n_law = len(pairs.law_pairs(rows, "T1"))
+    assert sum(r["kind"] == "law" for r in rest) == 18 * n_law
+    assert all("describe" not in r for r in rest)
+    assert "note" not in json.loads((agg / "checks_A.json").read_text())
+    assert "note" not in json.loads((agg / "checks_main.json").read_text())
     pp = res["per_pair"][0]
     assert {"rung", "g", "g_version", "space", "model", "seed"} <= set(pp)
     assert res["refs"] == {"T1": {"counts": {"noSolution": {
@@ -421,9 +444,10 @@ def test_checks_values_bars_met(fabricated):
     assert c["bar"] == pytest.approx(0.30) and c["met"] is False
     c = _check(res, "swap", metric=score.SWAP_KEY)
     assert c["value"] == pytest.approx(0.04) and c["bar"] == 0.1 and c["met"] is True
-    c = _check(res, "depthlaw", metric="depth_scale")
+    c = _check(res, "depthlaw", metric="depth_scale_rel_error")
     assert c["value"] == pytest.approx(abs(2 ** mean(DEPTH_DELTA) - 1))
     assert c["bar"] == 0.10 and c["met"] is True and c["space"] == "counts"
+    assert c["components"]["n_pairs"] == 2            # the law depth->depth pairs only
     assert c["seed_wobble"] == pytest.approx(abs(2 ** 0.03 - 2 ** 0.01))
     for x in res["checks"]:
         assert set(x) == {"rung", "g_version", "space", "mark_class", "metric", "check", "value",
@@ -460,7 +484,7 @@ def test_knob_gain_and_law_grid(fabricated):
     ext = [r for r in lg if r["arm_tgt"] == "extsize"]
     assert ext and all(r["identical_target"] is False for r in ext)   # extsize != any other arm
     dl = [r for r in res["depth_law"] if r["rung"] == "A" and r["model"] == "real"]
-    assert len(dl) == 4 * 3 and {r["kind"] for r in dl} == {"trained"}
+    assert len(dl) == (4 + 2) * 3 and {r["kind"] for r in dl} == {"trained", "law"}
 
 
 def test_end_to_end_score_then_aggregate(synth_dir, tmp_path):
@@ -485,6 +509,59 @@ def test_end_to_end_score_then_aggregate(synth_dir, tmp_path):
     dl = [c for c in res["checks"] if c["check"] == "depthlaw"]
     assert len(dl) == 1 and dl[0]["value"] < 1e-5 and dl[0]["met"] is True
     assert res["rung_choice"]["per_track|counts"]["chosen"] == "A"
+    _c4_accepts(agg, "A")
+
+
+def _c4_accepts(agg: Path, rung: str) -> None:
+    """C4's schema check and report run on this aggregate (in-process, candii python)."""
+    from ladder import figures, report
+    errs = figures.check_schema(figures.load_results(agg))
+    assert errs == [], errs[:5]
+    text = report.build_report(agg, rung)
+    assert "## Checks" in text and "## Depth law" in text
+
+
+def test_c4_reads_the_aggregate(fabricated):
+    _, agg, _ = fabricated
+    _c4_accepts(agg, "A")
+    _c4_accepts(agg, "B")
+
+
+def test_spread_clipped_and_nonfinite_counted(synth_dir, tmp_path):
+    root, manifest, _, bed = synth_dir
+    rows = _rows(manifest)
+
+    class Wild(FakePredictor):
+        def predict(self, x_src_pid, cov_src_pid, cov_tgt_pid, chrom):
+            loc, disp = super().predict(x_src_pid, cov_src_pid, cov_tgt_pid, chrom)
+            disp = np.full_like(disp, 60.0)                       # n = e^60 before the clip
+            if cov_tgt_pid == "T1__pe__pe":
+                loc = loc.copy()
+                loc[-3:] = np.nan                                 # three bad bins per chromosome
+            return loc, disp
+
+    pred = Wild(root, manifest, "counts", "T1")
+    d = _run_dir(tmp_path, "A_T1_counts_real_s0")
+    score.score_trained(pred, rows, bed, d)
+    s = json.loads((d / "scores.json").read_text())
+    tr = [r for r in s["records"] if r["kind"] == "trained"]
+    ok = [r for r in tr if r["target_pid"] != "T1__pe__pe"]
+    assert all(r["n_crps_nonfinite"] == 0 and r["crps_all"] is not None for r in ok)
+    bad = [r for r in tr if r["target_pid"] == "T1__pe__pe" and r["eval"] == "score"]
+    assert bad and all(r["n_crps_nonfinite"] == 6 and r["crps_all"] is None for r in bad)
+    assert s["n_records_crps_nonfinite"] >= 2
+    # the clip: disp = 60 is scored at n = N_MAX
+    rec = next(r for r in ok if r["eval"] == "score" and r["target_pid"] == "T1__depth__15M")
+    x, y, loc = _eval_by_hand(root, pred, rec["source_pid"], rec["target_pid"],
+                              pairs.SCORE_CHROMS, bed)
+    n = score.spread_of("counts", np.full(loc.shape, 60.0))
+    assert np.allclose(n, score.N_MAX, rtol=1e-12)
+    want = float(np.mean(nb_crps(n, p_from_mu(n, np.exp(loc)), y.astype(float))))
+    assert rec["crps_all"] == pytest.approx(want, rel=1e-12)
+
+
+def test_default_workers():
+    assert 1 <= score.default_workers() <= (__import__("os").cpu_count() or 1)
 
 
 def test_qm_curves(synth_dir, tmp_path):
@@ -498,3 +575,20 @@ def test_qm_curves(synth_dir, tmp_path):
     assert c["knots_x"] == c["knots_y"]
     assert all(len(v["knots_x"]) <= aggregate.QM_MAX_KNOTS for t in q["pval"].values()
                for v in t.values())
+
+
+def test_one_seed_gives_boolean_met_and_a_report(synth_dir, tmp_path):
+    """With one seed no wobble exists: every bar-less check is met = False with its reason, and
+    C4's schema check and report still run."""
+    _, manifest, cov, _ = synth_dir
+    rows = _rows(manifest)
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    for model in pairs.MODELS:
+        _fab_run(runs, rows, "A", model, 0)
+    agg = tmp_path / "agg"
+    res = aggregate.aggregate(manifest, cov, runs, tmp_path / "none.tsv", agg)
+    assert res["checks"] and all(isinstance(c["met"], bool) for c in res["checks"])
+    nobar = [c for c in res["checks"] if c["bar"] is None]
+    assert nobar and all(c["met"] is False and "met_reason" in c["components"] for c in nobar)
+    _c4_accepts(agg, "A")

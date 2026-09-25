@@ -1,11 +1,14 @@
 """t118 ladder — score one trained run from its checkpoint: trained pairs, shuffle, swap, depth law; and
 the never-trained arm->arm law test in a separate pass.
 
-**Distributions** (the `base` parameterisation, per bin): counts NB with mean mu = exp(loc) and size
-n = exp(disp), CRPS = `candi.metrics.nb_crps(n, p_from_mu(n, mu), y)`; pval log-normal with log
-median loc and sigma = exp(disp), CRPS = `baseline_rungs.lognormal_crps`. Targets are never floored.
+**Distributions** (the `base` parameterisation, per bin): counts NB with mean mu = `pred.mean(loc)`
+(exp(loc) clamped to the loss's [1e-4, 1e6]) and size n = exp(disp) clipped to the loss's
+[1e-3, 1e4]; CRPS = `candi.metrics.nb_crps(n, p_from_mu(n, mu), y)`; pval log-normal with log
+median loc and sigma = exp(disp) clipped to [1e-3, 1e3], CRPS = `baseline_rungs.lognormal_crps`.
+Bins whose CRPS is still not finite are counted per record (`n_crps_nonfinite`) and per file
+(`n_records_crps_nonfinite`), never dropped silently. Targets are never floored.
 ONE per-bin CRPS array per (pair, eval) serves all three subsets (`baseline_rungs.subset_index`:
-all / nonzero / top1, top-1 % ties broken by genomic order). Spearman is on exp(loc) (the NB mean
+all / nonzero / top1, top-1 % ties broken by genomic order). Spearman is on pred.mean(loc) (the NB mean
 in counts, the log-normal median in pval). The CRPS split (`baseline_rungs.scale_split`, the
 spread parameter held per bin) is computed only for kind `trained`, eval `score`, subset `all`.
 
@@ -17,7 +20,7 @@ removed; chromosomes concatenated in that order.
   shuffle   every training pair, eval score; C' = the covariates of `pairs.shuffle_target(rows,
             pair, space, run seed)` (a same-track product whose target differs in this space).
   swap      one per fit pid p, eval score: X = p, target = p, covariates (C_p, C_p); carries
-            `swap_median_abs_log_ratio` = median over bins with X > 0 of |log(exp(loc) / X)|.
+            `swap_median_abs_log_ratio` = median over bins with X > 0 of |log(pred.mean(loc) / X)|.
   depthlaw  counts only: a copy of the trained/score (or law) record of every pair whose two
             products differ only in depth (base<->depth trained, depth->depth law), with
             `depth_log2_ratio_true = log2(depth_tgt / depth_src)` (manifest depths),
@@ -65,6 +68,7 @@ import baseline_rungs as br  # noqa: E402
 from candi.bench.distributional import p_from_mu  # noqa: E402
 from candi.metrics import nb_crps, spearman  # noqa: E402
 from ladder import data, pairs  # noqa: E402
+from ladder.model import N_MAX, N_MIN, SIGMA_MAX, SIGMA_MIN  # noqa: E402  (the loss's bounds)
 
 SUBSETS = br.SUBSETS                     # ("all", "nonzero", "top1")
 METRICS = tuple(f"{m}_{s}" for m in ("crps", "spearman") for s in SUBSETS)
@@ -119,23 +123,33 @@ def split_all(space: str, m: np.ndarray, spread: np.ndarray, y: np.ndarray,
             "c_star_all": r["c_star"]}
 
 
-def metric_fields(space: str, loc: np.ndarray, disp: np.ndarray, y: np.ndarray,
+def spread_of(space: str, disp: np.ndarray) -> np.ndarray:
+    """NB size n (counts) / sigma (pval) = exp(disp), clipped to the training loss's bounds."""
+    lo, hi = (N_MIN, N_MAX) if space == "counts" else (SIGMA_MIN, SIGMA_MAX)
+    return np.exp(np.clip(disp, math.log(lo), math.log(hi)))
+
+
+def metric_fields(pred, loc: np.ndarray, disp: np.ndarray, y: np.ndarray,
                   split: bool = False) -> tuple[dict, dict]:
     """(fields, internals): n_* / crps_* / spearman_* per subset (+ the split); internals hold the
-    per-bin arrays and subset indices for reuse."""
-    m = np.exp(loc)
-    spread = np.exp(disp)
+    per-bin arrays and subset indices for reuse. The mean is the Predictor's own (`pred.mean`,
+    clamped as in the loss); the spread is clipped as in the loss (`spread_of`).
+    `n_crps_nonfinite` counts the bins whose CRPS is still not finite (their subset means are then
+    None, and the count says why)."""
+    space = pred.space
+    m = np.asarray(pred.mean(loc), np.float64)
+    spread = spread_of(space, disp)
     y64 = y.astype(np.float64)
     crps = crps_given(space, m, spread, y64)
     sub = br.subset_index(y)
-    out: dict = {}
+    out: dict = {"n_crps_nonfinite": int(np.count_nonzero(~np.isfinite(crps)))}
     for s, idx in sub.items():
         out[f"n_{s}"] = int(idx.size)
         if idx.size == 0:
             out[f"crps_{s}"] = None
             out[f"spearman_{s}"] = None
             continue
-        out[f"crps_{s}"] = float(crps[idx].mean())
+        out[f"crps_{s}"] = _finite(float(crps[idx].mean()))
         out[f"spearman_{s}"] = _finite(spearman(m[idx], y64[idx]))
     if split:
         out.update(split_all(space, m, spread, y64, crps) if y.size else
@@ -230,7 +244,7 @@ def _meta_profile(arr: dict, internals: dict) -> np.ndarray:
         st = int(arr["pos"][i]) - META_HALF
         acc[0] += _window(x, st, acc.shape[1])
         acc[1] += _window(yy, st, acc.shape[1])
-        acc[2] += _window(np.exp(loc), st, acc.shape[1])
+        acc[2] += _window(internals["mean_full"](loc), st, acc.shape[1])
     return (acc / max(k, 1)).astype(np.float32)
 
 
@@ -258,7 +272,7 @@ def _snippets(pred, arr: dict, internals: dict, arm: str, arm_index: int, seed: 
             q[j, s - st:e - st] = np.asarray(pred.quantiles(loc[s:e], disp[s:e], qq), np.float64)
         figs[f"snip__{arm}__{i}"] = np.stack([
             _window(x, st, SNIP_LEN), _window(yy, st, SNIP_LEN),
-            _window(np.exp(loc), st, SNIP_LEN), q[0], q[1]]).astype(np.float32)
+            _window(internals["mean_full"](loc), st, SNIP_LEN), q[0], q[1]]).astype(np.float32)
         locs.append({"arm": arm, "i": i, "rule": SNIP_RULES[i], "chrom": c, "start_bin": st,
                      "source_pid": pair["source_pid"], "target_pid": pair["target_pid"]})
     return figs, locs
@@ -286,8 +300,9 @@ def score_job(job: dict) -> tuple[list, dict, list]:
     rec = {"kind": job["kind"], "eval": ev, **_pair_fields(p),
            "cov_src_pid": job["cov_src"], "cov_tgt_pid": job["cov_tgt"],
            "n_blacklisted": arr["n_blacklisted"]}
-    fields, internals = metric_fields(space, arr["loc"], arr["disp"], arr["y"],
+    fields, internals = metric_fields(pred, arr["loc"], arr["disp"], arr["y"],
                                       split=bool(job.get("split")))
+    internals["mean_full"] = lambda a: np.asarray(pred.mean(a), np.float64)
     rec.update(fields)
     if job.get("describe"):
         rec["describe"] = pred.describe(job["cov_src"], job["cov_tgt"])
@@ -384,9 +399,11 @@ def _config(blacklist) -> dict:
     return {"score_chroms": list(pairs.SCORE_CHROMS), "val_chroms": list(pairs.VAL_CHROMS),
             "blacklist": str(blacklist),
             "blacklist_sha256": hashlib.sha256(Path(blacklist).read_bytes()).hexdigest(),
-            "counts": "NB(mean exp(loc), size exp(disp)); nb_crps(n, p_from_mu(n, mu), y)",
-            "pval": "log-normal(log median loc, sigma exp(disp)); baseline_rungs.lognormal_crps",
-            "subsets": "baseline_rungs.subset_index", "spearman_on": "exp(loc)",
+            "counts": "NB(mean pred.mean(loc), size exp(disp) clipped to [N_MIN, N_MAX]); "
+                      "nb_crps(n, p_from_mu(n, mu), y)",
+            "pval": "log-normal(log median loc, sigma exp(disp) clipped to [SIGMA_MIN, "
+                    "SIGMA_MAX]); baseline_rungs.lognormal_crps",
+            "subsets": "baseline_rungs.subset_index", "spearman_on": "pred.mean(loc)",
             "split": "baseline_rungs.scale_split, spread held per bin; trained/score/all only"}
 
 
@@ -413,9 +430,12 @@ def _clean(v):
     return v
 
 
-def write_json(obj, path: Path) -> None:
+def write_json(obj, path: Path, indent=1) -> None:
+    """Strict JSON (NaN -> null), tmp + replace; `indent=None` writes compact JSON."""
     tmp = Path(str(path) + ".tmp")
-    tmp.write_text(json.dumps(_clean(obj), indent=1, default=_json_default) + "\n", "utf-8")
+    sep = None if indent is not None else (",", ":")
+    tmp.write_text(json.dumps(_clean(obj), indent=indent, separators=sep,
+                              default=_json_default) + "\n", "utf-8")
     os.replace(tmp, path)
 
 
@@ -477,6 +497,7 @@ def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) 
     out = {"created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "run": run_info(pred, run_dir), "config": _config(blacklist), "records": records,
            "snippets": snippets, "skipped": skipped,
+           "n_records_crps_nonfinite": sum(r.get("n_crps_nonfinite", 0) > 0 for r in records),
            "timing": {"setup": round(t1 - t0, 3), "score": round(t2 - t1, 3),
                       "total": round(time.time() - t0, 3), "n_jobs": len(jobs),
                       "workers": int(workers)}}
@@ -499,6 +520,7 @@ def score_law(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) -> P
     t2 = time.time()
     out = {"created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "run": run_info(pred, run_dir), "config": _config(blacklist), "records": records,
+           "n_records_crps_nonfinite": sum(r.get("n_crps_nonfinite", 0) > 0 for r in records),
            "timing": {"setup": round(t1 - t0, 3), "score": round(t2 - t1, 3),
                       "total": round(time.time() - t0, 3), "n_jobs": len(jobs),
                       "workers": int(workers)}}
@@ -512,6 +534,14 @@ def score_law(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) -> P
 # ---------------------------------------------------------------------------------------------
 
 
+def default_workers() -> int:
+    """The CPUs this process may run on (the SLURM allocation), else the machine's count."""
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except AttributeError:          # macOS has no sched_getaffinity
+        return os.cpu_count() or 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -519,7 +549,7 @@ def main(argv=None) -> int:
         a = sub.add_parser(name)
         for pos in ("manifest", "covariates", "data_dir", "blacklist", "run_dir"):
             a.add_argument(pos, type=Path)
-        a.add_argument("--workers", type=int, default=os.cpu_count() or 1)
+        a.add_argument("--workers", type=int, default=default_workers())
     args = ap.parse_args(argv)
     done = args.run_dir / ("SCORE_DONE" if args.cmd == "trained" else "LAW_DONE")
     if done.exists():

@@ -10,13 +10,14 @@ trained, shuffle, swap, law (depthlaw records go to `depth_law`). `g_version` = 
 else per_track.
 
 **Checks** — each `{rung g_version space mark_class metric check value bar met seed_wobble
-components}`. `met` is a computed comparison of value against bar (None when the bar cannot be
-formed, e.g. one seed). Nothing here ticks anything or writes to the notebook.
+components}`. `met` is a computed comparison of value against bar (False when the value or the
+bar cannot be formed, e.g. one seed; `components["met_reason"]` says which). Nothing here writes to the notebook.
   beatstwin      D_nocov - D_real, kind trained;       bar 2 x wobble_real;  met value > bar
   lawtest_nocov  D_nocov - D_real, kind law;           bar 2 x wobble_real;  met value > bar
   lawtest_ids    D_ids - D_real, kind law;             bar 2 x wobble_real;  met value > bar
-  depthlaw       counts: max over depth pairs (trained base<->depth and law depth->depth) of
+  depthlaw       counts: max over the never-trained law depth->depth pairs of
                  |2^(mean over seeds of log2_pred - log2_true) - 1|, real;  bar 0.10; met value <= bar
+                 (the `depth_law` table keeps the trained base<->depth pairs too)
   beatsbelow     (B, C, D) D_below - D_this, real, trained; bar 2 x max(wobble_below, wobble_this);
                  met value > bar; left out when the rung below has no runs
   shuffle        D_nocov(trained) - D_real(shuffle); bar 2 x wobble_real (trained); met value < bar
@@ -27,6 +28,12 @@ formed, e.g. one seed). Nothing here ticks anything or writes to the notebook.
 of the rung chosen per (g_version, space): the lowest rung whose chr22 `crps_all` (real, mean over
 seeds, macro over all tracks, variant all) is within the best rung's seed wobble of the best.
 
+**Size.** `results.json` (compact JSON) keeps in `per_pair` only the trained/score and swap records
+(what the figures and report read); the val, shuffle, law and depthlaw records go one per line to
+`per_pair_rest.jsonl.gz` (their aggregates are in per_track / per_class / law_grid / depth_law).
+`describe` is kept only on real-model trained/score records. `per_track` / `per_class` carry the
+six METRICS; the swap check reads the swap records directly.
+
     python tools/t118/ladder/aggregate.py <manifest> <covariates.tsv> <runs_dir> <refs.tsv> <agg_dir>
     python tools/t118/ladder/aggregate.py qm-curves <manifest> <data_dir> <out.json>
 """
@@ -34,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import itertools
 import json
 import sys
@@ -49,7 +57,7 @@ if str(_T118) not in sys.path:
 
 import baseline_rungs as br  # noqa: E402
 from ladder import data, pairs  # noqa: E402
-from ladder.score import METRICS, SWAP_KEY, g_version, write_json  # noqa: E402
+from ladder.score import METRICS, SWAP_KEY, _clean, _json_default, g_version, write_json  # noqa: E402,E501
 
 KINDS = ("trained", "shuffle", "swap", "law")
 VARIANTS = ("all", "nonidentical")
@@ -161,7 +169,7 @@ def _identical(r: dict) -> bool:
     return bool(r[f"{r['space']}_identical"])
 
 
-def per_track_rows(per_pair: list[dict], ev: str = "score") -> list[dict]:
+def per_track_rows(per_pair: list[dict], ev: str = "score", with_swap: bool = False) -> list[dict]:
     groups: dict = defaultdict(list)
     for r in per_pair:
         if r.get("eval") != ev or r.get("kind") not in KINDS:
@@ -172,7 +180,7 @@ def per_track_rows(per_pair: list[dict], ev: str = "score") -> list[dict]:
     out = []
     for key, rs in sorted(groups.items(), key=lambda kv: tuple(map(str, kv[0]))):
         rung, gv, space, model, seed, kind, track, mc = key
-        metrics = METRICS + ((SWAP_KEY,) if kind == "swap" else ())
+        metrics = METRICS + ((SWAP_KEY,) if kind == "swap" and with_swap else ())
         for variant in VARIANTS:
             sel = rs if variant == "all" else [r for r in rs if not _identical(r)]
             for m in metrics:
@@ -276,7 +284,14 @@ def law_grid_rows(per_pair: list[dict]) -> list[dict]:
 
 
 def _check(rung, gv, space, mc, metric, name, value, bar, met_fn, wob, components) -> dict:
-    met = None if value is None or bar is None else bool(met_fn(value, bar))
+    """`met` is always a bool: False when the value or the bar cannot be formed (the reason is
+    in `components["met_reason"]`), so a check with one seed never reads as met."""
+    if value is None or bar is None:
+        met = False
+        components = {**components, "met_reason": "no value" if value is None else
+                      "no bar: the seed wobble needs at least two seeds"}
+    else:
+        met = bool(met_fn(value, bar))
     return {"rung": rung, "g_version": gv, "space": space, "mark_class": mc, "metric": metric,
             "check": name, "value": value, "bar": bar, "met": met, "seed_wobble": wob,
             "components": components}
@@ -350,7 +365,8 @@ def compute_checks(per_class: list[dict], depth_law: list[dict]) -> list[dict]:
     # depth law: counts, real, per (rung, g_version, mark_class)
     groups: dict = defaultdict(lambda: defaultdict(dict))
     for r in depth_law:
-        if r["model"] != "real" or r["space"] != "counts" or r["log2_pred"] is None:
+        if r["model"] != "real" or r["space"] != "counts" or r["log2_pred"] is None \
+                or r["kind"] != "law":
             continue
         key = (r["rung"], r["g_version"], r["mark_class"])
         groups[key][(r["kind"], r["source_pid"], r["target_pid"], r["log2_true"])][r["seed"]] = \
@@ -361,7 +377,7 @@ def compute_checks(per_class: list[dict], depth_law: list[dict]) -> list[dict]:
         per_seed = [max(abs(2.0 ** (s[sd] - pk[3]) - 1.0) for pk, s in by_pair.items() if sd in s)
                     for sd in seeds]
         worst = max(errs, key=errs.get)
-        out.append(_check(rung, gv, "counts", mc, "depth_scale", "depthlaw", errs[worst],
+        out.append(_check(rung, gv, "counts", mc, "depth_scale_rel_error", "depthlaw", errs[worst],
                           DEPTH_BAR, le, wobble(per_seed),
                           {"n_pairs": len(errs), "worst_pair": list(worst[:3]),
                            "per_seed": per_seed, "seeds": seeds}))
@@ -399,7 +415,16 @@ def rung_choice(per_pair: list[dict]) -> dict:
 # the aggregate command
 # ---------------------------------------------------------------------------------------------
 
-NOTE = ("values against bars; `met` is a computed comparison, not a tick and not a verdict")
+#: per_pair records results.json keeps; the rest go to per_pair_rest.jsonl.gz
+def _keep_in_results(r: dict) -> bool:
+    return (r.get("kind") == "trained" and r.get("eval") == "score") or r.get("kind") == "swap"
+
+
+def _slim(r: dict) -> dict:
+    if "describe" in r and not (r.get("model") == "real" and r.get("kind") == "trained"
+                                and r.get("eval") == "score"):
+        r = {k: v for k, v in r.items() if k != "describe"}
+    return r
 SUMMARY_COLS = ("rung", "g_version", "space", "model", "kind", "mark_class", "metric", "variant",
                 "mean", "seed_wobble", "per_seed_0", "per_seed_1", "per_seed_2", "n_tracks")
 
@@ -412,19 +437,31 @@ def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir) -> dict:
     missing = [n for n in expected_runs(rows) if n not in set(present)]
     if missing:
         _warn(f"{len(missing)} expected runs missing (listed in results.json)")
-    per_track = per_track_rows(per_pair)
-    per_class = per_class_rows(per_track)
+    per_track_all = per_track_rows(per_pair, with_swap=True)
+    per_class_all = per_class_rows(per_track_all)
     depth_law = depth_law_rows(per_pair)
-    checks = compute_checks(per_class, depth_law)
+    checks = compute_checks(per_class_all, depth_law)
+    per_track = [r for r in per_track_all if r["metric"] in METRICS]
+    per_class = [r for r in per_class_all if r["metric"] in METRICS]
+    kept = [_slim(r) for r in per_pair if _keep_in_results(r)]
+    with gzip.open(agg_dir / "per_pair_rest.jsonl.gz", "wt", encoding="utf-8") as fh:
+        for r in per_pair:
+            if not _keep_in_results(r):
+                fh.write(json.dumps(_clean(_slim(r)), separators=(",", ":"),
+                                    default=_json_default) + "\n")
     choice = rung_choice(per_pair)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     results = {"created_utc": now, "runs_dir": str(runs_dir), "runs_present": present,
                "runs_missing": missing, "runs_without_law": no_law,
-               "refs": load_refs(refs_tsv), "per_pair": per_pair, "per_track": per_track,
+               "refs": load_refs(refs_tsv), "per_pair": kept,
+               "per_pair_rest": str(agg_dir / "per_pair_rest.jsonl.gz"),
+               "n_records_crps_nonfinite": sum(1 for r in per_pair
+                                               if r.get("n_crps_nonfinite", 0) > 0),
+               "per_track": per_track,
                "per_class": per_class, "checks": checks, "knob_gain": knob_gain_rows(per_pair),
                "law_grid": law_grid_rows(per_pair), "depth_law": depth_law, "rung_choice": choice,
                "figdata": figdata}
-    write_json(results, agg_dir / "results.json")
+    write_json(results, agg_dir / "results.json", indent=None)
     with (agg_dir / "results_summary.tsv").open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
         w.writerow(SUMMARY_COLS)
@@ -435,7 +472,7 @@ def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir) -> dict:
                          r["mark_class"], r["metric"], r["variant"], r["mean"], r["seed_wobble"],
                          ps[0], ps[1], ps[2], r["n_tracks"])])
     for rung in sorted({r["rung"] for r in per_class}):
-        write_json({"rung": rung, "created_utc": now, "note": NOTE,
+        write_json({"rung": rung, "created_utc": now,
                     "checks": [c for c in checks if c["rung"] == rung
                                and c["check"] not in MAIN_ONLY]},
                    agg_dir / f"checks_{rung}.json")
@@ -444,7 +481,7 @@ def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir) -> dict:
         gv, space = key.split("|")
         main_checks += [c for c in checks if c["rung"] == ch["chosen"] and c["g_version"] == gv
                         and c["space"] == space]
-    write_json({"created_utc": now, "note": NOTE, "rung_choice": choice, "checks": main_checks},
+    write_json({"created_utc": now, "rung_choice": choice, "checks": main_checks},
                agg_dir / "checks_main.json")
     return results
 
