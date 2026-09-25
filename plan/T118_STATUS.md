@@ -19,7 +19,10 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
   histone track, 14 DNase, 242 across tracks, 2 094 never-trained arm→arm pairs, 576 runs).
 - Wave 1 done and merged (a0abc6f): harness, forms A–D, scorer, figures/report, SLURM. The harness
   and the scorer each passed an independent review, with fixes. 218 t118 tests pass.
-- Wave 2 building: the end-to-end CPU run of every rung on synthetic data, to find the seams.
+- Wave 2 done (34e5705): every rung runs end to end on CPU on synthetic data (train → score →
+  law test → aggregate → 9 figures → report); 226 t118 tests pass.
+- Pilot running on Nibi (design A, one H3K27ac g, all three models, both spaces, seed 0). When it
+  passes, all 576 runs go in (A and B first).
 - The cache build runs on Nibi now (it needs only merged code), so the pilot will not wait on it.
 - Planner's estimate, to be checked by the pilot: per-track run ≈ 20 min on a MIG slice,
   across-track ≈ 35 min; law test 10–90 min on CPU per run; A and B done ≈ 3 h after submission
@@ -38,8 +41,10 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 | job | what | submitted | state |
 |---|---|---|---|
-| 22654779 | `t118L_cache`: memory-mapped cache, 130 products × 2 spaces | 2026-09-25 ~05:45 | running (≈1 min, 3.6 GB per product) |
+| 22654779 | `t118L_cache`: memory-mapped cache, 130 products × 2 spaces | 2026-09-25 ~05:45 | completed, 260 files, 109 GB |
 | 22655875 | early real-data check: design A, H3K27ac track, real g, seed 0, counts and p (code a0abc6f), output in `ladder/pilot0/` (never used by the full run) | 2026-09-25 ~06:10 | completed, both tasks exit 0 |
+| 22656701 | pilot, train: design A, H3K27ac, 3 models × 2 spaces, seed 0 (code 34e5705) | 2026-09-25 ~06:50 | submitted |
+| 22656702 | pilot, law test of the same 6 runs (starts per task after its train task) | 2026-09-25 ~06:50 | submitted |
 
 ## Output paths
 
