@@ -24,9 +24,10 @@ Root: [[candii]]
     - · `h12` [H] [[h12_a_covariate_conditioned_affine_map_on_th|A covariate-conditioned affine map on the log-count axis closes at least half of the gap that the covariate-free monotone map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
     - · `h13` [H] [[h13_a_small_covariate_conditioned_convolutio|A small covariate-conditioned convolutional map over neighbouring bins closes gap that the conditioned affine map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
     - · `h14` [H] [[h14_an_encoder_decoder_with_the_encoder_cond|An encoder–decoder with the encoder conditioned on the source covariates and the decoder on the target covariates closes gap that the conditioned convolutional map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
+    - · `h16` [H] [[h16_a_generator_that_reads_the_dna_sequence_|A generator that reads the DNA sequence as well as the source and target covariates outputs a position-dependent transformation that beats the same design without sequence on the knobs that act through mappability and GC]] — *idea*
 
 ## Dashboard
 
 - **Questions** (4): open 4 · review 0 · resolved 0
-- **Hypotheses** (14): idea 14 · staged 0 · running 0 · done 0
+- **Hypotheses** (15): idea 15 · staged 0 · running 0 · done 0
 - **Verdicts**: supported 0 · partial 0 · refuted 0 · inconclusive 0 · invalid-run 0

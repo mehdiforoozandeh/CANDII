@@ -141,6 +141,27 @@ gains, CRPS on non-zero bins, per-arm results, the CRPS split, the point-output 
 - **Shape and magnitude:** a per-bin map can fix magnitude only. Shape effects (fragment
   extension, paired-end, peak width) need f to see neighbouring bins.
 
+### Architecture ladder (2026-09-25)
+
+The options are forms of **f**; **g** is a small MLP that reads [C, C'] and outputs f's parameters.
+f works on log-scaled input: x = log(1 + counts), or log of −log10 p. Kept by the PI, in order of
+expressiveness, all to be built:
+
+- **A — per-bin affine.** log μᵢ = a + b·xᵢ, plus one dispersion (NB n or log-normal σ). g outputs
+  3 numbers. Magnitude only (depth shift, dynamic range).
+- **B — per-bin monotone curve.** g outputs a monotone spline (~8–16 knots) plus dispersion as a
+  function of level. The same function class as QuantileMatching, chosen from C, C' instead of fit
+  on X'. Magnitude only.
+- **C — kernel, then curve.** f convolves x with a kernel (~33 bins ≈ 800 bp) that g outputs, then
+  applies B's curve. Adds global shape (broadening, sharpening); same kernel at every position.
+- **D — conditioned CNN.** A few dilated conv layers (~2 kb view); g outputs a per-channel scale
+  and shift for each layer (FiLM). Shape that depends on local context.
+- **E — g also reads DNA sequence: PARKED** (PI 2026-09-25); recorded as its own hypothesis under
+  the capacity question. g would output per-bin parameters of f.
+
+g sees few distinct (C, C') points (38 per histone track, 18 for DNase, 246 across tracks), so g
+stays small in A–D and the capacity goes into f's form.
+
 ## 4. What ran
 
 | step | where | jobs | result |
