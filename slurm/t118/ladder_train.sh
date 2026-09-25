@@ -143,13 +143,21 @@ esac
 # The authoritative task table, from pairs.py; a stale shared copy is an error, not a guess.
 TMP_TABLE="$TASKS_TSV.tmp.${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$IDX"
 python3 "$KIT/tools/t118/ladder/pairs.py" tasks "$MANIFEST" > "$TMP_TABLE"
-if [ -f "$TASKS_TSV" ] && ! cmp -s "$TMP_TABLE" "$TASKS_TSV"; then
-  echo "$TASKS_TSV differs from this kit's pairs.py table; remove it or fix the kit" >&2
-  rm -f "$TMP_TABLE"; exit 2
+# The run comes from this task's own table. The shared copy is created once and never replaced:
+# replacing it under 40 concurrent readers on /project gave "Stale file handle" (8 failed tasks,
+# job 22657297). cmp exit 1 = the tables differ (an error); exit 2 = a read problem (not fatal).
+RUN=$(run_name_from < "$TMP_TABLE")
+if [ -f "$TASKS_TSV" ]; then
+  CMP_RC=0; cmp -s "$TMP_TABLE" "$TASKS_TSV" || CMP_RC=$?
+  if [ "$CMP_RC" = 1 ]; then
+    echo "$TASKS_TSV differs from this kit's pairs.py table; remove it or fix the kit" >&2
+    rm -f "$TMP_TABLE"; exit 2
+  fi
+else
+  mv -n "$TMP_TABLE" "$TASKS_TSV" 2>/dev/null || true
 fi
-mv -f "$TMP_TABLE" "$TASKS_TSV"
-RUN=$(run_name_from < "$TASKS_TSV")
-[ -n "$RUN" ] || { echo "no task $IDX in $TASKS_TSV" >&2; exit 2; }
+rm -f "$TMP_TABLE"
+[ -n "$RUN" ] || { echo "no task $IDX in the pairs.py table" >&2; exit 2; }
 echo "run: $RUN"
 if [ -f "$RUNS/$RUN/SCORE_DONE" ]; then echo "skip $RUN: SCORE_DONE exists"; exit 0; fi
 
