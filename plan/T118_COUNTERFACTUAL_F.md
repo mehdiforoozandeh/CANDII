@@ -96,8 +96,8 @@ parameter comes from a fixed rule:
   own (wording fixed 2026-09-25).
 - **Two versions of g (PI ruling 2026-09-25):** one g per track (7 g's, each trained on that
   track's pairs only; the assay entry of C is constant inside it) and one g across all 7 tracks
-  (all 246 pairs, the assay in C). Both are run and scored under the same checks. Which version
-  decides pass/fail: TODO(PI). The earlier "one per arm" version is dropped: a g trained on one
+  (all 246 pairs, the assay in C). Both are run and scored under the same checks. **Both versions
+  decide pass/fail** (PI ruling 2026-09-25): the claim needs every check to pass for both. The earlier "one per arm" version is dropped: a g trained on one
   arm's pairs sees a single (C, C') per direction and cannot learn anything about C.
 - **Covariates:** C and C' are the **full** knob vector on both sides plus the assay: depth,
   run type, read length, dedup, MAPQ, control fraction, ratio k, control identity, control depth,
@@ -193,11 +193,13 @@ Spearman (all bins), noSolution / QM / oracle: DNase counts 0.670 / 0.667 / 0.49
 
 ## 6. Open
 
-1. **The oracle** — redefine it (the scrambled twin now gives the bar and arm → arm gives the law
-   test, so the oracle is less central).
+1. ~~The oracle~~ — **dropped** (PI ruling 2026-09-25). The two boring explanations (the scrambled
+   twin, and the arm → arm law test) and the two references (noSolution, QuantileMatching) replace
+   it. The v2 oracle numbers stay in section 4 as history; nothing is judged against them.
 2. **Thresholds** for the final design: the bar against the scrambled twin and the bar for the
    arm → arm law test are not set. The "2 × seed wobble" rule and the shuffle and swap checks are
-   carried over; the gap-closed ≥ 0.5 rules wait for the oracle.
+   carried over; the gap-closed rules are gone with the oracle.
+   Under `all`, 4 checks × 2 versions of g: at 80% power each, joint power ≈ 17% if independent.
 3. **The architecture** (the form of f, and how g produces it) — not chosen. Drafted options in the vault: a covariate-conditioned affine
    map (h12), a small conditioned convolutional network (h13), an encoder–decoder (h14). The
    shape part needs f to see neighbouring bins.

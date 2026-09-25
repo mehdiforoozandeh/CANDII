@@ -22,7 +22,7 @@ tests whether recorded covariates alone map one processing of a track onto anoth
 
 ## What we want
 
-The design was finalised 2026-09-25 and is recorded in `plan/T118_COUNTERFACTUAL_F.md`: g(C, C') outputs f, f(X) predicts X'; the competitor is the same model trained with scrambled covariates; never-trained arm → arm pairs test whether g learned how C and C' relate. g is trained in two versions, one per track (7) and one across all 7 tracks; no per-arm version. Done so far: the noSolution / QuantileMatching / pseudoreplicate-oracle rungs (v2, Nibi `/project/def-maxwl/mforooz/t118/rungs_v2/`). Open: the oracle's redefinition, the bars against the twin and for the arm → arm test, which version of g decides pass/fail, and the architecture (the form of f and how g produces it).
+The design was finalised 2026-09-25 and is recorded in `plan/T118_COUNTERFACTUAL_F.md`: g(C, C') outputs f, f(X) predicts X'; the competitor is the same model trained with scrambled covariates; never-trained arm → arm pairs test whether g learned how C and C' relate. g is trained in two versions, one per track (7) and one across all 7 tracks; no per-arm version. Done so far: the noSolution / QuantileMatching / pseudoreplicate-oracle rungs (v2, Nibi `/project/def-maxwl/mforooz/t118/rungs_v2/`). Both versions of g decide pass/fail; the oracle is dropped (2026-09-25). Open: the bars against the twin and for the arm → arm test, and the architecture (the form of f and how g produces it).
 
 ## Output
 
