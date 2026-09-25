@@ -5,6 +5,8 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Now
 
+- **Waiting on the PI: Nibi tunnel down since 2026-09-25 11:23 (see Blocked on the PI).**
+
 
 - Ground truth checked 2026-09-25: branch `exp/t118-counterfactual-f` in sync with origin, 0
   commits behind `origin/main`; Nibi reachable; 130 product dirs + `MANIFEST.tsv`, md5
@@ -52,6 +54,7 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 | 22667089 | retry of the 8 train tasks that failed (92, 99, 209, 244, 280, 304, 340, 353) | 2026-09-25 ~11:50 | submitted |
 | 22667090 | law test of those 8 (after each retry) | 2026-09-25 ~11:50 | submitted |
 | 22667091 | law test of the 24 runs still training at 11:30 (starts when train array 22657297 ends) | 2026-09-25 ~11:50 | submitted |
+| 22669098 | retry of law task 110 (transient CVMFS read error while building the venv) | 2026-09-25 ~12:10 | submitted |
 | 22657365 | trial aggregation of rung A on the 6 pilot runs (tests figures and report on real data; overwritten by the real one) | 2026-09-25 ~07:15 | completed, 2 min, 7 GB; 9 figures + report + checks JSON |
 
 ## Output paths
@@ -142,4 +145,8 @@ Science choices the plan does not settle; each is the most conservative option.
 
 ## Blocked on the PI
 
-- (nothing) — the Nibi tunnel was down for a while on 2026-09-25 and is back; the runs kept going.
+- **Nibi tunnel down again (2026-09-25 11:23 local).** `ssh -o BatchMode=yes nibi` exits 255. Nibi work is
+  stopped; I did not try to authenticate. Last known state (16:10 UTC): train 570/576 done, 6 running
+  (the 8 retries included); law test A 105/144, B–D starting; one law task (110) failed on a
+  transient CVMFS read error and was resubmitted (22669098). The jobs keep running. Needed: the PI
+  runs `hpc up nibi`; then I aggregate each finished rung, copy the evidence down and link it.
