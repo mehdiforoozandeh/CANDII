@@ -147,10 +147,12 @@ def predict_chrom(ladder: Ladder, X: np.ndarray, theta: torch.Tensor, device,
     """(loc, disp) float32[n] for a whole chromosome X of the source, one theta [n_theta].
 
     Chunks of `chunk` bins, each with `context` bins of halo; outside the chromosome X = 0 (as
-    `Corpus.window` pads during training).
+    `Corpus.window` pads during training). A chromosome shorter than `chunk` is one chunk of its
+    own length (not padded up to `chunk`: the synthetic test chromosomes are ~1000 bins).
     """
     c = ladder.context
     n = int(np.asarray(X).shape[0])
+    chunk = max(1, min(int(chunk), n))
     n_chunks = max(1, -(-n // chunk))
     Xp = np.zeros(n_chunks * chunk + 2 * c, dtype=np.float64)
     Xp[c:c + n] = X

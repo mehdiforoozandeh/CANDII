@@ -103,4 +103,4 @@ python3 "$KIT/tools/t118/ladder/figures.py" "$AGG" "$RUNG" --refs-qm "$AGG/qm_cu
 python3 "$KIT/tools/t118/ladder/report.py" "$AGG" "$RUNG"
 
 echo "=== done rung $RUNG $(date -u)"
-ls -l "$AGG/$RUNG/report.md" "$AGG/checks_$RUNG.json"
+ls -l "$AGG/$RUNG/report.md" "$AGG/$RUNG/checks_$RUNG.json" "$AGG/checks_$RUNG.json"

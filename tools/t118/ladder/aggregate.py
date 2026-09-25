@@ -472,10 +472,14 @@ def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir) -> dict:
                          r["mark_class"], r["metric"], r["variant"], r["mean"], r["seed_wobble"],
                          ps[0], ps[1], ps[2], r["n_tracks"])])
     for rung in sorted({r["rung"] for r in per_class}):
-        write_json({"rung": rung, "created_utc": now,
-                    "checks": [c for c in checks if c["rung"] == rung
-                               and c["check"] not in MAIN_ONLY]},
-                   agg_dir / f"checks_{rung}.json")
+        rung_checks = {"rung": rung, "created_utc": now,
+                       "checks": [c for c in checks if c["rung"] == rung
+                                  and c["check"] not in MAIN_ONLY]}
+        write_json(rung_checks, agg_dir / f"checks_{rung}.json")
+        # the same file beside the rung's report and figures: <agg_dir>/<rung>/ is the evidence
+        # directory that is rsync'd to the vault
+        (agg_dir / rung).mkdir(exist_ok=True)
+        write_json(rung_checks, agg_dir / rung / f"checks_{rung}.json")
     main_checks = []
     for key, ch in choice.items():
         gv, space = key.split("|")

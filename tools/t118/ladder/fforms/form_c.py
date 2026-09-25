@@ -94,11 +94,11 @@ class FormC(FForm):
 
         y = self._curve_y(y0, s)
         y_lo, y_hi = torch.gather(y, 1, idx), torch.gather(y, 1, idx + 1)
-        loc = y_lo + t * (y_hi - y_lo)
+        loc = torch.lerp(y_lo, y_hi, t)
 
         tc = t.clamp(0.0, 1.0)  # dispersion is clamped to the end values outside the knots
         d_lo, d_hi = torch.gather(d, 1, idx), torch.gather(d, 1, idx + 1)
-        disp = d_lo + tc * (d_hi - d_lo)
+        disp = torch.lerp(d_lo, d_hi, tc)
         return loc, disp
 
     def describe(self, theta: torch.Tensor) -> dict:
