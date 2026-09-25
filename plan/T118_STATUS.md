@@ -5,7 +5,11 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 ## Now
 
-- **Waiting on the PI: Nibi tunnel down since 2026-09-25 11:23 (see Blocked on the PI).**
+- **All 576 runs trained and scored** (25 Sep). Law test: A 144/144, B 143, C 138, D 119 (15:15 UTC),
+  still running. Design A aggregated (job 22678427) and its evidence copied to
+  `cruxvault/results/h12/` and linked from the hypothesis. B, C, D follow as their law tests finish.
+- Team overview page (design + pilot numbers): https://claude.ai/artifact/Gj3KNBCaK1efJpfTQ8KV7V
+
 
 
 - Ground truth checked 2026-09-25: branch `exp/t118-counterfactual-f` in sync with origin, 0
@@ -35,7 +39,7 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 
 | rung | built | pilot | submitted | finished | report |
 |---|---|---|---|---|---|
-| A — per-bin affine | no | no | no | no | no |
+| A — per-bin affine | yes | yes | yes | yes, 144/144 + law | yes: `cruxvault/results/h12/report.md` |
 | B — per-bin monotone curve | no | no | no | no | no |
 | C — kernel, then curve | no | no | no | no | no |
 | D — conditioned CNN | no | no | no | no | no |
@@ -55,6 +59,8 @@ Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Wor
 | 22667090 | law test of those 8 (after each retry) | 2026-09-25 ~11:50 | submitted |
 | 22667091 | law test of the 24 runs still training at 11:30 (starts when train array 22657297 ends) | 2026-09-25 ~11:50 | submitted |
 | 22669098 | retry of law task 110 (transient CVMFS read error while building the venv) | 2026-09-25 ~12:10 | submitted |
+| 22676228 | retry of law tasks 433–440 (the same CVMFS read error) | 2026-09-25 ~14:30 | submitted |
+| 22678427 | aggregation of design A (retry of 22678258, which hit the CVMFS error; node c537 excluded) | 2026-09-25 ~15:10 | completed, 2.6 min |
 | 22657365 | trial aggregation of rung A on the 6 pilot runs (tests figures and report on real data; overwritten by the real one) | 2026-09-25 ~07:15 | completed, 2 min, 7 GB; 9 figures + report + checks JSON |
 
 ## Output paths
@@ -122,12 +128,51 @@ Science choices the plan does not settle; each is the most conservative option.
     be an extrapolation rather than "one average map". This is the conservative reading: it gives
     the twin its best average map, so "beats the twin" is not made easier.
 
+## For the PI — design A, first full reading (drafted, nothing ticked)
+
+The report holds every check with its value, bar and seed wobble: 45 of 78 checks meet their bar.
+Shape of the result, in plain terms:
+
+- **p space: the covariates help.** Against the no-covariates twin on the held-out chromosomes, all
+  12 p-space readings meet the bar (every class, both versions of g, all bins and top 1%).
+- **Counts: mostly not.** Only broad (both g's) and narrow (across-track g) all-bins readings meet
+  the bar; top-1% readings are all unmet, and DNase is worse than the twin with a per-track g
+  (−0.55 all bins). Design A's straight line on log(1 + counts) is the likely reason (see the pilot
+  note).
+- **Law test (never-trained pairs):** beats the labels-as-ids twin almost everywhere (often by
+  orders of magnitude — that twin has no answer for unseen pairs); beats the no-covariates twin on
+  all bins for narrow and broad, rarely on top 1%, and not for DNase with a per-track g.
+- **Depth law: unmet in every class** (largest |predicted scale / depth ratio − 1| = 0.35 to 0.60
+  against a bar of 0.10). Design A does not learn the depth scale to within 10%.
+- **Rung choice for the main claim (chr22, provisional — B–D law tests are still running but
+  validation does not depend on them):** C for the across-track g in both spaces; D per track in
+  counts; A per track in p space, because B, C and D have runs that blow up there (next item).
+
+### A decision for the PI: a few p-space pairs explode the mean
+
+In 32 of 576 run × split combinations, one or two pairs (of 14–242) score CRPS from ~25 to ~10⁷,
+almost all in −log10 p space and mostly in designs B and D. They are all **upscaling** pairs: a
+sparse source (depth 3.75M, 7.5M or 15M, or DNase with dedup off) to the full-depth base. Their
+top-1% CRPS is ordinary (~4); the explosion is in the low bins. Reason: where the source is near
+zero it tells little about the target, so the log-normal fit learns a large σ at low levels. That is
+fine for the likelihood, but a log-normal's mean is median × exp(σ²/2), so its CRPS explodes. One
+such pair then dominates the mean over pairs, and with it the seed wobble.
+
+This is a property of the log-normal choice, not a code bug; I changed nothing. Options, for you:
+(a) keep as is; (b) cap σ in p space (e.g. σ ≤ 2) and rerun the p-space half (288 runs, ~3 h);
+(c) keep the runs and report the median over pairs beside the mean. My recommendation: (c) now
+(no rerun, no change to the pre-registered mean), and (b) only if you want the p-space rung
+comparison to be readable.
+
 ## Failures and fixes
 
 - 8 of 576 train tasks failed in their first 35 s: every task rewrote the shared `tasks.tsv`, and
   concurrent readers on /project got "Stale file handle". Fix (82cf8db, shell only; the Python code
   is unchanged from the run's 34e5705): each task reads its own copy and the shared one is never
   replaced. Retried as 22667089.
+- Law and aggregation tasks failed 10 times on "Input/output error" reading the cluster's shared
+  software filesystem (CVMFS) while building the venv (nodes c128, c166, c537) — a cluster fault, not
+  ours; each was resubmitted.
 - The law-test array (`aftercorr` on the train array) never released a task while the train array
   was still running, and would never have run for the 8 failed tasks. Cancelled the pending part and
   re-submitted the law test directly for every trained run.
@@ -145,8 +190,4 @@ Science choices the plan does not settle; each is the most conservative option.
 
 ## Blocked on the PI
 
-- **Nibi tunnel down again (2026-09-25 11:23 local).** `ssh -o BatchMode=yes nibi` exits 255. Nibi work is
-  stopped; I did not try to authenticate. Last known state (16:10 UTC): train 570/576 done, 6 running
-  (the 8 retries included); law test A 105/144, B–D starting; one law task (110) failed on a
-  transient CVMFS read error and was resubmitted (22669098). The jobs keep running. Needed: the PI
-  runs `hpc up nibi`; then I aggregate each finished rung, copy the evidence down and link it.
+- (nothing blocking; decisions for the PI are listed under "For the PI" below)

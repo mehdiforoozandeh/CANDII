@@ -66,7 +66,13 @@ _(none yet)_
 
 <!-- what the run produced. Keep files under results/h12/ and link at least the report:
      - [Report](results/h12/report.md)   - results/h12/curve.png -->
-_(none yet)_
+- [Report: design A, the per-bin affine map — all 144 runs, drafted check readings](results/h12/report.md)
+- [Checks: value against bar for every check, both versions of g](results/h12/checks_A.json)
+- results/h12/figures/fig1_ladder.png ladder: CRPS by model, class and space
+- results/h12/figures/fig3_law_grid.png law test: never-trained arm → arm pairs, gain over each twin
+- results/h12/figures/fig4_depth_law.png depth law: predicted count scale against the depth ratio
+- results/h12/figures/fig7_snippets.png 10 kb track snippets, fixed locus rule
+- results/h12/FIR_PATH.txt Nibi run and aggregation directory
 
 ## Findings
 
