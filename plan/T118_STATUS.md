@@ -225,4 +225,5 @@ above); it is being tested.
 
 ## Blocked on the PI
 
-- (nothing blocking; decisions for the PI are listed under "For the PI" below)
+- **Nibi tunnel down (2026-09-25 15:10 local), third time.** Nibi work stopped; I did not authenticate. Design X
+  (array 22683580) keeps running; its results wait for `hpc up nibi`.
