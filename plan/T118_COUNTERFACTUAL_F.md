@@ -253,6 +253,8 @@ an interactive page later, once results exist.
 | Baselines v1 (NB / Gaussian spreads) | `nibi:/project/def-maxwl/mforooz/t118/qm_rungs/` | 22572763 (all failed: missing x-transformers), 22583098/22583384 (test, fixed), 22583393 (test ok), 22583719 (245 pairs), 22588843 (aggregate) | Superseded by v2. Tables: `cruxvault/results/t118/baseline_rungs.md` (main checkout). |
 | p-value distribution | `nibi:/project/def-maxwl/mforooz/t118/pval_dist/` | 22591748 | log-normal, see section 3 |
 | Baselines v2 + oracle | `nibi:/project/def-maxwl/mforooz/t118/rungs_v2/`, code snapshot `code/Q3` (commit fb2ba6f) | 22630504, 22630505 (tests), 22630900, 22631034 (246 pairs), 22631035 (130 oracle products), 22631036 (aggregate) | All tasks completed. Tables: `cruxvault/results/t118/rungs_v2.md` / `.tsv` (main checkout, gitignored). |
+| Ladder A–D, 576 runs + law test (t118) | `nibi:/project/def-maxwl/mforooz/t118/ladder/`, code 34e5705 (Python) + 82cf8db (SLURM) | train 22657297 (+22667089), law 22667088/90/91 (+retries), aggregation 22682907–10 | All completed 2026-09-25. Reports: `cruxvault/results/{h12,h17,h13,h14,h15}/` (main checkout). Summary, choices and open problems: `plan/T118_STATUS.md`. |
+| Design X, exploratory (g reads the bin value) | `nibi:.../t118/ladder/explore_x/`, code 5b2998d | 22688594 (CPU) | 24 runs, 2 tracks; see `plan/T118_STATUS.md`. Not pre-registered. |
 
 Mechanical fixes on the way: the job venv now uses the repo's pinned recipe (python/3.10.13,
 `requirements-fir.txt`, then the x-transformers 2.11.23 wheel from `$KIT/wheels`); Nibi compute
@@ -307,4 +309,8 @@ Spearman (all bins), noSolution / QM / oracle: DNase counts 0.670 / 0.667 / 0.49
 3b. **Full covariate table** per product — approved as the first build step.
 4. t119 — rebuild the DNase MAPQ arms with multimapping off.
 5. PR #47 (pseudoreplicates) is ready for the PI's review and merge.
+7. **p-space explosion (open, 2026-09-25).** A few upscaling pairs make mean CRPS explode in designs
+   B, C and D (an unconstrained σ at the lowest knot; D unexplained). The PI rejected capping σ and
+   report-only; a principled fix is open. See `plan/T118_STATUS.md`.
+8. Depth law and swap unmet by every design — depth-law computation to be checked first.
 6. `/scratch/mforooz` is over its soft quota (1826 GiB against 1024 GiB on 2026-09-25); write outputs to /project (370 GiB free).

@@ -1,250 +1,173 @@
-# t118 status — architecture ladder A–D (overnight run, started 2026-09-25)
+# t118 status — architecture ladder A–D and design X (as of 2026-09-25, evening)
 
-Updated as the work goes. Design authority: `plan/T118_COUNTERFACTUAL_F.md`. Work order:
-`plan/T118_HANDOFF.md`.
+Design authority: `plan/T118_COUNTERFACTUAL_F.md`. First work order: `plan/T118_HANDOFF.md`. Next
+agent's work order: `plan/T118_HANDOFF_2.md`. Nothing here is ticked or a verdict; every reading is
+a draft for the PI.
 
-## Now
+## State in one paragraph
 
-- **Done: all 576 runs trained, scored and law-tested; all four designs aggregated on the final data**
-  (jobs 22682907–10) and linked in the notebook: `cruxvault/results/h12` (A), `h17` (B), `h13` (C),
-  `h14` (D), `h15` (main claim, drafted readings). Checks met: A 45/78, B 67/102, C 68/102, D 41/102.
-- Done: exploratory design X (the PI's idea: g also reads the bin value), 24 runs on CPU (array
-  22688594, all completed, 4–51 min each), output `ladder/explore_x/` — outside the pre-registered
-  ladder. The GPU version (22683580) never started (every 10 GB-slice node was held by the scheduler
-  for a higher-priority job). Result below, under "Design X".
-- Team overview page (design + pilot numbers): https://claude.ai/artifact/Gj3KNBCaK1efJpfTQ8KV7V
+All 576 pre-registered runs (4 designs × 3 models × 8 g's × 2 spaces × 3 seeds) are trained, scored
+on chr19 + chr21, law-tested on the 2 094 never-trained arm → arm pairs, and aggregated. Each design
+has a report, 9 figures and a checks file in `cruxvault/results/` (main checkout; gitignored), linked
+from its hypothesis. The main-claim readings are drafted. Two problems stand out: a few p-space
+pairs make the mean CRPS explode in designs B, C and D, and the depth law and swap checks are unmet
+everywhere. An exploratory test of the PI's idea (g also reads the bin value; "design X") removed
+the p-space explosions on the two tracks tested but did worse than B–D in DNase counts.
 
+## Where everything is
 
+| what | where |
+|---|---|
+| code | branch `exp/t118-counterfactual-f` (PR #48, draft): `tools/t118/ladder/`, `tools/t118/covariates.tsv`, `slurm/t118/ladder_*.sh`, `slurm/t118/explore_x*.sh`, `tests/test_t118_*.py` (238 tests) |
+| code run on Nibi | kit `K3` = Python 34e5705 + SLURM 82cf8db (the 576 runs); kit `K4` = K3 + design X (5b2998d, CPU script) — under `/project/def-maxwl/mforooz/t118/ladder/code/` |
+| runs | `nibi:/project/def-maxwl/mforooz/t118/ladder/runs/<rung>_<g>_<space>_<model>_s<seed>/` (ckpt, scores.json, law.json, figdata.npz) |
+| aggregate | `nibi:/project/def-maxwl/mforooz/t118/ladder/agg/` (results.json, results_summary.tsv, checks_*.json, `<rung>/report.md` + figures) |
+| design X runs | `nibi:/project/def-maxwl/mforooz/t118/ladder/explore_x/runs/X_*` |
+| cache | `nibi:/project/def-maxwl/mforooz/t118/ladder/cache/` — 260 memory-mapped files, 109 GB. Kept; deleting it is the PI's call |
+| evidence | main checkout `cruxvault/results/h12` (A), `h17` (B), `h13` (C), `h14` (D), `h15` (main claim), each with `FIR_PATH.txt`; also copied into the worktree's `cruxvault/results/` so `crux validate` resolves the links |
+| team page | https://claude.ai/artifact/Gj3KNBCaK1efJpfTQ8KV7V (mirror: `cruxvault/results/t118/team_overview_2026-09-25.md`) |
+| build plan and log | `.orchestrate/plan.md` in the worktree (git-excluded) |
 
-- Ground truth checked 2026-09-25: branch `exp/t118-counterfactual-f` in sync with origin, 0
-  commits behind `origin/main`; Nibi reachable; 130 product dirs + `MANIFEST.tsv`, md5
-  `599e2ca607961fe550b477558f894edf` (matches the handoff).
-- Notebook: the four rungs and the main claim are now `running` (opt-out field added to the four
-  rungs, citing the PI ruling of 2026-09-23). Commit 74ff2e2.
-- Build plan written (git-excluded, `.orchestrate/plan.md` in this worktree). Waves: 0 = covariate
-  table + ladder core (contracts, data reader, pair and task tables, synthetic products); 1 =
-  training harness, the four f forms, scorer, figures/report, SLURM scripts (8 builders in
-  parallel); 2 = end-to-end CPU smoke of all four rungs; 3 = pilot on Nibi, then all 576 runs.
-- Wave 0 done and merged: covariate table (`tools/t118/covariates.tsv`, 130 products, source named
-  for every base value) and the ladder core (pair counts verified on the real manifest: 38 per
-  histone track, 14 DNase, 242 across tracks, 2 094 never-trained arm→arm pairs, 576 runs).
-- Wave 1 done and merged (a0abc6f): harness, forms A–D, scorer, figures/report, SLURM. The harness
-  and the scorer each passed an independent review, with fixes. 218 t118 tests pass.
-- Wave 2 done (34e5705): every rung runs end to end on CPU on synthetic data (train → score →
-  law test → aggregate → 9 figures → report); 226 t118 tests pass.
-- Pilot passed on Nibi (12/12 tasks). **All 576 runs submitted** 2026-09-25 ~07:10 (train array
-  22657297, law array 22657301). The six pilot runs are reused (their outputs sit in `runs/`).
-- The cache build runs on Nibi now (it needs only merged code), so the pilot will not wait on it.
-- Planner's estimate, to be checked by the pilot: per-track run ≈ 20 min on a MIG slice,
-  across-track ≈ 35 min; law test 10–90 min on CPU per run; A and B done ≈ 3 h after submission
-  if 40 slices run at once, all four ≈ 6–8 h.
+## Results — the four designs (drafted readings met; 12 per cell unless noted)
 
-## Per rung
-
-| rung | built | pilot | submitted | finished | report |
-|---|---|---|---|---|---|
-| A — per-bin affine | yes | yes | yes | yes, 144/144 + law | yes: `cruxvault/results/h12/report.md` |
-| B — per-bin monotone curve | yes | — | yes | yes, 144/144 + law | yes: `cruxvault/results/h17/report.md` |
-| C — kernel, then curve | yes | — | yes | yes, 144/144 + law | yes: `cruxvault/results/h13/report.md` |
-| D — conditioned CNN | yes | — | yes | yes, 144/144 + law | yes: `cruxvault/results/h14/report.md` |
-
-## Nibi jobs
-
-| job | what | submitted | state |
-|---|---|---|---|
-| 22654779 | `t118L_cache`: memory-mapped cache, 130 products × 2 spaces | 2026-09-25 ~05:45 | completed, 260 files, 109 GB |
-| 22655875 | early real-data check: design A, H3K27ac track, real g, seed 0, counts and p (code a0abc6f), output in `ladder/pilot0/` (never used by the full run) | 2026-09-25 ~06:10 | completed, both tasks exit 0 |
-| 22656701 | pilot, train: design A, H3K27ac, 3 models × 2 spaces, seed 0 (code 34e5705) | 2026-09-25 ~06:50 | completed, 6/6 exit 0 |
-| 22656702 | pilot, law test of the same 6 runs (starts per task after its train task) | 2026-09-25 ~06:50 | completed, 6/6 exit 0 |
-| **22657297** | **full run, train + score: all 576 runs, array 0-575 %40, A → B → C → D (code 34e5705)** | 2026-09-25 ~07:10 | at 11:30 UTC: 544 done, 24 running, 8 failed (a shared-file race on /project, before training; fixed in 82cf8db and retried) |
-| 22657301 | full run, law test (`aftercorr`) | 2026-09-25 ~07:10 | 17 done; the rest never started (SLURM held the whole array on the train array) and was cancelled, replaced by 22667088/90/91 |
-| 22667088 | law test, re-submitted without a dependency for the 527 runs already trained (code 82cf8db) | 2026-09-25 ~11:50 | submitted |
-| 22667089 | retry of the 8 train tasks that failed (92, 99, 209, 244, 280, 304, 340, 353) | 2026-09-25 ~11:50 | submitted |
-| 22667090 | law test of those 8 (after each retry) | 2026-09-25 ~11:50 | submitted |
-| 22667091 | law test of the 24 runs still training at 11:30 (starts when train array 22657297 ends) | 2026-09-25 ~11:50 | submitted |
-| 22669098 | retry of law task 110 (transient CVMFS read error while building the venv) | 2026-09-25 ~12:10 | submitted |
-| 22676228 | retry of law tasks 433–440 (the same CVMFS read error) | 2026-09-25 ~14:30 | submitted |
-| 22678427 | aggregation of design A (retry of 22678258, which hit the CVMFS error; node c537 excluded) | 2026-09-25 ~15:10 | completed, 2.6 min |
-| 22678919 | aggregation of design B | 2026-09-25 ~15:40 | completed, 3 min |
-| 22657365 | trial aggregation of rung A on the 6 pilot runs (tests figures and report on real data; overwritten by the real one) | 2026-09-25 ~07:15 | completed, 2 min, 7 GB; 9 figures + report + checks JSON |
-
-## Output paths
-
-- All Nibi outputs: `/project/def-maxwl/mforooz/t118/ladder/`
-
-## Measured time per run
-
-Early check (job 22655875, design A, one H3K27ac g, 38 training pairs, 1 MIG slice + 4 cores):
-
-| run | venv | train | score | wall | peak host memory (sacct) |
-|---|---|---|---|---|---|
-| counts, real g, seed 0 | ~1 min | 361 s (2 000 steps, best at 1 000) | ~5 min | 12.2 min | 12.3 GB |
-| −log10 p, real g, seed 0 | ~1 min | 561 s (3 750 steps, best at 2 750) | 70 s | 12.1 min | 13.5 GB |
-
-Peak memory includes the memory-mapped cache pages, so the full run asks for 32 GB (command-line
-`--mem`) instead of the script's 16 GB.
-
-### What the early check showed (one seed, real g only — not a result, no twins yet)
-
-Design A, H3K27ac track, mean CRPS over its 38 trained pairs on chr19 + chr21, blacklist removed;
-references are the v2 baseline numbers for the same pairs:
-
-| space | bins | real g, design A | noSolution | QuantileMatching |
-|---|---|---|---|---|
-| counts | all | 0.421 | 0.503 | 0.437 |
-| counts | top 1% | 5.30 | 2.40 | 1.87 |
-| −log10 p | all | 0.164 | 0.253 | 0.215 |
-| −log10 p | top 1% | 3.27 | 2.70 | 2.31 |
-
-On the top 1% of bins design A is worse than both references. The likely cause is design A's one
-dispersion value for the whole track: fitted mostly on near-zero bins, it makes the predicted
-distribution too wide at peaks (the references use a Poisson, which is narrow). Design B gives a
-dispersion per level, which should fix this. I read it as a property of design A, not a bug, and did
-not change anything. Seed wobble is not known yet, so none of these gaps can be judged.
-
-## Choices I made
-
-Science choices the plan does not settle; each is the most conservative option.
-
-1. Fragment length is not a covariate. Only the extsize factor k is encoded; the actual fragment
-   length (which also moves on the paired-end and MAPQ arms) is recorded in the table, unencoded.
-2. Products with no control (DNase and the control-identity = none arms): control fraction,
-   ratio k and control depth are 0, identity = none, has-control = 0 (the DNase rule applied to
-   both).
-3. Count-space pairs whose target counts equal the source counts (p-only arms as targets) are kept
-   and flagged; the headline numbers include them, and a variant without them is reported beside.
-4. The labels-as-ids twin's fixed permutation is a derangement (no pair keeps its own covariates).
-5. Rung B's curve above the last knot continues with the last segment's slope (QuantileMatching
-   stays flat there).
-6. The across-track g gets the same step budget as a per-track g.
-7. The depth law is computed in count space only.
-8. The main claim's rung choice on chr22 uses CRPS on all bins (real g, mean over seeds, macro over
-   tracks), per version of g and per space.
-9. The law test scores all chr19 + chr21 bins, in a separate CPU job per run, regenerating
-   predictions from the checkpoint.
-10. Figures are drawn with matplotlib. The local `candii` env lacks it, so figures are tested with
-    `/Users/mforooz/miniforge3/bin/python`; on Nibi the job venv has it. No environment changed.
-11. A memory-mapped cache of all 130 products × 2 spaces (≈126 GB) goes under
-    `/project/def-maxwl/mforooz/t118/ladder/cache/`. I will not delete it; that is the PI's call
-    once the runs are scored.
-12. At test time the no-covariates twin predicts with one θ for every query: the mean of its g's
-    outputs over the training pairs. Otherwise g, which learned to ignore covariates, would be
-    queried on covariate pairs it never saw (law test, shuffle, swap), and its answer there would
-    be an extrapolation rather than "one average map". This is the conservative reading: it gives
-    the twin its best average map, so "beats the twin" is not made easier.
-
-## For the PI — design A, first full reading (drafted, nothing ticked)
-
-The report holds every check with its value, bar and seed wobble: 45 of 78 checks meet their bar.
-Shape of the result, in plain terms:
-
-- **p space: the covariates help.** Against the no-covariates twin on the held-out chromosomes, all
-  12 p-space readings meet the bar (every class, both versions of g, all bins and top 1%).
-- **Counts: mostly not.** Only broad (both g's) and narrow (across-track g) all-bins readings meet
-  the bar; top-1% readings are all unmet, and DNase is worse than the twin with a per-track g
-  (−0.55 all bins). Design A's straight line on log(1 + counts) is the likely reason (see the pilot
-  note).
-- **Law test (never-trained pairs):** beats the labels-as-ids twin almost everywhere (often by
-  orders of magnitude — that twin has no answer for unseen pairs); beats the no-covariates twin on
-  all bins for narrow and broad, rarely on top 1%, and not for DNase with a per-track g.
-- **Depth law: unmet in every class** (largest |predicted scale / depth ratio − 1| = 0.35 to 0.60
-  against a bar of 0.10). Design A does not learn the depth scale to within 10%.
-- **Rung choice for the main claim (chr22, provisional — B–D law tests are still running but
-  validation does not depend on them):** C for the across-track g in both spaces; D per track in
-  counts; A per track in p space, because B, C and D have runs that blow up there (next item).
-
-### Design B against design A (drafted readings met, of 12 per cell unless noted)
-
-| check | A counts | B counts | A p | B p |
-|---|---|---|---|---|
-| beats the no-covariates twin (held-out chromosomes) | 3 | 11 | 12 | 7 |
-| law test: beats the no-covariates twin | 6 | 8 | 4 | 1 |
-| law test: beats the labels-as-ids twin | 10 | 12 | 10 | 11 |
-| beats the design below (B > A) | — | 9 | — | 8 |
-| depth law (of 6; counts only) | 0 | 0 | — | — |
-
-B's curve fixes count space, as expected (3 → 11 against the twin). In p space B does worse than A;
-this matches the exploding upscaling pairs below, which hit B and D and barely A (A has one σ for
-the whole track). Depth law still unmet (largest error 0.30–0.52). Design B: 67 of 102 checks met.
-
-## All four designs (drafted readings met; 12 per cell unless noted)
+Every gain is judged against 2 × the real g's seed wobble (3 seeds), per mark class (DNase; narrow;
+broad), CRPS on all bins and on the top 1%, for both versions of g (one per track, one across tracks).
 
 | check | A counts | B counts | C counts | D counts | A p | B p | C p | D p |
 |---|---|---|---|---|---|---|---|---|
-| beats the no-covariates twin | 3 | 11 | 11 | 11 | 12 | 7 | 11 | 3 |
+| beats the no-covariates twin (held-out chromosomes) | 3 | 11 | 11 | 11 | 12 | 7 | 11 | 3 |
 | law test vs the no-covariates twin | 6 | 8 | 12 | 9 | 4 | 1 | 4 | 1 |
 | law test vs the labels-as-ids twin | 10 | 12 | 12 | 11 | 10 | 11 | 11 | 5 |
 | beats the design below | — | 9 | 5 | 1 | — | 8 | 2 | 0 |
-| depth law (of 6) | 0 | 0 | 0 | 0 | — | — | — | — |
+| depth law (of 6; counts only) | 0 | 0 | 0 | 0 | — | — | — | — |
 
-Main claim (chr22 rule): C for the across-track g in both spaces, D per track in counts, A per track in
-p. Shuffle met almost everywhere; swap unmet everywhere; depth law unmet everywhere. Details:
-`cruxvault/results/h15/report.md`.
+Checks met in total: A 45/78, B 67/102, C 68/102, D 41/102.
 
-## Design X (exploratory, not pre-registered): g also reads the bin value
+- **Design A** (one line in log space): p space is its strength (12/12 against the twin). In counts
+  it fails, because one straight line on log(1 + counts) cannot represent "no change" at low counts
+  and overshoots at peaks (on the p-only arms, a ≈ −1.6, b ≈ 1.9 instead of 0 and 1).
+- **Design B** (monotone curve) fixes counts (3 → 11) but is worse than A in p space, which is where
+  the exploding pairs hit.
+- **Design C** (kernel, then curve) is the best in counts on the law test (12/12) and is the design
+  the main claim judges for the across-track g.
+- **Design D** (FiLM CNN) is strong in counts against the twin but collapses in p space (3/12),
+  again because of exploding pairs.
+- **Depth law**: unmet by every design in every class (predicted count scale misses the true depth
+  ratio by 30–140% against a 10% bar). Not yet investigated: check the depth-law computation itself
+  before reading this as a model failure.
 
-g outputs a 32-number pair vector from (C, C′); a shared MLP reads [bin value, pair vector] and gives
-each bin its own mean and spread. One g per track, H3K27ac and DNase, both spaces, real g and the
-no-covariates twin, 3 seeds; held-out chromosomes only (no law test). Real g, mean CRPS all bins
-(seed wobble), pairs with CRPS > 20 summed over the 3 seeds, and the gain over the twin against
-2 × wobble:
+## Results — the main claim (drafted; `cruxvault/results/h15/report.md`)
+
+Chosen design by the pre-registered chr22 rule (lowest design within the best one's seed wobble):
+
+| g | space | A | B | C | D | chosen |
+|---|---|---|---|---|---|---|
+| across tracks | counts | 0.491 | 0.395 | **0.353** | 0.360 | C |
+| across tracks | −log10 p | 0.226 | 4.76 | **0.181** | 8 912 | C |
+| per track | counts | 0.566 | 0.374 | 0.340 | **0.332** | D |
+| per track | −log10 p | **0.224** | 0.229 | 0.338 | 386 | A |
+
+Readings of the chosen design (met/total): shuffle 22/24 met (a wrong C′ removes the advantage);
+swap 0/12 met (C′ = C does not return X to within a median |log ratio| of 0.1 — ≈0.19–0.22 for C in
+counts; part of this is the log(1 + X) input scale); depth law 0/6 met. Under the rule `all`,
+several checks are unmet for every chosen design.
+
+## The p-space explosion (open; the PI wants a principled fix)
+
+In 32 of 576 run × split combinations, one or two pairs (of 14–242) score CRPS from ~25 to ~10⁷,
+almost all in −log10 p and in designs B, C and D. All are **upscaling** pairs (my label): a sparse
+source (depth 3.75M, 7.5M, 15M, or DNase with dedup off) to the full-depth base. Their top-1% CRPS
+is ordinary (~4); the explosion is in low bins, and one such pair dominates a run's mean and seed
+wobble.
+
+Diagnosis, checked with the PI: in the worst pair (DNase depth 3.75M → base, design B, across-track
+g), the lowest knot sits at x = log(1e-3) (the floor) and its learned σ is 10.9. Only 0.1% of source
+bins sit at the floor, and there the target's log-space SD is 1.8 — so 10.9 is not what the data ask
+for. The lowest knot has almost no training data, its σ drifts, and linear interpolation spreads the
+large σ over every bin between the floor and the median, where a log-normal's mean,
+median × exp(σ²/2), makes CRPS explode. A is spared because it has one σ per pair.
+
+Ruled out by the PI: capping σ (not principled); keeping the runs and only reporting (not a fix).
+Withdrawn by me: a censored log-normal (it rested on a wrong diagnosis). Also discussed: a
+log-Laplace would be worse (power-law tail; mean and CRPS infinite once its scale reaches 1). Still
+unexplained: design D also explodes and has no knots.
+
+## Design X — exploratory test of the PI's idea (not pre-registered)
+
+The idea: g reads the bin value as well as (C, C′), so each bin value gets its own transformation.
+As built: g outputs a 32-number pair vector from (C, C′); a shared MLP reads [bin value, pair vector]
+and gives, per bin, loc = x + a and disp = d. So f is design A with the slope fixed at 1 and a
+shift a and spread d that depend on the bin value — any function of x, not forced to be monotone.
+It is a change to both g and f; it is fairly compared with B (both per-bin), not with C or D, which
+see neighbouring bins. Tested: one g per track, H3K27ac and DNase, both spaces, real g and the
+no-covariates twin, 3 seeds, held-out chromosomes only (no law test). Ran on CPU (16 cores) because
+every 10 GB GPU-slice node was held by the scheduler for another job.
 
 | track | space | A | B | C | D | X | exploding pairs A/B/C/D/X | X beats twin |
 |---|---|---|---|---|---|---|---|---|
 | H3K27ac | counts | 0.419 | 0.378 | 0.364 | 0.363 | 0.376 | 0/0/0/0/0 | met (0.085 > 0.002) |
-| H3K27ac | p | 0.165 | 0.441 (0.80) | 1.04 (2.59) | 0.144 | 0.151 | 0/1/1/0/0 | met (0.036 > 0.004) |
-| DNase | counts | 3.06 | 0.824 | 0.818 | 0.772 | 1.32 (0.21) | 3/0/0/0/0 | unmet (0.30 < 0.42) |
+| H3K27ac | p | 0.165 | 0.441 | 1.04 | 0.144 | 0.151 | 0/1/1/0/0 | met (0.036 > 0.004) |
+| DNase | counts | 3.06 | 0.824 | 0.818 | 0.772 | 1.32 | 3/0/0/0/0 | unmet (0.30 < 0.42) |
 | DNase | p | 0.752 | 0.541 | 0.526 | 18 500 | 0.659 | 0/0/0/3/0 | met (0.16 > 0.13) |
 
-Reading: in p space X had no exploding pair on either track and beats its twin on both; B, C and D
-each exploded somewhere. In counts X is close to B on H3K27ac but clearly worse than B–D on DNase
-(larger wobble, top-1% CRPS 68 against ~20). Caveats: two tracks, per-track g only, 6 runs per cell,
-and the explosions are sporadic (1–3 pairs per design), so "none in X" is suggestive, not proof.
+Mean CRPS over all bins, real g, mean over seeds; exploding = pairs with CRPS > 20 over 3 seeds. In p
+space X had no exploding pair and beat its twin on both tracks. In counts it is close to B on
+H3K27ac and clearly worse than B–D on DNase. Two tracks and sporadic explosions: suggestive, not
+proof.
 
-## A decision for the PI: a few p-space pairs explode the mean
+## Choices I made (science choices the plan did not settle; the most conservative option)
 
-In 32 of 576 run × split combinations, one or two pairs (of 14–242) score CRPS from ~25 to ~10⁷,
-almost all in −log10 p space and mostly in designs B and D. They are all **upscaling** pairs: a
-sparse source (depth 3.75M, 7.5M or 15M, or DNase with dedup off) to the full-depth base. Their
-top-1% CRPS is ordinary (~4); the explosion is in the low bins. Reason: where the source is near
-zero it tells little about the target, so the log-normal fit learns a large σ at low levels. That is
-fine for the likelihood, but a log-normal's mean is median × exp(σ²/2), so its CRPS explodes. One
-such pair then dominates the mean over pairs, and with it the seed wobble.
-
-**Corrected diagnosis (checked 2026-09-25 with the PI).** In the worst pair (DNase depth 3.75M →
-base, design B, across-track g) the lowest knot sits at x = log(1e-3), the floor, and its learned σ
-is 10.9. But only 0.1% of source bins sit at the floor, and there the target's log-space SD is 1.8.
-So the 10.9 is not what the data ask for: the lowest knot has almost no training data, its σ drifts,
-and linear interpolation spreads the large σ over every bin between the floor and the median, where
-exp(σ²/2) makes the CRPS explode. The PI rejected capping σ and reporting-only as not a fix. The
-earlier idea of a censored log-normal is withdrawn (it rested on the wrong diagnosis). Open: D also
-explodes and has no knots — to be checked. The PI proposed that g also read the bin value (design X
-above); it is being tested.
-
-## Failures and fixes
-
-- 8 of 576 train tasks failed in their first 35 s: every task rewrote the shared `tasks.tsv`, and
-  concurrent readers on /project got "Stale file handle". Fix (82cf8db, shell only; the Python code
-  is unchanged from the run's 34e5705): each task reads its own copy and the shared one is never
-  replaced. Retried as 22667089.
-- Law and aggregation tasks failed 10 times on "Input/output error" reading the cluster's shared
-  software filesystem (CVMFS) while building the venv (nodes c128, c166, c537) — a cluster fault, not
-  ours; each was resubmitted.
-- The law-test array (`aftercorr` on the train array) never released a task while the train array
-  was still running, and would never have run for the 8 failed tasks. Cancelled the pending part and
-  re-submitted the law test directly for every trained run.
+1. Fragment length is not a covariate; only the extsize factor k is encoded (fragment length is in
+   the table, unencoded).
+2. Products with no control (DNase, control-identity = none): control fraction, ratio k and control
+   depth are 0, identity none, has-control 0.
+3. Count-space pairs whose target counts equal the source are kept and flagged; headline includes
+   them, a variant without them is reported beside.
+4. The labels-as-ids twin's permutation is a derangement.
+5. B's curve above the last knot continues with the last slope.
+6. The across-track g gets the same step budget as a per-track g.
+7. The depth law is computed in count space only.
+8. The main claim's chr22 rung choice uses CRPS on all bins (real g, mean over seeds, macro over
+   tracks).
+9. The law test scores all chr19 + chr21 bins, in a CPU job per run, from the checkpoint.
+10. Figures use matplotlib; tested locally with `/Users/mforooz/miniforge3/bin/python` (the
+    `candii` env lacks it). No environment changed.
+11. The 109 GB cache stays until the PI decides.
+12. At test time the no-covariates twin predicts with one θ (its mean over the training pairs), so
+    it is never asked to extrapolate onto covariate pairs it never saw.
 
 ## Disagreements with the plan
 
-- The design plan says the across-track g has "all 246 pairs". With both DNase MAPQ arms excluded
-  (the handoff's rule) it is 242: 6 histone tracks × 38 + DNase 14. The code uses 242.
-- **Swap check vs the input scale (for the PI; bar not changed).** f reads x = log(1 + counts), so
-  the identity map predicts a mean of X + 1, not X; at X = 1 that alone gives |log ratio| = 0.69.
-  The swap bar (median |log(predicted mean / X)| over bins with X > 0 below 0.1) can still be met
-  by forms whose curve or head can bend at low counts (B, C, D), but design A (one line in log1p
-  space) may miss it by construction in count space. Swap gates only the main claim. I report the
-  number as measured.
+- The across-track g has 242 pairs, not the plan's "246" (both DNase MAPQ arms excluded).
+- Swap vs input scale: with x = log(1 + counts), the identity predicts X + 1, so design A may miss
+  the 0.1 swap bar by construction in counts. Bar unchanged; reported as measured.
 
-## Blocked on the PI
+## Failures and fixes (none changed a number)
 
-- (nothing blocking)
+- 8 train tasks failed in 35 s on an NFS "Stale file handle" (every task rewrote a shared
+  `tasks.tsv`); fixed in 82cf8db (shell only) and retried.
+- The law array chained with `aftercorr` never released a task while the train array ran; cancelled
+  and resubmitted directly.
+- 10 law/aggregation tasks failed on CVMFS "Input/output error" while building the venv (nodes
+  c128, c166, c537); resubmitted with those nodes excluded.
+- The Nibi tunnel dropped three times; Nibi work stopped each time until the PI ran `hpc up nibi`.
+- Design X's GPU array (22683580) never started: all MIG nodes (g30–g37) were held (`mixed-`) for a
+  higher-priority job. Cancelled; run on CPU (22688594), 4–51 min per run.
+
+## Nibi jobs (all finished)
+
+cache 22654779 · early check 22655875 · pilot 22656701 / 22656702 · train 22657297 (+ retry
+22667089) · law 22657301 (cancelled part) → 22667088, 22667090, 22667091, 22669098, 22676228 ·
+aggregation 22678427 (A), 22678919 (B), final 22682907 (C), 22682908 (D), 22682909 (A), 22682910
+(B) · design X 22683580 (cancelled) → 22688594 (CPU).
+
+## Measured cost
+
+Per-track train + score ≈ 12 min on a 10 GB slice (cold cache; much faster warm); across-track law
+test up to ~2 h on 8 CPU cores; aggregation 2–4 min; design X on 16 CPU cores 4–51 min per run.
+
+## Waiting on the PI
+
+- The principled fix for the p-space explosion (see above), and whether design X should become a
+  pre-registered design.
+- Ticks, verdicts (`crux close`), accepting the task, merging — none done.
