@@ -4,16 +4,20 @@ type: idea
 schema: 2
 title: A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design
 parent: q4
-status: idea
+status: running
 rule: all
+neutral_optout: "PI ruling 2026-09-23: no check voids the run; the shuffle and swap checks are reported for this rung and gate only the main claim"
 measurement: "design B of the architecture ladder. f: a monotone spline on the log scale (12 knots at fixed training quantiles of x; g outputs positive steps) applied to every bin, plus dispersion as a function of level. g is a small MLP on [C, C'] that outputs the knots and the dispersion curve. Same function class as QuantileMatching, but chosen from C, C' instead of fitted on X'. g(C, C') outputs f, f(X) predicts X' as NB (n, p) per bin for counts and log-normal (μ, σ) per bin for −log10 p; both versions of g (one per track, 7; one across all 7 tracks) decide pass/fail; pairs, split, covariates and scoring as in plan/T118_COUNTERFACTUAL_F.md (base↔arm both ways, chr22 validates, chr19 + chr21 score, never-trained arm→arm law test); competitor = this design trained with C and C' scrambled across pairs"
 replicates: 7 tracks x base↔arm pairs in both directions (246 pairs; DNase MAPQ arms excluded) x 3 seeds of each g (7 per-track g's and 1 across-track g), and of each twin
 verdict: 
 metric: 
 created: "2026-09-25T01:26:25"
-updated: "2026-09-25T01:30:29"
+updated: "2026-09-25T02:03:08"
 null_approved: "2026-09-25T01:30:29"
 null_hash: 15406e39fd11a69f
+lock: e1d6dc947b754ebe
+locked: "2026-09-25T02:03:08"
+lock_at: running
 ---
 
 # h17 — A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design

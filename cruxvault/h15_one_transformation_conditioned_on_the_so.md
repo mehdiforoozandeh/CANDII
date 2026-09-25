@@ -4,7 +4,7 @@ type: idea
 schema: 2
 title: A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates
 parent: q1
-status: idea
+status: running
 rule: all
 measurement: "g(C, C') outputs f, and f(X) predicts X' as NB (n, p) per bin for counts and log-normal (μ, σ) per bin for −log10 p; g is what is trained, in two versions: one g per track (7 g's) and one g across all 7 tracks, both scored under the same checks (both versions decide pass/fail); trained on base↔arm pairs of the t112 counterfactual corpus in both directions, validated on chr22, scored on chr19 + chr21 (blacklist removed) and on never-trained arm→arm pairs; D = NB CRPS / log-normal CRPS and Spearman, on all, non-zero and top-1% bins; competitor = the same model trained with C and C' scrambled across pairs; design record plan/T118_COUNTERFACTUAL_F.md"
 replicates: 7 tracks (1 DNase, 3 narrow, 3 broad marks) x base↔arm pairs in both directions (19 arm products per histone track, 9 for DNase; 246 pairs) x 3 seeds of each g (7 per-track g's and 1 across-track g)
@@ -12,9 +12,12 @@ neutral_optout: "PI ruling 2026-09-23: no check voids the run; the swap check (C
 verdict: 
 metric: 
 created: "2026-09-23T14:40:11"
-updated: "2026-09-25T00:55:22"
+updated: "2026-09-25T02:03:08"
 null_approved: "2026-09-25T00:55:22"
 null_hash: db64666c20881711
+lock: a7e5a25e3939818d
+locked: "2026-09-25T02:03:08"
+lock_at: running
 ---
 
 # h15 — A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates
