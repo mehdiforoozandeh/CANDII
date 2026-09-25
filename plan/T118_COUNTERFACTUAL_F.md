@@ -173,12 +173,21 @@ expressiveness, all to be built:
   - **labels-as-ids twin** — one fixed permutation of (C, C') across pairs for all of training: the
     wrong label still identifies its pair, so the twin can learn one map per pair. On trained pairs
     it can match g; only the law test (never-trained pairs) separates them.
-  Which twin gates which check: TODO(PI).
+  **Gating** (PI 2026-09-25, approved to satisfy the notebook's rules — pass/fail is not the PI's
+  priority now): beating the twin is judged against the no-covariates twin; the law test against
+  both twins.
 - **Loss** (PI 2026-09-25): negative log-likelihood — NB for counts, log-normal for −log10 p. A p
   target of exactly 0 has zero log-normal likelihood, so p targets are floored at 1e-3 in the
   training loss only; scoring uses the real values.
 - **One g per space** (PI 2026-09-25): a counts g whose f reads the count track X only, and a p g
   whose f reads the p track X only.
+
+- **Sizes** (PI 2026-09-25): g is an MLP with 2 hidden layers of 64 in every rung. B: 12 knots
+  at fixed training quantiles of x, g outputs positive steps (always monotone). C: a 33-bin kernel
+  (825 bp), initialised to the identity, unconstrained (can sharpen as well as smooth). D: 4
+  layers × 32 channels, kernel 5, dilations 1, 2, 4, 8 (view 61 bins ≈ 1.5 kb).
+- Routine training settings (optimizer, learning rate, window length, batch mix) are the agent's
+  call, reported with the run.
 
 g sees few distinct (C, C') points (38 per histone track, 18 for DNase, 246 across tracks), so g
 stays small in A–D and the capacity goes into f's form.

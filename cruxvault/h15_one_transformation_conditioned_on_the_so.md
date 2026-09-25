@@ -44,10 +44,10 @@ A generator conditioned on the source and target covariates produces the transfo
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
 <!-- Bars marked TODO(PI) are not set; CLAUDE.md forbids inventing a gate. -->
-- [ ] beatstwin: D_twin − D_g > 2 x g's seed wobble (max pairwise |Δ| of D_g over 3 seeds; D_g = the distance of the prediction f(X) made with the f that g outputs), per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately, CRPS all bins and top 1%, on chr19 + chr21. Further bar on the size of the gain: TODO(PI) (no oracle; dropped 2026-09-25)
+- [ ] beatstwin: (twin = the no-covariates twin, (C, C') re-scrambled at every step) D_twin − D_g > 2 x g's seed wobble (max pairwise |Δ| of D_g over 3 seeds; D_g = the distance of the prediction f(X) made with the f that g outputs), per mark class (DNase; narrow H3K27ac/H3K4me3/H3K4me1; broad H3K27me3/H3K36me3/H3K9me3), counts and p separately, CRPS all bins and top 1%, on chr19 + chr21. Further bar on the size of the gain: TODO(PI) (no oracle; dropped 2026-09-25)
       fails-if:: the covariates add nothing a scrambled-covariate twin of equal capacity cannot already do
       discriminates:: true
-- [ ] lawtest: on never-trained arm → arm pairs within each track, scored on chr19 + chr21 and reported by knob combination, g beats the scrambled twin by more than 2 x seed wobble; bar: TODO(PI). For depth → depth pairs the predicted count scale must follow the depth ratio (tolerance TODO(PI))
+- [ ] lawtest: (against both twins: no-covariates and labels-as-ids) on never-trained arm → arm pairs within each track, scored on chr19 + chr21 and reported by knob combination, g beats each twin by more than 2 x seed wobble; bar: TODO(PI). For depth → depth pairs the predicted count scale must follow the depth ratio (tolerance TODO(PI))
       fails-if:: g keeps one map per trained (C, C') pair and has no answer for a combination it never saw
 - [ ] shufflecollapse: at scoring, C' replaced by the C' of another arm of the same track whose target differs (drawn separately for counts and p); g's advantage over the twin must vanish; bar: TODO(PI)
       fails-if:: g does not use C': the f it outputs does not change when told the wrong target covariates
