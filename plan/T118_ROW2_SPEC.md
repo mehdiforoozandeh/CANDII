@@ -160,8 +160,9 @@ are read, never rerun. All jobs on Nibi; GPU jobs use only the 10 GB MIG slice.
 
 ## 7. Decisions for the PI
 
-Each entry: the choice, the options with cost and what each teaches, and a recommendation. Nothing
-below is decided.
+Each entry: the choice, the options with cost and what each teaches, and a recommendation.
+
+Decided by the PI in chat on 2026-09-26: adopt the recommendation in every entry, (i)–(x).
 
 **(i) What g reads of x.**
 (a) The bin's own value x_i only. Cost: none beyond section 2. Teaches: whether a level-dependent
