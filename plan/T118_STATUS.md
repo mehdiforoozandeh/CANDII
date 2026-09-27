@@ -14,6 +14,18 @@ pairs make the mean CRPS explode in designs B, C and D, and the depth law and sw
 everywhere. An exploratory test of the PI's idea (g also reads the bin value; "design X") removed
 the p-space explosions on the two tracks tested but did worse than B–D in DNase counts.
 
+## 2026-09-26 — row 2 of the grid (g reads the bin value) is being built
+
+The PI set a new session goal: results for a 2 × 4 grid. Row 1 is g(C, C′) → f (the 576 finished
+runs); row 2 is g(x, C, C′) → f, one transformation per bin, for each of A–D (new forms A2–D2).
+Spec: `plan/T118_ROW2_SPEC.md` — the PI adopted every recommendation in its §7 (g reads the bin's
+own value only; one rule for all forms; B2 is not forced monotone; smoke, then the full 576 row-2
+runs; pre-register before compute; design X kept as a reference; D's explosion diagnosed in parallel
+on CPU). Build plan: `.orchestrate/plan_row2.md` (git-excluded). Wave 0 (core harness, A2, B2, C2,
+D2, figures/report) is being built in worktrees under
+`/Users/mforooz/Desktop/research/libbrechteam@sfu/.orchestrate-wt/CANDII/row2-*`. No Nibi compute
+yet; every compute step waits for the PI's yes. Row-1 golden smoke captured before any merge.
+
 ## Where everything is
 
 | what | where |
