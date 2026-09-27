@@ -1,9 +1,13 @@
 """t118 ladder — the per-rung markdown report, drawn from the pinned `results.json` + checks JSON.
 
     python tools/t118/ladder/report.py <agg_dir> <rung>
+    python tools/t118/ladder/report.py grid <agg_dir>
 
 Writes `<agg_dir>/<rung>/report.md` with the sections Summary, Checks, Law test, Depth law,
-Shuffle and swap, Figures, Runs, Choices. Runs under the candii env: numpy + stdlib, no
+Shuffle and swap, Figures, Runs, Choices. A row-2 rung (A2-D2: g also reads the source signal)
+adds the section "Against the same design in row 1" after Checks. `grid` writes
+`<agg_dir>/grid.md`: the 2 x 4 grid (row 1 and row 2 against designs A-D) from the optional
+`grid` and `rung_choice_row2` keys of results.json. Runs under the candii env: numpy + stdlib, no
 matplotlib (it reuses the labels and loaders of `figures.py`, whose plotting imports are lazy).
 
 Rules the text follows (PI and AGENTS.md section 7.2):
@@ -12,7 +16,9 @@ Rules the text follows (PI and AGENTS.md section 7.2):
 - the seed wobble stands beside every model number (references have no seed and say so);
 - the CRPS split (oracle-scaled CRPS + scale error) stands beside every CRPS on all bins, and a
   CRPS whose split was not computed says so;
-- hypotheses are named by their content, never by notebook ids.
+- hypotheses are named by their content, never by notebook ids;
+- the count of scored pairs with CRPS on all bins above 20 (the "exploding" label) is reported
+  only: it has no bar and is never a pass or a fail.
 """
 from __future__ import annotations
 
@@ -156,12 +162,19 @@ def section_checks(res, rung, checks):
          "depth pairs, bar 0.10. Shuffle and swap gate only the main claim (one transformation f, "
          "chosen by g from the source and target covariates); they are reported for every rung.",
          ""]
+    if rung in F.ROW2:
+        L += [f"Beats the same design in row 1: value = D_row1 - D_row2 of the real g (design "
+              f"{rung[0]} against design {rung}, same mark class, space and metric), bar = 2 x the "
+              f"larger of the two seed wobbles.", ""]
     rows = []
     for c in F.sort_checks(checks):
         name = F.CHECK_NAME.get(c["check"], c["check"])
         below = (c.get("components") or {}).get("rung_below")
         if c["check"] == "beatsbelow" and below:
             name += f" ({F.RUNG_NAME.get(below, below)})"
+        r1 = (c.get("components") or {}).get("rung_row1")
+        if c["check"] == "beatsrow1" and r1:
+            name += f" ({F.RUNG_NAME.get(r1, r1)})"
         rows.append([name, F.GV_NAME.get(c["g_version"], c["g_version"]),
                      F.SPACE_NAME.get(c["space"], c["space"]), c["mark_class"],
                      F.METRIC_NAME.get(c["metric"], c["metric"]), F.fmt(c["value"]),
@@ -191,6 +204,64 @@ def section_checks(res, rung, checks):
         L += ["", f"Validation CRPS is on chr22; {NO_SPLIT} (validation)."]
     else:
         L.append("No rung choice in results.json.")
+    if rung in F.ROW2:
+        L += ["", "### The row-2 choice, reported beside it", "",
+              "The same rule over the row-2 designs A2-D2. The main claim's choice above stays "
+              "over row 1 only; this one is reported, not judged.", ""]
+        rows = []
+        for key, v in sorted(res.get("rung_choice_row2", {}).items()):
+            gv, _, space = key.partition("|")
+            vals = "; ".join(f"{r}: {F.fmt(v['val_by_rung'].get(r))} (seed wobble "
+                             f"{F.fmt(v.get('wobble_by_rung', {}).get(r))})"
+                             for r in F.ROW2 if r in v.get("val_by_rung", {}))
+            rows.append([F.GV_NAME.get(gv, gv), F.SPACE_NAME.get(space, space), v["chosen"],
+                         "yes" if v["chosen"] == rung else "no", vals])
+        if rows:
+            L += _table(["g", "space", "chosen rung", f"is rung {rung}",
+                         "validation CRPS by rung"], rows)
+            L += ["", f"Validation CRPS is on chr22; {NO_SPLIT} (validation)."]
+        else:
+            L.append("No row-2 rung choice in results.json.")
+    L.append("")
+    return L
+
+
+def section_row1(res, rung, idx, checks):
+    """A row-2 rung against the row-1 design in the same column, real g, trained pairs."""
+    r1 = rung[0]
+    L = ["## Against the same design in row 1", "",
+         f"Design {rung} ({F.RUNG_NAME[rung]}) against design {r1} ({F.RUNG_NAME[r1]}): the same "
+         f"data, pairs, split, step budget, seeds and scoring; only what g reads differs (row 1: "
+         f"the covariates C, C'; row 2: also the source signal x). Real g, trained pairs, "
+         f"held-out chromosomes chr19 + chr21, all pairs kept. Gain = row-1 mean - row-2 mean "
+         f"(CRPS: positive favours row 2). The reading is the aggregator's check \"beats the "
+         f"same design in row 1\" (bar = 2 x the larger seed wobble): drafted, not ticked.", ""]
+    split1, split2 = _split_index(res, r1), _split_index(res, rung)
+    chk = {(c["g_version"], c["space"], c["mark_class"], c["metric"]): c for c in checks
+           if c["check"] == "beatsrow1"}
+    rows = []
+    for gv in F.G_VERSIONS:
+        for space in F.SPACES:
+            for cls in F.CLASSES:
+                for metric in ("crps_all", "crps_top1"):
+                    a = idx.get((r1, gv, space, "real", "trained", cls, metric, "all"))
+                    b = idx.get((rung, gv, space, "real", "trained", cls, metric, "all"))
+                    ca, cb = _mw(a), _mw(b)
+                    if metric == "crps_all":
+                        ca += "; " + _split_text(split1.get((gv, space, "real", cls)))
+                        cb += "; " + _split_text(split2.get((gv, space, "real", cls)))
+                    else:
+                        ca += f"; {NO_SPLIT}"
+                        cb += f"; {NO_SPLIT}"
+                    gain = (F.fmt(a["mean"] - b["mean"]) if a and b and a.get("mean") is not None
+                            and b.get("mean") is not None else "n/a")
+                    c = chk.get((gv, space, cls, metric))
+                    rd = (f"{'met' if c['met'] else 'unmet'} (bar {F.fmt(c['bar'])})"
+                          if c is not None else "no check in results")
+                    rows.append([F.GV_NAME[gv], F.SPACE_NAME[space], cls, F.METRIC_NAME[metric],
+                                 ca, cb, gain, rd])
+    L += _table(["g", "space", "class", "metric", f"row 1, design {r1}", f"row 2, design {rung}",
+                 "gain", "drafted reading"], rows)
     L.append("")
     return L
 
@@ -449,10 +520,18 @@ def build_report(agg_dir, rung) -> str:
     idx, tbc = F.class_index(res), F.class_tracks(res)
     checks = F.load_checks(agg_dir, rung, res)
     split = _split_index(res, rung)
+    if rung in F.ROW2:
+        ask = (f"Question: can a transformation f, which a small network g chooses at every bin "
+               f"from that bin's source value x and the covariates of the source track (C) and "
+               f"of the wanted track (C'), turn X into X' — here with f in the form of "
+               f"{F.RUNG_NAME[rung]}. This is row 2 of the grid: row 1 chooses one f per pair "
+               f"from C and C' alone. Each result is compared with two ")
+    else:
+        ask = (f"Question: can one transformation f, which a small network g chooses from the "
+               f"covariates of the source track (C) and of the wanted track (C'), turn X into X' — "
+               f"here with f in the form of {F.RUNG_NAME[rung]}. Each result is compared with two ")
     L = [f"# Rung {rung}: {F.RUNG_NAME[rung]}", "",
-         f"Question: can one transformation f, which a small network g chooses from the "
-         f"covariates of the source track (C) and of the wanted track (C'), turn X into X' — "
-         f"here with f in the form of {F.RUNG_NAME[rung]}. Each result is compared with two "
+         ask +
          f"twins trained the same way: the no-covariates twin (C, C' redrawn at every step, so "
          f"they carry no information) and the labels-as-ids twin (one fixed permutation of C, "
          f"C', so a label still names its pair). Split: train on every chromosome except chr19, "
@@ -461,6 +540,8 @@ def build_report(agg_dir, rung) -> str:
          "are not ticked in the notebook.", ""]
     L += section_summary(res, rung, idx, tbc, split)
     L += section_checks(res, rung, checks)
+    if rung in F.ROW2:
+        L += section_row1(res, rung, idx, checks)
     L += section_law(res, rung, idx)
     L += section_depth(res, rung, checks)
     L += section_shuffle_swap(res, rung, idx, checks)
@@ -470,7 +551,132 @@ def build_report(agg_dir, rung) -> str:
     return "\n".join(L) + "\n"
 
 
+COLUMN_NAME = {"A": "A: affine in log space", "B": "B: monotone curve, 12 knots",
+               "C": "C: 33-bin kernel, then the curve", "D": "D: FiLM-modulated dilated CNN"}
+ROW_NAME = {1: "row 1: g reads (C, C')", 2: "row 2: g reads (x, C, C')"}
+
+
+def build_grid(agg_dir) -> str:
+    """The 2 x 4 grid (row 1 and row 2 against designs A-D), from the `grid` rows of results."""
+    agg_dir = Path(agg_dir)
+    res = F.load_results(agg_dir)
+    tbc, idx = F.class_tracks(res), F.class_index(res)
+    grid = {(r["g_version"], r["space"], r["mark_class"], r["metric"], r["column"],
+             int(r["row"])): r for r in res.get("grid", [])}
+    splits = {rung: _split_index(res, rung) for rung in F.RUNGS}
+    L = ["# The transformation grid: row 1 against row 2", "",
+         "Columns are the four forms of f: A, an affine map in log space; B, a monotone curve on "
+         "12 knots; C, a 33-bin kernel followed by that curve; D, a dilated CNN modulated by g "
+         "(FiLM). Row 1: g reads the covariates of the source and the wanted track (C, C') and "
+         "chooses one f per pair. Row 2: g also reads the bin's source value x and chooses one f "
+         "per bin. Both rows share the data, pairs, chromosome split, step budget, seeds and "
+         "scoring.", "",
+         "Each cell: real g, trained pairs, held-out chromosomes chr19 + chr21, all pairs kept; the "
+         "mean over the 3 seeds of the macro mean over the class's tracks, with the seed wobble "
+         "(the largest pairwise difference over the seeds). CRPS is the NB CRPS in counts space "
+         "and the log-normal CRPS in -log10 p space; lower is better. noSolution (X' = X) and "
+         "QuantileMatching are references with no seed, never pass/fail.", "",
+         "The count under each table is the number of (pair, seed) trained records whose CRPS on "
+         "all bins is above 20 (the label \"exploding\" in the status file). It is reported only: "
+         "it has no bar and it is not a check.", "",
+         "Nothing in this file is a verdict.", ""]
+    if not grid:
+        L += ["No grid rows in results.json: aggregate both rows (`aggregate.py ... --rows 1,2`) "
+              "to write them.", ""]
+    for gv in F.G_VERSIONS:
+        for space in F.SPACES:
+            if not any(k[:2] == (gv, space) for k in grid):
+                continue
+            L += [f"## {F.GV_NAME[gv]}, {F.SPACE_NAME[space]}", ""]
+            for cls in F.CLASSES:
+                if not any(k[:3] == (gv, space, cls) for k in grid):
+                    continue
+                L += [f"### {cls}", ""]
+                for metric in ("crps_all", "crps_top1"):
+                    refs = [_ref_cell(res, cls, space, ref, metric, tbc)
+                            for ref in ("noSolution", "QuantileMatching")]
+                    rows = []
+                    for row in (1, 2):
+                        cells = [ROW_NAME[row]]
+                        for col in F.ROW1:
+                            g = grid.get((gv, space, cls, metric, col, row))
+                            if g is None or g.get("mean") is None:
+                                cells.append("not run" if g is None else "n/a")
+                                continue
+                            # the seed count is read from the cell's per_class row
+                            pc = idx.get((g["rung"], gv, space, "real", "trained", cls, metric,
+                                          "all"))
+                            n = (sum(v is not None for v in pc["per_seed"]) if pc
+                                 else len(F.SEEDS))
+                            extra = "" if n == len(F.SEEDS) else f", {n} of {len(F.SEEDS)} seeds"
+                            c = (f"{F.fmt(g['mean'])} (seed wobble {F.fmt(g['seed_wobble'])}"
+                                 f"{extra})")
+                            if metric == "crps_all":
+                                c += "; " + _split_text(splits[g["rung"]].get(
+                                    (gv, space, "real", cls)))
+                            else:
+                                c += f"; {NO_SPLIT}"
+                            cells.append(c)
+                        rows.append(cells + refs)
+                    L += [f"**{F.METRIC_NAME[metric]}**", ""]
+                    L += _table(["", *(COLUMN_NAME[c] for c in F.ROW1), "noSolution",
+                                 "QuantileMatching"], rows)
+                    L.append("")
+                rows = []
+                for row in (1, 2):
+                    cells = [ROW_NAME[row]]
+                    for col in F.ROW1:
+                        g = grid.get((gv, space, cls, "crps_all", col, row)) or \
+                            grid.get((gv, space, cls, "crps_top1", col, row))
+                        cells.append("n/a" if g is None or g.get("n_pairs_crps_gt_20") is None
+                                     else str(int(g["n_pairs_crps_gt_20"])))
+                    rows.append(cells)
+                L += ["(pair, seed) trained records with CRPS on all bins > 20 (reported only):",
+                      ""]
+                L += _table(["", *(COLUMN_NAME[c] for c in F.ROW1)], rows)
+                L.append("")
+    L += ["## Which design each row chooses", "",
+          "Rule: the lowest rung whose chr22 validation CRPS (all bins, real g, mean over seeds, "
+          "macro over all tracks) is within the best rung's seed wobble of the best. The main "
+          "claim's choice is over row 1 only; the row-2 choice is reported beside it, not judged.",
+          ""]
+    rows = []
+    rc1, rc2 = res.get("rung_choice", {}), res.get("rung_choice_row2", {})
+    for key in sorted(set(rc1) | set(rc2)):
+        gv, _, space = key.partition("|")
+        cells = [F.GV_NAME.get(gv, gv), F.SPACE_NAME.get(space, space)]
+        for rc, rungs in ((rc1, F.ROW1), (rc2, F.ROW2)):
+            v = rc.get(key)
+            if v is None:
+                cells += ["n/a", "n/a"]
+                continue
+            cells += [v["chosen"], "; ".join(
+                f"{r}: {F.fmt(v['val_by_rung'].get(r))} (seed wobble "
+                f"{F.fmt(v.get('wobble_by_rung', {}).get(r))})"
+                for r in rungs if r in v.get("val_by_rung", {}))]
+        rows.append(cells)
+    if rows:
+        L += _table(["g", "space", "row-1 choice (main claim)", "row-1 validation CRPS",
+                     "row-2 choice (reported)", "row-2 validation CRPS"], rows)
+        L += ["", f"Validation CRPS is on chr22; {NO_SPLIT} (validation)."]
+    else:
+        L.append("No rung choice in results.json.")
+    if not rc2:
+        L += ["", "No row-2 rung choice in results.json."]
+    L.append("")
+    return "\n".join(L) + "\n"
+
+
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["grid"]:
+        ap = argparse.ArgumentParser(description="t118 ladder — the 2 x 4 grid report")
+        ap.add_argument("agg_dir")
+        a = ap.parse_args(argv[1:])
+        out = Path(a.agg_dir) / "grid.md"
+        out.write_text(build_grid(a.agg_dir))
+        print(out)
+        return 0
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("agg_dir")
     ap.add_argument("rung", choices=F.RUNGS)

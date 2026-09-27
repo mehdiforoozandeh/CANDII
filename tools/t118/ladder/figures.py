@@ -4,6 +4,9 @@
                                                          [--snippet-track <track>]
     python tools/t118/ladder/figures.py --check-schema <agg_dir>
 
+`<rung>` is a row-1 design (A-D: g reads the covariates only) or a row-2 design (A2-D2: g also
+reads the source signal, so f applies one transformation per bin).
+
 Writes `<agg_dir>/<rung>/figures/`:
   fig1_ladder         per mark class x space: noSolution, both twins, A-D, QuantileMatching;
                       CRPS on all bins and on the top 1 %; bars = seed range (every rung present,
@@ -15,13 +18,15 @@ Writes `<agg_dir>/<rung>/figures/`:
   fig4_depth_law      true log2 depth ratio vs predicted log2 count scale, identity line and the
                       +-10 % band (every rung present, `<rung>` highlighted)
   fig5_learned_f      A: a and b per arm level; B: g's curve per arm over QuantileMatching's curve;
-                      C: the kernel per arm; D: the size of the FiLM modulation per layer
+                      C: the kernel per arm; D: the size of the FiLM modulation per layer;
+                      A2-D2: the model's loc and dispersion response at each input level
   fig6_meta_profiles  mean signal +-2 kb around the top bins of X', for X, X' and the prediction
   fig7_snippets       10 kb loci picked by the fixed rule, X, X', predicted mean, 90 % interval
   fig8_calibration    PIT histograms per mark class (secondary)
   fig9_checks         the checks card: each check's value against its bar, per version of g
 
-`--check-schema` validates results.json against the pinned keys (plan t118-C3) and draws
+`--check-schema` validates results.json against the pinned keys (plan t118-C3; row 2 adds the
+optional keys `rung_choice_row2` and `grid` and the check `beatsrow1`) and draws
 nothing; it needs numpy only. Plotting imports matplotlib lazily (Agg backend), so this module
 imports under the candii env too (report.py reuses its labels and loaders). No torch, no candi,
 no scipy, no ladder modules.
@@ -36,7 +41,9 @@ from pathlib import Path
 
 import numpy as np
 
-RUNGS = ("A", "B", "C", "D")
+RUNGS = ("A", "B", "C", "D", "A2", "B2", "C2", "D2")
+ROW1 = RUNGS[:4]            # g reads (C, C'): one f per pair
+ROW2 = RUNGS[4:]            # g reads (x, C, C'): one f per bin
 MODELS = ("real", "nocov", "ids")
 SPACES = ("counts", "pval")
 SEEDS = (0, 1, 2)
@@ -57,7 +64,11 @@ DEFAULT_SNIPPET_TRACK = "C19M16"    # the pilot track: H3K27ac, all ten arms
 RUNG_NAME = {"A": "design A, the per-bin affine map",
              "B": "design B, the per-bin monotone curve",
              "C": "design C, a 33-bin kernel then the monotone curve",
-             "D": "design D, a dilated CNN modulated by g (FiLM)"}
+             "D": "design D, a dilated CNN modulated by g (FiLM)",
+             "A2": "design A2, the affine map chosen per bin",
+             "B2": "design B2, the monotone curve chosen per bin",
+             "C2": "design C2, a 33-bin kernel chosen per bin then the per-bin curve",
+             "D2": "design D2, a dilated CNN modulated per bin by g (FiLM)"}
 MODEL_NAME = {"real": "real g", "nocov": "no-covariates twin", "ids": "labels-as-ids twin"}
 GV_NAME = {"per_track": "one g per track", "across": "one g across tracks"}
 SPACE_NAME = {"counts": "counts", "pval": "-log10 p"}
@@ -68,22 +79,24 @@ METRIC_NAME = {"crps_all": "CRPS, all bins", "crps_nonzero": "CRPS, non-zero bin
                "swap_median_abs_log_ratio": "median |log(mean / X)|",
                "depth_scale_rel_error": "|scale / ratio - 1|"}
 CHECK_ORDER = ("beatstwin", "lawtest_nocov", "lawtest_ids", "depthlaw", "beatsbelow", "shuffle",
-               "swap")
+               "swap", "beatsrow1")
 CHECK_NAME = {"beatstwin": "beats the no-covariates twin (held-out chromosomes)",
               "lawtest_nocov": "law test: beats the no-covariates twin",
               "lawtest_ids": "law test: beats the labels-as-ids twin",
               "depthlaw": "depth law: count scale within 10 % of the depth ratio",
               "beatsbelow": "beats the rung below",
               "shuffle": "shuffle: a wrong C' removes the advantage",
-              "swap": "swap: C' = C leaves X unchanged"}
+              "swap": "swap: C' = C leaves X unchanged",
+              "beatsrow1": "beats the same design in row 1"}
 CHECK_SHORT = {"beatstwin": "beats no-cov twin", "lawtest_nocov": "law test vs no-cov twin",
                "lawtest_ids": "law test vs ids twin", "depthlaw": "depth law",
                "beatsbelow": "beats rung below", "shuffle": "shuffle (wrong C')",
-               "swap": "swap (C' = C)"}
+               "swap": "swap (C' = C)", "beatsrow1": "beats row-1 design"}
 #: the comparison `met` encodes, per check (plan t118-C3)
 CHECK_RULE = {"beatstwin": ">", "lawtest_nocov": ">", "lawtest_ids": ">", "beatsbelow": ">",
-              "depthlaw": "<=", "shuffle": "<", "swap": "<"}
-RUNG_COLOUR = {"A": "#1f77b4", "B": "#ff7f0e", "C": "#2ca02c", "D": "#d62728"}
+              "depthlaw": "<=", "shuffle": "<", "swap": "<", "beatsrow1": ">"}
+RUNG_COLOUR = {"A": "#1f77b4", "B": "#ff7f0e", "C": "#2ca02c", "D": "#d62728",
+               "A2": "#17becf", "B2": "#bcbd22", "C2": "#9467bd", "D2": "#e377c2"}
 MODEL_COLOUR = {"nocov": "#7f4f9f", "ids": "#8c564b", "real": "#1f77b4"}
 TRACK_COLOUR = {"C07M20": "#1f77b4", "C07M29": "#ff7f0e", "C12M02": "#2ca02c",
                 "C19M16": "#d62728", "C19M22": "#9467bd", "C40M17": "#8c564b",
@@ -118,6 +131,10 @@ ENUMS = {"rung": RUNGS, "g_version": G_VERSIONS, "space": SPACES, "model": MODEL
 #: per_pair fields a trained/score record must carry (the CRPS split and the PIT histogram)
 TRAINED_SCORE_KEYS = ("crps_all", "crps_top1", "spearman_all", "crps_oracle_scaled_all",
                       "scale_error_all", "c_star_all", "pit_hist")
+#: optional row-2 keys: results written without them stay valid
+GRID_KEYS = ("g_version", "space", "mark_class", "metric", "column", "row", "rung", "mean",
+             "seed_wobble", "n_pairs_crps_gt_20")
+BEATSROW1_COMPONENTS = ("rung_row1", "d_row1", "d_row2", "wobble_row1", "wobble_row2")
 
 
 def check_schema(res: dict, max_per_section: int = 10) -> list[str]:
@@ -156,23 +173,32 @@ def check_schema(res: dict, max_per_section: int = 10) -> list[str]:
                 bad.append(f"per_seed length {len(r['per_seed'])} != {len(SEEDS)}")
             if sec == "checks" and r.get("check") not in CHECK_ORDER:
                 bad.append(f"check={r.get('check')!r}")
+            if sec == "checks" and r.get("check") == "beatsrow1":
+                comp = r.get("components")
+                bad += [f"components.{k}" for k in BEATSROW1_COMPONENTS
+                        if not isinstance(comp, dict) or k not in comp]
             if bad:
                 n_err += 1
                 if n_err <= max_per_section:
                     errs.append(f"{sec}[{i}]: missing or invalid {', '.join(map(str, bad))}")
         if n_err > max_per_section:
             errs.append(f"{sec}: {n_err - max_per_section} more rows with errors")
-    rc = res.get("rung_choice", {})
-    if isinstance(rc, dict):
+    for top in ("rung_choice", "rung_choice_row2"):
+        if top == "rung_choice_row2" and top not in res:
+            continue                    # optional: results of row 1 alone
+        rc = res.get(top, {})
+        if not isinstance(rc, dict):
+            errs.append(f"{top}: not a dict")
+            continue
         for key, v in rc.items():
             gv, _, space = key.partition("|")
             if gv not in G_VERSIONS or space not in SPACES:
-                errs.append(f"rung_choice: key {key!r} is not '<g_version>|<space>'")
+                errs.append(f"{top}: key {key!r} is not '<g_version>|<space>'")
             for k in ("chosen", "val_by_rung", "wobble_by_rung"):
                 if k not in v:
-                    errs.append(f"rung_choice[{key!r}]: missing {k!r}")
-    else:
-        errs.append("rung_choice: not a dict")
+                    errs.append(f"{top}[{key!r}]: missing {k!r}")
+    if "grid" in res:
+        errs += _check_grid(res["grid"], max_per_section)
     refs = res.get("refs", {})
     if not isinstance(refs, dict):
         errs.append("refs: not a dict")
@@ -189,6 +215,34 @@ def check_schema(res: dict, max_per_section: int = 10) -> list[str]:
     for k in ("runs_present", "runs_missing"):
         if k in res and not isinstance(res[k], list):
             errs.append(f"{k}: not a list")
+    return errs
+
+
+def _check_grid(rows, max_per_section=10) -> list[str]:
+    """Errors of the optional `grid` rows: keys, enums, and rung == the (column, row) cell."""
+    if not isinstance(rows, list):
+        return ["grid: not a list"]
+    errs, n_err = [], 0
+    for i, r in enumerate(rows):
+        bad = [k for k in GRID_KEYS if k not in r]
+        bad += [f"{k}={r[k]!r}" for k in ("rung", "g_version", "space", "mark_class")
+                if k in r and r[k] not in ENUMS[k]]
+        if "metric" in r and r["metric"] not in METRICS:
+            bad.append(f"metric={r['metric']!r}")
+        col, row = r.get("column"), r.get("row")
+        if "column" in r and col not in ROW1:
+            bad.append(f"column={col!r}")
+        if "row" in r and str(row) not in ("1", "2"):
+            bad.append(f"row={row!r}")
+        elif col in ROW1 and "rung" in r and \
+                r["rung"] != (col if str(row) == "1" else f"{col}2"):
+            bad.append(f"rung={r['rung']!r} is not the cell ({col}, row {row})")
+        if bad:
+            n_err += 1
+            if n_err <= max_per_section:
+                errs.append(f"grid[{i}]: missing or invalid {', '.join(map(str, bad))}")
+    if n_err > max_per_section:
+        errs.append(f"grid: {n_err - max_per_section} more rows with errors")
     return errs
 
 
@@ -355,22 +409,25 @@ def _footer(fig, text):
 def fig1_ladder(ctx, out):
     plt, res, rung = ctx["plt"], ctx["res"], ctx["rung"]
     idx, tbc = ctx["idx"], ctx["tbc"]
-    xs = ["noSolution", "nocov twin", "ids twin", "A", "B", "C", "D", "QuantileMatching"]
+    row2 = any(r_ in ROW2 for r_ in ctx["rungs"])      # A2-D2 join the axis only when present
+    shown = ROW1 + ROW2 if row2 else ROW1
+    xs = ["noSolution", "nocov twin", "ids twin", *shown, "QuantileMatching"]
     rows = [(s, m) for s in SPACES for m in ("crps_all", "crps_top1")]
-    fig, axes = plt.subplots(len(rows), len(CLASSES), figsize=(13, 12), squeeze=False)
+    fig, axes = plt.subplots(len(rows), len(CLASSES), figsize=(17 if row2 else 13, 12),
+                             squeeze=False)
     offs = {"per_track": -0.13, "across": 0.13}
     marks = {"per_track": "o", "across": "s"}
     for i, (space, metric) in enumerate(rows):
         for j, cls in enumerate(CLASSES):
             ax = axes[i][j]
             ax.axvspan(xs.index(rung) - 0.45, xs.index(rung) + 0.45, color="#fff2cc", zorder=0)
-            for k, ref in ((0, "noSolution"), (7, "QuantileMatching")):
+            for k, ref in ((0, "noSolution"), (len(xs) - 1, "QuantileMatching")):
                 v = ref_class(res, cls, space, ref, metric, tbc)
                 if v is not None:
                     ax.plot([k], [v], marker="D", color="0.2", ms=6, zorder=3)
             for gv in G_VERSIONS:
                 for k, (r_, model) in enumerate([(rung, "nocov"), (rung, "ids")] +
-                                                [(r_, "real") for r_ in RUNGS], start=1):
+                                                [(r_, "real") for r_ in shown], start=1):
                     row = idx.get((r_, gv, space, model, "trained", cls, metric, "all"))
                     if row is None or row["mean"] is None:
                         continue
@@ -618,6 +675,9 @@ def fig5_learned_f(ctx, out):
     if rung == "A":
         _fig5_a(ctx, rows, arms, out)
         return
+    if rung in ROW2:
+        _fig5_row2(ctx, rows, arms, out)
+        return
     track = ctx["snippet_track"]
     rows_t = [r for r in rows if r["track"] == track]
     fig, axes = plt.subplots(len(SPACES), len(arms), figsize=(2.3 * len(arms), 5.2),
@@ -701,6 +761,76 @@ def fig5_learned_f(ctx, out):
                  f"{GV_NAME['per_track']}", x=0.01, ha="left", fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     _footer(fig, what + "." + qm_note + " Grey line = identity (noSolution).")
+    _save(fig, out)
+
+
+def _fig5_row2(ctx, rows, arms, out):
+    """A row-2 design: g's output depends on the bin's level, so draw the model's response."""
+    plt, rung = ctx["plt"], ctx["rung"]
+    track = ctx["snippet_track"]
+    rows_t = [r for r in rows if r["track"] == track and "levels_x" in r["describe"]
+              and isinstance(r["describe"].get("response"), dict)]
+    panels = [(s, p) for s in SPACES for p in ("loc", "disp")]
+    fig, axes = plt.subplots(len(panels), len(arms), figsize=(2.3 * len(arms), 9.5),
+                             squeeze=False)
+    qm = _load_qm(ctx.get("refs_qm"))
+    cmap = plt.get_cmap("viridis")
+    for i, (space, par) in enumerate(panels):
+        for j, arm in enumerate(arms):
+            ax = axes[i][j]
+            sub = [r for r in rows_t if r["space"] == space and arm_of_pair(r) == arm]
+            ax.set_title(f"{arm} · {SPACE_NAME[space]} · {par}")
+            if not sub:
+                _no_data(ax)
+                continue
+            levels = sorted({level_of_pair(r) for r in sub})
+            seed0 = min(x["seed"] for x in sub)
+            for li, lv in enumerate(levels):
+                col = cmap(0.1 + 0.8 * li / max(len(levels) - 1, 1))
+                for r in sorted((r for r in sub if level_of_pair(r) == lv),
+                                key=lambda r: r["seed"]):
+                    d = r["describe"]
+                    x = np.asarray(d["levels_x"], float)
+                    y = np.asarray(d["response"].get(par, []), float)
+                    if y.shape != x.shape:
+                        continue
+                    ax.plot(x, y, color=col, marker=".", ms=3,
+                            lw=1.0 if r["seed"] == 0 else 0.5,
+                            alpha=1.0 if r["seed"] == 0 else 0.5,
+                            label=f"{lv}" if r["seed"] == seed0 else None)
+                if par == "loc" and qm is not None:
+                    q = qm.get(space, {}).get(track, {}).get(f"{track}__{arm}__{lv}")
+                    if q:              # QuantileMatching in the forms' log space, as for B
+                        kx = np.asarray(q["knots_x"], float)
+                        ky = np.asarray(q["knots_y"], float)
+                        if space == "counts":
+                            qx, qy = np.log1p(np.maximum(kx, 0)), np.log1p(np.maximum(ky, 0))
+                        else:
+                            qx, qy = np.log(np.maximum(kx, 1e-3)), np.log(np.maximum(ky, 1e-3))
+                        lx = np.asarray(sub[0]["describe"]["levels_x"], float)
+                        keep = (qx >= lx.min()) & (qx <= lx.max())
+                        ax.plot(qx[keep], qy[keep], color=col, ls=":", lw=1.3)
+            if par == "loc":
+                lx = np.asarray(sub[0]["describe"]["levels_x"], float)
+                ax.plot(lx, lx, color="0.6", lw=0.6, ls="-", zorder=0)
+            ax.set_xlabel("input level x = log(1 + X)" if space == "counts"
+                          else "input level x = log(max(p, 1e-3))", fontsize=6)
+            if j == 0:
+                ax.set_ylabel(("loc (log mean)" if space == "counts" else "loc (log median)")
+                              if par == "loc" else "dispersion output")
+            ax.legend(fontsize=5.5, frameon=False, loc="best")
+            ax.grid(color="0.93")
+    qm_note = (" Dotted = QuantileMatching's per-pair curve (chr1), same colour as its level."
+               if qm is not None else
+               " QuantileMatching curves were not supplied (--refs-qm absent).")
+    fig.suptitle(f"The learned f, rung {rung} ({RUNG_NAME[rung]}) — track {track}, "
+                 f"{GV_NAME['per_track']}: the model's response at each input level",
+                 x=0.01, ha="left", fontsize=10)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    _footer(fig, "Response = the model's output at the centre bin of a flat window whose bins all "
+                 "equal the level x; g reads that level, so loc and dispersion may bend with x. "
+                 "base->arm pairs, real g; solid = seed 0, thin = seeds 1-2." + qm_note +
+                 " Grey line on the loc panels = identity (noSolution).")
     _save(fig, out)
 
 
@@ -972,6 +1102,10 @@ def fig9_checks(ctx, out):
                 below = (c.get("components") or {}).get("rung_below")
                 if below:
                     label += f" ({below})"
+            if c["check"] == "beatsrow1":
+                r1 = (c.get("components") or {}).get("rung_row1")
+                if r1:
+                    label += f" ({r1})"
             reading = "met" if c["met"] else "unmet"
             cells.append([label, METRIC_NAME.get(c["metric"], c["metric"]),
                           SPACE_NAME.get(c["space"], c["space"]), c["mark_class"],
@@ -991,10 +1125,12 @@ def fig9_checks(ctx, out):
                  f"NOT ticked: value against bar as computed by the aggregator",
                  x=0.01, ha="left", fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.98))
+    row2 = (" Beats row-1 design: value = D_row1 - D_row2 of the real g in the same column, bar "
+            "= 2 x the larger of the two seed wobbles." if rung in ROW2 else "")
     _footer(fig, "Gain checks: value = D_other - D_real (CRPS; positive favours the real g), bar = "
                  "2 x seed wobble (the larger wobble for 'beats rung below'). Depth law: bar 0.10. "
                  "Swap: bar 0.1. Shuffle and swap gate only the main claim. Seed wobble = the "
-                 "largest pairwise |difference| over the 3 seeds.")
+                 "largest pairwise |difference| over the 3 seeds." + row2)
     _save(fig, out)
 
 
