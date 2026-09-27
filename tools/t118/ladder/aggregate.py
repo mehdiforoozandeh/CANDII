@@ -23,10 +23,22 @@ bar cannot be formed, e.g. one seed; `components["met_reason"]` says which). Not
   shuffle        D_nocov(trained) - D_real(shuffle); bar 2 x wobble_real (trained); met value < bar
   swap           macro over the class's tracks of the per-track mean swap_median_abs_log_ratio,
                  real, mean over seeds; bar 0.1; met value < bar
+  beatsrow1      (A2, B2, C2, D2) D_row1 - D_row2, real, trained, the row-1 design of the same
+                 column (A2 against A); bar 2 x max(wobble_row1, wobble_row2); met value > bar;
+                 `seed_wobble` = that max; left out when the row-1 design has no runs
 (D metrics crps_all and crps_top1, variant all.) `checks_<rung>.json` holds the rung's checks
 (shuffle and swap excluded — they belong to the main claim); `checks_main.json` holds every check
 of the rung chosen per (g_version, space): the lowest rung whose chr22 `crps_all` (real, mean over
-seeds, macro over all tracks, variant all) is within the best rung's seed wobble of the best.
+seeds, macro over all tracks, variant all) is within the best rung's seed wobble of the best. That
+choice is over row 1 (A-D) only; beatsbelow for a row-2 rung compares within row 2 (B2 against A2).
+
+**Rows.** `--rows` picks which rows of the grid are aggregated (default 1): a run whose rung is in
+a row not picked is skipped. `--also-runs DIR` (repeatable) reads more run directories beside
+`<runs_dir>`. With row 2 picked, results.json gains `rung_choice_row2` (the same rule over
+A2-D2), `grid` (per g_version x space x mark class x metric x cell of the 2 x 4 grid: the real-g
+trained mean and seed wobble, and `n_pairs_crps_gt_20`, the count of real-g (pair, seed)
+trained/score records with crps_all > 20 — reported only, never pass/fail), `rows` and
+`also_runs`. The default call (row 1, no `--also-runs`) writes what it wrote before row 2 existed.
 
 **Size.** `results.json` (compact JSON) keeps in `per_pair` only the trained/score and swap records
 (what the figures and report read); the val, shuffle, law and depthlaw records go one per line to
@@ -35,6 +47,7 @@ seeds, macro over all tracks, variant all) is within the best rung's seed wobble
 six METRICS; the swap check reads the swap records directly.
 
     python tools/t118/ladder/aggregate.py <manifest> <covariates.tsv> <runs_dir> <refs.tsv> <agg_dir>
+                                          [--also-runs DIR]... [--rows 1|2|1,2]
     python tools/t118/ladder/aggregate.py qm-curves <manifest> <data_dir> <out.json>
 """
 from __future__ import annotations
@@ -71,6 +84,9 @@ REF_COLUMNS = {"crps_all": "spread_crps_all", "crps_nonzero": "spread_crps_nonze
 DEPTH_BAR = 0.10
 SWAP_BAR = 0.10
 MAIN_ONLY = ("shuffle", "swap")
+#: the "exploding" threshold of the grid's reported count (status-file label; never a check)
+EXPLODE_CRPS = 20.0
+GRID_METRICS = CHECK_METRICS
 QM_MAX_KNOTS = 256
 
 
@@ -96,16 +112,21 @@ def _warn(msg: str) -> None:
 # ---------------------------------------------------------------------------------------------
 
 
-def expected_runs(rows: list[dict]) -> list[str]:
-    """Every run name the manifest implies (its tracks + "all"), in task order."""
+def expected_runs(rows: list[dict], rows_set=(1,)) -> list[str]:
+    """Every run name the manifest implies (its tracks + "all") for the grid rows in `rows_set`,
+    in task order (the run-name formula of `pairs.tasks`, over the manifest's tracks)."""
     g_ids = tuple(pairs.track_ids(rows)) + ("all",)
-    return [f"{r}_{g}_{s}_{m}_s{sd}" for r in pairs.RUNGS for g in g_ids for s in pairs.SPACES
+    rungs = [r for row in (1, 2) if row in rows_set
+             for r in (pairs.RUNGS if row == 1 else pairs.RUNGS_ROW2)]
+    return [f"{r}_{g}_{s}_{m}_s{sd}" for r in rungs for g in g_ids for s in pairs.SPACES
             for m in pairs.MODELS for sd in pairs.SEEDS]
 
 
-def load_runs(runs_dir) -> tuple[list[dict], list[str], list[str], dict]:
+def load_runs(runs_dir, rows_set=None, seen=None) -> tuple[list[dict], list[str], list[str], dict]:
     """(per_pair records with run fields flattened in, runs present, runs lacking law.json,
-    figdata paths). A run is present when its scores.json exists."""
+    figdata paths). A run is present when its scores.json exists. `rows_set` (None = every row)
+    skips a run whose rung is in a grid row not picked; a run name in `seen` (already read from
+    another directory) is skipped with a warning."""
     runs_dir = Path(runs_dir)
     per_pair, present, no_law, figdata = [], [], [], {}
     for d in sorted(p for p in runs_dir.iterdir() if p.is_dir()) if runs_dir.is_dir() else []:
@@ -114,7 +135,12 @@ def load_runs(runs_dir) -> tuple[list[dict], list[str], list[str], dict]:
             continue
         s = json.loads(sj.read_text("utf-8"))
         run = dict(s["run"])
+        if rows_set is not None and pairs.row_of(run["rung"]) not in rows_set:
+            continue
         run.setdefault("run_name", d.name)
+        if seen is not None and run["run_name"] in seen:
+            _warn(f"run {run['run_name']} in {runs_dir} was already read; skipped")
+            continue
         run["g_version"] = g_version(run["g"])
         flat = {k: run[k] for k in RUN_KEYS}
         present.append(flat["run_name"])
@@ -338,17 +364,28 @@ def compute_checks(per_class: list[dict], depth_law: list[dict]) -> list[dict]:
                                   _diff(val(lt_row), val(lreal)), _twice(w), gt, w,
                                   {"d_real": val(lreal), f"d_{twin}": val(lt_row),
                                    "wobble_real": w, f"wobble_{twin}": val(lt_row, "seed_wobble")}))
-            ri = pairs.RUNGS.index(rung)
-            if ri > 0 and pairs.RUNGS[ri - 1] in rungs_present and real is not None:
-                below = get(pairs.RUNGS[ri - 1], gv, space, "real", "trained", mc, metric)
+            order = pairs.RUNGS if pairs.row_of(rung) == 1 else pairs.RUNGS_ROW2
+            ri = order.index(rung)
+            if ri > 0 and order[ri - 1] in rungs_present and real is not None:
+                below = get(order[ri - 1], gv, space, "real", "trained", mc, metric)
                 if below is not None:
                     wb, wt = val(below, "seed_wobble"), val(real, "seed_wobble")
                     wmax = None if wb is None or wt is None else max(wb, wt)
                     out.append(_check(rung, gv, space, mc, metric, "beatsbelow",
                                       _diff(val(below), val(real)), _twice(wmax), gt, wmax,
-                                      {"rung_below": pairs.RUNGS[ri - 1], "d_below": val(below),
+                                      {"rung_below": order[ri - 1], "d_below": val(below),
                                        "d_this": val(real), "wobble_below": wb,
                                        "wobble_this": wt}))
+            if rung in pairs.ROW1_OF and real is not None:
+                r1 = pairs.ROW1_OF[rung]
+                row1 = get(r1, gv, space, "real", "trained", mc, metric)
+                if row1 is not None:
+                    w1, w2 = val(row1, "seed_wobble"), val(real, "seed_wobble")
+                    wmax = None if w1 is None or w2 is None else max(w1, w2)
+                    out.append(_check(rung, gv, space, mc, metric, "beatsrow1",
+                                      _diff(val(row1), val(real)), _twice(wmax), gt, wmax,
+                                      {"rung_row1": r1, "d_row1": val(row1), "d_row2": val(real),
+                                       "wobble_row1": w1, "wobble_row2": w2}))
             shuf = get(rung, gv, space, "real", "shuffle", mc, metric)
             if shuf is not None:
                 w = val(real, "seed_wobble")
@@ -384,18 +421,19 @@ def compute_checks(per_class: list[dict], depth_law: list[dict]) -> list[dict]:
     return out
 
 
-def rung_choice(per_pair: list[dict]) -> dict:
-    """Per "<g_version>|<space>": val crps_all, real, variant all, macro over all tracks per seed."""
+def rung_choice(per_pair: list[dict], rungs=pairs.RUNGS) -> dict:
+    """Per "<g_version>|<space>": val crps_all, real, variant all, macro over all tracks per seed;
+    the choice is among `rungs` (row 1 by default; `pairs.RUNGS_ROW2` for the row-2 choice)."""
     vt = [r for r in per_track_rows(per_pair, ev="val")
           if r["kind"] == "trained" and r["model"] == "real" and r["metric"] == "crps_all"
-          and r["variant"] == "all"]
+          and r["variant"] == "all" and r["rung"] in rungs]
     acc: dict = defaultdict(lambda: defaultdict(list))
     for r in vt:
         acc[(r["g_version"], r["space"], r["rung"])][r["seed"]].append(r["value"])
     out: dict = {}
     for gv, space in sorted({k[:2] for k in acc}):
         val_by, wob_by = {}, {}
-        for rung in pairs.RUNGS:
+        for rung in rungs:
             by_seed = acc.get((gv, space, rung))
             if not by_seed:
                 continue
@@ -403,11 +441,43 @@ def rung_choice(per_pair: list[dict]) -> dict:
             val_by[rung], wob_by[rung] = _mean(per_seed), wobble(per_seed)
         best = min(val_by, key=val_by.get)
         tol = wob_by[best] if wob_by[best] is not None else 0.0
-        chosen = next(r for r in pairs.RUNGS if r in val_by and val_by[r] <= val_by[best] + tol)
+        chosen = next(r for r in rungs if r in val_by and val_by[r] <= val_by[best] + tol)
         out[f"{gv}|{space}"] = {"chosen": chosen, "val_by_rung": val_by, "wobble_by_rung": wob_by,
                                 "best": best, "tolerance": tol,
                                 "rule": "lowest rung with val crps_all <= best + best's seed "
                                         "wobble (real, mean over seeds, macro over tracks)"}
+    return out
+
+
+def grid_rows(per_class: list[dict], per_pair: list[dict], rows_set) -> list[dict]:
+    """The 2 x 4 grid: per (g_version, space, mark class, metric) and cell (column A-D, row) with
+    a real-g trained per_class row, its mean and seed wobble, and `n_pairs_crps_gt_20` = the real-g
+    (pair, seed) trained/score records of that cell with crps_all > EXPLODE_CRPS (reported only)."""
+    idx = _class_index(per_class)
+    n_explode: dict = defaultdict(int)
+    for r in per_pair:
+        v = r.get("crps_all")
+        if r.get("kind") == "trained" and r.get("eval") == "score" and r.get("model") == "real" \
+                and v is not None and not isinstance(v, bool) and np.isfinite(v) \
+                and v > EXPLODE_CRPS:
+            n_explode[(r["rung"], r["g_version"], r["space"], r["mark_class"])] += 1
+    combos = sorted({(r["g_version"], r["space"], r["mark_class"]) for r in per_class
+                     if r["model"] == "real" and r["kind"] == "trained"})
+    out = []
+    for gv, space, mc in combos:
+        for metric in GRID_METRICS:
+            for row in (1, 2):
+                if row not in rows_set:
+                    continue
+                for col in pairs.RUNGS:
+                    rung = col if row == 1 else f"{col}2"
+                    pc = idx.get((rung, gv, space, "real", "trained", mc, metric, "all"))
+                    if pc is None:
+                        continue
+                    out.append({"g_version": gv, "space": space, "mark_class": mc,
+                                "metric": metric, "column": col, "row": row, "rung": rung,
+                                "mean": pc["mean"], "seed_wobble": pc["seed_wobble"],
+                                "n_pairs_crps_gt_20": n_explode.get((rung, gv, space, mc), 0)})
     return out
 
 
@@ -429,12 +499,22 @@ SUMMARY_COLS = ("rung", "g_version", "space", "model", "kind", "mark_class", "me
                 "mean", "seed_wobble", "per_seed_0", "per_seed_1", "per_seed_2", "n_tracks")
 
 
-def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir) -> dict:
+def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir, also_runs=(),
+              rows_set=(1,)) -> dict:
     rows = pairs.read_manifest(manifest)
+    rows_set = tuple(sorted(set(rows_set)))
+    also_runs = [Path(d) for d in also_runs]
+    extended = rows_set != (1,) or bool(also_runs)
     agg_dir = Path(agg_dir)
     agg_dir.mkdir(parents=True, exist_ok=True)
-    per_pair, present, no_law, figdata = load_runs(runs_dir)
-    missing = [n for n in expected_runs(rows) if n not in set(present)]
+    per_pair, present, no_law, figdata = load_runs(runs_dir, rows_set)
+    for d in also_runs:
+        pp, pr, nl, fd = load_runs(d, rows_set, seen=set(present))
+        per_pair += pp
+        present += pr
+        no_law += nl
+        figdata.update(fd)
+    missing = [n for n in expected_runs(rows, rows_set) if n not in set(present)]
     if missing:
         _warn(f"{len(missing)} expected runs missing (listed in results.json)")
     per_track_all = per_track_rows(per_pair, with_swap=True)
@@ -461,6 +541,12 @@ def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir) -> dict:
                "per_class": per_class, "checks": checks, "knob_gain": knob_gain_rows(per_pair),
                "law_grid": law_grid_rows(per_pair), "depth_law": depth_law, "rung_choice": choice,
                "figdata": figdata}
+    if 2 in rows_set:
+        results["rung_choice_row2"] = rung_choice(per_pair, pairs.RUNGS_ROW2)
+        results["grid"] = grid_rows(per_class, per_pair, rows_set)
+    if extended:
+        results["rows"] = list(rows_set)
+        results["also_runs"] = [str(d) for d in also_runs]
     write_json(results, agg_dir / "results.json", indent=None)
     with (agg_dir / "results_summary.tsv").open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
@@ -531,6 +617,16 @@ def qm_curves(manifest, data_dir, out_json, chrom: str = "chr1") -> dict:
     return out
 
 
+def _rows_arg(text: str) -> tuple:
+    try:
+        rows_set = tuple(sorted({int(t) for t in text.split(",") if t.strip()}))
+    except ValueError:
+        rows_set = ()
+    if not rows_set or not set(rows_set) <= {1, 2}:
+        raise argparse.ArgumentTypeError(f"--rows {text!r}: expected 1, 2 or 1,2")
+    return rows_set
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "qm-curves":
@@ -544,8 +640,15 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     for pos in ("manifest", "covariates", "runs_dir", "refs_tsv", "agg_dir"):
         ap.add_argument(pos, type=Path)
+    ap.add_argument("--also-runs", type=Path, action="append", default=[], metavar="DIR",
+                    help="another run directory read beside runs_dir (repeatable)")
+    ap.add_argument("--rows", type=_rows_arg, default=(1,),
+                    help="grid rows to aggregate: 1, 2 or 1,2 (default 1)")
     a = ap.parse_args(argv)
-    res = aggregate(a.manifest, a.covariates, a.runs_dir, a.refs_tsv, a.agg_dir)
+    # the default call passes the five positionals only, exactly as before row 2
+    extra = {} if a.rows == (1,) and not a.also_runs else {"also_runs": a.also_runs,
+                                                            "rows_set": a.rows}
+    res = aggregate(a.manifest, a.covariates, a.runs_dir, a.refs_tsv, a.agg_dir, **extra)
     print(f"{len(res['runs_present'])} runs present, {len(res['runs_missing'])} missing; "
           f"{len(res['checks'])} checks -> {a.agg_dir}")
     return 0
