@@ -645,8 +645,10 @@ def main(argv=None) -> int:
     ap.add_argument("--rows", type=_rows_arg, default=(1,),
                     help="grid rows to aggregate: 1, 2 or 1,2 (default 1)")
     a = ap.parse_args(argv)
-    res = aggregate(a.manifest, a.covariates, a.runs_dir, a.refs_tsv, a.agg_dir,
-                    also_runs=a.also_runs, rows_set=a.rows)
+    # the default call passes the five positionals only, exactly as before row 2
+    extra = {} if a.rows == (1,) and not a.also_runs else {"also_runs": a.also_runs,
+                                                            "rows_set": a.rows}
+    res = aggregate(a.manifest, a.covariates, a.runs_dir, a.refs_tsv, a.agg_dir, **extra)
     print(f"{len(res['runs_present'])} runs present, {len(res['runs_missing'])} missing; "
           f"{len(res['checks'])} checks -> {a.agg_dir}")
     return 0
