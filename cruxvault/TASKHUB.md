@@ -41,6 +41,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t118` [implementation] learn the generator g(C, C') that outputs the transformation f (X' = f(X), f = g(C, C')) on the base↔arm pairs of the counterfactual corpus, with the QuantileMatching and pseudoreplicate-oracle rungs, and score the pre-registered checks — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q1_do_the_recorded_experimental_covariates_\|q1]]
 - `t119` [data-acquisition] rebuild the two DNase MAPQ arms (C12M02 mapq 0 and 10) with multimapping off, so the MAPQ cut applies; the t112 builds are byte-identical to the DNase base — refs [[h15_one_transformation_conditioned_on_the_so\|h15]]
+- `t120` [implementation] build and run row 2 of the g x f grid: g reads the source bin value as well as the covariates, for designs A-D — refs [[q1_do_the_recorded_experimental_covariates_\|q1]]
 
 ## Blocked
 
@@ -99,6 +100,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t106` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — *blocked*
 - `t107` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 - `t118` [implementation] learn the generator g(C, C') that outputs the transformation f (X' = f(X), f = g(C, C')) on the base↔arm pairs of the counterfactual corpus, with the QuantileMatching and pseudoreplicate-oracle rungs, and score the pre-registered checks — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q1_do_the_recorded_experimental_covariates_\|q1]] — *open*
+- `t120` [implementation] build and run row 2 of the g x f grid: g reads the source bin value as well as the covariates, for designs A-D — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *open*
 
 ### visualization
 
