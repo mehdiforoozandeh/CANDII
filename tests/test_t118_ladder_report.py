@@ -64,7 +64,7 @@ def test_synth_covers_every_rung_version_space_and_seed(synth):
     _, res = synth
     assert figures.check_schema(res) == []
     pc = res["per_class"]
-    assert {r["rung"] for r in pc} == set(figures.RUNGS)
+    assert {r["rung"] for r in pc} == set(figures.ROW1)
     assert {r["g_version"] for r in pc} == set(figures.G_VERSIONS)
     assert {r["space"] for r in pc} == set(figures.SPACES)
     assert all(len(r["per_seed"]) == 3 for r in pc)
