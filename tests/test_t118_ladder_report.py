@@ -69,7 +69,7 @@ def test_synth_covers_every_rung_version_space_and_seed(synth):
     assert {r["space"] for r in pc} == set(figures.SPACES)
     assert all(len(r["per_seed"]) == 3 for r in pc)
     assert len(res["runs_present"]) + len(res["runs_missing"]) == 576
-    for r in figures.RUNGS:
+    for r in figures.ROW1:
         assert (synth[0] / f"checks_{r}.json").is_file()
     assert (synth[0] / "checks_main.json").is_file()
     # the seed wobble follows the pinned rule: max pairwise |delta| over the seeds
