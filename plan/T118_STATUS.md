@@ -26,6 +26,28 @@ D2, figures/report) is being built in worktrees under
 `/Users/mforooz/Desktop/research/libbrechteam@sfu/.orchestrate-wt/CANDII/row2-*`. No Nibi compute
 yet; every compute step waits for the PI's yes. Row-1 golden smoke captured before any merge.
 
+## Row 2 build
+
+The row-2 code is built and tested locally. It follows the spec `plan/T118_ROW2_SPEC.md`. No row-2
+run exists yet, so this section holds no results.
+
+- The four new forms of f are in `tools/t118/ladder/fforms/`: `form_a2.py` (the affine map in log
+  space, chosen per bin), `form_b2.py` (the 12-knot curve, chosen per bin; the map across bins is
+  not forced monotone), `form_c2.py` (the 33-bin kernel, then the curve) and `form_d2.py` (the
+  dilated CNN modulated by g).
+- These files changed to carry row 2: `pairs.py` (`RUNGS_ROW2`, `tasks --row 2`), `model.py`,
+  `base.py`, `train.py`, `aggregate.py` (`--rows`, `--also-runs`), `figures.py`, `report.py`
+  (`report.py grid` writes the 2 × 4 grid to `<agg>/grid.md`) and `smoke.py` (it accepts A2–D2).
+- The SLURM scripts are `slurm/t118/row2_train.sh`, `row2_train_cpu.sh`, `row2_law.sh` and
+  `row2_agg.sh`.
+- The new tests are `tests/test_t118_form_{a2,b2,c2,d2}.py` and
+  `tests/test_t118_row2_{core,score,aggregate,figures,slurm,e2e}.py`. They add 190 tests to the 238
+  row-1 tests, so `tests/test_t118_*.py` holds 428 tests.
+- The row-1 forms, `data.py`, `encoding.py` and `tools/t118/covariates.tsv` did not change. The
+  row-1 task table keeps its pinned md5, and a test pins it.
+- `smoke.py <work_dir> A2` (or B2, C2, D2) runs every command of the chain on synthetic products on
+  CPU and prints `SMOKE OK <rung>`. The end-to-end test runs it for A2.
+
 ## Where everything is
 
 | what | where |

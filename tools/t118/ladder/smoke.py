@@ -17,6 +17,10 @@ cost ~5 s of torch + candi imports, a third of the smoke), then — as subproces
 criteria name, writes `smoke_timing.json` (wall seconds per phase and per run) and prints
 `SMOKE OK <rung>`.
 
+`<rung>` is a rung of row 1 (`pairs.RUNGS`, A..D) or of row 2 (`pairs.RUNGS_ROW2`, A2..D2). For a
+row-2 rung, `aggregate.py` gets `--rows 2`, and `report.py grid <agg>` also runs and must write
+`<agg>/grid.md`. A row-1 rung runs exactly the commands it ran before row 2 existed.
+
 `<work_dir>` is recreated when it holds this script's marker file; a non-empty directory without
 the marker is refused rather than deleted.
 """
@@ -123,8 +127,9 @@ def worker(spec_path) -> int:
 
 def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
           jobs: int | None = None) -> dict:
-    if rung not in pairs.RUNGS:
-        raise ValueError(f"rung {rung!r} not in {pairs.RUNGS}")
+    if rung not in pairs.RUNGS + pairs.RUNGS_ROW2:
+        raise ValueError(f"rung {rung!r} not in {pairs.RUNGS + pairs.RUNGS_ROW2}")
+    row2 = pairs.row_of(rung) == 2
     t_start = time.time()
     py = sys.executable
     work = Path(work_dir).resolve()
@@ -172,11 +177,14 @@ def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
     agg = paths["agg"]
     qm = agg / "qm_curves.json"
     timing["aggregate"] = _run([py, LADDER / "aggregate.py", paths["manifest"],
-                                paths["covariates"], paths["runs"], paths["refs"], agg], log)
+                                paths["covariates"], paths["runs"], paths["refs"], agg]
+                               + (["--rows", "2"] if row2 else []), log)
     timing["qm_curves"] = _run([py, LADDER / "aggregate.py", "qm-curves", paths["manifest"],
                                 paths["products"], qm], log)
     timing["check_schema"] = _run([py, LADDER / "figures.py", "--check-schema", agg], log)
     timing["report"] = _run([py, LADDER / "report.py", agg, rung], log)
+    if row2:
+        timing["report_grid"] = _run([py, LADDER / "report.py", "grid", agg], log)
     if mpl_python:
         timing["figures"] = _run([mpl_python, LADDER / "figures.py", agg, rung, "--refs-qm", qm],
                                  log)
@@ -186,6 +194,8 @@ def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
     # the files the acceptance criteria name
     rd = agg / rung
     need = [rd / "report.md", rd / f"checks_{rung}.json", agg / "results.json"]
+    if row2:
+        need.append(agg / "grid.md")
     run0 = paths["runs"] / f"{rung}_T1_counts_real_s0"
     need += [run0 / f for f in ("ckpt.pt", "scores.json", "figdata.npz", "law.json")]
     if mpl_python:
@@ -216,7 +226,7 @@ def main(argv=None) -> int:
         return worker(argv[1])
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("work_dir")
-    ap.add_argument("rung", choices=pairs.RUNGS)
+    ap.add_argument("rung", choices=pairs.RUNGS + pairs.RUNGS_ROW2)
     ap.add_argument("--mpl-python", default=None,
                     help="a python with numpy + matplotlib for figures.py (no torch needed)")
     ap.add_argument("--steps", type=int, default=40)
