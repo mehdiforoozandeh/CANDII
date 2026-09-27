@@ -9,6 +9,12 @@ rung starts at noSolution.
 
 **Context.** `x` carries `context` bins of halo on each side: `x` is `[B, L + 2*context]`, `loc`
 and `disp` are `[B, L]` (A, B: context 0; C: 16; D: 30).
+
+**Row 2** (`per_bin = True`; forms A2..D2, plan/T118_ROW2_SPEC.md §2). g also reads the bin value, so
+theta is per input position: `forward(x [B, W], theta [B, W, n_theta]) -> (loc [B, L], disp [B, L])`,
+W = L + 2*context, `theta[:, j]` belongs to input position j. `init_theta()` is still
+`Tensor[n_theta]`; `describe(theta [K, n_theta])` returns `"n_levels": K` and per-form lists of
+length K. Row-1 forms (`per_bin = False`) keep the contract above unchanged.
 """
 from __future__ import annotations
 
@@ -28,6 +34,8 @@ class FForm(torch.nn.Module):
     rung: str = ""
     n_theta: int = 0
     context: int = 0
+    #: row-2 forms set True: theta is [B, W, n_theta], one per input position
+    per_bin: bool = False
 
     def __init__(self, space: str, stats: dict):
         super().__init__()
@@ -42,11 +50,15 @@ class FForm(torch.nn.Module):
         raise NotImplementedError
 
     def forward(self, x: torch.Tensor, theta: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """x [B, L + 2*context], theta [B, n_theta] -> (loc [B, L], disp [B, L])."""
+        """x [B, L + 2*context], theta [B, n_theta] -> (loc [B, L], disp [B, L]).
+
+        Row 2 (`per_bin`): theta [B, L + 2*context, n_theta], one per input position."""
         raise NotImplementedError
 
     def describe(self, theta: torch.Tensor) -> dict:
-        """theta [n_theta] -> a dict of plain floats / lists."""
+        """theta [n_theta] -> a dict of plain floats / lists.
+
+        Row 2 (`per_bin`): theta [K, n_theta] -> a dict with `"n_levels": K` and lists of length K."""
         raise NotImplementedError
 
 

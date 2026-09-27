@@ -16,10 +16,11 @@ arms, byte-identical to the DNase base: a t112 defect), sorted by pid — 128 on
 
 **Tasks.** 576 = RUNGS x G_IDS x SPACES x MODELS x SEEDS, rung slowest and seed fastest:
 `index = rung_i*144 + g_i*18 + space_i*9 + model_i*3 + seed`,
-`run_name = f"{rung}_{g}_{space}_{model}_s{seed}"`.
+`run_name = f"{rung}_{g}_{space}_{model}_s{seed}"`. Row 2 (`tasks(row=2)`, `--row 2`) is the same
+table with the rungs of `RUNGS_ROW2` (A2..D2) in place of A..D: same indices, same formula.
 
     python tools/t118/ladder/pairs.py count <MANIFEST.tsv>
-    python tools/t118/ladder/pairs.py tasks <MANIFEST.tsv>
+    python tools/t118/ladder/pairs.py tasks <MANIFEST.tsv> [--row 2]
     python tools/t118/ladder/pairs.py train-pairs <MANIFEST.tsv> <g>
     python tools/t118/ladder/pairs.py law-pairs <MANIFEST.tsv> <g>
 """
@@ -45,6 +46,9 @@ MAIN_CHROMS = tuple(f"chr{i}" for i in range(1, 23)) + ("chrX",)
 MARK_CLASS = dict(_br.MARK_CLASS)
 EXCLUDED_PIDS = ("C12M02__mapq__0", "C12M02__mapq__10")
 RUNGS = ("A", "B", "C", "D")
+#: row 2: g also reads the bin value (plan/T118_ROW2_SPEC.md); each lifts its row-1 rung
+RUNGS_ROW2 = ("A2", "B2", "C2", "D2")
+ROW1_OF = {"A2": "A", "B2": "B", "C2": "C", "D2": "D"}
 MODELS = ("real", "nocov", "ids")
 SPACES = ("counts", "pval")
 SEEDS = (0, 1, 2)
@@ -185,10 +189,24 @@ def ids_permutation(n_pairs: int, seed: int) -> np.ndarray:
             return perm
 
 
-def tasks(rows: list[dict] | None = None) -> list[dict]:
-    """The 576-row task table; a pure function of the pinned constants (rows kept for the signature)."""
+def row_of(rung: str) -> int:
+    """1 for a rung of RUNGS, 2 for a rung of RUNGS_ROW2; ValueError otherwise."""
+    if rung in RUNGS:
+        return 1
+    if rung in RUNGS_ROW2:
+        return 2
+    raise ValueError(f"rung {rung!r} not in {RUNGS} or {RUNGS_ROW2}")
+
+
+def tasks(rows: list[dict] | None = None, row: int = 1) -> list[dict]:
+    """The 576-row task table; a pure function of the pinned constants (rows kept for the signature).
+
+    `row` 1: rungs RUNGS; `row` 2: rungs RUNGS_ROW2, same indices and run-name formula.
+    """
+    if row not in (1, 2):
+        raise ValueError(f"row {row!r} not in (1, 2)")
     out = []
-    for ri, rung in enumerate(RUNGS):
+    for ri, rung in enumerate(RUNGS if row == 1 else RUNGS_ROW2):
         for gi, g in enumerate(G_IDS):
             for si, space in enumerate(SPACES):
                 for mi, model in enumerate(MODELS):
@@ -224,12 +242,14 @@ def main(argv=None) -> int:
         p.add_argument("manifest")
         if name in ("train-pairs", "law-pairs"):
             p.add_argument("g")
+        if name == "tasks":
+            p.add_argument("--row", type=int, choices=(1, 2), default=1)
     args = ap.parse_args(argv)
     rows = read_manifest(args.manifest)
     if args.cmd == "count":
         sys.stdout.write("".join(line + "\n" for line in count_lines(rows)))
     elif args.cmd == "tasks":
-        sys.stdout.write("\t".join(TASK_KEYS) + "\n" + _tsv(tasks(rows), TASK_KEYS))
+        sys.stdout.write("\t".join(TASK_KEYS) + "\n" + _tsv(tasks(rows, args.row), TASK_KEYS))
     else:
         fn = train_pairs if args.cmd == "train-pairs" else law_pairs
         sys.stdout.write("\t".join(PAIR_KEYS) + "\n" + _tsv(fn(rows, args.g), PAIR_KEYS))

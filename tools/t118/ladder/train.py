@@ -3,7 +3,7 @@
     python tools/t118/ladder/train.py train <manifest.tsv> <covariates.tsv> <data_dir> <runs_dir>
         <rung> <g> <space> <model> <seed> [--max-steps N] [--eval-every N] [--device auto|cpu|cuda]
     python tools/t118/ladder/train.py train-index <manifest.tsv> <covariates.tsv> <data_dir>
-        <runs_dir> <index> [...]                        (the index-th row of `pairs.tasks`)
+        <runs_dir> <index> [--row {1,2}] [...]          (the index-th row of `pairs.tasks(row=)`)
     python tools/t118/ladder/train.py cache <manifest.tsv> <products_dir> <cache_dir> <index>
                                                         (`data.build_cache`, all products by pid)
 
@@ -28,6 +28,10 @@ without improvement; the best state is restored and saved.
 **Knots** (rungs B, C; computed for every rung, A and D ignore them): `base.knot_stats` of x over a
 4 M-bin sample from `default_rng(0)`: blocks of 1024 contiguous bins, each at a uniform
 (fit pid, chromosome proportional to length, start) over the training chromosomes.
+
+**Row 2** (a form with `per_bin = True`, rungs A2..D2): the loop is the same (`ladder(cov, xb)`, g
+reads x inside the Ladder); validation predicts with `model.predict_chrom_bins` (nocov: the averaged
+map over the training pairs); config.json gains `"row": 2`. Row-1 runs are unchanged.
 
 **Run dir** `<runs_dir>/<run_name>/`: config.json, ckpt.pt, train_log.tsv (`step loss val_nll
 seconds`), timing.json, TRAIN_DONE (written last; if present the CLI exits 0 without work).
@@ -156,12 +160,17 @@ def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
     ladder.eval()
     per_pair = []
     with torch.no_grad():
-        theta_avg = model.nocov_theta(ladder, cov_val) if average_theta else None
+        theta_avg = (model.nocov_theta(ladder, cov_val)
+                     if average_theta and not ladder.per_bin else None)
         for i, p in enumerate(train_pairs):
             X = corpus.get(p["source_pid"], space, chrom)
             Y = corpus.get(p["target_pid"], space, chrom)
-            theta = theta_avg if average_theta else ladder.theta(cov_val[i:i + 1])[0]
-            loc, disp = model.predict_chrom(ladder, X, theta, device)
+            if ladder.per_bin:
+                cov = cov_val if average_theta else cov_val[i:i + 1]
+                loc, disp = model.predict_chrom_bins(ladder, X, cov, device, average=average_theta)
+            else:
+                theta = theta_avg if average_theta else ladder.theta(cov_val[i:i + 1])[0]
+                loc, disp = model.predict_chrom(ladder, X, theta, device)
             y = torch.from_numpy(np.array(Y, dtype=np.float32)).to(device)
             per_pair.append(float(ladder.nll(torch.from_numpy(loc).to(device),
                                              torch.from_numpy(disp).to(device), y)))
@@ -236,7 +245,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
 
     config = {
         "run_name": name, "rung": rung, "g": g, "space": space, "model": model_name, "seed": seed,
-        **cfg, "device": str(dev), "n_cov": encoding.N_COV, "cov_fields": list(encoding.FIELDS),
+        **({"row": 2} if ladder.per_bin else {}), **cfg, "device": str(dev), "n_cov": encoding.N_COV, "cov_fields": list(encoding.FIELDS),
         "context": ladder.context, "n_theta": ladder.n_theta,
         "train_chroms": chroms, "val_chroms": list(pairs.VAL_CHROMS),
         "score_chroms": list(pairs.SCORE_CHROMS),
@@ -329,6 +338,7 @@ def main(argv=None) -> int:
     for a in ("manifest", "covariates", "data_dir", "runs_dir"):
         p.add_argument(a)
     p.add_argument("index", type=int)
+    p.add_argument("--row", type=int, choices=(1, 2), default=1)
     knobs(p)
     p = sub.add_parser("cache")
     for a in ("manifest", "products_dir", "cache_dir"):
@@ -345,7 +355,7 @@ def main(argv=None) -> int:
         print(f"{row['pid']}: " + " ".join(f"{s}={v}" for s, v in status.items()))
         return 0
     if args.cmd == "train-index":
-        table = pairs.tasks(pairs.read_manifest(args.manifest))
+        table = pairs.tasks(pairs.read_manifest(args.manifest), args.row)
         if not 0 <= args.index < len(table):
             raise IndexError(f"task index {args.index} outside 0..{len(table) - 1}")
         t = table[args.index]
