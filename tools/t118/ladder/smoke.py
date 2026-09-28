@@ -1,7 +1,7 @@
 """t118 ladder — the end-to-end smoke: every CLI of the chain, on synthetic products, on CPU.
 
-    python tools/t118/ladder/smoke.py <work_dir> <rung> [--mpl-python PATH] [--steps 40]
-                                      [--seeds 3] [--jobs N]
+    python tools/t118/ladder/smoke.py <work_dir> <rung> [--xshuf] [--mpl-python PATH]
+                                      [--steps 40] [--seeds 3] [--jobs N]
 
 In `<work_dir>`: `synth.make_products` -> `products/` (tracks T1 H3K27ac, T2 DNase-seq), a small
 `blacklist.bed` and an empty `refs_empty.tsv`; then for g in (T1, all) x both spaces x the three
@@ -20,6 +20,12 @@ criteria name, writes `smoke_timing.json` (wall seconds per phase and per run) a
 `<rung>` is a rung of row 1 (`pairs.RUNGS`, A..D) or of row 2 (`pairs.RUNGS_ROW2`, A2..D2). For a
 row-2 rung, `aggregate.py` gets `--rows 2`, and `report.py grid <agg>` also runs and must write
 `<agg>/grid.md`. A row-1 rung runs exactly the commands it ran before row 2 existed.
+
+`--xshuf` (row-2 rungs only) adds the shuffled-bin twin (model `pairs.MODEL_XSHUF`) to the run list
+with the same g's, spaces and seeds, in the same `runs/` dir; `aggregate.py` gets `--rows 2 --xshuf`;
+the asserts add the twin runs in `runs_present`, at least one `beatsxshuf` and one `lawtest_xshuf`
+row in `checks_<rung>.json`, the report section "## Against the shuffled-bin twin" and the grid's
+row "| row 2, shuffled-bin twin". Without `--xshuf` the smoke runs exactly the commands it ran before.
 
 `<work_dir>` is recreated when it holds this script's marker file; a non-empty directory without
 the marker is refused rather than deleted.
@@ -126,10 +132,13 @@ def worker(spec_path) -> int:
 
 
 def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
-          jobs: int | None = None) -> dict:
+          jobs: int | None = None, xshuf: bool = False) -> dict:
     if rung not in pairs.RUNGS + pairs.RUNGS_ROW2:
         raise ValueError(f"rung {rung!r} not in {pairs.RUNGS + pairs.RUNGS_ROW2}")
     row2 = pairs.row_of(rung) == 2
+    if xshuf and not row2:
+        raise ValueError(f"xshuf needs a row-2 rung, not {rung!r}")
+    models = pairs.MODELS + ((pairs.MODEL_XSHUF,) if xshuf else ())
     t_start = time.time()
     py = sys.executable
     work = Path(work_dir).resolve()
@@ -140,6 +149,8 @@ def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
     for k in ("runs", "agg", "logs"):
         paths[k].mkdir(parents=True, exist_ok=True)
     timing: dict = {"rung": rung, "steps": steps, "seeds": seeds}
+    if xshuf:
+        timing["xshuf"] = True
 
     t0 = time.time()
     paths["manifest"], paths["covariates"] = synth.make_products(paths["products"], seed=0)
@@ -148,7 +159,7 @@ def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
     timing["products"] = time.time() - t0
 
     runs = [(g, space, model, seed) for g in G_SMOKE for space in pairs.SPACES
-            for model in pairs.MODELS for seed in range(seeds)]
+            for model in models for seed in range(seeds)]
     n_jobs = max(1, int(jobs or min(8, os.cpu_count() or 1)))
     t0 = time.time()
     # the most expensive runs (the across-track g) first, so the workers finish together
@@ -178,7 +189,8 @@ def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
     qm = agg / "qm_curves.json"
     timing["aggregate"] = _run([py, LADDER / "aggregate.py", paths["manifest"],
                                 paths["covariates"], paths["runs"], paths["refs"], agg]
-                               + (["--rows", "2"] if row2 else []), log)
+                               + (["--rows", "2"] if row2 else [])
+                               + (["--xshuf"] if xshuf else []), log)
     timing["qm_curves"] = _run([py, LADDER / "aggregate.py", "qm-curves", paths["manifest"],
                                 paths["products"], qm], log)
     timing["check_schema"] = _run([py, LADDER / "figures.py", "--check-schema", agg], log)
@@ -215,6 +227,15 @@ def smoke(work_dir, rung: str, mpl_python=None, steps: int = 40, seeds: int = 3,
     no_law = sorted(want & set(res.get("runs_without_law", [])))
     if no_law:
         raise AssertionError(f"smoke: runs without law.json: {no_law}")
+    if xshuf:
+        checks = json.loads((rd / f"checks_{rung}.json").read_text("utf-8"))["checks"]
+        for name in ("beatsxshuf", "lawtest_xshuf"):
+            if not any(c["check"] == name for c in checks):
+                raise AssertionError(f"smoke: no {name} row in checks_{rung}.json")
+        if "## Against the shuffled-bin twin" not in (rd / "report.md").read_text("utf-8"):
+            raise AssertionError(f"smoke: {rd / 'report.md'} has no shuffled-bin twin section")
+        if "| row 2, shuffled-bin twin" not in (agg / "grid.md").read_text("utf-8"):
+            raise AssertionError(f"smoke: {agg / 'grid.md'} has no shuffled-bin twin row")
     timing["total"] = time.time() - t_start
     (work / "smoke_timing.json").write_text(json.dumps(timing, indent=1) + "\n")
     return timing
@@ -227,6 +248,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("work_dir")
     ap.add_argument("rung", choices=pairs.RUNGS + pairs.RUNGS_ROW2)
+    ap.add_argument("--xshuf", action="store_true",
+                    help="also run the shuffled-bin twin (model xshuf); row-2 rungs only")
     ap.add_argument("--mpl-python", default=None,
                     help="a python with numpy + matplotlib for figures.py (no torch needed)")
     ap.add_argument("--steps", type=int, default=40)
@@ -234,7 +257,9 @@ def main(argv=None) -> int:
     ap.add_argument("--jobs", type=int, default=None,
                     help="runs at a time, one thread each (default min(8, cpu count))")
     a = ap.parse_args(argv)
-    t = smoke(a.work_dir, a.rung, a.mpl_python, a.steps, a.seeds, a.jobs)
+    if a.xshuf and pairs.row_of(a.rung) != 2:
+        ap.error(f"--xshuf needs a row-2 rung ({', '.join(pairs.RUNGS_ROW2)}), not {a.rung}")
+    t = smoke(a.work_dir, a.rung, a.mpl_python, a.steps, a.seeds, a.jobs, xshuf=a.xshuf)
     print(f"wall s: total {t['total']:.1f}, runs {t['runs_wall']:.1f} ({len(t['per_run'])} runs, "
           f"{t['jobs']} at a time; sums train {t['train_sum']:.1f} score {t['score_sum']:.1f} "
           f"law {t['law_sum']:.1f}), aggregate {t['aggregate']:.1f}, report {t['report']:.1f}"
