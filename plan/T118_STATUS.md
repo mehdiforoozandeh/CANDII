@@ -131,6 +131,19 @@ figures, reports), X5 (four `slurm/t118/xshuf_*.sh` scripts) merged at 2311208. 
 the row-1 law checks against the other twins use 2 × the real g's wobble. Both twin checks are
 written only when some twin run was read. X6 (smoke, end-to-end test) and N1 (the exact nocov
 fix) are building.
+
+Build done at c3196e0 (X1–X6, N1 merged; verifier: 590 t118 tests, 2 608 in `tests/`, goldens A
+counts/nocov and A2 counts EQUAL; A2 nocov within float order: CRPS ≤ 4e-7 relative, Spearman on
+the top 1 % up to 1.1e-2 absolute on the synthetic smoke's small top-1 sets — N1's F3 changes the
+summation order only). Kit **K6** = c3196e0 at `/project/def-maxwl/mforooz/t118/ladder/code/K6`
+(GIT_SHA, wheels from K5). Row-2 real and ids runs stay on K5: K6 is bit-exact on those paths
+(goldens), so the kits do not mix within a model. All 192 row-2 nocov runs run on K6. The four K5
+nocov smoke run dirs moved to `row2/runs_smoke_K5/` (23:20).
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-09-28 23:24 | 22859772 | nocov smoke on K6, indices 66, 138, 498, 570 (`row2_train.sh`, out `row2/`) | K6 |
+| 2026-09-28 23:24 | 22859778 | shuffled-bin twin smoke, twin-table indices 18, 42, 162, 189 = A2 C19M16 counts, A2 across counts, D2 C19M16 counts, D2 across pval, seed 0 (`xshuf_train.sh`, out `row2_xshuf/`) | K6 |
 PI ruling 2026-09-28 (shuffled-bin-value twin): g's x at bin i is the source track's x at a
 uniformly random bin of the same chromosome; redrawn each training step; one fixed seeded
 permutation per chromosome at prediction and scoring. f still reads the true x.
