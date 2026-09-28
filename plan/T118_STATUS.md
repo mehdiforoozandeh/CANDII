@@ -48,6 +48,17 @@ run exists yet, so this section holds no results.
 - `smoke.py <work_dir> A2` (or B2, C2, D2) runs every command of the chain on synthetic products on
   CPU and prints `SMOKE OK <rung>`. The end-to-end test runs it for A2.
 
+## Row 2 Nibi smoke (submitted 2026-09-28, PI yes)
+
+- Kit `K5` = c8cf98c at `/project/def-maxwl/mforooz/t118/ladder/code/K5` (with `GIT_SHA`, `wheels/`).
+- Out dir `/project/def-maxwl/mforooz/t118/row2/` (logs in `logs/`).
+- Smoke train+score array **22851946**, indices 54, 198, 342, 486 = A2, B2, C2, D2 × C19M16 × counts
+  × real × seed 0, on 10 GB slices. Never resubmit; a rerun skips runs with `SCORE_DONE`.
+- Row-1 re-score check **22851953** (`row2/row2_rescore_check.sh`, a one-off outside the repo):
+  re-scores the finished row-1 run `A_C19M16_counts_real_s0` with K5 on a slice into
+  `row2/rescore_check/` and prints `RESCORE EQUAL` or `DIFFER` in its log.
+- Law tasks for the 4 smoke runs follow when their `SCORE_DONE` exists (submitted directly).
+
 ## Where everything is
 
 | what | where |
