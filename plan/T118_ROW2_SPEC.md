@@ -163,6 +163,11 @@ are read, never rerun. All jobs on Nibi; GPU jobs use only the 10 GB MIG slice.
 Each entry: the choice, the options with cost and what each teaches, and a recommendation.
 
 Decided by the PI in chat on 2026-09-26: adopt the recommendation in every entry, (i)–(x).
+Changed by the PI in chat on 2026-09-28: (vi) is now (b), exploratory — run both rows, read the
+results, and draw conclusions afterwards; no hypotheses are filed before the runs. Added the same day:
+a shuffled-bin-value twin for every row-2 design (g reads x from a randomly chosen other bin of the
+same source track; same design, size and training), so a row-2 gain can be put down to the bin's own
+level or to the extra input alone. Both readings are of interest.
 
 **(i) What g reads of x.**
 (a) The bin's own value x_i only. Cost: none beyond section 2. Teaches: whether a level-dependent

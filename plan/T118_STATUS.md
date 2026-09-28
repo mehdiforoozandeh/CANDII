@@ -58,6 +58,12 @@ run exists yet, so this section holds no results.
   re-scores the finished row-1 run `A_C19M16_counts_real_s0` with K5 on a slice into
   `row2/rescore_check/` and prints `RESCORE EQUAL` or `DIFFER` in its log.
 - Law tasks for the 4 smoke runs follow when their `SCORE_DONE` exists (submitted directly).
+- State at 2026-09-28 21:15 UTC: re-score check done, `RESCORE EQUAL` (140 of 140 records; row 1 is
+  bit-exact on real data). A2 done in 7:03, D2 in 13:06 (score 7.4 min); B2 and C2 trained (65 s,
+  176 s) and still scoring.
+- PI 2026-09-28: the phase is exploratory (run both rows, conclude later; no hypotheses filed) and a
+  shuffled-bin-value twin is added for every row-2 design. The execution phase is handed off:
+  `plan/T118_HANDOFF_3.md`.
 
 ## Where everything is
 
