@@ -40,6 +40,10 @@ bin, 2 a random non-top-1 % bin (rng `default_rng([seed, 7120, arm_index])`), on
 of the arm's first level in sorted order. `arm_index` is the arm's position among the run's sorted
 arm names; under the across-track g the pair is the first track's (sorted) that has the arm.
 
+**Row-2 nocov.** The averaged map reads only the source's x, so its jobs are grouped by source pid
+(one group per worker task) and each (source pid, chromosome) is predicted once; the records come
+back in the jobs' own order and are the same as one prediction per job.
+
     python tools/t118/ladder/score.py trained <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N]
     python tools/t118/ladder/score.py law     <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N]
 """
@@ -203,7 +207,13 @@ def _eval_arrays(pred, space, x_pid, y_pid, cov_src, cov_tgt, chroms, blacklist,
         y = pred.corpus.get(y_pid, space, c)
         if x.shape != y.shape:
             raise ValueError(f"{c}: source {x.shape} and target {y.shape} differ in length")
-        loc, disp = pred.predict(x_pid, cov_src, cov_tgt, c)
+        cache = _CTX.get("nocov_pred")
+        if cache is None:
+            loc, disp = pred.predict(x_pid, cov_src, cov_tgt, c)
+        else:                   # row-2 nocov: the prediction depends on (x_pid, chromosome) only
+            if (x_pid, c) not in cache:
+                cache[(x_pid, c)] = pred.predict(x_pid, cov_src, cov_tgt, c)
+            loc, disp = cache[(x_pid, c)]
         loc = np.asarray(loc, np.float64)
         disp = np.asarray(disp, np.float64)
         if loc.shape != x.shape or disp.shape != x.shape:
@@ -376,11 +386,43 @@ def run_info(pred, run_dir) -> dict:
 
 
 def _run_jobs(jobs: list[dict], workers: int) -> list:
+    if _CTX.get("by_source"):
+        return _run_by_source(jobs, workers)
     if workers <= 1 or len(jobs) <= 1:
         return [score_job(j) for j in jobs]
     ctx = mp.get_context("fork")
     with ctx.Pool(min(workers, len(jobs)), initializer=_worker_init) as pool:
         return pool.map(score_job, jobs, chunksize=1)
+
+
+def _score_source(items: list) -> list:
+    """One source pid's jobs [(index, job)] -> [(index, result)], each (x_pid, chromosome)
+    predicted once (the row-2 nocov averaged map reads only the source's x)."""
+    _CTX["nocov_pred"] = {}
+    try:
+        return [(i, score_job(job)) for i, job in items]
+    finally:
+        _CTX["nocov_pred"] = None
+
+
+def _run_by_source(jobs: list[dict], workers: int) -> list:
+    """Row-2 nocov: the jobs grouped by source pid (largest group first), one group per worker
+    task; the results come back in the jobs' own order, so the records are unchanged."""
+    groups: dict = {}
+    for i, j in enumerate(jobs):
+        groups.setdefault(j["x_pid"], []).append((i, j))
+    tasks = sorted(groups.values(), key=len, reverse=True)
+    if workers <= 1 or len(tasks) <= 1:
+        done = [_score_source(t) for t in tasks]
+    else:
+        ctx = mp.get_context("fork")
+        with ctx.Pool(min(workers, len(tasks)), initializer=_worker_init) as pool:
+            done = pool.map(_score_source, tasks, chunksize=1)
+    out = [None] * len(jobs)
+    for group in done:
+        for i, r in group:
+            out[i] = r
+    return out
 
 
 def _worker_init():
@@ -392,7 +434,8 @@ def _worker_init():
 def _setup(pred, rows, blacklist):
     _CTX.clear()
     _CTX.update(pred=pred, blacklist=str(blacklist),
-                depth={r["pid"]: float(r["depth"]) for r in rows})
+                depth={r["pid"]: float(r["depth"]) for r in rows},
+                by_source=bool(getattr(pred, "per_bin", False)) and pred.model == "nocov")
 
 
 def _config(blacklist) -> dict:

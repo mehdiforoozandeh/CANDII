@@ -172,18 +172,42 @@ class Sampler:
 
 
 def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
-             average_theta: bool = False, xshuf_seed: int | None = None) -> float:
+             average_theta: bool = False, xshuf_seed: int | None = None,
+             level_cache: dict | None = None) -> float:
     """Mean over the trained pairs of the mean per-bin NLL over the whole of chr22.
 
     `average_theta` (the nocov twin): every pair uses one theta, the mean over `cov_val`, exactly
     as the twin's Predictor does, so early stopping selects the model that is scored.
     `xshuf_seed` (the shuffled-bin twin): g reads x through the fixed permutation of chr22,
     `xshuf.pred_rng(xshuf_seed, "chr22")`, as the twin's Predictor does.
+
+    Row-2 nocov: the averaged map reads only the source's x, so (loc, disp) is computed once per
+    source pid and scored against every target of that source; `level_cache` (a dict the caller
+    keeps for the run) holds each source's chr22 distinct values and inverse index across calls.
+    Both are bit-identical to the per-pair loop; the mean is over the pairs in their own order.
     """
     chrom = pairs.VAL_CHROMS[0]
     was_training = ladder.training
     ladder.eval()
     per_pair = []
+    if ladder.per_bin and average_theta and xshuf_seed is None:
+        by_src: dict = {}
+        for i, p in enumerate(train_pairs):
+            by_src.setdefault(p["source_pid"], []).append(i)
+        per_pair = [None] * len(train_pairs)
+        with torch.no_grad():
+            for src, idx in by_src.items():
+                X = corpus.get(src, space, chrom)
+                lc = None if level_cache is None else level_cache.setdefault((src, chrom), {})
+                loc, disp = model.predict_chrom_bins(ladder, X, cov_val, device, average=True,
+                                                     level_cache=lc)
+                loc_t, disp_t = torch.from_numpy(loc).to(device), torch.from_numpy(disp).to(device)
+                for i in idx:
+                    Y = corpus.get(train_pairs[i]["target_pid"], space, chrom)
+                    y = torch.from_numpy(np.array(Y, dtype=np.float32)).to(device)
+                    per_pair[i] = float(ladder.nll(loc_t, disp_t, y))
+        ladder.train(was_training)
+        return float(np.mean(per_pair))
     with torch.no_grad():
         theta_avg = (model.nocov_theta(ladder, cov_val)
                      if average_theta and not ladder.per_bin else None)
@@ -302,8 +326,9 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     t1 = time.time()
     log = []
     xshuf_seed = seed if is_xshuf else None
+    level_cache = {} if (ladder.per_bin and model_name == "nocov") else None
     val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov",
-                   xshuf_seed=xshuf_seed)
+                   xshuf_seed=xshuf_seed, level_cache=level_cache)
     log.append((0, float("nan"), val, time.time() - t1))
     best = {"val": val, "step": 0, "g": copy.deepcopy(ladder.g.state_dict()),
             "form": copy.deepcopy(ladder.form.state_dict())}
@@ -327,7 +352,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         losses.append(float(loss))
         if step % cfg["eval_every"] == 0 or step == cfg["max_steps"]:
             val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov",
-                           xshuf_seed=xshuf_seed)
+                           xshuf_seed=xshuf_seed, level_cache=level_cache)
             log.append((step, float(np.mean(losses)), val, time.time() - t1))
             losses = []
             if val < best["val"]:

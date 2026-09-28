@@ -252,6 +252,10 @@ def theta_levels(ladder: Ladder, x_values: torch.Tensor, cov: torch.Tensor,
     `average=False`: `cov` must be [1, 40], one (C, C'). `average=True`: the mean over the k rows of
     `cov` [k, 40] of g(x, cov_j) — the no-covariates twin's map (spec §3). Evaluated in blocks of
     levels so k * block stays under LEVEL_ROWS.
+
+    `average=True` takes g's last layer out of the mean: that layer is linear and nothing follows it,
+    so mean_j(W h_j + b) = W mean_j(h_j) + b, with h_j g's last hidden layer for pair j. Exact up to
+    float summation order; the last layer runs on U rows instead of k * U.
     """
     if not ladder.per_bin:
         raise ValueError(f"rung {ladder.rung}: theta_levels needs a per-bin form")
@@ -262,16 +266,32 @@ def theta_levels(ladder: Ladder, x_values: torch.Tensor, cov: torch.Tensor,
     x_values = x_values.reshape(-1)
     step = max(1, LEVEL_ROWS // k)
     out = []
+    if average:
+        layers = list(ladder.g.net)
+        last = layers[-1]
+        if not isinstance(last, torch.nn.Linear):
+            raise TypeError(f"g's last layer is {type(last).__name__}, not Linear: the mean over "
+                            f"pairs cannot be taken before it")
+        w, b = layers[0].weight, layers[0].bias
+        c = torch.nn.functional.linear(cov, w[:, 1:], b)                 # [k, 64], as GBin.forward
+        for u0 in range(0, max(1, x_values.shape[0]), step):
+            xv = x_values[u0:u0 + step].to(cov.dtype).to(w.dtype)
+            h = xv[None, :, None] * w[:, 0] + c[:, None, :]              # [k, u, 64]
+            for layer in layers[1:-1]:
+                h = layer(h)
+            out.append(last(h.mean(0)))                                  # [u, n_theta]
+        return torch.cat(out, 0)
     for u0 in range(0, max(1, x_values.shape[0]), step):
         t = ladder.g.levels(cov, x_values[u0:u0 + step])              # [k, u, n_theta]
-        out.append(t.mean(0) if average else t[0])
+        out.append(t[0])
     return torch.cat(out, 0)
 
 
 @torch.no_grad()
 def predict_chrom_bins(ladder: Ladder, X: np.ndarray, cov: torch.Tensor, device,
                        average: bool = False, chunk: int = CHUNK,
-                       x_g_rng: np.random.Generator | None = None) -> tuple[np.ndarray, np.ndarray]:
+                       x_g_rng: np.random.Generator | None = None,
+                       level_cache: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Row 2: (loc, disp) float32[n] for a whole chromosome X, theta per position from g.
 
     Same padding, chunks and halo as `predict_chrom`. theta at position j = `theta_levels` at the
@@ -281,6 +301,10 @@ def predict_chrom_bins(ladder: Ladder, X: np.ndarray, cov: torch.Tensor, device,
     `x_g_rng` (the shuffled-bin twin): perm = `xshuf.draw_positions(x_g_rng, n, n, fixed=True)`;
     g at padded position q reads x at `src[q]`, `src[c + j] = c + perm[j]` on the bins and
     `src[q] = q` on the pads; f reads the true x. None: g reads the true x.
+
+    `level_cache` (the nocov twin's validation): a dict owned by the caller for ONE fixed X. Empty,
+    it is filled with this X's distinct values and inverse index; filled, they are reused instead of
+    `np.unique` (the same arrays, so the output is bit-identical).
     """
     c = ladder.context
     n = int(np.asarray(X).shape[0])
@@ -289,7 +313,16 @@ def predict_chrom_bins(ladder: Ladder, X: np.ndarray, cov: torch.Tensor, device,
     Xp = np.zeros(n_chunks * chunk + 2 * c, dtype=np.float64)
     Xp[c:c + n] = X
     xp = transform_x(Xp, ladder.space)
-    uniq, inv = np.unique(xp, return_inverse=True)
+    if level_cache:
+        if level_cache["n_padded"] != xp.shape[0]:
+            raise ValueError(f"level_cache holds {level_cache['n_padded']} padded bins, "
+                             f"this X has {xp.shape[0]}")
+        uniq, inv = level_cache["uniq"], level_cache["inv"]
+    else:
+        uniq, inv = np.unique(xp, return_inverse=True)
+        if level_cache is not None:
+            level_cache.update(n_padded=xp.shape[0], uniq=uniq,
+                               inv=np.asarray(inv, dtype=np.int32 if uniq.size < 2**31 else np.int64))
     theta_u = theta_levels(ladder, torch.from_numpy(uniq).to(device),
                            cov.to(device=device, dtype=torch.float32), average)
     inv_t = torch.from_numpy(np.asarray(inv, dtype=np.int64).reshape(-1)).to(device)
