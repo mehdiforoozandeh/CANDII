@@ -103,6 +103,22 @@ and nearly every p-space bin is distinct. So the 192 no-covariates tasks (index 
 `row2/idx_nocov.txt`) are held until the averaged map is made cheap; all 192 will then run on one
 kit. The four smoke nocov runs finished on K5 are counted as smoke only if the fix changes their
 numbers.
+
+22:15: cancelled 22853854_138 (A2 across, trained, scoring on CPU) and 22853854_570 (D2 across,
+no first validation after 52 min): both would pass 3 h on K5 and the fix below replaces them.
+Before the nocov array runs on the new kit, the four K5 nocov run dirs move to
+`row2/runs_smoke_K5/` (A2_all_pval_nocov_s0 holds a K5 TRAIN_DONE that would otherwise be skipped).
+
+Diagnosis (read-only agent, local timings; scratch `scratchpad/nocov_diag/`): validation loops
+all 242 pairs and rebuilds the averaged map per pair, though pairs share about 128 sources;
+scoring runs on CPU (score.py forces cpu) and rebuilds it per job (854 jobs; law 2 094 jobs over
+121 sources). Three exact fixes, built as chunk N1: (F1) one (loc, disp) per (source,
+chromosome), reused by every pair and job with that source — bit-identical; (F4) each source's
+distinct values computed once per run for validation — bit-identical; (F3) g's last linear layer
+taken out of the mean over pairs, theta_bar = W · mean(h) + b — exact up to float order (max
+|Δ theta| 5e-7 to 2e-6). Estimated with all three: across-track nocov p runs 1.2–1.7 h total, law
+34–40 min on 8 cores (today: scoring alone 2.9–5.8 h, law 4.3–8.8 h). No approximation needed.
+Full array 22855414 at 22:15: 7 done, 13 running (13 slices free).
 PI ruling 2026-09-28 (shuffled-bin-value twin): g's x at bin i is the source track's x at a
 uniformly random bin of the same chromosome; redrawn each training step; one fixed seeded
 permutation per chromosome at prediction and scoring. f still reads the true x.
