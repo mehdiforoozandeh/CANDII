@@ -119,6 +119,18 @@ taken out of the mean over pairs, theta_bar = W · mean(h) + b — exact up to f
 |Δ theta| 5e-7 to 2e-6). Estimated with all three: across-track nocov p runs 1.2–1.7 h total, law
 34–40 min on 8 cores (today: scoring alone 2.9–5.8 h, law 4.3–8.8 h). No approximation needed.
 Full array 22855414 at 22:15: 7 done, 13 running (13 slices free).
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-09-28 22:33 | 22857243 | law, batch 1: the 29 real/ids runs with SCORE_DONE at 22:30 (indices in `row2/law_batch1.txt`) | K5 |
+
+Shuffled-bin twin build: X1 (draw, training, prediction, task table), X2 (scorer tests), X3
+(aggregation: twin rows, checks `beatsxshuf` and `lawtest_xshuf`, grid row 3), X4 (schema,
+figures, reports), X5 (four `slurm/t118/xshuf_*.sh` scripts) merged at 2311208. Note for the PI:
+`lawtest_xshuf` uses the bar 2 × the larger of the real and twin seed wobbles (as `beatsxshuf`);
+the row-1 law checks against the other twins use 2 × the real g's wobble. Both twin checks are
+written only when some twin run was read. X6 (smoke, end-to-end test) and N1 (the exact nocov
+fix) are building.
 PI ruling 2026-09-28 (shuffled-bin-value twin): g's x at bin i is the source track's x at a
 uniformly random bin of the same chromosome; redrawn each training step; one fixed seeded
 permutation per chromosome at prediction and scoring. f still reads the true x.
