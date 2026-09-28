@@ -90,6 +90,14 @@ Slice nodes at 21:15: g30–34 and g37 `mixed` (usable), g35–36 `mixed-` (held
 PI ruling 2026-09-28 (shuffled-bin-value twin): g's x at bin i is the source track's x at a
 uniformly random bin of the same chromosome; redrawn each training step; one fixed seeded
 permutation per chromosome at prediction and scoring. f still reads the true x.
+Further PI answers the same day: training draws come from a fixed uniform pool of 2^17 bins per
+(source track, chromosome), with replacement, the bin itself not excluded; padded positions read
+their own padded value; one permutation per chromosome shared by all source tracks; two drafted
+checks, "row 2 beats its twin" on trained pairs and on the law-test pairs (neither gates anything);
+no no-covariates version of the twin (192 runs, real covariates); per-run g summaries kept.
+Build plan `.orchestrate/plan_xshuf.md` (git-excluded); chunks X1 (draw, training, prediction,
+task table) and X4 (schema, figures, reports) building in
+`/Users/mforooz/Desktop/research/libbrechteam@sfu/.orchestrate-wt/CANDII/xshuf-X{1,4}`.
 
 The full 576 array waits for the no-covariates smoke: if the averaged map is too slow in p space,
 the fix changes the code (new kit), and runs from two kits should not mix.
