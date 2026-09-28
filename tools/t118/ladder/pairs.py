@@ -18,9 +18,12 @@ arms, byte-identical to the DNase base: a t112 defect), sorted by pid — 128 on
 `index = rung_i*144 + g_i*18 + space_i*9 + model_i*3 + seed`,
 `run_name = f"{rung}_{g}_{space}_{model}_s{seed}"`. Row 2 (`tasks(row=2)`, `--row 2`) is the same
 table with the rungs of `RUNGS_ROW2` (A2..D2) in place of A..D: same indices, same formula.
+The shuffled-bin twin (`tasks(row=2, xshuf=True)`, `--row 2 --xshuf`; `ladder/xshuf.py`) is its own
+192-row table = RUNGS_ROW2 x G_IDS x SPACES x SEEDS, model `MODEL_XSHUF` (real covariates only):
+`index = rung_i*48 + g_i*6 + space_i*3 + seed`, `run_name = f"{rung}_{g}_{space}_xshuf_s{seed}"`.
 
     python tools/t118/ladder/pairs.py count <MANIFEST.tsv>
-    python tools/t118/ladder/pairs.py tasks <MANIFEST.tsv> [--row 2]
+    python tools/t118/ladder/pairs.py tasks <MANIFEST.tsv> [--row 2] [--xshuf]
     python tools/t118/ladder/pairs.py train-pairs <MANIFEST.tsv> <g>
     python tools/t118/ladder/pairs.py law-pairs <MANIFEST.tsv> <g>
 """
@@ -50,6 +53,8 @@ RUNGS = ("A", "B", "C", "D")
 RUNGS_ROW2 = ("A2", "B2", "C2", "D2")
 ROW1_OF = {"A2": "A", "B2": "B", "C2": "C", "D2": "D"}
 MODELS = ("real", "nocov", "ids")
+#: the row-2 shuffled-bin-value twin (`ladder/xshuf.py`); not in MODELS, its own task table
+MODEL_XSHUF = "xshuf"
 SPACES = ("counts", "pval")
 SEEDS = (0, 1, 2)
 TRACKS = ("C07M20", "C07M29", "C12M02", "C19M16", "C19M22", "C40M17", "C40M18")
@@ -198,13 +203,18 @@ def row_of(rung: str) -> int:
     raise ValueError(f"rung {rung!r} not in {RUNGS} or {RUNGS_ROW2}")
 
 
-def tasks(rows: list[dict] | None = None, row: int = 1) -> list[dict]:
+def tasks(rows: list[dict] | None = None, row: int = 1, xshuf: bool = False) -> list[dict]:
     """The 576-row task table; a pure function of the pinned constants (rows kept for the signature).
 
     `row` 1: rungs RUNGS; `row` 2: rungs RUNGS_ROW2, same indices and run-name formula.
+    `xshuf=True` (row 2 only): the 192-row table of the shuffled-bin twin, model `MODEL_XSHUF`.
     """
     if row not in (1, 2):
         raise ValueError(f"row {row!r} not in (1, 2)")
+    if xshuf:
+        if row != 2:
+            raise ValueError(f"the {MODEL_XSHUF} table is row 2 only, not row {row!r}")
+        return _tasks_xshuf()
     out = []
     for ri, rung in enumerate(RUNGS if row == 1 else RUNGS_ROW2):
         for gi, g in enumerate(G_IDS):
@@ -215,6 +225,20 @@ def tasks(rows: list[dict] | None = None, row: int = 1) -> list[dict]:
                         out.append({"index": index, "rung": rung, "g": g, "space": space,
                                     "model": model, "seed": seed,
                                     "run_name": f"{rung}_{g}_{space}_{model}_s{seed}"})
+    assert [t["index"] for t in out] == list(range(len(out)))
+    return out
+
+
+def _tasks_xshuf() -> list[dict]:
+    out = []
+    for ri, rung in enumerate(RUNGS_ROW2):
+        for gi, g in enumerate(G_IDS):
+            for si, space in enumerate(SPACES):
+                for seed in SEEDS:
+                    index = ri * 48 + gi * 6 + si * 3 + seed
+                    out.append({"index": index, "rung": rung, "g": g, "space": space,
+                                "model": MODEL_XSHUF, "seed": seed,
+                                "run_name": f"{rung}_{g}_{space}_{MODEL_XSHUF}_s{seed}"})
     assert [t["index"] for t in out] == list(range(len(out)))
     return out
 
@@ -244,12 +268,17 @@ def main(argv=None) -> int:
             p.add_argument("g")
         if name == "tasks":
             p.add_argument("--row", type=int, choices=(1, 2), default=1)
+            p.add_argument("--xshuf", action="store_true",
+                           help="the shuffled-bin twin's 192-row table (needs --row 2)")
     args = ap.parse_args(argv)
+    if args.cmd == "tasks" and args.xshuf and args.row != 2:
+        ap.error("tasks --xshuf needs --row 2")
     rows = read_manifest(args.manifest)
     if args.cmd == "count":
         sys.stdout.write("".join(line + "\n" for line in count_lines(rows)))
     elif args.cmd == "tasks":
-        sys.stdout.write("\t".join(TASK_KEYS) + "\n" + _tsv(tasks(rows, args.row), TASK_KEYS))
+        sys.stdout.write("\t".join(TASK_KEYS) + "\n" + _tsv(tasks(rows, args.row, xshuf=args.xshuf),
+                                                            TASK_KEYS))
     else:
         fn = train_pairs if args.cmd == "train-pairs" else law_pairs
         sys.stdout.write("\t".join(PAIR_KEYS) + "\n" + _tsv(fn(rows, args.g), PAIR_KEYS))

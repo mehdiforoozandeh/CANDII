@@ -26,6 +26,11 @@ is `[B, W, n_theta]`. For fixed (C, C') theta_i depends on x_i alone, so predict
 per distinct x value of the chromosome and gathers (`theta_levels`, `predict_chrom_bins`) — exact,
 not an approximation. The row-2 no-covariates twin is one averaged map that still reads x:
 theta_bar(x) = mean over the training pairs j of g(x, C_j, C'_j).
+
+**Shuffled-bin twin** (model "xshuf", row 2, real covariates; `ladder/xshuf.py`). g reads x from
+another bin of the same chromosome, f reads the true x: `Ladder.forward(cov, x, x_g)`. At
+prediction `predict_chrom_bins(..., x_g_rng=xshuf.pred_rng(seed, chrom))` permutes the chromosome's
+bins once for g (pads read themselves); the distinct-value gather is unchanged and still exact.
 """
 from __future__ import annotations
 
@@ -38,7 +43,7 @@ import numpy as np
 import torch
 from scipy.stats import nbinom, norm
 
-from ladder import base, data, encoding
+from ladder import base, data, encoding, xshuf
 
 HIDDEN = 64
 P_FLOOR = 1e-3
@@ -166,6 +171,7 @@ class Ladder(torch.nn.Module):
     """g + one f-form: `forward(cov_pair [B, 40], x [B, L + 2c]) -> (loc [B, L], disp [B, L])`.
 
     Row 2 (`per_bin`, the form's flag): g is `GBin` and reads x as well; the signature is the same.
+    `x_g` (row 2 only, shaped like x): the x g reads instead of x — the shuffled-bin twin.
     """
 
     def __init__(self, rung: str, space: str, stats: dict, n_cov: int = encoding.N_COV):
@@ -188,9 +194,13 @@ class Ladder(torch.nn.Module):
             raise ValueError(f"rung {self.rung}: a per-bin g needs x")
         return self.g(cov_pair, x)
 
-    def forward(self, cov_pair: torch.Tensor, x: torch.Tensor):
+    def forward(self, cov_pair: torch.Tensor, x: torch.Tensor, x_g: torch.Tensor | None = None):
         if self.per_bin:
-            return self.form(x, self.g(cov_pair, x))
+            if x_g is not None and tuple(x_g.shape) != tuple(x.shape):
+                raise ValueError(f"x_g {tuple(x_g.shape)} must be shaped like x {tuple(x.shape)}")
+            return self.form(x, self.g(cov_pair, x if x_g is None else x_g))
+        if x_g is not None:
+            raise ValueError(f"rung {self.rung}: x_g needs a per-bin (row-2) form")
         return self.form(x, self.g(cov_pair))
 
     def nll_bins(self, loc, disp, y) -> torch.Tensor:
@@ -260,12 +270,17 @@ def theta_levels(ladder: Ladder, x_values: torch.Tensor, cov: torch.Tensor,
 
 @torch.no_grad()
 def predict_chrom_bins(ladder: Ladder, X: np.ndarray, cov: torch.Tensor, device,
-                       average: bool = False, chunk: int = CHUNK) -> tuple[np.ndarray, np.ndarray]:
+                       average: bool = False, chunk: int = CHUNK,
+                       x_g_rng: np.random.Generator | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Row 2: (loc, disp) float32[n] for a whole chromosome X, theta per position from g.
 
     Same padding, chunks and halo as `predict_chrom`. theta at position j = `theta_levels` at the
     distinct values of the padded, transformed X, gathered back by the inverse index (exact: theta_j
     depends on x_j alone). `cov` [1, 40], or [k, 40] with `average=True` (the nocov twin).
+
+    `x_g_rng` (the shuffled-bin twin): perm = `xshuf.draw_positions(x_g_rng, n, n, fixed=True)`;
+    g at padded position q reads x at `src[q]`, `src[c + j] = c + perm[j]` on the bins and
+    `src[q] = q` on the pads; f reads the true x. None: g reads the true x.
     """
     c = ladder.context
     n = int(np.asarray(X).shape[0])
@@ -278,6 +293,11 @@ def predict_chrom_bins(ladder: Ladder, X: np.ndarray, cov: torch.Tensor, device,
     theta_u = theta_levels(ladder, torch.from_numpy(uniq).to(device),
                            cov.to(device=device, dtype=torch.float32), average)
     inv_t = torch.from_numpy(np.asarray(inv, dtype=np.int64).reshape(-1)).to(device)
+    if x_g_rng is not None:
+        perm = xshuf.draw_positions(x_g_rng, n, n, fixed=True)
+        src = np.arange(xp.shape[0], dtype=np.int64)
+        src[c:c + n] = c + perm
+        inv_t = inv_t[torch.from_numpy(src).to(device)]
     offs = torch.arange(chunk + 2 * c, device=device)
     locs, disps = [], []
     for b0 in range(0, n_chunks, BATCH_CHUNKS):
@@ -395,7 +415,8 @@ class Predictor:
         X = self.corpus.get(x_src_pid, self.space, chrom)
         if self.per_bin:
             cov, avg = self._cov_t(cov_src_pid, cov_tgt_pid)
-            return predict_chrom_bins(self.ladder, X, cov, self.device, average=avg)
+            rng = xshuf.pred_rng(self.seed, chrom) if self.model == "xshuf" else None
+            return predict_chrom_bins(self.ladder, X, cov, self.device, average=avg, x_g_rng=rng)
         return predict_chrom(self.ladder, X, self._theta_t(cov_src_pid, cov_tgt_pid), self.device)
 
     def mean(self, loc: np.ndarray) -> np.ndarray:

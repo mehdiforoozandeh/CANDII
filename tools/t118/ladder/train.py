@@ -3,7 +3,8 @@
     python tools/t118/ladder/train.py train <manifest.tsv> <covariates.tsv> <data_dir> <runs_dir>
         <rung> <g> <space> <model> <seed> [--max-steps N] [--eval-every N] [--device auto|cpu|cuda]
     python tools/t118/ladder/train.py train-index <manifest.tsv> <covariates.tsv> <data_dir>
-        <runs_dir> <index> [--row {1,2}] [...]          (the index-th row of `pairs.tasks(row=)`)
+        <runs_dir> <index> [--row {1,2}] [--xshuf] [...] (the index-th row of `pairs.tasks(row=)`;
+                                                        --xshuf: the twin's table, needs --row 2)
     python tools/t118/ladder/train.py cache <manifest.tsv> <products_dir> <cache_dir> <index>
                                                         (`data.build_cache`, all products by pid)
 
@@ -33,6 +34,13 @@ without improvement; the best state is restored and saved.
 reads x inside the Ladder); validation predicts with `model.predict_chrom_bins` (nocov: the averaged
 map over the training pairs); config.json gains `"row": 2`. Row-1 runs are unchanged.
 
+**Shuffled-bin twin** (model "xshuf", row-2 rungs only, real covariates; `ladder/xshuf.py`): the
+window and covariate streams are the real run's; g reads `xs_g`, a copy of the window whose
+in-chromosome positions are replaced by x drawn uniformly from the (source pid, chromosome) pool,
+fresh every step (`xshuf.train_rng(seed)`), pads unchanged; validation uses the fixed per-chromosome
+permutation (`xshuf.pred_rng`). config.json gains `"xshuf": Pool.describe()`, timing.json
+`"xshuf_pool"`.
+
 **Run dir** `<runs_dir>/<run_name>/`: config.json, ckpt.pt, train_log.tsv (`step loss val_nll
 seconds`), timing.json, TRAIN_DONE (written last; if present the CLI exits 0 without work).
 """
@@ -56,7 +64,7 @@ if str(_T118) not in sys.path:          # script mode: make `ladder` importable
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from ladder import base, data, encoding, model, pairs  # noqa: E402
+from ladder import base, data, encoding, model, pairs, xshuf  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 DEFAULTS = {"window": 2048, "batch": 32, "lr": 1e-3, "warmup": 100, "grad_clip": 1.0,
@@ -108,10 +116,11 @@ def knot_sample(corpus, fit_pids, space, chroms, lens, n: int, block: int) -> np
 
 
 class Sampler:
-    """Random training windows. `draw(B)` -> (pair_idx, cov_idx, x [B, W+2c], y [B, W], mask)."""
+    """Random training windows. `draw(B)` -> (pair_idx, cov_idx, x [B, W+2c], y [B, W], mask);
+    with `xshuf_pool`, a sixth entry x_g [B, W+2c]: the x the shuffled-bin twin's g reads."""
 
     def __init__(self, corpus, space, train_pairs, chroms, lens, window, context, seed,
-                 model_name, perm):
+                 model_name, perm, xshuf_pool=None):
         self.corpus, self.space, self.pairs = corpus, space, train_pairs
         self.chroms, self.lens = chroms, lens
         self.probs = lens / lens.sum()
@@ -119,9 +128,11 @@ class Sampler:
         self.model, self.perm = model_name, perm
         self.rng = np.random.default_rng(int(seed))             # pairs, chromosomes, positions
         self.cov_rng = np.random.default_rng([int(seed), 7121])  # the nocov re-draw only
+        self.xshuf_pool = xshuf_pool
+        self.xshuf_rng = xshuf.train_rng(seed) if xshuf_pool is not None else None
 
     def cov_index(self, pair_idx: np.ndarray) -> np.ndarray:
-        if self.model == "real":
+        if self.model in ("real", pairs.MODEL_XSHUF):
             return pair_idx.copy()
         if self.model == "ids":
             return self.perm[pair_idx]
@@ -145,15 +156,29 @@ class Sampler:
                 self.space)
             ys[b] = self.corpus.window(p["target_pid"], self.space, chrom, s, s + W)
             mask[b, :max(0, min(W, n - s))] = True
-        return pi, self.cov_index(pi), xs, ys, mask
+        if self.xshuf_pool is None:
+            return pi, self.cov_index(pi), xs, ys, mask
+        pool = self.xshuf_pool
+        xs_g = xs.copy()
+        for b in range(batch):
+            pid, chrom, n = self.pairs[pi[b]]["source_pid"], self.chroms[ci[b]], int(self.lens[ci[b]])
+            s = int(u[b] * (max(0, n - W) + 1))
+            lo, hi = max(0, c - s), min(W + 2 * c, n - s + c)     # window slots on bins [0, n)
+            m = max(0, hi - lo)
+            if m:
+                pos = xshuf.draw_positions(self.xshuf_rng, pool.n_source(pid, chrom), m)
+                xs_g[b, lo:hi] = model.transform_x(pool.values[(pid, chrom)][pos], self.space)
+        return pi, self.cov_index(pi), xs, ys, mask, xs_g
 
 
 def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
-             average_theta: bool = False) -> float:
+             average_theta: bool = False, xshuf_seed: int | None = None) -> float:
     """Mean over the trained pairs of the mean per-bin NLL over the whole of chr22.
 
     `average_theta` (the nocov twin): every pair uses one theta, the mean over `cov_val`, exactly
     as the twin's Predictor does, so early stopping selects the model that is scored.
+    `xshuf_seed` (the shuffled-bin twin): g reads x through the fixed permutation of chr22,
+    `xshuf.pred_rng(xshuf_seed, "chr22")`, as the twin's Predictor does.
     """
     chrom = pairs.VAL_CHROMS[0]
     was_training = ladder.training
@@ -167,7 +192,9 @@ def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
             Y = corpus.get(p["target_pid"], space, chrom)
             if ladder.per_bin:
                 cov = cov_val if average_theta else cov_val[i:i + 1]
-                loc, disp = model.predict_chrom_bins(ladder, X, cov, device, average=average_theta)
+                rng = None if xshuf_seed is None else xshuf.pred_rng(xshuf_seed, chrom)
+                loc, disp = model.predict_chrom_bins(ladder, X, cov, device, average=average_theta,
+                                                     x_g_rng=rng)
             else:
                 theta = theta_avg if average_theta else ladder.theta(cov_val[i:i + 1])[0]
                 loc, disp = model.predict_chrom(ladder, X, theta, device)
@@ -190,8 +217,9 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     torch.backends.cudnn.benchmark = False
     if space not in pairs.SPACES:
         raise ValueError(f"space {space!r} not in {pairs.SPACES}")
-    if model_name not in pairs.MODELS:
-        raise ValueError(f"model {model_name!r} not in {pairs.MODELS}")
+    if model_name not in pairs.MODELS + (pairs.MODEL_XSHUF,):
+        raise ValueError(f"model {model_name!r} not in {pairs.MODELS + (pairs.MODEL_XSHUF,)}")
+    is_xshuf = model_name == pairs.MODEL_XSHUF
     seed = int(seed)
     cfg = dict(DEFAULTS)
     unknown = set(overrides) - set(cfg)
@@ -237,8 +265,15 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     torch.manual_seed(seed)
     np.random.seed(seed)
     ladder = model.Ladder(rung, space, stats).to(dev)
+    pool, t_pool = None, None
+    if is_xshuf:
+        if not ladder.per_bin:
+            raise ValueError(f"model {model_name!r} needs a row-2 rung")
+        tp0 = time.time()
+        pool = xshuf.Pool(corpus, space, fit, chroms, seed)
+        t_pool = time.time() - tp0
     sampler = Sampler(corpus, space, tp, chroms, lens, cfg["window"], ladder.context, seed,
-                      model_name, perm)
+                      model_name, perm, xshuf_pool=pool)
     opt = torch.optim.Adam(ladder.parameters(), lr=cfg["lr"])
     warm = max(1, int(cfg["warmup"]))
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, (s + 1) / warm))
@@ -259,21 +294,28 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         "ids_perm": [int(v) for v in perm],
         "knots_x": [float(v) for v in stats["knots_x"]],
     }
+    if is_xshuf:
+        config["xshuf"] = pool.describe()
     (run_dir / "config.json").write_text(json.dumps(config, indent=1) + "\n")
 
     t_setup = time.time() - t0
     t1 = time.time()
     log = []
-    val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov")
+    xshuf_seed = seed if is_xshuf else None
+    val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov",
+                   xshuf_seed=xshuf_seed)
     log.append((0, float("nan"), val, time.time() - t1))
     best = {"val": val, "step": 0, "g": copy.deepcopy(ladder.g.state_dict()),
             "form": copy.deepcopy(ladder.form.state_dict())}
     bad, losses, step = 0, [], 0
     ladder.train()
     for step in range(1, cfg["max_steps"] + 1):
-        _, ci, xb, yb, mb = sampler.draw(cfg["batch"])
+        out = sampler.draw(cfg["batch"])
+        _, ci, xb, yb, mb = out[:5]
+        xg = out[5] if len(out) == 6 else None
         cov = cov_all_t[torch.from_numpy(ci).to(dev)]
-        loc, disp = ladder(cov, torch.from_numpy(xb).to(dev))
+        xg_t = None if xg is None else torch.from_numpy(xg).to(dev)
+        loc, disp = ladder(cov, torch.from_numpy(xb).to(dev), x_g=xg_t)
         loss = ladder.nll(loc, disp, torch.from_numpy(yb).to(dev), torch.from_numpy(mb).to(dev))
         if not torch.isfinite(loss):
             raise FloatingPointError(f"{name}: non-finite loss at step {step}")
@@ -284,7 +326,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         sched.step()
         losses.append(float(loss))
         if step % cfg["eval_every"] == 0 or step == cfg["max_steps"]:
-            val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov")
+            val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov",
+                           xshuf_seed=xshuf_seed)
             log.append((step, float(np.mean(losses)), val, time.time() - t1))
             losses = []
             if val < best["val"]:
@@ -313,6 +356,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     timing = {"setup": t_setup, "train": t_train, "total": time.time() - t0,
               "peak_rss_mb": peak_rss_mb(), "steps_run": step, "best_step": int(best["step"]),
               "val_nll": float(best["val"])}
+    if is_xshuf:
+        timing["xshuf_pool"] = t_pool
     (run_dir / "timing.json").write_text(json.dumps(timing, indent=1) + "\n")
     (run_dir / "TRAIN_DONE").write_text(f"{name} best_step {best['step']} val_nll {best['val']!r}\n")
     print(f"{name}: best_step {best['step']} val_nll {best['val']:.6g} "
@@ -339,12 +384,16 @@ def main(argv=None) -> int:
         p.add_argument(a)
     p.add_argument("index", type=int)
     p.add_argument("--row", type=int, choices=(1, 2), default=1)
+    p.add_argument("--xshuf", action="store_true",
+                   help="the shuffled-bin twin's table (pairs.tasks(row=2, xshuf=True)); needs --row 2")
     knobs(p)
     p = sub.add_parser("cache")
     for a in ("manifest", "products_dir", "cache_dir"):
         p.add_argument(a)
     p.add_argument("index", type=int)
     args = ap.parse_args(argv)
+    if args.cmd == "train-index" and args.xshuf and args.row != 2:
+        ap.error("train-index --xshuf needs --row 2")
 
     if args.cmd == "cache":
         rows = sorted(pairs.read_manifest(args.manifest), key=lambda r: r["pid"])
@@ -355,7 +404,10 @@ def main(argv=None) -> int:
         print(f"{row['pid']}: " + " ".join(f"{s}={v}" for s, v in status.items()))
         return 0
     if args.cmd == "train-index":
-        table = pairs.tasks(pairs.read_manifest(args.manifest), args.row)
+        if args.xshuf:
+            table = pairs.tasks(pairs.read_manifest(args.manifest), 2, xshuf=True)
+        else:
+            table = pairs.tasks(pairs.read_manifest(args.manifest), args.row)
         if not 0 <= args.index < len(table):
             raise IndexError(f"task index {args.index} outside 0..{len(table) - 1}")
         t = table[args.index]
