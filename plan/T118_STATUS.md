@@ -65,6 +65,31 @@ run exists yet, so this section holds no results.
   shuffled-bin-value twin is added for every row-2 design. The execution phase is handed off:
   `plan/T118_HANDOFF_3.md`.
 
+## Row 2 execution (from 2026-09-28, handoff 3)
+
+Smoke 22851946 finished, all four COMPLETED (sacct elapsed, MaxRSS; timing.json train seconds,
+peak RSS, steps run / best step):
+
+| run | elapsed | MaxRSS | train | peak RSS | steps / best |
+|---|---|---|---|---|---|
+| A2 C19M16 counts real s0 | 7:03 | 6.2 GiB | 53 s | 7.2 GiB | 4000 / 4000 |
+| B2 … | 16:23 | 5.5 GiB | 65 s | 4.9 GiB | 1750 / 750 |
+| C2 … | 13:58 | 6.5 GiB | 176 s | 6.8 GiB | 3750 / 2750 |
+| D2 … | 13:06 | 6.0 GiB | 269 s | 7.0 GiB | 3750 / 2750 |
+
+Scoring, not training, dominates the per-task time (5–15 min of each total).
+
+Jobs (never resubmit a finished one; a rerun skips on SCORE_DONE / LAW_DONE):
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-09-28 21:17 | 22853853 | law smoke, indices 54, 198, 342, 486 (`row2_law.sh`, CPU) | K5 |
+| 2026-09-28 21:17 | 22853854 | no-covariates p-space smoke, indices 66, 138, 498, 570 = A2 / D2 × C19M16 / `all` × pval × nocov × s0 (`row2_train.sh`) | K5 |
+
+Slice nodes at 21:15: g30–34 and g37 `mixed` (usable), g35–36 `mixed-` (held).
+The full 576 array waits for the no-covariates smoke: if the averaged map is too slow in p space,
+the fix changes the code (new kit), and runs from two kits should not mix.
+
 ## Where everything is
 
 | what | where |
