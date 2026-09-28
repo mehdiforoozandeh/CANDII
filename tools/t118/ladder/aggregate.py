@@ -26,6 +26,12 @@ bar cannot be formed, e.g. one seed; `components["met_reason"]` says which). Not
   beatsrow1      (A2, B2, C2, D2) D_row1 - D_row2, real, trained, the row-1 design of the same
                  column (A2 against A); bar 2 x max(wobble_row1, wobble_row2); met value > bar;
                  `seed_wobble` = that max; left out when the row-1 design has no runs
+  beatsxshuf     (A2, B2, C2, D2) D_xshuf - D_real, kind trained, the shuffled-bin twin (model
+                 xshuf: g reads x from a random other bin of the same chromosome); bar
+                 2 x max(wobble_real, wobble_xshuf); met value > bar; `seed_wobble` = that max
+  lawtest_xshuf  the same on kind law (the never-trained pairs); same bar and components
+                 (both twin checks are drafted readings only, never a gate; written only when
+                 some twin run was read, so an aggregation without twin runs is unchanged)
 (D metrics crps_all and crps_top1, variant all.) `checks_<rung>.json` holds the rung's checks
 (shuffle and swap excluded — they belong to the main claim); `checks_main.json` holds every check
 of the rung chosen per (g_version, space): the lowest rung whose chr22 `crps_all` (real, mean over
@@ -39,6 +45,9 @@ A2-D2), `grid` (per g_version x space x mark class x metric x cell of the 2 x 4 
 trained mean and seed wobble, and `n_pairs_crps_gt_20`, the count of real-g (pair, seed)
 trained/score records with crps_all > 20 — reported only, never pass/fail), `rows` and
 `also_runs`. The default call (row 1, no `--also-runs`) writes what it wrote before row 2 existed.
+`--xshuf` (needs 2 in `--rows`) adds the twin's 192 run names to the expected runs; twin runs are
+read whenever present (their per_track / per_class rows carry model `xshuf`), and then `grid` gains
+row 3: the twin's trained mean, seed wobble and `n_pairs_crps_gt_20` per cell `<col>2`.
 
 **Size.** `results.json` (compact JSON) keeps in `per_pair` only the trained/score and swap records
 (what the figures and report read); the val, shuffle, law and depthlaw records go one per line to
@@ -47,7 +56,7 @@ trained/score records with crps_all > 20 — reported only, never pass/fail), `r
 six METRICS; the swap check reads the swap records directly.
 
     python tools/t118/ladder/aggregate.py <manifest> <covariates.tsv> <runs_dir> <refs.tsv> <agg_dir>
-                                          [--also-runs DIR]... [--rows 1|2|1,2]
+                                          [--also-runs DIR]... [--rows 1|2|1,2] [--xshuf]
     python tools/t118/ladder/aggregate.py qm-curves <manifest> <data_dir> <out.json>
 """
 from __future__ import annotations
@@ -112,14 +121,19 @@ def _warn(msg: str) -> None:
 # ---------------------------------------------------------------------------------------------
 
 
-def expected_runs(rows: list[dict], rows_set=(1,)) -> list[str]:
+def expected_runs(rows: list[dict], rows_set=(1,), xshuf: bool = False) -> list[str]:
     """Every run name the manifest implies (its tracks + "all") for the grid rows in `rows_set`,
-    in task order (the run-name formula of `pairs.tasks`, over the manifest's tracks)."""
+    in task order (the run-name formula of `pairs.tasks`, over the manifest's tracks); `xshuf`
+    appends the shuffled-bin twin's row-2 names (the formula of `pairs.tasks(row=2, xshuf=True)`)."""
     g_ids = tuple(pairs.track_ids(rows)) + ("all",)
     rungs = [r for row in (1, 2) if row in rows_set
              for r in (pairs.RUNGS if row == 1 else pairs.RUNGS_ROW2)]
-    return [f"{r}_{g}_{s}_{m}_s{sd}" for r in rungs for g in g_ids for s in pairs.SPACES
-            for m in pairs.MODELS for sd in pairs.SEEDS]
+    out = [f"{r}_{g}_{s}_{m}_s{sd}" for r in rungs for g in g_ids for s in pairs.SPACES
+           for m in pairs.MODELS for sd in pairs.SEEDS]
+    if xshuf:
+        out += [f"{r}_{g}_{s}_{pairs.MODEL_XSHUF}_s{sd}" for r in pairs.RUNGS_ROW2 for g in g_ids
+                for s in pairs.SPACES for sd in pairs.SEEDS]
+    return out
 
 
 def load_runs(runs_dir, rows_set=None, seen=None) -> tuple[list[dict], list[str], list[str], dict]:
@@ -335,6 +349,8 @@ def compute_checks(per_class: list[dict], depth_law: list[dict]) -> list[dict]:
     idx = _class_index(per_class)
     combos = sorted({(r["rung"], r["g_version"], r["space"], r["mark_class"]) for r in per_class})
     rungs_present = {r["rung"] for r in per_class}
+    # the twin checks exist only when some twin run was read (no twin -> today's checks exactly)
+    has_xshuf = any(r["model"] == pairs.MODEL_XSHUF for r in per_class)
     out = []
 
     def get(rung, gv, space, model, kind, mc, metric):
@@ -386,6 +402,18 @@ def compute_checks(per_class: list[dict], depth_law: list[dict]) -> list[dict]:
                                       _diff(val(row1), val(real)), _twice(wmax), gt, wmax,
                                       {"rung_row1": r1, "d_row1": val(row1), "d_row2": val(real),
                                        "wobble_row1": w1, "wobble_row2": w2}))
+            if has_xshuf and pairs.row_of(rung) == 2:
+                for name, kind in (("beatsxshuf", "trained"), ("lawtest_xshuf", "law")):
+                    r_row = get(rung, gv, space, "real", kind, mc, metric)
+                    x_row = get(rung, gv, space, pairs.MODEL_XSHUF, kind, mc, metric)
+                    if r_row is None and x_row is None:
+                        continue
+                    wr, wx = val(r_row, "seed_wobble"), val(x_row, "seed_wobble")
+                    wmax = None if wr is None or wx is None else max(wr, wx)
+                    out.append(_check(rung, gv, space, mc, metric, name,
+                                      _diff(val(x_row), val(r_row)), _twice(wmax), gt, wmax,
+                                      {"d_real": val(r_row), "d_xshuf": val(x_row),
+                                       "wobble_real": wr, "wobble_xshuf": wx}))
             shuf = get(rung, gv, space, "real", "shuffle", mc, metric)
             if shuf is not None:
                 w = val(real, "seed_wobble")
@@ -452,32 +480,41 @@ def rung_choice(per_pair: list[dict], rungs=pairs.RUNGS) -> dict:
 def grid_rows(per_class: list[dict], per_pair: list[dict], rows_set) -> list[dict]:
     """The 2 x 4 grid: per (g_version, space, mark class, metric) and cell (column A-D, row) with
     a real-g trained per_class row, its mean and seed wobble, and `n_pairs_crps_gt_20` = the real-g
-    (pair, seed) trained/score records of that cell with crps_all > EXPLODE_CRPS (reported only)."""
+    (pair, seed) trained/score records of that cell with crps_all > EXPLODE_CRPS (reported only).
+    When a twin (model xshuf) per_class row exists, row 3 is the twin of row 2: rung `<col>2`, the
+    twin's trained values and the twin's own explode count."""
     idx = _class_index(per_class)
+    xs = pairs.MODEL_XSHUF
+    row_model = {1: "real", 2: "real", 3: xs}
+    grid_models = ("real", xs)
     n_explode: dict = defaultdict(int)
     for r in per_pair:
         v = r.get("crps_all")
-        if r.get("kind") == "trained" and r.get("eval") == "score" and r.get("model") == "real" \
+        if r.get("kind") == "trained" and r.get("eval") == "score" \
+                and r.get("model") in grid_models \
                 and v is not None and not isinstance(v, bool) and np.isfinite(v) \
                 and v > EXPLODE_CRPS:
-            n_explode[(r["rung"], r["g_version"], r["space"], r["mark_class"])] += 1
+            n_explode[(r["model"], r["rung"], r["g_version"], r["space"], r["mark_class"])] += 1
     combos = sorted({(r["g_version"], r["space"], r["mark_class"]) for r in per_class
-                     if r["model"] == "real" and r["kind"] == "trained"})
+                     if r["model"] in grid_models and r["kind"] == "trained"})
+    grid = tuple(row for row in (1, 2) if row in rows_set)
+    if any(r["model"] == xs for r in per_class):
+        grid += (3,)
     out = []
     for gv, space, mc in combos:
         for metric in GRID_METRICS:
-            for row in (1, 2):
-                if row not in rows_set:
-                    continue
+            for row in grid:
+                model = row_model[row]
                 for col in pairs.RUNGS:
                     rung = col if row == 1 else f"{col}2"
-                    pc = idx.get((rung, gv, space, "real", "trained", mc, metric, "all"))
+                    pc = idx.get((rung, gv, space, model, "trained", mc, metric, "all"))
                     if pc is None:
                         continue
                     out.append({"g_version": gv, "space": space, "mark_class": mc,
                                 "metric": metric, "column": col, "row": row, "rung": rung,
                                 "mean": pc["mean"], "seed_wobble": pc["seed_wobble"],
-                                "n_pairs_crps_gt_20": n_explode.get((rung, gv, space, mc), 0)})
+                                "n_pairs_crps_gt_20": n_explode.get((model, rung, gv, space, mc),
+                                                                    0)})
     return out
 
 
@@ -500,9 +537,11 @@ SUMMARY_COLS = ("rung", "g_version", "space", "model", "kind", "mark_class", "me
 
 
 def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir, also_runs=(),
-              rows_set=(1,)) -> dict:
+              rows_set=(1,), xshuf: bool = False) -> dict:
     rows = pairs.read_manifest(manifest)
     rows_set = tuple(sorted(set(rows_set)))
+    if xshuf and 2 not in rows_set:
+        raise ValueError("xshuf needs row 2 in rows_set: the shuffled-bin twin is a row-2 model")
     also_runs = [Path(d) for d in also_runs]
     extended = rows_set != (1,) or bool(also_runs)
     agg_dir = Path(agg_dir)
@@ -514,7 +553,7 @@ def aggregate(manifest, covariates, runs_dir, refs_tsv, agg_dir, also_runs=(),
         present += pr
         no_law += nl
         figdata.update(fd)
-    missing = [n for n in expected_runs(rows, rows_set) if n not in set(present)]
+    missing = [n for n in expected_runs(rows, rows_set, xshuf) if n not in set(present)]
     if missing:
         _warn(f"{len(missing)} expected runs missing (listed in results.json)")
     per_track_all = per_track_rows(per_pair, with_swap=True)
@@ -644,10 +683,16 @@ def main(argv=None) -> int:
                     help="another run directory read beside runs_dir (repeatable)")
     ap.add_argument("--rows", type=_rows_arg, default=(1,),
                     help="grid rows to aggregate: 1, 2 or 1,2 (default 1)")
+    ap.add_argument("--xshuf", action="store_true",
+                    help="also expect the shuffled-bin twin's row-2 runs (needs 2 in --rows)")
     a = ap.parse_args(argv)
+    if a.xshuf and 2 not in a.rows:
+        ap.error("--xshuf needs 2 in --rows: the shuffled-bin twin is a row-2 model")
     # the default call passes the five positionals only, exactly as before row 2
     extra = {} if a.rows == (1,) and not a.also_runs else {"also_runs": a.also_runs,
                                                             "rows_set": a.rows}
+    if a.xshuf:
+        extra["xshuf"] = True
     res = aggregate(a.manifest, a.covariates, a.runs_dir, a.refs_tsv, a.agg_dir, **extra)
     print(f"{len(res['runs_present'])} runs present, {len(res['runs_missing'])} missing; "
           f"{len(res['checks'])} checks -> {a.agg_dir}")
