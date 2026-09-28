@@ -26,7 +26,8 @@ Writes `<agg_dir>/<rung>/figures/`:
   fig9_checks         the checks card: each check's value against its bar, per version of g
 
 `--check-schema` validates results.json against the pinned keys (plan t118-C3; row 2 adds the
-optional keys `rung_choice_row2` and `grid` and the check `beatsrow1`) and draws
+optional keys `rung_choice_row2` and `grid` and the check `beatsrow1`; the shuffled-bin twin of
+row 2 adds the model `xshuf`, the checks `beatsxshuf` and `lawtest_xshuf`, and grid row 3) and draws
 nothing; it needs numpy only. Plotting imports matplotlib lazily (Agg backend), so this module
 imports under the candii env too (report.py reuses its labels and loaders). No torch, no candi,
 no scipy, no ladder modules.
@@ -44,7 +45,9 @@ import numpy as np
 RUNGS = ("A", "B", "C", "D", "A2", "B2", "C2", "D2")
 ROW1 = RUNGS[:4]            # g reads (C, C'): one f per pair
 ROW2 = RUNGS[4:]            # g reads (x, C, C'): one f per bin
-MODELS = ("real", "nocov", "ids")
+MODELS = ("real", "nocov", "ids", "xshuf")
+#: the shuffled-bin twin of a row-2 design: g reads x from a random bin of the same chromosome
+TWIN_XSHUF = "xshuf"
 SPACES = ("counts", "pval")
 SEEDS = (0, 1, 2)
 G_VERSIONS = ("per_track", "across")
@@ -69,7 +72,8 @@ RUNG_NAME = {"A": "design A, the per-bin affine map",
              "B2": "design B2, the monotone curve chosen per bin",
              "C2": "design C2, a 33-bin kernel chosen per bin then the per-bin curve",
              "D2": "design D2, a dilated CNN modulated per bin by g (FiLM)"}
-MODEL_NAME = {"real": "real g", "nocov": "no-covariates twin", "ids": "labels-as-ids twin"}
+MODEL_NAME = {"real": "real g", "nocov": "no-covariates twin", "ids": "labels-as-ids twin",
+              "xshuf": "shuffled-bin twin"}
 GV_NAME = {"per_track": "one g per track", "across": "one g across tracks"}
 SPACE_NAME = {"counts": "counts", "pval": "-log10 p"}
 METRIC_NAME = {"crps_all": "CRPS, all bins", "crps_nonzero": "CRPS, non-zero bins",
@@ -79,7 +83,7 @@ METRIC_NAME = {"crps_all": "CRPS, all bins", "crps_nonzero": "CRPS, non-zero bin
                "swap_median_abs_log_ratio": "median |log(mean / X)|",
                "depth_scale_rel_error": "|scale / ratio - 1|"}
 CHECK_ORDER = ("beatstwin", "lawtest_nocov", "lawtest_ids", "depthlaw", "beatsbelow", "shuffle",
-               "swap", "beatsrow1")
+               "swap", "beatsrow1", "beatsxshuf", "lawtest_xshuf")
 CHECK_NAME = {"beatstwin": "beats the no-covariates twin (held-out chromosomes)",
               "lawtest_nocov": "law test: beats the no-covariates twin",
               "lawtest_ids": "law test: beats the labels-as-ids twin",
@@ -87,17 +91,21 @@ CHECK_NAME = {"beatstwin": "beats the no-covariates twin (held-out chromosomes)"
               "beatsbelow": "beats the rung below",
               "shuffle": "shuffle: a wrong C' removes the advantage",
               "swap": "swap: C' = C leaves X unchanged",
-              "beatsrow1": "beats the same design in row 1"}
+              "beatsrow1": "beats the same design in row 1",
+              "beatsxshuf": "beats the shuffled-bin twin (held-out chromosomes)",
+              "lawtest_xshuf": "law test: beats the shuffled-bin twin"}
 CHECK_SHORT = {"beatstwin": "beats no-cov twin", "lawtest_nocov": "law test vs no-cov twin",
                "lawtest_ids": "law test vs ids twin", "depthlaw": "depth law",
                "beatsbelow": "beats rung below", "shuffle": "shuffle (wrong C')",
-               "swap": "swap (C' = C)", "beatsrow1": "beats row-1 design"}
+               "swap": "swap (C' = C)", "beatsrow1": "beats row-1 design",
+               "beatsxshuf": "beats shuffled twin", "lawtest_xshuf": "law test vs shuffled twin"}
 #: the comparison `met` encodes, per check (plan t118-C3)
 CHECK_RULE = {"beatstwin": ">", "lawtest_nocov": ">", "lawtest_ids": ">", "beatsbelow": ">",
-              "depthlaw": "<=", "shuffle": "<", "swap": "<", "beatsrow1": ">"}
+              "depthlaw": "<=", "shuffle": "<", "swap": "<", "beatsrow1": ">",
+              "beatsxshuf": ">", "lawtest_xshuf": ">"}
 RUNG_COLOUR = {"A": "#1f77b4", "B": "#ff7f0e", "C": "#2ca02c", "D": "#d62728",
                "A2": "#17becf", "B2": "#bcbd22", "C2": "#9467bd", "D2": "#e377c2"}
-MODEL_COLOUR = {"nocov": "#7f4f9f", "ids": "#8c564b", "real": "#1f77b4"}
+MODEL_COLOUR = {"nocov": "#7f4f9f", "ids": "#8c564b", "real": "#1f77b4", "xshuf": "#e6a100"}
 TRACK_COLOUR = {"C07M20": "#1f77b4", "C07M29": "#ff7f0e", "C12M02": "#2ca02c",
                 "C19M16": "#d62728", "C19M22": "#9467bd", "C40M17": "#8c564b",
                 "C40M18": "#e377c2"}
@@ -135,6 +143,10 @@ TRAINED_SCORE_KEYS = ("crps_all", "crps_top1", "spearman_all", "crps_oracle_scal
 GRID_KEYS = ("g_version", "space", "mark_class", "metric", "column", "row", "rung", "mean",
              "seed_wobble", "n_pairs_crps_gt_20")
 BEATSROW1_COMPONENTS = ("rung_row1", "d_row1", "d_row2", "wobble_row1", "wobble_row2")
+BEATSXSHUF_COMPONENTS = ("d_real", "d_xshuf", "wobble_real", "wobble_xshuf")
+#: the components each check must carry (checks not listed carry free-form components)
+CHECK_COMPONENTS = {"beatsrow1": BEATSROW1_COMPONENTS, "beatsxshuf": BEATSXSHUF_COMPONENTS,
+                    "lawtest_xshuf": BEATSXSHUF_COMPONENTS}
 
 
 def check_schema(res: dict, max_per_section: int = 10) -> list[str]:
@@ -173,9 +185,9 @@ def check_schema(res: dict, max_per_section: int = 10) -> list[str]:
                 bad.append(f"per_seed length {len(r['per_seed'])} != {len(SEEDS)}")
             if sec == "checks" and r.get("check") not in CHECK_ORDER:
                 bad.append(f"check={r.get('check')!r}")
-            if sec == "checks" and r.get("check") == "beatsrow1":
+            if sec == "checks" and r.get("check") in CHECK_COMPONENTS:
                 comp = r.get("components")
-                bad += [f"components.{k}" for k in BEATSROW1_COMPONENTS
+                bad += [f"components.{k}" for k in CHECK_COMPONENTS[r["check"]]
                         if not isinstance(comp, dict) or k not in comp]
             if bad:
                 n_err += 1
@@ -219,7 +231,10 @@ def check_schema(res: dict, max_per_section: int = 10) -> list[str]:
 
 
 def _check_grid(rows, max_per_section=10) -> list[str]:
-    """Errors of the optional `grid` rows: keys, enums, and rung == the (column, row) cell."""
+    """Errors of the optional `grid` rows: keys, enums, and rung == the (column, row) cell.
+
+    Row 1 is design `<col>`, row 2 is `<col>2`, and row 3 is the shuffled-bin twin of `<col>2`
+    (its rung is `<col>2`; a grid row carries no model, row 3 means model `xshuf`)."""
     if not isinstance(rows, list):
         return ["grid: not a list"]
     errs, n_err = [], 0
@@ -232,8 +247,11 @@ def _check_grid(rows, max_per_section=10) -> list[str]:
         col, row = r.get("column"), r.get("row")
         if "column" in r and col not in ROW1:
             bad.append(f"column={col!r}")
-        if "row" in r and str(row) not in ("1", "2"):
+        if "row" in r and str(row) not in ("1", "2", "3"):
             bad.append(f"row={row!r}")
+        elif col in ROW1 and "rung" in r and str(row) == "3" and r["rung"] != f"{col}2":
+            bad.append(f"rung={r['rung']!r} is not the cell ({col}, row=3: the shuffled-bin "
+                       f"twin of {col}2)")
         elif col in ROW1 and "rung" in r and \
                 r["rung"] != (col if str(row) == "1" else f"{col}2"):
             bad.append(f"rung={r['rung']!r} is not the cell ({col}, row {row})")
@@ -1127,6 +1145,11 @@ def fig9_checks(ctx, out):
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     row2 = (" Beats row-1 design: value = D_row1 - D_row2 of the real g in the same column, bar "
             "= 2 x the larger of the two seed wobbles." if rung in ROW2 else "")
+    if any(c["check"] in ("beatsxshuf", "lawtest_xshuf") for c in checks):
+        row2 += (" Beats shuffled twin (trained pairs) and law test vs shuffled twin (never-"
+                 "trained pairs, reported only): value = D_twin - D_real, the twin's g reading x "
+                 "from a random bin of the same chromosome; bar = 2 x the larger of the two seed "
+                 "wobbles.")
     _footer(fig, "Gain checks: value = D_other - D_real (CRPS; positive favours the real g), bar = "
                  "2 x seed wobble (the larger wobble for 'beats rung below'). Depth law: bar 0.10. "
                  "Swap: bar 0.1. Shuffle and swap gate only the main claim. Seed wobble = the "
