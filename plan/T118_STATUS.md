@@ -86,7 +86,23 @@ Jobs (never resubmit a finished one; a rerun skips on SCORE_DONE / LAW_DONE):
 | 2026-09-28 21:17 | 22853853 | law smoke, indices 54, 198, 342, 486 (`row2_law.sh`, CPU) | K5 |
 | 2026-09-28 21:17 | 22853854 | no-covariates p-space smoke, indices 66, 138, 498, 570 = A2 / D2 × C19M16 / `all` × pval × nocov × s0 (`row2_train.sh`) | K5 |
 
-Slice nodes at 21:15: g30–34 and g37 `mixed` (usable), g35–36 `mixed-` (held).
+| 2026-09-28 22:01 | 22855414 | full row-2 train+score, the 384 real and labels-as-ids tasks (index list `row2/idx_real_ids.txt` on Nibi), `%40`, GPU slices | K5 |
+
+Slice nodes at 21:15: g30–34 and g37 `mixed` (usable), g35–36 `mixed-` (held). At 22:00 all of
+g30–37 showed `mixed-`, but `--test-only` gave an immediate start on g30, so the array went to the
+GPU (same device as row 1); fallback `row2_train_cpu.sh` if the first wave does not start.
+
+Law smoke 22853853: all four COMPLETED — A2 5:28, B2 22:33, C2 12:41, D2 14:23 (8 CPU cores).
+
+No-covariates p-space smoke 22853854 (22:00): per-track runs fine — A2 train 137 s (11:02
+total), D2 train 467 s (25:06 total). Across-track runs slow: A2 train 2021 s (row-1 A across
+nocov: 280 s); each chr22 validation of the averaged map takes about 225 s and dominates the
+step time; D2 across had not finished its first validation after 36 min. Cause as predicted: the
+averaged map is g evaluated over (training pairs × distinct x values), 242 pairs across tracks,
+and nearly every p-space bin is distinct. So the 192 no-covariates tasks (index list
+`row2/idx_nocov.txt`) are held until the averaged map is made cheap; all 192 will then run on one
+kit. The four smoke nocov runs finished on K5 are counted as smoke only if the fix changes their
+numbers.
 PI ruling 2026-09-28 (shuffled-bin-value twin): g's x at bin i is the source track's x at a
 uniformly random bin of the same chromosome; redrawn each training step; one fixed seeded
 permutation per chromosome at prediction and scoring. f still reads the true x.
