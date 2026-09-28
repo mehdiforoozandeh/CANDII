@@ -5,9 +5,11 @@
 
 Writes `<agg_dir>/<rung>/report.md` with the sections Summary, Checks, Law test, Depth law,
 Shuffle and swap, Figures, Runs, Choices. A row-2 rung (A2-D2: g also reads the source signal)
-adds the section "Against the same design in row 1" after Checks. `grid` writes
-`<agg_dir>/grid.md`: the 2 x 4 grid (row 1 and row 2 against designs A-D) from the optional
-`grid` and `rung_choice_row2` keys of results.json. Runs under the candii env: numpy + stdlib, no
+adds the section "Against the same design in row 1" after Checks, and, when results.json holds
+the rung's shuffled-bin twin (model `xshuf`), the section "Against the shuffled-bin twin" after
+that. `grid` writes `<agg_dir>/grid.md`: the 2 x 4 grid (row 1 and row 2 against designs A-D;
+a third row for the shuffled-bin twin when the grid rows hold row 3) from the optional `grid`
+and `rung_choice_row2` keys of results.json. Runs under the candii env: numpy + stdlib, no
 matplotlib (it reuses the labels and loaders of `figures.py`, whose plotting imports are lazy).
 
 Rules the text follows (PI and AGENTS.md section 7.2):
@@ -261,6 +263,82 @@ def section_row1(res, rung, idx, checks):
                     rows.append([F.GV_NAME[gv], F.SPACE_NAME[space], cls, F.METRIC_NAME[metric],
                                  ca, cb, gain, rd])
     L += _table(["g", "space", "class", "metric", f"row 1, design {r1}", f"row 2, design {rung}",
+                 "gain", "drafted reading"], rows)
+    L.append("")
+    return L
+
+
+XSHUF_WHAT = (
+    "The shuffled-bin twin has the same design, size, training and real covariates as the "
+    "row-2 run; only the x that g reads differs. g reads x from a uniformly random bin of the "
+    "same chromosome of the same source track, redrawn at every training step; at scoring it "
+    "reads x through one fixed seeded permutation of the bins per chromosome. f still reads the "
+    "true x. The comparison asks whether g uses the bin's own value, beyond the distribution "
+    "of values on its chromosome.")
+
+
+def has_xshuf(res, rung) -> bool:
+    """True when results.json holds any per_class row of the shuffled-bin twin for `rung`."""
+    return any(r.get("rung") == rung and r.get("model") == F.TWIN_XSHUF
+               for r in res.get("per_class", []))
+
+
+def section_xshuf(res, rung, idx, checks, split):
+    """A row-2 rung against its shuffled-bin twin (model `xshuf`), trained pairs and law pairs."""
+    tw = F.TWIN_XSHUF
+    L = ["## Against the shuffled-bin twin", "",
+         f"Design {rung} ({F.RUNG_NAME[rung]}) against its shuffled-bin twin. {XSHUF_WHAT} "
+         f"Trained pairs, held-out chromosomes chr19 + chr21, all pairs kept. Gain = twin mean - "
+         f"real mean (CRPS: positive favours the real g). The reading is the aggregator's check "
+         f"\"beats the shuffled-bin twin\" (bar = 2 x the larger seed wobble): drafted, not "
+         f"ticked.", ""]
+    chk = {(c["check"], c["g_version"], c["space"], c["mark_class"], c["metric"]): c
+           for c in checks if c["check"] in ("beatsxshuf", "lawtest_xshuf")}
+
+    def gain(a, b):
+        return (F.fmt(b["mean"] - a["mean"]) if a and b and a.get("mean") is not None
+                and b.get("mean") is not None else "n/a")
+
+    def reading(check, gv, space, cls, metric):
+        c = chk.get((check, gv, space, cls, metric))
+        return (f"{'met' if c['met'] else 'unmet'} (bar {F.fmt(c['bar'])})" if c is not None
+                else "no check in results")
+
+    rows = []
+    for gv in F.G_VERSIONS:
+        for space in F.SPACES:
+            for cls in F.CLASSES:
+                for metric in ("crps_all", "crps_top1"):
+                    a = idx.get((rung, gv, space, "real", "trained", cls, metric, "all"))
+                    b = idx.get((rung, gv, space, tw, "trained", cls, metric, "all"))
+                    ca, cb = _mw(a), _mw(b)
+                    if metric == "crps_all":
+                        ca += "; " + _split_text(split.get((gv, space, "real", cls)))
+                        cb += "; " + _split_text(split.get((gv, space, tw, cls)))
+                    else:
+                        ca += f"; {NO_SPLIT}"
+                        cb += f"; {NO_SPLIT}"
+                    rows.append([F.GV_NAME[gv], F.SPACE_NAME[space], cls, F.METRIC_NAME[metric],
+                                 ca, cb, gain(a, b),
+                                 reading("beatsxshuf", gv, space, cls, metric)])
+    L += _table(["g", "space", "class", "metric", f"real g, rung {rung}", "shuffled-bin twin",
+                 "gain", "drafted reading"], rows)
+    L += ["", "### Law test against the twin", "",
+          "Never-trained arm -> arm pairs within a track, chr19 + chr21. Gain = twin mean - real "
+          "mean. The reading is the aggregator's check \"law test: beats the shuffled-bin twin\" "
+          "(the same bar): drafted, not ticked, and reported only; nothing gates on it. "
+          f"{NO_SPLIT} (law pairs).", ""]
+    rows = []
+    for gv in F.G_VERSIONS:
+        for space in F.SPACES:
+            for cls in F.CLASSES:
+                for metric in ("crps_all", "crps_top1"):
+                    a = idx.get((rung, gv, space, "real", "law", cls, metric, "all"))
+                    b = idx.get((rung, gv, space, tw, "law", cls, metric, "all"))
+                    rows.append([F.GV_NAME[gv], F.SPACE_NAME[space], cls, F.METRIC_NAME[metric],
+                                 _mw(a), _mw(b), gain(a, b),
+                                 reading("lawtest_xshuf", gv, space, cls, metric)])
+    L += _table(["g", "space", "class", "metric", f"real g, rung {rung}", "shuffled-bin twin",
                  "gain", "drafted reading"], rows)
     L.append("")
     return L
@@ -542,6 +620,8 @@ def build_report(agg_dir, rung) -> str:
     L += section_checks(res, rung, checks)
     if rung in F.ROW2:
         L += section_row1(res, rung, idx, checks)
+        if has_xshuf(res, rung):
+            L += section_xshuf(res, rung, idx, checks, split)
     L += section_law(res, rung, idx)
     L += section_depth(res, rung, checks)
     L += section_shuffle_swap(res, rung, idx, checks)
@@ -553,7 +633,10 @@ def build_report(agg_dir, rung) -> str:
 
 COLUMN_NAME = {"A": "A: affine in log space", "B": "B: monotone curve, 12 knots",
                "C": "C: 33-bin kernel, then the curve", "D": "D: FiLM-modulated dilated CNN"}
-ROW_NAME = {1: "row 1: g reads (C, C')", 2: "row 2: g reads (x, C, C')"}
+ROW_NAME = {1: "row 1: g reads (C, C')", 2: "row 2: g reads (x, C, C')",
+            3: "row 2, shuffled-bin twin: g reads x from a random other bin"}
+#: the model a grid row's cells are read from (row 3 is the shuffled-bin twin of row 2)
+ROW_MODEL = {1: "real", 2: "real", 3: F.TWIN_XSHUF}
 
 
 def build_grid(agg_dir) -> str:
@@ -564,6 +647,7 @@ def build_grid(agg_dir) -> str:
     grid = {(r["g_version"], r["space"], r["mark_class"], r["metric"], r["column"],
              int(r["row"])): r for r in res.get("grid", [])}
     splits = {rung: _split_index(res, rung) for rung in F.RUNGS}
+    grid_rows = (1, 2, 3) if any(k[5] == 3 for k in grid) else (1, 2)
     L = ["# The transformation grid: row 1 against row 2", "",
          "Columns are the four forms of f: A, an affine map in log space; B, a monotone curve on "
          "12 knots; C, a 33-bin kernel followed by that curve; D, a dilated CNN modulated by g "
@@ -580,6 +664,9 @@ def build_grid(agg_dir) -> str:
          "all bins is above 20 (the label \"exploding\" in the status file). It is reported only: "
          "it has no bar and it is not a check.", "",
          "Nothing in this file is a verdict.", ""]
+    if 3 in grid_rows:
+        L += [f"Row 3 is the shuffled-bin twin of row 2. {XSHUF_WHAT} Its cells are the twin's "
+              f"own values, read the same way as the real g's.", ""]
     if not grid:
         L += ["No grid rows in results.json: aggregate both rows (`aggregate.py ... --rows 1,2`) "
               "to write them.", ""]
@@ -596,7 +683,7 @@ def build_grid(agg_dir) -> str:
                     refs = [_ref_cell(res, cls, space, ref, metric, tbc)
                             for ref in ("noSolution", "QuantileMatching")]
                     rows = []
-                    for row in (1, 2):
+                    for row in grid_rows:
                         cells = [ROW_NAME[row]]
                         for col in F.ROW1:
                             g = grid.get((gv, space, cls, metric, col, row))
@@ -604,8 +691,8 @@ def build_grid(agg_dir) -> str:
                                 cells.append("not run" if g is None else "n/a")
                                 continue
                             # the seed count is read from the cell's per_class row
-                            pc = idx.get((g["rung"], gv, space, "real", "trained", cls, metric,
-                                          "all"))
+                            pc = idx.get((g["rung"], gv, space, ROW_MODEL[row], "trained", cls,
+                                          metric, "all"))
                             n = (sum(v is not None for v in pc["per_seed"]) if pc
                                  else len(F.SEEDS))
                             extra = "" if n == len(F.SEEDS) else f", {n} of {len(F.SEEDS)} seeds"
@@ -613,7 +700,7 @@ def build_grid(agg_dir) -> str:
                                  f"{extra})")
                             if metric == "crps_all":
                                 c += "; " + _split_text(splits[g["rung"]].get(
-                                    (gv, space, "real", cls)))
+                                    (gv, space, ROW_MODEL[row], cls)))
                             else:
                                 c += f"; {NO_SPLIT}"
                             cells.append(c)
@@ -623,7 +710,7 @@ def build_grid(agg_dir) -> str:
                                  "QuantileMatching"], rows)
                     L.append("")
                 rows = []
-                for row in (1, 2):
+                for row in grid_rows:
                     cells = [ROW_NAME[row]]
                     for col in F.ROW1:
                         g = grid.get((gv, space, cls, "crps_all", col, row)) or \
