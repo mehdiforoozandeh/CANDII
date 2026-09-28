@@ -87,6 +87,10 @@ Jobs (never resubmit a finished one; a rerun skips on SCORE_DONE / LAW_DONE):
 | 2026-09-28 21:17 | 22853854 | no-covariates p-space smoke, indices 66, 138, 498, 570 = A2 / D2 × C19M16 / `all` × pval × nocov × s0 (`row2_train.sh`) | K5 |
 
 Slice nodes at 21:15: g30–34 and g37 `mixed` (usable), g35–36 `mixed-` (held).
+PI ruling 2026-09-28 (shuffled-bin-value twin): g's x at bin i is the source track's x at a
+uniformly random bin of the same chromosome; redrawn each training step; one fixed seeded
+permutation per chromosome at prediction and scoring. f still reads the true x.
+
 The full 576 array waits for the no-covariates smoke: if the averaged map is too slow in p space,
 the fix changes the code (new kit), and runs from two kits should not mix.
 
