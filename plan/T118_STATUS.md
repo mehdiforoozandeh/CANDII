@@ -140,9 +140,17 @@ summation order only). Kit **K6** = c3196e0 at `/project/def-maxwl/mforooz/t118/
 (goldens), so the kits do not mix within a model. All 192 row-2 nocov runs run on K6. The four K5
 nocov smoke run dirs moved to `row2/runs_smoke_K5/` (23:20).
 
+K6 smoke state at 00:29 (train seconds from train_log; totals from sacct):
+nocov A2 C19M16 pval 109 s (25:08 total); D2 C19M16 pval 257 s (27:39); A2 across pval 630 s
+(K5: 2021 s; same best step 1000, same val_nll to 7 digits), scoring; D2 across pval 1633 s (K5:
+no first validation in 52 min), scoring. Twin A2 C19M16 counts 38 s (12:36); D2 C19M16 counts
+286 s (26:47); A2 across counts 727 s, scoring; D2 across pval 1746 s, scoring.
+Full array 22855414 at 00:28: 154 SCORE_DONE of 384, 17 left in the queue.
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-28 23:24 | 22859772 | nocov smoke on K6, indices 66, 138, 498, 570 (`row2_train.sh`, out `row2/`) | K6 |
+| 2026-09-29 00:30 | 22861310 | law, batch 2: 119 more real/ids runs with SCORE_DONE (`row2/law_batch2.txt`); batch 1 (22857243) all 29 COMPLETED, longest 1:08:43 | K5 |
 | 2026-09-28 23:24 | 22859778 | shuffled-bin twin smoke, twin-table indices 18, 42, 162, 189 = A2 C19M16 counts, A2 across counts, D2 C19M16 counts, D2 across pval, seed 0 (`xshuf_train.sh`, out `row2_xshuf/`) | K6 |
 PI ruling 2026-09-28 (shuffled-bin-value twin): g's x at bin i is the source track's x at a
 uniformly random bin of the same chromosome; redrawn each training step; one fixed seeded
