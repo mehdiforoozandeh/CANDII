@@ -15,9 +15,9 @@ github.com/mlibbrecht/2026-07-26_epi_imputation (main, 2026-09-28):
 "CANDI" means CANDI + the training-side output correction (025's `candi.tcfloor`)
 everywhere.
 
-Writes panels/eic_{leaderboard,measures}{,_landscape,_portrait}.{pdf,svg}: one
-pair per layout (poster.tex, poster_landscape.tex, poster_portrait.tex). Each pair
-is drawn at the size it is printed at, so a point here is a point there.
+Writes panels/eic_{leaderboard,measures}_landscape.{pdf,svg} for
+poster_landscape.tex, drawn at the size they are printed at, so a point here is a
+point there.
 """
 from pathlib import Path
 
@@ -213,10 +213,8 @@ def measures(stem, w, h, fs):
     save(fig, stem)
 
 
-# One pair per layout: (leaderboard w, h), (measures w, h), panel text size in pt.
-SIZES = {"":           ((15.0, 17.0), (27.5, 16.0), 30),
-         "_landscape": ((8.2, 9.24), (12.0, 9.24), 22),
-         "_portrait":  ((7.2, 12.1), (11.6, 7.4), 20)}
+# (leaderboard w, h), (measures w, h), panel text size in pt.
+SIZES = {"_landscape": ((8.2, 9.24), (12.0, 9.24), 22)}
 for suffix, (lb, me, fs) in SIZES.items():
     leaderboard(f"eic_leaderboard{suffix}", *lb, fs)
     measures(f"eic_measures{suffix}", *me, fs)

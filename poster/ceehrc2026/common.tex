@@ -1,7 +1,7 @@
-% Shared by poster_landscape.tex and poster_portrait.tex: packages, colours, the
-% panel and box styles, and every sentence on the poster. A layout file sets its
-% page with geometry and its type scale (\bodysize, \capsize, \smallsize,
-% \headsize, \boxtitlesize), then inputs this file.
+% Input by poster_landscape.tex: packages, colours, the panel and box styles,
+% and every sentence on the poster. The layout file sets its page with geometry
+% and its type scale (\bodysize, \capsize, \smallsize, \headsize,
+% \boxtitlesize), then inputs this file. make_html.py reads the sentences too.
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}                 % scalable math at poster sizes
 \usepackage[default]{opensans}
@@ -104,8 +104,8 @@ fitted by least squares on the 133 training experiments only. CANDI then ranks
 \textbf{C}\enspace The leaderboard with CANDI added: CANDI is first at 0.179
 (bootstrap range 0.177--0.184), the next entry 0.306.}
 \newcommand{\CapD}{%
-\textbf{D}\enspace Eight of the nine measures (top-1\%-imputed MSE not shown)
-relative to the baseline, median over 51 experiments. CANDI is first on three and
+\textbf{D}\enspace Eight of the nine measures relative to the baseline, median
+over 51 experiments. CANDI is first on three and
 top 8 on the rest.}
 
 \newcommand{\TxtRefs}{%

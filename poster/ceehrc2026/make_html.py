@@ -1,11 +1,10 @@
-"""The poster as two self-contained web pages, one per layout.
+"""The poster as a self-contained web page.
 
-Writes html/poster_landscape.html (44 x 34 in) and html/poster_portrait.html
-(34 x 44 in). Each page mirrors its LaTeX layout (poster_landscape.tex,
-poster_portrait.tex): it is laid out in CSS inches and points at print size,
+Writes html/poster_landscape.html (44 x 34 in). The page mirrors
+poster_landscape.tex: it is laid out in CSS inches and points at print size,
 then scaled to the window's width. Every sentence is read from common.tex, so
-the words cannot drift from the PDFs; every panel is the SVG twin of the PDF
-the LaTeX includes, embedded as a data URI, so each page is one file.
+the words cannot drift from the PDF; every panel is the SVG twin of the PDF the
+LaTeX includes, embedded as a data URI, so the page is one file.
 
 Run after split_ga.py, make_eic_panels.py and the qr.tex build (build.sh does).
 """
@@ -98,19 +97,15 @@ body { background: var(--ground); color: var(--ground-ink);
 .poster .text p + p { margin-top: .2in; }
 .poster .text p.eq, .poster .text p.eq + p { margin-top: .12in; }
 .poster p.eq { text-align: center; white-space: nowrap; }
-.red { position: absolute; left: 0; top: var(--red-top, .6in); width: var(--red-w); height: var(--red-h, 3.35in);
+.red { position: absolute; left: 0; top: var(--red-top); width: var(--red-w); height: var(--red-h);
   background: var(--red); }
-.sfu { position: absolute; right: var(--sfu-r, .3in); bottom: -.02in; color: #fff; line-height: .8;
+.sfu { position: absolute; right: var(--sfu-r); bottom: -.02in; color: #fff; line-height: .8;
   font-size: var(--sfu); font-weight: 400; }
 .title { position: absolute; left: var(--title-x); font-weight: 700; white-space: nowrap;
   line-height: 1.12; }
 .authors { position: absolute; left: var(--title-x); bottom: calc(100% - 3.8in);
   font-size: var(--authors); line-height: 1; white-space: nowrap; }
-.qr { position: absolute; right: .8in; top: .6in; display: flex; flex-direction: column;
-  align-items: flex-end; white-space: nowrap;
-  font-size: 17pt; color: var(--muted); }
-.qr img { display: block; width: 2.9in; height: 2.9in; margin-bottom: .1in; }
-/* Landscape: a small QR code at the right end of the author line. */
+/* The QR code at the right end of the author line. */
 .qr-line { position: absolute; right: .8in; bottom: calc(100% - 3.9in); display: flex;
   align-items: flex-end; gap: .25in; font-size: 20.4pt; color: var(--muted); white-space: nowrap; }
 .qr-line img { display: block; width: 1.74in; height: 1.74in; }
@@ -168,9 +163,8 @@ def fig(src, width, cap):
             f'<figcaption>{cap}</figcaption></figure>')
 
 
-def box(title, text, height=None):
-    h = f' style="height:{height}in"' if height else ""
-    return f'<div class="box"{h}><h3>{title}</h3>{text}</div>'
+def box(title, text):
+    return f'<div class="box"><h3>{title}</h3>{text}</div>'
 
 
 def page(kind, w_in, h_in, sizes, header, body):
@@ -192,10 +186,10 @@ def page(kind, w_in, h_in, sizes, header, body):
 {SCRIPT}"""
 
 
-def qr(cls):
+def qr():
     link = f'<a href="{W['PosterURL']}" style="color:inherit">mehdiforoozandeh.github.io/CANDI</a>'
     img = f'<img src="{svg('qr')}" alt="QR code: {W['PosterURL']}">'
-    return f'<div class="{cls}">{img if cls == "qr" else link}{link if cls == "qr" else img}</div>'
+    return f'<div class="qr-line">{link}{img}</div>'
 
 
 def refs():
@@ -212,7 +206,7 @@ L = page("landscape", 44, 34,
          f"""<div class="red"><div class="sfu">SFU</div></div>
 <div class="title" data-fit="36.9" style="bottom:calc(100% - 2.06in); font-size:100pt">{W['PosterTitle']}</div>
 <div class="authors">{W['PosterAuthors']}</div>
-{qr("qr-line")}""",
+{qr()}""",
          f"""<div class="body" style="grid-template-rows: 16.03in 12.25in; row-gap: .4in">
 <div style="display:grid; grid-template-columns: 11in 30.4in; column-gap: 1in">
 <div class="col" style="justify-content: space-between">
@@ -235,42 +229,7 @@ L = page("landscape", 44, 34,
 </div>
 </div>""")
 
-# --- portrait: poster_portrait.tex, 34 x 44 in -------------------------------
-t1, t2 = "Self-supervised confidence-aware denoising", "imputation of genomic data"
-assert f"{t1} {t2}" == W["PosterTitle"]
-P = page("portrait", 34, 44,
-         dict(**{"red-w": "7in", "sfu": "150pt", "title-x": "7.7in", "authors": "50pt",
-                 "top": "4.45in", "body": "28pt", "body-lh": "36pt", "cap": "24pt",
-                 "cap-lh": "31pt", "small": "19pt", "small-lh": "24pt", "head": "44pt",
-                 "boxtitle": "34pt"}),
-         f"""<div class="red"><div class="sfu">SFU</div></div>
-<div class="title" data-fit="22" style="top:.55in; font-size:70pt">{t1}<br>{t2}</div>
-<div class="authors">{W['PosterAuthors']}</div>
-{qr("qr")}""",
-         f"""<div class="body" style="grid-template-columns: 12.2in 19.4in; column-gap: .8in;
-  grid-template-rows: 4.9in 16.85in 16in; row-gap: .5in">
-<div class="row" style="grid-column: 1 / 3">
-<div style="width:10.2in">{box("The problem", W['TxtProblem'], 4.9)}</div>
-<div style="width:10.2in">{box("CANDI", W['TxtCandi'], 4.9)}</div>
-<div style="width:10.2in">{box("Key findings", W['TxtFindings'], 4.9)}</div>
-</div>
-<div class="col" style="grid-column: 1 / 3"><h2>{W['HeadStrip']}</h2>
-<img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">
-<p class="cap wide">{W['CapStrip']}</p></div>
-<div class="col"><h2>{W['HeadUtility']}</h2>
-<div class="row" style="align-items:center"><img src="{svg('ga_A')}" alt="" style="width:6.6in">
-<p class="cap" style="width:5.2in; margin:0">{W['CapA']}</p></div>
-<div class="row" style="align-items:center; margin-top:.4in"><img src="{svg('ga_B')}" alt="" style="width:6.6in">
-<p class="cap" style="width:5.2in; margin:0">{W['CapB']}</p></div>
-<div class="fill"></div>{refs()}</div>
-<div class="col"><h2>{W['HeadEIC']}</h2>
-<div class="row">{fig('eic_leaderboard_portrait', 7.2, W['CapC'])}
-<div style="width:11.6in"><div class="text"><p>{W['TxtEIC']}</p></div>
-<img src="{svg('eic_measures_portrait')}" alt="" style="width:100%; margin-top:.35in">
-<p class="cap">{W['CapD']}</p></div></div></div>
-</div>""")
-
-for name, text in (("poster_landscape", L), ("poster_portrait", P)):
+for name, text in (("poster_landscape", L),):
     f = OUT / f"{name}.html"
     f.write_text(text)
     print(f"wrote html/{f.name}  ({f.stat().st_size / 1e6:.1f} MB)")
