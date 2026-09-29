@@ -184,6 +184,12 @@ tunnel dropped again** (the 11:25 UTC pass: ssh exit 255, "Permission denied"; `
 12:10: fir and nibi down). Nibi work stopped until the PI runs `hpc up nibi`; queued jobs keep
 running on Nibi.
 
+Tunnel back 19:27 (PI). State: main row-2 array 22855414 all 384 COMPLETED; law 22879392 all
+55 COMPLETED; twin array 22862753 174 of 192 COMPLETED; nocov array 22862752 has started no task
+yet: both arrays sit on Priority and the twin's larger memory request gives it a slightly higher
+priority (1016665 vs 1016662, the TRES memory term), so the nocov tasks start once the twin's
+last 18 run. Law loop restarted 19:28.
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
