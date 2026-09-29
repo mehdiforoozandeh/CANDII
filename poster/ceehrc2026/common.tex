@@ -44,57 +44,63 @@
 \newcommand{\PosterURL}{https://mehdiforoozandeh.github.io/CANDI/}
 
 \newcommand{\TxtProblem}{%
-Most (cell type, assay) experiments were never run, and those that were differ in
-depth, read length, run type and platform. In the ENCODE Imputation Challenge, a
-baseline that averages each assay over other cell types beat all but two submitted
-methods~[1].}
+Epigenomic measurements often suffer from noise, batch effects and
+irreproducibility. Existing imputation methods operate on idealized processed
+signal, and assume that this processing removes all batch effects. In the ENCODE
+Imputation Challenge, due to subtle differences between the train and test sets,
+a simple baseline outperformed most of the entrants~[1].}
 
 \newcommand{\TxtCandi}{%
 \textbf{C}onfidence-\textbf{A}ware \textbf{N}eural \textbf{D}enoising
-\textbf{I}mputer~[2] is a self-supervised transformer over raw read counts, DNA
-sequence and four experimental covariates. It predicts a distribution for every
-assay in every 25\,bp bin, so each imputed value has an interval. It has no
-cell-type embedding, so it runs on cell types it has never seen.}
+\textbf{I}mputer~[2] is a self-supervised deep learning method for epigenome
+imputation and denoising. It takes raw read counts, DNA sequence and
+experiment-specific covariates as input, and outputs probability distributions
+over raw counts, signal values and peak calls. By conditioning on experimental
+metadata rather than learned cell-type embeddings, it enables zero-shot
+generalization to unseen cell types.}
 
 \newcommand{\TxtFindings}{%
 \begin{itemize}
-  \item CANDI is \textbf{1st of 26} on the ENCODE Imputation Challenge blind test.
-  \item CANDI's intervals are calibrated, and its latent features are predictive
-        of gene expression.
+  \item CANDI ranks \textbf{1st of 26} on the ENCODE Imputation Challenge blind test.
+  \item CANDI provides calibrated uncertainty estimates.
+  \item CANDI's imputed signals and latent space predict gene expression.
 \end{itemize}}
 
 \newcommand{\HeadStrip}{CANDI schematic workflow}
 \newcommand{\CapStrip}{%
-\textbf{Top:} one cell type is sliced out of the cell type $\times$ assay $\times$
-genome tensor, and a 30\,kb window of it goes into CANDI as raw counts, DNA and
-covariates. Grey assays were never measured; yellow ones are masked in training.
-\textbf{Bottom:} CANDI returns a mean and a 95\% interval for every assay, and
-window by window this fills every missing thread of the tensor.}
+\textbf{Top:} for a given 30\,kb locus, CANDI takes as input the observed read
+counts with the ChIP-seq control, four experimental covariates per assay and the
+DNA sequence; grey assays were never measured, and yellow ones are masked in
+training. \textbf{Bottom:} all outputs are probability distributions, here a mean
+and a 95\% interval for every assay; window by window, they fill every missing
+thread of the tensor.}
 
 \newcommand{\HeadUtility}{Downstream utility of CANDI}
 \newcommand{\CapA}{%
-\textbf{A}\enspace For DNase-seq (cell line DND-41), the observed coverage of
-CANDI's intervals follows their stated confidence over the full range.}
+\textbf{A}\enspace Confidence calibration for DNase-seq (DND-41): the predicted
+confidence level against the fraction of observed data falling within that
+interval.}
 \newcommand{\CapB}{%
-\textbf{B}\enspace Gene expression predicted from each feature set as assays are
-removed. Latent features hold $r \approx 0.79$ from 13 assays down to 4; observed
-data falls to 0.60.}
+\textbf{B}\enspace Gene expression prediction as input assays are removed. The
+Denoised+Imputed and Latent settings are robust to input sparsity.}
 
 \newcommand{\HeadEIC}{Fixing the signal-level shift in the ENCODE Imputation Challenge blind test}
 \newcommand{\TxtEIC}{%
-\textbf{The shift.} The blind test holds 51 experiments (12 cell types, 8 assays),
-all of them paired-end; 85\% of the training experiments are single-end. The
-blind-test tracks also sit at a different signal level from the training tracks,
-by an assay-specific factor: 3.3$\times$ for H3K4me3, 1.7$\times$ for H3K27ac and
-0.9--1.0$\times$ for broad marks. A model fitted to the training tracks therefore
-predicts the wrong level, and CANDI's raw output ranks 14th.\par\vspace{0.2in}
+\textbf{The shift.} We followed the train-test split of the EIC: 51 blind-test
+experiments (12 cell types, 8 assays). There are subtle differences between the
+train and test sets: every blind-test experiment is paired-end, against 15\% of
+the training experiments, and the blind-test tracks sit at an assay-specific
+signal level (3.3$\times$ for H3K4me3, 1.7$\times$ for H3K27ac, 0.9--1.0$\times$
+for broad marks). CANDI recovers the rank-ordering and structural patterns of the
+signal but not its absolute magnitude, and its raw output ranks 14th.
+\par\vspace{0.2in}
 \textbf{The fix.} For each assay, CANDI's output passes through one layer,
 \par\vspace{0.12in}
 \centerline{$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$,}
 \vspace{0.12in}
 whose coefficients are fitted by least squares on the 133 training experiments
-only. With it, CANDI ranks 1st. Our scorer reproduces every published entry to a median relative
-difference of $9\times10^{-10}$.}
+only. With it, CANDI ranks 1st. Our scorer reproduces every published entry to a
+median relative difference of $9\times10^{-10}$.}
 \newcommand{\CapC}{%
 \textbf{C}\enspace The challenge's leaderboard with CANDI added. CANDI is first at
 0.179 (bootstrap range 0.177--0.184); the next entry scores 0.306. Bars span the ten

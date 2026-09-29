@@ -9,7 +9,7 @@
 \documentclass{article}
 \usepackage[paperwidth=44in, paperheight=34in,
             left=0.8in, right=0.8in, top=4.55in, bottom=0.7in]{geometry}
-\newcommand{\bodysize}{\fontsize{30}{39}\selectfont}
+\newcommand{\bodysize}{\fontsize{28}{36}\selectfont}
 \newcommand{\capsize}{\fontsize{26}{34}\selectfont}
 \newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
 \newcommand{\headsize}{\fontsize{48}{58}\selectfont}
@@ -18,8 +18,8 @@
 
 \newcommand{\LeftW}{12.4in}
 \newcommand{\RightW}{29in}
-\newcommand{\RowOne}{15.8in}
-\newcommand{\RowTwo}{12.3in}
+\newcommand{\RowOne}{15.86in}
+\newcommand{\RowTwo}{12.27in}
 
 \begin{document}
 % ============================================================ header ==========
@@ -42,9 +42,9 @@
 \end{tikzpicture}%
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%
-  \begin{tcolorbox}[textbox, height=4.95in]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox, height=4.95in]\boxtitle{CANDI}\TxtCandi\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox, height=4.95in]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
+  \begin{tcolorbox}[textbox, height=4.6in]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
+  \begin{tcolorbox}[textbox, height=5.6in]\boxtitle{CANDI}\TxtCandi\end{tcolorbox}\vfill
+  \begin{tcolorbox}[textbox, height=4.6in]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
 \Column{row 1 right}{\RightW}{\RowOne}{%
   \sectionbar{\HeadStrip}
   \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
@@ -61,7 +61,7 @@
   {\smallsize\color{muted}\TxtRefs\par}}\hfill
 \Column{row 2 right}{\RightW}{\RowTwo}{%
   \sectionbar{\HeadEIC}
-  \begin{minipage}[t]{7.6in}\vspace{0pt}{\bodysize\color{ink}\TxtEIC\par}\end{minipage}\hfill
-  \panel{8.0in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
-  \panel{12.0in}{panels/eic_measures_landscape.pdf}{\CapD}}
+  \begin{minipage}[t]{8.4in}\vspace{0pt}{\bodysize\color{ink}\TxtEIC\par}\end{minipage}\hfill
+  \panel{7.8in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
+  \panel{11.4in}{panels/eic_measures_landscape.pdf}{\CapD}}
 \end{document}

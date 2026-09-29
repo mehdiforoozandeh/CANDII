@@ -120,7 +120,7 @@ body { background: var(--ground); color: var(--ground-ink);
 .row { display: flex; justify-content: space-between; align-items: flex-start; }
 .fill { flex: 1; }
 .box { background: var(--panel); border: 4pt solid var(--red); border-radius: .22in;
-  padding: .3in .4in .35in;
+  padding: .28in .4in .28in;
   font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
 .box h3 { color: var(--red); font-size: var(--boxtitle); line-height: 1.2;
   font-weight: 700; margin-bottom: .15in; }
@@ -133,7 +133,7 @@ body { background: var(--ground); color: var(--ground-ink);
   margin-bottom: .3in; }
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
-.cap.wide { text-align: justify; margin-top: .25in; }
+.cap.wide { text-align: justify; margin-top: .18in; }
 .text { font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
 .refs { border-top: 3pt solid var(--rule); padding-top: .25in; font-size: var(--small);
   line-height: var(--small-lh); color: var(--muted); }
@@ -205,7 +205,7 @@ def refs():
 # --- landscape: poster_landscape.tex, 44 x 34 in -----------------------------
 L = page("landscape", 44, 34,
          dict(**{"red-w": "8in", "sfu": "160pt", "title-x": "8.8in", "authors": "52pt",
-                 "top": "4.55in", "body": "30pt", "body-lh": "39pt", "cap": "26pt",
+                 "top": "4.55in", "body": "28pt", "body-lh": "36pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "36pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
@@ -213,11 +213,11 @@ L = page("landscape", 44, 34,
 <div class="authors">{W['PosterAuthors']}</div>
 {qr("qr-line")}""",
          f"""<div class="body" style="grid-template-columns: 12.4in 29in; column-gap: 1in;
-  grid-template-rows: 15.8in 12.3in; row-gap: .5in">
+  grid-template-rows: 15.86in 12.27in; row-gap: .5in">
 <div class="col" style="justify-content: space-between">
-{box("The problem", W['TxtProblem'], 4.95)}
-{box("CANDI", W['TxtCandi'], 4.95)}
-{box("Key findings", W['TxtFindings'], 4.95)}
+{box("The problem", W['TxtProblem'], 4.6)}
+{box("CANDI", W['TxtCandi'], 5.6)}
+{box("Key findings", W['TxtFindings'], 4.6)}
 </div>
 <div class="col"><h2>{W['HeadStrip']}</h2>
 <img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">
@@ -226,9 +226,9 @@ L = page("landscape", 44, 34,
 <div class="row">{fig('ga_A', 5.95, W['CapA'])}{fig('ga_B', 5.95, W['CapB'])}</div>
 <div class="fill"></div>{refs()}</div>
 <div class="col"><h2>{W['HeadEIC']}</h2>
-<div class="row"><div class="text" style="width:7.6in"><p>{W['TxtEIC']}</p></div>
-{fig('eic_leaderboard_landscape', 8.0, W['CapC'])}
-{fig('eic_measures_landscape', 12.0, W['CapD'])}</div></div>
+<div class="row"><div class="text" style="width:8.4in"><p>{W['TxtEIC']}</p></div>
+{fig('eic_leaderboard_landscape', 7.8, W['CapC'])}
+{fig('eic_measures_landscape', 11.4, W['CapD'])}</div></div>
 </div>""")
 
 # --- portrait: poster_portrait.tex, 34 x 44 in -------------------------------
