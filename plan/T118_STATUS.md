@@ -169,6 +169,15 @@ twin law on K6. The loop's job ids are copied into the table below.
 law loop stopped on its first pass before submitting anything (the helper had not run). Nibi work
 is stopped until the PI runs `hpc up nibi`. The jobs already queued keep running on Nibi. On
 resume: rerun the law loop (it finds every scored run not yet in `law_submitted.txt`).
+Tunnel back 05:50 (PI). Checked: `law_submitted.txt` counts (312 row 2, 17 twin) match the
+jobs queued, so the dropped pass left nothing half-done. State at 05:51: main array 22855414
+363 of 384 COMPLETED (21 D2 tasks pending); law batch 3 (22867594) all 156 COMPLETED; twin law
+batch 1 (22867637) all 13 COMPLETED; the nocov (22862752) and twin (22862753) arrays pending on
+Priority (fair-share after ~400 slice-jobs), slice nodes g30–37 `mixed`. Law loop restarted.
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-09-29 05:51 | 22879392 | law loop: 55 row-2 real/ids runs | K5 |
 
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
