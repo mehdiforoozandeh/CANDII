@@ -1,0 +1,7 @@
+# LaTeX by-products
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+# split_ga.py regenerates these; the originals live in the CANDI repo docs/
+landing/candi-graphical-abstract.*
