@@ -82,13 +82,19 @@ data falls to 0.60.}
 
 \newcommand{\HeadEIC}{Fixing the signal-level shift in the ENCODE Imputation Challenge blind test}
 \newcommand{\TxtEIC}{%
-51 blind-test experiments (12 cell types, 8 assays), scored with the challenge's own
-nine measures and ranking statistic; our scorer reproduces every published entry to a
-median relative difference of $9\times10^{-10}$. CANDI's output as it comes ranks
-14th, so for each assay we pass it through one fixed layer,
-$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$, whose
-24 numbers are fitted by least squares on the 133 training experiments only; with
-it, CANDI ranks 1st.}
+\textbf{The shift.} The blind test holds 51 experiments (12 cell types, 8 assays),
+all of them paired-end; 85\% of the training experiments are single-end. The
+blind-test tracks also sit at a different signal level from the training tracks,
+by an assay-specific factor: 3.3$\times$ for H3K4me3, 1.7$\times$ for H3K27ac and
+0.9--1.0$\times$ for broad marks. A model fitted to the training tracks therefore
+predicts the wrong level, and CANDI's raw output ranks 14th.\par\vspace{0.2in}
+\textbf{The fix.} For each assay, CANDI's output passes through one layer,
+\par\vspace{0.12in}
+\centerline{$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$,}
+\vspace{0.12in}
+whose coefficients are fitted by least squares on the 133 training experiments
+only. With it, CANDI ranks 1st. Our scorer reproduces every published entry to a median relative
+difference of $9\times10^{-10}$.}
 \newcommand{\CapC}{%
 \textbf{C}\enspace The challenge's leaderboard with CANDI added. CANDI is first at
 0.179 (bootstrap range 0.177--0.184); the next entry scores 0.306. Bars span the ten

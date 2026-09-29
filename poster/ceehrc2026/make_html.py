@@ -53,6 +53,8 @@ def html(tex):
     s = s.replace(r"\,", "&thinsp;").replace(r"\enspace", "&ensp;")
     for cmd, tag in (("textbf", "b"), ("textit", "i"), ("emph", "em")):
         s = re.sub(rf"\\{cmd}\{{([^{{}}]*)\}}", rf"<{tag}>\1</{tag}>", s)
+    s = re.sub(r"\s*\\centerline\{([^{}]*)\}\s*\\vspace\{[^}]*\}\s*",
+               r'</p><p class="eq">\1</p><p>', s)
     s = re.sub(r"\\par\s*\\vspace\{[^}]*\}\s*", "</p><p>", s)
     s = s.replace(r"\begin{itemize}", "<ul>").replace(r"\end{itemize}", "</ul>")
     s = re.sub(r"\\item\s*", "<li>", s)
@@ -94,6 +96,9 @@ body { background: var(--ground); color: var(--ground-ink);
   transform-origin: 0 0; font-family: "Open Sans", "Helvetica Neue", Arial, sans-serif; }
 .poster * { box-sizing: border-box; margin: 0; }
 .poster p + p { margin-top: .1in; }
+.poster .text p + p { margin-top: .2in; }
+.poster .text p.eq, .poster .text p.eq + p { margin-top: .12in; }
+.poster p.eq { text-align: center; white-space: nowrap; }
 .red { position: absolute; left: 0; top: .6in; width: var(--red-w); height: 3.35in;
   background: var(--red); }
 .sfu { position: absolute; right: .3in; bottom: -.02in; color: #fff; line-height: .8;
@@ -221,7 +226,7 @@ L = page("landscape", 44, 34,
 <div class="row">{fig('ga_A', 5.95, W['CapA'])}{fig('ga_B', 5.95, W['CapB'])}</div>
 <div class="fill"></div>{refs()}</div>
 <div class="col"><h2>{W['HeadEIC']}</h2>
-<div class="row"><p class="text" style="width:7.6in">{W['TxtEIC']}</p>
+<div class="row"><div class="text" style="width:7.6in"><p>{W['TxtEIC']}</p></div>
 {fig('eic_leaderboard_landscape', 8.0, W['CapC'])}
 {fig('eic_measures_landscape', 12.0, W['CapD'])}</div></div>
 </div>""")
@@ -256,7 +261,7 @@ P = page("portrait", 34, 44,
 <div class="fill"></div>{refs()}</div>
 <div class="col"><h2>{W['HeadEIC']}</h2>
 <div class="row">{fig('eic_leaderboard_portrait', 7.2, W['CapC'])}
-<div style="width:11.6in"><p class="text">{W['TxtEIC']}</p>
+<div style="width:11.6in"><div class="text"><p>{W['TxtEIC']}</p></div>
 <img src="{svg('eic_measures_portrait')}" alt="" style="width:100%; margin-top:.35in">
 <p class="cap">{W['CapD']}</p></div></div></div>
 </div>""")
