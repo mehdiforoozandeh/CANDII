@@ -179,6 +179,11 @@ Priority (fair-share after ~400 slice-jobs), slice nodes g30–37 `mixed`. Law l
 |---|---|---|---|
 | 2026-09-29 05:51 | 22879392 | law loop: 55 row-2 real/ids runs | K5 |
 
+Law loop passes 06:12–08:53: nothing new scored (all three train arrays still queued). **The
+tunnel dropped again** (the 11:25 UTC pass: ssh exit 255, "Permission denied"; `hpc status` at
+12:10: fir and nibi down). Nibi work stopped until the PI runs `hpc up nibi`; queued jobs keep
+running on Nibi.
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
