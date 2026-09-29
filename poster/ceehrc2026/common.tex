@@ -15,16 +15,17 @@
 \definecolor{sfured}{HTML}{A6192E}
 \definecolor{ink}{HTML}{1B2A32}
 \definecolor{muted}{HTML}{5E6E78}
-% The pastel palette. SFU red stays on the header block and the headings; the
-% salmon accent and the warm fill carry the boxes and rules. The figures use the
-% same family (make_eic_panels.py, split_ga.py): coral for CANDI, mustard for the
-% baseline, sky, sage and lavender for the rest.
-\definecolor{accent}{HTML}{E8A598}
-\definecolor{panel}{HTML}{FCF4F1}
-\definecolor{rule}{HTML}{EBD9D4}
+% The pastel palette. SFU red is only the header block. Headings are deep slate;
+% the slate-blue accent and the cool fill carry the boxes and rules. The figures
+% use the same family (make_eic_panels.py, split_ga.py): coral for CANDI only,
+% mustard for the baseline, dusty blue for signal, sage and lavender for the rest.
+\definecolor{heading}{HTML}{2E4A62}
+\definecolor{accent}{HTML}{A9BFD3}
+\definecolor{panel}{HTML}{F3F6F9}
+\definecolor{rule}{HTML}{D9E1E8}
 
 \newcommand{\sectionbar}[1]{%
-  {\headsize\bfseries\color{sfured}#1\par}\vspace{0.08in}%
+  {\headsize\bfseries\color{heading}#1\par}\vspace{0.08in}%
   {\color{accent}\rule{\linewidth}{5pt}}\par\vspace{0.3in}}
 
 % One panel: its graphic, then its one- or two-sentence caption.
@@ -38,7 +39,7 @@
 \tcbset{textbox/.style={enhanced, colback=panel, colframe=accent, arc=0.22in,
   boxrule=4pt, left=0.4in, right=0.4in, top=0.3in, bottom=0.35in,
   fontupper=\bodysize\color{ink}, before skip=0pt, after skip=0pt}}
-\newcommand{\boxtitle}[1]{{\boxtitlesize\bfseries\color{sfured}#1}\par\vspace{0.15in}}
+\newcommand{\boxtitle}[1]{{\boxtitlesize\bfseries\color{heading}#1}\par\vspace{0.15in}}
 \setlist[itemize]{leftmargin=1.0em, itemsep=0.15in, topsep=0.05in,
                   label={\color{accent}\textbullet}}
 

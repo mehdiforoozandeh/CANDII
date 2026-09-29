@@ -24,23 +24,29 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "panels"
 OUT.mkdir(exist_ok=True)
 
-# The poster's pastel palette (common.tex). CANDI's own colour is coral: its
-# predicted tracks, its imputed cells, the model box and panel A's curve.
-# Measured and denoised signal is always darker than imputed signal.
-CORAL, CORAL_LIGHT, CORAL_DARK = "#D46A5A", "#F6CFC7", "#C25B4C"
+# The poster's pastel palette (common.tex). Signal is dusty blue: measured and
+# denoised signal is always darker than imputed signal. Coral is CANDI's own
+# colour, kept for the model box title and panel A's curve.
+BLUE, BLUE_LIGHT, BLUE_IMP = "#4F7FAF", "#C5DAEE", "#9DBFE0"
+CORAL = "#D46A5A"
 # (exact text in build_ga.py, replacement); each must match exactly once.
 RECOLOUR = [
-    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{CORAL}", "{CORAL_LIGHT}"'),
+    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{BLUE}", "{BLUE_LIGHT}"'),
     # the cubes: measured threads, and imputed ones in the filled cube
-    ('            return "#12868C", SHADE[face]', f'            return "{CORAL_DARK}", SHADE[face]'),
+    ('            return "#12868C", SHADE[face]', f'            return "{BLUE}", SHADE[face]'),
     # the sliced matrices: measured (dark) and imputed (light) signal
-    ('["#FFFFFF", "#0E7276"]', f'["#FFFFFF", "{CORAL_DARK}"]'),
-    ('["#F4FBFB", "#5FBABD"]', '["#FFF8F6", "#F3BCB2"]'),
-    ('facecolor="#EDF8F8"', 'facecolor="#FDF1EE"'),
-    ('Teal names = imputed.', 'Coral names = imputed.'),
+    ('["#FFFFFF", "#0E7276"]', f'["#FFFFFF", "{BLUE}"]'),
+    ('["#F4FBFB", "#5FBABD"]', '["#F7FAFD", "#A9C8E6"]'),
+    ('facecolor="#EDF8F8"', 'facecolor="#EEF4FA"'),
+    ('Teal names = imputed.', 'Blue names = imputed.'),
     # the predicted tracks: denoised assays dark, imputed ones light
-    ('color=TEAL, alpha=.26', f'color=("{CORAL_DARK}" if not tag else "#EDA69B"), alpha=.26'),
-    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=("{CORAL_DARK}" if not tag else "#EDA69B")'),
+    ('color=TEAL, alpha=.26', f'color=(TEAL if not tag else "{BLUE_IMP}"), alpha=.26'),
+    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=(TEAL if not tag else "{BLUE_IMP}")'),
+    # CANDI's own colour: the model box title bar and panel A's curve
+    ('facecolor=TEAL, edgecolor="none", zorder=3))', f'facecolor="{CORAL}", edgecolor="none", zorder=3))'),
+    ('axA.plot(x, y, lw=2.0, color=TEAL', f'axA.plot(x, y, lw=2.0, color="{CORAL}"'),
+    # the model's convolution blocks: apricot, not a second coral
+    ('CONV, TRANS, LAT, DECONV = "#EFA79D"', 'CONV, TRANS, LAT, DECONV = "#F4D3B5"'),
     # panel B's four feature sets, and the DNA bases
     ('SRC = {"Observed": "#7A8B94", "Denoised": "#3F7FB5",\n       "Denoised+Imputed": "#4E9E62", "Latent": "#C0453C"}',
      'SRC = {"Observed": "#9AA7AF", "Denoised": "#7FAED6",\n       "Denoised+Imputed": "#86C295", "Latent": "#D46A5A"}'),

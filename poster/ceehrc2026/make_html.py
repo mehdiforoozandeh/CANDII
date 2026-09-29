@@ -77,8 +77,8 @@ def svg(stem):
 CSS = """
 :root {
   --ground: #E7EBED; --ground-ink: #3C4A52;
-  --red: #A6192E; --ink: #1B2A32; --muted: #5E6E78; --panel: #FCF4F1;
-  --rule: #EBD9D4; --paper: #FFFFFF; --accent: #E8A598;
+  --red: #A6192E; --heading: #2E4A62; --ink: #1B2A32; --muted: #5E6E78; --panel: #F3F6F9;
+  --rule: #D9E1E8; --paper: #FFFFFF; --accent: #A9BFD3;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --ground: #161C20; --ground-ink: #AAB6BD; color-scheme: dark; }
@@ -122,13 +122,13 @@ body { background: var(--ground); color: var(--ground-ink);
 .box { background: var(--panel); border: 4pt solid var(--accent); border-radius: .22in;
   padding: .28in .4in .28in;
   font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
-.box h3 { color: var(--red); font-size: var(--boxtitle); line-height: 1.2;
+.box h3 { color: var(--heading); font-size: var(--boxtitle); line-height: 1.2;
   font-weight: 700; margin-bottom: .15in; }
 .box ul { list-style: none; padding: 0; }
 .box li { position: relative; padding-left: 1em; }
 .box li + li { margin-top: .15in; }
 .box li::before { content: "•"; color: var(--accent); position: absolute; left: .15em; }
-.poster h2 { color: var(--red); font-size: var(--head); line-height: 1.2; font-weight: 700;
+.poster h2 { color: var(--heading); font-size: var(--head); line-height: 1.2; font-weight: 700;
   text-wrap: balance; padding-bottom: .08in; border-bottom: 5pt solid var(--accent);
   margin-bottom: .3in; }
 figure img { display: block; width: 100%; }
