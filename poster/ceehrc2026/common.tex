@@ -49,10 +49,12 @@
 \newcommand{\PosterURL}{https://mehdiforoozandeh.github.io/CANDI/}
 
 \newcommand{\TxtProblem}{%
-Epigenomic measurements often suffer from noise, batch effects and
-irreproducibility. Imputation methods operate on processed signal, and assume that
-processing removes all batch effects. In the ENCODE Imputation Challenge, due to
-subtle train-test differences, a simple baseline outperformed most entrants~[1].}
+Epigenomic data form a three-dimensional tensor across assays, cell types and
+genomic positions, with tens to hundreds of assays and thousands of cell types.
+Due to the high cost and complexity of profiling every possible assay in all
+relevant cell and tissue types, this tensor is sparse: most experiments were
+never performed. Epigenome imputation methods aim to predict these missing
+experiments~[1].}
 
 \newcommand{\TxtCandi}{%
 \textbf{C}onfidence-\textbf{A}ware \textbf{N}eural \textbf{D}enoising
