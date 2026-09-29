@@ -35,7 +35,6 @@ def macros(tex):
 # until it has an HTML form.
 MATH = {
     r"$\times$": "×",
-    r"$9\times10^{-10}$": "9&thinsp;×&thinsp;10<sup>−10</sup>",
     r"$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$":
         "max(<i>β</i><sub>0</sub> + <i>β</i><sub>1</sub>·CANDI + "
         "<i>β</i><sub>2</sub>·baseline, 0)",
