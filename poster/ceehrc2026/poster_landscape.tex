@@ -29,13 +29,15 @@
   \fill[sfured] ($(nw)+(0,-0.6in)$) rectangle ($(nw)+(8.0in,-3.95in)$);
   \node[anchor=south east, inner sep=0pt, text=white]
     at ($(nw)+(7.7in,-3.8in)$) {\fontsize{160}{160}\selectfont SFU};
+  % The title runs the full width to the right margin; the QR code sits at the
+  % right end of the author line, below it.
   \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(8.8in,-2.2in)$) {\resizebox{30.4in}{!}{\bfseries\PosterTitle}};
+    at ($(nw)+(8.8in,-2.15in)$) {\resizebox{34.4in}{!}{\bfseries\PosterTitle}};
   \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(8.8in,-3.8in)$) {\fontsize{68}{76}\selectfont\PosterAuthors};
-  \node[anchor=north east, inner sep=0pt] at ($(ne)+(-0.8in,-0.6in)$)
-    {\qrcode[height=2.9in]{\PosterURL}};
-  \node[anchor=north east, inner sep=0pt, text=muted] at ($(ne)+(-0.8in,-3.62in)$)
+    at ($(nw)+(8.8in,-3.8in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
+  \node[anchor=south east, inner sep=0pt] at ($(ne)+(-0.8in,-3.8in)$)
+    {\qrcode[height=1.45in]{\PosterURL}};
+  \node[anchor=south east, inner sep=0pt, text=muted] at ($(ne)+(-2.45in,-3.8in)$)
     {\fontsize{17}{20}\selectfont mehdiforoozandeh.github.io/CANDI};
 \end{tikzpicture}%
 % ============================================================ row 1 ===========
@@ -59,7 +61,7 @@
   {\smallsize\color{muted}\TxtRefs\par}}\hfill
 \Column{row 2 right}{\RightW}{\RowTwo}{%
   \sectionbar{\HeadEIC}
-  \begin{minipage}[t]{7.6in}\vspace{0pt}{\bodysize\color{ink}\raggedright\TxtEIC\par}\end{minipage}\hfill
+  \begin{minipage}[t]{7.6in}\vspace{0pt}{\bodysize\color{ink}\TxtEIC\par}\end{minipage}\hfill
   \panel{8.0in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
   \panel{12.0in}{panels/eic_measures_landscape.pdf}{\CapD}}
 \end{document}

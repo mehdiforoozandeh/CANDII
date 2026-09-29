@@ -106,15 +106,20 @@ body { background: var(--ground); color: var(--ground-ink);
   align-items: flex-end; white-space: nowrap;
   font-size: 17pt; color: var(--muted); }
 .qr img { display: block; width: 2.9in; height: 2.9in; margin-bottom: .1in; }
+/* Landscape: a small QR code at the right end of the author line. */
+.qr-line { position: absolute; right: .8in; bottom: calc(100% - 3.8in); display: flex;
+  align-items: flex-end; gap: .2in; font-size: 17pt; color: var(--muted); white-space: nowrap; }
+.qr-line img { display: block; width: 1.45in; height: 1.45in; }
 .body { position: absolute; left: .8in; top: var(--top); display: grid; }
 .col { display: flex; flex-direction: column; min-height: 0; }
 .row { display: flex; justify-content: space-between; align-items: flex-start; }
 .fill { flex: 1; }
-.box { background: var(--panel); border-radius: .22in; padding: .3in .4in .35in;
+.box { background: var(--panel); border: 4pt solid var(--red); border-radius: .22in;
+  padding: .3in .4in .35in;
   font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
 .box h3 { color: var(--red); font-size: var(--boxtitle); line-height: 1.2;
   font-weight: 700; margin-bottom: .15in; }
-.box ul { list-style: none; padding: 0; text-align: left; }
+.box ul { list-style: none; padding: 0; }
 .box li { position: relative; padding-left: 1em; }
 .box li + li { margin-top: .15in; }
 .box li::before { content: "•"; color: var(--red); position: absolute; left: .15em; }
@@ -124,7 +129,7 @@ body { background: var(--ground); color: var(--ground-ink);
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
 .cap.wide { text-align: justify; margin-top: .25in; }
-.text { font-size: var(--body); line-height: var(--body-lh); }
+.text { font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
 .refs { border-top: 3pt solid var(--rule); padding-top: .25in; font-size: var(--small);
   line-height: var(--small-lh); color: var(--muted); }
 sub, sup { font-size: .7em; line-height: 0; }
@@ -176,12 +181,16 @@ def page(kind, w_in, h_in, sizes, header, body):
 <div class="wrap">
 <div class="poster" style="width:{w_in}in; height:{h_in}in; {vars_}">
 {header}
-<div class="qr"><img src="{svg('qr')}" alt="QR code: {W['PosterURL']}">
-<a href="{W['PosterURL']}" style="color:inherit">mehdiforoozandeh.github.io/CANDI</a></div>
 {body}
 </div>
 </div>
 {SCRIPT}"""
+
+
+def qr(cls):
+    link = f'<a href="{W['PosterURL']}" style="color:inherit">mehdiforoozandeh.github.io/CANDI</a>'
+    img = f'<img src="{svg('qr')}" alt="QR code: {W['PosterURL']}">'
+    return f'<div class="{cls}">{img if cls == "qr" else link}{link if cls == "qr" else img}</div>'
 
 
 def refs():
@@ -190,13 +199,14 @@ def refs():
 
 # --- landscape: poster_landscape.tex, 44 x 34 in -----------------------------
 L = page("landscape", 44, 34,
-         dict(**{"red-w": "8in", "sfu": "160pt", "title-x": "8.8in", "authors": "68pt",
+         dict(**{"red-w": "8in", "sfu": "160pt", "title-x": "8.8in", "authors": "52pt",
                  "top": "4.55in", "body": "30pt", "body-lh": "39pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "36pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
-<div class="title" data-fit="30.4" style="top:.75in; font-size:100pt">{W['PosterTitle']}</div>
-<div class="authors">{W['PosterAuthors']}</div>""",
+<div class="title" data-fit="34.4" style="bottom:calc(100% - 2.36in); font-size:100pt">{W['PosterTitle']}</div>
+<div class="authors">{W['PosterAuthors']}</div>
+{qr("qr-line")}""",
          f"""<div class="body" style="grid-template-columns: 12.4in 29in; column-gap: 1in;
   grid-template-rows: 15.8in 12.3in; row-gap: .5in">
 <div class="col" style="justify-content: space-between">
@@ -226,7 +236,8 @@ P = page("portrait", 34, 44,
                  "boxtitle": "34pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
 <div class="title" data-fit="22" style="top:.55in; font-size:70pt">{t1}<br>{t2}</div>
-<div class="authors">{W['PosterAuthors']}</div>""",
+<div class="authors">{W['PosterAuthors']}</div>
+{qr("qr")}""",
          f"""<div class="body" style="grid-template-columns: 12.2in 19.4in; column-gap: .8in;
   grid-template-rows: 4.9in 16.85in 16in; row-gap: .5in">
 <div class="row" style="grid-column: 1 / 3">
