@@ -6,7 +6,7 @@ run unchanged, and its finished figure is then saved again, cropped, once per
 piece. Cropping a vector savefig keeps every piece vector and pixel-identical to
 the landing page.
 
-Writes panels/ga_{strip,A,B,C,legend}.pdf.
+Writes panels/ga_{strip,A,B,legend}.pdf. The SAGA panel (C) is not used.
 """
 from pathlib import Path
 import runpy
@@ -40,7 +40,6 @@ pieces = {
     "ga_strip": sb,
     "ga_A": box([ns["axA"]]),
     "ga_B": box([ns["axB"]]),
-    "ga_C": box([ns["axC"]]),
     "ga_legend": box([fig.legends[0]]),
 }
 for name, bb in pieces.items():

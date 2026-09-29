@@ -7,7 +7,7 @@
 %
 % Build: bash build.sh   (draws the panels, then runs latexmk)
 \documentclass{article}
-\newcommand{\PosterHeight}{84in}
+\newcommand{\PosterHeight}{82in}
 \usepackage[paperwidth=44in, paperheight=\PosterHeight,
             left=1in, right=1in, top=6.4in, bottom=1in]{geometry}
 \usepackage[T1]{fontenc}
@@ -97,13 +97,11 @@ cell-type embedding, so it runs on cell types it has never seen.
 \begin{minipage}[t]{13.33in}
 \vspace{0pt}
 \begin{tcolorbox}[textbox, equal height group=intro]
-\boxtitle{Take-home}
+\boxtitle{Key findings}
 \begin{itemize}
   \item CANDI is \textbf{1st of 26} on the ENCODE Imputation Challenge blind test.
-  \item The lead needs a \textbf{24-number output correction}, fitted on training
-        data only. Without it, CANDI is 14th.
-  \item CANDI's intervals are calibrated, and its latent features give more
-        reproducible chromatin states.
+  \item CANDI's intervals are calibrated, and its latent features are predictive
+        of gene expression.
 \end{itemize}
 \end{tcolorbox}
 \end{minipage}
@@ -127,12 +125,10 @@ full range.}\gap
 \panel{11.7in}{panels/ga_B.pdf}{\textbf{B}\enspace Gene expression predicted from
 each feature set as assays are removed. Latent features hold $r \approx 0.79$ from 13
 assays down to 4; observed data falls to 0.60.}\gap
-\panel{16.9in}{panels/ga_C.pdf}{\textbf{C}\enspace Agreement of SAGA chromatin-state
-annotations between replicates. Latent features give the most reproducible
-annotation in four of six biosamples.}
-
-\vspace{0.35in}
-{\centering\includegraphics[width=17in]{panels/ga_legend.pdf}\par}
+\begin{minipage}[t]{16.9in}
+\vspace{3.5in}
+\includegraphics[width=\linewidth]{panels/ga_legend.pdf}
+\end{minipage}
 
 \vspace{1.3in}
 % ================================================ the challenge ===============
