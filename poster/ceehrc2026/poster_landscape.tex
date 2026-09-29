@@ -29,19 +29,20 @@
 \begin{tikzpicture}[remember picture, overlay]
   \coordinate (nw) at (current page.north west);
   \coordinate (ne) at (current page.north east);
-  \fill[sfured] ($(nw)+(0,-0.6in)$) rectangle ($(nw)+(8.0in,-3.95in)$);
+  % The SFU block is 5.6 x 2.35 in, centred on the title and author lines.
+  \fill[sfured] ($(nw)+(0,-1.12in)$) rectangle ($(nw)+(5.6in,-3.465in)$);
   \node[anchor=south east, inner sep=0pt, text=white]
-    at ($(nw)+(7.7in,-3.8in)$) {\fontsize{160}{160}\selectfont SFU};
+    at ($(nw)+(5.39in,-3.36in)$) {\fontsize{112}{112}\selectfont SFU};
   % The title runs the full width to the right margin; the QR code sits at the
   % right end of the author line, below it.
   \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(8.8in,-2.15in)$) {\resizebox{34.4in}{!}{\bfseries\PosterTitle}};
+    at ($(nw)+(6.3in,-2.08in)$) {\resizebox{36.9in}{!}{\bfseries\PosterTitle}};
   \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(8.8in,-3.8in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
-  \node[anchor=south east, inner sep=0pt] at ($(ne)+(-0.8in,-3.8in)$)
-    {\qrcode[height=1.45in]{\PosterURL}};
-  \node[anchor=south east, inner sep=0pt, text=muted] at ($(ne)+(-2.45in,-3.8in)$)
-    {\fontsize{17}{20}\selectfont mehdiforoozandeh.github.io/CANDI};
+    at ($(nw)+(6.3in,-3.8in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
+  \node[anchor=south east, inner sep=0pt] at ($(ne)+(-0.8in,-3.9in)$)
+    {\qrcode[height=1.74in]{\PosterURL}};
+  \node[anchor=south east, inner sep=0pt, text=muted] at ($(ne)+(-2.79in,-3.9in)$)
+    {\fontsize{20.4}{24}\selectfont mehdiforoozandeh.github.io/CANDI};
 \end{tikzpicture}%
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%

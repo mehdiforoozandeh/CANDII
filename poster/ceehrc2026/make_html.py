@@ -98,9 +98,9 @@ body { background: var(--ground); color: var(--ground-ink);
 .poster .text p + p { margin-top: .2in; }
 .poster .text p.eq, .poster .text p.eq + p { margin-top: .12in; }
 .poster p.eq { text-align: center; white-space: nowrap; }
-.red { position: absolute; left: 0; top: .6in; width: var(--red-w); height: 3.35in;
+.red { position: absolute; left: 0; top: var(--red-top, .6in); width: var(--red-w); height: var(--red-h, 3.35in);
   background: var(--red); }
-.sfu { position: absolute; right: .3in; bottom: -.02in; color: #fff; line-height: .8;
+.sfu { position: absolute; right: var(--sfu-r, .3in); bottom: -.02in; color: #fff; line-height: .8;
   font-size: var(--sfu); font-weight: 400; }
 .title { position: absolute; left: var(--title-x); font-weight: 700; white-space: nowrap;
   line-height: 1.12; }
@@ -111,9 +111,9 @@ body { background: var(--ground); color: var(--ground-ink);
   font-size: 17pt; color: var(--muted); }
 .qr img { display: block; width: 2.9in; height: 2.9in; margin-bottom: .1in; }
 /* Landscape: a small QR code at the right end of the author line. */
-.qr-line { position: absolute; right: .8in; bottom: calc(100% - 3.8in); display: flex;
-  align-items: flex-end; gap: .2in; font-size: 17pt; color: var(--muted); white-space: nowrap; }
-.qr-line img { display: block; width: 1.45in; height: 1.45in; }
+.qr-line { position: absolute; right: .8in; bottom: calc(100% - 3.9in); display: flex;
+  align-items: flex-end; gap: .25in; font-size: 20.4pt; color: var(--muted); white-space: nowrap; }
+.qr-line img { display: block; width: 1.74in; height: 1.74in; }
 .body { position: absolute; left: .8in; top: var(--top); display: grid; }
 .col { display: flex; flex-direction: column; min-height: 0; }
 .row { display: flex; justify-content: space-between; align-items: flex-start; }
@@ -204,12 +204,13 @@ def refs():
 
 # --- landscape: poster_landscape.tex, 44 x 34 in -----------------------------
 L = page("landscape", 44, 34,
-         dict(**{"red-w": "8in", "sfu": "160pt", "title-x": "8.8in", "authors": "52pt",
+         dict(**{"red-w": "5.6in", "red-top": "1.12in", "red-h": "2.345in", "sfu-r": ".21in",
+                 "sfu": "112pt", "title-x": "6.3in", "authors": "52pt",
                  "top": "4.35in", "body": "28pt", "body-lh": "36pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "36pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
-<div class="title" data-fit="34.4" style="bottom:calc(100% - 2.36in); font-size:100pt">{W['PosterTitle']}</div>
+<div class="title" data-fit="36.9" style="bottom:calc(100% - 2.06in); font-size:100pt">{W['PosterTitle']}</div>
 <div class="authors">{W['PosterAuthors']}</div>
 {qr("qr-line")}""",
          f"""<div class="body" style="grid-template-rows: 16.03in 12.25in; row-gap: .4in">
