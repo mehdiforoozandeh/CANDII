@@ -147,6 +147,20 @@ no first validation in 52 min), scoring. Twin A2 C19M16 counts 38 s (12:36); D2 
 286 s (26:47); A2 across counts 727 s, scoring; D2 across pval 1746 s, scoring.
 Full array 22855414 at 00:28: 154 SCORE_DONE of 384, 17 left in the queue.
 
+K6 smokes all COMPLETED by 01:03 (sacct elapsed; MaxRSS): nocov A2 per-track 25:08 (5.8 GiB),
+A2 across 1:20:20 (5.6 GiB), D2 per-track 27:39 (7.5 GiB), D2 across 1:33:54 (7.4 GiB); twin A2
+per-track 12:36 (14.4 GiB), A2 across 1:26:49 (15.6 GiB, pool 406 s), D2 per-track 26:47
+(5.9 GiB), D2 across 1:20:16 (15.6 GiB, pool 534 s). All inside 3 h. The twin's peak memory sits at
+its 16 000 MB request (the pool reads every training chromosome of the source pids), so the twin
+array runs with `--mem=32000M` given on the sbatch line (no code change).
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
+| 2026-09-29 01:04 | 22862750 | twin law smoke, twin indices 18, 42, 162, 189 (`xshuf_law.sh`) | K6 |
+| 2026-09-29 01:04 | 22862752 | full row-2 nocov train+score, the 192 tasks in `row2/idx_nocov.txt` (the 4 smoke runs skip), `%40` | K6 |
+| 2026-09-29 01:04 | 22862753 | full twin train+score, twin indices 0–191 (the 4 smoke runs skip), `%40`, `--mem=32000M`, out `row2_xshuf/` | K6 |
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-28 23:24 | 22859772 | nocov smoke on K6, indices 66, 138, 498, 570 (`row2_train.sh`, out `row2/`) | K6 |
