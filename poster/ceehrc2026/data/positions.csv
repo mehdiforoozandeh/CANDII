@@ -1,6 +1,0 @@
-measures,arm,label,grid,role,position,n,rank_stat,score_mean,score_lb,score_ub,average_position,average_score_mean,beats_average
-9,candi.tcfloor,CANDI,common,entry,1,26,1.0,0.17924976258309594,0.17663817663817669,0.18426344896933136,4,0.31307468856488463,True
-9,candi.none,"CANDI, uncorrected",common,entry,14,26,12.0,0.3511982570806099,0.3482207697893971,0.3547567175018155,3,0.3020082676945422,False
-9,avocado005.none,"Avocado, retrained from scratch",full,entry,23,26,22.0,0.49103122730573706,0.4887436456063907,0.4923747276688453,4,0.2963800904977375,False
-9,avg.none,[diagnostic] our re-scored Average inserted as a 26th entry,common,duplicate-insertion diagnostic,7,26,7.0,0.32139824590804983,0.31422825540472604,0.33386402994246134,6,0.3071225071225071,False
-9,avocado.none,[diagnostic] our re-scored Avocado inserted as a 26th entry,common,duplicate-insertion diagnostic,25,26,25.0,0.496278140885984,0.49448354840511705,0.4981565275682922,4,0.2951762471370314,False
