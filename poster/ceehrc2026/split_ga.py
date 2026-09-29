@@ -6,7 +6,11 @@ run unchanged, and its finished figure is then saved again, cropped, once per
 piece. Cropping a vector savefig keeps every piece vector and pixel-identical to
 the landing page.
 
-Writes panels/ga_{strip,A,B,legend}.pdf. The SAGA panel (C) is not used.
+The one change: the landing page's shared legend is drawn from the SAGA panel's
+bars (C), and C is not on the poster. That legend is removed, and panel B gets a
+line legend of its own, in panel A's legend style.
+
+Writes panels/ga_{strip,A,B}.{pdf,svg}.
 """
 from pathlib import Path
 import runpy
@@ -19,6 +23,9 @@ OUT.mkdir(exist_ok=True)
 
 ns = runpy.run_path(str(HERE / "landing" / "build_ga.py"))
 fig = ns["fig"]
+fig.legends[0].remove()
+ns["axB"].legend(fontsize=7.6, frameon=False, loc="lower right", handlelength=1.6,
+                 borderpad=0.1, labelspacing=.35)
 fig.canvas.draw()
 r = fig.canvas.get_renderer()
 inch = fig.dpi_scale_trans.inverted()
@@ -40,8 +47,8 @@ pieces = {
     "ga_strip": sb,
     "ga_A": box([ns["axA"]]),
     "ga_B": box([ns["axB"]]),
-    "ga_legend": box([fig.legends[0]]),
 }
 for name, bb in pieces.items():
-    fig.savefig(OUT / f"{name}.pdf", bbox_inches=bb, facecolor="white")
-    print(f"wrote panels/{name}.pdf  ({bb.width:.2f} x {bb.height:.2f} in)")
+    for ext in ("pdf", "svg"):
+        fig.savefig(OUT / f"{name}.{ext}", bbox_inches=bb, facecolor="white")
+    print(f"wrote panels/{name}.{{pdf,svg}}  ({bb.width:.2f} x {bb.height:.2f} in)")

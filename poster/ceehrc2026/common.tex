@@ -1,0 +1,120 @@
+% Shared by poster_landscape.tex and poster_portrait.tex: packages, colours, the
+% panel and box styles, and every sentence on the poster. A layout file sets its
+% page with geometry and its type scale (\bodysize, \capsize, \smallsize,
+% \headsize, \boxtitlesize), then inputs this file.
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}                 % scalable math at poster sizes
+\usepackage[default]{opensans}
+\usepackage{amsmath,xcolor,graphicx,tikz,qrcode,enumitem}
+\usepackage[most]{tcolorbox}
+\usetikzlibrary{calc}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+\definecolor{sfured}{HTML}{A6192E}
+\definecolor{ink}{HTML}{1B2A32}
+\definecolor{muted}{HTML}{5E6E78}
+\definecolor{teal}{HTML}{12868C}
+\definecolor{panel}{HTML}{F3F5F6}
+\definecolor{rule}{HTML}{D5DBDF}
+
+\newcommand{\sectionbar}[1]{%
+  {\headsize\bfseries\color{sfured}#1\par}\vspace{0.08in}%
+  {\color{sfured}\rule{\linewidth}{5pt}}\par\vspace{0.3in}}
+
+% One panel: its graphic, then its one- or two-sentence caption.
+\newcommand{\panel}[3]{% #1 width  #2 graphic  #3 caption
+  \begin{minipage}[t]{#1}
+    \vspace{0pt}
+    \includegraphics[width=\linewidth]{#2}\par\vspace{0.2in}
+    {\capsize\color{ink}\raggedright#3\par}
+  \end{minipage}}
+
+\tcbset{textbox/.style={enhanced, colback=panel, colframe=panel, arc=0.22in,
+  boxrule=0pt, left=0.4in, right=0.4in, top=0.3in, bottom=0.35in,
+  fontupper=\bodysize\color{ink}, before skip=0pt, after skip=0pt}}
+\newcommand{\boxtitle}[1]{{\boxtitlesize\bfseries\color{sfured}#1}\par\vspace{0.15in}}
+\setlist[itemize]{leftmargin=1.0em, itemsep=0.15in, topsep=0.05in,
+                  label={\color{sfured}\textbullet}}
+
+% ------------------------------------------------------------------ the words --
+\newcommand{\PosterTitle}{Self-supervised confidence-aware denoising imputation of genomic data}
+\newcommand{\PosterAuthors}{Mehdi Foroozandeh, Abdul Rahman Diab, and Maxwell Libbrecht}
+\newcommand{\PosterURL}{https://mehdiforoozandeh.github.io/CANDI/}
+
+\newcommand{\TxtProblem}{%
+Most (cell type, assay) experiments were never run, and those that were differ in
+depth, read length, run type and platform. In the ENCODE Imputation Challenge, a
+baseline that averages each assay over other cell types beat all but two submitted
+methods~[1].}
+
+\newcommand{\TxtCandi}{%
+\textbf{C}onfidence-\textbf{A}ware \textbf{N}eural \textbf{D}enoising
+\textbf{I}mputer~[2] is a self-supervised transformer over raw read counts, DNA
+sequence and four experimental covariates. It predicts a distribution for every
+assay in every 25\,bp bin, so each imputed value has an interval. It has no
+cell-type embedding, so it runs on cell types it has never seen.}
+
+\newcommand{\TxtFindings}{%
+\begin{itemize}
+  \item CANDI is \textbf{1st of 26} on the ENCODE Imputation Challenge blind test.
+  \item CANDI's intervals are calibrated, and its latent features are predictive
+        of gene expression.
+\end{itemize}}
+
+\newcommand{\HeadStrip}{CANDI schematic workflow}
+\newcommand{\CapStrip}{%
+\textbf{Top:} one cell type is sliced out of the cell type $\times$ assay $\times$
+genome tensor, and a 30\,kb window of it goes into CANDI as raw counts, DNA and
+covariates. Grey assays were never measured; yellow ones are masked in training.
+\textbf{Bottom:} CANDI returns a mean and a 95\% interval for every assay, and
+window by window this fills every missing thread of the tensor.}
+
+\newcommand{\HeadUtility}{Downstream utility of CANDI}
+\newcommand{\CapA}{%
+\textbf{A}\enspace For DNase-seq (cell line DND-41), the observed coverage of
+CANDI's intervals follows their stated confidence over the full range.}
+\newcommand{\CapB}{%
+\textbf{B}\enspace Gene expression predicted from each feature set as assays are
+removed. Latent features hold $r \approx 0.79$ from 13 assays down to 4; observed
+data falls to 0.60.}
+
+\newcommand{\HeadEIC}{Fixing the signal-level shift in the ENCODE Imputation Challenge blind test}
+\newcommand{\TxtEIC}{%
+51 blind-test experiments (12 cell types, 8 assays), scored with the challenge's own
+nine measures and ranking statistic; our scorer reproduces every published entry to a
+median relative difference of $9\times10^{-10}$. CANDI's output as it comes ranks
+14th, so for each assay we pass it through one fixed layer,
+$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$, whose
+24 numbers are fitted by least squares on the 133 training experiments only; with
+it, CANDI ranks 1st.}
+\newcommand{\CapC}{%
+\textbf{C}\enspace The challenge's leaderboard with CANDI added. CANDI is first at
+0.179 (bootstrap range 0.177--0.184); the next entry scores 0.306. Bars span the ten
+bootstrap groups.}
+\newcommand{\CapD}{%
+\textbf{D}\enspace Each of the nine measures relative to the baseline, median over
+the 51 experiments. CANDI is first on genome-wide MSE, Pearson and Spearman, and in
+the top 8 on five more.}
+
+\newcommand{\TxtRefs}{%
+[1]~Schreiber J, Boix C, \textit{et al.} The ENCODE Imputation Challenge: a critical
+assessment of methods for cross-cell type imputation of epigenomic profiles.
+\textit{Genome Biol} 24:79 (2023).\par\vspace{0.1in}
+[2]~Foroozandeh M, Diab AR, Libbrecht M. CANDI: self-supervised, confidence-aware
+denoising imputation of genomic data. \textit{bioRxiv} 2025.01.23.634626 (2025).\par
+\vspace{0.1in}
+Panels C--D: blind-test scoring from the Libbrecht lab's EIC reproduction
+(experiments 017, 025). \emph{Baseline} is the challenge's average-activity track.
+The output correction was chosen after the challenge results were public; none of
+its numbers is fitted on blind-test data.}
+
+% \Column{name}{width}{height}{content}: a column of fixed height, top-aligned, so
+% \vfill inside it spreads its blocks to the row's height. The build log gets the
+% height the content needs ("POSTER: ... needs"), which is how rows are balanced.
+\newsavebox\PosterCol
+\newcommand{\Column}[4]{%
+  \sbox\PosterCol{\begin{minipage}[t]{#2}\vspace{0pt}#4\end{minipage}}%
+  \typeout{POSTER: #1 needs \the\dimexpr\ht\PosterCol+\dp\PosterCol\relax\space of #3}%
+  \begin{minipage}[t][#3][t]{#2}\vspace{0pt}#4\end{minipage}}

@@ -1,0 +1,65 @@
+% CEEHRC 2026 poster, landscape: 44 in wide x 34 in high (ANSI E), inside the
+% conference's 44 x 44 in limit.
+%
+% Two rows of two columns. Row 1: the three text boxes | the schematic workflow.
+% Row 2: downstream utility and the references | the challenge section. The
+% row heights are set by the right column; the log lines "POSTER: ... needs" say
+% how much each column needs.
+% Build: bash build.sh
+\documentclass{article}
+\usepackage[paperwidth=44in, paperheight=34in,
+            left=0.8in, right=0.8in, top=4.55in, bottom=0.7in]{geometry}
+\newcommand{\bodysize}{\fontsize{30}{39}\selectfont}
+\newcommand{\capsize}{\fontsize{26}{34}\selectfont}
+\newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
+\newcommand{\headsize}{\fontsize{48}{58}\selectfont}
+\newcommand{\boxtitlesize}{\fontsize{36}{44}\selectfont}
+\input{common}
+
+\newcommand{\LeftW}{12.4in}
+\newcommand{\RightW}{29in}
+\newcommand{\RowOne}{15.8in}
+\newcommand{\RowTwo}{12.3in}
+
+\begin{document}
+% ============================================================ header ==========
+\begin{tikzpicture}[remember picture, overlay]
+  \coordinate (nw) at (current page.north west);
+  \coordinate (ne) at (current page.north east);
+  \fill[sfured] ($(nw)+(0,-0.6in)$) rectangle ($(nw)+(8.0in,-3.95in)$);
+  \node[anchor=south east, inner sep=0pt, text=white]
+    at ($(nw)+(7.7in,-3.8in)$) {\fontsize{160}{160}\selectfont SFU};
+  \node[anchor=south west, inner sep=0pt, text=ink]
+    at ($(nw)+(8.8in,-2.2in)$) {\resizebox{30.4in}{!}{\bfseries\PosterTitle}};
+  \node[anchor=south west, inner sep=0pt, text=ink]
+    at ($(nw)+(8.8in,-3.8in)$) {\fontsize{68}{76}\selectfont\PosterAuthors};
+  \node[anchor=north east, inner sep=0pt] at ($(ne)+(-0.8in,-0.6in)$)
+    {\qrcode[height=2.9in]{\PosterURL}};
+  \node[anchor=north east, inner sep=0pt, text=muted] at ($(ne)+(-0.8in,-3.62in)$)
+    {\fontsize{17}{20}\selectfont mehdiforoozandeh.github.io/CANDI};
+\end{tikzpicture}%
+% ============================================================ row 1 ===========
+\Column{row 1 left}{\LeftW}{\RowOne}{%
+  \begin{tcolorbox}[textbox, height=4.95in]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
+  \begin{tcolorbox}[textbox, height=4.95in]\boxtitle{CANDI}\TxtCandi\end{tcolorbox}\vfill
+  \begin{tcolorbox}[textbox, height=4.95in]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
+\Column{row 1 right}{\RightW}{\RowOne}{%
+  \sectionbar{\HeadStrip}
+  \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
+  {\capsize\color{ink}\CapStrip\par}}
+
+\vspace{0.5in}
+% ============================================================ row 2 ===========
+\Column{row 2 left}{\LeftW}{\RowTwo}{%
+  \sectionbar{\HeadUtility}
+  \panel{5.95in}{panels/ga_A.pdf}{\CapA}\hfill
+  \panel{5.95in}{panels/ga_B.pdf}{\CapB}\par
+  \vfill
+  {\color{rule}\rule{\linewidth}{3pt}}\par\vspace{0.25in}
+  {\smallsize\color{muted}\TxtRefs\par}}\hfill
+\Column{row 2 right}{\RightW}{\RowTwo}{%
+  \sectionbar{\HeadEIC}
+  \begin{minipage}[t]{7.6in}\vspace{0pt}{\bodysize\color{ink}\raggedright\TxtEIC\par}\end{minipage}\hfill
+  \panel{8.0in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
+  \panel{12.0in}{panels/eic_measures_landscape.pdf}{\CapD}}
+\end{document}

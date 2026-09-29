@@ -15,8 +15,9 @@ github.com/mlibbrecht/2026-07-26_epi_imputation (main, 2026-09-28):
 "CANDI" means CANDI + the training-side output correction (025's `candi.tcfloor`)
 everywhere.
 
-Writes panels/eic_{leaderboard,measures}.pdf. Sizes are in
-inches as printed on the 44-inch-wide poster, so a point here is a point there.
+Writes panels/eic_{leaderboard,measures}{,_landscape,_portrait}.{pdf,svg}: one
+pair per layout (poster.tex, poster_landscape.tex, poster_portrait.tex). Each pair
+is drawn at the size it is printed at, so a point here is a point there.
 """
 from pathlib import Path
 
@@ -68,9 +69,16 @@ def name(team):
 
 
 def save(fig, stem):
-    fig.savefig(OUT / f"{stem}.pdf", facecolor="white")
+    for ext in ("pdf", "svg"):
+        fig.savefig(OUT / f"{stem}.{ext}", facecolor="white")
     w, h = fig.get_size_inches()
-    print(f"wrote panels/{stem}.pdf  ({w:.1f} x {h:.1f} in)")
+    print(f"wrote panels/{stem}.{{pdf,svg}}  ({w:.1f} x {h:.1f} in)")
+    plt.close(fig)
+
+
+def width_in(fig, text):
+    """Width of a drawn text artist, in inches."""
+    return text.get_window_extent(fig.canvas.get_renderer()).width / fig.dpi
 
 
 tc = pd.read_csv(DATA / "leaderboard_candi.tcfloor.csv")
@@ -85,33 +93,44 @@ print(f"[text] CANDI as it comes: {r0.position} of {len(raw)}, score {r0.score_m
       f"fitted on {sorted(set(coef.n_train))} training experiments per assay")
 
 # ================================================================ leaderboard ==
-fig = plt.figure(figsize=(15.0, 17.0))
-ax = fig.add_axes([0.46, 0.085, 0.51, 0.885])
-lab_tr = blended_transform_factory(fig.transFigure, ax.transData)
-n = len(tc)
-ys = np.arange(n)[::-1]
-for y, r in zip(ys, tc.itertuples()):
-    c, big = colour(r.team), r.team in (CANDI, AVG)
-    ax.plot([r.score_lb, r.score_ub], [y, y], color=c, lw=5 if big else 3,
-            solid_capstyle="round", zorder=3)
-    ax.plot([r.score_mean], [y], "o", ms=22 if big else 13, color=c, zorder=4)
-    kw = dict(fontsize=FS - 4, va="center", color=INK if big else MUTED,
-              fontweight="bold" if big else "normal", transform=lab_tr)
-    ax.text(0.055, y, str(r.position), ha="right", **kw)
-    ax.text(0.070, y, name(r.team), ha="left", **{**kw, "color": c if big else MUTED})
-r1 = tc.iloc[0]
-ax.text(r1.score_mean + 0.012, n - 1, f"{r1.score_mean:.3f}", fontsize=FS - 4,
-        color=TEAL, fontweight="bold", va="center")
-ax.set_ylim(-0.8, n - 0.2)
-ax.set_xlim(0.15, 0.52)
-ax.set_yticks([])
-for s in ("left", "top", "right"):
-    ax.spines[s].set_visible(False)
-ax.tick_params(axis="x", labelsize=FS - 4, colors=INK)
-ax.grid(axis="x", ls="--", lw=1.4, color="#C9CFD3", zorder=0)
-ax.set_xlabel("challenge ranking statistic (lower = better)", fontsize=FS - 2,
-              color=INK, labelpad=12)
-save(fig, "eic_leaderboard")
+def leaderboard(stem, w, h, fs):
+    fig = plt.figure(figsize=(w, h))
+    ax = fig.add_axes([0.5, 0.1, 0.4, 0.8])
+    lab_tr = blended_transform_factory(fig.transFigure, ax.transData)
+    n = len(tc)
+    ys = np.arange(n)[::-1]
+    rank_x = 0.05 + 0.9 * fs / 72            # right edge of the rank column, in
+    names = []
+    for y, r in zip(ys, tc.itertuples()):
+        c, big = colour(r.team), r.team in (CANDI, AVG)
+        ax.plot([r.score_lb, r.score_ub], [y, y], color=c, lw=5 if big else 3,
+                solid_capstyle="round", zorder=3)
+        ax.plot([r.score_mean], [y], "o", ms=0.75 * fs if big else 0.45 * fs,
+                color=c, zorder=4)
+        kw = dict(fontsize=fs - 4, va="center", color=INK if big else MUTED,
+                  fontweight="bold" if big else "normal", transform=lab_tr)
+        ax.text(rank_x / w, y, str(r.position), ha="right", **kw)
+        names.append(ax.text((rank_x + 0.2 * fs / 72) / w, y, name(r.team),
+                             ha="left", **{**kw, "color": c if big else MUTED}))
+    fig.canvas.draw()
+    left = rank_x + 0.2 * fs / 72 + max(width_in(fig, t) for t in names) + 0.25
+    bottom, top, right = 2.9 * fs / 72, 0.12, 0.25
+    ax.set_position([left / w, bottom / h, 1 - (left + right) / w, 1 - (bottom + top) / h])
+    r1 = tc.iloc[0]
+    ax.text(r1.score_mean + 0.012, n - 1, f"{r1.score_mean:.3f}", fontsize=fs - 4,
+            color=TEAL, fontweight="bold", va="center")
+    ax.set_ylim(-0.8, n - 0.2)
+    ax.set_xlim(0.15, 0.52)
+    ax.set_yticks([])
+    for s in ("left", "top", "right"):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(axis="x", labelsize=fs - 4, colors=INK)
+    ax.grid(axis="x", ls="--", lw=1.4, color="#C9CFD3", zorder=0)
+    # Right-aligned to the axis, so on a narrow panel it runs on under the names.
+    fig.text(1 - right / w, 0.12 / h, "challenge ranking statistic (lower = better)",
+             fontsize=fs - 2, color=INK, ha="right", va="bottom")
+    save(fig, stem)
+
 
 # =================================================================== measures ==
 # Each measure on its own scale, with the baseline at 1. Seven are errors and two
@@ -129,48 +148,76 @@ MEAS = [("mse", "MSE, genome-wide", False),
         ("mse1imp", "MSE, top 1% imputed", False),
         ("gwcorr", "Pearson r (reversed)", True),
         ("gwspear", "Spearman ρ (reversed)", True)]
-rng = np.random.default_rng(4)
-fig = plt.figure(figsize=(27.5, 16.0))
-L, Wd, B, H = 0.25, 0.72, 0.13, 0.85
-rh = H / len(MEAS)
-for i, (key, lab, rev) in enumerate(MEAS):
-    ax = fig.add_axes([L, B + H - (i + 1) * rh, Wd, rh * 0.92])
-    v = ratios[key].astype(float)
-    v = -v if rev else v          # left is better on every row
-    # A few entries are orders of magnitude off on the MSE family; the axis stops
-    # at the Tukey fence and anything past it is a caret on the right edge.
-    q1, q3 = v.quantile([0.25, 0.75])
-    lo, hi = v.min(), min(v.max(), q3 + 1.5 * (q3 - q1))
-    pad = 0.10 * (hi - lo if hi > lo else 1.0)
-    for team, val in v.items():
-        off = val > hi
-        x = hi + pad if off else val
-        if team == CANDI:
-            ax.plot([x], [0], ">" if off else "o", ms=26, color=TEAL, zorder=6)
-        elif team == AVG:
-            ax.plot([x], [0], ">" if off else "o", ms=20, color=BASE, zorder=5)
-        else:
-            ax.plot([x], [rng.uniform(-0.33, 0.33)], ">" if off else "o",
-                    ms=13, mfc=FIELD if off else "none", mec=FIELD, mew=2.4, zorder=3)
-    ax.set_xlim(lo - pad, hi + 2 * pad)
-    ax.set_ylim(-0.62, 0.62)
-    ax.set_xticks([]); ax.set_yticks([])
-    for s in ("top", "left", "right"):
-        ax.spines[s].set_visible(False)
-    ax.spines["bottom"].set_color("#DDE3E9")
-    fig.text(L - 0.012, B + H - (i + 0.5) * rh, lab, ha="right", va="center",
-             fontsize=FS - 2, color=INK)
-fig.patches.append(FancyArrowPatch((L + 0.145, 0.07), (L, 0.07),
-                                   transform=fig.transFigure, arrowstyle="-|>",
-                                   mutation_scale=40, lw=3, color=INK))
-fig.text(L + 0.156, 0.07, "better", fontsize=FS, color=INK, va="center")
-lx = 0.02
-for mk, kw, lab in (("o", dict(ms=26, color=TEAL), "CANDI"),
-                    ("o", dict(ms=20, color=BASE), "average-activity baseline"),
-                    ("o", dict(ms=13, mfc="none", mec=FIELD, mew=2.4),
+
+
+def measures(stem, w, h, fs):
+    rng = np.random.default_rng(4)
+    fig = plt.figure(figsize=(w, h))
+    labs = [fig.text(0, 0, lab, fontsize=fs - 2) for _, lab, _ in MEAS]
+    fig.canvas.draw()
+    lab_w = max(width_in(fig, t) for t in labs)
+    for t in labs:
+        t.remove()
+    # Inches: the label column, then the strips; below them the arrow row and
+    # the key row.
+    Lin = 0.1 + lab_w + 0.25
+    L, Wd = Lin / w, 1 - (Lin + 0.15) / w
+    row = 1.5 * fs / 72
+    B, H = (2 * row + 0.1) / h, 1 - (2 * row + 0.25) / h
+    rh = H / len(MEAS)
+    for i, (key, lab, rev) in enumerate(MEAS):
+        ax = fig.add_axes([L, B + H - (i + 1) * rh, Wd, rh * 0.92])
+        v = ratios[key].astype(float)
+        v = -v if rev else v          # left is better on every row
+        # A few entries are orders of magnitude off on the MSE family; the axis
+        # stops at the Tukey fence and anything past it is a caret on the right.
+        q1, q3 = v.quantile([0.25, 0.75])
+        lo, hi = v.min(), min(v.max(), q3 + 1.5 * (q3 - q1))
+        pad = 0.10 * (hi - lo if hi > lo else 1.0)
+        for team, val in v.items():
+            off = val > hi
+            x = hi + pad if off else val
+            if team == CANDI:
+                ax.plot([x], [0], ">" if off else "o", ms=0.87 * fs, color=TEAL, zorder=6)
+            elif team == AVG:
+                ax.plot([x], [0], ">" if off else "o", ms=0.67 * fs, color=BASE, zorder=5)
+            else:
+                ax.plot([x], [rng.uniform(-0.33, 0.33)], ">" if off else "o",
+                        ms=0.43 * fs, mfc=FIELD if off else "none", mec=FIELD,
+                        mew=0.08 * fs, zorder=3)
+        ax.set_xlim(lo - pad, hi + 2 * pad)
+        ax.set_ylim(-0.62, 0.62)
+        ax.set_xticks([]); ax.set_yticks([])
+        for s in ("top", "left", "right"):
+            ax.spines[s].set_visible(False)
+        ax.spines["bottom"].set_color("#DDE3E9")
+        fig.text(L - 0.25 / w, B + H - (i + 0.5) * rh, lab, ha="right", va="center",
+                 fontsize=fs - 2, color=INK)
+    ya, yk = (row + 0.1 + row / 2) / h, (0.1 + row / 2) / h
+    aw = min(4.0, 0.3 * Wd * w)                 # arrow length, in
+    fig.patches.append(FancyArrowPatch((L + aw / w, ya), (L, ya),
+                                       transform=fig.transFigure, arrowstyle="-|>",
+                                       mutation_scale=1.3 * fs, lw=0.1 * fs, color=INK))
+    fig.text(L + (aw + 0.15) / w, ya, "better", fontsize=fs, color=INK, va="center")
+    x = 0.15                                    # the key, left to right, in
+    for kw, lab in ((dict(ms=0.87 * fs, color=TEAL), "CANDI"),
+                    (dict(ms=0.67 * fs, color=BASE), "average-activity baseline"),
+                    (dict(ms=0.43 * fs, mfc="none", mec=FIELD, mew=0.08 * fs),
                      "the 24 other entries")):
-    fig.lines.append(plt.Line2D([lx], [0.02], marker=mk, transform=fig.transFigure,
-                                ls="none", **kw))
-    t = fig.text(lx + 0.011, 0.02, lab, fontsize=FS - 4, color=MUTED, va="center")
-    lx += 0.033 + 0.0076 * len(lab)
-save(fig, "eic_measures")
+        x += 0.45 * fs / 72
+        fig.lines.append(plt.Line2D([x / w], [yk], marker="o", transform=fig.transFigure,
+                                    ls="none", **kw))
+        t = fig.text((x + 0.5 * fs / 72) / w, yk, lab, fontsize=fs - 4, color=MUTED,
+                     va="center")
+        fig.canvas.draw()
+        x += 0.5 * fs / 72 + width_in(fig, t) + 0.35
+    save(fig, stem)
+
+
+# One pair per layout: (leaderboard w, h), (measures w, h), panel text size in pt.
+SIZES = {"":           ((15.0, 17.0), (27.5, 16.0), 30),
+         "_landscape": ((8.0, 8.8), (12.0, 8.8), 22),
+         "_portrait":  ((7.2, 12.1), (11.6, 7.4), 20)}
+for suffix, (lb, me, fs) in SIZES.items():
+    leaderboard(f"eic_leaderboard{suffix}", *lb, fs)
+    measures(f"eic_measures{suffix}", *me, fs)
