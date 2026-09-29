@@ -192,6 +192,14 @@ last 18 run. Law loop restarted 19:28.
 
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
+| 2026-09-29 19:30 | 22936307 | law loop: the last 21 row-2 real/ids runs (D2) | K5 |
+| 2026-09-29 19:30 | 22936365 | law loop: twin law, the scored twin runs 13–173 not yet sent (smoke indices excluded) | K6 |
+
+Passes 19:51–20:32: nothing new to send (twin and nocov arrays still queued). **Tunnel dropped a
+third time at 20:55 UTC** (ssh 255; `hpc status`: nibi down). Nibi work stopped.
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
 | 2026-09-29 01:04 | 22862750 | twin law smoke, twin indices 18, 42, 162, 189 (`xshuf_law.sh`) | K6 |
 | 2026-09-29 01:04 | 22862752 | full row-2 nocov train+score, the 192 tasks in `row2/idx_nocov.txt` (the 4 smoke runs skip), `%40` | K6 |
