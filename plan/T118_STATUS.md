@@ -154,11 +154,24 @@ per-track 12:36 (14.4 GiB), A2 across 1:26:49 (15.6 GiB, pool 406 s), D2 per-tra
 its 16 000 MB request (the pool reads every training chromosome of the source pids), so the twin
 array runs with `--mem=32000M` given on the sbatch line (no code change).
 
+Law smokes all COMPLETED by 03:23 (elapsed; MaxRSS): nocov A2 per-track 7:33, A2 across 45:36,
+D2 per-track 17:54, D2 across 34:55 (≤ 11.8 GiB); twin A2 per-track 40:09, A2 across 44:27, D2
+per-track 21:41, D2 across 1:35:44 (16.9 GiB of 24 000 MB). Law batch 2 (22861310): all 119
+COMPLETED.
+
+From 03:24, later law arrays are submitted by a background loop on this laptop every 20 min
+through the one-off `/project/def-maxwl/mforooz/t118/law_loop_remote.sh` (not in the repo), which
+calls `/project/def-maxwl/mforooz/t118/law_todo.sh <out_dir> <models>`: runs with SCORE_DONE, no
+LAW_DONE, not yet in `<out_dir>/law_submitted.txt`. Row-2 real/ids law runs on K5, nocov and
+twin law on K6. The loop's job ids are copied into the table below.
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
 | 2026-09-29 01:04 | 22862750 | twin law smoke, twin indices 18, 42, 162, 189 (`xshuf_law.sh`) | K6 |
 | 2026-09-29 01:04 | 22862752 | full row-2 nocov train+score, the 192 tasks in `row2/idx_nocov.txt` (the 4 smoke runs skip), `%40` | K6 |
+| 2026-09-29 03:24 | 22867594 | law, batch 3: 156 more row-2 real/ids runs | K5 |
+| 2026-09-29 03:24 | 22867637 | twin law, batch 1: twin indices 0–12 | K6 |
 | 2026-09-29 01:04 | 22862753 | full twin train+score, twin indices 0–191 (the 4 smoke runs skip), `%40`, `--mem=32000M`, out `row2_xshuf/` | K6 |
 
 | submitted (UTC) | job | what | kit |
