@@ -77,8 +77,8 @@ def svg(stem):
 CSS = """
 :root {
   --ground: #E7EBED; --ground-ink: #3C4A52;
-  --red: #A6192E; --ink: #1B2A32; --muted: #5E6E78; --panel: #F3F5F6;
-  --rule: #D5DBDF; --paper: #FFFFFF;
+  --red: #A6192E; --ink: #1B2A32; --muted: #5E6E78; --panel: #FCF4F1;
+  --rule: #EBD9D4; --paper: #FFFFFF; --accent: #E8A598;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --ground: #161C20; --ground-ink: #AAB6BD; color-scheme: dark; }
@@ -119,7 +119,7 @@ body { background: var(--ground); color: var(--ground-ink);
 .col { display: flex; flex-direction: column; min-height: 0; }
 .row { display: flex; justify-content: space-between; align-items: flex-start; }
 .fill { flex: 1; }
-.box { background: var(--panel); border: 4pt solid var(--red); border-radius: .22in;
+.box { background: var(--panel); border: 4pt solid var(--accent); border-radius: .22in;
   padding: .28in .4in .28in;
   font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
 .box h3 { color: var(--red); font-size: var(--boxtitle); line-height: 1.2;
@@ -127,9 +127,9 @@ body { background: var(--ground); color: var(--ground-ink);
 .box ul { list-style: none; padding: 0; }
 .box li { position: relative; padding-left: 1em; }
 .box li + li { margin-top: .15in; }
-.box li::before { content: "•"; color: var(--red); position: absolute; left: .15em; }
+.box li::before { content: "•"; color: var(--accent); position: absolute; left: .15em; }
 .poster h2 { color: var(--red); font-size: var(--head); line-height: 1.2; font-weight: 700;
-  text-wrap: balance; padding-bottom: .08in; border-bottom: 5pt solid var(--red);
+  text-wrap: balance; padding-bottom: .08in; border-bottom: 5pt solid var(--accent);
   margin-bottom: .3in; }
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
@@ -169,8 +169,9 @@ def fig(src, width, cap):
             f'<figcaption>{cap}</figcaption></figure>')
 
 
-def box(title, text, height):
-    return f'<div class="box" style="height:{height}in"><h3>{title}</h3>{text}</div>'
+def box(title, text, height=None):
+    h = f' style="height:{height}in"' if height else ""
+    return f'<div class="box"{h}><h3>{title}</h3>{text}</div>'
 
 
 def page(kind, w_in, h_in, sizes, header, body):
@@ -205,30 +206,33 @@ def refs():
 # --- landscape: poster_landscape.tex, 44 x 34 in -----------------------------
 L = page("landscape", 44, 34,
          dict(**{"red-w": "8in", "sfu": "160pt", "title-x": "8.8in", "authors": "52pt",
-                 "top": "4.55in", "body": "28pt", "body-lh": "36pt", "cap": "26pt",
+                 "top": "4.35in", "body": "28pt", "body-lh": "36pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "36pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
 <div class="title" data-fit="34.4" style="bottom:calc(100% - 2.36in); font-size:100pt">{W['PosterTitle']}</div>
 <div class="authors">{W['PosterAuthors']}</div>
 {qr("qr-line")}""",
-         f"""<div class="body" style="grid-template-columns: 12.4in 29in; column-gap: 1in;
-  grid-template-rows: 15.86in 12.27in; row-gap: .5in">
+         f"""<div class="body" style="grid-template-rows: 16.03in 12.25in; row-gap: .4in">
+<div style="display:grid; grid-template-columns: 11in 30.4in; column-gap: 1in">
 <div class="col" style="justify-content: space-between">
-{box("The problem", W['TxtProblem'], 4.6)}
-{box("CANDI", W['TxtCandi'], 5.6)}
-{box("Key findings", W['TxtFindings'], 4.6)}
+{box("The problem", W['TxtProblem'])}
+{box("CANDI", W['TxtCandi'])}
+{box("Key findings", W['TxtFindings'])}
 </div>
 <div class="col"><h2>{W['HeadStrip']}</h2>
 <img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">
 <p class="cap wide">{W['CapStrip']}</p></div>
+</div>
+<div style="display:grid; grid-template-columns: 13in 28.4in; column-gap: 1in">
 <div class="col"><h2>{W['HeadUtility']}</h2>
-<div class="row">{fig('ga_A', 5.95, W['CapA'])}{fig('ga_B', 5.95, W['CapB'])}</div>
+<div class="row">{fig('ga_A', 6.25, W['CapA'])}{fig('ga_B', 6.25, W['CapB'])}</div>
 <div class="fill"></div>{refs()}</div>
 <div class="col"><h2>{W['HeadEIC']}</h2>
-<div class="row"><div class="text" style="width:8.4in"><p>{W['TxtEIC']}</p></div>
-{fig('eic_leaderboard_landscape', 7.8, W['CapC'])}
-{fig('eic_measures_landscape', 11.4, W['CapD'])}</div></div>
+<div class="row"><div class="text" style="width:7.6in"><p>{W['TxtEIC']}</p></div>
+{fig('eic_leaderboard_landscape', 8.2, W['CapC'])}
+{fig('eic_measures_landscape', 12.0, W['CapD'])}</div></div>
+</div>
 </div>""")
 
 # --- portrait: poster_portrait.tex, 34 x 44 in -------------------------------

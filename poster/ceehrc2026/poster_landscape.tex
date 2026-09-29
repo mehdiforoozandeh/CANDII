@@ -8,7 +8,7 @@
 % Build: bash build.sh
 \documentclass{article}
 \usepackage[paperwidth=44in, paperheight=34in,
-            left=0.8in, right=0.8in, top=4.55in, bottom=0.7in]{geometry}
+            left=0.8in, right=0.8in, top=4.35in, bottom=0.7in]{geometry}
 \newcommand{\bodysize}{\fontsize{28}{36}\selectfont}
 \newcommand{\capsize}{\fontsize{26}{34}\selectfont}
 \newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
@@ -16,10 +16,13 @@
 \newcommand{\boxtitlesize}{\fontsize{36}{44}\selectfont}
 \input{common}
 
-\newcommand{\LeftW}{12.4in}
-\newcommand{\RightW}{29in}
-\newcommand{\RowOne}{15.86in}
-\newcommand{\RowTwo}{12.27in}
+% Row 1 gives the schematic the width; row 2 gives panels A and B more.
+\newcommand{\LeftW}{11.0in}
+\newcommand{\RightW}{30.4in}
+\newcommand{\LeftWTwo}{13.0in}
+\newcommand{\RightWTwo}{28.4in}
+\newcommand{\RowOne}{16.03in}
+\newcommand{\RowTwo}{12.25in}
 
 \begin{document}
 % ============================================================ header ==========
@@ -42,26 +45,26 @@
 \end{tikzpicture}%
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%
-  \begin{tcolorbox}[textbox, height=4.6in]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox, height=5.6in]\boxtitle{CANDI}\TxtCandi\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox, height=4.6in]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
+  \begin{tcolorbox}[textbox]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
+  \begin{tcolorbox}[textbox]\boxtitle{CANDI}\TxtCandi\end{tcolorbox}\vfill
+  \begin{tcolorbox}[textbox]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
 \Column{row 1 right}{\RightW}{\RowOne}{%
   \sectionbar{\HeadStrip}
   \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
   {\capsize\color{ink}\CapStrip\par}}
 
-\vspace{0.5in}
+\vspace{0.4in}
 % ============================================================ row 2 ===========
-\Column{row 2 left}{\LeftW}{\RowTwo}{%
+\Column{row 2 left}{\LeftWTwo}{\RowTwo}{%
   \sectionbar{\HeadUtility}
-  \panel{5.95in}{panels/ga_A.pdf}{\CapA}\hfill
-  \panel{5.95in}{panels/ga_B.pdf}{\CapB}\par
+  \panel{6.25in}{panels/ga_A.pdf}{\CapA}\hfill
+  \panel{6.25in}{panels/ga_B.pdf}{\CapB}\par
   \vfill
   {\color{rule}\rule{\linewidth}{3pt}}\par\vspace{0.25in}
   {\smallsize\color{muted}\TxtRefs\par}}\hfill
-\Column{row 2 right}{\RightW}{\RowTwo}{%
+\Column{row 2 right}{\RightWTwo}{\RowTwo}{%
   \sectionbar{\HeadEIC}
-  \begin{minipage}[t]{8.4in}\vspace{0pt}{\bodysize\color{ink}\TxtEIC\par}\end{minipage}\hfill
-  \panel{7.8in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
-  \panel{11.4in}{panels/eic_measures_landscape.pdf}{\CapD}}
+  \begin{minipage}[t]{7.6in}\vspace{0pt}{\bodysize\color{ink}\TxtEIC\par}\end{minipage}\hfill
+  \panel{8.2in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
+  \panel{12.0in}{panels/eic_measures_landscape.pdf}{\CapD}}
 \end{document}

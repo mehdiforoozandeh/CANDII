@@ -42,11 +42,11 @@ plt.rcParams.update({
     "ytick.major.width": 2.0, "ytick.major.size": 9,
 })
 
-# The landing page's palette: CANDI is its teal, observed data its grey.
+# The poster's pastel palette (common.tex): CANDI is coral, as in the schematic.
 INK, MUTED, RULE = "#1B2A32", "#5E6E78", "#B9C2C7"
-TEAL = "#12868C"
-BASE = "#C98A1B"          # the average-activity baseline
-FIELD = "#8A98A0"         # the 24 other submitted entries
+TEAL = "#D46A5A"          # CANDI (name kept: the colour was teal)
+BASE = "#E2B35C"          # the average-activity baseline
+FIELD = "#A3AFB6"         # the 24 other submitted entries
 
 FS = 30                   # body text in the panels, pt
 CANDI, AVG = "CANDI", "Average"
@@ -216,7 +216,7 @@ def measures(stem, w, h, fs):
 
 # One pair per layout: (leaderboard w, h), (measures w, h), panel text size in pt.
 SIZES = {"":           ((15.0, 17.0), (27.5, 16.0), 30),
-         "_landscape": ((7.8, 8.8), (11.4, 8.8), 22),
+         "_landscape": ((8.2, 9.24), (12.0, 9.24), 22),
          "_portrait":  ((7.2, 12.1), (11.6, 7.4), 20)}
 for suffix, (lb, me, fs) in SIZES.items():
     leaderboard(f"eic_leaderboard{suffix}", *lb, fs)

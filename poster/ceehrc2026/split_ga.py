@@ -10,9 +10,9 @@ Two changes:
 - The landing page's shared legend is drawn from the SAGA panel's bars (C), and C
   is not on the poster. That legend is removed, and panel B gets a line legend of
   its own, in panel A's legend style.
-- The schematic's tensors and signal tracks are recoloured from teal to the SFU
-  red palette (RECOLOUR below). The source is patched in memory before it runs, so
-  landing/build_ga.py stays verbatim. The model diagram and panel A keep teal.
+- The figure is recoloured to the poster's pastel palette (RECOLOUR below). The
+  source is patched in memory before it runs, so landing/build_ga.py stays
+  verbatim.
 
 Writes panels/ga_{strip,A,B}.{pdf,svg}.
 """
@@ -24,21 +24,24 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "panels"
 OUT.mkdir(exist_ok=True)
 
-SFU_RED = "#A6192E"
+# The poster's pastel palette (common.tex). CANDI's own colour is coral: its
+# predicted tracks, its imputed cells, the model box and panel A's curve.
+CORAL, CORAL_LIGHT = "#D46A5A", "#F4C2B8"
 # (exact text in build_ga.py, replacement); each must match exactly once.
 RECOLOUR = [
+    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{CORAL}", "{CORAL_LIGHT}"'),
     # the cubes: measured threads, and imputed ones in the filled cube
-    ('            return "#12868C", SHADE[face]', f'            return "{SFU_RED}", SHADE[face]'),
-    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', 'TEAL, TEAL_IMP = "#12868C", "#E29AA5"'),
+    ('            return "#12868C", SHADE[face]', '            return "#E8958A", SHADE[face]'),
     # the sliced matrices: measured (dark) and imputed (light) signal
-    ('["#FFFFFF", "#0E7276"]', '["#FFFFFF", "#8A1426"]'),
-    ('["#F4FBFB", "#5FBABD"]', '["#FDF4F5", "#D97A89"]'),
-    ('facecolor="#EDF8F8"', 'facecolor="#FBEDEF"'),
-    # the predicted tracks: imputed assay names, the 95% band and the mean
-    ('color=TEAL if tag else INK', f'color="{SFU_RED}" if tag else INK'),
-    ('color=TEAL, alpha=.26', f'color="{SFU_RED}", alpha=.26'),
-    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color="{SFU_RED}"'),
-    ('Teal names = imputed.', 'Red names = imputed.'),
+    ('["#FFFFFF", "#0E7276"]', '["#FFFFFF", "#D9786B"]'),
+    ('["#F4FBFB", "#5FBABD"]', '["#FFF7F5", "#F0ADA2"]'),
+    ('facecolor="#EDF8F8"', 'facecolor="#FDF1EE"'),
+    ('Teal names = imputed.', 'Coral names = imputed.'),
+    # panel B's four feature sets, and the DNA bases
+    ('SRC = {"Observed": "#7A8B94", "Denoised": "#3F7FB5",\n       "Denoised+Imputed": "#4E9E62", "Latent": "#C0453C"}',
+     'SRC = {"Observed": "#9AA7AF", "Denoised": "#7FAED6",\n       "Denoised+Imputed": "#86C295", "Latent": "#D46A5A"}'),
+    ('DNA_COL = {"A": "#4E9E62", "C": "#3F7FB5", "G": "#E0A93B", "T": "#C0453C"}',
+     'DNA_COL = {"A": "#95CBA2", "C": "#8DB8DE", "G": "#EFCB7E", "T": "#EC9C94"}'),
 ]
 src_path = HERE / "landing" / "build_ga.py"
 src = src_path.read_text()
