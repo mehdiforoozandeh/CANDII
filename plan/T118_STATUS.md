@@ -165,6 +165,11 @@ calls `/project/def-maxwl/mforooz/t118/law_todo.sh <out_dir> <models>`: runs wit
 LAW_DONE, not yet in `<out_dir>/law_submitted.txt`. Row-2 real/ids law runs on K5, nocov and
 twin law on K6. The loop's job ids are copied into the table below.
 
+**2026-09-29 03:27 UTC: the Nibi tunnel dropped** (ssh exit 255; `hpc status`: nibi down). The
+law loop stopped on its first pass before submitting anything (the helper had not run). Nibi work
+is stopped until the PI runs `hpc up nibi`. The jobs already queued keep running on Nibi. On
+resume: rerun the law loop (it finds every scored run not yet in `law_submitted.txt`).
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
