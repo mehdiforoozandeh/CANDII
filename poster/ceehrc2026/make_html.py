@@ -123,7 +123,7 @@ body { background: var(--ground); color: var(--ground-ink);
 .box li + li { margin-top: .15in; }
 .box li::before { content: "•"; color: var(--accent); position: absolute; left: .15em; }
 .poster h2 { color: var(--heading); font-size: var(--head); line-height: 1.2; font-weight: 700;
-  text-wrap: balance; padding-bottom: .08in; border-bottom: 5pt solid var(--accent);
+  letter-spacing: -.01em; text-wrap: balance; padding-bottom: .08in; border-bottom: 5pt solid var(--accent);
   margin-bottom: .3in; }
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
