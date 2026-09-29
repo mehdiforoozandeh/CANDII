@@ -26,17 +26,21 @@ OUT.mkdir(exist_ok=True)
 
 # The poster's pastel palette (common.tex). CANDI's own colour is coral: its
 # predicted tracks, its imputed cells, the model box and panel A's curve.
-CORAL, CORAL_LIGHT = "#D46A5A", "#F4C2B8"
+# Measured and denoised signal is always darker than imputed signal.
+CORAL, CORAL_LIGHT, CORAL_DARK = "#D46A5A", "#F6CFC7", "#C25B4C"
 # (exact text in build_ga.py, replacement); each must match exactly once.
 RECOLOUR = [
     ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{CORAL}", "{CORAL_LIGHT}"'),
     # the cubes: measured threads, and imputed ones in the filled cube
-    ('            return "#12868C", SHADE[face]', '            return "#E8958A", SHADE[face]'),
+    ('            return "#12868C", SHADE[face]', f'            return "{CORAL_DARK}", SHADE[face]'),
     # the sliced matrices: measured (dark) and imputed (light) signal
-    ('["#FFFFFF", "#0E7276"]', '["#FFFFFF", "#D9786B"]'),
-    ('["#F4FBFB", "#5FBABD"]', '["#FFF7F5", "#F0ADA2"]'),
+    ('["#FFFFFF", "#0E7276"]', f'["#FFFFFF", "{CORAL_DARK}"]'),
+    ('["#F4FBFB", "#5FBABD"]', '["#FFF8F6", "#F3BCB2"]'),
     ('facecolor="#EDF8F8"', 'facecolor="#FDF1EE"'),
     ('Teal names = imputed.', 'Coral names = imputed.'),
+    # the predicted tracks: denoised assays dark, imputed ones light
+    ('color=TEAL, alpha=.26', f'color=("{CORAL_DARK}" if not tag else "#EDA69B"), alpha=.26'),
+    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=("{CORAL_DARK}" if not tag else "#EDA69B")'),
     # panel B's four feature sets, and the DNA bases
     ('SRC = {"Observed": "#7A8B94", "Denoised": "#3F7FB5",\n       "Denoised+Imputed": "#4E9E62", "Latent": "#C0453C"}',
      'SRC = {"Observed": "#9AA7AF", "Denoised": "#7FAED6",\n       "Denoised+Imputed": "#86C295", "Latent": "#D46A5A"}'),

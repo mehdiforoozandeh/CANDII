@@ -89,8 +89,7 @@ Denoised+Imputed and Latent settings are robust to input sparsity.}
 \textbf{The shift.} We followed the EIC train-test split: 51 blind-test
 experiments (12 cell types, 8 assays). The train and test sets differ subtly:
 every blind-test experiment is paired-end, against 15\% of training experiments,
-and blind-test tracks sit at an assay-specific signal level (3.3$\times$ H3K4me3,
-1.7$\times$ H3K27ac, 0.9--1.0$\times$ broad marks). CANDI recovers the
+and blind-test tracks sit at an assay-specific signal level. CANDI recovers the
 rank-ordering and structure of the signal but not its absolute magnitude; its raw
 output ranks 14th.
 \par\vspace{0.2in}
@@ -104,9 +103,9 @@ fitted by least squares on the 133 training experiments only. CANDI then ranks
 \textbf{C}\enspace The leaderboard with CANDI added: CANDI is first at 0.179
 (bootstrap range 0.177--0.184), the next entry 0.306.}
 \newcommand{\CapD}{%
-\textbf{D}\enspace Each of the nine measures relative to the baseline, median over
-51 experiments. CANDI is first on genome-wide MSE, Pearson and Spearman, and top 8
-on five more.}
+\textbf{D}\enspace Eight of the nine measures (top-1\%-imputed MSE not shown)
+relative to the baseline, median over 51 experiments. CANDI is first on three and
+top 8 on the rest.}
 
 \newcommand{\TxtRefs}{%
 [1]~Schreiber J, Boix C, \textit{et al.} The ENCODE Imputation Challenge: a critical

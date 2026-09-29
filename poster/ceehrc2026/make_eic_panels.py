@@ -145,7 +145,6 @@ MEAS = [("mse", "MSE, genome-wide", False),
         ("mseenh", "MSE, enhancers", False),
         ("msevar", "MSE, variance-weighted", False),
         ("mse1obs", "MSE, top 1% observed", False),
-        ("mse1imp", "MSE, top 1% imputed", False),
         ("gwcorr", "Pearson r (reversed)", True),
         ("gwspear", "Spearman ρ (reversed)", True)]
 
