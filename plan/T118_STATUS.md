@@ -198,6 +198,16 @@ last 18 run. Law loop restarted 19:28.
 Passes 19:51–20:32: nothing new to send (twin and nocov arrays still queued). **Tunnel dropped a
 third time at 20:55 UTC** (ssh 255; `hpc status`: nibi down). Nibi work stopped.
 
+Tunnel back 21:22 (PI). Twin array 184 of 192 COMPLETED; nocov array still queued behind it. 10
+law tasks failed in seconds, all on node c371, with the known CVMFS "Input/output error" on
+`virtualenv` (22936307_547; 22936365_14, 55, 56, 57, 59, 60, 63, 64, 68). Resubmitted with
+`--exclude=c128,c166,c537,c371`; the law loop now passes that exclude list too. Loop restarted.
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-09-29 21:23 | 22941573 | law retry: row-2 index 547 | K5 |
+| 2026-09-29 21:23 | 22941574 | twin law retry: twin indices 14, 55, 56, 57, 59, 60, 63, 64, 68 | K6 |
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
