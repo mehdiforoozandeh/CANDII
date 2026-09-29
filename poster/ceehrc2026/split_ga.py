@@ -27,7 +27,7 @@ OUT.mkdir(exist_ok=True)
 # The poster's pastel palette (common.tex). Signal is dusty blue: measured and
 # denoised signal is always darker than imputed signal. Coral is CANDI's own
 # colour, kept for the model box title and panel A's curve.
-BLUE, BLUE_LIGHT, BLUE_IMP = "#4F7FAF", "#C5DAEE", "#9DBFE0"
+BLUE, BLUE_LIGHT, BLUE_IMP = "#2C5A88", "#D6E5F4", "#A9C9E8"
 CORAL = "#D46A5A"
 # (exact text in build_ga.py, replacement); each must match exactly once.
 RECOLOUR = [
@@ -36,7 +36,7 @@ RECOLOUR = [
     ('            return "#12868C", SHADE[face]', f'            return "{BLUE}", SHADE[face]'),
     # the sliced matrices: measured (dark) and imputed (light) signal
     ('["#FFFFFF", "#0E7276"]', f'["#FFFFFF", "{BLUE}"]'),
-    ('["#F4FBFB", "#5FBABD"]', '["#F7FAFD", "#A9C8E6"]'),
+    ('["#F4FBFB", "#5FBABD"]', '["#F9FBFE", "#BDD5ED"]'),
     ('facecolor="#EDF8F8"', 'facecolor="#EEF4FA"'),
     ('Teal names = imputed.', 'Blue names = imputed.'),
     # the predicted tracks: denoised assays dark, imputed ones light
