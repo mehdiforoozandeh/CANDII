@@ -36,9 +36,11 @@
   % The title runs the full width to the right margin; the QR code sits at the
   % right end of the author line, below it.
   \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(6.3in,-2.08in)$) {\resizebox{36.9in}{!}{\bfseries\PosterTitle}};
+    at ($(nw)+(6.3in,-1.96in)$) {\resizebox{36.9in}{!}{\bfseries\PosterTitle}};
   \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(6.3in,-3.8in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
+    at ($(nw)+(6.3in,-3.15in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
+  \node[anchor=south west, inner sep=0pt, text=muted]
+    at ($(nw)+(6.3in,-3.9in)$) {\fontsize{38}{44}\selectfont\PosterAffil};
   \node[anchor=south east, inner sep=0pt] at ($(ne)+(-0.8in,-3.9in)$)
     {\qrcode[height=1.74in]{\PosterURL}};
   \node[anchor=south east, inner sep=0pt, text=muted] at ($(ne)+(-2.79in,-3.9in)$)

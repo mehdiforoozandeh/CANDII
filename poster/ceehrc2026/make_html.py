@@ -103,8 +103,10 @@ body { background: var(--ground); color: var(--ground-ink);
   font-size: var(--sfu); font-weight: 400; }
 .title { position: absolute; left: var(--title-x); font-weight: 700; white-space: nowrap;
   line-height: 1.12; }
-.authors { position: absolute; left: var(--title-x); bottom: calc(100% - 3.8in);
+.authors { position: absolute; left: var(--title-x); bottom: calc(100% - 3.15in);
   font-size: var(--authors); line-height: 1; white-space: nowrap; }
+.affil { position: absolute; left: var(--title-x); bottom: calc(100% - 3.9in);
+  font-size: 38pt; line-height: 1; white-space: nowrap; color: var(--muted); }
 /* The QR code at the right end of the author line. */
 .qr-line { position: absolute; right: .8in; bottom: calc(100% - 3.9in); display: flex;
   align-items: flex-end; gap: .25in; font-size: 20.4pt; color: var(--muted); white-space: nowrap; }
@@ -204,8 +206,9 @@ L = page("landscape", 44, 34,
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "36pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
-<div class="title" data-fit="36.9" style="bottom:calc(100% - 2.06in); font-size:100pt">{W['PosterTitle']}</div>
+<div class="title" data-fit="36.9" style="bottom:calc(100% - 1.94in); font-size:100pt">{W['PosterTitle']}</div>
 <div class="authors">{W['PosterAuthors']}</div>
+<div class="affil">{W['PosterAffil']}</div>
 {qr()}""",
          f"""<div class="body" style="grid-template-rows: 16.03in 12.25in; row-gap: .4in">
 <div style="display:grid; grid-template-columns: 11in 30.4in; column-gap: 1in">
