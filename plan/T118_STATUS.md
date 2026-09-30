@@ -207,6 +207,13 @@ law tasks failed in seconds, all on node c371, with the known CVMFS "Input/outpu
 |---|---|---|---|
 | 2026-09-29 21:23 | 22941573 | law retry: row-2 index 547 | K5 |
 | 2026-09-29 21:23 | 22941574 | twin law retry: twin indices 14, 55, 56, 57, 59, 60, 63, 64, 68 | K6 |
+| 2026-09-29 21:23 | 22941577 | law loop: twin indices 174, 175, 177, 179, 180 | K6 |
+
+Law loop passes 21:43 → 06:08 (30 Sep): nothing new scored for about 9 h; the twin's last
+tasks and the whole nocov array stayed queued (TRAINQ 2 throughout). **The tunnel dropped a
+fourth time** (the 14:39 UTC pass on 30 Sep: ssh 255, "Permission denied"). Nibi work stopped. On
+resume: find why the two GPU arrays do not start; if the slice nodes are held, the CPU fallback
+`row2_train_cpu.sh` / `xshuf_train_cpu.sh` is the handoff's rule.
 
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
