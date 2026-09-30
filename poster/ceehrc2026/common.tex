@@ -1,0 +1,133 @@
+% Input by poster_landscape.tex: packages, colours, the panel and box styles,
+% and every sentence on the poster. The layout file sets its page with geometry
+% and its type scale (\bodysize, \capsize, \smallsize, \headsize,
+% \boxtitlesize), then inputs this file. make_html.py reads the sentences too.
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}                 % scalable math at poster sizes
+\usepackage[default]{opensans}
+\usepackage{amsmath,xcolor,graphicx,tikz,qrcode,enumitem}
+\usepackage[most]{tcolorbox}
+\usetikzlibrary{calc}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+\definecolor{sfured}{HTML}{A6192E}
+\definecolor{ink}{HTML}{1B2A32}
+\definecolor{muted}{HTML}{5E6E78}
+% The pastel palette. SFU red is only the header block. Headings are deep slate;
+% the slate-blue accent and the cool fill carry the boxes and rules. The figures
+% use the same family (make_eic_panels.py, split_ga.py): coral for CANDI only,
+% mustard for the baseline, dusty blue for signal, sage and lavender for the rest.
+\definecolor{heading}{HTML}{2E4A62}
+\definecolor{accent}{HTML}{A9BFD3}
+\definecolor{panel}{HTML}{F3F6F9}
+\definecolor{rule}{HTML}{D9E1E8}
+
+\newcommand{\sectionbar}[1]{%
+  {\headsize\bfseries\color{heading}#1\par}\vspace{0.08in}%
+  {\color{accent}\rule{\linewidth}{5pt}}\par\vspace{0.3in}}
+
+% One panel: its graphic, then its one- or two-sentence caption.
+\newcommand{\panel}[3]{% #1 width  #2 graphic  #3 caption
+  \begin{minipage}[t]{#1}
+    \vspace{0pt}
+    \includegraphics[width=\linewidth]{#2}\par\vspace{0.2in}
+    {\capsize\color{ink}\raggedright#3\par}
+  \end{minipage}}
+
+\tcbset{textbox/.style={enhanced, colback=panel, colframe=accent, arc=0.22in,
+  boxrule=4pt, left=0.4in, right=0.4in, top=0.3in, bottom=0.35in,
+  fontupper=\bodysize\color{ink}, before skip=0pt, after skip=0pt}}
+\newcommand{\boxtitle}[1]{{\boxtitlesize\bfseries\color{heading}#1}\par\vspace{0.15in}}
+\setlist[itemize]{leftmargin=1.0em, itemsep=0.15in, topsep=0.05in,
+                  label={\color{accent}\textbullet}}
+
+% ------------------------------------------------------------------ the words --
+\newcommand{\PosterTitle}{Self-supervised confidence-aware denoising imputation of genomic data}
+\newcommand{\PosterAuthors}{Mehdi Foroozandeh, Abdul Rahman Diab, and Maxwell Libbrecht}
+\newcommand{\PosterAffil}{Simon Fraser University, Department of Computing Science}
+\newcommand{\PosterURL}{https://mehdiforoozandeh.github.io/CANDI/}
+
+\newcommand{\TxtProblem}{%
+Epigenomic data form a three-dimensional tensor across assays, cell types and
+genomic positions, with tens to hundreds of assays and thousands of cell types.
+Due to the high cost and complexity of profiling every possible assay in all
+relevant cell and tissue types, this tensor is sparse: most experiments were
+never performed. Epigenome imputation methods aim to predict these missing
+experiments~[1].}
+
+\newcommand{\TxtCandi}{%
+\textbf{C}onfidence-\textbf{A}ware \textbf{N}eural \textbf{D}enoising
+\textbf{I}mputer~[2] is a self-supervised deep learning method for epigenome
+imputation and denoising. It takes raw read counts, DNA sequence and experimental
+covariates, and outputs probability distributions over counts, signal and peaks.
+Conditioning on metadata rather than cell-type embeddings enables zero-shot
+generalization to unseen cell types.}
+
+\newcommand{\TxtFindings}{%
+\begin{itemize}
+  \item CANDI ranks \textbf{1st of 26} on the ENCODE Imputation Challenge.
+  \item CANDI provides calibrated uncertainty estimates.
+  \item CANDI's imputed signals and latent space predict gene expression.
+\end{itemize}}
+
+\newcommand{\HeadStrip}{CANDI schematic workflow}
+\newcommand{\CapStrip}{%
+\textbf{Top:} for each 30\,kb locus, CANDI takes observed read counts with the
+ChIP-seq control, four covariates per assay and the DNA sequence; grey assays were
+never measured, yellow ones are masked. \textbf{Bottom:} each output is a
+probability distribution, here a mean and 95\% interval per assay; window by
+window, they fill every missing thread of the tensor.}
+
+\newcommand{\HeadUtility}{Downstream utility of CANDI}
+\newcommand{\CapA}{%
+\textbf{A}\enspace Confidence calibration for DNase-seq (DND-41): predicted
+confidence level against the fraction of observed data within that interval.}
+\newcommand{\CapB}{%
+\textbf{B}\enspace Gene expression prediction as input assays are removed.
+Denoised+Imputed and Latent settings are robust to input sparsity.}
+
+\newcommand{\HeadEIC}{Fixing the train-test experimental covariate shift in the ENCODE Imputation Challenge}
+\newcommand{\TxtEIC}{%
+\textbf{The shift.} We followed the EIC train-test split: 51 blind-test
+experiments (12 cell types, 8 assays). The train and test sets differ subtly:
+every blind-test experiment is paired-end, against 15\% of training experiments,
+and blind-test tracks sit at an assay-specific signal level. CANDI recovers the
+rank-ordering and structure of the signal but not its absolute magnitude; its raw
+output ranks 14th.
+\par\vspace{0.2in}
+\textbf{The fix.} Per assay, CANDI's output passes through one layer,
+\par\vspace{0.12in}
+\centerline{$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$,}
+\vspace{0.12in}
+fitted by least squares on the 133 training experiments only. CANDI then ranks
+1st.}
+\newcommand{\CapC}{%
+\textbf{C}\enspace The leaderboard with CANDI added: CANDI is first at 0.179
+(bootstrap range 0.177--0.184), the next entry 0.306.}
+\newcommand{\CapD}{%
+\textbf{D}\enspace Eight of the nine measures relative to the baseline, median
+over 51 experiments. CANDI is first on three and
+top 8 on the rest.}
+
+\newcommand{\TxtRefs}{%
+[1]~Schreiber J, Boix C, \textit{et al.} The ENCODE Imputation Challenge: a critical
+assessment of methods for cross-cell type imputation of epigenomic profiles.
+\textit{Genome Biol} 24:79 (2023).\par\vspace{0.1in}
+[2]~Foroozandeh M, Diab AR, Libbrecht M. CANDI: self-supervised, confidence-aware
+denoising imputation of genomic data. \textit{bioRxiv} 2025.01.23.634626 (2025).\par
+\vspace{0.1in}
+Panels C--D: blind-test scoring from the Libbrecht lab's EIC reproduction;
+\emph{baseline} is the challenge's average-activity track.
+The correction was chosen after the challenge results were public; none of it is
+fitted on blind-test data.}
+
+% \Column{name}{width}{height}{content}: a column of fixed height, top-aligned, so
+% \vfill inside it spreads its blocks to the row's height. The build log gets the
+% height the content needs ("POSTER: ... needs"), which is how rows are balanced.
+\newsavebox\PosterCol
+\newcommand{\Column}[4]{%
+  \sbox\PosterCol{\begin{minipage}[t]{#2}\vspace{0pt}#4\end{minipage}}%
+  \typeout{POSTER: #1 needs \the\dimexpr\ht\PosterCol+\dp\PosterCol\relax\space of #3}%
+  \begin{minipage}[t][#3][t]{#2}\vspace{0pt}#4\end{minipage}}
