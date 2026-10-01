@@ -445,3 +445,20 @@ def test_law_grid_draws_a_pair_with_no_finite_crps_blank(dirs, tmp_path):
                         str(d / "qm_curves.json")], capture_output=True, text=True, timeout=400)
     assert p.returncode == 0, p.stderr[-3000:]
     assert (d / "A2" / "figures" / "fig3_law_grid.png").stat().st_size > 10_000
+
+
+def test_report_law_section_skips_a_pair_with_no_finite_crps(dirs, tmp_path):
+    """The law section's per-arm gain means leave out a pair whose model has d = None; the pair
+    count stays; a combination with no finite gain reads n/a."""
+    _, _, tw, _ = dirs
+    d = tmp_path / "none_report"
+    shutil.copytree(tw, d)
+    res = json.loads((d / "results.json").read_text())
+    rows = [r for r in res["law_grid"] if r["rung"] == "A2" and r["metric"] == "crps_all"]
+    before = report.build_report(tw, "A2")
+    rows[0]["d_real"] = None
+    rows[1]["d_ids"] = None
+    (d / "results.json").write_text(json.dumps(res))
+    after = report.build_report(d, "A2")
+    assert "## Law test" in after
+    assert len(after.splitlines()) == len(before.splitlines())

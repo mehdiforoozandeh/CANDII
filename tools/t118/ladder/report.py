@@ -375,12 +375,18 @@ def section_law(res, rung, idx):
                 continue
             acc: dict = {}
             for r in sub:
-                a = acc.setdefault((r["arm_src"], r["arm_tgt"]), {"n": [], "i": [], "id": 0})
-                a["n"].append(r["d_nocov"] - r["d_real"])
-                a["i"].append(r["d_ids"] - r["d_real"])
+                a = acc.setdefault((r["arm_src"], r["arm_tgt"]),
+                                   {"pairs": 0, "n": [], "i": [], "id": 0})
+                a["pairs"] += 1
+                # d = None: no finite CRPS in any seed (an exploding pair); left out of the mean
+                if r["d_nocov"] is not None and r["d_real"] is not None:
+                    a["n"].append(r["d_nocov"] - r["d_real"])
+                if r["d_ids"] is not None and r["d_real"] is not None:
+                    a["i"].append(r["d_ids"] - r["d_real"])
                 a["id"] += bool(r.get("identical_target"))
-            rows = [[s, t, len(v["n"]), F.fmt(float(np.mean(v["n"]))),
-                     F.fmt(float(np.mean(v["i"]))), v["id"]]
+            rows = [[s, t, v["pairs"],
+                     F.fmt(float(np.mean(v["n"]))) if v["n"] else "n/a",
+                     F.fmt(float(np.mean(v["i"]))) if v["i"] else "n/a", v["id"]]
                     for (s, t), v in sorted(acc.items())]
             L += [f"#### {F.GV_NAME[gv]}, {F.SPACE_NAME[space]}", ""]
             L += _table(["source arm", "target arm", "pairs", "gain over no-covariates twin",
