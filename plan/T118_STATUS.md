@@ -215,6 +215,16 @@ fourth time** (the 14:39 UTC pass on 30 Sep: ssh 255, "Permission denied"). Nibi
 resume: find why the two GPU arrays do not start; if the slice nodes are held, the CPU fallback
 `row2_train_cpu.sh` / `xshuf_train_cpu.sh` is the handoff's rule.
 
+Tunnel back 2026-10-01 19:05 (PI). The stall resolved itself while the tunnel was down: nocov
+array 22862752 all 192 COMPLETED, twin array 22862753 all 192 COMPLETED; every law retry
+(22941573, 22941574) and 22941577 COMPLETED; nothing queued. Files: `row2/` 576 SCORE_DONE, 388
+LAW_DONE (384 real/ids + 4 nocov smoke); `row2_xshuf/` 192 SCORE_DONE, 185 LAW_DONE.
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-10-01 19:06 | 23073675 | nocov law: the 188 remaining row-2 nocov runs (exclude c128, c166, c537, c371) | K6 |
+| 2026-10-01 19:06 | 23073676 | twin law: the last 7 twin runs, indices 184–188, 190, 191 | K6 |
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
