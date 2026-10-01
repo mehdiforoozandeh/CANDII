@@ -253,6 +253,18 @@ blank; regression test added; no number changes). Kit **K7** = 220f671 (differs 
 | 2026-10-01 23:09 | 23088152 | aggregate + figures + report, B2 (rerun) | K7 |
 | 2026-10-01 23:09 | 23088156 | D2 (rerun, after 23088152) | K7 |
 
+Both K7 reruns drew all 9 figures, then FAILED in `report.py` section_law on the same `None`
+cells (a second subtraction I had not searched for). Fix 33e09cb (a pair with no finite CRPS is
+left out of that gain's mean; pair count unchanged; `n/a` if none left; reports only). Kit **K8**
+= 33e09cb (differs from K6 only in `figures.py` and `report.py`). Before submitting, all four
+reports were built on the login node from the real `results.json` without writing: all build; a
+fresh A2 report equals the stored one except the `results.json written` timestamp.
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-10-01 23:27 | 23088586 | aggregate + figures + report, B2 (second rerun) | K8 |
+| 2026-10-01 23:27 | 23088588 | D2 (second rerun, after 23088586) | K8 |
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
