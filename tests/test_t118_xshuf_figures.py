@@ -426,3 +426,22 @@ def test_figures_write_the_nine_pngs_for_a2_with_the_twin(dirs):
     pngs = sorted((tw / "A2" / "figures").glob("*.png"))
     assert [q.stem for q in pngs] == sorted(figures.FIG_NAMES)
     assert all(q.stat().st_size > 10_000 for q in pngs)
+
+
+def test_law_grid_draws_a_pair_with_no_finite_crps_blank(dirs, tmp_path):
+    """A law-grid cell whose model has no finite CRPS in any seed (d = None, seen on Nibi for
+    B2 and D2 in p space) is drawn blank; it does not stop the figures."""
+    exe = _mpl_python()
+    out, _, tw, _ = dirs
+    d = tmp_path / "none_cell"
+    shutil.copytree(tw, d)
+    shutil.copy(out / "qm_curves.json", d / "qm_curves.json")
+    res = json.loads((d / "results.json").read_text())
+    rows = [r for r in res["law_grid"] if r["rung"] == "A2"]
+    rows[0]["d_real"] = None
+    rows[1]["d_ids"] = None
+    (d / "results.json").write_text(json.dumps(res))
+    p = subprocess.run([exe, str(LADDER / "figures.py"), str(d), "A2", "--refs-qm",
+                        str(d / "qm_curves.json")], capture_output=True, text=True, timeout=400)
+    assert p.returncode == 0, p.stderr[-3000:]
+    assert (d / "A2" / "figures" / "fig3_law_grid.png").stat().st_size > 10_000

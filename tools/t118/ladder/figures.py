@@ -555,7 +555,9 @@ def fig3_law_grid(ctx, out):
             ident = np.zeros_like(m, dtype=bool)
             for r in by.get((track, gv, space), []):
                 a, b = pos[(r["arm_src"], r["level_src"])], pos[(r["arm_tgt"], r["level_tgt"])]
-                m[a, b] = r[f"d_{tw}"] - r["d_real"]
+                # None = no finite CRPS in any seed (an exploding pair): drawn blank, like no data
+                if r[f"d_{tw}"] is not None and r["d_real"] is not None:
+                    m[a, b] = r[f"d_{tw}"] - r["d_real"]
                 ident[a, b] = bool(r.get("identical_target"))
             mats.append((m, ident))
         vmax = {}
