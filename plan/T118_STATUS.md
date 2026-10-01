@@ -240,6 +240,19 @@ Aggregation chain (`xshuf_agg.sh`, K6, reads row-2 runs + row-1 runs `ladder/run
 | 2026-10-01 22:40 | 23087033 | D2 (after 23087028) | K6 |
 | 2026-10-01 22:40 | 23087035 | grid (after 23087033) | K6 |
 
+A2, C2 and grid COMPLETED (1 344 runs present, 0 missing). B2 and D2 FAILED in `figures.py`
+fig3 (law grid): 4 of 134 016 law-grid cells have no finite CRPS in any of the 3 seeds (`d =
+None`): B2 per-track p space, real g, 3 cells; D2 per-track p space, labels-as-ids twin, 1 cell.
+The aggregation itself finished, so `results.json`, checks and `grid.md` are complete; only the
+B2 and D2 figures and reports were missing. Fix 220f671 (figures only: such a cell is drawn
+blank; regression test added; no number changes). Kit **K7** = 220f671 (differs from K6 only in
+`figures.py`).
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-10-01 23:09 | 23088152 | aggregate + figures + report, B2 (rerun) | K7 |
+| 2026-10-01 23:09 | 23088156 | D2 (rerun, after 23088152) | K7 |
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
