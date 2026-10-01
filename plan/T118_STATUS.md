@@ -265,6 +265,16 @@ fresh A2 report equals the stored one except the `results.json written` timestam
 | 2026-10-01 23:27 | 23088586 | aggregate + figures + report, B2 (second rerun) | K8 |
 | 2026-10-01 23:27 | 23088588 | D2 (second rerun, after 23088586) | K8 |
 
+Both COMPLETED (4:27, 5:39). All four row-2 reports and 9 figures each exist; `grid.md`
+unchanged (md5 3cbf7c40…).
+
+**Delivered 2026-10-01.** Evidence copied to the main checkout's `cruxvault/results/row2/` and
+to the worktree's copy (gitignored; 61 files, 23 MB): `grid.md`, `GRID_SUMMARY.md` (drafted
+readings, check tallies, every cell of rows 1, 2 and the twin with its seed wobble, exploding
+counts), `checks_*.json`, `results_summary.tsv`, `qm_curves.json`, `<rung>/report.md` and
+figures for A–D and A2–D2, and `FIR_PATH.txt`. `results.json` (373 MB with
+`per_pair_rest.jsonl.gz`) stays on Nibi. No hypothesis filed, nothing ticked, no verdict.
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
