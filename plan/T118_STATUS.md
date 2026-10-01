@@ -225,6 +225,21 @@ LAW_DONE (384 real/ids + 4 nocov smoke); `row2_xshuf/` 192 SCORE_DONE, 185 LAW_D
 | 2026-10-01 19:06 | 23073675 | nocov law: the 188 remaining row-2 nocov runs (exclude c128, c166, c537, c371) | K6 |
 | 2026-10-01 19:06 | 23073676 | twin law: the last 7 twin runs, indices 184–188, 190, 191 | K6 |
 
+Both COMPLETED by 22:38 (longest nocov law 2:09:29). Every run is scored and law-tested:
+`row2/` 576 SCORE_DONE / 576 LAW_DONE; `row2_xshuf/` 192 / 192.
+
+Aggregation chain (`xshuf_agg.sh`, K6, reads row-2 runs + row-1 runs `ladder/runs` + twin runs
+`row2_xshuf/runs`, writes `row2/agg/`; refs `rungs_v2/rungs_v2.tsv`; each after the previous with
+`afterany`):
+
+| submitted (UTC) | job | what | kit |
+|---|---|---|---|
+| 2026-10-01 22:40 | 23087020 | aggregate + figures + report, A2 | K6 |
+| 2026-10-01 22:40 | 23087026 | B2 (after 23087020) | K6 |
+| 2026-10-01 22:40 | 23087028 | C2 (after 23087026) | K6 |
+| 2026-10-01 22:40 | 23087033 | D2 (after 23087028) | K6 |
+| 2026-10-01 22:40 | 23087035 | grid (after 23087033) | K6 |
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
