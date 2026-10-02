@@ -7,7 +7,7 @@ parent: root
 status: open
 stale: false
 created: "2026-09-01T02:16:11"
-updated: "2026-09-01T02:16:11"
+updated: "2026-10-02T12:29:01"
 ---
 
 # q1 — Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?
@@ -47,14 +47,15 @@ Locked before any run under this question:
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+Drafted 2026-10-02; not judged. The main claim, one g(C, C′) per pair, has drafted readings in its report (2026-09-25). An exploratory second row, where g also reads the bin's own value, ran on 2026-10-01. Its drafted readings are under [[q4_how_much_capacity_does_a_covariate_condi|the capacity question]]. The main claim still chooses its design on chr22 from row 1 only.
 
 <!-- crux:ledger:start -->
-**5 children** · ideas 0/2 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0) · sub-questions 0/3 resolved
+**6 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0) · sub-questions 0/3 resolved
 
 - `h1` [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
 - `h2` [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+- `h15` [[h15_one_transformation_conditioned_on_the_so|A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates]] — *running*
 - `q2` _(Q)_ [[q2_do_the_covariates_that_record_which_read|Do the covariates that record which reads entered the treatment pileup carry enough information to map a track across a change in one of them?]] — *open*
 - `q3` _(Q)_ [[q3_do_the_covariates_that_record_how_the_co|Do the covariates that record how the control and the peak caller were configured carry enough information to map the p-value track across a change in one of them?]] — *open*
-- `q4` _(Q)_ [[q4_how_much_capacity_does_a_covariate_condi|How much capacity does a covariate-conditioned transformation need before it closes the gap that a covariate-free monotone map leaves?]] — *open*
+- `q4` _(Q)_ [[q4_how_much_capacity_does_a_covariate_condi|How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?]] — *open*
 <!-- crux:ledger:end -->
