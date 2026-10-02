@@ -275,6 +275,39 @@ counts), `checks_*.json`, `results_summary.tsv`, `qm_curves.json`, `<rung>/repor
 figures for A–D and A2–D2, and `FIR_PATH.txt`. `results.json` (373 MB with
 `per_pair_rest.jsonl.gz`) stays on Nibi. No hypothesis filed, nothing ticked, no verdict.
 
+**2026-10-02: lab deck, vault update, follow-up tasks.**
+
+- **Lab deck** (26 slides; motivation, background, method, results, discussion), published at
+  https://claude.ai/artifact/1mFz6C5jLaG1Ctc8JN572C (private until the PI shares it; version 4).
+  Source in `cruxvault/presentations/t118-grid/`: `deck_src.html` (slides and chart code),
+  `build_deck.py` (embeds the numbers from `cruxvault/results/row2/` and writes `index.html`),
+  `snippet.json` (a real 10 kb H3K27ac snippet, chr19:12,732,350–12,742,350, read from the t112
+  products on Nibi). To edit: change `deck_src.html`, run `python
+  cruxvault/presentations/t118-grid/build_deck.py`, then republish `index.html` to the same URL.
+  Pointer file: `cruxvault/results/row2/DECK.md` (gitignored). PI edits applied after review:
+  slide 16 has dividers and a note that each dot pools all knobs (one g per track only); slide 19
+  labels each mark class under every group; slide 22 has plain row labels (which twin, seen or
+  unseen pairs) and no "beats the design to its left" row.
+- **Vault** (commits 75c67e2, 844f5d1, 887dd06): the capacity question (q4) and the covariates
+  question (q1) carry a drafted, exploratory row-2 reading; h12, h17, h13, h14 and h15 link the
+  row-2 evidence under `## Artifacts`; t118 and t120 have `## Progress` sections. No tick, verdict,
+  close, accept or done mark.
+- **New tasks** under t118 (PI yes, 2026-10-02): t122 hand-check the depth-law computation; t123
+  diagnose design D's p-space explosion; t124 a principled fix for the p-space explosion. The id
+  t121 was skipped because `visualization/t121-ceehrc-poster` already uses it.
+- **Not filed** (PI: wait): a question under q4, "Does letting g read the bin's own value change how
+  expressive f must be?" Wait until the p-space fix lands, then test on fresh data.
+- **Cockpit:** `crux serve` on http://localhost:8787 now serves this worktree's vault
+  (`--dir .../worktrees/counterfactual-f/cruxvault`), not the main checkout, so the branch's vault
+  changes show. After the merge, restart it from the main checkout's `cruxvault/`.
+- **Depth law, from the deck review:** the PI asked why f does not follow the depth law by
+  construction. Answer: in t118 the count-space f has no log-depth offset (log μ = a + b·log(1 + X)
+  in A; depth is only one z-scored input of g, `tools/t118/ladder/encoding.py`), by design, so the
+  covariates must carry the depth effect. Candidate reasons it misses: few depth examples and
+  arm → arm ratios never trained; a per-bin NB loss dominated by low bins; a pure scale is not a
+  shift in log(1 + X); or a wrong computation (t122). Offered, not decided: a variant with a
+  built-in log-depth offset, as a ceiling.
+
 | submitted (UTC) | job | what | kit |
 |---|---|---|---|
 | 2026-09-29 01:04 | 22862749 | nocov law smoke, indices 66, 138, 498, 570 (`row2_law.sh`) | K6 |
@@ -461,3 +494,6 @@ test up to ~2 h on 8 CPU cores; aggregation 2–4 min; design X on 16 CPU cores 
 - The principled fix for the p-space explosion (see above), and whether design X should become a
   pre-registered design.
 - Ticks, verdicts (`crux close`), accepting the task, merging — none done.
+- Whether to add a count-space variant with a built-in log-depth offset, as a depth-law ceiling
+  (offered 2026-10-02, not decided).
+- Sharing the lab deck link with the lab (only the PI can share it).

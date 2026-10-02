@@ -415,7 +415,7 @@
         <div class="item"><span class="ln" style="border-color:var(--ns)"></span>do nothing (X′ = X)</div>
         <div class="item"><span class="ln" style="border-color:var(--qm)"></span>QuantileMatching, which reads no settings</div>
       </div>
-      <p class="note">One g per track · CRPS on all bins, chr19 + chr21 · dot = mean of 3 seeds, bar = seed range · lower is better. The x-axes do not start at 0.</p>
+      <p class="note">No single knob: each dot pools every trained pair (all knobs, base → arm and arm → base). One g per track · CRPS on all bins, chr19 + chr21 · dot = mean of 3 seeds, bar = seed range · lower is better. The x-axes do not start at 0.</p>
     </div>
   </section>
 
@@ -524,9 +524,9 @@
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Results</span>finding 4 · all checks</div>
-      <h2>Row 2 still uses the settings: every design beats its no-covariates twin in counts</h2>
+      <h2>Row 2 still uses the settings, at least in counts</h2>
       <div class="fig tall" id="figChecks"></div>
-      <p class="note">Each cell = how many of 12 settings meet the check (3 mark classes × 2 versions of g × 2 metrics: all bins and top 1%). Gain must exceed 2 × the larger seed wobble. Grey = the check does not apply.</p>
+      <p class="note">Seen pairs = trained base ↔ arm pairs, scored on held-out chromosomes. Unseen pairs = the law test (arm → arm, never trained). Each cell = how many of 12 settings meet the check (3 mark classes × 2 versions of g × 2 metrics: all bins and top 1%). "Better" = the gain is larger than 2 × the seed wobble. Grey = does not apply (row 1 has no shuffled-bin twin).</p>
     </div>
   </section>
 
@@ -1004,6 +1004,7 @@ function figOverview(){
   CLASSES.forEach((c,ci)=>{
     const x0=lx+ci*(pw+gap),[a,b]=ranges[c],xx=v=>x0+(Math.min(Math.max(v,a),b)-a)/(b-a)*pw;
     s+=T(x0+pw/2,top-14,c,'ptitle','middle');
+    if(ci>0) s+=L(x0-gap/2,top-30,x0-gap/2,top+rowH*4+30,COL.axis,2);
     for(let k=0;k<=4;k++){const v=a+(b-a)*k/4;s+=L(xx(v),top,xx(v),top+rowH*4,COL.grid,1)+T(xx(v),top+rowH*4+22,v.toFixed(c==='DNase'?1:2),'tick','middle');}
     const ref=DATA.refs['counts|'+c];
     s+=L(xx(ref.ns),top-4,xx(ref.ns),top+rowH*4,COL.ns,2.5,'7 5')+L(xx(ref.qm),top-4,xx(ref.qm),top+rowH*4,COL.qm,2.5,'7 5');
@@ -1071,7 +1072,7 @@ function figWhyA(){
 
 /* ---------- 19 · % change row2 vs row1 ---------- */
 function figDelta(){
-  const W=1160,H=430;let s='';
+  const W=1160,H=470;let s='';
   const x0=110,w=1000,top=30,h=320,ylo=-80,yhi=20;
   const yy=v=>top+(yhi-v)/(yhi-ylo)*h;
   for(let v=ylo;v<=yhi;v+=20){s+=L(x0,yy(v),x0+w,yy(v),v===0?COL.axis:COL.grid,v===0?2:1)+T(x0-12,yy(v)+5,(v>0?'+':'')+v+'%','tick','end');}
@@ -1079,7 +1080,10 @@ function figDelta(){
   s+=T(x0+w-6,yy(-74),'better ↓','cap','end')+T(x0+w-6,yy(14),'worse ↑','cap','end');
   ['A','B','C','D'].forEach((r,ri)=>{
     const gx=x0+w*(ri+0.5)/4;
-    s+=T(gx,top+h+34,r+' → '+r+'2','ptitle','middle');
+    s+=T(gx,top+h+72,r+' → '+r+'2','ptitle','middle');
+    CLASSES.forEach((c,ci)=>{const xa=gx-100+ci*80-12,xb=gx-100+ci*80+40+12;
+      if(ci%2===0) s+=R(xa,top,xb-xa,h,COL.grid,'none',4).replace('fill:var(--grid)','fill:var(--grid);fill-opacity:.55');
+      s+=L(xa+3,top+h+14,xb-3,top+h+14,COL.faint,1.5)+T((xa+xb)/2,top+h+36,c,'tick','middle','style="font-size:15px;fill:var(--muted)"');});
     let k=0;
     CLASSES.forEach((c,ci)=>['per_track','across'].forEach((g,gi)=>{
       const [m1,w1]=cell(r,g,'counts','real',c,'crps_all'),[m2,w2]=cell(r+'2',g,'counts','real',c,'crps_all');
@@ -1088,7 +1092,6 @@ function figDelta(){
       const fill=beyond?(m2<m1?COL.row2:COL.accent):'none',stroke=beyond?'none':COL.muted;
       s+=gi===0?Ci(x,y,9,fill,stroke,2.2):R(x-8,y-8,16,16,fill,stroke,2,2.2);
       if(Math.abs(pct)>8) s+=T(x+(pct<0?0:0),y+(pct<0?28:-14),Math.round(pct)+'%','val','middle',`style="fill:${beyond?(m2<m1?'var(--row2)':'var(--accent)'):'var(--muted)'}"`);
-      if(ri===0) s+=T(x,top+h+58,c==='DNase'?'DN':c==='narrow'?'nar':'brd','cap','middle');
     }));
   });
   s+=Ci(x0+w-300,H-10,7,'none',COL.muted,2)+T(x0+w-288,H-5,'one g per track','cap')+R(x0+w-160,H-17,14,14,'none',COL.muted,2,2)+T(x0+w-140,H-5,'one g across','cap');
@@ -1145,11 +1148,12 @@ function figSigma(){
 
 /* ---------- 22 · checks heatmap ---------- */
 function figChecks(){
-  const W=1160,H=440;let s='';
-  const rows=[['beatstwin','beats the no-covariates twin'],['lawtest_nocov','law test vs no-covariates twin'],['lawtest_ids','law test vs labels-as-ids twin'],
-    ['beatsbelow','beats the design to its left'],['beatsrow1','beats its row-1 design'],['beatsxshuf','beats the shuffled-bin twin'],['lawtest_xshuf','law test vs shuffled-bin twin']];
+  const W=1210,H=390;let s='';
+  const rows=[['beatstwin','better than no-covariates twin · seen pairs'],['lawtest_nocov','better than no-covariates twin · unseen pairs'],
+    ['lawtest_ids','better than labels-as-ids twin · unseen pairs'],['beatsxshuf','better than shuffled-bin twin · seen pairs'],
+    ['lawtest_xshuf','better than shuffled-bin twin · unseen pairs'],['beatsrow1','row 2 better than its row-1 design · seen pairs']];
   const des=['A','B','C','D','A2','B2','C2','D2'];
-  const lx=330,cw=48,rh=44,top=70;
+  const lx=410,cw=45,rh=46,top=70;
   ['counts','pval'].forEach((sp,si)=>{
     const x0=lx+si*(cw*8+40);
     s+=T(x0+cw*4,24,sp==='counts'?'counts':'−log10 p','ptitle','middle');
