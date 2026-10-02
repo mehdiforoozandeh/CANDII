@@ -7,7 +7,7 @@ parent: q1
 status: open
 stale: false
 created: "2026-09-17T21:46:17"
-updated: "2026-09-25T12:00:00"
+updated: "2026-10-02T12:29:01"
 ---
 
 # q4 — How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?
@@ -29,7 +29,13 @@ Locked before any run: every rung is compared to its own scrambled-covariate twi
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+Drafted 2026-10-02; exploratory (outside the pre-registered ladder), not judged. In row 2, g also reads the bin's value x, so f changes per bin. Its shuffled-bin twin reads x from a random bin of the same chromosome. Numbers: `results/row2/GRID_SUMMARY.md`; ± is the seed wobble, the largest difference between two of 3 seeds.
+
+- Counts: reading x fixes design A. One g per track, DNase CRPS as oracle-scaled + scale error (the part an ideal rescale removes): A 3.06 ± 0.11 = 1.36 + 1.7; A2 0.849 ± 0.009 = 0.8368 + 0.0121; twin 3.02 ± 0.0442 = 1.339 + 1.682. So the gain needs the bin's own value. B, C and D change little, except C2 on DNase.
+- −log10 p: row 2, A2 included, has more (pair, seed) records with CRPS above 20 than row 1; the twin has no more than row 1. The spec predicted that A2 would likely remove them. Some row-2 means reach 10³–10⁶, with wobbles as large.
+- Every row-2 design beats its no-covariates twin in counts in 10–12 of 12 cells. The depth law stays unmet (B2: 1 of 6 cells).
+
+Open: a principled fix for the p-space explosion (the PI rejected capping σ and report-only); a hand check of the depth-law computation; why design D explodes without knots; [[t119_rebuild_the_two_dnase_mapq_arms_c12|the DNase MAPQ-arm rebuild]].
 
 <!-- crux:ledger:start -->
 **5 children** · ideas 0/5 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)

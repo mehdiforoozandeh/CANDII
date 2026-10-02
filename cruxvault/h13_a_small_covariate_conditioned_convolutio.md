@@ -74,6 +74,9 @@ _(none yet)_
 - results/h13/figures/fig3_law_grid.png law test: never-trained arm → arm pairs
 - results/h13/figures/fig5_learned_f.png the learned f made visible
 - results/h13/FIR_PATH.txt Nibi run and aggregation directory
+- [Row 2, design C2 (a kernel and curve chosen per bin; g also reads the bin's value): report, exploratory 2026-10-01, not a test of these checks](results/row2/C2/report.md)
+- [Row 2, design C2: drafted checks, including against its row-1 design and its shuffled-bin twin](results/row2/checks_C2.json)
+- results/row2/C2/figures/fig1_ladder.png row 2, design C2: CRPS by model, class and space
 
 ## Findings
 

@@ -75,6 +75,9 @@ _(none yet)_
 - results/h17/figures/fig4_depth_law.png depth law: predicted count scale against the depth ratio
 - results/h17/figures/fig5_learned_f.png g's curve per arm over QuantileMatching's per-pair curve
 - results/h17/FIR_PATH.txt Nibi run and aggregation directory
+- [Row 2, design B2 (the 12-knot curve chosen per bin; g also reads the bin's value): report, exploratory 2026-10-01, not a test of these checks](results/row2/B2/report.md)
+- [Row 2, design B2: drafted checks, including against its row-1 design and its shuffled-bin twin](results/row2/checks_B2.json)
+- results/row2/B2/figures/fig1_ladder.png row 2, design B2: CRPS by model, class and space
 
 ## Findings
 

@@ -82,6 +82,9 @@ _(none yet)_
 - [Main claim: which design is judged, and its drafted readings](results/h15/report.md)
 - [Checks of the chosen designs, with shuffle and swap](results/h15/checks_main.json)
 - results/h15/results_summary.tsv every run's scores per track and class
+- [Row 1, row 2 and the shuffled-bin twin: every cell and the drafted readings (exploratory 2026-10-01; the design this claim judges is still chosen from row 1)](results/row2/GRID_SUMMARY.md)
+- [The 2 × 4 grid with both metrics and the noSolution and QuantileMatching references](results/row2/grid.md)
+- results/row2/FIR_PATH.txt Nibi paths of the row-2 runs, the twin runs and the aggregate
 
 ## Findings
 

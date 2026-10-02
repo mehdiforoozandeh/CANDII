@@ -73,6 +73,9 @@ _(none yet)_
 - results/h12/figures/fig4_depth_law.png depth law: predicted count scale against the depth ratio
 - results/h12/figures/fig7_snippets.png 10 kb track snippets, fixed locus rule
 - results/h12/FIR_PATH.txt Nibi run and aggregation directory
+- [Row 2, design A2 (the affine map chosen per bin; g also reads the bin's value): report, exploratory 2026-10-01, not a test of these checks](results/row2/A2/report.md)
+- [Row 2, design A2: drafted checks, including against its row-1 design and its shuffled-bin twin](results/row2/checks_A2.json)
+- results/row2/A2/figures/fig1_ladder.png row 2, design A2: CRPS by model, class and space
 
 ## Findings
 

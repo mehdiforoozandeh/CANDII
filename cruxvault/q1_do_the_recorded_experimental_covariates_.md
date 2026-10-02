@@ -7,7 +7,7 @@ parent: root
 status: open
 stale: false
 created: "2026-09-01T02:16:11"
-updated: "2026-09-01T02:16:11"
+updated: "2026-10-02T12:29:01"
 ---
 
 # q1 — Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?
@@ -47,7 +47,7 @@ Locked before any run under this question:
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+Drafted 2026-10-02; not judged. The main claim, one g(C, C′) per pair, has drafted readings in its report (2026-09-25). An exploratory second row, where g also reads the bin's own value, ran on 2026-10-01. Its drafted readings are under [[q4_how_much_capacity_does_a_covariate_condi|the capacity question]]. The main claim still chooses its design on chr22 from row 1 only.
 
 <!-- crux:ledger:start -->
 **6 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0) · sub-questions 0/3 resolved
