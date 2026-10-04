@@ -1,8 +1,8 @@
 % CEEHRC 2026 poster, landscape: 44 in wide x 34 in high (ANSI E), inside the
 % conference's 44 x 44 in limit.
 %
-% Two rows of two columns. Row 1: the three text boxes | the schematic workflow.
-% Row 2: downstream utility and the references | the challenge section. The
+% Two rows of two columns. Row 1: the two text boxes and the references | the
+% schematic workflow. Row 2: downstream utility | the challenge section. The
 % row heights are set by the right column; the log lines "POSTER: ... needs" say
 % how much each column needs.
 % Build: bash build.sh
@@ -17,12 +17,12 @@
 \input{common}
 
 % Row 1 gives the schematic the width; row 2 gives panels A and B more.
-\newcommand{\LeftW}{11.0in}
-\newcommand{\RightW}{30.4in}
+\newcommand{\LeftW}{9.8in}
+\newcommand{\RightW}{31.6in}
 \newcommand{\LeftWTwo}{13.0in}
 \newcommand{\RightWTwo}{28.4in}
-\newcommand{\RowOne}{16.03in}
-\newcommand{\RowTwo}{12.25in}
+\newcommand{\RowOne}{16.65in}
+\newcommand{\RowTwo}{11.65in}
 
 \begin{document}
 % ============================================================ header ==========
@@ -49,8 +49,9 @@
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%
   \begin{tcolorbox}[textbox]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox]\boxtitle{CANDI}\TxtCandi\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
+  \begin{tcolorbox}[textbox]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}\vfill
+  {\color{rule}\rule{\linewidth}{3pt}}\par\vspace{0.25in}
+  {\smallsize\color{muted}\TxtRefs\par}}\hfill
 \Column{row 1 right}{\RightW}{\RowOne}{%
   \sectionbar{\HeadStrip}
   \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
@@ -59,12 +60,9 @@
 \vspace{0.4in}
 % ============================================================ row 2 ===========
 \Column{row 2 left}{\LeftWTwo}{\RowTwo}{%
-  \sectionbar{\HeadUtility}
+  \sectionbar{\HeadUtility}\vfill
   \panel{6.25in}{panels/ga_A.pdf}{\CapA}\hfill
-  \panel{6.25in}{panels/ga_B.pdf}{\CapB}\par
-  \vfill
-  {\color{rule}\rule{\linewidth}{3pt}}\par\vspace{0.25in}
-  {\smallsize\color{muted}\TxtRefs\par}}\hfill
+  \panel{6.25in}{panels/ga_B.pdf}{\CapB}\par\vfill}\hfill
 \Column{row 2 right}{\RightWTwo}{\RowTwo}{%
   \sectionbar{\HeadEIC}
   \panel{11.4in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill

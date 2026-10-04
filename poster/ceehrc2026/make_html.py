@@ -201,12 +201,12 @@ L = page("landscape", 44, 34,
 <div class="authors">{W['PosterAuthors']}</div>
 <div class="affil">{W['PosterAffil']}</div>
 {qr()}""",
-         f"""<div class="body" style="grid-template-rows: 16.03in 12.25in; row-gap: .4in">
-<div style="display:grid; grid-template-columns: 11in 30.4in; column-gap: 1in">
+         f"""<div class="body" style="grid-template-rows: 16.65in 11.65in; row-gap: .4in">
+<div style="display:grid; grid-template-columns: 9.8in 31.6in; column-gap: 1in">
 <div class="col" style="justify-content: space-between">
 {box("The problem", W['TxtProblem'])}
-{box("CANDI", W['TxtCandi'])}
 {box("Key findings", W['TxtFindings'])}
+{refs()}
 </div>
 <div class="col"><h2>{W['HeadStrip']}</h2>
 <img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">
@@ -214,8 +214,9 @@ L = page("landscape", 44, 34,
 </div>
 <div style="display:grid; grid-template-columns: 13in 28.4in; column-gap: 1in">
 <div class="col"><h2>{W['HeadUtility']}</h2>
+<div class="fill"></div>
 <div class="row">{fig('ga_A', 6.25, W['CapA'])}{fig('ga_B', 6.25, W['CapB'])}</div>
-<div class="fill"></div>{refs()}</div>
+<div class="fill"></div></div>
 <div class="col"><h2>{W['HeadEIC']}</h2>
 <div class="row">{fig('eic_leaderboard_landscape', 11.4, W['CapC'])}
 {fig('eic_measures_landscape', 16.4, W['CapD'])}</div></div>

@@ -47,8 +47,10 @@ RECOLOUR = [
     # the predicted tracks: denoised assays dark red, imputed ones salmon
     ('color=TEAL, alpha=.26', 'color=(TEAL if not tag else TEAL_IMP), alpha=(.28 if not tag else .30)'),
     ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=(TEAL if not tag else TEAL_IMP), alpha=(1 if not tag else {IMP_ALPHA})'),
-    # the signal head's output passes through the per-assay output layer; the
-    # line under the heads moves left of that arrow, the closing text moves down
+    # the signal head's output passes through the per-assay output layer, with
+    # the average-activity track (mustard, as in panels C and D) as its second
+    # input; the line under the heads moves left of the arrow, the closing text
+    # moves down
     ("""axm.text(.5, .314, "a distribution at every position", fontsize=6.3,
          color=MUTED, ha="center", va="top", transform=axm.transAxes)""",
      """axm.text(.44, .336, "a distribution\\nat every position", fontsize=6.3,
@@ -56,9 +58,14 @@ RECOLOUR = [
 down(.5, .348, .266)
 axm.text(.56, .336, "per assay", fontsize=6.3, color=MUTED, ha="left", va="top",
          transform=axm.transAxes)
-mbox(.07, .93, .176, .262, "max(β₀ + β₁·CANDI", "+ β₂·average-activity, 0)", "#FFFFFF",
+mbox(.31, .97, .176, .262, "max(β₀ + β₁·CANDI", "+ β₂·average-activity, 0)", "#FFFFFF",
      fs=6.9, ec=TEAL, tc=TEAL, sub_fs=6.9)
-axm.text(.5, .164, "final signal", fontsize=6.3, color=MUTED, ha="center", va="top",
+mbox(.03, .21, .184, .254, "average-", "activity", "#FFFFFF", fs=6.3, ec="#E2B35C",
+     tc="#7A5A14", sub_fs=6.3)
+axm.add_patch(FancyArrowPatch((.218, .219), (.305, .219), transform=axm.transAxes,
+                              arrowstyle="-|>", mutation_scale=9, lw=1.0, color=MUTED,
+                              zorder=3))
+axm.text(.64, .164, "final signal", fontsize=6.3, color=MUTED, ha="center", va="top",
          transform=axm.transAxes)"""),
     ('axm.text(.5, .258, "Self-supervised.', 'axm.text(.5, .112, "Self-supervised.'),
     # CANDI's own colour: the model box title bar and panel A's curve

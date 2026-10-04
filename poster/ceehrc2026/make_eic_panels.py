@@ -214,7 +214,7 @@ def measures(stem, w, h, fs):
 
 
 # (leaderboard w, h), (measures w, h), panel text size in pt.
-SIZES = {"_landscape": ((11.4, 9.24), (16.4, 9.24), 22)}
+SIZES = {"_landscape": ((11.4, 8.8), (16.4, 8.8), 22)}
 for suffix, (lb, me, fs) in SIZES.items():
     leaderboard(f"eic_leaderboard{suffix}", *lb, fs)
     measures(f"eic_measures{suffix}", *me, fs)
