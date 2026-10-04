@@ -15,11 +15,18 @@ github.com/mlibbrecht/2026-07-26_epi_imputation (main, 2026-09-28):
                                       experiment (commit 5218f31a); the Pearson r
                                       panel reads gwcorr, common grid, all 23
                                       chromosomes
+  skill_shifted.csv              029  each entry's skill as submitted ("none") and
+                                      after the same three-parameter correction
+                                      ("pilot": [1, prediction, Average] fitted on
+                                      chr22 of each blind experiment, scored on the
+                                      other 22 chromosomes); 0 = the baseline with
+                                      its positions scrambled, 1 = the baseline
+                                      (commit 0ed50ce, 2026-09-07)
 
 "CANDI" means CANDI + the training-side output correction (025's `candi.tcfloor`)
 everywhere.
 
-Writes panels/eic_{pearson,leaderboard,measures}_landscape.{pdf,svg} for
+Writes panels/eic_{pearson,skill,measures}_landscape.{pdf,svg} for
 poster_landscape.tex, drawn at the size they are printed at, so a point here is a
 point there.
 """
@@ -85,8 +92,6 @@ def width_in(fig, text):
     return text.get_window_extent(fig.canvas.get_renderer()).width / fig.dpi
 
 
-tc = pd.read_csv(DATA / "leaderboard_candi.tcfloor.csv")
-assert len(tc) == 26
 # Not plotted; these are the numbers the section text quotes, printed so a rebuild
 # shows them beside the figures.
 raw = pd.read_csv(DATA / "leaderboard_candi.none.csv")
@@ -96,43 +101,77 @@ print(f"[text] CANDI as it comes: {r0.position} of {len(raw)}, score {r0.score_m
       f"correction: {coef.shape[0]} assays x 3 = {3 * coef.shape[0]} numbers, "
       f"fitted on {sorted(set(coef.n_train))} training experiments per assay")
 
-# ================================================================ leaderboard ==
-def leaderboard(stem, w, h, fs):
+# ====================================================================== skill ==
+def skill(stem, w, h, fs):
+    """Each entry's skill as submitted (filled dot) and after the same correction
+    (open dot), best-corrected first. CANDI's "as submitted" is CANDI + its own
+    training-side correction (tcfloor), as everywhere on the poster."""
+    t = pd.read_csv(DATA / "skill_shifted.csv")
+    sk = t.pivot_table(index="entry", columns="rung", values="skill")
+    sk.loc[CANDI, "none"] = sk.loc["CANDI + tcfloor", "tcfloor"]
+    d = sk.drop(index="CANDI + tcfloor")[["none", "pilot"]].dropna()
+    d = d.sort_values("pilot", ascending=False)
+    assert len(d) == 26 and d.index[0] == CANDI
+    asb = int((d.none > d.loc[CANDI, "none"]).sum()) + 1
+    print(f"[B] CANDI skill {d.loc[CANDI, 'none']:.2f} as submitted ({asb} of 26), "
+          f"{d.loc[CANDI, 'pilot']:.2f} after the correction (1 of 26); the next "
+          f"after it: {d.pilot.iloc[1]:.2f}; every entry improves: "
+          f"{bool((d.pilot > d.none).all())}")
     fig = plt.figure(figsize=(w, h))
     ax = fig.add_axes([0.5, 0.1, 0.4, 0.8])
     lab_tr = blended_transform_factory(fig.transFigure, ax.transData)
-    n = len(tc)
+    n, lo, hi = len(d), 0.4, 1.5
     ys = np.arange(n)[::-1]
-    rank_x = 0.05 + 0.9 * fs / 72            # right edge of the rank column, in
+    rank_x = 0.05 + 0.9 * fs / 72
     names = []
-    for y, r in zip(ys, tc.itertuples()):
-        c, big = colour(r.team), r.team in (CANDI, AVG)
-        ax.plot([r.score_lb, r.score_ub], [y, y], color=c, lw=5 if big else 3,
-                solid_capstyle="round", zorder=3)
-        ax.plot([r.score_mean], [y], "o", ms=0.75 * fs if big else 0.45 * fs,
-                color=c, zorder=4)
+    for k, (y, (team, r)) in enumerate(zip(ys, d.iterrows()), start=1):
+        c, big = colour(team), team in (CANDI, AVG)
+        x0 = max(r.none, lo)
+        ax.add_patch(FancyArrowPatch((x0, y), (r.pilot, y), arrowstyle="-|>",
+                                     mutation_scale=0.9 * fs, lw=3 if big else 2,
+                                     color=c, alpha=0.6, shrinkA=0.3 * fs,
+                                     shrinkB=0.25 * fs, zorder=2))
+        ax.plot([x0], [y], "<" if r.none < lo else "o",
+                ms=0.6 * fs if big else 0.42 * fs, color=c, zorder=4, clip_on=False)
+        ax.plot([r.pilot], [y], "o", ms=0.6 * fs if big else 0.42 * fs, mfc="white",
+                mec=c, mew=0.12 * fs, zorder=4)
         kw = dict(fontsize=fs - 4, va="center", color=INK if big else MUTED,
                   fontweight="bold" if big else "normal", transform=lab_tr)
-        ax.text(rank_x / w, y, str(r.position), ha="right", **kw)
-        names.append(ax.text((rank_x + 0.2 * fs / 72) / w, y, name(r.team),
+        ax.text(rank_x / w, y, str(k), ha="right", **kw)
+        names.append(ax.text((rank_x + 0.2 * fs / 72) / w, y, name(team),
                              ha="left", **{**kw, "color": c if big else MUTED}))
     fig.canvas.draw()
     left = rank_x + 0.2 * fs / 72 + max(width_in(fig, t) for t in names) + 0.25
-    bottom, top, right = 2.9 * fs / 72, 0.12, 0.25
+    bottom, top, right = 5.4 * fs / 72, 0.12, 0.25
     ax.set_position([left / w, bottom / h, 1 - (left + right) / w, 1 - (bottom + top) / h])
-    r1 = tc.iloc[0]
-    ax.text(r1.score_mean + 0.012, n - 1, f"{r1.score_mean:.3f}", fontsize=fs - 4,
-            color=TEAL, fontweight="bold", va="center")
+    ax.text(d.loc[CANDI, "pilot"] + 0.025, n - 1, f"{d.loc[CANDI, 'pilot']:.2f}",
+            fontsize=fs - 4, color=TEAL, fontweight="bold", va="center")
+    ax.axvline(1.0, color=BASE, lw=2.4, ls=(0, (5, 4)), zorder=1)
     ax.set_ylim(-0.8, n - 0.2)
-    ax.set_xlim(0.15, 0.52)
+    ax.set_xlim(lo, hi)
+    ax.set_xticks([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])
     ax.set_yticks([])
-    for s in ("left", "top", "right"):
-        ax.spines[s].set_visible(False)
+    for s_ in ("left", "top", "right"):
+        ax.spines[s_].set_visible(False)
     ax.tick_params(axis="x", labelsize=fs - 4, colors=INK)
     ax.grid(axis="x", ls="--", lw=1.4, color="#C9CFD3", zorder=0)
-    # Right-aligned to the axis, so on a narrow panel it runs on under the names.
-    fig.text(1 - right / w, 0.12 / h, "challenge ranking statistic (lower = better)",
+    fig.text(1 - right / w, 2.55 * fs / 72 / h,
+             "skill  (1 = the baseline; higher = better)",
              fontsize=fs - 2, color=INK, ha="right", va="bottom")
+    yk = 0.9 * fs / 72 / h                       # the key, right-aligned
+    t2 = fig.text(1 - right / w, yk, "after the same correction", fontsize=fs - 4,
+                  color=MUTED, ha="right", va="center")
+    fig.canvas.draw()
+    x2 = 1 - right / w - (width_in(fig, t2) + 0.5 * fs / 72) / w
+    fig.lines.append(plt.Line2D([x2], [yk], marker="o", ms=0.42 * fs, mfc="white",
+                                mec=MUTED, mew=0.12 * fs, ls="none",
+                                transform=fig.transFigure))
+    t1 = fig.text(x2 - (0.5 * fs / 72 + 0.35) / w, yk, "as submitted", fontsize=fs - 4,
+                  color=MUTED, ha="right", va="center")
+    fig.canvas.draw()
+    x1 = x2 - (0.5 * fs / 72 + 0.35 + width_in(fig, t1) + 0.5 * fs / 72) / w
+    fig.lines.append(plt.Line2D([x1], [yk], marker="o", ms=0.42 * fs, color=MUTED,
+                                ls="none", transform=fig.transFigure))
     save(fig, stem)
 
 
@@ -252,9 +291,9 @@ def pearson(stem, w, h, fs):
     save(fig, stem)
 
 
-# (Pearson w, h), (leaderboard w, h), (measures w, h), panel text size in pt.
+# (Pearson w, h), (skill w, h), (measures w, h), panel text size in pt.
 SIZES = {"_landscape": ((7.0, 10.15), (8.8, 10.15), (11.8, 10.15), 22)}
-for suffix, (pr, lb, me, fs) in SIZES.items():
+for suffix, (pr, sk_, me, fs) in SIZES.items():
     pearson(f"eic_pearson{suffix}", *pr, fs)
-    leaderboard(f"eic_leaderboard{suffix}", *lb, fs)
+    skill(f"eic_skill{suffix}", *sk_, fs)
     measures(f"eic_measures{suffix}", *me, fs)

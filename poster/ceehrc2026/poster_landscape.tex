@@ -15,17 +15,16 @@
 \newcommand{\capsize}{\fontsize{26}{34}\selectfont}
 \newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
 \newcommand{\headsize}{\fontsize{48}{58}\selectfont}
-\newcommand{\boxtitlesize}{\fontsize{42}{50}\selectfont}
 \input{common}
 
 % Row 1 gives the schematic the width; row 2 gives the challenge section the width.
 \newcommand{\LeftW}{12.2in}
 \newcommand{\RightW}{29.2in}
-\newcommand{\UseW}{5.4in}      % one application icon; make_intro_panels.py draws W = 5.4
+\newcommand{\UseW}{5.7in}      % one application icon; make_intro_panels.py draws W = 5.7
 \newcommand{\LeftWTwo}{28.4in}
 \newcommand{\RightWTwo}{13.0in}
-\newcommand{\RowOne}{16.40in}
-\newcommand{\RowTwo}{13.22in}
+\newcommand{\RowOne}{15.96in}
+\newcommand{\RowTwo}{13.25in}
 
 \begin{document}
 % ============================================================ header ==========
@@ -52,12 +51,13 @@
 \end{tikzpicture}%
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%
-  \begin{tcolorbox}[textbox]\boxtitle{The problem}\raggedright\TxtProblem\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox]\boxtitle{\HeadUses}
-    \panel{\UseW}{panels/use_states.pdf}{\TxtUseStates}\hfill
-    \panel{\UseW}{panels/use_gwas.pdf}{\TxtUseGwas}\par\vspace{0.25in}
-    \panel{\UseW}{panels/use_expr.pdf}{\TxtUseExpr}\hfill
-    \panel{\UseW}{panels/use_qc.pdf}{\TxtUseQC}\end{tcolorbox}}\hfill
+  \sectionbar{\HeadProblem}
+  {\bodysize\color{ink}\raggedright\TxtProblem\par}\vfill
+  \sectionbar{\HeadUses}
+  \panel{\UseW}{panels/use_states.pdf}{\TxtUseStates}\hfill
+  \panel{\UseW}{panels/use_gwas.pdf}{\TxtUseGwas}\par\vspace{0.3in}
+  \panel{\UseW}{panels/use_expr.pdf}{\TxtUseExpr}\hfill
+  \panel{\UseW}{panels/use_conf.pdf}{\TxtUseConf}\par}\hfill
 \Column{row 1 right}{\RightW}{\RowOne}{%
   \sectionbar{\HeadStrip}
   \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
@@ -68,7 +68,7 @@
 \Column{row 2 left}{\LeftWTwo}{\RowTwo}{%
   \sectionbar{\HeadEIC}
   \panel{7.0in}{panels/eic_pearson_landscape.pdf}{\CapA}\hfill
-  \panel{8.8in}{panels/eic_leaderboard_landscape.pdf}{\CapB}\hfill
+  \panel{8.8in}{panels/eic_skill_landscape.pdf}{\CapB}\hfill
   \panel{11.8in}{panels/eic_measures_landscape.pdf}{\CapC}}\hfill
 \Column{row 2 right}{\RightWTwo}{\RowTwo}{%
   \sectionbar{\HeadUtility}\vfill

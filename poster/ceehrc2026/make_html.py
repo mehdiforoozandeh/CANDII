@@ -51,6 +51,7 @@ def html(tex):
     for cmd, tag in (("textbf", "b"), ("textit", "i"), ("emph", "em")):
         s = re.sub(rf"\\{cmd}\{{([^{{}}]*)\}}", rf"<{tag}>\1</{tag}>", s)
     s = re.sub(r"\\par\s*\\vspace\{[^}]*\}\s*", "</p><p>", s)
+    s = re.sub(r"\\par\s*", "</p><p>", s)
     s = s.replace(r"\begin{itemize}", "<ul>").replace(r"\end{itemize}", "</ul>")
     s = re.sub(r"\\item\s*", "<li>", s)
     s = s.replace("<li>", "</li><li>").replace("<ul></li>", "<ul>")
@@ -111,25 +112,22 @@ body { background: var(--ground); color: var(--ground-ink);
 .col { display: flex; flex-direction: column; min-height: 0; }
 .row { display: flex; justify-content: space-between; align-items: flex-start; }
 .fill { flex: 1; }
-.box { background: var(--panel); border: 4pt solid var(--accent); border-radius: .22in;
-  padding: .28in .4in .28in;
-  font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
-.box h3 { color: var(--heading); font-size: var(--boxtitle); line-height: 1.2;
-  font-weight: 700; margin-bottom: .15in; }
-.box ul { list-style: none; padding: 0; text-align: left; }
-.box li { position: relative; padding-left: 1em; }
-.box li + li { margin-top: .15in; }
-.box li::before { content: "•"; color: var(--accent); position: absolute; left: .15em; }
+.intro { font-size: var(--body); line-height: var(--body-lh); }
+.intro ul { list-style: none; padding: 0; }
+.intro li { position: relative; padding-left: 1em; }
+.intro li + li { margin-top: .15in; }
+.intro li::before { content: "•"; color: var(--accent); position: absolute; left: .15em; }
 .poster h2 { color: var(--heading); font-size: var(--head); line-height: 1.2; font-weight: 700;
   letter-spacing: -.01em; text-wrap: balance; padding-bottom: .08in; border-bottom: 5pt solid var(--accent);
   margin-bottom: .3in; }
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
 .cap.wide { text-align: justify; margin-top: .18in; }
-.uses { display: grid; grid-template-columns: 5.4in 5.4in; justify-content: space-between;
-  row-gap: .25in; text-align: left; }
+.uses { display: grid; grid-template-columns: 5.7in 5.7in; justify-content: space-between;
+  row-gap: .3in; }
 .refs { border-top: 4pt solid var(--rule); margin-top: .15in; padding-top: .15in; font-size: var(--small);
   line-height: var(--small-lh); color: var(--muted); }
+.poster .refs p + p { margin-top: 0; }
 sub, sup { font-size: .7em; line-height: 0; }
 @media (prefers-reduced-motion: no-preference) { .wrap { transition: height .15s; } }
 """
@@ -160,10 +158,6 @@ SCRIPT = """
 def fig(src, width, cap):
     return (f'<figure style="width:{width}in"><img src="{svg(src)}" alt="">'
             f'<figcaption>{cap}</figcaption></figure>')
-
-
-def box(title, text):
-    return f'<div class="box"><h3>{title}</h3>{text}</div>'
 
 
 def page(kind, w_in, h_in, sizes, header, body):
@@ -201,21 +195,22 @@ L = page("landscape", 44, 36,
                  "sfu": "112pt", "title-x": "7.1in", "authors": "52pt",
                  "authors-top": "1.575in", "affil-top": "2.487in", "url-gap": ".36in",
                  "top": "3.55in", "body": "30pt", "body-lh": "38pt", "cap": "26pt",
-                 "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
-                 "boxtitle": "42pt"}),
+                 "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
 <div class="title" data-fit="33.7" style="top:.5in; font-size:100pt">{W['PosterTitle']}</div>
 <div class="authors">{W['PosterAuthors']}</div>
 <div class="affil">{W['PosterAffil']}</div>
 {qr()}
 <div class="divider"></div>""",
-         f"""<div class="body" style="grid-template-rows: 16.40in 13.62in auto; width: 42.4in">
+         f"""<div class="body" style="grid-template-rows: 15.96in 13.65in auto; width: 42.4in">
 <div style="display:grid; grid-template-columns: 12.2in 29.2in; column-gap: 1in">
-<div class="col" style="justify-content: space-between">
-{box("The problem", W['TxtProblem'])}
-{box(W['HeadUses'], '<div class="uses">' + ''.join(fig(f'use_{s}', 5.4, W[t]) for s, t in
+<div class="col"><h2>{W['HeadProblem']}</h2>
+<div class="intro">{W['TxtProblem']}</div>
+<div class="fill"></div>
+<h2>{W['HeadUses']}</h2>
+<div class="uses">{''.join(fig(f'use_{s}', 5.7, W[t]) for s, t in
      (('states', 'TxtUseStates'), ('gwas', 'TxtUseGwas'), ('expr', 'TxtUseExpr'),
-      ('qc', 'TxtUseQC'))) + '</div>')}
+      ('conf', 'TxtUseConf')))}</div>
 </div>
 <div class="col"><h2>{W['HeadStrip']}</h2>
 <img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">
@@ -224,7 +219,7 @@ L = page("landscape", 44, 36,
 <div style="display:grid; grid-template-columns: 28.4in 13in; column-gap: 1in; margin-top: .4in">
 <div class="col"><h2>{W['HeadEIC']}</h2>
 <div class="row">{fig('eic_pearson_landscape', 7.0, W['CapA'])}
-{fig('eic_leaderboard_landscape', 8.8, W['CapB'])}
+{fig('eic_skill_landscape', 8.8, W['CapB'])}
 {fig('eic_measures_landscape', 11.8, W['CapC'])}</div></div>
 <div class="col"><h2>{W['HeadUtility']}</h2>
 <div class="fill"></div>

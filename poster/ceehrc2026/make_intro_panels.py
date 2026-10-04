@@ -1,15 +1,16 @@
 """The four downstream-application icons in the poster's introduction.
 
 Each icon is a small schematic, not data: the tracks are drawn from a made-up
-state sequence so that the picture reads at a glance. The four applications are
-the ones Ernst & Kellis (2015, ChromImpute) demonstrate with imputed data:
-chromatin-state annotation, disease-variant (GWAS) enrichment, relation to gene
-expression and quality control of observed experiments.
+state sequence so that the picture reads at a glance. Three applications are
+ones Ernst & Kellis (2015, ChromImpute) demonstrate with imputed data:
+chromatin-state annotation, disease-variant (GWAS) enrichment and relation to
+gene expression. The fourth is CANDI's own: with a predicted interval at every
+position, uncertain predictions can be set aside and confident ones used.
 
 Colours follow the schematic workflow (schematic.py): dark red is a measured
 track, salmon an imputed one.
 
-Writes panels/use_{states,gwas,expr,qc}.{pdf,svg} at the size they are printed
+Writes panels/use_{states,gwas,expr,conf}.{pdf,svg} at the size they are printed
 at (W x H in), so a point here is a point there.
 """
 from pathlib import Path
@@ -27,11 +28,11 @@ OUT.mkdir(exist_ok=True)
 plt.rcParams.update({"font.family": "DejaVu Sans", "pdf.fonttype": 42,
                      "svg.fonttype": "path"})
 
-W, H = 5.4, 1.75                      # inches; poster_landscape.tex \UseW is the same width
+W, H = 5.7, 1.75                      # inches; poster_landscape.tex \UseW is the same width
 HD = 2.3                              # the drawing's own height units, squeezed into H
 INK, MUTED, GRID = "#1B2A32", "#5E6E78", "#B9C2C7"
 SIG, IMP = "#A3302A", "#F4A08F"       # measured, imputed (schematic.py)
-FLAG = "#E2B35C"                      # mustard: the mismatch in the QC icon
+KEEP, DROP = "#7FA87A", "#BDBDBD"     # sage: confident, kept; grey: uncertain, set aside
 STATE = {"promoter": "#5B7FA6", "enhancer": "#E2B35C", "transcribed": "#7FA87A",
          "repressed": "#9A8FBF", "quiescent": "#E3E3E3"}
 
@@ -145,27 +146,33 @@ def expr():
     save(fig, "use_expr")
 
 
-# ---- 4 quality control: observed and imputed disagree -> flag the experiment ---
-def qc():
+# ---- 4 confidence: a mean and its interval; wide intervals are set aside ------
+def conf():
     fig, ax = canvas()
-    x0, x1 = 0.1, 4.15
-    c, w = [.12, .33, .55, .8], [.03, .05, .035, .04]
-    clean = peaks(c, w, [.8, .55, .9, .6], noise=.02)
-    noisy = peaks(c[:2] + [.93], w[:2] + [.02], [.75, .5, .7], noise=.14)
-    a, b = .45, .99                                           # where they disagree
-    ax.add_patch(Rectangle((x0 + a * (x1 - x0), 0.08), (b - a) * (x1 - x0), 2.14,
-                           color=FLAG, alpha=.28, lw=0))
-    track(ax, x0, x1, 1.22, 0.9, noisy, SIG)
-    track(ax, x0, x1, 0.18, 0.9, clean, IMP, .8)
-    cx, cy, r = 4.85, 1.2, 0.62                               # a warning triangle
-    k = HD / H                                                # keep the triangle equilateral
-    ax.add_patch(Polygon([(cx - r, cy - .5 * r * k), (cx + r, cy - .5 * r * k), (cx, cy + r * k)],
-                         closed=True, fc=FLAG, ec=INK, lw=2.4, joinstyle="round"))
-    ax.text(cx, cy + .02, "!", ha="center", va="center", fontsize=40, fontweight="bold",
-            color=INK)
-    save(fig, "use_qc")
+    x0, x1 = 0.1, W - 0.1
+    xs = x0 + X * (x1 - x0)
+    mu = 0.95 + 0.85 * peaks([.12, .38, .62, .88], [.03, .04, .035, .03],
+                             [.9, .6, .8, .7], noise=0)
+    bumps = [(.30, .47), (.70, .80)]                          # the uncertain stretches
+    sd = 0.05 + sum(0.32 * np.exp(-0.5 * ((X - .5 * (a + b)) / (.28 * (b - a))) ** 2)
+                    for a, b in bumps)
+    for a, b in bumps:                                         # grey out, behind the band
+        ax.add_patch(Rectangle((x0 + a * (x1 - x0), 0.55), (b - a) * (x1 - x0), 1.7,
+                               color=DROP, alpha=.35, lw=0))
+    ax.fill_between(xs, np.maximum(mu - 1.96 * sd, 0.6), mu + 1.96 * sd, color=IMP,
+                    alpha=.55, lw=0)
+    ax.plot(xs, mu, color=SIG, lw=2.4)
+    edges = sorted({0.0, 1.0, *[e for ab in bumps for e in ab]})
+    for a, b in zip(edges[:-1], edges[1:]):                    # the keep / set-aside bar
+        bad = any(abs(a - p) < 1e-9 for p, _ in bumps)
+        ax.add_patch(Rectangle((x0 + a * (x1 - x0), 0.08), (b - a) * (x1 - x0), 0.32,
+                               color=DROP if bad else KEEP, lw=0))
+        ax.text(x0 + .5 * (a + b) * (x1 - x0), 0.24, "\u2715" if bad else "\u2713",
+                ha="center", va="center", fontsize=15, fontweight="bold",
+                color="#5E6E78" if bad else "white")
+    save(fig, "use_conf")
 
 
-for draw in (states, gwas, expr, qc):
+for draw in (states, gwas, expr, conf):
     draw()
-print("wrote panels/use_{states,gwas,expr,qc}.{pdf,svg}")
+print("wrote panels/use_{states,gwas,expr,conf}.{pdf,svg}")

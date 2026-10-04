@@ -216,7 +216,7 @@ def cube(x0, y0, cw, ch, dx, dy, filled, labels=False):
     ang = degrees(atan2(dy, dx))
     L = np.hypot(dx, dy)
     px, py = dy / L, -dx / L
-    AX.text(rx + .5 * dx + px * .75, y0 + .5 * dy + py * .75, "genome",
+    AX.text(rx + .5 * dx + px * 1.05, y0 + .5 * dy + py * 1.05, "genome",
             fontsize=7.4, color=MUTED, ha="center", va="center", rotation=ang,
             rotation_mode="anchor")
     if labels:
@@ -229,9 +229,11 @@ def cube(x0, y0, cw, ch, dx, dy, filled, labels=False):
     else:
         AX.text(x0 - .7, y0 + ch / 2, f"{N_TA} assays", fontsize=7.4, color=MUTED,
                 rotation=90, va="center", ha="center")
-    AX.text(x0 + (cw + dx) / 2, y0 - .5,
+    # the long label starts under the assay names, so it ends before the depth edge
+    # and its "genome" label
+    AX.text(x0 - 3.4 if labels else x0 + (cw + dx) / 2, y0 - .5,
             f"{N_CT} cell types" + ("  (ENCODE Imputation Challenge)" if labels else ""),
-            fontsize=7.4, color=MUTED, ha="center", va="top")
+            fontsize=7.4, color=MUTED, ha="left" if labels else "center", va="top")
 
 
 # ---------------------------------------------------------------- the window -
