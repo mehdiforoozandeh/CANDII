@@ -219,7 +219,7 @@ L = page("landscape", 44, 36,
 <div style="display:grid; grid-template-columns: 28.4in 13in; column-gap: 1in; margin-top: .4in">
 <div class="col"><h2>{W['HeadEIC']}</h2>
 <div class="row">{fig('eic_pearson_landscape', 7.0, W['CapA'])}
-{fig('eic_skill_landscape', 8.8, W['CapB'])}
+{fig('eic_ranks_landscape', 8.8, W['CapB'])}
 {fig('eic_measures_landscape', 11.8, W['CapC'])}</div></div>
 <div class="col"><h2>{W['HeadUtility']}</h2>
 <div class="fill"></div>
