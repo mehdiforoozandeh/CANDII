@@ -6,7 +6,8 @@ then scaled to the window's width. Every sentence is read from common.tex, so
 the words cannot drift from the PDF; every panel is the SVG twin of the PDF the
 LaTeX includes, embedded as a data URI, so the page is one file.
 
-Run after split_ga.py, make_eic_panels.py and the qr.tex build (build.sh does).
+Run after split_ga.py, make_eic_panels.py, make_intro_panels.py and the qr.tex
+build (build.sh does).
 """
 from base64 import b64encode
 from pathlib import Path
@@ -115,7 +116,7 @@ body { background: var(--ground); color: var(--ground-ink);
   font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
 .box h3 { color: var(--heading); font-size: var(--boxtitle); line-height: 1.2;
   font-weight: 700; margin-bottom: .15in; }
-.box ul { list-style: none; padding: 0; }
+.box ul { list-style: none; padding: 0; text-align: left; }
 .box li { position: relative; padding-left: 1em; }
 .box li + li { margin-top: .15in; }
 .box li::before { content: "•"; color: var(--accent); position: absolute; left: .15em; }
@@ -125,6 +126,8 @@ body { background: var(--ground); color: var(--ground-ink);
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
 .cap.wide { text-align: justify; margin-top: .18in; }
+.uses { display: grid; grid-template-columns: 5.4in 5.4in; justify-content: space-between;
+  row-gap: .25in; text-align: left; }
 .refs { border-top: 4pt solid var(--rule); margin-top: .15in; padding-top: .15in; font-size: var(--small);
   line-height: var(--small-lh); color: var(--muted); }
 sub, sup { font-size: .7em; line-height: 0; }
@@ -197,7 +200,7 @@ L = page("landscape", 44, 36,
          dict(**{"red-w": "5.6in", "red-top": ".6in", "red-h": "2.35in", "sfu-r": ".21in",
                  "sfu": "112pt", "title-x": "7.1in", "authors": "52pt",
                  "authors-top": "1.575in", "affil-top": "2.487in", "url-gap": ".36in",
-                 "top": "3.55in", "body": "34pt", "body-lh": "43pt", "cap": "26pt",
+                 "top": "3.55in", "body": "30pt", "body-lh": "38pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "42pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
@@ -206,11 +209,13 @@ L = page("landscape", 44, 36,
 <div class="affil">{W['PosterAffil']}</div>
 {qr()}
 <div class="divider"></div>""",
-         f"""<div class="body" style="grid-template-rows: 16.54in 13.91in auto; width: 42.4in">
-<div style="display:grid; grid-template-columns: 10.6in 30.8in; column-gap: 1in">
+         f"""<div class="body" style="grid-template-rows: 16.40in 13.62in auto; width: 42.4in">
+<div style="display:grid; grid-template-columns: 12.2in 29.2in; column-gap: 1in">
 <div class="col" style="justify-content: space-between">
 {box("The problem", W['TxtProblem'])}
-{box("Key findings", W['TxtFindings'])}
+{box(W['HeadUses'], '<div class="uses">' + ''.join(fig(f'use_{s}', 5.4, W[t]) for s, t in
+     (('states', 'TxtUseStates'), ('gwas', 'TxtUseGwas'), ('expr', 'TxtUseExpr'),
+      ('qc', 'TxtUseQC'))) + '</div>')}
 </div>
 <div class="col"><h2>{W['HeadStrip']}</h2>
 <img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">

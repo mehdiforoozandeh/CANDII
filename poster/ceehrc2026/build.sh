@@ -8,6 +8,7 @@ cd "$(dirname "$0")"
 PY=${PY:-/Users/mforooz/miniforge3/envs/candi-local/bin/python}   # needs matplotlib, numpy, pandas
 "$PY" split_ga.py
 "$PY" make_eic_panels.py
+"$PY" make_intro_panels.py
 for tex in poster_landscape qr; do
   latexmk -pdf -interaction=nonstopmode -halt-on-error "$tex.tex" >/dev/null
 done

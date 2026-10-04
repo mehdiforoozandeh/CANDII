@@ -49,20 +49,28 @@
 \newcommand{\PosterAffil}{Simon Fraser University, Department of Computing Science}
 \newcommand{\PosterURL}{https://mehdiforoozandeh.github.io/CANDI/}
 
+% The problem statement follows the introduction of the MLCB 2026 submission
+% (SSL/EpiDenoise/candi-mlcb-2026/main.pdf); the four downstream applications are
+% the ones ChromImpute [1] demonstrates with imputed data (make_intro_panels.py).
 \newcommand{\TxtProblem}{%
-Epigenomic data form a three-dimensional tensor across assays, cell types and
-genomic positions, with tens to hundreds of assays and thousands of cell types.
-Due to the high cost and complexity of profiling every possible assay in all
-relevant cell and tissue types, this tensor is sparse: most experiments were
-never performed. Epigenome imputation methods aim to predict these missing
-experiments~[1].}
-
-\newcommand{\TxtFindings}{%
 \begin{itemize}
-  \item CANDI ranks \textbf{1st of 26} on the ENCODE Imputation Challenge.
-  \item CANDI provides calibrated uncertainty estimates.
-  \item CANDI's imputed signals and latent space predict gene expression.
+  \item Epigenomic data form a 3-D tensor: tens to hundreds of assays
+        $\times$ thousands of cell types $\times$ genomic positions.
+  \item Profiling every assay in every cell type costs too much, so most
+        experiments are missing.
+  \item Imputation predicts these missing experiments~[1,2].
+  \item Imputed data are often cleaner than observed data, so imputation also
+        denoises performed experiments~[1].
+  \item Experimental covariates matter: in the ENCODE Imputation Challenge, a
+        train--test shift let a simple average-activity baseline beat most
+        entrants~[2].
 \end{itemize}}
+
+\newcommand{\HeadUses}{Downstream applications}
+\newcommand{\TxtUseStates}{Annotate chromatin states in every cell type~[1].}
+\newcommand{\TxtUseGwas}{Link disease-associated variants to relevant cell types~[1].}
+\newcommand{\TxtUseExpr}{Predict gene expression from marks around each gene~[1,3].}
+\newcommand{\TxtUseQC}{Flag low-quality experiments that disagree with imputation~[1].}
 
 \newcommand{\HeadStrip}{CANDI schematic workflow}
 \newcommand{\CapStrip}{%
@@ -93,10 +101,12 @@ confidence level against the fraction of observed data within that interval.}
 Denoised+Imputed and Latent settings are robust to input sparsity.}
 
 \newcommand{\TxtRefs}{%
-[1]~Schreiber J, Boix C, \textit{et al.} The ENCODE Imputation Challenge: a critical
+[1]~Ernst J, Kellis M. Large-scale imputation of epigenomic datasets for systematic
+annotation of diverse human tissues. \textit{Nat Biotechnol} 33:364--376 (2015).\quad
+[2]~Schreiber J, Boix C, \textit{et al.} The ENCODE Imputation Challenge: a critical
 assessment of methods for cross-cell type imputation of epigenomic profiles.
 \textit{Genome Biol} 24:79 (2023).\quad
-[2]~Foroozandeh M, Diab AR, Libbrecht M. CANDI: self-supervised, confidence-aware
+[3]~Foroozandeh M, Diab AR, Libbrecht M. CANDI: self-supervised, confidence-aware
 denoising imputation of genomic data. \textit{bioRxiv} 2025.01.23.634626 (2025).\quad
 Panels A--C: blind-test scoring from the Libbrecht lab's EIC reproduction;
 \emph{baseline} is the challenge's average-activity track.

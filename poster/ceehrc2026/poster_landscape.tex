@@ -3,7 +3,7 @@
 % any other size or more than one page.
 %
 % Two rows of two columns, then the references in one band across the foot.
-% Row 1: the two text boxes | the schematic workflow. Row 2: the challenge
+% Row 1: the problem and its downstream applications | the schematic workflow. Row 2: the challenge
 % section | downstream utility. The
 % row heights are set by the right column; the log lines "POSTER: ... needs" say
 % how much each column needs.
@@ -11,7 +11,7 @@
 \documentclass{article}
 \usepackage[paperwidth=44in, paperheight=36in,
             left=0.8in, right=0.8in, top=3.55in, bottom=0.7in]{geometry}
-\newcommand{\bodysize}{\fontsize{34}{43}\selectfont}
+\newcommand{\bodysize}{\fontsize{30}{38}\selectfont}
 \newcommand{\capsize}{\fontsize{26}{34}\selectfont}
 \newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
 \newcommand{\headsize}{\fontsize{48}{58}\selectfont}
@@ -19,12 +19,13 @@
 \input{common}
 
 % Row 1 gives the schematic the width; row 2 gives the challenge section the width.
-\newcommand{\LeftW}{10.6in}
-\newcommand{\RightW}{30.8in}
+\newcommand{\LeftW}{12.2in}
+\newcommand{\RightW}{29.2in}
+\newcommand{\UseW}{5.4in}      % one application icon; make_intro_panels.py draws W = 5.4
 \newcommand{\LeftWTwo}{28.4in}
 \newcommand{\RightWTwo}{13.0in}
-\newcommand{\RowOne}{16.54in}
-\newcommand{\RowTwo}{13.51in}
+\newcommand{\RowOne}{16.40in}
+\newcommand{\RowTwo}{13.22in}
 
 \begin{document}
 % ============================================================ header ==========
@@ -51,8 +52,12 @@
 \end{tikzpicture}%
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%
-  \begin{tcolorbox}[textbox]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
+  \begin{tcolorbox}[textbox]\boxtitle{The problem}\raggedright\TxtProblem\end{tcolorbox}\vfill
+  \begin{tcolorbox}[textbox]\boxtitle{\HeadUses}
+    \panel{\UseW}{panels/use_states.pdf}{\TxtUseStates}\hfill
+    \panel{\UseW}{panels/use_gwas.pdf}{\TxtUseGwas}\par\vspace{0.25in}
+    \panel{\UseW}{panels/use_expr.pdf}{\TxtUseExpr}\hfill
+    \panel{\UseW}{panels/use_qc.pdf}{\TxtUseQC}\end{tcolorbox}}\hfill
 \Column{row 1 right}{\RightW}{\RowOne}{%
   \sectionbar{\HeadStrip}
   \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
