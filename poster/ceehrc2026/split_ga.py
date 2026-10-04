@@ -24,24 +24,25 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "panels"
 OUT.mkdir(exist_ok=True)
 
-# The poster's pastel palette (common.tex). Signal is dusty blue: measured and
-# denoised signal is always darker than imputed signal. Coral is CANDI's own
+# The poster's pastel palette (common.tex). Signal is violet, a hue far from the
+# grey of missing and the yellow of masked experiments: measured and denoised
+# signal is always darker than imputed signal. Coral is CANDI's own
 # colour, kept for the model box title and panel A's curve.
-BLUE, BLUE_LIGHT, BLUE_IMP = "#2C5A88", "#D6E5F4", "#A9C9E8"
+SIG, SIG_LIGHT, SIG_IMP = "#5B3A99", "#D9C8F2", "#B39AE6"
 CORAL = "#D46A5A"
 # (exact text in build_ga.py, replacement); each must match exactly once.
 RECOLOUR = [
-    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{BLUE}", "{BLUE_LIGHT}"'),
+    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{SIG}", "{SIG_LIGHT}"'),
     # the cubes: measured threads, and imputed ones in the filled cube
-    ('            return "#12868C", SHADE[face]', f'            return "{BLUE}", SHADE[face]'),
+    ('            return "#12868C", SHADE[face]', f'            return "{SIG}", SHADE[face]'),
     # the sliced matrices: measured (dark) and imputed (light) signal
-    ('["#FFFFFF", "#0E7276"]', f'["#FFFFFF", "{BLUE}"]'),
-    ('["#F4FBFB", "#5FBABD"]', '["#F9FBFE", "#BDD5ED"]'),
-    ('facecolor="#EDF8F8"', 'facecolor="#EEF4FA"'),
-    ('Teal names = imputed.', 'Blue names = imputed.'),
+    ('["#FFFFFF", "#0E7276"]', f'["#FFFFFF", "{SIG}"]'),
+    ('["#F4FBFB", "#5FBABD"]', '["#FCFAFF", "#CDB9F0"]'),
+    ('facecolor="#EDF8F8"', 'facecolor="#F5F0FC"'),
+    ('Teal names = imputed.', 'Violet names = imputed.'),
     # the predicted tracks: denoised assays dark, imputed ones light
-    ('color=TEAL, alpha=.26', f'color=(TEAL if not tag else "{BLUE_IMP}"), alpha=.26'),
-    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=(TEAL if not tag else "{BLUE_IMP}")'),
+    ('color=TEAL, alpha=.26', f'color=(TEAL if not tag else "{SIG_IMP}"), alpha=.26'),
+    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=(TEAL if not tag else "{SIG_IMP}")'),
     # CANDI's own colour: the model box title bar and panel A's curve
     ('facecolor=TEAL, edgecolor="none", zorder=3))', f'facecolor="{CORAL}", edgecolor="none", zorder=3))'),
     ('axA.plot(x, y, lw=2.0, color=TEAL', f'axA.plot(x, y, lw=2.0, color="{CORAL}"'),
