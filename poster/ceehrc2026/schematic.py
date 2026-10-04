@@ -330,14 +330,15 @@ _dna_ax.patch.set_visible(False)
 _dna_ax.axis("off")
 DNA_COL = {"A": "#95CBA2", "C": "#8DB8DE", "G": "#EFCB7E", "T": "#EC9C94"}
 _seq = np.random.default_rng(5).choice(list("ACGT"), 72)
-_w = .94 / len(_seq)     # stops short of 1 so "one-hot" ends inside the input band
+_w = 1 / len(_seq)
 for j, b in enumerate(_seq):
     _dna_ax.add_patch(Rectangle((j * _w, .34), _w * .9, .46, facecolor=DNA_COL[b],
                                 edgecolor="none"))
 _dna_ax.text(-.030, .57, "DNA sequence", fontsize=6.8, color=INK, ha="right",
              va="center")
-_dna_ax.text(.952, .57, "one-hot", fontsize=6.1, color=MUTED, style="italic",
-             ha="left", va="center")
+# under the bar's right end, so the bar spans the same width as the tracks
+_dna_ax.text(1.0, .27, "one-hot", fontsize=6.1, color=MUTED, style="italic",
+             ha="right", va="top")
 
 _cov = AX.inset_axes([WX0, WY0 - 1.0, WW, 3.4], transform=AX.transData)
 _cov.set_xlim(-.315, 1.075)

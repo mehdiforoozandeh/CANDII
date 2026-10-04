@@ -154,7 +154,7 @@ def skill(stem, w, h, fs):
     ax.tick_params(axis="x", labelsize=fs - 4, colors=INK)
     ax.grid(axis="x", ls="--", lw=1.4, color="#C9CFD3", zorder=0)
     fig.text(1 - right / w, 2.55 * fs / 72 / h,
-             "skill  (1 = the baseline; higher = better)",
+             "imputation score  (1 = the baseline; higher = better)",
              fontsize=fs - 2, color=INK, ha="right", va="bottom")
     yk = 0.9 * fs / 72 / h                       # the key, right-aligned
     t2 = fig.text(1 - right / w, yk, "after the same correction", fontsize=fs - 4,

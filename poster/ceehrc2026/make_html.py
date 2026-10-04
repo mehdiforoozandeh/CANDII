@@ -101,7 +101,7 @@ body { background: var(--ground); color: var(--ground-ink);
 .authors { position: absolute; left: var(--title-x); top: var(--authors-top);
   font-size: var(--authors); line-height: 1; white-space: nowrap; }
 .affil { position: absolute; left: var(--title-x); top: var(--affil-top);
-  font-size: 38pt; line-height: 1; white-space: nowrap; color: var(--muted); }
+  font-size: 32pt; line-height: 1; white-space: nowrap; color: var(--muted); }
 /* The QR code at the right margin, its link under it on the affiliation's line. */
 .qr-col { position: absolute; right: .8in; top: .6in; display: flex; flex-direction: column;
   align-items: flex-end; font-size: 20.4pt; line-height: 1; color: var(--muted); white-space: nowrap; }
@@ -193,7 +193,7 @@ def refs():
 L = page("landscape", 44, 36,
          dict(**{"red-w": "5.6in", "red-top": ".6in", "red-h": "2.35in", "sfu-r": ".21in",
                  "sfu": "112pt", "title-x": "7.1in", "authors": "52pt",
-                 "authors-top": "1.575in", "affil-top": "2.487in", "url-gap": ".36in",
+                 "authors-top": "1.575in", "affil-top": "2.560in", "url-gap": ".36in",
                  "top": "3.55in", "body": "28pt", "body-lh": "35pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
@@ -207,7 +207,7 @@ L = page("landscape", 44, 36,
 <div class="col"><h2>{W['HeadProblem']}</h2>
 <div class="intro">{W['TxtProblem']}</div>
 <div class="fill"></div>
-<h2>{W['HeadUses']}</h2>
+<h2 style="font-size:43pt">{W['HeadUses']}</h2>
 <div class="uses">{''.join(fig(f'use_{s}', 5.7, W[t]) for s, t in
      (('states', 'TxtUseStates'), ('gwas', 'TxtUseGwas'), ('expr', 'TxtUseExpr'),
       ('conf', 'TxtUseConf')))}</div>

@@ -42,7 +42,7 @@
   \node[anchor=base west, inner sep=0pt, text=ink]
     at ($(nw)+(7.1in,-2.21in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
   \node[anchor=base west, inner sep=0pt, text=muted]
-    at ($(nw)+(7.1in,-2.95in)$) {\fontsize{38}{44}\selectfont\PosterAffil};
+    at ($(nw)+(7.1in,-2.95in)$) {\fontsize{32}{38}\selectfont\PosterAffil};
   \node[anchor=north east, inner sep=0pt] at ($(ne)+(-0.8in,-0.6in)$)
     {\qrcode[height=1.74in]{\PosterURL}};
   \node[anchor=base east, inner sep=0pt, text=muted] at ($(ne)+(-0.8in,-2.95in)$)
@@ -53,7 +53,7 @@
 \Column{row 1 left}{\LeftW}{\RowOne}{%
   \sectionbar{\HeadProblem}
   {\bodysize\color{ink}\raggedright\TxtProblem\par}\vfill
-  \sectionbar{\HeadUses}
+  \sectionbar{\fontsize{43}{52}\selectfont\HeadUses}   % 43 pt: one line in \LeftW
   \panel{\UseW}{panels/use_states.pdf}{\TxtUseStates}\hfill
   \panel{\UseW}{panels/use_gwas.pdf}{\TxtUseGwas}\par\vspace{0.15in}
   \panel{\UseW}{panels/use_expr.pdf}{\TxtUseExpr}\hfill
