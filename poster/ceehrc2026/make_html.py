@@ -124,7 +124,7 @@ figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
 .cap.wide { text-align: justify; margin-top: .18in; }
 .uses { display: grid; grid-template-columns: 5.7in 5.7in; justify-content: space-between;
-  row-gap: .3in; }
+  row-gap: .15in; }
 .refs { border-top: 4pt solid var(--rule); margin-top: .15in; padding-top: .15in; font-size: var(--small);
   line-height: var(--small-lh); color: var(--muted); }
 .poster .refs p + p { margin-top: 0; }
@@ -194,7 +194,7 @@ L = page("landscape", 44, 36,
          dict(**{"red-w": "5.6in", "red-top": ".6in", "red-h": "2.35in", "sfu-r": ".21in",
                  "sfu": "112pt", "title-x": "7.1in", "authors": "52pt",
                  "authors-top": "1.575in", "affil-top": "2.487in", "url-gap": ".36in",
-                 "top": "3.55in", "body": "30pt", "body-lh": "38pt", "cap": "26pt",
+                 "top": "3.55in", "body": "28pt", "body-lh": "35pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
 <div class="title" data-fit="33.7" style="top:.5in; font-size:100pt">{W['PosterTitle']}</div>
@@ -219,7 +219,7 @@ L = page("landscape", 44, 36,
 <div style="display:grid; grid-template-columns: 28.4in 13in; column-gap: 1in; margin-top: .4in">
 <div class="col"><h2>{W['HeadEIC']}</h2>
 <div class="row">{fig('eic_pearson_landscape', 7.0, W['CapA'])}
-{fig('eic_ranks_landscape', 8.8, W['CapB'])}
+{fig('eic_skill_landscape', 8.8, W['CapB'])}
 {fig('eic_measures_landscape', 11.8, W['CapC'])}</div></div>
 <div class="col"><h2>{W['HeadUtility']}</h2>
 <div class="fill"></div>

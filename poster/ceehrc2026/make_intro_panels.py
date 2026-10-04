@@ -28,7 +28,7 @@ OUT.mkdir(exist_ok=True)
 plt.rcParams.update({"font.family": "DejaVu Sans", "pdf.fonttype": 42,
                      "svg.fonttype": "path"})
 
-W, H = 5.7, 1.75                      # inches; poster_landscape.tex \UseW is the same width
+W, H = 5.7, 1.5                       # inches; poster_landscape.tex \UseW is the same width
 HD = 2.3                              # the drawing's own height units, squeezed into H
 INK, MUTED, GRID = "#1B2A32", "#5E6E78", "#B9C2C7"
 SIG, IMP = "#A3302A", "#F4A08F"       # measured, imputed (schematic.py)

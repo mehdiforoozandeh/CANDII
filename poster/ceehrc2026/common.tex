@@ -24,7 +24,7 @@
 \definecolor{rule}{HTML}{D9E1E8}
 
 \newcommand{\sectionbar}[1]{%
-  {\headsize\bfseries\color{heading}#1\par}\vspace{0.08in}%
+  {\headsize\bfseries\color{heading}\raggedright\hyphenpenalty=10000 #1\par}\vspace{0.08in}%
   {\color{accent}\rule{\linewidth}{5pt}}\par\vspace{0.3in}}
 
 % One panel: its graphic, then its one- or two-sentence caption.
@@ -51,23 +51,24 @@
 \newcommand{\HeadProblem}{The problem}
 \newcommand{\TxtProblem}{%
 \begin{itemize}
-  \item Epigenomic data form a 3-D tensor: tens to hundreds of assays
-        $\times$ thousands of cell types $\times$ genomic positions.
-  \item Profiling every assay in every cell type costs too much, so most
-        experiments are missing.
-  \item Imputation predicts these missing experiments~[1,2].
-  \item Imputed data are often cleaner than observed data, so imputation also
-        denoises performed experiments~[1].
-  \item Experimental covariates matter: in the ENCODE Imputation Challenge, a
-        train--test shift let a simple average-activity baseline beat most
-        entrants~[2].
+  \item Epigenomic data (e.g., histone modifications, DNA accessibility) span
+        tens to hundreds of assays and thousands of cell types.
+  \item Due to the high cost and complexity of profiling every assay in all
+        relevant cell types, most experiments are missing.
+  \item Epigenome imputation methods aim to predict these missing
+        experiments~[1,2].
+  \item Imputed data often has better properties than observed data, so
+        researchers also apply imputation for denoising~[1].
+  \item In the ENCODE Imputation Challenge, due to subtle differences in
+        experimental covariates between the train and test sets, a simple
+        average-activity baseline outperformed most of the entrants~[2].
 \end{itemize}}
 
-\newcommand{\HeadUses}{Downstream applications}
+\newcommand{\HeadUses}{Downstream applications of imputation}
 \newcommand{\TxtUseStates}{Annotate chromatin states in every cell type~[1].}
-\newcommand{\TxtUseGwas}{Link disease-associated variants to relevant cell types~[1].}
+\newcommand{\TxtUseGwas}{Link disease-associated variants to cell type-specific regulatory elements~[1].}
 \newcommand{\TxtUseExpr}{Predict gene expression from marks around each gene~[1,3].}
-\newcommand{\TxtUseConf}{Keep confident predictions; set aside uncertain ones~[3].}
+\newcommand{\TxtUseConf}{Keep confident predictions; discard uncertain predictions~[3].}
 
 \newcommand{\HeadStrip}{CANDI schematic workflow}
 \newcommand{\CapStrip}{%
@@ -79,12 +80,11 @@ window, they fill every missing thread of the tensor.}
 
 \newcommand{\HeadEIC}{CANDI fixes the train-test covariate shift in the ENCODE Imputation Challenge}
 \newcommand{\CapA}{%
-\textbf{A}\enspace Genome-wide Pearson $r$ of CANDI against each of the 51
-blind-test experiments (points), by assay.}
+\textbf{A}\enspace CANDI's genome-wide Pearson $r$ on the 51 blind-test
+experiments (points); mustard: the baseline's median.}
 \newcommand{\CapB}{%
-\textbf{B}\enspace Rank on the challenge's statistic before and after the same
-correction for every entry. CANDI rises from 13th to 1st; the baseline falls from
-5th to last.}
+\textbf{B}\enspace Skill before (filled) and after (open) the same correction
+for every entry; 1 is the baseline. CANDI rises from 0.88 to 1.28, the highest.}
 \newcommand{\CapC}{%
 \textbf{C}\enspace Eight of the nine measures relative to the baseline, median
 over 51 experiments. CANDI is first on three and

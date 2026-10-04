@@ -15,18 +15,19 @@ github.com/mlibbrecht/2026-07-26_epi_imputation (main, 2026-09-28):
                                       experiment (commit 5218f31a); the Pearson r
                                       panel reads gwcorr, common grid, all 23
                                       chromosomes
-  field_none.csv                 026  the whole field re-scored on 22 chromosomes
-                                      (chr22 held out), every entry as submitted and
-                                      CANDI uncorrected; the challenge's statistic
-  field_pilot.csv                026  the same field after the same correction for
-                                      every entry: max(b0 + b1 * prediction + b2 *
-                                      Average, 0), fitted on chr22 of each blind
-                                      experiment (commit 0ed50ce, 2026-09-07)
+  skill_shifted.csv              029  each entry's skill before ("none"; CANDI
+                                      uncorrected) and after ("pilot") the same
+                                      correction for every entry: max(b0 + b1 *
+                                      prediction + b2 * Average, 0), fitted on chr22
+                                      of each blind experiment, scored on the other
+                                      22 chromosomes; 0 = the baseline with its
+                                      positions scrambled, 1 = the baseline
+                                      (commit 0ed50ce, 2026-09-07)
 
 "CANDI" means CANDI + the training-side output correction (025's `candi.tcfloor`)
 everywhere.
 
-Writes panels/eic_{pearson,ranks,measures}_landscape.{pdf,svg} for
+Writes panels/eic_{pearson,skill,measures}_landscape.{pdf,svg} for
 poster_landscape.tex, drawn at the size they are printed at, so a point here is a
 point there.
 """
@@ -101,47 +102,74 @@ print(f"[text] CANDI as it comes: {r0.position} of {len(raw)}, score {r0.score_m
       f"correction: {coef.shape[0]} assays x 3 = {3 * coef.shape[0]} numbers, "
       f"fitted on {sorted(set(coef.n_train))} training experiments per assay")
 
-# ====================================================================== ranks ==
-def ranks(stem, w, h, fs):
-    """Each entry's place on the challenge's statistic before the correction (left)
-    and after the same correction for every entry (right), one line per entry.
-    Both sides: the same 26 entries, the same scorer, the same 22 chromosomes."""
-    a = pd.read_csv(DATA / "field_none.csv").set_index("team").position
-    b = pd.read_csv(DATA / "field_pilot.csv").set_index("team").position
-    assert len(a) == len(b) == 26 and set(a.index) == set(b.index)
-    print(f"[B] before: CANDI {a[CANDI]}, baseline {a[AVG]}; after the same "
-          f"correction: CANDI {b[CANDI]}, baseline {b[AVG]} (of 26)")
-    label = lambda t: "baseline" if t == AVG else name(t)   # the long name fits neither side
+# ====================================================================== skill ==
+def skill(stem, w, h, fs):
+    """Each entry's skill before (filled dot) and after (open dot) the same
+    correction for every entry, best-corrected first. CANDI's "before" is CANDI
+    uncorrected: the correction here is the one every entry gets, not CANDI's own
+    output layer."""
+    t = pd.read_csv(DATA / "skill_shifted.csv")
+    sk = t.pivot_table(index="entry", columns="rung", values="skill")
+    d = sk.drop(index="CANDI + tcfloor")[["none", "pilot"]].dropna()
+    d = d.sort_values("pilot", ascending=False)
+    assert len(d) == 26 and d.index[0] == CANDI
+    print(f"[B] skill before -> after: CANDI {d.loc[CANDI, 'none']:.2f} -> "
+          f"{d.loc[CANDI, 'pilot']:.2f} (highest; next {d.pilot.iloc[1]:.2f}); baseline "
+          f"{d.loc[AVG, 'none']:.2f} -> {d.loc[AVG, 'pilot']:.2f}; every entry improves: "
+          f"{bool((d.pilot > d.none).all())}")
     fig = plt.figure(figsize=(w, h))
-    names = {}
-    for side, pos, ha in (("l", a, "right"), ("r", b, "left")):
-        names[side] = [fig.text(0, 0, f"{label(t)}  {p}", fontsize=fs - 4, ha=ha,
-                                fontweight="bold" if t in (CANDI, AVG) else "normal")
-                       for t, p in pos.items()]
+    ax = fig.add_axes([0.5, 0.1, 0.4, 0.8])
+    lab_tr = blended_transform_factory(fig.transFigure, ax.transData)
+    n, lo, hi = len(d), 0.4, 1.5
+    ys = np.arange(n)[::-1]
+    names = []
+    for y, (team, r) in zip(ys, d.iterrows()):
+        c, big = colour(team), team in (CANDI, AVG)
+        x0 = max(r.none, lo)
+        ax.add_patch(FancyArrowPatch((x0, y), (r.pilot, y), arrowstyle="-|>",
+                                     mutation_scale=0.9 * fs, lw=3 if big else 2,
+                                     color=c, alpha=0.6, shrinkA=0.3 * fs,
+                                     shrinkB=0.25 * fs, zorder=2))
+        ax.plot([x0], [y], "<" if r.none < lo else "o",
+                ms=0.6 * fs if big else 0.42 * fs, color=c, zorder=4, clip_on=False)
+        ax.plot([r.pilot], [y], "o", ms=0.6 * fs if big else 0.42 * fs, mfc="white",
+                mec=c, mew=0.12 * fs, zorder=4)
+        kw = dict(fontsize=fs - 4, va="center", color=INK if big else MUTED,
+                  fontweight="bold" if big else "normal", transform=lab_tr)
+        names.append(ax.text(0.1 / w, y, name(team),
+                             ha="left", **{**kw, "color": c if big else MUTED}))
     fig.canvas.draw()
-    lw_ = {k: max(width_in(fig, t) for t in v) for k, v in names.items()}
-    for v in names.values():
-        for t in v:
-            t.remove()
-    top, bottom = 1.0, 0.25                       # inches: column titles, then rows
-    xl, xr = 0.1 + lw_["l"] + 0.3, w - 0.1 - lw_["r"] - 0.3     # 0.3: the text's offset from the dots
-    ax = fig.add_axes([xl / w, bottom / h, (xr - xl) / w, 1 - (top + bottom) / h])
-    ax.set_xlim(0, 1)
-    ax.set_ylim(26.6, 0.4)
-    ax.axis("off")
-    for t in a.index:                              # the field first, CANDI and the baseline on top
-        big = t in (CANDI, AVG)
-        ax.plot([0, 1], [a[t], b[t]], color=colour(t), lw=5 if big else 2,
-                alpha=1 if big else .7, zorder=3 if big else 2, solid_capstyle="round")
-        ax.plot([0, 1], [a[t], b[t]], "o", ms=.55 * fs if big else .3 * fs,
-                color=colour(t), zorder=4 if big else 2)
-        kw = dict(fontsize=fs - 4, va="center", color=colour(t) if big else MUTED,
-                  fontweight="bold" if big else "normal", transform=ax.transData)
-        ax.text(-0.04, a[t], f"{label(t)}  {a[t]}", ha="right", **kw)
-        ax.text(1.04, b[t], f"{b[t]}  {label(t)}", ha="left", **kw)
-    for x, ha, lab in ((xl, "right", "before"), (xr, "left", "after the same\ncorrection")):
-        fig.text(x / w, 1 - 0.12 / h, lab, fontsize=fs - 2, color=INK, ha=ha, va="top",
-                 fontweight="bold", linespacing=1.1)
+    left = 0.1 + max(width_in(fig, t) for t in names) + 0.25
+    bottom, top, right = 5.4 * fs / 72, 0.12, 0.25
+    ax.set_position([left / w, bottom / h, 1 - (left + right) / w, 1 - (bottom + top) / h])
+    ax.text(d.loc[CANDI, "pilot"] + 0.025, n - 1, f"{d.loc[CANDI, 'pilot']:.2f}",
+            fontsize=fs - 4, color=TEAL, fontweight="bold", va="center")
+    ax.axvline(1.0, color=BASE, lw=2.4, ls=(0, (5, 4)), zorder=1)
+    ax.set_ylim(-0.8, n - 0.2)
+    ax.set_xlim(lo, hi)
+    ax.set_xticks([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])
+    ax.set_yticks([])
+    for s_ in ("left", "top", "right"):
+        ax.spines[s_].set_visible(False)
+    ax.tick_params(axis="x", labelsize=fs - 4, colors=INK)
+    ax.grid(axis="x", ls="--", lw=1.4, color="#C9CFD3", zorder=0)
+    fig.text(1 - right / w, 2.55 * fs / 72 / h,
+             "skill  (1 = the baseline; higher = better)",
+             fontsize=fs - 2, color=INK, ha="right", va="bottom")
+    yk = 0.9 * fs / 72 / h                       # the key, right-aligned
+    t2 = fig.text(1 - right / w, yk, "after the same correction", fontsize=fs - 4,
+                  color=MUTED, ha="right", va="center")
+    fig.canvas.draw()
+    x2 = 1 - right / w - (width_in(fig, t2) + 0.5 * fs / 72) / w
+    fig.lines.append(plt.Line2D([x2], [yk], marker="o", ms=0.42 * fs, mfc="white",
+                                mec=MUTED, mew=0.12 * fs, ls="none",
+                                transform=fig.transFigure))
+    t1 = fig.text(x2 - (0.5 * fs / 72 + 0.35) / w, yk, "before", fontsize=fs - 4,
+                  color=MUTED, ha="right", va="center")
+    fig.canvas.draw()
+    x1 = x2 - (0.5 * fs / 72 + 0.35 + width_in(fig, t1) + 0.5 * fs / 72) / w
+    fig.lines.append(plt.Line2D([x1], [yk], marker="o", ms=0.42 * fs, color=MUTED,
+                                ls="none", transform=fig.transFigure))
     save(fig, stem)
 
 
@@ -230,14 +258,18 @@ def measures(stem, w, h, fs):
 def pearson(stem, w, h, fs):
     """Genome-wide Pearson r of CANDI against each of the 51 blind-test
     experiments, one box per assay, assays from best to worst median. Each grey
-    point is one experiment (one cell type)."""
+    point is one experiment (one cell type); the mustard bar is the
+    average-activity baseline's median on the same experiments."""
     sc = pd.read_csv(DATA / "scores_official.csv")
     sc = sc[(sc.grid == "common") & (sc.chrom_set == "all23")]
     cd = sc[sc.arm == "candi.tcfloor"]
-    assert len(cd) == 51
+    av = sc[sc.arm == "avg.none"]
+    assert len(cd) == len(av) == 51
     order = cd.groupby("assay_name").gwcorr.median().sort_values(ascending=False).index
     print("[A] CANDI median Pearson r by assay:",
           ", ".join(f"{a} {cd[cd.assay_name == a].gwcorr.median():.2f}" for a in order))
+    print("[A] baseline median Pearson r by assay:",
+          ", ".join(f"{a} {av[av.assay_name == a].gwcorr.median():.2f}" for a in order))
     fig = plt.figure(figsize=(w, h))
     ax = fig.add_axes([1.45 / w, 2.75 / h, 1 - 1.65 / w, 1 - 3.0 / h])
     data = [cd[cd.assay_name == a].gwcorr.values for a in order]
@@ -250,6 +282,15 @@ def pearson(stem, w, h, fs):
     for i, v in enumerate(data, start=1):
         ax.scatter(i + rng.uniform(-.16, .16, len(v)), v, s=fs * 5.0, color="#9AA4AA",
                    alpha=.75, edgecolor="none", zorder=3)
+    for i, a in enumerate(order, start=1):
+        ax.plot([i - .42, i + .42], [av[av.assay_name == a].gwcorr.median()] * 2,
+                color=BASE, lw=5, solid_capstyle="butt", zorder=4)
+    for m in bp["medians"]:                  # CANDI's median stays visible where they tie
+        m.set_zorder(5)
+    ax.legend(handles=[plt.Rectangle((0, 0), 1, 1, fc="#F6C9BE", ec="#8A969C", lw=2),
+                       plt.Line2D([], [], color=BASE, lw=5)],
+              labels=["CANDI", "average-activity\nbaseline (median)"], loc="upper right",
+              fontsize=fs - 4, frameon=False, handlelength=1.4, borderaxespad=0.3)
     ax.set_xticks(range(1, len(order) + 1))
     ax.set_xticklabels(order, rotation=90, fontsize=fs, color=INK)
     ax.set_ylim(0, 1)
@@ -261,9 +302,9 @@ def pearson(stem, w, h, fs):
     save(fig, stem)
 
 
-# (Pearson w, h), (ranks w, h), (measures w, h), panel text size in pt.
+# (Pearson w, h), (skill w, h), (measures w, h), panel text size in pt.
 SIZES = {"_landscape": ((7.0, 10.15), (8.8, 10.15), (11.8, 10.15), 22)}
-for suffix, (pr, rk, me, fs) in SIZES.items():
+for suffix, (pr, sk_, me, fs) in SIZES.items():
     pearson(f"eic_pearson{suffix}", *pr, fs)
-    ranks(f"eic_ranks{suffix}", *rk, fs)
+    skill(f"eic_skill{suffix}", *sk_, fs)
     measures(f"eic_measures{suffix}", *me, fs)
