@@ -3,8 +3,8 @@
 % any other size or more than one page.
 %
 % Two rows of two columns, then the references in one band across the foot.
-% Row 1: the two text boxes | the schematic workflow. Row 2: downstream utility
-% | the challenge section. The
+% Row 1: the two text boxes | the schematic workflow. Row 2: the challenge
+% section | downstream utility. The
 % row heights are set by the right column; the log lines "POSTER: ... needs" say
 % how much each column needs.
 % Build: bash build.sh
@@ -18,11 +18,11 @@
 \newcommand{\boxtitlesize}{\fontsize{42}{50}\selectfont}
 \input{common}
 
-% Row 1 gives the schematic the width; row 2 gives panels A and B more.
+% Row 1 gives the schematic the width; row 2 gives the challenge section the width.
 \newcommand{\LeftW}{10.6in}
 \newcommand{\RightW}{30.8in}
-\newcommand{\LeftWTwo}{13.0in}
-\newcommand{\RightWTwo}{28.4in}
+\newcommand{\LeftWTwo}{28.4in}
+\newcommand{\RightWTwo}{13.0in}
 \newcommand{\RowOne}{16.3in}
 \newcommand{\RowTwo}{13.75in}
 
@@ -40,7 +40,7 @@
   \node[anchor=north west, inner sep=0pt, text=ink]
     at ($(nw)+(7.1in,-0.6in)$) {\resizebox{33.7in}{!}{\bfseries\PosterTitle}};
   \node[anchor=base west, inner sep=0pt, text=ink]
-    at ($(nw)+(7.1in,-2.32in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
+    at ($(nw)+(7.1in,-2.21in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
   \node[anchor=base west, inner sep=0pt, text=muted]
     at ($(nw)+(7.1in,-2.95in)$) {\fontsize{38}{44}\selectfont\PosterAffil};
   \node[anchor=north east, inner sep=0pt] at ($(ne)+(-0.8in,-0.6in)$)
@@ -61,15 +61,16 @@
 \vspace{0.4in}
 % ============================================================ row 2 ===========
 \Column{row 2 left}{\LeftWTwo}{\RowTwo}{%
+  \sectionbar{\HeadEIC}
+  \panel{7.0in}{panels/eic_pearson_landscape.pdf}{\CapA}\hfill
+  \panel{8.8in}{panels/eic_leaderboard_landscape.pdf}{\CapB}\hfill
+  \panel{11.8in}{panels/eic_measures_landscape.pdf}{\CapC}}\hfill
+\Column{row 2 right}{\RightWTwo}{\RowTwo}{%
   \sectionbar{\HeadUtility}\vfill
   \begin{minipage}[c]{7.0in}\includegraphics[width=\linewidth]{panels/ga_A.pdf}\end{minipage}\hfill
-  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapA\par}\end{minipage}\par\vfill
+  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapD\par}\end{minipage}\par\vfill
   \begin{minipage}[c]{7.0in}\includegraphics[width=\linewidth]{panels/ga_B.pdf}\end{minipage}\hfill
-  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapB\par}\end{minipage}\par\vfill}\hfill
-\Column{row 2 right}{\RightWTwo}{\RowTwo}{%
-  \sectionbar{\HeadEIC}
-  \panel{11.4in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
-  \panel{16.4in}{panels/eic_measures_landscape.pdf}{\CapD}}
+  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapE\par}\end{minipage}\par\vfill}
 
 % ======================================================= references ===========
 % One long band across the foot of the page, under a divider.

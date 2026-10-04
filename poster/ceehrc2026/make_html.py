@@ -35,6 +35,7 @@ def macros(tex):
 MATH = {
     r"$\times$": "×",
     r"$r \approx 0.79$": "<i>r</i> ≈ 0.79",
+    r"$r$": "<i>r</i>",
 }
 
 
@@ -195,7 +196,7 @@ def refs():
 L = page("landscape", 44, 36,
          dict(**{"red-w": "5.6in", "red-top": ".6in", "red-h": "2.35in", "sfu-r": ".21in",
                  "sfu": "112pt", "title-x": "7.1in", "authors": "52pt",
-                 "authors-top": "1.685in", "affil-top": "2.487in", "url-gap": ".36in",
+                 "authors-top": "1.575in", "affil-top": "2.487in", "url-gap": ".36in",
                  "top": "3.55in", "body": "34pt", "body-lh": "43pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "42pt"}),
@@ -215,18 +216,19 @@ L = page("landscape", 44, 36,
 <img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">
 <p class="cap wide">{W['CapStrip']}</p></div>
 </div>
-<div style="display:grid; grid-template-columns: 13in 28.4in; column-gap: 1in; margin-top: .4in">
+<div style="display:grid; grid-template-columns: 28.4in 13in; column-gap: 1in; margin-top: .4in">
+<div class="col"><h2>{W['HeadEIC']}</h2>
+<div class="row">{fig('eic_pearson_landscape', 7.0, W['CapA'])}
+{fig('eic_leaderboard_landscape', 8.8, W['CapB'])}
+{fig('eic_measures_landscape', 11.8, W['CapC'])}</div></div>
 <div class="col"><h2>{W['HeadUtility']}</h2>
 <div class="fill"></div>
 <div class="row" style="align-items:center"><img src="{svg('ga_A')}" alt="" style="width:7in">
-<p class="cap" style="width:5.6in; margin:0">{W['CapA']}</p></div>
+<p class="cap" style="width:5.6in; margin:0">{W['CapD']}</p></div>
 <div class="fill"></div>
 <div class="row" style="align-items:center"><img src="{svg('ga_B')}" alt="" style="width:7in">
-<p class="cap" style="width:5.6in; margin:0">{W['CapB']}</p></div>
+<p class="cap" style="width:5.6in; margin:0">{W['CapE']}</p></div>
 <div class="fill"></div></div>
-<div class="col"><h2>{W['HeadEIC']}</h2>
-<div class="row">{fig('eic_leaderboard_landscape', 11.4, W['CapC'])}
-{fig('eic_measures_landscape', 16.4, W['CapD'])}</div></div>
 </div>
 {refs()}
 </div>""")

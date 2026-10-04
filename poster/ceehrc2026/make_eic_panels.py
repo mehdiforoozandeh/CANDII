@@ -11,11 +11,15 @@ github.com/mlibbrecht/2026-07-26_epi_imputation (main, 2026-09-28):
   tcfloor_coefficients.csv       025  the correction's 24 numbers (fitted in 017)
   measure_ratios.csv             025  each measure over the 51 experiments, with the
                                       average-activity baseline at 1
+  scores_official.csv            025  every arm's nine measures per blind-test
+                                      experiment (commit 5218f31a); the Pearson r
+                                      panel reads gwcorr, common grid, all 23
+                                      chromosomes
 
 "CANDI" means CANDI + the training-side output correction (025's `candi.tcfloor`)
 everywhere.
 
-Writes panels/eic_{leaderboard,measures}_landscape.{pdf,svg} for
+Writes panels/eic_{pearson,leaderboard,measures}_landscape.{pdf,svg} for
 poster_landscape.tex, drawn at the size they are printed at, so a point here is a
 point there.
 """
@@ -213,8 +217,54 @@ def measures(stem, w, h, fs):
     save(fig, stem)
 
 
-# (leaderboard w, h), (measures w, h), panel text size in pt.
-SIZES = {"_landscape": ((11.4, 11.1), (16.4, 11.1), 22)}
-for suffix, (lb, me, fs) in SIZES.items():
+# ============================================================= Pearson r box ==
+def pearson(stem, w, h, fs):
+    """Genome-wide Pearson r of CANDI against each of the 51 blind-test
+    experiments, one box per assay, assays from best to worst median. Each grey
+    point is one experiment (one cell type); the mustard bar is the
+    average-activity baseline's median on the same experiments."""
+    sc = pd.read_csv(DATA / "scores_official.csv")
+    sc = sc[(sc.grid == "common") & (sc.chrom_set == "all23")]
+    cd = sc[sc.arm == "candi.tcfloor"]
+    av = sc[sc.arm == "avg.none"]
+    assert len(cd) == 51 and len(av) == 51
+    order = cd.groupby("assay_name").gwcorr.median().sort_values(ascending=False).index
+    print("[A] CANDI median Pearson r by assay:",
+          ", ".join(f"{a} {cd[cd.assay_name == a].gwcorr.median():.2f}" for a in order))
+    fig = plt.figure(figsize=(w, h))
+    ax = fig.add_axes([1.45 / w, 2.75 / h, 1 - 1.65 / w, 1 - 3.0 / h])
+    data = [cd[cd.assay_name == a].gwcorr.values for a in order]
+    bp = ax.boxplot(data, widths=.62, patch_artist=True, showfliers=False,
+                    medianprops=dict(color="#A3302A", lw=3.2),
+                    boxprops=dict(facecolor="#F6C9BE", edgecolor="#8A969C", lw=2.0),
+                    whiskerprops=dict(color="#333333", lw=2.0),
+                    capprops=dict(color="#333333", lw=2.0), zorder=2)
+    rng = np.random.default_rng(0)
+    for i, v in enumerate(data, start=1):
+        ax.scatter(i + rng.uniform(-.16, .16, len(v)), v, s=fs * 5.0, color="#9AA4AA",
+                   alpha=.75, edgecolor="none", zorder=3)
+        m = av[av.assay_name == order[i - 1]].gwcorr.median()
+        ax.plot([i - .36, i + .36], [m, m], color=BASE, lw=4.0, zorder=4)
+    ax.set_xticks(range(1, len(order) + 1))
+    ax.set_xticklabels(order, rotation=90, fontsize=fs, color=INK)
+    ax.set_ylim(0, 1)
+    ax.set_yticks(np.arange(0, 1.01, .2))
+    ax.tick_params(axis="y", labelsize=fs, colors=INK)
+    ax.set_ylabel("Pearson r (genome-wide)", fontsize=fs, color=INK)
+    ax.grid(axis="both", color="#E3E6E8", lw=1.2, zorder=0)
+    ax.set_axisbelow(True)
+    from matplotlib.lines import Line2D
+    ax.legend(handles=[Line2D([], [], marker="o", ls="", color="#9AA4AA", ms=fs * .45,
+                              label="CANDI, one experiment"),
+                       Line2D([], [], color=BASE, lw=4.0,
+                              label="average-activity baseline,\nmedian")],
+              loc="upper right", fontsize=fs * .8, frameon=False, handlelength=1.2)
+    save(fig, stem)
+
+
+# (Pearson w, h), (leaderboard w, h), (measures w, h), panel text size in pt.
+SIZES = {"_landscape": ((7.0, 10.15), (8.8, 10.15), (11.8, 10.15), 22)}
+for suffix, (pr, lb, me, fs) in SIZES.items():
+    pearson(f"eic_pearson{suffix}", *pr, fs)
     leaderboard(f"eic_leaderboard{suffix}", *lb, fs)
     measures(f"eic_measures{suffix}", *me, fs)

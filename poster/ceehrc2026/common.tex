@@ -72,22 +72,26 @@ never measured, yellow ones are masked. \textbf{Bottom:} each output is a
 probability distribution, here a mean and 95\% interval per assay; window by
 window, they fill every missing thread of the tensor.}
 
-\newcommand{\HeadUtility}{Downstream utility of CANDI}
-\newcommand{\CapA}{%
-\textbf{A}\enspace Confidence calibration for DNase-seq (DND-41): predicted
-confidence level against the fraction of observed data within that interval.}
-\newcommand{\CapB}{%
-\textbf{B}\enspace Gene expression prediction as input assays are removed.
-Denoised+Imputed and Latent settings are robust to input sparsity.}
-
 \newcommand{\HeadEIC}{Fixing the train-test experimental covariate shift in the ENCODE Imputation Challenge}
-\newcommand{\CapC}{%
-\textbf{C}\enspace The leaderboard with CANDI added: CANDI is first at 0.179
+\newcommand{\CapA}{%
+\textbf{A}\enspace Genome-wide Pearson $r$ of CANDI against each of the 51
+blind-test experiments, by assay. Mustard bars: the average-activity baseline's
+median.}
+\newcommand{\CapB}{%
+\textbf{B}\enspace The leaderboard with CANDI added: CANDI is first at 0.179
 (bootstrap range 0.177--0.184), the next entry 0.306.}
-\newcommand{\CapD}{%
-\textbf{D}\enspace Eight of the nine measures relative to the baseline, median
+\newcommand{\CapC}{%
+\textbf{C}\enspace Eight of the nine measures relative to the baseline, median
 over 51 experiments. CANDI is first on three and
 top 8 on the rest.}
+
+\newcommand{\HeadUtility}{Downstream utility of CANDI}
+\newcommand{\CapD}{%
+\textbf{D}\enspace Confidence calibration for DNase-seq (DND-41): predicted
+confidence level against the fraction of observed data within that interval.}
+\newcommand{\CapE}{%
+\textbf{E}\enspace Gene expression prediction as input assays are removed.
+Denoised+Imputed and Latent settings are robust to input sparsity.}
 
 \newcommand{\TxtRefs}{%
 [1]~Schreiber J, Boix C, \textit{et al.} The ENCODE Imputation Challenge: a critical
@@ -95,7 +99,7 @@ assessment of methods for cross-cell type imputation of epigenomic profiles.
 \textit{Genome Biol} 24:79 (2023).\quad
 [2]~Foroozandeh M, Diab AR, Libbrecht M. CANDI: self-supervised, confidence-aware
 denoising imputation of genomic data. \textit{bioRxiv} 2025.01.23.634626 (2025).\quad
-Panels C--D: blind-test scoring from the Libbrecht lab's EIC reproduction;
+Panels A--C: blind-test scoring from the Libbrecht lab's EIC reproduction;
 \emph{baseline} is the challenge's average-activity track.
 The correction was chosen after the challenge results were public; none of it is
 fitted on blind-test data.}
