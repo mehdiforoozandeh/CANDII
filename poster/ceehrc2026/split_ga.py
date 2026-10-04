@@ -47,6 +47,20 @@ RECOLOUR = [
     # the predicted tracks: denoised assays dark red, imputed ones salmon
     ('color=TEAL, alpha=.26', 'color=(TEAL if not tag else TEAL_IMP), alpha=(.28 if not tag else .30)'),
     ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=(TEAL if not tag else TEAL_IMP), alpha=(1 if not tag else {IMP_ALPHA})'),
+    # the signal head's output passes through the per-assay output layer; the
+    # line under the heads moves left of that arrow, the closing text moves down
+    ("""axm.text(.5, .314, "a distribution at every position", fontsize=6.3,
+         color=MUTED, ha="center", va="top", transform=axm.transAxes)""",
+     """axm.text(.44, .336, "a distribution\\nat every position", fontsize=6.3,
+         color=MUTED, ha="right", va="top", transform=axm.transAxes, linespacing=1.35)
+down(.5, .348, .266)
+axm.text(.56, .336, "per assay", fontsize=6.3, color=MUTED, ha="left", va="top",
+         transform=axm.transAxes)
+mbox(.07, .93, .176, .262, "max(β₀ + β₁·CANDI", "+ β₂·average-activity, 0)", "#FFFFFF",
+     fs=6.9, ec=TEAL, tc=TEAL, sub_fs=6.9)
+axm.text(.5, .164, "final signal", fontsize=6.3, color=MUTED, ha="center", va="top",
+         transform=axm.transAxes)"""),
+    ('axm.text(.5, .258, "Self-supervised.', 'axm.text(.5, .112, "Self-supervised.'),
     # CANDI's own colour: the model box title bar and panel A's curve
     ('facecolor=TEAL, edgecolor="none", zorder=3))', f'facecolor="{CORAL}", edgecolor="none", zorder=3))'),
     ('axA.plot(x, y, lw=2.0, color=TEAL', f'axA.plot(x, y, lw=2.0, color="{CORAL}"'),

@@ -89,20 +89,6 @@ confidence level against the fraction of observed data within that interval.}
 Denoised+Imputed and Latent settings are robust to input sparsity.}
 
 \newcommand{\HeadEIC}{Fixing the train-test experimental covariate shift in the ENCODE Imputation Challenge}
-\newcommand{\TxtEIC}{%
-\textbf{The shift.} We followed the EIC train-test split: 51 blind-test
-experiments (12 cell types, 8 assays). The train and test sets differ subtly:
-every blind-test experiment is paired-end, against 15\% of training experiments,
-and blind-test tracks sit at an assay-specific signal level. CANDI recovers the
-rank-ordering and structure of the signal but not its absolute magnitude; its raw
-output ranks 14th.
-\par\vspace{0.2in}
-\textbf{The fix.} Per assay, CANDI's output passes through one layer,
-\par\vspace{0.12in}
-\centerline{$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$,}
-\vspace{0.12in}
-fitted by least squares on the 133 training experiments only. CANDI then ranks
-1st.}
 \newcommand{\CapC}{%
 \textbf{C}\enspace The leaderboard with CANDI added: CANDI is first at 0.179
 (bootstrap range 0.177--0.184), the next entry 0.306.}

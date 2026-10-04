@@ -34,9 +34,6 @@ def macros(tex):
 # until it has an HTML form.
 MATH = {
     r"$\times$": "×",
-    r"$\max(\beta_0 + \beta_1\cdot\text{CANDI} + \beta_2\cdot\text{baseline},\,0)$":
-        "max(<i>β</i><sub>0</sub> + <i>β</i><sub>1</sub>·CANDI + "
-        "<i>β</i><sub>2</sub>·baseline, 0)",
     r"$r \approx 0.79$": "<i>r</i> ≈ 0.79",
 }
 
@@ -51,8 +48,6 @@ def html(tex):
     s = s.replace(r"\,", "&thinsp;").replace(r"\enspace", "&ensp;")
     for cmd, tag in (("textbf", "b"), ("textit", "i"), ("emph", "em")):
         s = re.sub(rf"\\{cmd}\{{([^{{}}]*)\}}", rf"<{tag}>\1</{tag}>", s)
-    s = re.sub(r"\s*\\centerline\{([^{}]*)\}\s*\\vspace\{[^}]*\}\s*",
-               r'</p><p class="eq">\1</p><p>', s)
     s = re.sub(r"\\par\s*\\vspace\{[^}]*\}\s*", "</p><p>", s)
     s = s.replace(r"\begin{itemize}", "<ul>").replace(r"\end{itemize}", "</ul>")
     s = re.sub(r"\\item\s*", "<li>", s)
@@ -94,9 +89,6 @@ body { background: var(--ground); color: var(--ground-ink);
   transform-origin: 0 0; font-family: "Open Sans", "Helvetica Neue", Arial, sans-serif; }
 .poster * { box-sizing: border-box; margin: 0; }
 .poster p + p { margin-top: .1in; }
-.poster .text p + p { margin-top: .2in; }
-.poster .text p.eq, .poster .text p.eq + p { margin-top: .12in; }
-.poster p.eq { text-align: center; white-space: nowrap; }
 .red { position: absolute; left: 0; top: var(--red-top); width: var(--red-w); height: var(--red-h);
   background: var(--red); }
 .sfu { position: absolute; right: var(--sfu-r); bottom: -.02in; color: #fff; line-height: .8;
@@ -130,7 +122,6 @@ body { background: var(--ground); color: var(--ground-ink);
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
 .cap.wide { text-align: justify; margin-top: .18in; }
-.text { font-size: var(--body); line-height: var(--body-lh); text-align: justify; hyphens: auto; }
 .refs { border-top: 3pt solid var(--rule); padding-top: .25in; font-size: var(--small);
   line-height: var(--small-lh); color: var(--muted); }
 sub, sup { font-size: .7em; line-height: 0; }
@@ -226,9 +217,8 @@ L = page("landscape", 44, 34,
 <div class="row">{fig('ga_A', 6.25, W['CapA'])}{fig('ga_B', 6.25, W['CapB'])}</div>
 <div class="fill"></div>{refs()}</div>
 <div class="col"><h2>{W['HeadEIC']}</h2>
-<div class="row"><div class="text" style="width:7.6in"><p>{W['TxtEIC']}</p></div>
-{fig('eic_leaderboard_landscape', 8.2, W['CapC'])}
-{fig('eic_measures_landscape', 12.0, W['CapD'])}</div></div>
+<div class="row">{fig('eic_leaderboard_landscape', 11.4, W['CapC'])}
+{fig('eic_measures_landscape', 16.4, W['CapD'])}</div></div>
 </div>
 </div>""")
 
