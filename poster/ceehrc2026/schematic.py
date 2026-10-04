@@ -280,19 +280,17 @@ def track_panel(x0, y0, w, h, predicted, ylo=0.0):
 
 # ============================================================ row A : inputs ==
 # The tensor: 35 x 51 cells on the front face, each one experiment.
-CX0, CW, CH, DX, DY = 5.6, 26.0, 14.0, 6.0, 3.4
+CX0, CW, CH, DX, DY = 5.6, 16.0, 14.0, 5.0, 3.4
 cube(CX0, 26.6, CW, CH, DX, DY, filled=False, labels=True)
 
-AX.add_patch(FancyArrowPatch((39.0, 36.0), (55.6, 36.0), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((28.6, 36.0), (44.6, 36.0), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
-AX.text(47.3, 36.9, "slice one cell type\n(upper lobe of left lung)", fontsize=6.8,
+AX.text(36.6, 36.9, "slice one cell type\n(upper lobe of left lung)", fontsize=6.8,
         color=MUTED, ha="center", va="bottom", linespacing=1.35)
-AX.text(47.3, 34.6, "ENCODE Imputation Challenge:\n"
-                    f"{int(avail.sum())} of {avail.size:,} experiments\n"
-                    "measured.  Grey = missing.",
+AX.text(36.6, 35.0, "ENCODE Imputation\nChallenge data.\nGrey = missing.",
         fontsize=6.6, color=INK, ha="center", va="top", linespacing=1.45)
 
-WX0, WY0, WW, WH = 57.0, 26.6, 22.6, 17.6
+WX0, WY0, WW, WH = 46.0, 26.6, 22.6, 17.6
 
 
 def window_bracket(y, label):
@@ -342,7 +340,8 @@ _cov.text(.5, .52, "covariates\ndepth · read length · run type · platform",
 # (conv towers salmon, transformer grey, latent purple, deconv blue), sized so
 # it can be read at graphical-abstract scale.
 CONV, TRANS, LAT, DECONV = "#F4D3B5", "#A9AFB2", "#C6B4E2", "#9FC8E9"
-MX0, MY0, MW, MH = 82.4, 16.4, 17.2, 27.2
+MX0, MY0, MW, MH = 73.6, 3.0, 26.0, 41.0
+MS = 1.25                               # text and arrowheads, a little larger than the rest
 axm = AX.inset_axes([MX0, MY0, MW, MH], transform=AX.transData)
 axm.patch.set_visible(False)
 axm.axis("off")
@@ -351,8 +350,8 @@ axm.add_patch(FancyBboxPatch((0, 0), 1, 1, transform=axm.transAxes,
                              facecolor="#FAFCFC", edgecolor=RULE, lw=1.0, zorder=0))
 
 
-def mbox(x0, x1, y0, y1, head, sub=None, fc=TRANS, fs=7.8, ec="none", tc=INK,
-         sub_fs=6.3):
+def mbox(x0, x1, y0, y1, head, sub=None, fc=TRANS, fs=7.8 * MS, ec="none", tc=INK,
+         sub_fs=6.3 * MS):
     axm.add_patch(FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, transform=axm.transAxes,
                                  boxstyle="round,pad=0.004,rounding_size=0.014",
                                  facecolor=fc, edgecolor=ec, lw=1.0, zorder=3))
@@ -369,19 +368,19 @@ def mbox(x0, x1, y0, y1, head, sub=None, fc=TRANS, fs=7.8, ec="none", tc=INK,
 
 def down(x, y_from, y_to):
     axm.add_patch(FancyArrowPatch((x, y_from), (x, y_to), transform=axm.transAxes,
-                                  arrowstyle="-|>", mutation_scale=9, lw=1.0,
+                                  arrowstyle="-|>", mutation_scale=9 * MS, lw=1.0,
                                   color=MUTED, zorder=3))
 
 
 axm.add_patch(FancyBboxPatch((.25, .936), .50, .046, transform=axm.transAxes,
                              boxstyle="round,pad=0.008,rounding_size=0.011",
                              facecolor="#D46A5A", edgecolor="none", zorder=3))
-axm.text(.5, .959, "CANDI", fontsize=13.5, fontweight="bold", color="white",
+axm.text(.5, .959, "CANDI", fontsize=13.5 * MS, fontweight="bold", color="white",
          ha="center", va="center", transform=axm.transAxes, zorder=4)
 
 mbox(.07, .47, .832, .904, "Conv1D", "DNA", CONV)
 mbox(.53, .93, .832, .904, "Conv1D", "counts", CONV)
-axm.text(.5, .824, "covariates modulate every layer", fontsize=6.3, color=MUTED,
+axm.text(.5, .824, "covariates modulate every layer", fontsize=6.3 * MS, color=MUTED,
          ha="center", va="top", transform=axm.transAxes)
 down(.27, .788, .760)
 down(.73, .788, .760)
@@ -399,35 +398,35 @@ axm.plot([COLX[0], COLX[2]], [.564, .564], color=MUTED, lw=1.0,
          transform=axm.transAxes, zorder=3)
 for cx in COLX:
     down(cx, .564, .534)
-    mbox(cx - HALF, cx + HALF, .462, .528, "Deconv1D", fc=DECONV, fs=6.7)
+    mbox(cx - HALF, cx + HALF, .462, .528, "Deconv1D", fc=DECONV, fs=6.7 * MS)
     down(cx, .456, .428)
 for cx, (head, sub) in zip(COLX, (("counts", "neg. binomial"), ("signal", "Gaussian"),
                                   ("peaks", "Bernoulli"))):
-    mbox(cx - HALF, cx + HALF, .348, .422, head, sub, "#FFFFFF", fs=6.9, ec=TEAL,
-         tc=TEAL, sub_fs=5.4)
-axm.text(.44, .336, "a distribution\nat every position", fontsize=6.3,
+    mbox(cx - HALF, cx + HALF, .348, .422, head, sub, "#FFFFFF", fs=6.9 * MS, ec=TEAL,
+         tc=TEAL, sub_fs=5.4 * MS)
+axm.text(.44, .336, "a distribution\nat every position", fontsize=6.3 * MS,
          color=MUTED, ha="right", va="top", transform=axm.transAxes, linespacing=1.35)
 down(.5, .348, .266)
-axm.text(.56, .336, "per assay", fontsize=6.3, color=MUTED, ha="left", va="top",
+axm.text(.56, .336, "per assay", fontsize=6.3 * MS, color=MUTED, ha="left", va="top",
          transform=axm.transAxes)
 mbox(.31, .97, .176, .262, "max(β₀ + β₁·CANDI", "+ β₂·average-activity, 0)", "#FFFFFF",
-     fs=6.9, ec=TEAL, tc=TEAL, sub_fs=6.9)
-mbox(.03, .21, .184, .254, "average-", "activity", "#FFFFFF", fs=6.3, ec="#E2B35C",
-     tc="#7A5A14", sub_fs=6.3)
+     fs=6.9 * MS, ec=TEAL, tc=TEAL, sub_fs=6.9 * MS)
+mbox(.03, .21, .184, .254, "average-", "activity", "#FFFFFF", fs=6.3 * MS, ec="#E2B35C",
+     tc="#7A5A14", sub_fs=6.3 * MS)
 axm.add_patch(FancyArrowPatch((.218, .219), (.305, .219), transform=axm.transAxes,
-                              arrowstyle="-|>", mutation_scale=9, lw=1.0, color=MUTED,
+                              arrowstyle="-|>", mutation_scale=9 * MS, lw=1.0, color=MUTED,
                               zorder=3))
-axm.text(.64, .164, "final signal", fontsize=6.3, color=MUTED, ha="center", va="top",
+axm.text(.64, .164, "final signal", fontsize=6.3 * MS, color=MUTED, ha="center", va="top",
          transform=axm.transAxes)
 axm.text(.5, .112, "Self-supervised.  No cell-type embedding,\n"
                    "so it runs on cell types it has never seen.",
-         fontsize=7.0, color=INK, ha="center", va="top", transform=axm.transAxes,
+         fontsize=7.0 * MS, color=INK, ha="center", va="top", transform=axm.transAxes,
          linespacing=1.55)
 
 # in near the top, out near the bottom — the model is the turn in the loop
-AX.add_patch(FancyArrowPatch((79.5, 36.0), (82.1, 36.0), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((69.6, 36.0), (73.3, 36.0), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
-AX.add_patch(FancyArrowPatch((82.1, 17.7), (79.5, 17.7), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((73.3, 14.0), (69.6, 14.0), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
 
 # ========================================================== row B : outputs ===
@@ -439,9 +438,9 @@ AX.text(WX0 + WW * .58, OY0 - 1.1,
         "The mean misses spikes; the interval covers them.",
         fontsize=7.0, color=MUTED, ha="center", va="top", linespacing=1.5)
 
-AX.add_patch(FancyArrowPatch((55.6, 12.4), (39.0, 12.4), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((44.6, 12.4), (28.6, 12.4), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
-AX.text(47.3, 11.5, "every window,\nevery cell type", fontsize=6.6, color=MUTED,
+AX.text(36.6, 11.5, "every window,\nevery cell type", fontsize=6.6, color=MUTED,
         ha="center", va="top", linespacing=1.35)
 
 cube(CX0, 4.4, CW, CH, DX, DY, filled=True)

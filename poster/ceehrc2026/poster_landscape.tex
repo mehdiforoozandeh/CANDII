@@ -1,28 +1,29 @@
 % CEEHRC 2026 poster, landscape: 44 in wide x 34 in high (ANSI E), inside the
 % conference's 44 x 44 in limit.
 %
-% Two rows of two columns. Row 1: the two text boxes and the references | the
-% schematic workflow. Row 2: downstream utility | the challenge section. The
+% Two rows of two columns, then the references in one band across the foot.
+% Row 1: the two text boxes | the schematic workflow. Row 2: downstream utility
+% | the challenge section. The
 % row heights are set by the right column; the log lines "POSTER: ... needs" say
 % how much each column needs.
 % Build: bash build.sh
 \documentclass{article}
 \usepackage[paperwidth=44in, paperheight=34in,
             left=0.8in, right=0.8in, top=4.35in, bottom=0.7in]{geometry}
-\newcommand{\bodysize}{\fontsize{28}{36}\selectfont}
+\newcommand{\bodysize}{\fontsize{34}{43}\selectfont}
 \newcommand{\capsize}{\fontsize{26}{34}\selectfont}
 \newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
 \newcommand{\headsize}{\fontsize{48}{58}\selectfont}
-\newcommand{\boxtitlesize}{\fontsize{36}{44}\selectfont}
+\newcommand{\boxtitlesize}{\fontsize{42}{50}\selectfont}
 \input{common}
 
 % Row 1 gives the schematic the width; row 2 gives panels A and B more.
-\newcommand{\LeftW}{9.8in}
-\newcommand{\RightW}{31.6in}
+\newcommand{\LeftW}{11.0in}
+\newcommand{\RightW}{30.4in}
 \newcommand{\LeftWTwo}{13.0in}
 \newcommand{\RightWTwo}{28.4in}
-\newcommand{\RowOne}{16.65in}
-\newcommand{\RowTwo}{11.65in}
+\newcommand{\RowOne}{16.12in}
+\newcommand{\RowTwo}{11.08in}
 
 \begin{document}
 % ============================================================ header ==========
@@ -49,9 +50,7 @@
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%
   \begin{tcolorbox}[textbox]\boxtitle{The problem}\TxtProblem\end{tcolorbox}\vfill
-  \begin{tcolorbox}[textbox]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}\vfill
-  {\color{rule}\rule{\linewidth}{3pt}}\par\vspace{0.25in}
-  {\smallsize\color{muted}\TxtRefs\par}}\hfill
+  \begin{tcolorbox}[textbox]\boxtitle{Key findings}\TxtFindings\end{tcolorbox}}\hfill
 \Column{row 1 right}{\RightW}{\RowOne}{%
   \sectionbar{\HeadStrip}
   \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
@@ -67,4 +66,12 @@
   \sectionbar{\HeadEIC}
   \panel{11.4in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
   \panel{16.4in}{panels/eic_measures_landscape.pdf}{\CapD}}
+
+% ======================================================= references ===========
+% One long band across the foot of the page, under a divider.
+\vspace{0.15in}
+{\color{rule}\rule{\linewidth}{4pt}}\par\vspace{0.15in}
+\sbox\PosterCol{\parbox{\linewidth}{\smallsize\color{muted}\TxtRefs}}%
+\typeout{POSTER: references need \the\dimexpr\ht\PosterCol+\dp\PosterCol\relax}%
+{\smallsize\color{muted}\TxtRefs\par}
 \end{document}

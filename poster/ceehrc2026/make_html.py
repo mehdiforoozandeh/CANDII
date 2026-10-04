@@ -45,7 +45,7 @@ def html(tex):
         s = s.replace(k, v)
     assert "$" not in s, f"unmapped maths in: {s}"
     s = s.replace(r"\%", "%").replace("--", "–").replace("~", "&nbsp;")
-    s = s.replace(r"\,", "&thinsp;").replace(r"\enspace", "&ensp;")
+    s = s.replace(r"\,", "&thinsp;").replace(r"\enspace", "&ensp;").replace(r"\quad", "&emsp;")
     for cmd, tag in (("textbf", "b"), ("textit", "i"), ("emph", "em")):
         s = re.sub(rf"\\{cmd}\{{([^{{}}]*)\}}", rf"<{tag}>\1</{tag}>", s)
     s = re.sub(r"\\par\s*\\vspace\{[^}]*\}\s*", "</p><p>", s)
@@ -122,7 +122,7 @@ body { background: var(--ground); color: var(--ground-ink);
 figure img { display: block; width: 100%; }
 .poster figcaption, .poster .cap { font-size: var(--cap); line-height: var(--cap-lh); margin-top: .2in; }
 .cap.wide { text-align: justify; margin-top: .18in; }
-.refs { border-top: 3pt solid var(--rule); padding-top: .25in; font-size: var(--small);
+.refs { border-top: 4pt solid var(--rule); margin-top: .15in; padding-top: .15in; font-size: var(--small);
   line-height: var(--small-lh); color: var(--muted); }
 sub, sup { font-size: .7em; line-height: 0; }
 @media (prefers-reduced-motion: no-preference) { .wrap { transition: height .15s; } }
@@ -193,26 +193,25 @@ def refs():
 L = page("landscape", 44, 34,
          dict(**{"red-w": "5.6in", "red-top": "1.12in", "red-h": "2.345in", "sfu-r": ".21in",
                  "sfu": "112pt", "title-x": "6.3in", "authors": "52pt",
-                 "top": "4.35in", "body": "28pt", "body-lh": "36pt", "cap": "26pt",
+                 "top": "4.35in", "body": "34pt", "body-lh": "43pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
-                 "boxtitle": "36pt"}),
+                 "boxtitle": "42pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
 <div class="title" data-fit="36.9" style="bottom:calc(100% - 1.94in); font-size:100pt">{W['PosterTitle']}</div>
 <div class="authors">{W['PosterAuthors']}</div>
 <div class="affil">{W['PosterAffil']}</div>
 {qr()}""",
-         f"""<div class="body" style="grid-template-rows: 16.65in 11.65in; row-gap: .4in">
-<div style="display:grid; grid-template-columns: 9.8in 31.6in; column-gap: 1in">
+         f"""<div class="body" style="grid-template-rows: 16.12in 11.48in auto; width: 42.4in">
+<div style="display:grid; grid-template-columns: 11in 30.4in; column-gap: 1in">
 <div class="col" style="justify-content: space-between">
 {box("The problem", W['TxtProblem'])}
 {box("Key findings", W['TxtFindings'])}
-{refs()}
 </div>
 <div class="col"><h2>{W['HeadStrip']}</h2>
 <img src="{svg('ga_strip')}" alt="CANDI schematic workflow" style="width:100%">
 <p class="cap wide">{W['CapStrip']}</p></div>
 </div>
-<div style="display:grid; grid-template-columns: 13in 28.4in; column-gap: 1in">
+<div style="display:grid; grid-template-columns: 13in 28.4in; column-gap: 1in; margin-top: .4in">
 <div class="col"><h2>{W['HeadUtility']}</h2>
 <div class="fill"></div>
 <div class="row">{fig('ga_A', 6.25, W['CapA'])}{fig('ga_B', 6.25, W['CapB'])}</div>
@@ -221,6 +220,7 @@ L = page("landscape", 44, 34,
 <div class="row">{fig('eic_leaderboard_landscape', 11.4, W['CapC'])}
 {fig('eic_measures_landscape', 16.4, W['CapD'])}</div></div>
 </div>
+{refs()}
 </div>""")
 
 for name, text in (("poster_landscape", L),):
