@@ -24,25 +24,30 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "panels"
 OUT.mkdir(exist_ok=True)
 
-# The poster's pastel palette (common.tex). Signal is violet, a hue far from the
-# grey of missing and the yellow of masked experiments: measured and denoised
-# signal is always darker than imputed signal. Coral is CANDI's own
-# colour, kept for the model box title and panel A's curve.
-SIG, SIG_LIGHT, SIG_IMP = "#5B3A99", "#D9C8F2", "#B39AE6"
+# The poster's pastel palette (common.tex). Signal is one clear blue. Denoised
+# and measured signal is opaque; imputed signal is the same blue, translucent,
+# so it reads lighter on white. Missing experiments are a neutral grey with no
+# blue in it, so a light imputed cell never looks like a missing one.
+SIG, IMP_ALPHA = "#1764C0", .38
+GREY, GREY_LIGHT = "#BDBDBD", "#E3E3E3"
 CORAL = "#D46A5A"
 # (exact text in build_ga.py, replacement); each must match exactly once.
 RECOLOUR = [
-    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{SIG}", "{SIG_LIGHT}"'),
-    # the cubes: measured threads, and imputed ones in the filled cube
-    ('            return "#12868C", SHADE[face]', f'            return "{SIG}", SHADE[face]'),
-    # the sliced matrices: measured (dark) and imputed (light) signal
+    ('TEAL, TEAL_IMP = "#12868C", "#7FC7C9"', f'TEAL, TEAL_IMP = "{SIG}", "{SIG}"'),
+    ('MISS_C = "#DDE2E4"', f'MISS_C = "{GREY_LIGHT}"'),
+    # the cubes: measured threads opaque, imputed ones translucent, missing grey
+    ('            return "#12868C", SHADE[face]', '            return TEAL, SHADE[face]'),
+    ('        return (TEAL_IMP if filled else "#B3BEC4"), SHADE[face]',
+     f'        return (TEAL, {IMP_ALPHA} * SHADE[face]) if filled else ("{GREY}", SHADE[face])'),
+    # the sliced matrices: measured signal opaque, imputed signal translucent
     ('["#FFFFFF", "#0E7276"]', f'["#FFFFFF", "{SIG}"]'),
-    ('["#F4FBFB", "#5FBABD"]', '["#FCFAFF", "#CDB9F0"]'),
-    ('facecolor="#EDF8F8"', 'facecolor="#F5F0FC"'),
-    ('Teal names = imputed.', 'Violet names = imputed.'),
-    # the predicted tracks: denoised assays dark, imputed ones light
-    ('color=TEAL, alpha=.26', f'color=(TEAL if not tag else "{SIG_IMP}"), alpha=.26'),
-    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=(TEAL if not tag else "{SIG_IMP}")'),
+    ('["#F4FBFB", "#5FBABD"]', f'["#FFFFFF", "{SIG}"]'),
+    ('cmap=CM_IMP,', f'cmap=CM_IMP, alpha={IMP_ALPHA},'),
+    ('facecolor="#EDF8F8"', 'facecolor="#FFFFFF"'),
+    ('Teal names = imputed.', 'Blue names = imputed.'),
+    # the predicted tracks: denoised assays opaque, imputed ones translucent
+    ('color=TEAL, alpha=.26', 'color=TEAL, alpha=(.30 if not tag else .13)'),
+    ('a.plot(gx, y + mu * BH, color=TEAL', f'a.plot(gx, y + mu * BH, color=TEAL, alpha=(1 if not tag else {IMP_ALPHA + .12:.2f})'),
     # CANDI's own colour: the model box title bar and panel A's curve
     ('facecolor=TEAL, edgecolor="none", zorder=3))', f'facecolor="{CORAL}", edgecolor="none", zorder=3))'),
     ('axA.plot(x, y, lw=2.0, color=TEAL', f'axA.plot(x, y, lw=2.0, color="{CORAL}"'),
