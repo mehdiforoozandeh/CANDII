@@ -68,6 +68,10 @@ axm.add_patch(FancyArrowPatch((.218, .219), (.305, .219), transform=axm.transAxe
 axm.text(.64, .164, "final signal", fontsize=6.3, color=MUTED, ha="center", va="top",
          transform=axm.transAxes)"""),
     ('axm.text(.5, .258, "Self-supervised.', 'axm.text(.5, .112, "Self-supervised.'),
+    # no letter drawn inside panels A and B; the poster's captions carry them
+    ("""    ax.text(-0.175, 1.07, letter, transform=ax.transAxes, fontsize=13,
+            fontweight="bold", color=INK, va="bottom", ha="left")
+""", ""),
     # CANDI's own colour: the model box title bar and panel A's curve
     ('facecolor=TEAL, edgecolor="none", zorder=3))', f'facecolor="{CORAL}", edgecolor="none", zorder=3))'),
     ('axA.plot(x, y, lw=2.0, color=TEAL', f'axA.plot(x, y, lw=2.0, color="{CORAL}"'),
