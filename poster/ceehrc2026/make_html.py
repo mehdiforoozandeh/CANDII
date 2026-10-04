@@ -115,7 +115,7 @@ body { background: var(--ground); color: var(--ground-ink);
 .intro { font-size: var(--body); line-height: var(--body-lh); }
 .intro ul { list-style: none; padding: 0; }
 .intro li { position: relative; padding-left: 1em; }
-.intro li + li { margin-top: .15in; }
+.intro li + li { margin-top: .3in; }
 .intro li::before { content: "•"; color: var(--accent); position: absolute; left: .15em; }
 .poster h2 { color: var(--heading); font-size: var(--head); line-height: 1.2; font-weight: 700;
   letter-spacing: -.01em; text-wrap: balance; padding-bottom: .08in; border-bottom: 5pt solid var(--accent);
