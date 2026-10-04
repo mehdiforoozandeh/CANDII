@@ -57,14 +57,6 @@ relevant cell and tissue types, this tensor is sparse: most experiments were
 never performed. Epigenome imputation methods aim to predict these missing
 experiments~[1].}
 
-\newcommand{\TxtCandi}{%
-\textbf{C}onfidence-\textbf{A}ware \textbf{N}eural \textbf{D}enoising
-\textbf{I}mputer~[2] is a self-supervised deep learning method for epigenome
-imputation and denoising. It takes raw read counts, DNA sequence and experimental
-covariates, and outputs probability distributions over counts, signal and peaks.
-Conditioning on metadata rather than cell-type embeddings enables zero-shot
-generalization to unseen cell types.}
-
 \newcommand{\TxtFindings}{%
 \begin{itemize}
   \item CANDI ranks \textbf{1st of 26} on the ENCODE Imputation Challenge.
