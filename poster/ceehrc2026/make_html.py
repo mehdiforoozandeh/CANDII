@@ -206,7 +206,7 @@ L = page("landscape", 44, 36,
 <div class="affil">{W['PosterAffil']}</div>
 {qr()}
 <div class="divider"></div>""",
-         f"""<div class="body" style="grid-template-rows: 16.3in 14.15in auto; width: 42.4in">
+         f"""<div class="body" style="grid-template-rows: 16.54in 13.91in auto; width: 42.4in">
 <div style="display:grid; grid-template-columns: 10.6in 30.8in; column-gap: 1in">
 <div class="col" style="justify-content: space-between">
 {box("The problem", W['TxtProblem'])}

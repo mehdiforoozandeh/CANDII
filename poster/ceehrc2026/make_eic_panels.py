@@ -221,13 +221,11 @@ def measures(stem, w, h, fs):
 def pearson(stem, w, h, fs):
     """Genome-wide Pearson r of CANDI against each of the 51 blind-test
     experiments, one box per assay, assays from best to worst median. Each grey
-    point is one experiment (one cell type); the mustard bar is the
-    average-activity baseline's median on the same experiments."""
+    point is one experiment (one cell type)."""
     sc = pd.read_csv(DATA / "scores_official.csv")
     sc = sc[(sc.grid == "common") & (sc.chrom_set == "all23")]
     cd = sc[sc.arm == "candi.tcfloor"]
-    av = sc[sc.arm == "avg.none"]
-    assert len(cd) == 51 and len(av) == 51
+    assert len(cd) == 51
     order = cd.groupby("assay_name").gwcorr.median().sort_values(ascending=False).index
     print("[A] CANDI median Pearson r by assay:",
           ", ".join(f"{a} {cd[cd.assay_name == a].gwcorr.median():.2f}" for a in order))
@@ -243,8 +241,6 @@ def pearson(stem, w, h, fs):
     for i, v in enumerate(data, start=1):
         ax.scatter(i + rng.uniform(-.16, .16, len(v)), v, s=fs * 5.0, color="#9AA4AA",
                    alpha=.75, edgecolor="none", zorder=3)
-        m = av[av.assay_name == order[i - 1]].gwcorr.median()
-        ax.plot([i - .36, i + .36], [m, m], color=BASE, lw=4.0, zorder=4)
     ax.set_xticks(range(1, len(order) + 1))
     ax.set_xticklabels(order, rotation=90, fontsize=fs, color=INK)
     ax.set_ylim(0, 1)
@@ -253,12 +249,6 @@ def pearson(stem, w, h, fs):
     ax.set_ylabel("Pearson r (genome-wide)", fontsize=fs, color=INK)
     ax.grid(axis="both", color="#E3E6E8", lw=1.2, zorder=0)
     ax.set_axisbelow(True)
-    from matplotlib.lines import Line2D
-    ax.legend(handles=[Line2D([], [], marker="o", ls="", color="#9AA4AA", ms=fs * .45,
-                              label="CANDI, one experiment"),
-                       Line2D([], [], color=BASE, lw=4.0,
-                              label="average-activity baseline,\nmedian")],
-              loc="upper right", fontsize=fs * .8, frameon=False, handlelength=1.2)
     save(fig, stem)
 
 

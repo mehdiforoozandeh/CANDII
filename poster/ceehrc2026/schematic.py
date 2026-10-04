@@ -221,7 +221,7 @@ def cube(x0, y0, cw, ch, dx, dy, filled, labels=False):
     if labels:
         # which assay is which row; the cell types are counted, not named
         for a, name in enumerate(EIC_ASSAYS):
-            AX.text(x0 - .25, y0 + (N_TA - .5 - a) * fy, name, fontsize=3.3,
+            AX.text(x0 - .25, y0 + (N_TA - .5 - a) * fy, name, fontsize=3.8,
                     color=INK, ha="right", va="center")
         AX.text(x0 - 3.1, y0 + ch / 2, f"{N_TA} assays", fontsize=7.4, color=MUTED,
                 rotation=90, va="center", ha="center")
@@ -281,20 +281,21 @@ def track_panel(x0, y0, w, h, predicted, ylo=0.0):
 
 # ============================================================ row A : inputs ==
 # The tensor: 35 x 51 cells on the front face, each one experiment.
-CX0, CW, CH, DX, DY = 7.4, 16.0, 14.0, 5.0, 3.4
-cube(CX0, 26.6, CW, CH, DX, DY, filled=False, labels=True)
+CX0, CW, CH, DX, DY = 7.4, 16.0, 15.6, 3.5, 1.8   # short genome tail, tall assay axis
+cube(CX0, 28.2, CW, CH, DX, DY, filled=False, labels=True)
 
 # short arrows between tensor and tracks: the label sits under the arrow
-AX.add_patch(FancyArrowPatch((29.2, 36.0), (35.3, 36.0), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((27.7, 36.0), (33.8, 36.0), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
-AX.text(32.25, 35.2, "slice one\ncell type\n(upper lobe\nof left lung)", fontsize=6.6,
+AX.text(30.75, 35.2, "slice one\ncell type\n(upper lobe\nof left lung)", fontsize=6.6,
         color=MUTED, ha="center", va="top", linespacing=1.35)
 
 # The two rows are the two sides of CANDI: a tinted band behind each, with a tab
 # naming it, both running into the model box on the right.
-for _y0, _y1, _bg, _tab, _name in ((25.15, 46.0, "#F2F5F7", "#6C7A80", "INPUT"),
-                                   (1.9, 24.95, "#FCF1EE", TEAL, "OUTPUT")):
-    AX.add_patch(FancyBboxPatch((0.2, _y0), 63.4, _y1 - _y0,
+# The colour legend sits in the gap between the bands.
+for _y0, _y1, _bg, _tab, _name in ((26.3, 46.0, "#F2F5F7", "#6C7A80", "INPUT"),
+                                   (1.9, 24.4, "#EDF2F8", "#5B7FA6", "OUTPUT")):
+    AX.add_patch(FancyBboxPatch((0.2, _y0), 61.8, _y1 - _y0,
                                 boxstyle="round,pad=0,rounding_size=0.6",
                                 facecolor=_bg, edgecolor="none", zorder=0))
     AX.add_patch(FancyBboxPatch((0.2, _y0), 1.6, _y1 - _y0,
@@ -303,7 +304,7 @@ for _y0, _y1, _bg, _tab, _name in ((25.15, 46.0, "#F2F5F7", "#6C7A80", "INPUT"),
     AX.text(1.0, (_y0 + _y1) / 2, _name, fontsize=8.0, fontweight="bold",
             color="white", rotation=90, ha="center", va="center", zorder=2)
 
-WX0, WY0, WW, WH = 36.0, 26.6, 27.0, 17.6
+WX0, WY0, WW, WH = 34.5, 27.0, 27.0, 17.2
 
 
 def window_bracket(y, label):
@@ -353,7 +354,7 @@ _cov.text(.5, .52, "covariates\ndepth · read length · run type · platform",
 # (conv towers salmon, transformer grey, latent purple, deconv blue), sized so
 # it can be read at graphical-abstract scale.
 CONV, TRANS, LAT, DECONV = "#F4D3B5", "#A9AFB2", "#C6B4E2", "#9FC8E9"
-MX0, MY0, MW, MH = 67.6, 3.0, 32.0, 41.0
+MX0, MY0, MW, MH = 66.2, 3.0, 33.4, 41.0
 MS = 1.3                                # text and arrowheads, a little larger than the rest
 axm = AX.inset_axes([MX0, MY0, MW, MH], transform=AX.transData)
 axm.patch.set_visible(False)
@@ -437,9 +438,9 @@ axm.text(.5, .112, "Self-supervised.  No cell-type embedding,\n"
          linespacing=1.55)
 
 # in near the top, out near the bottom — the model is the turn in the loop
-AX.add_patch(FancyArrowPatch((63.9, 36.0), (67.3, 36.0), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((62.4, 36.0), (65.9, 36.0), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
-AX.add_patch(FancyArrowPatch((67.3, 14.0), (63.9, 14.0), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((65.9, 14.0), (62.4, 14.0), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
 
 # ========================================================== row B : outputs ===
@@ -451,19 +452,20 @@ AX.text(WX0 + WW * .58, OY0 - 1.1,
         "The mean misses spikes; the interval covers them.",
         fontsize=7.0, color=MUTED, ha="center", va="top", linespacing=1.5)
 
-AX.add_patch(FancyArrowPatch((35.3, 12.4), (29.2, 12.4), arrowstyle="-|>",
+AX.add_patch(FancyArrowPatch((33.8, 13.4), (27.7, 13.4), arrowstyle="-|>",
                              mutation_scale=13, lw=1.4, color=MUTED))
-AX.text(32.25, 11.6, "every window,\nevery cell type", fontsize=6.6, color=MUTED,
+AX.text(30.75, 12.6, "every window,\nevery cell type", fontsize=6.6, color=MUTED,
         ha="center", va="top", linespacing=1.35)
 
-cube(CX0, 4.4, CW, CH, DX, DY, filled=True)
-# colour legend between the two tensors: dark red = available, salmon = imputed
+cube(CX0, 5.6, CW, CH, DX, DY, filled=True)
+# colour legend between the two bands: dark red = available, salmon = imputed,
+# grey = missing
 for _x, _fc, _al, _lab in ((CX0 - 2.0, TEAL, 1.0, "available assays"),
                            (CX0 + 8.6, TEAL_IMP, 0.8, "imputed assays"),
                            (CX0 + 18.2, "#BDBDBD", 1.0, "missing assays")):
-    AX.add_patch(Rectangle((_x, 23.35), 1.3, 1.0, facecolor=_fc, alpha=_al,
+    AX.add_patch(Rectangle((_x, 24.85), 1.3, 1.0, facecolor=_fc, alpha=_al,
                            edgecolor="none"))
-    AX.text(_x + 1.8, 23.85, _lab, fontsize=7.0, color=INK, ha="left", va="center")
+    AX.text(_x + 1.8, 25.35, _lab, fontsize=7.0, color=INK, ha="left", va="center")
 
 # ============================================================== results =======
 bot = outer[1].subgridspec(1, 3, width_ratios=[1, 1.06, 1.5], wspace=0.30)
