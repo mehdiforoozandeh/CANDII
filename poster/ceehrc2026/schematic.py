@@ -444,8 +444,12 @@ AX.text(36.6, 11.5, "every window,\nevery cell type", fontsize=6.6, color=MUTED,
         ha="center", va="top", linespacing=1.35)
 
 cube(CX0, 4.4, CW, CH, DX, DY, filled=True)
-AX.text(CX0 + CW / 2 + DX / 2, 23.4, "measured / denoised (dark)  ·  imputed (light)",
-        fontsize=7.0, color=INK, ha="center", va="bottom")
+# colour legend between the two tensors: dark red = available, salmon = imputed
+for _x, _fc, _al, _lab in ((CX0 + 1.0, TEAL, 1.0, "available assays"),
+                           (CX0 + 12.0, TEAL_IMP, 0.8, "imputed assays")):
+    AX.add_patch(Rectangle((_x, 23.35), 1.3, 1.0, facecolor=_fc, alpha=_al,
+                           edgecolor="none"))
+    AX.text(_x + 1.8, 23.85, _lab, fontsize=7.0, color=INK, ha="left", va="center")
 
 # ============================================================== results =======
 bot = outer[1].subgridspec(1, 3, width_ratios=[1, 1.06, 1.5], wspace=0.30)

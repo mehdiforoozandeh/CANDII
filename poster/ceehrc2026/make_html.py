@@ -89,20 +89,22 @@ body { background: var(--ground); color: var(--ground-ink);
   transform-origin: 0 0; font-family: "Open Sans", "Helvetica Neue", Arial, sans-serif; }
 .poster * { box-sizing: border-box; margin: 0; }
 .poster p + p { margin-top: .1in; }
-.red { position: absolute; left: 0; top: var(--red-top); width: var(--red-w); height: var(--red-h);
+.red { position: absolute; left: .8in; top: var(--red-top); width: var(--red-w); height: var(--red-h);
   background: var(--red); }
 .sfu { position: absolute; right: var(--sfu-r); bottom: -.02in; color: #fff; line-height: .8;
   font-size: var(--sfu); font-weight: 400; }
 .title { position: absolute; left: var(--title-x); font-weight: 700; white-space: nowrap;
-  line-height: 1.12; }
-.authors { position: absolute; left: var(--title-x); bottom: calc(100% - 3.15in);
+  line-height: 1; }
+.authors { position: absolute; left: var(--title-x); top: var(--authors-top);
   font-size: var(--authors); line-height: 1; white-space: nowrap; }
-.affil { position: absolute; left: var(--title-x); bottom: calc(100% - 3.9in);
+.affil { position: absolute; left: var(--title-x); top: var(--affil-top);
   font-size: 38pt; line-height: 1; white-space: nowrap; color: var(--muted); }
-/* The QR code at the right end of the author line. */
-.qr-line { position: absolute; right: .8in; bottom: calc(100% - 3.9in); display: flex;
-  align-items: flex-end; gap: .25in; font-size: 20.4pt; color: var(--muted); white-space: nowrap; }
-.qr-line img { display: block; width: 1.74in; height: 1.74in; }
+/* The QR code at the right margin, its link under it on the affiliation's line. */
+.qr-col { position: absolute; right: .8in; top: .6in; display: flex; flex-direction: column;
+  align-items: flex-end; font-size: 20.4pt; line-height: 1; color: var(--muted); white-space: nowrap; }
+.qr-col img { display: block; width: 1.74in; height: 1.74in; margin-bottom: var(--url-gap); }
+.divider { position: absolute; left: .8in; right: .8in; top: 3.25in; height: 4pt;
+  background: var(--rule); }
 .body { position: absolute; left: .8in; top: var(--top); display: grid; }
 .col { display: flex; flex-direction: column; min-height: 0; }
 .row { display: flex; justify-content: space-between; align-items: flex-start; }
@@ -182,27 +184,29 @@ def page(kind, w_in, h_in, sizes, header, body):
 def qr():
     link = f'<a href="{W['PosterURL']}" style="color:inherit">mehdiforoozandeh.github.io/CANDI</a>'
     img = f'<img src="{svg('qr')}" alt="QR code: {W['PosterURL']}">'
-    return f'<div class="qr-line">{link}{img}</div>'
+    return f'<div class="qr-col">{img}{link}</div>'
 
 
 def refs():
     return f'<div class="refs"><p>{W["TxtRefs"]}</p></div>'
 
 
-# --- landscape: poster_landscape.tex, 44 x 34 in -----------------------------
-L = page("landscape", 44, 34,
-         dict(**{"red-w": "5.6in", "red-top": "1.12in", "red-h": "2.345in", "sfu-r": ".21in",
-                 "sfu": "112pt", "title-x": "6.3in", "authors": "52pt",
-                 "top": "4.35in", "body": "34pt", "body-lh": "43pt", "cap": "26pt",
+# --- poster_landscape.tex, 44 x 36 in (fixed) -------------------------------
+L = page("landscape", 44, 36,
+         dict(**{"red-w": "5.6in", "red-top": ".6in", "red-h": "2.35in", "sfu-r": ".21in",
+                 "sfu": "112pt", "title-x": "7.1in", "authors": "52pt",
+                 "authors-top": "1.685in", "affil-top": "2.487in", "url-gap": ".36in",
+                 "top": "3.55in", "body": "34pt", "body-lh": "43pt", "cap": "26pt",
                  "cap-lh": "34pt", "small": "20pt", "small-lh": "26pt", "head": "48pt",
                  "boxtitle": "42pt"}),
          f"""<div class="red"><div class="sfu">SFU</div></div>
-<div class="title" data-fit="36.9" style="bottom:calc(100% - 1.94in); font-size:100pt">{W['PosterTitle']}</div>
+<div class="title" data-fit="33.7" style="top:.5in; font-size:100pt">{W['PosterTitle']}</div>
 <div class="authors">{W['PosterAuthors']}</div>
 <div class="affil">{W['PosterAffil']}</div>
-{qr()}""",
-         f"""<div class="body" style="grid-template-rows: 16.12in 11.48in auto; width: 42.4in">
-<div style="display:grid; grid-template-columns: 11in 30.4in; column-gap: 1in">
+{qr()}
+<div class="divider"></div>""",
+         f"""<div class="body" style="grid-template-rows: 16.3in 14.15in auto; width: 42.4in">
+<div style="display:grid; grid-template-columns: 10.6in 30.8in; column-gap: 1in">
 <div class="col" style="justify-content: space-between">
 {box("The problem", W['TxtProblem'])}
 {box("Key findings", W['TxtFindings'])}
@@ -214,7 +218,11 @@ L = page("landscape", 44, 34,
 <div style="display:grid; grid-template-columns: 13in 28.4in; column-gap: 1in; margin-top: .4in">
 <div class="col"><h2>{W['HeadUtility']}</h2>
 <div class="fill"></div>
-<div class="row">{fig('ga_A', 6.25, W['CapA'])}{fig('ga_B', 6.25, W['CapB'])}</div>
+<div class="row" style="align-items:center"><img src="{svg('ga_A')}" alt="" style="width:7in">
+<p class="cap" style="width:5.6in; margin:0">{W['CapA']}</p></div>
+<div class="fill"></div>
+<div class="row" style="align-items:center"><img src="{svg('ga_B')}" alt="" style="width:7in">
+<p class="cap" style="width:5.6in; margin:0">{W['CapB']}</p></div>
 <div class="fill"></div></div>
 <div class="col"><h2>{W['HeadEIC']}</h2>
 <div class="row">{fig('eic_leaderboard_landscape', 11.4, W['CapC'])}

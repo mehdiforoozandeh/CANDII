@@ -1,5 +1,6 @@
-% CEEHRC 2026 poster, landscape: 44 in wide x 34 in high (ANSI E), inside the
-% conference's 44 x 44 in limit.
+% CEEHRC 2026 poster: 44 in wide x 36 in high, inside the conference's 44 x 44 in
+% limit. The size is fixed by the PI (2026-10-04); build.sh fails if the PDF is
+% any other size or more than one page.
 %
 % Two rows of two columns, then the references in one band across the foot.
 % Row 1: the two text boxes | the schematic workflow. Row 2: downstream utility
@@ -8,8 +9,8 @@
 % how much each column needs.
 % Build: bash build.sh
 \documentclass{article}
-\usepackage[paperwidth=44in, paperheight=34in,
-            left=0.8in, right=0.8in, top=4.35in, bottom=0.7in]{geometry}
+\usepackage[paperwidth=44in, paperheight=36in,
+            left=0.8in, right=0.8in, top=3.55in, bottom=0.7in]{geometry}
 \newcommand{\bodysize}{\fontsize{34}{43}\selectfont}
 \newcommand{\capsize}{\fontsize{26}{34}\selectfont}
 \newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
@@ -18,34 +19,35 @@
 \input{common}
 
 % Row 1 gives the schematic the width; row 2 gives panels A and B more.
-\newcommand{\LeftW}{11.0in}
-\newcommand{\RightW}{30.4in}
+\newcommand{\LeftW}{10.6in}
+\newcommand{\RightW}{30.8in}
 \newcommand{\LeftWTwo}{13.0in}
 \newcommand{\RightWTwo}{28.4in}
-\newcommand{\RowOne}{16.12in}
-\newcommand{\RowTwo}{11.08in}
+\newcommand{\RowOne}{16.3in}
+\newcommand{\RowTwo}{13.75in}
 
 \begin{document}
 % ============================================================ header ==========
+% Three columns between the margins, all sharing one top line (0.6 in) and one
+% bottom line (2.95 in): the SFU block | title, authors, affiliation | the QR
+% code with the link under it. A divider closes the header at 3.25 in.
 \begin{tikzpicture}[remember picture, overlay]
   \coordinate (nw) at (current page.north west);
   \coordinate (ne) at (current page.north east);
-  % The SFU block is 5.6 x 2.35 in, centred on the title and author lines.
-  \fill[sfured] ($(nw)+(0,-1.12in)$) rectangle ($(nw)+(5.6in,-3.465in)$);
+  \fill[sfured] ($(nw)+(0.8in,-0.6in)$) rectangle ($(nw)+(6.4in,-2.95in)$);
   \node[anchor=south east, inner sep=0pt, text=white]
-    at ($(nw)+(5.39in,-3.36in)$) {\fontsize{112}{112}\selectfont SFU};
-  % The title runs the full width to the right margin; the QR code sits at the
-  % right end of the author line, below it.
-  \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(6.3in,-1.96in)$) {\resizebox{36.9in}{!}{\bfseries\PosterTitle}};
-  \node[anchor=south west, inner sep=0pt, text=ink]
-    at ($(nw)+(6.3in,-3.15in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
-  \node[anchor=south west, inner sep=0pt, text=muted]
-    at ($(nw)+(6.3in,-3.9in)$) {\fontsize{38}{44}\selectfont\PosterAffil};
-  \node[anchor=south east, inner sep=0pt] at ($(ne)+(-0.8in,-3.9in)$)
+    at ($(nw)+(6.19in,-2.845in)$) {\fontsize{112}{112}\selectfont SFU};
+  \node[anchor=north west, inner sep=0pt, text=ink]
+    at ($(nw)+(7.1in,-0.6in)$) {\resizebox{33.7in}{!}{\bfseries\PosterTitle}};
+  \node[anchor=base west, inner sep=0pt, text=ink]
+    at ($(nw)+(7.1in,-2.32in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
+  \node[anchor=base west, inner sep=0pt, text=muted]
+    at ($(nw)+(7.1in,-2.95in)$) {\fontsize{38}{44}\selectfont\PosterAffil};
+  \node[anchor=north east, inner sep=0pt] at ($(ne)+(-0.8in,-0.6in)$)
     {\qrcode[height=1.74in]{\PosterURL}};
-  \node[anchor=south east, inner sep=0pt, text=muted] at ($(ne)+(-2.79in,-3.9in)$)
+  \node[anchor=base east, inner sep=0pt, text=muted] at ($(ne)+(-0.8in,-2.95in)$)
     {\fontsize{20.4}{24}\selectfont mehdiforoozandeh.github.io/CANDI};
+  \fill[rule] ($(nw)+(0.8in,-3.25in)$) rectangle ($(ne)+(-0.8in,-3.305in)$);
 \end{tikzpicture}%
 % ============================================================ row 1 ===========
 \Column{row 1 left}{\LeftW}{\RowOne}{%
@@ -60,8 +62,10 @@
 % ============================================================ row 2 ===========
 \Column{row 2 left}{\LeftWTwo}{\RowTwo}{%
   \sectionbar{\HeadUtility}\vfill
-  \panel{6.25in}{panels/ga_A.pdf}{\CapA}\hfill
-  \panel{6.25in}{panels/ga_B.pdf}{\CapB}\par\vfill}\hfill
+  \begin{minipage}[c]{7.0in}\includegraphics[width=\linewidth]{panels/ga_A.pdf}\end{minipage}\hfill
+  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapA\par}\end{minipage}\par\vfill
+  \begin{minipage}[c]{7.0in}\includegraphics[width=\linewidth]{panels/ga_B.pdf}\end{minipage}\hfill
+  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapB\par}\end{minipage}\par\vfill}\hfill
 \Column{row 2 right}{\RightWTwo}{\RowTwo}{%
   \sectionbar{\HeadEIC}
   \panel{11.4in}{panels/eic_leaderboard_landscape.pdf}{\CapC}\hfill
