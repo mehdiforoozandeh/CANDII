@@ -427,8 +427,8 @@ axm.text(.44, .336, "a distribution\nat every position", fontsize=6.3 * MS,
 down(.5, .348, .266)
 axm.text(.56, .336, "per assay", fontsize=6.3 * MS, color=MUTED, ha="left", va="top",
          transform=axm.transAxes)
-mbox(.31, .97, .176, .262, "max(β₀ + β₁·CANDI", "+ β₂·average-activity, 0)", "#FFFFFF",
-     fs=6.9 * MS, ec=TEAL, tc=TEAL, sub_fs=6.9 * MS)
+mbox(.31, .97, .176, .262, "max(β₀ + β₁·CANDI + β₂·average-activity, 0)", None, "#FFFFFF",
+     fs=6.0 * MS, ec=TEAL, tc=TEAL)   # 6.0: the formula fits on one line
 mbox(.03, .21, .184, .254, "average-", "activity", "#FFFFFF", fs=6.3 * MS, ec="#E2B35C",
      tc="#7A5A14", sub_fs=6.3 * MS)
 axm.add_patch(FancyArrowPatch((.218, .219), (.305, .219), transform=axm.transAxes,
