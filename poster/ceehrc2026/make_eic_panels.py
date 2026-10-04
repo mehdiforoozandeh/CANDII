@@ -303,7 +303,7 @@ def pearson(stem, w, h, fs):
 
 
 # (Pearson w, h), (skill w, h), (measures w, h), panel text size in pt.
-SIZES = {"_landscape": ((7.0, 10.15), (8.8, 10.15), (11.8, 10.15), 22)}
+SIZES = {"_landscape": ((7.0, 9.75), (8.8, 9.75), (11.8, 9.75), 22)}
 for suffix, (pr, sk_, me, fs) in SIZES.items():
     pearson(f"eic_pearson{suffix}", *pr, fs)
     skill(f"eic_skill{suffix}", *sk_, fs)
