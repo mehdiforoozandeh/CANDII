@@ -211,11 +211,12 @@ def cube(x0, y0, cw, ch, dx, dy, filled, labels=False):
                           (x0 + K * fx + dx, ty + dy)],
                          closed=True, fill=False, edgecolor=INK, lw=1.0, zorder=6))
 
-    # "genome" rides just outside the top-left edge, parallel to the depth axis
+    # "genome" rides just outside the lower-right depth edge, parallel to it:
+    # above the top face it would leave the row's band or hit the assay names
     ang = degrees(atan2(dy, dx))
     L = np.hypot(dx, dy)
-    px, py = -dy / L, dx / L
-    AX.text(x0 + .55 * dx + px * 1.0, ty + .55 * dy + py * 1.0, "genome",
+    px, py = dy / L, -dx / L
+    AX.text(rx + .5 * dx + px * .75, y0 + .5 * dy + py * .75, "genome",
             fontsize=7.4, color=MUTED, ha="center", va="center", rotation=ang,
             rotation_mode="anchor")
     if labels:
