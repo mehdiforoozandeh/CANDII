@@ -39,6 +39,13 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t118` [implementation] learn the generator g(C, C') that outputs the transformation f (X' = f(X), f = g(C, C')) on the base↔arm pairs of the counterfactual corpus, with the QuantileMatching reference rung, and score the pre-registered checks — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q1_do_the_recorded_experimental_covariates_\|q1]]
+- `t119` [data-acquisition] rebuild the two DNase MAPQ arms (C12M02 mapq 0 and 10) with multimapping off, so the MAPQ cut applies; the t112 builds are byte-identical to the DNase base — refs [[h15_one_transformation_conditioned_on_the_so\|h15]]
+- `t120` [implementation] build and run row 2 of the g x f grid: g reads the source bin value as well as the covariates, for designs A-D — refs [[q1_do_the_recorded_experimental_covariates_\|q1]]
+- `t122` [implementation] hand-check the depth-law computation (predicted count scale against the true depth ratio) before reading the unmet depth law as a model failure — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]]
+- `t123` [implementation] diagnose design D's −log10 p explosion from the finished D checkpoints (D has no knots, so the lowest-knot σ cause does not apply) — refs [[h14_an_encoder_decoder_with_the_encoder_cond\|h14]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]]
+- `t124` [implementation] find a principled fix for the −log10 p CRPS explosion in the per-bin designs (rows 1 and 2); capping σ and report-only were rejected by the PI — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]]
+- `t125` [implementation] Build and run the depth-offset count model and the counts-to-p map h (exploratory) — refs [[q5_does_a_depth_offset_on_f_the_source_dept\|q5]], [[q6_how_closely_does_a_map_h_reproduce_the_l\|q6]]
 
 ## Blocked
 
@@ -57,6 +64,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t119` [data-acquisition] rebuild the two DNase MAPQ arms (C12M02 mapq 0 and 10) with multimapping off, so the MAPQ cut applies; the t112 builds are byte-identical to the DNase base — refs [[h15_one_transformation_conditioned_on_the_so\|h15]] — *open*
 
 ### hpc-setup
 
@@ -95,6 +103,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t105` [implementation] the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them — *blocked*
 - `t106` [implementation] the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline — *blocked*
 - `t107` [implementation] run the in-vitro covariate testbed on the depth and run-type arms and score the pre-registered checks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
+- `t118` [implementation] learn the generator g(C, C') that outputs the transformation f (X' = f(X), f = g(C, C')) on the base↔arm pairs of the counterfactual corpus, with the QuantileMatching reference rung, and score the pre-registered checks — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q1_do_the_recorded_experimental_covariates_\|q1]] — *open*
+- `t120` [implementation] build and run row 2 of the g x f grid: g reads the source bin value as well as the covariates, for designs A-D — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *open*
+- `t122` [implementation] hand-check the depth-law computation (predicted count scale against the true depth ratio) before reading the unmet depth law as a model failure — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]] — *open*
+- `t123` [implementation] diagnose design D's −log10 p explosion from the finished D checkpoints (D has no knots, so the lowest-knot σ cause does not apply) — refs [[h14_an_encoder_decoder_with_the_encoder_cond\|h14]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]] — *open*
+- `t124` [implementation] find a principled fix for the −log10 p CRPS explosion in the per-bin designs (rows 1 and 2); capping σ and report-only were rejected by the PI — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]] — *open*
+- `t125` [implementation] Build and run the depth-offset count model and the counts-to-p map h (exploratory) — refs [[q5_does_a_depth_offset_on_f_the_source_dept\|q5]], [[q6_how_closely_does_a_map_h_reproduce_the_l\|q6]] — *open*
 
 ### visualization
 
