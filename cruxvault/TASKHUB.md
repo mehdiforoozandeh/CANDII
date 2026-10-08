@@ -45,6 +45,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t122` [implementation] hand-check the depth-law computation (predicted count scale against the true depth ratio) before reading the unmet depth law as a model failure — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]]
 - `t123` [implementation] diagnose design D's −log10 p explosion from the finished D checkpoints (D has no knots, so the lowest-knot σ cause does not apply) — refs [[h14_an_encoder_decoder_with_the_encoder_cond\|h14]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]]
 - `t124` [implementation] find a principled fix for the −log10 p CRPS explosion in the per-bin designs (rows 1 and 2); capping σ and report-only were rejected by the PI — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]]
+- `t125` [implementation] Build and run the depth-offset count model and the counts-to-p map h (exploratory) — refs [[q5_does_a_depth_offset_on_f_the_source_dept\|q5]], [[q6_how_closely_does_a_map_h_reproduce_the_l\|q6]]
 
 ## Blocked
 
@@ -107,6 +108,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t122` [implementation] hand-check the depth-law computation (predicted count scale against the true depth ratio) before reading the unmet depth law as a model failure — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]] — *open*
 - `t123` [implementation] diagnose design D's −log10 p explosion from the finished D checkpoints (D has no knots, so the lowest-knot σ cause does not apply) — refs [[h14_an_encoder_decoder_with_the_encoder_cond\|h14]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]] — *open*
 - `t124` [implementation] find a principled fix for the −log10 p CRPS explosion in the per-bin designs (rows 1 and 2); capping σ and report-only were rejected by the PI — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]] — *open*
+- `t125` [implementation] Build and run the depth-offset count model and the counts-to-p map h (exploratory) — refs [[q5_does_a_depth_offset_on_f_the_source_dept\|q5]], [[q6_how_closely_does_a_map_h_reproduce_the_l\|q6]] — *open*
 
 ### visualization
 

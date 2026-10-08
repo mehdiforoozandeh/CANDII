@@ -26,9 +26,11 @@ Root: [[candii]]
     - ▶ `h14` [H] [[h14_an_encoder_decoder_with_the_encoder_cond|A generator g(C, C') that modulates a small dilated convolutional network beats its scrambled-covariate twin and the kernel-and-curve design]] — *running*
     - · `h16` [H] [[h16_a_generator_that_reads_the_dna_sequence_|A generator that reads the DNA sequence as well as the source and target covariates outputs a position-dependent transformation that beats the same design without sequence on the knobs that act through mappability and GC]] — *idea*
     - ▶ `h17` [H] [[h17_a_generator_g_c_c_that_outputs_a_per_bin|A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design]] — *running*
+  - ○ `q5` [Q] [[q5_does_a_depth_offset_on_f_the_source_dept|**Does a depth offset on f (the source depth removed before f, the target depth added after) change how well a covariate-conditioned g → f translates a track's raw counts across a covariate change?**]] — *open*
+  - ○ `q6` [Q] [[q6_how_closely_does_a_map_h_reproduce_the_l|**How closely does a map h reproduce the −log10 p track from a predicted count distribution and its matched control, as h's complexity and inputs grow?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (4): open 4 · review 0 · resolved 0
+- **Questions** (6): open 6 · review 0 · resolved 0
 - **Hypotheses** (16): idea 11 · staged 0 · running 5 · done 0
 - **Verdicts**: supported 0 · partial 0 · refuted 0 · inconclusive 0 · invalid-run 0

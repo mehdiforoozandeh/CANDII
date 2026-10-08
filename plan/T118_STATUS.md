@@ -494,6 +494,14 @@ test up to ~2 h on 8 CPU cores; aggregation 2–4 min; design X on 16 CPU cores 
 - The principled fix for the p-space explosion (see above), and whether design X should become a
   pre-registered design.
 - Ticks, verdicts (`crux close`), accepting the task, merging — none done.
-- Whether to add a count-space variant with a built-in log-depth offset, as a depth-law ceiling
-  (offered 2026-10-02, not decided).
-- Sharing the lab deck link with the lab (only the PI can share it).
+
+## 2026-10-08: the next design (depth offset in f, and a counts → p map h)
+
+- The deck gained a slide that compares one g per track with one g across tracks (commit 09d3dcb,
+  deck version 5). The PI shared the deck with the lab.
+- The PI and the agent agreed a new design fork by fork: `plan/ETA_OFFSET_AND_H_DESIGN.md`. It
+  replaces the log-depth-offset variant offered on 2026-10-02.
+- Vault: two new questions under q1 (q5, the depth offset; q6, the map h) and task t125 (a child
+  of t118). The run is exploratory. Nothing is built or submitted yet.
+- First step of t125: verify the t112 DNase p recipe, the 25 bp p binning and the ChIP caller
+  commands on Nibi.
