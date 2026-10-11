@@ -75,6 +75,8 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
     native-scale CRPS; native MSE of the mean for both.
   - Control read length = the treatment base's read length; the Nibi smoke reports the formula-vs-real-P error.
 
+- 2026-10-11: formula + affine h = formula + an affine map of all rung-5 inputs (formula included), zero at init.
+
 ## Log
 
 - 2026-10-11: run started; Nibi down at start.
