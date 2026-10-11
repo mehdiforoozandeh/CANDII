@@ -83,6 +83,8 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 
 - 2026-10-11: rung 5 of the learned h gains the treatment and control log read lengths (21 inputs).
 
+- 2026-10-11: the shuffle control shuffles depth too, as in t118, so the offset uses the shuffled target's d′.
+
 ## Log
 
 - 2026-10-11: run started; Nibi down at start.
