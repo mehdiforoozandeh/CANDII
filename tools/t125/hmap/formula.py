@@ -7,9 +7,16 @@ The recipe that ran (plan/T125_STATUS.md, Phase 0 findings and PI decisions, 202
 - pileup ≈ count × fraglen / (read_length + 24) × s_T. Variant "bin" uses the bin's count; variant
   "frag" uses the mean count over the fragment window (zero outside the chromosome, as the caller's
   pileup is).
-- λ = max(λ_bg, λ_frag, λ_1k, λ_10k) from the binned control, scaled to the smaller set (MACS2
-  `--scale-to small`), ratio V in ratio arms. No control: max(λ_bg(N_T), λ_10k of the treatment); in
-  the chain that treatment window reads f's predicted mean.
+- λ = max(λ_bg, λ_frag, λ_1k, λ_10k). The window λ's come from the binned control, scaled to the
+  smaller set (MACS2 `--scale-to small`), ratio V in ratio arms. Each is a rate times d:
+  λ_w = (tags in the summed window) × fraglen / (width actually summed) × s_C, the width being
+  frag_bins(fraglen) × 25 bp, 1000 bp (40 bins) or 10000 bp (400 bins).
+- λ_bg comes from the TREATMENT, as MACS2's lambda_bg: fraglen × N_T × s_T / 2.7e9, with or without a
+  control; `--ratio` scales the control windows but does not move it.
+- No control: max(λ_bg, λ_10k of the treatment); in the chain that treatment window reads f's
+  predicted mean.
+- DNase: `info.fraglen` must be the extsize / smooth window that ran (150, or 75 / 300 in the extsize
+  arms); P2a's ProductInfo supplies it.
 - One tail per bin: P = −log10 P(X > floor(pileup)) (strict, no pseudocount). Phase 0 check: obs 0 at
   λ = 2 gives 0.06315 = −log10(1 − e^−2).
 
@@ -26,7 +33,7 @@ from scipy.stats import poisson
 GENOME_SIZE = 2.7e9
 BIN = 25
 SPAN_EXTRA = 24
-WINDOWS_CTL_BP = {"frag": None, "1k": 1000, "10k": 10000}   # frag = the product's fraglen
+WINDOWS_CTL_BP = {"frag": None, "1k": 1000, "10k": 10000}   # frag = frag_bins(fraglen) × 25 bp
 WINDOW_NOCTL_BP = 10000
 LAMBDA_FLOOR = 1e-12
 VARIANTS = ("bin", "frag")
@@ -126,22 +133,25 @@ def _tags(count_sum, read_length) -> np.ndarray:
 def local_lambda(info, counts_c_windows: dict | None, treat_10k) -> np.ndarray:
     """The local λ per bin, float64.
 
-    With a control: `counts_c_windows` = {"frag", "1k", "10k"} → the control count window SUMS;
-    λ = max(λ_bg(N_C · s_C), λ_frag, λ_1k, λ_10k), the window λ's at s_C. Without a control:
-    `treat_10k` = the 10 kb window SUM of the treatment track (f's mean in the chain);
-    λ = max(λ_bg(N_T), λ_10k).
+    With a control: `counts_c_windows` = {"frag", "1k", "10k"} → the control count window SUMS over
+    frag_bins(fraglen), 40 and 400 bins; λ = max(λ_bg, λ_frag, λ_1k, λ_10k), each window λ =
+    tags × fraglen / (bins summed × 25 bp) × s_C. Without a control: `treat_10k` = the 10 kb window
+    SUM of the treatment track (f's mean in the chain); λ = max(λ_bg, λ_10k). In both branches
+    λ_bg = fraglen × N_T × s_T / 2.7e9 (the treatment, as MACS2).
     """
     fl = float(info.fraglen)
+    s_t, s_c = scale(info)
+    bg = lambda_bg(float(info.depth_reads) * s_t, fl)
     if _has_control(info):
-        _, s_c = scale(info)
         rl_c = info.control_read_length
         lam = None
         for key, w_bp in WINDOWS_CTL_BP.items():
-            lw = lambda_window(_tags(counts_c_windows[key], rl_c), fl if w_bp is None else w_bp, fl, s_c)
+            width = frag_bins(fl) * BIN if w_bp is None else w_bp
+            lw = lambda_window(_tags(counts_c_windows[key], rl_c), width, fl, s_c)
             lam = lw if lam is None else np.maximum(lam, lw)
-        return np.maximum(lam, lambda_bg(float(info.control_reads) * s_c, fl))
+        return np.maximum(lam, bg)
     lw = lambda_window(_tags(treat_10k, info.read_length), WINDOW_NOCTL_BP, fl, 1.0)
-    return np.maximum(lw, lambda_bg(float(info.depth_reads), fl))
+    return np.maximum(lw, bg)
 
 
 def lambda_track(info, counts_c, treat) -> np.ndarray:

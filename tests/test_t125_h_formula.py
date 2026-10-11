@@ -3,8 +3,10 @@
 Written against the plan (chunk t125-P2b), `plan/ETA_OFFSET_AND_H_DESIGN.md` and the Phase 0 / PI
 decisions in `plan/T125_STATUS.md`:
   pileup ≈ count × fraglen / (read_length + 24) × s_T (bin: the bin's count; frag: the mean count over
-  the fragment window); λ = max(λ_bg, λ_frag, λ_1k, λ_10k) from the control, scaled to the smaller set
-  (ratio V in ratio arms); no control → max(λ_bg(N_T), λ_10k of the treatment); P = −log10 P(X > floor(pileup)).
+  the fragment window); λ = max(λ_bg, λ_frag, λ_1k, λ_10k), the window λ's from the control scaled to the
+  smaller set (ratio V in ratio arms), each a rate × d: tags in the summed window × fraglen / (width
+  summed); λ_bg = fraglen × N_T × s_T / 2.7e9 from the treatment (MACS2's lambda_bg; --ratio does not move
+  it); no control → max(λ_bg, λ_10k of the treatment); P = −log10 P(X > floor(pileup)).
 
 The test does not import P2a's modules (built in parallel): products are plain namespaces here.
 """
@@ -169,12 +171,13 @@ def test_local_lambda_with_control_by_hand():
     inf = info(depth_reads=30e6, control_reads=40e6, fraglen=180, control_read_length=101)
     sC = 0.75
     t = 25.0 / (101 + 24)                                  # tags per count
-    bg = 180 * 40e6 * sC / G
+    bg = 180 * 30e6 * 1.0 / G                              # d × N_T × s_T / G, the treatment
+    wf_bp = 7 * 25                                         # frag_bins(180) × 25: the width summed
     win = _ctl_windows([0, 200, 0, 0], [0, 0, 1000, 0], [0, 0, 0, 30000])
     lam = formula.local_lambda(inf, win, None)
     assert lam.dtype == np.float64 and lam.shape == (4,)
     exp = [bg,
-           max(bg, 200 * t * 180 / 180 * sC),
+           max(bg, 200 * t * 180 / wf_bp * sC),
            max(bg, 1000 * t * 180 / 1000 * sC),
            max(bg, 30000 * t * 180 / 10000 * sC)]
     np.testing.assert_allclose(lam, exp, rtol=1e-12)
@@ -204,9 +207,44 @@ def test_ratio_arm_uses_V():
     lam_v = formula.local_lambda(inf_v, win, None)
     lam_0 = formula.local_lambda(inf_0, win, None)
     t = 25.0 / 125
-    np.testing.assert_allclose(lam_v, [180 * N_C * V / G, max(180 * N_C * V / G, 500 * t * V)])
-    np.testing.assert_allclose(lam_0, [180 * 30e6 / G, max(180 * 30e6 / G, 500 * t * 30e6 / N_C)])
+    bg = 180 * 30e6 / G                                    # V <= 1 → s_T = 1: λ_bg = d × N_T / G
+    np.testing.assert_allclose(lam_v, [bg, max(bg, 500 * t * 180 / 175 * V)], rtol=1e-12)
+    np.testing.assert_allclose(lam_0, [bg, max(bg, 500 * t * 180 / 175 * 30e6 / N_C)], rtol=1e-12)
     assert lam_v[1] == pytest.approx(2 * lam_0[1])
+
+
+def test_ratio_arm_lambda_bg_independent_of_V_windows_proportional():
+    N_C = 107039349.0
+    win = _ctl_windows([300, 0, 0], [0, 4000, 0], [0, 0, 60000])
+    t = 25.0 / 125
+    out = {}
+    for V in (0.2, 0.4, 0.8):                              # V != N_T / N_C = 0.2803
+        inf = info(control_reads=N_C, ratio_V=V)
+        bg_only = formula.local_lambda(inf, _ctl_windows([0], [0], [0]), None)
+        assert bg_only[0] == pytest.approx(180 * 30e6 / G, rel=1e-12)   # λ_bg does not move with V
+        out[V] = formula.local_lambda(inf, win, None)
+        np.testing.assert_allclose(out[V], [300 * t * 180 / 175 * V, 4000 * t * 180 / 1000 * V,
+                                            60000 * t * 180 / 10000 * V], rtol=1e-12)
+    np.testing.assert_allclose(out[0.4], 2 * out[0.2], rtol=1e-12)
+    np.testing.assert_allclose(out[0.8], 4 * out[0.2], rtol=1e-12)
+
+
+@pytest.mark.parametrize("fraglen", [150, 200, 220])
+def test_uniform_control_rate_gives_equal_window_lambdas(fraglen):
+    inf = info(fraglen=fraglen, control_reads=2e6, depth_reads=1e6)   # λ_bg below the windows
+    wf = formula.frag_bins(fraglen)
+    rate = 3.0                                             # control counts per bin, everywhere
+    win = {"frag": np.array([rate * wf]), "1k": np.array([rate * 40]), "10k": np.array([rate * 400])}
+    _, sC = formula.scale(inf)
+    each = {key: formula.lambda_window(win[key] * 25.0 / 125, w_bp, fraglen, sC)[0]
+            for key, w_bp in (("frag", wf * 25), ("1k", 1000), ("10k", 10000))}
+    assert each["frag"] == pytest.approx(each["1k"], rel=1e-14)
+    assert each["10k"] == pytest.approx(each["1k"], rel=1e-14)
+    lam = formula.local_lambda(inf, win, None)
+    assert lam[0] == pytest.approx(each["1k"], rel=1e-15)
+    # and from a whole uniform track, away from the ends
+    lam_t = formula.lambda_track(inf, np.full(2000, rate), None)
+    np.testing.assert_allclose(lam_t[200:1800], each["1k"], rtol=1e-14)
 
 
 def test_q025_scales_the_treatment():
@@ -215,7 +253,7 @@ def test_q025_scales_the_treatment():
     np.testing.assert_allclose(formula.pileup(np.array([0.0, 3.0, 25.0]), inf),
                                np.array([0.0, 3.0, 25.0]) * 180 / 125 * sT)
     lam = formula.local_lambda(inf, _ctl_windows([0], [0], [0]), None)
-    assert lam[0] == pytest.approx(180 * 10e6 / G)          # λ_bg from the (unscaled) control
+    assert lam[0] == pytest.approx(180 * 30e6 * sT / G)     # λ_bg = d × N_T × s_T / G
     # and P itself uses the scaled pileup
     counts_t = np.array([0, 10, 50, 200], dtype=np.float64)
     counts_c = np.zeros(4)
@@ -243,8 +281,8 @@ def _manual_P(variant, inf, counts_t, counts_c, idx, treat=None):
         t = 25.0 / (inf.control_read_length + 24)
         wf = formula.frag_bins(inf.fraglen)
         lam = np.maximum.reduce([
-            np.full(len(counts_t), inf.fraglen * inf.control_reads * sC / G),
-            win_sum(counts_c, wf) * t * inf.fraglen / inf.fraglen * sC,
+            np.full(len(counts_t), inf.fraglen * inf.depth_reads * sT / G),
+            win_sum(counts_c, wf) * t * inf.fraglen / (wf * 25) * sC,
             win_sum(counts_c, 40) * t * inf.fraglen / 1000 * sC,
             win_sum(counts_c, 400) * t * inf.fraglen / 10000 * sC])
     else:
