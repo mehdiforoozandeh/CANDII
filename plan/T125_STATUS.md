@@ -10,7 +10,7 @@ worktree (git-excluded).
 |---|---|
 | 0 verify on Nibi | running (Nibi back up 2026-10-11 01:26 EDT) |
 | 1 build the count model | planning |
-| 2 build the map h | planning; waits on phase 0 for the formula and on the PI for the h MLP size |
+| 2 build the map h | planning; waits on phase 0 for the formula |
 | 3 smoke on Nibi | not started |
 | 4 count runs (432) | not started |
 | 5 h on the true X′ | not started |
@@ -36,7 +36,7 @@ Not yet read.
 
 ## PI decisions
 
-None yet in this run.
+- 2026-10-11: learned MLP h = 2 × 64, with the same training settings as the t118 g (optimizer, learning rate, epochs, early stopping on chr22).
 
 ## Log
 
