@@ -10,7 +10,7 @@ worktree (git-excluded).
 |---|---|
 | 0 verify on Nibi | done 2026-10-11; formula forks with the PI |
 | 1 build the count model | planning |
-| 2 build the map h | planning; waits on phase 0 for the formula |
+| 2 build the map h | planning; formula forks decided |
 | 3 smoke on Nibi | not started |
 | 4 count runs (432) | not started |
 | 5 h on the true X′ | not started |
@@ -55,6 +55,16 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 ## PI decisions
 
 - 2026-10-11: learned MLP h = 2 × 64, with the same training settings as the t118 g (optimizer, learning rate, epochs, early stopping on chr22).
+- 2026-10-11, formula h (from the phase 0 forks):
+  - DNase follows the recipe that ran (ATAC pipeline v2.2.3 in DNase mode). Its conflict with the
+    "dnase-seq-pipeline v3.0.0" rule is noted, not fixed.
+  - Pileup ≈ count × fraglen / (read_length + 24). Bin-only uses the bin; the fragment-window variant
+    uses the mean count over the bins one fragment wide.
+  - λ = the full MACS2 max of windows (fragment, 1 kb, 10 kb, background) from the binned control, scaled
+    as MACS2 does (to the smaller set; ratio V in ratio arms). No control: max(background, 10 kb of the
+    treatment); in the chain that window uses f's predicted mean.
+  - One Poisson tail per bin, with the caller's rules: strict tail, floor of the observed value,
+    no pseudocount, N = all tagAlign lines.
 
 ## Log
 
