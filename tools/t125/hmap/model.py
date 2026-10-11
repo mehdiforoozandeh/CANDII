@@ -6,14 +6,15 @@ formula variants one more, log1p of the formula's P, last) to mu = predicted log
 Variants (design note Part 2; PI 2026-10-11: MLP 2 x 64, as the t118 g):
 - `affine`:          mu = w . feat + b                         (w = 0, b = 0 at init)
 - `mlp`:             Linear(F, 64)-ReLU-Linear(64, 64)-ReLU-Linear(64, 1|2), last layer zero
-- `formula_affine`:  mu = f + alpha_assay + beta * f            (f = feat[..., -1]; alpha, beta 0)
+- `formula_affine`:  mu = f + w . feat + b over all n_in + 1 columns, f = feat[..., -1] included
+                     (w = 0, b = 0 at init; AMENDED 2026-10-11, PI)
 - `formula_mlp`:     mu = f + MLP(feat)[0]                     (last layer zero)
 The formula variants are the identity to the formula at init and run at rung 5 only.
 
 With `noise` (push + own noise) h also emits log_sigma (0 at init, sigma = 1), clamped to
 [log 1e-3, log 1e3]: a Gaussian on log(1 + P) whose sigma is h's leftover error when the count
-is known. For `affine`/`mlp` it is the second output of the same map; for `formula_affine` it is
-gamma_assay + delta * f (the same per-assay-plus-slope form as mu; gamma, delta 0 at init).
+is known. It is the second output of the same affine map or MLP (w' . feat + b' for the affine
+variants), zero at init.
 
 Losses (per bin, mean over the bins of `mask`; y = the true P, never logged by the caller):
 - push, true X':   (mu - log1p y)^2
@@ -162,35 +163,23 @@ class HModel(torch.nn.Module):
         self.variant, self.rung, self.noise, self.n_in = variant, int(rung), bool(noise), int(n_in)
         self.n_feat = n_in + 1 if self.formula else n_in
         n_out = 2 if self.noise else 1
-        if variant == "affine":
+        if variant in ("affine", "formula_affine"):
             self.lin = torch.nn.Linear(self.n_feat, n_out)
             with torch.no_grad():
                 self.lin.weight.zero_()
                 self.lin.bias.zero_()
-        elif variant in ("mlp", "formula_mlp"):
+        else:                                       # mlp, formula_mlp
             self.net = _mlp(self.n_feat, n_out)
-        else:                                       # formula_affine
-            self.alpha = torch.nn.Parameter(torch.zeros(N_ASSAY))
-            self.beta = torch.nn.Parameter(torch.zeros(1))
-            if self.noise:
-                self.gamma = torch.nn.Parameter(torch.zeros(N_ASSAY))
-                self.delta = torch.nn.Parameter(torch.zeros(1))
 
     def forward(self, feat: torch.Tensor):
         if feat.shape[-1] != self.n_feat:
             raise ValueError(f"{self.variant} r{self.rung} takes {self.n_feat} columns, "
                              f"got {feat.shape[-1]}")
-        if self.variant == "formula_affine":
-            f = feat[..., -1]
-            onehot = feat[..., ASSAY_COLS]
-            mu = f + onehot @ self.alpha + self.beta * f
-            ls = onehot @ self.gamma + self.delta * f if self.noise else None
-        else:
-            out = self.lin(feat) if self.variant == "affine" else self.net(feat)
-            mu = out[..., 0]
-            if self.formula:
-                mu = feat[..., -1] + mu
-            ls = out[..., 1] if self.noise else None
+        out = self.lin(feat) if self.variant in ("affine", "formula_affine") else self.net(feat)
+        mu = out[..., 0]
+        if self.formula:
+            mu = feat[..., -1] + mu
+        ls = out[..., 1] if self.noise else None
         if ls is not None:
             ls = ls.clamp(LOG_SIGMA_MIN, LOG_SIGMA_MAX)
         return mu, ls

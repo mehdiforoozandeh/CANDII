@@ -122,26 +122,58 @@ def test_affine_is_affine():
     assert torch.allclose(mab, 0.5 * ma + 0.5 * mb, atol=1e-5)
 
 
-def test_formula_affine_per_assay_intercept_and_slope():
-    """mu = f + alpha_assay + beta * f: an affine correction of the formula column."""
-    h = model.HModel("formula_affine", 5, False, N_R5)
-    names = dict(h.named_parameters())
-    assert sum(p.numel() for p in h.parameters()) == 7 + 1   # alpha per assay + beta
-    alpha = torch.arange(7, dtype=torch.float32) * 0.1
-    beta = 0.3
+LOG_DEPTH_C = 15          # rung 5: 9 log1p_k_frag ... 14 log_depth_t, 15 log_depth_c, ... 18 has_control
+
+
+@pytest.mark.parametrize("noise", [False, True])
+def test_formula_affine_is_formula_plus_affine_over_all_columns(noise):
+    """AMENDED 2026-10-11 (PI): mu = f + w . feat + b over all n_in + 1 = 20 columns, f included;
+    with noise log_sigma = w' . feat + b'. No per-assay-only parameters."""
+    h = model.HModel("formula_affine", 5, noise, N_R5)
+    n_out = 2 if noise else 1
+    assert sum(p.numel() for p in h.parameters()) == n_out * (20 + 1)
+    torch.manual_seed(0)
+    W = torch.randn(n_out, 20)
+    B = torch.randn(n_out)
     with torch.no_grad():
-        for n, p in names.items():
-            p.copy_(alpha if p.numel() == 7 else torch.full_like(p, beta))
-    for a in range(7):
-        feat = _feat(20, 5, formula=True, assay=a, seed=a)
-        f = feat[:, -1]
+        for p in h.parameters():
+            p.copy_(W if p.dim() == 2 else B)
+    feat = _feat(30, 5, formula=True, seed=4)
+    mu, ls = h(feat)
+    lin = feat @ W.T + B
+    assert torch.allclose(mu, feat[:, -1] + lin[:, 0], atol=1e-5)
+    if noise:
+        assert torch.allclose(ls, lin[:, 1].clamp(math.log(1e-3), math.log(1e3)), atol=1e-5)
+    # a non-formula column moves mu (the correction sees every feature, not only f and the assay)
+    feat2 = feat.clone()
+    feat2[:, LOG_DEPTH_C] += 1.0
+    mu2, _ = h(feat2)
+    assert torch.allclose(mu2 - mu, torch.full_like(mu, W[0, LOG_DEPTH_C].item()), atol=1e-5)
+
+
+def test_formula_affine_learns_a_non_formula_correction():
+    """Target log1p P = f + 0.7 * log_depth_c - 0.2: the correction must come from column 15."""
+    torch.manual_seed(2)
+    feat = _feat(2000, 5, formula=True, seed=7)
+    t = feat[:, -1] + 0.7 * feat[:, LOG_DEPTH_C] - 0.2
+    y = torch.expm1(t)
+    h = model.HModel("formula_affine", 5, False, N_R5)
+    mu0, _ = h(feat)
+    assert torch.equal(mu0, feat[:, -1])              # the formula at init
+    opt = torch.optim.Adam(h.parameters(), lr=0.05)
+    first = model.loss_push_true(mu0, y).item()
+    for _ in range(400):
+        opt.zero_grad()
         mu, _ = h(feat)
-        # other features do not move mu
-        feat2 = feat.clone()
-        feat2[:, [0, 1, 9, 10, 17]] += 3.0
-        mu2, _ = h(feat2)
-        assert torch.allclose(mu, f + alpha[a] + beta * f, atol=1e-6)
-        assert torch.equal(mu, mu2)
+        loss = model.loss_push_true(mu, y)
+        loss.backward()
+        opt.step()
+    assert loss.item() < 1e-3 * first
+    w = h.lin.weight.detach()[0]
+    assert abs(w[LOG_DEPTH_C].item() - 0.7) < 0.02
+    # b trades off with the one-hot weights (they sum to 1): the intercept per assay is b + w_assay
+    icpt = h.lin.bias.detach()[0] + w[2:9]
+    assert torch.allclose(icpt, torch.full_like(icpt, -0.2), atol=0.02)
 
 
 def test_log_sigma_clamped():
