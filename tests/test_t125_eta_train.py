@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -339,6 +340,112 @@ def test_bad_arguments(prod, tmp_path):
     with pytest.raises(KeyError):
         et.run_training(prod["manifest"], prod["cov"], prod["products"], tmp_path, "A", "all",
                         "real", 0, max_steps=1, device="cpu", bogus=1, **FAST)
+
+
+# -- held-out chromosomes -------------------------------------------------------------------------
+
+def _corrupt_copy(prod, dst: Path, chroms) -> Path:
+    """A copy of the synthetic products whose counts on `chroms` are large random values."""
+    shutil.copytree(prod["products"], dst)
+    rng = np.random.default_rng(99)
+    for pid in prod["log_d"]:
+        f = dst / pid / "counts25.npz"
+        with np.load(f, allow_pickle=False) as z:
+            arrs = {k: z[k] for k in z.files}
+        for c in chroms:
+            arrs[c] = rng.integers(500, 5000, size=arrs[c].shape[0]).astype(arrs[c].dtype)
+        np.savez_compressed(f, **arrs)
+    return dst
+
+
+def _train_on(prod, data_dir, runs_dir, rung, model, steps, eval_every):
+    return et.run_training(prod["manifest"], prod["cov"], data_dir, runs_dir, rung, "all", model,
+                           0, max_steps=steps, eval_every=eval_every, device="cpu", **FAST)
+
+
+def _log(rd):
+    return [r.split("\t") for r in (rd / "train_log.tsv").read_text().splitlines()[1:]]
+
+
+@pytest.mark.parametrize("rung,model", [("A", "real"), ("B2", "nocov")])
+def test_training_never_reads_score_chromosomes(prod, tmp_path, rung, model):
+    bad = _corrupt_copy(prod, tmp_path / "bad", ("chr19", "chr21"))
+    a = _train_on(prod, prod["products"], tmp_path / "ra", rung, model, 5, 5)
+    b = _train_on(prod, bad, tmp_path / "rb", rung, model, 5, 5)
+    ca = torch.load(a / "ckpt.pt", map_location="cpu", weights_only=True)
+    cb = torch.load(b / "ckpt.pt", map_location="cpu", weights_only=True)
+    for part in ("g", "form"):
+        for k in ca[part]:
+            assert torch.equal(ca[part][k], cb[part][k]), (part, k)
+    assert ca["stats"] == cb["stats"]                       # knots never see chr19 / chr21
+    assert ca["val_nll"] == cb["val_nll"] and ca["step"] == cb["step"]
+    assert [r[:3] for r in _log(a)] == [r[:3] for r in _log(b)]
+
+
+@pytest.mark.parametrize("steps", [1, 5])
+@pytest.mark.parametrize("rung,model", [("A", "real"), ("B2", "nocov")])
+def test_chr22_is_read_only_by_validation(prod, tmp_path, rung, model, steps):
+    """Corrupting chr22 moves val_nll but not the training losses (one eval at the last step, so
+    early stopping cannot cut the run) nor the knots."""
+    bad = _corrupt_copy(prod, tmp_path / "bad", ("chr22",))
+    a = _train_on(prod, prod["products"], tmp_path / "ra", rung, model, steps, steps)
+    b = _train_on(prod, bad, tmp_path / "rb", rung, model, steps, steps)
+    la, lb = _log(a), _log(b)
+    assert [int(r[0]) for r in la] == [int(r[0]) for r in lb] == [0, steps]
+    assert la[1][1] == lb[1][1]                             # mean loss of steps 1..steps, bit-equal
+    assert la[0][2] != lb[0][2] and la[1][2] != lb[1][2]    # validation did read chr22
+    ca = torch.load(a / "ckpt.pt", map_location="cpu", weights_only=True)
+    cb = torch.load(b / "ckpt.pt", map_location="cpu", weights_only=True)
+    assert ca["stats"] == cb["stats"]
+
+
+# -- the training loss against the NB log-pmf, independently ------------------------------------
+
+@pytest.mark.parametrize("rung,model", [("A", "real"), ("A", "nocov"), ("C", "real"),
+                                        ("B2", "real"), ("D2", "nocov")])
+def test_training_loss_equals_nb_logpmf_of_predict_window(prod, rung, model):
+    """One fixed batch: the trainer's forward loss = mean -log NB(y; mu, n) with (mu, n) from
+    `predict_window_eta` on the raw haloed window and scipy's NB pmf (size n, p = n / (n + mu))."""
+    from scipy.stats import nbinom
+    corpus = data.Corpus(prod["products"])
+    tp = lpairs.train_pairs(prod["rows"], "all")
+    fit = lpairs.fit_pids(prod["rows"], "all")
+    enc = encoding.Encoder.fit(encoding.read_covariates(prod["cov"]), fit)
+    cov_all = torch.from_numpy(np.stack([enc.encode_pair(p["source_pid"], p["target_pid"])
+                                         for p in tp]))
+    lad = _perturbed(rung, _stats(prod, fit), seed=5)
+    chroms, lens = ltrain.training_chroms(corpus, tp[0]["source_pid"], "counts")
+    W, B, seed, c = 128, 6, 4, lad.context
+    sampler = et.EtaSampler(corpus, tp, chroms, lens, W, c, seed, model, prod["log_d"])
+    pi, ci, xb, yb, mb, ldb = sampler.draw(B)
+    cov = cov_all[torch.from_numpy(ci)]
+    with torch.no_grad():
+        loc, disp = lad(cov, torch.from_numpy(xb), torch.from_numpy(ldb))
+        loss = float(lad.nll(loc, disp, torch.from_numpy(yb), torch.from_numpy(mb)))
+    # the batch's positions, from t118's documented stream (default_rng(seed): pair, chrom, u)
+    rng = np.random.default_rng(seed)
+    pi2 = rng.integers(len(tp), size=B)
+    ci2 = rng.choice(len(chroms), size=B, p=lens / lens.sum())
+    u = rng.random(B)
+    assert np.array_equal(pi, pi2)
+    nll_sum, n_bins = 0.0, 0
+    for b in range(B):
+        p, chrom, n = tp[pi[b]], chroms[ci2[b]], int(lens[ci2[b]])
+        s = int(u[b] * (max(0, n - W) + 1))
+        Xw = corpus.window(p["source_pid"], "counts", chrom, s - c, s + W + c)
+        Y = corpus.window(p["target_pid"], "counts", chrom, s, s + W).astype(np.float64)
+        np.testing.assert_array_equal(Y, yb[b])
+        ls, lt = prod["log_d"][p["source_pid"]], prod["log_d"][p["target_pid"]]
+        with torch.no_grad():
+            cond = cov[b:b + 1] if lad.per_bin else lad.theta(cov[b:b + 1])[0]
+        lw, dw = em.predict_window_eta(lad, Xw, ls, lt, cond, DEV)
+        mu, size = np.exp(lw.astype(np.float64)), np.exp(dw.astype(np.float64))
+        keep = mb[b]
+        lp = nbinom.logpmf(Y[keep], size[keep], size[keep] / (size[keep] + mu[keep]))
+        nll_sum += float(-lp.sum())
+        n_bins += int(keep.sum())
+    assert n_bins > 0
+    assert loss == pytest.approx(nll_sum / n_bins, rel=1e-5)
 
 
 # -- the task index -------------------------------------------------------------------------------
