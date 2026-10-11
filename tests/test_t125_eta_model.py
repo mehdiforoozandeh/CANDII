@@ -253,11 +253,43 @@ def test_nocov_averaged_map_equals_explicit_mean(synth_dir, stats, encoder):
         want_loc, want_disp = lad.form(x, theta_bar)
     np.testing.assert_allclose(loc, want_loc[0].numpy() + ld_t, atol=1e-4, rtol=1e-5)
     np.testing.assert_allclose(disp, want_disp[0].numpy(), atol=1e-4, rtol=1e-5)
-    # row 1 nocov: one theta, the mean over the training pairs (t118's nocov_theta, reused)
-    lad1 = _perturb(em.EtaLadder("B", stats), seed=10)
-    th = lmodel.nocov_theta(lad1, covs)
+
+
+@pytest.mark.parametrize("rung", ("B", "A2"))
+def test_predictor_nocov_path(rung, tmp_path, synth_dir, stats, encoder):
+    """EtaPredictor nocov: one map for every query, the mean over the training pairs of g's theta
+    taken pair by pair here (row 1: theta; row 2: theta at the knots), and predict uses it."""
+    run_dir = tmp_path / "run"
+    lad = _write_ckpt(run_dir, synth_dir, stats, encoder, rung, "nocov")
+    pred = em.load_run(run_dir, synth_dir["root"], None, None, device="cpu")
+    tp = lpairs.train_pairs(synth_dir["rows"], "all")
+    knots = torch.as_tensor(stats["knots_x"], dtype=torch.float32)
+    per_pair = []
     with torch.no_grad():
-        assert torch.allclose(th, lad1.theta(covs).mean(0))
+        for p in tp:
+            cov_j = _cov(encoder, p["source_pid"], p["target_pid"])
+            if lad.per_bin:
+                per_pair.append(lad.theta(cov_j, knots[None])[0])          # [12, n_theta]
+            else:
+                per_pair.append(lad.theta(cov_j)[0])                       # [n_theta]
+    want = torch.stack(per_pair).mean(0).numpy()
+    for s, t in ((T1B, T1D), (T2B, T2P), (T1B, T2P)):     # covariates never change the map
+        np.testing.assert_allclose(pred.theta(s, t), want, atol=1e-5, rtol=1e-5)
+    X = _corpus(synth_dir).get(T2B, "counts", "chr22")
+    ld_s, ld_t = synth_dir["log_d"][T2B], synth_dir["log_d"][T2P]
+    loc, disp = pred.predict(T2B, T2B, T2P, "chr22")
+    if lad.per_bin:
+        x = torch.from_numpy(_haloed_eta(X, lad.context, ld_s))[None]
+        with torch.no_grad():
+            theta_bar = torch.stack([lad.theta(_cov(encoder, p["source_pid"], p["target_pid"]), x)
+                                     for p in tp]).mean(0)
+            w_loc, w_disp = lad.form(x, theta_bar)
+    else:
+        x = torch.from_numpy(_haloed_eta(X, lad.context, ld_s))[None]
+        with torch.no_grad():
+            w_loc, w_disp = lad.form(x, torch.from_numpy(want)[None])
+    np.testing.assert_allclose(loc, w_loc[0].numpy() + ld_t, atol=1e-4, rtol=1e-5)
+    np.testing.assert_allclose(disp, w_disp[0].numpy(), atol=1e-4, rtol=1e-5)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -412,9 +444,20 @@ def test_load_run_round_trip(rung, model, tmp_path, synth_dir, stats, encoder):
             want = em.predict_chrom_eta(lad, X, ld_s, ld_t, th.detach(), DEV)
         np.testing.assert_allclose(loc, want[0], atol=1e-4, rtol=1e-5)
         np.testing.assert_allclose(disp, want[1], atol=1e-4, rtol=1e-5)
-    # swap: C' = C so d' = d
-    loc_sw, _ = pred.predict(T1B, T1B, T1B, "chr22")
+    # swap: C' = C so d' = d (every model)
+    loc_sw, disp_sw = pred.predict(T1B, T1B, T1B, "chr22")
     loc_tr, _ = pred.predict(T1B, T1B, T1D, "chr22")
+    ld_s = log_depth[T1B]
+    cov_sw = _cov(encoder, T1B, T1B)
+    if lad.per_bin:
+        want_sw = em.predict_chrom_bins_eta(lad, X, ld_s, ld_s,
+                                            covs if model == "nocov" else cov_sw, DEV,
+                                            average=model == "nocov")
+    else:
+        th = lmodel.nocov_theta(lad, covs) if model == "nocov" else lad.theta(cov_sw)[0]
+        want_sw = em.predict_chrom_eta(lad, X, ld_s, ld_s, th.detach(), DEV)
+    np.testing.assert_allclose(loc_sw, want_sw[0], atol=1e-4, rtol=1e-5)
+    np.testing.assert_allclose(disp_sw, want_sw[1], atol=1e-4, rtol=1e-5)
     if model == "nocov":       # the map does not read C: only the offset moves
         np.testing.assert_allclose(loc_tr - loc_sw, log_depth[T1D] - log_depth[T1B], atol=1e-4)
 
@@ -478,6 +521,18 @@ def test_load_run_md5_warning_and_bad_model(tmp_path, synth_dir, stats, encoder)
         warnings.simplefilter("error")
         em.load_run(run_dir, synth_dir["root"], synth_dir["cov"], synth_dir["manifest"],
                     device="cpu")
+    # a config without "space" is refused with a clear error
+    ck = torch.load(run_dir / "ckpt.pt", weights_only=True)
+    del ck["config"]["space"]
+    torch.save(ck, run_dir / "ckpt.pt")
+    with pytest.raises(ValueError, match="space"):
+        em.load_run(run_dir, synth_dir["root"], None, None, device="cpu")
+    ck["config"]["space"] = "pval"
+    torch.save(ck, run_dir / "ckpt.pt")
+    with pytest.raises(ValueError, match="counts"):
+        em.load_run(run_dir, synth_dir["root"], None, None, device="cpu")
+    ck["config"]["space"] = "counts"
+    torch.save(ck, run_dir / "ckpt.pt")
     # t125 has no ids twin
     ck = torch.load(run_dir / "ckpt.pt", weights_only=True)
     ck["config"]["model"] = "ids"

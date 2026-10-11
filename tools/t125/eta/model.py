@@ -232,7 +232,9 @@ def load_run(run_dir, data_dir, covariates_tsv, manifest_tsv, device="auto") -> 
     dev = lmodel.pick_device(device)
     ckpt = torch.load(run_dir / "ckpt.pt", map_location="cpu", weights_only=True)
     cfg = ckpt["config"]
-    if cfg.get("space", SPACE) != SPACE:
+    if "space" not in cfg:
+        raise ValueError(f"{run_dir}: the run's config has no \"space\" key")
+    if cfg["space"] != SPACE:
         raise ValueError(f"{run_dir}: space {cfg['space']!r}, t125 part 1 is counts only")
     for path, key in ((covariates_tsv, "covariates_md5"), (manifest_tsv, "manifest_md5")):
         if path is not None and cfg.get(key) and lmodel.md5_path(path) != cfg[key]:
