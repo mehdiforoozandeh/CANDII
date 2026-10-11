@@ -518,3 +518,79 @@ def test_cli_train_and_train_index(env):
     assert (d / "TRAIN_DONE").is_file()
     assert json.loads((d / "config.json").read_text())["fnb_noise_loss"] == "mixture"
     assert "n_capped" in json.loads((d / "timing.json").read_text())
+
+
+# -- retry 1: f's chr22 pass computed once; no score chromosome read ------------------------------
+
+def _jittered_h(variant, rung, noise, seed=0):
+    torch.manual_seed(seed)
+    h = hm.HModel(variant, rung, bool(noise), hm.N_IN[rung])
+    with torch.no_grad():
+        for p in h.parameters():
+            p.add_(0.05 * torch.randn_like(p))
+    return h
+
+
+def test_fnb_validation_with_the_f_pass_is_bit_identical(env, pred):
+    hc = _corpus(env)
+    h = _jittered_h("formula_mlp", 5, 1)
+    std = hm.Standardiser().fit(np.random.default_rng(1).normal(size=(40, 22)),
+                                hm.continuous_cols(5))
+    dev = torch.device("cpu")
+    tp = pred.config["train_pairs"][::3]
+    f_val = ht.f_val_pass(pred, tp)
+    assert set(f_val) == {(p["source_pid"], p["target_pid"]) for p in tp}
+    for rule in ("expected", "mixture"):
+        a, sa = ht.validate_fnb(h, std, hc, env["infos"], pred, tp, 5, True, rule, dev)
+        b, sb = ht.validate_fnb(h, std, hc, env["infos"], pred, tp, 5, True, rule, dev,
+                                f_val=f_val)
+        assert a == b and sa == sb
+        c, _ = ht.validate_fnb(h, std, hc, env["infos"], pred, tp, 5, True, rule, dev,
+                               f_val=f_val)
+        assert c == a                                  # the cache is reused, not consumed
+
+
+def test_tiny_fnb_run_val_loss_equals_the_uncached_path(env, pred):
+    run_dir = _train(env, "affine", 5, 1, "fnb", runs="cache_check", steps=4, eval_every=2)
+    timing = json.loads((run_dir / "timing.json").read_text())
+    log = (run_dir / "train_log.tsv").read_text().splitlines()[1:]
+    assert isinstance(timing["f_pass_seconds"], float) and timing["f_pass_seconds"] >= 0
+    assert len(timing["val_seconds"]) == len(log) == 3
+    h, std, cfg, step, val = hm.load_ckpt(run_dir / "ckpt.pt")
+    got, _ = ht.validate_fnb(h, std, _corpus(env), env["infos"], pred, cfg["train_pairs"], 5,
+                             False, cfg["fnb_noise_loss"], torch.device("cpu"))
+    assert got == val == timing["val_loss"]
+    assert float(log[[int(l.split("\t")[0]) for l in log].index(step)].split("\t")[2]) == val
+
+
+def test_true_run_times_each_validation_pass(env):
+    run_dir = _train(env, "affine", 1, 0, "true", runs="val_timing", steps=4, eval_every=2)
+    timing = json.loads((run_dir / "timing.json").read_text())
+    assert len(timing["val_seconds"]) == 3 and "f_pass_seconds" not in timing
+
+
+def test_training_never_reads_chr19_or_chr21(env, monkeypatch):
+    held = set(lpairs.SCORE_CHROMS)
+    assert held == {"chr19", "chr21"}
+    get, n_bins = ldata.Corpus.get, ldata.Corpus.n_bins
+
+    def guard_get(self, pid, space, chrom):
+        if chrom in held:
+            raise AssertionError(f"read {pid}/{space}/{chrom}")
+        return get(self, pid, space, chrom)
+
+    def guard_n_bins(self, pid, space, chrom):
+        if chrom in held:
+            raise AssertionError(f"n_bins {pid}/{space}/{chrom}")
+        return n_bins(self, pid, space, chrom)
+
+    monkeypatch.setattr(ldata.Corpus, "get", guard_get)
+    monkeypatch.setattr(ldata.Corpus, "n_bins", guard_n_bins)
+    with pytest.raises(AssertionError):                 # the guard is live
+        ldata.Corpus(env["products"]).window("T1__base__base", "counts", "chr19", 0, 10)
+    for variant, rung, noise, source in (("formula_mlp", 5, 1, "true"),
+                                         ("formula_affine", 5, 1, "fnb"),
+                                         ("mlp", 1, 0, "fnb")):
+        run_dir = _train(env, variant, rung, noise, source, runs="no_score_chroms", steps=3,
+                         eval_every=3, batch=8)
+        assert (run_dir / "TRAIN_DONE").is_file()

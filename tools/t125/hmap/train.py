@@ -39,7 +39,11 @@ the PI.
 
 Validation every `eval_every` steps: the mean over products (true) or training pairs (fnb) of the
 mean loss over the whole of chr22, computed in `VAL_CHUNK` = 65 536-bin chunks (window features
-over a halo, so the chunking does not move the value).
+over a halo, so the chunking does not move the value). f is frozen, so for fnb its chr22 (loc,
+disp) per pair is predicted once before training (`f_val_pass`, time in `timing.json`
+`f_pass_seconds`) and reused by every pass; the NB support is still enumerated per pass.
+`timing.json` `val_seconds` lists the wall time of each validation pass. Training reads only the
+training chromosomes and chr22, never chr19 or chr21 (the score chromosomes).
 
 Standardiser (`hmap.model.Standardiser`): fitted once, before training, on the first
 `N_STD_WINDOWS` = 64 windows a fresh source of the same seed draws, and frozen. The true source
@@ -205,11 +209,28 @@ def validate_true(h, std, corpus: hd.HCorpus, infos: dict, pids, rung: int, form
     return float(np.mean(per))
 
 
+def f_val_pass(pred, train_pairs) -> dict:
+    """f's chr22 prediction per training pair, once: {(source, target): (loc, disp)} float32[n].
+
+    f is frozen while h trains, so every validation pass reuses this; `validate_fnb` with and
+    without it gives the same value bit for bit. Kept as f's raw float32 (loc, disp), 8 bytes a
+    bin a pair (about 16 MB per pair on chr22; 242 pairs of g "all" about 3.9 GB)."""
+    chrom = lpairs.VAL_CHROMS[0]
+    out = {}
+    for p in train_pairs:
+        key = (p["source_pid"], p["target_pid"])
+        if key not in out:
+            out[key] = pred.predict(key[0], key[0], key[1], chrom)
+    return out
+
+
 def validate_fnb(h, std, corpus: hd.HCorpus, infos: dict, pred, train_pairs, rung: int,
                  formula: bool, rule: str, device, val_chunk: int = VAL_CHUNK,
-                 elems: int = hd.FNB_ELEMS, k_max: int = pushforward.K_MAX) -> tuple[float, dict]:
+                 elems: int = hd.FNB_ELEMS, k_max: int = pushforward.K_MAX,
+                 f_val: dict | None = None) -> tuple[float, dict]:
     """(mean over the training pairs of the mean f-NB loss over the whole of chr22, stats with
-    n_bins and n_capped of the pass)."""
+    n_bins and n_capped of the pass). `f_val` (`f_val_pass`) holds f's chr22 prediction per pair;
+    without it f predicts here."""
     chrom = lpairs.VAL_CHROMS[0]
     was = h.training
     h.eval()
@@ -217,7 +238,8 @@ def validate_fnb(h, std, corpus: hd.HCorpus, infos: dict, pred, train_pairs, run
     for p in train_pairs:
         src, tgt = p["source_pid"], p["target_pid"]
         info = infos[tgt]
-        loc, disp = pred.predict(src, src, tgt, chrom)
+        loc, disp = (f_val[(src, tgt)] if f_val is not None
+                     else pred.predict(src, src, tgt, chrom))
         mu, nn = hd.nb_params(pred, loc, disp)
         n = corpus.n_bins(tgt, chrom)
         if mu.shape[0] != n:
@@ -367,11 +389,22 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
         config["train_pairs"] = tp
     (run_dir / "config.json").write_text(json.dumps(config, indent=1) + "\n")
 
+    f_val, f_pass_seconds = None, None
+    if source == "fnb":
+        tf = time.time()
+        f_val = f_val_pass(pred, tp)
+        f_pass_seconds = time.time() - tf
+    val_seconds = []
+
     def validate():
+        tv = time.time()
         if source == "true":
-            return validate_true(h, std, corpus, infos, pids, rung, formula, dev, val_chunk), None
-        return validate_fnb(h, std, corpus, infos, pred, tp, rung, formula, fnb_noise_loss, dev,
-                            val_chunk, elems, k_max)
+            out = validate_true(h, std, corpus, infos, pids, rung, formula, dev, val_chunk), None
+        else:
+            out = validate_fnb(h, std, corpus, infos, pred, tp, rung, formula, fnb_noise_loss,
+                               dev, val_chunk, elems, k_max, f_val=f_val)
+        val_seconds.append(time.time() - tv)
+        return out
 
     t_setup = time.time() - t0
     t1 = time.time()
@@ -422,8 +455,10 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
             fh.write(f"{s}\t{lo!r}\t{v!r}\t{sec:.3f}\n")
     timing = {"setup": t_setup, "train": t_train, "total": time.time() - t0,
               "peak_rss_mb": ltrain.peak_rss_mb(), "steps_run": step,
-              "best_step": int(best["step"]), "val_loss": float(best["val"])}
+              "best_step": int(best["step"]), "val_loss": float(best["val"]),
+              "val_seconds": val_seconds}
     if source == "fnb":
+        timing["f_pass_seconds"] = f_pass_seconds
         timing.update(n_k_mean=tr["n_k_sum"] / max(1, tr["n_bins"]), n_k_max=tr["n_k_max"],
                       n_bins_train=tr["n_bins"], n_capped_train=int(tr["n_capped"]),
                       n_capped_val=n_capped_val, n_capped=int(tr["n_capped"]) + n_capped_val)
