@@ -11,6 +11,10 @@ as t118 and EVAL.md). The scorer here adds, per record:
                   clamped as in the loss). Shows whether a gain sits in the mean or the spread.
   crps_all_gt_20  crps_all > 20 (None when crps_all is None), so aggregation counts explosions.
 
+Per file, `crps_by_kind` counts records with CRPS > 20 and records with a non-finite bin, apart,
+for each kind (trained_score, val, shuffle, swap; law), each (pair, eval) record once: the
+depthlaw copies are left out. `n_records_crps_nonfinite` is t118's key, kept as t118 counts it.
+
 **Depth law.** As t118: `depth_log2_scale_pred = log2(sum mu / sum X)` over the score bins on
 depth-only pairs, against `depth_log2_ratio_true = log2(d'/d)` (manifest depths). The law pass
 scores the depth->depth pairs only by default (`eta.pairs.law_pairs_depth`, PI decision);
@@ -219,8 +223,25 @@ def _t125(law_scope) -> dict:
             "explode_at": EXPLODE_AT}
 
 
-def _n_explode(records) -> int:
-    return sum(bool(r.get(EXPLODE_KEY)) for r in records)
+#: the record kinds counted in `crps_by_kind`; depthlaw records are copies and never counted
+KIND_LABELS = {("trained", "score"): "trained_score", ("trained", "val"): "val",
+               ("shuffle", "score"): "shuffle", ("swap", "score"): "swap", ("law", "score"): "law"}
+
+
+def crps_by_kind(records, kinds) -> dict:
+    """{label: {n_records, n_crps_gt_20, n_crps_nonfinite}} for each label in `kinds`; one count
+    per (pair, eval) record, depthlaw copies left out. n_crps_gt_20: records with crps_all > 20;
+    n_crps_nonfinite: records with at least one bin whose CRPS is not finite (reported apart)."""
+    out = {k: {"n_records": 0, "n_crps_gt_20": 0, "n_crps_nonfinite": 0} for k in kinds}
+    for r in records:
+        label = KIND_LABELS.get((r["kind"], r["eval"]))
+        if label is None:
+            continue
+        c = out[label]
+        c["n_records"] += 1
+        c["n_crps_gt_20"] += int(bool(r.get(EXPLODE_KEY)))
+        c["n_crps_nonfinite"] += int(r.get("n_crps_nonfinite", 0) > 0)
+    return out
 
 
 def _now() -> str:
@@ -278,7 +299,8 @@ def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) 
     out = {"created_utc": _now(), "run": run_info(pred, run_dir), "config": _config(blacklist),
            "records": records, "snippets": snippets, "skipped": skipped,
            "n_records_crps_nonfinite": sum(r.get("n_crps_nonfinite", 0) > 0 for r in records),
-           "n_records_crps_gt_20": _n_explode(records), "t125": _t125(None),
+           "crps_by_kind": crps_by_kind(records, ("trained_score", "val", "shuffle", "swap")),
+           "t125": _t125(None),
            "timing": {"setup": round(t1 - t0, 3), "score": round(t2 - t1, 3),
                       "total": round(time.time() - t0, 3), "n_jobs": len(jobs),
                       "workers": int(workers)}}
@@ -306,7 +328,7 @@ def score_law(pred, rows: list[dict], blacklist, run_dir, workers: int = 1,
     out = {"created_utc": _now(), "run": run_info(pred, run_dir), "config": _config(blacklist),
            "records": records,
            "n_records_crps_nonfinite": sum(r.get("n_crps_nonfinite", 0) > 0 for r in records),
-           "n_records_crps_gt_20": _n_explode(records), "t125": _t125(law_scope),
+           "crps_by_kind": crps_by_kind(records, ("law",)), "t125": _t125(law_scope),
            "timing": {"setup": round(t1 - t0, 3), "score": round(t2 - t1, 3),
                       "total": round(time.time() - t0, 3), "n_jobs": len(jobs),
                       "workers": int(workers)}}
