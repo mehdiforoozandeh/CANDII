@@ -1,6 +1,6 @@
 """t125 part 2: the learned h — models, the feature standardiser, the losses, the checkpoint.
 
-h maps the features of one 25 bp bin (P2a's `features`: rung 1 = 9 columns, rung 5 = 19, the
+h maps the features of one 25 bp bin (P2a's `features`: rung 1 = 9 columns, rung 5 = 21, the
 formula variants one more, log1p of the formula's P, last) to mu = predicted log(1 + P).
 
 Variants (design note Part 2; PI 2026-10-11: MLP 2 x 64, as the t118 g):
@@ -45,10 +45,10 @@ from ladder import model as ladder_model  # noqa: E402
 HIDDEN = ladder_model.HIDDEN                       # 64, the t118 g's width
 VARIANTS = ("affine", "mlp", "formula_affine", "formula_mlp")
 RUNGS = (1, 5)
-N_IN = {1: 9, 5: 19}                               # pinned in t125-P2a (FEATURES_R1 / FEATURES_R5)
+N_IN = {1: 9, 5: 21}                               # pinned in t125-P2a (FEATURES_R1 / FEATURES_R5)
 N_ASSAY = len(encoding.ASSAYS)                     # 7
 ASSAY_COLS = slice(2, 2 + N_ASSAY)                 # the one-hot, columns 2..8 at both rungs
-HAS_CONTROL_COL = 18                               # rung 5's flag column
+HAS_CONTROL_COL = 20                               # rung 5's flag column
 LOG_SIGMA_MIN = math.log(ladder_model.SIGMA_MIN)   # log 1e-3
 LOG_SIGMA_MAX = math.log(ladder_model.SIGMA_MAX)   # log 1e3
 STD_EPS = encoding.STD_EPS                         # 1e-6

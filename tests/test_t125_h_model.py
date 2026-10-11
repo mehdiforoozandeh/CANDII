@@ -2,7 +2,7 @@
 interface (plan_t125.md "### t125-P2d") and design note Part 2, not against the implementation.
 
 Feature widths are pinned in t125-P2a: rung 1 = 9 columns (log1p_k, log1p_ctl_bin, assay one-hot 7),
-rung 5 = 19 columns (rung 1 + 9 continuous + has_control); the formula variants take one extra
+rung 5 = 21 columns (rung 1 + 11 continuous + has_control; AMENDED 2026-10-11); the formula variants take one extra
 column, log1p of the formula's P, last.
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT / "tools" / "t125"))
 
 from hmap import model  # noqa: E402
 
-N_R1, N_R5 = 9, 19
+N_R1, N_R5 = 9, 21
 ASSAY_COLS = list(range(2, 9))          # one-hot, both rungs
 HALF_LOG_2PI = 0.5 * math.log(2 * math.pi)
 
@@ -34,7 +34,7 @@ def _feat(n, rung, formula=False, seed=0, assay=None):
     x[:, 2:9] = 0.0
     x[np.arange(n), 2 + a] = 1.0
     if rung == 5:
-        x[:, 18] = rng.integers(0, 2, size=n)        # has_control flag
+        x[:, 20] = rng.integers(0, 2, size=n)        # has_control flag
     if formula:
         x = np.concatenate([x, rng.uniform(0, 5, size=(n, 1)).astype(np.float32)], axis=1)
     return torch.from_numpy(x)
@@ -100,14 +100,14 @@ def test_formula_identity_at_init(variant, noise):
 def test_mlp_architecture():
     h = model.HModel("mlp", 5, True, N_R5)
     lin = [m for m in h.modules() if isinstance(m, torch.nn.Linear)]
-    assert [(m.in_features, m.out_features) for m in lin] == [(19, 64), (64, 64), (64, 2)]
+    assert [(m.in_features, m.out_features) for m in lin] == [(21, 64), (64, 64), (64, 2)]
     assert sum(isinstance(m, torch.nn.ReLU) for m in h.modules()) == 2
     h1 = model.HModel("mlp", 1, False, N_R1)
     lin = [m for m in h1.modules() if isinstance(m, torch.nn.Linear)]
     assert [(m.in_features, m.out_features) for m in lin] == [(9, 64), (64, 64), (64, 1)]
     hf = model.HModel("formula_mlp", 5, False, N_R5)
     lin = [m for m in hf.modules() if isinstance(m, torch.nn.Linear)]
-    assert lin[0].in_features == 20                    # n_in + the formula column
+    assert lin[0].in_features == 22                    # n_in + the formula column
 
 
 def test_affine_is_affine():
@@ -122,18 +122,18 @@ def test_affine_is_affine():
     assert torch.allclose(mab, 0.5 * ma + 0.5 * mb, atol=1e-5)
 
 
-LOG_DEPTH_C = 15          # rung 5: 9 log1p_k_frag ... 14 log_depth_t, 15 log_depth_c, ... 18 has_control
+LOG_DEPTH_C = 15          # rung 5: 9 log1p_k_frag ... 14 log_depth_t, 15 log_depth_c, ... 19 log_read_length_c, 20 has_control
 
 
 @pytest.mark.parametrize("noise", [False, True])
 def test_formula_affine_is_formula_plus_affine_over_all_columns(noise):
-    """AMENDED 2026-10-11 (PI): mu = f + w . feat + b over all n_in + 1 = 20 columns, f included;
+    """AMENDED 2026-10-11 (PI): mu = f + w . feat + b over all n_in + 1 = 22 columns, f included;
     with noise log_sigma = w' . feat + b'. No per-assay-only parameters."""
     h = model.HModel("formula_affine", 5, noise, N_R5)
     n_out = 2 if noise else 1
-    assert sum(p.numel() for p in h.parameters()) == n_out * (20 + 1)
+    assert sum(p.numel() for p in h.parameters()) == n_out * (22 + 1)
     torch.manual_seed(0)
-    W = torch.randn(n_out, 20)
+    W = torch.randn(n_out, 22)
     B = torch.randn(n_out)
     with torch.no_grad():
         for p in h.parameters():
@@ -201,7 +201,7 @@ def test_bad_args():
         model.HModel("formula_mlp", 1, False, N_R1)        # formula needs rung 5
     h = model.HModel("mlp", 5, False, N_R5)
     with pytest.raises(ValueError):
-        h(_feat(3, 5, formula=True))                        # 20 wide into a 19-wide h
+        h(_feat(3, 5, formula=True))                        # 22 wide into a 21-wide h
 
 
 def test_P_hat():
@@ -305,7 +305,7 @@ def test_standardiser_scales_only_continuous():
     feat = _feat(500, 5).numpy().astype(np.float64)
     feat[:, 0] = feat[:, 0] * 4 + 7
     feat[:, 12] = 2.5                                 # a constant column: std 0 -> 0
-    cont = [0, 1] + list(range(9, 18))
+    cont = [0, 1] + list(range(9, 20))
     s = model.Standardiser().fit(feat, cont)
     out = s.apply(feat)
     assert out.shape == feat.shape
@@ -315,7 +315,7 @@ def test_standardiser_scales_only_continuous():
         else:
             assert abs(out[:, c].mean()) < 1e-5
             assert abs(out[:, c].std() - 1) < 1e-4    # population std, as ladder.encoding
-    for c in ASSAY_COLS + [18]:
+    for c in ASSAY_COLS + [20]:
         assert np.array_equal(out[:, c], feat[:, c])  # one-hot and the flag untouched
 
 
@@ -334,9 +334,9 @@ def test_standardiser_leading_dims_torch_and_state():
 
 def test_continuous_columns():
     assert model.continuous_cols(1) == [0, 1]
-    assert model.continuous_cols(5) == [0, 1] + list(range(9, 18))
+    assert model.continuous_cols(5) == [0, 1] + list(range(9, 20))
     # the formula column is never scaled: the formula variants add it to mu as is
-    assert model.continuous_cols(5, formula=True) == [0, 1] + list(range(9, 18))
+    assert model.continuous_cols(5, formula=True) == [0, 1] + list(range(9, 20))
 
 
 # --- checkpoint --------------------------------------------------------------------------
