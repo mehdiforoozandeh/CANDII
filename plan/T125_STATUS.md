@@ -74,8 +74,14 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
   - Own-noise scoring: exact mixture CRPS on log(1 + P); push-only also gets log-scale CRPS; push-only keeps
     native-scale CRPS; native MSE of the mean for both.
   - Control read length = the treatment base's read length; the Nibi smoke reports the formula-vs-real-P error.
+    **Superseded the same day:** the crop arms cropped the control too, so every control's read length is
+    measured from the tagAlign that ran (read-only Nibi step).
 
 - 2026-10-11: formula + affine h = formula + an affine map of all rung-5 inputs (formula included), zero at init.
+
+- 2026-10-11: the no-covariates twin keeps the depth offset. Real vs twin shows what the covariates add beyond the fixed d′/d scaling; it is not directly comparable with the old grid's twin gap.
+
+- 2026-10-11: rung 5 of the learned h gains the treatment and control log read lengths (21 inputs).
 
 ## Log
 
