@@ -9,8 +9,8 @@ worktree (git-excluded).
 | phase | state |
 |---|---|
 | 0 verify on Nibi | done 2026-10-11; formula forks with the PI |
-| 1 build the count model | planning |
-| 2 build the map h | planning; formula forks decided |
+| 1 build the count model | building (plan: 24 chunks, `.orchestrate/plan_t125.md`) |
+| 2 build the map h | building |
 | 3 smoke on Nibi | not started |
 | 4 count runs (432) | not started |
 | 5 h on the true X′ | not started |
@@ -65,6 +65,15 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
     treatment); in the chain that window uses f's predicted mean.
   - One Poisson tail per bin, with the caller's rules: strict tail, floor of the observed value,
     no pseudocount, N = all tagAlign lines.
+
+- 2026-10-11, plan forks:
+  - Law pass on depth-only pairs only (42 across tracks); `--law-scope all` stays available.
+  - Repair training: 1 h seed, 768 fits (64 f × 12 h versions); seed spread quoted from the true-X′ h.
+    Upgrade to 3 seeds only if the Nibi smoke shows one fit under 20 min on 8 cores (ask the PI then).
+  - Own-noise loss on f's NB: expected Gaussian NLL, Σ_k NB(k)·NLL_k.
+  - Own-noise scoring: exact mixture CRPS on log(1 + P); push-only also gets log-scale CRPS; push-only keeps
+    native-scale CRPS; native MSE of the mean for both.
+  - Control read length = the treatment base's read length; the Nibi smoke reports the formula-vs-real-P error.
 
 ## Log
 
