@@ -26,10 +26,11 @@ for _p in (ROOT / "tools" / "t118", ROOT / "tools" / "t125"):
 from ladder import data as ldata  # noqa: E402
 from ladder import encoding, synth  # noqa: E402
 
-from hmap import caller, controls, features, products, tasks  # noqa: E402
+from hmap import caller, controls, features, formula, products, tasks  # noqa: E402
 
 MANIFEST = ROOT / "tests" / "fixtures" / "t112_meta" / "MANIFEST.tsv"
 COVARIATES = ROOT / "tools" / "t118" / "covariates.tsv"
+CTL_RL = ROOT / "tools" / "t125" / "hmap" / "control_read_length.tsv"
 ASSAYS = ("DNase-seq", "H3K27ac", "H3K27me3", "H3K36me3", "H3K4me1", "H3K4me3", "H3K9me3")
 
 
@@ -78,6 +79,26 @@ def test_lambda_bg_dnase_base():
     assert caller.lambda_bg(50e6, 150) == pytest.approx(150 * 50e6 / 2.7e9, rel=1e-12)
 
 
+@pytest.mark.parametrize("pid", ["C19M16__ratio__k2", "C19M16__ctldepth__q0.25",
+                                 "C19M16__base__base", "C07M20__ctlid__none", "C12M02__base__base"])
+def test_lambda_bg_agrees_with_formula(pid):
+    info = products.load(MANIFEST, COVARIATES)[pid]
+    s_t, _ = features.scales(info)
+    ours = caller.lambda_bg(info.depth_reads * s_t, info.fraglen)
+    assert math.log(ours) == pytest.approx(features.log_lambda_bg(info), rel=1e-12)
+    assert ours == pytest.approx(formula.lambda_bg(info.depth_reads * formula.scale(info)[0],
+                                                   info.fraglen), rel=1e-12)
+    # formula's local rate with all-zero windows is its lambda_bg alone
+    z = np.zeros(3)
+    if info.has_control:
+        lam = formula.local_lambda(info, {"frag": z, "1k": z, "10k": z}, None)
+    else:
+        lam = formula.local_lambda(info, None, z)
+    np.testing.assert_allclose(lam, ours, rtol=1e-12)
+    if pid == "C19M16__ratio__k2":
+        assert ours == pytest.approx(180 * 30e6 / 2.7e9, rel=1e-12)
+
+
 def test_lambda_window_hand_case():
     # 40 tags in a 1 kb window, fragment 200 bp, control scale 0.5 -> 40 * 200 / 1000 * 0.5 = 4
     assert caller.lambda_window(40.0, 1000, 200, 0.5) == pytest.approx(4.0)
@@ -123,7 +144,7 @@ def test_product_ratio_arm(infos):
     # the manifest's knob_value is MACS2's --ratio on this arm
     assert i.ratio_V == pytest.approx(0.5605415257, rel=1e-9)
     assert i.ctl_identity == "matched"
-    assert i.control_read_length == 101
+    assert i.control_read_length == pytest.approx(101.0, abs=0.01)    # measured mean
 
 
 def test_product_dnase_base(infos):
@@ -137,6 +158,7 @@ def test_product_dnase_base(infos):
     assert i.read_length == 76
     assert i.depth_reads == 50_000_000
     assert i.ctl_identity == "none"
+    assert i.control_read_length == 0.0
 
 
 def test_product_dnase_extsize_fraglen(infos):
@@ -150,10 +172,41 @@ def test_product_non_ratio_arms_have_no_V(infos):
             assert i.ratio_V is None, pid
 
 
-def test_control_read_length_is_track_base(infos):
-    crop = infos["C19M16__crop__36"]
-    assert crop.read_length == 36
-    assert crop.control_read_length == infos["C19M16__base__base"].read_length == 101
+def _read(path):
+    with open(path, newline="") as fh:
+        return list(csv.DictReader(fh, delimiter="\t"))
+
+
+def test_control_read_length_table_covers_every_control_product():
+    rows = _read(CTL_RL)
+    assert list(rows[0]) == ["pid", "control_tagalign", "control_read_length_mean", "n_lines_read"]
+    ctl_pids = {r["pid"] for r in _read(MANIFEST) if r["control_counts25_md5"]}
+    assert len(ctl_pids) == 114
+    assert {r["pid"] for r in rows} == ctl_pids
+    for r in rows:
+        assert int(r["n_lines_read"]) == 100000
+        assert r["control_tagalign"].endswith("tagAlign.gz")
+
+
+def test_control_read_length_is_measured(infos):
+    # the crop arms cropped the control too: its read length follows the crop, not the base
+    for track in ("C07M20", "C19M16"):
+        assert infos[f"{track}__crop__36"].read_length == 36
+        assert infos[f"{track}__crop__36"].control_read_length == pytest.approx(36.0, abs=0.01)
+        assert infos[f"{track}__crop__50"].control_read_length == pytest.approx(50.0, abs=0.01)
+        assert infos[f"{track}__base__base"].control_read_length == pytest.approx(101.0, abs=0.01)
+    assert infos["C07M20__ctlid__none"].control_read_length == 0.0
+
+
+def test_control_read_length_missing_raises(tmp_path):
+    rows = _read(CTL_RL)
+    short = tmp_path / "short.tsv"
+    with open(short, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows([r for r in rows if r["pid"] != "C19M16__base__base"])
+    with pytest.raises(KeyError, match="C19M16__base__base"):
+        products.load(MANIFEST, COVARIATES, short)
 
 
 # --------------------------------------------------------------------------------------------
@@ -164,12 +217,13 @@ def test_feature_names():
     assert encoding.ASSAYS == ASSAYS
     assert len(features.FEATURES_R1) == 9
     assert features.FEATURES_R1[:2] == ("log1p_k", "log1p_ctl_bin")
-    assert len(features.FEATURES_R5) == 19
+    assert len(features.FEATURES_R5) == 21
     assert features.FEATURES_R5[:9] == features.FEATURES_R1
     assert features.FEATURES_R5[9:] == ("log1p_k_frag", "log1p_ctl_frag", "log1p_ctl_1k",
                                         "log1p_ctl_10k", "log_lambda_bg", "log_depth_t",
                                         "log_depth_c", "log_scale_ratio", "log_fraglen",
-                                        "has_control")
+                                        "log_read_length", "log_read_length_c", "has_control")
+    assert features.FEATURES_R5.index("has_control") == 20
     assert features.FEATURE_FORMULA == "log1p_P_formula"
 
 
@@ -220,7 +274,7 @@ def _info(**kw):
     base = dict(pid="X__base__base", track="X", assay="H3K27ac", mark_class="narrow", arm="base",
                 level="base", depth_reads=30_000_000, read_length=101, run_type_pe=0, fraglen=180,
                 has_control=1, control_reads=60_000_000, ratio_V=None, ctl_identity="matched",
-                control_read_length=101)
+                control_read_length=101.0)
     base.update(kw)
     return products.ProductInfo(**base)
 
@@ -244,7 +298,7 @@ def test_fixed_features_shapes():
     f1 = features.fixed_features(_info(), t, c, 1)
     f5 = features.fixed_features(_info(), t, c, 5)
     assert f1.shape == (n, 8) and f1.dtype == np.float32
-    assert f5.shape == (n, 18) and f5.dtype == np.float32
+    assert f5.shape == (n, 20) and f5.dtype == np.float32
     np.testing.assert_array_equal(f5[:, :8], f1)
     with pytest.raises(ValueError):
         features.fixed_features(_info(), t, c, 3)
@@ -255,7 +309,7 @@ def test_fixed_features_with_control_by_hand():
     n = 900
     t = rng.poisson(3, n).astype(np.uint32)
     c = rng.poisson(2, n).astype(np.uint32)
-    info = _info(assay="H3K4me3")
+    info = _info(assay="H3K4me3", control_read_length=50.0)
     f = features.fixed_features(info, t, c, 5)
     cols = {name: f[:, j] for j, name in enumerate(features.FEATURES_R5[1:])}
     np.testing.assert_allclose(cols["log1p_ctl_bin"], np.log1p(c), rtol=1e-6)
@@ -266,14 +320,17 @@ def test_fixed_features_with_control_by_hand():
     np.testing.assert_allclose(cols["log1p_ctl_frag"], np.log1p(_wmean(c, 7)), rtol=1e-5)
     np.testing.assert_allclose(cols["log1p_ctl_1k"], np.log1p(_wmean(c, 40)), rtol=1e-5)
     np.testing.assert_allclose(cols["log1p_ctl_10k"], np.log1p(_wmean(c, 400)), rtol=1e-5)
-    # control 60 M > treatment 30 M -> s_C = 0.5, s_T = 1
-    lam_bg = 180 * 60e6 * 0.5 / 2.7e9
+    # control 60 M > treatment 30 M -> s_C = 0.5, s_T = 1; lambda_bg from the treatment
+    lam_bg = 180 * 30e6 / 2.7e9
     np.testing.assert_allclose(cols["log_lambda_bg"], math.log(lam_bg), rtol=1e-6)
     np.testing.assert_allclose(cols["log_depth_t"], math.log(30.0), rtol=1e-6)
     np.testing.assert_allclose(cols["log_depth_c"], math.log(60.0), rtol=1e-6)
     np.testing.assert_allclose(cols["log_scale_ratio"], math.log(0.5), rtol=1e-6)
     np.testing.assert_allclose(cols["log_fraglen"], math.log(180), rtol=1e-6)
+    np.testing.assert_allclose(cols["log_read_length"], math.log(101), rtol=1e-6)
+    np.testing.assert_allclose(cols["log_read_length_c"], math.log(50), rtol=1e-6)
     np.testing.assert_array_equal(cols["has_control"], 1.0)
+    np.testing.assert_array_equal(f[:, -1], 1.0)
 
 
 def test_fixed_features_ratio_arm_uses_V():
@@ -286,7 +343,8 @@ def test_fixed_features_ratio_arm_uses_V():
     j = features.FEATURES_R5.index("log_scale_ratio") - 1
     np.testing.assert_allclose(f[:, j], math.log(v), rtol=1e-6)        # s_C = V, s_T = 1
     j = features.FEATURES_R5.index("log_lambda_bg") - 1
-    np.testing.assert_allclose(f[:, j], math.log(180 * 107039349 * v / 2.7e9), rtol=1e-6)
+    # --ratio does not move lambda_bg: the treatment's 30 M lines, s_T = 1
+    np.testing.assert_allclose(f[:, j], math.log(180 * 30e6 / 2.7e9), rtol=1e-6)
 
 
 def test_fixed_features_q025_scales_treatment():
@@ -297,7 +355,8 @@ def test_fixed_features_q025_scales_treatment():
     j = features.FEATURES_R5.index("log_scale_ratio") - 1
     np.testing.assert_allclose(f[:, j], math.log(1.0 / (1.0 / r)), rtol=1e-6)   # s_C/s_T = r
     j = features.FEATURES_R5.index("log_lambda_bg") - 1
-    np.testing.assert_allclose(f[:, j], math.log(180 * 26759837 / 2.7e9), rtol=1e-6)
+    # lambda_bg from the treatment scaled down: 180 * 30e6 * (1 / r) / 2.7e9
+    np.testing.assert_allclose(f[:, j], math.log(180 * 30e6 * (1 / r) / 2.7e9), rtol=1e-6)
 
 
 def test_fixed_features_no_control_branch():
@@ -305,12 +364,14 @@ def test_fixed_features_no_control_branch():
     n = 600
     t = rng.poisson(4, n).astype(np.uint32)
     info = _info(assay="DNase-seq", mark_class="DNase", depth_reads=50_000_000, read_length=76,
-                 fraglen=150, has_control=0, control_reads=0, ctl_identity="none")
+                 fraglen=150, has_control=0, control_reads=0, ctl_identity="none",
+                 control_read_length=0.0)
     f = features.fixed_features(info, t, None, 5)
     cols = {name: f[:, j] for j, name in enumerate(features.FEATURES_R5[1:])}
     for k in ("log1p_ctl_bin", "log1p_ctl_frag", "log1p_ctl_1k", "log1p_ctl_10k",
-              "log_depth_c", "log_scale_ratio", "has_control"):
+              "log_depth_c", "log_scale_ratio", "log_read_length_c", "has_control"):
         np.testing.assert_array_equal(cols[k], 0.0)
+    np.testing.assert_allclose(cols["log_read_length"], math.log(76), rtol=1e-6)
     np.testing.assert_allclose(cols["log_lambda_bg"], math.log(150 * 50e6 / 2.7e9), rtol=1e-6)
     np.testing.assert_allclose(cols["log1p_k_frag"], np.log1p(_wmean(t, 7)), rtol=1e-5)
     np.testing.assert_array_equal(f[:, 1:8], np.tile(np.eye(7)[0], (n, 1)))
@@ -398,6 +459,10 @@ def synth_with_controls(tmp_path):
         np.savez_compressed(path, **arrays)
         r["control_counts25_md5"] = _md5(path)
         ctl[r["pid"]] = arrays
+    with open(root / "control_read_length.tsv", "w") as fh:
+        fh.write("pid\tcontrol_tagalign\tcontrol_read_length_mean\tn_lines_read\n")
+        for pid in sorted(ctl):
+            fh.write(f"{pid}\tsynthetic\t101.0\t100000\n")
     with open(manifest, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
         w.writeheader()
@@ -428,13 +493,14 @@ def test_control_cache_round_trip(tmp_path, synth_with_controls):
 
 def test_products_load_needs_the_control_md5(tmp_path, synth_with_controls):
     root, manifest, rows, ctl = synth_with_controls
-    infos = products.load(manifest, root / "covariates.tsv")
+    infos = products.load(manifest, root / "covariates.tsv", root / "control_read_length.tsv")
     assert infos["T1__base__base"].has_control == 1
+    assert infos["T1__base__base"].control_read_length == 101.0
     assert infos["T2__base__base"].has_control == 0
     raw = tmp_path / "raw"
     m2, c2 = synth.make_products(raw, 0, n_bins=N_BINS)   # covariates say control, no npz
     with pytest.raises(ValueError, match="control_counts25_md5"):
-        products.load(m2, c2)
+        products.load(m2, c2, root / "control_read_length.tsv")
 
 
 def test_control_cache_absent_and_md5(tmp_path, synth_with_controls):

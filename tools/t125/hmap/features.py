@@ -1,9 +1,10 @@
 """h's input features at rung 1 and rung 5, raw (P2d's standardiser z-scores them at training).
 
 Rung 1 (`FEATURES_R1`, 9 columns): the bin's count, the control count in the same bin, and the
-assay one-hot (`ladder.encoding.ASSAYS` order). Rung 5 (`FEATURES_R5`, 19 columns): rung 1 plus
+assay one-hot (`ladder.encoding.ASSAYS` order). Rung 5 (`FEATURES_R5`, 21 columns): rung 1 plus
 the fragment-window treatment mean, the control window means (fragment, 1 kb, 10 kb), the genome
-background rate, both depths, the control scaling ratio, the fragment length and the control flag.
+background rate, both depths, the control scaling ratio, the fragment length, both read lengths and
+the control flag (last, column 20).
 `FEATURE_FORMULA` names the one extra column the `formula_*` variants take (last).
 
 Windows: fragment = `frag_bins(fraglen)` bins (round(fraglen / 25), at least 1, made odd), 1 kb =
@@ -19,11 +20,14 @@ Column rules (all per bin, float32):
                    f's predicted mean) the window is taken over `treat_mean`; the chain then
                    replaces this column per enumerated k by log1p(`k_frag_chain`)
   log1p_ctl_frag / _1k / _10k   log1p(control window mean); 0 without a control
-  log_lambda_bg    log caller.lambda_bg(N_C * s_C, fraglen) with a control, (N_T, fraglen) without
+  log_lambda_bg    log caller.lambda_bg(N_T * s_T, fraglen): MACS2's lambda_bg comes from the
+                   TREATMENT in every arm (s_T = 1 without a control; --ratio does not move it)
   log_depth_t      log(N_T / 1e6)
   log_depth_c      log(N_C / 1e6) with a control; 0 without (has_control carries the difference)
   log_scale_ratio  log(s_C / s_T) of `caller.scale` (ratio V on the ratio arms); 0 without a control
   log_fraglen      log(fraglen)
+  log_read_length  log(treatment read length)
+  log_read_length_c  log(measured control read length); 0 without a control
   has_control      0 / 1
 The no-control local-rate window (10 kb of the treatment, f's predicted mean in the chain) is not a
 feature column; P2b's `formula.local_lambda` takes it, built with `window_sum` / `window_mean`.
@@ -44,7 +48,8 @@ ASSAY_COLUMNS = tuple(f"assay_{a}" for a in encoding.ASSAYS)
 FEATURES_R1 = ("log1p_k", "log1p_ctl_bin") + ASSAY_COLUMNS
 FEATURES_R5 = FEATURES_R1 + ("log1p_k_frag", "log1p_ctl_frag", "log1p_ctl_1k", "log1p_ctl_10k",
                              "log_lambda_bg", "log_depth_t", "log_depth_c", "log_scale_ratio",
-                             "log_fraglen", "has_control")
+                             "log_fraglen", "log_read_length", "log_read_length_c",
+                             "has_control")
 FEATURE_FORMULA = "log1p_P_formula"
 FEATURES = {1: FEATURES_R1, 5: FEATURES_R5}
 #: columns P2d's standardiser must never scale (the one-hot and the flag)
@@ -130,11 +135,9 @@ def scales(info: ProductInfo) -> tuple[float, float]:
 
 
 def log_lambda_bg(info: ProductInfo) -> float:
-    """log of the background rate: the scaled control's N with a control, N_T without."""
-    if info.has_control:
-        _, s_c = scales(info)
-        return math.log(caller.lambda_bg(info.control_reads * s_c, info.fraglen))
-    return math.log(caller.lambda_bg(info.depth_reads, info.fraglen))
+    """log of MACS2's background rate, from the treatment: lambda_bg(N_T * s_T, fraglen)."""
+    s_t, _ = scales(info)
+    return math.log(caller.lambda_bg(info.depth_reads * s_t, info.fraglen))
 
 
 def fixed_features(info: ProductInfo, counts_t: np.ndarray, counts_c: np.ndarray | None,
@@ -187,5 +190,8 @@ def fixed_features(info: ProductInfo, counts_t: np.ndarray, counts_c: np.ndarray
     out[:, col["log_depth_c"]] = math.log(info.control_reads / D_UNIT) if info.has_control else 0.0
     out[:, col["log_scale_ratio"]] = math.log(s_c / s_t)
     out[:, col["log_fraglen"]] = math.log(info.fraglen)
+    out[:, col["log_read_length"]] = math.log(info.read_length)
+    out[:, col["log_read_length_c"]] = (math.log(info.control_read_length) if info.has_control
+                                        else 0.0)
     out[:, col["has_control"]] = float(info.has_control)
     return out

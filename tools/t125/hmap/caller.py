@@ -47,7 +47,11 @@ def scale(N_T: float, N_C: float, ratio_V: float | None = None) -> tuple[float, 
 
 
 def lambda_bg(N_scaled: float, fraglen: float) -> float:
-    """The genome-background rate: fraglen * N / GENOME_SIZE (N already scaled)."""
+    """The genome-background rate: fraglen * N / GENOME_SIZE (N already scaled).
+
+    MACS2 takes N from the TREATMENT in every arm: N_scaled = N_T * s_T (s_T = 1 without a
+    control); `--ratio` scales the control windows only. Same definition as `formula.lambda_bg`.
+    """
     return float(fraglen) * float(N_scaled) / GENOME_SIZE
 
 
