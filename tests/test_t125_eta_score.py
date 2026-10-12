@@ -181,7 +181,15 @@ def test_trained_kinds_and_counts(synth_dir, scored_a):
               "crps_top1", "n_top1", "spearman_all", "n_blacklisted", "n_crps_nonfinite"):
         assert k in tr
     assert all(lscore.SWAP_KEY in r for r in by("swap"))
-    assert s["n_records_crps_gt_20"] == sum(r[es.EXPLODE_KEY] for r in recs)
+    assert "n_records_crps_gt_20" not in s
+    ck = s["crps_by_kind"]
+    assert set(ck) == {"trained_score", "val", "shuffle", "swap"}
+    for label, rs in (("trained_score", by("trained", "score")), ("val", by("trained", "val")),
+                      ("shuffle", by("shuffle")), ("swap", by("swap"))):
+        assert ck[label] == {"n_records": len(rs),
+                             "n_crps_gt_20": sum(r[es.EXPLODE_KEY] for r in rs),
+                             "n_crps_nonfinite": sum(r["n_crps_nonfinite"] > 0 for r in rs)}
+    assert sum(c["n_records"] for c in ck.values()) == len(recs) - len(dl)   # no depthlaw copy
     assert (d / "SCORE_DONE").is_file()
 
 
@@ -254,6 +262,25 @@ def test_metric_fields_eta_hand_case_and_explosion():
     f2, _ = es.metric_fields_eta(_StubPred(), np.log(np.full(y.shape, 0.5)), disp, big)
     assert f2["crps_all"] > 20 and f2[es.EXPLODE_KEY] is True
     assert es.EXPLODE_AT == 20.0
+
+
+def test_crps_by_kind_counts_each_record_once():
+    def rec(kind, ev, crps, nonfinite=0):
+        return {"kind": kind, "eval": ev, "crps_all": crps, es.EXPLODE_KEY:
+                None if crps is None else crps > 20, "n_crps_nonfinite": nonfinite}
+    t = rec("trained", "score", 25.0)
+    recs = [t, {**t, "kind": "depthlaw", "depth_source": "trained"},      # the copy: not counted
+            rec("trained", "val", 30.0), rec("trained", "score", 1.0, nonfinite=3),
+            rec("shuffle", "score", None, nonfinite=5), rec("swap", "score", 2.0),
+            rec("shuffle", "score", 21.0)]
+    ck = es.crps_by_kind(recs, ("trained_score", "val", "shuffle", "swap"))
+    assert ck == {"trained_score": {"n_records": 2, "n_crps_gt_20": 1, "n_crps_nonfinite": 1},
+                  "val": {"n_records": 1, "n_crps_gt_20": 1, "n_crps_nonfinite": 0},
+                  "shuffle": {"n_records": 2, "n_crps_gt_20": 1, "n_crps_nonfinite": 1},
+                  "swap": {"n_records": 1, "n_crps_gt_20": 0, "n_crps_nonfinite": 0}}
+    law = es.crps_by_kind([rec("law", "score", 40.0), {**rec("law", "score", 40.0),
+                                                       "kind": "depthlaw"}], ("law",))
+    assert law == {"law": {"n_records": 1, "n_crps_gt_20": 1, "n_crps_nonfinite": 0}}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -378,6 +405,9 @@ def test_law_scope_depth_and_all(rung, synth_dir, runs):
     dl = [r for r in law["records"] if r["kind"] == "depthlaw"]
     assert len(dl) == 4 and all(r["depth_source"] == "law" for r in dl)
     assert all(k in r and isinstance(r[es.EXPLODE_KEY], bool) for r in lp for k in MSE_KEYS)
+    assert law["crps_by_kind"] == {"law": {
+        "n_records": 4, "n_crps_gt_20": sum(r[es.EXPLODE_KEY] for r in lp),
+        "n_crps_nonfinite": sum(r["n_crps_nonfinite"] > 0 for r in lp)}}
     assert (d / "LAW_DONE").is_file()
 
     d_all = _write_run(runs / f"lawall_{rung}", synth_dir, rung, "real")
@@ -452,3 +482,51 @@ def test_cli_script_mode_law_all(synth_dir, runs):
     assert law["t125"]["law_scope"] == "all"
     assert sum(r["kind"] == "law" for r in law["records"]) == 24
     assert (d / "LAW_DONE").is_file()
+
+
+# ---------------------------------------------------------------------------------------------
+# a run trained by eta.train, then scored
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.filterwarnings("ignore:.*meant for synthetic data only")
+@pytest.mark.parametrize("rung,model", [("A", "real"), ("A2", "nocov")])
+def test_trained_run_scores(rung, model, synth_dir, tmp_path):
+    from eta import train as et
+    sd = synth_dir
+    d = et.run_training(sd["manifest"], sd["cov"], sd["root"], tmp_path, rung, G, model, 0,
+                        max_steps=3, eval_every=3, device="cpu", window=256, batch=8,
+                        knot_sample=20_000, knot_block=256)
+    assert (d / "TRAIN_DONE").is_file() and d.name == ep.run_name(rung, G, model, 0)
+    args = [str(sd["manifest"]), str(sd["cov"]), str(sd["root"]), str(sd["bed"]), str(d)]
+    assert es.main(["trained", *args, "--workers", "1"]) == 0
+    assert es.main(["law", *args, "--workers", "1", "--law-scope", "depth"]) == 0
+    s = json.loads((d / "scores.json").read_text())
+    law = json.loads((d / "law.json").read_text())
+    assert (d / "SCORE_DONE").is_file() and (d / "LAW_DONE").is_file()
+    assert s["run"]["rung"] == rung and s["run"]["model"] == model
+    fig = np.load(d / "figdata.npz").files
+    if model == "nocov":
+        assert fig == []
+    else:
+        assert any(k.startswith("meta__") for k in fig)
+    assert set(s["crps_by_kind"]) == {"trained_score", "val", "shuffle", "swap"}
+    assert set(law["crps_by_kind"]) == {"law"} and law["t125"]["law_scope"] == "depth"
+    assert law["crps_by_kind"]["law"]["n_records"] == len(ep.law_pairs_depth(sd["rows"], G))
+    kinds = {r["kind"] for r in s["records"]}
+    assert kinds == {"trained", "shuffle", "swap", "depthlaw"}
+    assert {r["kind"] for r in law["records"]} == {"law", "depthlaw"}
+    for r in s["records"] + law["records"]:
+        for k in ("crps_all", "crps_nonzero", "crps_top1") + MSE_KEYS:
+            assert r[k] is not None and math.isfinite(r[k]), (r["kind"], k)
+        assert isinstance(r[es.EXPLODE_KEY], bool)
+    for r in s["records"]:
+        if r["kind"] == "trained" and r["eval"] == "score":
+            for k in ("crps_oracle_scaled_all", "scale_error_all", "c_star_all", "pit_hist",
+                      "describe"):
+                assert k in r
+            assert math.isfinite(r["crps_oracle_scaled_all"]) and math.isfinite(r["scale_error_all"])
+    for r in s["records"] + law["records"]:
+        if r["kind"] == "depthlaw":
+            assert math.isfinite(r["depth_log2_scale_pred"])
+            assert math.isfinite(r["depth_log2_ratio_true"])

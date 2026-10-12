@@ -85,6 +85,8 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 
 - 2026-10-11: the shuffle control shuffles depth too, as in t118, so the offset uses the shuffled target's d′.
 
+- 2026-10-11: a comparison of two arms uses only the pairs finite in both; it reports how many pairs it dropped and the non-finite counts.
+
 ## Log
 
 - 2026-10-11: run started; Nibi down at start.
