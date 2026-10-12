@@ -21,7 +21,14 @@ worktree (git-excluded).
 
 ## Job ids
 
-None submitted yet. Every id goes here at submission.
+Every id goes here at submission.
+
+- Kit K9: `/project/def-maxwl/mforooz/t125/code/K9`, `GIT_SHA` 643054089f34e4ef662cf52acc37c84bac7d0ca2
+  (rsync of the worktree without .git, cruxvault, .orchestrate; wheels copied from t118 K6).
+- 23797342 `t125_verifyK9`: acceptance criteria 1, 2, 4-8 on kit K9 (CPU, 8 cores, 32 GB, 3 h).
+  Script and log: `/project/def-maxwl/mforooz/t125/verify/` (script not in the repo).
+- 23797345 `t125_hctl`: control count cache, array 0-129%20 ->
+  `/project/def-maxwl/mforooz/t125/ctl_cache`; logs `/project/def-maxwl/mforooz/t125/h/logs/`.
 
 ## Nibi access
 
@@ -94,3 +101,7 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 - 2026-10-11: run started; Nibi down at start.
 - 2026-10-11 01:30: Nibi up. Phase 0 reader and the planner dispatched. Chunk ids carry the prefix `t125-`.
 - 2026-10-11: wave 0 merged (offset and task table, form A by level, eta model, h data side, formula h, exact push-forward, learned h). Control read lengths measured for 114 products (`tools/t125/hmap/control_read_length.tsv`). Wave 2 part 1 (eta training, eta scoring, SLURM part 1) building.
+- 2026-10-11 (N1): kit K9 shipped to Nibi. Criterion 3: the 89 t118 files (tools/t118, slurm/t118,
+  tests/test_t118_*, tests/fixtures) in K9 have the same git blob hashes as a0e6834, and
+  `git diff --stat a0e6834` on those paths is empty. Verify job 23797342 and control-cache array
+  23797345 submitted.
