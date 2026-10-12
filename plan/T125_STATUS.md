@@ -105,3 +105,8 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
   tests/test_t118_*, tests/fixtures) in K9 have the same git blob hashes as a0e6834, and
   `git diff --stat a0e6834` on those paths is empty. Verify job 23797342 and control-cache array
   23797345 submitted.
+- 2026-10-11 23:17 EDT (N1): `ssh -o BatchMode=yes nibi` exited 255 during the queue poll. All Nibi
+  work stopped until the PI runs `hpc up nibi`. State at 23:11 EDT: verify job 23797342 RUNNING
+  (venv built, pytest started); control-cache array 23797345 tasks 0-18 COMPLETED (about 1 min
+  each, `counts=built`), tasks 19-129 PENDING; 36 files in ctl_cache. Both jobs run on without
+  the laptop. Still to read: the verify log's CRIT lines, sacct, and the criterion 9 count (114).
