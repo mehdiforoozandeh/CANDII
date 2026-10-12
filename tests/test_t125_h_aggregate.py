@@ -170,6 +170,9 @@ def build_h_root(root: Path) -> Path:
                     kw.update(crps_all=None, crps_top1=None, n_crps_nonfinite=1,
                               crps_oracle_scaled_all=None, scale_error_all=None,
                               crps_all_gt_20=False)
+                if f == F1 and s == 1 and k == ("Td", "d1", "d2"):   # a non-finite LOG bin only
+                    kw.update(crps_log_all=None, crps_log_top1=None, n_crps_log_nonfinite=1,
+                              crps_log_oracle_scaled_all=None, crps_log_scale_error_all=None)
                 return kw
             write_chain(h_root, f, hp, chain_recs(hp, f, False, fn_push))
             hn = h_info("affine", 1, 1, "true", s)
@@ -476,6 +479,10 @@ def test_vs_oldgrid_tsv(agg):
     assert num(r["delta"]) == pytest.approx(0.3, **AP)                  # old - chain h
     assert num(r["bar"]) == pytest.approx(0.4, **AP)
     assert r["gain_exceeds_bar"] == "no" and r["matched"] == "no"
+    # the chain's f is seed 0: the old grid's seed-0 value and delta beside the 3-seed mean
+    assert num(r["old_seed0"]) == pytest.approx(1.95, **AP)
+    assert num(r["delta_seed0"]) == pytest.approx(0.25, **AP)
+    assert r["gain_seed0_exceeds_bar"] == "no"
     t = one(rows, f_rung="A", mark_class="narrow", h_name="h_affine_r1_push_true",
             metric="crps_top1")
     assert num(t["old_mean"]) == pytest.approx(12.0, **AP)
@@ -487,10 +494,13 @@ def test_vs_oldgrid_tsv(agg):
     # one fnb seed: the bar uses the true-X' h's wobble (0.2) beside the old grid's (0.1)
     assert num(fn["delta"]) == pytest.approx(0.6, **AP)
     assert num(fn["bar"]) == pytest.approx(0.4, **AP)
-    nz = one(rows, f_rung="A", mark_class="narrow", h_name="h_affine_r1_noise_true",
-             metric="crps_all")
-    assert nz["delta"] == "" and nz["gain_exceeds_bar"] == "no" and nz["note"]
-    assert nz["h_metric"] == "crps_mean_point_all"                      # point CRPS, shown only
+    # own-noise h: a point CRPS is never put beside the old grid's proper CRPS
+    assert not pick(rows, h_name="h_affine_r1_noise_true")
+    sk = [s for s in agg["res"]["readings_skipped"] if s["reading"] == "vs_oldgrid"
+          and s.get("h_name") == "h_affine_r1_noise_true"]
+    assert sk and all(s["reason"] == ha.NOISE_VS_OLD for s in sk)
+    assert {r["h_metric"] for r in rows} <= {"crps_all", "crps_top1", "crps_oracle_scaled_all",
+                                             "scale_error_all"}
     # no old-grid row for A2: no comparison (not an error)
     assert not pick(rows, f_rung="A2")
     assert r["old_n_crps_gt_20"] == ""                                  # TSV only: unknown
@@ -509,12 +519,21 @@ def test_vs_oldgrid_json_pair_matched(agg_json):
     assert num(r["old_wobble"]) == pytest.approx(0.1, **AP)
     assert num(r["delta"]) == pytest.approx(0.95, **AP)
     assert r["gain_exceeds_bar"] == "yes"
+    assert num(r["old_seed0"]) == pytest.approx(2.45, **AP)
+    assert num(r["delta_seed0"]) == pytest.approx(0.9, **AP)
+    assert r["gain_seed0_exceeds_bar"] == "yes"
     assert r["n_pairs_used"] == "2" and r["n_pairs_dropped_not_finite"] == "1"
     assert r["n_pairs_only_one_arm"] == "1"
     assert num(r["old_tsv_mean"]) == pytest.approx(2.0, **AP)
     d = one(rows, f_rung="A", mark_class="DNase", h_name="h_affine_r1_push_true",
             metric="crps_all")
     assert d["old_n_crps_gt_20"] == "1"
+    # d1->d2 has a non-finite log-scale bin at seed 1 in the chain h: it stays in the native
+    # comparison (only the compared metrics must be finite)
+    assert d["matched"] == "yes" and d["n_pairs_used"] == "1"
+    assert d["n_pairs_dropped_not_finite"] == "0"
+    assert num(d["h_mean"]) == pytest.approx(1.1, **AP)
+    assert num(d["old_mean"]) == pytest.approx((2.0 + 25.0 + 2.1) / 3, **AP)
     sp = one(rows, f_rung="A", mark_class="narrow", h_name="h_affine_r1_push_true",
              metric="crps_oracle_scaled_all")
     assert num(sp["old_mean"]) == pytest.approx(2.45, **AP)
@@ -546,6 +565,26 @@ def test_summary_data(agg):
         assert k in sd
     res = json.loads((agg["agg"] / "results_h.json").read_text())
     assert res["readings"] and res["alone_rows"] and res["chain_rows"]
+
+
+def test_vs_oldgrid_json_with_empty_tsv(tmp_path):
+    h_root = build_h_root(tmp_path)
+    empty = tmp_path / "empty.tsv"
+    empty.write_text("")
+    old_json = write_old_json(tmp_path / "results.json")
+    ha.aggregate(MANIFEST, COV, h_root, tmp_path / "agg", old_grid_tsv=empty,
+                 old_grid_json=old_json)
+    rows = read_tsv(tmp_path / "agg" / "h_vs_oldgrid.tsv")
+    r = one(rows, f_rung="A", mark_class="narrow", h_name="h_affine_r1_push_true",
+            metric="crps_all")
+    assert r["matched"] == "yes" and num(r["delta"]) == pytest.approx(0.95, **AP)
+    assert r["old_tsv_mean"] == ""
+
+
+def test_rec_ok_checks_only_compared_metrics():
+    r = rec(False, nat=1.0, log=0.5, mse=1.0, crps_log_all=None, n_crps_log_nonfinite=3)
+    assert ha._rec_ok(r, ("crps_all", "crps_top1"))
+    assert not ha._rec_ok(r, ("crps_all", "crps_log_all"))
 
 
 def test_cli(tmp_path):

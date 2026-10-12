@@ -27,8 +27,9 @@ beside push's proper CRPS as the same number, never compared with a proper CRPS)
 
 **Readings** (every metric lower-is-better; `gain` positive = the named winner side is lower).
 A comparison of two arms uses only the products / pairs present in every seed of both arms and
-finite in every one of those records (no `n_*_nonfinite` > 0, every compared metric finite; PI
-2026-10-11); `components.pairs` counts the used, dropped-as-not-finite and one-arm-only keys.
+finite in every one of those records (every metric the comparison uses is finite, as
+eta/aggregate.py; score.py writes a subset mean as None when one of its bins is not finite, so a
+non-finite log-scale bin does not drop a pair from a native-scale comparison; PI 2026-10-11); `components.pairs` counts the used, dropped-as-not-finite and one-arm-only keys.
 `bar` = 2 x the larger seed wobble of the two arms; an arm with one seed (fnb h) takes the seed
 wobble of the true-X' h of the same version, f cell, class and metric (PI decision (ii) b: one fnb
 seed, the spread quoted from the true-X' h); a formula h has no h seed and adds no wobble.
@@ -41,12 +42,17 @@ seed, the spread quoted from the true-X' h); a formula h has no h seed and adds 
                  = the fnb-trained h is lower); `abs_delta_exceeds_bar` = |delta| > bar (plan).
   vs_oldgrid     per chain f cell (rung, g_version) x class x h version: the old grid's p-space
                  real-f values (`--old-grid-tsv`: space pval, kind trained, variant all, model
-                 real) beside the chain h; delta = old - h (positive = the chain h is lower). With
+                 real) beside the chain h. The chain's f is seed 0 only, so both the old
+                 grid's seed-0 value (`old_seed0`, `delta_seed0`) and its 3-seed mean (`old_mean`,
+                 `delta`) are given, beside the old seed wobble; delta = old - h (positive = the
+                 chain h is lower). With
                  `--old-grid-json` (t118 row-2 agg/results.json) the two are pair-matched and the
                  old split and explosion counts are read from its per_pair pval records; with the
                  TSV alone the class means are compared as they are, and a row whose track counts
-                 differ is kept with gain_exceeds_bar no and the reason. An own-noise h is shown
-                 (its point CRPS) with no delta: a point CRPS is not compared with a proper CRPS.
+                 differ is kept with gain_exceeds_bar no and the reason. A valid JSON with an
+                 empty TSV still gives rows. Push-only and formula h only: an own-noise h's
+                 native number is a point CRPS, never compared with the old grid's proper CRPS;
+                 it is listed in readings_skipped with that reason.
 **Explosions** per (scope, f cell, h version, class): the (pair or product, seed) records whose
 flag of the h's kind is set (`crps_all_gt_20` push, `crps_mean_point_all_gt_20` own noise), and,
 apart, the records with a non-finite native bin and with a non-finite log-scale bin. Reported
@@ -97,7 +103,7 @@ GV_LABEL = {"per_track": "one g per track", "across": "one g across tracks"}
 WOBBLE_FNB = ("one fnb h seed: the seed wobble is the true-X' h's of the same version, f cell, "
               "class and metric (PI)")
 WOBBLE_FORMULA = "formula h: no h seed, no wobble of its own"
-NOISE_VS_OLD = ("own noise: its native number is the point CRPS of the mean; it is shown, not "
+NOISE_VS_OLD = ("own noise: its native number is the point CRPS of the mean; it is not "
                 "compared with the old grid's proper CRPS")
 
 ALONE_COLS = ("h_name", "variant", "rung", "noise", "source", "mark_class", "metric", "mean",
@@ -113,8 +119,8 @@ REPAIR_COLS = ("f_rung", "f_g_version", "mark_class", "variant", "rung", "noise"
                "abs_delta_exceeds_bar", "gain_exceeds_bar", "n_pairs_used",
                "n_pairs_dropped_not_finite", "n_pairs_only_one_arm", "note")
 VS_COLS = ("f_rung", "f_g_version", "mark_class", "h_name", "variant", "rung", "noise", "source",
-           "metric", "h_metric", "old_mean", "old_wobble", "h_mean", "h_wobble", "delta", "bar",
-           "gain_exceeds_bar", "matched", "n_pairs_used", "n_pairs_dropped_not_finite",
+           "metric", "h_metric", "old_seed0", "old_mean", "old_wobble", "h_mean", "h_wobble",
+           "delta_seed0", "delta", "bar", "gain_seed0_exceeds_bar", "gain_exceeds_bar", "matched", "n_pairs_used", "n_pairs_dropped_not_finite",
            "n_pairs_only_one_arm", "old_tsv_mean", "old_tsv_wobble", "old_n_tracks",
            "h_n_tracks", "old_n_crps_gt_20", "old_n_crps_nonfinite", "h_n_crps_gt_20",
            "h_n_crps_nonfinite", "note")
@@ -422,9 +428,9 @@ def _summary_index(rows: list[dict]) -> dict:
 
 
 def _rec_ok(r: dict, metrics) -> bool:
-    if any((v or 0) > 0 for k, v in r.items()
-           if k.startswith("n_") and k.endswith("_nonfinite") and not isinstance(v, bool)):
-        return False
+    """Every compared metric the record carries is finite (as eta/aggregate.py: "every compared
+    part finite"). score.py writes a subset mean as None when a bin of it is not finite, so a
+    non-finite bin drops the record only from the comparisons of its own scale."""
     return all(_finite(r[m]) for m in metrics if m in r)
 
 
@@ -580,78 +586,96 @@ def repair(cell, arms: dict) -> tuple[list, list]:
     return out, skipped
 
 
+def _old_has_class(old_arm, mc) -> bool:
+    return bool(old_arm) and any(r.get("mark_class") == mc for recs in old_arm["seeds"].values()
+                                 for r in recs.values())
+
+
+def _seed0(v: dict | None):
+    """The seed-0 value of a {per_seed, seeds} block (None when seed 0 is absent)."""
+    if not v or 0 not in v.get("seeds", []):
+        return None
+    return v["per_seed"][v["seeds"].index(0)]
+
+
 def vs_oldgrid(cell, arms: dict, sidx: dict, old: dict, old_arms: dict, old_ex: dict,
                exp_idx: dict) -> tuple[list, list]:
+    """The chain h against the old grid's p-space real f (see the module docstring). The chain
+    uses f seed 0 only, so the old grid's seed-0 value and its 3-seed mean are both given, each
+    with its own delta, beside the old grid's seed wobble. Own-noise h are not compared (their
+    native number is a point CRPS); they are listed in the skipped readings."""
     out, skipped = [], []
     f_rung, f_gv = cell
     old_arm = old_arms.get(cell)
     for vname in sorted(arms):
         arm = arms[vname]
         info = arm["info"]
-        noise = bool(info["noise"])
         for mc in _classes(arm):
-            if not any((f_rung, f_gv, mc, m) in old for m in OLD_METRICS):
-                skipped.append({"reading": "vs_oldgrid", "scope": "chain", "f_rung": f_rung,
-                                "f_g_version": f_gv, "mark_class": mc, "h_name": vname,
-                                "reason": "the old grid has no p-space value for this rung, g "
-                                          "and class"})
+            base_skip = {"reading": "vs_oldgrid", "scope": "chain", "f_rung": f_rung,
+                         "f_g_version": f_gv, "mark_class": mc, "h_name": vname}
+            if info["noise"]:
+                skipped.append({**base_skip, "reason": NOISE_VS_OLD})
+                continue
+            in_tsv = any((f_rung, f_gv, mc, m) in old for m in OLD_METRICS)
+            in_json = _old_has_class(old_arm, mc)
+            if not in_tsv and not in_json:
+                skipped.append({**base_skip, "reason": "the old grid has no p-space value for "
+                                                       "this rung, g and class"})
                 continue
             ex = exp_idx.get((f_rung, f_gv, vname, mc), {})
             oe = old_ex.get((f_rung, f_gv, mc)) if old_arm else None
             res, diag, matched = None, None, False
-            if old_arm and not noise:
+            if in_json:
                 res, diag = compare(arm, old_arm, OLD_METRICS, mc, "chain")
                 matched = res is not None
-                if res is None:
-                    skipped.append({"reading": "vs_oldgrid", "scope": "chain", "f_rung": f_rung,
-                                    "f_g_version": f_gv, "mark_class": mc, "h_name": vname,
-                                    "reason": diag["reason"], "pairs": diag})
+                if res is None and not in_tsv:
+                    skipped.append({**base_skip, "reason": diag["reason"], "pairs": diag})
                     continue
             for m in OLD_METRICS:
-                hm = (NAT[True] + m[len("crps"):] if noise and m.startswith("crps_")
-                      else "crps_mean_point_" + m if noise else m)
-                srow = sidx.get((f_rung, f_gv, vname, mc, hm))
+                srow = sidx.get((f_rung, f_gv, vname, mc, m))
                 trow = old.get((f_rung, f_gv, mc, m))
                 note = []
                 if matched:
                     h_mean, h_w = res["x"][m]["mean"], res["x"][m]["seed_wobble"]
                     o_mean, o_w = res["y"][m]["mean"], res["y"][m]["seed_wobble"]
+                    o_s0 = _seed0(res["y"][m])
                 else:
                     h_mean = srow["mean"] if srow else None
                     h_w = srow["seed_wobble"] if srow else None
                     o_mean = trow["mean"] if trow else None
                     o_w = trow["seed_wobble"] if trow else None
+                    o_s0 = trow["per_seed"][0] if trow else None
+                    if diag is not None:
+                        note.append(f"pair matching failed ({diag['reason']}); TSV class means")
                     if trow is None and m in OLD_METRICS[2:]:
                         note.append("the old grid's split needs --old-grid-json")
                 if info["source"] == "fnb":
                     t = sidx.get((f_rung, f_gv, _vname(info["variant"], info["rung"],
-                                                       info["noise"], "true"), mc, hm))
+                                                       info["noise"], "true"), mc, m))
                     h_w = None if t is None else t["seed_wobble"]
                     note.append(WOBBLE_FNB)
                 elif info["source"] == "formula":
                     note.append(WOBBLE_FORMULA)
-                delta = bar = None
+                delta = _diff(o_mean, h_mean)
+                delta_s0 = _diff(o_s0, h_mean)
+                bar = _bar(o_w, h_w) if (delta is not None or delta_s0 is not None) else None
                 block = None
-                if noise:
-                    note.append(NOISE_VS_OLD)
-                else:
-                    delta = _diff(o_mean, h_mean)
-                    bar = _bar(o_w, h_w) if delta is not None else None
-                    if not matched and trow is not None and srow is not None and (
-                            trow["n_tracks"] != srow["n_tracks"]):
-                        block = (f"track counts differ (chain {srow['n_tracks']}, old grid "
-                                 f"{trow['n_tracks']}) and the old-grid TSV cannot be "
-                                 "pair-matched")
-                        note.append(block)
-                    if not matched:
-                        note.append("old grid from --old-grid-tsv only: class means as they are")
+                if not matched and trow is not None and srow is not None and (
+                        trow["n_tracks"] != srow["n_tracks"]):
+                    block = (f"track counts differ (chain {srow['n_tracks']}, old grid "
+                             f"{trow['n_tracks']}) and the old-grid TSV cannot be pair-matched")
+                    note.append(block)
+                if not matched:
+                    note.append("old grid from --old-grid-tsv only: class means as they are")
                 out.append({"reading": "vs_oldgrid", "scope": "chain", "f_rung": f_rung,
                             "f_g_version": f_gv, "mark_class": mc, "h_name": vname,
                             "variant": info["variant"], "rung": info["rung"],
                             "noise": info["noise"], "source": info["source"], "metric": m,
-                            "h_metric": hm, "old_mean": o_mean, "old_wobble": o_w,
-                            "h_mean": h_mean, "h_wobble": h_w, "delta": delta, "gain": delta,
-                            "bar": bar,
+                            "h_metric": m, "old_seed0": o_s0, "old_mean": o_mean,
+                            "old_wobble": o_w, "h_mean": h_mean, "h_wobble": h_w,
+                            "delta_seed0": delta_s0, "delta": delta, "gain": delta, "bar": bar,
+                            "gain_seed0_exceeds_bar": (False if block
+                                                       else _exceeds(delta_s0, bar)),
                             "gain_exceeds_bar": False if block else _exceeds(delta, bar),
                             "matched": matched,
                             "n_pairs_used": diag["n_used"] if matched else None,
@@ -669,7 +693,8 @@ def vs_oldgrid(cell, arms: dict, sidx: dict, old: dict, old_arms: dict, old_ex: 
                             "note": "; ".join(note) or None,
                             "components": {"pairs": diag,
                                            "gain": "old - chain h; positive = the chain h is "
-                                                   "lower"}})
+                                                   "lower; delta_seed0 uses the old grid's "
+                                                   "seed 0 (the chain's f is seed 0)"}})
     return out, skipped
 
 
@@ -829,14 +854,20 @@ def write_grid_md(path: Path, alone_rows: list[dict], readings: list[dict], expl
                  for r in readings if r["reading"] == "repair"])
     L += ["## The chain against the old grid's p results", "",
           "The old grid (t118 row 2): real f, p space, trained pairs, mean over its 3 f seeds ± "
-          "wobble. The chain: t125 f (seed 0) then h; ± the h seeds' wobble (fnb: the true-X' "
-          "h's; formula: none). Delta = old - chain h (positive = the chain h is lower). "
-          "Own-noise h are shown with their point CRPS of the mean and no delta.", ""]
-    L += _table(["f", "class", "h", "metric", "old grid", "chain h", "delta", "bar",
-                 "gain > 2 × wobble", "pair-matched", "CRPS > 20: old / h", "note"],
-                [[where(r), r["mark_class"], r["h_name"], r["metric"],
+          "wobble, and its seed 0 alone (the chain's f is seed 0 only). The chain: t125 f "
+          "(seed 0) then h; ± the h seeds' wobble (fnb: the true-X' h's; formula: none). Delta "
+          "= old - chain h (positive = the chain h is lower), against the old seed 0 and against "
+          "the old 3-seed mean; one bar (2 × the larger seed wobble) for both. Push-only and "
+          "formula h only (CRPS > 20 counts crps_all_gt_20 on both sides); own-noise h are not "
+          "compared (a point CRPS of the mean is not a proper CRPS).", ""]
+    L += _table(["f", "class", "h", "metric", "old grid seed 0", "old grid 3 seeds", "chain h",
+                 "delta vs seed 0", "delta vs 3 seeds", "bar", "gain > 2 × wobble (seed 0 / 3 "
+                 "seeds)", "pair-matched", "CRPS > 20: old / h", "note"],
+                [[where(r), r["mark_class"], r["h_name"], r["metric"], _f(r["old_seed0"]),
                   _pm(r["old_mean"], r["old_wobble"]), _pm(r["h_mean"], r["h_wobble"]),
-                  _f(r["delta"]), _f(r["bar"]), _yn(r["gain_exceeds_bar"]), _yn(r["matched"]),
+                  _f(r["delta_seed0"]), _f(r["delta"]), _f(r["bar"]),
+                  f"{_yn(r['gain_seed0_exceeds_bar'])} / {_yn(r['gain_exceeds_bar'])}",
+                  _yn(r["matched"]),
                   f"{'—' if r['old_n_crps_gt_20'] is None else r['old_n_crps_gt_20']} / "
                   f"{'—' if r['h_n_crps_gt_20'] is None else r['h_n_crps_gt_20']}",
                   r["note"] or ""]
@@ -915,6 +946,10 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
         _warn(w)
     old = load_old_tsv(old_grid_tsv)
     old_arms, old_ex = load_old_json(old_grid_json)
+    if bool(old) != bool(old_arms):
+        _warn("the old grid comes from the " + ("TSV" if old else "JSON") + " only (the "
+              + ("JSON" if old else "TSV") + " is absent or empty): vs_oldgrid rows are "
+              + ("not pair-matched" if old else "pair-matched with no TSV means beside"))
 
     # expected runs
     alone_expected = [r["h_name"] for r in tasks.tasks_alone()]
@@ -974,7 +1009,7 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
         for fn in (lambda c: push_vs_noise("chain", c, cells[c], sidx_chain, "chain"),
                    lambda c: repair(c, cells[c]),
                    lambda c: vs_oldgrid(c, cells[c], sidx_chain, old, old_arms, old_ex,
-                                        exp_idx) if old else ([], [])):
+                                        exp_idx) if (old or old_arms) else ([], [])):
             rs, sk = fn(cell)
             readings += rs
             skipped += sk
