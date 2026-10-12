@@ -16,11 +16,19 @@ value, bar, met, seed_wobble, components}`). Every metric is lower-is-better; a 
 `other - this`, positive when `this` is better. `bar` = 2 x the larger seed wobble of the two arms;
 `met` = gain > bar ("the gain exceeds 2 x the larger seed wobble"), False with a `met_reason` when
 the bar cannot be formed (one seed). `met` is a drafted reading, never a tick or a verdict.
+**Two arms are compared on common ground** (`compare_arms`): per seed, only the tracks both arms
+have, and in each only the pairs present in both and finite in both (no non-finite bin, every
+compared part finite; PI 2026-10-11). `components.pairs` reports the track counts per arm and
+seed, the dropped tracks, and the pairs used / dropped as non-finite / present in one arm only,
+with each arm's non-finite record count. No common track at any seed -> no reading; the skip and
+its reason go to `results.json["readings_skipped"]`. The old grid is pair-matched through
+`--old-grid-json`; with the TSV alone its class mean is compared as is, and a reading whose track
+counts differ from the TSV's n_tracks is kept with met False and the reason.
   beatstwin       nocov - real (trained), metrics crps_all, crps_top1, mse_log1p_all, mse_log1p_top1.
                   The twin KEEPS the depth offset (PI), so this gap is not directly comparable with
                   the old grid's real-vs-twin gap; the old gap is beside it as `oldgrid_gap`.
   vs_oldgrid      old-grid real (`--old-grid-tsv`: space counts, kind trained, variant all) minus the
-                  t125 real mean of the same rung, g_version, class, metric; Aold against the old
+                  t125 real value of the same rung, g_version, class, metric; Aold against the old
                   grid's A (the depth offset alone). No row when the old grid has no value (it has
                   no MSE).
   vs_oldspread    A only: Aold - A, real (the new spread rule alone, both with the offset).
@@ -29,13 +37,17 @@ the bar cannot be formed (one seed). `met` is a drafted reading, never a tick or
                   its two split parts, crps_top1, mse_log1p_all and mse_log1p_top1: this, other,
                   both wobbles, gain, bar, gain_exceeds_bar. The old grid's split comes from
                   `--old-grid-json` (its results.json per_pair records, aggregated by the same rule).
-  depthlaw        per (rung, g_version), real, mark_class "all": max over the depth->depth law
-                  pairs of |2^(mean over seeds of (log2_pred - log2_true)) - 1|; bar 0.10;
-                  met = value <= bar (as t118). Beside it: the same over the trained base<->depth
-                  pairs, and the twin's value.
+  depthlaw        per (rung, g_version, mark_class) as t118, plus a pooled row (mark_class
+                  "all"), real: max over the depth->depth law pairs of |2^(mean over seeds of
+                  (log2_pred - log2_true)) - 1|; bar 0.10; met = value <= bar (as t118). Beside
+                  it: the same over the trained base<->depth pairs, the twin's value, and the
+                  old grid's depthlaw check of the same rung (Aold: A), g_version and class from
+                  its checks_<rung>.json (`--old-grid-checks`, default the old TSV's directory)
+                  with gain = old - t125 and its bar.
   n_pairs_crps_gt_20 / n_pairs_crps_nonfinite
                   per (rung, g_version, class, model): the (pair, seed) trained/score records whose
-                  crps_all is > 20 / not finite (None). Reported only (value; bar and met None).
+                  crps_all is > 20 / that have a non-finite bin (n_crps_nonfinite > 0, as
+                  score.py's crps_by_kind; a zero-bin record is in neither). Reported only.
 `results.json["explosions"]` has the same two counts for every record kind and eval; a depthlaw
 record is a copy of a scored record and is never counted.
 
@@ -45,6 +57,7 @@ depth_law.tsv, grid.md, summary_data.json. Missing runs (of the 432 task names) 
 
     python tools/t125/eta/aggregate.py <manifest> <covariates.tsv> <runs_dir> <agg_dir>
                                        [--old-grid-tsv PATH] [--old-grid-json PATH]
+                                       [--old-grid-checks DIR]
 """
 from __future__ import annotations
 
@@ -181,23 +194,50 @@ def load_old_tsv(path) -> dict:
     return out
 
 
-def load_old_json(path) -> tuple[dict, list[dict]]:
+#: the fields an old-grid per_pair record keeps in memory (results.json can be large)
+OLD_KEEP = ("kind", "eval", "space", "rung", "g_version", "model", "seed", "track", "mark_class",
+            "source_pid", "target_pid", "n_crps_nonfinite", "counts_identical") + PARTS
+
+
+def load_old_json(path) -> tuple[dict, list[dict], list[dict]]:
     """(split index {(rung, g_version, mark_class, metric, model): per_class row}, explosion rows
-    of the real model) from the old grid's results.json per_pair records (trained/score, counts),
-    aggregated by the same rule; ({}, []) when no path or no file."""
+    of the real model, the trained/score counts per_pair records of every model, slimmed to
+    OLD_KEEP) from the old grid's results.json; ({}, [], []) when no path or no file."""
     if path is None:
-        return {}, []
+        return {}, [], []
     path = Path(path)
     if not path.is_file():
-        _warn(f"old-grid JSON {path} not found; old-grid split and explosions left out")
-        return {}, []
-    per_pair = [r for r in json.loads(path.read_text("utf-8")).get("per_pair", [])
+        _warn(f"old-grid JSON {path} not found; old-grid split, pair matching and explosions "
+              "left out")
+        return {}, [], []
+    per_pair = [{k: r[k] for k in OLD_KEEP if k in r}
+                for r in json.loads(path.read_text("utf-8")).get("per_pair", [])
                 if r.get("kind") == "trained" and r.get("eval") == "score"
                 and r.get("space") == SPACE]
     per_class = la.per_class_rows(per_track_rows(per_pair, SPLIT_KEYS))
     idx = {(r["rung"], r["g_version"], r["mark_class"], r["metric"], r["model"]): r
            for r in per_class if r["variant"] == "all"}
-    return idx, explosion_rows([r for r in per_pair if r.get("model") == "real"])
+    return idx, explosion_rows([r for r in per_pair if r.get("model") == "real"]), per_pair
+
+
+def load_old_depth(checks_dir) -> dict:
+    """{(rung, g_version, mark_class): old-grid depthlaw check} from t118's checks_<rung>.json
+    in `checks_dir` (space counts); {} when there is none."""
+    if checks_dir is None or not Path(checks_dir).is_dir():
+        return {}
+    out = {}
+    for f in sorted(Path(checks_dir).glob("checks_*.json")):
+        if f.name == "checks_main.json":
+            continue
+        try:
+            checks = json.loads(f.read_text("utf-8")).get("checks", [])
+        except (OSError, ValueError) as e:
+            _warn(f"old-grid checks {f} unreadable ({e}); skipped")
+            continue
+        for c in checks:
+            if c.get("check") == "depthlaw" and c.get("space") == SPACE:
+                out[(c["rung"], c["g_version"], c["mark_class"])] = c
+    return out
 
 
 # ---------------------------------------------------------------------------------------------
@@ -205,10 +245,16 @@ def load_old_json(path) -> tuple[dict, list[dict]]:
 # ---------------------------------------------------------------------------------------------
 
 
+def _nonfinite(r: dict) -> bool:
+    """A record with at least one bin whose CRPS is not finite (score.py's `crps_by_kind`)."""
+    return (r.get("n_crps_nonfinite") or 0) > 0
+
+
 def explosion_rows(per_pair: list[dict]) -> list[dict]:
     """Per (rung, g_version, mark_class, model, kind, eval): n_records, n_crps_gt_20 (finite
-    crps_all > 20) and n_crps_nonfinite (crps_all None or not finite), each record once; depthlaw
-    records (copies of scored records) are skipped."""
+    crps_all > 20) and n_crps_nonfinite (n_crps_nonfinite > 0: some bin's CRPS not finite), each
+    record once; depthlaw records (copies of scored records) are skipped. A record with no bins
+    (crps_all None, n_crps_nonfinite 0) is in neither count."""
     acc: dict = defaultdict(lambda: [0, 0, 0])
     for r in per_pair:
         if r.get("kind") == "depthlaw" or "crps_all" not in r:
@@ -217,9 +263,9 @@ def explosion_rows(per_pair: list[dict]) -> list[dict]:
         v = r["crps_all"]
         a = acc[key]
         a[0] += 1
-        if not _finite(v):
+        if _nonfinite(r):
             a[2] += 1
-        elif v > EXPLODE_AT:
+        elif _finite(v) and v > EXPLODE_AT:
             a[1] += 1
     return [{"rung": k[0], "g_version": k[1], "mark_class": k[2], "model": k[3], "kind": k[4],
              "eval": k[5], "n_records": a[0], "n_crps_gt_20": a[1], "n_crps_nonfinite": a[2]}
@@ -249,16 +295,24 @@ def _depth_stat(rows: list[dict]) -> dict:
             "n_records_no_pred": n_nopred}
 
 
-def depth_readings(depth_law: list[dict]) -> list[dict]:
+def depth_readings(depth_law: list[dict], old_depth: dict | None = None) -> list[dict]:
+    """One depthlaw row per (rung, g_version, mark_class) as t118, plus a pooled row (mark_class
+    "all") per (rung, g_version); each class row carries the old grid's value of the same rung
+    (Aold: the old A), g_version and class from its checks_*.json, and the gain old - t125 with
+    the bar 2 x the larger seed wobble."""
+    old_depth = old_depth or {}
     groups: dict = defaultdict(list)
     for r in depth_law:
-        if r["space"] == SPACE:
-            groups[(r["rung"], r["g_version"], r["model"], r["kind"])].append(r)
+        if r["space"] != SPACE:
+            continue
+        for mc in (r["mark_class"], "all"):
+            groups[(r["rung"], r["g_version"], mc, r["model"], r["kind"])].append(r)
     out = []
-    for rung, gv in sorted({k[:2] for k in groups}):
-        law = _depth_stat(groups.get((rung, gv, "real", "law"), []))
-        tr = _depth_stat(groups.get((rung, gv, "real", "trained"), []))
-        noc = _depth_stat(groups.get((rung, gv, "nocov", "law"), []))
+    for rung, gv, mc in sorted({k[:3] for k in groups}, key=lambda k: (k[0], k[1], k[2] == "all",
+                                                                       k[2])):
+        law = _depth_stat(groups.get((rung, gv, mc, "real", "law"), []))
+        tr = _depth_stat(groups.get((rung, gv, mc, "real", "trained"), []))
+        noc = _depth_stat(groups.get((rung, gv, mc, "nocov", "law"), []))
         v = law["value"]
         comp = {"n_pairs": law["n_pairs"], "worst_pair": law["worst_pair"],
                 "per_seed": law["per_seed"], "seeds": law["seeds"],
@@ -267,9 +321,23 @@ def depth_readings(depth_law: list[dict]) -> list[dict]:
                 "trained_n_pairs": tr["n_pairs"],
                 "nocov_value": noc["value"], "nocov_seed_wobble": noc["seed_wobble"],
                 "rule": "met = value <= bar (the depth law holds within 10 %)"}
+        old_rung = "A" if rung == ep.RUNG_OLDSPREAD else rung
+        oc = old_depth.get((old_rung, gv, mc)) if mc != "all" else None
+        ov = None if oc is None else oc.get("value")
+        ow = None if oc is None else oc.get("seed_wobble")
+        gain = None if ov is None or v is None else ov - v
+        bar = None if gain is None else _twice(_wmax(ow, law["seed_wobble"]))
+        comp.update({"oldgrid_rung": old_rung, "oldgrid_value": ov, "oldgrid_seed_wobble": ow,
+                     "oldgrid_n_pairs": None if oc is None else
+                     (oc.get("components") or {}).get("n_pairs"),
+                     "gain_vs_oldgrid": gain, "bar_vs_oldgrid": bar,
+                     "gain_vs_oldgrid_exceeds_bar": bool(gain is not None and bar is not None
+                                                         and gain > bar)})
+        if mc == "all":
+            comp["oldgrid_note"] = "the old grid has no pooled depth-law value"
         if v is None:
             comp["met_reason"] = "no depth->depth law records of the real model"
-        out.append({"reading": "depthlaw", "rung": rung, "g_version": gv, "mark_class": "all",
+        out.append({"reading": "depthlaw", "rung": rung, "g_version": gv, "mark_class": mc,
                     "metric": "depth_scale_rel_error", "model": "real", "value": v,
                     "bar": DEPTH_BAR, "met": bool(v is not None and v <= DEPTH_BAR),
                     "seed_wobble": law["seed_wobble"], "components": comp})
@@ -277,15 +345,16 @@ def depth_readings(depth_law: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------------------------
-# readings
+# readings: two arms over the pairs finite in both
 # ---------------------------------------------------------------------------------------------
 
 
-def _row(reading, rung, gv, mc, metric, value, bar, wob, components, model="real") -> dict:
-    if value is None or bar is None:
+def _row(reading, rung, gv, mc, metric, value, bar, wob, components, model="real",
+         block: str | None = None) -> dict:
+    if value is None or bar is None or block:
         met = False
-        components = {**components, "met_reason": "no value" if value is None else
-                      "no bar: the seed wobble needs at least two seeds"}
+        components = {**components, "met_reason": block or (
+            "no value" if value is None else "no bar: the seed wobble needs at least two seeds")}
     else:
         met = bool(value > bar)
     return {"reading": reading, "rung": rung, "g_version": gv, "mark_class": mc,
@@ -294,7 +363,7 @@ def _row(reading, rung, gv, mc, metric, value, bar, wob, components, model="real
 
 
 def _part(this, other) -> dict:
-    """this / other: per_class-like dicts (mean, seed_wobble) or None; gain = other - this."""
+    """this / other: dicts (mean, seed_wobble[, per_seed]) or None; gain = other - this."""
     t = None if this is None else this["mean"]
     o = None if other is None else other["mean"]
     tw = None if this is None else this["seed_wobble"]
@@ -303,46 +372,161 @@ def _part(this, other) -> dict:
     bar = _twice(_wmax(tw, ow)) if gain is not None else None
     return {"this": t, "this_wobble": tw, "other": o, "other_wobble": ow, "gain": gain,
             "bar": bar, "gain_exceeds_bar": bool(gain is not None and bar is not None
-                                                 and gain > bar)}
+                                                 and gain > bar),
+            "per_seed_this": None if this is None else this.get("per_seed"),
+            "per_seed_other": None if other is None else other.get("per_seed")}
 
 
-def compute_readings(per_class: list[dict], per_pair: list[dict], old: dict,
-                     old_split: dict) -> list[dict]:
-    idx = _class_index(per_class)
+def arm_index(per_pair: list[dict]) -> dict:
+    """{(rung, g_version, model): {seed: {track: {(source_pid, target_pid): record}}}} of the
+    trained/score counts records."""
+    out: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    for r in per_pair:
+        if r.get("kind") == "trained" and r.get("eval") == "score" and r.get("space") == SPACE:
+            out[(r["rung"], r["g_version"], r["model"])][r["seed"]][r["track"]][
+                (r["source_pid"], r["target_pid"])] = r
+    return out
+
+
+def _pair_ok(r: dict) -> bool:
+    """Finite: no non-finite bin, and every compared part the record carries is finite (the old
+    grid carries no MSE, so the MSE is not required of it)."""
+    return not _nonfinite(r) and all(_finite(r[k]) for k in PARTS if k in r)
+
+
+def compare_arms(this: dict, other: dict, mc: str) -> tuple[dict | None, dict]:
+    """The two arms (`arm_index` values) on class `mc`, per seed over the tracks both have and,
+    in each, the pairs finite in both (PI, 2026-10-11). Returns ({part: {mean, seed_wobble,
+    per_seed} for "this" and "other"}, diagnostics), or (None, diagnostics with a reason) when no
+    seed has a track in common."""
+    diag = {"seeds_used": [], "n_tracks_this": {}, "n_tracks_other": {}, "n_tracks_used": {},
+            "tracks_dropped": {}, "n_pairs_common": 0, "n_pairs_used": 0,
+            "n_pairs_dropped_nonfinite": 0, "n_pairs_only_this": 0, "n_pairs_only_other": 0,
+            "n_nonfinite_this": 0, "n_nonfinite_other": 0,
+            "rule": "per seed: the tracks both arms have; in each, the pairs finite in both"}
+    vals = {side: {m: [] for m in PARTS} for side in ("this", "other")}
+    for s in ep.SEEDS:
+        tx = {t: ps for t, ps in this.get(s, {}).items()
+              if next(iter(ps.values()))["mark_class"] == mc}
+        ty = {t: ps for t, ps in other.get(s, {}).items()
+              if next(iter(ps.values()))["mark_class"] == mc}
+        diag["n_tracks_this"][s], diag["n_tracks_other"][s] = len(tx), len(ty)
+        diag["n_nonfinite_this"] += sum(_nonfinite(r) for ps in tx.values() for r in ps.values())
+        diag["n_nonfinite_other"] += sum(_nonfinite(r) for ps in ty.values() for r in ps.values())
+        dropped = set(tx) ^ set(ty)
+        used: dict = {}
+        for t in sorted(set(tx) & set(ty)):
+            kx, ky = set(tx[t]), set(ty[t])
+            diag["n_pairs_only_this"] += len(kx - ky)
+            diag["n_pairs_only_other"] += len(ky - kx)
+            common = kx & ky
+            ok = sorted(p for p in common if _pair_ok(tx[t][p]) and _pair_ok(ty[t][p]))
+            diag["n_pairs_common"] += len(common)
+            diag["n_pairs_dropped_nonfinite"] += len(common) - len(ok)
+            diag["n_pairs_used"] += len(ok)
+            if ok:
+                used[t] = ok
+            else:
+                dropped.add(t)
+        diag["n_tracks_used"][s] = len(used)
+        if dropped:
+            diag["tracks_dropped"][s] = sorted(dropped)
+        if used:
+            diag["seeds_used"].append(s)
+        for side, arm in (("this", tx), ("other", ty)):
+            for m in PARTS:
+                tr = [_mean(arm[t][p].get(m) for p in ps) for t, ps in used.items()]
+                vals[side][m].append(_mean(tr))
+    if not diag["seeds_used"]:
+        diag["reason"] = (f"no track of class {mc} is in both arms with a pair finite in both, "
+                          "at any seed")
+        return None, diag
+    out = {side: {m: {"mean": _mean(v), "seed_wobble": wobble(v), "per_seed": v}
+                  for m, v in by.items()} for side, by in vals.items()}
+    return out, diag
+
+
+def _tsv_compare(per_track: list[dict], this_key: tuple, old_row: dict, mc: str,
+                 metric: str) -> tuple[dict, str | None]:
+    """The old-grid TSV fallback (no per-pair records): this arm's class value over all its
+    pairs; the track counts are compared through the TSV's n_tracks."""
+    rung, gv, model = this_key
+    by_seed: dict = defaultdict(set)
+    for r in per_track:
+        if (r["rung"], r["g_version"], r["model"], r["kind"], r["mark_class"], r["metric"],
+                r["variant"]) == (rung, gv, model, "trained", mc, metric, "all"):
+            by_seed[r["seed"]].add(r["track"])
+    n_this = {s: len(v) for s, v in sorted(by_seed.items())}
+    diag = {"pair_matched": False, "n_tracks_this": n_this, "n_tracks_other": old_row["n_tracks"],
+            "note": "old grid from --old-grid-tsv only: its pairs cannot be matched; "
+                    "pass --old-grid-json to compare over the pairs finite in both"}
+    block = None
+    if any(n != old_row["n_tracks"] for n in n_this.values()) or not n_this:
+        block = (f"track counts differ (t125 {n_this}, old grid {old_row['n_tracks']}) and the "
+                 "old-grid TSV has no per-track values to intersect")
+    return diag, block
+
+
+def compute_readings(per_class: list[dict], per_track: list[dict], per_pair: list[dict],
+                     old: dict, old_pairs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(readings, skipped): beatstwin, vs_oldgrid, vs_oldspread and mean_or_spread over the
+    pairs finite in both arms, plus the explosion / non-finite counts; `skipped` lists each
+    comparison with no reading and why."""
+    arms, old_arms = arm_index(per_pair), arm_index(old_pairs)
     combos = sorted({(r["rung"], r["g_version"], r["mark_class"]) for r in per_class
                      if r["kind"] == "trained" and r["space"] == SPACE})
-    out = []
-
-    def get(rung, gv, model, mc, metric):
-        return idx.get((rung, gv, model, "trained", mc, metric))
+    out, skipped = [], []
 
     def old_get(rung, gv, mc, metric, model="real"):
-        if metric in SPLIT_KEYS:
-            return old_split.get((rung, gv, mc, metric, model))
         return old.get((rung, gv, mc, metric, model))
 
     for rung, gv, mc in combos:
         old_rung = "A" if rung == ep.RUNG_OLDSPREAD else rung
-        sides = {"beatstwin": lambda m: (get(rung, gv, "real", mc, m),
-                                         get(rung, gv, "nocov", mc, m)),
-                 "vs_oldgrid": lambda m: (get(rung, gv, "real", mc, m),
-                                          old_get(old_rung, gv, mc, m)),
-                 "vs_oldspread": lambda m: (get("A", gv, "real", mc, m),
-                                            get(ep.RUNG_OLDSPREAD, gv, "real", mc, m))}
+        plan = {"beatstwin": ((rung, gv, "real"), arms, (rung, gv, "nocov"), arms),
+                "vs_oldgrid": ((rung, gv, "real"), arms, (old_rung, gv, "real"), old_arms),
+                "vs_oldspread": (("A", gv, "real"), arms, (ep.RUNG_OLDSPREAD, gv, "real"), arms)}
         for name in COMPARISONS:
             if name == "vs_oldspread" and rung != "A":
                 continue
-            any_row = False
-            for metric in READING_METRICS:
-                this, other = sides[name](metric)
-                if this is None or other is None:
+            kx, ax, ky, ay = plan[name]
+            if kx not in ax:
+                continue
+            tsv_mode = name == "vs_oldgrid" and ky not in ay
+            if tsv_mode and not any(old_get(old_rung, gv, mc, m) for m in READING_METRICS):
+                continue
+            if not tsv_mode and ky not in ay:
+                continue
+            block = None
+            if tsv_mode:
+                res = {"this": {}, "other": {}}
+                idx = _class_index(per_class)
+                for m in PARTS:
+                    t, o = idx.get((rung, gv, "real", "trained", mc, m)), old_get(old_rung, gv,
+                                                                                  mc, m)
+                    res["this"][m] = None if t is None else {"mean": t["mean"],
+                                                             "seed_wobble": t["seed_wobble"],
+                                                             "per_seed": t["per_seed"]}
+                    res["other"][m] = o
+                orow = next(old_get(old_rung, gv, mc, m) for m in READING_METRICS
+                            if old_get(old_rung, gv, mc, m))
+                diag, block = _tsv_compare(per_track, kx, orow, mc, "crps_all")
+            else:
+                res, diag = compare_arms(ax[kx], ay[ky], mc)
+                if res is None:
+                    skipped.append({"reading": name, "rung": rung, "g_version": gv,
+                                    "mark_class": mc, "this": list(kx), "other": list(ky),
+                                    "reason": diag["reason"], "pairs": diag})
                     continue
-                any_row = True
-                p = _part(this, other)
+            parts = {m: _part(res["this"].get(m), res["other"].get(m)) for m in PARTS}
+            for metric in READING_METRICS:
+                p = parts[metric]
+                if p["this"] is None or p["other"] is None:
+                    continue
                 comp = {"this": p["this"], "other": p["other"], "wobble_this": p["this_wobble"],
-                        "wobble_other": p["other_wobble"],
-                        "per_seed_this": this.get("per_seed"),
-                        "per_seed_other": other.get("per_seed")}
+                        "wobble_other": p["other_wobble"], "per_seed_this": p["per_seed_this"],
+                        "per_seed_other": p["per_seed_other"], "pairs": diag}
+                if metric == "crps_all":
+                    comp["split_gain"] = {k: parts[k] for k in SPLIT_KEYS}
                 if name == "beatstwin":
                     comp.update({"d_real": p["this"], "d_nocov": p["other"], "note": TWIN_NOTE})
                     o_r, o_n = old_get(rung, gv, mc, metric), old_get(rung, gv, mc, metric,
@@ -356,20 +540,19 @@ def compute_readings(per_class: list[dict], per_pair: list[dict], old: dict,
                 else:
                     comp.update({"d_A": p["this"], "d_Aold": p["other"]})
                 out.append(_row(name, rung, gv, mc, metric, p["gain"], p["bar"],
-                                _wmax(p["this_wobble"], p["other_wobble"]), comp))
-            if any_row:
-                parts = {m: _part(*sides[name](m)) for m in PARTS}
-                comp = {"comparison": name, "parts": parts,
-                        "gain": "other - this, positive = this better (every part lower-is-better)"}
-                if name == "vs_oldgrid":
-                    comp["oldgrid_rung"] = old_rung
-                    comp["note"] = ("old-grid split from --old-grid-json; the old grid has no "
-                                    "MSE")
-                if name == "beatstwin":
-                    comp["note"] = TWIN_NOTE
-                out.append({"reading": "mean_or_spread", "rung": rung, "g_version": gv,
-                            "mark_class": mc, "metric": name, "model": "real", "value": None,
-                            "bar": None, "met": None, "seed_wobble": None, "components": comp})
+                                _wmax(p["this_wobble"], p["other_wobble"]), comp, block=block))
+            comp = {"comparison": name, "parts": parts, "pairs": diag,
+                    "gain": "other - this, positive = this better (every part lower-is-better)"}
+            if name == "vs_oldgrid":
+                comp["oldgrid_rung"] = old_rung
+                comp["note"] = "the old grid has no MSE"
+            if name == "beatstwin":
+                comp["note"] = TWIN_NOTE
+            if block:
+                comp["met_reason"] = block
+            out.append({"reading": "mean_or_spread", "rung": rung, "g_version": gv,
+                        "mark_class": mc, "metric": name, "model": "real", "value": None,
+                        "bar": None, "met": None, "seed_wobble": None, "components": comp})
     # explosion and non-finite counts, trained/score, per (rung, g_version, class, model)
     for e in explosion_rows(per_pair):
         if e["kind"] != "trained" or e["eval"] != "score":
@@ -381,7 +564,7 @@ def compute_readings(per_class: list[dict], per_pair: list[dict], old: dict,
                         "value": e[key], "bar": None, "met": None, "seed_wobble": None,
                         "components": {"n_records": e["n_records"], "kind": "trained",
                                        "eval": "score", "reported_only": True}})
-    return out
+    return out, skipped
 
 
 # ---------------------------------------------------------------------------------------------
@@ -466,7 +649,7 @@ AOLD_ROWS = (("Aold: row-1 A with the old spread (one per pair) and the offset",
 
 def write_grid_md(path: Path, cells: list[dict], readings: list[dict], explosions: list[dict],
                   old_explosions: list[dict], depth: list[dict], n_present: int,
-                  n_missing: int) -> None:
+                  n_missing: int, skipped: list[dict] | None = None) -> None:
     ci = {(c["source"], c["rung"], c["g_version"], c["mark_class"], c["metric"]): c
           for c in cells}
     ex = {(e["rung"], e["g_version"], e["mark_class"], e["model"]): e for e in explosions
@@ -532,13 +715,20 @@ def write_grid_md(path: Path, cells: list[dict], readings: list[dict], explosion
           "Depth-only pairs, real g: max over the never-trained depth->depth pairs of "
           "|2^(mean over seeds of (log2 predicted total / source total - log2 d'/d)) - 1|, with "
           "the per-seed maximum's wobble; beside it the same over the trained base<->depth pairs "
-          "and the twin's value. Bar 0.10 (reported, as t118).", ""]
-    L += _table(["rung", "g", "depth->depth law pairs", "seed wobble", "n pairs",
-                 "within 0.10", "trained base<->depth", "twin (law pairs)"],
-                [[d["rung"], GV_LABEL[d["g_version"]], _f(d["value"]), _f(d["seed_wobble"]),
-                  str(d["components"]["n_pairs"]), _yn(d["met"]),
+          "and the twin's value. Bar 0.10 (reported, as t118). Per mark class as t118, and "
+          "pooled over the classes (class \"all\"). The old grid's value is its depthlaw check "
+          "of the same rung (Aold: the old A), g and class; gain = old - t125, * = larger than "
+          "2 × the larger seed wobble.", ""]
+    L += _table(["rung", "g", "class", "depth->depth law pairs", "n pairs", "within 0.10",
+                 "trained base<->depth", "twin (law pairs)", "old grid", "gain vs old grid"],
+                [[d["rung"], GV_LABEL[d["g_version"]], d["mark_class"],
+                  _pm(d["value"], d["seed_wobble"]), str(d["components"]["n_pairs"]),
+                  _yn(d["met"]),
                   _pm(d["components"]["trained_value"], d["components"]["trained_seed_wobble"]),
-                  _pm(d["components"]["nocov_value"], d["components"]["nocov_seed_wobble"])]
+                  _pm(d["components"]["nocov_value"], d["components"]["nocov_seed_wobble"]),
+                  _pm(d["components"]["oldgrid_value"], d["components"]["oldgrid_seed_wobble"]),
+                  _f(d["components"]["gain_vs_oldgrid"])
+                  + ("*" if d["components"]["gain_vs_oldgrid_exceeds_bar"] else "")]
                  for d in depth])
     # readings
     titles = {"vs_oldgrid": "Each design against the same design in the old grid "
@@ -551,11 +741,31 @@ def write_grid_md(path: Path, cells: list[dict], readings: list[dict], explosion
         if name == "beatstwin":
             L += [f"Note: {TWIN_NOTE}.", ""]
         L += ["Positive = the first-named arm is better (lower). Bar = 2 × the larger seed "
-              "wobble.", ""]
-        L += _table(["rung", "g", "class", "metric", "gain", "larger seed wobble", "bar",
-                     "gain > 2 × wobble"],
+              "wobble. Each comparison uses, per seed, the tracks both arms have and in each "
+              "the pairs finite in both (PI); the pairs dropped as non-finite are counted. The "
+              "CRPS on all bins carries the gains of its oracle-scaled and scale-error parts "
+              "(* = larger than that part's own bar).", ""]
+
+        def split(r, k):
+            sg = r["components"].get("split_gain")
+            if not sg:
+                return "—"
+            return _f(sg[k]["gain"]) + ("*" if sg[k]["gain_exceeds_bar"] else "")
+
+        def dropped(r):
+            pr = r["components"].get("pairs") or {}
+            if "n_pairs_used" not in pr:
+                return "not matched (TSV)"
+            td = sum(len(v) for v in pr["tracks_dropped"].values())
+            return (f"{pr['n_pairs_used']} / {pr['n_pairs_dropped_nonfinite']} / {td}")
+
+        L += _table(["rung", "g", "class", "metric", "gain", "oracle-scaled gain",
+                     "scale-error gain", "larger seed wobble", "bar", "gain > 2 × wobble",
+                     "pairs used / dropped non-finite / (track, seed) dropped"],
                     [[r["rung"], GV_LABEL[r["g_version"]], r["mark_class"], r["metric"],
-                      _f(r["value"]), _f(r["seed_wobble"]), _f(r["bar"]), _yn(r["met"])]
+                      _f(r["value"]), split(r, "crps_oracle_scaled_all"),
+                      split(r, "scale_error_all"), _f(r["seed_wobble"]), _f(r["bar"]),
+                      _yn(r["met"]), dropped(r)]
                      for r in rs])
     L += ["## Mean or spread", "",
           "Per comparison: the gain on CRPS (all bins), on its oracle-scaled part and its "
@@ -574,6 +784,11 @@ def write_grid_md(path: Path, cells: list[dict], readings: list[dict], explosion
                        for k in ms_parts])
     L += _table(["comparison", "rung", "g", "class", "CRPS all", "oracle-scaled",
                  "scale error", "MSE all", "MSE top 1 %"], rows)
+    if skipped:
+        L += ["## Comparisons with no reading", ""]
+        L += _table(["comparison", "rung", "g", "class", "why"],
+                    [[k["reading"], k["rung"], GV_LABEL[k["g_version"]], k["mark_class"],
+                      k["reason"]] for k in skipped])
     path.write_text("\n".join(L), encoding="utf-8")
 
 
@@ -591,7 +806,9 @@ def _tsv(path: Path, cols, rows) -> None:
 
 
 def aggregate(manifest, covariates, runs_dir, agg_dir, old_grid_tsv=None,
-              old_grid_json=None) -> dict:
+              old_grid_json=None, old_grid_checks=None) -> dict:
+    """`old_grid_checks` = the directory of the old grid's checks_<rung>.json (default: the
+    directory of `old_grid_tsv`, where t118's aggregate writes both)."""
     ep.read_manifest(manifest)               # fail early on a bad manifest
     agg_dir = Path(agg_dir)
     agg_dir.mkdir(parents=True, exist_ok=True)
@@ -601,12 +818,17 @@ def aggregate(manifest, covariates, runs_dir, agg_dir, old_grid_tsv=None,
     if missing:
         _warn(f"{len(missing)} of {len(expected)} expected runs missing (listed in results.json)")
     old = load_old_tsv(old_grid_tsv)
-    old_split, old_explosions = load_old_json(old_grid_json)
+    old_split, old_explosions, old_pairs = load_old_json(old_grid_json)
+    if old_grid_checks is None and old_grid_tsv is not None:
+        old_grid_checks = Path(old_grid_tsv).parent
+    old_depth = load_old_depth(old_grid_checks)
     per_track = per_track_rows(per_pair)
     per_class = la.per_class_rows(per_track)
     depth_law = la.depth_law_rows(per_pair)
-    depth = depth_readings(depth_law)
-    readings = depth + compute_readings(per_class, per_pair, old, old_split)
+    depth = depth_readings(depth_law, old_depth)
+    cmp_rows, skipped = compute_readings(per_class, per_track, per_pair, old, old_pairs)
+    del old_pairs
+    readings = depth + cmp_rows
     explosions = explosion_rows(per_pair)
     cells = grid_cells(per_class, old, old_split)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -614,6 +836,8 @@ def aggregate(manifest, covariates, runs_dir, agg_dir, old_grid_tsv=None,
                "covariates": str(covariates),
                "old_grid_tsv": None if old_grid_tsv is None else str(old_grid_tsv),
                "old_grid_json": None if old_grid_json is None else str(old_grid_json),
+               "old_grid_checks": None if old_grid_checks is None else str(old_grid_checks),
+               "readings_skipped": skipped,
                "n_expected_runs": len(expected), "runs_present": present,
                "runs_missing": missing, "runs_without_law": no_law,
                "explode_at": EXPLODE_AT, "twin_note": TWIN_NOTE,
@@ -630,10 +854,11 @@ def aggregate(manifest, covariates, runs_dir, agg_dir, old_grid_tsv=None,
          [{**r, "depth_source": r["kind"], "depth_log2_ratio_true": r["log2_true"],
            "depth_log2_scale_pred": r["log2_pred"]} for r in depth_law])
     write_grid_md(agg_dir / "grid.md", cells, readings, explosions, old_explosions, depth,
-                  len(present), len(missing))
+                  len(present), len(missing), skipped)
     write_json({"created_utc": now, "runs_present": len(present), "runs_missing": len(missing),
                 "n_expected_runs": len(expected), "explode_at": EXPLODE_AT,
                 "twin_note": TWIN_NOTE, "cells": cells, "readings": readings,
+                "readings_skipped": skipped,
                 "depth_law": depth, "explosions": explosions,
                 "oldgrid_explosions": old_explosions},
                agg_dir / "summary_data.json")
@@ -647,10 +872,14 @@ def main(argv=None) -> int:
     ap.add_argument("--old-grid-tsv", type=Path, default=None,
                     help="t118 row-2 results_summary.tsv (the old grid's class means)")
     ap.add_argument("--old-grid-json", type=Path, default=None,
-                    help="t118 row-2 agg/results.json (the old grid's per-pair split)")
+                    help="t118 row-2 agg/results.json (the old grid's per-pair records: "
+                         "pair matching and the split)")
+    ap.add_argument("--old-grid-checks", type=Path, default=None,
+                    help="directory of t118 row-2 checks_<rung>.json (the old depth law; "
+                         "default: the directory of --old-grid-tsv)")
     a = ap.parse_args(argv)
     res = aggregate(a.manifest, a.covariates, a.runs_dir, a.agg_dir, a.old_grid_tsv,
-                    a.old_grid_json)
+                    a.old_grid_json, a.old_grid_checks)
     print(f"{len(res['runs_present'])} runs present, {len(res['runs_missing'])} missing; "
           f"{len(res['readings'])} readings -> {a.agg_dir}")
     return 0

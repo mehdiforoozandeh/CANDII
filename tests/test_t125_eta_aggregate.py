@@ -78,14 +78,16 @@ def _tracks(g):
 
 
 def _write_run(runs_dir: Path, rung: str, g: str, model: str, seed: int,
-               overrides: dict | None = None, law: bool = True) -> Path:
+               overrides: dict | None = None, law: bool = True,
+               tracks: list[str] | None = None) -> Path:
     """scores.json (+ law.json) of one run. `overrides` maps (track, i) -> crps_all of that
     trained/score record."""
     name = ep.run_name(rung, g, model, seed)
     d = runs_dir / name
     d.mkdir(parents=True)
     recs = []
-    for t in _tracks(g):
+    tracks = tracks or _tracks(g)
+    for t in tracks:
         for i in (0, 1):
             p = _pair(t, i)
             c = _crps(rung, model, t, i, seed)
@@ -116,7 +118,7 @@ def _write_run(runs_dir: Path, rung: str, g: str, model: str, seed: int,
                                                "t125": {"law_scope": None}}))
     if law:
         lrecs = []
-        for t in _tracks(g):
+        for t in tracks:
             for j, (true, preds) in enumerate(((1.0, (1.1, 1.0, 0.9)),
                                                (-1.0, (-0.8, -0.8, -0.8)))):
                 p = {**_pair(t, 0), "arm_src": "depth", "level_src": f"a{j}",
@@ -162,6 +164,8 @@ def _write_old_json(path: Path) -> Path:
         for t, base in (("C07M20", 1.0), ("C07M29", 2.0)):
             step = 0.1 if t == "C07M20" else 0.0
             r = _rec("trained", "score", _pair(t, 0), 1.0, split=True)
+            for k in ("mse_log1p_all", "mse_log1p_nonzero", "mse_log1p_top1", "crps_all_gt_20"):
+                r.pop(k)                                 # t118 records carry no MSE
             r.update({"crps_oracle_scaled_all": base + step * seed, "scale_error_all": 0.5,
                       "run_name": f"A_all_counts_real_s{seed}", "rung": "A", "g": "all",
                       "g_version": "across", "space": "counts", "model": "real", "seed": seed})
@@ -170,6 +174,17 @@ def _write_old_json(path: Path) -> Path:
             recs.append(r)
     path.write_text(json.dumps({"per_pair": recs}))
     return path
+
+
+def _write_old_checks(d: Path) -> None:
+    """t118's checks_<rung>.json: one old depthlaw check (A, across, narrow); checks_main.json
+    repeats checks with other values and must be ignored."""
+    chk = {"rung": "A", "g_version": "across", "space": "counts", "mark_class": "narrow",
+           "metric": "depth_scale_rel_error", "check": "depthlaw", "value": 0.3, "bar": 0.1,
+           "met": False, "seed_wobble": 0.05, "components": {"n_pairs": 4}}
+    other = {**chk, "check": "beatstwin", "metric": "crps_all", "value": 9.0}
+    (d / "checks_A.json").write_text(json.dumps({"rung": "A", "checks": [chk, other]}))
+    (d / "checks_main.json").write_text(json.dumps({"checks": [{**chk, "value": 99.0}]}))
 
 
 @pytest.fixture(scope="module")
@@ -188,6 +203,7 @@ def agg(tmp_path_factory):
                     _write_run(runs, rung, g, model, seed, ov, law=law)
     old_tsv = _write_old_tsv(root / "old.tsv")
     old_json = _write_old_json(root / "old.json")
+    _write_old_checks(root)                      # beside the TSV: found without a flag
     out = root / "agg"
     rc = ea.main([str(MANIFEST), str(COV), str(runs), str(out), "--old-grid-tsv", str(old_tsv),
                   "--old-grid-json", str(old_json)])
@@ -315,26 +331,99 @@ def test_beatstwin_bar_uses_the_larger_wobble(agg):
     assert r["components"]["oldgrid_gap"] == pytest.approx(0.5)
 
 
-def test_vs_oldgrid_and_aold_against_old_a(agg):
+def test_vs_oldgrid_pair_matched_through_the_old_json(agg):
+    """With --old-grid-json both arms use only the pairs both have and both find finite: the
+    old json holds pair 0 of C07M20 and C07M29 only, so t125's pair 1 and depth pair drop out.
+    t125 A real, pair 0: C07M20 1.0+0.1s, C07M29 2.0+0.1s -> class 1.5+0.1s (mean 1.6, wobble
+    0.2). Old: crps_all 1.0 everywhere except C07M29 seed 2 at 30.0 -> (1, 1, 15.5)."""
     res = agg["res"]
-    m_a, w_a = _mw(_per_seed("A", "real"))
+    old_ps = [1.0, 1.0, 15.5]
     r = _reading(res, "vs_oldgrid", "A", "across", "narrow", "crps_all")
-    assert r["value"] == pytest.approx(2.0 - m_a, **APPROX)            # positive = t125 better
-    assert r["bar"] == pytest.approx(2 * max(0.3, w_a), **APPROX)
-    assert r["met"] is (r["value"] > r["bar"])
+    assert r["value"] == pytest.approx(sum(old_ps) / 3 - 1.6, **APPROX)   # positive = t125 better
+    assert r["bar"] == pytest.approx(2 * 14.5, **APPROX)
+    assert r["met"] is False
+    pr = r["components"]["pairs"]
+    assert pr["n_pairs_used"] == 6 and pr["n_pairs_only_this"] == 12
+    assert pr["n_pairs_only_other"] == 0 and pr["n_pairs_dropped_nonfinite"] == 0
     top = _reading(res, "vs_oldgrid", "A", "across", "narrow", "crps_top1")
-    assert top["value"] == pytest.approx(30.0 - 10 * m_a, **APPROX)
-    assert top["bar"] == pytest.approx(2 * max(1.0, 10 * w_a), **APPROX)
-    assert top["met"] is True                                           # 15.3 > 2.67
-    # Aold compares with the old grid's A
-    m_o, w_o = _mw(_per_seed("Aold", "real"))
+    assert top["value"] == pytest.approx(10.0 - 16.0, **APPROX)
+    assert top["bar"] == pytest.approx(2 * 2.0, **APPROX)
+    # Aold compares with the old grid's A: pair 0 of Aold = 1.2+0.1s, 2.2+0.1s -> mean 1.8
     ro = _reading(res, "vs_oldgrid", "Aold", "across", "narrow", "crps_all")
-    assert ro["value"] == pytest.approx(2.0 - m_o, **APPROX)
+    assert ro["value"] == pytest.approx(sum(old_ps) / 3 - 1.8, **APPROX)
     assert ro["components"]["oldgrid_rung"] == "A"
-    # no old-grid row (DNase, per_track, MSE) -> no reading
+    # no old value (per_track, MSE) -> no reading; DNase: the old arm has no DNase track ->
+    # no reading, and the skip is listed with its reason
     assert not [x for x in res["readings"] if x["reading"] == "vs_oldgrid"
                 and (x["mark_class"] == "DNase" or x["g_version"] == "per_track"
                      or x["metric"].startswith("mse"))]
+    sk = [k for k in res["readings_skipped"] if (k["reading"], k["rung"], k["g_version"],
+                                                  k["mark_class"]) ==
+          ("vs_oldgrid", "A", "across", "DNase")]
+    assert len(sk) == 1 and "no track" in sk[0]["reason"]
+
+
+def test_vs_oldgrid_tsv_fallback(tmp_path, agg):
+    """Only --old-grid-tsv: the t125 class value over all its pairs against the TSV mean; the
+    track counts are checked through the TSV's n_tracks."""
+    m_a, w_a = _mw(_per_seed("A", "real"))
+    ea.aggregate(MANIFEST, COV, agg["runs"], tmp_path / "agg", old_grid_tsv=agg["old_tsv"])
+    res = json.loads((tmp_path / "agg" / "results.json").read_text())
+    r = _reading(res, "vs_oldgrid", "A", "across", "narrow", "crps_all")
+    assert r["value"] == pytest.approx(2.0 - m_a, **APPROX)
+    assert r["bar"] == pytest.approx(2 * max(0.3, w_a), **APPROX)
+    assert r["components"]["pairs"]["pair_matched"] is False
+    top = _reading(res, "vs_oldgrid", "A", "across", "narrow", "crps_top1")
+    assert top["value"] == pytest.approx(30.0 - 10 * m_a, **APPROX)
+    assert top["met"] is True                                           # 15.3 > 2.67
+    # the TSV says 3 tracks, t125 has 2 per seed -> the reading is kept but never met
+    t3 = tmp_path / "old3.tsv"
+    t3.write_text("\n".join(line.rsplit("\t", 1)[0] + "\t3" if i else line
+                            for i, line in enumerate(agg["old_tsv"].read_text().splitlines())))
+    ea.aggregate(MANIFEST, COV, agg["runs"], tmp_path / "agg3", old_grid_tsv=t3)
+    res3 = json.loads((tmp_path / "agg3" / "results.json").read_text())
+    top3 = _reading(res3, "vs_oldgrid", "A", "across", "narrow", "crps_top1")
+    assert top3["met"] is False and "track counts differ" in top3["components"]["met_reason"]
+
+
+def test_arms_compared_on_the_tracks_both_have(tmp_path):
+    """Real g has 3 tracks, the twin only C07M20: narrow is compared on C07M20 alone, the
+    dropped track is recorded; DNase has no track in common -> no reading, a skip with why."""
+    runs = tmp_path / "runs"
+    for seed in (0, 1, 2):
+        _write_run(runs, "A", "all", "real", seed)
+        _write_run(runs, "A", "all", "nocov", seed, tracks=["C07M20"])
+    ea.aggregate(MANIFEST, COV, runs, tmp_path / "agg")
+    res = json.loads((tmp_path / "agg" / "results.json").read_text())
+    r = _reading(res, "beatstwin", "A", "across", "narrow", "crps_all")
+    # C07M20 only: real (3.2+0.2s)/3, twin (4.2+0.3s)/3
+    assert r["value"] == pytest.approx(1.1 / 3, **APPROX)
+    pr = r["components"]["pairs"]
+    assert pr["tracks_dropped"] == {str(s): ["C07M29"] for s in (0, 1, 2)}
+    assert pr["n_tracks_this"] == {str(s): 2 for s in (0, 1, 2)}
+    assert pr["n_tracks_other"] == {str(s): 1 for s in (0, 1, 2)}
+    assert pr["n_tracks_used"] == {str(s): 1 for s in (0, 1, 2)}
+    assert not [x for x in res["readings"] if x["reading"] in ("beatstwin", "mean_or_spread")
+                and x["mark_class"] == "DNase"]
+    sk = [k for k in res["readings_skipped"] if (k["reading"], k["mark_class"]) ==
+          ("beatstwin", "DNase")]
+    assert len(sk) == 1 and "DNase" in sk[0]["reason"]
+    assert "Comparisons with no reading" in (tmp_path / "agg" / "grid.md").read_text()
+
+
+def test_arms_compared_on_pairs_finite_in_both(agg):
+    """PI 2026-10-11: one g per track, A: real seed 2 pair 0 is non-finite -> that pair leaves
+    BOTH arms at seed 2; real seed 1 pair 1 at 30.0 is finite and stays."""
+    r = _reading(agg["res"], "beatstwin", "A", "per_track", "narrow", "crps_all")
+    real = [3.2 / 3, 32.1 / 3, (1.4 + 25.0) / 2]
+    twin = [4.2 / 3, 4.5 / 3, (2.0 + 1.0) / 2]
+    assert r["components"]["per_seed_this"] == pytest.approx(real, **APPROX)
+    assert r["components"]["per_seed_other"] == pytest.approx(twin, **APPROX)
+    assert r["value"] == pytest.approx(sum(twin) / 3 - sum(real) / 3, **APPROX)
+    pr = r["components"]["pairs"]
+    assert pr["n_pairs_dropped_nonfinite"] == 1
+    assert (pr["n_nonfinite_this"], pr["n_nonfinite_other"]) == (1, 0)
+    assert (pr["n_pairs_common"], pr["n_pairs_used"]) == (9, 8)
 
 
 def test_vs_oldspread_is_aold_minus_a(agg):
@@ -370,7 +459,9 @@ def test_mean_or_spread_parts(agg):
     q = og["components"]["parts"]["crps_oracle_scaled_all"]
     assert q["other"] == pytest.approx(1.55, **APPROX)
     assert q["other_wobble"] == pytest.approx(0.1, **APPROX)
-    assert q["gain"] == pytest.approx(1.55 - 0.8 * m_real, **APPROX)
+    # this arm over the matched pairs (pair 0 only): 0.8 x (1.5+0.1s) -> 1.28
+    assert q["this"] == pytest.approx(0.8 * 1.6, **APPROX)
+    assert q["gain"] == pytest.approx(1.55 - 0.8 * 1.6, **APPROX)
     assert og["components"]["parts"]["mse_log1p_all"]["gain"] is None
     sp = _reading(res, "mean_or_spread", "A", "across", "narrow", "vs_oldspread")
     assert sp["components"]["parts"]["scale_error_all"]["gain"] == \
@@ -445,6 +536,41 @@ def test_depthlaw_reading(agg):
     assert c["trained_value"] == pytest.approx(0.0, abs=1e-12)  # base<->depth, pred == true
     assert c["trained_n_pairs"] == 3
     assert c["nocov_value"] == pytest.approx(2 ** 0.5 - 1, **APPROX)
+    assert c["oldgrid_value"] is None                          # the old grid has no pooled row
+
+
+def test_depthlaw_per_class_and_against_the_old_grid(agg):
+    res = agg["res"]
+    n = _reading(res, "depthlaw", "A", "across", "narrow", "depth_scale_rel_error")
+    d = _reading(res, "depthlaw", "A", "across", "DNase", "depth_scale_rel_error")
+    assert (n["components"]["n_pairs"], d["components"]["n_pairs"]) == (4, 2)
+    assert n["value"] == pytest.approx(2 ** 0.2 - 1, **APPROX)
+    c = n["components"]
+    assert c["oldgrid_value"] == 0.3 and c["oldgrid_seed_wobble"] == 0.05      # not checks_main
+    assert c["gain_vs_oldgrid"] == pytest.approx(0.3 - (2 ** 0.2 - 1), **APPROX)
+    assert c["bar_vs_oldgrid"] == pytest.approx(0.1, **APPROX)
+    assert c["gain_vs_oldgrid_exceeds_bar"] is True
+    assert d["components"]["oldgrid_value"] is None
+    # Aold against the old grid's A
+    ao = _reading(res, "depthlaw", "Aold", "across", "narrow", "depth_scale_rel_error")
+    assert ao["components"]["oldgrid_rung"] == "A" and ao["components"]["oldgrid_value"] == 0.3
+    # per_track g: one class row and the pooled row
+    assert _reading(res, "depthlaw", "A", "per_track", "narrow", "depth_scale_rel_error")
+    assert _reading(res, "depthlaw", "A", "per_track", "all", "depth_scale_rel_error")
+
+
+def test_zero_bin_record_is_not_nonfinite():
+    base = {"rung": "A", "g_version": "across", "mark_class": "narrow", "model": "real",
+            "kind": "trained", "eval": "score"}
+    rows = ea.explosion_rows([
+        {**base, "crps_all": None, "n_crps_nonfinite": 0, "n_all": 0},     # no bins: neither
+        {**base, "crps_all": 25.0, "n_crps_nonfinite": 0},                 # explodes
+        {**base, "crps_all": None, "n_crps_nonfinite": 2},                 # non-finite
+        {**base, "kind": "depthlaw", "crps_all": 25.0, "n_crps_nonfinite": 0},  # a copy
+    ])
+    assert len(rows) == 1
+    assert (rows[0]["n_records"], rows[0]["n_crps_gt_20"], rows[0]["n_crps_nonfinite"]) == \
+        (3, 1, 1)
 
 
 def test_depth_law_tsv(agg):
@@ -499,6 +625,18 @@ def test_grid_md(agg):
     assert "CRPS > 20" in md and "non-finite" in md
     assert "Depth law" in md
     assert "Nothing in this file is a verdict" in md
+    # the gain tables carry the CRPS split's gains beside the all-bins gain
+    assert "| oracle-scaled gain | scale-error gain |" in md
+    assert "dropped non-finite" in md
+
+
+def test_crps_gain_carries_its_split(agg):
+    r = _reading(agg["res"], "beatstwin", "A", "across", "narrow", "crps_all")
+    sg = r["components"]["split_gain"]
+    m_real, _ = _mw(_per_seed("A", "real"))
+    m_noc, _ = _mw(_per_seed("A", "nocov"))
+    assert sg["crps_oracle_scaled_all"]["gain"] == pytest.approx(0.8 * (m_noc - m_real), **APPROX)
+    assert sg["scale_error_all"]["gain"] == pytest.approx(0.2 * (m_noc - m_real), **APPROX)
 
 
 def test_summary_data(agg):
