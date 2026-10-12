@@ -9,8 +9,8 @@ worktree (git-excluded).
 | phase | state |
 |---|---|
 | 0 verify on Nibi | done 2026-10-11; formula forks with the PI |
-| 1 build the count model | building (plan: 24 chunks, `.orchestrate/plan_t125.md`) |
-| 2 build the map h | building |
+| 1 build the count model | built and reviewed (offset, form A, model, train, score, aggregate) |
+| 2 build the map h | built and reviewed (data side, formula, push-forward, learned h, train, score, aggregate); end-to-end smoke building |
 | 3 smoke on Nibi | not started |
 | 4 count runs (432) | not started |
 | 5 h on the true X′ | not started |
