@@ -51,20 +51,38 @@ SCORE_PY = ROOT / "tools" / "t125" / "hmap" / "score.py"
 FAST = {"window": 256, "batch": 8, "knot_sample": 20_000, "knot_block": 256}
 N_BINS = {"chr1": 2000, "chr2": 1500, "chr19": 700, "chr21": 600, "chr22": 500, "chrX": 400}
 CHROMS = ("chr19", "chr21")
-METRIC_KEYS = ("crps_all", "crps_nonzero", "crps_top1", "crps_log_all", "crps_log_top1",
-               "mse_log1p_all", "mse_log1p_top1", "mse_all", "mse_top1",
-               "crps_oracle_scaled_all", "scale_error_all")
-ALONE_KEYS = {"h_name", "pid", "track", "assay", "mark_class", "arm", "level", "has_control",
-              "n_all", "n_top1", "crps_all", "crps_nonzero", "crps_top1", "mse_log1p_all",
-              "mse_log1p_top1", "crps_oracle_scaled_all", "scale_error_all", "c_star_all",
-              "n_crps_nonfinite", "crps_log_all", "crps_log_top1", "mse_all", "mse_top1",
-              "crps_all_gt_20"}
-CHAIN_KEYS = (set(lpairs.PAIR_KEYS) | {"f_run_name", "h_name", "n_all", "n_top1", "n_k_mean",
-                                       "n_k_max", "n_capped", "crps_all", "crps_nonzero",
-                                       "crps_top1", "mse_log1p_all", "mse_log1p_top1",
-                                       "crps_oracle_scaled_all", "scale_error_all", "c_star_all",
-                                       "n_crps_nonfinite", "crps_log_all", "crps_log_top1",
-                                       "mse_all", "mse_top1", "crps_all_gt_20"})
+LOG_KEYS = ("crps_log_all", "crps_log_nonzero", "crps_log_top1", "crps_log_oracle_scaled_all",
+            "crps_log_scale_error_all", "crps_log_c_star_all")
+SHARED_KEYS = ("mse_log1p_all", "mse_log1p_top1", "mse_all", "mse_top1") + LOG_KEYS
+#: the native-scale keys: push = the proper CRPS of the pushed set; own noise = the point CRPS of
+#: its mean, under its own names (never the push keys)
+NATIVE = {False: ("crps_all", "crps_nonzero", "crps_top1", "crps_oracle_scaled_all",
+                  "scale_error_all", "c_star_all"),
+          True: ("crps_mean_point_all", "crps_mean_point_nonzero", "crps_mean_point_top1",
+                 "crps_mean_point_oracle_scaled_all", "crps_mean_point_scale_error_all",
+                 "crps_mean_point_c_star_all")}
+FLAGS = {False: ("crps_all_gt_20", "n_crps_nonfinite"),
+         True: ("crps_mean_point_all_gt_20", "n_crps_mean_point_nonfinite")}
+
+
+def metric_keys(noise: bool) -> tuple:
+    return NATIVE[noise] + SHARED_KEYS
+
+
+def nat(noise: bool) -> str:
+    return "crps_mean_point" if noise else "crps"
+
+
+ALONE_BASE = {"h_name", "pid", "track", "assay", "mark_class", "arm", "level", "has_control",
+              "n_all", "n_top1", "n_crps_log_nonfinite"}
+CHAIN_BASE = set(lpairs.PAIR_KEYS) | {"f_run_name", "h_name", "n_all", "n_top1", "n_k_mean",
+                                      "n_k_max", "n_capped", "n_crps_log_nonfinite"}
+
+
+def assert_keys(rec: dict, base: set, noise: bool):
+    assert base | set(metric_keys(noise)) | set(FLAGS[noise]) <= set(rec)
+    assert not set(NATIVE[not noise]) & set(rec)        # the two native schemas never mix
+    assert FLAGS[not noise][0] not in rec
 
 
 # -- set-up ------------------------------------------------------------------------------------
@@ -270,14 +288,16 @@ def test_alone_records(S, alone):
         recs = res["records"]
         assert [r["pid"] for r in recs] == usable
         for r in recs:
-            assert ALONE_KEYS <= set(r)
-            for k in METRIC_KEYS + ("c_star_all",):
+            noise = res["h"]["noise"] == 1
+            assert_keys(r, ALONE_BASE, noise)
+            for k in metric_keys(noise):
                 assert r[k] is not None and math.isfinite(r[k]), (spec, r["pid"], k)
-            assert r["n_crps_nonfinite"] == 0
-            assert r["crps_all_gt_20"] == (r["crps_all"] > 20)
+            assert r[FLAGS[noise][1]] == 0 and r["n_crps_log_nonfinite"] == 0
+            assert r[FLAGS[noise][0]] == (r[f"{nat(noise)}_all"] > 20)
             assert r["n_all"] > 0 and r["n_top1"] == math.ceil(0.01 * r["n_all"])
         assert res["h"]["h_name"] == recs[0]["h_name"]
-        assert "n_records_crps_gt_20" in res
+        n = nat(res["h"]["noise"] == 1)
+        assert f"n_records_{n}_gt_20" in res and "n_records_crps_log_nonfinite" in res
 
 
 def test_alone_push_affine_matches_numpy(S, alone):
@@ -350,7 +370,7 @@ def test_alone_noise_is_gaussian_on_log1p(S, alone):
             ms.append(((np.log1p(mean_p) - t) ** 2)[keep])
         rec = recs[pid]
         assert rec["crps_log_all"] == pytest.approx(np.concatenate(cl).mean(), rel=1e-4)
-        assert rec["crps_all"] == pytest.approx(np.concatenate(ca).mean(), rel=1e-4)
+        assert rec["crps_mean_point_all"] == pytest.approx(np.concatenate(ca).mean(), rel=1e-4)
         assert rec["mse_log1p_all"] == pytest.approx(np.concatenate(ms).mean(), rel=1e-4)
 
 
@@ -389,12 +409,13 @@ def test_chain_records(S, chain):
         assert res["n_capped_total"] == sum(r["n_capped"] for r in recs) == 0
         assert res["f_run"]["run_name"] == S["f_dir"].name
         for r in recs:
-            assert CHAIN_KEYS <= set(r)
+            noise = res["h"]["noise"] == 1
+            assert_keys(r, CHAIN_BASE, noise)
             assert r["f_run_name"] == S["f_dir"].name and r["h_name"] == name
             assert r["n_k_mean"] >= 1 and r["n_k_max"] >= 1
-            for k in METRIC_KEYS + ("c_star_all",):
+            for k in metric_keys(noise):
                 assert r[k] is not None and math.isfinite(r[k]), (name, k)
-            assert r["crps_all_gt_20"] == (r["crps_all"] > 20)
+            assert r[FLAGS[noise][0]] == (r[f"{nat(noise)}_all"] > 20)
 
 
 def test_chain_formula_bin_by_brute_force(S, chain):
@@ -470,7 +491,7 @@ def test_chain_noise_is_mixture_crps(S, chain):
         cl.append(pf.crps_gauss_mixture(m, sg, w, np.log1p(y))[keep])
         ca.append(np.abs(pf.mean_gauss_mixture_logp(m, sg, w) - y)[keep])
     assert rec["crps_log_all"] == pytest.approx(np.concatenate(cl).mean(), rel=1e-4)
-    assert rec["crps_all"] == pytest.approx(np.concatenate(ca).mean(), rel=1e-4)
+    assert rec["crps_mean_point_all"] == pytest.approx(np.concatenate(ca).mean(), rel=1e-4)
 
 
 def test_chain_point_mass_equals_alone(S, alone, monkeypatch, tmp_path):
@@ -497,7 +518,7 @@ def test_chain_point_mass_equals_alone(S, alone, monkeypatch, tmp_path):
         for rec in json.loads((d / name / "scores.json").read_text())["records"]:
             ref = a[rec["target_pid"]]
             assert rec["n_all"] == ref["n_all"] and rec["n_k_max"] == 1
-            for k in METRIC_KEYS:
+            for k in metric_keys(alone[spec]["h"]["noise"] == 1):
                 assert rec[k] == pytest.approx(ref[k], rel=1e-6, abs=1e-6), (spec, k)
 
 
@@ -549,3 +570,109 @@ def test_chain_cli_skips_when_done(S, chain):
         args += ["--h", s]
     assert score.main(args) == 0
     assert {p: (p / "scores.json").stat().st_mtime_ns for p in mtimes} == mtimes
+
+
+# -- the log-scale split (PI 2026-10-11), non-finite counts, device default ---------------------
+
+
+class _ShiftedTruth:
+    """A fake h: mu = log1p(y) + c0 ln2 on every bin (1 + P scaled by 2^c0); own noise with a
+    tiny sigma, or a point push. `nan_rows` get mu = NaN."""
+
+    kind, rung, formula = "fake", None, False
+
+    def __init__(self, name, c0, noise, nan_rows=()):
+        self.name, self.c0, self.noise, self.nan_rows = name, c0, noise, np.asarray(nan_rows, int)
+
+    def __call__(self, batch):
+        y = batch.ctx["y"][batch.rows]
+        mu = np.log1p(y) + self.c0 * math.log(2.0)
+        mu[np.isin(batch.rows, self.nan_rows)] = np.nan
+        mu = np.repeat(mu[:, None], batch.k.shape[1], axis=1)
+        return mu, (np.full(mu.shape, math.log(1e-3)) if self.noise else None)
+
+
+def _point_ctx(n=3000, seed=4):
+    rng = np.random.default_rng(seed)
+    y = np.where(rng.random(n) < 0.3, 0.0, rng.gamma(1.5, 2.0, n))
+    return {"y": y, "mode": "point", "kpt": np.zeros(n, np.int64), "info": None,
+            "n_blacklisted": 0}
+
+
+@pytest.mark.parametrize("noise", [False, True])
+def test_log_split_recovers_a_known_shift(noise):
+    """Truth shifted by c0 = 0.75 on the log scale: c* = -0.75 and the oracle-scaled log CRPS
+    is ~0 (exactly 0 for a point; sigma * (sqrt 2 - 1) / sqrt pi for a Gaussian of sigma 1e-3)."""
+    ctx = _point_ctx()
+    h = _ShiftedTruth("h_fake", 0.75, noise)
+    f = score.score_context([h], ctx)[0]["h_fake"]
+    assert f["crps_log_c_star_all"] == pytest.approx(-0.75, abs=1e-9)
+    floor = 1e-3 * (math.sqrt(2.0) - 1.0) / math.sqrt(math.pi) if noise else 0.0
+    assert f["crps_log_oracle_scaled_all"] == pytest.approx(floor, abs=1e-9)
+    far = 1e-3 / math.sqrt(math.pi) if noise else 0.0      # a Gaussian far from y: |m| - s/sqrt(pi)
+    assert f["crps_log_all"] == pytest.approx(0.75 * math.log(2.0) - far, abs=1e-9)
+    assert f["crps_log_scale_error_all"] == pytest.approx(0.75 * math.log(2.0) - far - floor,
+                                                          abs=1e-9)
+    assert f["n_crps_log_nonfinite"] == 0
+    if not noise:                    # the native split of push: 1 + P scaled is not P scaled
+        assert f["crps_oracle_scaled_all"] <= f["crps_all"]
+        assert "crps_mean_point_all" not in f
+    else:
+        assert "crps_all" not in f and "crps_oracle_scaled_all" not in f
+        assert f["crps_mean_point_oracle_scaled_all"] <= f["crps_mean_point_all"]
+
+
+@pytest.mark.parametrize("noise", [False, True])
+def test_log_split_matches_scale_split_on_points(noise):
+    """A point push: the log split equals `baseline_rungs.scale_split` run on 1 + P scaled by
+    2^c and scored as |log(1 + P) + c ln2 - log(1 + y)|. A mixture of sigma 1e-3 is the same up to
+    the Gaussian's -sigma / sqrt(pi) away from the truth."""
+    ctx = _point_ctx(seed=9)
+    rng = np.random.default_rng(1)
+    ly = np.log1p(ctx["y"])
+    noisy = ly + rng.normal(0.3, 0.5, ly.size)
+
+    class H(_ShiftedTruth):
+        def __call__(self, batch):
+            mu = np.maximum(noisy[batch.rows], 0.0)[:, None]
+            return mu, (np.full(mu.shape, math.log(1e-3)) if self.noise else None)
+
+    f = score.score_context([H("h_fake", 0.0, noise)], ctx)[0]["h_fake"]
+    m = np.maximum(noisy, 0.0)
+
+    def crps(mm, tt):      # in the scale_split form: mm = (1 + m) 2^c, scored on the log scale
+        return np.abs(np.log(mm) - tt)
+
+    r = br.scale_split(np.exp(m), ly, crps)      # m = log(1 + P), so 1 + P = exp(m)
+    if not noise:
+        assert f["crps_log_c_star_all"] == pytest.approx(r["c_star"], abs=1e-9)
+        assert f["crps_log_oracle_scaled_all"] == pytest.approx(r["crps_oracle_scaled"],
+                                                                abs=1e-12)
+        assert f["crps_log_all"] == pytest.approx(r["crps"], abs=1e-12)
+    else:
+        assert f["crps_log_c_star_all"] == pytest.approx(r["c_star"], abs=0.0101)
+        assert f["crps_log_oracle_scaled_all"] == pytest.approx(
+            r["crps_oracle_scaled"] - 1e-3 / math.sqrt(math.pi), abs=1e-4)
+
+
+@pytest.mark.parametrize("noise", [False, True])
+def test_nonfinite_log_crps_is_counted(noise):
+    ctx = _point_ctx()
+    f = score.score_context([_ShiftedTruth("h_fake", 0.5, noise, nan_rows=[3, 50, 77])],
+                            ctx)[0]["h_fake"]
+    assert f["n_crps_log_nonfinite"] == 3
+    assert f["crps_log_all"] is None
+    assert f[FLAGS[noise][1]] == 3
+
+
+def test_cli_device_defaults_to_auto(monkeypatch):
+    seen = {}
+
+    def fake(*a, **kw):
+        seen.update(kw)
+        return Path("x")
+
+    monkeypatch.setattr(score, "score_chain", fake)
+    score.main(["chain", "m", "c", "d", "ctl", "bl", "/nonexistent/f_run", "/nonexistent/out",
+                "--h", "formula:bin", "--workers", "1"])
+    assert seen["device"] == "auto"

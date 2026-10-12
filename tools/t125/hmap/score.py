@@ -18,20 +18,29 @@ at k as the last column. Alone, k is the true count (a point support, K = 1).
               (sorted one-pass pair sum), `crps_log_*` = its exact CRPS on log(1 + P) (log1p is
               monotone: same sort), the mean = sum_k NB(k) P_hat(k).
   own noise   the mixture sum_k NB(k) N(mu_k, sigma_k^2) on log(1 + P): `crps_log_*` = its exact
-              CRPS (`pushforward.crps_gauss_mixture`); `crps_*` = |mean_P - y|, the point CRPS of
-              the P-scale mean sum_k NB(k) (exp(mu_k + sigma_k^2 / 2) - 1) (decision (iv) (a)).
+              CRPS (`pushforward.crps_gauss_mixture`); the native number is the point CRPS of
+              the P-scale mean sum_k NB(k) (exp(mu_k + sigma_k^2 / 2) - 1) (decision (iv) (a)),
+              written as `crps_mean_point_*` so it never shares a key with push's proper CRPS.
   both        `mse_log1p_*` = (log1p(mean_P) - log1p(y))^2 and `mse_*` = (mean_P - y)^2.
 Subsets all / nonzero / top1 of the true P (`baseline_rungs.subset_index`, top 1 % by y), on
 chr19 + chr21 with blacklist bins removed (`ladder.data.read_blacklist_flags`); per record the
-subset means, `n_crps_nonfinite` (bins whose CRPS is not finite; their subset means are then None,
-as t118), and `crps_all_gt_20` (the explosion flag aggregation counts per (pair, seed)).
+subset means, the non-finite bin counts (`n_crps_nonfinite` or `n_crps_mean_point_nonfinite`, and
+`n_crps_log_nonfinite`; a subset mean over a non-finite bin is None, as t118), and the explosion
+flag `crps_all_gt_20` (own noise: `crps_mean_point_all_gt_20`) that aggregation counts per
+(pair, seed). The full key list is in `score_context`.
 
-**Split** (the t118 rule: trained/score/all; `baseline_rungs.scale_split`): c* on a 2^c grid
-(-6..6 step 0.25, then +-0.25 step 0.01) on the seeded 20 000-bin subsample, both CRPS on every
-bin. Push only: the whole pushed set is scaled, {2^c P_hat(k)} (as t118 p-space scales the
-log-normal median with sigma held, i.e. the whole law); the pair term scales by 2^c, so c* comes
-from the subsample's sets and the scaled CRPS of every bin from the same pass. Own noise: its
-`crps_all` is a point CRPS, so `scale_split(mean_P, y, |m - y|)` exactly.
+**Splits** (the t118 rule: trained/score/all; `baseline_rungs.scale_split`'s search): c* on a
+2^c grid (-6..6 step 0.25, then +-0.25 step 0.01) on the seeded 20 000-bin subsample, the CRPS
+at c* on every bin.
+  native, push       the whole pushed set scaled, {2^c P_hat(k)} (as t118 p-space scales the
+                     log-normal median with sigma held, i.e. the whole law); the pair term scales
+                     by 2^c.
+  native, own noise  `scale_split(mean_P, y, |m - y|)` of its point CRPS (`crps_mean_point_*`).
+  log scale, both    (PI 2026-10-11) log1p(P) shifted by c ln2, i.e. 1 + P scaled by 2^c: push =
+                     {log1p P_hat(k) + c ln2}, own noise = every mu_k + c ln2 with sigma held;
+                     the pair term is unchanged, so only the first term is re-evaluated
+                     (`crps_log_oracle_scaled_all`, `crps_log_scale_error_all`,
+                     `crps_log_c_star_all`).
 
 **Memory.** Bins are sorted by their NB support size and processed in chunks of at most
 `CHUNK_BINS` bins and `ELEM_BUDGET` bin x k elements (one capped row is 4097 wide; it no longer
@@ -41,7 +50,7 @@ features and the formula λ are built once per (pair, chromosome) and shared by 
 
     python tools/t125/hmap/score.py alone <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <h_spec> <out_dir> [--workers N]
     python tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <f_run_dir> <out_dir> --h <h_spec> [--h ...] [--workers N]
-      both: [--control-rl-tsv PATH] (default: products.CONTROL_RL_TSV) [--device cpu|cuda|auto]
+      both: [--control-rl-tsv PATH] (default: products.CONTROL_RL_TSV) [--device auto|cpu|cuda] (default auto, as hmap/train.py)
 
 alone → `<out_dir>/<h_name>/scores.json` + `ALONE_DONE`, one record per usable product.
 chain → `<out_dir>/<f_run_name>/<h_name>/scores.json` per h, one record per training pair of f;
@@ -64,6 +73,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
+from scipy.special import ndtr
 
 _TOOLS = Path(__file__).resolve().parents[2]
 for _p in (_TOOLS / "t118", _TOOLS / "t125"):      # import convention (plan): t118 and t125
@@ -328,29 +338,90 @@ def _set_crps(vs, ws, coef, y, a=1.0):
         return (ws * np.abs(a * vs - y[:, None])).sum(axis=1) - a * (ws * vs * coef).sum(axis=1)
 
 
-def _fit_part(vs, ws, coef, y):
-    """One chunk of the subsample, flattened to its positive-weight entries: (v, w, y per
-    entry, the chunk's total half pair sum sum_rows sum_i w_i v_i coef_i)."""
-    pos = ws > 0
-    yy = np.broadcast_to(y[:, None], vs.shape)
-    return vs[pos], ws[pos], yy[pos], float((ws * vs * coef).sum())
+LN2 = math.log(2.0)
 
 
-def _c_star(parts: list, n_sel: int) -> float:
-    """`baseline_rungs.scale_split`'s grid on the pushed sets of the subsample. The pair term of
-    {2^c v} is 2^c times that of {v}, so each grid point costs one pass over the entries."""
-    v = np.concatenate([p[0] for p in parts])
-    w = np.concatenate([p[1] for p in parts])
-    y = np.concatenate([p[2] for p in parts])
-    half_pair = sum(p[3] for p in parts)
-
-    def fit(c: float) -> float:
-        a = 2.0 ** c
-        with np.errstate(invalid="ignore"):
-            return float((w @ np.abs(a * v - y) - a * half_pair) / n_sel)
-
+def _grid(fit) -> float:
+    """c* by `baseline_rungs.scale_split`'s search: 2^c grid -6..6 step 0.25, then +-0.25 step
+    0.01 around the best."""
     c = float(min(np.arange(-6.0, 6.001, 0.25), key=fit))
     return float(min(np.arange(c - 0.25, c + 0.2501, 0.01), key=fit))
+
+
+def _flat(vs, ws, y):
+    """The positive-weight entries of sorted rows: (v, w, the row's y) per entry."""
+    pos = ws > 0
+    return vs[pos], ws[pos], np.broadcast_to(y[:, None], vs.shape)[pos]
+
+
+def _mix_e1(mu, sg, w, t, shift: float = 0.0) -> np.ndarray:
+    """sum_k w_k A(t - (mu_k + shift), sigma_k^2): the first term of the mixture CRPS with every
+    mu shifted (the pair term does not move under a common shift). A as `pushforward`."""
+    pos = w > 0
+    mu = np.where(pos, mu, 0.0)
+    sg = np.where(pos, sg, 1.0)
+    w = np.where(pos, w, 0.0)
+    w = w / w.sum(axis=1, keepdims=True)
+    m = t[:, None] - (mu + shift)
+    z = m / sg
+    A = m * (2.0 * ndtr(z) - 1.0) + 2.0 * sg * np.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi)
+    return (w * A).sum(axis=1)
+
+
+class _Fit:
+    """The c-search of one h on the seeded subsample, for the two splits that move a whole set:
+    native push ({2^c P_hat(k)}: the pair term scales by 2^c) and log scale (log1p(P) + c ln2:
+    the pair term is unchanged; push = the pushed set {log1p P_hat(k)}, own noise = the mixture
+    with every mu_k + c ln2, sigma held)."""
+
+    def __init__(self, noise: bool):
+        self.noise = noise
+        self.nat, self.log = [], []      # flattened entries per chunk
+        self.nat_pair = 0.0              # sum over bins of the half pair term (native)
+        self.log_pair = 0.0              # the same on the log scale
+        self.n = 0
+
+    def add_push(self, vs, ws, coef, y, ly):
+        self.n += vs.shape[0]
+        self.nat.append(_flat(vs, ws, y))
+        self.nat_pair += float((ws * vs * coef).sum())
+        lv = np.log1p(vs)
+        self.log.append(_flat(lv, ws, ly))
+        self.log_pair += float((ws * lv * coef).sum())
+
+    def add_noise(self, mu, sg, w, ly, crps_log):
+        self.n += mu.shape[0]
+        pos = w > 0
+        wn = np.where(pos, w, 0.0) / np.where(pos, w, 0.0).sum(axis=1, keepdims=True)
+        self.log.append((mu[pos], sg[pos], wn[pos], np.broadcast_to(ly[:, None], mu.shape)[pos]))
+        self.log_pair += float((_mix_e1(mu, sg, w, ly) - crps_log).sum())
+
+    def c_native(self) -> float:
+        v, w, y = (np.concatenate(x) for x in zip(*self.nat))
+
+        def fit(c):
+            a = 2.0 ** c
+            with np.errstate(invalid="ignore"):
+                return float((w @ np.abs(a * v - y) - a * self.nat_pair) / self.n)
+        return _grid(fit)
+
+    def c_log(self) -> float:
+        if not self.noise:
+            v, w, y = (np.concatenate(x) for x in zip(*self.log))
+
+            def fit(c):
+                with np.errstate(invalid="ignore"):
+                    return float((w @ np.abs(v + c * LN2 - y) - self.log_pair) / self.n)
+            return _grid(fit)
+        mu, sg, w, t = (np.concatenate(x) for x in zip(*self.log))
+
+        def fit(c):
+            m = t - (mu + c * LN2)
+            z = m / sg
+            with np.errstate(invalid="ignore", over="ignore"):
+                A = m * (2.0 * ndtr(z) - 1.0) + 2.0 * sg * np.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi)
+                return float((w @ A - self.log_pair) / self.n)
+        return _grid(fit)
 
 
 def _fmean(a: np.ndarray, idx: np.ndarray):
@@ -360,30 +431,58 @@ def _fmean(a: np.ndarray, idx: np.ndarray):
     return v if math.isfinite(v) else None
 
 
+def _split(crps_all, cs, c, prefix: str) -> dict:
+    return {f"{prefix}_oracle_scaled_all": cs,
+            f"{prefix}_scale_error_all": (None if cs is None or crps_all is None
+                                          else crps_all - cs),
+            f"{prefix}_c_star_all": c}
+
+
 def score_context(hs: list, ctx: dict) -> tuple[dict, dict]:
-    """({h_name: metric fields}, shared fields {n_k_mean, n_k_max, n_capped}) of one context."""
+    """({h_name: metric fields}, shared fields {n_k_mean, n_k_max, n_capped}) of one context.
+
+    Keys. Push only: `crps_*` (the proper CRPS of the pushed set on P) with its split
+    `crps_oracle_scaled_all`, `scale_error_all`, `c_star_all`, the flag `crps_all_gt_20` and
+    `n_crps_nonfinite`. Own noise: the native number is the point CRPS of the mean, so it is
+    written under `crps_mean_point_*` (split `crps_mean_point_oracle_scaled_all`,
+    `crps_mean_point_scale_error_all`, `crps_mean_point_c_star_all`, flag
+    `crps_mean_point_all_gt_20`, `n_crps_mean_point_nonfinite`) and never under the push keys.
+    Both: `crps_log_*` (proper, on log1p P) with `crps_log_oracle_scaled_all`,
+    `crps_log_scale_error_all`, `crps_log_c_star_all`, `n_crps_log_nonfinite`; `mse_log1p_*`,
+    `mse_*`."""
     y = ctx["y"]
     N = y.shape[0]
+    ly = np.log1p(y)
     sizes = support_sizes(ctx)
     shared = {"n_capped": int(np.count_nonzero(sizes > K_MAX))}
-    push = [h for h in hs if not h.noise]
-    # phase A: c* of every push h on the seeded subsample (as scale_split draws it)
-    c_star = {}
-    if push and N:
+    # phase A: c* of every split that moves a whole set, on the seeded subsample (as
+    # scale_split draws it)
+    c_nat, c_log = {}, {}
+    if N:
         sel = (np.arange(N) if N <= br.SCALE_FIT_BUDGET else
                np.random.default_rng(br.SCALE_SEED).choice(N, br.SCALE_FIT_BUDGET, replace=False))
-        parts = {h.name: [] for h in push}
+        fits = {h.name: _Fit(h.noise) for h in hs}
         for rows in chunk_rows(sizes, sel):
             k, w, _ = support_rows(ctx, rows)
             b = Batch(ctx, rows, k)
-            for h in push:
-                parts[h.name].append(_fit_part(*sorted_set(p_hat(h(b)[0]), w), y[rows]))
-        c_star = {name: _c_star(p, sel.size) for name, p in parts.items()}
+            for h in hs:
+                mu, ls = h(b)
+                if h.noise:
+                    with np.errstate(over="ignore"):
+                        sg = np.exp(ls)
+                    fits[h.name].add_noise(mu, sg, w, ly[rows],
+                                           pf.crps_gauss_mixture(mu, sg, w, ly[rows]))
+                else:
+                    fits[h.name].add_push(*sorted_set(p_hat(mu), w), y[rows], ly[rows])
+        for h in hs:
+            c_log[h.name] = fits[h.name].c_log()
+            if not h.noise:
+                c_nat[h.name] = fits[h.name].c_native()
     # phase B: every bin
-    arr = {h.name: {key: np.full(N, np.nan) for key in ("crps", "crps_log", "mean", "crps_c")}
+    arr = {h.name: {key: np.full(N, np.nan)
+                    for key in ("crps", "crps_log", "mean", "crps_c", "crps_log_c")}
            for h in hs}
     n_k = np.zeros(N, np.int64)
-    ly = np.log1p(y)
     for rows in chunk_rows(sizes, np.arange(N)):
         k, w, valid = support_rows(ctx, rows)
         n_k[rows] = valid.sum(axis=1)
@@ -392,18 +491,23 @@ def score_context(hs: list, ctx: dict) -> tuple[dict, dict]:
         for h in hs:
             mu, ls = h(b)
             a = arr[h.name]
+            s = c_log[h.name] * LN2
             if h.noise:
                 with np.errstate(over="ignore"):
                     sg = np.exp(ls)
                 m = pf.mean_gauss_mixture_logp(mu, sg, w)
-                a["crps_log"][rows] = pf.crps_gauss_mixture(mu, sg, w, lyy)
+                cl = pf.crps_gauss_mixture(mu, sg, w, lyy)
+                a["crps_log"][rows] = cl
+                a["crps_log_c"][rows] = cl + _mix_e1(mu, sg, w, lyy, s) - _mix_e1(mu, sg, w, lyy)
                 a["crps"][rows] = np.abs(m - yy)
             else:
                 vs, ws, coef = sorted_set(p_hat(mu), w)
                 m = (ws * vs).sum(axis=1)
+                lv = np.log1p(vs)
                 a["crps"][rows] = _set_crps(vs, ws, coef, yy)
-                a["crps_c"][rows] = _set_crps(vs, ws, coef, yy, 2.0 ** c_star[h.name])
-                a["crps_log"][rows] = _set_crps(np.log1p(vs), ws, coef, lyy)
+                a["crps_c"][rows] = _set_crps(vs, ws, coef, yy, 2.0 ** c_nat[h.name])
+                a["crps_log"][rows] = _set_crps(lv, ws, coef, lyy)
+                a["crps_log_c"][rows] = _set_crps(lv + s, ws, coef, lyy)
             a["mean"][rows] = m
     shared["n_k_mean"] = float(n_k.mean()) if N else None
     shared["n_k_max"] = int(n_k.max()) if N else None
@@ -411,29 +515,35 @@ def score_context(hs: list, ctx: dict) -> tuple[dict, dict]:
     out = {}
     for h in hs:
         a = arr[h.name]
+        nat = "crps_mean_point" if h.noise else "crps"
         with np.errstate(invalid="ignore", divide="ignore"):
             se_log = (np.log1p(a["mean"]) - ly) ** 2
             se = (a["mean"] - y) ** 2
-        f: dict = {"n_crps_nonfinite": int(np.count_nonzero(~np.isfinite(a["crps"])))}
+        f: dict = {f"n_{nat}_nonfinite": int(np.count_nonzero(~np.isfinite(a["crps"]))),
+                   "n_crps_log_nonfinite": int(np.count_nonzero(~np.isfinite(a["crps_log"])))}
         for s, idx in sub.items():
             f[f"n_{s}"] = int(idx.size)
-            f[f"crps_{s}"] = _fmean(a["crps"], idx)
+            f[f"{nat}_{s}"] = _fmean(a["crps"], idx)
             f[f"crps_log_{s}"] = _fmean(a["crps_log"], idx)
             f[f"mse_log1p_{s}"] = _fmean(se_log, idx)
             f[f"mse_{s}"] = _fmean(se, idx)
         if not N:
-            f.update(crps_oracle_scaled_all=None, scale_error_all=None, c_star_all=None)
-        elif h.noise:
-            r = br.scale_split(a["mean"], y, lambda mm, yy: np.abs(mm - yy))
-            f.update(crps_oracle_scaled_all=r["crps_oracle_scaled"],
-                     scale_error_all=r["scale_error"], c_star_all=r["c_star"])
+            f.update(_split(None, None, None, "crps_log"))
+            f.update(_split(None, None, None, nat) if h.noise else
+                     {"crps_oracle_scaled_all": None, "scale_error_all": None, "c_star_all": None})
         else:
-            cs = _fmean(a["crps_c"], sub["all"])
-            f.update(crps_oracle_scaled_all=cs,
-                     scale_error_all=(None if cs is None or f["crps_all"] is None
-                                      else f["crps_all"] - cs),
-                     c_star_all=c_star[h.name])
-        f["crps_all_gt_20"] = f["crps_all"] is not None and f["crps_all"] > CRPS_EXPLODE
+            f.update(_split(f["crps_log_all"], _fmean(a["crps_log_c"], sub["all"]),
+                            c_log[h.name], "crps_log"))
+            if h.noise:
+                r = br.scale_split(a["mean"], y, lambda mm, yy: np.abs(mm - yy))
+                f.update(_split(f[f"{nat}_all"], r["crps_oracle_scaled"], r["c_star"], nat))
+            else:
+                cs = _fmean(a["crps_c"], sub["all"])
+                f.update(crps_oracle_scaled_all=cs,
+                         scale_error_all=(None if cs is None or f["crps_all"] is None
+                                          else f["crps_all"] - cs),
+                         c_star_all=c_nat[h.name])
+        f[f"{nat}_all_gt_20"] = f[f"{nat}_all"] is not None and f[f"{nat}_all"] > CRPS_EXPLODE
         out[h.name] = f
     return out, shared
 
@@ -528,8 +638,11 @@ def write_h_scores(d, obj) -> None:
 
 
 def _summary(records: list) -> dict:
-    return {"n_records_crps_nonfinite": sum(r["n_crps_nonfinite"] > 0 for r in records),
-            "n_records_crps_gt_20": sum(bool(r["crps_all_gt_20"]) for r in records)}
+    """File-level counts; the native keys follow the h's kind (crps / crps_mean_point)."""
+    nat = "crps_mean_point" if records and "crps_mean_point_all" in records[0] else "crps"
+    return {f"n_records_{nat}_nonfinite": sum(r[f"n_{nat}_nonfinite"] > 0 for r in records),
+            "n_records_crps_log_nonfinite": sum(r["n_crps_log_nonfinite"] > 0 for r in records),
+            f"n_records_{nat}_gt_20": sum(bool(r[f"{nat}_all_gt_20"]) for r in records)}
 
 
 def _now() -> str:
@@ -537,7 +650,7 @@ def _now() -> str:
 
 
 def score_alone(manifest, covariates, data_dir, ctl_cache, blacklist, h_spec, out_dir,
-                workers: int = 1, control_rl_tsv=products.CONTROL_RL_TSV, device="cpu") -> Path:
+                workers: int = 1, control_rl_tsv=products.CONTROL_RL_TSV, device="auto") -> Path:
     """One h on the true X' of every usable product -> `<out_dir>/<h_name>/scores.json`."""
     t0 = time.time()
     h = load_h(h_spec, device)
@@ -559,7 +672,7 @@ def score_alone(manifest, covariates, data_dir, ctl_cache, blacklist, h_spec, ou
 
 def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir, out_dir,
                 h_specs: list, workers: int = 1, control_rl_tsv=products.CONTROL_RL_TSV,
-                device="cpu") -> Path:
+                device="auto") -> Path:
     """Every listed h on f's NB over f's training pairs -> `<out_dir>/<f_run>/<h_name>/scores.json`;
     CHAIN_DONE once every listed h is scored. Returns `<out_dir>/<f_run>`."""
     t0 = time.time()
@@ -613,7 +726,7 @@ def main(argv=None) -> int:
             a.add_argument("--h", dest="h_specs", action="append", required=True)
         a.add_argument("--workers", type=int, default=lscore.default_workers())
         a.add_argument("--control-rl-tsv", type=Path, default=products.CONTROL_RL_TSV)
-        a.add_argument("--device", default="cpu", choices=("cpu", "cuda", "auto"))
+        a.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     args = ap.parse_args(argv)
     t0 = time.time()
     common = (args.manifest, args.covariates, args.data_dir, args.ctl_cache, args.blacklist)
