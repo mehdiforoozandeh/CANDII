@@ -61,6 +61,13 @@ Every id goes here at submission.
   - 24068466 `t125_etalaw`: array 258,402%2 (law batch 3: B2, Aold x C19M16 real s0).
   - 24070630 `t125_etalaw`: array 45 (law batch 4: A all nocov s0).
   - 24073862 `t125_etalaw`: array 381 (law batch 5: D2 all nocov s0).
+  - 24067474_42 and _47 both TIMEOUT at 3:00:20 (no TRAIN_DONE, no timing.json). 24067530 never
+    started (its dependency failed); cancelled.
+  - 24083622 `t125_smokechain4`: `smoke/smoke_chain4.sh`, the same one-off chain with 4 h (2 formulas,
+    2 true h; no fnb h exists), output only into `t125/smoke/chain/`.
+  - 24083625 `t125_htrain` table fnb: array 42,47%2 again, `--time=12:00:00` on the command line
+    (the script's 3 h is too short), only to measure one fnb fit; logs `h/logs/`.
+  - 24083626 `t125_smokechain`: `smoke/smoke_chain.sh` (6 h), `--dependency=afterok:24083625`.
 
 ### Nibi smoke (K10), partial
 
