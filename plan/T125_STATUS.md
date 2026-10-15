@@ -37,6 +37,14 @@ Every id goes here at submission.
   the K8 runs use a `$SLURM_TMPDIR` copy of K8 plus the test file from git at 33e09cb (K8's sha),
   kept in `/project/def-maxwl/mforooz/t125/verify/K8_tests_33e09cb`. Script and log:
   `/project/def-maxwl/mforooz/t125/verify/` (`verify_K10.sh`, `t125_verifyK10_24065614.out`).
+- Nibi smoke (N2), kit K10, 2026-10-15. Logs `/project/def-maxwl/mforooz/t125/{eta,h}/logs/%x_%A_%a.out`.
+  - 24065701 `t125_etatrain`: array 18,66,114,162,210,258,306,354,402,45,381%11 (the 9 rungs x
+    C19M16 real s0; A all nocov s0 = 45; D2 all nocov s0 = **381**, not 357 as the plan says: 357 is
+    D2_C19M16_counts_nocov_s0 by `index = rung_i*48 + g_i*6 + model_i*3 + seed`, g "all" = 7).
+  - 24065702 `t125_halone`: array 0,1 (formula:bin, formula:frag).
+  - 24065703 `t125_htrain` table true: array 0,21 (h_affine_r1_push_true_s0; mlp r5 noise s0 =
+    **21**, not 8 as the plan says: true index = learned_i*3 + seed, mlp r5 noise is learned_i 7;
+    index 8 is affine r5 push s2).
 
 ## Nibi access
 
