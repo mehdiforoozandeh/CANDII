@@ -57,6 +57,7 @@ Every id goes here at submission.
     `score.py chain` on f A_C19M16_counts_real_s0 with 6 h (2 formulas, the 2 true h of 24065703,
     the 2 fnb h of 24067474), output only into `t125/smoke/chain/`, log `t125/smoke/logs/`.
   - 24067530 `t125_smokechain`: that script, `--dependency=afterok:24065703:24067474` (both live).
+  - 24067868 `t125_etalaw`: array 114,210,354%3 (law batch 2: C, A2, D2 x C19M16 real s0).
 
 ### Nibi smoke (K10), partial
 
