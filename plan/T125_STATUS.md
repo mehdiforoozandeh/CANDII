@@ -49,6 +49,13 @@ Every id goes here at submission.
     f A_C19M16_counts_real_s0 (fnb index = f_i*12 + learned_i; f_i 3). h_chain index 3 exits 3
     unless all 36 true h and all 12 fnb h of that f have TRAIN_DONE (the script checks all 50), so
     the smoke as planned cannot produce a CHAIN_DONE; the chain smoke needs a decision.
+  - 24067469 `t125_etalaw`: array 18,66,162,306%4 (law batch 1: A, B, D, C2 x C19M16 real s0).
+  - 24067474 `t125_htrain` table fnb: array 42,47%2 (h_mlp_r5_push and h_formula_mlp_r5_noise on
+    f A_C19M16_counts_real_s0, fnb_seeds 1).
+  - Chain smoke (foreman ruling: h_chain.sh needs all 50 h): one-off
+    `/project/def-maxwl/mforooz/t125/smoke/smoke_chain.sh` (h_chain.sh's resources and venv) runs
+    `score.py chain` on f A_C19M16_counts_real_s0 with 6 h (2 formulas, the 2 true h of 24065703,
+    the 2 fnb h of 24067474), output only into `t125/smoke/chain/`, log `t125/smoke/logs/`.
 
 ### Nibi smoke (K10), partial
 
