@@ -59,6 +59,7 @@ Every id goes here at submission.
   - 24067530 `t125_smokechain`: that script, `--dependency=afterok:24065703:24067474` (both live).
   - 24067868 `t125_etalaw`: array 114,210,354%3 (law batch 2: C, A2, D2 x C19M16 real s0).
   - 24068466 `t125_etalaw`: array 258,402%2 (law batch 3: B2, Aold x C19M16 real s0).
+  - 24070630 `t125_etalaw`: array 45 (law batch 4: A all nocov s0).
 
 ### Nibi smoke (K10), partial
 
