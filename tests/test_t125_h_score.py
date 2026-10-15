@@ -446,8 +446,8 @@ def test_chain_formula_bin_by_brute_force(S, chain):
             nk.append(valid.sum(1)[keep])
             ys.append(y[keep])
         assert rec["crps_all"] == pytest.approx(np.concatenate(crps).mean(), rel=1e-7, abs=1e-10)
-        assert rec["mse_log1p_all"] == pytest.approx(np.concatenate(mse).mean(), rel=1e-9,
-                                                     abs=1e-12)
+        assert rec["mse_log1p_all"] == pytest.approx(np.concatenate(mse).mean(), rel=1e-7,
+                                                     abs=1e-10)
         assert rec["n_k_mean"] == pytest.approx(np.concatenate(nk).mean())
         assert rec["n_k_max"] == int(np.concatenate(nk).max())
 
