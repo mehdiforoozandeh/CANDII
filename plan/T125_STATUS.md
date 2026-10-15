@@ -29,6 +29,14 @@ Every id goes here at submission.
   Script and log: `/project/def-maxwl/mforooz/t125/verify/` (script not in the repo).
 - 23797345 `t125_hctl`: control count cache, array 0-129%20 ->
   `/project/def-maxwl/mforooz/t125/ctl_cache`; logs `/project/def-maxwl/mforooz/t125/h/logs/`.
+- Kit K10: `/project/def-maxwl/mforooz/t125/code/K10`, `GIT_SHA` 7e0f0f2fabfc28b00c40bdc44c2886483d2e8bbd
+  (K9 + the test-tolerance commit; rsync as K9, wheels copied from K9). The run code is identical:
+  `git diff --stat 643054089f 7e0f0f2 -- tools slurm src` is empty.
+- 24065614 `t125_verifyK10`: criterion 1 without -x, criterion 2, and the twin-determinism test 3x on
+  K10 and 3x on t118 ladder kit K8 (CPU, 8 cores, 32 GB, 3 h). No t118 kit on Nibi has `tests/`, so
+  the K8 runs use a `$SLURM_TMPDIR` copy of K8 plus the test file from git at 33e09cb (K8's sha),
+  kept in `/project/def-maxwl/mforooz/t125/verify/K8_tests_33e09cb`. Script and log:
+  `/project/def-maxwl/mforooz/t125/verify/` (`verify_K10.sh`, `t125_verifyK10_24065614.out`).
 
 ## Nibi access
 
@@ -110,3 +118,5 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
   (venv built, pytest started); control-cache array 23797345 tasks 0-18 COMPLETED (about 1 min
   each, `counts=built`), tasks 19-129 PENDING; 36 files in ctl_cache. Both jobs run on without
   the laptop. Still to read: the verify log's CRIT lines, sacct, and the criterion 9 count (114).
+- 2026-10-15: kit K10 shipped to Nibi; verify job 24065614 submitted (criterion 1 without -x,
+  criterion 2, twin-determinism test on K10 and on t118 K8).
