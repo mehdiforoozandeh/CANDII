@@ -60,6 +60,7 @@ Every id goes here at submission.
   - 24067868 `t125_etalaw`: array 114,210,354%3 (law batch 2: C, A2, D2 x C19M16 real s0).
   - 24068466 `t125_etalaw`: array 258,402%2 (law batch 3: B2, Aold x C19M16 real s0).
   - 24070630 `t125_etalaw`: array 45 (law batch 4: A all nocov s0).
+  - 24073862 `t125_etalaw`: array 381 (law batch 5: D2 all nocov s0).
 
 ### Nibi smoke (K10), partial
 
