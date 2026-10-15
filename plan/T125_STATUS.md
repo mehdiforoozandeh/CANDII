@@ -45,6 +45,25 @@ Every id goes here at submission.
   - 24065703 `t125_htrain` table true: array 0,21 (h_affine_r1_push_true_s0; mlp r5 noise s0 =
     **21**, not 8 as the plan says: true index = learned_i*3 + seed, mlp r5 noise is learned_i 7;
     index 8 is affine r5 push s2).
+  - Not yet submitted: h_train fnb indices **42** (mlp r5 push) and **47** (formula_mlp r5 noise) for
+    f A_C19M16_counts_real_s0 (fnb index = f_i*12 + learned_i; f_i 3). h_chain index 3 exits 3
+    unless all 36 true h and all 12 fnb h of that f have TRAIN_DONE (the script checks all 50), so
+    the smoke as planned cannot produce a CHAIN_DONE; the chain smoke needs a decision.
+
+### Nibi smoke (K10), partial
+
+| run | job | node | Elapsed | MaxRSS | notes |
+|---|---|---|---|---|---|
+| h_alone formula:bin | 24065702_0 | c331 | 00:01:30 | 9.0 GB | score 43.8 s, 128 products, 0 non-finite, 0 CRPS > 20 |
+| h_alone formula:frag | 24065702_1 | c331 | 00:01:31 | 9.5 GB | score 44.4 s, 128 products, 0 non-finite, 0 CRPS > 20 |
+
+Formula sanity, MSE on log1p, chr19 + chr21 pooled (the alone scorer pools both; no chr21-only
+number exists), blacklist removed. bin-only / frag-window:
+C19M16 base 0.0305 / 0.0184; crop 36 0.1119 / 0.0368; crop 50 0.0693 / 0.0321; ratio k0.5
+0.0347 / 0.0201; ratio k2 0.0118 / 0.0070. All 128 products: median 0.0398 / 0.0213, max
+0.1477 / 0.0435 (both C40M18 crop 36). The bin-only formula is off on the crop arms (median crop
+0.106 vs 0.034-0.062 elsewhere; C19M16 crop 36 c* = -1.47, i.e. the formula is high by about
+2^1.47); the frag-window formula is not (crop 36 c* = -0.09). Ratio arms look right in both.
 
 ## Nibi access
 
