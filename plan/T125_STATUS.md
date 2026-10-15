@@ -56,6 +56,7 @@ Every id goes here at submission.
     `/project/def-maxwl/mforooz/t125/smoke/smoke_chain.sh` (h_chain.sh's resources and venv) runs
     `score.py chain` on f A_C19M16_counts_real_s0 with 6 h (2 formulas, the 2 true h of 24065703,
     the 2 fnb h of 24067474), output only into `t125/smoke/chain/`, log `t125/smoke/logs/`.
+  - 24067530 `t125_smokechain`: that script, `--dependency=afterok:24065703:24067474` (both live).
 
 ### Nibi smoke (K10), partial
 
