@@ -87,6 +87,12 @@ Every id goes here at submission.
   - 24166139 `t125_etatraincpu`: `eta_train_cpu.sh`, array 240-383%40. Device by rung: A, B, C, D,
     A2 on the slice; B2, C2, D2, Aold on CPU, except the smoke runs 258, 306, 354, 381 and 402
     (slice).
+  - 24173033 `t125_d2twin` (D2 twin nondeterminism, PI decision 2026-10-16): one-off
+    `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/d2twin_rescore.sh` (not in the repo; 4
+    cores, 24000M, 3 h, CPU) copies run D2_C19M16_counts_nocov_s0 (index 357, trained on CPU by
+    24166139) into that dir, drops the copy's scores, re-runs eta_train.sh's exact `score.py trained
+    ... --workers 4` on the copy, then `d2twin_compare.py` compares per record with the original
+    and with the 3 seeds; log `t125/smoke/logs/`. The original run dir is only read.
   - Law batches (`eta_law.sh`, `--mem=16000M --time=0:30:00` on the command line, `%40`, submitted
     directly for indices with SCORE_DONE; never a dependency):
     - 24149205: 3,4,5
