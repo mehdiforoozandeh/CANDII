@@ -384,13 +384,19 @@ def test_chain_fast_equals_reference(S, tmp_path, monkeypatch):
 
 
 def test_chain_fast_equals_reference_with_capped_rows(S, tmp_path, monkeypatch):
+    """Also with many small chunks (the formula values kept across chunks, rung-1 rows shared).
+    The two paths now cut different chunks, so the float32 h forward runs on other batch shapes
+    (a BLAS result may change in the last bit): 1e-7, the PI's reduction-order tolerance."""
     _few_pairs(monkeypatch)
     monkeypatch.setattr(score, "K_MAX", 3)
-    specs = ["formula:frag", str(S["h_mlp"]), str(S["h_noise"])]
+    monkeypatch.setattr(score, "CHUNK_BINS", 300)
+    monkeypatch.setattr(score, "FAST_ELEM_BUDGET", 700)
+    specs = ["formula:frag", "formula:bin", str(S["h_mlp"]), str(S["h_noise"]),
+             str(_h_dir(tmp_path / "h", "h_affine_r1_noise_true_s1", "affine", 1, True, 4))]
     ref = _chain_records(S, specs, tmp_path / "ref", False, monkeypatch)
     new = _chain_records(S, specs, tmp_path / "fast", True, monkeypatch)
     assert sum(r["n_capped"] for r in ref["h_formula_frag"]) > 0
-    _assert_records_close(ref, new)
+    _assert_records_close(ref, new, rel=1e-7)
 
 
 def test_alone_fast_equals_reference(S, tmp_path, monkeypatch):
