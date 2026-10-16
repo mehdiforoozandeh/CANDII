@@ -1,7 +1,8 @@
 """t125 part 2 — the five Nibi job scripts of the map h, checked as text and in DRY_RUN.
 
 Mirrors tests/test_t125_slurm_eta.py for slurm/t125/h_{ctl_cache,train,alone,chain,agg}.sh: the
-resource lines the hard rules fix (one MIG-slice gres line on h_chain.sh and none elsewhere, the
+resource lines the hard rules fix (one MIG-slice gres line on h_chain.sh and on h_train.sh, the
+latter since t125-P2h moved the fnb fits onto the slice, and none elsewhere, the
 account, the excluded nodes incl. c371, the job names, a walltime, no exported variables, no
 /usr/bin/time, no afterok, no /scratch), the per-task venv recipe and kit pin, the t125 out dirs,
 and — through DRY_RUN=1 — that the index -> h / f mapping comes from `tools/t125/hmap/tasks.py`
@@ -25,7 +26,8 @@ FIXTURE_MANIFEST = REPO / "tests" / "fixtures" / "t112_meta" / "MANIFEST.tsv"
 
 SCRIPTS = {name: SLURM / f"h_{name}.sh" for name in ("ctl_cache", "train", "alone", "chain", "agg")}
 ARRAYS = ("ctl_cache", "train", "alone", "chain")
-CPU = ("ctl_cache", "train", "alone", "agg")
+CPU = ("ctl_cache", "alone", "agg")
+GPU = ("train", "chain")
 GRES_VALUE = "--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1"
 GRES = f"#SBATCH {GRES_VALUE}"
 EXCLUDE = "--exclude=c128,c166,c537,c371"
@@ -35,7 +37,7 @@ CACHE = "/project/def-maxwl/mforooz/t118/ladder/cache"
 OLD_GRID_JSON = "/project/def-maxwl/mforooz/t118/row2/agg/results.json"
 JOB_NAMES = {"ctl_cache": "t125_hctl", "train": "t125_htrain", "alone": "t125_halone",
              "chain": "t125_hchain", "agg": "t125_hagg"}
-RESOURCES = {"ctl_cache": ("0:30:00", "2", "8000M"), "train": ("3:00:00", "8", "32000M"),
+RESOURCES = {"ctl_cache": ("0:30:00", "2", "8000M"), "train": ("4:00:00", "8", "24000M"),
              "alone": ("2:00:00", "8", "32000M"), "chain": ("6:00:00", "4", "32000M"),
              "agg": ("2:00:00", "4", "16000M")}
 COV = "/kit/tools/t118/covariates.tsv"
@@ -147,10 +149,12 @@ def test_script_parses(name):
     assert r.returncode == 0, r.stderr
 
 
-def test_only_the_chain_script_requests_the_mig_slice():
-    """Acceptance criterion 8: `grep -c 'SBATCH --gres'` is 1 on h_chain.sh and 0 elsewhere."""
-    assert [ln for ln in _sbatch("chain") if "gres" in ln] == [GRES]
-    assert _text("chain").count("SBATCH --gres") == 1
+@pytest.mark.parametrize("name", GPU)
+def test_the_gpu_scripts_request_one_mig_slice(name):
+    """Acceptance criterion 8 as amended by t125-P2h: `grep -c 'SBATCH --gres'` is 1 on
+    h_chain.sh and h_train.sh and 0 elsewhere."""
+    assert [ln for ln in _sbatch(name) if "gres" in ln] == [GRES]
+    assert _text(name).count("SBATCH --gres") == 1
 
 
 @pytest.mark.parametrize("name", CPU)
@@ -159,10 +163,10 @@ def test_cpu_scripts_request_no_gres(name):
     assert not any("gres" in ln for ln in _sbatch(name))
 
 
-def test_h_train_documents_the_gpu_slice_variant_without_requesting_it():
+def test_h_train_documents_why_it_requests_the_slice():
     h = _header("train")
-    assert "GPU-SLICE VARIANT" in h and GRES_VALUE in h
-    assert "SBATCH --gres" not in _text("train")
+    assert "t125-P2h" in h and "MIG slice" in h
+    assert "GPU-SLICE VARIANT" not in h
 
 
 @pytest.mark.parametrize("name", SCRIPTS)

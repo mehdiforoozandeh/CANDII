@@ -1,5 +1,6 @@
 #!/bin/bash
-# t125 part 2: train one learned h (the map from a count and the control to P = -log10 p) on CPU,
+# t125 part 2: train one learned h (the map from a count and the control to P = -log10 p) on a
+# 10 GB MIG slice,
 # either on the true X' (table "true": 12 learned h x 3 seeds = 36 tasks) or on one f's predicted
 # NB (table "fnb": the 64 seed-0 real f runs x 12 learned h x fnb_seeds; 768 tasks at fnb_seeds 1,
 # PI decision (ii) b; 2304 at fnb_seeds 3). One array task = one h.
@@ -33,15 +34,14 @@
 # then requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR; PYTHONPATH is
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
-# RESOURCES. CPU only, no GPU request. 8 cores (OMP/MKL threads 8), 32 GB, 3 h. Nodes c128, c166,
-# c537 and c371 are excluded. Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute
-# nodes). No --device is passed: train.py picks its default device.
-# GPU-SLICE VARIANT. If the Nibi smoke (plan chunk t125-N2) finds that one fnb fit on 8 cores runs
-# over 2 h, add the slice request to the resource block below as an #SBATCH line with
-#     --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
-# and set --cpus-per-task=4 and --mem=16000M; record the change in plan/T125_STATUS.md. The line
-# is written here without its #SBATCH prefix so this CPU script carries no gres request
-# (acceptance criterion 8). There is no second script.
+# RESOURCES (t125-P2h). One 10 GB MIG slice of an H100, 8 cores (OMP/MKL threads 8; train.py
+# draws the windows of an f-NB batch in 8 threads), 24 GB, 4 h. Nodes c128, c166, c537 and c371
+# are excluded. Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute nodes). No
+# --device is passed: train.py picks its default device, the slice. The Nibi smoke (N2, kit K10)
+# found both fnb fits over 3 h (and over 12 h, job 24083625) on 8 CPU cores; t125-P2h builds the
+# f-NB chunks on the slice with the same numbers (on a CPU device bit for bit the old path). The
+# 36 true-X' fits of N4 ran on CPU with kit K10; this script reruns a true fit on the slice
+# (float32 results then differ from a CPU run in the last bits).
 #
 # DRY_RUN=1 prints the train command line (nothing when TRAIN_DONE exists; a note on stderr when
 # the fnb f run has no TRAIN_DONE, where a real task would exit 3) and exits 0 before any module
@@ -66,10 +66,11 @@
 # array that may have finished: verify finished work by its TRAIN_DONE files.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t125_htrain
+#SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --exclude=c128,c166,c537,c371
-#SBATCH --time=3:00:00
+#SBATCH --time=4:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32000M
+#SBATCH --mem=24000M
 
 set -euo pipefail
 

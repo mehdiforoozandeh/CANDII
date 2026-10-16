@@ -48,6 +48,14 @@ widens 65 536 others). Rows whose support exceeds `K_MAX` are capped by `nb_supp
 is written per record (`n_capped`) and per file (`n_capped_total`). The NB support, the fixed
 features and the formula λ are built once per (pair, chromosome) and shared by every h.
 
+**Speed (t125-P2h, no number changes).** On a CUDA device `score_context` runs
+`score_context_fast`: chunks of up to FAST_ELEM_BUDGET bins x k (the same sort by support size),
+each chunk's NB support computed on its distinct (mu, n) rows, the formula P from scipy on the
+distinct (λ, floor(pileup)) pairs (kept per pair across chunks), and every per-(bin, k) step
+(features, h, sort, sums, the mixture pair term) in torch on the device, float64 except the h
+forward (float32, as before). Only summation order, the chunk padding of the NB weights and the
+device's libm differ from the numpy reference, which stays the CPU path.
+
     python tools/t125/hmap/score.py alone <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <h_spec> <out_dir> [--workers N]
     python tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <f_run_dir> <out_dir> --h <h_spec> [--h ...] [--workers N]
       both: [--control-rl-tsv PATH] (default: products.CONTROL_RL_TSV) [--device auto|cpu|cuda] (default auto, as hmap/train.py)
@@ -87,6 +95,7 @@ from ladder import data as ldata  # noqa: E402
 from ladder import model as lmodel  # noqa: E402
 from ladder import pairs as lpairs  # noqa: E402
 from ladder import score as lscore  # noqa: E402
+from hmap import data as hd  # noqa: E402
 from hmap import features, formula, products  # noqa: E402
 from hmap import model as hmodel  # noqa: E402
 from hmap import pushforward as pf  # noqa: E402
@@ -96,6 +105,9 @@ SUBSETS = br.SUBSETS
 FORMULA_SPECS = {"formula:bin": "bin", "formula:frag": "frag"}
 CHUNK_BINS = 65_536
 ELEM_BUDGET = 1 << 20          # bins x k per chunk (a rung-5 feature block is ~92 MB at float32)
+#: the fast (device) path's chunks: 2^22 bins x k (float64 temporaries 32 MB each, the rung-5
+#: features 370 MB, the h's 2 x 64 hidden layers 2 GB: inside a 10 GB MIG slice)
+FAST_ELEM_BUDGET = 1 << 22
 K_MAX = pf.K_MAX
 TAIL = pf.TAIL
 CRPS_EXPLODE = 20.0
@@ -268,15 +280,16 @@ def support_rows(ctx, rows):
     return nb_support(ctx["mu"][rows], ctx["n_size"][rows], tail=TAIL, k_max=K_MAX)
 
 
-def chunk_rows(sizes: np.ndarray, idx: np.ndarray):
+def chunk_rows(sizes: np.ndarray, idx: np.ndarray, budget: int | None = None):
     """Yield the bins of `idx` sorted by support size, in chunks of at most CHUNK_BINS bins and
-    at most ELEM_BUDGET bins x (the chunk's widest support), or one bin."""
+    at most ELEM_BUDGET (or `budget`) bins x (the chunk's widest support), or one bin."""
+    budget = ELEM_BUDGET if budget is None else int(budget)
     order = idx[np.argsort(sizes[idx], kind="stable")]
     w = sizes[order]
     s, n = 0, order.size
     while s < n:
         L = min(CHUNK_BINS, n - s)
-        over = np.flatnonzero(np.arange(1, L + 1) * w[s:s + L] > ELEM_BUDGET)
+        over = np.flatnonzero(np.arange(1, L + 1) * w[s:s + L] > budget)
         e = s + max(1, int(over[0]) if over.size else L)
         yield order[s:e]
         s = e
@@ -438,8 +451,11 @@ def _split(crps_all, cs, c, prefix: str) -> dict:
             f"{prefix}_c_star_all": c}
 
 
-def score_context(hs: list, ctx: dict) -> tuple[dict, dict]:
+def score_context(hs: list, ctx: dict, device=None, fast: bool | None = None) -> tuple[dict, dict]:
     """({h_name: metric fields}, shared fields {n_k_mean, n_k_max, n_capped}) of one context.
+
+    `fast` (default: True exactly when `device` is a CUDA device) runs `score_context_fast` on
+    `device`; otherwise the numpy reference below runs (the CPU path, unchanged by t125-P2h).
 
     Keys. Push only: `crps_*` (the proper CRPS of the pushed set on P) with its split
     `crps_oracle_scaled_all`, `scale_error_all`, `c_star_all`, the flag `crps_all_gt_20` and
@@ -450,6 +466,10 @@ def score_context(hs: list, ctx: dict) -> tuple[dict, dict]:
     Both: `crps_log_*` (proper, on log1p P) with `crps_log_oracle_scaled_all`,
     `crps_log_scale_error_all`, `crps_log_c_star_all`, `n_crps_log_nonfinite`; `mse_log1p_*`,
     `mse_*`."""
+    if fast is None:
+        fast = device is not None and torch.device(device).type == "cuda"
+    if fast:
+        return score_context_fast(hs, ctx, "cpu" if device is None else device)
     y = ctx["y"]
     N = y.shape[0]
     ly = np.log1p(y)
@@ -509,6 +529,12 @@ def score_context(hs: list, ctx: dict) -> tuple[dict, dict]:
                 a["crps_log"][rows] = _set_crps(lv, ws, coef, lyy)
                 a["crps_log_c"][rows] = _set_crps(lv + s, ws, coef, lyy)
             a["mean"][rows] = m
+    return _records(hs, arr, c_nat, c_log, n_k, y, ly, shared)
+
+
+def _records(hs, arr: dict, c_nat: dict, c_log: dict, n_k, y, ly, shared: dict):
+    """The per-h record fields from the per-bin arrays (shared by both paths)."""
+    N = y.shape[0]
     shared["n_k_mean"] = float(n_k.mean()) if N else None
     shared["n_k_max"] = int(n_k.max()) if N else None
     sub = br.subset_index(y)
@@ -549,6 +575,269 @@ def score_context(hs: list, ctx: dict) -> tuple[dict, dict]:
 
 
 # ---------------------------------------------------------------------------------------------
+# the fast path on a torch device (t125-P2h): the same numbers, built once per chunk on the device
+# ---------------------------------------------------------------------------------------------
+
+
+def _support_rows_unique(ctx, rows):
+    """(k_u int64[u, K], w_u float64[u, K], valid_u bool[u, K], inv int64[r]): `support_rows` of
+    the chunk's distinct rows (the same K: the widest row is among them), and the map back."""
+    if ctx["mode"] == "point":
+        ku, inv = np.unique(ctx["kpt"][rows], return_inverse=True)
+        k = ku[:, None]
+        return k, np.ones(k.shape), np.ones(k.shape, bool), inv.reshape(-1)
+    mu_u, n_u, inv = pf.unique_pairs(ctx["mu"][rows], ctx["n_size"][rows])
+    k, w, valid = nb_support(mu_u, n_u, tail=TAIL, k_max=K_MAX)
+    return k, w, valid, inv
+
+
+class BatchT:
+    """`Batch` on a torch device: the per-(bin, k) inputs of one chunk, shared by every h. The
+    columns are `Batch`'s bit for bit except log1p of the fragment-window mean on a GPU
+    (`hd.log1p_f32`); the formula P comes from `hd.formula_log1p_t` (scipy on the distinct pairs)."""
+
+    def __init__(self, ctx, rows, k_u, inv, device, fcache: dict | None = None):
+        self.ctx, self.rows, self.k_u, self.device, self.fcache = ctx, rows, k_u, device, fcache
+        self.inv_t = torch.from_numpy(inv).to(device)
+        self.shape = (int(rows.shape[0]), int(k_u.shape[1]))
+        self._c: dict = {}
+
+    def _np(self, a) -> torch.Tensor:
+        return torch.from_numpy(np.ascontiguousarray(a)).to(self.device)
+
+    def get(self, name):
+        if name not in self._c:
+            c, r = self.ctx, self.rows
+            if name == "kf":
+                v = self._np(self.k_u.astype(np.float64))[self.inv_t]
+            elif name == "lk":
+                v = self._np(features.k_column(self.k_u))[self.inv_t]
+            elif name == "lkfrag":
+                v = hd.log1p_f32((self.get("kf") + self._np(c["frest_k"][r])[:, None])
+                                 / self._np(c["fcnt"][r])[:, None])
+            elif name == "fixed":
+                v = self._np(c["fixed"][r])
+            elif name == "lP_bin":
+                v = hd.formula_log1p_t("bin", c["info"], self.get("kf"), c["lam"][r],
+                                       cache=self.fcache)
+            elif name == "lP_frag":
+                v = hd.formula_log1p_t("frag", c["info"], self.get("kf"), c["lam"][r],
+                                       self._np(c["frest_f"][r]), cache=self.fcache)
+            else:
+                raise KeyError(name)
+            self._c[name] = v
+        return self._c[name]
+
+
+def _formula_t(h: FormulaH, bt: BatchT):
+    return bt.get(f"lP_{h.window}"), None
+
+
+@torch.no_grad()
+def _learned_t(h: LearnedH, bt: BatchT):
+    """`LearnedH.__call__` on the device: the same float32 features, the standardiser in float64
+    then float32 (as `Standardiser.apply` on numpy), the same forward."""
+    fx = bt.get("fixed")
+    n, K = bt.shape
+    parts = [bt.get("lk")[..., None], fx[:, None, :N_FIX_R1].expand(n, K, N_FIX_R1)]
+    if h.rung == 5:
+        parts += [bt.get("lkfrag")[..., None],
+                  fx[:, None, KFRAG_FIX + 1:N_FIX_R5].expand(n, K, N_FIX_R5 - KFRAG_FIX - 1)]
+    if h.formula:
+        parts.append(bt.get("lP_frag").to(torch.float32)[..., None])
+    feat = torch.cat(parts, dim=-1)
+    scale, shift = h.std._coeffs()
+    width = scale.shape[0]
+
+    def apply(x):
+        return (x.to(torch.float64) * bt._np(scale) + bt._np(shift)).to(torch.float32)
+
+    if width == feat.shape[-1]:
+        feat = apply(feat)
+    elif h.formula and width == h.h.n_in:
+        feat = torch.cat([apply(feat[..., :width]), feat[..., width:]], dim=-1)
+    else:
+        raise ValueError(f"{h.name}: standardiser width {width}, features {feat.shape[-1]}")
+    mu, ls = h.h(feat.to(h.device))
+    return mu.to(device=bt.device, dtype=torch.float64), (
+        None if ls is None else ls.to(device=bt.device, dtype=torch.float64))
+
+
+def _call_t(h, bt: BatchT):
+    return _formula_t(h, bt) if h.kind == "formula" else _learned_t(h, bt)
+
+
+def _row_key_t(h, bt: BatchT) -> torch.Tensor | None:
+    """For a rung-1 learned h (inputs: k, the control bin, the assay), int64 [r] equal exactly for
+    bins whose (mu, sigma) rows over k are the same: the NB row and the control bin's bits."""
+    if h.kind != "learned" or h.rung != 1:
+        return None
+    ctl = bt.get("fixed")[:, 0].contiguous().view(torch.int32).to(torch.int64) & 0xFFFFFFFF
+    return bt.inv_t * (1 << 32) + ctl
+
+
+def _p_hat_t(mu: torch.Tensor) -> torch.Tensor:
+    return torch.clamp_min(torch.expm1(mu), 0.0)
+
+
+def _sorted_set_t(v: torch.Tensor, w: torch.Tensor):
+    """`sorted_set` in torch (the stable sort gives the same permutation)."""
+    pos = w > 0
+    zero = v.new_zeros(())
+    v = torch.where(pos, v, zero)
+    w = torch.where(pos, w, zero)
+    w = w / w.sum(dim=1, keepdim=True)
+    vs, order = torch.sort(v, dim=1, stable=True)
+    ws = torch.gather(w, 1, order)
+    coef = 2.0 * (torch.cumsum(ws, dim=1) - ws) + ws - 1.0
+    return vs, ws, coef
+
+
+def _set_crps_t(vs, ws, coef, y, a: float = 1.0):
+    return (ws * torch.abs(a * vs - y[:, None])).sum(dim=1) - a * (ws * vs * coef).sum(dim=1)
+
+
+def _mix_e1_t(mu, sg, w, t, shift: float = 0.0):
+    pos = w > 0
+    zero, one = mu.new_zeros(()), mu.new_ones(())
+    mu = torch.where(pos, mu, zero)
+    sg = torch.where(pos, sg, one)
+    w = torch.where(pos, w, zero)
+    w = w / w.sum(dim=1, keepdim=True)
+    m = t[:, None] - (mu + shift)
+    z = m / sg
+    A = (m * (2.0 * torch.special.ndtr(z) - 1.0)
+         + 2.0 * sg * torch.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi))
+    return (w * A).sum(dim=1)
+
+
+def _flat_t(vs, ws, y):
+    pos = ws > 0
+    return vs[pos], ws[pos], y[:, None].expand_as(vs)[pos]
+
+
+class _FitT(_Fit):
+    """`_Fit` on device tensors (the grid search itself is `_grid`, unchanged)."""
+
+    def add_push(self, vs, ws, coef, y, ly):
+        self.n += vs.shape[0]
+        self.nat.append(_flat_t(vs, ws, y))
+        self.nat_pair += float((ws * vs * coef).sum())
+        lv = torch.log1p(vs)
+        self.log.append(_flat_t(lv, ws, ly))
+        self.log_pair += float((ws * lv * coef).sum())
+
+    def add_noise(self, mu, sg, w, ly, crps_log):
+        self.n += mu.shape[0]
+        pos = w > 0
+        wz = torch.where(pos, w, w.new_zeros(()))
+        wn = wz / wz.sum(dim=1, keepdim=True)
+        self.log.append((mu[pos], sg[pos], wn[pos], ly[:, None].expand_as(mu)[pos]))
+        self.log_pair += float((_mix_e1_t(mu, sg, w, ly) - crps_log).sum())
+
+    def c_native(self) -> float:
+        v, w, y = (torch.cat(x) for x in zip(*self.nat))
+
+        def fit(c):
+            a = float(2.0 ** c)
+            return float((torch.dot(w, torch.abs(a * v - y)) - a * self.nat_pair) / self.n)
+        return _grid(fit)
+
+    def c_log(self) -> float:
+        if not self.noise:
+            v, w, y = (torch.cat(x) for x in zip(*self.log))
+
+            def fit(c):
+                return float((torch.dot(w, torch.abs(v + float(c) * LN2 - y)) - self.log_pair)
+                             / self.n)
+            return _grid(fit)
+        mu, sg, w, t = (torch.cat(x) for x in zip(*self.log))
+
+        def fit(c):
+            m = t - (mu + float(c) * LN2)
+            z = m / sg
+            A = (m * (2.0 * torch.special.ndtr(z) - 1.0)
+                 + 2.0 * sg * torch.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi))
+            return float((torch.dot(w, A) - self.log_pair) / self.n)
+        return _grid(fit)
+
+
+def score_context_fast(hs: list, ctx: dict, device) -> tuple[dict, dict]:
+    """`score_context` with every per-(bin, k) step on `device` in torch float64 (the h forward in
+    float32, as the reference). The same chunks, NB supports (on each chunk's distinct rows),
+    features and formula values; only the summation order and the device's libm differ."""
+    dev = torch.device(device)
+    y = ctx["y"]
+    N = y.shape[0]
+    ly = np.log1p(y)
+    yt, lyt = torch.from_numpy(y).to(dev), torch.from_numpy(ly).to(dev)
+    sizes = (np.ones(N, np.int64) if ctx["mode"] == "point" else
+             np.minimum(pf.support_size_unique(ctx["mu"], ctx["n_size"], tail=TAIL, k_max=K_MAX,
+                                               fn=support_size), K_MAX + 1))
+    shared = {"n_capped": int(np.count_nonzero(sizes > K_MAX))}
+    fcache: dict = {}
+
+    def chunk(rows):
+        k_u, w_u, valid_u, inv = _support_rows_unique(ctx, rows)
+        bt = BatchT(ctx, rows, k_u, inv, dev, fcache)
+        return bt, torch.from_numpy(w_u).to(dev)[bt.inv_t], valid_u.sum(axis=1)[inv]
+
+    c_nat, c_log = {}, {}
+    if N:
+        sel = (np.arange(N) if N <= br.SCALE_FIT_BUDGET else
+               np.random.default_rng(br.SCALE_SEED).choice(N, br.SCALE_FIT_BUDGET, replace=False))
+        fits = {h.name: _FitT(h.noise) for h in hs}
+        for rows in chunk_rows(sizes, sel, FAST_ELEM_BUDGET):
+            bt, w, _ = chunk(rows)
+            rt = torch.from_numpy(rows).to(dev)
+            for h in hs:
+                mu, ls = _call_t(h, bt)
+                if h.noise:
+                    sg = torch.exp(ls)
+                    fits[h.name].add_noise(mu, sg, w, lyt[rt], pf.crps_gauss_mixture_t(
+                        mu, sg, w, lyt[rt], row_key=_row_key_t(h, bt)))
+                else:
+                    fits[h.name].add_push(*_sorted_set_t(_p_hat_t(mu), w), yt[rt], lyt[rt])
+        for h in hs:
+            c_log[h.name] = fits[h.name].c_log()
+            if not h.noise:
+                c_nat[h.name] = fits[h.name].c_native()
+        del fits
+    arr = {h.name: {key: np.full(N, np.nan)
+                    for key in ("crps", "crps_log", "mean", "crps_c", "crps_log_c")}
+           for h in hs}
+    n_k = np.zeros(N, np.int64)
+    for rows in chunk_rows(sizes, np.arange(N), FAST_ELEM_BUDGET):
+        bt, w, nk = chunk(rows)
+        n_k[rows] = nk
+        rt = torch.from_numpy(rows).to(dev)
+        yy, lyy = yt[rt], lyt[rt]
+        for h in hs:
+            mu, ls = _call_t(h, bt)
+            a = arr[h.name]
+            s = c_log[h.name] * LN2
+            if h.noise:
+                sg = torch.exp(ls)
+                m = pf.mean_gauss_mixture_logp_t(mu, sg, w)
+                cl = pf.crps_gauss_mixture_t(mu, sg, w, lyy, row_key=_row_key_t(h, bt))
+                a["crps_log"][rows] = cl.cpu().numpy()
+                a["crps_log_c"][rows] = (cl + _mix_e1_t(mu, sg, w, lyy, s)
+                                         - _mix_e1_t(mu, sg, w, lyy)).cpu().numpy()
+                a["crps"][rows] = torch.abs(m - yy).cpu().numpy()
+            else:
+                vs, ws, coef = _sorted_set_t(_p_hat_t(mu), w)
+                m = (ws * vs).sum(dim=1)
+                lv = torch.log1p(vs)
+                a["crps"][rows] = _set_crps_t(vs, ws, coef, yy).cpu().numpy()
+                a["crps_c"][rows] = _set_crps_t(vs, ws, coef, yy,
+                                                float(2.0 ** c_nat[h.name])).cpu().numpy()
+                a["crps_log"][rows] = _set_crps_t(lv, ws, coef, lyy).cpu().numpy()
+                a["crps_log_c"][rows] = _set_crps_t(lv + s, ws, coef, lyy).cpu().numpy()
+            a["mean"][rows] = m.cpu().numpy()
+    return _records(hs, arr, c_nat, c_log, n_k, y, ly, shared)
+
+
+# ---------------------------------------------------------------------------------------------
 # jobs
 # ---------------------------------------------------------------------------------------------
 
@@ -572,7 +861,7 @@ def alone_job(pid: str) -> dict:
         per.append({"chrom": c, "treat": x, "ctl": _ctl(pid, c), "kpt": x,
                     "y": corpus.get(pid, "pval", c)})
     ctx = build_context(info, per, _CTX["blacklist"], _need_fixed(hs))
-    fields, _ = score_context(hs, ctx)
+    fields, _ = score_context(hs, ctx, device=_CTX.get("device"))
     base = {"pid": pid, "track": info.track, "assay": info.assay, "mark_class": info.mark_class,
             "arm": info.arm, "level": info.level, "has_control": int(info.has_control)}
     return {name: {"h_name": name, **base, **f} for name, f in fields.items()}
@@ -588,7 +877,7 @@ def chain_job(pair: dict) -> dict:
         per.append({"chrom": c, "treat": mu, "ctl": _ctl(tgt, c), "mu": mu, "n_size": n_size,
                     "y": corpus.get(tgt, "pval", c)})
     ctx = build_context(info, per, _CTX["blacklist"], _need_fixed(hs))
-    fields, shared = score_context(hs, ctx)
+    fields, shared = score_context(hs, ctx, device=_CTX.get("device"))
     base = {k: pair[k] for k in lpairs.PAIR_KEYS}
     return {name: {**base, "f_run_name": _CTX["f_run_name"], "h_name": name,
                    "n_k_mean": shared["n_k_mean"], "n_k_max": shared["n_k_max"],
@@ -657,7 +946,8 @@ def score_alone(manifest, covariates, data_dir, ctl_cache, blacklist, h_spec, ou
     d = Path(out_dir) / h.name
     if (d / "ALONE_DONE").is_file():
         return d / "scores.json"
-    _setup(manifest, covariates, data_dir, ctl_cache, blacklist, [h], control_rl_tsv)
+    _setup(manifest, covariates, data_dir, ctl_cache, blacklist, [h], control_rl_tsv,
+           device=getattr(h, "device", None))
     pids = [r["pid"] for r in lpairs.usable_products(lpairs.read_manifest(manifest))]
     t1 = time.time()
     records = [r[h.name] for r in _map(alone_job, pids, workers, getattr(h, "device", "cpu"))]
@@ -689,7 +979,7 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
         if pred.run_name != f_run_dir.name:
             raise ValueError(f"{f_run_dir}: run_name {pred.run_name!r} != its directory name")
         _setup(manifest, covariates, data_dir, ctl_cache, blacklist, todo, control_rl_tsv,
-               pred=pred, f_run_name=pred.run_name)
+               pred=pred, f_run_name=pred.run_name, device=pred.device)
         t1 = time.time()
         results = _map(chain_job, list(pred.train_pairs), workers, pred.device)
         t2 = time.time()

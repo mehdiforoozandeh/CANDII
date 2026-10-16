@@ -45,6 +45,15 @@ disp) per pair is predicted once before training (`f_val_pass`, time in `timing.
 `timing.json` `val_seconds` lists the wall time of each validation pass. Training reads only the
 training chromosomes and chr22, never chr19 or chr21 (the score chromosomes).
 
+Speed (t125-P2h, no number changes): the f-NB chunks are built on the training device
+(`hmap.data.fnb_flat_fast`: the same chunks and values as `fnb_chunks`, h and the loss still run
+chunk by chunk; bit for bit on a CPU device, on a GPU log1p of the fragment-window mean is the
+GPU's); validation keeps each chunk's plan and the formula values across passes; the windows of an
+f-NB draw are built in `DRAW_WORKERS` threads for a cache-mode corpus, one batch ahead of the
+step. `fnb_batch_loss` / `validate_fnb` keep the reference path (`fast=False`) for the tests. Each
+validation prints one progress line; `timing.json` adds `step_seconds` and `draw_seconds` (sums
+over the training steps; `draw_seconds` is the wait for the batch).
+
 Standardiser (`hmap.model.Standardiser`): fitted once, before training, on the first
 `N_STD_WINDOWS` = 64 windows a fresh source of the same seed draws, and frozen. The true source
 fits it on the true features; the fnb source on the features at k = f's predicted mean (log1p of
@@ -61,6 +70,7 @@ import json
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 _TOOLS = Path(__file__).resolve().parents[2]
@@ -85,6 +95,10 @@ SOURCES = ("true", "fnb")
 TABLES = ("true", "fnb")
 VAL_CHUNK = 65536
 N_STD_WINDOWS = 64
+#: t125-P2h: run_training builds the f-NB chunks on its device (`hd.fnb_flat_fast`; on a CPU
+#: device bit for bit the reference `hd.fnb_chunks`) and draws the windows of a batch in threads
+FAST = True
+DRAW_WORKERS = 8
 
 
 def is_formula(variant: str) -> bool:
@@ -154,16 +168,21 @@ def true_batch_loss(h, std, tb: hd.TrueBatch, rung: int, formula: bool, device,
 
 def fnb_batch_loss(h, std, fb: hd.FnbBatch, rung: int, formula: bool, noise: bool, rule: str,
                    device, elems: int = hd.FNB_ELEMS, k_max: int = pushforward.K_MAX,
-                   backward: bool = True) -> tuple[float, dict]:
+                   backward: bool = True, fast: bool = False) -> tuple[float, dict]:
     """(mean loss over the batch's bins, stats) with the exact NB support in chunks sorted by
     support size; each chunk's loss x (its rows / N) is back-propagated on its own when
     `backward`, so the accumulated gradient is the whole batch's. stats: n_bins, n_capped,
-    n_k_sum, n_k_max."""
+    n_k_sum, n_k_max. `fast` builds the same chunks on `device` (`hd.fnb_flat_fast`) and runs h
+    and the loss chunk by chunk as here; on a CPU device the value and the gradient are the
+    reference's bit for bit."""
     N = int(fb.y.shape[0])
     total = 0.0
     st = {"n_bins": N, "n_capped": 0, "n_k_sum": 0, "n_k_max": 0}
     if N == 0:
         return float("nan"), st
+    if fast:
+        return _fnb_loss_flat(h, std, fb, rung, formula, noise, rule, device, elems, k_max,
+                              backward=backward)
     with torch.set_grad_enabled(backward):
         for ch in hd.fnb_chunks(fb, rung, formula, elems=elems, k_max=k_max):
             r = ch.idx.shape[0]
@@ -181,6 +200,54 @@ def fnb_batch_loss(h, std, fb: hd.FnbBatch, rung: int, formula: bool, noise: boo
             st["n_k_sum"] += int(ch.n_k.sum())
             st["n_k_max"] = max(st["n_k_max"], int(ch.n_k.max()))
     return total, st
+
+
+def _fnb_loss_flat(h, std, fb: hd.FnbBatch, rung: int, formula: bool, noise: bool, rule: str,
+                   device, elems: int, k_max: int, backward: bool, plan: dict | None = None,
+                   fcache: dict | None = None,
+                   flat_elems: int = hd.FLAT_ELEMS) -> tuple[float, dict]:
+    """`fnb_batch_loss` with the features of runs of chunks built at once (`hd.fnb_flat_fast`);
+    each chunk's forward pass, loss and backward pass still run on its own [r, K] block in the
+    same order (a BLAS result may depend on the batch size), and the parts are summed in the same
+    order, so on a CPU device value and gradient are the reference's bit for bit."""
+    N = int(fb.y.shape[0])
+    st = {"n_bins": N, "n_capped": 0, "n_k_sum": 0, "n_k_max": 0}
+    if N == 0:
+        return float("nan"), st
+    parts = []
+    with torch.set_grad_enabled(backward):
+        for fl in hd.fnb_flat_fast(fb, rung, formula, device, elems=elems, k_max=k_max,
+                                   plan=plan, fcache=fcache, flat_elems=flat_elems):
+            xs = std.apply(fl.feat)
+            F = xs.shape[1]
+            for e0, r0, r, K in fl.blocks:
+                m, ls = h(xs[e0:e0 + r * K].view(r, K, F))
+                w = fl.w[e0:e0 + r * K].view(r, K)
+                y = fl.y[r0:r0 + r]
+                loss = (hm.loss_noise_fnb(m, ls, w, y, rule) if noise
+                        else hm.loss_push_fnb(m, w, y))
+                part = loss * (r / N)
+                if backward:
+                    part.backward()
+                parts.append(part.detach())
+            st["n_capped"] += fl.n_capped
+            st["n_k_sum"] += fl.n_k_sum
+            st["n_k_max"] = max(st["n_k_max"], fl.n_k_max)
+    total = 0.0
+    for v in torch.stack(parts).cpu().tolist():
+        total += v
+    return total, st
+
+
+def fnb_val_loss_flat(h, std, fb: hd.FnbBatch, rung: int, formula: bool, noise: bool, rule: str,
+                      device, elems: int = hd.FNB_ELEMS, k_max: int = pushforward.K_MAX,
+                      plan: dict | None = None, fcache: dict | None = None,
+                      flat_elems: int = hd.FLAT_ELEMS) -> tuple[float, dict]:
+    """`fnb_batch_loss(..., backward=False, fast=True)` with the h-independent work kept across
+    validation passes: `plan` (`hd._flat_plan` of this batch) and `fcache` (formula values)."""
+    with torch.no_grad():
+        return _fnb_loss_flat(h, std, fb, rung, formula, noise, rule, device, elems, k_max,
+                              backward=False, plan=plan, fcache=fcache, flat_elems=flat_elems)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -227,10 +294,12 @@ def f_val_pass(pred, train_pairs) -> dict:
 def validate_fnb(h, std, corpus: hd.HCorpus, infos: dict, pred, train_pairs, rung: int,
                  formula: bool, rule: str, device, val_chunk: int = VAL_CHUNK,
                  elems: int = hd.FNB_ELEMS, k_max: int = pushforward.K_MAX,
-                 f_val: dict | None = None) -> tuple[float, dict]:
+                 f_val: dict | None = None, fast: bool = False,
+                 cache: dict | None = None) -> tuple[float, dict]:
     """(mean over the training pairs of the mean f-NB loss over the whole of chr22, stats with
     n_bins and n_capped of the pass). `f_val` (`f_val_pass`) holds f's chr22 prediction per pair;
-    without it f predicts here."""
+    without it f predicts here. `fast` uses `fnb_val_loss_flat` (bit for bit on a CPU device);
+    `cache` (a dict the caller keeps across passes) holds its chunk plans and formula values."""
     chrom = lpairs.VAL_CHROMS[0]
     was = h.training
     h.eval()
@@ -250,8 +319,18 @@ def validate_fnb(h, std, corpus: hd.HCorpus, infos: dict, pred, train_pairs, run
             a, b = hd._span(n, s, e, hd.HALO)
             fb = hd.concat_fnb([hd.fnb_bins(corpus, info, chrom, a, b, s, e, mu[a:b], nn[a:b])],
                                [info], [0])
-            loss, cst = fnb_batch_loss(h, std, fb, rung, formula, h.noise, rule, device,
-                                       elems=elems, k_max=k_max, backward=False)
+            if fast:
+                plans = None if cache is None else cache.setdefault("plans", {})
+                key = (src, tgt, s)
+                if plans is not None and key not in plans:
+                    plans[key] = hd._flat_plan(fb, elems, k_max, pushforward.TAIL)
+                loss, cst = fnb_val_loss_flat(
+                    h, std, fb, rung, formula, h.noise, rule, device, elems=elems, k_max=k_max,
+                    plan=None if plans is None else plans[key],
+                    fcache=None if cache is None else cache.setdefault("formula", {}))
+            else:
+                loss, cst = fnb_batch_loss(h, std, fb, rung, formula, h.noise, rule, device,
+                                           elems=elems, k_max=k_max, backward=False)
             acc += loss * (e - s)
             st["n_capped"] += cst["n_capped"]
         st["n_bins"] += n
@@ -341,11 +420,15 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
         first, pids = tp[0]["source_pid"], None
     chroms, lens = ltrain.training_chroms(corpus.data, first, hd.SPACE_COUNTS)
 
+    draw_workers = (DRAW_WORKERS if source == "fnb" and corpus.data.is_cache
+                    and pred.corpus.is_cache else 1)
+
     def make_source():
         if source == "true":
             return hd.TrueSource(corpus, infos, pids, chroms, lens, cfg["window"], seed,
                                  with_formula=formula)
-        return hd.FnbSource(corpus, infos, pred, tp, chroms, lens, cfg["window"], seed)
+        return hd.FnbSource(corpus, infos, pred, tp, chroms, lens, cfg["window"], seed,
+                            workers=draw_workers)
 
     std = (fit_standardiser_true(make_source(), rung, formula) if source == "true"
            else fit_standardiser_fnb(make_source(), rung, formula))
@@ -395,6 +478,7 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
         f_val = f_val_pass(pred, tp)
         f_pass_seconds = time.time() - tf
     val_seconds = []
+    val_cache: dict = {}
 
     def validate():
         tv = time.time()
@@ -402,7 +486,8 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
             out = validate_true(h, std, corpus, infos, pids, rung, formula, dev, val_chunk), None
         else:
             out = validate_fnb(h, std, corpus, infos, pred, tp, rung, formula, fnb_noise_loss,
-                               dev, val_chunk, elems, k_max, f_val=f_val)
+                               dev, val_chunk, elems, k_max, f_val=f_val, fast=FAST,
+                               cache=val_cache)
         val_seconds.append(time.time() - tv)
         return out
 
@@ -411,18 +496,32 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
     log = []
     val, vst = validate()
     log.append((0, float("nan"), val, time.time() - t1))
+    print(f"{name}: step 0 val_loss {val:.6g} (validation {val_seconds[-1]:.1f}s, setup "
+          f"{t_setup:.1f}s, device {dev})", flush=True)
     best = {"val": val, "step": 0, "h": copy.deepcopy(h.state_dict())}
     n_capped_val = 0 if vst is None else int(vst["n_capped"])
     tr = {"n_bins": 0, "n_capped": 0, "n_k_sum": 0, "n_k_max": 0}
     bad, losses, step = 0, [], 0
+    draw_s, step_s = 0.0, 0.0
+    # threaded draws only: the next batch is drawn while this step runs (the same batches, in
+    # the same order; at the end one extra batch is drawn and dropped)
+    ahead = ThreadPoolExecutor(1) if draw_workers > 1 else None
+    nxt = ahead.submit(src.draw, cfg["batch"]) if ahead is not None else None
     h.train()
     for step in range(1, cfg["max_steps"] + 1):
+        ts = time.time()
         opt.zero_grad(set_to_none=True)
-        if source == "true":
-            loss = true_batch_loss(h, std, src.draw(cfg["batch"]), rung, formula, dev)
+        if ahead is not None:
+            batch = nxt.result()
+            nxt = ahead.submit(src.draw, cfg["batch"])
         else:
-            loss, st = fnb_batch_loss(h, std, src.draw(cfg["batch"]), rung, formula, bool(noise),
-                                      fnb_noise_loss, dev, elems=elems, k_max=k_max)
+            batch = src.draw(cfg["batch"])
+        draw_s += time.time() - ts
+        if source == "true":
+            loss = true_batch_loss(h, std, batch, rung, formula, dev)
+        else:
+            loss, st = fnb_batch_loss(h, std, batch, rung, formula, bool(noise),
+                                      fnb_noise_loss, dev, elems=elems, k_max=k_max, fast=FAST)
             for key in ("n_bins", "n_capped", "n_k_sum"):
                 tr[key] += st[key]
             tr["n_k_max"] = max(tr["n_k_max"], st["n_k_max"])
@@ -431,10 +530,14 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
         torch.nn.utils.clip_grad_norm_(h.parameters(), cfg["grad_clip"])
         opt.step()
         sched.step()
+        step_s += time.time() - ts
         losses.append(loss)
         if step % cfg["eval_every"] == 0 or step == cfg["max_steps"]:
             val, _ = validate()
             log.append((step, float(np.mean(losses)), val, time.time() - t1))
+            print(f"{name}: step {step} loss {log[-1][1]:.6g} val_loss {val:.6g} (validation "
+                  f"{val_seconds[-1]:.1f}s; steps so far {step_s:.1f}s, of which draws "
+                  f"{draw_s:.1f}s)", flush=True)
             losses = []
             if val < best["val"]:
                 best = {"val": val, "step": step, "h": copy.deepcopy(h.state_dict())}
@@ -443,6 +546,8 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
                 bad += 1
                 if bad >= cfg["patience"]:
                     break
+    if ahead is not None:
+        ahead.shutdown(wait=True)
     t_train = time.time() - t1
 
     h.load_state_dict(best["h"])
@@ -456,7 +561,7 @@ def run_training(manifest, covariates, data_dir, ctl_cache, runs_dir, variant, r
     timing = {"setup": t_setup, "train": t_train, "total": time.time() - t0,
               "peak_rss_mb": ltrain.peak_rss_mb(), "steps_run": step,
               "best_step": int(best["step"]), "val_loss": float(best["val"]),
-              "val_seconds": val_seconds}
+              "val_seconds": val_seconds, "step_seconds": step_s, "draw_seconds": draw_s}
     if source == "fnb":
         timing["f_pass_seconds"] = f_pass_seconds
         timing.update(n_k_mean=tr["n_k_sum"] / max(1, tr["n_bins"]), n_k_max=tr["n_k_max"],

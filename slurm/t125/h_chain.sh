@@ -34,9 +34,14 @@
 # then requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR; PYTHONPATH is
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
-# RESOURCES. One 10 GB MIG slice of an H100 (the f predictions), 4 cores (score.py --workers 4),
-# 32 GB host memory, 6 h. Nodes c128, c166, c537 and c371 are excluded. Peak memory from
-# `sacct -o MaxRSS` (no /usr/bin/time on compute nodes).
+# RESOURCES. One 10 GB MIG slice of an H100, 4 cores, 32 GB host memory, 6 h. Nodes c128, c166,
+# c537 and c371 are excluded. Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute
+# nodes). Since t125-P2h the slice does the scoring itself (score.py's fast path: every
+# per-(bin, k) step in torch on the device, the same numbers as the CPU scorer up to summation
+# order); the jobs run in one process on CUDA, so --workers 4 is unused there. The cost grows with
+# f's NB support: a row-2 f (support about 10 counts) fits in the 6 h; a row-1 f (about 220-300
+# counts on chr19 + chr21) does not, above all for the rung-5 own-noise h, whose mixture CRPS is
+# O(support^2) per bin (measured in t125-P2h).
 #
 # DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE exists; a note on stderr for
 # each missing TRAIN_DONE, where a real task would exit 3) and exits 0 before any module load. The
