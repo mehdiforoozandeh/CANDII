@@ -75,6 +75,9 @@ Every id goes here at submission.
 - N4 (h on the true X′), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/h/logs/%x_%A_%a.out`.
   - 24145831 `t125_htrain` table true: array 0-35%36, script resources (8 cores, 32000M, 3 h),
     submitted 15:54 UTC (indices 0 and 21 skip on TRAIN_DONE from the smoke).
+  - `h_alone.sh` batches (alone index = true index + 2; blacklist
+    `/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed`, as the smoke):
+    - 24145944 `t125_halone`: array 2,23%2 (the two smoke-trained h), 15:55 UTC.
 
 ### Nibi smoke (K10)
 
