@@ -19,8 +19,9 @@
 # task exits 0 without work. A task whose f run or any learned h run dir has no TRAIN_DONE exits
 # 3, so an unfinished train task shows up as a failed chain task instead of a partial chain.
 #
-# THE H SET (9th argument, PI 2026-10-16). "all" (default): the 50 h above, for the 16 real f
-# with one g across tracks (the repair reading; their fnb h must exist). "true": only the 2
+# THE H SET (9th argument, PI 2026-10-16). "all" (default): the 50 h above, for the real f with
+# one g across tracks (the repair reading; their fnb h must exist). In this table those are the 8
+# g = all runs, indices 7 15 23 31 (rows 1, A B C D) and 39 47 55 63 (row 2). "true": only the 2
 # formulas and the 36 true-X' h (38), no fnb h needed: the per-track f, if time allows. A later
 # "all" task on an f that a "true" task chained scores only its 12 fnb h (h with a scores.json
 # are not scored again) and rewrites CHAIN_DONE with all 50 names.

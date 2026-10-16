@@ -374,12 +374,25 @@ def fnb_chunks(fb: FnbBatch, rung: int, with_formula: bool, elems: int = FNB_ELE
 # ---------------------------------------------------------------------------------------------
 
 
+_LOG1P_POOL = ThreadPoolExecutor(4)
+_LOG1P_PART = 1 << 22
+
+
 def log1p_f32(x: torch.Tensor) -> torch.Tensor:
     """float32 of numpy's log1p of a float64 tensor, on the tensor's device. The log1p always runs
     on the host (numpy, as the reference), never in the device's libm, so a feature is the
-    reference's bit for bit on every device."""
-    out = np.log1p(x.detach().cpu().numpy()).astype(np.float32)
-    return torch.from_numpy(out).to(x.device)
+    reference's bit for bit on every device; a large array is cut into parts done in 4 threads
+    (numpy's ufuncs release the GIL; each value is the same)."""
+    a = np.ascontiguousarray(x.detach().cpu().numpy()).reshape(-1)
+    out = np.empty(a.shape, np.float32)
+
+    def part(s):
+        out[s:s + _LOG1P_PART] = np.log1p(a[s:s + _LOG1P_PART])
+    if a.size > _LOG1P_PART:
+        list(_LOG1P_POOL.map(part, range(0, a.size, _LOG1P_PART)))
+    else:
+        part(0)
+    return torch.from_numpy(out.reshape(tuple(x.shape))).to(x.device)
 
 
 def formula_log1p_t(variant: str, info: ProductInfo, kf: torch.Tensor, lam: np.ndarray,
