@@ -13,7 +13,7 @@ worktree (git-excluded).
 | 2 build the map h | built and reviewed (data side, formula, push-forward, learned h, train, score, aggregate); end-to-end smoke building |
 | 3 smoke on Nibi | not started |
 | 4 count runs (432) | running (N3, 24145801) |
-| 5 h on the true X′ | not started |
+| 5 h on the true X′ | done 2026-10-16: 36 TRAIN_DONE, 38 ALONE_DONE (see "N4 results") |
 | 6 h on f's NB, chain scores | not started |
 | 7 aggregate | not started |
 | 8 vault readings | not started |
@@ -184,6 +184,50 @@ C19M16 base 0.0305 / 0.0184; crop 36 0.1119 / 0.0368; crop 50 0.0693 / 0.0321; r
 0.1477 / 0.0435 (both C40M18 crop 36). The bin-only formula is off on the crop arms (median crop
 0.106 vs 0.034-0.062 elsewhere; C19M16 crop 36 c* = -1.47, i.e. the formula is high by about
 2^1.47); the frag-window formula is not (crop 36 c* = -0.09). Ratio arms look right in both.
+
+### N4 results (h on the true X′, K10)
+
+2026-10-16 17:40 UTC. `ls h/runs_true/*/TRAIN_DONE | wc -l` = **36**; `ls h/alone/*/ALONE_DONE | wc -l` =
+**38**. No task failed, none resubmitted. Elapsed and MaxRSS (GiB) from `sacct`; train s, best /
+steps from `timing.json`. Indices 0 and 21 are the smoke fits of 24065703.
+
+| h (3 seeds) | Elapsed min | MaxRSS | train s | best / steps (s0, s1, s2) |
+|---|---|---|---|---|
+| affine r1 push | 26.2-42.5 | 13.3-22.4 | 1522-2477 | 1000/2000, 1000/2000, 2250/3250 |
+| affine r1 noise | 33.9-47.2 | 17.7-22.6 | 1934-2658 | 1250/2250, 2750/3750, 2250/3250 |
+| affine r5 push | 27.4-35.3 | 21.7-26.5 | 1568-1994 | 1500/2500, 1000/2000, 2000/3000 |
+| affine r5 noise | 41.5-46.8 | 13.2-31.2 | 2390-2755 | 3500/4000, 3750/4000, 2500/3500 |
+| mlp r1 push | 28.8-45.2 | 25.3-31.2 | 1648-2602 | 1000/2000, 2750/3750, 1750/2750 |
+| mlp r1 noise | 22.9-37.4 | 5.1-22.4 | 1297-2162 | 250/1250, 1250/2250, 1750/2750 |
+| mlp r5 push | 51.9-54.0 | 15.8-31.2 | 2955-3131 | 3250/4000, 3500/4000, 2750/3750 |
+| mlp r5 noise | 36.9-65.2 | 5.0-22.4 | 2103-3855 | 2750/3750, 1250/2250, 2500/3500 |
+| formula_affine r5 push | 20.7-41.1 | 17.6-28.5 | 1180-2292 | 1500/2500, 500/1500, 1500/2500 |
+| formula_affine r5 noise | 58.0-58.6 | 19.1-31.2 | 3326-3383 | **4000/4000, 4000/4000**, 3750/4000 |
+| formula_mlp r5 push | 58.1-63.9 | 30.2-31.2 | 3390-3748 | **4000/4000 all three** |
+| formula_mlp r5 noise | 25.1-96.7 | 5.2-31.2 | 1420-5735 | 250/1250, 2000/3000, 3500/4000 |
+
+All 36: 20.7-96.7 min, sum 26.5 task-hours (about 212 core-hours). **MaxRSS reaches 31.2 GiB in 11 fits (indices 10, 11, 13, 18, 19, 27, 28, 31, 32, 34, 35)
+against `--mem=32000M` (31.25 GiB): at the limit.** No log shows an OOM line and every task is
+COMPLETED 0:0; the cgroup may count page cache. Five fits stop at the step budget (no early stop).
+
+**Alone scorings** (128 records each; 1.5-4.0 min, 5.0-17.6 GiB; score 44-193 s). Explosion =
+records with `crps_mean_point_all` > 20 (own-noise h: the point CRPS of `mean_P = exp(μ + σ²/2) − 1`);
+non-finite = records with a non-finite `crps_mean_point` (bins in brackets). `crps_log` is finite in
+every record of every h.
+
+| kind | explode (s0/s1/s2) | non-finite records (s0/s1/s2) |
+|---|---|---|
+| affine r5 noise | 77 / 83 / 76 | 23 / 25 / 23 (623,131 bins) |
+| formula_affine r5 noise | 41 / 49 / 47 | 8 / 8 / 9 (205,146 bins) |
+| affine r1 noise | 2 / 2 / 2 | 0 |
+| mlp r1 noise | 0 / 0 / 1 | 0 |
+| the 2 formulas, all push h, mlp r5 noise, formula_mlp r5 noise | 0 | 0 |
+
+`crps_top1` > 20 occurs in every kind, formulas included (3 and 4 records); that is the top 1 % by
+true P, not an explosion. The affine own-noise h on rung 5 blow up in the native mean (`σ²` large);
+their log-scale CRPS stays finite. **Capped rows: none.** The alone scorer writes no `n_capped`
+(only chain records carry it, `score.py` 595 / 701), and `timing.json` of a true-X′ fit has no
+capped field.
 
 ## Nibi access
 
