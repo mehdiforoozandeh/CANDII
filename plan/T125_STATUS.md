@@ -76,6 +76,7 @@ Every id goes here at submission.
   - Law batches (`eta_law.sh`, `--mem=16000M --time=0:30:00` on the command line, `%40`, submitted
     directly for indices with SCORE_DONE; never a dependency):
     - 24149205: 3,4,5
+    - 24151319: 0,1,2,6-14
 - N4 (h on the true X′), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/h/logs/%x_%A_%a.out`.
   - 24145831 `t125_htrain` table true: array 0-35%36, script resources (8 cores, 32000M, 3 h),
     submitted 15:54 UTC (indices 0 and 21 skip on TRAIN_DONE from the smoke).
