@@ -82,6 +82,7 @@ Every id goes here at submission.
     - 24153254: 19,24,25,26,27,28,29,30,33,34
     - 24154583: 31,32,35,36,37,38,39,40,41,48,49,50,51,52,53,59,60
     - 24156039: 54,55,56,57,58,61,62,63,64,65,67,68,69,70,71,72,73,74,75,76,77,83
+    - 24157585: 78,79,80,81,82,84,85,86,87,88,89,96,97,98,99,100,101,102,105,106,107,108,109,110,111
 - N4 (h on the true X′), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/h/logs/%x_%A_%a.out`.
   - 24145831 `t125_htrain` table true: array 0-35%36, script resources (8 cores, 32000M, 3 h),
     submitted 15:54 UTC (indices 0 and 21 skip on TRAIN_DONE from the smoke).
