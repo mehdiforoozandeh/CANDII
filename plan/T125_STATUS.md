@@ -12,7 +12,7 @@ worktree (git-excluded).
 | 1 build the count model | built and reviewed (offset, form A, model, train, score, aggregate) |
 | 2 build the map h | built and reviewed (data side, formula, push-forward, learned h, train, score, aggregate); end-to-end smoke building |
 | 3 smoke on Nibi | not started |
-| 4 count runs (432) | not started |
+| 4 count runs (432) | running (N3, 24145801) |
 | 5 h on the true X′ | not started |
 | 6 h on f's NB, chain scores | not started |
 | 7 aggregate | not started |
@@ -68,6 +68,10 @@ Every id goes here at submission.
   - 24083625 `t125_htrain` table fnb: array 42,47%2 again, `--time=12:00:00` on the command line
     (the script's 3 h is too short), only to measure one fnb fit; logs `h/logs/`.
   - 24083626 `t125_smokechain`: `smoke/smoke_chain.sh` (6 h), `--dependency=afterok:24083625`.
+- N3 (part 1 in full), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/eta/logs/%x_%A_%a.out`.
+  - 24145801 `t125_etatrain`: array 0-431%40, `--mem=24000M --time=3:00:00` on the command line,
+    submitted 15:53 UTC (the 11 smoke runs skip on SCORE_DONE). At submission the slice nodes
+    g30, g37 show `mixed-`, g31-33 and g36 `draining@`, g35 `allocated`, g34 `inval`.
 
 ### Nibi smoke (K10)
 
