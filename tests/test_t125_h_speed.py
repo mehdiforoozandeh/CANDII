@@ -615,16 +615,19 @@ def test_real_k10_checkpoints_chain_score_as_before(ref):
     ctl = ldata.Corpus(NIBI / "ctl_cache")
     c = "chr21"
     mu, n_size = score.f_nb(pred, p["source_pid"], p["target_pid"], c)
-    sl = slice(10_000_000, 10_000_300)
     info = infos[p["target_pid"]]
-    per = [{"chrom": c, "treat": mu[sl], "mu": mu[sl], "n_size": n_size[sl],
-            "ctl": (ctl.get(p["target_pid"], "counts", c).astype(np.float64)[sl]
+    per = [{"chrom": c, "treat": mu, "mu": mu, "n_size": n_size,
+            "ctl": (ctl.get(p["target_pid"], "counts", c).astype(np.float64)
                     if info.has_control else None),
-            "y": ldata.Corpus(NIBI_CACHE).get(p["target_pid"], "pval", c)[sl]}]
+            "y": ldata.Corpus(NIBI_CACHE).get(p["target_pid"], "pval", c)}]
+    whole = score.build_context(info, per, NIBI_BLACKLIST, True)
+    N = whole["y"].shape[0]
+    top = np.sort(np.argsort(whole["mu"], kind="stable")[-300:])     # the widest supports
+    ctx = {k: (v[top] if isinstance(v, np.ndarray) and v.shape[:1] == (N,) else v)
+           for k, v in whole.items()}
     res = {}
     for name, mod, d, kw in (("pre", ref["score"], "cpu", {}), ("now", score, "cpu", {}),
                              ("fast", score, dev, {"fast": True})):
-        ctx = mod.build_context(info, per, NIBI_BLACKLIST, True)
         hs = [mod.load_h(s, d) for s in specs]
         res[name] = mod.score_context(hs, ctx, **({"device": d} if name != "pre" else {}), **kw)
     assert res["pre"] == res["now"]
