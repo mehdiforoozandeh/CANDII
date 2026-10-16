@@ -30,11 +30,11 @@ from test_t125_h_score import S, _h_dir  # noqa: E402,F401  (the shared syntheti
 pytestmark = pytest.mark.filterwarnings("ignore:.*meant for synthetic data only")
 
 
-def _mixture(n, K, seed, smooth=True):
+def _mixture(n, K, seed, smooth=True, wiggle=0.05):
     rng = np.random.default_rng(seed)
     k = np.arange(K, dtype=np.float64)[None, :]
     if smooth:                                     # mu(k), sigma(k) smooth in k, as an h's are
-        mu = 0.5 + 0.002 * k * rng.uniform(0.5, 1.5, (n, 1)) + 0.05 * np.sin(k / 37.0)
+        mu = 0.5 + 0.002 * k * rng.uniform(0.5, 1.5, (n, 1)) + wiggle * np.sin(k / 37.0)
         sg = 0.2 + 0.05 * np.cos(k / 53.0) * rng.uniform(0.5, 1.0, (n, 1))
         centre = rng.uniform(0.3, 0.7, (n, 1)) * K
         w = np.exp(-0.5 * ((k - centre) / (0.15 * K)) ** 2)
@@ -58,17 +58,30 @@ def test_merge_keeps_each_rows_weight_mean_and_variance():
     var = (wn * (sg * sg + mu * mu)).sum(1) - mean ** 2
     np.testing.assert_allclose(((W * (V + M * M)).sum(1) - (W * M).sum(1) ** 2).numpy(),
                                var.numpy(), rtol=1e-9)
-    assert bool((V > 0).all())
-    assert ((W > 0).sum(1) == 64).all()           # every row has more than 64 components
+    assert bool((V[W > 0] > 0).all())
+    assert ((W > 0).sum(1) <= 64).all() and ((W > 0).sum(1) > 32).all()
 
 
-def test_merge_groups_are_adjacent_in_mu_and_near_equal_in_count():
+def test_merge_groups_are_adjacent_in_mu():
+    """Equal weights, counts and gaps: the cut is the equal-count one, in sorted mu order."""
     mu = torch.tensor([[5.0, 1.0, 3.0, 2.0, 4.0, 0.0]], dtype=torch.float64)
     w = torch.full((1, 6), 1 / 6, dtype=torch.float64)
     M, V, W = pf.merge_mixture_t(mu, torch.zeros_like(mu) + 1e-6, w, 3)
     np.testing.assert_allclose(M.numpy(), [[0.5, 2.5, 4.5]])
     np.testing.assert_allclose(W.numpy(), [[1 / 3, 1 / 3, 1 / 3]])
     np.testing.assert_allclose(V.numpy(), [[0.25 + 1e-6] * 3])
+
+
+def test_merge_groups_are_finer_where_the_weight_is():
+    rng = np.random.default_rng(5)
+    mu = torch.from_numpy(np.sort(rng.normal(0, 1, (1, 1000)), axis=1))
+    w = torch.from_numpy(np.exp(-0.5 * (np.arange(1000) - 500.0) ** 2 / 50.0 ** 2))[None, :]
+    w = w / w.sum()
+    M, V, W = pf.merge_mixture_t(mu, torch.full_like(mu, 0.01), w, 50)
+    used = W[0] > 0
+    assert int(used.sum()) <= 50
+    assert bool((torch.diff(M[0][used]) > 0).all())          # adjacent, ordered groups
+    assert float(W[0][used].max()) < 0.15                    # no group swallows the bulk
 
 
 @pytest.mark.parametrize("K", [5, 200])
@@ -82,13 +95,16 @@ def test_rows_within_the_cap_are_exact(K):
                                rtol=1e-12)
 
 
-def test_merged_crps_is_close_on_a_wide_smooth_mixture():
-    """A wide support (2,500 components, as a deep bin's): merged to 256, within 1e-4 per bin."""
-    mu, sg, w, y = _mixture(12, 2500, 2)
+@pytest.mark.parametrize("wiggle,tol", [(0.0, 1e-6), (0.05, 1e-4)])
+def test_merged_crps_is_close_on_a_wide_smooth_mixture(wiggle, tol):
+    """A wide support (2,500 components, as a deep bin's) merged to 256: within 1e-6 per bin when
+    mu rises with k; within 1e-4 when mu wiggles (components of different sigma then sit side by
+    side in mu order, and merging them is not exact at any group count)."""
+    mu, sg, w, y = _mixture(12, 2500, 2, wiggle=wiggle)
     exact = pf.crps_gauss_mixture_t(mu, sg, w, y)
     merged = pf.crps_gauss_mixture_t(mu, sg, w, y, max_groups=256)
     rel = (merged - exact).abs() / exact.abs()
-    assert float(rel.max()) < 1e-4, float(rel.max())
+    assert float(rel.max()) < tol, float(rel.max())
     assert float(rel.max()) > 0                   # it did merge
 
 

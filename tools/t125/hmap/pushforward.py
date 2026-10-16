@@ -319,11 +319,15 @@ def _A_t(m: torch.Tensor, s2: torch.Tensor) -> torch.Tensor:
 
 def merge_mixture_t(mu: torch.Tensor, s2: torch.Tensor, w: torch.Tensor, max_groups: int):
     """(mu_g, s2_g, w_g) [n, G], G = min(max_groups, the widest row): each row's positive-weight
-    components, sorted by mu (stable), cut into min(c, max_groups) groups of adjacent components
-    of near-equal count (component j of c goes to group j * G // c), each group replaced by the
-    Gaussian with the group's weight, mean and variance (the components' own variance plus their
-    spread about the group mean). A row of c <= max_groups components keeps them all, one per
-    group. Unused groups have weight 0. The rows' weights must already be normalised."""
+    components, sorted by mu (stable), cut into at most max_groups groups of ADJACENT components,
+    each group replaced by the Gaussian with the group's weight, mean and variance (the
+    components' own variance plus their spread about the group mean). The cut: component j goes
+    to group floor(G u_j), u_j = the mean of three cumulative shares in sorted order, its weight
+    (centred), its count j / c, and its distance in mu measured in its own sigma, so groups are
+    finer where the weight is, where there are many components and where mu moves fast against
+    sigma (on smooth synthetic mixtures of 2,500 components this is about 1e-8 relative, against
+    1e-6 to 1e-5 for equal-count groups). A row of c <= max_groups components keeps them all, one
+    per group. Unused groups have weight 0. The rows' weights must already be normalised."""
     n, K = mu.shape
     pos = w > 0.0
     c = pos.sum(dim=1)
@@ -332,11 +336,20 @@ def merge_mixture_t(mu: torch.Tensor, s2: torch.Tensor, w: torch.Tensor, max_gro
     order = torch.sort(key, dim=1, stable=True).indices
     mu_s, s2_s, w_s = (torch.gather(t, 1, order) for t in (mu, s2, w))
     j = torch.arange(K, device=mu.device)[None, :]
+    live = j < c[:, None]
     cg = torch.clamp_min(c, 1)[:, None]
-    grp = torch.where(cg > G, (j * G) // cg, j)
-    grp = torch.where(j < c[:, None], grp, torch.full_like(grp, G))          # padding: dropped
     zero = mu.new_zeros(())
-    w_s = torch.where(j < c[:, None], w_s, zero)
+    w_s = torch.where(live, w_s, zero)
+    u_w = torch.cumsum(w_s, dim=1) - 0.5 * w_s
+    u_w = u_w / torch.clamp_min(w_s.sum(dim=1, keepdim=True), 1e-300)
+    gap = torch.diff(mu_s, dim=1, prepend=mu_s[:, :1]).clamp_min(0.0)
+    gap = torch.where(live, gap / torch.sqrt(torch.where(live, s2_s, torch.ones_like(s2_s))), zero)
+    u_m = torch.cumsum(gap, dim=1)
+    u_m = u_m / torch.clamp_min(torch.gather(u_m, 1, cg - 1), 1e-300)
+    u = (u_w + u_m + j / cg) / 3.0
+    grp = torch.clamp(torch.floor(u * G).to(torch.int64), 0, G - 1)
+    grp = torch.where(cg > G, grp, j)
+    grp = torch.where(live, grp, torch.full_like(grp, G))                      # padding: dropped
     W = mu.new_zeros((n, G + 1)).scatter_add_(1, grp, w_s)
     M = mu.new_zeros((n, G + 1)).scatter_add_(1, grp, w_s * torch.where(j < c[:, None], mu_s, zero))
     ok = W > 0.0

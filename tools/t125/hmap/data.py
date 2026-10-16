@@ -430,26 +430,32 @@ def formula_log1p_t(variant: str, info: ProductInfo, kf: torch.Tensor, lam: np.n
     ub, ib = np.unique(lam.view(np.int64), return_inverse=True)
     gid = np.array([st["lam"].setdefault(b, len(st["lam"])) for b in ub.tolist()], np.int64)
     key = torch.from_numpy(gid[ib.reshape(-1)]).to(dev)[row_e] * (1 << 31) + m
-    uk, inv = torch.unique(key, return_inverse=True)
-    ukn = uk.cpu().numpy()
-    keys = st["keys"]
-    pos = np.searchsorted(keys, ukn)
-    hit = np.zeros(ukn.size, bool)
-    if keys.size:
-        hit = (pos < keys.size) & (keys[np.minimum(pos, keys.size - 1)] == ukn)
-    if not hit.all():
-        miss = ukn[~hit]
+
+    def lookup():
+        kt = st.setdefault("keys_t", {}).get(dev)
+        if kt is None:
+            kt = st["keys_t"][dev] = torch.from_numpy(st["keys"]).to(dev)
+            st.setdefault("vals_t", {})[dev] = torch.from_numpy(st["vals"]).to(dev)
+        if kt.numel() == 0:
+            return None, torch.zeros(key.shape, dtype=torch.bool, device=dev)
+        pos = torch.searchsorted(kt, key).clamp_max(kt.numel() - 1)
+        return pos, kt[pos] == key
+
+    pos, hit = lookup()
+    if not bool(hit.all()):
+        miss = torch.unique(key[~hit]).cpu().numpy()
         lam_of = np.zeros(len(st["lam"]), np.int64)
         for bits, g in st["lam"].items():
             lam_of[g] = bits
         val = np.log1p(formula.neglog10_sf_strict((miss & ((1 << 31) - 1)).astype(np.float64),
                                                   lam_of.view(np.float64)[miss >> 31]))
-        allk = np.concatenate([keys, miss])
+        allk = np.concatenate([st["keys"], miss])
         allv = np.concatenate([st["vals"], val])
         o = np.argsort(allk, kind="stable")
         st["keys"], st["vals"] = allk[o], allv[o]
-        pos = np.searchsorted(st["keys"], ukn)
-    return torch.from_numpy(st["vals"][pos]).to(dev)[inv].reshape(shape)
+        st["keys_t"], st["vals_t"] = {}, {}
+        pos, hit = lookup()
+    return st["vals_t"][dev][pos].reshape(shape)
 
 
 #: fnb_flat_fast: at most this many (bin, k) entries built at once (22 float32 features: 370 MB)

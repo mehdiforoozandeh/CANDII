@@ -142,6 +142,23 @@ def test_gauss_mixture_torch_twins():
                                pf.mean_gauss_mixture_logp(mu, sg, w), rtol=1e-12, equal_nan=True)
 
 
+def test_sorted_set_sorts_only_rows_out_of_order():
+    rng = np.random.default_rng(4)
+    n, K = 50, 30
+    v = np.sort(rng.gamma(2.0, 1.0, (n, K)), axis=1)
+    v[::3] = rng.gamma(2.0, 1.0, (n, K))[::3]        # every third row out of order
+    w = rng.random((n, K)) * (rng.random((n, K)) > 0.2)
+    w[:, -5:] = 0.0                                   # padding
+    y = rng.gamma(2.0, 1.0, n)
+    vs, ws, coef = score.sorted_set(v, w)
+    vt, wt, ct = score._sorted_set_t(torch.from_numpy(v), torch.from_numpy(w))
+    for a in (1.0, 1.7):
+        np.testing.assert_allclose(score._set_crps_t(vt, wt, ct, torch.from_numpy(y), a).numpy(),
+                                   score._set_crps(vs, ws, coef, y, a), rtol=1e-12)
+    np.testing.assert_allclose(pf.crps_discrete(v, w, y), score._set_crps(vs, ws, coef, y),
+                               rtol=1e-12)
+
+
 # -- h training on f's NB ------------------------------------------------------------------------
 
 
@@ -360,6 +377,14 @@ def _chain_records(S, specs, out, fast, monkeypatch):
             for p in Path(fd).iterdir() if p.is_dir()}
 
 
+def _parent(k: str) -> str | None:
+    """A split's scale error is a difference of two means (crps_all - crps_oracle_scaled_all):
+    its tolerance is relative to that crps, not to the small difference itself."""
+    if k == "scale_error_all":
+        return "crps_all"
+    return k.replace("scale_error_all", "all") if k.endswith("_scale_error_all") else None
+
+
 def _assert_records_close(ref: dict, new: dict, rel=REL):
     assert ref.keys() == new.keys()
     for name in ref:
@@ -368,7 +393,12 @@ def _assert_records_close(ref: dict, new: dict, rel=REL):
             assert a.keys() == b.keys()
             for k in a:
                 if isinstance(a[k], float) or isinstance(b[k], float):
-                    assert _close(a[k], b[k], rel=rel), (name, k, a[k], b[k])
+                    par = _parent(k)
+                    if par is not None and a[k] is not None and b[k] is not None:
+                        tol = rel * max(abs(a[par]), abs(b[par]), 1e-12)
+                        assert abs(a[k] - b[k]) <= tol, (name, k, a[k], b[k], tol)
+                    else:
+                        assert _close(a[k], b[k], rel=rel), (name, k, a[k], b[k])
                 else:
                     assert a[k] == b[k], (name, k)
 
@@ -415,6 +445,32 @@ def test_alone_fast_equals_reference(S, tmp_path, monkeypatch):
         out[fast] = recs
     monkeypatch.setattr(score, "score_context", real)
     _assert_records_close(out[False], out[True])
+
+
+def test_a_stopped_chain_resumes_from_its_kept_pairs(S, tmp_path, monkeypatch):
+    """The walltime stops a chain after two pairs; the next task scores only the rest, and the
+    scores equal an uninterrupted chain's."""
+    _few_pairs(monkeypatch)
+    specs = ["formula:frag", str(S["h_noise"])]
+    whole = _chain_records(S, specs, tmp_path / "whole", False, monkeypatch)
+    real, calls = score.chain_job, []
+
+    def stops(pair):
+        calls.append(pair["target_pid"])
+        if len(calls) > 2:
+            raise TimeoutError("walltime")
+        return real(pair)
+    monkeypatch.setattr(score, "chain_job", stops)
+    with pytest.raises(TimeoutError):
+        _chain_records(S, specs, tmp_path / "cut", False, monkeypatch)
+    fd = tmp_path / "cut" / S["f_dir"].name
+    part = tmp_path / "cut" / f"{S['f_dir'].name}.partial"
+    assert len(list(part.glob("pair_*.json"))) == 2 and not (fd / "CHAIN_DONE").exists()
+    calls.clear()
+    monkeypatch.setattr(score, "chain_job", lambda pair: (calls.append(1), real(pair))[1])
+    resumed = _chain_records(S, specs, tmp_path / "cut", False, monkeypatch)
+    assert len(calls) == len(whole["h_formula_frag"]) - 2
+    assert resumed == whole and (fd / "CHAIN_DONE").is_file()
 
 
 # -- the pre-change code (edc7329, vendored) ----------------------------------------------------

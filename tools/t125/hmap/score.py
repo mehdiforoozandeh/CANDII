@@ -64,9 +64,12 @@ device's libm differ from the numpy reference, which stays the CPU path.
 alone → `<out_dir>/<h_name>/scores.json` + `ALONE_DONE`, one record per usable product.
 chain → `<out_dir>/<f_run_name>/<h_name>/scores.json` per h, one record per training pair of f;
 `<out_dir>/<f_run_name>/CHAIN_DONE` (the h names, one per line) once every listed h has its
-scores.json. An h whose scores.json exists is not scored again. With a CUDA device the jobs run in
-one process (no fork). Workers are forked (Linux; on macOS a forked torch forward can segfault,
-so run learned h with --workers 1 there); a dead worker fails the call, never hangs it.
+scores.json. An h whose scores.json exists is not scored again. Each pair's records are kept in
+`<out_dir>/<f_run_name>.partial/pair_<i>.json` as soon as it is scored (t125-P2h), so a task
+stopped by its walltime resumes where it stopped (a kept file counts only if it holds every h of
+the call). With a CUDA device the jobs run in one process (no fork). Workers are forked (Linux;
+on macOS a forked torch forward can segfault, so run learned h with --workers 1 there); a dead
+worker fails the call, never hangs it.
 """
 from __future__ import annotations
 
@@ -645,35 +648,58 @@ def _formula_t(h: FormulaH, bt: BatchT):
 @torch.no_grad()
 def _learned_t(h: LearnedH, bt: BatchT):
     """`LearnedH.__call__` on the device: the same float32 features, the standardiser in float64
-    then float32 (as `Standardiser.apply` on numpy), the same forward."""
+    then float32 per value (as `Standardiser.apply` on numpy), the same forward. A column that is
+    the same for every k of a bin is standardised once per bin and then repeated (the same value:
+    the standardiser works value by value)."""
     fx = bt.get("fixed")
     n, K = bt.shape
-    parts = [bt.get("lk")[..., None], fx[:, None, :N_FIX_R1].expand(n, K, N_FIX_R1)]
-    if h.rung == 5:
-        parts += [bt.get("lkfrag")[..., None],
-                  fx[:, None, KFRAG_FIX + 1:N_FIX_R5].expand(n, K, N_FIX_R5 - KFRAG_FIX - 1)]
-    if h.formula:
-        parts.append(bt.get("lP_frag").to(torch.float32)[..., None])
-    feat = torch.cat(parts, dim=-1)
     scale, shift = h.std._coeffs()
     width = scale.shape[0]
+    F = h.h.n_feat
+    if not (width == F or (h.formula and width == h.h.n_in)):
+        raise ValueError(f"{h.name}: standardiser width {width}, features {F}")
+    sc, sh = bt._np(scale), bt._np(shift)
 
-    def apply(x):
-        return (x.to(torch.float64) * bt._np(scale) + bt._np(shift)).to(torch.float32)
+    def apply(x, cols):
+        return (x.to(torch.float64) * sc[cols] + sh[cols]).to(torch.float32)
 
-    if width == feat.shape[-1]:
-        feat = apply(feat)
-    elif h.formula and width == h.h.n_in:
-        feat = torch.cat([apply(feat[..., :width]), feat[..., width:]], dim=-1)
+    if h.rung == 5:
+        fixed_cols = list(range(1, 1 + N_FIX_R1)) + list(range(2 + N_FIX_R1, 1 + N_FIX_R5))
+        fixed = torch.cat([fx[:, :N_FIX_R1], fx[:, KFRAG_FIX + 1:N_FIX_R5]], dim=1)
     else:
-        raise ValueError(f"{h.name}: standardiser width {width}, features {feat.shape[-1]}")
+        fixed_cols = list(range(1, 1 + N_FIX_R1))
+        fixed = fx[:, :N_FIX_R1]
+    feat = torch.empty((n, K, F), dtype=torch.float32, device=bt.device)
+    feat[:, :, fixed_cols] = apply(fixed, fixed_cols)[:, None, :]
+    feat[:, :, 0] = apply(bt.get("lk"), 0)
+    if h.rung == 5:
+        feat[:, :, 1 + N_FIX_R1] = apply(bt.get("lkfrag"), 1 + N_FIX_R1)
+    if h.formula:
+        lp = bt.get("lP_frag").to(torch.float32)
+        feat[:, :, F - 1] = apply(lp, F - 1) if width == F else lp
     mu, ls = h.h(feat.to(h.device))
     return mu.to(device=bt.device, dtype=torch.float64), (
         None if ls is None else ls.to(device=bt.device, dtype=torch.float64))
 
 
 def _call_t(h, bt: BatchT):
-    return _formula_t(h, bt) if h.kind == "formula" else _learned_t(h, bt)
+    """h on the chunk. A rung-1 learned h sees only (k, the control bin, the assay), so bins with
+    the same NB row and control bin get the same output row: h runs once per such row and the
+    rows are copied out (`_row_key_t`)."""
+    if h.kind == "formula":
+        return _formula_t(h, bt)
+    key = _row_key_t(h, bt)
+    if key is None:
+        return _learned_t(h, bt)
+    uk, uinv = torch.unique(key, return_inverse=True)
+    n = key.shape[0]
+    rep = torch.full((uk.numel(),), n, dtype=torch.int64, device=key.device)
+    rep.scatter_reduce_(0, uinv, torch.arange(n, device=key.device), reduce="amin")
+    rep_np = rep.cpu().numpy()
+    sub = BatchT(bt.ctx, bt.rows[rep_np], bt.k_u, bt.inv_t[rep].cpu().numpy(), bt.device,
+                 bt.fcache)
+    mu, ls = _learned_t(h, sub)
+    return mu[uinv], (None if ls is None else ls[uinv])
 
 
 def _row_key_t(h, bt: BatchT) -> torch.Tensor | None:
@@ -690,14 +716,24 @@ def _p_hat_t(mu: torch.Tensor) -> torch.Tensor:
 
 
 def _sorted_set_t(v: torch.Tensor, w: torch.Tensor):
-    """`sorted_set` in torch (the stable sort gives the same permutation)."""
+    """`sorted_set` in torch. Only the rows whose positive-weight values are not already in order
+    are sorted (stable): the pair-sum identity needs the weighted entries in order, and the
+    zero-weight ones add nothing wherever they sit (a monotone h, e.g. every formula, sorts no
+    row; the sums then run in another order)."""
     pos = w > 0
     zero = v.new_zeros(())
     v = torch.where(pos, v, zero)
     w = torch.where(pos, w, zero)
     w = w / w.sum(dim=1, keepdim=True)
-    vs, order = torch.sort(v, dim=1, stable=True)
-    ws = torch.gather(w, 1, order)
+    run = torch.cummax(torch.where(pos, v, torch.full_like(v, -math.inf)), dim=1).values
+    prev = torch.cat([torch.full_like(run[:, :1], -math.inf), run[:, :-1]], dim=1)
+    bad = torch.nonzero(~(((~pos) | (v >= prev)).all(dim=1))).squeeze(1)
+    vs, ws = v, w
+    if bad.numel():
+        vs, ws = v.clone(), w.clone()
+        vb, order = torch.sort(v[bad], dim=1, stable=True)
+        vs[bad] = vb
+        ws[bad] = torch.gather(w[bad], 1, order)
     coef = 2.0 * (torch.cumsum(ws, dim=1) - ws) + ws - 1.0
     return vs, ws, coef
 
@@ -904,6 +940,37 @@ def chain_job(pair: dict) -> dict:
     return out
 
 
+def _partial_path(i: int) -> Path:
+    return Path(_CTX["partial_dir"]) / f"pair_{i:04d}.json"
+
+
+def chain_pair(i: int) -> dict:
+    """`chain_job` of training pair i, kept in `<out_dir>/<f_run>.partial/pair_<i>.json` once done,
+    so a task that is stopped (walltime) resumes at the first pair without one. A kept file is
+    used only when it holds every h of this call, for the same pair and the same mix_groups."""
+    pair = _CTX["pred"].train_pairs[i]
+    names = [h.name for h in _CTX["hs"]]
+    path = _partial_path(i)
+    key = {k: pair[k] for k in ("source_pid", "target_pid")}
+    if path.is_file():
+        try:
+            kept = json.loads(path.read_text())
+        except ValueError:
+            kept = None
+        if (kept and kept.get("pair") == key and kept.get("mix_groups") == _CTX.get("mix_groups")
+                and set(names) <= set(kept["records"])):
+            return {n: kept["records"][n] for n in names}
+    t = time.time()
+    out = chain_job(pair)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"pair": key, "mix_groups": _CTX.get("mix_groups"),
+                               "seconds": round(time.time() - t, 3), "records": out}))
+    tmp.replace(path)
+    print(f"pair {i + 1}/{len(_CTX['pred'].train_pairs)} {key['source_pid']} -> "
+          f"{key['target_pid']}: {time.time() - t:.0f}s", flush=True)
+    return out
+
+
 def _map(fn, items: list, workers: int, device) -> list:
     if workers <= 1 or len(items) <= 1 or getattr(device, "type", str(device)) == "cuda":
         return [fn(i) for i in items]
@@ -1002,8 +1069,11 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
             raise ValueError(f"{f_run_dir}: run_name {pred.run_name!r} != its directory name")
         _setup(manifest, covariates, data_dir, ctl_cache, blacklist, todo, control_rl_tsv,
                pred=pred, f_run_name=pred.run_name, device=pred.device, mix_groups=mix_groups)
+        part = Path(out_dir) / f"{f_run_dir.name}.partial"     # beside the f run's h dirs
+        part.mkdir(parents=True, exist_ok=True)
+        _CTX["partial_dir"] = str(part)
         t1 = time.time()
-        results = _map(chain_job, list(pred.train_pairs), workers, pred.device)
+        results = _map(chain_pair, list(range(len(pred.train_pairs))), workers, pred.device)
         t2 = time.time()
         f_info = lscore.run_info(pred, f_run_dir)
         for h in todo:
