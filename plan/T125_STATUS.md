@@ -83,6 +83,7 @@ Every id goes here at submission.
     `/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed`, as the smoke):
     - 24145944 `t125_halone`: array 2,23%2 (the two smoke-trained h), 15:55 UTC.
     - 24149709 `t125_halone`: array 9,14,17,26,27,35%6, 16:25 UTC.
+    - 24151292 `t125_halone`: array 3,5,8,10,13,16,18,19,24,28%10, 16:36 UTC.
 
 ### Nibi smoke (K10)
 
