@@ -86,6 +86,7 @@ Every id goes here at submission.
     - 24149709 `t125_halone`: array 9,14,17,26,27,35%6, 16:25 UTC.
     - 24151292 `t125_halone`: array 3,5,8,10,13,16,18,19,24,28%10, 16:36 UTC.
     - 24151779 `t125_halone`: array 4,6,7,11,12,15,22,25,36%9, 16:46 UTC.
+    - 24152189 `t125_halone`: array 20,21,29,30,31,32,33%7, 16:57 UTC.
 
 ### Nibi smoke (K10)
 
