@@ -80,7 +80,13 @@ Every id goes here at submission.
     is cheap (smoke: 20 s on the slice) and its scoring runs on CPU anyway. 24145801 keeps 191-383.
   - 24163757 `t125_etatraincpu`: `eta_train_cpu.sh`, array 384-431%40 (script resources: 16 cores,
     64000M, 8 h). So Aold s0-s2 except 402 are trained with `--device cpu`; every other rung on the
-    slice.
+    slice. CPU Aold: train about 290 s (slice: 20 s), whole task 7-25 min.
+  - 20:39 UTC: 1 new GPU task started in 30 min (7 of mine on the 1g slices; `ReqNodeNotAvail`).
+    Pending tasks **240-383 (rungs B2, C2, D2, whole) cancelled** in 24145801 (none had started)
+    and moved to the CPU script. 24145801 keeps 195-239 (rest of A2; A2 192-194 already on GPU).
+  - 24166139 `t125_etatraincpu`: `eta_train_cpu.sh`, array 240-383%40. Device by rung: A, B, C, D,
+    A2 on the slice; B2, C2, D2, Aold on CPU, except the smoke runs 258, 306, 354, 381 and 402
+    (slice).
   - Law batches (`eta_law.sh`, `--mem=16000M --time=0:30:00` on the command line, `%40`, submitted
     directly for indices with SCORE_DONE; never a dependency):
     - 24149205: 3,4,5
