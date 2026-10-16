@@ -107,7 +107,7 @@ inside the step budget). Aold trains 3000 steps in 20 s (the old-grid form; not 
 | true mlp r5 noise s0 | 24065703_21, c331 | 01:05:10 | 22.4 | 3855 | 2750 / 3750 | 16: first 371 s, median 61 s, sum 2034 s | |
 | fnb mlp r5 push, f = A C19M16 real s0 | 24067474_42, c140 | **TIMEOUT 03:00:20** | 7.9 | - | - | - | TotalCPU 13:55 h (4.6 of 8 cores busy); no timing.json, so no f_pass_seconds, val_seconds or capped-row count |
 | fnb formula_mlp r5 noise, same f | 24067474_47, c146 | **TIMEOUT 03:00:20** | 4.6 | - | - | - | TotalCPU 11:48 h (3.9 cores busy); same |
-| chain smoke, 4 h | 24083622, g30 | CHAIN4_ELAPSED | CHAIN4_RSS | - | - | - | CHAIN4_NOTES |
+| chain smoke, 4 h | 24083622, g30 | still RUNNING at 2:11:47 (last read) | 7.7 (host) | - | - | - | no output yet; one python process at 94 % of one core (the 4 workers are not used on the GPU path); the 10 GB slice shows 10.8 GB in use (full); `score.py chain` writes every h's scores.json only after all pairs are done |
 
 The fnb fits print nothing between "h: ..." and the end, and write `train_log.tsv` and
 `timing.json` only at the end, so a timed-out fit leaves no reading. Rerun 24083625 (same indices,
@@ -130,14 +130,14 @@ The fnb fits print nothing between "h: ..." and the end, and write `train_log.ts
   most; `%38`, keep `--time=2:00:00`, `--mem=32000M`.
 - **N5, 768 fnb fits.** Not sizable yet: both smoke fits ran over 3 h on 8 cores. Lower bound
   768 × 3 h × 8 cores ≈ **18,400 core-hours**; at `%40` the wall time is at least 768 / 40 × 3 h ≈
-  58 h. The script's `--time=3:00:00` is too short. **64 chains:** CHAIN_SIZING.
+  58 h. The script's `--time=3:00:00` is too short. **64 chains:** not sizable yet: the 4-h chain on one f ran over 2.2 h without finishing, on one core with a full 10 GB slice; a 50-h chain will be longer, and `h_chain.sh`'s `--time=6:00:00` may be too short.
 
 **Flags (not decided here).**
 (a) One fnb fit under 20 min on 8 cores: **no** — both ran over 3 h (TIMEOUT).
 (b) Any fnb fit over 2 h on 8 cores: **yes**, both (the plan's trigger for the GPU-slice line in
 `h_train.sh`; a repo change goes through a chunk).
 (c) Explosions or non-finite: none in the 11 count runs, the 11 law passes or the 2 formula
-alone scorings. CHAIN_FLAG
+alone scorings. The chain smoke has no result yet.
 
 **Verify job 24065614 (K10), CRIT lines** (`t125/verify/t125_verifyK10_24065614.out`; 00:51:05,
 6.8 GiB, c316):
@@ -167,6 +167,15 @@ C19M16 base 0.0305 / 0.0184; crop 36 0.1119 / 0.0368; crop 50 0.0693 / 0.0321; r
   (publickey,keyboard-interactive,hostbased)`). All Nibi work stops until the PI runs
   `hpc up nibi`.
 - 2026-10-11 01:26 EDT: `ssh -o BatchMode=yes nibi` returns `l2.nibi.sharcnet`. Nibi work resumes.
+
+- 2026-10-15 19:40 PDT (N2): `ssh -o BatchMode=yes nibi` exited 255 (`Permission denied
+  (publickey,keyboard-interactive,hostbased)`, mux master broken pipe). All Nibi work stopped until
+  the PI runs `hpc up nibi`. Last state read (about 21:24 UTC): chain smoke 24083622 RUNNING 2:11:47;
+  fnb rerun 24083625_42/_47 RUNNING 2:12:59 (no TRAIN_DONE yet); 6-h chain 24083626 PENDING on
+  24083625. They run on without the laptop. Still to read: 24083622 and 24083625 sacct and
+  timing.json (f_pass_seconds, val_seconds, n_capped), the smoke/chain scores.json
+  (CRPS > 20, non-finite, n_capped_total, timing), then 24083626. Re-run
+  `python3 /project/def-maxwl/mforooz/t125/smoke/smoke_summary.py` on the login node.
 
 ## Phase 0 findings
 
