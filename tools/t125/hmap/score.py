@@ -783,28 +783,58 @@ class _FitT(_Fit):
     def c_native(self) -> float:
         v, w, y = (torch.cat(x) for x in zip(*self.nat))
 
-        def fit(c):
-            a = float(2.0 ** c)
-            return float((torch.dot(w, torch.abs(a * v - y)) - a * self.nat_pair) / self.n)
-        return _grid(fit)
+        def fits(cs):
+            a = torch.tensor([float(2.0 ** c) for c in cs], dtype=torch.float64, device=v.device)
+            tot = _block_dot(w, lambda s_: torch.abs(a[None, :] * v[s_, None] - y[s_, None]))
+            return [float((t - float(ai) * self.nat_pair) / self.n)
+                    for t, ai in zip(tot.tolist(), a.tolist())]
+        return _grid_many(fits)
 
     def c_log(self) -> float:
         if not self.noise:
             v, w, y = (torch.cat(x) for x in zip(*self.log))
 
-            def fit(c):
-                return float((torch.dot(w, torch.abs(v + float(c) * LN2 - y)) - self.log_pair)
-                             / self.n)
-            return _grid(fit)
+            def fits(cs):
+                sh = torch.tensor([float(c) * LN2 for c in cs], dtype=torch.float64,
+                                  device=v.device)
+                tot = _block_dot(w, lambda s_: torch.abs(v[s_, None] + sh[None, :] - y[s_, None]))
+                return [float((t - self.log_pair) / self.n) for t in tot.tolist()]
+            return _grid_many(fits)
         mu, sg, w, t = (torch.cat(x) for x in zip(*self.log))
 
-        def fit(c):
-            m = t - (mu + float(c) * LN2)
-            z = m / sg
-            A = (m * (2.0 * torch.special.ndtr(z) - 1.0)
-                 + 2.0 * sg * torch.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi))
-            return float((torch.dot(w, A) - self.log_pair) / self.n)
-        return _grid(fit)
+        def fits(cs):
+            sh = torch.tensor([float(c) * LN2 for c in cs], dtype=torch.float64, device=mu.device)
+
+            def A(s_):
+                m = t[s_, None] - (mu[s_, None] + sh[None, :])
+                z = m / sg[s_, None]
+                return (m * (2.0 * torch.special.ndtr(z) - 1.0)
+                        + 2.0 * sg[s_, None] * torch.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi))
+            tot = _block_dot(w, A, block=1 << 18)
+            return [float((x - self.log_pair) / self.n) for x in tot.tolist()]
+        return _grid_many(fits)
+
+
+def _block_dot(w: torch.Tensor, cols, block: int = 1 << 19) -> torch.Tensor:
+    """sum_e w_e M[e, g] for every grid point g, M built by `cols(slice)` one block of entries at
+    a time (one pass over the entries for the whole grid instead of one per grid point)."""
+    tot = None
+    for s0 in range(0, w.shape[0], block):
+        s_ = slice(s0, s0 + block)
+        part = w[s_] @ cols(s_)
+        tot = part if tot is None else tot + part
+    return tot
+
+
+def _grid_many(fits) -> float:
+    """`_grid` with every grid point of a stage evaluated in one call: the same 2^c grid (-6..6 step
+    0.25, then +-0.25 step 0.01 around the best) and the same first-minimum rule."""
+    g1 = np.arange(-6.0, 6.001, 0.25)
+    v1 = fits(g1)
+    c = float(g1[int(np.argmin(v1))])
+    g2 = np.arange(c - 0.25, c + 0.2501, 0.01)
+    v2 = fits(g2)
+    return float(g2[int(np.argmin(v2))])
 
 
 def score_context_fast(hs: list, ctx: dict, device, mix_groups: int | None = None
