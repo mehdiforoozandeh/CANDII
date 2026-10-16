@@ -9,7 +9,7 @@ the code (`fast=False`, the numpy CPU scorer), on the synthetic set-up of tests/
 - `fnb_batch_loss` / `validate_fnb` fast vs reference: the same loss and gradient, bit for bit;
 - a short fnb training run (`run_training`, FAST vs not): the same checkpoint and val loss;
 - the threaded f-NB draw (cache-mode corpus): the same batch;
-- the chain (`score_context_fast` on CPU torch) vs the numpy reference: <= 1e-9 relative on every
+- the chain (`score_context_fast` on CPU torch) vs the numpy reference: <= 1e-7 relative on every
   record of formula, learned push and learned own-noise h, also with capped rows and alone;
 - the pre-change train.py, score.py, data.py and pushforward.py (edc7329, vendored in
   tests/fixtures/t125_p2h_edc7329): the f-NB draws, a checkpoint and its chain scores are the same;
@@ -49,7 +49,7 @@ from test_t125_h_score import S, _h_dir  # noqa: E402,F401  (the shared syntheti
 pytestmark = pytest.mark.filterwarnings("ignore:.*meant for synthetic data only")
 BASE_SHA = "edc7329"
 CUDA = torch.cuda.is_available()
-REL = 1e-9
+REL = 1e-7     # the PI's tolerance where only summation order (or a GEMM's batch shape) changes
 
 
 def _pred(S, data_dir=None):
