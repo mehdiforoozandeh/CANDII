@@ -72,6 +72,9 @@ Every id goes here at submission.
   - 24145801 `t125_etatrain`: array 0-431%40, `--mem=24000M --time=3:00:00` on the command line,
     submitted 15:53 UTC (the 11 smoke runs skip on SCORE_DONE). At submission the slice nodes
     g30, g37 show `mixed-`, g31-33 and g36 `draining@`, g35 `allocated`, g34 `inval`.
+- N4 (h on the true X′), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/h/logs/%x_%A_%a.out`.
+  - 24145831 `t125_htrain` table true: array 0-35%36, script resources (8 cores, 32000M, 3 h),
+    submitted 15:54 UTC (indices 0 and 21 skip on TRAIN_DONE from the smoke).
 
 ### Nibi smoke (K10)
 
