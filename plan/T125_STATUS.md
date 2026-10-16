@@ -87,6 +87,13 @@ Every id goes here at submission.
   - 24166139 `t125_etatraincpu`: `eta_train_cpu.sh`, array 240-383%40. Device by rung: A, B, C, D,
     A2 on the slice; B2, C2, D2, Aold on CPU, except the smoke runs 258, 306, 354, 381 and 402
     (slice).
+  - 23:31 UTC: 24163757_429, _430, _431 (Aold_all nocov s0-s2), all three on node **c95**, hung in
+    `score.py trained` for 3 h 07 min: trained at 20:24, then 15 score processes at 0 % CPU (state
+    S), no output. The other Aold_all runs scored in 41 min (426, c45). Read as a node fault
+    (transient); cancelled and resubmitted once on CPU with c95 also excluded (TRAIN_DONE exists, so
+    only scoring reruns):
+  - 24176598 `t125_etatraincpu`: `eta_train_cpu.sh`, array 429,430,431,
+    `--exclude=c128,c166,c537,c371,c95`.
   - 24173033 `t125_d2twin` (D2 twin nondeterminism, PI decision 2026-10-16): one-off
     `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/d2twin_rescore.sh` (not in the repo; 4
     cores, 24000M, 3 h, CPU) copies run D2_C19M16_counts_nocov_s0 (index 357, trained on CPU by
