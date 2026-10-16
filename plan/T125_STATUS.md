@@ -93,6 +93,7 @@ Every id goes here at submission.
     24166139) into that dir, drops the copy's scores, re-runs eta_train.sh's exact `score.py trained
     ... --workers 4` on the copy, then `d2twin_compare.py` compares per record with the original
     and with the 3 seeds; log `t125/smoke/logs/`. The original run dir is only read.
+    FAILED at the compare step (scoring done); result in "D2 twin nondeterminism, measured".
   - Law batches (`eta_law.sh`, `--mem=16000M --time=0:30:00` on the command line, `%40`, submitted
     directly for indices with SCORE_DONE; never a dependency):
     - 24149205: 3,4,5
@@ -264,6 +265,28 @@ true P, not an explosion. The affine own-noise h on rung 5 blow up in the native
 their log-scale CRPS stays finite. **Capped rows: none.** The alone scorer writes no `n_capped`
 (only chain records carry it, `score.py` 595 / 701), and `timing.json` of a true-X′ fit has no
 capped field.
+
+### D2 twin nondeterminism, measured (N3)
+
+2026-10-16, job 24173033 (c294, CPU, 4 cores). Run D2_C19M16_counts_nocov_s0 (index 357; trained
+on CPU by 24166139, first scored there). Second scoring = eta_train.sh's exact `score.py trained
+... --workers 4` on a copy in `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/` (844.7 s).
+The compare step in the job failed (KeyError: `crps_oracle_scaled_all` is only on shuffle
+records); the fixed `d2twin_compare.py` (stdlib) was re-run on the login node on the two
+scores.json: `d2twin_rescore/compare.txt`.
+
+| metric | records | records that differ | max / median abs diff | 3-seed wobble per record, median / max (max-min) | seed means range |
+|---|---|---|---|---|---|
+| crps_all | 140 | **0** | 0 / 0 | 5.3e-3 / 2.6e-2 (102 records) | 8.9e-4 |
+| crps_oracle_scaled_all | 38 | **0** | 0 / 0 | 2.7e-3 / 2.2e-2 | 2.2e-3 |
+| scale_error_all | 38 | **0** | 0 / 0 | 6.5e-3 / 2.2e-2 | 1.8e-3 |
+| mse_log1p_all | 140 | **0** | 0 / 0 | 9.4e-4 / 5.8e-2 (102 records) | 2.7e-3 |
+
+The two scorings of this run are bit-identical in every record (relative difference 0). So on
+the real data the t125 D2 nocov scoring is deterministic run to run; the failing
+`test_twin_scoring_is_deterministic[D2]` (fixture data, K10 and t118 K8) does not show here. The
+seed wobble is the only spread. (Seed wobble over 102, not 140, records: shuffle records are keyed
+by the shuffled pid, which differs by seed.)
 
 ## Nibi access
 
