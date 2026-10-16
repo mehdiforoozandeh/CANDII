@@ -12,8 +12,8 @@ worktree (git-excluded).
 | 1 build the count model | built and reviewed (offset, form A, model, train, score, aggregate) |
 | 2 build the map h | built and reviewed (data side, formula, push-forward, learned h, train, score, aggregate); end-to-end smoke building |
 | 3 smoke on Nibi | not started |
-| 4 count runs (432) | not started |
-| 5 h on the true X′ | not started |
+| 4 count runs (432) | running (N3, 24145801) |
+| 5 h on the true X′ | done 2026-10-16: 36 TRAIN_DONE, 38 ALONE_DONE (see "N4 results") |
 | 6 h on f's NB, chain scores | not started |
 | 7 aggregate | not started |
 | 8 vault readings | not started |
@@ -68,6 +68,34 @@ Every id goes here at submission.
   - 24083625 `t125_htrain` table fnb: array 42,47%2 again, `--time=12:00:00` on the command line
     (the script's 3 h is too short), only to measure one fnb fit; logs `h/logs/`.
   - 24083626 `t125_smokechain`: `smoke/smoke_chain.sh` (6 h), `--dependency=afterok:24083625`.
+- N3 (part 1 in full), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/eta/logs/%x_%A_%a.out`.
+  - 24145801 `t125_etatrain`: array 0-431%40, `--mem=24000M --time=3:00:00` on the command line,
+    submitted 15:53 UTC (the 11 smoke runs skip on SCORE_DONE). At submission the slice nodes
+    g30, g37 show `mixed-`, g31-33 and g36 `draining@`, g35 `allocated`, g34 `inval`. At 16:16 UTC
+    only 5-6 tasks run at a time (the free slices on g30/g37). At 17:50 UTC (2 h) 16-19 run at a
+    time, 65 tasks COMPLETED, 0 failed: the slices are not held, so no CPU fallback.
+  - Law batches (`eta_law.sh`, `--mem=16000M --time=0:30:00` on the command line, `%40`, submitted
+    directly for indices with SCORE_DONE; never a dependency):
+    - 24149205: 3,4,5
+    - 24151319: 0,1,2,6-14
+    - 24152310: 15-17,20-23
+    - 24153254: 19,24,25,26,27,28,29,30,33,34
+    - 24154583: 31,32,35,36,37,38,39,40,41,48,49,50,51,52,53,59,60
+    - 24156039: 54,55,56,57,58,61,62,63,64,65,67,68,69,70,71,72,73,74,75,76,77,83
+    - 24157585: 78,79,80,81,82,84,85,86,87,88,89,96,97,98,99,100,101,102,105,106,107,108,109,110,111
+    - 24159233: 103,104,112,113,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133
+- N4 (h on the true X′), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/h/logs/%x_%A_%a.out`.
+  - 24145831 `t125_htrain` table true: array 0-35%36, script resources (8 cores, 32000M, 3 h),
+    submitted 15:54 UTC (indices 0 and 21 skip on TRAIN_DONE from the smoke).
+  - `h_alone.sh` batches (alone index = true index + 2; blacklist
+    `/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed`, as the smoke):
+    - 24145944 `t125_halone`: array 2,23%2 (the two smoke-trained h), 15:55 UTC.
+    - 24149709 `t125_halone`: array 9,14,17,26,27,35%6, 16:25 UTC.
+    - 24151292 `t125_halone`: array 3,5,8,10,13,16,18,19,24,28%10, 16:36 UTC.
+    - 24151779 `t125_halone`: array 4,6,7,11,12,15,22,25,36%9, 16:46 UTC.
+    - 24152189 `t125_halone`: array 20,21,29,30,31,32,33%7, 16:57 UTC.
+    - 24152669 `t125_halone`: array 34, 17:07 UTC.
+    - 24154245 `t125_halone`: array 37, 17:33 UTC (true fits: 36 of 36 TRAIN_DONE at 17:33).
 
 ### Nibi smoke (K10)
 
@@ -161,6 +189,50 @@ C19M16 base 0.0305 / 0.0184; crop 36 0.1119 / 0.0368; crop 50 0.0693 / 0.0321; r
 0.106 vs 0.034-0.062 elsewhere; C19M16 crop 36 c* = -1.47, i.e. the formula is high by about
 2^1.47); the frag-window formula is not (crop 36 c* = -0.09). Ratio arms look right in both.
 
+### N4 results (h on the true X′, K10)
+
+2026-10-16 17:40 UTC. `ls h/runs_true/*/TRAIN_DONE | wc -l` = **36**; `ls h/alone/*/ALONE_DONE | wc -l` =
+**38**. No task failed, none resubmitted. Elapsed and MaxRSS (GiB) from `sacct`; train s, best /
+steps from `timing.json`. Indices 0 and 21 are the smoke fits of 24065703.
+
+| h (3 seeds) | Elapsed min | MaxRSS | train s | best / steps (s0, s1, s2) |
+|---|---|---|---|---|
+| affine r1 push | 26.2-42.5 | 13.3-22.4 | 1522-2477 | 1000/2000, 1000/2000, 2250/3250 |
+| affine r1 noise | 33.9-47.2 | 17.7-22.6 | 1934-2658 | 1250/2250, 2750/3750, 2250/3250 |
+| affine r5 push | 27.4-35.3 | 21.7-26.5 | 1568-1994 | 1500/2500, 1000/2000, 2000/3000 |
+| affine r5 noise | 41.5-46.8 | 13.2-31.2 | 2390-2755 | 3500/4000, 3750/4000, 2500/3500 |
+| mlp r1 push | 28.8-45.2 | 25.3-31.2 | 1648-2602 | 1000/2000, 2750/3750, 1750/2750 |
+| mlp r1 noise | 22.9-37.4 | 5.1-22.4 | 1297-2162 | 250/1250, 1250/2250, 1750/2750 |
+| mlp r5 push | 51.9-54.0 | 15.8-31.2 | 2955-3131 | 3250/4000, 3500/4000, 2750/3750 |
+| mlp r5 noise | 36.9-65.2 | 5.0-22.4 | 2103-3855 | 2750/3750, 1250/2250, 2500/3500 |
+| formula_affine r5 push | 20.7-41.1 | 17.6-28.5 | 1180-2292 | 1500/2500, 500/1500, 1500/2500 |
+| formula_affine r5 noise | 58.0-58.6 | 19.1-31.2 | 3326-3383 | **4000/4000, 4000/4000**, 3750/4000 |
+| formula_mlp r5 push | 58.1-63.9 | 30.2-31.2 | 3390-3748 | **4000/4000 all three** |
+| formula_mlp r5 noise | 25.1-96.7 | 5.2-31.2 | 1420-5735 | 250/1250, 2000/3000, 3500/4000 |
+
+All 36: 20.7-96.7 min, sum 26.5 task-hours (about 212 core-hours). **MaxRSS reaches 31.2 GiB in 11 fits (indices 10, 11, 13, 18, 19, 27, 28, 31, 32, 34, 35)
+against `--mem=32000M` (31.25 GiB): at the limit.** No log shows an OOM line and every task is
+COMPLETED 0:0; the cgroup may count page cache. Five fits stop at the step budget (no early stop).
+
+**Alone scorings** (128 records each; 1.5-4.0 min, 5.0-17.6 GiB; score 44-193 s). Explosion =
+records with `crps_mean_point_all` > 20 (own-noise h: the point CRPS of `mean_P = exp(μ + σ²/2) − 1`);
+non-finite = records with a non-finite `crps_mean_point` (bins in brackets). `crps_log` is finite in
+every record of every h.
+
+| kind | explode (s0/s1/s2) | non-finite records (s0/s1/s2) |
+|---|---|---|
+| affine r5 noise | 77 / 83 / 76 | 23 / 25 / 23 (623,131 bins) |
+| formula_affine r5 noise | 41 / 49 / 47 | 8 / 8 / 9 (205,146 bins) |
+| affine r1 noise | 2 / 2 / 2 | 0 |
+| mlp r1 noise | 0 / 0 / 1 | 0 |
+| the 2 formulas, all push h, mlp r5 noise, formula_mlp r5 noise | 0 | 0 |
+
+`crps_top1` > 20 occurs in every kind, formulas included (3 and 4 records); that is the top 1 % by
+true P, not an explosion. The affine own-noise h on rung 5 blow up in the native mean (`σ²` large);
+their log-scale CRPS stays finite. **Capped rows: none.** The alone scorer writes no `n_capped`
+(only chain records carry it, `score.py` 595 / 701), and `timing.json` of a true-X′ fit has no
+capped field.
+
 ## Nibi access
 
 - 2026-10-11: `ssh -o BatchMode=yes nibi` exited 255 (`Permission denied
@@ -238,6 +310,9 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 
 - 2026-10-16: fnb training and chain scoring get an exact speed-up chunk (no number may change; tests prove it), then a re-smoke, before the 768 fnb fits and 64 chains.
 - 2026-10-16: the D2 twin run-to-run difference (also in t118's own kit) is measured on the smoke run; if it is far below the seed wobble, it is accepted and noted in the grid and the deck.
+
+- 2026-10-16: in the chain, the own-noise h are scored with a merged mixture: adjacent k components merged into ≤ 256 moment-matched Gaussians before the CRPS pair sum, on all bins. It is kept only if its error against the exact CRPS, measured on a random sample of bins, is below 1e-3 relative; the measured error goes in the grid. Push-only h stay exact.
+- 2026-10-16: compute scope for the repair reading and the chain: only the 16 real f with one g across tracks (192 fnb fits + 16 chains). This supersedes "768 fits". Per-track f get chain scores with the formulas and the true-X′ h only, if time allows.
 
 ## Log
 
