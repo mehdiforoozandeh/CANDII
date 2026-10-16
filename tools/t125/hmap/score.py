@@ -610,6 +610,7 @@ class BatchT:
 
     def __init__(self, ctx, rows, k_u, inv, device, fcache: dict | None = None):
         self.ctx, self.rows, self.k_u, self.device, self.fcache = ctx, rows, k_u, device, fcache
+        self.inv = inv
         self.inv_t = torch.from_numpy(inv).to(device)
         self.shape = (int(rows.shape[0]), int(k_u.shape[1]))
         self._c: dict = {}
@@ -625,8 +626,8 @@ class BatchT:
             elif name == "lk":
                 v = self._np(features.k_column(self.k_u))[self.inv_t]
             elif name == "lkfrag":
-                v = hd.log1p_f32((self.get("kf") + self._np(c["frest_k"][r])[:, None])
-                                 / self._np(c["fcnt"][r])[:, None])
+                v = hd.log1p_kfrag_f32(self.k_u[:, 0][self.inv], self.shape[1], c["frest_k"][r],
+                                       c["fcnt"][r], self.device)
             elif name == "fixed":
                 v = self._np(c["fixed"][r])
             elif name == "lP_bin":

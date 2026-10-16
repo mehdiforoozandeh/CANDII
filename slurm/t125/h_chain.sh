@@ -47,14 +47,22 @@
 # then requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR; PYTHONPATH is
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
-# RESOURCES. One 10 GB MIG slice of an H100, 4 cores, 40000M host memory, 6 h. Nodes c128, c166,
-# c537 and c371 are excluded. Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute
-# nodes). Since t125-P2h the slice does the scoring itself (score.py's fast path: every
-# per-(bin, k) step in torch on the device, the same numbers as the CPU scorer up to summation
-# order); the jobs run in one process on CUDA, so --workers 4 is unused there. The cost grows with
-# f's NB support: a row-2 f (support about 10 counts) fits in the 6 h; a row-1 f (about 220-300
-# counts on chr19 + chr21) does not, above all for the rung-5 own-noise h, whose mixture CRPS is
-# O(support^2) per bin (measured in t125-P2h).
+# RESOURCES. One 10 GB MIG slice of an H100, 4 cores, 40000M host memory, 1 day (partition b3).
+# Nodes c128, c166, c537 and c371 are excluded. Peak memory from `sacct -o MaxRSS` (no
+# /usr/bin/time on compute nodes). Since t125-P2h the slice does the scoring itself (score.py's
+# fast path: every per-(bin, k) step in torch on the device; the CPU scorer's numbers up to
+# summation order, the own-noise h's merged mixture aside); the jobs run in one process on CUDA,
+# so --workers 4 is unused there. WALLTIME, sized from Nibi measurements (t125-P2h, kit code of
+# 2026-10-16, one 1g.10gb slice, all 50 h, --mix-merge 128; 242 pairs for g = all):
+#   A_all (row 1)  about 85 h      B_all (row 1)  about 48 h      B2_all (row 2)  about 49 h
+#   A_C19M16 (a per-track row-1 f, 38 pairs) about 13 h; A2_C19M16 (row 2) about 1.7 h.
+# The cost is the f's NB support: sum over bins of the support (row 1, g = all: 4.6e11) for every
+# h, and of min(support, 128)^2 (about 4e12) for the own-noise h. One day, not more: on
+# 2026-10-16 `sbatch --test-only` put a 1-day slice job's start within the hour (b3) and a 2- to
+# 4-day one's 3 to 7 days later (b4, b5). A task that hits the walltime keeps every pair it
+# finished (<out_root>/chain/<f_run>.partial/), so the same index, submitted again by hand after
+# the TIMEOUT, resumes there: about 4 tasks in a row for A_all, 2 to 3 for B_all and B2_all, 1 for
+# a per-track f (give it --time=16:00:00 on the command line).
 #
 # DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE lists every h; a note on stderr for
 # each missing TRAIN_DONE, where a real task would exit 3) and exits 0 before any module load. The
@@ -81,7 +89,7 @@
 #SBATCH --job-name=t125_hchain
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --exclude=c128,c166,c537,c371
-#SBATCH --time=6:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=40000M
 
