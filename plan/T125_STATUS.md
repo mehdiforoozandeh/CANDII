@@ -74,6 +74,13 @@ Every id goes here at submission.
     g30, g37 show `mixed-`, g31-33 and g36 `draining@`, g35 `allocated`, g34 `inval`. At 16:16 UTC
     only 5-6 tasks run at a time (the free slices on g30/g37). At 17:50 UTC (2 h) 16-19 run at a
     time, 65 tasks COMPLETED, 0 failed: the slices are not held, so no CPU fallback.
+  - 19:55 UTC: only 9 GPU tasks run (pending reason `ReqNodeNotAvail`; slice nodes `mixed-` for
+    4 h). Pending tasks **384-431 (rung Aold, all 48) cancelled** in 24145801 (none had started;
+    402 is the smoke run, already done on GPU) and moved to the CPU script, because Aold training
+    is cheap (smoke: 20 s on the slice) and its scoring runs on CPU anyway. 24145801 keeps 191-383.
+  - 24163757 `t125_etatraincpu`: `eta_train_cpu.sh`, array 384-431%40 (script resources: 16 cores,
+    64000M, 8 h). So Aold s0-s2 except 402 are trained with `--device cpu`; every other rung on the
+    slice.
   - Law batches (`eta_law.sh`, `--mem=16000M --time=0:30:00` on the command line, `%40`, submitted
     directly for indices with SCORE_DONE; never a dependency):
     - 24149205: 3,4,5
