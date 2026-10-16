@@ -405,7 +405,7 @@ def test_dry_run_chain_index_0_pinned():
                     "/c", "/ctl", "/bl.bed", "/eta/A_C07M20_counts_real_s0", "/out/chain"]
     assert len(specs) == 50
     assert specs == _chain_specs("A_C07M20_counts_real_s0", "/out")
-    assert tail == ["--workers", "4", "--mix-merge", "256"]
+    assert tail == ["--workers", "4", "--mix-merge", "128"]
 
 
 def test_dry_run_chain_learned_formula_h_are_run_dirs_not_formulas():
@@ -465,7 +465,7 @@ def test_dry_run_chain_true_set_needs_no_fnb_h(tmp_path):
     head, specs, tail = _chain_split(r.stdout)
     want = [s for s in _chain_specs(F_RUNS[3], str(out)) if "/runs_fnb/" not in s]
     assert specs == want and len(specs) == 38
-    assert tail == ["--workers", "4", "--mix-merge", "256"]
+    assert tail == ["--workers", "4", "--mix-merge", "128"]
     assert "36 h run dirs lack TRAIN_DONE" in r.stderr
     for spec in want:
         if not spec.startswith("formula:"):

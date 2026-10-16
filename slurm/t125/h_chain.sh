@@ -7,10 +7,13 @@
 # WHAT ONE TASK DOES.
 #   python3 $KIT/tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <cache_dir> <ctl_cache> \
 #       <blacklist> <eta_runs_dir>/<f_run> <out_root>/chain --h <spec> [--h <spec> ...] --workers 4 \
-#       --mix-merge 256
+#       --mix-merge 128
 #           -> chain/<f_run>/<h_name>/scores.json per h, chain/<f_run>/CHAIN_DONE
-# --mix-merge 256 (PI 2026-10-16): the own-noise h's mixture CRPS over at most 256 moment-matched
-# components per bin (each such record says crps_mix_merged); push-only h stay exact.
+# --mix-merge 128 (PI 2026-10-16: at most 256): the own-noise h's mixture CRPS over at most 128
+# moment-matched components per bin (each such record says crps_mix_merged); push-only h stay
+# exact. Measured on 6,000 random bins of a deep pair (support up to 2,509), crps_log_all of the 5
+# rung-5 / rung-1 own-noise h tested: relative error at most 3.5e-4 at 128 (8.7e-5 at 256, 1.4e-3
+# at 64), crps_log_top1 at most 3.3e-7; 128 makes the pair sum about 4 times cheaper than 256.
 # The h list is `python3 tools/t125/hmap/tasks.py chain-list <f_run> --fnb-seeds N` (50 at N = 1:
 # the 2 formulas, the 36 h trained on the true X', this f's 12 h trained on its NB), each name
 # turned into a spec: h_formula_bin / h_formula_frag -> formula:bin / formula:frag (the learned
@@ -106,7 +109,7 @@ case "$H_SET" in
   true) N_EXPECT=38 ;;
   *) echo "h_set '$H_SET' is not all or true; $USAGE" >&2; exit 2 ;;
 esac
-MIX_MERGE=256
+MIX_MERGE=128
 case "$OUT_ROOT" in
   */t118|*/t118/*) echo "out root $OUT_ROOT is under a t118 directory; t125 writes only under t125/" >&2; exit 2 ;;
 esac
