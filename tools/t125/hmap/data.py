@@ -409,39 +409,33 @@ def log1p_f32(x: torch.Tensor) -> torch.Tensor:
     return torch.from_numpy(out.reshape(tuple(x.shape))).to(x.device)
 
 
-def log1p_kfrag_f32(k0_row: np.ndarray, width, rest: np.ndarray, cnt: np.ndarray,
+def log1p_kfrag_f32(k0_row: np.ndarray, blocks, rest: np.ndarray, cnt: np.ndarray,
                     device) -> torch.Tensor:
     """The log1p_k_frag column, float32 log1p((k + rest) / cnt) with k = k0_row[row] + j, all on
     the host as the reference computes it ((k0 + j) as int64 then float64, IEEE + and /, numpy
-    log1p), then moved to `device`. `width`: an int K (rows of K entries, returns [r, K]) or int
-    [r] per-row widths laid out flat (returns [sum width])."""
+    log1p), then moved to `device`. `blocks`: an int K (every row has K entries; returns [r, K]),
+    or [(e0, r0, r, K)] (rows r0..r0+r of K entries laid out flat from entry e0; returns [E])."""
     k0_row = np.asarray(k0_row, dtype=np.int64)
     rest = np.asarray(rest, dtype=np.float64)
     cnt = np.asarray(cnt, dtype=np.float64)
-    if np.isscalar(width) or np.ndim(width) == 0:
-        K = int(width)
-        out = np.empty((k0_row.shape[0], K), np.float32)
-        j = np.arange(K, dtype=np.int64)[None, :]
-        rows_per = max(1, _LOG1P_PART // max(1, K))
-
-        def part(r0, r1):
-            kf = (k0_row[r0:r1, None] + j).astype(np.float64)
-            out[r0:r1] = np.log1p((kf + rest[r0:r1, None]) / cnt[r0:r1, None])
-        n = k0_row.shape[0]
-        list(_LOG1P_POOL.map(lambda r0: part(r0, min(r0 + rows_per, n)), range(0, n, rows_per)))
-        return torch.from_numpy(out).to(device)
-    wid = np.asarray(width, dtype=np.int64)
-    offs = np.concatenate([[0], np.cumsum(wid)])
-    E = int(offs[-1])
-    row_e = np.repeat(np.arange(wid.shape[0]), wid)
+    n = k0_row.shape[0]
+    flat = not (np.isscalar(blocks) or np.ndim(blocks) == 0)
+    if not flat:
+        blocks = [(0, 0, n, int(blocks))]
+    E = sum(r * K for _, _, r, K in blocks)
     out = np.empty(E, np.float32)
+    tasks = []
+    for e0, r0, r, K in blocks:
+        step = max(1, _LOG1P_PART // max(1, K))
+        tasks += [(e0 + i * K, r0 + i, min(step, r - i), K) for i in range(0, r, step)]
 
-    def part(s0, s1):
-        r = row_e[s0:s1]
-        kf = (k0_row[r] + (np.arange(s0, s1, dtype=np.int64) - offs[r])).astype(np.float64)
-        out[s0:s1] = np.log1p((kf + rest[r]) / cnt[r])
-    _threaded(E, part)
-    return torch.from_numpy(out).to(device)
+    def part(t):
+        e0, r0, r, K = t
+        kf = (k0_row[r0:r0 + r, None] + np.arange(K, dtype=np.int64)[None, :]).astype(np.float64)
+        out[e0:e0 + r * K] = np.log1p((kf + rest[r0:r0 + r, None]) / cnt[r0:r0 + r, None]).ravel()
+    list(_LOG1P_POOL.map(part, tasks))
+    res = torch.from_numpy(out if flat else out.reshape(n, int(blocks[0][3])))
+    return res.to(device)
 
 
 def formula_log1p_t(variant: str, info: ProductInfo, kf: torch.Tensor, lam: np.ndarray,
@@ -622,8 +616,14 @@ def fnb_flat_fast(fb: FnbBatch, rung: int, with_formula: bool, device,
         if with_formula:
             kf = (torch.from_numpy(k0_tab).to(device)[tid_e] + j_e).to(torch.float64)
             rest = torch.from_numpy(np.ascontiguousarray(fb.frag_rest[rows])).to(device)
+        blocks, e0, r0 = [], 0, 0
+        for c in range(c0, c1):
+            r, K = int(chunks[c].size), int(widths[c])
+            blocks.append((e0, r0, r, K))
+            e0 += r * K
+            r0 += r
         if rung == 5:
-            feat[:, K_FRAG_COL] = log1p_kfrag_f32(k0_tab[tid], wid, fb.frag_rest[rows],
+            feat[:, K_FRAG_COL] = log1p_kfrag_f32(k0_tab[tid], blocks, fb.frag_rest[rows],
                                                   fb.frag_cnt[rows], device)
         if with_formula:
             lam = fb.lam[rows]
@@ -639,12 +639,6 @@ def fnb_flat_fast(fb: FnbBatch, rung: int, with_formula: bool, device,
                     feat[sel, -1] = formula_log1p_t("frag", fb.infos[int(g)], kf[sel], lam, rest,
                                                     row_e[sel], fcache).to(torch.float32)
         w_e = torch.from_numpy(w_tab).to(device)[tid_e, j_e]
-        blocks, e0, r0 = [], 0, 0
-        for c in range(c0, c1):
-            r, K = int(chunks[c].size), int(widths[c])
-            blocks.append((e0, r0, r, K))
-            e0 += r * K
-            r0 += r
         nk = nk_tab[tid]
         yield FnbFlat(feat, w_e, torch.from_numpy(np.ascontiguousarray(fb.y[rows])).to(device),
                       blocks, int(capped[rows].sum()), int(nk.sum()), int(nk.max()))
