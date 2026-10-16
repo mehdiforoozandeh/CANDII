@@ -69,12 +69,89 @@ Every id goes here at submission.
     (the script's 3 h is too short), only to measure one fnb fit; logs `h/logs/`.
   - 24083626 `t125_smokechain`: `smoke/smoke_chain.sh` (6 h), `--dependency=afterok:24083625`.
 
-### Nibi smoke (K10), partial
+### Nibi smoke (K10)
 
-| run | job | node | Elapsed | MaxRSS | notes |
-|---|---|---|---|---|---|
-| h_alone formula:bin | 24065702_0 | c331 | 00:01:30 | 9.0 GB | score 43.8 s, 128 products, 0 non-finite, 0 CRPS > 20 |
-| h_alone formula:frag | 24065702_1 | c331 | 00:01:31 | 9.5 GB | score 44.4 s, 128 products, 0 non-finite, 0 CRPS > 20 |
+2026-10-15, kit K10. Elapsed, node and MaxRSS from `sacct` (MaxRSS in GiB); train seconds, steps and
+best step from each run's `timing.json`; score seconds from `scores.json` / `law.json` `timing`.
+Summary script (read-only): `/project/def-maxwl/mforooz/t125/smoke/smoke_summary.py`.
+
+**Count runs (`eta_train.sh`, one 10 GB MIG slice, 4 cores, 16000M, 3 h) and their depth-only law
+pass (`eta_law.sh`, 8 cores, 24000M, 1 h).** Every run: 0 records with CRPS > 20, 0 non-finite
+(scores: 140 records per track run, 896 for g = all; law: 12 records per track run, 84 for g = all).
+
+| run (index) | train job, node | Elapsed | MaxRSS | train s | best / steps | score s | law job | law Elapsed | law MaxRSS | law score s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A C19M16 real (18) | 24065701, g37 | 00:18:40 | 9.8 | 171 | 250 / 1250 | 878 | 24067469 | 00:01:39 | 6.9 | 48 |
+| B C19M16 real (66) | 24065701, g37 | 00:20:22 | 8.8 | 322 | 2750 / 3750 | 830 | 24067469 | 00:01:00 | 6.2 | 7 |
+| C C19M16 real (114) | 24065701, g30 | 00:19:52 | 8.5 | 612 | 3500 / 4000 | 496 | 24067868 | 00:00:59 | 6.4 | 4 |
+| D C19M16 real (162) | 24065701, g30 | 00:17:16 | 5.7 | 600 | 2750 / 3750 | 353 | 24067469 | 00:01:20 | 5.7 | 26 |
+| A2 C19M16 real (210) | 24065701, g30 | 00:20:05 | 9.3 | 597 | 2750 / 3750 | 524 | 24067868 | 00:01:18 | 6.6 | 24 |
+| B2 C19M16 real (258) | 24065701, g30 | 00:24:52 | 5.8 | 529 | 2000 / 3000 | 878 | 24068466 | 00:01:04 | 6.1 | 8 |
+| C2 C19M16 real (306) | 24065701, g30 | 00:16:20 | 6.2 | 603 | 2750 / 3750 | 293 | 24067469 | 00:00:58 | 7.0 | 5 |
+| D2 C19M16 real (354) | 24065701, g30 | 00:21:47 | 5.9 | 622 | **4000 / 4000** | 600 | 24067868 | 00:01:22 | 8.6 | 25 |
+| Aold C19M16 real (402) | 24065701, g37 | 00:15:39 | 6.1 | **20** | 2000 / 3000 | 877 | 24068466 | 00:01:27 | 6.3 | 21 |
+| A all nocov (45) | 24065701, g37 | 01:13:35 | **15.6** | 389 | 750 / 1750 | 3954 | 24070630 | 00:03:27 | 9.1 | 145 |
+| D2 all nocov (381) | 24065701, g30 | 01:24:44 | **15.6** | 1275 | 2500 / 3500 | 3742 | 24073862 | 00:01:48 | 10.3 | 46 |
+
+Notes. Scoring (4 workers) takes more wall time than training. The two g = all runs peak at 15.6
+GiB against `--mem=16000M` (15.6 GiB): at the limit. D2 C19M16 picks its last step (no early stop
+inside the step budget). Aold trains 3000 steps in 20 s (the old-grid form; not checked further).
+
+**The map h.**
+
+| run | job, node | Elapsed | MaxRSS | train s | best / steps | validation passes | notes |
+|---|---|---|---|---|---|---|---|
+| h_alone formula:bin | 24065702_0, c331 | 00:01:30 | 9.0 | - | - | - | score 43.8 s, 128 products, 0 non-finite, 0 CRPS > 20 |
+| h_alone formula:frag | 24065702_1, c331 | 00:01:31 | 9.5 | - | - | - | score 44.4 s, 128 products, 0 non-finite, 0 CRPS > 20 |
+| true affine r1 push s0 | 24065703_0, c331 | 00:26:14 | 22.4 | 1522 | 1000 / 2000 | 9: first 142 s, median 31 s, sum 394 s | |
+| true mlp r5 noise s0 | 24065703_21, c331 | 01:05:10 | 22.4 | 3855 | 2750 / 3750 | 16: first 371 s, median 61 s, sum 2034 s | |
+| fnb mlp r5 push, f = A C19M16 real s0 | 24067474_42, c140 | **TIMEOUT 03:00:20** | 7.9 | - | - | - | TotalCPU 13:55 h (4.6 of 8 cores busy); no timing.json, so no f_pass_seconds, val_seconds or capped-row count |
+| fnb formula_mlp r5 noise, same f | 24067474_47, c146 | **TIMEOUT 03:00:20** | 4.6 | - | - | - | TotalCPU 11:48 h (3.9 cores busy); same |
+| chain smoke, 4 h | 24083622, g30 | CHAIN4_ELAPSED | CHAIN4_RSS | - | - | - | CHAIN4_NOTES |
+
+The fnb fits print nothing between "h: ..." and the end, and write `train_log.tsv` and
+`timing.json` only at the end, so a timed-out fit leaves no reading. Rerun 24083625 (same indices,
+`--time=12:00:00`) measures one full fit; the 6-h chain smoke 24083626 waits on it.
+
+**Recommended sizes for the full runs** (assumes the smoke's tasks are typical; slice-hours = one
+10 GB MIG slice for one hour):
+
+- **N3, 432 count runs.** 378 track runs at about 20 min (15.7-24.9 min) and 54 g = all runs at
+  about 80 min (73.6-84.7 min): 378 × 0.33 h + 54 × 1.33 h ≈ 125 + 72 ≈ **200 slice-hours**. At
+  `%40` the wall time is about 200 / 40 = 5 h plus a 1.4 h tail, if 40 slices are free. `--time`
+  3:00:00 stays (2× the longest). **`--mem=24000M` on the command line** (the g = all runs sit at
+  the 16000M limit). Law pass: 378 × about 1.3 min + 54 × about 3 min ≈ 11 task-hours × 8 cores ≈
+  **90 core-hours**; `--time=0:30:00` and `--mem=16000M` are enough (longest 3:27, largest 10.3
+  GiB); `%40` per batch.
+- **N4, 36 true-X′ h fits.** Observed 26 and 65 min, 22.4 GiB each. Upper estimate 36 × 1.1 h × 8
+  cores ≈ **320 core-hours**; at `%36` the wall time is about 1.1-1.5 h. Keep `--time=3:00:00` and
+  `--mem=32000M` (70 % used). **38 alone scorings:** the formulas take 1.5 min and 9.5 GiB; a learned
+  h alone was not measured. Estimate under 15 min each, 38 × 0.25 h × 8 ≈ **76 core-hours** at
+  most; `%38`, keep `--time=2:00:00`, `--mem=32000M`.
+- **N5, 768 fnb fits.** Not sizable yet: both smoke fits ran over 3 h on 8 cores. Lower bound
+  768 × 3 h × 8 cores ≈ **18,400 core-hours**; at `%40` the wall time is at least 768 / 40 × 3 h ≈
+  58 h. The script's `--time=3:00:00` is too short. **64 chains:** CHAIN_SIZING.
+
+**Flags (not decided here).**
+(a) One fnb fit under 20 min on 8 cores: **no** — both ran over 3 h (TIMEOUT).
+(b) Any fnb fit over 2 h on 8 cores: **yes**, both (the plan's trigger for the GPU-slice line in
+`h_train.sh`; a repo change goes through a chunk).
+(c) Explosions or non-finite: none in the 11 count runs, the 11 law passes or the 2 formula
+alone scorings. CHAIN_FLAG
+
+**Verify job 24065614 (K10), CRIT lines** (`t125/verify/t125_verifyK10_24065614.out`; 00:51:05,
+6.8 GiB, c316):
+
+    CRIT 2 PASS rc=0 passed=615 failed=0 skipped=0 deselected=0 error=0 (518 s)
+    CRIT 3c K10 sha=7e0f0f2fabfc28b00c40bdc44c2886483d2e8bbd runs_pass=0 runs_fail=3
+    CRIT 3c K8 sha=33e09cb (tmp copy, tests from git 33e09cb) runs_pass=0 runs_fail=3
+    CRIT 1 FAIL rc=1 passed=610 failed=1 skipped=6 deselected=2611 error=0 (2145 s)
+    CRIT 1 ID FAILED tests/test_t118_xshuf_score.py::test_twin_scoring_is_deterministic[D2]
+
+Each 3c run is passed=1 failed=1: the A2 case passes and the D2 case fails, on K10 and equally on
+the t118 kit K8. The D2 twin scoring is not deterministic on Nibi CPU in the t118 code too, so it
+is not a t125 regression. The `records` lists differ (`c_star_all` agrees on the first record);
+which field differs needs `pytest -vv`.
 
 Formula sanity, MSE on log1p, chr19 + chr21 pooled (the alone scorer pools both; no chr21-only
 number exists), blacklist removed. bin-only / frag-window:
