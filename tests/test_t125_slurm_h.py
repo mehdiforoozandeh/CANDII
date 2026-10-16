@@ -107,8 +107,9 @@ def _alone_line(spec, out="/out"):
             f"{spec} {out}/alone --workers 8")
 
 
-def _chain_args(out="/out", eta="/eta", seeds=None):
-    return ["/kit", "/p", "/c", "/ctl", "/bl.bed", eta, out] + ([str(seeds)] if seeds else [])
+def _chain_args(out="/out", eta="/eta", seeds=None, h_set=None):
+    return (["/kit", "/p", "/c", "/ctl", "/bl.bed", eta, out] + ([str(seeds)] if seeds else [])
+            + ([h_set] if h_set else []))
 
 
 def _chain_split(line: str):
@@ -404,7 +405,7 @@ def test_dry_run_chain_index_0_pinned():
                     "/c", "/ctl", "/bl.bed", "/eta/A_C07M20_counts_real_s0", "/out/chain"]
     assert len(specs) == 50
     assert specs == _chain_specs("A_C07M20_counts_real_s0", "/out")
-    assert tail == ["--workers", "4"]
+    assert tail == ["--workers", "4", "--mix-merge", "256"]
 
 
 def test_dry_run_chain_learned_formula_h_are_run_dirs_not_formulas():
@@ -444,13 +445,47 @@ def test_dry_run_chain_notes_missing_train_done_then_skips_on_chain_done(tmp_pat
     r = _dry("chain", args, 0)
     assert r.returncode == 0 and "exit 3" not in r.stderr and len(r.stdout.splitlines()) == 1
     (out / "chain" / F_RUNS[0]).mkdir(parents=True)
-    (out / "chain" / F_RUNS[0] / "CHAIN_DONE").touch()
+    done = out / "chain" / F_RUNS[0] / "CHAIN_DONE"
+    names = [Path(s).name if not s.startswith("formula:") else "h_formula_" + s.split(":")[1]
+             for s in _chain_specs(F_RUNS[0], str(out))]
+    done.write_text("\n".join(names[:38]) + "\n")        # a "true" chain: not every h
+    r = _dry("chain", args, 0)
+    assert r.returncode == 0 and len(r.stdout.splitlines()) == 1
+    done.write_text("\n".join(names) + "\n")
     r = _dry("chain", args, 0)
     assert r.returncode == 0 and r.stdout == "" and "skip" in r.stderr
 
 
+def test_dry_run_chain_true_set_needs_no_fnb_h(tmp_path):
+    """h_set "true" (PI 2026-10-16, a per-track f): the 2 formulas and the 36 true-X' h, in the
+    chain-list order; no fnb run dir is needed; it skips once its 38 h are in CHAIN_DONE."""
+    out, eta = tmp_path / "h", tmp_path / "eta"
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="true"), 3)
+    assert r.returncode == 0, r.stderr
+    head, specs, tail = _chain_split(r.stdout)
+    want = [s for s in _chain_specs(F_RUNS[3], str(out)) if "/runs_fnb/" not in s]
+    assert specs == want and len(specs) == 38
+    assert tail == ["--workers", "4", "--mix-merge", "256"]
+    assert "36 h run dirs lack TRAIN_DONE" in r.stderr
+    for spec in want:
+        if not spec.startswith("formula:"):
+            Path(spec).mkdir(parents=True)
+            (Path(spec) / "TRAIN_DONE").touch()
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="true"), 3)
+    assert "lack TRAIN_DONE" not in r.stderr               # the 12 fnb run dirs are not asked for
+    (out / "chain" / F_RUNS[3]).mkdir(parents=True)
+    names = [Path(s).name if not s.startswith("formula:") else "h_formula_" + s.split(":")[1]
+             for s in want]
+    (out / "chain" / F_RUNS[3] / "CHAIN_DONE").write_text("\n".join(names) + "\n")
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="true"), 3)
+    assert r.returncode == 0 and r.stdout == "" and "skip" in r.stderr
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="all"), 3)
+    assert r.returncode == 0 and len(_chain_split(r.stdout)[1]) == 50   # "all" still runs
+
+
 @pytest.mark.parametrize("args,index", [(_chain_args(), 64), (_chain_args(), 1000),
-                                        (_chain_args(seeds=2), 0)])
+                                        (_chain_args(seeds=2), 0),
+                                        (_chain_args(seeds=1, h_set="fnb"), 0)])
 def test_dry_run_chain_bad_input_fails(args, index):
     assert _dry("chain", args, index).returncode == 2
 

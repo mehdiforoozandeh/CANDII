@@ -47,8 +47,9 @@ training chromosomes and chr22, never chr19 or chr21 (the score chromosomes).
 
 Speed (t125-P2h, no number changes): the f-NB chunks are built on the training device
 (`hmap.data.fnb_flat_fast`: the same chunks and values as `fnb_chunks`, h and the loss still run
-chunk by chunk; bit for bit on a CPU device, on a GPU log1p of the fragment-window mean is the
-GPU's); validation keeps each chunk's plan and the formula values across passes; the windows of an
+chunk by chunk, so value and gradient are the reference's bit for bit on the same device; the
+features are bit for bit on every device); validation keeps each chunk's plan and the formula
+values across passes; the windows of an
 f-NB draw are built in `DRAW_WORKERS` threads for a cache-mode corpus, one batch ahead of the
 step. `fnb_batch_loss` / `validate_fnb` keep the reference path (`fast=False`) for the tests. Each
 validation prints one progress line; `timing.json` adds `step_seconds` and `draw_seconds` (sums
@@ -209,7 +210,7 @@ def _fnb_loss_flat(h, std, fb: hd.FnbBatch, rung: int, formula: bool, noise: boo
     """`fnb_batch_loss` with the features of runs of chunks built at once (`hd.fnb_flat_fast`);
     each chunk's forward pass, loss and backward pass still run on its own [r, K] block in the
     same order (a BLAS result may depend on the batch size), and the parts are summed in the same
-    order, so on a CPU device value and gradient are the reference's bit for bit."""
+    order, so value and gradient are the reference's bit for bit on the same device."""
     N = int(fb.y.shape[0])
     st = {"n_bins": N, "n_capped": 0, "n_k_sum": 0, "n_k_max": 0}
     if N == 0:
@@ -221,7 +222,9 @@ def _fnb_loss_flat(h, std, fb: hd.FnbBatch, rung: int, formula: bool, noise: boo
             xs = std.apply(fl.feat)
             F = xs.shape[1]
             for e0, r0, r, K in fl.blocks:
-                m, ls = h(xs[e0:e0 + r * K].view(r, K, F))
+                # a fresh copy: the block gets the same shape AND alignment as the reference's
+                # own tensor (a GPU GEMM may pick its kernel by the pointer's alignment)
+                m, ls = h(xs[e0:e0 + r * K].view(r, K, F).clone())
                 w = fl.w[e0:e0 + r * K].view(r, K)
                 y = fl.y[r0:r0 + r]
                 loss = (hm.loss_noise_fnb(m, ls, w, y, rule) if noise

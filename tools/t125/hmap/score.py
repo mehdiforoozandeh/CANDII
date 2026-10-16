@@ -59,6 +59,7 @@ device's libm differ from the numpy reference, which stays the CPU path.
     python tools/t125/hmap/score.py alone <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <h_spec> <out_dir> [--workers N]
     python tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <f_run_dir> <out_dir> --h <h_spec> [--h ...] [--workers N]
       both: [--control-rl-tsv PATH] (default: products.CONTROL_RL_TSV) [--device auto|cpu|cuda] (default auto, as hmap/train.py)
+      chain: [--mix-merge G] own-noise h: mixture CRPS over <= G merged components per bin (0 = exact, default)
 
 alone → `<out_dir>/<h_name>/scores.json` + `ALONE_DONE`, one record per usable product.
 chain → `<out_dir>/<f_run_name>/<h_name>/scores.json` per h, one record per training pair of f;
@@ -451,11 +452,14 @@ def _split(crps_all, cs, c, prefix: str) -> dict:
             f"{prefix}_c_star_all": c}
 
 
-def score_context(hs: list, ctx: dict, device=None, fast: bool | None = None) -> tuple[dict, dict]:
+def score_context(hs: list, ctx: dict, device=None, fast: bool | None = None,
+                  mix_groups: int | None = None) -> tuple[dict, dict]:
     """({h_name: metric fields}, shared fields {n_k_mean, n_k_max, n_capped}) of one context.
 
     `fast` (default: True exactly when `device` is a CUDA device) runs `score_context_fast` on
     `device`; otherwise the numpy reference below runs (the CPU path, unchanged by t125-P2h).
+    `mix_groups` (the chain's merged mixture, PI 2026-10-16; None = exact) needs the fast path
+    and is used for the own-noise h only; shared then holds `n_mix_merged_bins`.
 
     Keys. Push only: `crps_*` (the proper CRPS of the pushed set on P) with its split
     `crps_oracle_scaled_all`, `scale_error_all`, `c_star_all`, the flag `crps_all_gt_20` and
@@ -467,9 +471,11 @@ def score_context(hs: list, ctx: dict, device=None, fast: bool | None = None) ->
     `crps_log_scale_error_all`, `crps_log_c_star_all`, `n_crps_log_nonfinite`; `mse_log1p_*`,
     `mse_*`."""
     if fast is None:
-        fast = device is not None and torch.device(device).type == "cuda"
+        fast = (device is not None and torch.device(device).type == "cuda") or bool(mix_groups)
+    if mix_groups and not fast:
+        raise ValueError("the merged mixture (mix_groups) runs on the fast path only")
     if fast:
-        return score_context_fast(hs, ctx, "cpu" if device is None else device)
+        return score_context_fast(hs, ctx, "cpu" if device is None else device, mix_groups)
     y = ctx["y"]
     N = y.shape[0]
     ly = np.log1p(y)
@@ -532,9 +538,12 @@ def score_context(hs: list, ctx: dict, device=None, fast: bool | None = None) ->
     return _records(hs, arr, c_nat, c_log, n_k, y, ly, shared)
 
 
-def _records(hs, arr: dict, c_nat: dict, c_log: dict, n_k, y, ly, shared: dict):
+def _records(hs, arr: dict, c_nat: dict, c_log: dict, n_k, y, ly, shared: dict,
+             mix_groups: int | None = None):
     """The per-h record fields from the per-bin arrays (shared by both paths)."""
     N = y.shape[0]
+    if mix_groups:
+        shared["n_mix_merged_bins"] = int(np.count_nonzero(n_k > int(mix_groups)))
     shared["n_k_mean"] = float(n_k.mean()) if N else None
     shared["n_k_max"] = int(n_k.max()) if N else None
     sub = br.subset_index(y)
@@ -592,9 +601,9 @@ def _support_rows_unique(ctx, rows):
 
 
 class BatchT:
-    """`Batch` on a torch device: the per-(bin, k) inputs of one chunk, shared by every h. The
-    columns are `Batch`'s bit for bit except log1p of the fragment-window mean on a GPU
-    (`hd.log1p_f32`); the formula P comes from `hd.formula_log1p_t` (scipy on the distinct pairs)."""
+    """`Batch` on a torch device: the per-(bin, k) inputs of one chunk, shared by every h, bit for
+    bit `Batch`'s on every device: log1p on the host (`hd.log1p_f32`), the formula P from
+    `hd.formula_log1p_t` (scipy on the distinct pairs)."""
 
     def __init__(self, ctx, rows, k_u, inv, device, fcache: dict | None = None):
         self.ctx, self.rows, self.k_u, self.device, self.fcache = ctx, rows, k_u, device, fcache
@@ -670,7 +679,7 @@ def _call_t(h, bt: BatchT):
 def _row_key_t(h, bt: BatchT) -> torch.Tensor | None:
     """For a rung-1 learned h (inputs: k, the control bin, the assay), int64 [r] equal exactly for
     bins whose (mu, sigma) rows over k are the same: the NB row and the control bin's bits."""
-    if h.kind != "learned" or h.rung != 1:
+    if h.kind != "learned" or h.rung != 1 or h.formula:
         return None
     ctl = bt.get("fixed")[:, 0].contiguous().view(torch.int32).to(torch.int64) & 0xFFFFFFFF
     return bt.inv_t * (1 << 32) + ctl
@@ -762,7 +771,8 @@ class _FitT(_Fit):
         return _grid(fit)
 
 
-def score_context_fast(hs: list, ctx: dict, device) -> tuple[dict, dict]:
+def score_context_fast(hs: list, ctx: dict, device, mix_groups: int | None = None
+                       ) -> tuple[dict, dict]:
     """`score_context` with every per-(bin, k) step on `device` in torch float64 (the h forward in
     float32, as the reference). The same chunks, NB supports (on each chunk's distinct rows),
     features and formula values; only the summation order and the device's libm differ."""
@@ -795,7 +805,7 @@ def score_context_fast(hs: list, ctx: dict, device) -> tuple[dict, dict]:
                 if h.noise:
                     sg = torch.exp(ls)
                     fits[h.name].add_noise(mu, sg, w, lyt[rt], pf.crps_gauss_mixture_t(
-                        mu, sg, w, lyt[rt], row_key=_row_key_t(h, bt)))
+                        mu, sg, w, lyt[rt], row_key=_row_key_t(h, bt), max_groups=mix_groups))
                 else:
                     fits[h.name].add_push(*_sorted_set_t(_p_hat_t(mu), w), yt[rt], lyt[rt])
         for h in hs:
@@ -819,7 +829,8 @@ def score_context_fast(hs: list, ctx: dict, device) -> tuple[dict, dict]:
             if h.noise:
                 sg = torch.exp(ls)
                 m = pf.mean_gauss_mixture_logp_t(mu, sg, w)
-                cl = pf.crps_gauss_mixture_t(mu, sg, w, lyy, row_key=_row_key_t(h, bt))
+                cl = pf.crps_gauss_mixture_t(mu, sg, w, lyy, row_key=_row_key_t(h, bt),
+                                             max_groups=mix_groups)
                 a["crps_log"][rows] = cl.cpu().numpy()
                 a["crps_log_c"][rows] = (cl + _mix_e1_t(mu, sg, w, lyy, s)
                                          - _mix_e1_t(mu, sg, w, lyy)).cpu().numpy()
@@ -834,7 +845,7 @@ def score_context_fast(hs: list, ctx: dict, device) -> tuple[dict, dict]:
                 a["crps_log"][rows] = _set_crps_t(lv, ws, coef, lyy).cpu().numpy()
                 a["crps_log_c"][rows] = _set_crps_t(lv + s, ws, coef, lyy).cpu().numpy()
             a["mean"][rows] = m.cpu().numpy()
-    return _records(hs, arr, c_nat, c_log, n_k, y, ly, shared)
+    return _records(hs, arr, c_nat, c_log, n_k, y, ly, shared, mix_groups)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -877,12 +888,20 @@ def chain_job(pair: dict) -> dict:
         per.append({"chrom": c, "treat": mu, "ctl": _ctl(tgt, c), "mu": mu, "n_size": n_size,
                     "y": corpus.get(tgt, "pval", c)})
     ctx = build_context(info, per, _CTX["blacklist"], _need_fixed(hs))
-    fields, shared = score_context(hs, ctx, device=_CTX.get("device"))
+    G = _CTX.get("mix_groups")
+    fields, shared = score_context(hs, ctx, device=_CTX.get("device"), mix_groups=G)
     base = {k: pair[k] for k in lpairs.PAIR_KEYS}
-    return {name: {**base, "f_run_name": _CTX["f_run_name"], "h_name": name,
-                   "n_k_mean": shared["n_k_mean"], "n_k_max": shared["n_k_max"],
-                   "n_capped": shared["n_capped"], **f}
-            for name, f in fields.items()}
+    out = {name: {**base, "f_run_name": _CTX["f_run_name"], "h_name": name,
+                  "n_k_mean": shared["n_k_mean"], "n_k_max": shared["n_k_max"],
+                  "n_capped": shared["n_capped"], **f}
+           for name, f in fields.items()}
+    if G:
+        # the own-noise h's crps_log_* come from the merged mixture (PI 2026-10-16)
+        for h in hs:
+            if h.noise:
+                out[h.name].update(crps_mix_merged=True, crps_mix_groups=int(G),
+                                   n_mix_merged_bins=shared["n_mix_merged_bins"])
+    return out
 
 
 def _map(fn, items: list, workers: int, device) -> list:
@@ -962,9 +981,12 @@ def score_alone(manifest, covariates, data_dir, ctl_cache, blacklist, h_spec, ou
 
 def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir, out_dir,
                 h_specs: list, workers: int = 1, control_rl_tsv=products.CONTROL_RL_TSV,
-                device="auto") -> Path:
+                device="auto", mix_groups: int | None = None) -> Path:
     """Every listed h on f's NB over f's training pairs -> `<out_dir>/<f_run>/<h_name>/scores.json`;
-    CHAIN_DONE once every listed h is scored. Returns `<out_dir>/<f_run>`."""
+    CHAIN_DONE once every listed h is scored. Returns `<out_dir>/<f_run>`. `mix_groups` (> 0):
+    the own-noise h's mixture CRPS over at most that many merged components per bin (each such
+    record carries crps_mix_merged, crps_mix_groups, n_mix_merged_bins); None or 0: exact."""
+    mix_groups = int(mix_groups) if mix_groups else None
     t0 = time.time()
     f_run_dir = Path(f_run_dir)
     hs = [load_h(s, device) for s in h_specs]          # every spec checked before any work
@@ -979,7 +1001,7 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
         if pred.run_name != f_run_dir.name:
             raise ValueError(f"{f_run_dir}: run_name {pred.run_name!r} != its directory name")
         _setup(manifest, covariates, data_dir, ctl_cache, blacklist, todo, control_rl_tsv,
-               pred=pred, f_run_name=pred.run_name, device=pred.device)
+               pred=pred, f_run_name=pred.run_name, device=pred.device, mix_groups=mix_groups)
         t1 = time.time()
         results = _map(chain_job, list(pred.train_pairs), workers, pred.device)
         t2 = time.time()
@@ -987,7 +1009,8 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
         for h in todo:
             records = [r[h.name] for r in results]
             out = {"created_utc": _now(), "mode": "chain", "f_run": f_info, "h": h.info(),
-                   "config": _config(blacklist), "records": records, **_summary(records),
+                   "config": {**_config(blacklist), "mix_groups": mix_groups},
+                   "records": records, **_summary(records),
                    "n_capped_total": sum(r["n_capped"] for r in records),
                    "timing": {"setup": round(t1 - t0, 3), "score_all_h": round(t2 - t1, 3),
                               "n_h_scored_together": len(todo), "n_jobs": len(records),
@@ -1014,6 +1037,9 @@ def main(argv=None) -> int:
         a.add_argument("out_dir", type=Path)
         if name == "chain":
             a.add_argument("--h", dest="h_specs", action="append", required=True)
+            a.add_argument("--mix-merge", dest="mix_groups", type=int, default=0,
+                           help="own-noise h: merge the mixture to at most this many components "
+                                "per bin (0 = exact, the default)")
         a.add_argument("--workers", type=int, default=lscore.default_workers())
         a.add_argument("--control-rl-tsv", type=Path, default=products.CONTROL_RL_TSV)
         a.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
@@ -1036,7 +1062,7 @@ def main(argv=None) -> int:
                 return 0
         path = score_chain(*common, args.f_run_dir, args.out_dir, args.h_specs,
                            workers=args.workers, control_rl_tsv=args.control_rl_tsv,
-                           device=args.device)
+                           device=args.device, mix_groups=args.mix_groups or None)
     print(f"{args.cmd} -> {path} ({time.time() - t0:.1f} s)")
     return 0
 

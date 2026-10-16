@@ -6,15 +6,24 @@
 #
 # WHAT ONE TASK DOES.
 #   python3 $KIT/tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <cache_dir> <ctl_cache> \
-#       <blacklist> <eta_runs_dir>/<f_run> <out_root>/chain --h <spec> [--h <spec> ...] --workers 4
+#       <blacklist> <eta_runs_dir>/<f_run> <out_root>/chain --h <spec> [--h <spec> ...] --workers 4 \
+#       --mix-merge 256
 #           -> chain/<f_run>/<h_name>/scores.json per h, chain/<f_run>/CHAIN_DONE
+# --mix-merge 256 (PI 2026-10-16): the own-noise h's mixture CRPS over at most 256 moment-matched
+# components per bin (each such record says crps_mix_merged); push-only h stay exact.
 # The h list is `python3 tools/t125/hmap/tasks.py chain-list <f_run> --fnb-seeds N` (50 at N = 1:
 # the 2 formulas, the 36 h trained on the true X', this f's 12 h trained on its NB), each name
 # turned into a spec: h_formula_bin / h_formula_frag -> formula:bin / formula:frag (the learned
 # h_formula_affine_* and h_formula_mlp_* are run dirs, not formulas); *_true_s<seed> -> <out_root>/runs_true/<name>;
-# *_<f_run>_s<seed> -> <out_root>/runs_fnb/<name>. A task whose CHAIN_DONE exists exits 0 without
-# work. A task whose f run or any learned h run dir has no TRAIN_DONE exits 3, so an unfinished
-# train task shows up as a failed chain task instead of a partial chain.
+# *_<f_run>_s<seed> -> <out_root>/runs_fnb/<name>. A task whose CHAIN_DONE lists every h of the
+# task exits 0 without work. A task whose f run or any learned h run dir has no TRAIN_DONE exits
+# 3, so an unfinished train task shows up as a failed chain task instead of a partial chain.
+#
+# THE H SET (9th argument, PI 2026-10-16). "all" (default): the 50 h above, for the 16 real f
+# with one g across tracks (the repair reading; their fnb h must exist). "true": only the 2
+# formulas and the 36 true-X' h (38), no fnb h needed: the per-track f, if time allows. A later
+# "all" task on an f that a "true" task chained scores only its 12 fnb h (h with a scores.json
+# are not scored again) and rewrites CHAIN_DONE with all 50 names.
 #
 # THE TASK TABLE. Index -> f run comes from `python3 tools/t125/hmap/tasks.py fnb <manifest>`:
 # the f runs in the order of their first row (that table is built from eta.pairs.f_runs_seed0).
@@ -43,7 +52,7 @@
 # counts on chr19 + chr21) does not, above all for the rung-5 own-noise h, whose mixture CRPS is
 # O(support^2) per bin (measured in t125-P2h).
 #
-# DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE exists; a note on stderr for
+# DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE lists every h; a note on stderr for
 # each missing TRAIN_DONE, where a real task would exit 3) and exits 0 before any module load. The
 # tables are resolved as in h_train.sh: ${PYTHON:-python3}, $KIT or else this script's checkout,
 # <products_dir>/MANIFEST.tsv or else tests/fixtures/t112_meta/MANIFEST.tsv.
@@ -59,6 +68,10 @@
 #   sbatch --parsable --array=$READY_INDICES%40 --exclude=c128,c166,c537,c371 \
 #       --output=$OUT_H/logs/%x_%A_%a.out \
 #       $KIT/slurm/t125/h_chain.sh $KIT $PRODUCTS $CACHE $CTL $BLACKLIST $ETA_RUNS $OUT_H 1
+#   # a per-track f with the formulas and the 36 true-X' h only:
+#   sbatch --parsable --array=$INDICES%40 --exclude=c128,c166,c537,c371 \
+#       --output=$OUT_H/logs/%x_%A_%a.out \
+#       $KIT/slurm/t125/h_chain.sh $KIT $PRODUCTS $CACHE $CTL $BLACKLIST $ETA_RUNS $OUT_H 1 true
 # %40 is safe because each task builds its own venv in $SLURM_TMPDIR.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t125_hchain
@@ -71,7 +84,7 @@
 set -euo pipefail
 
 BLACKLIST_SHA256_PREFIX=31c69342
-USAGE="usage: h_chain.sh <kit_dir> <products_dir> <cache_dir> <ctl_cache> <blacklist.bed> <eta_runs_dir> <out_root> [fnb_seeds 1|3]"
+USAGE="usage: h_chain.sh <kit_dir> <products_dir> <cache_dir> <ctl_cache> <blacklist.bed> <eta_runs_dir> <out_root> [fnb_seeds 1|3] [h_set all|true]"
 KIT="${1:?$USAGE}"
 PRODUCTS="${2:?$USAGE}"
 CACHE="${3:?$USAGE}"
@@ -80,12 +93,19 @@ BLACKLIST="${5:?$USAGE}"
 ETA_RUNS="${6:?$USAGE}"
 OUT_ROOT="${7:?$USAGE}"
 FNB_SEEDS="${8:-1}"
+H_SET="${9:-all}"
 IDX="${SLURM_ARRAY_TASK_ID:?array task only}"
 [[ "$IDX" =~ ^[0-9]+$ ]] || { echo "SLURM_ARRAY_TASK_ID '$IDX' is not an index" >&2; exit 2; }
 case "$FNB_SEEDS" in
   1|3) ;;
   *) echo "fnb_seeds '$FNB_SEEDS' is not 1 or 3" >&2; exit 2 ;;
 esac
+case "$H_SET" in
+  all) N_EXPECT=$((38 + 12 * FNB_SEEDS)) ;;
+  true) N_EXPECT=38 ;;
+  *) echo "h_set '$H_SET' is not all or true; $USAGE" >&2; exit 2 ;;
+esac
+MIX_MERGE=256
 case "$OUT_ROOT" in
   */t118|*/t118/*) echo "out root $OUT_ROOT is under a t118 directory; t125 writes only under t125/" >&2; exit 2 ;;
 esac
@@ -133,6 +153,31 @@ build_specs() {
   done
 }
 
+# The chain-list names on stdin, kept for $H_SET: "true" drops this f's fnb h.
+names_for_set() {
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    case "$H_SET:$name" in
+      true:h_formula_bin|true:h_formula_frag|true:*_true_s[0-9]*|all:*) echo "$name" ;;
+    esac
+  done
+}
+# 0 when $CHAIN/$F_RUN/CHAIN_DONE lists every name on stdin.
+chain_done_covers() {
+  local done="$CHAIN/$F_RUN/CHAIN_DONE" name
+  [ -f "$done" ] || return 1
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    grep -qxF "$name" "$done" || return 1
+  done
+  return 0
+}
+# Before the venv (no h list yet): CHAIN_DONE has at least as many names as this h set needs.
+chain_done_count_ok() {
+  [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ] && [ "$(grep -c . "$CHAIN/$F_RUN/CHAIN_DONE")" -ge "$N_EXPECT" ]
+}
+
 if [ "${DRY_RUN:-0}" = 1 ]; then
   TOOLS="$KIT"
   [ -f "$TOOLS/tools/t125/hmap/tasks.py" ] || TOOLS=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -143,15 +188,15 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   F_RUN=$(PYTHONPATH="$TPP" "$PY" "$TOOLS/tools/t125/hmap/tasks.py" fnb "$TABLE_MANIFEST" \
           | f_runs_from | f_run_from)
   [ -n "$F_RUN" ] || { echo "no task $IDX in the f-run table" >&2; exit 2; }
-  if [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ]; then echo "skip $F_RUN: CHAIN_DONE exists" >&2; exit 0; fi
   NAMES=$(PYTHONPATH="$TPP" "$PY" "$TOOLS/tools/t125/hmap/tasks.py" chain-list "$F_RUN" \
-          --fnb-seeds "$FNB_SEEDS")
+          --fnb-seeds "$FNB_SEEDS" | names_for_set)
+  if chain_done_covers <<< "$NAMES"; then echo "skip $F_RUN: CHAIN_DONE lists every h" >&2; exit 0; fi
   build_specs <<< "$NAMES"
   [ -f "$ETA_RUNS/$F_RUN/TRAIN_DONE" ] \
     || echo "note: no $ETA_RUNS/$F_RUN/TRAIN_DONE; a real task would exit 3" >&2
   [ "${#MISSING[@]}" = 0 ] \
     || echo "note: ${#MISSING[@]} h run dirs lack TRAIN_DONE; a real task would exit 3" >&2
-  echo "python3 $KIT/tools/t125/hmap/score.py chain $MANIFEST $COVARIATES $CACHE $CTL $BLACKLIST $ETA_RUNS/$F_RUN $CHAIN ${SPECS[*]} --workers 4"
+  echo "python3 $KIT/tools/t125/hmap/score.py chain $MANIFEST $COVARIATES $CACHE $CTL $BLACKLIST $ETA_RUNS/$F_RUN $CHAIN ${SPECS[*]} --workers 4 --mix-merge $MIX_MERGE"
   exit 0
 fi
 
@@ -180,7 +225,7 @@ echo "blacklist sha256: $BL_SHA"
 if [ -f "$TASKS_TSV" ]; then
   F_RUN=$(f_run_from < "$TASKS_TSV")
   if [ -n "$F_RUN" ]; then
-    if [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ]; then echo "skip $F_RUN: CHAIN_DONE exists"; exit 0; fi
+    if chain_done_count_ok; then echo "skip $F_RUN: CHAIN_DONE lists $N_EXPECT h or more"; exit 0; fi
     [ -f "$ETA_RUNS/$F_RUN/TRAIN_DONE" ] || { echo "no $ETA_RUNS/$F_RUN/TRAIN_DONE: f run $F_RUN did not finish" >&2; exit 3; }
   fi
 fi
@@ -220,19 +265,19 @@ fi
 rm -f "$TMP_TABLE"
 [ -n "$F_RUN" ] || { echo "no task $IDX in the f-run table" >&2; exit 2; }
 echo "f run: $F_RUN"
-if [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ]; then echo "skip $F_RUN: CHAIN_DONE exists"; exit 0; fi
 [ -f "$ETA_RUNS/$F_RUN/TRAIN_DONE" ] || { echo "no $ETA_RUNS/$F_RUN/TRAIN_DONE: f run $F_RUN did not finish" >&2; exit 3; }
 
-NAMES=$(python3 "$KIT/tools/t125/hmap/tasks.py" chain-list "$F_RUN" --fnb-seeds "$FNB_SEEDS")
+NAMES=$(python3 "$KIT/tools/t125/hmap/tasks.py" chain-list "$F_RUN" --fnb-seeds "$FNB_SEEDS" | names_for_set)
+if chain_done_covers <<< "$NAMES"; then echo "skip $F_RUN: CHAIN_DONE lists every h"; exit 0; fi
 build_specs <<< "$NAMES"
 if [ "${#MISSING[@]}" != 0 ]; then
   echo "${#MISSING[@]} h run dirs lack TRAIN_DONE; train them first:" >&2
   printf '  %s\n' "${MISSING[@]}" >&2
   exit 3
 fi
-echo "h scored: $((${#SPECS[@]} / 2))"
+echo "h set $H_SET: $((${#SPECS[@]} / 2)) h"
 
 python3 "$KIT/tools/t125/hmap/score.py" chain "$MANIFEST" "$COVARIATES" "$CACHE" "$CTL" \
-    "$BLACKLIST" "$ETA_RUNS/$F_RUN" "$CHAIN" "${SPECS[@]}" --workers 4
+    "$BLACKLIST" "$ETA_RUNS/$F_RUN" "$CHAIN" "${SPECS[@]}" --workers 4 --mix-merge "$MIX_MERGE"
 
 echo "=== done $F_RUN $(date -u)"

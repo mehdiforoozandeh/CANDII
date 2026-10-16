@@ -11,9 +11,10 @@ the code (`fast=False`, the numpy CPU scorer), on the synthetic set-up of tests/
 - the threaded f-NB draw (cache-mode corpus): the same batch;
 - the chain (`score_context_fast` on CPU torch) vs the numpy reference: <= 1e-9 relative on every
   record of formula, learned push and learned own-noise h, also with capped rows and alone;
-- a checkpoint written by the pre-change train.py (git edc7329) loads and chain-scores with the
-  current code exactly as with the pre-change score.py (skipped without git or that commit);
-- on a CUDA device (Nibi only): the fast paths against the reference on the same device.
+- the pre-change train.py, score.py, data.py and pushforward.py (edc7329, vendored in
+  tests/fixtures/t125_p2h_edc7329): the f-NB draws, a checkpoint and its chain scores are the same;
+- on Nibi: real K10 true-X' checkpoints chain-score as with edc7329 (CPU, bit for bit; fast path
+  within 1e-7), and on a CUDA device the fast paths against the reference on the same device.
 """
 from __future__ import annotations
 
@@ -349,7 +350,7 @@ def _few_pairs(monkeypatch, n=3):
 def _chain_records(S, specs, out, fast, monkeypatch):
     real = score.score_context
 
-    def forced(hs, ctx, device=None, fast_=None):
+    def forced(hs, ctx, device=None, **kw):
         return real(hs, ctx, device="cpu", fast=fast)
     monkeypatch.setattr(score, "score_context", forced)
     fd = score.score_chain(S["manifest"], S["cov"], S["prod"], S["ctl"], S["bed"], S["f_dir"],
@@ -404,7 +405,7 @@ def test_alone_fast_equals_reference(S, tmp_path, monkeypatch):
     out = {}
     for fast in (False, True):
         monkeypatch.setattr(score, "score_context",
-                            lambda hs, ctx, device=None, fast_=None, f=fast: real(
+                            lambda hs, ctx, device=None, f=fast, **kw: real(
                                 hs, ctx, device="cpu", fast=f))
         recs = {}
         for spec in (S["specs"][1], str(S["h_noise"])):
@@ -416,34 +417,78 @@ def test_alone_fast_equals_reference(S, tmp_path, monkeypatch):
     _assert_records_close(out[False], out[True])
 
 
-# -- a checkpoint of the pre-change train.py -----------------------------------------------------------
+# -- the pre-change code (edc7329, vendored) ----------------------------------------------------
 
 
-def _pre_change_module(path_in_repo: str, name: str, tmp_path: Path):
-    try:
-        src = subprocess.run(["git", "-C", str(ROOT), "show", f"{BASE_SHA}:{path_in_repo}"],
-                             capture_output=True, text=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        pytest.skip(f"git or commit {BASE_SHA} not available (a kit without .git)")
-    f = tmp_path / f"{name}.py"
-    # the module inserts tools/t118 and tools/t125 by its own path: keep it pointing at the repo
-    f.write_text(src.replace("Path(__file__).resolve().parents[2]",
-                             f"Path({str(ROOT / 'tools')!r})"))
-    spec = importlib.util.spec_from_file_location(name, f)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+@pytest.fixture(scope="module")
+def ref(tmp_path_factory):
+    """The pre-change hmap as a package `hmap_ref`: train.py, score.py, data.py and pushforward.py
+    from edc7329 (vendored in tests/fixtures/t125_p2h_edc7329, so this runs in a kit without
+    .git), every other hmap module as it is now (t125-P2h changed no other one). Every
+    `from hmap ...` inside points at hmap_ref, so the old train uses the old data / pushforward."""
+    import re
+    import shutil
+    d = tmp_path_factory.mktemp("hmap_ref_pkg")
+    pkg = d / "hmap_ref"
+    shutil.copytree(ROOT / "tools" / "t125" / "hmap", pkg,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    for f in VENDORED:
+        shutil.copy(VENDOR / f"{f}.py", pkg / f"{f}.py")
+    for f in pkg.glob("*.py"):
+        src = f.read_text()
+        src = re.sub(r"\bfrom hmap(\.| import)", r"from hmap_ref\1", src)
+        src = src.replace("Path(__file__).resolve().parents[2]", f"Path({str(ROOT / 'tools')!r})")
+        f.write_text(src)
+    sys.path.insert(0, str(d))
+    import importlib
+    return {m: importlib.import_module(f"hmap_ref.{m}") for m in ("train", "score", "data",
+                                                                  "pushforward")}
 
 
-def test_pre_change_checkpoint_loads_and_chain_scores_identically(S, tmp_path, monkeypatch):
-    train_pre = _pre_change_module("tools/t125/hmap/train.py", "train_pre", tmp_path)
-    score_pre = _pre_change_module("tools/t125/hmap/score.py", "score_pre", tmp_path)
+VENDOR = ROOT / "tests" / "fixtures" / "t125_p2h_edc7329"
+VENDORED = ("train", "score", "data", "pushforward")
+
+
+def test_vendored_reference_is_edc7329():
+    """The vendored files are the commit's own (checked where git and the commit exist)."""
+    for f in VENDORED:
+        try:
+            src = subprocess.run(["git", "-C", str(ROOT), "show", f"{BASE_SHA}:tools/t125/hmap/{f}.py"],
+                                 capture_output=True, text=True, check=True).stdout
+        except (OSError, subprocess.CalledProcessError):
+            pytest.skip(f"git or commit {BASE_SHA} not available (a kit without .git)")
+        assert (VENDOR / f"{f}.py").read_text() == src, f
+
+
+def test_draws_equal_the_pre_change_draws(S, ref, cache):
+    """FnbSource.draw (refactored for threads) against edc7329's, serial and threaded."""
+    for data_dir in (S["prod"], cache):
+        pred = _pred(S, data_dir=data_dir)
+        corpus = hd.HCorpus(data_dir, S["ctl"])
+        tp = list(pred.config["train_pairs"])
+        chroms, lens = ltrain.training_chroms(corpus.data, tp[0]["source_pid"], hd.SPACE_COUNTS)
+        old_corpus = ref["data"].HCorpus(data_dir, S["ctl"])
+        old = ref["data"].FnbSource(old_corpus, S["infos"], pred, tp, chroms, lens, 256, 7)
+        new = [hd.FnbSource(corpus, S["infos"], pred, tp, chroms, lens, 256, 7, workers=w)
+               for w in ((1, 4) if data_dir == cache else (1,))]
+        for _ in range(3):
+            a = old.draw(9)
+            for src in new:
+                b = src.draw(9)
+                for x, y in zip(a, b):
+                    if isinstance(x, np.ndarray):
+                        np.testing.assert_array_equal(x, y)
+                    else:
+                        assert [i.pid for i in x] == [i.pid for i in y]
+
+
+def test_pre_change_checkpoint_loads_and_chain_scores_identically(S, ref, tmp_path, monkeypatch):
     kw = dict(max_steps=4, eval_every=2, device="cpu", control_rl_tsv=S["rl"], window=256, batch=4)
     runs_pre, runs_new = tmp_path / "runs_pre", tmp_path / "runs_new"
-    old = [train_pre.run_training(S["manifest"], S["cov"], S["prod"], S["ctl"], runs_pre,
-                                  "formula_mlp", 5, 1, "true", 0, **kw),
-           train_pre.run_training(S["manifest"], S["cov"], S["prod"], S["ctl"], runs_pre,
-                                  "mlp", 5, 0, "fnb", 0, fnb_run=S["f_dir"], **kw)]
+    old = [ref["train"].run_training(S["manifest"], S["cov"], S["prod"], S["ctl"], runs_pre,
+                                     "formula_mlp", 5, 1, "true", 0, **kw),
+           ref["train"].run_training(S["manifest"], S["cov"], S["prod"], S["ctl"], runs_pre,
+                                     "mlp", 5, 0, "fnb", 0, fnb_run=S["f_dir"], **kw)]
     monkeypatch.setattr(ht, "FAST", True)
     new = [ht.run_training(S["manifest"], S["cov"], S["prod"], S["ctl"], runs_new,
                            "formula_mlp", 5, 1, "true", 0, **kw),
@@ -453,15 +498,83 @@ def test_pre_change_checkpoint_loads_and_chain_scores_identically(S, tmp_path, m
         _same_run_dirs(d0, d1)
     specs = ["formula:frag"] + [str(d) for d in old]
     _few_pairs(monkeypatch)
-    fd_pre = score_pre.score_chain(S["manifest"], S["cov"], S["prod"], S["ctl"], S["bed"],
-                                   S["f_dir"], tmp_path / "chain_pre", specs, workers=1,
-                                   control_rl_tsv=S["rl"])
+    fd_pre = ref["score"].score_chain(S["manifest"], S["cov"], S["prod"], S["ctl"], S["bed"],
+                                      S["f_dir"], tmp_path / "chain_pre", specs, workers=1,
+                                      control_rl_tsv=S["rl"])
     pre = {p.name: json.loads((p / "scores.json").read_text())["records"]
            for p in Path(fd_pre).iterdir() if p.is_dir()}
-    ref = _chain_records(S, specs, tmp_path / "chain_ref", False, monkeypatch)
-    assert ref == pre                              # the CPU path: bit for bit
+    ref_now = _chain_records(S, specs, tmp_path / "chain_ref", False, monkeypatch)
+    assert ref_now == pre                          # the CPU path: bit for bit
     new_fast = _chain_records(S, specs, tmp_path / "chain_fast", True, monkeypatch)
     _assert_records_close(pre, new_fast)
+
+
+# -- real data on Nibi: a K10 true-X' checkpoint in the chain ------------------------------------
+
+NIBI = Path("/project/def-maxwl/mforooz/t125")
+K10_H = NIBI / "h" / "runs_true"
+K10_F = NIBI / "eta" / "runs" / "A_C19M16_counts_real_s0"
+NIBI_PRODUCTS = Path("/project/def-maxwl/mforooz/t112_cf/products")
+NIBI_CACHE = Path("/project/def-maxwl/mforooz/t118/ladder/cache")
+NIBI_BLACKLIST = Path("/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed")
+
+
+@pytest.mark.skipif(not (K10_F / "TRAIN_DONE").is_file()
+                    or not (K10_H / "h_formula_mlp_r5_noise_true_s0" / "TRAIN_DONE").is_file(),
+                    reason="Nibi only: the K10 runs are not here")
+def test_real_k10_checkpoints_chain_score_as_before(ref):
+    """Real K10 true-X' checkpoints on the real f A_C19M16_counts_real_s0: one whole shallow pair
+    (chr19 + chr21) and 300 bins of the deepest pair (support about 2,500). edc7329's scorer and
+    today's CPU path agree bit for bit; the fast path (on the GPU when there is one) within 1e-7."""
+    import time
+    specs = ["formula:frag", str(K10_H / "h_mlp_r1_push_true_s0"),
+             str(K10_H / "h_formula_mlp_r5_noise_true_s0"), str(K10_H / "h_mlp_r1_noise_true_s0")]
+    manifest, cov = NIBI_PRODUCTS / "MANIFEST.tsv", ROOT / "tools" / "t118" / "covariates.tsv"
+    dev = "cuda" if CUDA else "cpu"
+    pred = em.load_run(K10_F, NIBI_CACHE, cov, manifest, device="cpu")
+    tp = list(pred.train_pairs)
+    out = {}
+    for name, mod in (("pre", ref["score"]), ("now", score)):
+        hs = [mod.load_h(s, "cpu") for s in specs]
+        mod._setup(manifest, cov, NIBI_CACHE, NIBI / "ctl_cache", NIBI_BLACKLIST, hs,
+                   products.CONTROL_RL_TSV, pred=pred, f_run_name=pred.run_name, device="cpu")
+        t = time.time()
+        out[name] = mod.chain_job(tp[0])
+        print(f"{name}: shallow pair {time.time() - t:.0f}s")
+    hs = [score.load_h(s, dev) for s in specs]
+    score._setup(manifest, cov, NIBI_CACHE, NIBI / "ctl_cache", NIBI_BLACKLIST, hs,
+                 products.CONTROL_RL_TSV, pred=pred, f_run_name=pred.run_name, device=dev)
+    t = time.time()
+    out["fast"] = score.chain_job(tp[0])
+    print(f"fast ({dev}): shallow pair {time.time() - t:.0f}s")
+    assert out["pre"] == out["now"]
+    _assert_records_close({k: [v] for k, v in out["pre"].items()},
+                          {k: [v] for k, v in out["fast"].items()}, rel=1e-7)
+    # 300 bins of the deepest pair (the old CPU own-noise path takes minutes per 300 bins)
+    deep = max(range(len(tp)), key=lambda i: float(np.mean(
+        pred.mean(pred.predict(tp[i]["source_pid"], tp[i]["source_pid"], tp[i]["target_pid"],
+                               "chr21")[0]))))
+    p = tp[deep]
+    infos = products.load(manifest, cov, products.CONTROL_RL_TSV)
+    ctl = ldata.Corpus(NIBI / "ctl_cache")
+    c = "chr21"
+    mu, n_size = score.f_nb(pred, p["source_pid"], p["target_pid"], c)
+    sl = slice(10_000_000, 10_000_300)
+    info = infos[p["target_pid"]]
+    per = [{"chrom": c, "treat": mu[sl], "mu": mu[sl], "n_size": n_size[sl],
+            "ctl": (ctl.get(p["target_pid"], "counts", c).astype(np.float64)[sl]
+                    if info.has_control else None),
+            "y": ldata.Corpus(NIBI_CACHE).get(p["target_pid"], "pval", c)[sl]}]
+    res = {}
+    for name, mod, d, kw in (("pre", ref["score"], "cpu", {}), ("now", score, "cpu", {}),
+                             ("fast", score, dev, {"fast": True})):
+        ctx = mod.build_context(info, per, NIBI_BLACKLIST, True)
+        hs = [mod.load_h(s, d) for s in specs]
+        res[name] = mod.score_context(hs, ctx, **({"device": d} if name != "pre" else {}), **kw)
+    assert res["pre"] == res["now"]
+    assert res["now"][1]["n_k_max"] > 1000
+    _assert_records_close({k: [v] for k, v in res["now"][0].items()},
+                          {k: [v] for k, v in res["fast"][0].items()}, rel=1e-7)
 
 
 # -- CUDA (Nibi) -----------------------------------------------------------------------------------
@@ -469,21 +582,14 @@ def test_pre_change_checkpoint_loads_and_chain_scores_identically(S, tmp_path, m
 
 @pytest.mark.skipif(not CUDA, reason="no CUDA device")
 def test_cuda_fast_paths_against_the_reference_on_the_same_device(S, fb, tmp_path, monkeypatch):
-    """GPU: the fast chunk features equal the CPU reference except log1p of the fragment-window
-    mean (counted, at most 1 float32 ulp); the loss on the GPU equals the reference loss on the GPU
-    within 1e-6; the chain records within 1e-7."""
-    ref = list(hd.fnb_chunks(fb, 5, True, elems=1 << 18))
+    """GPU: the fast chunk features are the CPU reference's bit for bit (every log1p on the host);
+    the loss of the fast path on the GPU equals the reference path on the GPU (same features, same
+    block shapes) within 1e-7 (printed: exact or not); the chain records within 1e-7."""
+    ref_chunks = list(hd.fnb_chunks(fb, 5, True, elems=1 << 18))
     new, _ = _flat_blocks(fb, 5, True, "cuda", elems=1 << 18)
-    n_diff = 0
-    for a, (bf, bw, by) in zip(ref, new):
+    for a, (bf, bw, by) in zip(ref_chunks, new):
         np.testing.assert_array_equal(bw, a.w.astype(np.float32))
-        cols = [c for c in range(bf.shape[-1]) if c != hd.K_FRAG_COL]
-        np.testing.assert_array_equal(bf[..., cols], a.feat[..., cols])
-        d = np.abs(bf[..., hd.K_FRAG_COL].view(np.int32).astype(np.int64)
-                   - a.feat[..., hd.K_FRAG_COL].view(np.int32))
-        assert d.max() <= 1
-        n_diff += int((d > 0).sum())
-    print(f"log1p_k_frag float32 entries differing by 1 ulp: {n_diff}")
+        np.testing.assert_array_equal(bf.view(np.int32), a.feat.view(np.int32))
     std = _std(fb, 5, True)
     for noise in (False, True):
         losses = []
@@ -491,12 +597,14 @@ def test_cuda_fast_paths_against_the_reference_on_the_same_device(S, fb, tmp_pat
             h = _model("formula_mlp", 5, noise).cuda()
             losses.append(ht.fnb_batch_loss(h, std, fb, 5, True, noise, "expected", "cuda",
                                             fast=fast)[0])
-        assert losses[1] == pytest.approx(losses[0], rel=1e-6)
+        print(f"cuda loss noise={noise}: reference {losses[0]!r} fast {losses[1]!r} "
+              f"exact={losses[0] == losses[1]}")
+        assert abs(losses[1] - losses[0]) <= 1e-7 * abs(losses[0])
     real = score.score_context
     out = {}
     for fast in (False, True):
         monkeypatch.setattr(score, "score_context",
-                            lambda hs, ctx, device=None, fast_=None, f=fast: real(
+                            lambda hs, ctx, device=None, f=fast, **kw: real(
                                 hs, ctx, device="cuda", fast=f))
         hs = [score.load_h(s, "cuda") for s in S["specs"]]
         score._setup(S["manifest"], S["cov"], S["prod"], S["ctl"], S["bed"], hs, S["rl"],

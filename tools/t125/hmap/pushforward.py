@@ -317,13 +317,51 @@ def _A_t(m: torch.Tensor, s2: torch.Tensor) -> torch.Tensor:
     return m * (2.0 * torch.special.ndtr(z) - 1.0) + 2.0 * s * _INV_SQRT_2PI * torch.exp(-0.5 * z * z)
 
 
+def merge_mixture_t(mu: torch.Tensor, s2: torch.Tensor, w: torch.Tensor, max_groups: int):
+    """(mu_g, s2_g, w_g) [n, G], G = min(max_groups, the widest row): each row's positive-weight
+    components, sorted by mu (stable), cut into min(c, max_groups) groups of adjacent components
+    of near-equal count (component j of c goes to group j * G // c), each group replaced by the
+    Gaussian with the group's weight, mean and variance (the components' own variance plus their
+    spread about the group mean). A row of c <= max_groups components keeps them all, one per
+    group. Unused groups have weight 0. The rows' weights must already be normalised."""
+    n, K = mu.shape
+    pos = w > 0.0
+    c = pos.sum(dim=1)
+    G = max(1, min(int(max_groups), int(c.max()) if n else 1))
+    key = torch.where(pos, mu, torch.full_like(mu, math.inf))
+    order = torch.sort(key, dim=1, stable=True).indices
+    mu_s, s2_s, w_s = (torch.gather(t, 1, order) for t in (mu, s2, w))
+    j = torch.arange(K, device=mu.device)[None, :]
+    cg = torch.clamp_min(c, 1)[:, None]
+    grp = torch.where(cg > G, (j * G) // cg, j)
+    grp = torch.where(j < c[:, None], grp, torch.full_like(grp, G))          # padding: dropped
+    zero = mu.new_zeros(())
+    w_s = torch.where(j < c[:, None], w_s, zero)
+    W = mu.new_zeros((n, G + 1)).scatter_add_(1, grp, w_s)
+    M = mu.new_zeros((n, G + 1)).scatter_add_(1, grp, w_s * torch.where(j < c[:, None], mu_s, zero))
+    ok = W > 0.0
+    M = torch.where(ok, M / torch.where(ok, W, torch.ones_like(W)), zero)
+    d = torch.where(j < c[:, None], mu_s - torch.gather(M, 1, grp), zero)
+    V = mu.new_zeros((n, G + 1)).scatter_add_(
+        1, grp, w_s * (torch.where(j < c[:, None], s2_s, zero) + d * d))
+    V = torch.where(ok, V / torch.where(ok, W, torch.ones_like(W)), torch.ones_like(V))
+    small = (c <= G)[:, None]               # rows not merged keep their own values exactly
+    s2_s = torch.where(j < c[:, None], s2_s, torch.ones_like(s2_s))
+    return (torch.where(small, mu_s[:, :G], M[:, :G]), torch.where(small, s2_s[:, :G], V[:, :G]),
+            torch.where(small, w_s[:, :G], W[:, :G]))
+
+
 def crps_gauss_mixture_t(mu: torch.Tensor, sigma: torch.Tensor, w: torch.Tensor, y: torch.Tensor,
                          chunk: int = 4096, pair_elems: int | None = None,
-                         row_key: torch.Tensor | None = None) -> torch.Tensor:
+                         row_key: torch.Tensor | None = None,
+                         max_groups: int | None = None) -> torch.Tensor:
     """`crps_gauss_mixture` on torch float64 tensors [n, K] (y [n]) of one device: the same masking,
     renormalisation and closed form; the pair term in width-sorted chunks as there. `row_key`
     (int64 [n]): rows with one key have the same (mu, sigma, w) row, so their pair term (the
-    O(K^2) part, independent of y) is computed once. Returns float64[n] on that device."""
+    O(K^2) part, independent of y) is computed once. `max_groups` (PI 2026-10-16, chain only):
+    the pair term is taken over `merge_mixture_t`'s moment-matched groups, at most max_groups per
+    row (an approximation for rows of more components; the first term stays exact). Returns
+    float64[n] on that device."""
     mu, sigma, w = mu.to(torch.float64), sigma.to(torch.float64), w.to(torch.float64)
     if not (mu.shape == sigma.shape == w.shape) or mu.ndim != 2:
         raise ValueError(f"mu {tuple(mu.shape)}, sigma {tuple(sigma.shape)}, w {tuple(w.shape)} "
@@ -348,6 +386,10 @@ def crps_gauss_mixture_t(mu: torch.Tensor, sigma: torch.Tensor, w: torch.Tensor,
         rep = torch.full((uk.numel(),), n, dtype=torch.int64, device=mu.device)
         rep.scatter_reduce_(0, inv, torch.arange(n, device=mu.device), reduce="amin")
         mu, s2, w, pos = mu[rep], s2[rep], w[rep], pos[rep]
+    if max_groups is not None and mu.shape[0] and int(pos.sum(dim=1).max()) > int(max_groups):
+        mu, s2, w = merge_mixture_t(mu, s2, w, max_groups)
+        pos = w > 0.0
+        K = mu.shape[1]
     nr = mu.shape[0]
     width = torch.where(pos.any(dim=1), K - torch.argmax(pos.flip(1).to(torch.int8), dim=1),
                         torch.ones((), dtype=torch.int64, device=mu.device))

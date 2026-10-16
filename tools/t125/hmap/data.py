@@ -40,8 +40,8 @@ caller runs h on each chunk's own [r, K] block). Bit for bit: the support size a
 of each (distinct (mu, n) row, chunk width) pair (`pushforward.unique_pairs`; the chunk width
 decides the padding, so it is part of the key); log1p k on those rows; the formula column on the
 distinct (lambda, floor(pileup)) pairs (scipy, as `formula.P_enumerated`), the pileup in float64
-with IEEE division. On a CPU device every column is numpy's; on a GPU only log1p of the
-fragment-window mean is the device's (float64 log1p, then cast to float32). `_flat_plan` (the
+with IEEE division, every log1p by numpy on the host (`log1p_f32`), so every column is the
+reference's bit for bit on every device (float64 +, / and floor are IEEE on a GPU too). `_flat_plan` (the
 chunk plan and the NB supports) can be kept across validation passes. `FnbSource(workers=N)` builds
 the windows of one draw in N threads (the random draws come first, so the batch is the same); only
 for a cache-mode corpus.
@@ -375,11 +375,11 @@ def fnb_chunks(fb: FnbBatch, rung: int, with_formula: bool, elems: int = FNB_ELE
 
 
 def log1p_f32(x: torch.Tensor) -> torch.Tensor:
-    """float32 of log1p(x) for a float64 tensor: numpy's log1p on a CPU device (bit for bit the
-    reference), the device's float64 log1p elsewhere."""
-    if x.device.type == "cpu":
-        return torch.from_numpy(np.log1p(x.numpy()).astype(np.float32))
-    return torch.log1p(x).to(torch.float32)
+    """float32 of numpy's log1p of a float64 tensor, on the tensor's device. The log1p always runs
+    on the host (numpy, as the reference), never in the device's libm, so a feature is the
+    reference's bit for bit on every device."""
+    out = np.log1p(x.detach().cpu().numpy()).astype(np.float32)
+    return torch.from_numpy(out).to(x.device)
 
 
 def formula_log1p_t(variant: str, info: ProductInfo, kf: torch.Tensor, lam: np.ndarray,
