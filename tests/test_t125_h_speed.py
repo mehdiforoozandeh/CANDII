@@ -607,9 +607,10 @@ def test_real_k10_checkpoints_chain_score_as_before(ref):
     _assert_records_close({k: [v] for k, v in out["pre"].items()},
                           {k: [v] for k, v in out["fast"].items()}, rel=1e-7)
     # 300 bins of the deepest pair (the old CPU own-noise path takes minutes per 300 bins)
-    deep = max(range(len(tp)), key=lambda i: float(np.mean(
-        pred.mean(pred.predict(tp[i]["source_pid"], tp[i]["source_pid"], tp[i]["target_pid"],
-                               "chr21")[0]))))
+    def support(i):
+        mu_i, n_i = score.f_nb(pred, tp[i]["source_pid"], tp[i]["target_pid"], "chr21")
+        return pf.support_size_unique(mu_i, n_i)
+    deep = max(range(len(tp)), key=lambda i: float(support(i).mean()))
     p = tp[deep]
     infos = products.load(manifest, cov, products.CONTROL_RL_TSV)
     ctl = ldata.Corpus(NIBI / "ctl_cache")
@@ -622,7 +623,8 @@ def test_real_k10_checkpoints_chain_score_as_before(ref):
             "y": ldata.Corpus(NIBI_CACHE).get(p["target_pid"], "pval", c)}]
     whole = score.build_context(info, per, NIBI_BLACKLIST, True)
     N = whole["y"].shape[0]
-    top = np.sort(np.argsort(whole["mu"], kind="stable")[-300:])     # the widest supports
+    size = pf.support_size_unique(whole["mu"], whole["n_size"])
+    top = np.sort(np.argsort(size, kind="stable")[-300:])            # the widest supports
     ctx = {k: (v[top] if isinstance(v, np.ndarray) and v.shape[:1] == (N,) else v)
            for k, v in whole.items()}
     res = {}
