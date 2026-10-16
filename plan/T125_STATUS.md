@@ -311,6 +311,9 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 - 2026-10-16: fnb training and chain scoring get an exact speed-up chunk (no number may change; tests prove it), then a re-smoke, before the 768 fnb fits and 64 chains.
 - 2026-10-16: the D2 twin run-to-run difference (also in t118's own kit) is measured on the smoke run; if it is far below the seed wobble, it is accepted and noted in the grid and the deck.
 
+- 2026-10-16: in the chain, the own-noise h are scored with a merged mixture: adjacent k components merged into ≤ 256 moment-matched Gaussians before the CRPS pair sum, on all bins. It is kept only if its error against the exact CRPS, measured on a random sample of bins, is below 1e-3 relative; the measured error goes in the grid. Push-only h stay exact.
+- 2026-10-16: compute scope for the repair reading and the chain: only the 16 real f with one g across tracks (192 fnb fits + 16 chains). This supersedes "768 fits". Per-track f get chain scores with the formulas and the true-X′ h only, if time allows.
+
 ## Log
 
 - 2026-10-11: run started; Nibi down at start.
