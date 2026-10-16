@@ -94,6 +94,14 @@ Every id goes here at submission.
     only scoring reruns):
   - 24176598 `t125_etatraincpu`: `eta_train_cpu.sh`, array 429,430,431,
     `--exclude=c128,c166,c537,c371,c95`.
+  - 23:49 UTC: **the hang repeats on three other nodes** (c477, c58, c59): after "TRAIN_DONE
+    present", `score.py trained` parent (19 threads) and its 4 forked workers sit in
+    `futex_wait_queue` at 0.0-0.2 % CPU for 15 min. So it is **not transient: a code defect,
+    stopped** (24176598 cancelled; 429-431 have TRAIN_DONE, no SCORE_DONE). Likely cause, not
+    proven: `score.py` 172/196 forks a `Pool` (`mp.get_context("fork")`) from a parent that holds a
+    torch/OpenMP thread pool; `eta_train_cpu.sh` 120 sets `OMP_NUM_THREADS=16`. Only Aold_all nocov
+    hangs: Aold_all real (426-428) and D2_all nocov on CPU scored. A fix (e.g. a spawn context or
+    1 OMP thread in scoring, or scoring 429-431 with eta_train.sh) is a PI / chunk decision.
   - 24173033 `t125_d2twin` (D2 twin nondeterminism, PI decision 2026-10-16): one-off
     `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/d2twin_rescore.sh` (not in the repo; 4
     cores, 24000M, 3 h, CPU) copies run D2_C19M16_counts_nocov_s0 (index 357, trained on CPU by
