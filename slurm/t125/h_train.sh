@@ -35,14 +35,18 @@
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
 # RESOURCES (t125-P2h). One 10 GB MIG slice of an H100, 8 cores (OMP/MKL threads 8; train.py
-# draws the windows of an f-NB batch in 8 threads), 40000M host memory, 4 h. Nodes c128, c166,
-# c537 and c371 are excluded. Memory: the N4 true-X' fits (K10, CPU) peaked at 31.2 GiB of 31.25;
-# an fnb fit's host memory is far smaller (a P2h profile of two validation passes: 4.7 GB). Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute nodes). No
-# --device is passed: train.py picks its default device, the slice. The Nibi smoke (N2, kit K10)
-# found both fnb fits over 3 h (and over 12 h, job 24083625) on 8 CPU cores; t125-P2h builds the
-# f-NB chunks on the slice with the same numbers (on a CPU device bit for bit the old path). The
-# 36 true-X' fits of N4 ran on CPU with kit K10; this script reruns a true fit on the slice
-# (float32 results then differ from a CPU run in the last bits).
+# draws the windows of an f-NB batch in 8 threads and takes log1p on the host in up to 8), 40000M
+# host memory, 1 day (partition b3). Nodes c128, c166, c537 and c371 are excluded. Memory: the N4
+# true-X' fits (K10, CPU) peaked at 31.2 GiB of 31.25. No --device is passed: train.py picks its
+# default device, the slice. The Nibi smoke (N2, kit K10) found both fnb fits over 3 h (and over
+# 12 h, job 24083625) on 8 CPU cores; t125-P2h builds the f-NB chunks on the slice with the same
+# numbers (bit for bit on a CPU device; on the slice the features are bit for bit too). Measured
+# on the slice for f A_C19M16_counts_real_s0 (38 pairs): a training step 0.26-0.64 s, a chr22
+# validation pass 346 s, so a fit of 4000 steps and 17 passes about 2.2 h. A g = all f (242 pairs,
+# the repair scope, PI 2026-10-16) has up to 12 times the support on chr22 (A_all): about 1 h a
+# pass, up to about 20 h a fit; hence 1 day (a longer request starts days later, see
+# h_chain.sh). The 36 true-X' fits of N4 ran on CPU with kit K10; this script reruns a true fit on
+# the slice (float32 results then differ from a CPU run in the last bits).
 #
 # DRY_RUN=1 prints the train command line (nothing when TRAIN_DONE exists; a note on stderr when
 # the fnb f run has no TRAIN_DONE, where a real task would exit 3) and exits 0 before any module
@@ -69,7 +73,7 @@
 #SBATCH --job-name=t125_htrain
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --exclude=c128,c166,c537,c371
-#SBATCH --time=4:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40000M
 
