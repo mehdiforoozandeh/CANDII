@@ -34,7 +34,7 @@
 # then requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR; PYTHONPATH is
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
-# RESOURCES. One 10 GB MIG slice of an H100, 4 cores, 32 GB host memory, 6 h. Nodes c128, c166,
+# RESOURCES. One 10 GB MIG slice of an H100, 4 cores, 40000M host memory, 6 h. Nodes c128, c166,
 # c537 and c371 are excluded. Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute
 # nodes). Since t125-P2h the slice does the scoring itself (score.py's fast path: every
 # per-(bin, k) step in torch on the device, the same numbers as the CPU scorer up to summation
@@ -66,7 +66,7 @@
 #SBATCH --exclude=c128,c166,c537,c371
 #SBATCH --time=6:00:00
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32000M
+#SBATCH --mem=40000M
 
 set -euo pipefail
 

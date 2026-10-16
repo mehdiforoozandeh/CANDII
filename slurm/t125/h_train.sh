@@ -35,8 +35,9 @@
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
 # RESOURCES (t125-P2h). One 10 GB MIG slice of an H100, 8 cores (OMP/MKL threads 8; train.py
-# draws the windows of an f-NB batch in 8 threads), 24 GB, 4 h. Nodes c128, c166, c537 and c371
-# are excluded. Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute nodes). No
+# draws the windows of an f-NB batch in 8 threads), 40000M host memory, 4 h. Nodes c128, c166,
+# c537 and c371 are excluded. Memory: the N4 true-X' fits (K10, CPU) peaked at 31.2 GiB of 31.25;
+# an fnb fit's host memory is far smaller (a P2h profile of two validation passes: 4.7 GB). Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute nodes). No
 # --device is passed: train.py picks its default device, the slice. The Nibi smoke (N2, kit K10)
 # found both fnb fits over 3 h (and over 12 h, job 24083625) on 8 CPU cores; t125-P2h builds the
 # f-NB chunks on the slice with the same numbers (on a CPU device bit for bit the old path). The
@@ -70,7 +71,7 @@
 #SBATCH --exclude=c128,c166,c537,c371
 #SBATCH --time=4:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=24000M
+#SBATCH --mem=40000M
 
 set -euo pipefail
 

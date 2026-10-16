@@ -37,8 +37,8 @@ CACHE = "/project/def-maxwl/mforooz/t118/ladder/cache"
 OLD_GRID_JSON = "/project/def-maxwl/mforooz/t118/row2/agg/results.json"
 JOB_NAMES = {"ctl_cache": "t125_hctl", "train": "t125_htrain", "alone": "t125_halone",
              "chain": "t125_hchain", "agg": "t125_hagg"}
-RESOURCES = {"ctl_cache": ("0:30:00", "2", "8000M"), "train": ("4:00:00", "8", "24000M"),
-             "alone": ("2:00:00", "8", "32000M"), "chain": ("6:00:00", "4", "32000M"),
+RESOURCES = {"ctl_cache": ("0:30:00", "2", "8000M"), "train": ("4:00:00", "8", "40000M"),
+             "alone": ("2:00:00", "8", "32000M"), "chain": ("6:00:00", "4", "40000M"),
              "agg": ("2:00:00", "4", "16000M")}
 COV = "/kit/tools/t118/covariates.tsv"
 
