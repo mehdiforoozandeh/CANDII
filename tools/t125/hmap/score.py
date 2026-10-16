@@ -832,23 +832,25 @@ def score_context_fast(hs: list, ctx: dict, device, mix_groups: int | None = Non
     if N:
         sel = (np.arange(N) if N <= br.SCALE_FIT_BUDGET else
                np.random.default_rng(br.SCALE_SEED).choice(N, br.SCALE_FIT_BUDGET, replace=False))
-        fits = {h.name: _FitT(h.noise) for h in hs}
-        for rows in chunk_rows(sizes, sel, FAST_ELEM_BUDGET):
-            bt, w, _ = chunk(rows)
-            rt = torch.from_numpy(rows).to(dev)
-            for h in hs:
+        # one h at a time: a fit keeps its subsample's (bin, k) entries on the device (up to
+        # 20 000 x 4097), so the fits of 50 h would not fit in a 10 GB slice together
+        for h in hs:
+            fit = _FitT(h.noise)
+            for rows in chunk_rows(sizes, sel, FAST_ELEM_BUDGET):
+                bt, w, _ = chunk(rows)
+                rt = torch.from_numpy(rows).to(dev)
                 mu, ls = _call_t(h, bt)
                 if h.noise:
                     sg = torch.exp(ls)
-                    fits[h.name].add_noise(mu, sg, w, lyt[rt], pf.crps_gauss_mixture_t(
+                    fit.add_noise(mu, sg, w, lyt[rt], pf.crps_gauss_mixture_t(
                         mu, sg, w, lyt[rt], row_key=_row_key_t(h, bt), max_groups=mix_groups))
                 else:
-                    fits[h.name].add_push(*_sorted_set_t(_p_hat_t(mu), w), yt[rt], lyt[rt])
-        for h in hs:
-            c_log[h.name] = fits[h.name].c_log()
+                    fit.add_push(*_sorted_set_t(_p_hat_t(mu), w), yt[rt], lyt[rt])
+                del bt, w, mu, ls
+            c_log[h.name] = fit.c_log()
             if not h.noise:
-                c_nat[h.name] = fits[h.name].c_native()
-        del fits
+                c_nat[h.name] = fit.c_native()
+            del fit
     arr = {h.name: {key: np.full(N, np.nan)
                     for key in ("crps", "crps_log", "mean", "crps_c", "crps_log_c")}
            for h in hs}
