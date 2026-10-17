@@ -12,7 +12,7 @@ worktree (git-excluded).
 | 1 build the count model | built and reviewed (offset, form A, model, train, score, aggregate) |
 | 2 build the map h | built and reviewed (data side, formula, push-forward, learned h, train, score, aggregate); end-to-end smoke building |
 | 3 smoke on Nibi | not started |
-| 4 count runs (432) | running (N3, 24145801) |
+| 4 count runs (432) | done 2026-10-17: 432 SCORE_DONE, 432 LAW_DONE; aggregate 24224060 (eta/agg/grid.md) |
 | 5 h on the true X′ | done 2026-10-16: 36 TRAIN_DONE, 38 ALONE_DONE (see "N4 results") |
 | 6 h on f's NB, chain scores | not started |
 | 7 aggregate | not started |
@@ -123,6 +123,20 @@ Every id goes here at submission.
     by `/project/def-maxwl/mforooz/t125/eta/oneoff/run_device.sh`. 216 gpu, 216 cpu: A, B, C, D 48
     gpu each; A2 19 gpu / 29 cpu; B2, C2 47 cpu + 1 gpu (smoke); D2 46 cpu + 2 gpu (smoke 354, 381);
     Aold 47 cpu + 1 gpu (smoke 402). score_job of 429-431 is `none` until 24200215 ends.
+    Re-run 2026-10-17 after 24200215: every row has train_job and score_job (429-431 score_job
+    24200215_*).
+  - 24200215 COMPLETED: 429-431 scored serially in 2976-3009 s, law 72-75 s (52-53 min per task).
+    With the forked pool removed, the scoring did not hang.
+  - **Acceptance criterion 10 met (2026-10-17): 432 SCORE_DONE, 432 LAW_DONE.**
+  - 24224060 `t125_etaagg`: `eta_agg.sh` K10, OLD=`/project/def-maxwl/mforooz/t125/old_grid/results_summary.tsv`
+    (checks_*.json in the same dir; old-grid JSON t118 `row2/agg/results.json`), COMPLETED 1:17.
+    "432 runs present, 0 missing; 750 readings". Output `/project/def-maxwl/mforooz/t125/eta/agg/`:
+    grid.md, results.json, results_summary.tsv, pairs_summary.tsv, depth_law.tsv, summary_data.json.
+  - Aggregate counts (`summary_data.json`), records with CRPS > 20 / non-finite / all, by kind:
+    trained 12 / 0 / 52,272 (score 6, val 6); shuffle 6 / 0 / 26,136; swap 6 / 0 / 13,824; law
+    0 / 0 / 4,536. **Every CRPS > 20 record is rung A2, g = all (across), nocov**: per kind, 4 DNase and
+    2 narrow. Old grid (t118 row 2): trained 3 / 0 / 11,616, all rung A per-track DNase real.
+    readings_skipped: 0 (750 readings).
   - 24173033 `t125_d2twin` (D2 twin nondeterminism, PI decision 2026-10-16): one-off
     `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/d2twin_rescore.sh` (not in the repo; 4
     cores, 24000M, 3 h, CPU) copies run D2_C19M16_counts_nocov_s0 (index 357, trained on CPU by
