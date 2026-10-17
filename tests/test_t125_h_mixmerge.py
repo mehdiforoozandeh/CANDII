@@ -168,6 +168,38 @@ def test_merged_chain_flags_only_the_own_noise_h(chains):
     assert sum(r["n_mix_merged_bins"] for r in chains["merged"][noise]["records"]) > 0
 
 
+def test_merged_chain_writes_its_merge_error(S, chains, tmp_path_factory):
+    """merge_error.json beside the chain's scores: per own-noise h, the per-bin relative error of
+    crps_log (merged against exact) on the widest merged bins of every pair."""
+    root = tmp_path_factory.getbasetemp()
+    me = json.loads(next(Path(root).glob("mixmerge*/merged/*/merge_error.json")).read_text())
+    assert me["mix_groups"] == 4 and me["f_run_name"] == S["f_dir"].name
+    assert set(me["h"]) == {"h_formula_affine_r5_noise_true_s2"}       # own-noise h only
+    e = me["h"]["h_formula_affine_r5_noise_true_s2"]
+    assert e["kind"] == "formula_affine_r5_noise" and e["n_bins"] > 0 and e["support_max"] > 4
+    assert 0 <= e["rel_err_median"] <= e["rel_err_q99"] <= e["rel_err_max"]
+    assert abs(e["signed_rel_err_mean"]) <= e["rel_err_max"]
+    assert e["avg_rel_err"] == pytest.approx(
+        abs(e["crps_log_merged_mean"] - e["crps_log_exact_mean"]) / e["crps_log_exact_mean"])
+    assert e["n_pairs"] == len(chains["merged"]["h_formula_affine_r5_noise_true_s2"]["records"])
+    assert not list(Path(root).glob("mixmerge*/exact/*/merge_error.json"))   # exact: no file
+
+
+def test_merge_error_summary_by_hand():
+    class H:
+        def info(self):
+            return {"variant": "mlp", "rung": 5, "source": "true"}
+    checks = [{"support": [300, 400], "exact": [1.0, 2.0], "merged": [1.001, 1.998]},
+              {"support": [500], "exact": [4.0], "merged": [4.0]}]
+    e = score.merge_error_summary(H(), checks)
+    rel = np.array([1e-3, 1e-3, 0.0])
+    assert e["n_bins"] == 3 and e["support_max"] == 500 and e["kind"] == "mlp_r5_noise"
+    assert e["rel_err_max"] == pytest.approx(1e-3) and e["rel_err_median"] == pytest.approx(1e-3)
+    assert e["signed_rel_err_mean"] == pytest.approx((1e-3 - 1e-3 + 0) / 3)
+    assert e["rel_err_q99"] == pytest.approx(np.quantile(rel, 0.99))
+    assert e["avg_rel_err"] == pytest.approx(abs(6.999 / 3 - 7.0 / 3) / (7.0 / 3))
+
+
 def test_a_cap_above_every_support_gives_the_exact_numbers(chains):
     noise = "h_formula_affine_r5_noise_true_s2"
     for r, e in zip(chains["wide"][noise]["records"], chains["exact"][noise]["records"]):

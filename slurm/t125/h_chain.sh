@@ -7,13 +7,15 @@
 # WHAT ONE TASK DOES.
 #   python3 $KIT/tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <cache_dir> <ctl_cache> \
 #       <blacklist> <eta_runs_dir>/<f_run> <out_root>/chain --h <spec> [--h <spec> ...] --workers 4 \
-#       --mix-merge 128
+#       --mix-merge 512
 #           -> chain/<f_run>/<h_name>/scores.json per h, chain/<f_run>/CHAIN_DONE
-# --mix-merge 128 (PI 2026-10-16: at most 256): the own-noise h's mixture CRPS over at most 128
-# moment-matched components per bin (each such record says crps_mix_merged); push-only h stay
-# exact. Measured on 6,000 random bins of a deep pair (support up to 2,509), crps_log_all of the 5
-# rung-5 / rung-1 own-noise h tested: relative error at most 3.5e-4 at 128 (8.7e-5 at 256, 1.4e-3
-# at 64), crps_log_top1 at most 3.3e-7; 128 makes the pair sum about 4 times cheaper than 256.
+# --mix-merge 512 (PI 2026-10-16 / 2026-10-17): the own-noise h's mixture CRPS over at most 512
+# moment-matched components per bin (each such record says crps_mix_merged; the measured merge
+# error per own-noise h goes to chain/<f_run>/merge_error.json); push-only h stay exact. The PI's
+# bar: the smallest G in {256, 512, 1024} whose PER-BIN max relative error of crps_log, on the
+# deepest-support bins of the 8 C19M16 f and all 6 own-noise kinds, is < 1e-3. Measured so far on
+# one deep pair (6,000 random bins): per-bin max 1.25e-3 at 256 (affine r5 noise) - so 256 fails;
+# 512 is the next candidate, PENDING the full measurement (t125-P2h retry 2, Open).
 # The h list is `python3 tools/t125/hmap/tasks.py chain-list <f_run> --fnb-seeds N` (50 at N = 1:
 # the 2 formulas, the 36 h trained on the true X', this f's 12 h trained on its NB), each name
 # turned into a spec: h_formula_bin / h_formula_frag -> formula:bin / formula:frag (the learned
@@ -22,10 +24,12 @@
 # task exits 0 without work. A task whose f run or any learned h run dir has no TRAIN_DONE exits
 # 3, so an unfinished train task shows up as a failed chain task instead of a partial chain.
 #
-# THE H SET (9th argument, PI 2026-10-16). "all" (default): the 50 h above, for the real f with
-# one g across tracks (the repair reading; their fnb h must exist). In this table those are the 8
-# g = all runs, indices 7 15 23 31 (rows 1, A B C D) and 39 47 55 63 (row 2). "true": only the 2
-# formulas and the 36 true-X' h (38), no fnb h needed: the per-track f, if time allows. A later
+# THE H SET (9th argument). "all" (default): the 50 h above. SCOPE (PI 2026-10-17): the repair
+# fits and these chains are for the 8 real seed-0 f of track C19M16 only, every design: A, B, C,
+# D, A2, B2, C2, D2 x C19M16 x real x s0 = chain indices 3 11 19 27 35 43 51 59 (their fnb fits
+# are h_train.sh fnb indices 36-47,132-143,228-239,324-335,420-431,516-527,612-623,708-719); no
+# g = all chain. "true": only the 2
+# formulas and the 36 true-X' h (38), no fnb h needed: other per-track f, if time allows. A later
 # "all" task on an f that a "true" task chained scores only its 12 fnb h (h with a scores.json
 # are not scored again) and rewrites CHAIN_DONE with all 50 names.
 #
@@ -53,16 +57,13 @@
 # fast path: every per-(bin, k) step in torch on the device; the CPU scorer's numbers up to
 # summation order, the own-noise h's merged mixture aside); the jobs run in one process on CUDA,
 # so --workers 4 is unused there. WALLTIME, sized from Nibi measurements (t125-P2h, kit code of
-# 2026-10-16, one 1g.10gb slice, all 50 h, --mix-merge 128; 242 pairs for g = all):
-#   A_all (row 1)  about 85 h      B_all (row 1)  about 48 h      B2_all (row 2)  about 49 h
-#   A_C19M16 (a per-track row-1 f, 38 pairs) about 13 h; A2_C19M16 (row 2) about 1.7 h.
-# The cost is the f's NB support: sum over bins of the support (row 1, g = all: 4.6e11) for every
-# h, and of min(support, 128)^2 (about 4e12) for the own-noise h. One day, not more: on
-# 2026-10-16 `sbatch --test-only` put a 1-day slice job's start within the hour (b3) and a 2- to
-# 4-day one's 3 to 7 days later (b4, b5). A task that hits the walltime keeps every pair it
-# finished (<out_root>/chain/<f_run>.partial/), so the same index, submitted again by hand after
-# the TIMEOUT, resumes there: about 4 tasks in a row for A_all, 2 to 3 for B_all and B2_all, 1 for
-# a per-track f (give it --time=16:00:00 on the command line).
+# 2026-10-16, one 1g.10gb slice, all 50 h, 38 pairs per C19M16 f): at --mix-merge 128,
+# A_C19M16 (row 1, the widest support) about 13 h and A2_C19M16 (row 2) about 1.7 h; at 512 the
+# own-noise pair sum of bins wider than 128 costs up to 16 times more (estimates at 512 PENDING,
+# Open). One day, not more: on 2026-10-16 `sbatch --test-only` put a 1-day slice job's start within
+# the hour (b3) and a 2- to 4-day one's 3 to 7 days later (b4, b5). A task that hits the walltime
+# keeps every pair it finished (<out_root>/chain/<f_run>.partial/), so the same index, submitted
+# again by hand after the TIMEOUT, resumes there.
 #
 # DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE lists every h; a note on stderr for
 # each missing TRAIN_DONE, where a real task would exit 3) and exits 0 before any module load. The
@@ -117,7 +118,7 @@ case "$H_SET" in
   true) N_EXPECT=38 ;;
   *) echo "h_set '$H_SET' is not all or true; $USAGE" >&2; exit 2 ;;
 esac
-MIX_MERGE=128
+MIX_MERGE=512
 case "$OUT_ROOT" in
   */t118|*/t118/*) echo "out root $OUT_ROOT is under a t118 directory; t125 writes only under t125/" >&2; exit 2 ;;
 esac

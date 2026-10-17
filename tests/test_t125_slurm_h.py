@@ -405,7 +405,7 @@ def test_dry_run_chain_index_0_pinned():
                     "/c", "/ctl", "/bl.bed", "/eta/A_C07M20_counts_real_s0", "/out/chain"]
     assert len(specs) == 50
     assert specs == _chain_specs("A_C07M20_counts_real_s0", "/out")
-    assert tail == ["--workers", "4", "--mix-merge", "128"]
+    assert tail == ["--workers", "4", "--mix-merge", "512"]
 
 
 def test_dry_run_chain_learned_formula_h_are_run_dirs_not_formulas():
@@ -456,6 +456,30 @@ def test_dry_run_chain_notes_missing_train_done_then_skips_on_chain_done(tmp_pat
     assert r.returncode == 0 and r.stdout == "" and "skip" in r.stderr
 
 
+C19M16_CHAIN = (3, 11, 19, 27, 35, 43, 51, 59)
+C19M16_FNB = [i * 12 + j for i in C19M16_CHAIN for j in range(12)]
+
+
+def test_scope_is_the_8_c19m16_f():
+    """PI 2026-10-17: repair fits and chains for the 8 real seed-0 C19M16 f only; the headers
+    give the chain indices and the fnb index ranges, and those indices name exactly those f."""
+    assert [F_RUNS[i] for i in C19M16_CHAIN] == [
+        f"{r}_C19M16_counts_real_s0" for r in ("A", "B", "C", "D", "A2", "B2", "C2", "D2")]
+    ranges = "36-47,132-143,228-239,324-335,420-431,516-527,612-623,708-719"
+    for name in ("train", "chain"):                                  # ranges may wrap a line
+        assert ranges in "".join(ln.lstrip("# ") for ln in _header(name).splitlines()), name
+    assert "3 11 19 27 35 43 51 59" in _header("chain")
+    table = [h for f in F_RUNS for h in _fnb_h(f)]                  # the fnb table's order
+    want = [h for f in (F_RUNS[i] for i in C19M16_CHAIN) for h in _fnb_h(f)]
+    assert [table[i] for i in C19M16_FNB] == want and len(want) == 96
+    for i in (C19M16_FNB[0], C19M16_FNB[-1]):
+        r = _dry("train", ["/kit", "/p", "/c", "/ctl", "/out", "fnb", "/eta", "1"], i)
+        assert r.returncode == 0 and r.stdout.split()[-5] == str(i), (r.stdout, r.stderr)
+    for i in (3, 59):
+        r = _dry("chain", _chain_args(seeds=1), i)
+        assert _chain_split(r.stdout)[0][8] == f"/eta/{F_RUNS[i]}"
+
+
 def test_dry_run_chain_true_set_needs_no_fnb_h(tmp_path):
     """h_set "true" (PI 2026-10-16, a per-track f): the 2 formulas and the 36 true-X' h, in the
     chain-list order; no fnb run dir is needed; it skips once its 38 h are in CHAIN_DONE."""
@@ -465,7 +489,7 @@ def test_dry_run_chain_true_set_needs_no_fnb_h(tmp_path):
     head, specs, tail = _chain_split(r.stdout)
     want = [s for s in _chain_specs(F_RUNS[3], str(out)) if "/runs_fnb/" not in s]
     assert specs == want and len(specs) == 38
-    assert tail == ["--workers", "4", "--mix-merge", "128"]
+    assert tail == ["--workers", "4", "--mix-merge", "512"]
     assert "36 h run dirs lack TRAIN_DONE" in r.stderr
     for spec in want:
         if not spec.startswith("formula:"):

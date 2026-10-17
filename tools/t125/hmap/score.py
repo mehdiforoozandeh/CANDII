@@ -56,6 +56,15 @@ distinct (λ, floor(pileup)) pairs (kept per pair across chunks), and every per-
 forward (float32, as before). Only summation order, the chunk padding of the NB weights and the
 device's libm differ from the numpy reference, which stays the CPU path.
 
+**Merged mixture** (chain only, `--mix-merge G`, PI 2026-10-16/17): the own-noise h's crps_log
+pair sum over at most G moment-matched components per bin (`pushforward.merge_mixture_t`); every
+such record carries `crps_mix_merged`, `crps_mix_groups`, `n_mix_merged_bins`. The chain measures
+the merge's own error and writes `<out_dir>/<f_run>/merge_error.json`: {f_run_name, mix_groups,
+mix_check_bins, check (the rule in words), h: {h_name: {variant, rung, noise, source, kind
+("<variant>_r<rung>_noise"), n_pairs, n_bins, support_median, support_max, rel_err_median,
+rel_err_q99, rel_err_max, signed_rel_err_mean, crps_log_exact_mean, crps_log_merged_mean,
+avg_rel_err}}}, over the MIX_CHECK_BINS widest merged bins of every pair.
+
     python tools/t125/hmap/score.py alone <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <h_spec> <out_dir> [--workers N]
     python tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <f_run_dir> <out_dir> --h <h_spec> [--h ...] [--workers N]
       both: [--control-rl-tsv PATH] (default: products.CONTROL_RL_TSV) [--device auto|cpu|cuda] (default auto, as hmap/train.py)
@@ -112,6 +121,13 @@ ELEM_BUDGET = 1 << 20          # bins x k per chunk (a rung-5 feature block is ~
 #: the fast (device) path's chunks: 2^22 bins x k (float64 temporaries 32 MB each, the rung-5
 #: features 370 MB, the h's 2 x 64 hidden layers 2 GB: inside a 10 GB MIG slice)
 FAST_ELEM_BUDGET = 1 << 22
+#: the merged mixture's own check, per (pair, own-noise h): this many widest-support merged bins
+MIX_CHECK_BINS = 64
+MERGE_ERROR_DOC = ("per pair, the MIX_CHECK_BINS bins of widest support among those with more "
+                   "than mix_groups components (chr19 + chr21, blacklist removed): crps_log of the "
+                   "exact mixture and of the merged one (the value in the records); relative "
+                   "error per bin = (merged - exact) / |exact|; avg_rel_err = |mean merged - mean "
+                   "exact| / |mean exact| over those bins")
 K_MAX = pf.K_MAX
 TAIL = pf.TAIL
 CRPS_EXPLODE = 20.0
@@ -914,7 +930,59 @@ def score_context_fast(hs: list, ctx: dict, device, mix_groups: int | None = Non
                 a["crps_log"][rows] = _set_crps_t(lv, ws, coef, lyy).cpu().numpy()
                 a["crps_log_c"][rows] = _set_crps_t(lv + s, ws, coef, lyy).cpu().numpy()
             a["mean"][rows] = m.cpu().numpy()
+    if mix_groups and N and any(h.noise for h in hs):
+        shared["mix_check"] = _mix_check(hs, ctx, sizes, arr, lyt, dev, mix_groups)
     return _records(hs, arr, c_nat, c_log, n_k, y, ly, shared, mix_groups)
+
+
+def _mix_check(hs, ctx, sizes, arr, lyt, dev, mix_groups: int) -> dict:
+    """The merge's own error on this context: the MIX_CHECK_BINS widest-support bins with more than
+    mix_groups components, their crps_log exact and merged ({h_name: {support, exact, merged}}
+    for the own-noise h; the merged values are the ones written to the records)."""
+    big = np.flatnonzero(sizes > int(mix_groups))
+    if big.size == 0:
+        return {h.name: {"support": [], "exact": [], "merged": []} for h in hs if h.noise}
+    pick = big[np.argsort(sizes[big], kind="stable")[::-1][:MIX_CHECK_BINS]]
+    pick = np.sort(pick)
+    out = {}
+    for rows in chunk_rows(sizes, pick, FAST_ELEM_BUDGET):
+        k_u, w_u, valid_u, inv = _support_rows_unique(ctx, rows)
+        bt = BatchT(ctx, rows, k_u, inv, dev, {})
+        w = torch.from_numpy(w_u).to(dev)[bt.inv_t]
+        rt = torch.from_numpy(rows).to(dev)
+        for h in hs:
+            if not h.noise:
+                continue
+            mu, ls = _call_t(h, bt)
+            ex = pf.crps_gauss_mixture_t(mu, torch.exp(ls), w, lyt[rt]).cpu().numpy()
+            d = out.setdefault(h.name, {"support": [], "exact": [], "merged": []})
+            d["support"] += [int(v) for v in sizes[rows]]
+            d["exact"] += [float(v) for v in ex]
+            d["merged"] += [float(v) for v in arr[h.name]["crps_log"][rows]]
+    return out
+
+
+def merge_error_summary(h, checks: list) -> dict:
+    """One own-noise h's entry of merge_error.json from its per-pair `_mix_check` lists."""
+    sup = np.array([v for c in checks for v in c["support"]], dtype=np.int64)
+    ex = np.array([v for c in checks for v in c["exact"]], dtype=np.float64)
+    mg = np.array([v for c in checks for v in c["merged"]], dtype=np.float64)
+    info = h.info()
+    base = {"variant": info["variant"], "rung": info["rung"], "noise": 1,
+            "source": info.get("source"), "kind": f"{info['variant']}_r{info['rung']}_noise",
+            "n_pairs": len(checks), "n_bins": int(ex.size)}
+    if ex.size == 0:
+        return {**base, "support_median": None, "support_max": None, "rel_err_median": None,
+                "rel_err_q99": None, "rel_err_max": None, "signed_rel_err_mean": None,
+                "crps_log_exact_mean": None, "crps_log_merged_mean": None, "avg_rel_err": None}
+    with np.errstate(divide="ignore", invalid="ignore"):
+        signed = (mg - ex) / np.abs(ex)
+    rel = np.abs(signed)
+    return {**base, "support_median": float(np.median(sup)), "support_max": int(sup.max()),
+            "rel_err_median": float(np.median(rel)), "rel_err_q99": float(np.quantile(rel, 0.99)),
+            "rel_err_max": float(rel.max()), "signed_rel_err_mean": float(signed.mean()),
+            "crps_log_exact_mean": float(ex.mean()), "crps_log_merged_mean": float(mg.mean()),
+            "avg_rel_err": float(abs(mg.mean() - ex.mean()) / abs(ex.mean()))}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -970,6 +1038,8 @@ def chain_job(pair: dict) -> dict:
             if h.noise:
                 out[h.name].update(crps_mix_merged=True, crps_mix_groups=int(G),
                                    n_mix_merged_bins=shared["n_mix_merged_bins"])
+        if "mix_check" in shared:
+            out["_mix_check"] = shared["mix_check"]
     return out
 
 
@@ -992,7 +1062,11 @@ def chain_pair(i: int) -> dict:
             kept = None
         if (kept and kept.get("pair") == key and kept.get("mix_groups") == _CTX.get("mix_groups")
                 and set(names) <= set(kept["records"])):
-            return {n: kept["records"][n] for n in names}
+            got = {n: kept["records"][n] for n in names}
+            mc = kept["records"].get("_mix_check")
+            if mc is not None:
+                got["_mix_check"] = {n: v for n, v in mc.items() if n in names}
+            return got
     t = time.time()
     out = chain_job(pair)
     tmp = path.with_suffix(".json.tmp")
@@ -1108,6 +1182,7 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
         t1 = time.time()
         results = _map(chain_pair, list(range(len(pred.train_pairs))), workers, pred.device)
         t2 = time.time()
+        checks = [r.pop("_mix_check", None) for r in results]
         f_info = lscore.run_info(pred, f_run_dir)
         for h in todo:
             records = [r[h.name] for r in results]
@@ -1119,6 +1194,18 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
                               "n_h_scored_together": len(todo), "n_jobs": len(records),
                               "workers": int(workers)}}
             write_h_scores(fd / h.name, out)
+        noisy = [h for h in todo if h.noise]
+        if mix_groups and noisy:
+            path = fd / "merge_error.json"
+            me = json.loads(path.read_text()) if path.is_file() else {"h": {}}
+            if me.get("mix_groups") not in (None, mix_groups):
+                me = {"h": {}}
+            me.update(f_run_name=f_run_dir.name, mix_groups=mix_groups,
+                      mix_check_bins=MIX_CHECK_BINS, check=MERGE_ERROR_DOC)
+            for h in noisy:
+                me["h"][h.name] = merge_error_summary(
+                    h, [c[h.name] for c in checks if c is not None and h.name in c])
+            lscore.write_json(me, path)
     if all((fd / n / "scores.json").is_file() for n in names):
         (fd / "CHAIN_DONE").write_text("\n".join(names) + "\n")
     return fd
