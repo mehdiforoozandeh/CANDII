@@ -171,6 +171,14 @@ Every id goes here at submission.
     - 24152189 `t125_halone`: array 20,21,29,30,31,32,33%7, 16:57 UTC.
     - 24152669 `t125_halone`: array 34, 17:07 UTC.
     - 24154245 `t125_halone`: array 37, 17:33 UTC (true fits: 36 of 36 TRAIN_DONE at 17:33).
+- Kit K11: `/project/def-maxwl/mforooz/t125/code/K11`, `GIT_SHA` 7ebb9c59c83e4fc18387975733f8ff59740fca42
+  (merge of chunk/t125-P2h; rsync as K9, wheels copied from K10), 2026-10-17.
+- N5 (h on f's NB and the chains, track C19M16), kit K11, 2026-10-17. Logs
+  `/project/def-maxwl/mforooz/t125/h/logs/%x_%A_%a.out`.
+  - 24224310 `t125_htrain` table fnb (1 h seed): array
+    36-47,132-143,228-239,324-335,420-431,516-527,612-623,708-719%16 (96 fits, the 8 C19M16 real
+    s0 f), script resources (1g.10gb slice, 8 cores, 40000M, 1 day), submitted 04:56 UTC. The two
+    smoke dirs in runs_fnb (A_C19M16 formula_mlp r5 noise, mlp r5 push) held only config.json.
 
 ### Nibi smoke (K10)
 
