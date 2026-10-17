@@ -13,9 +13,10 @@
 # moment-matched components per bin (each such record says crps_mix_merged; the measured merge
 # error per own-noise h goes to chain/<f_run>/merge_error.json); push-only h stay exact. The PI's
 # bar: the smallest G in {256, 512, 1024} whose PER-BIN max relative error of crps_log, on the
-# deepest-support bins of the 8 C19M16 f and all 6 own-noise kinds, is < 1e-3. Measured so far on
-# one deep pair (6,000 random bins): per-bin max 1.25e-3 at 256 (affine r5 noise) - so 256 fails;
-# 512 is the next candidate, PENDING the full measurement (t125-P2h retry 2, Open).
+# deepest-support bins of the 8 C19M16 f and all 6 own-noise kinds, is < 1e-3. Measured on Nibi
+# (t125-P2h, 2026-10-17; per f the 5,000 widest-support bins over its 38 pairs, true-X' s0 h;
+# table /project/def-maxwl/mforooz/t125/smoke/p2h/logs/gsel_c19m16.json): per-bin max 2.0e-3 at
+# 256 (fails; formula_affine r5 noise, D), 7.7e-4 at 512 (passes; same), 8.6e-5 at 1024. So 512.
 # The h list is `python3 tools/t125/hmap/tasks.py chain-list <f_run> --fnb-seeds N` (50 at N = 1:
 # the 2 formulas, the 36 h trained on the true X', this f's 12 h trained on its NB), each name
 # turned into a spec: h_formula_bin / h_formula_frag -> formula:bin / formula:frag (the learned
@@ -57,10 +58,11 @@
 # fast path: every per-(bin, k) step in torch on the device; the CPU scorer's numbers up to
 # summation order, the own-noise h's merged mixture aside); the jobs run in one process on CUDA,
 # so --workers 4 is unused there. WALLTIME, sized from Nibi measurements (t125-P2h, kit code of
-# 2026-10-16, one 1g.10gb slice, all 50 h, 38 pairs per C19M16 f): at --mix-merge 128,
-# A_C19M16 (row 1, the widest support) about 13 h and A2_C19M16 (row 2) about 1.7 h; at 512 the
-# own-noise pair sum of bins wider than 128 costs up to 16 times more (estimates at 512 PENDING,
-# Open). One day, not more: on 2026-10-16 `sbatch --test-only` put a 1-day slice job's start within
+# 2026-10-17, one 1g.10gb slice, all 50 h, 38 pairs per C19M16 f, --mix-merge 512): A 50.5 h,
+# B 35.6 h, B2 33.3 h, C 3.1 h, D 3.7 h, A2 1.7 h, C2 3.1 h, D2 3.0 h (the support decides: A, B,
+# B2 reach 800-2,500 counts, the rest stay under about 200). With a 1-day task A needs 3 tasks in a
+# row, B and B2 2, the others 1 (resubmit the same index after a TIMEOUT; see below).
+# One day, not more: on 2026-10-16 `sbatch --test-only` put a 1-day slice job's start within
 # the hour (b3) and a 2- to 4-day one's 3 to 7 days later (b4, b5). A task that hits the walltime
 # keeps every pair it finished (<out_root>/chain/<f_run>.partial/), so the same index, submitted
 # again by hand after the TIMEOUT, resumes there.
