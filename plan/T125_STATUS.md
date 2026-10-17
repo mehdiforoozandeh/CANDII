@@ -16,8 +16,8 @@ worktree (git-excluded).
 | 5 h on the true X′ | done 2026-10-16: 36 TRAIN_DONE, 38 ALONE_DONE (see "N4 results") |
 | 6 h on f's NB, chain scores | not started |
 | 7 aggregate | part 1 done (eta agg job 24224060); part 2 on 5 of 8 chains done (job 24312235, PI 2026-10-17); refresh when A, B, B2 land |
-| 8 vault readings | not started |
-| 9 lab deck | not started |
+| 8 vault readings | drafted: depth-offset question (part 1), map-h question (part 2, 5 of 8); refresh pending |
+| 9 lab deck | published v1 (5 of 8 chains): https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS ; republish on refresh |
 
 ## Job ids
 
@@ -549,3 +549,4 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
   the laptop. Still to read: the verify log's CRIT lines, sacct, and the criterion 9 count (114).
 - 2026-10-15: kit K10 shipped to Nibi; verify job 24065614 submitted (criterion 1 without -x,
   criterion 2, twin-determinism test on K10 and on t118 K8).
+- 2026-10-17: deck v1 published (private): https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS ; mirrored in cruxvault/results/t125/DECK.md.
