@@ -193,6 +193,10 @@ Every id goes here at submission.
     36-47,132-143,228-239,324-335,420-431,516-527,612-623,708-719%16 (96 fits, the 8 C19M16 real
     s0 f), script resources (1g.10gb slice, 8 cores, 40000M, 1 day), submitted 04:56 UTC. The two
     smoke dirs in runs_fnb (A_C19M16 formula_mlp r5 noise, mlp r5 push) held only config.json.
+  - `h_chain.sh` (h_set all, --mix-merge 512 default, script resources: slice, 4 cores, 40000M,
+    1 day; blacklist `/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed`),
+    each submitted when its f's 12 fnb h had TRAIN_DONE (36 true h TRAIN_DONE):
+    - 24268972 `t125_hchain`: array 19 (C_C19M16_counts_real_s0), 07:19 UTC.
 
 ### Nibi smoke (K10)
 
