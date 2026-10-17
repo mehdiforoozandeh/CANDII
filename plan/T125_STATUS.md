@@ -259,7 +259,11 @@ Every id goes here at submission.
   - Real-data equality, chain C: `chain/C_C19M16_counts_real_s0.partial` copied to
     `/project/def-maxwl/mforooz/t125/smoke/p2i/real/chain/` (runs_true, runs_fnb symlinked to `t125/h`);
     24313465 `t125_hchain` on K12, array 19, n_shards `assemble`, `--time=1:00:00`; compared by
-    `smoke/p2i/compare_chain.py` to `t125/h/chain/C_C19M16_counts_real_s0`: PENDING.
+    `smoke/p2i/compare_chain.py` to `t125/h/chain/C_C19M16_counts_real_s0`: COMPLETED 0:47 (g32),
+    CHAIN_DONE written. **Equal**: the same 52 files; CHAIN_DONE and merge_error.json byte-equal; all
+    1900 records of the 50 scores.json bit-equal (serialised JSON); each scores.json equal but for
+    created_utc, timing and `h.spec` (the smoke's out root reaches the h run dirs through its
+    runs_true / runs_fnb symlinks; 0 of 50 differ once that path is mapped back).
 
 ### Nibi smoke (K10)
 
