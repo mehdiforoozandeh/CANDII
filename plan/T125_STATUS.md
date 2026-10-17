@@ -329,6 +329,15 @@ by the shuffled pid, which differs by seed.)
   (CRPS > 20, non-finite, n_capped_total, timing), then 24083626. Re-run
   `python3 /project/def-maxwl/mforooz/t125/smoke/smoke_summary.py` on the login node.
 
+- 2026-10-17 about 01:58 UTC (N3): `ssh -o BatchMode=yes nibi` exited 255 (`Permission denied
+  (publickey,keyboard-interactive,hostbased)`). All Nibi work stopped until the PI runs
+  `hpc up nibi`. Last state read (01:37-01:58 UTC): 427 train tasks COMPLETED, 2 RUNNING
+  (24183485 of 234, 235, 236), SCORE_DONE 426, LAW_DONE 421; law batch 24191400 (215, 222, 237,
+  239) submitted. 429-431 are stopped (scoring hang, code defect). They run on without the laptop.
+  To do on resume: law for the last A2 indices (234-236 and any missing), then the 429-431 fix
+  decision; eta_agg.sh with OLD=/project/def-maxwl/mforooz/t125/old_grid/results_summary.tsv
+  (results_summary.tsv and checks_*.json already rsynced there on 2026-10-16).
+
 ## Phase 0 findings
 
 Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf/products/<pid>/provenance.json`
