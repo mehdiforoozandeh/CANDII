@@ -531,6 +531,8 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 
 - 2026-10-17: lab deck = one deck, two mini-arcs (shared motivation and background; part 1; part 2; one discussion). Part-1 result slides: the depth law still fails; design A gains; covariates help the mean.
 
+- 2026-10-17: part-2 result slides: the complexity grid of h on the true X′; repair fails (true-X′ h beats fnb-trained h in the chain); chain vs the old grid.
+
 ## Log
 
 - 2026-10-11: run started; Nibi down at start.
