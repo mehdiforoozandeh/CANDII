@@ -33,14 +33,28 @@ writes the count into the run.
 
 The f-NB batch is returned per bin (`FnbBatch`: the NB's mean and size, not a dense (k, w)), with
 only the bins that lie on the chromosome; `fnb_chunks` expands it.
+
+**Exact fast path (t125-P2h)**, `fnb_flat_fast`: the same chunks (same rows, same order, same K)
+with the same values, built on a torch device, whole runs of chunks at once and laid out flat (the
+caller runs h on each chunk's own [r, K] block). Bit for bit: the support size and the NB support
+of each (distinct (mu, n) row, chunk width) pair (`pushforward.unique_pairs`; the chunk width
+decides the padding, so it is part of the key); log1p k on those rows; the formula column on the
+distinct (lambda, floor(pileup)) pairs (scipy, as `formula.P_enumerated`), the pileup in float64
+with IEEE division; every log1p is numpy's on the host (`log1p_kfrag_f32` builds the
+fragment-window column there), so every column is the reference's bit for bit on every device
+(float64 +, / and floor are IEEE on a GPU too). `_flat_plan` (the chunk plan and the NB supports)
+can be kept across validation passes. `FnbSource(workers=N)` builds the windows of one draw in N
+threads (the random draws come first, so the batch is the same); only for a cache-mode corpus.
 """
 from __future__ import annotations
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Iterator, NamedTuple
 
 import numpy as np
+import torch
 
 from ladder import data as ldata
 from ladder import model as lmodel
@@ -240,7 +254,7 @@ class FnbSource:
     """Windows of f's predicted NB over the f's training pairs (see the module docstring)."""
 
     def __init__(self, corpus: HCorpus, infos: dict, pred, train_pairs, chroms, lens,
-                 window: int, seed: int, halo: int = HALO):
+                 window: int, seed: int, halo: int = HALO, workers: int = 1):
         if not train_pairs:
             raise ValueError("FnbSource needs at least one training pair")
         self.corpus, self.infos, self.pred = corpus, infos, pred
@@ -250,24 +264,32 @@ class FnbSource:
         self.probs = self.lens / self.lens.sum()
         self.window, self.halo = int(window), int(halo)
         self.rng = np.random.default_rng(int(seed))
+        self.workers = max(1, int(workers))
+        self._pool = ThreadPoolExecutor(self.workers) if self.workers > 1 else None
+
+    def _window(self, pair, chrom: str, n: int, s: int):
+        e = min(s + self.window, n)
+        info = self.infos[pair["target_pid"]]
+        a, bb = _span(n, s, e, self.halo)
+        src = pair["source_pid"]
+        loc, disp = self.pred.predict_window(src, src, pair["target_pid"], chrom, a, bb)
+        mu, nn = nb_params(self.pred, loc, disp)
+        return info, fnb_bins(self.corpus, info, chrom, a, bb, s, e, mu, nn)
 
     def draw(self, batch: int) -> FnbBatch:
         W = self.window
         pi = self.rng.integers(len(self.pairs), size=batch)
         ci = self.rng.choice(len(self.chroms), size=batch, p=self.probs)
         u = self.rng.random(batch)
-        parts, info_list, info_of_part, slot = [], [], [], {}
+        jobs = []
         for b in range(batch):
-            pair = self.pairs[pi[b]]
             chrom, n = self.chroms[ci[b]], int(self.lens[ci[b]])
-            s = int(u[b] * (max(0, n - W) + 1))
-            e = min(s + W, n)
-            info = self.infos[pair["target_pid"]]
-            a, bb = _span(n, s, e, self.halo)
-            src = pair["source_pid"]
-            loc, disp = self.pred.predict_window(src, src, pair["target_pid"], chrom, a, bb)
-            mu, nn = nb_params(self.pred, loc, disp)
-            parts.append(fnb_bins(self.corpus, info, chrom, a, bb, s, e, mu, nn))
+            jobs.append((self.pairs[pi[b]], chrom, n, int(u[b] * (max(0, n - W) + 1))))
+        done = (list(self._pool.map(lambda j: self._window(*j), jobs)) if self._pool is not None
+                else [self._window(*j) for j in jobs])
+        parts, info_list, info_of_part, slot = [], [], [], {}
+        for info, part in done:
+            parts.append(part)
             if info.pid not in slot:
                 slot[info.pid] = len(info_list)
                 info_list.append(info)
@@ -345,3 +367,279 @@ def fnb_chunks(fb: FnbBatch, rung: int, with_formula: bool, elems: int = FNB_ELE
         k, w, valid = pushforward.nb_support(fb.mu[idx], fb.n_size[idx], tail=tail, k_max=k_max)
         yield FnbChunk(idx, chunk_features(fb, idx, k, rung, with_formula), w, fb.y[idx],
                        int((size[idx] > k_max).sum()), valid.sum(axis=1))
+
+
+# ---------------------------------------------------------------------------------------------
+# exact fast path on a torch device (t125-P2h)
+# ---------------------------------------------------------------------------------------------
+
+
+def _host_threads() -> int:
+    try:
+        import os
+        return max(1, min(8, len(os.sched_getaffinity(0))))
+    except (AttributeError, OSError):
+        return 4
+
+
+_LOG1P_POOL = ThreadPoolExecutor(_host_threads())
+_LOG1P_PART = 1 << 21
+
+
+def _threaded(n: int, fn) -> None:
+    """fn(start, stop) over [0, n) in parts, in the host pool (numpy's ufuncs release the GIL)."""
+    if n > _LOG1P_PART:
+        list(_LOG1P_POOL.map(lambda s0: fn(s0, min(s0 + _LOG1P_PART, n)),
+                             range(0, n, _LOG1P_PART)))
+    elif n:
+        fn(0, n)
+
+
+def log1p_f32(x: torch.Tensor) -> torch.Tensor:
+    """float32 of numpy's log1p of a float64 tensor, on the tensor's device. The log1p always runs
+    on the host (numpy, as the reference), never in the device's libm, so a feature is the
+    reference's bit for bit on every device; each value is computed alone, so the threads do not
+    move it."""
+    a = np.ascontiguousarray(x.detach().cpu().numpy()).reshape(-1)
+    out = np.empty(a.shape, np.float32)
+
+    def part(s0, s1):
+        out[s0:s1] = np.log1p(a[s0:s1])
+    _threaded(a.size, part)
+    return torch.from_numpy(out.reshape(tuple(x.shape))).to(x.device)
+
+
+def log1p_kfrag_f32(k0_row: np.ndarray, blocks, rest: np.ndarray, cnt: np.ndarray,
+                    device) -> torch.Tensor:
+    """The log1p_k_frag column, float32 log1p((k + rest) / cnt) with k = k0_row[row] + j, all on
+    the host as the reference computes it ((k0 + j) as int64 then float64, IEEE + and /, numpy
+    log1p), then moved to `device`. `blocks`: an int K (every row has K entries; returns [r, K]),
+    or [(e0, r0, r, K)] (rows r0..r0+r of K entries laid out flat from entry e0; returns [E])."""
+    k0_row = np.asarray(k0_row, dtype=np.int64)
+    rest = np.asarray(rest, dtype=np.float64)
+    cnt = np.asarray(cnt, dtype=np.float64)
+    n = k0_row.shape[0]
+    flat = not (np.isscalar(blocks) or np.ndim(blocks) == 0)
+    if not flat:
+        blocks = [(0, 0, n, int(blocks))]
+    E = sum(r * K for _, _, r, K in blocks)
+    out = np.empty(E, np.float32)
+    tasks = []
+    for e0, r0, r, K in blocks:
+        step = max(1, _LOG1P_PART // max(1, K))
+        tasks += [(e0 + i * K, r0 + i, min(step, r - i), K) for i in range(0, r, step)]
+
+    def part(t):
+        e0, r0, r, K = t
+        kf = (k0_row[r0:r0 + r, None] + np.arange(K, dtype=np.int64)[None, :]).astype(np.float64)
+        out[e0:e0 + r * K] = np.log1p((kf + rest[r0:r0 + r, None]) / cnt[r0:r0 + r, None]).ravel()
+    list(_LOG1P_POOL.map(part, tasks))
+    res = torch.from_numpy(out if flat else out.reshape(n, int(blocks[0][3])))
+    return res.to(device)
+
+
+def formula_log1p_t(variant: str, info: ProductInfo, kf: torch.Tensor, lam: np.ndarray,
+                    rest: torch.Tensor | None = None, row_e: torch.Tensor | None = None,
+                    cache: dict | None = None) -> torch.Tensor:
+    """float64 log1p(`formula.P_enumerated(variant, info, k, lam, rest)`) on kf's device, bit for
+    bit. kf: float64 k, either [r, K] (row i is bin i) or flat [E] with `row_e` [E] naming each
+    entry's bin; lam [r] (numpy), rest [r] (a tensor; "frag" only). The pileup is formed in
+    float64 as `formula.pileup` (dividing by tensors: a CUDA division by a python scalar
+    multiplies by its reciprocal); the Poisson tail is scipy's (`formula.neglog10_sf_strict`) on
+    the distinct (lambda, floor(pileup)) pairs. `cache` (a dict) keeps those values per (product,
+    variant) for later calls."""
+    dev = kf.device
+    shape = kf.shape
+    kf = kf.to(torch.float64)
+    lam = np.asarray(lam, dtype=np.float64).ravel()
+    if row_e is None:
+        if kf.ndim != 2 or lam.shape[0] != kf.shape[0]:
+            raise ValueError(f"k {tuple(kf.shape)} must be [r, K] with r = len(lam) = {lam.shape[0]}")
+        row_e = torch.arange(kf.shape[0], device=dev).repeat_interleave(kf.shape[1])
+        kf = kf.reshape(-1)
+
+    def scalar(v: float) -> torch.Tensor:
+        return torch.full((1,), float(v), dtype=torch.float64, device=dev)
+
+    if variant == "bin":
+        c = kf
+    elif variant == "frag":
+        if rest is None:
+            raise ValueError("variant 'frag' needs frag_rest")
+        c = (kf + rest.to(device=dev, dtype=torch.float64)[row_e]) / scalar(
+            formula.frag_bins(info.fraglen))
+    else:
+        raise ValueError(f"variant must be one of {formula.VARIANTS}, got {variant!r}")
+    if kf.numel() == 0:
+        return torch.zeros(shape, dtype=torch.float64, device=dev)
+    s_t, _ = formula.scale(info)
+    pile = c * scalar(float(info.fraglen)) / scalar(float(info.read_length) + formula.SPAN_EXTRA)
+    m = torch.floor(pile * scalar(s_t))
+    if not bool(torch.isfinite(m).all()):
+        raise ValueError("non-finite pileup")
+    m = m.to(torch.int64)
+    if int(m.min()) < 0 or int(m.max()) >= (1 << 31):
+        raise ValueError("pileup outside [0, 2^31)")
+    st = {"lam": {}, "keys": np.zeros(0, np.int64), "vals": np.zeros(0, np.float64)}
+    if cache is not None:
+        st = cache.setdefault((info.pid, variant), st)
+    ub, ib = np.unique(lam.view(np.int64), return_inverse=True)
+    gid = np.array([st["lam"].setdefault(b, len(st["lam"])) for b in ub.tolist()], np.int64)
+    key = torch.from_numpy(gid[ib.reshape(-1)]).to(dev)[row_e] * (1 << 31) + m
+
+    def lookup():
+        kt = st.setdefault("keys_t", {}).get(dev)
+        if kt is None:
+            kt = st["keys_t"][dev] = torch.from_numpy(st["keys"]).to(dev)
+            st.setdefault("vals_t", {})[dev] = torch.from_numpy(st["vals"]).to(dev)
+        if kt.numel() == 0:
+            return None, torch.zeros(key.shape, dtype=torch.bool, device=dev)
+        pos = torch.searchsorted(kt, key).clamp_max(kt.numel() - 1)
+        return pos, kt[pos] == key
+
+    pos, hit = lookup()
+    if not bool(hit.all()):
+        miss = torch.unique(key[~hit]).cpu().numpy()
+        lam_of = np.zeros(len(st["lam"]), np.int64)
+        for bits, g in st["lam"].items():
+            lam_of[g] = bits
+        val = np.log1p(formula.neglog10_sf_strict((miss & ((1 << 31) - 1)).astype(np.float64),
+                                                  lam_of.view(np.float64)[miss >> 31]))
+        allk = np.concatenate([st["keys"], miss])
+        allv = np.concatenate([st["vals"], val])
+        o = np.argsort(allk, kind="stable")
+        st["keys"], st["vals"] = allk[o], allv[o]
+        st["keys_t"], st["vals_t"] = {}, {}
+        pos, hit = lookup()
+    return st["vals_t"][dev][pos].reshape(shape)
+
+
+#: fnb_flat_fast: at most this many (bin, k) entries built at once (22 float32 features: 370 MB)
+FLAT_ELEMS = 1 << 22
+
+
+class FnbFlat(NamedTuple):
+    """Consecutive chunks of `fnb_chunks` laid out flat on a device: chunk c is the slice
+    [e0, e0 + r K) of the entries (row-major [r, K], as `FnbChunk.feat`) and rows [r0, r0 + r)."""
+    feat: torch.Tensor           # float32[E, F]
+    w: torch.Tensor              # float32[E]
+    y: torch.Tensor              # float32[R]
+    blocks: list                 # [(e0, r0, r, K)] per chunk, in `fnb_chunks` order
+    n_capped: int
+    n_k_sum: int
+    n_k_max: int
+
+
+def _flat_plan(fb: FnbBatch, elems: int, k_max: int, tail: float) -> dict:
+    """The h-independent part of `fnb_flat_fast` for one batch: the chunk plan of `fnb_chunks` and
+    the NB support of each (distinct row, chunk width) pair, bit for bit as the chunk's own call."""
+    size = pushforward.support_size_unique(fb.mu, fb.n_size, tail=tail, k_max=k_max)
+    plan = chunk_plan(size, elems, k_max)
+    eff = np.minimum(size, int(k_max) + 1)
+    mu_u, n_u, uid = pushforward.unique_pairs(fb.mu, fb.n_size)
+    widths = np.array([int(eff[idx].max()) for idx in plan], dtype=np.int64)
+    tables = {}
+    for K in np.unique(widths):
+        U = np.unique(np.concatenate([uid[idx] for idx, Kc in zip(plan, widths) if Kc == K]))
+        k, w, valid = pushforward.nb_support(mu_u[U], n_u[U], tail=tail, k_max=k_max)
+        if k.shape[1] != K:
+            raise AssertionError(f"chunk width {K} but the distinct rows give {k.shape[1]}")
+        # kept small: row j of k is k[:, 0] + j; the loss takes w as float32
+        tables[int(K)] = (U, k[:, 0].copy(), w.astype(np.float32), valid.sum(axis=1))
+    idx_t = np.int32 if size.shape[0] < 2 ** 31 else np.int64
+    return {"order": np.concatenate(plan).astype(idx_t) if plan else np.zeros(0, idx_t),
+            "bounds": np.cumsum([0] + [idx.size for idx in plan]), "widths": widths,
+            "uid": uid.astype(idx_t), "tables": tables, "n_u": mu_u.shape[0],
+            "capped": size > k_max}
+
+
+def fnb_flat_fast(fb: FnbBatch, rung: int, with_formula: bool, device,
+                  elems: int = FNB_ELEMS, k_max: int = pushforward.K_MAX,
+                  tail: float = pushforward.TAIL, flat_elems: int = FLAT_ELEMS,
+                  plan: dict | None = None, fcache: dict | None = None) -> Iterator[FnbFlat]:
+    """The chunks of `fnb_chunks` (same rows, order, K and values) built on `device`, whole runs
+    of chunks (up to `flat_elems` entries) at once and laid out flat (see the module docstring).
+    `plan` (`_flat_plan` of this batch, kept by the caller) and `fcache` skip the h-independent
+    work on a repeated batch (the validation passes)."""
+    if rung not in (1, 5):
+        raise ValueError(f"rung {rung!r} not in (1, 5)")
+    device = torch.device(device)
+    if plan is None:
+        plan = _flat_plan(fb, elems, k_max, tail)
+    nf = N_FIXED_R1 if rung == 1 else fb.feat_fixed.shape[1]
+    F = 1 + nf + (1 if with_formula else 0)
+    order, bounds = plan["order"], plan["bounds"]
+    chunks = [order[bounds[c]:bounds[c + 1]].astype(np.int64) for c in range(bounds.size - 1)]
+    widths, uid, tables = plan["widths"], plan["uid"], plan["tables"]
+    tpos = {K: np.full(plan["n_u"], -1, np.int64) for K in tables}
+    for K, (U, *_rest) in tables.items():
+        tpos[K][U] = np.arange(U.size)
+    capped = plan["capped"]
+    c0 = 0
+    while c0 < len(chunks):
+        c1, E = c0, 0
+        while c1 < len(chunks) and (c1 == c0 or E + chunks[c1].size * widths[c1] <= flat_elems):
+            E += int(chunks[c1].size * widths[c1])
+            c1 += 1
+        rows = np.concatenate(chunks[c0:c1])
+        wid = np.repeat(widths[c0:c1], [chunks[c].size for c in range(c0, c1)])
+        Kmax = int(widths[c0:c1].max())
+        # per row: its (distinct row, width) table row, as one padded [T, Kmax] table
+        Ks = sorted({int(K) for K in widths[c0:c1]})
+        base = np.cumsum([0] + [tables[K][0].size for K in Ks])
+        w_tab = np.zeros((base[-1], Kmax), np.float32)
+        lk_tab = np.zeros((base[-1], Kmax), np.float32)
+        k0_tab = np.zeros(base[-1], np.int64)
+        nk_tab = np.zeros(base[-1], np.int64)
+        for b, K in zip(base[:-1], Ks):
+            _, k0, w, nk_ = tables[K]
+            u = k0.shape[0]
+            w_tab[b:b + u, :K] = w
+            lk_tab[b:b + u, :K] = np.log1p((k0[:, None] + np.arange(K)[None, :]).astype(np.float64))
+            k0_tab[b:b + u] = k0
+            nk_tab[b:b + u] = nk_
+        tid = np.empty(rows.size, np.int64)
+        for b, K in zip(base[:-1], Ks):
+            sel = wid == K
+            tid[sel] = b + tpos[K][uid[rows[sel]]]
+        if (tid < 0).any():
+            raise AssertionError("a row without its NB table")
+        offs = np.concatenate([[0], np.cumsum(wid)])
+        row_e = torch.repeat_interleave(torch.arange(rows.size, device=device),
+                                        torch.from_numpy(wid).to(device))
+        j_e = torch.arange(E, device=device) - torch.from_numpy(offs[:-1]).to(device)[row_e]
+        tid_e = torch.from_numpy(tid).to(device)[row_e]
+        feat = torch.empty((E, F), dtype=torch.float32, device=device)
+        feat[:, 0] = torch.from_numpy(lk_tab).to(device)[tid_e, j_e]
+        fixed = np.ascontiguousarray(fb.feat_fixed[rows][:, :nf])
+        feat[:, 1:1 + nf] = torch.from_numpy(fixed).to(device)[row_e]
+        if with_formula:
+            kf = (torch.from_numpy(k0_tab).to(device)[tid_e] + j_e).to(torch.float64)
+            rest = torch.from_numpy(np.ascontiguousarray(fb.frag_rest[rows])).to(device)
+        blocks, e0, r0 = [], 0, 0
+        for c in range(c0, c1):
+            r, K = int(chunks[c].size), int(widths[c])
+            blocks.append((e0, r0, r, K))
+            e0 += r * K
+            r0 += r
+        if rung == 5:
+            feat[:, K_FRAG_COL] = log1p_kfrag_f32(k0_tab[tid], blocks, fb.frag_rest[rows],
+                                                  fb.frag_cnt[rows], device)
+        if with_formula:
+            lam = fb.lam[rows]
+            g_rows = fb.info_idx[rows]
+            groups = np.unique(g_rows)
+            if groups.size == 1:
+                feat[:, -1] = formula_log1p_t("frag", fb.infos[int(groups[0])], kf, lam, rest,
+                                              row_e, fcache).to(torch.float32)
+            else:
+                g_e = torch.from_numpy(g_rows).to(device)[row_e]
+                for g in groups:
+                    sel = torch.nonzero(g_e == int(g)).squeeze(1)
+                    feat[sel, -1] = formula_log1p_t("frag", fb.infos[int(g)], kf[sel], lam, rest,
+                                                    row_e[sel], fcache).to(torch.float32)
+        w_e = torch.from_numpy(w_tab).to(device)[tid_e, j_e]
+        nk = nk_tab[tid]
+        yield FnbFlat(feat, w_e, torch.from_numpy(np.ascontiguousarray(fb.y[rows])).to(device),
+                      blocks, int(capped[rows].sum()), int(nk.sum()), int(nk.max()))
+        c0 = c1

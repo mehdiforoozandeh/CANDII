@@ -1,7 +1,8 @@
 """t125 part 2 — the five Nibi job scripts of the map h, checked as text and in DRY_RUN.
 
 Mirrors tests/test_t125_slurm_eta.py for slurm/t125/h_{ctl_cache,train,alone,chain,agg}.sh: the
-resource lines the hard rules fix (one MIG-slice gres line on h_chain.sh and none elsewhere, the
+resource lines the hard rules fix (one MIG-slice gres line on h_chain.sh and on h_train.sh, the
+latter since t125-P2h moved the fnb fits onto the slice, and none elsewhere, the
 account, the excluded nodes incl. c371, the job names, a walltime, no exported variables, no
 /usr/bin/time, no afterok, no /scratch), the per-task venv recipe and kit pin, the t125 out dirs,
 and — through DRY_RUN=1 — that the index -> h / f mapping comes from `tools/t125/hmap/tasks.py`
@@ -25,7 +26,8 @@ FIXTURE_MANIFEST = REPO / "tests" / "fixtures" / "t112_meta" / "MANIFEST.tsv"
 
 SCRIPTS = {name: SLURM / f"h_{name}.sh" for name in ("ctl_cache", "train", "alone", "chain", "agg")}
 ARRAYS = ("ctl_cache", "train", "alone", "chain")
-CPU = ("ctl_cache", "train", "alone", "agg")
+CPU = ("ctl_cache", "alone", "agg")
+GPU = ("train", "chain")
 GRES_VALUE = "--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1"
 GRES = f"#SBATCH {GRES_VALUE}"
 EXCLUDE = "--exclude=c128,c166,c537,c371"
@@ -35,8 +37,8 @@ CACHE = "/project/def-maxwl/mforooz/t118/ladder/cache"
 OLD_GRID_JSON = "/project/def-maxwl/mforooz/t118/row2/agg/results.json"
 JOB_NAMES = {"ctl_cache": "t125_hctl", "train": "t125_htrain", "alone": "t125_halone",
              "chain": "t125_hchain", "agg": "t125_hagg"}
-RESOURCES = {"ctl_cache": ("0:30:00", "2", "8000M"), "train": ("3:00:00", "8", "32000M"),
-             "alone": ("2:00:00", "8", "32000M"), "chain": ("6:00:00", "4", "32000M"),
+RESOURCES = {"ctl_cache": ("0:30:00", "2", "8000M"), "train": ("1-00:00:00", "8", "40000M"),
+             "alone": ("2:00:00", "8", "32000M"), "chain": ("1-00:00:00", "4", "40000M"),
              "agg": ("2:00:00", "4", "16000M")}
 COV = "/kit/tools/t118/covariates.tsv"
 
@@ -105,8 +107,9 @@ def _alone_line(spec, out="/out"):
             f"{spec} {out}/alone --workers 8")
 
 
-def _chain_args(out="/out", eta="/eta", seeds=None):
-    return ["/kit", "/p", "/c", "/ctl", "/bl.bed", eta, out] + ([str(seeds)] if seeds else [])
+def _chain_args(out="/out", eta="/eta", seeds=None, h_set=None):
+    return (["/kit", "/p", "/c", "/ctl", "/bl.bed", eta, out] + ([str(seeds)] if seeds else [])
+            + ([h_set] if h_set else []))
 
 
 def _chain_split(line: str):
@@ -147,10 +150,12 @@ def test_script_parses(name):
     assert r.returncode == 0, r.stderr
 
 
-def test_only_the_chain_script_requests_the_mig_slice():
-    """Acceptance criterion 8: `grep -c 'SBATCH --gres'` is 1 on h_chain.sh and 0 elsewhere."""
-    assert [ln for ln in _sbatch("chain") if "gres" in ln] == [GRES]
-    assert _text("chain").count("SBATCH --gres") == 1
+@pytest.mark.parametrize("name", GPU)
+def test_the_gpu_scripts_request_one_mig_slice(name):
+    """Acceptance criterion 8 as amended by t125-P2h: `grep -c 'SBATCH --gres'` is 1 on
+    h_chain.sh and h_train.sh and 0 elsewhere."""
+    assert [ln for ln in _sbatch(name) if "gres" in ln] == [GRES]
+    assert _text(name).count("SBATCH --gres") == 1
 
 
 @pytest.mark.parametrize("name", CPU)
@@ -159,10 +164,10 @@ def test_cpu_scripts_request_no_gres(name):
     assert not any("gres" in ln for ln in _sbatch(name))
 
 
-def test_h_train_documents_the_gpu_slice_variant_without_requesting_it():
+def test_h_train_documents_why_it_requests_the_slice():
     h = _header("train")
-    assert "GPU-SLICE VARIANT" in h and GRES_VALUE in h
-    assert "SBATCH --gres" not in _text("train")
+    assert "t125-P2h" in h and "MIG slice" in h
+    assert "GPU-SLICE VARIANT" not in h
 
 
 @pytest.mark.parametrize("name", SCRIPTS)
@@ -170,7 +175,7 @@ def test_account_exclude_time_and_no_partition(name):
     lines = _sbatch(name)
     assert "#SBATCH --account=def-maxwl" in lines
     assert f"#SBATCH {EXCLUDE}" in lines
-    assert any(re.fullmatch(r"#SBATCH --time=\d+:\d\d:\d\d", ln) for ln in lines)
+    assert any(re.fullmatch(r"#SBATCH --time=(\d+-)?\d+:\d\d:\d\d", ln) for ln in lines)
     assert not any("--partition" in ln for ln in lines)
     assert not any("--output" in ln or "--error" in ln for ln in lines), "the submitter gives the log path"
 
@@ -400,7 +405,7 @@ def test_dry_run_chain_index_0_pinned():
                     "/c", "/ctl", "/bl.bed", "/eta/A_C07M20_counts_real_s0", "/out/chain"]
     assert len(specs) == 50
     assert specs == _chain_specs("A_C07M20_counts_real_s0", "/out")
-    assert tail == ["--workers", "4"]
+    assert tail == ["--workers", "4", "--mix-merge", "512"]
 
 
 def test_dry_run_chain_learned_formula_h_are_run_dirs_not_formulas():
@@ -440,13 +445,71 @@ def test_dry_run_chain_notes_missing_train_done_then_skips_on_chain_done(tmp_pat
     r = _dry("chain", args, 0)
     assert r.returncode == 0 and "exit 3" not in r.stderr and len(r.stdout.splitlines()) == 1
     (out / "chain" / F_RUNS[0]).mkdir(parents=True)
-    (out / "chain" / F_RUNS[0] / "CHAIN_DONE").touch()
+    done = out / "chain" / F_RUNS[0] / "CHAIN_DONE"
+    names = [Path(s).name if not s.startswith("formula:") else "h_formula_" + s.split(":")[1]
+             for s in _chain_specs(F_RUNS[0], str(out))]
+    done.write_text("\n".join(names[:38]) + "\n")        # a "true" chain: not every h
+    r = _dry("chain", args, 0)
+    assert r.returncode == 0 and len(r.stdout.splitlines()) == 1
+    done.write_text("\n".join(names) + "\n")
     r = _dry("chain", args, 0)
     assert r.returncode == 0 and r.stdout == "" and "skip" in r.stderr
 
 
+C19M16_CHAIN = (3, 11, 19, 27, 35, 43, 51, 59)
+C19M16_FNB = [i * 12 + j for i in C19M16_CHAIN for j in range(12)]
+
+
+def test_scope_is_the_8_c19m16_f():
+    """PI 2026-10-17: repair fits and chains for the 8 real seed-0 C19M16 f only; the headers
+    give the chain indices and the fnb index ranges, and those indices name exactly those f."""
+    assert [F_RUNS[i] for i in C19M16_CHAIN] == [
+        f"{r}_C19M16_counts_real_s0" for r in ("A", "B", "C", "D", "A2", "B2", "C2", "D2")]
+    ranges = "36-47,132-143,228-239,324-335,420-431,516-527,612-623,708-719"
+    for name in ("train", "chain"):                                  # ranges may wrap a line
+        assert ranges in "".join(ln.lstrip("# ") for ln in _header(name).splitlines()), name
+    assert "3 11 19 27 35 43 51 59" in _header("chain")
+    table = [h for f in F_RUNS for h in _fnb_h(f)]                  # the fnb table's order
+    want = [h for f in (F_RUNS[i] for i in C19M16_CHAIN) for h in _fnb_h(f)]
+    assert [table[i] for i in C19M16_FNB] == want and len(want) == 96
+    for i in (C19M16_FNB[0], C19M16_FNB[-1]):
+        r = _dry("train", ["/kit", "/p", "/c", "/ctl", "/out", "fnb", "/eta", "1"], i)
+        assert r.returncode == 0 and r.stdout.split()[-5] == str(i), (r.stdout, r.stderr)
+    for i in (3, 59):
+        r = _dry("chain", _chain_args(seeds=1), i)
+        assert _chain_split(r.stdout)[0][8] == f"/eta/{F_RUNS[i]}"
+
+
+def test_dry_run_chain_true_set_needs_no_fnb_h(tmp_path):
+    """h_set "true" (PI 2026-10-16, a per-track f): the 2 formulas and the 36 true-X' h, in the
+    chain-list order; no fnb run dir is needed; it skips once its 38 h are in CHAIN_DONE."""
+    out, eta = tmp_path / "h", tmp_path / "eta"
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="true"), 3)
+    assert r.returncode == 0, r.stderr
+    head, specs, tail = _chain_split(r.stdout)
+    want = [s for s in _chain_specs(F_RUNS[3], str(out)) if "/runs_fnb/" not in s]
+    assert specs == want and len(specs) == 38
+    assert tail == ["--workers", "4", "--mix-merge", "512"]
+    assert "36 h run dirs lack TRAIN_DONE" in r.stderr
+    for spec in want:
+        if not spec.startswith("formula:"):
+            Path(spec).mkdir(parents=True)
+            (Path(spec) / "TRAIN_DONE").touch()
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="true"), 3)
+    assert "lack TRAIN_DONE" not in r.stderr               # the 12 fnb run dirs are not asked for
+    (out / "chain" / F_RUNS[3]).mkdir(parents=True)
+    names = [Path(s).name if not s.startswith("formula:") else "h_formula_" + s.split(":")[1]
+             for s in want]
+    (out / "chain" / F_RUNS[3] / "CHAIN_DONE").write_text("\n".join(names) + "\n")
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="true"), 3)
+    assert r.returncode == 0 and r.stdout == "" and "skip" in r.stderr
+    r = _dry("chain", _chain_args(out=str(out), eta=str(eta), seeds=1, h_set="all"), 3)
+    assert r.returncode == 0 and len(_chain_split(r.stdout)[1]) == 50   # "all" still runs
+
+
 @pytest.mark.parametrize("args,index", [(_chain_args(), 64), (_chain_args(), 1000),
-                                        (_chain_args(seeds=2), 0)])
+                                        (_chain_args(seeds=2), 0),
+                                        (_chain_args(seeds=1, h_set="fnb"), 0)])
 def test_dry_run_chain_bad_input_fails(args, index):
     assert _dry("chain", args, index).returncode == 2
 

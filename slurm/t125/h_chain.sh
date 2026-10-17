@@ -6,15 +6,33 @@
 #
 # WHAT ONE TASK DOES.
 #   python3 $KIT/tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <cache_dir> <ctl_cache> \
-#       <blacklist> <eta_runs_dir>/<f_run> <out_root>/chain --h <spec> [--h <spec> ...] --workers 4
+#       <blacklist> <eta_runs_dir>/<f_run> <out_root>/chain --h <spec> [--h <spec> ...] --workers 4 \
+#       --mix-merge 512
 #           -> chain/<f_run>/<h_name>/scores.json per h, chain/<f_run>/CHAIN_DONE
+# --mix-merge 512 (PI 2026-10-16 / 2026-10-17): the own-noise h's mixture CRPS over at most 512
+# moment-matched components per bin (each such record says crps_mix_merged; the measured merge
+# error per own-noise h goes to chain/<f_run>/merge_error.json); push-only h stay exact. The PI's
+# bar: the smallest G in {256, 512, 1024} whose PER-BIN max relative error of crps_log, on the
+# deepest-support bins of the 8 C19M16 f and all 6 own-noise kinds, is < 1e-3. Measured on Nibi
+# (t125-P2h, 2026-10-17; per f the 5,000 widest-support bins over its 38 pairs, true-X' s0 h;
+# table /project/def-maxwl/mforooz/t125/smoke/p2h/logs/gsel_c19m16.json): per-bin max 2.0e-3 at
+# 256 (fails; formula_affine r5 noise, D), 7.7e-4 at 512 (passes; same), 8.6e-5 at 1024. So 512.
 # The h list is `python3 tools/t125/hmap/tasks.py chain-list <f_run> --fnb-seeds N` (50 at N = 1:
 # the 2 formulas, the 36 h trained on the true X', this f's 12 h trained on its NB), each name
 # turned into a spec: h_formula_bin / h_formula_frag -> formula:bin / formula:frag (the learned
 # h_formula_affine_* and h_formula_mlp_* are run dirs, not formulas); *_true_s<seed> -> <out_root>/runs_true/<name>;
-# *_<f_run>_s<seed> -> <out_root>/runs_fnb/<name>. A task whose CHAIN_DONE exists exits 0 without
-# work. A task whose f run or any learned h run dir has no TRAIN_DONE exits 3, so an unfinished
-# train task shows up as a failed chain task instead of a partial chain.
+# *_<f_run>_s<seed> -> <out_root>/runs_fnb/<name>. A task whose CHAIN_DONE lists every h of the
+# task exits 0 without work. A task whose f run or any learned h run dir has no TRAIN_DONE exits
+# 3, so an unfinished train task shows up as a failed chain task instead of a partial chain.
+#
+# THE H SET (9th argument). "all" (default): the 50 h above. SCOPE (PI 2026-10-17): the repair
+# fits and these chains are for the 8 real seed-0 f of track C19M16 only, every design: A, B, C,
+# D, A2, B2, C2, D2 x C19M16 x real x s0 = chain indices 3 11 19 27 35 43 51 59 (their fnb fits
+# are h_train.sh fnb indices 36-47,132-143,228-239,324-335,420-431,516-527,612-623,708-719); no
+# g = all chain. "true": only the 2
+# formulas and the 36 true-X' h (38), no fnb h needed: other per-track f, if time allows. A later
+# "all" task on an f that a "true" task chained scores only its 12 fnb h (h with a scores.json
+# are not scored again) and rewrites CHAIN_DONE with all 50 names.
 #
 # THE TASK TABLE. Index -> f run comes from `python3 tools/t125/hmap/tasks.py fnb <manifest>`:
 # the f runs in the order of their first row (that table is built from eta.pairs.f_runs_seed0).
@@ -34,11 +52,22 @@
 # then requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR; PYTHONPATH is
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
-# RESOURCES. One 10 GB MIG slice of an H100 (the f predictions), 4 cores (score.py --workers 4),
-# 32 GB host memory, 6 h. Nodes c128, c166, c537 and c371 are excluded. Peak memory from
-# `sacct -o MaxRSS` (no /usr/bin/time on compute nodes).
+# RESOURCES. One 10 GB MIG slice of an H100, 4 cores, 40000M host memory, 1 day (partition b3).
+# Nodes c128, c166, c537 and c371 are excluded. Peak memory from `sacct -o MaxRSS` (no
+# /usr/bin/time on compute nodes). Since t125-P2h the slice does the scoring itself (score.py's
+# fast path: every per-(bin, k) step in torch on the device; the CPU scorer's numbers up to
+# summation order, the own-noise h's merged mixture aside); the jobs run in one process on CUDA,
+# so --workers 4 is unused there. WALLTIME, sized from Nibi measurements (t125-P2h, kit code of
+# 2026-10-17, one 1g.10gb slice, all 50 h, 38 pairs per C19M16 f, --mix-merge 512): A 50.5 h,
+# B 35.6 h, B2 33.3 h, C 3.1 h, D 3.7 h, A2 1.7 h, C2 3.1 h, D2 3.0 h (the support decides: A, B,
+# B2 reach 800-2,500 counts, the rest stay under about 200). With a 1-day task A needs 3 tasks in a
+# row, B and B2 2, the others 1 (resubmit the same index after a TIMEOUT; see below).
+# One day, not more: on 2026-10-16 `sbatch --test-only` put a 1-day slice job's start within
+# the hour (b3) and a 2- to 4-day one's 3 to 7 days later (b4, b5). A task that hits the walltime
+# keeps every pair it finished (<out_root>/chain/<f_run>.partial/), so the same index, submitted
+# again by hand after the TIMEOUT, resumes there.
 #
-# DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE exists; a note on stderr for
+# DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE lists every h; a note on stderr for
 # each missing TRAIN_DONE, where a real task would exit 3) and exits 0 before any module load. The
 # tables are resolved as in h_train.sh: ${PYTHON:-python3}, $KIT or else this script's checkout,
 # <products_dir>/MANIFEST.tsv or else tests/fixtures/t112_meta/MANIFEST.tsv.
@@ -54,19 +83,23 @@
 #   sbatch --parsable --array=$READY_INDICES%40 --exclude=c128,c166,c537,c371 \
 #       --output=$OUT_H/logs/%x_%A_%a.out \
 #       $KIT/slurm/t125/h_chain.sh $KIT $PRODUCTS $CACHE $CTL $BLACKLIST $ETA_RUNS $OUT_H 1
+#   # a per-track f with the formulas and the 36 true-X' h only:
+#   sbatch --parsable --array=$INDICES%40 --exclude=c128,c166,c537,c371 \
+#       --output=$OUT_H/logs/%x_%A_%a.out \
+#       $KIT/slurm/t125/h_chain.sh $KIT $PRODUCTS $CACHE $CTL $BLACKLIST $ETA_RUNS $OUT_H 1 true
 # %40 is safe because each task builds its own venv in $SLURM_TMPDIR.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t125_hchain
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --exclude=c128,c166,c537,c371
-#SBATCH --time=6:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32000M
+#SBATCH --mem=40000M
 
 set -euo pipefail
 
 BLACKLIST_SHA256_PREFIX=31c69342
-USAGE="usage: h_chain.sh <kit_dir> <products_dir> <cache_dir> <ctl_cache> <blacklist.bed> <eta_runs_dir> <out_root> [fnb_seeds 1|3]"
+USAGE="usage: h_chain.sh <kit_dir> <products_dir> <cache_dir> <ctl_cache> <blacklist.bed> <eta_runs_dir> <out_root> [fnb_seeds 1|3] [h_set all|true]"
 KIT="${1:?$USAGE}"
 PRODUCTS="${2:?$USAGE}"
 CACHE="${3:?$USAGE}"
@@ -75,12 +108,19 @@ BLACKLIST="${5:?$USAGE}"
 ETA_RUNS="${6:?$USAGE}"
 OUT_ROOT="${7:?$USAGE}"
 FNB_SEEDS="${8:-1}"
+H_SET="${9:-all}"
 IDX="${SLURM_ARRAY_TASK_ID:?array task only}"
 [[ "$IDX" =~ ^[0-9]+$ ]] || { echo "SLURM_ARRAY_TASK_ID '$IDX' is not an index" >&2; exit 2; }
 case "$FNB_SEEDS" in
   1|3) ;;
   *) echo "fnb_seeds '$FNB_SEEDS' is not 1 or 3" >&2; exit 2 ;;
 esac
+case "$H_SET" in
+  all) N_EXPECT=$((38 + 12 * FNB_SEEDS)) ;;
+  true) N_EXPECT=38 ;;
+  *) echo "h_set '$H_SET' is not all or true; $USAGE" >&2; exit 2 ;;
+esac
+MIX_MERGE=512
 case "$OUT_ROOT" in
   */t118|*/t118/*) echo "out root $OUT_ROOT is under a t118 directory; t125 writes only under t125/" >&2; exit 2 ;;
 esac
@@ -128,6 +168,31 @@ build_specs() {
   done
 }
 
+# The chain-list names on stdin, kept for $H_SET: "true" drops this f's fnb h.
+names_for_set() {
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    case "$H_SET:$name" in
+      true:h_formula_bin|true:h_formula_frag|true:*_true_s[0-9]*|all:*) echo "$name" ;;
+    esac
+  done
+}
+# 0 when $CHAIN/$F_RUN/CHAIN_DONE lists every name on stdin.
+chain_done_covers() {
+  local done="$CHAIN/$F_RUN/CHAIN_DONE" name
+  [ -f "$done" ] || return 1
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    grep -qxF "$name" "$done" || return 1
+  done
+  return 0
+}
+# Before the venv (no h list yet): CHAIN_DONE has at least as many names as this h set needs.
+chain_done_count_ok() {
+  [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ] && [ "$(grep -c . "$CHAIN/$F_RUN/CHAIN_DONE")" -ge "$N_EXPECT" ]
+}
+
 if [ "${DRY_RUN:-0}" = 1 ]; then
   TOOLS="$KIT"
   [ -f "$TOOLS/tools/t125/hmap/tasks.py" ] || TOOLS=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -138,15 +203,15 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   F_RUN=$(PYTHONPATH="$TPP" "$PY" "$TOOLS/tools/t125/hmap/tasks.py" fnb "$TABLE_MANIFEST" \
           | f_runs_from | f_run_from)
   [ -n "$F_RUN" ] || { echo "no task $IDX in the f-run table" >&2; exit 2; }
-  if [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ]; then echo "skip $F_RUN: CHAIN_DONE exists" >&2; exit 0; fi
   NAMES=$(PYTHONPATH="$TPP" "$PY" "$TOOLS/tools/t125/hmap/tasks.py" chain-list "$F_RUN" \
-          --fnb-seeds "$FNB_SEEDS")
+          --fnb-seeds "$FNB_SEEDS" | names_for_set)
+  if chain_done_covers <<< "$NAMES"; then echo "skip $F_RUN: CHAIN_DONE lists every h" >&2; exit 0; fi
   build_specs <<< "$NAMES"
   [ -f "$ETA_RUNS/$F_RUN/TRAIN_DONE" ] \
     || echo "note: no $ETA_RUNS/$F_RUN/TRAIN_DONE; a real task would exit 3" >&2
   [ "${#MISSING[@]}" = 0 ] \
     || echo "note: ${#MISSING[@]} h run dirs lack TRAIN_DONE; a real task would exit 3" >&2
-  echo "python3 $KIT/tools/t125/hmap/score.py chain $MANIFEST $COVARIATES $CACHE $CTL $BLACKLIST $ETA_RUNS/$F_RUN $CHAIN ${SPECS[*]} --workers 4"
+  echo "python3 $KIT/tools/t125/hmap/score.py chain $MANIFEST $COVARIATES $CACHE $CTL $BLACKLIST $ETA_RUNS/$F_RUN $CHAIN ${SPECS[*]} --workers 4 --mix-merge $MIX_MERGE"
   exit 0
 fi
 
@@ -175,7 +240,7 @@ echo "blacklist sha256: $BL_SHA"
 if [ -f "$TASKS_TSV" ]; then
   F_RUN=$(f_run_from < "$TASKS_TSV")
   if [ -n "$F_RUN" ]; then
-    if [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ]; then echo "skip $F_RUN: CHAIN_DONE exists"; exit 0; fi
+    if chain_done_count_ok; then echo "skip $F_RUN: CHAIN_DONE lists $N_EXPECT h or more"; exit 0; fi
     [ -f "$ETA_RUNS/$F_RUN/TRAIN_DONE" ] || { echo "no $ETA_RUNS/$F_RUN/TRAIN_DONE: f run $F_RUN did not finish" >&2; exit 3; }
   fi
 fi
@@ -215,19 +280,19 @@ fi
 rm -f "$TMP_TABLE"
 [ -n "$F_RUN" ] || { echo "no task $IDX in the f-run table" >&2; exit 2; }
 echo "f run: $F_RUN"
-if [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ]; then echo "skip $F_RUN: CHAIN_DONE exists"; exit 0; fi
 [ -f "$ETA_RUNS/$F_RUN/TRAIN_DONE" ] || { echo "no $ETA_RUNS/$F_RUN/TRAIN_DONE: f run $F_RUN did not finish" >&2; exit 3; }
 
-NAMES=$(python3 "$KIT/tools/t125/hmap/tasks.py" chain-list "$F_RUN" --fnb-seeds "$FNB_SEEDS")
+NAMES=$(python3 "$KIT/tools/t125/hmap/tasks.py" chain-list "$F_RUN" --fnb-seeds "$FNB_SEEDS" | names_for_set)
+if chain_done_covers <<< "$NAMES"; then echo "skip $F_RUN: CHAIN_DONE lists every h"; exit 0; fi
 build_specs <<< "$NAMES"
 if [ "${#MISSING[@]}" != 0 ]; then
   echo "${#MISSING[@]} h run dirs lack TRAIN_DONE; train them first:" >&2
   printf '  %s\n' "${MISSING[@]}" >&2
   exit 3
 fi
-echo "h scored: $((${#SPECS[@]} / 2))"
+echo "h set $H_SET: $((${#SPECS[@]} / 2)) h"
 
 python3 "$KIT/tools/t125/hmap/score.py" chain "$MANIFEST" "$COVARIATES" "$CACHE" "$CTL" \
-    "$BLACKLIST" "$ETA_RUNS/$F_RUN" "$CHAIN" "${SPECS[@]}" --workers 4
+    "$BLACKLIST" "$ETA_RUNS/$F_RUN" "$CHAIN" "${SPECS[@]}" --workers 4 --mix-merge "$MIX_MERGE"
 
 echo "=== done $F_RUN $(date -u)"

@@ -38,12 +38,19 @@ nonzero width and processed in chunks, each chunk trimmed to its own widest row,
 
 Entries with w == 0 (padding) are ignored everywhere, even when their values are NaN or inf.
 Weights are renormalised per row before use; a row with no positive weight gives NaN.
+
+**Exact speed-ups (t125-P2h).** `unique_pairs` gives the distinct (mu, n) rows of a batch by bit
+pattern: f's NB takes few distinct values (44 of 2 M bins on chr22 for a rung-A f), and every
+function here is per row, so evaluating on the distinct rows and gathering back is bit for bit the
+same. `crps_gauss_mixture_t` / `mean_gauss_mixture_logp_t` are torch twins of the numpy functions
+for a GPU (same formulas, float64; only the summation order and the device's libm differ).
 """
 from __future__ import annotations
 
 import math
 
 import numpy as np
+import torch
 from scipy.special import gammaln, ndtr
 from scipy.stats import nbinom
 
@@ -127,6 +134,29 @@ def _plan(mu, n_size, tail, k_max):
         start[wide] = lo
         size[wide] = np.where(hi >= _HUGE, _HUGE, hi - lo + 1)
     return start, size, p, n_size
+
+
+def unique_pairs(a, b) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(a_u, b_u, inv): the distinct (a, b) rows of two float64 arrays BY BIT PATTERN, so that
+    a == a_u[inv] and b == b_u[inv] bit for bit (also -0.0 vs 0.0 and every NaN payload)."""
+    a = np.ascontiguousarray(a, dtype=np.float64).ravel()
+    b = np.ascontiguousarray(b, dtype=np.float64).ravel()
+    if a.shape != b.shape:
+        raise ValueError(f"a {a.shape} and b {b.shape} differ")
+    ua, ia = np.unique(a.view(np.int64), return_inverse=True)
+    ub, ib = np.unique(b.view(np.int64), return_inverse=True)
+    nb = max(1, ub.size)
+    key = ia.reshape(-1).astype(np.int64) * nb + ib.reshape(-1)
+    uk, inv = np.unique(key, return_inverse=True)
+    return ua[uk // nb].view(np.float64), ub[uk % nb].view(np.float64), inv.reshape(-1)
+
+
+def support_size_unique(mu, n_size, tail: float = TAIL, k_max: int = K_MAX,
+                        fn=None) -> np.ndarray:
+    """`support_size` evaluated on the distinct (mu, n) rows and gathered back: the same int64[n].
+    `fn` replaces `support_size` (the scorer's test hook)."""
+    mu_u, n_u, inv = unique_pairs(mu, n_size)
+    return (support_size if fn is None else fn)(mu_u, n_u, tail=tail, k_max=k_max)[inv]
 
 
 def support_size(mu, n_size, tail: float = TAIL, k_max: int = K_MAX) -> np.ndarray:
@@ -274,3 +304,136 @@ def mean_gauss_mixture_logp(mu, sigma, w) -> np.ndarray:
         w = w / w.sum(axis=1, keepdims=True)
         term = np.where(pos, np.expm1(mu + 0.5 * sigma * sigma), 0.0)
     return (w * term).sum(axis=1)
+
+
+# ---------------------------------------------------------------------------------------------
+# torch twins (t125-P2h): the same formulas on a torch device, float64
+# ---------------------------------------------------------------------------------------------
+
+
+def _A_t(m: torch.Tensor, s2: torch.Tensor) -> torch.Tensor:
+    s = torch.sqrt(s2)
+    z = m / s
+    return m * (2.0 * torch.special.ndtr(z) - 1.0) + 2.0 * s * _INV_SQRT_2PI * torch.exp(-0.5 * z * z)
+
+
+def merge_mixture_t(mu: torch.Tensor, s2: torch.Tensor, w: torch.Tensor, max_groups: int):
+    """(mu_g, s2_g, w_g) [n, G], G = min(max_groups, the widest row): each row's positive-weight
+    components, sorted by mu (stable), cut into at most max_groups groups of ADJACENT components,
+    each group replaced by the Gaussian with the group's weight, mean and variance (the
+    components' own variance plus their spread about the group mean). The cut: component j goes
+    to group floor(G u_j), u_j = the mean of three cumulative shares in sorted order, its weight
+    (centred), its count j / c, and its distance in mu measured in its own sigma, so groups are
+    finer where the weight is, where there are many components and where mu moves fast against
+    sigma (on smooth synthetic mixtures of 2,500 components this is about 1e-8 relative, against
+    1e-6 to 1e-5 for equal-count groups). A row of c <= max_groups components keeps them all, one
+    per group. Unused groups have weight 0. The rows' weights must already be normalised."""
+    n, K = mu.shape
+    pos = w > 0.0
+    c = pos.sum(dim=1)
+    G = max(1, min(int(max_groups), int(c.max()) if n else 1))
+    key = torch.where(pos, mu, torch.full_like(mu, math.inf))
+    order = torch.sort(key, dim=1, stable=True).indices
+    mu_s, s2_s, w_s = (torch.gather(t, 1, order) for t in (mu, s2, w))
+    j = torch.arange(K, device=mu.device)[None, :]
+    live = j < c[:, None]
+    cg = torch.clamp_min(c, 1)[:, None]
+    zero = mu.new_zeros(())
+    w_s = torch.where(live, w_s, zero)
+    u_w = torch.cumsum(w_s, dim=1) - 0.5 * w_s
+    u_w = u_w / torch.clamp_min(w_s.sum(dim=1, keepdim=True), 1e-300)
+    gap = torch.diff(mu_s, dim=1, prepend=mu_s[:, :1]).clamp_min(0.0)
+    gap = torch.where(live, gap / torch.sqrt(torch.where(live, s2_s, torch.ones_like(s2_s))), zero)
+    u_m = torch.cumsum(gap, dim=1)
+    u_m = u_m / torch.clamp_min(torch.gather(u_m, 1, cg - 1), 1e-300)
+    u = (u_w + u_m + j / cg) / 3.0
+    grp = torch.clamp(torch.floor(u * G).to(torch.int64), 0, G - 1)
+    grp = torch.where(cg > G, grp, j)
+    grp = torch.where(live, grp, torch.full_like(grp, G))                      # padding: dropped
+    W = mu.new_zeros((n, G + 1)).scatter_add_(1, grp, w_s)
+    M = mu.new_zeros((n, G + 1)).scatter_add_(1, grp, w_s * torch.where(j < c[:, None], mu_s, zero))
+    ok = W > 0.0
+    M = torch.where(ok, M / torch.where(ok, W, torch.ones_like(W)), zero)
+    d = torch.where(j < c[:, None], mu_s - torch.gather(M, 1, grp), zero)
+    V = mu.new_zeros((n, G + 1)).scatter_add_(
+        1, grp, w_s * (torch.where(j < c[:, None], s2_s, zero) + d * d))
+    V = torch.where(ok, V / torch.where(ok, W, torch.ones_like(W)), torch.ones_like(V))
+    small = (c <= G)[:, None]               # rows not merged keep their own values exactly
+    s2_s = torch.where(j < c[:, None], s2_s, torch.ones_like(s2_s))
+    return (torch.where(small, mu_s[:, :G], M[:, :G]), torch.where(small, s2_s[:, :G], V[:, :G]),
+            torch.where(small, w_s[:, :G], W[:, :G]))
+
+
+def crps_gauss_mixture_t(mu: torch.Tensor, sigma: torch.Tensor, w: torch.Tensor, y: torch.Tensor,
+                         chunk: int = 4096, pair_elems: int | None = None,
+                         row_key: torch.Tensor | None = None,
+                         max_groups: int | None = None) -> torch.Tensor:
+    """`crps_gauss_mixture` on torch float64 tensors [n, K] (y [n]) of one device: the same masking,
+    renormalisation and closed form; the pair term in width-sorted chunks as there. `row_key`
+    (int64 [n]): rows with one key have the same (mu, sigma, w) row, so their pair term (the
+    O(K^2) part, independent of y) is computed once. `max_groups` (PI 2026-10-16, chain only):
+    the pair term is taken over `merge_mixture_t`'s moment-matched groups, at most max_groups per
+    row (an approximation for rows of more components; the first term stays exact). Returns
+    float64[n] on that device."""
+    mu, sigma, w = mu.to(torch.float64), sigma.to(torch.float64), w.to(torch.float64)
+    if not (mu.shape == sigma.shape == w.shape) or mu.ndim != 2:
+        raise ValueError(f"mu {tuple(mu.shape)}, sigma {tuple(sigma.shape)}, w {tuple(w.shape)} "
+                         f"must be the same [n, K]")
+    y = y.to(torch.float64).reshape(-1)
+    n, K = mu.shape
+    if y.shape[0] != n:
+        raise ValueError(f"y has {y.shape[0]} rows, mu has {n}")
+    pos = w > 0.0
+    if bool((pos & ~(sigma > 0.0)).any()):
+        raise ValueError("sigma must be > 0 wherever w > 0")
+    zero, one = mu.new_zeros(()), mu.new_ones(())
+    mu = torch.where(pos, mu, zero)
+    sigma = torch.where(pos, sigma, one)
+    w = torch.where(pos, w, zero)
+    w = w / w.sum(dim=1, keepdim=True)
+    s2 = sigma * sigma
+    e1 = (w * _A_t(y[:, None] - mu, s2)).sum(dim=1)
+    inv = None
+    if row_key is not None:
+        uk, inv = torch.unique(row_key.reshape(-1), return_inverse=True)
+        rep = torch.full((uk.numel(),), n, dtype=torch.int64, device=mu.device)
+        rep.scatter_reduce_(0, inv, torch.arange(n, device=mu.device), reduce="amin")
+        mu, s2, w, pos = mu[rep], s2[rep], w[rep], pos[rep]
+    if max_groups is not None and mu.shape[0] and int(pos.sum(dim=1).max()) > int(max_groups):
+        mu, s2, w = merge_mixture_t(mu, s2, w, max_groups)
+        pos = w > 0.0
+        K = mu.shape[1]
+    nr = mu.shape[0]
+    width = torch.where(pos.any(dim=1), K - torch.argmax(pos.flip(1).to(torch.int8), dim=1),
+                        torch.ones((), dtype=torch.int64, device=mu.device))
+    order = torch.sort(width, stable=True).indices
+    width_sorted = width[order].cpu().numpy()
+    e2 = torch.empty(nr, dtype=torch.float64, device=mu.device)
+    chunk = max(1, int(chunk))
+    budget = PAIR_ELEMS if pair_elems is None else int(pair_elems)
+    s = 0
+    while s < nr:
+        r = min(chunk, nr - s)
+        kc = int(width_sorted[s + r - 1])
+        if r * kc * kc > budget:
+            r = max(1, budget // (kc * kc))
+            kc = int(width_sorted[s + r - 1])
+        idx = order[s:s + r]
+        m, q, ww = mu[idx, :kc], s2[idx, :kc], w[idx, :kc]
+        pair = _A_t(m[:, :, None] - m[:, None, :], q[:, :, None] + q[:, None, :])
+        e2[idx] = torch.einsum("rj,rjk,rk->r", ww, pair, ww)
+        s += r
+    if inv is not None:
+        e2 = e2[inv]
+    return e1 - 0.5 * e2
+
+
+def mean_gauss_mixture_logp_t(mu: torch.Tensor, sigma: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
+    """`mean_gauss_mixture_logp` on torch float64 tensors of one device."""
+    mu, sigma, w = mu.to(torch.float64), sigma.to(torch.float64), w.to(torch.float64)
+    pos = w > 0.0
+    zero = mu.new_zeros(())
+    w = torch.where(pos, w, zero)
+    w = w / w.sum(dim=1, keepdim=True)
+    term = torch.where(pos, torch.expm1(mu + 0.5 * sigma * sigma), zero)
+    return (w * term).sum(dim=1)

@@ -1,5 +1,6 @@
 #!/bin/bash
-# t125 part 2: train one learned h (the map from a count and the control to P = -log10 p) on CPU,
+# t125 part 2: train one learned h (the map from a count and the control to P = -log10 p) on a
+# 10 GB MIG slice,
 # either on the true X' (table "true": 12 learned h x 3 seeds = 36 tasks) or on one f's predicted
 # NB (table "fnb": the 64 seed-0 real f runs x 12 learned h x fnb_seeds; 768 tasks at fnb_seeds 1,
 # PI decision (ii) b; 2304 at fnb_seeds 3). One array task = one h.
@@ -33,15 +34,21 @@
 # then requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR; PYTHONPATH is
 # "$KIT/src" and the t125 CLIs put tools/t118 and tools/t125 on sys.path themselves.
 #
-# RESOURCES. CPU only, no GPU request. 8 cores (OMP/MKL threads 8), 32 GB, 3 h. Nodes c128, c166,
-# c537 and c371 are excluded. Peak memory from `sacct -o MaxRSS` (no /usr/bin/time on compute
-# nodes). No --device is passed: train.py picks its default device.
-# GPU-SLICE VARIANT. If the Nibi smoke (plan chunk t125-N2) finds that one fnb fit on 8 cores runs
-# over 2 h, add the slice request to the resource block below as an #SBATCH line with
-#     --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
-# and set --cpus-per-task=4 and --mem=16000M; record the change in plan/T125_STATUS.md. The line
-# is written here without its #SBATCH prefix so this CPU script carries no gres request
-# (acceptance criterion 8). There is no second script.
+# RESOURCES (t125-P2h). One 10 GB MIG slice of an H100, 8 cores (OMP/MKL threads 8; train.py
+# draws the windows of an f-NB batch in 8 threads and takes log1p on the host in up to 8), 40000M
+# host memory, 1 day (partition b3). Nodes c128, c166, c537 and c371 are excluded. Memory: the N4
+# true-X' fits (K10, CPU) peaked at 31.2 GiB of 31.25. No --device is passed: train.py picks its
+# default device, the slice. The Nibi smoke (N2, kit K10) found both fnb fits over 3 h (and over
+# 12 h, job 24083625) on 8 CPU cores; t125-P2h builds the f-NB chunks on the slice with the same
+# numbers (bit for bit on a CPU device; on the slice the features are bit for bit too). Measured
+# on the slice for f A_C19M16_counts_real_s0 (38 pairs): a training step 0.26-0.64 s, a chr22
+# validation pass 346 s, so a fit of 4000 steps and 17 passes about 2.2 h (the widest-support
+# C19M16 f; the row-2 f are cheaper). 1 day leaves room (a longer request starts days later, see
+# h_chain.sh). The 36 true-X' fits of N4 ran on CPU with kit K10; this script reruns a true fit on
+# the slice (float32 results then differ from a CPU run in the last bits).
+# SCOPE (PI 2026-10-17): the fnb fits are for the 8 real seed-0 f of track C19M16 only (A, B, C,
+# D, A2, B2, C2, D2): 96 fits, fnb indices 36-47,132-143,228-239,324-335,420-431,516-527,
+# 612-623,708-719 (fnb index = f index x 12 + h version; f index 3, 11, ..., 59).
 #
 # DRY_RUN=1 prints the train command line (nothing when TRAIN_DONE exists; a note on stderr when
 # the fnb f run has no TRAIN_DONE, where a real task would exit 3) and exits 0 before any module
@@ -59,17 +66,19 @@
 #       $KIT/slurm/t125/h_train.sh $KIT $PRODUCTS $CACHE $CTL $OUT_H true
 #   sbatch --parsable --array=0-35%36 --exclude=c128,c166,c537,c371 --output=$OUT_H/logs/%x_%A_%a.out \
 #       $KIT/slurm/t125/h_train.sh $KIT $PRODUCTS $CACHE $CTL $OUT_H true
-#   # h on f's NB (768 at one h seed), once the 64 seed-0 real f runs have SCORE_DONE:
-#   sbatch --parsable --array=0-767%40 --exclude=c128,c166,c537,c371 --output=$OUT_H/logs/%x_%A_%a.out \
+#   # h on f's NB, the 96 in scope (the 8 C19M16 f; the table has 768 at one h seed):
+#   sbatch --parsable --array=36-47,132-143,228-239,324-335,420-431,516-527,612-623,708-719%40 \
+#       --exclude=c128,c166,c537,c371 --output=$OUT_H/logs/%x_%A_%a.out \
 #       $KIT/slurm/t125/h_train.sh $KIT $PRODUCTS $CACHE $CTL $OUT_H fnb /project/def-maxwl/mforooz/t125/eta/runs 1
 # %40 is safe because each task builds its own venv in $SLURM_TMPDIR. Never chain a job onto an
 # array that may have finished: verify finished work by its TRAIN_DONE files.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t125_htrain
+#SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
 #SBATCH --exclude=c128,c166,c537,c371
-#SBATCH --time=3:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32000M
+#SBATCH --mem=40000M
 
 set -euo pipefail
 
