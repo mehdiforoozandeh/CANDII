@@ -1,6 +1,7 @@
 """t125 — assemble GRID_SUMMARY.md from the part-1 (eta) and part-2 (h) aggregate outputs.
 
     python tools/t125/summary.py <eta_agg_dir> <h_agg_dir> <out_md> [--old-grid-tsv PATH]
+                                 [--run-device PATH]
 
 Inputs: `<eta_agg_dir>/summary_data.json` (`eta/aggregate.py`) and `<h_agg_dir>/summary_data_h.json`
 (`hmap/aggregate.py`). A missing file is not an error: its sections say so. `--old-grid-tsv` is
@@ -22,11 +23,20 @@ Rules (handoff Phase 7, plan t125-E1):
 - the explosion counts (CRPS > 20, and non-finite CRPS, apart, by kind) of both parts, the
   capped NB row counts of part 2, and every skipped reading with its reason;
 - no Spearman value in any table, and no verdict words: free text copied from the inputs is
-  passed through `clean()`, and the writer raises if a verdict word is left in the output.
+  passed through `clean()`, and the writer raises if a verdict word is left in the output;
+- beside every CRPS mean, the count of the (pair, seed) records with CRPS > 20 inside it (part 1:
+  the trained-pair records of each arm's cell; part 2: the records of the h's kind);
+- part 2 on a partial chain set (PI 2026-10-17): a banner "<n> of <m> designs" naming the designs
+  whose chain is not finished, at the top and in every part-2 section;
+- the device of every part-1 run (`--run-device`, default `<eta_agg_dir>/run_device.tsv`): GPU and
+  CPU counts per rung, and the note that cross-row design comparisons also cross devices;
+- the merged mixture (G and each chain's largest per-bin and averaged error) and the learned h
+  fits at the step cap, with their capped NB rows (from `hmap/aggregate.py`).
 """
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import re
@@ -76,6 +86,8 @@ METRIC_LABEL = {"crps_all": "CRPS, all bins", "crps_top1": "CRPS, top 1 % bins",
                 "crps_mean_point_scale_error_all": "point CRPS split: scale-error part"}
 PARTS = ("crps_all", "crps_oracle_scaled_all", "scale_error_all", "crps_top1", "mse_log1p_all",
          "mse_log1p_top1")
+EX_COL = "records with CRPS > 20 in the mean (this / other)"
+CRPS_PARTS = ("crps_all", "crps_top1", "crps_oracle_scaled_all", "scale_error_all")
 PART_LABEL = {"crps_all": "CRPS all", "crps_oracle_scaled_all": "oracle-scaled part",
               "scale_error_all": "scale-error part", "crps_top1": "CRPS top 1 %",
               "mse_log1p_all": "MSE all", "mse_log1p_top1": "MSE top 1 %"}
@@ -174,10 +186,38 @@ def _eta_rows(readings: list[dict], name: str) -> list[dict]:
                                        r["metric"]))
 
 
+def _p1_index(rows) -> dict:
+    return {(e.get("rung"), e.get("g_version"), e.get("mark_class"), e.get("model"), e.get("kind"),
+             e.get("eval")): int(e.get("n_crps_gt_20") or 0) for e in rows or []}
+
+
+def _p1_counts(eta: dict, r: dict, comparison: str) -> tuple:
+    """(n this, n other): the trained-pair (score) records with CRPS > 20 in the two cells of a
+    part-1 comparison (both arms over their 3 seeds)."""
+    t125, old = _p1_index(eta.get("explosions")), _p1_index(eta.get("oldgrid_explosions"))
+    rung, g, mc = r["rung"], r["g_version"], r["mark_class"]
+    this = t125.get((rung, g, mc, r.get("model") or "real", "trained", "score"))
+    if comparison == "beatstwin":
+        other = t125.get((rung, g, mc, "nocov", "trained", "score"))
+    elif comparison == "vs_oldspread":
+        other = t125.get(("Aold", g, mc, "real", "trained", "score"))
+    elif comparison == "vs_oldgrid":
+        orung = (r.get("components") or {}).get("oldgrid_rung") or ("A" if rung == "Aold"
+                                                                    else rung)
+        other = old.get((orung, g, mc, "real", "trained", "score"))
+    else:
+        other = None
+    return this, other
+
+
+def _ex_text(n_this, n_other) -> str:
+    return f"{f(n_this)} / {f(n_other)}"
+
+
 def _cmp_table(rows: list[dict], this_lab: str, other_lab: str, gain_lab: str,
-               extra=None) -> list[str]:
-    header = ["rung", "g", "class", "metric", this_lab, other_lab, gain_lab, "bar (2 × wobble)",
-              EXCEEDS, "CRPS split (this vs other)", "pairs"]
+               extra=None, counts=None) -> list[str]:
+    header = ["rung", "g", "class", "metric", this_lab, other_lab, EX_COL, gain_lab,
+              "bar (2 × wobble)", EXCEEDS, "CRPS split (this vs other)", "pairs"]
     if extra:
         header.append(extra[0])
     body = []
@@ -186,6 +226,7 @@ def _cmp_table(rows: list[dict], this_lab: str, other_lab: str, gain_lab: str,
         line = [r["rung"], gv(r["g_version"]), r["mark_class"], METRIC_LABEL.get(r["metric"],
                                                                                 r["metric"]),
                 pm(c.get("this"), c.get("wobble_this")), pm(c.get("other"), c.get("wobble_other")),
+                (_ex_text(*counts(r)) if counts and r["metric"] in CRPS_PARTS else "—"),
                 f(r["value"]), f(r["bar"]), yn(r["met"], c.get("met_reason")),
                 _split_text(c) if r["metric"] == "crps_all" else "—", _pairs_text(c.get("pairs"))]
         if extra:
@@ -198,11 +239,15 @@ def part1_oldgrid(eta: dict) -> list[str]:
     rd = eta["readings"]
     out = ["Each t125 design (real model, trained pairs, score chromosomes) against the same "
            "design in the old grid (counts space). Aold is compared with the old grid's A: the "
-           "depth offset alone. gain = old grid − t125, positive = t125 lower.", ""]
-    out += _cmp_table(_eta_rows(rd, "vs_oldgrid"), "t125", "old grid", "gain (old − t125)")
+           "depth offset alone. gain = old grid − t125, positive = t125 lower. The column \""
+           + EX_COL + "\" counts the (pair, seed) records with CRPS > 20 in each arm's cell; a "
+           "nonzero count inflates that CRPS mean.", ""]
+    out += _cmp_table(_eta_rows(rd, "vs_oldgrid"), "t125", "old grid", "gain (old − t125)",
+                      counts=lambda r: _p1_counts(eta, r, "vs_oldgrid"))
     out += ["A against Aold: the new spread rule alone (both with the depth offset). "
             "gain = Aold − A, positive = A lower.", ""]
-    out += _cmp_table(_eta_rows(rd, "vs_oldspread"), "A", "Aold", "gain (Aold − A)")
+    out += _cmp_table(_eta_rows(rd, "vs_oldspread"), "A", "Aold", "gain (Aold − A)",
+                      counts=lambda r: _p1_counts(eta, r, "vs_oldspread"))
     return out
 
 
@@ -212,7 +257,8 @@ def part1_twin(eta: dict) -> list[str]:
            "real) is beside it for scale only.", ""]
     out += _cmp_table(_eta_rows(eta["readings"], "beatstwin"), "real", "no-covariates twin",
                       "gain (twin − real)",
-                      ("old grid gap", lambda r: f(r["components"].get("oldgrid_gap"))))
+                      ("old grid gap", lambda r: f(r["components"].get("oldgrid_gap"))),
+                      counts=lambda r: _p1_counts(eta, r, "beatstwin"))
     return out
 
 
@@ -231,9 +277,14 @@ def part1_mean_spread(eta: dict) -> list[str]:
             if not x or x.get("gain") is None:
                 cells.append("—")
             else:
+                ex = ""
+                if p in CRPS_PARTS:
+                    nt, no = _p1_counts(eta, r, r["metric"])
+                    if nt or no:
+                        ex = f" [records with CRPS > 20: this {f(nt)}, other {f(no)}]"
                 cells.append(f"{f(x['gain'])} ({f(x['bar'])}) — {yn(x['gain_exceeds_bar'])}; "
                              f"this {pm(x['this'], x['this_wobble'])}, other "
-                             f"{pm(x['other'], x['other_wobble'])}")
+                             f"{pm(x['other'], x['other_wobble'])}{ex}")
         body.append([r["metric"], r["rung"], gv(r["g_version"]), r["mark_class"]] + cells)
     return out + table(header, body)
 
@@ -306,6 +357,25 @@ def part1_explosions(eta: dict) -> list[str]:
 # ---------------------------------------------------------------------------------------------
 
 
+def part2_banner(h: dict | None) -> list[str]:
+    """"<n> of <m> designs" when some expected chain f is not finished (PI 2026-10-17)."""
+    if not h or not h.get("chain_f_runs_missing") or not h.get("chain_f_expected_runs"):
+        return []
+    fin = [x.split("_")[0] for x in h.get("chain_f_finished_runs", [])]
+    mis = [x.split("_")[0] for x in h["chain_f_runs_missing"]]
+    n = len(h["chain_f_expected_runs"])
+    return [f"**Part 2: {len(fin)} of {n} designs.** The chain readings (repair, the chain "
+            f"against the old grid, push only against own noise in the chain) cover the f of "
+            f"track {h.get('chain_track') or 'all'}, seed 0, for designs {', '.join(fin) or 'none'}. "
+            f"Missing (chain not finished): {', '.join(mis)}. These tables are refreshed when "
+            "they land; the alone readings are complete.", ""]
+
+
+def _h_ex_index(h: dict) -> dict:
+    return {(e.get("scope"), e.get("f_rung"), e.get("f_g_version"), e.get("h_name"),
+             e.get("mark_class")): e for e in h.get("explosions", [])}
+
+
 def _hkey(r):
     return (r.get("f_rung") or "", r.get("f_g_version") or "", r.get("h_name") or "",
             _ckey(r.get("mark_class")), r.get("metric") or "")
@@ -322,7 +392,8 @@ def part2_grid(h: dict) -> list[str]:
     header = ["h", "class", "CRPS on P, all bins", "its split (oracle-scaled / scale error)",
               "CRPS on P, top 1 %", "CRPS on log(1 + P), all bins", "its split",
               "CRPS on log(1 + P), top 1 %", "MSE log(1 + P) of the mean, all bins",
-              "MSE, top 1 %", "products"]
+              "MSE, top 1 %", "products", "records with CRPS > 20 in the CRPS on P means",
+              "records with a non-finite bin (on P / on log(1 + P))"]
     body = []
     for name, mc in sorted({(c["h_name"], c["mark_class"]) for c in cells},
                            key=lambda k: (k[0], _ckey(k[1]))):
@@ -337,10 +408,14 @@ def part2_grid(h: dict) -> list[str]:
 
         n = max((c.get("n") or 0 for (hn, cl, _), c in idx.items() if hn == name and cl == mc),
                 default=0)
+        ex = next((c.get("explosions") for (hn, cl, _), c in idx.items()
+                   if hn == name and cl == mc and c.get("explosions")), None) or {}
         body.append([name + (" (own noise: point CRPS)" if noise else ""), mc, v(f"{nat}_all"),
                      f"{v(sp[0])} / {v(sp[1])}", v(f"{nat}_top1"), v("crps_log_all"),
                      f"{v('crps_log_oracle_scaled_all')} / {v('crps_log_scale_error_all')}",
-                     v("crps_log_top1"), v("mse_log1p_all"), v("mse_log1p_top1"), f(n)])
+                     v("crps_log_top1"), v("mse_log1p_all"), v("mse_log1p_top1"), f(n),
+                     f"{f(ex.get('n_gt_20'))} of {f(ex.get('n_records'))}",
+                     f"{f(ex.get('n_native_nonfinite'))} / {f(ex.get('n_log_nonfinite'))}"])
     return out + table(header, body)
 
 
@@ -379,14 +454,23 @@ def part2_repair(h: dict) -> list[str]:
            "the same f. delta = true − fnb, positive = the fnb-trained h lower. The fnb h has one "
            "h seed (PI decision (ii) b); the bar uses the true-X′ h's seed wobble.", ""]
     header = ["f", "class", "variant", "rung", "noise", "metric", "true-X′ h", "fnb h",
+              "records with CRPS > 20 in the mean (true / fnb)",
               "delta (true − fnb)", "bar (2 × wobble)", "|delta| exceeds bar", EXCEEDS, "pairs"]
     body = []
+    exi = _h_ex_index(h)
     for r in _readings(h, "repair"):
         p = (r.get("components") or {}).get("pairs") or {}
+        ex = "—"
+        if not r["metric"].startswith(("crps_log", "mse")):
+            et = exi.get(("chain", r["f_rung"], r["f_g_version"], r.get("true_h"),
+                          r["mark_class"])) or {}
+            ef = exi.get(("chain", r["f_rung"], r["f_g_version"], r.get("fnb_h"),
+                          r["mark_class"])) or {}
+            ex = _ex_text(et.get("n_gt_20"), ef.get("n_gt_20"))
         body.append([_fcell(r), r["mark_class"], r["variant"], f(r["rung"]),
                      "own noise" if r["noise"] else "push", METRIC_LABEL.get(r["metric"],
                                                                              r["metric"]),
-                     pm(r["true_mean"], r["true_wobble"]), pm(r["fnb_mean"], None),
+                     pm(r["true_mean"], r["true_wobble"]), pm(r["fnb_mean"], None), ex,
                      f(r["delta"]), f(r["bar"]), yn(r["abs_delta_exceeds_bar"]),
                      yn(r["gain_exceeds_bar"]),
                      f"{f(p.get('n_used'))} used, {f(p.get('n_dropped_not_finite'))} dropped"])
@@ -400,6 +484,7 @@ def part2_vs_old(h: dict) -> list[str]:
            "only (an own-noise h's native number is a point CRPS). The CRPS split is in the rows "
            "of the two split parts.", ""]
     header = ["f", "class", "h", "metric", "chain h", "old grid, seed 0 alone", "old grid",
+              "records with CRPS > 20 (chain h / old grid cell)",
               "delta (seed 0)", "delta (mean)", "bar (2 × wobble)",
               EXCEEDS + " (seed 0)", EXCEEDS + " (mean)", "pair-matched", "note"]
     body = []
@@ -408,6 +493,7 @@ def part2_vs_old(h: dict) -> list[str]:
                                                                                r["metric"]),
                      pm(r["h_mean"], r["h_wobble"]), f(r["old_seed0"]),
                      pm(r["old_mean"], r["old_wobble"]),
+                     _ex_text(r.get("h_n_crps_gt_20"), r.get("old_n_crps_gt_20")),
                      f(r["delta_seed0"]), f(r["delta"]), f(r["bar"]),
                      yn(r["gain_seed0_exceeds_bar"]), yn(r["gain_exceeds_bar"]), yn(r["matched"]),
                      clean(r.get("note"))])
@@ -444,12 +530,57 @@ def part2_explosions(h: dict) -> list[str]:
                        f(e["n_crps_gt_20"]), f(e["n_crps_nonfinite"])] for e in old])
     cap = h.get("capped", [])
     n_rows = sum(int(c.get("n_capped_rows") or 0) for c in cap)
-    out += [f"Capped NB rows (NB support wider than K_MAX = 4096; every h of one f shares them): "
-            f"{n_rows} rows over {len(cap)} f runs. A nonzero count goes to the PI.", ""]
+    out += [f"Capped NB rows in the chain scoring (NB support wider than K_MAX = 4096; every h of "
+            f"one f shares them): {n_rows} rows in total over {len(cap)} f runs. A nonzero count "
+            "goes to the PI. The capped rows of the fnb fits are under \"Learned h fits\" below.",
+            ""]
     out += table(["f run", "pairs", "pairs with a capped row", "capped rows",
                   "the same for every h of this f"],
                  [[c["f_run"], f(c.get("n_pairs")), f(c.get("n_pairs_capped")),
                    f(c.get("n_capped_rows")), yn(c.get("consistent_across_h"))] for c in cap])
+    out += part2_merge(h) + part2_fits(h)
+    return out
+
+
+def part2_merge(h: dict) -> list[str]:
+    me = h.get("merge_errors")
+    if me is None:
+        return []
+    gs = sorted({m.get("mix_groups") for m in me if m.get("mix_groups") is not None})
+    out = ["### Merged mixture", "",
+           f"Own-noise h in the chain are scored with a merged mixture: G = "
+           f"{', '.join(str(g) for g in gs) or '—'} moment-matched Gaussians at most (PI "
+           "2026-10-16, G chosen 2026-10-17). Error = relative error of crps_log against the exact "
+           "mixture, on the widest-support bins with more than G components; per bin (the bar: "
+           "below 1e-3) and averaged over those bins. Largest over each f's own-noise h.", ""]
+    out += table(["f run", "G", "own-noise h", "h with bins checked", "bins checked (max)",
+                  "largest per-bin error", "its h", "largest averaged error", "its h",
+                  "h at or above 1e-3 per bin", "note"],
+                 [[m["f_run"], f(m.get("mix_groups")), f(m.get("n_h")), f(m.get("n_h_checked")),
+                   f(m.get("n_bins_max")), f(m.get("rel_err_max")),
+                   clean(m.get("rel_err_max_h")) or "—", f(m.get("avg_rel_err_max")),
+                   clean(m.get("avg_rel_err_max_h")) or "—", f(m.get("n_h_rel_err_max_ge_bar")),
+                   clean(m.get("note"))] for m in me])
+    return out
+
+
+def part2_fits(h: dict) -> list[str]:
+    fits = h.get("fits")
+    if not fits:
+        return []
+    out = ["### Learned h fits at the step cap, and their capped NB rows", ""]
+    for t in fits.get("totals", []):
+        cap = "/".join(str(x) for x in t.get("max_steps", [])) or "—"
+        out.append(f"- {t['source']} fits: {t['n_fits']}; {t['n_at_step_cap']} ran to the "
+                   f"{cap}-step cap (no early stop), {t['n_best_at_step_cap']} of them with the "
+                   f"best step at the cap; {t['n_fits_with_capped_rows']} fits have capped NB rows, "
+                   f"{t['n_capped_rows']} capped NB rows in all (training and validation draws).")
+    out.append("")
+    at = [r for r in fits.get("runs", []) if r.get("at_step_cap")]
+    out += table(["h fit", "source", "steps run", "best step", "capped NB rows"],
+                 [[clean(r["h_name"]), r["source"], f(r.get("steps_run")), f(r.get("best_step")),
+                   f(r.get("n_capped"))] for r in sorted(at, key=lambda r: (r["source"],
+                                                                            r["h_name"]))])
     return out
 
 
@@ -462,7 +593,35 @@ def _md5(path) -> str:
     return hashlib.md5(Path(path).read_bytes()).hexdigest()
 
 
-def what_was_run(eta, h, eta_path, h_path, old_tsv) -> list[str]:
+def read_devices(path) -> list[dict] | None:
+    if path is None or not Path(path).is_file():
+        return None
+    with Path(path).open(newline="", encoding="utf-8") as fh:
+        return list(csv.DictReader(fh, delimiter="\t"))
+
+
+def device_note(rows: list[dict] | None, path=None) -> list[str]:
+    """GPU / CPU counts of the part-1 training runs, per rung (PI 2026-10-17)."""
+    if rows is None:
+        return [f"- Part 1 devices: no run_device.tsv at `{path}`." if path else
+                "- Part 1 devices: no run_device.tsv given."]
+    tot: dict = defaultdict(int)
+    by: dict = defaultdict(lambda: defaultdict(int))
+    for r in rows:
+        d = (r.get("train_device") or "unknown").lower()
+        tot[d] += 1
+        by[r["run_name"].split("_")[0]][d] += 1
+    order = ["A", "B", "C", "D", "A2", "B2", "C2", "D2", "Aold"]
+    rungs = [x for x in order if x in by] + sorted(set(by) - set(order))
+    per = "; ".join(f"{x} " + ", ".join(f"{n} {d.upper()}" for d, n in sorted(by[x].items()))
+                    for x in rungs)
+    totals = ", ".join(f"{n} on {d.upper()}" for d, n in sorted(tot.items()))
+    return [f"- Part 1 devices (`{path}`): {len(rows)} runs trained, {totals}. By rung: {per}. "
+            "Accepted by the PI (2026-10-17). A comparison across rows of designs (A, B, C, D "
+            "against A2, B2, C2, D2, or against Aold) also crosses devices."]
+
+
+def what_was_run(eta, h, eta_path, h_path, old_tsv, devices=None, dev_path=None) -> list[str]:
     out = []
     if eta is None:
         out.append(f"- Part 1: no aggregate at `{eta_path}`.")
@@ -476,8 +635,12 @@ def what_was_run(eta, h, eta_path, h_path, old_tsv) -> list[str]:
     else:
         out.append(f"- Part 2 (the map h to P = −log10 p): {h.get('alone_present')} of "
                    f"{h.get('alone_expected')} h scored alone, {h.get('chain_f_present')} of "
-                   f"{h.get('chain_f_expected')} f runs scored in the chain; aggregate written "
-                   f"{h.get('created_utc')} (`{h_path}`).")
+                   f"{h.get('chain_f_expected')} f runs scored in the chain (finished); aggregate "
+                   f"written {h.get('created_utc')} (`{h_path}`).")
+        if h.get("chain_f_runs_missing"):
+            out.append("- " + part2_banner(h)[0])
+    if eta is not None:
+        out += device_note(devices, dev_path)
     if old_tsv is not None:
         p = Path(old_tsv)
         out.append(f"- Old grid TSV: `{p}`" + (f" (md5 {_md5(p)})." if p.is_file()
@@ -544,12 +707,14 @@ def notes(eta, h) -> list[str]:
 # ---------------------------------------------------------------------------------------------
 
 
-def build(eta_agg, h_agg, old_grid_tsv=None) -> str:
+def build(eta_agg, h_agg, old_grid_tsv=None, run_device=None) -> str:
     eta_path, h_path = Path(eta_agg) / ETA_FILE, Path(h_agg) / H_FILE
     eta, h = _load(eta_path), _load(h_path)
+    dev_path = Path(run_device) if run_device is not None else Path(eta_agg) / "run_device.tsv"
+    devices = read_devices(dev_path)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     body = {
-        "What was run": what_was_run(eta, h, eta_path, h_path, old_grid_tsv),
+        "What was run": what_was_run(eta, h, eta_path, h_path, old_grid_tsv, devices, dev_path),
         "Drafted readings": drafted_readings(),
         "Notes on how it was run": notes(eta, h),
     }
@@ -566,13 +731,17 @@ def build(eta_agg, h_agg, old_grid_tsv=None) -> str:
     for title, fn in p1:
         body[title] = fn(eta) if eta is not None else [f"_No part-1 aggregate at `{eta_path}`._",
                                                        ""]
+    if eta is not None:
+        body[p1[0][0]] = device_note(devices, dev_path) + [""] + body[p1[0][0]]
+    banner = part2_banner(h)
     for title, fn in p2:
-        body[title] = fn(h) if h is not None else [f"_No part-2 aggregate at `{h_path}`._", ""]
+        body[title] = (banner + fn(h)) if h is not None else [
+            f"_No part-2 aggregate at `{h_path}`._", ""]
     lines = ["# t125 grid summary", "",
              f"Written by `tools/t125/summary.py` at {now}. Every value is quoted with its seed "
              "spread; every CRPS with its split; each comparison says whether its gain exceeds "
              "2 × the larger seed wobble. Exploratory: no row here is a tick, a close or a "
-             "conclusion.", ""]
+             "conclusion.", ""] + banner
     for title in SECTIONS:
         lines += [f"## {title}", ""] + body[title]
     text = "\n".join(lines).rstrip("\n") + "\n"
@@ -589,8 +758,11 @@ def main(argv=None) -> int:
     ap.add_argument("out_md", type=Path)
     ap.add_argument("--old-grid-tsv", type=Path, default=None,
                     help="recorded (path, md5) under 'What was run'")
+    ap.add_argument("--run-device", type=Path, default=None,
+                    help="part-1 run_device.tsv (index, run_name, train_device, ...); default "
+                         "<eta_agg_dir>/run_device.tsv")
     a = ap.parse_args(argv)
-    text = build(a.eta_agg_dir, a.h_agg_dir, a.old_grid_tsv)
+    text = build(a.eta_agg_dir, a.h_agg_dir, a.old_grid_tsv, a.run_device)
     a.out_md.parent.mkdir(parents=True, exist_ok=True)
     tmp = a.out_md.with_name(a.out_md.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")

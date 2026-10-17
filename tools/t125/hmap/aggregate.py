@@ -64,9 +64,23 @@ h_repair.tsv, h_vs_oldgrid.tsv, grid_h.md, summary_data_h.json. Missing h runs (
 `tasks.tasks_alone()` and, per f in `eta.pairs.f_runs_seed0()`, `tasks.chain_h_list`) are listed in
 results_h.json, not fatal; comparisons with no reading go to `readings_skipped` with the reason.
 
+**Chain scope and unfinished chains** (PI 2026-10-17). The expected chain f are the real seed-0 f
+of one track (`--chain-track`, default C19M16: 8 designs); `--chain-track all` expects all 64. A
+chain counts only when `<h_root>/chain/<f_run>/CHAIN_DONE` exists: a dir without it (scores of a
+chain still running) and the shard dirs `<f_run>.partial` are left out. Every expected f with no
+finished chain gives one `readings_skipped` entry per chain reading (push_vs_noise, repair,
+vs_oldgrid) with the reason "chain not finished". A finished f outside the scope is still read and
+listed in `chain_f_out_of_scope`.
+**Merged mixture** per finished f: `<f_run>/merge_error.json` (score.py chain): G
+(`mix_groups`) and, over its own-noise h, the largest per-bin relative error and the largest
+averaged error on crps_log (bar 1e-3, PI 2026-10-17). **Fits**: every `runs_fnb/*` and
+`runs_true/*` with TRAIN_DONE: steps run against the step cap (`max_steps`), the best step, and
+the capped NB rows of the fit (`timing.json` n_capped).
+
     python tools/t125/hmap/aggregate.py <manifest> <covariates.tsv> <h_root> <agg_dir>
                                         --old-grid-tsv PATH [--old-grid-json PATH]
                                         [--eta-runs DIR] [--fnb-seeds 1|3]
+                                        [--chain-track C19M16|all]
 """
 from __future__ import annotations
 
@@ -91,6 +105,13 @@ from eta import pairs as ep  # noqa: E402
 from hmap import tasks  # noqa: E402
 
 EXPLODE_AT = 20.0
+#: PI 2026-10-17: the repair reading and the chain use the 8 real seed-0 f of this one track
+CHAIN_TRACK = "C19M16"
+CHAIN_READINGS = ("push_vs_noise", "repair", "vs_oldgrid")
+NOT_FINISHED = "chain not finished"
+#: PI 2026-10-17: the merged mixture is kept when its per-bin relative error is below this
+MERGE_BAR = 1e-3
+DEFAULT_MAX_STEPS = 4000
 CLASS_ORDER = ("DNase", "narrow", "broad")
 NAT = {False: "crps", True: "crps_mean_point"}
 LOG_KEYS = ("crps_log_all", "crps_log_top1")
@@ -252,15 +273,23 @@ def pair_key(r: dict) -> tuple:
     return (r["track"], r["source_pid"], r["target_pid"])
 
 
-def load_chain(h_root: Path, warnings: list, skipped: list):
+def load_chain(h_root: Path, warnings: list, skipped: list, unfinished: set | None = None):
     """({(f_rung, f_g_version): {version: arm}}, {f_run: [h names]}, capped rows,
-    {f_run: {h_name: n_records}}); arm seeds -> {(track, source, target): record}."""
+    {f_run: {h_name: n_records}}); arm seeds -> {(track, source, target): record}. Only the f
+    with a CHAIN_DONE are read; the names of f dirs with scores but no CHAIN_DONE go to
+    `unfinished`; `<f_run>.partial` shard dirs are never read."""
     cells: dict = defaultdict(dict)
     present: dict = defaultdict(list)
     n_recs: dict = defaultdict(dict)
     capped: dict = {}
+    unfinished = set() if unfinished is None else unfinished
     for f in sorted((Path(h_root) / "chain").glob("*/*/scores.json")):
         f_run = f.parent.parent.name
+        if f_run.endswith(".partial"):
+            continue
+        if not (f.parent.parent / "CHAIN_DONE").is_file():
+            unfinished.add(f_run)
+            continue
         obj = _read(f)
         if not obj:
             continue
@@ -290,6 +319,96 @@ def load_chain(h_root: Path, warnings: list, skipped: list):
                                                       "n_capped_rows")):
             capped[f_run]["consistent_across_h"] = False
     return dict(cells), dict(present), [capped[k] for k in sorted(capped)], dict(n_recs)
+
+
+def f_cell_of_name(f_run: str) -> tuple[str, str]:
+    """(rung, g_version) from an f run name `<rung>_<g>_counts_real_s0`."""
+    parts = f_run.split("_")
+    return parts[0], ("across" if len(parts) > 1 and parts[1] == "all" else "per_track")
+
+
+def expected_chain_f(chain_track: str | None = CHAIN_TRACK) -> list[str]:
+    """The expected chain f: the real seed-0 f of `chain_track` (None or "all": all 64)."""
+    fs = ep.f_runs_seed0()
+    if chain_track in (None, "all"):
+        return fs
+    return [f for f in fs if f.split("_")[1] == chain_track]
+
+
+def load_merge_errors(h_root: Path, f_runs) -> list[dict]:
+    """Per finished f: G and, over its own-noise h checked (n_bins > 0), the largest per-bin
+    relative error (`rel_err_max`) and the largest averaged error (`avg_rel_err`) on crps_log."""
+    out = []
+    for f_run in sorted(f_runs):
+        path = Path(h_root) / "chain" / f_run / "merge_error.json"
+        if not path.is_file():
+            continue
+        obj = _read(path)
+        if not obj:
+            continue
+        hs = obj.get("h") or {}
+        chk = {k: v for k, v in hs.items() if (v.get("n_bins") or 0) > 0}
+
+        def top(key):
+            got = [(float(v[key]), k) for k, v in chk.items() if _finite(v.get(key))]
+            return max(got) if got else (None, None)
+
+        mx, mx_h = top("rel_err_max")
+        av, av_h = top("avg_rel_err")
+        row = {"f_run": f_run, "mix_groups": obj.get("mix_groups"),
+               "mix_check_bins": obj.get("mix_check_bins"), "n_h": len(hs),
+               "n_h_checked": len(chk),
+               "n_bins_max": max((int(v["n_bins"]) for v in chk.values()), default=0),
+               "support_max": max((int(v["support_max"]) for v in chk.values()
+                                   if v.get("support_max") is not None), default=None),
+               "rel_err_max": mx, "rel_err_max_h": mx_h, "avg_rel_err_max": av,
+               "avg_rel_err_max_h": av_h, "bar": MERGE_BAR,
+               "n_h_rel_err_max_ge_bar": sum(1 for v in chk.values()
+                                             if _finite(v.get("rel_err_max"))
+                                             and float(v["rel_err_max"]) >= MERGE_BAR),
+               "note": None, "per_h": hs}
+        if not chk:
+            row["note"] = (f"no bin had more than G = {obj.get('mix_groups')} mixture components, "
+                           "so the merged mixture equals the exact one on every bin")
+        out.append(row)
+    return out
+
+
+def load_fits(h_root: Path) -> dict:
+    """Every learned h fit with TRAIN_DONE under runs_fnb/ and runs_true/: steps run against the
+    step cap, the best step, the capped NB rows; totals per source."""
+    runs = []
+    for sub, source in (("runs_fnb", "fnb"), ("runs_true", "true")):
+        for d in sorted((Path(h_root) / sub).glob("*/TRAIN_DONE")):
+            d = d.parent
+            t = _read(d / "timing.json") if (d / "timing.json").is_file() else None
+            if not t:
+                continue
+            c = (_read(d / "config.json") if (d / "config.json").is_file() else None) or {}
+            dflt = c.get("DEFAULTS") if isinstance(c.get("DEFAULTS"), dict) else {}
+            cap = int(c.get("max_steps") or dflt.get("max_steps") or DEFAULT_MAX_STEPS)
+            src = str(c.get("source") or source)
+            steps, best = t.get("steps_run"), t.get("best_step")
+            runs.append({"h_name": c.get("h_name") or d.name, "source": source,
+                         "fnb_f": src.split(":", 1)[1] if src.startswith("fnb:") else None,
+                         "steps_run": steps, "best_step": best, "max_steps": cap,
+                         "at_step_cap": bool(steps is not None and int(steps) >= cap),
+                         "best_at_step_cap": bool(best is not None and int(best) >= cap),
+                         "n_capped": int(t.get("n_capped") or 0),
+                         "n_capped_train": t.get("n_capped_train"),
+                         "n_capped_val": t.get("n_capped_val")})
+    totals = []
+    for source in ("fnb", "true"):
+        rs = [r for r in runs if r["source"] == source]
+        if not rs:
+            continue
+        totals.append({"source": source, "n_fits": len(rs),
+                       "max_steps": sorted({r["max_steps"] for r in rs}),
+                       "n_at_step_cap": sum(r["at_step_cap"] for r in rs),
+                       "n_best_at_step_cap": sum(r["best_at_step_cap"] for r in rs),
+                       "n_fits_with_capped_rows": sum(r["n_capped"] > 0 for r in rs),
+                       "n_capped_rows": sum(r["n_capped"] for r in rs)})
+    return {"runs": runs, "totals": totals}
 
 
 def load_old_tsv(path) -> dict:
@@ -770,7 +889,8 @@ def _grid_cell(sidx, cell, vname, mc, which, kind, noise, formula) -> str:
 
 
 def write_grid_md(path: Path, alone_rows: list[dict], readings: list[dict], explosions: list,
-                  capped: list, skipped: list, counts: dict) -> None:
+                  capped: list, skipped: list, counts: dict, scope: dict | None = None,
+                  merge_errors: list | None = None, fits: dict | None = None) -> None:
     sidx = _summary_index(alone_rows)
     cell = (None, None)
     L = ["# t125 part 2: the map h from the predicted NB and the control to P = -log10 p", "",
@@ -788,8 +908,16 @@ def write_grid_md(path: Path, alone_rows: list[dict], readings: list[dict], expl
          "carries its oracle-scaled + scale-error split. The chain values per f cell are in "
          "h_chain_summary.tsv.", "",
          f"h runs present alone: {counts['alone_present']} of {counts['alone_expected']}; "
-         f"chain f runs present: {counts['chain_f_present']} of {counts['chain_f_expected']} "
-         "(missing ones listed in results_h.json).", "",
+         f"chain f runs finished: {counts['chain_f_present']} of {counts['chain_f_expected']} "
+         "(missing ones listed in results_h.json).", ""]
+    if scope and scope.get("chain_f_runs_missing"):
+        fin = [f.split("_")[0] for f in scope["chain_f_finished_runs"]]
+        mis = [f.split("_")[0] for f in scope["chain_f_runs_missing"]]
+        L += [f"**The chain covers {len(fin)} of {len(scope['chain_f_expected_runs'])} designs** "
+              f"(track {scope.get('chain_track') or 'all'}, f seed 0): finished "
+              f"{', '.join(fin) or 'none'}; {NOT_FINISHED}: {', '.join(mis)}. Their readings are "
+              "listed under \"Comparisons with no reading\".", ""]
+    L += [
          "A row marked \"gain > 2 × wobble: yes\" only says the gain is larger than 2 × the "
          "larger seed wobble of the two arms. No row here is ticked or concluded.", ""]
     for mc in [c for c in CLASS_ORDER if any(r["mark_class"] == c for r in alone_rows)]:
@@ -891,6 +1019,35 @@ def write_grid_md(path: Path, alone_rows: list[dict], readings: list[dict], expl
                  "same in every h file"],
                 [[c["f_run"], str(c["n_pairs"]), str(c["n_pairs_capped"]),
                   str(c["n_capped_rows"]), _yn(c["consistent_across_h"])] for c in capped])
+    if merge_errors is not None:
+        L += ["## Merged mixture", "",
+              "Own-noise h in the chain: adjacent k components merged into at most G "
+              "moment-matched Gaussians before the CRPS pair sum (PI 2026-10-16), checked per pair "
+              "on the widest-support bins with more than G components. Per-bin relative error on "
+              f"crps_log; bar {MERGE_BAR:g} per bin (PI 2026-10-17). Largest over the f's "
+              "own-noise h.", ""]
+        L += _table(["f run", "G", "own-noise h", "h checked", "bins checked (max)",
+                     "largest per-bin error", "its h", "largest averaged error", "its h",
+                     f"h at or above {MERGE_BAR:g}", "note"],
+                    [[m["f_run"], str(m["mix_groups"]), str(m["n_h"]), str(m["n_h_checked"]),
+                      str(m["n_bins_max"]), _f(m["rel_err_max"]), str(m["rel_err_max_h"] or "—"),
+                      _f(m["avg_rel_err_max"]), str(m["avg_rel_err_max_h"] or "—"),
+                      str(m["n_h_rel_err_max_ge_bar"]), m["note"] or ""] for m in merge_errors])
+    if fits is not None:
+        L += ["## Fits at the step cap", "",
+              "Learned h fits (TRAIN_DONE): steps run against the step cap (max_steps; no early "
+              "stop inside it), the best step at the cap, and the capped NB rows of the fit.", ""]
+        L += _table(["source", "fits", "step cap", "stopped at the step cap", "best step at the cap",
+                     "fits with capped NB rows", "capped NB rows"],
+                    [[t["source"], str(t["n_fits"]), "/".join(str(x) for x in t["max_steps"]),
+                      str(t["n_at_step_cap"]), str(t["n_best_at_step_cap"]),
+                      str(t["n_fits_with_capped_rows"]), str(t["n_capped_rows"])]
+                     for t in fits["totals"]])
+        at_cap = [r for r in fits["runs"] if r["at_step_cap"]]
+        if at_cap:
+            L += _table(["h fit", "source", "steps run", "best step", "capped NB rows"],
+                        [[r["h_name"], r["source"], str(r["steps_run"]), str(r["best_step"]),
+                          str(r["n_capped"])] for r in at_cap])
     if skipped:
         L += ["## Comparisons with no reading", ""]
         L += _table(["reading", "where", "h", "class", "why"],
@@ -932,7 +1089,7 @@ def _json_row(r: dict) -> dict:
 
 
 def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid_json=None,
-              eta_runs=None, fnb_seeds: int = 1) -> dict:
+              eta_runs=None, fnb_seeds: int = 1, chain_track: str | None = CHAIN_TRACK) -> dict:
     lpairs.read_manifest(manifest)               # fail early on a bad manifest
     if not Path(covariates).is_file():
         raise FileNotFoundError(covariates)
@@ -941,7 +1098,8 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
     warnings: list = []
     skipped: list = []
     alone_arms, alone_present = load_alone(h_root, warnings)
-    cells, chain_present, capped, n_recs = load_chain(h_root, warnings, skipped)
+    unfinished: set = set()
+    cells, chain_present, capped, n_recs = load_chain(h_root, warnings, skipped, unfinished)
     for w in warnings:
         _warn(w)
     old = load_old_tsv(old_grid_tsv)
@@ -954,11 +1112,26 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
     # expected runs
     alone_expected = [r["h_name"] for r in tasks.tasks_alone()]
     alone_missing = [n for n in alone_expected if n not in set(alone_present)]
-    f_expected = ep.f_runs_seed0()
+    f_expected = expected_chain_f(chain_track)
     f_missing = [f for f in f_expected if f not in chain_present]
+    f_finished = [f for f in f_expected if f in chain_present]
+    f_out_of_scope = sorted(f for f in chain_present if f not in set(f_expected))
+    for f in f_missing:
+        rung, gv = f_cell_of_name(f)
+        detail = ("scores present, no CHAIN_DONE: left out" if f in unfinished
+                  else "no chain scores")
+        for reading in CHAIN_READINGS:
+            skipped.append({"reading": reading, "scope": "chain", "f_run": f, "f_rung": rung,
+                            "f_g_version": gv, "reason": NOT_FINISHED, "detail": detail})
+    if f_out_of_scope:
+        _warn(f"{len(f_out_of_scope)} finished chain f outside the scope {chain_track!r} read "
+              f"too: {f_out_of_scope}")
+    merge_errors = load_merge_errors(h_root, chain_present)
+    fits = load_fits(h_root)
     chain_missing = {f: [n for n in tasks.chain_h_list(f, fnb_seeds)
                          if n not in set(chain_present[f])] for f in sorted(chain_present)}
-    chain_done = {f: (h_root / "chain" / f / "CHAIN_DONE").is_file() for f in chain_present}
+    chain_done = {f: (h_root / "chain" / f / "CHAIN_DONE").is_file()
+                  for f in sorted(set(chain_present) | unfinished)}
     incomplete = []
     for f, by_h in sorted(n_recs.items()):
         want = None
@@ -974,7 +1147,7 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
     if alone_missing:
         _warn(f"{len(alone_missing)} of {len(alone_expected)} alone h runs missing")
     if f_missing:
-        _warn(f"{len(f_missing)} of {len(f_expected)} chain f runs missing")
+        _warn(f"{len(f_missing)} of {len(f_expected)} chain f runs missing (chain not finished)")
 
     # summaries
     alone_rows = [r for v in sorted(alone_arms) for r in summary_rows(alone_arms[v], "alone",
@@ -1028,6 +1201,11 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
                "alone_present": sorted(alone_present), "alone_missing": alone_missing,
                "chain_present": {f: sorted(v) for f, v in sorted(chain_present.items())},
                "chain_missing": chain_missing, "chain_f_runs_missing": f_missing,
+               "chain_track": chain_track, "chain_f_expected_runs": f_expected,
+               "chain_f_finished_runs": f_finished,
+               "chain_f_not_finished": sorted(unfinished & set(f_expected)),
+               "chain_f_out_of_scope": f_out_of_scope, "merge_errors": merge_errors,
+               "fits": fits,
                "chain_done": chain_done, "chain_incomplete": incomplete,
                "warnings": warnings, "alone_rows": j_alone, "chain_rows": j_chain,
                "readings": readings, "readings_skipped": skipped, "explosions": explosions,
@@ -1047,10 +1225,16 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
     _tsv(agg_dir / "h_vs_oldgrid.tsv", VS_COLS,
          [r for r in readings if r["reading"] == "vs_oldgrid"])
     counts = {"alone_present": len(alone_present), "alone_expected": len(alone_expected),
-              "chain_f_present": len(chain_present), "chain_f_expected": len(f_expected)}
+              "chain_f_present": len(f_finished), "chain_f_expected": len(f_expected)}
+    scope = {"chain_track": chain_track, "chain_f_expected_runs": f_expected,
+             "chain_f_finished_runs": f_finished, "chain_f_runs_missing": f_missing,
+             "chain_f_not_finished": sorted(unfinished & set(f_expected)),
+             "chain_f_out_of_scope": f_out_of_scope}
+    me_slim = [{k: v for k, v in m.items() if k != "per_h"} for m in merge_errors]
     write_grid_md(agg_dir / "grid_h.md", alone_rows, readings, explosions, capped, skipped,
-                  counts)
-    write_json({"created_utc": now, **counts, "explode_at": EXPLODE_AT,
+                  counts, scope=scope, merge_errors=me_slim, fits=fits)
+    write_json({"created_utc": now, **counts, **scope, "explode_at": EXPLODE_AT,
+                "merge_errors": me_slim, "fits": fits,
                 "alone_cells": j_alone, "chain_cells": j_chain, "readings": readings,
                 "readings_skipped": skipped, "explosions": explosions, "capped": capped,
                 "oldgrid_explosions": old_ex_rows,
@@ -1071,13 +1255,18 @@ def main(argv=None) -> int:
     ap.add_argument("--eta-runs", type=Path, default=None,
                     help="the eta runs dir (each f's config.json train_pairs: expected pairs)")
     ap.add_argument("--fnb-seeds", type=int, choices=(1, 3), default=1)
+    ap.add_argument("--chain-track", default=CHAIN_TRACK,
+                    help=f"the track whose real seed-0 f are the expected chains (default "
+                         f"{CHAIN_TRACK}, PI 2026-10-17); 'all' expects all 64")
     a = ap.parse_args(argv)
     res = aggregate(a.manifest, a.covariates, a.h_root, a.agg_dir, a.old_grid_tsv,
-                    a.old_grid_json, a.eta_runs, a.fnb_seeds)
+                    a.old_grid_json, a.eta_runs, a.fnb_seeds,
+                    None if a.chain_track == "all" else a.chain_track)
     print(f"alone h runs {len(res['alone_present'])} present, {len(res['alone_missing'])} "
-          f"missing; chain f runs {len(res['chain_present'])} present, "
-          f"{len(res['chain_f_runs_missing'])} missing; {len(res['readings'])} readings -> "
-          f"{a.agg_dir}")
+          f"missing; chain f runs {len(res['chain_f_finished_runs'])} of "
+          f"{len(res['chain_f_expected_runs'])} finished, {len(res['chain_f_runs_missing'])} "
+          f"missing (chain not finished), {len(res['chain_f_out_of_scope'])} out of scope; "
+          f"{len(res['readings'])} readings -> {a.agg_dir}")
     return 0
 
 

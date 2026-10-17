@@ -95,13 +95,20 @@ def write_alone(root: Path, info: dict, records: list[dict]) -> None:
     (d / "ALONE_DONE").write_text("x\n")
 
 
-def write_chain(root: Path, f_run: str, info: dict, records: list[dict]) -> None:
+def write_chain(root: Path, f_run: str, info: dict, records: list[dict], done=True) -> None:
+    """One h's chain scores.json; `done` also writes the f's CHAIN_DONE (score.py writes it once
+    every h of the f is scored; a chain without it is not finished)."""
     d = root / "chain" / f_run / info["h_name"]
     d.mkdir(parents=True, exist_ok=True)
-    f_info = {"run_name": f_run, "rung": F_RUNG[f_run], "g": "all", "g_version": "across",
-              "space": "counts", "model": "real", "seed": 0}
+    g = f_run.split("_")[1]
+    f_info = {"run_name": f_run, "rung": F_RUNG.get(f_run, f_run.split("_")[0]), "g": g,
+              "g_version": "across" if g == "all" else "per_track", "space": "counts",
+              "model": "real", "seed": 0}
     (d / "scores.json").write_text(json.dumps({"mode": "chain", "f_run": f_info, "h": info,
                                                "records": records}))
+    if done:
+        with (root / "chain" / f_run / "CHAIN_DONE").open("a") as fh:
+            fh.write(info["h_name"] + "\n")
 
 
 def alone_recs(info, noise, fn) -> list[dict]:
@@ -245,7 +252,8 @@ def agg(tmp_path_factory):
     root = tmp_path_factory.mktemp("h_agg")
     h_root = build_h_root(root)
     old_tsv = write_old_tsv(root / "results_summary.tsv")
-    res = ha.aggregate(MANIFEST, COV, h_root, root / "agg", old_grid_tsv=old_tsv)
+    res = ha.aggregate(MANIFEST, COV, h_root, root / "agg", old_grid_tsv=old_tsv,
+                       chain_track=None)
     return {"root": root, "h_root": h_root, "res": res, "agg": root / "agg", "old_tsv": old_tsv}
 
 
@@ -256,7 +264,7 @@ def agg_json(tmp_path_factory):
     old_tsv = write_old_tsv(root / "results_summary.tsv")
     old_json = write_old_json(root / "results.json")
     res = ha.aggregate(MANIFEST, COV, h_root, root / "agg", old_grid_tsv=old_tsv,
-                       old_grid_json=old_json)
+                       old_grid_json=old_json, chain_track=None)
     return {"res": res, "agg": root / "agg"}
 
 
@@ -595,6 +603,141 @@ def test_cli(tmp_path):
                     "--old-grid-tsv", str(empty)]) == 0
     assert (tmp_path / "agg" / "grid_h.md").is_file()
     assert read_tsv(tmp_path / "agg" / "h_vs_oldgrid.tsv") == []
+
+
+# ---------------------------------------------------------------------------------------------
+# a partial chain set (PI 2026-10-17: aggregate on the finished chains, refresh later)
+# ---------------------------------------------------------------------------------------------
+
+C19 = [f"{r}_C19M16_counts_real_s0" for r in ("A", "B", "C", "D", "A2", "B2", "C2", "D2")]
+
+
+def _chain_f(h_root: Path, f_run: str, done: bool) -> None:
+    """A per-track f with a formula h and one true push h (3 seeds); `done` writes CHAIN_DONE."""
+    fb = h_info("formula", None, 0, None, None, window="bin")
+    write_chain(h_root, f_run, fb, chain_recs(fb, f_run, False, lambda k, o: dict(
+        nat=2.0 + o, log=1.0 + o, mse=1.0 + o)), done=done)
+    for s in (0, 1, 2):
+        hp = h_info("affine", 1, 0, "true", s)
+        write_chain(h_root, f_run, hp, chain_recs(hp, f_run, False, lambda k, o, s=s: dict(
+            nat=1.0 + o + 0.1 * s, log=0.5 + o, mse=1.0 + o)), done=done)
+
+
+def _merge_error(h_root: Path, f_run: str, rows: dict) -> None:
+    h = {name: {"variant": "affine", "rung": 1, "noise": 1, "source": "true", "n_pairs": 5,
+                "n_bins": nb, "support_median": None if not nb else 600.0,
+                "support_max": None if not nb else 1028, "rel_err_median": None,
+                "rel_err_q99": None, "rel_err_max": mx, "signed_rel_err_mean": None,
+                "crps_log_exact_mean": None, "crps_log_merged_mean": None, "avg_rel_err": av}
+         for name, (nb, mx, av) in rows.items()}
+    (h_root / "chain" / f_run / "merge_error.json").write_text(json.dumps(
+        {"f_run_name": f_run, "mix_groups": 512, "mix_check_bins": 64, "check": "x", "h": h}))
+
+
+def _fit(h_root: Path, sub: str, name: str, source: str, steps: int, best: int, capped: int):
+    d = h_root / sub / name
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "config.json").write_text(json.dumps({"h_name": name, "source": source, "max_steps": 4000,
+                                               "DEFAULTS": {"max_steps": 4000}}))
+    (d / "timing.json").write_text(json.dumps({"steps_run": steps, "best_step": best,
+                                               "n_capped": capped, "n_capped_train": capped,
+                                               "n_capped_val": 0}))
+    (d / "TRAIN_DONE").write_text("x\n")
+
+
+@pytest.fixture(scope="module")
+def partial(tmp_path_factory):
+    """The C19M16 scope (the default): C and D2 finished (CHAIN_DONE), A scored but not finished
+    (no CHAIN_DONE), B only shard files in B.partial; the two across f of build_h_root (out of
+    this scope) are present too."""
+    root = tmp_path_factory.mktemp("h_agg_partial")
+    h_root = build_h_root(root)
+    _chain_f(h_root, C19[2], True)
+    _chain_f(h_root, C19[7], True)
+    _chain_f(h_root, C19[0], False)
+    (h_root / "chain" / (C19[1] + ".partial")).mkdir(parents=True)
+    (h_root / "chain" / (C19[1] + ".partial") / "pair_0000.json").write_text("{}")
+    _merge_error(h_root, C19[2], {"h_a": (0, None, None), "h_b": (0, None, None)})
+    _merge_error(h_root, C19[7], {"h_a": (91, 6.6e-4, 1.7e-4), "h_b": (91, 2e-7, 1e-7),
+                                  "h_c": (0, None, None)})
+    _fit(h_root, "runs_fnb", f"h_mlp_r5_push_{C19[2]}_s0", f"fnb:{C19[2]}", 4000, 3250, 3)
+    _fit(h_root, "runs_fnb", f"h_mlp_r1_push_{C19[2]}_s0", f"fnb:{C19[2]}", 2250, 1250, 0)
+    _fit(h_root, "runs_fnb", f"h_mlp_r1_push_{C19[7]}_s0", f"fnb:{C19[7]}", 4000, 4000, 0)
+    _fit(h_root, "runs_true", "h_mlp_r1_push_true_s0", "true", 4000, 4000, 0)
+    res = ha.aggregate(MANIFEST, COV, h_root, root / "agg",
+                       old_grid_tsv=write_old_tsv(root / "results_summary.tsv"))
+    return {"res": res, "agg": root / "agg", "h_root": h_root}
+
+
+def test_partial_chains_expected_scope_is_the_c19m16_designs(partial):
+    res = partial["res"]
+    assert res["chain_track"] == "C19M16"
+    assert res["chain_f_expected_runs"] == C19
+    assert res["chain_f_finished_runs"] == [C19[2], C19[7]]
+    assert res["chain_f_runs_missing"] == [f for f in C19 if f not in (C19[2], C19[7])]
+    assert res["chain_f_not_finished"] == [C19[0]]          # scores present, no CHAIN_DONE
+    assert sorted(res["chain_f_out_of_scope"]) == sorted([F1, F2])
+    sd = json.loads((partial["agg"] / "summary_data_h.json").read_text())
+    assert sd["chain_f_present"] == 2 and sd["chain_f_expected"] == 8
+    for k in ("chain_f_expected_runs", "chain_f_finished_runs", "chain_f_runs_missing",
+              "chain_track", "merge_errors", "fits"):
+        assert k in sd, k
+
+
+def test_partial_chains_missing_f_skipped_with_reason(partial):
+    sk = [k for k in partial["res"]["readings_skipped"] if k["reason"] == "chain not finished"]
+    by_f = {}
+    for k in sk:
+        by_f.setdefault(k["f_run"], set()).add(k["reading"])
+    assert set(by_f) == set(partial["res"]["chain_f_runs_missing"])
+    for f, readings in by_f.items():
+        assert readings == {"push_vs_noise", "repair", "vs_oldgrid"}, f
+    a = [k for k in sk if k["f_run"] == C19[0]][0]
+    assert a["f_rung"] == "A" and a["f_g_version"] == "per_track"
+    assert "CHAIN_DONE" in a["detail"]
+    md = (partial["agg"] / "grid_h.md").read_text()
+    assert "chain not finished" in md
+
+
+def test_partial_chains_unfinished_scores_left_out(partial):
+    rows = read_tsv(partial["agg"] / "h_chain_summary.tsv")
+    assert not pick(rows, f_rung="A", f_g_version="per_track")      # A: no CHAIN_DONE
+    assert pick(rows, f_rung="C", f_g_version="per_track")
+    assert pick(rows, f_rung="D2", f_g_version="per_track")
+    assert pick(rows, f_rung="A", f_g_version="across")             # out of scope, still read
+    assert C19[0] not in partial["res"]["chain_present"]
+    assert not any(c["f_run"].endswith(".partial") for c in partial["res"]["capped"])
+
+
+def test_merge_errors_per_f(partial):
+    me = {m["f_run"]: m for m in partial["res"]["merge_errors"]}
+    assert set(me) == {C19[2], C19[7]}
+    d2 = me[C19[7]]
+    assert d2["mix_groups"] == 512 and d2["n_h"] == 3 and d2["n_h_checked"] == 2
+    assert d2["rel_err_max"] == pytest.approx(6.6e-4) and d2["rel_err_max_h"] == "h_a"
+    assert d2["avg_rel_err_max"] == pytest.approx(1.7e-4) and d2["avg_rel_err_max_h"] == "h_a"
+    assert d2["n_bins_max"] == 91 and d2["n_h_rel_err_max_ge_bar"] == 0
+    c = me[C19[2]]
+    assert c["n_h_checked"] == 0 and c["rel_err_max"] is None
+    assert "merged mixture equals the exact one" in c["note"]
+    md = (partial["agg"] / "grid_h.md").read_text()
+    assert "Merged mixture" in md and "512" in md
+
+
+def test_fits_step_cap_and_capped_rows(partial):
+    fits = partial["res"]["fits"]
+    fnb = {r["h_name"]: r for r in fits["runs"] if r["source"] == "fnb"}
+    assert len(fnb) == 3
+    assert fnb[f"h_mlp_r5_push_{C19[2]}_s0"]["at_step_cap"] is True
+    assert fnb[f"h_mlp_r1_push_{C19[2]}_s0"]["at_step_cap"] is False
+    assert fnb[f"h_mlp_r1_push_{C19[7]}_s0"]["best_at_step_cap"] is True
+    tot = {t["source"]: t for t in fits["totals"]}
+    assert tot["fnb"]["n_fits"] == 3 and tot["fnb"]["n_at_step_cap"] == 2
+    assert tot["fnb"]["n_best_at_step_cap"] == 1
+    assert tot["fnb"]["n_fits_with_capped_rows"] == 1 and tot["fnb"]["n_capped_rows"] == 3
+    assert tot["true"]["n_fits"] == 1 and tot["true"]["n_at_step_cap"] == 1
+    md = (partial["agg"] / "grid_h.md").read_text()
+    assert "step cap" in md
 
 
 # ---------------------------------------------------------------------------------------------

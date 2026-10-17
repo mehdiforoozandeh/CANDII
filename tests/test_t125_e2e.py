@@ -469,3 +469,100 @@ def test_summary_flags_and_spread_formatting():
     assert s.pm(1.0, None) == "1 (one seed)"
     assert s.yn(True) == "yes" and s.yn(False, "no bar") == "no (no bar)"
     assert s.SECTIONS == tuple(SECTIONS)
+
+
+# ---------------------------------------------------------------------------------------------
+# a partial part 2 (PI 2026-10-17: 5 of 8 chain designs), the device note, inflated means
+# ---------------------------------------------------------------------------------------------
+
+C19 = [f"{r}_C19M16_counts_real_s0" for r in ("A", "B", "C", "D", "A2", "B2", "C2", "D2")]
+
+
+def _p1_reading(name, model, this, other, rung="A2", mc="DNase"):
+    return {"reading": name, "rung": rung, "g_version": "across", "mark_class": mc,
+            "metric": "crps_all", "model": model, "value": other - this, "bar": 0.5,
+            "met": False, "seed_wobble": 0.1,
+            "components": {"this": this, "other": other, "wobble_this": 0.1, "wobble_other": 0.2,
+                           "pairs": {"n_pairs_used": 42, "n_pairs_dropped_nonfinite": 0}}}
+
+
+def _partial_aggregates(tmp_path: Path) -> tuple[Path, Path]:
+    eta_dir, h_dir = tmp_path / "eta_agg", tmp_path / "h_agg"
+    eta_dir.mkdir()
+    h_dir.mkdir()
+    ex = [{"rung": "A2", "g_version": "across", "mark_class": "DNase", "model": m,
+           "kind": "trained", "eval": "score", "n_records": 42, "n_crps_gt_20": n,
+           "n_crps_nonfinite": 0} for m, n in (("real", 0), ("nocov", 4))]
+    eta = {"created_utc": "x", "runs_present": 432, "runs_missing": 0, "n_expected_runs": 432,
+           "twin_note": "the twin keeps the offset",
+           "readings": [_p1_reading("beatstwin", "real", 1.3, 9.7)],
+           "readings_skipped": [], "depth_law": [], "explosions": ex, "oldgrid_explosions": []}
+    (eta_dir / "summary_data.json").write_text(json.dumps(eta))
+    with (eta_dir / "run_device.tsv").open("w") as fh:
+        fh.write("index\trun_name\ttrain_device\ttrain_job\tscore_job\n")
+        for i in range(3):
+            fh.write(f"{i}\tA_C07M20_counts_real_s{i}\tgpu\tj\tj\n")
+        for i in range(2):
+            fh.write(f"{10 + i}\tB2_C07M20_counts_real_s{i}\tcpu\tj\tj\n")
+    fin = [C19[i] for i in (2, 3, 4, 6, 7)]
+    h = {"created_utc": "x", "alone_present": 38, "alone_expected": 38, "chain_f_present": 5,
+         "chain_f_expected": 8, "chain_track": "C19M16", "chain_f_expected_runs": C19,
+         "chain_f_finished_runs": fin, "chain_f_runs_missing": [C19[0], C19[1], C19[5]],
+         "chain_f_not_finished": [], "chain_f_out_of_scope": [],
+         "alone_cells": [], "chain_cells": [], "readings": [],
+         "readings_skipped": [{"reading": r, "scope": "chain", "f_run": C19[0], "f_rung": "A",
+                               "f_g_version": "per_track", "reason": "chain not finished",
+                               "detail": "no chain scores"}
+                              for r in ("push_vs_noise", "repair", "vs_oldgrid")],
+         "explosions": [{"scope": "chain", "f_rung": "D2", "f_g_version": "per_track",
+                         "h_name": "h_affine_r5_noise_true", "mark_class": "narrow",
+                         "kind": "crps_mean_point_all_gt_20", "n_records": 114, "n_gt_20": 7,
+                         "n_native_nonfinite": 1, "n_log_nonfinite": 0}],
+         "capped": [{"f_run": C19[7], "n_pairs": 38, "n_pairs_capped": 2, "n_capped_rows": 5,
+                     "consistent_across_h": True}],
+         "merge_errors": [{"f_run": C19[7], "mix_groups": 512, "mix_check_bins": 64, "n_h": 24,
+                           "n_h_checked": 24, "n_bins_max": 91, "support_max": 1028,
+                           "rel_err_max": 9.69e-4, "rel_err_max_h": "h_x", "avg_rel_err_max": 1.67e-4,
+                           "avg_rel_err_max_h": "h_y", "bar": 1e-3, "n_h_rel_err_max_ge_bar": 0,
+                           "note": None},
+                          {"f_run": C19[2], "mix_groups": 512, "mix_check_bins": 64, "n_h": 24,
+                           "n_h_checked": 0, "n_bins_max": 0, "support_max": None,
+                           "rel_err_max": None, "rel_err_max_h": None, "avg_rel_err_max": None,
+                           "avg_rel_err_max_h": None, "bar": 1e-3, "n_h_rel_err_max_ge_bar": 0,
+                           "note": "no bin had more than G = 512 mixture components"}],
+         "fits": {"runs": [{"h_name": "h_mlp_r5_push_x_s0", "source": "fnb", "steps_run": 4000,
+                            "best_step": 4000, "max_steps": 4000, "at_step_cap": True,
+                            "best_at_step_cap": True, "n_capped": 3}],
+                  "totals": [{"source": "fnb", "n_fits": 96, "max_steps": [4000],
+                              "n_at_step_cap": 21, "n_best_at_step_cap": 9,
+                              "n_fits_with_capped_rows": 24, "n_capped_rows": 488}]},
+         "oldgrid_explosions": [], "notes": {}}
+    (h_dir / "summary_data_h.json").write_text(json.dumps(h))
+    return eta_dir, h_dir
+
+
+def test_summary_partial_part2_devices_and_inflated_means(tmp_path):
+    s = _load("t125_summary_partial", SUMMARY)
+    eta_dir, h_dir = _partial_aggregates(tmp_path)
+    text = s.build(eta_dir, h_dir)
+    _check_summary(text)
+    # the banner: at the top and in every part-2 section, naming the missing designs
+    assert "5 of 8 designs" in text.split("## What was run")[0]
+    for title in SECTIONS[7:12]:
+        sec = _section(text, title)
+        assert "5 of 8 designs" in sec and "A, B, B2" in sec, title
+    assert "chain not finished" in _section(text, "Notes on how it was run")
+    # the device note: counts, and cross-row comparisons cross devices
+    run = _section(text, "What was run")
+    assert "3 on GPU" in run and "2 on CPU" in run and "also crosses devices" in run
+    assert "also crosses devices" in _section(text, "Part 1: each design against the old grid")
+    # the inflated twin mean carries its count of CRPS > 20 records
+    twin = _section(text, "Part 1: each model against its no-covariates twin")
+    row = [ln for ln in twin.splitlines() if ln.startswith("| A2 ")][0]
+    assert "0 / 4" in row
+    # merged mixture G and errors; fits at the step cap; capped rows
+    p2 = _section(text, "Part 2: exploding pairs (CRPS > 20)")
+    assert "G = 512" in p2 and "0.000969" in p2 and "0.000167" in p2
+    assert "21 ran to the 4000-step cap" in p2 and "488 capped NB rows" in p2
+    assert "5 rows in total" in p2
+    assert "7" in p2 and "CRPS > 20" in p2
