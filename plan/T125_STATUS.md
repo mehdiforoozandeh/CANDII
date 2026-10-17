@@ -216,6 +216,8 @@ Every id goes here at submission.
     - 24288878 `t125_hchain`: array 51 (C2_C19M16_counts_real_s0), 11:21 UTC.
   - 11:41 UTC: C, D CHAIN_DONE; 94 of 96 fnb TRAIN_DONE (D2 10).
     - 24290367 `t125_hchain`: array 43 (B2_C19M16_counts_real_s0; task 1 of ~2), 11:41 UTC.
+  - 12:01 UTC: **fnb done: 96 of 96 TRAIN_DONE**, array 24224310 96 COMPLETED, 0 failed.
+    - 24291820 `t125_hchain`: array 59 (D2_C19M16_counts_real_s0), 12:02 UTC.
 
 ### Nibi smoke (K10)
 
