@@ -197,6 +197,9 @@ Every id goes here at submission.
     1 day; blacklist `/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed`),
     each submitted when its f's 12 fnb h had TRAIN_DONE (36 true h TRAIN_DONE):
     - 24268972 `t125_hchain`: array 19 (C_C19M16_counts_real_s0), 07:19 UTC.
+    - 24272487 `t125_hchain`: array 3,11 (A, B _C19M16_counts_real_s0; task 1 of ~3 and ~2),
+      07:39 UTC. At 07:38 only 2 fnb tasks run; the slice nodes g30-g32, g35-g37 show `mix-`
+      (planned for higher-priority jobs), g33 `drng@`, g34 `inval`.
 
 ### Nibi smoke (K10)
 
