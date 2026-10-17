@@ -15,7 +15,7 @@ worktree (git-excluded).
 | 4 count runs (432) | done 2026-10-17: 432 SCORE_DONE, 432 LAW_DONE; aggregate 24224060 (eta/agg/grid.md) |
 | 5 h on the true X′ | done 2026-10-16: 36 TRAIN_DONE, 38 ALONE_DONE (see "N4 results") |
 | 6 h on f's NB, chain scores | not started |
-| 7 aggregate | part 1 done (eta agg job 24224060); part 2 waits on the fnb fits and chains |
+| 7 aggregate | part 1 done (eta agg job 24224060); part 2 on 5 of 8 chains done (job 24312235, PI 2026-10-17); refresh when A, B, B2 land |
 | 8 vault readings | not started |
 | 9 lab deck | not started |
 
@@ -218,6 +218,28 @@ Every id goes here at submission.
     - 24290367 `t125_hchain`: array 43 (B2_C19M16_counts_real_s0; task 1 of ~2), 11:41 UTC.
   - 12:01 UTC: **fnb done: 96 of 96 TRAIN_DONE**, array 24224310 96 COMPLETED, 0 failed.
     - 24291820 `t125_hchain`: array 59 (D2_C19M16_counts_real_s0), 12:02 UTC.
+
+- N6b (part 2 on the 5 finished chains, PI decision 2026-10-17), 2026-10-17.
+  - Chunk `chunk/t125-N6b` (ec77f69, merged fast-forward into exp/t118-counterfactual-f, pushed):
+    `hmap/aggregate.py` expects the 8 C19M16 real seed-0 f (`--chain-track`, `all` for 64), reads a
+    chain only with CHAIN_DONE (never `*.partial`), gives each missing f `readings_skipped` entries
+    "chain not finished", and reads `merge_error.json` and the h fits' step cap and capped rows;
+    `summary.py` adds the "5 of 8 designs" banner, the part-1 device note (`--run-device`), CRPS > 20
+    counts beside the means, the merged-mixture and step-cap tables.
+  - Kit K13: `/project/def-maxwl/mforooz/t125/code/K13`, `GIT_SHA` ec77f692e043126e1485e761eabe571b6c741058
+    (rsync as K11, wheels from K11).
+  - 24312234 `t125_testK13` (CPU, 8 cores, 32000M; one-off `t125/n6b/test_K13.sh`): test_t125_h_aggregate.py
+    23 passed, test_t125_e2e.py 13 passed (2:51).
+  - 24312235 `t125_agg5of8` (CPU, 4 cores, 16000M; one-off `t125/n6b/agg_sum_5of8.sh`: h_agg.sh's python
+    command with agg_dir `h/agg_5of8`, then summary.py): COMPLETED 1:20, MaxRSS 4.4 GiB. "38 alone present;
+    chain f 5 of 8 finished, 3 missing (chain not finished); 1192 readings". Outputs `h/agg_5of8/`,
+    `summary_5of8/GRID_SUMMARY.md` (21 "CRPS > 20" lines). Local copies and the criterion-12 names in
+    `cruxvault/results/t125/` (see FIR_PATH.txt); digest `cruxvault/results/t125/part2_digest.md`.
+  - Merged mixture G 512: C, A2, C2 no bin above 512 components (merged = exact); D per-bin max 8.6e-4,
+    averaged 8.9e-5; D2 9.7e-4 and 1.7e-4 (bar 1e-3). Fits at the 4000-step cap: fnb 22 of 96, true 11 of 36;
+    fnb capped NB rows 584 in 30 fits; chain capped rows 0.
+  - To do when A, B, B2 have CHAIN_DONE: re-run `agg_sum_5of8.sh` with a new agg dir (or h_agg.sh on K13) and
+    replace the "5 of 8" files.
 
 ### Nibi smoke (K10)
 
