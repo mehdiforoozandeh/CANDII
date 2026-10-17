@@ -116,7 +116,13 @@ Every id goes here at submission.
     workers 1: no forked pool), `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`. eta_train_cpu.sh has no
     workers override (`--workers 4` is fixed at line 154). The law pass is in the same job because
     eta_law.sh forks the same pool (`--workers 8`).
-  - 24200232 `t125_etalaw`: law for 213 (retry), 234, 235, 236.
+  - 24200232 `t125_etalaw`: law for 213 (retry), 234, 235, 236. All COMPLETED.
+  - Per-run device table (coordinator ruling 3):
+    `/project/def-maxwl/mforooz/t125/eta/agg/run_device.tsv` (index, run_name, train_device,
+    train_job, score_job), from the train logs (the task that printed train.py's `best_step` line)
+    by `/project/def-maxwl/mforooz/t125/eta/oneoff/run_device.sh`. 216 gpu, 216 cpu: A, B, C, D 48
+    gpu each; A2 19 gpu / 29 cpu; B2, C2 47 cpu + 1 gpu (smoke); D2 46 cpu + 2 gpu (smoke 354, 381);
+    Aold 47 cpu + 1 gpu (smoke 402). score_job of 429-431 is `none` until 24200215 ends.
   - 24173033 `t125_d2twin` (D2 twin nondeterminism, PI decision 2026-10-16): one-off
     `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/d2twin_rescore.sh` (not in the repo; 4
     cores, 24000M, 3 h, CPU) copies run D2_C19M16_counts_nocov_s0 (index 357, trained on CPU by
@@ -348,6 +354,15 @@ by the shuffled pid, which differs by seed.)
   To do on resume: law for the last A2 indices (234-236 and any missing), then the 429-431 fix
   decision; eta_agg.sh with OLD=/project/def-maxwl/mforooz/t125/old_grid/results_summary.tsv
   (results_summary.tsv and checks_*.json already rsynced there on 2026-10-16).
+- 2026-10-17 02:48 UTC: Nibi back (coordinator); N3 resumed.
+- 2026-10-17 about 04:04 UTC (N3): `ssh -o BatchMode=yes nibi` exited 255 again (mux broken pipe,
+  then `Permission denied`). All Nibi work stopped until the PI runs `hpc up nibi`. Last state read
+  (03:34 UTC): SCORE_DONE 429, LAW_DONE 429 (law 24200232 for 213, 234-236 all COMPLETED);
+  24200215_429/_430/_431 RUNNING 45 min on c99, each score.py at about 97 % of one core (working,
+  not hung). They run on without the laptop. To do on resume: when 24200215 ends, check 432
+  SCORE_DONE / 432 LAW_DONE; re-run `bash /project/def-maxwl/mforooz/t125/eta/oneoff/run_device.sh`
+  (fills score_job of 429-431 in `eta/agg/run_device.tsv`; the train columns are already complete);
+  then eta_agg.sh with OLD=/project/def-maxwl/mforooz/t125/old_grid/results_summary.tsv.
 
 ## Phase 0 findings
 
