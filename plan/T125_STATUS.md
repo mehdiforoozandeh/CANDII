@@ -210,6 +210,10 @@ Every id goes here at submission.
     wait. Nothing moved to CPU (needs the foreman/PI). Every job stays queued; no CHAIN_DONE yet.
     The 67 fits so far: elapsed 7 min to 2 h 28 min, MaxRSS max 18.8 GiB (of 40000M); 14 of 67
     hit the 4000-step cap (best_step 250-4000); 24 runs have capped NB rows (488 in all).
+  - 10:20-10:40 UTC: slices free again; fnb tasks and all 5 chain jobs start (10:36). Nothing moved
+    to CPU (foreman: keep waiting for slices).
+  - 11:21 UTC: A2 CHAIN_DONE (task 24275564_35). 89 of 96 fnb TRAIN_DONE (B2 11, C2 12, D2 6).
+    - 24288878 `t125_hchain`: array 51 (C2_C19M16_counts_real_s0), 11:21 UTC.
 
 ### Nibi smoke (K10)
 
