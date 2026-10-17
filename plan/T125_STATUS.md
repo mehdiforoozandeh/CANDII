@@ -201,6 +201,8 @@ Every id goes here at submission.
       07:39 UTC. At 07:38 only 2 fnb tasks run; the slice nodes g30-g32, g35-g37 show `mix-`
       (planned for higher-priority jobs), g33 `drng@`, g34 `inval`.
     - 24273272 `t125_hchain`: array 27 (D_C19M16_counts_real_s0), 07:49 UTC.
+    - 24275564 `t125_hchain`: array 35 (A2_C19M16_counts_real_s0), 08:19 UTC. At 08:19 64 of 96
+      fnb TRAIN_DONE; 3 fnb tasks run, every chain PENDING (Priority); GPU LevelFS 0.18.
 
 ### Nibi smoke (K10)
 
