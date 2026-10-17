@@ -403,6 +403,9 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 - 2026-10-16: in the chain, the own-noise h are scored with a merged mixture: adjacent k components merged into ≤ 256 moment-matched Gaussians before the CRPS pair sum, on all bins. It is kept only if its error against the exact CRPS, measured on a random sample of bins, is below 1e-3 relative; the measured error goes in the grid. Push-only h stay exact.
 - 2026-10-16: compute scope for the repair reading and the chain: only the 16 real f with one g across tracks (192 fnb fits + 16 chains). This supersedes "768 fits". Per-track f get chain scores with the formulas and the true-X′ h only, if time allows.
 
+- 2026-10-17: **scope corrected.** There are 8 across-track real f (2 rows × 4 designs), not 16, and they are the most costly (~242 pairs each). The repair reading and the chain now use the 8 real seed-0 f of ONE track, C19M16, all 8 designs: 96 fnb fits (8 f × 12 h versions) and 8 chains. This supersedes "16 across-track f".
+- 2026-10-17: the merged-mixture bar holds **per bin**: use the smallest G in {256, 512, 1024} whose per-bin max relative error on crps_log is < 1e-3 on the measured deep bins of the C19M16 f. Both per-bin and averaged errors go in the grid.
+
 ## Log
 
 - 2026-10-11: run started; Nibi down at start.
