@@ -200,6 +200,7 @@ Every id goes here at submission.
     - 24272487 `t125_hchain`: array 3,11 (A, B _C19M16_counts_real_s0; task 1 of ~3 and ~2),
       07:39 UTC. At 07:38 only 2 fnb tasks run; the slice nodes g30-g32, g35-g37 show `mix-`
       (planned for higher-priority jobs), g33 `drng@`, g34 `inval`.
+    - 24273272 `t125_hchain`: array 27 (D_C19M16_counts_real_s0), 07:49 UTC.
 
 ### Nibi smoke (K10)
 
