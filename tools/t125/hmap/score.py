@@ -69,6 +69,7 @@ avg_rel_err}}}, over the MIX_CHECK_BINS widest merged bins of every pair.
     python tools/t125/hmap/score.py chain <manifest> <covariates.tsv> <data_dir> <ctl_cache> <blacklist.bed> <f_run_dir> <out_dir> --h <h_spec> [--h ...] [--workers N]
       both: [--control-rl-tsv PATH] (default: products.CONTROL_RL_TSV) [--device auto|cpu|cuda] (default auto, as hmap/train.py)
       chain: [--mix-merge G] own-noise h: mixture CRPS over <= G merged components per bin (0 = exact, default)
+      chain: [--pair-shard K/N | --assemble-only] (t125-P2i, below)
 
 alone → `<out_dir>/<h_name>/scores.json` + `ALONE_DONE`, one record per usable product.
 chain → `<out_dir>/<f_run_name>/<h_name>/scores.json` per h, one record per training pair of f;
@@ -76,7 +77,13 @@ chain → `<out_dir>/<f_run_name>/<h_name>/scores.json` per h, one record per tr
 scores.json. An h whose scores.json exists is not scored again. Each pair's records are kept in
 `<out_dir>/<f_run_name>.partial/pair_<i>.json` as soon as it is scored (t125-P2h), so a task
 stopped by its walltime resumes where it stopped (a kept file counts only if it holds every h of
-the call). With a CUDA device the jobs run in one process (no fork). Workers are forked (Linux;
+the call). **Pair shards** (t125-P2i, no number changes): `--pair-shard K/N` scores only the
+pairs i with i % N == K that have no kept file and writes nothing but their pair files, so N tasks
+fill one `.partial` dir without ever scoring the same pair; `--assemble-only` scores nothing and,
+once every pair is kept, writes scores.json, merge_error.json and CHAIN_DONE from the kept files in
+pair order (a kept file round-trips every number exactly: the outputs equal the one-task run's,
+timestamps and timing aside; tests/test_t125_h_shard.py). With a CUDA device
+the jobs run in one process (no fork). Workers are forked (Linux;
 on macOS a forked torch forward can segfault, so run learned h with --workers 1 there); a dead
 worker fails the call, never hangs it.
 """
@@ -1047,26 +1054,40 @@ def _partial_path(i: int) -> Path:
     return Path(_CTX["partial_dir"]) / f"pair_{i:04d}.json"
 
 
-def chain_pair(i: int) -> dict:
-    """`chain_job` of training pair i, kept in `<out_dir>/<f_run>.partial/pair_<i>.json` once done,
-    so a task that is stopped (walltime) resumes at the first pair without one. A kept file is
-    used only when it holds every h of this call, for the same pair and the same mix_groups."""
+def kept_pair(i: int) -> dict | None:
+    """The records of training pair i from its kept `pair_<i>.json`, or None when there is no
+    usable one: a kept file counts only when it holds every h of this call, for the same pair and
+    the same mix_groups."""
     pair = _CTX["pred"].train_pairs[i]
     names = [h.name for h in _CTX["hs"]]
     path = _partial_path(i)
     key = {k: pair[k] for k in ("source_pid", "target_pid")}
-    if path.is_file():
-        try:
-            kept = json.loads(path.read_text())
-        except ValueError:
-            kept = None
-        if (kept and kept.get("pair") == key and kept.get("mix_groups") == _CTX.get("mix_groups")
-                and set(names) <= set(kept["records"])):
-            got = {n: kept["records"][n] for n in names}
-            mc = kept["records"].get("_mix_check")
-            if mc is not None:
-                got["_mix_check"] = {n: v for n, v in mc.items() if n in names}
-            return got
+    if not path.is_file():
+        return None
+    try:
+        kept = json.loads(path.read_text())
+    except ValueError:
+        return None
+    if not (kept and kept.get("pair") == key and kept.get("mix_groups") == _CTX.get("mix_groups")
+            and set(names) <= set(kept["records"])):
+        return None
+    got = {n: kept["records"][n] for n in names}
+    mc = kept["records"].get("_mix_check")
+    if mc is not None:
+        got["_mix_check"] = {n: v for n, v in mc.items() if n in names}
+    return got
+
+
+def chain_pair(i: int) -> dict:
+    """`chain_job` of training pair i, kept in `<out_dir>/<f_run>.partial/pair_<i>.json` once done,
+    so a task that is stopped (walltime) resumes at the first pair without one. A kept pair
+    (`kept_pair`) is read back, never scored again."""
+    got = kept_pair(i)
+    if got is not None:
+        return got
+    pair = _CTX["pred"].train_pairs[i]
+    path = _partial_path(i)
+    key = {k: pair[k] for k in ("source_pid", "target_pid")}
     t = time.time()
     out = chain_job(pair)
     tmp = path.with_suffix(".json.tmp")
@@ -1155,11 +1176,23 @@ def score_alone(manifest, covariates, data_dir, ctl_cache, blacklist, h_spec, ou
 
 def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir, out_dir,
                 h_specs: list, workers: int = 1, control_rl_tsv=products.CONTROL_RL_TSV,
-                device="auto", mix_groups: int | None = None) -> Path:
+                device="auto", mix_groups: int | None = None,
+                pair_shard: tuple[int, int] | None = None, assemble_only: bool = False) -> Path:
     """Every listed h on f's NB over f's training pairs -> `<out_dir>/<f_run>/<h_name>/scores.json`;
     CHAIN_DONE once every listed h is scored. Returns `<out_dir>/<f_run>`. `mix_groups` (> 0):
     the own-noise h's mixture CRPS over at most that many merged components per bin (each such
-    record carries crps_mix_merged, crps_mix_groups, n_mix_merged_bins); None or 0: exact."""
+    record carries crps_mix_merged, crps_mix_groups, n_mix_merged_bins); None or 0: exact.
+
+    `pair_shard` (k, n) (t125-P2i): score only the pairs i with i % n == k that are not kept yet,
+    into the shared `.partial` dir, and write nothing else (no scores.json, no merge_error.json, no
+    CHAIN_DONE). `assemble_only`: score nothing; when every pair is kept, write the outputs from
+    the kept pairs in pair order, as the one-task run does; otherwise write nothing."""
+    if pair_shard is not None and assemble_only:
+        raise ValueError("pair_shard and assemble_only exclude each other")
+    if pair_shard is not None:
+        sk, sn = (int(v) for v in pair_shard)
+        if not (sn >= 1 and 0 <= sk < sn):
+            raise ValueError(f"pair shard {sk}/{sn}: need 0 <= k < n")
     mix_groups = int(mix_groups) if mix_groups else None
     t0 = time.time()
     f_run_dir = Path(f_run_dir)
@@ -1180,7 +1213,21 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
         part.mkdir(parents=True, exist_ok=True)
         _CTX["partial_dir"] = str(part)
         t1 = time.time()
-        results = _map(chain_pair, list(range(len(pred.train_pairs))), workers, pred.device)
+        pairs = list(range(len(pred.train_pairs)))
+        if pair_shard is not None:
+            mine = [i for i in pairs if i % sn == sk]
+            _map(chain_pair, mine, workers, pred.device)
+            print(f"pair shard {sk}/{sn}: {len(mine)} of {len(pairs)} pairs kept in {part}")
+            return fd
+        if assemble_only:
+            results = [kept_pair(i) for i in pairs]
+            missing = [i for i, r in zip(pairs, results) if r is None]
+            if missing:
+                print(f"assemble: {len(missing)} of {len(pairs)} pairs not kept yet "
+                      f"({missing[:10]}{' ...' if len(missing) > 10 else ''}); nothing written")
+                return fd
+        else:
+            results = _map(chain_pair, pairs, workers, pred.device)
         t2 = time.time()
         checks = [r.pop("_mix_check", None) for r in results]
         f_info = lscore.run_info(pred, f_run_dir)
@@ -1206,7 +1253,7 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
                 me["h"][h.name] = merge_error_summary(
                     h, [c[h.name] for c in checks if c is not None and h.name in c])
             lscore.write_json(me, path)
-    if all((fd / n / "scores.json").is_file() for n in names):
+    if pair_shard is None and all((fd / n / "scores.json").is_file() for n in names):
         (fd / "CHAIN_DONE").write_text("\n".join(names) + "\n")
     return fd
 
@@ -1214,6 +1261,17 @@ def score_chain(manifest, covariates, data_dir, ctl_cache, blacklist, f_run_dir,
 # ---------------------------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------------------------
+
+
+def _shard(s: str) -> tuple[int, int]:
+    """'k/n' -> (k, n) with 0 <= k < n."""
+    try:
+        k, n = (int(v) for v in s.split("/"))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"pair shard {s!r} is not K/N") from None
+    if not (n >= 1 and 0 <= k < n):
+        raise argparse.ArgumentTypeError(f"pair shard {s!r}: need 0 <= K < N")
+    return k, n
 
 
 def main(argv=None) -> int:
@@ -1230,6 +1288,12 @@ def main(argv=None) -> int:
             a.add_argument("--mix-merge", dest="mix_groups", type=int, default=0,
                            help="own-noise h: merge the mixture to at most this many components "
                                 "per bin (0 = exact, the default)")
+            g = a.add_mutually_exclusive_group()
+            g.add_argument("--pair-shard", dest="pair_shard", type=_shard, default=None,
+                           metavar="K/N", help="score only the pairs i with i %% N == K that are "
+                           "not kept yet; write only their pair files")
+            g.add_argument("--assemble-only", dest="assemble_only", action="store_true",
+                           help="score nothing; write the outputs once every pair is kept")
         a.add_argument("--workers", type=int, default=lscore.default_workers())
         a.add_argument("--control-rl-tsv", type=Path, default=products.CONTROL_RL_TSV)
         a.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
@@ -1252,7 +1316,8 @@ def main(argv=None) -> int:
                 return 0
         path = score_chain(*common, args.f_run_dir, args.out_dir, args.h_specs,
                            workers=args.workers, control_rl_tsv=args.control_rl_tsv,
-                           device=args.device, mix_groups=args.mix_groups or None)
+                           device=args.device, mix_groups=args.mix_groups or None,
+                           pair_shard=args.pair_shard, assemble_only=args.assemble_only)
     print(f"{args.cmd} -> {path} ({time.time() - t0:.1f} s)")
     return 0
 

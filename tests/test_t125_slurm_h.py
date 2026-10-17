@@ -514,6 +514,49 @@ def test_dry_run_chain_bad_input_fails(args, index):
     assert _dry("chain", args, index).returncode == 2
 
 
+# ---- h_chain.sh pair shards (t125-P2i) -------------------------------------------------------
+
+def _shard_args(n):
+    return _chain_args(seeds=1, h_set="all") + [str(n)]
+
+
+@pytest.mark.parametrize("task,f_index,shard", [(30, 3, 0), (37, 3, 7), (119, 11, 9),
+                                               (430, 43, 0), (439, 43, 9)])
+def test_dry_run_chain_shard_scores_its_shard_then_assembles(task, f_index, shard):
+    """n_shards 10: array task T = f index T // 10, shard T % 10; the shard line, then the
+    assemble line, each the one-task line plus its flag."""
+    r = _dry("chain", _shard_args(10), task)
+    assert r.returncode == 0, r.stderr
+    one = _dry("chain", _chain_args(seeds=1), f_index).stdout.strip()
+    lines = r.stdout.splitlines()
+    assert lines == [f"{one} --pair-shard {shard}/10", f"{one} --assemble-only"]
+    head, specs, tail = _chain_split(lines[0])
+    assert head[8] == f"/eta/{F_RUNS[f_index]}" and len(specs) == 50
+    assert tail == ["--workers", "4", "--mix-merge", "512", "--pair-shard", f"{shard}/10"]
+
+
+def test_dry_run_chain_assemble_mode_and_one_shard():
+    r = _dry("chain", _shard_args("assemble"), 11)
+    one = _dry("chain", _chain_args(seeds=1), 11).stdout.strip()
+    assert r.returncode == 0 and r.stdout.splitlines() == [f"{one} --assemble-only"]
+    assert _dry("chain", _shard_args(1), 11).stdout.strip() == one       # n = 1: the one-task run
+
+
+@pytest.mark.parametrize("n,task", [("0", 3), ("x", 3), ("100", 3), ("-2", 3), ("10", 640)])
+def test_dry_run_chain_bad_shards_fail(n, task):
+    assert _dry("chain", _shard_args(n), task).returncode == 2
+
+
+def test_chain_shards_assemble_under_one_lock():
+    code = "\n".join(_code("chain"))
+    assert '"${CMD[@]}" --pair-shard "$SHARD/$N_SHARDS"' in code
+    assert 'LOCK="$CHAIN/$F_RUN.assemble.lock"' in code and 'until mkdir "$LOCK"' in code
+    assert code.index("--pair-shard") < code.index('until mkdir "$LOCK"') < code.rindex(
+        '"${CMD[@]}" --assemble-only')
+    assert 'TMP_TABLE="$TASKS_TSV.tmp.${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$TASK"' in code
+    assert "exit 4" in code
+
+
 # ---- DRY_RUN: h_agg.sh -----------------------------------------------------------------------
 
 def test_dry_run_agg():
