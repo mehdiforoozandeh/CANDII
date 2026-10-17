@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Depth Offset and Map h</title>
+
+<!--
+  prezit deck · t125: the depth offset in f (part 1) and the counts -> p map h (part 2)
+  Chrome, build pattern and chart style copied from ../t118-grid/ (deck_src.html + build_deck.py).
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-17):
+  - Audience is the lab: shared motivation and background, then two mini-arcs (part 1, part 2),
+    then one discussion and next-steps section.
+  - Part 2: h alone on the true counts is complete; the chain f -> h covers the designs the aggregate holds
+    (5 of 8 on 2026-10-17: A, B, B2 pending). Every part-2 figure and count reads whatever designs
+    part2/summary_data_h.json holds, and the "N of 8" banner is computed, so a refresh needs only a rebuild.
+  - Exploratory phase: no hypothesis, no metrics.json, no approved synthesis. `crux deck --verify`
+    does not apply. Every number is embedded as DATA by build_deck.py from
+    cruxvault/results/t125/part1/, part2/ and the old grid's GRID_SUMMARY.md; none is typed in this file,
+    except definitional design constants on the background slides (copied from the t118 deck).
+  - Figures for everything; the only tables are grid concepts (the part-1 grid, the versions of h).
+  - Readings, never verdicts. Every CRPS carries its oracle-scaled / scale-error split; every value
+    its seed wobble; every gain its bar (2 x the larger seed wobble).
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    --row1:#4a72b0; --row2:#d9822b; --aold:#b08a1e; --new:#1f8a70; --old:#8d8f98; --twin:#9b6bb3;
+    --ok:#3f8f6f; --arm:#2f8f8a; --ctl:#a0679c; --xsrc:#8d8f98; --gpu:#4a72b0; --cpu:#d9822b;
+    --push:#2e7fa8; --noise:#c05a8a; --htrue:#1f8a70; --hfnb:#cc6f1f; --hform:#6b7785;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --new:#3fb393; --old:#9a9ca6; --aold:#d1a937; --twin:#b48ad0;
+      --push:#4ea3cf; --noise:#dc7aa8; --htrue:#3fb393; --hfnb:#e88b3a; --hform:#97a3b0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --new:#3fb393; --old:#9a9ca6; --aold:#d1a937; --twin:#b48ad0;
+    --push:#4ea3cf; --noise:#dc7aa8; --htrue:#3fb393; --hfnb:#e88b3a; --hform:#97a3b0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:16px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.4vw,56px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.7vw,36px);letter-spacing:-.015em;margin-bottom:16px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;font-size:clamp(20px,2.6vw,33px)}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:66ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:12px}
+  ul.pts{list-style:none;margin-top:12px;max-width:80ch}
+  ul.pts li{position:relative;padding-left:24px;margin:7px 0;font-size:clamp(15px,1.4vw,18px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px;max-width:none}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px;max-width:none}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:55vh}
+  .fig.short svg{max-height:22vh}
+  .legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:6px;justify-content:center;font-size:14px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:8px}
+  .legend .sw{width:14px;height:14px;border-radius:3px;flex:none}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:19px}.cards.lg .cb{font-size:16.5px;line-height:1.5}.cards.lg .card{padding:18px 20px;min-height:170px}
+  .card svg{width:100%;height:auto;display:block;margin:4px 0 8px;max-height:20vh}
+
+  /* the grid table */
+  table.grid{border-collapse:separate;border-spacing:8px;width:100%;margin-top:2px}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:10px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:25%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.empty{background:none;border:1px dashed var(--hair);color:var(--faint)}
+  table.grid td .nm{font-weight:700;font-size:20px;display:block}
+  table.grid tr.r1 td:not(.rh):not(.empty){border-left:4px solid var(--row1)}
+  table.grid tr.r2 td:not(.rh):not(.empty){border-left:4px solid var(--row2)}
+  table.grid tr.ro td:not(.rh):not(.empty){border-left:4px solid var(--aold)}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 8px;margin:3px 2px 0;border:1px solid var(--hair);color:var(--body)}
+  .tag.gpu{border-color:var(--gpu)}.tag.cpu{border-color:var(--cpu)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17.5px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  /* part 2 */
+  .scope{display:inline-block;margin-left:10px;letter-spacing:.12em;color:var(--twin)}
+  table.hgrid{border-spacing:6px 4px}
+  table.hgrid td{padding:5px 8px;font-size:14px}
+  table.hgrid td.rh{width:36%;font-size:15px}
+  table.hgrid tr.hf td:not(.rh):not(.empty){border-left:4px solid var(--hform);color:var(--muted)}
+  table.hgrid tr.h1 td:not(.rh):not(.empty){border-left:4px solid var(--row1)}
+  table.hgrid tr.h5 td:not(.rh):not(.empty){border-left:4px solid var(--accent)}
+  .tag.src-t{border-color:var(--htrue)}.tag.src-f{border-color:var(--hfnb)}
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:100vh;transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the two fixes and the state of each part
+       numbers  run counts only (DATA.runs, DATA.h2.alone, DATA.h2.chain) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>Two fixes for the t118 grid:<br>a depth offset in f, and a map h<br>from counts to p&#8209;values</h1>
+      <p class="sub"><b>Part 1, the depth offset:</b> <span class="num" id="tRuns"></span> runs, all scored.
+        <b>Part 2, the map h:</b> <span id="tRuns2"></span>.
+        This is an exploratory pass: it shows readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd></p>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the question
+       claim    given a track X made with settings C, predict the track X' made with settings C'
+       source   t118 snippet (real H3K27ac)
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the question</div>
+      <h2>Can a model turn one track into another, from its processing settings alone?</h2>
+      <div class="fig" id="figQuestion"></div>
+      <ul class="pts cols">
+        <li><b>CANDI reads these settings</b> (we call them <b>covariates</b>) for every input and output track.</li>
+        <li>We test the settings <b>in isolation</b>, with small models, on data where the true X′ exists.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 · BACKGROUND · the data
+       claim    7 tracks in 3 mark classes, each rebuilt many times with one knob changed
+       numbers  none (definitional names only) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>the data</div>
+      <h2>We rebuilt 7 tracks many times, changing one setting at a time</h2>
+      <div class="fig tall" id="figData"></div>
+      <p class="note">Each rebuild is called an <b>arm</b>. We reran the ENCODE pipeline from the raw reads, so for every change we have the true answer X′. Results are always reported per mark class.</p>
+    </div>
+  </section>
+
+  <!-- 4 · BACKGROUND · g and f
+       claim    a small generator g reads the settings and outputs the parameters of a transformation f
+       numbers  definitional (MLP 2 x 64, from the t118 deck) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>the model</div>
+      <h2>A small network g reads the settings and builds the transformation f</h2>
+      <div class="fig tall" id="figGF"></div>
+      <ul class="pts cols">
+        <li><b>We train g, not f.</b> f is only what g outputs for one pair of settings.</li>
+        <li><b>f outputs a distribution in every bin</b> (a mean and a spread), as CANDI does.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 5 · BACKGROUND · four designs
+       claim    four forms of f, from least to most flexible
+       numbers  definitional sizes (from the t118 deck) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>four designs of f</div>
+      <h2>Four designs of f, from simple to flexible</h2>
+      <div class="fig tall" id="figDesigns"></div>
+      <p class="note">A and B look at one bin at a time, so they change magnitude only. C and D also see neighbouring bins, so they can change shape (for example, peak width).</p>
+    </div>
+  </section>
+
+  <!-- 6 · BACKGROUND · rows and versions of g
+       claim    every design runs in two rows (what g reads) and two versions of g (per track, across tracks)
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>rows and versions of g</div>
+      <h2>Each design runs in two rows, and with two versions of g</h2>
+      <div class="fig tall" id="figRowsG"></div>
+      <ul class="pts cols">
+        <li><b>Row 1:</b> one f for the whole genome. <b>Row 2:</b> g also reads each bin's own level, so f can treat low bins and peaks differently. Row-2 designs carry a 2: A2, B2, C2, D2.</li>
+        <li><b>One g per track:</b> 7 small g's. <b>One g across tracks:</b> a single g that also reads the assay.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 7 · BACKGROUND · scoring
+       claim    CRPS (with its split), the MSE of the predicted mean, and a bar of 2 x the seed wobble
+       numbers  definitional (3 seeds, 2 x wobble) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>scoring</div>
+      <h2>Two scores, one split, and one bar for "larger than noise"</h2>
+      <div class="fig tall" id="figScore"></div>
+      <p class="note">Lower is better for every score. All scores are on held-out chromosomes (chr19 and chr21); the best training step is picked on chr22.</p>
+    </div>
+  </section>
+
+  <!-- 8 · MOTIVATION · the t118 grid's two problems
+       claim    the old grid missed the depth law in nearly every cell, and in -log10 p many predictions blew up
+       source   depth: summary_data.json depth_law oldgrid_value (8 designs x 2 g x 3 classes);
+                explosions: old GRID_SUMMARY.md -log10 p tables, summed over classes and both g
+       numbers  in figure only (D5) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the t118 grid</div>
+      <h2>The t118 grid had two problems</h2>
+      <div class="fig tall" id="figFail"></div>
+      <ul class="pts cols">
+        <li><b>The depth law:</b> keep everything, change only the read depth, and the predicted counts should scale by the read ratio. We allow a 10% error.</li>
+        <li><b>A blow-up:</b> a (pair, seed) record with CRPS above 20, where a typical value is below 1. One blow-up can dominate a mean.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 9 · MOTIVATION · two causes, two fixes
+       claim    depth was something g had to learn; p was predicted with a learned spread that can drift
+       source   real snippet (base and its 1/8-depth arm; ratio from depth_law.tsv); log-normal identity
+       numbers  the read ratio only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>why, and what we changed</div>
+      <h2>Two causes, and one fix for each</h2>
+      <div class="fig tall" id="figWhy"></div>
+    </div>
+  </section>
+
+  <!-- 10 · PART 1 · METHOD · the offset
+       claim    f now maps depth-normalised counts; "do nothing" becomes "scale by d'/d"
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · method</span>the depth offset</div>
+      <h2>Part 1: f now works on counts divided by the read depth</h2>
+      <div class="fig tall" id="figOffset"></div>
+      <ul class="pts cols">
+        <li><b>The only input change</b> from the old grid is a constant shift per track: − log d.</li>
+        <li><b>g still reads both depths</b>, so g can move f away from d′/d. The offset sets the default; it does not force the depth law.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 11 · PART 1 · METHOD · the grid (the one table, a grid concept)
+       claim    8 designs (rows 1/2 x A-D) plus the old-spread A arm; 432 runs
+       source   run_device.tsv (runs and training device per design)
+       numbers  rendered from DATA.dev and DATA.runs -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · method</span>the grid</div>
+      <h2>The part-1 grid: 2 rows × 4 designs, plus A with its old spread</h2>
+      <table class="grid" id="tblGrid">
+        <tr><th></th>
+          <th>A<small>one straight line</small></th><th>B<small>a rising curve</small></th>
+          <th>C<small>smoothing kernel, then curve</small></th><th>D<small>small CNN</small></th></tr>
+        <tr class="r1"><td class="rh">Row 1 · g(C, C′)<small>one f per pair of settings</small></td>
+          <td data-d="A"></td><td data-d="B"></td><td data-d="C"></td><td data-d="D"></td></tr>
+        <tr class="r2"><td class="rh">Row 2 · g(eta_in, C, C′)<small>one f per bin</small></td>
+          <td data-d="A2"></td><td data-d="B2"></td><td data-d="C2"></td><td data-d="D2"></td></tr>
+        <tr class="ro"><td class="rh">Row 1, old spread<small>A with one spread per pair, as in the old grid</small></td>
+          <td data-d="Aold"></td><td class="empty">—</td><td class="empty">—</td><td class="empty">—</td></tr>
+      </table>
+      <div class="fig short" id="figBudget" style="margin-top:6px"></div>
+      <p class="note">Tags: where each design was trained (GPU slice or CPU), from the run records. Comparisons across rows also cross devices.</p>
+    </div>
+  </section>
+
+  <!-- 12 · PART 1 · METHOD · the spread rule
+       claim    each design's spread sees what its mean sees; only row-1 A changed
+       numbers  definitional (12 knots) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · method</span>the spread</div>
+      <h2>Each design's spread now sees what its mean sees</h2>
+      <div class="fig" id="figSpread"></div>
+      <ul class="pts cols">
+        <li><b>The spread</b> is the negative binomial's shape n: how wide the predicted distribution is in each bin.</li>
+        <li><b>Only row-1 A changed.</b> It had one spread per pair; now it sets its spread by level, as A2 already did. Old-spread A keeps the old rule, so we can split the two changes.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 13 · PART 1 · METHOD · control and comparisons
+       claim    the no-covariates twin keeps the offset; four comparisons each isolate one change
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · method</span>control and comparisons</div>
+      <h2>One control, and four comparisons that each isolate one change</h2>
+      <div class="fig tall" id="figCompare"></div>
+      <p class="note">The no-covariates twin is the only control in part 1. It keeps the d′/d offset (PI), so its gap to the real model is not the old grid's twin gap.</p>
+    </div>
+  </section>
+
+  <!-- 14 · PART 1 · RESULT 1 · the depth law
+       claim    the depth law still does not hold: 0 of 64 cells within 10%, no gain over the old grid beyond the bar
+       source   summary_data.json depth_law (72 cells: 8 designs x 2 g x (3 classes + pooled) = 64, plus 8 of Aold)
+       numbers  rendered from DATA.depth -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · results</span>1 · the depth law</div>
+      <h2>The depth law still does not hold: <span id="tDL_h"></span> cells within 10%</h2>
+      <div class="fig tall" id="figDepthLaw"></div>
+      <ul class="pts cols3">
+        <li><b>Within 10%:</b> <span id="tDL_in"></span>. <b>Beyond the bar against the old grid:</b> <span id="tDL_gain"></span>.</li>
+        <li><b>g still reads depth</b>, so the offset does not force the law. D, one g per track, DNase: <span class="num" id="tDL_d"></span>.</li>
+        <li><b>The twins of D and D2</b> are close to the law (<span class="num" id="tDL_tw"></span>); real D is not (<span class="num" id="tDL_real"></span>).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 15 · PART 1 · RESULT 2 · design A gains
+       claim    only the A designs beat the old grid beyond the bar, mostly in the scale-error part
+       source   summary_data.json cells (crps_all with split) and readings vs_oldgrid, vs_oldspread
+       numbers  rendered from DATA.cells and DATA.rd -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · results</span>2 · design A</div>
+      <h2>Only the A designs beat the old grid beyond the bar, mostly in scale error</h2>
+      <div class="fig tall" id="figAGain"></div>
+      <ul class="pts cols3">
+        <li><b>A, one g per track, DNase:</b> gain <span class="num" id="tAG_g"></span>; <span class="num" id="tAG_se"></span> of it is scale error.</li>
+        <li><b>Old-spread A</b> isolates the offset: gain <span class="num" id="tAG_old"></span>. <b>The spread rule</b> adds <span class="num" id="tAG_sp"></span>; the MSE of the mean moves beyond the bar in <span class="num" id="tAG_mse"></span>.</li>
+        <li><b>B to D2:</b> <span class="num" id="tAG_rest"></span> cells beyond the bar.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 16 · PART 1 · RESULT 3 · covariates help the mean
+       claim    the real model beats its no-covariates twin on the MSE of the mean in every cell, beyond the bar
+       source   summary_data.json readings beatstwin (mse_log1p_all, crps_all); explosions (trained/score)
+       numbers  rendered from DATA.rd and DATA.expl -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · results</span>3 · the covariates</div>
+      <h2>The settings still improve the mean, beyond the fixed d′/d scale</h2>
+      <div class="fig tall" id="figTwin"></div>
+      <ul class="pts cols">
+        <li><b>MSE of the mean:</b> real is lower in <span class="num" id="tTW_mse"></span> cells, all beyond the bar. Example, B, one g per track, DNase: <span class="num" id="tTW_ex"></span>.</li>
+        <li><b>CRPS:</b> <span class="num" id="tTW_crps"></span> beyond the bar. Old-spread A, one g per track, DNase: the twin is lower by <span class="num" id="tTW_ao"></span>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 17 · PART 1 · READING
+       claim    the three readings of part 1, restated
+       numbers  restates numbers from the result slides only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · reading</span>what part 1 shows</div>
+      <h2>Part 1, read: the offset moves A's scale, not the depth law</h2>
+      <div class="cards c3 lg">
+        <div class="card" style="--c:var(--accent)"><div class="ct">1 · The depth law</div>
+          <div id="icLaw"></div>
+          <div class="cb">No real design is within 10% (<span class="num" id="tR_law"></span>). g reads depth and moves away from d′/d; the D twins do not.</div></div>
+        <div class="card" style="--c:var(--new)"><div class="ct">2 · Design A</div>
+          <div id="icA"></div>
+          <div class="cb">Only the A designs move beyond the bar against the old grid (<span class="num" id="tR_a"></span>). The gain is mostly scale error, and it is in the spread, not the mean.</div></div>
+        <div class="card" style="--c:var(--twin)"><div class="ct">3 · The settings</div>
+          <div id="icCov"></div>
+          <div class="cb">The real model's mean beats its twin's in <span class="num" id="tR_cov"></span> cells, beyond the bar, with d′/d given to both.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 18 · PART 1 · CAVEATS
+       claim    four limits on how far part 1 can be read
+       source   run_device.tsv; summary_data.json explosions and twin cells
+       numbers  rendered from DATA.dev and DATA.expl -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 1 · reading</span>what part 1 cannot show</div>
+      <h2>Four limits on these readings</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--twin)"><div class="ct">The twin keeps the offset</div>
+          <div id="icTwinOff"></div>
+          <div class="cb">So real − twin is what the settings add beyond d′/d. It is not comparable with the old grid's twin gap.</div></div>
+        <div class="card" style="--c:var(--gpu)"><div class="ct">Mixed training devices</div>
+          <div id="icDev"></div>
+          <div class="cb"><span class="num" id="tC_dev"></span>. Row 1 trained on the GPU slice, most of row 2 on CPU, so row-1 against row-2 comparisons also cross devices.</div></div>
+        <div class="card" style="--c:var(--old)"><div class="ct">The old grid has no MSE</div>
+          <div id="icMse"></div>
+          <div class="cb">Against the old grid we compare CRPS only. The mean-or-spread split there rests on the CRPS split alone.</div></div>
+        <div class="card" style="--c:var(--accent)"><div class="ct">One twin blows up</div>
+          <div id="icBoom"></div>
+          <div class="cb">A2, one g across tracks, its twin, DNase: CRPS <span id="tC_boom"></span>. All <span class="num" id="tC_nboom"></span> come from this twin.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 19 · PART 2 · METHOD · the map h
+       claim    h turns each possible count k into a value P = −log10 p; the predicted P is the set h(k) weighted by NB(k),
+                so its mean and CRPS are exact, with no sampling
+       source   design (plan/ETA_OFFSET_AND_H_DESIGN.md, Part 2); the NB and the formula curve are illustrations
+       numbers  definitional only (the 1e-6 tail cut) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 2 · method</span>the map h</div>
+      <h2>Part 2: h turns every possible count into a p&#8209;value, weighted by f's prediction</h2>
+      <div class="fig tall" id="figHMap"></div>
+      <ul class="pts cols">
+        <li><b>P = −log10 p</b> is the value the peak caller writes in every bin. h is trained against the real P track.</li>
+        <li><b>f no longer predicts p.</b> It predicts counts; h maps them to P. Nothing is sampled.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 20 · PART 2 · METHOD · versions of h (a grid concept, so a table)
+       claim    8 versions of h (complexity × input end) × 2 uncertainty variants
+       source   design; seed counts from summary_data_h.json (DATA.h2.seeds_true, seeds_fnb)
+       numbers  definitional; seed counts from DATA -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 2 · method</span>versions of h</div>
+      <h2>Eight versions of h, each with two kinds of uncertainty</h2>
+      <table class="grid hgrid" id="tblH">
+        <tr><th></th><th>push only<small>h adds no noise of its own</small></th>
+          <th>push + own noise<small>h adds a learned spread on log(1 + P)</small></th></tr>
+        <tr class="hf"><td class="rh">formula, bin only<small>the caller's Poisson tail at the local control rate</small></td>
+          <td data-h="form">nothing learned</td><td class="empty">—</td></tr>
+        <tr class="hf"><td class="rh">formula, fragment window<small>the same, on the mean count over one fragment</small></td>
+          <td data-h="form">nothing learned</td><td class="empty">—</td></tr>
+        <tr class="h1"><td class="rh">affine h, rung 1<small>bin count + control in bin</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h1"><td class="rh">MLP h, rung 1<small>bin count + control in bin</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">affine h, rung 5<small>all inputs</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">MLP h, rung 5<small>all inputs</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">formula + affine correction, rung 5<small>all inputs, the formula among them</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">formula + MLP correction, rung 5<small>all inputs, the formula among them</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+      </table>
+      <p class="note"><b>All inputs</b> (rung 5): the control windows, the genome background, both depths, the control ratio, the fragment length and window, and both read lengths. One h is shared by all assays; the assay is an input.</p>
+    </div>
+  </section>
+
+  <!-- 21 · PART 2 · METHOD · training sources, scorings, scope
+       claim    two training sources × two scorings give the three readings; the chain covers one track
+       source   summary_data_h.json (product and pair counts, chains finished / expected, track, assay, f designs)
+       numbers  rendered from DATA.h2 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 2 · method</span>training and scoring</div>
+      <h2>Two training sources, two scorings, three readings</h2>
+      <div class="fig tall" id="figHScore"></div>
+      <div class="callout" id="tH_scope"></div>
+    </div>
+  </section>
+
+  <!-- 22 · PART 2 · RESULT 1 · h on the true counts
+       claim    with the counts known, the versions of h differ; the formula + MLP correction at rung 5 is the lowest
+       source   summary_data_h.json alone_cells (crps_log_all and its split), readings push_vs_noise (alone)
+       numbers  rendered from DATA.h2.cells_alone and DATA.h2.rd
+       cut      CRPS on P (own noise has only a point CRPS there); MSE goes on the caveat slide -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 2 · results</span>1 · h on the true counts</div>
+      <h2>With the true counts given, how closely does each h reproduce −log10 p?</h2>
+      <div class="fig tall" id="figHAlone"></div>
+      <ul class="pts cols3">
+        <li><b>Lowest, narrow marks:</b> <span id="tHA_best"></span>.</li>
+        <li><b>The inputs, narrow:</b> <span id="tHA_rung"></span>.</li>
+        <li><b>Own noise</b> (push + own noise) is lower than push only in <span class="num" id="tHA_noise"></span> cells on this scale.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 23 · PART 2 · RESULT 2 · repair
+       claim    in the chain, h trained on the true counts is lower than the same h trained on f's NB in every push-only row,
+                each beyond the bar
+       source   summary_data_h.json readings repair (crps_log_all, its split, crps_all); chain_cells
+       numbers  rendered from DATA.h2.rd and DATA.h2.cells_chain -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 2 · results</span>2 · repair <span class="scope"></span></div>
+      <h2>Training h on f's predictions does not repair f: <span id="tHR_h"></span></h2>
+      <div class="fig tall" id="figRepair"></div>
+      <ul class="pts cols3">
+        <li><b>Example:</b> <span id="tHR_ex"></span>.</li>
+        <li><b>CRPS on P</b>, push only: h trained on true counts is lower in <span id="tHR_p"></span>.</li>
+        <li><b>Push + own noise:</b> <span id="tHR_noise"></span>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 24 · PART 2 · RESULT 3 · the chain against the old grid's direct p
+       claim    on D and D2 every chain h is above the old grid's direct p, beyond the bar; where the old grid blew up on this
+                track (A2, C2), no chain h did
+       source   summary_data_h.json readings vs_oldgrid (crps_all, crps_oracle_scaled_all, scale_error_all); old cell sizes
+       numbers  rendered from DATA.h2.rd; designs are classed from the data, not typed -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 2 · results</span>3 · the chain against the old grid <span class="scope"></span></div>
+      <h2>Chain f → h against the old grid's p: higher on <span id="tHO_hd"></span></h2>
+      <div class="fig" id="figChainOld" style="max-height:none"></div>
+      <ul class="pts cols3">
+        <li><b><span id="tHO_d"></span>:</b> <span id="tHO_dtxt"></span>.</li>
+        <li><b><span id="tHO_x"></span>:</b> <span id="tHO_xtxt"></span>.</li>
+        <li><b>The other designs:</b> <span id="tHO_rest"></span>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 25 · PART 2 · READING · limits
+       claim    six limits on how far part 2 can be read
+       source   summary_data_h.json (chains, notes, merge_errors, explosions, readings push_vs_noise, fits, capped)
+       numbers  rendered from DATA.h2 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Part 2 · reading</span>what part 2 cannot show yet</div>
+      <h2>Six limits on the part-2 readings</h2>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--twin)"><div class="ct" id="tL_scopeT"></div>
+          <div class="cb" id="tL_scope"></div></div>
+        <div class="card" style="--c:var(--hfnb)"><div class="ct">One track, one seed of f's NB h</div>
+          <div class="cb" id="tL_seed"></div></div>
+        <div class="card" style="--c:var(--row1)"><div class="ct">Merged mixture in the chain</div>
+          <div id="icMerge"></div><div class="cb" id="tL_merge"></div></div>
+        <div class="card" style="--c:var(--accent)"><div class="ct">Own noise blows up the mean</div>
+          <div id="icHBoom"></div><div class="cb" id="tL_boom"></div></div>
+        <div class="card" style="--c:var(--noise)"><div class="ct">Own noise: spread, not mean</div>
+          <div class="cb" id="tL_noise"></div></div>
+        <div class="card" style="--c:var(--old)"><div class="ct">Step cap and capped NB rows</div>
+          <div class="cb" id="tL_cap"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 26 · DISCUSSION · open questions, both parts
+       claim    what we still do not understand, negatives kept
+       numbers  none of its own -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what is still unclear</div>
+      <h2>Six things to discuss</h2>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--accent)"><div class="ct">Part 1 · the depth law still does not hold</div><div class="cb">g reads both depths and moves f away from d′/d. Real D is among the furthest from the law; its twin stays close. Should g read depth?</div></div>
+        <div class="card" style="--c:var(--new)"><div class="ct">Part 1 · A gains in the spread</div><div class="cb">A's gain over the old grid is mostly scale error, and not in the MSE of the mean. B to D2 do not move: they could already bend and scale.</div></div>
+        <div class="card" style="--c:var(--twin)"><div class="ct">Part 1 · a harder control</div><div class="cb">The twin gets d′/d for free, so real − twin reads "the settings beyond depth", not "the settings at all".</div></div>
+        <div class="card" style="--c:var(--hfnb)"><div class="ct">Part 2 · h trained on f's NB does not repair f</div><div class="cb">h trained on f's NB sees f's errors in training, yet is higher than h trained on true counts on f's NB. One seed, and many of its fits hit the step cap.</div></div>
+        <div class="card" style="--c:var(--row2)"><div class="ct">Part 2 · the chain is above direct p on D and D2</div><div class="cb">The gap is in the oracle-scaled part, so a rescale does not close it. Even with the true counts, h is not exact; in the chain, f's errors come on top.</div></div>
+        <div class="card" style="--c:var(--noise)"><div class="ct">Part 2 · what own noise buys</div><div class="cb">Own noise lowers the log-scale CRPS but not the MSE of the mean, and with affine h at rung 5 the mean on P blows up.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 27 · DISCUSSION · next steps
+       claim    options for the next work, both parts; no verdicts
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>next steps</div>
+      <h2>Next: options, not decisions</h2>
+      <div class="fig tall" id="figNext"></div>
+      <p class="note">Nothing here is a verdict. Runs and tables: cruxvault/results/t125/ (GRID_SUMMARY.md, part1/, part2/). Old grid: cruxvault/results/row2/.</p>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · t125 depth offset and map h · exploratory</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py from:
+     snip, locus  ../t118-grid/snippet.json (real H3K27ac, 25 bp bins)
+     law_ratio    part1/depth_law.tsv, log2 read ratio of C19M16 base -> 3.75 M
+     cells        part1/summary_data.json cells: "src|rung|g|class|metric" ->
+                  [mean, wobble, (oracle-scaled, wobble, scale error, wobble)]; src real | twin | old
+     rd           part1/summary_data.json readings: "reading|metric|rung|g|class" ->
+                  [gain, bar, beyond bar, this, wobble, other, wobble, (os gain, bar, se gain, bar)]
+     depth        part1/summary_data.json depth_law (72 cells)
+     expl         part1/summary_data.json explosions (CRPS > 20) by kind, nonzero cells
+     oldp         old GRID_SUMMARY.md -log10 p explosion tables, summed over classes and both g
+     dev, runs    part1/run_device.tsv
+     h2           part2/summary_data_h.json: cells_alone "class|version id|metric" and cells_chain
+                  "f design|version id|metric" -> [mean, wobble, n]; rd (repair, vs_oldgrid, push_vs_noise);
+                  expl, merge, fits, capped, old_cell_n; version id = variant|window|rung|noise|source
+   =========================================================================== */
+const DATA = __DATA__;
+
+const COL={push:'var(--push)',noise:'var(--noise)',htrue:'var(--htrue)',hfnb:'var(--hfnb)',hform:'var(--hform)',row1:'var(--row1)',row2:'var(--row2)',aold:'var(--aold)',nw:'var(--new)',old:'var(--old)',twin:'var(--twin)',
+  ok:'var(--ok)',arm:'var(--arm)',ctl:'var(--ctl)',x:'var(--xsrc)',ink:'var(--ink)',muted:'var(--muted)',body:'var(--body)',
+  faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',accent:'var(--accent)',
+  paper:'var(--paper)',gpu:'var(--gpu)',cpu:'var(--cpu)'};
+const CL=['DNase','narrow','broad'], GV=['per_track','across'];
+const DES=['A','B','C','D','A2','B2','C2','D2','Aold'];
+const GN={per_track:'one g per track',across:'one g across tracks'};
+const rowCol=d=>d==='Aold'?COL.aold:(d.endsWith('2')?COL.row2:COL.row1);
+const fmt=v=>{const a=Math.abs(v);return a>=1000?v.toExponential(1).replace('e+','e'):a>=100?v.toFixed(0):a>=10?v.toFixed(1):a>=1?v.toFixed(3):v.toPrecision(3);};
+const pm=(v,w)=>fmt(v)+' ± '+fmt(w);
+const cell=(src,r,g,c,m)=>DATA.cells[[src,r,g,c,m].join('|')];
+const rdg=(k,m,r,g,c)=>DATA.rd[[k,m,r,g,c].join('|')];
+const allRd=(k,m)=>Object.entries(DATA.rd).filter(([key])=>key.startsWith(k+'|'+m+'|')).map(([key,v])=>{const p=key.split('|');return {r:p[2],g:p[3],c:p[4],v};});
+
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2)=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const arrowL0=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2+8,y,c,w)+arrowHead(x2,y,'l',c);
+const arrowD=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2-8,c,w)+arrowHead(x,y2,'d',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+/* g-version marker: circle = one g per track, square = one g across tracks */
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g==='per_track'?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const logY=(lo,hi,top,h)=>v=>top+h*(1-(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo)));
+
+function trackD(v,x0,yBase,w,h,ymax,closed){
+  const n=v.length,dx=w/n;let d=closed?`M${x0},${yBase}`:'';
+  v.forEach((val,i)=>{const y=(yBase-h*Math.min(val,ymax)/ymax).toFixed(1);
+    const xa=(x0+i*dx).toFixed(1),xb=(x0+(i+1)*dx).toFixed(1);
+    d+=(d===''?`M${xa},${y}`:` L${xa},${y}`)+` L${xb},${y}`;});
+  return closed?d+` L${x0+w},${yBase} Z`:d;}
+const S=k=>DATA.snip[k];
+
+/* groups of design slots: 9 designs x nslot; draws shading, labels and row dividers */
+function groups(x0,w,top,h,des,lblY,fs=17){
+  const gw=w/des.length;let s='';
+  des.forEach((d,i)=>{const gx=x0+i*gw;
+    if(i%2===0) s+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+    s+=T(gx+gw/2,lblY,d,'ptitle','middle',`style="fill:${rowCol(d)};font-size:${fs}px"`);
+    if(i>0&&(des[i]==='A2'||des[i]==='Aold')) s+=L(gx,top-6,gx,top+h+8,COL.axis,2);});
+  return {s,gw,x:(gi,si,n)=>x0+gi*gw+gw*(0.14+0.72*(si+0.5)/n)};}
+function yTicks(x0,w,yy,ticks){let s='';ticks.forEach(([v,l])=>{s+=L(x0,yy(v),x0+w,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,l,'tick','end');});return s;}
+
+/* ---------- 2 · the question ---------- */
+function figQuestion(){
+  const W=1160,H=270;let s='';
+  const vx=S('base__base/counts25').slice(100,300), vy=S('depth__15M/counts25').slice(100,300);
+  s+=R(10,40,280,150,COL.card,COL.hair,10)+P(trackD(vx,24,170,252,110,46,true),COL.x,'none',0)+T(150,30,'X · the track we have','ptitle','middle');
+  s+=R(320,60,190,48,COL.card,COL.row1,24)+T(415,90,'C: how X was made','axlbl','middle','style="font-size:15.5px"');
+  s+=R(320,130,190,48,COL.card,COL.row2,24)+T(415,160,'C′: how we want it','axlbl','middle','style="font-size:15.5px"');
+  s+=arrowR(292,115,560)+arrowR(512,84,560)+arrowR(512,154,560);
+  s+=R(565,60,150,110,COL.card,COL.accent,14,2.5)+T(640,132,'?','big','middle',`style="font-size:54px;fill:var(--accent)"`);
+  s+=arrowR(717,115,800);
+  s+=R(805,40,300,150,COL.card,COL.hair,10)+P(trackD(vy,819,170,272,110,46,true),COL.ink,'none',0)+T(955,30,'X′ · the track we want','ptitle','middle');
+  s+=T(955,220,'the real X′ exists, so we can score','psub','middle');
+  s+=T(580,258,`real data: H3K27ac, ${DATA.locus[0]}, the base track and its fewer-reads arm, same y-axis`,'cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 3 · the data: knobs and classes ---------- */
+function figData(){
+  const W=1160,H=480;let s='';
+  s+=T(0,24,'(a) One setting ("knob") changed per rebuild','ptitle');
+  const cx=310,cy=232,rr=140;
+  const knobs=[['depth','fewer reads','r'],['read length','shorter reads','r'],['paired-end','on','r'],
+    ['duplicates','kept','r'],['MAPQ cut','lower','r'],['antibody proxy','control mixed in','r'],
+    ['control','none · another','c'],['control depth','fewer reads','c'],['control scaling','up · down','c'],
+    ['fragment length','short · long','c']];
+  knobs.forEach(([n,lv,t],i)=>{
+    const a=-Math.PI/2+i*2*Math.PI/knobs.length, x=cx+rr*Math.cos(a), y=cy+rr*Math.sin(a);
+    const c=t==='r'?COL.arm:COL.ctl;
+    s+=L(cx+58*Math.cos(a),cy+58*Math.sin(a),x-14*Math.cos(a),y-14*Math.sin(a),c,2.5)+Ci(x,y,11,c);
+    const right=Math.cos(a)>0.2,left=Math.cos(a)<-0.2,anc=right?'start':left?'end':'middle';
+    const tx=x+(right?18:left?-18:0), ty=y+(Math.abs(Math.cos(a))<=0.2?(Math.sin(a)<0?-30:34):-2);
+    s+=T(tx,ty,n,'axlbl',anc,'style="font-size:16px;font-weight:600"')+T(tx,ty+19,lv,'psub',anc,'style="font-size:14px"');
+  });
+  s+=Ci(cx,cy,56,COL.card,COL.ink,2.5)+T(cx,cy-2,'base','big','middle','style="font-size:22px"')+T(cx,cy+20,'track','psub','middle');
+  s+=Ci(40,H-12,7,COL.arm)+T(54,H-7,'reads knobs: move counts and p','cap')+Ci(300,H-12,7,COL.ctl)+T(314,H-7,'control and caller knobs: move p only','cap');
+  s+=divider(640,10,H-4);
+  s+=T(670,24,'(b) 7 tracks in 3 mark classes','ptitle');
+  const groupsC=[['DNase','open chromatin, no control',['DNase-seq'],0],
+    ['narrow marks','sharp peaks',['H3K27ac','H3K4me3','H3K4me1'],1],
+    ['broad marks','wide domains',['H3K27me3','H3K36me3','H3K9me3'],2]];
+  groupsC.forEach(([n,sub,tr,k],i)=>{
+    const x=670,y=44+i*140,w=490,h=126;
+    s+=R(x,y,w,h,COL.card,COL.hair,12)+T(x+16,y+30,n,'ptitle','start','style="font-size:19px"')+T(x+16,y+52,sub,'psub');
+    tr.forEach((t,j)=>{s+=R(x+16+j*102,y+74,96,30,COL.paper,COL.hair,15)+T(x+64+j*102,y+94,t,'axlbl','middle','style="font-size:13.5px"');});
+    const ix=x+340,iy=y+104,iw=134;let d=`M${ix},${iy}`;
+    for(let j=0;j<=80;j++){const t=j/80,xx=ix+t*iw;let yv=0;
+      if(k===0) yv=Math.exp(-Math.pow((t-0.5)/0.04,2))*70;
+      if(k===1) yv=Math.exp(-Math.pow((t-0.35)/0.05,2))*60+Math.exp(-Math.pow((t-0.72)/0.04,2))*42;
+      if(k===2) yv=(t>0.12&&t<0.85?26+7*Math.sin(t*38):3);
+      d+=` L${xx.toFixed(1)},${(iy-yv).toFixed(1)}`;}
+    s+=P(d+` L${ix+iw},${iy} Z`,COL.ink,'none',0,';fill-opacity:.75')+L(ix,iy,ix+iw,iy,COL.axis,1);
+  });
+  return svg(W,H,s);
+}
+
+/* ---------- 4 · g and f (t118) ---------- */
+function figGF(){
+  const W=1160,H=400;let s='';
+  s+=R(20,40,150,46,COL.card,COL.row1,23)+T(95,70,'C','mono','middle');
+  s+=R(20,110,150,46,COL.card,COL.row2,23)+T(95,140,'C′','mono','middle');
+  s+=T(95,28,'settings','psub','middle');
+  s+=arrowR(172,63,250)+arrowR(172,133,250);
+  s+=R(255,30,210,140,COL.card,COL.accent,14,2.5)+T(360,24,'g · trained','val','middle','style="fill:var(--accent)"');
+  [[290,3],[360,4],[430,3]].forEach(([x,n])=>{for(let j=0;j<n;j++){const y=100+(j-(n-1)/2)*28;s+=Ci(x,y,8,COL.accent);}});
+  s+=T(360,160,'small MLP, 2 × 64','cap','middle');
+  s+=arrowR(467,100,560);
+  s+=R(565,70,120,60,COL.card,COL.hair,10)+T(625,107,'θ','big','middle')+T(625,58,'parameters','psub','middle');
+  s+=arrowD(625,132,215);
+  const vx=S('base__base/counts25').slice(100,300), vy=S('depth__15M/counts25').slice(100,300);
+  s+=R(20,220,300,140,COL.card,COL.hair,10)+P(trackD(vx,34,345,272,100,46,true),COL.x,'none',0)+T(170,385,'X','ptitle','middle');
+  s+=arrowR(322,290,520);
+  s+=R(525,220,200,140,COL.card,COL.ink,14,2.5)+T(625,297,'f','big','middle','style="font-size:40px"')+T(625,330,'built by g','psub','middle');
+  s+=arrowR(727,290,820);
+  const yb=345,w=300,h=100,x0=825;
+  const up=vy.map(v=>v*1.45+2), lo=vy.map(v=>Math.max(0,v*0.6-1));
+  s+=R(x0-6,220,w+12,140,COL.card,COL.hair,10);
+  s+=P(trackD(up,x0,yb,w,h,46,true),COL.row2,'none',0,';fill-opacity:.25');
+  s+=P(trackD(lo,x0,yb,w,h,46,true),COL.card,'none',0);
+  s+=P(trackD(vy,x0,yb,w,h,46,false),'none',COL.row2,2);
+  s+=T(x0+w/2,385,'predicted X′: a mean and a spread per bin','psub','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 5 · designs (t118) ---------- */
+function figDesigns(){
+  const W=1160,H=420;let s='';
+  const pw=260,gap=26,top=20,ph=200;
+  const names=[['A','one straight line'],['B','a rising curve'],['C','smoothing kernel, then curve'],['D','small CNN, tuned by g']];
+  const can=[['magnitude only','3 numbers'],['magnitude only','12-knot curve'],['+ one shape change, everywhere','33-bin kernel (825 bp)'],['+ shape that depends on neighbours','4 layers, view ≈ 1.5 kb']];
+  names.forEach(([n,t],i)=>{
+    const x=10+i*(pw+gap);
+    s+=R(x,top,pw,ph+150,COL.card,COL.hair,12);
+    s+=T(x+18,top+40,n,'big')+T(x+50,top+38,t,'axlbl','start','style="font-size:15.5px"');
+    const bx=x+30,by=top+70,bw=pw-60,bh=ph-60;
+    if(i<2){
+      s+=L(bx,by+bh,bx+bw,by+bh,COL.axis,1.2)+L(bx,by,bx,by+bh,COL.axis,1.2);
+      s+=T(bx+bw/2,by+bh+20,'input level → output level','cap','middle');
+      if(i===0) s+=L(bx+5,by+bh-10,bx+bw-5,by+10,COL.accent,3.5);
+      else{let d='',pts=[];for(let k=0;k<12;k++){const t=k/11,xx=bx+5+t*(bw-10),yy=by+bh-10-(bh-20)*(0.5*t+0.5*Math.pow(t,3)+0.15*Math.sin(t*6)*t*(1-t)*4);pts.push([xx,yy]);d+=(k?' L':'M')+xx.toFixed(1)+','+yy.toFixed(1);}
+        s+=P(d,'none',COL.accent,3.5);pts.forEach(p=>s+=Ci(p[0],p[1],4.5,COL.card,COL.accent,2));}
+    }else if(i===2){
+      const kx=bx,kw=bw*0.45;
+      s+=L(kx,by+bh,kx+kw,by+bh,COL.axis,1.2);
+      let d=`M${kx},${by+bh}`;for(let k=0;k<=40;k++){const t=k/40;d+=` L${(kx+t*kw).toFixed(1)},${(by+bh-Math.exp(-Math.pow((t-0.5)/0.13,2))*(bh-20)).toFixed(1)}`;}
+      s+=P(d,'none',COL.accent,3.5)+T(kx+kw/2,by+bh+20,'kernel','cap','middle');
+      s+=T(kx+kw+14,by+bh/2+8,'→','big','middle');
+      const cx2=kx+kw+30,cw=bw-kw-30;
+      s+=L(cx2,by+bh,cx2+cw,by+bh,COL.axis,1.2)+L(cx2,by,cx2,by+bh,COL.axis,1.2);
+      let d2='';for(let k=0;k<=20;k++){const t=k/20;d2+=(k?' L':'M')+(cx2+4+t*(cw-8)).toFixed(1)+','+(by+bh-8-(bh-16)*(0.5*t+0.5*t*t*t)).toFixed(1);}
+      s+=P(d2,'none',COL.accent,3)+T(cx2+cw/2,by+bh+20,'curve','cap','middle');
+    }else{
+      for(let l=0;l<4;l++){const yy=by+l*34;s+=R(bx+40,yy,bw-60,24,'none',COL.accent,5,2);
+        for(let k=0;k<9;k++) s+=Ci(bx+52+k*((bw-84)/8),yy+12,3,COL.accent);
+        s+=L(bx,yy+12,bx+34,yy+12,COL.row1,2)+arrowHead(bx+40,yy+12,'r',COL.row1,7);}
+      s+=T(bx+8,by+bh+20,'g scales and shifts each layer','cap','start');
+    }
+    s+=L(x+18,top+ph+50,x+pw-18,top+ph+50,COL.hair,1);
+    s+=T(x+18,top+ph+82,can[i][0],'axlbl','start','style="font-size:15.5px"')+T(x+18,top+ph+108,can[i][1],'psub');
+  });
+  s+=L(40,H-8,W-60,H-8,COL.faint,1.5)+arrowHead(W-50,H-8,'r',COL.faint)+T(W/2,H-16,'more flexible →','cap','middle');
+  return svg(W,H+4,s);
+}
+
+/* ---------- 6 · rows and versions of g ---------- */
+function figRowsG(){
+  const W=1160,H=420;let s='';
+  const v=S('base__base/counts25'), lx=150, pw=410;
+  s+=T(0,24,'(a) Two rows: what g reads','ptitle');
+  s+=T(0,92,'source track','axlbl','start','style="font-size:15px;font-weight:600"')+T(0,112,'(real H3K27ac)','psub','start','style="font-size:13.5px"');
+  s+=P(trackD(v,lx,120,pw,70,46,true),COL.x,'none',0)+L(lx,120,lx+pw,120,COL.axis,1);
+  s+=T(0,190,'Row 1','ptitle','start','style="fill:var(--row1)"')+T(0,212,'g(C, C′)','psub');
+  s+=R(lx,168,pw,46,COL.row1,'none',6)+T(lx+pw/2,197,'the same f in every bin','axlbl','middle','style="fill:#fff;font-size:15.5px"');
+  s+=T(0,290,'Row 2','ptitle','start','style="fill:var(--row2)"')+T(0,312,'g(level, C, C′)','psub');
+  const n=v.length,dx=pw/n;
+  v.forEach((val,i)=>{const op=0.15+0.85*Math.min(1,Math.log1p(val)/Math.log1p(45));
+    s+=`<rect x="${(lx+i*dx).toFixed(1)}" y="268" width="${(dx+0.6).toFixed(1)}" height="46" style="fill:var(--row2);fill-opacity:${op.toFixed(2)}"/>`;});
+  s+=T(lx+pw/2,340,'f changes with the bin\'s level','psub','middle')+T(lx+pw/2,362,'darker = higher level','cap','middle');
+  s+=divider(600,10,H-6);
+  s+=T(630,24,'(b) Two versions of g','ptitle');
+  const tr=['DNase','H3K27ac','H3K4me3','H3K4me1','H3K27me3','H3K36me3','H3K9me3'];
+  s+=T(760,62,'one g per track','axlbl','middle','style="font-weight:600"');
+  tr.forEach((t,i)=>{const y=80+i*44;
+    s+=R(630,y,120,32,COL.paper,COL.hair,16)+T(690,y+21,t,'axlbl','middle','style="font-size:13.5px"');
+    s+=L(752,y+16,800,y+16,COL.muted,1.5)+R(804,y+3,52,26,COL.card,COL.accent,6,2)+T(830,y+21,'g'+(i+1),'val','middle','style="fill:var(--accent);font-size:14px"');});
+  s+=L(885,50,885,H-20,COL.hair,1.5);
+  s+=T(1030,62,'one g across tracks','axlbl','middle','style="font-weight:600"');
+  tr.forEach((t,i)=>{const y=80+i*44;
+    s+=R(905,y,120,32,COL.paper,COL.hair,16)+T(965,y+21,t,'axlbl','middle','style="font-size:13.5px"');
+    s+=L(1027,y+16,1085,230,COL.muted,1.2);});
+  s+=R(1085,190,72,80,COL.card,COL.accent,12,2.5)+T(1121,238,'g','big','middle','style="fill:var(--accent)"');
+  s+=T(1121,292,'also reads','psub','middle','style="font-size:13.5px"')+T(1121,310,'the assay','psub','middle','style="font-size:13.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 7 · scoring: four panels ---------- */
+function figScore(){
+  const W=1160,H=430;let s='';
+  const pw=275,gap=20,top=50;
+  const xs=[0,1,2,3].map(i=>i*(pw+gap));
+  [1,2,3].forEach(i=>s+=divider(xs[i]-gap/2,10,H-6));
+  // (a) CRPS
+  {const x0=xs[0]+10,w=pw-20,yb=230,truth=0.62;
+   s+=T(xs[0],24,'(a) CRPS','ptitle');
+   s+=L(x0,yb,x0+w,yb,COL.axis,1.2);
+   const pdf=(m,sd)=>{let d='';for(let k=0;k<=100;k++){const t=k/100,y=Math.exp(-0.5*Math.pow((t-m)/sd,2))/sd*9;d+=(k?' L':'M')+(x0+t*w).toFixed(1)+','+(yb-Math.min(y,170)).toFixed(1);}return d;};
+   s+=P(pdf(0.6,0.07),'none',COL.nw,3)+P(pdf(0.33,0.16),'none',COL.old,3);
+   s+=L(x0+truth*w,60,x0+truth*w,yb,COL.ink,2,'6 4')+T(x0+truth*w+6,72,'truth','axlbl','start','style="font-size:14px"');
+   s+=T(x0+0.70*w,128,'sharp, right','val','start','style="fill:var(--new);font-size:14px"');
+   s+=T(x0,86,'wide, off','val','start','style="fill:var(--old);font-size:14px"');
+   s+=FO(xs[0],250,pw,170,'Scores the whole predicted distribution against the true value. A prediction that is off, or too wide, scores high.');}
+  // (b) split
+  {const x0=xs[1],bx=x0+40,bw=80,yb=230;
+   s+=T(x0,24,'(b) CRPS = two parts','ptitle');
+   s+=R(bx,yb-120,bw,120,COL.nw,'none',3)+R(bx,yb-170,bw,50,COL.nw,'none',3,0,';fill-opacity:.35');
+   s+=T(bx+bw+12,yb-60,'oracle-scaled','val','start','style="fill:var(--new);font-size:14.5px"')+T(bx+bw+12,yb-42,'what is left after','cap')+T(bx+bw+12,yb-26,'the best rescale','cap');
+   s+=T(bx+bw+12,yb-150,'scale error','val','start','style="fill:var(--new);font-size:14.5px"')+T(bx+bw+12,yb-132,'one overall factor','cap')+T(bx+bw+12,yb-116,'would remove it','cap');
+   s+=L(bx-6,yb,bx+bw+6,yb,COL.axis,1.2);
+   s+=FO(x0,250,pw,170,'We always quote both parts. A gain in scale error is "the constant in front was wrong", which is cheap to fix.');}
+  // (c) MSE of the mean
+  {const x0=xs[2]+10,w=pw-20,yb=230,m=0.45,truth=0.6;
+   s+=T(xs[2],24,'(c) MSE of the mean','ptitle');
+   s+=L(x0,yb,x0+w,yb,COL.axis,1.2);
+   let d='';for(let k=0;k<=100;k++){const t=k/100,y=Math.exp(-0.5*Math.pow((t-m)/0.13,2))*140;d+=(k?' L':'M')+(x0+t*w).toFixed(1)+','+(yb-y).toFixed(1);}
+   s+=P(d,'none',COL.faint,2.5,';stroke-dasharray:5 4');
+   s+=L(x0+m*w,yb-150,x0+m*w,yb,COL.nw,3.5)+T(x0+m*w-6,yb-156,'mean','val','end','style="fill:var(--new);font-size:14px"');
+   s+=L(x0+truth*w,70,x0+truth*w,yb,COL.ink,2,'6 4')+T(x0+truth*w+6,82,'truth','axlbl','start','style="font-size:14px"');
+   s+=FO(xs[2],250,pw,170,'Error of the predicted mean, on log(1 + value). It ignores the spread, so it tells a gain in the mean from a gain in the spread.');}
+  // (d) the bar
+  {const x0=xs[3];
+   s+=T(x0,24,'(d) The bar','ptitle');
+   const yy=v=>60+(1-v)*170;
+   const A=[0.82,0.76,0.86],B=[0.5,0.56,0.47];
+   [[x0+70,A,COL.old,'model 1'],[x0+190,B,COL.nw,'model 2']].forEach(([x,v,c,n])=>{
+     v.forEach((val,i)=>s+=Ci(x-22+i*22,yy(val),7,c));
+     s+=T(x,yy(0)+4,n,'axlbl','middle','style="font-size:14px"');});
+   const mA=A.reduce((a,b)=>a+b)/3,mB=B.reduce((a,b)=>a+b)/3;
+   s+=L(x0+128,yy(mA),x0+128,yy(mB)-8,COL.accent,2.5)+arrowHead(x0+128,yy(mB),'d',COL.accent);
+   s+=T(x0+136,(yy(mA)+yy(mB))/2+5,'gain','val','start','style="fill:var(--accent);font-size:14px"');
+   s+=FO(x0,250,pw,170,'3 seeds per model. The <b>wobble</b> is the largest gap between two seeds. A gain counts only if it is larger than <b>2 × the larger wobble</b>.');}
+  return svg(W,H,s);
+}
+
+/* ---------- 8 · the old grid's two problems ---------- */
+function figFail(){
+  const W=1160,H=430;let s='';
+  // (a) old-grid depth law
+  const des8=DES.slice(0,8),top=70,h=270,x0=70,w=620;
+  const yy=logY(0.05,2,top,h);
+  const cellsO=DATA.depth.filter(r=>r[0]!=='Aold'&&r[2]!=='all');
+  const nIn=cellsO.filter(r=>r[10]<=r[15]).length;
+  s+=T(0,24,'(a) The depth law, old grid','ptitle')+T(0,46,`${nIn} of ${cellsO.length} cells within 10% (8 designs × 2 versions of g × 3 classes)`,'psub');
+  const G=groups(x0,w,top,h,des8,top+h+26);s+=G.s;
+  s+=R(x0,yy(0.1),w,top+h-yy(0.1),COL.ok,'none',0,0,';fill-opacity:.16')+T(x0+6,yy(0.1)+17,'within 10%','cap','start','style="fill:var(--ok)"');
+  s+=yTicks(x0,w,yy,[[0.05,'5%'],[0.1,'10%'],[0.2,'20%'],[0.5,'50%'],[1,'100%'],[2,'200%']]);
+  s+=T(20,top+h/2,'depth-law error','axlbl','middle',`transform="rotate(-90 20 ${top+h/2})" style="font-size:15px"`);
+  cellsO.forEach(r=>{const gi=des8.indexOf(r[0]),si=GV.indexOf(r[1])*3+CL.indexOf(r[2]);
+    const x=G.x(gi,si,6),inb=r[10]<=r[15];
+    s+=mark(x,yy(r[10]),r[1],inb?COL.ok:rowCol(r[0]),inb?COL.ink:'none',6,2);});
+  s+=Ci(x0+10,H-14,6,COL.muted)+T(x0+22,H-9,'one g per track','cap')+R(x0+140,H-19,11,11,COL.muted,'none',1.5,0)+T(x0+158,H-9,'one g across tracks','cap')+T(x0+310,H-9,'each shape: DNase, narrow, broad','cap');
+  s+=divider(730,10,H-6);
+  // (b) old-grid p explosions
+  const bx0=800,bw=350,btop=70,bh=270;
+  const mx=Math.max(...DATA.oldp['row 1'],...DATA.oldp['row 2']);const ymax=Math.ceil(mx/5)*5+2;
+  const by=v=>btop+bh*(1-v/ymax);
+  s+=T(760,24,'(b) −log10 p: blow-ups, old grid','ptitle')+T(760,46,'(pair, seed) records with CRPS > 20','psub');
+  for(let v=0;v<=ymax;v+=5) s+=L(bx0,by(v),bx0+bw,by(v),COL.grid,1)+T(bx0-8,by(v)+5,v,'tick','end');
+  ['A','B','C','D'].forEach((d,i)=>{const gx=bx0+bw*(i+0.5)/4;
+    [['row 1',COL.row1,-20],['row 2',COL.row2,20]].forEach(([k,c,off])=>{const v=DATA.oldp[k][i];
+      s+=R(gx+off-17,by(v),34,btop+bh-by(v),c,'none',3)+T(gx+off,by(v)-6,v,'val','middle',`style="fill:${c};font-size:14px"`);});
+    s+=T(gx,btop+bh+26,d+' · '+d+'2','ptitle','middle','style="font-size:16px"');});
+  s+=L(bx0,btop+bh,bx0+bw,btop+bh,COL.axis,1.2);
+  s+=R(bx0+20,H-19,12,12,COL.row1,'none',2)+T(bx0+38,H-9,'row 1','cap')+R(bx0+110,H-19,12,12,COL.row2,'none',2)+T(bx0+128,H-9,'row 2','cap')+T(bx0+200,H-9,'sum: 3 classes × 2 g','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 9 · two causes, two fixes ---------- */
+function figWhy(){
+  const W=1160,H=480;let s='';
+  // (a) the depth law on real data
+  const vb=S('base__base/counts25'),va=S('depth__3.75M/counts25'),f=Math.pow(2,DATA.law_ratio);
+  const fr=f<1?'1/'+Math.round(1/f):String(f);
+  s+=T(0,24,'(a) Fewer reads scale every bin by the read ratio','ptitle');
+  const lx=10,pw=540;
+  s+=T(lx,62,'base track','axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(vb,lx,160,pw,90,46,true),COL.x,'none',0)+L(lx,160,lx+pw,160,COL.axis,1);
+  const ymax2=46*f;
+  s+=T(lx,196,`the arm with ${fr} of the reads (filled), and the base × ${fr} (line)`,'axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(va,lx,290,pw,80,ymax2,true),COL.ink,'none',0,';fill-opacity:.8');
+  s+=P(trackD(vb.map(x=>x*f),lx,290,pw,80,ymax2,false),'none',COL.row2,2.2);
+  s+=L(lx,290,lx+pw,290,COL.axis,1);
+  s+=T(lx+pw,310,`real H3K27ac, ${DATA.locus[0]}; the two panels have their own y-axes`,'cap','end');
+  s+=FO(lx,322,pw,60,'In the old grid, f copied counts by default, so g had to <b>learn</b> this scaling. It missed it.','font:400 16px var(--sans);color:var(--body);line-height:1.4');
+  s+=R(lx,392,pw,70,COL.card,COL.nw,10,2.5)+FO(lx+14,400,pw-28,60,'<b style="color:var(--new)">Fix, part 1:</b> build the read ratio into f as a fixed <b>depth offset</b>.','font:400 17px var(--sans);color:var(--ink);line-height:1.4');
+  s+=divider(585,10,H-6);
+  // (b) the log-normal mean
+  const x0=680,w=450,top=60,h=230,smax=4,lmax=4;
+  s+=T(615,24,'(b) A drifting spread blows up the mean','ptitle');
+  const xx=v=>x0+v/smax*w, yy=l=>top+h*(1-l/lmax);
+  for(let e=0;e<=4;e++) s+=L(x0,yy(e),x0+w,yy(e),COL.grid,1)+T(x0-8,yy(e)+5,e?'10<tspan dy="-7" font-size="11">'+e+'</tspan>':'1','tick','end');
+  s+=L(x0,top+h,x0+w,top+h,COL.axis,1.2);
+  let d='';for(let k=0;k<=100;k++){const sg=k/100*smax,l=sg*sg/2/Math.LN10;if(l>lmax) break;d+=(k?' L':'M')+xx(sg).toFixed(1)+','+yy(l).toFixed(1);}
+  s+=P(d,'none',COL.ink,3);
+  s+=T(x0+w/2,top+h+30,'learned spread σ (log scale of p)','axlbl','middle','style="font-size:15px"');
+  s+=T(625,top+h/2,'mean ÷ median','axlbl','middle',`transform="rotate(-90 625 ${top+h/2})" style="font-size:15px"`);
+  s+=T(xx(0.12),yy(1.1),'small σ: mean ≈ median','val','start','style="fill:var(--ok);font-size:14px"');
+  s+=T(xx(2.9)-10,yy(3.6),'σ drifts up: the mean explodes','val','end','style="fill:var(--accent);font-size:14px"');
+  s+=FO(615,322,540,60,'The old grid predicted −log10 p directly, with a log-normal whose spread was learned. One spread drifted, and the mean blew up.','font:400 16px var(--sans);color:var(--body);line-height:1.4');
+  s+=R(615,392,540,70,COL.card,COL.twin,10,2.5)+FO(629,400,512,60,'<b style="color:var(--twin)">Fix, part 2:</b> predict counts only, and compute p from them with a <b>map h</b>.','font:400 17px var(--sans);color:var(--ink);line-height:1.4');
+  return svg(W,H,s);
+}
+
+/* ---------- 10 · the offset ---------- */
+function figOffset(){
+  const W=1160,H=440;let s='';
+  const box=(x,y,w,h,txt,c,sub)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-2:6),txt,'mono','middle','style="font-size:16.5px"')+(sub?T(x+w/2,y+h/2+20,sub,'cap','middle'):'');
+  // lane a: old grid
+  s+=T(0,24,'(a) Old grid','ptitle','start','style="fill:var(--old)"');
+  let y=44;
+  s+=box(0,y,110,56,'X',COL.hair,'counts')+arrowR(112,y+28,150);
+  s+=box(155,y,200,56,'log(1 + X)',COL.hair)+arrowR(357,y+28,395);
+  s+=box(400,y,120,56,'f',COL.ink)+arrowR(522,y+28,560);
+  s+=box(565,y,200,56,'log μ′',COL.hair)+arrowR(767,y+28,805);
+  s+=box(810,y,130,56,'NB → X′',COL.hair);
+  s+=R(960,y-2,200,60,COL.paper,COL.old,10,1.5,';stroke-dasharray:5 4')+FO(970,y+4,184,56,'f does nothing ⇒ <b>copy the counts</b>','font:400 15px var(--sans);color:var(--body);line-height:1.3');
+  s+=L(0,140,W,140,COL.axis,1.5,'6 6');
+  // lane b: t125
+  s+=T(0,172,'(b) t125, part 1','ptitle','start','style="fill:var(--new)"');
+  y=260;
+  s+=box(0,y,110,56,'X',COL.hair,'counts')+arrowR(112,y+28,150);
+  s+=box(155,y,200,56,'log(1 + X) − log d',COL.nw,'eta_in')+arrowR(357,y+28,395);
+  s+=box(400,y,120,56,'f',COL.ink)+arrowR(522,y+28,560);
+  s+=box(565,y,200,56,'eta_out + log d′',COL.nw,'= log μ′')+arrowR(767,y+28,805);
+  s+=box(810,y,130,56,'NB → X′',COL.hair);
+  s+=R(960,y-2,200,60,COL.paper,COL.nw,10,1.5,';stroke-dasharray:5 4')+FO(970,y+4,184,56,'f does nothing ⇒ <b>scale by d′/d</b>, the depth law','font:400 15px var(--sans);color:var(--body);line-height:1.3');
+  // g above f
+  s+=R(330,186,260,48,COL.card,COL.accent,10,2.2)+T(460,207,'g(C, C′) · row 1','axlbl','middle','style="font-size:14.5px;fill:var(--accent)"')+T(460,226,'g(eta_in, C, C′) · row 2','axlbl','middle','style="font-size:14.5px;fill:var(--accent)"');
+  s+=arrowD(460,236,y-2,COL.accent);
+  s+=T(600,214,'C and C′ include both depths','cap','start');
+  s+=FO(0,340,W,90,'<b>d</b> = depth of the source track, <b>d′</b> = depth of the target, in millions of reads. The noise model (negative binomial, NB) and its loss are as before. f never reads C; only g does.','font:400 15.5px var(--sans);color:var(--muted);line-height:1.45');
+  return svg(W,H,s);
+}
+
+/* ---------- 11 · run budget ---------- */
+function figBudget(){
+  const W=1160,H=96;let s='';const r=DATA.runs;const per=r.gver*r.models*r.seeds;
+  const items=[[r.gver,'versions of g',r.per_track+' per track + 1 across'],[r.models,'models','real + no-covariates twin'],[r.seeds,'seeds',''],[per,'runs per design','']];
+  items.forEach(([n,t,sub],i)=>{const x=40+i*270;const ns=String(n);
+    s+=T(x,46,ns,'big','start',i===3?'style="fill:var(--accent)"':'')+T(x+ns.length*16+10,44,t,'axlbl')+T(x,72,sub,'psub');
+    if(i<3) s+=T(x+240,48,i===2?'=':'×','big','middle','style="fill:var(--faint)"');});
+  s+=T(W/2,H-4,`${per} runs × ${Object.keys(DATA.dev).length} designs = ${r.n} runs, all on Nibi`,'cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 12 · the spread rule ---------- */
+function figSpread(){
+  const W=1160,H=330;let s='';
+  const pw=270,gap=26,xs=[0,1,2,3].map(i=>i*(pw+gap));
+  [1,2,3].forEach(i=>s+=divider(xs[i]-gap/2,10,H-6));
+  const ax=(x0,y0,w,h,xl,yl)=>L(x0,y0+h,x0+w,y0+h,COL.axis,1.2)+L(x0,y0,x0,y0+h,COL.axis,1.2)+T(x0+w/2,y0+h+20,xl,'cap','middle')+T(x0-8,y0+h/2,yl,'cap','middle',`transform="rotate(-90 ${x0-8} ${y0+h/2})"`);
+  const curve=(x0,y0,w,h,c)=>{let d='',pts=[];for(let k=0;k<12;k++){const t=k/11,xx=x0+6+t*(w-12),yy=y0+h-12-(h-24)*(0.25+0.6*t-0.35*t*t+0.12*Math.sin(t*7));pts.push([xx,yy]);d+=(k?' L':'M')+xx.toFixed(1)+','+yy.toFixed(1);}return P(d,'none',c,3)+pts.map(p=>Ci(p[0],p[1],3.8,COL.card,c,2)).join('');};
+  // (a)
+  s+=T(xs[0],24,'(a) A, A2, B, B2: by level','ptitle','start','style="font-size:18px"');
+  s+=ax(xs[0]+24,54,pw-40,150,'level (eta_in)','spread n')+curve(xs[0]+24,54,pw-40,150,COL.nw);
+  s+=FO(xs[0],236,pw,90,'A 12-knot curve over the level. <b>Row-1 A: new.</b> The others: as in the old grid.');
+  // (b)
+  s+=T(xs[1],24,'(b) C, C2: level and context','ptitle','start','style="font-size:18px"');
+  {const kx=xs[1]+10,kw=90,by=54,bh=150;
+   let d=`M${kx},${by+bh}`;for(let k=0;k<=40;k++){const t=k/40;d+=` L${(kx+t*kw).toFixed(1)},${(by+bh-Math.exp(-Math.pow((t-0.5)/0.14,2))*(bh-30)).toFixed(1)}`;}
+   s+=L(kx,by+bh,kx+kw,by+bh,COL.axis,1.2)+P(d,'none',COL.nw,3)+T(kx+kw/2,by+bh+20,'kernel','cap','middle');
+   s+=T(kx+kw+16,by+bh/2+8,'→','big','middle');
+   s+=ax(kx+kw+40,by,pw-kw-60,bh,'smoothed level','')+curve(kx+kw+40,by,pw-kw-60,bh,COL.nw);}
+  s+=FO(xs[1],236,pw,90,'The same curve, read at the kernel-smoothed level. As in the old grid.');
+  // (c)
+  s+=T(xs[2],24,'(c) D, D2: level and context','ptitle','start','style="font-size:18px"');
+  {const bx=xs[2]+20,by=60;
+   for(let l=0;l<3;l++){const yy=by+l*34;s+=R(bx,yy,150,24,'none',COL.nw,5,2);for(let k=0;k<8;k++) s+=Ci(bx+14+k*17.5,yy+12,3,COL.nw);}
+   s+=arrowR(bx+152,by+50,bx+188,COL.muted)+L(bx+170,by+50,bx+170,by+120,COL.muted,2)+arrowR(bx+170,by+120,bx+188,COL.muted);
+   s+=R(bx+192,by+34,60,32,COL.card,COL.ink,8,2)+T(bx+222,by+55,'mean','axlbl','middle','style="font-size:13.5px"');
+   s+=R(bx+192,by+104,60,32,COL.card,COL.nw,8,2)+T(bx+222,by+125,'spread','axlbl','middle','style="font-size:13.5px;fill:var(--new)"');
+   s+=T(bx+75,by+130,'CNN','axlbl','middle','style="font-size:14px"');}
+  s+=FO(xs[2],236,pw,90,'The CNN outputs the spread beside the mean. As in the old grid.');
+  // (d)
+  s+=T(xs[3],24,'(d) Old-spread A: one per pair','ptitle','start','style="font-size:18px"');
+  s+=ax(xs[3]+24,54,pw-40,150,'level (eta_in)','spread n')+L(xs[3]+30,129,xs[3]+pw-22,129,COL.aold,3.5);
+  s+=FO(xs[3],236,pw,90,'One spread for every bin of a pair: the old row-1 A rule, now with the offset.');
+  return svg(W,H,s);
+}
+
+/* ---------- 13 · control and comparisons ---------- */
+function figCompare(){
+  const W=1160,H=420;let s='';
+  const chip=(x,y,t,c,dash)=>R(x,y,58,30,COL.card,c,15,2,dash?';stroke-dasharray:4 3':'')+T(x+29,y+21,t,'mono','middle','style="font-size:15px"');
+  s+=T(0,24,'(a) The no-covariates twin','ptitle');
+  [['real model',COL.nw,['C','C′'],false,60],['no-covariates twin',COL.twin,['?','?'],true,190]].forEach(([n,c,ch,dash,y])=>{
+    s+=T(0,y+6,n,'axlbl','start',`style="fill:${c};font-weight:600;font-size:16px"`);
+    s+=chip(0,y+20,ch[0],c,dash)+chip(66,y+20,ch[1],c,dash)+arrowR(128,y+35,166);
+    s+=R(170,y+16,60,38,COL.card,COL.accent,8,2)+T(200,y+41,'g','val','middle','style="fill:var(--accent)"')+arrowR(232,y+35,268);
+    s+=R(272,y+16,60,38,COL.card,COL.ink,8,2)+T(302,y+41,'f','val','middle')+arrowR(334,y+35,370);
+    s+=R(374,y+16,140,38,COL.card,COL.nw,8,2)+T(444,y+41,'× d′/d (true)','axlbl','middle','style="font-size:14px"');
+    if(dash) s+=T(0,y+76,'random settings at every step','cap');});
+  s+=FO(0,300,520,110,'Both keep the true d′/d offset. So <b>real − twin</b> is what the settings add <b>beyond</b> the fixed depth scaling.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  s+=divider(560,10,H-6);
+  // (b) comparisons
+  s+=T(590,24,'(b) Four comparisons','ptitle');
+  const node=(x,y,w,t,c)=>R(x,y,w,36,COL.card,c,18,2)+T(x+w/2,y+24,t,'axlbl','middle','style="font-size:14.5px"');
+  const edge=(x1,x2,y,lab,c)=>arrowR(x1,y,x2,c,2.2)+T((x1+x2)/2,y-10,lab,'cap','middle',`style="fill:${c};font-size:13.5px"`);
+  let y=56;
+  s+=T(590,y+24,'1','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'old grid, design X',COL.old)+edge(777,955,y+18,'offset (+ A\'s spread rule)',COL.nw)+node(960,y,190,'t125, design X',COL.nw);
+  y=136;
+  s+=T(590,y+24,'2','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'old grid, A',COL.old)+edge(777,955,y+18,'the offset alone',COL.aold)+node(960,y,190,'old-spread A',COL.aold);
+  y=216;
+  s+=T(590,y+24,'3','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'old-spread A',COL.aold)+edge(777,955,y+18,'the spread rule alone',COL.nw)+node(960,y,190,'t125, A',COL.nw);
+  y=296;
+  s+=T(590,y+24,'4','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'no-covariates twin',COL.twin)+edge(777,955,y+18,'the settings, beyond d′/d',COL.twin)+node(960,y,190,'real model',COL.nw);
+  s+=T(590,H-12,'Each comparison: CRPS with its split, and the MSE of the mean (none for the old grid)','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 14 · depth law ---------- */
+function figDepthLaw(){
+  const W=1160,H=450;let s='';
+  const top=72,h=290,lo=0.04,hi=5,yy=logY(lo,hi,top,h);
+  const ticks=[[0.05,'5%'],[0.1,'10%'],[0.2,'20%'],[0.5,'50%'],[1,'100%'],[2,'200%'],[5,'500%']];
+  const band=(x0,w)=>R(x0,yy(0.1),w,top+h-yy(0.1),COL.ok,'none',0,0,';fill-opacity:.16');
+  // (a) class cells: t125 real against the old grid
+  const ax=70,aw=640;
+  const cls=DATA.depth.filter(r=>r[2]!=='all');
+  s+=T(0,24,'(a) Real model: t125 against the old grid','ptitle')+T(0,46,`3 classes × 2 versions of g: ${cls.length} cells (${cls.filter(r=>r[0]!=='Aold').length} for the 8 designs, ${cls.filter(r=>r[0]==='Aold').length} for old-spread A)`,'psub');
+  const G=groups(ax,aw,top,h,DES,top+h+26);s+=G.s+band(ax,aw)+yTicks(ax,aw,yy,ticks);
+  s+=T(ax+aw-6,yy(0.1)+17,'within 10%','cap','end','style="fill:var(--ok)"');
+  s+=T(18,top+h/2,'depth-law error','axlbl','middle',`transform="rotate(-90 18 ${top+h/2})" style="font-size:15px"`);
+  cls.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1])*3+CL.indexOf(r[2]),x=G.x(gi,si,6);
+    s+=L(x,yy(r[10]),x,yy(r[3]),COL.faint,1.2);
+    s+=L(x,yy(r[5]),x,yy(r[6]),COL.nw,1.6,'2 2');
+    s+=mark(x,yy(r[10]),r[1],COL.card,COL.old,5.5,1.8);
+    s+=mark(x,yy(r[3]),r[1],r[7]?COL.ok:COL.nw,'none',6);});
+  s+=divider(735,10,H-6);
+  // (b) pooled cells: real against its twin
+  const bx=800,bw=350;
+  const all=DATA.depth.filter(r=>r[2]==='all');
+  s+=T(755,24,'(b) Pooled: real against its twin','ptitle')+T(755,46,`all classes together: ${all.length} cells (${all.filter(r=>r[0]==='Aold').length} for old-spread A)`,'psub');
+  const H2=groups(bx,bw,top,h,DES,top+h+26,13.5);s+=H2.s+band(bx,bw)+yTicks(bx,bw,yy,ticks);
+  all.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1]),x=H2.x(gi,si,2);
+    s+=L(x-4,yy(r[3]),x+4,yy(r[8]),COL.faint,1.2);
+    s+=mark(x-4,yy(r[3]),r[1],r[7]?COL.ok:COL.nw,'none',5);
+    s+=mark(x+4,yy(r[8]),r[1],COL.twin,'none',5);});
+  // legend
+  const ly=H-14;
+  s+=Ci(10,ly-4,6,COL.nw)+T(22,ly,'t125 real','cap')+Ci(110,ly-4,5.5,COL.card,COL.old,1.8)+T(122,ly,'old grid','cap')+Ci(200,ly-4,6,COL.twin)+T(212,ly,'no-covariates twin','cap');
+  s+=L(352,ly-10,352,ly+2,COL.nw,1.6,'2 2')+T(360,ly,'range of the 3 per-seed errors','cap');
+  s+=Ci(600,ly-4,6,COL.muted)+T(612,ly,'one g per track','cap')+R(722,ly-9,10,10,COL.muted,'none',1.5,0)+T(738,ly,'one g across tracks','cap')+T(1160,ly,'(a) in each shape: DNase, narrow, broad','cap','end');
+  return svg(W,H,s);
+}
+
+/* ---------- 15 · design A gains ---------- */
+function figAGain(){
+  const W=1160,H=450;let s='';
+  // (a) stacked bars, one g per track, DNase
+  const bars=[['old','A','old grid','A',COL.old],['real','Aold','t125','old-spread A',COL.aold],['real','A','t125','A',COL.nw]];
+  const vals=bars.map(([src,r])=>cell(src,r,'per_track','DNase','crps_all'));
+  const top=70,h=290,x0=60,ymax=Math.max(...vals.map(v=>v[0]+v[1]/2))*1.12,yy=v=>top+h*(1-v/ymax);
+  s+=T(0,24,'(a) One g per track, DNase: CRPS and its split','ptitle')+T(0,46,'mean of 3 seeds ± seed wobble','psub');
+  for(let k=0;k<=3;k++) s+=L(x0,yy(k),x0+440,yy(k),COL.grid,1)+T(x0-8,yy(k)+5,k,'tick','end');
+  s+=L(x0,top+h,x0+440,top+h,COL.axis,1.2);
+  bars.forEach(([src,r,l1,l2,c],i)=>{const [m,w,os,osw,se,sew]=vals[i];const bx=x0+15+i*132,bw=88;
+    s+=R(bx,yy(os),bw,top+h-yy(os),c,'none',3);
+    s+=R(bx,yy(os+se),bw,yy(os)-yy(os+se),c,'none',3,0,';fill-opacity:.35');
+    s+=T(bx+bw/2,yy(m)-12,pm(m,w),'val','middle',`style="fill:${c};font-size:15px"`);
+    s+=T(bx+bw/2,yy(os/2)-4,fmt(os),'val','middle','style="fill:#fff;font-size:14px"')+T(bx+bw/2,yy(os/2)+14,'± '+fmt(osw),'cap','middle','style="fill:#fff;font-size:12.5px"');
+    const segH=yy(os)-yy(os+se);
+    if(segH>38) s+=T(bx+bw/2,yy(os+se/2)-2,fmt(se),'val','middle',`style="fill:${c};font-size:14px"`)+T(bx+bw/2,yy(os+se/2)+15,'± '+fmt(sew),'cap','middle','style="font-size:12.5px"');
+    else s+=T(bx+bw+6,yy(os+se/2)+5,fmt(se)+' ± '+fmt(sew),'cap','start',`style="fill:${c};font-size:12.5px"`);
+    s+=T(bx+bw/2,top+h+22,l1,'axlbl','middle','style="font-size:14.5px"')+T(bx+bw/2,top+h+42,l2,'axlbl','middle',`style="font-size:14.5px;font-weight:600;fill:${c}"`);});
+  s+=R(x0,H-20,14,14,COL.muted,'none',2)+T(x0+20,H-8,'oracle-scaled','cap')+R(x0+130,H-20,14,14,COL.muted,'none',2,0,';fill-opacity:.35')+T(x0+150,H-8,'scale error','cap');
+  s+=divider(545,10,H-6);
+  // (b) gain / bar against the old grid, all 54 cells
+  const bx0=630,bw=520,lo=-2,hi=9,by=v=>top+h*(hi-Math.max(lo,Math.min(hi,v)))/(hi-lo);
+  const all=allRd('vs_oldgrid','crps_all');const nMet=all.filter(o=>o.v[2]).length;
+  s+=T(575,24,'(b) Every design against the old grid','ptitle')+T(575,46,`CRPS gain ÷ bar, all bins: ${nMet} of ${all.length} cells beyond the bar`,'psub');
+  const G=groups(bx0,bw,top,h,DES,top+h+26,15);s+=G.s;
+  [-2,0,2,4,6,8].forEach(v=>s+=L(bx0,by(v),bx0+bw,by(v),v===0?COL.axis:COL.grid,v===0?1.6:1)+T(bx0-8,by(v)+5,v,'tick','end'));
+  s+=L(bx0,by(1),bx0+bw,by(1),COL.accent,2,'7 5')+T(bx0-8,by(1)+5,'bar','tick','end','style="fill:var(--accent)"');
+  s+=T(590,top+h/2,'gain ÷ bar','axlbl','middle',`transform="rotate(-90 590 ${top+h/2})" style="font-size:15px"`);
+  all.forEach(o=>{const gi=DES.indexOf(o.r),si=GV.indexOf(o.g)*3+CL.indexOf(o.c),x=G.x(gi,si,6),q=o.v[0]/o.v[1];
+    s+=o.v[2]?mark(x,by(q),o.g,COL.nw,'none',6):mark(x,by(q),o.g,COL.card,COL.muted,5,1.6);});
+  s+=Ci(bx0+10,H-13,6,COL.nw)+T(bx0+22,H-8,'beyond the bar','cap')+Ci(bx0+140,H-13,5,COL.card,COL.muted,1.6)+T(bx0+152,H-8,'within','cap')+T(bx0+220,H-8,'● one g per track ■ one g across tracks','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 16 · real against the twin ---------- */
+function figTwin(){
+  const W=1160,H=450;let s='';
+  const top=72,h=290;
+  const panel=(x0,w,metric,lo,hi,ticks,title,sub,lx)=>{
+    const yy=logY(lo,hi,top,h);let t='';
+    const all=allRd('beatstwin',metric);const nMet=all.filter(o=>o.v[2]).length;
+    t+=T(lx,24,title,'ptitle')+T(lx,46,sub.replace('{n}',`${nMet} of ${all.length}`),'psub');
+    const G=groups(x0,w,top,h,DES,top+h+26,15);t+=G.s+yTicks(x0,w,yy,ticks);
+    t+=L(x0,yy(1),x0+w,yy(1),COL.accent,2,'7 5')+T(x0-8,yy(1)+5,'bar','tick','end','style="fill:var(--accent)"');
+    t+=T(lx+14,top+h/2,'gain ÷ bar','axlbl','middle',`transform="rotate(-90 ${lx+14} ${top+h/2})" style="font-size:15px"`);
+    all.forEach(o=>{const gi=DES.indexOf(o.r),si=GV.indexOf(o.g)*3+CL.indexOf(o.c),x=G.x(gi,si,6),q=o.v[0]/o.v[1];
+      if(q<=lo){t+=arrowHead(x,top+h-2,'d',COL.accent,9)+T(x+8,top+h-14,'twin lower','cap','start','style="fill:var(--accent);font-size:12.5px"');return;}
+      t+=o.v[2]?mark(x,yy(q),o.g,COL.nw,'none',6):mark(x,yy(q),o.g,COL.card,COL.muted,5,1.6);
+      if(metric==='crps_all'&&o.c==='DNase'){const es=DATA.expl.nonzero.filter(z=>z[0]===o.r&&z[1]===o.g&&z[3]==='nocov'&&z[4]==='trained/score');
+        if(es.length) t+=T(x+14,yy(q)-26,'twin records > '+DATA.expl.at+':','cap','start','style="fill:var(--accent);font-size:12.5px"')+T(x+14,yy(q)-10,es.map(z=>`${z[2]} ${z[6]} of ${z[5]}`).join(', '),'cap','start','style="fill:var(--accent);font-size:12.5px"');}});
+    return t;};
+  s+=panel(70,480,'mse_log1p_all',0.5,50,[[0.5,'0.5'],[2,'2'],[5,'5'],[10,'10'],[20,'20'],[50,'50']],'(a) MSE of the predicted mean','real against its no-covariates twin: {n} beyond the bar',0);
+  s+=divider(585,10,H-6);
+  s+=panel(670,480,'crps_all',0.1,50,[[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[2,'2'],[5,'5'],[10,'10'],[20,'20'],[50,'50']],'(b) CRPS, all bins','real against its no-covariates twin: {n} beyond the bar',600);
+  s+=Ci(80,H-13,6,COL.nw)+T(92,H-8,'beyond the bar','cap')+Ci(210,H-13,5,COL.card,COL.muted,1.6)+T(222,H-8,'within','cap')+T(290,H-8,'● one g per track ■ one g across tracks; in each shape: DNase, narrow, broad · gain = twin − real','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 17 · reading icons ---------- */
+function icLaw(){const W=300,H=96;let s='';const lo=0.04,hi=5,x=v=>14+272*(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo));
+  s+=R(x(lo),8,x(0.1)-x(lo),58,COL.ok,'none',0,0,';fill-opacity:.16')+L(14,66,286,66,COL.axis,1.2);
+  DATA.depth.filter(r=>r[0]!=='Aold').forEach((r,i)=>s+=Ci(x(r[3]),22+(i%4)*3,4,COL.nw,'none'));
+  DATA.depth.filter(r=>r[0]==='D'||r[0]==='D2').forEach((r,i)=>s+=Ci(x(r[8]),48+(i%4)*3,4,COL.twin,'none'));
+  [[0.1,'10%'],[1,'100%']].forEach(([v,l])=>s+=T(x(v),82,l,'cap','middle','style="font-size:12px"'));
+  s+=T(286,20,'real','cap','end','style="fill:var(--new);font-size:12px"')+T(286,56,'D, D2 twins','cap','end','style="fill:var(--twin);font-size:12px"');
+  return svg(W,H,s);}
+function icA(){const W=300,H=90;let s='';const [m1,,o1,,s1]=cell('old','A','per_track','DNase','crps_all'),[m2,,o2,,s2]=cell('real','A','per_track','DNase','crps_all');
+  const k=70/m1;s+=L(10,84,290,84,COL.axis,1.2);
+  s+=R(60,84-o1*k,60,o1*k,COL.old,'none',2)+R(60,84-(o1+s1)*k,60,s1*k,COL.old,'none',2,0,';fill-opacity:.35');
+  s+=R(180,84-o2*k,60,o2*k,COL.nw,'none',2)+R(180,84-(o2+s2)*k,60,s2*k,COL.nw,'none',2,0,';fill-opacity:.35');
+  s+=arrowR(126,40,174,COL.accent)+T(90,10+0,'','cap');return svg(W,H,s);}
+function icCov(){const W=300,H=90;let s='';
+  s+=R(30,20,60,30,COL.card,COL.nw,15,2)+T(60,41,'C, C′','mono','middle','style="font-size:13px"')+T(60,70,'real','cap','middle');
+  s+=R(210,20,60,30,COL.card,COL.twin,15,2,';stroke-dasharray:4 3')+T(240,41,'?','mono','middle','style="font-size:13px"')+T(240,70,'twin','cap','middle');
+  s+=T(150,42,'<','big','middle','style="font-size:24px"')+T(150,70,'MSE','cap','middle');return svg(W,H,s);}
+
+/* ---------- 18 · caveat icons ---------- */
+function icTwinOff(){const W=260,H=80;let s='';
+  s+=R(10,10,50,26,COL.card,COL.twin,13,2,';stroke-dasharray:4 3')+T(35,28,'?','mono','middle','style="font-size:13px"');
+  s+=arrowR(64,23,96)+R(100,8,150,30,COL.card,COL.nw,8,2)+T(175,28,'× d′/d kept','axlbl','middle','style="font-size:13.5px"');
+  s+=T(130,66,'the twin is not blind to depth','cap','middle','style="font-size:12.5px"');return svg(W,H,s);}
+function icDev(){const W=260,H=112;let s='';const ds=DES;const bw=24;
+  ds.forEach((d,i)=>{const g=DATA.dev[d].gpu||0,c=DATA.dev[d].cpu||0,n=g+c,x=6+i*28,hh=62;
+    s+=R(x,10,bw,hh*g/n,COL.gpu,'none',0)+R(x,10+hh*g/n,bw,hh*c/n,COL.cpu,'none',0);
+    s+=T(x+bw/2,88,d,'cap','middle',`style="font-size:${d.length>2?9.5:11.5}px;fill:${rowCol(d)}"`);});
+  s+=R(40,98,11,11,COL.gpu,'none',2)+T(56,108,'GPU slice','cap','start','style="font-size:12px"')+R(140,98,11,11,COL.cpu,'none',2)+T(156,108,'CPU','cap','start','style="font-size:12px"');
+  return svg(W,H,s);}
+function icMse(){const W=260,H=80;let s='';
+  s+=R(20,14,90,32,COL.card,COL.old,16,2)+T(65,36,'CRPS','axlbl','middle','style="font-size:14px"');
+  s+=R(150,14,90,32,COL.card,COL.hair,16,2,';stroke-dasharray:4 3')+T(195,36,'MSE','axlbl','middle','style="font-size:14px;fill:var(--faint)"');
+  s+=L(158,52,232,8,COL.accent,2.5);
+  s+=T(130,70,'old grid','cap','middle','style="font-size:12.5px"');return svg(W,H,s);}
+function icBoom(){const W=260,H=84;let s='';const k=DATA.expl.kinds;
+  const ks=Object.keys(k).filter(x=>k[x][1]>0);const mx=Math.max(...ks.map(x=>k[x][1]));
+  s+=T(130,79,`by kind of scoring, of ${Object.values(k).reduce((a,v)=>a+v[0],0).toLocaleString('en-US')} records`,'cap','middle','style="font-size:11px"');
+  ks.forEach((x,i)=>{const bx=10+i*62,hh=34*k[x][1]/mx;s+=R(bx,46-hh,40,hh,COL.accent,'none',2)+T(bx+20,42-hh,k[x][1],'cap','middle','style="fill:var(--accent);font-size:12px"')+T(bx+20,60,x.split('/')[0]+(x.endsWith('val')?' (val)':''),'cap','middle','style="font-size:11px"');});
+  return svg(W,H,s);}
+
+/* ===================== PART 2 · the map h =====================
+   Everything reads DATA.h2; designs come from the data (H2.f_done), so A, B, B2 appear when they land. */
+const H2=DATA.h2;
+const HV=[
+  {v:'formula',w:'bin',r:'None',name:'formula, bin only',grp:0},
+  {v:'formula',w:'frag',r:'None',name:'formula, fragment window',grp:0},
+  {v:'affine',w:'None',r:'1',name:'affine h, rung 1',grp:1},
+  {v:'mlp',w:'None',r:'1',name:'MLP h, rung 1',grp:1},
+  {v:'affine',w:'None',r:'5',name:'affine h, rung 5',grp:2},
+  {v:'mlp',w:'None',r:'5',name:'MLP h, rung 5',grp:2},
+  {v:'formula_affine',w:'None',r:'5',name:'formula + affine correction, rung 5',grp:2},
+  {v:'formula_mlp',w:'None',r:'5',name:'formula + MLP correction, rung 5',grp:2}];
+const HV_LEARN=HV.filter(x=>x.v!=='formula');
+const HGRP=['nothing learned','rung 1: bin count + control in bin','rung 5: all inputs'];
+const HSRC={true:'trained on true counts',fnb:"trained on f's predicted NB",formula:'nothing learned'};
+const HNZ={'0':'push only','1':'push + own noise'};
+const hKey=(ver,noise,src)=>ver.v==='formula'?`formula|${ver.w}|None|0|formula`:`${ver.v}|None|${ver.r}|${noise}|${src}`;
+const pid=id=>{const [v,w,r,n,s]=id.split('|');return {v,w,r,n,s};};
+const verOf=id=>{const p=pid(id);return HV.find(x=>x.v===p.v&&(p.v==='formula'?x.w===p.w:x.r===p.r));};
+const hFull=(id,src)=>{const p=pid(id),ver=verOf(id);if(p.v==='formula')return ver.name;
+  return `${ver.name}, ${HNZ[p.n]}, ${HSRC[src||p.s]}`;};
+const hA=(cls,key,m)=>H2.cells_alone[`${cls}|${key}|${m}`];
+/* chain cell [mean, wobble, n]; an h trained on f's NB has one seed and borrows the true-counts h's wobble (PI) */
+const hC=(f,key,m)=>{const c=H2.cells_chain[`${f}|${key}|${m}`];if(!c)return null;let w=c[1];
+  if(w==null&&key.endsWith('|fnb')){const t=H2.cells_chain[`${f}|${key.replace(/\|fnb$/,'|true')}|${m}`];w=t?t[1]:null;}return [c[0],w,c[2]];};
+const fw=v=>Math.abs(v)>=1?fmt(v):v.toPrecision(2);
+const pmw=(v,w)=>w==null?fmt(v)+' (no seed wobble)':fmt(v)+' ± '+fw(w);
+const crpsSplit=(m,os,se)=>`${fmt(m)} (oracle-scaled ${fmt(os)} + scale error ${fmt(se)})`;
+const HDES=DES.filter(d=>H2.f_done.includes(d));
+const hRd=(k,m,f)=>H2.rd.filter(x=>x.k===k&&x.m===m&&(f===undefined||x.f===f));
+const scopeTxt=()=>`chain: ${H2.chain[0]} of ${H2.chain[1]} designs`;
+const SRCC={true:'var(--htrue)',fnb:'var(--hfnb)',formula:'var(--hform)'};
+
+/* ---------- 19 · the map h ---------- */
+function figHMap(){
+  const W=1160,H=440;let s='';
+  // illustration: NB(mean 6, shape 4) and the caller's Poisson upper tail at a control rate of 3
+  const mu=6,nn=4,pp=nn/(nn+mu),K=22;const nb=[];let t=Math.pow(pp,nn);
+  for(let k=0;k<K;k++){nb.push(t);t=t*(k+nn)/(k+1)*(1-pp);}
+  const lam=3,lf=k=>{let sum=0,term=Math.exp(-lam);for(let j=1;j<=k;j++)term*=lam/j;for(let j=k;j<k+80;j++){sum+=term;term*=lam/(j+1);}return sum;};
+  const hk=nb.map((_,k)=>-Math.log10(Math.max(1e-300,lf(k))));
+  const mx=Math.max(...nb);
+  s+=T(0,24,'(a) From f\'s predicted NB to the predicted P, with no sampling','ptitle');
+  // NB bars
+  const bx=10,bw=270,by=230,bh=140;
+  s+=R(bx-6,52,bw+12,214,COL.card,COL.hair,10)+T(bx+bw/2,74,'f\'s predicted NB for X′, one bin','axlbl','middle','style="font-size:15px;font-weight:600"');
+  nb.forEach((v,k)=>{const x=bx+6+k*(bw-12)/K;s+=R(x,by-bh*v/mx,(bw-12)/K-2,bh*v/mx,COL.row1,'none',1.5);});
+  s+=L(bx,by,bx+bw,by,COL.axis,1.2)+T(bx+bw/2,by+22,'each possible count k = 0, 1, 2, …','cap','middle');
+  s+=R(bx,290,bw,40,COL.card,COL.ctl,20,2)+T(bx+bw/2,315,'+ the control around the bin','axlbl','middle','style="font-size:14.5px"');
+  s+=arrowR(bx+bw+8,170,352)+L(bx+bw,310,330,310,COL.muted,2)+L(330,310,330,170,COL.muted,2);
+  // h
+  s+=R(356,120,120,100,COL.card,COL.accent,14,2.5)+T(416,180,'h','big','middle','style="font-size:40px;fill:var(--accent)"')+T(416,244,'one P per k','psub','middle');
+  s+=arrowR(478,170,530);
+  // weighted set of P values
+  const px=548,pw=300,py=230,ph=140,pmax=Math.ceil(Math.max(...hk.filter((_,k)=>nb[k]>mx*0.02)));
+  s+=R(px-14,52,pw+28,214,COL.card,COL.hair,10)+T(px+pw/2,74,'predicted P: values h(k), weights NB(k)','axlbl','middle','style="font-size:15px;font-weight:600"');
+  const xp=v=>px+pw*Math.min(v,pmax)/pmax;
+  nb.forEach((v,k)=>{if(hk[k]<=pmax) s+=L(xp(hk[k]),py,xp(hk[k]),py-ph*v/mx,COL.row1,3);});
+  const mean=nb.reduce((a,v,k)=>a+v*hk[k],0)/nb.reduce((a,v)=>a+v,0);
+  s+=L(xp(mean),py-ph-8,xp(mean),py,COL.accent,2,'6 4')+T(xp(mean)+6,py-ph+4,'mean','val','start','style="fill:var(--accent);font-size:14px"');
+  s+=L(px,py,px+pw,py,COL.axis,1.2)+T(px+pw/2,py+22,'P = −log10 p','cap','middle');
+  s+=arrowR(866,170,900);
+  // exact scores
+  s+=R(905,60,250,90,COL.card,COL.new,10,2)+FO(917,68,228,80,'<b style="color:var(--ink)">Exact mean</b><br>Σ NB(k) · h(k)');
+  s+=R(905,166,250,100,COL.card,COL.new,10,2)+FO(917,174,228,90,'<b style="color:var(--ink)">Exact CRPS</b><br>a sum over pairs of k, no sampling');
+  s+=T(1030,290,'k runs until the NB tail is below 10<tspan dy="-7" font-size="11">−6</tspan>','cap','middle');
+  s+=T(W/2,352,'illustration: shapes only, not data','cap','middle');
+  s+=L(0,366,W,366,COL.axis,1.5,'6 6');
+  // (b) uncertainty variants
+  s+=T(0,394,'(b) Two kinds of uncertainty','ptitle');
+  const lane=(x0,lab,noise)=>{let t=T(x0,424,lab,'axlbl','start','style="font-weight:600;font-size:15px"');const ax0=x0+170,aw=240;
+    t+=L(ax0,430,ax0+aw,430,COL.axis,1.2);
+    nb.forEach((v,k)=>{if(hk[k]>pmax) return;const x=ax0+aw*hk[k]/pmax,hh=34*v/mx;
+      if(!noise) t+=L(x,430,x,430-hh,COL.push,2.5);
+      else{let d='';for(let j=-10;j<=10;j++){const xx=x+j*0.9,yy=430-hh*0.8*Math.exp(-j*j/18);d+=(j>-10?' L':'M')+xx.toFixed(1)+','+yy.toFixed(1);}t+=P(d,'none',COL.noise,2);}});
+    return t;};
+  s+=lane(330,'push only',false)+lane(760,'push + own noise',true);
+  return svg(W,H+4,s);
+}
+
+/* ---------- 21 · training sources and scorings ---------- */
+function figHScore(){
+  const W=1160,H=330;let s='';
+  const nA=c=>(hA(c,'formula|bin|None|0|formula','crps_log_all')||[0,0,0])[2];
+  const f0=HDES[0],nP=f0?(hC(f0,'formula|bin|None|0|formula','crps_log_all')||[0,0,0])[2]:0;
+  const x0=270,cw=330,ch=118,y0=58,gap=14;
+  s+=T(x0+cw/2,30,'scored alone, on the true counts X′','axlbl','middle','style="font-weight:600"')+T(x0+cw+gap+cw/2,30,'scored in the chain, on f\'s predicted NB','axlbl','middle','style="font-weight:600"');
+  [['true','trained on true counts',`${H2.seeds_true} seeds`],['fnb','trained on f\'s predicted NB',`${H2.seeds_fnb} seed, per f`]].forEach(([k,lab,sub],i)=>{
+    const y=y0+i*(ch+gap);s+=T(0,y+ch/2-4,lab,'axlbl','start',`style="font-weight:600;fill:${SRCC[k]}"`)+T(0,y+ch/2+18,sub,'psub');});
+  const cellB=(cx,cy,c,dash,html)=>R(cx,cy,cw,ch,COL.card,c,10,2,dash?';stroke-dasharray:6 5':'')+FO(cx+14,cy+10,cw-28,ch-16,html,'font:400 15px var(--sans);color:var(--body);line-height:1.38');
+  s+=cellB(x0,y0,SRCC.true,false,`<b style="color:var(--ink)">Result 1:</b> how closely h reproduces −log10 p when the counts are known. ${nA('DNase')} DNase, ${nA('narrow')} narrow, ${nA('broad')} broad products.`);
+  s+=cellB(x0+cw+gap,y0,SRCC.true,false,`<b style="color:var(--ink)">Result 3:</b> the chain f → h against the old grid's direct p. ${nP} pairs per design.`);
+  s+=cellB(x0,y0+ch+gap,COL.axis,true,'<span style="color:var(--faint)">not scored</span>');
+  s+=cellB(x0+cw+gap,y0+ch+gap,SRCC.fnb,false,`<b style="color:var(--ink)">Result 2, repair:</b> the same version of h, trained on f's NB, on the same input as the cell above.`);
+  s+=L(x0+cw*1.5+gap,y0+ch+2,x0+cw*1.5+gap,y0+ch+gap-2,COL.accent,3);
+  // the two pipelines
+  const px=982;
+  s+=divider(962,10,H-10);
+  s+=T(px,30,'alone','axlbl','start','style="font-weight:600"');
+  const chip=(x,y,t,c)=>R(x,y,44,30,COL.card,c,15,2)+T(x+22,y+20,t,'axlbl','middle','style="font-size:14px"');
+  s+=chip(px,44,'X′',COL.ink)+arrowR(px+46,59,px+64)+chip(px+66,44,'h',COL.accent)+arrowR(px+112,59,px+130)+T(px+140,64,'P','mono','start','style="font-size:16px"');
+  s+=T(px,128,'in the chain','axlbl','start','style="font-weight:600"');
+  s+=chip(px,142,'X',COL.xsrc)+arrowR(px+46,157,px+64)+chip(px+66,142,'f',COL.ink)+arrowR(px+112,157,px+130)+chip(px+132,142,'NB',COL.row1);
+  s+=arrowD(px+154,174,206)+chip(px+132,208,'h',COL.accent)+arrowL0(px+130,223,px+112)+T(px+102,228,'P','mono','end','style="font-size:16px"');
+  s+=T(px,272,'f: seed 0 of each','cap')+T(px,290,'real design','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 22 · h on the true counts ---------- */
+function figHAlone(){
+  const W=1160;let s='';
+  const LW=286,gp=18,pw=(W-LW-gp*2)/3,top=78;
+  // row layout
+  const rows=[];let y=top;
+  HGRP.forEach((g,gi)=>{rows.push({grp:g,y});y+=22;HV.filter(v=>v.grp===gi).forEach(v=>{const hgt=v.v==='formula'?20:32;rows.push({ver:v,y,h:hgt});y+=hgt+4;});y+=4;});
+  const yEnd=y;
+  rows.forEach(r=>{if(r.grp) s+=T(0,r.y+15,r.grp,'cap','start','style="font-weight:600;fill:var(--muted);font-size:13.5px;letter-spacing:.04em"');
+    else s+=T(14,r.y+r.h/2+5,r.ver.name,'axlbl','start','style="font-size:14.5px"');});
+  CL.forEach((cls,ci)=>{
+    const px=LW+ci*(pw+gp),bx=px+4,bwMax=pw-92;
+    if(ci>0) s+=divider(px-gp/2,top-34,yEnd+20);
+    const bars=[];HV.forEach(v=>{(v.v==='formula'?['0']:['0','1']).forEach(n=>{const k=hKey(v,n,'true');const c=hA(cls,k,'crps_log_all');if(c) bars.push({v,n,k,c});});});
+    const mx=Math.max(...bars.map(b=>b.c[0]+(b.c[1]||0)/2));const xs=v=>bx+bwMax*Math.max(0,v)/mx;
+    const nP=(bars[0]||{c:[0,0,0]}).c[2];
+    s+=T(px,24,`(${'abc'[ci]}) ${cls==='DNase'?'DNase':cls+' marks'}`,'ptitle')+T(px,46,`${nP} products · CRPS on log(1 + P)`,'psub');
+    const ticks=[0,mx/2,mx].map(v=>+v.toPrecision(2));
+    ticks.forEach(v=>s+=L(xs(v),top-6,xs(v),yEnd,COL.grid,1)+T(xs(v),yEnd+16,String(v),'tick','middle'));
+    rows.filter(r=>r.ver).forEach(r=>{
+      (r.ver.v==='formula'?['0']:['0','1']).forEach((n,j)=>{
+        const k=hKey(r.ver,n,'true'),c=hA(cls,k,'crps_log_all'),os=hA(cls,k,'crps_log_oracle_scaled_all'),se=hA(cls,k,'crps_log_scale_error_all');if(!c) return;
+        const col=r.ver.v==='formula'?COL.hform:(n==='0'?COL.push:COL.noise);
+        const yy=r.y+(r.ver.v==='formula'?4:3+j*15),bh=12;
+        const o=Math.max(0,os[0]),e=Math.max(0,se[0]);
+        s+=R(bx,yy,xs(o)-bx,bh,col,'none',2)+R(xs(o),yy,xs(o+e)-xs(o),bh,col,'none',2,0,';fill-opacity:.35');
+        if(c[1]!=null) s+=L(xs(c[0]-c[1]/2),yy+bh/2,xs(c[0]+c[1]/2),yy+bh/2,COL.ink,1.6)+L(xs(c[0]-c[1]/2),yy+2,xs(c[0]-c[1]/2),yy+bh-2,COL.ink,1.6)+L(xs(c[0]+c[1]/2),yy+2,xs(c[0]+c[1]/2),yy+bh-2,COL.ink,1.6);
+        s+=T(xs(c[0]+(c[1]||0)/2)+5,yy+bh-1,c[1]==null?fmt(c[0]):fmt(c[0])+' ± '+fw(c[1]),'cap','start','style="font-size:11.5px;fill:var(--body)"');});});
+  });
+  const ly=yEnd+46;
+  s+=R(0,ly-11,13,12,COL.push,'none',2)+T(19,ly,'push only','cap')+R(100,ly-11,13,12,COL.noise,'none',2)+T(119,ly,'push + own noise','cap')+R(245,ly-11,13,12,COL.hform,'none',2)+T(264,ly,'formula (nothing learned)','cap');
+  s+=T(450,ly,'solid: oracle-scaled · light: scale error · whisker: seed wobble · every h here trained on true counts','cap');
+  return svg(W,ly+8,s);
+}
+
+/* ---------- 23 · repair ---------- */
+function figRepair(){
+  const W=1160,H=450;let s='';
+  const top=72,h=286;
+  const rows=hRd('repair','crps_log_all').filter(x=>pid(x.id).n==='0');
+  const des=HDES.filter(d=>rows.some(x=>x.f===d));
+  const slot=x=>HV_LEARN.findIndex(v=>v.v===pid(x.id).v&&v.r===pid(x.id).r);
+  // (a) values
+  const ax=70,aw=600,vals=rows.flatMap(x=>[x.t-(x.tw||0)/2,x.t+(x.tw||0)/2,x.o]);
+  const lo=Math.min(...vals)*0.96,hi=Math.max(...vals)*1.03,yy=v=>top+h*(hi-v)/(hi-lo);
+  const nT=rows.filter(x=>x.d<0).length;
+  s+=T(0,24,'(a) CRPS on log(1 + P), in the chain, push only','ptitle')+T(0,46,`the same version of h, trained two ways, on f's predicted NB (track ${H2.track})`,'psub');
+  const G=groups(ax,aw,top,h,des,top+h+26,17);s+=G.s.replace(/style="fill:var\(--row[12]\)/g,'style="fill:var(--ink)');
+  const tk=[];for(let k=Math.ceil(lo*100);k<=Math.floor(hi*100);k+=2) tk.push([k/100,(k/100).toFixed(2)]);s+=yTicks(ax,aw,yy,tk);
+  s+=T(18,top+h/2,'CRPS on log(1 + P)','axlbl','middle',`transform="rotate(-90 18 ${top+h/2})" style="font-size:15px"`);
+  rows.forEach(x=>{const gi=des.indexOf(x.f),si=slot(x),xx=G.x(gi,si,6);
+    s+=L(xx,yy(x.t),xx,yy(x.o),COL.faint,1.4);
+    if(x.tw!=null) s+=L(xx,yy(x.t-x.tw/2),xx,yy(x.t+x.tw/2),COL.htrue,1.6);
+    s+=R(xx-5,yy(x.o)-5,10,10,COL.hfnb,'none',1.5)+Ci(xx,yy(x.t),5.5,COL.htrue);});
+  des.forEach((d,gi)=>HV_LEARN.forEach((v,si)=>s+=T(G.x(gi,si,6),top+h+44,si+1,'tick','middle','style="font-size:11.5px"')));
+  s+=divider(700,10,H-30);
+  // (b) gap ÷ bar
+  const bx0=790,bw=360,blo=0.5,bhi=50,by=logY(blo,bhi,top,h);
+  const nMet=rows.filter(x=>x.d<0&&x.met).length;
+  s+=T(720,24,'(b) The gap, divided by its bar','ptitle')+T(720,46,`f's NB h − true-counts h: ${nMet} of ${rows.length} rows beyond the bar`,'psub');
+  const G2=groups(bx0,bw,top,h,des,top+h+26,15);s+=G2.s.replace(/style="fill:var\(--row[12]\)/g,'style="fill:var(--ink)');
+  s+=yTicks(bx0,bw,by,[[0.5,'0.5'],[2,'2'],[5,'5'],[10,'10'],[20,'20'],[50,'50']]);
+  s+=L(bx0,by(1),bx0+bw,by(1),COL.accent,2,'7 5')+T(bx0-8,by(1)+5,'bar','tick','end','style="fill:var(--accent)"');
+  s+=T(738,top+h/2,'gap ÷ bar','axlbl','middle',`transform="rotate(-90 738 ${top+h/2})" style="font-size:15px"`);
+  rows.forEach(x=>{const gi=des.indexOf(x.f),si=slot(x),xx=G2.x(gi,si,6),q=-x.d/x.bar;
+    if(q<=0){s+=arrowHead(xx,top+h-2,'d',COL.hfnb,8);return;}
+    s+=x.met?Ci(xx,by(q),5.5,COL.htrue):Ci(xx,by(q),5,COL.card,COL.muted,1.6);});
+  // legend and key
+  const ly=H-26;
+  s+=Ci(8,ly-4,5.5,COL.htrue)+T(18,ly,'h trained on true counts (whisker: seed wobble)','cap')+R(400,ly-9,10,10,COL.hfnb,'none',1.5)+T(416,ly,'h trained on f\'s predicted NB (1 seed)','cap');
+  s+=T(0,H-6,'In each design, 1–6: '+HV_LEARN.map((v,i)=>`${i+1} ${v.name}`).join(' · '),'cap','start','style="font-size:12.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 24 · the chain against the old grid ---------- */
+function figChainOld(){
+  const W=1160,H=450;let s='';
+  const top=72,h=286;
+  const all=hRd('vs_oldgrid','crps_all');const des=HDES.filter(d=>all.some(x=>x.f===d));
+  const oldOf=d=>all.find(x=>x.f===d);
+  // (a) log scale overview
+  const ax=72,aw=560;
+  const vmax=Math.max(...all.flatMap(x=>[x.h,x.o0,x.o]));const lo=0.1,hi=Math.pow(10,Math.ceil(Math.log10(vmax*1.5))),yy=logY(lo,hi,top,h);
+  s+=T(0,24,'(a) CRPS on P, all bins: every design in the chain','ptitle')+T(0,46,`track ${H2.track}, f seed 0, ${(all[0]||{n:0}).n} pairs; old grid on the same pairs`,'psub');
+  const G=groups(ax,aw,top,h,des,top+h+24,17);s+=G.s.replace(/style="fill:var\(--row[12]\)/g,'style="fill:var(--ink)');
+  const tk=[];for(let e=-1;Math.pow(10,e)<=hi;e++) tk.push([Math.pow(10,e),e<0?'0.1':e<3?String(Math.pow(10,e)):'10<tspan dy="-7" font-size="10">'+e+'</tspan>']);s+=yTicks(ax,aw,yy,tk);
+  s+=T(16,top+h/2,'CRPS on P (log scale)','axlbl','middle',`transform="rotate(-90 16 ${top+h/2})" style="font-size:15px"`);
+  s+=L(ax,yy(H2.explode_at),ax+aw,yy(H2.explode_at),COL.accent,1.4,'3 4')+T(ax+aw-4,yy(H2.explode_at)-6,'blow-up: CRPS > '+H2.explode_at,'cap','end','style="fill:var(--accent);font-size:12.5px"');
+  des.forEach((d,gi)=>{const rws=all.filter(x=>x.f===d),gx=ax+gi*G.gw,gw=G.gw;
+    rws.forEach((x,i)=>{const src=pid(x.id).s;s+=Ci(gx+gw*0.12+gw*0.42*(i+0.5)/rws.length,yy(x.h),4.2,SRCC[src]);});
+    const o=oldOf(d),xo=gx+gw*0.72;
+    s+=P(`M${xo},${yy(o.o0)-7} L${xo+7},${yy(o.o0)} L${xo},${yy(o.o0)+7} L${xo-7},${yy(o.o0)} Z`,COL.ink);
+    s+=R(xo+12,yy(o.o)-6,12,12,COL.card,COL.ink,1.5,2);
+    s+=T(xo+18,yy(o.o)-26,fmt(o.o),'cap','middle','style="font-size:11.5px;fill:var(--ink)"')+T(xo+18,yy(o.o)-12,'± '+fmt(o.ow),'cap','middle','style="font-size:11px"');
+    s+=T(gx+gw/2,top+h+44,`old: ${o.ox} of ${H2.old_cell_n[d+'|'+H2.f_g[0]+'|narrow']||'?'}`,'cap','middle','style="font-size:12px"');
+    s+=T(gx+gw/2,top+h+60,`chain: ${rws.reduce((a,x)=>a+x.hx,0)}`,'cap','middle','style="font-size:12px"');});
+  s+=T(0,top+h+44,'records','cap','start','style="font-size:12px"')+T(0,top+h+60,'> '+H2.explode_at,'cap','start','style="font-size:12px"');
+  s+=divider(668,10,H-6);
+  // (b) the designs where every chain h is above the old grid beyond the bar: split bars
+  const hiD=des.filter(d=>all.filter(x=>x.f===d).every(x=>x.d<0&&Math.abs(x.d)>x.bar));
+  const bx0=750,bw=400;
+  s+=T(690,24,`(b) ${hiD.join(' and ')||'none'}: the CRPS split`,'ptitle')+T(690,46,'old grid (3-seed mean) against the lowest and highest chain h','psub');
+  if(hiD.length){
+    const sp=(d,id,m)=>hRd('vs_oldgrid',m,d).find(x=>x.id===id);
+    const items=[];hiD.forEach(d=>{const rws=all.filter(x=>x.f===d).sort((a,b)=>a.h-b.h);
+      items.push({d,kind:'old',x:rws[0]},{d,kind:'lo',x:rws[0]},{d,kind:'hi',x:rws[rws.length-1]});});
+    const val=it=>it.kind==='old'?[it.x.o,it.x.ow,sp(it.d,it.x.id,'crps_oracle_scaled_all').o,sp(it.d,it.x.id,'scale_error_all').o]:[it.x.h,it.x.hw,sp(it.d,it.x.id,'crps_oracle_scaled_all').h,sp(it.d,it.x.id,'scale_error_all').h];
+    const ymax=Math.max(...items.map(it=>val(it)[0]))*1.22,by=v=>top+h*(1-v/ymax);
+    for(let k=0;k<=ymax;k+=0.05) s+=L(bx0,by(k),bx0+bw,by(k),COL.grid,1)+T(bx0-8,by(k)+5,k.toFixed(2),'tick','end');
+    s+=L(bx0,top+h,bx0+bw,top+h,COL.axis,1.2);
+    const sw=bw/items.length;
+    items.forEach((it,i)=>{const [m,w,os,se]=val(it),c=it.kind==='old'?COL.old:SRCC[pid(it.x.id).s],x=bx0+i*sw+sw*0.2,bwid=sw*0.6;
+      s+=R(x,by(os),bwid,top+h-by(os),c,'none',2)+R(x,by(os+Math.max(0,se)),bwid,by(os)-by(os+Math.max(0,se)),c,'none',2,0,';fill-opacity:.35');
+      s+=T(x+bwid/2,by(m)-22,fmt(m),'val','middle',`style="fill:${c};font-size:13.5px"`)+T(x+bwid/2,by(m)-7,w==null?'no wobble':'± '+fmt(w),'cap','middle','style="font-size:11px"');
+      const ver=verOf(it.x.id),p=pid(it.x.id);
+      const nm=ver.name.split(', ');
+      const ls=it.kind==='old'?['old grid','direct p','']:(p.v==='formula'?[nm[0]+',',nm[1],'']:[nm[0]+',',nm[1],p.s==='fnb'?"f's NB, push":'true counts, push']);
+      ls.forEach((l,j)=>s+=T(x+bwid/2,top+h+16+j*14,l,'cap','middle','style="font-size:11.5px;fill:var(--body)"'));
+      if(i%3===0){s+=T(bx0+i*sw+sw*1.5,top+h+66,it.d,'ptitle','middle','style="font-size:16px"');if(i>0) s+=L(bx0+i*sw,top-6,bx0+i*sw,top+h+52,COL.axis,2);}});
+  }
+  const ly=H-8;
+  s+=Ci(8,ly-4,4.5,COL.hform)+T(18,ly,'formula','cap')+Ci(88,ly-4,4.5,COL.htrue)+T(98,ly,'h trained on true counts','cap')+Ci(270,ly-4,4.5,COL.hfnb)+T(280,ly,'h trained on f\'s NB','cap');
+  s+=P(`M${428},${ly-11} L${435},${ly-4} L${428},${ly+3} L${421},${ly-4} Z`,COL.ink)+T(441,ly,'old grid, seed 0','cap')+R(556,ly-10,11,11,COL.card,COL.ink,1.5,2)+T(573,ly,'old grid, 3-seed mean','cap');
+  s+=T(1160,ly,'(b) solid: oracle-scaled · light: scale error','cap','end');
+  return svg(W,H,s);
+}
+
+/* ---------- 25 · caveat icons ---------- */
+function icMerge(){const W=300,H=94;let s='';const m=H2.merge.slice().sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0]));const bar=m[0][4],mx=bar*1.25;
+  const bw=280/m.length,yb=62,y=v=>yb-50*v/mx;
+  s+=L(10,y(bar),290,y(bar),COL.accent,1.6,'5 4')+T(10,y(bar)-5,'bar '+bar.toExponential(0).replace('e-','e−'),'cap','start','style="fill:var(--accent);font-size:11px"');
+  m.forEach((r,i)=>{const x=10+i*bw+bw*0.25;if(r[2]!=null) s+=R(x,y(r[2]),bw*0.5,yb-y(r[2]),COL.row1,'none',2);
+    s+=T(x+bw*0.25,yb+14,r[0],'cap','middle','style="font-size:12px;fill:var(--ink)"')+T(x+bw*0.25,yb+27,r[2]!=null?r[2].toExponential(1).replace('e-','e−'):'exact','cap','middle','style="font-size:10.5px"');});
+  s+=L(10,yb,290,yb,COL.axis,1.2);return svg(W,H,s);}
+function icHBoom(){const W=300,H=80;let s='';const ks=['alone','chain'].map(sc=>[sc,H2.expl[sc+'|crps_mean_point_all_gt_20']]).filter(x=>x[1]);
+  const mx=Math.max(...ks.map(x=>x[1].gt));
+  ks.forEach(([sc,e],i)=>{const y=10+i*32,w=150*e.gt/mx,wa=150*e.gt_aff5/mx;
+    s+=T(0,y+15,sc,'cap','start','style="font-size:12px;fill:var(--ink)"')+R(48,y+2,w,18,COL.accent,'none',2,0,';fill-opacity:.35')+R(48,y+2,wa,18,COL.accent,'none',2);
+    s+=T(52+w,y+15,`${e.gt} of ${e.rec.toLocaleString('en-US')}`,'cap','start','style="font-size:11.5px"');});
+  return svg(W,H,s);}
+
+/* ---------- 27 · next steps ---------- */
+function figNext(){
+  const W=1160,H=380;let s='';
+  const steps=[['1','Refresh part 2',`when the chains of ${H2.f_missing.join(', ')||'the last designs'} land; the figures read whatever the aggregate holds`,'var(--twin)'],
+    ['2','Look at how g moves depth','the per-pair predicted scales against the read ratio, for real D against its twin','var(--accent)'],
+    ['3','Option: g without depth','without depth in g, the offset would carry d′/d alone','var(--new)'],
+    ['4','Option: where the chain loses','split the D and D2 gap by bin level and the top 1 %','var(--row2)'],
+    ['5','Option: a firmer repair test','three seeds for the h trained on f\'s NB, and fits past the step cap','var(--hfnb)'],
+    ['6','Write the readings to the vault','as readings only: no ticks, no verdicts','var(--row1)']];
+  steps.forEach(([n,t,sub,c],i)=>{const x=10+(i%3)*385,y=10+Math.floor(i/3)*185;
+    s+=R(x,y,360,170,COL.card,c,12,2.5);
+    s+=Ci(x+36,y+38,20,c)+T(x+36,y+45,n,'big','middle','style="fill:#fff;font-size:20px"');
+    s+=FO(x+70,y+20,272,145,`<div style="font:600 18px var(--sans);color:var(--ink);line-height:1.3">${t}</div><div style="font:400 15px var(--sans);color:var(--muted);line-height:1.4;margin-top:8px">${sub}</div>`,'');});
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figQuestion,figData,figGF,figDesigns,figRowsG,figScore,figFail,figWhy,figOffset,figBudget,figSpread,figCompare,
+  figDepthLaw,figAGain,figTwin,figNext,icLaw,icA,icCov,icTwinOff,icDev,icMse,icBoom,
+  figHMap,figHScore,figHAlone,figRepair,figChainOld,icMerge,icHBoom};
+for(const [id,fn] of Object.entries(FIGS)){const el=document.getElementById(id);if(el){try{el.innerHTML=fn();}catch(e){el.textContent='figure error: '+e.message;console.error(id,e);}}}
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+
+/* grid table cells */
+document.querySelectorAll('#tblGrid td[data-d]').forEach(td=>{const d=td.dataset.d,dv=DATA.dev[d],n=(dv.gpu||0)+(dv.cpu||0);
+  const tags=['gpu','cpu'].filter(k=>dv[k]).map(k=>`<span class="tag ${k}">${dv[k]===n?'':dv[k]+' '}${k.toUpperCase()}</span>`).join('');
+  td.innerHTML=`<span class="nm" style="color:${rowCol(d)}">${d==='Aold'?'old-spread A':d}</span>${n} runs<br>${tags}`;});
+
+/* prose numbers, all from DATA */
+try{
+  put('tRuns',String(DATA.runs.n));
+  // depth law
+  const D8=DATA.depth.filter(r=>r[0]!=='Aold'),DO=DATA.depth.filter(r=>r[0]==='Aold');
+  const nIn=D8.filter(r=>r[7]).length,nInO=DO.filter(r=>r[7]).length;
+  put('tDL_h',`${nIn} of ${D8.length}`);
+  put('tDL_in',`${nIn} of ${D8.length} cells (old-spread A: ${nInO} of ${DO.length})`);
+  const G8=D8.filter(r=>r[2]!=='all'),GO=DO.filter(r=>r[2]!=='all');
+  put('tDL_gain',`${G8.filter(r=>r[14]).length} of ${G8.length} class cells (old-spread A: ${GO.filter(r=>r[14]).length} of ${GO.length}); the old grid has no pooled value`);
+  const dd=DATA.depth.find(r=>r[0]==='D'&&r[1]==='per_track'&&r[2]==='DNase');
+  put('tDL_d',`real ${pm(dd[3],dd[4])}, its twin ${pm(dd[8],dd[9])}`);
+  const tw=DATA.depth.filter(r=>r[0]==='D'||r[0]==='D2').map(r=>r[8]),rl=DATA.depth.filter(r=>r[0]==='D').map(r=>r[3]);
+  put('tDL_tw',`${fmt(Math.min(...tw))} to ${fmt(Math.max(...tw))}, all 16 cells`);
+  put('tDL_real',`${fmt(Math.min(...rl))} to ${fmt(Math.max(...rl))}, all 8 cells`);
+  // design A
+  const ag=rdg('vs_oldgrid','crps_all','A','per_track','DNase'),ao=rdg('vs_oldgrid','crps_all','Aold','per_track','DNase'),
+        sp=rdg('vs_oldspread','crps_all','A','per_track','DNase');
+  put('tAG_g',`${fmt(ag[0])} (bar ${fmt(ag[1])})`);
+  put('tAG_se',`${fmt(ag[9])} (bar ${fmt(ag[10])})`);
+  put('tAG_old',`${fmt(ao[0])} (bar ${fmt(ao[1])}; scale error ${fmt(ao[9])})`);
+  put('tAG_sp',`${fmt(sp[0])} (bar ${fmt(sp[1])})`);
+  const msp=allRd('vs_oldspread','mse_log1p_all');put('tAG_mse',`${msp.filter(o=>o.v[2]).length} of ${msp.length} cells`);
+  const rest=allRd('vs_oldgrid','crps_all').filter(o=>!o.r.startsWith('A'));put('tAG_rest',`${rest.filter(o=>o.v[2]).length} of ${rest.length}`);
+  // covariates
+  const tm=allRd('beatstwin','mse_log1p_all');put('tTW_mse',`${tm.filter(o=>o.v[3]<o.v[5]).length} of ${tm.length}`);
+  const ex=rdg('beatstwin','mse_log1p_all','B','per_track','DNase');put('tTW_ex',`${pm(ex[3],ex[4])} against ${pm(ex[5],ex[6])} (gain ${fmt(ex[0])}, bar ${fmt(ex[1])})`);
+  const tc=allRd('beatstwin','crps_all');const nc=tc.filter(o=>!o.v[2]);
+  put('tTW_crps',`${tc.length-nc.length} of ${tc.length} cells`);
+  const aot=rdg('beatstwin','crps_all','Aold','per_track','DNase');put('tTW_ao',`${fmt(-aot[0])} (bar ${fmt(aot[1])}; scale error ${fmt(-aot[9])})`);
+  // reading
+  put('tR_law',`${nIn} of ${D8.length} cells`);
+  const vg=allRd('vs_oldgrid','crps_all');put('tR_a',`${vg.filter(o=>o.v[2]).length} of ${vg.length} cells, all A, A2 or old-spread A`);
+  put('tR_cov',`${tm.filter(o=>o.v[2]).length} of ${tm.length}`);
+  // caveats
+  const g=Object.values(DATA.dev).reduce((a,v)=>a+(v.gpu||0),0),c=Object.values(DATA.dev).reduce((a,v)=>a+(v.cpu||0),0);
+  put('tC_dev',`${g} runs on the GPU slice, ${c} on CPU`);
+  const bt=cell('twin','A2','across','DNase','crps_all');
+  const bz=DATA.expl.nonzero.find(z=>z[0]==='A2'&&z[1]==='across'&&z[2]==='DNase'&&z[3]==='nocov'&&z[4]==='trained/score');
+  put('tC_boom',`${pm(bt[0],bt[1])} (oracle-scaled ${pm(bt[2],bt[3])} + scale error ${pm(bt[4],bt[5])}); ${bz[6]} of its ${bz[5]} records are above ${DATA.expl.at}`);
+  const nb=Object.values(DATA.expl.kinds).reduce((a,v)=>a+v[1],0),nr=Object.values(DATA.expl.kinds).reduce((a,v)=>a+v[0],0);
+  const nzm=[...new Set(DATA.expl.nonzero.map(z=>z[0]+' '+z[1]+' '+z[3]))];
+  put('tC_nboom',`${nb} part-1 records above ${DATA.expl.at}`+(nzm.length===1?'':' [not one twin: '+nzm.join(', ')+']'));
+}catch(e){console.error('prose',e);}
+
+/* part-2 prose, all from DATA.h2 */
+try{
+  const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0), rng=a=>`${fmt(Math.min(...a))}–${fmt(Math.max(...a))}`;
+  const fe=v=>v.toExponential(1).replace('e-','e−');
+  document.querySelectorAll('.scope').forEach(el=>el.textContent='· '+scopeTxt());
+  put('tRuns2',`${H2.alone[0]} of ${H2.alone[1]} h scored on the true counts; the chain f → h on ${H2.chain[0]} of ${H2.chain[1]} designs`+(H2.f_missing.length?` (${H2.f_missing.join(', ')} pending)`:''));
+  // table of versions
+  document.querySelectorAll('#tblH td[data-h="learn"]').forEach(td=>td.innerHTML=
+    `<span class="tag src-t">trained on true counts · ${H2.seeds_true} seeds</span><span class="tag src-f">trained on f's NB · ${H2.seeds_fnb} seed</span>`);
+  // scope
+  const f0=HDES[0],nP=f0?hC(f0,'formula|bin|None|0|formula','crps_log_all')[2]:0;
+  document.getElementById('tH_scope').innerHTML=`<b>Scope of the chain:</b> track ${H2.track} (${H2.assay}, narrow), seed 0 of each real f, ${H2.f_g.map(g=>GN[g]).join(', ')}, ${nP} pairs. `+
+    `<b>${H2.chain[0]} of ${H2.chain[1]} designs</b> finished (${HDES.join(', ')})`+(H2.f_missing.length?`; ${H2.f_missing.join(', ')} pending, added when they land.`:'.');
+  // result 1: alone, narrow
+  const fs=(cls,k)=>{const c=hA(cls,k,'crps_log_all'),os=hA(cls,k,'crps_log_oracle_scaled_all'),se=hA(cls,k,'crps_log_scale_error_all');return `${pmw(c[0],c[1])} (${fmt(os[0])} + ${fmt(se[0])})`;};
+  const keysA=HV.flatMap(v=>v.v==='formula'?[hKey(v,'0','formula')]:[hKey(v,'0','true'),hKey(v,'1','true')]).filter(k=>hA('narrow',k,'crps_log_all'));
+  const best=keysA.reduce((a,k)=>hA('narrow',k,'crps_log_all')[0]<hA('narrow',a,'crps_log_all')[0]?k:a);
+  const forms=keysA.filter(k=>k.startsWith('formula|')),bf=forms.reduce((a,k)=>hA('narrow',k,'crps_log_all')[0]<hA('narrow',a,'crps_log_all')[0]?k:a);
+  const cb=hA('narrow',best,'crps_log_all'),cf=hA('narrow',bf,'crps_log_all');
+  const pb=pid(best);put('tHA_best',`${verOf(best).name}${pb.v==='formula'?'':', '+HNZ[pb.n]}: ${fs('narrow',best)}, oracle-scaled + scale error. Lower formula (${verOf(bf).name.replace('formula, ','')}): ${fmt(cf[0])}; gap ${fmt(cf[0]-cb[0])}, bar ${fmt(2*(cb[1]||0))}`);
+  const m1=hKey(HV[3],'0','true'),m5=hKey(HV[5],'0','true'),c1=hA('narrow',m1,'crps_log_all'),c5=hA('narrow',m5,'crps_log_all');
+  put('tHA_rung',`MLP h, push only: rung 1 ${fs('narrow',m1)}; rung 5 ${fs('narrow',m5)}; gap ${fmt(c1[0]-c5[0])}, bar ${fmt(2*Math.max(c1[1],c5[1]))}`);
+  const pa=hRd('push_vs_noise','crps_log_all').filter(x=>x.sc==='alone');
+  put('tHA_noise',`${pa.filter(x=>x.q<x.p).length} of ${pa.length} (${pa.filter(x=>x.q<x.p&&x.met).length} beyond the bar)`);
+  // result 2: repair
+  const rp=hRd('repair','crps_log_all').filter(x=>pid(x.id).n==='0'),rn=hRd('repair','crps_log_all').filter(x=>pid(x.id).n==='1');
+  put('tHR_h',`higher in ${rp.filter(x=>x.d<0).length} of ${rp.length} rows`);
+  const ex=rp.reduce((a,x)=>x.t<a.t?x:a),exs=(m,f)=>hRd('repair',m,ex.f).find(x=>x.id===ex.id)[f];
+  put('tHR_ex',`${ex.f}, ${verOf(ex.id).name}: true counts ${pmw(ex.t,ex.tw)} (${fmt(exs('crps_log_oracle_scaled_all','t'))} + ${fmt(exs('crps_log_scale_error_all','t'))}) against f's NB ${fmt(ex.o)} (${fmt(exs('crps_log_oracle_scaled_all','o'))} + ${fmt(exs('crps_log_scale_error_all','o'))}); bar ${fmt(ex.bar)}. All ${rp.length} rows: ${rp.filter(x=>x.d<0&&x.met).length} beyond the bar`);
+  const rP=hRd('repair','crps_all').filter(x=>pid(x.id).n==='0');
+  put('tHR_p',`${rP.filter(x=>x.d<0).length} of ${rP.length} rows (gap ${rng(rP.map(x=>-x.d))}), ${rP.filter(x=>x.d<0&&x.met).length} beyond the bar`);
+  const nf=rn.filter(x=>x.d>0),maxn=Math.max(...rn.map(x=>x.n)),few=rn.filter(x=>x.n<maxn);
+  put('tHR_noise',`h trained on f's NB is lower in ${nf.length} of ${rn.length} rows (${nf.filter(x=>x.met).length} beyond the bar), all at rung ${[...new Set(nf.map(x=>pid(x.id).r))].join(', ')}, by ${fw(Math.min(...nf.map(x=>x.d)))}–${fw(Math.max(...nf.map(x=>x.d)))}. ${few.length} rows use only ${Math.min(...few.map(x=>x.n))}–${Math.max(...few.map(x=>x.n))} of ${maxn} pairs`);
+  // result 3: the chain against the old grid
+  const vo=hRd('vs_oldgrid','crps_all'),vd=HDES.filter(d=>vo.some(x=>x.f===d)),od=d=>vo.find(x=>x.f===d);
+  const hiD=vd.filter(d=>vo.filter(x=>x.f===d).every(x=>x.d<0&&Math.abs(x.d)>x.bar));
+  const exD=vd.filter(d=>!hiD.includes(d)&&(od(d).o>H2.explode_at||od(d).o0>H2.explode_at));
+  const rest=vd.filter(d=>!hiD.includes(d)&&!exD.includes(d));
+  const nhx=sum(vo,x=>x.hx);
+  put('tHO_hd',(hiD.join(' and ')||'no design')+(nhx===0?', no blow-ups':`, ${nhx} chain blow-ups`));
+  put('tHO_d',hiD.join(', ')||'—');
+  if(hiD.length){const r=vo.filter(x=>hiD.includes(x.f)),last=hiD[hiD.length-1],lo=vo.filter(x=>x.f===last).sort((a,b)=>a.h-b.h)[0];
+    const osp=hRd('vs_oldgrid','crps_oracle_scaled_all',last).find(x=>x.id===lo.id),sep=hRd('vs_oldgrid','scale_error_all',last).find(x=>x.id===lo.id);
+    put('tHO_dtxt',`old grid ${hiD.map(d=>`${d} ${pmw(od(d).o,od(d).ow)}`).join(', ')}. Every chain h is higher: ${rng(r.map(x=>x.h))}; gaps ${rng(r.map(x=>-x.d))}, bars at most ${fw(Math.max(...r.map(x=>x.bar)))}. The gap is oracle-scaled (${last}, ${verOf(lo.id).name}: ${fmt(osp.h)} against ${fmt(osp.o)}; scale error ${fw(sep.h)} against ${fw(sep.o)})`);}
+  else put('tHO_dtxt','no design has every chain h above the old grid beyond the bar');
+  const oc=d=>H2.old_cell_n[d+'|'+H2.f_g[0]+'|narrow'];
+  put('tHO_x',exD.join(', ')||'—');
+  put('tHO_xtxt',exD.length?`old grid seed 0: ${exD.map(d=>fmt(od(d).o0)).join(', ')}; 3-seed mean: ${exD.map(d=>pmw(od(d).o,od(d).ow)).join(', ')}; old-cell records > ${H2.explode_at}: ${exD.map(d=>od(d).ox).join(' and ')} of ${oc(exD[0])}. Chain: ${sum(vo.filter(x=>exD.includes(x.f)),x=>x.hx)} records > ${H2.explode_at}; ${vo.filter(x=>exD.includes(x.f)&&x.met).length} of ${vo.filter(x=>exD.includes(x.f)).length} deltas beyond the bar`:'no design where the old grid blew up on this track');
+  put('tHO_rest',rest.length?rest.map(d=>`${d}: old grid seed 0 ${fmt(od(d).o0)}, 3-seed mean ${pmw(od(d).o,od(d).ow)}; deltas beyond the bar ${vo.filter(x=>x.f===d&&(x.met||(x.d<0&&Math.abs(x.d)>x.bar))).length} of ${vo.filter(x=>x.f===d).length}`).join('. '):'none');
+  // caveats
+  put('tL_scopeT',`${H2.chain[0]} of ${H2.chain[1]} designs in the chain`);
+  put('tL_scope',`Finished: ${HDES.join(', ')}. `+(H2.f_missing.length?`Pending: ${H2.f_missing.join(', ')}; the figures and counts are rebuilt from the aggregate when they land. `:'')+`h on the true counts is complete (${H2.alone[0]} of ${H2.alone[1]}).`);
+  put('tL_seed',`The chain uses track ${H2.track} (${H2.assay}) and seed 0 of f only. An h trained on f's NB has ${H2.seeds_fnb} seed: its wobble is borrowed from the same h trained on true counts (PI).`);
+  const mg=H2.merge.filter(r=>r[2]!=null).sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0])),mx=H2.merge.filter(r=>r[2]==null).map(r=>r[0]);
+  put('tL_merge',`Own-noise h in the chain: at most G = ${H2.merge[0][1]} merged components per bin. Largest per-bin error: ${mg.map(r=>`${r[0]} ${fe(r[2])}`).join(', ')} (bar ${fe(H2.merge[0][4])}). ${mx.join(', ')}: exact.`);
+  const ea=H2.expl['alone|crps_mean_point_all_gt_20'],ec=H2.expl['chain|crps_mean_point_all_gt_20'],pa0=H2.expl['alone|crps_all_gt_20'],pc0=H2.expl['chain|crps_all_gt_20'];
+  put('tL_boom',`Point CRPS of the mean on P above ${H2.explode_at}: alone ${ea.gt} of ${ea.rec.toLocaleString('en-US')}, chain ${ec.gt} of ${ec.rec.toLocaleString('en-US')} records; ${ea.gt_aff5} and ${ec.gt_aff5} are affine h or formula + affine correction, rung 5 (solid). Log-scale CRPS non-finite: ${ea.lnf+ec.lnf}. Push only and formula: ${pa0.gt+pc0.gt}.`);
+  const nl=hRd('push_vs_noise','crps_log_all'),nm=hRd('push_vs_noise','mse_log1p_all');
+  put('tL_noise',`CRPS on log(1 + P): own noise is lower in ${nl.filter(x=>x.q<x.p).length} of ${nl.length} rows (${nl.filter(x=>x.q<x.p&&x.met).length} beyond the bar). MSE of the mean: lower in ${nm.filter(x=>x.q<x.p).length} of ${nm.length} (${nm.filter(x=>x.q<x.p&&x.met).length} beyond the bar). Alone and chain rows together.`);
+  const ff=H2.fits.fnb,ft=H2.fits.true;
+  put('tL_cap',`${ff.n_at_step_cap} of ${ff.n_fits} fits on f's NB and ${ft.n_at_step_cap} of ${ft.n_fits} on true counts ran to the ${ff.max_steps.join(', ')}-step cap. Capped NB rows (support above the count limit): ${ff.n_capped_rows} in ${ff.n_fits_with_capped_rows} fits on f's NB, ${ft.n_capped_rows} on true counts, ${sum(H2.capped,r=>r[3])} in the chain scoring.`);
+}catch(e){console.error('prose part 2',e);}
+
+/* ---------- navigation ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h=parseInt((location.hash||'').slice(1));show(isNaN(h)?0:h-1);
+</script>
+</body>
+</html>
