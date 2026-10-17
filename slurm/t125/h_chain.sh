@@ -67,6 +67,20 @@
 # keeps every pair it finished (<out_root>/chain/<f_run>.partial/), so the same index, submitted
 # again by hand after the TIMEOUT, resumes there.
 #
+# PAIR SHARDS (10th argument n_shards, t125-P2i, PI 2026-10-17; no number changes). 1 (default):
+# the one-task run above. n > 1: array task T scores f index T / n (integer division), shard
+# k = T % n: `score.py chain ... --pair-shard k/n` scores the pairs i with i % n == k that have no
+# kept pair_<i>.json in the shared <f_run>.partial dir and writes nothing else; then, holding the
+# lock dir <out_root>/chain/<f_run>.assemble.lock (waits up to 30 min, else exit 4), the task runs
+# `score.py chain ... --assemble-only`, which writes scores.json, merge_error.json and CHAIN_DONE
+# only once every pair is kept, so the last shard to finish assembles. "assemble": array task T =
+# the f index, assemble only (by hand, e.g. after an exit 4: remove the stale lock first). A kept
+# pair is never scored again, so shards may join a dir a one-task run left. The f indices of the
+# A, B, B2 C19M16 chains (3, 11, 43) at n = 10 are array tasks 30-39, 110-119, 430-439:
+#   sbatch --parsable --array=30-39,110-119,430-439 --exclude=c128,c166,c537,c371 \
+#       --output=$OUT_H/logs/%x_%A_%a.out \
+#       $KIT/slurm/t125/h_chain.sh $KIT $PRODUCTS $CACHE $CTL $BLACKLIST $ETA_RUNS $OUT_H 1 all 10
+#
 # DRY_RUN=1 prints the chain command line (nothing when CHAIN_DONE lists every h; a note on stderr for
 # each missing TRAIN_DONE, where a real task would exit 3) and exits 0 before any module load. The
 # tables are resolved as in h_train.sh: ${PYTHON:-python3}, $KIT or else this script's checkout,
@@ -99,7 +113,7 @@
 set -euo pipefail
 
 BLACKLIST_SHA256_PREFIX=31c69342
-USAGE="usage: h_chain.sh <kit_dir> <products_dir> <cache_dir> <ctl_cache> <blacklist.bed> <eta_runs_dir> <out_root> [fnb_seeds 1|3] [h_set all|true]"
+USAGE="usage: h_chain.sh <kit_dir> <products_dir> <cache_dir> <ctl_cache> <blacklist.bed> <eta_runs_dir> <out_root> [fnb_seeds 1|3] [h_set all|true] [n_shards N|assemble]"
 KIT="${1:?$USAGE}"
 PRODUCTS="${2:?$USAGE}"
 CACHE="${3:?$USAGE}"
@@ -109,8 +123,19 @@ ETA_RUNS="${6:?$USAGE}"
 OUT_ROOT="${7:?$USAGE}"
 FNB_SEEDS="${8:-1}"
 H_SET="${9:-all}"
-IDX="${SLURM_ARRAY_TASK_ID:?array task only}"
-[[ "$IDX" =~ ^[0-9]+$ ]] || { echo "SLURM_ARRAY_TASK_ID '$IDX' is not an index" >&2; exit 2; }
+N_SHARDS="${10:-1}"
+TASK="${SLURM_ARRAY_TASK_ID:?array task only}"
+[[ "$TASK" =~ ^[0-9]+$ ]] || { echo "SLURM_ARRAY_TASK_ID '$TASK' is not an index" >&2; exit 2; }
+# MODE: one (the one-task run), shard (score shard SHARD of N_SHARDS, then try to assemble),
+# assemble (assemble only); IDX is the f index.
+if [ "$N_SHARDS" = assemble ]; then
+  MODE=assemble; IDX=$TASK
+elif [[ "$N_SHARDS" =~ ^[1-9][0-9]?$ ]]; then
+  if [ "$N_SHARDS" = 1 ]; then MODE=one; IDX=$TASK
+  else MODE=shard; IDX=$((TASK / N_SHARDS)); SHARD=$((TASK % N_SHARDS)); fi
+else
+  echo "n_shards '$N_SHARDS' is not 1-99 or assemble; $USAGE" >&2; exit 2
+fi
 case "$FNB_SEEDS" in
   1|3) ;;
   *) echo "fnb_seeds '$FNB_SEEDS' is not 1 or 3" >&2; exit 2 ;;
@@ -211,7 +236,12 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
     || echo "note: no $ETA_RUNS/$F_RUN/TRAIN_DONE; a real task would exit 3" >&2
   [ "${#MISSING[@]}" = 0 ] \
     || echo "note: ${#MISSING[@]} h run dirs lack TRAIN_DONE; a real task would exit 3" >&2
-  echo "python3 $KIT/tools/t125/hmap/score.py chain $MANIFEST $COVARIATES $CACHE $CTL $BLACKLIST $ETA_RUNS/$F_RUN $CHAIN ${SPECS[*]} --workers 4 --mix-merge $MIX_MERGE"
+  LINE="python3 $KIT/tools/t125/hmap/score.py chain $MANIFEST $COVARIATES $CACHE $CTL $BLACKLIST $ETA_RUNS/$F_RUN $CHAIN ${SPECS[*]} --workers 4 --mix-merge $MIX_MERGE"
+  case "$MODE" in
+    one) echo "$LINE" ;;
+    shard) echo "$LINE --pair-shard $SHARD/$N_SHARDS"; echo "$LINE --assemble-only" ;;
+    assemble) echo "$LINE --assemble-only" ;;
+  esac
   exit 0
 fi
 
@@ -232,7 +262,7 @@ KIT=$(cd "$KIT" && pwd)
 COVARIATES="$KIT/tools/t118/covariates.tsv"
 mkdir -p "$CHAIN"
 
-echo "=== t125 h_chain idx=$IDX job ${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$IDX host=$(hostname) $(date -u)"
+echo "=== t125 h_chain idx=$IDX mode=$MODE${SHARD:+ shard $SHARD/$N_SHARDS} job ${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$TASK host=$(hostname) $(date -u)"
 echo "kit git sha: $(cat "$KIT/GIT_SHA" 2>/dev/null || git -C "$KIT" rev-parse HEAD 2>/dev/null || echo unknown)"
 echo "blacklist sha256: $BL_SHA"
 
@@ -264,7 +294,7 @@ case "$(python3 -c 'import candi; print(candi.__file__)')" in
 esac
 
 # The authoritative f-run table, from tasks.py; a stale shared copy is an error, not a guess.
-TMP_TABLE="$TASKS_TSV.tmp.${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$IDX"
+TMP_TABLE="$TASKS_TSV.tmp.${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$TASK"
 python3 "$KIT/tools/t125/hmap/tasks.py" fnb "$MANIFEST" | f_runs_from > "$TMP_TABLE"
 # cmp exit 1 = the tables differ (an error); exit 2 = a read problem (not fatal).
 F_RUN=$(f_run_from < "$TMP_TABLE")
@@ -292,7 +322,31 @@ if [ "${#MISSING[@]}" != 0 ]; then
 fi
 echo "h set $H_SET: $((${#SPECS[@]} / 2)) h"
 
-python3 "$KIT/tools/t125/hmap/score.py" chain "$MANIFEST" "$COVARIATES" "$CACHE" "$CTL" \
-    "$BLACKLIST" "$ETA_RUNS/$F_RUN" "$CHAIN" "${SPECS[@]}" --workers 4 --mix-merge "$MIX_MERGE"
+CMD=(python3 "$KIT/tools/t125/hmap/score.py" chain "$MANIFEST" "$COVARIATES" "$CACHE" "$CTL"
+     "$BLACKLIST" "$ETA_RUNS/$F_RUN" "$CHAIN" "${SPECS[@]}" --workers 4 --mix-merge "$MIX_MERGE")
+case "$MODE" in
+  one) "${CMD[@]}" ;;
+  assemble) "${CMD[@]}" --assemble-only ;;
+  shard)
+    "${CMD[@]}" --pair-shard "$SHARD/$N_SHARDS"
+    LOCK="$CHAIN/$F_RUN.assemble.lock"
+    WAITED=0
+    until mkdir "$LOCK" 2>/dev/null; do
+      if [ "$WAITED" -ge 1800 ]; then
+        echo "$LOCK held for 30 min; assemble by hand (n_shards assemble) after removing it" >&2
+        exit 4
+      fi
+      sleep 30; WAITED=$((WAITED + 30))
+    done
+    echo "${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$TASK $(hostname)" > "$LOCK/holder"
+    trap 'rm -rf "$LOCK"' EXIT
+    "${CMD[@]}" --assemble-only
+    rm -rf "$LOCK"; trap - EXIT
+    ;;
+esac
+if [ "$MODE" != one ]; then
+  if [ -f "$CHAIN/$F_RUN/CHAIN_DONE" ]; then echo "CHAIN_DONE: $F_RUN"
+  else echo "no CHAIN_DONE yet for $F_RUN: pairs not kept yet (see above)"; fi
+fi
 
 echo "=== done $F_RUN $(date -u)"
