@@ -264,6 +264,12 @@ Every id goes here at submission.
     1900 records of the 50 scores.json bit-equal (serialised JSON); each scores.json equal but for
     created_utc, timing and `h.spec` (the smoke's out root reaches the h run dirs through its
     runs_true / runs_fnb symlinks; 0 of 50 differ once that path is mapped back).
+  - 2026-10-17 ~17:10 UTC: `ssh -o BatchMode=yes nibi` exited 255 (the Duo master is gone); Nibi
+    work stopped until the PI runs `hpc up nibi`. Last read 16:37 UTC: 24313498 all 30 tasks PENDING
+    (Priority), A, B, B2 with pairs 0-10 kept, no CHAIN_DONE. The shards run and assemble on their
+    own; to check: `ls h/chain/{A,B,B2}_C19M16_counts_real_s0/CHAIN_DONE` and `merge_error.json`. If
+    a shard exits 4 (stale `chain/<f_run>.assemble.lock`), remove the lock and run h_chain.sh on K12
+    with n_shards `assemble` at the f index (3, 11, 43).
 
 ### Nibi smoke (K10)
 
