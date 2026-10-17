@@ -240,6 +240,26 @@ Every id goes here at submission.
     fnb capped NB rows 584 in 30 fits; chain capped rows 0.
   - To do when A, B, B2 have CHAIN_DONE: re-run `agg_sum_5of8.sh` with a new agg dir (or h_agg.sh on K13) and
     replace the "5 of 8" files.
+- N5b (t125-P2i, PI 2026-10-17: split the 3 slow chains across pair shards; no number changes).
+  - Code: `score.py chain --pair-shard K/N` (scores only the pairs i with i % N == K that have no
+    kept pair file; writes nothing else) and `--assemble-only` (writes scores.json, merge_error.json,
+    CHAIN_DONE from the kept pair files once all are kept); `h_chain.sh` 10th argument n_shards
+    (array task T = f index T // n, shard T % n; the shard then assembles under
+    `chain/<f_run>.assemble.lock`) or `assemble`. Commit 20f2a76 (chunk/t125-P2i), merged 61ae10a.
+    Tests: test_t125_h_shard.py 9 passed and test_t125_slurm_h.py 124 passed (laptop); CPU job
+    24312258 (one-off `t125/smoke/p2i/pytest_cpu.sh`): test_t125_h_score, _h_mixmerge, _h_shard,
+    _h_speed, _h_aggregate, _e2e 106 passed, 2 skipped (no .git, no CUDA), 24:32.
+  - Kit K12: `/project/def-maxwl/mforooz/t125/code/K12`, `GIT_SHA` 61ae10ac5fcda593ade8b63ab47be348e528fbb9
+    (rsync as K11, wheels from K11).
+  - 16:31 UTC: cancelled 24272487_3 (A), 24272487_11 (B), 24290367_43 (B2), each with pairs 0-10
+    kept (pairs 0-7 took about 1 min each, pairs 8-10 about 85-105 min each). Submitted
+    24313498 `t125_hchain` on K12: array 30-39,110-119,430-439 (A, B, B2 at n_shards 10), script
+    resources, `--time=12:00:00` (b2; `--test-only` put 1 day at 08:32 UTC next day, 12 h at 23:54 UTC;
+    a shard holds at most 3 of the 27 open pairs).
+  - Real-data equality, chain C: `chain/C_C19M16_counts_real_s0.partial` copied to
+    `/project/def-maxwl/mforooz/t125/smoke/p2i/real/chain/` (runs_true, runs_fnb symlinked to `t125/h`);
+    24313465 `t125_hchain` on K12, array 19, n_shards `assemble`, `--time=1:00:00`; compared by
+    `smoke/p2i/compare_chain.py` to `t125/h/chain/C_C19M16_counts_real_s0`: PENDING.
 
 ### Nibi smoke (K10)
 
