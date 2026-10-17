@@ -214,6 +214,8 @@ Every id goes here at submission.
     to CPU (foreman: keep waiting for slices).
   - 11:21 UTC: A2 CHAIN_DONE (task 24275564_35). 89 of 96 fnb TRAIN_DONE (B2 11, C2 12, D2 6).
     - 24288878 `t125_hchain`: array 51 (C2_C19M16_counts_real_s0), 11:21 UTC.
+  - 11:41 UTC: C, D CHAIN_DONE; 94 of 96 fnb TRAIN_DONE (D2 10).
+    - 24290367 `t125_hchain`: array 43 (B2_C19M16_counts_real_s0; task 1 of ~2), 11:41 UTC.
 
 ### Nibi smoke (K10)
 
