@@ -203,6 +203,13 @@ Every id goes here at submission.
     - 24273272 `t125_hchain`: array 27 (D_C19M16_counts_real_s0), 07:49 UTC.
     - 24275564 `t125_hchain`: array 35 (A2_C19M16_counts_real_s0), 08:19 UTC. At 08:19 64 of 96
       fnb TRAIN_DONE; 3 fnb tasks run, every chain PENDING (Priority); GPU LevelFS 0.18.
+  - 09:58 UTC: **slice stall, 2 h 10 min.** No N5 task has started since 07:48 UTC. 67 of 96 fnb
+    TRAIN_DONE (A, B, C, D, A2 12 each; B2 7), 0 failed; 29 fnb pending (B2 523-527, C2 612-623,
+    D2 708-719) and all 5 chain jobs (6 f) PENDING, reason Priority. Slice nodes g30, g32, g35,
+    g37 `mix-`, g31, g36 `mix`, g33 `drng@`, g34 `inval`; cluster-wide 20 1g.10gb jobs run, 34
+    wait. Nothing moved to CPU (needs the foreman/PI). Every job stays queued; no CHAIN_DONE yet.
+    The 67 fits so far: elapsed 7 min to 2 h 28 min, MaxRSS max 18.8 GiB (of 40000M); 14 of 67
+    hit the 4000-step cap (best_step 250-4000); 24 runs have capped NB rows (488 in all).
 
 ### Nibi smoke (K10)
 
