@@ -9,6 +9,11 @@ Inputs (all gitignored, local):
   cruxvault/results/t125/part1/depth_law.tsv       per-pair depth ratios (only the snippet's ratio)
   <main checkout>/cruxvault/results/row2/GRID_SUMMARY.md   the old grid's -log10 p explosion tables
   ../t118-grid/snippet.json                        the real H3K27ac snippet used by the t118 deck
+  tools/t118/covariates.tsv                        the assay of the chain track
+  cruxvault/results/t125/part2/summary_data_h.json t125 part-2 aggregate (h alone and in the chain; readings
+                                                   repair, vs_oldgrid, push_vs_noise; explosions; merged
+                                                   mixture; fit caps; capped NB rows). Whatever designs it
+                                                   holds are drawn, so A, B, B2 appear when they land.
 
     python cruxvault/presentations/t125-eta-h/build_deck.py
 """
@@ -111,12 +116,75 @@ for r in csv.DictReader(open(R1 / "run_device.tsv"), delimiter="\t"):
 runs = {"n": sum(sum(v.values()) for v in dev.values()), "gver": len(gver), "models": len(models),
         "seeds": len(seeds), "per_track": len(gver - {"all"})}
 
+# ---- part 2: the map h (part2/summary_data_h.json). Every design the file holds is passed on, so the
+#      chains of A, B, B2 appear in the figures when a refreshed aggregate lands. ----
+H = json.load(open(VAULT / "results" / "t125" / "part2" / "summary_data_h.json"))
+fid = lambda c: "|".join(str(c.get(k)) for k in ("variant", "window", "rung", "noise", "source"))
+H_MET = ["crps_log_all", "crps_log_oracle_scaled_all", "crps_log_scale_error_all", "mse_log1p_all",
+         "crps_all", "crps_oracle_scaled_all", "scale_error_all"]
+# cells: "class|version id|metric" (alone) or "f design|version id|metric" (chain) -> [mean, wobble, n]
+h_alone = {f"{c['mark_class']}|{fid(c)}|{c['metric']}": [r4(c["mean"]), r4(c["seed_wobble"]), c["n"]]
+           for c in H["alone_cells"] if c["metric"] in H_MET}
+h_chain = {f"{c['f_rung']}|{fid(c)}|{c['metric']}": [r4(c["mean"]), r4(c["seed_wobble"]), c["n"]]
+           for c in H["chain_cells"] if c["metric"] in H_MET}
+h_rd = []
+for x in H["readings"]:
+    k, m = x["reading"], x["metric"]
+    base = {"k": k, "sc": x["scope"], "f": x.get("f_rung"), "c": x["mark_class"], "m": m,
+            "id": fid({**x, "window": {"h_formula_bin": "bin", "h_formula_frag": "frag"}.get(x.get("h_name"))})}
+    if k == "repair" and m in ("crps_log_all", "crps_log_oracle_scaled_all", "crps_log_scale_error_all", "crps_all"):
+        base.update(t=r4(x["true_mean"]), tw=r4(x["true_wobble"]), o=r4(x["fnb_mean"]), d=r4(x["delta"]),
+                    bar=r4(x["bar"]), met=bool(x["abs_delta_exceeds_bar"]),
+                    n=x["components"]["pairs"]["n_used"])
+    elif k == "vs_oldgrid" and m in ("crps_all", "crps_oracle_scaled_all", "scale_error_all"):
+        base.update(h=r4(x["h_mean"]), hw=r4(x["h_wobble"]), o0=r4(x["old_seed0"]),
+                    o=r4(x["old_mean"]), ow=r4(x["old_wobble"]), d=r4(x["delta"]), d0=r4(x["delta_seed0"]),
+                    bar=r4(x["bar"]), met=bool(x["gain_exceeds_bar"]), met0=bool(x["gain_seed0_exceeds_bar"]),
+                    hx=x["h_n_crps_gt_20"], ox=x["old_n_crps_gt_20"], oxn=x["old_n_crps_nonfinite"],
+                    n=x["n_pairs_used"])
+    elif k == "push_vs_noise" and m in ("crps_log_all", "mse_log1p_all"):
+        base.update(p=r4(x["push_mean"]), pw=r4(x["push_wobble"]), q=r4(x["noise_mean"]), qw=r4(x["noise_wobble"]),
+                    g=r4(x["gain"]), bar=r4(x["bar"]), met=bool(x["gain_exceeds_bar"]))
+    else:
+        continue
+    h_rd.append(base)
+# explosions of the own-noise point CRPS, by scope, with the share from the affine rung-5 versions
+h_expl = collections.defaultdict(lambda: {"rec": 0, "gt": 0, "nf": 0, "lnf": 0, "gt_aff5": 0})
+for e in H["explosions"]:
+    s = h_expl[f"{e['scope']}|{e['kind']}"]
+    s["rec"] += e["n_records"]; s["gt"] += e["n_gt_20"]; s["nf"] += e["n_native_nonfinite"]
+    s["lnf"] += e["n_log_nonfinite"]
+    if e["variant"] in ("affine", "formula_affine") and e["rung"] == 5:
+        s["gt_aff5"] += e["n_gt_20"]
+old_cell_n = {f"{e['rung']}|{e['g_version']}|{e['mark_class']}": e["n_records"] for e in H["oldgrid_explosions"]}
+# the chain track's assay, from the t118 covariates table (column "track", "assay")
+COV = VAULT.parent / "tools" / "t118" / "covariates.tsv"
+assay = next(r["assay"] for r in csv.DictReader(open(COV), delimiter="\t") if r["track"] == H["chain_track"])
+h2 = {"created": H["created_utc"], "track": H["chain_track"], "assay": assay,
+      "seeds_true": max(len(c["seeds"]) for c in H["alone_cells"] if c["source"] == "true"),
+      "seeds_fnb": max(len(c["seeds"]) for c in H["chain_cells"] if c["source"] == "fnb"), "explode_at": H["explode_at"],
+      "alone": [H["alone_present"], H["alone_expected"]],
+      "chain": [H["chain_f_present"], H["chain_f_expected"]],
+      "f_done": sorted(r.split("_")[0] for r in H["chain_f_finished_runs"]),
+      "f_missing": sorted(r.split("_")[0] for r in H["chain_f_runs_missing"]),
+      "f_g": sorted({c["f_g_version"] for c in H["chain_cells"]}),
+      "cells_alone": h_alone, "cells_chain": h_chain, "rd": h_rd,
+      "expl": dict(h_expl), "old_cell_n": old_cell_n,
+      # merged mixture per chain f: [design, G, largest per-bin error, largest averaged error, bar, h at or above bar]
+      "merge": [[m["f_run"].split("_")[0], m["mix_groups"], m["rel_err_max"], m["avg_rel_err_max"], m["bar"],
+                 m["n_h_rel_err_max_ge_bar"]] for m in H["merge_errors"]],
+      "fits": {t["source"]: t for t in H["fits"]["totals"]},
+      "capped": [[c["f_run"].split("_")[0], c["n_pairs"], c["n_pairs_capped"], c["n_capped_rows"]] for c in H["capped"]],
+      "notes": H["notes"]}
+
 data = {"snip": snip, "locus": locus, "law_ratio": law_ratio, "cells": cells, "rd": rd, "depth": depth,
         "expl": {"kinds": dict(kinds), "nonzero": nonzero, "old_counts": old_counts_expl,
                  "at": S["explode_at"]},
         "oldp": oldp, "dev": {k: dict(v) for k, v in dev.items()}, "runs": runs,
-        "created": S["created_utc"]}
+        "created": S["created_utc"], "h2": h2}
 src = open(HERE / "deck_src.html").read()
 assert src.count("__DATA__") == 1
 open(HERE / "index.html", "w").write(src.replace("__DATA__", json.dumps(data, separators=(",", ":"))))
-print(f"wrote {HERE / 'index.html'}: {len(cells)} cells, {len(rd)} comparisons, {len(depth)} depth cells")
+print(f"wrote {HERE / 'index.html'}: {len(cells)} cells, {len(rd)} comparisons, {len(depth)} depth cells; "
+      f"part 2: {len(h_alone)} alone cells, {len(h_chain)} chain cells, {len(h_rd)} readings, "
+      f"{h2['chain'][0]} of {h2['chain'][1]} chains")
