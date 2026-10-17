@@ -34,7 +34,13 @@ Exploratory (PI 2026-10-08): readings only — no pass/fail bars, no ticks, no v
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+Part 1 (`results/t125/GRID_SUMMARY_part1.md`): ± is the seed wobble; a gain clears above twice the larger one.
+
+- No depth-law cell of 72 is within 0.10; no gain over the earlier grid clears.
+- Only design A clears the earlier grid: its per-track DNase CRPS (oracle-scaled + scale error) is 1.247 ± 0.016 = 1.109 + 0.138, against 3.06 ± 0.113 = 1.36 + 1.70. The offset alone gives 0.927 of this 1.813 gain.
+- Real beats the twin on MSE in all 54 cells (per-track B, DNase: 0.194 ± 0.003 against 0.365 ± 0.013). This twin keeps the offset; the earlier one did not.
+- All 24 CRPS > 20 records sit in the across-track A2 twin.
+- Training devices are mixed. The earlier grid has no MSE.
 
 <!-- crux:ledger:start -->
 _(no children yet)_
