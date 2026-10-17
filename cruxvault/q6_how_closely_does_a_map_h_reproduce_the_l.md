@@ -34,7 +34,13 @@ Exploratory (PI 2026-10-08): readings only — no pass/fail bars, no ticks, no v
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+5 of 8 designs; redone when A, B, B2 land ([digest](results/t125/part2_digest.md)). ± is seed wobble; clear is > 2 ×.
+
+- True X′, narrow, log CRPS (oracle-scaled + scale error): formula 0.1177 bin-only, 0.0865 fragment-wide; rungs 1/5: affine 0.1791 ± 0.0010 (0.1367 + 0.0423) / 0.124 ± 0.0008, MLP 0.1603 ± 0.0034 / 0.0836 ± 0.0004; formula+MLP 0.0798 ± 0.0013.
+- True-X′ push h beats h fit to f's NB in all 30 rows, clearly (D2, MLP rung 5: 0.1172 ± 0.0004 (0.1145 + 0.0027) against 0.1352 (0.1302 + 0.0050)).
+- On D, D2, push chain h trail earlier p models: CRPS on P 0.178–0.276 against 0.143 ± 0.0016, gap oracle-scaled. On A2, C2 those exploded; they did not.
+- Own noise lowers log CRPS in all 78 rows (76 clear), MSE in 5 (none clear).
+- Caveats: one track, one fnb seed, D2 mixture error 9.7e-4 (bar 1e-3), affine rung-5 own-noise explosions.
 
 <!-- crux:ledger:start -->
 _(no children yet)_
