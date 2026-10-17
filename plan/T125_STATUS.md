@@ -74,6 +74,45 @@ Every id goes here at submission.
     g30, g37 show `mixed-`, g31-33 and g36 `draining@`, g35 `allocated`, g34 `inval`. At 16:16 UTC
     only 5-6 tasks run at a time (the free slices on g30/g37). At 17:50 UTC (2 h) 16-19 run at a
     time, 65 tasks COMPLETED, 0 failed: the slices are not held, so no CPU fallback.
+  - 19:55 UTC: only 9 GPU tasks run (pending reason `ReqNodeNotAvail`; slice nodes `mixed-` for
+    4 h). Pending tasks **384-431 (rung Aold, all 48) cancelled** in 24145801 (none had started;
+    402 is the smoke run, already done on GPU) and moved to the CPU script, because Aold training
+    is cheap (smoke: 20 s on the slice) and its scoring runs on CPU anyway. 24145801 keeps 191-383.
+  - 24163757 `t125_etatraincpu`: `eta_train_cpu.sh`, array 384-431%40 (script resources: 16 cores,
+    64000M, 8 h). So Aold s0-s2 except 402 are trained with `--device cpu`; every other rung on the
+    slice. CPU Aold: train about 290 s (slice: 20 s), whole task 7-25 min.
+  - 20:39 UTC: 1 new GPU task started in 30 min (7 of mine on the 1g slices; `ReqNodeNotAvail`).
+    Pending tasks **240-383 (rungs B2, C2, D2, whole) cancelled** in 24145801 (none had started)
+    and moved to the CPU script. 24145801 keeps 195-239 (rest of A2; A2 192-194 already on GPU).
+  - 24166139 `t125_etatraincpu`: `eta_train_cpu.sh`, array 240-383%40. Device by rung: A, B, C, D,
+    A2 on the slice; B2, C2, D2, Aold on CPU, except the smoke runs 258, 306, 354, 381 and 402
+    (slice).
+  - 00:36 UTC (2026-10-17): no GPU task started since 22:33 UTC (2 h; `ReqNodeNotAvail`). Pending
+    **211-239 (rest of A2) cancelled** in 24145801 and moved to CPU. 24145801 has nothing left.
+    A2 is therefore mixed: 192-209 (and smoke 210) on the slice, 211-239 on CPU.
+  - 24183485 `t125_etatraincpu`: `eta_train_cpu.sh`, array 211-239%40.
+  - 23:31 UTC: 24163757_429, _430, _431 (Aold_all nocov s0-s2), all three on node **c95**, hung in
+    `score.py trained` for 3 h 07 min: trained at 20:24, then 15 score processes at 0 % CPU (state
+    S), no output. The other Aold_all runs scored in 41 min (426, c45). Read as a node fault
+    (transient); cancelled and resubmitted once on CPU with c95 also excluded (TRAIN_DONE exists, so
+    only scoring reruns):
+  - 24176598 `t125_etatraincpu`: `eta_train_cpu.sh`, array 429,430,431,
+    `--exclude=c128,c166,c537,c371,c95`.
+  - 23:49 UTC: **the hang repeats on three other nodes** (c477, c58, c59): after "TRAIN_DONE
+    present", `score.py trained` parent (19 threads) and its 4 forked workers sit in
+    `futex_wait_queue` at 0.0-0.2 % CPU for 15 min. So it is **not transient: a code defect,
+    stopped** (24176598 cancelled; 429-431 have TRAIN_DONE, no SCORE_DONE). Likely cause, not
+    proven: `score.py` 172/196 forks a `Pool` (`mp.get_context("fork")`) from a parent that holds a
+    torch/OpenMP thread pool; `eta_train_cpu.sh` 120 sets `OMP_NUM_THREADS=16`. Only Aold_all nocov
+    hangs: Aold_all real (426-428) and D2_all nocov on CPU scored. A fix (e.g. a spawn context or
+    1 OMP thread in scoring, or scoring 429-431 with eta_train.sh) is a PI / chunk decision.
+  - 24173033 `t125_d2twin` (D2 twin nondeterminism, PI decision 2026-10-16): one-off
+    `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/d2twin_rescore.sh` (not in the repo; 4
+    cores, 24000M, 3 h, CPU) copies run D2_C19M16_counts_nocov_s0 (index 357, trained on CPU by
+    24166139) into that dir, drops the copy's scores, re-runs eta_train.sh's exact `score.py trained
+    ... --workers 4` on the copy, then `d2twin_compare.py` compares per record with the original
+    and with the 3 seeds; log `t125/smoke/logs/`. The original run dir is only read.
+    FAILED at the compare step (scoring done); result in "D2 twin nondeterminism, measured".
   - Law batches (`eta_law.sh`, `--mem=16000M --time=0:30:00` on the command line, `%40`, submitted
     directly for indices with SCORE_DONE; never a dependency):
     - 24149205: 3,4,5
@@ -84,6 +123,25 @@ Every id goes here at submission.
     - 24156039: 54,55,56,57,58,61,62,63,64,65,67,68,69,70,71,72,73,74,75,76,77,83
     - 24157585: 78,79,80,81,82,84,85,86,87,88,89,96,97,98,99,100,101,102,105,106,107,108,109,110,111
     - 24159233: 103,104,112,113,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133
+    - 24160871: 42,43,44,47,134,135,136,137,140,141,142,144,145,147
+    - 24162067: 46,93,143,146,148,149,150,151,152,154,155,156,157,158,159,160,161,164
+    - 24163123: 90,91,92,94,95,139,153,163,165,166,167,168,169,170,171,172,173,174,175,176,177
+    - 24164273: 138,178,179,180,181,182,183,184,185,387,389
+    - 24165412: 192,193,384,385,386,388,390,391,392,393,394,395,396,397,398,399,400,401,403,404,405,406,407,408,409,410,411,413,414,417,418,419,425
+    - 24166703: 186,187,188,194,412,415,416,420,421,422,423,424
+    - 24167774: 189,190,191,195,196,197,198,199,200,201,202,240,243,244,251,252,253,254,255,256,257,261,263,269,275,427,428
+    - 24168951: 203,241,245,247,248,250,259,260,262,264,265,266,267,268,270,271,272,274,276,277,278,279,280,288,289,290,291,292,293,294,295,297,299,300,301,302
+    - 24170142: 249,273,281,296,298,304,305,307,308,309,310,311,313,314,315,316,317,318,319,322,324,325,327,328,329,426
+    - 24171577: 242,246,303,312,321,326,335,339,348,349,350,351
+    - 24173031: 285,336,337,341,342,343,344,352,355,356,357,360
+    - 24174020: 204,205,206,207,208,209,282,284,330,331,338,340,346,347,358,359,361,362,364,365,366,367,369
+    - 24175471: 283,286,320,323,332,333,334,353,363,368,370,371,373,375,376,377
+    - 24177947: 287
+    - 24179904: 372,383
+    - 24181558: 374
+    - 24187994: 211,212,214,216,220,221,224,225,227,228,229,230,232,345,378,379,380,382
+    - 24190487: 213,217,218,219,223,226,231,233,238
+    - 24191400: 215,222,237,239
 - N4 (h on the true X′), kit K10, 2026-10-16. Logs `/project/def-maxwl/mforooz/t125/h/logs/%x_%A_%a.out`.
   - 24145831 `t125_htrain` table true: array 0-35%36, script resources (8 cores, 32000M, 3 h),
     submitted 15:54 UTC (indices 0 and 21 skip on TRAIN_DONE from the smoke).
@@ -233,6 +291,28 @@ their log-scale CRPS stays finite. **Capped rows: none.** The alone scorer write
 (only chain records carry it, `score.py` 595 / 701), and `timing.json` of a true-X′ fit has no
 capped field.
 
+### D2 twin nondeterminism, measured (N3)
+
+2026-10-16, job 24173033 (c294, CPU, 4 cores). Run D2_C19M16_counts_nocov_s0 (index 357; trained
+on CPU by 24166139, first scored there). Second scoring = eta_train.sh's exact `score.py trained
+... --workers 4` on a copy in `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/` (844.7 s).
+The compare step in the job failed (KeyError: `crps_oracle_scaled_all` is only on shuffle
+records); the fixed `d2twin_compare.py` (stdlib) was re-run on the login node on the two
+scores.json: `d2twin_rescore/compare.txt`.
+
+| metric | records | records that differ | max / median abs diff | 3-seed wobble per record, median / max (max-min) | seed means range |
+|---|---|---|---|---|---|
+| crps_all | 140 | **0** | 0 / 0 | 5.3e-3 / 2.6e-2 (102 records) | 8.9e-4 |
+| crps_oracle_scaled_all | 38 | **0** | 0 / 0 | 2.7e-3 / 2.2e-2 | 2.2e-3 |
+| scale_error_all | 38 | **0** | 0 / 0 | 6.5e-3 / 2.2e-2 | 1.8e-3 |
+| mse_log1p_all | 140 | **0** | 0 / 0 | 9.4e-4 / 5.8e-2 (102 records) | 2.7e-3 |
+
+The two scorings of this run are bit-identical in every record (relative difference 0). So on
+the real data the t125 D2 nocov scoring is deterministic run to run; the failing
+`test_twin_scoring_is_deterministic[D2]` (fixture data, K10 and t118 K8) does not show here. The
+seed wobble is the only spread. (Seed wobble over 102, not 140, records: shuffle records are keyed
+by the shuffled pid, which differs by seed.)
+
 ## Nibi access
 
 - 2026-10-11: `ssh -o BatchMode=yes nibi` exited 255 (`Permission denied
@@ -248,6 +328,15 @@ capped field.
   timing.json (f_pass_seconds, val_seconds, n_capped), the smoke/chain scores.json
   (CRPS > 20, non-finite, n_capped_total, timing), then 24083626. Re-run
   `python3 /project/def-maxwl/mforooz/t125/smoke/smoke_summary.py` on the login node.
+
+- 2026-10-17 about 01:58 UTC (N3): `ssh -o BatchMode=yes nibi` exited 255 (`Permission denied
+  (publickey,keyboard-interactive,hostbased)`). All Nibi work stopped until the PI runs
+  `hpc up nibi`. Last state read (01:37-01:58 UTC): 427 train tasks COMPLETED, 2 RUNNING
+  (24183485 of 234, 235, 236), SCORE_DONE 426, LAW_DONE 421; law batch 24191400 (215, 222, 237,
+  239) submitted. 429-431 are stopped (scoring hang, code defect). They run on without the laptop.
+  To do on resume: law for the last A2 indices (234-236 and any missing), then the 429-431 fix
+  decision; eta_agg.sh with OLD=/project/def-maxwl/mforooz/t125/old_grid/results_summary.tsv
+  (results_summary.tsv and checks_*.json already rsynced there on 2026-10-16).
 
 ## Phase 0 findings
 
@@ -313,6 +402,9 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 
 - 2026-10-16: in the chain, the own-noise h are scored with a merged mixture: adjacent k components merged into ≤ 256 moment-matched Gaussians before the CRPS pair sum, on all bins. It is kept only if its error against the exact CRPS, measured on a random sample of bins, is below 1e-3 relative; the measured error goes in the grid. Push-only h stay exact.
 - 2026-10-16: compute scope for the repair reading and the chain: only the 16 real f with one g across tracks (192 fnb fits + 16 chains). This supersedes "768 fits". Per-track f get chain scores with the formulas and the true-X′ h only, if time allows.
+
+- 2026-10-17: **scope corrected.** There are 8 across-track real f (2 rows × 4 designs), not 16, and they are the most costly (~242 pairs each). The repair reading and the chain now use the 8 real seed-0 f of ONE track, C19M16, all 8 designs: 96 fnb fits (8 f × 12 h versions) and 8 chains. This supersedes "16 across-track f".
+- 2026-10-17: the merged-mixture bar holds **per bin**: use the smallest G in {256, 512, 1024} whose per-bin max relative error on crps_log is < 1e-3 on the measured deep bins of the C19M16 f. Both per-bin and averaged errors go in the grid.
 
 ## Log
 
