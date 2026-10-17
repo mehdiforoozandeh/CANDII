@@ -15,7 +15,7 @@ worktree (git-excluded).
 | 4 count runs (432) | done 2026-10-17: 432 SCORE_DONE, 432 LAW_DONE; aggregate 24224060 (eta/agg/grid.md) |
 | 5 h on the true X′ | done 2026-10-16: 36 TRAIN_DONE, 38 ALONE_DONE (see "N4 results") |
 | 6 h on f's NB, chain scores | not started |
-| 7 aggregate | not started |
+| 7 aggregate | part 1 done (eta agg job 24224060); part 2 waits on the fnb fits and chains |
 | 8 vault readings | not started |
 | 9 lab deck | not started |
 
@@ -467,6 +467,8 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 - 2026-10-17: the count runs trained on mixed devices (GPU slice for A, B, C, D and A2 192–210; CPU for A2 211–239, B2, C2, D2, Aold) are accepted. The device of every run is recorded in the grid and the deck, with the note that cross-row design comparisons also cross devices.
 
 - 2026-10-17: K_MAX stays 4,096. Capped bins (NB support wider than 4,096 counts; 17 of 262,144,000 training bins in the timing fit, 0 in validation) are counted per run and reported in the grid and the deck.
+
+- 2026-10-17: lab deck = one deck, two mini-arcs (shared motivation and background; part 1; part 2; one discussion). Part-1 result slides: the depth law still fails; design A gains; covariates help the mean.
 
 ## Log
 
