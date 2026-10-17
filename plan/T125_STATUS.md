@@ -106,6 +106,17 @@ Every id goes here at submission.
     torch/OpenMP thread pool; `eta_train_cpu.sh` 120 sets `OMP_NUM_THREADS=16`. Only Aold_all nocov
     hangs: Aold_all real (426-428) and D2_all nocov on CPU scored. A fix (e.g. a spawn context or
     1 OMP thread in scoring, or scoring 429-431 with eta_train.sh) is a PI / chunk decision.
+  - Resume 2026-10-17 02:48 UTC: SCORE_DONE 429, LAW_DONE 425; nothing of mine queued; no hung
+    task left. Missing: score + law of 429-431; law of 213 (24190487_213 FAILED in 22 s on c329:
+    `ERROR: Wheel 'tzdata' ... is invalid` from CVMFS, transient, resubmitted once) and 234-236.
+  - 24200215 `t125_aoldw1` (coordinator ruling 1): one-off
+    `/project/def-maxwl/mforooz/t125/eta/oneoff/aold_nocov_w1.sh` (not in the repo), array 429-431,
+    2 cores, 32000M, 16 h, c95 also excluded. Per run: `score.py trained ... --workers 1` then
+    `score.py law ... --workers 1 --law-scope depth` (the calls of eta_train.sh and eta_law.sh with
+    workers 1: no forked pool), `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`. eta_train_cpu.sh has no
+    workers override (`--workers 4` is fixed at line 154). The law pass is in the same job because
+    eta_law.sh forks the same pool (`--workers 8`).
+  - 24200232 `t125_etalaw`: law for 213 (retry), 234, 235, 236.
   - 24173033 `t125_d2twin` (D2 twin nondeterminism, PI decision 2026-10-16): one-off
     `/project/def-maxwl/mforooz/t125/smoke/d2twin_rescore/d2twin_rescore.sh` (not in the repo; 4
     cores, 24000M, 3 h, CPU) copies run D2_C19M16_counts_nocov_s0 (index 357, trained on CPU by
