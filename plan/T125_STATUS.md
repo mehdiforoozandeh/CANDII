@@ -87,6 +87,10 @@ Every id goes here at submission.
   - 24166139 `t125_etatraincpu`: `eta_train_cpu.sh`, array 240-383%40. Device by rung: A, B, C, D,
     A2 on the slice; B2, C2, D2, Aold on CPU, except the smoke runs 258, 306, 354, 381 and 402
     (slice).
+  - 00:36 UTC (2026-10-17): no GPU task started since 22:33 UTC (2 h; `ReqNodeNotAvail`). Pending
+    **211-239 (rest of A2) cancelled** in 24145801 and moved to CPU. 24145801 has nothing left.
+    A2 is therefore mixed: 192-209 (and smoke 210) on the slice, 211-239 on CPU.
+  - 24183485 `t125_etatraincpu`: `eta_train_cpu.sh`, array 211-239%40.
   - 23:31 UTC: 24163757_429, _430, _431 (Aold_all nocov s0-s2), all three on node **c95**, hung in
     `score.py trained` for 3 h 07 min: trained at 20:24, then 15 score processes at 0 % CPU (state
     S), no output. The other Aold_all runs scored in 41 min (426, c45). Read as a node fault
