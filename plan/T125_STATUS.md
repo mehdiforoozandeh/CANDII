@@ -338,6 +338,10 @@ Every id goes here at submission.
     of the three timed-out pairs, 21:17 UTC. **`--time=2-00:00:00` on the command line** (b4), not
     the script's 12 h: the three pairs need more than 12 h on 16 cores, so a 12 h rerun would time
     out again. Operational only (same code, inputs and device as the other CPU pairs).
+  - 24570754 `t125_agg8of8` FAILED 3:0 in 54 s at the array's end ("no CHAIN_DONE for B"), as
+    planned. Resubmitted: **24608467** `t125_agg8of8` (the same `n7/agg_sum_8of8.sh`, K14),
+    `--dependency=afterany:24608447` (live at submission), 21:18 UTC; it exits 3 again unless B and
+    B2 have CHAIN_DONE.
 
 ### Nibi smoke (K10)
 
