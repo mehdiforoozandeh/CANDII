@@ -317,6 +317,13 @@ Every id goes here at submission.
     GRID_SUMMARY_5of8.md locally first), FIR_PATH.txt and a new part2_digest.md. Digest helper
     (stdlib, not in the repo): `/project/def-maxwl/mforooz/t125/n7/digest_stats.py <part2 dir>`
     reproduces the 5-of-8 digest's numbers; run it on the 5-of-8 and 8-of-8 dirs to diff them.
+  - N8 (finish agent), 2026-10-19, polled every 15 min from 13:19 UTC. Kept pairs (A / B / B2 of 38):
+    13:19 26/24/25; 15:04 27/26/26; 17:04 31/29/33; 18:49 **33/30/35**. At 18:49 UTC (last read):
+    16 tasks RUNNING (about 9 h 36 min elapsed; the 16 missing pairs), none FAILED, TIMEOUT or
+    CANCELLED, none resubmitted; no CHAIN_DONE; 24570754 PENDING (Dependency). The 12 h walltime ends
+    about 21:13 UTC (24561928) and 21:02 UTC (24561631_0), so a deep pair still running then would
+    TIMEOUT (its kept pairs stay; resubmit that index once).
+  - 19:59 UTC: `ssh -o BatchMode=yes nibi` exited 255 (see "Nibi access"). N8 stopped before steps 2-6.
 
 ### Nibi smoke (K10)
 
@@ -509,6 +516,14 @@ by the shuffled pid, which differs by seed.)
   SCORE_DONE / 432 LAW_DONE; re-run `bash /project/def-maxwl/mforooz/t125/eta/oneoff/run_device.sh`
   (fills score_job of 429-431 in `eta/agg/run_device.tsv`; the train columns are already complete);
   then eta_agg.sh with OLD=/project/def-maxwl/mforooz/t125/old_grid/results_summary.tsv.
+- 2026-10-19 19:59 UTC (15:59 EDT, N8): `ssh -o BatchMode=yes nibi` exited 255 (`Permission denied
+  (publickey,keyboard-interactive,hostbased)`). All Nibi work stopped until the PI runs
+  `hpc up nibi`. Last state read 18:49 UTC: kept pairs A 33, B 30, B2 35 of 38; 16 CPU tasks RUNNING
+  (24561928 and 24561631), none failed; 24570754 PENDING (Dependency). They run on without the
+  laptop. To do on resume: `sacct -j 24561631,24561928 -X` for TIMEOUT tasks (resubmit each once
+  with chain_cpu.sh at that array index), then the "To do on resume" list of N7 above (CHAIN_DONE,
+  assemble mode if needed, 24570754 or its resubmission), then N8 steps 2-6 (rsync to part2/,
+  digest, deck rebuild, DECK.md, vault readings, closing of this file).
 
 ## Phase 0 findings
 
