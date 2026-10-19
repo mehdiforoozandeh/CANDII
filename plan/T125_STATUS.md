@@ -295,7 +295,28 @@ Every id goes here at submission.
     At 10:30 elapsed: no error, venv and 50 h loaded, about 12 of 16 cores busy (sstat AveCPU
     2:12:40), MaxRSS 11.4 GB. score.py prints only at the end of a pair, so no per-h rate is
     visible inside a pair.
-  - 24561928 `t125_hchaincpu`: array 1-80%81 (the other 80 pairs), K14, 09:13 UTC.
+  - 24561928 `t125_hchaincpu`: array 1-80%81 (the other 80 pairs), K14, 09:13 UTC. All 81 tasks
+    started at once (no queue wait).
+  - 24570754 `t125_agg8of8`: one-off `/project/def-maxwl/mforooz/t125/n7/agg_sum_8of8.sh` (N6b's
+    agg_sum_5of8.sh on K14, agg dir `h/agg_8of8`, summary `summary_8of8/`; exits 3 unless all 8
+    C19M16 f have CHAIN_DONE), `--dependency=afterany:24561631:24561928` (both live at
+    submission), 12:18 UTC; logs `t125/n7/logs/`.
+  - **State at 13:16 UTC (09:16 EDT, the PI's deadline; N7 stopped here):** 42 of 81 CPU tasks
+    COMPLETED 0:0, 39 RUNNING (4 h 02 - 4 h 13 elapsed, about 15 of 16 cores busy, MaxRSS about
+    15 GB, no error or traceback in any log), none failed, none resubmitted. Kept pairs: A 26 of
+    38, B 24, B2 25; no CHAIN_DONE, no assemble lock. Missing: A 11-15, 22, 24-27, 36, 37; B 11-15,
+    18, 24-27, 34-37; B2 11-15, 24-27, 34-37 (the ctldepth, depth and other deep pairs; on the slice
+    the ctldepth pairs took 5,100-6,300 s). Per-pair CPU seconds of the 42 kept: 83 (B2 pair 23)
+    to 10,015 (B2 pair 18); deep ones 2,800-10,000 s. The 12 h walltime ends about 21:13 UTC; a
+    pair that needs more than 12 h on CPU would TIMEOUT (kept pairs stay; resubmit that task).
+  - To do on resume: when 24561928 ends, check `ls h/chain/{A,B,B2}_C19M16_counts_real_s0/CHAIN_DONE`
+    and `merge_error.json` (the last shard of each f assembles; if not, run chain_cpu.sh with 10th
+    argument `assemble` at array index 3, 11 or 43); 24570754 then writes `h/agg_8of8/` and
+    `summary_8of8/GRID_SUMMARY.md` (it exits 3 if a CHAIN_DONE is missing; then resubmit it
+    without the dependency). Then the rsync down (part2 -> part2_5of8, GRID_SUMMARY.md ->
+    GRID_SUMMARY_5of8.md locally first), FIR_PATH.txt and a new part2_digest.md. Digest helper
+    (stdlib, not in the repo): `/project/def-maxwl/mforooz/t125/n7/digest_stats.py <part2 dir>`
+    reproduces the 5-of-8 digest's numbers; run it on the 5-of-8 and 8-of-8 dirs to diff them.
 
 ### Nibi smoke (K10)
 
