@@ -324,6 +324,20 @@ Every id goes here at submission.
     about 21:13 UTC (24561928) and 21:02 UTC (24561631_0), so a deep pair still running then would
     TIMEOUT (its kept pairs stay; resubmit that index once).
   - 19:59 UTC: `ssh -o BatchMode=yes nibi` exited 255 (see "Nibi access"). N8 stopped before steps 2-6.
+- N9 (finish agent, 8 of 8), 2026-10-19. Nibi back (PI).
+  - 20:26 UTC: 24561631 and 75 of 81 tasks COMPLETED; 6 RUNNING at 11 h 13 min (A pairs 13 and 26,
+    B 35 and 36, B2 26 and 27; about 14 of 16 cores busy, MaxRSS about 15 GB, no error). Kept pairs
+    A 36, B 36, B2 36 of 38.
+  - Per-pair seconds (score.py `seconds` in the kept pair files): the deep A, B, B2 pairs on CPU took
+    up to 42,305 s (A pair 13, 11.8 h); on C, D, A2, C2, D2 every pair took under 110 s on the slice.
+  - 21:14 UTC: 24561928_2, _15, _70 COMPLETED (11.5-11.9 h); **24561928_51, _52, _69 TIMEOUT at
+    12:00:27** (B pairs 35 and 36, B2 pair 26). A has CHAIN_DONE (its last shard assembled). B has 36
+    of 38 pairs kept, B2 37 of 38. 24570754 started on the array's end (it exits 3: B, B2 have no
+    CHAIN_DONE).
+  - 24608447 `t125_hchaincpu`: chain_cpu.sh (args.txt, K14), array 51,52,69, the one resubmission
+    of the three timed-out pairs, 21:17 UTC. **`--time=2-00:00:00` on the command line** (b4), not
+    the script's 12 h: the three pairs need more than 12 h on 16 cores, so a 12 h rerun would time
+    out again. Operational only (same code, inputs and device as the other CPU pairs).
 
 ### Nibi smoke (K10)
 
