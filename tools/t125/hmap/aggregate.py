@@ -47,7 +47,8 @@ seed, the spread quoted from the true-X' h); a formula h has no h seed and adds 
                  `delta`) are given, beside the old seed wobble; delta = old - h (positive = the
                  chain h is lower). With
                  `--old-grid-json` (t118 row-2 agg/results.json) the two are pair-matched and the
-                 old split and explosion counts are read from its per_pair pval records; with the
+                 old split and explosion counts are read from its per_pair pval records (the
+                 counts beside a chain h cover only the chain's tracks of that class); with the
                  TSV alone the class means are compared as they are, and a row whose track counts
                  differ is kept with gain_exceeds_bar no and the reason. A valid JSON with an
                  empty TSV still gives rows. Push-only and formula h only: an own-noise h's
@@ -448,8 +449,9 @@ OLD_KEEP = ("rung", "g_version", "seed", "track", "mark_class", "source_pid", "t
 
 def load_old_json(path) -> tuple[dict, dict]:
     """({(rung, g_version): arm of the old grid's real f, seeds -> {pair key: record}},
-    {(rung, g_version, mark_class): explosion counts}) from the old grid's results.json per_pair
-    records (kind trained, eval score, space pval, model real); ({}, {}) when absent."""
+    {(rung, g_version, mark_class, track): explosion counts}) from the old grid's results.json
+    per_pair records (kind trained, eval score, space pval, model real); ({}, {}) when absent.
+    The counts are kept per track so a chain h is set beside its own tracks only."""
     if path is None:
         return {}, {}
     path = Path(path)
@@ -467,7 +469,7 @@ def load_old_json(path) -> tuple[dict, dict]:
         cell = (r["rung"], r["g_version"])
         arm = arms.setdefault(cell, {"info": {"h_name": "old grid"}, "seeds": {}})
         _add(arm, int(r["seed"]), pair_key(r), r, warnings, str(path))
-        e = ex[(r["rung"], r["g_version"], r["mark_class"])]
+        e = ex[(r["rung"], r["g_version"], r["mark_class"], r.get("track"))]
         e["n_records"] += 1
         if (r.get("n_crps_nonfinite") or 0) > 0:
             e["n_crps_nonfinite"] += 1
@@ -742,7 +744,14 @@ def vs_oldgrid(cell, arms: dict, sidx: dict, old: dict, old_arms: dict, old_ex: 
                                                        "this rung, g and class"})
                 continue
             ex = exp_idx.get((f_rung, f_gv, vname, mc), {})
-            oe = old_ex.get((f_rung, f_gv, mc)) if old_arm else None
+            # like with like: only the old cell's tracks that the chain has in this class
+            tracks = {r.get("track") for recs in arm["seeds"].values() for r in recs.values()
+                      if r.get("mark_class") == mc}
+            oes = [v for k, v in old_ex.items() if k[:3] == (f_rung, f_gv, mc)
+                   and k[3] in tracks] if old_arm else []
+            oe = ({"n_crps_gt_20": sum(v["n_crps_gt_20"] for v in oes),
+                   "n_crps_nonfinite": sum(v["n_crps_nonfinite"] for v in oes)}
+                  if old_arm else None)
             res, diag, matched = None, None, False
             if in_json:
                 res, diag = compare(arm, old_arm, OLD_METRICS, mc, "chain")
@@ -986,7 +995,8 @@ def write_grid_md(path: Path, alone_rows: list[dict], readings: list[dict], expl
           "(seed 0) then h; ± the h seeds' wobble (fnb: the true-X' h's; formula: none). Delta "
           "= old - chain h (positive = the chain h is lower), against the old seed 0 and against "
           "the old 3-seed mean; one bar (2 × the larger seed wobble) for both. Push-only and "
-          "formula h only (CRPS > 20 counts crps_all_gt_20 on both sides); own-noise h are not "
+          "formula h only (CRPS > 20 counts crps_all_gt_20 on both sides; the old grid's count "
+          "covers only the chain's tracks of that class, over its 3 seeds); own-noise h are not "
           "compared (a point CRPS of the mean is not a proper CRPS).", ""]
     L += _table(["f", "class", "h", "metric", "old grid seed 0", "old grid 3 seeds", "chain h",
                  "delta vs seed 0", "delta vs 3 seeds", "bar", "gain > 2 × wobble (seed 0 / 3 "
@@ -1190,8 +1200,13 @@ def aggregate(manifest, covariates, h_root, agg_dir, old_grid_tsv=None, old_grid
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     j_alone = [_json_row(r) for r in alone_rows]
     j_chain = [_json_row(r) for r in chain_rows]
+    old_cell: dict = defaultdict(lambda: {"n_records": 0, "n_crps_gt_20": 0,
+                                          "n_crps_nonfinite": 0})
+    for k, v in old_ex.items():                        # cell level: every track of the old cell
+        for c in v:
+            old_cell[k[:3]][c] += v[c]
     old_ex_rows = [{"rung": k[0], "g_version": k[1], "mark_class": k[2], **v}
-                   for k, v in sorted(old_ex.items())]
+                   for k, v in sorted(old_cell.items())]
     results = {"created_utc": now, "h_root": str(h_root), "manifest": str(manifest),
                "covariates": str(covariates),
                "old_grid_tsv": None if old_grid_tsv is None else str(old_grid_tsv),

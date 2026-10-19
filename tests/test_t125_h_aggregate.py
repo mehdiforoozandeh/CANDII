@@ -589,6 +589,37 @@ def test_vs_oldgrid_json_with_empty_tsv(tmp_path):
     assert r["old_tsv_mean"] == ""
 
 
+def test_vs_oldgrid_explosions_count_only_the_chain_tracks(tmp_path):
+    """The old grid's CRPS > 20 and non-finite counts beside a chain h count only the tracks the
+    chain has in that class (like with like); the old cell's other tracks are left out. The
+    cell-level `oldgrid_explosions` rows still count every track of the old cell."""
+    h_root = build_h_root(tmp_path)
+    old_json = write_old_json(tmp_path / "results.json")
+    d = json.loads(old_json.read_text())
+    for s in (0, 1, 2):                    # a narrow track the chain does not have: all explode
+        base = {"kind": "trained", "eval": "score", "rung": "A", "g_version": "across",
+                "model": "real", "seed": s, "track": "Tz", "mark_class": "narrow",
+                "source_pid": "z1", "target_pid": "z2", "space": "pval",
+                "crps_top1": 40.0, "crps_oracle_scaled_all": 29.95, "scale_error_all": 0.05}
+        d["per_pair"].append({**base, "crps_all": 30.0, "n_crps_nonfinite": 0})
+        d["per_pair"].append({**base, "source_pid": "z2", "target_pid": "z1",
+                              "crps_all": None, "n_crps_nonfinite": 2})
+    old_json.write_text(json.dumps(d))
+    res = ha.aggregate(MANIFEST, COV, h_root, tmp_path / "agg",
+                       old_grid_tsv=write_old_tsv(tmp_path / "results_summary.tsv"),
+                       old_grid_json=old_json, chain_track=None)
+    rows = read_tsv(tmp_path / "agg" / "h_vs_oldgrid.tsv")
+    n = one(rows, f_rung="A", mark_class="narrow", h_name="h_affine_r1_push_true",
+            metric="crps_all")
+    assert n["old_n_crps_gt_20"] == "0" and n["old_n_crps_nonfinite"] == "0"
+    dn = one(rows, f_rung="A", mark_class="DNase", h_name="h_affine_r1_push_true",
+             metric="crps_all")
+    assert dn["old_n_crps_gt_20"] == "1"
+    cell = {(e["rung"], e["g_version"], e["mark_class"]): e for e in res["oldgrid_explosions"]}
+    assert cell[("A", "across", "narrow")]["n_crps_gt_20"] == 3
+    assert cell[("A", "across", "narrow")]["n_crps_nonfinite"] == 3
+
+
 def test_rec_ok_checks_only_compared_metrics():
     r = rec(False, nat=1.0, log=0.5, mse=1.0, crps_log_all=None, n_crps_log_nonfinite=3)
     assert ha._rec_ok(r, ("crps_all", "crps_top1"))
