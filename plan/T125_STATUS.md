@@ -270,6 +270,32 @@ Every id goes here at submission.
     own; to check: `ls h/chain/{A,B,B2}_C19M16_counts_real_s0/CHAIN_DONE` and `merge_error.json`. If
     a shard exits 4 (stale `chain/<f_run>.assemble.lock`), remove the lock and run h_chain.sh on K12
     with n_shards `assemble` at the f index (3, 11, 43).
+- N7 (A, B, B2 chains on CPU; part 2 on 8 of 8), 2026-10-19.
+  - 08:57 UTC: 24313498 still PENDING (Priority) after about 36 h (group GPU fair-share 0.19, CPU
+    0.31); A, B, B2 each with pairs 0-10 kept, no lock. **Cancelled 24313498** (none had started).
+  - **Device note (foreman ruling, operational):** chain scoring is evaluation only, and P2h showed
+    the CPU path equals the GPU path within 1e-7 for chain records. **Pairs 0-10 of A, B, B2 were
+    scored on the 1g.10gb GPU slice (24272487_3, _11, 24290367_43); pairs 11-37 on CPU** (below).
+    C, D, A2, C2, D2: all 38 pairs on the slice.
+  - Chunk `chunk/t125-N7` (d35448d, merged fast-forward into exp/t118-counterfactual-f, pushed):
+    `hmap/aggregate.py` vs_oldgrid counts the old grid's CRPS > 20 and non-finite records only on
+    the chain's tracks of that class (before: every track of the old cell); the cell-level
+    `oldgrid_explosions` rows keep every track. test_t125_h_aggregate.py 24 passed (laptop, 4 s).
+  - Kit K14: `/project/def-maxwl/mforooz/t125/code/K14`, `GIT_SHA` d35448d7f5f54608d0bdd1406f6b2937abaaf6bc
+    (rsync of the worktree without .git, .github, .obsidian, cruxvault, .orchestrate; wheels from
+    K12). Chain code equals K12's: `git diff --stat 61ae10a d35448d -- tools/t125/hmap/score.py
+    slurm/t125/h_chain.sh` is empty.
+  - One-off `/project/def-maxwl/mforooz/t125/h/oneoff/chain_cpu.sh` (not in the repo; args in
+    `args.txt` beside it): h_chain.sh with no --gres, 16 cores, 64000M, 12 h, OMP/MKL threads 16,
+    `--device cpu --workers 1`; array task T (0-80) -> f index (3, 11, 43)[T / 27], `--pair-shard
+    (11 + T % 27)/38` (38 pairs per f, so one pair per task), then the shared assemble lock as
+    h_chain.sh; 10th argument `assemble` = assemble only at the f index. Mapping checked by
+    DRY_RUN on the laptop (T 0/26/27/53/54/80 -> A 11, A 37, B 11, B 37, B2 11, B2 37).
+  - 24561631 `t125_hchaincpu`: array 0 (A pair 11), K14, 09:02 UTC, node c208 (test task).
+    At 10:30 elapsed: no error, venv and 50 h loaded, about 12 of 16 cores busy (sstat AveCPU
+    2:12:40), MaxRSS 11.4 GB. score.py prints only at the end of a pair, so no per-h rate is
+    visible inside a pair.
+  - 24561928 `t125_hchaincpu`: array 1-80%81 (the other 80 pairs), K14, 09:13 UTC.
 
 ### Nibi smoke (K10)
 
