@@ -385,7 +385,7 @@
     <aside class="notes">
       <p>These are the two vault questions under the covariates question: the depth-offset question and the map-h question. Results 1 to 3 answer question 1; results 4 to 6 answer question 2.</p>
       <p>Question 1 is about the counts only. Question 2 is about the p&#8209;value track, first with perfect counts (how good can h be?) and then with f's predicted counts (how good is the whole chain?).</p>
-      <p>Both are exploratory by the PI's choice: the plan set no thresholds, so the deck reports readings, each with its wobble and bar.</p>
+      <p>Both are exploratory: the plan set no thresholds in advance, so the deck reports readings, each with its wobble and bar.</p>
       <p><b>Likely question:</b> "Why both at once?" They share the count model: part 2 feeds the part-1 f into h.</p>
     </aside>
   </section>
@@ -462,7 +462,7 @@
       <div class="kicker"><span class="sec">Method</span>experiment 1 · control and comparisons</div>
       <h2>One control, and four comparisons that each isolate one change</h2>
       <div class="fig tall" id="figCompare"></div>
-      <p class="note">The no-covariates twin is the only control in part 1. By the PI's choice it keeps the d′/d offset, so its gap to the real model is not the earlier grid's twin gap.</p>
+      <p class="note">The no-covariates twin is the only control in part 1. It keeps the d′/d offset, so its gap to the real model is not the earlier grid's twin gap.</p>
     </div>
     <aside class="notes">
       <p>Panel (a): the <b>no-covariates twin</b> is the same model, but g sees random settings at every training step, so it can only learn one average map. Both the real model and the twin get the true d′/d offset.</p>
@@ -516,7 +516,7 @@
       <p>Rows go down in complexity and inputs. The two <b>formula</b> rows learn nothing: they are the peak caller's own Poisson tail, at the bin or over one fragment. Then <b>affine</b> h (a weighted sum) and <b>MLP</b> h (a small network) at the two input ends, <b>rung 1</b> and <b>rung 5</b>; the design used only the two ends of a five-step input ladder. The last two rows add a learned correction to the formula.</p>
       <p>Columns: each learned h comes in push only and push + own noise. Each learned h is trained two ways (the tags): on the true counts, with 3 seeds, and on f's predicted counts, with 1 seed.</p>
       <p>The formula + correction rows need the rung-5 inputs, so they have no rung-1 version.</p>
-      <p><b>Likely question:</b> "Why only one seed on f's predictions?" Compute, by the PI's choice: the seed wobble there is borrowed from the same h trained on the true counts.</p>
+      <p><b>Likely question:</b> "Why only one seed on f's predictions?" To save compute: the seed wobble there is borrowed from the same h trained on the true counts.</p>
     </aside>
   </section>
 
@@ -535,7 +535,7 @@
       <p class="note">Same computation as the earlier grid, on depth-only pairs. The twins of D and D2 meet it, so the test can be met.</p>
     </div>
     <aside class="notes">
-      <p>Panel (a): one column per design. Grey is the earlier grid (no offset) and green the new model (with the depth offset); each bar spans the 6 class cells of the design (3 classes × 2 versions of g) and the dot is their median. The y-axis is the depth-law error on a log scale; the green band is within 10%.</p>
+      <p>Panel (a): one column per design. Grey is the earlier grid (no offset) and green the new model (with the depth offset); each bar spans the 6 class cells of the design (3 classes × 2 versions of g) and the dot is their median. The y-axis is the depth-law error on a log scale; the green band is within 10%. The dashed line at 3.0 (300%) is what a model that ignores depth would score: it predicts the same counts as X, and on the pairs with a quarter of the reads that misses by |4 − 1| = 3.0.</p>
       <p>Panel (b): all classes pooled, the new real model (green) against its no-covariates twin (purple). Only the twins of D and D2 stay near the law (<span id="n_r1tw"></span>); the other twins miss by much more (<span id="n_r1tw2"></span>).</p>
       <p>A reading on D and D2 only: real D misses by <span id="n_r1d"></span>, while its twin, which cannot read the settings, stays near the law. So in D, g's reading of the settings (depth among them) seems to move f away from d′/d. This is open, not shown: see next steps, option 2.</p>
       <p><b>Likely question:</b> "Is the law computed correctly?" It is the earlier grid's computation; the D and D2 twins meeting it show the test can be met. Every cell is in the appendix.</p>
@@ -845,6 +845,7 @@
       <p>Panel (a): every class cell. Open marker = the earlier grid (no offset), filled = the new real model (with offset), joined by a thin line; the dotted line is the range of the three per-seed errors.</p>
       <p>Panel (b): the pooled cells, real against twin. Circle = one g per track, square = one g across tracks; within each design the shapes run DNase, narrow, broad.</p>
       <p>No filled marker is in the green band; in panel (b) only the D and D2 twins are near it.</p>
+      <p>The dashed line at 3.0 is a model that ignores depth (it predicts ×1): on a law pair with a quarter of the reads it misses by |4 − 1| = 3.0, the worst over the law pairs.</p>
     </aside>
   </section>
 
@@ -1398,7 +1399,7 @@ function figDepthLaw(){
   const cls=DATA.depth.filter(r=>r[2]!=='all');
   s+=T(0,24,'(a) Real model: new (with offset) against the earlier grid (no offset)','ptitle')+T(0,46,`3 classes × 2 versions of g: ${cls.length} cells (${cls.filter(r=>r[0]!=='Aold').length} for the 8 designs, ${cls.filter(r=>r[0]==='Aold').length} for old-spread A)`,'psub');
   const G=groups(ax,aw,top,h,DES,top+h+26);s+=G.s+band(ax,aw)+yTicks(ax,aw,yy,ticks);
-  s+=T(ax+aw-6,yy(0.1)+17,'within 10%','cap','end','style="fill:var(--ok)"');
+  s+=T(ax+aw-6,yy(0.1)+17,'within 10%','cap','end','style="fill:var(--ok)"');s+=ignLine(ax,aw,yy);
   s+=T(18,top+h/2,'depth-law error','axlbl','middle',`transform="rotate(-90 18 ${top+h/2})" style="font-size:15px"`);
   cls.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1])*3+CL.indexOf(r[2]),x=G.x(gi,si,6);
     s+=L(x,yy(r[10]),x,yy(r[3]),COL.faint,1.2);
@@ -1409,8 +1410,8 @@ function figDepthLaw(){
   // (b) pooled cells: real against its twin
   const bx=800,bw=350;
   const all=DATA.depth.filter(r=>r[2]==='all');
-  s+=T(755,24,'(b) Pooled: real against its twin','ptitle')+T(755,46,`all classes together: ${all.length} cells (${all.filter(r=>r[0]==='Aold').length} for old-spread A)`,'psub');
-  const H2=groups(bx,bw,top,h,DES,top+h+26,13.5);s+=H2.s+band(bx,bw)+yTicks(bx,bw,yy,ticks);
+  s+=T(755,24,'(b) Pooled: real against its twin','ptitle')+T(755,46,`${all.length} pooled cells (${all.filter(r=>r[0]==='Aold').length} old-spread A) · dashed: ignores depth`,'psub');
+  const H2=groups(bx,bw,top,h,DES,top+h+26,13.5);s+=H2.s+band(bx,bw)+yTicks(bx,bw,yy,ticks);s+=ignLine(bx,bw,yy,false);
   all.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1]),x=H2.x(gi,si,2);
     s+=L(x-4,yy(r[3]),x+4,yy(r[8]),COL.faint,1.2);
     s+=mark(x-4,yy(r[3]),r[1],r[7]?COL.ok:COL.nw,'none',5);
@@ -1645,6 +1646,10 @@ const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}
 const vlab=(x,y,txt,c,fs=14)=>T(x,y,txt,'val','middle',`style="fill:${c};font-size:${fs}px"`);
 const rotY=(x,y,txt)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:15px"`);
 
+/* the reference a model that ignores depth would score: it predicts the same counts as X (×1), so on a
+   law pair with log2 d′/d = −2 its error is |1/(d′/d) − 1| = 3.0, the worst over the law pairs (±1, ±2) */
+const DL_IGN=3.0;
+const ignLine=(x0,w,yy,lbl=true)=>L(x0,yy(DL_IGN),x0+w,yy(DL_IGN),COL.muted,1.4,'6 4')+(lbl?T(x0+6,yy(DL_IGN)-7,'ignores depth (predict ×1)','cap','start','style="fill:var(--muted);font-size:13px"'):'');
 /* ---------- R1 · the depth law ---------- */
 function figR1(){
   const W=1160,H=450;let s='';
@@ -1657,6 +1662,7 @@ function figR1(){
   const G=groups(ax,aw,top,h,DES,top+h+28);s+=G.s+band(ax,aw)+yTicks(ax,aw,yy,ticks);
   s+=T(ax+aw-6,yy(0.1)+18,'within 10%','cap','end','style="fill:var(--ok);font-size:14px"');
   s+=rotY(16,top+h/2,'depth-law error (log scale)');
+  s+=ignLine(ax,aw,yy);
   DES.forEach((d,gi)=>{const rs=cls.filter(r=>r[0]===d);
     [[10,COL.old],[3,COL.nw]].forEach(([k,c],j)=>{const v=rs.map(r=>r[k]).filter(x=>x!=null);if(!v.length) return;
       const x=ax+gi*G.gw+G.gw*(j?0.66:0.34),mn=Math.min(...v),mx=Math.max(...v);
@@ -1665,8 +1671,8 @@ function figR1(){
   s+=divider(712,10,H-6);
   // (b) pooled: real against its twin
   const bx=800,bw=350,all=DATA.depth.filter(r=>r[2]==='all');
-  s+=T(735,24,'(b) All classes pooled: real against twin','ptitle')+T(735,48,'new model · ● one g per track · ■ one g across tracks','psub');
-  const G2=groups(bx,bw,top,h,DES,top+h+28,14);s+=G2.s+band(bx,bw)+yTicks(bx,bw,yy,ticks);
+  s+=T(735,24,'(b) All classes pooled: real against twin','ptitle')+T(735,48,'● one g per track · ■ one g across tracks · dashed: ignores depth','psub');
+  const G2=groups(bx,bw,top,h,DES,top+h+28,14);s+=G2.s+band(bx,bw)+yTicks(bx,bw,yy,ticks);s+=ignLine(bx,bw,yy,false);
   all.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1]),x=G2.x(gi,si,2);
     s+=L(x,yy(r[3]),x,yy(r[8]),COL.faint,1.4)+mark(x,yy(r[3]),r[1],COL.nw,'none',5.5)+mark(x,yy(r[8]),r[1],COL.twin,'none',5.5);});
   s+=sw(bx,H-10,COL.nw,'real model')+sw(bx+120,H-10,COL.twin,'no-covariates twin');
@@ -2102,7 +2108,7 @@ try{
   // limits
   put('tL_scopeT',H2.f_missing.length?`${H2.chain[0]} of ${H2.chain[1]} designs in the chain`:`All ${H2.chain[1]} designs in the chain`);
   put('tL_scope',`Finished: ${andJ(HDES)}. `+(H2.f_missing.length?`Running: ${andJ(H2.f_missing)}; results 5 and 6 cover the finished designs only.`:'The chain readings cover every design.'));
-  put('tL_seed',`Track ${H2.track} (${H2.assay}), seed 0 of each f. The h trained on f's predicted counts has ${H2.seeds_fnb} seed; by the PI's choice its wobble is borrowed from the same h trained on true counts.`);
+  put('tL_seed',`Track ${H2.track} (${H2.assay}), seed 0 of each f. The h trained on f's predicted counts has ${H2.seeds_fnb} seed; its wobble is borrowed from the same h trained on true counts.`);
   const mg=H2.merge.filter(r=>r[2]!=null).sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0])),mx=byDes(H2.merge.filter(r=>r[2]==null).map(r=>r[0]));
   put('tL_merge',`Own-noise h in the chain: at most G = ${H2.merge[0][1]} components per bin. Largest per-bin error ${mg.length?mg.map(r=>`${r[0]} ${fe(r[2])}`).join(', '):'none'}, bar ${fe(H2.merge[0][4])}`+(mx.length?`; ${andJ(mx)} exact.`:'.'));
   put('tL_boom',`Point CRPS of the mean on P above ${H2.explode_at}: ${ea.gt} of ${ea.rec.toLocaleString('en-US')} records alone, ${ec.gt} of ${ec.rec.toLocaleString('en-US')} in the chain; ${ea.gt_aff5+ec.gt_aff5} of them from affine h at rung 5. Push-only and formula h: ${pa0.gt+pc0.gt}.`);
