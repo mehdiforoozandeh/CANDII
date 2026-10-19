@@ -636,3 +636,17 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 - 2026-10-15: kit K10 shipped to Nibi; verify job 24065614 submitted (criterion 1 without -x,
   criterion 2, twin-determinism test on K10 and on t118 K8).
 - 2026-10-17: deck v1 published (private): https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS ; mirrored in cruxvault/results/t125/DECK.md.
+
+## Wrapped up 2026-10-19 (PI stop)
+
+- The PI stopped t125: no more compute or token spend.
+- Chain A is complete. Chain B (pairs 35–36) and chain B2 (pair 26) timed out at 12 h. They were resubmitted once as 24608447; that job was cancelled while it was RUNNING. The 8-of-8 aggregate 24608467 was cancelled while PENDING. Pairs already scored stay saved on Nibi.
+- The published deck (https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS, version 2, 37 slides) is final at 5 of 8 chain designs. The vault readings (q6 "Answer so far") also stay at 5 of 8.
+- Commit bf5ba11 adds the "ignores depth = 3.0" line to both depth-law figures, and index.html is rebuilt locally. Neither is published.
+
+### Open calls for the PI
+
+1. Share the deck with the lab, or keep it private.
+2. Record conclusions on q5 and q6, or leave them open.
+3. Merge PR #48 to main, or wait for an experiment-lane merge rule.
+4. Delete or keep the t125 caches under /project/def-maxwl/mforooz/t125/ on Nibi.
