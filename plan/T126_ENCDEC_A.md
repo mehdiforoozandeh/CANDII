@@ -76,3 +76,9 @@ Encoder-decoder rung D. PI decisions:
   wins.
 - **Unit tests:** the self path dec(c) ∘ enc(c) is the code path the self terms train; the hold-out
   removes every 7.5M pair from training; an arm→arm prediction equals dec(enc(X1, c1), c2).
+
+## PI confirmations (2026-10-20)
+
+- Run count: 7 per-track g's + 1 across-track g, as t118 row 1 — 144 rung-A runs, 240 rung-D runs.
+- Encdec-D starts as a constant map (no skip from x, so no identity init); old D starts at the
+  identity. Accepted for this exploratory run; named as a doubt in the readings.
