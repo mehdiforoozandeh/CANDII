@@ -638,7 +638,8 @@ def main(argv=None) -> int:
     pred = model.load_run(args.run_dir, args.data_dir, args.covariates, args.manifest, device="cpu")
     rows = pairs.read_manifest(args.manifest)
     fn = score_trained if args.cmd == "trained" else score_law
-    path = fn(pred, rows, args.blacklist, args.run_dir, workers=args.workers, extras=args.extras)
+    kw = {"extras": True} if args.extras else {}       # default call unchanged
+    path = fn(pred, rows, args.blacklist, args.run_dir, workers=args.workers, **kw)
     print(f"{args.cmd} {args.run_dir.name} -> {path} ({time.time() - t0:.1f} s)")
     return 0
 
