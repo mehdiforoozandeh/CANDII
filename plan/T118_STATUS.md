@@ -557,3 +557,4 @@ mse(Z, Z') is the mean over channels and the latent positions the decoder reads.
 - 24647788 `t126_lawD`: same array, `aftercorr:24647762` (submitted while 24647762 was live).
 - lambda selection (later, at aggregation): per g version, lowest mean-over-seeds best val_nll.
 - Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE.
+- 2026-10-20 23:58 UTC: 24647788 tasks 73, 74, 174 FAILED on c329 (CVMFS: invalid tzdata wheel at venv build); re-run as 24706070 (array 73,74,174, c329 also excluded). 24646366/24646367 (A) and 24647762 (D train) all COMPLETED.
