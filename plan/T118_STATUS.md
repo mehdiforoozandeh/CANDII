@@ -533,3 +533,18 @@ is fitted without it). SLURM `slurm/t126/train.sh`, `law.sh`. Tests `tests/test_
 - 24646366 `t126_train`: array 0-17,19-65,67-113,115-143%12 (the 141 non-smoke runs), 07:06 UTC.
 - 24646367 `t126_law`: same array, `aftercorr:24646366` (submitted while 24646366 was live).
 - Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE.
+
+### t126 rung D (spec section "Rung D" in `plan/T126_ENCDEC_A.md`)
+
+Built (commit 01579a2): form `DED` (`ladder/fforms/form_ded.py`: encoder dil 1, 2 FiLM by g_enc(c);
+decoder dil 4, 8 FiLM by g_dec(c') + D's 1x1 head; no skip; context 30), `model.GEncDecD`,
+`tools/t126/train_ded.py` (four-term loss + lam * mse(Z, Z')), D table `pairs.py tasks --table D`
+(D, DEDl0, DEDl0.1, DEDl1, DEDl10 x 8 g x real/nocov x 3 seeds = 240; arms 1-2 = 0-95). Init change
+vs D: the zero head with no skip gives the constant map loc = 0, disp = log n0 at start (D: identity).
+mse(Z, Z') is the mean over channels and the latent positions the decoder reads.
+
+- Kit K2: `/project/def-maxwl/mforooz/t126/code/K2`, `GIT_SHA` 01579a2. Out dir
+  `/project/def-maxwl/mforooz/t126/D/` (runs/, logs/). Rung-A runs stay on K1 (A code unchanged).
+- 24646796 `t126_verifyK2`: tests t126 and t118 on K2.
+- 24646801 `t126_trainD` smoke: array 18,66,114 (D, DEDl0, DEDl0.1 x C19M16 real s0).
+- 24646802 `t126_lawD` smoke: same indices, `aftercorr:24646801`.
