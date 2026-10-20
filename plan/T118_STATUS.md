@@ -505,3 +505,31 @@ test up to ~2 h on 8 CPU cores; aggregation 2–4 min; design X on 16 CPU cores 
   of t118). The run is exploratory. Nothing is built or submitted yet.
 - First step of t125: verify the t112 DNase p recipe, the 25 bp p binning and the ChIP caller
   commands on Nibi.
+
+## t126 — encoder-decoder rung A (spec `plan/T126_ENCDEC_A.md`; exploratory, no verdicts)
+
+Built (commit 774cd0f): `GEncDec` in `tools/t118/ladder/model.py` (shared phi(c) -> alpha, log beta;
+psi(c') -> NB log size), forms `AED` (beta learned) and `AED1` (beta = 1) in `ladder/fforms/`, an
+optional hold-out in `pairs.train_pairs` / `fit_pids` / `train.run_training` (default unchanged;
+config.json gains `holdout`, `heldout_pairs` only when set), held-out pairs scored as kind `heldout`
+(+ depthlaw) by `score.score_trained`. Task table `tools/t126/pairs.py`: arms A, AED, AED1 x 8 g's
+(7 per track + all) x real/nocov x 3 seeds = 144, `index = arm_i*48 + g_i*6 + model_i*3 + seed`.
+Held out of training: depth 7.5M on every track (fit pids exclude it too, so the encoder's z-scaling
+is fitted without it). SLURM `slurm/t126/train.sh`, `law.sh`. Tests `tests/test_t126_encdec.py`.
+
+- Kit K1: `/project/def-maxwl/mforooz/t126/code/K1`, `GIT_SHA` 774cd0f (rsync of the worktree without
+  .git, cruxvault, .orchestrate; wheels from t125 K14). Out dir `/project/def-maxwl/mforooz/t126/`
+  (runs/, logs/). Products `/project/def-maxwl/mforooz/t112_cf/products` (manifest md5 = fixture);
+  cache `/project/def-maxwl/mforooz/t118/ladder/cache` (read only).
+- 24644857 `t126_verifyK1`: tests t126, t118, t125 on K1 (script and log in `t126/verify/`).
+- 24644858 `t126_train` smoke: array 18,66,114 (A, AED, AED1 x C19M16 real s0).
+- 24644859 `t126_law` smoke: same indices, `aftercorr:24644858`.
+- 24644857 result: t126 15 passed; t118 585 passed, 6 skipped, 1 failed =
+  `test_t118_xshuf_score.py::test_twin_scoring_is_deterministic[D2]`, the known Nibi-CPU failure
+  that t125 also saw on t118 kit K8 (`plan/T125_STATUS.md`); row-2 xshuf code is untouched by t126.
+- Smoke (2026-10-20 06:55 UTC, g30): AED 10.4 min, AED1 9.4 min train + score; scores.json holds
+  36 trained, 2 heldout and 6 depthlaw records (2 from heldout), no 7.5M pid in the training pairs
+  or fit pids.
+- 24646366 `t126_train`: array 0-17,19-65,67-113,115-143%12 (the 141 non-smoke runs), 07:06 UTC.
+- 24646367 `t126_law`: same array, `aftercorr:24646366` (submitted while 24646366 was live).
+- Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE.
