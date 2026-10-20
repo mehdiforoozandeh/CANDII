@@ -548,3 +548,12 @@ mse(Z, Z') is the mean over channels and the latent positions the decoder reads.
 - 24646796 `t126_verifyK2`: tests t126 and t118 on K2.
 - 24646801 `t126_trainD` smoke: array 18,66,114 (D, DEDl0, DEDl0.1 x C19M16 real s0).
 - 24646802 `t126_lawD` smoke: same indices, `aftercorr:24646801`.
+- 24646796 result (part): t126 25 passed on K2; t118 part still running at 07:35 UTC.
+- D smoke (g30): D 9.6 min train + score; DEDl0 and DEDl0.1 ran all 4000 steps in ~12 min of
+  training (chr22 val NLL 0.740 / 0.734 vs D 0.731 at its best step). Configs: 36 training pairs,
+  no 7.5M product, 2 held-out pairs; t118 settings (lr 1e-3, batch 32, 4000 steps).
+- 24647762 `t126_trainD`: array 0-17,19-65,67-113,115-239%12 (all 237 non-smoke runs: arms D and
+  DEDl0 = 0-95, lambda arms DEDl0.1 / DEDl1 / DEDl10 = 96-239), 07:34 UTC.
+- 24647788 `t126_lawD`: same array, `aftercorr:24647762` (submitted while 24647762 was live).
+- lambda selection (later, at aggregation): per g version, lowest mean-over-seeds best val_nll.
+- Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE.
