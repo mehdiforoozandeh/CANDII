@@ -92,6 +92,22 @@ def nb_nll(loc: torch.Tensor, disp: torch.Tensor, y: torch.Tensor) -> torch.Tens
     return (-ll).to(out_dtype)
 
 
+def poisson_nll(loc: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """Per-bin Poisson negative log-likelihood of count y, mean exp(loc) clamped as in `nb_nll`.
+
+    Its gradient w.r.t. loc is mu - y inside the clamp. Float64 inside, loc's dtype out.
+    """
+    out_dtype = loc.dtype
+    loc, y = loc.double(), y.double()
+    log_mu = loc.clamp(math.log(MU_MIN), math.log(MU_MAX))
+    return (log_mu.exp() - y * log_mu + torch.lgamma(y + 1.0)).to(out_dtype)
+
+
+#: training losses (counts only for ppml): nb = NB NLL; ppml = Poisson NLL of y given mu (the mean
+#: part) + NB NLL of y given (mu detached, n) (the dispersion part: no gradient reaches mu)
+LOSSES = ("nb", "ppml")
+
+
 def lognormal_nll(loc: torch.Tensor, disp: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Per-bin log-normal negative log-likelihood of y floored at 1e-3 (the floor is the loss's).
 
@@ -174,9 +190,13 @@ class Ladder(torch.nn.Module):
     `x_g` (row 2 only, shaped like x): the x g reads instead of x — the shuffled-bin twin.
     """
 
-    def __init__(self, rung: str, space: str, stats: dict, n_cov: int = encoding.N_COV):
+    def __init__(self, rung: str, space: str, stats: dict, n_cov: int = encoding.N_COV,
+                 loss: str = "nb"):
         super().__init__()
         self.rung, self.space, self.n_cov = rung, space, int(n_cov)
+        if loss not in LOSSES or (loss == "ppml" and space != "counts"):
+            raise ValueError(f"loss {loss!r}: want one of {LOSSES}, ppml in counts only")
+        self.loss = loss
         self.form = base.load_form(rung, space, stats)
         self.context = int(self.form.context)
         self.n_theta = int(self.form.n_theta)
@@ -204,15 +224,27 @@ class Ladder(torch.nn.Module):
         return self.form(x, self.g(cov_pair))
 
     def nll_bins(self, loc, disp, y) -> torch.Tensor:
+        if self.loss == "ppml":
+            return poisson_nll(loc, y) + nb_nll(loc.detach(), disp, y)
         return nb_nll(loc, disp, y) if self.space == "counts" else lognormal_nll(loc, disp, y)
 
     def nll(self, loc, disp, y, mask: torch.Tensor | None = None) -> torch.Tensor:
         """Mean per-bin NLL (over the bins where `mask` is True, if given)."""
-        per = self.nll_bins(loc, disp, y)
-        if mask is None:
-            return per.mean()
-        m = mask.to(per.dtype)
-        return (per * m).sum() / m.sum().clamp(min=1.0)
+        return _masked_mean(self.nll_bins(loc, disp, y), mask)
+
+    def nll_terms(self, loc, disp, y, mask: torch.Tensor | None = None) -> dict:
+        """ppml only: {"loss_pois": mean Poisson NLL (mean part), "loss_nb": mean NB NLL given the
+        detached mu (dispersion part)}, plain floats for the training log."""
+        with torch.no_grad():
+            return {"loss_pois": float(_masked_mean(poisson_nll(loc, y), mask)),
+                    "loss_nb": float(_masked_mean(nb_nll(loc, disp, y), mask))}
+
+
+def _masked_mean(per: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
+    if mask is None:
+        return per.mean()
+    m = mask.to(per.dtype)
+    return (per * m).sum() / m.sum().clamp(min=1.0)
 
 
 @torch.no_grad()
@@ -493,7 +525,8 @@ def load_run(run_dir, data_dir, covariates_tsv, manifest_tsv, device="auto") -> 
                           f"encoder")
     stats = {"knots_x": np.asarray(ckpt["stats"]["knots_x"], dtype=np.float64),
              "n0": float(ckpt["stats"]["n0"]), "sigma0": float(ckpt["stats"]["sigma0"])}
-    ladder = Ladder(cfg["rung"], cfg["space"], stats, n_cov=int(cfg.get("n_cov", encoding.N_COV)))
+    ladder = Ladder(cfg["rung"], cfg["space"], stats, n_cov=int(cfg.get("n_cov", encoding.N_COV)),
+                    loss=cfg.get("loss", "nb"))
     ladder.g.load_state_dict(ckpt["g"])
     ladder.form.load_state_dict(ckpt["form"])
     enc = encoding.Encoder.from_state(ckpt["encoder"])

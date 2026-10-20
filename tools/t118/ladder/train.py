@@ -1,7 +1,8 @@
 """t118 ladder — train one (rung, g, space, model, seed) run, and build one product's cache.
 
     python tools/t118/ladder/train.py train <manifest.tsv> <covariates.tsv> <data_dir> <runs_dir>
-        <rung> <g> <space> <model> <seed> [--max-steps N] [--eval-every N] [--device auto|cpu|cuda]
+        <rung> <g> <space> <model> <seed> [--loss nb|ppml] [--max-steps N] [--eval-every N]
+        [--device auto|cpu|cuda]
     python tools/t118/ladder/train.py train-index <manifest.tsv> <covariates.tsv> <data_dir>
         <runs_dir> <index> [--row {1,2}] [--xshuf] [...] (the index-th row of `pairs.tasks(row=)`;
                                                         --xshuf: the twin's table, needs --row 2)
@@ -41,6 +42,12 @@ fresh every step (`xshuf.train_rng(seed)`), pads unchanged; validation uses the 
 permutation (`xshuf.pred_rng`). config.json gains `"xshuf": Pool.describe()`, timing.json
 `"xshuf_pool"`.
 
+**Loss** (`--loss`, t127): nb (default) = the NB NLL; ppml (counts) = Poisson NLL of y given mu
+(the mean part) + NB NLL of y given (mu detached, n) (the dispersion part), `model.Ladder.nll_bins`;
+validation and early stopping use that same total. A ppml run's name ends `_ppml_s<seed>`, its
+config.json gains `"loss": "ppml"`, its train_log.tsv gains `loss_pois loss_nb` (the two terms'
+interval means; nan at step 0). `train-index --ppml` reads `pairs.tasks_ppml()`.
+
 **Run dir** `<runs_dir>/<run_name>/`: config.json, ckpt.pt, train_log.tsv (`step loss val_nll
 seconds`), timing.json, TRAIN_DONE (written last; if present the CLI exits 0 without work).
 """
@@ -72,8 +79,9 @@ DEFAULTS = {"window": 2048, "batch": 32, "lr": 1e-3, "warmup": 100, "grad_clip":
             "knot_sample": 4_000_000, "knot_block": 1024, "n0": 5.0, "sigma0": 0.5}
 
 
-def run_name(rung: str, g: str, space: str, model_name: str, seed: int) -> str:
-    return f"{rung}_{g}_{space}_{model_name}_s{int(seed)}"
+def run_name(rung: str, g: str, space: str, model_name: str, seed: int, loss: str = "nb") -> str:
+    sfx = "" if loss == "nb" else f"_{loss}"
+    return f"{rung}_{g}_{space}_{model_name}{sfx}_s{int(seed)}"
 
 
 def git_sha() -> str:
@@ -230,7 +238,8 @@ def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
 
 
 def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model_name, seed,
-                 max_steps=None, eval_every=None, device="auto", cov_rows=None, **overrides):
+                 max_steps=None, eval_every=None, device="auto", cov_rows=None, loss="nb",
+                 **overrides):
     """Train one run into `<runs_dir>/<run_name>/`; returns the run dir. Skips if TRAIN_DONE.
 
     `overrides` may replace any DEFAULTS entry (tests only; the CLI exposes max_steps, eval_every
@@ -254,7 +263,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         cfg["max_steps"] = int(max_steps)
     if eval_every is not None:
         cfg["eval_every"] = int(eval_every)
-    name = run_name(rung, g, space, model_name, seed)
+    name = run_name(rung, g, space, model_name, seed, loss)
     run_dir = Path(runs_dir) / name
     if (run_dir / "TRAIN_DONE").is_file():
         print(f"{name}: TRAIN_DONE present, nothing to do")
@@ -288,7 +297,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    ladder = model.Ladder(rung, space, stats).to(dev)
+    ladder = model.Ladder(rung, space, stats, loss=loss).to(dev)
     pool, t_pool = None, None
     if is_xshuf:
         if not ladder.per_bin:
@@ -320,6 +329,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     }
     if is_xshuf:
         config["xshuf"] = pool.describe()
+    if loss != "nb":
+        config["loss"] = loss
     (run_dir / "config.json").write_text(json.dumps(config, indent=1) + "\n")
 
     t_setup = time.time() - t0
@@ -333,6 +344,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     best = {"val": val, "step": 0, "g": copy.deepcopy(ladder.g.state_dict()),
             "form": copy.deepcopy(ladder.form.state_dict())}
     bad, losses, step = 0, [], 0
+    terms = []                                      # ppml: the per-term means of each interval
     ladder.train()
     for step in range(1, cfg["max_steps"] + 1):
         out = sampler.draw(cfg["batch"])
@@ -350,11 +362,16 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         opt.step()
         sched.step()
         losses.append(float(loss))
+        if ladder.loss == "ppml":
+            terms.append(ladder.nll_terms(loc, disp, torch.from_numpy(yb).to(dev),
+                                          torch.from_numpy(mb).to(dev)))
         if step % cfg["eval_every"] == 0 or step == cfg["max_steps"]:
             val = validate(ladder, corpus, tp, cov_val, space, dev, model_name == "nocov",
                            xshuf_seed=xshuf_seed, level_cache=level_cache)
-            log.append((step, float(np.mean(losses)), val, time.time() - t1))
-            losses = []
+            log.append((step, float(np.mean(losses)), val, time.time() - t1)
+                       + ((float(np.mean([t["loss_pois"] for t in terms])),
+                           float(np.mean([t["loss_nb"] for t in terms]))) if terms else ()))
+            losses, terms = [], []
             if val < best["val"]:
                 best = {"val": val, "step": step, "g": copy.deepcopy(ladder.g.state_dict()),
                         "form": copy.deepcopy(ladder.form.state_dict())}
@@ -375,9 +392,12 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     torch.save(ckpt, tmp)
     os.replace(tmp, run_dir / "ckpt.pt")
     with open(run_dir / "train_log.tsv", "w", encoding="utf-8") as fh:
-        fh.write("step\tloss\tval_nll\tseconds\n")
-        for s, lo, v, sec in log:
-            fh.write(f"{s}\t{lo!r}\t{v!r}\t{sec:.3f}\n")
+        ppml = ladder.loss == "ppml"
+        fh.write("step\tloss\tval_nll\tseconds" + ("\tloss_pois\tloss_nb" if ppml else "") + "\n")
+        for s, lo, v, sec, *tt in log:
+            fh.write(f"{s}\t{lo!r}\t{v!r}\t{sec:.3f}"
+                     + ("".join(f"\t{t!r}" for t in (tt or [float("nan")] * 2)) if ppml else "")
+                     + "\n")
     timing = {"setup": t_setup, "train": t_train, "total": time.time() - t0,
               "peak_rss_mb": peak_rss_mb(), "steps_run": step, "best_step": int(best["step"]),
               "val_nll": float(best["val"])}
@@ -403,6 +423,7 @@ def main(argv=None) -> int:
     for a in ("manifest", "covariates", "data_dir", "runs_dir", "rung", "g", "space", "model"):
         p.add_argument(a)
     p.add_argument("seed", type=int)
+    p.add_argument("--loss", choices=model.LOSSES, default="nb")
     knobs(p)
     p = sub.add_parser("train-index")
     for a in ("manifest", "covariates", "data_dir", "runs_dir"):
@@ -411,6 +432,7 @@ def main(argv=None) -> int:
     p.add_argument("--row", type=int, choices=(1, 2), default=1)
     p.add_argument("--xshuf", action="store_true",
                    help="the shuffled-bin twin's table (pairs.tasks(row=2, xshuf=True)); needs --row 2")
+    p.add_argument("--ppml", action="store_true", help="the t127 table (pairs.tasks_ppml())")
     knobs(p)
     p = sub.add_parser("cache")
     for a in ("manifest", "products_dir", "cache_dir"):
@@ -429,7 +451,9 @@ def main(argv=None) -> int:
         print(f"{row['pid']}: " + " ".join(f"{s}={v}" for s, v in status.items()))
         return 0
     if args.cmd == "train-index":
-        if args.xshuf:
+        if args.ppml:
+            table = pairs.tasks_ppml()
+        elif args.xshuf:
             table = pairs.tasks(pairs.read_manifest(args.manifest), 2, xshuf=True)
         else:
             table = pairs.tasks(pairs.read_manifest(args.manifest), args.row)
@@ -437,11 +461,13 @@ def main(argv=None) -> int:
             raise IndexError(f"task index {args.index} outside 0..{len(table) - 1}")
         t = table[args.index]
         rung, g, space, model_name, seed = t["rung"], t["g"], t["space"], t["model"], t["seed"]
+        loss = t.get("loss", "nb")
     else:
         rung, g, space, model_name, seed = args.rung, args.g, args.space, args.model, args.seed
+        loss = args.loss
     run_training(args.manifest, args.covariates, args.data_dir, args.runs_dir, rung, g, space,
                  model_name, seed, max_steps=args.max_steps, eval_every=args.eval_every,
-                 device=args.device)
+                 device=args.device, loss=loss)
     return 0
 
 
