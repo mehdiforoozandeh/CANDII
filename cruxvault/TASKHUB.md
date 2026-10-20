@@ -47,6 +47,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t124` [implementation] find a principled fix for the −log10 p CRPS explosion in the per-bin designs (rows 1 and 2); capping σ and report-only were rejected by the PI — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]]
 - `t125` [implementation] Build and run the depth-offset count model and the counts-to-p map h (exploratory) — refs [[q5_does_a_depth_offset_on_f_the_source_dept\|q5]], [[q6_how_closely_does_a_map_h_reproduce_the_l\|q6]]
 - `t126` [implementation] Build and run the encoder-decoder rung A (shared per-side map phi, exact inverse; beta learned and beta=1) against a retrained old rung A, counts only, depth 7.5M held out of training (exploratory)
+- `t127` [implementation] head-to-head: Poisson-NLL mean + NB-NLL dispersion vs full NB NLL, counts, per-track g, rungs A, A-no-pseudocount (mu = e^a X^b + e^c), D, 3 seeds; exploratory, no bar — refs [[q1_do_the_recorded_experimental_covariates_\|q1]]
 
 ## Blocked
 
@@ -111,6 +112,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t124` [implementation] find a principled fix for the −log10 p CRPS explosion in the per-bin designs (rows 1 and 2); capping σ and report-only were rejected by the PI — refs [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]] — *open*
 - `t125` [implementation] Build and run the depth-offset count model and the counts-to-p map h (exploratory) — refs [[q5_does_a_depth_offset_on_f_the_source_dept\|q5]], [[q6_how_closely_does_a_map_h_reproduce_the_l\|q6]] — *open*
 - `t126` [implementation] Build and run the encoder-decoder rung A (shared per-side map phi, exact inverse; beta learned and beta=1) against a retrained old rung A, counts only, depth 7.5M held out of training (exploratory) — *open*
+- `t127` [implementation] head-to-head: Poisson-NLL mean + NB-NLL dispersion vs full NB NLL, counts, per-track g, rungs A, A-no-pseudocount (mu = e^a X^b + e^c), D, 3 seeds; exploratory, no bar — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *open*
 
 ### visualization
 
