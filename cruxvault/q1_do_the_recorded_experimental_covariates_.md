@@ -50,7 +50,7 @@ Locked before any run under this question:
 Drafted 2026-10-02; not judged. The main claim, one g(C, C′) per pair, has drafted readings in its report (2026-09-25). An exploratory second row, where g also reads the bin's own value, ran on 2026-10-01. Its drafted readings are under [[q4_how_much_capacity_does_a_covariate_condi|the capacity question]]. The main claim still chooses its design on chr22 from row 1 only.
 
 <!-- crux:ledger:start -->
-**8 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0) · sub-questions 0/5 resolved
+**9 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0) · sub-questions 0/6 resolved
 
 - `h1` [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
 - `h2` [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
@@ -60,4 +60,5 @@ Drafted 2026-10-02; not judged. The main claim, one g(C, C′) per pair, has dra
 - `q4` _(Q)_ [[q4_how_much_capacity_does_a_covariate_condi|How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?]] — *open*
 - `q5` _(Q)_ [[q5_does_a_depth_offset_on_f_the_source_dept|Does a depth offset on f (the source depth removed before f, the target depth added after) change how well a covariate-conditioned g → f translates a track's raw counts across a covariate change?]] — *open*
 - `q6` _(Q)_ [[q6_how_closely_does_a_map_h_reproduce_the_l|How closely does a map h reproduce the −log10 p track from a predicted count distribution and its matched control, as h's complexity and inputs grow?]] — *open*
+- `q7` _(Q)_ [[q7_why_do_the_covariate_conditioned_g_f_des|Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?]] — *open*
 <!-- crux:ledger:end -->

@@ -35,7 +35,7 @@ Drafted 2026-10-02; exploratory (outside the pre-registered ladder), not judged.
 - −log10 p: row 2, A2 included, has more (pair, seed) records with CRPS above 20 than row 1; the twin has no more than row 1. The spec predicted that A2 would likely remove them. Some row-2 means reach 10³–10⁶, with wobbles as large.
 - Every row-2 design beats its no-covariates twin in counts in 10–12 of 12 cells. The depth law stays unmet (B2: 1 of 6 cells).
 
-Open: a principled fix for the p-space explosion (the PI rejected capping σ and report-only); a hand check of the depth-law computation; why design D explodes without knots; [[t119_rebuild_the_two_dnase_mapq_arms_c12|the DNase MAPQ-arm rebuild]].
+Open: a principled fix for the p-space explosion (the PI rejected capping σ and report-only); the depth-law miss ([[q7_why_do_the_covariate_conditioned_g_f_des|its question]]); why design D explodes without knots; [[t119_rebuild_the_two_dnase_mapq_arms_c12|the DNase MAPQ-arm rebuild]].
 
 <!-- crux:ledger:start -->
 **5 children** · ideas 0/5 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)

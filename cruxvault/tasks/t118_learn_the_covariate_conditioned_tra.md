@@ -33,6 +33,7 @@ The design was finalised 2026-09-25 and is recorded in `plan/T118_COUNTERFACTUAL
   - a hand check of the depth-law computation, before the unmet depth law is read as a model failure. Task: `t122`.
   - the diagnosis of design D's explosion: D has no knots, so the cause found in B and C (a drifting σ at the lowest knot) does not explain it. Task: `t123`.
   - [[t119_rebuild_the_two_dnase_mapq_arms_c12|the rebuild of the two DNase MAPQ arms]], so the MAPQ cut applies.
+- 2026-10-19: why the designs miss the depth law is followed under [[q7_why_do_the_covariate_conditioned_g_f_des|why the designs miss the depth law]]. Its readings: the depth-law check is correct ([[t122_hand_check_the_depth_law_computatio|the hand check]]); trained pairs fit and never-trained arm → arm pairs miss, for depth and every testable knob ([report](results/h19/report.md)). The pseudoreplicates built for the dropped oracle exist only on `data-acquisition/t117-pseudoreplicates` (07aa7c9, task done 2026-09-23, 130 of 130 checks pass).
 - Not marked done: the PI decides.
 
 ## Output
