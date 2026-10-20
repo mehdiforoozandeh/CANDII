@@ -230,11 +230,16 @@ def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
 
 
 def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model_name, seed,
-                 max_steps=None, eval_every=None, device="auto", cov_rows=None, **overrides):
+                 max_steps=None, eval_every=None, device="auto", cov_rows=None, holdout=(),
+                 **overrides):
     """Train one run into `<runs_dir>/<run_name>/`; returns the run dir. Skips if TRAIN_DONE.
 
     `overrides` may replace any DEFAULTS entry (tests only; the CLI exposes max_steps, eval_every
     and device). `cov_rows` replaces the rows read from `covariates` (tests only).
+    `holdout` (t126): (arm, level) pairs held out of training — `pairs.train_pairs(rows, g,
+    holdout)`, so the fit pids (encoder normalisation, knots) exclude them too; config.json gains
+    `"holdout"` and `"heldout_pairs"`, which `score.score_trained` reads to score them. Empty (the
+    default): the run and its config.json are unchanged.
     """
     t0 = time.time()
     torch.backends.cudnn.deterministic = True
@@ -265,8 +270,9 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     rows = pairs.read_manifest(manifest)
     if cov_rows is None:
         cov_rows = encoding.read_covariates(covariates)
-    tp = pairs.train_pairs(rows, g)
-    fit = pairs.fit_pids(rows, g)
+    holdout = [[str(a), str(lv)] for a, lv in holdout]
+    tp = pairs.train_pairs(rows, g, holdout)
+    fit = pairs.fit_pids(rows, g, holdout)
     if len(tp) < 2:
         raise ValueError(f"g {g!r}: {len(tp)} training pairs")
     corpus = data.Corpus(data_dir)
@@ -318,6 +324,9 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         "ids_perm": [int(v) for v in perm],
         "knots_x": [float(v) for v in stats["knots_x"]],
     }
+    if holdout:
+        config["holdout"] = holdout
+        config["heldout_pairs"] = pairs.heldout_pairs(rows, g, holdout)
     if is_xshuf:
         config["xshuf"] = pool.describe()
     (run_dir / "config.json").write_text(json.dumps(config, indent=1) + "\n")

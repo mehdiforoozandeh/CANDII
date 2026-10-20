@@ -167,11 +167,66 @@ class GBin(torch.nn.Module):
         return self(cov_pair, x_values.expand(cov_pair.shape[0], -1))
 
 
+def _mlp(n_in: int, n_out: int, bias: torch.Tensor) -> torch.nn.Sequential:
+    """MLP n_in -> 64 -> 64 -> n_out, ReLU; last layer weight 0, bias = `bias` (as `G`)."""
+    net = torch.nn.Sequential(
+        torch.nn.Linear(n_in, HIDDEN), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN, HIDDEN), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN, n_out))
+    with torch.no_grad():
+        net[-1].weight.zero_()
+        net[-1].bias.copy_(torch.as_tensor(bias, dtype=torch.float32).reshape(-1))
+    return net
+
+
+class GEncDec(torch.nn.Module):
+    """t126 encoder-decoder g for rung A's f (forms AED, AED1; plan/T126_ENCDEC_A.md).
+
+    `phi`: ONE MLP n_cov -> 64 -> 64 -> (alpha, log beta) (or alpha alone when `beta_learned` is
+    False, beta = 1), applied to the source covariates c and the target covariates c' separately.
+    `psi`: MLP n_cov -> 64 -> 64 -> 1 on c' only, the NB log size d. Returns rung A's theta:
+        b = beta(c') / beta(c),  a = alpha(c') - b * alpha(c),  d = psi(c').
+    Input `cov_pair` [B, 2 n_cov] = concat(encode(c), encode(c')), as `G`. Last layers have weight 0;
+    phi's bias is 0 (alpha = 0, beta = 1) and psi's bias is init_theta's d, so theta starts at
+    `init_theta` = (0, 1, d0) for every input, as every rung does.
+    """
+
+    def __init__(self, n_cov: int, init_theta: torch.Tensor, beta_learned: bool = True):
+        super().__init__()
+        init_theta = torch.as_tensor(init_theta, dtype=torch.float32).reshape(-1)
+        if init_theta.numel() != 3 or float(init_theta[0]) != 0.0 or float(init_theta[1]) != 1.0:
+            raise ValueError(f"GEncDec needs rung A's init_theta (0, 1, d0), got {init_theta.tolist()}")
+        self.n_cov = int(n_cov)
+        self.beta_learned = bool(beta_learned)
+        self.phi = _mlp(self.n_cov, 2 if self.beta_learned else 1, torch.zeros(2 if beta_learned else 1))
+        self.psi = _mlp(self.n_cov, 1, init_theta[2:3])
+
+    def latent(self, c: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """c [B, n_cov] -> (alpha [B], log beta [B]); log beta = 0 when beta is fixed to 1."""
+        out = self.phi(c)
+        alpha = out[:, 0]
+        log_beta = out[:, 1] if self.beta_learned else torch.zeros_like(alpha)
+        return alpha, log_beta
+
+    def forward(self, cov_pair: torch.Tensor) -> torch.Tensor:
+        if cov_pair.dim() != 2 or cov_pair.shape[1] != 2 * self.n_cov:
+            raise ValueError(f"GEncDec: cov_pair {tuple(cov_pair.shape)} must be [B, {2 * self.n_cov}]")
+        c, ct = cov_pair[:, :self.n_cov], cov_pair[:, self.n_cov:]
+        alpha, log_beta = self.latent(c)
+        alpha_t, log_beta_t = self.latent(ct)
+        b = torch.ones_like(alpha) if not self.beta_learned else torch.exp(log_beta_t - log_beta)
+        a = alpha_t - b * alpha
+        d = self.psi(ct)[:, 0]
+        return torch.stack([a, b, d], dim=1)
+
+
 class Ladder(torch.nn.Module):
     """g + one f-form: `forward(cov_pair [B, 40], x [B, L + 2c]) -> (loc [B, L], disp [B, L])`.
 
     Row 2 (`per_bin`, the form's flag): g is `GBin` and reads x as well; the signature is the same.
     `x_g` (row 2 only, shaped like x): the x g reads instead of x — the shuffled-bin twin.
+    t126: a form whose `g_kind` is "encdec" / "encdec_beta1" (AED, AED1) gets `GEncDec`; a form
+    without `g_kind` gets `G`, as before.
     """
 
     def __init__(self, rung: str, space: str, stats: dict, n_cov: int = encoding.N_COV):
@@ -181,8 +236,13 @@ class Ladder(torch.nn.Module):
         self.context = int(self.form.context)
         self.n_theta = int(self.form.n_theta)
         self.per_bin = bool(self.form.per_bin)
+        g_kind = getattr(self.form, "g_kind", None)
         if self.per_bin:
             self.g = GBin(2 * self.n_cov, self.n_theta, self.form.init_theta())
+        elif g_kind in ("encdec", "encdec_beta1"):
+            self.g = GEncDec(self.n_cov, self.form.init_theta(), beta_learned=g_kind == "encdec")
+        elif g_kind is not None:
+            raise ValueError(f"rung {rung}: unknown g_kind {g_kind!r}")
         else:
             self.g = G(2 * self.n_cov, self.n_theta, self.form.init_theta())
 

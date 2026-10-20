@@ -119,15 +119,32 @@ def _tracks_of(rows: list[dict], g: str) -> list[str]:
     return track_ids(rows) if g == "all" else [g]
 
 
-def train_pairs(rows: list[dict], g: str) -> list[dict]:
-    """base->arm and arm->base per usable arm product, (pid, direction) order; "all" = concat."""
+def _held(p: dict, holdout) -> bool:
+    """True if the pair's source or target product is an (arm, level) of `holdout`."""
+    held = {(str(a), str(lv)) for a, lv in holdout}
+    return (p["arm_src"], p["level_src"]) in held or (p["arm_tgt"], p["level_tgt"]) in held
+
+
+def train_pairs(rows: list[dict], g: str, holdout=()) -> list[dict]:
+    """base->arm and arm->base per usable arm product, (pid, direction) order; "all" = concat.
+
+    `holdout` (t126): (arm, level) pairs whose products leave training; every pair with such a
+    source or target is dropped (`heldout_pairs` lists them). Empty (the default): unchanged.
+    """
     out = []
     for track in _tracks_of(rows, g):
         base, arms = _by_track(rows, track)
         for r in arms:
             out.append(_pair(base, r, "base_to_arm"))
             out.append(_pair(r, base, "arm_to_base"))
+    if holdout:
+        out = [p for p in out if not _held(p, holdout)]
     return out
+
+
+def heldout_pairs(rows: list[dict], g: str, holdout) -> list[dict]:
+    """The base<->arm pairs of g that `holdout` removes from `train_pairs`, in the same order."""
+    return [p for p in train_pairs(rows, g) if _held(p, holdout)] if holdout else []
 
 
 def law_pairs(rows: list[dict], g: str) -> list[dict]:
@@ -142,9 +159,10 @@ def law_pairs(rows: list[dict], g: str) -> list[dict]:
     return out
 
 
-def fit_pids(rows: list[dict], g: str) -> list[str]:
-    """Sorted set of the source and target pids of `train_pairs(rows, g)`."""
-    return sorted({p[k] for p in train_pairs(rows, g) for k in ("source_pid", "target_pid")})
+def fit_pids(rows: list[dict], g: str, holdout=()) -> list[str]:
+    """Sorted set of the source and target pids of `train_pairs(rows, g, holdout)`."""
+    return sorted({p[k] for p in train_pairs(rows, g, holdout)
+                   for k in ("source_pid", "target_pid")})
 
 
 def _pair_index(rows: list[dict], pair: dict) -> int:

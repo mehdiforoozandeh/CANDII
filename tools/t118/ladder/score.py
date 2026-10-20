@@ -25,8 +25,13 @@ removed; chromosomes concatenated in that order.
             products differ only in depth (base<->depth trained, depth->depth law), with
             `depth_log2_ratio_true = log2(depth_tgt / depth_src)` (manifest depths),
             `depth_log2_scale_pred = log2(sum mu / sum X)` over the score bins, and
-            `depth_source` in {trained, law}.
+            `depth_source` in {trained, law} (t126 hold-out runs: also heldout).
   law       (law pass) every never-trained arm->arm pair of `pairs.law_pairs(rows, g)`, eval score.
+  heldout   (t126; only when the run's config.json has `"holdout"`) every base<->arm pair the
+            hold-out removed from training (`pairs.heldout_pairs`), eval score, scored as a trained
+            record is (split, PIT, describe; a depthlaw copy with `depth_source = "heldout"` for
+            base<->depth pairs). Trained, shuffle and swap then cover the remaining training pairs
+            and fit pids only. Arm->arm pairs with a held-out product stay in the law pass.
 
 `pit_hist` (trained/score, every model): int[20] histogram of the randomised PIT — NB
 u = F(y-1) + v (F(y) - F(y-1)), v ~ U(0, 1) from default_rng(0); log-normal Phi((log y - loc)/sigma),
@@ -500,7 +505,8 @@ def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) 
     run_dir = Path(run_dir)
     _setup(pred, rows, blacklist)
     space, real = pred.space, pred.model == "real"
-    train = pairs.train_pairs(rows, pred.g_id)
+    holdout = [tuple(h) for h in (getattr(pred, "config", None) or {}).get("holdout", ())]
+    train = pairs.train_pairs(rows, pred.g_id, holdout)
     snip = _snip_plan(train) if real else {}
     jobs, skipped = [], []
     for p in train:
@@ -512,6 +518,11 @@ def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) 
                          "cov_tgt": p["target_pid"], "split": sc, "pit": sc, "describe": True,
                          "meta": real and sc, "snip": snip.get(key) if sc else None,
                          "depth": sc and space == "counts" and _is_depth_pair(p, "trained")})
+    for p in pairs.heldout_pairs(rows, pred.g_id, holdout):
+        jobs.append({"kind": "heldout", "eval": "score", "pair": p, "x_pid": p["source_pid"],
+                     "y_pid": p["target_pid"], "cov_src": p["source_pid"],
+                     "cov_tgt": p["target_pid"], "split": True, "pit": True, "describe": True,
+                     "depth": space == "counts" and _is_depth_pair(p, "trained")})
     for p in train:
         try:
             wrong = pairs.shuffle_target(rows, p, space, pred.seed)
@@ -522,7 +533,7 @@ def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) 
         jobs.append({"kind": "shuffle", "eval": "score", "pair": p, "x_pid": p["source_pid"],
                      "y_pid": p["target_pid"], "cov_src": p["source_pid"], "cov_tgt": wrong})
     by_pid = {r["pid"]: r for r in pairs.usable_products(rows)}
-    for pid in pairs.fit_pids(rows, pred.g_id):
+    for pid in pairs.fit_pids(rows, pred.g_id, holdout):
         r = by_pid[pid]
         p = pairs._pair(r, r, "swap")
         jobs.append({"kind": "swap", "eval": "score", "pair": p, "x_pid": pid, "y_pid": pid,
