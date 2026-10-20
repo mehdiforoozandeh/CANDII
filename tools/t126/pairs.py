@@ -13,7 +13,12 @@ scores.json); arm->arm pairs with a 7.5M product stay in t118's law pass.
 (t118's formula; index 18 = A_C19M16_counts_real_s0, 66 = AED_..., 114 = AED1_...). G_IDS are
 t118's (7 per-track g's, then "all"); MODELS = real and the no-covariates twin.
 
-    python tools/t126/pairs.py tasks <MANIFEST.tsv>
+**Rung D table** (`tasks(table="D")`, `tasks --table D`; plan/T126_ENCDEC_A.md "Rung D"). 240 =
+ARMS_D x G_IDS x MODELS x SEEDS with the same index formula over arms D (t118 rung D retrained),
+DEDl0, DEDl0.1, DEDl1, DEDl10 (encoder-decoder D with lambda = LAMBDAS[arm]); index 18 =
+D_C19M16_counts_real_s0, 66 = DEDl0_C19M16_counts_real_s0. Arms 1-2 are indices 0-95.
+
+    python tools/t126/pairs.py tasks <MANIFEST.tsv> [--table A|D]
     python tools/t126/pairs.py train-pairs <MANIFEST.tsv> <g>
     python tools/t126/pairs.py heldout-pairs <MANIFEST.tsv> <g>
 """
@@ -37,12 +42,18 @@ SPACE = "counts"
 #: (arm, level) of the products held out of training, on every track (PI 2026-10-19)
 HOLDOUT = (("depth", "7.5M"),)
 TASK_KEYS = ("index", "rung", "g", "space", "model", "seed", "run_name")
+ARMS_D = ("D", "DEDl0", "DEDl0.1", "DEDl1", "DEDl10")
+#: the encoder-decoder D arms' latent-matching weight (PI grid {0.1, 1, 10}, 2026-10-20)
+LAMBDAS = {"DEDl0": 0.0, "DEDl0.1": 0.1, "DEDl1": 1.0, "DEDl10": 10.0}
+TABLES = ("A", "D")
 
 
-def tasks(rows: list[dict] | None = None) -> list[dict]:
-    """The 144-row task table; a pure function of the constants (rows kept for the signature)."""
+def tasks(rows: list[dict] | None = None, table: str = "A") -> list[dict]:
+    """The task table ("A": 144 rows, "D": 240 rows); a pure function of the constants."""
+    if table not in TABLES:
+        raise ValueError(f"table {table!r} not in {TABLES}")
     out = []
-    for ai, arm in enumerate(ARMS):
+    for ai, arm in enumerate(ARMS if table == "A" else ARMS_D):
         for gi, g in enumerate(G_IDS):
             for mi, model in enumerate(MODELS):
                 for seed in SEEDS:
@@ -69,10 +80,12 @@ def main(argv=None) -> int:
         p.add_argument("manifest")
         if name != "tasks":
             p.add_argument("g")
+        else:
+            p.add_argument("--table", choices=TABLES, default="A")
     args = ap.parse_args(argv)
     rows = _lp.read_manifest(args.manifest)
     if args.cmd == "tasks":
-        sys.stdout.write("\t".join(TASK_KEYS) + "\n" + _lp._tsv(tasks(rows), TASK_KEYS))
+        sys.stdout.write("\t".join(TASK_KEYS) + "\n" + _lp._tsv(tasks(rows, args.table), TASK_KEYS))
     else:
         fn = train_pairs if args.cmd == "train-pairs" else heldout_pairs
         sys.stdout.write("\t".join(_lp.PAIR_KEYS) + "\n" + _lp._tsv(fn(rows, args.g), _lp.PAIR_KEYS))

@@ -220,13 +220,39 @@ class GEncDec(torch.nn.Module):
         return torch.stack([a, b, d], dim=1)
 
 
+class GEncDecD(torch.nn.Module):
+    """t126 encoder-decoder g for rung DED (`fforms/form_ded.py`; plan/T126_ENCDEC_A.md "Rung D").
+
+    `g_enc`: MLP n_cov -> 64 -> 64 -> 128 on the source covariates c: the encoder's FiLM
+    (gamma[2][32], beta[2][32]). `g_dec`: a separate MLP of the same shape on c' only: the
+    decoder's FiLM. Last layers weight 0, bias gamma 1 / beta 0. `forward(cov_pair)` returns the
+    form's D-layout theta [B, 256] (`FormDED.join_theta`), so the Ladder, the Predictor and the
+    no-covariates twin's mean theta work as for any row-1 rung.
+    """
+
+    def __init__(self, n_cov: int, n_side: int):
+        super().__init__()
+        self.n_cov = int(n_cov)
+        half = n_side // 2
+        init = torch.cat([torch.ones(half), torch.zeros(half)])
+        self.g_enc = _mlp(self.n_cov, n_side, init)
+        self.g_dec = _mlp(self.n_cov, n_side, init)
+
+    def forward(self, cov_pair: torch.Tensor) -> torch.Tensor:
+        from ladder.fforms.form_ded import FormDED
+        if cov_pair.dim() != 2 or cov_pair.shape[1] != 2 * self.n_cov:
+            raise ValueError(f"GEncDecD: cov_pair {tuple(cov_pair.shape)} must be [B, {2 * self.n_cov}]")
+        c, ct = cov_pair[:, :self.n_cov], cov_pair[:, self.n_cov:]
+        return FormDED.join_theta(self.g_enc(c), self.g_dec(ct))
+
+
 class Ladder(torch.nn.Module):
     """g + one f-form: `forward(cov_pair [B, 40], x [B, L + 2c]) -> (loc [B, L], disp [B, L])`.
 
     Row 2 (`per_bin`, the form's flag): g is `GBin` and reads x as well; the signature is the same.
     `x_g` (row 2 only, shaped like x): the x g reads instead of x — the shuffled-bin twin.
-    t126: a form whose `g_kind` is "encdec" / "encdec_beta1" (AED, AED1) gets `GEncDec`; a form
-    without `g_kind` gets `G`, as before.
+    t126: a form whose `g_kind` is "encdec" / "encdec_beta1" (AED, AED1) gets `GEncDec`,
+    "encdec_d" (DED) gets `GEncDecD`; a form without `g_kind` gets `G`, as before.
     """
 
     def __init__(self, rung: str, space: str, stats: dict, n_cov: int = encoding.N_COV):
@@ -241,6 +267,9 @@ class Ladder(torch.nn.Module):
             self.g = GBin(2 * self.n_cov, self.n_theta, self.form.init_theta())
         elif g_kind in ("encdec", "encdec_beta1"):
             self.g = GEncDec(self.n_cov, self.form.init_theta(), beta_learned=g_kind == "encdec")
+        elif g_kind == "encdec_d":
+            from ladder.fforms.form_ded import N_SIDE
+            self.g = GEncDecD(self.n_cov, N_SIDE)
         elif g_kind is not None:
             raise ValueError(f"rung {rung}: unknown g_kind {g_kind!r}")
         else:
