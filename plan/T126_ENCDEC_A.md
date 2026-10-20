@@ -50,3 +50,29 @@ identity, and arm→arm composes through the latent. φ is one network applied t
 
 Short visual report, then a prezit deck in the style of the t118 grid deck
 (`cruxvault/presentations/t118-grid/`).
+
+## Rung D (PI scope extension, 2026-10-19/20)
+
+Encoder-decoder rung D. PI decisions:
+
+- **Encoder:** today's D trunk split in two. 2 dilated conv layers (dilations 1, 2; 32 channels;
+  kernel 5), each FiLM-modulated by g_enc(c), then GELU. Input x = log1p(X); output latent Z,
+  shape [B, 32, L].
+- **Decoder:** 2 layers (dilations 4, 8), each FiLM-modulated by g_dec(c′), then GELU, then today's
+  1×1 head giving (loc, disp). NO skip from x to the output: the source cannot bypass the latent.
+  Total context stays 61 bins (same size and context as today's D). Zero-init / identity
+  conventions from `form_d.py` where they still apply; any changed init is reported.
+- **g_enc, g_dec:** separate MLPs, each 2×64 like t118's g, each reads one side's covariates only.
+- **Loss** per base↔arm pair (X, c) → (X′, c′), Z = enc(X, c), Z′ = enc(X′, c′):
+  NLL(X′ | dec(Z, c′)) + NLL(X | dec(Z′, c)) + NLL(X | dec(Z, c)) + NLL(X′ | dec(Z′, c′))
+  + λ·mse(Z, Z′).
+- **Arms**, each with a no-covariates twin, both g versions, 3 seeds, counts only, depth 7.5M held
+  out of training: (1) old D retrained (t118 rung D, hold-out applied); (2) encdec-D, λ = 0;
+  (3) encdec-D, λ > 0.
+- **λ grid (PI, 2026-10-20): {0.1, 1, 10}.** All three are trained (both g versions, 3 seeds, each
+  with a no-covariates twin) and all three are scored on chr19 + chr21, so the readings show every λ.
+- **λ selection rule (PI):** one λ per g version by the t118 run-selection convention on chr22 —
+  the validation NLL on the trained cross pairs (the run's best `val_nll`), mean over seeds; lowest
+  wins.
+- **Unit tests:** the self path dec(c) ∘ enc(c) is the code path the self terms train; the hold-out
+  removes every 7.5M pair from training; an arm→arm prediction equals dec(enc(X1, c1), c2).
