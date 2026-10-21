@@ -246,6 +246,97 @@ class GEncDecD(torch.nn.Module):
         return FormDED.join_theta(self.g_enc(c), self.g_dec(ct))
 
 
+class GSym(torch.nn.Module):
+    """t128 symmetric g for rungs DS / DSBOX (`fforms/form_ds.py`; plan/T126_ENCDEC_D2.md).
+
+    ONE MLP 2 n_cov -> 64 -> 64 -> 256 (`mlp`; last layer weight 0, bias gamma 1 / beta 0) gives
+    old D's FiLM for a pair (a, b) of covariate vectors. A learned clean covariate vector C_clean
+    sits in the middle: its 13 processing knobs are learned per assay (`cclean` [7, 13]); its assay
+    entries are copied from the source c. With cc = C_clean of c,
+        theta = cat(mlp(cat(c, cc)), mlp(cat(cc, c')))   [B, 512]
+    the encoder's FiLM then the decoder's. Form A (`box` False): the knobs are `cclean` itself.
+    Form D (`box` True): `cclean` is the pre-sigmoid u, knobs = lo + (hi - lo) * sigmoid(u), with
+    the box [lo, hi] set by `set_box`. The init values are the training script's job
+    (`set_cclean_init`; PI 2026-10-21: zeros for form A, the base's covariates for form D).
+    """
+
+    def __init__(self, n_cov: int, init_theta: torch.Tensor, box: bool):
+        super().__init__()
+        from ladder.fforms.form_ds import ASSAY_SLICE, FILM, N_ASSAY, N_KNOB
+        init_theta = torch.as_tensor(init_theta, dtype=torch.float32).reshape(-1)
+        if init_theta.numel() != 2 * FILM:
+            raise ValueError(f"GSym: init_theta has {init_theta.numel()} entries, want {2 * FILM}")
+        if int(n_cov) != ASSAY_SLICE.stop:
+            raise ValueError(f"GSym: n_cov {n_cov} != {ASSAY_SLICE.stop} (13 knobs + 7 assays)")
+        self.n_cov = int(n_cov)
+        self.box = bool(box)
+        self.mlp = _mlp(2 * self.n_cov, FILM, init_theta[:FILM])
+        self.cclean = torch.nn.Parameter(torch.zeros(N_ASSAY, N_KNOB))
+        self.register_buffer("box_lo", torch.zeros(N_ASSAY, N_KNOB))
+        self.register_buffer("box_hi", torch.zeros(N_ASSAY, N_KNOB))
+
+    @staticmethod
+    def assay_index(c: torch.Tensor) -> torch.Tensor:
+        from ladder.fforms.form_ds import ASSAY_SLICE
+        return c[:, ASSAY_SLICE].argmax(dim=1)
+
+    def cclean_knobs(self) -> torch.Tensor:
+        """[7, 13]: the decoded knobs of C_clean, one row per assay."""
+        if not self.box:
+            return self.cclean
+        return self.box_lo + (self.box_hi - self.box_lo) * torch.sigmoid(self.cclean)
+
+    def cclean_of(self, c: torch.Tensor) -> torch.Tensor:
+        """c [B, 20] -> C_clean [B, 20]: the knobs of c's assay, then c's own assay entries."""
+        from ladder.fforms.form_ds import ASSAY_SLICE
+        knobs = self.cclean_knobs()[self.assay_index(c)].to(c.dtype)
+        return torch.cat([knobs, c[:, ASSAY_SLICE]], dim=1)
+
+    def film(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """a, b [B, 20] -> old D's FiLM [B, 256]."""
+        return self.mlp(torch.cat([a, b], dim=1))
+
+    def forward(self, cov_pair: torch.Tensor) -> torch.Tensor:
+        if cov_pair.dim() != 2 or cov_pair.shape[1] != 2 * self.n_cov:
+            raise ValueError(f"GSym: cov_pair {tuple(cov_pair.shape)} must be [B, {2 * self.n_cov}]")
+        c, ct = cov_pair[:, :self.n_cov], cov_pair[:, self.n_cov:]
+        cc = self.cclean_of(c)
+        return torch.cat([self.film(c, cc), self.film(cc, ct)], dim=1)
+
+    @torch.no_grad()
+    def set_box(self, lo: torch.Tensor, hi: torch.Tensor) -> None:
+        """Copy the box [lo, hi] ([7, 13] each). Form D only; a no-op with a warning for form A."""
+        if not self.box:
+            warnings.warn("GSym.set_box: form A (free C_clean) has no box; ignored")
+            return
+        lo = torch.as_tensor(lo, dtype=self.box_lo.dtype).reshape(self.box_lo.shape)
+        hi = torch.as_tensor(hi, dtype=self.box_hi.dtype).reshape(self.box_hi.shape)
+        if bool((hi < lo).any()):
+            raise ValueError("GSym.set_box: hi < lo somewhere")
+        self.box_lo.copy_(lo)
+        self.box_hi.copy_(hi)
+
+    @torch.no_grad()
+    def set_cclean_init(self, values: torch.Tensor) -> None:
+        """Initialise C_clean's knobs at `values` [7, 13]. Form A copies them; form D stores
+        clamp(logit((values - lo) / (hi - lo)), -4, 4), 0 where hi == lo (call `set_box` first)."""
+        v = torch.as_tensor(values, dtype=self.cclean.dtype).reshape(self.cclean.shape)
+        if not self.box:
+            self.cclean.copy_(v)
+            return
+        width = self.box_hi - self.box_lo
+        flat = width <= 0
+        frac = (v - self.box_lo) / torch.where(flat, torch.ones_like(width), width)
+        u = torch.logit(frac.clamp(1e-12, 1.0 - 1e-12)).clamp(-4.0, 4.0)
+        self.cclean.copy_(torch.where(flat, torch.zeros_like(u), u))
+
+    @torch.no_grad()
+    def cclean_table(self) -> dict:
+        """{assay name: [13 decoded knob values]}."""
+        k = self.cclean_knobs().detach().double().cpu()
+        return {a: k[i].tolist() for i, a in enumerate(encoding.ASSAYS)}
+
+
 class Ladder(torch.nn.Module):
     """g + one f-form: `forward(cov_pair [B, 40], x [B, L + 2c]) -> (loc [B, L], disp [B, L])`.
 
@@ -270,6 +361,9 @@ class Ladder(torch.nn.Module):
         elif g_kind == "encdec_d":
             from ladder.fforms.form_ded import N_SIDE
             self.g = GEncDecD(self.n_cov, N_SIDE)
+        elif g_kind == "sym_film":
+            self.g = GSym(self.n_cov, self.form.init_theta(),
+                          box=bool(getattr(self.form, "cclean_box", False)))
         elif g_kind is not None:
             raise ValueError(f"rung {rung}: unknown g_kind {g_kind!r}")
         else:
