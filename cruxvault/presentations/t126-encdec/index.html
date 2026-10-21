@@ -239,11 +239,11 @@
         <div class="card" style="--c:var(--ok)"><span class="tag out">ruled out</span><div class="ct">1 · The check itself</div>
           <div class="cb">We recomputed the depth law from the raw count histograms, and summed the counts of every depth track.</div><div class="bn" id="tS1"></div></div>
         <div class="card" style="--c:var(--eda)"><span class="tag part">indirect</span><div class="ct">2 · The +1 in log(1 + count)</div>
-          <div class="cb">A zero-count bin stays at 0 when the depth changes, so a plain shift cannot scale the counts. Old A compensates with a steeper line.</div><div class="bn" id="tS2"></div></div>
+          <div class="cb">On log(1 + count), the depth law is a curve, not a straight line, because of the +1. Old A compensates with a steeper line.</div><div class="bn" id="tS2"></div></div>
         <div class="card" style="--c:var(--nv)"><span class="tag holds">mostly holds</span><div class="ct">3 · g extrapolates badly</div>
           <div class="cb">Going arm → base → arm with two trained maps beats the direct arm → arm map that g never trained on.</div><div class="bn" id="tS3"></div></div>
         <div class="card" style="--c:var(--muted)"><span class="tag open">open</span><div class="ct">4 · The loss</div>
-          <div class="cb">The loss scores trained pairs only. Nothing in it asks the never-trained pairs to be right. Not tested yet.</div><div class="bn">no check run</div></div>
+          <div class="cb">The negative binomial likelihood gives high-count bins less weight, so it does not force the predicted total to match the target's. Not tested yet.</div><div class="bn">no check run</div></div>
       </div>
       <div class="fig mid" id="figDiag" style="margin-top:14px"></div>
     </div>
@@ -251,7 +251,7 @@
       <p>Card 1: if the check were wrong, the gap could be fake. A second computation, from the count histograms, gives the same numbers, and the depth tracks hold the counts their read depth says. So the check stands.</p>
       <p>Card 2, panel (a): on log(1 + count), the exact depth law is a curve, not a line, because the zero bins stay at zero. The best straight line has a slope above 1 and an offset below ln r (r is the read ratio). That is what old A learned. It is indirect: it explains how A fits, not why never-trained pairs fail.</p>
       <p>Card 3, panel (b): composing two trained maps through the base is far closer to the law than the direct map. So the maps g learned are fine where it trained; it is g's guess for a new pair of settings that is off.</p>
-      <p>Card 4: the loss is still a suspect; no check has been run.</p>
+      <p>Card 4: a Poisson likelihood for the mean would force the predicted total to equal the target total for every pair; the negative binomial likelihood we use does not. The loss is still a suspect; no check has been run.</p>
     </aside>
   </section>
 
@@ -469,7 +469,7 @@
           <div class="cb">It keeps old D's trained fit, but the never-trained depth error does not drop, and three knobs fall below the twin.</div><div class="bn" id="tR2"></div></div>
         <div class="card" style="--c:var(--muted)"><div class="rl">Still in play</div>
           <div class="ct">The loss, and how the latent is trained</div>
-          <div class="cb">Nothing in the loss rewards never-trained pairs. Composing two trained maps through the base did work in the earlier grid.</div><div class="bn" id="tR3"></div></div>
+          <div class="cb">The negative binomial loss does not force the predicted total to match, and it is untested. Composing two trained maps through the base did work in the earlier grid.</div><div class="bn" id="tR3"></div></div>
       </div>
       <p class="note">These are readings from one exploratory run, not verdicts. Each is open to the doubts on the next slide.</p>
     </div>
