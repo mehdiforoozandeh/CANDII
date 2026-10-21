@@ -559,3 +559,24 @@ mse(Z, Z') is the mean over channels and the latent positions the decoder reads.
 - Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE.
 - 2026-10-20 23:58 UTC: 24647788 tasks 73, 74, 174 FAILED on c329 (CVMFS: invalid tzdata wheel at venv build); re-run as 24706070 (array 73,74,174, c329 also excluded). 24646366/24646367 (A) and 24647762 (D train) all COMPLETED.
 - 2026-10-21: t126 readings (exploratory) on Nibi in `/project/def-maxwl/mforooz/t126/readings/`: extraction 24706111 (final, after 24706070), stdlib re-check 24706606; report `cruxvault/results/t126/report.pdf` (chosen lambda: 0.1 per-track g, 1 across-track g).
+
+## t128 — symmetric encoder-decoder rung D v2
+
+Spec `plan/T126_ENCDEC_D2.md`; plan `.orchestrate/plan_t128.md` on exp/t118-counterfactual-f.
+Exploratory: readings, no bar, no verdicts.
+
+- Kit K1: `/project/def-maxwl/mforooz/t128/code/K1`, `GIT_SHA` 58c9c22888284f58fdfb00034fe702384e7726be
+  (exp/t118-counterfactual-f with chunks C1–C5 merged; clean and equal to origin at snapshot).
+  rsync of the worktree without .git, cruxvault, .orchestrate, .claude, `__pycache__`; `wheels/`
+  copied from t126 K2 (1 file, `x_transformers-2.11.23-py3-none-any.whl`). 13 MB.
+- Out dir `/project/def-maxwl/mforooz/t128/` (code, runs, logs, verify, viabase, readings).
+  Products `/project/def-maxwl/mforooz/t112_cf/products`; cache `/project/def-maxwl/mforooz/t118/ladder/cache`
+  (read only); old D runs `/project/def-maxwl/mforooz/t126/D/runs` (read only).
+- Submitted 2026-10-21 20:48:55 UTC, all with c128, c166, c329, c371, c537 excluded:
+  - 24757111 `t128_verify`: tests t128, t126, t118 on K1; log `t128/verify/t128_verify_24757111.out`.
+  - 24757112 `t128_train` smoke: array 18,57,90,129,153,177,201,225%12 (one real s0 C19M16 run per setting).
+  - 24757113 `t128_law` smoke: same indices, `aftercorr:24757112` (submitted while 24757112 was live).
+  - 24757114 `t128_viabase` smoke: array 9 (= D_C19M16_counts_real_s0 via the base).
+- At submission every Nibi partition was `down` (sinfo; no reservation listed), so all four jobs
+  were PENDING with Reason=PartitionDown (law: Reason=Dependency). They start when Nibi reopens.
+- Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE / LATENT_DONE.
