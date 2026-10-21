@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poisson Mean Versus NB</title>
+
+<!--
+  prezit deck · t127: the mean trained by Poisson NLL vs the full NB NLL, in the t118 testbed.
+  Chrome, palette, figure style and build pattern copied from ../t118-grid/ and ../t125-eta-h/
+  (deck_src.html + build_deck.py -> index.html with a DATA block).
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-20):
+  - Audience is the lab: basic explanations, figures over text, labelled and divided panels.
+  - Exploratory phase: no metrics.json, no addresses, no approved synthesis. `crux deck --verify`
+    does not apply. Every result number is embedded as DATA by build_deck.py from
+    cruxvault/results/t127/ (deltas.csv, depth_law.csv, depth_law_by_class.csv, records.jsonl.gz,
+    extra/, tasks.tsv, row1_sanity_pairs.json) and cruxvault/results/h19/depth_pairs/; none is typed
+    in this file, except definitional constants (3 seeds, the 10% depth-law allowance, the
+    illustration dispersion n = 2 on the schematic).
+  - The run grid is the only table (it is a grid).
+  - Every CRPS carries its oracle-scaled / scale-error split. Never-trained records carry no split,
+    so the deck shows no never-trained CRPS. Every gap is shown beside its seed wobble.
+  - A discussion slide carries the PI's reading (2026-10-20) and two next steps the PI asked for.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once */
+    --nb:#4a72b0; --ppml:#d9822b; --ok:#3f8f6f; --miss:#b5462e; --xsrc:#8d8f98; --wob:#d8d4cc;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --nb:#6f95d3; --ppml:#e99a4c; --ok:#5fb08f; --miss:#e0714f; --wob:#3d3b38;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --nb:#6f95d3; --ppml:#e99a4c; --ok:#5fb08f; --miss:#e0714f; --wob:#3d3b38;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;font-size:clamp(20px,2.4vw,31px)}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  .src{color:var(--faint);font-size:11px;line-height:1.4;margin-top:6px;opacity:.85}
+  ul.pts{list-style:none;margin-top:10px;max-width:80ch}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px;max-width:none}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+  .c-nb{color:var(--nb);font-weight:600}.c-ppml{color:var(--ppml);font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:54vh}
+  .fig.short svg{max-height:30vh}
+  .legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:8px;justify-content:center;font-size:15px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:8px}
+  .legend .sw{width:15px;height:15px;border-radius:3px;flex:none}
+  .legend .ln{width:22px;height:0;border-top:2.5px dashed;flex:none}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 21px var(--sans);fill:var(--ink)}
+  .plab{font:700 22px var(--sans);fill:var(--accent)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .eq{font:400 24px var(--serif);fill:var(--ink)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px}
+  @media (max-width:900px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:18px 22px}
+  .card .ct{font-weight:600;font-size:20px;color:var(--ink);margin-bottom:8px}
+  .card .cb{font-size:17px;line-height:1.5;color:var(--body)}
+  .card .eqh{font-family:var(--serif);font-size:clamp(18px,1.8vw,24px);color:var(--ink);margin:10px 0 12px;line-height:1.5}
+  .card .eqh i{font-style:italic}
+  .card .cw{font-size:15px;line-height:1.45;color:var(--muted);margin-top:10px;border-top:1px dashed var(--hair);padding-top:10px}
+
+  /* the grid table */
+  table.grid{border-collapse:separate;border-spacing:8px;width:100%;margin-top:4px}
+  table.grid th{font-size:16px;font-weight:600;color:var(--ink);text-align:center;padding:6px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13.5px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:12px 8px;font-size:16px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:40%;font-size:17px}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:14px;margin-top:3px}
+  table.grid td .nm{font-weight:700;font-size:22px;display:block}
+  table.grid td.nb{border-top:4px solid var(--nb)} table.grid td.ppml{border-top:4px solid var(--ppml)}
+  table.grid td.form{font-family:var(--serif);font-size:17px}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:14px 20px;margin-top:6px;font-size:clamp(16px,1.6vw,21px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:100vh;transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline; scope; exploratory status
+       source   results/t127/tasks.tsv (run count)
+       numbers  the run count only, rendered from DATA.grid
+       cut      the hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>Does changing the training loss fix the depth law?</h1>
+      <p class="sub">A head-to-head of two losses for the same small models: the full negative binomial (NB) loss,
+      and a loss that fits the mean by Poisson. <span class="num" id="tRuns"></span> trained runs, on tracks where
+      the right answer is known. Exploratory: readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd></p>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the depth law fails on never-trained pairs
+       claim    the depth law holds on trained base↔arm pairs and fails on never-trained arm→arm pairs, in every design
+       job      show the gap that this experiment tries to close
+       source   results/h19/depth_pairs/out_raw.txt, out_raw_row2.txt (real model, one g per track)
+       numbers  none in prose (D5); the figure carries the medians
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the problem</div>
+      <h2>The model follows the depth law on pairs it trained on, and misses it on pairs it never saw</h2>
+      <div class="fig tall" id="figMotiv"></div>
+      <ul class="pts cols">
+        <li><b>The depth law:</b> halve the reads, and the predicted counts should halve. The real tracks obey it.</li>
+        <li><b>Training sees only base ↔ arm pairs.</b> The law is tested on arm → arm pairs, such as 15 M → 7.5 M reads. These were never trained.</li>
+      </ul>
+      <p class="src">Source: earlier transformation grid (t118 rows 1 and 2), results/h19/depth_pairs.</p>
+    </div>
+  </section>
+
+  <!-- 3 · MOTIVATION · why the loss is a suspect
+       claim    the NB loss balances predicted and observed totals only with per-bin weights; a Poisson loss with a free scale balances them exactly
+       job      explain, with a schematic, why the loss might let totals drift
+       source   the score equations of the two likelihoods; the real H3K27ac snippet of the t118 deck
+       numbers  none (D5); the dispersion n = 2 is an illustration constant
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>why suspect the loss</div>
+      <h2>The NB loss lets the peaks count less when it balances the totals</h2>
+      <div class="fig tall" id="figLoss"></div>
+      <ul class="pts cols">
+        <li><b>Poisson loss</b>, with a free overall scale: at its best fit, the predicted total equals the observed total, exactly.</li>
+        <li><b>NB loss:</b> each bin enters the balance with a weight that falls as the bin gets higher. So the totals can drift.</li>
+      </ul>
+      <p class="note">y = observed reads in a bin, μ = predicted mean, n = the NB dispersion (small n = more spread). The weight curve is an illustration with μ = these counts and n = 2.</p>
+    </div>
+  </section>
+
+  <!-- 4 · METHOD · the two losses
+       claim    both arms output the same NB distribution; they differ only in how the mean is trained
+       job      define the two arms
+       source   the t127 training code (K2 kit, git 2d6b6b0), as described in results/t127/report.md
+       numbers  none
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>two losses</div>
+      <h2>Two losses, the same model, the same output</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--nb)">
+          <div class="ct"><span class="c-nb">Full NB loss</span> (the loss we used so far)</div>
+          <div class="eqh">L = − log NB( <i>y</i> | <i>μ</i>, <i>n</i> )</div>
+          <div class="cb">One loss trains the mean μ and the dispersion n together.</div>
+          <div class="cw">The mean is pulled by the NB balance, where high bins weigh less.</div>
+        </div>
+        <div class="card" style="--c:var(--ppml)">
+          <div class="ct"><span class="c-ppml">Poisson-mean loss</span> (new)</div>
+          <div class="eqh">L = − log Poisson( <i>y</i> | <i>μ</i> ) − log NB( <i>y</i> | <i>μ</i><sub>frozen</sub>, <i>n</i> )</div>
+          <div class="cb">The Poisson term trains the mean. The NB term trains only the dispersion: it sees a frozen copy of μ.</div>
+          <div class="cw">The mean is pulled by the Poisson balance, where every bin weighs the same.</div>
+        </div>
+      </div>
+      <div class="fig short" id="figHeads" style="margin-top:14px"></div>
+      <p class="note">Both arms output an NB distribution per bin and are scored the same way. Each arm stops early on its own validation loss.</p>
+    </div>
+  </section>
+
+  <!-- 5 · METHOD · THE GRID (the one table)
+       claim    3 designs × 2 losses × 7 tracks × 3 seeds, one g per track, counts only, the t118 row-1 pairs and splits
+       job      show what was run
+       source   results/t127/tasks.tsv; row1_sanity_pairs.json; records.jsonl.gz (stop steps)
+       numbers  run counts, track and class counts, and the two sanity readings, all rendered from DATA
+       cut      the second note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the runs</div>
+      <h2>Three designs of f, each trained with both losses</h2>
+      <table class="grid">
+        <tr><th></th><th><span class="c-nb">Full NB loss</span></th><th><span class="c-ppml">Poisson-mean loss</span></th></tr>
+        <tr><td class="rh">Design A · a straight line on log(1 + counts)<small>log μ = a + b · log(1 + X). The +1 means it cannot express a pure rescale.</small></td>
+          <td class="nb"><span class="nm" id="gA_nb"></span>runs</td><td class="ppml"><span class="nm" id="gA_ppml"></span>runs</td></tr>
+        <tr><td class="rh">Design A0 · the same, without the +1<small>μ = e<sup>a</sup> · X<sup>b</sup> + e<sup>c</sup>. A pure rescale is possible.</small></td>
+          <td class="nb"><span class="nm" id="gA0_nb"></span>runs</td><td class="ppml"><span class="nm" id="gA0_ppml"></span>runs</td></tr>
+        <tr><td class="rh">Design D · a small CNN<small>g scales and shifts each layer (FiLM). The most flexible.</small></td>
+          <td class="nb"><span class="nm" id="gD_nb"></span>runs</td><td class="ppml"><span class="nm" id="gD_ppml"></span>runs</td></tr>
+      </table>
+      <p class="note">Each cell = <span id="gTracks"></span> tracks (<span id="gClasses"></span>) × <span id="gSeeds"></span> seeds. One g per track, read counts only, the real model. Same training pairs and held-out chromosomes (chr19 + chr21) as the earlier grid. <b>Seed wobble</b> = the largest gap between the 3 seeds; it is drawn beside every gap.</p>
+      <p class="note">Checks: the full-NB arm reproduces the earlier runs (median per-pair CRPS difference <span id="gSanity"></span>). <span id="gStop"></span> nb / Poisson-mean run pairs stop at the same training step.</p>
+      <p class="src">Source: results/t127/tasks.tsv, row1_sanity_pairs.json, records.jsonl.gz.</p>
+    </div>
+  </section>
+
+  <!-- 6 · RESULT · design A: the gain is the scale error
+       claim    in design A the Poisson-mean loss cuts CRPS, and almost all of the cut is the scale error; the oracle-scaled part barely moves
+       job      result (a), with the split
+       source   results/t127/deltas.csv (CRPS all / oracle_scaled / scale_error, trained pairs)
+       numbers  ≥ 2, rendered from DATA.deltas
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 1 · design A</div>
+      <h2>In design A, the new loss removes the scale error, and little else</h2>
+      <div class="fig" id="figSplit"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--nb)"></span>full NB loss</div>
+        <div class="item"><span class="sw" style="background:var(--ppml)"></span>Poisson-mean loss</div>
+        <div class="item"><span class="sw" style="background:var(--faint)"></span>solid = oracle-scaled part</div>
+        <div class="item"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--faint) 0 3px,transparent 3px 6px)"></span>hatched = scale-error part</div>
+      </div>
+      <ul class="pts cols">
+        <li><b>Scale-error part:</b> <span class="num" id="sA_se"></span>. This part is what a single best rescale of the prediction would remove.</li>
+        <li><b>Oracle-scaled part:</b> <span class="num" id="sA_os"></span>. The shape of the prediction improves much less.</li>
+      </ul>
+      <p class="src">Source: results/t127/deltas.csv. CRPS = oracle-scaled part + scale-error part.</p>
+    </div>
+  </section>
+
+  <!-- 7 · RESULT · DNase totals fixed
+       claim    the full NB loss over-predicts DNase totals 13–15× on one trained pair in design A; the Poisson-mean loss brings them back to about 1×
+       job      result (b)
+       source   results/t127/records.jsonl.gz (Σμ/Σy per pair and seed); deltas.csv (|log2 Σμ/Σy|, trained)
+       numbers  ≥ 2, rendered from DATA.dnase and DATA.deltas
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 2 · predicted totals</div>
+      <h2>The over-predicted DNase totals are fixed</h2>
+      <div class="fig" id="figTotals"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--nb)"></span>full NB loss</div>
+        <div class="item"><span class="sw" style="background:var(--ppml)"></span>Poisson-mean loss</div>
+      </div>
+      <ul class="pts cols">
+        <li><b>Design A, full NB loss:</b> on DNase, "duplicates kept → base", the predicted total is <span class="num" id="dnA_nb"></span> the observed total. With the new loss: <span class="num" id="dnA_pp"></span>.</li>
+        <li><b>Over all trained pairs</b>, design A's total error halves: <span class="num" id="totA"></span>. In A0 and D the change is within the seed wobble.</li>
+      </ul>
+      <p class="src">Source: results/t127/records.jsonl.gz (per seed), deltas.csv (panel b).</p>
+    </div>
+  </section>
+
+  <!-- 8 · RESULT · the depth law is NOT fixed (the key negative)
+       claim    on never-trained arm→arm depth pairs the error stays 3–5× the trained-pair error with either loss; the observed data obey the law almost exactly
+       job      result (c), the honest negative
+       source   results/t127/depth_law.csv; extra/*.json (observed totals) via build_deck.py
+       numbers  ≥ 2, rendered from DATA.depth and DATA.target_law
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 3 · the depth law</div>
+      <h2>The depth law on never-trained pairs is not fixed</h2>
+      <div class="fig tall" id="figDepth"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--nb)"></span>full NB loss</div>
+        <div class="item"><span class="sw" style="background:var(--ppml)"></span>Poisson-mean loss</div>
+        <div class="item"><span class="ln" style="border-color:var(--ok)"></span>the observed data themselves</div>
+      </div>
+      <ul class="pts cols">
+        <li><b>Never-trained arm → arm pairs:</b> design A <span class="num" id="dlA"></span>, A0 <span class="num" id="dlA0"></span>, D <span class="num" id="dlD"></span> (full NB → Poisson-mean, seed wobble in brackets).</li>
+        <li><b>The data are not the problem:</b> the observed totals follow the law to <span class="num" id="dlTrue"></span> log2 (median; worst pair <span class="num" id="dlTrueMax"></span>). So the miss is in g.</li>
+      </ul>
+      <p class="src">Source: results/t127/depth_law.csv; observed totals from results/t127/extra.</p>
+    </div>
+  </section>
+
+  <!-- 9 · RESULT · the gain shrinks to seed noise in A0 and D
+       claim    where the design can already express a rescale (A0, D), the CRPS gain of the new loss is about the size of the seed wobble
+       job      result (d): the gain is a rescue of a wrong form
+       source   results/t127/deltas.csv (Δ and wobble, trained pairs)
+       numbers  ≥ 2, rendered from DATA.deltas
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 4 · designs that can rescale</div>
+      <h2>Where the design can already rescale, the gain is about seed noise</h2>
+      <div class="fig" id="figGain"></div>
+      <ul class="pts cols">
+        <li><b>A0 and D:</b> the CRPS gain is <span class="num" id="gnA0"></span> and <span class="num" id="gnD"></span>, against seed wobbles of <span class="num" id="gwA0"></span> and <span class="num" id="gwD"></span>. Only A0's oracle-scaled part keeps a small gain (<span class="num" id="gnA0os"></span> the wobble).</li>
+        <li><b>So the new loss mainly rescues design A</b>, whose form cannot express a pure rescale.</li>
+      </ul>
+      <p class="note">Bar = Poisson-mean minus full NB, trained pairs (left of 0 = the new loss is better). Grey band = ± the seed wobble. Number at the bar end = the gap in units of the seed wobble.</p>
+      <p class="src">Source: results/t127/deltas.csv.</p>
+    </div>
+  </section>
+
+  <!-- 10 · RESULT · likelihood and calibration unchanged
+       claim    the new loss costs no NB likelihood and leaves the PIT calibration unchanged, in every design
+       job      result (e)
+       source   results/t127/deltas.csv (NB NLL held-out; PIT L1 from flat; trained pairs)
+       numbers  ≥ 2, rendered from DATA.deltas
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 5 · likelihood and calibration</div>
+      <h2>The new loss costs no likelihood and leaves calibration as it was</h2>
+      <div class="fig" id="figCalib"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--nb)"></span>full NB loss</div>
+        <div class="item"><span class="sw" style="background:var(--ppml)"></span>Poisson-mean loss</div>
+      </div>
+      <ul class="pts cols">
+        <li><b>NB likelihood:</b> the largest change is <span class="num" id="nllMax"></span> nats per bin, smaller than the seed wobble (up to <span class="num" id="nllWob"></span>).</li>
+        <li><b>Calibration</b> (how far the PIT histogram is from flat): the largest change is <span class="num" id="pitMax"></span>, against a seed wobble up to <span class="num" id="pitWob"></span>.</li>
+      </ul>
+      <p class="src">Source: results/t127/deltas.csv.</p>
+    </div>
+  </section>
+
+  <!-- 11 · DISCUSSION · the reading and the next steps
+       claim    the Poisson-mean loss repairs a wrong form's scale but not generalisation; the failure is in g
+       job      the PI's reading (2026-10-20) and the two next steps the PI asked for
+       source   results/t127/report.md, "Reading (PI-accepted 2026-10-20)"
+       numbers  none of its own (D5)
+       cut      the doubts note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what it means</div>
+      <h2>The loss was not the cause: the failure is in how g generalises</h2>
+      <div class="callout"><b>Reading.</b> The Poisson-mean loss repairs the scale of a design that has the wrong form. It does not
+      make g carry the depth law over to pairs it never trained on.</div>
+      <div class="cards" style="margin-top:22px">
+        <div class="card" style="--c:var(--ok)"><div class="ct">Next 1 · a composable g (already running)</div>
+          <div class="cb">An encoder–decoder g: one shared map from each side's settings to a common space, with an exact inverse. An arm → arm change then uses the same maps as the trained pairs.</div></div>
+        <div class="card" style="--c:var(--nb)"><div class="ct">Next 2 · train on arm → arm pairs</div>
+          <div class="cb">Add arm → arm pairs to training, so that the depth-law pairs are no longer unseen.</div></div>
+      </div>
+      <p class="note">Doubts: g is shared across pairs, so the Poisson guarantee on totals holds only loosely. The two arms stop early on different losses, but most run pairs stop at the same step.</p>
+      <p class="src">Source: results/t127/report.md; next steps t126 (encoder–decoder) and q7.</p>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · Poisson-mean vs full NB loss · exploratory</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py from cruxvault/results/t127/ and results/h19/:
+     deltas    deltas.csv "aspect|rung" -> [full NB, Poisson-mean, Δ = Poisson-mean − full NB, wobble]
+     depth     depth_law.csv "rung|loss|trained|law" -> [median |log2 err|, wobble, worst check, wobble, pairs]
+     depth_mc  depth_law_by_class.csv "rung|loss|src|class" -> [worst check, wobble]
+     split     trained CRPS split re-pooled from records.jsonl.gz (cross-check of deltas.csv)
+     dnase     Σμ/Σy per seed, DNase, trained pair dn_pair, "rung|loss"
+     target_law  |log2 observed total ratio − log2 depth ratio| over the never-trained depth pairs
+     grid      tasks.tsv; classes, same_stop, sanity: records.jsonl.gz, row1_sanity_pairs.json
+     motiv     h19 out_raw*.txt: real model, one g per track, median |log2 err| (trained, law)
+     snip      t118-grid/snippet.json base counts (H3K27ac, chr19)
+   =========================================================================== */
+const DATA = __DATA__;
+
+const COL={nb:'var(--nb)',ppml:'var(--ppml)',ok:'var(--ok)',miss:'var(--miss)',x:'var(--xsrc)',wob:'var(--wob)',
+  ink:'var(--ink)',body:'var(--body)',muted:'var(--muted)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',
+  axis:'var(--axis)',card:'var(--card)',accent:'var(--accent)',paper:'var(--paper)'};
+const RUNGS=['A','A0','D'], LOSSES=['nb','ppml'];
+const LNAME={nb:'full NB',ppml:'Poisson-mean'};
+const dl=(a,r)=>DATA.deltas[a+'|'+r];
+const fx=(v,d=3)=>(v<0?'−':'')+Math.abs(v).toFixed(d);
+const f3=v=>Math.abs(v)>=10?v.toFixed(1):Math.abs(v)>=1?v.toFixed(2):v.toFixed(3);
+
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2)=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const arrowHead=(x,y,dir,c,s=9)=>{const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const HATCH=`<defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" style="fill:var(--card)"/><line x1="0" y1="0" x2="0" y2="7" style="stroke:var(--ink);stroke-width:3;stroke-opacity:.45"/></pattern></defs>`;
+/* a visible divider between panels */
+const DIV=(x,y1,y2)=>L(x,y1,x,y2,COL.hair,2);
+/* panel label "(a) title" */
+const PL=(x,y,lab,title)=>T(x,y,lab,'plab')+T(x+36,y,title,'ptitle');
+/* whisker: length = seed wobble, centred on the value */
+const WH=(x,yTop,yBot,c=COL.ink)=>L(x,yTop,x,yBot,c,2)+L(x-6,yTop,x+6,yTop,c,2)+L(x-6,yBot,x+6,yBot,c,2);
+
+/* ---------- 2 · motivation: trained vs never-trained depth pairs ---------- */
+function figMotiv(){
+  const W=1180,H=430;let s='';
+  // (a) schematic: one track's depth arms
+  s+=PL(0,28,'(a)','which depth pairs g trained on');
+  const cx=230,cy=225,rr=125;
+  const arms=[['15 M reads',-90],['7.5 M reads',30],['3.75 M reads',150]];
+  const pos=arms.map(([l,a])=>[cx+rr*Math.cos(a*Math.PI/180),cy+rr*Math.sin(a*Math.PI/180)]);
+  // never-trained arm -> arm (dashed, red)
+  for(let i=0;i<3;i++){const [x1,y1]=pos[i],[x2,y2]=pos[(i+1)%3];s+=L(x1,y1,x2,y2,COL.miss,3,'8 6');}
+  // trained base <-> arm (solid, green)
+  pos.forEach(([x,y])=>s+=L(cx,cy,x,y,COL.ok,4));
+  s+=R(cx-58,cy-24,116,48,COL.card,COL.ink,24,2)+T(cx,cy+7,'base','ptitle','middle');
+  pos.forEach(([x,y],i)=>{s+=R(x-74,y-22,148,44,COL.card,COL.muted,22,2)+T(x,y+6,arms[i][0],'axlbl','middle');});
+  s+=L(20,H-44,60,H-44,COL.ok,4)+T(70,H-38,'trained: base ↔ arm','axlbl');
+  s+=L(20,H-14,60,H-14,COL.miss,3,'8 6')+T(70,H-8,'never trained: arm → arm','axlbl');
+  s+=DIV(470,10,H-5);
+  // (b) median error per design, trained vs never-trained
+  s+=PL(500,28,'(b)','error of the predicted depth scale');
+  s+=T(500,52,'real model · one g per track · read counts','psub');
+  const x0=590,w=570,top=80,h=270,ymax=0.4;
+  const yy=v=>top+h*(1-v/ymax);
+  [0,0.1,0.2,0.3,0.4].forEach(v=>s+=L(x0,yy(v),x0+w,yy(v),COL.grid,1)+T(x0-10,yy(v)+5,v.toFixed(1),'tick','end'));
+  s+=T(530,top+h/2,'median |log2 error|','axlbl','middle',`transform="rotate(-90 530 ${top+h/2})"`);
+  const des=['A','B','C','D','A2','B2','C2','D2'];
+  des.forEach((d,i)=>{const gx=x0+w*(i+0.5)/8,m=DATA.motiv[d];
+    s+=L(gx,yy(m.trained),gx,yy(m.law),COL.axis,2.5);
+    s+=Ci(gx,yy(m.trained),9,COL.ok)+Ci(gx,yy(m.law),9,COL.miss);
+    s+=T(gx,top+h+26,d,'ptitle','middle');});
+  s+=L(x0+w/2,top+h+8,x0+w/2,top+h+40,COL.hair,2);
+  s+=T(x0+w/4,top+h+56,'row 1 designs','psub','middle')+T(x0+3*w/4,top+h+56,'row 2 designs','psub','middle');
+  s+=Ci(x0+w-290,top-8,8,COL.ok)+T(x0+w-276,top-3,'trained pairs','cap')+Ci(x0+w-150,top-8,8,COL.miss)+T(x0+w-136,top-3,'never-trained pairs','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 3 · why the loss is a suspect ---------- */
+function figLoss(){
+  const W=1180,H=440;let s='';
+  const v=DATA.snip.base, n=v.length, lx=90, pw=600, dx=pw/n, NDISP=2;
+  // (a) the track
+  s+=PL(0,26,'(a)','a real track: reads per bin (H3K27ac)');
+  const y1=200,h1=140,ymax=Math.max(...v);
+  let d=`M${lx},${y1}`;v.forEach((c,i)=>{const y=(y1-h1*c/ymax).toFixed(1);d+=` L${(lx+i*dx).toFixed(1)},${y} L${(lx+(i+1)*dx).toFixed(1)},${y}`;});
+  s+=P(d+` L${lx+pw},${y1} Z`,COL.x,'none',0,';fill-opacity:.85')+L(lx,y1,lx+pw,y1,COL.axis,1.2);
+  s+=T(lx-10,y1-h1+5,String(ymax),'tick','end')+T(lx-10,y1+5,'0','tick','end');
+  // (b) weight of each bin in the balance of totals
+  s+=PL(0,250,'(b)','how much each bin counts when the totals are balanced');
+  const y2=410,h2=120;
+  s+=L(lx,y2,lx+pw,y2,COL.axis,1.2)+L(lx,y2-h2,lx+pw,y2-h2,COL.grid,1,'3 4');
+  s+=T(lx-10,y2-h2+5,'1','tick','end')+T(lx-10,y2+5,'0','tick','end');
+  s+=L(lx,y2-h2,lx+pw,y2-h2,COL.ppml,4);
+  let d2='';v.forEach((c,i)=>{const wgt=NDISP/(NDISP+c),y=(y2-h2*wgt).toFixed(1);d2+=(i?' L':'M')+`${(lx+i*dx).toFixed(1)},${y} L${(lx+(i+1)*dx).toFixed(1)},${y}`;});
+  s+=P(d2,'none',COL.nb,2.5);
+  s+=T(lx+pw+8,y2-h2+5,'Poisson','val','start','style="fill:var(--ppml)"');
+  s+=T(lx+pw+8,y2-20,'NB','val','start','style="fill:var(--nb)"');
+  s+=T(lx+pw/2,H-4,'the same bins as in (a): peaks get almost no weight under NB','cap','middle');
+  s+=DIV(770,10,H-5);
+  // (c) the two balance equations
+  s+=PL(800,26,'(c)','what each loss balances');
+  s+=R(800,60,370,150,COL.card,COL.ppml,12,2.5);
+  s+=T(820,92,'Poisson loss','val','start','style="fill:var(--ppml)"');
+  s+=T(985,138,'Σ ( y − μ ) = 0','eq','middle');
+  s+=T(985,186,'predicted total = observed total','axlbl','middle');
+  s+=R(800,240,370,170,COL.card,COL.nb,12,2.5);
+  s+=T(820,272,'NB loss','val','start','style="fill:var(--nb)"');
+  s+=T(985,320,'Σ ( y − μ ) · n / (n + μ) = 0','eq','middle');
+  s+=T(985,362,'high bins (large μ) weigh less,','axlbl','middle');
+  s+=T(985,388,'so the totals can drift apart','axlbl','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 4 · which loss trains which output ---------- */
+function figHeads(){
+  const W=1180,H=230;let s='';
+  [['(a)','full NB loss','nb'],['(b)','Poisson-mean loss','ppml']].forEach(([lab,t,l],i)=>{const px=i*600;
+    if(i) s+=DIV(px-20,5,H-5);
+    s+=PL(px,24,lab,'what trains what: '+t);
+    s+=R(px,90,120,60,COL.card,COL.ink,10,2)+T(px+60,127,'g → f','ptitle','middle');
+    s+=L(px+122,120,px+170,80,COL.muted,2)+L(px+122,120,px+170,165,COL.muted,2);
+    s+=R(px+170,55,150,50,COL.card,COL.muted,25,2)+T(px+245,86,'mean μ','axlbl','middle');
+    s+=R(px+170,140,150,50,COL.card,COL.muted,25,2)+T(px+245,171,'dispersion n','axlbl','middle');
+    if(l==='nb'){
+      s+=R(px+410,95,140,52,COL.card,COL.nb,10,2.5)+T(px+480,127,'NB loss','val','middle','style="fill:var(--nb)"');
+      s+=L(px+408,110,px+330,80,COL.nb,3)+arrowHead(px+324,78,'l',COL.nb)+L(px+408,132,px+330,165,COL.nb,3)+arrowHead(px+324,167,'l',COL.nb);
+    }else{
+      s+=R(px+410,54,150,52,COL.card,COL.ppml,10,2.5)+T(px+485,86,'Poisson loss','val','middle','style="fill:var(--ppml)"');
+      s+=R(px+410,139,150,52,COL.card,COL.nb,10,2.5)+T(px+485,171,'NB loss','val','middle','style="fill:var(--nb)"');
+      s+=L(px+408,80,px+332,80,COL.ppml,3)+arrowHead(px+324,80,'l',COL.ppml)+L(px+408,165,px+332,165,COL.nb,3)+arrowHead(px+324,165,'l',COL.nb);
+      s+=L(px+300,106,px+430,139,COL.faint,2,'5 5')+T(px+392,214,'NB loss reads a frozen copy of μ: it cannot move μ','cap','middle');}
+  });
+  s+=T(0,H-4,'arrow = the training signal that moves this output','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 6 · design A: the CRPS split ---------- */
+function figSplit(){
+  const W=1180,H=380;let s=HATCH;
+  const os=dl('CRPS oracle_scaled','A'), se=dl('CRPS scale_error','A'), all=dl('CRPS all, trained','A');
+  // (a) stacked bars
+  s+=PL(0,26,'(a)','CRPS, design A');
+  s+=T(0,50,'trained pairs · one g per track · read counts · lower is better','psub');
+  const x0=90,top=80,h=250,ymax=Math.ceil((all[0]+all[3]/2)*10)/10;
+  const yy=v=>top+h*(1-v/ymax);
+  for(let v=0;v<=ymax+1e-9;v+=0.2) s+=L(x0,yy(v),x0+400,yy(v),COL.grid,1)+T(x0-10,yy(v)+5,v.toFixed(1),'tick','end');
+  s+=T(30,top+h/2,'CRPS','axlbl','middle',`transform="rotate(-90 30 ${top+h/2})"`);
+  LOSSES.forEach((l,i)=>{const bx=x0+50+i*190,bw=120,o=os[i],e=se[i],tot=all[i],c=COL[l];
+    s+=R(bx,yy(o),bw,top+h-yy(o),c,'none',2);
+    s+=R(bx,yy(o+e),bw,yy(o)-yy(o+e),'url(#hatch)',c,2,2);
+    s+=WH(bx+bw/2,yy(tot+all[3]/2),yy(tot-all[3]/2));
+    s+=T(bx+bw+8,yy(o+e)+(i?-6:18),'scale error '+f3(e),'cap','start');
+    s+=T(bx+bw/2,yy(o)+28,f3(o),'val','middle','style="fill:#fff"');
+    s+=T(bx+bw/2,yy(tot+all[3]/2)-10,f3(tot),'val','middle',`style="fill:${c}"`);
+    s+=T(bx+bw/2,top+h+26,LNAME[l]+' loss','axlbl','middle');});
+  s+=L(x0,top+h,x0+400,top+h,COL.axis,1.2);
+  s+=DIV(560,10,H-5);
+  // (b) the gap, decomposed, beside the seed wobble
+  s+=PL(590,26,'(b)','the gap: Poisson-mean − full NB');
+  s+=T(590,50,'grey band = ± seed wobble · left of 0 = the new loss is better','psub');
+  const rows=[['CRPS',all],['oracle-scaled part',os],['scale-error part',se]];
+  const gx0=830,gw=240,xmin=-0.3,xmax=0.05,xx=v=>gx0+gw*(v-xmin)/(xmax-xmin);
+  rows.forEach(([lab,r],k)=>{const y=110+k*72;
+    s+=R(xx(-r[3]),y-22,xx(r[3])-xx(-r[3]),44,COL.wob,'none',3);
+    s+=R(Math.min(xx(0),xx(r[2])),y-13,Math.abs(xx(r[2])-xx(0)),26,COL.ppml,'none',3);
+    s+=T(gx0-14,y+6,lab,'axlbl','end');
+    s+=T(1090,y+6,fx(r[2]),'val','start','style="fill:var(--ppml)"');});
+  s+=L(xx(0),80,xx(0),320,COL.ink,1.5);
+  [-0.3,-0.2,-0.1,0].forEach(v=>s+=T(xx(v),340,v===0?'0':fx(v,1),'tick','middle'));
+  s+=T(gx0+gw/2,365,'change in CRPS','axlbl','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 7 · predicted totals ---------- */
+function figTotals(){
+  const W=1180,H=380;let s='';
+  // (a) DNase, duplicates kept -> base, per seed, log axis
+  s+=PL(0,26,'(a)','DNase, "duplicates kept → base" pair');
+  s+=T(0,50,'predicted total / observed total · one dot per seed · one g per track','psub');
+  const x0=100,top=80,h=250,w=440,lmin=Math.log2(0.5),lmax=Math.log2(20);
+  const yy=v=>top+h*(1-(Math.log2(v)-lmin)/(lmax-lmin));
+  [0.5,1,2,5,10,20].forEach(v=>s+=L(x0,yy(v),x0+w,yy(v),v===1?COL.ok:COL.grid,v===1?2.5:1)+T(x0-10,yy(v)+5,v+'×','tick','end'));
+  s+=T(x0+w-4,yy(1)-8,'right total','cap','end','style="fill:var(--ok)"');
+  RUNGS.forEach((r,i)=>{const gx=x0+w*(i+0.5)/3;
+    LOSSES.forEach((l,j)=>{const xs=gx+(j?28:-28);
+      DATA.dnase[r+'|'+l].forEach((v,k)=>s+=Ci(xs+(k-1)*9,yy(v),7,COL[l],COL.card,1.5));});
+    s+=T(gx,top+h+28,'design '+r,'axlbl','middle');});
+  { const v=DATA.dnase['A|nb'];s+=T(x0+w/6+46,yy(Math.max(...v))+5,Math.min(...v).toFixed(1)+'–'+Math.max(...v).toFixed(1)+'×','val','start','style="fill:var(--nb)"');}
+  s+=DIV(590,10,H-5);
+  // (b) all trained pairs: |log2 total ratio|
+  s+=PL(620,26,'(b)','error of the predicted total, all trained pairs');
+  s+=T(620,50,'mean over pairs of |log2 (predicted / observed total)| · whisker = seed wobble','psub');
+  const bx0=700,bw=450,ymax=0.25,by=v=>top+h*(1-v/ymax);
+  [0,0.05,0.1,0.15,0.2,0.25].forEach(v=>s+=L(bx0,by(v),bx0+bw,by(v),COL.grid,1)+T(bx0-10,by(v)+5,v.toFixed(2),'tick','end'));
+  s+=T(645,top+h/2,'|log2 error|','axlbl','middle',`transform="rotate(-90 645 ${top+h/2})"`);
+  RUNGS.forEach((r,i)=>{const d=dl('|log2 sum mu/sum y|, trained',r),gx=bx0+bw*(i+0.5)/3;
+    LOSSES.forEach((l,j)=>{const x=gx+(j?8:-58),v=d[j];
+      s+=R(x,by(v),50,top+h-by(v),COL[l],'none',2)+WH(x+25,by(v+d[3]/2),by(Math.max(0,v-d[3]/2)));});
+    s+=T(gx,top+h+28,'design '+r,'axlbl','middle');});
+  s+=L(bx0,top+h,bx0+bw,top+h,COL.axis,1.2);
+  return svg(W,H,s);
+}
+
+/* ---------- 8 · depth law ---------- */
+function figDepth(){
+  const W=1180,H=430;let s='';
+  const top=90,h=270;
+  // (a) median |log2 err|, trained vs never-trained, same y-axis
+  s+=PL(0,26,'(a)','error of the predicted depth scale');
+  s+=T(0,50,'median |log2 error| over pairs · whisker = seed wobble · one g per track · read counts','psub');
+  const x0=80,w=640,ymax=0.6,yy=v=>top+h*(1-v/ymax);
+  [0,0.1,0.2,0.3,0.4,0.5,0.6].forEach(v=>s+=L(x0,yy(v),x0+w,yy(v),COL.grid,1)+T(x0-10,yy(v)+5,v.toFixed(1),'tick','end'));
+  s+=T(24,top+h/2,'median |log2 error|','axlbl','middle',`transform="rotate(-90 24 ${top+h/2})"`);
+  s+=L(x0,yy(DATA.target_law.median),x0+w,yy(DATA.target_law.median),COL.ok,2.5,'7 5');
+  [['trained','trained base ↔ arm pairs'],['law','never-trained arm → arm pairs']].forEach(([src,lab],si)=>{
+    const px=x0+si*w/2,pw=w/2;
+    if(si) s+=L(px,top-10,px,top+h+50,COL.hair,2);
+    s+=T(px+pw/2,top-14,lab,'axlbl','middle',`style="font-weight:600;fill:${si?'var(--miss)':'var(--ok)'}"`);
+    RUNGS.forEach((r,i)=>{const gx=px+pw*(i+0.5)/3;
+      LOSSES.forEach((l,j)=>{const d=DATA.depth[[r,l,src].join('|')],x=gx+(j?4:-40);
+        s+=R(x,yy(d[0]),36,top+h-yy(d[0]),COL[l],'none',2)+WH(x+18,yy(d[0]+d[1]/2),yy(Math.max(0,d[0]-d[1]/2)));});
+      s+=T(gx,top+h+26,r,'ptitle','middle');});});
+  s+=L(x0,top+h,x0+w,top+h,COL.axis,1.2);
+  s+=T(x0+w/2,top+h+50,'design','cap','middle');
+  s+=DIV(770,10,H-5);
+  // (b) worst pair, never-trained
+  s+=PL(800,26,'(b)','worst never-trained pair');
+  s+=T(800,72,'whisker = seed wobble · shaded = allowed (10%)','psub')+T(800,50,'relative error of the predicted scale','psub');
+  const bx0=870,bw=290,bmax=1.0,by=v=>top+h*(1-v/bmax);
+  [0,0.2,0.4,0.6,0.8,1.0].forEach(v=>s+=L(bx0,by(v),bx0+bw,by(v),COL.grid,1)+T(bx0-10,by(v)+5,Math.round(v*100)+'%','tick','end'));
+  s+=R(bx0,by(0.1),bw,top+h-by(0.1),COL.ok,'none',0,0,';fill-opacity:.16');
+  RUNGS.forEach((r,i)=>{const gx=bx0+bw*(i+0.5)/3;
+    LOSSES.forEach((l,j)=>{const d=DATA.depth[[r,l,'law'].join('|')],x=gx+(j?3:-37);
+      s+=R(x,by(d[2]),34,top+h-by(d[2]),COL[l],'none',2)+WH(x+17,by(Math.min(bmax,d[2]+d[3]/2)),by(Math.max(0,d[2]-d[3]/2)));});
+    s+=T(gx,top+h+26,r,'ptitle','middle');});
+  s+=L(bx0,top+h,bx0+bw,top+h,COL.axis,1.2);
+  s+=T(bx0+bw/2,top+h+50,'design','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 9 · gain vs seed wobble, every design ---------- */
+function figGain(){
+  const W=1180,H=350;let s='';
+  const rows=[['CRPS','CRPS all, trained'],['oracle-scaled part','CRPS oracle_scaled'],['scale-error part','CRPS scale_error']];
+  const pw=360,gap=40,top=70;
+  RUNGS.forEach((r,i)=>{const px=i*(pw+gap);
+    if(i) s+=DIV(px-gap/2,10,H-5);
+    s+=PL(px,26,'('+'abc'[i]+')','design '+r);
+    const lo=i?-0.04:-0.32,hi=i?0.02:0.04,gx0=px+170,gw=pw-180,xx=v=>gx0+gw*(v-lo)/(hi-lo);
+    rows.forEach(([lab,a],k)=>{const d=dl(a,r),y=top+30+k*70;
+      s+=R(xx(-d[3]),y-22,xx(d[3])-xx(-d[3]),44,COL.wob,'none',3);
+      s+=R(Math.min(xx(0),xx(d[2])),y-12,Math.abs(xx(d[2])-xx(0)),24,COL.ppml,'none',3);
+      s+=T(gx0-12,y+6,lab,'axlbl','end');
+      const ratio=Math.abs(d[2])/d[3];
+      s+=T(d[2]<0?Math.min(xx(d[2]),xx(-d[3]))-6:Math.max(xx(d[2]),xx(d[3]))+6,y+28,ratio.toFixed(1)+'×','val',d[2]<0?'end':'start',`style="fill:${ratio>=2?'var(--ink)':'var(--faint)'}"`);});
+    s+=L(xx(0),top,xx(0),top+220,COL.ink,1.5);
+    const tk=i?[-0.04,-0.02,0,0.02]:[-0.3,-0.2,-0.1,0];
+    tk.forEach(v=>s+=T(xx(v),top+244,v===0?'0':fx(v,2),'tick','middle'));
+    s+=T(gx0+gw/2,top+266,'change','cap','middle');});
+  return svg(W,H,s);
+}
+
+/* ---------- 10 · likelihood and calibration ---------- */
+function figCalib(){
+  const W=1180,H=360;let s='';
+  const panels=[['(a)','NB likelihood on held-out bins','NB NLL, held-out (nats/bin)','nats per bin · lower is better',1.4],
+                ['(b)','calibration','PIT L1 from flat, trained','distance of the PIT histogram from flat · lower is better',0.5]];
+  panels.forEach(([lab,title,a,sub,ymax],pi)=>{const px=pi*600;
+    if(pi) s+=DIV(px-20,10,H-5);
+    s+=PL(px,26,lab,title)+T(px,50,sub+' · one g per track','psub');
+    const x0=px+80,w=480,top=80,h=230,yy=v=>top+h*(1-v/ymax);
+    const tks=pi?[0,0.1,0.2,0.3,0.4,0.5]:[0,0.2,0.4,0.6,0.8,1,1.2,1.4];
+    tks.forEach(v=>s+=L(x0,yy(v),x0+w,yy(v),COL.grid,1)+T(x0-10,yy(v)+5,v.toFixed(1),'tick','end'));
+    RUNGS.forEach((r,i)=>{const d=dl(a,r),gx=x0+w*(i+0.5)/3;
+      LOSSES.forEach((l,j)=>{const x=gx+(j?6:-66),v=d[j];
+        s+=R(x,yy(v),60,top+h-yy(v),COL[l],'none',2)+WH(x+30,yy(v+d[3]/2),yy(v-d[3]/2));
+        s+=T(x+30,yy(v+d[3]/2)-10,v.toFixed(3),'val','middle',`style="fill:${COL[l]}"`);});
+      s+=T(gx,top+h+26,'design '+r,'axlbl','middle');});
+    s+=L(x0,top+h,x0+w,top+h,COL.axis,1.2);});
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figMotiv,figHeads,figLoss,figSplit,figTotals,figDepth,figGain,figCalib};
+for(const [id,fn] of Object.entries(FIGS)){const el=document.getElementById(id);if(el){try{el.innerHTML=fn();}catch(e){el.textContent='figure error: '+e.message;console.error(id,e);}}}
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;else console.error('no span',id);};
+const G=DATA.grid;
+put('tRuns',String(G.n));
+RUNGS.forEach(r=>LOSSES.forEach(l=>put(`g${r}_${l}`,String(G.cell[r+'|'+l]))));
+put('gTracks',String(G.tracks));put('gSeeds',String(G.seeds));
+put('gClasses',['DNase','narrow','broad'].map(c=>`${DATA.classes[c]} ${c==='DNase'?'DNase':c+' marks'}`).join(', '));
+put('gSanity',(DATA.sanity.median*100).toFixed(2)+'%');
+put('gStop',`${DATA.same_stop[0]} of ${DATA.same_stop[1]}`);
+const arrow=(a,r,d=3)=>{const x=dl(a,r);return `${x[0].toFixed(d)} → ${x[1].toFixed(d)}`;};
+const wb=(a,r,d=3)=>dl(a,r)[3].toFixed(d);
+put('sA_se',`${arrow('CRPS scale_error','A')} (seed wobble ${wb('CRPS scale_error','A')})`);
+put('sA_os',`${arrow('CRPS oracle_scaled','A')} (seed wobble ${wb('CRPS oracle_scaled','A')})`);
+{const n=DATA.dnase['A|nb'],p=DATA.dnase['A|ppml'],rg=v=>Math.min(...v).toFixed(1)+'–'+Math.max(...v).toFixed(1)+'×';
+ put('dnA_nb',rg(n));put('dnA_pp',Math.min(...p).toFixed(2)+'–'+Math.max(...p).toFixed(2)+'×');}
+put('totA',`${arrow('|log2 sum mu/sum y|, trained','A')} (seed wobble ${wb('|log2 sum mu/sum y|, trained','A')})`);
+RUNGS.forEach(r=>{const a=DATA.depth[r+'|nb|law'],b=DATA.depth[r+'|ppml|law'];
+  put('dl'+r,`${a[0].toFixed(2)} → ${b[0].toFixed(2)} (${Math.max(a[1],b[1]).toFixed(2)})`);});
+put('dlTrue',DATA.target_law.median.toFixed(3));put('dlTrueMax',DATA.target_law.max.toFixed(3));
+['A0','D'].forEach(r=>{const d=dl('CRPS all, trained',r);put('gn'+r,fx(d[2]));put('gw'+r,d[3].toFixed(3));});
+{const d=dl('CRPS oracle_scaled','A0');put('gnA0os',(Math.abs(d[2])/d[3]).toFixed(1)+'×');}
+{const n=RUNGS.map(r=>dl('NB NLL, held-out (nats/bin)',r)),p=RUNGS.map(r=>dl('PIT L1 from flat, trained',r));
+ put('nllMax',Math.max(...n.map(d=>Math.abs(d[2]))).toFixed(4));put('nllWob',Math.max(...n.map(d=>d[3])).toFixed(4));
+ put('pitMax',Math.max(...p.map(d=>Math.abs(d[2]))).toFixed(4));put('pitWob',Math.max(...p.map(d=>d[3])).toFixed(3));}
+
+/* ---------- navigation ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h=parseInt((location.hash||'').slice(1));show(isNaN(h)?0:h-1);
+</script>
+</body>
+</html>
