@@ -7,9 +7,9 @@ parent: t118
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-10-19T23:23:29
-updated: 2026-10-19T23:23:29
+status: done
+created: "2026-10-19T23:23:29"
+updated: "2026-10-20T19:00:36"
 ---
 
 # t126 — Build and run the encoder-decoder rung A (shared per-side map phi, exact inverse; beta learned and beta=1) against a retrained old rung A, counts only, depth 7.5M held out of training (exploratory)
@@ -24,7 +24,7 @@ tests whether a composable g fixes the never-trained-pair generalisation failure
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Lab deck: encoder-decoder g](presentations/t126-encdec/DECK.md)
 
 ## Evidence
 
