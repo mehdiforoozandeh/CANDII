@@ -1,15 +1,15 @@
 ---
 id: t127
 type: task
-title: head-to-head: Poisson-NLL mean + NB-NLL dispersion vs full NB NLL, counts, per-track g, rungs A, A-no-pseudocount (mu = e^a X^b + e^c), D, 3 seeds; exploratory, no bar
+title: "head-to-head: Poisson-NLL mean + NB-NLL dispersion vs full NB NLL, counts, per-track g, rungs A, A-no-pseudocount (mu = e^a X^b + e^c), D, 3 seeds; exploratory, no bar"
 category: implementation
 parent: t118
 blocked_by: None
 refs: q1
 hypothesis_refs: 
-status: open
-created: 2026-10-19T23:31:53
-updated: 2026-10-19T23:31:53
+status: done
+created: "2026-10-19T23:31:53"
+updated: "2026-10-20T17:12:36"
 ---
 
 # t127 — head-to-head: Poisson-NLL mean + NB-NLL dispersion vs full NB NLL, counts, per-track g, rungs A, A-no-pseudocount (mu = e^a X^b + e^c), D, 3 seeds; exploratory, no bar
@@ -29,7 +29,7 @@ t118 depth law unmet; NB NLL balances totals only weighted, Poisson NLL forces s
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Poisson-mean vs NB head-to-head report](results/t127/report.md)
 
 ## Evidence
 

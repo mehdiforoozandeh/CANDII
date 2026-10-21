@@ -58,8 +58,14 @@ _(none yet)_
 
 <!-- what the run produced. Keep files under results/h21/ and link at least the report:
      - [Report](results/h21/report.md)   - results/h21/curve.png -->
-_(none yet)_
+- [Poisson-mean vs NB head-to-head report](results/t127/report.md)
+- results/t127/report.pdf figures for every comparison aspect
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+The head-to-head run (126 runs: rungs A, A0, D × nb/ppml × 7 tracks × 3 seeds) did not fix the depth
+law. Never-trained depth → depth median |log2 err| moved A 0.33 → 0.29 (wobble 0.05), A0 0.46 → 0.38
+(0.16), D 0.27 → 0.28 (0.13), and the worst-pair check stayed at 0.46–0.68 in every arm. The loss did
+remove rung A's total-scale bias (scale_error 0.253 → 0.005, wobble 0.025), and it left NB likelihood
+and PIT calibration unchanged. PI reading (2026-10-20): the Poisson-mean loss fixes rung A's scale
+bias but not the depth law, so it is not the cure. The box stays unticked; closing is the PI's call.
