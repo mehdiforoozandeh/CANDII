@@ -68,3 +68,5 @@ _(none yet)_
 ## Findings
 
 Observed 2026-10-19, not concluded. Median |log2 error| of the predicted scale, real g: row 1 trained 0.055–0.095, never-trained 0.25–0.55; row 2 trained 0.043–0.077, never-trained 0.19–0.47; every design, both g versions. Never-trained predictions overshoot: design A predicts −1.23 for a true −1 and +2.41 for +2. Chaining the two trained legs through the base gives 0.07–0.16, lower than g's direct answer. The across-track g is no better than the per-track g. Relative CRPS gain over the no-covariates twin, median over 16 design × g configurations: counts 0.29 trained, 0.11 never-trained same knob, 0.16 two knobs; −log10 p 0.15, 0.06, 0.004. Design D is least bad, then C; A and A2 are worst.
+
+Observed 2026-10-20 ([report](results/t127/report.md)): the same pattern holds when f can express the law exactly (rung A0: trained 0.12, never-trained 0.38–0.46 log2) and when the loss is changed to a Poisson NLL for the mean (never-trained A 0.29, A0 0.38, D 0.28). Neither the form of f nor the loss closes the gap, which places the failure in g.

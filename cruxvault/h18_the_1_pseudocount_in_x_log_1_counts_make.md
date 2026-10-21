@@ -65,3 +65,5 @@ _(none yet)_
 ## Findings
 
 Observed 2026-10-19, not concluded. Over design A's 504 depth-pair readings (both g versions, 3 seeds), the pure-rescale parameters would overshoot by 0.40–2.96 log2 (1.04–2.96 on never-trained pairs). The observed never-trained miss is about 0.3 log2. The fitted g does not take the pure-rescale parameters: median b is 1.55 on trained pairs and 1.72 on never-trained pairs, and median a − ln r is −1.58 and −1.77.
+
+Observed 2026-10-20 in the loss head-to-head ([report](results/t127/report.md)): rung A0, which drops the +1 and can express the law exactly (μ = e^a·X^b + e^c), does not meet it either. Never-trained depth → depth median |log2 err| is 0.46 (NB loss, wobble 0.16) and 0.38 (Poisson-mean loss, wobble 0.07), against rung A's 0.33 and 0.29; trained pairs fit (0.12). So removing the +1 does not fix the miss on never-trained pairs. PI understood and agreed 2026-10-20 that neither A nor A0's g learns the depth ratio as a rule.

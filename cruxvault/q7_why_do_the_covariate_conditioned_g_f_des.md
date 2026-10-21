@@ -40,6 +40,8 @@ Observed 2026-10-19, not judged.
 - The audit also reported that it recomputed all 24 depth-law check values exactly; that recomputation left no saved output.
 - Trained depth pairs fit the law; never-trained arm → arm depth pairs miss it, in every design and both g versions ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]).
 - A fix was discussed and not decided: train on arm → arm pairs too, so that the law-test pairs are no longer unseen.
+- The loss is not the cause: a Poisson NLL for the mean removes rung A's total-scale bias but leaves the never-trained depth miss (A 0.29, A0 0.38, D 0.28 log2) ([report](results/t127/report.md); PI reading 2026-10-20).
+- The +1 is not the cause either: rung A0, which can express the law exactly, misses never-trained pairs as much or more (0.38–0.46 log2).
 
 <!-- crux:ledger:start -->
 **5 children** · ideas 0/5 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
