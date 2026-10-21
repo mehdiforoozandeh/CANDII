@@ -558,3 +558,4 @@ mse(Z, Z') is the mean over channels and the latent positions the decoder reads.
 - lambda selection (later, at aggregation): per g version, lowest mean-over-seeds best val_nll.
 - Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE.
 - 2026-10-20 23:58 UTC: 24647788 tasks 73, 74, 174 FAILED on c329 (CVMFS: invalid tzdata wheel at venv build); re-run as 24706070 (array 73,74,174, c329 also excluded). 24646366/24646367 (A) and 24647762 (D train) all COMPLETED.
+- 2026-10-21: t126 readings (exploratory) on Nibi in `/project/def-maxwl/mforooz/t126/readings/`: extraction 24706111 (final, after 24706070), stdlib re-check 24706606; report `cruxvault/results/t126/report.pdf` (chosen lambda: 0.1 per-track g, 1 across-track g).
