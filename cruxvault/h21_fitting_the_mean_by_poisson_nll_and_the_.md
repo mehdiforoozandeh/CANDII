@@ -4,14 +4,17 @@ type: idea
 schema: 2
 title: Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not
 parent: q7
-status: idea
-rule:
-measurement:
-replicates:
-verdict:
-metric:
-created: 2026-10-19T23:41:09
-updated: 2026-10-19T23:41:09
+status: done
+rule: all
+measurement: 
+replicates: 
+verdict: refuted
+metric: "never-trained depth miss with Poisson-mean loss: A0 0.38, D 0.28 median |log2 err| vs trained 0.07–0.12"
+created: "2026-10-19T23:41:09"
+updated: "2026-10-20T18:52:04"
+lock: 1cdab54a770689f7
+locked: "2026-10-20T18:52:04"
+lock_at: close
 ---
 
 # h21 — Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not
@@ -31,7 +34,7 @@ With a log link and a free intercept, the Poisson NLL's optimum sets the predict
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially
      true. One line, <=25 words, naming a family. Your checks must discriminate against it.
      The PI approves it before checks are written: `crux approve-null <id>`. -->
-_(one line: the cheapest way this result could be trivially true — name a family from capacity, chance, leakage, selection, normalization, instrumentation)_
+Chance: a single seed or track happens to land near the law; the median over 3 seeds and 7 tracks guards against it.
 
 ## Problem Statement
 
@@ -44,7 +47,14 @@ Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meet
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-- [ ] _(state a falsifiable, pre-registered check)_
+Checks written after the run, at the PI's request on 2026-10-20; the work was exploratory with no bar set beforehand.
+
+- [ ] With the Poisson-NLL mean, the never-trained depth → depth median |log2 error| falls to the trained-pair level (about 0.1) in at least one rung that can express the law (A0 or D)
+      fails-if:: Both A0 and D stay well above their trained-pair level with the Poisson-mean loss
+      (found: A0 0.38, wobble 0.07; D 0.28, wobble 0.09; trained 0.07–0.12 — [report](results/t127/report.md))
+- [x] [outcome-neutral] The target tracks themselves obey the depth law on the scored bins
+      fails-if:: Σy/ΣX differs from the manifest depth ratio by more than 0.01 log2
+      (found: within 0.004 log2)
 
 ## Planned Intervention
 
@@ -69,3 +79,5 @@ law. Never-trained depth → depth median |log2 err| moved A 0.33 → 0.29 (wobb
 remove rung A's total-scale bias (scale_error 0.253 → 0.005, wobble 0.025), and it left NB likelihood
 and PIT calibration unchanged. PI reading (2026-10-20): the Poisson-mean loss fixes rung A's scale
 bias but not the depth law, so it is not the cure. The box stays unticked; closing is the PI's call.
+
+Why not supported (PI, 2026-10-20): the Poisson-mean loss balances totals on the trained pairs, which is what it guarantees, but the depth-law miss is on never-trained pairs. There g still has to produce a ratio it never saw, and changing the loss does not teach it the rule. The loss is therefore not the cause.

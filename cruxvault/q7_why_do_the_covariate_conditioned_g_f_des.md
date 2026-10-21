@@ -5,7 +5,7 @@ schema: 2
 title: Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?
 parent: q1
 status: open
-stale: false
+stale: true
 created: "2026-10-19T23:40:57"
 updated: "2026-10-19T23:40:57"
 ---
@@ -44,11 +44,11 @@ Observed 2026-10-19, not judged.
 - The +1 is not the cause either: rung A0, which can express the law exactly, misses never-trained pairs as much or more (0.38–0.46 log2).
 
 <!-- crux:ledger:start -->
-**5 children** · ideas 0/5 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
+**5 children** · ideas 2/5 done (supported 0, partial 0, refuted 2, inconclusive 0, invalid-run 0)
 
-- `h18` [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *idea*
+- `h18` [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *done* — verdict **refuted**, metric `never-trained depth miss, rung A0 (no +1): 0.46 (NB) / 0.38 (Poisson-mean) median |log2 err| vs trained 0.12`
 - `h19` [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *idea*
 - `h20` [[h20_a_larger_g_with_the_same_training_pairs_|A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs]] — *idea*
-- `h21` [[h21_fitting_the_mean_by_poisson_nll_and_the_|Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not]] — *idea*
+- `h21` [[h21_fitting_the_mean_by_poisson_nll_and_the_|Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not]] — *done* — verdict **refuted**, metric `never-trained depth miss with Poisson-mean loss: A0 0.38, D 0.28 median |log2 err| vs trained 0.07–0.12`
 - `h22` [[h22_a_composable_g_one_shared_map_from_each_|A composable g — one shared map from each side's covariates to a common latent, with an exact inverse — meets the depth law on never-trained depth pairs without arm → arm training]] — *idea*
 <!-- crux:ledger:end -->
