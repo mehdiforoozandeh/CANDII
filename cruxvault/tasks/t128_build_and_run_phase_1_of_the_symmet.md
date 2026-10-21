@@ -1,5 +1,5 @@
 ---
-id: t127
+id: t128
 type: task
 title: Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory)
 category: implementation
@@ -12,7 +12,7 @@ created: 2026-10-21T13:10:55
 updated: 2026-10-21T13:10:55
 ---
 
-# t127 — Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory)
+# t128 — Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory)
 
 Refs:: _(none)_
 
