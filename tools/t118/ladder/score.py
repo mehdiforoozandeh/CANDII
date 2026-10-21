@@ -50,7 +50,7 @@ arm names; under the across-track g the pair is the first track's (sorted) that 
 back in the jobs' own order and are the same as one prediction per job.
 
     python tools/t118/ladder/score.py trained <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N]
-    python tools/t118/ladder/score.py law     <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N]
+    python tools/t118/ladder/score.py law     <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N] [--split]
 """
 from __future__ import annotations
 
@@ -560,14 +560,16 @@ def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) 
     return run_dir / "scores.json"
 
 
-def score_law(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) -> Path:
-    """Every never-trained arm->arm pair of the run's g (+ depth->depth depth-law records)."""
+def score_law(pred, rows: list[dict], blacklist, run_dir, workers: int = 1,
+              split: bool = False) -> Path:
+    """Every never-trained arm->arm pair of the run's g (+ depth->depth depth-law records).
+    `split=True` (opt-in, t128) adds the CRPS split keys to every law record."""
     t0 = time.time()
     run_dir = Path(run_dir)
     _setup(pred, rows, blacklist)
     jobs = [{"kind": "law", "eval": "score", "pair": p, "x_pid": p["source_pid"],
              "y_pid": p["target_pid"], "cov_src": p["source_pid"], "cov_tgt": p["target_pid"],
-             "depth": pred.space == "counts" and _is_depth_pair(p, "law")}
+             "depth": pred.space == "counts" and _is_depth_pair(p, "law"), "split": split}
             for p in pairs.law_pairs(rows, pred.g_id)]
     t1 = time.time()
     records = [r for recs, _, _ in _run_jobs(jobs, workers) for r in recs]
@@ -604,6 +606,9 @@ def main(argv=None) -> int:
         for pos in ("manifest", "covariates", "data_dir", "blacklist", "run_dir"):
             a.add_argument(pos, type=Path)
         a.add_argument("--workers", type=int, default=default_workers())
+        if name == "law":
+            a.add_argument("--split", action="store_true",
+                           help="add the CRPS split keys to every law record (default off)")
     args = ap.parse_args(argv)
     done = args.run_dir / ("SCORE_DONE" if args.cmd == "trained" else "LAW_DONE")
     if done.exists():
@@ -613,8 +618,11 @@ def main(argv=None) -> int:
     t0 = time.time()
     pred = model.load_run(args.run_dir, args.data_dir, args.covariates, args.manifest, device="cpu")
     rows = pairs.read_manifest(args.manifest)
-    fn = score_trained if args.cmd == "trained" else score_law
-    path = fn(pred, rows, args.blacklist, args.run_dir, workers=args.workers)
+    if args.cmd == "trained":
+        path = score_trained(pred, rows, args.blacklist, args.run_dir, workers=args.workers)
+    else:
+        path = score_law(pred, rows, args.blacklist, args.run_dir, workers=args.workers,
+                         split=args.split)
     print(f"{args.cmd} {args.run_dir.name} -> {path} ({time.time() - t0:.1f} s)")
     return 0
 
