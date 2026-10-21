@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encoder-Decoder g</title>
+
+<!--
+  prezit deck · t126: encoder-decoder g for rungs A and D.
+  Chrome, build pattern and chart style copied from ../t125-eta-h/ and ../t118-grid/.
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-21):
+  - Arc: motivation (with the 2026-10-19 diagnosis), method, results, discussion. No summary or
+    appendix slide. The section is marked on every slide (kicker).
+  - Exploratory phase: no hypothesis, no metrics.json, no verdicts. `crux deck --verify` does not
+    apply. Every number is embedded as DATA by build_deck.py from cruxvault/results/t126/ and its
+    deck_inputs/ (the t118 knob report and the 2026-10-19 diagnosis tables). No measured number is
+    typed in this file. Typed: design constants of the spec only (layer counts, dilations 1, 2, 4, 8,
+    32 channels, g = 2 x 64, the chromosome split), on method slides and in notes.
+  - Motivation slides carry numbers (PI: the diagnosis is today's evidence).
+  - The discussion restates result numbers and the doubts' run counts; it adds no new reading.
+  - Every slide has speaker notes (<aside class="notes">), shown with the `n` key, as in t125.
+  - The only table is the grid of arms.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once */
+    --olda:#4a72b0; --eda:#d9822b; --eda1:#a8552e; --oldd:#1f8a70;
+    --edd0:#b08fcc; --edd1:#a47cc4; --edd2:#8257a8; --edd3:#5f3a85; --twin:#77736c; --ref:#9a9ca4;
+    /* one colour per pair group */
+    --tr:#4f5d75; --ho:#0a8a8f; --nv:#c84d86; --nv2:#e8a3c3;
+    --ok:#3f8f6f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --olda:#6f95d2; --eda:#e89a45; --eda1:#d07a4c; --oldd:#3fb393;
+      --edd0:#d6bde8; --edd1:#bf9ddb; --edd2:#a37cc9; --edd3:#8a62b5; --twin:#a19d96; --ref:#8a8c96;
+      --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --olda:#6f95d2; --eda:#e89a45; --eda1:#d07a4c; --oldd:#3fb393;
+    --edd0:#d6bde8; --edd1:#bf9ddb; --edd2:#a37cc9; --edd3:#8a62b5; --twin:#a19d96; --ref:#8a8c96;
+    --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em;text-wrap:balance}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px;text-wrap:balance}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:none}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.mid svg{max-height:40vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2,.cards.c5{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 9px;margin:0 0 6px;border:1px solid var(--hair);color:var(--body)}
+  .tag.out{background:rgba(63,143,111,.13);border-color:var(--ok)}
+  .tag.part{background:rgba(217,130,43,.13);border-color:var(--eda)}
+  .tag.holds{background:rgba(200,77,134,.13);border-color:var(--nv)}
+  .tag.open{background:none;border-style:dashed;border-color:var(--muted)}
+
+  /* the grid of arms */
+  table.grid{border-collapse:separate;border-spacing:8px 6px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:8px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:18%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.arm{font-weight:600;color:var(--ink);text-align:left;border-left:5px solid var(--c)}
+  table.grid td.arm small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:14.5px;border:1px solid var(--hair);background:var(--card);border-radius:16px;padding:4px 12px;color:var(--body)}
+  .chip b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the idea, the two rungs and the scope
+       numbers  run counts only (DATA.runs) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>An encoder-decoder g: does building in composition carry the fit to pairs the model never trained on?</h1>
+      <p class="sub"><b>Rung A</b> (one straight line per pair) and <b>rung D</b> (a small CNN): <span class="num" id="tRunsA"></span> and <span class="num" id="tRunsD"></span> trained runs, all scored.
+        This is an exploratory pass: it reports readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+    </div>
+    <aside class="notes">
+      <p>This deck follows the transformation grid (t118) and the depth-offset deck (t125). It asks one question: if g is built so that any pair of settings composes through one shared middle, does the model then work on pairs it never trained on?</p>
+      <p>Every number on the slides and in these notes is read from the result files when the deck is built. Nothing here is a verdict.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · MOTIVATION · trained and never-trained pairs, and the depth law
+       job      teach the two words the deck rests on: a never-trained pair, and the depth law
+       source   ../t118-grid/snippet.json (real H3K27ac); deck_inputs/diag_count_sums.jsonl (the true ratio)
+       numbers  the snippet's read ratio and locus (DATA) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>two words first</div>
+      <h2>The model trains only on base ↔ arm pairs; arm → arm pairs are never seen in training</h2>
+      <div class="fig tall" id="figPairs"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each track was rebuilt many times, changing one setting (a <b>knob</b>) at a time; each rebuild is an <b>arm</b>. Training uses only pairs between the base track and one arm, in both directions (solid). A pair between two arms (dashed) is <b>never trained</b>: the model must work it out from the settings alone.</p>
+      <p>Panel (b): the <b>depth law</b>. With fewer reads, every bin scales by the read ratio. We read the predicted total over the source total, on a log2 scale, against the true ratio. The error is the gap between the two; 0 is perfect.</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · the failure in t118
+       claim    every t118 design fits trained pairs, and misses never-trained pairs
+       source   deck_inputs/knobreport_depth_table.tsv, knobreport_knob_table.tsv (the t118 knob report)
+       numbers  DATA.mot_depth, DATA.mot_knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the problem, from the earlier grid</div>
+      <h2>Every earlier design fits the pairs it trained on, and misses the pairs it never saw</h2>
+      <div class="fig tall" id="figMot"></div>
+      <ul class="pts cols">
+        <li><span id="tMot1"></span></li>
+        <li><span id="tMot2"></span></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each column is one design of the earlier grid (A to D; a 2 means g also reads the bin's level). Each design has two versions of g: a circle is one g per track, a square is one g across tracks. Dark is the error on trained depth pairs; pink is on never-trained depth → depth pairs.</p>
+      <p>Panel (b): how much better the real model is than its <b>no-covariates twin</b> (the same model that sees random settings), per knob, as a share of the twin's CRPS. Higher is better. Every knob loses gain on its never-trained pairs, but MAPQ and control fraction gain little even when trained.</p>
+      <p>The four control and caller knobs do not change the counts at all, so they are left out of panel (b).</p>
+    </aside>
+  </section>
+
+  <!-- 4 · MOTIVATION · the diagnosis: four suspects
+       job      one card per suspect: what we checked and what it found
+       source   deck_inputs/diag_* (2026-10-19 checks)
+       numbers  DATA.diag -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>diagnosis · four suspects</div>
+      <h2>We checked four suspects for the gap: one is ruled out, one is indirect, one mostly holds, one is open</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--ok)"><span class="tag out">ruled out</span><div class="ct">1 · The check itself</div>
+          <div class="cb">We recomputed the depth law from the raw count histograms, and summed the counts of every depth track.</div><div class="bn" id="tS1"></div></div>
+        <div class="card" style="--c:var(--eda)"><span class="tag part">indirect</span><div class="ct">2 · The +1 in log(1 + count)</div>
+          <div class="cb">A zero-count bin stays at 0 when the depth changes, so a plain shift cannot scale the counts. Old A compensates with a steeper line.</div><div class="bn" id="tS2"></div></div>
+        <div class="card" style="--c:var(--nv)"><span class="tag holds">mostly holds</span><div class="ct">3 · g extrapolates badly</div>
+          <div class="cb">Going arm → base → arm with two trained maps beats the direct arm → arm map that g never trained on.</div><div class="bn" id="tS3"></div></div>
+        <div class="card" style="--c:var(--muted)"><span class="tag open">open</span><div class="ct">4 · The loss</div>
+          <div class="cb">The loss scores trained pairs only. Nothing in it asks the never-trained pairs to be right. Not tested yet.</div><div class="bn">no check run</div></div>
+      </div>
+      <div class="fig mid" id="figDiag" style="margin-top:14px"></div>
+    </div>
+    <aside class="notes">
+      <p>Card 1: if the check were wrong, the gap could be fake. A second computation, from the count histograms, gives the same numbers, and the depth tracks hold the counts their read depth says. So the check stands.</p>
+      <p>Card 2, panel (a): on log(1 + count), the exact depth law is a curve, not a line, because the zero bins stay at zero. The best straight line has a slope above 1 and an offset below ln r (r is the read ratio). That is what old A learned. It is indirect: it explains how A fits, not why never-trained pairs fail.</p>
+      <p>Card 3, panel (b): composing two trained maps through the base is far closer to the law than the direct map. So the maps g learned are fine where it trained; it is g's guess for a new pair of settings that is off.</p>
+      <p>Card 4: the loss is still a suspect; no check has been run.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · MOTIVATION · the fix must come from g's structure
+       job      bridge: why we change g's structure, not the data
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what to change</div>
+      <h2>Real data has few arm → arm examples, so the fix must come from g's structure</h2>
+      <div class="cards c2 lg">
+        <div class="card" style="--c:var(--muted)"><div class="rl">Option 1 · more pairs</div>
+          <div class="ct">Train on arm → arm pairs too.</div>
+          <div class="cb">Public data rarely holds the same sample processed two ways, so CANDI cannot rely on such pairs.</div></div>
+        <div class="card" style="--c:var(--accent)"><div class="rl">Option 2 · structure (this work)</div>
+          <div class="ct">Make every pair pass through one shared middle.</div>
+          <div class="cb">Suspect 3 says routing through the base works. Build that route into g: encode the source with its own settings, decode with the target's. Then arm → arm composes by construction.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>CANDI's training data comes from public experiments. Two processings of the same sample are rare there, so the model cannot learn arm → arm maps from examples.</p>
+      <p>The diagnosis points to structure: the trained maps are good, and chaining two of them works. An encoder-decoder makes that chaining part of the model.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · METHOD · the encoder-decoder idea
+       job      schematic: old g reads both settings; the encoder-decoder reads one side at a time
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the idea</div>
+      <h2>An encoder-decoder g reads one track's settings at a time, so any two tracks compose</h2>
+      <div class="fig tall" id="figIdea"></div>
+    </div>
+    <aside class="notes">
+      <p>Lane (a), the old g: it reads the source settings c and the target settings c′ together. An arm → arm pair is a new combination of inputs, which g has never seen.</p>
+      <p>Lane (b), the encoder-decoder: one shared network φ reads <b>one</b> track's settings and gives that track's coordinates. The encoder removes the source's settings, giving a covariate-free latent z; the decoder adds the target's. Any pair, trained or not, uses the same two pieces. With c′ = c the model returns X itself.</p>
+    </aside>
+  </section>
+
+  <!-- 7 · METHOD · rung A with the exact inverse
+       job      the equations, the two rung-A arms, and the round-trip rule they imply
+       numbers  none (definitional) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>rung A · the exact inverse</div>
+      <h2>Rung A: encoding is the exact inverse of decoding, so a round trip returns the start</h2>
+      <div class="fig tall" id="figRungA"></div>
+    </div>
+    <aside class="notes">
+      <p>φ(c) gives two numbers per track: a location α and a scale β. Encoding subtracts α and divides by β; decoding multiplies by the target's β and adds its α. The result is still one straight line on log(1 + count), as in old A, with slope b = β(c′)/β(c).</p>
+      <p>Two arms: β learned, or β fixed at 1 (then the map is a pure shift). In both, b for c → c′ times b for c′ → c is exactly 1. Keep that in mind for result (d).</p>
+      <p>The spread of the negative binomial comes from a second small network ψ that reads the target's settings only.</p>
+    </aside>
+  </section>
+
+  <!-- 8 · METHOD · rung D with a learned decoder
+       job      the split CNN and the four-term loss with lambda
+       numbers  lambda grid and chosen lambda (DATA.lam); layer sizes are design constants -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>rung D · a learned decoder</div>
+      <h2>Rung D: the CNN is cut in two, an encoder tuned by the source and a decoder tuned by the target</h2>
+      <div class="fig tall" id="figRungD"></div>
+      <p class="note" id="tLam"></p>
+    </div>
+    <aside class="notes">
+      <p>Top: old D's four dilated layers are split 2 + 2. The first two are tuned (scaled and shifted, called FiLM) by g_enc, which reads the source settings; the last two by g_dec, which reads the target's. There is no shortcut from X to the output: everything passes through the latent Z. The view stays the same as old D.</p>
+      <p>Bottom: the loss for one trained pair (X, c) → (X′, c′). Two cross terms (the real job), two self terms (a round trip on one side), and a pull λ that asks both latents to agree. λ = 0 drops the pull.</p>
+      <p>λ is picked per version of g by the lowest validation NLL on chr22, the earlier grid's rule.</p>
+    </aside>
+  </section>
+
+  <!-- 9 · METHOD · the grid of arms (the one table) and the training scope
+       numbers  run counts, seeds, g counts, held-out level (DATA) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the arms</div>
+      <h2>Every arm runs against a retrained baseline, and each has its own no-covariates twin</h2>
+      <table class="grid" id="tblArms">
+        <tr><th></th><th>arm</th><th>how g reads the settings</th><th>the map at the start of training</th></tr>
+        <tr><td class="rh" rowspan="3">Rung A<small>one straight line on log(1 + count)</small></td>
+          <td class="arm" style="--c:var(--olda)">old A, retrained<small>baseline</small></td><td>both sides at once</td><td>the identity</td></tr>
+        <tr><td class="arm" style="--c:var(--eda)">encoder-decoder A, scale learned</td><td>one side at a time</td><td>the identity</td></tr>
+        <tr><td class="arm" style="--c:var(--eda1)">encoder-decoder A, scale fixed at 1<small>a pure shift</small></td><td>one side at a time</td><td>the identity</td></tr>
+        <tr><td class="rh" rowspan="3">Rung D<small>a small CNN</small></td>
+          <td class="arm" style="--c:var(--oldd)">old D, retrained<small>baseline</small></td><td>both sides at once</td><td>the identity</td></tr>
+        <tr><td class="arm" style="--c:var(--edd0)">encoder-decoder D, no pull (λ = 0)</td><td>one side at a time</td><td>a constant map</td></tr>
+        <tr><td class="arm" style="--c:var(--edd2)" id="tArmLam"></td><td>one side at a time</td><td>a constant map</td></tr>
+      </table>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="notes">
+      <p>The baselines are retrained, not reused, because this run holds the middle depth out of training. Every arm has a no-covariates twin: the same model fed random settings, which can only learn one average map.</p>
+      <p>Encoder-decoder D has no shortcut from X, so it cannot start as the identity: it starts as a constant map. Old D starts at the identity. This is a known difference, named again in the doubts.</p>
+    </aside>
+  </section>
+
+  <!-- 10 · METHOD · which pairs are scored
+       job      schematic of the depth pair groups and the knob groups
+       numbers  depth levels (DATA.levels) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what we score</div>
+      <h2>We score trained pairs, a held-out depth, and never-trained arm → arm pairs</h2>
+      <div class="fig tall" id="figGroups"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a), the depth ladder. Trained pairs link the base to two depths. The middle depth is held out of training: its pairs with the base are only scored. Never-trained pairs link two depths, with or without the held-out one.</p>
+      <p>Panel (b), the other knobs: they have trained base ↔ arm pairs and never-trained arm → arm pairs of the same knob; two-knob pairs mix two arms of different knobs.</p>
+      <p>Scores are on chromosomes 19 and 21; the best training step and λ are picked on chromosome 22.</p>
+    </aside>
+  </section>
+
+  <!-- 11 · RESULTS · (a) the depth law
+       claim    no encoder-decoder arm closes the never-trained depth gap; the held-out depth is easy for all
+                but encoder-decoder A
+       source   results/t126/depth_table.tsv, depth_points.tsv.gz
+       numbers  DATA.depth, DATA.depth_seed -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the depth law</div>
+      <h2>No encoder-decoder arm closes the never-trained depth gap; the held-out depth is easy for every arm but encoder-decoder A</h2>
+      <div class="fig tall" id="figDepth"></div>
+      <ul class="pts">
+        <li id="tDa1"></li>
+        <li id="tDa2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each row is one arm; each bar is the median error over that pair group, with the 25th to 75th percentile as a whisker. The small ticks are each seed's own median: a gap smaller than their spread is not a gap. Log scale.</p>
+      <p>The held-out depth sits between two trained depths, so it tests interpolation only. Encoder-decoder A misses even its trained depths; result (d) shows why.</p>
+      <p id="nDa"></p>
+    </aside>
+  </section>
+
+  <!-- 12 · RESULTS · (b) the other knobs
+       claim    encoder-decoder D gains more on trained pairs of three knobs, but falls below its twin on their
+                never-trained pairs, where old D keeps a gain
+       source   results/t126/knob_table.tsv
+       numbers  DATA.knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) the other knobs</div>
+      <h2>Encoder-decoder D gains more on trained pairs, but falls below its twin on never-trained pairs of three knobs</h2>
+      <div class="fig tall" id="figKnob"></div>
+      <ul class="pts">
+        <li id="tKb1"></li>
+        <li id="tKb2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Gain over the twin: for each pair, (twin's CRPS − real CRPS) / twin's CRPS, then the median over pairs. Above 0, the settings help; below 0, the model is worse than ignoring them.</p>
+      <p>Filled dot: trained pairs. Open ring: never-trained pairs of the same knob. The line joins the two for one arm. Two-knob pairs are all never-trained, so they have a ring only.</p>
+      <p id="nKb"></p>
+    </aside>
+  </section>
+
+  <!-- 13 · RESULTS · (c) the fit on trained pairs
+       claim    encoder-decoder D keeps old D's fit; encoder-decoder A loses fit with one g per track, mostly as
+                scale error
+       source   results/t126/fit_table.tsv
+       numbers  DATA.fit -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) the fit on trained pairs</div>
+      <h2>Encoder-decoder D keeps old D's fit on trained pairs; encoder-decoder A loses fit, mostly in scale error</h2>
+      <div class="fig tall" id="figFit"></div>
+      <ul class="pts">
+        <li id="tFc1"></li>
+        <li id="tFc2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>CRPS on counts over the trained pairs, mean over a track's pairs, then over tracks, then over seeds. Lower is better. Dark is the oracle-scaled part (left after the best single rescale); light is the scale error (what that rescale removes). The whisker is the range over 3 seeds; the grey tick is the no-covariates twin.</p>
+      <p>So the encoder-decoder D structure costs nothing on trained pairs. Encoder-decoder A's loss is mostly a wrong overall scale, which result (d) explains.</p>
+    </aside>
+  </section>
+
+  <!-- 14 · RESULTS · (d) why encoder-decoder A fails
+       claim    the exact inverse forces b(c->c')·b(c'->c) = 1, but old A learns a slope above 1 both ways (the +1
+                compensation)
+       source   results/t126/ab_table.tsv; depth_points.tsv.gz (the share of downward pairs predicted upward)
+       numbers  DATA.ab, DATA.prod, DATA.down -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) why encoder-decoder A fails</div>
+      <h2>The exact inverse forces the two directions' slopes to multiply to 1, but old A needs a slope above 1 both ways</h2>
+      <div class="fig tall" id="figAB"></div>
+      <ul class="pts">
+        <li id="tAd1"></li>
+        <li id="tAd2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each point is one trained or held-out base ↔ depth pair of one track and one seed. ln r is the log read ratio, target over source; less depth is on the left. The dashed lines are the depth law on log counts: slope b = 1 and offset a = ln r.</p>
+      <p>Old A sits above b = 1 on both sides: that is the +1 compensation of the diagnosis. Encoder-decoder A cannot do that: if its slope is above 1 one way, it must be below 1 the other way. It keeps the offset near 0, so a zero-count bin keeps a mean near 1, and with less depth the prediction goes up, not down.</p>
+      <p id="nAd"></p>
+    </aside>
+  </section>
+
+  <!-- 15 · DISCUSSION · what this rules in and out
+       job      readings restated as what they rule in and out; no verdicts
+       numbers  restated from results (a) to (d); none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
+      <h2>Composition by construction is not enough on its own, in either form we tried</h2>
+      <div class="cards c3 lg">
+        <div class="card" style="--c:var(--eda)"><div class="rl">Ruled out, for rung A</div>
+          <div class="ct">An exact inverse on log(1 + count)</div>
+          <div class="cb">It cannot learn the slope above 1 that old A uses in both directions, so it misses even trained depths.</div><div class="bn" id="tR1"></div></div>
+        <div class="card" style="--c:var(--edd2)"><div class="rl">Not enough, for rung D</div>
+          <div class="ct">A learned latent, at these settings</div>
+          <div class="cb">It keeps old D's trained fit, but the never-trained depth error does not drop, and three knobs fall below the twin.</div><div class="bn" id="tR2"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Still in play</div>
+          <div class="ct">The loss, and how the latent is trained</div>
+          <div class="cb">Nothing in the loss rewards never-trained pairs. Composing two trained maps through the base did work in the earlier grid.</div><div class="bn" id="tR3"></div></div>
+      </div>
+      <p class="note">These are readings from one exploratory run, not verdicts. Each is open to the doubts on the next slide.</p>
+    </div>
+    <aside class="notes">
+      <p>Rung A: the result has a clear cause. The +1 in log(1 + count) makes the best line steeper than 1 in both directions, and an exact inverse forbids that. A fix would have to change the space (for example, a log of counts with a different offset) or drop the exact inverse.</p>
+      <p>Rung D: the structure is there and the trained fit is unchanged, yet the never-trained pairs do not improve. The doubts on the next slide could each explain this.</p>
+      <p>The loss is the one suspect not yet tested.</p>
+    </aside>
+  </section>
+
+  <!-- 16 · DISCUSSION · doubts
+       job      the five doubts the PI named, each with its count
+       numbers  DATA.steps, DATA.lam, DATA.levels (restated); none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>doubts</div>
+      <h2>Five doubts could each change the rung-D reading</h2>
+      <div class="cards c5">
+        <div class="card" style="--c:var(--edd2)"><div class="ct">The start</div>
+          <div class="cb">Encoder-decoder D starts as a constant map; old D starts at the identity. The start may shape what the latent learns.</div></div>
+        <div class="card" style="--c:var(--edd2)"><div class="ct">Under-training</div>
+          <div class="cb" id="tDb2"></div></div>
+        <div class="card" style="--c:var(--ho)"><div class="ct">Interpolation only</div>
+          <div class="cb" id="tDb3"></div></div>
+        <div class="card" style="--c:var(--nv)"><div class="ct">Product identity</div>
+          <div class="cb">For knobs other than depth, each track's settings are unique per arm, so g can use them as a name. A gain or loss there may be memory, not a rule.</div></div>
+        <div class="card" style="--c:var(--muted)"><div class="ct">λ within noise</div>
+          <div class="cb" id="tDb5"></div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The start and the step cap together: encoder-decoder D began further from a good map and often used every step, so it may need more steps or an identity-like start before its never-trained pairs can be judged.</p>
+      <p>Product identity: within one track, every arm's settings vector is different, so for knobs other than depth g can learn "this vector means this arm". Depth has three levels in a clear order, so it is the cleanest test.</p>
+      <p>λ: the chosen λ wins by about one seed's spread, so the choice is weak.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · encoder-decoder g · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py (see its docstring for every input):
+     snip, locus, snip_ratio   ../t118-grid/snippet.json; the 15 M ratio from diag_count_sums.jsonl
+     levels                    depth levels (millions of reads): base, trained, held out
+     mot_depth                 knob report: [row, design, g version, trained error, never-trained error]
+     mot_knob                  knob report: "space|knob|group" -> [median over 16 configs of the gain, n]
+     diag                      2026-10-19 checks: audit, count sums, old-A (a, b), composition via base
+     depth                     [arm, g version, group, median, q25, q75, slope, n records]
+     depth_seed                "arm|g|group" -> per-seed medians
+     knob                      [arm, g version, group, knob, typical-pair gain, n pairs]
+     fit                       [arm, g version, model, CRPS, seed min, seed max, oracle-scaled, scale error, n seeds]
+     ab                        [arm, g version, kind, ln r, a, b]; prod "arm|g" -> b(c->c')*b(c'->c)
+     down                      arm -> [share of downward trained pairs predicted upward, median log2 scale, n]
+     lam, lam_chosen, steps, cap, runs
+   =========================================================================== */
+const DATA = {"snip":{"base__base/counts25":[4.0,4.0,5.0,4.0,3.0,2.0,3.0,2.0,2.0,2.0,4.0,2.0,2.0,2.0,2.0,1.0,2.0,3.0,4.0,5.0,5.0,4.0,4.0,3.0,2.0,1.0,1.0,0.0,1.0,2.0,2.0,3.0,3.0,2.0,1.0,3.0,3.0,4.0,4.0,6.0,4.0,4.0,3.0,3.0,2.0,2.0,2.0,3.0,3.0,4.0,6.0,6.0,5.0,6.0,5.0,3.0,2.0,3.0,4.0,4.0,6.0,6.0,7.0,8.0,8.0,8.0,9.0,10.0,10.0,9.0,10.0,8.0,7.0,5.0,7.0,9.0,9.0,9.0,12.0,12.0,11.0,13.0,18.0,17.0,15.0,15.0,14.0,13.0,11.0,11.0,14.0,13.0,10.0,7.0,8.0,4.0,1.0,2.0,2.0,2.0,2.0,7.0,7.0,8.0,7.0,7.0,4.0,2.0,3.0,5.0,6.0,6.0,7.0,7.0,6.0,6.0,7.0,6.0,5.0,4.0,3.0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,2.0,2.0,2.0,2.0,1.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,2.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,2.0,2.0,2.0,3.0,2.0,2.0,3.0,5.0,5.0,5.0,5.0,4.0,3.0,4.0,6.0,6.0,7.0,7.0,7.0,6.0,5.0,7.0,7.0,5.0,4.0,6.0,3.0,3.0,5.0,7.0,7.0,10.0,11.0,12.0,14.0,13.0,16.0,19.0,27.0,37.0,43.0,43.0,45.0,39.0,30.0,25.0,25.0,17.0,15.0,16.0,15.0,13.0,13.0,12.0,9.0,9.0,6.0,6.0,4.0,3.0,2.0,2.0,1.0,2.0,4.0,5.0,5.0,6.0,7.0,5.0,6.0,6.0,5.0,3.0,2.0,2.0,1.0,2.0,2.0,2.0,1.0,2.0,1.0,2.0,2.0,2.0,1.0,1.0,0.0,0.0,0.0,1.0,1.0,3.0,3.0,3.0,2.0,2.0,0.0,0.0,0.0,1.0,1.0,3.0,3.0,4.0,4.0,4.0,2.0,2.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,2.0,2.0,2.0,2.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,2.0,2.0,2.0,2.0,2.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0],"depth__15M/counts25":[3.0,4.0,5.0,4.0,3.0,2.0,2.0,1.0,1.0,1.0,2.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,2.0,3.0,4.0,3.0,3.0,2.0,1.0,0.0,0.0,0.0,1.0,2.0,2.0,3.0,3.0,2.0,1.0,2.0,2.0,3.0,3.0,5.0,4.0,4.0,3.0,3.0,2.0,2.0,2.0,3.0,3.0,3.0,5.0,5.0,4.0,5.0,5.0,3.0,2.0,3.0,3.0,3.0,4.0,4.0,5.0,4.0,4.0,4.0,5.0,3.0,5.0,4.0,5.0,4.0,5.0,3.0,4.0,3.0,3.0,3.0,5.0,5.0,6.0,8.0,8.0,8.0,8.0,9.0,8.0,10.0,10.0,10.0,10.0,7.0,5.0,2.0,3.0,1.0,1.0,1.0,1.0,1.0,1.0,5.0,6.0,6.0,5.0,5.0,2.0,0.0,2.0,3.0,4.0,5.0,5.0,4.0,3.0,2.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,2.0,4.0,5.0,5.0,5.0,4.0,3.0,3.0,4.0,3.0,3.0,3.0,2.0,2.0,2.0,4.0,3.0,3.0,2.0,3.0,1.0,1.0,2.0,4.0,4.0,4.0,6.0,6.0,5.0,4.0,8.0,9.0,13.0,18.0,20.0,18.0,20.0,19.0,17.0,14.0,15.0,9.0,6.0,5.0,5.0,4.0,4.0,4.0,4.0,5.0,4.0,4.0,3.0,1.0,0.0,0.0,0.0,1.0,2.0,2.0,2.0,3.0,3.0,3.0,4.0,4.0,3.0,2.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,1.0,1.0,2.0,2.0,3.0,3.0,3.0,2.0,2.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]},"locus":["chr19",12732350,12742350],"snip_ratio":0.5000162957526704,"levels":{"base":30.0,"trained":[15.0,3.75],"heldout":[7.5]},"down":{"AED1":[0.95238,0.70104,84],"AED":[0.84524,0.4644,84],"A":[0.0,-2.18858,84]},"cap":4000,"mot_depth":[["1","A","across",0.0923,0.29474],["1","A","per_track",0.08592,0.31993],["1","B","across",0.06498,0.33223],["1","B","per_track",0.07617,0.29426],["1","C","across",0.09487,0.54911],["1","C","per_track",0.0694,0.32605],["1","D","across",0.08663,0.35073],["1","D","per_track",0.05505,0.24998],["2","A2","across",0.04303,0.34408],["2","A2","per_track",0.04993,0.33697],["2","B2","across",0.0774,0.22275],["2","B2","per_track",0.0638,0.2427],["2","C2","across",0.05597,0.47287],["2","C2","per_track",0.05207,0.326],["2","D2","across",0.06654,0.18493],["2","D2","per_track",0.05355,0.33066]],"mot_knob":{"counts|abproxy|same":[0.08099,16],"counts|crop|same":[0.04615,16],"counts|ctldepth|same":[0.05743,16],"counts|ctlid|same":[0.04486,16],"counts|depth|same":[0.16197,16],"counts|extsize|same":[0.27702,16],"counts|mapq|same":[0.06663,16],"counts|ratio|same":[0.17166,16],"counts|abproxy|trained":[0.08601,16],"counts|crop|trained":[0.18436,16],"counts|ctldepth|trained":[0.28132,16],"counts|ctlid|trained":[0.28373,16],"counts|dedup|trained":[0.16691,16],"counts|depth|trained":[0.46006,16],"counts|extsize|trained":[0.36015,16],"counts|mapq|trained":[0.07968,16],"counts|pe|trained":[0.14675,16],"counts|ratio|trained":[0.28151,16],"pval|abproxy|same":[0.01029,16],"pval|crop|same":[-0.25958,16],"pval|ctldepth|same":[0.48129,16],"pval|ctlid|same":[0.30552,16],"pval|depth|same":[-251.81032,16],"pval|extsize|same":[-39.63913,16],"pval|mapq|same":[-0.08773,16],"pval|ratio|same":[0.41324,16],"pval|abproxy|trained":[0.13769,16],"pval|crop|trained":[0.045,16],"pval|ctldepth|trained":[0.62143,16],"pval|ctlid|trained":[0.36076,16],"pval|dedup|trained":[0.09389,16],"pval|depth|trained":[-13.14775,16],"pval|extsize|trained":[0.20409,16],"pval|mapq|trained":[0.03362,16],"pval|pe|trained":[0.10613,16],"pval|ratio|trained":[0.56489,16]},"diag":{"audit_n":504,"audit_runs":24,"audit_max":1.0184130716517359e-06,"sums_n":21,"sums_max":0.01018,"base_depth":30.0,"b_q":[1.49899,1.64517,1.84511],"off_q":[-1.88403,-1.68778,-1.5188],"frac0_q":[0.43445,0.66529,0.81865],"ab_old":[["per_track","trained",-0.69315,-2.11143,1.69618],["per_track","trained",0.69315,-0.6994,1.54144],["per_track","trained",-2.07944,-3.73989,1.85092],["per_track","trained",2.07944,-0.05551,1.32248],["per_track","trained",-1.38629,-2.96113,1.78808],["per_track","trained",1.38629,-0.2744,1.41372],["per_track","law",-1.38629,-3.29585,1.8428],["per_track","law",-0.69315,-2.42548,1.74434],["per_track","law",1.38629,-0.47624,1.53108],["per_track","law",0.69315,-1.29897,1.67505],["per_track","law",0.69315,-0.95756,1.61544],["per_track","law",-0.69315,-2.75853,1.81509],["per_track","trained",-0.69315,-2.17569,1.82703],["per_track","trained",0.69315,-0.63666,1.48756],["per_track","trained",-2.07944,-3.90319,2.12589],["per_track","trained",2.07944,-0.02647,1.22249],["per_track","trained",-1.38629,-3.0643,1.9793],["per_track","trained",1.38629,-0.19792,1.31958],["per_track","law",-1.38629,-3.36091,2.04112],["per_track","law",-0.69315,-2.45782,1.87794],["per_track","law",1.38629,-0.35256,1.41362],["per_track","law",0.69315,-1.19809,1.66676],["per_track","law",0.69315,-0.89512,1.59981],["per_track","law",-0.69315,-2.75847,1.95859],["per_track","trained",-1.20397,-2.44911,1.4489],["per_track","trained",1.20397,-0.53343,1.86346],["per_track","trained",-2.59027,-3.7176,1.37193],["per_track","trained",2.59027,0.03778,2.2394],["per_track","trained",-1.89712,-3.09202,1.40406],["per_track","trained",1.89712,-0.14911,2.06111],["per_track","law",-1.38629,-2.79646,1.57839],["per_track","law",-0.69315,-2.11906,1.64234],["per_track","law",1.38629,-0.50203,2.13178],["per_track","law",0.69315,-1.01411,2.04705],["per_track","law",0.69315,-0.92303,1.92587],["per_track","law",-0.69315,-2.20034,1.75703],["per_track","trained",-0.69315,-2.02973,1.66261],["per_track","trained",0.69315,-0.61217,1.44465],["per_track","trained",-2.07944,-3.71395,1.9042],["per_track","trained",2.07944,-0.02162,1.22633],["per_track","trained",-1.38629,-2.89436,1.78558],["per_track","trained",1.38629,-0.18679,1.31154],["per_track","law",-1.38629,-3.25488,1.85663],["per_track","law",-0.69315,-2.38407,1.72471],["per_track","law",1.38629,-0.45482,1.44306],["per_track","law",0.69315,-1.3014,1.61515],["per_track","law",0.69315,-0.92299,1.53903],["per_track","law",-0.69315,-2.75702,1.80955],["per_track","trained",-0.69315,-1.91027,1.44598],["per_track","trained",0.69315,-0.72043,1.53236],["per_track","trained",-2.07944,-3.32917,1.43822],["per_track","trained",2.07944,-0.12718,1.61853],["per_track","trained",-1.38629,-2.63883,1.44048],["per_track","trained",1.38629,-0.35156,1.57875],["per_track","law",-1.38629,-2.93682,1.53433],["per_track","law",-0.69315,-2.18663,1.5461],["per_track","law",1.38629,-0.53861,1.70912],["per_track","law",0.69315,-1.19949,1.74983],["per_track","law",0.69315,-0.91881,1.6568],["per_track","law",-0.69315,-2.46604,1.64916],["per_track","trained",-0.69315,-2.29181,1.90146],["per_track","trained",0.69315,-0.73215,1.57655],["per_track","trained",-2.07944,-3.79761,2.0118],["per_track","trained",2.07944,-0.00138,1.27333],["per_track","trained",-1.38629,-3.06442,1.95267],["per_track","trained",1.38629,-0.20567,1.37986],["per_track","law",-1.38629,-3.28245,1.89141],["per_track","law",-0.69315,-2.48002,1.81801],["per_track","law",1.38629,-0.25611,1.39086],["per_track","law",0.69315,-1.09073,1.51483],["per_track","law",0.69315,-0.87104,1.57307],["per_track","law",-0.69315,-2.69413,1.77565],["per_track","trained",-0.69315,-2.19797,1.78936],["per_track","trained",0.69315,-0.72769,1.57874],["per_track","trained",-2.07944,-3.70468,1.88682],["per_track","trained",2.07944,-0.02702,1.29555],["per_track","trained",-1.38629,-2.97745,1.84354],["per_track","trained",1.38629,-0.25652,1.42084],["per_track","law",-1.38629,-3.22271,1.8215],["per_track","law",-0.69315,-2.44301,1.77585],["per_track","law",1.38629,-0.36523,1.41876],["per_track","law",0.69315,-1.12798,1.54384],["per_track","law",0.69315,-0.92399,1.59551],["per_track","law",-0.69315,-2.65339,1.73389],["across","trained",-0.69315,-2.03532,1.66928],["across","trained",0.69315,-0.69019,1.53084],["across","trained",-2.07944,-3.6658,1.87474],["across","trained",2.07944,-0.03542,1.40377],["across","trained",-1.38629,-2.87498,1.77996],["across","trained",1.38629,-0.24975,1.44998],["across","trained",-0.69315,-2.08366,1.7717],["across","trained",0.69315,-0.66698,1.52288],["across","trained",-2.07944,-3.75205,1.96748],["across","trained",2.07944,-0.03544,1.36443],["across","trained",-1.38629,-2.95542,1.89075],["across","trained",1.38629,-0.25065,1.42011],["across","trained",-1.20397,-2.56289,1.42236],["across","trained",1.20397,-0.56501,1.59228],["across","trained",-2.59027,-4.06042,1.50646],["across","trained",2.59027,-0.09631,1.6808],["across","trained",-1.89712,-3.2968,1.44717],["across","trained",1.89712,-0.24522,1.6299],["across","trained",-0.69315,-2.01058,1.68088],["across","trained",0.69315,-0.6583,1.5156],["across","trained",-2.07944,-3.58845,1.82888],["across","trained",2.07944,-0.02851,1.38004],["across","trained",-1.38629,-2.81154,1.75823],["across","trained",1.38629,-0.2321,1.41416],["across","trained",-0.69315,-1.79528,1.40679],["across","trained",0.69315,-0.64901,1.41891],["across","trained",-2.07944,-3.30438,1.54407],["across","trained",2.07944,-0.08111,1.44908],["across","trained",-1.38629,-2.54541,1.48432],["across","trained",1.38629,-0.27927,1.45545],["across","trained",-0.69315,-2.12887,1.7934],["across","trained",0.69315,-0.72837,1.58678],["across","trained",-2.07944,-3.7566,1.96777],["across","trained",2.07944,-0.05593,1.40458],["across","trained",-1.38629,-2.9696,1.89349],["across","trained",1.38629,-0.30003,1.47565],["across","trained",-0.69315,-2.08281,1.70568],["across","trained",0.69315,-0.71572,1.56792],["across","trained",-2.07944,-3.71327,1.87757],["across","trained",2.07944,-0.05578,1.44438],["across","trained",-1.38629,-2.92192,1.80132],["across","trained",1.38629,-0.27752,1.48396],["across","law",-1.38629,-3.25437,1.88988],["across","law",-0.69315,-2.39936,1.80713],["across","law",1.38629,-0.40192,1.6146],["across","law",0.69315,-1.13337,1.79041],["across","law",0.69315,-0.87614,1.6708],["across","law",-0.69315,-2.68697,1.90188],["across","law",-1.38629,-3.30012,1.98955],["across","law",-0.69315,-2.43592,1.91356],["across","law",1.38629,-0.41247,1.62424],["across","law",0.69315,-1.1557,1.88465],["across","law",0.69315,-0.89454,1.73461],["across","law",-0.69315,-2.72579,2.00532],["across","law",-1.38629,-3.26963,1.56548],["across","law",-0.69315,-2.42713,1.53396],["across","law",1.38629,-0.58081,1.66918],["across","law",0.69315,-1.27532,1.68374],["across","law",0.69315,-1.03617,1.61639],["across","law",-0.69315,-2.69474,1.63802],["across","law",-1.38629,-3.17718,1.87944],["across","law",-0.69315,-2.35112,1.80697],["across","law",1.38629,-0.39144,1.59131],["across","law",0.69315,-1.11305,1.81299],["across","law",0.69315,-0.85693,1.68708],["across","law",-0.69315,-2.63369,1.90672],["across","law",-1.38629,-2.96107,1.5922],["across","law",-0.69315,-2.17225,1.54221],["across","law",1.38629,-0.37314,1.56141],["across","law",0.69315,-1.03615,1.65438],["across","law",0.69315,-0.81753,1.56397],["across","law",-0.69315,-2.4953,1.6638],["across","law",-1.38629,-3.3312,2.01245],["across","law",-0.69315,-2.48189,1.92418],["across","law",1.38629,-0.43973,1.6582],["across","law",0.69315,-1.19496,1.91148],["across","law",0.69315,-0.92706,1.76269],["across","law",-0.69315,-2.77865,2.03519],["across","law",-1.38629,-3.28044,1.90532],["across","law",-0.69315,-2.42504,1.83762],["across","law",1.38629,-0.43626,1.65803],["across","law",0.69315,-1.15646,1.84034],["across","law",0.69315,-0.90431,1.71451],["across","law",-0.69315,-2.70998,1.93199]],"compose":[["A","across",0.29474,0.12715,126],["A","per_track",0.31993,0.14724,126],["B","across",0.33223,0.08939,126],["B","per_track",0.29426,0.12307,126],["C","across",0.54911,0.10757,126],["C","per_track",0.32605,0.09272,126],["D","across",0.35073,0.15923,126],["D","per_track",0.24998,0.07749,126]]},"depth":[["t118 A","across","heldout",0.09677,0.01952,0.1831,0.94809,42],["t118 A","across","never",0.38914,0.2911,0.47024,1.17983,42],["t118 A","across","never75",0.22785,0.17228,0.40061,1.26097,84],["t118 A","across","trained",0.08923,0.03562,0.1641,0.94465,84],["t118 A","per_track","heldout",0.08303,0.03973,0.12846,0.99564,42],["t118 A","per_track","never",0.38644,0.27474,0.51757,1.18161,42],["t118 A","per_track","never75",0.29018,0.13234,0.39931,1.23489,84],["t118 A","per_track","trained",0.08755,0.04207,0.16866,0.97712,84],["t118 D","across","heldout",0.08828,0.04699,0.12464,1.00313,42],["t118 D","across","never",0.36927,0.30783,0.48458,1.20162,42],["t118 D","across","never75",0.327,0.24246,0.42607,1.31946,84],["t118 D","across","trained",0.0808,0.04241,0.15025,1.00544,84],["t118 D","per_track","heldout",0.05016,0.0289,0.1001,0.98252,42],["t118 D","per_track","never",0.25516,0.17422,0.4712,1.13688,42],["t118 D","per_track","never75",0.24917,0.11068,0.42904,1.23368,84],["t118 D","per_track","trained",0.05525,0.0234,0.10152,0.98215,84],["A","across","heldout",0.102,0.03483,0.1924,0.97236,42],["A","across","never",0.44635,0.36059,0.52526,1.21574,42],["A","across","never75",0.28666,0.1719,0.43112,1.31122,84],["A","across","trained",0.08861,0.03471,0.19069,0.97506,84],["A","per_track","heldout",0.08224,0.03722,0.14097,0.9903,42],["A","per_track","never",0.37714,0.32542,0.55094,1.18353,42],["A","per_track","never75",0.30516,0.1597,0.43731,1.24793,84],["A","per_track","trained",0.11566,0.04671,0.2162,0.97862,84],["AED","across","heldout",1.19755,0.10845,2.49959,0.43944,42],["AED","across","never",1.94368,1.02021,3.02232,0.49699,42],["AED","across","never75",2.01983,1.45439,2.34556,0.49686,84],["AED","across","trained",1.00181,0.27765,2.07485,0.44862,84],["AED","per_track","heldout",1.2278,0.20221,2.46857,0.49439,42],["AED","per_track","never",1.89347,1.10338,3.00694,0.53162,42],["AED","per_track","never75",2.02147,1.44846,2.31234,0.53226,84],["AED","per_track","trained",1.11014,0.34445,2.01428,0.49095,84],["AED1","across","heldout",1.7451,0.15527,2.73073,0.33961,42],["AED1","across","never",1.98211,0.92178,3.19326,0.4293,42],["AED1","across","never75",1.99576,1.38652,2.43658,0.4293,84],["AED1","across","trained",1.35557,0.26117,2.40442,0.37089,84],["AED1","per_track","heldout",1.67689,0.17626,2.75589,0.34354,42],["AED1","per_track","never",1.94698,0.95471,3.16393,0.44051,42],["AED1","per_track","never75",2.01289,1.40913,2.3999,0.44051,84],["AED1","per_track","trained",1.30772,0.28666,2.34118,0.37225,84],["D","across","heldout",0.08122,0.04285,0.18702,1.03333,42],["D","across","never",0.33557,0.18434,0.6412,1.1965,42],["D","across","never75",0.24833,0.16142,0.40039,1.25606,84],["D","across","trained",0.05107,0.02894,0.07651,0.99423,84],["D","per_track","heldout",0.0979,0.03891,0.15719,1.01108,42],["D","per_track","never",0.29085,0.11957,0.51334,1.12786,42],["D","per_track","never75",0.18769,0.10006,0.35734,1.18681,84],["D","per_track","trained",0.05379,0.02252,0.107,0.98411,84],["DEDl0","across","heldout",0.07311,0.03498,0.10606,1.02676,42],["DEDl0","across","never",0.52397,0.37058,0.68014,0.73932,42],["DEDl0","across","never75",0.27156,0.14892,0.42989,0.72565,84],["DEDl0","across","trained",0.07217,0.03453,0.1247,1.00071,84],["DEDl0","per_track","heldout",0.06788,0.03044,0.11618,0.99018,42],["DEDl0","per_track","never",0.43788,0.27805,0.65172,0.76818,42],["DEDl0","per_track","never75",0.31663,0.22318,0.4383,0.68006,84],["DEDl0","per_track","trained",0.06051,0.02386,0.10125,0.97637,84],["DEDl0.1","across","heldout",0.03711,0.01608,0.06515,0.9918,42],["DEDl0.1","across","never",0.45913,0.32142,0.5537,0.79208,42],["DEDl0.1","across","never75",0.34814,0.24112,0.43522,0.66215,84],["DEDl0.1","across","trained",0.04213,0.01524,0.07081,0.97651,84],["DEDl0.1","per_track","heldout",0.08452,0.0473,0.138,0.9764,42],["DEDl0.1","per_track","never",0.30899,0.22414,0.42654,0.8579,42],["DEDl0.1","per_track","never75",0.29702,0.19399,0.39993,0.71046,84],["DEDl0.1","per_track","trained",0.07573,0.0307,0.12771,0.96526,84],["DEDl1","across","heldout",0.0948,0.04918,0.15745,0.95548,42],["DEDl1","across","never",0.25726,0.14969,0.51736,0.83428,42],["DEDl1","across","never75",0.31153,0.20103,0.43011,0.68968,84],["DEDl1","across","trained",0.09722,0.05079,0.18859,0.94295,84],["DEDl1","per_track","heldout",0.07945,0.04449,0.14846,0.98263,42],["DEDl1","per_track","never",0.33083,0.18097,0.43811,0.87961,42],["DEDl1","per_track","never75",0.29382,0.18289,0.39582,0.70626,84],["DEDl1","per_track","trained",0.05576,0.03088,0.11652,0.97355,84],["DEDl10","across","heldout",0.12129,0.08954,0.18308,1.00883,42],["DEDl10","across","never",0.26907,0.20879,0.3363,0.86372,42],["DEDl10","across","never75",0.25948,0.13638,0.40608,0.71515,84],["DEDl10","across","trained",0.06124,0.03127,0.12138,0.97958,84],["DEDl10","per_track","heldout",0.10896,0.05533,0.17391,1.00534,42],["DEDl10","per_track","never",0.36464,0.2329,0.48522,0.85156,42],["DEDl10","per_track","never75",0.28219,0.1052,0.45849,0.70502,84],["DEDl10","per_track","trained",0.06422,0.02898,0.1279,0.98159,84]],"depth_seed":{"t118 A|per_track|trained":[0.0759,0.10395,0.08582],"t118 A|per_track|heldout":[0.07187,0.10218,0.08242],"t118 A|per_track|never":[0.38159,0.33359,0.4079],"t118 A|per_track|never75":[0.29018,0.31257,0.25752],"t118 A|across|trained":[0.06683,0.09496,0.09717],"t118 A|across|heldout":[0.06024,0.12084,0.09355],"t118 A|across|never":[0.43702,0.38187,0.31096],"t118 A|across|never75":[0.2993,0.22785,0.18875],"t118 D|per_track|trained":[0.07596,0.05165,0.05128],"t118 D|per_track|heldout":[0.06964,0.05638,0.04921],"t118 D|per_track|never":[0.24275,0.18594,0.3276],"t118 D|per_track|never75":[0.20392,0.31821,0.24595],"t118 D|across|trained":[0.09473,0.08663,0.05063],"t118 D|across|heldout":[0.07793,0.09661,0.07557],"t118 D|across|never":[0.37585,0.42246,0.35964],"t118 D|across|never75":[0.27661,0.3623,0.34225],"AED1|per_track|trained":[1.31916,1.26546,1.34632],"AED1|per_track|heldout":[1.70287,1.64319,1.72969],"AED1|per_track|never":[1.98204,1.94698,1.94793],"AED1|per_track|never75":[2.01159,2.02478,1.99034],"AED1|across|trained":[1.34109,1.39038,1.30243],"AED1|across|heldout":[1.72443,1.77683,1.68529],"AED1|across|never":[1.97601,1.98211,1.98213],"AED1|across|never75":[1.99795,2.02156,1.99013],"AED|per_track|trained":[0.94526,1.11014,0.95521],"AED|per_track|heldout":[1.11776,1.2278,1.1348],"AED|per_track|never":[1.90808,1.86247,1.86935],"AED|per_track|never75":[2.03765,2.01948,2.00622],"AED|across|trained":[1.06836,1.10128,0.97481],"AED|across|heldout":[1.20155,1.29362,1.14194],"AED|across|never":[1.96426,1.8788,1.93858],"AED|across|never75":[2.05933,1.98933,2.01687],"A|per_track|trained":[0.12694,0.08115,0.13421],"A|per_track|heldout":[0.09696,0.06026,0.0856],"A|per_track|never":[0.51669,0.35869,0.33858],"A|per_track|never75":[0.33036,0.21582,0.27408],"A|across|trained":[0.08701,0.11034,0.05868],"A|across|heldout":[0.05805,0.13468,0.07074],"A|across|never":[0.42389,0.48843,0.43685],"A|across|never75":[0.26939,0.28666,0.30654],"DEDl0.1|per_track|trained":[0.06554,0.07824,0.07836],"DEDl0.1|per_track|heldout":[0.0729,0.07057,0.12398],"DEDl0.1|per_track|never":[0.35767,0.27041,0.29629],"DEDl0.1|per_track|never75":[0.34844,0.29322,0.26515],"DEDl0.1|across|trained":[0.03064,0.04464,0.05405],"DEDl0.1|across|heldout":[0.03344,0.03365,0.09847],"DEDl0.1|across|never":[0.5514,0.51045,0.24569],"DEDl0.1|across|never75":[0.36564,0.31638,0.33384],"DEDl0|per_track|trained":[0.04713,0.04888,0.07196],"DEDl0|per_track|heldout":[0.08231,0.05495,0.08074],"DEDl0|per_track|never":[0.61838,0.4625,0.3491],"DEDl0|per_track|never75":[0.40001,0.28585,0.30587],"DEDl0|across|trained":[0.08324,0.06668,0.05859],"DEDl0|across|heldout":[0.09118,0.09628,0.03685],"DEDl0|across|never":[0.82567,0.21447,0.48459],"DEDl0|across|never75":[0.4408,0.13245,0.30699],"DEDl10|per_track|trained":[0.11847,0.05986,0.04208],"DEDl10|per_track|heldout":[0.13829,0.10573,0.09518],"DEDl10|per_track|never":[0.33308,0.39205,0.32217],"DEDl10|per_track|never75":[0.33825,0.28901,0.21205],"DEDl10|across|trained":[0.04632,0.03924,0.09711],"DEDl10|across|heldout":[0.10269,0.09683,0.19751],"DEDl10|across|never":[0.32559,0.27777,0.22127],"DEDl10|across|never75":[0.35498,0.19223,0.30669],"DEDl1|per_track|trained":[0.05576,0.04785,0.08197],"DEDl1|per_track|heldout":[0.07422,0.09776,0.1129],"DEDl1|per_track|never":[0.26802,0.33888,0.34629],"DEDl1|per_track|never75":[0.28986,0.32469,0.27642],"DEDl1|across|trained":[0.05389,0.16061,0.08733],"DEDl1|across|heldout":[0.07087,0.10819,0.12316],"DEDl1|across|never":[0.55179,0.2954,0.18246],"DEDl1|across|never75":[0.41078,0.23806,0.29217],"D|per_track|trained":[0.05206,0.0545,0.05232],"D|per_track|heldout":[0.11405,0.0971,0.09541],"D|per_track|never":[0.27595,0.26029,0.31166],"D|per_track|never75":[0.16156,0.22209,0.18769],"D|across|trained":[0.06295,0.05021,0.05142],"D|across|heldout":[0.11616,0.06679,0.08212],"D|across|never":[0.1642,0.40351,0.40141],"D|across|never75":[0.215,0.39779,0.18511]},"knob":[["t118 A","across","cross","cross",0.06672,1966],["t118 A","across","same","abproxy",0.07291,12],["t118 A","across","same","crop",0.01534,12],["t118 A","across","same","ctldepth",-0.13293,12],["t118 A","across","same","ctlid",-0.23768,12],["t118 A","across","same","depth",0.1867,42],["t118 A","across","same","extsize",0.02348,14],["t118 A","across","same","mapq",0.01804,12],["t118 A","across","same","ratio",-0.00942,12],["t118 A","across","trained","abproxy",0.03724,24],["t118 A","across","trained","crop",0.15892,24],["t118 A","across","trained","ctldepth",0.04388,24],["t118 A","across","trained","ctlid",0.03228,24],["t118 A","across","trained","dedup",0.03732,14],["t118 A","across","trained","depth",0.26168,42],["t118 A","across","trained","extsize",0.06065,28],["t118 A","across","trained","mapq",0.02896,24],["t118 A","across","trained","pe",0.04263,14],["t118 A","across","trained","ratio",0.04751,24],["t118 A","per_track","cross","cross",0.05956,1966],["t118 A","per_track","same","abproxy",0.06887,12],["t118 A","per_track","same","crop",0.00597,12],["t118 A","per_track","same","ctldepth",-0.29373,12],["t118 A","per_track","same","ctlid",-0.21128,12],["t118 A","per_track","same","depth",0.18124,42],["t118 A","per_track","same","extsize",-0.06204,14],["t118 A","per_track","same","mapq",0.01777,12],["t118 A","per_track","same","ratio",-0.07209,12],["t118 A","per_track","trained","abproxy",0.04447,24],["t118 A","per_track","trained","crop",0.15507,24],["t118 A","per_track","trained","ctldepth",-0.00527,24],["t118 A","per_track","trained","ctlid",0.0136,24],["t118 A","per_track","trained","dedup",0.03246,14],["t118 A","per_track","trained","depth",0.26437,42],["t118 A","per_track","trained","extsize",0.00432,28],["t118 A","per_track","trained","mapq",0.03135,24],["t118 A","per_track","trained","pe",0.04294,14],["t118 A","per_track","trained","ratio",0.01423,24],["t118 D","across","cross","cross",0.14421,1966],["t118 D","across","same","abproxy",0.10012,12],["t118 D","across","same","crop",0.20266,12],["t118 D","across","same","ctldepth",0.24582,12],["t118 D","across","same","ctlid",0.24335,12],["t118 D","across","same","depth",0.21471,42],["t118 D","across","same","extsize",0.2462,14],["t118 D","across","same","mapq",0.10351,12],["t118 D","across","same","ratio",0.25583,12],["t118 D","across","trained","abproxy",0.0991,24],["t118 D","across","trained","crop",0.19182,24],["t118 D","across","trained","ctldepth",0.26028,24],["t118 D","across","trained","ctlid",0.26043,24],["t118 D","across","trained","dedup",0.10138,14],["t118 D","across","trained","depth",0.36773,42],["t118 D","across","trained","extsize",0.26147,28],["t118 D","across","trained","mapq",0.10782,24],["t118 D","across","trained","pe",0.10459,14],["t118 D","across","trained","ratio",0.26097,24],["t118 D","per_track","cross","cross",0.13466,1966],["t118 D","per_track","same","abproxy",0.08187,12],["t118 D","per_track","same","crop",0.21071,12],["t118 D","per_track","same","ctldepth",0.24945,12],["t118 D","per_track","same","ctlid",0.25234,12],["t118 D","per_track","same","depth",0.20329,42],["t118 D","per_track","same","extsize",0.25223,14],["t118 D","per_track","same","mapq",0.08851,12],["t118 D","per_track","same","ratio",0.27674,12],["t118 D","per_track","trained","abproxy",0.09674,24],["t118 D","per_track","trained","crop",0.17374,24],["t118 D","per_track","trained","ctldepth",0.27979,24],["t118 D","per_track","trained","ctlid",0.28021,24],["t118 D","per_track","trained","dedup",0.09606,14],["t118 D","per_track","trained","depth",0.34415,42],["t118 D","per_track","trained","extsize",0.28166,28],["t118 D","per_track","trained","mapq",0.09283,24],["t118 D","per_track","trained","pe",0.09559,14],["t118 D","per_track","trained","ratio",0.2795,24],["A","across","cross","cross",0.06046,1966],["A","across","heldout","depth",0.45492,14],["A","across","same","abproxy",0.07876,12],["A","across","same","crop",0.01619,12],["A","across","same","ctldepth",-0.09982,12],["A","across","same","ctlid",-0.25442,12],["A","across","same","depth",0.17711,42],["A","across","same","extsize",-0.05787,14],["A","across","same","mapq",0.02835,12],["A","across","same","ratio",-0.07214,12],["A","across","trained","abproxy",0.04153,24],["A","across","trained","crop",0.16547,24],["A","across","trained","ctldepth",0.01978,24],["A","across","trained","ctlid",-0.01061,24],["A","across","trained","dedup",0.04042,14],["A","across","trained","depth",0.24859,28],["A","across","trained","extsize",-0.02065,28],["A","across","trained","mapq",0.03297,24],["A","across","trained","pe",0.05488,14],["A","across","trained","ratio",0.01458,24],["A","per_track","cross","cross",0.06355,1966],["A","per_track","heldout","depth",0.45342,14],["A","per_track","same","abproxy",0.0779,12],["A","per_track","same","crop",0.00652,12],["A","per_track","same","ctldepth",-0.27361,12],["A","per_track","same","ctlid",-0.19909,12],["A","per_track","same","depth",0.14491,42],["A","per_track","same","extsize",-0.05849,14],["A","per_track","same","mapq",0.02894,12],["A","per_track","same","ratio",-0.11314,12],["A","per_track","trained","abproxy",0.04894,24],["A","per_track","trained","crop",0.16993,24],["A","per_track","trained","ctldepth",-0.01636,24],["A","per_track","trained","ctlid",-0.01369,24],["A","per_track","trained","dedup",0.04217,14],["A","per_track","trained","depth",0.25565,28],["A","per_track","trained","extsize",-0.02012,28],["A","per_track","trained","mapq",0.0359,24],["A","per_track","trained","pe",0.05021,14],["A","per_track","trained","ratio",-0.02162,24],["AED","across","cross","cross",0.02091,1966],["AED","across","heldout","depth",0.38637,14],["AED","across","same","abproxy",0.00321,12],["AED","across","same","crop",0.11499,12],["AED","across","same","ctldepth",0.04963,12],["AED","across","same","ctlid",0.03601,12],["AED","across","same","depth",0.34953,42],["AED","across","same","extsize",0.09184,14],["AED","across","same","mapq",0.01451,12],["AED","across","same","ratio",-0.00102,12],["AED","across","trained","abproxy",0.01159,24],["AED","across","trained","crop",0.11294,24],["AED","across","trained","ctldepth",0.03374,24],["AED","across","trained","ctlid",-0.02998,24],["AED","across","trained","dedup",0.02612,14],["AED","across","trained","depth",0.2025,28],["AED","across","trained","extsize",-0.06305,28],["AED","across","trained","mapq",0.00832,24],["AED","across","trained","pe",0.00899,14],["AED","across","trained","ratio",-0.03644,24],["AED","per_track","cross","cross",0.01777,1966],["AED","per_track","heldout","depth",0.37907,14],["AED","per_track","same","abproxy",0.00486,12],["AED","per_track","same","crop",0.11552,12],["AED","per_track","same","ctldepth",0.0528,12],["AED","per_track","same","ctlid",0.02179,12],["AED","per_track","same","depth",0.29931,42],["AED","per_track","same","extsize",0.00385,14],["AED","per_track","same","mapq",0.02195,12],["AED","per_track","same","ratio",0.00991,12],["AED","per_track","trained","abproxy",0.02296,24],["AED","per_track","trained","crop",0.10359,24],["AED","per_track","trained","ctldepth",-0.01435,24],["AED","per_track","trained","ctlid",-0.02736,24],["AED","per_track","trained","dedup",0.02554,14],["AED","per_track","trained","depth",0.21772,28],["AED","per_track","trained","extsize",-0.08787,28],["AED","per_track","trained","mapq",0.01898,24],["AED","per_track","trained","pe",0.0191,14],["AED","per_track","trained","ratio",-0.03309,24],["AED1","across","cross","cross",0.04358,1966],["AED1","across","heldout","depth",0.30748,14],["AED1","across","same","abproxy",0.01709,12],["AED1","across","same","crop",0.11818,12],["AED1","across","same","ctldepth",0.04103,12],["AED1","across","same","ctlid",0.03295,12],["AED1","across","same","depth",0.35288,42],["AED1","across","same","extsize",0.05733,14],["AED1","across","same","mapq",0.01795,12],["AED1","across","same","ratio",0.04716,12],["AED1","across","trained","abproxy",-0.01863,24],["AED1","across","trained","crop",0.08344,24],["AED1","across","trained","ctldepth",0.0283,24],["AED1","across","trained","ctlid",0.01145,24],["AED1","across","trained","dedup",0.04816,14],["AED1","across","trained","depth",0.13659,28],["AED1","across","trained","extsize",0.02082,28],["AED1","across","trained","mapq",-0.00516,24],["AED1","across","trained","pe",0.0447,14],["AED1","across","trained","ratio",0.01423,24],["AED1","per_track","cross","cross",0.03886,1966],["AED1","per_track","heldout","depth",0.30715,14],["AED1","per_track","same","abproxy",0.01656,12],["AED1","per_track","same","crop",0.12423,12],["AED1","per_track","same","ctldepth",0.03386,12],["AED1","per_track","same","ctlid",0.01329,12],["AED1","per_track","same","depth",0.3207,42],["AED1","per_track","same","extsize",0.05062,14],["AED1","per_track","same","mapq",0.02173,12],["AED1","per_track","same","ratio",0.02556,12],["AED1","per_track","trained","abproxy",-0.02153,24],["AED1","per_track","trained","crop",0.0775,24],["AED1","per_track","trained","ctldepth",0.00944,24],["AED1","per_track","trained","ctlid",0.00553,24],["AED1","per_track","trained","dedup",0.01046,14],["AED1","per_track","trained","depth",0.13203,28],["AED1","per_track","trained","extsize",0.02304,28],["AED1","per_track","trained","mapq",0.00241,24],["AED1","per_track","trained","pe",0.00594,14],["AED1","per_track","trained","ratio",0.01643,24],["D","across","cross","cross",0.15366,1966],["D","across","heldout","depth",0.56034,14],["D","across","same","abproxy",0.10385,12],["D","across","same","crop",0.1905,12],["D","across","same","ctldepth",0.21661,12],["D","across","same","ctlid",0.22247,12],["D","across","same","depth",0.22385,42],["D","across","same","extsize",0.22469,14],["D","across","same","mapq",0.10734,12],["D","across","same","ratio",0.22719,12],["D","across","trained","abproxy",0.11484,24],["D","across","trained","crop",0.204,24],["D","across","trained","ctldepth",0.23724,24],["D","across","trained","ctlid",0.23775,24],["D","across","trained","dedup",0.10922,14],["D","across","trained","depth",0.33863,28],["D","across","trained","extsize",0.23792,28],["D","across","trained","mapq",0.11155,24],["D","across","trained","pe",0.11098,14],["D","across","trained","ratio",0.23687,24],["D","per_track","cross","cross",0.14213,1966],["D","per_track","heldout","depth",0.54705,14],["D","per_track","same","abproxy",0.08481,12],["D","per_track","same","crop",0.18911,12],["D","per_track","same","ctldepth",0.26744,12],["D","per_track","same","ctlid",0.2694,12],["D","per_track","same","depth",0.18363,42],["D","per_track","same","extsize",0.27293,14],["D","per_track","same","mapq",0.08922,12],["D","per_track","same","ratio",0.28088,12],["D","per_track","trained","abproxy",0.09909,24],["D","per_track","trained","crop",0.17239,24],["D","per_track","trained","ctldepth",0.28792,24],["D","per_track","trained","ctlid",0.28901,24],["D","per_track","trained","dedup",0.09501,14],["D","per_track","trained","depth",0.34131,28],["D","per_track","trained","extsize",0.28877,28],["D","per_track","trained","mapq",0.09448,24],["D","per_track","trained","pe",0.09698,14],["D","per_track","trained","ratio",0.28837,24],["DEDl0","across","cross","cross",0.15791,1966],["DEDl0","across","heldout","depth",0.52094,14],["DEDl0","across","same","abproxy",-0.10178,12],["DEDl0","across","same","crop",-0.1635,12],["DEDl0","across","same","ctldepth",0.09374,12],["DEDl0","across","same","ctlid",0.09723,12],["DEDl0","across","same","depth",0.11445,42],["DEDl0","across","same","extsize",0.0969,14],["DEDl0","across","same","mapq",-0.14721,12],["DEDl0","across","same","ratio",0.09566,12],["DEDl0","across","trained","abproxy",0.15306,24],["DEDl0","across","trained","crop",0.27022,24],["DEDl0","across","trained","ctldepth",0.09508,24],["DEDl0","across","trained","ctlid",0.09582,24],["DEDl0","across","trained","dedup",0.17144,14],["DEDl0","across","trained","depth",0.35654,28],["DEDl0","across","trained","extsize",0.09617,28],["DEDl0","across","trained","mapq",0.16636,24],["DEDl0","across","trained","pe",0.17194,14],["DEDl0","across","trained","ratio",0.09633,24],["DEDl0","per_track","cross","cross",0.16062,1966],["DEDl0","per_track","heldout","depth",0.55414,14],["DEDl0","per_track","same","abproxy",-0.11362,12],["DEDl0","per_track","same","crop",-0.17985,12],["DEDl0","per_track","same","ctldepth",0.12429,12],["DEDl0","per_track","same","ctlid",0.12427,12],["DEDl0","per_track","same","depth",0.11001,42],["DEDl0","per_track","same","extsize",0.13794,14],["DEDl0","per_track","same","mapq",-0.14334,12],["DEDl0","per_track","same","ratio",0.12344,12],["DEDl0","per_track","trained","abproxy",0.14833,24],["DEDl0","per_track","trained","crop",0.23553,24],["DEDl0","per_track","trained","ctldepth",0.12401,24],["DEDl0","per_track","trained","ctlid",0.12404,24],["DEDl0","per_track","trained","dedup",0.16651,14],["DEDl0","per_track","trained","depth",0.36965,28],["DEDl0","per_track","trained","extsize",0.13825,28],["DEDl0","per_track","trained","mapq",0.15847,24],["DEDl0","per_track","trained","pe",0.16777,14],["DEDl0","per_track","trained","ratio",0.12352,24],["DEDl0.1","across","cross","cross",0.1583,1966],["DEDl0.1","across","heldout","depth",0.57688,14],["DEDl0.1","across","same","abproxy",-0.11172,12],["DEDl0.1","across","same","crop",-0.14996,12],["DEDl0.1","across","same","ctldepth",0.12281,12],["DEDl0.1","across","same","ctlid",0.12274,12],["DEDl0.1","across","same","depth",0.17362,42],["DEDl0.1","across","same","extsize",0.12348,14],["DEDl0.1","across","same","mapq",-0.13653,12],["DEDl0.1","across","same","ratio",0.1233,12],["DEDl0.1","across","trained","abproxy",0.14581,24],["DEDl0.1","across","trained","crop",0.27846,24],["DEDl0.1","across","trained","ctldepth",0.12305,24],["DEDl0.1","across","trained","ctlid",0.12302,24],["DEDl0.1","across","trained","dedup",0.16576,14],["DEDl0.1","across","trained","depth",0.38828,28],["DEDl0.1","across","trained","extsize",0.12378,28],["DEDl0.1","across","trained","mapq",0.15947,24],["DEDl0.1","across","trained","pe",0.16888,14],["DEDl0.1","across","trained","ratio",0.12314,24],["DEDl0.1","per_track","cross","cross",0.15391,1966],["DEDl0.1","per_track","heldout","depth",0.58097,14],["DEDl0.1","per_track","same","abproxy",-0.08965,12],["DEDl0.1","per_track","same","crop",-0.17373,12],["DEDl0.1","per_track","same","ctldepth",0.14303,12],["DEDl0.1","per_track","same","ctlid",0.14915,12],["DEDl0.1","per_track","same","depth",0.16611,42],["DEDl0.1","per_track","same","extsize",0.14886,14],["DEDl0.1","per_track","same","mapq",-0.14299,12],["DEDl0.1","per_track","same","ratio",0.14209,12],["DEDl0.1","per_track","trained","abproxy",0.15133,24],["DEDl0.1","per_track","trained","crop",0.26442,24],["DEDl0.1","per_track","trained","ctldepth",0.142,24],["DEDl0.1","per_track","trained","ctlid",0.14569,24],["DEDl0.1","per_track","trained","dedup",0.1552,14],["DEDl0.1","per_track","trained","depth",0.35805,28],["DEDl0.1","per_track","trained","extsize",0.14936,28],["DEDl0.1","per_track","trained","mapq",0.15279,24],["DEDl0.1","per_track","trained","pe",0.15237,14],["DEDl0.1","per_track","trained","ratio",0.14316,24],["DEDl1","across","cross","cross",0.14999,1966],["DEDl1","across","heldout","depth",0.57455,14],["DEDl1","across","same","abproxy",-0.0878,12],["DEDl1","across","same","crop",-0.1606,12],["DEDl1","across","same","ctldepth",0.13539,12],["DEDl1","across","same","ctlid",0.1401,12],["DEDl1","across","same","depth",0.16069,42],["DEDl1","across","same","extsize",0.14115,14],["DEDl1","across","same","mapq",-0.13448,12],["DEDl1","across","same","ratio",0.14128,12],["DEDl1","across","trained","abproxy",0.1489,24],["DEDl1","across","trained","crop",0.27849,24],["DEDl1","across","trained","ctldepth",0.13772,24],["DEDl1","across","trained","ctlid",0.13902,24],["DEDl1","across","trained","dedup",0.15936,14],["DEDl1","across","trained","depth",0.37477,28],["DEDl1","across","trained","extsize",0.14145,28],["DEDl1","across","trained","mapq",0.15248,24],["DEDl1","across","trained","pe",0.16205,14],["DEDl1","across","trained","ratio",0.1395,24],["DEDl1","per_track","cross","cross",0.15799,1966],["DEDl1","per_track","heldout","depth",0.57395,14],["DEDl1","per_track","same","abproxy",-0.06737,12],["DEDl1","per_track","same","crop",-0.17378,12],["DEDl1","per_track","same","ctldepth",0.16358,12],["DEDl1","per_track","same","ctlid",0.166,12],["DEDl1","per_track","same","depth",0.15199,42],["DEDl1","per_track","same","extsize",0.17566,14],["DEDl1","per_track","same","mapq",-0.13988,12],["DEDl1","per_track","same","ratio",0.16479,12],["DEDl1","per_track","trained","abproxy",0.14906,24],["DEDl1","per_track","trained","crop",0.25823,24],["DEDl1","per_track","trained","ctldepth",0.16464,24],["DEDl1","per_track","trained","ctlid",0.16579,24],["DEDl1","per_track","trained","dedup",0.15035,14],["DEDl1","per_track","trained","depth",0.35684,28],["DEDl1","per_track","trained","extsize",0.17641,28],["DEDl1","per_track","trained","mapq",0.14946,24],["DEDl1","per_track","trained","pe",0.15278,14],["DEDl1","per_track","trained","ratio",0.16445,24],["DEDl10","across","cross","cross",0.16281,1966],["DEDl10","across","heldout","depth",0.58163,14],["DEDl10","across","same","abproxy",-0.03071,12],["DEDl10","across","same","crop",-0.10938,12],["DEDl10","across","same","ctldepth",0.10602,12],["DEDl10","across","same","ctlid",0.10707,12],["DEDl10","across","same","depth",0.21632,42],["DEDl10","across","same","extsize",0.10878,14],["DEDl10","across","same","mapq",-0.11035,12],["DEDl10","across","same","ratio",0.10818,12],["DEDl10","across","trained","abproxy",0.14288,24],["DEDl10","across","trained","crop",0.30336,24],["DEDl10","across","trained","ctldepth",0.10701,24],["DEDl10","across","trained","ctlid",0.1073,24],["DEDl10","across","trained","dedup",0.17078,14],["DEDl10","across","trained","depth",0.3835,28],["DEDl10","across","trained","extsize",0.1087,28],["DEDl10","across","trained","mapq",0.16082,24],["DEDl10","across","trained","pe",0.17091,14],["DEDl10","across","trained","ratio",0.10792,24],["DEDl10","per_track","cross","cross",0.15755,1966],["DEDl10","per_track","heldout","depth",0.57517,14],["DEDl10","per_track","same","abproxy",-0.07578,12],["DEDl10","per_track","same","crop",-0.15633,12],["DEDl10","per_track","same","ctldepth",0.14482,12],["DEDl10","per_track","same","ctlid",0.14317,12],["DEDl10","per_track","same","depth",0.19589,42],["DEDl10","per_track","same","extsize",0.14702,14],["DEDl10","per_track","same","mapq",-0.12992,12],["DEDl10","per_track","same","ratio",0.14241,12],["DEDl10","per_track","trained","abproxy",0.146,24],["DEDl10","per_track","trained","crop",0.2644,24],["DEDl10","per_track","trained","ctldepth",0.1437,24],["DEDl10","per_track","trained","ctlid",0.14349,24],["DEDl10","per_track","trained","dedup",0.15841,14],["DEDl10","per_track","trained","depth",0.3724,28],["DEDl10","per_track","trained","extsize",0.14685,28],["DEDl10","per_track","trained","mapq",0.15364,24],["DEDl10","per_track","trained","pe",0.15535,14],["DEDl10","per_track","trained","ratio",0.14156,24]],"fit":[["A","across","nocov",0.78563,0.74937,0.84027,0.58557,0.20006,3],["A","across","real",0.74629,0.6871,0.83129,0.60569,0.14059,3],["A","per_track","nocov",0.85714,0.843,0.8822,0.59894,0.2582,3],["A","per_track","real",0.87176,0.84692,0.88977,0.58897,0.28279,3],["AED","across","nocov",0.84834,0.84642,0.85087,0.6479,0.20044,3],["AED","across","real",0.77629,0.7705,0.7799,0.64087,0.13542,3],["AED","per_track","nocov",0.85249,0.84863,0.85614,0.6628,0.1897,3],["AED","per_track","real",1.10484,1.0806,1.12934,0.67897,0.42587,3],["AED1","across","nocov",0.84839,0.84613,0.85094,0.64782,0.20057,3],["AED1","across","real",0.77576,0.77442,0.77771,0.63185,0.14391,3],["AED1","per_track","nocov",0.84724,0.84628,0.84854,0.66213,0.1851,3],["AED1","per_track","real",0.78155,0.77767,0.78585,0.62751,0.15403,3],["D","across","nocov",0.65291,0.64818,0.65777,0.56138,0.09153,3],["D","across","real",0.51225,0.49342,0.52251,0.48194,0.03031,3],["D","per_track","nocov",0.6484,0.646,0.64969,0.56691,0.08148,3],["D","per_track","real",0.44502,0.44328,0.44616,0.44149,0.00353,3],["DEDl0","across","nocov",0.66471,0.66229,0.66858,0.55346,0.11124,3],["DEDl0","across","real",0.48552,0.46013,0.50848,0.47036,0.01516,3],["DEDl0","per_track","nocov",0.64866,0.64142,0.65349,0.55656,0.0921,3],["DEDl0","per_track","real",0.45107,0.44891,0.45423,0.44582,0.00525,3],["DEDl0.1","across","nocov",0.66486,0.66083,0.67009,0.55198,0.11288,3],["DEDl0.1","across","real",0.46144,0.45771,0.46657,0.45737,0.00407,3],["DEDl0.1","per_track","nocov",0.6457,0.64523,0.64602,0.55556,0.09014,3],["DEDl0.1","per_track","real",0.44839,0.44666,0.45035,0.44442,0.00397,3],["DEDl1","across","nocov",0.66438,0.65974,0.66698,0.5518,0.11258,3],["DEDl1","across","real",0.45478,0.45414,0.45514,0.45052,0.00426,3],["DEDl1","per_track","nocov",0.65399,0.64816,0.65959,0.55989,0.0941,3],["DEDl1","per_track","real",0.44711,0.44125,0.45363,0.44295,0.00416,3],["DEDl10","across","nocov",0.67173,0.65767,0.69722,0.55463,0.1171,3],["DEDl10","across","real",0.46649,0.45539,0.47343,0.46137,0.00512,3],["DEDl10","per_track","nocov",0.65605,0.64718,0.67152,0.55988,0.09617,3],["DEDl10","per_track","real",0.44622,0.44288,0.44816,0.44143,0.00479,3],["t118 A","across","ids",0.68911,0.66127,0.73587,null,null,3],["t118 A","across","nocov",0.77655,0.7542,0.79939,null,null,3],["t118 A","across","real",0.66758,0.63084,0.7345,null,null,3],["t118 A","per_track","ids",1.06478,0.935,1.14841,null,null,3],["t118 A","per_track","nocov",0.80468,0.78468,0.82098,null,null,3],["t118 A","per_track","real",0.88646,0.87343,0.90143,null,null,3],["t118 D","across","ids",0.49831,0.49549,0.50196,null,null,3],["t118 D","across","nocov",0.65106,0.65058,0.65172,null,null,3],["t118 D","across","real",0.50631,0.49308,0.51809,null,null,3],["t118 D","per_track","ids",0.45482,0.44702,0.46905,null,null,3],["t118 D","per_track","nocov",0.64372,0.63949,0.64835,null,null,3],["t118 D","per_track","real",0.44355,0.44054,0.44585,null,null,3]],"ab":[["AED1","per_track","trained",-0.69315,-0.00656,1.0],["AED1","per_track","trained",0.69315,0.00656,1.0],["AED1","per_track","trained",-2.07944,-0.10006,1.0],["AED1","per_track","trained",2.07944,0.10006,1.0],["AED1","per_track","heldout",-1.38629,-0.05301,1.0],["AED1","per_track","heldout",1.38629,0.05301,1.0],["AED1","per_track","trained",-0.69315,-0.05127,1.0],["AED1","per_track","trained",0.69315,0.05127,1.0],["AED1","per_track","trained",-2.07944,-0.20241,1.0],["AED1","per_track","trained",2.07944,0.20241,1.0],["AED1","per_track","heldout",-1.38629,-0.131,1.0],["AED1","per_track","heldout",1.38629,0.131,1.0],["AED1","per_track","trained",-0.69315,-0.02036,1.0],["AED1","per_track","trained",0.69315,0.02036,1.0],["AED1","per_track","trained",-2.07944,-0.10783,1.0],["AED1","per_track","trained",2.07944,0.10783,1.0],["AED1","per_track","heldout",-1.38629,-0.06769,1.0],["AED1","per_track","heldout",1.38629,0.06769,1.0],["AED1","per_track","trained",-0.69315,-0.01572,1.0],["AED1","per_track","trained",0.69315,0.01572,1.0],["AED1","per_track","trained",-2.07944,-0.11405,1.0],["AED1","per_track","trained",2.07944,0.11405,1.0],["AED1","per_track","heldout",-1.38629,-0.05488,1.0],["AED1","per_track","heldout",1.38629,0.05488,1.0],["AED1","per_track","trained",-0.69315,-0.03244,1.0],["AED1","per_track","trained",0.69315,0.03244,1.0],["AED1","per_track","trained",-2.07944,-0.16221,1.0],["AED1","per_track","trained",2.07944,0.16221,1.0],["AED1","per_track","heldout",-1.38629,-0.10424,1.0],["AED1","per_track","heldout",1.38629,0.10424,1.0],["AED1","per_track","trained",-0.69315,-0.01806,1.0],["AED1","per_track","trained",0.69315,0.01806,1.0],["AED1","per_track","trained",-2.07944,-0.11743,1.0],["AED1","per_track","trained",2.07944,0.11743,1.0],["AED1","per_track","heldout",-1.38629,-0.07377,1.0],["AED1","per_track","heldout",1.38629,0.07377,1.0],["AED1","per_track","trained",-1.20397,-0.14517,1.0],["AED1","per_track","trained",1.20397,0.14517,1.0],["AED1","per_track","trained",-2.59027,-0.27866,1.0],["AED1","per_track","trained",2.59027,0.27866,1.0],["AED1","per_track","heldout",-1.89712,-0.21701,1.0],["AED1","per_track","heldout",1.89712,0.21701,1.0],["AED1","per_track","trained",-1.20397,-0.14589,1.0],["AED1","per_track","trained",1.20397,0.14589,1.0],["AED1","per_track","trained",-2.59027,-0.33661,1.0],["AED1","per_track","trained",2.59027,0.33661,1.0],["AED1","per_track","heldout",-1.89712,-0.26102,1.0],["AED1","per_track","heldout",1.89712,0.26102,1.0],["AED1","per_track","trained",-1.20397,-0.11989,1.0],["AED1","per_track","trained",1.20397,0.11989,1.0],["AED1","per_track","trained",-2.59027,-0.27802,1.0],["AED1","per_track","trained",2.59027,0.27802,1.0],["AED1","per_track","heldout",-1.89712,-0.2143,1.0],["AED1","per_track","heldout",1.89712,0.2143,1.0],["AED1","per_track","trained",-0.69315,-0.02581,1.0],["AED1","per_track","trained",0.69315,0.02581,1.0],["AED1","per_track","trained",-2.07944,-0.1347,1.0],["AED1","per_track","trained",2.07944,0.1347,1.0],["AED1","per_track","heldout",-1.38629,-0.07427,1.0],["AED1","per_track","heldout",1.38629,0.07427,1.0],["AED1","per_track","trained",-0.69315,-0.03576,1.0],["AED1","per_track","trained",0.69315,0.03576,1.0],["AED1","per_track","trained",-2.07944,-0.13894,1.0],["AED1","per_track","trained",2.07944,0.13894,1.0],["AED1","per_track","heldout",-1.38629,-0.08177,1.0],["AED1","per_track","heldout",1.38629,0.08177,1.0],["AED1","per_track","trained",-0.69315,-0.0138,1.0],["AED1","per_track","trained",0.69315,0.0138,1.0],["AED1","per_track","trained",-2.07944,-0.10005,1.0],["AED1","per_track","trained",2.07944,0.10005,1.0],["AED1","per_track","heldout",-1.38629,-0.05936,1.0],["AED1","per_track","heldout",1.38629,0.05936,1.0],["AED1","per_track","trained",-0.69315,0.05162,1.0],["AED1","per_track","trained",0.69315,-0.05162,1.0],["AED1","per_track","trained",-2.07944,0.00362,1.0],["AED1","per_track","trained",2.07944,-0.00362,1.0],["AED1","per_track","heldout",-1.38629,0.03147,1.0],["AED1","per_track","heldout",1.38629,-0.03147,1.0],["AED1","per_track","trained",-0.69315,-0.0088,1.0],["AED1","per_track","trained",0.69315,0.0088,1.0],["AED1","per_track","trained",-2.07944,-0.08827,1.0],["AED1","per_track","trained",2.07944,0.08827,1.0],["AED1","per_track","heldout",-1.38629,-0.05401,1.0],["AED1","per_track","heldout",1.38629,0.05401,1.0],["AED1","per_track","trained",-0.69315,0.03074,1.0],["AED1","per_track","trained",0.69315,-0.03074,1.0],["AED1","per_track","trained",-2.07944,-0.01061,1.0],["AED1","per_track","trained",2.07944,0.01061,1.0],["AED1","per_track","heldout",-1.38629,0.01481,1.0],["AED1","per_track","heldout",1.38629,-0.01481,1.0],["AED1","per_track","trained",-0.69315,0.01263,1.0],["AED1","per_track","trained",0.69315,-0.01263,1.0],["AED1","per_track","trained",-2.07944,-0.08483,1.0],["AED1","per_track","trained",2.07944,0.08483,1.0],["AED1","per_track","heldout",-1.38629,-0.03024,1.0],["AED1","per_track","heldout",1.38629,0.03024,1.0],["AED1","per_track","trained",-0.69315,-0.03216,1.0],["AED1","per_track","trained",0.69315,0.03216,1.0],["AED1","per_track","trained",-2.07944,-0.12734,1.0],["AED1","per_track","trained",2.07944,0.12734,1.0],["AED1","per_track","heldout",-1.38629,-0.08021,1.0],["AED1","per_track","heldout",1.38629,0.08021,1.0],["AED1","per_track","trained",-0.69315,-0.00196,1.0],["AED1","per_track","trained",0.69315,0.00196,1.0],["AED1","per_track","trained",-2.07944,-0.05933,1.0],["AED1","per_track","trained",2.07944,0.05933,1.0],["AED1","per_track","heldout",-1.38629,-0.02992,1.0],["AED1","per_track","heldout",1.38629,0.02992,1.0],["AED1","per_track","trained",-0.69315,-0.03252,1.0],["AED1","per_track","trained",0.69315,0.03252,1.0],["AED1","per_track","trained",-2.07944,-0.10066,1.0],["AED1","per_track","trained",2.07944,0.10066,1.0],["AED1","per_track","heldout",-1.38629,-0.07859,1.0],["AED1","per_track","heldout",1.38629,0.07859,1.0],["AED1","per_track","trained",-0.69315,-0.04902,1.0],["AED1","per_track","trained",0.69315,0.04902,1.0],["AED1","per_track","trained",-2.07944,-0.18027,1.0],["AED1","per_track","trained",2.07944,0.18027,1.0],["AED1","per_track","heldout",-1.38629,-0.11731,1.0],["AED1","per_track","heldout",1.38629,0.11731,1.0],["AED1","per_track","trained",-0.69315,0.00448,1.0],["AED1","per_track","trained",0.69315,-0.00448,1.0],["AED1","per_track","trained",-2.07944,-0.08182,1.0],["AED1","per_track","trained",2.07944,0.08182,1.0],["AED1","per_track","heldout",-1.38629,-0.04411,1.0],["AED1","per_track","heldout",1.38629,0.04411,1.0],["AED1","across","trained",-0.69315,-0.02178,1.0],["AED1","across","trained",0.69315,0.02178,1.0],["AED1","across","trained",-2.07944,-0.10909,1.0],["AED1","across","trained",2.07944,0.10909,1.0],["AED1","across","trained",-0.69315,-0.01447,1.0],["AED1","across","trained",0.69315,0.01447,1.0],["AED1","across","trained",-2.07944,-0.08569,1.0],["AED1","across","trained",2.07944,0.08569,1.0],["AED1","across","trained",-1.20397,-0.16441,1.0],["AED1","across","trained",1.20397,0.16441,1.0],["AED1","across","trained",-2.59027,-0.25559,1.0],["AED1","across","trained",2.59027,0.25559,1.0],["AED1","across","trained",-0.69315,0.00101,1.0],["AED1","across","trained",0.69315,-0.00101,1.0],["AED1","across","trained",-2.07944,-0.05721,1.0],["AED1","across","trained",2.07944,0.05721,1.0],["AED1","across","trained",-0.69315,-0.00451,1.0],["AED1","across","trained",0.69315,0.00451,1.0],["AED1","across","trained",-2.07944,-0.06428,1.0],["AED1","across","trained",2.07944,0.06428,1.0],["AED1","across","trained",-0.69315,-0.00143,1.0],["AED1","across","trained",0.69315,0.00143,1.0],["AED1","across","trained",-2.07944,-0.08301,1.0],["AED1","across","trained",2.07944,0.08301,1.0],["AED1","across","trained",-0.69315,-0.02519,1.0],["AED1","across","trained",0.69315,0.02519,1.0],["AED1","across","trained",-2.07944,-0.10219,1.0],["AED1","across","trained",2.07944,0.10219,1.0],["AED1","across","heldout",-1.38629,-0.06053,1.0],["AED1","across","heldout",1.38629,0.06053,1.0],["AED1","across","heldout",-1.38629,-0.04255,1.0],["AED1","across","heldout",1.38629,0.04255,1.0],["AED1","across","heldout",-1.89712,-0.20853,1.0],["AED1","across","heldout",1.89712,0.20853,1.0],["AED1","across","heldout",-1.38629,-0.01563,1.0],["AED1","across","heldout",1.38629,0.01563,1.0],["AED1","across","heldout",-1.38629,-0.02755,1.0],["AED1","across","heldout",1.38629,0.02755,1.0],["AED1","across","heldout",-1.38629,-0.03518,1.0],["AED1","across","heldout",1.38629,0.03518,1.0],["AED1","across","heldout",-1.38629,-0.05718,1.0],["AED1","across","heldout",1.38629,0.05718,1.0],["AED1","across","trained",-0.69315,-0.03068,1.0],["AED1","across","trained",0.69315,0.03068,1.0],["AED1","across","trained",-2.07944,-0.13643,1.0],["AED1","across","trained",2.07944,0.13643,1.0],["AED1","across","trained",-0.69315,-0.01777,1.0],["AED1","across","trained",0.69315,0.01777,1.0],["AED1","across","trained",-2.07944,-0.11381,1.0],["AED1","across","trained",2.07944,0.11381,1.0],["AED1","across","trained",-1.20397,-0.07656,1.0],["AED1","across","trained",1.20397,0.07656,1.0],["AED1","across","trained",-2.59027,-0.20272,1.0],["AED1","across","trained",2.59027,0.20272,1.0],["AED1","across","trained",-0.69315,-0.00656,1.0],["AED1","across","trained",0.69315,0.00656,1.0],["AED1","across","trained",-2.07944,-0.10822,1.0],["AED1","across","trained",2.07944,0.10822,1.0],["AED1","across","trained",-0.69315,0.00871,1.0],["AED1","across","trained",0.69315,-0.00871,1.0],["AED1","across","trained",-2.07944,-0.08233,1.0],["AED1","across","trained",2.07944,0.08233,1.0],["AED1","across","trained",-0.69315,-0.03324,1.0],["AED1","across","trained",0.69315,0.03324,1.0],["AED1","across","trained",-2.07944,-0.15251,1.0],["AED1","across","trained",2.07944,0.15251,1.0],["AED1","across","trained",-0.69315,-0.00974,1.0],["AED1","across","trained",0.69315,0.00974,1.0],["AED1","across","trained",-2.07944,-0.10687,1.0],["AED1","across","trained",2.07944,0.10687,1.0],["AED1","across","heldout",-1.38629,-0.08088,1.0],["AED1","across","heldout",1.38629,0.08088,1.0],["AED1","across","heldout",-1.38629,-0.05101,1.0],["AED1","across","heldout",1.38629,0.05101,1.0],["AED1","across","heldout",-1.89712,-0.14207,1.0],["AED1","across","heldout",1.89712,0.14207,1.0],["AED1","across","heldout",-1.38629,-0.03967,1.0],["AED1","across","heldout",1.38629,0.03967,1.0],["AED1","across","heldout",-1.38629,-0.02156,1.0],["AED1","across","heldout",1.38629,0.02156,1.0],["AED1","across","heldout",-1.38629,-0.09434,1.0],["AED1","across","heldout",1.38629,0.09434,1.0],["AED1","across","heldout",-1.38629,-0.051,1.0],["AED1","across","heldout",1.38629,0.051,1.0],["AED1","across","trained",-0.69315,-0.04891,1.0],["AED1","across","trained",0.69315,0.04891,1.0],["AED1","across","trained",-2.07944,-0.12425,1.0],["AED1","across","trained",2.07944,0.12425,1.0],["AED1","across","trained",-0.69315,-0.04694,1.0],["AED1","across","trained",0.69315,0.04694,1.0],["AED1","across","trained",-2.07944,-0.12592,1.0],["AED1","across","trained",2.07944,0.12592,1.0],["AED1","across","trained",-1.20397,-0.17882,1.0],["AED1","across","trained",1.20397,0.17882,1.0],["AED1","across","trained",-2.59027,-0.2764,1.0],["AED1","across","trained",2.59027,0.2764,1.0],["AED1","across","trained",-0.69315,-0.06203,1.0],["AED1","across","trained",0.69315,0.06203,1.0],["AED1","across","trained",-2.07944,-0.13514,1.0],["AED1","across","trained",2.07944,0.13514,1.0],["AED1","across","trained",-0.69315,-0.04983,1.0],["AED1","across","trained",0.69315,0.04983,1.0],["AED1","across","trained",-2.07944,-0.12676,1.0],["AED1","across","trained",2.07944,0.12676,1.0],["AED1","across","trained",-0.69315,-0.04915,1.0],["AED1","across","trained",0.69315,0.04915,1.0],["AED1","across","trained",-2.07944,-0.12332,1.0],["AED1","across","trained",2.07944,0.12332,1.0],["AED1","across","trained",-0.69315,-0.04124,1.0],["AED1","across","trained",0.69315,0.04124,1.0],["AED1","across","trained",-2.07944,-0.12044,1.0],["AED1","across","trained",2.07944,0.12044,1.0],["AED1","across","heldout",-1.38629,-0.08696,1.0],["AED1","across","heldout",1.38629,0.08696,1.0],["AED1","across","heldout",-1.38629,-0.09311,1.0],["AED1","across","heldout",1.38629,0.09311,1.0],["AED1","across","heldout",-1.89712,-0.22499,1.0],["AED1","across","heldout",1.89712,0.22499,1.0],["AED1","across","heldout",-1.38629,-0.10235,1.0],["AED1","across","heldout",1.38629,0.10235,1.0],["AED1","across","heldout",-1.38629,-0.08683,1.0],["AED1","across","heldout",1.38629,0.08683,1.0],["AED1","across","heldout",-1.38629,-0.09002,1.0],["AED1","across","heldout",1.38629,0.09002,1.0],["AED1","across","heldout",-1.38629,-0.08301,1.0],["AED1","across","heldout",1.38629,0.08301,1.0],["AED","per_track","trained",-0.69315,0.21874,0.63417],["AED","per_track","trained",0.69315,-0.34492,1.57688],["AED","per_track","trained",-2.07944,-0.06865,0.68868],["AED","per_track","trained",2.07944,0.09968,1.45205],["AED","per_track","heldout",-1.38629,0.07617,0.64459],["AED","per_track","heldout",1.38629,-0.11817,1.55138],["AED","per_track","trained",-0.69315,0.19635,0.67465],["AED","per_track","trained",0.69315,-0.29105,1.48226],["AED","per_track","trained",-2.07944,-0.00774,0.73072],["AED","per_track","trained",2.07944,0.01059,1.36851],["AED","per_track","heldout",-1.38629,0.09738,0.68643],["AED","per_track","heldout",1.38629,-0.14187,1.45682],["AED","per_track","trained",-0.69315,0.14205,0.78601],["AED","per_track","trained",0.69315,-0.18072,1.27225],["AED","per_track","trained",-2.07944,-0.03432,0.66883],["AED","per_track","trained",2.07944,0.05132,1.49516],["AED","per_track","heldout",-1.38629,0.05386,0.72262],["AED","per_track","heldout",1.38629,-0.07454,1.38386],["AED","per_track","trained",-0.69315,0.06175,0.86819],["AED","per_track","trained",0.69315,-0.07112,1.15183],["AED","per_track","trained",-2.07944,0.01033,0.74267],["AED","per_track","trained",2.07944,-0.01391,1.34649],["AED","per_track","heldout",-1.38629,0.03964,0.80096],["AED","per_track","heldout",1.38629,-0.0495,1.24851],["AED","per_track","trained",-0.69315,0.06102,0.82414],["AED","per_track","trained",0.69315,-0.07404,1.21339],["AED","per_track","trained",-2.07944,-0.05169,0.75976],["AED","per_track","trained",2.07944,0.06803,1.31621],["AED","per_track","heldout",-1.38629,-0.024,0.78941],["AED","per_track","heldout",1.38629,0.03041,1.26677],["AED","per_track","trained",-0.69315,0.08844,0.82053],["AED","per_track","trained",0.69315,-0.10778,1.21873],["AED","per_track","trained",-2.07944,-0.11819,0.74177],["AED","per_track","trained",2.07944,0.15934,1.34812],["AED","per_track","heldout",-1.38629,-0.02717,0.77982],["AED","per_track","heldout",1.38629,0.03484,1.28234],["AED","per_track","trained",-1.20397,0.23386,0.51857],["AED","per_track","trained",1.20397,-0.45097,1.92838],["AED","per_track","trained",-2.59027,-0.03104,0.44918],["AED","per_track","trained",2.59027,0.0691,2.22629],["AED","per_track","heldout",-1.89712,0.06966,0.47358],["AED","per_track","heldout",1.89712,-0.14709,2.11156],["AED","per_track","trained",-1.20397,0.26372,0.4744],["AED","per_track","trained",1.20397,-0.5559,2.10793],["AED","per_track","trained",-2.59027,-0.01642,0.43002],["AED","per_track","trained",2.59027,0.03819,2.32549],["AED","per_track","heldout",-1.89712,0.05611,0.43775],["AED","per_track","heldout",1.89712,-0.12819,2.28442],["AED","per_track","trained",-1.20397,0.28286,0.50672],["AED","per_track","trained",1.20397,-0.55822,1.97346],["AED","per_track","trained",-2.59027,-0.04192,0.46543],["AED","per_track","trained",2.59027,0.09007,2.14856],["AED","per_track","heldout",-1.89712,0.09751,0.47957],["AED","per_track","heldout",1.89712,-0.20332,2.08521],["AED","per_track","trained",-0.69315,0.09355,0.80225],["AED","per_track","trained",0.69315,-0.1166,1.24649],["AED","per_track","trained",-2.07944,-0.07867,0.70655],["AED","per_track","trained",2.07944,0.11135,1.41533],["AED","per_track","heldout",-1.38629,0.00747,0.75316],["AED","per_track","heldout",1.38629,-0.00992,1.32775],["AED","per_track","trained",-0.69315,0.13641,0.73466],["AED","per_track","trained",0.69315,-0.18568,1.36118],["AED","per_track","trained",-2.07944,0.0079,0.70649],["AED","per_track","trained",2.07944,-0.01118,1.41545],["AED","per_track","heldout",-1.38629,0.04437,0.72113],["AED","per_track","heldout",1.38629,-0.06153,1.38672],["AED","per_track","trained",-0.69315,0.15401,0.73332],["AED","per_track","trained",0.69315,-0.21002,1.36366],["AED","per_track","trained",-2.07944,-0.03289,0.6927],["AED","per_track","trained",2.07944,0.04749,1.44362],["AED","per_track","heldout",-1.38629,0.06321,0.7046],["AED","per_track","heldout",1.38629,-0.0897,1.41924],["AED","per_track","trained",-0.69315,0.21356,0.73266],["AED","per_track","trained",0.69315,-0.29149,1.3649],["AED","per_track","trained",-2.07944,-0.00562,0.55633],["AED","per_track","trained",2.07944,0.01011,1.7975],["AED","per_track","heldout",-1.38629,0.09833,0.63686],["AED","per_track","heldout",1.38629,-0.1544,1.5702],["AED","per_track","trained",-0.69315,0.28949,0.63142],["AED","per_track","trained",0.69315,-0.45847,1.58373],["AED","per_track","trained",-2.07944,0.14596,0.55027],["AED","per_track","trained",2.07944,-0.26525,1.8173],["AED","per_track","heldout",-1.38629,0.21642,0.57106],["AED","per_track","heldout",1.38629,-0.37898,1.75113],["AED","per_track","trained",-0.69315,0.29206,0.62988],["AED","per_track","trained",0.69315,-0.46368,1.58761],["AED","per_track","trained",-2.07944,0.04103,0.59085],["AED","per_track","trained",2.07944,-0.06945,1.69249],["AED","per_track","heldout",-1.38629,0.1626,0.60738],["AED","per_track","heldout",1.38629,-0.2677,1.64642],["AED","per_track","trained",-0.69315,0.06802,0.84858],["AED","per_track","trained",0.69315,-0.08016,1.17843],["AED","per_track","trained",-2.07944,-0.0751,0.72822],["AED","per_track","trained",2.07944,0.10313,1.3732],["AED","per_track","heldout",-1.38629,-0.00467,0.7859],["AED","per_track","heldout",1.38629,0.00594,1.27243],["AED","per_track","trained",-0.69315,0.04174,0.80618],["AED","per_track","trained",0.69315,-0.05178,1.24042],["AED","per_track","trained",-2.07944,-0.06107,0.70479],["AED","per_track","trained",2.07944,0.08665,1.41886],["AED","per_track","heldout",-1.38629,-0.03861,0.75386],["AED","per_track","heldout",1.38629,0.05122,1.3265],["AED","per_track","trained",-0.69315,0.05102,0.84798],["AED","per_track","trained",0.69315,-0.06016,1.17927],["AED","per_track","trained",-2.07944,-0.07283,0.74329],["AED","per_track","trained",2.07944,0.09798,1.34538],["AED","per_track","heldout",-1.38629,-0.02612,0.79272],["AED","per_track","heldout",1.38629,0.03295,1.26147],["AED","per_track","trained",-0.69315,0.0763,0.80601],["AED","per_track","trained",0.69315,-0.09467,1.24068],["AED","per_track","trained",-2.07944,-0.03374,0.65016],["AED","per_track","trained",2.07944,0.0519,1.53809],["AED","per_track","heldout",-1.38629,0.01273,0.72603],["AED","per_track","heldout",1.38629,-0.01753,1.37735],["AED","per_track","trained",-0.69315,0.19383,0.67944],["AED","per_track","trained",0.69315,-0.28528,1.47181],["AED","per_track","trained",-2.07944,-0.08417,0.75321],["AED","per_track","trained",2.07944,0.11174,1.32765],["AED","per_track","heldout",-1.38629,0.04093,0.71822],["AED","per_track","heldout",1.38629,-0.05699,1.39234],["AED","per_track","trained",-0.69315,0.20372,0.66332],["AED","per_track","trained",0.69315,-0.30713,1.50757],["AED","per_track","trained",-2.07944,-0.06732,0.70643],["AED","per_track","trained",2.07944,0.0953,1.41557],["AED","per_track","heldout",-1.38629,0.04927,0.6806],["AED","per_track","heldout",1.38629,-0.07239,1.46929],["AED","across","trained",-0.69315,0.13631,0.78666],["AED","across","trained",0.69315,-0.17327,1.2712],["AED","across","trained",-2.07944,-0.03944,0.71036],["AED","across","trained",2.07944,0.05552,1.40774],["AED","across","trained",-0.69315,0.11186,0.79807],["AED","across","trained",0.69315,-0.14017,1.25303],["AED","across","trained",-2.07944,-0.03673,0.71698],["AED","across","trained",2.07944,0.05122,1.39473],["AED","across","trained",-1.20397,0.25092,0.53633],["AED","across","trained",1.20397,-0.46784,1.86451],["AED","across","trained",-2.59027,0.131,0.44676],["AED","across","trained",2.59027,-0.29322,2.23836],["AED","across","trained",-0.69315,0.2272,0.70538],["AED","across","trained",0.69315,-0.3221,1.41768],["AED","across","trained",-2.07944,0.05705,0.63617],["AED","across","trained",2.07944,-0.08967,1.5719],["AED","across","trained",-0.69315,0.26753,0.68142],["AED","across","trained",0.69315,-0.3926,1.46752],["AED","across","trained",-2.07944,0.12542,0.58411],["AED","across","trained",2.07944,-0.21471,1.712],["AED","across","trained",-0.69315,0.16955,0.77382],["AED","across","trained",0.69315,-0.2191,1.2923],["AED","across","trained",-2.07944,-0.00862,0.7011],["AED","across","trained",2.07944,0.0123,1.42633],["AED","across","trained",-0.69315,0.1883,0.75025],["AED","across","trained",0.69315,-0.25098,1.33289],["AED","across","trained",-2.07944,0.04526,0.65869],["AED","across","trained",2.07944,-0.06872,1.51816],["AED","across","heldout",-1.38629,0.05758,0.73942],["AED","across","heldout",1.38629,-0.07787,1.35242],["AED","across","heldout",-1.38629,0.04127,0.7502],["AED","across","heldout",1.38629,-0.05501,1.33298],["AED","across","heldout",-1.89712,0.19959,0.48274],["AED","across","heldout",1.89712,-0.41345,2.07151],["AED","across","heldout",-1.38629,0.14232,0.66588],["AED","across","heldout",1.38629,-0.21374,1.50176],["AED","across","heldout",-1.38629,0.20314,0.62026],["AED","across","heldout",1.38629,-0.32751,1.61222],["AED","across","heldout",-1.38629,0.09206,0.72699],["AED","across","heldout",1.38629,-0.12664,1.37553],["AED","across","heldout",-1.38629,0.13063,0.69202],["AED","across","heldout",1.38629,-0.18876,1.44504],["AED","across","trained",-0.69315,0.1222,0.78536],["AED","across","trained",0.69315,-0.15559,1.27329],["AED","across","trained",-2.07944,0.08392,0.60717],["AED","across","trained",2.07944,-0.13821,1.64698],["AED","across","trained",-0.69315,0.15762,0.78537],["AED","across","trained",0.69315,-0.20069,1.27328],["AED","across","trained",-2.07944,0.1185,0.60296],["AED","across","trained",2.07944,-0.19653,1.65848],["AED","across","trained",-1.20397,0.18655,0.61796],["AED","across","trained",1.20397,-0.30188,1.61822],["AED","across","trained",-2.59027,0.10801,0.45824],["AED","across","trained",2.59027,-0.23572,2.18228],["AED","across","trained",-0.69315,0.14216,0.77067],["AED","across","trained",0.69315,-0.18446,1.29757],["AED","across","trained",-2.07944,0.08288,0.59567],["AED","across","trained",2.07944,-0.13914,1.67879],["AED","across","trained",-0.69315,0.17127,0.73343],["AED","across","trained",0.69315,-0.23352,1.36346],["AED","across","trained",-2.07944,0.12451,0.55042],["AED","across","trained",2.07944,-0.22621,1.81678],["AED","across","trained",-0.69315,0.1409,0.77254],["AED","across","trained",0.69315,-0.18239,1.29444],["AED","across","trained",-2.07944,0.08624,0.60252],["AED","across","trained",2.07944,-0.14313,1.65969],["AED","across","trained",-0.69315,0.15362,0.77103],["AED","across","trained",0.69315,-0.19924,1.29696],["AED","across","trained",-2.07944,0.0771,0.60697],["AED","across","trained",2.07944,-0.12703,1.64752],["AED","across","heldout",-1.38629,0.11737,0.68119],["AED","across","heldout",1.38629,-0.17229,1.46801],["AED","across","heldout",-1.38629,0.16228,0.67972],["AED","across","heldout",1.38629,-0.23875,1.4712],["AED","across","heldout",-1.89712,0.15967,0.52616],["AED","across","heldout",1.89712,-0.30345,1.90056],["AED","across","heldout",-1.38629,0.09874,0.68018],["AED","across","heldout",1.38629,-0.14517,1.4702],["AED","across","heldout",-1.38629,0.1445,0.63526],["AED","across","heldout",1.38629,-0.22746,1.57416],["AED","across","heldout",-1.38629,0.11454,0.67776],["AED","across","heldout",1.38629,-0.169,1.47545],["AED","across","heldout",-1.38629,0.11739,0.6787],["AED","across","heldout",1.38629,-0.17296,1.4734],["AED","across","trained",-0.69315,0.19951,0.68717],["AED","across","trained",0.69315,-0.29034,1.45525],["AED","across","trained",-2.07944,0.00179,0.64576],["AED","across","trained",2.07944,-0.00277,1.54857],["AED","across","trained",-0.69315,0.17244,0.706],["AED","across","trained",0.69315,-0.24425,1.41644],["AED","across","trained",-2.07944,-0.00562,0.66391],["AED","across","trained",2.07944,0.00846,1.50624],["AED","across","trained",-1.20397,0.18203,0.51997],["AED","across","trained",1.20397,-0.35008,1.92319],["AED","across","trained",-2.59027,0.02152,0.45156],["AED","across","trained",2.59027,-0.04766,2.21452],["AED","across","trained",-0.69315,0.13489,0.72366],["AED","across","trained",0.69315,-0.1864,1.38186],["AED","across","trained",-2.07944,-0.01742,0.67395],["AED","across","trained",2.07944,0.02585,1.48378],["AED","across","trained",-0.69315,0.22639,0.67082],["AED","across","trained",0.69315,-0.33749,1.49072],["AED","across","trained",-2.07944,0.0688,0.60594],["AED","across","trained",2.07944,-0.11354,1.65032],["AED","across","trained",-0.69315,0.21767,0.66812],["AED","across","trained",0.69315,-0.3258,1.49675],["AED","across","trained",-2.07944,0.06406,0.62803],["AED","across","trained",2.07944,-0.102,1.59229],["AED","across","trained",-0.69315,0.24887,0.66491],["AED","across","trained",0.69315,-0.37429,1.50397],["AED","across","trained",-2.07944,0.03478,0.63639],["AED","across","trained",2.07944,-0.05466,1.57137],["AED","across","heldout",-1.38629,0.07442,0.65855],["AED","across","heldout",1.38629,-0.113,1.51848],["AED","across","heldout",-1.38629,0.06863,0.67534],["AED","across","heldout",1.38629,-0.10162,1.48074],["AED","across","heldout",-1.89712,0.0857,0.48388],["AED","across","heldout",1.89712,-0.17712,2.06664],["AED","across","heldout",-1.38629,0.0368,0.69612],["AED","across","heldout",1.38629,-0.05287,1.43654],["AED","across","heldout",-1.38629,0.11369,0.64951],["AED","across","heldout",1.38629,-0.17505,1.53963],["AED","across","heldout",-1.38629,0.14133,0.63888],["AED","across","heldout",1.38629,-0.22121,1.56524],["AED","across","heldout",-1.38629,0.12329,0.64561],["AED","across","heldout",1.38629,-0.19097,1.54891],["A","per_track","trained",-0.69315,-2.16349,1.72561],["A","per_track","trained",0.69315,-0.67396,1.56147],["A","per_track","trained",-2.07944,-3.68896,1.8221],["A","per_track","trained",2.07944,-0.0028,1.33037],["A","per_track","heldout",-1.38629,-2.91919,1.76265],["A","per_track","heldout",1.38629,-0.20234,1.41233],["A","per_track","trained",-0.69315,-2.06861,1.60062],["A","per_track","trained",0.69315,-0.59926,1.43483],["A","per_track","trained",-2.07944,-3.80784,1.87284],["A","per_track","trained",2.07944,0.05368,1.2232],["A","per_track","heldout",-1.38629,-2.95631,1.74185],["A","per_track","heldout",1.38629,-0.17405,1.30506],["A","per_track","trained",-0.69315,-2.13313,1.75338],["A","per_track","trained",0.69315,-0.68829,1.55367],["A","per_track","trained",-2.07944,-3.74669,1.994],["A","per_track","trained",2.07944,-0.00621,1.22908],["A","per_track","heldout",-1.38629,-2.95317,1.87936],["A","per_track","heldout",1.38629,-0.21466,1.34424],["A","per_track","trained",-0.69315,-2.31091,1.93387],["A","per_track","trained",0.69315,-0.67745,1.51636],["A","per_track","trained",-2.07944,-3.74444,1.97581],["A","per_track","trained",2.07944,0.02073,1.13768],["A","per_track","heldout",-1.38629,-3.03591,1.95889],["A","per_track","heldout",1.38629,-0.15849,1.24916],["A","per_track","trained",-0.69315,-2.24794,1.90912],["A","per_track","trained",0.69315,-0.62702,1.48266],["A","per_track","trained",-2.07944,-4.08082,2.2738],["A","per_track","trained",2.07944,0.03476,1.18795],["A","per_track","heldout",-1.38629,-3.17815,2.096],["A","per_track","heldout",1.38629,-0.12495,1.28991],["A","per_track","trained",-0.69315,-2.13375,1.85193],["A","per_track","trained",0.69315,-0.71774,1.56104],["A","per_track","trained",-2.07944,-4.12542,2.38374],["A","per_track","trained",2.07944,-0.02895,1.24504],["A","per_track","heldout",-1.38629,-3.12264,2.10183],["A","per_track","heldout",1.38629,-0.28826,1.38172],["A","per_track","trained",-1.20397,-2.47015,1.47422],["A","per_track","trained",1.20397,-0.62176,1.89666],["A","per_track","trained",-2.59027,-3.73488,1.40319],["A","per_track","trained",2.59027,-0.01474,2.29195],["A","per_track","heldout",-1.89712,-3.11597,1.43306],["A","per_track","heldout",1.89712,-0.23543,2.10842],["A","per_track","trained",-1.20397,-2.45866,1.47506],["A","per_track","trained",1.20397,-0.58453,1.89512],["A","per_track","trained",-2.59027,-3.77114,1.41432],["A","per_track","trained",2.59027,-0.02912,2.30432],["A","per_track","heldout",-1.89712,-3.1344,1.43191],["A","per_track","heldout",1.89712,-0.22015,2.09619],["A","per_track","trained",-1.20397,-2.36382,1.45194],["A","per_track","trained",1.20397,-0.53106,1.86535],["A","per_track","trained",-2.59027,-3.65138,1.40542],["A","per_track","trained",2.59027,0.04041,2.27765],["A","per_track","heldout",-1.89712,-3.01752,1.40677],["A","per_track","heldout",1.89712,-0.18461,2.0644],["A","per_track","trained",-0.69315,-2.25107,1.71781],["A","per_track","trained",0.69315,-0.77002,1.56781],["A","per_track","trained",-2.07944,-3.75566,1.75008],["A","per_track","trained",2.07944,0.02392,1.23591],["A","per_track","heldout",-1.38629,-3.00842,1.72196],["A","per_track","heldout",1.38629,-0.23281,1.36785],["A","per_track","trained",-0.69315,-2.19075,1.81744],["A","per_track","trained",0.69315,-0.69508,1.56096],["A","per_track","trained",-2.07944,-3.74969,1.94696],["A","per_track","trained",2.07944,0.02297,1.28351],["A","per_track","heldout",-1.38629,-2.9793,1.88874],["A","per_track","heldout",1.38629,-0.24294,1.39335],["A","per_track","trained",-0.69315,-2.14193,1.76683],["A","per_track","trained",0.69315,-0.66211,1.5252],["A","per_track","trained",-2.07944,-3.76051,1.92884],["A","per_track","trained",2.07944,0.03407,1.16216],["A","per_track","heldout",-1.38629,-2.95174,1.84682],["A","per_track","heldout",1.38629,-0.21102,1.31303],["A","per_track","trained",-0.69315,-1.83754,1.36185],["A","per_track","trained",0.69315,-0.62209,1.47278],["A","per_track","trained",-2.07944,-3.23267,1.30676],["A","per_track","trained",2.07944,-0.14421,1.66439],["A","per_track","heldout",-1.38629,-2.55667,1.34608],["A","per_track","heldout",1.38629,-0.29134,1.55393],["A","per_track","trained",-0.69315,-1.84017,1.4778],["A","per_track","trained",0.69315,-0.68497,1.49434],["A","per_track","trained",-2.07944,-3.19293,1.49203],["A","per_track","trained",2.07944,-0.16739,1.60939],["A","per_track","heldout",-1.38629,-2.52959,1.4861],["A","per_track","heldout",1.38629,-0.3682,1.54769],["A","per_track","trained",-0.69315,-1.89479,1.46285],["A","per_track","trained",0.69315,-0.69265,1.51469],["A","per_track","trained",-2.07944,-3.30015,1.4532],["A","per_track","trained",2.07944,-0.13034,1.58168],["A","per_track","heldout",-1.38629,-2.61311,1.45983],["A","per_track","heldout",1.38629,-0.31929,1.54335],["A","per_track","trained",-0.69315,-2.33701,1.94549],["A","per_track","trained",0.69315,-0.80408,1.59726],["A","per_track","trained",-2.07944,-3.68269,1.91861],["A","per_track","trained",2.07944,-0.00452,1.23172],["A","per_track","heldout",-1.38629,-3.00912,1.92275],["A","per_track","heldout",1.38629,-0.25965,1.35485],["A","per_track","trained",-0.69315,-2.2602,1.89817],["A","per_track","trained",0.69315,-0.63101,1.50553],["A","per_track","trained",-2.07944,-3.86684,2.12369],["A","per_track","trained",2.07944,0.08925,1.20251],["A","per_track","heldout",-1.38629,-3.06782,2.00985],["A","per_track","heldout",1.38629,-0.10878,1.29159],["A","per_track","trained",-0.69315,-2.26219,1.94326],["A","per_track","trained",0.69315,-0.68288,1.54519],["A","per_track","trained",-2.07944,-3.84207,2.13404],["A","per_track","trained",2.07944,0.13271,1.19775],["A","per_track","heldout",-1.38629,-3.04736,2.02605],["A","per_track","heldout",1.38629,-0.12101,1.29754],["A","per_track","trained",-0.69315,-2.2031,1.70224],["A","per_track","trained",0.69315,-0.73217,1.5723],["A","per_track","trained",-2.07944,-3.59431,1.632],["A","per_track","trained",2.07944,-0.00714,1.2682],["A","per_track","heldout",-1.38629,-2.89889,1.65057],["A","per_track","heldout",1.38629,-0.22078,1.36151],["A","per_track","trained",-0.69315,-2.22672,1.81791],["A","per_track","trained",0.69315,-0.69278,1.55583],["A","per_track","trained",-2.07944,-3.68576,1.85956],["A","per_track","trained",2.07944,0.00964,1.35141],["A","per_track","heldout",-1.38629,-2.98435,1.82911],["A","per_track","heldout",1.38629,-0.19399,1.39292],["A","per_track","trained",-0.69315,-2.21394,1.72648],["A","per_track","trained",0.69315,-0.75849,1.53033],["A","per_track","trained",-2.07944,-3.75889,1.80102],["A","per_track","trained",2.07944,-0.14457,1.2773],["A","per_track","heldout",-1.38629,-3.00177,1.77205],["A","per_track","heldout",1.38629,-0.36299,1.37022],["A","across","trained",-0.69315,-2.08805,1.66544],["A","across","trained",0.69315,-0.71034,1.5217],["A","across","trained",-2.07944,-3.69907,1.86972],["A","across","trained",2.07944,0.02048,1.34586],["A","across","trained",-0.69315,-2.18136,1.80066],["A","across","trained",0.69315,-0.70902,1.56167],["A","across","trained",-2.07944,-3.80541,1.95664],["A","across","trained",2.07944,-0.01636,1.39038],["A","across","trained",-1.20397,-2.66045,1.48461],["A","across","trained",1.20397,-0.40785,1.49672],["A","across","trained",-2.59027,-4.10314,1.53763],["A","across","trained",2.59027,0.08824,1.40534],["A","across","trained",-0.69315,-2.08054,1.66662],["A","across","trained",0.69315,-0.7075,1.52814],["A","across","trained",-2.07944,-3.66615,1.82618],["A","across","trained",2.07944,0.01381,1.35292],["A","across","trained",-0.69315,-1.74161,1.35883],["A","across","trained",0.69315,-0.60759,1.34561],["A","across","trained",-2.07944,-3.32785,1.554],["A","across","trained",2.07944,0.01899,1.30004],["A","across","trained",-0.69315,-2.20907,1.81947],["A","across","trained",0.69315,-0.76165,1.58787],["A","across","trained",-2.07944,-3.79115,1.98849],["A","across","trained",2.07944,-0.00104,1.3775],["A","across","trained",-0.69315,-2.22832,1.80508],["A","across","trained",0.69315,-0.80009,1.60127],["A","across","trained",-2.07944,-3.86985,1.98864],["A","across","trained",2.07944,-0.02519,1.39518],["A","across","heldout",-1.38629,-2.8888,1.77446],["A","across","heldout",1.38629,-0.21769,1.40203],["A","across","heldout",-1.38629,-2.99883,1.8902],["A","across","heldout",1.38629,-0.27461,1.45782],["A","across","heldout",-1.89712,-3.35852,1.49417],["A","across","heldout",1.89712,-0.06107,1.41398],["A","across","heldout",-1.38629,-2.86403,1.74824],["A","across","heldout",1.38629,-0.22848,1.40626],["A","across","heldout",-1.38629,-2.52397,1.46135],["A","across","heldout",1.38629,-0.18016,1.31805],["A","across","heldout",-1.38629,-2.99793,1.91648],["A","across","heldout",1.38629,-0.28079,1.46002],["A","across","heldout",-1.38629,-3.05974,1.89327],["A","across","heldout",1.38629,-0.33218,1.48618],["A","across","trained",-0.69315,-2.12868,1.69253],["A","across","trained",0.69315,-0.66789,1.50029],["A","across","trained",-2.07944,-3.66931,1.70269],["A","across","trained",2.07944,-0.003,1.41418],["A","across","trained",-0.69315,-2.14968,1.79358],["A","across","trained",0.69315,-0.64893,1.50952],["A","across","trained",-2.07944,-3.64091,1.79109],["A","across","trained",2.07944,-0.0021,1.3791],["A","across","trained",-1.20397,-2.29054,1.35871],["A","across","trained",1.20397,-0.4574,1.65038],["A","across","trained",-2.59027,-3.69082,1.27628],["A","across","trained",2.59027,0.01667,1.65418],["A","across","trained",-0.69315,-1.9934,1.64577],["A","across","trained",0.69315,-0.59454,1.452],["A","across","trained",-2.07944,-3.43412,1.57562],["A","across","trained",2.07944,0.03486,1.33828],["A","across","trained",-0.69315,-1.72875,1.39455],["A","across","trained",0.69315,-0.63346,1.38469],["A","across","trained",-2.07944,-3.18239,1.36637],["A","across","trained",2.07944,-0.00684,1.36221],["A","across","trained",-0.69315,-2.19784,1.79827],["A","across","trained",0.69315,-0.67946,1.54465],["A","across","trained",-2.07944,-3.62842,1.71714],["A","across","trained",2.07944,-0.00768,1.42313],["A","across","trained",-0.69315,-2.25035,1.76665],["A","across","trained",0.69315,-0.73192,1.53785],["A","across","trained",-2.07944,-3.7572,1.75047],["A","across","trained",2.07944,-0.04781,1.43121],["A","across","heldout",-1.38629,-2.93267,1.71441],["A","across","heldout",1.38629,-0.22208,1.43427],["A","across","heldout",-1.38629,-2.93007,1.8201],["A","across","heldout",1.38629,-0.24141,1.41827],["A","across","heldout",-1.89712,-2.97944,1.30674],["A","across","heldout",1.89712,-0.13037,1.61826],["A","across","heldout",-1.38629,-2.72701,1.61114],["A","across","heldout",1.38629,-0.16671,1.35128],["A","across","heldout",-1.38629,-2.47397,1.40342],["A","across","heldout",1.38629,-0.17892,1.32827],["A","across","heldout",-1.38629,-2.93021,1.77104],["A","across","heldout",1.38629,-0.26063,1.46275],["A","across","heldout",-1.38629,-3.04719,1.78167],["A","across","heldout",1.38629,-0.28835,1.46962],["A","across","trained",-0.69315,-2.05217,1.68074],["A","across","trained",0.69315,-0.68827,1.60113],["A","across","trained",-2.07944,-3.64163,1.85783],["A","across","trained",2.07944,-0.04542,1.52979],["A","across","trained",-0.69315,-2.1407,1.78596],["A","across","trained",0.69315,-0.69465,1.56918],["A","across","trained",-2.07944,-3.768,1.89923],["A","across","trained",2.07944,-0.02182,1.47812],["A","across","trained",-1.20397,-2.44875,1.43437],["A","across","trained",1.20397,-0.58913,1.80518],["A","across","trained",-2.59027,-3.93442,1.38695],["A","across","trained",2.59027,-0.05253,1.82107],["A","across","trained",-0.69315,-2.07012,1.7186],["A","across","trained",0.69315,-0.68072,1.56562],["A","across","trained",-2.07944,-3.60933,1.83746],["A","across","trained",2.07944,-0.01942,1.46736],["A","across","trained",-0.69315,-1.77824,1.4195],["A","across","trained",0.69315,-0.6265,1.43406],["A","across","trained",-2.07944,-3.25503,1.50064],["A","across","trained",2.07944,-0.08218,1.54773],["A","across","trained",-0.69315,-2.13605,1.79758],["A","across","trained",0.69315,-0.70063,1.62557],["A","across","trained",-2.07944,-3.73296,1.91328],["A","across","trained",2.07944,-0.03445,1.5357],["A","across","trained",-0.69315,-2.15377,1.77833],["A","across","trained",0.69315,-0.79434,1.67579],["A","across","trained",-2.07944,-3.69721,1.87388],["A","across","trained",2.07944,-0.07843,1.60109],["A","across","heldout",-1.38629,-2.87815,1.79151],["A","across","heldout",1.38629,-0.27049,1.54457],["A","across","heldout",-1.38629,-2.98888,1.86565],["A","across","heldout",1.38629,-0.27431,1.50055],["A","across","heldout",-1.89712,-3.1671,1.33763],["A","across","heldout",1.89712,-0.2153,1.79881],["A","across","heldout",-1.38629,-2.85766,1.79042],["A","across","heldout",1.38629,-0.26624,1.49506],["A","across","heldout",-1.38629,-2.53762,1.48284],["A","across","heldout",1.38629,-0.26315,1.49841],["A","across","heldout",-1.38629,-2.96409,1.87728],["A","across","heldout",1.38629,-0.28612,1.56925],["A","across","heldout",-1.38629,-2.939,1.85591],["A","across","heldout",1.38629,-0.35669,1.62828]],"prod":{"AED1|per_track":[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0],"AED1|across":[1.0,1.0,1.0,1.0,1.0,1.0],"AED|per_track":[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0],"AED|across":[1.0,1.0,1.0,1.0,1.0,1.0],"A|per_track":[2.69448,2.42405,2.29663,2.29087,2.72417,2.45079,2.93243,2.24784,2.83057,2.70118,2.89094,2.96784,2.79611,3.21604,2.79543,3.25905,2.70838,3.20106,2.69319,2.16295,2.83694,2.49894,2.69477,2.24161,2.00571,2.17496,2.20833,2.40125,2.21576,2.2985,3.10745,2.36319,2.85775,2.55376,3.0027,2.55605,2.67644,2.0697,2.82835,2.51304,2.64209,2.30045],"A|across":[2.89043,2.7745,2.71685,2.50528,2.98011,3.00024]},"lam":[["DEDl0","across",0.74723,0.01276,0.0,false,3],["DEDl0","per_track",0.75726,0.00617,0.0,false,21],["DEDl0.1","across",0.74906,0.02228,0.1,false,3],["DEDl0.1","per_track",0.75658,0.0034,0.1,true,21],["DEDl1","across",0.74476,0.00963,1.0,true,3],["DEDl1","per_track",0.75942,0.00707,1.0,false,21],["DEDl10","across",0.75295,0.00721,10.0,false,3],["DEDl10","per_track",0.76235,0.00765,10.0,false,21]],"lam_chosen":{"per_track":0.1,"across":1.0},"steps":{"A":[24,1],"AED":[24,4],"AED1":[24,2],"D":[24,7],"DEDl0":[24,15],"DEDl0.1":[24,18],"DEDl1":[24,19],"DEDl10":[24,14]},"runs":{"A":144,"D":240,"seeds":3,"per_track":7}};
+
+const COL={olda:'var(--olda)',eda:'var(--eda)',eda1:'var(--eda1)',oldd:'var(--oldd)',twin:'var(--twin)',ref:'var(--ref)',
+  tr:'var(--tr)',ho:'var(--ho)',nv:'var(--nv)',nv2:'var(--nv2)',ok:'var(--ok)',ink:'var(--ink)',muted:'var(--muted)',
+  body:'var(--body)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',
+  accent:'var(--accent)',paper:'var(--paper)'};
+const GV=['per_track','across'];
+const GN={per_track:'one g per track',across:'one g across tracks'};
+const lamOf=k=>{const r=DATA.lam.find(x=>x[0]===k);return r?r[4]:null;};
+const LAMS=[...new Set(DATA.lam.map(r=>r[0]))].sort((a,b)=>lamOf(a)-lamOf(b));
+const EDDC=['var(--edd0)','var(--edd1)','var(--edd2)','var(--edd3)'];
+const lamTxt=v=>String(v);
+const ARMS=[
+  {k:'A',l1:'old A',l2:'retrained',c:COL.olda},
+  {k:'AED',l1:'encoder-decoder A',l2:'scale learned',c:COL.eda},
+  {k:'AED1',l1:'encoder-decoder A',l2:'scale fixed at 1',c:COL.eda1},
+  {k:'D',l1:'old D',l2:'retrained',c:COL.oldd},
+  ...LAMS.map((k,i)=>({k,l1:'encoder-decoder D',l2:lamOf(k)===0?'no pull (λ = 0)':`λ = ${lamTxt(lamOf(k))}`,c:EDDC[i]}))];
+const ARM=k=>ARMS.find(a=>a.k===k);
+const aName=k=>{const a=ARM(k);return `${a.l1}, ${a.l2}`;};
+const EDD=LAMS, EDDP=LAMS.filter(k=>lamOf(k)>0);
+const chosen=g=>DATA.lam.find(r=>r[1]===g&&r[5])[0];
+
+const f2=v=>v.toFixed(2), f3=v=>v.toFixed(3);
+const rng=(a,f=f2)=>{const lo=Math.min(...a),hi=Math.max(...a);const n=v=>f(v).replace('-','−');return f(lo)===f(hi)?n(lo):lo<0?`${n(lo)} to ${n(hi)}`:`${n(lo)}–${n(hi)}`;};
+const andJ=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+const dep=(a,g,grp)=>DATA.depth.find(r=>r[0]===a&&r[1]===g&&r[2]===grp);
+const depV=(arms,grp)=>arms.flatMap(a=>GV.map(g=>dep(a,g,grp)[3]));
+const kn=(a,g,grp,k)=>DATA.knob.find(r=>r[0]===a&&r[1]===g&&r[2]===grp&&r[3]===k);
+const ft=(a,g,m='real')=>DATA.fit.find(r=>r[0]===a&&r[1]===g&&r[2]===m);
+
+/* ---------- svg helpers (t125) ---------- */
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2)=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const arrowD=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2-8,c,w)+arrowHead(x,y2,'d',c);
+const arrowU=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2+8,c,w)+arrowHead(x,y2,'u',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+/* g-version marker: circle = one g per track, square = one g across tracks */
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g==='per_track'?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const logS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo));
+const linS=(lo,hi,a,b)=>v=>a+(b-a)*(v-lo)/(hi-lo);
+const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+20,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const rotY=(x,y,txt,fs=15)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:${fs}px"`);
+function trackD(v,x0,yBase,w,h,ymax,closed){
+  const n=v.length,dx=w/n;let d=closed?`M${x0},${yBase}`:'';
+  v.forEach((val,i)=>{const y=(yBase-h*Math.min(val,ymax)/ymax).toFixed(1);
+    const xa=(x0+i*dx).toFixed(1),xb=(x0+(i+1)*dx).toFixed(1);
+    d+=(d===''?`M${xa},${y}`:` L${xa},${y}`)+` L${xb},${y}`;});
+  return closed?d+` L${x0+w},${yBase} Z`:d;}
+const S=k=>DATA.snip[k];
+const mlab=m=>(m%1===0?m.toFixed(0):String(m))+'M';
+
+/* ---------- 2 · pairs and the depth law ---------- */
+function figPairs(){
+  const W=1160,H=470;let s='';
+  s+=T(0,24,'(a) Training uses base ↔ arm pairs only','ptitle');
+  const cx=300,cy=225;
+  const tl=DATA.levels.trained, ho=DATA.levels.heldout;
+  const nodes=[[`${mlab(tl[0])} reads`,160,110],[`${mlab(ho[0])} reads`,300,68],[`${mlab(tl[1])} reads`,440,110],
+    ['reads trimmed',440,340],['reads trimmed more',300,382],['control mixed in',160,340]];
+  const pos=nodes.map(n=>[n[1],n[2]]);
+  [[0,1],[1,2],[0,2],[3,4]].forEach(([i,j])=>s+=L(pos[i][0],pos[i][1],pos[j][0],pos[j][1],COL.nv,2.4,'7 5'));
+  s+=L(pos[0][0],pos[0][1],pos[5][0],pos[5][1],COL.nv2,2.6,'2 5');
+  pos.forEach(([x,y])=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d;
+    s+=L(cx+ux*56,cy+uy*56,x-ux*16,y-uy*16,COL.tr,3);});
+  pos.forEach(([x,y],i)=>{s+=Ci(x,y,13,COL.card,COL.tr,2.5);
+    const right=x>cx+20,left=x<cx-20,anc=right?'start':left?'end':'middle';
+    s+=T(x+(right?20:left?-20:0),y+(right||left?6:(y<cy?-22:34)),nodes[i][0],'axlbl',anc,'style="font-size:15.5px;font-weight:600"');});
+  s+=Ci(cx,cy,54,COL.card,COL.ink,2.5)+T(cx,cy-2,'base','big','middle','style="font-size:22px"')+T(cx,cy+20,'track','psub','middle');
+  const ly=H-10;
+  s+=L(0,ly-5,34,ly-5,COL.tr,3)+T(42,ly,'trained, both directions','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(218,ly-5,252,ly-5,COL.nv,2.4,'7 5')+T(260,ly,'never trained, same knob','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(440,ly-5,474,ly-5,COL.nv2,2.6,'2 5')+T(482,ly,'two knobs','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=divider(600,10,H-6);
+  // (b) the depth law on real data
+  const vb=S('base__base/counts25').slice(100,340),va=S('depth__15M/counts25').slice(100,340),f=DATA.snip_ratio;
+  const lx=630,pw=520,ym=46;
+  s+=T(lx,24,'(b) The depth law: fewer reads scale every bin','ptitle');
+  s+=T(lx,62,'base track','axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(vb,lx,158,pw,86,ym,true),COL.ref,'none',0)+L(lx,158,lx+pw,158,COL.axis,1);
+  s+=T(lx,194,`arm with ${mlab(tl[0])} reads (filled) and base × ${f.toFixed(2)} (line)`,'axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(va,lx,290,pw,86,ym*f,true),COL.ink,'none',0,';fill-opacity:.8');
+  s+=P(trackD(vb.map(x=>x*f),lx,290,pw,86,ym*f,false),'none',COL.ho,2.2);
+  s+=L(lx,290,lx+pw,290,COL.axis,1);
+  s+=T(lx+pw,310,`real H3K27ac, ${DATA.locus[0]}; each panel has its own y-axis`,'cap','end');
+  s+=R(lx,326,pw,94,COL.card,COL.hair,10)+FO(lx+14,334,pw-28,84,'<b>Depth-law error</b> = | log2 (predicted total ÷ source total) − log2 (true read ratio) |. It is 0 when the model scales the counts exactly by the read ratio.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  return svg(W,H,s);
+}
+
+/* ---------- 3 · the t118 failure ---------- */
+function figMot(){
+  const W=1160,H=430;let s='';
+  // (a) depth law per design
+  const des=[...new Set(DATA.mot_depth.map(r=>r[1]))];
+  const ax=70,aw=560,top=70,h=280,yy=logS(0.03,1,top+h,top);
+  s+=T(0,24,'(a) Depth law, every earlier design, both versions of g','ptitle');
+  s+=T(0,48,'● one g per track · ■ one g across tracks','psub');
+  [[0.03,'0.03'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1']].forEach(([v,l])=>s+=L(ax,yy(v),ax+aw,yy(v),COL.grid,1)+T(ax-8,yy(v)+5,l,'tick','end'));
+  s+=rotY(16,top+h/2,'median depth-law error (log scale)');
+  const gw=aw/des.length;
+  des.forEach((d,i)=>{const gx=ax+i*gw;if(i%2===0)s+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+    s+=T(gx+gw/2,top+h+24,d,'ptitle','middle','style="font-size:17px"');
+    if(i===4)s+=L(gx,top-6,gx,top+h+8,COL.axis,2);
+    GV.forEach((g,j)=>{const r=DATA.mot_depth.find(x=>x[1]===d&&x[2]===g),x=gx+gw*(j?0.68:0.32);
+      s+=L(x,yy(r[3]),x,yy(r[4]),COL.faint,1.6)+mark(x,yy(r[3]),g,COL.tr,'none',6)+mark(x,yy(r[4]),g,COL.nv,'none',6);});});
+  s+=T(ax+2*gw,top+h+48,'row 1: g reads the settings','cap','middle')+T(ax+6*gw,top+h+48,'row 2: g also reads the bin level','cap','middle');
+  s+=sw(ax,H-6,COL.tr,'trained depth pairs')+sw(ax+190,H-6,COL.nv,'never-trained depth → depth pairs');
+  s+=divider(665,10,H-6);
+  // (b) per knob, counts
+  const ks=[['depth','depth'],['crop','read length'],['mapq','MAPQ cut'],['abproxy','control mixed in']];
+  const bx=830,bw=310,xx=linS(0,0.5,bx,bx+bw),rt=86,rh=62;
+  s+=T(690,24,'(b) Gain over the twin, per knob','ptitle')+T(690,48,'counts · median over the 16 designs × versions of g','psub');
+  [0,0.1,0.2,0.3,0.4,0.5].forEach(v=>s+=L(xx(v),rt-14,xx(v),rt+ks.length*rh-20,COL.grid,1)+T(xx(v),rt+ks.length*rh,f2(v).replace(/0$/,''),'tick','middle'));
+  s+=T(bx+bw/2,rt+ks.length*rh+24,'gain over the twin (share of its CRPS)','axlbl','middle','style="font-size:15px"');
+  ks.forEach(([k,lab],i)=>{const y=rt+i*rh+10,a=DATA.mot_knob[`counts|${k}|trained`][0],b=DATA.mot_knob[`counts|${k}|same`][0];
+    s+=T(bx-14,y+5,lab,'axlbl','end','style="font-size:16px;font-weight:600"');
+    s+=L(xx(a),y,xx(b),y,COL.faint,2)+Ci(xx(a),y,7,COL.tr)+Ci(xx(b),y,7,COL.card,COL.nv,2.5);});
+  s+=Ci(840,H-10,6,COL.tr)+T(852,H-5,'trained','cap')+Ci(930,H-10,6,COL.card,COL.nv,2.5)+T(942,H-5,'never trained, same knob','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 4 · the diagnosis evidence: (a) suspect 2, (b) suspect 3 ---------- */
+function figDiag(){
+  const W=1160,H=300;let s='';const D=DATA.diag;
+  const top=50,h=200;
+  // (a) the +1: the exact law on log(1 + count) is a curve; old A's median line
+  const bx=60,bw=470,xs=linS(0,4,bx,bx+bw),ys=linS(-2.5,4,top+h,top);
+  s+=T(0,20,'(a) Suspect 2: why old A needs a slope above 1','ptitle','start','style="font-size:17px"');
+  [-2,0,2,4].forEach(v=>s+=L(bx,ys(v),bx+bw,ys(v),COL.grid,1)+T(bx-8,ys(v)+5,v,'tick','end'));
+  [0,1,2,3,4].forEach(v=>s+=T(xs(v),top+h+18,v,'tick','middle'));
+  s+=T(bx+bw/2,top+h+36,'source: log(1 + count)','axlbl','middle','style="font-size:14px"');
+  s+=rotY(18,top+h/2,'target: log mean',14);
+  const lr=Math.log(0.5);let d='';
+  for(let k=1;k<=80;k++){const x=4*k/80,y=lr+Math.log(Math.exp(x)-1);if(y<-2.5)continue;d+=(d?' L':'M')+xs(x).toFixed(1)+','+ys(y).toFixed(1);}
+  s+=P(d,'none',COL.ink,2.6);
+  const b=D.b_q[1],a=lr+D.off_q[1];
+  const xe=Math.min(4,(4-a)/b);
+  s+=L(xs(0),ys(a),xs(xe),ys(a+xe*b),COL.olda,3)+L(xs(0),ys(lr),xs(4),ys(lr+4),COL.muted,2,'6 4');
+  const lgx=bx+12,lgy=top+12;
+  s+=R(lgx-6,lgy-8,290,80,COL.paper,'none',6);
+  s+=L(lgx,lgy+6,lgx+30,lgy+6,COL.ink,2.6)+T(lgx+38,lgy+11,'exact law, half the reads','cap','start','style="fill:var(--ink);font-size:13.5px"');
+  s+=L(lgx,lgy+30,lgx+30,lgy+30,COL.olda,3)+T(lgx+38,lgy+35,`old A, median learned line (slope ${f2(b)})`,'cap','start','style="fill:var(--olda);font-size:13.5px"');
+  s+=L(lgx,lgy+54,lgx+30,lgy+54,COL.muted,2,'6 4')+T(lgx+38,lgy+59,'a plain shift (slope 1)','cap','start','style="fill:var(--muted);font-size:13.5px"');
+  s+=divider(580,10,H-6);
+  // (b) composition through the base, per earlier row-1 design
+  const yy=logS(0.03,1,top+h,top),ax=660,aw=490;
+  s+=T(600,20,'(b) Suspect 3: direct map against two trained maps via the base','ptitle','start','style="font-size:17px"');
+  [[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1']].forEach(([v,l])=>s+=L(ax,yy(v),ax+aw,yy(v),COL.grid,1)+T(ax-8,yy(v)+5,l,'tick','end'));
+  s+=rotY(618,top+h/2,'median depth-law error (log)',14);
+  const des=[...new Set(D.compose.map(r=>r[0]))],gw=aw/des.length;
+  des.forEach((dd,i)=>{const gx=ax+i*gw;if(i%2===0)s+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+    s+=T(gx+gw/2,top+h+22,dd,'ptitle','middle','style="font-size:16px"');
+    GV.forEach((g,j)=>{const c=D.compose.find(r=>r[0]===dd&&r[1]===g),t=DATA.mot_depth.find(r=>r[1]===dd&&r[2]===g),x=gx+gw*(j?0.7:0.3);
+      s+=L(x,yy(c[2]),x,yy(t[3]),COL.faint,1.4)+mark(x,yy(c[2]),g,COL.nv,'none',6)+mark(x,yy(c[3]),g,COL.card,COL.ho,6,2.4)+mark(x,yy(t[3]),g,COL.tr,'none',5);});});
+  const ly=H-6;
+  s+=Ci(606,ly-4,6,COL.nv)+T(616,ly,'direct arm → arm, never trained','cap')+Ci(862,ly-4,6,COL.card,COL.ho,2.4)+T(874,ly,'arm → base → arm','cap')+Ci(1030,ly-4,5,COL.tr)+T(1040,ly,'trained pairs','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 6 · the idea ---------- */
+function figIdea(){
+  const W=1160,H=440;let s='';
+  const box=(x,y,w,h,txt,c,sub,fs=17)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-3:6),txt,'mono','middle',`style="font-size:${fs}px"`)+(sub?T(x+w/2,y+h/2+19,sub,'cap','middle'):'');
+  s+=T(0,24,'(a) Old g: reads both settings at once','ptitle','start','style="fill:var(--olda)"');
+  let y=60;
+  s+=box(0,y-6,90,40,'c',COL.hair)+box(0,y+46,90,40,'c′',COL.hair)+arrowR(92,y+14,150)+arrowR(92,y+66,150);
+  s+=box(155,y,140,80,'g(c, c′)',COL.accent,'one network');
+  s+=L(297,y+65,512,y+65,COL.accent,2)+arrowHead(520,y+65,'r',COL.accent)+T(410,y+86,'parameters of f','cap','middle');
+  s+=box(365,y-8,100,48,'X',COL.hair)+arrowR(467,y+16,520);
+  s+=box(525,y-8,120,96,'f',COL.ink,'')+arrowR(647,y+40,700)+box(705,y+12,100,56,'X′',COL.hair);
+  s+=R(870,y-4,290,96,COL.paper,COL.olda,10,1.5,';stroke-dasharray:5 4')+FO(882,y+4,270,86,'An arm → arm pair is a <b>new input point</b> (c₁, c₂) for g: it must guess.','font:400 15.5px var(--sans);color:var(--body);line-height:1.35');
+  s+=L(0,184,W,184,COL.axis,1.5,'6 6');
+  s+=T(0,216,'(b) Encoder-decoder: one network φ reads one track\'s settings at a time','ptitle','start','style="fill:var(--accent)"');
+  y=262;
+  s+=box(0,y,100,60,'X',COL.hair,'source')+arrowR(102,y+30,150);
+  s+=box(155,y,170,60,'encode',COL.accent,'with φ(c)');
+  s+=arrowR(327,y+30,375)+R(380,y-4,160,68,COL.paper,COL.ink,34,2.5)+T(460,y+28,'z','big','middle')+T(460,y+50,'no settings left','cap','middle');
+  s+=arrowR(542,y+30,590)+box(595,y,170,60,'decode',COL.accent,'with φ(c′)');
+  s+=arrowR(767,y+30,815)+box(820,y,100,60,'X′',COL.hair,'target');
+  s+=R(950,y-14,210,88,COL.paper,COL.accent,10,1.5,';stroke-dasharray:5 4')+FO(960,y-6,192,80,'Same φ on both sides. c′ = c gives X back.','font:400 15.5px var(--sans);color:var(--body);line-height:1.35');
+  s+=FO(0,y+86,W,70,'<b>arm 1 → arm 2</b> = decode with φ(c₂) after encode with φ(c₁): the very pieces that training used on base ↔ arm 1 and base ↔ arm 2. The route through the base, from suspect 3, is now part of the model.','font:400 16.5px var(--sans);color:var(--body);line-height:1.45');
+  return svg(W,H,s);
+}
+
+/* ---------- 7 · rung A ---------- */
+function figRungA(){
+  const W=1160,H=430;let s='';
+  const eq=(x,y,w,t,sub,c=COL.hair)=>R(x,y,w,58,COL.card,c,10,2)+T(x+16,y+27,t,'mono','start','style="font-size:17px"')+T(x+16,y+47,sub,'cap','start');
+  s+=T(0,24,'(a) The maps','ptitle');
+  s+=eq(0,44,560,'x = log(1 + X)','the source counts, as in old A');
+  s+=eq(0,114,560,'z = (x − α(c)) / β(c)','encode: remove the source\'s location and scale',COL.accent);
+  s+=eq(0,184,560,'log μ′ = α(c′) + β(c′) · z','decode: add the target\'s location and scale',COL.accent);
+  s+=eq(0,254,560,'X′ ~ NB(μ′, spread from ψ(c′))','ψ: a small network on the target settings only');
+  s+=R(0,330,560,90,COL.paper,COL.ink,10,1.5)+FO(14,338,532,80,'Together: <b>one straight line</b>, log μ′ = a + b·x, with slope <b>b = β(c′) / β(c)</b> and offset a = α(c′) − b·α(c). This is old A\'s form, built from one side at a time.','font:400 15.5px var(--sans);color:var(--body);line-height:1.4');
+  s+=divider(600,10,H-6);
+  s+=T(630,24,'(b) Two arms, and the rule they share','ptitle');
+  // arm cards with mini line plots
+  const mini=(x,y,c,lab,sub,slopes,cap)=>{let t=R(x,y,250,204,COL.card,c,12,2.2)+T(x+14,y+28,lab,'axlbl','start',`style="font-size:16px;font-weight:600;fill:${c}"`)+T(x+14,y+48,sub,'cap','start');
+    const px=x+24,py=y+64,pw=200,ph=110;t+=L(px,py+ph,px+pw,py+ph,COL.axis,1.2)+L(px,py,px,py+ph,COL.axis,1.2);
+    slopes.forEach(([b,a,dash])=>t+=L(px,py+ph-(a)*ph,px+pw,py+ph-(a+b)*ph,c,3,dash));
+    t+=T(px+pw/2,py+ph+17,cap,'cap','middle','style="font-size:13px"');return t;};
+  s+=mini(630,44,COL.eda,'scale learned','β from φ: slope and offset',[[0.9,0.05,''],[0.5,0.15,'6 4']],'one line per target: slopes differ');
+  s+=mini(905,44,COL.eda1,'scale fixed at 1','β = 1: a pure shift',[[0.6,0.05,''],[0.6,0.32,'6 4']],'one line per target: all parallel');
+  s+=R(630,256,525,164,COL.paper,COL.accent,10,2)+FO(646,266,495,150,'<b>The round-trip rule.</b> Going c → c′ and back multiplies the two slopes: b(c → c′) · b(c′ → c) = (β(c′)/β(c)) · (β(c)/β(c′)) = <b>1</b>. A slope above 1 one way forces a slope below 1 the other way.','font:400 16px var(--sans);color:var(--body);line-height:1.45');
+  return svg(W,H,s);
+}
+
+/* ---------- 8 · rung D ---------- */
+function figRungD(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) The network: 2 layers tuned by the source, 2 by the target','ptitle');
+  const y=56,lw=150,lh=64;
+  const layer=(x,t,sub,c)=>R(x,y,lw,lh,COL.card,c,10,2.2)+T(x+lw/2,y+28,t,'axlbl','middle','style="font-size:15px;font-weight:600"')+T(x+lw/2,y+48,sub,'cap','middle');
+  s+=R(0,y,90,lh,COL.card,COL.hair,10)+T(45,y+30,'x','mono','middle')+T(45,y+50,'log(1+X)','cap','middle');
+  s+=arrowR(92,y+lh/2,118)+layer(122,'conv, dilation 1','tuned by g_enc(c)',COL.accent)+arrowR(274,y+lh/2,300)+layer(304,'conv, dilation 2','tuned by g_enc(c)',COL.accent);
+  s+=arrowR(456,y+lh/2,486)+R(490,y-6,100,lh+12,COL.paper,COL.ink,38,2.5)+T(540,y+30,'Z','big','middle')+T(540,y+52,'latent','cap','middle');
+  s+=arrowR(592,y+lh/2,618)+layer(622,'conv, dilation 4','tuned by g_dec(c′)',COL.edd2)+arrowR(774,y+lh/2,800)+layer(804,'conv, dilation 8','tuned by g_dec(c′)',COL.edd2);
+  s+=arrowR(956,y+lh/2,982)+R(986,y,174,lh,COL.card,COL.ink,10,2)+T(1073,y+28,'head','axlbl','middle','style="font-size:15px;font-weight:600"')+T(1073,y+48,'mean and spread of X′','cap','middle');
+  s+=T(305,y+lh+30,'encoder','ptitle','middle','style="fill:var(--accent);font-size:17px"')+T(790,y+lh+30,'decoder','ptitle','middle','style="fill:var(--edd2);font-size:17px"');
+  s+=T(580,y+lh+56,'no shortcut from x to the output: everything passes through Z · g_enc and g_dec each read one side only','cap','middle','style="font-size:14px"');
+  s+=L(0,206,W,206,COL.axis,1.5,'6 6');
+  // (b) the loss
+  s+=T(0,238,'(b) The loss for one trained pair (X, c) → (X′, c′), with Z = enc(X, c), Z′ = enc(X′, c′)','ptitle');
+  const gx=150,gy=290,cw=300,ch=52;
+  s+=T(gx+cw/2,gy-12,'decode with c′','axlbl','middle','style="font-weight:600"')+T(gx+cw+10+cw/2,gy-12,'decode with c','axlbl','middle','style="font-weight:600"');
+  s+=T(gx-14,gy+ch/2+5,'from Z','axlbl','end','style="font-weight:600"')+T(gx-14,gy+ch+8+ch/2+5,'from Z′','axlbl','end','style="font-weight:600"');
+  const cellB=(x,yy,t,lab,c)=>R(x,yy,cw,ch,COL.card,c,8,2)+T(x+14,yy+22,t,'mono','start','style="font-size:15px"')+T(x+14,yy+42,lab,'cap','start');
+  s+=cellB(gx,gy,'NLL(X′ | dec(Z, c′))','cross: the real job',COL.ink)+cellB(gx+cw+10,gy,'NLL(X | dec(Z, c))','self: a round trip',COL.hair);
+  s+=cellB(gx,gy+ch+8,'NLL(X′ | dec(Z′, c′))','self: a round trip',COL.hair)+cellB(gx+cw+10,gy+ch+8,'NLL(X | dec(Z′, c))','cross: the reverse job',COL.ink);
+  s+=T(gx+2*cw+30,gy+ch+10,'+','big','middle');
+  s+=R(gx+2*cw+50,gy+18,300,ch+20,COL.paper,COL.edd2,10,2)+T(gx+2*cw+64,gy+46,'λ · mse(Z, Z′)','mono','start','style="font-size:16px"')+T(gx+2*cw+64,gy+68,'pull the two latents together','cap','start');
+  return svg(W,H,s);
+}
+
+/* ---------- 10 · pair groups ---------- */
+function figGroups(){
+  const W=1160,H=420;let s='';
+  s+=T(0,24,'(a) Depth: the middle depth is held out of training','ptitle');
+  const lv=[DATA.levels.base,...DATA.levels.trained,...DATA.levels.heldout].sort((a,b)=>b-a);
+  const x0=120,y0=70,dy=92,yOf=m=>y0+lv.indexOf(m)*dy;
+  lv.forEach(m=>{const held=DATA.levels.heldout.includes(m),isb=m===DATA.levels.base;
+    s+=R(x0,yOf(m)-24,150,48,COL.card,held?COL.ho:COL.ink,24,2.4,held?';stroke-dasharray:6 4':'')+T(x0+75,yOf(m)+6,(isb?'base · ':'')+mlab(m)+' reads','axlbl','middle','style="font-size:15.5px;font-weight:600"');});
+  const B=DATA.levels.base,[t1,t2]=DATA.levels.trained,h1=DATA.levels.heldout[0];
+  const arc=(m1,m2,side,off,c,dash,w=2.6)=>{const ya=yOf(m1),yb=yOf(m2),xs=side<0?x0:x0+150,xo=xs+side*off;
+    return P(`M${xs},${ya} C${xo},${ya} ${xo},${yb} ${xs},${yb}`,'none',c,w,dash?`;stroke-dasharray:${dash}`:'');};
+  s+=arc(B,t1,-1,60,COL.tr,'')+arc(B,t2,-1,130,COL.tr,'');
+  s+=arc(B,h1,1,70,COL.ho,'6 4');
+  s+=arc(t1,t2,1,150,COL.nv,'7 5');
+  s+=arc(t1,h1,-1,40,COL.nv2,'2 5')+arc(h1,t2,1,40,COL.nv2,'2 5');
+  const lx=430;
+  [[COL.tr,'','trained: base ↔ trained depths'],[COL.ho,'6 4','held out: base ↔ middle depth (scored only)'],
+   [COL.nv,'7 5','never trained: depth → depth'],[COL.nv2,'2 5','never trained, with the middle depth']].forEach(([c,dash,t],i)=>{
+    const yy=110+i*58;s+=L(lx,yy,lx+40,yy,c,3,dash)+T(lx+52,yy+5,t,'axlbl','start','style="font-size:15px"');});
+  s+=divider(835,10,H-6);
+  s+=T(860,24,'(b) Other knobs','ptitle');
+  s+=FO(860,46,300,360,'<p style="margin:0 0 12px"><b style="color:var(--tr)">Trained:</b> base ↔ arm, both directions.</p><p style="margin:0 0 12px"><b style="color:var(--nv)">Never trained, same knob:</b> one arm of a knob → another arm of the same knob.</p><p style="margin:0 0 12px"><b style="color:var(--nv)">Two knobs:</b> an arm of one knob → an arm of another.</p><p style="margin:0">All scores: chromosomes 19 and 21. Best training step and λ: chromosome 22.</p>','font:400 16px var(--sans);color:var(--body);line-height:1.45');
+  return svg(W,H,s);
+}
+
+/* ---------- 11 · depth law results ---------- */
+const DG=[['trained','trained',COL.tr],['heldout','held-out middle depth',COL.ho],['never','never trained, depth → depth',COL.nv],['never75','never trained, with the middle depth',COL.nv2]];
+function armLabels(x,top,rh,arms,fs=15){let s='';arms.forEach((k,i)=>{const a=ARM(k),y=top+i*rh+rh/2;
+  s+=T(x,y-2,a.l1,'axlbl','end',`style="font-size:${fs}px;font-weight:600;fill:${a.c}"`)+T(x,y+16,a.l2,'cap','end',`style="font-size:${fs-1.5}px"`);});return s;}
+function figDepth(){
+  const W=1160,H=540;let s='';
+  const arms=ARMS.map(a=>a.k),top=52,rh=50,lx=232;
+  s+=armLabels(lx-10,top,rh,arms);
+  const pw=430,gap=30,xs0=[lx+10,lx+10+pw+gap];
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=logS(0.02,3,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GN[g][0].toUpperCase()+GN[g].slice(1)}`,'ptitle');
+    [[0.02,'0.02'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1'],[2,'2']].forEach(([v,l])=>s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,l,'tick','middle'));
+    arms.forEach((k,i)=>{const y0=top+i*rh+5;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      DG.forEach(([grp,,c],j)=>{const r=dep(k,g,grp),yb=y0+j*10;
+        s+=R(x0,yb,xx(r[3])-x0,8,c,'none',1.5);
+        s+=L(xx(r[4]),yb+4,xx(r[5]),yb+4,COL.ink,1.1);
+        (DATA.depth_seed[`${k}|${g}|${grp}`]||[]).forEach(v=>s+=L(xx(v),yb-1,xx(v),yb+9,COL.ink,1.6));});});
+    s+=L(x0,top+4*rh,x0+pw,top+4*rh,COL.axis,2);
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'depth-law error, | log2 predicted scale − log2 true read ratio | (log scale)','axlbl','middle','style="font-size:15px"');
+  let lxx=0;DG.forEach(([,lab,c])=>{s+=sw(lxx,H-8,c,lab);lxx+=lab.length*7.2+40;});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+60,'bar: median · whisker: middle half of the records · ticks: each seed\'s median','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 12 · knobs ---------- */
+function figKnob(){
+  const W=1160,H=520;let s='';
+  const KS=[['depth','depth'],['crop','read length'],['mapq','MAPQ cut'],['abproxy','control mixed in'],['cross','two knobs']];
+  const top=70,sub=12,kh=5*sub+16,lx=150;
+  KS.forEach(([,lab],i)=>{const y=top+i*kh+kh/2;s+=T(lx-14,y+5,lab,'axlbl','end','style="font-size:16px;font-weight:600"');});
+  const pw=470,gap=30,xs0=[lx,lx+pw+gap];
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(-0.25,0.65,x0+10,x0+pw-10),arms=['A','AED','AED1','D',chosen(g)];
+    s+=T(x0,24,`(${'ab'[pi]}) ${GN[g][0].toUpperCase()+GN[g].slice(1)}`,'ptitle')+T(x0,46,`encoder-decoder D at its chosen λ = ${lamTxt(DATA.lam_chosen[g])}`,'psub');
+    [-0.2,0,0.2,0.4,0.6].forEach(v=>s+=L(xx(v),top-6,xx(v),top+KS.length*kh-6,v===0?COL.muted:COL.grid,v===0?1.6:1)+T(xx(v),top+KS.length*kh+12,v===0?'0':f2(v).replace(/0$/,''),'tick','middle'));
+    KS.forEach(([k],i)=>{const yk=top+i*kh;if(i%2===0)s+=R(x0,yk-4,pw,kh-4,COL.grid,'none',0,0,';fill-opacity:.35');
+      arms.forEach((a,j)=>{const y=yk+8+j*sub,c=ARM(a).c;
+        const tr=k==='cross'?null:kn(a,g,'trained',k),nv=kn(a,g,k==='cross'?'cross':'same',k);
+        if(tr) s+=L(xx(tr[4]),y,xx(nv[4]),y,c,2.2)+Ci(xx(tr[4]),y,5.5,c);
+        s+=Ci(xx(nv[4]),y,5.5,COL.card,c,2.4);});});
+    if(pi>0) s+=divider(x0-gap/2,10,top+KS.length*kh);});
+  s+=T(xs0[0]+pw+gap/2,top+KS.length*kh+34,'gain over the no-covariates twin, (twin CRPS − real CRPS) ÷ twin CRPS, median over pairs','axlbl','middle','style="font-size:15px"');
+  let x=0;const legA=['A','AED','AED1','D'];
+  legA.forEach(a=>{const lab=aName(a);s+=Ci(x+6,H-12,6,ARM(a).c)+T(x+18,H-7,lab,'cap','start','style="font-size:13.5px;fill:var(--body)"');x+=lab.length*6.3+30;});
+  s+=Ci(x+6,H-12,6,ARM(EDDP[1]).c)+T(x+18,H-7,'encoder-decoder D, chosen λ','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=T(W,H-7,'● trained  ○ never trained','cap','end','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 13 · fit ---------- */
+function figFit(){
+  const W=1160,H=480;let s='';
+  const arms=ARMS.map(a=>a.k),top=50,rh=44,lx=232;
+  s+=armLabels(lx-10,top-3,rh,arms);
+  const pw=430,gap=30,xs0=[lx+10,lx+10+pw+gap],xmax=Math.ceil(Math.max(...DATA.fit.map(r=>r[5]))*10)/10+0.1;
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(0,xmax,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GN[g][0].toUpperCase()+GN[g].slice(1)}`,'ptitle');
+    for(let v=0;v<=xmax+1e-9;v+=0.2) s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,f2(v).replace(/\.?0+$/,'')||'0','tick','middle');
+    arms.forEach((k,i)=>{const r=ft(k,g),t=ft(k,g,'nocov'),c=ARM(k).c,y=top+i*rh+8,bh=rh-18;
+      s+=R(x0,y,xx(r[6])-x0,bh,c,'none',2)+R(xx(r[6]),y,xx(r[6]+r[7])-xx(r[6]),bh,c,'none',2,0,';fill-opacity:.35');
+      s+=L(xx(r[4]),y+bh/2,xx(r[5]),y+bh/2,COL.ink,1.4)+L(xx(r[4]),y+bh/2-5,xx(r[4]),y+bh/2+5,COL.ink,1.4)+L(xx(r[5]),y+bh/2-5,xx(r[5]),y+bh/2+5,COL.ink,1.4);
+      s+=L(xx(t[3]),y-3,xx(t[3]),y+bh+3,COL.twin,3);
+      s+=T(Math.max(xx(r[5]),xx(t[3]))+8,y+bh/2+5,f3(r[3]),'val','start',`style="fill:${c};font-size:14px"`);});
+    s+=L(x0,top+4*rh-3,x0+pw,top+4*rh-3,COL.axis,2);
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'CRPS on counts, trained pairs (mean over a track\'s pairs, then tracks, then seeds)','axlbl','middle','style="font-size:15px"');
+  s+=sw(0,H-8,COL.muted,'oracle-scaled part')+sw(170,H-8,COL.muted,'scale error',0.35);
+  s+=L(300,H-14,300,H-2,COL.twin,3)+T(310,H-8,'no-covariates twin','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(460,H-8,490,H-8,COL.ink,1.4)+T(498,H-8,'range over 3 seeds','cap','start','style="font-size:14px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 14 · a and b ---------- */
+function figAB(){
+  const W=1160,H=440;let s='';
+  const top=60,h=300,g='per_track';
+  const A3=['A','AED','AED1'];
+  const pt=(x,y,kind,c)=>kind==='trained'?Ci(x,y,4.2,c,'none',0)+`<circle cx="${x}" cy="${y}" r="4.2" style="fill:${c};fill-opacity:.55;stroke:none"/>`:`<polygon points="${x},${y-6} ${x+6},${y} ${x},${y+6} ${x-6},${y}" style="fill:${c};fill-opacity:.8"/>`;
+  const jit=i=>((i*37)%11-5)*1.4;
+  const panel=(x0,pw,title,col,ylo,yhi,ideal,ylab)=>{const xx=linS(-2.3,2.3,x0,x0+pw),yy=linS(ylo,yhi,top+h,top);let t='';
+    t+=T(x0-50,24,title,'ptitle','start','style="font-size:18px"');
+    for(let v=Math.ceil(ylo*2)/2;v<=yhi+1e-9;v+=(yhi-ylo>3?1:0.5)) t+=L(x0,yy(v),x0+pw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,String(+v.toFixed(1)),'tick','end');
+    [-2,-1,0,1,2].forEach(v=>t+=T(xx(v),top+h+18,v,'tick','middle'));
+    t+=L(x0,top+h,x0+pw,top+h,COL.axis,1.2)+L(xx(0),top,xx(0),top+h,COL.axis,1,'3 3');
+    t+=T(x0+pw/2,top+h+40,'ln r, r = target reads ÷ source reads','axlbl','middle','style="font-size:15px"');
+    t+=rotY(x0-42,top+h/2,ylab);
+    t+=ideal(xx,yy);
+    DATA.ab.filter(r=>r[1]===g&&A3.includes(r[0])).forEach((r,i)=>t+=pt(xx(r[3])+jit(i),yy(Math.max(ylo,Math.min(yhi,r[col]))),r[2],ARM(r[0]).c));
+    return t;};
+  s+=panel(70,320,'(a) Learned slope b, one g per track',5,0.3,2.5,(xx,yy)=>L(xx(-2.3),yy(1),xx(2.3),yy(1),COL.ink,1.6,'6 4')+T(xx(2.3),yy(1)-8,'b = 1','cap','end','style="fill:var(--ink)"'),'learned slope b');
+  s+=divider(425,10,H-6);
+  s+=panel(500,320,'(b) Learned offset a, one g per track',4,-4.3,2.5,(xx,yy)=>L(xx(-2.3),yy(-2.3),xx(2.3),yy(2.3),COL.ink,1.6,'6 4')+T(xx(2.2),yy(2.2)+22,'a = ln r','cap','end','style="fill:var(--ink)"'),'learned offset a');
+  s+=divider(855,10,H-6);
+  // (c) the round trip
+  const cx0=915,cw=235,yy=linS(0.5,3.5,top+h,top);
+  s+=T(875,24,'(c) Round trip b(c → c′) · b(c′ → c)','ptitle','start','style="font-size:18px"');
+  [0.5,1,1.5,2,2.5,3,3.5].forEach(v=>s+=L(cx0,yy(v),cx0+cw,yy(v),COL.grid,1)+T(cx0-8,yy(v)+5,v,'tick','end'));
+  s+=L(cx0,yy(1),cx0+cw,yy(1),COL.ink,1.6,'6 4')+T(cx0+cw,yy(1)+20,'exact inverse: 1','cap','end','style="fill:var(--ink)"');
+  s+=rotY(cx0-42,top+h/2,'product of the two slopes');
+  A3.forEach((a,i)=>{const x=cx0+34+i*76;
+    GV.forEach((gv,j)=>(DATA.prod[`${a}|${gv}`]||[]).forEach((v,k)=>s+=mark(x+(j?14:-10)+((k*13)%9-4),yy(v),gv,ARM(a).c,'none',4.2)));
+    const ls=a==='A'?['old A','retrained']:['encoder-','decoder A',a==='AED'?'scale learned':'scale fixed at 1'];
+    ls.forEach((t,j)=>s+=T(x+2,top+h+18+j*15,t,'cap','middle',`style="font-size:12.5px;fill:${ARM(a).c};font-weight:${j<ls.length-1||a==='A'?600:400}"`));});
+  // legend
+  const ly=H-8;let x=0;
+  A3.forEach(a=>{const lab=aName(a);s+=Ci(x+6,ly-4,5,ARM(a).c)+T(x+16,ly,lab,'cap','start','style="font-size:13.5px;fill:var(--body)"');x+=lab.length*6.7+30;});
+  s+=Ci(x+6,ly-4,4.2,COL.muted)+T(x+16,ly,'trained pair','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=`<polygon points="${x+120},${ly-10} ${x+126},${ly-4} ${x+120},${ly+2} ${x+114},${ly-4}" style="fill:var(--muted)"/>`+T(x+132,ly,'held-out depth','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=T(W,ly,'(c) ● one g per track ■ one g across tracks','cap','end','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figPairs,figMot,figDiag,figIdea,figRungA,figRungD,figGroups,figDepth,figKnob,figFit,figAB};
+Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
+
+/* ---------- prose: every number from DATA ---------- */
+try{
+  put('tRunsA',DATA.runs.A);put('tRunsD',DATA.runs.D);
+  // motivation
+  const md=DATA.mot_depth;
+  putH('tMot1',`<b>Depth law:</b> median error ${rng(md.map(r=>r[3]))} on trained pairs, ${rng(md.map(r=>r[4]))} on never-trained pairs, in all ${md.length} designs × versions of g.`);
+  const mk=DATA.mot_knob,KN=[['depth','depth'],['crop','read length'],['mapq','MAPQ'],['abproxy','control mixed in']];
+  const lower=KN.filter(([k])=>mk[`counts|${k}|same`][0]<mk[`counts|${k}|trained`][0]).length;
+  const pk=Object.keys(mk).filter(k=>k.startsWith('pval|')&&k.endsWith('|same')).map(k=>k.split('|')[1]);
+  const plow=pk.filter(k=>mk[`pval|${k}|same`][0]<mk[`pval|${k}|trained`][0]).length;
+  putH('tMot2',`<b>Knobs:</b> ${lower} of ${KN.length} lose gain on never-trained pairs (${KN.map(([k,l])=>`${l} ${f2(mk[`counts|${k}|trained`][0])} → ${f2(mk[`counts|${k}|same`][0])}`).join(', ')}); on the p-value track, ${plow} of ${pk.length} knobs do.`);
+  // diagnosis
+  const D=DATA.diag;
+  put('tS1',`${D.audit_n} depth-law records of ${D.audit_runs} old-A runs: largest gap ${D.audit_max.toExponential(0)}; summed counts of ${D.sums_n} depth tracks within ${f2(D.sums_max)} of the nominal log2 ratio.`);
+  put('tS2',`Old A, median over ${D.audit_n} depth pairs: slope b = ${f2(D.b_q[1])} (quartiles ${f2(D.b_q[0])}–${f2(D.b_q[2])}); offset a = ln r ${f2(D.off_q[1])} (${f2(D.off_q[0])} to ${f2(D.off_q[2])}).`);
+  put('tS3',`Earlier designs A–D: direct arm → arm ${rng(D.compose.map(r=>r[2]))}; arm → base → arm ${rng(D.compose.map(r=>r[3]))} (median error).`);
+  // rung D lambda and the arms
+  const lg=LAMS.map(lamOf).filter(v=>v>0).map(lamTxt);
+  put('tLam',`λ grid: ${lg.join(', ')}, plus λ = 0 as its own arm. Chosen on chromosome 22, the lowest mean validation NLL: λ = ${lamTxt(DATA.lam_chosen.per_track)} for one g per track, λ = ${lamTxt(DATA.lam_chosen.across)} for one g across tracks.`);
+  putH('tArmLam',`encoder-decoder D, with the pull (λ = ${lg.join(', ')})<small>one λ chosen per version of g</small>`);
+  const ho=DATA.levels.heldout.map(mlab).join(', ');
+  putH('chips',[`<b>held out of training:</b> the ${ho} depth arm of every track`,`<b>a no-covariates twin</b> for every arm`,
+    `<b>${DATA.runs.per_track} g's, one per track, + 1 g across tracks</b>`,`<b>${DATA.runs.seeds} seeds</b>`,'<b>counts only</b>',
+    `<b>${DATA.runs.A} + ${DATA.runs.D}</b> trained runs (rung A + rung D)`,`<b>up to ${DATA.cap} steps</b>, best step on chromosome 22`].map(t=>`<span class="chip">${t}</span>`).join(''));
+  // (a) depth
+  const OA=['A'],EA=['AED','AED1'],OD=['D'];
+  putH('tDa1',`<b>Never-trained depth → depth:</b> encoder-decoder A ${rng(depV(EA,'never'))} against old A ${rng(depV(OA,'never'))}; encoder-decoder D ${rng(depV(EDD,'never'))} (all λ) against old D ${rng(depV(OD,'never'))}. Trained pairs: old A, old D and encoder-decoder D ${rng(depV(['A','D',...EDD],'trained'))}.`);
+  putH('tDa2',`<b>Held-out ${ho} depth:</b> old A ${rng(depV(OA,'heldout'))}, old D ${rng(depV(OD,'heldout'))}, encoder-decoder D ${rng(depV(EDD,'heldout'))}; encoder-decoder A ${rng(depV(EA,'heldout'))}, and ${rng(depV(EA,'trained'))} even on its trained pairs.`);
+  const sdS=Object.entries(DATA.depth_seed).filter(([k])=>k.split('|')[2]==='never').map(([,v])=>Math.max(...v)-Math.min(...v));
+  put('nDa',`Ranges are over both versions of g. The spread of the three seeds' medians on never-trained pairs is up to ${f2(Math.max(...sdS))} for one arm; several gaps between encoder-decoder D and old D are smaller than that.`);
+  // (b) knobs
+  const K3=['crop','mapq','abproxy'],kv=(arms,grp)=>arms.flatMap(a=>GV.flatMap(g=>K3.map(k=>kn(a==='chosen'?chosen(g):a,g,grp,k)[4])));
+  putH('tKb1',`<b>Read length, MAPQ, control mixed in:</b> encoder-decoder D at the chosen λ gains ${rng(kv(['chosen'],'trained'))} on trained pairs (old D ${rng(kv(['D'],'trained'))}), but ${rng(kv(['chosen'],'same'))} on never-trained pairs (old D ${rng(kv(['D'],'same'))}).`);
+  const cr=(a)=>GV.map(g=>kn(a==='chosen'?chosen(g):a,g,'cross','cross')[4]);
+  putH('tKb2',`<b>Encoder-decoder A</b> gains ${rng(kv(['AED','AED1'],'trained').concat(kv(['AED','AED1'],'same')))} on these three knobs. <b>Two knobs at once:</b> encoder-decoder D ${rng(cr('chosen'))}, old D ${rng(cr('D'))}. <b>Depth:</b> trained ${rng(GV.map(g=>kn(chosen(g),g,'trained','depth')[4]))} → never trained ${rng(GV.map(g=>kn(chosen(g),g,'same','depth')[4]))} for encoder-decoder D.`);
+  const nS=kn('D','per_track','same','crop')[5],nT=kn('D','per_track','trained','crop')[5];
+  const allL=EDD.flatMap(a=>GV.flatMap(g=>K3.map(k=>kn(a,g,'same',k)[4])));
+  put('nKb',`Each of these knobs has ${nT} trained and ${nS} never-trained pairs per version of g, and no seed spread is stored for this reading. Every λ reads alike: encoder-decoder D's never-trained gains on the three knobs span ${rng(allL)} over all λ.`);
+  // (c) fit
+  const fv=(arms,f=r=>r[3])=>arms.flatMap(a=>GV.map(g=>f(ft(a,g))));
+  putH('tFc1',`<b>Rung D:</b> encoder-decoder D ${rng(fv(EDD),f3)} (all λ) against old D ${rng(fv(OD),f3)}; seed ranges up to ${f3(Math.max(...fv(['D',...EDD],r=>r[5]-r[4])))}.`);
+  const a=ft('A','per_track'),e=ft('AED','per_track'),e1=ft('AED1','per_track'),ax=ft('A','across'),ex=ft('AED','across');
+  putH('tFc2',`<b>Rung A, one g per track:</b> scale learned ${f3(e[3])} (scale error ${f3(e[7])}), scale fixed at 1 ${f3(e1[3])} (${f3(e1[7])}), old A ${f3(a[3])} (${f3(a[7])}). <b>Across tracks</b> the gap to old A is ${f3(ex[3]-ax[3])}, smaller than old A's seed range ${f3(ax[5]-ax[4])}.`);
+  // (d) a, b
+  const ab=DATA.ab.filter(r=>r[1]==='per_track'&&r[2]==='trained');
+  const bOld=ab.filter(r=>r[0]==='A').map(r=>r[5]),bE=ab.filter(r=>r[0]==='AED'&&r[3]<0).map(r=>r[5]),aE=ab.filter(r=>r[0]==='AED').map(r=>r[4]),aE1=ab.filter(r=>r[0]==='AED1').map(r=>r[4]);
+  const pOld=GV.flatMap(g=>DATA.prod[`A|${g}`]),pE=GV.flatMap(g=>DATA.prod[`AED|${g}`].concat(DATA.prod[`AED1|${g}`]));
+  putH('tAd1',`<b>Old A</b>, one g per track: slope b ${rng(bOld)} on trained depth pairs, in both directions; round trip ${rng(pOld)} over both versions of g. <b>Encoder-decoder A:</b> round trip ${rng(pE,f3)}, by construction, so with less depth its slope drops to ${rng(bE)}.`);
+  const dn=DATA.down;
+  putH('tAd2',`<b>Its offset a stays near 0</b> (scale learned ${rng(aE)}, scale fixed at 1 ${rng(aE1)}), not near ln r. On trained pairs with fewer target reads, it predicts <b>more</b> reads in ${Math.round(dn.AED[0]*100)}% (scale learned) and ${Math.round(dn.AED1[0]*100)}% (scale fixed) of ${dn.AED[2]} records; old A in ${Math.round(dn.A[0]*100)}%.`);
+  put('nAd',`Panels (a) and (b) show one g per track; the across-tracks g reads alike (panel c). Held-out pairs (diamonds) follow the trained ones.`);
+  // discussion
+  put('tR1',`Trained depth error ${rng(depV(EA,'trained'))}; old A ${rng(depV(OA,'trained'))}.`);
+  put('tR2',`Never-trained depth ${rng(depV(EDD,'never'))}; old D ${rng(depV(OD,'never'))}.`);
+  put('tR3',`Earlier grid: via the base ${rng(D.compose.map(r=>r[3]))}, direct ${rng(D.compose.map(r=>r[2]))}.`);
+  const st=DATA.steps,capN=arms=>arms.reduce((s,k)=>s+st[k][1],0),runN=arms=>arms.reduce((s,k)=>s+st[k][0],0);
+  put('tDb2',`${capN(EDD)} of ${runN(EDD)} encoder-decoder D runs ran all ${DATA.cap} steps, against ${capN(OD)} of ${runN(OD)} for old D. They may need more steps.`);
+  put('tDb3',`The held-out ${ho} depth lies between the trained ${DATA.levels.trained.map(mlab).join(' and ')} depths. It tests interpolation, not extrapolation.`);
+  const lp=DATA.lam.filter(r=>r[4]>0),gaps=GV.map(g=>{const v=lp.filter(r=>r[1]===g).map(r=>r[2]);return Math.max(...v)-Math.min(...v);});
+  put('tDb5',`The validation NLL differs between λ values by at most ${(Math.max(...gaps)).toFixed(4)}; one g's seed range is ${rng(lp.map(r=>r[3]),v=>v.toFixed(4))}.`);
+}catch(e){console.error('prose',e);}
+
+/* ---------- navigation and speaker notes ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>
