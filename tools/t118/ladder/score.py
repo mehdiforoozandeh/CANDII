@@ -621,8 +621,8 @@ def main(argv=None) -> int:
     if args.cmd == "trained":
         path = score_trained(pred, rows, args.blacklist, args.run_dir, workers=args.workers)
     else:
-        path = score_law(pred, rows, args.blacklist, args.run_dir, workers=args.workers,
-                         split=args.split)
+        kw = {"split": True} if args.split else {}   # default-off: the old call, unchanged
+        path = score_law(pred, rows, args.blacklist, args.run_dir, workers=args.workers, **kw)
     print(f"{args.cmd} {args.run_dir.name} -> {path} ({time.time() - t0:.1f} s)")
     return 0
 
