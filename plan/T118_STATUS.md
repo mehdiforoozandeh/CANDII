@@ -580,3 +580,31 @@ Exploratory: readings, no bar, no verdicts.
 - At submission every Nibi partition was `down` (sinfo; no reservation listed), so all four jobs
   were PENDING with Reason=PartitionDown (law: Reason=Dependency). They start when Nibi reopens.
 - Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE / LATENT_DONE.
+
+### t128 on Fir
+
+Nibi GPU slices and most H100 nodes were draining for over a day, so the PI ruled to copy the data
+to Fir (2026-10-24). The Nibi smoke 24797365/24797366 was left in place; the PI decides which runs count.
+
+- Globus (PI, Nibi -> Fir, same real paths under `/project/6014832/mforooz`), checked 2026-10-24 00:17 UTC:
+  `t112_cf/products` 635 files, 42402281147 B on both; `t118/ladder/cache` 520 files, 126091750990 B
+  on both. md5 equal on both clusters for `MANIFEST.tsv` and cache `C40M18__mapq__0__pval.npy`,
+  `C40M18__mapq__10__pval.npy`, `C07M20__abproxy__f0.5__counts.npy`. No data went through the laptop.
+- Blacklist on Fir: `/project/def-maxwl/mforooz/DATA_CANDI_MERGED/hg38_blacklist_v2.bed`, sha256
+  31c69342df43bbc19dd8ef2886611a8150cb53e90f341de14d30e742c9251737 (equal to Nibi's
+  `EIC_REPRO/002/scripts/hg38_blacklist_v2.bed`; `EpiDenoise/data/hg38_blacklist_v2.bed` also equal).
+  It is passed to train.sh as the 5th positional argument and to law.sh as the 4th.
+- Kit K2 on Fir: `/project/def-maxwl/mforooz/t128/code/K2`, `GIT_SHA` f47cf117649fbe388cc6de8105b291627b01f2d9
+  (= origin/exp/t118-counterfactual-f); `git archive` without `cruxvault/`; `wheels/` = the one wheel
+  from Nibi K1 (`x_transformers-2.11.23-py3-none-any.whl`, sha256 2ba818a5...). 15 MB. The venv recipe
+  (python/3.10.13, requirements-fir.txt, requirements-pypi.txt from wheels/) builds on the Fir login
+  node and imports candi from K2/src (torch 2.6.0).
+- sbatch overrides on Fir (repo scripts unchanged): `--exclude=` on every job (the scripts' Nibi node
+  names c128,c166,c537,c371,c329 are invalid on Fir); `--time=1:00:00` on train (b1). The MIG gres
+  `nvidia_h100_80gb_hbm3_1g.10gb` exists on Fir, so the train script's own gres is kept.
+- Submitted 2026-10-24 00:17-00:18 UTC, out dir `/project/def-maxwl/mforooz/t128` on Fir:
+  - 61556 `t128_verify` on K2 (RUNNING at submission); log `t128/verify/t128_verify_61556.out`.
+  - 61593 `t128_train` smoke: array 18,57,90,129,153,177,201,225%12, MIG 1g.10gb, 1 h (PENDING Priority).
+  - 61594 `t128_law` smoke: same indices, `aftercorr:61593` (submitted while 61593 was live).
+  - No via-base job on Fir: it reads t126 checkpoints that exist only on Nibi.
+- Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE / LATENT_DONE.
