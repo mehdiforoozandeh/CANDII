@@ -320,7 +320,7 @@ class GSym(torch.nn.Module):
     def set_cclean_init(self, values: torch.Tensor) -> None:
         """Initialise C_clean's knobs at `values` [7, 13]. Form A copies them; form D stores
         clamp(logit((values - lo) / (hi - lo)), -4, 4), 0 where hi == lo (call `set_box` first)."""
-        v = torch.as_tensor(values, dtype=self.cclean.dtype).reshape(self.cclean.shape)
+        v = torch.as_tensor(values, dtype=self.cclean.dtype, device=self.cclean.device).reshape(self.cclean.shape)
         if not self.box:
             self.cclean.copy_(v)
             return
