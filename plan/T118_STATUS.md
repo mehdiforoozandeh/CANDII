@@ -608,3 +608,46 @@ to Fir (2026-10-24). The Nibi smoke 24797365/24797366 was left in place; the PI 
   - 61594 `t128_law` smoke: same indices, `aftercorr:61593` (submitted while 61593 was live).
   - No via-base job on Fir: it reads t126 checkpoints that exist only on Nibi.
 - Never resubmit these; a rerun skips on SCORE_DONE / LAW_DONE / LATENT_DONE.
+
+### t128 smoke readback and the full submission (C7, 2026-10-24)
+
+Fir smoke 61593/61594 read back on 2026-10-24 01:56 UTC. Index 129 (round trip only, sampled latent)
+and 225 (cross + round trip, sampled latent) have all four marks; 177 (λ = 1) has TRAIN_DONE only.
+The other five have only `config.json` (timed out at the 1 h override); their rerun trains from scratch.
+
+| check (PI rulings applied) | 129 | 225 | 177 |
+|---|---|---|---|
+| rung DS, holdout `[["depth","7.5M"]]`, 36 train pairs, 2 held-out pairs | pass | pass | pass |
+| no 7.5M in train pairs or the 19 fit pids | pass | pass | pass |
+| form A, `cclean_init` == 0 (max abs 0.0) | pass | pass | pass |
+| `val_nll_rule` | L2 NLL | L1+L2 NLL | L1+L2 NLL |
+| `train_log.tsv` header `step loss mse_z kl val_nll val_cross_nll seconds` | pass | pass | pass |
+| kl | 0.35–1.52 (> 0) | 0.48–1.84 (> 0) | 0 (deterministic) |
+| scores.json: trained 72, heldout 2, swap 19 (= fit pids), depthlaw 6 (2 heldout) | pass | pass | — |
+| law.json: all 342 law records carry `crps_oracle_scaled_all` | pass | pass | — |
+| latent.json kinds: latent 20, agree 190, ident 380 | pass | pass | — |
+
+The 6 depthlaw copies in law.json carry no split; that is the C3 design ("depthlaw copies drop
+them as today"), not a defect. No DSbox run finished, so the box-init check waits for the full run.
+
+| run | steps | best step | val_nll | val_cross_nll | train min | score min | law min | latent min | median abs(Z − x), base | corr(Z, x), base | median over 20 pids: abs(Z − x), corr | median σ_z |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 129 | 1250 | 250 | 1.0900 | 1.0351 | 29.9 | 15.1 | 18.9 | 5.4 | 0.5443 | 0.9805 | 0.5369, 0.9807 | 0.376 |
+| 225 | 1750 | 750 | 2.8552 | 0.7841 | 38.2 | 18.2 | 25.3 | 6.2 | 0.5723 | 0.9886 | 0.5116, 0.9818 | 0.749 |
+| 177 | 3000 | 2000 | 2.5194 | 0.7445 | 56.4 | — | — | — | — | — | — | — |
+
+val_nll is not comparable across rules (L2 only vs L1+L2). Z tracks x closely (corr ≈ 0.98) in both
+sampled-latent arms: a first look only, one seed and one g.
+Walltime: train ≤ 4000 steps × ~1.1–2 s + score ~18 min fits the script's 4 h; law + latent ~32 min fits 6 h.
+
+Nibi via-base smoke 24757114_9 COMPLETED (12 min, c501): `law.json` (342 law records, all with the
+split), `LAW_DONE`, `viabase.json` (intermediate nb_mean, K1 sha 58c9c22); the old t126 run dir
+has no file newer than K1.
+
+Submitted 2026-10-24 01:58 UTC (never resubmit; a rerun skips on SCORE_DONE / LATENT_DONE / LAW_DONE):
+- Fir 70473 `t128_train`: array 0-239%24, K2, script's own 4 h, `--exclude=` (Fir override, as 61593),
+  blacklist DATA_CANDI_MERGED as 5th positional. Smoke 129, 225 skip; 177 scores only.
+- Fir 70474 `t128_law`: array 0-239%24, `aftercorr:70473` (submitted while 70473 was live), 6 h, `--exclude=`.
+- Nibi 24896767 `t128_viabase`: array 0-8,10-23%12, K1, Nibi blacklist, `--exclude=c128,c166,c537,c371,c329`
+  (same as the script header), otherwise the 24757114 submit line.
+- If the first Fir wave shows an ImportError, lower the throttle: `scontrol update JobId=70473 ArrayTaskThrottle=12`.
