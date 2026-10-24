@@ -1,0 +1,184 @@
+#!/bin/bash
+# t118 ladder, ROW 2 SHUFFLED-BIN TWIN: train one (rung, g, space, xshuf, seed) run on a 10 GB MIG
+# slice, then score its trained pairs, shuffle and swap. One array task = one run; 192 tasks. This
+# is row2_train.sh with the twin's task table (`--row 2 --xshuf`: the same A2..D2 designs, size,
+# training and real covariates, but g reads x from a uniformly random bin of the same chromosome,
+# redrawn every training step, one fixed seeded permutation per chromosome at scoring; f reads the
+# true x; tools/t118/ladder/xshuf.py) and its own out dir. Row 2's scripts and outputs are not
+# touched.
+#
+# WHAT ONE TASK DOES.
+#   1. python3 $KIT/tools/t118/ladder/train.py train-index <manifest> <covariates.tsv> <cache_dir> \
+#          <out_dir>/runs <index> --row 2 --xshuf     -> <out_dir>/runs/<run_name>/ckpt.pt, TRAIN_DONE
+#   2. python3 $KIT/tools/t118/ladder/score.py trained <manifest> <covariates.tsv> <cache_dir> \
+#          <blacklist> <out_dir>/runs/<run_name> --workers 4   -> scores.json, figdata.npz, SCORE_DONE
+# A task whose SCORE_DONE exists exits 0 without work, so a resubmission redoes only the missing
+# runs (train.py also skips on TRAIN_DONE, so a task that died while scoring does not retrain).
+#
+# THE TASK TABLE. Index -> run comes from `python3 tools/t118/ladder/pairs.py tasks <manifest>
+# --row 2 --xshuf` (192 rows, rung slowest, seed fastest; index 18 = A2_C19M16_counts_xshuf_s0).
+# The first task that has a venv writes it to $OUT/tasks.tsv IN THE TWIN'S OUT DIR (never row 2's
+# row2/tasks.tsv, which holds the 576-row row-2 table); a later task reads that copy BEFORE
+# building its venv only to exit early when its run is already done, and then checks it against a
+# fresh pairs.py table (a mismatch exits 2). Order A2 -> B2 -> C2 -> D2.
+#
+# EXTRA SETUP TIME. Before its first step the twin reads every training chromosome of its source
+# pids once, sequentially, to build the per-(pid, chromosome) pool that g's shuffled x is drawn
+# from (xshuf.Pool): about 9 GB for a per-track g and about 60 GB for the across-track g ("all"),
+# minutes on /project. Its wall time is "xshuf_pool" in the run's timing.json.
+#
+# NO --export. Alliance arrays truncate a comma-valued exported variable, so every input is a
+# POSITIONAL argument and the task index is $SLURM_ARRAY_TASK_ID. Every output is under <out_dir>:
+#   OUT=/project/def-maxwl/mforooz/t118/row2_xshuf
+#   CACHE=/project/def-maxwl/mforooz/t118/ladder/cache   (row 1's cache, read-only here)
+# Nothing goes to scratch; nothing is timed with a wrapper (read peak memory from `sacct -o MaxRSS`).
+#
+# THE VENV is the repo's pinned recipe of row2_train.sh: python/3.10.13, requirements-fir.txt from
+# the CVMFS wheelhouse, then requirements-pypi.txt (x-transformers only) from $KIT/wheels with
+# --no-index --find-links. Built per task in $SLURM_TMPDIR.
+#
+# RESOURCES. One 10 GB MIG slice of an H100, 4 cores (score.py --workers 4), 16 GB host memory,
+# 3 h. Nodes c128, c166 and c537 are excluded. When `sinfo` shows the slice nodes held, use
+# xshuf_train_cpu.sh (same task table, same outputs, CPU only).
+#
+# DRY_RUN=1 prints the two python command lines (or nothing, when the run is already done) and
+# exits 0 before any module load. It resolves the task table with ${PYTHON:-python3} (needs numpy,
+# scipy, torch: run it with the candii env active or PYTHON set) from $KIT when $KIT holds
+# pairs.py, else from the checkout this script sits in; and from <products_dir>/MANIFEST.tsv when
+# it exists, else from that checkout's tests/fixtures/t112_meta/MANIFEST.tsv (the same file,
+# md5-pinned). Nothing is checked for existence except the run's SCORE_DONE.
+#
+# Usage, from the Nibi login node, after snapshotting the repo to $KIT:
+#   OUT=/project/def-maxwl/mforooz/t118/row2_xshuf; mkdir -p $OUT/logs   # SLURM opens --output first
+#   CACHE=/project/def-maxwl/mforooz/t118/ladder/cache
+#   sbatch --test-only --array=0-191%40 --exclude=c128,c166,c537 --output=$OUT/logs/%x_%A_%a.out \
+#       $KIT/slurm/t118/xshuf_train.sh $KIT $PRODUCTS $CACHE $OUT
+#   # smoke (A2, B2, C2, D2 x C19M16 counts xshuf s0):
+#   sbatch --parsable --array=18,66,114,162%4 --exclude=c128,c166,c537 \
+#       --output=$OUT/logs/%x_%A_%a.out $KIT/slurm/t118/xshuf_train.sh $KIT $PRODUCTS $CACHE $OUT
+#   # full run, throttled to %40:
+#   sbatch --parsable --array=0-191%40 --exclude=c128,c166,c537 --output=$OUT/logs/%x_%A_%a.out \
+#       $KIT/slurm/t118/xshuf_train.sh $KIT $PRODUCTS $CACHE $OUT
+# The law array (xshuf_law.sh) is then submitted DIRECTLY, with no dependency on this array, for
+# the tasks whose SCORE_DONE exists; record the job ids in the status file. Never chain a job
+# onto an array that may have finished (no per-task or on-success dependency on a big array):
+# verify finished work by its files.
+#SBATCH --account=def-maxwl
+#SBATCH --job-name=t118L_xstrain
+#SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
+#SBATCH --exclude=c128,c166,c537
+#SBATCH --time=3:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16000M
+
+set -euo pipefail
+
+DEFAULT_BLACKLIST=/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed
+BLACKLIST_SHA256_PREFIX=31c69342
+USAGE="usage: xshuf_train.sh <kit_dir> <products_dir> <cache_dir> <out_dir> [blacklist.bed]"
+KIT="${1:?$USAGE}"
+PRODUCTS="${2:?$USAGE}"
+CACHE="${3:?$USAGE}"
+OUT="${4:?$USAGE}"
+BLACKLIST="${5:-$DEFAULT_BLACKLIST}"
+IDX="${SLURM_ARRAY_TASK_ID:?array task only}"
+[[ "$IDX" =~ ^[0-9]+$ ]] || { echo "SLURM_ARRAY_TASK_ID '$IDX' is not an index" >&2; exit 2; }
+PY_MODULES="python/3.10.13"
+MANIFEST="$PRODUCTS/MANIFEST.tsv"
+COVARIATES="$KIT/tools/t118/covariates.tsv"
+RUNS="$OUT/runs"
+TASKS_TSV="$OUT/tasks.tsv"
+
+# The run_name of task $IDX, read from a pairs.py task table on stdin (columns found by header).
+run_name_from() {
+  awk -F'\t' -v i="$IDX" 'NR == 1 { for (c = 1; c <= NF; c++) h[$c] = c; next }
+                          $h["index"] == i { print $h["run_name"] }'
+}
+
+if [ "${DRY_RUN:-0}" = 1 ]; then
+  TOOLS="$KIT"
+  [ -f "$TOOLS/tools/t118/ladder/pairs.py" ] || TOOLS=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+  TABLE_MANIFEST="$MANIFEST"
+  [ -f "$TABLE_MANIFEST" ] || TABLE_MANIFEST="$TOOLS/tests/fixtures/t112_meta/MANIFEST.tsv"
+  TABLE=$(PYTHONPATH="$TOOLS/src${PYTHONPATH:+:$PYTHONPATH}" "${PYTHON:-python3}" \
+          "$TOOLS/tools/t118/ladder/pairs.py" tasks "$TABLE_MANIFEST" --row 2 --xshuf)
+  RUN=$(run_name_from <<< "$TABLE")
+  [ -n "$RUN" ] || { echo "no task $IDX in the pairs.py table" >&2; exit 2; }
+  if [ -f "$RUNS/$RUN/SCORE_DONE" ]; then echo "skip $RUN: SCORE_DONE exists" >&2; exit 0; fi
+  echo "python3 $KIT/tools/t118/ladder/train.py train-index $MANIFEST $COVARIATES $CACHE $RUNS $IDX --row 2 --xshuf"
+  echo "python3 $KIT/tools/t118/ladder/score.py trained $MANIFEST $COVARIATES $CACHE $BLACKLIST $RUNS/$RUN --workers 4"
+  exit 0
+fi
+
+[ -f "$KIT/tools/t118/ladder/train.py" ] || { echo "no tools/t118/ladder/train.py under $KIT" >&2; exit 2; }
+[ -f "$KIT/tools/t118/ladder/score.py" ] || { echo "no tools/t118/ladder/score.py under $KIT" >&2; exit 2; }
+[ -f "$COVARIATES" ] || { echo "no $COVARIATES" >&2; exit 2; }
+[ -f "$MANIFEST" ] || { echo "no $MANIFEST" >&2; exit 2; }
+[ -d "$CACHE" ] || { echo "no cache dir $CACHE (run ladder_cache.sh first)" >&2; exit 2; }
+[ -s "$BLACKLIST" ] || { echo "blacklist $BLACKLIST missing or empty" >&2; exit 2; }
+BL_SHA=$(sha256sum "$BLACKLIST" | cut -d' ' -f1)
+case "$BL_SHA" in
+  "$BLACKLIST_SHA256_PREFIX"*) ;;
+  *) echo "blacklist sha256 $BL_SHA does not start $BLACKLIST_SHA256_PREFIX" >&2; exit 2 ;;
+esac
+KIT=$(cd "$KIT" && pwd)
+COVARIATES="$KIT/tools/t118/covariates.tsv"
+mkdir -p "$RUNS"
+
+echo "=== t118 xshuf_train idx=$IDX job ${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$IDX host=$(hostname) $(date -u)"
+echo "kit git sha: $(cat "$KIT/GIT_SHA" 2>/dev/null || git -C "$KIT" rev-parse HEAD 2>/dev/null || echo unknown)"
+echo "blacklist sha256: $BL_SHA"
+
+# Early exit before the venv, only from a table an earlier task already wrote with pairs.py.
+if [ -f "$TASKS_TSV" ]; then
+  RUN=$(run_name_from < "$TASKS_TSV")
+  if [ -n "$RUN" ] && [ -f "$RUNS/$RUN/SCORE_DONE" ]; then
+    echo "skip $RUN: SCORE_DONE exists"; exit 0
+  fi
+fi
+
+set +u; module load $PY_MODULES; set -u
+virtualenv --no-download "$SLURM_TMPDIR/venv"
+source "$SLURM_TMPDIR/venv/bin/activate"
+pip install --no-index --upgrade pip
+ls "$KIT"/wheels/x_transformers-*-py3-none-any.whl >/dev/null 2>&1 \
+  || { echo "no x_transformers wheel in $KIT/wheels" >&2; exit 2; }
+pip install --no-index -r "$KIT/requirements-fir.txt"
+pip install --no-index --find-links "$KIT/wheels" -r "$KIT/requirements-pypi.txt"
+export PYTHONPATH="$KIT/src"
+export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
+if [ -f "$KIT/GIT_SHA" ]; then export T118_GIT_SHA=$(cat "$KIT/GIT_SHA"); fi
+python3 -c "import candi.metrics, candi.bench.distributional, candi.store.genome; print('venv ok', candi.__file__)"
+# the library must come from this kit, not from some other install (tests/test_slurm_kit_pin.py)
+case "$(python3 -c 'import candi; print(candi.__file__)')" in
+  "$KIT"/src/*) ;;
+  *) echo "candi does not import from $KIT/src" >&2; exit 3 ;;
+esac
+
+# The authoritative task table, from pairs.py; a stale shared copy is an error, not a guess.
+TMP_TABLE="$TASKS_TSV.tmp.${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_$IDX"
+python3 "$KIT/tools/t118/ladder/pairs.py" tasks "$MANIFEST" --row 2 --xshuf > "$TMP_TABLE"
+# The run comes from this task's own table. The shared copy is created once and never replaced:
+# replacing it under 40 concurrent readers on /project gave "Stale file handle" (8 failed tasks,
+# job 22657297). cmp exit 1 = the tables differ (an error); exit 2 = a read problem (not fatal).
+RUN=$(run_name_from < "$TMP_TABLE")
+if [ -f "$TASKS_TSV" ]; then
+  CMP_RC=0; cmp -s "$TMP_TABLE" "$TASKS_TSV" || CMP_RC=$?
+  if [ "$CMP_RC" = 1 ]; then
+    echo "$TASKS_TSV differs from this kit's pairs.py table; remove it or fix the kit" >&2
+    rm -f "$TMP_TABLE"; exit 2
+  fi
+else
+  mv -n "$TMP_TABLE" "$TASKS_TSV" 2>/dev/null || true
+fi
+rm -f "$TMP_TABLE"
+[ -n "$RUN" ] || { echo "no task $IDX in the pairs.py table" >&2; exit 2; }
+echo "run: $RUN"
+if [ -f "$RUNS/$RUN/SCORE_DONE" ]; then echo "skip $RUN: SCORE_DONE exists"; exit 0; fi
+
+python3 "$KIT/tools/t118/ladder/train.py" train-index "$MANIFEST" "$COVARIATES" "$CACHE" "$RUNS" "$IDX" --row 2 --xshuf
+echo "=== trained $(date -u)"
+python3 "$KIT/tools/t118/ladder/score.py" trained "$MANIFEST" "$COVARIATES" "$CACHE" "$BLACKLIST" \
+    "$RUNS/$RUN" --workers 4
+
+echo "=== done $RUN $(date -u)"

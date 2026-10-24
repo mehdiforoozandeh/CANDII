@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Depth Offset and Map h</title>
+
+<!--
+  prezit deck · t125: the depth offset in f (part 1) and the counts -> p map h (part 2). Version 2.
+  Chrome, build pattern and chart style copied from ../t118-grid/ (deck_src.html + build_deck.py).
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-19):
+  - One arc in the order of a research paper: summary, motivation, method, results, discussion, then an
+    appendix (glossary and detail figures). The section is marked on every slide (kicker).
+  - Two audiences: the PI reads it alone first, then presents it to the lab. Every slide has speaker
+    notes (<aside class="notes">), hidden by default, shown as an overlay with the `n` key, and printed
+    under each slide.
+  - Part 2: h on the true counts is complete; the chain f -> h covers the designs the aggregate holds.
+    Every part-2 figure and count reads whatever designs part2/summary_data_h.json holds, and every
+    "N of 8" is computed, so a refresh needs only a rebuild.
+  - Exploratory phase: no hypothesis, no metrics.json, no approved synthesis. `crux deck --verify`
+    does not apply. Every number is embedded as DATA by build_deck.py from cruxvault/results/t125/part1/,
+    part2/ and the old grid's GRID_SUMMARY.md; none is typed in this file, except definitional design
+    constants (3 seeds, 10%, 2 x wobble, 2 x 64, 12 knots) on method slides and in notes.
+  - Figures for everything; the only tables are grid concepts (the part-1 grid, the versions of h).
+  - Readings, never verdicts. Every CRPS carries its oracle-scaled / scale-error split; every value
+    its seed wobble; every gain its bar (2 x the larger seed wobble).
+  - The summary slide carries numbers (PI: an abstract with one number per reading).
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm or model version, defined once */
+    --row1:#4a72b0; --row2:#d9822b; --aold:#b08a1e; --new:#1f8a70; --old:#9a9ca4; --twin:#9b6bb3;
+    --ok:#3f8f6f; --arm:#2f8f8a; --ctl:#a0679c; --xsrc:#8d8f98; --gpu:#4a72b0; --cpu:#d9822b;
+    --push:#3b8fd0; --noise:#c84d86; --htrue:#0a7d8c; --hfnb:#a8552e; --hform:#4f5d75;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --new:#3fb393; --old:#8a8c96; --aold:#d1a937; --twin:#b48ad0;
+      --push:#5aa8e6; --noise:#e070a4; --htrue:#2fb0bf; --hfnb:#d07a4c; --hform:#8d9ab0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --new:#3fb393; --old:#8a8c96; --aold:#d1a937; --twin:#b48ad0;
+    --push:#5aa8e6; --noise:#e070a4; --htrue:#2fb0bf; --hfnb:#d07a4c; --hform:#8d9ab0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  .sec.s-sum{background:var(--accent);color:var(--paper)}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;font-size:clamp(20px,2.4vw,31px)}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:80ch}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px;max-width:none}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px;max-width:none}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:54vh}
+  .fig.short svg{max-height:22vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .cards.lg .cw{font-size:15.5px}
+  .card svg{width:100%;height:auto;display:block;margin:4px 0 8px;max-height:20vh}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15.5px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .cards.sm .card{padding:11px 14px}.cards.sm .ct{font-size:15.5px;margin-bottom:4px}.cards.sm .cb{font-size:14px;line-height:1.38}
+
+  /* summary */
+  .abs{display:grid;grid-template-columns:150px 1fr;gap:6px 18px;margin:2px 0 12px;font-size:clamp(15px,1.4vw,18px);line-height:1.42;color:var(--body)}
+  .abs dt{font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.12em;font-size:12.5px;padding-top:4px}
+
+  /* the grid table */
+  table.grid{border-collapse:separate;border-spacing:8px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:9px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:25%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.empty{background:none;border:1px dashed var(--hair);color:var(--faint)}
+  table.grid td .nm{font-weight:700;font-size:20px;display:block}
+  table.grid tr.r1 td:not(.rh):not(.empty){border-left:4px solid var(--row1)}
+  table.grid tr.r2 td:not(.rh):not(.empty){border-left:4px solid var(--row2)}
+  table.grid tr.ro td:not(.rh):not(.empty){border-left:4px solid var(--aold)}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 8px;margin:3px 2px 0;border:1px solid var(--hair);color:var(--body)}
+  .tag.src-t{border-color:var(--htrue)}.tag.src-f{border-color:var(--hfnb)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  /* part 2 */
+  .scope{display:inline-block;margin-left:10px;letter-spacing:.12em;color:var(--twin)}
+  table.hgrid{border-spacing:6px 4px}
+  table.hgrid td{padding:5px 8px;font-size:14px}
+  table.hgrid td.rh{width:36%;font-size:15px}
+  table.hgrid tr.hf td:not(.rh):not(.empty){border-left:4px solid var(--hform);color:var(--muted)}
+  table.hgrid tr.h1 td:not(.rh):not(.empty){border-left:4px solid var(--push)}
+  table.hgrid tr.h5 td:not(.rh):not(.empty){border-left:4px solid var(--accent)}
+
+  /* readings table (discussion) */
+  .tag.good{background:rgba(31,138,112,.13);border-color:var(--new)}
+  .tag.bad{background:rgba(181,70,46,.13);border-color:var(--accent)}
+  table.rgrid td{text-align:left;padding:12px 14px;font-size:15.5px;vertical-align:top}
+  table.rgrid td b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+  table.rgrid td .tag{font-size:14px;margin:2px 0 6px}
+  table.rgrid td small{display:block;color:var(--body);font-size:14.5px;line-height:1.38;font-variant-numeric:tabular-nums}
+  table.rgrid td.rh{width:15%;font-size:17px}
+  table.rgrid tr.q1 td:not(.rh){border-top:4px solid var(--new)}
+  table.rgrid tr.q2 td:not(.rh){border-top:4px solid var(--push)}
+  table.hgrid td .tag{font-size:14px;padding:1px 10px;margin:1px 3px}
+  /* glossary */
+  dl.gl{display:grid;grid-template-columns:1fr 1fr;gap:0 40px;margin-top:6px}
+  dl.gl div{padding:4px 0;border-bottom:1px solid var(--hair);font-size:14px;line-height:1.33;color:var(--body)}
+  dl.gl dt{display:inline;font-weight:700;color:var(--ink)}
+  dl.gl dt::after{content:" · ";color:var(--faint);font-weight:400}
+  dl.gl dd{display:inline}
+
+  /* divider slide */
+  .divider h1{font-size:clamp(40px,5vw,64px)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px 16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the two fixes and the state of each part
+       numbers  run counts only (DATA.runs, DATA.h2.alone, DATA.h2.chain) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>Two fixes for the earlier transformation grid:<br>a depth offset in f, and a map h<br>from counts to p&#8209;values</h1>
+      <p class="sub"><b>Part 1, the depth offset:</b> <span class="num" id="tRuns"></span> trained runs, all scored.
+        <b>Part 2, the map h:</b> <span id="tRuns2"></span>.
+        This is an exploratory pass: it reports readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes for each slide</p>
+    </div>
+    <aside class="notes">
+      <p>This deck reports the follow-up to the earlier transformation grid (the deck the lab saw before, in the folder next to this one). It follows a paper: why we did it, what we ran, what we saw, what it means. The appendix holds a glossary and the detailed figures.</p>
+      <p>Every number on the slides and in these notes is read from the result files when the deck is built. Part 2 is still growing: a rebuild picks up the last chains when they land, and every "N of 8" updates by itself.</p>
+      <p>Nothing here is a verdict. The run is exploratory, so each finding is a reading with its seed wobble and its bar.</p>
+      <p><b>Likely question:</b> "Is this the same data as the earlier grid?" Yes: the same 7 tracks, arms, pairs, chromosome split, seeds and size of g.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · SUMMARY (the abstract)
+       job      the question, what we did, and the six readings, one number each
+       numbers  rendered from DATA (restated from the result slides) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec s-sum">Summary</span>the whole deck on one slide</div>
+      <h2>The question, what we did, and six readings</h2>
+      <dl class="abs">
+        <dt>Question</dt><dd>Can a small model turn one sequencing track into another from its processing settings alone, for the read counts and for the p&#8209;value track?</dd>
+        <dt>What we did</dt><dd>We fixed two problems of the earlier grid. <b>Part 1:</b> f scales the counts by the read ratio by default (a fixed depth offset). <b>Part 2:</b> f predicts only counts, and a map h computes the p&#8209;values from them.</dd>
+      </dl>
+      <div class="cards c3 sm">
+        <div class="card" style="--c:var(--accent)"><div class="rl">Reading 1 · part 1</div><div class="ct">Predicted counts still do not scale with read depth.</div><div class="bn" id="sm1"></div></div>
+        <div class="card" style="--c:var(--new)"><div class="rl">Reading 2 · part 1</div><div class="ct">The offset helps the simplest design, A, mostly by fixing its overall scale.</div><div class="bn" id="sm2"></div></div>
+        <div class="card" style="--c:var(--twin)"><div class="rl">Reading 3 · part 1</div><div class="ct">The settings still improve the predicted mean, beyond plain depth scaling.</div><div class="bn" id="sm3"></div></div>
+        <div class="card" style="--c:var(--push)"><div class="rl">Reading 4 · part 2</div><div class="ct" id="sm4t"></div><div class="bn" id="sm4"></div></div>
+        <div class="card" style="--c:var(--hfnb)"><div class="rl">Reading 5 · part 2</div><div class="ct">Push-only h: training on f's predictions does not repair f's errors.</div><div class="bn" id="sm5"></div></div>
+        <div class="card" style="--c:var(--row2)"><div class="rl">Reading 6 · part 2</div><div class="ct" id="sm6t"></div><div class="bn" id="sm6"></div></div>
+      </div>
+      <p class="note">Every card is a reading, not a verdict. ± is the seed wobble; a gain counts only if it is larger than the bar (2 × the larger seed wobble). A CRPS split reads (oracle-scaled + scale error). Words are defined in the glossary at the end.</p>
+    </div>
+    <aside class="notes">
+      <p>Read this slide as the abstract. The top two lines say what we asked and what we changed; the six cards are what we saw, one number each.</p>
+      <p>Cards 1 to 3 come from part 1, the read counts. Cards 4 to 6 come from part 2, the p&#8209;values. Each card has its own result slide later (results 1 to 6, in the same order), with the seed wobble and the bar.</p>
+      <p>The short story: the offset helps design A, but the depth law still does not hold. The map h removes the blow-ups of the old p&#8209;value predictions for push-only and formula h, but on the designs named in card 6 the chain is less accurate than the earlier grid's direct prediction.</p>
+      <p><b>Likely question:</b> "So did the fixes work?" Partly, and the deck keeps the negatives: see results 1, 5 and 6, and the own-noise exceptions in results 5 and 6.</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · the question
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the question</div>
+      <h2>Can a model turn one track into another, from its processing settings alone?</h2>
+      <div class="fig" id="figQuestion"></div>
+      <ul class="pts cols">
+        <li><b>CANDI reads these settings</b> (we call them <b>covariates</b>) for every input and output track.</li>
+        <li>We test the settings <b>in isolation</b>, with small models, on data where the true X′ exists.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>A <b>track</b> is a genome-wide signal, here in 25 bp bins. The same sample, processed with different settings (read depth, read length, control, and so on), gives different tracks. The question is whether the settings alone tell us how to go from one to the other.</p>
+      <p>The figure: on the left, a real H3K27ac track X; on the right, the same sample with fewer reads, X′. The model gets X and both sets of settings, C and C′, and must predict X′.</p>
+      <p>We need this because CANDI is conditioned on these settings, but inside CANDI we cannot see what the settings alone do.</p>
+      <p><b>Likely question:</b> "Why small models?" So the settings are the only route to the answer; a big model could hide what the settings do.</p>
+    </aside>
+  </section>
+
+  <!-- 4 · MOTIVATION · the data
+       numbers  none (definitional names only) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the data</div>
+      <h2>We rebuilt 7 tracks many times, changing one setting at a time</h2>
+      <div class="fig tall" id="figData"></div>
+      <p class="note">Each rebuild is called an <b>arm</b>. We reran the ENCODE pipeline from the raw reads, so for every change we have the true answer X′. Results are always reported per mark class. The classes are a fixed table taken over from the earlier grid (H3K4me1 is listed as narrow there); they are not derived from peak widths in this work.</p>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each dot is one knob we changed, with the level we moved it to. Green knobs change which reads enter the pileup, so they move both the counts and the p&#8209;values. Purple knobs change only the control or the peak caller, so they move only the p&#8209;values. The <b>antibody proxy</b> mixes control reads into the treatment, to mimic a weaker antibody.</p>
+      <p>Panel (b): the 7 base tracks fall in three mark classes with very different shapes. DNase has no control, so it has fewer arms.</p>
+      <p>Each (source arm, target arm) of one track is a <b>pair</b>; the model learns to go from the source to the target.</p>
+      <p><b>Likely question:</b> "Why is H3K4me1 narrow?" It is the earlier grid's fixed class table, kept so the two grids compare class by class; it is a convention, not a measured property.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · MOTIVATION · the model (g builds f)
+       numbers  definitional (MLP 2 x 64) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the model</div>
+      <h2>A small network g reads the settings and builds the transformation f</h2>
+      <div class="fig tall" id="figGF"></div>
+      <ul class="pts cols">
+        <li><b>We train g, not f.</b> f is only what g outputs for one pair of settings.</li>
+        <li><b>f outputs a distribution in every bin</b> (a mean and a spread), as CANDI does: a negative binomial over counts.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Top row: g is a small neural network (2 layers of 64). It reads the source settings C and the target settings C′ and outputs the parameters θ of f.</p>
+      <p>Bottom row: f is applied to the source track X, bin by bin, and outputs a distribution for each bin of X′: a mean (the line) and a spread (the band).</p>
+      <p>Because only g sees the settings, any skill f has at turning X into X′ must come through the settings.</p>
+      <p><b>Likely question:</b> "Why a distribution, not one number?" Counts are noisy; CANDI also outputs a negative binomial, and the CRPS score needs a distribution.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · MOTIVATION · four designs of f
+       numbers  definitional sizes -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>four designs of f</div>
+      <h2>Four designs of f, from simple to flexible</h2>
+      <div class="fig tall" id="figDesigns"></div>
+      <p class="note">A and B look at one bin at a time, so they change magnitude only. C and D also see neighbouring bins, so they can change shape (for example, peak width).</p>
+    </div>
+    <aside class="notes">
+      <p>The letters A to D name four forms of f, used everywhere in the deck. A is one straight line in log space (a slope and an intercept); B is a rising curve with 12 knots; C smooths with a kernel and then applies a curve; D is a small CNN whose layers g scales and shifts.</p>
+      <p>Read the panels left to right as "more flexible". The bottom line of each panel says what it can change and how many numbers g must output.</p>
+      <p><b>Likely question:</b> "Why keep A if it is the weakest?" A is the easiest to read, and in the earlier grid it showed the clearest problem; it is also where the offset helps most (result 2).</p>
+    </aside>
+  </section>
+
+  <!-- 7 · MOTIVATION · rows and versions of g
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>rows and versions of g</div>
+      <h2>Each design runs in two rows, and with two versions of g</h2>
+      <div class="fig tall" id="figRowsG"></div>
+      <ul class="pts cols">
+        <li><b>Row 1:</b> one f for the whole genome. <b>Row 2:</b> g also reads each bin's own level, so f can treat low bins and peaks differently. Row-2 designs carry a 2: A2, B2, C2, D2.</li>
+        <li><b>One g per track:</b> 7 small g's. <b>One g across tracks:</b> a single g that also reads the assay.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a), the rows: in row 1, g reads only the settings, so every bin gets the same f. In row 2, g also reads the bin's own level, so f can change from bin to bin (darker colour = higher level).</p>
+      <p>Panel (b), the versions of g: either 7 separate g's, one per track, or one g for all tracks that also reads the assay.</p>
+      <p>So one "design" in the deck is a letter (A to D) plus a row (no 2 = row 1, a 2 = row 2), and every design is trained with both versions of g. A <b>cell</b> is one design × one version of g × one mark class.</p>
+      <p><b>Likely question:</b> "Which version of g is better?" In the earlier grid, one g per track was better on DNase and the two tied on histone marks; this deck does not revisit that.</p>
+    </aside>
+  </section>
+
+  <!-- 8 · MOTIVATION · what went wrong in the earlier grid, and why (merged problems + causes)
+       source   depth: summary_data.json depth_law oldgrid_value; explosions: old GRID_SUMMARY.md -log10 p tables
+       numbers  in figure only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what went wrong in the earlier grid, and why</div>
+      <h2>The earlier grid had two problems, each with a likely cause and an idea</h2>
+      <div class="fig tall" id="figProblems"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each marker is one cell of the earlier grid; the y-axis is how far the predicted total count is from the read ratio when only depth changes (the <b>depth law</b>), on a log scale. The green band is within 10%; almost every cell is far outside it. Likely cause: f copied the counts unless g learned to scale them.</p>
+      <p>Panel (b): how many (pair, seed) records blew up (CRPS above 20, where typical values are below 1) when the earlier grid predicted −log10 p directly. Likely cause: a learned log-normal spread σ that drifts; the log-normal mean grows as e to the σ²/2 (appendix, "the two causes in detail").</p>
+      <p>The two boxes are the two ideas tested here: a fixed depth offset in f, and computing p from predicted counts with a map h.</p>
+      <p><b>Likely question:</b> "Is the depth law the right test?" It is the simplest change with a known answer: halve the reads and every bin halves on average.</p>
+    </aside>
+  </section>
+
+  <!-- 9 · MOTIVATION · the two questions
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the two questions</div>
+      <h2>This work asks two questions</h2>
+      <div class="cards c2 lg">
+        <div class="card" style="--c:var(--new)"><div class="rl">Question 1 · the depth offset</div>
+          <div class="ct">If f scales the counts by the read ratio unless g says otherwise, do the predictions follow the depth law, and do they get closer to the truth?</div>
+          <div class="cw"><b>Experiment 1:</b> retrain the whole grid with the offset. Compare it with the earlier grid, and with a twin that cannot see the settings.</div></div>
+        <div class="card" style="--c:var(--push)"><div class="rl">Question 2 · the map h</div>
+          <div class="ct">If f predicts only counts, how closely can a map h turn them into the −log10 p track, as h gets more inputs and more flexible? Does the chain f → h avoid the blow-ups?</div>
+          <div class="cw"><b>Experiment 2:</b> train h on the true counts and on f's predicted counts. Score it alone and in the chain f → h, against the earlier grid's p.</div></div>
+      </div>
+      <p class="note">Exploratory: both questions get readings, with no threshold set in advance.</p>
+    </div>
+    <aside class="notes">
+      <p>These are the two vault questions under the covariates question: the depth-offset question and the map-h question. Results 1 to 3 answer question 1; results 4 to 6 answer question 2.</p>
+      <p>Question 1 is about the counts only. Question 2 is about the p&#8209;value track, first with perfect counts (how good can h be?) and then with f's predicted counts (how good is the whole chain?).</p>
+      <p>Both are exploratory: the plan set no thresholds in advance, so the deck reports readings, each with its wobble and bar.</p>
+      <p><b>Likely question:</b> "Why both at once?" They share the count model: part 2 feeds the part-1 f into h.</p>
+    </aside>
+  </section>
+
+  <!-- 10 · METHOD · scoring
+       numbers  definitional (3 seeds, 2 x wobble) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>how we score</div>
+      <h2>How we score: CRPS and its two parts, the error of the mean, and a bar for noise</h2>
+      <div class="fig tall" id="figScore"></div>
+      <p class="note">Lower is better for every score. All scores are on held-out chromosomes (chr19 and chr21); the best training step is picked on chr22. Each score is a mean over (pair, seed) records.</p>
+    </div>
+    <aside class="notes">
+      <p>(a) <b>CRPS</b> scores the whole predicted distribution against the true value in each bin: a prediction that is off, or too wide, scores high. (b) We split every CRPS into an <b>oracle-scaled</b> part (what is left after the best single rescale) and a <b>scale error</b> (what that rescale removes). A gain in scale error means "the overall factor was wrong", which is cheap to fix.</p>
+      <p>(c) The <b>MSE of the mean</b> looks only at the predicted mean, on log(1 + value). With CRPS it tells a gain in the mean from a gain in the spread.</p>
+      <p>(d) Every model is trained with 3 seeds. The <b>wobble</b> is the largest gap between two seeds, and a gain counts only if it is larger than the <b>bar</b>, 2 × the larger wobble of the two models.</p>
+      <p><b>Likely question:</b> "Why not a p&#8209;value test?" The run is exploratory; the bar is a simple, stated rule for "larger than seed noise".</p>
+    </aside>
+  </section>
+
+  <!-- 11 · METHOD · idea 1, the depth offset
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>idea 1 · the depth offset</div>
+      <h2>Idea 1: f works on counts divided by the read depth, so "do nothing" means "scale by d′/d"</h2>
+      <div class="fig tall" id="figOffset"></div>
+      <ul class="pts cols">
+        <li><b>The only input change</b> from the earlier grid is a constant shift per track: − log d.</li>
+        <li><b>g still reads both depths</b>, so g can move f away from d′/d. The offset sets the default; it does not force the depth law.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Lane (a), the earlier grid: f read log(1 + X) and output the log mean of X′. If f learned nothing, it copied the counts.</p>
+      <p>Lane (b), the new model: f reads eta_in, the bin's depth-scaled level (log count minus the log source depth d), and its output eta_out gets the log target depth d′ added back. If f learns nothing, the prediction is the source scaled by d′/d, which is the depth law.</p>
+      <p>Everything else is the earlier grid's: the same g, the same negative binomial noise model and loss.</p>
+      <p><b>Likely question:</b> "Why let g still read depth?" The PI chose it: the offset should set a default, not remove capacity. Whether g then uses depth to move away from the law is an open question (result 1, next steps).</p>
+    </aside>
+  </section>
+
+  <!-- 12 · METHOD · experiment 1, the grid (the one table, a grid concept)
+       numbers  rendered from DATA.dev and DATA.runs -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>experiment 1 · the grid</div>
+      <h2>Experiment 1: the whole grid again, with the offset, plus A with its old spread</h2>
+      <table class="grid" id="tblGrid">
+        <tr><th></th>
+          <th>A<small>one straight line</small></th><th>B<small>a rising curve</small></th>
+          <th>C<small>kernel, then curve</small></th><th>D<small>small CNN</small></th></tr>
+        <tr class="r1"><td class="rh">Row 1 · g(C, C′)<small>one f per pair of settings</small></td>
+          <td data-d="A"></td><td data-d="B"></td><td data-d="C"></td><td data-d="D"></td></tr>
+        <tr class="r2"><td class="rh">Row 2 · g(level, C, C′)<small>level: the bin's depth-scaled level</small></td>
+          <td data-d="A2"></td><td data-d="B2"></td><td data-d="C2"></td><td data-d="D2"></td></tr>
+        <tr class="ro"><td class="rh">Row 1, old spread<small>A with one spread per pair, as in the earlier grid</small></td>
+          <td data-d="Aold"></td><td class="empty">—</td><td class="empty">—</td><td class="empty">—</td></tr>
+      </table>
+      <div class="fig short" id="figBudget" style="margin-top:8px"></div>
+      <p class="note"><b>The spread rule:</b> each design's spread now sees what its mean sees. Only row-1 A changed (from one spread per pair to a spread set by level); old-spread A keeps the old rule, so the two changes can be read apart (appendix).</p>
+    </div>
+    <aside class="notes">
+      <p>Read the table as the list of designs: 2 rows × 4 designs, plus one extra arm, <b>old-spread A</b>, which is row-1 A with the earlier grid's spread rule. Each cell holds the runs of that design.</p>
+      <p>The line below multiplies it out: every design is trained with 8 versions of g (7 per track + 1 across tracks), as the real model and as its no-covariates twin, with 3 seeds.</p>
+      <p>The spread is the negative binomial's shape n, how wide the predicted distribution is. Row-1 A changed twice (the offset and the spread rule), so old-spread A lets result 2 read each change alone.</p>
+      <p><b>Likely question:</b> "Did all runs train the same way?" No: some trained on a GPU slice and some on CPU (appendix). Row-1 against row-2 comparisons therefore also cross devices.</p>
+    </aside>
+  </section>
+
+  <!-- 13 · METHOD · control and comparisons
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>experiment 1 · control and comparisons</div>
+      <h2>One control, and four comparisons that each isolate one change</h2>
+      <div class="fig tall" id="figCompare"></div>
+      <p class="note">The no-covariates twin is the only control in part 1. It keeps the d′/d offset, so its gap to the real model is not the earlier grid's twin gap.</p>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): the <b>no-covariates twin</b> is the same model, but g sees random settings at every training step, so it can only learn one average map. Both the real model and the twin get the true d′/d offset.</p>
+      <p>Panel (b): the four comparisons we read. 1: each design against its earlier-grid self (the offset, plus the spread rule for A). 2: old-spread A against the earlier grid's A (the offset alone). 3: A against old-spread A (the spread rule alone). 4: real against twin (what the settings add beyond d′/d).</p>
+      <p>Each comparison is read with CRPS and its split, and with the MSE of the mean, except against the earlier grid, which has no MSE.</p>
+      <p><b>Likely question:</b> "Why does the twin keep the offset?" So that real minus twin isolates the settings other than depth; it means this gap is smaller than the earlier grid's and not comparable with it.</p>
+    </aside>
+  </section>
+
+  <!-- 14 · METHOD · idea 2 (the map h) and experiment 2 (training and scoring), merged
+       source   design (plan/ETA_OFFSET_AND_H_DESIGN.md, Part 2); the NB and the formula curve are illustrations
+       numbers  definitional; scope rendered from DATA.h2 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>idea 2 and experiment 2 · the map h</div>
+      <h2>Idea 2: h turns every possible count into a p&#8209;value, weighted by f's prediction</h2>
+      <div class="fig tall" id="figHMap"></div>
+      <div class="callout" id="tH_scope"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): f predicts a negative binomial over the count k in one bin. h reads each possible k, with the control around the bin, and gives one value P = −log10 p per k. The predicted P is that set of values, each weighted by its probability, so its mean and its CRPS are exact sums: nothing is sampled. (Shapes are an illustration, not data.)</p>
+      <p>Panel (b), two kinds of uncertainty: <b>push only</b> takes its spread from f only; <b>push + own noise</b> adds a learned spread of h's own, for what h cannot know even with the true count.</p>
+      <p>Panel (c), experiment 2: h is trained on the true counts or on f's predicted counts, and scored alone (on the true counts) or in the chain (on f's predicted counts). Three of the four cells are results 4, 5 and 6.</p>
+      <p><b>Likely question:</b> "Why should this not blow up?" There is no learned log-normal spread on P any more for push-only h: the spread of P comes from the count distribution. Own-noise h do add a spread, and they can blow up (result 6).</p>
+    </aside>
+  </section>
+
+  <!-- 15 · METHOD · versions of h (a grid concept, so a table)
+       numbers  definitional; seed counts from DATA -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>experiment 2 · versions of h</div>
+      <h2>Eight versions of h, from a fixed formula to a flexible network with all inputs</h2>
+      <table class="grid hgrid" id="tblH">
+        <tr><th><small style="text-align:left">tags: what h is trained on, and its seeds</small></th><th>push only<small>spread from f only</small></th>
+          <th>push + own noise<small>f's spread + h's own spread on log(1 + P)</small></th></tr>
+        <tr class="hf"><td class="rh">formula, bin only<small>the caller's Poisson tail at the local control rate</small></td>
+          <td data-h="form">nothing learned</td><td class="empty">—</td></tr>
+        <tr class="hf"><td class="rh">formula, fragment window<small>the same, on the mean count over one fragment</small></td>
+          <td data-h="form">nothing learned</td><td class="empty">—</td></tr>
+        <tr class="h1"><td class="rh">affine h, rung 1<small>inputs: bin count + control in the bin</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h1"><td class="rh">MLP h, rung 1<small>inputs: bin count + control in the bin</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">affine h, rung 5<small>all inputs</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">MLP h, rung 5<small>all inputs</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">formula + affine correction, rung 5<small>all inputs, the formula among them</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+        <tr class="h5"><td class="rh">formula + MLP correction, rung 5<small>all inputs, the formula among them</small></td><td data-h="learn"></td><td data-h="learn"></td></tr>
+      </table>
+      <p class="note"><b>Rungs</b> are input sets: rung 1 is the smallest, rung 5 is all of them (the control windows, the genome background, both depths, the control ratio, the fragment length and window, both read lengths). One h is shared by all assays; the assay is an input.</p>
+    </div>
+    <aside class="notes">
+      <p>Rows go down in complexity and inputs. The two <b>formula</b> rows learn nothing: they are the peak caller's own Poisson tail, at the bin or over one fragment. Then <b>affine</b> h (a weighted sum) and <b>MLP</b> h (a small network) at the two input ends, <b>rung 1</b> and <b>rung 5</b>; the design used only the two ends of a five-step input ladder. The last two rows add a learned correction to the formula.</p>
+      <p>Columns: each learned h comes in push only and push + own noise. Each learned h is trained two ways (the tags): on the true counts, with 3 seeds, and on f's predicted counts, with 1 seed.</p>
+      <p>The formula + correction rows need the rung-5 inputs, so they have no rung-1 version.</p>
+      <p><b>Likely question:</b> "Why only one seed on f's predictions?" To save compute: the seed wobble there is borrowed from the same h trained on the true counts.</p>
+    </aside>
+  </section>
+
+  <!-- 16 · RESULTS · R1 · the depth law
+       claim    the depth law still does not hold: 0 of 48 class cells within 10% (earlier grid 1 of 48)
+       source   summary_data.json depth_law (72 cells)
+       numbers  rendered from DATA.depth -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>result 1 of 6 · question 1 · the depth law</div>
+      <h2>The depth law still does not hold: <span id="tDL_h"></span></h2>
+      <div class="fig tall" id="figR1"></div>
+      <ul class="pts">
+        <li><span id="tDL_main"></span></li>
+      </ul>
+      <p class="note">Same computation as the earlier grid, on depth-only pairs. The twins of D and D2 meet it, so the test can be met.</p>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): one column per design. Grey is the earlier grid (no offset) and green the new model (with the depth offset); each bar spans the 6 class cells of the design (3 classes × 2 versions of g) and the dot is their median. The y-axis is the depth-law error on a log scale; the green band is within 10%. The dashed line at 3.0 (300%) is what a model that ignores depth would score: it predicts the same counts as X, and on the pairs with a quarter of the reads that misses by |4 − 1| = 3.0.</p>
+      <p>Panel (b): all classes pooled, the new real model (green) against its no-covariates twin (purple). Only the twins of D and D2 stay near the law (<span id="n_r1tw"></span>); the other twins miss by much more (<span id="n_r1tw2"></span>).</p>
+      <p>A reading on D and D2 only: real D misses by <span id="n_r1d"></span>, while its twin, which cannot read the settings, stays near the law. So in D, g's reading of the settings (depth among them) seems to move f away from d′/d. This is open, not shown: see next steps, option 2.</p>
+      <p><b>Likely question:</b> "Is the law computed correctly?" It is the earlier grid's computation; the D and D2 twins meeting it show the test can be met. Every cell is in the appendix.</p>
+    </aside>
+  </section>
+
+  <!-- 17 · RESULTS · R2 · design A gains
+       numbers  rendered from DATA.cells and DATA.rd -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>result 2 of 6 · question 1 · design A</div>
+      <h2>The offset helps design A, mostly in scale error; <span id="tAG_hrest"></span> do not move</h2>
+      <div class="fig tall" id="figR2"></div>
+      <ul class="pts">
+        <li><span id="tAG_main"></span></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): one cell, design A with one g per track on DNase, where the change is largest. Each bar is the CRPS on counts: dark is the oracle-scaled part, light is the scale error; the label on top is the mean ± seed wobble. Left to right: the earlier grid, the offset alone (old-spread A), and the offset plus the spread rule (new A).</p>
+      <p>Panel (b): for every design, how many of its 6 cells beat the earlier grid by more than the bar.</p>
+      <p>Split of the gain: the offset alone gives <span id="n_r2old"></span>; the spread rule alone adds <span id="n_r2sp"></span>, but the MSE of the mean moves beyond the bar in <span id="n_r2mse"></span>, so that part is in the spread, not the mean.</p>
+      <p><b>Likely question:</b> "Why not B to D?" A guess, not tested: they could already bend and scale, so they may have learned the overall factor without help. A also has an intercept, so this does not explain the difference by itself.</p>
+    </aside>
+  </section>
+
+  <!-- 18 · RESULTS · R3 · the settings help the mean
+       numbers  rendered from DATA.cells and DATA.rd -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>result 3 of 6 · question 1 · the settings</div>
+      <h2>The settings still improve the predicted mean, beyond the fixed d′/d scale</h2>
+      <div class="fig tall" id="figR3"></div>
+      <ul class="pts">
+        <li><span id="tTW_main"></span></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): one class and one version of g (DNase, one g per track), every design: the MSE of the predicted mean for the real model (green) and its twin (purple). The whisker is the seed wobble.</p>
+      <p>Panel (b): for every design, how many of its 6 cells have the real model lower than the twin by more than the bar, for the MSE of the mean (solid) and for CRPS (light).</p>
+      <p>Both models get the true d′/d, so this gap is what the other settings add. CRPS exceptions: the across-tracks A2 twin blows up (appendix); and in old-spread A, one g per track, DNase, the twin is lower by <span id="n_r3ao"></span>.</p>
+      <p><b>Likely question:</b> "Why is the twin lower there?" A guess, not tested: a single spread per pair may suit the twin's one average map better. Almost all of that gap is scale error.</p>
+    </aside>
+  </section>
+
+  <!-- 19 · RESULTS · R4 · h on the true counts
+       numbers  rendered from DATA.h2.cells_alone -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>result 4 of 6 · question 2 · h on the true counts</div>
+      <h2 id="tHA_h"></h2>
+      <div class="fig tall" id="figR4"></div>
+      <ul class="pts">
+        <li><span id="tHA_main"></span></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): narrow marks, every version of h trained and scored on the true counts, push only. The bar is the CRPS on log(1 + P): dark is the oracle-scaled part, light the scale error; the whisker is the seed wobble. Lower is closer to the real p&#8209;value track.</p>
+      <p>Panel (b) reads the four learned versions as a 2 × 2: inputs down (rung 1, rung 5), flexibility across (affine, MLP). The arrows give the drop in CRPS.</p>
+      <p>The formula learns nothing: <span id="n_r4form"></span>. With own noise, the lowest narrow value is <span id="n_r4best"></span>; own noise lowers this score in <span id="n_r4noise"></span>, but not the error of the mean (appendix). DNase and broad marks keep the same order (appendix).</p>
+      <p><b>Likely question:</b> "Which rung-5 inputs matter?" Rung 5 adds them all at once, so this run cannot tell. A guess, not tested: the control windows, as the caller itself uses them.</p>
+    </aside>
+  </section>
+
+  <!-- 20 · RESULTS · R5 · repair
+       numbers  rendered from DATA.h2.rd -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>result 5 of 6 · question 2 · repair <span class="scope"></span></div>
+      <h2>Push-only h: training on f's predictions does not repair f's errors</h2>
+      <div class="fig tall" id="figR5"></div>
+      <ul class="pts">
+        <li><span id="tHR_main"></span></li>
+        <li><b>Own-noise exception:</b> <span id="tHR_noise"></span>.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Both h are scored on the same input, f's predicted counts in the chain; they differ only in what they were trained on. Teal: h trained on the true counts. Rust: the same version of h trained on f's predicted counts, which has seen f's errors in training.</p>
+      <p>Panel (a): one design as an example, all six learned versions, push only, CRPS on log(1 + P) with its split. Panel (b): for every finished design, how many of the six push-only rows have the true-counts h lower by more than the bar. A <b>row</b> here is one h version × one f design × one class.</p>
+      <p>On CRPS on P, push only, the true-counts h is also lower in <span id="n_r5p"></span>. Some own-noise rows use fewer pairs (<span id="n_r5pairs"></span>): a comparison keeps only pairs whose score is finite for both h, and the own-noise affine h at rung 5 is not finite on many pairs.</p>
+      <p><b>Likely question:</b> "Is one seed enough?" It is a limit: the h trained on f's predictions has one seed, and some of its fits ran to the step cap (appendix).</p>
+    </aside>
+  </section>
+
+  <!-- 21 · RESULTS · R6 · the chain against the earlier grid's direct p
+       numbers  rendered from DATA.h2.rd and DATA.h2.expl; designs are classed from the data, not typed -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>result 6 of 6 · question 2 · the chain against the earlier grid <span class="scope"></span></div>
+      <h2 id="tHO_h"></h2>
+      <div class="fig tall" id="figR6"></div>
+      <ul class="pts">
+        <li><span id="tHO_main"></span></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): for each finished design, on a log scale, the earlier grid's direct p&#8209;value prediction (black square: the 3-seed mean with its wobble; open diamond: seed 0) against every push-only and formula chain h (coloured dots). Above the dashed line a record counts as a blow-up.</p>
+      <p>Panel (b): the designs where every chain h is above the earlier grid by more than the bar, with the CRPS split; the gap is in the oracle-scaled part, so a single rescale would not close it.</p>
+      <p>Where the earlier grid blew up on this track (<span id="n_r6x"></span>), no push-only or formula chain h did. <span id="n_r6rest"></span></p>
+      <p><b>Likely question:</b> "Why is the chain worse there?" Even with the true counts h is not exact (result 4), and in the chain f's count errors come on top.</p>
+    </aside>
+  </section>
+
+  <!-- 22 · DISCUSSION · what we learned (a readings grid: questions as rows, readings in cells)
+       numbers  restates numbers from the result slides only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what we learned</div>
+      <h2>The offset helps A but not the depth law; push-only h is stable but limited by f's count errors</h2>
+      <table class="grid rgrid" id="tblRead">
+        <tr class="q1"><td class="rh">Question 1<small>the depth offset</small></td>
+          <td><b>Depth law</b><span class="tag bad">still missed</span><small id="rd11"></small></td>
+          <td><b>Design A</b><span class="tag good">gain, mostly scale error</span><small id="rd12"></small></td>
+          <td><b>Other designs</b><span class="tag">no change</span><small id="rd13"></small></td>
+          <td><b>Settings beyond d′/d</b><span class="tag good">help the mean</span><small id="rd14"></small></td></tr>
+        <tr class="q2"><td class="rh">Question 2<small>the map h</small></td>
+          <td><b>h on true counts</b><span class="tag good">inputs help most</span><small id="rd21"></small></td>
+          <td><b>Repair, push only</b><span class="tag bad">does not repair</span><small id="rd22"></small></td>
+          <td><b>Chain against earlier grid</b><span class="tag bad" id="rd23t"></span><small id="rd23"></small></td>
+          <td><b>Blow-ups in the chain</b><span class="tag good">none for push-only, formula</span><small id="rd24"></small></td></tr>
+      </table>
+      <ul class="pts cols">
+        <li><b>Push-only and formula h are stable;</b> in the chain they are limited by f's count errors.</li>
+        <li><b>A reading on D and D2 only, not tested:</b> only their twins stay near the depth law, so g may move f away from d′/d.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Read the table row by row: each row is one of the two questions from the motivation, each cell one reading with its result slide's main number. Green tags are readings in favour of the change, red ones against it; grey means no change.</p>
+      <p>Question 1: the offset sets the right default, but the depth law does not hold; the offset helps design A, mostly through its overall scale; the other designs do not move; the settings other than depth still help the mean.</p>
+      <p>Question 2: with the true counts, more inputs help h most. In the chain, f's errors set the limit: training push-only h on f's predictions does not repair them, and on some designs the chain is less accurate than the earlier grid's direct p. Push-only and formula h never blow up; own-noise h do.</p>
+      <p><b>Likely question:</b> "So should we keep the offset and h?" That is a decision for after the open questions on the next slides, not a reading.</p>
+    </aside>
+  </section>
+
+  <!-- 23 · DISCUSSION · limits that bear on a claim (the others are in the appendix)
+       numbers  rendered from DATA -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>limits</div>
+      <h2>Three limits that bear on the readings</h2>
+      <div class="cards c3 lg">
+        <div class="card" style="--c:var(--twin)"><div class="rl">Results 1 and 3</div><div class="ct">The twin keeps the offset</div>
+          <div class="cb">So real − twin is what the settings add beyond d′/d. It is not comparable with the earlier grid's twin gap.</div></div>
+        <div class="card" style="--c:var(--hfnb)"><div class="rl">Results 5 and 6</div><div class="ct">The chain: one track, one seed of f</div>
+          <div class="cb" id="tL_seed"></div></div>
+        <div class="card" style="--c:var(--accent)"><div class="rl">Results 4 to 6</div><div class="ct">Own noise can blow up the mean</div>
+          <div class="cb" id="tL_boom"></div></div>
+      </div>
+      <p class="note">Six more limits (devices, no MSE in the earlier grid, merged mixture, step cap, capped rows, designs still running) are in the appendix.</p>
+    </div>
+    <aside class="notes">
+      <p>These three limits change how far a reading can be taken. The twin gets d′/d for free, so result 3 reads "the settings beyond depth", not "the settings at all", and results 1 and 3 cannot be compared with the earlier grid's twin.</p>
+      <p>The chain is one H3K27ac track and seed 0 of each f, and the h trained on f's predictions has one seed. Every chain reading is about that one track.</p>
+      <p>Own-noise h widen the predicted P, which lowers the CRPS, but the mean of P can blow up, mostly for affine h at rung 5; that is why results 5 and 6 lead with push-only h.</p>
+      <p><b>Likely question:</b> "Which limit matters most?" For question 2, the single track.</p>
+    </aside>
+  </section>
+
+  <!-- 24 · DISCUSSION · open questions and next steps
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>open questions and next steps</div>
+      <h2>Open questions, and options for what to do next</h2>
+      <div class="fig tall" id="figNext"></div>
+      <p class="note">Options, not decisions. Where the runs and tables are: see the speaker notes.</p>
+    </div>
+    <aside class="notes">
+      <p>Each box is an option, with the open question it would answer. Nothing here is decided.</p>
+      <p>Box 1 is housekeeping: the deck rebuilds itself from the data when the last chains land. Boxes 2 and 3 are about question 1: whether g moves f away from d′/d (the reading on D and D2), and whether g should read depth at all. Boxes 4 to 6 are about question 2: where the chain loses to direct p, whether repair needs more seeds or longer fits, and whether one track is representative.</p>
+      <p>Runs and tables: cruxvault/results/t125/ (GRID_SUMMARY.md, part1/, part2/); the earlier grid: cruxvault/results/row2/.</p>
+      <p><b>Likely question:</b> "What would you do first?" The cheapest is box 2, which needs no new training: compare g's predicted scale with the read ratio, real D against its twin.</p>
+    </aside>
+  </section>
+
+  <!-- 25 · APPENDIX · divider -->
+  <section class="slide">
+    <div class="wrap divider">
+      <div class="kicker"><span class="sec">Appendix</span>reference</div>
+      <h1>Appendix</h1>
+      <p class="sub">A glossary of every term in the deck, then the detail behind the method and the results: the spread rule, the two causes, every cell, the training devices, the blow-ups, the merged mixture, the step cap and the other limits.</p>
+    </div>
+    <aside class="notes">
+      <p>The appendix is for questions, not for the talk.</p>
+      <p>The two glossary slides define every term a lab member may not know. The detail slides show every cell behind results 1 to 5, and the checks behind the limits.</p>
+      <p><b>Likely question:</b> "Where is the full table?" In cruxvault/results/t125/GRID_SUMMARY.md; the appendix figures are drawn from the same files.</p>
+    </aside>
+  </section>
+
+  <!-- 26 · APPENDIX · glossary 1: data and model
+       numbers  definitional only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>glossary 1 of 2 · data and model</div>
+      <h2>Glossary: data and model</h2>
+      <dl class="gl">
+        <div><dt>track</dt><dd>a genome-wide signal of one sample, in 25 bp bins: read counts, or the p&#8209;value track.</dd></div>
+        <div><dt>arm</dt><dd>a rebuild of a base track with exactly one processing setting changed.</dd></div>
+        <div><dt>covariate (setting)</dt><dd>a recorded processing setting of a track: depth, read length, control, and so on.</dd></div>
+        <div><dt>antibody proxy</dt><dd>an arm with control reads mixed into the treatment, to mimic a weaker antibody.</dd></div>
+        <div><dt>counts</dt><dd>the number of reads in each 25 bp bin.</dd></div>
+        <div><dt>P = −log10 p</dt><dd>the peak caller's p&#8209;value per bin, on a log scale: how surprising the counts are against the control.</dd></div>
+        <div><dt>product</dt><dd>one real p&#8209;value track: one arm of one track.</dd></div>
+        <div><dt>pair</dt><dd>a source arm and a target arm of one track; the model maps the source to the target.</dd></div>
+        <div><dt>g and f</dt><dd>g is a small network that reads the settings; f is the transformation g builds for one pair.</dd></div>
+        <div><dt>NB (negative binomial)</dt><dd>the count distribution f predicts in every bin: a mean and a spread.</dd></div>
+        <div><dt>spread n</dt><dd>the NB's shape parameter: how wide the predicted distribution is.</dd></div>
+        <div><dt>design A–D</dt><dd>four forms of f: a line, a 12-knot curve, kernel then curve, a small CNN.</dd></div>
+        <div><dt>row 1 / row 2</dt><dd>row 1: g reads the settings only; row 2 (A2–D2): g also reads each bin's own level.</dd></div>
+        <div><dt>one g per track / across tracks</dt><dd>7 separate g's, or a single g that also reads the assay.</dd></div>
+        <div><dt>cell</dt><dd>one design × one version of g × one mark class.</dd></div>
+        <div><dt>no-covariates twin</dt><dd>the same model trained with random settings, so it learns one average map; here it keeps d′/d.</dd></div>
+        <div><dt>earlier grid</dt><dd>the earlier transformation grid, without the offset.</dd></div>
+        <div><dt>old-spread A</dt><dd>row-1 A with the offset but with the earlier grid's one spread per pair.</dd></div>
+        <div><dt>d and d′</dt><dd>the read depth of the source and of the target track, in millions of reads.</dd></div>
+        <div><dt>eta_in, eta_out</dt><dd>f's input, the bin's depth-scaled level log(1 + X) − log d, and its output; the log target mean is eta_out + log d′.</dd></div>
+        <div><dt>depth law</dt><dd>on depth-only pairs, the predicted total count should scale by d′/d; we allow a 10% error.</dd></div>
+      </dl>
+    </div>
+    <aside class="notes">
+      <p>Terms for the data and the count model, roughly in the order they appear in the deck. Point the lab here when a word on a slide is unfamiliar.</p>
+      <p>The two easiest to confuse: a <b>design</b> (A to D, plus a 2 for row 2) is a form of f, while a <b>version of g</b> (per track or across tracks) is how g is shared between tracks. Every design is trained with both versions.</p>
+      <p><b>Likely question:</b> "Is the earlier grid the same as row 1?" No: the earlier grid is the whole earlier run (rows 1 and 2, without the offset); row 1 exists in both.</p>
+    </aside>
+  </section>
+
+  <!-- 27 · APPENDIX · glossary 2: scoring and map h
+       numbers  definitional only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>glossary 2 of 2 · scoring and the map h</div>
+      <h2>Glossary: scoring and the map h</h2>
+      <dl class="gl">
+        <div><dt>CRPS</dt><dd>a score of a whole predicted distribution against the true value; lower is better.</dd></div>
+        <div><dt>oracle-scaled</dt><dd>the part of the CRPS left after the best single rescale of the prediction.</dd></div>
+        <div><dt>scale error</dt><dd>the part of the CRPS that one overall factor would remove.</dd></div>
+        <div><dt>MSE of the mean</dt><dd>squared error of the predicted mean, on log(1 + value); it ignores the spread.</dd></div>
+        <div><dt>seed wobble</dt><dd>the largest gap between the 3 training seeds of one model (the ± on every value).</dd></div>
+        <div><dt>bar</dt><dd>2 × the larger seed wobble of two models; a gain counts only if it is larger.</dd></div>
+        <div><dt>blow-up</dt><dd>a (pair, seed) record with CRPS above 20, where typical values are below 1.</dd></div>
+        <div><dt>held-out chromosomes</dt><dd>scores are on chr19 and chr21; the best training step is picked on chr22.</dd></div>
+        <div><dt>map h</dt><dd>turns a count (and the control around it) into P; part 2's replacement for predicting p directly.</dd></div>
+        <div><dt>formula h</dt><dd>the peak caller's own Poisson tail at the local control rate; nothing learned.</dd></div>
+        <div><dt>affine h / MLP h</dt><dd>a learned weighted sum of the inputs / a small learned network.</dd></div>
+        <div><dt>rung 1 / rung 5</dt><dd>h's input sets: the bin count and the control in the bin / all inputs.</dd></div>
+        <div><dt>push only</dt><dd>the predicted P is h(k) for every count k, weighted by f's distribution; h adds no noise.</dd></div>
+        <div><dt>push + own noise</dt><dd>each h(k) also gets a learned spread on log(1 + P).</dd></div>
+        <div><dt>chain</dt><dd>X → f → h: h applied to f's predicted counts, scored against the real P track.</dd></div>
+        <div><dt>trained on true counts / on f's predicted counts</dt><dd>the two ways h is trained: on the real X′, or on f's predicted distribution.</dd></div>
+        <div><dt>repair</dt><dd>whether h trained on f's predicted counts is lower in the chain than h trained on true counts.</dd></div>
+        <div><dt>row (part 2)</dt><dd>one h version × one f design × one mark class.</dd></div>
+        <div><dt>delta</dt><dd>the chain minus the earlier grid, per pair, then averaged.</dd></div>
+        <div><dt>merged mixture</dt><dd>own-noise CRPS in the chain uses at most G merged components per bin; its error is measured.</dd></div>
+        <div><dt>step cap / capped rows</dt><dd>an h fit that stopped at the maximum number of steps / a count distribution wider than the count limit.</dd></div>
+      </dl>
+    </div>
+    <aside class="notes">
+      <p>Terms for scoring and part 2. The three that matter most for reading the results are the CRPS split (oracle-scaled and scale error), the seed wobble, and the bar.</p>
+      <p>For part 2, keep apart what h is <b>trained</b> on (true counts or f's predicted counts) and what it is <b>scored</b> on (alone on the true counts, or in the chain on f's predicted counts).</p>
+      <p><b>Likely question:</b> "Why two CRPS scales, on P and on log(1 + P)?" CRPS on P is comparable with the earlier grid; the log scale is where the own-noise h is defined and where the large values of P do not dominate.</p>
+    </aside>
+  </section>
+
+  <!-- 28 · APPENDIX · the spread rule (moved from the method)
+       numbers  definitional (12 knots) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of the method · the spread rule</div>
+      <h2>Each design's spread now sees what its mean sees</h2>
+      <div class="fig" id="figSpread"></div>
+      <ul class="pts cols">
+        <li><b>The spread</b> is the negative binomial's shape n: how wide the predicted distribution is in each bin.</li>
+        <li><b>Only row-1 A changed.</b> It had one spread per pair; now it sets its spread by level, as A2 already did. Old-spread A keeps the old rule.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>The rule: whatever the mean of a design can see, its spread can see too. Panels (a) to (c) show this for A/B, C and D, which are all as in the earlier grid except row-1 A.</p>
+      <p>Panel (d): the earlier row-1 A rule, one spread for every bin of a pair. We keep it as a separate arm, old-spread A.</p>
+      <p><b>Likely question:</b> "Why change the spread at all?" One spread per pair cannot be narrow in low bins and wide in peaks; the earlier A's CRPS was dominated by that.</p>
+    </aside>
+  </section>
+
+  <!-- 29 · APPENDIX · the two causes in detail (moved from the motivation)
+       source   real snippet (base and its 1/8-depth arm; ratio from depth_law.tsv); log-normal identity
+       numbers  the read ratio only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of the motivation · the two causes</div>
+      <h2>The two causes in detail</h2>
+      <div class="fig tall" id="figWhy"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): real data. Fewer reads scale every bin by about the read ratio (the orange line, the base times the ratio, follows the filled arm). In the earlier grid, f copied the counts unless g learned to scale them.</p>
+      <p>Panel (b): a formula, not data. The earlier grid predicted −log10 p with a log-normal whose spread σ was learned. The mean of a log-normal grows as e to the σ²/2, so a spread that drifts up makes the mean explode.</p>
+      <p><b>Likely question:</b> "Why not just clip σ?" Clipping hides the drift; computing p from counts removes the learned spread from the push-only p&#8209;value path.</p>
+    </aside>
+  </section>
+
+  <!-- 30 · APPENDIX · depth law, every cell
+       numbers  rendered from DATA.depth -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of result 1</div>
+      <h2>The depth law, every cell</h2>
+      <div class="fig tall" id="figDepthLaw"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): every class cell. Open marker = the earlier grid (no offset), filled = the new real model (with offset), joined by a thin line; the dotted line is the range of the three per-seed errors.</p>
+      <p>Panel (b): the pooled cells, real against twin. Circle = one g per track, square = one g across tracks; within each design the shapes run DNase, narrow, broad.</p>
+      <p>No filled marker is in the green band; in panel (b) only the D and D2 twins are near it.</p>
+      <p>The dashed line at 3.0 is a model that ignores depth (it predicts ×1): on a law pair with a quarter of the reads it misses by |4 − 1| = 3.0, the worst over the law pairs.</p>
+    </aside>
+  </section>
+
+  <!-- 31 · APPENDIX · every design against the earlier grid and the twin
+       numbers  rendered from DATA.rd -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of results 2 and 3</div>
+      <h2>Every cell: against the earlier grid, and against the twin</h2>
+      <div class="fig tall" id="figAllCells"></div>
+    </div>
+    <aside class="notes">
+      <p>Each marker is one cell; the y-axis is its gain divided by its bar, so a marker above the dashed "bar" line is a gain larger than seed noise. Filled = beyond the bar, open = within.</p>
+      <p>Panel (a): CRPS gain over the earlier grid (result 2): only A, A2 and old-spread A reach above the bar. Panel (b): MSE gain over the twin (result 3): every cell is above the bar.</p>
+      <p>Panel (c): CRPS gain over the twin; open markers and the arrow mark the exceptions named in result 3's notes.</p>
+    </aside>
+  </section>
+
+  <!-- 32 · APPENDIX · h on the true counts, all classes, both kinds of uncertainty
+       numbers  rendered from DATA.h2.cells_alone -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of result 4</div>
+      <h2>h on the true counts: every class, both kinds of uncertainty</h2>
+      <div class="fig tall" id="figHAlone"></div>
+    </div>
+    <aside class="notes">
+      <p>Each row is a version of h; each panel is a mark class. Blue = push only, pink = push + own noise, slate = formula. Dark is the oracle-scaled part, light the scale error, the whisker the seed wobble.</p>
+      <p>The order is the same in all three classes: rung 5 below rung 1, MLP below affine, and a formula + correction at rung 5 lowest.</p>
+      <p>Own noise lowers this score in every learned row; the own-noise slide shows that it does not lower the error of the mean.</p>
+    </aside>
+  </section>
+
+  <!-- 33 · APPENDIX · repair, every row
+       numbers  rendered from DATA.h2.rd -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of result 5 <span class="scope"></span></div>
+      <h2>Repair, every push-only row of the chain</h2>
+      <div class="fig tall" id="figRepair"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): one group per learned version of h, one pair of markers per finished f design (named under the axis): the CRPS on log(1 + P) in the chain. Teal circle = h trained on true counts (whisker: seed wobble); rust square = h trained on f's predicted counts.</p>
+      <p>Panel (b): the gap between the two, divided by its bar; every point above the dashed line is beyond the bar.</p>
+      <p>Read it as one check per row: does the rust square sit above the teal circle? Result 5 counts the rows where it does by more than the bar.</p>
+    </aside>
+  </section>
+
+  <!-- 34 · APPENDIX · own noise: lower score, not a better mean; and its blow-ups
+       numbers  rendered from DATA.h2 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of the limits · own noise</div>
+      <h2>Own noise lowers the score but not the error of the mean, and its mean can blow up</h2>
+      <div class="fig tall" id="figNoise"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): for every row where both kinds of uncertainty exist (h alone and in the chain), how often push + own noise is lower than push only, for the CRPS on log(1 + P) and for the MSE of the mean. Solid: beyond the bar; light: lower but within the bar.</p>
+      <p>Panel (b): own-noise records whose point CRPS of the mean on P is above 20, alone and in the chain; the solid part comes from affine h at rung 5, with or without the formula.</p>
+      <p>Reading: own noise widens the predicted P so the CRPS improves, but it does not move the mean closer, and with an affine h at rung 5 the mean can explode.</p>
+    </aside>
+  </section>
+
+  <!-- 35 · APPENDIX · part-1 blow-ups and training devices
+       numbers  rendered from DATA.expl, DATA.dev -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of the limits · part 1</div>
+      <h2>Part 1: where each design trained, and where the counts blew up</h2>
+      <div class="fig tall" id="figDevBoom"></div>
+      <ul class="pts cols">
+        <li><b>Devices:</b> <span id="tC_dev2"></span>.</li>
+        <li><b>Count blow-ups:</b> <span id="tC_boom"></span>.</li>
+      </ul>
+      <p class="note">Kinds of scoring: <b>law</b> = depth-only pairs for the depth law; <b>shuffle</b> = settings shuffled across pairs; <b>swap</b> = source and target settings swapped; <b>trained</b> = the trained pairs (score chromosomes, or validation). This slide counts count blow-ups; the motivation slide counts the earlier grid's p&#8209;value blow-ups.</p>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): for each design, how many of its runs trained on the GPU slice (blue) or on CPU (orange). Row 1 trained on the GPU slice; most of row 2 and old-spread A trained on CPU. The PI accepted this; any row-1 against row-2 comparison also crosses devices.</p>
+      <p>Panel (b): part-1 records with CRPS on counts above 20, by kind of scoring. Every one of them comes from one model, named below the figure.</p>
+      <p>The earlier grid's count blow-ups are gone; its p&#8209;value blow-ups, on the motivation slide, are a different count.</p>
+    </aside>
+  </section>
+
+  <!-- 36 · APPENDIX · merged mixture, step cap, capped rows
+       numbers  rendered from DATA.h2 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>detail of the limits · part 2</div>
+      <h2>Part 2: the merged-mixture check, the step cap and capped rows</h2>
+      <div class="fig tall" id="figChecks"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): own-noise h in the chain are scored with a merged mixture (at most G components per bin, a PI rule) instead of the exact sum. For each design, the largest per-bin relative error against the exact CRPS, measured on deep bins; it must stay below the dashed bar. "exact" means no bin needed merging.</p>
+      <p>Panel (b): how many h fits ran to the step cap, by training source; a capped fit may not have converged.</p>
+      <p>Panel (c): count rows whose distribution was wider than the count limit and was capped, by where they occur.</p>
+    </aside>
+  </section>
+
+  <!-- 37 · APPENDIX · the other limits
+       numbers  rendered from DATA -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Appendix</span>the other limits</div>
+      <h2>Six more limits</h2>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--gpu)"><div class="ct">Mixed training devices</div>
+          <div class="cb"><span id="tC_dev"></span>. Row-1 against row-2 comparisons also cross devices.</div></div>
+        <div class="card" style="--c:var(--old)"><div class="ct">The earlier grid has no MSE</div>
+          <div class="cb">Against the earlier grid we compare CRPS only; "mean or spread" there rests on the CRPS split alone.</div></div>
+        <div class="card" style="--c:var(--row1)"><div class="ct">Merged mixture in the chain</div>
+          <div class="cb" id="tL_merge"></div></div>
+        <div class="card" style="--c:var(--hform)"><div class="ct">The step cap</div>
+          <div class="cb" id="tL_cap"></div></div>
+        <div class="card" style="--c:var(--hform)"><div class="ct">Capped count rows</div>
+          <div class="cb" id="tL_rows"></div></div>
+        <div class="card" style="--c:var(--row2)"><div class="ct" id="tL_scopeT"></div>
+          <div class="cb" id="tL_scope"></div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>These limits do not change a reading on their own, but they qualify the numbers.</p>
+      <p>Devices were mixed (the PI accepted this and asked for it to be stated). The earlier grid has no MSE. The merged mixture has a measured error under its bar. Some h fits stopped at the step cap; a few training rows were capped. The chain may not yet cover all 8 designs.</p>
+      <p><b>Likely question:</b> "Could the devices explain row-1 against row-2 gaps?" Not tested; no reading in this deck rests on a row-1 against row-2 gap.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · depth offset and map h · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py from:
+     snip, locus  ../t118-grid/snippet.json (real H3K27ac, 25 bp bins)
+     law_ratio    part1/depth_law.tsv, log2 read ratio of C19M16 base -> 3.75 M
+     cells        part1/summary_data.json cells: "src|rung|g|class|metric" ->
+                  [mean, wobble, (oracle-scaled, wobble, scale error, wobble)]; src real | twin | old
+     rd           part1/summary_data.json readings: "reading|metric|rung|g|class" ->
+                  [gain, bar, beyond bar, this, wobble, other, wobble, (os gain, bar, se gain, bar)]
+     depth        part1/summary_data.json depth_law (72 cells)
+     expl         part1/summary_data.json explosions (CRPS > 20) by kind, nonzero cells
+     oldp         old GRID_SUMMARY.md -log10 p explosion tables, summed over classes and both g
+     dev, runs    part1/run_device.tsv
+     h2           part2/summary_data_h.json: cells_alone "class|version id|metric" and cells_chain
+                  "f design|version id|metric" -> [mean, wobble, n]; rd (repair, vs_oldgrid, push_vs_noise);
+                  expl, merge, fits, capped, old_cell_n; version id = variant|window|rung|noise|source
+   =========================================================================== */
+const DATA = __DATA__;
+
+const COL={push:'var(--push)',noise:'var(--noise)',htrue:'var(--htrue)',hfnb:'var(--hfnb)',hform:'var(--hform)',row1:'var(--row1)',row2:'var(--row2)',aold:'var(--aold)',nw:'var(--new)',old:'var(--old)',twin:'var(--twin)',
+  ok:'var(--ok)',arm:'var(--arm)',ctl:'var(--ctl)',x:'var(--xsrc)',ink:'var(--ink)',muted:'var(--muted)',body:'var(--body)',
+  faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',accent:'var(--accent)',
+  paper:'var(--paper)',gpu:'var(--gpu)',cpu:'var(--cpu)'};
+const CL=['DNase','narrow','broad'], GV=['per_track','across'];
+const DES=['A','B','C','D','A2','B2','C2','D2','Aold'];
+const GN={per_track:'one g per track',across:'one g across tracks'};
+const rowCol=d=>d==='Aold'?COL.aold:(d.endsWith('2')?COL.row2:COL.row1);
+const fmt=v=>{const a=Math.abs(v);return a>=1000?v.toExponential(1).replace('e+','e'):a>=100?v.toFixed(0):a>=10?v.toFixed(1):a>=1?v.toFixed(3):v.toPrecision(3);};
+const pm=(v,w)=>fmt(v)+' ± '+fmt(w);
+const cell=(src,r,g,c,m)=>DATA.cells[[src,r,g,c,m].join('|')];
+const rdg=(k,m,r,g,c)=>DATA.rd[[k,m,r,g,c].join('|')];
+const allRd=(k,m)=>Object.entries(DATA.rd).filter(([key])=>key.startsWith(k+'|'+m+'|')).map(([key,v])=>{const p=key.split('|');return {r:p[2],g:p[3],c:p[4],v};});
+
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2)=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const arrowL0=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2+8,y,c,w)+arrowHead(x2,y,'l',c);
+const arrowD=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2-8,c,w)+arrowHead(x,y2,'d',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+/* g-version marker: circle = one g per track, square = one g across tracks */
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g==='per_track'?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const logY=(lo,hi,top,h)=>v=>top+h*(1-(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo)));
+
+function trackD(v,x0,yBase,w,h,ymax,closed){
+  const n=v.length,dx=w/n;let d=closed?`M${x0},${yBase}`:'';
+  v.forEach((val,i)=>{const y=(yBase-h*Math.min(val,ymax)/ymax).toFixed(1);
+    const xa=(x0+i*dx).toFixed(1),xb=(x0+(i+1)*dx).toFixed(1);
+    d+=(d===''?`M${xa},${y}`:` L${xa},${y}`)+` L${xb},${y}`;});
+  return closed?d+` L${x0+w},${yBase} Z`:d;}
+const S=k=>DATA.snip[k];
+
+/* groups of design slots: 9 designs x nslot; draws shading, labels and row dividers */
+function groups(x0,w,top,h,des,lblY,fs=17){
+  const gw=w/des.length;let s='';
+  des.forEach((d,i)=>{const gx=x0+i*gw;
+    if(i%2===0) s+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+    if(d==='Aold'){const f2=Math.max(10.5,fs*0.72),two=gw<62;
+      s+=T(gx+gw/2,lblY,'A','ptitle','middle',`style="fill:${rowCol(d)};font-size:${fs}px"`)+
+        T(gx+gw/2,lblY+f2+2,two?'old':'old spread','cap','middle',`style="fill:${rowCol(d)};font-size:${f2}px"`)+
+        (two?T(gx+gw/2,lblY+2*f2+3,'spread','cap','middle',`style="fill:${rowCol(d)};font-size:${f2}px"`):'');}
+    else s+=T(gx+gw/2,lblY,d,'ptitle','middle',`style="fill:${rowCol(d)};font-size:${fs}px"`);
+    if(i>0&&(des[i]==='A2'||des[i]==='Aold')) s+=L(gx,top-6,gx,top+h+8,COL.axis,2);});
+  return {s,gw,x:(gi,si,n)=>x0+gi*gw+gw*(0.14+0.72*(si+0.5)/n)};}
+function yTicks(x0,w,yy,ticks){let s='';ticks.forEach(([v,l])=>{s+=L(x0,yy(v),x0+w,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,l,'tick','end');});return s;}
+
+/* ---------- 3 · the question ---------- */
+function figQuestion(){
+  const W=1160,H=270;let s='';
+  const vx=S('base__base/counts25').slice(100,300), vy=S('depth__15M/counts25').slice(100,300);
+  s+=R(10,40,280,150,COL.card,COL.hair,10)+P(trackD(vx,24,170,252,110,46,true),COL.x,'none',0)+T(150,30,'X · the track we have','ptitle','middle');
+  s+=R(320,60,190,48,COL.card,COL.row1,24)+T(415,90,'C: how X was made','axlbl','middle','style="font-size:15.5px"');
+  s+=R(320,130,190,48,COL.card,COL.row2,24)+T(415,160,'C′: how we want it','axlbl','middle','style="font-size:15.5px"');
+  s+=arrowR(292,115,560)+arrowR(512,84,560)+arrowR(512,154,560);
+  s+=R(565,60,150,110,COL.card,COL.accent,14,2.5)+T(640,132,'?','big','middle',`style="font-size:54px;fill:var(--accent)"`);
+  s+=arrowR(717,115,800);
+  s+=R(805,40,300,150,COL.card,COL.hair,10)+P(trackD(vy,819,170,272,110,46,true),COL.ink,'none',0)+T(955,30,'X′ · the track we want','ptitle','middle');
+  s+=T(955,220,'the real X′ exists, so we can score','psub','middle');
+  s+=T(580,258,`real data: H3K27ac, ${DATA.locus[0]}, the base track and its fewer-reads arm, same y-axis`,'cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 4 · the data: knobs and classes ---------- */
+function figData(){
+  const W=1160,H=480;let s='';
+  s+=T(0,24,'(a) One setting ("knob") changed per rebuild','ptitle');
+  const cx=310,cy=232,rr=140;
+  const knobs=[['depth','fewer reads','r'],['read length','shorter reads','r'],['paired-end','on','r'],
+    ['duplicates','kept','r'],['MAPQ cut','lower','r'],['antibody proxy','control mixed in','r'],
+    ['control','none · another','c'],['control depth','fewer reads','c'],['control scaling','up · down','c'],
+    ['fragment length','short · long','c']];
+  knobs.forEach(([n,lv,t],i)=>{
+    const a=-Math.PI/2+i*2*Math.PI/knobs.length, x=cx+rr*Math.cos(a), y=cy+rr*Math.sin(a);
+    const c=t==='r'?COL.arm:COL.ctl;
+    s+=L(cx+58*Math.cos(a),cy+58*Math.sin(a),x-14*Math.cos(a),y-14*Math.sin(a),c,2.5)+Ci(x,y,11,c);
+    const right=Math.cos(a)>0.2,left=Math.cos(a)<-0.2,anc=right?'start':left?'end':'middle';
+    const tx=x+(right?18:left?-18:0), ty=y+(Math.abs(Math.cos(a))<=0.2?(Math.sin(a)<0?-30:34):-2);
+    s+=T(tx,ty,n,'axlbl',anc,'style="font-size:16px;font-weight:600"')+T(tx,ty+19,lv,'psub',anc,'style="font-size:14px"');
+  });
+  s+=Ci(cx,cy,56,COL.card,COL.ink,2.5)+T(cx,cy-2,'base','big','middle','style="font-size:22px"')+T(cx,cy+20,'track','psub','middle');
+  s+=Ci(40,H-12,7,COL.arm)+T(54,H-7,'reads knobs: move counts and p','cap')+Ci(300,H-12,7,COL.ctl)+T(314,H-7,'control and caller knobs: move p only','cap');
+  s+=divider(640,10,H-4);
+  s+=T(670,24,'(b) 7 tracks in 3 mark classes','ptitle');
+  const groupsC=[['DNase','open chromatin, no control',['DNase-seq'],0],
+    ['narrow marks','sharp peaks',['H3K27ac','H3K4me3','H3K4me1'],1],
+    ['broad marks','wide domains',['H3K27me3','H3K36me3','H3K9me3'],2]];
+  groupsC.forEach(([n,sub,tr,k],i)=>{
+    const x=670,y=44+i*140,w=490,h=126;
+    s+=R(x,y,w,h,COL.card,COL.hair,12)+T(x+16,y+30,n,'ptitle','start','style="font-size:19px"')+T(x+16,y+52,sub,'psub');
+    tr.forEach((t,j)=>{s+=R(x+16+j*102,y+74,96,30,COL.paper,COL.hair,15)+T(x+64+j*102,y+94,t,'axlbl','middle','style="font-size:13.5px"');});
+    const ix=x+340,iy=y+104,iw=134;let d=`M${ix},${iy}`;
+    for(let j=0;j<=80;j++){const t=j/80,xx=ix+t*iw;let yv=0;
+      if(k===0) yv=Math.exp(-Math.pow((t-0.5)/0.04,2))*70;
+      if(k===1) yv=Math.exp(-Math.pow((t-0.35)/0.05,2))*60+Math.exp(-Math.pow((t-0.72)/0.04,2))*42;
+      if(k===2) yv=(t>0.12&&t<0.85?26+7*Math.sin(t*38):3);
+      d+=` L${xx.toFixed(1)},${(iy-yv).toFixed(1)}`;}
+    s+=P(d+` L${ix+iw},${iy} Z`,COL.ink,'none',0,';fill-opacity:.75')+L(ix,iy,ix+iw,iy,COL.axis,1);
+  });
+  return svg(W,H,s);
+}
+
+/* ---------- 5 · g and f (t118) ---------- */
+function figGF(){
+  const W=1160,H=400;let s='';
+  s+=R(20,40,150,46,COL.card,COL.row1,23)+T(95,70,'C','mono','middle');
+  s+=R(20,110,150,46,COL.card,COL.row2,23)+T(95,140,'C′','mono','middle');
+  s+=T(95,28,'settings','psub','middle');
+  s+=arrowR(172,63,250)+arrowR(172,133,250);
+  s+=R(255,30,210,140,COL.card,COL.accent,14,2.5)+T(360,24,'g · trained','val','middle','style="fill:var(--accent)"');
+  [[290,3],[360,4],[430,3]].forEach(([x,n])=>{for(let j=0;j<n;j++){const y=100+(j-(n-1)/2)*28;s+=Ci(x,y,8,COL.accent);}});
+  s+=T(360,160,'small MLP, 2 × 64','cap','middle');
+  s+=arrowR(467,100,560);
+  s+=R(565,70,120,60,COL.card,COL.hair,10)+T(625,107,'θ','big','middle')+T(625,58,'parameters','psub','middle');
+  s+=arrowD(625,132,215);
+  const vx=S('base__base/counts25').slice(100,300), vy=S('depth__15M/counts25').slice(100,300);
+  s+=R(20,220,300,140,COL.card,COL.hair,10)+P(trackD(vx,34,345,272,100,46,true),COL.x,'none',0)+T(170,385,'X','ptitle','middle');
+  s+=arrowR(322,290,520);
+  s+=R(525,220,200,140,COL.card,COL.ink,14,2.5)+T(625,297,'f','big','middle','style="font-size:40px"')+T(625,330,'built by g','psub','middle');
+  s+=arrowR(727,290,820);
+  const yb=345,w=300,h=100,x0=825;
+  const up=vy.map(v=>v*1.45+2), lo=vy.map(v=>Math.max(0,v*0.6-1));
+  s+=R(x0-6,220,w+12,140,COL.card,COL.hair,10);
+  s+=P(trackD(up,x0,yb,w,h,46,true),COL.row2,'none',0,';fill-opacity:.25');
+  s+=P(trackD(lo,x0,yb,w,h,46,true),COL.card,'none',0);
+  s+=P(trackD(vy,x0,yb,w,h,46,false),'none',COL.row2,2);
+  s+=T(x0+w/2,385,'predicted X′: a mean and a spread per bin','psub','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 6 · designs (t118) ---------- */
+function figDesigns(){
+  const W=1160,H=420;let s='';
+  const pw=260,gap=26,top=20,ph=200;
+  const names=[['A','one straight line'],['B','a rising curve'],['C','kernel, then curve'],['D','small CNN, tuned by g']];
+  const can=[['magnitude only','3 numbers'],['magnitude only','12-knot curve'],['+ one shape change, everywhere','33-bin kernel (825 bp)'],['+ shape that depends on neighbours','4 layers, view ≈ 1.5 kb']];
+  names.forEach(([n,t],i)=>{
+    const x=10+i*(pw+gap);
+    s+=R(x,top,pw,ph+150,COL.card,COL.hair,12);
+    s+=T(x+18,top+40,n,'big')+T(x+50,top+38,t,'axlbl','start','style="font-size:15.5px"');
+    const bx=x+30,by=top+70,bw=pw-60,bh=ph-60;
+    if(i<2){
+      s+=L(bx,by+bh,bx+bw,by+bh,COL.axis,1.2)+L(bx,by,bx,by+bh,COL.axis,1.2);
+      s+=T(bx+bw/2,by+bh+20,'input level → output level','cap','middle');
+      if(i===0) s+=L(bx+5,by+bh-10,bx+bw-5,by+10,COL.accent,3.5);
+      else{let d='',pts=[];for(let k=0;k<12;k++){const t=k/11,xx=bx+5+t*(bw-10),yy=by+bh-10-(bh-20)*(0.5*t+0.5*Math.pow(t,3)+0.15*Math.sin(t*6)*t*(1-t)*4);pts.push([xx,yy]);d+=(k?' L':'M')+xx.toFixed(1)+','+yy.toFixed(1);}
+        s+=P(d,'none',COL.accent,3.5);pts.forEach(p=>s+=Ci(p[0],p[1],4.5,COL.card,COL.accent,2));}
+    }else if(i===2){
+      const kx=bx,kw=bw*0.45;
+      s+=L(kx,by+bh,kx+kw,by+bh,COL.axis,1.2);
+      let d=`M${kx},${by+bh}`;for(let k=0;k<=40;k++){const t=k/40;d+=` L${(kx+t*kw).toFixed(1)},${(by+bh-Math.exp(-Math.pow((t-0.5)/0.13,2))*(bh-20)).toFixed(1)}`;}
+      s+=P(d,'none',COL.accent,3.5)+T(kx+kw/2,by+bh+20,'kernel','cap','middle');
+      s+=T(kx+kw+14,by+bh/2+8,'→','big','middle');
+      const cx2=kx+kw+30,cw=bw-kw-30;
+      s+=L(cx2,by+bh,cx2+cw,by+bh,COL.axis,1.2)+L(cx2,by,cx2,by+bh,COL.axis,1.2);
+      let d2='';for(let k=0;k<=20;k++){const t=k/20;d2+=(k?' L':'M')+(cx2+4+t*(cw-8)).toFixed(1)+','+(by+bh-8-(bh-16)*(0.5*t+0.5*t*t*t)).toFixed(1);}
+      s+=P(d2,'none',COL.accent,3)+T(cx2+cw/2,by+bh+20,'curve','cap','middle');
+    }else{
+      for(let l=0;l<4;l++){const yy=by+l*34;s+=R(bx+40,yy,bw-60,24,'none',COL.accent,5,2);
+        for(let k=0;k<9;k++) s+=Ci(bx+52+k*((bw-84)/8),yy+12,3,COL.accent);
+        s+=L(bx,yy+12,bx+34,yy+12,COL.row1,2)+arrowHead(bx+40,yy+12,'r',COL.row1,7);}
+      s+=T(bx+8,by+bh+20,'g scales and shifts each layer','cap','start');
+    }
+    s+=L(x+18,top+ph+50,x+pw-18,top+ph+50,COL.hair,1);
+    s+=T(x+18,top+ph+82,can[i][0],'axlbl','start','style="font-size:15.5px"')+T(x+18,top+ph+108,can[i][1],'psub');
+  });
+  s+=L(40,H-8,W-60,H-8,COL.faint,1.5)+arrowHead(W-50,H-8,'r',COL.faint)+T(W/2,H-16,'more flexible →','cap','middle');
+  return svg(W,H+4,s);
+}
+
+/* ---------- 7 · rows and versions of g ---------- */
+function figRowsG(){
+  const W=1160,H=420;let s='';
+  const v=S('base__base/counts25'), lx=150, pw=410;
+  s+=T(0,24,'(a) Two rows: what g reads','ptitle');
+  s+=T(0,92,'source track','axlbl','start','style="font-size:15px;font-weight:600"')+T(0,112,'(real H3K27ac)','psub','start','style="font-size:13.5px"');
+  s+=P(trackD(v,lx,120,pw,70,46,true),COL.x,'none',0)+L(lx,120,lx+pw,120,COL.axis,1);
+  s+=T(0,190,'Row 1','ptitle','start','style="fill:var(--row1)"')+T(0,212,'g(C, C′)','psub');
+  s+=R(lx,168,pw,46,COL.row1,'none',6)+T(lx+pw/2,197,'the same f in every bin','axlbl','middle','style="fill:#fff;font-size:15.5px"');
+  s+=T(0,290,'Row 2','ptitle','start','style="fill:var(--row2)"')+T(0,312,'g(level, C, C′)','psub');
+  const n=v.length,dx=pw/n;
+  v.forEach((val,i)=>{const op=0.15+0.85*Math.min(1,Math.log1p(val)/Math.log1p(45));
+    s+=`<rect x="${(lx+i*dx).toFixed(1)}" y="268" width="${(dx+0.6).toFixed(1)}" height="46" style="fill:var(--row2);fill-opacity:${op.toFixed(2)}"/>`;});
+  s+=T(lx+pw/2,340,'f changes with the bin\'s level','psub','middle')+T(lx+pw/2,362,'darker = higher level','cap','middle');
+  s+=divider(600,10,H-6);
+  s+=T(630,24,'(b) Two versions of g','ptitle');
+  const tr=['DNase','H3K27ac','H3K4me3','H3K4me1','H3K27me3','H3K36me3','H3K9me3'];
+  s+=T(760,62,'one g per track','axlbl','middle','style="font-weight:600"');
+  tr.forEach((t,i)=>{const y=80+i*44;
+    s+=R(630,y,120,32,COL.paper,COL.hair,16)+T(690,y+21,t,'axlbl','middle','style="font-size:13.5px"');
+    s+=L(752,y+16,800,y+16,COL.muted,1.5)+R(804,y+3,52,26,COL.card,COL.accent,6,2)+T(830,y+21,'g'+(i+1),'val','middle','style="fill:var(--accent);font-size:14px"');});
+  s+=L(885,50,885,H-20,COL.hair,1.5);
+  s+=T(1030,62,'one g across tracks','axlbl','middle','style="font-weight:600"');
+  tr.forEach((t,i)=>{const y=80+i*44;
+    s+=R(905,y,120,32,COL.paper,COL.hair,16)+T(965,y+21,t,'axlbl','middle','style="font-size:13.5px"');
+    s+=L(1027,y+16,1085,230,COL.muted,1.2);});
+  s+=R(1085,190,72,80,COL.card,COL.accent,12,2.5)+T(1121,238,'g','big','middle','style="fill:var(--accent)"');
+  s+=T(1121,292,'also reads','psub','middle','style="font-size:13.5px"')+T(1121,310,'the assay','psub','middle','style="font-size:13.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 11 · scoring: four panels ---------- */
+function figScore(){
+  const W=1160,H=430;let s='';
+  const pw=275,gap=20,top=50;
+  const xs=[0,1,2,3].map(i=>i*(pw+gap));
+  [1,2,3].forEach(i=>s+=divider(xs[i]-gap/2,10,H-6));
+  // (a) CRPS
+  {const x0=xs[0]+10,w=pw-20,yb=230,truth=0.62;
+   s+=T(xs[0],24,'(a) CRPS','ptitle');
+   s+=L(x0,yb,x0+w,yb,COL.axis,1.2);
+   const pdf=(m,sd)=>{let d='';for(let k=0;k<=100;k++){const t=k/100,y=Math.exp(-0.5*Math.pow((t-m)/sd,2))/sd*9;d+=(k?' L':'M')+(x0+t*w).toFixed(1)+','+(yb-Math.min(y,170)).toFixed(1);}return d;};
+   s+=P(pdf(0.6,0.07),'none',COL.nw,3)+P(pdf(0.33,0.16),'none',COL.old,3);
+   s+=L(x0+truth*w,60,x0+truth*w,yb,COL.ink,2,'6 4')+T(x0+truth*w+6,72,'truth','axlbl','start','style="font-size:14px"');
+   s+=T(x0+0.70*w,128,'sharp, right','val','start','style="fill:var(--new);font-size:14px"');
+   s+=T(x0,86,'wide, off','val','start','style="fill:var(--old);font-size:14px"');
+   s+=FO(xs[0],250,pw,170,'Scores the whole predicted distribution against the true value. A prediction that is off, or too wide, scores high.');}
+  // (b) split
+  {const x0=xs[1],bx=x0+40,bw=80,yb=230;
+   s+=T(x0,24,'(b) CRPS = two parts','ptitle');
+   s+=R(bx,yb-120,bw,120,COL.nw,'none',3)+R(bx,yb-170,bw,50,COL.nw,'none',3,0,';fill-opacity:.35');
+   s+=T(bx+bw+12,yb-60,'oracle-scaled','val','start','style="fill:var(--new);font-size:14.5px"')+T(bx+bw+12,yb-42,'what is left after','cap')+T(bx+bw+12,yb-26,'the best rescale','cap');
+   s+=T(bx+bw+12,yb-150,'scale error','val','start','style="fill:var(--new);font-size:14.5px"')+T(bx+bw+12,yb-132,'one overall factor','cap')+T(bx+bw+12,yb-116,'would remove it','cap');
+   s+=L(bx-6,yb,bx+bw+6,yb,COL.axis,1.2);
+   s+=FO(x0,250,pw,170,'We always quote both parts. A gain in scale error is "the constant in front was wrong", which is cheap to fix.');}
+  // (c) MSE of the mean
+  {const x0=xs[2]+10,w=pw-20,yb=230,m=0.45,truth=0.6;
+   s+=T(xs[2],24,'(c) MSE of the mean','ptitle');
+   s+=L(x0,yb,x0+w,yb,COL.axis,1.2);
+   let d='';for(let k=0;k<=100;k++){const t=k/100,y=Math.exp(-0.5*Math.pow((t-m)/0.13,2))*140;d+=(k?' L':'M')+(x0+t*w).toFixed(1)+','+(yb-y).toFixed(1);}
+   s+=P(d,'none',COL.faint,2.5,';stroke-dasharray:5 4');
+   s+=L(x0+m*w,yb-150,x0+m*w,yb,COL.nw,3.5)+T(x0+m*w-6,yb-156,'mean','val','end','style="fill:var(--new);font-size:14px"');
+   s+=L(x0+truth*w,70,x0+truth*w,yb,COL.ink,2,'6 4')+T(x0+truth*w+6,82,'truth','axlbl','start','style="font-size:14px"');
+   s+=FO(xs[2],250,pw,170,'Error of the predicted mean, on log(1 + value). It ignores the spread, so it tells a gain in the mean from a gain in the spread.');}
+  // (d) the bar
+  {const x0=xs[3];
+   s+=T(x0,24,'(d) The bar','ptitle');
+   const yy=v=>60+(1-v)*170;
+   const A=[0.82,0.76,0.86],B=[0.5,0.56,0.47];
+   [[x0+70,A,COL.old,'model 1'],[x0+190,B,COL.nw,'model 2']].forEach(([x,v,c,n])=>{
+     v.forEach((val,i)=>s+=Ci(x-22+i*22,yy(val),7,c));
+     s+=T(x,yy(0)+4,n,'axlbl','middle','style="font-size:14px"');});
+   const mA=A.reduce((a,b)=>a+b)/3,mB=B.reduce((a,b)=>a+b)/3;
+   s+=L(x0+128,yy(mA),x0+128,yy(mB)-8,COL.accent,2.5)+arrowHead(x0+128,yy(mB),'d',COL.accent);
+   s+=T(x0+136,(yy(mA)+yy(mB))/2+5,'gain','val','start','style="fill:var(--accent);font-size:14px"');
+   s+=FO(x0,250,pw,170,'3 seeds per model. The <b>wobble</b> is the largest gap between two seeds. A gain counts only if it is larger than <b>2 × the larger wobble</b>.');}
+  return svg(W,H,s);
+}
+
+
+/* ---------- 9 · two causes, two fixes ---------- */
+function figWhy(){
+  const W=1160,H=480;let s='';
+  // (a) the depth law on real data
+  const vb=S('base__base/counts25'),va=S('depth__3.75M/counts25'),f=Math.pow(2,DATA.law_ratio);
+  const fr=f<1?'1/'+Math.round(1/f):String(f);
+  s+=T(0,24,'(a) Fewer reads scale every bin by the read ratio','ptitle');
+  const lx=10,pw=540;
+  s+=T(lx,62,'base track','axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(vb,lx,160,pw,90,46,true),COL.x,'none',0)+L(lx,160,lx+pw,160,COL.axis,1);
+  const ymax2=46*f;
+  s+=T(lx,196,`the arm with ${fr} of the reads (filled), and the base × ${fr} (line)`,'axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(va,lx,290,pw,80,ymax2,true),COL.ink,'none',0,';fill-opacity:.8');
+  s+=P(trackD(vb.map(x=>x*f),lx,290,pw,80,ymax2,false),'none',COL.row2,2.2);
+  s+=L(lx,290,lx+pw,290,COL.axis,1);
+  s+=T(lx+pw,310,`real H3K27ac, ${DATA.locus[0]}; the two panels have their own y-axes`,'cap','end');
+  s+=FO(lx,322,pw,60,'In the earlier grid, f copied counts by default, so g had to <b>learn</b> this scaling. It missed it.','font:400 16px var(--sans);color:var(--body);line-height:1.4');
+  s+=R(lx,392,pw,70,COL.card,COL.nw,10,2.5)+FO(lx+14,400,pw-28,60,'<b style="color:var(--new)">Idea 1:</b> build the read ratio into f as a fixed <b>depth offset</b>.','font:400 17px var(--sans);color:var(--ink);line-height:1.4');
+  s+=divider(585,10,H-6);
+  // (b) the log-normal mean
+  const x0=680,w=450,top=60,h=230,smax=4,lmax=4;
+  s+=T(615,24,'(b) A drifting spread blows up the mean','ptitle');
+  const xx=v=>x0+v/smax*w, yy=l=>top+h*(1-l/lmax);
+  for(let e=0;e<=4;e++) s+=L(x0,yy(e),x0+w,yy(e),COL.grid,1)+T(x0-8,yy(e)+5,e?'10<tspan dy="-7" font-size="11">'+e+'</tspan>':'1','tick','end');
+  s+=L(x0,top+h,x0+w,top+h,COL.axis,1.2);
+  let d='';for(let k=0;k<=100;k++){const sg=k/100*smax,l=sg*sg/2/Math.LN10;if(l>lmax) break;d+=(k?' L':'M')+xx(sg).toFixed(1)+','+yy(l).toFixed(1);}
+  s+=P(d,'none',COL.ink,3);
+  s+=T(x0+w/2,top+h+30,'learned spread σ (log scale of p)','axlbl','middle','style="font-size:15px"');
+  s+=T(625,top+h/2,'mean ÷ median','axlbl','middle',`transform="rotate(-90 625 ${top+h/2})" style="font-size:15px"`);
+  s+=T(xx(0.12),yy(1.1),'small σ: mean ≈ median','val','start','style="fill:var(--ok);font-size:14px"');
+  s+=T(xx(2.9)-10,yy(3.6),'σ drifts up: the mean explodes','val','end','style="fill:var(--accent);font-size:14px"');
+  s+=FO(615,322,540,60,'The earlier grid predicted −log10 p directly, with a log-normal whose spread was learned. One spread drifted, and the mean blew up.','font:400 16px var(--sans);color:var(--body);line-height:1.4');
+  s+=R(615,392,540,70,COL.card,COL.twin,10,2.5)+FO(629,400,512,60,'<b style="color:var(--twin)">Idea 2:</b> predict counts only, and compute p from them with a <b>map h</b>.','font:400 17px var(--sans);color:var(--ink);line-height:1.4');
+  return svg(W,H,s);
+}
+
+/* ---------- 12 · the offset ---------- */
+function figOffset(){
+  const W=1160,H=440;let s='';
+  const box=(x,y,w,h,txt,c,sub)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-2:6),txt,'mono','middle','style="font-size:16.5px"')+(sub?T(x+w/2,y+h/2+20,sub,'cap','middle'):'');
+  // lane a: old grid
+  s+=T(0,24,'(a) Earlier grid: no offset','ptitle','start','style="fill:var(--old)"');
+  let y=44;
+  s+=box(0,y,110,56,'X',COL.hair,'counts')+arrowR(112,y+28,150);
+  s+=box(155,y,200,56,'log(1 + X)',COL.hair)+arrowR(357,y+28,395);
+  s+=box(400,y,120,56,'f',COL.ink)+arrowR(522,y+28,560);
+  s+=box(565,y,200,56,'log μ′',COL.hair)+arrowR(767,y+28,805);
+  s+=box(810,y,130,56,'NB → X′',COL.hair);
+  s+=R(960,y-2,200,60,COL.paper,COL.old,10,1.5,';stroke-dasharray:5 4')+FO(970,y+4,184,56,'f does nothing ⇒ <b>copy the counts</b>','font:400 15px var(--sans);color:var(--body);line-height:1.3');
+  s+=L(0,140,W,140,COL.axis,1.5,'6 6');
+  // lane b: t125
+  s+=T(0,172,'(b) New: with depth offset','ptitle','start','style="fill:var(--new)"');
+  y=260;
+  s+=box(0,y,110,56,'X',COL.hair,'counts')+arrowR(112,y+28,150);
+  s+=box(155,y,200,56,'log(1 + X) − log d',COL.nw,'eta_in: depth-scaled level')+arrowR(357,y+28,395);
+  s+=box(400,y,120,56,'f',COL.ink)+arrowR(522,y+28,560);
+  s+=box(565,y,200,56,'eta_out + log d′',COL.nw,'= log μ′')+arrowR(767,y+28,805);
+  s+=box(810,y,130,56,'NB → X′',COL.hair);
+  s+=R(960,y-2,200,60,COL.paper,COL.nw,10,1.5,';stroke-dasharray:5 4')+FO(970,y+4,184,56,'f does nothing ⇒ <b>scale by d′/d</b>, the depth law','font:400 15px var(--sans);color:var(--body);line-height:1.3');
+  // g above f
+  s+=R(330,186,260,48,COL.card,COL.accent,10,2.2)+T(460,207,'g(C, C′) · row 1','axlbl','middle','style="font-size:14.5px;fill:var(--accent)"')+T(460,226,'g(eta_in, C, C′) · row 2','axlbl','middle','style="font-size:14.5px;fill:var(--accent)"');
+  s+=arrowD(460,236,y-2,COL.accent);
+  s+=T(600,214,'C and C′ include both depths','cap','start');
+  s+=FO(0,340,W,90,'<b>d</b> = depth of the source track, <b>d′</b> = depth of the target, in millions of reads. The noise model (negative binomial, NB) and its loss are as before. f never reads C; only g does.','font:400 15.5px var(--sans);color:var(--muted);line-height:1.45');
+  return svg(W,H,s);
+}
+
+
+/* ---------- 14 · the spread rule ---------- */
+function figSpread(){
+  const W=1160,H=330;let s='';
+  const pw=270,gap=26,xs=[0,1,2,3].map(i=>i*(pw+gap));
+  [1,2,3].forEach(i=>s+=divider(xs[i]-gap/2,10,H-6));
+  const ax=(x0,y0,w,h,xl,yl)=>L(x0,y0+h,x0+w,y0+h,COL.axis,1.2)+L(x0,y0,x0,y0+h,COL.axis,1.2)+T(x0+w/2,y0+h+20,xl,'cap','middle')+T(x0-8,y0+h/2,yl,'cap','middle',`transform="rotate(-90 ${x0-8} ${y0+h/2})"`);
+  const curve=(x0,y0,w,h,c)=>{let d='',pts=[];for(let k=0;k<12;k++){const t=k/11,xx=x0+6+t*(w-12),yy=y0+h-12-(h-24)*(0.25+0.6*t-0.35*t*t+0.12*Math.sin(t*7));pts.push([xx,yy]);d+=(k?' L':'M')+xx.toFixed(1)+','+yy.toFixed(1);}return P(d,'none',c,3)+pts.map(p=>Ci(p[0],p[1],3.8,COL.card,c,2)).join('');};
+  // (a)
+  s+=T(xs[0],24,'(a) A, A2, B, B2: by level','ptitle','start','style="font-size:18px"');
+  s+=ax(xs[0]+24,54,pw-40,150,'depth-scaled level','spread n')+curve(xs[0]+24,54,pw-40,150,COL.nw);
+  s+=FO(xs[0],236,pw,90,'A 12-knot curve over the level. <b>Row-1 A: new.</b> The others: as in the earlier grid.');
+  // (b)
+  s+=T(xs[1],24,'(b) C, C2: level and context','ptitle','start','style="font-size:18px"');
+  {const kx=xs[1]+10,kw=90,by=54,bh=150;
+   let d=`M${kx},${by+bh}`;for(let k=0;k<=40;k++){const t=k/40;d+=` L${(kx+t*kw).toFixed(1)},${(by+bh-Math.exp(-Math.pow((t-0.5)/0.14,2))*(bh-30)).toFixed(1)}`;}
+   s+=L(kx,by+bh,kx+kw,by+bh,COL.axis,1.2)+P(d,'none',COL.nw,3)+T(kx+kw/2,by+bh+20,'kernel','cap','middle');
+   s+=T(kx+kw+16,by+bh/2+8,'→','big','middle');
+   s+=ax(kx+kw+40,by,pw-kw-60,bh,'smoothed level','')+curve(kx+kw+40,by,pw-kw-60,bh,COL.nw);}
+  s+=FO(xs[1],236,pw,90,'The same curve, read at the kernel-smoothed level. As in the earlier grid.');
+  // (c)
+  s+=T(xs[2],24,'(c) D, D2: level and context','ptitle','start','style="font-size:18px"');
+  {const bx=xs[2]+20,by=60;
+   for(let l=0;l<3;l++){const yy=by+l*34;s+=R(bx,yy,150,24,'none',COL.nw,5,2);for(let k=0;k<8;k++) s+=Ci(bx+14+k*17.5,yy+12,3,COL.nw);}
+   s+=arrowR(bx+152,by+50,bx+188,COL.muted)+L(bx+170,by+50,bx+170,by+120,COL.muted,2)+arrowR(bx+170,by+120,bx+188,COL.muted);
+   s+=R(bx+192,by+34,60,32,COL.card,COL.ink,8,2)+T(bx+222,by+55,'mean','axlbl','middle','style="font-size:13.5px"');
+   s+=R(bx+192,by+104,60,32,COL.card,COL.nw,8,2)+T(bx+222,by+125,'spread','axlbl','middle','style="font-size:13.5px;fill:var(--new)"');
+   s+=T(bx+75,by+130,'CNN','axlbl','middle','style="font-size:14px"');}
+  s+=FO(xs[2],236,pw,90,'The CNN outputs the spread beside the mean. As in the earlier grid.');
+  // (d)
+  s+=T(xs[3],24,'(d) Old-spread A: one per pair','ptitle','start','style="font-size:18px"');
+  s+=ax(xs[3]+24,54,pw-40,150,'depth-scaled level','spread n')+L(xs[3]+30,129,xs[3]+pw-22,129,COL.aold,3.5);
+  s+=FO(xs[3],236,pw,90,'One spread for every bin of a pair: the old row-1 A rule, now with the offset.');
+  return svg(W,H,s);
+}
+
+/* ---------- 15 · control and comparisons ---------- */
+function figCompare(){
+  const W=1160,H=420;let s='';
+  const chip=(x,y,t,c,dash)=>R(x,y,58,30,COL.card,c,15,2,dash?';stroke-dasharray:4 3':'')+T(x+29,y+21,t,'mono','middle','style="font-size:15px"');
+  s+=T(0,24,'(a) The no-covariates twin','ptitle');
+  [['real model',COL.nw,['C','C′'],false,60],['no-covariates twin',COL.twin,['?','?'],true,190]].forEach(([n,c,ch,dash,y])=>{
+    s+=T(0,y+6,n,'axlbl','start',`style="fill:${c};font-weight:600;font-size:16px"`);
+    s+=chip(0,y+20,ch[0],c,dash)+chip(66,y+20,ch[1],c,dash)+arrowR(128,y+35,166);
+    s+=R(170,y+16,60,38,COL.card,COL.accent,8,2)+T(200,y+41,'g','val','middle','style="fill:var(--accent)"')+arrowR(232,y+35,268);
+    s+=R(272,y+16,60,38,COL.card,COL.ink,8,2)+T(302,y+41,'f','val','middle')+arrowR(334,y+35,370);
+    s+=R(374,y+16,140,38,COL.card,COL.nw,8,2)+T(444,y+41,'× d′/d (true)','axlbl','middle','style="font-size:14px"');
+    if(dash) s+=T(0,y+76,'random settings at every step','cap');});
+  s+=FO(0,300,520,110,'Both keep the true d′/d offset. So <b>real − twin</b> is what the settings add <b>beyond</b> the fixed depth scaling.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  s+=divider(560,10,H-6);
+  // (b) comparisons
+  s+=T(590,24,'(b) Four comparisons','ptitle');
+  const node=(x,y,w,t,c)=>R(x,y,w,36,COL.card,c,18,2)+T(x+w/2,y+24,t,'axlbl','middle','style="font-size:14.5px"');
+  const edge=(x1,x2,y,lab,c)=>arrowR(x1,y,x2,c,2.2)+T((x1+x2)/2,y-10,lab,'cap','middle',`style="fill:${c};font-size:13.5px"`);
+  let y=56;
+  s+=T(590,y+24,'1','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'earlier grid, design X',COL.old)+edge(777,955,y+18,'offset (+ A\'s spread rule)',COL.nw)+node(960,y,190,'new, design X',COL.nw);
+  y=136;
+  s+=T(590,y+24,'2','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'earlier grid, A',COL.old)+edge(777,955,y+18,'the offset alone',COL.aold)+node(960,y,190,'old-spread A',COL.aold);
+  y=216;
+  s+=T(590,y+24,'3','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'old-spread A',COL.aold)+edge(777,955,y+18,'the spread rule alone',COL.nw)+node(960,y,190,'new, A',COL.nw);
+  y=296;
+  s+=T(590,y+24,'4','big','start','style="font-size:20px;fill:var(--faint)"')+node(615,y,160,'no-covariates twin',COL.twin)+edge(777,955,y+18,'the settings, beyond d′/d',COL.twin)+node(960,y,190,'real model',COL.nw);
+  s+=T(590,H-12,'Each comparison: CRPS with its split, and the MSE of the mean (none for the earlier grid)','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 31 · depth law, every cell (appendix) ---------- */
+function figDepthLaw(){
+  const W=1160,H=450;let s='';
+  const top=72,h=290,lo=0.04,hi=5,yy=logY(lo,hi,top,h);
+  const ticks=[[0.05,'5%'],[0.1,'10%'],[0.2,'20%'],[0.5,'50%'],[1,'100%'],[2,'200%'],[5,'500%']];
+  const band=(x0,w)=>R(x0,yy(0.1),w,top+h-yy(0.1),COL.ok,'none',0,0,';fill-opacity:.16');
+  // (a) class cells: t125 real against the old grid
+  const ax=70,aw=640;
+  const cls=DATA.depth.filter(r=>r[2]!=='all');
+  s+=T(0,24,'(a) Real model: new (with offset) against the earlier grid (no offset)','ptitle')+T(0,46,`3 classes × 2 versions of g: ${cls.length} cells (${cls.filter(r=>r[0]!=='Aold').length} for the 8 designs, ${cls.filter(r=>r[0]==='Aold').length} for old-spread A)`,'psub');
+  const G=groups(ax,aw,top,h,DES,top+h+26);s+=G.s+band(ax,aw)+yTicks(ax,aw,yy,ticks);
+  s+=T(ax+aw-6,yy(0.1)+17,'within 10%','cap','end','style="fill:var(--ok)"');s+=ignLine(ax,aw,yy);
+  s+=T(18,top+h/2,'depth-law error','axlbl','middle',`transform="rotate(-90 18 ${top+h/2})" style="font-size:15px"`);
+  cls.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1])*3+CL.indexOf(r[2]),x=G.x(gi,si,6);
+    s+=L(x,yy(r[10]),x,yy(r[3]),COL.faint,1.2);
+    s+=L(x,yy(r[5]),x,yy(r[6]),COL.nw,1.6,'2 2');
+    s+=mark(x,yy(r[10]),r[1],COL.card,COL.old,5.5,1.8);
+    s+=mark(x,yy(r[3]),r[1],r[7]?COL.ok:COL.nw,'none',6);});
+  s+=divider(735,10,H-30);
+  // (b) pooled cells: real against its twin
+  const bx=800,bw=350;
+  const all=DATA.depth.filter(r=>r[2]==='all');
+  s+=T(755,24,'(b) Pooled: real against its twin','ptitle')+T(755,46,`${all.length} pooled cells (${all.filter(r=>r[0]==='Aold').length} old-spread A) · dashed: ignores depth`,'psub');
+  const H2=groups(bx,bw,top,h,DES,top+h+26,13.5);s+=H2.s+band(bx,bw)+yTicks(bx,bw,yy,ticks);s+=ignLine(bx,bw,yy,false);
+  all.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1]),x=H2.x(gi,si,2);
+    s+=L(x-4,yy(r[3]),x+4,yy(r[8]),COL.faint,1.2);
+    s+=mark(x-4,yy(r[3]),r[1],r[7]?COL.ok:COL.nw,'none',5);
+    s+=mark(x+4,yy(r[8]),r[1],COL.twin,'none',5);});
+  // legend
+  const ly=H-14;
+  s+=Ci(10,ly-4,6,COL.nw)+T(22,ly,'new: with offset','cap')+Ci(150,ly-4,5.5,COL.card,COL.old,1.8)+T(162,ly,'earlier grid: no offset','cap')+Ci(332,ly-4,6,COL.twin)+T(344,ly,'no-covariates twin','cap');
+  s+=L(482,ly-10,482,ly+2,COL.nw,1.6,'2 2')+T(490,ly,'range of the 3 per-seed errors','cap');
+  s+=Ci(700,ly-4,6,COL.muted)+T(712,ly,'one g per track','cap')+R(822,ly-9,10,10,COL.muted,'none',1.5,0)+T(838,ly,'one g across tracks','cap');
+  return svg(W,H,s);
+}
+
+/* ===================== PART 2 · the map h =====================
+   Everything reads DATA.h2; designs come from the data (H2.f_done), so A, B, B2 appear when they land. */
+const H2=DATA.h2;
+const HV=[
+  {v:'formula',w:'bin',r:'None',name:'formula, bin only',grp:0},
+  {v:'formula',w:'frag',r:'None',name:'formula, fragment window',grp:0},
+  {v:'affine',w:'None',r:'1',name:'affine h, rung 1',grp:1},
+  {v:'mlp',w:'None',r:'1',name:'MLP h, rung 1',grp:1},
+  {v:'affine',w:'None',r:'5',name:'affine h, rung 5',grp:2},
+  {v:'mlp',w:'None',r:'5',name:'MLP h, rung 5',grp:2},
+  {v:'formula_affine',w:'None',r:'5',name:'formula + affine correction, rung 5',grp:2},
+  {v:'formula_mlp',w:'None',r:'5',name:'formula + MLP correction, rung 5',grp:2}];
+const HV_LEARN=HV.filter(x=>x.v!=='formula');
+const HGRP=['nothing learned','rung 1: bin count + control in bin','rung 5: all inputs'];
+const HSRC={true:'trained on true counts',fnb:"trained on f's predicted counts",formula:'nothing learned'};
+const HNZ={'0':'push only','1':'push + own noise'};
+const hKey=(ver,noise,src)=>ver.v==='formula'?`formula|${ver.w}|None|0|formula`:`${ver.v}|None|${ver.r}|${noise}|${src}`;
+const pid=id=>{const [v,w,r,n,s]=id.split('|');return {v,w,r,n,s};};
+const verOf=id=>{const p=pid(id);return HV.find(x=>x.v===p.v&&(p.v==='formula'?x.w===p.w:x.r===p.r));};
+const hFull=(id,src)=>{const p=pid(id),ver=verOf(id);if(p.v==='formula')return ver.name;
+  return `${ver.name}, ${HNZ[p.n]}, ${HSRC[src||p.s]}`;};
+const hA=(cls,key,m)=>H2.cells_alone[`${cls}|${key}|${m}`];
+/* chain cell [mean, wobble, n]; an h trained on f's NB has one seed and borrows the true-counts h's wobble (PI) */
+const hC=(f,key,m)=>{const c=H2.cells_chain[`${f}|${key}|${m}`];if(!c)return null;let w=c[1];
+  if(w==null&&key.endsWith('|fnb')){const t=H2.cells_chain[`${f}|${key.replace(/\|fnb$/,'|true')}|${m}`];w=t?t[1]:null;}return [c[0],w,c[2]];};
+const fw=v=>Math.abs(v)>=1?fmt(v):v.toPrecision(2);
+const pmw=(v,w)=>w==null?fmt(v)+' (no seed wobble)':fmt(v)+' ± '+fw(w);
+const crpsSplit=(m,os,se)=>`${fmt(m)} (oracle-scaled ${fmt(os)} + scale error ${fmt(se)})`;
+const HDES=DES.filter(d=>H2.f_done.includes(d));
+const hRd=(k,m,f)=>H2.rd.filter(x=>x.k===k&&x.m===m&&(f===undefined||x.f===f));
+const scopeTxt=()=>`chain: ${H2.chain[0]} of ${H2.chain[1]} designs`;
+const SRCC={true:'var(--htrue)',fnb:'var(--hfnb)',formula:'var(--hform)'};
+
+
+
+/* ---------- 33 · h on the true counts, every class (appendix) ---------- */
+function figHAlone(){
+  const W=1160;let s='';
+  const LW=286,gp=18,pw=(W-LW-gp*2)/3,top=78;
+  // row layout
+  const rows=[];let y=top;
+  HGRP.forEach((g,gi)=>{rows.push({grp:g,y});y+=22;HV.filter(v=>v.grp===gi).forEach(v=>{const hgt=v.v==='formula'?20:32;rows.push({ver:v,y,h:hgt});y+=hgt+4;});y+=4;});
+  const yEnd=y;
+  rows.forEach(r=>{if(r.grp) s+=T(0,r.y+15,r.grp,'cap','start','style="font-weight:600;fill:var(--muted);font-size:13.5px;letter-spacing:.04em"');
+    else s+=T(14,r.y+r.h/2+5,r.ver.name,'axlbl','start','style="font-size:14.5px"');});
+  CL.forEach((cls,ci)=>{
+    const px=LW+ci*(pw+gp),bx=px+4,bwMax=pw-92;
+    if(ci>0) s+=divider(px-gp/2,top-34,yEnd+20);
+    const bars=[];HV.forEach(v=>{(v.v==='formula'?['0']:['0','1']).forEach(n=>{const k=hKey(v,n,'true');const c=hA(cls,k,'crps_log_all');if(c) bars.push({v,n,k,c});});});
+    const mx=Math.max(...bars.map(b=>b.c[0]+(b.c[1]||0)/2));const xs=v=>bx+bwMax*Math.max(0,v)/mx;
+    const nP=(bars[0]||{c:[0,0,0]}).c[2];
+    s+=T(px,24,`(${'abc'[ci]}) ${cls==='DNase'?'DNase':cls+' marks'}`,'ptitle')+T(px,46,`${nP} products · CRPS on log(1 + P)`,'psub');
+    const ticks=[0,mx/2,mx].map(v=>+v.toPrecision(2));
+    ticks.forEach(v=>s+=L(xs(v),top-6,xs(v),yEnd,COL.grid,1)+T(xs(v),yEnd+16,String(v),'tick','middle'));
+    rows.filter(r=>r.ver).forEach(r=>{
+      (r.ver.v==='formula'?['0']:['0','1']).forEach((n,j)=>{
+        const k=hKey(r.ver,n,'true'),c=hA(cls,k,'crps_log_all'),os=hA(cls,k,'crps_log_oracle_scaled_all'),se=hA(cls,k,'crps_log_scale_error_all');if(!c) return;
+        const col=r.ver.v==='formula'?COL.hform:(n==='0'?COL.push:COL.noise);
+        const yy=r.y+(r.ver.v==='formula'?4:3+j*15),bh=12;
+        const o=Math.max(0,os[0]),e=Math.max(0,se[0]);
+        s+=R(bx,yy,xs(o)-bx,bh,col,'none',2)+R(xs(o),yy,xs(o+e)-xs(o),bh,col,'none',2,0,';fill-opacity:.35');
+        if(c[1]!=null) s+=L(xs(c[0]-c[1]/2),yy+bh/2,xs(c[0]+c[1]/2),yy+bh/2,COL.ink,1.6)+L(xs(c[0]-c[1]/2),yy+2,xs(c[0]-c[1]/2),yy+bh-2,COL.ink,1.6)+L(xs(c[0]+c[1]/2),yy+2,xs(c[0]+c[1]/2),yy+bh-2,COL.ink,1.6);
+        s+=T(xs(c[0]+(c[1]||0)/2)+5,yy+bh-1,c[1]==null?fmt(c[0]):fmt(c[0])+' ± '+fw(c[1]),'cap','start','style="font-size:11.5px;fill:var(--body)"');});});
+  });
+  const ly=yEnd+46;
+  s+=R(0,ly-11,13,12,COL.push,'none',2)+T(19,ly,'push only','cap')+R(100,ly-11,13,12,COL.noise,'none',2)+T(119,ly,'push + own noise','cap')+R(245,ly-11,13,12,COL.hform,'none',2)+T(264,ly,'formula (nothing learned)','cap');
+  s+=T(450,ly,'solid: oracle-scaled · light: scale error · whisker: seed wobble · every h here trained on true counts','cap');
+  return svg(W,ly+8,s);
+}
+
+
+function figBudget(){
+  const W=1160,H=124;let s='';const r=DATA.runs;const per=r.gver*r.models*r.seeds;
+  const items=[[r.gver,'versions of g',r.per_track+' per track + 1 across'],[r.models,'models','real + no-covariates twin'],[r.seeds,'seeds',''],[per,'runs per design','']];
+  items.forEach(([n,t,sub],i)=>{const x=40+i*270;const ns=String(n);
+    s+=T(x,40,ns,'big','start',i===3?'style="fill:var(--accent)"':'')+T(x+ns.length*16+10,38,t,'axlbl')+T(x,66,sub,'psub');
+    if(i<3) s+=T(x+240,42,i===2?'=':'×','big','middle','style="fill:var(--faint)"');});
+  s+=T(W/2,H-8,`${per} runs × ${Object.keys(DATA.dev).length} designs = ${r.n} runs`,'axlbl','middle','style="font-size:15px;fill:var(--muted)"');
+  return svg(W,H,s);
+}
+/* ---------- 8 · the earlier grid's two problems, their likely causes and the two ideas ---------- */
+function figProblems(){
+  const W=1160,H=470;let s='';
+  // (a) depth law, earlier grid
+  const des8=DES.slice(0,8),top=66,h=200,x0=64,w=490,yy=logY(0.05,2,top,h);
+  const cellsO=DATA.depth.filter(r=>r[0]!=='Aold'&&r[2]!=='all'),nIn=cellsO.filter(r=>r[10]<=r[15]).length;
+  s+=T(0,24,'(a) The depth law, earlier grid (no offset)','ptitle')+T(0,48,`${nIn} of ${cellsO.length} cells within 10%`,'psub');
+  const G=groups(x0,w,top,h,des8,top+h+24,15);s+=G.s;
+  s+=R(x0,yy(0.1),w,top+h-yy(0.1),COL.ok,'none',0,0,';fill-opacity:.16')+T(x0+6,yy(0.1)+16,'within 10%','cap','start','style="fill:var(--ok)"');
+  s+=yTicks(x0,w,yy,[[0.05,'5%'],[0.1,'10%'],[0.5,'50%'],[2,'200%']]);
+  s+=rotY(16,top+h/2,'depth-law error');
+  cellsO.forEach(r=>{const gi=des8.indexOf(r[0]),si=GV.indexOf(r[1])*3+CL.indexOf(r[2]),x=G.x(gi,si,6),inb=r[10]<=r[15];
+    s+=mark(x,yy(r[10]),r[1],inb?COL.ok:rowCol(r[0]),inb?COL.ink:'none',5.5,2);});
+  s+=Ci(x0+6,top+h+48,5,COL.muted)+T(x0+16,top+h+53,'one g per track','cap')+R(x0+130,top+h+43,10,10,COL.muted,'none',1.5,0)+T(x0+146,top+h+53,'one g across tracks','cap');
+  const cause=(x,y,w,txt)=>FO(x,y,w,52,txt,'font:400 15.5px var(--sans);color:var(--body);line-height:1.38');
+  const idea=(x,y,w,c,txt)=>R(x,y,w,54,COL.card,c,10,2.5)+FO(x+14,y+8,w-28,44,txt,'font:400 16.5px var(--sans);color:var(--ink);line-height:1.35');
+  s+=cause(0,338,560,'<b>Likely cause:</b> f copied the counts unless g learned to scale them, and g learned it poorly.');
+  s+=idea(0,402,560,COL.nw,'<b style="color:var(--new)">Idea 1:</b> build the read ratio into f as a fixed <b>depth offset</b>.');
+  s+=divider(590,10,H-6);
+  // (b) p-value blow-ups, earlier grid
+  const bx0=690,bw=460,btop=66,bh=200;
+  const mx=Math.max(...DATA.oldp['row 1'],...DATA.oldp['row 2']);const ymax=Math.ceil(mx/5)*5+2,by=v=>btop+bh*(1-v/ymax);
+  s+=T(620,24,'(b) −log10 p: blow-ups, earlier grid','ptitle')+T(620,48,'(pair, seed) records with CRPS > 20, all classes, both versions of g','psub');
+  for(let v=0;v<=ymax;v+=10) s+=L(bx0,by(v),bx0+bw,by(v),COL.grid,1)+T(bx0-8,by(v)+5,v,'tick','end');
+  ['A','B','C','D'].forEach((d,i)=>{const gx=bx0+bw*(i+0.5)/4;
+    [['row 1',COL.row1,-22],['row 2',COL.row2,22]].forEach(([k,c,off])=>{const v=DATA.oldp[k][i];
+      s+=R(gx+off-18,by(v),36,btop+bh-by(v),c,'none',3)+vlab(gx+off,by(v)-6,v,c,14);});
+    s+=T(gx,btop+bh+24,d+' · '+d+'2','ptitle','middle','style="font-size:15px"');});
+  s+=L(bx0,btop+bh,bx0+bw,btop+bh,COL.axis,1.2);
+  s+=sw(bx0,btop+bh+53,COL.row1,'row 1')+sw(bx0+90,btop+bh+53,COL.row2,'row 2');
+  s+=cause(620,338,540,'<b>Likely cause:</b> p was predicted with a log-normal whose learned spread can drift; its mean grows as e<sup>σ²/2</sup>.');
+  s+=idea(620,402,540,COL.twin,'<b style="color:var(--twin)">Idea 2:</b> predict counts only, and compute p from them with a <b>map h</b>.');
+  return svg(W,H,s);
+}
+/* ---------- 14 · idea 2: the map h, the two kinds of uncertainty, and experiment 2 ---------- */
+function figHMap(){
+  const W=1160,H=470;let s='';
+  // illustration: NB(mean 6, shape 4) and the caller's Poisson upper tail at a control rate of 3
+  const mu=6,nn=4,pp=nn/(nn+mu),K=22;const nb=[];let t=Math.pow(pp,nn);
+  for(let k=0;k<K;k++){nb.push(t);t=t*(k+nn)/(k+1)*(1-pp);}
+  const lam=3,lf=k=>{let sum=0,term=Math.exp(-lam);for(let j=1;j<=k;j++)term*=lam/j;for(let j=k;j<k+80;j++){sum+=term;term*=lam/(j+1);}return sum;};
+  const hk=nb.map((_,k)=>-Math.log10(Math.max(1e-300,lf(k))));
+  const mx=Math.max(...nb),pmax=Math.ceil(Math.max(...hk.filter((_,k)=>nb[k]>mx*0.02)));
+  s+=T(0,24,'(a) From f\'s predicted counts to the predicted P, with no sampling','ptitle');
+  const bx=6,bw=210,by=200,bh=110;
+  s+=R(bx-6,44,bw+12,180,COL.card,COL.hair,10)+T(bx+bw/2,64,'f\'s predicted counts, one bin','axlbl','middle','style="font-size:14.5px;font-weight:600"');
+  nb.forEach((v,k)=>{const x=bx+6+k*(bw-12)/K;s+=R(x,by-bh*v/mx,(bw-12)/K-2,bh*v/mx,COL.row1,'none',1.5);});
+  s+=L(bx,by,bx+bw,by,COL.axis,1.2)+T(bx+bw/2,by+18,'each possible count k','cap','middle');
+  s+=R(bx,236,bw,34,COL.card,COL.ctl,17,2)+T(bx+bw/2,258,'+ the control around the bin','axlbl','middle','style="font-size:14px"');
+  s+=arrowR(bx+bw+6,140,262)+L(bx+bw,253,238,253,COL.muted,2)+L(238,253,238,140,COL.muted,2);
+  s+=R(266,96,92,88,COL.card,COL.accent,14,2.5)+T(312,150,'h','big','middle','style="font-size:38px;fill:var(--accent)"')+T(312,206,'one P per k','psub','middle','style="font-size:14px"');
+  s+=arrowR(360,140,392);
+  const px=406,pw=200,py=200,ph=110;
+  s+=R(px-10,44,pw+20,180,COL.card,COL.hair,10)+T(px+pw/2,64,'predicted P, weighted','axlbl','middle','style="font-size:14.5px;font-weight:600"');
+  const xp=v=>px+pw*Math.min(v,pmax)/pmax;
+  nb.forEach((v,k)=>{if(hk[k]<=pmax) s+=L(xp(hk[k]),py,xp(hk[k]),py-ph*v/mx,COL.row1,3);});
+  const mean=nb.reduce((a,v,k)=>a+v*hk[k],0)/nb.reduce((a,v)=>a+v,0);
+  s+=L(xp(mean),py-ph-6,xp(mean),py,COL.accent,2,'6 4')+T(xp(mean)+5,py-ph+2,'mean','val','start','style="fill:var(--accent);font-size:13.5px"');
+  s+=L(px,py,px+pw,py,COL.axis,1.2)+T(px+pw/2,py+18,'P = −log10 p','cap','middle');
+  s+=arrowR(618,140,640);
+  s+=R(644,52,116,74,COL.card,COL.new,10,2)+FO(652,58,104,66,'<b style="color:var(--ink)">exact mean</b><br>Σ NB(k) · h(k)','font:400 14px var(--sans);color:var(--muted);line-height:1.35');
+  s+=R(644,136,116,88,COL.card,COL.new,10,2)+FO(652,142,104,80,'<b style="color:var(--ink)">exact CRPS</b><br>a sum over pairs of k','font:400 14px var(--sans);color:var(--muted);line-height:1.35');
+  s+=T(380,290,'illustration: shapes only, not data · k runs until the NB tail is below 10⁻⁶','cap','middle','style="font-size:13px"');
+  s+=L(0,304,762,304,COL.axis,1.5,'6 6');
+  // (b) two kinds of uncertainty, with captions
+  s+=T(0,330,'(b) Two kinds of uncertainty','ptitle');
+  const lane=(x0,lab,cap,noise)=>{let t=T(x0,362,lab,'axlbl','start','style="font-weight:600;font-size:15.5px"');const ax0=x0,aw=330,yb=420;
+    t+=L(ax0,yb,ax0+aw,yb,COL.axis,1.2);
+    nb.forEach((v,k)=>{if(hk[k]>pmax) return;const x=ax0+aw*hk[k]/pmax,hh=44*v/mx;
+      if(!noise) t+=L(x,yb,x,yb-hh,COL.push,2.5);
+      else{let d='';for(let j=-12;j<=12;j++){const xx=x+j*1.0,yy=yb-hh*0.8*Math.exp(-j*j/24);d+=(j>-12?' L':'M')+xx.toFixed(1)+','+yy.toFixed(1);}t+=P(d,'none',COL.noise,2);}});
+    return t+T(x0,yb+24,cap,'axlbl','start',`style="font-size:14.5px;fill:${noise?'var(--noise)':'var(--push)'}"`);};
+  s+=lane(0,'push only','spread from f only',false)+lane(400,'push + own noise','f\'s spread + h\'s own spread',true);
+  s+=divider(782,10,H-6);
+  // (c) experiment 2: how h is trained and scored
+  s+=T(800,24,'(c) Experiment 2','ptitle')+T(800,48,'how h is trained, and how it is scored','psub');
+  const cx=[905,1035],cw=124,ry=[110,240],ch=118;
+  s+=T(cx[0]+cw/2,82,'scored alone','axlbl','middle','style="font-size:14px;font-weight:600"')+T(cx[0]+cw/2,98,'on true counts','cap','middle','style="font-size:12.5px"');
+  s+=T(cx[1]+cw/2,82,'scored in chain','axlbl','middle','style="font-size:14px;font-weight:600"')+T(cx[1]+cw/2,98,'on f\'s predictions','cap','middle','style="font-size:12.5px"');
+  [['trained on','true counts',`${H2.seeds_true} seeds`,SRCC.true],['trained on','f\'s predictions',`${H2.seeds_fnb} seed`,SRCC.fnb]].forEach(([a,b,c2,col],i)=>{const y=ry[i]+ch/2;
+    s+=T(898,y-12,a,'axlbl','end',`style="font-size:14px;fill:${col};font-weight:600"`)+T(898,y+6,b,'axlbl','end',`style="font-size:14px;fill:${col};font-weight:600"`)+T(898,y+24,c2,'cap','end','style="font-size:12.5px"');});
+  const cellC=(x,y,c,dash,lines)=>R(x,y,cw,ch,COL.card,c,10,2,dash?';stroke-dasharray:6 5':'')+lines.map((l,j)=>T(x+cw/2,y+ch/2-8+j*20,l,j?'cap':'val','middle',j?'style="font-size:13px;fill:var(--body)"':`style="font-size:15.5px;fill:var(--ink)"`)).join('');
+  s+=cellC(cx[0],ry[0],SRCC.true,false,['Result 4','h alone']);
+  s+=cellC(cx[1],ry[0],SRCC.true,false,['Result 6','against direct p']);
+  s+=cellC(cx[0],ry[1],COL.axis,true,['—','not scored']);
+  s+=cellC(cx[1],ry[1],SRCC.fnb,false,['Result 5','repair']);
+  s+=L(cx[1]+cw/2,ry[0]+ch+2,cx[1]+cw/2,ry[1]-2,COL.accent,3);
+  return svg(W,H,s);
+}
+/* ---------- 33 · repair, every push-only row (appendix): grouped by version of h, one pair of markers per design ---------- */
+function figRepair(){
+  const W=1160,H=460;let s='';
+  const top=72,h=270;
+  const rows=hRd('repair','crps_log_all').filter(x=>pid(x.id).n==='0');
+  const des=HDES.filter(d=>rows.some(x=>x.f===d));
+  const slot=x=>HV_LEARN.findIndex(v=>v.v===pid(x.id).v&&v.r===pid(x.id).r);
+  const verLines=v=>{const nm=v.name.replace(' correction','');const i=nm.lastIndexOf(', ');return [nm.slice(0,i),nm.slice(i+2)];};
+  const groupsV=(x0,w,lblY,fs)=>{const gw=w/HV_LEARN.length;let t='';HV_LEARN.forEach((v,i)=>{const gx=x0+i*gw;if(i%2===0) t+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+      const [a,b]=verLines(v),ls=a.startsWith('formula + ')?['formula +',a.slice(10)]:[a];
+      ls.forEach((l,j)=>t+=T(gx+gw/2,lblY+j*(fs+2),l,'axlbl','middle',`style="font-size:${fs}px;font-weight:600"`));t+=T(gx+gw/2,lblY+ls.length*(fs+2),b,'cap','middle',`style="font-size:${fs-1}px"`);});
+    return {t,gw,x:(gi,si)=>x0+gi*gw+gw*(0.12+0.76*(si+0.5)/des.length)};};
+  // (a) values
+  const ax=70,aw=600,vals=rows.flatMap(x=>[x.t-(x.tw||0)/2,x.t+(x.tw||0)/2,x.o]);
+  const lo=Math.min(...vals)*0.96,hi=Math.max(...vals)*1.03,yy=v=>top+h*(hi-v)/(hi-lo);
+  s+=T(0,24,'(a) CRPS on log(1 + P), in the chain, push only','ptitle')+T(0,46,`each version of h trained two ways, scored on f's predicted counts (track ${H2.track})`,'psub');
+  const G=groupsV(ax,aw,top+h+22,13.5);s+=G.t;
+  const tk=[];for(let k=Math.ceil(lo*100);k<=Math.floor(hi*100);k+=2) tk.push([k/100,(k/100).toFixed(2)]);s+=yTicks(ax,aw,yy,tk);
+  s+=rotY(18,top+h/2,'CRPS on log(1 + P)');
+  rows.forEach(x=>{const xx=G.x(slot(x),des.indexOf(x.f));
+    s+=L(xx,yy(x.t),xx,yy(x.o),COL.faint,1.4);
+    if(x.tw!=null) s+=L(xx,yy(x.t-x.tw/2),xx,yy(x.t+x.tw/2),COL.htrue,1.6);
+    s+=R(xx-4.5,yy(x.o)-4.5,9,9,COL.hfnb,'none',1.5)+Ci(xx,yy(x.t),5,COL.htrue);});
+  s+=T(ax,H-32,`within each group, one pair of markers per design, left to right: ${andJ(des)}`,'cap','start','style="font-size:13.5px"');
+  s+=divider(700,10,H-30);
+  // (b) gap ÷ bar
+  const bx0=790,bw=360,blo=0.5,bhi=50,by=logY(blo,bhi,top,h);
+  const nMet=rows.filter(x=>x.d<0&&x.met).length;
+  s+=T(720,24,'(b) The gap, divided by its bar','ptitle')+T(720,46,`true-counts h is lower: ${nMet} of ${rows.length} rows beyond the bar`,'psub');
+  const G2=(()=>{const gw=bw/HV_LEARN.length;let t='';HV_LEARN.forEach((v,i)=>{const gx=bx0+i*gw;if(i%2===0) t+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+});
+    return {t,x:(gi,si)=>bx0+gi*gw+gw*(0.12+0.76*(si+0.5)/des.length)};})();
+  s+=G2.t+yTicks(bx0,bw,by,[[0.5,'0.5'],[2,'2'],[5,'5'],[10,'10'],[20,'20'],[50,'50']]);
+  s+=L(bx0,by(1),bx0+bw,by(1),COL.accent,2,'7 5')+T(bx0-8,by(1)+5,'bar','tick','end','style="fill:var(--accent)"');
+  s+=rotY(738,top+h/2,'gap ÷ bar');
+  rows.forEach(x=>{const xx=G2.x(slot(x),des.indexOf(x.f)),q=-x.d/x.bar;
+    if(q<=0){s+=arrowHead(xx,top+h-2,'d',COL.hfnb,8);return;}
+    s+=x.met?Ci(xx,by(q),5,COL.htrue):Ci(xx,by(q),4.5,COL.card,COL.muted,1.6);});
+  s+=T(bx0+bw/2,top+h+24,'the six versions of h, in the same order as (a)','cap','middle','style="font-size:13px"');
+  const ly=H-8;
+  s+=Ci(8,ly-4,5.5,COL.htrue)+T(18,ly,'h trained on true counts (whisker: seed wobble)','cap')+R(380,ly-9,10,10,COL.hfnb,'none',1.5)+T(396,ly,"h trained on f's predicted counts (1 seed)",'cap');
+  return svg(W,H,s);
+}
+
+/* ===================== v2 · main-arc result figures (one claim each) ===================== */
+const DNm=d=>d==='Aold'?'old-spread A':d;
+const andJ=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const byDes=a=>a.slice().sort((x,y)=>DES.indexOf(x)-DES.indexOf(y));
+const median=a=>{const v=a.slice().sort((x,y)=>x-y),n=v.length;return n%2?v[(n-1)/2]:(v[n/2-1]+v[n/2])/2;};
+const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+20,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const vlab=(x,y,txt,c,fs=14)=>T(x,y,txt,'val','middle',`style="fill:${c};font-size:${fs}px"`);
+const rotY=(x,y,txt)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:15px"`);
+
+/* the reference a model that ignores depth would score: it predicts the same counts as X (×1), so on a
+   law pair with log2 d′/d = −2 its error is |1/(d′/d) − 1| = 3.0, the worst over the law pairs (±1, ±2) */
+const DL_IGN=3.0;
+const ignLine=(x0,w,yy,lbl=true)=>L(x0,yy(DL_IGN),x0+w,yy(DL_IGN),COL.muted,1.4,'6 4')+(lbl?T(x0+6,yy(DL_IGN)-7,'ignores depth (predict ×1)','cap','start','style="fill:var(--muted);font-size:13px"'):'');
+/* ---------- R1 · the depth law ---------- */
+function figR1(){
+  const W=1160,H=450;let s='';
+  const top=74,h=286,lo=0.04,hi=5,yy=logY(lo,hi,top,h);
+  const ticks=[[0.05,'5%'],[0.1,'10%'],[0.2,'20%'],[0.5,'50%'],[1,'100%'],[2,'200%'],[5,'500%']];
+  const band=(x0,w)=>R(x0,yy(0.1),w,top+h-yy(0.1),COL.ok,'none',0,0,';fill-opacity:.16');
+  // (a) per design: old grid against this work, the 6 class cells as a range
+  const ax=78,aw=600,cls=DATA.depth.filter(r=>r[2]!=='all');
+  s+=T(0,24,'(a) Depth-law error per design, real model','ptitle')+T(0,48,'bar: the 6 class cells of a design (3 classes × 2 versions of g) · dot: their median','psub');
+  const G=groups(ax,aw,top,h,DES,top+h+28);s+=G.s+band(ax,aw)+yTicks(ax,aw,yy,ticks);
+  s+=T(ax+aw-6,yy(0.1)+18,'within 10%','cap','end','style="fill:var(--ok);font-size:14px"');
+  s+=rotY(16,top+h/2,'depth-law error (log scale)');
+  s+=ignLine(ax,aw,yy);
+  DES.forEach((d,gi)=>{const rs=cls.filter(r=>r[0]===d);
+    [[10,COL.old],[3,COL.nw]].forEach(([k,c],j)=>{const v=rs.map(r=>r[k]).filter(x=>x!=null);if(!v.length) return;
+      const x=ax+gi*G.gw+G.gw*(j?0.66:0.34),mn=Math.min(...v),mx=Math.max(...v);
+      s+=R(x-8,yy(mx),16,Math.max(3,yy(mn)-yy(mx)),c,'none',8,0,';fill-opacity:.4')+Ci(x,yy(median(v)),6.5,c,COL.card,1.6);});});
+  s+=sw(ax,H-10,COL.old,'earlier grid: no offset',0.6)+sw(ax+200,H-10,COL.nw,'new: with depth offset',0.8);
+  s+=divider(712,10,H-6);
+  // (b) pooled: real against its twin
+  const bx=800,bw=350,all=DATA.depth.filter(r=>r[2]==='all');
+  s+=T(735,24,'(b) All classes pooled: real against twin','ptitle')+T(735,48,'● one g per track · ■ one g across tracks · dashed: ignores depth','psub');
+  const G2=groups(bx,bw,top,h,DES,top+h+28,14);s+=G2.s+band(bx,bw)+yTicks(bx,bw,yy,ticks);s+=ignLine(bx,bw,yy,false);
+  all.forEach(r=>{const gi=DES.indexOf(r[0]),si=GV.indexOf(r[1]),x=G2.x(gi,si,2);
+    s+=L(x,yy(r[3]),x,yy(r[8]),COL.faint,1.4)+mark(x,yy(r[3]),r[1],COL.nw,'none',5.5)+mark(x,yy(r[8]),r[1],COL.twin,'none',5.5);});
+  s+=sw(bx,H-10,COL.nw,'real model')+sw(bx+120,H-10,COL.twin,'no-covariates twin');
+  return svg(W,H,s);
+}
+
+/* ---------- R2 · design A ---------- */
+function figR2(){
+  const W=1160,H=450;let s='';
+  const top=80,h=280;
+  const bars=[['old','A','no offset','A, earlier grid',COL.old],['real','Aold','offset only','old-spread A',COL.aold],['real','A','offset + spread rule','A, new',COL.nw]];
+  const vals=bars.map(([src,r])=>cell(src,r,'per_track','DNase','crps_all'));
+  const x0=60,pw=480,ymax=Math.max(...vals.map(v=>v[0]+v[1]))*1.16,yy=v=>top+h*(1-v/ymax);
+  s+=T(0,24,'(a) Design A, one g per track, DNase: CRPS on counts','ptitle')+T(0,48,'dark: oracle-scaled · light: scale error · top: mean ± seed wobble','psub');
+  for(let k=0;k<=ymax;k++) s+=L(x0,yy(k),x0+pw,yy(k),COL.grid,1)+T(x0-8,yy(k)+5,k,'tick','end');
+  s+=L(x0,top+h,x0+pw,top+h,COL.axis,1.2)+rotY(16,top+h/2,'CRPS on counts');
+  const bw=104,bxOf=i=>x0+28+i*160;
+  bars.forEach(([src,r,l1,l2,c],i)=>{const [m,w,os,osw,se,sew]=vals[i];const bx=bxOf(i);
+    s+=R(bx,yy(os),bw,top+h-yy(os),c,'none',3)+R(bx,yy(os+se),bw,yy(os)-yy(os+se),c,'none',3,0,';fill-opacity:.35');
+    s+=vlab(bx+bw/2,yy(m)-12,pm(m,w),c,15);
+    s+=T(bx+bw/2,yy(os/2)+6,fmt(os),'val','middle','style="fill:#fff;font-size:15px"');
+    const segH=yy(os)-yy(os+se);
+    if(segH>26) s+=T(bx+bw/2,yy(os+se/2)+6,fmt(se),'val','middle',`style="fill:${c};font-size:15px"`);
+    else s+=T(bx+bw+5,yy(os+se/2)+5,fmt(se),'cap','start',`style="fill:${c};font-size:13px"`);
+    s+=T(bx+bw/2,top+h+22,l2,'axlbl','middle',`style="font-size:15px;font-weight:600;fill:${c}"`)+T(bx+bw/2,top+h+42,l1,'cap','middle','style="font-size:13.5px"');});
+  s+=sw(x0,H-8,COL.muted,'oracle-scaled')+sw(x0+140,H-8,COL.muted,'scale error',0.35);
+  s+=divider(585,10,H-6);
+  // (b) cells beyond the bar against the old grid, per design
+  const all=allRd('vs_oldgrid','crps_all');const per=DES.map(d=>{const o=all.filter(x=>x.r===d);return [d,o.filter(x=>x.v[2]).length,o.length];});
+  const nmax=Math.max(...per.map(p=>p[2])),bx0=670,bW=480,by=v=>top+h*(1-v/nmax);
+  s+=T(615,24,'(b) Cells beyond the bar against the earlier grid','ptitle')+T(615,48,`CRPS on counts, all bins · ${nmax} cells per design (3 classes × 2 versions of g)`,'psub');
+  for(let k=0;k<=nmax;k++) s+=L(bx0,by(k),bx0+bW,by(k),COL.grid,1)+T(bx0-8,by(k)+5,k,'tick','end');
+  s+=L(bx0,top+h,bx0+bW,top+h,COL.axis,1.2)+rotY(632,top+h/2,'cells beyond the bar');
+  const gw=bW/DES.length;
+  per.forEach(([d,n,t],i)=>{const x=bx0+i*gw+gw*0.2,c=rowCol(d);
+    if(n>0) s+=R(x,by(n),gw*0.6,top+h-by(n),c,'none',3);
+    s+=vlab(x+gw*0.3,by(n)-8,n,n?c:COL.faint,15);});
+  s+=groups(bx0,bW,top,h,DES,top+h+24,15).s.replace(/<rect[^>]*>/g,'');
+  return svg(W,H,s);
+}
+
+/* ---------- R3 · the settings help the mean ---------- */
+function figR3(){
+  const W=1160,H=450;let s='';
+  const top=80,h=280;
+  // (a) MSE of the mean, one g per track, DNase, real against twin
+  const ax=70,aw=560,gw=aw/DES.length;
+  const v=DES.map(d=>[cell('real',d,'per_track','DNase','mse_log1p_all'),cell('twin',d,'per_track','DNase','mse_log1p_all')]);
+  const ymax=Math.max(...v.flatMap(([a,b])=>[a[0]+a[1]/2,b[0]+b[1]/2]))*1.12,yy=x=>top+h*(1-x/ymax);
+  const step=ymax>0.6?0.2:0.1;
+  s+=T(0,24,'(a) MSE of the mean: one g per track, DNase','ptitle')+T(0,48,'every design · whisker: seed wobble · lower is better','psub');
+  for(let k=0;k<=ymax+1e-9;k+=step) s+=L(ax,yy(k),ax+aw,yy(k),COL.grid,1)+T(ax-8,yy(k)+5,k.toFixed(1),'tick','end');
+  s+=L(ax,top+h,ax+aw,top+h,COL.axis,1.2)+rotY(18,top+h/2,'MSE of the mean');
+  v.forEach(([a,b],i)=>{const gx=ax+i*gw;
+    [[a,COL.nw,0.16],[b,COL.twin,0.52]].forEach(([c,col,off])=>{const x=gx+gw*off,bw=gw*0.32;
+      s+=R(x,yy(c[0]),bw,top+h-yy(c[0]),col,'none',2);
+      s+=L(x+bw/2,yy(c[0]-c[1]/2),x+bw/2,yy(c[0]+c[1]/2),COL.ink,1.6);});});
+  s+=groups(ax,aw,top,h,DES,top+h+24,15).s.replace(/<rect[^>]*>/g,'');
+  s+=sw(ax,H-8,COL.nw,'real model')+sw(ax+120,H-8,COL.twin,'no-covariates twin');
+  s+=divider(668,10,H-6);
+  // (b) cells beyond the bar, real against twin, per design
+  const per=DES.map(d=>{const m=allRd('beatstwin','mse_log1p_all').filter(x=>x.r===d),c=allRd('beatstwin','crps_all').filter(x=>x.r===d);
+    return [d,m.filter(x=>x.v[2]).length,c.filter(x=>x.v[2]).length,m.length];});
+  const nmax=Math.max(...per.map(p=>p[3])),bx0=740,bW=410,by=x=>top+h*(1-x/nmax),g2=bW/DES.length;
+  s+=T(690,24,'(b) Cells where real beats the twin beyond the bar','ptitle')+T(690,48,`${nmax} cells per design (3 classes × 2 versions of g)`,'psub');
+  for(let k=0;k<=nmax;k++) s+=L(bx0,by(k),bx0+bW,by(k),COL.grid,1)+T(bx0-8,by(k)+5,k,'tick','end');
+  s+=L(bx0,top+h,bx0+bW,top+h,COL.axis,1.2);
+  per.forEach(([d,nm,nc],i)=>{const gx=bx0+i*g2;
+    s+=R(gx+g2*0.12,by(nm),g2*0.36,top+h-by(nm),COL.nw,'none',2)+R(gx+g2*0.52,by(nc),g2*0.36,top+h-by(nc),COL.nw,'none',2,0,';fill-opacity:.35');
+    if(nc<nm) s+=T(gx+g2*0.7,by(nc)-6,nc,'val','middle','style="fill:var(--accent);font-size:13px"');});
+  s+=groups(bx0,bW,top,h,DES,top+h+24,13.5).s.replace(/<rect[^>]*>/g,'');
+  s+=sw(bx0,H-8,COL.nw,'MSE of the mean')+sw(bx0+170,H-8,COL.nw,'CRPS (number shown when not all)',0.35);
+  return svg(W,H,s);
+}
+
+/* ---------- R4 · h on the true counts: complexity × inputs (narrow) ---------- */
+function figR4(){
+  const W=1160,H=470;let s='';const cls='narrow';
+  const rows=HV.map(v=>{const k=hKey(v,'0',v.v==='formula'?'formula':'true');return {v,k,c:hA(cls,k,'crps_log_all'),os:hA(cls,k,'crps_log_oracle_scaled_all'),se:hA(cls,k,'crps_log_scale_error_all')};}).filter(r=>r.c);
+  const LW=262,bx=LW+6,bwMax=330,top=70;
+  const mx=Math.max(...rows.map(r=>r.c[0]+(r.c[1]||0)/2))*1.02,xs=v=>bx+bwMax*Math.max(0,v)/mx;
+  const nP=rows[0].c[2];
+  s+=T(0,24,'(a) Narrow marks: every version of h, push only','ptitle')+T(0,48,`${nP} products · CRPS on log(1 + P), trained and scored on the true counts`,'psub');
+  let y=top+6;const rh=31;
+  HGRP.forEach((g,gi)=>{s+=T(0,y+12,g,'cap','start','style="font-weight:700;fill:var(--muted);font-size:13px;letter-spacing:.04em"');y+=20;
+    rows.filter(r=>r.v.grp===gi).forEach(r=>{const col=r.v.v==='formula'?COL.hform:COL.push,yb=y+5,bh=18;
+      s+=T(12,yb+14,r.v.name,'axlbl','start','style="font-size:15px"');
+      s+=R(bx,yb,xs(r.os[0])-bx,bh,col,'none',2)+R(xs(r.os[0]),yb,xs(r.os[0]+Math.max(0,r.se[0]))-xs(r.os[0]),bh,col,'none',2,0,';fill-opacity:.35');
+      if(r.c[1]!=null) s+=L(xs(r.c[0]-r.c[1]/2),yb+bh/2,xs(r.c[0]+r.c[1]/2),yb+bh/2,COL.ink,1.6);
+      s+=T(xs(r.c[0]+(r.c[1]||0)/2)+6,yb+14,r.c[1]==null?fmt(r.c[0]):fmt(r.c[0])+' ± '+fw(r.c[1]),'cap','start','style="font-size:13.5px;fill:var(--body)"');
+      y+=rh;});y+=6;});
+  [0,mx/2,mx].map(v=>+v.toPrecision(2)).forEach(v=>s+=L(xs(v),top,xs(v),y-4,COL.grid,1)+T(xs(v),y+12,String(v),'tick','middle'));
+  s+=sw(0,H-8,COL.push,'learned h, push only')+sw(190,H-8,COL.hform,'formula (nothing learned)')+T(420,H-8,'light: scale error · whisker: seed wobble','cap','start','style="font-size:13.5px"');
+  s+=divider(735,10,H-6);
+  // (b) the 2 x 2: inputs down, flexibility across
+  const q=(v,r)=>{const k=hKey(HV.find(x=>x.v===v&&x.r===r),'0','true');return hA(cls,k,'crps_log_all');};
+  const M=[[q('affine','1'),q('mlp','1')],[q('affine','5'),q('mlp','5')]];
+  const gx=850,gy=118,cw=130,ch=92,gap=70;
+  s+=T(760,24,'(b) More inputs, or more flexibility?','ptitle')+T(760,48,'the four learned versions above, as a 2 × 2','psub');
+  s+=T(gx+cw/2,gy-14,'affine h','axlbl','middle','style="font-weight:600"')+T(gx+cw+gap+cw/2,gy-14,'MLP h','axlbl','middle','style="font-weight:600"');
+  [['rung 1','bin + control'],['rung 5','all inputs']].forEach(([a,b],i)=>{const yy=gy+i*(ch+gap)+ch/2;s+=T(gx-14,yy-2,a,'axlbl','end','style="font-weight:600"')+T(gx-14,yy+17,b,'cap','end','style="font-size:13px"');});
+  const vmin=Math.min(...M.flat().map(c=>c[0])),vmax=Math.max(...M.flat().map(c=>c[0]));
+  M.forEach((row,i)=>row.forEach((c,j)=>{const x=gx+j*(cw+gap),yy=gy+i*(ch+gap),op=0.18+0.55*(vmax-c[0])/(vmax-vmin||1);
+    s+=R(x,yy,cw,ch,COL.push,COL.push,10,2,`;fill-opacity:${op.toFixed(2)}`);
+    s+=T(x+cw/2,yy+ch/2+2,fmt(c[0]),'big','middle','style="font-size:24px"')+T(x+cw/2,yy+ch/2+24,'± '+fw(c[1]),'cap','middle','style="font-size:13px;fill:var(--body)"');}));
+  const gapTxt=(a,b)=>`−${fmt(a[0]-b[0])} (bar ${fw(2*Math.max(a[1],b[1]))})`;
+  // across (flexibility)
+  [0,1].forEach(i=>{const yy=gy+i*(ch+gap)+ch/2;s+=arrowR(gx+cw+6,yy,gx+cw+gap-6,COL.accent,2)+T(gx+cw+gap/2,yy-10,gapTxt(M[i][0],M[i][1]).split(' (')[0],'val','middle','style="fill:var(--accent);font-size:13.5px"');});
+  // down (inputs)
+  [0,1].forEach(j=>{const x=gx+j*(cw+gap)+cw/2;s+=arrowD(x,gy+ch+6,gy+ch+gap-6,COL.accent,2)+T(x+8,gy+ch+gap/2+5,gapTxt(M[0][j],M[1][j]).split(' (')[0],'val','start','style="fill:var(--accent);font-size:13.5px"');});
+  const bars=[2*Math.max(M[0][0][1],M[0][1][1]),2*Math.max(M[1][0][1],M[1][1][1]),2*Math.max(M[0][0][1],M[1][0][1]),2*Math.max(M[0][1][1],M[1][1][1])];
+  s+=T(760,gy+2*ch+gap+44,`arrows: the drop in CRPS · every bar ≤ ${fw(Math.max(...bars))}`,'cap','start','style="font-size:13.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- R5 · repair ---------- */
+function figR5(){
+  const W=1160,H=450;let s='';const top=80,h=270;
+  const rows=hRd('repair','crps_log_all').filter(x=>pid(x.id).n==='0');
+  const des=HDES.filter(d=>rows.some(x=>x.f===d));
+  const ex=rows.reduce((a,x)=>x.t<a.t?x:a),fx=ex.f,exr=HV_LEARN.map(v=>rows.find(x=>x.f===fx&&pid(x.id).v===v.v&&pid(x.id).r===v.r)).filter(Boolean);
+  const spl=(x,m,k)=>(hRd('repair',m,x.f).find(y=>y.id===x.id)||{})[k];
+  const ax=64,aw=560,gw=aw/exr.length,ymax=Math.max(...exr.map(x=>Math.max(x.o,x.t)))*1.18,yy=v=>top+h*(1-v/ymax);
+  s+=T(0,24,`(a) Example, design ${fx}: every learned h, push only`,'ptitle')+T(0,48,`in the chain on f's predicted counts · CRPS on log(1 + P) · track ${H2.track}`,'psub');
+  const st=ymax>0.3?0.1:0.05;for(let k=0;k<=ymax+1e-9;k+=st) s+=L(ax,yy(k),ax+aw,yy(k),COL.grid,1)+T(ax-8,yy(k)+5,k.toFixed(2),'tick','end');
+  s+=L(ax,top+h,ax+aw,top+h,COL.axis,1.2)+rotY(14,top+h/2,'CRPS on log(1 + P)');
+  exr.forEach((x,i)=>{const gx=ax+i*gw,bw=gw*0.34,ver=verOf(x.id);
+    [[x.t,spl(x,'crps_log_oracle_scaled_all','t'),SRCC.true,0.13,x.tw],[x.o,spl(x,'crps_log_oracle_scaled_all','o'),SRCC.fnb,0.53,null]].forEach(([m,os,c,off,w])=>{const bx=gx+gw*off;
+      s+=R(bx,yy(os),bw,top+h-yy(os),c,'none',2)+R(bx,yy(m),bw,yy(os)-yy(m),c,'none',2,0,';fill-opacity:.35');
+      if(w!=null) s+=L(bx+bw/2,yy(m-w/2),bx+bw/2,yy(m+w/2),COL.ink,1.6);});
+    const nm=ver.name.replace(', rung',' · rung').split(' · ');
+    s+=T(gx+gw/2,top+h+20,nm[0].replace(' correction',''),'cap','middle','style="font-size:12.5px;fill:var(--body)"')+T(gx+gw/2,top+h+36,nm[1]||'','cap','middle','style="font-size:12.5px"');});
+  s+=sw(ax,H-8,SRCC.true,'h trained on true counts')+sw(ax+210,H-8,SRCC.fnb,"h trained on f's predictions")+T(ax+450,H-8,'light: scale error','cap','start','style="font-size:13.5px"');
+  s+=divider(668,10,H-6);
+  // (b) rows beyond the bar, per design
+  const per=des.map(d=>{const o=rows.filter(x=>x.f===d);return [d,o.filter(x=>x.d<0&&x.met).length,o.length];});
+  const nmax=Math.max(...per.map(p=>p[2])),bx0=760,bW=390,by=v=>top+h*(1-v/nmax),g2=bW/Math.max(des.length,1);
+  s+=T(690,24,'(b) Rows where the true-counts h is lower','ptitle')+T(690,48,`beyond the bar · ${nmax} learned versions per design · ${H2.chain[0]} of ${H2.chain[1]} designs`,'psub');
+  for(let k=0;k<=nmax;k++) s+=L(bx0,by(k),bx0+bW,by(k),COL.grid,1)+T(bx0-8,by(k)+5,k,'tick','end');
+  s+=L(bx0,top+h,bx0+bW,top+h,COL.axis,1.2);
+  per.forEach(([d,n],i)=>{const x=bx0+i*g2+g2*0.22;s+=R(x,by(n),g2*0.56,top+h-by(n),SRCC.true,'none',3)+vlab(x+g2*0.28,by(n)-8,n,SRCC.true,15)+T(x+g2*0.28,top+h+24,d,'ptitle','middle','style="font-size:16px"');});
+  return svg(W,H,s);
+}
+
+/* ---------- R6 · the chain against the old grid's direct p ---------- */
+function figR6(){
+  const W=1160,H=450;let s='';const top=80,h=270;
+  const all=hRd('vs_oldgrid','crps_all');const des=HDES.filter(d=>all.some(x=>x.f===d));const od=d=>all.find(x=>x.f===d);
+  const ax=112,aw=528;
+  const vmax=Math.max(...all.flatMap(x=>[x.h,x.o0,x.o+(x.ow||0)/2]));const lo=0.1,hi=Math.pow(10,Math.ceil(Math.log10(vmax*1.5))),yy=logY(lo,hi,top,h);
+  s+=T(0,24,"(a) CRPS on P: the chain f → h against the earlier grid's direct p",'ptitle')+T(0,48,`track ${H2.track} (${H2.assay}), f seed 0, ${(all[0]||{n:0}).n} pairs · log scale`,'psub');
+  const tk=[];for(let e=-1;Math.pow(10,e)<=hi;e++) tk.push([Math.pow(10,e),e<0?'0.1':e<3?String(Math.pow(10,e)):'10<tspan dy="-7" font-size="10">'+e+'</tspan>']);s+=yTicks(ax,aw,yy,tk);
+  s+=L(ax,top+h,ax+aw,top+h,COL.axis,1.2)+rotY(16,top+h/2,'CRPS on P (log scale)');
+  s+=L(ax,yy(H2.explode_at),ax+aw,yy(H2.explode_at),COL.accent,1.6,'4 4')+T(ax+aw-4,yy(H2.explode_at)-7,'blow-up: CRPS > '+H2.explode_at,'cap','end','style="fill:var(--accent);font-size:13.5px"');
+  const gw=aw/Math.max(des.length,1);
+  des.forEach((d,gi)=>{const rws=all.filter(x=>x.f===d),gx=ax+gi*gw,o=od(d);
+    if(gi%2===0) s+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+    const xc=gx+gw*0.32,hv=rws.map(x=>x.h);
+    s+=L(xc,yy(Math.min(...hv)),xc,yy(Math.max(...hv)),COL.faint,8);
+    rws.forEach((x,i)=>s+=Ci(xc-10+10*(i%3),yy(x.h),5.5,SRCC[pid(x.id).s]));
+    const xo=gx+gw*0.72;
+    s+=L(xo,yy(Math.max(lo,o.o-(o.ow||0)/2)),xo,yy(o.o+(o.ow||0)/2),COL.ink,1.6)+R(xo-7,yy(o.o)-7,14,14,COL.ink,'none',1.5);
+    s+=P(`M${xo+18},${yy(o.o0)-8} L${xo+26},${yy(o.o0)} L${xo+18},${yy(o.o0)+8} L${xo+10},${yy(o.o0)} Z`,COL.card,COL.ink,1.8);
+    s+=T(gx+gw/2,top+h+24,d,'ptitle','middle','style="font-size:17px"');
+    const hx=rws.reduce((a,x)=>a+x.hx,0);
+    s+=T(gx+gw/2,top+h+44,String(o.ox),'val','middle',`style="font-size:15px;fill:${o.ox?'var(--accent)':'var(--muted)'}"`)+T(gx+gw/2,top+h+62,String(hx),'val','middle',`style="font-size:15px;fill:${hx?'var(--accent)':'var(--muted)'}"`);});
+  s+=T(ax-14,top+h+44,'earlier grid > 20','cap','end','style="font-size:13px"')+T(ax-14,top+h+62,'chain > 20','cap','end','style="font-size:13px"');
+  s+=Ci(8,H-12,5,SRCC.formula)+T(18,H-8,'formula','cap','start','style="font-size:13.5px"')+Ci(88,H-12,5,SRCC.true)+T(98,H-8,'h, true counts','cap','start','style="font-size:13.5px"')+Ci(206,H-12,5,SRCC.fnb)+T(216,H-8,"h, f's predictions",'cap','start','style="font-size:13.5px"');
+  s+=R(352,H-18,11,11,COL.ink,'none',1.5)+T(369,H-8,'earlier grid, 3-seed mean','cap','start','style="font-size:13.5px"')+P(`M${566},${H-19} L${572},${H-13} L${566},${H-7} L${560},${H-13} Z`,COL.card,COL.ink,1.5)+T(578,H-8,'seed 0','cap','start','style="font-size:13.5px"');
+  s+=divider(668,10,H-6);
+  // (b) the designs where every chain h is above the old grid beyond the bar: the CRPS split
+  const hiAll=des.filter(d=>all.filter(x=>x.f===d).every(x=>x.d<0&&Math.abs(x.d)>x.bar)),hiD=hiAll.slice(-2);
+  const bx0=750,bw=400;
+  s+=T(690,24,`(b) ${andJ(hiD)||'no design'}: where the gap is`,'ptitle')+T(690,48,'earlier grid against the lowest and highest chain h'+(hiAll.length>2?` (2 of ${hiAll.length} such designs)`:''),'psub');
+  if(hiD.length){
+    const sp=(d,id,m)=>hRd('vs_oldgrid',m,d).find(x=>x.id===id);
+    const items=[];hiD.forEach(d=>{const rws=all.filter(x=>x.f===d).sort((a,b)=>a.h-b.h);items.push({d,kind:'old',x:rws[0]},{d,kind:'lo',x:rws[0]},{d,kind:'hi',x:rws[rws.length-1]});});
+    const val=it=>it.kind==='old'?[it.x.o,it.x.ow,sp(it.d,it.x.id,'crps_oracle_scaled_all').o,sp(it.d,it.x.id,'scale_error_all').o]:[it.x.h,it.x.hw,sp(it.d,it.x.id,'crps_oracle_scaled_all').h,sp(it.d,it.x.id,'scale_error_all').h];
+    const ymax=Math.max(...items.map(it=>val(it)[0]))*1.3,by=v=>top+h*(1-v/ymax);
+    const st=ymax>0.5?0.1:0.05;for(let k=0;k<=ymax+1e-9;k+=st) s+=L(bx0,by(k),bx0+bw,by(k),COL.grid,1)+T(bx0-8,by(k)+5,k.toFixed(2),'tick','end');
+    s+=L(bx0,top+h,bx0+bw,top+h,COL.axis,1.2);
+    const swd=bw/items.length;
+    items.forEach((it,i)=>{const [m,w,os,se]=val(it),c=it.kind==='old'?COL.old:SRCC[pid(it.x.id).s],x=bx0+i*swd+swd*0.17,bwid=swd*0.66;
+      s+=R(x,by(os),bwid,top+h-by(os),c,'none',2)+R(x,by(os+Math.max(0,se)),bwid,by(os)-by(os+Math.max(0,se)),c,'none',2,0,';fill-opacity:.35');
+      s+=vlab(x+bwid/2,by(m)-8,fmt(m),c,14);
+      const ver=verOf(it.x.id),p=pid(it.x.id),nm=ver.name.split(', ');
+      const ls=it.kind==='old'?['earlier grid','direct p']:[nm[0],nm[1]];
+      ls.forEach((l,j)=>s+=T(x+bwid/2,top+h+18+j*15,l,'cap','middle','style="font-size:12px;fill:var(--body)"'));
+      if(i%3===0){s+=T(bx0+i*swd+swd*1.5,top+h+56,it.d,'ptitle','middle','style="font-size:17px"');if(i>0) s+=L(bx0+i*swd,top-6,bx0+i*swd,top+h+40,COL.axis,2);}});
+    s+=sw(bx0,H-8,COL.muted,'oracle-scaled')+sw(bx0+140,H-8,COL.muted,'scale error',0.35)+T(bx0+260,H-8,'colours as in (a)','cap','start','style="font-size:13.5px"');
+  } else s+=T(690,140,'no design has every chain h above the earlier grid beyond the bar','psub');
+  return svg(W,H,s);
+}
+
+/* ===================== v2 · appendix figures ===================== */
+/* every cell, gain ÷ bar: (a) against the old grid (CRPS), (b) against the twin (MSE), (c) against the twin (CRPS) */
+function figAllCells(){
+  const W=1160,H=440;let s='';const top=74,h=290;
+  const panel=(x0,w,lx,k,m,lo,hi,logS,ticks,title)=>{
+    const all=allRd(k,m),nMet=all.filter(o=>o.v[2]).length;
+    const yy=logS?logY(lo,hi,top,h):v=>top+h*(hi-Math.max(lo,Math.min(hi,v)))/(hi-lo);
+    let t=T(lx,24,title,'ptitle','start','style="font-size:18px"')+T(lx,48,`${nMet} of ${all.length} cells beyond the bar`,'psub');
+    const G=groups(x0,w,top,h,DES,top+h+24,12.5);t+=G.s+yTicks(x0,w,yy,ticks);
+    t+=L(x0,yy(1),x0+w,yy(1),COL.accent,2,'7 5')+T(x0-8,yy(1)+5,'bar','tick','end','style="fill:var(--accent)"');
+    if(!logS) t+=L(x0,yy(0),x0+w,yy(0),COL.axis,1.4);
+    all.forEach(o=>{const gi=DES.indexOf(o.r),si=GV.indexOf(o.g)*3+CL.indexOf(o.c),x=G.x(gi,si,6),q=o.v[0]/o.v[1];
+      if(logS&&q<=lo){t+=arrowHead(x,top+h-2,'d',COL.accent,8);return;}
+      t+=o.v[2]?mark(x,yy(q),o.g,COL.nw,'none',5):mark(x,yy(q),o.g,COL.card,COL.muted,4.5,1.5);});
+    return t;};
+  s+=panel(60,320,0,'vs_oldgrid','crps_all',-2,9,false,[[-2,'−2'],[0,'0'],[2,'2'],[4,'4'],[6,'6'],[8,'8']],'(a) CRPS: new against the earlier grid');
+  s+=divider(392,10,H-30);
+  s+=panel(445,320,405,'beatstwin','mse_log1p_all',0.5,50,true,[[0.5,'0.5'],[2,'2'],[5,'5'],[10,'10'],[20,'20'],[50,'50']],'(b) MSE of the mean: real against twin');
+  s+=divider(777,10,H-30);
+  s+=panel(830,320,790,'beatstwin','crps_all',0.1,50,true,[[0.1,'0.1'],[0.5,'0.5'],[2,'2'],[10,'10'],[50,'50']],'(c) CRPS: real against twin');
+  s+=Ci(8,H-12,5,COL.nw)+T(18,H-8,'beyond the bar','cap')+Ci(130,H-12,4.5,COL.card,COL.muted,1.5)+T(140,H-8,'within','cap')+T(210,H-8,'● one g per track · ■ one g across tracks · in each design: DNase, narrow, broad · y: gain ÷ bar · ▼ the other model is lower','cap');
+  return svg(W,H,s);
+}
+
+/* own noise against push only, and the own-noise blow-ups of the mean */
+function figNoise(){
+  const W=1160,H=400;let s='';
+  const met=['crps_log_all','mse_log1p_all'],mn={crps_log_all:'CRPS on log(1 + P)',mse_log1p_all:'MSE of the mean'};
+  s+=T(0,24,'(a) Rows where push + own noise is lower than push only','ptitle')+T(0,48,'h alone and in the chain, every learned version · solid: beyond the bar · light: lower, within the bar','psub');
+  const x0=210,bw=430;
+  met.forEach((m,i)=>{const rows=hRd('push_vs_noise',m),n=rows.length,lw=rows.filter(x=>x.q<x.p).length,mt=rows.filter(x=>x.q<x.p&&x.met).length,y=90+i*110;
+    s+=T(0,y+26,mn[m],'axlbl','start','style="font-weight:600"');
+    s+=R(x0,y,bw,40,COL.card,COL.hair,4,1.5)+R(x0,y,bw*lw/n,40,COL.noise,'none',4,0,';fill-opacity:.35')+R(x0,y,bw*mt/n,40,COL.noise,'none',4);
+    s+=T(x0,y+64,`lower in ${lw} of ${n} rows, ${mt} beyond the bar`,'axlbl','start','style="font-size:15px"');});
+  s+=divider(700,10,H-6);
+  const ks=['alone','chain'].map(sc=>[sc,H2.expl[sc+'|crps_mean_point_all_gt_20']]).filter(x=>x[1]);
+  s+=T(730,24,'(b) Own noise: blow-ups of the mean on P','ptitle')+T(730,48,`point CRPS of the mean > ${H2.explode_at} · solid: affine h, rung 5`,'psub');
+  const mx=Math.max(...ks.map(x=>x[1].rec));
+  ks.forEach(([sc,e],i)=>{const y=90+i*110,w=380;
+    s+=T(730,y+26,sc==='alone'?'h alone':'in the chain','axlbl','start','style="font-weight:600"');
+    const x=850,ww=w*0.78;
+    s+=R(x,y,ww,40,COL.card,COL.hair,4,1.5)+R(x,y,ww*e.gt/e.rec,40,COL.accent,'none',4,0,';fill-opacity:.35')+R(x,y,ww*e.gt_aff5/e.rec,40,COL.accent,'none',4);
+    s+=T(730,y+64,`${e.gt} of ${e.rec.toLocaleString('en-US')} records (${e.gt_aff5} affine rung 5); not finite: ${e.nf}`,'axlbl','start','style="font-size:15px"');});
+  const pa0=H2.expl['alone|crps_all_gt_20'],pc0=H2.expl['chain|crps_all_gt_20'];
+  s+=T(730,330,`Push only and formula: ${pa0.gt+pc0.gt} of ${(pa0.rec+pc0.rec).toLocaleString('en-US')} records above ${H2.explode_at}.`,'axlbl','start','style="font-size:15px"');
+  s+=T(0,330,'Own noise widens P, so the CRPS falls; the mean does not get closer.','axlbl','start','style="font-size:15px"');
+  return svg(W,H,s);
+}
+
+/* part 1: devices per design, and blow-ups by kind of scoring */
+function figDevBoom(){
+  const W=1160,H=380;let s='';const top=74,h=230;
+  s+=T(0,24,'(a) Training device, per design','ptitle')+T(0,48,'runs on the GPU slice or on CPU, from the run records','psub');
+  const x0=60,aw=560,gw=aw/DES.length,nmax=Math.max(...DES.map(d=>(DATA.dev[d].gpu||0)+(DATA.dev[d].cpu||0))),yy=v=>top+h*(1-v/nmax);
+  [0,nmax/2,nmax].forEach(v=>s+=L(x0,yy(v),x0+aw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,Math.round(v),'tick','end'));
+  DES.forEach((d,i)=>{const g=DATA.dev[d].gpu||0,c=DATA.dev[d].cpu||0,x=x0+i*gw+gw*0.2,bw=gw*0.6;
+    s+=R(x,yy(g),bw,top+h-yy(g),COL.gpu,'none',0)+R(x,yy(g+c),bw,yy(g)-yy(g+c),COL.cpu,'none',0);});
+  s+=groups(x0,aw,top,h,DES,top+h+24,15).s.replace(/<rect[^>]*>/g,'');
+  s+=sw(x0,H-8,COL.gpu,'GPU slice')+sw(x0+120,H-8,COL.cpu,'CPU');
+  s+=divider(660,10,H-6);
+  const k=DATA.expl.kinds,ks=Object.keys(k),mx=Math.max(1,...ks.map(x=>k[x][1]));
+  s+=T(690,24,`(b) Records with CRPS > ${DATA.expl.at}, by kind of scoring`,'ptitle')+T(690,48,`part 1, all designs and models · ${Object.values(k).reduce((a,v)=>a+v[0],0).toLocaleString('en-US')} records`,'psub');
+  const bx0=720,bw=430,g2=bw/ks.length,by=v=>top+h*(1-v/(mx*1.25));
+  ks.forEach((x,i)=>{const n=k[x][1],xx=bx0+i*g2+g2*0.2;s+=R(xx,by(n),g2*0.6,top+h-by(n),COL.accent,'none',2)+vlab(xx+g2*0.3,by(n)-8,n,COL.accent,15);
+    const [a,b]=x.split('/');s+=T(xx+g2*0.3,top+h+22,a,'axlbl','middle','style="font-size:14.5px"')+T(xx+g2*0.3,top+h+40,b==='val'?'(validation)':'','cap','middle','style="font-size:12.5px"');});
+  s+=L(bx0,top+h,bx0+bw,top+h,COL.axis,1.2);
+  return svg(W,H,s);
+}
+
+/* part 2: merged mixture, step cap, capped rows */
+function figChecks(){
+  const W=1160,H=380;let s='';const top=80,h=210;
+  const m=H2.merge.slice().sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0])),bar=m[0][4],mx=bar*1.3;
+  s+=T(0,24,'(a) Merged mixture: largest error','ptitle')+T(0,48,'per bin, relative to the exact CRPS','psub')+T(0,68,`at most G = ${m[0][1]} components per bin`,'psub');
+  const x0=60,aw=330,gw=aw/m.length,yy=v=>top+h*(1-v/mx);
+  s+=L(x0,yy(bar),x0+aw,yy(bar),COL.accent,2,'6 4')+T(x0+aw,yy(bar)-7,'bar '+bar.toExponential(0).replace('e-','e−'),'cap','end','style="fill:var(--accent);font-size:13.5px"');
+  m.forEach((r,i)=>{const x=x0+i*gw+gw*0.2,bw=gw*0.6;if(r[2]!=null) s+=R(x,yy(r[2]),bw,top+h-yy(r[2]),COL.row1,'none',2);
+    s+=T(x+bw/2,top+h+22,r[0],'ptitle','middle','style="font-size:16px"')+T(x+bw/2,top+h+40,r[2]!=null?r[2].toExponential(1).replace('e-','e−'):'exact','cap','middle','style="font-size:12.5px"');});
+  s+=L(x0,top+h,x0+aw,top+h,COL.axis,1.2);
+  s+=divider(420,10,H-6);
+  const ff=H2.fits.fnb,ft=H2.fits.true;
+  s+=T(445,24,'(b) h fits that ran to the step cap','ptitle')+T(445,48,`cap: ${ff.max_steps.join(', ')} steps`,'psub');
+  [[ft,'trained on true counts',SRCC.true],[ff,"trained on f's predictions",SRCC.fnb]].forEach(([f,lab,c],i)=>{const y=100+i*100,w=300;
+    s+=T(445,y,lab,'axlbl','start','style="font-weight:600;font-size:15.5px"');
+    s+=R(445,y+12,w,32,COL.card,COL.hair,4,1.5)+R(445,y+12,w*f.n_at_step_cap/f.n_fits,32,c,'none',4);
+    s+=T(445,y+66,`${f.n_at_step_cap} of ${f.n_fits} fits`,'axlbl','start','style="font-size:15px"');});
+  s+=divider(775,10,H-6);
+  const chainRows=H2.capped.reduce((a,r)=>a+r[3],0);
+  s+=T(800,24,'(c) Capped count rows','ptitle')+T(800,48,'NB range wider than the count limit','psub');
+  [[ft.n_capped_rows,`fits on true counts (${ft.n_fits_with_capped_rows} fits)`],[ff.n_capped_rows,`fits on f's predictions (${ff.n_fits_with_capped_rows} fits)`],[chainRows,'chain scoring']].forEach(([n,lab],i)=>{const y=110+i*76;
+    s+=T(800,y,n.toLocaleString('en-US'),'big','start','style="font-size:30px"')+T(800,y+24,lab,'axlbl','start','style="font-size:15px"');});
+  return svg(W,H,s);
+}
+
+/* next steps: options, not decisions (text computed from the data where it names designs) */
+function figNext2(){
+  const W=1160,H=380;let s='';
+  const done=H2.f_missing.length===0;
+  const vo=hRd('vs_oldgrid','crps_all'),hiN=andJ(HDES.filter(d=>vo.some(x=>x.f===d)&&vo.filter(x=>x.f===d).every(x=>x.d<0&&Math.abs(x.d)>x.bar)))||'the';
+  const steps=[['1',done?'Read the full chain':'Rebuild when the chain lands',done?`all ${H2.chain[1]} designs are in; re-read results 5 and 6 and the limits`:`the chains of ${H2.f_missing.join(', ')} are running; a rebuild of this deck picks them up`,'var(--row2)'],
+    ['2','How does g move depth?','compare g\'s predicted scale with the read ratio, pair by pair, for real D against its twin (no new training)','var(--accent)'],
+    ['3','Option: g without depth','retrain with depth removed from g, so the offset alone carries d′/d','var(--new)'],
+    ['4','Option: where the chain loses',`split the ${hiN} gap to direct p by bin level and by the top 1% of bins`,'var(--push)'],
+    ['5','Option: a firmer repair test','three seeds for the h trained on f\'s predictions, and fits past the step cap','var(--hfnb)'],
+    ['6','Option: more chain tracks','the chain covers one H3K27ac track; a DNase and a broad track would test how far it holds','var(--twin)']];
+  steps.forEach(([n,t,sub,c],i)=>{const x=10+(i%3)*385,y=10+Math.floor(i/3)*185;
+    s+=R(x,y,360,170,COL.card,c,12,2.5)+Ci(x+36,y+38,20,c)+T(x+36,y+45,n,'big','middle','style="fill:#fff;font-size:20px"');
+    s+=FO(x+70,y+20,272,145,`<div style="font:600 18px var(--sans);color:var(--ink);line-height:1.3">${t}</div><div style="font:400 15.5px var(--sans);color:var(--muted);line-height:1.42;margin-top:8px">${sub}</div>`,'');});
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figQuestion,figData,figGF,figDesigns,figRowsG,figProblems,figScore,figOffset,figBudget,figCompare,
+  figHMap,figR1,figR2,figR3,figR4,figR5,figR6,figNext:figNext2,
+  figSpread,figWhy,figDepthLaw,figAllCells,figHAlone,figRepair,figNoise,figDevBoom,figChecks};
+for(const [id,fn] of Object.entries(FIGS)){const el=document.getElementById(id);if(el){try{el.innerHTML=fn();}catch(e){el.textContent='figure error: '+e.message;console.error(id,e);}}}
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+/* a CRPS with its split, the parts named: "1.247 ± 0.016 (oracle-scaled 1.109 + scale error 0.138)" */
+const splN=(m,w,os,se)=>`${w==null?fmt(m):pm(m,w)} (oracle-scaled ${fmt(os)} + scale error ${fw(se)})`;
+const pc=v=>(100*v>=10?String(Math.round(100*v)):(100*v).toPrecision(2))+'%';
+const rngS=a=>{const lo=Math.min(...a),hi=Math.max(...a);return fmt(lo)===fmt(hi)?fmt(lo):`${fmt(lo)}–${fmt(hi)}`;};
+
+/* grid table cells */
+document.querySelectorAll('#tblGrid td[data-d]').forEach(td=>{const d=td.dataset.d,dv=DATA.dev[d],n=(dv.gpu||0)+(dv.cpu||0);
+  td.innerHTML=`<span class="nm" style="color:${rowCol(d)}">${DNm(d)}</span>${n} runs`;});
+
+/* ---------- part 1, all from DATA ---------- */
+const P1={};
+try{
+  put('tRuns',String(DATA.runs.n));
+  const D8=DATA.depth.filter(r=>r[0]!=='Aold'),DO=DATA.depth.filter(r=>r[0]==='Aold');
+  const G8=D8.filter(r=>r[2]!=='all'),P8=D8.filter(r=>r[2]==='all');
+  const nInG=G8.filter(r=>r[7]).length,nInP=P8.filter(r=>r[7]).length,nInO=DO.filter(r=>r[7]).length;
+  const nOld=G8.filter(r=>r[10]!=null&&r[10]<=r[15]).length,gainMet=G8.filter(r=>r[14]).length;
+  Object.assign(P1,{nInG,nG:G8.length,nInP,nP:P8.length,nOld});
+  put('tDL_h',`${nInG} of ${G8.length} class cells within 10% (earlier grid: ${nOld} of ${G8.length})`);
+  putH('tDL_main',`<b>Class cells within 10%:</b> new ${nInG} of ${G8.length}, earlier grid ${nOld} of ${G8.length}. Pooled cells (no earlier-grid value): ${nInP} of ${P8.length}; old-spread A: ${nInO} of ${DO.length}. A gain over the earlier grid beyond its bar in ${gainMet} of ${G8.length} class cells.`);
+  const twDD=DATA.depth.filter(r=>r[0]==='D'||r[0]==='D2'),twO=DATA.depth.filter(r=>!['D','D2'].includes(r[0]));
+  const rD=DATA.depth.filter(r=>r[0]==='D');
+  put('n_r1tw',`they miss by ${pc(Math.min(...twDD.map(r=>r[8])))}–${pc(Math.max(...twDD.map(r=>r[8])))}`);
+  put('n_r1tw2',`${pc(Math.min(...twO.map(r=>r[8])))}–${pc(Math.max(...twO.map(r=>r[8])))}`);
+  put('n_r1d',`${pc(Math.min(...rD.map(r=>r[3])))}–${pc(Math.max(...rD.map(r=>r[3])))} (seed wobble up to ${pc(Math.max(...rD.map(r=>r[4])))})`);
+  P1.twDD=`${pc(Math.min(...twDD.map(r=>r[8])))}–${pc(Math.max(...twDD.map(r=>r[8])))}`;
+  // design A
+  const ag=rdg('vs_oldgrid','crps_all','A','per_track','DNase'),ao=rdg('vs_oldgrid','crps_all','Aold','per_track','DNase'),
+        sp=rdg('vs_oldspread','crps_all','A','per_track','DNase');
+  const co=cell('old','A','per_track','DNase','crps_all'),cn=cell('real','A','per_track','DNase','crps_all');
+  const restD=DES.filter(d=>!d.startsWith('A')),rest=allRd('vs_oldgrid','crps_all').filter(o=>restD.includes(o.r));
+  P1.restN=andJ(restD);P1.restMet=rest.filter(o=>o.v[2]).length;P1.restTot=rest.length;P1.ag=ag;
+  put('tAG_hrest',P1.restN);
+  putH('tAG_main',`<b>A, one g per track, DNase:</b> CRPS ${splN(co[0],co[1],co[2],co[4])} → ${splN(cn[0],cn[1],cn[2],cn[4])}. Gain ${fmt(ag[0])} (bar ${fmt(ag[1])}) = oracle-scaled ${fmt(ag[7])} (bar ${fmt(ag[8])}) + scale error ${fmt(ag[9])} (bar ${fmt(ag[10])}). <b>${P1.restN}:</b> ${P1.restMet} of ${P1.restTot} cells beyond the bar.`);
+  P1.a=`${pm(co[0],co[1])} → ${pm(cn[0],cn[1])}`;
+  put('n_r2old',`${fmt(ao[0])} (bar ${fmt(ao[1])}; oracle-scaled ${fmt(ao[7])} + scale error ${fmt(ao[9])})`);
+  put('n_r2sp',`${fmt(sp[0])} (bar ${fmt(sp[1])}`+(sp.length>7?`; oracle-scaled ${fmt(sp[7])} + scale error ${fmt(sp[9])})`:')'));
+  const msp=allRd('vs_oldspread','mse_log1p_all');put('n_r2mse',`${msp.filter(o=>o.v[2]).length} of ${msp.length} cells`);
+  // the settings
+  const tm=allRd('beatstwin','mse_log1p_all');P1.mLow=tm.filter(o=>o.v[3]<o.v[5]).length;P1.mMet=tm.filter(o=>o.v[2]).length;P1.mTot=tm.length;
+  const tc=allRd('beatstwin','crps_all');P1.cMet=tc.filter(o=>o.v[2]).length;P1.cTot=tc.length;
+  const ex=rdg('beatstwin','mse_log1p_all','B','per_track','DNase');
+  const allTxt=(n,m)=>m===n?'all':String(m);
+  putH('tTW_main',`<b>MSE of the mean:</b> real is lower in ${P1.mLow} of ${P1.mTot} cells, ${allTxt(P1.mLow,P1.mMet)} beyond the bar (B, one g per track, DNase: ${pm(ex[3],ex[4])} against the twin's ${pm(ex[5],ex[6])}; gain ${fmt(ex[0])}, bar ${fmt(ex[1])}). <b>CRPS:</b> ${P1.cMet} of ${P1.cTot} cells beyond the bar.`);
+  const aot=rdg('beatstwin','crps_all','Aold','per_track','DNase');
+  put('n_r3ao',`${fmt(-aot[0])} = oracle-scaled ${fmt(-aot[7])} + scale error ${fmt(-aot[9])} (bar ${fmt(aot[1])})`);
+  // limits and appendix
+  const g=Object.values(DATA.dev).reduce((a,v)=>a+(v.gpu||0),0),c=Object.values(DATA.dev).reduce((a,v)=>a+(v.cpu||0),0);
+  put('tC_dev',`${g} runs trained on the GPU slice, ${c} on CPU`);put('tC_dev2',`${g} runs on the GPU slice, ${c} on CPU; row 1 on the GPU slice, most of row 2 and old-spread A on CPU`);
+  const bt=cell('twin','A2','across','DNase','crps_all');
+  const nb=Object.values(DATA.expl.kinds).reduce((a,v)=>a+v[1],0),nr=Object.values(DATA.expl.kinds).reduce((a,v)=>a+v[0],0);
+  const nzm=[...new Set(DATA.expl.nonzero.map(z=>`${DNm(z[0])}, ${GN[z[1]]}, ${z[3]==='nocov'?'its no-covariates twin':'real model'}`))];
+  put('tC_boom',`${nb} of ${nr.toLocaleString('en-US')} part-1 records are above ${DATA.expl.at}, all from ${nzm.join('; ')} (its DNase CRPS ${splN(bt[0],bt[1],bt[2],bt[4])}). The earlier grid's ${DATA.expl.old_counts[1]} count blow-ups (of ${DATA.expl.old_counts[0].toLocaleString('en-US')} records) are gone`);
+}catch(e){console.error('prose part 1',e);}
+
+/* ---------- part 2, all from DATA.h2 ---------- */
+const P2={};
+try{
+  const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0), rng=a=>`${fmt(Math.min(...a))}–${fmt(Math.max(...a))}`;
+  const fe=v=>v.toExponential(1).replace('e-','e−');
+  document.querySelectorAll('.scope').forEach(el=>el.textContent='· '+scopeTxt());
+  put('tRuns2',`h on the true counts, ${H2.alone[0]} of ${H2.alone[1]} scored; the chain f → h, ${H2.chain[0]} of ${H2.chain[1]} designs`+(H2.f_missing.length?` (${andJ(H2.f_missing)} still running)`:''));
+  document.querySelectorAll('#tblH td[data-h="learn"]').forEach(td=>td.innerHTML=
+    `<span class="tag src-t">true counts · ${H2.seeds_true} seeds</span><span class="tag src-f">f's predicted counts · ${H2.seeds_fnb} seed</span>`);
+  const f0=HDES[0],nP=f0?hC(f0,'formula|bin|None|0|formula','crps_log_all')[2]:0;
+  putH('tH_scope',`<b>Scope of the chain:</b> track ${H2.track} (${H2.assay}, a narrow mark), seed 0 of each real f, ${H2.f_g.map(g=>GN[g]).join(', ')}, ${nP} pairs. `+
+    `<b>${H2.chain[0]} of ${H2.chain[1]} designs</b> finished (${andJ(HDES)})`+(H2.f_missing.length?`; ${andJ(H2.f_missing)} still running, added by a rebuild when they land.`:'.'));
+  // result 4: alone, narrow
+  const A=k=>hA('narrow',k,'crps_log_all'),OS=k=>hA('narrow',k,'crps_log_oracle_scaled_all')[0],SE=k=>hA('narrow',k,'crps_log_scale_error_all')[0];
+  const sK=k=>{const c=A(k);return splN(c[0],c[1],OS(k),SE(k));};
+  const m5k=hKey(HV[5],'0','true'),m1k=hKey(HV[3],'0','true'),a1k=hKey(HV[2],'0','true'),a5k=hKey(HV[4],'0','true');
+  const m5=A(m5k),m1=A(m1k),a1=A(a1k),a5=A(a5k);
+  const inG=[a1[0]-a5[0],m1[0]-m5[0]],cxG=[a1[0]-m1[0],a5[0]-m5[0]];
+  const bars=[[a1,a5],[m1,m5],[a1,m1],[a5,m5]].map(([x,y])=>2*Math.max(x[1],y[1]));
+  P2.inputsWin=Math.min(...inG)>Math.max(...cxG);
+  const t4=P2.inputsWin?'Given the true counts, more inputs help h more than more flexibility (narrow marks)':'Given the true counts, h gets closer with more inputs and with more flexibility (narrow marks)';
+  put('tHA_h',t4);put('sm4t',(P2.inputsWin?'Given the true counts, more inputs help h more than a more flexible h.':'Given the true counts, h gets closer with more inputs and more flexibility.'));
+  const pushK=HV.map(v=>hKey(v,'0',v.v==='formula'?'formula':'true')).filter(k=>A(k));
+  const bestP=pushK.reduce((a,k)=>A(k)[0]<A(a)[0]?k:a);
+  putH('tHA_main',`<b>Narrow marks, push only, CRPS on log(1 + P):</b> MLP h, rung 1 → rung 5: ${sK(m1k)} → ${sK(m5k)}; drop ${fmt(inG[1])} (bar ${fw(bars[1])}). Affine → MLP at rung 5: drop ${fmt(cxG[1])} (bar ${fw(bars[3])}). Lowest push-only h: ${verOf(bestP).name}, ${sK(bestP)}.`);
+  P2.m1=m1;P2.m5=m5;P2.bmax=Math.max(...bars);P2.inG=inG;
+  put('n_r4form',`bin only ${sK('formula|bin|None|0|formula')}, fragment window ${sK('formula|frag|None|0|formula')}`);
+  const allK=HV.flatMap(v=>v.v==='formula'?[hKey(v,'0','formula')]:[hKey(v,'0','true'),hKey(v,'1','true')]).filter(k=>A(k));
+  const best=allK.reduce((a,k)=>A(k)[0]<A(a)[0]?k:a);
+  put('n_r4best',`${verOf(best).name}${pid(best).v==='formula'?'':', '+HNZ[pid(best).n]}, ${sK(best)}`);
+  const pa=hRd('push_vs_noise','crps_log_all').filter(x=>x.sc==='alone');
+  put('n_r4noise',`${pa.filter(x=>x.q<x.p).length} of ${pa.length} cells (${pa.filter(x=>x.q<x.p&&x.met).length} beyond the bar)`);
+  // result 5: repair
+  const rp=hRd('repair','crps_log_all').filter(x=>pid(x.id).n==='0'),rn=hRd('repair','crps_log_all').filter(x=>pid(x.id).n==='1');
+  P2.rLow=rp.filter(x=>x.d<0).length;P2.rMet=rp.filter(x=>x.d<0&&x.met).length;P2.rTot=rp.length;
+  const ex=rp.reduce((a,x)=>x.t<a.t?x:a),exs=(m,f)=>hRd('repair',m,ex.f).find(x=>x.id===ex.id)[f];
+  putH('tHR_main',`<b>Push only, CRPS on log(1 + P):</b> the true-counts h is lower in ${P2.rLow} of ${P2.rTot} rows, ${P2.rMet===P2.rLow?'all':P2.rMet} beyond the bar. Example, ${ex.f}, ${verOf(ex.id).name}: ${splN(ex.t,ex.tw,exs('crps_log_oracle_scaled_all','t'),exs('crps_log_scale_error_all','t'))} against ${splN(ex.o,null,exs('crps_log_oracle_scaled_all','o'),exs('crps_log_scale_error_all','o'))}; bar ${fmt(ex.bar)}.`);
+  const nf=rn.filter(x=>x.d>0);P2.nf=nf.length;P2.rn=rn.length;
+  put('tHR_noise',nf.length?`the h trained on f's predictions is lower in ${nf.length} of ${rn.length} own-noise rows (${nf.filter(x=>x.met).length} beyond the bar), all at rung ${[...new Set(nf.map(x=>pid(x.id).r))].join(', ')}, by ${fw(Math.min(...nf.map(x=>x.d)))}–${fw(Math.max(...nf.map(x=>x.d)))} in CRPS on log(1 + P)`:`none: the true-counts h is lower in all ${rn.length} own-noise rows too`);
+  const rP=hRd('repair','crps_all').filter(x=>pid(x.id).n==='0');
+  put('n_r5p',`${rP.filter(x=>x.d<0).length} of ${rP.length} rows, ${rP.filter(x=>x.d<0&&x.met).length} beyond the bar (gaps ${rng(rP.map(x=>-x.d))})`);
+  const maxn=Math.max(...rn.map(x=>x.n)),few=rn.filter(x=>x.n<maxn);
+  put('n_r5pairs',few.length?`${few.length} of ${rn.length} own-noise rows use ${Math.min(...few.map(x=>x.n))}–${Math.max(...few.map(x=>x.n))} of ${maxn} pairs`+(few.every(x=>pid(x.id).r==='5'&&/affine/.test(pid(x.id).v))?'; all are affine h at rung 5, with or without the formula':''):'none');
+  // result 6: the chain against the earlier grid
+  const vo=hRd('vs_oldgrid','crps_all'),vd=HDES.filter(d=>vo.some(x=>x.f===d)),od=d=>vo.find(x=>x.f===d);
+  const hiD=vd.filter(d=>vo.filter(x=>x.f===d).every(x=>x.d<0&&Math.abs(x.d)>x.bar));
+  const exD=vd.filter(d=>!hiD.includes(d)&&(od(d).o>H2.explode_at||od(d).o0>H2.explode_at));
+  const restD=vd.filter(d=>!hiD.includes(d)&&!exD.includes(d));
+  const pc0=H2.expl['chain|crps_all_gt_20'],ec=H2.expl['chain|crps_mean_point_all_gt_20'],ea=H2.expl['alone|crps_mean_point_all_gt_20'],pa0=H2.expl['alone|crps_all_gt_20'];
+  Object.assign(P2,{hiD,exD});
+  const hiR=vo.filter(x=>hiD.includes(x.f));
+  const spOf=(m,x)=>hRd('vs_oldgrid',m,x.f).find(y=>y.id===x.id);
+  const blowTxt=pc0.gt===0?'push-only and formula h never blow up':`${pc0.gt} push-only or formula chain records blow up`;
+  const t6=hiD.length?`The chain is less accurate than direct p on ${andJ(hiD)}; ${blowTxt}`:`No design's chain is less accurate than direct p beyond the bar; ${blowTxt}`;
+  put('tHO_h',t6);put('sm6t',(hiD.length?`In the chain, p-values are less accurate than the earlier grid's on ${andJ(hiD)}; ${blowTxt}.`:t6+'.'));
+  let hiTxt='';
+  if(hiD.length){
+    const oT=(()=>{const v=hiD.map(d=>od(d).o),w=Math.max(...hiD.map(d=>od(d).ow));return `${rngS(v)} (wobble ≤ ${fw(w)})`;})();
+    const osR=hiR.map(x=>spOf('crps_oracle_scaled_all',x).h),seR=hiR.map(x=>spOf('scale_error_all',x).h);
+    hiTxt=`chain ${rngS(hiR.map(x=>x.h))} (oracle-scaled ${rngS(osR)} + scale error ${fw(Math.min(...seR))}–${fw(Math.max(...seR))}) against the earlier grid's ${oT}`;
+    putH('tHO_main',`<b>${andJ(hiD)}, CRPS on P:</b> ${hiTxt}; every gap beyond its bar (bars ≤ ${fw(Math.max(...hiR.map(x=>x.bar)))}), and in the oracle-scaled part. <b>Blow-ups in the chain:</b> push-only and formula h ${pc0.gt} of ${pc0.rec.toLocaleString('en-US')} records; own-noise h ${ec.gt} of ${ec.rec.toLocaleString('en-US')} (point CRPS of the mean; ${ec.nf} not finite).`);
+  } else putH('tHO_main',`<b>Blow-ups in the chain:</b> push-only and formula h ${pc0.gt} of ${pc0.rec.toLocaleString('en-US')} records; own-noise h ${ec.gt} of ${ec.rec.toLocaleString('en-US')}.`);
+  P2.hiTxt=hiTxt;P2.pc0=pc0;P2.ec=ec;
+  put('n_r6x',exD.length?`${andJ(exD)}: the earlier grid's 3-seed means ${exD.map(d=>pmw(od(d).o,od(d).ow)).join(' and ')}, seed 0 ${exD.map(d=>fmt(od(d).o0)).join(' and ')}; ${vo.filter(x=>exD.includes(x.f)&&Math.abs(x.d)>x.bar).length} of ${vo.filter(x=>exD.includes(x.f)).length} deltas beyond the bar, as the earlier grid's wobble is so large`:'no finished design');
+  put('n_r6rest',restD.length?`The other designs: ${restD.map(d=>`${d}, earlier grid ${pmw(od(d).o,od(d).ow)} (seed 0 ${fmt(od(d).o0)}), ${vo.filter(x=>x.f===d&&Math.abs(x.d)>x.bar).length} of ${vo.filter(x=>x.f===d).length} deltas beyond the bar`).join('; ')}.`:'');
+  // limits
+  put('tL_scopeT',H2.f_missing.length?`${H2.chain[0]} of ${H2.chain[1]} designs in the chain`:`All ${H2.chain[1]} designs in the chain`);
+  put('tL_scope',`Finished: ${andJ(HDES)}. `+(H2.f_missing.length?`Running: ${andJ(H2.f_missing)}; results 5 and 6 cover the finished designs only.`:'The chain readings cover every design.'));
+  put('tL_seed',`Track ${H2.track} (${H2.assay}), seed 0 of each f. The h trained on f's predicted counts has ${H2.seeds_fnb} seed; its wobble is borrowed from the same h trained on true counts.`);
+  const mg=H2.merge.filter(r=>r[2]!=null).sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0])),mx=byDes(H2.merge.filter(r=>r[2]==null).map(r=>r[0]));
+  put('tL_merge',`Own-noise h in the chain: at most G = ${H2.merge[0][1]} components per bin. Largest per-bin error ${mg.length?mg.map(r=>`${r[0]} ${fe(r[2])}`).join(', '):'none'}, bar ${fe(H2.merge[0][4])}`+(mx.length?`; ${andJ(mx)} exact.`:'.'));
+  put('tL_boom',`Point CRPS of the mean on P above ${H2.explode_at}: ${ea.gt} of ${ea.rec.toLocaleString('en-US')} records alone, ${ec.gt} of ${ec.rec.toLocaleString('en-US')} in the chain; ${ea.gt_aff5+ec.gt_aff5} of them from affine h at rung 5. Push-only and formula h: ${pa0.gt+pc0.gt}.`);
+  const F=H2.fits.fnb,Ft=H2.fits.true;
+  put('tL_cap',`${F.n_at_step_cap} of ${F.n_fits} h fits on f's predicted counts and ${Ft.n_at_step_cap} of ${Ft.n_fits} on true counts ran to the ${F.max_steps.join(', ')}-step cap.`);
+  put('tL_rows',`Count distributions wider than the count limit: ${F.n_capped_rows} rows in ${F.n_fits_with_capped_rows} fits on f's predicted counts, ${Ft.n_capped_rows} on true counts, ${sum(H2.capped,r=>r[3])} in the chain scoring.`);
+}catch(e){console.error('prose part 2',e);}
+
+/* ---------- summary and the readings table: restated from the result slides ---------- */
+try{
+  const ag=P1.ag;
+  put('sm1',`${P1.nInG} of ${P1.nG} class cells within 10% (earlier grid: ${P1.nOld} of ${P1.nG}); pooled cells: ${P1.nInP} of ${P1.nP}`);
+  put('sm2',`A, one g per track, DNase: CRPS ${P1.a}; gain ${fmt(ag[0])} (bar ${fmt(ag[1])}), of which scale error ${fmt(ag[9])}`);
+  put('sm3',`MSE of the mean lower than the twin's in ${P1.mLow} of ${P1.mTot} cells, ${P1.mMet===P1.mLow?'all':P1.mMet} beyond the bar`);
+  put('sm4',`MLP h, narrow: rung 1 ${pm(P2.m1[0],P2.m1[1])} → rung 5 ${pm(P2.m5[0],P2.m5[1])}; drop ${fmt(P2.inG[1])}, bars ≤ ${fw(P2.bmax)}`);
+  put('sm5',`true-counts h lower in ${P2.rLow} of ${P2.rTot} push-only rows, ${P2.rMet===P2.rLow?'all':P2.rMet} beyond the bar (own noise: the other way in ${P2.nf} of ${P2.rn})`);
+  put('sm6',(P2.hiTxt?P2.hiTxt+'. ':'')+`Blow-ups: push-only and formula ${P2.pc0.gt} of ${P2.pc0.rec.toLocaleString('en-US')}, own noise ${P2.ec.gt} of ${P2.ec.rec.toLocaleString('en-US')} · ${H2.chain[0]} of ${H2.chain[1]} designs`);
+  put('rd11',`${P1.nInG} of ${P1.nG} class cells within 10% (earlier grid: ${P1.nOld})`);
+  put('rd12',`A, DNase: gain ${fmt(ag[0])}, bar ${fmt(ag[1])}; scale error ${fmt(ag[9])}`);
+  put('rd13',`${P1.restN}: ${P1.restMet} of ${P1.restTot} cells beyond the bar`);
+  put('rd14',`MSE: ${P1.mMet} of ${P1.mTot} cells beyond the bar`);
+  put('rd21',`MLP, rung 1 → 5: ${fmt(P2.m1[0])} → ${fmt(P2.m5[0])} (bars ≤ ${fw(P2.bmax)})`);
+  put('rd22',`${P2.rMet} of ${P2.rTot} rows beyond the bar; own noise: the other way in ${P2.nf} of ${P2.rn}`);
+  const t23=document.getElementById('rd23t');
+  if(P2.hiD.length){t23.textContent=`less accurate on ${andJ(P2.hiD)}`;put('rd23',P2.hiTxt.replace(/ \(oracle-scaled[^)]*\)/,''));}
+  else{t23.textContent='no design less accurate';t23.className='tag good';put('rd23','');}
+  const t24=document.querySelector('#tblRead tr.q2 td:last-child .tag');
+  if(P2.pc0.gt>0){t24.textContent=`${P2.pc0.gt} push-only or formula`;t24.className='tag bad';}
+  put('rd24',`push-only, formula: ${P2.pc0.gt} of ${P2.pc0.rec.toLocaleString('en-US')}; own noise: ${P2.ec.gt} of ${P2.ec.rec.toLocaleString('en-US')}`);
+}catch(e){console.error('summary',e);}
+
+/* ---------- navigation and speaker notes ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>
