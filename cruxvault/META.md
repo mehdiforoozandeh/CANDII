@@ -37,9 +37,11 @@ Root: [[candii]]
     - · `h22` [H] [[h22_a_composable_g_one_shared_map_from_each_|A composable g — one shared map from each side's covariates to a common latent, with an exact inverse — meets the depth law on never-trained depth pairs without arm → arm training]] — *idea*
     - · `h23` [H] [[h23_on_never_trained_arm_arm_depth_pairs_the|On never-trained arm → arm depth pairs, the shared-weight encoder-decoder FiLM CNN meets the depth law at the trained-pair level]] — *idea*
     - · `h24` [H] [[h24_the_depth_entries_in_g_s_covariate_input|The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs]] — *idea*
+  - ○ `q8` [Q] [[q8_does_candi_s_training_which_never_pairs_|**Does CANDI's training, which never pairs an experiment with a counterfactual of itself except in depth, leave the trained model unable to correct for a change in the other covariates?**]] — *open*
+    - · `h26` [H] [[h26_a_trained_candi_checkpoint_told_a_counte|A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates]] — *idea*
 
 ## Dashboard
 
-- **Questions** (7): open 7 · review 0 · resolved 0
-- **Hypotheses** (24): idea 17 · staged 0 · running 5 · done 2
+- **Questions** (8): open 8 · review 0 · resolved 0
+- **Hypotheses** (25): idea 18 · staged 0 · running 5 · done 2
 - **Verdicts**: supported 0 · partial 0 · refuted 2 · inconclusive 0 · invalid-run 0

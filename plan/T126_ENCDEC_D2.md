@@ -83,3 +83,38 @@ are the shared-scope C_clean, the full grid, and twins for the other arms.
 - Under form A, C_clean is not identifiable, so its learned value may mean nothing.
 - With 1 channel and a skip that starts at the identity, the deterministic L2-only arm may stay
   at the identity. The VAE arm tests this.
+
+## Phase 2: PI decisions, 2026-10-25
+
+The PI picked three paths from the phase-1 deck:
+1. **Fixed real-base middle:** the encoder-decoder with C_clean frozen at the base's covariates.
+2. **More steps:** the cap goes from 4000 to 12,000 steps, and the best step is still chosen on chr22.
+3. **Anchored middle:** the encoder output is an NB prediction of the observed base track X_base,
+   trained with NLL(X_base).
+
+Deferred to a later phase: the scale questions, namely a bigger g, a bigger CNN, and other
+activations (the CNN now uses GELU). The PI ruled that these wait until phase 2 defines how g and f
+work together.
+
+Run grid (PI, 2026-10-25): 4 arms × 8 g units × 3 seeds = 96 runs, all at 12,000 steps, no twins.
+- a. Default: learnable C_clean (form A), L1 + L2.
+- b. Fixed base: C_clean frozen at the base's covariates, L1 + L2.
+- c. Anchored: C_clean fixed at the base; L1 + L2 + L_anchor at equal weights, where
+  L_anchor = NLL(X_base | f_e(x_arm; g(c_arm, c_base))) with NB output. The decoder reads the encoder's
+  predicted NB mean, in training as at test time.
+- d. Old D, retrained at 12,000 steps, as the reference; via-base is scored from these maps.
+Form D (box) is dropped, because its C_clean barely moves from the base.
+
+Metrics (PI, 2026-10-25). Every CRPS has the oracle_scaled / scale_error split, and a gap counts only
+above 2x the larger seed spread.
+- Tier 1, the question: (1) never-trained arm->arm CRPS, pooled and per knob, against old D and
+  via-base; (2) generalisation gap = never-trained CRPS - trained CRPS, same arm.
+- Tier 2, no cost elsewhere: (3) trained-pair CRPS; (4) held-out 7.5M depth CRPS; (5) depth-law error
+  on never-trained depth pairs (sanity check only).
+- Tier 3, diagnostics: (6) hop-1 CRPS, the prediction of X_base against the real base (arms b, c, d;
+  for b, the decoder's base prediction from the middle); (7) middle consistency, |Z - Z'| against
+  |x - x'| for two arms of one track; (8) swap check against identity distance; (9) the share of runs
+  whose best step is in the last 10% of 12,000 steps.
+- The deck ranks the arms by (1) and shows (2) beside it, as a reading, not a gate.
+- Final report: each metric is defined, with its best and worst cases explained, and then its
+  results. The discussion and conclusion must draw on every metric and say what each one tells us.
