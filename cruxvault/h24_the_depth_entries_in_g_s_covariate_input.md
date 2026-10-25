@@ -11,7 +11,9 @@ replicates: 7 tracks × 3 seeds, both g versions
 verdict: 
 metric: 
 created: "2026-10-25T00:22:33"
-updated: "2026-10-25T00:22:33"
+updated: "2026-10-25T00:58:40"
+null_approved: "2026-10-25T00:58:40"
+null_hash: 55c193fc0a71623a
 ---
 
 # h24 — The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs

@@ -11,10 +11,12 @@ replicates:
 verdict: refuted
 metric: "never-trained depth miss with Poisson-mean loss: A0 0.38, D 0.28 median |log2 err| vs trained 0.07–0.12"
 created: "2026-10-19T23:41:09"
-updated: "2026-10-20T18:52:04"
+updated: "2026-10-25T00:58:40"
 lock: 1cdab54a770689f7
 locked: "2026-10-20T18:52:04"
 lock_at: close
+null_approved: "2026-10-25T00:58:40"
+null_hash: 24641e914971592d
 ---
 
 # h21 — Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not

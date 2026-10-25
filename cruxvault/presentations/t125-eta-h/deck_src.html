@@ -6,7 +6,8 @@
 <title>Depth Offset and Map h</title>
 
 <!--
-  prezit deck · t125: the depth offset in f (part 1) and the counts -> p map h (part 2). Version 2.
+  prezit deck · t125: the depth offset in f (part 1) and the counts -> p map h (part 2). Version 3: the chain
+  covers 6 of 8 designs (A added, aggregate job 24966577, 2026-10-25; B and B2 stopped by the PI on 2026-10-19).
   Chrome, build pattern and chart style copied from ../t118-grid/ (deck_src.html + build_deck.py).
 
   DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-19):
@@ -15,7 +16,8 @@
   - Two audiences: the PI reads it alone first, then presents it to the lab. Every slide has speaker
     notes (<aside class="notes">), hidden by default, shown as an overlay with the `n` key, and printed
     under each slide.
-  - Part 2: h on the true counts is complete; the chain f -> h covers the designs the aggregate holds.
+  - Part 2: h on the true counts is complete; the chain f -> h covers the designs the aggregate holds
+    (6 of 8: A, C, D, A2, C2, D2; B and B2 are not rerun).
     Every part-2 figure and count reads whatever designs part2/summary_data_h.json holds, and every
     "N of 8" is computed, so a refresh needs only a rebuild.
   - Exploratory phase: no hypothesis, no metrics.json, no approved synthesis. `crux deck --verify`
@@ -221,7 +223,7 @@
     </div>
     <aside class="notes">
       <p>This deck reports the follow-up to the earlier transformation grid (the deck the lab saw before, in the folder next to this one). It follows a paper: why we did it, what we ran, what we saw, what it means. The appendix holds a glossary and the detailed figures.</p>
-      <p>Every number on the slides and in these notes is read from the result files when the deck is built. Part 2 is still growing: a rebuild picks up the last chains when they land, and every "N of 8" updates by itself.</p>
+      <p>Every number on the slides and in these notes is read from the result files when the deck is built. Part 2 covers <span id="n_t2scope"></span>; the PI stopped the other chains and does not want them rerun. Every "N of 8" is computed from the data.</p>
       <p>Nothing here is a verdict. The run is exploratory, so each finding is a reading with its seed wobble and its bar.</p>
       <p><b>Likely question:</b> "Is this the same data as the earlier grid?" Yes: the same 7 tracks, arms, pairs, chromosome split, seeds and size of g.</p>
     </aside>
@@ -631,7 +633,7 @@
       </ul>
     </div>
     <aside class="notes">
-      <p>Panel (a): for each finished design, on a log scale, the earlier grid's direct p&#8209;value prediction (black square: the 3-seed mean with its wobble; open diamond: seed 0) against every push-only and formula chain h (coloured dots). Above the dashed line a record counts as a blow-up.</p>
+      <p>Panel (a): for each finished design, on a log scale, the earlier grid's direct p&#8209;value prediction (black square: the 3-seed mean with its wobble; open diamond: seed 0) against every push-only and formula chain h (coloured dots). Above the dashed line a record counts as a blow-up. The two count rows under each design (records with CRPS above 20) count only the chain's track; version 2 of this deck counted every track of the earlier grid's cell, so its earlier-grid counts were higher.</p>
       <p>Panel (b): the designs where every chain h is above the earlier grid by more than the bar, with the CRPS split; the gap is in the oracle-scaled part, so a single rescale would not close it.</p>
       <p>Where the earlier grid blew up on this track (<span id="n_r6x"></span>), no push-only or formula chain h did. <span id="n_r6rest"></span></p>
       <p><b>Likely question:</b> "Why is the chain worse there?" Even with the true counts h is not exact (result 4), and in the chain f's count errors come on top.</p>
@@ -683,7 +685,7 @@
         <div class="card" style="--c:var(--accent)"><div class="rl">Results 4 to 6</div><div class="ct">Own noise can blow up the mean</div>
           <div class="cb" id="tL_boom"></div></div>
       </div>
-      <p class="note">Six more limits (devices, no MSE in the earlier grid, merged mixture, step cap, capped rows, designs still running) are in the appendix.</p>
+      <p class="note">Six more limits (devices, no MSE in the earlier grid, merged mixture, step cap, capped rows, designs not in the chain) are in the appendix. <b>Merged mixture:</b> <span id="tL_mergeMain"></span>.</p>
     </div>
     <aside class="notes">
       <p>These three limits change how far a reading can be taken. The twin gets d′/d for free, so result 3 reads "the settings beyond depth", not "the settings at all", and results 1 and 3 cannot be compared with the earlier grid's twin.</p>
@@ -704,7 +706,7 @@
     </div>
     <aside class="notes">
       <p>Each box is an option, with the open question it would answer. Nothing here is decided.</p>
-      <p>Box 1 is housekeeping: the deck rebuilds itself from the data when the last chains land. Boxes 2 and 3 are about question 1: whether g moves f away from d′/d (the reading on D and D2), and whether g should read depth at all. Boxes 4 to 6 are about question 2: where the chain loses to direct p, whether repair needs more seeds or longer fits, and whether one track is representative.</p>
+      <p>Box 1 is about scope: the chain lacks the designs the PI stopped, so results 5 and 6 cover the others only. Boxes 2 and 3 are about question 1: whether g moves f away from d′/d (the reading on D and D2), and whether g should read depth at all. Boxes 4 to 6 are about question 2: where the chain loses to direct p, whether repair needs more seeds or longer fits, and whether one track is representative.</p>
       <p>Runs and tables: cruxvault/results/t125/ (GRID_SUMMARY.md, part1/, part2/); the earlier grid: cruxvault/results/row2/.</p>
       <p><b>Likely question:</b> "What would you do first?" The cheapest is box 2, which needs no new training: compare g's predicted scale with the read ratio, real D against its twin.</p>
     </aside>
@@ -938,7 +940,7 @@
       <div class="fig tall" id="figChecks"></div>
     </div>
     <aside class="notes">
-      <p>Panel (a): own-noise h in the chain are scored with a merged mixture (at most G components per bin, a PI rule) instead of the exact sum. For each design, the largest per-bin relative error against the exact CRPS, measured on deep bins; it must stay below the dashed bar. "exact" means no bin needed merging.</p>
+      <p>Panel (a): own-noise h in the chain are scored with a merged mixture (at most G components per bin, a PI rule) instead of the exact sum. For each design, the largest per-bin relative error against the exact CRPS, measured on deep bins; a design above the dashed bar breaks it (<span id="n_mergeOver"></span>). "exact" means no bin needed merging.</p>
       <p>Panel (b): how many h fits ran to the step cap, by training source; a capped fit may not have converged.</p>
       <p>Panel (c): count rows whose distribution was wider than the count limit and was capped, by where they occur.</p>
     </aside>
@@ -967,7 +969,7 @@
     </div>
     <aside class="notes">
       <p>These limits do not change a reading on their own, but they qualify the numbers.</p>
-      <p>Devices were mixed (the PI accepted this and asked for it to be stated). The earlier grid has no MSE. The merged mixture has a measured error under its bar. Some h fits stopped at the step cap; a few training rows were capped. The chain may not yet cover all 8 designs.</p>
+      <p>Devices were mixed (the PI accepted this and asked for it to be stated). The earlier grid has no MSE. The merged mixture: <span id="n_mergeNote"></span>. Some h fits stopped at the step cap; a few training rows were capped. The chain covers <span id="n_scopeNote"></span>.</p>
       <p><b>Likely question:</b> "Could the devices explain row-1 against row-2 gaps?" Not tested; no reading in this deck rests on a row-1 against row-2 gap.</p>
     </aside>
   </section>
@@ -1425,7 +1427,7 @@ function figDepthLaw(){
 }
 
 /* ===================== PART 2 · the map h =====================
-   Everything reads DATA.h2; designs come from the data (H2.f_done), so A, B, B2 appear when they land. */
+   Everything reads DATA.h2; designs come from the data (H2.f_done; 6 of 8 in version 3, B and B2 stopped by the PI). */
 const H2=DATA.h2;
 const HV=[
   {v:'formula',w:'bin',r:'None',name:'formula, bin only',grp:0},
@@ -1939,12 +1941,12 @@ function figDevBoom(){
 /* part 2: merged mixture, step cap, capped rows */
 function figChecks(){
   const W=1160,H=380;let s='';const top=80,h=210;
-  const m=H2.merge.slice().sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0])),bar=m[0][4],mx=bar*1.3;
+  const m=H2.merge.slice().sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0])),bar=m[0][4],mx=Math.max(bar,...m.map(r=>r[2]||0))*1.15;
   s+=T(0,24,'(a) Merged mixture: largest error','ptitle')+T(0,48,'per bin, relative to the exact CRPS','psub')+T(0,68,`at most G = ${m[0][1]} components per bin`,'psub');
   const x0=60,aw=330,gw=aw/m.length,yy=v=>top+h*(1-v/mx);
   s+=L(x0,yy(bar),x0+aw,yy(bar),COL.accent,2,'6 4')+T(x0+aw,yy(bar)-7,'bar '+bar.toExponential(0).replace('e-','e−'),'cap','end','style="fill:var(--accent);font-size:13.5px"');
-  m.forEach((r,i)=>{const x=x0+i*gw+gw*0.2,bw=gw*0.6;if(r[2]!=null) s+=R(x,yy(r[2]),bw,top+h-yy(r[2]),COL.row1,'none',2);
-    s+=T(x+bw/2,top+h+22,r[0],'ptitle','middle','style="font-size:16px"')+T(x+bw/2,top+h+40,r[2]!=null?r[2].toExponential(1).replace('e-','e−'):'exact','cap','middle','style="font-size:12.5px"');});
+  m.forEach((r,i)=>{const x=x0+i*gw+gw*0.2,bw=gw*0.6;if(r[2]!=null) s+=R(x,yy(r[2]),bw,top+h-yy(r[2]),r[2]>=bar?COL.accent:COL.row1,'none',2);
+    s+=T(x+bw/2,top+h+22,r[0],'ptitle','middle','style="font-size:16px"')+T(x+bw/2,top+h+40,r[2]!=null?r[2].toExponential(1).replace('e-','e−'):'exact','cap','middle','style="font-size:12.5px"')+(r[5]?T(x+bw/2,top+h+56,`${r[5]} of ${r[6]} h over`,'cap','middle','style="font-size:12px;fill:var(--accent)"'):'');});
   s+=L(x0,top+h,x0+aw,top+h,COL.axis,1.2);
   s+=divider(420,10,H-6);
   const ff=H2.fits.fnb,ft=H2.fits.true;
@@ -1966,7 +1968,7 @@ function figNext2(){
   const W=1160,H=380;let s='';
   const done=H2.f_missing.length===0;
   const vo=hRd('vs_oldgrid','crps_all'),hiN=andJ(HDES.filter(d=>vo.some(x=>x.f===d)&&vo.filter(x=>x.f===d).every(x=>x.d<0&&Math.abs(x.d)>x.bar)))||'the';
-  const steps=[['1',done?'Read the full chain':'Rebuild when the chain lands',done?`all ${H2.chain[1]} designs are in; re-read results 5 and 6 and the limits`:`the chains of ${H2.f_missing.join(', ')} are running; a rebuild of this deck picks them up`,'var(--row2)'],
+  const steps=[['1',done?'Read the full chain':`${andJ(H2.f_missing)} are not in the chain`,done?`all ${H2.chain[1]} designs are in; re-read results 5 and 6 and the limits`:`the PI stopped these chains and does not want them rerun; results 5 and 6 cover ${H2.chain[0]} of ${H2.chain[1]} designs`,'var(--row2)'],
     ['2','How does g move depth?','compare g\'s predicted scale with the read ratio, pair by pair, for real D against its twin (no new training)','var(--accent)'],
     ['3','Option: g without depth','retrain with depth removed from g, so the offset alone carries d′/d','var(--new)'],
     ['4','Option: where the chain loses',`split the ${hiN} gap to direct p by bin level and by the top 1% of bins`,'var(--push)'],
@@ -2046,12 +2048,12 @@ try{
   const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0), rng=a=>`${fmt(Math.min(...a))}–${fmt(Math.max(...a))}`;
   const fe=v=>v.toExponential(1).replace('e-','e−');
   document.querySelectorAll('.scope').forEach(el=>el.textContent='· '+scopeTxt());
-  put('tRuns2',`h on the true counts, ${H2.alone[0]} of ${H2.alone[1]} scored; the chain f → h, ${H2.chain[0]} of ${H2.chain[1]} designs`+(H2.f_missing.length?` (${andJ(H2.f_missing)} still running)`:''));
+  put('tRuns2',`h on the true counts, ${H2.alone[0]} of ${H2.alone[1]} scored; the chain f → h, ${H2.chain[0]} of ${H2.chain[1]} designs`+(H2.f_missing.length?` (${andJ(H2.f_missing)} stopped by the PI, not rerun)`:''));
   document.querySelectorAll('#tblH td[data-h="learn"]').forEach(td=>td.innerHTML=
     `<span class="tag src-t">true counts · ${H2.seeds_true} seeds</span><span class="tag src-f">f's predicted counts · ${H2.seeds_fnb} seed</span>`);
   const f0=HDES[0],nP=f0?hC(f0,'formula|bin|None|0|formula','crps_log_all')[2]:0;
   putH('tH_scope',`<b>Scope of the chain:</b> track ${H2.track} (${H2.assay}, a narrow mark), seed 0 of each real f, ${H2.f_g.map(g=>GN[g]).join(', ')}, ${nP} pairs. `+
-    `<b>${H2.chain[0]} of ${H2.chain[1]} designs</b> finished (${andJ(HDES)})`+(H2.f_missing.length?`; ${andJ(H2.f_missing)} still running, added by a rebuild when they land.`:'.'));
+    `<b>${H2.chain[0]} of ${H2.chain[1]} designs</b> finished (${andJ(HDES)})`+(H2.f_missing.length?`; ${andJ(H2.f_missing)} stopped by the PI and not rerun.`:'.'));
   // result 4: alone, narrow
   const A=k=>hA('narrow',k,'crps_log_all'),OS=k=>hA('narrow',k,'crps_log_oracle_scaled_all')[0],SE=k=>hA('narrow',k,'crps_log_scale_error_all')[0];
   const sK=k=>{const c=A(k);return splN(c[0],c[1],OS(k),SE(k));};
@@ -2100,18 +2102,23 @@ try{
     const oT=(()=>{const v=hiD.map(d=>od(d).o),w=Math.max(...hiD.map(d=>od(d).ow));return `${rngS(v)} (wobble ≤ ${fw(w)})`;})();
     const osR=hiR.map(x=>spOf('crps_oracle_scaled_all',x).h),seR=hiR.map(x=>spOf('scale_error_all',x).h);
     hiTxt=`chain ${rngS(hiR.map(x=>x.h))} (oracle-scaled ${rngS(osR)} + scale error ${fw(Math.min(...seR))}–${fw(Math.max(...seR))}) against the earlier grid's ${oT}`;
-    putH('tHO_main',`<b>${andJ(hiD)}, CRPS on P:</b> ${hiTxt}; every gap beyond its bar (bars ≤ ${fw(Math.max(...hiR.map(x=>x.bar)))}), and in the oracle-scaled part. <b>Blow-ups in the chain:</b> push-only and formula h ${pc0.gt} of ${pc0.rec.toLocaleString('en-US')} records; own-noise h ${ec.gt} of ${ec.rec.toLocaleString('en-US')} (point CRPS of the mean; ${ec.nf} not finite).`);
-  } else putH('tHO_main',`<b>Blow-ups in the chain:</b> push-only and formula h ${pc0.gt} of ${pc0.rec.toLocaleString('en-US')} records; own-noise h ${ec.gt} of ${ec.rec.toLocaleString('en-US')}.`);
+    putH('tHO_main',`<b>${andJ(hiD)}, CRPS on P:</b> ${hiTxt}; every gap beyond its bar (bars ≤ ${fw(Math.max(...hiR.map(x=>x.bar)))}), and in the oracle-scaled part. <b>Blow-ups in the chain:</b> push-only and formula h ${pc0.gt} of ${pc0.rec.toLocaleString('en-US')} records; own-noise h ${ec.gt.toLocaleString('en-US')} of ${ec.rec.toLocaleString('en-US')} (point CRPS of the mean; ${ec.nf} not finite).`);
+  } else putH('tHO_main',`<b>Blow-ups in the chain:</b> push-only and formula h ${pc0.gt} of ${pc0.rec.toLocaleString('en-US')} records; own-noise h ${ec.gt.toLocaleString('en-US')} of ${ec.rec.toLocaleString('en-US')}.`);
   P2.hiTxt=hiTxt;P2.pc0=pc0;P2.ec=ec;
   put('n_r6x',exD.length?`${andJ(exD)}: the earlier grid's 3-seed means ${exD.map(d=>pmw(od(d).o,od(d).ow)).join(' and ')}, seed 0 ${exD.map(d=>fmt(od(d).o0)).join(' and ')}; ${vo.filter(x=>exD.includes(x.f)&&Math.abs(x.d)>x.bar).length} of ${vo.filter(x=>exD.includes(x.f)).length} deltas beyond the bar, as the earlier grid's wobble is so large`:'no finished design');
   put('n_r6rest',restD.length?`The other designs: ${restD.map(d=>`${d}, earlier grid ${pmw(od(d).o,od(d).ow)} (seed 0 ${fmt(od(d).o0)}), ${vo.filter(x=>x.f===d&&Math.abs(x.d)>x.bar).length} of ${vo.filter(x=>x.f===d).length} deltas beyond the bar`).join('; ')}.`:'');
   // limits
   put('tL_scopeT',H2.f_missing.length?`${H2.chain[0]} of ${H2.chain[1]} designs in the chain`:`All ${H2.chain[1]} designs in the chain`);
-  put('tL_scope',`Finished: ${andJ(HDES)}. `+(H2.f_missing.length?`Running: ${andJ(H2.f_missing)}; results 5 and 6 cover the finished designs only.`:'The chain readings cover every design.'));
+  put('tL_scope',`Finished: ${andJ(HDES)}. `+(H2.f_missing.length?`Not in the chain: ${andJ(H2.f_missing)}, stopped by the PI and not rerun; results 5 and 6 cover the finished designs only.`:'The chain readings cover every design.'));
+  put('n_t2scope',`${H2.chain[0]} of ${H2.chain[1]} chain designs (${andJ(HDES)})`);put('n_scopeNote',`${H2.chain[0]} of ${H2.chain[1]} designs; ${andJ(H2.f_missing)} are not rerun`);
   put('tL_seed',`Track ${H2.track} (${H2.assay}), seed 0 of each f. The h trained on f's predicted counts has ${H2.seeds_fnb} seed; its wobble is borrowed from the same h trained on true counts.`);
   const mg=H2.merge.filter(r=>r[2]!=null).sort((a,b)=>DES.indexOf(a[0])-DES.indexOf(b[0])),mx=byDes(H2.merge.filter(r=>r[2]==null).map(r=>r[0]));
   put('tL_merge',`Own-noise h in the chain: at most G = ${H2.merge[0][1]} components per bin. Largest per-bin error ${mg.length?mg.map(r=>`${r[0]} ${fe(r[2])}`).join(', '):'none'}, bar ${fe(H2.merge[0][4])}`+(mx.length?`; ${andJ(mx)} exact.`:'.'));
-  put('tL_boom',`Point CRPS of the mean on P above ${H2.explode_at}: ${ea.gt} of ${ea.rec.toLocaleString('en-US')} records alone, ${ec.gt} of ${ec.rec.toLocaleString('en-US')} in the chain; ${ea.gt_aff5+ec.gt_aff5} of them from affine h at rung 5. Push-only and formula h: ${pa0.gt+pc0.gt}.`);
+  const mo=mg.filter(r=>r[5]>0);
+  const moTxt=mo.length?mo.map(r=>`design ${r[0]}'s merged-mixture error is above the ${fe(r[4])} bar in ${r[5]} of ${r[6]} own-noise h (per-bin max ${fe(r[2])}, averaged ${fe(r[3])})`).join('; '):`every design is under the ${fe(H2.merge[0][4])} bar`;
+  put('tL_mergeMain',moTxt+(mo.length?'; its own-noise chain numbers carry this error':''));put('n_mergeOver',moTxt);put('n_mergeNote',moTxt);
+  if(mo.length){const el=document.getElementById('tL_merge');if(el)el.textContent+=' Above the bar: '+moTxt+'.';}
+  put('tL_boom',`Point CRPS of the mean on P above ${H2.explode_at}: ${ea.gt} of ${ea.rec.toLocaleString('en-US')} records alone, ${ec.gt.toLocaleString('en-US')} of ${ec.rec.toLocaleString('en-US')} in the chain; ${(ea.gt_aff5+ec.gt_aff5).toLocaleString('en-US')} of them from affine h at rung 5. Push-only and formula h: ${pa0.gt+pc0.gt}.`);
   const F=H2.fits.fnb,Ft=H2.fits.true;
   put('tL_cap',`${F.n_at_step_cap} of ${F.n_fits} h fits on f's predicted counts and ${Ft.n_at_step_cap} of ${Ft.n_fits} on true counts ran to the ${F.max_steps.join(', ')}-step cap.`);
   put('tL_rows',`Count distributions wider than the count limit: ${F.n_capped_rows} rows in ${F.n_fits_with_capped_rows} fits on f's predicted counts, ${Ft.n_capped_rows} on true counts, ${sum(H2.capped,r=>r[3])} in the chain scoring.`);
@@ -2125,7 +2132,7 @@ try{
   put('sm3',`MSE of the mean lower than the twin's in ${P1.mLow} of ${P1.mTot} cells, ${P1.mMet===P1.mLow?'all':P1.mMet} beyond the bar`);
   put('sm4',`MLP h, narrow: rung 1 ${pm(P2.m1[0],P2.m1[1])} → rung 5 ${pm(P2.m5[0],P2.m5[1])}; drop ${fmt(P2.inG[1])}, bars ≤ ${fw(P2.bmax)}`);
   put('sm5',`true-counts h lower in ${P2.rLow} of ${P2.rTot} push-only rows, ${P2.rMet===P2.rLow?'all':P2.rMet} beyond the bar (own noise: the other way in ${P2.nf} of ${P2.rn})`);
-  put('sm6',(P2.hiTxt?P2.hiTxt+'. ':'')+`Blow-ups: push-only and formula ${P2.pc0.gt} of ${P2.pc0.rec.toLocaleString('en-US')}, own noise ${P2.ec.gt} of ${P2.ec.rec.toLocaleString('en-US')} · ${H2.chain[0]} of ${H2.chain[1]} designs`);
+  put('sm6',(P2.hiTxt?P2.hiTxt+'. ':'')+`Blow-ups: push-only and formula ${P2.pc0.gt} of ${P2.pc0.rec.toLocaleString('en-US')}, own noise ${P2.ec.gt.toLocaleString('en-US')} of ${P2.ec.rec.toLocaleString('en-US')} · ${H2.chain[0]} of ${H2.chain[1]} designs`);
   put('rd11',`${P1.nInG} of ${P1.nG} class cells within 10% (earlier grid: ${P1.nOld})`);
   put('rd12',`A, DNase: gain ${fmt(ag[0])}, bar ${fmt(ag[1])}; scale error ${fmt(ag[9])}`);
   put('rd13',`${P1.restN}: ${P1.restMet} of ${P1.restTot} cells beyond the bar`);
@@ -2137,7 +2144,7 @@ try{
   else{t23.textContent='no design less accurate';t23.className='tag good';put('rd23','');}
   const t24=document.querySelector('#tblRead tr.q2 td:last-child .tag');
   if(P2.pc0.gt>0){t24.textContent=`${P2.pc0.gt} push-only or formula`;t24.className='tag bad';}
-  put('rd24',`push-only, formula: ${P2.pc0.gt} of ${P2.pc0.rec.toLocaleString('en-US')}; own noise: ${P2.ec.gt} of ${P2.ec.rec.toLocaleString('en-US')}`);
+  put('rd24',`push-only, formula: ${P2.pc0.gt} of ${P2.pc0.rec.toLocaleString('en-US')}; own noise: ${P2.ec.gt.toLocaleString('en-US')} of ${P2.ec.rec.toLocaleString('en-US')}`);
 }catch(e){console.error('summary',e);}
 
 /* ---------- navigation and speaker notes ---------- */

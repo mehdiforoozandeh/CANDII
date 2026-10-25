@@ -11,8 +11,10 @@ replicates: 7 tracks × 3 seeds × both g versions; the 7.5M pairs reported sepa
 verdict: 
 metric: 
 created: "2026-10-25T00:22:33"
-updated: "2026-10-25T00:22:33"
+updated: "2026-10-25T00:58:40"
 builds_on: h22
+null_approved: "2026-10-25T00:58:40"
+null_hash: bd4157c52d7ced99
 ---
 
 # h23 — On never-trained arm → arm depth pairs, the shared-weight encoder-decoder FiLM CNN meets the depth law at the trained-pair level
