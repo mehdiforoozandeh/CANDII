@@ -698,3 +698,42 @@ Fir root `/project/def-maxwl/mforooz/t128p2` (code, runs, logs, verify, viabase,
   - smoke law 453755 (aftercorr:453754, chained while train was live).
   - smoke via-base 453756 (array 9, afterany:453754; exits 3 if the D smoke did not finish).
 - Never resubmit these; the readback chunk (C5) reads the smoke and submits the full array.
+
+### Smoke readback (C5, 2026-10-25 22:43 UTC)
+
+- Verify 453753: `RESULT t128p2 rc=0`, `t128 rc=0`, `t126 rc=0`, `t118 rc=1`. The only FAILED lines
+  are the two known flakes `test_t118_xshuf_score.py::test_twin_scoring_is_deterministic[A2]` and `[D2]`.
+- Smoke jobs 453754 / 453755 / 453756 all COMPLETED. Every pinned check passed (0 failures): marks,
+  `config.json` (max_steps 300, holdout `[["depth","7.5M"]]`, 36 train pairs, no 7.5M in pairs or
+  in the 19 fit pids, rungs DS/DS/DSANC/D, cclean_frozen False/True/True), the frozen C_clean of
+  DSfixed and DSanchor equals the encoder-recomputed knobs of `C19M16__base__base` and its init
+  (atol 1e-6), DSfree init 0, `train_terms.tsv` anchor > 0 only on DSanchor, scores (trained 72,
+  heldout 2, swap 19, split on every trained score record), law 342 with split, latent
+  20 / 190 / 380, hop1 19 (18 trained = the arm fit pids, 1 held-out 7.5M) with split, via-base
+  `D_C19M16_counts_real_s0` law 342 with split.
+- Smoke table (300 steps, eval every 100, minutes per pass):
+
+  | arm | steps | best step | s/step | val_nll | score | law | latent | hop1 |
+  |---|---|---|---|---|---|---|---|---|
+  | DSfree | 300 | 300 | 1.897 | 2.8458 | 15.2 | 16.2 | 5.4 | - |
+  | DSfixed | 300 | 300 | 1.894 | 2.8661 | 15.2 | 15.7 | 5.1 | - |
+  | DSanchor | 300 | 300 | 1.906 | 3.6585 | 16.3 | 19.5 | 5.5 | 1.0 |
+  | D | 300 | 300 | 1.825 | 0.8059 | 9.4 | 10.7 | - | - |
+
+  The val_nll columns use each arm's own rule, so they do not compare across arms.
+- Walltime: the largest s/step × 12,000 + 30 min is 6.85 h, under 11 h, so the full train array
+  keeps the script's `--time=12:00:00`.
+- First look (300 steps only; not a reading), base pid latent: DSfree median |Z − x| 0.338,
+  corr(Z, x) 0.9935; DSfixed 0.207, 0.9966; DSanchor 0.045, 0.9988.
+
+### Full submission (C5)
+
+- Submitted 2026-10-25 22:44:28 UTC on Fir with kit K1 (524f4d7; code under tools/slurm/src
+  unchanged up to 15eb2a8 except the h26 files):
+  - train 470429 (array 0-95%24, `--time` from the script, 12 h) into `t128p2/runs`.
+  - law 470431 (array 0-95%12, aftercorr:470429, submitted while train was live).
+  - via-base 470432 (array 0-23%12, afterany:470429; a task whose D run is unfinished exits 3 and
+    C6 re-runs it).
+- Never resubmit these. A watcher re-runs only FAILED/TIMEOUT indices as new arrays (train, then a
+  chained law); a TIMEOUT gets `--time=1-00:00:00`; a `fc107xx` CUDA failure adds that node to
+  `--exclude`.
