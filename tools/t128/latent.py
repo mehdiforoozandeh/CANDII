@@ -40,7 +40,7 @@ if str(_T118) not in sys.path:          # import convention: tools/t118 holds `l
 from ladder import data, model, pairs, score  # noqa: E402
 from ladder.fforms import form_ds  # noqa: E402
 
-RUNGS = ("DS", "DSBOX")
+RUNGS = ("DS", "DSBOX", "DSANC")
 CHUNK = model.CHUNK
 #: the encoder's receptive field each side: ONE f (old D), not the full map's 2 * 30
 HALO = form_ds.CTX1
@@ -196,7 +196,9 @@ def _config(blacklist) -> dict:
                      "median |x_a - x_b|, Pearson corr(Z_a, Z_b)",
             "ident": "median over bins with X > 0 of |log(mu / X)|, mu = pred.mean(loc) of "
                      "pred.predict(source, source, target), X = source counts (score.swap_ratio)",
-            "halo": f"{HALO} zero-padded bins per chunk side (one f's receptive field)"}
+            "halo": f"{HALO} zero-padded bins per chunk side (one f's receptive field)",
+            "sigma_rule": "DS/DSBOX: median exp(log sigma_z); DSANC: median NB size exp(disp_e) "
+                          "of the encoder head (the second output of form.encode)"}
 
 
 def run_latent(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) -> Path:
