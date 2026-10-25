@@ -20,7 +20,7 @@ A peak caller turns read counts into a significance score with a fixed recipe. C
 
 ## TL;DR
 
-On the true counts, the caller's fragment-wide formula nearly matches the best learned map; formula plus a learned correction is best. Push-only h never blows up in the chain, but there every h trails the earlier direct p model on designs D and D2, and training h on f's predictions does not repair f.
+On the true counts, the caller's fragment-wide formula nearly matches the best learned map; formula plus a learned correction is best. Push-only h never blows up in the chain, but there every h trails the earlier direct p model on designs A, D and D2, and training h on f's predictions does not repair f.
 
 ## Question
 
@@ -40,24 +40,25 @@ Part 2 of [[t125_build_and_run_the_depth_offset_coun|the depth-offset run]]. h m
 
 ## Answer so far
 
-Final at 5 of 8 designs (C, D, A2, C2, D2); the PI stopped the run on 2026-10-19 (chain A finished unaggregated; B, B2 unfinished). Log CRPS is CRPS on log(1 + P), as total (oracle-scaled + scale error); a gain clears above 2 × the larger seed wobble.
+At 6 of 8 designs (A, C, D, A2, C2, D2), aggregated 2026-10-25; the PI stopped chains B and B2 on 2026-10-19 and they stay unfinished. Log CRPS is CRPS on log(1 + P), as total (oracle-scaled + scale error); a gain clears above 2 × the larger seed wobble.
 
 - True X′, narrow: bin formula 0.1177, fragment formula 0.0865; affine rung 1 0.1791 ± 0.0010 (0.1367 + 0.0423); MLP rung 5 0.0836 ± 0.0004; formula + MLP 0.0798 ± 0.0013.
-- Repair: the true-X′ push h beats the h trained on f's NB in 30 of 30 rows, clear (D2, MLP rung 5: 0.1172 ± 0.0004 (0.1145 + 0.0027) against 0.1352 (0.1302 + 0.0050)).
-- Chain on D and D2, CRPS on P: every h reads 0.178–0.276 (lowest: the bin formula) against the capacity grid's 0.143 ± 0.0016; the gap is oracle-scaled. Push and formula h have 0 records with CRPS > 20; the capacity grid exploded on A2 and C2.
-- Own noise lowers log CRPS in 78 of 78 rows (76 clear) but MSE in only 5 (none clear).
-- Caveats: one track, one f seed; D2 mixture error 9.7e-4 (bar 1e-3); 22 of 96 NB-trained fits hit the step cap.
+- Repair: the true-X′ push h beats the h trained on f's NB in 36 of 36 rows (35 clear; D2, MLP rung 5: 0.1172 ± 0.0004 (0.1145 + 0.0027) against 0.1352 (0.1302 + 0.0050); A: 0.1268 ± 0.0014 (0.1199 + 0.0070) against 0.1388 (0.1324 + 0.0064)).
+- Chain on A, D and D2, CRPS on P: every h reads 0.178–0.284 (lowest: the bin formula) against the capacity grid's 0.165 ± 0.0048 (A) and 0.143 ± 0.0016 (D, D2); the gap is oracle-scaled. Push and formula h have 0 records with CRPS > 20; the capacity grid exploded on A2 and C2.
+- Own noise lowers log CRPS in 90 of 90 rows (88 clear) but MSE in only 9 (none clear).
+- Caveats: one track, one f seed; the merged-mixture error is above the 1e-3 bar on A (per-bin max 3.5e-3, 2 of 24 own-noise h; averaged 9.1e-5); 22 of 96 NB-trained fits hit the step cap.
 
 ## Run Links
 
 - Nibi (not Fir), h runs: `/project/def-maxwl/mforooz/t125/h/{runs_true,runs_fnb,alone,chain}/` (checkpoints and logs stay there).
+- Aggregate, 6 of 8 designs: `/project/def-maxwl/mforooz/t125/h/agg_6of8/` (job 24966577, kit K14, GIT_SHA d35448d7f5f54608d0bdd1406f6b2937abaaf6bc). Summary: `/project/def-maxwl/mforooz/t125/summary_6of8/GRID_SUMMARY.md`.
 - Aggregate, 5 of 8 designs: `/project/def-maxwl/mforooz/t125/h/agg_5of8/` (job 24312235). Summary: `/project/def-maxwl/mforooz/t125/summary_5of8/GRID_SUMMARY.md`. Tests: job 24312234. Kit K13, GIT_SHA ec77f692e043126e1485e761eabe571b6c741058.
 - Cancelled on the PI stop (2026-10-19): chain B/B2 resubmission 24608447 and the 8-of-8 aggregate 24608467.
 - Job record: `plan/T125_STATUS.md` on `exp/t118-counterfactual-f`.
 
 ## Artifacts
 
-- [Part-2 digest](results/t125/part2_digest.md)
+- [Part-2 digest, 6 of 8](results/t125/part2_digest.md); [5 of 8](results/t125/part2_digest_5of8.md)
 - [Grid summary, parts 1 and 2](results/t125/GRID_SUMMARY.md)
 - [h grid](results/t125/part2/grid_h.md), [h alone](results/t125/h_alone_summary.tsv), [h in the chain](results/t125/h_chain_summary.tsv), [repair](results/t125/h_repair.tsv), [chain against the capacity grid](results/t125/h_vs_oldgrid.tsv)
 - [Run paths](results/t125/FIR_PATH.txt)

@@ -82,6 +82,10 @@ CANDI's existing DSF ladder in kind. The planted-warp apparatus check is t106, n
 Children: t111 (arm 2). Every other arm lands on this task's branch.
 
 
+## Progress
+
+- 2026-10-25: scratch-purge rescue before the 2026-11-20 purge (Nibi job 24966415). The 130 products were already on `/project/def-maxwl/mforooz/t112_cf/products/`; all 635 files have equal md5 on /scratch and /project, and 374 of 374 MANIFEST md5 fields match. The small `checks/`, `code/` and `logs/` dirs were copied to /project too. The FASTQ cache, the FASTQ-arm harvest, the BAM-arm tree, `store_src/` and the tagAligns stay on /scratch only, about 1.4 TiB; the PI decides. Detail in [the run paths](results/t112/NIBI_PATH.txt).
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

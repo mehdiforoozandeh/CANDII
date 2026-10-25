@@ -650,3 +650,19 @@ Read-only check on Nibi, 2026-10-11. Source: `/project/def-maxwl/mforooz/t112_cf
 2. Record conclusions on q5 and q6, or leave them open.
 3. Merge PR #48 to main, or wait for an experiment-lane merge rule.
 4. Delete or keep the t125 caches under /project/def-maxwl/mforooz/t125/ on Nibi.
+
+## 2026-10-25: part 2 aggregated on 6 of 8 chains (PI-approved)
+
+- Chain A had CHAIN_DONE since 2026-10-19 but was never aggregated. B and B2 stay unfinished; the PI does not want them rerun.
+- No code change. Kit K14 reused (`tools/t125`, `slurm/t125` and `src` unchanged from d35448d to e67bdae). One-off
+  wrapper `/project/def-maxwl/mforooz/t125/n8/agg_sum_6of8.sh` = `n7/agg_sum_8of8.sh` with agg dir `h/agg_6of8`,
+  summary dir `summary_6of8/`, and the CHAIN_DONE check over A, C, D, A2, C2, D2.
+- **24966577** `t125_agg6of8` (CPU, 4 cores, 16000M): COMPLETED 1:02, MaxRSS 4.3 GiB. "38 alone present; chain f 6 of
+  8 finished, 2 missing (chain not finished); 1416 readings". Summary md5 aea7f3c43b8e612020a4534c9c1eb2ff; logs `t125/n8/logs/`.
+- Local copies in `cruxvault/results/t125/`: `part2/`, `GRID_SUMMARY.md`, the four TSVs, `part2_digest.md` (6 of 8);
+  the 5-of-8 copies are kept as `part2_5of8/`, `GRID_SUMMARY_5of8.md`, `part2_digest_5of8.md`. q6 "Answer so far" updated.
+- New readings from A: repair push 36 of 36 (35 clear); chain A every h 0.192–0.284 against the old grid's 0.165 ±
+  0.0048; own noise lowers log CRPS in 90 of 90 rows. Merged mixture on A: per-bin max 3.5e-3, above the 1e-3 bar,
+  in 2 of 24 own-noise h (averaged 9.1e-5).
+- K14's old-grid explosion counts use the chain track only, so `h_vs_oldgrid.tsv` counts differ from the 5-of-8 files (K13).
+- The published deck stays at 5 of 8.
