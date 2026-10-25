@@ -70,7 +70,7 @@ if [ "$LOCAL" = 0 ]; then
   for j in "${JOBS[@]}"; do
     set -- $j
     rsync -a -e 'ssh -o BatchMode=yes' "$1:$R/${2}_$3.log" "$RES/" || { echo "rsync from $1 failed" >&2; exit 1; }
-    grep -h -e 'assigned runs' -e 'via-base' -e 'collect:' "$RES/${2}_$3.log" || true
+    grep -h -e 'assigned runs' -e 'via-base' -e 'old D split' -e 'collect:' "$RES/${2}_$3.log" || true
   done
   for H in fir nibi; do
     rsync -a -e 'ssh -o BatchMode=yes' --include="*_$H.tsv.gz" --include="*_$H.tsv" \
@@ -91,6 +91,8 @@ t128 readings. The runs live on TWO clusters, same path on both: $T
   Nibi runs/  indices 197-224 and 226-239 (nibi_idx.txt; 42)   nibi:$T/runs/
   Copies of a run on the other cluster (old smoke attempts) are ignored.
   Via the base (24 runs, Nibi):                                 nibi:$T/viabase/
+  Old D law re-scored with the CRPS split (48 runs, Nibi):      nibi:$T/oldD_split/
+                                                                (replaces old D's law rows when present)
   Old D reference (t126, read only):                            nibi:/project/def-maxwl/mforooz/t126/D/runs/
                                                                 (local copy: records_D_t126.tsv.gz)
   Readings (extraction + second-method collection), both:       $R/

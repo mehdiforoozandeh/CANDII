@@ -14,8 +14,11 @@ Outputs in <out_dir> (tag = cluster name):
   cclean_<tag>.tsv      one row per run x assay x knob: init, learned, lo, hi, in_g
   runs_<tag>.tsv        one row per assigned run: its marks and training summary
   viabase_<tag>.tsv.gz  (with --viabase) law + depthlaw records of old D via the base, arm Dviabase
+  oldd_split_<tag>.tsv.gz (with --oldd-split) old D's law + depthlaw records re-scored with the
+                        CRPS split (t128/oldD_split/), arm D
 
     python3 extract_records.py <out_dir> <tag> <runs_dir> <idx_file> [--viabase <viabase_dir>]
+        [--oldd-split <oldD_split_dir>]
 """
 import gzip
 import json
@@ -174,11 +177,12 @@ def run_fragments(d, name, tag, cache):
 
 def main():
     args = sys.argv[1:]
-    via = None
-    if "--viabase" in args:
-        i = args.index("--viabase")
-        via = args[i + 1]
-        args = args[:i] + args[i + 2:]
+    opt = {}
+    for flag in ("--viabase", "--oldd-split"):
+        if flag in args:
+            i = args.index(flag)
+            opt[flag] = args[i + 1]
+            args = args[:i] + args[i + 2:]
     out, tag, runs, idx_file = args
     cache = os.path.join(out, "cache")
     os.makedirs(cache, exist_ok=True)
@@ -218,21 +222,24 @@ def main():
     for k in ("cclean", "runs"):
         os.replace(os.path.join(out, f"{k}_{tag}.tsv.tmp"), os.path.join(out, f"{k}_{tag}.tsv"))
     print(f"{tag}: {len(assigned)} assigned runs; marks {counts}; cache hits {n_hit}, read {n_read}")
-    if via:
-        n = 0
-        with gzip.open(os.path.join(out, f"viabase_{tag}.tsv.gz.tmp"), "wt") as fh:
+    for flag, stem, arm, label in (("--viabase", "viabase", "Dviabase", "via-base"),
+                                   ("--oldd-split", "oldd_split", "D", "old D split")):
+        if flag not in opt:
+            continue
+        src, n = opt[flag], 0
+        with gzip.open(os.path.join(out, f"{stem}_{tag}.tsv.gz.tmp"), "wt") as fh:
             fh.write("\t".join(COLS) + "\n")
-            for name in sorted(os.listdir(via)):
-                d = os.path.join(via, name)
+            for name in sorted(os.listdir(src)) if os.path.isdir(src) else []:
+                d = os.path.join(src, name)
                 if not os.path.isfile(os.path.join(d, "LAW_DONE")):
                     continue
-                extra = {"arm": "Dviabase", "setting": "", "cclean_form": "", "loss": "",
+                extra = {"arm": arm, "setting": "", "cclean_form": "", "loss": "",
                          "lam": "", "vae": ""}
                 fh.writelines(score_rows(os.path.join(d, "law.json"), tag, extra))
                 n += 1
-        os.replace(os.path.join(out, f"viabase_{tag}.tsv.gz.tmp"),
-                   os.path.join(out, f"viabase_{tag}.tsv.gz"))
-        print(f"{tag}: via-base runs with LAW_DONE: {n}")
+        os.replace(os.path.join(out, f"{stem}_{tag}.tsv.gz.tmp"),
+                   os.path.join(out, f"{stem}_{tag}.tsv.gz"))
+        print(f"{tag}: {label} runs with LAW_DONE: {n}")
 
 
 if __name__ == "__main__":

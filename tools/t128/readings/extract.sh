@@ -17,7 +17,7 @@ R=$T/readings
 cd $R
 python3 --version
 VIA=()
-[ "$TAG" = nibi ] && VIA=(--viabase $T/viabase)
+[ "$TAG" = nibi ] && VIA=(--viabase $T/viabase --oldd-split $T/oldD_split)
 python3 extract_records.py $R $TAG $T/runs $T/${TAG}_idx.txt "${VIA[@]}"
 ls -la $R
 echo READINGS_DONE

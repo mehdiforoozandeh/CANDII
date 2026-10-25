@@ -5,6 +5,8 @@ Inputs (beside this file, brought down by run_all.sh; small tables only):
   (extract_records.py on each cluster, only the runs that cluster's index list assigns to it),
   viabase_nibi.tsv.gz (old D through the base, arm Dviabase), and records_D_t126.tsv.gz (a copy
   of t126's records_D.tsv.gz; arm D = old rung D, real and its no-covariates twin; no recompute).
+  oldd_split_nibi.tsv.gz (old D's law + depthlaw records re-scored with the CRPS split), when
+  present, replaces the matching (run, kind, depth_source) rows of records_D_t126.tsv.gz.
 Outputs (beside this file):
   n_table.tsv       runs per arm x model: assigned, TRAIN_DONE, LAW_DONE, LATENT_DONE, by cluster
   depth_table.tsv   reading 1: median |log2 error| per arm x g_version x group
@@ -76,6 +78,14 @@ def load():
     old["arm"] = old.run.str.split("_").str[0]
     old = old[old.arm == "D"].copy()
     old["cluster"] = "nibi (t126)"
+    o = read_many("oldd_split")
+    if len(o):                    # old D's law rows re-scored with the split replace t126's
+        k = ["run", "kind", "depth_source"]
+        o["cluster"] = "nibi (t128 oldD_split)"
+        hit = old[k].fillna("").apply(tuple, axis=1).isin(set(o[k].fillna("").apply(tuple, axis=1)))
+        print(f"old D: {o.run.nunique()} runs re-scored with the split replace {int(hit.sum())} "
+              f"t126 rows with {len(o)}")
+        old = pd.concat([old[~hit], o.assign(arm="D")], ignore_index=True)
     d = pd.concat([d, v.assign(arm="Dviabase"), old], ignore_index=True)
     d = numeric(d, NUM)
     d["seed"] = d.seed.astype(int)
