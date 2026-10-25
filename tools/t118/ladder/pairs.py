@@ -261,6 +261,30 @@ def _tasks_xshuf() -> list[dict]:
     return out
 
 
+#: t127, PPML vs NB: rungs x losses x tracks x seeds, counts, real covariates, per-track g only
+PPML_RUNGS = ("A", "A0", "D")
+PPML_LOSSES = ("nb", "ppml")
+PPML_TASK_KEYS = TASK_KEYS[:5] + ("loss",) + TASK_KEYS[5:]
+
+
+def tasks_ppml() -> list[dict]:
+    """The 126-row t127 table: `index = rung_i*42 + loss_i*21 + track_i*3 + seed`, space counts,
+    model real, g = the track; run_name `f"{rung}_{g}_counts_real_s{seed}"` for nb and
+    `f"{rung}_{g}_counts_real_ppml_s{seed}"` for ppml (`train.run_name`)."""
+    out = []
+    for ri, rung in enumerate(PPML_RUNGS):
+        for li, loss in enumerate(PPML_LOSSES):
+            for ti, g in enumerate(TRACKS):
+                for seed in SEEDS:
+                    index = ri * 42 + li * 21 + ti * 3 + seed
+                    sfx = "" if loss == "nb" else f"_{loss}"
+                    out.append({"index": index, "rung": rung, "g": g, "space": "counts",
+                                "model": "real", "loss": loss, "seed": seed,
+                                "run_name": f"{rung}_{g}_counts_real{sfx}_s{seed}"})
+    assert [t["index"] for t in out] == list(range(len(out)))
+    return out
+
+
 def count_lines(rows: list[dict]) -> list[str]:
     lines = [f"usable_products {len(usable_products(rows))}"]
     lines += [f"train_pairs {t} {len(train_pairs(rows, t))}" for t in track_ids(rows)]
@@ -288,12 +312,15 @@ def main(argv=None) -> int:
             p.add_argument("--row", type=int, choices=(1, 2), default=1)
             p.add_argument("--xshuf", action="store_true",
                            help="the shuffled-bin twin's 192-row table (needs --row 2)")
+            p.add_argument("--ppml", action="store_true", help="the t127 PPML-vs-NB 126-row table")
     args = ap.parse_args(argv)
     if args.cmd == "tasks" and args.xshuf and args.row != 2:
         ap.error("tasks --xshuf needs --row 2")
     rows = read_manifest(args.manifest)
     if args.cmd == "count":
         sys.stdout.write("".join(line + "\n" for line in count_lines(rows)))
+    elif args.cmd == "tasks" and args.ppml:
+        sys.stdout.write("\t".join(PPML_TASK_KEYS) + "\n" + _tsv(tasks_ppml(), PPML_TASK_KEYS))
     elif args.cmd == "tasks":
         sys.stdout.write("\t".join(TASK_KEYS) + "\n" + _tsv(tasks(rows, args.row, xshuf=args.xshuf),
                                                             TASK_KEYS))

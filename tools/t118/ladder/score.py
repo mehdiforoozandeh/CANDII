@@ -49,8 +49,11 @@ arm names; under the across-track g the pair is the first track's (sorted) that 
 (one group per worker task) and each (source pid, chromosome) is predicted once; the records come
 back in the jobs' own order and are the same as one prediction per job.
 
-    python tools/t118/ladder/score.py trained <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N]
-    python tools/t118/ladder/score.py law     <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N] [--split]
+**Extras** (`--extras`, t127, counts, report only): every record gains `mu_sum_over_y_sum`;
+trained and law records also `cover50` / `cover90` (`extra_fields`). Off by default.
+
+    python tools/t118/ladder/score.py trained <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N] [--extras]
+    python tools/t118/ladder/score.py law     <manifest> <covariates.tsv> <data_dir> <blacklist.bed> <run_dir> [--workers N] [--split] [--extras]
 """
 from __future__ import annotations
 
@@ -180,6 +183,27 @@ def pit_hist(space: str, m: np.ndarray, spread: np.ndarray, y64: np.ndarray, loc
         u = np.where(y64 > 0, norm.cdf(z), 0.0)
     h, _ = np.histogram(np.clip(u, 0.0, 1.0), bins=PIT_BINS, range=(0.0, 1.0))
     return [int(v) for v in h]
+
+
+def extra_fields(space: str, m: np.ndarray, spread: np.ndarray, y64: np.ndarray,
+                 coverage: bool) -> dict:
+    """t127 report-only keys (counts; `--extras`): `mu_sum_over_y_sum` = sum mu / sum y over the
+    eval bins; with `coverage`, `cover50` / `cover90` = the fraction of bins whose y lies in the
+    NB's central 50 % / 90 % interval [ppf(a/2), ppf(1 - a/2)], i.e. F(y) >= a/2 and
+    F(y - 1) < 1 - a/2."""
+    if space != "counts":
+        return {}
+    sy = float(y64.sum())
+    out = {"mu_sum_over_y_sum": float(m.sum()) / sy if sy > 0 else None}
+    if coverage:
+        p = p_from_mu(spread, m)
+        f_hi = nbinom.cdf(y64, spread, p)
+        f_lo = nbinom.cdf(y64 - 1.0, spread, p)
+        for lvl in (50, 90):
+            a = 1.0 - lvl / 100.0
+            out[f"cover{lvl}"] = (float(np.mean((f_hi >= a / 2) & (f_lo < 1.0 - a / 2)))
+                                  if y64.size else None)
+    return out
 
 
 def swap_ratio(m: np.ndarray, x: np.ndarray):
@@ -326,6 +350,9 @@ def score_job(job: dict) -> tuple[list, dict, list]:
                                    arr["loc"])
     if job["kind"] == "swap":
         rec[SWAP_KEY] = swap_ratio(internals["m"], arr["x"])
+    if _CTX.get("extras"):
+        rec.update(extra_fields(space, internals["m"], internals["spread"], internals["y64"],
+                                coverage=job["kind"] in ("trained", "law")))
     out = [rec]
     if job.get("depth"):
         sx = float(arr["x"].astype(np.float64).sum())
@@ -333,7 +360,8 @@ def score_job(job: dict) -> tuple[list, dict, list]:
         dr = {**rec, "kind": "depthlaw", "depth_source": job["kind"],
               "depth_log2_ratio_true": math.log2(depth[p["target_pid"]] / depth[p["source_pid"]]),
               "depth_log2_scale_pred": math.log2(sm / sx) if sx > 0 and sm > 0 else None}
-        for k in ("describe", "pit_hist", "crps_oracle_scaled_all", "scale_error_all", "c_star_all"):
+        for k in ("describe", "pit_hist", "crps_oracle_scaled_all", "scale_error_all", "c_star_all",
+                  "cover50", "cover90", "mu_sum_over_y_sum"):
             dr.pop(k, None)
         out.append(dr)
     figs, locs = {}, []
@@ -387,6 +415,9 @@ def run_info(pred, run_dir) -> dict:
         v = getattr(pred, k, None)
         if v is not None:
             info[k] = v
+    loss = getattr(getattr(pred, "ladder", None), "loss", "nb")
+    if loss != "nb":
+        info["loss"] = loss
     return info
 
 
@@ -436,9 +467,9 @@ def _worker_init():
         torch.set_num_threads(1)
 
 
-def _setup(pred, rows, blacklist):
+def _setup(pred, rows, blacklist, extras: bool = False):
     _CTX.clear()
-    _CTX.update(pred=pred, blacklist=str(blacklist),
+    _CTX.update(pred=pred, blacklist=str(blacklist), extras=bool(extras),
                 depth={r["pid"]: float(r["depth"]) for r in rows},
                 by_source=bool(getattr(pred, "per_bin", False)) and pred.model == "nocov")
 
@@ -499,11 +530,12 @@ def _snip_plan(train: list[dict]) -> dict:
     return plan
 
 
-def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) -> Path:
+def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1,
+                  extras: bool = False) -> Path:
     """trained (score + val), shuffle, swap and depth-law records -> scores.json, figdata.npz."""
     t0 = time.time()
     run_dir = Path(run_dir)
-    _setup(pred, rows, blacklist)
+    _setup(pred, rows, blacklist, extras)
     space, real = pred.space, pred.model == "real"
     holdout = [tuple(h) for h in (getattr(pred, "config", None) or {}).get("holdout", ())]
     train = pairs.train_pairs(rows, pred.g_id, holdout)
@@ -561,12 +593,12 @@ def score_trained(pred, rows: list[dict], blacklist, run_dir, workers: int = 1) 
 
 
 def score_law(pred, rows: list[dict], blacklist, run_dir, workers: int = 1,
-              split: bool = False) -> Path:
+              split: bool = False, extras: bool = False) -> Path:
     """Every never-trained arm->arm pair of the run's g (+ depth->depth depth-law records).
     `split=True` (opt-in, t128) adds the CRPS split keys to every law record."""
     t0 = time.time()
     run_dir = Path(run_dir)
-    _setup(pred, rows, blacklist)
+    _setup(pred, rows, blacklist, extras)
     jobs = [{"kind": "law", "eval": "score", "pair": p, "x_pid": p["source_pid"],
              "y_pid": p["target_pid"], "cov_src": p["source_pid"], "cov_tgt": p["target_pid"],
              "depth": pred.space == "counts" and _is_depth_pair(p, "law"), "split": split}
@@ -609,6 +641,8 @@ def main(argv=None) -> int:
         if name == "law":
             a.add_argument("--split", action="store_true",
                            help="add the CRPS split keys to every law record (default off)")
+        a.add_argument("--extras", action="store_true",
+                       help="t127 report-only keys: mu_sum_over_y_sum, cover50, cover90 (counts)")
     args = ap.parse_args(argv)
     done = args.run_dir / ("SCORE_DONE" if args.cmd == "trained" else "LAW_DONE")
     if done.exists():
@@ -618,10 +652,12 @@ def main(argv=None) -> int:
     t0 = time.time()
     pred = model.load_run(args.run_dir, args.data_dir, args.covariates, args.manifest, device="cpu")
     rows = pairs.read_manifest(args.manifest)
+    kw = {"extras": True} if args.extras else {}       # default call unchanged (t127)
     if args.cmd == "trained":
-        path = score_trained(pred, rows, args.blacklist, args.run_dir, workers=args.workers)
+        path = score_trained(pred, rows, args.blacklist, args.run_dir, workers=args.workers, **kw)
     else:
-        kw = {"split": True} if args.split else {}   # default-off: the old call, unchanged
+        if args.split:
+            kw["split"] = True                         # default-off: the old call, unchanged (t128)
         path = score_law(pred, rows, args.blacklist, args.run_dir, workers=args.workers, **kw)
     print(f"{args.cmd} {args.run_dir.name} -> {path} ({time.time() - t0:.1f} s)")
     return 0
