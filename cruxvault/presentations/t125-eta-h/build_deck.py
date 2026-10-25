@@ -10,10 +10,12 @@ Inputs (all gitignored, local):
   <main checkout>/cruxvault/results/row2/GRID_SUMMARY.md   the old grid's -log10 p explosion tables
   ../t118-grid/snippet.json                        the real H3K27ac snippet used by the t118 deck
   tools/t118/covariates.tsv                        the assay of the chain track
-  cruxvault/results/t125/part2/summary_data_h.json t125 part-2 aggregate (h alone and in the chain; readings
-                                                   repair, vs_oldgrid, push_vs_noise; explosions; merged
-                                                   mixture; fit caps; capped NB rows). Whatever designs it
-                                                   holds are drawn, so A, B, B2 appear when they land.
+  cruxvault/results/t125/part2/summary_data_h.json t125 part-2 aggregate, 6 of 8 chain designs (job 24966577,
+                                                   kit K14, 2026-10-25; the 5-of-8 file is kept in part2_5of8/).
+                                                   h alone and in the chain; readings repair, vs_oldgrid,
+                                                   push_vs_noise; explosions; merged mixture; fit caps; capped
+                                                   NB rows. Whatever designs it holds are drawn; B and B2 were
+                                                   stopped by the PI (2026-10-19) and are not rerun.
 
     python cruxvault/presentations/t125-eta-h/build_deck.py
 """
@@ -116,8 +118,8 @@ for r in csv.DictReader(open(R1 / "run_device.tsv"), delimiter="\t"):
 runs = {"n": sum(sum(v.values()) for v in dev.values()), "gver": len(gver), "models": len(models),
         "seeds": len(seeds), "per_track": len(gver - {"all"})}
 
-# ---- part 2: the map h (part2/summary_data_h.json). Every design the file holds is passed on, so the
-#      chains of A, B, B2 appear in the figures when a refreshed aggregate lands. ----
+# ---- part 2: the map h (part2/summary_data_h.json, 6 of 8 chains). Every design the file holds is passed on;
+#      the missing ones (B, B2, stopped by the PI) are listed from the file, not typed. ----
 H = json.load(open(VAULT / "results" / "t125" / "part2" / "summary_data_h.json"))
 fid = lambda c: "|".join(str(c.get(k)) for k in ("variant", "window", "rung", "noise", "source"))
 H_MET = ["crps_log_all", "crps_log_oracle_scaled_all", "crps_log_scale_error_all", "mse_log1p_all",
@@ -170,9 +172,10 @@ h2 = {"created": H["created_utc"], "track": H["chain_track"], "assay": assay,
       "f_g": sorted({c["f_g_version"] for c in H["chain_cells"]}),
       "cells_alone": h_alone, "cells_chain": h_chain, "rd": h_rd,
       "expl": dict(h_expl), "old_cell_n": old_cell_n,
-      # merged mixture per chain f: [design, G, largest per-bin error, largest averaged error, bar, h at or above bar]
+      # merged mixture per chain f: [design, G, largest per-bin error, largest averaged error, bar, h at or above bar,
+      #                              own-noise h checked]
       "merge": [[m["f_run"].split("_")[0], m["mix_groups"], m["rel_err_max"], m["avg_rel_err_max"], m["bar"],
-                 m["n_h_rel_err_max_ge_bar"]] for m in H["merge_errors"]],
+                 m["n_h_rel_err_max_ge_bar"], m["n_h_checked"]] for m in H["merge_errors"]],
       "fits": {t["source"]: t for t in H["fits"]["totals"]},
       "capped": [[c["f_run"].split("_")[0], c["n_pairs"], c["n_pairs_capped"], c["n_capped_rows"]] for c in H["capped"]],
       "notes": H["notes"]}
