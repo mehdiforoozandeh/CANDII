@@ -11,7 +11,9 @@ replicates: the part-2 pairs, designs D and D2, 3 f seeds
 verdict: 
 metric: 
 created: "2026-10-25T00:22:33"
-updated: "2026-10-25T00:22:33"
+updated: "2026-10-25T00:58:40"
+null_approved: "2026-10-25T00:58:40"
+null_hash: 8f920311d2c7a411
 ---
 
 # h25 — In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h

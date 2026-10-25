@@ -11,10 +11,12 @@ replicates:
 verdict: refuted
 metric: "never-trained depth miss, rung A0 (no +1): 0.46 (NB) / 0.38 (Poisson-mean) median |log2 err| vs trained 0.12"
 created: "2026-10-19T23:41:09"
-updated: "2026-10-20T18:52:04"
+updated: "2026-10-25T00:58:40"
 lock: 99cd2a93a9c09a4e
 locked: "2026-10-20T18:52:04"
 lock_at: close
+null_approved: "2026-10-25T00:58:40"
+null_hash: 24641e914971592d
 ---
 
 # h18 — The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law
