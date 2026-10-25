@@ -4,7 +4,8 @@ One AGREE or DISAGREE line per headline (tolerance 1e-6 on means and medians, ex
 then one DISAGREE line per failing cell, if any. A cell present in only one method is DISAGREE.
 Headlines: pooled never-trained CRPS (+ its oracle_scaled / scale_error split) per arm x gv,
 pooled trained CRPS per arm x gv, depth-law medians per arm x gv x group, DSanchor's hop-1
-pooled CRPS per gv x group, and the metric-9 counts and share per arm x gv.
+pooled CRPS per gv x group, the metric-2 gen_gap (knob all) per arm x gv, the noise label of
+DSfree vs D on metric 1 (never, knob all) per gv, and the metric-9 counts and share per arm x gv.
 """
 import json
 from pathlib import Path
@@ -61,6 +62,14 @@ check("metric 5 depth-law median |log2 error|", v["depth_median_abs_err"],
 check("metric 6 DSanchor hop-1 pooled CRPS (encoder, knob all)", v["hop1_crps_pooled"],
       tab("m6_hop1_table.tsv", ["arm", "g_version", "group"], knob="all",
           source="encoder NB head (hop1.json)"), "crps_all")
+check("metric 2 gen_gap (knob all: same-knob never minus trained)", v["gen_gap_all"],
+      tab("m2_gap_table.tsv", ["arm", "g_version"], knob="all"), "gen_gap")
+lab = tab("m1_never_table.tsv", ["arm", "g_version"], subgroup="never", knob="all")
+want = v["label_DSfree_vs_D_never"]
+got = {f"{a}|{g}": r.label_vs_D for (a, g), r in lab.iterrows() if a == "DSfree"}
+ok = bool(want) and want == got
+lines.append(f"{'AGREE' if ok else 'DISAGREE'} noise label DSfree vs D, metric 1 never (knob all): "
+             f"verify {want} | analyze {got}")
 m9 = tab("m9_steps_table.tsv", ["arm", "g_version"])
 for col, exact in (("n_runs", True), ("n_best_last10", True), ("n_at_cap", True),
                    ("share_best_last10", False)):

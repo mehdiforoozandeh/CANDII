@@ -29,13 +29,15 @@ Conventions (phase-1 analyze.py, restated):
   Pooled CRPS (t118): per seed, mean over a track's pairs, then mean over tracks; the reading is
   the mean over seeds. Every CRPS column has crps_oracle_scaled_all and scale_error_all beside it.
 Noise rule (spec): seed_spread = max - min over the seeds of a per-seed value. A gap between two
-  cells counts only if |gap| > 2 x max(spread_a, spread_ref); otherwise "within noise". Cells
-  with fewer than 2 seeds have no spread: "no spread (n_seeds < 2)".
-Metric 9: a run's best step is "in the last 10 %" when best_step >= 0.9 x its max_steps (10,800
+  cells counts only if |gap| > 2 x max(spread_a, spread_ref); otherwise "within noise". When
+  either cell has fewer than 3 seeds the label is "incomplete (n_seeds=k)", k the smaller count.
+Metric 9 (run_all.sh sets T128P2_FULL_TREE=1 on the full tree, where every run must have
+  max_steps 12,000 or the script stops): a run's best step is "in the last 10 %" when best_step >= 0.9 x its max_steps (10,800
   at the 12,000 cap); "at cap" when steps_run >= max_steps (12,000).
 
     /Users/mforooz/miniforge3/envs/candi-local/bin/python analyze.py
 """
+import os
 from pathlib import Path
 
 import numpy as np
@@ -52,6 +54,8 @@ NUM = list(METRICS) + ["log2_true", "log2_pred", "val_nll", "swap_mal", "steps_r
                        "best_step", "max_steps", "c_star_all"]
 PHASE1_ARM = {"DSfree": "DS", "D": "D", "Dviabase": "Dviabase"}   # Decision (vii)
 P1 = "phase1_4000steps_"
+N_SEEDS = 3                      # the grid's seeds; fewer in a cell = no noise verdict
+FULL_MAX_STEPS = 12000
 
 
 def read(name):
@@ -90,16 +94,18 @@ def spread(s):
     return float(s.max() - s.min()) if len(s) >= 2 else np.nan
 
 
-def noise_label(gap, sa, sb):
+def noise_label(gap, sa, sb, na, nb):
+    """Spec noise rule. Fewer than N_SEEDS seeds on either side: "incomplete (n_seeds=k)"."""
     if pd.isna(gap):
         return np.nan, "n/a"
-    if pd.isna(sa) or pd.isna(sb):
-        return np.nan, "no spread (n_seeds < 2)"
+    k = min(int(na) if pd.notna(na) else 0, int(nb) if pd.notna(nb) else 0)
+    if k < N_SEEDS or pd.isna(sa) or pd.isna(sb):
+        return np.nan, f"incomplete (n_seeds={k})"
     c = bool(abs(gap) > 2 * max(sa, sb))
     return c, ("counts" if c else "within noise")
 
 
-def add_gaps(t, keys, value, refs=("D",), sp="seed_spread", suffix=""):
+def add_gaps(t, keys, value, refs=("D",), sp="seed_spread", suffix="", ns="n_seeds"):
     """Per row, the gap of `value` to the same cell (keys) of each reference arm, with the noise
     rule. Columns gap_vs_<ref>, spread_a, spread_<ref>, counts_vs_<ref>, label_vs_<ref>."""
     t = t.copy()
@@ -115,7 +121,7 @@ def add_gaps(t, keys, value, refs=("D",), sp="seed_spread", suffix=""):
                 continue
             ref_row = r.loc[k]
             gap = row[value] - ref_row[value]
-            c, l = noise_label(gap, row[sp], ref_row[sp])
+            c, l = noise_label(gap, row[sp], ref_row[sp], row[ns], ref_row[ns])
             g.append(gap); sb.append(ref_row[sp]); cn.append(c); lb.append(l)
         t[f"gap_vs_{ref}{suffix}"] = g
         t[f"spread_{ref}{suffix}"] = sb
@@ -227,7 +233,7 @@ def n_table(d):
     r = read("runs_fir.tsv")
     for m in MARKS:
         r[m] = pd.to_numeric(r[m], errors="coerce").fillna(0).astype(int)
-    r["has_dir"] = r.TRAIN_DONE.notna() & r.g.notna()
+    r["has_dir"] = pd.to_numeric(r.run_dir, errors="coerce").fillna(0).astype(int)
     t = r.groupby("arm").agg(assigned=("run", "size"), run_dirs=("has_dir", "sum"),
                              **{m: (m, "sum") for m in MARKS}).reset_index()
     t["viabase_LAW_DONE"] = np.nan
@@ -260,10 +266,9 @@ def m3_trained(p):
 
 
 def m2_gap(m1, m3):
-    """gen_gap = never - trained, per seed and pooled; knob k: same-knob law pairs; knob all:
-    every never-trained pair (same + cross)."""
-    nv = pd.concat([m1[(m1.subgroup == "same") & (m1.knob != "all")],
-                    m1[(m1.subgroup == "never") & (m1.knob == "all")]])
+    """gen_gap = never - trained, per seed and pooled; crps_never = same-knob law pairs only
+    (knob k: the same pairs of k; knob all: every same pair, pooled once)."""
+    nv = m1[m1.subgroup == "same"]
     nv = nv[nv.arm != "Dviabase"]
     k = ["arm", "g_version", "knob"]
     cols = list(METRICS) + [f"crps_s{s}" for s in (0, 1, 2)] + ["n_pairs"]
@@ -377,9 +382,14 @@ def m8_swap(d, lt):
     return order(t, ["g_version", "knob"]), pts
 
 
-def m9_steps(runs):
+def m9_steps(runs, full):
     r = numeric(runs[runs.TRAIN_DONE == 1].copy(),
                 ["steps_run", "best_step", "max_steps", "s_per_step", "train_s"])
+    if full:
+        bad = r[r.max_steps != FULL_MAX_STEPS]
+        if len(bad):
+            raise SystemExit(f"full tree: {len(bad)} runs with max_steps != {FULL_MAX_STEPS}: "
+                             + ", ".join(f"{a}={b}" for a, b in zip(bad.run, bad.max_steps)))
     r["last10"] = r.best_step >= 0.9 * r.max_steps
     r["at_cap"] = r.steps_run >= r.max_steps
     t = r.groupby(["arm", "g_version"]).agg(
@@ -400,15 +410,18 @@ def rank_table(m1, m2):
                                                  "crps_oracle_scaled_all": "m1_crps_oracle_scaled_all",
                                                  "scale_error_all": "m1_scale_error_all",
                                                  "seed_spread": "m1_seed_spread",
+                                                 "n_seeds": "m1_n_seeds",
                                                  "gap_vs_D": "m1_gap_vs_D", "label_vs_D": "m1_label_vs_D",
                                                  "gap_vs_Dviabase": "m1_gap_vs_Dviabase",
                                                  "label_vs_Dviabase": "m1_label_vs_Dviabase"})
     b = m2[m2.knob == "all"][["arm", "g_version", "gen_gap", "gen_gap_crps_oracle_scaled_all",
-                              "gen_gap_scale_error_all", "seed_spread", "gap_vs_D", "label_vs_D"]]
+                              "gen_gap_scale_error_all", "seed_spread", "n_seeds", "gap_vs_D",
+                              "label_vs_D"]]
     b = b.rename(columns={"gen_gap": "m2_gen_gap",
                           "gen_gap_crps_oracle_scaled_all": "m2_gen_gap_oracle_scaled_all",
                           "gen_gap_scale_error_all": "m2_gen_gap_scale_error_all",
-                          "seed_spread": "m2_seed_spread", "gap_vs_D": "m2_gap_vs_D",
+                          "seed_spread": "m2_seed_spread", "n_seeds": "m2_n_seeds",
+                          "gap_vs_D": "m2_gap_vs_D",
                           "label_vs_D": "m2_label_vs_D"})
     t = a.merge(b, on=["arm", "g_version"], how="left")
     out = []
@@ -421,9 +434,10 @@ def rank_table(m1, m2):
             val = "m1_crps_never" if m == "m1" else "m2_gen_gap"
             s[f"{m}_gap_vs_next"] = s[val] - nxt[val]
             s[f"{m}_label_vs_next"] = [
-                noise_label(g, sa, sb)[1] if isinstance(na, str) else "n/a"
-                for g, sa, sb, na in zip(s[f"{m}_gap_vs_next"], s[f"{m}_seed_spread"],
-                                         nxt[f"{m}_seed_spread"], s.next_arm)]
+                noise_label(g, sa, sb, a, b)[1] if isinstance(nm, str) else "n/a"
+                for g, sa, sb, a, b, nm in zip(s[f"{m}_gap_vs_next"], s[f"{m}_seed_spread"],
+                                               nxt[f"{m}_seed_spread"], s[f"{m}_n_seeds"],
+                                               nxt[f"{m}_n_seeds"], s.next_arm)]
         out.append(s)
     return pd.concat(out, ignore_index=True)
 
@@ -510,7 +524,7 @@ def main():
     show("metric 8: swap vs identity (knob all)", m8[m8.knob == "all"],
          G + ["swap_median_abs_log_ratio", "seed_spread", "identity_median_abs_log_ratio",
               "ident_seed_spread", "gap_vs_D", "label_vs_D"])
-    m9 = m9_steps(runs)
+    m9 = m9_steps(runs, os.environ.get("T128P2_FULL_TREE") == "1")
     m9.to_csv(HERE / "m9_steps_table.tsv", sep="\t", index=False)
     show("metric 9: best step in the last 10 %", m9, list(m9.columns))
     rk = rank_table(m1, m2)

@@ -12,7 +12,12 @@ Independent of extract_records.py / analyze.py (no shared code, no pandas). Two 
       2. pooled trained-pair CRPS per arm x g version;
       3. depth-law median |log2 error| per arm x g version x group;
       4. hop-1 pooled CRPS of DSanchor's encoder NB head per g version x group;
-      5. metric 9 counts per arm x g version: runs with TRAIN_DONE, best step in the last 10 %
+      5. metric 2 gen_gap, knob all, per arm x g version: per seed, pooled same-knob law pairs
+         minus pooled trained pairs; the reading = the mean over seeds;
+      6. the noise label of DSfree against D on metric 1 (never, knob all) per g version:
+         "incomplete (n_seeds=k)" below 3 seeds on either side, else "counts" when
+         |gap| > 2 x the larger seed spread (max - min over seeds), else "within noise";
+      7. metric 9 counts per arm x g version: runs with TRAIN_DONE, best step in the last 10 %
          of the run's step cap (TRAIN_DONE's best_step), runs at the cap (the last step of
          train_log.tsv), and the share.
       python3 verify_raw.py reduce <verify_raw.json> <collect.json>
@@ -26,7 +31,7 @@ from collections import defaultdict
 
 def collect(out, root):
     c = {k: defaultdict(list) for k in ("depth", "trained", "never", "never_os", "never_se",
-                                        "hop1", "steps")}
+                                        "same", "hop1", "steps")}
     runs, via = os.path.join(root, "runs"), os.path.join(root, "viabase")
     dirs = [(n.split("_")[0], os.path.join(runs, n)) for n in sorted(os.listdir(runs))]
     if os.path.isdir(via):
@@ -61,6 +66,8 @@ def collect(out, root):
                     c["never"][key].append(r["crps_all"])
                     c["never_os"][key].append(r["crps_oracle_scaled_all"])
                     c["never_se"][key].append(r["scale_error_all"])
+                    if r["arm_src"] == r["arm_tgt"]:
+                        c["same"][key].append(r["crps_all"])
                 elif k == "hop1":
                     c["hop1"][f"{arm}|{gv}|{r['group']}|{seed}|{r['track']}"].append(r["crps_all"])
     for name in sorted(os.listdir(runs)):
@@ -77,6 +84,25 @@ def collect(out, root):
         c["steps"][f"{name.split('_')[0]}|{gv}"].append([best, last, cfg["max_steps"]])
     json.dump(c, open(out, "w"))
     print(f"collect: {n} runs with LAW_DONE -> {out}")
+
+
+def per_seed(d):
+    """{arm|gv|seed|track: [crps]} -> {arm|gv: {seed: mean over tracks of mean over pairs}}."""
+    out = defaultdict(lambda: defaultdict(list))
+    for k, v in d.items():
+        arm, gv, seed, _ = k.split("|")
+        out[f"{arm}|{gv}"][seed].append(st.mean(v))
+    return {k: {sd: st.mean(t) for sd, t in s.items()} for k, s in out.items()}
+
+
+def label(a, b):
+    """Noise label of the gap a - b, each a {seed: value} dict."""
+    k = min(len(a), len(b))
+    if k < 3:
+        return f"incomplete (n_seeds={k})"
+    sa, sb = max(a.values()) - min(a.values()), max(b.values()) - min(b.values())
+    gap = st.mean(a.values()) - st.mean(b.values())
+    return "counts" if abs(gap) > 2 * max(sa, sb) else "within noise"
 
 
 def pooled(d, nkey=2):
@@ -96,7 +122,16 @@ def reduce(out, part):
            "never_scale_error_pooled": pooled(c["never_se"]),
            "trained_crps_pooled": pooled(c["trained"]),
            "depth_median_abs_err": {k: st.median(v) for k, v in sorted(c["depth"].items())},
-           "hop1_crps_pooled": pooled(c["hop1"], nkey=3), "m9": {}}
+           "hop1_crps_pooled": pooled(c["hop1"], nkey=3), "m9": {}, "gen_gap_all": {},
+           "label_DSfree_vs_D_never": {}}
+    same, tr, nv = per_seed(c["same"]), per_seed(c["trained"]), per_seed(c["never"])
+    for k in sorted(set(same) & set(tr)):
+        gaps = [same[k][sd] - tr[k][sd] for sd in same[k] if sd in tr[k]]
+        res["gen_gap_all"][k] = st.mean(gaps)
+    for gv in sorted({k.split("|")[1] for k in nv}):
+        a, b = nv.get(f"DSfree|{gv}"), nv.get(f"D|{gv}")
+        if a and b:
+            res["label_DSfree_vs_D_never"][f"DSfree|{gv}"] = label(a, b)
     for k, v in sorted(c["steps"].items()):
         nb = sum(1 for b, _, m in v if b >= 0.9 * m)
         res["m9"][k] = {"n_runs": len(v), "n_best_last10": nb,

@@ -27,13 +27,35 @@ DEFAULT_ROOT=/project/def-maxwl/mforooz/t128p2
 T=${T128P2_ROOT:-$DEFAULT_ROOT}
 R=$T/readings
 RES=${T128P2_RESULTS:-/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxvault/results/t128p2}
+# The job ledger: $R/jobs.tsv on Fir (purpose, job_id, submitted_utc). Whoever submits a t128p2
+# job appends a row; this script appends its extract/verify jobs and FIR_PATH.txt lists the file.
+# Seeded (only when absent) with the C4/C5 jobs of plan_t128p2.md's Log.
+LEDGER_SEED="purpose\tjob_id\tsubmitted_utc
+verify (kit K1)\t453753\t2026-10-25T21:21:30Z
+smoke train\t453754\t2026-10-25T21:21:30Z
+smoke law\t453755\t2026-10-25T21:21:30Z
+smoke viabase\t453756\t2026-10-25T21:21:30Z
+train (full, 0-95%%24)\t470429\t2026-10-25T22:44:28Z
+law (full, aftercorr)\t470431\t2026-10-25T22:44:28Z
+viabase (full, afterany)\t470432\t2026-10-25T22:44:28Z"
 MIRROR=$REPO/cruxvault/results/t128p2
 PHASE1=/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxvault/results/t128
 PANDAS_PY=${PANDAS_PY:-/Users/mforooz/miniforge3/envs/candi-local/bin/python}
 H=fir
 SCRIPTS=(extract_records.py verify_raw.py extract.sh verify.sh analyze.py verify_compare.py run_all.sh)
+DEFAULT_RES=/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxvault/results/t128p2
 LOCAL=0
 [ "${1:-}" = --local ] && LOCAL=1
+realp() { if [ -d "$1" ]; then (cd "$1" && pwd -P); else echo "${1%/}"; fi; }
+if [ "$T" != "$DEFAULT_ROOT" ]; then   # a non-full tree must never write the full tree's results
+  if [ -z "${T128P2_RESULTS:-}" ] || [ "$(realp "$T128P2_RESULTS")" = "$(realp "$DEFAULT_RES")" ]; then
+    echo "T128P2_ROOT=$T is not the full tree: set T128P2_RESULTS to a dir other than $DEFAULT_RES" >&2
+    exit 2
+  fi
+  export T128P2_FULL_TREE=0
+else
+  export T128P2_FULL_TREE=1          # analyze.py then requires max_steps == 12000 on every run
+fi
 mkdir -p "$RES"
 
 remote() {  # remote <command>; stops the pipeline on a dead tunnel
@@ -48,6 +70,7 @@ remote() {  # remote <command>; stops the pipeline on a dead tunnel
 
 if [ "$LOCAL" = 0 ]; then
   remote "mkdir -p $R && test -d $T/runs"
+  remote "test -s $R/jobs.tsv || printf '$LEDGER_SEED\n' > $R/jobs.tsv"
   rsync -a -e 'ssh -o BatchMode=yes' "$HERE/extract_records.py" "$HERE/verify_raw.py" \
     "$HERE/extract.sh" "$HERE/verify.sh" "$H:$R/" || { echo "rsync to $H failed" >&2; exit 1; }
   JOBS=()                      # "kind id"
@@ -55,7 +78,7 @@ if [ "$LOCAL" = 0 ]; then
     id=$(remote "cd $R && sbatch --parsable --output=$R/${k}_%j.log $k.sh $T") || exit $?
     [[ "$id" =~ ^[0-9]+$ ]] || { echo "sbatch $k.sh gave '$id'" >&2; exit 1; }
     JOBS+=("$k $id")
-    printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$H" "$id" "$k.sh $T" >> "$RES/jobs.tsv"
+    remote "printf 'readings $k ($T)\t$id\t$(date -u +%FT%TZ)\n' >> $R/jobs.tsv"
     echo "$H: $k.sh job $id"
   done
   while :; do                  # wait for both jobs (sacct every 30 s)
@@ -79,7 +102,7 @@ if [ "$LOCAL" = 0 ]; then
     grep -h -e 'assigned runs' -e 'via-base' -e 'collect:' "$RES/${1}_$2.log" || true
   done
   rsync -rt -e 'ssh -o BatchMode=yes' --include="*_$H.tsv.gz" --include="*_$H.tsv" \
-    --include="verify_collect_$H.json" --exclude='*' "$H:$R/" "$RES/" \
+    --include="verify_collect_$H.json" --include=jobs.tsv --exclude='*' "$H:$R/" "$RES/" \
     || { echo "rsync from $H failed" >&2; exit 1; }
 fi
 
@@ -98,10 +121,8 @@ t128 phase 2 readings. Tree read: fir:$T   (T128P2_ROOT; the default full tree i
   via the base (24, from the new D maps)                  fir:$DEFAULT_ROOT/viabase/
   readings (extraction + second-method collection)        fir:$R/
   kit K1 (sha 524f4d7)                                    fir:$DEFAULT_ROOT/code/K1/
-Training/law jobs (plan_t128p2.md Log): verify 453753; smoke train 453754, law 453755,
-  via-base 453756; full train 470429 (0-95%24), law 470431 (aftercorr), via-base 470432.
-Readings jobs (time, cluster, id, script), every run of run_all.sh into this dir:
-$(cat "$RES/jobs.tsv" 2>/dev/null)
+Every job (fir:$R/jobs.tsv, appended by whoever submits; copy below):
+$(cat "$RES/jobs.tsv" 2>/dev/null || echo "  (jobs.tsv not brought down yet)")
 Rebuild everything: bash tools/t128p2/readings/run_all.sh   (tables only: add --local)
 EOF
 

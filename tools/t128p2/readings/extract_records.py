@@ -4,8 +4,8 @@ Reads, never writes, the run directories. Every directory under <root>/runs/ is 
 cluster, no index lists); <root>/tasks.tsv, when present, adds the run index and the assigned
 runs that have no directory yet. A run's scored records are read when it has LAW_DONE
 (scores.json + law.json); latent.json when it has LATENT_DONE; hop1.json when it has HOP1_DONE.
-Per-run fragments are cached under <out>/cache/<run>/ and rebuilt only when the run's marks
-change (incremental re-runs).
+Per-run fragments are cached under <out>/cache/<run>/ and rebuilt only when the run's marks,
+its train log, or this script (sha256) change (incremental re-runs).
 
 Outputs in <out_dir>:
   records_fir.tsv.gz  one row per scored record (eval == score; kinds trained, heldout, law,
@@ -14,14 +14,15 @@ Outputs in <out_dir>:
                       group (hop1 records carry their own group: trained / heldout)
   latent_fir.tsv.gz   one row per latent.json record (kinds latent, agree, ident)
   cclean_fir.tsv      one row per run x assay x knob: init, learned, frozen, in_g
-  runs_fir.tsv        one row per run: marks, steps_run, best_step, val_nll, val_cross_nll,
-                      seconds per step, device, node (from the newest train log of its index)
+  runs_fir.tsv        one row per run: run_dir (directory exists), marks, steps_run,
+                      best_step, val_nll, val_cross_nll, seconds per step, device, node (from the newest train log of its index)
   viabase_fir.tsv.gz  law + depthlaw records of <root>/viabase/*/ (arm Dviabase)
 
     python3 extract_records.py <out_dir> <root>
 """
 import glob
 import gzip
+import hashlib
 import json
 import os
 import re
@@ -44,9 +45,11 @@ CCOLS = ["run", "cluster", "arm", "g", "g_version", "model", "seed", "assay", "k
 RCOLS = ["index", "run", "cluster", "arm", "g", "g_version", "model", "seed", "TRAIN_DONE",
          "SCORE_DONE", "LAW_DONE", "LATENT_DONE", "HOP1_DONE", "max_steps", "steps_run",
          "best_step", "val_nll", "val_cross_nll", "val_nll_rule", "train_s", "s_per_step",
-         "device", "node", "train_log"]
+         "device", "node", "train_log", "run_dir"]
 KINDS = ("trained", "heldout", "law", "depthlaw", "swap", "hop1")
 MARKS = ("TRAIN_DONE", "SCORE_DONE", "LAW_DONE", "LATENT_DONE", "HOP1_DONE")
+with open(os.path.abspath(__file__), "rb") as _fh:     # a code change invalidates the cache
+    CODE_SHA = hashlib.sha256(_fh.read()).hexdigest()[:16]
 
 
 def cell(v):
@@ -153,6 +156,7 @@ def stamp_of(d, log):
         p = os.path.join(d, m)
         parts.append(f"{m}:{os.path.getmtime(p):.3f}" if os.path.isfile(p) else f"{m}:-")
     parts.append(f"log:{log}")
+    parts.append(f"code:{CODE_SHA}")
     return "|".join(parts) + "\n"
 
 
@@ -167,7 +171,7 @@ def run_fragments(d, name, index, logs, cache):
         return [open(f).readlines() for f in files], True
     has = {m: os.path.isfile(os.path.join(d, m)) for m in MARKS}
     arm = arm_of(name)
-    row = {"run": name, "cluster": TAG, "arm": arm, "node": node, "train_log": log,
+    row = {"run": name, "cluster": TAG, "arm": arm, "node": node, "train_log": log, "run_dir": True,
            **{m: has[m] for m in MARKS}}
     rec, lat, cc = [], [], []
     cp = os.path.join(d, "config.json")
@@ -235,7 +239,8 @@ def main():
         d = os.path.join(runs, name)
         ix = index.get(name)
         if not os.path.isdir(d):
-            rh.write(line({"index": ix, "run": name, "cluster": TAG, "arm": arm_of(name)}, RCOLS))
+            rh.write(line({"index": ix, "run": name, "cluster": TAG, "arm": arm_of(name),
+                               "run_dir": False}, RCOLS))
             continue
         (rec, lat, cc, row), hit = run_fragments(d, name, ix, logs, cache)
         n_hit += hit
