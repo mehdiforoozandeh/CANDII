@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Symmetric Encoder-Decoder</title>
+
+<!--
+  prezit deck · t128 phase 1: the symmetric encoder-decoder rung D (spec plan/T126_ENCDEC_D2.md).
+  Chrome, build pattern and chart style copied from ../t126-encdec/.
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-21 and the t128-C9 brief, 2026-10-25):
+  - Arc: motivation, method, results, discussion. The section is marked on every slide (kicker).
+  - Exploratory phase: no hypothesis, no metrics.json, no verdicts. `crux deck --verify` does not
+    apply. Every number is embedded as DATA by build_deck.py from cruxvault/results/t128/. No
+    measured number is typed in this file. Typed: design constants of the spec only (8 settings,
+    lambda grid 0.1 / 1 / 10, 4 layers, 32 channels, dilations 1, 2, 4, 8, g = 2 x 64, the KL
+    warm-up over 1000 of 4000 steps, the 60-bin halo, the noise rule's factor 2, the chromosome
+    split), the cluster kits and job history of plan_t128.md "## Log" (doubts slide), on method
+    and discussion slides.
+  - Every count (runs per setting, seeds, g's) comes from DATA, so a rebuild after the last runs
+    land changes the counts with no edit. Headlines that state a comparison are written by the
+    script from DATA (ids h*), so they follow the numbers.
+  - Arm codes of the run names never appear: plain names only (ARMS below).
+  - Every slide has speaker notes (<aside class="notes">), shown with the `n` key, as in t126.
+  - The only table is the grid of settings.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once (settings 1-8, the two references, the twin) */
+    --s1:#d9822b; --s2:#9a6a12; --s3:#5d7fb8; --s4:#2f4f8a; --s5:#c3a3dc; --s6:#9467bd; --s7:#5f3a85;
+    --s8:#c8435a; --oldd:#1f8a70; --via:#6fb59a; --twin:#77736c; --ref:#9a9ca4;
+    /* one colour per pair group */
+    --tr:#4f5d75; --ho:#0a8a8f; --nv:#c84d86; --nv2:#e8a3c3;
+    --ok:#3f8f6f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+      --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+      --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+    --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+    --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em;text-wrap:balance}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px;text-wrap:balance}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:none}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.mid svg{max-height:40vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2,.cards.c5{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 9px;margin:0 0 6px;border:1px solid var(--hair);color:var(--body)}
+  .tag.out{background:rgba(63,143,111,.13);border-color:var(--ok)}
+  .tag.part{background:rgba(217,130,43,.13);border-color:var(--s1)}
+  .tag.holds{background:rgba(200,77,134,.13);border-color:var(--nv)}
+  .tag.open{background:none;border-style:dashed;border-color:var(--muted)}
+  .tag.opt{background:none;border-style:dashed;border-color:var(--accent);color:var(--accent)}
+  table.grid.compact{border-spacing:6px 3px}
+  table.grid.compact td{padding:4px 8px;font-size:14px;line-height:1.25}
+  table.grid.compact th{padding:2px 4px;font-size:14px}
+  table.grid.compact td.arm small{display:inline;margin-left:6px}
+  table.grid td.y{font-weight:600;color:var(--ink)}
+  table.grid td.no{color:var(--faint)}
+  .mini{font-size:13px;color:var(--muted)}
+
+  /* the grid of arms */
+  table.grid{border-collapse:separate;border-spacing:8px 6px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:8px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:18%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.arm{font-weight:600;color:var(--ink);text-align:left;border-left:5px solid var(--c)}
+  table.grid td.arm small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:14.5px;border:1px solid var(--hair);background:var(--card);border-radius:16px;padding:4px 12px;color:var(--body)}
+  .chip b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+</style></head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the design and the scope of phase 1
+       numbers  run counts only (DATA.counts) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>A symmetric encoder-decoder: one g, one CNN, and a learned clean setting in the middle</h1>
+      <p class="sub">Phase 1 of the redesign of the t126 encoder-decoder: 8 settings, both versions of g, <span class="num" id="tRuns"></span>.
+        This is an exploratory pass: it reports readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+    </div>
+    <aside class="notes">
+      <p>This deck follows the encoder-decoder deck (t126). There, building composition into g did not carry the fit to pairs the model never trained on. The PI redesigned the encoder-decoder so that both halves are the same network, set by one g, and meet at a learned "clean" setting.</p>
+      <p>Every number on the slides and in these notes is read from the result files when the deck is built. Some runs were still training at build time; each chart shows its own run count.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · MOTIVATION · two words: never-trained pairs and the depth law
+       job      teach the two words the deck rests on
+       numbers  none (schematic) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>two words first</div>
+      <h2>The model trains only on base ↔ arm pairs; arm → arm pairs are never seen in training</h2>
+      <div class="fig tall" id="figPairs"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each track was rebuilt many times, changing one processing setting (a <b>knob</b>) at a time; each rebuild is an <b>arm</b>. Training uses only pairs between the base track and one arm, in both directions (solid). A pair between two arms (dashed) is <b>never trained</b>: the model must work it out from the settings alone.</p>
+      <p>Panel (b): the <b>depth law</b>. With fewer reads, every bin scales by the read ratio. We compare the predicted total, over the source total, with the true read ratio on a log2 scale. 0 is perfect.</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · what t126 showed
+       job      the three t126 findings that motivate the redesign, as cards with a mini schematic
+       source   ../t126-encdec/ (the t126 deck)
+       numbers  none (prezit: motivation carries no numbers) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what the t126 encoder-decoder showed</div>
+      <h2>The t126 encoder-decoder did not carry the fit to never-trained pairs, and its two halves were not alike</h2>
+      <div class="fig mid" id="figT126"></div>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--nv)"><span class="tag holds">no carry-over</span><div class="ct">Never-trained pairs stayed bad</div>
+          <div class="cb">Encoder-decoder D kept old D's fit on trained pairs, but its never-trained depth error did not drop, and three knobs fell below the no-covariates twin.</div></div>
+        <div class="card" style="--c:var(--s3)"><span class="tag part">asymmetric</span><div class="ct">Two halves, two g's</div>
+          <div class="cb">The CNN was cut 2 + 2: two layers set by g_enc(c), two by g_dec(c′). The halves differ, so "encode" and "decode" were not the same map run two ways.</div></div>
+        <div class="card" style="--c:var(--accent)"><span class="tag holds">broken by the +1</span><div class="ct">Encoder-decoder A could not fit</div>
+          <div class="cb">An exact inverse on log(1 + count) forces the two directions' slopes to multiply to 1, but the +1 needs a slope above 1 both ways.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>These are the three findings of the t126 deck that this work answers. The numbers are on that deck.</p>
+      <p>Card 2 is the PI's ruling: the encoder and decoder must be symmetric, and one g must set both.</p>
+    </aside>
+  </section>
+
+  <!-- 4 · MOTIVATION · the PI's redesign
+       job      schematic: every setting maps to one learned clean setting, then out
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the redesign</div>
+      <h2>The redesign: every track passes through one learned clean setting, with the same network on both sides</h2>
+      <div class="fig tall" id="figHub"></div>
+    </div>
+    <aside class="notes">
+      <p>Left, t126: two g's, each reading one side, set two different halves of a cut CNN.</p>
+      <p>Right, t128: one g, the same g as in the t118 grid, reads a pair of settings as always. The trick is the middle: g is asked for the map from the source's settings c to a learned clean setting C_clean, and then for the map from C_clean to the target's settings c′. Both maps use the same CNN. So an arm → arm pair uses exactly the two pieces that the trained pairs use: c → C_clean and C_clean → c′.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · METHOD · the model
+       job      schematic of f_e and f_d: the same CNN, FiLM from g(c, C_clean) and g(C_clean, c'), Z Gaussian, X NB
+       numbers  none (design constants of the spec) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the model</div>
+      <h2>The encoder and the decoder are one CNN with shared weights; only the FiLM from g differs</h2>
+      <div class="fig tall" id="figModel"></div>
+    </div>
+    <aside class="notes">
+      <p><b>f</b> is old rung D exactly: 4 dilated convolution layers (dilations 1, 2, 4, 8), 32 channels, kernel 5, and a 1 × 1 head. <b>FiLM</b> means g gives a scale and a shift for every layer and channel; g gives nothing else.</p>
+      <p><b>Encoder</b>: input x = log(1 + X); FiLM from g(c, C_clean); the head gives a Gaussian mean μ_z and spread σ_z per 25 bp bin. <b>Decoder</b>: input Z; FiLM from g(C_clean, c′); the head gives the negative binomial of X′. Z has 1 channel at the same 25 bp resolution, with no pooling.</p>
+      <p>Two f's in series see further, so each training window gets 60 bins of halo on each side.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · METHOD · C_clean forms A and D
+       job      schematic: form A starts at 0 and is free; form D starts at the base inside a hard box
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the clean setting C_clean</div>
+      <h2>C_clean is learned per track: form A starts at 0 and is free, form D starts at the base inside a hard box</h2>
+      <div class="fig tall" id="figForms"></div>
+    </div>
+    <aside class="notes">
+      <p>C_clean is a covariate vector like any other. Its assay entries are copied from the source; only the 13 processing entries are learned. With one g per track, there is one C_clean per track; with one g across tracks, one per track as well.</p>
+      <p><b>Form A</b> (the default): starts at 0, which in z units is the mean of the training settings, and moves freely. <b>Form D</b>: starts at the base track's own settings, and each entry is a sigmoid onto the range seen in training, so it cannot leave that box. There is no penalty weight.</p>
+    </aside>
+  </section>
+
+  <!-- 7 · METHOD · the losses
+       job      L1, L2, L3 and the VAE, as a 2 x 2 grid plus the pull
+       numbers  none (definitional constants of the spec) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the losses</div>
+      <h2>Three losses: the cross map (L1), the round trip (L2), and latent agreement (L3); a VAE adds noise to Z</h2>
+      <div class="fig tall" id="figLoss"></div>
+    </div>
+    <aside class="notes">
+      <p>For one trained pair, the source (X, c) and the target (X′, c′): Z = encoder of X with c, Z′ = encoder of X′ with c′.</p>
+      <p><b>L1, cross</b>: decode Z with c′ and score X′; decode Z′ with c and score X. That is the real job. <b>L2, round trip</b>: decode Z with c and score X itself, and the same for Z′. <b>L3, latent agreement</b>: λ times the mean squared gap between Z and Z′, so that the two tracks of one pair meet at one latent.</p>
+      <p><b>VAE</b>: Z is sampled from the Gaussian, with a KL term to N(0, 1) whose weight ramps from 0 to 1 over the first 1000 of 4000 steps. The deterministic arms use Z = μ_z.</p>
+    </aside>
+  </section>
+
+  <!-- 8 · METHOD · the grid of settings (the one table) and the scope
+       numbers  run counts, seeds, g counts from DATA; lambda grid and the settings are spec constants -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the settings</div>
+      <h2>Eight settings change one thing at a time from the default; two of them have a no-covariates twin</h2>
+      <table class="grid compact" id="tblArms">
+        <tr><th style="width:27%">setting</th><th>clean setting</th><th>cross (L1)</th><th>round trip (L2)</th><th>agreement (L3)</th><th>latent Z</th><th>runs done<small>of assigned</small></th></tr>
+      </table>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="notes">
+      <p>Setting 1 is the default; each other setting changes one or two things from it. Settings 3 and 4 test the round trip alone, which the spec flagged: with 1 channel and a skip that starts at the identity, the round trip alone may stay at the identity.</p>
+      <p>The <b>no-covariates twin</b> is the same model fed random settings: it can only learn one average map. Twins were trained only for settings 1 and 3.</p>
+      <p>Both versions of g: one g per track (trained on one track's arms), and one g across all tracks.</p>
+    </aside>
+  </section>
+
+  <!-- 9 · METHOD · scoring groups and selection
+       job      schematic of the pair groups; selection rule on chr22
+       numbers  none (the held-out level and chromosome split are design constants) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what we score, and how a run is selected</div>
+      <h2>We score trained pairs, a held-out depth, and never-trained pairs; each setting picks its step by its own loss on chr22</h2>
+      <div class="fig tall" id="figGroups"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): the depth ladder. Trained pairs link the base to two depths. The 7.5M depth is held out of training: its pairs with the base are only scored. Never-trained pairs link two depths, with or without the held-out one.</p>
+      <p>Panel (b): selection. Each setting keeps its best step by its own loss's likelihood terms on chromosome 22, with Z = μ_z, and without the KL or λ terms, so the λ values compare fairly (PI ruling). The same rule picks one λ per version of g.</p>
+    </aside>
+  </section>
+
+  <!-- 10 · METHOD · the references and the noise rule
+       job      old D, old D through the base, and the noise rule for every gap
+       numbers  none (the factor 2 is the spec's rule) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>references and the noise rule</div>
+      <h2>Two references need no training: old D, and old D chained through the base</h2>
+      <div class="fig tall" id="figRefs"></div>
+    </div>
+    <aside class="notes">
+      <p><b>Old D</b> is t126's retrained old rung D, with 7.5M held out, and its twin. <b>Old D through the base</b> chains two of old D's trained maps, arm → base, then base → arm, on the never-trained pairs. It is the target the redesign aims at: composition through a middle, done by hand.</p>
+      <p><b>The noise rule</b> (spec): a gap counts only if it is larger than 2 × the larger seed spread of the two cells, where a seed spread is the largest gap between the 3 seeds. Smaller gaps are shown and labelled "within noise".</p>
+    </aside>
+  </section>
+
+  <!-- 11 · RESULTS · (a) the depth law
+       claim    written from DATA (hDa): round trip only misses the depth law by the full ratio; the others read like old D;
+                via the base is lowest on never-trained pairs
+       source   results/t128/depth_table.tsv (seed medians included)
+       numbers  DATA.depth -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the depth law</div>
+      <h2 id="hDa"></h2>
+      <div class="fig tall" id="figDepth"></div>
+      <ul class="pts">
+        <li id="tDa1"></li>
+        <li id="tDa2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each row is one setting or reference; each bar is the median depth-law error over that pair group, with the 25th to 75th percentile as a whisker. The small ticks are each seed's own median: a gap smaller than their spread is not a gap. Log scale. The number after a name is its run count in this version of g.</p>
+      <p id="nDa"></p>
+    </aside>
+  </section>
+
+  <!-- 12 · RESULTS · (b) never-trained CRPS, pooled, with the split
+       claim    written from DATA (hCb)
+       source   results/t128/knob_table.tsv (group never, knob all)
+       numbers  DATA.knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) never-trained pairs, all knobs pooled</div>
+      <h2 id="hCb"></h2>
+      <div class="fig tall" id="figCrps"></div>
+      <ul class="pts">
+        <li id="tCb1"></li>
+        <li id="tCb2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>CRPS on counts over every never-trained pair: mean over a track's pairs, then over tracks, then over seeds. Lower is better. Dark is the oracle-scaled part (what is left after the best single rescale); light is the scale error (what that rescale removes). Ticks are the seeds. The dashed lines mark old D and old D through the base.</p>
+      <p id="nCb"></p>
+    </aside>
+  </section>
+
+  <!-- 13 · RESULTS · (b) per knob
+       claim    written from DATA (hCk)
+       source   results/t128/knob_table.tsv (groups same and cross)
+       numbers  DATA.knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) never-trained pairs, per knob</div>
+      <h2 id="hCk"></h2>
+      <div class="fig tall" id="figKnob"></div>
+      <ul class="pts">
+        <li id="tCk1"></li>
+        <li id="tCk2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each small panel is one knob's never-trained pairs (arm → arm of the same knob), and the last is pairs across two knobs. Each panel has its own x-axis. Bars are split as on the last slide: dark oracle-scaled, light scale error. The control and caller knobs do not change the counts, so they are left out.</p>
+      <p id="nCk"></p>
+    </aside>
+  </section>
+
+  <!-- 14 · RESULTS · (c) gain over the twin
+       claim    written from DATA (hTw)
+       source   results/t128/twin_table.tsv
+       numbers  DATA.twin -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) gain over the no-covariates twin</div>
+      <h2 id="hTw"></h2>
+      <div class="fig tall" id="figTwin"></div>
+      <ul class="pts">
+        <li id="tTw1"></li>
+        <li id="tTw2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Gain over the twin, per pair: (twin's CRPS − real CRPS) ÷ twin's CRPS, then the median over pairs. Above 0, the settings help; at 0, the model ignores them.</p>
+      <p>Filled dot: trained pairs. Open ring: never-trained pairs. A solid line joins them when the gap passes the noise rule; a dotted line means "within noise".</p>
+      <p id="nTw"></p>
+    </aside>
+  </section>
+
+  <!-- 15 · RESULTS · (d) collapse
+       claim    written from DATA (hCo): Z stays close to x in every setting
+       source   results/t128/collapse_table.tsv
+       numbers  DATA.collapse -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) collapse: is Z just x?</div>
+      <h2 id="hCo"></h2>
+      <div class="fig tall" id="figCollapse"></div>
+      <ul class="pts">
+        <li id="tCo1"></li>
+        <li id="tCo2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Z is the encoder's mean μ_z, computed on chromosomes 19 and 21 for every product of a run's tracks. x = log(1 + X) is the encoder's own input. Panel (a): the median gap between them, per bin. Panel (b): their correlation. If Z equals x up to a shift, the latent holds the input and nothing more: we call that <b>collapse</b>.</p>
+      <p id="nCo"></p>
+    </aside>
+  </section>
+
+  <!-- 16 · RESULTS · (e) latent agreement
+       claim    written from DATA (hAg): only the L3 settings bring two tracks' latents closer than their inputs
+       source   results/t128/agree_table.tsv
+       numbers  DATA.agree -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) latent agreement</div>
+      <h2 id="hAg"></h2>
+      <div class="fig tall" id="figAgree"></div>
+      <ul class="pts">
+        <li id="tAg1"></li>
+        <li id="tAg2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>For two products of the same track (two arms, or an arm and the base), we take the median gap between their latents, |Z − Z′|, and the median gap between their inputs, |x − x′|. If the encoder removes the settings, the latents of one sample should agree more than the inputs do: the dot lands left of the input line.</p>
+      <p id="nAg"></p>
+    </aside>
+  </section>
+
+  <!-- 17 · RESULTS · (f) swap check against the identity distance
+       claim    written from DATA (hSw)
+       source   results/t128/swap_table.tsv, swap_points.tsv.gz
+       numbers  DATA.swap, DATA.swap_pts -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) the swap check against the identity distance</div>
+      <h2 id="hSw"></h2>
+      <div class="fig tall" id="figSwap"></div>
+      <ul class="pts">
+        <li id="tSw1"></li>
+        <li id="tSw2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p><b>Swap check</b> (y): give the model c′ = c, so nothing should change, and measure how far the prediction moves from X: the median over bins with X &gt; 0 of |log(predicted mean ÷ X)|. 0 passes.</p>
+      <p><b>Identity distance</b> (x): the same measure on real pairs, c ≠ c′, against the source X. A map that returns its input has 0 here. The target is the bottom right: pass the swap check while staying far from the identity. The diagonal is where a model changes X as much when nothing should change as when the settings change.</p>
+      <p id="nSw"></p>
+    </aside>
+  </section>
+
+  <!-- 18 · RESULTS · (g) the lambda choice
+       claim    written from DATA (hLa)
+       source   results/t128/lambda_table.tsv, lambda_per_g.tsv, lambda_chosen.json
+       numbers  DATA.lam, DATA.lam_g, DATA.lam_chosen -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(g) the λ choice</div>
+      <h2 id="hLa"></h2>
+      <div class="fig tall" id="figLam"></div>
+      <ul class="pts">
+        <li id="tLa1"></li>
+        <li id="tLa2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>The rule (spec and PI ruling): on chromosome 22, each run's best validation NLL of its L1 + L2 terms, with Z = μ_z and without the λ term; per version of g, the λ with the lowest mean over runs wins. All three λ are scored on every slide regardless.</p>
+      <p id="nLa"></p>
+    </aside>
+  </section>
+
+  <!-- 19 · RESULTS · (h) the learned clean setting
+       claim    written from DATA (hCc): C_clean barely leaves its start in either form
+       source   results/t128/cclean_table.tsv
+       numbers  DATA.cknob, DATA.cdrift -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(h) where C_clean went</div>
+      <h2 id="hCc"></h2>
+      <div class="fig tall" id="figClean"></div>
+      <ul class="pts">
+        <li id="tCc1"></li>
+        <li id="tCc2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each row is one processing entry of C_clean, in the z units g reads (0 = the mean of the training settings). The grey bar is the range seen in training, which is form D's box. The black diamond is the base track. Rings mark where each form started; dots, where it ended. Median over the tracks, one g per track.</p>
+      <p>Panel (b): per setting, the median distance C_clean moved from its start, against the median spread of the learned value over the 3 seeds.</p>
+      <p id="nCc"></p>
+    </aside>
+  </section>
+
+  <!-- 20 · DISCUSSION · what this rules in and out
+       job      readings restated as what they rule in and out; no verdicts
+       numbers  restated from results (a) to (h); none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
+      <h2>The symmetric form passes the swap check far from the identity, but it does not yet beat old D on never-trained pairs</h2>
+      <div class="cards c3 lg">
+        <div class="card" style="--c:var(--s3)"><div class="rl">Ruled out</div>
+          <div class="ct">The round trip alone</div>
+          <div class="cb">Without the cross loss, the model stays at the identity: it ignores the settings, and the depth law misses by the full ratio. The VAE moves it only part of the way.</div><div class="bn" id="tR1"></div></div>
+        <div class="card" style="--c:var(--s1)"><div class="rl">Ruled in</div>
+          <div class="ct">One shared CNN, set by one g, with the cross loss</div>
+          <div class="cb">It returns X when c′ = c, changes X when the settings change, and keeps its gain on never-trained pairs as a whole.</div><div class="bn" id="tR2"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Not shown</div>
+          <div class="ct">A gain over old D, or a latent free of x</div>
+          <div class="cb">Never-trained CRPS sits within noise of old D, behind old D through the base; Z tracks x closely in every setting; C_clean barely moves.</div><div class="bn" id="tR3"></div></div>
+      </div>
+      <p class="note">These are readings from one exploratory pass, not verdicts. Each is open to the doubts on the next slide.</p>
+    </div>
+    <aside class="notes">
+      <p>Ruled out: the spec's own doubt came true. With a skip that starts at the identity and only the round trip to fit, the identity is a perfect answer, and the model takes it.</p>
+      <p>Ruled in: the cross loss is what makes the shared network use the settings. The default passes the swap check while moving X on real pairs, the target the PI named.</p>
+      <p>Not shown: the never-trained pairs are no better than old D's, and chaining old D through the base by hand still does better. The latent stays close to x, and the clean setting stays near where it started.</p>
+    </aside>
+  </section>
+
+  <!-- 21 · DISCUSSION · doubts
+       job      the doubts the spec and the run named, each with its count
+       source   DATA.steps, DATA.counts, DATA.n; the kits and the reruns from plan_t128.md "## Log"
+       numbers  restated; the kit names and job history are typed from the plan log -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>doubts</div>
+      <h2>Five doubts could each change a reading</h2>
+      <div class="cards c5">
+        <div class="card" style="--c:var(--s1)"><div class="ct">C_clean is not identifiable</div>
+          <div class="cb">Under form A, g can absorb any shift of C_clean, so its learned value may mean nothing. It also barely moved.</div></div>
+        <div class="card" style="--c:var(--s2)"><div class="ct">Under-training</div>
+          <div class="cb" id="tDb2"></div></div>
+        <div class="card" style="--c:var(--ho)"><div class="ct">Incomplete grid</div>
+          <div class="cb" id="tDb3"></div></div>
+        <div class="card" style="--c:var(--nv)"><div class="ct">Two clusters, three kits</div>
+          <div class="cb" id="tDb4"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="ct">Device and reruns</div>
+          <div class="cb">GPU type is not in the tables. Some runs were re-run after a timeout, a busy GPU node, or the form-D device bug; a rerun trains from scratch.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>Kits: Nibi kit K1 at commit 58c9c22; Fir kit K2 at f47cf11; Fir kit K3 at 836e96c, which is K2 plus a one-line fix that put form D's box on the same device as its start. The code of each setting is the same in every kit it ran on.</p>
+      <p>Reruns (plan log): three default runs timed out at 4 h and were re-run with 8 h; the form-D array was re-submitted on K3 after the device bug; on Fir, runs on a busy or slow node were re-run with those nodes excluded. The device per run is recorded on the cluster, not in these tables.</p>
+      <p id="nDb"></p>
+    </aside>
+  </section>
+
+  <!-- 22 · DISCUSSION · phase-2 options
+       job      options for the PI to choose from; marked as options, not recommendations
+       numbers  restated pointers only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>phase 2 · options for the PI</div>
+      <h2>Phase 2 options, for the PI to choose from</h2>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--s1)"><span class="tag opt">option</span><div class="ct">A shared-scope C_clean</div>
+          <div class="cb">One clean setting for all tracks instead of one per track, so the middle is shared and may become identifiable.</div></div>
+        <div class="card" style="--c:var(--twin)"><span class="tag opt">option</span><div class="ct">Twins for other settings</div>
+          <div class="cb">No-covariates twins for form D, the λ settings and the VAE settings, so their gain over the twin can be read.</div></div>
+        <div class="card" style="--c:var(--s4)"><span class="tag opt">option</span><div class="ct">A bottleneck against collapse</div>
+          <div class="cb">Make Z unable to copy x: pool Z to a coarser resolution, drop the skip in the encoder, or add noise to Z.</div></div>
+        <div class="card" style="--c:var(--s2)"><span class="tag opt">option</span><div class="ct">More steps</div>
+          <div class="cb" id="tOp4"></div></div>
+        <div class="card" style="--c:var(--s6)"><span class="tag opt">option</span><div class="ct">L3 with the cross loss, further</div>
+          <div class="cb" id="tOp5"></div></div>
+        <div class="card" style="--c:var(--muted)"><span class="tag opt">option</span><div class="ct">The full grid</div>
+          <div class="cb">Every setting crossed with both C_clean forms and both latents, as the spec's phase 2 lists.</div></div>
+      </div>
+      <p class="note">These are options, not recommendations. The readings above do not rank them.</p>
+    </div>
+    <aside class="notes">
+      <p>The first three are from the spec's phase 2 list and the brief. "More steps" and "L3 further" come from the readings: many runs used every step, and only the L3 settings brought two tracks' latents closer than their inputs.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · symmetric encoder-decoder · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py from cruxvault/results/t128/ (see its docstring):
+     counts    {assigned, done, fir:[done, assigned], nibi:[..], g_per_track, seeds, settings_by_cluster}
+     n         "key|model" -> {assigned, law}          steps  "key|model" -> [runs, at cap, median steps, median best step]
+     depth     [key, g version, group, median, q25, q75, seed spread, [seed medians], n runs, n records]
+     knob      [key, g version, group, knob, CRPS, oracle-scaled, scale error, seed spread, n runs, n pairs, label vs old D, [seeds]]
+     twin      [key, g version, group, knob, gain, seed spread, n pairs, n runs real, n runs twin, label trained vs this group]
+     collapse  [key, g version, model, median |Z - x|, seed spread, corr(Z, x), corr spread, median sigma_z, n runs, [seeds]]
+     agree     [key, g version, model, one/two/all knobs, median |Z - Z'|, seed spread, median |x - x'|, n runs, [seeds]]
+     swap      [key, g version, model, swap, seed spread, identity distance, its spread, n runs]
+     swap_pts  [key, g version, model, identity distance, swap]   one per run (median over its knobs)
+     lam       [key, g version, lambda, mean val NLL, seed spread, [seeds], chosen, n runs, n runs full, n g's lowest]
+     lam_g     [key, g version, g, mean val NLL, n seeds];  lam_chosen  g version -> {arm, lam, complete, runner_up, gap, label}
+     cdrift    "key|g version|model" -> {drift_from_init, drift_from_base, seed_spread, frac_at_box_edge, n_runs}
+     cknob     [key, knob index, knob, start, learned, base, box low, box high, seed spread]  one g per track, median over tracks
+   =========================================================================== */
+const DATA = __DATA__;
+
+const COL={tr:'var(--tr)',ho:'var(--ho)',nv:'var(--nv)',nv2:'var(--nv2)',ok:'var(--ok)',ink:'var(--ink)',muted:'var(--muted)',
+  body:'var(--body)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',
+  accent:'var(--accent)',paper:'var(--paper)',ref:'var(--ref)',twin:'var(--twin)',oldd:'var(--oldd)',via:'var(--via)'};
+const GV=['per_track','across'];
+const GN={per_track:'one g per track',across:'one g across tracks'};
+const GNc=g=>GN[g][0].toUpperCase()+GN[g].slice(1);
+/* plain names: the only place an arm is named */
+const ARMS=[
+  {k:'def',  s:1,l1:'1 · default',               l2:'L1 + L2, form A',            c:'var(--s1)',name:'default (L1 + L2)'},
+  {k:'formd',s:2,l1:'2 · form D',                l2:'clean setting starts at the base',c:'var(--s2)',name:'form D: clean setting starts at the base'},
+  {k:'rt',   s:3,l1:'3 · round trip only',       l2:'L2 alone',                   c:'var(--s3)',name:'round trip only'},
+  {k:'rtvae',s:4,l1:'4 · round trip only, VAE',  l2:'L2 alone, sampled Z',        c:'var(--s4)',name:'round trip only, VAE'},
+  {k:'l01',  s:5,l1:'5 · latent agreement',      l2:'L1 + L2 + L3, λ = 0.1',      c:'var(--s5)',name:'latent agreement, λ = 0.1'},
+  {k:'l1',   s:6,l1:'6 · latent agreement',      l2:'L1 + L2 + L3, λ = 1',        c:'var(--s6)',name:'latent agreement, λ = 1'},
+  {k:'l10',  s:7,l1:'7 · latent agreement',      l2:'L1 + L2 + L3, λ = 10',       c:'var(--s7)',name:'latent agreement, λ = 10'},
+  {k:'vae',  s:8,l1:'8 · default, VAE',          l2:'L1 + L2, sampled Z',         c:'var(--s8)',name:'default, VAE'},
+  {k:'oldd', s:0,l1:'old D (t126)',              l2:'reference, 7.5M held out',   c:'var(--oldd)',name:'old D'},
+  {k:'via',  s:0,l1:'old D through the base',    l2:'arm → base → arm',           c:'var(--via)',name:'old D through the base'}];
+const ARM=k=>ARMS.find(a=>a.k===k);
+const SET=ARMS.filter(a=>a.s>0).map(a=>a.k);
+const LAMK=['l01','l1','l10'];
+const lamOf={l01:0.1,l1:1,l10:10};
+
+const f2=v=>v==null?'—':v.toFixed(2), f3=v=>v==null?'—':v.toFixed(3), f4=v=>v==null?'—':v.toFixed(4);
+const mn=s=>String(s).replace('-','−');
+const rng=(a,f=f2)=>{a=a.filter(v=>v!=null&&!isNaN(v));if(!a.length)return '—';const lo=Math.min(...a),hi=Math.max(...a);return f(lo)===f(hi)?mn(f(lo)):lo<0?`${mn(f(lo))} to ${mn(f(hi))}`:`${f(lo)}–${f(hi)}`;};
+const andJ=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+const nLaw=(k,m='real')=>(DATA.n[`${k}|${m}`]||{law:0}).law;
+const nAs=(k,m='real')=>(DATA.n[`${k}|${m}`]||{assigned:0}).assigned;
+/* the spec's noise rule: a gap counts only if |gap| > 2 x the larger seed spread */
+const noise=(gap,sa,sb)=>sa==null||sb==null?'no seed spread':Math.abs(gap)>2*Math.max(sa,sb)?'counts':'within noise';
+const dep=(a,g,grp)=>DATA.depth.find(r=>r[0]===a&&r[1]===g&&r[2]===grp);
+const kn=(a,g,grp,k)=>DATA.knob.find(r=>r[0]===a&&r[1]===g&&r[2]===grp&&r[3]===k);
+const tw=(a,g,grp,k)=>DATA.twin.find(r=>r[0]===a&&r[1]===g&&r[2]===grp&&r[3]===k);
+const co=(a,g,m='real')=>DATA.collapse.find(r=>r[0]===a&&r[1]===g&&r[2]===m);
+const ag=(a,g,nk,m='real')=>DATA.agree.find(r=>r[0]===a&&r[1]===g&&r[2]===m&&r[3]===nk);
+const swr=(a,g,m='real')=>DATA.swap.find(r=>r[0]===a&&r[1]===g&&r[2]===m);
+const has=(a,g)=>!!dep(a,g,'trained')||!!dep(a,g,'never');
+
+/* ---------- svg helpers (t126) ---------- */
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2,ex='')=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const arrowD=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2-8,c,w)+arrowHead(x,y2,'d',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g==='per_track'?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const logS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo));
+const linS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo);
+const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+20,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const rotY=(x,y,txt,fs=15)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:${fs}px"`);
+const box=(x,y,w,h,txt,c,sub,fs=17)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-3:6),txt,'mono','middle',`style="font-size:${fs}px"`)+(sub?T(x+w/2,y+h/2+19,sub,'cap','middle'):'');
+function armLabels(x,top,rh,arms,g,fs=15,model='real'){let s='';arms.forEach((k,i)=>{const a=ARM(k),y=top+i*rh+rh/2;
+  s+=T(x,y-2,a.l1,'axlbl','end',`style="font-size:${fs}px;font-weight:600;fill:${a.c}"`)+T(x,y+15,a.l2,'cap','end',`style="font-size:${fs-2}px"`);});return s;}
+
+/* ---------- 2 · pairs and the depth law (schematic) ---------- */
+function figPairs(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) Training uses base ↔ arm pairs only','ptitle');
+  const cx=300,cy=225;
+  const nodes=[['15M reads',160,110],['7.5M reads',300,68],['3.75M reads',440,110],
+    ['reads trimmed',440,340],['MAPQ raised',300,382],['control mixed in',160,340]];
+  const pos=nodes.map(n=>[n[1],n[2]]);
+  [[0,2],[3,4]].forEach(([i,j])=>s+=L(pos[i][0],pos[i][1],pos[j][0],pos[j][1],COL.nv,2.4,'7 5'));
+  s+=L(pos[0][0],pos[0][1],pos[5][0],pos[5][1],COL.nv2,2.6,'2 5');
+  pos.forEach(([x,y])=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d;
+    s+=L(cx+ux*56,cy+uy*56,x-ux*16,y-uy*16,COL.tr,3);});
+  pos.forEach(([x,y],i)=>{s+=Ci(x,y,13,COL.card,COL.tr,2.5);
+    const right=x>cx+20,left=x<cx-20,anc=right?'start':left?'end':'middle';
+    s+=T(x+(right?20:left?-20:0),y+(right||left?6:(y<cy?-22:34)),nodes[i][0],'axlbl',anc,'style="font-size:15.5px;font-weight:600"');});
+  s+=Ci(cx,cy,54,COL.card,COL.ink,2.5)+T(cx,cy-2,'base','big','middle','style="font-size:22px"')+T(cx,cy+20,'track','psub','middle');
+  const ly=H-8;
+  s+=L(0,ly-5,34,ly-5,COL.tr,3)+T(42,ly,'trained, both directions','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(218,ly-5,252,ly-5,COL.nv,2.4,'7 5')+T(260,ly,'never trained, same knob','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(440,ly-5,474,ly-5,COL.nv2,2.6,'2 5')+T(482,ly,'two knobs','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=divider(610,10,H-6);
+  // (b) the depth law, schematic bins
+  const lx=640,pw=510;
+  s+=T(lx,24,'(b) The depth law: half the reads halves every bin','ptitle');
+  const bins=[3,7,2,12,5,1,0,9,15,6,3,8,2,4,11,5,2,0,6,10];
+  const bw=pw/bins.length,y1=170,y2=320,hs=8;
+  s+=T(lx,58,'source track','axlbl','start','style="font-size:15px;font-weight:600"');
+  bins.forEach((v,i)=>s+=R(lx+i*bw+2,y1-v*hs/1.3,bw-4,v*hs/1.3,COL.ref,'none',2,0));
+  s+=L(lx,y1,lx+pw,y1,COL.axis,1);
+  s+=T(lx,206,'target track with half the reads','axlbl','start','style="font-size:15px;font-weight:600"');
+  bins.forEach((v,i)=>s+=R(lx+i*bw+2,y2-v*hs/2.6,bw-4,v*hs/2.6,COL.ink,'none',2,0,';fill-opacity:.8'));
+  s+=L(lx,y2,lx+pw,y2,COL.axis,1);
+  s+=R(lx,338,pw,84,COL.card,COL.hair,10)+FO(lx+14,346,pw-28,74,'<b>Depth-law error</b> = | log2 (predicted total ÷ source total) − log2 (true read ratio) |. It is 0 when the model scales the counts exactly by the read ratio, and 1 when it misses by a factor of 2.','font:400 15.5px var(--sans);color:var(--body);line-height:1.4');
+  return svg(W,H,s);
+}
+
+/* ---------- 3 · t126, mini schematic of the three findings ---------- */
+function figT126(){
+  const W=1160,H=190;let s='';
+  // (a) trained vs never-trained bars (qualitative)
+  s+=T(0,22,'(a) Trained against never-trained pairs','ptitle','start','style="font-size:16px"');
+  s+=R(30,60,120,26,COL.tr,'none',3)+T(160,79,'trained pairs: small error','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=R(30,100,310,26,COL.nv,'none',3)+T(30,150,'never-trained pairs: large error','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=divider(375,10,H-6);
+  // (b) the asymmetric split
+  s+=T(400,22,'(b) The t126 split: 2 + 2 layers','ptitle','start','style="font-size:16px"');
+  const lay=(x,c,t)=>R(x,62,64,46,COL.card,c,8,2.2)+T(x+32,90,t,'cap','middle','style="font-size:13px;fill:var(--body)"');
+  s+=lay(400,COL.accent,'layer 1')+lay(472,COL.accent,'layer 2')+R(546,58,50,54,COL.paper,COL.ink,24,2.2)+T(571,90,'Z','axlbl','middle','style="font-weight:600"')+lay(604,'var(--s3)','layer 3')+lay(676,'var(--s3)','layer 4');
+  s+=T(468,134,'set by g_enc(c)','cap','middle','style="fill:var(--accent);font-size:14px"')+T(672,134,'set by g_dec(c′)','cap','middle','style="fill:var(--s3);font-size:14px"');
+  s+=divider(770,10,H-6);
+  // (c) the +1: slopes multiply to 1
+  s+=T(795,22,'(c) Exact inverse: slopes multiply to 1','ptitle','start','style="font-size:16px"');
+  const px=830,py=48,pw=140,ph=110;
+  s+=L(px,py+ph,px+pw,py+ph,COL.axis,1.2)+L(px,py,px,py+ph,COL.axis,1.2);
+  s+=L(px,py+ph,px+pw,py+ph-pw*0.55,'var(--s3)',3)+L(px,py+ph,px+pw*0.55,py,'var(--s3)',3,'6 4');
+  s+=T(px+pw+12,py+70,'slope < 1 one way','cap','start','style="font-size:13.5px"')+T(px+pw*0.55+10,py+12,'> 1 the other','cap','start','style="font-size:13.5px"');
+  s+=T(px,py+ph+24,'the +1 needs > 1 both ways','cap','start','style="font-size:13.5px;fill:var(--accent)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 4 · the hub ---------- */
+function figHub(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) t126: two g\'s, two different halves','ptitle','start','style="fill:var(--s3)"');
+  s+=box(0,70,90,46,'X',COL.hair)+arrowR(92,93,130);
+  s+=box(135,60,150,66,'enc half',COL.accent,'layers 1–2')+T(210,150,'set by g_enc(c)','cap','middle','style="fill:var(--accent)"');
+  s+=arrowR(287,93,320)+R(325,66,60,54,COL.paper,COL.ink,27,2.4)+T(355,99,'Z','big','middle','style="font-size:22px"');
+  s+=arrowR(387,93,420)+box(425,60,150,66,'dec half','var(--s3)','layers 3–4')+T(500,150,'set by g_dec(c′)','cap','middle','style="fill:var(--s3)"');
+  s+=arrowR(577,93,610)+box(0,190,560,70,'',COL.hair)+FO(14,198,536,60,'Different layers and different g\'s on the two sides: encoding and decoding are not one map run two ways, and nothing ties the middle across tracks.','font:400 15px var(--sans);color:var(--body);line-height:1.38');
+  s+=divider(640,10,H-6);
+  // (b) hub
+  const cx=905,cy=245;
+  s+=T(665,24,'(b) t128: every arm goes to one clean setting, and out','ptitle','start','style="fill:var(--accent)"');
+  const arms=[['base',905,85],['15M reads',1095,160],['3.75M reads',1095,330],['reads trimmed',905,410],['control mixed in',715,330],['MAPQ raised',715,160]];
+  arms.forEach(([t,x,y])=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d,ox=-uy*7,oy=ux*7;
+    s+=L(x-ux*28+ox,y-uy*22+oy,cx+ux*62+ox,cy+uy*62+oy,COL.accent,2.4)+arrowHead(cx+ux*62+ox,cy+uy*62+oy,Math.abs(ux)>Math.abs(uy)?(ux>0?'l':'r'):(uy>0?'u':'d'),COL.accent,8);
+    s+=L(cx+ux*62-ox,cy+uy*62-oy,x-ux*30-ox,y-uy*24-oy,'var(--s3)',2.4,'6 4');
+    s+=R(x-62,y-17,124,34,COL.card,COL.hair,17,1.5)+T(x,y+5,t,'cap','middle','style="font-size:13.5px;fill:var(--body);font-weight:600"');});
+  s+=Ci(cx,cy,58,COL.paper,COL.ink,2.6)+T(cx,cy-2,'C_clean','mono','middle','style="font-size:19px"')+T(cx,cy+20,'learned','cap','middle');
+  s+=L(665,H-12,695,H-12,COL.accent,2.4)+T(702,H-7,'encode: g(c, C_clean)','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=L(880,H-12,910,H-12,'var(--s3)',2.4,'6 4')+T(917,H-7,'decode: g(C_clean, c′)','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 5 · the model ---------- */
+function figModel(){
+  const W=1160,H=450;let s='';
+  const y=110,h=84;
+  s+=T(0,24,'One CNN f (old rung D: 4 dilated layers, 32 channels), used twice with the same weights','ptitle');
+  s+=box(0,y+12,96,60,'X',COL.hair,'counts')+arrowR(98,y+42,128);
+  s+=box(132,y+12,110,60,'x',COL.hair,'log(1 + X)')+arrowR(244,y+42,282);
+  s+=R(286,y,220,h,COL.card,COL.accent,12,2.6)+T(396,y+34,'f','mono','middle','style="font-size:24px"')+T(396,y+60,'encoder f_e','cap','middle','style="font-size:14.5px"');
+  s+=arrowR(508,y+42,546)+R(550,y-6,130,h+12,COL.paper,COL.ink,40,2.6)+T(615,y+30,'Z','big','middle')+T(615,y+52,'1 channel','cap','middle')+T(615,y+68,'Gaussian','cap','middle');
+  s+=arrowR(682,y+42,720)+R(724,y,220,h,COL.card,'var(--s3)',12,2.6)+T(834,y+34,'f','mono','middle','style="font-size:24px"')+T(834,y+60,'decoder f_d','cap','middle','style="font-size:14.5px"');
+  s+=arrowR(946,y+42,984)+box(988,y+12,170,60,'X′',COL.hair,'negative binomial');
+  // FiLM from g
+  const gy=290;
+  s+=box(286,gy,220,64,'g(c, C_clean)',COL.accent,'FiLM: scale + shift per layer',16);
+  s+=box(724,gy,220,64,'g(C_clean, c′)','var(--s3)','FiLM: scale + shift per layer',16);
+  s+=L(396,gy,396,y+h+8,COL.accent,2.2)+arrowHead(396,y+h+4,'u',COL.accent);
+  s+=L(834,gy,834,y+h+8,'var(--s3)',2.2)+arrowHead(834,y+h+4,'u','var(--s3)');
+  s+=P(`M506,${gy+32} C610,${gy+32} 620,${gy+32} 724,${gy+32}`,'none',COL.muted,1.6,';stroke-dasharray:4 4');
+  s+=T(615,gy+24,'one g, two calls','cap','middle','style="font-size:14px;fill:var(--ink);font-weight:600"');
+  s+=L(396,72,834,72,COL.ink,1.8,'2 4')+T(615,64,'the same weights','cap','middle','style="font-size:14px;fill:var(--ink);font-weight:600"');
+  s+=L(396,72,396,y,COL.ink,1.8,'2 4')+L(834,72,834,y,COL.ink,1.8,'2 4');
+  s+=FO(0,380,W,64,'X and X′ live in count space (negative binomial); Z lives in Gaussian space. g is the t118 MLP (2 × 64) on [c_source, c_target]; it outputs FiLM only. With c′ = c, the route is f_d(f_e(X)) through C_clean.','font:400 15.5px var(--sans);color:var(--body);line-height:1.42');
+  return svg(W,H,s);
+}
+
+/* ---------- 6 · C_clean forms ---------- */
+function figForms(){
+  const W=1160,H=420;let s='';
+  const xx=linS(-4,4,140,1100);
+  const lane=(y,title,c,startV,endV,boxed)=>{let t=T(0,y-74,title,'ptitle','start',`style="fill:${c}"`);
+    t+=R(xx(-3.2),y-14,xx(1.2)-xx(-3.2),28,COL.grid,boxed?COL.ink:'none',6,boxed?2.4:0);
+    t+=T(xx(-3.2),y+36,'lowest value seen in training','cap','start')+T(xx(1.2),y+36,'highest','cap','end');
+    t+=L(xx(-4),y,xx(4),y,COL.axis,1.2);
+    t+=`<polygon points="${xx(1.0)},${y-10} ${xx(1.0)+10},${y} ${xx(1.0)},${y+10} ${xx(1.0)-10},${y}" style="fill:var(--ink)"/>`+T(xx(1.0),y-18,'base','cap','middle','style="fill:var(--ink);font-weight:600"');
+    t+=Ci(xx(startV),y,9,COL.card,c,3)+T(xx(startV),y+58,'start','cap','middle',`style="fill:${c};font-weight:600"`);
+    return t;};
+  s+=lane(116,'Form A (default): starts at 0, the mean of the training settings, and moves freely','var(--s1)',0);
+  s+=P(`M${xx(0)},98 C${xx(1.5)},70 ${xx(2.8)},70 ${xx(3.6)},98`,'none','var(--s1)',2.2,';stroke-dasharray:6 4')+arrowHead(xx(3.6),102,'d','var(--s1)',8);
+  s+=T(xx(3.6),126,'may leave the box','cap','middle','style="fill:var(--s1)"');
+  s+=lane(316,'Form D: starts at the base track\'s settings, held inside the box by a sigmoid','var(--s2)',1.0,null,true);
+  s+=P(`M${xx(1.0)},298 C${xx(0.4)},270 ${xx(-0.6)},270 ${xx(-1.2)},298`,'none','var(--s2)',2.2,';stroke-dasharray:6 4')+arrowHead(xx(-1.2),302,'d','var(--s2)',8);
+  s+=T(xx(-1.9),296,'moves only inside the box','cap','end','style="fill:var(--s2)"');
+  s+=T(W/2,H-6,'one processing entry of C_clean, in the z units g reads (13 entries; the assay entries are copied from the source)','cap','middle','style="font-size:14px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 7 · losses ---------- */
+function figLoss(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) For one trained pair (X, c) → (X′, c′), with Z = f_e(X; c) and Z′ = f_e(X′; c′)','ptitle');
+  const gx=150,gy=86,cw=300,ch=62;
+  s+=T(gx+cw/2,gy-14,'decode with c′','axlbl','middle','style="font-weight:600"')+T(gx+cw+12+cw/2,gy-14,'decode with c','axlbl','middle','style="font-weight:600"');
+  s+=T(gx-14,gy+ch/2+5,'from Z','axlbl','end','style="font-weight:600"')+T(gx-14,gy+ch+10+ch/2+5,'from Z′','axlbl','end','style="font-weight:600"');
+  const cell=(x,y,t,lab,c)=>R(x,y,cw,ch,COL.card,c,8,2.4)+T(x+14,y+26,t,'mono','start','style="font-size:15.5px"')+T(x+14,y+48,lab,'cap','start');
+  s+=cell(gx,gy,'NLL(X′ | f_d(Z; c′))','L1 cross: the real job',COL.ink)+cell(gx+cw+12,gy,'NLL(X | f_d(Z; c))','L2 round trip','var(--s3)');
+  s+=cell(gx,gy+ch+10,'NLL(X′ | f_d(Z′; c′))','L2 round trip','var(--s3)')+cell(gx+cw+12,gy+ch+10,'NLL(X | f_d(Z′; c))','L1 cross: the reverse job',COL.ink);
+  s+=T(gx+2*cw+40,gy+ch+12,'+','big','middle');
+  s+=R(gx+2*cw+62,gy+26,300,ch+30,COL.paper,'var(--s6)',10,2.4)+T(gx+2*cw+76,gy+58,'L3 = λ · mse(Z, Z′)','mono','start','style="font-size:16px"')+T(gx+2*cw+76,gy+82,'λ ∈ {0.1, 1, 10}: pull the latents together','cap','start');
+  s+=L(0,270,W,270,COL.axis,1.5,'6 6');
+  s+=T(0,302,'(b) Deterministic or VAE','ptitle');
+  s+=R(0,322,540,100,COL.card,COL.hair,10)+FO(14,330,512,88,'<b>Deterministic</b>: Z = μ_z. All selection and every latent reading use this, in every setting.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  s+=R(570,322,590,100,COL.card,'var(--s8)',10,2)+FO(584,330,562,88,'<b>VAE</b>: Z = μ_z + σ_z · ε in training, plus a KL term to N(0, 1) whose weight ramps from 0 to 1 over the first 1000 of 4000 steps.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  return svg(W,H,s);
+}
+
+/* ---------- 9 · scoring groups and selection ---------- */
+function figGroups(){
+  const W=1160,H=420;let s='';
+  s+=T(0,24,'(a) Depth: 7.5M is held out of training','ptitle');
+  const lv=['base','15M','7.5M','3.75M'],x0=120,y0=74,dy=92,yOf=m=>y0+lv.indexOf(m)*dy;
+  lv.forEach(m=>{const held=m==='7.5M';
+    s+=R(x0,yOf(m)-24,150,48,COL.card,held?COL.ho:COL.ink,24,2.4,held?';stroke-dasharray:6 4':'')+T(x0+75,yOf(m)+6,(m==='base'?'base track':m+' reads'),'axlbl','middle','style="font-size:15.5px;font-weight:600"');});
+  const arc=(m1,m2,side,off,c,dash,w=2.6)=>{const ya=yOf(m1),yb=yOf(m2),xs=side<0?x0:x0+150,xo=xs+side*off;
+    return P(`M${xs},${ya} C${xo},${ya} ${xo},${yb} ${xs},${yb}`,'none',c,w,dash?`;stroke-dasharray:${dash}`:'');};
+  s+=arc('base','15M',-1,60,COL.tr,'')+arc('base','3.75M',-1,130,COL.tr,'');
+  s+=arc('base','7.5M',1,70,COL.ho,'6 4');
+  s+=arc('15M','3.75M',1,150,COL.nv,'7 5');
+  s+=arc('15M','7.5M',-1,40,COL.nv2,'2 5')+arc('7.5M','3.75M',1,40,COL.nv2,'2 5');
+  const lx=420;
+  [[COL.tr,'','trained: base ↔ 15M, base ↔ 3.75M'],[COL.ho,'6 4','held out: base ↔ 7.5M (scored only)'],
+   [COL.nv,'7 5','never trained: depth → depth'],[COL.nv2,'2 5','never trained, with 7.5M']].forEach(([c,dash,t],i)=>{
+    const yy=110+i*58;s+=L(lx,yy,lx+40,yy,c,3,dash)+T(lx+52,yy+5,t,'axlbl','start','style="font-size:15px"');});
+  s+=T(lx,336,'Other knobs: trained base ↔ arm;','cap','start','style="font-size:14px"');
+  s+=T(lx,356,'never trained arm → arm (same knob, or two knobs).','cap','start','style="font-size:14px"');
+  s+=T(lx,376,'Scored on chromosomes 19 and 21, blacklist removed.','cap','start','style="font-size:14px"');
+  s+=divider(800,10,H-6);
+  s+=T(825,24,'(b) Selection on chromosome 22','ptitle');
+  const rows=[['L1 + L2 settings','L1 + L2 likelihood','var(--s1)'],['L2-only settings','L2 likelihood','var(--s3)'],['L1 + L2 + L3 settings','L1 + L2 likelihood (no λ term)','var(--s6)']];
+  rows.forEach(([a,b,c],i)=>{const y=64+i*86;s+=R(825,y,325,70,COL.card,c,10,2)+T(841,y+28,a,'axlbl','start',`style="font-weight:600;fill:${c};font-size:15.5px"`)+T(841,y+52,'best step by its '+b,'cap','start','style="font-size:13.5px"');});
+  s+=FO(825,326,325,92,'Z = μ_z and no KL term in every case, so the VAE and λ settings compare fairly. One λ per version of g: the lowest mean.','font:400 14.5px var(--sans);color:var(--body);line-height:1.38');
+  return svg(W,H,s);
+}
+
+/* ---------- 10 · references and the noise rule ---------- */
+function figRefs(){
+  const W=1160,H=420;let s='';
+  s+=T(0,24,'(a) Old D through the base: two trained maps, chained','ptitle');
+  const y=120;
+  s+=box(0,y,140,56,'arm 1',COL.hair)+box(320,y,140,56,'base',COL.ink)+box(640,y,140,56,'arm 2',COL.hair);
+  s+=arrowR(142,y+28,318,COL.oldd,2.6)+T(230,y-10,'old D, trained','cap','middle','style="fill:var(--oldd);font-weight:600"');
+  s+=arrowR(462,y+28,638,COL.oldd,2.6)+T(550,y-10,'old D, trained','cap','middle','style="fill:var(--oldd);font-weight:600"');
+  s+=P(`M70,${y+60} C70,${y+140} 710,${y+140} 710,${y+62}`,'none',COL.nv,2.4,';stroke-dasharray:7 5')+arrowHead(710,y+62,'u',COL.nv);
+  s+=T(390,y+132,'old D direct: arm 1 → arm 2, never trained','cap','middle','style="fill:var(--nv);font-weight:600;font-size:14.5px"');
+  s+=FO(0,y+160,780,70,'The hop to the base uses the predicted mean of the first map as the input of the second. No training: both maps are t126 checkpoints.','font:400 15px var(--sans);color:var(--body);line-height:1.4');
+  s+=divider(820,10,H-6);
+  s+=T(845,24,'(b) The noise rule','ptitle');
+  s+=T(845,50,'3 seeds per cell; spread = largest − smallest seed','cap','start','style="font-size:13.5px"');
+  const yy=linS(0.4,0.75,320,80),A=[0.60,0.70,0.66],B=[0.45,0.53,0.50],mA=(A[0]+A[1]+A[2])/3,mB=(B[0]+B[1]+B[2])/3;
+  const cellS=(x,c,vals,lab)=>{let t='';vals.forEach(v=>t+=L(x-22,yy(v),x+22,yy(v),c,3.4));
+    t+=L(x+32,yy(Math.min(...vals)),x+32,yy(Math.max(...vals)),COL.ink,1.6)+L(x+28,yy(Math.min(...vals)),x+36,yy(Math.min(...vals)),COL.ink,1.6)+L(x+28,yy(Math.max(...vals)),x+36,yy(Math.max(...vals)),COL.ink,1.6);
+    t+=T(x+42,yy((Math.min(...vals)+Math.max(...vals))/2)+5,'spread','cap','start','style="font-size:13px"')+T(x,342,lab,'axlbl','middle','style="font-size:14.5px;font-weight:600"');return t;};
+  s+=cellS(880,'var(--s1)',A,'cell a')+cellS(1060,COL.oldd,B,'cell b');
+  s+=L(1000,yy(mA),1000,yy(mB),COL.accent,2.2,'4 3')+L(993,yy(mA),1007,yy(mA),COL.accent,2)+L(993,yy(mB),1007,yy(mB),COL.accent,2)+T(1000,yy(mB)+22,'gap between the means','cap','middle','style="fill:var(--accent);font-weight:700"');
+  s+=FO(845,356,315,60,'The gap counts only if it is larger than <b>2 × the larger spread</b>; otherwise it is labelled <b>within noise</b>.','font:400 14.5px var(--sans);color:var(--body);line-height:1.35');
+  return svg(W,H,s);
+}
+
+/* ---------- 11 · depth law ---------- */
+const DG=[['trained','trained',COL.tr],['heldout','held-out 7.5M',COL.ho],['never','never trained, depth → depth',COL.nv],['never75','never trained, with 7.5M',COL.nv2]];
+const DARMS=()=>ARMS.map(a=>a.k).filter(k=>GV.some(g=>has(k,g)));
+function figDepth(){
+  const arms=DARMS(),top=52,rh=44,lx=250;
+  const W=1160,H=top+arms.length*rh+86;let s='';
+  s+=armLabels(lx-12,top,rh,arms);
+  const pw=420,gap=36,xs0=[lx+4,lx+4+pw+gap];
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=logS(0.02,4,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle');
+    [[0.02,'0.02'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1'],[2,'2'],[4,'4']].forEach(([v,l])=>s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,l,'tick','middle'));
+    arms.forEach((k,i)=>{const y0=top+i*rh+4;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      let nr=null;
+      DG.forEach(([grp,,c],j)=>{const r=dep(k,g,grp),yb=y0+j*9.5;if(!r)return;nr=r[8];
+        s+=R(x0,yb,xx(r[3])-x0,7.5,c,'none',1.5);
+        s+=L(xx(r[4]),yb+3.75,xx(r[5]),yb+3.75,COL.ink,1.1);
+        r[7].forEach(v=>s+=L(xx(v),yb-1,xx(v),yb+8.5,COL.ink,1.6));});
+      s+=T(x0+pw-4,y0+rh-12,nr==null?'no runs yet':`n = ${nr}`,'cap','end','style="font-size:12px"');});
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'depth-law error, | log2 predicted scale − log2 true read ratio | (log scale)','axlbl','middle','style="font-size:15px"');
+  let lxx=0;DG.forEach(([,lab,c])=>{s+=sw(lxx,H-6,c,lab);lxx+=lab.length*7.4+40;});
+  s+=T(W,H-6,'bar: median · whisker: middle half · ticks: seeds','cap','end','style="font-size:13px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 12 · never-trained CRPS, pooled ---------- */
+function splitBar(xx,x0,y,h,r,c){return R(x0,y,xx(r[5])-x0,h,c,'none',2)+R(xx(r[5]),y,xx(r[5]+r[6])-xx(r[5]),h,c,'none',2,0,';fill-opacity:.35');}
+function figCrps(){
+  const arms=ARMS.map(a=>a.k).filter(k=>GV.some(g=>kn(k,g,'never','all'))),top=56,rh=40,lx=250;
+  const W=1160,H=top+arms.length*rh+80;let s='';
+  s+=armLabels(lx-12,top-2,rh,arms);
+  const pw=420,gap=36,xs0=[lx+4,lx+4+pw+gap];
+  const all=DATA.knob.filter(r=>r[2]==='never'&&r[3]==='all');
+  const xmax=Math.ceil(Math.max(...all.flatMap(r=>[r[4],...r[11]]))*10)/10+0.3;
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(0,xmax,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle');
+    for(let v=0;v<=xmax+1e-9;v+=0.2) s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,v<1e-9?'0':f2(v).replace(/0$/,''),'tick','middle');
+    ['oldd','via'].forEach(ref=>{const r=kn(ref,g,'never','all');if(r)s+=L(xx(r[4]),top-6,xx(r[4]),top+arms.length*rh,ARM(ref).c,1.8,'5 4');});
+    arms.forEach((k,i)=>{const r=kn(k,g,'never','all'),c=ARM(k).c,y=top+i*rh+8,bh=rh-18;
+      if(!r){s+=T(x0+6,y+bh/2+5,'no runs yet','cap');return;}
+      s+=splitBar(xx,x0,y,bh,r,c);
+      r[11].forEach(v=>s+=L(xx(v),y-3,xx(v),y+bh+3,COL.ink,1.6));
+      s+=T(Math.max(xx(r[4]),...r[11].map(xx))+8,y+bh/2+5,`${f3(r[4])} · n = ${r[8]}`,'val','start',`style="fill:${c};font-size:13.5px"`);});
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'CRPS on counts, all never-trained pairs (mean over a track\'s pairs, then tracks, then seeds)','axlbl','middle','style="font-size:15px"');
+  s+=sw(0,H-6,COL.muted,'oracle-scaled part')+sw(170,H-6,COL.muted,'scale error',0.35);
+  s+=L(300,H-12,300,H,COL.ink,1.6)+T(310,H-6,'seeds','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(380,H-11,410,H-11,COL.oldd,1.8,'5 4')+T(416,H-6,'old D','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(480,H-11,510,H-11,COL.via,1.8,'5 4')+T(516,H-6,'old D through the base','cap','start','style="font-size:14px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 13 · per knob ---------- */
+const KS=[['depth','same','depth'],['crop','same','read length'],['mapq','same','MAPQ cut'],['abproxy','same','control mixed in'],['cross','cross','two knobs']];
+function figKnob(){
+  const arms=ARMS.map(a=>a.k).filter(k=>GV.some(g=>kn(k,g,'same','depth'))),bh=9,rg=2.5,blockH=arms.length*(bh+rg);
+  const lx=150,top=60,cw=192,gap=12,W=1160;
+  const H=top+2*(blockH+46)+40;let s='';
+  KS.forEach(([k,grp,lab],j)=>{const x0=lx+j*(cw+gap);s+=T(x0+cw/2,24,lab,'ptitle','middle','style="font-size:17px"');
+    const rows=DATA.knob.filter(r=>r[2]===grp&&r[3]===k&&arms.includes(r[0]));
+    const xmax=Math.max(...rows.map(r=>r[4]))*1.08,xx=linS(0,xmax,x0,x0+cw);
+    GV.forEach((g,gi)=>{const yb=top+gi*(blockH+46);
+      [0,xmax/2].forEach(v=>s+=L(xx(v),yb-4,xx(v),yb+blockH,COL.grid,1));
+      s+=T(xx(0),yb+blockH+15,'0','tick','middle')+T(xx(xmax/2),yb+blockH+15,f2(xmax/2),'tick','middle');
+      arms.forEach((a,i)=>{const r=kn(a,g,grp,k),y=yb+i*(bh+rg);if(r)s+=splitBar(xx,x0,y,bh,r,ARM(a).c);});});});
+  GV.forEach((g,gi)=>{const yb=top+gi*(blockH+46);s+=T(lx-14,yb+blockH/2-4,gi?'one g':'one g','axlbl','end','style="font-size:15px;font-weight:600"')+T(lx-14,yb+blockH/2+14,gi?'across tracks':'per track','axlbl','end','style="font-size:15px;font-weight:600"');});
+  s+=T(lx+(5*cw+4*gap)/2,H-36,'CRPS on counts, never-trained pairs of that knob; each panel has its own axis','axlbl','middle','style="font-size:15px"');
+  let x=0;arms.forEach(a=>{const lab=ARM(a).l1.replace(/^\d · /,'');s+=R(x,H-17,12,12,ARM(a).c,'none',2)+T(x+16,H-7,a==='l01'||a==='l1'||a==='l10'?'λ = '+lamOf[a]:lab,'cap','start','style="font-size:12.5px;fill:var(--body)"');x+=(a.startsWith('l')&&a!=='l01'?60:lab.length*6.6+34);});
+  return svg(W,H,s);
+}
+
+/* ---------- 14 · gain over the twin ---------- */
+const TK=[['all','never','all knobs'],['depth','same','depth'],['crop','same','read length'],['mapq','same','MAPQ cut'],['abproxy','same','control mixed in'],['cross','cross','two knobs']];
+function figTwin(){
+  const arms=['def','rt','oldd'].filter(a=>DATA.twin.some(r=>r[0]===a));
+  const top=72,sub=14,kh=arms.length*sub+18,lx=170,W=1160,H=top+TK.length*kh+70;let s='';
+  TK.forEach(([,,lab],i)=>{const y=top+i*kh+kh/2;s+=T(lx-14,y+2,lab,'axlbl','end','style="font-size:16px;font-weight:600"');});
+  const pw=465,gap=30,xs0=[lx,lx+pw+gap];
+  const vals=DATA.twin.filter(r=>arms.includes(r[0])).map(r=>r[4]);
+  const lo=Math.min(-0.2,Math.floor(Math.min(...vals)*10)/10),hi=Math.max(0.6,Math.ceil(Math.max(...vals)*10)/10);
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(lo,hi,x0+10,x0+pw-10);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle')+T(x0,46,'settings 1 and 3, and old D for reference','psub');
+    for(let v=Math.ceil(lo*10)/10;v<=hi+1e-9;v+=0.2) s+=L(xx(v),top-6,xx(v),top+TK.length*kh-6,Math.abs(v)<1e-9?COL.muted:COL.grid,Math.abs(v)<1e-9?1.6:1)+T(xx(v),top+TK.length*kh+12,Math.abs(v)<1e-9?'0':mn(f2(v).replace(/0$/,'')),'tick','middle');
+    TK.forEach(([k,grp],i)=>{const yk=top+i*kh;if(i%2===0)s+=R(x0,yk-4,pw,kh-4,COL.grid,'none',0,0,';fill-opacity:.35');
+      arms.forEach((a,j)=>{const y=yk+8+j*sub,c=ARM(a).c,tr=k==='cross'?null:tw(a,g,'trained',k),nv=tw(a,g,grp,k);
+        if(!nv)return;
+        if(tr) s+=L(xx(tr[4]),y,xx(nv[4]),y,c,2.2,nv[9]==='counts'?'':'2 3')+Ci(xx(tr[4]),y,5.5,c);
+        s+=Ci(xx(nv[4]),y,5.5,COL.card,c,2.4);});});
+    if(pi>0) s+=divider(x0-gap/2,10,top+TK.length*kh);});
+  s+=T(xs0[0]+pw+gap/2,top+TK.length*kh+34,'gain over the no-covariates twin, (twin CRPS − real CRPS) ÷ twin CRPS, median over pairs','axlbl','middle','style="font-size:15px"');
+  let x=0;arms.forEach(a=>{const lab=ARM(a).name;s+=Ci(x+6,H-12,6,ARM(a).c)+T(x+18,H-7,lab,'cap','start','style="font-size:13.5px;fill:var(--body)"');x+=lab.length*6.8+32;});
+  s+=T(W,H-7,'● trained  ○ never trained  — gap counts  ··· within noise','cap','end','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 15 · collapse ---------- */
+const ZROWS=()=>{const r=[];SET.forEach(k=>{if(GV.some(g=>co(k,g)))r.push([k,'real']);if(GV.some(g=>co(k,g,'nocov')))r.push([k,'nocov']);});return r;};
+function zLabels(x,top,rh,rows){let s='';rows.forEach(([k,m],i)=>{const a=ARM(k),y=top+i*rh+rh/2;
+  s+=T(x,y-2,a.l1+(m==='nocov'?', twin':''),'axlbl','end',`style="font-size:14.5px;font-weight:600;fill:${m==='nocov'?'var(--twin)':a.c}"`)+T(x,y+14,m==='nocov'?'no-covariates twin':a.l2,'cap','end','style="font-size:12.5px"');});return s;}
+function figCollapse(){
+  const rows=ZROWS(),top=60,rh=38,lx=250,W=1160,H=top+rows.length*rh+80;let s='';
+  s+=zLabels(lx-12,top,rh,rows);
+  // (a) |Z - x|
+  const x0=lx+4,pw=420,xmA=Math.ceil(Math.max(...DATA.collapse.flatMap(r=>[r[3],...r[9]]))*10)/10,xa=linS(0,xmA,x0,x0+pw);
+  s+=T(x0,24,'(a) Median |Z − x| per bin','ptitle')+T(x0,46,'● one g per track  ■ one g across tracks · ticks: seeds','psub');
+  for(let v=0;v<=xmA+1e-9;v+=0.2)s+=L(xa(v),top-4,xa(v),top+rows.length*rh,COL.grid,1)+T(xa(v),top+rows.length*rh+18,v<1e-9?'0':f2(v).replace(/0$/,''),'tick','middle');
+  // (b) corr
+  const x1=x0+pw+50,pw2=330,cmin=Math.floor(Math.min(...DATA.collapse.map(r=>r[5]))*20)/20,xb=linS(cmin,1,x1,x1+pw2);
+  s+=T(x1,24,'(b) Correlation of Z with x','ptitle')+T(x1,46,'● one g per track  ■ one g across tracks','psub');
+  for(let v=cmin;v<=1+1e-9;v+=0.01){const major=Math.abs(v*20-Math.round(v*20))<1e-6;s+=L(xb(v),top-4,xb(v),top+rows.length*rh,major?COL.axis:COL.grid,1);if(major)s+=T(xb(v),top+rows.length*rh+18,f2(v),'tick','middle');}
+  s+=divider(x0+pw+25,10,top+rows.length*rh+4);
+  rows.forEach(([k,m],i)=>{const y=top+i*rh+rh/2,c=m==='nocov'?COL.twin:ARM(k).c;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35')+R(x1,top+i*rh,pw2,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+    GV.forEach((g,j)=>{const r=co(k,g,m);if(!r)return;const yy=y+(j?7:-7);
+      r[9].forEach(v=>s+=L(xa(v),yy-5,xa(v),yy+5,COL.ink,1.3));
+      s+=mark(xa(r[3]),yy,g,c,'none',5.5)+mark(xb(r[5]),yy,g,c,'none',5.5);});
+    const nr=GV.map(g=>co(k,g,m)).filter(Boolean).map(r=>r[8]).join(' + ');
+    s+=T(W,y+5,`n = ${nr}`,'cap','end','style="font-size:12px"');});
+  s+=T(x0+pw/2,top+rows.length*rh+40,'median over bins of |μ_z − log(1 + X)|','axlbl','middle','style="font-size:15px"');
+  s+=T(x1+pw2/2,top+rows.length*rh+40,'Pearson correlation, Z against x (1 = Z is x up to scale)','axlbl','middle','style="font-size:15px"');
+  s+=T(0,H-6,'chromosomes 19 and 21, every product of the run\'s tracks · n = runs (one g per track + one g across tracks)','cap','start','style="font-size:13px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 16 · agreement ---------- */
+function figAgree(){
+  const rows=ZROWS(),top=84,rh=36,lx=250,W=1160,H=top+rows.length*rh+84;let s='';
+  s+=zLabels(lx-12,top,rh,rows);
+  const pans=[['one','(a) Two products differing in one knob'],['two','(b) Two products differing in two knobs']];
+  const xm=Math.ceil(Math.max(...DATA.agree.filter(r=>r[3]!=='all').flatMap(r=>[r[4],r[6]]))*10)/10+0.1;
+  const pw=400,gap=50;
+  pans.forEach(([nk,title],pi)=>{const x0=lx+4+pi*(pw+gap),xx=linS(0,xm,x0,x0+pw);
+    s+=T(x0,24,title,'ptitle','start','style="font-size:18px"')+T(x0,46,'● one g per track  ■ one g across tracks · ticks: seeds','psub');
+    for(let v=0;v<=xm+1e-9;v+=0.1){const lab=Math.abs(v*5-Math.round(v*5))<1e-6;s+=L(xx(v),top-4,xx(v),top+rows.length*rh,COL.grid,1);if(lab)s+=T(xx(v),top+rows.length*rh+18,v<1e-9?'0':f2(v).replace(/0$/,''),'tick','middle');}
+    const xr=DATA.agree.find(r=>r[3]===nk&&r[2]==='real');
+    if(xr){s+=L(xx(xr[6]),top-10,xx(xr[6]),top+rows.length*rh,COL.ink,2.2,'6 4')+T(xx(xr[6])+6,top-16,`inputs: median |x − x′| = ${f2(xr[6])}`,'cap','start','style="fill:var(--ink);font-size:13px"');}
+    rows.forEach(([k,m],i)=>{const y=top+i*rh+rh/2,c=m==='nocov'?COL.twin:ARM(k).c;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      GV.forEach((g,j)=>{const r=ag(k,g,nk,m);if(!r)return;const yy=y+(j?7:-7);
+        r[8].forEach(v=>s+=L(xx(v),yy-5,xx(v),yy+5,COL.ink,1.3));s+=mark(xx(r[4]),yy,g,c,'none',5.5);});});
+    if(pi)s+=divider(x0-gap/2,10,top+rows.length*rh+4);});
+  s+=T(lx+4+pw+gap/2,top+rows.length*rh+42,'median over bins of |Z − Z′| for two products of one track (latents left of the dashed line agree more than the inputs)','axlbl','middle','style="font-size:14.5px"');
+  s+=T(0,H-6,'one-knob pairs include base ↔ arm; ticks: seeds; chromosomes 19 and 21','cap','start','style="font-size:13px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 17 · swap vs identity ---------- */
+function figSwap(){
+  const W=1160,H=480;let s='';
+  const keys=[];SET.forEach(k=>{['real','nocov'].forEach(m=>{if(DATA.swap.some(r=>r[0]===k&&r[2]===m))keys.push([k,m]);});});
+  const xmax=Math.ceil(Math.max(...DATA.swap_pts.map(p=>p[3]),...DATA.swap.map(r=>r[5]))*20)/20;
+  const ymax=Math.ceil(Math.max(...DATA.swap_pts.map(p=>p[4]),...DATA.swap.map(r=>r[3]))*20)/20;
+  const x0=90,pw=680,top=40,ph=360,xx=linS(0,xmax,x0,x0+pw),yy=linS(0,ymax,top+ph,top);
+  const ax=xx(xmax*0.62),ay=yy(ymax*0.55);
+  s+=L(ax,ay,xx(xmax*0.9)-6,yy(ymax*0.12)-6,'var(--ok)',2.4)+`<polygon points="${xx(xmax*0.9)},${yy(ymax*0.12)} ${xx(xmax*0.9)-14},${yy(ymax*0.12)-4} ${xx(xmax*0.9)-6},${yy(ymax*0.12)-14}" style="fill:var(--ok)"/>`;
+  s+=T(ax-6,ay-24,'the target: pass the swap check','cap','start','style="fill:var(--ok);font-weight:700;font-size:14px"')+T(ax-6,ay-6,'while far from the identity','cap','start','style="fill:var(--ok);font-weight:700;font-size:14px"');
+  for(let v=0;v<=xmax+1e-9;v+=0.05)s+=L(xx(v),top,xx(v),top+ph,COL.grid,1)+T(xx(v),top+ph+20,f2(v),'tick','middle');
+  for(let v=0;v<=ymax+1e-9;v+=0.05)s+=L(x0,yy(v),x0+pw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,f2(v),'tick','end');
+  const dm=Math.min(xmax,ymax);s+=L(xx(0),yy(0),xx(dm),yy(dm),COL.muted,1.6,'6 4')+T(xx(dm)-6,yy(dm)+18,'swap = identity distance','cap','end','style="font-size:13px"');
+  s+=T(x0+pw/2,top+ph+46,'identity distance on real pairs, median |log(predicted mean ÷ source X)|','axlbl','middle','style="font-size:15px"');
+  s+=rotY(30,top+ph/2,'swap check, c′ = c: median |log(predicted mean ÷ X)|');
+  DATA.swap_pts.forEach(p=>{const c=p[2]==='nocov'?COL.twin:ARM(p[0]).c;s+=mark(xx(p[3]),yy(p[4]),p[1],c,'none',2.6).replace('stroke-width','fill-opacity:.32;stroke-width');});
+  keys.forEach(([k,m])=>GV.forEach(g=>{const r=swr(k,g,m);if(!r)return;const c=m==='nocov'?COL.twin:ARM(k).c;s+=mark(xx(r[5]),yy(r[3]),g,c,COL.paper,8,2);}));
+  // legend
+  const lx=x0+pw+40;s+=T(lx,top+4,'large: mean of the cell · small: one run','cap','start','style="font-size:13px"')+T(lx,top+22,'● one g per track  ■ one g across tracks','cap','start','style="font-size:13px"');
+  keys.forEach(([k,m],i)=>{const y=top+52+i*28,a=ARM(k),c=m==='nocov'?COL.twin:a.c,nr=GV.map(g=>swr(k,g,m)).filter(Boolean).map(r=>r[7]).join(' + ');
+    s+=Ci(lx+7,y-5,7,c)+T(lx+22,y,`${m==='nocov'?a.l1.replace(/^\d · /,'')+', twin':a.l1}`,'cap','start',`style="font-size:13.5px;fill:${c};font-weight:600"`)+T(W,y,`n = ${nr}`,'cap','end','style="font-size:12px"');});
+  return svg(W,H,s);
+}
+
+/* ---------- 18 · lambda ---------- */
+function figLam(){
+  const W=1160,H=420;let s='';
+  const vals=DATA.lam.flatMap(r=>[r[3],...r[5]]).concat(DATA.lam_g.map(r=>r[3]));
+  const lo=Math.floor(Math.min(...vals)*20)/20,hi=Math.ceil(Math.max(...vals)*20)/20;
+  const top=60,ph=280,pw=440,gap=80;
+  GV.forEach((g,pi)=>{const x0=90+pi*(pw+gap),yy=linS(lo,hi,top+ph,top),cx=i=>x0+pw*(i+0.5)/3;
+    s+=T(x0-60,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle');
+    for(let v=lo;v<=hi+1e-9;v+=0.05)s+=L(x0,yy(v),x0+pw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,f2(v),'tick','end');
+    s+=rotY(x0-58,top+ph/2,'best validation NLL, chromosome 22',14);
+    LAMK.forEach((k,i)=>{const r=DATA.lam.find(x=>x[0]===k&&x[1]===g),c=ARM(k).c;
+      s+=T(cx(i),top+ph+24,`λ = ${lamOf[k]}`,'axlbl','middle','style="font-weight:600"');
+      if(!r){s+=T(cx(i),top+ph/2,'no runs yet','cap','middle');return;}
+      DATA.lam_g.filter(x=>x[0]===k&&x[1]===g).forEach((x,j)=>s+=Ci(cx(i)-26+((j*7)%5)*3,yy(x[3]),3.4,c,'none',0,';fill-opacity:.45'));
+      r[5].forEach((v,j)=>s+=L(cx(i)+8,yy(v),cx(i)+30,yy(v),COL.ink,2));
+      s+=L(cx(i)-40,yy(r[3]),cx(i)+40,yy(r[3]),c,4)+(r[6]?T(cx(i),yy(r[3])-10,'chosen','cap','middle',`style="fill:${c};font-weight:700"`):'');
+      s+=T(cx(i),top+ph+44,`n = ${r[7]} of ${r[8]}`,'cap','middle','style="font-size:12.5px"');});});
+  s+=L(90,H-12,130,H-12,COL.muted,4)+T(138,H-7,'mean over runs','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=L(280,H-12,300,H-12,COL.ink,2)+T(308,H-7,'mean per seed','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=Ci(440,H-12,3.4,COL.muted)+T(450,H-7,'one g (mean over its seeds)','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 19 · C_clean ---------- */
+const KNAME={'depth_log2 z':'depth','read_length z':'read length','run_type_pe':'paired end','dedup_on':'deduplication','mapq_thresh z':'MAPQ cut','control_fraction z*':'control fraction','ratio_k z*':'ratio','control_depth_log2 z*':'control depth','extsize_k z':'extension size','has_control':'has a control','ctl_identity=matched':'control: matched','ctl_identity=other':'control: other','ctl_identity=none':'control: none'};
+function figClean(){
+  const W=1160,H=500;let s='';
+  const kk=[...new Set(DATA.cknob.map(r=>r[1]))].sort((a,b)=>a-b),top=56,rh=29,lx=170,pw=500;
+  const all=DATA.cknob.flatMap(r=>[r[3],r[4],r[5],r[6],r[7]]).filter(v=>v!=null);
+  const lo=Math.floor(Math.min(...all)),hi=Math.ceil(Math.max(...all)),xx=linS(lo,hi,lx,lx+pw);
+  s+=T(0,24,'(a) Each entry of C_clean: start and end, one g per track','ptitle','start','style="font-size:18px"');
+  for(let v=lo;v<=hi;v++)s+=L(xx(v),top-6,xx(v),top+kk.length*rh,v===0?COL.muted:COL.grid,v===0?1.4:1)+T(xx(v),top+kk.length*rh+18,mn(v),'tick','middle');
+  kk.forEach((i,j)=>{const y=top+j*rh+rh/2,a=DATA.cknob.find(r=>r[0]==='def'&&r[1]===i),d=DATA.cknob.find(r=>r[0]==='formd'&&r[1]===i),ref=d||a;
+    s+=T(lx-12,y+5,KNAME[ref[2]]||ref[2],'axlbl','end','style="font-size:14px"');
+    if(ref[6]!=null)s+=R(xx(ref[6]),y-7,Math.max(2,xx(ref[7])-xx(ref[6])),14,COL.grid,'none',3,0);
+    if(ref[5]!=null)s+=`<polygon points="${xx(ref[5])},${y-8} ${xx(ref[5])+8},${y} ${xx(ref[5])},${y+8} ${xx(ref[5])-8},${y}" style="fill:var(--ink)"/>`;
+    [[a,'var(--s1)',-5],[d,'var(--s2)',5]].forEach(([r,c,o])=>{if(!r)return;s+=L(xx(r[3]),y+o,xx(r[4]),y+o,c,2)+Ci(xx(r[3]),y+o,5,COL.card,c,2)+Ci(xx(r[4]),y+o,4.2,c);});});
+  s+=T(lx+pw/2,top+kk.length*rh+40,'value in the z units g reads (0 = mean of the training settings)','axlbl','middle','style="font-size:14.5px"');
+  const ly=H-8;s+=R(0,ly-11,22,12,COL.grid,'none',3,0)+T(28,ly,'range seen in training (form D\'s box)','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=`<polygon points="290,${ly-12} 297,${ly-5} 290,${ly+2} 283,${ly-5}" style="fill:var(--ink)"/>`+T(303,ly,'base','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=Ci(355,ly-5,5,COL.card,COL.muted,2)+T(364,ly,'start','cap','start','style="font-size:13px;fill:var(--body)"')+Ci(412,ly-5,4.2,COL.muted)+T(421,ly,'end','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=Ci(466,ly-5,5,'var(--s1)')+T(476,ly,'form A','cap','start','style="font-size:13px;fill:var(--body)"')+Ci(540,ly-5,5,'var(--s2)')+T(550,ly,'form D','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=divider(720,10,H-30);
+  // (b) drift vs seed spread per setting
+  const rows=[];SET.forEach(k=>GV.forEach(g=>{const d=DATA.cdrift[`${k}|${g}|real`];if(d)rows.push([k,g,d]);}));
+  const arms=[...new Set(rows.map(r=>r[0]))],x0=930,pw2=210,rh2=Math.min(40,(H-140)/arms.length);
+  const xm=Math.ceil(Math.max(...rows.flatMap(r=>[r[2].drift_from_init,r[2].seed_spread??0]))*50)/50,xb=linS(0,xm,x0,x0+pw2);
+  s+=T(745,24,'(b) How far it moved','ptitle','start','style="font-size:18px"')+T(745,46,'median over entries and tracks','psub');
+  for(let v=0;v<=xm+1e-9;v+=xm/2)s+=L(xb(v),top+4,xb(v),top+arms.length*rh2+8,COL.grid,1)+T(xb(v),top+arms.length*rh2+26,f2(v),'tick','middle');
+  arms.forEach((k,i)=>{const y=top+12+i*rh2+rh2/2,a=ARM(k);s+=T(x0-10,y+5,a.l1,'axlbl','end',`style="font-size:13.5px;font-weight:600;fill:${a.c}"`);
+    GV.forEach((g,j)=>{const d=DATA.cdrift[`${k}|${g}|real`];if(!d)return;const yy=y+(j?5:-5);
+      if(d.seed_spread!=null)s+=L(xb(d.seed_spread),yy-6,xb(d.seed_spread),yy+6,COL.ink,2);
+      s+=mark(xb(d.drift_from_init),yy,g,a.c,'none',4.6);});});
+  s+=T(x0+pw2/2,top+arms.length*rh2+46,'distance from its start','axlbl','middle','style="font-size:14px"');
+  s+=T(745,top+arms.length*rh2+70,'● ■ moved (one g per track, across)  | seed spread','cap','start','style="font-size:12.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figPairs,figT126,figHub,figModel,figForms,figLoss,figGroups,figRefs,figDepth,figCrps,figKnob,figTwin,figCollapse,figAgree,figSwap,figLam,figClean};
+Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
+
+/* ---------- the grid of settings ---------- */
+try{
+  const G={def:['form A','yes','yes','—','deterministic'],formd:['form D','yes','yes','—','deterministic'],rt:['form A','—','yes','—','deterministic'],
+    rtvae:['form A','—','yes','—','VAE'],l01:['form A','yes','yes','λ = 0.1','deterministic'],l1:['form A','yes','yes','λ = 1','deterministic'],
+    l10:['form A','yes','yes','λ = 10','deterministic'],vae:['form A','yes','yes','—','VAE']};
+  const tb=document.getElementById('tblArms');
+  SET.forEach(k=>{const a=ARM(k),g=G[k],tws=nAs(k,'nocov')?` <span class="mini">· twin ${nLaw(k,'nocov')} of ${nAs(k,'nocov')}</span>`:'';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="arm" style="--c:${a.c}"><small style="margin:0 6px 0 0">${a.s}</small>${a.name}</td>`+g.map((v,i)=>`<td class="${v==='—'?'no':(i===1||i===2)&&v==='yes'?'y':''}">${v}</td>`).join('')+`<td>${nLaw(k)} of ${nAs(k)}${tws}</td>`;
+    tb.appendChild(tr);});
+  const C=DATA.counts;
+  putH('chips',[`<b>${C.g_per_track} g's, one per track, + 1 g across tracks</b>`,`<b>${C.seeds} seeds</b>`,'<b>counts only</b>',
+    '<b>held out of training:</b> the 7.5M depth arm',`<b>up to ${DATA.cap} steps</b>, t118 row-1 training`,
+    `<b>${C.done} of ${C.assigned}</b> runs scored at this build`].map(t=>`<span class="chip">${t}</span>`).join(''));
+  put('tRuns',`${C.done} of ${C.assigned} runs scored at this build`);
+}catch(e){console.error('grid',e);}
+
+/* ---------- prose and headlines: every number from DATA ---------- */
+try{
+  const SETn=k=>ARM(k).name;
+  const both=(f)=>GV.map(f).filter(v=>v!=null);
+  // (a) depth
+  const dv=(arms,grp)=>arms.flatMap(a=>both(g=>{const r=dep(a,g,grp);return r?r[3]:null;}));
+  const others=SET.filter(k=>!['rt','rtvae'].includes(k));
+  putH('hDa',`Round trip only misses the depth law by the full read ratio; every setting with the cross loss reads like old D, and old D through the base is lowest`);
+  putH('tDa1',`<b>Round trip only:</b> error ${rng(dv(['rt'],'trained'))} even on trained pairs, about one factor of 2 per halving of depth: it returns the source unchanged. With the VAE: ${rng(dv(['rtvae'],'trained'))}.`);
+  putH('tDa2',`<b>Never-trained depth → depth:</b> settings with the cross loss ${rng(dv(others,'never'))}, old D ${rng(dv(['oldd'],'never'))}, old D through the base ${rng(dv(['via'],'never'))}. <b>Held-out 7.5M:</b> settings with the cross loss ${rng(dv(others,'heldout'))}, old D ${rng(dv(['oldd'],'heldout'))}.`);
+  const nl=others.flatMap(k=>GV.map(g=>{const r=dep(k,g,'never'),o=dep('oldd',g,'never');return r&&o?noise(r[3]-o[3],r[6],o[6]):null;})).filter(Boolean);
+  put('nDa',`Against old D on never-trained depth pairs, ${nl.filter(x=>x==='counts').length} of ${nl.length} setting × g cells pass the noise rule; ${nl.filter(x=>x==='within noise').length} are within noise; ${nl.filter(x=>x==='no seed spread').length} have fewer than 2 seeds.`);
+  // (b) pooled CRPS
+  const cv=(k,g)=>kn(k,g,'never','all');
+  const vsD=SET.flatMap(k=>GV.map(g=>{const r=cv(k,g),o=cv('oldd',g);if(!r||!o)return null;return {k,g,gap:r[4]-o[4],lab:noise(r[4]-o[4],r[7],o[7])};})).filter(Boolean);
+  const better=vsD.filter(x=>x.lab==='counts'&&x.gap<0),worse=vsD.filter(x=>x.lab==='counts'&&x.gap>0);
+  const viaBeat=SET.flatMap(k=>GV.map(g=>{const r=cv(k,g),v=cv('via',g);return r&&v?{k,g,lab:noise(r[4]-v[4],r[7],v[7]),gap:r[4]-v[4]}:null;})).filter(Boolean);
+  putH('hCb',better.length?`On never-trained pairs, ${andJ([...new Set(better.map(x=>SETn(x.k)))])} beat old D beyond noise; the rest sit within noise of old D or worse`
+    :`On never-trained pairs no setting beats old D beyond noise; the round-trip settings are worse, and old D through the base is best with one g per track`);
+  const os=(k,g)=>{const r=cv(k,g);return r?`${f3(r[4])} (${f3(r[5])} + ${f3(r[6])})`:'—';};
+  putH('tCb1',`<b>One g per track</b>, CRPS (oracle-scaled + scale error): default ${os('def','per_track')}, form D ${os('formd','per_track')}, old D ${os('oldd','per_track')}, old D through the base ${os('via','per_track')}, round trip only ${os('rt','per_track')}.`);
+  putH('tCb2',`<b>Against old D</b>, ${vsD.length} setting × g cells: ${better.length} better beyond noise, ${worse.length} worse beyond noise (${andJ([...new Set(worse.map(x=>SETn(x.k)))])||'none'}), ${vsD.filter(x=>x.lab!=='counts').length} within noise or without a seed spread. ${(()=>{const r=cv('rt','per_track'),d=cv('def','per_track');if(!r||!d)return '';const ex=r[4]-d[4],se=r[6]-d[6];return `Round trip only's extra CRPS over the default, one g per track: ${f3(ex)}, of which ${Math.round(100*se/ex)}% is scale error.`;})()}`);
+  put('nCb',`Against old D through the base: ${viaBeat.filter(x=>x.lab==='counts'&&x.gap>0).length} of ${viaBeat.length} setting × g cells are worse beyond noise, ${viaBeat.filter(x=>x.lab==='counts'&&x.gap<0).length} better, the rest within noise or without a seed spread.`);
+  // (b) per knob
+  const kc=KS.flatMap(([k,grp])=>SET.flatMap(a=>GV.map(g=>{const r=kn(a,g,grp,k),o=kn('oldd',g,grp,k);return r&&o?{a,k,lab:noise(r[4]-o[4],r[7],o[7]),gap:r[4]-o[4]}:null;}))).filter(Boolean);
+  const kb=kc.filter(x=>x.lab==='counts'&&x.gap<0),kw=kc.filter(x=>x.lab==='counts'&&x.gap>0);
+  const kwk=[...new Set(kw.map(x=>KS.find(z=>z[0]===x.k)[2]))];
+  putH('hCk',kb.length?`Per knob, settings beat old D beyond noise in ${kb.length} of ${kc.length} cells, and lose in ${kw.length}`:`Per knob, no setting beats old D beyond noise; ${kw.length} of ${kc.length} cells are worse, on ${kwk.length===KS.length?'every knob':andJ(kwk)}`);
+  const sk=(a,k,grp)=>rng(both(g=>{const r=kn(a,g,grp,k);return r?r[4]:null;}),f3);
+  putH('tCk1',`<b>Same-knob depth pairs:</b> default ${sk('def','depth','same')}, old D ${sk('oldd','depth','same')}, old D through the base ${sk('via','depth','same')}. <b>Read length:</b> default ${sk('def','crop','same')}, old D ${sk('oldd','crop','same')}.`);
+  putH('tCk2',`<b>Two knobs at once:</b> default ${sk('def','cross','cross')}, old D ${sk('oldd','cross','cross')}, old D through the base ${sk('via','cross','cross')}. Of ${kc.length} setting × knob × g cells against old D: ${kw.length} worse beyond noise, ${kb.length} better, the rest within noise or without a seed spread.`);
+  put('nCk',`Ranges are over both versions of g. Same-knob pairs per version of g: ${andJ(KS.slice(0,4).map(([k,,lab])=>{const r=kn('def','per_track','same',k);return `${lab} ${r?r[9]:'—'}`;}))} pair records.`);
+  // (c) twin
+  const tg=(a,g,grp,k)=>{const r=tw(a,g,grp,k);return r?r[4]:null;};
+  const dT=both(g=>tg('def',g,'trained','all')),dN=both(g=>tg('def',g,'never','all')),oT=both(g=>tg('oldd',g,'trained','all')),oN=both(g=>tg('oldd',g,'never','all'));
+  const dl=GV.map(g=>(tw('def',g,'never','all')||[])[9]).filter(Boolean),ol=GV.map(g=>(tw('oldd',g,'never','all')||[])[9]).filter(Boolean);
+  putH('hTw',`The default keeps its gain over the twin from trained to never-trained pairs; round trip only has no gain at all`);
+  putH('tTw1',`<b>All knobs:</b> default ${rng(dT)} on trained pairs, ${rng(dN)} on never-trained pairs (gap ${andJ([...new Set(dl)])}); old D ${rng(oT)} → ${rng(oN)} (gap ${andJ([...new Set(ol)])}). The default starts lower on trained pairs.`);
+  const sl=['depth','crop','mapq','abproxy'].flatMap(k=>GV.map(g=>tw('def',g,'same',k))).filter(Boolean);
+  putH('tTw2',`<b>Same-knob pairs:</b> the default drops below 0 on ${andJ(['crop','mapq','abproxy'].filter(k=>GV.some(g=>(tg('def',g,'same',k)??1)<0)).map(k=>KS.find(z=>z[0]===k)[2]))||'no knob'} (${rng(sl.filter(r=>r[3]!=='depth').map(r=>r[4]))}). <b>Round trip only:</b> ${rng(DATA.twin.filter(r=>r[0]==='rt').map(r=>r[4]),f3)} in every group.`);
+  put('nTw',`Each version of g: ${andJ(GV.map(g=>{const r=tw('def',g,'never','all');return r?`${GN[g]} n = ${r[7]} real and ${r[8]} twin runs, ${r[6]} never-trained pairs`:'';}).filter(Boolean))}. The gap label compares each never-trained cell with the trained cell of the same knob.`);
+  // (d) collapse
+  const cr=SET.flatMap(k=>both(g=>{const r=co(k,g);return r?r[5]:null;}));
+  const crt=both(g=>{const r=co('rt',g);return r?r[5]:null;});
+  putH('hCo',`Z stays close to x in every setting: the correlation of Z with x is ${rng(cr,f3)}`);
+  putH('tCo1',`<b>Correlation of Z with x:</b> ${rng(cr,f3)} across all settings and both versions of g; round trip only ${rng(crt,f3)}, the closest to a copy of x. The twins read alike: ${rng(SET.flatMap(k=>both(g=>{const r=co(k,g,'nocov');return r?r[5]:null;})),f3)}.`);
+  const zx=k=>rng(both(g=>{const r=co(k,g);return r?r[3]:null;}));
+  putH('tCo2',`<b>Median |Z − x|:</b> round trip only ${zx('rt')}, default ${zx('def')}, form D ${zx('formd')}, λ = 10 ${zx('l10')}, VAE settings ${rng(['rtvae','vae'].flatMap(k=>both(g=>{const r=co(k,g);return r?r[3]:null;})))}. Seed spreads reach ${f2(Math.max(...DATA.collapse.map(r=>r[4]??0)))}, so most gaps are within noise.`);
+  const coL=SET.filter(k=>k!=='def').flatMap(k=>GV.map(g=>{const r=co(k,g),d=co('def',g);return r&&d?noise(r[3]-d[3],r[4],d[4]):null;})).filter(Boolean);
+  put('nCo',`Against the default, ${coL.filter(x=>x==='counts').length} of ${coL.length} setting × g cells of median |Z − x| pass the noise rule. Median σ_z of the deterministic settings is not used (Z = μ_z there).`);
+  // (e) agreement
+  const xd=DATA.agree.find(r=>r[3]==='two'&&r[2]==='real');
+  const below=SET.filter(k=>GV.some(g=>{const r=ag(k,g,'two');return r&&r[4]<r[6];}));
+  putH('hAg',below.length===LAMK.length&&LAMK.every(k=>below.includes(k))?`Only the latent-agreement settings (λ = 0.1, 1, 10) bring two products' latents closer than their inputs`:below.length?`Only ${andJ(below.map(SETn))} bring two products' latents closer than their inputs`:'No setting brings two products\' latents closer than their inputs');
+  const az=k=>rng(both(g=>{const r=ag(k,g,'two');return r?r[4]:null;}));
+  putH('tAg1',`<b>Two-knob pairs</b>, median |Z − Z′|: λ = 0.1 ${az('l01')}, λ = 1 ${az('l1')}, λ = 10 ${az('l10')}, against inputs ${xd?f2(xd[6]):'—'}.`);
+  putH('tAg2',`<b>Without L3</b>: default ${az('def')}, form D ${az('formd')}, round trip only ${az('rt')}, default with VAE ${az('vae')}: the latents of one sample differ more than its inputs.`);
+  put('nAg',`For one-knob pairs the median |x − x′| is ${f2((DATA.agree.find(r=>r[3]==='one')||[])[6])}, because most bins are equal between two arms of one track; panel (a) reads against that line.`);
+  // (f) swap
+  const sv=(k,i)=>rng(both(g=>{const r=swr(k,g);return r?r[i]:null;}),f3);
+  putH('hSw',`The default and form D pass the swap check far from the identity; round trip only sits at the identity`);
+  putH('tSw1',`<b>Default:</b> swap ${sv('def',3)}, identity distance ${sv('def',5)}. <b>Form D:</b> ${sv('formd',3)} and ${sv('formd',5)}. <b>Round trip only:</b> ${sv('rt',3)} and ${sv('rt',5)}: it returns its input whatever the settings.`);
+  putH('tSw2',`<b>The VAE settings</b> move toward the diagonal (default with VAE: swap ${sv('vae',3)}, identity ${sv('vae',5)}); λ = 10 swap ${sv('l10',3)}. <b>The default's twin</b> sits on the diagonal: ${sv('def',3).length?rng(both(g=>{const r=swr('def',g,'nocov');return r?r[3]:null;}),f3):''}.`);
+  const swL=SET.filter(k=>k!=='def').flatMap(k=>GV.map(g=>{const r=swr(k,g),d=swr('def',g);return r&&d?{k,lab:noise(r[3]-d[3],r[4],d[4])}:null;})).filter(Boolean);
+  put('nSw',`Swap check against the default: ${swL.filter(x=>x.lab==='counts').length} of ${swL.length} setting × g cells pass the noise rule (${andJ([...new Set(swL.filter(x=>x.lab==='counts').map(x=>SETn(x.k)))])||'none'}).`);
+  // (g) lambda
+  const LC=DATA.lam_chosen;
+  const lcTxt=GV.filter(g=>LC[g]).map(g=>`λ = ${LC[g].lam} for ${GN[g]}`);
+  const lcLab=GV.filter(g=>LC[g]).map(g=>LC[g].label==='within noise'?'within noise':LC[g].label==='counts'?'beyond noise':'without a seed spread');
+  const lset=[...new Set(GV.filter(g=>LC[g]).map(g=>LC[g].lam))];
+  putH('hLa',`The rule picks ${lset.length===1&&GV.every(g=>LC[g])?`λ = ${lset[0]} for both versions of g`:andJ(lcTxt)}, but the margin is ${andJ([...new Set(lcLab)])}`);
+  putH('tLa1',andJ(GV.filter(g=>LC[g]).map(g=>`<b>${GNc(g)}:</b> λ = ${LC[g].lam}, ahead of λ = ${lamOf[LC[g].runner_up]} by ${f4(LC[g].gap)} (${LC[g].label==='within noise'?'within noise':LC[g].label==='counts'?'beyond noise':'no seed spread: fewer than 2 seeds'})`))+'.');
+  const lr=DATA.lam.filter(r=>r[1]==='per_track');
+  putH('tLa2',`<b>Per g, one g per track:</b> ${andJ(lr.map(r=>`λ = ${r[2]} is lowest for ${r[9]} of ${DATA.counts.g_per_track} g's`))}. The choice is ${GV.every(g=>LC[g]&&LC[g].complete)?'on the full grid':'provisional: not every λ run has finished'}.`);
+  put('nLa',`Run counts per λ are on the chart; seed spread of the mean NLL: ${rng(DATA.lam.map(r=>r[4]),f4)}.`);
+  // (h) C_clean
+  const cd=(k,f)=>rng(both(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?d[f]:null;}),f3);
+  const mv=SET.flatMap(k=>both(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?d.drift_from_init:null;})),ss=SET.flatMap(k=>both(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?d.seed_spread:null;}));
+  putH('hCc',`C_clean barely leaves its start in either form: it moves ${rng(mv,f3)} in z units, about its own seed spread`);
+  putH('tCc1',`<b>Form A</b> moves ${cd('def','drift_from_init')} from 0 and ends ${cd('def','drift_from_base')} from the base. <b>Form D</b> moves ${cd('formd','drift_from_init')} from the base. Seed spread of the learned value: ${rng(ss,f3)}.`);
+  const atEdge=DATA.cknob.filter(r=>r[0]==='formd'&&r[5]!=null&&r[7]!=null&&r[6]!=null&&(Math.abs(r[5]-r[7])<1e-6||Math.abs(r[5]-r[6])<1e-6)&&r[6]!==r[7]&&/ z\*?$/.test(r[2])).map(r=>KNAME[r[2]]||r[2]);
+  putH('tCc2',`<b>The base sits at the edge of the box</b> for ${andJ(atEdge)} (median over tracks; the yes/no entries always do): form D starts at a box edge there, so it can only move inward.`);
+  put('nCc',`n runs per setting and version of g: ${andJ(SET.flatMap(k=>GV.map(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?`${SETn(k)}, ${GN[g]} ${d.n_runs}`:null;})).filter(Boolean))}.`);
+  // discussion
+  put('tR1',`Depth error ${rng(dv(['rt'],'trained'))} on trained pairs; swap ${sv('rt',3)}, identity ${sv('rt',5)}; gain over the twin ${rng(DATA.twin.filter(r=>r[0]==='rt').map(r=>r[4]),f3)}.`);
+  put('tR2',`Default: swap ${sv('def',3)} at identity distance ${sv('def',5)}; gain over the twin ${rng(dT)} trained, ${rng(dN)} never trained.`);
+  put('tR3',`Never-trained CRPS: default ${rng(both(g=>(cv('def',g)||[])[4]),f3)}, old D ${rng(both(g=>(cv('oldd',g)||[])[4]),f3)}, through the base ${rng(both(g=>(cv('via',g)||[])[4]),f3)}; corr(Z, x) ${rng(cr,f3)}.`);
+  const st=DATA.steps,capN=k=>(st[`${k}|real`]||[0,0])[1],runN=k=>(st[`${k}|real`]||[0,0])[0];
+  const det=SET.filter(k=>!['rtvae','vae'].includes(k));
+  put('tDb2',`${det.reduce((s,k)=>s+capN(k),0)} of ${det.reduce((s,k)=>s+runN(k),0)} deterministic runs (twins not counted) used all ${DATA.cap} steps (form D: ${capN('formd')} of ${runN('formd')}); the VAE settings stopped early, at a median of ${andJ(['rtvae','vae'].map(k=>(st[`${k}|real`]||[])[2]).filter(v=>v!=null).map(String))} steps.`);
+  const miss=SET.filter(k=>nLaw(k)<nAs(k));
+  put('tDb3',`${DATA.counts.done} of ${DATA.counts.assigned} runs were scored at this build. Still missing: ${andJ(miss.map(k=>`${SETn(k)}: ${nAs(k)-nLaw(k)} runs`))||'none'}. Cells with fewer than 2 seeds carry no noise label.`);
+  const C=DATA.counts,sbc=C.settings_by_cluster;
+  put('tDb4',`Fir ran ${C.fir[0]} of its ${C.fir[1]} runs (kits K2 and K3), Nibi ${C.nibi[0]} of ${C.nibi[1]} (kit K1). Settings on Nibi: ${andJ(sbc.nibi.map(SETn))}. The code of each setting is the same in each kit.`);
+  put('nDb',`Settings on Fir: ${andJ(sbc.fir.map(SETn))}.`);
+  put('tOp4',`${det.reduce((s,k)=>s+capN(k),0)} of ${det.reduce((s,k)=>s+runN(k),0)} deterministic runs stopped at the ${DATA.cap}-step cap; the median best step per setting was ${rng(det.map(k=>(st[`${k}|real`]||[])[3]).filter(v=>v!=null),v=>String(Math.round(v)))}.`);
+  put('tOp5',`Only the λ settings brought latents closer than inputs (λ = 10: ${az('l10')} against ${xd?f2(xd[6]):'—'}), at a cost on the swap check (${sv('l10',3)}).`);
+}catch(e){console.error('prose',e);}
+
+/* ---------- navigation and speaker notes ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>

@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Symmetric Encoder-Decoder</title>
+
+<!--
+  prezit deck · t128 phase 1: the symmetric encoder-decoder rung D (spec plan/T126_ENCDEC_D2.md).
+  Chrome, build pattern and chart style copied from ../t126-encdec/.
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-21 and the t128-C9 brief, 2026-10-25):
+  - Arc: motivation, method, results, discussion. The section is marked on every slide (kicker).
+  - Exploratory phase: no hypothesis, no metrics.json, no verdicts. `crux deck --verify` does not
+    apply. Every number is embedded as DATA by build_deck.py from cruxvault/results/t128/. No
+    measured number is typed in this file. Typed: design constants of the spec only (8 settings,
+    lambda grid 0.1 / 1 / 10, 4 layers, 32 channels, dilations 1, 2, 4, 8, g = 2 x 64, the KL
+    warm-up over 1000 of 4000 steps, the 60-bin halo, the noise rule's factor 2, the chromosome
+    split), the cluster kits and job history of plan_t128.md "## Log" (doubts slide), on method
+    and discussion slides.
+  - Every count (runs per setting, seeds, g's) comes from DATA, so a rebuild after the last runs
+    land changes the counts with no edit. Headlines that state a comparison are written by the
+    script from DATA (ids h*), so they follow the numbers.
+  - Arm codes of the run names never appear: plain names only (ARMS below).
+  - Every slide has speaker notes (<aside class="notes">), shown with the `n` key, as in t126.
+  - The only table is the grid of settings.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once (settings 1-8, the two references, the twin) */
+    --s1:#d9822b; --s2:#9a6a12; --s3:#5d7fb8; --s4:#2f4f8a; --s5:#c3a3dc; --s6:#9467bd; --s7:#5f3a85;
+    --s8:#c8435a; --oldd:#1f8a70; --via:#6fb59a; --twin:#77736c; --ref:#9a9ca4;
+    /* one colour per pair group */
+    --tr:#4f5d75; --ho:#0a8a8f; --nv:#c84d86; --nv2:#e8a3c3;
+    --ok:#3f8f6f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+      --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+      --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+    --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+    --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em;text-wrap:balance}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px;text-wrap:balance}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:none}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.mid svg{max-height:40vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2,.cards.c5{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 9px;margin:0 0 6px;border:1px solid var(--hair);color:var(--body)}
+  .tag.out{background:rgba(63,143,111,.13);border-color:var(--ok)}
+  .tag.part{background:rgba(217,130,43,.13);border-color:var(--s1)}
+  .tag.holds{background:rgba(200,77,134,.13);border-color:var(--nv)}
+  .tag.open{background:none;border-style:dashed;border-color:var(--muted)}
+  .tag.opt{background:none;border-style:dashed;border-color:var(--accent);color:var(--accent)}
+  table.grid.compact{border-spacing:6px 3px}
+  table.grid.compact td{padding:4px 8px;font-size:14px;line-height:1.25}
+  table.grid.compact th{padding:2px 4px;font-size:14px}
+  table.grid.compact td.arm small{display:inline;margin-left:6px}
+  table.grid td.y{font-weight:600;color:var(--ink)}
+  table.grid td.no{color:var(--faint)}
+  .mini{font-size:13px;color:var(--muted)}
+
+  /* the grid of arms */
+  table.grid{border-collapse:separate;border-spacing:8px 6px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:8px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:18%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.arm{font-weight:600;color:var(--ink);text-align:left;border-left:5px solid var(--c)}
+  table.grid td.arm small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:14.5px;border:1px solid var(--hair);background:var(--card);border-radius:16px;padding:4px 12px;color:var(--body)}
+  .chip b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+</style></head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the design and the scope of phase 1
+       numbers  run counts only (DATA.counts) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>A symmetric encoder-decoder: one g, one CNN, and a learned clean setting in the middle</h1>
+      <p class="sub">Phase 1 of the redesign of the t126 encoder-decoder: 8 settings, both versions of g, <span class="num" id="tRuns"></span>.
+        This is an exploratory pass: it reports readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+    </div>
+    <aside class="notes">
+      <p>This deck follows the encoder-decoder deck (t126). There, building composition into g did not carry the fit to pairs the model never trained on. The PI redesigned the encoder-decoder so that both halves are the same network, set by one g, and meet at a learned "clean" setting.</p>
+      <p>Every number on the slides and in these notes is read from the result files when the deck is built. Some runs were still training at build time; each chart shows its own run count.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · MOTIVATION · two words: never-trained pairs and the depth law
+       job      teach the two words the deck rests on
+       numbers  none (schematic) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>two words first</div>
+      <h2>The model trains only on base ↔ arm pairs; arm → arm pairs are never seen in training</h2>
+      <div class="fig tall" id="figPairs"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each track was rebuilt many times, changing one processing setting (a <b>knob</b>) at a time; each rebuild is an <b>arm</b>. Training uses only pairs between the base track and one arm, in both directions (solid). A pair between two arms (dashed) is <b>never trained</b>: the model must work it out from the settings alone.</p>
+      <p>Panel (b): the <b>depth law</b>. With fewer reads, every bin scales by the read ratio. We compare the predicted total, over the source total, with the true read ratio on a log2 scale. 0 is perfect.</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · what t126 showed
+       job      the three t126 findings that motivate the redesign, as cards with a mini schematic
+       source   ../t126-encdec/ (the t126 deck)
+       numbers  none (prezit: motivation carries no numbers) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what the t126 encoder-decoder showed</div>
+      <h2>The t126 encoder-decoder did not carry the fit to never-trained pairs, and its two halves were not alike</h2>
+      <div class="fig mid" id="figT126"></div>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--nv)"><span class="tag holds">no carry-over</span><div class="ct">Never-trained pairs stayed bad</div>
+          <div class="cb">Encoder-decoder D kept old D's fit on trained pairs, but its never-trained depth error did not drop, and three knobs fell below the no-covariates twin.</div></div>
+        <div class="card" style="--c:var(--s3)"><span class="tag part">asymmetric</span><div class="ct">Two halves, two g's</div>
+          <div class="cb">The CNN was cut 2 + 2: two layers set by g_enc(c), two by g_dec(c′). The halves differ, so "encode" and "decode" were not the same map run two ways.</div></div>
+        <div class="card" style="--c:var(--accent)"><span class="tag holds">broken by the +1</span><div class="ct">Encoder-decoder A could not fit</div>
+          <div class="cb">An exact inverse on log(1 + count) forces the two directions' slopes to multiply to 1, but the +1 needs a slope above 1 both ways.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>These are the three findings of the t126 deck that this work answers. The numbers are on that deck.</p>
+      <p>Card 2 is the PI's ruling: the encoder and decoder must be symmetric, and one g must set both.</p>
+    </aside>
+  </section>
+
+  <!-- 4 · MOTIVATION · the PI's redesign
+       job      schematic: every setting maps to one learned clean setting, then out
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the redesign</div>
+      <h2>The redesign: every track passes through one learned clean setting, with the same network on both sides</h2>
+      <div class="fig tall" id="figHub"></div>
+    </div>
+    <aside class="notes">
+      <p>Left, t126: two g's, each reading one side, set two different halves of a cut CNN.</p>
+      <p>Right, t128: one g, the same g as in the t118 grid, reads a pair of settings as always. The trick is the middle: g is asked for the map from the source's settings c to a learned clean setting C_clean, and then for the map from C_clean to the target's settings c′. Both maps use the same CNN. So an arm → arm pair uses exactly the two pieces that the trained pairs use: c → C_clean and C_clean → c′.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · METHOD · the model
+       job      schematic of f_e and f_d: the same CNN, FiLM from g(c, C_clean) and g(C_clean, c'), Z Gaussian, X NB
+       numbers  none (design constants of the spec) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the model</div>
+      <h2>The encoder and the decoder are one CNN with shared weights; only the FiLM from g differs</h2>
+      <div class="fig tall" id="figModel"></div>
+    </div>
+    <aside class="notes">
+      <p><b>f</b> is old rung D exactly: 4 dilated convolution layers (dilations 1, 2, 4, 8), 32 channels, kernel 5, and a 1 × 1 head. <b>FiLM</b> means g gives a scale and a shift for every layer and channel; g gives nothing else.</p>
+      <p><b>Encoder</b>: input x = log(1 + X); FiLM from g(c, C_clean); the head gives a Gaussian mean μ_z and spread σ_z per 25 bp bin. <b>Decoder</b>: input Z; FiLM from g(C_clean, c′); the head gives the negative binomial of X′. Z has 1 channel at the same 25 bp resolution, with no pooling.</p>
+      <p>Two f's in series see further, so each training window gets 60 bins of halo on each side.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · METHOD · C_clean forms A and D
+       job      schematic: form A starts at 0 and is free; form D starts at the base inside a hard box
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the clean setting C_clean</div>
+      <h2>C_clean is learned per track: form A starts at 0 and is free, form D starts at the base inside a hard box</h2>
+      <div class="fig tall" id="figForms"></div>
+    </div>
+    <aside class="notes">
+      <p>C_clean is a covariate vector like any other. Its assay entries are copied from the source; only the 13 processing entries are learned. With one g per track, there is one C_clean per track; with one g across tracks, one per track as well.</p>
+      <p><b>Form A</b> (the default): starts at 0, which in z units is the mean of the training settings, and moves freely. <b>Form D</b>: starts at the base track's own settings, and each entry is a sigmoid onto the range seen in training, so it cannot leave that box. There is no penalty weight.</p>
+    </aside>
+  </section>
+
+  <!-- 7 · METHOD · the losses
+       job      L1, L2, L3 and the VAE, as a 2 x 2 grid plus the pull
+       numbers  none (definitional constants of the spec) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the losses</div>
+      <h2>Three losses: the cross map (L1), the round trip (L2), and latent agreement (L3); a VAE adds noise to Z</h2>
+      <div class="fig tall" id="figLoss"></div>
+    </div>
+    <aside class="notes">
+      <p>For one trained pair, the source (X, c) and the target (X′, c′): Z = encoder of X with c, Z′ = encoder of X′ with c′.</p>
+      <p><b>L1, cross</b>: decode Z with c′ and score X′; decode Z′ with c and score X. That is the real job. <b>L2, round trip</b>: decode Z with c and score X itself, and the same for Z′. <b>L3, latent agreement</b>: λ times the mean squared gap between Z and Z′, so that the two tracks of one pair meet at one latent.</p>
+      <p><b>VAE</b>: Z is sampled from the Gaussian, with a KL term to N(0, 1) whose weight ramps from 0 to 1 over the first 1000 of 4000 steps. The deterministic arms use Z = μ_z.</p>
+    </aside>
+  </section>
+
+  <!-- 8 · METHOD · the grid of settings (the one table) and the scope
+       numbers  run counts, seeds, g counts from DATA; lambda grid and the settings are spec constants -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the settings</div>
+      <h2>Eight settings change one thing at a time from the default; two of them have a no-covariates twin</h2>
+      <table class="grid compact" id="tblArms">
+        <tr><th style="width:27%">setting</th><th>clean setting</th><th>cross (L1)</th><th>round trip (L2)</th><th>agreement (L3)</th><th>latent Z</th><th>runs done<small>of assigned</small></th></tr>
+      </table>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="notes">
+      <p>Setting 1 is the default; each other setting changes one or two things from it. Settings 3 and 4 test the round trip alone, which the spec flagged: with 1 channel and a skip that starts at the identity, the round trip alone may stay at the identity.</p>
+      <p>The <b>no-covariates twin</b> is the same model fed random settings: it can only learn one average map. Twins were trained only for settings 1 and 3.</p>
+      <p>Both versions of g: one g per track (trained on one track's arms), and one g across all tracks.</p>
+    </aside>
+  </section>
+
+  <!-- 9 · METHOD · scoring groups and selection
+       job      schematic of the pair groups; selection rule on chr22
+       numbers  none (the held-out level and chromosome split are design constants) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what we score, and how a run is selected</div>
+      <h2>We score trained pairs, a held-out depth, and never-trained pairs; each setting picks its step by its own loss on chr22</h2>
+      <div class="fig tall" id="figGroups"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): the depth ladder. Trained pairs link the base to two depths. The 7.5M depth is held out of training: its pairs with the base are only scored. Never-trained pairs link two depths, with or without the held-out one.</p>
+      <p>Panel (b): selection. Each setting keeps its best step by its own loss's likelihood terms on chromosome 22, with Z = μ_z, and without the KL or λ terms, so the λ values compare fairly (PI ruling). The same rule picks one λ per version of g.</p>
+    </aside>
+  </section>
+
+  <!-- 10 · METHOD · the references and the noise rule
+       job      old D, old D through the base, and the noise rule for every gap
+       numbers  none (the factor 2 is the spec's rule) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>references and the noise rule</div>
+      <h2>Two references need no training: old D, and old D chained through the base</h2>
+      <div class="fig tall" id="figRefs"></div>
+    </div>
+    <aside class="notes">
+      <p><b>Old D</b> is t126's retrained old rung D, with 7.5M held out, and its twin. <b>Old D through the base</b> chains two of old D's trained maps, arm → base, then base → arm, on the never-trained pairs. It is the target the redesign aims at: composition through a middle, done by hand.</p>
+      <p><b>The noise rule</b> (spec): a gap counts only if it is larger than 2 × the larger seed spread of the two cells, where a seed spread is the largest gap between the 3 seeds. Smaller gaps are shown and labelled "within noise".</p>
+    </aside>
+  </section>
+
+  <!-- 11 · RESULTS · (a) the depth law
+       claim    written from DATA (hDa): round trip only misses the depth law by the full ratio; the others read like old D;
+                via the base is lowest on never-trained pairs
+       source   results/t128/depth_table.tsv (seed medians included)
+       numbers  DATA.depth -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the depth law</div>
+      <h2 id="hDa"></h2>
+      <div class="fig tall" id="figDepth"></div>
+      <ul class="pts">
+        <li id="tDa1"></li>
+        <li id="tDa2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each row is one setting or reference; each bar is the median depth-law error over that pair group, with the 25th to 75th percentile as a whisker. The small ticks are each seed's own median: a gap smaller than their spread is not a gap. Log scale. The number after a name is its run count in this version of g.</p>
+      <p id="nDa"></p>
+    </aside>
+  </section>
+
+  <!-- 12 · RESULTS · (b) never-trained CRPS, pooled, with the split
+       claim    written from DATA (hCb)
+       source   results/t128/knob_table.tsv (group never, knob all)
+       numbers  DATA.knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) never-trained pairs, all knobs pooled</div>
+      <h2 id="hCb"></h2>
+      <div class="fig tall" id="figCrps"></div>
+      <ul class="pts">
+        <li id="tCb1"></li>
+        <li id="tCb2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>CRPS on counts over every never-trained pair: mean over a track's pairs, then over tracks, then over seeds. Lower is better. Dark is the oracle-scaled part (what is left after the best single rescale); light is the scale error (what that rescale removes). Ticks are the seeds. The dashed lines mark old D and old D through the base.</p>
+      <p id="nCb"></p>
+    </aside>
+  </section>
+
+  <!-- 13 · RESULTS · (b) per knob
+       claim    written from DATA (hCk)
+       source   results/t128/knob_table.tsv (groups same and cross)
+       numbers  DATA.knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) never-trained pairs, per knob</div>
+      <h2 id="hCk"></h2>
+      <div class="fig tall" id="figKnob"></div>
+      <ul class="pts">
+        <li id="tCk1"></li>
+        <li id="tCk2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each small panel is one knob's never-trained pairs (arm → arm of the same knob), and the last is pairs across two knobs. Each panel has its own x-axis. Bars are split as on the last slide: dark oracle-scaled, light scale error. The control and caller knobs do not change the counts, so they are left out.</p>
+      <p id="nCk"></p>
+    </aside>
+  </section>
+
+  <!-- 14 · RESULTS · (c) gain over the twin
+       claim    written from DATA (hTw)
+       source   results/t128/twin_table.tsv
+       numbers  DATA.twin -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) gain over the no-covariates twin</div>
+      <h2 id="hTw"></h2>
+      <div class="fig tall" id="figTwin"></div>
+      <ul class="pts">
+        <li id="tTw1"></li>
+        <li id="tTw2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Gain over the twin, per pair: (twin's CRPS − real CRPS) ÷ twin's CRPS, then the median over pairs. Above 0, the settings help; at 0, the model ignores them.</p>
+      <p>Filled dot: trained pairs. Open ring: never-trained pairs. A solid line joins them when the gap passes the noise rule; a dotted line means "within noise".</p>
+      <p id="nTw"></p>
+    </aside>
+  </section>
+
+  <!-- 15 · RESULTS · (d) collapse
+       claim    written from DATA (hCo): Z stays close to x in every setting
+       source   results/t128/collapse_table.tsv
+       numbers  DATA.collapse -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) collapse: is Z just x?</div>
+      <h2 id="hCo"></h2>
+      <div class="fig tall" id="figCollapse"></div>
+      <ul class="pts">
+        <li id="tCo1"></li>
+        <li id="tCo2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Z is the encoder's mean μ_z, computed on chromosomes 19 and 21 for every product of a run's tracks. x = log(1 + X) is the encoder's own input. Panel (a): the median gap between them, per bin. Panel (b): their correlation. If Z equals x up to a shift, the latent holds the input and nothing more: we call that <b>collapse</b>.</p>
+      <p id="nCo"></p>
+    </aside>
+  </section>
+
+  <!-- 16 · RESULTS · (e) latent agreement
+       claim    written from DATA (hAg): only the L3 settings bring two tracks' latents closer than their inputs
+       source   results/t128/agree_table.tsv
+       numbers  DATA.agree -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) latent agreement</div>
+      <h2 id="hAg"></h2>
+      <div class="fig tall" id="figAgree"></div>
+      <ul class="pts">
+        <li id="tAg1"></li>
+        <li id="tAg2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>For two products of the same track (two arms, or an arm and the base), we take the median gap between their latents, |Z − Z′|, and the median gap between their inputs, |x − x′|. If the encoder removes the settings, the latents of one sample should agree more than the inputs do: the dot lands left of the input line.</p>
+      <p id="nAg"></p>
+    </aside>
+  </section>
+
+  <!-- 17 · RESULTS · (f) swap check against the identity distance
+       claim    written from DATA (hSw)
+       source   results/t128/swap_table.tsv, swap_points.tsv.gz
+       numbers  DATA.swap, DATA.swap_pts -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) the swap check against the identity distance</div>
+      <h2 id="hSw"></h2>
+      <div class="fig tall" id="figSwap"></div>
+      <ul class="pts">
+        <li id="tSw1"></li>
+        <li id="tSw2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p><b>Swap check</b> (y): give the model c′ = c, so nothing should change, and measure how far the prediction moves from X: the median over bins with X &gt; 0 of |log(predicted mean ÷ X)|. 0 passes.</p>
+      <p><b>Identity distance</b> (x): the same measure on real pairs, c ≠ c′, against the source X. A map that returns its input has 0 here. The target is the bottom right: pass the swap check while staying far from the identity. The diagonal is where a model changes X as much when nothing should change as when the settings change.</p>
+      <p id="nSw"></p>
+    </aside>
+  </section>
+
+  <!-- 18 · RESULTS · (g) the lambda choice
+       claim    written from DATA (hLa)
+       source   results/t128/lambda_table.tsv, lambda_per_g.tsv, lambda_chosen.json
+       numbers  DATA.lam, DATA.lam_g, DATA.lam_chosen -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(g) the λ choice</div>
+      <h2 id="hLa"></h2>
+      <div class="fig tall" id="figLam"></div>
+      <ul class="pts">
+        <li id="tLa1"></li>
+        <li id="tLa2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>The rule (spec and PI ruling): on chromosome 22, each run's best validation NLL of its L1 + L2 terms, with Z = μ_z and without the λ term; per version of g, the λ with the lowest mean over runs wins. All three λ are scored on every slide regardless.</p>
+      <p id="nLa"></p>
+    </aside>
+  </section>
+
+  <!-- 19 · RESULTS · (h) the learned clean setting
+       claim    written from DATA (hCc): C_clean barely leaves its start in either form
+       source   results/t128/cclean_table.tsv
+       numbers  DATA.cknob, DATA.cdrift -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(h) where C_clean went</div>
+      <h2 id="hCc"></h2>
+      <div class="fig tall" id="figClean"></div>
+      <ul class="pts">
+        <li id="tCc1"></li>
+        <li id="tCc2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each row is one processing entry of C_clean, in the z units g reads (0 = the mean of the training settings). The grey bar is the range seen in training, which is form D's box. The black diamond is the base track. Rings mark where each form started; dots, where it ended. Median over the tracks, one g per track.</p>
+      <p>Panel (b): per setting, the median distance C_clean moved from its start, against the median spread of the learned value over the 3 seeds.</p>
+      <p id="nCc"></p>
+    </aside>
+  </section>
+
+  <!-- 20 · DISCUSSION · what this rules in and out
+       job      readings restated as what they rule in and out; no verdicts
+       numbers  restated from results (a) to (h); none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
+      <h2>The symmetric form passes the swap check far from the identity, but it does not yet beat old D on never-trained pairs</h2>
+      <div class="cards c3 lg">
+        <div class="card" style="--c:var(--s3)"><div class="rl">Ruled out</div>
+          <div class="ct">The round trip alone</div>
+          <div class="cb">Without the cross loss, the model stays at the identity: it ignores the settings, and the depth law misses by the full ratio. The VAE moves it only part of the way.</div><div class="bn" id="tR1"></div></div>
+        <div class="card" style="--c:var(--s1)"><div class="rl">Ruled in</div>
+          <div class="ct">One shared CNN, set by one g, with the cross loss</div>
+          <div class="cb">It returns X when c′ = c, changes X when the settings change, and keeps its gain on never-trained pairs as a whole.</div><div class="bn" id="tR2"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Not shown</div>
+          <div class="ct">A gain over old D, or a latent free of x</div>
+          <div class="cb">Never-trained CRPS sits within noise of old D, behind old D through the base; Z tracks x closely in every setting; C_clean barely moves.</div><div class="bn" id="tR3"></div></div>
+      </div>
+      <p class="note">These are readings from one exploratory pass, not verdicts. Each is open to the doubts on the next slide.</p>
+    </div>
+    <aside class="notes">
+      <p>Ruled out: the spec's own doubt came true. With a skip that starts at the identity and only the round trip to fit, the identity is a perfect answer, and the model takes it.</p>
+      <p>Ruled in: the cross loss is what makes the shared network use the settings. The default passes the swap check while moving X on real pairs, the target the PI named.</p>
+      <p>Not shown: the never-trained pairs are no better than old D's, and chaining old D through the base by hand still does better. The latent stays close to x, and the clean setting stays near where it started.</p>
+    </aside>
+  </section>
+
+  <!-- 21 · DISCUSSION · doubts
+       job      the doubts the spec and the run named, each with its count
+       source   DATA.steps, DATA.counts, DATA.n; the kits and the reruns from plan_t128.md "## Log"
+       numbers  restated; the kit names and job history are typed from the plan log -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>doubts</div>
+      <h2>Five doubts could each change a reading</h2>
+      <div class="cards c5">
+        <div class="card" style="--c:var(--s1)"><div class="ct">C_clean is not identifiable</div>
+          <div class="cb">Under form A, g can absorb any shift of C_clean, so its learned value may mean nothing. It also barely moved.</div></div>
+        <div class="card" style="--c:var(--s2)"><div class="ct">Under-training</div>
+          <div class="cb" id="tDb2"></div></div>
+        <div class="card" style="--c:var(--ho)"><div class="ct">Incomplete grid</div>
+          <div class="cb" id="tDb3"></div></div>
+        <div class="card" style="--c:var(--nv)"><div class="ct">Two clusters, three kits</div>
+          <div class="cb" id="tDb4"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="ct">Device and reruns</div>
+          <div class="cb">GPU type is not in the tables. Some runs were re-run after a timeout, a busy GPU node, or the form-D device bug; a rerun trains from scratch.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>Kits: Nibi kit K1 at commit 58c9c22; Fir kit K2 at f47cf11; Fir kit K3 at 836e96c, which is K2 plus a one-line fix that put form D's box on the same device as its start. The code of each setting is the same in every kit it ran on.</p>
+      <p>Reruns (plan log): three default runs timed out at 4 h and were re-run with 8 h; the form-D array was re-submitted on K3 after the device bug; on Fir, runs on a busy or slow node were re-run with those nodes excluded. The device per run is recorded on the cluster, not in these tables.</p>
+      <p id="nDb"></p>
+    </aside>
+  </section>
+
+  <!-- 22 · DISCUSSION · phase-2 options
+       job      options for the PI to choose from; marked as options, not recommendations
+       numbers  restated pointers only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>phase 2 · options for the PI</div>
+      <h2>Phase 2 options, for the PI to choose from</h2>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--s1)"><span class="tag opt">option</span><div class="ct">A shared-scope C_clean</div>
+          <div class="cb">One clean setting for all tracks instead of one per track, so the middle is shared and may become identifiable.</div></div>
+        <div class="card" style="--c:var(--twin)"><span class="tag opt">option</span><div class="ct">Twins for other settings</div>
+          <div class="cb">No-covariates twins for form D, the λ settings and the VAE settings, so their gain over the twin can be read.</div></div>
+        <div class="card" style="--c:var(--s4)"><span class="tag opt">option</span><div class="ct">A bottleneck against collapse</div>
+          <div class="cb">Make Z unable to copy x: pool Z to a coarser resolution, drop the skip in the encoder, or add noise to Z.</div></div>
+        <div class="card" style="--c:var(--s2)"><span class="tag opt">option</span><div class="ct">More steps</div>
+          <div class="cb" id="tOp4"></div></div>
+        <div class="card" style="--c:var(--s6)"><span class="tag opt">option</span><div class="ct">L3 with the cross loss, further</div>
+          <div class="cb" id="tOp5"></div></div>
+        <div class="card" style="--c:var(--muted)"><span class="tag opt">option</span><div class="ct">The full grid</div>
+          <div class="cb">Every setting crossed with both C_clean forms and both latents, as the spec's phase 2 lists.</div></div>
+      </div>
+      <p class="note">These are options, not recommendations. The readings above do not rank them.</p>
+    </div>
+    <aside class="notes">
+      <p>The first three are from the spec's phase 2 list and the brief. "More steps" and "L3 further" come from the readings: many runs used every step, and only the L3 settings brought two tracks' latents closer than their inputs.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · symmetric encoder-decoder · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py from cruxvault/results/t128/ (see its docstring):
+     counts    {assigned, done, fir:[done, assigned], nibi:[..], g_per_track, seeds, settings_by_cluster}
+     n         "key|model" -> {assigned, law}          steps  "key|model" -> [runs, at cap, median steps, median best step]
+     depth     [key, g version, group, median, q25, q75, seed spread, [seed medians], n runs, n records]
+     knob      [key, g version, group, knob, CRPS, oracle-scaled, scale error, seed spread, n runs, n pairs, label vs old D, [seeds]]
+     twin      [key, g version, group, knob, gain, seed spread, n pairs, n runs real, n runs twin, label trained vs this group]
+     collapse  [key, g version, model, median |Z - x|, seed spread, corr(Z, x), corr spread, median sigma_z, n runs, [seeds]]
+     agree     [key, g version, model, one/two/all knobs, median |Z - Z'|, seed spread, median |x - x'|, n runs, [seeds]]
+     swap      [key, g version, model, swap, seed spread, identity distance, its spread, n runs]
+     swap_pts  [key, g version, model, identity distance, swap]   one per run (median over its knobs)
+     lam       [key, g version, lambda, mean val NLL, seed spread, [seeds], chosen, n runs, n runs full, n g's lowest]
+     lam_g     [key, g version, g, mean val NLL, n seeds];  lam_chosen  g version -> {arm, lam, complete, runner_up, gap, label}
+     cdrift    "key|g version|model" -> {drift_from_init, drift_from_base, seed_spread, frac_at_box_edge, n_runs}
+     cknob     [key, knob index, knob, start, learned, base, box low, box high, seed spread]  one g per track, median over tracks
+   =========================================================================== */
+const DATA = {"counts":{"assigned":240,"done":222,"fir":[180,198],"nibi":[42,42],"g_per_track":7,"seeds":3,"settings_by_cluster":{"fir":["def","formd","rt","rtvae","l01","l1","l10","vae"],"nibi":["l10","vae"]}},"n":{"def|nocov":{"assigned":24,"law":24},"def|real":{"assigned":24,"law":24},"formd|real":{"assigned":24,"law":24},"l01|real":{"assigned":24,"law":14},"l1|real":{"assigned":24,"law":20},"l10|real":{"assigned":24,"law":20},"rt|nocov":{"assigned":24,"law":24},"rt|real":{"assigned":24,"law":24},"rtvae|real":{"assigned":24,"law":24},"vae|real":{"assigned":24,"law":24},"oldd|nocov":{"assigned":24,"law":24},"oldd|real":{"assigned":24,"law":24},"via|real":{"assigned":24,"law":24}},"steps":{"def|nocov":[24,8,3125.0,2125.0],"def|real":[24,22,4000.0,3750.0],"formd|real":[24,24,4000.0,4000.0],"l01|real":[14,13,4000.0,3750.0],"l1|real":[20,15,4000.0,3500.0],"l10|real":[20,12,4000.0,3500.0],"rt|nocov":[24,20,4000.0,3750.0],"rt|real":[24,16,4000.0,3500.0],"rtvae|real":[24,0,1250.0,250.0],"vae|real":[24,0,1750.0,750.0]},"cap":4000,"depth":[["oldd","across","heldout",0.08122,0.04285,0.18702,0.04937,[0.11616,0.06679,0.08212],3,42],["oldd","across","never",0.33557,0.18434,0.6412,0.23931,[0.1642,0.40351,0.40141],3,42],["oldd","across","never75",0.24833,0.16142,0.40039,0.21268,[0.215,0.39779,0.18511],3,84],["oldd","across","trained",0.05107,0.02894,0.07651,0.01274,[0.06295,0.05021,0.05142],3,84],["oldd","per_track","heldout",0.0979,0.03891,0.15719,0.01864,[0.11405,0.0971,0.09541],21,42],["oldd","per_track","never",0.29085,0.11957,0.51334,0.05137,[0.27595,0.26029,0.31166],21,42],["oldd","per_track","never75",0.18769,0.10006,0.35734,0.06053,[0.16156,0.22209,0.18769],21,84],["oldd","per_track","trained",0.05379,0.02252,0.107,0.00243,[0.05206,0.0545,0.05232],21,84],["def","across","heldout",0.1551,0.12303,0.2126,0.03497,[0.17801,0.15809,0.14305],3,42],["def","across","never",0.41643,0.28115,0.50295,0.39158,[0.46995,0.16542,0.557],3,42],["def","across","never75",0.20656,0.09013,0.45566,0.2493,[0.19428,0.12423,0.37353],3,84],["def","across","trained",0.0918,0.0599,0.16556,0.04013,[0.1156,0.11923,0.0791],3,84],["def","per_track","heldout",0.11501,0.04919,0.15087,0.06063,[0.12702,0.1011,0.0664],21,42],["def","per_track","never",0.31071,0.26229,0.5229,0.00636,[0.31311,0.3106,0.30675],21,42],["def","per_track","never75",0.30099,0.15392,0.40056,0.04655,[0.28363,0.31643,0.26989],21,84],["def","per_track","trained",0.06179,0.0286,0.11314,0.01159,[0.06924,0.05765,0.0597],21,84],["formd","across","heldout",0.07763,0.03274,0.13031,0.01282,[0.06879,0.08161,0.07834],3,42],["formd","across","never",0.28871,0.18632,0.69339,0.64609,[0.82569,0.1796,0.22869],3,42],["formd","across","never75",0.28827,0.1193,0.48512,0.34459,[0.50273,0.15813,0.17348],3,84],["formd","across","trained",0.07876,0.03468,0.12679,0.03871,[0.08242,0.04977,0.08848],3,84],["formd","per_track","heldout",0.10588,0.04967,0.16617,0.0683,[0.16011,0.09181,0.09535],21,42],["formd","per_track","never",0.39234,0.30088,0.5653,0.06007,[0.41387,0.4125,0.3538],21,42],["formd","per_track","never75",0.29279,0.17981,0.43579,0.1311,[0.36802,0.26997,0.23692],21,84],["formd","per_track","trained",0.0709,0.0309,0.11086,0.03065,[0.07516,0.04451,0.07117],21,84],["l01","across","heldout",0.14937,0.09119,0.19628,null,[0.14937],1,14],["l01","across","never",0.17553,0.13595,0.2576,null,[0.17553],1,14],["l01","across","never75",0.15987,0.10112,0.45202,null,[0.15987],1,28],["l01","across","trained",0.10796,0.03186,0.1717,null,[0.10796],1,28],["l01","per_track","heldout",0.11799,0.06249,0.17572,0.02478,[0.13704,0.11802,0.11226],13,26],["l01","per_track","never",0.33367,0.23361,0.5378,0.07749,[0.41116,0.33367,0.3524],13,26],["l01","per_track","never75",0.33063,0.21648,0.4458,0.11719,[0.37076,0.25357,0.34698],13,52],["l01","per_track","trained",0.05803,0.02246,0.09014,0.05166,[0.05652,0.08424,0.03258],13,52],["l1","per_track","heldout",0.08707,0.05191,0.13414,0.04343,[0.11113,0.0677,0.08831],20,40],["l1","per_track","never",0.39846,0.27164,0.51754,0.0687,[0.35526,0.39846,0.42396],20,40],["l1","per_track","never75",0.29462,0.13015,0.4667,0.08937,[0.21811,0.29705,0.30748],20,80],["l1","per_track","trained",0.0728,0.03822,0.16654,0.02172,[0.0722,0.08739,0.06567],20,80],["l10","across","heldout",0.13778,0.08182,0.20786,0.09354,[0.20739,0.11385,0.12414],3,42],["l10","across","never",0.34307,0.17571,0.47185,0.45402,[0.55365,0.09962,0.34307],3,42],["l10","across","never75",0.25001,0.09003,0.42658,0.23656,[0.38728,0.22622,0.15071],3,84],["l10","across","trained",0.14039,0.05569,0.23583,0.17386,[0.22508,0.05122,0.14526],3,84],["l10","per_track","heldout",0.08822,0.05028,0.14972,0.02819,[0.09671,0.10304,0.07486],17,34],["l10","per_track","never",0.34502,0.21152,0.46163,0.07094,[0.33013,0.37659,0.30565],17,34],["l10","per_track","never75",0.2264,0.12203,0.41234,0.05421,[0.27634,0.22293,0.22213],17,68],["l10","per_track","trained",0.11283,0.05471,0.21344,0.07607,[0.15967,0.09568,0.08359],17,68],["rt","across","heldout",1.99899,1.996,2.02272,0.02542,[1.99654,2.02195,1.99688],3,42],["rt","across","never",1.99525,1.98849,2.01889,0.03393,[1.99011,2.02404,1.99404],3,42],["rt","across","never75",0.99835,0.99439,1.0073,0.01609,[0.99482,1.01091,0.99601],3,84],["rt","across","trained",2.36149,1.00151,2.99691,0.02637,[2.35823,2.38256,2.35619],3,84],["rt","per_track","heldout",2.00519,1.99698,2.02602,0.02765,[2.00171,2.02514,1.99749],21,42],["rt","per_track","never",2.00213,1.98932,2.01554,0.02137,[1.99715,2.01852,1.99995],21,42],["rt","per_track","never75",1.0026,0.99538,1.00884,0.00633,[0.99882,1.00514,1.00059],21,84],["rt","per_track","trained",2.34616,1.00149,3.00042,0.02303,[2.35497,2.36688,2.34384],21,84],["rtvae","across","heldout",1.66236,1.34559,1.83952,0.49649,[1.76444,2.00925,1.51276],3,42],["rtvae","across","never",1.47652,0.98836,1.66016,0.32161,[1.50077,1.62679,1.30518],3,42],["rtvae","across","never75",0.7486,0.34859,1.02791,0.19236,[0.76683,0.8346,0.64224],3,84],["rtvae","across","trained",1.86643,0.96994,2.33882,0.16365,[1.71828,1.88193,1.76552],3,84],["rtvae","per_track","heldout",1.48385,1.3262,1.84957,0.36953,[1.66946,1.56485,1.29993],21,42],["rtvae","per_track","never",1.37938,1.16511,1.73793,0.23343,[1.40819,1.48434,1.25091],21,42],["rtvae","per_track","never75",0.6693,0.42545,0.95896,0.12411,[0.6946,0.72959,0.60548],21,84],["rtvae","per_track","trained",1.57381,0.84637,2.16691,0.31562,[1.73239,1.71658,1.41677],21,84],["vae","across","heldout",0.31821,0.09362,0.48915,0.31034,[0.45519,0.14484,0.21554],3,42],["vae","across","never",0.16964,0.0923,0.35349,0.2248,[0.17325,0.11989,0.34469],3,42],["vae","across","never75",0.22062,0.11603,0.44923,0.15541,[0.18609,0.22781,0.34151],3,84],["vae","across","trained",0.22378,0.09765,0.37035,0.21323,[0.31412,0.10088,0.19672],3,84],["vae","per_track","heldout",0.11192,0.06392,0.19809,0.06977,[0.16079,0.09102,0.14839],21,42],["vae","per_track","never",0.22329,0.12897,0.37353,0.13016,[0.31714,0.1959,0.18698],21,42],["vae","per_track","never75",0.25493,0.08568,0.40572,0.11247,[0.32246,0.24932,0.20999],21,84],["vae","per_track","trained",0.10197,0.03895,0.18727,0.09045,[0.10517,0.06985,0.1603],21,84],["via","across","never",0.07087,0.03161,0.1409,0.11204,[0.06245,0.16494,0.0529],3,42],["via","across","never75",0.09919,0.03425,0.2604,0.07219,[0.12374,0.07794,0.15013],3,84],["via","per_track","never",0.12332,0.073,0.17274,0.05437,[0.0951,0.14947,0.10476],21,42],["via","per_track","never75",0.12496,0.04527,0.17648,0.02355,[0.11199,0.12854,0.13554],21,84]],"knob":[["oldd","across","cross","all",0.72033,0.65602,0.06431,0.02201,3,5898,"n/a",[0.72761,0.70569,0.7277]],["oldd","across","cross","cross",0.72033,0.65602,0.06431,0.02201,3,5898,"n/a",[0.72761,0.70569,0.7277]],["oldd","across","heldout","all",0.42248,0.41445,0.00802,0.00736,3,42,"n/a",[0.42218,0.41895,0.42631]],["oldd","across","heldout","depth",0.42248,0.41445,0.00802,0.00736,3,42,"n/a",[0.42218,0.41895,0.42631]],["oldd","across","never","all",0.6667,0.61197,0.05473,0.01947,3,6282,"n/a",[0.6725,0.65406,0.67353]],["oldd","across","same","abproxy",0.61833,0.61625,0.00208,0.00179,3,36,"n/a",[0.61846,0.61737,0.61916]],["oldd","across","same","all",0.31956,0.3127,0.00686,0.00297,3,384,"n/a",[0.318,0.3197,0.32098]],["oldd","across","same","crop",0.40011,0.3949,0.00521,0.00543,3,36,"n/a",[0.40134,0.40222,0.39679]],["oldd","across","same","depth",0.27269,0.25885,0.01383,0.00574,3,126,"n/a",[0.26999,0.27234,0.27573]],["oldd","across","same","mapq",0.60921,0.60582,0.0034,0.00841,3,36,"n/a",[0.60602,0.60719,0.61443]],["oldd","across","trained","abproxy",0.59368,0.59012,0.00356,0.00348,3,72,"n/a",[0.59511,0.59429,0.59163]],["oldd","across","trained","all",0.51225,0.48194,0.03031,0.02909,3,684,"n/a",[0.49342,0.52251,0.52081]],["oldd","across","trained","crop",0.51091,0.50905,0.00186,0.00156,3,72,"n/a",[0.51083,0.51173,0.51017]],["oldd","across","trained","depth",0.4018,0.40059,0.00121,0.00454,3,84,"n/a",[0.39974,0.40428,0.40137]],["oldd","across","trained","mapq",0.60615,0.60537,0.00078,0.00307,3,72,"n/a",[0.60641,0.60755,0.60448]],["oldd","per_track","cross","all",0.71484,0.64846,0.06638,0.05324,21,5898,"n/a",[0.7125,0.68938,0.74262]],["oldd","per_track","cross","cross",0.71484,0.64846,0.06638,0.05324,21,5898,"n/a",[0.7125,0.68938,0.74262]],["oldd","per_track","heldout","all",0.41248,0.4081,0.00438,0.00208,21,42,"n/a",[0.41233,0.41152,0.4136]],["oldd","per_track","heldout","depth",0.41248,0.4081,0.00438,0.00208,21,42,"n/a",[0.41233,0.41152,0.4136]],["oldd","per_track","never","all",0.6625,0.60611,0.05639,0.0436,21,6282,"n/a",[0.6612,0.64135,0.68495]],["oldd","per_track","same","abproxy",0.6158,0.61372,0.00208,0.00802,18,36,"n/a",[0.62069,0.61404,0.61267]],["oldd","per_track","same","all",0.32114,0.31387,0.00727,0.00233,21,384,"n/a",[0.3208,0.32014,0.32247]],["oldd","per_track","same","crop",0.40016,0.39582,0.00435,0.01195,18,36,"n/a",[0.40638,0.39967,0.39443]],["oldd","per_track","same","depth",0.27468,0.26142,0.01326,0.00639,21,126,"n/a",[0.27063,0.27702,0.27638]],["oldd","per_track","same","mapq",0.6079,0.60427,0.00363,0.00345,18,36,"n/a",[0.60694,0.60666,0.6101]],["oldd","per_track","trained","abproxy",0.58684,0.584,0.00285,0.00376,18,72,"n/a",[0.58932,0.58564,0.58556]],["oldd","per_track","trained","all",0.44502,0.44149,0.00353,0.00288,21,684,"n/a",[0.44616,0.44328,0.44563]],["oldd","per_track","trained","crop",0.50829,0.50714,0.00115,0.00217,18,72,"n/a",[0.50933,0.50837,0.50717]],["oldd","per_track","trained","depth",0.39633,0.39482,0.00151,0.00172,21,84,"n/a",[0.39747,0.39578,0.39575]],["oldd","per_track","trained","mapq",0.60438,0.603,0.00138,0.00178,18,72,"n/a",[0.60496,0.60498,0.6032]],["def","across","cross","all",0.72728,0.66759,0.05968,0.04448,3,5898,"within noise",[0.72795,0.74918,0.7047]],["def","across","cross","cross",0.72728,0.66759,0.05968,0.04448,3,5898,"within noise",[0.72795,0.74918,0.7047]],["def","across","heldout","all",0.42457,0.41606,0.00851,0.00994,3,42,"within noise",[0.43089,0.42188,0.42095]],["def","across","heldout","depth",0.42457,0.41606,0.00851,0.00994,3,42,"within noise",[0.43089,0.42188,0.42095]],["def","across","never","all",0.68117,0.62711,0.05406,0.03351,3,6282,"within noise",[0.6831,0.69695,0.66344]],["def","across","same","abproxy",0.81856,0.76061,0.05796,0.02351,3,36,"counts",[0.82287,0.80466,0.82817]],["def","across","same","all",0.3816,0.35707,0.02452,0.01634,3,384,"counts",[0.38643,0.37101,0.38735]],["def","across","same","crop",0.53158,0.48314,0.04845,0.03328,3,36,"counts",[0.52712,0.51718,0.55046]],["def","across","same","depth",0.31806,0.29078,0.02727,0.03141,3,126,"within noise",[0.33233,0.30091,0.32093]],["def","across","same","mapq",0.82028,0.76785,0.05243,0.05528,3,36,"counts",[0.81584,0.79486,0.85014]],["def","across","trained","abproxy",0.59965,0.59434,0.00531,0.01184,3,72,"within noise",[0.59802,0.60639,0.59455]],["def","across","trained","all",0.4837,0.47503,0.00866,0.03008,3,684,"within noise",[0.48288,0.49914,0.46906]],["def","across","trained","crop",0.5149,0.5132,0.0017,0.00378,3,72,"within noise",[0.51487,0.51681,0.51302]],["def","across","trained","depth",0.40381,0.40099,0.00282,0.00694,3,84,"within noise",[0.40287,0.40776,0.40081]],["def","across","trained","mapq",0.61063,0.60887,0.00176,0.00399,3,72,"within noise",[0.60851,0.6125,0.61087]],["def","per_track","cross","all",0.65596,0.62475,0.03121,0.02174,21,5898,"within noise",[0.64523,0.65568,0.66697]],["def","per_track","cross","cross",0.65596,0.62475,0.03121,0.02174,21,5898,"within noise",[0.64523,0.65568,0.66697]],["def","per_track","heldout","all",0.41849,0.41254,0.00594,0.01888,21,42,"within noise",[0.41845,0.42795,0.40906]],["def","per_track","heldout","depth",0.41849,0.41254,0.00594,0.01888,21,42,"within noise",[0.41845,0.42795,0.40906]],["def","per_track","never","all",0.62121,0.59161,0.0296,0.0182,21,6282,"within noise",[0.61236,0.62071,0.63057]],["def","per_track","same","abproxy",0.81206,0.75747,0.05459,0.01403,18,36,"counts",[0.82124,0.80721,0.80772]],["def","per_track","same","all",0.37701,0.35629,0.02071,0.00592,21,384,"counts",[0.37756,0.37969,0.37377]],["def","per_track","same","crop",0.52228,0.48069,0.04159,0.00553,18,36,"counts",[0.52427,0.52382,0.51874]],["def","per_track","same","depth",0.31108,0.29029,0.02079,0.00939,21,126,"counts",[0.30856,0.31703,0.30764]],["def","per_track","same","mapq",0.8079,0.76575,0.04215,0.00927,18,36,"counts",[0.80785,0.81255,0.80328]],["def","per_track","trained","abproxy",0.59118,0.58767,0.00351,0.00312,18,72,"within noise",[0.59281,0.59105,0.58969]],["def","per_track","trained","all",0.4463,0.44315,0.00315,0.00762,21,684,"within noise",[0.44227,0.44675,0.4499]],["def","per_track","trained","crop",0.5118,0.51008,0.00172,0.00341,18,72,"within noise",[0.51138,0.5103,0.51371]],["def","per_track","trained","depth",0.39729,0.39618,0.00111,0.00487,21,84,"within noise",[0.39893,0.39887,0.39406]],["def","per_track","trained","mapq",0.60651,0.60539,0.00112,0.00273,18,72,"within noise",[0.60499,0.60771,0.60682]],["formd","across","cross","all",0.68898,0.65192,0.03706,0.05146,3,5898,"within noise",[0.69513,0.71164,0.66018]],["formd","across","cross","cross",0.68898,0.65192,0.03706,0.05146,3,5898,"within noise",[0.69513,0.71164,0.66018]],["formd","across","heldout","all",0.41908,0.41506,0.00401,0.02324,3,42,"within noise",[0.41049,0.43373,0.413]],["formd","across","heldout","depth",0.41908,0.41506,0.00401,0.02324,3,42,"within noise",[0.41049,0.43373,0.413]],["formd","across","never","all",0.64699,0.6133,0.03369,0.04539,3,6282,"within noise",[0.65293,0.66671,0.62132]],["formd","across","same","abproxy",0.77136,0.74004,0.03132,0.05002,3,36,"counts",[0.78855,0.78701,0.73853]],["formd","across","same","all",0.37284,0.35438,0.01846,0.01799,3,384,"counts",[0.3785,0.37901,0.36101]],["formd","across","same","crop",0.52732,0.48436,0.04296,0.01602,3,36,"counts",[0.53705,0.52387,0.52103]],["formd","across","same","depth",0.30741,0.28797,0.01945,0.03239,3,126,"within noise",[0.31864,0.31735,0.28625]],["formd","across","same","mapq",0.81823,0.76892,0.04931,0.01659,3,36,"counts",[0.82702,0.81724,0.81043]],["formd","across","trained","abproxy",0.60262,0.5962,0.00642,0.00266,3,72,"counts",[0.60196,0.60428,0.60162]],["formd","across","trained","all",0.48894,0.47688,0.01205,0.04564,3,684,"within noise",[0.48741,0.51252,0.46688]],["formd","across","trained","crop",0.51255,0.51078,0.00177,0.00495,3,72,"within noise",[0.5141,0.51425,0.5093]],["formd","across","trained","depth",0.40893,0.40407,0.00486,0.02959,3,84,"within noise",[0.39982,0.42828,0.39869]],["formd","across","trained","mapq",0.60729,0.6057,0.00159,0.00435,3,72,"within noise",[0.61018,0.60583,0.60585]],["formd","per_track","cross","all",0.65081,0.62514,0.02567,0.04251,21,5898,"within noise",[0.63646,0.637,0.67896]],["formd","per_track","cross","cross",0.65081,0.62514,0.02567,0.04251,21,5898,"within noise",[0.63646,0.637,0.67896]],["formd","per_track","heldout","all",0.41365,0.41068,0.00297,0.00555,21,42,"within noise",[0.41648,0.41093,0.41353]],["formd","per_track","heldout","depth",0.41365,0.41068,0.00297,0.00555,21,42,"within noise",[0.41648,0.41093,0.41353]],["formd","per_track","never","all",0.61607,0.59165,0.02442,0.03435,21,6282,"within noise",[0.6044,0.60506,0.63874]],["formd","per_track","same","abproxy",0.80141,0.75334,0.04807,0.01591,18,36,"counts",[0.80868,0.80278,0.79277]],["formd","per_track","same","all",0.37455,0.35593,0.01862,0.00248,21,384,"counts",[0.37565,0.37483,0.37317]],["formd","per_track","same","crop",0.52083,0.48098,0.03986,0.00619,18,36,"counts",[0.51921,0.52474,0.51855]],["formd","per_track","same","depth",0.30656,0.28857,0.01799,0.00663,21,126,"counts",[0.3105,0.30531,0.30387]],["formd","per_track","same","mapq",0.81436,0.76834,0.04602,0.00536,18,36,"counts",[0.81432,0.81706,0.8117]],["formd","per_track","trained","abproxy",0.58988,0.58712,0.00276,0.00204,18,72,"within noise",[0.5891,0.58941,0.59114]],["formd","per_track","trained","all",0.45106,0.44678,0.00428,0.02186,21,684,"within noise",[0.44282,0.44568,0.46468]],["formd","per_track","trained","crop",0.51309,0.51092,0.00217,0.00255,18,72,"within noise",[0.5126,0.51461,0.51206]],["formd","per_track","trained","depth",0.39873,0.39769,0.00104,0.00279,21,84,"within noise",[0.4002,0.39741,0.39858]],["formd","per_track","trained","mapq",0.60577,0.60495,0.00083,0.00033,18,72,"within noise",[0.60567,0.60599,0.60566]],["l01","across","cross","all",0.70239,0.6494,0.05299,null,1,1966,"no spread (n_seeds < 2)",[0.70239]],["l01","across","cross","cross",0.70239,0.6494,0.05299,null,1,1966,"no spread (n_seeds < 2)",[0.70239]],["l01","across","heldout","all",0.42266,0.41189,0.01077,null,1,14,"no spread (n_seeds < 2)",[0.42266]],["l01","across","heldout","depth",0.42266,0.41189,0.01077,null,1,14,"no spread (n_seeds < 2)",[0.42266]],["l01","across","never","all",0.65715,0.6105,0.04666,null,1,2094,"no spread (n_seeds < 2)",[0.65715]],["l01","across","same","abproxy",0.82444,0.75721,0.06723,null,1,12,"no spread (n_seeds < 2)",[0.82444]],["l01","across","same","all",0.37359,0.35268,0.02091,null,1,128,"no spread (n_seeds < 2)",[0.37359]],["l01","across","same","crop",0.52784,0.48357,0.04427,null,1,12,"no spread (n_seeds < 2)",[0.52784]],["l01","across","same","depth",0.29469,0.27844,0.01625,null,1,42,"no spread (n_seeds < 2)",[0.29469]],["l01","across","same","mapq",0.82087,0.77193,0.04894,null,1,12,"no spread (n_seeds < 2)",[0.82087]],["l01","across","trained","abproxy",0.60136,0.59607,0.00529,null,1,24,"no spread (n_seeds < 2)",[0.60136]],["l01","across","trained","all",0.49375,0.47906,0.01469,null,1,228,"no spread (n_seeds < 2)",[0.49375]],["l01","across","trained","crop",0.51385,0.5112,0.00266,null,1,24,"no spread (n_seeds < 2)",[0.51385]],["l01","across","trained","depth",0.40395,0.40096,0.00299,null,1,28,"no spread (n_seeds < 2)",[0.40395]],["l01","across","trained","mapq",0.60816,0.607,0.00116,null,1,24,"no spread (n_seeds < 2)",[0.60816]],["l01","per_track","cross","all",0.73486,0.69262,0.04224,0.05046,13,3322,"within noise",[0.75592,0.70546,0.7432]],["l01","per_track","cross","cross",0.73486,0.69262,0.04224,0.05046,13,3322,"within noise",[0.75592,0.70546,0.7432]],["l01","per_track","heldout","all",0.45073,0.43529,0.01544,0.0352,13,26,"within noise",[0.46468,0.42948,0.45804]],["l01","per_track","heldout","depth",0.45073,0.43529,0.01544,0.0352,13,26,"within noise",[0.46468,0.42948,0.45804]],["l01","per_track","never","all",0.68049,0.64213,0.03836,0.03997,13,3546,"within noise",[0.69655,0.65658,0.68833]],["l01","per_track","same","abproxy",0.80307,0.75148,0.05159,0.05373,10,20,"counts",[0.7921,0.78169,0.83542]],["l01","per_track","same","all",0.37069,0.34813,0.02256,0.0103,13,224,"counts",[0.37151,0.36514,0.37543]],["l01","per_track","same","crop",0.51851,0.4751,0.04341,0.02107,10,20,"counts",[0.51183,0.51131,0.53239]],["l01","per_track","same","depth",0.31505,0.29027,0.02478,0.01137,13,78,"counts",[0.32088,0.30951,0.31478]],["l01","per_track","same","mapq",0.8078,0.761,0.04681,0.03945,10,20,"counts",[0.80458,0.78969,0.82914]],["l01","per_track","trained","abproxy",0.5766,0.57409,0.00251,0.01138,10,40,"within noise",[0.57061,0.58199,0.5772]],["l01","per_track","trained","all",0.49101,0.48518,0.00584,0.01701,13,396,"counts",[0.49552,0.48025,0.49726]],["l01","per_track","trained","crop",0.50443,0.50285,0.00158,0.00583,10,40,"within noise",[0.50148,0.5045,0.50731]],["l01","per_track","trained","depth",0.42287,0.4204,0.00248,0.01686,13,52,"within noise",[0.42777,0.41199,0.42886]],["l01","per_track","trained","mapq",0.59934,0.59826,0.00108,0.00542,10,40,"within noise",[0.59687,0.59885,0.60229]],["l1","per_track","cross","all",0.66793,0.6398,0.02813,0.04056,20,5576,"within noise",[0.68647,0.64591,0.6714]],["l1","per_track","cross","cross",0.66793,0.6398,0.02813,0.04056,20,5576,"within noise",[0.68647,0.64591,0.6714]],["l1","per_track","heldout","all",0.42397,0.4172,0.00676,0.01123,20,40,"within noise",[0.43089,0.42135,0.41966]],["l1","per_track","heldout","depth",0.42397,0.4172,0.00676,0.01123,20,40,"within noise",[0.43089,0.42135,0.41966]],["l1","per_track","never","all",0.63023,0.60363,0.0266,0.03201,20,5940,"within noise",[0.64488,0.61287,0.63296]],["l1","per_track","same","abproxy",0.80028,0.75145,0.04884,0.01821,17,34,"counts",[0.80153,0.80876,0.79055]],["l1","per_track","same","all",0.37378,0.35494,0.01884,0.00293,20,364,"counts",[0.37363,0.37532,0.3724]],["l1","per_track","same","crop",0.51107,0.4794,0.03167,0.01605,17,34,"counts",[0.50562,0.52167,0.50594]],["l1","per_track","same","depth",0.30938,0.28846,0.02092,0.01272,20,120,"counts",[0.31055,0.31516,0.30243]],["l1","per_track","same","mapq",0.79917,0.75965,0.03953,0.00384,17,34,"counts",[0.79774,0.80158,0.7982]],["l1","per_track","trained","abproxy",0.60356,0.59787,0.00569,0.01147,17,68,"within noise",[0.60858,0.60499,0.59711]],["l1","per_track","trained","all",0.46299,0.45806,0.00493,0.02641,20,648,"within noise",[0.47939,0.45298,0.45659]],["l1","per_track","trained","crop",0.51855,0.51593,0.00262,0.00707,17,68,"within noise",[0.52202,0.51495,0.51868]],["l1","per_track","trained","depth",0.40457,0.4023,0.00227,0.0131,20,80,"within noise",[0.41289,0.39979,0.40102]],["l1","per_track","trained","mapq",0.61354,0.61153,0.002,0.00791,17,68,"within noise",[0.61676,0.60884,0.61501]],["l10","across","cross","all",0.71558,0.68326,0.03232,0.05504,3,5898,"within noise",[0.70348,0.69411,0.74915]],["l10","across","cross","cross",0.71558,0.68326,0.03232,0.05504,3,5898,"within noise",[0.70348,0.69411,0.74915]],["l10","across","heldout","all",0.43994,0.42844,0.0115,0.00224,3,42,"counts",[0.44102,0.43878,0.44002]],["l10","across","heldout","depth",0.43994,0.42844,0.0115,0.00224,3,42,"counts",[0.44102,0.43878,0.44002]],["l10","across","never","all",0.66907,0.6399,0.02917,0.04836,3,6282,"within noise",[0.66092,0.64896,0.69732]],["l10","across","same","abproxy",0.77701,0.74851,0.0285,0.00323,3,36,"counts",[0.77897,0.7763,0.77574]],["l10","across","same","all",0.36768,0.35391,0.01377,0.01672,3,384,"counts",[0.375,0.35827,0.36977]],["l10","across","same","crop",0.48703,0.47191,0.01513,0.01409,3,36,"counts",[0.48955,0.47873,0.49282]],["l10","across","same","depth",0.29527,0.28079,0.01448,0.03297,3,126,"within noise",[0.31293,0.27996,0.29292]],["l10","across","same","mapq",0.7721,0.74734,0.02477,0.01514,3,36,"counts",[0.77737,0.76222,0.77672]],["l10","across","trained","abproxy",0.63297,0.61857,0.0144,0.01788,3,72,"counts",[0.63774,0.62165,0.63953]],["l10","across","trained","all",0.5175,0.50268,0.01482,0.0378,3,684,"within noise",[0.50765,0.50353,0.54133]],["l10","across","trained","crop",0.53534,0.52842,0.00692,0.01639,3,72,"within noise",[0.54184,0.52545,0.53874]],["l10","across","trained","depth",0.41779,0.41383,0.00396,0.00226,3,84,"counts",[0.41858,0.41632,0.41849]],["l10","across","trained","mapq",0.63536,0.62619,0.00917,0.02982,3,72,"within noise",[0.65197,0.62215,0.63196]],["l10","per_track","cross","all",0.68498,0.66254,0.02244,0.06739,17,4610,"within noise",[0.66302,0.72965,0.66226]],["l10","per_track","cross","cross",0.68498,0.66254,0.02244,0.06739,17,4610,"within noise",[0.66302,0.72965,0.66226]],["l10","per_track","heldout","all",0.43568,0.43075,0.00493,0.00756,17,34,"counts",[0.43842,0.43776,0.43086]],["l10","per_track","heldout","depth",0.43568,0.43075,0.00493,0.00756,17,34,"counts",[0.43842,0.43776,0.43086]],["l10","per_track","never","all",0.64123,0.62068,0.02056,0.05625,17,4914,"within noise",[0.62244,0.67869,0.62258]],["l10","per_track","same","abproxy",0.74299,0.72177,0.02123,0.03436,14,28,"counts",[0.76091,0.74151,0.72655]],["l10","per_track","same","all",0.35988,0.34761,0.01227,0.01289,17,304,"counts",[0.36104,0.36574,0.35285]],["l10","per_track","same","crop",0.4866,0.46639,0.02021,0.0265,14,28,"counts",[0.49804,0.49022,0.47154]],["l10","per_track","same","depth",0.29339,0.28415,0.00924,0.00808,17,102,"counts",[0.29826,0.29018,0.29172]],["l10","per_track","same","mapq",0.75444,0.73169,0.02275,0.02797,14,28,"counts",[0.76568,0.75994,0.73771]],["l10","per_track","trained","abproxy",0.61885,0.61096,0.00789,0.00625,14,56,"counts",[0.6149,0.6205,0.62115]],["l10","per_track","trained","all",0.5089,0.49326,0.01565,0.06588,17,540,"within noise",[0.48502,0.5509,0.49079]],["l10","per_track","trained","crop",0.53586,0.52831,0.00755,0.00925,14,56,"counts",[0.53118,0.53598,0.54043]],["l10","per_track","trained","depth",0.42417,0.4195,0.00468,0.01304,17,68,"counts",[0.4284,0.42858,0.41554]],["l10","per_track","trained","mapq",0.63014,0.6252,0.00494,0.01655,14,56,"within noise",[0.62128,0.63131,0.63783]],["rt","across","cross","all",1.05759,0.78578,0.27182,0.00208,3,5898,"counts",[1.05711,1.05887,1.0568]],["rt","across","cross","cross",1.05759,0.78578,0.27182,0.00208,3,5898,"counts",[1.05711,1.05887,1.0568]],["rt","across","heldout","all",1.00626,0.57336,0.43289,0.00772,3,42,"counts",[1.00332,1.01104,1.00441]],["rt","across","heldout","depth",1.00626,0.57336,0.43289,0.00772,3,42,"counts",[1.00332,1.01104,1.00441]],["rt","across","never","all",0.97168,0.73342,0.23825,0.00189,3,6282,"counts",[0.97118,0.97287,0.97098]],["rt","across","same","abproxy",0.82731,0.77025,0.05706,0.0003,3,36,"counts",[0.82717,0.82727,0.82748]],["rt","across","same","all",0.41103,0.36417,0.04686,0.00088,3,384,"counts",[0.41065,0.41153,0.41091]],["rt","across","same","crop",0.53355,0.4835,0.05005,0.00034,3,36,"counts",[0.53334,0.53364,0.53368]],["rt","across","same","depth",0.39201,0.3075,0.0845,0.00231,3,126,"counts",[0.39105,0.39336,0.39161]],["rt","across","same","mapq",0.81548,0.76942,0.04606,0.00039,3,36,"counts",[0.81523,0.81559,0.81562]],["rt","across","trained","abproxy",0.78729,0.72797,0.05932,0.00035,3,72,"counts",[0.78714,0.78725,0.78749]],["rt","across","trained","all",0.73231,0.59388,0.13843,0.00126,3,684,"counts",[0.73196,0.73311,0.73185]],["rt","across","trained","crop",0.83443,0.6934,0.14103,0.00121,3,72,"counts",[0.83402,0.83523,0.83405]],["rt","across","trained","depth",0.94209,0.55138,0.39072,0.00781,3,84,"counts",[0.9391,0.9469,0.94028]],["rt","across","trained","mapq",0.81397,0.76937,0.0446,0.00039,3,72,"counts",[0.81374,0.81405,0.81413]],["rt","per_track","cross","all",1.05853,0.78555,0.27298,0.00148,21,5898,"counts",[1.05829,1.05938,1.0579]],["rt","per_track","cross","cross",1.05853,0.78555,0.27298,0.00148,21,5898,"counts",[1.05829,1.05938,1.0579]],["rt","per_track","heldout","all",1.00823,0.57326,0.43498,0.00566,21,42,"counts",[1.00644,1.01196,1.00629]],["rt","per_track","heldout","depth",1.00823,0.57326,0.43498,0.00566,21,42,"counts",[1.00644,1.01196,1.00629]],["rt","per_track","never","all",0.97251,0.73324,0.23927,0.00142,21,6282,"counts",[0.97227,0.97334,0.97192]],["rt","per_track","same","abproxy",0.82769,0.77019,0.05749,0.00027,18,36,"counts",[0.82781,0.82755,0.82771]],["rt","per_track","same","all",0.41138,0.36415,0.04723,0.00055,21,384,"counts",[0.41133,0.41168,0.41113]],["rt","per_track","same","crop",0.53393,0.48353,0.0504,7e-05,18,36,"counts",[0.53396,0.53392,0.5339]],["rt","per_track","same","depth",0.39244,0.30752,0.08492,0.00224,21,126,"counts",[0.39215,0.3937,0.39146]],["rt","per_track","same","mapq",0.8159,0.76945,0.04644,0.00026,18,36,"counts",[0.81601,0.81575,0.81593]],["rt","per_track","trained","abproxy",0.78776,0.72791,0.05985,0.0003,18,72,"counts",[0.7878,0.78759,0.78789]],["rt","per_track","trained","all",0.73299,0.59377,0.13921,0.00058,21,684,"counts",[0.73288,0.73333,0.73275]],["rt","per_track","trained","crop",0.83532,0.69344,0.14188,0.00251,18,72,"counts",[0.83498,0.83674,0.83423]],["rt","per_track","trained","depth",0.94342,0.55099,0.39243,0.00628,21,84,"counts",[0.94204,0.94726,0.94097]],["rt","per_track","trained","mapq",0.81435,0.76939,0.04496,0.00018,18,72,"counts",[0.81443,0.81425,0.81437]],["rtvae","across","cross","all",0.92411,0.76208,0.16203,0.13108,3,5898,"within noise",[1.00482,0.89376,0.87374]],["rtvae","across","cross","cross",0.92411,0.76208,0.16203,0.13108,3,5898,"within noise",[1.00482,0.89376,0.87374]],["rtvae","across","heldout","all",0.77847,0.5426,0.23587,0.07628,3,42,"counts",[0.80986,0.79198,0.73358]],["rtvae","across","heldout","depth",0.77847,0.5426,0.23587,0.07628,3,42,"counts",[0.80986,0.79198,0.73358]],["rtvae","across","never","all",0.85556,0.7127,0.14285,0.11358,3,6282,"within noise",[0.92556,0.82913,0.81198]],["rtvae","across","same","abproxy",0.78526,0.74872,0.03654,0.05044,3,36,"counts",[0.81459,0.76416,0.77702]],["rtvae","across","same","all",0.39748,0.36593,0.03155,0.01618,3,384,"counts",[0.40792,0.39279,0.39174]],["rtvae","across","same","crop",0.48588,0.46026,0.02562,0.04057,3,36,"counts",[0.51234,0.47178,0.47352]],["rtvae","across","same","depth",0.33221,0.30043,0.03177,0.02948,3,126,"counts",[0.35011,0.32587,0.32063]],["rtvae","across","same","mapq",0.77951,0.74921,0.03031,0.06151,3,36,"counts",[0.81834,0.75683,0.76336]],["rtvae","across","trained","abproxy",0.75344,0.71212,0.04132,0.05084,3,72,"counts",[0.78531,0.73448,0.74053]],["rtvae","across","trained","all",0.68621,0.58832,0.09789,0.06781,3,684,"counts",[0.72594,0.67454,0.65814]],["rtvae","across","trained","crop",0.748,0.6576,0.0904,0.06991,3,72,"counts",[0.78697,0.73997,0.71706]],["rtvae","across","trained","depth",0.72842,0.52538,0.20303,0.05914,3,84,"counts",[0.75342,0.73755,0.69428]],["rtvae","across","trained","mapq",0.77986,0.74958,0.03028,0.06567,3,72,"counts",[0.82091,0.75524,0.76343]],["rtvae","per_track","cross","all",0.9562,0.76348,0.19272,0.04977,21,5898,"counts",[0.93055,0.98032,0.95773]],["rtvae","per_track","cross","cross",0.9562,0.76348,0.19272,0.04977,21,5898,"counts",[0.93055,0.98032,0.95773]],["rtvae","per_track","heldout","all",0.79434,0.53846,0.25587,0.05626,21,42,"counts",[0.79053,0.82437,0.76811]],["rtvae","per_track","heldout","depth",0.79434,0.53846,0.25587,0.05626,21,42,"counts",[0.79053,0.82437,0.76811]],["rtvae","per_track","never","all",0.88039,0.71297,0.16742,0.03865,21,6282,"counts",[0.86118,0.89983,0.88017]],["rtvae","per_track","same","abproxy",0.7927,0.7447,0.048,0.01067,18,36,"counts",[0.79731,0.78664,0.79415]],["rtvae","per_track","same","all",0.39498,0.36323,0.03175,0.0069,21,384,"counts",[0.39957,0.39268,0.39268]],["rtvae","per_track","same","crop",0.48395,0.45681,0.02714,0.01552,18,36,"counts",[0.49271,0.47719,0.48195]],["rtvae","per_track","same","depth",0.33634,0.29882,0.03752,0.0114,21,126,"counts",[0.34088,0.33868,0.32948]],["rtvae","per_track","same","mapq",0.78283,0.74646,0.03637,0.01725,18,36,"counts",[0.79214,0.77488,0.78148]],["rtvae","per_track","trained","abproxy",0.75932,0.70801,0.05131,0.00569,18,72,"counts",[0.76305,0.75736,0.75753]],["rtvae","per_track","trained","all",0.70275,0.58943,0.11331,0.02324,21,684,"counts",[0.69183,0.71507,0.70135]],["rtvae","per_track","trained","crop",0.74537,0.65191,0.09346,0.02223,18,72,"counts",[0.75648,0.74537,0.73425]],["rtvae","per_track","trained","depth",0.74552,0.52171,0.22382,0.0404,21,84,"counts",[0.74484,0.76607,0.72567]],["rtvae","per_track","trained","mapq",0.78397,0.74655,0.03743,0.02031,18,72,"counts",[0.79502,0.7747,0.7822]],["vae","across","cross","all",0.74386,0.68294,0.06092,0.04401,3,5898,"within noise",[0.75229,0.71764,0.76165]],["vae","across","cross","cross",0.74386,0.68294,0.06092,0.04401,3,5898,"within noise",[0.75229,0.71764,0.76165]],["vae","across","heldout","all",0.5295,0.45582,0.07369,0.0779,3,42,"within noise",[0.52197,0.57222,0.49432]],["vae","across","heldout","depth",0.5295,0.45582,0.07369,0.0779,3,42,"within noise",[0.52197,0.57222,0.49432]],["vae","across","never","all",0.69279,0.63931,0.05348,0.03758,3,6282,"within noise",[0.69952,0.67064,0.70821]],["vae","across","same","abproxy",0.69081,0.66915,0.02166,0.05105,3,36,"within noise",[0.7008,0.66029,0.71134]],["vae","across","same","all",0.36072,0.34546,0.01526,0.02245,3,384,"within noise",[0.34982,0.37228,0.36007]],["vae","across","same","crop",0.42196,0.41497,0.00699,0.01189,3,36,"within noise",[0.42346,0.41527,0.42716]],["vae","across","same","depth",0.2857,0.27189,0.01381,0.0262,3,126,"within noise",[0.27683,0.30303,0.27723]],["vae","across","same","mapq",0.66603,0.65678,0.00925,0.04421,3,36,"within noise",[0.68289,0.63867,0.67654]],["vae","across","trained","abproxy",0.67268,0.64902,0.02366,0.06144,3,72,"within noise",[0.68662,0.63499,0.69642]],["vae","across","trained","all",0.5879,0.54717,0.04073,0.03779,3,684,"counts",[0.58592,0.57,0.60778]],["vae","across","trained","crop",0.5708,0.56238,0.00842,0.06641,3,72,"within noise",[0.59366,0.52724,0.5915]],["vae","across","trained","depth",0.48232,0.44134,0.04098,0.0192,3,84,"counts",[0.49479,0.47559,0.47657]],["vae","across","trained","mapq",0.6718,0.66361,0.00819,0.07837,3,72,"within noise",[0.69959,0.62122,0.69458]],["vae","per_track","cross","all",0.66831,0.63952,0.02879,0.03391,21,5898,"within noise",[0.68209,0.64818,0.67467]],["vae","per_track","cross","cross",0.66831,0.63952,0.02879,0.03391,21,5898,"within noise",[0.68209,0.64818,0.67467]],["vae","per_track","heldout","all",0.43421,0.42387,0.01034,0.01083,21,42,"counts",[0.44056,0.43235,0.42973]],["vae","per_track","heldout","depth",0.43421,0.42387,0.01034,0.01083,21,42,"counts",[0.44056,0.43235,0.42973]],["vae","per_track","never","all",0.62596,0.60087,0.02508,0.02824,21,6282,"within noise",[0.63599,0.60775,0.63413]],["vae","per_track","same","abproxy",0.65015,0.64158,0.00857,0.06284,18,36,"within noise",[0.63392,0.62685,0.68969]],["vae","per_track","same","all",0.34737,0.33966,0.0077,0.00897,21,384,"counts",[0.34965,0.34174,0.35071]],["vae","per_track","same","crop",0.40523,0.40178,0.00345,0.02076,18,36,"within noise",[0.39936,0.39778,0.41855]],["vae","per_track","same","depth",0.26956,0.26351,0.00605,0.00898,21,126,"within noise",[0.27312,0.27141,0.26414]],["vae","per_track","same","mapq",0.64196,0.63639,0.00558,0.06102,18,36,"within noise",[0.62498,0.61995,0.68097]],["vae","per_track","trained","abproxy",0.62802,0.61868,0.00935,0.04798,18,72,"within noise",[0.6125,0.61179,0.65977]],["vae","per_track","trained","all",0.53271,0.5172,0.01551,0.03421,21,684,"counts",[0.54648,0.51228,0.53937]],["vae","per_track","trained","crop",0.53808,0.53486,0.00321,0.06129,18,72,"within noise",[0.51723,0.51849,0.57852]],["vae","per_track","trained","depth",0.41738,0.41343,0.00395,0.00898,21,84,"counts",[0.42248,0.4135,0.41616]],["vae","per_track","trained","mapq",0.64357,0.63761,0.00596,0.07479,18,72,"within noise",[0.61786,0.62019,0.69265]],["via","across","cross","all",0.68918,0.61658,0.0726,0.07875,3,5898,"within noise",[0.648,0.6928,0.72675]],["via","across","cross","cross",0.68918,0.61658,0.0726,0.07875,3,5898,"within noise",[0.648,0.6928,0.72675]],["via","across","never","all",0.63638,0.57679,0.05959,0.06423,3,6282,"within noise",[0.60282,0.63929,0.66705]],["via","across","same","abproxy",0.62435,0.62103,0.00331,0.01111,3,36,"within noise",[0.63068,0.61957,0.62278]],["via","across","same","all",0.31505,0.31253,0.00252,0.0016,3,384,"within noise",[0.31596,0.31436,0.31485]],["via","across","same","crop",0.40639,0.40445,0.00194,0.00438,3,36,"within noise",[0.40842,0.40404,0.40671]],["via","across","same","depth",0.25615,0.25359,0.00256,0.00084,3,126,"counts",[0.25646,0.25562,0.25637]],["via","across","same","mapq",0.61663,0.61525,0.00137,0.00194,3,36,"within noise",[0.61729,0.61724,0.61535]],["via","per_track","cross","all",0.57727,0.56812,0.00916,0.00938,21,5898,"counts",[0.57793,0.57225,0.58164]],["via","per_track","cross","cross",0.57727,0.56812,0.00916,0.00938,21,5898,"counts",[0.57793,0.57225,0.58164]],["via","per_track","never","all",0.54469,0.53677,0.00792,0.0078,21,6282,"counts",[0.54559,0.54033,0.54814]],["via","per_track","same","abproxy",0.62012,0.61607,0.00405,0.0054,18,36,"within noise",[0.62207,0.61667,0.62161]],["via","per_track","same","all",0.31211,0.31025,0.00187,0.00097,21,384,"counts",[0.3127,0.31173,0.31191]],["via","per_track","same","crop",0.40336,0.40129,0.00207,0.00259,18,36,"within noise",[0.40431,0.40173,0.40404]],["via","per_track","same","depth",0.25335,0.25212,0.00123,0.00166,21,126,"counts",[0.2543,0.25264,0.25311]],["via","per_track","same","mapq",0.61601,0.61302,0.00298,0.00387,18,36,"counts",[0.61575,0.61807,0.6142]]],"twin":[["oldd","across","cross","all",0.15366,0.01347,1966,3,3,"counts"],["oldd","across","cross","cross",0.15366,0.01347,1966,3,3,"counts"],["oldd","across","heldout","all",0.56034,0.00957,14,3,3,"counts"],["oldd","across","heldout","depth",0.56034,0.00957,14,3,3,"counts"],["oldd","across","never","all",0.15842,0.01524,2094,3,3,"counts"],["oldd","across","same","abproxy",0.10385,0.01189,12,3,3,"within noise"],["oldd","across","same","all",0.2104,0.03584,128,3,3,"within noise"],["oldd","across","same","crop",0.1905,0.10555,12,3,3,"within noise"],["oldd","across","same","depth",0.22385,0.03596,42,3,3,"counts"],["oldd","across","same","mapq",0.10734,0.0156,12,3,3,"within noise"],["oldd","across","trained","abproxy",0.11484,0.00506,24,3,3,"n/a"],["oldd","across","trained","all",0.2214,0.02751,228,3,3,"n/a"],["oldd","across","trained","crop",0.204,0.02536,24,3,3,"n/a"],["oldd","across","trained","depth",0.33863,0.04326,28,3,3,"n/a"],["oldd","across","trained","mapq",0.11155,0.00247,24,3,3,"n/a"],["oldd","per_track","cross","all",0.14213,0.0049,1966,21,21,"counts"],["oldd","per_track","cross","cross",0.14213,0.0049,1966,21,21,"counts"],["oldd","per_track","heldout","all",0.54705,0.02029,14,21,21,"counts"],["oldd","per_track","heldout","depth",0.54705,0.02029,14,21,21,"counts"],["oldd","per_track","never","all",0.14806,0.00465,2094,21,21,"counts"],["oldd","per_track","same","abproxy",0.08481,0.01024,12,21,21,"within noise"],["oldd","per_track","same","all",0.24188,0.03193,128,21,21,"within noise"],["oldd","per_track","same","crop",0.18911,0.06565,12,21,21,"within noise"],["oldd","per_track","same","depth",0.18363,0.00508,42,21,21,"counts"],["oldd","per_track","same","mapq",0.08922,0.00731,12,21,21,"within noise"],["oldd","per_track","trained","abproxy",0.09909,0.00594,24,21,21,"n/a"],["oldd","per_track","trained","all",0.28015,0.01276,228,21,21,"n/a"],["oldd","per_track","trained","crop",0.17239,0.0307,24,21,21,"n/a"],["oldd","per_track","trained","depth",0.34131,0.01294,28,21,21,"n/a"],["oldd","per_track","trained","mapq",0.09448,0.00698,24,21,21,"n/a"],["def","across","cross","all",0.15557,0.01918,1966,3,3,"within noise"],["def","across","cross","cross",0.15557,0.01918,1966,3,3,"within noise"],["def","across","heldout","all",0.57497,0.02843,14,3,3,"counts"],["def","across","heldout","depth",0.57497,0.02843,14,3,3,"counts"],["def","across","never","all",0.15224,0.01953,2094,3,3,"within noise"],["def","across","same","abproxy",-0.05667,0.00626,12,3,3,"counts"],["def","across","same","all",0.06534,0.03467,128,3,3,"counts"],["def","across","same","crop",-0.16156,0.08318,12,3,3,"counts"],["def","across","same","depth",0.12015,0.13849,42,3,3,"within noise"],["def","across","same","mapq",-0.10747,0.07694,12,3,3,"counts"],["def","across","trained","abproxy",0.16924,0.03805,24,3,3,"n/a"],["def","across","trained","all",0.15133,0.02389,228,3,3,"n/a"],["def","across","trained","crop",0.26163,0.02587,24,3,3,"n/a"],["def","across","trained","depth",0.37472,0.00402,28,3,3,"n/a"],["def","across","trained","mapq",0.17095,0.00313,24,3,3,"n/a"],["def","per_track","cross","all",0.15449,0.01609,1966,21,21,"within noise"],["def","per_track","cross","cross",0.15449,0.01609,1966,21,21,"within noise"],["def","per_track","heldout","all",0.56831,0.05112,14,21,21,"counts"],["def","per_track","heldout","depth",0.56831,0.05112,14,21,21,"counts"],["def","per_track","never","all",0.15278,0.01884,2094,21,21,"within noise"],["def","per_track","same","abproxy",-0.07127,0.02218,12,21,21,"counts"],["def","per_track","same","all",0.07367,0.03209,128,21,21,"counts"],["def","per_track","same","crop",-0.12672,0.01973,12,21,21,"counts"],["def","per_track","same","depth",0.11617,0.02333,42,21,21,"counts"],["def","per_track","same","mapq",-0.1197,0.01547,12,21,21,"counts"],["def","per_track","trained","abproxy",0.16703,0.0087,24,21,21,"n/a"],["def","per_track","trained","all",0.15659,0.02455,228,21,21,"n/a"],["def","per_track","trained","crop",0.25326,0.03117,24,21,21,"n/a"],["def","per_track","trained","depth",0.38123,0.02569,28,21,21,"n/a"],["def","per_track","trained","mapq",0.16519,0.02821,24,21,21,"n/a"],["rt","across","cross","all",0.00044,0.00082,1966,3,3,"within noise"],["rt","across","cross","cross",0.00044,0.00082,1966,3,3,"within noise"],["rt","across","heldout","all",-0.0008,0.0069,14,3,3,"within noise"],["rt","across","heldout","depth",-0.0008,0.0069,14,3,3,"within noise"],["rt","across","never","all",0.0004,0.00079,2094,3,3,"within noise"],["rt","across","same","abproxy",0.00077,0.00064,12,3,3,"within noise"],["rt","across","same","all",-7e-05,0.00017,128,3,3,"within noise"],["rt","across","same","crop",0.00056,0.00151,12,3,3,"within noise"],["rt","across","same","depth",-0.00013,0.00205,42,3,3,"within noise"],["rt","across","same","mapq",0.00079,0.00086,12,3,3,"within noise"],["rt","across","trained","abproxy",0.00079,0.0005,24,3,3,"n/a"],["rt","across","trained","all",0.0,0.0003,228,3,3,"n/a"],["rt","across","trained","crop",0.00064,0.0015,24,3,3,"n/a"],["rt","across","trained","depth",-0.00023,0.00624,28,3,3,"n/a"],["rt","across","trained","mapq",0.00076,0.0007,24,3,3,"n/a"],["rt","per_track","cross","all",-3e-05,0.00046,1966,21,21,"within noise"],["rt","per_track","cross","cross",-3e-05,0.00046,1966,21,21,"within noise"],["rt","per_track","heldout","all",-0.00119,0.00493,14,21,21,"within noise"],["rt","per_track","heldout","depth",-0.00119,0.00493,14,21,21,"within noise"],["rt","per_track","never","all",-4e-05,0.00044,2094,21,21,"within noise"],["rt","per_track","same","abproxy",-9e-05,0.00054,12,21,21,"within noise"],["rt","per_track","same","all",-0.0001,3e-05,128,21,21,"within noise"],["rt","per_track","same","crop",-0.0004,0.00045,12,21,21,"within noise"],["rt","per_track","same","depth",-0.00018,0.00085,42,21,21,"within noise"],["rt","per_track","same","mapq",-0.0001,0.00034,12,21,21,"within noise"],["rt","per_track","trained","abproxy",-0.00019,0.00033,24,21,21,"n/a"],["rt","per_track","trained","all",-0.00017,0.00017,228,21,21,"n/a"],["rt","per_track","trained","crop",-0.00038,0.00104,24,21,21,"n/a"],["rt","per_track","trained","depth",-0.00065,0.00416,28,21,21,"n/a"],["rt","per_track","trained","mapq",-8e-05,0.00033,24,21,21,"n/a"]],"collapse":[["def","across","real",0.41709,0.2227,0.9808,0.01576,4.38897,3,[0.42257,0.55799,0.33529]],["def","per_track","real",0.31807,0.18211,0.99001,0.00138,3.85664,21,[0.35565,0.42844,0.24633]],["formd","across","real",0.30846,0.01545,0.98564,0.00942,144.01347,3,[0.30614,0.30544,0.32089]],["formd","per_track","real",0.32102,0.03126,0.98286,0.01279,111.77074,21,[0.32829,0.34515,0.31388]],["l01","across","real",0.43828,null,0.98034,null,1.76454,1,[0.43828]],["l01","per_track","real",0.38689,0.11464,0.97959,0.01575,1.6046,13,[0.42487,0.40552,0.31023]],["l1","per_track","real",0.36421,0.13921,0.96231,0.01022,2.05613,20,[0.41634,0.48039,0.34118]],["l10","across","real",0.57939,0.10613,0.92499,0.03383,1.83547,3,[0.5825,0.57288,0.67901]],["l10","per_track","real",0.59969,0.15349,0.92588,0.03088,1.65781,17,[0.63582,0.51716,0.67066]],["rt","across","real",0.25013,0.23021,0.9974,0.00106,5.86126,3,[0.24664,0.15623,0.38645]],["rt","per_track","real",0.21256,0.12564,0.99882,0.00194,3.35368,21,[0.17848,0.15085,0.2765]],["rtvae","across","real",0.52114,0.08616,0.98108,0.00701,0.38695,3,[0.50265,0.496,0.58216]],["rtvae","per_track","real",0.5461,0.04394,0.97929,0.00672,0.4025,21,[0.52444,0.51305,0.55699]],["vae","across","real",0.63584,0.04774,0.99182,0.03923,0.34093,3,[0.62148,0.63522,0.66922]],["vae","per_track","real",0.61749,0.05729,0.97751,0.03311,0.72416,21,[0.59953,0.6023,0.65682]],["def","across","nocov",0.30285,0.07545,0.98006,0.0054,1.15543,3,[0.32652,0.30266,0.25106]],["def","per_track","nocov",0.30392,0.12785,0.9904,0.00446,3.68719,21,[0.2568,0.29069,0.38465]],["rt","across","nocov",0.29845,0.21009,0.99878,0.00177,4.9436,3,[0.29845,0.16852,0.37861]],["rt","per_track","nocov",0.20697,0.09838,0.99899,0.00084,3.13153,21,[0.20756,0.13844,0.23683]]],"agree":[["def","across","real","all",0.63607,0.17088,0.40547,3,[0.66046,0.55489,0.72577]],["def","across","real","one",0.39432,0.02631,0.0,3,[0.40629,0.37998,0.39828]],["def","across","real","two",0.65417,0.20219,0.40547,3,[0.68257,0.56421,0.7664]],["def","per_track","real","all",0.49941,0.02882,0.40547,21,[0.49062,0.49317,0.51944]],["def","per_track","real","one",0.33748,0.01621,0.0,21,[0.3401,0.32883,0.34504]],["def","per_track","real","two",0.51124,0.03036,0.40547,21,[0.49929,0.50288,0.52965]],["formd","across","real","all",0.4327,0.03847,0.40547,3,[0.4108,0.44559,0.44927]],["formd","across","real","one",0.26263,0.02435,0.0,3,[0.26162,0.27084,0.24649]],["formd","across","real","two",0.44769,0.04049,0.40547,3,[0.42009,0.45069,0.46058]],["formd","per_track","real","all",0.43069,0.0329,0.40547,21,[0.41381,0.44672,0.4298]],["formd","per_track","real","one",0.26701,0.02175,0.0,21,[0.25123,0.26883,0.27299]],["formd","per_track","real","two",0.44163,0.02293,0.40547,21,[0.43126,0.45419,0.43569]],["l01","across","real","all",0.21747,null,0.40547,1,[0.21747]],["l01","across","real","one",0.16024,null,0.0,1,[0.16024]],["l01","across","real","two",0.2199,null,0.40547,1,[0.2199]],["l01","per_track","real","all",0.20079,0.02324,0.40547,13,[0.2138,0.19741,0.19056]],["l01","per_track","real","one",0.15148,0.03475,0.0,13,[0.17062,0.13586,0.15273]],["l01","per_track","real","two",0.20596,0.0233,0.40547,13,[0.21699,0.19929,0.19369]],["l1","per_track","real","all",0.09724,0.01349,0.40547,20,[0.10645,0.09297,0.09728]],["l1","per_track","real","one",0.0651,0.01583,0.0,20,[0.0763,0.06119,0.06047]],["l1","per_track","real","two",0.09928,0.01303,0.40547,20,[0.10777,0.09474,0.0993]],["l10","across","real","all",0.05476,0.01971,0.40547,3,[0.05269,0.04701,0.06672]],["l10","across","real","one",0.03564,0.01641,0.0,3,[0.03221,0.03353,0.04861]],["l10","across","real","two",0.05603,0.01993,0.40547,3,[0.0536,0.04918,0.0691]],["l10","per_track","real","all",0.04956,0.01069,0.40547,17,[0.04322,0.05095,0.0539]],["l10","per_track","real","one",0.0346,0.00332,0.0,17,[0.03327,0.03603,0.03659]],["l10","per_track","real","two",0.05118,0.01143,0.40547,17,[0.04391,0.05308,0.05534]],["rt","across","real","all",0.5333,0.1284,0.40547,3,[0.53656,0.4506,0.579]],["rt","across","real","one",0.09406,0.13394,0.0,3,[0.05891,0.19284,0.0663]],["rt","across","real","two",0.53948,0.12696,0.40547,3,[0.5396,0.45456,0.58152]],["rt","per_track","real","all",0.4643,0.02884,0.40547,21,[0.46239,0.45041,0.47926]],["rt","per_track","real","one",0.07559,0.04089,0.0,21,[0.06403,0.10493,0.07926]],["rt","per_track","real","two",0.47138,0.03122,0.40547,21,[0.46744,0.45484,0.48606]],["rtvae","across","real","all",0.51136,0.01788,0.40547,3,[0.49869,0.51657,0.51654]],["rtvae","across","real","one",0.19236,0.04293,0.0,3,[0.18688,0.17009,0.21302]],["rtvae","across","real","two",0.52571,0.01788,0.40547,3,[0.51337,0.53125,0.53013]],["rtvae","per_track","real","all",0.50527,0.00459,0.40547,21,[0.50633,0.5077,0.50311]],["rtvae","per_track","real","one",0.20245,0.03157,0.0,21,[0.19664,0.1857,0.21726]],["rtvae","per_track","real","two",0.51595,0.00565,0.40547,21,[0.5173,0.5175,0.51185]],["vae","across","real","all",0.47629,0.06256,0.40547,3,[0.47263,0.4268,0.48936]],["vae","across","real","one",0.26905,0.03242,0.0,3,[0.25369,0.2556,0.28612]],["vae","across","real","two",0.48466,0.05578,0.40547,3,[0.48017,0.43873,0.49451]],["vae","per_track","real","all",0.45646,0.04451,0.40547,21,[0.42656,0.45529,0.47107]],["vae","per_track","real","one",0.27127,0.03967,0.0,21,[0.25552,0.29519,0.28404]],["vae","per_track","real","two",0.47168,0.04181,0.40547,21,[0.43988,0.4817,0.47644]],["def","across","nocov","all",0.52705,0.01745,0.40547,3,[0.52834,0.53184,0.51439]],["def","across","nocov","one",0.30412,0.04746,0.0,3,[0.27735,0.32482,0.30466]],["def","across","nocov","two",0.53918,0.01528,0.40547,3,[0.54626,0.54388,0.53099]],["def","per_track","nocov","all",0.49985,0.02485,0.40547,21,[0.49739,0.49264,0.51749]],["def","per_track","nocov","one",0.20707,0.06627,0.0,21,[0.22169,0.223,0.15673]],["def","per_track","nocov","two",0.5125,0.03658,0.40547,21,[0.50811,0.49877,0.53536]],["rt","across","nocov","all",0.52409,0.12008,0.40547,3,[0.52666,0.44503,0.56511]],["rt","across","nocov","one",0.02672,0.01689,0.0,3,[0.02155,0.03844,0.02425]],["rt","across","nocov","two",0.53223,0.12414,0.40547,3,[0.53128,0.44617,0.57031]],["rt","per_track","nocov","all",0.46885,0.0686,0.40547,21,[0.47356,0.43093,0.49952]],["rt","per_track","nocov","one",0.03154,0.03608,0.0,21,[0.02136,0.03836,0.05745]],["rt","per_track","nocov","two",0.48158,0.06352,0.40547,21,[0.48383,0.44289,0.50641]]],"swap":[["def","across","real",0.04575,0.02764,0.27491,0.01727,3],["def","per_track","real",0.0303,0.00412,0.27872,0.01544,21],["formd","across","real",0.03532,0.00638,0.27772,0.01191,3],["formd","per_track","real",0.0341,0.00834,0.27453,0.01247,21],["l01","across","real",0.0562,null,0.26297,null,1],["l01","per_track","real",0.03725,0.01045,0.2819,0.03478,13],["l1","per_track","real",0.05799,0.02916,0.24783,0.02231,20],["l10","across","real",0.1116,0.05902,0.19362,0.01414,3],["l10","per_track","real",0.10456,0.01942,0.2186,0.03709,17],["rt","across","real",0.00222,0.00052,0.00372,0.00354,3],["rt","per_track","real",0.00248,0.00081,0.00411,0.00241,21],["rtvae","across","real",0.14712,0.04348,0.16345,0.03985,3],["rtvae","per_track","real",0.14298,0.03062,0.16146,0.01136,21],["vae","across","real",0.1738,0.10474,0.24204,0.14567,3],["vae","per_track","real",0.19404,0.09146,0.27196,0.06894,21],["def","across","nocov",0.07091,0.02088,0.0702,0.0223,3],["def","per_track","nocov",0.07306,0.0124,0.07109,0.01245,21],["rt","across","nocov",0.00198,0.00031,0.00197,0.00031,3],["rt","per_track","nocov",0.00194,0.00052,0.00192,0.00047,21]],"swap_pts":[["def","across","nocov",0.0807,0.0807],["def","across","nocov",0.088,0.088],["def","across","nocov",0.0885,0.0916],["def","across","nocov",0.083,0.083],["def","across","nocov",0.0767,0.0767],["def","across","nocov",0.0856,0.0856],["def","across","nocov",0.0832,0.0832],["def","across","nocov",0.0654,0.0654],["def","across","nocov",0.073,0.073],["def","across","nocov",0.0789,0.0808],["def","across","nocov",0.0674,0.0674],["def","across","nocov",0.0602,0.0602],["def","across","nocov",0.0706,0.0706],["def","across","nocov",0.0671,0.0671],["def","across","nocov",0.0574,0.0574],["def","across","nocov",0.0662,0.0662],["def","across","nocov",0.072,0.073],["def","across","nocov",0.0608,0.0608],["def","across","nocov",0.0535,0.0535],["def","across","nocov",0.064,0.064],["def","across","nocov",0.058,0.058],["def","across","real",0.2153,0.0373],["def","across","real",0.2347,0.0361],["def","across","real",0.5546,0.0617],["def","across","real",0.2009,0.034],["def","across","real",0.1814,0.0334],["def","across","real",0.2251,0.0361],["def","across","real",0.2548,0.0433],["def","across","real",0.2381,0.0478],["def","across","real",0.2869,0.05],["def","across","real",0.5783,0.0717],["def","across","real",0.2452,0.0438],["def","across","real",0.1979,0.0397],["def","across","real",0.2699,0.041],["def","across","real",0.2318,0.0524],["def","across","real",0.2662,0.0828],["def","across","real",0.319,0.0889],["def","across","real",0.5543,0.0828],["def","across","real",0.2744,0.107],["def","across","real",0.2421,0.0992],["def","across","real",0.2989,0.0816],["def","across","real",0.27,0.0862],["def","per_track","nocov",0.0529,0.0529],["def","per_track","nocov",0.0754,0.0754],["def","per_track","nocov",0.0868,0.08],["def","per_track","nocov",0.1209,0.1209],["def","per_track","nocov",0.0597,0.0597],["def","per_track","nocov",0.0595,0.0595],["def","per_track","nocov",0.0628,0.0628],["def","per_track","nocov",0.0754,0.0754],["def","per_track","nocov",0.0691,0.0691],["def","per_track","nocov",0.0908,0.082],["def","per_track","nocov",0.1077,0.1077],["def","per_track","nocov",0.0667,0.0667],["def","per_track","nocov",0.0706,0.0706],["def","per_track","nocov",0.0859,0.0859],["def","per_track","nocov",0.0526,0.0526],["def","per_track","nocov",0.0737,0.0737],["def","per_track","nocov",0.1109,0.1084],["def","per_track","nocov",0.0735,0.0735],["def","per_track","nocov",0.0579,0.0579],["def","per_track","nocov",0.096,0.096],["def","per_track","nocov",0.0625,0.0625],["def","per_track","real",0.2586,0.039],["def","per_track","real",0.3025,0.0392],["def","per_track","real",0.6911,0.034],["def","per_track","real",0.2495,0.0267],["def","per_track","real",0.1865,0.0239],["def","per_track","real",0.2782,0.0404],["def","per_track","real",0.2638,0.0461],["def","per_track","real",0.2504,0.0368],["def","per_track","real",0.2851,0.0301],["def","per_track","real",0.6751,0.0528],["def","per_track","real",0.2366,0.0242],["def","per_track","real",0.1802,0.0273],["def","per_track","real",0.2741,0.023],["def","per_track","real",0.251,0.0459],["def","per_track","real",0.2079,0.0443],["def","per_track","real",0.2735,0.0306],["def","per_track","real",0.6857,0.0463],["def","per_track","real",0.2549,0.032],["def","per_track","real",0.1963,0.029],["def","per_track","real",0.2854,0.0295],["def","per_track","real",0.2472,0.0292],["formd","across","real",0.2278,0.0323],["formd","across","real",0.2698,0.035],["formd","across","real",0.5869,0.0747],["formd","across","real",0.2341,0.0394],["formd","across","real",0.1957,0.0396],["formd","across","real",0.2514,0.0381],["formd","across","real",0.2567,0.0405],["formd","across","real",0.2404,0.0325],["formd","across","real",0.2894,0.0263],["formd","across","real",0.5602,0.0634],["formd","across","real",0.2525,0.0318],["formd","across","real",0.2124,0.0359],["formd","across","real",0.2709,0.0265],["formd","across","real",0.2593,0.0344],["formd","across","real",0.2311,0.0415],["formd","across","real",0.2792,0.036],["formd","across","real",0.6142,0.0677],["formd","across","real",0.2494,0.0363],["formd","across","real",0.1949,0.0416],["formd","across","real",0.262,0.0329],["formd","across","real",0.2577,0.0345],["formd","per_track","real",0.2486,0.028],["formd","per_track","real",0.3006,0.0284],["formd","per_track","real",0.6793,0.0567],["formd","per_track","real",0.2387,0.0295],["formd","per_track","real",0.1817,0.0308],["formd","per_track","real",0.2749,0.0432],["formd","per_track","real",0.2576,0.0339],["formd","per_track","real",0.2338,0.0637],["formd","per_track","real",0.2635,0.0401],["formd","per_track","real",0.6493,0.0615],["formd","per_track","real",0.2359,0.049],["formd","per_track","real",0.1785,0.0348],["formd","per_track","real",0.2574,0.0416],["formd","per_track","real",0.2352,0.0414],["formd","per_track","real",0.2485,0.0388],["formd","per_track","real",0.2821,0.0361],["formd","per_track","real",0.6487,0.0426],["formd","per_track","real",0.2178,0.0401],["formd","per_track","real",0.1837,0.0268],["formd","per_track","real",0.2783,0.0343],["formd","per_track","real",0.253,0.0447],["l01","across","real",0.2224,0.0607],["l01","across","real",0.2652,0.0613],["l01","across","real",0.5978,0.0752],["l01","across","real",0.2314,0.0573],["l01","across","real",0.1923,0.0642],["l01","across","real",0.2478,0.0611],["l01","across","real",0.2335,0.0599],["l01","per_track","real",0.2152,0.0491],["l01","per_track","real",0.2964,0.0391],["l01","per_track","real",0.6726,0.0579],["l01","per_track","real",0.2468,0.0445],["l01","per_track","real",0.2473,0.0498],["l01","per_track","real",0.249,0.0432],["l01","per_track","real",0.6456,0.0451],["l01","per_track","real",0.2005,0.0442],["l01","per_track","real",0.1603,0.0301],["l01","per_track","real",0.2309,0.0354],["l01","per_track","real",0.2702,0.0323],["l01","per_track","real",0.6803,0.053],["l01","per_track","real",0.2663,0.0316],["l1","per_track","real",0.2566,0.1048],["l1","per_track","real",0.6718,0.0682],["l1","per_track","real",0.1882,0.1039],["l1","per_track","real",0.1774,0.0821],["l1","per_track","real",0.2249,0.1027],["l1","per_track","real",0.1807,0.0977],["l1","per_track","real",0.2287,0.0636],["l1","per_track","real",0.2501,0.1042],["l1","per_track","real",0.684,0.0641],["l1","per_track","real",0.2296,0.0442],["l1","per_track","real",0.1613,0.0567],["l1","per_track","real",0.2651,0.0621],["l1","per_track","real",0.2111,0.0694],["l1","per_track","real",0.2006,0.06],["l1","per_track","real",0.2256,0.0524],["l1","per_track","real",0.646,0.0659],["l1","per_track","real",0.2286,0.0624],["l1","per_track","real",0.1971,0.0627],["l1","per_track","real",0.1866,0.1102],["l1","per_track","real",0.2152,0.0655],["l10","across","real",0.1395,0.1485],["l10","across","real",0.1419,0.131],["l10","across","real",0.4257,0.1633],["l10","across","real",0.1369,0.1625],["l10","across","real",0.1382,0.1454],["l10","across","real",0.1464,0.1471],["l10","across","real",0.1402,0.1455],["l10","across","real",0.1609,0.1239],["l10","across","real",0.1731,0.1101],["l10","across","real",0.3816,0.1437],["l10","across","real",0.1662,0.129],["l10","across","real",0.1503,0.1079],["l10","across","real",0.1646,0.1183],["l10","across","real",0.1782,0.1365],["l10","across","real",0.1538,0.0774],["l10","across","real",0.1687,0.0916],["l10","across","real",0.3006,0.1627],["l10","across","real",0.1677,0.0848],["l10","across","real",0.143,0.0756],["l10","across","real",0.1559,0.081],["l10","across","real",0.1543,0.0883],["l10","per_track","real",0.6431,0.1264],["l10","per_track","real",0.1807,0.13],["l10","per_track","real",0.1715,0.1212],["l10","per_track","real",0.2123,0.121],["l10","per_track","real",0.1898,0.0998],["l10","per_track","real",0.1607,0.1173],["l10","per_track","real",0.5801,0.1701],["l10","per_track","real",0.1891,0.1288],["l10","per_track","real",0.1412,0.0968],["l10","per_track","real",0.1994,0.2091],["l10","per_track","real",0.196,0.1877],["l10","per_track","real",0.1692,0.2175],["l10","per_track","real",0.6284,0.1873],["l10","per_track","real",0.1524,0.0983],["l10","per_track","real",0.1439,0.1158],["l10","per_track","real",0.1846,0.0817],["l10","per_track","real",0.1512,0.1057],["rt","across","nocov",0.0022,0.0022],["rt","across","nocov",0.0021,0.0021],["rt","across","nocov",0.0026,0.0026],["rt","across","nocov",0.0022,0.0022],["rt","across","nocov",0.0022,0.0022],["rt","across","nocov",0.0021,0.0021],["rt","across","nocov",0.0021,0.0021],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.0028,0.0028],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.002,0.002],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.0028,0.0028],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.002,0.002],["rt","across","nocov",0.0019,0.0019],["rt","across","nocov",0.002,0.002],["rt","across","real",0.0028,0.0023],["rt","across","real",0.0031,0.0026],["rt","across","real",0.0054,0.0027],["rt","across","real",0.003,0.0025],["rt","across","real",0.0036,0.0024],["rt","across","real",0.0037,0.0025],["rt","across","real",0.0032,0.0027],["rt","across","real",0.0061,0.0023],["rt","across","real",0.0055,0.0023],["rt","across","real",0.0097,0.0032],["rt","across","real",0.008,0.0024],["rt","across","real",0.0074,0.0023],["rt","across","real",0.0064,0.0024],["rt","across","real",0.0044,0.0023],["rt","across","real",0.0027,0.002],["rt","across","real",0.0027,0.002],["rt","across","real",0.0058,0.0029],["rt","across","real",0.0023,0.0021],["rt","across","real",0.0025,0.0021],["rt","across","real",0.0022,0.002],["rt","across","real",0.0022,0.002],["rt","per_track","nocov",0.0022,0.0022],["rt","per_track","nocov",0.0019,0.0019],["rt","per_track","nocov",0.0028,0.0028],["rt","per_track","nocov",0.0019,0.0019],["rt","per_track","nocov",0.0016,0.0016],["rt","per_track","nocov",0.0015,0.0015],["rt","per_track","nocov",0.0019,0.0019],["rt","per_track","nocov",0.0019,0.0019],["rt","per_track","nocov",0.0017,0.0017],["rt","per_track","nocov",0.0021,0.0021],["rt","per_track","nocov",0.0015,0.0015],["rt","per_track","nocov",0.0025,0.0025],["rt","per_track","nocov",0.0017,0.0017],["rt","per_track","nocov",0.0022,0.0022],["rt","per_track","nocov",0.0024,0.0024],["rt","per_track","nocov",0.0021,0.0021],["rt","per_track","nocov",0.0031,0.0032],["rt","per_track","nocov",0.0017,0.0017],["rt","per_track","nocov",0.0027,0.0027],["rt","per_track","nocov",0.0019,0.0019],["rt","per_track","nocov",0.0024,0.0024],["rt","per_track","real",0.0031,0.0022],["rt","per_track","real",0.0024,0.0018],["rt","per_track","real",0.0127,0.004],["rt","per_track","real",0.0023,0.002],["rt","per_track","real",0.0024,0.002],["rt","per_track","real",0.0028,0.0022],["rt","per_track","real",0.0041,0.0032],["rt","per_track","real",0.0051,0.0033],["rt","per_track","real",0.0045,0.0029],["rt","per_track","real",0.0034,0.0024],["rt","per_track","real",0.0106,0.0029],["rt","per_track","real",0.0138,0.0029],["rt","per_track","real",0.0024,0.0017],["rt","per_track","real",0.0057,0.0028],["rt","per_track","real",0.0042,0.0025],["rt","per_track","real",0.0029,0.0016],["rt","per_track","real",0.0124,0.0031],["rt","per_track","real",0.0035,0.0021],["rt","per_track","real",0.0038,0.0017],["rt","per_track","real",0.0022,0.0015],["rt","per_track","real",0.0062,0.0029],["rtvae","across","real",0.1582,0.1495],["rtvae","across","real",0.1412,0.1348],["rtvae","across","real",0.1528,0.0999],["rtvae","across","real",0.1829,0.1746],["rtvae","across","real",0.1595,0.1593],["rtvae","across","real",0.1597,0.1461],["rtvae","across","real",0.1564,0.1475],["rtvae","across","real",0.168,0.164],["rtvae","across","real",0.1532,0.15],["rtvae","across","real",0.2076,0.2153],["rtvae","across","real",0.1777,0.1756],["rtvae","across","real",0.1847,0.1829],["rtvae","across","real",0.1598,0.1501],["rtvae","across","real",0.1543,0.1517],["rtvae","across","real",0.1276,0.1211],["rtvae","across","real",0.1184,0.1177],["rtvae","across","real",0.2007,0.18],["rtvae","across","real",0.1333,0.1227],["rtvae","across","real",0.1528,0.1499],["rtvae","across","real",0.1217,0.1171],["rtvae","across","real",0.132,0.1262],["rtvae","per_track","real",0.2391,0.2113],["rtvae","per_track","real",0.1101,0.1059],["rtvae","per_track","real",0.1532,0.1562],["rtvae","per_track","real",0.1586,0.1582],["rtvae","per_track","real",0.1028,0.1031],["rtvae","per_track","real",0.2344,0.241],["rtvae","per_track","real",0.0919,0.0934],["rtvae","per_track","real",0.1986,0.2033],["rtvae","per_track","real",0.1586,0.157],["rtvae","per_track","real",0.1284,0.1083],["rtvae","per_track","real",0.1481,0.15],["rtvae","per_track","real",0.1635,0.1639],["rtvae","per_track","real",0.1687,0.1701],["rtvae","per_track","real",0.1018,0.0956],["rtvae","per_track","real",0.1269,0.1161],["rtvae","per_track","real",0.1454,0.1286],["rtvae","per_track","real",0.1832,0.1562],["rtvae","per_track","real",0.1005,0.0998],["rtvae","per_track","real",0.1989,0.2004],["rtvae","per_track","real",0.1282,0.1282],["rtvae","per_track","real",0.1164,0.1136],["vae","across","real",0.106,0.0973],["vae","across","real",0.1059,0.1046],["vae","across","real",0.1962,0.0974],["vae","across","real",0.1026,0.1079],["vae","across","real",0.1257,0.1227],["vae","across","real",0.1006,0.1022],["vae","across","real",0.1033,0.0955],["vae","across","real",0.2658,0.242],["vae","across","real",0.2526,0.2367],["vae","across","real",0.5709,0.2465],["vae","across","real",0.2519,0.2413],["vae","across","real",0.2688,0.2414],["vae","across","real",0.2569,0.2399],["vae","across","real",0.2498,0.2349],["vae","across","real",0.1977,0.1839],["vae","across","real",0.1505,0.1475],["vae","across","real",0.2023,0.114],["vae","across","real",0.1653,0.1661],["vae","across","real",0.1847,0.1724],["vae","across","real",0.1549,0.1474],["vae","across","real",0.1291,0.123],["vae","per_track","real",0.2781,0.2821],["vae","per_track","real",0.2784,0.2844],["vae","per_track","real",0.5881,0.1654],["vae","per_track","real",0.2482,0.2361],["vae","per_track","real",0.2906,0.2329],["vae","per_track","real",0.2853,0.3126],["vae","per_track","real",0.274,0.3114],["vae","per_track","real",0.2467,0.2661],["vae","per_track","real",0.2078,0.1999],["vae","per_track","real",0.6361,0.1888],["vae","per_track","real",0.2561,0.269],["vae","per_track","real",0.305,0.3157],["vae","per_track","real",0.2573,0.3826],["vae","per_track","real",0.2225,0.2424],["vae","per_track","real",0.1019,0.1072],["vae","per_track","real",0.1217,0.1054],["vae","per_track","real",0.6572,0.185],["vae","per_track","real",0.1705,0.1814],["vae","per_track","real",0.3149,0.3155],["vae","per_track","real",0.1895,0.1734],["vae","per_track","real",0.1097,0.1089]],"lam":[["l01","across",0.1,2.52615,null,[2.52615],true,1,3,1],["l01","per_track",0.1,2.57084,0.06022,[2.57894,2.54048,2.6007],true,13,21,6],["l1","per_track",1.0,2.60494,0.04495,[2.63581,2.59086,2.59256],false,20,21,1],["l10","across",10.0,2.5908,0.01765,[2.5865,2.58412,2.60177],false,3,3,0],["l10","per_track",10.0,2.69936,0.02775,[2.70985,2.70788,2.6821],false,17,21,0]],"lam_g":[["l01","across","all",2.52615,1],["l01","per_track","C07M20",2.3846,3],["l01","per_track","C07M29",2.35251,3],["l01","per_track","C12M02",3.0776,3],["l01","per_track","C19M16",2.49682,2],["l01","per_track","C19M22",2.38987,1],["l01","per_track","C40M17",2.59333,1],["l1","per_track","C07M20",2.39483,2],["l1","per_track","C07M29",2.37486,3],["l1","per_track","C12M02",3.09765,3],["l1","per_track","C19M16",2.50621,3],["l1","per_track","C19M22",2.41856,3],["l1","per_track","C40M17",2.60909,3],["l1","per_track","C40M18",2.76336,3],["l10","across","all",2.5908,3],["l10","per_track","C07M29",2.4844,2],["l10","per_track","C12M02",3.22075,3],["l10","per_track","C19M16",2.52943,3],["l10","per_track","C19M22",2.43665,3],["l10","per_track","C40M17",2.64612,3],["l10","per_track","C40M18",2.80716,3]],"lam_chosen":{"across":{"arm":"l01","lam":0.1,"complete":false,"runner_up":"l10","gap":0.06464770636711892,"label":"no spread (n_seeds < 2)"},"per_track":{"arm":"l01","lam":0.1,"complete":false,"runner_up":"l1","gap":0.03410206021597739,"label":"within noise"}},"cdrift":{"def|across|nocov":{"drift_from_init":0.0317,"drift_from_base":0.3094,"seed_spread":0.057,"frac_at_box_edge":0.0,"n_runs":3},"def|across|real":{"drift_from_init":0.023,"drift_from_base":0.3139,"seed_spread":0.0546,"frac_at_box_edge":0.0,"n_runs":3},"def|per_track|nocov":{"drift_from_init":0.0411,"drift_from_base":0.2737,"seed_spread":0.0708,"frac_at_box_edge":0.0,"n_runs":3},"def|per_track|real":{"drift_from_init":0.02,"drift_from_base":0.2853,"seed_spread":0.0423,"frac_at_box_edge":0.0,"n_runs":3},"formd|across|real":{"drift_from_init":0.0217,"drift_from_base":0.0217,"seed_spread":0.0041,"frac_at_box_edge":0.0,"n_runs":3},"formd|per_track|real":{"drift_from_init":0.0216,"drift_from_base":0.0216,"seed_spread":0.0067,"frac_at_box_edge":0.0,"n_runs":3},"l01|across|real":{"drift_from_init":0.0386,"drift_from_base":0.3005,"frac_at_box_edge":0.0,"n_runs":1},"l01|per_track|real":{"drift_from_init":0.0298,"drift_from_base":0.2643,"seed_spread":0.0495,"frac_at_box_edge":0.0,"n_runs":3},"l1|per_track|real":{"drift_from_init":0.0479,"drift_from_base":0.2542,"seed_spread":0.0564,"frac_at_box_edge":0.0,"n_runs":3},"l10|across|real":{"drift_from_init":0.0438,"drift_from_base":0.3298,"seed_spread":0.0443,"frac_at_box_edge":0.0,"n_runs":3},"l10|per_track|real":{"drift_from_init":0.0543,"drift_from_base":0.3172,"seed_spread":0.0469,"frac_at_box_edge":0.0,"n_runs":3},"rt|across|nocov":{"drift_from_init":0.0283,"drift_from_base":0.3095,"seed_spread":0.0606,"frac_at_box_edge":0.0,"n_runs":3},"rt|across|real":{"drift_from_init":0.028,"drift_from_base":0.3143,"seed_spread":0.0654,"frac_at_box_edge":0.0,"n_runs":3},"rt|per_track|nocov":{"drift_from_init":0.0397,"drift_from_base":0.2805,"seed_spread":0.0779,"frac_at_box_edge":0.0,"n_runs":3},"rt|per_track|real":{"drift_from_init":0.039,"drift_from_base":0.3151,"seed_spread":0.0849,"frac_at_box_edge":0.0,"n_runs":3},"rtvae|across|real":{"drift_from_init":0.0349,"drift_from_base":0.3048,"seed_spread":0.0506,"frac_at_box_edge":0.0,"n_runs":3},"rtvae|per_track|real":{"drift_from_init":0.0445,"drift_from_base":0.2891,"seed_spread":0.0572,"frac_at_box_edge":0.0,"n_runs":3},"vae|across|real":{"drift_from_init":0.0327,"drift_from_base":0.2972,"seed_spread":0.0515,"frac_at_box_edge":0.0,"n_runs":3},"vae|per_track|real":{"drift_from_init":0.0442,"drift_from_base":0.3083,"seed_spread":0.0436,"frac_at_box_edge":0.0,"n_runs":3}},"cknob":[["def",0,"depth_log2 z",0.0,0.0179,0.3032,-4.0179,0.3032,0.0395],["def",1,"read_length z",0.0,0.0098,0.3402,-3.2821,0.3402,0.0329],["def",2,"run_type_pe",0.0,0.0178,0.0,0.0,1.0,0.0327],["def",3,"dedup_on",0.0,-0.0198,1.0,0.0,1.0,0.0328],["def",4,"mapq_thresh z",0.0,-0.0073,0.3356,-3.49,0.3356,0.0181],["def",5,"control_fraction z*",0.0,0.0511,-0.3384,-0.3384,3.5769,0.0638],["def",6,"ratio_k z*",0.0,0.0153,-0.106,-2.014,3.71,0.0273],["def",7,"control_depth_log2 z*",0.0,-0.0139,0.2753,-3.5376,1.0511,0.0507],["def",8,"extsize_k z",0.0,-0.005,-0.1031,-2.0628,3.8163,0.0321],["def",9,"has_control",0.0,-0.0468,1.0,0.0,1.0,0.0787],["def",10,"ctl_identity=matched",0.0,-0.0469,1.0,0.0,1.0,0.0607],["def",11,"ctl_identity=other",0.0,-0.0011,0.0,0.0,1.0,0.0547],["def",12,"ctl_identity=none",0.0,-0.0078,0.0,0.0,1.0,0.0183],["formd",0,"depth_log2 z",0.3032,0.2206,0.3032,-4.0179,0.3032,0.0153],["formd",1,"read_length z",0.3402,0.2631,0.3402,-3.2821,0.3402,0.017],["formd",2,"run_type_pe",0.0,0.02,0.0,0.0,1.0,0.0032],["formd",3,"dedup_on",1.0,0.9801,1.0,0.0,1.0,0.0028],["formd",4,"mapq_thresh z",0.3356,0.261,0.3356,-3.49,0.3356,0.0084],["formd",5,"control_fraction z*",-0.3384,-0.2575,-0.3384,-0.3384,3.5769,0.0077],["formd",6,"ratio_k z*",-0.106,0.0558,-0.106,-2.014,3.71,0.4179],["formd",7,"control_depth_log2 z*",0.2753,0.291,0.2753,-3.5376,1.0511,0.1163],["formd",8,"extsize_k z",-0.1031,-0.32,-0.1031,-2.0628,3.8163,0.4766],["formd",9,"has_control",1.0,0.9789,1.0,0.0,1.0,0.0067],["formd",10,"ctl_identity=matched",1.0,0.9809,1.0,0.0,1.0,0.0012],["formd",11,"ctl_identity=other",0.0,0.0195,0.0,0.0,1.0,0.0013],["formd",12,"ctl_identity=none",0.0,0.0197,0.0,0.0,1.0,0.0016]]};
+
+const COL={tr:'var(--tr)',ho:'var(--ho)',nv:'var(--nv)',nv2:'var(--nv2)',ok:'var(--ok)',ink:'var(--ink)',muted:'var(--muted)',
+  body:'var(--body)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',
+  accent:'var(--accent)',paper:'var(--paper)',ref:'var(--ref)',twin:'var(--twin)',oldd:'var(--oldd)',via:'var(--via)'};
+const GV=['per_track','across'];
+const GN={per_track:'one g per track',across:'one g across tracks'};
+const GNc=g=>GN[g][0].toUpperCase()+GN[g].slice(1);
+/* plain names: the only place an arm is named */
+const ARMS=[
+  {k:'def',  s:1,l1:'1 · default',               l2:'L1 + L2, form A',            c:'var(--s1)',name:'default (L1 + L2)'},
+  {k:'formd',s:2,l1:'2 · form D',                l2:'clean setting starts at the base',c:'var(--s2)',name:'form D: clean setting starts at the base'},
+  {k:'rt',   s:3,l1:'3 · round trip only',       l2:'L2 alone',                   c:'var(--s3)',name:'round trip only'},
+  {k:'rtvae',s:4,l1:'4 · round trip only, VAE',  l2:'L2 alone, sampled Z',        c:'var(--s4)',name:'round trip only, VAE'},
+  {k:'l01',  s:5,l1:'5 · latent agreement',      l2:'L1 + L2 + L3, λ = 0.1',      c:'var(--s5)',name:'latent agreement, λ = 0.1'},
+  {k:'l1',   s:6,l1:'6 · latent agreement',      l2:'L1 + L2 + L3, λ = 1',        c:'var(--s6)',name:'latent agreement, λ = 1'},
+  {k:'l10',  s:7,l1:'7 · latent agreement',      l2:'L1 + L2 + L3, λ = 10',       c:'var(--s7)',name:'latent agreement, λ = 10'},
+  {k:'vae',  s:8,l1:'8 · default, VAE',          l2:'L1 + L2, sampled Z',         c:'var(--s8)',name:'default, VAE'},
+  {k:'oldd', s:0,l1:'old D (t126)',              l2:'reference, 7.5M held out',   c:'var(--oldd)',name:'old D'},
+  {k:'via',  s:0,l1:'old D through the base',    l2:'arm → base → arm',           c:'var(--via)',name:'old D through the base'}];
+const ARM=k=>ARMS.find(a=>a.k===k);
+const SET=ARMS.filter(a=>a.s>0).map(a=>a.k);
+const LAMK=['l01','l1','l10'];
+const lamOf={l01:0.1,l1:1,l10:10};
+
+const f2=v=>v==null?'—':v.toFixed(2), f3=v=>v==null?'—':v.toFixed(3), f4=v=>v==null?'—':v.toFixed(4);
+const mn=s=>String(s).replace('-','−');
+const rng=(a,f=f2)=>{a=a.filter(v=>v!=null&&!isNaN(v));if(!a.length)return '—';const lo=Math.min(...a),hi=Math.max(...a);return f(lo)===f(hi)?mn(f(lo)):lo<0?`${mn(f(lo))} to ${mn(f(hi))}`:`${f(lo)}–${f(hi)}`;};
+const andJ=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+const nLaw=(k,m='real')=>(DATA.n[`${k}|${m}`]||{law:0}).law;
+const nAs=(k,m='real')=>(DATA.n[`${k}|${m}`]||{assigned:0}).assigned;
+/* the spec's noise rule: a gap counts only if |gap| > 2 x the larger seed spread */
+const noise=(gap,sa,sb)=>sa==null||sb==null?'no seed spread':Math.abs(gap)>2*Math.max(sa,sb)?'counts':'within noise';
+const dep=(a,g,grp)=>DATA.depth.find(r=>r[0]===a&&r[1]===g&&r[2]===grp);
+const kn=(a,g,grp,k)=>DATA.knob.find(r=>r[0]===a&&r[1]===g&&r[2]===grp&&r[3]===k);
+const tw=(a,g,grp,k)=>DATA.twin.find(r=>r[0]===a&&r[1]===g&&r[2]===grp&&r[3]===k);
+const co=(a,g,m='real')=>DATA.collapse.find(r=>r[0]===a&&r[1]===g&&r[2]===m);
+const ag=(a,g,nk,m='real')=>DATA.agree.find(r=>r[0]===a&&r[1]===g&&r[2]===m&&r[3]===nk);
+const swr=(a,g,m='real')=>DATA.swap.find(r=>r[0]===a&&r[1]===g&&r[2]===m);
+const has=(a,g)=>!!dep(a,g,'trained')||!!dep(a,g,'never');
+
+/* ---------- svg helpers (t126) ---------- */
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2,ex='')=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const arrowD=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2-8,c,w)+arrowHead(x,y2,'d',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g==='per_track'?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const logS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo));
+const linS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo);
+const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+20,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const rotY=(x,y,txt,fs=15)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:${fs}px"`);
+const box=(x,y,w,h,txt,c,sub,fs=17)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-3:6),txt,'mono','middle',`style="font-size:${fs}px"`)+(sub?T(x+w/2,y+h/2+19,sub,'cap','middle'):'');
+function armLabels(x,top,rh,arms,g,fs=15,model='real'){let s='';arms.forEach((k,i)=>{const a=ARM(k),y=top+i*rh+rh/2;
+  s+=T(x,y-2,a.l1,'axlbl','end',`style="font-size:${fs}px;font-weight:600;fill:${a.c}"`)+T(x,y+15,a.l2,'cap','end',`style="font-size:${fs-2}px"`);});return s;}
+
+/* ---------- 2 · pairs and the depth law (schematic) ---------- */
+function figPairs(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) Training uses base ↔ arm pairs only','ptitle');
+  const cx=300,cy=225;
+  const nodes=[['15M reads',160,110],['7.5M reads',300,68],['3.75M reads',440,110],
+    ['reads trimmed',440,340],['MAPQ raised',300,382],['control mixed in',160,340]];
+  const pos=nodes.map(n=>[n[1],n[2]]);
+  [[0,2],[3,4]].forEach(([i,j])=>s+=L(pos[i][0],pos[i][1],pos[j][0],pos[j][1],COL.nv,2.4,'7 5'));
+  s+=L(pos[0][0],pos[0][1],pos[5][0],pos[5][1],COL.nv2,2.6,'2 5');
+  pos.forEach(([x,y])=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d;
+    s+=L(cx+ux*56,cy+uy*56,x-ux*16,y-uy*16,COL.tr,3);});
+  pos.forEach(([x,y],i)=>{s+=Ci(x,y,13,COL.card,COL.tr,2.5);
+    const right=x>cx+20,left=x<cx-20,anc=right?'start':left?'end':'middle';
+    s+=T(x+(right?20:left?-20:0),y+(right||left?6:(y<cy?-22:34)),nodes[i][0],'axlbl',anc,'style="font-size:15.5px;font-weight:600"');});
+  s+=Ci(cx,cy,54,COL.card,COL.ink,2.5)+T(cx,cy-2,'base','big','middle','style="font-size:22px"')+T(cx,cy+20,'track','psub','middle');
+  const ly=H-8;
+  s+=L(0,ly-5,34,ly-5,COL.tr,3)+T(42,ly,'trained, both directions','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(218,ly-5,252,ly-5,COL.nv,2.4,'7 5')+T(260,ly,'never trained, same knob','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(440,ly-5,474,ly-5,COL.nv2,2.6,'2 5')+T(482,ly,'two knobs','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=divider(610,10,H-6);
+  // (b) the depth law, schematic bins
+  const lx=640,pw=510;
+  s+=T(lx,24,'(b) The depth law: half the reads halves every bin','ptitle');
+  const bins=[3,7,2,12,5,1,0,9,15,6,3,8,2,4,11,5,2,0,6,10];
+  const bw=pw/bins.length,y1=170,y2=320,hs=8;
+  s+=T(lx,58,'source track','axlbl','start','style="font-size:15px;font-weight:600"');
+  bins.forEach((v,i)=>s+=R(lx+i*bw+2,y1-v*hs/1.3,bw-4,v*hs/1.3,COL.ref,'none',2,0));
+  s+=L(lx,y1,lx+pw,y1,COL.axis,1);
+  s+=T(lx,206,'target track with half the reads','axlbl','start','style="font-size:15px;font-weight:600"');
+  bins.forEach((v,i)=>s+=R(lx+i*bw+2,y2-v*hs/2.6,bw-4,v*hs/2.6,COL.ink,'none',2,0,';fill-opacity:.8'));
+  s+=L(lx,y2,lx+pw,y2,COL.axis,1);
+  s+=R(lx,338,pw,84,COL.card,COL.hair,10)+FO(lx+14,346,pw-28,74,'<b>Depth-law error</b> = | log2 (predicted total ÷ source total) − log2 (true read ratio) |. It is 0 when the model scales the counts exactly by the read ratio, and 1 when it misses by a factor of 2.','font:400 15.5px var(--sans);color:var(--body);line-height:1.4');
+  return svg(W,H,s);
+}
+
+/* ---------- 3 · t126, mini schematic of the three findings ---------- */
+function figT126(){
+  const W=1160,H=190;let s='';
+  // (a) trained vs never-trained bars (qualitative)
+  s+=T(0,22,'(a) Trained against never-trained pairs','ptitle','start','style="font-size:16px"');
+  s+=R(30,60,120,26,COL.tr,'none',3)+T(160,79,'trained pairs: small error','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=R(30,100,310,26,COL.nv,'none',3)+T(30,150,'never-trained pairs: large error','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=divider(375,10,H-6);
+  // (b) the asymmetric split
+  s+=T(400,22,'(b) The t126 split: 2 + 2 layers','ptitle','start','style="font-size:16px"');
+  const lay=(x,c,t)=>R(x,62,64,46,COL.card,c,8,2.2)+T(x+32,90,t,'cap','middle','style="font-size:13px;fill:var(--body)"');
+  s+=lay(400,COL.accent,'layer 1')+lay(472,COL.accent,'layer 2')+R(546,58,50,54,COL.paper,COL.ink,24,2.2)+T(571,90,'Z','axlbl','middle','style="font-weight:600"')+lay(604,'var(--s3)','layer 3')+lay(676,'var(--s3)','layer 4');
+  s+=T(468,134,'set by g_enc(c)','cap','middle','style="fill:var(--accent);font-size:14px"')+T(672,134,'set by g_dec(c′)','cap','middle','style="fill:var(--s3);font-size:14px"');
+  s+=divider(770,10,H-6);
+  // (c) the +1: slopes multiply to 1
+  s+=T(795,22,'(c) Exact inverse: slopes multiply to 1','ptitle','start','style="font-size:16px"');
+  const px=830,py=48,pw=140,ph=110;
+  s+=L(px,py+ph,px+pw,py+ph,COL.axis,1.2)+L(px,py,px,py+ph,COL.axis,1.2);
+  s+=L(px,py+ph,px+pw,py+ph-pw*0.55,'var(--s3)',3)+L(px,py+ph,px+pw*0.55,py,'var(--s3)',3,'6 4');
+  s+=T(px+pw+12,py+70,'slope < 1 one way','cap','start','style="font-size:13.5px"')+T(px+pw*0.55+10,py+12,'> 1 the other','cap','start','style="font-size:13.5px"');
+  s+=T(px,py+ph+24,'the +1 needs > 1 both ways','cap','start','style="font-size:13.5px;fill:var(--accent)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 4 · the hub ---------- */
+function figHub(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) t126: two g\'s, two different halves','ptitle','start','style="fill:var(--s3)"');
+  s+=box(0,70,90,46,'X',COL.hair)+arrowR(92,93,130);
+  s+=box(135,60,150,66,'enc half',COL.accent,'layers 1–2')+T(210,150,'set by g_enc(c)','cap','middle','style="fill:var(--accent)"');
+  s+=arrowR(287,93,320)+R(325,66,60,54,COL.paper,COL.ink,27,2.4)+T(355,99,'Z','big','middle','style="font-size:22px"');
+  s+=arrowR(387,93,420)+box(425,60,150,66,'dec half','var(--s3)','layers 3–4')+T(500,150,'set by g_dec(c′)','cap','middle','style="fill:var(--s3)"');
+  s+=arrowR(577,93,610)+box(0,190,560,70,'',COL.hair)+FO(14,198,536,60,'Different layers and different g\'s on the two sides: encoding and decoding are not one map run two ways, and nothing ties the middle across tracks.','font:400 15px var(--sans);color:var(--body);line-height:1.38');
+  s+=divider(640,10,H-6);
+  // (b) hub
+  const cx=905,cy=245;
+  s+=T(665,24,'(b) t128: every arm goes to one clean setting, and out','ptitle','start','style="fill:var(--accent)"');
+  const arms=[['base',905,85],['15M reads',1095,160],['3.75M reads',1095,330],['reads trimmed',905,410],['control mixed in',715,330],['MAPQ raised',715,160]];
+  arms.forEach(([t,x,y])=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d,ox=-uy*7,oy=ux*7;
+    s+=L(x-ux*28+ox,y-uy*22+oy,cx+ux*62+ox,cy+uy*62+oy,COL.accent,2.4)+arrowHead(cx+ux*62+ox,cy+uy*62+oy,Math.abs(ux)>Math.abs(uy)?(ux>0?'l':'r'):(uy>0?'u':'d'),COL.accent,8);
+    s+=L(cx+ux*62-ox,cy+uy*62-oy,x-ux*30-ox,y-uy*24-oy,'var(--s3)',2.4,'6 4');
+    s+=R(x-62,y-17,124,34,COL.card,COL.hair,17,1.5)+T(x,y+5,t,'cap','middle','style="font-size:13.5px;fill:var(--body);font-weight:600"');});
+  s+=Ci(cx,cy,58,COL.paper,COL.ink,2.6)+T(cx,cy-2,'C_clean','mono','middle','style="font-size:19px"')+T(cx,cy+20,'learned','cap','middle');
+  s+=L(665,H-12,695,H-12,COL.accent,2.4)+T(702,H-7,'encode: g(c, C_clean)','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=L(880,H-12,910,H-12,'var(--s3)',2.4,'6 4')+T(917,H-7,'decode: g(C_clean, c′)','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 5 · the model ---------- */
+function figModel(){
+  const W=1160,H=450;let s='';
+  const y=110,h=84;
+  s+=T(0,24,'One CNN f (old rung D: 4 dilated layers, 32 channels), used twice with the same weights','ptitle');
+  s+=box(0,y+12,96,60,'X',COL.hair,'counts')+arrowR(98,y+42,128);
+  s+=box(132,y+12,110,60,'x',COL.hair,'log(1 + X)')+arrowR(244,y+42,282);
+  s+=R(286,y,220,h,COL.card,COL.accent,12,2.6)+T(396,y+34,'f','mono','middle','style="font-size:24px"')+T(396,y+60,'encoder f_e','cap','middle','style="font-size:14.5px"');
+  s+=arrowR(508,y+42,546)+R(550,y-6,130,h+12,COL.paper,COL.ink,40,2.6)+T(615,y+30,'Z','big','middle')+T(615,y+52,'1 channel','cap','middle')+T(615,y+68,'Gaussian','cap','middle');
+  s+=arrowR(682,y+42,720)+R(724,y,220,h,COL.card,'var(--s3)',12,2.6)+T(834,y+34,'f','mono','middle','style="font-size:24px"')+T(834,y+60,'decoder f_d','cap','middle','style="font-size:14.5px"');
+  s+=arrowR(946,y+42,984)+box(988,y+12,170,60,'X′',COL.hair,'negative binomial');
+  // FiLM from g
+  const gy=290;
+  s+=box(286,gy,220,64,'g(c, C_clean)',COL.accent,'FiLM: scale + shift per layer',16);
+  s+=box(724,gy,220,64,'g(C_clean, c′)','var(--s3)','FiLM: scale + shift per layer',16);
+  s+=L(396,gy,396,y+h+8,COL.accent,2.2)+arrowHead(396,y+h+4,'u',COL.accent);
+  s+=L(834,gy,834,y+h+8,'var(--s3)',2.2)+arrowHead(834,y+h+4,'u','var(--s3)');
+  s+=P(`M506,${gy+32} C610,${gy+32} 620,${gy+32} 724,${gy+32}`,'none',COL.muted,1.6,';stroke-dasharray:4 4');
+  s+=T(615,gy+24,'one g, two calls','cap','middle','style="font-size:14px;fill:var(--ink);font-weight:600"');
+  s+=L(396,72,834,72,COL.ink,1.8,'2 4')+T(615,64,'the same weights','cap','middle','style="font-size:14px;fill:var(--ink);font-weight:600"');
+  s+=L(396,72,396,y,COL.ink,1.8,'2 4')+L(834,72,834,y,COL.ink,1.8,'2 4');
+  s+=FO(0,380,W,64,'X and X′ live in count space (negative binomial); Z lives in Gaussian space. g is the t118 MLP (2 × 64) on [c_source, c_target]; it outputs FiLM only. With c′ = c, the route is f_d(f_e(X)) through C_clean.','font:400 15.5px var(--sans);color:var(--body);line-height:1.42');
+  return svg(W,H,s);
+}
+
+/* ---------- 6 · C_clean forms ---------- */
+function figForms(){
+  const W=1160,H=420;let s='';
+  const xx=linS(-4,4,140,1100);
+  const lane=(y,title,c,startV,endV,boxed)=>{let t=T(0,y-74,title,'ptitle','start',`style="fill:${c}"`);
+    t+=R(xx(-3.2),y-14,xx(1.2)-xx(-3.2),28,COL.grid,boxed?COL.ink:'none',6,boxed?2.4:0);
+    t+=T(xx(-3.2),y+36,'lowest value seen in training','cap','start')+T(xx(1.2),y+36,'highest','cap','end');
+    t+=L(xx(-4),y,xx(4),y,COL.axis,1.2);
+    t+=`<polygon points="${xx(1.0)},${y-10} ${xx(1.0)+10},${y} ${xx(1.0)},${y+10} ${xx(1.0)-10},${y}" style="fill:var(--ink)"/>`+T(xx(1.0),y-18,'base','cap','middle','style="fill:var(--ink);font-weight:600"');
+    t+=Ci(xx(startV),y,9,COL.card,c,3)+T(xx(startV),y+58,'start','cap','middle',`style="fill:${c};font-weight:600"`);
+    return t;};
+  s+=lane(116,'Form A (default): starts at 0, the mean of the training settings, and moves freely','var(--s1)',0);
+  s+=P(`M${xx(0)},98 C${xx(1.5)},70 ${xx(2.8)},70 ${xx(3.6)},98`,'none','var(--s1)',2.2,';stroke-dasharray:6 4')+arrowHead(xx(3.6),102,'d','var(--s1)',8);
+  s+=T(xx(3.6),126,'may leave the box','cap','middle','style="fill:var(--s1)"');
+  s+=lane(316,'Form D: starts at the base track\'s settings, held inside the box by a sigmoid','var(--s2)',1.0,null,true);
+  s+=P(`M${xx(1.0)},298 C${xx(0.4)},270 ${xx(-0.6)},270 ${xx(-1.2)},298`,'none','var(--s2)',2.2,';stroke-dasharray:6 4')+arrowHead(xx(-1.2),302,'d','var(--s2)',8);
+  s+=T(xx(-1.9),296,'moves only inside the box','cap','end','style="fill:var(--s2)"');
+  s+=T(W/2,H-6,'one processing entry of C_clean, in the z units g reads (13 entries; the assay entries are copied from the source)','cap','middle','style="font-size:14px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 7 · losses ---------- */
+function figLoss(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) For one trained pair (X, c) → (X′, c′), with Z = f_e(X; c) and Z′ = f_e(X′; c′)','ptitle');
+  const gx=150,gy=86,cw=300,ch=62;
+  s+=T(gx+cw/2,gy-14,'decode with c′','axlbl','middle','style="font-weight:600"')+T(gx+cw+12+cw/2,gy-14,'decode with c','axlbl','middle','style="font-weight:600"');
+  s+=T(gx-14,gy+ch/2+5,'from Z','axlbl','end','style="font-weight:600"')+T(gx-14,gy+ch+10+ch/2+5,'from Z′','axlbl','end','style="font-weight:600"');
+  const cell=(x,y,t,lab,c)=>R(x,y,cw,ch,COL.card,c,8,2.4)+T(x+14,y+26,t,'mono','start','style="font-size:15.5px"')+T(x+14,y+48,lab,'cap','start');
+  s+=cell(gx,gy,'NLL(X′ | f_d(Z; c′))','L1 cross: the real job',COL.ink)+cell(gx+cw+12,gy,'NLL(X | f_d(Z; c))','L2 round trip','var(--s3)');
+  s+=cell(gx,gy+ch+10,'NLL(X′ | f_d(Z′; c′))','L2 round trip','var(--s3)')+cell(gx+cw+12,gy+ch+10,'NLL(X | f_d(Z′; c))','L1 cross: the reverse job',COL.ink);
+  s+=T(gx+2*cw+40,gy+ch+12,'+','big','middle');
+  s+=R(gx+2*cw+62,gy+26,300,ch+30,COL.paper,'var(--s6)',10,2.4)+T(gx+2*cw+76,gy+58,'L3 = λ · mse(Z, Z′)','mono','start','style="font-size:16px"')+T(gx+2*cw+76,gy+82,'λ ∈ {0.1, 1, 10}: pull the latents together','cap','start');
+  s+=L(0,270,W,270,COL.axis,1.5,'6 6');
+  s+=T(0,302,'(b) Deterministic or VAE','ptitle');
+  s+=R(0,322,540,100,COL.card,COL.hair,10)+FO(14,330,512,88,'<b>Deterministic</b>: Z = μ_z. All selection and every latent reading use this, in every setting.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  s+=R(570,322,590,100,COL.card,'var(--s8)',10,2)+FO(584,330,562,88,'<b>VAE</b>: Z = μ_z + σ_z · ε in training, plus a KL term to N(0, 1) whose weight ramps from 0 to 1 over the first 1000 of 4000 steps.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  return svg(W,H,s);
+}
+
+/* ---------- 9 · scoring groups and selection ---------- */
+function figGroups(){
+  const W=1160,H=420;let s='';
+  s+=T(0,24,'(a) Depth: 7.5M is held out of training','ptitle');
+  const lv=['base','15M','7.5M','3.75M'],x0=120,y0=74,dy=92,yOf=m=>y0+lv.indexOf(m)*dy;
+  lv.forEach(m=>{const held=m==='7.5M';
+    s+=R(x0,yOf(m)-24,150,48,COL.card,held?COL.ho:COL.ink,24,2.4,held?';stroke-dasharray:6 4':'')+T(x0+75,yOf(m)+6,(m==='base'?'base track':m+' reads'),'axlbl','middle','style="font-size:15.5px;font-weight:600"');});
+  const arc=(m1,m2,side,off,c,dash,w=2.6)=>{const ya=yOf(m1),yb=yOf(m2),xs=side<0?x0:x0+150,xo=xs+side*off;
+    return P(`M${xs},${ya} C${xo},${ya} ${xo},${yb} ${xs},${yb}`,'none',c,w,dash?`;stroke-dasharray:${dash}`:'');};
+  s+=arc('base','15M',-1,60,COL.tr,'')+arc('base','3.75M',-1,130,COL.tr,'');
+  s+=arc('base','7.5M',1,70,COL.ho,'6 4');
+  s+=arc('15M','3.75M',1,150,COL.nv,'7 5');
+  s+=arc('15M','7.5M',-1,40,COL.nv2,'2 5')+arc('7.5M','3.75M',1,40,COL.nv2,'2 5');
+  const lx=420;
+  [[COL.tr,'','trained: base ↔ 15M, base ↔ 3.75M'],[COL.ho,'6 4','held out: base ↔ 7.5M (scored only)'],
+   [COL.nv,'7 5','never trained: depth → depth'],[COL.nv2,'2 5','never trained, with 7.5M']].forEach(([c,dash,t],i)=>{
+    const yy=110+i*58;s+=L(lx,yy,lx+40,yy,c,3,dash)+T(lx+52,yy+5,t,'axlbl','start','style="font-size:15px"');});
+  s+=T(lx,336,'Other knobs: trained base ↔ arm;','cap','start','style="font-size:14px"');
+  s+=T(lx,356,'never trained arm → arm (same knob, or two knobs).','cap','start','style="font-size:14px"');
+  s+=T(lx,376,'Scored on chromosomes 19 and 21, blacklist removed.','cap','start','style="font-size:14px"');
+  s+=divider(800,10,H-6);
+  s+=T(825,24,'(b) Selection on chromosome 22','ptitle');
+  const rows=[['L1 + L2 settings','L1 + L2 likelihood','var(--s1)'],['L2-only settings','L2 likelihood','var(--s3)'],['L1 + L2 + L3 settings','L1 + L2 likelihood (no λ term)','var(--s6)']];
+  rows.forEach(([a,b,c],i)=>{const y=64+i*86;s+=R(825,y,325,70,COL.card,c,10,2)+T(841,y+28,a,'axlbl','start',`style="font-weight:600;fill:${c};font-size:15.5px"`)+T(841,y+52,'best step by its '+b,'cap','start','style="font-size:13.5px"');});
+  s+=FO(825,326,325,92,'Z = μ_z and no KL term in every case, so the VAE and λ settings compare fairly. One λ per version of g: the lowest mean.','font:400 14.5px var(--sans);color:var(--body);line-height:1.38');
+  return svg(W,H,s);
+}
+
+/* ---------- 10 · references and the noise rule ---------- */
+function figRefs(){
+  const W=1160,H=420;let s='';
+  s+=T(0,24,'(a) Old D through the base: two trained maps, chained','ptitle');
+  const y=120;
+  s+=box(0,y,140,56,'arm 1',COL.hair)+box(320,y,140,56,'base',COL.ink)+box(640,y,140,56,'arm 2',COL.hair);
+  s+=arrowR(142,y+28,318,COL.oldd,2.6)+T(230,y-10,'old D, trained','cap','middle','style="fill:var(--oldd);font-weight:600"');
+  s+=arrowR(462,y+28,638,COL.oldd,2.6)+T(550,y-10,'old D, trained','cap','middle','style="fill:var(--oldd);font-weight:600"');
+  s+=P(`M70,${y+60} C70,${y+140} 710,${y+140} 710,${y+62}`,'none',COL.nv,2.4,';stroke-dasharray:7 5')+arrowHead(710,y+62,'u',COL.nv);
+  s+=T(390,y+132,'old D direct: arm 1 → arm 2, never trained','cap','middle','style="fill:var(--nv);font-weight:600;font-size:14.5px"');
+  s+=FO(0,y+160,780,70,'The hop to the base uses the predicted mean of the first map as the input of the second. No training: both maps are t126 checkpoints.','font:400 15px var(--sans);color:var(--body);line-height:1.4');
+  s+=divider(820,10,H-6);
+  s+=T(845,24,'(b) The noise rule','ptitle');
+  s+=T(845,50,'3 seeds per cell; spread = largest − smallest seed','cap','start','style="font-size:13.5px"');
+  const yy=linS(0.4,0.75,320,80),A=[0.60,0.70,0.66],B=[0.45,0.53,0.50],mA=(A[0]+A[1]+A[2])/3,mB=(B[0]+B[1]+B[2])/3;
+  const cellS=(x,c,vals,lab)=>{let t='';vals.forEach(v=>t+=L(x-22,yy(v),x+22,yy(v),c,3.4));
+    t+=L(x+32,yy(Math.min(...vals)),x+32,yy(Math.max(...vals)),COL.ink,1.6)+L(x+28,yy(Math.min(...vals)),x+36,yy(Math.min(...vals)),COL.ink,1.6)+L(x+28,yy(Math.max(...vals)),x+36,yy(Math.max(...vals)),COL.ink,1.6);
+    t+=T(x+42,yy((Math.min(...vals)+Math.max(...vals))/2)+5,'spread','cap','start','style="font-size:13px"')+T(x,342,lab,'axlbl','middle','style="font-size:14.5px;font-weight:600"');return t;};
+  s+=cellS(880,'var(--s1)',A,'cell a')+cellS(1060,COL.oldd,B,'cell b');
+  s+=L(1000,yy(mA),1000,yy(mB),COL.accent,2.2,'4 3')+L(993,yy(mA),1007,yy(mA),COL.accent,2)+L(993,yy(mB),1007,yy(mB),COL.accent,2)+T(1000,yy(mB)+22,'gap between the means','cap','middle','style="fill:var(--accent);font-weight:700"');
+  s+=FO(845,356,315,60,'The gap counts only if it is larger than <b>2 × the larger spread</b>; otherwise it is labelled <b>within noise</b>.','font:400 14.5px var(--sans);color:var(--body);line-height:1.35');
+  return svg(W,H,s);
+}
+
+/* ---------- 11 · depth law ---------- */
+const DG=[['trained','trained',COL.tr],['heldout','held-out 7.5M',COL.ho],['never','never trained, depth → depth',COL.nv],['never75','never trained, with 7.5M',COL.nv2]];
+const DARMS=()=>ARMS.map(a=>a.k).filter(k=>GV.some(g=>has(k,g)));
+function figDepth(){
+  const arms=DARMS(),top=52,rh=44,lx=250;
+  const W=1160,H=top+arms.length*rh+86;let s='';
+  s+=armLabels(lx-12,top,rh,arms);
+  const pw=420,gap=36,xs0=[lx+4,lx+4+pw+gap];
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=logS(0.02,4,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle');
+    [[0.02,'0.02'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1'],[2,'2'],[4,'4']].forEach(([v,l])=>s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,l,'tick','middle'));
+    arms.forEach((k,i)=>{const y0=top+i*rh+4;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      let nr=null;
+      DG.forEach(([grp,,c],j)=>{const r=dep(k,g,grp),yb=y0+j*9.5;if(!r)return;nr=r[8];
+        s+=R(x0,yb,xx(r[3])-x0,7.5,c,'none',1.5);
+        s+=L(xx(r[4]),yb+3.75,xx(r[5]),yb+3.75,COL.ink,1.1);
+        r[7].forEach(v=>s+=L(xx(v),yb-1,xx(v),yb+8.5,COL.ink,1.6));});
+      s+=T(x0+pw-4,y0+rh-12,nr==null?'no runs yet':`n = ${nr}`,'cap','end','style="font-size:12px"');});
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'depth-law error, | log2 predicted scale − log2 true read ratio | (log scale)','axlbl','middle','style="font-size:15px"');
+  let lxx=0;DG.forEach(([,lab,c])=>{s+=sw(lxx,H-6,c,lab);lxx+=lab.length*7.4+40;});
+  s+=T(W,H-6,'bar: median · whisker: middle half · ticks: seeds','cap','end','style="font-size:13px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 12 · never-trained CRPS, pooled ---------- */
+function splitBar(xx,x0,y,h,r,c){return R(x0,y,xx(r[5])-x0,h,c,'none',2)+R(xx(r[5]),y,xx(r[5]+r[6])-xx(r[5]),h,c,'none',2,0,';fill-opacity:.35');}
+function figCrps(){
+  const arms=ARMS.map(a=>a.k).filter(k=>GV.some(g=>kn(k,g,'never','all'))),top=56,rh=40,lx=250;
+  const W=1160,H=top+arms.length*rh+80;let s='';
+  s+=armLabels(lx-12,top-2,rh,arms);
+  const pw=420,gap=36,xs0=[lx+4,lx+4+pw+gap];
+  const all=DATA.knob.filter(r=>r[2]==='never'&&r[3]==='all');
+  const xmax=Math.ceil(Math.max(...all.flatMap(r=>[r[4],...r[11]]))*10)/10+0.3;
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(0,xmax,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle');
+    for(let v=0;v<=xmax+1e-9;v+=0.2) s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,v<1e-9?'0':f2(v).replace(/0$/,''),'tick','middle');
+    ['oldd','via'].forEach(ref=>{const r=kn(ref,g,'never','all');if(r)s+=L(xx(r[4]),top-6,xx(r[4]),top+arms.length*rh,ARM(ref).c,1.8,'5 4');});
+    arms.forEach((k,i)=>{const r=kn(k,g,'never','all'),c=ARM(k).c,y=top+i*rh+8,bh=rh-18;
+      if(!r){s+=T(x0+6,y+bh/2+5,'no runs yet','cap');return;}
+      s+=splitBar(xx,x0,y,bh,r,c);
+      r[11].forEach(v=>s+=L(xx(v),y-3,xx(v),y+bh+3,COL.ink,1.6));
+      s+=T(Math.max(xx(r[4]),...r[11].map(xx))+8,y+bh/2+5,`${f3(r[4])} · n = ${r[8]}`,'val','start',`style="fill:${c};font-size:13.5px"`);});
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'CRPS on counts, all never-trained pairs (mean over a track\'s pairs, then tracks, then seeds)','axlbl','middle','style="font-size:15px"');
+  s+=sw(0,H-6,COL.muted,'oracle-scaled part')+sw(170,H-6,COL.muted,'scale error',0.35);
+  s+=L(300,H-12,300,H,COL.ink,1.6)+T(310,H-6,'seeds','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(380,H-11,410,H-11,COL.oldd,1.8,'5 4')+T(416,H-6,'old D','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(480,H-11,510,H-11,COL.via,1.8,'5 4')+T(516,H-6,'old D through the base','cap','start','style="font-size:14px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 13 · per knob ---------- */
+const KS=[['depth','same','depth'],['crop','same','read length'],['mapq','same','MAPQ cut'],['abproxy','same','control mixed in'],['cross','cross','two knobs']];
+function figKnob(){
+  const arms=ARMS.map(a=>a.k).filter(k=>GV.some(g=>kn(k,g,'same','depth'))),bh=9,rg=2.5,blockH=arms.length*(bh+rg);
+  const lx=150,top=60,cw=192,gap=12,W=1160;
+  const H=top+2*(blockH+46)+40;let s='';
+  KS.forEach(([k,grp,lab],j)=>{const x0=lx+j*(cw+gap);s+=T(x0+cw/2,24,lab,'ptitle','middle','style="font-size:17px"');
+    const rows=DATA.knob.filter(r=>r[2]===grp&&r[3]===k&&arms.includes(r[0]));
+    const xmax=Math.max(...rows.map(r=>r[4]))*1.08,xx=linS(0,xmax,x0,x0+cw);
+    GV.forEach((g,gi)=>{const yb=top+gi*(blockH+46);
+      [0,xmax/2].forEach(v=>s+=L(xx(v),yb-4,xx(v),yb+blockH,COL.grid,1));
+      s+=T(xx(0),yb+blockH+15,'0','tick','middle')+T(xx(xmax/2),yb+blockH+15,f2(xmax/2),'tick','middle');
+      arms.forEach((a,i)=>{const r=kn(a,g,grp,k),y=yb+i*(bh+rg);if(r)s+=splitBar(xx,x0,y,bh,r,ARM(a).c);});});});
+  GV.forEach((g,gi)=>{const yb=top+gi*(blockH+46);s+=T(lx-14,yb+blockH/2-4,gi?'one g':'one g','axlbl','end','style="font-size:15px;font-weight:600"')+T(lx-14,yb+blockH/2+14,gi?'across tracks':'per track','axlbl','end','style="font-size:15px;font-weight:600"');});
+  s+=T(lx+(5*cw+4*gap)/2,H-36,'CRPS on counts, never-trained pairs of that knob; each panel has its own axis','axlbl','middle','style="font-size:15px"');
+  let x=0;arms.forEach(a=>{const lab=ARM(a).l1.replace(/^\d · /,'');s+=R(x,H-17,12,12,ARM(a).c,'none',2)+T(x+16,H-7,a==='l01'||a==='l1'||a==='l10'?'λ = '+lamOf[a]:lab,'cap','start','style="font-size:12.5px;fill:var(--body)"');x+=(a.startsWith('l')&&a!=='l01'?60:lab.length*6.6+34);});
+  return svg(W,H,s);
+}
+
+/* ---------- 14 · gain over the twin ---------- */
+const TK=[['all','never','all knobs'],['depth','same','depth'],['crop','same','read length'],['mapq','same','MAPQ cut'],['abproxy','same','control mixed in'],['cross','cross','two knobs']];
+function figTwin(){
+  const arms=['def','rt','oldd'].filter(a=>DATA.twin.some(r=>r[0]===a));
+  const top=72,sub=14,kh=arms.length*sub+18,lx=170,W=1160,H=top+TK.length*kh+70;let s='';
+  TK.forEach(([,,lab],i)=>{const y=top+i*kh+kh/2;s+=T(lx-14,y+2,lab,'axlbl','end','style="font-size:16px;font-weight:600"');});
+  const pw=465,gap=30,xs0=[lx,lx+pw+gap];
+  const vals=DATA.twin.filter(r=>arms.includes(r[0])).map(r=>r[4]);
+  const lo=Math.min(-0.2,Math.floor(Math.min(...vals)*10)/10),hi=Math.max(0.6,Math.ceil(Math.max(...vals)*10)/10);
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(lo,hi,x0+10,x0+pw-10);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle')+T(x0,46,'settings 1 and 3, and old D for reference','psub');
+    for(let v=Math.ceil(lo*10)/10;v<=hi+1e-9;v+=0.2) s+=L(xx(v),top-6,xx(v),top+TK.length*kh-6,Math.abs(v)<1e-9?COL.muted:COL.grid,Math.abs(v)<1e-9?1.6:1)+T(xx(v),top+TK.length*kh+12,Math.abs(v)<1e-9?'0':mn(f2(v).replace(/0$/,'')),'tick','middle');
+    TK.forEach(([k,grp],i)=>{const yk=top+i*kh;if(i%2===0)s+=R(x0,yk-4,pw,kh-4,COL.grid,'none',0,0,';fill-opacity:.35');
+      arms.forEach((a,j)=>{const y=yk+8+j*sub,c=ARM(a).c,tr=k==='cross'?null:tw(a,g,'trained',k),nv=tw(a,g,grp,k);
+        if(!nv)return;
+        if(tr) s+=L(xx(tr[4]),y,xx(nv[4]),y,c,2.2,nv[9]==='counts'?'':'2 3')+Ci(xx(tr[4]),y,5.5,c);
+        s+=Ci(xx(nv[4]),y,5.5,COL.card,c,2.4);});});
+    if(pi>0) s+=divider(x0-gap/2,10,top+TK.length*kh);});
+  s+=T(xs0[0]+pw+gap/2,top+TK.length*kh+34,'gain over the no-covariates twin, (twin CRPS − real CRPS) ÷ twin CRPS, median over pairs','axlbl','middle','style="font-size:15px"');
+  let x=0;arms.forEach(a=>{const lab=ARM(a).name;s+=Ci(x+6,H-12,6,ARM(a).c)+T(x+18,H-7,lab,'cap','start','style="font-size:13.5px;fill:var(--body)"');x+=lab.length*6.8+32;});
+  s+=T(W,H-7,'● trained  ○ never trained  — gap counts  ··· within noise','cap','end','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 15 · collapse ---------- */
+const ZROWS=()=>{const r=[];SET.forEach(k=>{if(GV.some(g=>co(k,g)))r.push([k,'real']);if(GV.some(g=>co(k,g,'nocov')))r.push([k,'nocov']);});return r;};
+function zLabels(x,top,rh,rows){let s='';rows.forEach(([k,m],i)=>{const a=ARM(k),y=top+i*rh+rh/2;
+  s+=T(x,y-2,a.l1+(m==='nocov'?', twin':''),'axlbl','end',`style="font-size:14.5px;font-weight:600;fill:${m==='nocov'?'var(--twin)':a.c}"`)+T(x,y+14,m==='nocov'?'no-covariates twin':a.l2,'cap','end','style="font-size:12.5px"');});return s;}
+function figCollapse(){
+  const rows=ZROWS(),top=60,rh=38,lx=250,W=1160,H=top+rows.length*rh+80;let s='';
+  s+=zLabels(lx-12,top,rh,rows);
+  // (a) |Z - x|
+  const x0=lx+4,pw=420,xmA=Math.ceil(Math.max(...DATA.collapse.flatMap(r=>[r[3],...r[9]]))*10)/10,xa=linS(0,xmA,x0,x0+pw);
+  s+=T(x0,24,'(a) Median |Z − x| per bin','ptitle')+T(x0,46,'● one g per track  ■ one g across tracks · ticks: seeds','psub');
+  for(let v=0;v<=xmA+1e-9;v+=0.2)s+=L(xa(v),top-4,xa(v),top+rows.length*rh,COL.grid,1)+T(xa(v),top+rows.length*rh+18,v<1e-9?'0':f2(v).replace(/0$/,''),'tick','middle');
+  // (b) corr
+  const x1=x0+pw+50,pw2=330,cmin=Math.floor(Math.min(...DATA.collapse.map(r=>r[5]))*20)/20,xb=linS(cmin,1,x1,x1+pw2);
+  s+=T(x1,24,'(b) Correlation of Z with x','ptitle')+T(x1,46,'● one g per track  ■ one g across tracks','psub');
+  for(let v=cmin;v<=1+1e-9;v+=0.01){const major=Math.abs(v*20-Math.round(v*20))<1e-6;s+=L(xb(v),top-4,xb(v),top+rows.length*rh,major?COL.axis:COL.grid,1);if(major)s+=T(xb(v),top+rows.length*rh+18,f2(v),'tick','middle');}
+  s+=divider(x0+pw+25,10,top+rows.length*rh+4);
+  rows.forEach(([k,m],i)=>{const y=top+i*rh+rh/2,c=m==='nocov'?COL.twin:ARM(k).c;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35')+R(x1,top+i*rh,pw2,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+    GV.forEach((g,j)=>{const r=co(k,g,m);if(!r)return;const yy=y+(j?7:-7);
+      r[9].forEach(v=>s+=L(xa(v),yy-5,xa(v),yy+5,COL.ink,1.3));
+      s+=mark(xa(r[3]),yy,g,c,'none',5.5)+mark(xb(r[5]),yy,g,c,'none',5.5);});
+    const nr=GV.map(g=>co(k,g,m)).filter(Boolean).map(r=>r[8]).join(' + ');
+    s+=T(W,y+5,`n = ${nr}`,'cap','end','style="font-size:12px"');});
+  s+=T(x0+pw/2,top+rows.length*rh+40,'median over bins of |μ_z − log(1 + X)|','axlbl','middle','style="font-size:15px"');
+  s+=T(x1+pw2/2,top+rows.length*rh+40,'Pearson correlation, Z against x (1 = Z is x up to scale)','axlbl','middle','style="font-size:15px"');
+  s+=T(0,H-6,'chromosomes 19 and 21, every product of the run\'s tracks · n = runs (one g per track + one g across tracks)','cap','start','style="font-size:13px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 16 · agreement ---------- */
+function figAgree(){
+  const rows=ZROWS(),top=84,rh=36,lx=250,W=1160,H=top+rows.length*rh+84;let s='';
+  s+=zLabels(lx-12,top,rh,rows);
+  const pans=[['one','(a) Two products differing in one knob'],['two','(b) Two products differing in two knobs']];
+  const xm=Math.ceil(Math.max(...DATA.agree.filter(r=>r[3]!=='all').flatMap(r=>[r[4],r[6]]))*10)/10+0.1;
+  const pw=400,gap=50;
+  pans.forEach(([nk,title],pi)=>{const x0=lx+4+pi*(pw+gap),xx=linS(0,xm,x0,x0+pw);
+    s+=T(x0,24,title,'ptitle','start','style="font-size:18px"')+T(x0,46,'● one g per track  ■ one g across tracks · ticks: seeds','psub');
+    for(let v=0;v<=xm+1e-9;v+=0.1){const lab=Math.abs(v*5-Math.round(v*5))<1e-6;s+=L(xx(v),top-4,xx(v),top+rows.length*rh,COL.grid,1);if(lab)s+=T(xx(v),top+rows.length*rh+18,v<1e-9?'0':f2(v).replace(/0$/,''),'tick','middle');}
+    const xr=DATA.agree.find(r=>r[3]===nk&&r[2]==='real');
+    if(xr){s+=L(xx(xr[6]),top-10,xx(xr[6]),top+rows.length*rh,COL.ink,2.2,'6 4')+T(xx(xr[6])+6,top-16,`inputs: median |x − x′| = ${f2(xr[6])}`,'cap','start','style="fill:var(--ink);font-size:13px"');}
+    rows.forEach(([k,m],i)=>{const y=top+i*rh+rh/2,c=m==='nocov'?COL.twin:ARM(k).c;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      GV.forEach((g,j)=>{const r=ag(k,g,nk,m);if(!r)return;const yy=y+(j?7:-7);
+        r[8].forEach(v=>s+=L(xx(v),yy-5,xx(v),yy+5,COL.ink,1.3));s+=mark(xx(r[4]),yy,g,c,'none',5.5);});});
+    if(pi)s+=divider(x0-gap/2,10,top+rows.length*rh+4);});
+  s+=T(lx+4+pw+gap/2,top+rows.length*rh+42,'median over bins of |Z − Z′| for two products of one track (latents left of the dashed line agree more than the inputs)','axlbl','middle','style="font-size:14.5px"');
+  s+=T(0,H-6,'one-knob pairs include base ↔ arm; ticks: seeds; chromosomes 19 and 21','cap','start','style="font-size:13px"');
+  return svg(W,H,s);
+}
+
+/* ---------- 17 · swap vs identity ---------- */
+function figSwap(){
+  const W=1160,H=480;let s='';
+  const keys=[];SET.forEach(k=>{['real','nocov'].forEach(m=>{if(DATA.swap.some(r=>r[0]===k&&r[2]===m))keys.push([k,m]);});});
+  const xmax=Math.ceil(Math.max(...DATA.swap_pts.map(p=>p[3]),...DATA.swap.map(r=>r[5]))*20)/20;
+  const ymax=Math.ceil(Math.max(...DATA.swap_pts.map(p=>p[4]),...DATA.swap.map(r=>r[3]))*20)/20;
+  const x0=90,pw=680,top=40,ph=360,xx=linS(0,xmax,x0,x0+pw),yy=linS(0,ymax,top+ph,top);
+  const ax=xx(xmax*0.62),ay=yy(ymax*0.55);
+  s+=L(ax,ay,xx(xmax*0.9)-6,yy(ymax*0.12)-6,'var(--ok)',2.4)+`<polygon points="${xx(xmax*0.9)},${yy(ymax*0.12)} ${xx(xmax*0.9)-14},${yy(ymax*0.12)-4} ${xx(xmax*0.9)-6},${yy(ymax*0.12)-14}" style="fill:var(--ok)"/>`;
+  s+=T(ax-6,ay-24,'the target: pass the swap check','cap','start','style="fill:var(--ok);font-weight:700;font-size:14px"')+T(ax-6,ay-6,'while far from the identity','cap','start','style="fill:var(--ok);font-weight:700;font-size:14px"');
+  for(let v=0;v<=xmax+1e-9;v+=0.05)s+=L(xx(v),top,xx(v),top+ph,COL.grid,1)+T(xx(v),top+ph+20,f2(v),'tick','middle');
+  for(let v=0;v<=ymax+1e-9;v+=0.05)s+=L(x0,yy(v),x0+pw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,f2(v),'tick','end');
+  const dm=Math.min(xmax,ymax);s+=L(xx(0),yy(0),xx(dm),yy(dm),COL.muted,1.6,'6 4')+T(xx(dm)-6,yy(dm)+18,'swap = identity distance','cap','end','style="font-size:13px"');
+  s+=T(x0+pw/2,top+ph+46,'identity distance on real pairs, median |log(predicted mean ÷ source X)|','axlbl','middle','style="font-size:15px"');
+  s+=rotY(30,top+ph/2,'swap check, c′ = c: median |log(predicted mean ÷ X)|');
+  DATA.swap_pts.forEach(p=>{const c=p[2]==='nocov'?COL.twin:ARM(p[0]).c;s+=mark(xx(p[3]),yy(p[4]),p[1],c,'none',2.6).replace('stroke-width','fill-opacity:.32;stroke-width');});
+  keys.forEach(([k,m])=>GV.forEach(g=>{const r=swr(k,g,m);if(!r)return;const c=m==='nocov'?COL.twin:ARM(k).c;s+=mark(xx(r[5]),yy(r[3]),g,c,COL.paper,8,2);}));
+  // legend
+  const lx=x0+pw+40;s+=T(lx,top+4,'large: mean of the cell · small: one run','cap','start','style="font-size:13px"')+T(lx,top+22,'● one g per track  ■ one g across tracks','cap','start','style="font-size:13px"');
+  keys.forEach(([k,m],i)=>{const y=top+52+i*28,a=ARM(k),c=m==='nocov'?COL.twin:a.c,nr=GV.map(g=>swr(k,g,m)).filter(Boolean).map(r=>r[7]).join(' + ');
+    s+=Ci(lx+7,y-5,7,c)+T(lx+22,y,`${m==='nocov'?a.l1.replace(/^\d · /,'')+', twin':a.l1}`,'cap','start',`style="font-size:13.5px;fill:${c};font-weight:600"`)+T(W,y,`n = ${nr}`,'cap','end','style="font-size:12px"');});
+  return svg(W,H,s);
+}
+
+/* ---------- 18 · lambda ---------- */
+function figLam(){
+  const W=1160,H=420;let s='';
+  const vals=DATA.lam.flatMap(r=>[r[3],...r[5]]).concat(DATA.lam_g.map(r=>r[3]));
+  const lo=Math.floor(Math.min(...vals)*20)/20,hi=Math.ceil(Math.max(...vals)*20)/20;
+  const top=60,ph=280,pw=440,gap=80;
+  GV.forEach((g,pi)=>{const x0=90+pi*(pw+gap),yy=linS(lo,hi,top+ph,top),cx=i=>x0+pw*(i+0.5)/3;
+    s+=T(x0-60,24,`(${'ab'[pi]}) ${GNc(g)}`,'ptitle');
+    for(let v=lo;v<=hi+1e-9;v+=0.05)s+=L(x0,yy(v),x0+pw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,f2(v),'tick','end');
+    s+=rotY(x0-58,top+ph/2,'best validation NLL, chromosome 22',14);
+    LAMK.forEach((k,i)=>{const r=DATA.lam.find(x=>x[0]===k&&x[1]===g),c=ARM(k).c;
+      s+=T(cx(i),top+ph+24,`λ = ${lamOf[k]}`,'axlbl','middle','style="font-weight:600"');
+      if(!r){s+=T(cx(i),top+ph/2,'no runs yet','cap','middle');return;}
+      DATA.lam_g.filter(x=>x[0]===k&&x[1]===g).forEach((x,j)=>s+=Ci(cx(i)-26+((j*7)%5)*3,yy(x[3]),3.4,c,'none',0,';fill-opacity:.45'));
+      r[5].forEach((v,j)=>s+=L(cx(i)+8,yy(v),cx(i)+30,yy(v),COL.ink,2));
+      s+=L(cx(i)-40,yy(r[3]),cx(i)+40,yy(r[3]),c,4)+(r[6]?T(cx(i),yy(r[3])-10,'chosen','cap','middle',`style="fill:${c};font-weight:700"`):'');
+      s+=T(cx(i),top+ph+44,`n = ${r[7]} of ${r[8]}`,'cap','middle','style="font-size:12.5px"');});});
+  s+=L(90,H-12,130,H-12,COL.muted,4)+T(138,H-7,'mean over runs','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=L(280,H-12,300,H-12,COL.ink,2)+T(308,H-7,'mean per seed','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=Ci(440,H-12,3.4,COL.muted)+T(450,H-7,'one g (mean over its seeds)','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 19 · C_clean ---------- */
+const KNAME={'depth_log2 z':'depth','read_length z':'read length','run_type_pe':'paired end','dedup_on':'deduplication','mapq_thresh z':'MAPQ cut','control_fraction z*':'control fraction','ratio_k z*':'ratio','control_depth_log2 z*':'control depth','extsize_k z':'extension size','has_control':'has a control','ctl_identity=matched':'control: matched','ctl_identity=other':'control: other','ctl_identity=none':'control: none'};
+function figClean(){
+  const W=1160,H=500;let s='';
+  const kk=[...new Set(DATA.cknob.map(r=>r[1]))].sort((a,b)=>a-b),top=56,rh=29,lx=170,pw=500;
+  const all=DATA.cknob.flatMap(r=>[r[3],r[4],r[5],r[6],r[7]]).filter(v=>v!=null);
+  const lo=Math.floor(Math.min(...all)),hi=Math.ceil(Math.max(...all)),xx=linS(lo,hi,lx,lx+pw);
+  s+=T(0,24,'(a) Each entry of C_clean: start and end, one g per track','ptitle','start','style="font-size:18px"');
+  for(let v=lo;v<=hi;v++)s+=L(xx(v),top-6,xx(v),top+kk.length*rh,v===0?COL.muted:COL.grid,v===0?1.4:1)+T(xx(v),top+kk.length*rh+18,mn(v),'tick','middle');
+  kk.forEach((i,j)=>{const y=top+j*rh+rh/2,a=DATA.cknob.find(r=>r[0]==='def'&&r[1]===i),d=DATA.cknob.find(r=>r[0]==='formd'&&r[1]===i),ref=d||a;
+    s+=T(lx-12,y+5,KNAME[ref[2]]||ref[2],'axlbl','end','style="font-size:14px"');
+    if(ref[6]!=null)s+=R(xx(ref[6]),y-7,Math.max(2,xx(ref[7])-xx(ref[6])),14,COL.grid,'none',3,0);
+    if(ref[5]!=null)s+=`<polygon points="${xx(ref[5])},${y-8} ${xx(ref[5])+8},${y} ${xx(ref[5])},${y+8} ${xx(ref[5])-8},${y}" style="fill:var(--ink)"/>`;
+    [[a,'var(--s1)',-5],[d,'var(--s2)',5]].forEach(([r,c,o])=>{if(!r)return;s+=L(xx(r[3]),y+o,xx(r[4]),y+o,c,2)+Ci(xx(r[3]),y+o,5,COL.card,c,2)+Ci(xx(r[4]),y+o,4.2,c);});});
+  s+=T(lx+pw/2,top+kk.length*rh+40,'value in the z units g reads (0 = mean of the training settings)','axlbl','middle','style="font-size:14.5px"');
+  const ly=H-8;s+=R(0,ly-11,22,12,COL.grid,'none',3,0)+T(28,ly,'range seen in training (form D\'s box)','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=`<polygon points="290,${ly-12} 297,${ly-5} 290,${ly+2} 283,${ly-5}" style="fill:var(--ink)"/>`+T(303,ly,'base','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=Ci(355,ly-5,5,COL.card,COL.muted,2)+T(364,ly,'start','cap','start','style="font-size:13px;fill:var(--body)"')+Ci(412,ly-5,4.2,COL.muted)+T(421,ly,'end','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=Ci(466,ly-5,5,'var(--s1)')+T(476,ly,'form A','cap','start','style="font-size:13px;fill:var(--body)"')+Ci(540,ly-5,5,'var(--s2)')+T(550,ly,'form D','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=divider(720,10,H-30);
+  // (b) drift vs seed spread per setting
+  const rows=[];SET.forEach(k=>GV.forEach(g=>{const d=DATA.cdrift[`${k}|${g}|real`];if(d)rows.push([k,g,d]);}));
+  const arms=[...new Set(rows.map(r=>r[0]))],x0=930,pw2=210,rh2=Math.min(40,(H-140)/arms.length);
+  const xm=Math.ceil(Math.max(...rows.flatMap(r=>[r[2].drift_from_init,r[2].seed_spread??0]))*50)/50,xb=linS(0,xm,x0,x0+pw2);
+  s+=T(745,24,'(b) How far it moved','ptitle','start','style="font-size:18px"')+T(745,46,'median over entries and tracks','psub');
+  for(let v=0;v<=xm+1e-9;v+=xm/2)s+=L(xb(v),top+4,xb(v),top+arms.length*rh2+8,COL.grid,1)+T(xb(v),top+arms.length*rh2+26,f2(v),'tick','middle');
+  arms.forEach((k,i)=>{const y=top+12+i*rh2+rh2/2,a=ARM(k);s+=T(x0-10,y+5,a.l1,'axlbl','end',`style="font-size:13.5px;font-weight:600;fill:${a.c}"`);
+    GV.forEach((g,j)=>{const d=DATA.cdrift[`${k}|${g}|real`];if(!d)return;const yy=y+(j?5:-5);
+      if(d.seed_spread!=null)s+=L(xb(d.seed_spread),yy-6,xb(d.seed_spread),yy+6,COL.ink,2);
+      s+=mark(xb(d.drift_from_init),yy,g,a.c,'none',4.6);});});
+  s+=T(x0+pw2/2,top+arms.length*rh2+46,'distance from its start','axlbl','middle','style="font-size:14px"');
+  s+=T(745,top+arms.length*rh2+70,'● ■ moved (one g per track, across)  | seed spread','cap','start','style="font-size:12.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figPairs,figT126,figHub,figModel,figForms,figLoss,figGroups,figRefs,figDepth,figCrps,figKnob,figTwin,figCollapse,figAgree,figSwap,figLam,figClean};
+Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
+
+/* ---------- the grid of settings ---------- */
+try{
+  const G={def:['form A','yes','yes','—','deterministic'],formd:['form D','yes','yes','—','deterministic'],rt:['form A','—','yes','—','deterministic'],
+    rtvae:['form A','—','yes','—','VAE'],l01:['form A','yes','yes','λ = 0.1','deterministic'],l1:['form A','yes','yes','λ = 1','deterministic'],
+    l10:['form A','yes','yes','λ = 10','deterministic'],vae:['form A','yes','yes','—','VAE']};
+  const tb=document.getElementById('tblArms');
+  SET.forEach(k=>{const a=ARM(k),g=G[k],tws=nAs(k,'nocov')?` <span class="mini">· twin ${nLaw(k,'nocov')} of ${nAs(k,'nocov')}</span>`:'';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="arm" style="--c:${a.c}"><small style="margin:0 6px 0 0">${a.s}</small>${a.name}</td>`+g.map((v,i)=>`<td class="${v==='—'?'no':(i===1||i===2)&&v==='yes'?'y':''}">${v}</td>`).join('')+`<td>${nLaw(k)} of ${nAs(k)}${tws}</td>`;
+    tb.appendChild(tr);});
+  const C=DATA.counts;
+  putH('chips',[`<b>${C.g_per_track} g's, one per track, + 1 g across tracks</b>`,`<b>${C.seeds} seeds</b>`,'<b>counts only</b>',
+    '<b>held out of training:</b> the 7.5M depth arm',`<b>up to ${DATA.cap} steps</b>, t118 row-1 training`,
+    `<b>${C.done} of ${C.assigned}</b> runs scored at this build`].map(t=>`<span class="chip">${t}</span>`).join(''));
+  put('tRuns',`${C.done} of ${C.assigned} runs scored at this build`);
+}catch(e){console.error('grid',e);}
+
+/* ---------- prose and headlines: every number from DATA ---------- */
+try{
+  const SETn=k=>ARM(k).name;
+  const both=(f)=>GV.map(f).filter(v=>v!=null);
+  // (a) depth
+  const dv=(arms,grp)=>arms.flatMap(a=>both(g=>{const r=dep(a,g,grp);return r?r[3]:null;}));
+  const others=SET.filter(k=>!['rt','rtvae'].includes(k));
+  putH('hDa',`Round trip only misses the depth law by the full read ratio; every setting with the cross loss reads like old D, and old D through the base is lowest`);
+  putH('tDa1',`<b>Round trip only:</b> error ${rng(dv(['rt'],'trained'))} even on trained pairs, about one factor of 2 per halving of depth: it returns the source unchanged. With the VAE: ${rng(dv(['rtvae'],'trained'))}.`);
+  putH('tDa2',`<b>Never-trained depth → depth:</b> settings with the cross loss ${rng(dv(others,'never'))}, old D ${rng(dv(['oldd'],'never'))}, old D through the base ${rng(dv(['via'],'never'))}. <b>Held-out 7.5M:</b> settings with the cross loss ${rng(dv(others,'heldout'))}, old D ${rng(dv(['oldd'],'heldout'))}.`);
+  const nl=others.flatMap(k=>GV.map(g=>{const r=dep(k,g,'never'),o=dep('oldd',g,'never');return r&&o?noise(r[3]-o[3],r[6],o[6]):null;})).filter(Boolean);
+  put('nDa',`Against old D on never-trained depth pairs, ${nl.filter(x=>x==='counts').length} of ${nl.length} setting × g cells pass the noise rule; ${nl.filter(x=>x==='within noise').length} are within noise; ${nl.filter(x=>x==='no seed spread').length} have fewer than 2 seeds.`);
+  // (b) pooled CRPS
+  const cv=(k,g)=>kn(k,g,'never','all');
+  const vsD=SET.flatMap(k=>GV.map(g=>{const r=cv(k,g),o=cv('oldd',g);if(!r||!o)return null;return {k,g,gap:r[4]-o[4],lab:noise(r[4]-o[4],r[7],o[7])};})).filter(Boolean);
+  const better=vsD.filter(x=>x.lab==='counts'&&x.gap<0),worse=vsD.filter(x=>x.lab==='counts'&&x.gap>0);
+  const viaBeat=SET.flatMap(k=>GV.map(g=>{const r=cv(k,g),v=cv('via',g);return r&&v?{k,g,lab:noise(r[4]-v[4],r[7],v[7]),gap:r[4]-v[4]}:null;})).filter(Boolean);
+  putH('hCb',better.length?`On never-trained pairs, ${andJ([...new Set(better.map(x=>SETn(x.k)))])} beat old D beyond noise; the rest sit within noise of old D or worse`
+    :`On never-trained pairs no setting beats old D beyond noise; the round-trip settings are worse, and old D through the base is best with one g per track`);
+  const os=(k,g)=>{const r=cv(k,g);return r?`${f3(r[4])} (${f3(r[5])} + ${f3(r[6])})`:'—';};
+  putH('tCb1',`<b>One g per track</b>, CRPS (oracle-scaled + scale error): default ${os('def','per_track')}, form D ${os('formd','per_track')}, old D ${os('oldd','per_track')}, old D through the base ${os('via','per_track')}, round trip only ${os('rt','per_track')}.`);
+  putH('tCb2',`<b>Against old D</b>, ${vsD.length} setting × g cells: ${better.length} better beyond noise, ${worse.length} worse beyond noise (${andJ([...new Set(worse.map(x=>SETn(x.k)))])||'none'}), ${vsD.filter(x=>x.lab!=='counts').length} within noise or without a seed spread. ${(()=>{const r=cv('rt','per_track'),d=cv('def','per_track');if(!r||!d)return '';const ex=r[4]-d[4],se=r[6]-d[6];return `Round trip only's extra CRPS over the default, one g per track: ${f3(ex)}, of which ${Math.round(100*se/ex)}% is scale error.`;})()}`);
+  put('nCb',`Against old D through the base: ${viaBeat.filter(x=>x.lab==='counts'&&x.gap>0).length} of ${viaBeat.length} setting × g cells are worse beyond noise, ${viaBeat.filter(x=>x.lab==='counts'&&x.gap<0).length} better, the rest within noise or without a seed spread.`);
+  // (b) per knob
+  const kc=KS.flatMap(([k,grp])=>SET.flatMap(a=>GV.map(g=>{const r=kn(a,g,grp,k),o=kn('oldd',g,grp,k);return r&&o?{a,k,lab:noise(r[4]-o[4],r[7],o[7]),gap:r[4]-o[4]}:null;}))).filter(Boolean);
+  const kb=kc.filter(x=>x.lab==='counts'&&x.gap<0),kw=kc.filter(x=>x.lab==='counts'&&x.gap>0);
+  const kwk=[...new Set(kw.map(x=>KS.find(z=>z[0]===x.k)[2]))];
+  putH('hCk',kb.length?`Per knob, settings beat old D beyond noise in ${kb.length} of ${kc.length} cells, and lose in ${kw.length}`:`Per knob, no setting beats old D beyond noise; ${kw.length} of ${kc.length} cells are worse, on ${kwk.length===KS.length?'every knob':andJ(kwk)}`);
+  const sk=(a,k,grp)=>rng(both(g=>{const r=kn(a,g,grp,k);return r?r[4]:null;}),f3);
+  putH('tCk1',`<b>Same-knob depth pairs:</b> default ${sk('def','depth','same')}, old D ${sk('oldd','depth','same')}, old D through the base ${sk('via','depth','same')}. <b>Read length:</b> default ${sk('def','crop','same')}, old D ${sk('oldd','crop','same')}.`);
+  putH('tCk2',`<b>Two knobs at once:</b> default ${sk('def','cross','cross')}, old D ${sk('oldd','cross','cross')}, old D through the base ${sk('via','cross','cross')}. Of ${kc.length} setting × knob × g cells against old D: ${kw.length} worse beyond noise, ${kb.length} better, the rest within noise or without a seed spread.`);
+  put('nCk',`Ranges are over both versions of g. Same-knob pairs per version of g: ${andJ(KS.slice(0,4).map(([k,,lab])=>{const r=kn('def','per_track','same',k);return `${lab} ${r?r[9]:'—'}`;}))} pair records.`);
+  // (c) twin
+  const tg=(a,g,grp,k)=>{const r=tw(a,g,grp,k);return r?r[4]:null;};
+  const dT=both(g=>tg('def',g,'trained','all')),dN=both(g=>tg('def',g,'never','all')),oT=both(g=>tg('oldd',g,'trained','all')),oN=both(g=>tg('oldd',g,'never','all'));
+  const dl=GV.map(g=>(tw('def',g,'never','all')||[])[9]).filter(Boolean),ol=GV.map(g=>(tw('oldd',g,'never','all')||[])[9]).filter(Boolean);
+  putH('hTw',`The default keeps its gain over the twin from trained to never-trained pairs; round trip only has no gain at all`);
+  putH('tTw1',`<b>All knobs:</b> default ${rng(dT)} on trained pairs, ${rng(dN)} on never-trained pairs (gap ${andJ([...new Set(dl)])}); old D ${rng(oT)} → ${rng(oN)} (gap ${andJ([...new Set(ol)])}). The default starts lower on trained pairs.`);
+  const sl=['depth','crop','mapq','abproxy'].flatMap(k=>GV.map(g=>tw('def',g,'same',k))).filter(Boolean);
+  putH('tTw2',`<b>Same-knob pairs:</b> the default drops below 0 on ${andJ(['crop','mapq','abproxy'].filter(k=>GV.some(g=>(tg('def',g,'same',k)??1)<0)).map(k=>KS.find(z=>z[0]===k)[2]))||'no knob'} (${rng(sl.filter(r=>r[3]!=='depth').map(r=>r[4]))}). <b>Round trip only:</b> ${rng(DATA.twin.filter(r=>r[0]==='rt').map(r=>r[4]),f3)} in every group.`);
+  put('nTw',`Each version of g: ${andJ(GV.map(g=>{const r=tw('def',g,'never','all');return r?`${GN[g]} n = ${r[7]} real and ${r[8]} twin runs, ${r[6]} never-trained pairs`:'';}).filter(Boolean))}. The gap label compares each never-trained cell with the trained cell of the same knob.`);
+  // (d) collapse
+  const cr=SET.flatMap(k=>both(g=>{const r=co(k,g);return r?r[5]:null;}));
+  const crt=both(g=>{const r=co('rt',g);return r?r[5]:null;});
+  putH('hCo',`Z stays close to x in every setting: the correlation of Z with x is ${rng(cr,f3)}`);
+  putH('tCo1',`<b>Correlation of Z with x:</b> ${rng(cr,f3)} across all settings and both versions of g; round trip only ${rng(crt,f3)}, the closest to a copy of x. The twins read alike: ${rng(SET.flatMap(k=>both(g=>{const r=co(k,g,'nocov');return r?r[5]:null;})),f3)}.`);
+  const zx=k=>rng(both(g=>{const r=co(k,g);return r?r[3]:null;}));
+  putH('tCo2',`<b>Median |Z − x|:</b> round trip only ${zx('rt')}, default ${zx('def')}, form D ${zx('formd')}, λ = 10 ${zx('l10')}, VAE settings ${rng(['rtvae','vae'].flatMap(k=>both(g=>{const r=co(k,g);return r?r[3]:null;})))}. Seed spreads reach ${f2(Math.max(...DATA.collapse.map(r=>r[4]??0)))}, so most gaps are within noise.`);
+  const coL=SET.filter(k=>k!=='def').flatMap(k=>GV.map(g=>{const r=co(k,g),d=co('def',g);return r&&d?noise(r[3]-d[3],r[4],d[4]):null;})).filter(Boolean);
+  put('nCo',`Against the default, ${coL.filter(x=>x==='counts').length} of ${coL.length} setting × g cells of median |Z − x| pass the noise rule. Median σ_z of the deterministic settings is not used (Z = μ_z there).`);
+  // (e) agreement
+  const xd=DATA.agree.find(r=>r[3]==='two'&&r[2]==='real');
+  const below=SET.filter(k=>GV.some(g=>{const r=ag(k,g,'two');return r&&r[4]<r[6];}));
+  putH('hAg',below.length===LAMK.length&&LAMK.every(k=>below.includes(k))?`Only the latent-agreement settings (λ = 0.1, 1, 10) bring two products' latents closer than their inputs`:below.length?`Only ${andJ(below.map(SETn))} bring two products' latents closer than their inputs`:'No setting brings two products\' latents closer than their inputs');
+  const az=k=>rng(both(g=>{const r=ag(k,g,'two');return r?r[4]:null;}));
+  putH('tAg1',`<b>Two-knob pairs</b>, median |Z − Z′|: λ = 0.1 ${az('l01')}, λ = 1 ${az('l1')}, λ = 10 ${az('l10')}, against inputs ${xd?f2(xd[6]):'—'}.`);
+  putH('tAg2',`<b>Without L3</b>: default ${az('def')}, form D ${az('formd')}, round trip only ${az('rt')}, default with VAE ${az('vae')}: the latents of one sample differ more than its inputs.`);
+  put('nAg',`For one-knob pairs the median |x − x′| is ${f2((DATA.agree.find(r=>r[3]==='one')||[])[6])}, because most bins are equal between two arms of one track; panel (a) reads against that line.`);
+  // (f) swap
+  const sv=(k,i)=>rng(both(g=>{const r=swr(k,g);return r?r[i]:null;}),f3);
+  putH('hSw',`The default and form D pass the swap check far from the identity; round trip only sits at the identity`);
+  putH('tSw1',`<b>Default:</b> swap ${sv('def',3)}, identity distance ${sv('def',5)}. <b>Form D:</b> ${sv('formd',3)} and ${sv('formd',5)}. <b>Round trip only:</b> ${sv('rt',3)} and ${sv('rt',5)}: it returns its input whatever the settings.`);
+  putH('tSw2',`<b>The VAE settings</b> move toward the diagonal (default with VAE: swap ${sv('vae',3)}, identity ${sv('vae',5)}); λ = 10 swap ${sv('l10',3)}. <b>The default's twin</b> sits on the diagonal: ${sv('def',3).length?rng(both(g=>{const r=swr('def',g,'nocov');return r?r[3]:null;}),f3):''}.`);
+  const swL=SET.filter(k=>k!=='def').flatMap(k=>GV.map(g=>{const r=swr(k,g),d=swr('def',g);return r&&d?{k,lab:noise(r[3]-d[3],r[4],d[4])}:null;})).filter(Boolean);
+  put('nSw',`Swap check against the default: ${swL.filter(x=>x.lab==='counts').length} of ${swL.length} setting × g cells pass the noise rule (${andJ([...new Set(swL.filter(x=>x.lab==='counts').map(x=>SETn(x.k)))])||'none'}).`);
+  // (g) lambda
+  const LC=DATA.lam_chosen;
+  const lcTxt=GV.filter(g=>LC[g]).map(g=>`λ = ${LC[g].lam} for ${GN[g]}`);
+  const lcLab=GV.filter(g=>LC[g]).map(g=>LC[g].label==='within noise'?'within noise':LC[g].label==='counts'?'beyond noise':'without a seed spread');
+  const lset=[...new Set(GV.filter(g=>LC[g]).map(g=>LC[g].lam))];
+  putH('hLa',`The rule picks ${lset.length===1&&GV.every(g=>LC[g])?`λ = ${lset[0]} for both versions of g`:andJ(lcTxt)}, but the margin is ${andJ([...new Set(lcLab)])}`);
+  putH('tLa1',andJ(GV.filter(g=>LC[g]).map(g=>`<b>${GNc(g)}:</b> λ = ${LC[g].lam}, ahead of λ = ${lamOf[LC[g].runner_up]} by ${f4(LC[g].gap)} (${LC[g].label==='within noise'?'within noise':LC[g].label==='counts'?'beyond noise':'no seed spread: fewer than 2 seeds'})`))+'.');
+  const lr=DATA.lam.filter(r=>r[1]==='per_track');
+  putH('tLa2',`<b>Per g, one g per track:</b> ${andJ(lr.map(r=>`λ = ${r[2]} is lowest for ${r[9]} of ${DATA.counts.g_per_track} g's`))}. The choice is ${GV.every(g=>LC[g]&&LC[g].complete)?'on the full grid':'provisional: not every λ run has finished'}.`);
+  put('nLa',`Run counts per λ are on the chart; seed spread of the mean NLL: ${rng(DATA.lam.map(r=>r[4]),f4)}.`);
+  // (h) C_clean
+  const cd=(k,f)=>rng(both(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?d[f]:null;}),f3);
+  const mv=SET.flatMap(k=>both(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?d.drift_from_init:null;})),ss=SET.flatMap(k=>both(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?d.seed_spread:null;}));
+  putH('hCc',`C_clean barely leaves its start in either form: it moves ${rng(mv,f3)} in z units, about its own seed spread`);
+  putH('tCc1',`<b>Form A</b> moves ${cd('def','drift_from_init')} from 0 and ends ${cd('def','drift_from_base')} from the base. <b>Form D</b> moves ${cd('formd','drift_from_init')} from the base. Seed spread of the learned value: ${rng(ss,f3)}.`);
+  const atEdge=DATA.cknob.filter(r=>r[0]==='formd'&&r[5]!=null&&r[7]!=null&&r[6]!=null&&(Math.abs(r[5]-r[7])<1e-6||Math.abs(r[5]-r[6])<1e-6)&&r[6]!==r[7]&&/ z\*?$/.test(r[2])).map(r=>KNAME[r[2]]||r[2]);
+  putH('tCc2',`<b>The base sits at the edge of the box</b> for ${andJ(atEdge)} (median over tracks; the yes/no entries always do): form D starts at a box edge there, so it can only move inward.`);
+  put('nCc',`n runs per setting and version of g: ${andJ(SET.flatMap(k=>GV.map(g=>{const d=DATA.cdrift[`${k}|${g}|real`];return d?`${SETn(k)}, ${GN[g]} ${d.n_runs}`:null;})).filter(Boolean))}.`);
+  // discussion
+  put('tR1',`Depth error ${rng(dv(['rt'],'trained'))} on trained pairs; swap ${sv('rt',3)}, identity ${sv('rt',5)}; gain over the twin ${rng(DATA.twin.filter(r=>r[0]==='rt').map(r=>r[4]),f3)}.`);
+  put('tR2',`Default: swap ${sv('def',3)} at identity distance ${sv('def',5)}; gain over the twin ${rng(dT)} trained, ${rng(dN)} never trained.`);
+  put('tR3',`Never-trained CRPS: default ${rng(both(g=>(cv('def',g)||[])[4]),f3)}, old D ${rng(both(g=>(cv('oldd',g)||[])[4]),f3)}, through the base ${rng(both(g=>(cv('via',g)||[])[4]),f3)}; corr(Z, x) ${rng(cr,f3)}.`);
+  const st=DATA.steps,capN=k=>(st[`${k}|real`]||[0,0])[1],runN=k=>(st[`${k}|real`]||[0,0])[0];
+  const det=SET.filter(k=>!['rtvae','vae'].includes(k));
+  put('tDb2',`${det.reduce((s,k)=>s+capN(k),0)} of ${det.reduce((s,k)=>s+runN(k),0)} deterministic runs (twins not counted) used all ${DATA.cap} steps (form D: ${capN('formd')} of ${runN('formd')}); the VAE settings stopped early, at a median of ${andJ(['rtvae','vae'].map(k=>(st[`${k}|real`]||[])[2]).filter(v=>v!=null).map(String))} steps.`);
+  const miss=SET.filter(k=>nLaw(k)<nAs(k));
+  put('tDb3',`${DATA.counts.done} of ${DATA.counts.assigned} runs were scored at this build. Still missing: ${andJ(miss.map(k=>`${SETn(k)}: ${nAs(k)-nLaw(k)} runs`))||'none'}. Cells with fewer than 2 seeds carry no noise label.`);
+  const C=DATA.counts,sbc=C.settings_by_cluster;
+  put('tDb4',`Fir ran ${C.fir[0]} of its ${C.fir[1]} runs (kits K2 and K3), Nibi ${C.nibi[0]} of ${C.nibi[1]} (kit K1). Settings on Nibi: ${andJ(sbc.nibi.map(SETn))}. The code of each setting is the same in each kit.`);
+  put('nDb',`Settings on Fir: ${andJ(sbc.fir.map(SETn))}.`);
+  put('tOp4',`${det.reduce((s,k)=>s+capN(k),0)} of ${det.reduce((s,k)=>s+runN(k),0)} deterministic runs stopped at the ${DATA.cap}-step cap; the median best step per setting was ${rng(det.map(k=>(st[`${k}|real`]||[])[3]).filter(v=>v!=null),v=>String(Math.round(v)))}.`);
+  put('tOp5',`Only the λ settings brought latents closer than inputs (λ = 10: ${az('l10')} against ${xd?f2(xd[6]):'—'}), at a cost on the swap check (${sv('l10',3)}).`);
+}catch(e){console.error('prose',e);}
+
+/* ---------- navigation and speaker notes ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>
