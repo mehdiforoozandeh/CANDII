@@ -708,8 +708,11 @@ def load_run(run_dir, data_dir, covariates_tsv, manifest_tsv, device="auto") -> 
                           f"encoder")
     stats = {"knots_x": np.asarray(ckpt["stats"]["knots_x"], dtype=np.float64),
              "n0": float(ckpt["stats"]["n0"]), "sigma0": float(ckpt["stats"]["sigma0"])}
+    # t126/t128 runs write their own loss formula under "loss" (an NB head, e.g. "L12: ..."); only
+    # the ladder's own names select the head here
+    loss = cfg.get("loss", "nb")
     ladder = Ladder(cfg["rung"], cfg["space"], stats, n_cov=int(cfg.get("n_cov", encoding.N_COV)),
-                    loss=cfg.get("loss", "nb"))
+                    loss=loss if loss in LOSSES else "nb")
     ladder.g.load_state_dict(ckpt["g"])
     ladder.form.load_state_dict(ckpt["form"])
     enc = encoding.Encoder.from_state(ckpt["encoder"])
