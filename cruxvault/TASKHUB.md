@@ -53,12 +53,17 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t128` [implementation] Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory) — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[h22_a_composable_g_one_shared_map_from_each_\|h22]], [[h19_g_fits_trained_base_arm_depth_pairs_but_\|h19]]
 - `t129` [implementation] merge the loss head-to-head code (Poisson-mean loss, rung A0, score --extras) from exp/t118-ppml-vs-nb into exp/t118-counterfactual-f, resolving the score.py and train.py conflicts against the t126/t128 changes; tests on Nibi — refs [[h21_fitting_the_mean_by_poisson_nll_and_the_\|h21]], [[h18_the_1_pseudocount_in_x_log_1_counts_make\|h18]]
 - `t130` [implementation] score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 
 ## Blocked
 
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t100`
 
 ## By category
+
+### admin
+
+- `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 
 ### data-acquisition
 

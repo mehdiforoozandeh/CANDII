@@ -84,6 +84,7 @@ Children: t111 (arm 2). Every other arm lands on this task's branch.
 
 ## Progress
 
+- 2026-10-25: PI ruling: the 1.4 TiB on Nibi /scratch with no /project copy (FASTQ arms, FASTQ cache, BAM arms, store sources, tagAligns, smoke) is left to purge on 2026-11-20. The 130 products, the store and the pseudoreplicates are on /project, md5-verified (job 24966415).
 - 2026-10-25: scratch-purge rescue before the 2026-11-20 purge (Nibi job 24966415). The 130 products were already on `/project/def-maxwl/mforooz/t112_cf/products/`; all 635 files have equal md5 on /scratch and /project, and 374 of 374 MANIFEST md5 fields match. The small `checks/`, `code/` and `logs/` dirs were copied to /project too. The FASTQ cache, the FASTQ-arm harvest, the BAM-arm tree, `store_src/` and the tagAligns stay on /scratch only, about 1.4 TiB; the PI decides. Detail in [the run paths](results/t112/NIBI_PATH.txt).
 
 ## Output
