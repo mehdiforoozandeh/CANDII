@@ -666,3 +666,21 @@ Submitted 2026-10-24 01:58 UTC (never resubmit; a rerun skips on SCORE_DONE / LA
   DSrtvae 23/24; DSl0.1 11/24; DSvae 1; DSl1, DSl10 0), Nibi 0 of 42, via-base 24/24, old D from
   t126 records_D. verify.txt: 0 DISAGREE. The lambda choice is provisional (`complete: false`).
 - Old D's t126 law records carry no oracle_scaled / scale_error split, so its never-trained split is NaN.
+
+### t128 old D law re-scored with the CRPS split (C8b, 2026-10-25)
+
+- Why: old D's t126 law.json records carry no oracle_scaled / scale_error split. This re-runs the
+  same direct law scoring (`score.score_law(..., split=True)`) on each old D checkpoint, 24 real +
+  24 nocov twin runs. Code `tools/t128/oldd_split.py`, `slurm/t128/oldd_split.sh` (48 tasks;
+  index = m_i*24 + g_i*3 + seed; 9 = D_C19M16_counts_real_s0, 33 = its twin).
+- Kit K4: `/project/def-maxwl/mforooz/t128/code/K4`, `GIT_SHA` e3f2095c2e9d479c53312125d78e59291db29994
+  (chunk/t128-C8b); rsync of the worktree without .git, cruxvault, .orchestrate, .claude,
+  `__pycache__`; `wheels/` copied from Nibi K1. 13 MB.
+- Out dir `/project/def-maxwl/mforooz/t128/oldD_split/<run_name>/` (law.json, LAW_DONE,
+  oldd_split.json). The old runs `/project/def-maxwl/mforooz/t126/D/runs` are only read.
+- Nibi 24964406 `t128_oldd_split`: array 0-47%12, K4, Nibi blacklist, CPU 8 cores, 24 GB, 4 h,
+  `--exclude=c128,c166,c537,c371,c329`; submitted 2026-10-25 06:41 UTC (PENDING Priority).
+  Never resubmit; a rerun skips on LAW_DONE.
+- Readings: `extract.sh nibi` passes `--oldd-split $T/oldD_split` -> `oldd_split_nibi.tsv.gz`;
+  `analyze.py` replaces old D's matching (run, kind, depth_source) rows of records_D_t126 with it
+  when present. Re-run `bash tools/t128/readings/run_all.sh` after the array finishes.
