@@ -3,7 +3,7 @@ slug: candii
 root_id: root
 engine_version: 3.5
 counter_q: 7
-counter_h: 22
+counter_h: 25
 counter_s: 0
-counter_t: 128
+counter_t: 130
 task_categories: data-acquisition, hpc-setup, implementation, visualization, manuscript, admin

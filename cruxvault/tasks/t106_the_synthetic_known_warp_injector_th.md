@@ -3,8 +3,8 @@ id: t106
 type: task
 title: the synthetic known-warp injector that plantedrecovery reads, following meta_probe's off/shuffled/planted discipline
 category: implementation
-parent: t103
-blocked_by: t103
+parent: t130
+blocked_by: None
 refs: h1, h2, h3, h4, h5, h6, h7, h8, h9, h10
 hypothesis_refs: 
 status: open
@@ -19,6 +19,10 @@ Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on
 ## Why
 
 the precondition that makes every other number in h1 and h2 readable; meta_probe itself cannot be reused because it plants one bit, not a warp
+
+## Progress
+
+- 2026-10-25: re-parented from the dropped testbed to [[t130_score_the_one_warp_check_set_blind_|the scoring task]]. The injector plants the warp on the target X' of counterfactual pairs, and g reads the planted covariate as one added entry of C and C'.
 
 ## Output
 

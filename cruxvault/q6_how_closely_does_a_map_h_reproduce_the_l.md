@@ -65,5 +65,7 @@ At 6 of 8 designs (A, C, D, A2, C2, D2), aggregated 2026-10-25; the PI stopped c
 - [Deck](presentations/t125-eta-h/index.html) — published https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS; vault copy [DECK.md](presentations/t125-eta-h/DECK.md)
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**1 children** · ideas 0/1 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
+
+- `h25` [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *idea*
 <!-- crux:ledger:end -->

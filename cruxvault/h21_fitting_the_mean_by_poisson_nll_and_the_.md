@@ -72,7 +72,7 @@ Checks written after the run, at the PI's request on 2026-10-20; the work was ex
      - [Report](results/h21/report.md)   - results/h21/curve.png -->
 - [Poisson-mean vs NB head-to-head report](results/t127/report.md)
 - results/t127/report.pdf figures for every comparison aspect
-- [Lab deck: Poisson-mean vs full NB loss](presentations/t127-ppml-vs-nb/index.html) — built 2026-10-20; no published artifact URL was found
+- [Lab deck: Poisson-mean vs full NB loss](presentations/t127-ppml-vs-nb/DECK.md) — published https://claude.ai/artifact/3QpVJzhgeZBwfSXu19y5Yj
 
 ## Findings
 

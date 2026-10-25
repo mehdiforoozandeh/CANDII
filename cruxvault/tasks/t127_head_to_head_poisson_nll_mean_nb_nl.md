@@ -30,7 +30,7 @@ t118 depth law unmet; NB NLL balances totals only weighted, Poisson NLL forces s
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
 - [Poisson-mean vs NB head-to-head report](results/t127/report.md)
-- [Lab deck](presentations/t127-ppml-vs-nb/index.html) — built 2026-10-20; no published artifact URL was found
+- [Lab deck](presentations/t127-ppml-vs-nb/DECK.md) — published https://claude.ai/artifact/3QpVJzhgeZBwfSXu19y5Yj
 
 ## Evidence
 

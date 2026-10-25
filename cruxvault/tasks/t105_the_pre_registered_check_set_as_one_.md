@@ -3,8 +3,8 @@ id: t105
 type: task
 title: the pre-registered check set as one scoring module, calling bench.covariate and bench.distributional rather than reimplementing them
 category: implementation
-parent: t103
-blocked_by: t103
+parent: t130
+blocked_by: None
 refs: h1, h2, h3, h4, h5, h6, h7, h8, h9, h10
 hypothesis_refs: 
 status: open
@@ -19,6 +19,10 @@ Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on
 ## Why
 
 shuffledrop is covuse plus _marginal_resample, crps_split is nb_suite, and assayresidual is covshare per decile -- all four already exist and must not be rebuilt
+
+## Progress
+
+- 2026-10-25: re-parented from the dropped testbed to [[t130_score_the_one_warp_check_set_blind_|the scoring task]]. The module scores the g → f runs of t118, not an encoder–decoder.
 
 ## Output
 

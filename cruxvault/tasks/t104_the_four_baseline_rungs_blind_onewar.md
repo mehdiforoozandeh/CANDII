@@ -3,8 +3,8 @@ id: t104
 type: task
 title: the four baseline rungs (blind, onewarp, model, oracle), with the point-to-distribution spread device so blind and onewarp are CRPS-scorable
 category: implementation
-parent: t103
-blocked_by: t103
+parent: t130
+blocked_by: None
 refs: h1, h2, h3, h4, h5, h6, h7, h8, h9, h10
 hypothesis_refs: 
 status: open
@@ -19,6 +19,10 @@ Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on
 ## Why
 
 gapclosed has no denominator without them, and the headline is measured from onewarp, not from blind
+
+## Progress
+
+- 2026-10-25: re-parented from the dropped testbed to [[t130_score_the_one_warp_check_set_blind_|the scoring task]]. Under g → f, `blind` is the no-covariates twin and `model` is g → f, both already trained in t118 and both NB-valued. `onewarp` is t118's per-pair QuantileMatching, and `oracle` is two NB draws at the target depth; only these two need the spread device.
 
 ## Output
 

@@ -7,9 +7,9 @@ parent: t112
 blocked_by: None
 refs: h2, h15
 hypothesis_refs: 
-status: open
-created: 2026-09-16T21:53:46
-updated: 2026-09-16T21:53:46
+status: done
+created: "2026-09-16T21:53:46"
+updated: "2026-10-25T00:18:27"
 ---
 
 # t111 — re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms
