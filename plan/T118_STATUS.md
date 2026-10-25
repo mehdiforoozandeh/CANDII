@@ -651,3 +651,18 @@ Submitted 2026-10-24 01:58 UTC (never resubmit; a rerun skips on SCORE_DONE / LA
 - Nibi 24896767 `t128_viabase`: array 0-8,10-23%12, K1, Nibi blacklist, `--exclude=c128,c166,c537,c371,c329`
   (same as the script header), otherwise the 24757114 submit line.
 - If the first Fir wave shows an ImportError, lower the throttle: `scontrol update JobId=70473 ArrayTaskThrottle=12`.
+
+### t128 readings (C8, first pass 2026-10-25)
+
+- Pipeline: `tools/t128/readings/` (extract_records.py, verify_raw.py stdlib, extract.sh, verify.sh,
+  analyze.py pandas, verify_compare.py). One command re-runs it all and is incremental (per-run cache
+  keyed on the DONE marks): `bash tools/t128/readings/run_all.sh` (`--local` = tables only).
+- Each cluster reads only its own runs (Fir `fir_idx.txt`: 0-196, 225; Nibi `nibi_idx.txt`: 197-224,
+  226-239). Outputs on both: `/project/def-maxwl/mforooz/t128/readings/`. Small tables only on the
+  laptop: `cruxvault/results/t128/` (main checkout, gitignored; mirrored into this worktree).
+- First-pass jobs (CPU, --gres=none; Fir with `--exclude=`): Fir extract 315215, verify 315216;
+  Nibi extract 24964016, verify 24964017. All COMPLETED.
+- Read at first pass: 155 Fir runs with LAW_DONE (DS, DSbox, DSrt real + both twins complete;
+  DSrtvae 23/24; DSl0.1 11/24; DSvae 1; DSl1, DSl10 0), Nibi 0 of 42, via-base 24/24, old D from
+  t126 records_D. verify.txt: 0 DISAGREE. The lambda choice is provisional (`complete: false`).
+- Old D's t126 law records carry no oracle_scaled / scale_error split, so its never-trained split is NaN.
