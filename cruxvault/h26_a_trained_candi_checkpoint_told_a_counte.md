@@ -5,7 +5,7 @@ schema: 2
 title: A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates
 parent: q8
 status: idea
-rule: 
+rule: all
 measurement: "Covariate-swap probe: per track x arm, change in predicted log2 mean (told arm vs told base covariates) against the real arm/base log2 ratio, and NB NLL of the arm track under each prompt; CPU inference on a saved checkpoint, one chromosome"
 replicates: 7 tracks x (2 read-length + 1 run-type arms); 2 seeds of checkpoint where they exist
 verdict: 
@@ -28,10 +28,9 @@ Claim: CANDI's output does not follow a change in read length or run type with b
 
 ## Null
 
-<!-- spec 09: the BORING explanation — the cheapest way this result could be trivially
-     true. One line, <=25 words, naming a family. Your checks must discriminate against it.
-     The PI approves it before checks are written: `crux approve-null <id>`. -->
-_(one line: the cheapest way this result could be trivially true — name a family from capacity, chance, leakage, selection, normalization, instrumentation)_
+Instrumentation: per-bin chr21 arm/base log2 ratios are mostly sampling noise, so even a covariate-aware model could not track them.
+
+<!-- Recommended by Claude via the crux-null agent; the PI delegated the choice on 2026-10-25. Awaiting PI sign-off (crux approve-null h26 not run). -->
 
 ## Problem Statement
 
@@ -44,7 +43,30 @@ A trained CANDI checkpoint, told a counterfactual arm's read length or run type 
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-- [ ] _(state a falsifiable, pre-registered check)_
+<!-- Thresholds marked "recommended" were proposed by Claude under the PI's delegation (2026-10-25) and await PI sign-off. -->
+
+**Probe definition, fixed before any inference.** Pairs = 7 tracks × {read length 36, read length 50, run type PE}. A pair whose arm value equals the base's native value is dropped and listed (no swap exists). Prompt (a) = the base's covariates; prompt (b) = the base's covariates with ONLY the knob changed, depth held at the base's value. Real ratio R = log2((arm+1)/(base+1)), median-centred per pair, so the global level (the arm's own mapped depth, which the depth offset explains) is out of the claim. Gate resolution for ratios: 1 kb pooled bins (recommended; 25 bp, 200 bp and 5 kb are reported, never gating). NLL is always computed at the native 25 bp NB. Checkpoint seeds s0 and s1 (t81, md5 checked against results/t81/TRAIN_CANDI_EIC19.md); a claim-directed check is met only if it is met on every seed that exists. Eligibility (`effectfloor`) is computed and frozen BEFORE any model inference.
+
+**Outcome-neutral controls** must pass whatever the claim is; a failure makes the run invalid, never a refutation.
+
+- [ ] [outcome-neutral] `swapwired` (manipulation check) — for every pair, assert on the decoder's metadata tensor that prompts (a) and (b) differ in exactly the intended field, encoded in the training data's units and inside the trained vocabulary (run-type index in the table; read length in the same scaling the dataset loader uses). Record the output-side η difference separately from the count difference.
+      fails-if:: the read-length or run-type field is mis-encoded, lands in the wrong column, or is set on the input side, so a Δ of 0 is a wiring bug, not the model's behaviour
+- [ ] [outcome-neutral] `depthcontrol` (positive control) — on the 15M / 7.5M / 3.75M arms of all 7 tracks: (1) the predicted global Δ (told depth arm − told base) equals log2(arm reads / base reads) within 0.01 log2; (2) the arm's NB NLL is lower under the depth-arm prompt than under the base prompt; (3) the real total log2(arm/base) is within 0.05 of log2 of the thinning fraction. The offset head makes (1) true by construction, so this tests the probe's plumbing and file pairing, not learning.
+      fails-if:: y_meta does not reach the decoder, the decode reads the wrong column, or arm and base products are mispaired
+- [ ] [outcome-neutral] `thinningblank` (negative control) — run the `effectfloor` statistic on the median-centred depth-thinning pairs. Binomial thinning has no per-bin pattern, so all 21 depth pairs must come out NOT eligible.
+      fails-if:: the split-half apparatus finds a "reproducible arm effect" where none exists (for example from the +1 pseudocount compressing low-count bins the same way in both halves)
+- [ ] [outcome-neutral] `effectfloor` (precondition against the null) — per pair, with the t117 halves: r_split = Spearman across 1 kb bins between log2((arm_pr1+1)/(base_pr1+1)) and log2((arm_pr2+1)/(base_pr2+1)), each median-centred and computed within deciles of base mean count, then averaged over deciles. A pair is ELIGIBLE when r_split exceeds the 99th percentile of a block-shift null (99 circular shifts of the pr2 ratio by ≥ 1 Mb on chr21) and r_split ≥ 0.2 (recommended). Met when at least one read-length pair AND at least one run-type pair are eligible; claim-directed checks score eligible pairs only.
+      fails-if:: the null holds; the run then reads invalid for that knob
+
+**Claim-directed checks** (eligible pairs only). Combination rule `all`, over `gapleft` and `swapcorr`. Joint power is about 64% (two checks at 80%), lower with the seed requirement. Thresholds may not be loosened to compensate.
+
+- [ ] [hypothesis] `gapleft` — score the arm's pr2 half (all predictions shifted by the same log2 half-depth offset) under P_base (prompt a), P_arm (prompt b), and P_oracle = P_base × 2^(R̂), where R̂ is the median-centred, decile-adjusted 1 kb ratio estimated from the pr1 halves only (cross-fitted). G_oracle = NLL(P_base) − NLL(P_oracle); G_model = NLL(P_base) − NLL(P_arm); 95% CIs by a 100 kb block bootstrap on chr21. Met for a pair when the lower bound of G_oracle > 0 AND the upper bound of G_model / G_oracle ≤ 0.25 (recommended). Met overall when met on every eligible pair.
+      fails-if:: the model, told the arm's knob, closes more than a quarter of a real, reachable gap
+      discriminates:: true
+- [ ] [hypothesis] `swapcorr` — Spearman between the median-centred model Δ (prompt b − prompt a, log2 mean, 1 kb) and the median-centred full-product real R. Met for a pair when ρ ≤ the 95th percentile of a block-shift null (99 circular shifts of Δ by ≥ 1 Mb). If max |Δ| < 1e-4 log2 over the chromosome, ρ is recorded as 0 and the pair is labelled "covariate unused". Met overall when met on every eligible pair.
+      fails-if:: the model gets the direction and rank of the arm effect right but shrinks its size
+
+**Reported, never gating.** Global level (predicted vs real track-wide log2(arm/base)); every gate statistic at 25 bp, 200 bp and 5 kb; optional `python -m candi.bench` tier C (`covuse`, `covshare`); CRPS only as `crps`, `crps_oracle_scaled` and `scale_error` together.
 
 ## Planned Intervention
 
@@ -52,7 +74,7 @@ CPU only, no training. Checkpoint: the selected CANDI checkpoint of [[t81_retrai
 
 ## Run Links
 
-_(none yet)_
+- 2026-10-25, chr21, CPU. Nibi 24997320 (halves extract); Fir 453552 (eligibility, frozen before inference), 454386_0-13 (inference, seeds 0 and 1), 457511 (scoring). Run root `fir:/project/def-maxwl/mforooz/h26`; small outputs in `results/h26/` (gitignored, main checkout) with `FIR_PATH.txt`. Code `tools/h26/`, `slurm/h26/`.
 
 ## Artifacts
 
@@ -62,10 +84,15 @@ _(none yet)_
 
 ## Findings
 
-Prior evidence, before any run; no checks are ticked. Pre-CANDII numbers are single seed, 12 held-out targets.
+Run of 2026-10-25 (PI delegated; null and thresholds await sign-off). Numbers from `results/h26/eligibility.json` and `results.json`. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` met; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated (no eligible pair).
 
-- Code: an unmasked assay's target is the same experiment, so read length and run type are equal on both sides; only depth varies, by independent binomial thinning (`src/candi/dataset.py:43-65, 430-446`; `src/candi/store/dataset.py:142`). A masked assay's covariates are fixed per (biosample, assay), and a batch holds one biosample.
-- With the depth offset on, assay and run_type steering were functionally null (`AGENTS.md` §7.1, §7.2 item 3); at weight decay 0 the run_type direction score was 0.559, near chance (archive h47).
-- With the offset off, run_type changed imputation in the right direction (archive h42), but run type, read length and depth are collinear on that panel.
-- On the smoke-scale `t22_on_s0` checkpoint, `covuse` reports run_type unused ([equivalence report](results/t22/EQUIVALENCE.md)).
-- No production CANDII checkpoint has a covariate block score: the t81 score jsons carry no `C` key (Fir, 2026-10-25).
+- `swapwired`: 84 of 84 prompt rows change one field in the target column only; read lengths 36 and 50 lie in the training range 20-101.
+- `depthcontrol`: part (1) holds on 10 of 42 rows (worst 0.107 log2), because told depth also moves eta through FiLM; part (2) on 32 of 42; part (3) on 21 of 21.
+- `effectfloor`: 0 of 19 knob pairs eligible; best 1 kb r_split 0.084. Decile stratification anti-correlates the two base halves and biases r_split down (depth pairs -0.15 to -0.46), so `thinningblank` passes for that reason too. The design needs repair before a rerun.
+- Reported only: the model does use both covariates on the output side. Told 36 bp, chr21 level moves -0.22 to -0.89 log2 (real -1.05 to -1.08, mostly the bin-count rule). Told PE, it moves -0.19 to -0.98 for ChIP and +0.52 to +0.70 for DNase; the real tracks move -0.08 to +0.01. At 1 kb the pr1-fitted oracle worsens NLL on 38 of 38 rows.
+
+Prior evidence, before the run. Pre-CANDII numbers are single seed, 12 held-out targets.
+
+- Code: an unmasked assay's target is the same experiment, so read length and run type are equal on both sides; only depth varies, by independent binomial thinning (`src/candi/dataset.py:43-65, 430-446`; `src/candi/store/dataset.py:142`).
+- With the depth offset on, run_type steering was functionally null (`AGENTS.md` §7.1, §7.2 item 3); at weight decay 0 its direction score was 0.559 (archive h47).
+- With the offset off, run_type changed imputation in the right direction, but run type, read length and depth are collinear on that panel (archive h42).
