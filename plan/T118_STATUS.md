@@ -684,3 +684,17 @@ Submitted 2026-10-24 01:58 UTC (never resubmit; a rerun skips on SCORE_DONE / LA
 - Readings: `extract.sh nibi` passes `--oldd-split $T/oldD_split` -> `oldd_split_nibi.tsv.gz`;
   `analyze.py` replaces old D's matching (run, kind, depth_source) rows of records_D_t126 with it
   when present. Re-run `bash tools/t128/readings/run_all.sh` after the array finishes.
+
+## t128 phase 2 — fixed, anchored and 12k-step arms
+
+Spec: `plan/T126_ENCDEC_D2.md` § "Phase 2: PI decisions, 2026-10-25". Plan: `.orchestrate/plan_t128p2.md`.
+Fir root `/project/def-maxwl/mforooz/t128p2` (code, runs, logs, verify, viabase, readings, smoke).
+
+- Kit K1: `/project/def-maxwl/mforooz/t128p2/code/K1`, GIT_SHA 524f4d7 (waves 1–2 merged), one wheel
+  copied from t128 K3.
+- Submitted 2026-10-25 21:21:30 UTC on Fir (no --export, no --partition):
+  - verify 453753 (`slurm/t128p2/verify.sh`), log in `t128p2/verify/`.
+  - smoke train 453754 (array 9,33,57,81%4; 300 steps, eval every 100; 2 h) into `t128p2/smoke`.
+  - smoke law 453755 (aftercorr:453754, chained while train was live).
+  - smoke via-base 453756 (array 9, afterany:453754; exits 3 if the D smoke did not finish).
+- Never resubmit these; the readback chunk (C5) reads the smoke and submits the full array.
