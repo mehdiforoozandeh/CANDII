@@ -20,6 +20,10 @@ Refs:: [[h14_an_encoder_decoder_with_the_encoder_cond\|h14]], [[q4_how_much_capa
 
 D and D2 explode in p space with no known cause; the fix for the explosion needs it
 
+## Progress
+
+- 2026-10-24: no diagnosis is recorded in the vault, in `plan/T118_STATUS.md` or in any commit on any branch. The status file still lists D's explosion as unexplained.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

@@ -26,18 +26,18 @@ Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
 
-If you know exactly how two versions of the same experiment were processed, a model can work out how to turn one into the other — and not just by memorising each case.
+If you know how two versions of one experiment were processed, a model can turn one into the other without memorising each case.
 
 ## TL;DR
 
-A generator g reads the full covariate vectors C (how X was made) and C' (how the wanted track is made) and outputs a transformation f; f(X) predicts X' as a distribution per bin. Pairs come from [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]: 7 tracks, each a base plus arms that change one processing knob. The model trains on base ↔ arm and is scored on held-out chromosomes against its own twin trained with scrambled covariates, and on arm → arm pairs it never saw, which only a model that learned how C and C' relate can answer. Settled when g beats its twin beyond seed wobble and gets the arm → arm pairs right.
+A generator g reads the covariates C and C′ and outputs a transformation f; f(X) predicts X′ per bin. Pairs come from [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]. The competitor is g trained with scrambled covariates. So far, not judged: g beats that twin on held-out chromosomes almost everywhere; the gain shrinks on never-trained arm → arm pairs. Every chosen design misses the swap check and the depth law.
 
 ## Null
 Normalization: the covariates are ignored — g does no better than the same model trained with C and C' scrambled across pairs.
 
 ## Problem Statement
 
-CANDI's zero-shot claims rest on its covariate conditioning doing real work, and inside CANDI that cannot be isolated. Here each training pair differs in one recorded knob, so the effect of each covariate on signal magnitude and shape is known to exist. The open question is whether the covariate values alone carry enough to reproduce it, as a relation between C and C' rather than a table of per-pair maps (PI ruling 2026-09-25).
+CANDI's zero-shot claims rest on covariate conditioning that cannot be isolated inside CANDI. Here each pair differs in one recorded knob; the question is whether the covariates alone reproduce its effect, as a relation between C and C′ (PI 2026-09-25). It replaces the one-warp design of [[h1_conditioning_on_the_recorded_sequencing_|the depth claim]] and [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]].
 
 ## Idea / Hypothesis
 
@@ -59,33 +59,41 @@ A generator conditioned on the source and target covariates produces the transfo
 
 ## Planned Intervention
 
-Full design, rulings and run record: `plan/T118_COUNTERFACTUAL_F.md`.
+Run under [[t118_learn_the_covariate_conditioned_tra|the generator task]]; design in `plan/T118_COUNTERFACTUAL_F.md`, run record in `plan/T118_STATUS.md`.
 
-- Training pairs base ↔ arm, both directions; no arm → arm and no identity pairs in training. Train on all chromosomes but chr19, chr21, chr22; chr22 validates; chr19 + chr21 score. chrY, chrM dropped; blacklist out of scoring only.
-- C and C' are the full knob vector plus the assay, one standardised concatenation; g never sees C' − C.
-- Which design is judged (PI ruling 2026-09-25): of the ladder rungs A–D ([[q4_how_much_capacity_does_a_covariate_condi|the capacity question]]), the one chosen on chr22 as the lowest rung within seed wobble of the best, then scored once on chr19 + chr21. The shuffle and swap checks gate this claim only; the rungs report them without gating.
-- g is trained, f is its output. Two versions of g: one per track (7 g's; the assay entry is constant inside each) and one across all 7 tracks. Both are scored under the same checks; both decide pass/fail — every check must pass for both (PI ruling 2026-09-25). No per-arm version.
-- p space is log-normal, measured 2026-09-24 (skew of x 2.9–17.6 vs log x −0.56–0.51; SD between pseudoreplicate halves ∝ level, slope 0.81–1.32).
-- References, never pass/fail: noSolution (X' = X) and per-pair QuantileMatching, which reads no covariates. One-value rungs are Poisson (counts) and log-normal with one σ per arm (p), floored at 1e-3.
-- Reported only: Spearman, CRPS on non-zero bins, the CRPS split, per-arm results, a point-output version of g.
-- The pseudoreplicate oracle is not a floor (on Spearman it beats both references in only 1 of 142 count pairs and 18 of 242 p pairs), because a base and its arm share reads and the halves share none. The oracle is dropped (PI ruling 2026-09-25); no bar uses it.
-- Four claim-directed checks, each on both versions of g, under `all`: at 80% power each that is about 17% joint power if independent, and bars may not be loosened to compensate.
+- 7 tracks; base ↔ arm training pairs, both directions; chr22 validates; chr19 + chr21 score.
+- f is one of the designs A–D of [[q4_how_much_capacity_does_a_covariate_condi|the capacity question]]; chr22 picks the judged design.
+- g per track and g across tracks, 3 seeds each; NB for counts, log-normal for −log10 p.
+- Twins: no-covariates and labels-as-ids. The pseudoreplicate oracle was dropped (PI 2026-09-25).
 
 ## Run Links
 
-_(none yet)_
+- Row 1 (the judged runs, 576): Nibi `/project/def-maxwl/mforooz/t118/ladder/runs`, kit K3; train 22657297 (retry 22667089), law 22667088/22667090/22667091/22669098/22676228, aggregation 22678427–22682910 (`plan/T118_STATUS.md`, "Nibi jobs").
+- Row 2 (exploratory, 576) and the shuffled-bin twin (192): `/project/def-maxwl/mforooz/t118/row2/runs`, `/project/def-maxwl/mforooz/t118/row2_xshuf/runs`; aggregate `/project/def-maxwl/mforooz/t118/row2/agg` (jobs 23087020–23088588).
+- Reference rungs: `/project/def-maxwl/mforooz/t118/rungs_v2/`.
+- Never-trained knob readings: `/project/def-maxwl/mforooz/t118/knobgen/`, extraction job 24641277.
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h15/ and link at least the report:
-     - [Report](results/h15/report.md)   - results/h15/curve.png -->
 - [Main claim: which design is judged, and its drafted readings](results/h15/report.md)
 - [Checks of the chosen designs, with shuffle and swap](results/h15/checks_main.json)
 - results/h15/results_summary.tsv every run's scores per track and class
-- [Row 1, row 2 and the shuffled-bin twin: every cell and the drafted readings (exploratory 2026-10-01; the design this claim judges is still chosen from row 1)](results/row2/GRID_SUMMARY.md)
+- [Row 1, row 2 and the shuffled-bin twin: every cell and the drafted readings (exploratory 2026-10-01)](results/row2/GRID_SUMMARY.md)
 - [The 2 × 4 grid with both metrics and the noSolution and QuantileMatching references](results/row2/grid.md)
 - results/row2/FIR_PATH.txt Nibi paths of the row-2 runs, the twin runs and the aggregate
+- [Trained versus never-trained pairs: depth law and every knob (2026-10-19)](results/h19/report.md) and its [figures](results/t118/knob_generalization/report.pdf)
+- [Reference rungs noSolution and QuantileMatching](results/t118/rungs_v2.md)
+- [Team overview, 2026-09-25](results/t118/team_overview_2026-09-25.md) — published https://claude.ai/artifact/Gj3KNBCaK1efJpfTQ8KV7V
+- [Lab deck: the transformation grid](presentations/t118-grid/index.html) — published https://claude.ai/artifact/1mFz6C5jLaG1Ctc8JN572C; vault copy [DECK.md](presentations/t118-grid/DECK.md)
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+Exploratory drafts (2026-09-25 to 10-19), not ticked. Bars are 2 × the real g's 3-seed wobble, per mark class.
+
+- Chosen: C (across-track g), D (per-track, counts), A (per-track, p).
+- Beats the no-covariates twin: 5–6 of 6 cells; shuffle 4–6 of 6.
+- Swap unmet everywhere: median |log(mean / X)| 0.19–0.22 in counts, 0.46–0.55 in p (bar 0.1).
+- Depth law unmet: worst-pair error 0.19–1.36 (bar 0.10). The real data obey the law ([audit](results/t122/AUDIT.md)).
+- Law test on never-trained pairs against that twin: 4–6 of 6 in counts, 1–3 of 6 in p.
+- Relative gain over that twin, median of 16 configurations, trained / never-trained one knob / two knobs: counts 0.29 / 0.11 / 0.16; p 0.15 / 0.06 / 0.004.
+- Caveats: exploding p pairs make p means unreadable; the DNase MAPQ arms equal the base; no oracle-scaled / scale-error split exists here.

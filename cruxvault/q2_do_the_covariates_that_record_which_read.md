@@ -15,10 +15,10 @@ updated: "2026-09-17T20:35:48"
 Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
-If the only thing that changed between two runs of the same sample is which reads made it into the pile, can knowing that setting translate one run into the other?
+If the only thing that changed between two runs of the same sample is which reads made it into the pile, can knowing that setting translate one run into the other? Nobody has tested it yet; early readings say the settings help a little on pairs the model has seen, and seldom on new ones.
 
 ## TL;DR
-Four processing choices decide which reads enter the treatment pileup, and each moves both the raw counts and the −log10 p signal: read length, duplicate handling, the mapping-quality filter, and — as a proxy for antibody efficiency — the fraction of treatment reads that are really background. For each we hold a counterfactual pair built by the ENCODE pipeline with exactly that one choice changed and its value recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values of that covariate predicts the other member of the pair better than one-warp, the single covariate-free monotone map on each output axis fitted on training pairs and scored on held-out pairs, by the margin locked in [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]]: gap-closed ≥ 0.5 of the one-warp → oracle interval per mark class and a gain above 2× the model's seed |Δ|. It answers yes only if every child holds; a refuted child names a knob whose recorded value does not carry the information.
+Four processing choices decide which reads enter the treatment pileup, and each moves both the counts and the −log10 p signal: [[h3_conditioning_on_the_recorded_read_length|read length]], [[h4_conditioning_on_the_recorded_duplicate_h|duplicate removal]], [[h5_conditioning_on_the_recorded_mapping_qua|the MAPQ filter]] and [[h6_conditioning_on_the_recorded_antibody_ef|the antibody proxy]]. Each has a counterfactual pair built by the ENCODE pipeline with that one choice changed and recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values beats one-warp, the covariate-free monotone map fitted within the knob, by the margin of [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]]. It answers yes only if every child holds. No child has been tested; exploratory readings from runs that trained on all ten knobs at once are summarised below.
 
 ## Question
 
@@ -29,7 +29,7 @@ Locked before any run: the children share q1's protocol; each is scored on both 
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+Readings only, from [[t118_learn_the_covariate_conditioned_tra|the g × f grid]] and [[t126_build_and_run_the_encoder_decoder_r|the encoder-decoder rungs]]; the [knob report](results/q2/KNOB_READINGS.md) has the tables and the CRPS split. Two patterns hold. First, a per-pair monotone map closes about half of the gap toward the pseudoreplicate oracle for duplicate removal (both axes) and read-length counts, but almost none for MAPQ or for read length in p. The one-warp null is therefore plausible for duplicates and unlikely for MAPQ. Second, a generator g that reads the covariates beats its no-covariates twin on trained pairs in counts for every knob (median gain 0.08–0.18 against a seed wobble of 0.003–0.06), and in p by less (0.03–0.14). On never-trained pairs within a knob the p gain vanishes or turns negative, and the learned-decoder encoder-decoder falls below its twin on nearly every never-trained pair. None of this scores the locked bar: the competitor is the twin, not one-warp, and the oracle is a half-depth pseudoreplicate.
 
 <!-- crux:ledger:start -->
 **4 children** · ideas 0/4 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)

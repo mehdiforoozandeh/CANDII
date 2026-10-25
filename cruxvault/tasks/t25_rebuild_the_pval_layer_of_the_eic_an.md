@@ -27,7 +27,7 @@ change, the doc updates, and the Fir jobs.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- results/t25/DELIVERABLE.md — 455/455 rebuilt, gate 55911214 rc=0; fixes merged 6d81f64
+- [Deliverable](results/t25/DELIVERABLE.md) — 455/455 rebuilt, gate 55911214 rc=0; fixes merged 6d81f64
 
 ## Evidence
 

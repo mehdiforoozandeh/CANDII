@@ -15,10 +15,12 @@ updated: "2026-10-02T12:29:01"
 Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
-Once the settings are known, how simple can the translator be — a stretch, a bendable curve, a look at neighbouring bins, or a small network?
+
+How simple can the translator be: a stretch, a bendable curve, a look at neighbouring bins, or a small network? So far the bendable curve does most of the work.
 
 ## TL;DR
-The parent asks whether the recorded covariates carry the information; this one asks how expressive f must be to use it. Rewritten 2026-09-25 for the g(C, C') → f design (the one-warp map, the oracle and gap-closed are gone). Its children are the rungs A–D, each a form of f whose parameters a small g reads from [C, C'], each judged against its own scrambled-covariate twin and against the rung below; a fifth rung where g also reads DNA sequence is parked. Settled by the highest rung that still beats the rung below beyond seed wobble: if only A beats its twin, the covariates act as a rescale; if C or D is needed, they act on shape.
+
+How expressive must f be to use the covariates? The children are rungs A–D (affine, monotone curve, kernel plus curve, conditioned CNN), each judged against its scrambled-covariate twin and the rung below; a sequence-reading rung is parked. All four ran in two rows: g reads C, C′, or also the bin value. Exploratory readings: in counts the curve gives the main step and shape adds little. Some −log10 p pairs explode. No rung carries its gain to never-trained pairs.
 
 ## Question
 
@@ -29,13 +31,14 @@ Locked before any run: every rung is compared to its own scrambled-covariate twi
 
 ## Answer so far
 
-Drafted 2026-10-02; exploratory (outside the pre-registered ladder), not judged. In row 2, g also reads the bin's value x, so f changes per bin. Its shuffled-bin twin reads x from a random bin of the same chromosome. Numbers: `results/row2/GRID_SUMMARY.md`; ± is the seed wobble, the largest difference between two of 3 seeds.
+CRPS on all bins, chr19 + chr21, one g per track, mean of 3 seeds ± seed wobble (largest difference between two seeds).
 
-- Counts: reading x fixes design A. One g per track, DNase CRPS as oracle-scaled + scale error (the part an ideal rescale removes): A 3.06 ± 0.11 = 1.36 + 1.7; A2 0.849 ± 0.009 = 0.8368 + 0.0121; twin 3.02 ± 0.0442 = 1.339 + 1.682. So the gain needs the bin's own value. B, C and D change little, except C2 on DNase.
-- −log10 p: row 2, A2 included, has more (pair, seed) records with CRPS above 20 than row 1; the twin has no more than row 1. The spec predicted that A2 would likely remove them. Some row-2 means reach 10³–10⁶, with wobbles as large.
-- Every row-2 design beats its no-covariates twin in counts in 10–12 of 12 cells. The depth law stays unmet (B2: 1 of 6 cells).
+- Counts, row 1: DNase A 3.06 ± 0.11, B 0.824 ± 0.004, C 0.818 ± 0.027, D 0.772 ± 0.036; narrow 0.479, 0.392, 0.379, 0.375. A's excess is scale error (1.70 of 3.06). Beats the rung below: B 9 of 12 cells, C 5, D 1. Beats its twin: A 3, B–D 11.
+- −log10 p: A beats its twin in 12 of 12 cells and never explodes. B, C and D explode on a few sparse-to-full-depth pairs (CRPS > 20; D's DNase mean is 1.9 × 10⁴). In B and C the lowest knot's σ drifts; D's cause is not found ([[t123_diagnose_design_d_s_log10_p_explosi|the D diagnosis]]). The fix is open ([[t124_find_a_principled_fix_for_the_log10|the p-space fix]]); the PI rejected capping σ.
+- Row 2 (g reads the bin value x): A2 DNase 0.849 ± 0.009, against 3.02 for a twin that reads x from a random bin. B–D change little, except C2 on DNase (0.730 ± 0.003). In p, row 2 explodes more, A2 too, against the spec.
+- Never-trained arm → arm pairs: the relative count gain over the twin falls from 0.29 to 0.11 on same-knob pairs (median of 16 settings). More capacity does not fix it: per track, D keeps 0.23, A nothing. The depth law is unmet in every cell except one of B2. This points at g, not at f's form ([[q7_why_do_the_covariate_conditioned_g_f_des|the depth-law question]]).
 
-Open: a principled fix for the p-space explosion (the PI rejected capping σ and report-only); a hand check of the depth-law computation; why design D explodes without knots; [[t119_rebuild_the_two_dnase_mapq_arms_c12|the DNase MAPQ-arm rebuild]].
+Also open: [[t119_rebuild_the_two_dnase_mapq_arms_c12|the DNase MAPQ-arm rebuild]].
 
 <!-- crux:ledger:start -->
 **5 children** · ideas 0/5 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)

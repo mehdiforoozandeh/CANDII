@@ -30,7 +30,7 @@ Letting each bin borrow from its neighbours lets the model widen or sharpen peak
 
 ## TL;DR
 
-Design C of the architecture ladder (rewritten 2026-09-25 for the g(C, C') → f design; the earlier version compared against a one-warp map and an oracle, both gone). f: convolve x with a kernel of 33 bins (825 bp), initialised to the identity and unconstrained, that g outputs, then apply the monotone curve of design B. The same kernel is used at every position. Adds global shape: broadening and smoothing (fragment extension, single- vs paired-end, read length) and sharpening. Beating the curve design means some knob acts on shape, not only on level. Settled when it beats its own scrambled-covariate twin beyond seed wobble on held-out chromosomes and on never-trained arm → arm pairs, for both versions of g. It must also beat design B, the per-bin monotone-curve design, the rung below it.
+Design C of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one 33-bin kernel, then the 12-knot curve, per pair. Exploratory readings, no verdict. C beats its scrambled-covariate twin in 11 of 12 cells in each space. It beats design B in 5 of 12 count cells and 2 of 12 p cells. On never-trained arm → arm pairs it keeps more count gain than A or B. Design C2, where g also reads the bin value, is the one clear row-2 gain in counts (DNase), and it explodes in p.
 
 ## Null
 
@@ -38,7 +38,7 @@ Normalization: the covariates are ignored — this design does no better than th
 
 ## Problem Statement
 
-Adds global shape: broadening and smoothing (fragment extension, single- vs paired-end, read length) and sharpening. Beating the curve design means some knob acts on shape, not only on level.
+Adds global shape: broadening and smoothing (fragment extension, single- vs paired-end, read length) and sharpening. Beating [[h17_a_generator_g_c_c_that_outputs_a_per_bin|design B]] means some knob acts on shape, not only on level.
 
 ## Idea / Hypothesis
 
@@ -58,26 +58,35 @@ A generator g(C, C') that outputs a convolution kernel followed by a monotone cu
 
 ## Planned Intervention
 
-Design record: `plan/T118_COUNTERFACTUAL_F.md` (Architecture ladder). Shuffle and swap checks, Spearman, CRPS on non-zero bins, per-arm results and the gap to QuantileMatching are reported for this design; the pass/fail shuffle and swap checks live in the main claim.
+Run under [[t118_learn_the_covariate_conditioned_tra|the g → f ladder task]]; design in `plan/T118_COUNTERFACTUAL_F.md`. Seven tracks, 242 base ↔ arm pairs; chr22 validates, chr19 + chr21 score. Two versions of g (per track, across tracks), 3 seeds, both spaces, with the no-covariates and labels-as-ids twins. Row 2 ([[t120_build_and_run_row_2_of_the_g_x_f_gr|the row-2 task]], `plan/T118_ROW2_SPEC.md`) reruns it as C2.
 
 ## Run Links
 
-_(none yet)_
+- Row 1 aggregate: `nibi:/project/def-maxwl/mforooz/t118/ladder/agg/C`; runs `nibi:/project/def-maxwl/mforooz/t118/ladder/runs/C_*` (kit K3). Train array 22657297 (+ retry 22667089); law arrays 22667088, 22667090, 22667091, 22669098, 22676228; aggregation 22682907 (2026-09-25). Code 34e5705 (python), 82cf8db (slurm).
+- Row 2: `nibi:/project/def-maxwl/mforooz/t118/row2/runs` (real, ids: kit K5; no-covariates: K6), shuffled-bin twin `nibi:/project/def-maxwl/mforooz/t118/row2_xshuf/runs` (K6), aggregate `nibi:/project/def-maxwl/mforooz/t118/row2/agg`. Arrays 22855414 (main), 22862752 (no-covariates), 22862753 (twin); job record in `plan/T118_STATUS.md`, "Row 2 execution".
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h13/ and link at least the report:
-     - [Report](results/h13/report.md)   - results/h13/curve.png -->
-- [Report: design C, kernel then curve — all 144 runs, drafted check readings](results/h13/report.md)
+- [Report: design C, all 144 runs, drafted check readings](results/h13/report.md)
 - [Checks: value against bar for every check, both versions of g](results/h13/checks_C.json)
-- results/h13/figures/fig1_ladder.png ladder: CRPS by model, class and space
-- results/h13/figures/fig3_law_grid.png law test: never-trained arm → arm pairs
-- results/h13/figures/fig5_learned_f.png the learned f made visible
-- results/h13/FIR_PATH.txt Nibi run and aggregation directory
-- [Row 2, design C2 (a kernel and curve chosen per bin; g also reads the bin's value): report, exploratory 2026-10-01, not a test of these checks](results/row2/C2/report.md)
-- [Row 2, design C2: drafted checks, including against its row-1 design and its shuffled-bin twin](results/row2/checks_C2.json)
-- results/row2/C2/figures/fig1_ladder.png row 2, design C2: CRPS by model, class and space
+- [Nibi paths](results/h13/FIR_PATH.txt)
+- results/h13/figures/fig1_ladder.png CRPS by model, class and space
+- results/h13/figures/fig3_law_grid.png law test: gain over each twin on never-trained pairs
+- results/h13/figures/fig4_depth_law.png predicted count scale against the depth ratio
+- results/h13/figures/fig5_learned_f.png the learned kernel and curve
+- [Row 2, design C2: report](results/row2/C2/report.md)
+- [Row 2, design C2: drafted checks, including against row 1 and the shuffled-bin twin](results/row2/checks_C2.json)
+- results/row2/C2/figures/fig1_ladder.png row 2, C2: CRPS by model, class and space
+- [Grid summary: rows 1 and 2, every cell with its seed wobble](results/row2/GRID_SUMMARY.md)
+- [Trained versus never-trained pairs: depth law and every knob](results/h19/report.md)
+- [Knob generalization report](results/t118/knob_generalization/report.pdf)
+- [Lab deck: the g → f grid](presentations/t118-grid/index.html) — published https://claude.ai/artifact/1mFz6C5jLaG1Ctc8JN572C ([deck note](results/row2/DECK.md))
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+CRPS on all bins, one g per track, mean of 3 seeds ± seed wobble (largest difference between two seeds); split = oracle-scaled + scale error.
+
+- Row 1, counts: DNase 0.818 ± 0.027 (0.802 + 0.016), no-covariates twin 1.83 ± 0.42 (1.30 + 0.52); narrow 0.379 ± 0.004 against B's 0.392 ± 0.005.
+- Row 1, −log10 p: DNase 0.526 ± 0.035 against 0.767. Narrow is 0.502 ± 0.858 because one pair explodes (CRPS > 20); a principled fix is open ([[t124_find_a_principled_fix_for_the_log10|the p-space fix task]]).
+- Never-trained arm → arm pairs: beats the no-covariates twin in 12 of 12 count and 4 of 12 p cells. The relative count gain over the twin is 0.35 on trained pairs and 0.19 on never-trained same-knob pairs ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]). Depth law unmet, 6 of 6.
+- Row 2: C2 counts DNase 0.730 ± 0.003, against 0.821 for the twin that reads x from a random bin. C2 beats C in 2 of 12 count cells, both DNase with one g per track. In p, C2 explodes (DNase 1.6 × 10⁴; across-track records narrow / broad 7 / 6).

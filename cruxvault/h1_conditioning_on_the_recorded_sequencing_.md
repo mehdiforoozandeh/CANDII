@@ -22,43 +22,18 @@ Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
 
-Knowing how deeply two experiments were sequenced is enough to turn one experiment's
-numbers into the other's — and by more than just rescaling them would.
+Knowing how deeply two experiments were sequenced is enough to turn one experiment's numbers into the other's, and by more than plain rescaling.
 
 ## TL;DR
 
-An encoder reads a source track of raw counts plus the source's recorded covariates; a decoder
-reads the target's covariates and emits raw counts and a −log10 p signal. The mean is
-`mu = d · exp(eta)`, so `log mu = eta + log d` with **`log d` pinned as a fixed offset of
-coefficient exactly 1** — without the pin, eta and the decoder's scale are confounded and eta is
-not identified. The claim is **not** that prediction is possible. A single global monotone map on
-the value axis, with no covariates at all, already removes most of the level difference, so that
-map is the competitor. The claim is that conditioning on the recorded depth closes the gap that map
-leaves, up to the floor set by two independent draws from the same eta at the target depth.
+An encoder reads a source track and its covariates; a decoder reads the target's covariates and emits raw counts and −log10 p, with log depth pinned as an offset of coefficient exactly 1 (`mu = d · exp(eta)`). The competitor is one-warp, a covariate-free monotone map on the value axis. The claim is that depth conditioning closes the gap one-warp leaves. This design was never run; [[h15_one_transformation_conditioned_on_the_so|the counterfactual-arms claim]] asked the depth question instead.
 
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 
 ## Problem Statement
 
-Depth pairs come from the store's DSF ladder. **That is this arm's central weakness and it is
-recorded up front, not discovered later.** `STORE.md` records that DSF 2/4/8 are not stored —
-`dataset.py::thin_counts` does `rng.binomial(counts, 1/d)` — so a DSF pair is a binomial thinning
-of one track, and NB is closed under thinning with `n` preserved. The depth mapping therefore has a
-closed-form answer, `onewarp` should do well on it, and a win here is **weak** evidence for the
-parent question; `h2` carries the real weight. `AGENTS.md` §7.2 rule 5 adds that DSF only
-downsamples, so the upward-depth direction is never trained and 7 of 12 eval targets already sit
-above their per-assay training depth ceiling.
-
-The literature names a stronger competitor than `onewarp`. `[[signal-normalization-in-epigenomics]]`
-and `[[quantile-normalization]]` record that the field's own post-mortem concludes a single global
-transform is insufficient and recommends quantile normalisation applied to signal in peaks and
-signal in background **separately**, which S3norm already fits as a two-component monotone
-transform. PI ruling 2026-09-16: `onewarp` stays the headline denominator; `splitwarp` is not a rung, and
-the stronger competitor is recorded here as the reading a `onewarp` win must survive.
-
-The 93%/96% figure that motivates `onewarp` being the competitor at all is `TODO(PI): provenance` —
-it is not recorded anywhere in this repository.
+Depth is the weak arm. A depth pair from the store's DSF ladder is a binomial thinning of one track (`STORE.md`), and NB is closed under thinning, so the depth map has a closed-form answer. A win is weak evidence for [[q1_do_the_recorded_experimental_covariates_|the parent question]]; [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]] carries more weight. The literature names a stronger competitor: separate quantile normalisation of peak and background signal ([[signal-normalization-in-epigenomics]], [[quantile-normalization]]). PI ruling 2026-09-16: one-warp stays the denominator.
 
 ## Idea / Hypothesis
 
@@ -180,44 +155,26 @@ and the rule content-hash when the node goes running.
 
 ## Planned Intervention
 
-A four-rung ladder is fit on paired real tracks and every rung is scored on the same distance:
-
-| rung | what it is |
-|---|---|
-| `blind` | no covariates |
-| `onewarp` | one global monotone value-axis map, no covariates — **the competitor** |
-| `model` | covariate-conditioned |
-| `oracle` | two independent **NB** draws from the same eta at the target depth — the irreducible floor (PI ruling 2026-09-16) |
-
-Headline gap-closed is `(D_onewarp − D_model) / (D_onewarp − D_oracle)`, never measured from
-`blind`. `blind` and `onewarp` emit point maps, so they are made CRPS-scorable through the
-point-to-distribution spread device the leaderboard already carries (see `t69`).
-
-**Do not reach for `configs/regions/encode_pilot_hg38.bed` if any check subsamples loci.** Another
-session in this repo reports measuring, 2026-09-01, that the 44 ENCODE Pilot Regions flip
-checkpoint selections on CRPS gaps of 0.066–0.069 because their offset grows with training instead
-of staying constant, while a seeded random window set of identical size was faithful. **That
-measurement is not verified here and nothing in this node rests on it** — it is recorded as a
-caution with its provenance named. Note that `EVAL.md` on `implementation/cheap-v-eval` currently
-argues the opposite, so one of the two is wrong. Any locus subsample used here is re-measured for
-the specific metric in question first.
-
-Scored results in this repo carry a `provenance.eval_scope` block (name, bed, sha256,
-`scored_bins`, `fraction`), with the scope hanging off `EvalSource.eval_regions`. Two runs compare
-only when that block matches — the BED path alone will not do, because a BED is a mutable file.
-**As of writing that block lives only on the unpushed local branch `implementation/cheap-v-eval`,
-90 commits ahead of `origin/main`; it is not on `origin/main` and not on origin at all.**
+Four rungs on paired tracks, scored on macro NB CRPS against the real target (PI 2026-09-16): blind (no covariates), one-warp (the competitor), model (covariate-conditioned), and oracle (two NB draws from the same eta at the target depth). Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t103_build_the_in_vitro_covariate_testbed|The testbed task]] is still open. The earlier design text and its cautions are in `results/h1/design_notes.md`.
 
 ## Run Links
 
-_(none yet)_
+No run of this design. The depth readings below come from the counterfactual-grid runs: Nibi `/project/def-maxwl/mforooz/t118/ladder/runs` (row 1) and `/project/def-maxwl/mforooz/t118/row2/runs` (row 2); extraction job 24641277 into `/project/def-maxwl/mforooz/t118/knobgen/`.
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h1/ and link at least the report:
-     - [Report](results/h1/report.md)   - results/h1/curve.png -->
-_(none yet)_
+- [Depth and run-type readings from the knob tables](results/h1/knob_readings.txt), made by [knob_readings.py](results/h1/knob_readings.py)
+- [Trained versus never-trained pairs: depth law and every knob](results/h19/report.md)
+- [Knob-generalisation figures](results/t118/knob_generalization/report.pdf)
+- [Depth-law computation audit](results/t122/AUDIT.md)
+- [Design text before the 2026-10-24 compression](results/h1/design_notes.md)
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+Exploratory readings, not judged. The counterfactual grid's depth arms (2026-10-19) use the no-covariates twin, not one-warp, as the competitor:
+
+- The real depth arms obey the depth law: count totals match the depth ratio within 0.71% over 84 ordered pairs.
+- Counts, relative CRPS gain over the twin, median over 16 design × g configurations: 0.46 on trained base ↔ depth pairs (16 of 16 clear 2 × seed wobble over 3 seeds) and 0.16 on never-trained depth → depth pairs (13 of 16 clear).
+- −log10 p: exploding pairs make the pooled gain unreadable. The median-pair gain is 0.21 trained and 0.12 never-trained; no seed bar exists for that statistic.
+- Depth law, median |log2 predicted scale − log2 depth ratio|: 0.04–0.09 trained, 0.18–0.55 never-trained.
+- The source gives no oracle-scaled / scale-error split for these gains.

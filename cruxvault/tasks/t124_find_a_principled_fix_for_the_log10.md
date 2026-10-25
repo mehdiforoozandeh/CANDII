@@ -20,6 +20,10 @@ Refs:: [[h15_one_transformation_conditioned_on_the_so\|h15]], [[q4_how_much_capa
 
 until it is fixed, many row-2 −log10 p cells cannot be read: some means reach 10³–10⁶, with wobbles as large
 
+## Progress
+
+- 2026-10-24: no fix is recorded in the vault, in `plan/T118_STATUS.md` or in any commit on any branch. Capping σ and report-only stay rejected; a censored log-normal was withdrawn because it rested on a wrong diagnosis (`plan/T118_STATUS.md`, "The p-space explosion").
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

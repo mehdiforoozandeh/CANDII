@@ -26,11 +26,11 @@ Parent:: [[q4_how_much_capacity_does_a_covariate_condi]]
 
 ## ELI5
 
-Once both runs' settings are known, a stretch and a shift of the signal may be enough to turn one run into the other.
+A stretch and a shift of the signal may turn one run into the other. In counts this was not enough until the model also saw each bin's own value.
 
 ## TL;DR
 
-Design A of the architecture ladder (rewritten 2026-09-25 for the g(C, C') → f design; the earlier version compared against a one-warp map and an oracle, both gone). f: log μᵢ = a + b·xᵢ, x = log(1 + counts) or log(−log10 p), plus one dispersion value (NB n or log-normal σ). g is a small MLP on [C, C'] that outputs (a, b, dispersion). The simplest rung. It can express depth (a moves by the log depth ratio) and dynamic range (b), and nothing about shape. If it already beats its twin, the covariates act at least partly as a rescale. Settled when it beats its own scrambled-covariate twin beyond seed wobble on held-out chromosomes and on never-trained arm → arm pairs, for both versions of g. Compared with QuantileMatching and noSolution as references only.
+Design A, the lowest rung of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one affine map in log space per pair. Exploratory readings, no verdict. It beats its scrambled-covariate twin in −log10 p (12 of 12 cells) but not in counts (3 of 12). Design A2, where g also reads the bin value, fixes counts and makes −log10 p explode. On never-trained arm → arm pairs, A gains nothing over the twin in counts.
 
 ## Null
 
@@ -38,7 +38,7 @@ Normalization: the covariates are ignored — this design does no better than th
 
 ## Problem Statement
 
-The simplest rung. It can express depth (a moves by the log depth ratio) and dynamic range (b), and nothing about shape. If it already beats its twin, the covariates act at least partly as a rescale.
+The simplest rung: it can express depth (a moves by the log depth ratio) and dynamic range (b), and nothing about shape. If it beats its twin, the covariates act partly as a rescale.
 
 ## Idea / Hypothesis
 
@@ -56,27 +56,36 @@ A generator g(C, C') that outputs a per-bin affine map on the log scale beats th
 
 ## Planned Intervention
 
-Design record: `plan/T118_COUNTERFACTUAL_F.md` (Architecture ladder). Shuffle and swap checks, Spearman, CRPS on non-zero bins, per-arm results and the gap to QuantileMatching are reported for this design; the pass/fail shuffle and swap checks live in the main claim.
+Run under [[t118_learn_the_covariate_conditioned_tra|the g → f ladder task]]; design in `plan/T118_COUNTERFACTUAL_F.md`. Seven tracks, 242 base ↔ arm pairs; chr22 validates, chr19 + chr21 score. Two versions of g (per track, across tracks), 3 seeds, both spaces, with the no-covariates and labels-as-ids twins. Row 2 ([[t120_build_and_run_row_2_of_the_g_x_f_gr|the row-2 task]], `plan/T118_ROW2_SPEC.md`) reruns it as A2.
 
 ## Run Links
 
-_(none yet)_
+- Row 1 aggregate: `nibi:/project/def-maxwl/mforooz/t118/ladder/agg/A`; runs `nibi:/project/def-maxwl/mforooz/t118/ladder/runs/A_*` (kit K3). Train array 22657297 (+ retry 22667089); law arrays 22667088, 22667090, 22667091, 22669098, 22676228; aggregation 22682909 (2026-09-25). Code 34e5705 (python), 82cf8db (slurm).
+- Row 2: `nibi:/project/def-maxwl/mforooz/t118/row2/runs` (real, ids: kit K5; no-covariates: K6), shuffled-bin twin `nibi:/project/def-maxwl/mforooz/t118/row2_xshuf/runs` (K6), aggregate `nibi:/project/def-maxwl/mforooz/t118/row2/agg`. Arrays 22855414 (main), 22862752 (no-covariates), 22862753 (twin); job record in `plan/T118_STATUS.md`, "Row 2 execution".
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h12/ and link at least the report:
-     - [Report](results/h12/report.md)   - results/h12/curve.png -->
-- [Report: design A, the per-bin affine map — all 144 runs, drafted check readings](results/h12/report.md)
+- [Report: design A, all 144 runs, drafted check readings](results/h12/report.md)
 - [Checks: value against bar for every check, both versions of g](results/h12/checks_A.json)
-- results/h12/figures/fig1_ladder.png ladder: CRPS by model, class and space
-- results/h12/figures/fig3_law_grid.png law test: never-trained arm → arm pairs, gain over each twin
-- results/h12/figures/fig4_depth_law.png depth law: predicted count scale against the depth ratio
-- results/h12/figures/fig7_snippets.png 10 kb track snippets, fixed locus rule
-- results/h12/FIR_PATH.txt Nibi run and aggregation directory
-- [Row 2, design A2 (the affine map chosen per bin; g also reads the bin's value): report, exploratory 2026-10-01, not a test of these checks](results/row2/A2/report.md)
-- [Row 2, design A2: drafted checks, including against its row-1 design and its shuffled-bin twin](results/row2/checks_A2.json)
-- results/row2/A2/figures/fig1_ladder.png row 2, design A2: CRPS by model, class and space
+- [Nibi paths](results/h12/FIR_PATH.txt)
+- results/h12/figures/fig1_ladder.png CRPS by model, class and space
+- results/h12/figures/fig3_law_grid.png law test: gain over each twin on never-trained pairs
+- results/h12/figures/fig4_depth_law.png predicted count scale against the depth ratio
+- results/h12/figures/fig7_snippets.png 10 kb track snippets
+- [Row 2, design A2: report](results/row2/A2/report.md)
+- [Row 2, design A2: drafted checks, including against row 1 and the shuffled-bin twin](results/row2/checks_A2.json)
+- results/row2/A2/figures/fig1_ladder.png row 2, A2: CRPS by model, class and space
+- [Grid summary: rows 1 and 2, every cell with its seed wobble](results/row2/GRID_SUMMARY.md)
+- [Trained versus never-trained pairs: depth law and every knob](results/h19/report.md)
+- [Knob generalization report](results/t118/knob_generalization/report.pdf)
+- [Lab deck: the g → f grid](presentations/t118-grid/index.html) — published https://claude.ai/artifact/1mFz6C5jLaG1Ctc8JN572C ([deck note](results/row2/DECK.md))
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+CRPS on all bins, one g per track, mean of 3 seeds ± seed wobble (largest difference between two seeds); split = oracle-scaled + scale error.
+
+- Row 1, counts: DNase 3.06 ± 0.11 (1.36 + 1.70), twin 2.51 ± 0.23 (1.41 + 1.10); the loss is in scale. Broad 0.443 ± 0.003 against 0.507. Beats-twin met in 3 of 12 cells.
+- Row 1, −log10 p: DNase 0.752 ± 0.018 against 0.876; met in 12 of 12. No exploding record (CRPS > 20).
+- Never-trained arm → arm pairs: beats the no-covariates twin in 6 of 12 count and 4 of 12 p cells; relative count gain over the twin −0.03, as on trained pairs (−0.04) ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]). Depth law unmet, 6 of 6.
+- Row 2, counts: A2 DNase 0.849 ± 0.009 (0.837 + 0.012), against 1.73 for its no-covariates twin and 3.02 for the twin that reads x from a random bin.
+- Row 2, −log10 p: A2 explodes (narrow 436 ± 1 310, broad 3.7 × 10⁴), against the spec's prediction. A principled fix is open ([[t124_find_a_principled_fix_for_the_log10|the p-space fix task]]).

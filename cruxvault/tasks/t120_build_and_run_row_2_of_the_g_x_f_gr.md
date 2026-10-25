@@ -5,7 +5,7 @@ title: build and run row 2 of the g x f grid: g reads the source bin value as we
 category: implementation
 parent: t118
 blocked_by: None
-refs: q1
+refs: q1, q4, h15, h12, h13, h14, h17
 hypothesis_refs: 
 status: open
 created: 2026-09-26T22:57:56
@@ -14,7 +14,7 @@ updated: 2026-10-02T12:29:01
 
 # t120 — build and run row 2 of the g x f grid: g reads the source bin value as well as the covariates, for designs A-D
 
-Refs:: [[q1_do_the_recorded_experimental_covariates_\|q1]]
+Refs:: [[q1_do_the_recorded_experimental_covariates_\|q1]], [[q4_how_much_capacity_does_a_covariate_condi\|q4]], [[h15_one_transformation_conditioned_on_the_so\|h15]], [[h12_a_covariate_conditioned_affine_map_on_th\|h12]], [[h13_a_small_covariate_conditioned_convolutio\|h13]], [[h14_an_encoder_decoder_with_the_encoder_cond\|h14]], [[h17_a_generator_g_c_c_that_outputs_a_per_bin\|h17]]
 
 ## Why
 
@@ -32,7 +32,10 @@ fills the second row of the 2x4 grid so each f design can be compared with g rea
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Row 1, row 2 and the shuffled-bin twin: drafted readings and every cell](results/row2/GRID_SUMMARY.md)
+- [The 2 × 4 grid with both metrics](results/row2/grid.md)
+- [Nibi paths](results/row2/FIR_PATH.txt)
+- [Lab deck, vault copy with its URL](presentations/t118-grid/DECK.md)
 
 ## Evidence
 

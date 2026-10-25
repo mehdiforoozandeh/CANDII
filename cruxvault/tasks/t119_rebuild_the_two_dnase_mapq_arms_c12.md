@@ -20,6 +20,10 @@ Refs:: [[h15_one_transformation_conditioned_on_the_so\|h15]]
 
 the DNase MAPQ arms currently do not test the MAPQ knob
 
+## Progress
+
+- 2026-10-24: no rebuild is recorded in the vault, in `plan/T118_STATUS.md` or in any commit. The pseudoreplicate checks confirm the defect: the C12M02 MAPQ 0 and 10 arms have treatment reads byte-identical to the DNase base (`results/t117/CHECKS.md`). Every grid table leaves both arms out.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

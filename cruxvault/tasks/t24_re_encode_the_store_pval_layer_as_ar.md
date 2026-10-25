@@ -27,7 +27,7 @@ change, the doc updates, and the Fir jobs.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- results/t24/DELIVERABLE.md
+- [Deliverable](results/t24/DELIVERABLE.md)
 
 ## Evidence
 

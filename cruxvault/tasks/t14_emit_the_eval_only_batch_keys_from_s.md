@@ -24,7 +24,7 @@ eval.py:329-354 and healthcheck.py:215-223 read all six through batch.get(...), 
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- results/t14/DELIVERABLE.md — merged 16fca65
+- [Deliverable](results/t14/DELIVERABLE.md) — merged 16fca65
 
 ## Evidence
 

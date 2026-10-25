@@ -24,7 +24,7 @@ Some processing settings matter more in repetitive, hard-to-map DNA, so a model 
 
 ## TL;DR
 
-Parked until the four sequence-blind designs have run. Here g reads the DNA sequence as well as C and C', so the transformation f can differ from bin to bin. The claim is that this beats the same design without sequence on the knobs whose effect depends on mappability or GC (MAPQ, read length, dedup, run type). Settled by comparing it with the per-bin affine design and with its own scrambled-covariate twin that keeps the sequence; the checks and bars are not written yet.
+Idea stage: this design has not run and has no null or checks yet. The PI parked it on 2026-09-25 until the four sequence-blind designs of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]] had run; they have now run. Here g reads the DNA sequence as well as C and C', so f can differ from bin to bin. The claim is that this beats the same design without sequence on the knobs whose effect depends on mappability or GC (MAPQ, read length, dedup, run type).
 
 ## Null
 
@@ -35,7 +35,9 @@ _(one line: the cheapest way this result could be trivially true — name a fami
 
 ## Problem Statement
 
-PARKED by the PI 2026-09-25, to revisit after the A–D ladder (plan/T118_COUNTERFACTUAL_F.md). Option E of the architecture ladder: g reads C, C' AND the DNA sequence, and outputs per-bin parameters of f; f(X) still predicts X'. Options A–D apply the same f at every position, so they cannot express knob effects that act through sequence: MAPQ and read length through mappability, dedup through PCR GC bias, run type most in repeats. Draft of how g reads sequence (not ruled): a dilated 1D CNN on one-hot DNA pooled to 25 bp bins, with Umap mappability (k = 24, 36, 50, 100), GC per bin and repeat masks as extra channels, [C, C'] entering by feature-wise scale and shift; paired with option A made local (per-bin a_i, b_i, dispersion) so E versus A isolates what sequence adds. Alternatives listed: precomputed sequence tracks only; pretrained DNA-model features (Enformer/Borzoi, Nucleotide Transformer, Caduceus). Risk: g here is large while it sees few distinct (C, C') points, so it may learn the track's sequence pattern rather than covariate effects; the scrambled-covariate twin keeps the same sequence input, which catches that.
+Designs A–D apply one f at every position, so they cannot express knob effects that act through sequence: MAPQ and read length through mappability, dedup through PCR GC bias, run type most in repeats. The grid gives a second reason. When g also read each bin's own value (design A2), counts CRPS on DNase fell from 3.06 ± 0.11 to 0.849 ± 0.009, and a twin that read a random bin's value did not gain (3.02). So a position-dependent f helps when its input is the right local signal. Sequence is such a signal, and g does not see it now.
+
+Risk: a sequence-reading g is large but sees few distinct (C, C') points, so it may learn the track's sequence pattern instead of covariate effects. The scrambled-covariate twin that keeps the sequence input catches that. The sequence-blind designs already fail to carry their gain to never-trained arm → arm pairs ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]); a larger g may make that worse.
 
 ## Idea / Hypothesis
 
@@ -48,7 +50,7 @@ A generator that reads the DNA sequence as well as the source and target covaria
 
 ## Planned Intervention
 
-_(how this hypothesis will be tested)_
+Not run. Draft of 2026-09-25, not ruled (option E in `plan/T118_COUNTERFACTUAL_F.md`, parked): a dilated 1D CNN on one-hot DNA pooled to 25 bp bins, with Umap mappability (k = 24, 36, 50, 100), GC per bin and repeat masks as extra channels, and [C, C'] entering by feature-wise scale and shift. It pairs with design A made local (per-bin a, b and dispersion), so the comparison with A isolates what sequence adds. Alternatives on record: precomputed sequence tracks only, or features from a pretrained DNA model (Enformer, Borzoi, Nucleotide Transformer, Caduceus).
 
 ## Run Links
 
@@ -56,10 +58,8 @@ _(none yet)_
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h16/ and link at least the report:
-     - [Report](results/h16/report.md)   - results/h16/curve.png -->
-_(none yet)_
+- [Grid summary: the row-2 evidence for a per-bin f](results/row2/GRID_SUMMARY.md)
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+Not run; no readings.

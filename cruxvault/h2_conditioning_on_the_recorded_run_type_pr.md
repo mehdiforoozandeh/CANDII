@@ -22,45 +22,18 @@ Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
 
-Knowing whether the sequencer read DNA fragments from one end or both is enough to turn one
-experiment's numbers into the other's — and by more than just rescaling them would.
+Knowing whether the sequencer read DNA fragments from one end or both is enough to turn one experiment's numbers into the other's, and by more than plain rescaling.
 
 ## TL;DR
 
-An encoder reads a source track of raw counts plus the source's recorded covariates; a decoder
-reads the target's covariates and emits raw counts and a −log10 p signal. The mean is
-`mu = d · exp(eta)`, so `log mu = eta + log d` with **`log d` pinned as a fixed offset of
-coefficient exactly 1** — without the pin, eta and the decoder's scale are confounded and eta is
-not identified. The claim is **not** that prediction is possible. A single global monotone map on
-the value axis, with no covariates at all, already removes most of the level difference, so that
-map is the competitor. The claim is that conditioning on the recorded run type closes the gap that
-map leaves, up to the floor set by two independent draws from the same eta at the target depth.
+An encoder reads a source track and its covariates; a decoder reads the target's covariates and emits raw counts and −log10 p, with log depth pinned as an offset of coefficient exactly 1. The competitor is one-warp, a covariate-free monotone map on the value axis. The claim is that run-type conditioning closes the gap one-warp leaves. This design was never run; [[h15_one_transformation_conditioned_on_the_so|the counterfactual-arms claim]] asked the run-type question instead.
 
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 
 ## Problem Statement
 
-Run type is the arm that carries real weight, because unlike depth it is not a thinning identity.
-`[[signal-normalization-in-epigenomics]]` records why it matters: a difference in the
-**deduplication rule** between single-end and paired-end data — single-end keeps one read per
-duplicate set, paired-end keeps a pair if either mate is unique — shifted the distribution enough
-that a naive baseline outperformed all but two of 23 ENCODE challenge submissions. Nothing in any
-of those methods could have detected it, because the assumption was made before the model saw the
-data.
-
-**This arm is gated on identifiability and may be impossible.** `AGENTS.md` §7.2 rule 5 records
-`H(run_type | assay_id, read_length) = 0.000 bits` on the shipped 8-assay panel (n = 26 `T_`
-records), against 0.551 bits on the full EIC panel, and calls a run-type steering demonstration
-impossible there as a property of the data rather than of the architecture. A first reading on the
-361-track control metadata (`results/t10/eic_control_metadata.csv`, 73 usable rows, 58 single-ended
-/ 15 paired-ended) gives `H(run_type) = 0.733` bits falling to **0.124** bits given `read_length`,
-and 0.119 given `read_length` and `lab` — thin but non-zero. That is controls, not the signal
-tracks this will use, so it settles nothing; `t100` measures it on the panel actually selected, and
-that measurement gates this node.
-
-The literature names a stronger competitor than `onewarp` — the peak/background-split transform
-S3norm fits. PI ruling 2026-09-16: `onewarp` stays the denominator; `splitwarp` is not a rung.
+Run type carries more weight than depth: it is not a thinning identity. [[signal-normalization-in-epigenomics]] records that the single-end and paired-end deduplication rules differ, and that this shift let a naive baseline beat all but two of 23 ENCODE challenge submissions. On the shipped 8-assay panel run type is fully determined by assay and read length (`AGENTS.md` §7.2 rule 5: 0.000 bits), so a real-panel test may be impossible. The counterfactual arms avoid this: each paired-end arm changes run type alone ([[t111_re_run_the_48_eic_blind_tracks_pair|the paired-end re-run task]]).
 
 ## Idea / Hypothesis
 
@@ -182,44 +155,24 @@ and the rule content-hash when the node goes running.
 
 ## Planned Intervention
 
-A four-rung ladder is fit on paired real tracks and every rung is scored on the same distance:
-
-| rung | what it is |
-|---|---|
-| `blind` | no covariates |
-| `onewarp` | one global monotone value-axis map, no covariates — **the competitor** |
-| `model` | covariate-conditioned |
-| `oracle` | two independent **NB** draws from the same eta at the target depth — the irreducible floor (PI ruling 2026-09-16) |
-
-Headline gap-closed is `(D_onewarp − D_model) / (D_onewarp − D_oracle)`, never measured from
-`blind`. `blind` and `onewarp` emit point maps, so they are made CRPS-scorable through the
-point-to-distribution spread device the leaderboard already carries (see `t69`).
-
-**Do not reach for `configs/regions/encode_pilot_hg38.bed` if any check subsamples loci.** Another
-session in this repo reports measuring, 2026-09-01, that the 44 ENCODE Pilot Regions flip
-checkpoint selections on CRPS gaps of 0.066–0.069 because their offset grows with training instead
-of staying constant, while a seeded random window set of identical size was faithful. **That
-measurement is not verified here and nothing in this node rests on it** — it is recorded as a
-caution with its provenance named. Note that `EVAL.md` on `implementation/cheap-v-eval` currently
-argues the opposite, so one of the two is wrong. Any locus subsample used here is re-measured for
-the specific metric in question first.
-
-Scored results in this repo carry a `provenance.eval_scope` block (name, bed, sha256,
-`scored_bins`, `fraction`), with the scope hanging off `EvalSource.eval_regions`. Two runs compare
-only when that block matches — the BED path alone will not do, because a BED is a mutable file.
-**As of writing that block lives only on the unpushed local branch `implementation/cheap-v-eval`,
-90 commits ahead of `origin/main`; it is not on `origin/main` and not on origin at all.**
+Four rungs on paired tracks, scored on macro NB CRPS against the real target (PI 2026-09-16): blind (no covariates), one-warp (the competitor), model (covariate-conditioned), and oracle (two NB draws from the same eta at the target depth). Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t103_build_the_in_vitro_covariate_testbed|The testbed task]] is still open. The earlier design text and its cautions are in `results/h2/design_notes.md`.
 
 ## Run Links
 
-_(none yet)_
+No run of this design. The paired-end products are on Nibi under `/scratch/mforooz/t112_cf/products/<track>__pe__pe/` (purge 2026-11-20). The readings below come from the counterfactual-grid runs: `/project/def-maxwl/mforooz/t118/ladder/runs` (row 1) and `/project/def-maxwl/mforooz/t118/row2/runs` (row 2); extraction job 24641277 into `/project/def-maxwl/mforooz/t118/knobgen/`.
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h2/ and link at least the report:
-     - [Report](results/h2/report.md)   - results/h2/curve.png -->
-_(none yet)_
+- [Depth and run-type readings from the knob tables](results/h2/knob_readings.txt), made by [knob_readings.py](results/h2/knob_readings.py)
+- [Manifest of the 130 counterfactual products, with the 7 paired-end arms](results/t112/MANIFEST.tsv)
+- [Knob-generalisation figures](results/t118/knob_generalization/report.pdf)
+- [Design text before the 2026-10-24 compression](results/h2/design_notes.md)
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+Exploratory readings, not judged. The paired-end arm exists: 7 FASTQ re-runs, one per track, with the base's pipeline image and 30M-read subsample. The counterfactual grid scores it against the no-covariates twin, not one-warp:
+
+- Counts, trained base ↔ paired-end pairs: median relative CRPS gain over the twin 0.15 over 16 design × g configurations; 11 of 16 clear 2 × seed wobble over 3 seeds.
+- −log10 p, the same pairs: median-pair gain 0.03, and the real model wins 86% of pairs; no seed bar exists for that statistic.
+- Run type has one level, so every never-trained pair also changes a second knob. On those pairs the median-pair gain is 0.07 in counts (real wins 65%) and −0.06 in p (real wins 34%).
+- The source gives no oracle-scaled / scale-error split.

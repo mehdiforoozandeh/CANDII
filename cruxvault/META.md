@@ -28,9 +28,15 @@ Root: [[candii]]
     - ▶ `h17` [H] [[h17_a_generator_g_c_c_that_outputs_a_per_bin|A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design]] — *running*
   - ○ `q5` [Q] [[q5_does_a_depth_offset_on_f_the_source_dept|**Does a depth offset on f (the source depth removed before f, the target depth added after) change how well a covariate-conditioned g → f translates a track's raw counts across a covariate change?**]] — *open*
   - ○ `q6` [Q] [[q6_how_closely_does_a_map_h_reproduce_the_l|**How closely does a map h reproduce the −log10 p track from a predicted count distribution and its matched control, as h's complexity and inputs grow?**]] — *open*
+  - ○ `q7` [Q] [[q7_why_do_the_covariate_conditioned_g_f_des|**Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?**]] — *open*
+    - ✓ `h18` [H] [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *done* — _refuted_ (`never-trained depth miss, rung A0 (no +1): 0.46 (NB) / 0.38 (Poisson-mean) median |log2 err| vs trained 0.12`)
+    - · `h19` [H] [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *idea*
+    - · `h20` [H] [[h20_a_larger_g_with_the_same_training_pairs_|A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs]] — *idea*
+    - ✓ `h21` [H] [[h21_fitting_the_mean_by_poisson_nll_and_the_|Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not]] — *done* — _refuted_ (`never-trained depth miss with Poisson-mean loss: A0 0.38, D 0.28 median |log2 err| vs trained 0.07–0.12`)
+    - · `h22` [H] [[h22_a_composable_g_one_shared_map_from_each_|A composable g — one shared map from each side's covariates to a common latent, with an exact inverse — meets the depth law on never-trained depth pairs without arm → arm training]] — *idea*
 
 ## Dashboard
 
-- **Questions** (6): open 6 · review 0 · resolved 0
-- **Hypotheses** (16): idea 11 · staged 0 · running 5 · done 0
-- **Verdicts**: supported 0 · partial 0 · refuted 0 · inconclusive 0 · invalid-run 0
+- **Questions** (7): open 7 · review 0 · resolved 0
+- **Hypotheses** (21): idea 14 · staged 0 · running 5 · done 2
+- **Verdicts**: supported 0 · partial 0 · refuted 2 · inconclusive 0 · invalid-run 0

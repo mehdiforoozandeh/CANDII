@@ -24,7 +24,7 @@ dataset.py:406 computes control_avail = 1.0 if (control_data != 0).any(), and th
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- results/t13/DELIVERABLE.md — merged 2b7b723
+- [Deliverable](results/t13/DELIVERABLE.md) — merged 2b7b723
 
 ## Evidence
 

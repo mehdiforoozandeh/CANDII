@@ -24,7 +24,7 @@ RIVALS_PLAN.md par.7.5: the whole field on the placement table without reimpleme
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- [Merged 3ef5b36](results/t54/DATASET3_GAP.md)
+- [Merged 3ef5b36](results/t54/DATASET3_GAP.md) — published https://claude.ai/code/artifact/df80c2b6-e617-4e1e-ac0c-c14b7f2a5276
 
 ## Evidence
 

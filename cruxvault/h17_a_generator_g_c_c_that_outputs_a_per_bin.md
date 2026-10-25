@@ -30,7 +30,7 @@ A bendable curve instead of a straight stretch lets weak and strong signal chang
 
 ## TL;DR
 
-Design B of the architecture ladder (rewritten 2026-09-25 for the g(C, C') → f design; the earlier version compared against a one-warp map and an oracle, both gone). f: a monotone spline on the log scale (12 knots at fixed training quantiles of x; g outputs positive steps) applied to every bin, plus dispersion as a function of level. g is a small MLP on [C, C'] that outputs the knots and the dispersion curve. Same function class as QuantileMatching, but chosen from C, C' instead of fitted on X'. Still magnitude only. Beating the affine design means the knobs change weak and strong bins differently. Its gap to QuantileMatching (reported, never gating) shows how much of a per-pair fit the covariates alone recover. Settled when it beats its own scrambled-covariate twin beyond seed wobble on held-out chromosomes and on never-trained arm → arm pairs, for both versions of g. It must also beat design A, the per-bin affine design, the rung below it.
+Design B of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one monotone 12-knot curve in log space per pair. Exploratory readings, no verdict. In counts B beats its scrambled-covariate twin (11 of 12 cells) and design A (9 of 12). In −log10 p a few pairs explode. On never-trained arm → arm pairs most of the count gain is lost. Design B2, where g also reads the bin value, changes counts little and explodes more in p.
 
 ## Null
 
@@ -38,7 +38,7 @@ Normalization: the covariates are ignored — this design does no better than th
 
 ## Problem Statement
 
-Still magnitude only. Beating the affine design means the knobs change weak and strong bins differently. Its gap to QuantileMatching (reported, never gating) shows how much of a per-pair fit the covariates alone recover.
+Still magnitude only: beating [[h12_a_covariate_conditioned_affine_map_on_th|design A]] means the knobs change weak and strong bins differently. B has QuantileMatching's function class, chosen from C, C' instead of fitted on X'.
 
 ## Idea / Hypothesis
 
@@ -58,27 +58,35 @@ A generator g(C, C') that outputs a per-bin monotone curve on the log scale beat
 
 ## Planned Intervention
 
-Design record: `plan/T118_COUNTERFACTUAL_F.md` (Architecture ladder). Shuffle and swap checks, Spearman, CRPS on non-zero bins, per-arm results and the gap to QuantileMatching are reported for this design; the pass/fail shuffle and swap checks live in the main claim.
+Run under [[t118_learn_the_covariate_conditioned_tra|the g → f ladder task]]; design in `plan/T118_COUNTERFACTUAL_F.md`. Seven tracks, 242 base ↔ arm pairs; chr22 validates, chr19 + chr21 score. Two versions of g (per track, across tracks), 3 seeds, both spaces, with the no-covariates and labels-as-ids twins. Row 2 ([[t120_build_and_run_row_2_of_the_g_x_f_gr|the row-2 task]], `plan/T118_ROW2_SPEC.md`) reruns it as B2.
 
 ## Run Links
 
-_(none yet)_
+- Row 1 aggregate: `nibi:/project/def-maxwl/mforooz/t118/ladder/agg/B`; runs `nibi:/project/def-maxwl/mforooz/t118/ladder/runs/B_*` (kit K3). Train array 22657297 (+ retry 22667089); law arrays 22667088, 22667090, 22667091, 22669098, 22676228; aggregation 22682910 (2026-09-25). Code 34e5705 (python), 82cf8db (slurm).
+- Row 2: `nibi:/project/def-maxwl/mforooz/t118/row2/runs` (real, ids: kit K5; no-covariates: K6), shuffled-bin twin `nibi:/project/def-maxwl/mforooz/t118/row2_xshuf/runs` (K6), aggregate `nibi:/project/def-maxwl/mforooz/t118/row2/agg`. Arrays 22855414 (main), 22862752 (no-covariates), 22862753 (twin); job record in `plan/T118_STATUS.md`, "Row 2 execution".
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h17/ and link at least the report:
-     - [Report](results/h17/report.md)   - results/h17/curve.png -->
-- [Report: design B, the per-bin monotone curve — all 144 runs, drafted check readings](results/h17/report.md)
+- [Report: design B, all 144 runs, drafted check readings](results/h17/report.md)
 - [Checks: value against bar for every check, both versions of g](results/h17/checks_B.json)
-- results/h17/figures/fig1_ladder.png ladder: CRPS by model, class and space
-- results/h17/figures/fig3_law_grid.png law test: never-trained arm → arm pairs, gain over each twin
-- results/h17/figures/fig4_depth_law.png depth law: predicted count scale against the depth ratio
+- [Nibi paths](results/h17/FIR_PATH.txt)
+- results/h17/figures/fig1_ladder.png CRPS by model, class and space
+- results/h17/figures/fig3_law_grid.png law test: gain over each twin on never-trained pairs
+- results/h17/figures/fig4_depth_law.png predicted count scale against the depth ratio
 - results/h17/figures/fig5_learned_f.png g's curve per arm over QuantileMatching's per-pair curve
-- results/h17/FIR_PATH.txt Nibi run and aggregation directory
-- [Row 2, design B2 (the 12-knot curve chosen per bin; g also reads the bin's value): report, exploratory 2026-10-01, not a test of these checks](results/row2/B2/report.md)
-- [Row 2, design B2: drafted checks, including against its row-1 design and its shuffled-bin twin](results/row2/checks_B2.json)
-- results/row2/B2/figures/fig1_ladder.png row 2, design B2: CRPS by model, class and space
+- [Row 2, design B2: report](results/row2/B2/report.md)
+- [Row 2, design B2: drafted checks, including against row 1 and the shuffled-bin twin](results/row2/checks_B2.json)
+- results/row2/B2/figures/fig1_ladder.png row 2, B2: CRPS by model, class and space
+- [Grid summary: rows 1 and 2, every cell with its seed wobble](results/row2/GRID_SUMMARY.md)
+- [Trained versus never-trained pairs: depth law and every knob](results/h19/report.md)
+- [Knob generalization report](results/t118/knob_generalization/report.pdf)
+- [Lab deck: the g → f grid](presentations/t118-grid/index.html) — published https://claude.ai/artifact/1mFz6C5jLaG1Ctc8JN572C ([deck note](results/row2/DECK.md))
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+CRPS on all bins, one g per track, mean of 3 seeds ± seed wobble (largest difference between two seeds); split = oracle-scaled + scale error.
+
+- Row 1, counts: DNase 0.824 ± 0.004 (0.816 + 0.007), no-covariates twin 1.54 ± 0.02 (1.17 + 0.37); narrow 0.392 against 0.497. QuantileMatching scores 0.886 on DNase (its table has no split).
+- Row 1, −log10 p: DNase 0.541 ± 0.111 against 0.744; met in 7 of 12. With one g across tracks, DNase is 24.9 ± 62.7: on a sparse source mapped to the full-depth base, the lowest knot's σ drifts (`plan/T118_STATUS.md`). A principled fix is open ([[t124_find_a_principled_fix_for_the_log10|the p-space fix task]]).
+- Never-trained arm → arm pairs: beats the no-covariates twin in 8 of 12 count and 1 of 12 p cells. The relative count gain over the twin falls from 0.29 (trained) to 0.06 (never-trained, same knob) ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]). Depth law unmet, 6 of 6.
+- Row 2: B2 counts DNase 0.817 ± 0.008; it beats B in 0 of 12. Only B2 meets the depth law anywhere (1 of 6 cells). In p, exploding records rise (narrow / broad 3 / 4, against 1 / 0 in row 1).

@@ -31,6 +31,7 @@ Runs the depth-offset count model and the counts → p map h. The design is `pla
 - 2026-10-17: 5 of 8 chains are done (designs C, D, A2, C2, D2). The 3 slow chains (A, B, B2) are split into 10 pair shards each on kit K12 (job 24313498), at most 3 of the 27 open pairs per shard. The sharding changes no number: chain C, re-assembled from its pair files on K12, equals the original.
 - 2026-10-17: kit K13 shipped (Nibi tests 23 and 13 passed), and the part-2 aggregate ran on the 5 finished chains (job 24312235): 38 h alone, 5 of 8 chain f, 1,192 readings. The merged mixture at G = 512 is exact on C, A2 and C2; its per-bin max error is 8.6e-4 on D and 9.7e-4 on D2, below the 1e-3 bar. Evidence (gitignored, in the vault): [the part-2 digest](results/t125/part2_digest.md), [the combined grid summary](results/t125/GRID_SUMMARY.md) (part 2 marked "5 of 8 designs"), [the h grid](results/t125/part2/grid_h.md), [the repair table](results/t125/part2/h_repair.tsv), [the chain against the old grid](results/t125/part2/h_vs_oldgrid.tsv) and the other `results/t125/part2/*` files.
 - 2026-10-17: the drafted part-2 reading is under [[q6_how_closely_does_a_map_h_reproduce_the_l|the question of how closely a map h reproduces the p track]]. It covers 5 of 8 designs and is redrafted when A, B and B2 land. Nothing is ticked, no verdict is recorded, and the task stays open.
+- 2026-10-19: the PI stopped the run. Chain A finished; chains B and B2 timed out, their resubmission (job 24608447) and the 8-of-8 aggregate (24608467) were cancelled. The deck and the drafted reading under the p-track question stay at 5 of 8 designs. Record: `plan/T125_STATUS.md`, "Wrapped up 2026-10-19".
 - Run record, job ids and PI decisions: `plan/T125_STATUS.md` on `exp/t118-counterfactual-f`.
 - The drafted part-1 reading is under [[q5_does_a_depth_offset_on_f_the_source_dept|the depth-offset question]]. Nothing is ticked, no verdict is recorded, and the task stays open.
 
@@ -38,10 +39,11 @@ Runs the depth-offset count model and the counts → p map h. The design is `pla
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Part-1 digest](results/t125/part1_digest.md)
+- [Part-2 digest](results/t125/part2_digest.md)
+- [Grid summary, parts 1 and 2](results/t125/GRID_SUMMARY.md)
+- [Lab deck, vault copy](presentations/t125-eta-h/DECK.md) — published https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS
 
 ## Evidence
 
-_(experiments only: what this run showed, in prose. The structured fact is
-`hypothesis_refs` in the frontmatter; this is the narrative beside it, and the
-engine never parses it.)_
+Part 1 (complete, 432 runs): the depth offset helps only design A beyond the bar, mostly in scale error, and no design follows the depth law on depth-only pairs; the no-covariates twin of design D nearly does. The covariates still improve the mean beyond d′/d in every cell. Part 2 (5 of 8 chain designs, final on the PI stop): on true counts the caller's formula nearly matches the best learned h; in the chain every h is stable but trails the earlier direct p model on designs D and D2, and h trained on f's predictions does not repair f. The readings, with seed wobble and CRPS splits, are under [[q5_does_a_depth_offset_on_f_the_source_dept|the depth-offset question]] and [[q6_how_closely_does_a_map_h_reproduce_the_l|the map-h question]]. Nothing is ticked and no verdict is recorded.

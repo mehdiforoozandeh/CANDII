@@ -5,7 +5,7 @@ title: "build the counterfactual arms for the in-vitro testbed: 10 processing kn
 category: data-acquisition
 parent: 
 blocked_by: None
-refs: h1, h2
+refs: h1, h2, h15
 hypothesis_refs: 
 status: done
 created: "2026-09-16T23:25:09"
@@ -14,7 +14,7 @@ updated: "2026-09-21T16:31:57"
 
 # t112 — build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi
 
-Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]], [[h15_one_transformation_conditioned_on_the_so\|h15]]
 
 ## Why
 
@@ -87,8 +87,10 @@ Children: t111 (arm 2). Every other arm lands on this task's branch.
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
 - [manifest of all 130 products](results/t112/MANIFEST.tsv)
-- [counterfactual arms write-up](results/t112/COUNTERFACTUAL_ARMS.md)
+- [counterfactual arms write-up](results/t112/COUNTERFACTUAL_ARMS.md) — vault copy of the published summary https://claude.ai/code/artifact/fb5ff45d-f155-4b01-ac50-db1179f4fd61
+- [what was built](results/t112/MANIFEST.md)
 - [checks](results/t112/CHECKS.md)
+- [processing-knob survey behind the knob list](results/t111/knob_survey.md)
 
 ## Evidence
 

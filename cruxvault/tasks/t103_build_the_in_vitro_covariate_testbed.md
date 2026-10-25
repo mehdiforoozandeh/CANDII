@@ -20,6 +20,10 @@ Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on
 
 the apparatus both h1 and h2 are read on; the unit that ships, so every child lands on its branch
 
+## Progress
+
+- 2026-10-24: not built. The depth and run-type questions it served were asked instead with the generator testbed of [[t118_learn_the_covariate_conditioned_tra|the generator task]] (design of 2026-09-25), so no run of this encoder–decoder exists. Whether to drop the task is the PI's call.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
