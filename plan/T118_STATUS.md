@@ -758,7 +758,7 @@ Fir root `/project/def-maxwl/mforooz/t128p2` (code, runs, logs, verify, viabase,
 ### Lab deck and vault record (C7, 2026-10-26)
 
 - Deck (22 slides, paper arc; one slide per metric 1–9 with its definition, best and worst case):
-  ARTIFACT_URL_PENDING . Source `cruxvault/presentations/t128p2-encdec/` (`deck_src.html`,
+  https://claude.ai/artifact/PGZNDxcAgy42NFuuVG5c1m . Source `cruxvault/presentations/t128p2-encdec/` (`deck_src.html`,
   `build_deck.py` reads `T128P2_RESULTS`, default the main checkout's `cruxvault/results/t128p2/`;
   vault copy `DECK.md`). To edit: change `deck_src.html`, run `python
   cruxvault/presentations/t128p2-encdec/build_deck.py`, republish `index.html` to the same URL.

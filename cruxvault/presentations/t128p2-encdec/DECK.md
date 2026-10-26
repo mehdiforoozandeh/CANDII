@@ -1,6 +1,6 @@
 # Symmetric encoder-decoder, phase 2: lab deck
 
-Artifact: ARTIFACT_URL_PENDING (private). Version 1, published 2026-10-26, is built on all 96 runs and the 24 via-base passes.
+Artifact: https://claude.ai/artifact/PGZNDxcAgy42NFuuVG5c1m (private). Version 1, published 2026-10-26, is built on all 96 runs and the 24 via-base passes.
 
 Source: `index.html` beside this file, built by `build_deck.py` from `deck_src.html`. Its numbers come from `cruxvault/results/t128p2/`, which is gitignored; the build reads the main checkout's copy by default (override with `T128P2_RESULTS=<dir>`). To rebuild, run these from the worktree root: `bash tools/t128p2/readings/run_all.sh`, then `python cruxvault/presentations/t128p2-encdec/build_deck.py`. The design is in `plan/T126_ENCDEC_D2.md` § "Phase 2: PI decisions, 2026-10-25"; the run log is in `plan/T118_STATUS.md` § "t128 phase 2".
 

@@ -14,6 +14,6 @@ This file lists every page published on claude.ai for CANDII, as of 2026-10-25. 
 | CANDI CEEHRC poster (portrait, superseded) | https://claude.ai/artifact/UwHMhKgQUQGqvDtTcLySnq | the first poster layout, task t121 | branch `visualization/t121-ceehrc-poster` |
 | The Dataset-3 Gap | https://claude.ai/artifact/UbkNYYgDZNQSJH3ieQy61s and https://claude.ai/code/artifact/df80c2b6-e617-4e1e-ac0c-c14b7f2a5276 | the EIC entrant scoring gap, [[t54_score_the_23_eic_entrant_submissions]] | `results/t54/DATASET3_GAP.md` (untracked) |
 | EIC Single-End Reprocessing | https://claude.ai/artifact/XU3FQq4UftFtbvJKRJ4T3D | the single-end reprocessing of the EIC blind tracks (2026-08-31) | no vault copy found |
-| Encoder-Decoder Phase 2 (22 slides) | ARTIFACT_URL_PENDING | the symmetric encoder-decoder phase 2 (`t128p2-encdec`): fixed, anchored and 12,000-step arms, [[t132_build_and_run_phase_2_of_the_symmet]] | [DECK.md](t128p2-encdec/DECK.md) |
+| Encoder-Decoder Phase 2 (22 slides) | https://claude.ai/artifact/PGZNDxcAgy42NFuuVG5c1m | the symmetric encoder-decoder phase 2 (`t128p2-encdec`): fixed, anchored and 12,000-step arms, [[t132_build_and_run_phase_2_of_the_symmet]] | [DECK.md](t128p2-encdec/DECK.md) |
 
 Not published: the q1 deck (`q1/`).
