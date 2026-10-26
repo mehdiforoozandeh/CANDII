@@ -737,3 +737,20 @@ Fir root `/project/def-maxwl/mforooz/t128p2` (code, runs, logs, verify, viabase,
 - Never resubmit these. A watcher re-runs only FAILED/TIMEOUT indices as new arrays (train, then a
   chained law); a TIMEOUT gets `--time=1-00:00:00`; a `fc107xx` CUDA failure adds that node to
   `--exclude`.
+
+### Readings on the full tree (C6b, 2026-10-26)
+
+- Preconditions met on Fir: 96 run dirs; TRAIN/SCORE/LAW_DONE 96, LATENT_DONE 72, HOP1_DONE 24,
+  viabase LAW_DONE 24; arrays 470429/470431/470432 = 216 COMPLETED, no other state; config check
+  (holdout 7.5M, max_steps 12000, no 7.5M train pair) → 0 bad. No reruns.
+- `bash tools/t128p2/readings/run_all.sh` (full tree, T128P2_FULL_TREE=1): extract 560471,
+  verify 560472 (both COMPLETED, ledger `t128p2/readings/jobs.tsv`). No code change.
+- Tables in `cruxvault/results/t128p2/` (main checkout, mirrored into this worktree; gitignored):
+  n, m1–m9, rank, cclean, pair, analyze_out.txt, verify.txt (12 AGREE, 0 DISAGREE), FIR_PATH.txt.
+- Metric 1 never CRPS (knob all; oracle_scaled / scale_error): across — DSfixed 0.633 (0.604/0.029),
+  via-base 0.636, DSanchor 0.644, DSfree 0.656, D 0.667, every gap within noise. per_track —
+  via-base 0.545 (0.537/0.008), DSanchor 0.597, DSfixed 0.613, DSfree 0.617, D 0.662; vs D within
+  noise; via-base beats every arm outside noise.
+- Metric 9: no run reached the 12k cap except one (DSfree per_track); best step in the last 10 % is
+  0/24 for every arm except DSfree (1/21 per_track). Early stopping ends DS runs near 6000 steps and
+  D near 3500.
