@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Encoder-Decoder Phase 2</title>
+
+<!--
+  prezit deck (paper arc) · t128 phase 2: fixed, anchored and 12,000-step arms of the symmetric
+  encoder-decoder rung D. Spec: plan/T126_ENCDEC_D2.md § "Phase 2: PI decisions, 2026-10-25".
+  Chrome, CSS and svg helpers copied from ../t128-encdec-sym/ (the phase-1 deck).
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-25, and the t128p2-C7 brief):
+  - Exploratory: no hypothesis, no metrics.json, no verdicts; `crux deck --verify` does not apply
+    (the result tables are gitignored and live outside the vault of a worktree). Every measured
+    number is embedded as DATA by build_deck.py from cruxvault/results/t128p2/. One DATA token,
+    no sources manifest (the phase-1 interface).
+  - Typed design constants only: the 12,000-step cap, the 4000-step phase-1 cap, the last-10 % line
+    (0.9 x the cap), eval every 250 and patience 4, lr 1e-3, batch 32, the 7.5M held-out depth, the
+    chromosome split, the noise rule's factor 2, loss weights 1, the CNN's GELU activation.
+  - Each metric slide gives the definition, the best case and the worst case before the figure
+    (PI's report rule). Arms are ranked by metric 1 with metric 2 beside it, as a reading.
+  - Plain names only: build_deck.py maps every arm code to its plain name before DATA is built.
+  - The only table is the grid of arms.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once (settings 1-8, the two references, the twin) */
+    --s1:#d9822b; --s2:#9a6a12; --s3:#5d7fb8; --s4:#2f4f8a; --s5:#c3a3dc; --s6:#9467bd; --s7:#5f3a85;
+    --s8:#c8435a; --oldd:#1f8a70; --via:#6fb59a; --twin:#77736c; --ref:#9a9ca4;
+    /* one colour per pair group */
+    --tr:#4f5d75; --ho:#0a8a8f; --nv:#c84d86; --nv2:#e8a3c3;
+    --ok:#3f8f6f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+      --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+      --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+    --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+    --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em;text-wrap:balance}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px;text-wrap:balance}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:none}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.mid svg{max-height:40vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2,.cards.c5{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 9px;margin:0 0 6px;border:1px solid var(--hair);color:var(--body)}
+  .tag.out{background:rgba(63,143,111,.13);border-color:var(--ok)}
+  .tag.part{background:rgba(217,130,43,.13);border-color:var(--s1)}
+  .tag.holds{background:rgba(200,77,134,.13);border-color:var(--nv)}
+  .tag.open{background:none;border-style:dashed;border-color:var(--muted)}
+  .tag.opt{background:none;border-style:dashed;border-color:var(--accent);color:var(--accent)}
+  table.grid.compact{border-spacing:6px 3px}
+  table.grid.compact td{padding:4px 8px;font-size:14px;line-height:1.25}
+  table.grid.compact th{padding:2px 4px;font-size:14px}
+  table.grid.compact td.arm small{display:inline;margin-left:6px}
+  table.grid td.y{font-weight:600;color:var(--ink)}
+  table.grid td.no{color:var(--faint)}
+  .mini{font-size:13px;color:var(--muted)}
+
+  /* the grid of arms */
+  table.grid{border-collapse:separate;border-spacing:8px 6px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:8px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:18%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.arm{font-weight:600;color:var(--ink);text-align:left;border-left:5px solid var(--c)}
+  table.grid td.arm small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:14.5px;border:1px solid var(--hair);background:var(--card);border-radius:16px;padding:4px 12px;color:var(--body)}
+  .chip b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+  /* phase 2: the metric definition strip (what it measures / best case / worst case) */
+  .mdef{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px;margin:0 0 8px}
+  .mdef div{background:var(--card);border:1px solid var(--hair);border-radius:8px;padding:7px 12px;font-size:14px;line-height:1.36;color:var(--body)}
+  .mdef div b{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px;color:var(--muted)}
+  .mdef div.best{border-left:4px solid var(--ok)}
+  .mdef div.best b{color:var(--ok)}
+  .mdef div.worst{border-left:4px solid var(--accent)}
+  .mdef div.worst b{color:var(--accent)}
+  .mdef div.what{border-left:4px solid var(--ink)}
+  @media (max-width:900px){.mdef{grid-template-columns:1fr}}
+  .slide h2{margin-bottom:8px}
+  .fig.res svg{max-height:43vh}
+  .cards.c3x3{grid-template-columns:repeat(3,1fr);gap:10px}
+  .cards.c3x3 .card{padding:9px 13px}
+  .cards.c3x3 .ct{font-size:15px;margin-bottom:3px}
+  .cards.c3x3 .cb{font-size:13.5px;line-height:1.36}
+  @media (max-width:900px){.cards.c3x3{grid-template-columns:1fr}}
+  ol.open{margin:8px 0 0 0;padding-left:0;list-style:none;counter-reset:op}
+  ol.open li{counter-increment:op;position:relative;padding:9px 14px 9px 54px;margin:8px 0;background:var(--card);border:1px solid var(--hair);border-radius:10px;font-size:clamp(14.5px,1.3vw,16.5px);line-height:1.42;color:var(--body)}
+  ol.open li::before{content:"(" counter(op,lower-roman) ")";position:absolute;left:14px;top:9px;font-weight:700;color:var(--accent)}
+  ol.open li b{color:var(--ink)}
+</style></head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the three paths and the scope of phase 2
+       numbers  run counts only (DATA.counts) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>The symmetric encoder-decoder, phase 2: a fixed middle, an anchored middle, and three times the steps</h1>
+      <p class="sub"><span id="tRuns"></span>. Every number is read from the result tables when the deck is built. This is an exploratory pass: it reports readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+    </div>
+    <aside class="notes">
+      <p>Phase 1 tested a symmetric encoder-decoder: one g and one CNN, used twice, through a learned "clean" middle setting. From that deck the PI picked three paths for phase 2. This deck reports them.</p>
+      <p>The deck follows the order of a paper: motivation, method, results (one slide per metric, nine metrics), discussion.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · MOTIVATION · (a) what phase 1 showed
+       job      phase-1 never-trained CRPS: the learned middle, old D, old D through the base
+       source   results/t128p2/phase1_knob_table.tsv (copy of the phase-1 table)
+       numbers  DATA.p1; headline and bullets written from DATA -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what phase 1 showed (4000 steps)</div>
+      <h2 id="hP1"></h2>
+      <div class="fig res" id="figP1"></div>
+      <ul class="pts"><li id="tP1a"></li><li id="tP1b"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>CRPS is the error of the whole predicted distribution, in counts; lower is better. Dark is the oracle-scaled part, light is the scale error (both explained on the method slides). Black ticks are the three seeds.</p>
+      <p>Never-trained pairs are arm to arm pairs that the model never saw in training. They are the question of this whole line of work: does the model carry its fit over to them?</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · (b) the PI's three paths, as one diagram of the middles
+       job      schematic: learned / fixed / anchored middle, old D direct, old D through the base
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the three paths the PI picked</div>
+      <h2>Three paths: fix the middle at the base, anchor the middle to the real base track, and train longer</h2>
+      <div class="fig tall" id="figPaths"></div>
+    </div>
+    <aside class="notes">
+      <p>Every route maps a source track (an arm) to a target track. The encoder-decoder routes go through a middle: the encoder maps the arm to the middle, and the same network, as the decoder, maps the middle to the target.</p>
+      <p><b>Learned middle</b>: the middle setting is learned (phase 1's default). <b>Fixed middle</b>: the middle setting is the base track's own setting and does not move. <b>Anchored middle</b>: the setting is fixed at the base, and the encoder must also predict the real base track; the decoder reads that prediction. <b>Old D</b> maps the arm straight to the target. <b>Old D through the base</b> chains two of old D's trained maps: arm to base, then base to target.</p>
+      <p>The third path, more steps, applies to every arm: the cap goes from four thousand to twelve thousand steps.</p>
+    </aside>
+  </section>
+
+  <!-- 4 · METHOD · the grid of arms (the one table)
+       numbers  runs scored from DATA.n; the rest are design constants of the spec -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the arms</div>
+      <h2>Four trained arms and one reference; each arm changes one thing from the one above it</h2>
+      <table class="grid compact" id="tblArms">
+        <tr><th style="width:24%">arm</th><th>middle setting</th><th>the decoder reads</th><th>losses</th><th>best step chosen by</th><th>runs scored<small>of assigned</small></th></tr>
+      </table>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="notes">
+      <p><b>L1, cross</b>: encode the source, decode with the target's setting, and score the real target; and the other way round. <b>L2, round trip</b>: encode, decode with the track's own setting, and score the track itself. <b>Anchor loss</b>: the encoder's own output is a negative binomial prediction of the base track, scored against the real base track. Each loss has weight one.</p>
+      <p>Old D retrained is the t118 rung D, retrained with the twelve-thousand-step cap. Old D through the base needs no training: it reuses old D's new maps.</p>
+      <p>Every arm runs on each per-track g and on the one g across tracks, with three seeds. The 7.5M depth arm is held out of training.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · METHOD · pairs that are scored, selection and scoring
+       numbers  none (design constants: held-out level, chromosome split) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what we score, and how a run is selected</div>
+      <h2>Training sees only base ↔ arm pairs; we score those, a held-out depth, and the never-trained arm → arm pairs</h2>
+      <div class="fig tall" id="figPairs"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each track was rebuilt many times, changing one processing setting (a <b>knob</b>) at a time; each rebuild is an <b>arm</b>. Training uses pairs between the base and one arm, both ways. The depth arm at 7.5M reads is held out: its pairs with the base are scored, never trained. Arm to arm pairs are never trained; "same knob" pairs join two arms of one knob, "two knobs" pairs join arms of two different knobs.</p>
+      <p>Panel (b): each run keeps the step with the best validation likelihood on chromosome 22, using its own loss terms. Every score is on chromosomes 19 and 21, with the blacklist removed.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · METHOD · the CRPS split and the noise rule
+       numbers  none (the factor 2 is the spec's rule) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>how to read every number</div>
+      <h2>Every CRPS is split into a shape part and a scale part, and every gap carries a noise label</h2>
+      <div class="fig tall" id="figRules"></div>
+    </div>
+    <aside class="notes">
+      <p><b>CRPS</b> (continuous ranked probability score) compares the whole predicted distribution of each bin with the observed count. Lower is better; zero is a perfect, certain prediction. Pooled CRPS: per seed, the mean over a track's pairs, then over tracks; the reading is the mean over seeds.</p>
+      <p><b>Oracle-scaled part</b>: the CRPS left after the one best rescaling of the prediction; it measures the shape. <b>Scale error</b>: what that rescaling removes; it measures a wrong total. The project's rule: no CRPS without its split.</p>
+      <p><b>Noise rule</b> (spec): the seed spread of a cell is the largest gap between its three seeds. A gap counts only if it is larger than two times the larger seed spread of the two cells. Smaller gaps are shown and labelled "within noise".</p>
+    </aside>
+  </section>
+
+  <!-- 7 · RESULTS · metric 1, never-trained CRPS, pooled
+       claim    written from DATA (hM1)
+       source   results/t128p2/m1_never_table.tsv (subgroup never, knob all), phase1_knob_table.tsv
+       numbers  DATA.m1, DATA.p1 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 1 · never-trained pairs</div>
+      <h2 id="hM1"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>CRPS on arm → arm pairs that no arm trained on, every knob pooled. The question of phase 2.</div>
+        <div class="best"><b>Best case</b>Low, close to the trained pairs, and below old D: the fit carries over. Most of it oracle-scaled.</div>
+        <div class="worst"><b>Worst case</b>No lower than old D (the middle adds nothing), or a large scale error (wrong totals).</div>
+      </div>
+      <div class="fig res" id="figM1"></div>
+      <ul class="pts"><li id="tM1a"></li><li id="tM1b"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Bars: dark is the oracle-scaled part, light is the scale error; black ticks are the seeds; the hollow diamond is the same arm in phase 1, at four thousand steps. Dashed lines: old D retrained (dark green) and old D through the base (light green). The text column gives each value with its split, then its noise label against old D ("D") and against old D through the base ("base").</p>
+      <p id="nM1"></p>
+    </aside>
+  </section>
+
+  <!-- 8 · RESULTS · metric 1, split by pair type
+       claim    written from DATA (hM1s)
+       source   results/t128p2/m1_never_table.tsv (subgroups same and cross, knob all)
+       numbers  DATA.m1 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 1 · same-knob and two-knob pairs</div>
+      <h2 id="hM1s"></h2>
+      <div class="fig tall" id="figM1s"></div>
+      <ul class="pts"><li id="tM1sa"></li><li id="tM1sb"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>The same metric, split by the kind of never-trained pair. Panel (a): two arms of one knob, for example 15M reads to 3.75M reads. Panel (b): arms of two different knobs, for example 15M reads to a track with a raised MAPQ cut. Most never-trained pairs are of kind (b), so (b) drives the pooled number.</p>
+      <p>Bar: one g per track, with its split. Square: one g across tracks. Each text line gives a value and its noise label against old D ("D"; for old D itself, against old D through the base, "base").</p>
+      <p id="nM1s"></p>
+    </aside>
+  </section>
+
+  <!-- 9 · RESULTS · metric 2, the generalisation gap
+       claim    written from DATA (hM2)
+       source   results/t128p2/m2_gap_table.tsv (knob all)
+       numbers  DATA.m2 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 2 · the generalisation gap</div>
+      <h2 id="hM2"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>Never-trained CRPS minus trained CRPS, same arm. The never-trained side uses same-knob pairs.</div>
+        <div class="best"><b>Best case</b>Near 0: unseen pairs are as good as trained ones.</div>
+        <div class="worst"><b>Worst case</b>Large and positive: the fit stays on the trained pairs.</div>
+      </div>
+      <div class="fig res" id="figM2"></div>
+      <div class="callout" id="tM2why"></div>
+    </div>
+    <aside class="notes">
+      <p>Bars: the pooled gap, with seed ticks. Below zero means the never-trained pairs score better than the trained ones. The text column gives each gap with its split (oracle-scaled part, then scale error) and its noise label against old D.</p>
+      <p>The next slide shows why every bar is below zero.</p>
+      <p id="nM2"></p>
+    </aside>
+  </section>
+
+  <!-- 10 · RESULTS · metric 2, why it is negative
+       claim    the negative sign comes from which pairs sit in each pool (verified from pair_table)
+       source   results/t128p2/m2_gap_table.tsv (per knob), pair_table.tsv.gz (pool make-up, simple means)
+       numbers  DATA.m2, DATA.mix -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 2 · why every pooled gap is negative</div>
+      <h2>The pooled gap is negative because the two pools hold different pairs, not because unseen pairs are easier</h2>
+      <div class="fig tall" id="figMix"></div>
+      <ul class="pts"><li id="tMixa"></li><li id="tMixb"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>CRPS on counts grows with the depth of the target track: a deep target has large counts and a large error. So a pool with many deep targets has a high CRPS, whatever the model.</p>
+      <p>Panel (a): the gap per knob, one g per track, with its noise label against old D in the text. Panel (b): the make-up of the two pools. Knobs with one arm only have no same-knob pair, so they sit only in the trained pool. Half of the trained depth pairs have the base, the deepest track, as their target; the never-trained depth pairs target the shallower arms.</p>
+      <p id="nMix"></p>
+    </aside>
+  </section>
+
+  <!-- 11 · RESULTS · metric 3, trained pairs
+       claim    written from DATA (hM3)
+       source   results/t128p2/m3_trained_table.tsv (knob all), phase1_knob_table.tsv
+       numbers  DATA.m3, DATA.p1 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 3 · trained pairs</div>
+      <h2 id="hM3"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>CRPS on the base ↔ arm pairs the model trained on (scored on other chromosomes).</div>
+        <div class="best"><b>Best case</b>As low as old D: the middle costs nothing on the pairs we know.</div>
+        <div class="worst"><b>Worst case</b>Above old D outside noise: the middle buys never-trained gains with trained-pair losses.</div>
+      </div>
+      <div class="fig res" id="figM3"></div>
+      <ul class="pts"><li id="tM3a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Same layout as metric 1: split bars, seed ticks, the phase-1 value as a hollow diamond, and the noise label against old D.</p>
+      <p id="nM3"></p>
+    </aside>
+  </section>
+
+  <!-- 12 · RESULTS · metric 4, held-out depth
+       claim    written from DATA (hM4)
+       source   results/t128p2/m4_heldout_table.tsv
+       numbers  DATA.m4 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 4 · the held-out depth, 7.5M reads</div>
+      <h2 id="hM4"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>CRPS on base ↔ 7.5M pairs, a depth level held out of training. Both directions.</div>
+        <div class="best"><b>Best case</b>As low as old D, or lower: the model fills in a missing level of a known knob.</div>
+        <div class="worst"><b>Worst case</b>Above old D outside noise: the middle loses the interpolation.</div>
+      </div>
+      <div class="fig res" id="figM4"></div>
+      <ul class="pts"><li id="tM4a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): from 7.5M reads to the base (a deep target, so a high CRPS). Panel (b): from the base to 7.5M reads (a shallow target). One g per track as a bar with its split; one g across tracks as a square.</p>
+      <p id="nM4"></p>
+    </aside>
+  </section>
+
+  <!-- 13 · RESULTS · metric 5, the depth law (sanity check)
+       claim    written from DATA (hM5)
+       source   results/t128p2/m5_depthlaw_table.tsv
+       numbers  DATA.m5 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 5 · the depth law (a sanity check)</div>
+      <h2 id="hM5"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>|log2 predicted scale − log2 true read ratio| on depth pairs. Half the reads should halve every bin.</div>
+        <div class="best"><b>Best case</b>Near 0 in every pair group: the model scales counts by the read ratio.</div>
+        <div class="worst"><b>Worst case</b>Near 1 or more: off by a factor of 2, as a map that returns its input would be.</div>
+      </div>
+      <div class="fig res" id="figM5"></div>
+      <ul class="pts"><li id="tM5a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Each row has four thin bars, one per pair group: trained, the held-out 7.5M, never-trained depth to depth, and never-trained pairs that touch 7.5M. Ticks are the seeds. Log scale. Old D through the base exists only for never-trained pairs.</p>
+      <p id="nM5"></p>
+    </aside>
+  </section>
+
+  <!-- 14 · RESULTS · metric 6, hop 1
+       claim    written from DATA (hM6)
+       source   results/t128p2/m6_hop1_table.tsv (knob all)
+       numbers  DATA.m6 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 6 · hop 1: does the middle hold the base?</div>
+      <h2 id="hM6"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>CRPS of the predicted base track, from an arm, against the real base. For arms with the middle at the base.</div>
+        <div class="best"><b>Best case</b>As low as old D's own arm → base map: the middle is a good base track.</div>
+        <div class="worst"><b>Worst case</b>Well above old D: the middle is not the base, whatever its setting says.</div>
+      </div>
+      <div class="fig res" id="figM6"></div>
+      <ul class="pts"><li id="tM6a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Fixed middle and old D: the decoder's arm to base prediction (for the fixed middle, the decoder under the base's own setting). Anchored middle: the same decoder prediction, and the encoder's own prediction of the base, which is what the decoder reads. Pairs: the trained arm to base pairs; the text adds the held-out 7.5M to base pairs.</p>
+      <p id="nM6"></p>
+    </aside>
+  </section>
+
+  <!-- 15 · RESULTS · metric 7, middle consistency
+       claim    written from DATA (hM7)
+       source   results/t128p2/m7_agree_table.tsv
+       numbers  DATA.m7 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 7 · middle consistency</div>
+      <h2 id="hM7"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>For two arms of one track: median |Z − Z′| over median |x − x′|, the middles' gap over the inputs' gap.</div>
+        <div class="best"><b>Best case</b>Well below 1: the middle removes the processing difference; one sample, one middle.</div>
+        <div class="worst"><b>Worst case</b>1 or more: the middles differ as much as the inputs, or more.</div>
+      </div>
+      <div class="fig res" id="figM7"></div>
+      <ul class="pts"><li id="tM7a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>x is log(1 + count), the encoder's input. Z is the middle the decoder reads: for the learned and fixed middles, the encoder's Gaussian mean; for the anchored middle, log(1 + the predicted base mean), which is in the same units as x. The ratio is taken per pair of products, then the median. Pairs where two arms differ in two knobs; the line below adds pairs with the base or two arms of one knob.</p>
+      <p>Caveat: the learned and fixed middles are not in the units of x, so their ratio is a weaker reading than the anchored middle's.</p>
+      <p id="nM7"></p>
+    </aside>
+  </section>
+
+  <!-- 16 · RESULTS · metric 8, swap check against identity distance
+       claim    written from DATA (hM8)
+       source   results/t128p2/m8_swap_table.tsv, m8_swap_points.tsv.gz
+       numbers  DATA.m8, DATA.m8_pts -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 8 · the swap check against the identity distance</div>
+      <h2 id="hM8"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>Swap: with c′ = c nothing should change; how far the prediction moves from X. Against how far it moves on real pairs.</div>
+        <div class="best"><b>Best case</b>Swap near 0 while the identity distance is large: bottom right.</div>
+        <div class="worst"><b>Worst case</b>A large swap (it changes X for nothing), or an identity distance near 0 (it ignores the settings).</div>
+      </div>
+      <div class="fig res" id="figM8"></div>
+      <ul class="pts"><li id="tM8a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Both axes: the median, over bins with a count above zero, of |log(predicted mean ÷ X)|. Swap (y): give the model the same setting on both sides. Identity distance (x): real pairs, against the source X. Small marks: one run (median over its knobs). Large marks: the cell mean. Old D has no identity distance in the tables, so its swap value is a horizontal line.</p>
+      <p id="nM8"></p>
+    </aside>
+  </section>
+
+  <!-- 17 · RESULTS · metric 9, best steps
+       claim    written from DATA (hM9)
+       source   results/t128p2/runs_fir.tsv, m9_steps_table.tsv
+       numbers  DATA.m9, DATA.m9_runs, DATA.counts.max_steps -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>metric 9 · was the step cap the limit?</div>
+      <h2 id="hM9"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>The share of runs whose best step is in the last 10 % of the 12,000-step cap.</div>
+        <div class="best"><b>Best case</b>0: every run found its best step well before the cap; steps were not the limit.</div>
+        <div class="worst"><b>Worst case</b>Many runs: the cap cut training short, and more steps could still help.</div>
+      </div>
+      <div class="fig res" id="figM9"></div>
+      <ul class="pts"><li id="tM9a"></li><li id="tM9b"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Each dot is one run's best step (by its own validation loss on chromosome 22); each small tick is where that run stopped. Early stopping (an evaluation every 250 steps, patience 4) ends a run after four evaluations with no gain. The lines mark the phase-1 cap of four thousand steps, the start of the last 10 %, and the cap.</p>
+      <p id="nM9"></p>
+    </aside>
+  </section>
+
+  <!-- 18 · RESULTS · ranking
+       claim    written from DATA (hRk)
+       source   results/t128p2/rank_table.tsv
+       numbers  DATA.rank -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>the arms ranked by metric 1, metric 2 beside</div>
+      <h2 id="hRk"></h2>
+      <div class="fig tall" id="figRank"></div>
+      <ul class="pts"><li id="tRka"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>A reading, not a gate (PI). Rows are in order of never-trained CRPS (metric 1), lowest first. The label between two rows says whether the gap to the next row passes the noise rule. The right-hand column is metric 2, the pooled generalisation gap; old D through the base has none, since it has no trained pairs of its own.</p>
+      <p id="nRk"></p>
+    </aside>
+  </section>
+
+  <!-- 19 · DISCUSSION · what each metric tells us
+       job      one line per metric 1-9
+       numbers  restated from results; none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what each metric tells us</div>
+      <h2>Nine readings: the middle costs nothing and passes every check, but only old D through the base improves never-trained pairs</h2>
+      <div class="cards c3x3" id="cardsD"></div>
+    </div>
+    <aside class="notes">
+      <p>One line per metric, restated from the results. Tier 1 (metrics 1 and 2) is the question. Tier 2 (metrics 3 to 5) checks that nothing else got worse. Tier 3 (metrics 6 to 9) explains the first two.</p>
+    </aside>
+  </section>
+
+  <!-- 20 · DISCUSSION · conclusion: how to formulate g and f
+       job      the readings combined into what they say about formulating g and f; no verdicts
+       numbers  restated from results; none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this says about how to formulate g and f</div>
+      <h2>With one g per track, the closer the middle is to the real base track, the lower the never-trained CRPS; only the chain through the base clears the noise</h2>
+      <div class="fig mid" id="figConc"></div>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--s6)"><div class="rl">Reading</div><div class="ct">Tie the middle to the base</div><div class="cb" id="tC1"></div></div>
+        <div class="card" style="--c:var(--via)"><div class="rl">Reading</div><div class="ct">The second hop is where the gap is</div><div class="cb" id="tC2"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Not shown</div><div class="ct">A gain from steps, or across tracks</div><div class="cb" id="tC3"></div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The figure orders the routes by how much of the real base track the middle holds: a learned setting, the base's setting, a prediction of the base trained against the real base, and old D's chain through the predicted base. Never-trained CRPS falls along that order. Only the last step passes the noise rule, so the order is a reading, not a result.</p>
+      <p>Hop 1 says the anchored encoder already predicts the base as well as old D. What still differs from the chain through the base is the second hop: one shared network decoding a middle, against old D's own base to arm map.</p>
+    </aside>
+  </section>
+
+  <!-- 21 · DISCUSSION · next steps: the deferred scale questions
+       job      the spec's deferred questions as options; no ranking
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>next steps · the deferred scale questions</div>
+      <h2>The scale questions wait until g and f work together; these are the options, not recommendations</h2>
+      <div class="cards c3 lg">
+        <div class="card" style="--c:var(--s1)"><span class="tag opt">option</span><div class="ct">A bigger g</div>
+          <div class="cb">A wider or deeper MLP than 2 × 64. It would teach whether the settings → FiLM map limits the never-trained pairs, most of which change two knobs at once.</div></div>
+        <div class="card" style="--c:var(--s3)"><span class="tag opt">option</span><div class="ct">A bigger CNN</div>
+          <div class="cb">More channels or layers than 4 × 32. It would teach whether one shared network is too small to be both encoder and decoder.</div></div>
+        <div class="card" style="--c:var(--s6)"><span class="tag opt">option</span><div class="ct">Another activation</div>
+          <div class="cb">The CNN uses GELU now. Another activation would teach whether its shape limits how well f follows the depth law's straight scaling.</div></div>
+      </div>
+      <p class="note">PI ruling, 2026-10-25: these wait until phase 2 defines how g and f work together. The readings above do not rank them.</p>
+    </div>
+    <aside class="notes">
+      <p>These three are the spec's deferred list. Each is an option with what it would teach; none is ranked.</p>
+    </aside>
+  </section>
+
+  <!-- 22 · DISCUSSION · open points for the PI
+       job      the decisions only the PI can make, each answerable in one line
+       numbers  restated from results; none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>open points for the PI</div>
+      <h2>Open points for the PI</h2>
+      <ol class="open">
+        <li id="tO1"></li>
+        <li id="tO2"></li>
+        <li id="tO3"></li>
+        <li id="tO4"></li>
+        <li id="tO5"></li>
+      </ol>
+    </div>
+    <aside class="notes">
+      <p>Each point is a question the readings raise and only the PI can settle. None is a recommendation.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · symmetric encoder-decoder, phase 2 · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py from cruxvault/results/t128p2/ (see its docstring).
+   Arms and g versions are plain names (build_deck.py NAMES). Row layouts:
+     counts {runs, done, g_per_track, seeds, max_steps, arms};  n  arm -> {assigned, done}
+     m1  [arm, g, knob, subgroup, CRPS, oracle-scaled, scale error, seed spread, [seeds], n runs, n pairs,
+          gap vs old D, label, gap vs old D through the base, label]
+     p1  [arm, g, group, CRPS, oracle-scaled, scale error, seed spread, [seeds]]   phase 1, 4000 steps, knob all
+     m2  [arm, g, knob, never CRPS, trained CRPS, gap, gap oracle-scaled, gap scale error, seed spread, [seeds],
+          n never pairs, n trained pairs, gap vs old D, label]
+     mix [{arm, g, never_mean, trained_mean, trained_reweighted, gap_reweighted, knobs_trained_only, n_never,
+          n_trained, depth_trained_by_target, depth_never_by_target}]   simple means over scored pairs
+     m3  [arm, g, knob, CRPS, os, se, spread, [seeds], n runs, n pairs, gap vs old D, label, phase-1 CRPS]
+     m4  [arm, g, direction, CRPS, os, se, spread, [seeds], n runs, n pairs, gap vs old D, label]
+     m5  [arm, g, group, median |log2 error|, spread, [seeds], n rows, gap vs old D, label, gap vs through base, label, phase 1]
+     m6  [arm, g, source (decoder|encoder), group, CRPS, os, se, spread, [seeds], n pairs, gap vs old D, label]
+     m7  [arm, g, n knobs differ, median |Z-Z'|, spread, median |x-x'|, median ratio, ratio spread, [seeds], n rows]
+     m8  [arm, g, swap, spread, identity distance, its spread, n runs, gap vs old D, label];  m8_pts [arm, g, identity, swap]
+     m9  [arm, g, n runs, cap, n best in last 10 %, n at cap, median best step, median steps run, median hours]
+     m9_runs [arm, g, best step, steps run];   cdrift [arm, g, median drift of the middle setting, max]
+     rank [arm, g, rank, m1, os, se, spread, label vs next, gap vs next, m2, m2 os, m2 se, m2 spread, label vs old D, label vs through base]
+   =========================================================================== */
+const DATA = __DATA__;
+
+const COL={tr:'var(--tr)',ho:'var(--ho)',nv:'var(--nv)',nv2:'var(--nv2)',ok:'var(--ok)',ink:'var(--ink)',muted:'var(--muted)',
+  body:'var(--body)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',
+  accent:'var(--accent)',paper:'var(--paper)',ref:'var(--ref)',oldd:'var(--oldd)',via:'var(--via)'};
+/* arms and g versions: the plain names come from DATA (build_deck.py NAMES), in its order */
+const AN=Object.keys(DATA.n);
+const ARMS=[
+  {name:AN[0],short:'learned middle',sub:'setting learned freely',c:'var(--s1)'},
+  {name:AN[1],short:'fixed middle',sub:'setting = the base\'s',c:'var(--s3)'},
+  {name:AN[2],short:'anchored middle',sub:'encoder predicts the base',c:'var(--s6)'},
+  {name:AN[3],short:'old D, retrained',sub:'no middle, 12,000-step cap',c:'var(--oldd)'},
+  {name:AN[4],short:'old D through the base',sub:'arm → base → arm',c:'var(--via)'}];
+const [LRN,FIX,ANC,OLD,VIA]=AN;
+const ARM=n=>ARMS.find(a=>a.name===n);
+const MID=[LRN,FIX,ANC];
+const GV=['one g per track','one g across tracks'];
+const GVc=g=>g[0].toUpperCase()+g.slice(1);
+const KNAME={depth:'depth',crop:'read length',mapq:'MAPQ cut',abproxy:'control mixed in',ctldepth:'control depth',
+  ctlid:'control identity',dedup:'deduplication',extsize:'extension size',pe:'paired end',ratio:'ratio',all:'all knobs'};
+
+const f2=v=>v==null?'—':v.toFixed(2), f3=v=>v==null?'—':v.toFixed(3), f4=v=>v==null?'—':v.toFixed(4);
+const mn=s=>String(s).replace(/-/g,'−');
+const sg=(v,f=f3)=>v==null?'—':(v>0?'+':'')+mn(f(v));
+const rng=(a,f=f3)=>{a=a.filter(v=>v!=null&&!isNaN(v));if(!a.length)return '—';const lo=Math.min(...a),hi=Math.max(...a);return f(lo)===f(hi)?mn(f(lo)):lo<0?`${mn(f(lo))} to ${mn(f(hi))}`:`${f(lo)}–${f(hi)}`;};
+const andJ=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+/* every CRPS with its split: total (oracle-scaled + scale error) */
+const cs=(v,os,se)=>`${f3(v)} (${f3(os)} + ${f3(se)})`;
+/* the spec's noise rule: a gap counts only if |gap| > 2 x the larger seed spread */
+const noise=(gap,sa,sb)=>sa==null||sb==null?'no seed spread':Math.abs(gap)>2*Math.max(sa,sb)?'counts':'within noise';
+const nl=l=>l==='counts'?'<b>counts</b>':l;
+const sh=n=>ARM(n).short;
+
+const m1r=(a,g,sub='never',k='all')=>DATA.m1.find(r=>r[0]===a&&r[1]===g&&r[2]===k&&r[3]===sub);
+const p1r=(a,g,grp)=>DATA.p1.find(r=>r[0]===a&&r[1]===g&&r[2]===grp);
+const m2r=(a,g,k='all')=>DATA.m2.find(r=>r[0]===a&&r[1]===g&&r[2]===k);
+const m3r=(a,g)=>DATA.m3.find(r=>r[0]===a&&r[1]===g);
+const m4r=(a,g,d)=>DATA.m4.find(r=>r[0]===a&&r[1]===g&&r[2]===d);
+const m5r=(a,g,grp)=>DATA.m5.find(r=>r[0]===a&&r[1]===g&&r[2]===grp);
+const m6r=(a,g,src,grp)=>DATA.m6.find(r=>r[0]===a&&r[1]===g&&r[2]===src&&r[3]===grp);
+const m7r=(a,g,nk)=>DATA.m7.find(r=>r[0]===a&&r[1]===g&&r[2]===nk);
+const m8r=(a,g)=>DATA.m8.find(r=>r[0]===a&&r[1]===g);
+const m9r=(a,g)=>DATA.m9.find(r=>r[0]===a&&r[1]===g);
+const mixr=(a,g)=>DATA.mix.find(m=>m.arm===a&&m.g===g);
+
+/* ---------- svg helpers (phase-1 deck) ---------- */
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2,ex='')=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g===GV[0]?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const diamond=(x,y,c,r=7)=>`<polygon points="${x},${y-r} ${x+r},${y} ${x},${y+r} ${x-r},${y}" style="fill:var(--paper);stroke:${c};stroke-width:2.2"/>`;
+const logS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo));
+const linS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo);
+const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+20,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const rotY=(x,y,txt,fs=15)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:${fs}px"`);
+const box=(x,y,w,h,txt,c,sub,fs=17)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-3:6),txt,'mono','middle',`style="font-size:${fs}px"`)+(sub?T(x+w/2,y+h/2+19,sub,'cap','middle'):'');
+const ticksX=(xx,lo,hi,step,y0,y1,fmt=v=>mn(f2(v)))=>{let s='';for(let v=lo;v<=hi+1e-9;v+=step){s+=L(xx(v),y0,xx(v),y1,COL.grid,1)+T(xx(v),y1+18,fmt(v),'tick','middle');}return s;};
+function rowLabel(x,y,a,lab,sub){const A=ARM(a);return T(x,y-2,lab||A.short,'axlbl','end',`style="font-size:15px;font-weight:600;fill:${A.c}"`)+T(x,y+15,sub==null?A.sub:sub,'cap','end','style="font-size:12.5px"');}
+
+/* Generic two-panel bar chart: one panel per item of `panels`, one row per entry of rows(panel).
+   A row: {a: arm name, lab, sub, v, os, se (split), seeds, p1 (phase-1 value), sq (second marker value), t1, t2 (text)} */
+function barPanels(o){
+  const panels=o.panels,rows0=o.rows(panels[0]),rh=o.rh||44,top=50,lx=o.lx||218,tw=o.tw||228,gap=30;
+  const pw=(1160-lx-panels.length*tw-(panels.length-1)*gap)/panels.length;
+  const H=top+rows0.length*rh+(o.legend?74:48);let s='';
+  rows0.forEach((r,i)=>s+=rowLabel(lx-12,top+i*rh+rh/2,r.a,r.lab,r.sub));
+  panels.forEach((p,pi)=>{const x0=lx+pi*(pw+tw+gap),xx=(o.log?logS:linS)(o.lo,o.hi,x0,x0+pw),rows=o.rows(p);
+    s+=T(x0,22,`(${'abcd'[pi]}) ${o.ptitle?o.ptitle(p):GVc(p)}`,'ptitle','start','style="font-size:18px"');
+    s+=(o.ticks||((xx,y0,y1)=>ticksX(xx,o.lo,o.hi,o.step,y0,y1)))(xx,top-4,top+rows.length*rh);
+    if(o.lo<0)s+=L(xx(0),top-6,xx(0),top+rows.length*rh,COL.ink,1.3);
+    (o.refs?o.refs(p):[]).forEach(f=>{if(f.v!=null)s+=L(xx(f.v),top-8,xx(f.v),top+rows.length*rh,f.c,1.8,'5 4');});
+    rows.forEach((r,i)=>{if(!r)return;const c=ARM(r.a).c,y=top+i*rh+9,bh=rh-20,z=o.lo<0?xx(0):x0;
+      if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      if(r.v==null){s+=T(x0+6,y+bh/2+5,'not measured','cap');}
+      else if(r.os!=null&&r.se!=null&&r.os>=0&&r.se>=0&&o.lo>=0){s+=R(x0,y,xx(r.os)-x0,bh,c,'none',2)+R(xx(r.os),y,xx(r.os+r.se)-xx(r.os),bh,c,'none',2,0,';fill-opacity:.35');}
+      else{const a=Math.min(z,xx(r.v)),b=Math.max(z,xx(r.v));s+=R(a,y,b-a,bh,c,'none',2);}
+      (r.seeds||[]).forEach(v=>s+=L(xx(v),y-3,xx(v),y+bh+3,COL.ink,1.6));
+      if(r.p1!=null)s+=diamond(xx(r.p1),y+bh/2,COL.ink);
+      if(r.sq!=null)s+=R(xx(r.sq)-6,y+bh/2-6,12,12,'var(--paper)',c,2,2.4);
+      s+=T(x0+pw+10,y+bh/2-1,r.t1||'','val','start',`style="fill:${c};font-size:14px"`)+T(x0+pw+10,y+bh/2+16,r.t2||'','cap','start','style="font-size:12.5px"');});
+    if(pi>0)s+=divider(x0-gap/2-tw*0,10,top+rows.length*rh+4);});
+  s+=T(lx+(1160-lx)/2,top+rows0.length*rh+38,o.axis,'axlbl','middle','style="font-size:15px"');
+  if(o.legend)s+=o.legend(H-6);
+  return svg(1160,H,s);
+}
+const splitLegend=(y,extra='')=>sw(0,y,COL.muted,'oracle-scaled part')+sw(170,y,COL.muted,'scale error',0.35)+L(300,y-12,300,y,COL.ink,1.6)+T(308,y,'seeds','cap','start','style="font-size:14px;fill:var(--body)"')+extra;
+function legendP1(x,y){return `<polygon points="${x+7},${y-12} ${x+14},${y-5} ${x+7},${y+2} ${x},${y-5}" style="fill:var(--paper);stroke:var(--ink);stroke-width:2"/>`+T(x+20,y,'phase 1, 4000 steps','cap','start','style="font-size:14px;fill:var(--body)"');}
+function legendRefs(x,y){return L(x,y-5,x+30,y-5,COL.oldd,1.8,'5 4')+T(x+36,y,'old D','cap','start','style="font-size:14px;fill:var(--body)"')+L(x+90,y-5,x+120,y-5,COL.via,1.8,'5 4')+T(x+126,y,'old D through the base','cap','start','style="font-size:14px;fill:var(--body)"');}
+
+/* ---------- motivation (a): phase 1 ---------- */
+function figP1(){
+  const arms=[LRN,OLD,VIA];
+  const xmax=Math.ceil(Math.max(...DATA.p1.filter(r=>r[2]==='never').flatMap(r=>[r[3],...r[7]]))*10)/10;
+  return barPanels({panels:GV,lo:0,hi:xmax,step:0.1,rh:46,
+    rows:g=>arms.map(a=>{const r=p1r(a,g,'never');return r?{a,lab:a===OLD?'old D':ARM(a).short,sub:a===LRN?'the phase-1 default':a===OLD?'no middle':ARM(a).sub,v:r[3],os:r[4],se:r[5],seeds:r[7],t1:cs(r[3],r[4],r[5])}:{a,v:null};}),
+    axis:'CRPS on counts, never-trained pairs, phase 1 (4000 steps)',legend:y=>splitLegend(y)});
+}
+
+/* ---------- motivation (b): the routes ---------- */
+function figPaths(){
+  const W=1160,H=500;let s='';
+  const lane=(y,a,title,mid,midSub,dec,anchor)=>{const c=ARM(a).c;let t='';
+    t+=T(0,y-30,title,'axlbl','start',`style="font-weight:700;fill:${c};font-size:16px"`);
+    t+=box(0,y-18,96,44,'arm',COL.hair,'',16)+arrowR(98,y+4,128,c,2.4);
+    t+=R(132,y-22,150,52,COL.card,c,10,2.4)+T(207,y-1,'f (encoder)','axlbl','middle','style="font-size:14.5px;font-weight:600"')+T(207,y+17,'g(c_arm, middle)','cap','middle','style="font-size:12.5px"');
+    t+=arrowR(284,y+4,314,c,2.4)+R(318,y-24,190,56,'var(--paper)',c,28,2.6)+T(413,y,mid,'axlbl','middle','style="font-size:15px;font-weight:700"')+T(413,y+18,midSub,'cap','middle','style="font-size:12.5px"');
+    t+=arrowR(510,y+4,540,c,2.4)+R(544,y-22,150,52,COL.card,c,10,2.4)+T(619,y-1,dec,'axlbl','middle','style="font-size:14.5px;font-weight:600"')+T(619,y+17,'g(middle, c′)','cap','middle','style="font-size:12.5px"');
+    t+=arrowR(696,y+4,726,c,2.4)+box(730,y-18,96,44,'target',COL.hair,'',16);
+    if(anchor)t+=P(`M413,${y+32} L413,${y+54}`,'none',c,2,';stroke-dasharray:4 3')+T(413,y+70,'scored against the real base','cap','middle',`style="fill:${c};font-weight:600;font-size:13px"`);
+    return t;};
+  s+=T(0,22,'(a) The encoder-decoder: one CNN f, used twice, set by one g','ptitle','start','style="font-size:18px"');
+  s+=lane(84,LRN,'learned middle (phase 1)','learned setting','moves freely','f (decoder)');
+  s+=lane(184,FIX,'fixed middle (path 1)','the base\'s setting','frozen','f (decoder)');
+  s+=lane(284,ANC,'anchored middle (path 3)','predicted base','NB mean, log(1 + ·)','f (decoder)',true);
+  s+=divider(860,10,H-6);
+  s+=T(885,22,'(b) References','ptitle','start','style="font-size:18px"');
+  const c1=ARM(OLD).c,c2=ARM(VIA).c;
+  s+=T(885,70,'old D: one map, arm → target','axlbl','start',`style="font-weight:700;fill:${c1};font-size:15px"`);
+  s+=box(885,86,80,40,'arm',COL.hair,'',15)+arrowR(967,106,1065,c1,2.4)+box(1070,86,90,40,'target',COL.hair,'',15)+T(1016,148,'f under g(c_arm, c′)','cap','middle','style="font-size:12.5px"');
+  s+=T(885,200,'old D through the base','axlbl','start',`style="font-weight:700;fill:${c2};font-size:15px"`);
+  s+=box(885,216,80,40,'arm',COL.hair,'',15)+arrowR(967,236,1000,c2,2.4)+box(1004,216,70,40,'base',COL.ink,'',15)+arrowR(1076,236,1100,c2,2.4)+box(1104,216,56,40,'tgt',COL.hair,'',14);
+  s+=FO(885,268,275,110,'Two of old D\'s trained maps chained: arm → base, then base → target, through the predicted base mean. No training.','font:400 14px var(--sans);color:var(--body);line-height:1.38');
+  s+=R(0,392,W,96,COL.card,COL.hair,10)+FO(16,402,W-32,84,'<b>Path 2, more steps</b>, applies to every arm: the cap goes from 4000 to 12,000 steps, and the best step is still chosen on chromosome 22. All routes see the same data: base ↔ arm pairs only, with the 7.5M depth held out.','font:400 15.5px var(--sans);color:var(--body);line-height:1.42');
+  return svg(W,H,s);
+}
+
+/* ---------- method: the pairs ---------- */
+function figPairs(){
+  const W=1160,H=456;let s='';
+  s+=T(0,24,'(a) Pairs: trained, held out, and never trained','ptitle');
+  const cx=300,cy=225;
+  const nodes=[['15M reads',160,110],['7.5M reads (held out)',300,68],['3.75M reads',440,110],
+    ['reads trimmed',440,340],['MAPQ raised',300,382],['control mixed in',160,340]];
+  const pos=nodes.map(n=>[n[1],n[2]]);
+  [[0,2],[3,4]].forEach(([i,j])=>s+=L(pos[i][0],pos[i][1],pos[j][0],pos[j][1],COL.nv,2.4,'7 5'));
+  s+=L(pos[0][0],pos[0][1],pos[5][0],pos[5][1],COL.nv2,2.6,'2 5');
+  pos.forEach(([x,y],i)=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d;
+    s+=L(cx+ux*56,cy+uy*56,x-ux*16,y-uy*16,i===1?COL.ho:COL.tr,3,i===1?'6 4':'');});
+  pos.forEach(([x,y],i)=>{s+=Ci(x,y,13,COL.card,i===1?COL.ho:COL.tr,2.5);
+    const right=x>cx+20,left=x<cx-20,anc=right?'start':left?'end':'middle';
+    s+=T(x+(right?20:left?-20:0),y+(right||left?6:(y<cy?-22:34)),nodes[i][0],'axlbl',anc,'style="font-size:15px;font-weight:600"');});
+  s+=Ci(cx,cy,54,COL.card,COL.ink,2.5)+T(cx,cy-2,'base','big','middle','style="font-size:22px"')+T(cx,cy+20,'track','psub','middle');
+  const ly=H-6;
+  s+=L(0,ly-5,30,ly-5,COL.tr,3)+T(36,ly,'trained, both ways','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=L(160,ly-5,190,ly-5,COL.ho,3,'6 4')+T(196,ly,'held out','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=L(270,ly-5,300,ly-5,COL.nv,2.4,'7 5')+T(306,ly,'never trained, same knob','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=L(470,ly-5,500,ly-5,COL.nv2,2.6,'2 5')+T(506,ly,'two knobs','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=divider(640,10,H-24);
+  s+=T(665,24,'(b) Selection and scoring','ptitle');
+  const rows=[['chromosome 22','pick each run\'s best step by its own validation likelihood','var(--s3)'],
+    ['chromosomes 19 and 21','score every pair, blacklist removed','var(--s6)'],
+    ['the rest of the genome','training windows (base ↔ arm pairs, 7.5M held out)',COL.tr]];
+  rows.forEach(([a,b,c],i)=>{const y=60+i*104;s+=R(665,y,495,86,COL.card,c,10,2.2)+T(683,y+32,a,'axlbl','start',`style="font-weight:700;fill:${c};font-size:16.5px"`)+FO(683,y+42,465,44,b,'font:400 14.5px var(--sans);color:var(--body);line-height:1.35');});
+  s+=T(665,392,'lr 1e-3, batch 32, eval every 250 steps, patience 4, cap 12,000','cap','start','style="font-size:13.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- method: the CRPS split and the noise rule ---------- */
+function figRules(){
+  const W=1160,H=400;let s='';
+  s+=T(0,24,'(a) CRPS = oracle-scaled part + scale error','ptitle');
+  const x0=20,xx=linS(0,1,x0,x0+520);
+  s+=R(x0,80,xx(0.62)-x0,46,COL.ink,'none',3,0,';fill-opacity:.75')+R(xx(0.62),80,xx(0.8)-xx(0.62),46,COL.ink,'none',3,0,';fill-opacity:.25');
+  s+=T((x0+xx(0.62))/2,108,'shape','axlbl','middle','style="fill:var(--paper);font-weight:700"')+T((xx(0.62)+xx(0.8))/2,108,'scale','axlbl','middle','style="font-weight:700"');
+  s+=FO(x0,148,540,150,'<b>Oracle-scaled part</b>: the error left after the one best rescaling of the prediction; it measures the <b>shape</b> of the track.<br><b>Scale error</b>: what that rescaling removes; it measures a <b>wrong total</b>.<br>Lower is better for both. Every CRPS here is written <b>total (shape + scale)</b>.','font:400 15.5px var(--sans);color:var(--body);line-height:1.45');
+  s+=divider(600,10,H-6);
+  s+=T(625,24,'(b) The noise rule','ptitle');
+  s+=T(625,50,'3 seeds per cell; spread = largest − smallest seed','cap','start','style="font-size:13.5px"');
+  const yy=linS(0.4,0.75,320,80),A=[0.60,0.70,0.66],B=[0.45,0.53,0.50],mA=(A[0]+A[1]+A[2])/3,mB=(B[0]+B[1]+B[2])/3;
+  const cellS=(x,c,vals,lab)=>{let t='';vals.forEach(v=>t+=L(x-22,yy(v),x+22,yy(v),c,3.4));
+    t+=L(x+32,yy(Math.min(...vals)),x+32,yy(Math.max(...vals)),COL.ink,1.6)+T(x+40,yy((Math.min(...vals)+Math.max(...vals))/2)+5,'spread','cap','start','style="font-size:13px"')+T(x,342,lab,'axlbl','middle','style="font-size:14.5px;font-weight:600"');return t;};
+  s+=cellS(680,'var(--s1)',A,'cell a')+cellS(880,COL.oldd,B,'cell b');
+  s+=L(800,yy(mA),800,yy(mB),COL.accent,2.2,'4 3')+T(800,yy(mB)+22,'gap','cap','middle','style="fill:var(--accent);font-weight:700"');
+  s+=FO(625,356,535,44,'The gap counts only if it is larger than <b>2 × the larger spread</b>; otherwise it is labelled <b>within noise</b>.','font:400 14.5px var(--sans);color:var(--body);line-height:1.35');
+  return svg(W,H,s);
+}
+
+/* ---------- metric 1 ---------- */
+const ALL5=()=>[LRN,FIX,ANC,OLD,VIA];
+function figM1(){
+  const all=DATA.m1.filter(r=>r[2]==='all'&&r[3]==='never');
+  const xmax=Math.ceil(Math.max(...all.flatMap(r=>[r[4],...r[8]]))*10)/10;
+  return barPanels({panels:GV,lo:0,hi:xmax,step:0.1,rh:38,
+    refs:g=>[{v:(m1r(OLD,g)||[])[4],c:COL.oldd},{v:(m1r(VIA,g)||[])[4],c:COL.via}],
+    rows:g=>ALL5().map(a=>{const r=m1r(a,g),p=p1r(a,g,'never');if(!r)return {a,v:null};
+      return {a,v:r[4],os:r[5],se:r[6],seeds:r[8],p1:p?p[3]:null,t1:cs(r[4],r[5],r[6]),
+        t2:a===OLD?`base ${r[14]}`:a===VIA?`D ${r[12]}`:`D ${r[12]} · base ${r[14]}`};}),
+    axis:'CRPS on counts, every never-trained pair (lower is better)',legend:y=>splitLegend(y)+legendP1(380,y)+legendRefs(560,y)});
+}
+function figM1s(){
+  const subs=['same','cross'];
+  const xmax=Math.ceil(Math.max(...DATA.m1.filter(r=>r[2]==='all'&&subs.includes(r[3])).flatMap(r=>[r[4],...r[8]]))*10)/10;
+  return barPanels({panels:subs,lo:0,hi:xmax,step:0.1,rh:42,ptitle:p=>p==='same'?'Two arms of one knob':'Arms of two different knobs',
+    refs:p=>[{v:(m1r(OLD,GV[0],p)||[])[4],c:COL.oldd},{v:(m1r(VIA,GV[0],p)||[])[4],c:COL.via}],
+    rows:p=>ALL5().map(a=>{const r=m1r(a,GV[0],p),q=m1r(a,GV[1],p);if(!r)return {a,v:null};
+      const lab=x=>a===OLD?`base ${x[14]}`:`D ${x[12]}`;
+      return {a,v:r[4],os:r[5],se:r[6],seeds:r[8],sq:q?q[4]:null,t1:`${f3(r[4])} · ${lab(r)}`,t2:q?`across ${f3(q[4])} · ${lab(q)}`:''};}),
+    axis:'CRPS on counts, never-trained pairs (bar: one g per track · square: one g across tracks)',legend:y=>splitLegend(y)+legendRefs(380,y)});
+}
+
+/* ---------- metric 2 ---------- */
+function figM2(){
+  const arms=[LRN,FIX,ANC,OLD];
+  const vals=DATA.m2.filter(r=>r[2]==='all').flatMap(r=>[r[5],...r[9]]);
+  const lo=Math.floor(Math.min(...vals)*20)/20,hi=0.05;
+  return barPanels({panels:GV,lo,hi,step:0.05,rh:42,
+    rows:g=>arms.map(a=>{const r=m2r(a,g);if(!r)return {a,v:null};
+      return {a,v:r[5],seeds:r[9],t1:`${sg(r[5])} (${sg(r[6])} ${r[7]<0?'−':'+'} ${f3(Math.abs(r[7]))})`,t2:a===OLD?`never ${f3(r[3])}, trained ${f3(r[4])}`:`D ${r[13]}`};}),
+    axis:'never-trained CRPS − trained CRPS, every knob pooled (below 0: never-trained pairs score better)'});
+}
+const MIXK=['abproxy','mapq','crop','depth','extsize','ctldepth','ctlid','ratio'];
+function figMix(){
+  const W=1160,top=56,rh=31,lx=150,pw=430;const H=top+MIXK.length*rh+70;let s='';
+  const g=GV[0],arms=[LRN,FIX,ANC,OLD];
+  const vals=DATA.m2.filter(r=>r[1]===g&&MIXK.includes(r[2])).map(r=>r[5]);
+  const lo=Math.floor(Math.min(...vals)*10)/10,hi=Math.ceil(Math.max(...vals)*10)/10,xx=linS(lo,hi,lx,lx+pw);
+  s+=T(0,22,'(a) The gap per knob, one g per track','ptitle','start','style="font-size:18px"');
+  for(let v=lo;v<=hi+1e-9;v+=0.1)s+=L(xx(v),top-4,xx(v),top+MIXK.length*rh,COL.grid,1)+T(xx(v),top+MIXK.length*rh+18,mn(f2(v)),'tick','middle');
+  s+=L(xx(0),top-6,xx(0),top+MIXK.length*rh,COL.ink,1.3);
+  MIXK.forEach((k,i)=>{const y=top+i*rh+rh/2;if(i%2===0)s+=R(lx,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+    s+=T(lx-10,y+5,KNAME[k],'axlbl','end','style="font-size:14.5px"');
+    arms.forEach((a,j)=>{const r=m2r(a,g,k);if(!r)return;const cnt=a!==OLD&&r[13]==='counts';
+      s+=Ci(xx(r[5]),y+(j-1.5)*5,6,ARM(a).c,cnt?COL.ink:'none',cnt?2:0);});});
+  s+=T(lx+pw/2,top+MIXK.length*rh+40,'never-trained − trained CRPS, same knob','axlbl','middle','style="font-size:14.5px"');
+  arms.forEach((a,j)=>s+=Ci(j*150+8,H-10,6,ARM(a).c)+T(j*150+20,H-5,sh(a),'cap','start','style="font-size:13.5px;fill:var(--body)"'));
+  s+=Ci(610,H-10,6,'none',COL.ink,2)+T(622,H-5,'ring: gap differs from old D\'s outside noise','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  // (b) the pools
+  const bx=640;s+=divider(bx-18,10,H-30);
+  s+=T(bx,22,'(b) What each pool holds, one g per track','ptitle','start','style="font-size:18px"');
+  const m=mixr(LRN,g);if(!m)return svg(W,H,s);
+  const ks=Object.keys(m.n_trained),tot=o=>Object.values(o).reduce((p,c)=>p+c,0),bw=430;
+  const stack=(y,o,lab)=>{let x=bx,t=T(bx,y-8,lab,'axlbl','start','style="font-size:14.5px;font-weight:600"');const n=tot(o);
+    ks.forEach(k=>{const w=(o[k]||0)/n*bw;if(w>0){const hl=k==='depth'?'var(--s6)':(k in m.knobs_trained_only)?'var(--accent)':COL.ref;
+      t+=R(x,y,w-2,26,hl,'none',2,0,';fill-opacity:.8');if(w>40)t+=T(x+w/2,y+18,KNAME[k].split(' ')[0],'cap','middle','style="font-size:11.5px;fill:var(--paper);font-weight:600"');x+=w;}});
+    return t+T(bx+bw+8,y+18,`n = ${n}`,'cap','start','style="font-size:13px"');};
+  s+=stack(70,m.n_never,'never-trained, same knob')+stack(130,m.n_trained,'trained');
+  s+=sw(bx,184,'var(--accent)','in the trained pool only')+sw(bx+200,184,'var(--s6)','depth');
+  const dt=m.depth_trained_by_target,dn=m.depth_never_by_target;
+  const bars=[['trained: target = base',dt.base],['trained: target = arm',dt.arm],...Object.keys(dn).sort((a,b)=>parseFloat(b)-parseFloat(a)).map(k=>[`never: target = ${k} reads`,dn[k]])];
+  const yb=218,xb=linS(0,0.7,bx+200,bx+480);
+  s+=T(bx,yb-4,'depth pairs: CRPS by target (learned middle)','axlbl','start','style="font-size:14.5px;font-weight:600"');
+  bars.forEach(([lab,v],i)=>{if(!v)return;const y=yb+10+i*22;s+=T(bx+192,y+13,lab,'cap','end','style="font-size:13px;fill:var(--body)"')+R(bx+200,y,xb(v[1])-xb(0),16,i<2?COL.tr:COL.nv,'none',2)+T(xb(v[1])+6,y+13,f3(v[1]),'cap','start','style="font-size:13px"');});
+  return svg(W,H,s);
+}
+
+/* ---------- metric 3 ---------- */
+function figM3(){
+  const arms=[LRN,FIX,ANC,OLD];
+  const xmax=Math.ceil(Math.max(...DATA.m3.flatMap(r=>[r[3],...r[7]]))*10)/10;
+  return barPanels({panels:GV,lo:0,hi:xmax,step:0.1,rh:42,refs:g=>[{v:(m3r(OLD,g)||[])[3],c:COL.oldd}],
+    rows:g=>arms.map(a=>{const r=m3r(a,g),p=p1r(a,g,'trained');if(!r)return {a,v:null};
+      return {a,v:r[3],os:r[4],se:r[5],seeds:r[7],p1:p?p[3]:null,t1:cs(r[3],r[4],r[5]),t2:a===OLD?'the reference':`D ${r[11]}`};}),
+    axis:'CRPS on counts, trained base ↔ arm pairs',legend:y=>splitLegend(y)+legendP1(380,y)+L(560,y-5,590,y-5,COL.oldd,1.8,'5 4')+T(596,y,'old D','cap','start','style="font-size:14px;fill:var(--body)"')});
+}
+
+/* ---------- metric 4 ---------- */
+function figM4(){
+  const arms=[LRN,FIX,ANC,OLD],dirs=['7.5M->base','base->7.5M'];
+  const xmax=Math.ceil(Math.max(...DATA.m4.flatMap(r=>[r[3],...r[7]]))*10)/10;
+  return barPanels({panels:dirs,lo:0,hi:xmax,step:0.1,rh:42,ptitle:d=>d==='7.5M->base'?'7.5M reads → base':'base → 7.5M reads',
+    refs:d=>[{v:(m4r(OLD,GV[0],d)||[])[3],c:COL.oldd}],
+    rows:d=>arms.map(a=>{const r=m4r(a,GV[0],d),q=m4r(a,GV[1],d);if(!r)return {a,v:null};
+      return {a,v:r[3],os:r[4],se:r[5],seeds:r[7],sq:q?q[3]:null,t1:`${cs(r[3],r[4],r[5])}`,t2:a===OLD?`across ${f3(q&&q[3])}`:`D ${r[11]} · across ${q?q[11]:'—'}`};}),
+    axis:'CRPS on counts, held-out depth pairs (bar: one g per track · square: one g across tracks)',legend:y=>splitLegend(y)});
+}
+
+/* ---------- metric 5 ---------- */
+const DG=[['trained','trained',COL.tr],['heldout','held-out 7.5M',COL.ho],['never','never trained, depth → depth',COL.nv],['never75','never trained, with 7.5M',COL.nv2]];
+function figM5(){
+  const arms=ALL5(),top=50,rh=44,lx=218,pw=420,gap=40,xs0=[lx+4,lx+4+pw+gap];
+  const W=1160,H=top+arms.length*rh+80;let s='';
+  arms.forEach((a,i)=>s+=rowLabel(lx-12,top+i*rh+rh/2,a));
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=logS(0.02,1,x0,x0+pw);
+    s+=T(x0,22,`(${'ab'[pi]}) ${GVc(g)}`,'ptitle','start','style="font-size:18px"');
+    [[0.02,'0.02'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1']].forEach(([v,l])=>s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,l,'tick','middle'));
+    arms.forEach((a,i)=>{const y0=top+i*rh+4;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      DG.forEach(([grp,,c],j)=>{const r=m5r(a,g,grp),yb=y0+j*9.5;if(!r||r[3]==null)return;
+        s+=R(x0,yb,xx(r[3])-x0,7.5,c,'none',1.5);r[5].forEach(v=>s+=L(xx(v),yb-1,xx(v),yb+8.5,COL.ink,1.6));});});
+    if(pi>0)s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'depth-law error, median |log2 predicted scale − log2 true read ratio| (log scale)','axlbl','middle','style="font-size:15px"');
+  let lxx=0;DG.forEach(([,lab,c])=>{s+=sw(lxx,H-6,c,lab);lxx+=lab.length*7.2+40;});
+  return svg(W,H,s);
+}
+
+/* ---------- metric 6 ---------- */
+function figM6(){
+  const rows=[[FIX,'decoder','fixed middle','decoder: arm → base'],[ANC,'decoder','anchored middle','decoder: arm → base'],
+    [ANC,'encoder','anchored middle','encoder: its base prediction'],[OLD,'decoder','old D, retrained','its arm → base map']];
+  const xmax=Math.ceil(Math.max(...DATA.m6.flatMap(r=>[r[4],...r[8]]))*10)/10;
+  return barPanels({panels:GV,lo:0,hi:xmax,step:0.1,rh:42,refs:g=>[{v:(m6r(OLD,g,'decoder','trained')||[])[4],c:COL.oldd}],
+    rows:g=>rows.map(([a,src,lab,sub])=>{const r=m6r(a,g,src,'trained'),h=m6r(a,g,src,'heldout');if(!r)return {a,lab,sub,v:null};
+      return {a,lab,sub,v:r[4],os:r[5],se:r[6],seeds:r[8],t1:cs(r[4],r[5],r[6]),t2:`${a===OLD?'reference':'D '+r[11]} · held out ${f3(h&&h[4])}`};}),
+    axis:'CRPS on counts of the predicted base against the real base (trained arm → base pairs)',legend:y=>splitLegend(y)});
+}
+
+/* ---------- metric 7 ---------- */
+function figM7(){
+  const arms=MID;
+  const xmax=Math.max(2,Math.ceil(Math.max(...DATA.m7.flatMap(r=>[r[6],...r[8]]))*2)/2);
+  return barPanels({panels:GV,lo:0,hi:xmax,step:0.5,rh:46,refs:()=>[{v:1,c:COL.ink}],
+    rows:g=>arms.map(a=>{const r=m7r(a,g,2),o=m7r(a,g,1);if(!r)return {a,v:null};
+      return {a,v:r[6],seeds:r[8],t1:`ratio ${f2(r[6])} (spread ${f2(r[7])})`,t2:`|Z−Z′| ${f2(r[3])} / |x−x′| ${f2(r[5])}`};}),
+    axis:'median |Z − Z′| ÷ |x − x′|, two arms that differ in two knobs (dashed: 1, as far apart as the inputs)'});
+}
+
+/* ---------- metric 8 ---------- */
+function figM8(){
+  const W=1160,H=400;let s='';
+  const pts=DATA.m8_pts,ds=DATA.m8.filter(r=>MID.includes(r[0]));
+  const xmax=Math.ceil(Math.max(...pts.filter(p=>p[2]!=null).map(p=>p[2]),...ds.map(r=>r[4]))*20)/20;
+  const ymax=Math.ceil(Math.max(...pts.map(p=>p[3]),...DATA.m8.map(r=>r[2]))*20)/20;
+  const x0=110,pw=620,top=20,ph=310,xx=linS(0,xmax,x0,x0+pw),yy=linS(0,ymax,top+ph,top);
+  for(let v=0;v<=xmax+1e-9;v+=0.05)s+=L(xx(v),top,xx(v),top+ph,COL.grid,1)+T(xx(v),top+ph+20,f2(v),'tick','middle');
+  for(let v=0;v<=ymax+1e-9;v+=0.05)s+=L(x0,yy(v),x0+pw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,f2(v),'tick','end');
+  const dm=Math.min(xmax,ymax);s+=L(xx(0),yy(0),xx(dm),yy(dm),COL.muted,1.6,'6 4');
+  GV.forEach((g,i)=>{const r=m8r(OLD,g);if(r)s+=L(x0,yy(r[2]),x0+pw,yy(r[2]),COL.oldd,2,i?'2 4':'7 4')+T(x0+pw-4,yy(r[2])-6,`old D, ${g}: ${f3(r[2])}`,'cap','end','style="font-size:13px;fill:var(--oldd);font-weight:600"');});
+  pts.filter(p=>p[2]!=null&&MID.includes(p[0])).forEach(p=>s+=mark(xx(p[2]),yy(p[3]),p[1],ARM(p[0]).c,'none',2.6).replace('stroke-width','fill-opacity:.35;stroke-width'));
+  ds.forEach(r=>s+=mark(xx(r[4]),yy(r[2]),r[1],ARM(r[0]).c,COL.paper,8,2));
+  s+=T(x0+pw/2,top+ph+46,'identity distance on real pairs, median |log(predicted mean ÷ source X)|','axlbl','middle','style="font-size:15px"');
+  s+=rotY(24,top+ph/2,'swap check, c′ = c','15');
+  const lx=x0+pw+36;s+=T(lx,top+14,'● one g per track  ■ one g across tracks','cap','start','style="font-size:13px"')+T(lx,top+32,'large: cell mean · small: one run','cap','start','style="font-size:13px"');
+  ds.forEach((r,i)=>{const y=top+64+i*42,c=ARM(r[0]).c;
+    s+=mark(lx+7,y-5,r[1],c,'none',7)+T(lx+22,y,`${sh(r[0])}, ${r[1].replace('one g ','')}`,'cap','start',`style="font-size:13.5px;fill:${c};font-weight:600"`)+T(lx+22,y+17,`swap ${f3(r[2])}, identity ${f3(r[4])} · vs old D: ${r[8]}`,'cap','start','style="font-size:12.5px"');});
+  return svg(W,H,s);
+}
+
+/* ---------- metric 9 ---------- */
+function figM9(){
+  const cap=DATA.counts.max_steps,rowsK=[];[LRN,FIX,ANC,OLD].forEach(a=>GV.forEach(g=>rowsK.push([a,g])));
+  const top=40,rh=34,lx=260,pw=640,W=1160,H=top+rowsK.length*rh+78;let s='';
+  const xx=linS(0,cap,lx,lx+pw);
+  for(let v=0;v<=cap;v+=2000)s+=L(xx(v),top-4,xx(v),top+rowsK.length*rh,COL.grid,1)+T(xx(v),top+rowsK.length*rh+18,v.toLocaleString('en'),'tick','middle');
+  [[4000,'phase-1 cap',COL.muted,'6 4'],[0.9*cap,'last 10 %',COL.accent,'4 3'],[cap,'cap',COL.ink,'']].forEach(([v,lab,c,d])=>s+=L(xx(v),top-14,xx(v),top+rowsK.length*rh,c,2,d)+T(xx(v),top-18,lab,'cap','middle',`style="font-size:13px;fill:${c};font-weight:600"`));
+  rowsK.forEach(([a,g],i)=>{const y=top+i*rh+rh/2,c=ARM(a).c,m=m9r(a,g);
+    if(i%2===0)s+=R(lx,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+    s+=T(lx-12,y+5,`${sh(a)} · ${g.replace('one g ','')}`,'axlbl','end',`style="font-size:14px;font-weight:600;fill:${c}"`);
+    const rs=DATA.m9_runs.filter(r=>r[0]===a&&r[1]===g);
+    rs.forEach((r,j)=>{const jit=((j*37)%11-5)*1.3;s+=L(xx(r[3]),y-9,xx(r[3]),y+9,COL.faint,1.4)+Ci(xx(r[2]),y+jit,4.5,c,'none',0,';fill-opacity:.75');});
+    if(m)s+=T(lx+pw+12,y+5,`${m[4]} of ${m[2]} in the last 10 % · stop ${Math.round(m[7]).toLocaleString('en')}`,'cap','start','style="font-size:13px;fill:var(--body)"');});
+  s+=T(lx+pw/2,top+rowsK.length*rh+40,'training step (dot: best step of one run · tick: where it stopped)','axlbl','middle','style="font-size:15px"');
+  return svg(W,H,s);
+}
+
+/* ---------- ranking ---------- */
+function figRank(){
+  const W=1160;let s='';const top=56,rh=46,lx=255,pw1=300;
+  const n=Math.max(...GV.map(g=>DATA.rank.filter(r=>r[1]===g).length)),H=top+n*rh+70;
+  const all=DATA.rank,x1max=Math.ceil(Math.max(...all.map(r=>r[3]))*10)/10;
+  const m2v=all.map(r=>r[9]).filter(v=>v!=null),x2lo=Math.floor(Math.min(...m2v)*10)/10;
+  GV.forEach((g,pi)=>{const x0=pi*(W/2),rows=all.filter(r=>r[1]===g).sort((a,b)=>a[2]-b[2]);
+    const xa=linS(0,x1max,x0+lx-60,x0+lx-60+pw1*0.62),xb=linS(x2lo,0,x0+lx-60+pw1*0.62+70,x0+W/2-30);
+    s+=T(x0,22,`(${'ab'[pi]}) ${GVc(g)}`,'ptitle','start','style="font-size:18px"');
+    s+=T(xa(x1max/2),top-10,'metric 1: never-trained CRPS','cap','middle','style="font-size:12.5px;font-weight:600"')+T((xb(x2lo)+xb(0))/2,top-10,'metric 2: gap','cap','middle','style="font-size:12.5px;font-weight:600"');
+    s+=L(xb(0),top-4,xb(0),top+rows.length*rh,COL.ink,1.2);
+    rows.forEach((r,i)=>{const a=r[0],c=ARM(a).c,y=top+i*rh+8,bh=rh-26;
+      s+=T(x0+lx-70,y+bh/2+5,`${r[2]}. ${sh(a)}`,'axlbl','end',`style="font-size:14.5px;font-weight:600;fill:${c}"`);
+      s+=R(xa(0),y,xa(r[4])-xa(0),bh,c,'none',2)+R(xa(r[4]),y,xa(r[4]+r[5])-xa(r[4]),bh,c,'none',2,0,';fill-opacity:.35');
+      s+=T(xa(0)+2,y+bh+14,cs(r[3],r[4],r[5]),'cap','start','style="font-size:12px;fill:var(--body)"');
+      if(r[9]!=null){s+=R(xb(r[9]),y,xb(0)-xb(r[9]),bh,c,'none',2,0,';fill-opacity:.7')+T(xb(r[9])-4,y+bh-2,sg(r[9]),'cap','end','style="font-size:12.5px"');}
+      else s+=T(xb(0)-6,y+bh-2,'no trained pairs','cap','end','style="font-size:12px"');
+      if(i<rows.length-1)s+=T(x0+lx-70,y+rh-4,`↕ ${r[7]}`,'cap','end',`style="font-size:12px;fill:${r[7]==='counts'?'var(--accent)':'var(--faint)'};font-weight:${r[7]==='counts'?700:400}"`);});
+    if(pi>0)s+=divider(x0-10,10,top+rows.length*rh);});
+  s+=splitLegend(H-6)+T(W,H-6,'↕ the gap to the next row: its noise label','cap','end','style="font-size:13px"');
+  return svg(W,H,s);
+}
+
+/* ---------- conclusion: the routes ordered by how much of the base the middle holds ---------- */
+function figConc(){
+  const W=1160,H=210;let s='';const g=GV[0],arms=[LRN,FIX,ANC,VIA];
+  const xs=arms.map((a,i)=>90+i*290),vals=arms.map(a=>(m1r(a,g)||[])[4]);
+  const yy=linS(Math.floor(Math.min(...vals)*20)/20-0.02,Math.ceil(Math.max(...vals)*20)/20+0.02,170,40);
+  s+=T(0,18,`(a) Never-trained CRPS, ${g}, against how much of the base the middle holds`,'ptitle','start','style="font-size:16px"');
+  arms.forEach((a,i)=>{const r=m1r(a,g),c=ARM(a).c;if(!r)return;
+    if(i>0){const p=m1r(arms[i-1],g),lab=noise(r[4]-p[4],r[7],p[7]);s+=L(xs[i-1]+14,yy(p[4]),xs[i]-14,yy(r[4]),lab==='counts'?COL.accent:COL.faint,2.2,lab==='counts'?'':'5 4')+T((xs[i-1]+xs[i])/2,(yy(p[4])+yy(r[4]))/2-8,lab,'cap','middle',`style="font-size:13px;fill:${lab==='counts'?'var(--accent)':'var(--muted)'};font-weight:600"`);}
+    r[8].forEach(v=>s+=L(xs[i]-12,yy(v),xs[i]+12,yy(v),COL.ink,1.4));
+    s+=Ci(xs[i],yy(r[4]),9,c)+T(xs[i],yy(r[4])+30,f3(r[4]),'val','middle',`style="fill:${c};font-size:14px"`)+T(xs[i],H-4,sh(a),'cap','middle',`style="font-size:13.5px;fill:${c};font-weight:600"`);});
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figP1,figPaths,figPairs,figRules,figM1,figM1s,figM2,figMix,figM3,figM4,figM5,figM6,figM7,figM8,figM9,figRank,figConc};
+Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
+
+/* ---------- the grid of arms ---------- */
+try{
+  const G=[[LRN,'learned freely, starts at 0','Z, the encoder\'s Gaussian mean','L1 + L2','its L1 + L2 likelihood'],
+    [FIX,'frozen at the base\'s setting','Z, the encoder\'s Gaussian mean','L1 + L2','its L1 + L2 likelihood'],
+    [ANC,'frozen at the base\'s setting','log(1 + predicted base mean)','L1 + L2 + anchor, weights 1','its L1 + L2 + anchor likelihood'],
+    [OLD,'none: one map, c → c′','—','likelihood of the target','its own likelihood'],
+    [VIA,'the predicted base track','old D\'s predicted base mean','none (reuses old D)','—']];
+  const tb=document.getElementById('tblArms');
+  G.forEach(([a,...cells])=>{const A=ARM(a),n=DATA.n[a];const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="arm" style="--c:${A.c}">${a}</td>`+cells.map(v=>`<td class="${v==='—'?'no':''}">${v}</td>`).join('')+`<td>${n?`${n.done} of ${n.assigned}`:'—'}</td>`;tb.appendChild(tr);});
+  const C=DATA.counts;
+  putH('chips',[`<b>${C.g_per_track} g's, one per track, + 1 g across tracks</b>`,`<b>${C.seeds} seeds</b>`,`<b>cap ${C.max_steps.toLocaleString('en')} steps</b> (phase 1: 4000)`,
+    '<b>eval every 250 steps, patience 4</b>','<b>held out:</b> the 7.5M depth arm','<b>counts only</b>, no twins'].map(t=>`<span class="chip">${t}</span>`).join(''));
+  put('tRuns',`${C.arms} arms × ${C.g_per_track + 1} g's × ${C.seeds} seeds = ${C.runs} runs, all scored (${C.done} of ${C.runs}), with a ${C.max_steps.toLocaleString('en')}-step cap`);
+}catch(e){console.error('grid',e);}
+
+/* ---------- prose and headlines: every number from DATA ---------- */
+try{
+  const [PT,AC]=GV;
+  // motivation (a): phase 1
+  const pl=g=>p1r(LRN,g,'never'),po=g=>p1r(OLD,g,'never'),pv=g=>p1r(VIA,g,'never');
+  const lab1=(a,b)=>a&&b?noise(a[3]-b[3],a[6],b[6]):'—';
+  putH('hP1',`In phase 1, the learned middle was ${lab1(pl(PT),po(PT))==='within noise'?'within noise of':'apart from'} old D on never-trained pairs, and old D through the base was lower still`);
+  putH('tP1a',`<b>${GVc(PT)}:</b> learned middle ${cs(pl(PT)[3],pl(PT)[4],pl(PT)[5])}, old D ${cs(po(PT)[3],po(PT)[4],po(PT)[5])} (${nl(lab1(pl(PT),po(PT)))}); through the base ${cs(pv(PT)[3],pv(PT)[4],pv(PT)[5])} (vs the learned middle: ${nl(lab1(pl(PT),pv(PT)))}).`);
+  putH('tP1b',`<b>${GVc(AC)}:</b> learned middle ${f3(pl(AC)[3])}, old D ${f3(po(AC)[3])} (${nl(lab1(pl(AC),po(AC)))}), through the base ${f3(pv(AC)[3])} (${nl(lab1(pl(AC),pv(AC)))}). Phase 1 asked: can a better middle, or more steps, close that gap?`);
+
+  // metric 1
+  const r1=(a,g)=>m1r(a,g);
+  const midsVsD=g=>MID.map(a=>r1(a,g)[12]),midsVsV=g=>MID.map(a=>r1(a,g)[14]);
+  const allIn=a=>a.every(l=>l==='within noise');
+  putH('hM1',`${GVc(PT)}, old D through the base is lowest${allIn(midsVsV(PT))?'':', outside noise of every middle'}; the three middles are ${allIn(midsVsD(PT))?'within noise of':'apart from'} old D, and ${allIn([...midsVsD(AC),...midsVsV(AC)])?'across tracks every gap is within noise':'across tracks some gaps count'}`);
+  putH('tM1a',`<b>${GVc(PT)}:</b> ${MID.map(a=>`${sh(a)} ${cs(r1(a,PT)[4],r1(a,PT)[5],r1(a,PT)[6])}`).join(', ')}; old D ${cs(r1(OLD,PT)[4],r1(OLD,PT)[5],r1(OLD,PT)[6])}; through the base ${cs(r1(VIA,PT)[4],r1(VIA,PT)[5],r1(VIA,PT)[6])}. Old D's scale error is ${f3(r1(OLD,PT)[6])}; the middles' is ${rng(MID.map(a=>r1(a,PT)[6]))}.`);
+  const p1g=g=>{const a=r1(LRN,g),p=p1r(LRN,g,'never');return `${f3(p[3])} → ${f3(a[4])} (${nl(noise(a[4]-p[3],a[7],p[6]))})`;};
+  putH('tM1b',`<b>Phase 1 → phase 2, learned middle:</b> ${PT} ${p1g(PT)}; ${AC} ${p1g(AC)}. <b>${GVc(AC)}:</b> the seed spread of old D through the base is ${f3(r1(VIA,AC)[7])}, so a gap to it must exceed ${f3(2*r1(VIA,AC)[7])} to count.`);
+  put('nM1',`Seed spreads, one g per track: ${ALL5().map(a=>`${sh(a)} ${f3(r1(a,PT)[7])}`).join(', ')}. Pairs per run: ${r1(LRN,PT)[10]}.`);
+  // metric 1 split
+  const s1=(a,sub,g=PT)=>m1r(a,g,sub);
+  const sameVs=MID.map(a=>s1(a,'same')[12]),crossVs=MID.map(a=>s1(a,'cross')[12]);
+  putH('hM1s',`On same-knob pairs old D beats every middle${sameVs.every(l=>l==='counts')?' outside noise':''}; on two-knob pairs, most of the never-trained set, the middles are lower but within noise`);
+  putH('tM1sa',`<b>Same knob, ${PT}:</b> old D ${cs(s1(OLD,'same')[4],s1(OLD,'same')[5],s1(OLD,'same')[6])}; the middles ${rng(MID.map(a=>s1(a,'same')[4]))} (${andJ([...new Set(sameVs)].map(nl))}). Through the base ${f3(s1(VIA,'same')[4])}.`);
+  putH('tM1sb',`<b>Two knobs, ${PT}:</b> old D ${cs(s1(OLD,'cross')[4],s1(OLD,'cross')[5],s1(OLD,'cross')[6])}; the middles ${rng(MID.map(a=>s1(a,'cross')[4]))} (${andJ([...new Set(crossVs)].map(nl))}); through the base ${f3(s1(VIA,'cross')[4])} (vs old D: ${nl(s1(VIA,'cross')[12])}). ${s1(LRN,'cross')[10]} of ${r1(LRN,PT)[10]} never-trained pairs change two knobs.`);
+  put('nM1s',`Same-knob pairs per run: ${s1(LRN,'same')[10]}. Across tracks, same knob: old D ${f3(s1(OLD,'same',AC)[4])}, middles ${rng(MID.map(a=>s1(a,'same',AC)[4]))}; two knobs: old D ${f3(s1(OLD,'cross',AC)[4])}, middles ${rng(MID.map(a=>s1(a,'cross',AC)[4]))}.`);
+
+  // metric 2
+  const g2=(a,g)=>m2r(a,g);
+  const neg=[LRN,FIX,ANC,OLD].every(a=>GV.every(g=>g2(a,g)[5]<0));
+  putH('hM2',`The pooled gap is ${neg?'negative for every arm':'mixed in sign'}, and old D's is the most negative; the next slide shows the cause`);
+  const mx=g=>[LRN,FIX,ANC,OLD].map(a=>mixr(a,g)).filter(Boolean);
+  putH('tM2why',`<b>Why below zero:</b> the two sides hold different pairs. Matching the trained side to the never-trained side's mix of knobs moves the gap to ${rng(mx(PT).filter(m=>m.arm!==OLD).map(m=>m.gap_reweighted).map(v=>v),v=>sg(v))} for the middles and ${sg(mixr(OLD,PT).gap_reweighted)} for old D (${PT}; a deck-side check on simple means over pairs, no seed spread).`);
+  put('nM2',`Pooled gaps, one g per track: ${[LRN,FIX,ANC,OLD].map(a=>`${sh(a)} ${sg(g2(a,PT)[5])}, seed spread ${f3(g2(a,PT)[8])}`).join('; ')}.`);
+  // metric 2, mix
+  const mL=mixr(LRN,PT),ko=Object.keys(mL.knobs_trained_only);
+  const pos=k=>[LRN,FIX,ANC].map(a=>m2r(a,PT,k)).filter(Boolean);
+  putH('tMixa',`<b>Per knob</b>, the middles' real gap sits on control mixed in (${rng(pos('abproxy').map(r=>r[5]),v=>sg(v))}) and the MAPQ cut (${rng(pos('mapq').map(r=>r[5]),v=>sg(v))}), ${andJ([...new Set([...pos('abproxy'),...pos('mapq')].map(r=>r[13]))].map(nl))} against old D (${sg(m2r(OLD,PT,'abproxy')[5])}, ${sg(m2r(OLD,PT,'mapq')[5])}). The control knobs are near 0.`);
+  putH('tMixb',`<b>The pools:</b> ${andJ(ko.map(k=>`${KNAME[k]} (trained CRPS ${f3(mL.knobs_trained_only[k][1])})`))} have one arm, so no same-knob pair, and are among the hardest knobs; depth is ${mL.n_never.depth} of ${Object.values(mL.n_never).reduce((p,c)=>p+c,0)} never-trained pairs but ${mL.n_trained.depth} of ${Object.values(mL.n_trained).reduce((p,c)=>p+c,0)} trained ones, and half of those trained depth pairs target the deep base (${f3(mL.depth_trained_by_target.base[1])} against ${f3(mL.depth_trained_by_target.arm[1])}).`);
+  put('nMix',`Reweighted trained CRPS, one g per track: ${mx(PT).map(m=>`${sh(m.arm)} ${f3(m.trained_reweighted)} against never-trained ${f3(m.never_mean)}`).join('; ')}.`);
+
+  // metric 3
+  const r3=(a,g)=>m3r(a,g);
+  const v3=GV.flatMap(g=>MID.map(a=>r3(a,g)[11]));
+  putH('hM3',`On trained pairs every middle is ${allIn(v3)?'within noise of':'apart from'} old D: the middle costs nothing where the model trained`);
+  putH('tM3a',`<b>${GVc(PT)}:</b> middles ${rng(MID.map(a=>r3(a,PT)[3]))}, old D ${cs(r3(OLD,PT)[3],r3(OLD,PT)[4],r3(OLD,PT)[5])}. <b>${GVc(AC)}:</b> middles ${rng(MID.map(a=>r3(a,AC)[3]))}, old D ${cs(r3(OLD,AC)[3],r3(OLD,AC)[4],r3(OLD,AC)[5])}; old D's scale error across tracks is ${f3(r3(OLD,AC)[5])}, the middles' ${rng(MID.map(a=>r3(a,AC)[5]))}.`);
+  put('nM3',`Seed spreads: ${GV.map(g=>`${g} ${rng([LRN,FIX,ANC,OLD].map(a=>r3(a,g)[6]))}`).join('; ')}.`);
+
+  // metric 4
+  const l4=GV.flatMap(g=>['7.5M->base','base->7.5M'].flatMap(d=>MID.map(a=>[a,g,d,m4r(a,g,d)])));
+  const c4=l4.filter(x=>x[3][11]==='counts');
+  putH('hM4',`On the held-out depth every middle is within noise of old D${c4.length?`, except ${c4.length} tiny gaps`:''}: the interpolation is kept`);
+  putH('tM4a',`<b>7.5M → base:</b> ${rng(l4.filter(x=>x[2]==='7.5M->base').map(x=>x[3][3]))} for the middles, old D ${rng(GV.map(g=>m4r(OLD,g,'7.5M->base')[3]))}. <b>Base → 7.5M:</b> ${rng(l4.filter(x=>x[2]==='base->7.5M').map(x=>x[3][3]))}, old D ${rng(GV.map(g=>m4r(OLD,g,'base->7.5M')[3]))}.${c4.length?` The gaps that count: ${andJ(c4.map(x=>`${sh(x[0])}, ${x[1].replace('one g ','')}, ${x[2].replace('->',' → ')}, ${sg(x[3][10],f4)}`))}.`:''}`);
+  put('nM4',`Both directions together, one g per track: ${[LRN,FIX,ANC,OLD].map(a=>`${sh(a)} ${f3(m4r(a,PT,'both')[3])}`).join(', ')}.`);
+
+  // metric 5
+  const r5=(a,g,grp)=>m5r(a,g,grp);
+  putH('hM5',`The depth law holds on trained pairs for every arm; on never-trained depth pairs only old D through the base stays close`);
+  putH('tM5a',`<b>Trained:</b> ${rng(GV.flatMap(g=>[LRN,FIX,ANC,OLD].map(a=>r5(a,g,'trained')[3])))} for every arm. <b>Never trained, depth → depth:</b> middles ${rng(GV.flatMap(g=>MID.map(a=>r5(a,g,'never')[3])))}, old D ${rng(GV.map(g=>r5(OLD,g,'never')[3]))}, through the base ${rng(GV.map(g=>r5(VIA,g,'never')[3]))}; seed spreads up to ${f3(Math.max(...GV.flatMap(g=>MID.map(a=>r5(a,g,'never')[4]))))}, so ${(n=>n?`only ${n} of the`:'none of the')(GV.flatMap(g=>MID.map(a=>r5(a,g,'never')[8])).filter(l=>l==='counts').length)} middle-vs-old-D gaps there count.`);
+  put('nM5',`Through the base vs old D, never-trained depth pairs: ${GV.map(g=>`${g} ${r5(VIA,g,'never')[8]}`).join(', ')}. Phase 1, learned middle, never-trained depth: ${GV.map(g=>`${g} ${f3(r5(LRN,g,'never')[11])}`).join(', ')}.`);
+
+  // metric 6
+  const r6=(a,g,src,grp='trained')=>m6r(a,g,src,grp);
+  const l6=GV.flatMap(g=>[[FIX,'decoder'],[ANC,'decoder'],[ANC,'encoder']].map(([a,s])=>r6(a,g,s)[11]));
+  putH('hM6',`The fixed and anchored middles predict the base ${allIn(l6)?'within noise of':'apart from'} old D's own arm → base map; the anchored encoder's base prediction is as good`);
+  putH('tM6a',`<b>${GVc(PT)}:</b> fixed ${f3(r6(FIX,PT,'decoder')[4])}, anchored decoder ${f3(r6(ANC,PT,'decoder')[4])}, anchored encoder ${cs(r6(ANC,PT,'encoder')[4],r6(ANC,PT,'encoder')[5],r6(ANC,PT,'encoder')[6])}, old D ${cs(r6(OLD,PT,'decoder')[4],r6(OLD,PT,'decoder')[5],r6(OLD,PT,'decoder')[6])}. <b>${GVc(AC)}:</b> ${rng([[FIX,'decoder'],[ANC,'decoder'],[ANC,'encoder']].map(([a,s])=>r6(a,AC,s)[4]))} against old D ${f3(r6(OLD,AC,'decoder')[4])}, whose scale error is ${f3(r6(OLD,AC,'decoder')[6])}.`);
+  put('nM6',`Seed spreads, trained pairs: ${GV.map(g=>`${g} ${rng([[FIX,'decoder'],[ANC,'decoder'],[ANC,'encoder'],[OLD,'decoder']].map(([a,s])=>r6(a,g,s)[7]))}`).join('; ')}.`);
+
+  // metric 7
+  const r7=(a,g)=>m7r(a,g,2);
+  const below=MID.filter(a=>GV.every(g=>r7(a,g)[6]<1));
+  putH('hM7',`Only the anchored middle brings two arms' middles closer than their inputs; the fixed and learned middles keep them as far apart, or further`);
+  putH('tM7a',`<b>Ratio, two knobs differ:</b> ${MID.map(a=>`${sh(a)} ${rng(GV.map(g=>r7(a,g)[6]),f2)}`).join(', ')} (below 1: ${andJ(below.map(sh))||'none'}). Gaps between the middles: anchored vs fixed ${GV.map(g=>`${g.replace('one g ','')} ${nl(noise(r7(ANC,g)[6]-r7(FIX,g)[6],r7(ANC,g)[7],r7(FIX,g)[7]))}`).join(', ')}; fixed vs learned ${GV.map(g=>`${g.replace('one g ','')} ${nl(noise(r7(FIX,g)[6]-r7(LRN,g)[6],r7(FIX,g)[7],r7(LRN,g)[7]))}`).join(', ')}.`);
+  put('nM7',`The learned middle's setting moved a median of ${rng(DATA.cdrift.filter(r=>r[0]===LRN).map(r=>r[2]))} from its start (z units); the fixed and anchored settings do not move (${rng(DATA.cdrift.filter(r=>r[0]!==LRN).map(r=>r[3]))}). Pairs per cell: ${r7(LRN,PT)[9]}. Ratio for one-knob pairs (with the base, or two arms of one knob): ${MID.map(a=>`${sh(a)} ${rng(GV.map(g=>m7r(a,g,1)[6]),f2)}`).join(', ')}.`);
+
+  // metric 8
+  const r8=(a,g)=>m8r(a,g);
+  putH('hM8',`Every middle passes the swap check far from the identity; old D's swap value is ${rng(GV.map(g=>r8(OLD,g)[2]))}, several times larger`);
+  putH('tM8a',`<b>Swap:</b> middles ${rng(GV.flatMap(g=>MID.map(a=>r8(a,g)[2])))} at identity distance ${rng(GV.flatMap(g=>MID.map(a=>r8(a,g)[4])))}. Against old D: ${GV.map(g=>`${g} ${andJ([...new Set(MID.map(a=>r8(a,g)[8]))].map(nl))}`).join('; ')} (old D's seed spread across tracks is ${f3(r8(OLD,AC)[3])}). The anchored middle's swap is the largest of the three (${rng(GV.map(g=>r8(ANC,g)[2]))}).`);
+  put('nM8',`Runs per cell: ${r8(LRN,PT)[6]} one g per track, ${r8(LRN,AC)[6]} across tracks.`);
+
+  // metric 9
+  const m9=DATA.m9,nl10=m9.reduce((p,r)=>p+r[4],0),nAll=m9.reduce((p,r)=>p+r[2],0),ncap=m9.reduce((p,r)=>p+r[5],0);
+  const med=(a,i)=>rng(GV.map(g=>m9r(a,g)[i]),v=>Math.round(v).toLocaleString('en'));
+  putH('hM9',`${nl10} of ${nAll} runs had their best step in the last 10 %: early stopping ended the middles near ${med(LRN,7)} steps and old D near ${med(OLD,7)}`);
+  putH('tM9a',`<b>Median best step:</b> middles ${rng(GV.flatMap(g=>MID.map(a=>m9r(a,g)[6])),v=>Math.round(v).toLocaleString('en'))}, old D ${med(OLD,6)}. ${ncap} of ${nAll} runs reached the ${DATA.counts.max_steps.toLocaleString('en')}-step cap.`);
+  const dP1=g=>{const a=m1r(LRN,g),p=p1r(LRN,g,'never');return nl(noise(a[4]-p[3],a[7],p[6]));};
+  putH('tM9b',`<b>For the "more steps" path:</b> the middles' best step moved past the old 4000 cap, but their never-trained CRPS moved ${GV.map(g=>`${sg(m1r(LRN,g)[4]-p1r(LRN,g,'never')[3])} (${dP1(g)})`).join(' and ')}; old D's median run stops before step 4000 either way (${f3(m1r(OLD,PT)[4])} now, ${f3(p1r(OLD,PT,'never')[3])} in phase 1). More steps alone did not move metric 1.`);
+  put('nM9',`Median training time per run: ${m9.map(r=>`${sh(r[0])}, ${r[1].replace('one g ','')} ${f2(r[8])} h`).join('; ')}.`);
+
+  // ranking
+  const rk=g=>DATA.rank.filter(r=>r[1]===g).sort((a,b)=>a[2]-b[2]);
+  const top1=g=>rk(g)[0];
+  const otherCounts=GV.flatMap(g=>rk(g).slice(0,-1).filter((r,i)=>!(g===PT&&i===0)).map(r=>r[7])).filter(l=>l==='counts').length;
+  putH('hRk',`${GVc(PT)}, ${sh(top1(PT)[0])} ranks first ${top1(PT)[7]==='counts'?'outside noise':'within noise'}; ${otherCounts?`${otherCounts} other neighbour gaps count`:'every other neighbour in either ranking is within noise'}`);
+  putH('tRka',`<b>Order, ${PT}:</b> ${rk(PT).map(r=>sh(r[0])).join(' → ')}. <b>${GVc(AC)}:</b> ${rk(AC).map(r=>sh(r[0])).join(' → ')}. Metric 2 is negative for every arm for the pool reason above, so its order is not a generalisation order.`);
+  put('nRk',`Gaps to the next row, one g per track: ${rk(PT).slice(0,-1).map(r=>`${sh(r[0])} ${sg(r[8])}`).join(', ')}.`);
+
+  // discussion: nine readings
+  const cards=[
+    ['1 · never-trained CRPS','var(--s6)',`Through the base is lowest per track (${f3(r1(VIA,PT)[4])} against ${rng(MID.map(a=>r1(a,PT)[4]))}, ${nl(andJ([...new Set(midsVsV(PT))]))}). The middles sit ${andJ([...new Set(midsVsD(PT))])} of old D: lower on two-knob pairs (${andJ([...new Set(MID.map(a=>s1(a,'cross')[12]))])}), higher on same-knob pairs (${andJ([...new Set(MID.map(a=>s1(a,'same')[12]))].map(nl))}).`],
+    ['2 · generalisation gap','var(--s1)',`Negative for all, ${rng(GV.flatMap(g=>[LRN,FIX,ANC,OLD].map(a=>g2(a,g)[5])),v=>sg(v))}, because the pools differ. Matched by knob it is ${rng(mx(PT).filter(m=>m.arm!==OLD).map(m=>m.gap_reweighted),v=>sg(v))} for the middles: they hold their trained fit on unseen pairs, except on control mixed in and the MAPQ cut.`],
+    ['3 · trained pairs','var(--tr)',`The middles cost nothing: ${allIn(v3)?'within noise of':'apart from'} old D in both versions of g.`],
+    ['4 · held-out depth','var(--ho)',`The interpolation to 7.5M is kept: ${c4.length?`${l4.length-c4.length} of ${l4.length} gaps`:'every gap'} within noise of old D.`],
+    ['5 · depth law','var(--nv)',`Sane on trained pairs (${rng(GV.flatMap(g=>[LRN,FIX,ANC,OLD].map(a=>r5(a,g,'trained')[3])))}); on never-trained depth pairs the middles miss like old D, and only the chain through the base stays close.`],
+    ['6 · hop 1','var(--s3)',`The base-tied middles hold a real base track: ${allIn(l6)?'within noise of':'apart from'} old D's arm → base map. So hop 1 is not where the gap to the chain is.`],
+    ['7 · middle consistency','var(--s6)',`Anchoring makes one sample's middles agree (ratio ${rng(GV.map(g=>r7(ANC,g)[6]),f2)}); fixing the setting gives ${rng(GV.map(g=>r7(FIX,g)[6]),f2)}; the learned middle ${rng(GV.map(g=>r7(LRN,g)[6]),f2)}.`],
+    ['8 · swap vs identity','var(--s1)',`All three middles return X when nothing changes (${rng(GV.flatMap(g=>MID.map(a=>r8(a,g)[2])))}) while moving X on real pairs (${rng(GV.flatMap(g=>MID.map(a=>r8(a,g)[4])))}); old D does not (${rng(GV.map(g=>r8(OLD,g)[2]))}).`],
+    ['9 · steps','var(--muted)',`${nl10} of ${nAll} best steps in the last 10 %: the 12,000 cap never bound, and phase 1's 4000 cap was not what held metric 1 back.`]];
+  putH('cardsD',cards.map(([t,c,b])=>`<div class="card" style="--c:${c}"><div class="ct">${t}</div><div class="cb">${b}</div></div>`).join(''));
+
+  // conclusion
+  putH('tC1',`A middle at the base's setting does as well as a learned one (the learned setting moves only ${rng(DATA.cdrift.filter(r=>r[0]===LRN).map(r=>r[2]))}). Anchoring adds a middle that agrees across arms and a real base prediction, at no cost on trained or held-out pairs.`);
+  putH('tC2',`The anchored encoder already predicts the base like old D (hop 1), yet the anchored route stays ${sg(r1(ANC,PT)[4]-r1(VIA,PT)[4])} above the chain through the base (${nl(r1(ANC,PT)[14])}). The difference left is the second hop: one shared network decoding the middle, against old D's own base → arm map.`);
+  putH('tC3',`The middles' best steps came near ${med(LRN,6)}; tripling the cap moved the learned middle within noise. ${GVc(AC)}: every gap within noise, with seed spreads up to ${f3(Math.max(...ALL5().map(a=>r1(a,AC)[7])))}.`);
+
+  // open points
+  putH('tO1',`<b>Metric 2's definition.</b> The pooled gap compares pools with different knobs and target depths, so it is negative for every arm. Should the next phase report it matched by knob (the check on the metric-2 slide), or per knob only?`);
+  putH('tO2',`<b>"More steps" and patience.</b> With patience 4, runs stop at a median of ${med(LRN,7)} steps (middles) and ${med(OLD,7)} (old D), and ${nl10} of ${nAll} best steps came near the cap. Is the "more steps" path closed, or should a longer patience be tried?`);
+  putH('tO3',`<b>The second hop.</b> Hop 1 matches old D, but the anchored route stays above the chain through the base. Should the next arm decode the anchored middle with old D's base → arm map, to test whether the shared decoder is what costs the ${sg(r1(ANC,PT)[4]-r1(VIA,PT)[4])}?`);
+  putH('tO4',`<b>Across-track g.</b> Every across-track gap is within noise (old D through the base has a seed spread of ${f3(r1(VIA,AC)[7])}). More seeds, or leave the across-track g out of the next phase?`);
+  putH('tO5',`<b>Same-knob pairs.</b> Old D beats every middle on two arms of one knob (${f3(s1(OLD,'same')[4])} against ${rng(MID.map(a=>s1(a,'same')[4]))}), by most on control mixed in and the MAPQ cut. Is that a target for the next phase, or expected for a middle at the base?`);
+}catch(e){console.error('prose',e);}
+
+/* ---------- navigation and speaker notes ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>

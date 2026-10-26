@@ -754,3 +754,16 @@ Fir root `/project/def-maxwl/mforooz/t128p2` (code, runs, logs, verify, viabase,
 - Metric 9: no run reached the 12k cap except one (DSfree per_track); best step in the last 10 % is
   0/24 for every arm except DSfree (1/21 per_track). Early stopping ends DS runs near 6000 steps and
   D near 3500.
+
+### Lab deck and vault record (C7, 2026-10-26)
+
+- Deck (22 slides, paper arc; one slide per metric 1–9 with its definition, best and worst case):
+  ARTIFACT_URL_PENDING . Source `cruxvault/presentations/t128p2-encdec/` (`deck_src.html`,
+  `build_deck.py` reads `T128P2_RESULTS`, default the main checkout's `cruxvault/results/t128p2/`;
+  vault copy `DECK.md`). To edit: change `deck_src.html`, run `python
+  cruxvault/presentations/t128p2-encdec/build_deck.py`, republish `index.html` to the same URL.
+- Metric 2 is negative for every arm because the two pools hold different pairs (dedup and pe only
+  in the trained pool; half the trained depth pairs target the deep base). Matched to the
+  never-trained knob mix, the gap is +0.005 to +0.014 for the three middles and −0.044 for D (per
+  track; simple means over pairs from `pair_table.tsv.gz`, computed in `build_deck.py`).
+- Vault: task t132 (parent t118; refs q7, h22, h19) done with the DECK.md output; not accepted.
