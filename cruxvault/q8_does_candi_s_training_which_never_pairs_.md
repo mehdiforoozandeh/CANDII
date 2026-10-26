@@ -46,6 +46,8 @@ Covariate-swap probe on the t81 checkpoints, chr21 (2026-10-25; null not yet app
 
 Rerun with the PI's repairs, chr21 (2026-10-26; prompts from non-blind arrays only, all 7 tracks kept). It is still not readable. Without deciles, the split-half floor calls 15 of 21 pure-thinning depth pairs reproducible, so it cannot tell a real read-length effect (36 bp r_split 0.28-0.36) from the pseudocount artefact. No run-type pair clears it. The depth control fails again on NLL direction (32 of 42 rows). The per-region question needs a floor statistic that thinning does not pass.
 
+Second rerun with a curve-corrected floor, chr21 (2026-10-26). The pseudocount signal-level curve explains why thinning looked reproducible, but subtracting it pushes the thinning pairs below zero (-0.11 to -0.37), so the corrected floor is biased against any effect. No knob pair clears it; 36 bp read length shows a small residual signal (0.015-0.086). The per-region question is still not readable.
+
 Reading: CANDI is in the 'ignores' state for read length and run type, and the missing counterfactual pairs fit that, but low conditional information and collinearity are joint causes. Dedup, MAPQ, fragment and control knobs are not CANDI inputs at all.
 
 <!-- crux:ledger:start -->

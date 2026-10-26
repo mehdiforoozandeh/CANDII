@@ -8,20 +8,29 @@ Two stages, run in this order, so eligibility is frozen before any model output 
   score         reads eligibility.json and the infer.py outputs. `swapwired`, `depthcontrol`
                 parts (1)-(2), `gapleft`, `swapcorr`, and the reported-only statistics.
 
-RERUN 1 applies the PI's post-hoc amendments of 2026-10-26 (h26 node, "Amendments after seeing
-data"): (ii)(a) `effectfloor` and `thinningblank` drop the decile stratification; (ii)(b)
+RERUN 2 applies the PI's second post-hoc amendment of 2026-10-26 (h26 node, "Second post-hoc
+amendment"): `effectfloor` and `thinningblank` gate on a RESIDUAL split-half statistic. Per pair, at
+each resolution, the expected signal-level curve E[R | level] is fitted and subtracted: the curve of
+the pr1 ratio is fitted against the pr2 base level log2(B2+1), and vice versa (cross-half, so the
+curve shares no per-bin noise with the ratio it explains). Primary curve = binned median over 50
+equal-count bins of the level (ties share a bin), linearly interpolated; the analytic curve
+log2((f mu + 1)/(mu + 1)), f = arm total / base total of that half, is reported as a sanity check,
+as is the raw (rerun 1) r_split. The `gapleft` oracle is R_hat = curve1(L2) + e1 (cross-fitted from
+the pr1 halves), which equals the uncentred pr1 ratio; it replaces the decile-centred R_hat.
+
+RERUN 1 applied the PI's post-hoc amendments of 2026-10-26 (h26 node, "Amendments after seeing
+data"), all still in force: (ii)(a) `effectfloor` and `thinningblank` drop the decile stratification; (ii)(b)
 `depthcontrol` is part (2) AND part (3), part (1) reported only; 99 block shifts everywhere,
 including the 25 bp reported-only `swapcorr` null. Everything else is as first pre-registered.
 
 Every definition is the h26 node's `## Verifiables`, verbatim where it is a number:
   ratios        log2((arm + 1) / (base + 1)), median-centred per pair
   gate res.     1 kb = 40 bins of 25 bp; 25 bp, 200 bp and 5 kb reported, never gating
-  effectfloor   r_split = Spearman(pr1 ratio, pr2 ratio) across 1 kb bins, each median-centred, NO
-                deciles (amendment ii-a; the decile-averaged first-run statistic is reported only);
-                eligible when r_split > 99th pct of 99 circular >= 1 Mb shifts of the pr2 ratio
-                AND r_split >= 0.2
-  gapleft       arm pr2 scored at 25 bp under P_base, P_arm, P_oracle = P_base x 2^R_hat (R_hat from
-                pr1 only, 1 kb, median-centred within base-count deciles); 100 kb block bootstrap;
+  effectfloor   r_split = Spearman(e1, e2) across 1 kb bins, e = half ratio minus its cross-half
+                signal-level curve (rerun 2); eligible when r_split > 99th pct of 99 circular
+                >= 1 Mb shifts of e2 AND r_split >= 0.2; raw and analytic-curve versions reported
+  gapleft       arm pr2 scored at 25 bp under P_base, P_arm, P_oracle = P_base x 2^R_hat (R_hat =
+                curve1(L2) + e1 from the pr1 halves, 1 kb; rerun 2); 100 kb block bootstrap;
                 met when CI_lo(G_oracle) > 0 and CI_hi(G_model / G_oracle) <= 0.25
   swapcorr      Spearman(model delta, real R) at 1 kb, both median-centred; met when rho <= 95th pct
                 of 99 circular >= 1 Mb shifts of delta; max|delta| < 1e-4 -> rho = 0, "covariate unused"
@@ -57,6 +66,7 @@ N_BOOT = 1000
 BOOT_BLOCK_BINS = 100_000 // BIN_BP
 R_FLOOR = 0.2
 GAP_RATIO_MAX = 0.25
+N_CURVE_BINS = 50
 PRODUCTS = Path("/project/def-maxwl/mforooz/t112_cf/products")
 
 
@@ -98,21 +108,8 @@ def spearman_shift_null(a: np.ndarray, b: np.ndarray, sh: np.ndarray) -> list:
     return [float((np.roll(ra, int(s)) * rb).sum() / den) for s in sh]
 
 
-def deciles(x: np.ndarray) -> np.ndarray:
-    r = np.argsort(np.argsort(x, kind="stable"), kind="stable")
-    return (r * 10) // len(x)
-
-
 def lratio(arm: np.ndarray, base: np.ndarray) -> np.ndarray:
     return np.log2((arm + 1.0) / (base + 1.0))
-
-
-def centre_in_groups(x: np.ndarray, g: np.ndarray) -> np.ndarray:
-    out = x.copy()
-    for d in np.unique(g):
-        m = g == d
-        out[m] -= np.median(x[m])
-    return out
 
 
 def shifts(n: int, k: int, rng: np.random.Generator) -> np.ndarray:
@@ -122,37 +119,65 @@ def shifts(n: int, k: int, rng: np.random.Generator) -> np.ndarray:
     return rng.integers(lo, n - lo, size=N_SHIFT)
 
 
-def r_split_stat(r1: np.ndarray, r2: np.ndarray, g: np.ndarray) -> float:
-    vals = [spearman(r1[g == d], r2[g == d]) for d in range(10)]
-    return float(np.nanmean(vals)) if np.isfinite(vals).any() else float("nan")
+def curve_fit(level: np.ndarray, r: np.ndarray):
+    """Binned-median curve of r against level: 50 equal-count bins by average rank (ties share a
+    bin), median r per bin at the bin's median level, linear interpolation, flat beyond the ends."""
+    n = len(level)
+    b = np.minimum(N_CURVE_BINS - 1, ((rankdata(level, "average") - 1) * N_CURVE_BINS / n).astype(int))
+    xs, ys = [], []
+    for k in np.unique(b):
+        m = b == k
+        xs.append(np.median(level[m]))
+        ys.append(np.median(r[m]))
+    xs, ys = np.asarray(xs), np.asarray(ys)
+    ux = np.unique(xs)
+    uy = np.array([ys[xs == u].mean() for u in ux])
+    return lambda L: np.interp(L, ux, uy)
+
+
+def analytic_curve(A: np.ndarray, B: np.ndarray, Bother: np.ndarray) -> np.ndarray:
+    """log2((f mu + 1)/(mu + 1)), f = sum A / sum B, mu = the other half's base rescaled to B's depth."""
+    f = A.sum() / B.sum()
+    mu = Bother * (B.sum() / Bother.sum())
+    return np.log2((f * mu + 1.0) / (mu + 1.0))
+
+
+def split_stat(r1, r2, sh):
+    obs = spearman(r1, r2)
+    null = spearman_shift_null(r2, r1, sh)
+    p99 = float(np.nanpercentile(null, 99)) if len(null) else float("nan")
+    return {"r": obs, "null_p99": p99, "null_mean": float(np.nanmean(null)) if len(null) else None,
+            "eligible": bool(np.isfinite(obs) and obs > p99 and obs >= R_FLOOR)}
 
 
 def effectfloor_one(job):
-    """r_split and its block-shift null at every resolution, for one (arm, base) pair.
+    """Rerun 2: the residual split-half statistic (gating) plus the raw and analytic ones (reported).
 
-    Amendment (ii)(a), 2026-10-26: r_split is the Spearman across bins of the two median-centred
-    half ratios, with NO decile stratification; the null is 99 circular >= 1 Mb shifts of the pr2
-    ratio. The first run's decile-averaged statistic is kept as `r_split_decile_reported` (no null).
-    """
+    Same 99 shifts for all three statistics of a pair at a resolution."""
     key, arm1, base1, arm2, base2, seed = job
     rng = np.random.default_rng(seed)
     out = {}
     for name, k in RES.items():
         A1, B1, A2, B2 = pool(arm1, k), pool(base1, k), pool(arm2, k), pool(base2, k)
-        r1 = lratio(A1, B1)
-        r1 -= np.median(r1)
-        r2 = lratio(A2, B2)
-        r2 -= np.median(r2)
-        obs = spearman(r1, r2)
-        sh = shifts(len(r1), k, rng)
-        null = spearman_shift_null(r2, r1, sh)
-        p99 = float(np.nanpercentile(null, 99)) if len(null) else float("nan")
-        g = deciles((B1 + B2) / 2.0)
-        obs_dec = r_split_stat(centre_in_groups(lratio(A1, B1), g), centre_in_groups(lratio(A2, B2), g), g)
-        out[name] = {"r_split": obs, "null_p99": p99, "null_mean": float(np.nanmean(null)) if len(null) else None,
-                     "n_shifts": int(len(sh)), "n_bins": int(len(r1)),
-                     "eligible": bool(np.isfinite(obs) and obs > p99 and obs >= R_FLOOR),
-                     "r_split_decile_reported": obs_dec}
+        R1, R2 = lratio(A1, B1), lratio(A2, B2)
+        L1, L2 = np.log2(B1 + 1.0), np.log2(B2 + 1.0)
+        sh = shifts(len(R1), k, rng)
+        raw = split_stat(R1 - np.median(R1), R2 - np.median(R2), sh)
+        e1 = R1 - curve_fit(L2, R1)(L2)
+        e2 = R2 - curve_fit(L1, R2)(L1)
+        res = split_stat(e1, e2, sh)
+        an = split_stat(R1 - analytic_curve(A1, B1, B2), R2 - analytic_curve(A2, B2, B1), sh)
+        # reported-only level diagnostics: the curve fitted against the half's OWN base level, and
+        # against the pooled base level; a synthetic thinning check showed the cross-half level can
+        # over-correct (negative residual r), so the PI sees which level choice is unbiased
+        L12 = np.log2(B1 + B2 + 1.0)
+        own = split_stat(R1 - curve_fit(L1, R1)(L1), R2 - curve_fit(L2, R2)(L2), sh)
+        pld = split_stat(R1 - curve_fit(L12, R1)(L12), R2 - curve_fit(L12, R2)(L12), sh)
+        out[name] = {"r_split": res["r"], "null_p99": res["null_p99"], "null_mean": res["null_mean"],
+                     "eligible": res["eligible"], "statistic": "residual, binned-median curve, cross-half level",
+                     "n_shifts": int(len(sh)), "n_bins": int(len(R1)),
+                     "raw_reported": raw, "analytic_reported": an,
+                     "ownlevel_reported": own, "pooledlevel_reported": pld}
     return key, out
 
 
@@ -240,7 +265,7 @@ def stage_eligibility(a) -> None:
     rt_ok = any(elig[k] for k in knob_keys if "pe__pe" in k)
     out = {
         "stage": "eligibility", "written": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "amendments": "PI 2026-10-26 (ii)(a): no decile stratification in effectfloor/thinningblank",
+        "amendments": "PI 2026-10-26 (ii)(a) no deciles; second amendment 2026-10-26: residual split-half statistic (curve vs other half's base level)",
         "halves": a.halves, "halves_md5": md5(Path(a.halves)), "gate_resolution": GATE,
         "native": native, "dropped_pairs": dropped,
         "half_read_fraction": {"min": min(half_frac.values()), "max": max(half_frac.values())},
@@ -250,6 +275,16 @@ def stage_eligibility(a) -> None:
         "effectfloor_by_knob": {"read_length": rl_ok, "run_type": rt_ok},
         "thinningblank": {k: res[k] for k in depth_keys},
         "thinningblank_met": not any(res[k][GATE]["eligible"] for k in depth_keys),
+        "mechanism_check": {k: {"raw_r": res[k][GATE]["raw_reported"]["r"],
+                                "raw_null_p99": res[k][GATE]["raw_reported"]["null_p99"],
+                                "raw_eligible": res[k][GATE]["raw_reported"]["eligible"],
+                                "resid_r": res[k][GATE]["r_split"], "resid_null_p99": res[k][GATE]["null_p99"],
+                                "resid_null_mean": res[k][GATE]["null_mean"],
+                                "analytic_r": res[k][GATE]["analytic_reported"]["r"],
+                                "analytic_eligible": res[k][GATE]["analytic_reported"]["eligible"],
+                                "ownlevel_r": res[k][GATE]["ownlevel_reported"]["r"],
+                                "pooledlevel_r": res[k][GATE]["pooledlevel_reported"]["r"]}
+                            for k in depth_keys},
         "depthcontrol_part3": dc3, "depthcontrol_part3_met": all(v["met"] for v in dc3.values()),
         "real_totals": real,
     }
@@ -302,7 +337,7 @@ def stage_score(a) -> None:
     seeds = sorted(int(p.stem.split("_s")[1]) for p in Path(a.preds).glob("C12M02_s*.npz"))
     cache = {}
     res = {"stage": "score", "written": time.strftime("%Y-%m-%dT%H:%M:%S"), "seeds": seeds,
-           "amendments": "PI 2026-10-26 (ii)(b): depthcontrol = part2 AND part3; 99 shifts at every resolution",
+           "amendments": "PI 2026-10-26 (ii)(b): depthcontrol = part2 AND part3; 99 shifts at every resolution; second amendment: gapleft R_hat = curve1(L2) + e1 (uncentred pr1 ratio)",
            "eligibility_written": elig["written"], "pairs": {}, "depthcontrol": {}, "swapwired": {}}
     preds_written = {}
     for seed in seeds:
@@ -391,11 +426,15 @@ def stage_score(a) -> None:
                 f2 = hm["n_lines"] / hm["product_lines"]
                 a1 = halves[f"{t}__{suf}|pr1"].astype(np.float64)
                 b1 = halves[f"{t}__base__base|pr1"].astype(np.float64)
+                b2 = halves[f"{t}__base__base|pr2"].astype(np.float64)
                 gl = {}
                 for name, k in RES.items():
                     nb = len(y) // k
-                    A1, B1 = pool(a1, k), pool(b1, k)
-                    Rh = centre_in_groups(lratio(A1, B1), deciles(B1))
+                    A1, B1, B2 = pool(a1, k), pool(b1, k), pool(b2, k)
+                    # rerun 2: R_hat = curve1(L2) + e1, cross-fitted from pr1 (== uncentred pr1 ratio)
+                    R1, L2 = lratio(A1, B1), np.log2(B2 + 1.0)
+                    c1 = curve_fit(L2, R1)(L2)
+                    Rh = c1 + (R1 - c1)
                     nbin = nb * k
                     yy = y[:nbin]
                     ma, na = mu("base")[:nbin] * f2, nn("base")[:nbin]
