@@ -227,7 +227,7 @@
   .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
   .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
   .panels>div{padding:0 14px}
-  .panels .fig svg{max-height:56vh}
+  .panels .fig svg{max-height:var(--cap,56vh)}
   .bsub{font:500 17px var(--sans);fill:#6f6b64}
   .panels>div+div{border-left:1px solid var(--hair)}
   @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
@@ -390,25 +390,43 @@
     </div>
   </section>
 
-  <!-- 10 · RESULTS · (e) the caveat
+  <!-- 10 · RESULTS · (e) why the middle of the ranking is muddy — the schematic
+       job      explain, as a picture, why a re-run arm differs from its base in two ways and a depth cut in one
+       claim    a re-run arm changes the setting AND draws a different random read sample; a depth cut only removes reads
+       source   the counterfactual-arm build (design); no result file
+       numbers  literal design constants only
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) a caution on the middle of the ranking · why</div>
+      <h2>A re-run arm differs from its base in two ways, not one</h2>
+      <div class="fig wide" id="figRedraw"></div>
+      <ul class="pts">
+        <li>Every track keeps a random <span data-src="literal">30M</span> reads. A re-run arm draws its own random sample, so its reads are partly different from the base's even where the setting changes nothing.</li>
+      </ul>
+      <aside class="notes"><p>The pipeline subsamples every track to the same number of reads with a random draw. A re-run arm (duplicate removal, run type, read length, mapping-quality filter) goes through the whole pipeline again, so it gets a new draw. Its difference from the base is then the setting's effect plus the difference between two random samples. A depth cut is different: it keeps a subset of the base's own reads, so it has no second draw. That makes the depth cuts a ruler for how much read sampling alone moves the shape.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · RESULTS · (e) the evidence
        job      one claim, one figure as its evidence, one caveat
-       claim    the four re-run settings sit inside the depth-thinning ladder on shape, so their shape scores are partly resampling
+       claim    the re-run settings change the shape about as much as throwing away three quarters to seven eighths of the reads, so read sampling may explain much of their score
        source   DATA.levels counts narrow/broad shape_1k for depth levels and the re-run settings
        numbers  DATA.levels
        cut      none -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker"><span class="sec">Results</span>(e) a caution on the middle of the ranking</div>
-      <h2>The re-run settings look like a depth cut on shape, because each one re-draws its reads</h2>
-      <div class="chartbox panels"><div class="fig" id="figLadN"></div><div class="fig" id="figLadB"></div></div>
+      <div class="kicker"><span class="sec">Results</span>(e) a caution on the middle of the ranking · evidence</div>
+      <h2>Re-run settings change the shape about as much as discarding most of the reads</h2>
+      <div class="chartbox panels" style="--cap:44vh"><div class="fig" id="figLadN"></div><div class="fig" id="figLadB"></div></div>
       <ul class="pts">
-        <li>A re-run arm draws a fresh random <span data-src="literal">30M</span>-read subsample, so part of its change is which reads were drawn, not the setting.</li>
+        <li><b>Grey</b>: depth cuts, a ruler for read sampling alone. <b style="color:var(--rerun)">Purple</b>: re-run settings keep all <span data-src="literal">30M</span> reads yet score <span id="tLadRange"></span>, like keeping a quarter to an eighth of them. Read sampling likely drives most of it, so we cannot rank them yet.</li>
       </ul>
-      <aside class="notes"><p>Grey points are depth cuts, whose reads are a subset of the base's reads. The purple points are the re-run settings. They sit between the quarter-depth cut and the eighth-depth cut, so we cannot yet order them by their own effect on shape.</p></aside>
+      <aside class="notes"><p>Read the chart from the grey bars first. Keeping half of the base's reads gives the smallest shape change, and keeping an eighth gives the largest. The purple bars fall between the quarter and the eighth cut. Each of these settings changes only part of the reads, while the new random sample touches all of them, so the sample is the simpler explanation for most of the shape change. Measuring a fresh random sample of the base against the base would give this floor directly.</p></aside>
     </div>
   </section>
 
-  <!-- 11 · DISCUSSION · ruled in / out / doubts
+  <!-- 12 · DISCUSSION · ruled in / out / doubts
        job      readings restated; doubts kept honest
        source   restated from results (a) to (e)
        numbers  none new
@@ -426,7 +444,7 @@
     </div>
   </section>
 
-  <!-- 12 · DISCUSSION · options for the next phase
+  <!-- 13 · DISCUSSION · options for the next phase
        job      labelled options; no recommendation
        source   the doubts on the previous slide
        numbers  none
@@ -495,24 +513,28 @@ const R=(space,mc,m)=>DATA.ranked[`${space}|${mc}|${m}`];
 const lvl=(space,mc,arm,level)=>DATA.levels.find(L=>L.space===space&&L.mc===mc&&L.arm===arm&&L.level===level);
 
 /* horizontal bars: rows {lab, sub, v, lo, hi, col}; whisker = range over tracks */
-function hbars(title, rows, xmax, xlab, W=720, Lg=370){
-  const rh=56, top=70, H=top+rows.length*rh+60, pW=W-Lg-30, xx=v=>Lg+Math.max(0,v)/xmax*pW;
+function hbars(title, rows, xmax, xlab, signed=false, W=720, Lg=370){
+  /* signed: bars grow left or right from zero and every value carries its sign */
+  const xmin=signed?Math.min(0,-Math.ceil(-Math.min(...rows.map(r=>Math.min(r.v,r.lo??r.v)))*10)/10):0;
+  const rh=56, top=70, H=top+rows.length*rh+60, pW=W-Lg-70, xx=v=>Lg+(Math.max(xmin,v)-xmin)/(xmax-xmin)*pW;
+  const lab=v=>signed?(v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(2):f2(v);
   let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
   s+=`<text x="12" y="32" class="ptitle">${title}</text>`;
-  const step=xmax>2?1:(xmax>0.5?0.2:0.1);
-  for(let t=0;t<=xmax+1e-9;t+=step){
+  const span=xmax-xmin, step=span>2?1:(span>0.5?0.2:0.1);
+  for(let t=Math.ceil(xmin/step-1e-9)*step;t<=xmax+1e-9;t+=step){
     s+=`<line x1="${xx(t)}" y1="${top-6}" x2="${xx(t)}" y2="${top+rows.length*rh}" class="grid"/>`;
-    s+=`<text x="${xx(t)}" y="${top+rows.length*rh+22}" text-anchor="middle" class="tick">${+t.toFixed(1)}</text>`;
+    s+=`<text x="${xx(t)}" y="${top+rows.length*rh+22}" text-anchor="middle" class="tick">${signed&&t>1e-9?'+':''}${+t.toFixed(1)}</text>`;
   }
+  if(signed) s+=`<line x1="${xx(0)}" y1="${top-10}" x2="${xx(0)}" y2="${top+rows.length*rh}" class="zero"/>`;
   rows.forEach((r,i)=>{
-    const y=top+i*rh+rh/2;
+    const y=top+i*rh+rh/2, x0=Math.min(xx(0),xx(r.v)), x1=Math.max(xx(0),xx(r.v));
     s+=`<text x="${Lg-14}" y="${y-2}" text-anchor="end" class="axlbl">${r.lab}</text>`;
     s+=`<text x="${Lg-14}" y="${y+18}" text-anchor="end" class="bsub">${r.sub}</text>`;
-    s+=`<rect x="${Lg}" y="${y-13}" width="${xx(r.v)-Lg}" height="26" fill="${r.col}" opacity=".85" rx="2"/>`;
+    s+=`<rect x="${x0}" y="${y-13}" width="${Math.max(1,x1-x0)}" height="26" fill="${r.col}" opacity=".85" rx="2"/>`;
     if(r.n>1) s+=`<line x1="${xx(r.lo)}" y1="${y}" x2="${xx(r.hi)}" y2="${y}" stroke="#1a1a1a" stroke-width="2"/>`
       +`<line x1="${xx(r.lo)}" y1="${y-7}" x2="${xx(r.lo)}" y2="${y+7}" stroke="#1a1a1a" stroke-width="2"/>`
       +`<line x1="${xx(r.hi)}" y1="${y-7}" x2="${xx(r.hi)}" y2="${y+7}" stroke="#1a1a1a" stroke-width="2"/>`;
-    s+=`<text x="${Math.max(xx(r.v),xx(r.hi||0))+8}" y="${y+6}" class="val" fill="${r.col}">${f2(r.v)}</text>`;
+    s+=`<text x="${Math.max(xx(r.v),xx(r.hi??r.v),xx(0))+8}" y="${y+6}" class="val" fill="${r.col}">${lab(r.v)}</text>`;
   });
   s+=`<text x="${Lg+pW}" y="${H-8}" text-anchor="end" class="cap">${xlab}</text>`;
   return s+`</svg>`;
@@ -549,8 +571,8 @@ const xmaxOf=(...lists)=>Math.ceil(Math.max(...lists.flat().map(r=>Math.max(Math
 /* (d) DNase */
 {const m=R('counts','DNase','abs_log2fc_top1'), fr=R('counts','DNase','dfrip'), X=Math.ceil(xmaxOf(m));
  put('figDnMag',hbars('(a) Peak height',rowsOf('DNase',m),X,'|log2 arm / base|'));
- put('figDnFrip',hbars('(b) FRiP, arm minus base',rowsOf('DNase',fr,false),xmaxOf(fr),'change in fraction of reads in peaks'));
- put('tDnDedup',f2(fr.find(r=>r.arm==='dedup').v));}
+ put('figDnFrip',hbars('(b) FRiP change, arm minus base',rowsOf('DNase',fr,false),xmaxOf(fr),'+ = arm has more of its reads in peaks',true));
+ {const v=fr.find(r=>r.arm==='dedup').v; put('tDnDedup',(v>0?'+':'−')+Math.abs(v).toFixed(2));}}
 
 /* (e) the depth ladder vs the re-run settings, shape on counts */
 function ladder(mc,title){
@@ -562,6 +584,31 @@ function ladder(mc,title){
   return hbars(title,rows,xmaxOf(rows),'shape change, 1 − rank correlation');
 }
 put('figLadN',ladder('narrow','(a) Narrow marks'));
+{const rr=['narrow','broad'].flatMap(mc=>R('counts',mc,'shape_1k').filter(r=>GROUP[r.arm]==='rerun').map(r=>r.v));
+ put('tLadRange',`${f2(Math.min(...rr))}–${f2(Math.max(...rr))}`);}
+put('figRedraw',`<svg viewBox="0 0 1160 380" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bdb9b1"/></marker></defs>
+  <text x="10" y="30" class="ptitle">(a) Base</text>
+  <rect x="10" y="44" width="170" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="95" y="78" text-anchor="middle" class="axlbl">raw reads</text>
+  <line x1="185" y1="72" x2="240" y2="72" class="axis" marker-end="url(#ar2)"/>
+  <rect x="245" y="44" width="250" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="370" y="78" text-anchor="middle" class="axlbl">pipeline, standard settings</text>
+  <line x1="500" y1="72" x2="555" y2="72" class="axis" marker-end="url(#ar2)"/>
+  <rect x="560" y="44" width="230" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="675" y="78" text-anchor="middle" class="axlbl">random 30M draw A</text>
+  <text x="10" y="150" class="ptitle" fill="var(--rerun)">(b) Re-run arm</text>
+  <rect x="10" y="164" width="170" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="95" y="198" text-anchor="middle" class="axlbl">same raw reads</text>
+  <line x1="185" y1="192" x2="240" y2="192" class="axis" marker-end="url(#ar2)"/>
+  <rect x="245" y="164" width="250" height="56" rx="8" fill="#fff" stroke="var(--rerun)" stroke-width="2.6"/><text x="370" y="198" text-anchor="middle" class="axlbl">pipeline, one setting changed</text>
+  <line x1="500" y1="192" x2="555" y2="192" class="axis" marker-end="url(#ar2)"/>
+  <rect x="560" y="164" width="230" height="56" rx="8" fill="#fff" stroke="var(--rerun)" stroke-width="2.6"/><text x="675" y="198" text-anchor="middle" class="axlbl">random 30M draw B</text>
+  <text x="820" y="186" class="xlab" fill="var(--rerun)">two differences:</text>
+  <text x="820" y="214" class="xsub">① the setting  ② a different draw</text>
+  <text x="10" y="270" class="ptitle" fill="var(--ctl)">(c) Depth cut</text>
+  <rect x="560" y="284" width="230" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="675" y="318" text-anchor="middle" class="axlbl">draw A (the base's reads)</text>
+  <line x1="675" y1="104" x2="675" y2="280" stroke="#d8d4cc" stroke-width="1.4" stroke-dasharray="4 4"/>
+  <line x1="795" y1="312" x2="850" y2="312" class="axis" marker-end="url(#ar2)"/>
+  <rect x="855" y="284" width="190" height="56" rx="8" fill="#fff" stroke="var(--ctl)" stroke-width="2.6"/><text x="950" y="318" text-anchor="middle" class="axlbl">keep a subset</text>
+  <text x="820" y="372" class="xsub">one difference: fewer reads, no new draw</text>
+</svg>`);
 put('figLadB',ladder('broad','(b) Broad marks'));
 
 /* the grid of arms */
