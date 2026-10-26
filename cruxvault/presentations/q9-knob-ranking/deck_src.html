@@ -227,7 +227,8 @@
   .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
   .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
   .panels>div{padding:0 14px}
-  .panels .fig svg{max-height:40vh}
+  .panels .fig svg{max-height:56vh}
+  .bsub{font:500 17px var(--sans);fill:#6f6b64}
   .panels>div+div{border-left:1px solid var(--hair)}
   @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
   table.dtable td.run{color:var(--own);font-weight:600}
@@ -239,7 +240,7 @@
 
   <!-- 1 · TITLE
        job      the question as a headline, the scope in one line
-       source   DATA.n_pairs, DATA.n_tracks, DATA.n_arm_products
+       source   DATA.n_pairs, DATA.n_tracks, DATA.n_arm_products; every bar's base → arm label from DATA.base (results/t133/MANIFEST.tsv) or the base recipe's defaults
        numbers  counts only, from DATA
        cut      the nav hint -->
   <section class="slide active">
@@ -470,12 +471,32 @@ function LEV(a,l){
     extsize:x=>`extension × ${x.slice(1)}`};
   return m[a]?m[a](l):l;
 }
+/* "base → arm" for one bar: the base's setting comes from the manifest (DATA.base),
+   or is the pipeline default the base was run with */
+const rng=(v,f)=>v.length>1?`${f(v[0])}–${f(v[v.length-1])}`:f(v[0]);
+const Mr=n=>`${+(n/1e6).toFixed(2)}M`;
+function BA(mc,a,l){
+  const B=DATA.base[mc], dn=mc==='DNase', k=parseFloat(l.slice(1));
+  const fl=rng(B.fraglen,x=>x);
+  const m={
+    depth:()=>`${rng(B.depth,Mr)} → ${l} reads`,
+    abproxy:()=>`0% → ${Math.round(k*100)}% control reads`,
+    crop:()=>`${rng(B.read_length,x=>x)} → ${l} bp reads`,
+    mapq:()=>`MAPQ ≥ 30 → ≥ ${l}`,
+    dedup:()=>'duplicates removed → kept',
+    pe:()=>'single-end → paired-end',
+    ratio:()=>`default control scaling → × ${l.slice(1)}`,
+    ctlid:()=>l==='none'?'matched control → none':'matched → another cell’s control',
+    ctldepth:()=>`all control reads → ${Math.round(k*100)}%`,
+    extsize:()=>dn?`smoothing ${fl} → ${Math.round(B.fraglen[0]*k)} bp`:`extension ${fl} bp → × ${l.slice(1)}`};
+  return m[a]?m[a]():LEV(a,l);
+}
 const R=(space,mc,m)=>DATA.ranked[`${space}|${mc}|${m}`];
 const lvl=(space,mc,arm,level)=>DATA.levels.find(L=>L.space===space&&L.mc===mc&&L.arm===arm&&L.level===level);
 
 /* horizontal bars: rows {lab, sub, v, lo, hi, col}; whisker = range over tracks */
-function hbars(title, rows, xmax, xlab, W=640, Lg=280){
-  const rh=50, top=70, H=top+rows.length*rh+60, pW=W-Lg-30, xx=v=>Lg+Math.max(0,v)/xmax*pW;
+function hbars(title, rows, xmax, xlab, W=720, Lg=370){
+  const rh=56, top=70, H=top+rows.length*rh+60, pW=W-Lg-30, xx=v=>Lg+Math.max(0,v)/xmax*pW;
   let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
   s+=`<text x="12" y="32" class="ptitle">${title}</text>`;
   const step=xmax>2?1:(xmax>0.5?0.2:0.1);
@@ -486,7 +507,7 @@ function hbars(title, rows, xmax, xlab, W=640, Lg=280){
   rows.forEach((r,i)=>{
     const y=top+i*rh+rh/2;
     s+=`<text x="${Lg-14}" y="${y-2}" text-anchor="end" class="axlbl">${r.lab}</text>`;
-    s+=`<text x="${Lg-14}" y="${y+16}" text-anchor="end" class="psub">${r.sub}</text>`;
+    s+=`<text x="${Lg-14}" y="${y+18}" text-anchor="end" class="bsub">${r.sub}</text>`;
     s+=`<rect x="${Lg}" y="${y-13}" width="${xx(r.v)-Lg}" height="26" fill="${r.col}" opacity=".85" rx="2"/>`;
     if(r.n>1) s+=`<line x1="${xx(r.lo)}" y1="${y}" x2="${xx(r.hi)}" y2="${y}" stroke="#1a1a1a" stroke-width="2"/>`
       +`<line x1="${xx(r.lo)}" y1="${y-7}" x2="${xx(r.lo)}" y2="${y+7}" stroke="#1a1a1a" stroke-width="2"/>`
@@ -496,22 +517,22 @@ function hbars(title, rows, xmax, xlab, W=640, Lg=280){
   s+=`<text x="${Lg+pW}" y="${H-8}" text-anchor="end" class="cap">${xlab}</text>`;
   return s+`</svg>`;
 }
-const rowsOf=(list,abs=true)=>list.map(r=>({lab:NAME[r.arm],sub:LEV(r.arm,r.level),
+const rowsOf=(mc,list,abs=true)=>list.map(r=>({lab:NAME[r.arm],sub:BA(mc,r.arm,r.level),
   v:abs?Math.abs(r.v):r.v,lo:abs?Math.abs(r.lo):r.lo,hi:abs?Math.abs(r.hi):r.hi,n:r.n,col:COL(r.arm)}))
   .map(r=>({...r,lo:Math.min(r.lo,r.hi),hi:Math.max(r.lo,r.hi)}));
 const xmaxOf=(...lists)=>Math.ceil(Math.max(...lists.flat().map(r=>Math.max(Math.abs(r.hi),Math.abs(r.lo),Math.abs(r.v))))*10)/10;
 
 /* (a) peak height, counts */
 {const a=R('counts','narrow','abs_log2fc_top1'), b=R('counts','broad','abs_log2fc_top1'), X=Math.ceil(xmaxOf(a,b));
- put('figMagN',hbars('(a) Narrow marks',rowsOf(a),X,'peak height change, |log2 arm / base|'));
- put('figMagB',hbars('(b) Broad marks',rowsOf(b),X,'peak height change, |log2 arm / base|'));
+ put('figMagN',hbars('(a) Narrow marks',rowsOf('narrow',a),X,'peak height change, |log2 arm / base|'));
+ put('figMagB',hbars('(b) Broad marks',rowsOf('broad',b),X,'peak height change, |log2 arm / base|'));
  const d=[a,b].map(l=>l.find(r=>r.arm==='depth').v);
  put('tDepthMag',`${f2(d[0])} (narrow) and ${f2(d[1])} (broad)`);}
 
 /* (b) shape, counts */
 {const a=R('counts','narrow','shape_1k'), b=R('counts','broad','shape_1k'), X=xmaxOf(a,b);
- put('figShpN',hbars('(a) Narrow marks',rowsOf(a),X,'shape change, 1 − rank correlation'));
- put('figShpB',hbars('(b) Broad marks',rowsOf(b),X,'shape change, 1 − rank correlation'));
+ put('figShpN',hbars('(a) Narrow marks',rowsOf('narrow',a),X,'shape change, 1 − rank correlation'));
+ put('figShpB',hbars('(b) Broad marks',rowsOf('broad',b),X,'shape change, 1 − rank correlation'));
  const ab=[a,b].map(l=>l.find(r=>r.arm==='abproxy').v);
  put('tAbShape',`${f2(ab[0])} (narrow) and ${f2(ab[1])} (broad)`);
  const rr=[...a,...b].filter(r=>GROUP[r.arm]==='rerun').map(r=>r.v);
@@ -519,24 +540,24 @@ const xmaxOf=(...lists)=>Math.ceil(Math.max(...lists.flat().map(r=>Math.max(Math
 
 /* (c) shape, p */
 {const a=R('pval','narrow','shape_1k'), b=R('pval','broad','shape_1k'), X=xmaxOf(a,b);
- put('figPN',hbars('(a) Narrow marks',rowsOf(a),X,'shape change, 1 − rank correlation'));
- put('figPB',hbars('(b) Broad marks',rowsOf(b),X,'shape change, 1 − rank correlation'));
+ put('figPN',hbars('(a) Narrow marks',rowsOf('narrow',a),X,'shape change, 1 − rank correlation'));
+ put('figPB',hbars('(b) Broad marks',rowsOf('broad',b),X,'shape change, 1 − rank correlation'));
  const all=[...a,...b];
  put('tCtlMax',f2(Math.max(...all.filter(r=>GROUP[r.arm]==='ctl').map(r=>r.v))));
  put('tReadMin',f2(Math.min(...all.filter(r=>GROUP[r.arm]!=='ctl').map(r=>r.v))));}
 
 /* (d) DNase */
 {const m=R('counts','DNase','abs_log2fc_top1'), fr=R('counts','DNase','dfrip'), X=Math.ceil(xmaxOf(m));
- put('figDnMag',hbars('(a) Peak height',rowsOf(m),X,'|log2 arm / base|'));
- put('figDnFrip',hbars('(b) FRiP, arm minus base',rowsOf(fr,false),xmaxOf(fr),'change in fraction of reads in peaks'));
+ put('figDnMag',hbars('(a) Peak height',rowsOf('DNase',m),X,'|log2 arm / base|'));
+ put('figDnFrip',hbars('(b) FRiP, arm minus base',rowsOf('DNase',fr,false),xmaxOf(fr),'change in fraction of reads in peaks'));
  put('tDnDedup',f2(fr.find(r=>r.arm==='dedup').v));}
 
 /* (e) the depth ladder vs the re-run settings, shape on counts */
 function ladder(mc,title){
   const rows=[];
-  ['15M','7.5M','3.75M'].forEach(l=>{const L=lvl('counts',mc,'depth',l); rows.push({lab:'Depth cut',sub:LEV('depth',l),...L.shape_1k,col:'var(--ctl)'});});
+  ['15M','7.5M','3.75M'].forEach(l=>{const L=lvl('counts',mc,'depth',l); rows.push({lab:'Depth cut',sub:BA(mc,'depth',l),...L.shape_1k,col:'var(--ctl)'});});
   R('counts',mc,'shape_1k').filter(r=>GROUP[r.arm]==='rerun')
-    .forEach(r=>rows.push({lab:NAME[r.arm],sub:LEV(r.arm,r.level),v:r.v,lo:r.lo,hi:r.hi,n:r.n,col:'var(--rerun)'}));
+    .forEach(r=>rows.push({lab:NAME[r.arm],sub:BA(mc,r.arm,r.level),v:r.v,lo:r.lo,hi:r.hi,n:r.n,col:'var(--rerun)'}));
   rows.sort((p,q)=>p.v-q.v);
   return hbars(title,rows,xmaxOf(rows),'shape change, 1 − rank correlation');
 }

@@ -58,7 +58,21 @@ for space in ("counts", "pval"):
                 {"arm": L["arm"], "level": L["level"], **L[m],
                  "signed": L["log2fc_top1"]["v"] if L["log2fc_top1"] else None} for L in order]
 
+# the base's own setting per mark class, for the "base → arm" label on every bar
+MARK_CLASS = {"DNase-seq": "DNase", "H3K27ac": "narrow", "H3K4me3": "narrow", "H3K4me1": "narrow",
+              "H3K27me3": "broad", "H3K36me3": "broad", "H3K9me3": "broad"}
+base = {}
+for r in load_tsv("results/t133/MANIFEST.tsv"):
+    if r["arm"] != "base":
+        continue
+    b = base.setdefault(MARK_CLASS[r["assay"]], {"depth": [], "read_length": [], "fraglen": [], "run_type": []})
+    for k in ("depth", "read_length", "fraglen"):
+        b[k].append(int(r[k]))
+    b["run_type"].append(r["run_type"])
+base = {mc: {k: sorted(set(v)) for k, v in b.items()} for mc, b in base.items()}
+
 data = {
+    "base": base,
     "n_pairs": len(rows),
     "n_tracks": len({r["track"] for r in rows}),
     "n_arm_products": len({(r["track"], r["arm"], r["level"]) for r in rows}),
