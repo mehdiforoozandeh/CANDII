@@ -377,3 +377,5 @@ existing page carried.
 ## [2026-09-16] ingest | Detrimental effects of duplicate reads and low complexity regions on RNA- and ChIP-seq data — Mikhail G Dozmorov, Indra Adrianto, Cory B Giles, Edmund Glass, Stuart B Glenn, Courtney Montgomery, Kathy L Sivils, Lorin E Olson, Tomoaki Iwayama, Willard M Freeman, Christopher J Lessard, Jonathan D Wren (2015)
 
 ## [2026-09-16] ingest | Identification of factors associated with duplicate rate in ChIP-seq data — Shulan Tian, Shuxia Peng, Michael Kalmbach, Krutika S. Gaonkar, Aditya Bhagwate, Wei Ding, Jeanette Eckel-Passow, Huihuang Yan, Susan L. Slager (2019)
+
+## [2026-10-26] page | Pseudocount log ratios carry a signal-level curve — new concept page (PI request); no raw/ source, evidence is a CANDII split-half test

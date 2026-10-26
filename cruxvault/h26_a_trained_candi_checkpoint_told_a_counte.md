@@ -77,6 +77,12 @@ A trained CANDI checkpoint, told a counterfactual arm's read length or run type 
 > (iv) Keep the existing 18 MB chr21 halves extract on Fir (no re-copy). Do not move any data through the laptop again: cluster-to-cluster data moves are Globus only; if you need data that exists only on Nibi, stop and say so on the return.
 > Everything else stays as pre-registered (other thresholds, seeds s0/s1, combination rule `all` over gapleft and swapcorr, block-shift nulls; use 99 shifts everywhere this time, including the 25 bp reported-only null).
 
+**Second post-hoc amendment (PI ruling, 2026-10-26), made after rerun 1's numbers were seen; binds rerun 2.** Recorded verbatim:
+
+> Rerun with a residual reproducibility test: for each pair, fit the expected signal-level curve E[R | μ] and subtract it, then test split-half agreement of the residuals (Spearman across 1 kb bins, same block-shift null with 99 shifts, same r ≥ 0.2 floor). Define the curve without using the arm's own per-bin pattern: primary = a smooth fit (e.g. binned-median or LOESS on log μ, μ estimated from the OTHER half's base to avoid shared-noise circularity — e.g. curve for the pr1 ratio fitted against base_pr2 level, and vice versa; document the exact choice) and as a sanity check also the analytic curve with f = arm total / base total. Apply the same residual statistic to `effectfloor` and `thinningblank`; `thinningblank` must now come out NOT eligible on the depth pairs, or the run is invalid again. If eligible knob pairs exist, evaluate `gapleft` and `swapcorr` as pre-registered, with the oracle ratio R̂ = fitted curve + pr1 residual (cross-fitted), and record that change too. Everything else as rerun 1 (amended depthcontrol = parts 2+3; no blind-panel B_ arrays in any form — keep the tripwire; seeds s0/s1; 1 kb gate; combination rule `all`). First verify the mechanism directly: show on the thinning pairs that r_split of the raw ratio drops to near the null after subtracting the curve; report both numbers.
+
+Exact choices, fixed before rerun 2 ran. At 1 kb, R1 = log2((A1+1)/(B1+1)) and R2 likewise for pr2. The curve for R1 is fitted against L2 = log2(B2+1), the pr2 base level, and the curve for R2 against L1. Primary curve: binned median, 50 equal-count bins of L by average rank (ties share a bin), median R per bin, linear interpolation between bin-median L values, flat beyond the ends. Analytic curve: E[R1] = log2((f1·μ+1)/(μ+1)) with f1 = ΣA1/ΣB1 and μ = B2·ΣB1/ΣB2 (likewise for R2). Residual e = R − curve. r_resid = Spearman(e1, e2); the null shifts e2. The gating statistic is the primary residual; the analytic residual and the raw r_split are reported. Also reported, never gating: the same residual with the curve fitted against the half's own base level and against the pooled base level, because a synthetic thinning check before the run showed the cross-half level can push r below 0. Oracle for `gapleft`: R̂ = c1(L2) + e1, which equals the uncentred pr1 ratio R1 by construction; this replaces rerun 1's decile-centred R̂.
+
 ## Planned Intervention
 
 CPU only, no training. Checkpoint: the selected CANDI checkpoint of [[t81_retrain_every_trainable_method_under|the retrain-every-method task]] (`/project/def-maxwl/mforooz/t81_checkpoints/t81_eic_19_s0.best.ckpt` and `_s1`; check the md5 against `results/t81/TRAIN_CANDI_EIC19.md` first, because the `/project` copy was once stale). Per track (C12M02, C19M16, C40M17, C40M18, C07M20, C19M22, C07M29): prompt with the cell type's T_ assays; decode the target column with y_meta set to (a) the base's covariates, (b) each arm's read length 36 / 50, (c) run type PE, (d) the depth arms 15M / 7.5M / 3.75M. Read per bin, on chr21: Δ = log2 mean(told arm) − log2 mean(told base) against log2(arm / base counts, +1); NB NLL of the arm track under (a) and under (b–d). Null: the same Δ with the arm's covariate values permuted across tracks. Optional second reading: `python -m candi.bench` with tier C (`covuse`, `covshare`) on the same checkpoint. The causal follow-up, which needs GPU: retrain CANDI with base→arm pairs added as input→target and repeat the probe.
@@ -85,14 +91,20 @@ CPU only, no training. Checkpoint: the selected CANDI checkpoint of [[t81_retrai
 
 - 2026-10-25, chr21, CPU. Nibi 24997320 (halves extract); Fir 453552 (eligibility, frozen before inference), 454386_0-13 (inference, seeds 0 and 1), 457511 (scoring). Run root `fir:/project/def-maxwl/mforooz/h26`; small outputs in `results/h26/` (gitignored, main checkout) with `FIR_PATH.txt`. Code `tools/h26/`, `slurm/h26/`.
 - 2026-10-26, rerun 1 (amendments of 2026-10-26), chr21, CPU. Fir 528375 (eligibility, written 01:06:09, before inference), 528686_0-13 (inference), 528687 (scoring). Run root `fir:/project/def-maxwl/mforooz/h26/rerun1`, reusing the first run's halves extract in place; small outputs in `results/h26/rerun1/` with `FIR_PATH.txt`. Code on branch `chunk/h26-rerun`.
+- 2026-10-26, rerun 2 (second amendment of 2026-10-26), chr21, CPU. Fir 601843 (eligibility, written 13:10:33), 601844 (scoring). Run root `fir:/project/def-maxwl/mforooz/h26/rerun2`; predictions and halves read in place from rerun 1 and the first run (`infer.py` unchanged). Small outputs in `results/h26/rerun2/` with `FIR_PATH.txt`. Code on branch `chunk/h26-rerun2`.
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h26/ and link at least the report:
-     - [Report](results/h26/report.md)   - results/h26/curve.png -->
-_(none yet)_
+- [Rerun 2 report](results/h26/rerun2/REPORT.md)
 
 ## Findings
+
+Rerun 2 of 2026-10-26, under the second amendment. Numbers from `results/h26/rerun2/eligibility.json` (`mechanism_check`) and `results.json`, 1 kb. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` met by its letter only; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated. See [[pseudocount-log-ratios-carry-a-signal-level-curve]].
+
+- Mechanism: on the 21 thinning pairs, raw r_split is -0.03 to 0.63 (15 eligible); after subtracting the curve it is -0.11 to -0.37, against a null p99 of 0.008-0.013. The curve explains the raw reproducibility, but the residual overshoots below the null instead of landing on it, most at 15M (raw near 0, residual about -0.36). The cross-half level fit induces this anti-correlation; own-level and pooled-level fits are negative too.
+- `thinningblank`: 0 of 21 eligible, but only because the statistic is biased negative, as in the first run.
+- `effectfloor`: 0 of 19. Read length 36 bp residual r 0.015-0.086 (above null p99, below the 0.2 floor); 50 bp and run type at or below 0.
+- `swapwired` 80 of 80; `depthcontrol` part (2) 32 of 42, part (3) 21 of 21 (same predictions as rerun 1).
 
 Rerun 1 of 2026-10-26, under the post-hoc amendments. Numbers from `results/h26/rerun1/eligibility.json` and `results.json`, 1 kb. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` unmet; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated.
 
