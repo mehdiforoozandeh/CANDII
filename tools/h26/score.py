@@ -8,10 +8,16 @@ Two stages, run in this order, so eligibility is frozen before any model output 
   score         reads eligibility.json and the infer.py outputs. `swapwired`, `depthcontrol`
                 parts (1)-(2), `gapleft`, `swapcorr`, and the reported-only statistics.
 
+RERUN 1 applies the PI's post-hoc amendments of 2026-10-26 (h26 node, "Amendments after seeing
+data"): (ii)(a) `effectfloor` and `thinningblank` drop the decile stratification; (ii)(b)
+`depthcontrol` is part (2) AND part (3), part (1) reported only; 99 block shifts everywhere,
+including the 25 bp reported-only `swapcorr` null. Everything else is as first pre-registered.
+
 Every definition is the h26 node's `## Verifiables`, verbatim where it is a number:
   ratios        log2((arm + 1) / (base + 1)), median-centred per pair
   gate res.     1 kb = 40 bins of 25 bp; 25 bp, 200 bp and 5 kb reported, never gating
-  effectfloor   r_split = mean over deciles of base mean count of Spearman(pr1 ratio, pr2 ratio);
+  effectfloor   r_split = Spearman(pr1 ratio, pr2 ratio) across 1 kb bins, each median-centred, NO
+                deciles (amendment ii-a; the decile-averaged first-run statistic is reported only);
                 eligible when r_split > 99th pct of 99 circular >= 1 Mb shifts of the pr2 ratio
                 AND r_split >= 0.2
   gapleft       arm pr2 scored at 25 bp under P_base, P_arm, P_oracle = P_base x 2^R_hat (R_hat from
@@ -19,8 +25,9 @@ Every definition is the h26 node's `## Verifiables`, verbatim where it is a numb
                 met when CI_lo(G_oracle) > 0 and CI_hi(G_model / G_oracle) <= 0.25
   swapcorr      Spearman(model delta, real R) at 1 kb, both median-centred; met when rho <= 95th pct
                 of 99 circular >= 1 Mb shifts of delta; max|delta| < 1e-4 -> rho = 0, "covariate unused"
-  depthcontrol  (1) |pred global delta - log2(arm/base depth)| <= 0.01; (2) NLL(arm | told arm depth)
-                < NLL(arm | told base depth); (3) |real log2(sum arm / sum base) - log2 frac| <= 0.05
+  depthcontrol  met = (2) NLL(arm | told arm depth) < NLL(arm | told base depth) AND (3) |real
+                log2(sum arm / sum base) - log2 frac| <= 0.05 (amendment ii-b); (1) |pred global
+                delta - log2(arm/base depth)| <= 0.01 is reported only
 """
 from __future__ import annotations
 
@@ -75,6 +82,22 @@ def spearman(a: np.ndarray, b: np.ndarray) -> float:
     return float((ra * rb).sum() / math.sqrt((ra * ra).sum() * (rb * rb).sum()))
 
 
+def centred_ranks(x: np.ndarray) -> np.ndarray:
+    r = rankdata(x)
+    return r - r.mean()
+
+
+def spearman_shift_null(a: np.ndarray, b: np.ndarray, sh: np.ndarray) -> list:
+    """Spearman(roll(a, s), b) for every shift s. Ranks commute with a circular shift, so ranking
+    once and rolling the ranks is the same number as `spearman(np.roll(a, s), b)`, without
+    re-ranking 1.9 M bins 99 times at 25 bp."""
+    if len(a) < 3 or np.ptp(a) == 0 or np.ptp(b) == 0:
+        return [float("nan")] * len(sh)
+    ra, rb = centred_ranks(a), centred_ranks(b)
+    den = math.sqrt((ra * ra).sum() * (rb * rb).sum())
+    return [float((np.roll(ra, int(s)) * rb).sum() / den) for s in sh]
+
+
 def deciles(x: np.ndarray) -> np.ndarray:
     r = np.argsort(np.argsort(x, kind="stable"), kind="stable")
     return (r * 10) // len(x)
@@ -105,26 +128,31 @@ def r_split_stat(r1: np.ndarray, r2: np.ndarray, g: np.ndarray) -> float:
 
 
 def effectfloor_one(job):
-    """r_split and its block-shift null at every resolution, for one (arm, base) pair."""
+    """r_split and its block-shift null at every resolution, for one (arm, base) pair.
+
+    Amendment (ii)(a), 2026-10-26: r_split is the Spearman across bins of the two median-centred
+    half ratios, with NO decile stratification; the null is 99 circular >= 1 Mb shifts of the pr2
+    ratio. The first run's decile-averaged statistic is kept as `r_split_decile_reported` (no null).
+    """
     key, arm1, base1, arm2, base2, seed = job
     rng = np.random.default_rng(seed)
     out = {}
     for name, k in RES.items():
         A1, B1, A2, B2 = pool(arm1, k), pool(base1, k), pool(arm2, k), pool(base2, k)
+        r1 = lratio(A1, B1)
+        r1 -= np.median(r1)
+        r2 = lratio(A2, B2)
+        r2 -= np.median(r2)
+        obs = spearman(r1, r2)
+        sh = shifts(len(r1), k, rng)
+        null = spearman_shift_null(r2, r1, sh)
+        p99 = float(np.nanpercentile(null, 99)) if len(null) else float("nan")
         g = deciles((B1 + B2) / 2.0)
-        r1 = centre_in_groups(lratio(A1, B1), g)
-        r2 = centre_in_groups(lratio(A2, B2), g)
-        obs = r_split_stat(r1, r2, g)
-        null = [r_split_stat(r1, np.roll(r2, int(s)), g) for s in shifts(len(r1), k, rng)]
-        p99 = float(np.nanpercentile(null, 99)) if null else float("nan")
-        # REPORTED ONLY, never gating: the same Spearman with no decile stratification. Splitting on
-        # deciles of (B1 + B2) / 2 makes B1 and B2 anti-correlated inside a decile, which biases the
-        # pre-registered r_split downward; this variant shows how large that bias is.
-        r1n, r2n = lratio(A1, B1) - np.median(lratio(A1, B1)), lratio(A2, B2) - np.median(lratio(A2, B2))
-        obs0 = spearman(r1n, r2n)
-        out[name] = {"r_split": obs, "null_p99": p99, "null_mean": float(np.nanmean(null)) if null else None,
+        obs_dec = r_split_stat(centre_in_groups(lratio(A1, B1), g), centre_in_groups(lratio(A2, B2), g), g)
+        out[name] = {"r_split": obs, "null_p99": p99, "null_mean": float(np.nanmean(null)) if len(null) else None,
+                     "n_shifts": int(len(sh)), "n_bins": int(len(r1)),
                      "eligible": bool(np.isfinite(obs) and obs > p99 and obs >= R_FLOOR),
-                     "r_split_nodecile_reported": obs0}
+                     "r_split_decile_reported": obs_dec}
     return key, out
 
 
@@ -212,6 +240,7 @@ def stage_eligibility(a) -> None:
     rt_ok = any(elig[k] for k in knob_keys if "pe__pe" in k)
     out = {
         "stage": "eligibility", "written": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "amendments": "PI 2026-10-26 (ii)(a): no decile stratification in effectfloor/thinningblank",
         "halves": a.halves, "halves_md5": md5(Path(a.halves)), "gate_resolution": GATE,
         "native": native, "dropped_pairs": dropped,
         "half_read_fraction": {"min": min(half_frac.values()), "max": max(half_frac.values())},
@@ -273,6 +302,7 @@ def stage_score(a) -> None:
     seeds = sorted(int(p.stem.split("_s")[1]) for p in Path(a.preds).glob("C12M02_s*.npz"))
     cache = {}
     res = {"stage": "score", "written": time.strftime("%Y-%m-%dT%H:%M:%S"), "seeds": seeds,
+           "amendments": "PI 2026-10-26 (ii)(b): depthcontrol = part2 AND part3; 99 shifts at every resolution",
            "eligibility_written": elig["written"], "pairs": {}, "depthcontrol": {}, "swapwired": {}}
     preds_written = {}
     for seed in seeds:
@@ -322,7 +352,8 @@ def stage_score(a) -> None:
                     "part1_err": abs(pred - math.log2(frac)), "part1_met": abs(pred - math.log2(frac)) <= 0.01,
                     "nll_told_arm": float(nll_d), "nll_told_base": float(nll_b),
                     "part2_met": bool(nll_d < nll_b), "part3_met": p3["met"], "part3_err": p3["abs_err"],
-                    "met": bool(abs(pred - math.log2(frac)) <= 0.01 and nll_d < nll_b and p3["met"]),
+                    # amendment (ii)(b): part (1) reported only
+                    "met": bool(nll_d < nll_b and p3["met"]),
                 }
 
             # knob pairs: swapcorr, gapleft, global level
@@ -346,10 +377,8 @@ def stage_score(a) -> None:
                         rho, p95 = 0.0, float("nan")
                     else:
                         rho = spearman(D, R)
-                        sh = shifts(len(D), k, rng)
-                        if name == "25bp":       # reported only; 25 shifts keep the 1.9 M-bin null cheap
-                            sh = sh[:25]
-                        null = [spearman(np.roll(D, int(s)), R) for s in sh]
+                        sh = shifts(len(D), k, rng)    # 99 everywhere, 25 bp included (PI 2026-10-26)
+                        null = spearman_shift_null(D, R, sh)
                         p95 = float(np.nanpercentile(null, 95))
                     sc[name] = {"rho": rho, "null_p95": p95, "max_abs_delta": float(np.abs(D).max()),
                                 "covariate_unused": unused,

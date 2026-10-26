@@ -44,6 +44,8 @@ Prior evidence, not judged (2026-10-25). All pre-CANDII numbers are single seed,
 
 Covariate-swap probe on the t81 checkpoints, chr21 (2026-10-25; null not yet approved). The output does move when told read length or run type: told 36 bp, the predicted level falls 0.22-0.89 log2 against a real 1.05-1.08; told PE, it moves 0.19-0.98 for ChIP and +0.52-0.70 for DNase, where the real tracks barely move (-0.08 to +0.01). Whether it tracks the per-region arm effect was not testable: no knob pair cleared the split-half reproducibility floor, the depth positive control failed (told depth also moves eta), and the floor statistic itself is biased down. So 'ignores' is wrong for the level; the per-region question stays open.
 
+Rerun with the PI's repairs, chr21 (2026-10-26; prompts from non-blind arrays only, all 7 tracks kept). It is still not readable. Without deciles, the split-half floor calls 15 of 21 pure-thinning depth pairs reproducible, so it cannot tell a real read-length effect (36 bp r_split 0.28-0.36) from the pseudocount artefact. No run-type pair clears it. The depth control fails again on NLL direction (32 of 42 rows). The per-region question needs a floor statistic that thinning does not pass.
+
 Reading: CANDI is in the 'ignores' state for read length and run type, and the missing counterfactual pairs fit that, but low conditional information and collinearity are joint causes. Dedup, MAPQ, fragment and control knobs are not CANDI inputs at all.
 
 <!-- crux:ledger:start -->

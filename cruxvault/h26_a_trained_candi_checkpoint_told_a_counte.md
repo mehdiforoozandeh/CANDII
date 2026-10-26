@@ -84,6 +84,7 @@ CPU only, no training. Checkpoint: the selected CANDI checkpoint of [[t81_retrai
 ## Run Links
 
 - 2026-10-25, chr21, CPU. Nibi 24997320 (halves extract); Fir 453552 (eligibility, frozen before inference), 454386_0-13 (inference, seeds 0 and 1), 457511 (scoring). Run root `fir:/project/def-maxwl/mforooz/h26`; small outputs in `results/h26/` (gitignored, main checkout) with `FIR_PATH.txt`. Code `tools/h26/`, `slurm/h26/`.
+- 2026-10-26, rerun 1 (amendments of 2026-10-26), chr21, CPU. Fir 528375 (eligibility, written 01:06:09, before inference), 528686_0-13 (inference), 528687 (scoring). Run root `fir:/project/def-maxwl/mforooz/h26/rerun1`, reusing the first run's halves extract in place; small outputs in `results/h26/rerun1/` with `FIR_PATH.txt`. Code on branch `chunk/h26-rerun`.
 
 ## Artifacts
 
@@ -93,9 +94,18 @@ _(none yet)_
 
 ## Findings
 
+Rerun 1 of 2026-10-26, under the post-hoc amendments. Numbers from `results/h26/rerun1/eligibility.json` and `results.json`, 1 kb. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` unmet; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated.
+
+- Prompts are the `T_` cells only; no `B_` array was opened. All 7 tracks kept a prompt (HAP-1 and SJSA1 have one assay each). Predictions are bit-identical to the first run.
+- `swapwired`: 80 of 80 rows.
+- `depthcontrol`: part (2) holds on 32 of 42 rows (fails mostly at 15M); part (3) on 42 of 42. Part (1), reported: 10 of 42.
+- `thinningblank`: 15 of 21 depth pairs eligible (7.5M r_split 0.34-0.52, 3.75M 0.48-0.63; null p99 0.32-0.40). Without deciles, the split-half statistic finds reproducibility where thinning has none.
+- `effectfloor`: read length 8 of 12 pairs eligible (36 bp r_split 0.28-0.36, the same range as the thinning pairs); run type 0 of 7 (max 0.162).
+- As scored on the 8 eligible pairs: the pr1 oracle worsens pr2 NLL on 38 of 38 rows, so `gapleft` has no reachable gap; `swapcorr` holds on 15 of 16 pair-seed rows (C07M20 36 bp, seed 0: ρ 0.315 > p95 0.225). With both controls failed, these are not read.
+
 Run of 2026-10-25 (PI delegated; the null and the thresholds were approved after the run, on 2026-10-25 and 2026-10-26). Numbers from `results/h26/eligibility.json` and `results.json`. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` met; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated (no eligible pair).
 
-- `swapwired`: 84 of 84 prompt rows change one field in the target column only; read lengths 36 and 50 lie in the training range 20-101.
+- `swapwired`: 80 of 80 prompt rows change one field in the target column only; read lengths 36 and 50 lie in the training range 20-101.
 - `depthcontrol`: part (1) holds on 10 of 42 rows (worst 0.107 log2), because told depth also moves eta through FiLM; part (2) on 32 of 42; part (3) on 21 of 21.
 - `effectfloor`: 0 of 19 knob pairs eligible; best 1 kb r_split 0.084. Decile stratification anti-correlates the two base halves and biases r_split down (depth pairs -0.15 to -0.46), so `thinningblank` passes for that reason too. The design needs repair before a rerun.
 - Reported only: the model does use both covariates on the output side. Told 36 bp, chr21 level moves -0.22 to -0.89 log2 (real -1.05 to -1.08, mostly the bin-count rule). Told PE, it moves -0.19 to -0.98 for ChIP and +0.52 to +0.70 for DNase; the real tracks move -0.08 to +0.01. At 1 kb the pr1-fitted oracle worsens NLL on 38 of 38 rows.

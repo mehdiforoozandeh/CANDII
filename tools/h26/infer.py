@@ -1,8 +1,15 @@
 """h26 step 3 (Fir, CPU): decode one t112 track on chr21 under every probe prompt.
 
 The covariate-swap probe of h26. The ENCODER input is the cell type's `T_` assays in the CANDI
-`eic` corpus, exactly as the t81 benchmark prompts a `T_ -> B_` imputation (the target column is
-held out by `_apply_loo_mask`, a no-op there because the `T_` cell lacks the assay). The latent is
+`eic` corpus (the target column is held out by `_apply_loo_mask`, a no-op when the `T_` cell lacks
+the assay).
+
+RERUN 1 (PI ruling (iii), 2026-10-26): the 2019 challenge's blind-panel `B_` arrays are not used in
+any form, not even loaded. The first run built the batch as the `T_ -> B_` pair, which read the `B_`
+cell's counts into `y_data_imp` (never fed to the model, but loaded). Here the regime is rewritten
+with no `eval_pairs` and no `B_`/`V_` biosample, the batch is the `T_` cell self-paired (so no
+imputation keys are built), and `CorpusStore.__getitem__` refuses any `B_` name as a tripwire. A
+track whose `T_` cell has no available assay has no usable prompt and is dropped (recorded). The latent is
 computed once per window; the DECODER is then run once per prompt, and the prompts differ only in
 the target column of `y_meta` (`[log2 depth, assay_id, read_length, run_type_id]`, the units
 `store/dataset.py` uses: raw read length in bp, run type SE=0 / PE=1).
@@ -69,6 +76,34 @@ def prompts_for(track: str, rows: dict, assay_id: int) -> dict:
     return out
 
 
+def noblind_regime(regime_path: str, cell_bios: str, out_dir: Path) -> Path:
+    """The regime with every B_ (and V_) biosample and every eval pair removed; eval = the T_ cell."""
+    r = json.loads(Path(regime_path).read_text())
+    r["eval_pairs"] = []
+    r["biosamples"] = {"train": [b for b in r["biosamples"]["train"] if b.startswith("T_")],
+                       "eval": [cell_bios]}
+    r["_comment"] = f"h26 rerun 1: {regime_path} with no B_/V_ biosample and no eval_pairs (PI ruling (iii))"
+    txt = json.dumps(r, indent=1)
+    assert '"B_' not in txt, "a B_ name survived in the derived regime"
+    out = out_dir / f"regime.noblind.{cell_bios}.json"
+    out.write_text(txt)
+    return out
+
+
+def forbid_blind() -> list:
+    """Make any attempt to open a B_ biosample in the store raise. Returns the opened-name log."""
+    from candi.store.reader import CorpusStore
+    opened, orig = [], CorpusStore.__getitem__
+
+    def guarded(self, name):
+        if str(name).startswith("B_"):
+            raise RuntimeError(f"h26 rerun 1: refusing to open blind-panel biosample {name} (ruling iii)")
+        opened.append(str(name))
+        return orig(self, name)
+    CorpusStore.__getitem__ = guarded
+    return opened
+
+
 def train_read_lengths(regime: dict) -> dict:
     man = json.loads((Path(regime["store"]) / "manifest.json").read_text())
     rls, rts = [], []
@@ -108,14 +143,24 @@ def main() -> None:
     model.load_state_dict(torch.load(ckpt, map_location="cpu"), strict=True)
     model.eval()
 
+    opened = forbid_blind()
     rows = {r["pid"]: r for r in csv.DictReader(open(a.cf_manifest), delimiter="\t")}
     base = rows[f"{a.track}__base__base"]
     cell = CELL[base["cell"]]
     regime = json.loads(Path(a.regime).read_text())
-    src = StoreSource(a.regime, chroms=[CHROM], biosamples=[f"B_{cell}"])
-    pair = Pair(f"T_{cell}", f"B_{cell}")
-    assert pair in src.eval_pairs, (pair, src.eval_pairs)
+    t_bios = f"T_{cell}"
+    regime_nb = noblind_regime(a.regime, t_bios, out)
+    src = StoreSource(regime_nb, chroms=[CHROM], biosamples=[t_bios])
+    pair = Pair(t_bios, t_bios)
+    assert not src.eval_pairs, src.eval_pairs
     col = src.assays.index(base["assay"])
+    t_avail = src.ds._availability[t_bios]
+    prompt_assays = [src.assays[i] for i in range(len(src.assays)) if bool(t_avail[i]) and i != col]
+    if not prompt_assays:
+        (out / f"{a.track}_s{a.seed}.json").write_text(json.dumps(
+            {"track": a.track, "seed": a.seed, "dropped": f"{t_bios} has no available assay (ruling iii)"}))
+        print(f"[h26] DROPPED {a.track}: {t_bios} has no usable prompt", flush=True)
+        return
     prompts = prompts_for(a.track, rows, col)
     names = list(prompts)
     rl_train = train_read_lengths(regime)
@@ -162,6 +207,8 @@ def main() -> None:
         if lo % (40 * a.batch_windows) == 0:
             print(f"[h26] {a.track} s{a.seed} window {lo}/{len(starts)} {time.time() - t0:.0f}s", flush=True)
     assert written.all(), f"{(~written).sum()} bins never written"
+    assert not any(n.startswith("B_") for n in opened), opened
+    assert not any(k.startswith("B_") for k in src.ds.corpus._bios), list(src.ds.corpus._bios)
     payload = {f"{p}|{k}": v for p, d in buf.items() for k, v in d.items()}
     np.savez_compressed(out / f"{a.track}_s{a.seed}.npz", **payload)
     meta = {
@@ -171,6 +218,10 @@ def main() -> None:
         "chrom": CHROM, "n_bins": n_bins, "n_windows": len(starts), "context_bins": L,
         "prompts": prompts, "swapwired": wired, "train_read_lengths": rl_train,
         "missing": MISSING, "cloze": CLOZE, "wall_s": round(time.time() - t0, 1),
+        "ruling_iii": {"regime_noblind": str(regime_nb), "prompt_biosample": t_bios,
+                       "prompt_assays": prompt_assays, "target_in_T": bool(t_avail[col]),
+                       "store_biosamples_opened": sorted(set(opened)),
+                       "store_biosamples_cached": sorted(src.ds.corpus._bios)},
     }
     (out / f"{a.track}_s{a.seed}.json").write_text(json.dumps(meta, indent=1))
     src.close()
