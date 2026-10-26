@@ -11,7 +11,9 @@ replicates: 7 tracks x (2 read-length + 1 run-type arms); 2 seeds of checkpoint 
 verdict: 
 metric: 
 created: "2026-10-25T13:49:00"
-updated: "2026-10-25T13:49:00"
+updated: "2026-10-26T00:53:49"
+null_approved: "2026-10-26T00:53:49"
+null_hash: e7671d9e2bb33ffb
 ---
 
 # h26 — A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates
@@ -30,7 +32,7 @@ Claim: CANDI's output does not follow a change in read length or run type with b
 
 Instrumentation: per-bin chr21 arm/base log2 ratios are mostly sampling noise, so even a covariate-aware model could not track them.
 
-<!-- Recommended by Claude via the crux-null agent; the PI delegated the choice on 2026-10-25. Awaiting PI sign-off (crux approve-null h26 not run). -->
+<!-- Recommended by Claude via the crux-null agent; the PI delegated the choice on 2026-10-25. The PI approved it with `crux approve-null h26` on 2026-10-26. -->
 
 ## Problem Statement
 
@@ -43,9 +45,9 @@ A trained CANDI checkpoint, told a counterfactual arm's read length or run type 
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-<!-- Thresholds marked "recommended" were proposed by Claude under the PI's delegation (2026-10-25) and await PI sign-off. -->
+<!-- Thresholds marked "recommended" were proposed by Claude under the PI's delegation (2026-10-25) and the PI approved them in chat on 2026-10-25. -->
 
-**Probe definition, fixed before any inference.** Pairs = 7 tracks × {read length 36, read length 50, run type PE}. A pair whose arm value equals the base's native value is dropped and listed (no swap exists). Prompt (a) = the base's covariates; prompt (b) = the base's covariates with ONLY the knob changed, depth held at the base's value. Real ratio R = log2((arm+1)/(base+1)), median-centred per pair, so the global level (the arm's own mapped depth, which the depth offset explains) is out of the claim. Gate resolution for ratios: 1 kb pooled bins (recommended; 25 bp, 200 bp and 5 kb are reported, never gating). NLL is always computed at the native 25 bp NB. Checkpoint seeds s0 and s1 (t81, md5 checked against results/t81/TRAIN_CANDI_EIC19.md); a claim-directed check is met only if it is met on every seed that exists. Eligibility (`effectfloor`) is computed and frozen BEFORE any model inference.
+**Probe definition, fixed before any inference.** Pairs = 7 tracks × {read length 36, read length 50, run type PE}. A pair whose arm value equals the base's native value is dropped and listed (no swap exists). Prompt (a) = the base's covariates; prompt (b) = the base's covariates with ONLY the knob changed, depth held at the base's value. Real ratio R = log2((arm+1)/(base+1)), median-centred per pair, so the global level (the arm's own mapped depth, which the depth offset explains) is out of the claim. Gate resolution for ratios: 1 kb pooled bins (PI-approved; 25 bp, 200 bp and 5 kb are reported, never gating). NLL is always computed at the native 25 bp NB. Checkpoint seeds s0 and s1 (t81, md5 checked against results/t81/TRAIN_CANDI_EIC19.md); a claim-directed check is met only if it is met on every seed that exists. Eligibility (`effectfloor`) is computed and frozen BEFORE any model inference.
 
 **Outcome-neutral controls** must pass whatever the claim is; a failure makes the run invalid, never a refutation.
 
@@ -55,12 +57,12 @@ A trained CANDI checkpoint, told a counterfactual arm's read length or run type 
       fails-if:: y_meta does not reach the decoder, the decode reads the wrong column, or arm and base products are mispaired
 - [ ] [outcome-neutral] `thinningblank` (negative control) — run the `effectfloor` statistic on the median-centred depth-thinning pairs. Binomial thinning has no per-bin pattern, so all 21 depth pairs must come out NOT eligible.
       fails-if:: the split-half apparatus finds a "reproducible arm effect" where none exists (for example from the +1 pseudocount compressing low-count bins the same way in both halves)
-- [ ] [outcome-neutral] `effectfloor` (precondition against the null) — per pair, with the t117 halves: r_split = Spearman across 1 kb bins between log2((arm_pr1+1)/(base_pr1+1)) and log2((arm_pr2+1)/(base_pr2+1)), each median-centred and computed within deciles of base mean count, then averaged over deciles. A pair is ELIGIBLE when r_split exceeds the 99th percentile of a block-shift null (99 circular shifts of the pr2 ratio by ≥ 1 Mb on chr21) and r_split ≥ 0.2 (recommended). Met when at least one read-length pair AND at least one run-type pair are eligible; claim-directed checks score eligible pairs only.
+- [ ] [outcome-neutral] `effectfloor` (precondition against the null) — per pair, with the t117 halves: r_split = Spearman across 1 kb bins between log2((arm_pr1+1)/(base_pr1+1)) and log2((arm_pr2+1)/(base_pr2+1)), each median-centred and computed within deciles of base mean count, then averaged over deciles. A pair is ELIGIBLE when r_split exceeds the 99th percentile of a block-shift null (99 circular shifts of the pr2 ratio by ≥ 1 Mb on chr21) and r_split ≥ 0.2 (PI-approved). Met when at least one read-length pair AND at least one run-type pair are eligible; claim-directed checks score eligible pairs only.
       fails-if:: the null holds; the run then reads invalid for that knob
 
 **Claim-directed checks** (eligible pairs only). Combination rule `all`, over `gapleft` and `swapcorr`. Joint power is about 64% (two checks at 80%), lower with the seed requirement. Thresholds may not be loosened to compensate.
 
-- [ ] [hypothesis] `gapleft` — score the arm's pr2 half (all predictions shifted by the same log2 half-depth offset) under P_base (prompt a), P_arm (prompt b), and P_oracle = P_base × 2^(R̂), where R̂ is the median-centred, decile-adjusted 1 kb ratio estimated from the pr1 halves only (cross-fitted). G_oracle = NLL(P_base) − NLL(P_oracle); G_model = NLL(P_base) − NLL(P_arm); 95% CIs by a 100 kb block bootstrap on chr21. Met for a pair when the lower bound of G_oracle > 0 AND the upper bound of G_model / G_oracle ≤ 0.25 (recommended). Met overall when met on every eligible pair.
+- [ ] [hypothesis] `gapleft` — score the arm's pr2 half (all predictions shifted by the same log2 half-depth offset) under P_base (prompt a), P_arm (prompt b), and P_oracle = P_base × 2^(R̂), where R̂ is the median-centred, decile-adjusted 1 kb ratio estimated from the pr1 halves only (cross-fitted). G_oracle = NLL(P_base) − NLL(P_oracle); G_model = NLL(P_base) − NLL(P_arm); 95% CIs by a 100 kb block bootstrap on chr21. Met for a pair when the lower bound of G_oracle > 0 AND the upper bound of G_model / G_oracle ≤ 0.25 (PI-approved). Met overall when met on every eligible pair.
       fails-if:: the model, told the arm's knob, closes more than a quarter of a real, reachable gap
       discriminates:: true
 - [ ] [hypothesis] `swapcorr` — Spearman between the median-centred model Δ (prompt b − prompt a, log2 mean, 1 kb) and the median-centred full-product real R. Met for a pair when ρ ≤ the 95th percentile of a block-shift null (99 circular shifts of Δ by ≥ 1 Mb). If max |Δ| < 1e-4 log2 over the chromosome, ρ is recorded as 0 and the pair is labelled "covariate unused". Met overall when met on every eligible pair.
@@ -84,7 +86,7 @@ _(none yet)_
 
 ## Findings
 
-Run of 2026-10-25 (PI delegated; null and thresholds await sign-off). Numbers from `results/h26/eligibility.json` and `results.json`. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` met; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated (no eligible pair).
+Run of 2026-10-25 (PI delegated; the null and the thresholds were approved after the run, on 2026-10-25 and 2026-10-26). Numbers from `results/h26/eligibility.json` and `results.json`. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` met; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated (no eligible pair).
 
 - `swapwired`: 84 of 84 prompt rows change one field in the target column only; read lengths 36 and 50 lie in the training range 20-101.
 - `depthcontrol`: part (1) holds on 10 of 42 rows (worst 0.107 log2), because told depth also moves eta through FiLM; part (2) on 32 of 42; part (3) on 21 of 21.
