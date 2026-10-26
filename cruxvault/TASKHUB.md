@@ -53,6 +53,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t128` [implementation] Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory) — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[h22_a_composable_g_one_shared_map_from_each_\|h22]], [[h19_g_fits_trained_base_arm_depth_pairs_but_\|h19]]
 - `t130` [implementation] score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t133` [visualization] rank the t112 processing knobs by how much each moves the signal: peak-height change, 1 kb shape change, FRiP
 
 ## Blocked
 
@@ -122,6 +123,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board — *open*
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 - `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
+- `t133` [visualization] rank the t112 processing knobs by how much each moves the signal: peak-height change, 1 kb shape change, FRiP — *open*
 
 ## Done · Dropped
 
