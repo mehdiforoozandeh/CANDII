@@ -53,7 +53,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t128` [implementation] Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory) — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[h22_a_composable_g_one_shared_map_from_each_\|h22]], [[h19_g_fits_trained_base_arm_depth_pairs_but_\|h19]]
 - `t130` [implementation] score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
-- `t133` [visualization] rank the t112 processing knobs by how much each moves the signal: peak-height change, 1 kb shape change, FRiP
 
 ## Blocked
 
@@ -123,7 +122,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board — *open*
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 - `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
-- `t133` [visualization] rank the t112 processing knobs by how much each moves the signal: peak-height change, 1 kb shape change, FRiP — *open*
 
 ## Done · Dropped
 
@@ -205,3 +203,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t127` [implementation] head-to-head: Poisson-NLL mean + NB-NLL dispersion vs full NB NLL, counts, per-track g, rungs A, A-no-pseudocount (mu = e^a X^b + e^c), D, 3 seeds; exploratory, no bar — refs [[q1_do_the_recorded_experimental_covariates_\|q1]], [[h21_fitting_the_mean_by_poisson_nll_and_the_\|h21]], [[h18_the_1_pseudocount_in_x_log_1_counts_make\|h18]] — *done* → `results/t127/report.md`, `presentations/t127-ppml-vs-nb/DECK.md`
 - `t129` [implementation] merge the loss head-to-head code (Poisson-mean loss, rung A0, score --extras) from exp/t118-ppml-vs-nb into exp/t118-counterfactual-f, resolving the score.py and train.py conflicts against the t126/t128 changes; tests on Nibi — refs [[h21_fitting_the_mean_by_poisson_nll_and_the_\|h21]], [[h18_the_1_pseudocount_in_x_log_1_counts_make\|h18]] — *done* → `results/t129/MERGE.md`
 - `t132` [implementation] Build and run phase 2 of the symmetric encoder-decoder rung D: fixed, anchored and 12k-step arms, 96 runs on Fir (exploratory) — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[h22_a_composable_g_one_shared_map_from_each_\|h22]], [[h19_g_fits_trained_base_arm_depth_pairs_but_\|h19]] — *done* → `presentations/t128p2-encdec/DECK.md`
+- `t133` [visualization] rank the t112 processing knobs by how much each moves the signal: peak-height change, 1 kb shape change, FRiP — *done* → `results/t133/DIGEST.md`

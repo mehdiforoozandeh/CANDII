@@ -39,9 +39,10 @@ Root: [[candii]]
     - · `h24` [H] [[h24_the_depth_entries_in_g_s_covariate_input|The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs]] — *idea*
   - ○ `q8` [Q] [[q8_does_candi_s_training_which_never_pairs_|**Does CANDI's training, which never pairs an experiment with a counterfactual of itself except in depth, leave the trained model unable to correct for a change in the other covariates?**]] — *open*
     - · `h26` [H] [[h26_a_trained_candi_checkpoint_told_a_counte|A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates]] — *idea*
+  - ○ `q9` [Q] [[q9_which_recorded_processing_covariates_mov|**Which recorded processing covariates move a track the most when changed one at a time, in peak height and in the shape of the signal?**]] — *open*
 
 ## Dashboard
 
-- **Questions** (8): open 8 · review 0 · resolved 0
+- **Questions** (9): open 9 · review 0 · resolved 0
 - **Hypotheses** (25): idea 18 · staged 0 · running 5 · done 2
 - **Verdicts**: supported 0 · partial 0 · refuted 2 · inconclusive 0 · invalid-run 0

@@ -60,7 +60,7 @@ Exploratory readings (PI ruling), not judged. Bars are 2 × the 3-seed wobble.
 - The depth and run-type claims were never run in their own design.
 
 <!-- crux:ledger:start -->
-**10 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0) · sub-questions 0/7 resolved
+**11 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0) · sub-questions 0/8 resolved
 
 - `h1` [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
 - `h2` [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
@@ -72,4 +72,5 @@ Exploratory readings (PI ruling), not judged. Bars are 2 × the 3-seed wobble.
 - `q6` _(Q)_ [[q6_how_closely_does_a_map_h_reproduce_the_l|How closely does a map h reproduce the −log10 p track from a predicted count distribution and its matched control, as h's complexity and inputs grow?]] — *open*
 - `q7` _(Q)_ [[q7_why_do_the_covariate_conditioned_g_f_des|Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?]] — *open*
 - `q8` _(Q)_ [[q8_does_candi_s_training_which_never_pairs_|Does CANDI's training, which never pairs an experiment with a counterfactual of itself except in depth, leave the trained model unable to correct for a change in the other covariates?]] — *open*
+- `q9` _(Q)_ [[q9_which_recorded_processing_covariates_mov|Which recorded processing covariates move a track the most when changed one at a time, in peak height and in the shape of the signal?]] — *open*
 <!-- crux:ledger:end -->

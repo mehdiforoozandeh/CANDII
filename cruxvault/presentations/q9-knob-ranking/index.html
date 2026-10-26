@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Which Settings Move the Signal</title>
+
+<!--
+  prezit · PAPER ARC · anchor: the question "which recorded processing covariates move a track
+  the most when changed one at a time" (exploratory, 2026-10-26).
+
+  build    python build_deck.py  ->  index.html beside this file
+  numbers  every measured number comes from DATA, which build_deck.py reduces from
+           results/t133/pairs.tsv (Nibi job 25063638, code 5f95c43). None is typed here.
+  typed    design constants only, marked data-src="literal": the top-1% peak set, the 1 kb
+           shape bins, the 30M-read base, chr19 + chr21.
+  notes    every slide carries speaker notes (press n).
+-->
+<script type="application/json" id="deck-sources">{"presentations/q9-knob-ranking/build_deck.py": "22149d513e3c471a7b064d1d286dcba529e84fb578b85db2af1403fa7b3d4ffe", "presentations/q9-knob-ranking/deck_src.html": "34a4b3b45757e0434b4028e15e15a3980affa5847aef0f25e540e7c900e38341", "results/t133/pairs.tsv": "4d2f46057b8db06ca04638840de6d038dd0a4149d95e09ce9530d04166951a8f"}</script>
+
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+
+  /* --- paper arc ------------------------------------------------------ */
+  :root{--depth:#3f7d7a;--ab:#b5462e;--rerun:#7a5ea8;--ctl:#9a968e;--noise:#a6a29a}
+  .kicker .sec{display:inline-block;background:var(--accent);color:#fff;padding:3px 9px;
+    border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  @media (max-width:900px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:#fff;
+    border-radius:8px;padding:16px 18px}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));
+    font-weight:700;margin-bottom:8px}
+  .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .panels>div{padding:0 14px}
+  .panels .fig svg{max-height:40vh}
+  .panels>div+div{border-left:1px solid var(--hair)}
+  @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
+  table.dtable td.run{color:var(--own);font-weight:600}
+  table.dtable td.off{color:var(--faint)}
+</style>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline, the scope in one line
+       source   DATA.n_pairs, DATA.n_tracks, DATA.n_arm_products
+       numbers  counts only, from DATA
+       cut      the nav hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">counterfactual arms · lab meeting · exploratory</div>
+      <h1>Which processing settings change a track the most?</h1>
+      <p class="sub"><span id="tPairs"></span> before/after comparisons: <span id="tArms"></span> re-processed versions of <span id="tTracks"></span> tracks, each changing one setting, scored for peak height, shape and FRiP.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+      <aside class="notes"><p>This is a first, exploratory reading. There are no pass or fail bars. The goal is a ranking of the settings, and an honest list of what still muddies it.</p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the data
+       job      what a counterfactual arm is, as a schematic
+       source   the counterfactual-arm build (design)
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the data</div>
+      <h2>Each arm re-processes the same experiment with one setting changed, so base vs arm isolates that setting</h2>
+      <div class="fig wide" id="figArms"></div>
+      <div class="chips" style="margin-top:18px;justify-content:center">
+        <div class="chip"><div class="cn" style="color:var(--depth)">Read side</div><div class="cc">depth · antibody proxy · read length · mapping quality · duplicates · run type</div></div>
+        <div class="chip"><div class="cn" style="color:var(--ctl)">Control side</div><div class="cc">control scaling · control identity · control depth · fragment extension</div></div>
+      </div>
+      <aside class="notes"><p>The base is the standard single-end ENCODE recipe. Every arm comes from the same raw reads with exactly one setting moved. Read-side settings change which reads enter the pileup, so they change both the counts and the p-values. Control-side settings only change the peak caller's p-values; the counts stay identical to the base.</p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · MOTIVATION · the question
+       job      narrow to the exact ask
+       source   the question node
+       numbers  none
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the question</div>
+      <p class="lead">If we change one processing setting, how much does the track move: in the height of its peaks, and in the pattern of where its signal falls?</p>
+      <p class="note">Why it matters: a model that translates a track across settings should spend its capacity on the settings that matter. The ranking tells us which those are.</p>
+      <aside class="notes"><p>Magnitude and shape are kept apart on purpose. A setting can rescale every peak without moving any of them, or leave heights alone and reshuffle the pattern.</p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · METHOD · the grid of arms (the deck's one table)
+       job      the ten settings, their levels and how each was made
+       source   DATA.levels (the level names)
+       numbers  none beyond level names from DATA
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the grid of arms</div>
+      <h2>Ten settings, one or more levels each</h2>
+      <table class="dtable" id="tblArms"></table>
+      <aside class="notes"><p>Re-run means the whole pipeline was run again from the raw reads. Derived means the change was applied to the base's filtered reads, or only to the peak caller. The two DNase mapping-quality arms came out identical to the base, so they are left out.</p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · METHOD · what we score
+       job      the three metrics and the summary rule, as cards
+       source   the question's Protocol (design constants)
+       numbers  literal design constants only
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what we score</div>
+      <h2>Three measures of how far an arm moved from its base</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--depth)"><div class="rl">Peak height</div><p>Take the base's top <span data-src="literal">1%</span> of bins (its peaks). Compare the mean signal there, arm over base, on a log<sub data-src="literal">2</sub> scale. One unit = peaks doubled or halved.</p></div>
+        <div class="card" style="--c:var(--ab)"><div class="rl">Shape</div><p>One minus the rank correlation between base and arm, on <span data-src="literal">1 kb</span> bins. Zero = same pattern, whatever the scale. Wider bins damp counting noise.</p></div>
+        <div class="card" style="--c:var(--rerun)"><div class="rl">FRiP</div><p>Fraction of reads in peaks: the share of a track's reads in its own top <span data-src="literal">1%</span> of bins. Counts only. We report arm minus base.</p></div>
+      </div>
+      <p class="note">Scored on <span data-src="literal">chr19 + chr21</span>, blacklist removed. Each bar is the median over the tracks of one mark class; the whisker is the range across those tracks. Each setting is shown at its strongest level.</p>
+      <aside class="notes"><p>There are no seeds here, so the uncertainty shown is the spread across tracks. Narrow marks and broad marks each have three tracks; DNase has one.</p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · RESULTS · (a) peak height
+       job      one claim, one figure as its evidence, one caveat
+       claim    depth moves peak height the most; the antibody proxy and read length come next
+       source   results/t133/pairs.tsv via DATA.ranked counts|narrow|abs_log2fc_top1 and counts|broad
+       numbers  DATA.ranked
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) peak height · counts · histone marks</div>
+      <h2>Depth moves peak height the most; the antibody proxy and read length come next</h2>
+      <div class="chartbox panels"><div class="fig" id="figMagN"></div><div class="fig" id="figMagB"></div></div>
+      <ul class="pts">
+        <li>Depth at its lowest level drops the peaks by <span id="tDepthMag"></span> log<sub data-src="literal">2</sub> units, close to the drop in read count itself.</li>
+      </ul>
+      <aside class="notes"><p>Panel a is the narrow marks and panel b the broad marks. The depth result is the expected one: fewer reads, proportionally shorter peaks. The interesting part is the order after it.</p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · RESULTS · (b) shape
+       job      one claim, one figure as its evidence, one caveat
+       claim    the antibody proxy changes the shape the most, more than an eightfold depth cut
+       source   DATA.ranked counts|narrow|shape_1k and counts|broad|shape_1k
+       numbers  DATA.ranked
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) shape · counts · histone marks</div>
+      <h2>Mixing control reads into the treatment changes the shape the most</h2>
+      <div class="chartbox panels"><div class="fig" id="figShpN"></div><div class="fig" id="figShpB"></div></div>
+      <ul class="pts">
+        <li>The antibody proxy reads <span id="tAbShape"></span>; the four re-run settings sit close together, between <span id="tRerunShape"></span>.</li>
+      </ul>
+      <aside class="notes"><p>Replacing most treatment reads with control reads flattens the contrast between peaks and background, which reorders bins. The four re-run settings bunch together; the last results slide shows why that bunching is suspicious.</p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · RESULTS · (c) p-values
+       job      one claim, one figure as its evidence, one caveat
+       claim    the control-side settings barely move the p-value track's shape
+       source   DATA.ranked pval|narrow|shape_1k and pval|broad|shape_1k
+       numbers  DATA.ranked
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) shape · p-value track · histone marks</div>
+      <h2>The four control-side settings barely move the p-value track's shape</h2>
+      <div class="chartbox panels"><div class="fig" id="figPN"></div><div class="fig" id="figPB"></div></div>
+      <ul class="pts">
+        <li>Control-side settings stay at or below <span id="tCtlMax"></span>; the read-side ones start at <span id="tReadMin"></span>. Control depth is the weakest of all.</li>
+      </ul>
+      <aside class="notes"><p>Control scaling, control identity, control depth and fragment extension change only the peak caller's inputs. They can still shift peak heights in p, which is in the table file, but the pattern stays almost the same.</p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · RESULTS · (d) DNase
+       job      one claim, one figure as its evidence, one caveat
+       claim    for DNase, duplicate removal and run type change the signal a lot, mostly by concentrating reads in peaks
+       source   DATA.ranked counts|DNase|abs_log2fc_top1, counts|DNase|dfrip
+       numbers  DATA.ranked
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) DNase · counts · one track</div>
+      <h2>In DNase, keeping duplicates and going paired-end pile reads into the peaks</h2>
+      <div class="chartbox panels"><div class="fig" id="figDnMag"></div><div class="fig" id="figDnFrip"></div></div>
+      <ul class="pts">
+        <li>Keeping duplicates raises FRiP by <span id="tDnDedup"></span>, a very large jump that we have not yet checked by hand.</li>
+      </ul>
+      <aside class="notes"><p>This is a single track, so there is no spread to show. Depth cuts peak height here too, but leaves FRiP nearly unchanged, as it should.</p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · RESULTS · (e) the caveat
+       job      one claim, one figure as its evidence, one caveat
+       claim    the four re-run settings sit inside the depth-thinning ladder on shape, so their shape scores are partly resampling
+       source   DATA.levels counts narrow/broad shape_1k for depth levels and the re-run settings
+       numbers  DATA.levels
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) a caution on the middle of the ranking</div>
+      <h2>The re-run settings look like a depth cut on shape, because each one re-draws its reads</h2>
+      <div class="chartbox panels"><div class="fig" id="figLadN"></div><div class="fig" id="figLadB"></div></div>
+      <ul class="pts">
+        <li>A re-run arm draws a fresh random <span data-src="literal">30M</span>-read subsample, so part of its change is which reads were drawn, not the setting.</li>
+      </ul>
+      <aside class="notes"><p>Grey points are depth cuts, whose reads are a subset of the base's reads. The purple points are the re-run settings. They sit between the quarter-depth cut and the eighth-depth cut, so we cannot yet order them by their own effect on shape.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · DISCUSSION · ruled in / out / doubts
+       job      readings restated; doubts kept honest
+       source   restated from results (a) to (e)
+       numbers  none new
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this reading says</div>
+      <h2>The ends of the ranking are clear; the middle is not yet</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--depth)"><div class="rl">Clear</div><p>Depth leads peak height. The antibody proxy leads shape. The control-side settings move the p-value track least, control depth weakest of all.</p></div>
+        <div class="card" style="--c:var(--rerun)"><div class="rl">Not resolved</div><p>Duplicate removal, run type, read length and mapping-quality filter: on shape they cannot be told apart from re-drawing the reads.</p></div>
+        <div class="card" style="--c:var(--noise)"><div class="rl">Doubts</div><p>Peaks are chosen on the base, so any re-drawn arm reads lower by regression to the mean, and FRiP at low depth is inflated the same way. The DNase FRiP jump is unchecked. Two chromosomes only.</p></div>
+      </div>
+      <aside class="notes"><p>Regression to the mean: the base's top bins are partly top because of the base's own noise, so an independent draw will usually be lower there. A nested depth cut does not suffer this, which is why depth behaves as expected.</p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · DISCUSSION · options for the next phase
+       job      labelled options; no recommendation
+       source   the doubts on the previous slide
+       numbers  none
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>options for the next phase</div>
+      <h2>Options for the next phase</h2>
+      <div class="cards">
+        <div class="card"><div class="rl">Option A</div><p>Measure the re-draw floor: score a fresh subsample of the base against the base, and subtract it. Small CPU job; resolves the middle of the ranking.</p></div>
+        <div class="card"><div class="rl">Option B</div><p>Choose peaks on a reference both tracks share (for example their union), to remove regression to the mean from peak height and FRiP. Minutes; cleaner magnitude ranking.</p></div>
+        <div class="card"><div class="rl">Option C</div><p>Check the DNase duplicate-removal jump by hand against the pipeline's own QC. Small; confirms or kills the largest DNase effect.</p></div>
+      </div>
+      <aside class="notes"><p>These are options, not recommendations. Each card says what it costs and what it would teach.</p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">counterfactual arms · which settings move the signal</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every measured number comes from DATA (build_deck.py, from results/t133/pairs.tsv).
+   Comparisons and ranges are computed here, never typed. */
+const DATA = {"n_pairs":192,"n_tracks":7,"n_arm_products":121,"levels":[{"space":"counts","mc":"DNase","arm":"dedup","level":"off","abs_log2fc_top1":{"v":2.568613213206609,"lo":2.568613213206609,"hi":2.568613213206609,"n":1},"log2fc_top1":{"v":2.568613213206609,"lo":2.568613213206609,"hi":2.568613213206609,"n":1},"shape_1k":{"v":0.06087785999620876,"lo":0.06087785999620876,"hi":0.06087785999620876,"n":1},"dfrip":{"v":0.5293518488163598,"lo":0.5293518488163598,"hi":0.5293518488163598,"n":1},"frip_base":{"v":0.17695704629128292,"lo":0.17695704629128292,"hi":0.17695704629128292,"n":1},"frip_arm":{"v":0.7063088951076427,"lo":0.7063088951076427,"hi":0.7063088951076427,"n":1}},{"space":"counts","mc":"DNase","arm":"depth","level":"15M","abs_log2fc_top1":{"v":1.7361597949568106,"lo":1.7361597949568106,"hi":1.7361597949568106,"n":1},"log2fc_top1":{"v":-1.7361597949568106,"lo":-1.7361597949568106,"hi":-1.7361597949568106,"n":1},"shape_1k":{"v":0.053671096084938474,"lo":0.053671096084938474,"hi":0.053671096084938474,"n":1},"dfrip":{"v":0.006062744991589042,"lo":0.006062744991589042,"hi":0.006062744991589042,"n":1},"frip_base":{"v":0.17695704629128292,"lo":0.17695704629128292,"hi":0.17695704629128292,"n":1},"frip_arm":{"v":0.18301979128287196,"lo":0.18301979128287196,"hi":0.18301979128287196,"n":1}},{"space":"counts","mc":"DNase","arm":"depth","level":"3.75M","abs_log2fc_top1":{"v":3.7316006369665575,"lo":3.7316006369665575,"hi":3.7316006369665575,"n":1},"log2fc_top1":{"v":-3.7316006369665575,"lo":-3.7316006369665575,"hi":-3.7316006369665575,"n":1},"shape_1k":{"v":0.20942602503712204,"lo":0.20942602503712204,"hi":0.20942602503712204,"n":1},"dfrip":{"v":0.0320798778219534,"lo":0.0320798778219534,"hi":0.0320798778219534,"n":1},"frip_base":{"v":0.17695704629128292,"lo":0.17695704629128292,"hi":0.17695704629128292,"n":1},"frip_arm":{"v":0.20903692411323632,"lo":0.20903692411323632,"hi":0.20903692411323632,"n":1}},{"space":"counts","mc":"DNase","arm":"depth","level":"7.5M","abs_log2fc_top1":{"v":2.7355682924805564,"lo":2.7355682924805564,"hi":2.7355682924805564,"n":1},"log2fc_top1":{"v":-2.7355682924805564,"lo":-2.7355682924805564,"hi":-2.7355682924805564,"n":1},"shape_1k":{"v":0.117454304438392,"lo":0.117454304438392,"hi":0.117454304438392,"n":1},"dfrip":{"v":0.014507166739019223,"lo":0.014507166739019223,"hi":0.014507166739019223,"n":1},"frip_base":{"v":0.17695704629128292,"lo":0.17695704629128292,"hi":0.17695704629128292,"n":1},"frip_arm":{"v":0.19146421303030214,"lo":0.19146421303030214,"hi":0.19146421303030214,"n":1}},{"space":"counts","mc":"DNase","arm":"pe","level":"pe","abs_log2fc_top1":{"v":1.870050971381274,"lo":1.870050971381274,"hi":1.870050971381274,"n":1},"log2fc_top1":{"v":1.870050971381274,"lo":1.870050971381274,"hi":1.870050971381274,"n":1},"shape_1k":{"v":0.1106503762334834,"lo":0.1106503762334834,"hi":0.1106503762334834,"n":1},"dfrip":{"v":0.3435081566113195,"lo":0.3435081566113195,"hi":0.3435081566113195,"n":1},"frip_base":{"v":0.17695704629128292,"lo":0.17695704629128292,"hi":0.17695704629128292,"n":1},"frip_arm":{"v":0.5204652029026025,"lo":0.5204652029026025,"hi":0.5204652029026025,"n":1}},{"space":"counts","mc":"broad","arm":"abproxy","level":"f0.5","abs_log2fc_top1":{"v":0.6909743852937374,"lo":0.6531027041396117,"hi":0.752070716472927,"n":3},"log2fc_top1":{"v":-0.6909743852937374,"lo":-0.752070716472927,"hi":-0.6531027041396117,"n":3},"shape_1k":{"v":0.27323622483614896,"lo":0.21120372674109766,"hi":0.28155258027602836,"n":3},"dfrip":{"v":-0.005029487108758918,"lo":-0.012202662320447345,"hi":-0.0023008506515326335,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.04690621690035458,"lo":0.046054679782635596,"hi":0.05172629259158459,"n":3}},{"space":"counts","mc":"broad","arm":"abproxy","level":"f0.9","abs_log2fc_top1":{"v":1.6440036601709542,"lo":1.529361993452057,"hi":1.9373619227318344,"n":3},"log2fc_top1":{"v":-1.6440036601709542,"lo":-1.9373619227318344,"hi":-1.529361993452057,"n":3},"shape_1k":{"v":0.5803989742081155,"lo":0.5527291202811717,"hi":0.598261516880947,"n":3},"dfrip":{"v":-0.0036972858572074524,"lo":-0.015524420868964967,"hi":-0.00020604805462134945,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.04823841815190605,"lo":0.04814948237954688,"hi":0.048404534043066966,"n":3}},{"space":"counts","mc":"broad","arm":"crop","level":"36","abs_log2fc_top1":{"v":1.968562082677543,"lo":1.5924227492013252,"hi":2.2285517314273404,"n":3},"log2fc_top1":{"v":-1.968562082677543,"lo":-2.2285517314273404,"hi":-1.5924227492013252,"n":3},"shape_1k":{"v":0.39588127896937886,"lo":0.3049429478945932,"hi":0.4464578820249784,"n":3},"dfrip":{"v":0.022208686378085617,"lo":0.021260117680618584,"hi":0.023172971930500594,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.0751086759396141,"lo":0.07056421681225385,"hi":0.08518907259265052,"n":3}},{"space":"counts","mc":"broad","arm":"crop","level":"50","abs_log2fc_top1":{"v":1.6724841714393042,"lo":1.2975670464323599,"hi":1.8362329249960674,"n":3},"log2fc_top1":{"v":-1.6724841714393042,"lo":-1.8362329249960674,"hi":-1.2975670464323599,"n":3},"shape_1k":{"v":0.36033368493127016,"lo":0.2743108251220506,"hi":0.3846056513061916,"n":3},"dfrip":{"v":0.011960984471422825,"lo":0.01121486246955801,"hi":0.012731569423080458,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.06466727343219396,"lo":0.05957039290372624,"hi":0.07588993938345476,"n":3}},{"space":"counts","mc":"broad","arm":"dedup","level":"off","abs_log2fc_top1":{"v":0.8922020818885749,"lo":0.43001376534138736,"hi":0.9837121201277631,"n":3},"log2fc_top1":{"v":-0.8922020818885749,"lo":-0.9837121201277631,"hi":-0.43001376534138736,"n":3},"shape_1k":{"v":0.3513331468387799,"lo":0.26376006108557193,"hi":0.35594032992600677,"n":3},"dfrip":{"v":0.004323300111842322,"lo":0.0024431533865101676,"hi":0.005886815648501506,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.05625900412095582,"lo":0.0507986838206784,"hi":0.06981577056053344,"n":3}},{"space":"counts","mc":"broad","arm":"depth","level":"15M","abs_log2fc_top1":{"v":1.0016997772046285,"lo":0.9895031785310554,"hi":1.0041663453264533,"n":3},"log2fc_top1":{"v":-1.0016997772046285,"lo":-1.0041663453264533,"hi":-0.9895031785310554,"n":3},"shape_1k":{"v":0.157236671006035,"lo":0.11470628658536619,"hi":0.15981625029198454,"n":3},"dfrip":{"v":0.014589043677923505,"lo":0.012302960117039172,"hi":0.014970128972975331,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.066524747687037,"lo":0.06332565940714356,"hi":0.0762319150290711,"n":3}},{"space":"counts","mc":"broad","arm":"depth","level":"3.75M","abs_log2fc_top1":{"v":2.989377979726166,"lo":2.9856578162728526,"hi":3.014255601814567,"n":3},"log2fc_top1":{"v":-2.989377979726166,"lo":-3.014255601814567,"hi":-2.9856578162728526,"n":3},"shape_1k":{"v":0.4853651742693662,"lo":0.3777191223059767,"hi":0.4887047565985172,"n":3},"dfrip":{"v":0.07827790708095425,"lo":0.06143283421319615,"hi":0.08464121517477245,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.1266334375151225,"lo":0.12536178912522808,"hi":0.13657691918388595,"n":3}},{"space":"counts","mc":"broad","arm":"depth","level":"7.5M","abs_log2fc_top1":{"v":2.002505906173791,"lo":1.9900155693632327,"hi":2.0178166028714855,"n":3},"log2fc_top1":{"v":-2.002505906173791,"lo":-2.0178166028714855,"hi":-1.9900155693632327,"n":3},"shape_1k":{"v":0.32381878325251845,"lo":0.24451149804471162,"hi":0.32793407486487547,"n":3},"dfrip":{"v":0.037059323962915565,"lo":0.030147245116026677,"hi":0.037155144295731565,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.08909084830484507,"lo":0.0854148543970838,"hi":0.09407620002805861,"n":3}},{"space":"counts","mc":"broad","arm":"mapq","level":"0","abs_log2fc_top1":{"v":1.0280248345663248,"lo":0.6852803211116923,"hi":1.1655297649005691,"n":3},"log2fc_top1":{"v":-1.0280248345663248,"lo":-1.1655297649005691,"hi":-0.6852803211116923,"n":3},"shape_1k":{"v":0.42848759513075496,"lo":0.32368631374797774,"hi":0.43977196547512476,"n":3},"dfrip":{"v":-0.000263768978333169,"lo":-0.0009925881188604935,"hi":-0.0001365082839532017,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.05167193503078033,"lo":0.04821902215021503,"hi":0.06293636679317144,"n":3}},{"space":"counts","mc":"broad","arm":"mapq","level":"10","abs_log2fc_top1":{"v":0.9238643564810679,"lo":0.5769196814971785,"hi":1.0314134985358865,"n":3},"log2fc_top1":{"v":-0.9238643564810679,"lo":-1.0314134985358865,"hi":-0.5769196814971785,"n":3},"shape_1k":{"v":0.3637088513386646,"lo":0.27495948905873957,"hi":0.364966162758372,"n":3},"dfrip":{"v":-0.00044368235934882927,"lo":-0.0005145255798486986,"hi":-0.00035481756870811565,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.0514211784292648,"lo":0.048000712865460114,"hi":0.0634852725526831,"n":3}},{"space":"counts","mc":"broad","arm":"pe","level":"pe","abs_log2fc_top1":{"v":0.8689920269090438,"lo":0.45100267004629824,"hi":1.003749616148501,"n":3},"log2fc_top1":{"v":-0.8689920269090438,"lo":-1.003749616148501,"hi":-0.45100267004629824,"n":3},"shape_1k":{"v":0.4191702442304096,"lo":0.3170543986151264,"hi":0.4248590195707682,"n":3},"dfrip":{"v":0.005124822660008979,"lo":0.0023160503181204675,"hi":0.00592465461725096,"n":3},"frip_base":{"v":0.0519357040091135,"lo":0.04835553043416823,"hi":0.06392895491203193,"n":3},"frip_arm":{"v":0.05706052666912248,"lo":0.0506715807522887,"hi":0.06985360952928289,"n":3}},{"space":"counts","mc":"narrow","arm":"abproxy","level":"f0.5","abs_log2fc_top1":{"v":0.7374722790576734,"lo":0.6498974505293142,"hi":0.9420640477431603,"n":3},"log2fc_top1":{"v":-0.7374722790576734,"lo":-0.9420640477431603,"hi":-0.6498974505293142,"n":3},"shape_1k":{"v":0.27136961857026587,"lo":0.24196730774788788,"hi":0.31256422037638254,"n":3},"dfrip":{"v":-0.01945064918446237,"lo":-0.09053024480871494,"hi":-0.015051098182080003,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.05934177692485048,"lo":0.056323606574006244,"hi":0.1443182676922341,"n":3}},{"space":"counts","mc":"narrow","arm":"abproxy","level":"f0.9","abs_log2fc_top1":{"v":1.8585649865800316,"lo":1.5106387593683221,"hi":2.8451244615710625,"n":3},"log2fc_top1":{"v":-1.8585649865800316,"lo":-2.8451244615710625,"hi":-1.5106387593683221,"n":3},"shape_1k":{"v":0.5309886033102172,"lo":0.48328524630959824,"hi":0.5682992777335301,"n":3},"dfrip":{"v":-0.02758031798781513,"lo":-0.17685818975146228,"hi":-0.02180446369378195,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.05121210812149772,"lo":0.049570241062304295,"hi":0.05799032274948677,"n":3}},{"space":"counts","mc":"narrow","arm":"crop","level":"36","abs_log2fc_top1":{"v":1.3404774810981277,"lo":1.0145528310610339,"hi":1.5555766377038398,"n":3},"log2fc_top1":{"v":-1.3404774810981277,"lo":-1.5555766377038398,"hi":-1.0145528310610339,"n":3},"shape_1k":{"v":0.4114001881877547,"lo":0.3650594778486146,"hi":0.47917250343513296,"n":3},"dfrip":{"v":0.021010531076318978,"lo":0.02019465062697147,"hi":0.030378759518315562,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.09980295718563183,"lo":0.09156935538305772,"hi":0.2652272720192646,"n":3}},{"space":"counts","mc":"narrow","arm":"crop","level":"50","abs_log2fc_top1":{"v":1.0576477722493263,"lo":0.759322160682413,"hi":1.2337538814554925,"n":3},"log2fc_top1":{"v":-1.0576477722493263,"lo":-1.2337538814554925,"hi":-0.759322160682413,"n":3},"shape_1k":{"v":0.3819515949750445,"lo":0.33929884823823186,"hi":0.4558101177996702,"n":3},"dfrip":{"v":0.012329169230700252,"lo":0.010446095168116287,"hi":0.013635611466376457,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.08923852127742914,"lo":0.0837038739867865,"hi":0.2484841239673255,"n":3}},{"space":"counts","mc":"narrow","arm":"dedup","level":"off","abs_log2fc_top1":{"v":0.3352132408349605,"lo":0.05134907162488095,"hi":1.3062667819050804,"n":3},"log2fc_top1":{"v":0.05134907162488095,"lo":-0.3352132408349605,"hi":1.3062667819050804,"n":3},"shape_1k":{"v":0.38508702098118963,"lo":0.3288399533769458,"hi":0.4758092567898946,"n":3},"dfrip":{"v":0.021568668625619805,"lo":0.006457400307081612,"hi":0.25817492631187244,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.10036109473493265,"lo":0.07783210506316786,"hi":0.4930234388128215,"n":3}},{"space":"counts","mc":"narrow","arm":"depth","level":"15M","abs_log2fc_top1":{"v":1.0030214964443207,"lo":0.999291798192857,"hi":1.0033190614758158,"n":3},"log2fc_top1":{"v":-1.0030214964443207,"lo":-1.0033190614758158,"hi":-0.999291798192857,"n":3},"shape_1k":{"v":0.16732015201532668,"lo":0.14599283380954553,"hi":0.18605022266911586,"n":3},"dfrip":{"v":0.010483520351647055,"lo":0.003143135481011472,"hi":0.01100573353884167,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.08979815964815452,"lo":0.0818582251077333,"hi":0.2379916479819605,"n":3}},{"space":"counts","mc":"narrow","arm":"depth","level":"3.75M","abs_log2fc_top1":{"v":3.0112609604492198,"lo":3.000951295710903,"hi":3.0212568424208,"n":3},"log2fc_top1":{"v":-3.0112609604492198,"lo":-3.0212568424208,"hi":-3.000951295710903,"n":3},"shape_1k":{"v":0.4912509724439208,"lo":0.45049005536598463,"hi":0.5050489754128219,"n":3},"dfrip":{"v":0.07194695171010819,"lo":0.0247632577328111,"hi":0.07269358469990252,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.15073937781942104,"lo":0.14406828945598876,"hi":0.25961177023376014,"n":3}},{"space":"counts","mc":"narrow","arm":"depth","level":"7.5M","abs_log2fc_top1":{"v":2.0060906032672445,"lo":1.9902062157384774,"hi":2.0173920739469353,"n":3},"log2fc_top1":{"v":-2.0060906032672445,"lo":-2.0173920739469353,"hi":-1.9902062157384774,"n":3},"shape_1k":{"v":0.33837583052756526,"lo":0.3027999399442368,"hi":0.3554598326594305,"n":3},"dfrip":{"v":0.03096813520883876,"lo":0.010331692290652117,"hi":0.0348570643447786,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.10976056131815161,"lo":0.10623176910086485,"hi":0.24518020479160116,"n":3}},{"space":"counts","mc":"narrow","arm":"mapq","level":"0","abs_log2fc_top1":{"v":0.44994062009268015,"lo":0.1686460537732326,"hi":0.5583409465346374,"n":3},"log2fc_top1":{"v":-0.44994062009268015,"lo":-0.5583409465346374,"hi":-0.1686460537732326,"n":3},"shape_1k":{"v":0.45011474031408194,"lo":0.3980699729807635,"hi":0.5213915359262122,"n":3},"dfrip":{"v":-0.0014401206009355405,"lo":-0.008166592392130245,"hi":-0.0010438994193812945,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.07774852668993155,"lo":0.0699345841551507,"hi":0.2266819201088188,"n":3}},{"space":"counts","mc":"narrow","arm":"mapq","level":"10","abs_log2fc_top1":{"v":0.33396365993022864,"lo":0.0700385060287265,"hi":0.4764622131938199,"n":3},"log2fc_top1":{"v":-0.33396365993022864,"lo":-0.4764622131938199,"hi":-0.0700385060287265,"n":3},"shape_1k":{"v":0.382538154865652,"lo":0.33634222800323077,"hi":0.452667878984907,"n":3},"dfrip":{"v":-0.000758685921337765,"lo":-0.003883633934357422,"hi":-0.0006509355450789733,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.07814149056423388,"lo":0.07061601883474848,"hi":0.23096487856659162,"n":3}},{"space":"counts","mc":"narrow","arm":"pe","level":"pe","abs_log2fc_top1":{"v":0.3539327950108111,"lo":0.061714986255666134,"hi":1.3051932898363312,"n":3},"log2fc_top1":{"v":0.061714986255666134,"lo":-0.3539327950108111,"hi":1.3051932898363312,"n":3},"shape_1k":{"v":0.4448894155411023,"lo":0.38961843837893684,"hi":0.5414170597125951,"n":3},"dfrip":{"v":0.02206755351087042,"lo":0.0062177208318150295,"hi":0.25729419413422194,"n":3},"frip_base":{"v":0.07879242610931285,"lo":0.07137470475608625,"hi":0.23484851250094904,"n":3},"frip_arm":{"v":0.10085997962018327,"lo":0.07759242558790128,"hi":0.49214270663517096,"n":3}},{"space":"pval","mc":"DNase","arm":"dedup","level":"off","abs_log2fc_top1":{"v":3.3962819066567866,"lo":3.3962819066567866,"hi":3.3962819066567866,"n":1},"log2fc_top1":{"v":3.3962819066567866,"lo":3.3962819066567866,"hi":3.3962819066567866,"n":1},"shape_1k":{"v":0.16750102262149402,"lo":0.16750102262149402,"hi":0.16750102262149402,"n":1},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"DNase","arm":"depth","level":"15M","abs_log2fc_top1":{"v":1.6109119812818824,"lo":1.6109119812818824,"hi":1.6109119812818824,"n":1},"log2fc_top1":{"v":-1.6109119812818824,"lo":-1.6109119812818824,"hi":-1.6109119812818824,"n":1},"shape_1k":{"v":0.12878039379753403,"lo":0.12878039379753403,"hi":0.12878039379753403,"n":1},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"DNase","arm":"depth","level":"3.75M","abs_log2fc_top1":{"v":3.1395122826514705,"lo":3.1395122826514705,"hi":3.1395122826514705,"n":1},"log2fc_top1":{"v":-3.1395122826514705,"lo":-3.1395122826514705,"hi":-3.1395122826514705,"n":1},"shape_1k":{"v":0.48302298441574976,"lo":0.48302298441574976,"hi":0.48302298441574976,"n":1},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"DNase","arm":"depth","level":"7.5M","abs_log2fc_top1":{"v":2.433081185493608,"lo":2.433081185493608,"hi":2.433081185493608,"n":1},"log2fc_top1":{"v":-2.433081185493608,"lo":-2.433081185493608,"hi":-2.433081185493608,"n":1},"shape_1k":{"v":0.3930543631683645,"lo":0.3930543631683645,"hi":0.3930543631683645,"n":1},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"DNase","arm":"extsize","level":"k0.5","abs_log2fc_top1":{"v":0.878149074599336,"lo":0.878149074599336,"hi":0.878149074599336,"n":1},"log2fc_top1":{"v":-0.878149074599336,"lo":-0.878149074599336,"hi":-0.878149074599336,"n":1},"shape_1k":{"v":0.006018581389470312,"lo":0.006018581389470312,"hi":0.006018581389470312,"n":1},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"DNase","arm":"extsize","level":"k2","abs_log2fc_top1":{"v":0.7876257736342067,"lo":0.7876257736342067,"hi":0.7876257736342067,"n":1},"log2fc_top1":{"v":0.7876257736342067,"lo":0.7876257736342067,"hi":0.7876257736342067,"n":1},"shape_1k":{"v":0.005133012429831552,"lo":0.005133012429831552,"hi":0.005133012429831552,"n":1},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"DNase","arm":"pe","level":"pe","abs_log2fc_top1":{"v":2.470056287251825,"lo":2.470056287251825,"hi":2.470056287251825,"n":1},"log2fc_top1":{"v":2.470056287251825,"lo":2.470056287251825,"hi":2.470056287251825,"n":1},"shape_1k":{"v":0.19633987627937177,"lo":0.19633987627937177,"hi":0.19633987627937177,"n":1},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"abproxy","level":"f0.5","abs_log2fc_top1":{"v":1.1262914090988456,"lo":1.0742551545521275,"hi":1.2484844968844337,"n":3},"log2fc_top1":{"v":-1.1262914090988456,"lo":-1.2484844968844337,"hi":-1.0742551545521275,"n":3},"shape_1k":{"v":0.33102173506082155,"lo":0.26546255197880464,"hi":0.34021475346582286,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"abproxy","level":"f0.9","abs_log2fc_top1":{"v":2.63091283453439,"lo":2.4299893641176915,"hi":3.2420577341247143,"n":3},"log2fc_top1":{"v":-2.63091283453439,"lo":-3.2420577341247143,"hi":-2.4299893641176915,"n":3},"shape_1k":{"v":0.7428431094950869,"lo":0.6999528382673941,"hi":0.754524977345464,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"crop","level":"36","abs_log2fc_top1":{"v":0.8216773267346515,"lo":0.5488661531793931,"hi":1.429148459770079,"n":3},"log2fc_top1":{"v":-0.8216773267346515,"lo":-1.429148459770079,"hi":-0.5488661531793931,"n":3},"shape_1k":{"v":0.4397111995881686,"lo":0.3498765985457243,"hi":0.4739067452885234,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"crop","level":"50","abs_log2fc_top1":{"v":0.829778476330758,"lo":0.5465434960636644,"hi":1.288323321258477,"n":3},"log2fc_top1":{"v":-0.829778476330758,"lo":-1.288323321258477,"hi":-0.5465434960636644,"n":3},"shape_1k":{"v":0.41139112028881863,"lo":0.32904025439135354,"hi":0.42540268932524106,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"ctldepth","level":"q0.25","abs_log2fc_top1":{"v":0.10749839574645327,"lo":0.09681135677653949,"hi":0.11072938935576114,"n":3},"log2fc_top1":{"v":-0.10749839574645327,"lo":-0.11072938935576114,"hi":-0.09681135677653949,"n":3},"shape_1k":{"v":0.037694656506974455,"lo":0.030269239105404244,"hi":0.04027860708954645,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"ctldepth","level":"q0.5","abs_log2fc_top1":{"v":0.04508960487433123,"lo":0.037236909096159065,"hi":0.048714413152408105,"n":3},"log2fc_top1":{"v":-0.04508960487433123,"lo":-0.048714413152408105,"hi":-0.037236909096159065,"n":3},"shape_1k":{"v":0.013388597627266186,"lo":0.011056402266525378,"hi":0.014960588774117323,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"ctlid","level":"none","abs_log2fc_top1":{"v":0.6149539764154377,"lo":0.3807122168610904,"hi":1.6694250032287565,"n":3},"log2fc_top1":{"v":-0.6149539764154377,"lo":-1.6694250032287565,"hi":-0.3807122168610904,"n":3},"shape_1k":{"v":0.15310239238088086,"lo":0.1445628052654655,"hi":0.1784068420132997,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"ctlid","level":"other","abs_log2fc_top1":{"v":0.040325586942084525,"lo":0.025315918776825555,"hi":0.10289718563604254,"n":3},"log2fc_top1":{"v":-0.025315918776825555,"lo":-0.10289718563604254,"hi":0.040325586942084525,"n":3},"shape_1k":{"v":0.0935247207361577,"lo":0.06604124792838995,"hi":0.1030940253664796,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"dedup","level":"off","abs_log2fc_top1":{"v":0.7661635430132826,"lo":0.3638893399393804,"hi":1.1338441645573942,"n":3},"log2fc_top1":{"v":-0.7661635430132826,"lo":-1.1338441645573942,"hi":-0.3638893399393804,"n":3},"shape_1k":{"v":0.40348094920142874,"lo":0.3238464732943629,"hi":0.4116543459742592,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"depth","level":"15M","abs_log2fc_top1":{"v":0.617849732002165,"lo":0.5845905334848858,"hi":0.7207946738102725,"n":3},"log2fc_top1":{"v":-0.617849732002165,"lo":-0.7207946738102725,"hi":-0.5845905334848858,"n":3},"shape_1k":{"v":0.19958517846274393,"lo":0.1575112476293179,"hi":0.20427566352873228,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"depth","level":"3.75M","abs_log2fc_top1":{"v":1.3284062572408117,"lo":1.2496760390390143,"hi":1.7983134796185913,"n":3},"log2fc_top1":{"v":-1.3284062572408117,"lo":-1.7983134796185913,"hi":-1.2496760390390143,"n":3},"shape_1k":{"v":0.5231330013690059,"lo":0.45897529761335265,"hi":0.5396924875232617,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"depth","level":"7.5M","abs_log2fc_top1":{"v":1.083835093801479,"lo":1.0034292601973571,"hi":1.372075639711734,"n":3},"log2fc_top1":{"v":-1.083835093801479,"lo":-1.372075639711734,"hi":-1.0034292601973571,"n":3},"shape_1k":{"v":0.47432177607821424,"lo":0.39142155166457604,"hi":0.48952589652682554,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"extsize","level":"k0.5","abs_log2fc_top1":{"v":0.6717542539289245,"lo":0.656171269160122,"hi":0.7840841974962215,"n":3},"log2fc_top1":{"v":-0.6717542539289245,"lo":-0.7840841974962215,"hi":-0.656171269160122,"n":3},"shape_1k":{"v":0.039387836784800956,"lo":0.03507840137418494,"hi":0.044661054993086924,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"extsize","level":"k2","abs_log2fc_top1":{"v":0.1020761174162472,"lo":0.10110236024058157,"hi":0.43666335030097136,"n":3},"log2fc_top1":{"v":0.1020761174162472,"lo":-0.10110236024058157,"hi":0.43666335030097136,"n":3},"shape_1k":{"v":0.03325173210341581,"lo":0.02937291603815595,"hi":0.03566657367592774,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"mapq","level":"0","abs_log2fc_top1":{"v":0.9759828520528849,"lo":0.6427121295615419,"hi":1.3196477718771424,"n":3},"log2fc_top1":{"v":-0.9759828520528849,"lo":-1.3196477718771424,"hi":-0.6427121295615419,"n":3},"shape_1k":{"v":0.4630800150806621,"lo":0.36869830704799655,"hi":0.47049169888934006,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"mapq","level":"10","abs_log2fc_top1":{"v":0.886021437033403,"lo":0.4467362302208602,"hi":1.2407042041591705,"n":3},"log2fc_top1":{"v":-0.886021437033403,"lo":-1.2407042041591705,"hi":-0.4467362302208602,"n":3},"shape_1k":{"v":0.4083083269931248,"lo":0.32945666987640965,"hi":0.40932978818434895,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"pe","level":"pe","abs_log2fc_top1":{"v":0.6047183318656452,"lo":0.5056027799065772,"hi":1.049361839505191,"n":3},"log2fc_top1":{"v":-0.6047183318656452,"lo":-1.049361839505191,"hi":-0.5056027799065772,"n":3},"shape_1k":{"v":0.47368229808978113,"lo":0.3798011455192719,"hi":0.4757094633900487,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"ratio","level":"k0.5","abs_log2fc_top1":{"v":0.18021328128308572,"lo":0.12212599152763072,"hi":0.22554679100319358,"n":3},"log2fc_top1":{"v":0.18021328128308572,"lo":0.12212599152763072,"hi":0.22554679100319358,"n":3},"shape_1k":{"v":0.0752391514523657,"lo":0.05007818742746961,"hi":0.08367982091039095,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"broad","arm":"ratio","level":"k2","abs_log2fc_top1":{"v":0.9592975458764288,"lo":0.9268859108223694,"hi":1.1785676529253668,"n":3},"log2fc_top1":{"v":-0.9592975458764288,"lo":-1.1785676529253668,"hi":-0.9268859108223694,"n":3},"shape_1k":{"v":0.11022086570396772,"lo":0.09697055484574224,"hi":0.1228634558832934,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"abproxy","level":"f0.5","abs_log2fc_top1":{"v":1.2322372355113704,"lo":1.173576433645936,"hi":1.3744994522652896,"n":3},"log2fc_top1":{"v":-1.2322372355113704,"lo":-1.3744994522652896,"hi":-1.173576433645936,"n":3},"shape_1k":{"v":0.3575634949225943,"lo":0.3287048961989193,"hi":0.3850780610320088,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"abproxy","level":"f0.9","abs_log2fc_top1":{"v":3.1891396008323296,"lo":2.8123751860059376,"hi":4.420985778378152,"n":3},"log2fc_top1":{"v":-3.1891396008323296,"lo":-4.420985778378152,"hi":-2.8123751860059376,"n":3},"shape_1k":{"v":0.7169124500776306,"lo":0.6831320440250175,"hi":0.7256196441475373,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"crop","level":"36","abs_log2fc_top1":{"v":0.1942856033291023,"lo":0.08486441021525697,"hi":0.6390805842730052,"n":3},"log2fc_top1":{"v":-0.1942856033291023,"lo":-0.6390805842730052,"hi":0.08486441021525697,"n":3},"shape_1k":{"v":0.4870948420017198,"lo":0.4377822343140675,"hi":0.5364575177877167,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"crop","level":"50","abs_log2fc_top1":{"v":0.22376834091632997,"lo":0.02994138705911755,"hi":0.5864508785655871,"n":3},"log2fc_top1":{"v":-0.22376834091632997,"lo":-0.5864508785655871,"hi":0.02994138705911755,"n":3},"shape_1k":{"v":0.4686630844456341,"lo":0.4228604784288045,"hi":0.51570096689012,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"ctldepth","level":"q0.25","abs_log2fc_top1":{"v":0.08483606852452434,"lo":0.05065037777673855,"hi":0.08903783944592335,"n":3},"log2fc_top1":{"v":-0.08483606852452434,"lo":-0.08903783944592335,"hi":-0.05065037777673855,"n":3},"shape_1k":{"v":0.05061715401902056,"lo":0.03705742633529874,"hi":0.05485953970805024,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"ctldepth","level":"q0.5","abs_log2fc_top1":{"v":0.034048995220760395,"lo":0.019664916306453076,"hi":0.04010765556197006,"n":3},"log2fc_top1":{"v":-0.034048995220760395,"lo":-0.04010765556197006,"hi":-0.019664916306453076,"n":3},"shape_1k":{"v":0.019345931259432292,"lo":0.01373397154835121,"hi":0.0205197252259679,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"ctlid","level":"none","abs_log2fc_top1":{"v":0.5018507822005055,"lo":0.3818035717669523,"hi":1.2517853929929108,"n":3},"log2fc_top1":{"v":-0.5018507822005055,"lo":-1.2517853929929108,"hi":-0.3818035717669523,"n":3},"shape_1k":{"v":0.10012780582360703,"lo":0.09238117551592773,"hi":0.27075036061641644,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"ctlid","level":"other","abs_log2fc_top1":{"v":0.39176342365052874,"lo":0.2614914714414757,"hi":0.3981067266038649,"n":3},"log2fc_top1":{"v":-0.2614914714414757,"lo":-0.39176342365052874,"hi":0.3981067266038649,"n":3},"shape_1k":{"v":0.09107910384112061,"lo":0.07855509251367587,"hi":0.09893573780854847,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"dedup","level":"off","abs_log2fc_top1":{"v":0.483280811784343,"lo":0.311886770956817,"hi":1.8723705200571144,"n":3},"log2fc_top1":{"v":0.483280811784343,"lo":-0.311886770956817,"hi":1.8723705200571144,"n":3},"shape_1k":{"v":0.4835410341221237,"lo":0.41988267032287374,"hi":0.5486228390457408,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"depth","level":"15M","abs_log2fc_top1":{"v":0.722125393526104,"lo":0.6675724274952594,"hi":0.95527229460283,"n":3},"log2fc_top1":{"v":-0.722125393526104,"lo":-0.95527229460283,"hi":-0.6675724274952594,"n":3},"shape_1k":{"v":0.23817340304561918,"lo":0.21279877880010656,"hi":0.23996589290393788,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"depth","level":"3.75M","abs_log2fc_top1":{"v":1.7954938208786664,"lo":1.608073066276211,"hi":2.70637951156312,"n":3},"log2fc_top1":{"v":-1.7954938208786664,"lo":-2.70637951156312,"hi":-1.608073066276211,"n":3},"shape_1k":{"v":0.5884730182854014,"lo":0.559333455380517,"hi":0.5961514333396174,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"depth","level":"7.5M","abs_log2fc_top1":{"v":1.3217154650188954,"lo":1.227103704821877,"hi":1.8702000555279914,"n":3},"log2fc_top1":{"v":-1.3217154650188954,"lo":-1.8702000555279914,"hi":-1.227103704821877,"n":3},"shape_1k":{"v":0.5359902411520957,"lo":0.5319145936807796,"hi":0.5743880498003118,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"extsize","level":"k0.5","abs_log2fc_top1":{"v":0.7967104712583463,"lo":0.7317988377574414,"hi":0.9640195321963045,"n":3},"log2fc_top1":{"v":-0.7967104712583463,"lo":-0.9640195321963045,"hi":-0.7317988377574414,"n":3},"shape_1k":{"v":0.059274356988691435,"lo":0.04752004003202848,"hi":0.06005036083031701,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"extsize","level":"k2","abs_log2fc_top1":{"v":0.49590367896380827,"lo":0.35358394233442964,"hi":0.8095914615465729,"n":3},"log2fc_top1":{"v":0.49590367896380827,"lo":0.35358394233442964,"hi":0.8095914615465729,"n":3},"shape_1k":{"v":0.041798719436262566,"lo":0.03996451695729386,"hi":0.05023000479952866,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"mapq","level":"0","abs_log2fc_top1":{"v":0.23634318410225533,"lo":0.17180799867619795,"hi":0.5599480830861424,"n":3},"log2fc_top1":{"v":-0.23634318410225533,"lo":-0.5599480830861424,"hi":-0.17180799867619795,"n":3},"shape_1k":{"v":0.5185051381149178,"lo":0.46836516862586364,"hi":0.56747077176211,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"mapq","level":"10","abs_log2fc_top1":{"v":0.198043318655093,"lo":0.03129513368362129,"hi":0.4787950187266757,"n":3},"log2fc_top1":{"v":-0.198043318655093,"lo":-0.4787950187266757,"hi":-0.03129513368362129,"n":3},"shape_1k":{"v":0.4662031594775061,"lo":0.4199420900634291,"hi":0.5077915715921171,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"pe","level":"pe","abs_log2fc_top1":{"v":0.5529105728233692,"lo":0.24955256820132252,"hi":1.880425738741031,"n":3},"log2fc_top1":{"v":0.5529105728233692,"lo":-0.24955256820132252,"hi":1.880425738741031,"n":3},"shape_1k":{"v":0.5289994349340938,"lo":0.47950144174150555,"hi":0.5925681327500003,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"ratio","level":"k0.5","abs_log2fc_top1":{"v":0.3081030495889097,"lo":0.13247603450643292,"hi":0.505015556292583,"n":3},"log2fc_top1":{"v":0.3081030495889097,"lo":0.13247603450643292,"hi":0.505015556292583,"n":3},"shape_1k":{"v":0.05525308461040168,"lo":0.04959883893968875,"hi":0.06754798274024687,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null},{"space":"pval","mc":"narrow","arm":"ratio","level":"k2","abs_log2fc_top1":{"v":0.9204608148480552,"lo":0.4706772175240831,"hi":1.287955525129132,"n":3},"log2fc_top1":{"v":-0.9204608148480552,"lo":-1.287955525129132,"hi":-0.4706772175240831,"n":3},"shape_1k":{"v":0.1705266580869953,"lo":0.14363207609000161,"hi":0.17125420668735336,"n":3},"dfrip":null,"frip_base":null,"frip_arm":null}],"ranked":{"counts|DNase|abs_log2fc_top1":[{"arm":"depth","level":"3.75M","v":3.7316006369665575,"lo":3.7316006369665575,"hi":3.7316006369665575,"n":1,"signed":-3.7316006369665575},{"arm":"dedup","level":"off","v":2.568613213206609,"lo":2.568613213206609,"hi":2.568613213206609,"n":1,"signed":2.568613213206609},{"arm":"pe","level":"pe","v":1.870050971381274,"lo":1.870050971381274,"hi":1.870050971381274,"n":1,"signed":1.870050971381274}],"counts|DNase|shape_1k":[{"arm":"depth","level":"3.75M","v":0.20942602503712204,"lo":0.20942602503712204,"hi":0.20942602503712204,"n":1,"signed":-3.7316006369665575},{"arm":"pe","level":"pe","v":0.1106503762334834,"lo":0.1106503762334834,"hi":0.1106503762334834,"n":1,"signed":1.870050971381274},{"arm":"dedup","level":"off","v":0.06087785999620876,"lo":0.06087785999620876,"hi":0.06087785999620876,"n":1,"signed":2.568613213206609}],"counts|DNase|dfrip":[{"arm":"dedup","level":"off","v":0.5293518488163598,"lo":0.5293518488163598,"hi":0.5293518488163598,"n":1,"signed":2.568613213206609},{"arm":"pe","level":"pe","v":0.3435081566113195,"lo":0.3435081566113195,"hi":0.3435081566113195,"n":1,"signed":1.870050971381274},{"arm":"depth","level":"3.75M","v":0.0320798778219534,"lo":0.0320798778219534,"hi":0.0320798778219534,"n":1,"signed":-3.7316006369665575}],"counts|narrow|abs_log2fc_top1":[{"arm":"depth","level":"3.75M","v":3.0112609604492198,"lo":3.000951295710903,"hi":3.0212568424208,"n":3,"signed":-3.0112609604492198},{"arm":"abproxy","level":"f0.9","v":1.8585649865800316,"lo":1.5106387593683221,"hi":2.8451244615710625,"n":3,"signed":-1.8585649865800316},{"arm":"crop","level":"36","v":1.3404774810981277,"lo":1.0145528310610339,"hi":1.5555766377038398,"n":3,"signed":-1.3404774810981277},{"arm":"mapq","level":"0","v":0.44994062009268015,"lo":0.1686460537732326,"hi":0.5583409465346374,"n":3,"signed":-0.44994062009268015},{"arm":"pe","level":"pe","v":0.3539327950108111,"lo":0.061714986255666134,"hi":1.3051932898363312,"n":3,"signed":0.061714986255666134},{"arm":"dedup","level":"off","v":0.3352132408349605,"lo":0.05134907162488095,"hi":1.3062667819050804,"n":3,"signed":0.05134907162488095}],"counts|narrow|shape_1k":[{"arm":"abproxy","level":"f0.9","v":0.5309886033102172,"lo":0.48328524630959824,"hi":0.5682992777335301,"n":3,"signed":-1.8585649865800316},{"arm":"depth","level":"3.75M","v":0.4912509724439208,"lo":0.45049005536598463,"hi":0.5050489754128219,"n":3,"signed":-3.0112609604492198},{"arm":"mapq","level":"0","v":0.45011474031408194,"lo":0.3980699729807635,"hi":0.5213915359262122,"n":3,"signed":-0.44994062009268015},{"arm":"pe","level":"pe","v":0.4448894155411023,"lo":0.38961843837893684,"hi":0.5414170597125951,"n":3,"signed":0.061714986255666134},{"arm":"crop","level":"36","v":0.4114001881877547,"lo":0.3650594778486146,"hi":0.47917250343513296,"n":3,"signed":-1.3404774810981277},{"arm":"dedup","level":"off","v":0.38508702098118963,"lo":0.3288399533769458,"hi":0.4758092567898946,"n":3,"signed":0.05134907162488095}],"counts|narrow|dfrip":[{"arm":"depth","level":"3.75M","v":0.07194695171010819,"lo":0.0247632577328111,"hi":0.07269358469990252,"n":3,"signed":-3.0112609604492198},{"arm":"abproxy","level":"f0.9","v":-0.02758031798781513,"lo":-0.17685818975146228,"hi":-0.02180446369378195,"n":3,"signed":-1.8585649865800316},{"arm":"pe","level":"pe","v":0.02206755351087042,"lo":0.0062177208318150295,"hi":0.25729419413422194,"n":3,"signed":0.061714986255666134},{"arm":"dedup","level":"off","v":0.021568668625619805,"lo":0.006457400307081612,"hi":0.25817492631187244,"n":3,"signed":0.05134907162488095},{"arm":"crop","level":"36","v":0.021010531076318978,"lo":0.02019465062697147,"hi":0.030378759518315562,"n":3,"signed":-1.3404774810981277},{"arm":"mapq","level":"0","v":-0.0014401206009355405,"lo":-0.008166592392130245,"hi":-0.0010438994193812945,"n":3,"signed":-0.44994062009268015}],"counts|broad|abs_log2fc_top1":[{"arm":"depth","level":"3.75M","v":2.989377979726166,"lo":2.9856578162728526,"hi":3.014255601814567,"n":3,"signed":-2.989377979726166},{"arm":"crop","level":"36","v":1.968562082677543,"lo":1.5924227492013252,"hi":2.2285517314273404,"n":3,"signed":-1.968562082677543},{"arm":"abproxy","level":"f0.9","v":1.6440036601709542,"lo":1.529361993452057,"hi":1.9373619227318344,"n":3,"signed":-1.6440036601709542},{"arm":"mapq","level":"0","v":1.0280248345663248,"lo":0.6852803211116923,"hi":1.1655297649005691,"n":3,"signed":-1.0280248345663248},{"arm":"dedup","level":"off","v":0.8922020818885749,"lo":0.43001376534138736,"hi":0.9837121201277631,"n":3,"signed":-0.8922020818885749},{"arm":"pe","level":"pe","v":0.8689920269090438,"lo":0.45100267004629824,"hi":1.003749616148501,"n":3,"signed":-0.8689920269090438}],"counts|broad|shape_1k":[{"arm":"abproxy","level":"f0.9","v":0.5803989742081155,"lo":0.5527291202811717,"hi":0.598261516880947,"n":3,"signed":-1.6440036601709542},{"arm":"depth","level":"3.75M","v":0.4853651742693662,"lo":0.3777191223059767,"hi":0.4887047565985172,"n":3,"signed":-2.989377979726166},{"arm":"mapq","level":"0","v":0.42848759513075496,"lo":0.32368631374797774,"hi":0.43977196547512476,"n":3,"signed":-1.0280248345663248},{"arm":"pe","level":"pe","v":0.4191702442304096,"lo":0.3170543986151264,"hi":0.4248590195707682,"n":3,"signed":-0.8689920269090438},{"arm":"crop","level":"36","v":0.39588127896937886,"lo":0.3049429478945932,"hi":0.4464578820249784,"n":3,"signed":-1.968562082677543},{"arm":"dedup","level":"off","v":0.3513331468387799,"lo":0.26376006108557193,"hi":0.35594032992600677,"n":3,"signed":-0.8922020818885749}],"counts|broad|dfrip":[{"arm":"depth","level":"3.75M","v":0.07827790708095425,"lo":0.06143283421319615,"hi":0.08464121517477245,"n":3,"signed":-2.989377979726166},{"arm":"crop","level":"36","v":0.022208686378085617,"lo":0.021260117680618584,"hi":0.023172971930500594,"n":3,"signed":-1.968562082677543},{"arm":"pe","level":"pe","v":0.005124822660008979,"lo":0.0023160503181204675,"hi":0.00592465461725096,"n":3,"signed":-0.8689920269090438},{"arm":"abproxy","level":"f0.5","v":-0.005029487108758918,"lo":-0.012202662320447345,"hi":-0.0023008506515326335,"n":3,"signed":-0.6909743852937374},{"arm":"dedup","level":"off","v":0.004323300111842322,"lo":0.0024431533865101676,"hi":0.005886815648501506,"n":3,"signed":-0.8922020818885749},{"arm":"mapq","level":"10","v":-0.00044368235934882927,"lo":-0.0005145255798486986,"hi":-0.00035481756870811565,"n":3,"signed":-0.9238643564810679}],"pval|DNase|abs_log2fc_top1":[{"arm":"dedup","level":"off","v":3.3962819066567866,"lo":3.3962819066567866,"hi":3.3962819066567866,"n":1,"signed":3.3962819066567866},{"arm":"depth","level":"3.75M","v":3.1395122826514705,"lo":3.1395122826514705,"hi":3.1395122826514705,"n":1,"signed":-3.1395122826514705},{"arm":"pe","level":"pe","v":2.470056287251825,"lo":2.470056287251825,"hi":2.470056287251825,"n":1,"signed":2.470056287251825},{"arm":"extsize","level":"k0.5","v":0.878149074599336,"lo":0.878149074599336,"hi":0.878149074599336,"n":1,"signed":-0.878149074599336}],"pval|DNase|shape_1k":[{"arm":"depth","level":"3.75M","v":0.48302298441574976,"lo":0.48302298441574976,"hi":0.48302298441574976,"n":1,"signed":-3.1395122826514705},{"arm":"pe","level":"pe","v":0.19633987627937177,"lo":0.19633987627937177,"hi":0.19633987627937177,"n":1,"signed":2.470056287251825},{"arm":"dedup","level":"off","v":0.16750102262149402,"lo":0.16750102262149402,"hi":0.16750102262149402,"n":1,"signed":3.3962819066567866},{"arm":"extsize","level":"k0.5","v":0.006018581389470312,"lo":0.006018581389470312,"hi":0.006018581389470312,"n":1,"signed":-0.878149074599336}],"pval|DNase|dfrip":[],"pval|narrow|abs_log2fc_top1":[{"arm":"abproxy","level":"f0.9","v":3.1891396008323296,"lo":2.8123751860059376,"hi":4.420985778378152,"n":3,"signed":-3.1891396008323296},{"arm":"depth","level":"3.75M","v":1.7954938208786664,"lo":1.608073066276211,"hi":2.70637951156312,"n":3,"signed":-1.7954938208786664},{"arm":"ratio","level":"k2","v":0.9204608148480552,"lo":0.4706772175240831,"hi":1.287955525129132,"n":3,"signed":-0.9204608148480552},{"arm":"extsize","level":"k0.5","v":0.7967104712583463,"lo":0.7317988377574414,"hi":0.9640195321963045,"n":3,"signed":-0.7967104712583463},{"arm":"pe","level":"pe","v":0.5529105728233692,"lo":0.24955256820132252,"hi":1.880425738741031,"n":3,"signed":0.5529105728233692},{"arm":"ctlid","level":"none","v":0.5018507822005055,"lo":0.3818035717669523,"hi":1.2517853929929108,"n":3,"signed":-0.5018507822005055},{"arm":"dedup","level":"off","v":0.483280811784343,"lo":0.311886770956817,"hi":1.8723705200571144,"n":3,"signed":0.483280811784343},{"arm":"mapq","level":"0","v":0.23634318410225533,"lo":0.17180799867619795,"hi":0.5599480830861424,"n":3,"signed":-0.23634318410225533},{"arm":"crop","level":"50","v":0.22376834091632997,"lo":0.02994138705911755,"hi":0.5864508785655871,"n":3,"signed":-0.22376834091632997},{"arm":"ctldepth","level":"q0.25","v":0.08483606852452434,"lo":0.05065037777673855,"hi":0.08903783944592335,"n":3,"signed":-0.08483606852452434}],"pval|narrow|shape_1k":[{"arm":"abproxy","level":"f0.9","v":0.7169124500776306,"lo":0.6831320440250175,"hi":0.7256196441475373,"n":3,"signed":-3.1891396008323296},{"arm":"depth","level":"3.75M","v":0.5884730182854014,"lo":0.559333455380517,"hi":0.5961514333396174,"n":3,"signed":-1.7954938208786664},{"arm":"pe","level":"pe","v":0.5289994349340938,"lo":0.47950144174150555,"hi":0.5925681327500003,"n":3,"signed":0.5529105728233692},{"arm":"mapq","level":"0","v":0.5185051381149178,"lo":0.46836516862586364,"hi":0.56747077176211,"n":3,"signed":-0.23634318410225533},{"arm":"crop","level":"36","v":0.4870948420017198,"lo":0.4377822343140675,"hi":0.5364575177877167,"n":3,"signed":-0.1942856033291023},{"arm":"dedup","level":"off","v":0.4835410341221237,"lo":0.41988267032287374,"hi":0.5486228390457408,"n":3,"signed":0.483280811784343},{"arm":"ratio","level":"k2","v":0.1705266580869953,"lo":0.14363207609000161,"hi":0.17125420668735336,"n":3,"signed":-0.9204608148480552},{"arm":"ctlid","level":"none","v":0.10012780582360703,"lo":0.09238117551592773,"hi":0.27075036061641644,"n":3,"signed":-0.5018507822005055},{"arm":"extsize","level":"k0.5","v":0.059274356988691435,"lo":0.04752004003202848,"hi":0.06005036083031701,"n":3,"signed":-0.7967104712583463},{"arm":"ctldepth","level":"q0.25","v":0.05061715401902056,"lo":0.03705742633529874,"hi":0.05485953970805024,"n":3,"signed":-0.08483606852452434}],"pval|narrow|dfrip":[],"pval|broad|abs_log2fc_top1":[{"arm":"abproxy","level":"f0.9","v":2.63091283453439,"lo":2.4299893641176915,"hi":3.2420577341247143,"n":3,"signed":-2.63091283453439},{"arm":"depth","level":"3.75M","v":1.3284062572408117,"lo":1.2496760390390143,"hi":1.7983134796185913,"n":3,"signed":-1.3284062572408117},{"arm":"mapq","level":"0","v":0.9759828520528849,"lo":0.6427121295615419,"hi":1.3196477718771424,"n":3,"signed":-0.9759828520528849},{"arm":"ratio","level":"k2","v":0.9592975458764288,"lo":0.9268859108223694,"hi":1.1785676529253668,"n":3,"signed":-0.9592975458764288},{"arm":"crop","level":"50","v":0.829778476330758,"lo":0.5465434960636644,"hi":1.288323321258477,"n":3,"signed":-0.829778476330758},{"arm":"dedup","level":"off","v":0.7661635430132826,"lo":0.3638893399393804,"hi":1.1338441645573942,"n":3,"signed":-0.7661635430132826},{"arm":"extsize","level":"k0.5","v":0.6717542539289245,"lo":0.656171269160122,"hi":0.7840841974962215,"n":3,"signed":-0.6717542539289245},{"arm":"ctlid","level":"none","v":0.6149539764154377,"lo":0.3807122168610904,"hi":1.6694250032287565,"n":3,"signed":-0.6149539764154377},{"arm":"pe","level":"pe","v":0.6047183318656452,"lo":0.5056027799065772,"hi":1.049361839505191,"n":3,"signed":-0.6047183318656452},{"arm":"ctldepth","level":"q0.25","v":0.10749839574645327,"lo":0.09681135677653949,"hi":0.11072938935576114,"n":3,"signed":-0.10749839574645327}],"pval|broad|shape_1k":[{"arm":"abproxy","level":"f0.9","v":0.7428431094950869,"lo":0.6999528382673941,"hi":0.754524977345464,"n":3,"signed":-2.63091283453439},{"arm":"depth","level":"3.75M","v":0.5231330013690059,"lo":0.45897529761335265,"hi":0.5396924875232617,"n":3,"signed":-1.3284062572408117},{"arm":"pe","level":"pe","v":0.47368229808978113,"lo":0.3798011455192719,"hi":0.4757094633900487,"n":3,"signed":-0.6047183318656452},{"arm":"mapq","level":"0","v":0.4630800150806621,"lo":0.36869830704799655,"hi":0.47049169888934006,"n":3,"signed":-0.9759828520528849},{"arm":"crop","level":"36","v":0.4397111995881686,"lo":0.3498765985457243,"hi":0.4739067452885234,"n":3,"signed":-0.8216773267346515},{"arm":"dedup","level":"off","v":0.40348094920142874,"lo":0.3238464732943629,"hi":0.4116543459742592,"n":3,"signed":-0.7661635430132826},{"arm":"ctlid","level":"none","v":0.15310239238088086,"lo":0.1445628052654655,"hi":0.1784068420132997,"n":3,"signed":-0.6149539764154377},{"arm":"ratio","level":"k2","v":0.11022086570396772,"lo":0.09697055484574224,"hi":0.1228634558832934,"n":3,"signed":-0.9592975458764288},{"arm":"extsize","level":"k0.5","v":0.039387836784800956,"lo":0.03507840137418494,"hi":0.044661054993086924,"n":3,"signed":-0.6717542539289245},{"arm":"ctldepth","level":"q0.25","v":0.037694656506974455,"lo":0.030269239105404244,"hi":0.04027860708954645,"n":3,"signed":-0.10749839574645327}],"pval|broad|dfrip":[]}};
+const put=(id,html)=>{const e=document.getElementById(id); if(e) e.innerHTML=html;};
+const f2=v=>v.toFixed(2);
+
+const NAME={depth:'Sequencing depth',abproxy:'Antibody efficiency proxy',crop:'Read length',
+  mapq:'Mapping-quality filter',dedup:'Duplicate removal',pe:'Run type',ratio:'Control scaling',
+  ctlid:'Control identity',ctldepth:'Control depth',extsize:'Fragment extension'};
+const GROUP={depth:'depth',abproxy:'ab',crop:'rerun',mapq:'rerun',dedup:'rerun',pe:'rerun',
+  ratio:'ctl',ctlid:'ctl',ctldepth:'ctl',extsize:'ctl'};
+const COL=a=>`var(--${GROUP[a]})`;
+function LEV(a,l){
+  const m={depth:x=>`${x} reads`,abproxy:x=>`${Math.round(parseFloat(x.slice(1))*100)}% control reads`,
+    crop:x=>`${x} bp reads`,mapq:x=>`MAPQ ≥ ${x}`,dedup:()=>'duplicates kept',pe:()=>'paired-end',
+    ratio:x=>`scale × ${x.slice(1)}`,ctlid:x=>x==='none'?'no control':'another cell’s control',
+    ctldepth:x=>`${Math.round(parseFloat(x.slice(1))*100)}% of control reads`,
+    extsize:x=>`extension × ${x.slice(1)}`};
+  return m[a]?m[a](l):l;
+}
+const R=(space,mc,m)=>DATA.ranked[`${space}|${mc}|${m}`];
+const lvl=(space,mc,arm,level)=>DATA.levels.find(L=>L.space===space&&L.mc===mc&&L.arm===arm&&L.level===level);
+
+/* horizontal bars: rows {lab, sub, v, lo, hi, col}; whisker = range over tracks */
+function hbars(title, rows, xmax, xlab, W=640, Lg=280){
+  const rh=50, top=70, H=top+rows.length*rh+60, pW=W-Lg-30, xx=v=>Lg+Math.max(0,v)/xmax*pW;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  s+=`<text x="12" y="32" class="ptitle">${title}</text>`;
+  const step=xmax>2?1:(xmax>0.5?0.2:0.1);
+  for(let t=0;t<=xmax+1e-9;t+=step){
+    s+=`<line x1="${xx(t)}" y1="${top-6}" x2="${xx(t)}" y2="${top+rows.length*rh}" class="grid"/>`;
+    s+=`<text x="${xx(t)}" y="${top+rows.length*rh+22}" text-anchor="middle" class="tick">${+t.toFixed(1)}</text>`;
+  }
+  rows.forEach((r,i)=>{
+    const y=top+i*rh+rh/2;
+    s+=`<text x="${Lg-14}" y="${y-2}" text-anchor="end" class="axlbl">${r.lab}</text>`;
+    s+=`<text x="${Lg-14}" y="${y+16}" text-anchor="end" class="psub">${r.sub}</text>`;
+    s+=`<rect x="${Lg}" y="${y-13}" width="${xx(r.v)-Lg}" height="26" fill="${r.col}" opacity=".85" rx="2"/>`;
+    if(r.n>1) s+=`<line x1="${xx(r.lo)}" y1="${y}" x2="${xx(r.hi)}" y2="${y}" stroke="#1a1a1a" stroke-width="2"/>`
+      +`<line x1="${xx(r.lo)}" y1="${y-7}" x2="${xx(r.lo)}" y2="${y+7}" stroke="#1a1a1a" stroke-width="2"/>`
+      +`<line x1="${xx(r.hi)}" y1="${y-7}" x2="${xx(r.hi)}" y2="${y+7}" stroke="#1a1a1a" stroke-width="2"/>`;
+    s+=`<text x="${Math.max(xx(r.v),xx(r.hi||0))+8}" y="${y+6}" class="val" fill="${r.col}">${f2(r.v)}</text>`;
+  });
+  s+=`<text x="${Lg+pW}" y="${H-8}" text-anchor="end" class="cap">${xlab}</text>`;
+  return s+`</svg>`;
+}
+const rowsOf=(list,abs=true)=>list.map(r=>({lab:NAME[r.arm],sub:LEV(r.arm,r.level),
+  v:abs?Math.abs(r.v):r.v,lo:abs?Math.abs(r.lo):r.lo,hi:abs?Math.abs(r.hi):r.hi,n:r.n,col:COL(r.arm)}))
+  .map(r=>({...r,lo:Math.min(r.lo,r.hi),hi:Math.max(r.lo,r.hi)}));
+const xmaxOf=(...lists)=>Math.ceil(Math.max(...lists.flat().map(r=>Math.max(Math.abs(r.hi),Math.abs(r.lo),Math.abs(r.v))))*10)/10;
+
+/* (a) peak height, counts */
+{const a=R('counts','narrow','abs_log2fc_top1'), b=R('counts','broad','abs_log2fc_top1'), X=Math.ceil(xmaxOf(a,b));
+ put('figMagN',hbars('(a) Narrow marks',rowsOf(a),X,'peak height change, |log2 arm / base|'));
+ put('figMagB',hbars('(b) Broad marks',rowsOf(b),X,'peak height change, |log2 arm / base|'));
+ const d=[a,b].map(l=>l.find(r=>r.arm==='depth').v);
+ put('tDepthMag',`${f2(d[0])} (narrow) and ${f2(d[1])} (broad)`);}
+
+/* (b) shape, counts */
+{const a=R('counts','narrow','shape_1k'), b=R('counts','broad','shape_1k'), X=xmaxOf(a,b);
+ put('figShpN',hbars('(a) Narrow marks',rowsOf(a),X,'shape change, 1 − rank correlation'));
+ put('figShpB',hbars('(b) Broad marks',rowsOf(b),X,'shape change, 1 − rank correlation'));
+ const ab=[a,b].map(l=>l.find(r=>r.arm==='abproxy').v);
+ put('tAbShape',`${f2(ab[0])} (narrow) and ${f2(ab[1])} (broad)`);
+ const rr=[...a,...b].filter(r=>GROUP[r.arm]==='rerun').map(r=>r.v);
+ put('tRerunShape',`${f2(Math.min(...rr))} and ${f2(Math.max(...rr))}`);}
+
+/* (c) shape, p */
+{const a=R('pval','narrow','shape_1k'), b=R('pval','broad','shape_1k'), X=xmaxOf(a,b);
+ put('figPN',hbars('(a) Narrow marks',rowsOf(a),X,'shape change, 1 − rank correlation'));
+ put('figPB',hbars('(b) Broad marks',rowsOf(b),X,'shape change, 1 − rank correlation'));
+ const all=[...a,...b];
+ put('tCtlMax',f2(Math.max(...all.filter(r=>GROUP[r.arm]==='ctl').map(r=>r.v))));
+ put('tReadMin',f2(Math.min(...all.filter(r=>GROUP[r.arm]!=='ctl').map(r=>r.v))));}
+
+/* (d) DNase */
+{const m=R('counts','DNase','abs_log2fc_top1'), fr=R('counts','DNase','dfrip'), X=Math.ceil(xmaxOf(m));
+ put('figDnMag',hbars('(a) Peak height',rowsOf(m),X,'|log2 arm / base|'));
+ put('figDnFrip',hbars('(b) FRiP, arm minus base',rowsOf(fr,false),xmaxOf(fr),'change in fraction of reads in peaks'));
+ put('tDnDedup',f2(fr.find(r=>r.arm==='dedup').v));}
+
+/* (e) the depth ladder vs the re-run settings, shape on counts */
+function ladder(mc,title){
+  const rows=[];
+  ['15M','7.5M','3.75M'].forEach(l=>{const L=lvl('counts',mc,'depth',l); rows.push({lab:'Depth cut',sub:LEV('depth',l),...L.shape_1k,col:'var(--ctl)'});});
+  R('counts',mc,'shape_1k').filter(r=>GROUP[r.arm]==='rerun')
+    .forEach(r=>rows.push({lab:NAME[r.arm],sub:LEV(r.arm,r.level),v:r.v,lo:r.lo,hi:r.hi,n:r.n,col:'var(--rerun)'}));
+  rows.sort((p,q)=>p.v-q.v);
+  return hbars(title,rows,xmaxOf(rows),'shape change, 1 − rank correlation');
+}
+put('figLadN',ladder('narrow','(a) Narrow marks'));
+put('figLadB',ladder('broad','(b) Broad marks'));
+
+/* the grid of arms */
+{const ROUTE={depth:'derived (thinned)',abproxy:'derived (mixed)',crop:'re-run',mapq:'re-run',dedup:'re-run',pe:'re-run',
+   ratio:'derived (peak caller)',ctlid:'derived (peak caller)',ctldepth:'derived (thinned control)',extsize:'derived (peak caller)'};
+ const MOVES=a=>GROUP[a]==='ctl'?'p-values only':'counts and p-values';
+ const by={}; DATA.levels.forEach(L=>{(by[L.arm]=by[L.arm]||new Set()).add(LEV(L.arm,L.level));});
+ let h='<thead><tr><th>setting</th><th>levels</th><th>how made</th><th>changes</th></tr></thead><tbody>';
+ Object.keys(NAME).forEach(a=>{h+=`<tr><td style="color:${COL(a)}">${NAME[a]}</td><td>${[...by[a]].join(' · ')}</td><td>${ROUTE[a]}</td><td>${MOVES(a)}</td></tr>`;});
+ put('tblArms',h+'</tbody>');}
+
+/* the arms schematic */
+put('figArms',`<svg viewBox="0 0 1100 330" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bdb9b1"/></marker></defs>
+  <rect x="20" y="120" width="200" height="90" rx="10" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="120" y="160" text-anchor="middle" class="xlab">Raw reads</text>
+  <text x="120" y="188" text-anchor="middle" class="xsub">one experiment</text>
+  <line x1="225" y1="150" x2="370" y2="70" class="axis" marker-end="url(#ar)"/>
+  <line x1="225" y1="180" x2="370" y2="260" class="axis" marker-end="url(#ar)"/>
+  <rect x="380" y="30" width="250" height="80" rx="10" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="505" y="66" text-anchor="middle" class="xlab">Base</text>
+  <text x="505" y="92" text-anchor="middle" class="xsub">standard recipe</text>
+  <rect x="380" y="220" width="250" height="80" rx="10" fill="#fff" stroke="var(--ab)" stroke-width="2"/>
+  <text x="505" y="256" text-anchor="middle" class="xlab">Arm</text>
+  <text x="505" y="282" text-anchor="middle" class="xsub">same recipe, one setting moved</text>
+  <line x1="635" y1="70" x2="740" y2="150" class="axis" marker-end="url(#ar)"/>
+  <line x1="635" y1="260" x2="740" y2="180" class="axis" marker-end="url(#ar)"/>
+  <rect x="750" y="120" width="320" height="90" rx="10" fill="#fff" stroke="var(--depth)" stroke-width="2.4"/>
+  <text x="910" y="158" text-anchor="middle" class="xlab">Difference</text>
+  <text x="910" y="186" text-anchor="middle" class="xsub">= that one setting’s effect</text>
+</svg>`);
+
+put('tPairs',DATA.n_pairs); put('tArms',DATA.n_arm_products); put('tTracks',DATA.n_tracks);
+
+/* navigation and speaker notes — as in assets/deck.html */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>
