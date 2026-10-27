@@ -283,12 +283,13 @@ def test_m1_split_and_prereg(fx):
     assert set(via.prereg_label) <= ok and len(via)
     other = m1[~m1.arm.isin(["Dbiggviabase", "Dbigfviabase"])].prereg_label
     assert other.isna().all()                     # "n/a" (pandas reads it as NaN)
-    pt = via[via.g_version == "per_track"]
-    assert (pt.prereg_threshold >= 0.015 - 1e-12).all()
-    assert (abs(pt.prereg_threshold - (2 * pt.seed_spread.clip(lower=0.0077)).clip(lower=0.015))
-            < 1e-12).all()
-    ac = via[via.g_version == "across"]
-    assert (abs(ac.prereg_threshold - 2 * ac.seed_spread.clip(lower=0.064)) < 1e-12).all()
+    sa = via.seed_spread
+    sr = via.spread_Dviabase                       # the reference cell's own seed spread
+    pt = (via.g_version == "per_track")
+    want = (2 * pd.concat([sa, sr], axis=1).max(axis=1).clip(lower=0.0077)).clip(lower=0.015)
+    want = want.where(pt, 2 * pd.concat([sa, sr], axis=1).max(axis=1).clip(lower=0.064))
+    assert (abs(via.prereg_threshold - want) < 1e-12).all()
+    assert (via[pt].prereg_threshold >= 0.015 - 1e-12).all()
     # the rule itself
     assert a.prereg("per_track", 0.50, 0.545, 0.001, 3, 3) == (0.0154, "gain")
     assert a.prereg("per_track", 0.54, 0.545, 0.001, 3, 3)[1] == a.WITHIN
@@ -297,6 +298,63 @@ def test_m1_split_and_prereg(fx):
     assert a.prereg("across", 0.50, 0.636, 0.01, 3, 3) == (0.128, "gain")
     assert a.prereg("across", 0.55, 0.636, 0.01, 3, 3)[1] == a.WITHIN
     assert a.prereg("across", 0.55, 0.636, 0.01, 2, 3)[1] == "incomplete (n_seeds=2)"
+    # the reference cell's spread raises the threshold above the constant
+    assert a.prereg("per_track", 0.50, 0.545, 0.001, 3, 3, 0.03) == (0.06, a.WITHIN)
+    assert a.prereg("across", 0.30, 0.636, 0.01, 3, 3, 0.164) == (0.328, "gain")
+    assert a.prereg("across", 0.40, 0.636, 0.01, 3, 3, 0.164)[1] == a.WITHIN
+
+
+def test_prereg_per_knob_cell_takes_reference_spread(fx):
+    """A per-knob cell whose Dviabase spread exceeds the 0.0077 constant gets 2 x that spread."""
+    _analyze().main(fx)
+    m1 = pd.read_csv(fx / "m1_never_table.tsv", sep="\t")
+    via = m1[m1.arm.isin(["Dbiggviabase", "Dbigfviabase"]) & (m1.g_version == "per_track")
+             & (m1.knob != "all")]
+    big = via[(via.spread_Dviabase > 0.0077) & (via.spread_Dviabase > via.seed_spread)
+              & (2 * via.spread_Dviabase > 0.015)]
+    assert len(big), "the fixture has no such cell"
+    assert (abs(big.prereg_threshold - 2 * big.spread_Dviabase) < 1e-12).all()
+    assert (big.prereg_threshold > 2 * 0.0077 + 1e-12).all()
+
+
+def test_lr_reading_needs_a_counted_gap(fx):
+    """Trained CRPS is "worse than D" only for gap > 0 with noise label "counts"."""
+    a = _analyze()
+    a.main(fx)
+    lines = _checks(fx)
+    # the fixture: Dbigf trained gaps vs D are positive but within noise
+    for g in ("per_track", "across"):
+        ln = _line(lines, f"INFO optimisation-failure reading Dbigf {g}:")
+        assert "(within noise)" in ln and ln.endswith("-> not an optimisation failure")
+    d = a.load(fx)
+    runs, _ = a.load_runs(fx)
+    m1 = pd.read_csv(fx / "m1_never_table.tsv", sep="\t", keep_default_na=False,
+                     na_values=[""])
+    m3 = pd.read_csv(fx / "m3_trained_table.tsv", sep="\t", keep_default_na=False,
+                     na_values=[""])
+    conf = pd.DataFrame(columns=["run", "best_step"])
+    cell = (m3.arm == "Dbigf") & (m3.g_version == "per_track") & (m3.knob == "all")
+    assert m3.loc[cell, "gap_vs_D"].iloc[0] > 0
+    m3.loc[cell, "label_vs_D"] = "counts"
+    ln = _line(a.checks(fx, d, m1, m3, runs, conf, False),
+               "INFO optimisation-failure reading Dbigf per_track:")
+    assert ln.endswith("-> read as optimisation failure (lr)")
+    m3.loc[cell, "gap_vs_D"] = -0.01                          # better than D, counted
+    ln = _line(a.checks(fx, d, m1, m3, runs, conf, False),
+               "INFO optimisation-failure reading Dbigf per_track:")
+    assert ln.endswith("-> not an optimisation failure")
+
+
+@pytest.mark.parametrize("env", [{"T128P3_RESULTS": "/nonexistent/results/t128p2"},
+                                 {"T128P3_ROOT": "/project/def-maxwl/mforooz/t128p2",
+                                  "T128P3_RESULTS": "/nonexistent/x"}])
+def test_run_all_refuses_t128p2_paths(env, tmp_path):
+    import os
+    e = {**os.environ, **env, "PATH": "/usr/bin:/bin"}
+    r = subprocess.run(["bash", str(RD / "run_all.sh"), "--local"], env=e, capture_output=True,
+                       text=True, cwd=tmp_path)
+    assert r.returncode == 2 and "refusing a t128p2 path" in r.stderr
+    assert not Path(env["T128P3_RESULTS"]).exists()
 
 
 def test_n_step_confounded_and_m9(fx):

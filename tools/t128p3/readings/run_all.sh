@@ -31,6 +31,7 @@ T=${T128P3_ROOT:-$DEFAULT_ROOT}
 R=$T/readings
 DEFAULT_RES=/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxvault/results/t128p3
 RES=${T128P3_RESULTS:-$DEFAULT_RES}
+case "$T $RES" in *t128p2*) echo "refusing a t128p2 path (T128P3_ROOT=$T, T128P3_RESULTS=$RES)" >&2; exit 2 ;; esac
 REF=/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxvault/results/t128p2
 REF_FILES=(records_fir.tsv.gz viabase_fir.tsv.gz runs_fir.tsv m1_never_table.tsv m9_steps_table.tsv)
 # The job ledger: $R/jobs.tsv on Fir (purpose, job_id, submitted_utc). Whoever submits a t128p3

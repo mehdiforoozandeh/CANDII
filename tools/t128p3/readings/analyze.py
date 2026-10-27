@@ -32,9 +32,11 @@ Conventions (phase 2's analyze.py, verbatim):
 Noise rule: seed_spread = max - min over the seeds of a per-seed value. A gap counts only if
   |gap| > 2 x max(spread_a, spread_ref); else "within noise"; "incomplete (n_seeds=k)" below 3.
 Pre-registered reading (design check), via-base arms against Dviabase on metric 1:
-  per_track threshold = max(2 x max(0.0077, spread_arm), 0.015); across = 2 x max(0.064,
-  spread_arm). "gain" when Dviabase - arm > threshold, "loss" when arm - Dviabase > threshold,
-  else "within noise (no gain above threshold)".
+  per_track threshold = max(2 x max(0.0077, spread_Dviabase_cell, spread_arm), 0.015); across =
+  2 x max(0.064, spread_Dviabase_cell, spread_arm). "gain" when Dviabase - arm > threshold,
+  "loss" when arm - Dviabase > threshold, else "within noise (no gain above threshold)".
+Optimisation-failure reading (checks.txt, INFO): via-base never not a "gain" AND the direct
+  arm's trained CRPS worse than D (gap > 0 with noise label "counts").
 Metric 9 (run_all.sh sets T128P3_FULL_TREE=1 on the full tree, where every phase-3 run must have
   max_steps 15,000 or the script stops): best step "in the last 10 %" when best_step >= 0.9 x the
   run's max_steps (13,500 at 15,000; 10,800 for the reference at 12,000); "at cap" when steps_run
@@ -162,11 +164,14 @@ def add_gaps(t, keys, value, refs=("D",), sp="seed_spread", suffix="", ns="n_see
     return t
 
 
-def prereg(gv, value, ref_value, spread_arm, na, nr):
-    """Pre-registered reading of a via-base arm against Dviabase: (threshold, label)."""
+def prereg(gv, value, ref_value, spread_arm, na, nr, spread_ref=np.nan):
+    """Pre-registered reading of a via-base arm against Dviabase: (threshold, label). The floor
+    constants are the Dviabase spreads of the (knob all, never) cell; every cell also takes its
+    own reference spread, so a per-knob gain never passes below the noise rule."""
     floor, minimum = PREREG[gv]
     sa = 0.0 if pd.isna(spread_arm) else float(spread_arm)
-    thr = max(2 * max(floor, sa), minimum)
+    sr = 0.0 if pd.isna(spread_ref) else float(spread_ref)
+    thr = max(2 * max(floor, sr, sa), minimum)
     if pd.isna(value) or pd.isna(ref_value):
         return thr, "n/a"
     k = min(int(na) if pd.notna(na) else 0, int(nr) if pd.notna(nr) else 0)
@@ -190,7 +195,7 @@ def add_prereg(t, keys):
             continue
         ref = r.loc[k]
         a, b = prereg(row.g_version, row.crps_all, ref.crps_all, row.seed_spread, row.n_seeds,
-                      ref.n_seeds)
+                      ref.n_seeds, ref.seed_spread)
         th.append(a); lb.append(b)
     t["prereg_threshold"] = th
     t["prereg_label"] = lb
@@ -507,7 +512,7 @@ def checks(here, d, m1, m3, runs, conf, full):
             nv_lab = a.loc[kv, "prereg_label"]
             gap = tr.loc[k, "gap_vs_D"]
             not_improved = nv_lab != "gain"
-            worse = pd.notna(gap) and gap > 0
+            worse = pd.notna(gap) and gap > 0 and tr.loc[k, "label_vs_D"] == "counts"
             read_ = ("read as optimisation failure (lr)" if not_improved and worse
                      else "not an optimisation failure")
             out.append(f"INFO optimisation-failure reading {arm} {g}: via-base never prereg "
