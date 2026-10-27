@@ -767,3 +767,21 @@ Fir root `/project/def-maxwl/mforooz/t128p2` (code, runs, logs, verify, viabase,
   never-trained knob mix, the gap is +0.005 to +0.014 for the three middles and −0.044 for D (per
   track; simple means over pairs from `pair_table.tsv.gz`, computed in `build_deck.py`).
 - Vault: task t132 (parent t118; refs q7, h22, h19) done with the DECK.md output; not accepted.
+
+## t128 phase 3 — a bigger g and a bigger f for old D through the base
+
+Spec: `plan/T126_ENCDEC_D2.md` § "Phase 3: PI decisions, 2026-10-27" and its "Design check" block.
+Plan: `.orchestrate/plan_t128p3.md`. Fir root `/project/def-maxwl/mforooz/t128p3` (code, runs, logs,
+verify, viabase, readings, smoke). Arm a `Dbigg` (g hidden 256), arm b `Dbigf` (f 64 channels,
+n_theta 512); 8 g units × 3 seeds each; reference = phase-2 arm D, not rerun.
+
+- Kit K1: `/project/def-maxwl/mforooz/t128p3/code/K1`, GIT_SHA f678ebd (waves 1–2 merged), one wheel
+  copied from t128p2 K1.
+- Submitted 2026-10-27 10:54:33 UTC on Fir (no --export, no --partition); ids also in
+  `t128p3/readings/jobs.tsv`:
+  - verify 725247 (`slurm/t128p3/verify.sh`), log in `t128p3/verify/`.
+  - smoke train 725249 (array 9,33%2: one Dbigg, one Dbigf; 300 steps, eval every 100; 3 h) into
+    `t128p3/smoke`.
+  - smoke law + via-base 725250 (array 9,33%2, aftercorr:725249, chained while train was live; 3 h).
+  - All three PENDING (None) at submission.
+- Never resubmit these; the readback chunk (C6) reads the smoke and submits the full arrays.
