@@ -785,3 +785,31 @@ n_theta 512); 8 g units × 3 seeds each; reference = phase-2 arm D, not rerun.
   - smoke law + via-base 725250 (array 9,33%2, aftercorr:725249, chained while train was live; 3 h).
   - All three PENDING (None) at submission.
 - Never resubmit these; the readback chunk (C6) reads the smoke and submits the full arrays.
+
+### Smoke readback and full submission (C6, 2026-10-27)
+
+- Verify 725247: `RESULT t128p3 rc=0`, `t128p2 rc=0`, `t128 rc=0`, `t126 rc=0`, `t118 rc=1`. The only
+  FAILED lines are the known flakes `test_t118_xshuf_score.py::test_twin_scoring_is_deterministic[A2]`
+  and `[D2]`.
+- Smoke (300 steps, eval every 100; train 725249, law + via-base 725250): every pinned check passes
+  for both runs. Marks TRAIN/SCORE/LAW_DONE and via-base LAW_DONE, law.json, viabase.json present;
+  config rung D, arm Dbigg / Dbigf, max_steps 300, holdout depth 7.5M, 36 train pairs, 19 fit pids,
+  no 7.5M in either; sizes (g_hidden, f_channels, n_theta) (256, 32, 256) / (64, 64, 512); ckpt
+  `g net.0.weight` rows 256 / 64 and `form head.weight` cols 32 / 64; scores.json trained 72
+  (36 score + 36 val, all 36 score records with `crps_oracle_scaled_all`), heldout 2, swap 19;
+  law.json 342 law records with the split + 6 depthlaw (same as phase 2); via-base law.json 348
+  records = the phase-2 smoke via-base count for C19M16.
+
+| run | steps | best | val_nll | s/step | score min | law min | via-base min |
+|---|---|---|---|---|---|---|---|
+| Dbigg_C19M16_counts_real_s0 | 300 | 300 | 0.7804 | 2.234 | 10.4 | 11.9 | 26.3 |
+| Dbigf_C19M16_counts_real_s0 | 300 | 300 | 0.7732 | 1.964 | 13.9 | 16.2 | 33.0 |
+
+- Walltime: T_arm = s/step × 15,000 + 45 min → Dbigg 10.06 h, Dbigf 8.94 h, both ≤ 11 h → train
+  `--time=12:00:00`. Law: max(6 h, 3 × 49.2 min) → `--time=6:00:00`. The smoke s/step includes three
+  evals in 300 steps, so it is an upper bound for 15k steps at eval every 250.
+- Full submission 2026-10-27 16:40:35 UTC on K1 (f678ebd); `$OUT/runs` was empty and no t128p3 job
+  was queued before it. Ids also in `t128p3/readings/jobs.tsv`:
+  - arm a Dbigg: train 758803 (0-23%12, 12 h), law + via-base 758804 (0-23%12, aftercorr:758803, 6 h).
+  - arm b Dbigf: train 758805 (24-47%12, 12 h), law + via-base 758806 (24-47%12, aftercorr:758805, 6 h).
+- Never resubmit these. A watcher re-runs only FAILED/TIMEOUT indices as new arrays.
