@@ -180,3 +180,22 @@ def test_sized_run_recorded_and_rebuilt(prod, arm, gh, fc, nt):
         n = vb.corpus.get(a, "counts", "chr19").shape[0]
         loc, disp = vb.predict(a, a, b, "chr19")
         assert loc.shape == (n,) and disp.shape == (n,)
+
+
+# (6) a default row-2 D2 run records f_channels 32 and reloads (form_d2.build takes no channels)
+def test_default_d2_run_reloads(prod):
+    run = ltrain.run_training(prod["manifest"], prod["cov"], prod["data"], prod["root"] / "d2",
+                              "D2", "T1", "counts", "real", 0, max_steps=4, eval_every=2,
+                              device="cpu", **SMALL)
+    cfg = json.loads((run / "config.json").read_text())
+    assert cfg["row"] == 2 and cfg["g_hidden"] == 64 and cfg["f_channels"] == 32
+    ckpt = torch.load(run / "ckpt.pt", map_location="cpu", weights_only=True)
+    assert ckpt["config"]["f_channels"] == 32
+    pred = _load(prod, run)
+    assert pred.ladder.f_channels == 32
+    for part in ("g", "form"):
+        got = getattr(pred.ladder, part).state_dict()
+        assert list(got) == list(ckpt[part])
+        assert all(torch.equal(got[k], ckpt[part][k]) for k in got)
+    with pytest.raises(TypeError):            # a non-default width on a form without the kwarg
+        model.Ladder("D2", "counts", STATS, f_channels=64)

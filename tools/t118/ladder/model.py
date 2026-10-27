@@ -374,8 +374,12 @@ class Ladder(torch.nn.Module):
         if loss not in LOSSES or (loss == "ppml" and space != "counts"):
             raise ValueError(f"loss {loss!r}: want one of {LOSSES}, ppml in counts only")
         self.loss = loss
+        # a recorded default width never reaches a build without the kwarg (form D2 inherits
+        # FormD.channels but its build takes none); a non-default width on such a form fails loudly
+        from ladder.fforms.form_d import CHANNELS as _D_CHANNELS
+        wide = f_channels is not None and int(f_channels) != _D_CHANNELS
         self.form = base.load_form(
-            rung, space, stats, **({"channels": int(f_channels)} if f_channels is not None else {}))
+            rung, space, stats, **({"channels": int(f_channels)} if wide else {}))
         self.g_hidden = int(g_hidden) if g_hidden is not None else HIDDEN
         self.f_channels = getattr(self.form, "channels", None)
         self.context = int(self.form.context)
