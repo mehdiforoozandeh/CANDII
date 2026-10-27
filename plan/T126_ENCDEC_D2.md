@@ -118,3 +118,53 @@ above 2x the larger seed spread.
 - The deck ranks the arms by (1) and shows (2) beside it, as a reading, not a gate.
 - Final report: each metric is defined, with its best and worst cases explained, and then its
   results. The discussion and conclusion must draw on every metric and say what each one tells us.
+
+## Phase 3: PI decisions, 2026-10-27
+
+The PI read phase 2's winner as **the two-step via the base**: old D (rung D), trained on base ↔ arm
+pairs, with each never-trained arm → arm pair predicted as arm → base → arm. It is the only model
+that beat old D direct on never-trained pairs outside noise (phase 2, one g per track: 0.545
+against 0.662). Phase 3 asks the deferred scale question on that model alone: does a bigger g, or a
+bigger f, lower the never-trained CRPS of the two-step via the base?
+
+Run grid (PI, 2026-10-27): 2 arms × 8 g units × 3 seeds = 48 runs. Each arm grows one part only.
+- a. **Bigger g:** g = MLP 40 -> 256 -> 256 -> n_theta, ReLU (hidden width 64 -> 256; about 23 k ->
+  about 142 k parameters). f as phase 2.
+- b. **Bigger f:** f = rung D's trunk at 64 channels (was 32), same 4 layers, kernel 5, dilations
+  1, 2, 4, 8, GELU; the receptive field stays 61 bins. About 16 k -> about 62 k parameters. FiLM
+  carries one gamma and one beta per channel, so n_theta goes 256 -> 512 and only g's last layer
+  grows; g's hidden width stays 64.
+- No combined arm, and one size per axis (PI). A combined arm or a second size follows only if an
+  axis helps.
+- Training: rung D's loss and recipe as phase 2's arm d; cap 15,000 steps; the existing early stop
+  (chr22 NLL every 250 steps, patience 4); the learning rate unchanged (a caveat, not tuned). The
+  depth 7.5M arm of every track stays held out.
+- **Reference:** phase 2's arm d (old D at 12,000 steps, the small model), read through the base. It
+  is not rerun: no phase-2 old-D run reached its cap (best step median about 2,750, stop about 3,750),
+  so the 12k and 15k caps act the same unless a bigger model trains longer. Metric 9 checks that.
+
+Metrics. The phase-2 rules hold: every CRPS has the oracle_scaled / scale_error split, and a gap
+counts only above 2x the larger seed spread of the two cells.
+- Tier 1, the question: (1) never-trained arm -> arm CRPS **through the base**, pooled and per knob,
+  each arm against the reference; also the direct never-trained CRPS of the same runs.
+- Tier 2, no cost elsewhere: (2) generalisation gap; (3) trained-pair CRPS; (4) held-out 7.5M depth
+  CRPS; (5) depth-law error on never-trained depth pairs (sanity check only).
+- Tier 3: (9) the share of runs whose best step is in the last 10% of 15,000 steps; the best-step
+  median against the reference's.
+- The deck ranks bigger g, bigger f and the reference by (1), one g per track and one g across
+  tracks, as a reading, not a gate.
+
+Design check (crux-design, 2026-10-27: sound, with the fixes below; nothing in the PI's grid changes).
+- *Pre-registered reading.* One g per track: a gain counts above 2x max(0.0077, the arm's own seed
+  spread), at least about 0.015 (about 3% of 0.545). One g across tracks, pooled: the reference seed
+  spread is 0.064 (seeds 0.603, 0.639, 0.667), driven by the dedup, extsize and pe knobs, so a gain
+  counts only above about 0.128 (about 20%). This cell is reported but is read per knob. "Within
+  noise" means "no gain above the stated threshold", never "no effect".
+- *Optimisation failure.* If an arm's never-trained CRPS does not improve and its trained-pair CRPS
+  also gets worse, read it as an optimisation failure (learning rate), not as "capacity does not help".
+- *Arm b* is "bigger f, with the g head it needs": its g grows 23 k -> 40 k (output layer only), against
+  142 k in arm a. Seeds do not pair across arms (a bigger model draws more initial weights).
+- *Checks.* The via-base never-trained pair count equals the reference's (2,094 per seed). The via-base
+  readout (tools/t128/viabase.py) rebuilds g and f at each run's recorded hidden width and channel
+  count, not at the module constants. A run whose best step is above 12,000 is flagged as
+  step-confounded and listed apart.
