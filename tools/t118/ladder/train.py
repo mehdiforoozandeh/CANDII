@@ -239,7 +239,7 @@ def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
 
 def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model_name, seed,
                  max_steps=None, eval_every=None, device="auto", cov_rows=None, holdout=(),
-                 loss="nb",
+                 loss="nb", g_hidden=None, f_channels=None, arm=None,
                  **overrides):
     """Train one run into `<runs_dir>/<run_name>/`; returns the run dir. Skips if TRAIN_DONE.
 
@@ -249,6 +249,10 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     holdout)`, so the fit pids (encoder normalisation, knots) exclude them too; config.json gains
     `"holdout"` and `"heldout_pairs"`, which `score.score_trained` reads to score them. Empty (the
     default): the run and its config.json are unchanged.
+    `g_hidden`, `f_channels`, `arm` (t128 phase 3): g's hidden width and form D's channel count
+    (None = the defaults, 64 / 32); config.json always records `g_hidden` and `f_channels` (None for
+    a form without channels). `arm` replaces the rung in the run name and is recorded as `"arm"`;
+    `config["rung"]` stays the form rung.
     """
     t0 = time.time()
     torch.backends.cudnn.deterministic = True
@@ -268,7 +272,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         cfg["max_steps"] = int(max_steps)
     if eval_every is not None:
         cfg["eval_every"] = int(eval_every)
-    name = run_name(rung, g, space, model_name, seed, loss)
+    name = run_name(arm or rung, g, space, model_name, seed, loss)
     run_dir = Path(runs_dir) / name
     if (run_dir / "TRAIN_DONE").is_file():
         print(f"{name}: TRAIN_DONE present, nothing to do")
@@ -303,7 +307,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    ladder = model.Ladder(rung, space, stats, loss=loss).to(dev)
+    ladder = model.Ladder(rung, space, stats, loss=loss, g_hidden=g_hidden,
+                          f_channels=f_channels).to(dev)
     pool, t_pool = None, None
     if is_xshuf:
         if not ladder.per_bin:
@@ -321,6 +326,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         "run_name": name, "rung": rung, "g": g, "space": space, "model": model_name, "seed": seed,
         **({"row": 2} if ladder.per_bin else {}), **cfg, "device": str(dev), "n_cov": encoding.N_COV, "cov_fields": list(encoding.FIELDS),
         "context": ladder.context, "n_theta": ladder.n_theta,
+        "g_hidden": ladder.g_hidden, "f_channels": ladder.f_channels,
+        **({"arm": arm} if arm is not None else {}),
         "train_chroms": chroms, "val_chroms": list(pairs.VAL_CHROMS),
         "score_chroms": list(pairs.SCORE_CHROMS),
         "sampling": "pair uniform, chromosome proportional to length, start uniform",

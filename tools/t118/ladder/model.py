@@ -122,14 +122,16 @@ def lognormal_nll(loc: torch.Tensor, disp: torch.Tensor, y: torch.Tensor) -> tor
 
 
 class G(torch.nn.Module):
-    """MLP n_in -> 64 -> 64 -> n_theta, ReLU; last layer weight 0, bias = init_theta."""
+    """MLP n_in -> hidden -> hidden -> n_theta, ReLU (hidden = HIDDEN = 64 by default); last layer
+    weight 0, bias = init_theta."""
 
-    def __init__(self, n_in: int, n_theta: int, init_theta: torch.Tensor):
+    def __init__(self, n_in: int, n_theta: int, init_theta: torch.Tensor, hidden: int = HIDDEN):
         super().__init__()
+        self.hidden = int(hidden)
         self.net = torch.nn.Sequential(
-            torch.nn.Linear(n_in, HIDDEN), torch.nn.ReLU(),
-            torch.nn.Linear(HIDDEN, HIDDEN), torch.nn.ReLU(),
-            torch.nn.Linear(HIDDEN, n_theta))
+            torch.nn.Linear(n_in, self.hidden), torch.nn.ReLU(),
+            torch.nn.Linear(self.hidden, self.hidden), torch.nn.ReLU(),
+            torch.nn.Linear(self.hidden, n_theta))
         last = self.net[-1]
         init_theta = torch.as_tensor(init_theta, dtype=torch.float32).reshape(-1)
         if init_theta.numel() != n_theta:
@@ -360,20 +362,28 @@ class Ladder(torch.nn.Module):
     `x_g` (row 2 only, shaped like x): the x g reads instead of x — the shuffled-bin twin.
     t126: a form whose `g_kind` is "encdec" / "encdec_beta1" (AED, AED1) gets `GEncDec`,
     "encdec_d" (DED) gets `GEncDecD`; a form without `g_kind` gets `G`, as before.
+    t128 phase 3: `g_hidden` sets the plain G's hidden width (default HIDDEN; any other g refuses a
+    non-default width); `f_channels` is passed to the form's build as `channels` (form D). Both
+    default to today's sizes; `f_channels` is read back from the form (None if it has none).
     """
 
     def __init__(self, rung: str, space: str, stats: dict, n_cov: int = encoding.N_COV,
-                 loss: str = "nb"):
+                 loss: str = "nb", g_hidden: int | None = None, f_channels: int | None = None):
         super().__init__()
         self.rung, self.space, self.n_cov = rung, space, int(n_cov)
         if loss not in LOSSES or (loss == "ppml" and space != "counts"):
             raise ValueError(f"loss {loss!r}: want one of {LOSSES}, ppml in counts only")
         self.loss = loss
-        self.form = base.load_form(rung, space, stats)
+        self.form = base.load_form(
+            rung, space, stats, **({"channels": int(f_channels)} if f_channels is not None else {}))
+        self.g_hidden = int(g_hidden) if g_hidden is not None else HIDDEN
+        self.f_channels = getattr(self.form, "channels", None)
         self.context = int(self.form.context)
         self.n_theta = int(self.form.n_theta)
         self.per_bin = bool(self.form.per_bin)
         g_kind = getattr(self.form, "g_kind", None)
+        if self.g_hidden != HIDDEN and (self.per_bin or g_kind is not None):
+            raise ValueError("g_hidden applies to the plain g only")
         if self.per_bin:
             self.g = GBin(2 * self.n_cov, self.n_theta, self.form.init_theta())
         elif g_kind in ("encdec", "encdec_beta1"):
@@ -387,7 +397,7 @@ class Ladder(torch.nn.Module):
         elif g_kind is not None:
             raise ValueError(f"rung {rung}: unknown g_kind {g_kind!r}")
         else:
-            self.g = G(2 * self.n_cov, self.n_theta, self.form.init_theta())
+            self.g = G(2 * self.n_cov, self.n_theta, self.form.init_theta(), hidden=self.g_hidden)
 
     def theta(self, cov_pair: torch.Tensor, x: torch.Tensor | None = None) -> torch.Tensor:
         """Row 1: [B, n_theta] (x ignored). Row 2: x [B, W] required -> [B, W, n_theta]."""
@@ -711,8 +721,12 @@ def load_run(run_dir, data_dir, covariates_tsv, manifest_tsv, device="auto") -> 
     # t126/t128 runs write their own loss formula under "loss" (an NB head, e.g. "L12: ..."); only
     # the ladder's own names select the head here
     loss = cfg.get("loss", "nb")
+    # t128 phase 3: sizes from the config; a checkpoint without the keys is the default 64 / 32
     ladder = Ladder(cfg["rung"], cfg["space"], stats, n_cov=int(cfg.get("n_cov", encoding.N_COV)),
-                    loss=loss if loss in LOSSES else "nb")
+                    loss=loss if loss in LOSSES else "nb",
+                    g_hidden=int(cfg.get("g_hidden", HIDDEN)),
+                    f_channels=(int(cfg["f_channels"]) if cfg.get("f_channels") is not None
+                                else None))
     ladder.g.load_state_dict(ckpt["g"])
     ladder.form.load_state_dict(ckpt["form"])
     enc = encoding.Encoder.from_state(ckpt["encoder"])

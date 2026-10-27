@@ -62,10 +62,11 @@ class FForm(torch.nn.Module):
         raise NotImplementedError
 
 
-def load_form(rung: str, space: str, stats: dict) -> FForm:
-    """`ladder.fforms.form_<rung.lower()>.build(space, stats)`."""
+def load_form(rung: str, space: str, stats: dict, **form_kwargs) -> FForm:
+    """`ladder.fforms.form_<rung.lower()>.build(space, stats, **form_kwargs)` (no kwargs by default;
+    t128 phase 3 passes `channels` to form D)."""
     mod = importlib.import_module(f"ladder.fforms.form_{rung.lower()}")
-    form = mod.build(space, stats)
+    form = mod.build(space, stats, **form_kwargs)
     if not isinstance(form, FForm):
         raise TypeError(f"form_{rung.lower()}.build returned {type(form).__name__}, not an FForm")
     if form.space != space:

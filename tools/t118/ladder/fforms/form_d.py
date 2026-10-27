@@ -12,6 +12,8 @@ Head: `nn.Conv1d(32, 2, 1)`, weight and bias zero-initialised, read per bin:
 so the map is the identity at initialisation whatever the trunk weights and theta are.
 
 theta (n_theta = 256) = gamma[4][32] then beta[4][32], layer-major. `init_theta` = gamma 1, beta 0.
+`channels` (t128 phase 3) sets the trunk width per instance: n_theta = 2 * 4 * channels becomes an
+instance attribute; the class attribute stays 256 (form_ds reads it). The default is 32.
 The trunk and head weights are this module's own parameters (`form.parameters()`), shared across
 pairs and trained jointly with g. Because the head starts at zero, the first gradient step reaches
 only the head; gamma, beta and the trunk receive gradient from the second step on.
@@ -39,27 +41,29 @@ class FormD(FForm):
     n_theta = 2 * N_LAYERS * CHANNELS
     context = CONTEXT
 
-    def __init__(self, space: str, stats: dict):
+    def __init__(self, space: str, stats: dict, channels: int = CHANNELS):
         super().__init__(space, stats)
+        self.channels = int(channels)
+        self.n_theta = 2 * N_LAYERS * self.channels
         self.convs = nn.ModuleList(
-            nn.Conv1d(1 if i == 0 else CHANNELS, CHANNELS, KERNEL, dilation=d,
+            nn.Conv1d(1 if i == 0 else self.channels, self.channels, KERNEL, dilation=d,
                       padding=(KERNEL - 1) // 2 * d)
             for i, d in enumerate(DILATIONS))
-        self.head = nn.Conv1d(CHANNELS, 2, 1)
+        self.head = nn.Conv1d(self.channels, 2, 1)
         nn.init.zeros_(self.head.weight)
         nn.init.zeros_(self.head.bias)
         s = self.stats["n0"] if space == "counts" else self.stats["sigma0"]
         self.disp0 = math.log(s)
 
     def init_theta(self) -> torch.Tensor:
-        half = N_LAYERS * CHANNELS
+        half = N_LAYERS * self.channels
         return torch.cat([torch.ones(half), torch.zeros(half)])
 
     def _film(self, theta: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         b = theta.shape[0]
-        half = N_LAYERS * CHANNELS
-        gamma = theta[:, :half].reshape(b, N_LAYERS, CHANNELS, 1)
-        beta = theta[:, half:].reshape(b, N_LAYERS, CHANNELS, 1)
+        half = N_LAYERS * self.channels
+        gamma = theta[:, :half].reshape(b, N_LAYERS, self.channels, 1)
+        beta = theta[:, half:].reshape(b, N_LAYERS, self.channels, 1)
         return gamma, beta
 
     def forward(self, x: torch.Tensor, theta: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -83,5 +87,5 @@ class FormD(FForm):
         return {"film_gamma": gamma[0, :, :, 0].tolist(), "film_beta": beta[0, :, :, 0].tolist()}
 
 
-def build(space: str, stats: dict) -> FormD:
-    return FormD(space, stats)
+def build(space: str, stats: dict, channels: int = CHANNELS) -> FormD:
+    return FormD(space, stats, channels=channels)
