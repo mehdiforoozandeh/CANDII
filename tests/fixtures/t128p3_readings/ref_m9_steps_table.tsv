@@ -1,0 +1,3 @@
+arm	g_version	n_runs	max_steps	n_best_last10	share_best_last10	n_at_cap	n_best_gt12000	best_step_median	best_step_min	best_step_max	steps_run_median	s_per_step_median	train_hours_median
+D	across	3	12000	0	0.0	0	0	3250.0	3000	3500	4250.0	1.35	1.59375
+D	per_track	6	12000	0	0.0	0	0	2750.0	2500	3000	3750.0	0.9	0.9375
