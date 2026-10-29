@@ -813,3 +813,37 @@ n_theta 512); 8 g units × 3 seeds each; reference = phase-2 arm D, not rerun.
   - arm a Dbigg: train 758803 (0-23%12, 12 h), law + via-base 758804 (0-23%12, aftercorr:758803, 6 h).
   - arm b Dbigf: train 758805 (24-47%12, 12 h), law + via-base 758806 (24-47%12, aftercorr:758805, 6 h).
 - Never resubmit these. A watcher re-runs only FAILED/TIMEOUT indices as new arrays.
+
+### Readings on the full tree (C7, 2026-10-29)
+
+- Preconditions met on Fir: 48 run dirs; SCORE_DONE 48, LAW_DONE 48, via-base LAW_DONE 48;
+  arrays 758803–758806 = 96 COMPLETED, no other state; config check (holdout 7.5M, max_steps 15000,
+  rung D, sizes per arm, no 7.5M train pair) → 0 bad. No reruns.
+- Smoke check of the pipeline (`T128P3_ROOT=…/t128p3/smoke`, scratch results): extract 1195210,
+  verify 1195211 (ledger `t128p3/smoke/readings/jobs.tsv`); 12 AGREE, 0 DISAGREE. The 2094 and
+  2136 count checks read FAIL on the smoke only because it holds one of the 7 per-track g units
+  (342 pairs) and no across unit; they PASS on the full tree.
+- Full tree (`bash tools/t128p3/readings/run_all.sh`, T128P3_FULL_TREE=1): extract 1195568,
+  verify 1195569 (both COMPLETED, ledger `t128p3/readings/jobs.tsv`). No code change.
+- Tables in `cruxvault/results/t128p3/` (main checkout, mirrored into this worktree; gitignored):
+  n, m1, m2, m3, m4, m5, m9, rank, step_confounded_runs, pair, analyze_out.txt, checks.txt
+  (4 PASS, 0 FAIL), verify.txt (12 AGREE, 0 DISAGREE), FIR_PATH.txt, jobs.tsv.
+- Metric 1 never-trained CRPS through the base (knob all; oracle_scaled / scale_error; seed
+  spread; pre-registered threshold vs the small via-base reference):
+  - per track: bigger f 0.530 (0.526/0.004; 0.005), bigger g 0.534 (0.529/0.005; 0.006), small
+    reference 0.545 (0.537/0.008; 0.008). Threshold 0.015; both gains (0.015, 0.011) read
+    "within noise (no gain above threshold)".
+  - across: bigger f 0.609 (0.575/0.034; 0.033), small reference 0.636 (0.577/0.060; 0.064),
+    bigger g 0.656 (0.573/0.083; 0.129). Thresholds 0.129 / 0.258; both "within noise".
+- Direct arms (no base) vs old D, never-trained: per track bigger g 0.742 (spread 0.197: seed 1
+  0.627, seeds 0 and 2 0.82 / 0.77, mostly scale error 0.144), bigger f 0.668, D 0.662; across
+  bigger g 0.638, bigger f 0.644, D 0.667. Every gap within noise.
+- Metric 3 trained CRPS: per track bigger g 0.436, bigger f 0.436, D 0.445 (bigger f −0.009
+  counts; bigger g within noise); across all within noise.
+- Metric 4 held-out 7.5M (both directions): per track bigger g 0.411, bigger f 0.408, D 0.412;
+  only bigger f per track counts (−0.005).
+- Metric 9: best-step median 2750 (bigger g per track), 2250 (bigger g across), 2500 (bigger f per
+  track), 2250 (bigger f across); 0 of 48 runs have best step > 12,000, and 0 reach the cap.
+  Early stopping ends all runs near 3,250–3,750 steps, as in phase 2. s/step median 1.17 / 2.38
+  (bigger g per track / across), 1.37 / 2.19 (bigger f).
+- Optimisation-failure reading: no arm × g cell reads as an optimisation failure.
