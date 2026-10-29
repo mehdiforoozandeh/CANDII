@@ -193,3 +193,17 @@ Run grid: 2 arms × 7 per-track g × seeds 3, 4, 5 = 42 new runs.
 Reading (to be fixed by the design check before any compute): metric 1, never-trained arm → arm
 CRPS through the base, one g per track, pooled over all six seeds per arm, with its split; plus the
 same on the three new seeds alone, as a replication. Metrics 3, 4, 5 and 9 as phase 3, per-track only.
+
+Reading (crux-design 2026-10-29; PI approved the same day). Per-seed value = the mean over the 7
+per-track g; arms unpaired. Two bars, reported apart:
+- Real: gap₆ > 4·SE, SE = √(sd_f²/6 + sd_ref²/6) (Welch; about 0.008 expected).
+- Size: max(2·max(0.0077, 0.669·R₆,f, 0.669·R₆,ref), 0.015); R₆ = 6-seed range, 0.669 converts it
+  to a 3-seed equivalent.
+- Labels: gain (both pass) / gain real, below the size bar / within seed noise / loss (mirror). The
+  gap is reported with its 95% interval. The range rule alone has about 9% power at 6 seeds and is
+  not used as the gate.
+- Replication, seeds 3–5 alone: gap₃ > 2·SE₃, one-sided.
+- Controls: (a) kit drift — the reference's seeds 3–5 against its seeds 0–2, |Δ| ≤ 4·SE₃, else read
+  the new seeds only; (b) readout — the phase-3 viabase.py rescoring one phase-2 D run reproduces its
+  recorded via-base CRPS.
+- The CRPS result is a reading under h27 only (PI); no separate hypothesis.
