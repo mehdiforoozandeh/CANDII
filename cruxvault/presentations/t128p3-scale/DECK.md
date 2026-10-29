@@ -1,6 +1,6 @@
 # A bigger g and a bigger f for old D through the base, phase 3: lab deck
 
-Artifact: __URL__
+Artifact: https://claude.ai/artifact/5JfcGnVRdH8NESQeSWp9tp
 
 Source: `index.html` beside this file, built by `build_deck.py` from `deck_src.html`. Its numbers come from `cruxvault/results/t128p3/`, which is gitignored; the build reads the main checkout's copy by default (override with `T128P3_RESULTS=<dir>`). To rebuild, run these from the worktree root: `bash tools/t128p3/readings/run_all.sh`, then `python cruxvault/presentations/t128p3-scale/build_deck.py`. The design is in `plan/T126_ENCDEC_D2.md` § "Phase 3: PI decisions, 2026-10-27" and its "Design check" block; the run log is in `plan/T118_STATUS.md` § "t128 phase 3". The build fails if an arm code reaches the page.
 
