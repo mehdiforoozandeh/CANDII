@@ -1,0 +1,6 @@
+run	kind	track	arm_src	level_src	arm_tgt	level_tgt	crps_all
+D_C07M20_counts_real_s0	law	C07M20	abproxy	f0.5	abproxy	f0.9	0.6004084696712416
+D_C07M20_counts_real_s0	law	C07M20	crop	36	mapq	30	0.5000005
+D_C07M20_counts_real_s0	law	C07M20	pe	se	pe	pe	0.25
+D_C07M20_counts_real_s0	depthlaw	C07M20	depth	5M	depth	10M	1.0
+D_C07M29_counts_real_s0	law	C07M29	pe	se	pe	pe	0.7
