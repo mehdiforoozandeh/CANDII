@@ -1,15 +1,15 @@
 ---
 id: t134
 type: task
-title: Build and run phase 3 of the pivot study: a bigger g and a bigger f for old D read through the base, 48 runs (exploratory)
+title: "Build and run phase 3 of the pivot study: a bigger g and a bigger f for old D read through the base, 48 runs (exploratory)"
 category: implementation
 parent: t118
 blocked_by: None
 refs: q7, h22, h19
 hypothesis_refs: 
-status: open
-created: 2026-10-27T03:29:31
-updated: 2026-10-27T03:29:31
+status: done
+created: "2026-10-27T03:29:31"
+updated: "2026-10-29T13:52:33"
 ---
 
 # t134 — Build and run phase 3 of the pivot study: a bigger g and a bigger f for old D read through the base, 48 runs (exploratory)
@@ -24,7 +24,7 @@ phase 3 of t128 as the PI ruled on 2026-10-27: does more capacity in g or in f l
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Deck: a bigger g and a bigger f for old D through the base, phase 3](presentations/t128p3-scale/DECK.md)
 
 ## Evidence
 

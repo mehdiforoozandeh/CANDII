@@ -847,3 +847,7 @@ n_theta 512); 8 g units × 3 seeds each; reference = phase-2 arm D, not rerun.
   Early stopping ends all runs near 3,250–3,750 steps, as in phase 2. s/step median 1.17 / 2.38
   (bigger g per track / across), 1.37 / 2.19 (bigger f).
 - Optimisation-failure reading: no arm × g cell reads as an optimisation failure.
+- Deck (17 slides, paper arc; one slide per metric 1, 2, 3, 4, 5, 9 with its definition, best and
+  worst case; the three routes through the base ranked by metric 1): __URL__ . Source
+  `cruxvault/presentations/t128p3-scale/` (`deck_src.html`, `build_deck.py` reads `T128P3_RESULTS`,
+  default the main checkout's `cruxvault/results/t128p3/`; vault copy `DECK.md`).
