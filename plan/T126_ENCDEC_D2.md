@@ -168,3 +168,28 @@ Design check (crux-design, 2026-10-27: sound, with the fixes below; nothing in t
   readout (tools/t128/viabase.py) rebuilds g and f at each run's recorded hidden width and channel
   count, not at the module constants. A run whose best step is above 12,000 is flagged as
   step-confounded and listed apart.
+
+## Phase 3b: more seeds for the bigger f (PI decisions, 2026-10-29)
+
+Phase 3's readings (deck https://claude.ai/artifact/5JfcGnVRdH8NESQeSWp9tp): through the base, one g
+per track, bigger f gave 0.530 against the small reference's 0.545, a gain of 0.0146 just under the
+pre-registered bar of 0.015; bigger g gave 0.534. The PI chose option B and ruled on the rest:
+- (i) Option B: three more seeds per per-track g for the bigger f AND for the small reference.
+- (ii) The bigger f's gain is not closed as "within noise"; the seeds decide it.
+- (iii) Bigger g's high direct seeds (0.627, 0.82, 0.77 per track) are a caveat, not followed up.
+- (iv) One g across tracks is dropped from the gain test.
+- (v) The f size gets its own hypothesis under the depth-law question (h27).
+
+Run grid: 2 arms × 7 per-track g × seeds 3, 4, 5 = 42 new runs.
+- a. **Bigger f** (`Dbigf`): exactly phase 3's arm b (g hidden 64, f 64 channels, n_theta 512,
+  15,000-step cap, early stop eval 250 / patience 4, lr unchanged, depth 7.5M held out).
+- b. **Small reference** (`D`): exactly phase 2's arm d (g hidden 64, f 32 channels, n_theta 256,
+  12,000-step cap, same early stop), so its six seeds pool with the three phase-2 seeds under one
+  recipe. Run on the phase-3 code: its default sizes are bit-identical to phase 2 (pinned by
+  tests/test_t128p3_sizes.py). The cap difference does not bind: no run of either arm reached a best
+  step above 6,000 (phase 3 metric 9).
+- Both arms are read directly and through the base, as phase 3. Seeds 0–2 are not rerun.
+
+Reading (to be fixed by the design check before any compute): metric 1, never-trained arm → arm
+CRPS through the base, one g per track, pooled over all six seeds per arm, with its split; plus the
+same on the three new seeds alone, as a replication. Metrics 3, 4, 5 and 9 as phase 3, per-track only.
