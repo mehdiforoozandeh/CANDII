@@ -72,10 +72,11 @@ Earlier readings:
 Exploratory readings; the PI has not ruled. Median |log2 error| of the predicted scale, chr19 + chr21; seed spread in brackets.
 
 - A 4× wider g does not meet the law on never-trained depth → depth pairs: 0.63 (0.19) per-track g and 0.46 (0.11) across-track g, against old D at 0.29 (0.05) and 0.34 (0.24). It still fits trained pairs (0.07).
-- A 2× wider f does not meet it either: 0.41 (0.23) and 0.34 (0.10).
+- A 2× wider f does not meet it either ([[h27_f_at_64_channels_2x_wider_with_the_same_|the f-size hypothesis]]).
 - Every gap to old D is within noise. Neither size moves the miss towards the law.
-- Read through the base, the bigger models stay near the law (bigger g 0.14 and 0.21, bigger f 0.09 and 0.11; old D 0.11 and 0.07).
-- On never-trained arm → arm CRPS through the base, per-track g, bigger f gives 0.530 (0.526 + 0.004) and bigger g 0.534 (0.529 + 0.005), against old D's 0.545 (0.537 + 0.008). The gains (0.015 and 0.011) do not clear the bar set before the run (0.015).
+- Read through the base, the wider g stays near the law: 0.14 and 0.21, against old D's 0.11 and 0.07.
+- On never-trained arm → arm CRPS through the base, per-track g, it gives 0.534 (0.529 + 0.005) against old D's 0.545 (0.537 + 0.008). The gain of 0.011 does not clear the bar set before the run (0.015).
+- Caveat (PI, 2026-10-29): read directly, its per-track CRPS seeds are 0.627, 0.82 and 0.77, mostly scale error. The PI ruled this a caveat; it is not followed up.
 - No run's best step came near the cap.
 
 So size, at these widths, is not what makes g miss the law on unseen pairs. The earlier readings had leaned the same way: the 2 × 64 g fits trained pairs to 0.04–0.10 in every design ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]), and it meets the law when its two trained maps run in series through the base.

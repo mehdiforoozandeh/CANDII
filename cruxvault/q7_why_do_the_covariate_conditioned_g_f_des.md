@@ -43,10 +43,10 @@ Readings to 2026-10-29, not judged: median |log2 error| of the predicted scale, 
 - Encoder-decoder designs do not close it yet ([[h22_a_composable_g_one_shared_map_from_each_|the composable-g hypothesis]]). Encoder-decoder D gives 0.26–0.52, old D 0.29–0.34; encoder-decoder A also loses trained pairs (1.0–1.4). A symmetric design through a learned clean setting gives 0.29–0.42 in its two complete cross-loss settings (first pass).
 - Chaining old D's two trained maps through the base meets the law: 0.07 (across-track g) and 0.12 (per-track g, seed spread 0.05) against direct 0.34 and 0.29. The trained maps hold the law; g's direct answer on an unseen pair does not use it.
 - Base ↔ 7.5M pairs, held out of training, are easy (0.04–0.16) except for encoder-decoder A.
-- Size is not the cause at the widths tried ([[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]]). A 4× wider g misses on never-trained depth pairs (0.63 per-track, 0.46 across), and so does a 2× wider f (0.41, 0.34), within noise of old D. Through the base, both stay near the law (0.09–0.21). Arm → arm training is not decided.
+- Size is not the cause at the widths tried ([[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]]). A 4× wider g misses on never-trained depth pairs (0.63 per-track, 0.46 across), and so does a 2× wider f (0.41, 0.34; [[h27_f_at_64_channels_2x_wider_with_the_same_|the f-size hypothesis]]), within noise of old D. More seeds for the wider f are next (PI, 2026-10-29); the across-track g is dropped from the gain test. Through the base, both stay near the law (0.09–0.21). Arm → arm training is not decided.
 
 <!-- crux:ledger:start -->
-**7 children** · ideas 2/7 done (supported 0, partial 0, refuted 2, inconclusive 0, invalid-run 0)
+**8 children** · ideas 2/8 done (supported 0, partial 0, refuted 2, inconclusive 0, invalid-run 0)
 
 - `h18` [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *done* — verdict **refuted**, metric `never-trained depth miss, rung A0 (no +1): 0.46 (NB) / 0.38 (Poisson-mean) median |log2 err| vs trained 0.12`
 - `h19` [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *idea*
@@ -55,4 +55,5 @@ Readings to 2026-10-29, not judged: median |log2 error| of the predicted scale, 
 - `h22` [[h22_a_composable_g_one_shared_map_from_each_|A composable g — one shared map from each side's covariates to a common latent, with an exact inverse — meets the depth law on never-trained depth pairs without arm → arm training]] — *idea*
 - `h23` [[h23_on_never_trained_arm_arm_depth_pairs_the|On never-trained arm → arm depth pairs, the shared-weight encoder-decoder FiLM CNN meets the depth law at the trained-pair level]] — *idea*
 - `h24` [[h24_the_depth_entries_in_g_s_covariate_input|The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs]] — *idea*
+- `h27` [[h27_f_at_64_channels_2x_wider_with_the_same_|f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs]] — *idea*
 <!-- crux:ledger:end -->
