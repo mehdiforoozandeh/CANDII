@@ -61,7 +61,7 @@ echo "=== t130 nested $MODE job ${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-none}}_${I
 echo "kit git sha: $(cat "$KIT/GIT_SHA" 2>/dev/null || git -C "$KIT" rev-parse HEAD 2>/dev/null || echo unknown)"
 
 if [ "$MODE" = aggregate ]; then
-  set +u; module load python/3.10.13; set -u
+  set +u; module load scipy-stack; set -u
   python3 "$PY" aggregate "$MAN" "$OUT"
   ls -la "$OUT"
   echo "=== done $(date -u)"
@@ -72,13 +72,6 @@ fi
 echo "blacklist sha256: $(sha256sum "$BL" | cut -d' ' -f1)"
 KIT=$(cd "$KIT" && pwd)
 set +u; module load python/3.10.13; set -u
-TRACK=$(python3 "$PY" tracks "$MAN" | awk -F'\t' -v i="$IDX" '$1 == i {print $2}')
-[ -n "$TRACK" ] || { echo "no track at index $IDX" >&2; exit 2; }
-if [ -f "$OUT/parts/$TRACK.DONE" ]; then
-  echo "$TRACK already done ($OUT/parts/$TRACK.DONE); nothing to do"
-  exit 0
-fi
-
 virtualenv --no-download "$SLURM_TMPDIR/venv"
 source "$SLURM_TMPDIR/venv/bin/activate"
 pip install --no-index --upgrade pip
@@ -92,6 +85,14 @@ case "$(python3 -c 'import candi; print(candi.__file__)')" in
   "$KIT"/src/*) ;;
   *) echo "candi does not import from $KIT/src" >&2; exit 3 ;;
 esac
+
+# the track lookup imports numpy, so it runs inside the venv
+TRACK=$(python3 "$PY" tracks "$MAN" | awk -F'\t' -v i="$IDX" '$1 == i {print $2}')
+[ -n "$TRACK" ] || { echo "no track at index $IDX" >&2; exit 2; }
+if [ -f "$OUT/parts/$TRACK.DONE" ]; then
+  echo "$TRACK already done ($OUT/parts/$TRACK.DONE); nothing to do"
+  exit 0
+fi
 
 echo "track $TRACK"
 python3 "$PY" run "$MAN" "$PRODUCTS" "$BL" "$OUT" "$IDX"
