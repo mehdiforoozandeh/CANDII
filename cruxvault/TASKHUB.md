@@ -57,6 +57,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t137` [implementation] measure the resampling floor: thin the t117 pr1/pr2 halves along a depth ladder and read peak height, 1 kb shape and per-bin divergence per depth, extrapolated to 30M — refs [[q10_how_much_does_resampling_alone_move_a_tr\|q10]]
 - `t139` [implementation] re-score the t133 knob ranking on one shared peak set to remove the regression-to-the-mean bias — refs [[q9_which_recorded_processing_covariates_mov\|q9]]
 - `t141` [implementation] map where each covariate acts along the genome: arm vs base per 1 kb after the one-warp, against mappability, GC, repeats and peak context — refs [[q11_where_along_the_genome_does_each_covaria\|q11]]
+- `t142` [implementation] rebuild the thinned floor, its 1 kb readings and the t141 depth null by whole-read thinning, and check against the real depth-arm halves — refs [[q10_how_much_does_resampling_alone_move_a_tr\|q10]], [[q11_where_along_the_genome_does_each_covaria\|q11]]
 
 ## Blocked
 
@@ -64,6 +65,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t130` [implementation] score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t137`
 - `t138` [implementation] map where pseudoreplicate disagreement concentrates: fit signal level as the null, then read mappability/repeats, GC and peak-vs-domain context on the residual — refs [[q10_how_much_does_resampling_alone_move_a_tr\|q10]] — blocked by `t137`
 - `t140` [implementation] carry the pivot lesson into CANDI: the full-depth track as the base for depth; non-depth covariates by augmentation only if the arm-to-arm grid shows it is needed — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[q8_does_candi_s_training_which_never_pairs_\|q8]] — blocked by `t135`, `t136`
+- `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — blocked by `t142`, `t136`
 
 ## By category
 
@@ -129,6 +131,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t139` [implementation] re-score the t133 knob ranking on one shared peak set to remove the regression-to-the-mean bias — refs [[q9_which_recorded_processing_covariates_mov\|q9]] — *open*
 - `t140` [implementation] carry the pivot lesson into CANDI: the full-depth track as the base for depth; non-depth covariates by augmentation only if the arm-to-arm grid shows it is needed — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[q8_does_candi_s_training_which_never_pairs_\|q8]] — *blocked*
 - `t141` [implementation] map where each covariate acts along the genome: arm vs base per 1 kb after the one-warp, against mappability, GC, repeats and peak context — refs [[q11_where_along_the_genome_does_each_covaria\|q11]] — *open*
+- `t142` [implementation] rebuild the thinned floor, its 1 kb readings and the t141 depth null by whole-read thinning, and check against the real depth-arm halves — refs [[q10_how_much_does_resampling_alone_move_a_tr\|q10]], [[q11_where_along_the_genome_does_each_covaria\|q11]] — *open*
 
 ### visualization
 
@@ -136,6 +139,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board — *open*
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 - `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
+- `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *blocked*
 
 ## Done · Dropped
 
@@ -219,3 +223,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t132` [implementation] Build and run phase 2 of the symmetric encoder-decoder rung D: fixed, anchored and 12k-step arms, 96 runs on Fir (exploratory) — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[h22_a_composable_g_one_shared_map_from_each_\|h22]], [[h19_g_fits_trained_base_arm_depth_pairs_but_\|h19]] — *done* → `presentations/t128p2-encdec/DECK.md`
 - `t133` [visualization] rank the t112 processing knobs by how much each moves the signal: peak-height change, 1 kb shape change, FRiP — *done* → `results/t133/DIGEST.md`
 - `t134` [implementation] Build and run phase 3 of the pivot study: a bigger g and a bigger f for old D read through the base, 48 runs (exploratory) — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[h22_a_composable_g_one_shared_map_from_each_\|h22]], [[h19_g_fits_trained_base_arm_depth_pairs_but_\|h19]] — *done* → `presentations/t128p3-scale/DECK.md`
+- `t144` [hpc-setup] size GPU jobs to measured use and prefer the cluster with fair-share headroom — *done* → `notes/gpu-job-sizing.md`

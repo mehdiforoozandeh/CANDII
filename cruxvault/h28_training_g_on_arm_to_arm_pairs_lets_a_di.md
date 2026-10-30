@@ -69,11 +69,14 @@ Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on ne
 
 ## Planned Intervention
 
-[[t136_design_and_run_the_arm_to_arm_train|The arm-to-arm grid task]]: old D's phase-2 recipe (per-track g, depth 7.5M held out) in two new arms. Darm1 adds the two 15M ↔ 3.75M pairs (ratio 4) to training; Darm2 adds every arm → arm pair that does not touch 7.5M. 2 arms × 7 tracks × 3 seeds = 42 runs on Fir. The score set is every pair that touches 7.5M; the depth pairs in it have ratio 2, which Darm1 never trains as an arm → arm ratio. The comparators are the existing phase-2 old D runs, direct and via the base, and the seed spread. Design and draft checks: `plan/T136_ARM2ARM_GRID.md`. Exploratory: nothing runs before the PI approves the null.
+[[t136_design_and_run_the_arm_to_arm_train|The arm-to-arm grid task]]: old D's phase-2 recipe (per-track g, depth 7.5M held out) in two new arms. Darm1 adds the two 15M ↔ 3.75M pairs (ratio 4) to training; Darm2 adds every arm → arm pair that does not touch 7.5M. 2 arms × 7 tracks × 3 seeds = 42 runs on Nibi (PI 2026-10-29; see Run Links). The score set is every pair that touches 7.5M; the depth pairs in it have ratio 2, which Darm1 never trains as an arm → arm ratio. The comparators are the existing phase-2 old D runs, direct and via the base, and the seed spread. Design and checks: `plan/T136_ARM2ARM_GRID.md`. The PI approved the null, the checks c1–c5 and design option A (no extra seeds) on 2026-10-29. Exploratory.
 
 ## Run Links
 
-_(none yet)_
+- **Cluster** (PI ruling 2026-10-29). The grid runs on Nibi at 2 CPUs, `--mem=10000M` and `--time=7:00:00` per run, not on Fir MIG slices. Reason (Fir queue diagnosis, 2026-10-29): the def-maxwl_gpu fair-share was exhausted; Fir billed each job by its 4 CPUs (MAX_TRES billing); and 12 h was requested against a measured median near 86 min. The Nibi queue was about 10× shorter. The Dref and Dviabase reference runs stay on Fir (`/project/def-maxwl/mforooz/t128p2/runs`, `/project/def-maxwl/mforooz/t128p2/viabase`) and are not rerun.
+- **Kit**: Nibi `/project/def-maxwl/mforooz/t136/code/K1` (git 1f634e1). Output root Nibi `/project/def-maxwl/mforooz/t136`; job ledger `/project/def-maxwl/mforooz/t136/jobs.tsv`.
+- **Smoke** (300 steps, 3 evaluations, task rows 9 = Darm1 and 30 = Darm2): train array 25389086 and law array 25389100, both COMPLETED. Wall time Darm1 11:55 (4.8 GB), Darm2 16:59 (3.9 GB). Projection at 12 000 steps and 49 evaluations: Darm1 < 1 h, Darm2 < 1.5 h with scoring, both inside 7 h. The law readback was correct: 7.5M held out, no 7.5M product in any training pair, law records carry the CRPS split.
+- **Full grid** (submitted 2026-10-30 05:45Z): Darm1 train 25403683 with law 25403688; Darm2 train 25403711 with law 25403725. Never resubmit these.
 
 ## Artifacts
 

@@ -6,7 +6,7 @@ title: Conditioning on the recorded sequencing depth predicts a target track fro
 parent: q1
 status: idea
 rule: all
-measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, on macro NB CRPS in counts, over the t112 counterfactual depth pairs (30M base ↔ 15M, 7.5M and 3.75M arms, and the never-trained depth → depth pairs) on chr19 + chr21; instrument is t118's covariate-conditioned g → f, with its no-covariates twin as blind, per-pair QuantileMatching as onewarp and two NB draws at the target depth as oracle
+measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, on macro NB CRPS in counts, over the t112 counterfactual depth pairs (30M base ↔ 15M, 7.5M and 3.75M arms, and the never-trained depth → depth pairs) on chr19 + chr21; instrument is t118's covariate-conditioned g → f, with its no-covariates twin as blind, per-pair QuantileMatching as onewarp and the exact nested-read oracle (PI ruling 2026-10-30) as oracle
 replicates: "7 tracks: 42 trained base ↔ depth pairs and 42 never-trained depth → depth pairs, x 3 seeds of each g (the t118 runs). TODO(PI): which g → f designs and versions count. The gain must clear 2 × the model's own seed |Δ| (PI ruling 2026-09-16). The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
 verdict: 
 metric: 
@@ -149,11 +149,22 @@ loosened to compensate.
   level-only `aspects_of(...)["level"]` reading;
 - (ii) **decided — PI ruling 2026-09-16: the `oracle` rung is two NB draws.** The model emits NB, and on an
   overdispersed target a Poisson oracle would sit below anything reachable, leaving gap-closed no
-  ceiling of 1;
+  ceiling of 1. **Superseded:** PI ruling 2026-10-29 made the pseudoreplicate floor the oracle
+  (q10), and PI ruling 2026-10-30 made the nested-read oracle the oracle for depth pairs (v);
 - (iii) **decided — PI ruling 2026-09-16: `onewarp` is the headline denominator; `splitwarp` is not a rung;**
 - (iv) every `TODO(PI)` threshold above;
-- (v) `TODO(PI)`: the eta the two oracle draws come from. The counterfactual pairs have no true
-  eta;
+- (v) **decided — PI ruling 2026-10-30: the oracle for the depth pairs is the exact nested-read
+  oracle.** Reason: each depth arm is a read subsample of the base, drawn independently from the
+  base tagAlign (`tools/t112/bam_arm.py`), so an arm shares reads with its base. The first blind
+  pass (2026-10-30) used the independent-replicate floor as oracle and found it above one-warp on
+  every counts depth cell, an inverted interval. The nested oracle in counts: base → arm is
+  Binomial(base count, r), a true ceiling, since no predictor can beat the law that made the arm
+  (measured dispersion of the real arms 0.995–1.006 of binomial). arm → base is the exact per-bin
+  Bayes posterior of the base count given the arm count, with an empirical prior from the base
+  histogram on the training chromosomes, blacklist-free; it is a ceiling only for a predictor that
+  reads one bin, so a model that reads neighbouring bins may exceed it (gap-closed > 1). The
+  independent-replicate floor is reported beside it as context only: "what a fresh replicate would
+  differ by". The eta question of the two-NB-draw oracle does not arise for these pairs.
 - (vi) `TODO(PI)`: which g → f is the `model` rung — which of designs A–D, and the per-track g,
   the across-track g, or both (t118 rules both decide for its main claim);
 - (vii) `TODO(PI)`: the spread device for `onewarp`. t118 scored QuantileMatching as Poisson,
@@ -165,7 +176,7 @@ loosened to compensate.
   the other option; the PI dropped them as t118's oracle on 2026-09-25, because two halves share
   no reads while a base and its arm share many, so the halves are not a floor. Each depth arm holds a subset of the base's
   reads, so X carries part of X′'s noise. Two independent NB draws may then not be a floor
-  either, and gap-closed can exceed 1.
+  either, and gap-closed can exceed 1. Resolved for depth pairs by (v).
 
 **The null was approved on 2026-09-16 (`crux approve-null`), so checks may be written against it.**
 The checks were adapted from the testbed to g → f on 2026-10-25 (PI ruling of that day); every bar
@@ -179,16 +190,17 @@ Four rungs on the t112 depth pairs (trained base ↔ depth and never-trained dep
 - **blind**: t118's no-covariates twin.
 - **onewarp**: one covariate-free monotone map fitted per pair (QuantileMatching).
 - **model**: t118's covariate-conditioned g → f.
-- **oracle**: two NB draws at the target depth (PI ruling 2026-09-16); not the t117 pseudoreplicates (see (x)).
+- **oracle**: the exact nested-read oracle (PI ruling 2026-10-30, item v).
 
-Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). The g → f runs exist; [[t130_score_the_one_warp_check_set_blind_|the scoring task]] scores them.
+Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t130_score_the_one_warp_check_set_blind_|The scoring task]] scored the existing runs.
 
 ## Run Links
 
-The one-warp check set is not scored yet. The g → f runs it reads, and the depth readings below, come from the counterfactual-grid runs: Nibi `/project/def-maxwl/mforooz/t118/ladder/runs` (row 1) and `/project/def-maxwl/mforooz/t118/row2/runs` (row 2); extraction job 24641277 into `/project/def-maxwl/mforooz/t118/knobgen/`.
+Blind check set, scored 2026-10-30: Nibi `/project/def-maxwl/mforooz/t130` (extract job 25402234, kit `/project/def-maxwl/mforooz/t137/code/K2`, 6743ab6; nested oracle array 25412625 and aggregate 25412626, kit `/project/def-maxwl/mforooz/t130/code/K2`, da96b2d). The g → f runs it reads, and the depth readings below, come from the counterfactual-grid runs: Nibi `/project/def-maxwl/mforooz/t118/ladder/runs` (row 1) and `/project/def-maxwl/mforooz/t118/row2/runs` (row 2); extraction job 24641277 into `/project/def-maxwl/mforooz/t118/knobgen/`.
 
 ## Artifacts
 
+- [Blind check-set readings, nested-read oracle](results/t130/DIGEST.md)
 - [Depth and run-type readings from the knob tables](results/h1/knob_readings.txt), made by [knob_readings.py](results/h1/knob_readings.py)
 - [Trained versus never-trained pairs: depth law and every knob](results/h19/report.md)
 - [Knob-generalisation figures](results/t118/knob_generalization/report.pdf)
@@ -197,10 +209,10 @@ The one-warp check set is not scored yet. The g → f runs it reads, and the dep
 
 ## Findings
 
-Exploratory readings, not judged. The counterfactual grid's depth arms (2026-10-19) use the no-covariates twin, not one-warp, as the competitor:
+Readings, not judged. Against the no-covariates twin (2026-10-19):
 
-- The real depth arms obey the depth law: count totals match the depth ratio within 0.71% over 84 ordered pairs.
-- Counts, relative CRPS gain over the twin, median over 16 design × g configurations: 0.46 on trained base ↔ depth pairs (16 of 16 clear 2 × seed wobble over 3 seeds) and 0.16 on never-trained depth → depth pairs (13 of 16 clear).
-- −log10 p: exploding pairs make the pooled gain unreadable. The median-pair gain is 0.21 trained and 0.12 never-trained; no seed bar exists for that statistic.
-- Depth law, median |log2 predicted scale − log2 depth ratio|: 0.04–0.09 trained, 0.18–0.55 never-trained.
-- The source gives no oracle-scaled / scale-error split for these gains.
+- The real depth arms obey the depth law: totals match within 0.71 % (84 pairs).
+- Counts, median relative CRPS gain over 16 design × g configurations: 0.46 on trained pairs (16 of 16 clear 2 × seed |Δ|) and 0.16 on never-trained depth → depth pairs (13 of 16). No CRPS split exists for these gains.
+- −log10 p: exploding pairs make the pooled gain unreadable; median-pair gain 0.21 trained, 0.12 never-trained.
+- Depth law, median |log2 scale error|: 0.04–0.09 trained, 0.18–0.55 untrained.
+- Blind check set vs one-warp and the nested-read oracle (2026-10-30), counts: base → arm, B–D close 0.77–0.92 of the gap per class, > 2 × seed |Δ| in 18/18 cells; A ≤ 0 in DNase, narrow. arm → base: C–D 1.1–3.7 (past the per-bin ceiling), B 0.23–0.86. Model scale_error ≤ 0.011 base → arm, ≤ 0.17 arm → base.

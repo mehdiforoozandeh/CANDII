@@ -20,6 +20,10 @@ Refs:: [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[h27_f_at_64_channe
 
 PI option B 2026-10-29: give the bigger f's 0.0146 CRPS gain through the base the statistical power to read
 
+## Decisions and runs
+
+- PI 2026-10-29: the train arrays 1211830 and 1211840 were cut from a 12 h to a 7 h time limit, and the law arrays 1211839 and 1211842 to 6 h, after the 2026-10-29 Fir queue diagnosis found 12 h over-requested against the measured run times (the PI ran `scontrol update`; verified by `squeue`). Never resubmit.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:

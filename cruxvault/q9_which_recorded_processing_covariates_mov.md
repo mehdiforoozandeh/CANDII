@@ -38,15 +38,18 @@ First pass, 192 base → arm comparisons ([[t133_rank_the_t112_processing_knobs_
 - Shape: antibody proxy 0.53 / 0.58; depth 3.75M 0.49 / 0.49; the four FASTQ re-run knobs 0.35–0.45. Depth 15M, whose reads are a subset of the base's, reads 0.17.
 - −log10 p: the control-scaling, control-identity, control-depth and fragment-extension knobs read 0.04–0.17 on shape, against 0.40–0.74 for the read-side knobs; control depth is the weakest knob.
 - DNase: duplicate removal off raises the peaks 2.6 log2 and FRiP by 0.53; paired-end raises them 1.9 log2 and FRiP by 0.34.
-- Doubts: (1) the FASTQ re-run arms re-draw the 30M subsample, so their shape scores share a resampling floor near that of depth 7.5M (0.32–0.34); (2) peaks are chosen on the base, so any re-drawn arm reads lower by regression to the mean (duplicate removal on broad marks −0.9 log2, where about 0 is expected); (3) the same selection likely inflates FRiP at low depth; (4) the DNase FRiP gain of 0.53 is unchecked.
+- Doubts: (1) the FASTQ re-run arms re-draw the 30M subsample, so their shape scores share a resampling floor near that of depth 7.5M (0.32–0.34); (2) base-chosen peaks make re-drawn arms read low by regression to the mean (re-scored below); (3) the same selection likely inflates FRiP at low depth; (4) the DNase FRiP gain of 0.53 is unchecked.
+- Shared-peak re-score, 2026-10-30, not judged: one peak set per track removes doubt (2). Peak-height rank 1 is unchanged everywhere; values fall a median 13 %. Shape does not change. Against the floor at the arm's depth, peak height is above it in 27 of 27 counts rows, shape in 3. A same-read knob holds no sampling noise, so "below the floor" is not "no effect".
 
 ## Run Links
 
 - Nibi: `/project/def-maxwl/mforooz/t118/knob_effects/out/` (job 25063638, code 5f95c43 on `exp/t118-counterfactual-f`).
+- Shared-peak re-score: Nibi `/project/def-maxwl/mforooz/t139/out/` (job 25389617, kit `/project/def-maxwl/mforooz/t137/code/K1`, 1f634e1).
 
 ## Artifacts
 
 - [Knob-ranking digest](results/t133/DIGEST.md)
+- [Shared-peak re-score digest](results/t139/DIGEST.md), [ranking](results/t139/ranking.tsv), [knob vs floor](results/t139/knob_vs_floor.tsv)
 - [Ranking](results/t133/ranking.tsv), [per level](results/t133/levels.tsv), [per pair](results/t133/pairs.tsv), [run path](results/t133/FIR_PATH.txt)
 - [Deck](presentations/q9-knob-ranking/index.html) — published https://claude.ai/artifact/1T1NKMYo5taJjDowse9r2f; vault copy [DECK.md](presentations/q9-knob-ranking/DECK.md)
 

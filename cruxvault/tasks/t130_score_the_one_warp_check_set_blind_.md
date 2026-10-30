@@ -18,7 +18,16 @@ Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on
 
 ## Why
 
-runs h1 and h2 on the counterfactual arms and g -> f, replacing the in-vitro testbed that was never built; scored once the resampling floor lands, against three baselines: the monotone scale map, the shuffled-covariate twin, and the pseudoreplicate floor as the oracle (PI ruling 2026-10-29)
+runs h1 and h2 on the counterfactual arms and g -> f, replacing the in-vitro testbed that was never built; scored once the resampling floor lands, against three baselines: the monotone scale map, the shuffled-covariate twin, and an oracle: the pseudoreplicate floor (PI ruling 2026-10-29), replaced for depth pairs by the exact nested-read oracle (PI ruling 2026-10-30)
+
+## Decisions and runs
+
+- PI ruling 2026-10-29: score blind against three baselines: the one-warp map (QuantileMatching), the no-covariates twin, and the pseudoreplicate floor as oracle. Every rung (A–D) and both g versions are reported; the model rung for any verdict is the PI's pick (h1 item vi, plan Decision v). Readings only, every threshold `TODO(PI)`.
+- Foreman decision 2026-10-29 (G3 review, amendment A3): the floor of a pair is the same-track base product's depth curve read at the target's depth.
+- Pass 1, 2026-10-30: extract job 25402234 on Nibi, kit `/project/def-maxwl/mforooz/t137/code/K2` (6743ab6), 576 row-1 ladder runs; second method 6 AGREE, 0 DISAGREE. Finding: on counts depth pairs the floor sat above one-warp (an inverted interval), because the depth arms share reads with the base.
+- PI ruling 2026-10-30 (amendment A9): the oracle for depth pairs is the exact nested-read oracle: base → arm Binomial(base, r), a true ceiling; arm → base the exact per-bin Bayes posterior with an empirical prior from the training chromosomes, blacklist-free, a ceiling only for a per-bin predictor. The floor stays as a context column. Run type and −log10 p keep the floor as oracle.
+- Nested oracle code merged at 8aa670b (oracle labels `binomial_ceiling` / `bayes_per_bin`). First submission 25411091 failed ×7 (numpy imported before the venv); fix da96b2d, kit `/project/def-maxwl/mforooz/t130/code/K2`; resubmitted as array 25412625 (tasks 0–6) and aggregate 25412626, both COMPLETED. Pass 2: 7 AGREE, 0 DISAGREE. Pass 1 is kept in `results/t130/pass1_floor_oracle/`.
+- Nibi output `/project/def-maxwl/mforooz/t130`. Digest: `results/t130/DIGEST.md`. Never resubmit these jobs.
 
 ## Output
 

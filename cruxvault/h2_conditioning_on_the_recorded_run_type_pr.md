@@ -6,7 +6,7 @@ title: Conditioning on the recorded run type predicts a target track from a sour
 parent: q1
 status: idea
 rule: all
-measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, on macro NB CRPS in counts, over the t112 paired-end arm against its single-end base (both at 30M reads) on chr19 + chr21; instrument is t118's covariate-conditioned g → f, with its no-covariates twin as blind, per-pair QuantileMatching as onewarp and two NB draws at the target depth as oracle
+measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, on macro NB CRPS in counts, over the t112 paired-end arm against its single-end base (both at 30M reads) on chr19 + chr21; instrument is t118's covariate-conditioned g → f, with its no-covariates twin as blind, per-pair QuantileMatching as onewarp and the independent-replicate floor at the target depth (PI rulings 2026-10-29 and 2026-10-30) as oracle
 replicates: "7 tracks: 14 trained base ↔ paired-end pairs, x 3 seeds of each g (the t118 runs). Run type has one arm level, so no never-trained pair changes run type alone. TODO(PI): which g → f designs and versions count. The gain must clear 2 × the model's own seed |Δ| (PI ruling 2026-09-16). The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
 verdict: 
 metric: 
@@ -149,11 +149,18 @@ loosened to compensate.
   level-only `aspects_of(...)["level"]` reading;
 - (ii) **decided — PI ruling 2026-09-16: the `oracle` rung is two NB draws.** The model emits NB, and on an
   overdispersed target a Poisson oracle would sit below anything reachable, leaving gap-closed no
-  ceiling of 1;
+  ceiling of 1. **Superseded:** PI ruling 2026-10-29 made the pseudoreplicate floor the oracle
+  (q10); for run type it stays so (v);
 - (iii) **decided — PI ruling 2026-09-16: `onewarp` is the headline denominator; `splitwarp` is not a rung;**
 - (iv) every `TODO(PI)` threshold above;
-- (v) `TODO(PI)`: the eta the two oracle draws come from. The counterfactual pairs have no true
-  eta;
+- (v) **decided — PI ruling 2026-10-30: the run-type pairs keep the independent-replicate floor as
+  oracle.** The exact nested-read oracle applies only to pairs nested by read subsampling (the
+  depth arms). The paired-end arm is a separate re-processing from FASTQ, not a read subsample of
+  its base, so no nested-read law exists for it. The eta question of the two-NB-draw oracle does
+  not arise. Reading note (foreman correction, 2026-10-30): in counts the floor sits above
+  one-warp for narrow and broad marks, so the interval is inverted and gap-closed comes out
+  negative. There a negative gap-closed means the model beats one-warp, not the reverse; an
+  earlier chat claim that one-warp beats the model was wrong;
 - (vi) `TODO(PI)`: which g → f is the `model` rung — which of designs A–D, and the per-track g,
   the across-track g, or both (t118 rules both decide for its main claim);
 - (vii) `TODO(PI)`: the spread device for `onewarp`. t118 scored QuantileMatching as Poisson,
@@ -178,16 +185,17 @@ Four rungs on the t112 paired-end pairs (trained base ↔ paired-end), scored on
 - **blind**: t118's no-covariates twin.
 - **onewarp**: one covariate-free monotone map fitted per pair (QuantileMatching).
 - **model**: t118's covariate-conditioned g → f.
-- **oracle**: two NB draws at the target depth (PI ruling 2026-09-16); not the t117 pseudoreplicates (see (x)).
+- **oracle**: the independent-replicate floor (PI rulings 2026-10-29, 2026-10-30; item v).
 
-Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). The g → f runs exist; [[t130_score_the_one_warp_check_set_blind_|the scoring task]] scores them.
+Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t130_score_the_one_warp_check_set_blind_|The scoring task]] scored the existing runs.
 
 ## Run Links
 
-The one-warp check set is not scored yet. The paired-end products are on Nibi under `/scratch/mforooz/t112_cf/products/<track>__pe__pe/` (purge 2026-11-20). The readings below come from the counterfactual-grid runs: `/project/def-maxwl/mforooz/t118/ladder/runs` (row 1) and `/project/def-maxwl/mforooz/t118/row2/runs` (row 2); extraction job 24641277 into `/project/def-maxwl/mforooz/t118/knobgen/`.
+Blind check set, scored 2026-10-30: Nibi `/project/def-maxwl/mforooz/t130` (extract job 25402234, kit `/project/def-maxwl/mforooz/t137/code/K2`, 6743ab6). The paired-end products are on Nibi under `/scratch/mforooz/t112_cf/products/<track>__pe__pe/` (purge 2026-11-20). The readings below come from the counterfactual-grid runs: `/project/def-maxwl/mforooz/t118/ladder/runs` (row 1) and `/project/def-maxwl/mforooz/t118/row2/runs` (row 2); extraction job 24641277 into `/project/def-maxwl/mforooz/t118/knobgen/`.
 
 ## Artifacts
 
+- [Blind check-set readings](results/t130/DIGEST.md)
 - [Depth and run-type readings from the knob tables](results/h2/knob_readings.txt), made by [knob_readings.py](results/h2/knob_readings.py)
 - [Manifest of the 130 counterfactual products, with the 7 paired-end arms](results/t112/MANIFEST.tsv)
 - [Knob-generalisation figures](results/t118/knob_generalization/report.pdf)
@@ -195,9 +203,9 @@ The one-warp check set is not scored yet. The paired-end products are on Nibi un
 
 ## Findings
 
-Exploratory readings, not judged. The paired-end arm exists: 7 FASTQ re-runs, one per track, with the base's pipeline image and 30M-read subsample. The counterfactual grid scores it against the no-covariates twin, not one-warp:
+Readings, not judged. The paired-end arm: 7 FASTQ re-runs, one per track, with the base's pipeline image. Against the no-covariates twin:
 
-- Counts, trained base ↔ paired-end pairs: median relative CRPS gain over the twin 0.15 over 16 design × g configurations; 11 of 16 clear 2 × seed wobble over 3 seeds.
-- −log10 p, the same pairs: median-pair gain 0.03, and the real model wins 86% of pairs; no seed bar exists for that statistic.
-- Run type has one level, so every never-trained pair also changes a second knob. On those pairs the median-pair gain is 0.07 in counts (real wins 65%) and −0.06 in p (real wins 34%).
-- The source gives no oracle-scaled / scale-error split.
+- Counts, trained base ↔ paired-end pairs: median relative CRPS gain 0.15 over 16 design × g configurations; 11 of 16 clear 2 × seed |Δ|. No CRPS split exists for these gains.
+- −log10 p, the same pairs: median-pair gain 0.03; the real model wins 86 % of pairs.
+- Every never-trained pair also changes a second knob. There the median-pair gain is 0.07 in counts (real wins 65 %) and −0.06 in p (34 %).
+- Blind check set against one-warp (2026-10-30), counts: the floor sits above one-warp in narrow and broad marks, so gap-closed is negative there and means the model is better. The gain over one-warp clears 2 × seed |Δ| in 16 of 16 narrow and broad cells. DNase is mixed.

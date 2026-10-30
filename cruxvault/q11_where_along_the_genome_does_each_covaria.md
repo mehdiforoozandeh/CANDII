@@ -32,9 +32,17 @@ Where along the genome does each covariate act: does a track react uniformly to 
      scope — fixed BEFORE any run. `crux deck` surfaces this as the pre-registration note. -->
 PI ruling 2026-10-29: (1) the uniform part is removed by the one-warp (monotone base→arm map fitted genome-wide), not by a single scale factor; (2) all knobs, counts and −log10 p, control knobs in p only; (3) the depth arm is the control, its null is the base thinned binomially to the arm's depth; (4) signal level is fitted first as the null, as in the regional floor map; (5) every reading quoted beside the pseudoreplicate floor map at matched depth. Exploratory: readings only, no verdict.
 
+- **Blacklist** (foreman amendment A8, 2026-10-30, within ruling 4). The hg38 v2 blacklist is masked in both 1 kb maps: this covariate map and the pseudoreplicate floor map.
+- **Floor join** (foreman decision 2026-10-30, within ruling 5). The floor map exists at two depths only, so each knob reading sits beside the floor at the nearest of them, labelled "exact" or "nearest".
+- **Depth control by whole reads** (PI ruling 2026-10-30, replaces the null of ruling 3). The depth arm's null is rebuilt by thinning whole reads of the base to the arm's depth, not 25 bp count units. The unit-wise null was about √k too narrow, where k (4–5) is the number of count units one read adds.
+
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+Readings, not judged ([covariate-map digest](results/t141/DIGEST.md)). In every knob, signal level explains more of the one-warp residual (R² 0.08–0.60) than the four features add.
+
+- Not uniform: mapping quality 0 (feature gain 0.10–0.11 R², mostly mappability; +0.45 log2 in the lowest-mappability decile), read length 36 and 50, paired-end in DNase, and antibody proxy f0.9 (peaks and context). Their feature gain is 50–1000× the floor's (≤ 0.0001). In −log10 p: control identity "none" and control ratio k0.5 (domains and peaks).
+- Uniform, so one genome-wide monotone map suffices: duplicate removal and paired-end in histone marks, depth, fragment extension, and control depth.
+- Caveat: the depth control failed. The depth arm's residual read 1.9–2.6× its null, for a known reason: the null thinned count units, not reads. The control is being redone by whole-read thinning, and the depth reading waits on it.
 
 <!-- crux:ledger:start -->
 _(no children yet)_
