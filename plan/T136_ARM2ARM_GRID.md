@@ -224,3 +224,38 @@ DNase. Under the null, Darm2 gains on histone tracks (ratio 2 seen arm → arm) 
 - **D1** — the headroom option: A (recommended), B or C.
 - **D2** — the null line in §1: approve, sharpen, or relabel as Selection (as h23 does).
 - **D3** — the `TODO(PI)` thresholds of c1–c5, and the combination rule `all` over c1, c3, c4.
+
+## Checks as written (PI, 2026-10-29)
+
+The PI approved the null in §1 as written (`crux approve-null h28`, Leakage family) and accepted
+the checks c1–c5 of §6 in chat on 2026-10-29, each at its recommended value. The checks are now
+in h28's `## Verifiables` with `rule: all`. §1–§9 above keep the draft history; their threshold
+placeholders are resolved here, not edited in place.
+
+Decisions:
+- **D1** — option A. The grid runs as designed, with no extra seeds.
+- **D2** — the null line in §1 is approved as Leakage.
+- **D3** — the thresholds below, and the combination rule `all` over c1, c3, c4.
+
+The resolved thresholds ("spread" is max − min over seeds 0, 1, 2, as in the header):
+
+| check | kind | accepted threshold |
+|---|---|---|
+| c1 `lawheldout` | claim-directed | (Dref − Darm1) / (Dref − Dviabase) ≥ 0.5 on `heldout_r2` median abs log2 err; no noise clause. With 0.195 and 0.125, Darm1 ≤ 0.160. |
+| c2 `basefit` | outcome-neutral | Darm1 and Darm2 each within 2 × the larger seed spread of Dref on `trained_base` median abs log2 err (0.052) and on trained base ↔ arm CRPS (0.445). |
+| c3 `ratiotransfer` | claim-directed, discriminates against the null | Darm1 `heldout_r2` ≤ Darm1 `trained_r4` + 2 × the larger of the two seed spreads. |
+| c4 `crpsheldout` | claim-directed | Darm1 closes ≥ 0.5 of the Dref → Dviabase CRPS interval on the held-out arm → arm pairs; the gain exceeds 2 × the larger seed spread; the oracle_scaled part closes ≥ 0.25 of its own interval. |
+| c5 `runhealth` | outcome-neutral | All 42 runs finish; pair counts are correct (below); at most 2 of 21 runs per arm have their best step above 10 800 of 12 000. |
+
+Combination: `all` over c1, c3, c4, read on Darm1 only, and only when c2 and c5 pass. A control
+failure makes the run invalid, not refuted. Joint power is about 51 % (three checks at 80 %).
+Darm2 is read, not checked.
+
+Pair counts. Darm2 adds 306 ordered arm → arm pairs per histone track and **30** for DNase
+C12M02 (6 arms not held out, 6 × 5), not 56. Darm1 adds 2 per track. §4 and §6 c5 already
+state 30; the value 56 appears only in §4's correction note.
+
+Cluster. The grid runs on **Nibi**, not Fir (PI 2026-10-29), at 2 CPUs, `--mem=10000M` and
+`--time=7:00:00` per run. The Fir paths in §3 (output root `/project/def-maxwl/mforooz/t136`)
+and the MIG-slice estimate in §7 are superseded for the new runs. The Dref and Dviabase
+reference runs stay where §3 names them on Fir.

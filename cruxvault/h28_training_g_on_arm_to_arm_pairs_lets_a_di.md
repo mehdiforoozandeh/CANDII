@@ -5,7 +5,7 @@ schema: 2
 title: Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on never-trained arm-to-arm pairs, without a pivot through the base
 parent: q7
 status: idea
-rule: 
+rule: all
 measurement: 
 replicates: 
 verdict: 
@@ -46,7 +46,26 @@ Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on ne
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-- [ ] _(state a falsifiable, pre-registered check)_
+<!-- The PI accepted these five checks and their thresholds in chat on 2026-10-29 (plan/T136_ARM2ARM_GRID.md §6, "Checks as written"; design option A, no extra seeds). -->
+
+**Definitions.** Every reading is per-track g, chr19 + chr21, pooled by the t118 rule (per seed: mean over a track's pairs, then mean over tracks; the reading is the mean over 3 seeds). "Spread" is the seed spread, max − min over seeds 0, 1, 2 of the per-seed value. `heldout_r2` = the 4 ordered depth pairs that touch 7.5M (ratio 2). `trained_r4` = 15M ↔ 3.75M (ratio 4). `trained_base` = base ↔ 15M and base ↔ 3.75M. The held-out arm → arm pairs = every law pair that touches 7.5M, all knobs. Dref = the existing phase-2 old D direct runs; Dviabase = Dref's two trained maps in series through the base. The readings recompute Dref and Dviabase on exactly the held-out pairs. Every CRPS is quoted with `crps_oracle_scaled_all` and `scale_error_all`.
+
+**Outcome-neutral controls** must pass whatever the claim is; a failure makes the run invalid, never a refutation.
+
+- [ ] [outcome-neutral] `basefit` — In Darm1 and in Darm2, the `trained_base` median |log2 error| is within 2 × the larger seed spread (the arm's or Dref's; Dref spread 0.010, so the band is at least ±0.020) of Dref's 0.052, and the trained base ↔ arm `crps_all` is within 2 × the larger seed spread (Dref spread 0.003, so at least ±0.006) of Dref's 0.445. A failure invalidates that arm's run.
+      fails-if:: the extra arm → arm pairs crowd out the base pairs (Darm2 draws about 11 % base pairs), so the arm is not the same model plus arm → arm pairs
+- [ ] [outcome-neutral] `runhealth` — All 42 runs (21 per arm) finish; no `config["train_pairs"]` row holds a 7.5M product; `len(config["extra_pairs"])` is 2 per track in Darm1, and 306 per histone track and 30 for DNase C12M02 in Darm2; at most 2 of 21 runs per arm have their best step in the last 10 % of the 12 000-step cap (best step > 10 800; Dref: 0 of 21).
+      fails-if:: the harness trained the wrong pairs, leaked a 7.5M product into training, or cut runs before they converged
+
+**Claim-directed checks**, read on Darm1 only and only when both controls pass. Combination rule `all` over `lawheldout`, `ratiotransfer` and `crpsheldout`. Three checks at 80 % power each give about 51 % joint power; the thresholds may not be loosened to compensate. Darm2 is read, not checked.
+
+- [ ] [hypothesis] `lawheldout` — On `heldout_r2`, Darm1 closes at least 0.5 of the gap from Dref direct to Dviabase in median |log2 error| of the predicted scale: (Dref − Darm1) / (Dref − Dviabase) ≥ 0.5. With the phase-2 references (Dref 0.195, Dviabase 0.125) this means Darm1 ≤ 0.160. No noise clause (design option A: the gap 0.070 is below 2 × Dref's spread 0.061).
+      fails-if:: arm → arm training on the ratio-4 pair leaves the ratio-2 held-out pairs where Dref left them
+- [ ] [hypothesis] `ratiotransfer` — In Darm1, the `heldout_r2` median |log2 error| (ratio 2, never trained as an arm → arm ratio) is at most the `trained_r4` median |log2 error| (ratio 4, trained) + 2 × the larger of the two seed spreads.
+      fails-if:: g recalls the one arm → arm ratio it trained on and does not carry the depth law to a ratio it has not seen on an arm → arm pair
+      discriminates:: true
+- [ ] [hypothesis] `crpsheldout` — On the held-out arm → arm pairs, Darm1's pooled `crps_all` closes at least 0.5 of the Dref → Dviabase interval, AND the gain Dref − Darm1 exceeds 2 × the larger seed spread (Darm1's or Dref's), AND the `crps_oracle_scaled_all` part closes at least 0.25 of its own Dref → Dviabase interval.
+      fails-if:: the depth-law scale moves but the predicted distribution on unseen arm → arm pairs does not improve, or improves through `scale_error` alone
 
 ## Planned Intervention
 
