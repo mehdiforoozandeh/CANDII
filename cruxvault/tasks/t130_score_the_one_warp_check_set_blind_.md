@@ -4,7 +4,7 @@ type: task
 title: score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs
 category: implementation
 parent: t118
-blocked_by: None
+blocked_by: t137
 refs: h1, h2
 hypothesis_refs: 
 status: open
@@ -18,7 +18,7 @@ Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on
 
 ## Why
 
-runs h1 and h2 on the counterfactual arms and g -> f, replacing the in-vitro testbed that was never built
+runs h1 and h2 on the counterfactual arms and g -> f, replacing the in-vitro testbed that was never built; scored once the resampling floor lands, against three baselines: the monotone scale map, the shuffled-covariate twin, and the pseudoreplicate floor as the oracle (PI ruling 2026-10-29)
 
 ## Output
 

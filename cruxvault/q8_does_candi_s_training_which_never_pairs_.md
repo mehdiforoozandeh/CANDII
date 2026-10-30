@@ -48,6 +48,8 @@ Rerun with the PI's repairs, chr21 (2026-10-26; prompts from non-blind arrays on
 
 Second rerun with a curve-corrected floor, chr21 (2026-10-26). The pseudocount signal-level curve explains why thinning looked reproducible, but subtracting it pushes the thinning pairs below zero (-0.11 to -0.37), so the corrected floor is biased against any effect. No knob pair clears it; 36 bp read length shows a small residual signal (0.015-0.086). The per-region question is still not readable.
 
+The probe is parked (PI ruling 2026-10-29); this reading stands as the baseline, and the test of what CANDI needs moved to [[h28_training_g_on_arm_to_arm_pairs_lets_a_di|the arm-to-arm training claim]].
+
 Reading: CANDI is in the 'ignores' state for read length and run type, and the missing counterfactual pairs fit that, but low conditional information and collinearity are joint causes. Dedup, MAPQ, fragment and control knobs are not CANDI inputs at all.
 
 <!-- crux:ledger:start -->
