@@ -18,7 +18,12 @@ byte-identical to the DNase base (a t112 defect) and are dropped.
 Summary: per (arm, level, mark class) the median over tracks; each knob is ranked by its
 strongest level.
 
-    python knob_effects.py --products DIR --blacklist BED --out DIR
+Peak set (t139, `--peakset`): `base` (default, the t133 rule) takes the top 1 % of the base's own
+bins. `shared` takes, per (track, space), the top 1 % of the mean within-product rank over the base
+and every arm product scored in that space; `log2fc_top1` and FRiP are then read on that one set
+for every pair of the track, so the set no longer favours the base's own noise.
+
+    python knob_effects.py --products DIR --blacklist BED --out DIR [--peakset base|shared]
 """
 from __future__ import annotations
 
@@ -28,7 +33,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from scipy.stats import spearmanr
+from scipy.stats import rankdata, spearmanr
 
 RES = 25
 COARSE = 40  # 40 x 25 bp = 1 kb
@@ -87,11 +92,29 @@ def frip(x: np.ndarray) -> float:
     return float(x[top_idx(x)].sum() / x.sum())
 
 
+def frip_in(x: np.ndarray, idx: np.ndarray) -> float:
+    return float(x[idx].sum() / x.sum())
+
+
+def shared_peaks(fine_by_pid: dict) -> np.ndarray:
+    """top_idx of the mean within-product rank (average ties, scaled by n) over the products."""
+    ranks = [rankdata(x, method="average") / x.size for x in fine_by_pid.values()]
+    return top_idx(np.mean(ranks, axis=0))
+
+
+def scored(mclass: str, arm: str, space: str) -> bool:
+    """True if a non-base arm is scored in this space (DNase mapq dropped; p-only knobs no counts)."""
+    if mclass == "DNase" and arm == "mapq":
+        return False
+    return not (space == "counts" and arm in P_ONLY)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--products", required=True, type=Path)
     ap.add_argument("--blacklist", required=True)
     ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--peakset", choices=("base", "shared"), default="base")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     blacklist = read_blacklist(a.blacklist)
@@ -105,31 +128,39 @@ def main():
         mclass = MARK_CLASS[base["assay"]]
         for space in SPACES:
             b = load(a.products / base["pid"], space, blacklist)
-            top = top_idx(b["fine"])
-            frip_b = frip(b["fine"]) if space == "counts" else None
-            for r in sorted((r for r in tr if r["arm"] != "base"), key=lambda r: r["pid"]):
-                if mclass == "DNase" and r["arm"] == "mapq":
-                    continue
-                if space == "counts" and r["arm"] in P_ONLY:
-                    continue
-                x = load(a.products / r["pid"], space, blacklist)
+            arms = [r for r in sorted((r for r in tr if r["arm"] != "base"), key=lambda r: r["pid"])
+                    if scored(mclass, r["arm"], space)]
+            loaded = {r["pid"]: load(a.products / r["pid"], space, blacklist) for r in arms}
+            if a.peakset == "shared":
+                top = shared_peaks({base["pid"]: b["fine"],
+                                    **{p: x["fine"] for p, x in loaded.items()}})
+                frip_b = frip_in(b["fine"], top) if space == "counts" else None
+            else:
+                top = top_idx(b["fine"])
+                frip_b = frip(b["fine"]) if space == "counts" else None
+            for r in arms:
+                x = loaded[r["pid"]]
                 lfc = float(np.log2(x["fine"][top].mean() / b["fine"][top].mean()))
                 rec = {"track": track, "assay": base["assay"], "mark_class": mclass,
                        "arm": r["arm"], "level": r["level"], "knob": r["knob"], "space": space,
                        "log2fc_top1": lfc, "abs_log2fc_top1": abs(lfc),
                        "shape_1k": float(1 - spearmanr(b["coarse"], x["coarse"]).statistic),
                        "frip_base": frip_b, "frip_arm": None, "dfrip": None,
-                       "n_fine": int(b["fine"].size), "n_coarse": int(b["coarse"].size)}
+                       "n_fine": int(b["fine"].size), "n_coarse": int(b["coarse"].size),
+                       "peakset": a.peakset, "n_peak_bins": int(top.size)}
                 if space == "counts":
-                    rec["frip_arm"] = frip(x["fine"])
+                    rec["frip_arm"] = (frip_in(x["fine"], top) if a.peakset == "shared"
+                                       else frip(x["fine"]))
                     rec["dfrip"] = rec["frip_arm"] - frip_b
                 records.append(rec)
                 print(f"{r['pid']:32s} {space:6s} lfc={lfc:+.3f} shape={rec['shape_1k']:.4f}"
                       f" dfrip={rec['dfrip']}", flush=True)
 
     cols = list(records[0])
+    if a.peakset == "base":  # byte-identical to the t133 pairs.tsv
+        cols = [c for c in cols if c not in ("peakset", "n_peak_bins")]
     with open(a.out / "pairs.tsv", "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t")
+        w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t", extrasaction="ignore")
         w.writeheader()
         w.writerows(records)
 
@@ -174,7 +205,8 @@ def main():
         w.writerows(ranks)
     (a.out / "config.json").write_text(json.dumps(
         {"chroms": CHROMS, "res": RES, "coarse_bins": COARSE, "top_fraction": TOP_FRACTION,
-         "blacklist": a.blacklist, "products": str(a.products), "p_only": sorted(P_ONLY)}, indent=1))
+         "blacklist": a.blacklist, "products": str(a.products), "p_only": sorted(P_ONLY),
+         "peakset": a.peakset}, indent=1))
     print("done", len(records), "pair records")
 
 
