@@ -197,6 +197,18 @@ def test_thinning_null_rng_convention(world):
                 np.testing.assert_array_equal(z[f"counts_null{s}_{c}"], want)
 
 
+def test_depth_meta_has_observed_ratio(world):
+    prod = world["prod"]
+    meta = json.loads(str(np.load(world["out"] / "arms1k" / "C19M16__depth__15M.npz")["meta"]))
+    sums = {}
+    for k, pid in (("arm", "C19M16__depth__15M"), ("base", "C19M16__base__base")):
+        with np.load(prod / pid / "counts25.npz") as z:
+            sums[k] = int(sum(int(z[c].sum()) for c in z.files if c != "chrM"))
+    assert meta["null"]["observed_sums"] == sums
+    assert meta["null"]["observed_ratio"] == sums["arm"] / sums["base"]
+    assert abs(meta["null"]["observed_ratio"] - 0.5) < 0.01          # nominal 15M / 30M
+
+
 # ---------------------------------------------------------------- (d) space rules
 
 def test_control_knob_only_in_pval_and_dnase_mapq_dropped(world):
@@ -252,9 +264,14 @@ def test_tables_and_floor_join(world):
     assert not list(o.glob("*.tmp"))
     d = row(world, "depth", "counts")
     assert d["floor_depth"] == "15" and float(d["floor_mean_d"]) == 0.42
+    assert d["floor_reads_per_half"] == "15000000" and d["floor_match"] == "exact"
     assert float(d["floor_R2_level"]) == 0.3 and d["floor_delta_R2"] == "nan"
-    assert row(world, "mapq", "counts")["floor_mean_d"] == "nan"       # 30M: no t138 depth
-    assert row(world, "depth", "pval")["floor_depth"] == "NA"          # t138 is counts only
+    mq = row(world, "mapq", "counts")                                  # 30M: nearest is 15M
+    assert mq["floor_depth"] == "15" and mq["floor_match"] == "nearest"
+    assert float(mq["floor_mean_d"]) == 0.42
+    dp = row(world, "depth", "pval")                                   # t138 is counts only
+    assert dp["floor_depth"] == "counts_only" and dp["floor_mean_d"] == "nan"
+    assert dp["floor_reads_per_half"] == "NA" and dp["floor_match"] == "NA"
     cls = tsv(o / "knob_classes.tsv")
     md = [r for r in cls if r["arm"] == "depth" and r["space"] == "counts"
           and r["series"] == "arm" and r["reading"] == "mean_d"]
@@ -265,6 +282,69 @@ def test_tables_and_floor_join(world):
     assert {r["context_label"] for r in ctx} == {"other", "domain", "peak"}
     dec = tsv(o / "knob_deciles.tsv")
     assert {r["feature"] for r in dec} == {"gc", "map", "rep"}
+
+
+def test_floor_depth_nearest():
+    f = mk.floor_depth
+    assert f("30000000", "counts") == ("15", 15_000_000, "nearest")
+    assert f("50000000", "counts") == ("15", 15_000_000, "nearest")
+    assert f("15000000", "counts") == ("15", 15_000_000, "exact")
+    assert f("3750000", "counts") == ("375", 3_750_000, "exact")
+    assert f("7500000", "counts") == ("375", 3_750_000, "nearest")    # tie -> the larger floor
+    assert f("1000000", "counts") == ("375", 3_750_000, "nearest")
+    assert f("30000000", "pval") == ("counts_only", "NA", "NA")
+    assert f("", "counts") == ("NA", "NA", "NA")
+
+
+def test_floor_columns_in_class_tables(world):
+    o = world["out"] / "out"
+    for name in ("knob_classes.tsv", "knob_context.tsv", "knob_deciles.tsv"):
+        r = tsv(o / name)
+        assert {"floor_depth", "floor_reads_per_half", "floor_match"} <= set(r[0]), name
+    assert world["cfg"]["blacklist"] is None and world["cfg"]["n_blacklisted_1k_bins"] == 0
+
+
+# ---------------------------------------------------------------- the blacklist mask
+
+BL_BINS = list(range(100, 200)) + [500]       # chr1 1 kb bins; bin 500 by a 1 bp overlap only
+
+
+def _bed(path):
+    path.write_text("chr1\t100000\t200000\nchr1\t500999\t501000\n")
+    return path
+
+
+def test_blacklist_1k_mask(tmp_path):
+    bad = M.blacklist_1k(_bed(tmp_path / "bl.bed"), ["chr1", "chr2"], {"chr1": 1000, "chr2": 10})
+    assert bad.size == 1010 and sorted(np.flatnonzero(bad)) == BL_BINS
+
+
+def test_blacklist_masks_planted_signal(world, tmp_path):
+    import shutil
+    bed = _bed(tmp_path / "bl.bed")
+    args = (world["root"] / "features.npz", world["prod"] / "MANIFEST.tsv", tmp_path / "no_t138")
+    clean = world["out"] / "arms1k"
+    planted = tmp_path / "planted"
+    shutil.copytree(clean, planted)
+    pid = "C19M16__crop__36"
+    with np.load(planted / f"{pid}.npz") as z:
+        arr = {k: z[k] for k in z.files}
+    for sp in ("counts", "pval"):
+        for k in (f"{sp}_arm_chr1", f"{sp}_r_chr1"):
+            x = arr[k].copy()
+            x[BL_BINS] = x[BL_BINS] + 50
+            arr[k] = x
+    np.savez(planted / f"{pid}.npz", **arr)
+    cfg = mk.run(clean, *args, tmp_path / "a", blacklist=bed)
+    mk.run(planted, *args, tmp_path / "b", blacklist=bed)
+    mk.run(planted, *args, tmp_path / "c")
+    assert cfg["blacklist"] == str(bed) and cfg["n_blacklisted_1k_bins"] == len(BL_BINS)
+    a, b, c = (tsv(tmp_path / x / "knob_products.tsv") for x in "abc")
+    assert a == b                                    # masked: the planted bins move nothing
+    ca = [r for r in a if r["pid"] == pid and r["space"] == "counts"][0]
+    cc = [r for r in c if r["pid"] == pid and r["space"] == "counts"][0]
+    assert ca["mean_d"] != cc["mean_d"]              # unmasked: they do
+    assert int(ca["n_bins"]) < int(cc["n_bins"])
 
 
 def test_missing_floor_reads_na(world, tmp_path):
@@ -313,7 +393,10 @@ def test_map_knobs_sh_dry_run_and_guard():
     assert p.returncode == 0, p.stderr
     assert p.stdout.strip() == ("python3 /kit/tools/t141/map_knobs.py run /x/t141/arms1k "
                                 "/y/t138/out/features.npz /prod/MANIFEST.tsv /y/t138/out "
-                                "/x/t141/out")
+                                "/x/t141/out --blacklist /project/def-maxwl/mforooz/EIC_REPRO/002/"
+                                "scripts/hg38_blacklist_v2.bed")
+    p = bash("map_knobs.sh", "/kit", "/prod", "/y/t138/out", "/x/t141", "/bl.bed")
+    assert p.stdout.strip().endswith("--blacklist /bl.bed")
     p = bash("map_knobs.sh", "/kit", "/prod", "/y/t138/out", "/x/t137")
     assert p.returncode == 2
 

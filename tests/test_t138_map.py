@@ -203,6 +203,37 @@ def run_map(tmp, **kw):
     return out
 
 
+def test_blacklist_masks_planted_signal(tmp_path):
+    """A signal planted only in blacklisted 1 kb bins moves nothing once --blacklist masks them."""
+    b1, feat, man = synth(tmp_path, inflate=False)
+    bed = tmp_path / "bl.bed"   # chr1 bins 100..199, and bin 500 by a 1 bp overlap of its last 25 bp
+    bed.write_text("chr1\t100000\t200000\nchr1\t500999\t501000\n")
+    bins = list(range(100, 200)) + [500]
+    planted = tmp_path / "planted"
+    planted.mkdir()
+    for f in b1.glob("*.npz"):
+        with np.load(f) as z:
+            arr = {k: z[k] for k in z.files}
+        for k in ("a15_chr1", "a375_chr1"):
+            x = arr[k].copy()
+            x[bins] = x[bins] * 20 + 500
+            arr[k] = x
+        np.savez(planted / f.name, **arr)
+    outs = {}
+    for name, src, extra in (("a", b1, ["--blacklist", bed]), ("b", planted, ["--blacklist", bed]),
+                             ("c", planted, [])):
+        p = py(MAP, "run", src, feat, man, tmp_path / name, *extra)
+        assert p.returncode == 0, p.stderr
+        outs[name] = tsv(tmp_path / name / "map_products.tsv")
+    assert outs["a"] == outs["b"]
+    assert [r["mean_d"] for r in outs["b"]] != [r["mean_d"] for r in outs["c"]]
+    assert all(int(rb["n_bins"]) < int(rc["n_bins"]) for rb, rc in zip(outs["b"], outs["c"]))
+    cfg = json.loads((tmp_path / "a" / "config.json").read_text())
+    assert cfg["blacklist"] == str(bed) and cfg["n_blacklisted_1k_bins"] == len(bins)
+    cfg = json.loads((tmp_path / "c" / "config.json").read_text())
+    assert cfg["blacklist"] is None and cfg["n_blacklisted_1k_bins"] == 0
+
+
 def test_level_only_null(tmp_path):
     out = run_map(tmp_path, inflate=False)
     rows = tsv(out / "map_products.tsv")

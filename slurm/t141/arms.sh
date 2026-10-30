@@ -12,10 +12,11 @@
 # dir must be t141 or under it. DRY_RUN=1 prints the python command line and exits 0 before any
 # module load. SLURM does not create the --output directory: mkdir -p $OUT/logs first.
 #
+# %12: each task imports torch (via candi) off the shared venv; >12 at once fail (Fir lesson).
 # Usage, from the Nibi login node, after snapshotting the repo to $KIT:
 #   OUT=/project/def-maxwl/mforooz/t141; mkdir -p $OUT/logs
 #   N=$(python3 $KIT/tools/t141/arms.py list $PRODUCTS | wc -l)     # 123 arm products
-#   sbatch --parsable --array=0-$((N - 1))%30 --output=$OUT/logs/%x_%A_%a.out \
+#   sbatch --parsable --array=0-$((N - 1))%12 --output=$OUT/logs/%x_%A_%a.out \
 #       $KIT/slurm/t141/arms.sh $KIT $PRODUCTS $OUT
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t141_arms

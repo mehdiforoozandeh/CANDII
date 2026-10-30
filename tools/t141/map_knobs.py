@@ -3,11 +3,14 @@
 Exploratory (PI, 2026-10-29); readings only, no verdicts, no thresholds.
 
     python map_knobs.py run <arms1k_dir> <features.npz> <products_manifest> <t138_out_dir> <out_dir>
+        [--blacklist BED]
 
 Input: `arms.py`'s `<arms1k_dir>/<pid>.npz` per arm product (a `<pid>.DROPPED` marker for the DNase
 mapq arms). For every arm product, space it was scored in, and series (`arm`; for the depth arm
 also `null_s0`, `null_s1`, the binomial-thinning null, counts only), per 1 kb bin over the feature
-chromosomes (the t138 grid; no blacklist, as t138):
+chromosomes (the t138 grid). With `--blacklist BED` (hg38 v2), a 1 kb bin is dropped if any of its
+40 25 bp sub-bins overlaps the BED by >= 1 bp (t138 `map.blacklist_1k`, the knob_effects `bad_bins`
+rule); without it no bin is dropped:
 
   d      = |r|, the size of the one-warp residual (counts: |log2((arm+0.5)/(warp(base)+0.5))|;
            pval: |arm - warp(base)|, a difference on the -log10 p scale)
@@ -24,9 +27,11 @@ delta_R2_<f>_shuffle (that feature's rows permuted, seed 0). A residual that is 
 everywhere (an arm bit-identical to its base, or an exact monotone transform) has undefined R^2:
 the R^2 readings are NaN, every delta_R2 is 0 and `residual_zero` is 1.
 
-The floor: the t138 pseudoreplicate map at matched depth, joined by mark class and depth: the arm's
-MANIFEST depth equals the t138 reads_per_half (15M <-> "15", 3.75M <-> "375"), else NA; counts
-only (t138 maps counts halves); NA everywhere when `<t138_out_dir>` lacks the table.
+The floor: the t138 pseudoreplicate map, joined by mark class and the NEAREST t138 depth in
+|log2(arm_depth / reads_per_half)| (t138 has 15M "15" and 3.75M "375"): 30M, 50M -> "15"; 3.75M ->
+"375"; an exact tie (7.5M) -> "375", the larger, conservative floor. `floor_match` says exact or
+nearest. Counts only (t138 maps counts halves): pval rows carry floor_depth "counts_only" and NA
+floor values. NA everywhere when `<t138_out_dir>` lacks the table.
 
 Outputs (atomic, .tmp then rename): knob_products.tsv (pid x space x series), knob_classes.tsv
 (arm x level x mark_class x space x series x reading: median, min, max over tracks; floor columns),
@@ -52,7 +57,7 @@ from knob_effects import MARK_CLASS  # noqa: E402
 
 CONTROL_P_ONLY = ("ctlid", "ctldepth", "ratio")
 ZERO_TOL = 1e-9
-FLOOR_DEPTHS = {15_000_000: "15", 3_750_000: "375"}
+FLOOR_DEPTHS = {"15": 15_000_000, "375": 3_750_000}
 FLOOR_PRODUCT_READINGS = ("mean_d", "R2_level", "delta_R2", "delta_R2_shuffle")
 GROUP = ("arm", "level", "mark_class", "space", "series")
 META = ["pid", "track", "assay", "mark_class", "arm", "level", "knob", "depth", "space", "series",
@@ -192,13 +197,20 @@ def _tsv(path):
         return list(csv.DictReader(f, delimiter="\t"))
 
 
-def floor_depth(depth: str, space: str) -> str:
+def floor_depth(depth: str, space: str) -> tuple:
+    """(t138 depth key, its reads_per_half, exact|nearest) by nearest |log2(depth / rph)|; a tie
+    goes to the smaller depth (the larger, conservative floor). pval -> ("counts_only", NA, NA)."""
     if space != "counts":
-        return "NA"
+        return "counts_only", "NA", "NA"
     try:
-        return FLOOR_DEPTHS.get(int(float(depth)), "NA")
+        x = float(depth)
     except ValueError:
-        return "NA"
+        return "NA", "NA", "NA"
+    if not x > 0:
+        return "NA", "NA", "NA"
+    dist = {k: abs(np.log2(x / v)) for k, v in FLOOR_DEPTHS.items()}
+    k = min(dist, key=lambda k: (dist[k], FLOOR_DEPTHS[k]))
+    return k, FLOOR_DEPTHS[k], "exact" if dist[k] == 0 else "nearest"
 
 
 def _fget(d: dict, key, field=None):
@@ -214,11 +226,12 @@ def write_tsv_atomic(path: Path, rows: list, cols: list):
     tmp.replace(path)
 
 
-def run(arms1k_dir, features, manifest, t138_out, out_dir) -> dict:
+def run(arms1k_dir, features, manifest, t138_out, out_dir, blacklist=None) -> dict:
     arms1k_dir, features, manifest, t138_out, out_dir = map(
         Path, (arms1k_dir, features, manifest, t138_out, out_dir))
     out_dir.mkdir(parents=True, exist_ok=True)
     chroms, lengths, feats, F, ctx_all = M.load_features(features)
+    bad = M.blacklist_1k(blacklist, chroms, lengths)
     products = [r for r in M.read_manifest(manifest) if r["arm"] != "base"]
     missing, dropped, rows = [], [], []
     for p in products:
@@ -251,19 +264,23 @@ def run(arms1k_dir, features, manifest, t138_out, out_dir) -> dict:
                                     if space == "counts" and "null" in meta else [])
                 for s in series:
                     d, level, keep = series_inputs(z, chroms, space, s)
+                    if bad is not None:
+                        keep = keep & ~bad
                     rd = readings(d, level, keep, F, ctx_all[track], feats)
-                    fd = floor_depth(meta["depth"], space)
+                    fd, frph, fmatch = floor_depth(meta["depth"], space)
                     row = {"pid": pid, "track": track, "assay": p["assay"], "mark_class":
                            MARK_CLASS[p["assay"]], "arm": p["arm"], "level": p["level"],
                            "knob": p.get("knob", ""), "depth": meta["depth"], "space": space,
                            "series": s, "identical_to_base": int(meta["identical_to_base"][space]),
-                           **rd, "floor_depth": fd}
+                           **rd, "floor_depth": fd, "floor_reads_per_half": frph,
+                           "floor_match": fmatch}
                     for k in FLOOR_PRODUCT_READINGS:
                         row[f"floor_{k}"] = _fget(floor["classes"], (row["mark_class"], fd, k))
                     rows.append(row)
         print(f"{pid} done", flush=True)
 
-    floor_cols = ["floor_depth"] + [f"floor_{k}" for k in FLOOR_PRODUCT_READINGS]
+    floor_cols = (["floor_depth", "floor_reads_per_half", "floor_match"]
+                  + [f"floor_{k}" for k in FLOOR_PRODUCT_READINGS])
     reading_cols = [k for k in rows[0] if k not in META and k not in floor_cols] if rows else []
     write_tsv_atomic(out_dir / "knob_products.tsv", rows, META + reading_cols + floor_cols)
 
@@ -274,7 +291,9 @@ def run(arms1k_dir, features, manifest, t138_out, out_dir) -> dict:
     for key, sel in sorted(groups.items()):
         g = dict(zip(GROUP, key))
         fd = sel[0]["floor_depth"]
-        common = {**g, "depth": sel[0]["depth"], "n_products": len(sel), "floor_depth": fd}
+        common = {**g, "depth": sel[0]["depth"], "n_products": len(sel), "floor_depth": fd,
+                  "floor_reads_per_half": sel[0]["floor_reads_per_half"],
+                  "floor_match": sel[0]["floor_match"]}
         for k in reading_cols:
             med, lo, hi = M._agg([r[k] for r in sel])
             cls_rows.append({**common, "reading": k, "median": med, "min": lo, "max": hi,
@@ -297,7 +316,8 @@ def run(arms1k_dir, features, manifest, t138_out, out_dir) -> dict:
                     "mean_r": M._agg([r[f"mean_r_{f}_dec{k}"] for r in sel])[0],
                     "mean_d": M._agg([r[f"mean_d_{f}_dec{k}"] for r in sel])[0],
                     "floor_mean_r": _fget(floor["deciles"], (g["mark_class"], fd, f, k))})
-    head = list(GROUP) + ["depth", "n_products", "floor_depth"]
+    head = list(GROUP) + ["depth", "n_products", "floor_depth", "floor_reads_per_half",
+                          "floor_match"]
     write_tsv_atomic(out_dir / "knob_classes.tsv", cls_rows,
                      head + ["reading", "median", "min", "max", "floor_median"])
     write_tsv_atomic(out_dir / "knob_context.tsv", ctx_rows,
@@ -310,6 +330,8 @@ def run(arms1k_dir, features, manifest, t138_out, out_dir) -> dict:
         "inputs": {"arms1k_dir": str(arms1k_dir), "features": str(features),
                    "manifest": str(manifest), "t138_out": str(t138_out)},
         "floor_tables_present": {k: bool(v) for k, v in floor.items()},
+        "blacklist": None if blacklist is None else str(blacklist),
+        "n_blacklisted_1k_bins": 0 if bad is None else int(bad.sum()),
         "features": list(feats) + ["ctx"], "mappability_missing": "map" not in feats,
         "chroms": chroms, "n_arm_products": len(products), "dropped": dropped,
         "n_rows": len(rows),
@@ -327,8 +349,11 @@ def run(arms1k_dir, features, manifest, t138_out, out_dir) -> dict:
             "delta_R2_<f>": "OLS R^2 of d on [1, d_hat, f] (ctx: two one-hot columns) - on "
                             "[1, d_hat]; _shuffle: the f rows permuted (seed 0)",
             "residual_zero": "max d <= 1e-9: R^2 NaN, every delta_R2 0",
-            "floor": "t138 map at reads_per_half == the arm's MANIFEST depth (15M, 3.75M), class "
-                     "median; counts only; NA otherwise",
+            "floor": "t138 map class median at the t138 depth (15M, 3.75M) nearest the arm's "
+                     "MANIFEST depth in |log2(depth / reads_per_half)|, a tie to 3.75M (the larger "
+                     "floor); counts only (pval: floor_depth counts_only, values NA)",
+            "blacklist": "with --blacklist: a 1 kb bin is dropped if any of its 40 x 25 bp "
+                         "sub-bins overlaps the BED by >= 1 bp; none dropped without it",
         },
         "subsample": M.SUBSAMPLE, "seed": M.SEED, "top_fraction": M.TOP_FRACTION,
         "git_sha": M.git_sha(), "note": "exploratory readings; no verdicts, no thresholds",
@@ -341,10 +366,17 @@ def run(arms1k_dir, features, manifest, t138_out, out_dir) -> dict:
 
 def main(argv=None):
     a = list(sys.argv[1:] if argv is None else argv)
+    blacklist = None
+    if "--blacklist" in a:
+        i = a.index("--blacklist")
+        if i + 1 >= len(a):
+            raise SystemExit("--blacklist needs a BED path")
+        blacklist = a[i + 1]
+        del a[i:i + 2]
     if len(a) != 6 or a[0] != "run":
         raise SystemExit("usage: map_knobs.py run <arms1k_dir> <features.npz> <products_manifest> "
-                         "<t138_out_dir> <out_dir>")
-    run(*a[1:])
+                         "<t138_out_dir> <out_dir> [--blacklist BED]")
+    run(*a[1:], blacklist=blacklist)
 
 
 if __name__ == "__main__":

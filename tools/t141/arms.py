@@ -11,8 +11,8 @@ base product is the row with the same `track` and `arm == base`.
 
 The 1 kb grid is the t137/t138 one: every chromosome of the npz except chrM / chrY, 1 kb = 40 x
 25 bp, tail dropped; counts are summed over the 40 bins (`floor.sums_1k`), -log10 p averaged (as
-`knob_effects.load`). The blacklist is handled as in the t138 map: NOT applied at 1 kb (the map is
-genome-wide).
+`knob_effects.load`). Every 1 kb bin is stored here; the blacklist is masked in the readout
+(`map_knobs.py --blacklist`), as in the t138 map.
 
 Per space the arm is scored in (space rules below):
   warp  the one-warp: the monotone base -> arm map, QuantileMatching of `baseline_rungs`
@@ -35,7 +35,8 @@ npz keys, per chromosome c and space s in (counts, pval):
   s_base_c, s_arm_c, s_warp_c (= warp(base)), s_r_c                     float32 (counts base/arm uint32)
   counts_null<k>_c (thinned base, uint32), counts_nullwarp<k>_c, counts_nullr<k>_c    depth arm only
   meta   a JSON string: pid, base pid, track, assay, arm, level, depth, spaces, identical_to_base per
-         space, qm_n_knots per fit, thin ratio and seeds, pid_index, formulas.
+         space, qm_n_knots per fit, thin ratio, observed sum(arm)/sum(base) of counts25 and seeds
+         (depth arm), pid_index, formulas.
 Written atomically (<pid>.tmp.npz, then renamed).
 """
 from __future__ import annotations
@@ -63,10 +64,15 @@ SPACE_FILES = {"counts": "counts25.npz", "pval": "pval25.npz"}
 NULL_SEEDS = (0, 1)
 PSEUDO = 0.5
 FORMULAS = {
-    "grid": "1 kb = 40 x 25 bp, tail dropped; every chromosome but chrM/chrY; no blacklist",
+    "grid": "1 kb = 40 x 25 bp, tail dropped; every chromosome but chrM/chrY; every bin stored "
+            "(map_knobs masks the blacklist)",
     "coarse": "counts summed, -log10 p averaged over the 40 bins",
     "warp": "baseline_rungs QuantileMatching (qm_fit / qm_apply), base -> arm, fitted once "
             "genome-wide on every 1 kb bin",
+    "warp_fit": "fitted at 1 kb on every chromosome (the t118 rungs fit at 25 bp on the train "
+                "chromosomes): the map reads the residual per 1 kb bin genome-wide, so the warp is "
+                "fitted on the grid and bins it is applied to; no model is scored, so there is no "
+                "held-out set to protect",
     "r_counts": "log2((arm + 0.5) / (warp(base) + 0.5))",
     "r_pval": "arm - warp(base) (difference on the -log10 p scale)",
     "null": "depth arm, counts only: base 25 bp counts thinned by rng.binomial(counts, depth_arm / "
@@ -204,6 +210,14 @@ def arm(products_dir, out_dir, arm_index: int) -> int:
             return 3
         meta["null"] = {"thin_ratio": ratio, "seeds": list(NULL_SEEDS),
                         "rng": "np.random.default_rng([seed, pid_index])", "space": "counts"}
+        sums = {}
+        for k, d in (("arm", products_dir / pid), ("base", products_dir / base["pid"])):
+            with np.load(d / SPACE_FILES["counts"], allow_pickle=False) as z:
+                sums[k] = int(sum(int(z[c].sum(dtype=np.int64)) for c in z.files if c not in DROP))
+        meta["null"]["observed_ratio"] = sums["arm"] / sums["base"] if sums["base"] else None
+        meta["null"]["observed_sums"] = sums
+        print(f"{pid} depth: nominal ratio {ratio:.4f}, observed sum(arm)/sum(base) "
+              f"{meta['null']['observed_ratio']}", flush=True)
         rngs = {s: np.random.default_rng([s, pid_index]) for s in NULL_SEEDS}
         thinned = {s: {} for s in NULL_SEEDS}
         with np.load(products_dir / base["pid"] / SPACE_FILES["counts"], allow_pickle=False) as z:

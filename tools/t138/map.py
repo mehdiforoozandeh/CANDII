@@ -1,16 +1,20 @@
 """t138: where does the split-half disagreement concentrate? (exploratory; readings, no verdicts)
 
-    python map.py run <bins1k_dir> <features.npz> <products_manifest> <out_dir>
+    python map.py run <bins1k_dir> <features.npz> <products_manifest> <out_dir> [--blacklist BED]
 
 For each product of the manifest and each depth in (15, 375) -- the untouched halves a15/b15 and the
 ratio-0.25 halves a375/b375 of G1's bins1k layout -- per 1 kb bin over the feature chromosomes:
 
-  d      = |log2((a + 0.5) / (b + 0.5))|            (bins with a + b == 0 dropped; no blacklist)
+  d      = |log2((a + 0.5) / (b + 0.5))|            (bins with a + b == 0 dropped)
   level  = log2(a + b + 1)
   d_hat  = the NULL: the mean of d in 40 quantile bins of level, a step function per bin
   r      = d - d_hat                                  (the residual the features are read against)
 
 Signal level is fitted FIRST; every feature reading is on r, never on d alone.
+
+Blacklist: with `--blacklist BED` (hg38 v2), a 1 kb bin is dropped before the readout if any of its
+40 25 bp sub-bins overlaps a blacklist interval by >= 1 bp (`knob_effects.bad_bins`). Without it,
+no bin is dropped (the behaviour before the flag existed).
 
 Readings per (pid, depth): Spearman(r, gc|map|rep) on a fixed-seed 500 000-bin subsample; mean r and
 mean d per context class (0 other, 1 domain, 2 peak) and per feature decile (rank deciles over the
@@ -40,7 +44,7 @@ from scipy.stats import rankdata, spearmanr
 _T118 = Path(__file__).resolve().parents[1] / "t118"
 if str(_T118) not in sys.path:
     sys.path.insert(0, str(_T118))
-from knob_effects import MARK_CLASS  # noqa: E402
+from knob_effects import COARSE, MARK_CLASS, bad_bins, read_blacklist  # noqa: E402
 
 DEPTHS = {"15": ("a15", "b15", 15_000_000), "375": ("a375", "b375", 3_750_000)}
 N_LEVEL_BINS = 40
@@ -75,6 +79,16 @@ def load_features(path: Path):
     lengths = {c: int(z[f"gc_{c}"].size) for c in chroms}
     z.close()
     return chroms, lengths, feats, cat, ctx
+
+
+def blacklist_1k(path, chroms, lengths: dict):
+    """Concatenated 1 kb mask over chroms: True where any of the 40 25 bp sub-bins is blacklisted
+    (knob_effects.bad_bins, >= 1 bp overlap). None when path is None."""
+    if path is None:
+        return None
+    bl = read_blacklist(path)
+    return np.concatenate([bad_bins(bl.get(c), lengths[c] * COARSE).reshape(-1, COARSE).any(1)
+                           for c in chroms])
 
 
 def level_null(d: np.ndarray, level: np.ndarray, n_bins: int = N_LEVEL_BINS) -> np.ndarray:
@@ -222,10 +236,16 @@ def git_sha() -> str:
 META = ["pid", "track", "assay", "mark_class", "arm", "level", "depth", "reads_per_half"]
 
 
-def run(bins1k_dir: Path, features: Path, manifest: Path, out_dir: Path) -> dict:
+def run(bins1k_dir: Path, features: Path, manifest: Path, out_dir: Path,
+        blacklist=None) -> dict:
     bins1k_dir, features, manifest, out_dir = map(Path, (bins1k_dir, features, manifest, out_dir))
     out_dir.mkdir(parents=True, exist_ok=True)
     chroms, lengths, feats, F, ctx_all = load_features(features)
+    bad = blacklist_1k(blacklist, chroms, lengths)
+    if bad is not None:
+        ok = ~bad
+        F = {f: v[ok] for f, v in F.items()}
+        ctx_all = {t: v[ok] for t, v in ctx_all.items()}
     products = read_manifest(manifest)
     rows = []
     for p in products:
@@ -239,6 +259,8 @@ def run(bins1k_dir: Path, features: Path, manifest: Path, out_dir: Path) -> dict
                                      f"{lengths[c]}")
             halves = {k: np.concatenate([z[f"{k}_{c}"] for c in chroms])
                       for dk in DEPTHS.values() for k in dk[:2]}
+            if bad is not None:
+                halves = {k: v[~bad] for k, v in halves.items()}
         for depth, (ka, kb, reads) in DEPTHS.items():
             rd = readings(halves[ka], halves[kb], F, ctx_all[track], feats)
             rows.append({"pid": pid, "track": track, "assay": p["assay"],
@@ -295,12 +317,17 @@ def run(bins1k_dir: Path, features: Path, manifest: Path, out_dir: Path) -> dict
         "inputs": {"bins1k_dir": str(bins1k_dir), "features": str(features),
                    "manifest": str(manifest)},
         "features": list(feats) + ["ctx"],
+        "blacklist": None if blacklist is None else str(blacklist),
+        "n_blacklisted_1k_bins": 0 if bad is None else int(bad.sum()),
         "mappability_missing": "map" not in feats,
         "n_products": len(products),
         "depths": {k: {"halves": list(v[:2]), "reads_per_half": v[2]} for k, v in DEPTHS.items()},
         "chroms": chroms,
         "formulas": {
             "d": "|log2((a + 0.5) / (b + 0.5))| per 1 kb bin; bins with a + b == 0 dropped",
+            "blacklist": "with --blacklist: a 1 kb bin is dropped if any of its 40 x 25 bp "
+                         "sub-bins overlaps the BED by >= 1 bp (knob_effects.bad_bins); "
+                         "none dropped without it",
             "level": "log2(a + b + 1)",
             "d_hat": f"mean of d in {N_LEVEL_BINS} quantile bins of level (unique edges), "
                      "assigned per bin as a step function (binned conditional mean)",
@@ -327,10 +354,17 @@ def run(bins1k_dir: Path, features: Path, manifest: Path, out_dir: Path) -> dict
 
 def main(argv=None):
     a = list(sys.argv[1:] if argv is None else argv)
+    blacklist = None
+    if "--blacklist" in a:
+        i = a.index("--blacklist")
+        if i + 1 >= len(a):
+            raise SystemExit("--blacklist needs a BED path")
+        blacklist = Path(a[i + 1])
+        del a[i:i + 2]
     if len(a) != 5 or a[0] != "run":
         raise SystemExit("usage: map.py run <bins1k_dir> <features.npz> <products_manifest> "
-                         "<out_dir>")
-    run(*map(Path, a[1:]))
+                         "<out_dir> [--blacklist BED]")
+    run(*map(Path, a[1:]), blacklist=blacklist)
 
 
 if __name__ == "__main__":
