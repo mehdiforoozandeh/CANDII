@@ -22,21 +22,32 @@ PROVENANCE (verified 2026-10-30; the slip of chunk G21 records it):
     without-replacement factor (N - b) / (N - 1) ~ 1. The dispersion check reads how exact it is.
 
 THE PREDICTIVES (counts space only; -log10 p cannot be thinned). rho = a product's depth relative
-to its base (base 1; an arm depth / base depth). Source s, target t, per bin source count x:
-  binomial          base -> arm. T = Binomial(x, rho_t). Exact (up to the hypergeometric factor).
+to its base (base 1; an arm depth / base depth). Source s, target t, per bin source count x. Each
+row carries `oracle_kind`, which says what kind of bound the row is:
+  binomial          base -> arm. T = Binomial(x, rho_t). oracle_kind `binomial_ceiling`: a true
+                    ceiling (no predictor of the arm can beat the law that made it), up to the
+                    hypergeometric factor below.
+  eb_binomial       arm -> base. The posterior P(b | x) ~ pi(b) Binomial(x; b, rho_s), pi = the
+                    base's histogram on the TRAINING chromosomes (every chromosome but chr19, chr21,
+                    chr22), blacklisted bins removed by the scored bins' rule. oracle_kind
+                    `bayes_per_bin`: the Bayes optimum ONLY for a predictor that sees the arm count
+                    at that one bin and a genome-wide prior. A model that reads neighbouring bins
+                    has a sharper prior per bin and can beat it, so gap-closed > 1 is possible on
+                    arm -> base and is not a bug. analyze.py reads it all the same: on true
+                    thinning at rho 0.125 the poisson_remainder sits ABOVE the one-warp (the
+                    interval inverts again), while eb_binomial does not (tests/test_t130_nested_
+                    oracle.py).
   poisson_remainder arm -> base. T = x + Poisson(x (1 - rho_s) / rho_s): the base = the arm plus the
                     reads the arm did not keep, approximated as Poisson with the rate the arm
-                    implies. APPROXIMATE: at x = 0 it is a point mass at 0 although the base can
-                    hold reads there. Reported; not the oracle analyze.py reads.
-  eb_binomial       arm -> base. The exact posterior P(b | x) ~ pi(b) Binomial(x; b, rho_s) with
-                    pi = the base's histogram on the TRAINING chromosomes (every chromosome but
-                    chr19, chr21, chr22). Exact under binomial thinning given that prior. This is
-                    the arm -> base oracle analyze.py reads: on true thinning at rho 0.125 the
-                    poisson_remainder sits ABOVE the one-warp (the interval inverts again), while
-                    eb_binomial does not (tests/test_t130_nested_oracle.py).
-  base_mediated     arm -> arm (independent subsamples of one base). T = Binomial(x, rho_t) +
-                    Poisson(x rho_t (1 - rho_s) / rho_s): the poisson_remainder base, thinned.
-                    APPROXIMATE for the same reason.
+                    implies. At x = 0 it is a point mass at 0 although the base can hold reads
+                    there. oracle_kind `approx_unused`: reported; analyze.py does not read it.
+  base_mediated     arm -> arm. T = Binomial(x, rho_t) + Poisson(x rho_t (1 - rho_s) / rho_s): the
+                    poisson_remainder base, thinned. It treats the two arms as independent
+                    subsamples of one base, but the three arms come from `shuf` with the SAME
+                    seed (the input's byte count), so they are not independent. oracle_kind
+                    `approx_unused`: reported; analyze.py does not read it.
+The top1 subset is ranked by the TARGET, so on top1 no row is a strict bound, not even
+binomial_ceiling: the selection itself uses the value being predicted.
 `binomial`, `poisson_remainder` and `base_mediated` are one family, T = Binomial(x, q) + Poisson(x mu),
 q = rho_t, mu = rho_t (1 - rho_s) / rho_s. Every rho is computed two ways (`r_source`): `manifest`
 (the MANIFEST `depth` column) and `empirical` (the arm's total count over the base's, every main
@@ -52,6 +63,9 @@ THE SPLIT. `crps_oracle_scaled` / `scale_error` / `c_star` by the same search as
 subsample, seed 0; both CRPS on every bin of the subset). Scaling the predictive mean by 2^c scales
 the depth ratio rho = rho_t / rho_s: q' = min(q 2^c, 1), mu' = max(rho 2^c - q', 0), so the mean
 x rho 2^c is kept exactly; eb_binomial scales its thinning ratio, rho_s' = min(rho_s / 2^c, 1).
+scale_error = crps - crps_oracle_scaled can be slightly NEGATIVE: c* is fitted on the 20 000-bin
+subsample and then scored on every bin, so the c = 0 predictive can win on the full set. This is
+baseline_rungs.scale_split's behaviour too, and it is not a bug.
 
 SCORED BINS: chr19 + chr21, blacklist bins removed (`baseline_rungs.load_eval`, the rungs' rule);
 subsets `all` and `top1` (`baseline_rungs.subset_index`, top 1 % ranked by the TARGET).
@@ -88,10 +102,12 @@ SCALE_SEED = 0                       # baseline_rungs.SCALE_SEED
 DISP_EDGES = (0, 1, 2, 3, 5, 9, 17, 33, 65, 129)   # base-count bin lower edges
 MARK_CLASS = {"DNase-seq": "DNase", "H3K27ac": "narrow", "H3K4me3": "narrow", "H3K4me1": "narrow",
               "H3K27me3": "broad", "H3K36me3": "broad", "H3K9me3": "broad"}
+ORACLE_KIND = {"binomial": "binomial_ceiling", "eb_binomial": "bayes_per_bin",
+               "poisson_remainder": "approx_unused", "base_mediated": "approx_unused"}
 PREDICTIVES = {"base_to_arm": ("binomial",), "arm_to_base": ("poisson_remainder", "eb_binomial"),
                "arm_to_arm": ("base_mediated",)}
 OCOLS = ["space", "eval", "track", "assay", "mark_class", "pid", "direction", "source_pid",
-         "target_pid", "predictive", "exact", "r_source", "rho_src", "rho_tgt", "ratio", "n_all",
+         "target_pid", "predictive", "oracle_kind", "r_source", "rho_src", "rho_tgt", "ratio", "n_all",
          "n_top1"] + [f"{k}_{s}" for s in SUBSETS
                       for k in ("crps", "crps_oracle_scaled", "scale_error", "c_star")]
 DCOLS = ["track", "pid", "rho_manifest", "rho_empirical", "base_lo", "base_hi", "n_bins",
@@ -332,6 +348,24 @@ def _write_tsv(path: Path, cols, rows) -> None:
     os.replace(tmp, path)
 
 
+def base_prior(track, blacklist: dict) -> np.ndarray:
+    """The eb_binomial prior: the base's count histogram over the training chromosomes (not
+    HELD_OUT), blacklisted bins removed by the scored bins' rule (baseline_rungs.load_eval)."""
+    import baseline_rungs as br
+    h = np.zeros(1, np.int64)
+    for c in track.chroms:
+        if c in HELD_OUT:
+            continue
+        a = np.asarray(track.get(c))
+        a = a[~br.blacklist_bin_flags(blacklist.get(c), a.size, br.RES)]
+        if a.size:
+            b = np.bincount(a.astype(np.int64))
+            h = np.pad(h, (0, max(0, b.size - h.size))) + np.pad(b, (0, max(0, h.size - b.size)))
+    if h.sum() == 0:
+        raise ValueError("base prior: no training-chromosome bin outside the blacklist")
+    return h.astype(np.float64) / h.sum()
+
+
 def score_predictive(x, y, crps_at) -> dict:
     import baseline_rungs as br
     sub = br.subset_index(np.asarray(y))
@@ -357,20 +391,12 @@ def run_track(manifest, products, blacklist_path, out, index: int) -> Path:
     products = Path(products)
     pids = sorted({p["source_pid"] for p in pairs} | {p["target_pid"] for p in pairs})
     base_pid = pairs[0]["base_pid"]
-    totals, prior = {}, None
-    for pid in pids:                                  # empirical totals; the base's prior
+    totals = {}
+    for pid in pids:                                  # empirical totals
         with br.Track(products / pid, "counts") as t:
-            tot = 0
-            for c in t.chroms:
-                a = t.get(c)
-                tot += int(a.sum(dtype=np.int64))
-                if pid == base_pid and c not in HELD_OUT:
-                    h = np.bincount(a)
-                    prior = h if prior is None else (
-                        np.pad(prior, (0, max(0, h.size - prior.size)))
-                        + np.pad(h, (0, max(0, prior.size - h.size))))
-            totals[pid] = tot
-    prior = prior.astype(np.float64) / prior.sum()
+            totals[pid] = sum(int(t.get(c).sum(dtype=np.int64)) for c in t.chroms)
+    with br.Track(products / base_pid, "counts") as t:
+        prior = base_prior(t, blacklist)
     rho_e = {pid: totals[pid] / totals[base_pid] for pid in pids}
     orows, drows = [], []
     for p in pairs:
@@ -392,7 +418,7 @@ def run_track(manifest, products, blacklist_path, out, index: int) -> Path:
                               **{k: p[k] for k in ("track", "assay", "mark_class", "pid",
                                                    "direction", "source_pid", "target_pid")},
                               "predictive": pred,
-                              "exact": int(pred in ("binomial", "eb_binomial")),
+                              "oracle_kind": ORACLE_KIND[pred],
                               "r_source": r_source, "rho_src": rs, "rho_tgt": rt,
                               "ratio": rt / rs, **score_predictive(x, y, crps_at)})
         if p["direction"] == "base_to_arm":

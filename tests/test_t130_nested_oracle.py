@@ -182,9 +182,11 @@ def test_run_and_aggregate(tmp_path):
     b2a = {(r["pid"], r["r_source"]): r for r in rows if r["direction"] == "base_to_arm"}
     assert float(b2a[("T1__depth__15M", "manifest")]["rho_tgt"]) == 0.5
     assert float(b2a[("T1__depth__7.5M", "empirical")]["rho_tgt"]) == pytest.approx(0.25, abs=0.01)
-    assert {r["exact"] for r in rows if r["predictive"] in ("binomial", "eb_binomial")} == {"1"}
-    assert {r["exact"] for r in rows if r["predictive"] in ("poisson_remainder",
-                                                            "base_mediated")} == {"0"}
+    kinds = {r["predictive"]: set() for r in rows}
+    for r in rows:
+        kinds[r["predictive"]].add(r["oracle_kind"])
+    assert kinds == {"binomial": {"binomial_ceiling"}, "eb_binomial": {"bayes_per_bin"},
+                     "poisson_remainder": {"approx_unused"}, "base_mediated": {"approx_unused"}}
     a2a = [r for r in rows if r["direction"] == "arm_to_arm"]
     assert {r["pid"] for r in a2a} == {"T1__depth__15M->T1__depth__7.5M",
                                        "T1__depth__7.5M->T1__depth__15M"}
@@ -220,3 +222,20 @@ def test_nested_oracle_sh_dry_run_and_guard():
     bad = subprocess.run(["bash", sh, "run", "/k", "/p", "/b.bed", "/x/t118"], env=env,
                          capture_output=True, text=True)
     assert bad.returncode != 0 and bad.stdout == ""
+
+
+def test_base_prior_training_chromosomes_without_blacklist(tmp_path):
+    """The eb prior: training chromosomes only, blacklisted bins removed (load_eval's rule)."""
+    d = tmp_path / "B"
+    d.mkdir()
+    chr1 = np.ones(400, np.uint32)
+    chr1[:40] = 500                                       # blacklisted spike: must not count
+    np.savez_compressed(d / "counts25.npz", chr1=chr1,
+                        chr19=np.full(100, 300, np.uint32),   # held out: must not count
+                        chr2=np.zeros(100, np.uint32))
+    bl = tmp_path / "bl.bed"
+    bl.write_text("chr1\t0\t1000\n")                    # bins 0..39 of chr1
+    with br.Track(d, "counts") as t:
+        prior = NO.base_prior(t, br.read_blacklist(bl))
+    assert prior.size == 2                                # only counts 0 and 1 remain
+    assert prior[0] == pytest.approx(100 / 460) and prior[1] == pytest.approx(360 / 460)

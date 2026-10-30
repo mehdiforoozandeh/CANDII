@@ -7,8 +7,9 @@ READINGS ONLY. Nothing here ticks a box or gives a verdict. Every threshold is t
 Inputs in <results_dir> (run_all.sh copies them in):
   records.tsv.gz, baselines.tsv.gz   extract_records.py
   floor_pairs.tsv, floor_curve.tsv, floor_p15M.tsv   t137 (tools/t137/floor.py aggregate)
-  nested_oracle.tsv                  tools/t130/nested_oracle.py (absent -> d_oracle NA on depth
-                                     pairs in counts, with a line in BLIND.md)
+  nested_oracle.tsv                  tools/t130/nested_oracle.py (absent -> every pair falls back
+                                     to the floor as its oracle, oracle_kind `floor_fallback`, with
+                                     a line in BLIND.md; verify_raw.py does the same)
 
 THE ORACLE (PI ruling 2026-10-30, plan_gaps.md A9). gap-closed runs one-warp -> d_oracle:
   depth pairs, counts   the NESTED-READ oracle: a depth arm is a read subsample of its base, so the
@@ -214,17 +215,19 @@ def nested_table(no: pd.DataFrame | None) -> dict | None:
 
 
 def pair_oracle(space, arm, pid, direction, floor: dict, nested) -> dict:
-    """The gap top of one pair: the nested-read oracle on depth pairs in counts, else the floor."""
-    if space == "counts" and arm == NESTED_KNOB:
+    """The gap top of one pair: the nested-read oracle on depth pairs in counts, else the floor.
+    No nested_oracle.tsv at all (nested None): the floor, oracle_kind `floor_fallback`."""
+    if space == "counts" and arm == NESTED_KNOB and nested is not None:
         kind = f"nested_{ORACLE_PREDICTIVE[direction]}"
-        r = None if nested is None else nested.get((pid, direction))
+        r = nested.get((pid, direction))
         if r is None:
             return {"oracle_kind": kind}
         return {"or_all": float(r["crps_all"]), "or_top1": float(r["crps_top1"]),
                 "or_os": float(r["crps_oracle_scaled_all"]), "or_se": float(r["scale_error_all"]),
                 "oracle_kind": kind}
+    kind = "floor_fallback" if space == "counts" and arm == NESTED_KNOB else "floor"
     return {"or_all": floor.get("fl_all"), "or_top1": floor.get("fl_top1"),
-            "or_os": floor.get("fl_os"), "or_se": floor.get("fl_se"), "oracle_kind": "floor"}
+            "or_os": floor.get("fl_os"), "or_se": floor.get("fl_se"), "oracle_kind": kind}
 
 
 def pair_values(rec: pd.DataFrame, base: pd.DataFrame, tabs, nested=None) -> pd.DataFrame:
@@ -439,6 +442,13 @@ Readings only. No box is ticked and no verdict is given here; every threshold is
   arm_to_base: the exact posterior of the base count given the arm count under binomial
   thinning, with the base's training-chromosome histogram as prior. rho = the arm's MANIFEST
   depth / the base's. `oracle_kind` names it (`nested_binomial`, `nested_eb_binomial`).
+- What the oracle bounds: `nested_binomial` (base_to_arm) is a true ceiling up to the
+  hypergeometric factor; `nested_eb_binomial` (arm_to_base) is the Bayes optimum only for a
+  predictor that sees the arm count at that one bin with a genome-wide prior, so a model that
+  reads neighbouring bins can beat it, and `gapclosed_onewarp` > 1 there is possible and not a
+  bug. On subset top1 (ranked by the target) neither is a strict bound.
+- If `nested_oracle.tsv` is absent, depth pairs in counts fall back to the floor as their oracle
+  (`oracle_kind floor_fallback`), and the summary below says so.
 - Every other pair keeps the floor as its oracle (`oracle_kind floor`). h2's run-type arm `pe`
   is NOT a subsample of the base (a separate FASTQ reprocessing), so it is not nested-by-
   subsampling and keeps the floor; depth pairs in -log10 p keep it too (p cannot be thinned).
@@ -485,7 +495,8 @@ def main(argv) -> int:
     lines = [f"records {len(rec)} (runs {rec['run'].nunique()}), baselines {len(base)}, "
              f"floor_pairs {len(fp)}, floor_curve {len(fc)}, floor_p15M {len(f15)}, "
              + (f"nested_oracle {len(no)}" if no is not None
-                else "nested_oracle.tsv ABSENT: d_oracle is NA on every depth pair in counts"),
+                else "nested_oracle.tsv ABSENT: depth pairs in counts fall back to the floor as their "
+                     "oracle (oracle_kind floor_fallback)"),
              f"oracle: depth pairs in counts -> nested-read ({ORACLE_R} rho; base_to_arm "
              f"{ORACLE_PREDICTIVE['base_to_arm']}, arm_to_base {ORACLE_PREDICTIVE['arm_to_base']}); "
              f"every other pair -> the floor. d_floor = context ({FLOOR_LABEL})",

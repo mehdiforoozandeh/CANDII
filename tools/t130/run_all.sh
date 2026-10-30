@@ -38,12 +38,18 @@ if [ "$LOCAL" = 0 ]; then
   for f in floor_pairs.tsv floor_curve.tsv floor_p15M.tsv; do
     rsync -av --no-g --no-p -e 'ssh -o BatchMode=yes' "$H:$T137_ROOT/$f" "$RES/"
   done
-  ssh -o BatchMode=yes "$H" "test -f $NESTED_ROOT/NESTED_DONE" \
-    || { echo "no $H:$NESTED_ROOT/NESTED_DONE: the nested-read oracle has not finished" >&2; exit 1; }
-  for f in nested_oracle.tsv nested_dispersion.tsv NESTED_DONE; do
-    rsync -av --no-g --no-p -e 'ssh -o BatchMode=yes' "$H:$NESTED_ROOT/$f" "$RES/"
-  done
+  if ssh -o BatchMode=yes "$H" "test -f $NESTED_ROOT/NESTED_DONE"; then
+    for f in nested_oracle.tsv nested_dispersion.tsv NESTED_DONE; do
+      rsync -av --no-g --no-p -e 'ssh -o BatchMode=yes' "$H:$NESTED_ROOT/$f" "$RES/"
+    done
+  else
+    echo "no $H:$NESTED_ROOT/NESTED_DONE: the nested-read oracle has not finished" >&2
+  fi
 fi
+# No nested_oracle.tsv: analyze.py and verify_raw.py both fall back to the floor as the depth
+# pairs' oracle (oracle_kind floor_fallback); BLIND.md says so.
+[ -f "$RES/nested_oracle.tsv" ] \
+  || echo "WARNING: no $RES/nested_oracle.tsv: depth pairs use the floor as their oracle" >&2
 
 "$PY" "$HERE/analyze.py" "$RES"
 "$PY" "$HERE/verify_raw.py" "$RES/records.tsv.gz" "$RES/baselines.tsv.gz" \

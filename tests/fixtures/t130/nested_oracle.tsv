@@ -1,8 +1,8 @@
-space	eval	track	assay	mark_class	pid	direction	source_pid	target_pid	predictive	exact	r_source	rho_src	rho_tgt	ratio	n_all	n_top1	crps_all	crps_oracle_scaled_all	scale_error_all	c_star_all	crps_top1	crps_oracle_scaled_top1	scale_error_top1	c_star_top1
-counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	base_to_arm	C19M16__base__base	C19M16__depth__15M	binomial	1	manifest	1	0.5	0.5	1000	10	0.9	0.765	0.135	0	1.8	1.53	0.27	0
-counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	base_to_arm	C19M16__base__base	C19M16__depth__15M	binomial	1	empirical	1	0.4998	0.4998	1000	10	0.5	0.425	0.075	0	1	0.85	0.15	0
-counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	poisson_remainder	0	manifest	0.5	1	2	1000	10	0.3	0.255	0.045	0	0.6	0.51	0.09	0
-counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	eb_binomial	1	manifest	0.5	1	2	1000	10	1.1	0.935	0.165	0	2.2	1.87	0.33	0
-counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	poisson_remainder	0	empirical	0.4998	1	2.00080032	1000	10	0.3	0.255	0.045	0	0.6	0.51	0.09	0
-counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	eb_binomial	1	empirical	0.4998	1	2.00080032	1000	10	0.4	0.34	0.06	0	0.8	0.68	0.12	0
-counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M->C19M16__depth__7.5M	arm_to_arm	C19M16__depth__15M	C19M16__depth__7.5M	base_mediated	0	manifest	0.5	0.25	0.5	1000	10	0.2	0.17	0.03	0	0.4	0.34	0.06	0
+space	eval	track	assay	mark_class	pid	direction	source_pid	target_pid	predictive	oracle_kind	r_source	rho_src	rho_tgt	ratio	n_all	n_top1	crps_all	crps_oracle_scaled_all	scale_error_all	c_star_all	crps_top1	crps_oracle_scaled_top1	scale_error_top1	c_star_top1
+counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	base_to_arm	C19M16__base__base	C19M16__depth__15M	binomial	binomial_ceiling	manifest	1	0.5	0.5	1000	10	0.9	0.765	0.135	0	1.8	1.53	0.27	0
+counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	base_to_arm	C19M16__base__base	C19M16__depth__15M	binomial	binomial_ceiling	empirical	1	0.4998	0.4998	1000	10	0.5	0.425	0.075	0	1	0.85	0.15	0
+counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	poisson_remainder	approx_unused	manifest	0.5	1	2	1000	10	0.3	0.255	0.045	0	0.6	0.51	0.09	0
+counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	eb_binomial	bayes_per_bin	manifest	0.5	1	2	1000	10	1.1	0.935	0.165	0	2.2	1.87	0.33	0
+counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	poisson_remainder	approx_unused	empirical	0.4998	1	2.00080032	1000	10	0.3	0.255	0.045	0	0.6	0.51	0.09	0
+counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M	arm_to_base	C19M16__depth__15M	C19M16__base__base	eb_binomial	bayes_per_bin	empirical	0.4998	1	2.00080032	1000	10	0.4	0.34	0.06	0	0.8	0.68	0.12	0
+counts	score	C19M16	H3K27ac	narrow	C19M16__depth__15M->C19M16__depth__7.5M	arm_to_arm	C19M16__depth__15M	C19M16__depth__7.5M	base_mediated	approx_unused	manifest	0.5	0.25	0.5	1000	10	0.2	0.17	0.03	0	0.4	0.34	0.06	0

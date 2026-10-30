@@ -15,7 +15,10 @@ Recomputes from the extract and the floor files, for the cells
     d_oracle   the nested-read oracle (PI ruling 2026-10-30), read from nested_oracle.tsv by its
                own route: the row with r_source `manifest`, eval `score`, space `counts` and the
                predictive `binomial` for base_to_arm / `eb_binomial` for arm_to_base, keyed by
-               (arm pid, direction); its crps_all, same pooling;
+               (arm pid, direction); its crps_<subset>, same pooling. If nested_oracle.tsv does
+               not exist, d_oracle is the floor (d_floor's route, metric crps_<subset>), as
+               analyze.py's `floor_fallback`. d_oracle alone is recomputed for every direction
+               (base_to_arm, arm_to_base, both) and both subsets (all, top1);
     gapclosed_onewarp  (d_onewarp - d_model) / (d_onewarp - d_oracle) from the three above;
     seed_abs_delta     max - min over the three per-seed pooled d_model values;
   and for rung D the swap median: the median swap_ratio_median over the real model's counts
@@ -49,10 +52,10 @@ def depth_of(pid, level, b2a):
     return 50e6 if pid == DNASE_BASE else 30e6
 
 
-def floor_of(track, x, fc):
+def floor_of(track, x, fc, metric="crps_all"):
     base = track + "__base__base"
     for r in fc:
-        if r["pid"] == base and r["metric"] == "crps_all" and r["alpha"] not in ("", "nan"):
+        if r["pid"] == base and r["metric"] == metric and r["alpha"] not in ("", "nan"):
             return math.exp(float(r["alpha"]) + float(r["beta"]) * math.log2(x))
     return None
 
@@ -79,9 +82,14 @@ def main(argv):
         return 2
     rp, bp, fpp, fcp, nop = argv
     rec, base, fp, fc = rows(rp), rows(bp), rows(fpp), rows(fcp)
-    nested = {(r["pid"], r["direction"]): float(r["crps_all"]) for r in rows(nop)
-              if r["space"] == "counts" and r["eval"] == "score" and r["r_source"] == "manifest"
-              and NESTED_PRED.get(r["direction"]) == r["predictive"] and r["crps_all"] != "NA"}
+    nested = None                     # no file: d_oracle falls back to the floor
+    if os.path.isfile(nop):
+        nested = {(r["pid"], r["direction"], s): float(r[f"crps_{s}"]) for r in rows(nop)
+                  for s in ("all", "top1")
+                  if r["space"] == "counts" and r["eval"] == "score"
+                  and r["r_source"] == "manifest"
+                  and NESTED_PRED.get(r["direction"]) == r["predictive"]
+                  and r[f"crps_{s}"] != "NA"}
     ow = {(b["space"], b["pid"], b["direction"]): float(b["crps_all"]) for b in base
           if b["rung"] in ("QuantileMatching", "QM") and b["crps_all"] != ""}
     out = {"d_model": {}, "d_onewarp": {}, "d_floor": {}, "d_oracle": {}, "gapclosed_onewarp": {},
@@ -94,11 +102,19 @@ def main(argv):
         out["d_model"][key] = pooled(sel, lambda r: float(r["crps_all"]))
         out["d_onewarp"][key] = pooled(sel, lambda r: ow.get(("counts", r["pid"], r["direction"])))
 
-        def fl(r):
+        def fl(r, metric="crps_all"):
             x = depth_of(r["target_pid"], r["level"], r["direction"] == "base_to_arm")
-            return floor_of(r["track"], x, fc)
+            return floor_of(r["track"], x, fc, metric)
         out["d_floor"][key] = pooled(sel, fl)
-        out["d_oracle"][key] = pooled(sel, lambda r: nested.get((r["pid"], r["direction"])))
+        for d in ("base_to_arm", "arm_to_base", "both"):
+            sd = [r for r in sel if d in ("both", r["direction"])]
+            for s in ("all", "top1"):
+                k = f"counts|depth|all|{rung}|per_track|{d}|{s}"
+                if nested is None:
+                    out["d_oracle"][k] = pooled(sd, lambda r, s=s: fl(r, f"crps_{s}"))
+                else:
+                    out["d_oracle"][k] = pooled(
+                        sd, lambda r, s=s: nested.get((r["pid"], r["direction"], s)))
         m, o, f = out["d_model"][key], out["d_onewarp"][key], out["d_oracle"][key]
         out["gapclosed_onewarp"][key] = (None if None in (m, o, f) or o == f
                                          else (o - m) / (o - f))

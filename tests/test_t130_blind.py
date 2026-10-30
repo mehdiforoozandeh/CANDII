@@ -215,6 +215,7 @@ def test_checks_readings_never_tick(res):
     assert (c.loc[c["check"] == "composegap", "reading"] == "not_extracted").all()
     md = (res / "BLIND.md").read_text()
     assert "PI's pick" in md and "TODO(PI)" in md
+    assert "neighbouring bins can beat it" in md
     assert "what a fresh replicate would differ by" in md and "NOT a subsample" in md
     g = c[(c["check"] == "gapclosed") & (c["knob"] == "depth") & (c["space"] == "counts")]
     assert g["detail"].str.contains("oracle nested_binomial,nested_eb_binomial").all()
@@ -242,15 +243,25 @@ def test_pe_and_pval_keep_the_floor_as_oracle(table, cellkey):
                 (r.d_onewarp - r.d_model) / (r.d_onewarp - r.d_floor), abs=1e-8)
 
 
-def test_missing_nested_oracle_is_na_not_the_floor(tmp_path):
+def test_missing_nested_oracle_falls_back_to_the_floor_in_both_methods(tmp_path):
     for f in FIX.iterdir():
         if f.name != "nested_oracle.tsv":
             shutil.copy(f, tmp_path / f.name)
     subprocess.run([PY, str(T130 / "analyze.py"), str(tmp_path)], check=True, capture_output=True)
     t = pd.read_csv(tmp_path / "blind_table.tsv", sep="\t")
-    r = cell(t, **HEAD, direction="both", subset="all")
-    assert math.isnan(r.d_oracle) and math.isnan(r.gapclosed_onewarp) and not math.isnan(r.d_floor)
+    for d in ("base_to_arm", "arm_to_base", "both"):
+        for s in ("all", "top1"):
+            r = cell(t, **HEAD, direction=d, subset=s)
+            assert r.oracle_kind == "floor_fallback"
+            assert r.d_oracle == pytest.approx(r.d_floor, abs=1e-12)
     assert "ABSENT" in (tmp_path / "BLIND.md").read_text()
+    subprocess.run([PY, str(T130 / "verify_raw.py")] + [str(tmp_path / f) for f in (
+        "records.tsv.gz", "baselines.tsv.gz", "floor_pairs.tsv", "floor_curve.tsv",
+        "nested_oracle.tsv")], check=True, capture_output=True)
+    subprocess.run([PY, str(T130 / "verify_compare.py"), str(tmp_path)], check=True,
+                   capture_output=True)
+    text = (tmp_path / "verify.txt").read_text()
+    assert text.count("DISAGREE") == 0 and "AGREE d_oracle: 12 cells" in text
 
 
 def test_missing_floor_propagates_as_na(tmp_path):
@@ -278,6 +289,10 @@ def test_second_method_agrees(res):
     text = (res / "verify.txt").read_text()
     assert text.count("DISAGREE") == 0
     assert text.count("AGREE") == 7
+    # d_oracle: rungs D, A x direction b2a, a2b, both x subset all, top1
+    assert "AGREE d_oracle: 12 cells" in text
+    v = json.loads((res / "verify_raw.json").read_text())
+    assert v["d_oracle"]["counts|depth|all|D|per_track|arm_to_base|top1"] == pytest.approx(2.2)
 
 
 def test_second_method_catches_a_change(res, tmp_path):
