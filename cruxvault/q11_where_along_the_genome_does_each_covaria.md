@@ -38,11 +38,12 @@ PI ruling 2026-10-29: (1) the uniform part is removed by the one-warp (monotone 
 
 ## Answer so far
 
-Readings, not judged ([covariate-map digest](results/t141/DIGEST.md)). In every knob, signal level explains more of the one-warp residual (R² 0.08–0.60) than the four features add.
+Readings, not judged, 2026-10-30 ([covariate-map digest](results/t141/DIGEST.md), [whole-read depth control](results/t142/t141_readthin/knob_classes.tsv)). Signal level explains more of the one-warp residual (R² 0.08–0.60) than the four features add; the shuffle gives ≤ 0.00003.
 
-- Not uniform: mapping quality 0 (feature gain 0.10–0.11 R², mostly mappability; +0.45 log2 in the lowest-mappability decile), read length 36 and 50, paired-end in DNase, and antibody proxy f0.9 (peaks and context). Their feature gain is 50–1000× the floor's (≤ 0.0001). In −log10 p: control identity "none" and control ratio k0.5 (domains and peaks).
-- Uniform, so one genome-wide monotone map suffices: duplicate removal and paired-end in histone marks, depth, fragment extension, and control depth.
-- Caveat: the depth control failed. The depth arm's residual read 1.9–2.6× its null, for a known reason: the null thinned count units, not reads. The control is being redone by whole-read thinning, and the depth reading waits on it.
+- Depth acts uniformly. With the whole-read null, the depth-arm residual equals its null in every class at 15M and 3.75M (DNase 15M: mean |r| 0.774 against 0.773 and 0.774; feature gain 0.00014 against 0.00018), in peaks and domains too. This supersedes the first-pass failure (1.9–2.6×), whose null thinned count units.
+- Not uniform, counts: mapping quality 0 (feature gain 0.10–0.11, mostly mappability; +0.45 log2 in the lowest-mappability decile), read length 36 and 50 (0.013–0.042), paired-end in DNase (0.015), antibody proxy f0.9 (0.006–0.015, peaks). The floor gains ≤ 0.0001. In −log10 p: control identity "none" (0.063–0.077) and ratio k0.5 (0.028–0.046, domains); the p level null under-fits peaks, so a p gain near 0.03 is not a knob effect alone.
+- Uniform: depth, duplicate removal and paired-end in histone marks (≤ 0.0023), fragment extension, control depth.
+- For CANDI: read length and mapping quality need a position-aware correction (sequence or mappability input); depth does not.
 
 <!-- crux:ledger:start -->
 _(no children yet)_

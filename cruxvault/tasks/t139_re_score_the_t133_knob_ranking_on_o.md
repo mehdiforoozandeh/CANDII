@@ -7,9 +7,9 @@ parent: t118
 blocked_by: None
 refs: q9
 hypothesis_refs: 
-status: open
-created: 2026-10-29T20:08:16
-updated: 2026-10-29T20:08:16
+status: done
+created: "2026-10-29T20:08:16"
+updated: "2026-10-30T04:26:34"
 ---
 
 # t139 — re-score the t133 knob ranking on one shared peak set to remove the regression-to-the-mean bias
@@ -32,7 +32,7 @@ settles the middle of the knob ranking, which picks what to augment if augmentat
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [t139 digest](results/t139/DIGEST.md)
 
 ## Evidence
 

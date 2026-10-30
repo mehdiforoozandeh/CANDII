@@ -215,4 +215,4 @@ Readings, not judged. Against the no-covariates twin (2026-10-19):
 - Counts, median relative CRPS gain over 16 design × g configurations: 0.46 on trained pairs (16 of 16 clear 2 × seed |Δ|) and 0.16 on never-trained depth → depth pairs (13 of 16). No CRPS split exists for these gains.
 - −log10 p: exploding pairs make the pooled gain unreadable; median-pair gain 0.21 trained, 0.12 never-trained.
 - Depth law, median |log2 scale error|: 0.04–0.09 trained, 0.18–0.55 untrained.
-- Blind check set vs one-warp and the nested-read oracle (2026-10-30), counts: base → arm, B–D close 0.77–0.92 of the gap per class, > 2 × seed |Δ| in 18/18 cells; A ≤ 0 in DNase, narrow. arm → base: C–D 1.1–3.7 (past the per-bin ceiling), B 0.23–0.86. Model scale_error ≤ 0.011 base → arm, ≤ 0.17 arm → base.
+- Nested-oracle blind pass (2026-10-30), counts: base → arm, B–D close 0.77–0.92 of the gap per class, > 2 × seed |Δ| in 18/18 cells; A ≤ 0 in DNase, narrow. arm → base: C–D 1.1–3.7 (past the per-bin ceiling), B 0.23–0.86. Model scale_error ≤ 0.011 base → arm, ≤ 0.17 arm → base. Arm dispersion 0.995–1.006 of binomial.

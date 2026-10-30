@@ -20,7 +20,7 @@ If you split one experiment's reads into two random halves, the two halves alrea
 
 ## TL;DR
 
-Every covariate correction is read against a floor: the change that pure read resampling causes with no covariate changed. This asks three things on the t117 pseudoreplicates (pr1/pr2 halves of all 130 counterfactual products), thinned along a depth ladder: how much resampling moves peak height, 1 kb shape and per-bin divergence at each depth; where in the genome the split-half disagreement concentrates; and how it shrinks with depth, read off the curve at the 30M the arms are built at. Signal level is fitted first as the null, since counting noise alone makes low-count bins irreproducible; mappability and repeats, GC, and peak versus domain context are read on the residual. It is settled when the floor at 30M is stated per mark class with its depth curve, and the residual regional pattern is either named or shown to be absent. The floor was set as the oracle for every reading under q1, beside the monotone scale map and the shuffled-covariate twin (PI ruling 2026-10-29). For pairs that share reads it is context only (PI ruling 2026-10-30; see Protocol).
+Every covariate correction is read against a floor: the change that read resampling alone causes. This asks three things on the t117 pseudoreplicates (pr1/pr2 halves of all 130 counterfactual products), thinned along a depth ladder: how much resampling moves peak height, 1 kb shape and per-bin divergence; where in the genome the split-half disagreement concentrates, with signal level fitted first as the null; and how it shrinks with depth, read at 30M. It is settled when the 30M floor is stated per mark class with its depth curve, and the regional pattern is named or shown to be absent. The floor is the oracle for pairs that share no reads and context for pairs that do (PI rulings 2026-10-29, 2026-10-30; see Protocol).
 
 ## Question
 
@@ -44,12 +44,13 @@ Locked before any run: draws are the t117 halves thinned to a depth ladder (no n
 
 ## Answer so far
 
-Readings, not judged ([floor digest](results/t137/DIGEST.md), [map digest](results/t138/DIGEST.md)):
+Readings, not judged, 2026-10-30 ([rebuilt floor and map](results/t142/DIGEST.md); first pass: [floor](results/t137/DIGEST.md), [map](results/t138/DIGEST.md)).
 
-- Floor at 30M, extrapolated, 1 kb shape: narrow 0.552, broad 0.494, DNase 0.121 (seed spread ≤ 0.0015). It shrinks with depth in 130 of 130 products. The peak-height floor is ≤ 0.014 log2 at every depth.
-- Per-bin divergence and CRPS grow with depth, because they are on the raw-count scale; they are not depth-free noise levels. The floor CRPS is mostly shape: narrow at 15M, 0.553 with oracle_scaled 0.484 and scale_error 0.063.
-- Where: signal level explains 0.18–0.38 of the per-bin disagreement at 15M. The four features add ≤ 0.0003 together (shuffle ≤ 0.00003). The one tail: low-mappability bins hold 1.4–1.5× their share of the worst bins in histone marks.
-- Caveat: the thinned 1 kb readings and the 3.75M map used unit-wise thinning, which is too smooth. They are being rebuilt by whole-read thinning.
+- 1 kb shape floor, whole-read thinning: at 30M (extrapolated) narrow 0.533, broad 0.485, DNase 0.114; at 3.75M per half 0.787, 0.788, 0.395. Seed spread ≤ 0.003. The curve is concave, so read the histone 30M value as 0.43–0.53. The real depth-arm halves match it (ratio 1.002, 21 arms).
+- Superseded: the first-pass thinned values (3.75M: 0.687, 0.657, 0.245; real/thinned 1.226). Unit thinning split reads, so 1 kb sums were about √k too smooth (k = 4–5). The 15M rows and the per-bin metrics stand.
+- The peak-height floor is ≤ 0.02 log2, with a seed spread of the same size. Per-bin divergence and CRPS grow with depth (raw-count scale). Floor CRPS, narrow 15M: crps_all 0.553, oracle_scaled 0.484, scale_error 0.063 (r0.5 seed spread ≤ 0.0003).
+- Where: signal level sets the noise, not region. Level explains 0.18–0.38 of the per-bin disagreement at 15M and 0.21–0.32 at 3.75M; the four features add ≤ 0.0003 R² (shuffle about 0.00001). Small tails: low-mappability bins at 15M (1.4–1.5× of the worst 1 %), peaks and domains at 3.75M (1.2–1.8×).
+- For CANDI: a level-dependent spread, such as the NB variance, describes the floor. Low-depth noise is larger than first measured.
 
 <!-- crux:ledger:start -->
 _(no children yet)_

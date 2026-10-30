@@ -208,4 +208,4 @@ Readings, not judged. The paired-end arm: 7 FASTQ re-runs, one per track, with t
 - Counts, trained base ↔ paired-end pairs: median relative CRPS gain 0.15 over 16 design × g configurations; 11 of 16 clear 2 × seed |Δ|. No CRPS split exists for these gains.
 - −log10 p, the same pairs: median-pair gain 0.03; the real model wins 86 % of pairs.
 - Every never-trained pair also changes a second knob. There the median-pair gain is 0.07 in counts (real wins 65 %) and −0.06 in p (34 %).
-- Blind check set against one-warp (2026-10-30), counts: the floor sits above one-warp in narrow and broad marks, so gap-closed is negative there and means the model is better. The gain over one-warp clears 2 × seed |Δ| in 16 of 16 narrow and broad cells. DNase is mixed.
+- Blind pass (2026-10-30), counts: the floor sits above one-warp in narrow and broad marks, so gap-closed is negative there and means the model is better. The model beats one-warp by 0.055–0.214, > 2 × seed |Δ| in 16 of 16 narrow and broad cells. DNase is mixed.

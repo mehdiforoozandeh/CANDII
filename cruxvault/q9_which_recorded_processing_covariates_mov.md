@@ -20,7 +20,7 @@ We re-processed the same experiments while changing one lab or software setting 
 
 ## TL;DR
 
-Ranks the ten counterfactual-arm knobs by how far each one moves a track from its base, separately for raw counts and −log10 p. First reading: depth leads on peak height, the antibody-efficiency proxy leads on shape, and the four control and fragment-extension knobs move the least. The middle group (duplicate removal, run type, read length, mapping-quality filter) is not yet resolved, because each of those arms also re-draws its 30M-read subsample. A noise floor for that re-draw would settle the middle of the ranking.
+Ranks the ten counterfactual-arm knobs by how far each moves a track from its base, in counts and −log10 p. Depth leads on peak height, the antibody-efficiency proxy on shape; the control and fragment-extension knobs move least. The middle group (duplicate removal, run type, read length, mapping-quality filter) re-draws its 30M-read subsample, so it is read against the resampling floor.
 
 ## Question
 
@@ -38,8 +38,8 @@ First pass, 192 base → arm comparisons ([[t133_rank_the_t112_processing_knobs_
 - Shape: antibody proxy 0.53 / 0.58; depth 3.75M 0.49 / 0.49; the four FASTQ re-run knobs 0.35–0.45. Depth 15M, whose reads are a subset of the base's, reads 0.17.
 - −log10 p: the control-scaling, control-identity, control-depth and fragment-extension knobs read 0.04–0.17 on shape, against 0.40–0.74 for the read-side knobs; control depth is the weakest knob.
 - DNase: duplicate removal off raises the peaks 2.6 log2 and FRiP by 0.53; paired-end raises them 1.9 log2 and FRiP by 0.34.
-- Doubts: (1) the FASTQ re-run arms re-draw the 30M subsample, so their shape scores share a resampling floor near that of depth 7.5M (0.32–0.34); (2) base-chosen peaks make re-drawn arms read low by regression to the mean (re-scored below); (3) the same selection likely inflates FRiP at low depth; (4) the DNase FRiP gain of 0.53 is unchecked.
-- Shared-peak re-score, 2026-10-30, not judged: one peak set per track removes doubt (2). Peak-height rank 1 is unchanged everywhere; values fall a median 13 %. Shape does not change. Against the floor at the arm's depth, peak height is above it in 27 of 27 counts rows, shape in 3. A same-read knob holds no sampling noise, so "below the floor" is not "no effect".
+- Doubts: (1) the FASTQ re-run arms re-draw the 30M subsample, so their shape scores share a resampling floor near that of depth 7.5M (0.32–0.34); (2) regression to the mean on base-chosen peaks (resolved below); (3) the same selection likely inflates FRiP at low depth; (4) the DNase FRiP gain of 0.53 is unchecked.
+- Shared-peak re-score, 2026-10-30, not judged: a shared peak set removes doubt (2); peak-height rank 1 holds, values fall a median 13 %. Against the floor at the arm's depth, peak height is above it in 27 of 27 counts rows (33–763×), shape in 3 of 27 (DNase depth 3.75M, DNase paired-end, broad antibody proxy f0.9; floor seed spread ≤ 0.002). Caveat: a knob arm re-uses the base's reads, the floor does not, so "below the floor" is not "no effect". The join used the first-pass floor; the DNase depth 3.75M row may drop.
 
 ## Run Links
 
