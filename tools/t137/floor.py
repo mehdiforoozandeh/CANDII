@@ -1,13 +1,16 @@
 """t137 — the resampling floor: how far apart two halves of ONE library are, as a function of depth.
 
-Exploratory (PI, 2026-10-29). Each t117 pseudoreplicate pair (pr1, pr2: 15M reads each, the two
-halves of one 30M t112 product) is two measurements of the same biology that differ only by read
+Exploratory (PI, 2026-10-29). Each t117 pseudoreplicate pair (pr1, pr2: the two halves of one
+t112 product) is two measurements of the same biology that differ only by read
 sampling. Thinning both halves by binomial draws on the 25 bp counts walks them down a depth
 ladder; at each rung the distance between the halves is the floor a processing knob must clear
 before its effect can be told apart from sampling noise.
 
-The depth ladder (`RATIOS`): thin ratio 1, 0.5, 0.25, 0.125 = 15M, 7.5M, 3.75M, 1.875M reads per
-half. Seeds 0 and 1 per ratio < 1; ratio 1 is the untouched halves (seed 0, no draw). The rng of
+The depth ladder (`RATIOS`): thin ratio 1, 0.5, 0.25, 0.125 of the product's OWN reads per half.
+The reads per half differ by product: `n_lines` of `<pseudoreps>/MANIFEST.tsv` (one row per pid x half;
+the mean of pr1 and pr2) is 15M for most products, 25M for the 50M DNase base, and 7.5M / 3.75M /
+1.875M for the depth arms. Each row of floor_pairs.tsv carries `reads_per_half = n_lines x ratio`.
+Seeds 0 and 1 per ratio < 1; ratio 1 is the untouched halves (seed 0, no draw). The rng of
 one configuration is `default_rng([seed, pid_index, depth_index])`; pr1 is thinned first (every
 chromosome of the npz but chrM / chrY, in npz order), then pr2, from the same rng object.
 
@@ -23,6 +26,16 @@ Metrics, on chr19 + chr21 with blacklisted 25 bp bins removed (`knob_effects.loa
                   Poisson spread (mean = max(source, 1e-3)): the rungs_v2 oracle rule. `all` bins
                   and `top1` (top 1 % of bins ranked by the TARGET, `baseline_rungs.subset_index`),
                   with the oracle_scaled / scale_error split of `baseline_rungs.scale_split`.
+
+Depth curve (aggregate). Per product and metric, `log(metric) = alpha + beta * log2(reads_per_half)`
+is fitted over that product's 4 ladder points (its own reads_per_half). The curve is then READ at
+fixed reads per half (`READ_AT`: 15M, 7.5M, 3.75M, 1.875M, and 30M as `value_30M_extrap`), so every
+product sits on one common reads-per-half axis whatever its own depth. The class row of
+floor_at_30M.tsv is the nanmedian over the class's products of those per-product readings (call
+this "fit per product, then read at fixed depths"; the pooled-points fit was not chosen because the
+depth arms would pull a pooled line by their position on the axis, not by their noise). A reading
+outside a product's own ladder range is an extrapolation of its line. `beta_sign` (neg / pos / nan)
+is written per curve and per class: check it; do not assume the floor shrinks with depth.
 
     python floor.py product <pseudoreps_dir> <products_dir> <blacklist.bed> <out_dir> <pid_index>
     python floor.py aggregate <out_dir> <rungs_v2_dir> [--expect 130]
@@ -49,14 +62,16 @@ import baseline_rungs as br  # noqa: E402  (imports candi: run under the kit ven
 
 RATIOS = (1.0, 0.5, 0.25, 0.125)
 SEEDS = (0, 1)
-READS_PER_HALF = 15_000_000
+READ_AT = {"15M": 15_000_000, "7.5M": 7_500_000, "3.75M": 3_750_000, "1.875M": 1_875_000}
 TARGET_READS = 30_000_000
 DROP = ("chrM", "chrY")
 DIRECTIONS = ("pr1_to_pr2", "pr2_to_pr1")
 BINS1K_RATIO, BINS1K_SEED = 0.25, 0
 PSEUDO = 0.5
 METRICS_CURVE = ("abs_log2fc_top1", "shape_1k", "divergence_bin", "crps_all", "crps_top1")
-DEPTH_LABEL = {1.0: "15M", 0.5: "7.5M", 0.25: "3.75M", 0.125: "1.875M"}
+RATIO_LABEL = {1.0: "r1", 0.5: "r0.5", 0.25: "r0.25", 0.125: "r0.125"}
+CLASS_AGG = ("fit per product, then read at fixed reads_per_half (READ_AT, TARGET_READS); class value "
+             "= nanmedian over the class's products")
 COLUMNS = ("pid track assay mark_class arm level thin_ratio reads_per_half seed direction "
            "log2fc_top1 abs_log2fc_top1 shape_1k divergence_bin spearman_fine crps_all crps_top1 "
            "crps_oracle_scaled_all scale_error_all c_star_all n_all n_top1 n_coarse").split()
@@ -67,8 +82,13 @@ FORMULAS = {
     "shape_1k": "1 - spearman(a_1k, b_1k)",
     "divergence_bin": "mean |log2((a + 0.5) / (b + 0.5))| over kept 25 bp bins",
     "crps": "mean poisson_crps(max(source, 1e-3), target); split by baseline_rungs.scale_split",
-    "curve": "log(metric) = alpha + beta * log2(reads_per_half), least squares over 4 ratios",
+    "reads_per_half": "n_lines (pseudoreps MANIFEST.tsv, mean of pr1/pr2) * thin_ratio",
+    "curve": "log(metric) = alpha + beta * log2(reads_per_half), least squares over the product's "
+             "4 ratios on its own reads_per_half",
+    "value_<label>": "exp(alpha + beta * log2(READ_AT[label])): the curve read at a fixed depth",
     "value_30M_extrap": "exp(alpha + beta * log2(30e6))",
+    "beta_sign": "neg if beta < 0, pos if beta > 0, else nan",
+    "class_aggregate": CLASS_AGG,
 }
 
 
@@ -90,6 +110,13 @@ def read_tsv(path) -> list[dict]:
 
 def sorted_pids(pseudoreps_dir) -> list[str]:
     return sorted({r["pid"] for r in read_tsv(Path(pseudoreps_dir) / "MANIFEST.tsv")})
+
+
+def n_lines_of(pseudoreps_dir, pid: str):
+    """The product's reads per half: `n_lines` of its pr1/pr2 MANIFEST rows (mean if they differ)."""
+    v = [float(r["n_lines"]) for r in read_tsv(Path(pseudoreps_dir) / "MANIFEST.tsv")
+         if r["pid"] == pid and r.get("n_lines") not in (None, "")]
+    return int(round(float(np.mean(v)))) if v else None
 
 
 def sums_1k(x: np.ndarray) -> np.ndarray:
@@ -131,6 +158,10 @@ def product(pseudoreps_dir, products_dir, blacklist_path, out_dir, pid_index: in
     meta = next((r for r in read_tsv(products_dir / "MANIFEST.tsv") if r["pid"] == pid), None)
     if meta is None:
         print(f"{pid}: not in {products_dir}/MANIFEST.tsv", file=sys.stderr)
+        return 2
+    n_lines = n_lines_of(pseudoreps_dir, pid)
+    if not n_lines or n_lines <= 0:
+        print(f"{pid}: no n_lines in {pseudoreps_dir}/MANIFEST.tsv", file=sys.stderr)
         return 2
     blacklist = read_blacklist(blacklist_path)
 
@@ -176,7 +207,7 @@ def product(pseudoreps_dir, products_dir, blacklist_path, out_dir, pid_index: in
                 "pid": pid, "track": meta["track"], "assay": meta["assay"],
                 "mark_class": MARK_CLASS[meta["assay"]], "arm": meta["arm"],
                 "level": meta["level"], "thin_ratio": ratio,
-                "reads_per_half": int(READS_PER_HALF * ratio), "seed": seed,
+                "reads_per_half": int(round(n_lines * ratio)), "seed": seed,
                 "shape_1k": float(1 - spearmanr(a1k, b1k).statistic),
                 "divergence_bin": float(np.mean(np.abs(np.log2((a + PSEUDO) / (b + PSEUDO))))),
                 "spearman_fine": float(spearmanr(a, b).statistic), "n_coarse": int(a1k.size)}
@@ -216,20 +247,35 @@ def _f(v) -> float:
     return float(v) if v not in ("", "None", "nan", None) else float("nan")
 
 
-def fit_curve(values: dict) -> dict:
-    """values {ratio: metric}; least squares of log(metric) on log2(reads_per_half)."""
-    x = np.array([math.log2(READS_PER_HALF * r) for r in RATIOS])
-    y = np.array([values[r] for r in RATIOS], dtype=np.float64)
+def beta_sign(beta) -> str:
+    return "neg" if beta < 0 else "pos" if beta > 0 else "nan"   # nan compares False both ways
+
+
+def fit_curve(points: dict) -> dict:
+    """points {reads_per_half: metric}; least squares of log(metric) on log2(reads_per_half), read
+    at the fixed depths READ_AT (value_<label>) and at TARGET_READS (value_30M_extrap)."""
+    x = np.array([math.log2(d) for d in points], dtype=np.float64)
+    y = np.array(list(points.values()), dtype=np.float64)
     nan = float("nan")
-    if not (np.isfinite(y).all() and (y > 0).all()):
-        return {"alpha": nan, "beta": nan, "r2": nan, "value_30M_extrap": nan}
+    out = {"alpha": nan, "beta": nan, "beta_sign": "nan", "r2": nan,
+           **{f"value_{k}": nan for k in READ_AT}, "value_30M_extrap": nan}
+    if not (len(y) >= 2 and np.isfinite(y).all() and (y > 0).all()):
+        return out
     ly = np.log(y)
     beta, alpha = np.polyfit(x, ly, 1)
     resid = ly - (alpha + beta * x)
     ss = float(((ly - ly.mean()) ** 2).sum())
-    r2 = 1.0 - float((resid ** 2).sum()) / ss if ss > 0 else nan
-    return {"alpha": float(alpha), "beta": float(beta), "r2": r2,
-            "value_30M_extrap": float(math.exp(alpha + beta * math.log2(TARGET_READS)))}
+    out.update({"alpha": float(alpha), "beta": float(beta), "beta_sign": beta_sign(beta),
+                "r2": 1.0 - float((resid ** 2).sum()) / ss if ss > 0 else nan,
+                "value_30M_extrap": float(math.exp(alpha + beta * math.log2(TARGET_READS)))})
+    for k, d in READ_AT.items():
+        out[f"value_{k}"] = float(math.exp(alpha + beta * math.log2(d)))
+    return out
+
+
+def _nanstat(f, v):
+    a = np.array(v, dtype=np.float64)
+    return float(f(a)) if np.isfinite(a).any() else float("nan")
 
 
 def _oracle_json(rungs_dir: Path, pid: str):
@@ -286,22 +332,25 @@ def aggregate(out_dir, rungs_dir, expect: int = 130) -> int:
     for pid in done:
         pr = [r for r in rows if r["pid"] == pid]
         mclass = pr[0]["mark_class"]
+        rph = {float(r["thin_ratio"]): int(r["reads_per_half"]) for r in pr}
         for m in METRICS_CURVE:
             by = {}
             for r in pr:
                 by.setdefault((float(r["thin_ratio"]), int(r["seed"])), []).append(_f(r[m]))
             dm = {k: float(np.mean(v)) for k, v in by.items()}
             val = {ra: float(np.mean([v for (r2, _), v in dm.items() if r2 == ra])) for ra in RATIOS}
-            row = {"pid": pid, "mark_class": mclass, "metric": m, **fit_curve(val)}
+            row = {"pid": pid, "mark_class": mclass, "metric": m,
+                   "reads_per_half_full": rph[1.0], **fit_curve({rph[ra]: val[ra] for ra in RATIOS})}
             for ra in RATIOS:
-                row[f"value_{DEPTH_LABEL[ra]}"] = val[ra]
+                row[f"obs_{RATIO_LABEL[ra]}"] = val[ra]
             for ra in RATIOS[1:]:
-                row[f"seed_spread_{DEPTH_LABEL[ra]}"] = abs(dm.get((ra, 0), float("nan"))
+                row[f"seed_spread_{RATIO_LABEL[ra]}"] = abs(dm.get((ra, 0), float("nan"))
                                                             - dm.get((ra, 1), float("nan")))
             curve.append(row)
-    curve_cols = (["pid", "mark_class", "metric", "alpha", "beta", "r2"]
-                  + [f"value_{DEPTH_LABEL[r]}" for r in RATIOS] + ["value_30M_extrap"]
-                  + [f"seed_spread_{DEPTH_LABEL[r]}" for r in RATIOS[1:]])
+    curve_cols = (["pid", "mark_class", "metric", "reads_per_half_full", "alpha", "beta",
+                   "beta_sign", "r2"] + [f"value_{k}" for k in READ_AT] + ["value_30M_extrap"]
+                  + [f"obs_{RATIO_LABEL[r]}" for r in RATIOS]
+                  + [f"seed_spread_{RATIO_LABEL[r]}" for r in RATIOS[1:]])
     _write(out_dir / "floor_curve.tsv", curve, curve_cols)
 
     # per mark class (and `all`) x metric: medians over the class's products
@@ -311,33 +360,38 @@ def aggregate(out_dir, rungs_dir, expect: int = 130) -> int:
             cr = [r for r in curve if r["metric"] == m and mclass in ("all", r["mark_class"])]
             if not cr:
                 continue
-            ext = np.array([r["value_30M_extrap"] for r in cr], dtype=np.float64)
+            ext = [r["value_30M_extrap"] for r in cr]
             row = {"mark_class": mclass, "metric": m, "n_products": len(cr),
-                   "value_30M_extrap": float(np.nanmedian(ext)) if np.isfinite(ext).any() else "nan",
-                   "value_30M_extrap_min": float(np.nanmin(ext)) if np.isfinite(ext).any() else "nan",
-                   "value_30M_extrap_max": float(np.nanmax(ext)) if np.isfinite(ext).any() else "nan"}
-            for ra in RATIOS:
-                row[f"value_{DEPTH_LABEL[ra]}"] = float(np.median([r[f"value_{DEPTH_LABEL[ra]}"]
-                                                                   for r in cr]))
+                   "value_30M_extrap": _nanstat(np.nanmedian, ext),
+                   "value_30M_extrap_min": _nanstat(np.nanmin, ext),
+                   "value_30M_extrap_max": _nanstat(np.nanmax, ext)}
+            for k in READ_AT:
+                row[f"value_{k}"] = _nanstat(np.nanmedian, [r[f"value_{k}"] for r in cr])
             for ra in RATIOS[1:]:
-                k = f"seed_spread_{DEPTH_LABEL[ra]}"
-                row[k] = float(np.median([r[k] for r in cr]))
-            row["beta"] = float(np.nanmedian([r["beta"] for r in cr]))
+                k = f"seed_spread_{RATIO_LABEL[ra]}"
+                row[k] = _nanstat(np.nanmedian, [r[k] for r in cr])
+            betas = [r["beta"] for r in cr]
+            row["beta"] = _nanstat(np.nanmedian, betas)
+            row["beta_sign"] = beta_sign(row["beta"])
+            row["n_beta_neg"] = sum(r["beta_sign"] == "neg" for r in cr)
+            row["n_beta_pos"] = sum(r["beta_sign"] == "pos" for r in cr)
             at30.append(row)
     at30_cols = (["mark_class", "metric", "n_products", "value_30M_extrap", "value_30M_extrap_min",
-                  "value_30M_extrap_max"] + [f"value_{DEPTH_LABEL[r]}" for r in RATIOS]
-                 + [f"seed_spread_{DEPTH_LABEL[r]}" for r in RATIOS[1:]] + ["beta"])
+                  "value_30M_extrap_max"] + [f"value_{k}" for k in READ_AT]
+                 + [f"seed_spread_{RATIO_LABEL[r]}" for r in RATIOS[1:]]
+                 + ["beta", "beta_sign", "n_beta_neg", "n_beta_pos"])
     _write(out_dir / "floor_at_30M.tsv", at30, at30_cols)
 
     # p space: read, not recomputed (no thinning in -log10 p without MACS2 reruns)
     p15, check = [], []
     mclass_of = {r["pid"]: r["mark_class"] for r in rows}
+    full_of = {r["pid"]: int(r["reads_per_half"]) for r in rows if float(r["thin_ratio"]) == 1.0}
     for pid in done:
         doc = _oracle_json(rungs_dir, pid)
         for d in DIRECTIONS:
             rp = _oracle_rec(doc, "pval", d)
             p15.append({"pid": pid, "mark_class": mclass_of[pid], "direction": d,
-                        "reads_per_half": READS_PER_HALF,
+                        "reads_per_half": full_of[pid],
                         "crps_all": _crps(rp, "all") if rp else "nan",
                         "crps_top1": _crps(rp, "top1") if rp else "nan",
                         "crps_oracle_scaled_all": (rp or {}).get("crps_oracle_scaled_all", "nan"),
@@ -360,7 +414,9 @@ def aggregate(out_dir, rungs_dir, expect: int = 130) -> int:
     check.append(f"{'PASS' if len(rows) == n_want else 'FAIL'} rows {len(rows)}")
     (out_dir / "floor_check.txt").write_text("\n".join(check) + "\n")
     (out_dir / "config.json").write_text(json.dumps(
-        {"ratios": RATIOS, "seeds": SEEDS, "reads_per_half": READS_PER_HALF,
+        {"ratios": RATIOS, "seeds": SEEDS,
+         "reads_per_half": "n_lines of <pseudoreps>/MANIFEST.tsv x thin_ratio, per product",
+         "read_at": READ_AT, "class_aggregate": CLASS_AGG,
          "target_reads": TARGET_READS, "drop": DROP, "chroms": CHROMS, "res": RES,
          "coarse_bins": COARSE, "bins1k": {"ratio": BINS1K_RATIO, "seed": BINS1K_SEED},
          "metrics_curve": METRICS_CURVE, "formulas": FORMULAS, "rungs_v2": str(rungs_dir),

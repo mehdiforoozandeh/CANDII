@@ -260,6 +260,52 @@ def test_aggregate_files(tree):
     assert len([line for line in check if line.startswith("PASS C19M16")]) == 4
     cfg = json.loads((out / "config.json").read_text())
     assert cfg["ratios"] == list(fl.RATIOS) and cfg["seeds"] == list(fl.SEEDS)
+    assert {r["beta_sign"] for r in curve} <= {"neg", "pos", "nan"}
+    assert all(r["beta_sign"] == "neg" for r in curve if r["metric"] in ("shape_1k", "divergence_bin"))
+
+
+def test_depth_axis_from_n_lines(tmp_path):
+    """Two products at different reads per half (15M and 3.75M, the latter the mean of 3.749M and
+    3.751M): reads_per_half = n_lines x ratio, and the class rows read every curve at fixed depths."""
+    make_tree(tmp_path, 5)
+    full = {PIDS[0]: 15_000_000, PIDS[1]: 3_750_000}
+    (tmp_path / "pseudoreps" / "MANIFEST.tsv").write_text(
+        "pid\thalf\tn_lines\n"
+        f"{PIDS[0]}\tpr1\t15000000\n{PIDS[0]}\tpr2\t15000000\n"
+        f"{PIDS[1]}\tpr1\t3749000\n{PIDS[1]}\tpr2\t3751000\n")
+    for i in range(2):
+        assert run_product(tmp_path, i) == 0
+    out = tmp_path / "out" / "t137"
+    assert fl.main(["aggregate", str(out), str(tmp_path / "rungs_v2"), "--expect", "2"]) == 0
+    for r in _rows(out / "floor_pairs.tsv"):
+        assert int(r["reads_per_half"]) == round(full[r["pid"]] * float(r["thin_ratio"]))
+    curve = _rows(out / "floor_curve.tsv")
+    for r in curve:
+        assert int(r["reads_per_half_full"]) == full[r["pid"]]
+        a, b = float(r["alpha"]), float(r["beta"])
+        assert r["beta_sign"] == ("neg" if b < 0 else "pos")
+        # the fit is on the product's own axis: refit from obs_* and compare
+        x = [np.log2(full[r["pid"]] * q) for q in fl.RATIOS]
+        y = [np.log(float(r[f"obs_{fl.RATIO_LABEL[q]}"])) for q in fl.RATIOS]
+        bb, aa = np.polyfit(x, y, 1)
+        assert (a, b) == pytest.approx((aa, bb), rel=1e-9)
+        for k, d in (("15M", 15e6), ("7.5M", 7.5e6), ("3.75M", 3.75e6), ("1.875M", 1.875e6),
+                     ("30M_extrap", 30e6)):
+            assert float(r[f"value_{k}"]) == pytest.approx(np.exp(a + b * np.log2(d)), rel=1e-9)
+    # the 3.75M product read at 3.75M is its own ratio-1 point on the line, not its 0.25 point
+    at30 = _rows(out / "floor_at_30M.tsv")
+    for m in fl.METRICS_CURVE:
+        cr = [r for r in curve if r["metric"] == m]
+        cls = next(r for r in at30 if r["metric"] == m and r["mark_class"] == "narrow")
+        for k in ("15M", "7.5M", "3.75M", "1.875M", "30M_extrap"):
+            want = np.nanmedian([float(r[f"value_{k}"]) for r in cr])
+            assert float(cls[f"value_{k}"]) == pytest.approx(want, rel=1e-12)
+        assert cls["beta_sign"] in ("neg", "pos", "nan")
+        assert int(cls["n_beta_neg"]) + int(cls["n_beta_pos"]) <= 2
+    p15 = _rows(out / "floor_p15M.tsv")
+    assert {(r["pid"], int(r["reads_per_half"])) for r in p15} == set(full.items())
+    check = (out / "floor_check.txt").read_text()
+    assert "FAIL" not in check
 
 
 def test_aggregate_refuses_missing_products(tree, tmp_path):
