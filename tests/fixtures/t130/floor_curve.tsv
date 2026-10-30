@@ -1,0 +1,16 @@
+pid	mark_class	metric	alpha	beta	r2	value_15M	value_7.5M	value_3.75M	value_1.875M	value_30M_extrap	seed_spread_15M_7.5M	seed_spread_3.75M	seed_spread_1.875M
+C19M16__base__base	narrow	abs_log2fc_top1	0.0	-0.1	0.99	0.3	0.4	0.5	0.6	0.25	0.02	0.02	0.02
+C19M16__base__base	narrow	shape_1k	0.0	-0.1	0.99	0.3	0.4	0.5	0.6	0.25	0.02	0.02	0.02
+C19M16__base__base	narrow	divergence_bin	0.0	-0.1	0.99	0.3	0.4	0.5	0.6	0.25	0.02	0.02	0.02
+C19M16__base__base	narrow	crps_all	0.0	-0.1	0.99	0.3	0.4	0.5	0.6	0.25	0.02	0.02	0.02
+C19M16__base__base	narrow	crps_top1	0.0	-0.1	0.99	0.9	1.2	1.5	1.8	0.75	0.02	0.02	0.02
+C19M16__depth__15M	narrow	abs_log2fc_top1	0.0	-0.1	0.99	0.4	0.5	0.6	0.7	0.33	0.02	0.02	0.02
+C19M16__depth__15M	narrow	shape_1k	0.0	-0.1	0.99	0.4	0.5	0.6	0.7	0.33	0.02	0.02	0.02
+C19M16__depth__15M	narrow	divergence_bin	0.0	-0.1	0.99	0.4	0.5	0.6	0.7	0.33	0.02	0.02	0.02
+C19M16__depth__15M	narrow	crps_all	0.0	-0.1	0.99	0.4	0.5	0.6	0.7	0.33	0.02	0.02	0.02
+C19M16__depth__15M	narrow	crps_top1	0.0	-0.1	0.99	1.2	1.5	1.8	2.1	0.99	0.02	0.02	0.02
+C19M16__pe__pe	narrow	abs_log2fc_top1	0.0	-0.1	0.99	0.35	0.45	0.55	0.65	0.29	0.02	0.02	0.02
+C19M16__pe__pe	narrow	shape_1k	0.0	-0.1	0.99	0.35	0.45	0.55	0.65	0.29	0.02	0.02	0.02
+C19M16__pe__pe	narrow	divergence_bin	0.0	-0.1	0.99	0.35	0.45	0.55	0.65	0.29	0.02	0.02	0.02
+C19M16__pe__pe	narrow	crps_all	0.0	-0.1	0.99	0.35	0.45	0.55	0.65	0.29	0.02	0.02	0.02
+C19M16__pe__pe	narrow	crps_top1	0.0	-0.1	0.99	1.05	1.35	1.65	1.95	0.87	0.02	0.02	0.02
