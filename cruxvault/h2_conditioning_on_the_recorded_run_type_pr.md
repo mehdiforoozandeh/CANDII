@@ -149,7 +149,7 @@ loosened to compensate.
   level-only `aspects_of(...)["level"]` reading;
 - (ii) **decided — PI ruling 2026-09-16: the `oracle` rung is two NB draws.** The model emits NB, and on an
   overdispersed target a Poisson oracle would sit below anything reachable, leaving gap-closed no
-  ceiling of 1. **Superseded:** PI ruling 2026-10-29 made the pseudoreplicate floor the oracle
+  ceiling of 1. **Superseded:** the 2026-10-29 gap-closing plan used the pseudoreplicate floor (one of the PI's three baselines, 2026-10-29) as the oracle
   (q10); for run type it stays so (v);
 - (iii) **decided — PI ruling 2026-09-16: `onewarp` is the headline denominator; `splitwarp` is not a rung;**
 - (iv) every `TODO(PI)` threshold above;
