@@ -12,6 +12,7 @@
 #SBATCH --time=2:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
+#SBATCH --gres=none
 #SBATCH --exclude=c128,c166,c537,c371,c329
 
 set -euo pipefail

@@ -6,9 +6,13 @@ Recomputes from the extract and the floor files, for the cells
     d_model    real model, kind trained, eval score: per run the mean crps_all over its depth
                pairs -> per seed the mean over runs -> the mean over seeds;
     d_onewarp  the pair's QuantileMatching crps_all, carried on the same records, same pooling;
-    d_floor    the TARGET's floor at its depth (thin_ratio 1.0 / 0.5 / 0.25 for a 15M / 7.5M /
-               3.75M depth target: the mean of floor_pairs crps_all over seeds and directions;
-               a base target: floor_curve value_30M_extrap of crps_all), same pooling;
+    d_floor    the pinned rule (plan_gaps.md A3), by its own route: X = the target's total depth
+               (a depth target's level; 50M for C12M02__base__base; else 30M); the same track's
+               base product `<track>__base__base`; its floor_curve crps_all row read ALWAYS by
+               the line exp(alpha + beta * log2 X) (never the value_ columns), same pooling.
+               floor_pairs is read for nothing (kept in the pinned argument list);
+    gapclosed_onewarp  (d_onewarp - d_model) / (d_onewarp - d_floor) from the three above;
+    seed_abs_delta     max - min over the three per-seed pooled d_model values;
   and for rung D the swap median: the median swap_ratio_median over the real model's counts
   swap records of depth products, g_version per_track.
 Writes verify_raw.json beside records.tsv.gz; verify_compare.py compares it with blind_table.tsv.
@@ -18,12 +22,13 @@ Writes verify_raw.json beside records.tsv.gz; verify_compare.py compares it with
 import csv
 import gzip
 import json
+import math
 import os
 import statistics as st
 import sys
 from collections import defaultdict
 
-RATIO = {"15M": 1.0, "7.5M": 0.5, "3.75M": 0.25}
+DNASE_BASE = "C12M02__base__base"
 
 
 def rows(path):
@@ -32,28 +37,34 @@ def rows(path):
         return list(csv.DictReader(fh, delimiter="\t"))
 
 
-def floor_of(target_pid, target_level, fp, fc):
-    if target_level in RATIO:
-        r = RATIO[target_level]
-        v = [float(x["crps_all"]) for x in fp
-             if x["pid"] == target_pid and abs(float(x["thin_ratio"]) - r) < 1e-9]
-        return sum(v) / len(v) if v else None
-    for x in fc:
-        if x["pid"] == target_pid and x["metric"] == "crps_all":
-            return float(x["value_30M_extrap"])
+def depth_of(pid, level, b2a):
+    if b2a and pid.split("__")[1] == "depth":
+        return float(level[:-1]) * 1e6
+    return 50e6 if pid == DNASE_BASE else 30e6
+
+
+def floor_of(track, x, fc):
+    base = track + "__base__base"
+    for r in fc:
+        if r["pid"] == base and r["metric"] == "crps_all" and r["alpha"] not in ("", "nan"):
+            return math.exp(float(r["alpha"]) + float(r["beta"]) * math.log2(x))
     return None
 
 
-def pooled(rec, value):
-    """{seed: {run: [values]}} -> mean over seeds of (mean over runs of (mean over pairs))."""
+def per_seed(rec, value):
+    """{seed: mean over runs of (mean over pairs)}; None if any value is missing."""
     by = defaultdict(lambda: defaultdict(list))
     for r in rec:
         v = value(r)
         if v is None:
             return None
         by[r["seed"]][r["run"]].append(v)
-    seeds = [sum(sum(p) / len(p) for p in runs.values()) / len(runs) for runs in by.values()]
-    return sum(seeds) / len(seeds) if seeds else None
+    return {s: sum(sum(p) / len(p) for p in runs.values()) / len(runs) for s, runs in by.items()}
+
+
+def pooled(rec, value):
+    s = per_seed(rec, value)
+    return sum(s.values()) / len(s) if s else None
 
 
 def main(argv):
@@ -64,7 +75,8 @@ def main(argv):
     rec, base, fp, fc = rows(rp), rows(bp), rows(fpp), rows(fcp)
     ow = {(b["space"], b["pid"], b["direction"]): float(b["crps_all"]) for b in base
           if b["rung"] in ("QuantileMatching", "QM") and b["crps_all"] != ""}
-    out = {"d_model": {}, "d_onewarp": {}, "d_floor": {}, "swap_ratio_median": {}}
+    out = {"d_model": {}, "d_onewarp": {}, "d_floor": {}, "gapclosed_onewarp": {},
+           "seed_abs_delta": {}, "swap_ratio_median": {}}
     for rung in ("D", "A"):
         key = f"counts|depth|all|{rung}|per_track|both|all"
         sel = [r for r in rec if r["rung"] == rung and r["g_version"] == "per_track"
@@ -74,9 +86,15 @@ def main(argv):
         out["d_onewarp"][key] = pooled(sel, lambda r: ow.get(("counts", r["pid"], r["direction"])))
 
         def fl(r):
-            b2a = r["direction"] == "base_to_arm"
-            return floor_of(r["target_pid"], r["level"] if b2a else "base", fp, fc)
+            x = depth_of(r["target_pid"], r["level"], r["direction"] == "base_to_arm")
+            return floor_of(r["track"], x, fc)
         out["d_floor"][key] = pooled(sel, fl)
+        m, o, f = out["d_model"][key], out["d_onewarp"][key], out["d_floor"][key]
+        out["gapclosed_onewarp"][key] = (None if None in (m, o, f) or o == f
+                                         else (o - m) / (o - f))
+        ps = per_seed(sel, lambda r: float(r["crps_all"]))
+        out["seed_abs_delta"][key] = (max(ps.values()) - min(ps.values())
+                                      if ps and len(ps) > 1 else None)
     sw = [float(r["swap_ratio_median"]) for r in rec
           if r["rung"] == "D" and r["g_version"] == "per_track" and r["model"] == "real"
           and r["kind"] == "swap" and r["space"] == "counts" and r["arm"] == "depth"

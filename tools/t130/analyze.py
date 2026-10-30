@@ -11,14 +11,26 @@ Inputs in <results_dir> (run_all.sh copies them in):
 Per pair (space, arm product pid, direction):
   d_onewarp     the pair's QuantileMatching record (rungs_v2), Poisson / log-normal spread CRPS.
   d_nosolution  the pair's noSolution record.
-  d_floor       the floor of the TARGET product at the target's depth. counts: a depth-15M /
-                7.5M / 3.75M target -> that product's floor_pairs rows at thin_ratio 1.0 / 0.5 /
-                0.25 (mean over seeds and both directions); a base or pe target (30M) -> its
-                floor_curve value_30M_extrap. The split (oracle_scaled / scale_error) at 30M is
-                not extrapolated: the ratio-1.0 split stands beside it, flagged split_depth 15M.
-                pval: floor_p15M (the 15M rungs_v2 oracle) for every target, floor_depth 15M.
-  floor_seed_spread  |seed 0 - seed 1| of the direction-mean floor at the target's ratio; at a
-                ratio-1.0 or 30M target (no draw) the spread at ratio 0.5. NA in pval (no seeds).
+  d_floor       the floor at the TARGET's real depth X (pinned rule, plan_gaps.md A3). X = the
+                target product's total depth (products MANIFEST `depth`): a depth arm -> its level
+                (15M / 7.5M / 3.75M); the DNase base C12M02__base__base -> 50M; every other base
+                and every pe target -> 30M. counts: the SAME TRACK's BASE product's t137 curve
+                (floor_curve.tsv, one row per product x metric) read at reads_per_half = X:
+                value_<X> for X in 15M / 7.5M / 3.75M / 1.875M, value_30M_extrap for X = 30M, else
+                exp(alpha + beta * log2 X). floor_extrap = 1 when X > the base's reads_per_half_full
+                (its n_lines: beyond its measured ladder), else 0. The split (oracle_scaled /
+                scale_error) is not fitted: it is the base product's floor_pairs split (mean over
+                seeds and directions) at the ladder ratio nearest X / n_lines in log2 (clamped to
+                1 .. 0.125), labelled split_depth = that ratio's reads per half.
+                pval: no thinning; the only p floor is the base product's floor_p15M row (the
+                rungs_v2 oracle between its own halves), at reads_per_half = the base's n_lines.
+                floor_depth carries THAT depth, and p_floor_matched = 1 only when X equals it
+                (a 30M target is NOT matched: p_floor_matched 0).
+  floor_seed_spread  counts: the base product's seed_spread_r<k> (floor_curve) at k = X / n_lines
+                rounded to the nearest of 0.5 / 0.25 / 0.125 in log2; k >= 0.5 -> r0.5. NA in pval.
+  Cell level: floor_depth / split_depth = the distinct labels of the cell's pairs, comma-joined;
+  floor_extrap = 1 if any pair's floor is extrapolated; p_floor_matched = 1 only if every pair is
+  matched (NA in counts).
 Pooling (the t118 rule), the SAME for every column, so the baselines and the floor are weighted
 exactly as the model is: per run the mean over its check-set pairs in the cell -> per seed the mean
 over runs -> the mean over seeds. Baseline and floor values ride on the real model's trained
@@ -39,7 +51,8 @@ direction(base_to_arm|arm_to_base|both) x subset(all|top1):
   depthlaw_median_abs_log2err  median |log2 pred scale - log2 true depth ratio| over the real
                     model's depthlaw records (counts, depth only)
   then, appended: gain_over_onewarp, gain_over_nocov_gt_2seed, onewarp_oracle_scaled_all,
-  onewarp_scale_error_all, floor_oracle_scaled_all, floor_scale_error_all, split_depth.
+  onewarp_scale_error_all, floor_oracle_scaled_all, floor_scale_error_all, split_depth,
+  floor_extrap, p_floor_matched.
 
     python analyze.py <results_dir>
 """
@@ -55,8 +68,10 @@ import pandas as pd
 TRACK_CLASS = {"C12M02": "DNase", "C19M16": "narrow", "C07M20": "narrow", "C19M22": "narrow",
                "C40M17": "broad", "C40M18": "broad", "C07M29": "broad"}
 KNOBS = ("depth", "pe")
-DEPTH_RATIO = {"15M": 1.0, "7.5M": 0.5, "3.75M": 0.25}
-SPREAD_RATIO = 0.5                        # the nearest seeded ladder point for a no-draw target
+RATIOS = (1.0, 0.5, 0.25, 0.125)           # the t137 ladder (floor.RATIOS)
+SPREAD_RATIOS = (0.5, 0.25, 0.125)        # seeded ladder points: floor_curve seed_spread_r<k>
+READ_AT = {"15M": 15e6, "7.5M": 7.5e6, "3.75M": 3.75e6, "1.875M": 1.875e6}   # floor.READ_AT
+DNASE_BASE = "C12M02__base__base"         # the one 50M base (pseudoreps MANIFEST: 25M per half)
 ONEWARP = ("QuantileMatching", "QM")
 CELL = ["space", "knob", "mark_class", "rung", "g_version", "dirc"]
 SUBSETS = ("all", "top1")
@@ -68,7 +83,8 @@ COLS = (CELL[:5] + ["direction", "subset", "d_model", "d_onewarp", "d_nocov", "d
                     "gapclosed_shuffle", "swap_ratio_median", "depthlaw_median_abs_log2err",
                     "n_pairs", "n_runs", "gain_over_onewarp", "gain_over_nocov_gt_2seed",
                     "onewarp_oracle_scaled_all", "onewarp_scale_error_all",
-                    "floor_oracle_scaled_all", "floor_scale_error_all", "split_depth"])
+                    "floor_oracle_scaled_all", "floor_scale_error_all", "split_depth",
+                    "floor_extrap", "p_floor_matched"])
 CHECK_COLS = ["check", "hypothesis", "knob", "space", "rung", "g_version", "mark_class",
               "direction", "subset", "reading", "detail", "threshold"]
 
@@ -82,65 +98,103 @@ def _mean_na(s: pd.Series) -> float:
 # ---------------------------------------------------------------------------------------------
 
 
+def label(reads) -> str:
+    """15000000 -> '15M', 7500000 -> '7.5M', 50000000 -> '50M'."""
+    return f"{float(reads) / 1e6:.4g}M"
+
+
+def target_depth(target_pid: str, arm: str, level: str) -> float:
+    """X: the target product's total depth (products MANIFEST `depth`)."""
+    if arm == "depth":
+        return float(level.rstrip("M")) * 1e6
+    return 50e6 if target_pid == DNASE_BASE else 30e6
+
+
+def base_pid(track: str) -> str:
+    return f"{track}__base__base"
+
+
+def nearest_log2(x: float, grid) -> float:
+    return min(grid, key=lambda g: abs(np.log2(x) - np.log2(g)))
+
+
+def spread_ratio(x: float, n_lines: float) -> float:
+    k = x / n_lines
+    return 0.5 if k >= 0.5 else nearest_log2(k, SPREAD_RATIOS)
+
+
+def curve_at(row: dict, x: float) -> float:
+    """The product's curve read at reads_per_half x: value_<label>, value_30M_extrap, or the line."""
+    for k, v in READ_AT.items():
+        if abs(x - v) < 0.5:
+            return float(row[f"value_{k}"])
+    if abs(x - 30e6) < 0.5:
+        return float(row["value_30M_extrap"])
+    beta = float(row["beta"])
+    alpha = (float(row["alpha"]) if "alpha" in row and pd.notna(row["alpha"])
+             else np.log(float(row["value_15M"])) - beta * np.log2(15e6))
+    return float(np.exp(alpha + beta * np.log2(x)))
+
+
 def floor_tables(fp: pd.DataFrame, fc: pd.DataFrame, f15: pd.DataFrame):
-    """(means, spreads, curve30, p15): dicts keyed by pid (and ratio) of the floor values."""
+    """(curve, split, p15): the floor sources keyed by pid (curve: (pid, metric); split: (pid,
+    ratio)). floor_pairs serves the split only; the value and the spread come from the curve."""
     fp = fp.copy()
     fp["ratio"] = fp["thin_ratio"].astype(float).round(6)
-    vals = ["crps_all", "crps_top1"] + SPLIT
-    means = {k: r for k, r in fp.groupby(["pid", "ratio"])[vals].mean().iterrows()}
-    per_seed = fp.groupby(["pid", "ratio", "seed"])[["crps_all", "crps_top1"]].mean()
-    spreads = {}
-    for (pid, ratio), g in per_seed.groupby(level=[0, 1]):
-        spreads[(pid, ratio)] = (g.max() - g.min()) if len(g) > 1 else g.iloc[0] * np.nan
-    curve = fc[fc["metric"].isin(["crps_all", "crps_top1"])]
-    curve30 = {(r.pid, r.metric): float(r.value_30M_extrap) for r in curve.itertuples()}
+    split = {k: r for k, r in fp.groupby(["pid", "ratio"])[SPLIT].mean().iterrows()}
+    curve = {(r["pid"], r["metric"]): r.to_dict()
+             for _, r in fc[fc["metric"].isin(["crps_all", "crps_top1"])].iterrows()}
+    vals = ["crps_all", "crps_top1"] + SPLIT + ["reads_per_half"]
     p15 = {k: r for k, r in f15.groupby("pid")[vals].mean().iterrows()}
-    return means, spreads, curve30, p15
+    return curve, split, p15
 
 
-def pair_floor(space, target_pid, target_arm, target_level, tabs) -> dict:
-    means, spreads, curve30, p15 = tabs
-    nan = float("nan")
+def pair_floor(space, track, target_pid, target_arm, target_level, tabs) -> dict:
+    curve, split, p15 = tabs
+    base = base_pid(track)
+    x = target_depth(target_pid, target_arm, target_level)
     if space == "pval":
-        r = p15.get(target_pid)
+        r = p15.get(base)
         if r is None:
-            return {"floor_depth": "15M", "split_depth": "15M"}
+            return {"floor_depth": None, "split_depth": None}
+        half = float(r["reads_per_half"])
         return {"fl_all": r["crps_all"], "fl_top1": r["crps_top1"],
                 "fl_os": r["crps_oracle_scaled_all"], "fl_se": r["scale_error_all"],
-                "fl_sp_all": nan, "fl_sp_top1": nan, "floor_depth": "15M", "split_depth": "15M"}
-    out = {}
-    if target_arm == "depth" and target_level in DEPTH_RATIO:
-        ratio = DEPTH_RATIO[target_level]
-        m = means.get((target_pid, ratio))
-        if m is not None:
-            out.update(fl_all=m["crps_all"], fl_top1=m["crps_top1"])
-        out.update(floor_depth=target_level, split_depth=target_level)
-    else:
-        ratio = 1.0
-        out.update(fl_all=curve30.get((target_pid, "crps_all"), nan),
-                   fl_top1=curve30.get((target_pid, "crps_top1"), nan),
-                   floor_depth="30M_extrap", split_depth="15M")
-        m = means.get((target_pid, ratio))
-    if m is not None:
-        out.update(fl_os=m["crps_oracle_scaled_all"], fl_se=m["scale_error_all"])
-    sp = spreads.get((target_pid, ratio if ratio < 1.0 else SPREAD_RATIO))
+                "floor_depth": label(half), "split_depth": label(half),
+                "p_floor_matched": float(abs(x - half) <= 0.01 * half)}
+    ca, ct = curve.get((base, "crps_all")), curve.get((base, "crps_top1"))
+    if ca is None:
+        return {"floor_depth": label(x), "split_depth": None}
+    n = float(ca["reads_per_half_full"])
+    out = {"fl_all": curve_at(ca, x), "floor_depth": label(x), "floor_extrap": float(x > n)}
+    if ct is not None:
+        out["fl_top1"] = curve_at(ct, x)
+    k = f"seed_spread_r{spread_ratio(x, n):g}"
+    out["fl_sp_all"] = float(ca[k])
+    if ct is not None:
+        out["fl_sp_top1"] = float(ct[k])
+    ratio = nearest_log2(min(max(x / n, RATIOS[-1]), 1.0), RATIOS)
+    sp = split.get((base, round(ratio, 6)))
+    out["split_depth"] = label(n * ratio)
     if sp is not None:
-        out.update(fl_sp_all=sp["crps_all"], fl_sp_top1=sp["crps_top1"])
+        out.update(fl_os=sp["crps_oracle_scaled_all"], fl_se=sp["scale_error_all"])
     return out
 
 
 def pair_values(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
     """One row per (space, pid, direction) of the trained check set: baselines and the floor."""
     keys = ["space", "pid", "direction"]
-    pairs = rec.loc[rec["kind"] == "trained", keys + ["arm", "level", "target_pid"]].drop_duplicates(keys)
+    pairs = rec.loc[rec["kind"] == "trained",
+                    keys + ["track", "arm", "level", "target_pid"]].drop_duplicates(keys)
     rows = []
     for p in pairs.itertuples(index=False):
         b2a = p.direction == "base_to_arm"
         t_arm, t_level = (p.arm, p.level) if b2a else ("base", "base")
         rows.append({"space": p.space, "pid": p.pid, "direction": p.direction,
-                     **pair_floor(p.space, p.target_pid, t_arm, t_level, tabs)})
+                     **pair_floor(p.space, p.track, p.target_pid, t_arm, t_level, tabs)})
     pv = pd.DataFrame(rows)
-    for c in ("fl_all", "fl_top1", "fl_os", "fl_se", "fl_sp_all", "fl_sp_top1"):
+    for c in ("fl_all", "fl_top1", "fl_os", "fl_se", "fl_sp_all", "fl_sp_top1", "floor_extrap",
+              "p_floor_matched"):
         if c not in pv:
             pv[c] = np.nan
     for tag, rungs in (("ow", ONEWARP), ("ns", ("noSolution",))):
@@ -209,6 +263,8 @@ def blind_table(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
     n_runs = g["run"].nunique()
     fdepth = g["floor_depth"].agg(lambda s: ",".join(sorted(s.dropna().unique())))
     sdepth = g["split_depth"].agg(lambda s: ",".join(sorted(s.dropna().unique())))
+    fextrap = g["floor_extrap"].max()
+    pmatch = g["p_floor_matched"].min()
 
     sw = rec[(rec["kind"] == "swap") & (rec["model"] == "real")]
     sw = pd.concat([sw, sw.assign(mark_class="all")], ignore_index=True)
@@ -239,6 +295,8 @@ def blind_table(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
         t["subset"] = s
         t["floor_depth"] = fdepth
         t["split_depth"] = sdepth
+        t["floor_extrap"] = fextrap
+        t["p_floor_matched"] = pmatch
         t["n_pairs"] = n_pairs
         t["n_runs"] = n_runs
         out.append(t)
@@ -280,7 +338,9 @@ def checks_readings(t: pd.DataFrame) -> pd.DataFrame:
                   "subset": "all", "threshold": "TODO(PI)"}
         rows.append({**common, "check": "gapclosed", "reading": _f(r.gapclosed_onewarp),
                      "detail": f"gain over onewarp {_f(r.gain_over_onewarp)}; 2 x seed |delta| "
-                               f"{_f(2 * r.seed_abs_delta)}; floor {r.floor_depth}"})
+                               f"{_f(2 * r.seed_abs_delta)}; floor_depth {r.floor_depth} "
+                               f"floor_extrap {_f(r.floor_extrap)} p_floor_matched "
+                               f"{_f(r.p_floor_matched)}"})
         rows.append({**common, "check": "shuffledrop", "reading": _f(r.gapclosed_shuffle),
                      "detail": "t118's shuffle check (C' of another arm of the same track: every "
                                "knob changes), NOT the marginal resample of the depth / run-type "
@@ -318,9 +378,12 @@ Readings only. No box is ticked and no verdict is given here; every threshold is
    `verify_compare.py` wrote `verify.txt` (AGREE / DISAGREE at 1e-6).
 
 ## Definitions
-- The floor is the TARGET product's resampling floor at the target's depth (t137): ladder
-  ratio 1.0 / 0.5 / 0.25 for a 15M / 7.5M / 3.75M target; the curve read at 30M for a base or
-  pe target (its split is the 15M one, `split_depth 15M`); in -log10 p the 15M oracle only.
+- The floor at a target of total depth X (15M / 7.5M / 3.75M depth arm, 50M DNase base, else
+  30M) is the same track's BASE product's t137 curve read at reads_per_half = X
+  (`floor_depth` = X; `floor_extrap 1` when X is beyond the base's own reads per half). The
+  split is the base's ladder split at the nearest ratio (`split_depth`). In -log10 p the only
+  floor is the base's own-depth oracle (`floor_depth` = its reads per half); `p_floor_matched 0`
+  marks every target whose X is not that depth.
 - Pooling: per run mean over its check-set pairs -> per seed mean over runs -> mean over seeds.
   `seed_abs_delta` = the largest pairwise |difference| of the three per-seed d_model values.
 - `gapclosed_onewarp` = (d_onewarp - d_model) / (d_onewarp - d_floor);

@@ -1,7 +1,7 @@
-pid	direction	crps_all	crps_top1	crps_oracle_scaled_all	scale_error_all
-C19M16__base__base	pr1_to_pr2	0.6	1.2	0.54	0.06
-C19M16__base__base	pr2_to_pr1	0.62	1.24	0.558	0.062
-C19M16__depth__15M	pr1_to_pr2	0.7	1.4	0.63	0.07
-C19M16__depth__15M	pr2_to_pr1	0.72	1.44	0.648	0.072
-C19M16__pe__pe	pr1_to_pr2	0.65	1.3	0.585	0.065
-C19M16__pe__pe	pr2_to_pr1	0.67	1.34	0.603	0.067
+pid	mark_class	direction	reads_per_half	crps_all	crps_top1	crps_oracle_scaled_all	scale_error_all
+C19M16__base__base	narrow	pr1_to_pr2	15000000	0.6	1.2	0.54	0.06
+C19M16__base__base	narrow	pr2_to_pr1	15000000	0.62	1.24	0.558	0.062
+C19M16__depth__15M	narrow	pr1_to_pr2	7500000	0.7	1.4	0.63	0.07
+C19M16__depth__15M	narrow	pr2_to_pr1	7500000	0.72	1.44	0.648	0.072
+C19M16__pe__pe	narrow	pr1_to_pr2	15000000	0.65	1.3	0.585	0.065
+C19M16__pe__pe	narrow	pr2_to_pr1	15000000	0.67	1.34	0.603	0.067

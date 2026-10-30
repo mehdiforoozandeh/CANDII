@@ -60,6 +60,7 @@ RCOLS = ["run", "rung", "g", "g_version", "model", "seed", "space", "kind", "eva
          "log2_depth_ratio", "n_all", "n_top1"]
 BCOLS = ["space", "rung", "track", "pid", "arm", "level", "direction", "source_pid", "target_pid",
          "crps_all", "crps_top1", "crps_oracle_scaled_all", "scale_error_all", "spearman_all"]
+#: has_scores 0 = scores.json missing, truncated or not valid JSON (the run is listed, not read)
 UCOLS = ["run", "rung", "g", "model", "seed", "space", "has_scores", "n_records"]
 #: output column <- source field, where the names differ
 RENAME = {"swap_ratio_median": "swap_median_abs_log_ratio",
@@ -100,15 +101,20 @@ def keep(kind, arm):
 
 
 def score_rows(path, meta):
-    with open(path) as fh:
-        s = json.load(fh)
+    """The kept rows of one scores.json; None when the file is truncated or not valid JSON."""
+    try:
+        with open(path) as fh:
+            s = json.load(fh)
+        recs = s["records"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
     run = s.get("run") or {}
     base = {"run": meta["run"], "rung": run.get("rung", meta["rung"]), "g": run.get("g", meta["g"]),
             "model": run.get("model", meta["model"]), "seed": run.get("seed", meta["seed"]),
             "space": run.get("space", meta["space"])}
     base["g_version"] = run.get("g_version") or gv_of(base["g"])
     out = []
-    for r in s["records"]:
+    for r in recs:
         k = r.get("kind")
         if k not in KINDS:
             continue
@@ -177,8 +183,9 @@ def main(argv):
             meta = dict(zip(("rung", "g", "space", "model", "seed"), m.groups()), run=name)
             meta["seed"] = int(meta["seed"])
             sp = os.path.join(d, "scores.json")
-            has = os.path.isfile(sp)
-            rows = score_rows(sp, meta) if has else []
+            rows = score_rows(sp, meta) if os.path.isfile(sp) else None
+            has = rows is not None                  # missing, truncated or invalid -> 0
+            rows = rows or []
             n_scores += has
             n_rec += len(rows)
             rh.writelines(rows)
