@@ -3,7 +3,8 @@
 Exploratory (PI, 2026-10-29); readings only, no verdicts.
 
     python arms.py list <products_dir>                            # the sorted arm pids, one per line
-    python arms.py arm  <products_dir> <out_dir> <arm_index>      # -> <out_dir>/arms1k/<pid>.npz
+    python arms.py arm  <products_dir> <out_dir> <arm_index> [<null_dir>]
+                                                                  # -> <out_dir>/arms1k/<pid>.npz
 
 `arm_index` is the arm product's position in the sorted list of NON-base pids of
 `<products_dir>/MANIFEST.tsv` (the base products are skipped; `list` prints that list). Its track's
@@ -26,6 +27,15 @@ base depth (MANIFEST `depth`), rng `np.random.default_rng([seed, pid_index])` fo
 `pid_index` = the ARM product's position in the sorted list of ALL pids of the MANIFEST; chromosomes
 thinned in npz order from one rng object per seed (`floor.thin`). The thinned base is then summed to
 1 kb, warped from the base and residualised exactly as the arm.
+
+Null thinning modes (`meta.null.thinning`). `unit` (the default): the binomial draw above, per 25 bp
+bin. `read` (t142, PI 2026-10-30), when `<null_dir>` is given: seed s's thinned base is read from
+`<null_dir>/<pid>/null_s<s>.npz`, the base read set's pr1 + pr2 tagAligns (together the base
+product's reads) thinned READ by read by `tools/t142/readthin.py` (rng `[seed, pid_index, 0]`, the
+same pid_index) and counted by the t117 rule. Its sidecar `null_s<s>.json` must carry the same
+ratio and pid_index, every chromosome must match the base's 25 bp shape and sit at or below it.
+Per-bin thinning drops the pieces of one read independently and makes 1 kb sums ~sqrt(k) too
+smooth (k = 25 bp bins per read); whole-read thinning does not.
 
 Space rules: ctlid, ctldepth and ratio change only the control, so they are scored in pval only;
 every other knob (extsize included) in both; the DNase mapq arms are dropped (a t112 defect: they
@@ -79,6 +89,29 @@ FORMULAS = {
             "depth_base), rng = np.random.default_rng([seed, pid_index]), seeds 0, 1, chromosomes "
             "in npz order; then summed to 1 kb, warped from the base and residualised as the arm",
 }
+NULL_READ = ("depth arm, counts only: the base read set's pr1 then pr2 tagAlign lines each kept with "
+             "prob depth_arm / depth_base (u < ratio, rng = np.random.default_rng([seed, pid_index, "
+             "0]), t142 readthin.py), counted by the t117 rule; then summed to 1 kb, warped from the "
+             "base and residualised as the arm")
+
+
+def read_null(null_dir, pid: str, seed: int, ratio: float, pid_index: int, base25: dict) -> dict:
+    """The t142 whole-read-thinned base of one seed, checked; ValueError on any mismatch."""
+    f = Path(null_dir) / pid / f"null_s{seed}.npz"
+    side = json.loads(f.with_suffix(".json").read_text())
+    if abs(float(side["ratio"]) - ratio) > 1e-12 or list(side["rng"]) != [seed, pid_index, 0]:
+        raise ValueError(f"{f}: ratio {side['ratio']} rng {side['rng']}, want {ratio} "
+                         f"[{seed}, {pid_index}, 0]")
+    out = {}
+    with np.load(f, allow_pickle=False) as z:
+        if [c for c in z.files if c not in DROP] != list(base25):
+            raise ValueError(f"{f}: chromosomes {z.files} != base {list(base25)}")
+        for c in base25:
+            t = z[c]
+            if t.shape != base25[c].shape or (t.astype(np.int64) > base25[c]).any():
+                raise ValueError(f"{f} {c}: shape {t.shape} vs {base25[c].shape} or above the base")
+            out[c] = t.astype(np.uint32)
+    return out
 
 
 def read_manifest(path) -> list[dict]:
@@ -153,7 +186,7 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def arm(products_dir, out_dir, arm_index: int) -> int:
+def arm(products_dir, out_dir, arm_index: int, null_dir=None) -> int:
     products_dir, out_dir = Path(products_dir), Path(out_dir)
     rows = read_manifest(products_dir / "MANIFEST.tsv")
     arms = arm_rows(rows)
@@ -209,7 +242,11 @@ def arm(products_dir, out_dir, arm_index: int) -> int:
             print(f"{pid}: thin ratio {ratio} not in (0, 1)", file=sys.stderr)
             return 3
         meta["null"] = {"thin_ratio": ratio, "seeds": list(NULL_SEEDS),
-                        "rng": "np.random.default_rng([seed, pid_index])", "space": "counts"}
+                        "rng": "np.random.default_rng([seed, pid_index])", "space": "counts",
+                        "thinning": "unit"}
+        if null_dir is not None:
+            meta["null"].update({"thinning": "read", "formula": NULL_READ, "null_dir": str(null_dir),
+                                 "rng": "np.random.default_rng([seed, pid_index, 0]) per read"})
         sums = {}
         for k, d in (("arm", products_dir / pid), ("base", products_dir / base["pid"])):
             with np.load(d / SPACE_FILES["counts"], allow_pickle=False) as z:
@@ -220,13 +257,27 @@ def arm(products_dir, out_dir, arm_index: int) -> int:
               f"{meta['null']['observed_ratio']}", flush=True)
         rngs = {s: np.random.default_rng([s, pid_index]) for s in NULL_SEEDS}
         thinned = {s: {} for s in NULL_SEEDS}
-        with np.load(products_dir / base["pid"] / SPACE_FILES["counts"], allow_pickle=False) as z:
-            for c in z.files:                       # npz order: the draw is reproducible
-                if c in DROP:
-                    continue
-                x25 = z[c]
+        if null_dir is not None:
+            with np.load(products_dir / base["pid"] / SPACE_FILES["counts"],
+                         allow_pickle=False) as z:
+                base25 = {c: z[c] for c in z.files if c not in DROP}
+            try:
                 for s in NULL_SEEDS:
-                    thinned[s][c] = sums_1k(thin(x25, ratio, rngs[s]))
+                    thinned[s] = {c: sums_1k(x) for c, x in
+                                  read_null(null_dir, pid, s, ratio, pid_index, base25).items()}
+            except (ValueError, OSError) as e:
+                print(f"{pid}: {e}", file=sys.stderr)
+                return 3
+            del base25
+        else:
+            with np.load(products_dir / base["pid"] / SPACE_FILES["counts"],
+                         allow_pickle=False) as z:
+                for c in z.files:                   # npz order: the draw is reproducible
+                    if c in DROP:
+                        continue
+                    x25 = z[c]
+                    for s in NULL_SEEDS:
+                        thinned[s][c] = sums_1k(thin(x25, ratio, rngs[s]))
         b = {c: arrays[f"counts_base_{c}"] for c in chroms}
         for s in NULL_SEEDS:
             warp, r, nk = warp_and_residual(b, thinned[s], chroms, "counts")
@@ -252,10 +303,10 @@ def main(argv=None) -> int:
         for r in arm_rows(read_manifest(Path(a[1]) / "MANIFEST.tsv")):
             print(r["pid"])
         return 0
-    if len(a) == 4 and a[0] == "arm":
-        return arm(a[1], a[2], int(a[3]))
-    print("usage: arms.py list <products_dir> | arms.py arm <products_dir> <out_dir> <arm_index>",
-          file=sys.stderr)
+    if len(a) in (4, 5) and a[0] == "arm":
+        return arm(a[1], a[2], int(a[3]), a[4] if len(a) == 5 else None)
+    print("usage: arms.py list <products_dir> | arms.py arm <products_dir> <out_dir> <arm_index> "
+          "[<null_dir>]", file=sys.stderr)
     return 2
 
 

@@ -359,3 +359,100 @@ def test_floor_agg_dry_run_and_headers():
     assert "--gres" not in t and 'export PYTHONPATH="$KIT/src"' in t
     a = (ROOT / "slurm" / "t137" / "floor_agg.sh").read_text()
     assert "#SBATCH --time=1:00:00\n" in a and "#SBATCH --mem=8G\n" in a
+
+
+# --- t142: read thinning (pre-thinned halves) ---------------------------------------------------
+
+def _prethin(root: Path, pid_index: int, fn=None) -> Path:
+    """Write <root>/thinned/<pid>/floor_<r>_s<seed>_<half>.npz holding exactly what the unit draw
+    gives (same rng, pr1 then pr2, every chromosome but chrM): read mode must then reproduce the
+    default rows bit for bit. `fn(name, arrays)` may alter a file."""
+    pid = fl.sorted_pids(root / "pseudoreps")[pid_index]
+    d = root / "thinned" / pid
+    d.mkdir(parents=True, exist_ok=True)
+    halves = {h: dict(np.load(root / "pseudoreps" / pid / h / "counts25.npz"))
+              for h in ("pr1", "pr2")}
+    for di, ratio in enumerate(fl.RATIOS):
+        if ratio == 1.0:
+            continue
+        for seed in fl.SEEDS:
+            rng = fl.rng_for(seed, pid_index, di)
+            for h in ("pr1", "pr2"):
+                arr = {c: fl.thin(x, ratio, rng) for c, x in halves[h].items() if c not in fl.DROP}
+                name = f"floor_{fl.RATIO_LABEL[ratio]}_s{seed}_{h}.npz"
+                if fn is not None:
+                    fn(name, arr)
+                np.savez(d / name, **arr)
+    return root / "thinned"
+
+
+def test_read_mode_reproduces_unit_rows_given_the_same_draw(tmp_path):
+    make_tree(tmp_path, 7)
+    out_u, out_r = tmp_path / "u" / "t137", tmp_path / "r" / "t137"
+    args = [str(tmp_path / "pseudoreps"), str(tmp_path / "products"), str(tmp_path / "blacklist.bed")]
+    for i in range(2):
+        thinned = _prethin(tmp_path, i)
+        assert fl.main(["product", *args, str(out_u), str(i)]) == 0
+        assert fl.main(["product", *args, str(out_r), str(i), "--thinned", str(thinned)]) == 0
+    for pid in PIDS:
+        assert (out_u / "pairs" / f"{pid}.tsv").read_text() == (out_r / "pairs" / f"{pid}.tsv").read_text()
+        assert (out_u / "pairs" / f"{pid}.DONE").read_text() == "14 rows\n"
+        assert (out_r / "pairs" / f"{pid}.DONE").read_text() == "14 rows thinning=read\n"
+        zu, zr = np.load(out_u / "bins1k" / f"{pid}.npz"), np.load(out_r / "bins1k" / f"{pid}.npz")
+        assert set(zu.files) == set(zr.files) and all((zu[k] == zr[k]).all() for k in zu.files)
+    for out, mode in ((out_u, "unit"), (out_r, "read")):
+        assert fl.main(["aggregate", str(out), str(tmp_path / "rungs_v2"), "--expect", "2"]) == 0
+        cfg = json.loads((out / "config.json").read_text())
+        assert cfg["thinning"] == mode
+        assert cfg["formulas"]["thin"] == (fl.FORMULAS["thin"] if mode == "unit" else fl.THIN_READ)
+    assert (out_u / "floor_pairs.tsv").read_text() == (out_r / "floor_pairs.tsv").read_text()
+
+
+def test_read_mode_needs_only_scored_chroms_except_bins1k(tmp_path):
+    make_tree(tmp_path, 8)
+    thinned = _prethin(tmp_path, 0)
+    pid = fl.sorted_pids(tmp_path / "pseudoreps")[0]
+    f = thinned / pid / "floor_r0.5_s1_pr2.npz"
+    z = dict(np.load(f))
+    np.savez(f, chr19=z["chr19"], chr21=z["chr21"])          # the scored chromosomes suffice
+    assert fl.main(["product", str(tmp_path / "pseudoreps"), str(tmp_path / "products"),
+                    str(tmp_path / "blacklist.bed"), str(tmp_path / "o" / "t137"), "0",
+                    "--thinned", str(thinned)]) == 0
+
+
+@pytest.mark.parametrize("defect", ["above", "missing_chrom", "missing_file", "shape"])
+def test_read_mode_refuses_bad_thinned_files(tmp_path, defect):
+    make_tree(tmp_path, 9)
+
+    def spoil(name, arr):
+        if name != "floor_r0.25_s0_pr1.npz":
+            return
+        if defect == "above":
+            arr["chr21"] = arr["chr21"].copy()
+            arr["chr21"][10] = arr["chr21"][10] + 10_000
+        elif defect == "missing_chrom":
+            del arr["chr21"]
+        elif defect == "shape":
+            arr["chr19"] = arr["chr19"][:-1]
+
+    thinned = _prethin(tmp_path, 0, spoil)
+    pid = fl.sorted_pids(tmp_path / "pseudoreps")[0]
+    if defect == "missing_file":
+        (thinned / pid / "floor_r0.125_s1_pr2.npz").unlink()
+    assert fl.main(["product", str(tmp_path / "pseudoreps"), str(tmp_path / "products"),
+                    str(tmp_path / "blacklist.bed"), str(tmp_path / "o" / "t137"), "0",
+                    "--thinned", str(thinned)]) == 3
+    assert not (tmp_path / "o" / "t137" / "pairs" / f"{pid}.DONE").exists()
+
+
+def test_aggregate_refuses_mixed_thinning(tree, tmp_path):
+    _, out, _ = tree
+    shutil.copytree(out / "pairs", tmp_path / "pairs")
+    (tmp_path / "pairs" / f"{PIDS[0]}.DONE").write_text("14 rows thinning=read\n")
+    assert fl.main(["aggregate", str(tmp_path), str(tree[0] / "rungs_v2"), "--expect", "2"]) == 2
+
+
+def test_default_config_records_unit(tree):
+    _, out, _ = tree
+    cfg = json.loads((out / "config.json").read_text())
+    assert cfg["thinning"] == "unit" and cfg["formulas"]["thin"] == fl.FORMULAS["thin"]

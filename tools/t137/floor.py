@@ -37,7 +37,16 @@ depth arms would pull a pooled line by their position on the axis, not by their 
 outside a product's own ladder range is an extrapolation of its line. `beta_sign` (neg / pos / nan)
 is written per curve and per class: check it; do not assume the floor shrinks with depth.
 
+Thinning modes (`thinning` in config.json). `unit` (the default): the binomial draw above, per
+25 bp bin. `read` (t142, PI 2026-10-30): `product --thinned <dir>` reads each (ratio < 1, seed, half)
+from `<dir>/<pid>/floor_<r>_s<seed>_<half>.npz`, whole-read thinned from the half's tagAlign by
+`tools/t142/readthin.py` (same rng key; a read is kept or dropped whole, so multi-bin sums carry
+the read-level variance that per-bin thinning removes). Each file must hold chr19 + chr21 (every
+chromosome for the bins1k draw, r0.25 s0), match the half's shape, and sit at or below the half on
+every bin, else the product exits 3. Ratio 1 is the untouched halves in both modes.
+
     python floor.py product <pseudoreps_dir> <products_dir> <blacklist.bed> <out_dir> <pid_index>
+                            [--thinned <dir>]
     python floor.py aggregate <out_dir> <rungs_v2_dir> [--expect 130]
 """
 from __future__ import annotations
@@ -90,6 +99,9 @@ FORMULAS = {
     "beta_sign": "neg if beta < 0, pos if beta > 0, else nan",
     "class_aggregate": CLASS_AGG,
 }
+THIN_READ = ("whole-read thinning (t142 readthin.py): each tagAlign line (pair, for paired-end) of "
+             "the half kept with prob ratio, u < ratio from the same rng key, pr1 then pr2; kept "
+             "lines counted by the t117 rule (bin25.counts_from_tagalign); ratio 1 = no draw")
 
 
 def thin(counts: np.ndarray, ratio: float, rng) -> np.ndarray:
@@ -101,6 +113,25 @@ def thin(counts: np.ndarray, ratio: float, rng) -> np.ndarray:
 
 def rng_for(seed: int, pid_index: int, depth_index: int):
     return np.random.default_rng([seed, pid_index, depth_index])
+
+
+def read_thinned(thinned_dir, pid: str, ratio: float, seed: int, half: str, full: dict,
+                 need) -> dict:
+    """A whole-read-thinned half (t142) for the chromosomes `need`; ValueError if one is missing,
+    has another shape than the half, or exceeds the half on any bin (it must be a subset of it)."""
+    f = Path(thinned_dir) / pid / f"floor_{RATIO_LABEL[ratio]}_s{seed}_{half}.npz"
+    if not f.is_file():
+        raise ValueError(f"no {f}")
+    out = {}
+    with np.load(f, allow_pickle=False) as z:
+        for c in need:
+            if c not in z.files:
+                raise ValueError(f"{f}: no {c}")
+            t = z[c]
+            if t.shape != full[c].shape or (t.astype(np.int64) > full[c]).any():
+                raise ValueError(f"{f} {c}: shape {t.shape} vs {full[c].shape} or above the half")
+            out[c] = t.astype(np.uint32)
+    return out
 
 
 def read_tsv(path) -> list[dict]:
@@ -152,7 +183,8 @@ def crps_fields(src: np.ndarray, tgt: np.ndarray) -> dict:
     return out
 
 
-def product(pseudoreps_dir, products_dir, blacklist_path, out_dir, pid_index: int) -> int:
+def product(pseudoreps_dir, products_dir, blacklist_path, out_dir, pid_index: int,
+            thinned_dir=None) -> int:
     pseudoreps_dir, products_dir, out_dir = Path(pseudoreps_dir), Path(products_dir), Path(out_dir)
     pid = sorted_pids(pseudoreps_dir)[pid_index]
     meta = next((r for r in read_tsv(products_dir / "MANIFEST.tsv") if r["pid"] == pid), None)
@@ -194,8 +226,21 @@ def product(pseudoreps_dir, products_dir, blacklist_path, out_dir, pid_index: in
             thinned = {}
             for h in ("pr1", "pr2"):
                 thinned[h] = {}
+                pre = None
+                if thinned_dir is not None and ratio != 1.0:
+                    try:
+                        pre = read_thinned(thinned_dir, pid, ratio, seed, h, halves[h],
+                                           chroms if keep_all else CHROMS)
+                    except ValueError as e:
+                        print(f"{pid}: {e}", file=sys.stderr)
+                        return 3
                 for c in chroms:              # genome-wide, npz order: the draw is reproducible
-                    t = thin(halves[h][c], ratio, rng)
+                    if pre is None:
+                        t = thin(halves[h][c], ratio, rng)
+                    elif c in pre:
+                        t = pre[c]
+                    else:
+                        continue
                     if c in CHROMS:
                         thinned[h][c] = t
                     if keep_all:
@@ -233,7 +278,8 @@ def product(pseudoreps_dir, products_dir, blacklist_path, out_dir, pid_index: in
     tmpz = out_dir / "bins1k" / f"{pid}.tmp.npz"
     np.savez_compressed(tmpz, **bins1k)
     tmpz.replace(out_dir / "bins1k" / f"{pid}.npz")
-    (out_dir / "pairs" / f"{pid}.DONE").write_text(f"{len(rows)} rows\n")
+    mode = "" if thinned_dir is None else " thinning=read"
+    (out_dir / "pairs" / f"{pid}.DONE").write_text(f"{len(rows)} rows{mode}\n")
     print(f"done {pid}: {len(rows)} rows, {len(bins1k)} 1 kb arrays", flush=True)
     return 0
 
@@ -321,6 +367,12 @@ def aggregate(out_dir, rungs_dir, expect: int = 130) -> int:
     if len(done) != expect:
         print(f"{len(done)} .DONE under {out_dir}/pairs, need {expect}", file=sys.stderr)
         return 2
+    modes = {("read" if "thinning=read" in (out_dir / "pairs" / f"{pid}.DONE").read_text()
+              else "unit") for pid in done}
+    if len(modes) != 1:
+        print(f"mixed thinning modes {sorted(modes)} under {out_dir}/pairs", file=sys.stderr)
+        return 2
+    thinning = modes.pop()
     rows = []
     for pid in done:
         rows += read_tsv(out_dir / "pairs" / f"{pid}.tsv")
@@ -414,12 +466,14 @@ def aggregate(out_dir, rungs_dir, expect: int = 130) -> int:
     check.append(f"{'PASS' if len(rows) == n_want else 'FAIL'} rows {len(rows)}")
     (out_dir / "floor_check.txt").write_text("\n".join(check) + "\n")
     (out_dir / "config.json").write_text(json.dumps(
-        {"ratios": RATIOS, "seeds": SEEDS,
+        {"ratios": RATIOS, "seeds": SEEDS, "thinning": thinning,
          "reads_per_half": "n_lines of <pseudoreps>/MANIFEST.tsv x thin_ratio, per product",
          "read_at": READ_AT, "class_aggregate": CLASS_AGG,
          "target_reads": TARGET_READS, "drop": DROP, "chroms": CHROMS, "res": RES,
          "coarse_bins": COARSE, "bins1k": {"ratio": BINS1K_RATIO, "seed": BINS1K_SEED},
-         "metrics_curve": METRICS_CURVE, "formulas": FORMULAS, "rungs_v2": str(rungs_dir),
+         "metrics_curve": METRICS_CURVE,
+         "formulas": FORMULAS if thinning == "unit" else {**FORMULAS, "thin": THIN_READ},
+         "rungs_v2": str(rungs_dir),
          "n_products": len(done), "git_sha": _git_sha()}, indent=1))
     n_fail = sum(line.startswith("FAIL") for line in check)
     print(f"aggregate: {len(rows)} rows, {len(curve)} curve rows, {n_fail} FAIL", flush=True)
@@ -433,13 +487,16 @@ def main(argv=None) -> int:
     for name in ("pseudoreps_dir", "products_dir", "blacklist", "out_dir"):
         p.add_argument(name)
     p.add_argument("pid_index", type=int)
+    p.add_argument("--thinned", default=None,
+                   help="t142 whole-read-thinned halves (<dir>/<pid>/floor_<r>_s<seed>_<half>.npz)")
     g = sub.add_parser("aggregate", help="concatenate, fit the depth curve, check vs rungs_v2")
     g.add_argument("out_dir")
     g.add_argument("rungs_dir")
     g.add_argument("--expect", type=int, default=130, help="number of products (.DONE files)")
     a = ap.parse_args(argv)
     if a.cmd == "product":
-        return product(a.pseudoreps_dir, a.products_dir, a.blacklist, a.out_dir, a.pid_index)
+        return product(a.pseudoreps_dir, a.products_dir, a.blacklist, a.out_dir, a.pid_index,
+                       a.thinned)
     return aggregate(a.out_dir, a.rungs_dir, a.expect)
 
 
