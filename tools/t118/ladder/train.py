@@ -239,7 +239,7 @@ def validate(ladder, corpus, train_pairs, cov_val: torch.Tensor, space, device,
 
 def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model_name, seed,
                  max_steps=None, eval_every=None, device="auto", cov_rows=None, holdout=(),
-                 loss="nb", g_hidden=None, f_channels=None, arm=None,
+                 loss="nb", g_hidden=None, f_channels=None, arm=None, extra_pairs=None,
                  **overrides):
     """Train one run into `<runs_dir>/<run_name>/`; returns the run dir. Skips if TRAIN_DONE.
 
@@ -253,6 +253,10 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
     (None = the defaults, 64 / 32); config.json always records `g_hidden` and `f_channels` (None for
     a form without channels). `arm` replaces the rung in the run name and is recorded as `"arm"`;
     `config["rung"]` stays the form rung.
+    `extra_pairs` (t136): arm->arm pairs (`pairs.law_pairs` dicts) appended, in the given order, to
+    the training pairs after the hold-out; a pair touching a held-out product raises ValueError. The
+    fit pids are unchanged. config.json always records `"extra_pairs"` (`[]` when None), so the
+    readings can subtract them from the law set. None (the default): training is unchanged.
     """
     t0 = time.time()
     torch.backends.cudnn.deterministic = True
@@ -285,6 +289,11 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         cov_rows = encoding.read_covariates(covariates)
     holdout = [[str(a), str(lv)] for a, lv in holdout]
     tp = pairs.train_pairs(rows, g, holdout)
+    if extra_pairs:
+        bad = [(p["source_pid"], p["target_pid"]) for p in extra_pairs if pairs._held(p, holdout)]
+        if bad:
+            raise ValueError(f"extra pairs touch a held-out product {holdout}: {bad}")
+        tp = tp + [dict(p) for p in extra_pairs]
     fit = pairs.fit_pids(rows, g, holdout)
     if len(tp) < 2:
         raise ValueError(f"g {g!r}: {len(tp)} training pairs")
@@ -337,6 +346,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, rung, g, space, model
         "covariates": str(covariates),
         "covariates_md5": model.md5_path(covariates) if covariates else None,
         "data_dir": str(data_dir), "fit_pids": fit, "train_pairs": tp,
+        "extra_pairs": [dict(p) for p in extra_pairs or []],
         "ids_perm": [int(v) for v in perm],
         "knots_x": [float(v) for v in stats["knots_x"]],
     }
