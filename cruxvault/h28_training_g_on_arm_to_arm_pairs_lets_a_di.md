@@ -5,13 +5,15 @@ schema: 2
 title: Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on never-trained arm-to-arm pairs, without a pivot through the base
 parent: q7
 status: idea
-rule:
-measurement:
-replicates:
-verdict:
-metric:
-created: 2026-10-29T20:07:43
-updated: 2026-10-29T20:07:43
+rule: 
+measurement: 
+replicates: 
+verdict: 
+metric: 
+created: "2026-10-29T20:07:43"
+updated: "2026-10-29T20:53:44"
+null_approved: "2026-10-29T20:53:44"
+null_hash: 89756075876f7d61
 ---
 
 # h28 — Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on never-trained arm-to-arm pairs, without a pivot through the base
