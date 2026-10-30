@@ -13,6 +13,9 @@ track (per_track) and `all` (across); models real / nocov / ids; seeds 0-2; both
     PE 15M). floor_curve = floor.py's per-product fit of those points (its real columns).
   floor_p15M crps_all: B 0.60 / 0.62 by direction (reads_per_half 15M).
 The floor rule (plan_gaps.md A3): the same track's BASE curve read at the target's depth X.
+  nested_oracle.tsv (PI ruling 2026-10-30, the depth-pair oracle): D15 counts, r_source manifest,
+    base_to_arm binomial crps_all 0.9, arm_to_base eb_binomial 1.1 (top1 2x, split 0.85x / 0.15x);
+    decoys that must NOT be read: empirical rows, poisson_remainder, an arm_to_arm row.
 """
 import csv
 import gzip
@@ -85,11 +88,16 @@ def test_gapclosed_by_hand(table):
     d_model = (1.0 + 1.2) / 2 + (0.0 + 0.02 + 0.05) / 3        # 1.1233333
     d_onewarp = (1.5 + 1.7) / 2                                  # 1.6
     d_floor = (base_curve("crps_all", 15e6) + base_curve("crps_all", 30e6)) / 2   # X 15M, 30M
+    d_oracle = (0.9 + 1.1) / 2                                   # the nested-read oracle
     assert r.d_model == pytest.approx(d_model, abs=1e-8)
     assert r.d_onewarp == pytest.approx(d_onewarp, abs=1e-8)
-    assert r.d_floor == pytest.approx(d_floor, abs=1e-8)
-    assert r.gapclosed_onewarp == pytest.approx((d_onewarp - d_model) / (d_onewarp - d_floor),
-                                                abs=1e-8)   # 0.376812
+    assert r.d_floor == pytest.approx(d_floor, abs=1e-8)        # the floor survives as context
+    assert r.d_oracle == pytest.approx(d_oracle, abs=1e-8)
+    assert r.oracle_kind == "nested_binomial,nested_eb_binomial"
+    assert r.gapclosed_onewarp == pytest.approx((d_onewarp - d_model) / (d_onewarp - d_oracle),
+                                                abs=1e-8)   # 0.794444
+    assert r.gapclosed_shuffle == pytest.approx((d_onewarp - (d_model + 0.15))
+                                                / (d_onewarp - d_oracle), abs=1e-8)
     assert r.d_nocov == pytest.approx(d_model + 0.2, abs=1e-8)
     assert r.gain_over_nocov == pytest.approx(0.2, abs=1e-8)
     assert r.d_nosolution == pytest.approx(d_onewarp + 0.5, abs=1e-8)
@@ -194,7 +202,7 @@ def test_swap_and_depthlaw(table):
 
 def test_no_nan_and_split_on_every_row(table):
     cols = ["d_floor", "seed_abs_delta", "crps_oracle_scaled_all", "scale_error_all", "d_model",
-            "d_onewarp"]
+            "d_onewarp", "d_oracle", "oracle_crps_oracle_scaled_all", "oracle_scale_error_all"]
     assert not table[cols].isna().any().any()
     assert len(table) == 2 * 2 * 2 * 2 * 2 * 3 * 2     # space knob class(narrow,all) rung gv dir sub
 
@@ -207,6 +215,42 @@ def test_checks_readings_never_tick(res):
     assert (c.loc[c["check"] == "composegap", "reading"] == "not_extracted").all()
     md = (res / "BLIND.md").read_text()
     assert "PI's pick" in md and "TODO(PI)" in md
+    assert "what a fresh replicate would differ by" in md and "NOT a subsample" in md
+    g = c[(c["check"] == "gapclosed") & (c["knob"] == "depth") & (c["space"] == "counts")]
+    assert g["detail"].str.contains("oracle nested_binomial,nested_eb_binomial").all()
+    assert g["detail"].str.contains("what a fresh replicate would differ by").all()
+
+
+def test_oracle_per_direction_and_its_split(table):
+    b2a = cell(table, **HEAD, direction="base_to_arm", subset="all")
+    a2b = cell(table, **HEAD, direction="arm_to_base", subset="all")
+    assert (b2a.d_oracle, b2a.oracle_kind) == (pytest.approx(0.9), "nested_binomial")
+    assert (a2b.d_oracle, a2b.oracle_kind) == (pytest.approx(1.1), "nested_eb_binomial")
+    assert b2a.oracle_crps_oracle_scaled_all == pytest.approx(0.85 * 0.9)
+    assert a2b.oracle_scale_error_all == pytest.approx(0.15 * 1.1)
+    assert cell(table, **HEAD, direction="arm_to_base", subset="top1").d_oracle == pytest.approx(2.2)
+
+
+@pytest.mark.parametrize("cellkey", [{**HEAD, "knob": "pe"}, {**HEAD, "space": "pval"}])
+def test_pe_and_pval_keep_the_floor_as_oracle(table, cellkey):
+    for d in ("base_to_arm", "arm_to_base", "both"):
+        for s in ("all", "top1"):
+            r = cell(table, **cellkey, direction=d, subset=s)
+            assert r.oracle_kind == "floor"
+            assert r.d_oracle == pytest.approx(r.d_floor, abs=1e-12)
+            assert r.gapclosed_onewarp == pytest.approx(
+                (r.d_onewarp - r.d_model) / (r.d_onewarp - r.d_floor), abs=1e-8)
+
+
+def test_missing_nested_oracle_is_na_not_the_floor(tmp_path):
+    for f in FIX.iterdir():
+        if f.name != "nested_oracle.tsv":
+            shutil.copy(f, tmp_path / f.name)
+    subprocess.run([PY, str(T130 / "analyze.py"), str(tmp_path)], check=True, capture_output=True)
+    t = pd.read_csv(tmp_path / "blind_table.tsv", sep="\t")
+    r = cell(t, **HEAD, direction="both", subset="all")
+    assert math.isnan(r.d_oracle) and math.isnan(r.gapclosed_onewarp) and not math.isnan(r.d_floor)
+    assert "ABSENT" in (tmp_path / "BLIND.md").read_text()
 
 
 def test_missing_floor_propagates_as_na(tmp_path):
@@ -227,20 +271,22 @@ def test_missing_floor_propagates_as_na(tmp_path):
 def test_second_method_agrees(res):
     subprocess.run([PY, str(T130 / "verify_raw.py"), str(res / "records.tsv.gz"),
                     str(res / "baselines.tsv.gz"), str(res / "floor_pairs.tsv"),
-                    str(res / "floor_curve.tsv")], check=True, capture_output=True)
+                    str(res / "floor_curve.tsv"), str(res / "nested_oracle.tsv")], check=True,
+                   capture_output=True)
     subprocess.run([PY, str(T130 / "verify_compare.py"), str(res)], check=True,
                    capture_output=True)
     text = (res / "verify.txt").read_text()
     assert text.count("DISAGREE") == 0
-    assert text.count("AGREE") == 6
+    assert text.count("AGREE") == 7
 
 
 def test_second_method_catches_a_change(res, tmp_path):
     for f in ("records.tsv.gz", "baselines.tsv.gz", "floor_pairs.tsv", "floor_curve.tsv",
-              "blind_table.tsv"):
+              "nested_oracle.tsv", "blind_table.tsv"):
         shutil.copy(res / f, tmp_path / f)
     subprocess.run([PY, str(T130 / "verify_raw.py")] + [str(tmp_path / f) for f in (
-        "records.tsv.gz", "baselines.tsv.gz", "floor_pairs.tsv", "floor_curve.tsv")],
+        "records.tsv.gz", "baselines.tsv.gz", "floor_pairs.tsv", "floor_curve.tsv",
+        "nested_oracle.tsv")],
         check=True, capture_output=True)
     v = json.loads((tmp_path / "verify_raw.json").read_text())
     k = next(iter(v["d_model"]))

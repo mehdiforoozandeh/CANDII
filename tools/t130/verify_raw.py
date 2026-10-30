@@ -10,14 +10,19 @@ Recomputes from the extract and the floor files, for the cells
                (a depth target's level; 50M for C12M02__base__base; else 30M); the same track's
                base product `<track>__base__base`; its floor_curve crps_all row read ALWAYS by
                the line exp(alpha + beta * log2 X) (never the value_ columns), same pooling.
-               floor_pairs is read for nothing (kept in the pinned argument list);
-    gapclosed_onewarp  (d_onewarp - d_model) / (d_onewarp - d_floor) from the three above;
+               floor_pairs is read for nothing (kept in the pinned argument list). d_floor is
+               context (what a fresh replicate would differ by), not the gap top;
+    d_oracle   the nested-read oracle (PI ruling 2026-10-30), read from nested_oracle.tsv by its
+               own route: the row with r_source `manifest`, eval `score`, space `counts` and the
+               predictive `binomial` for base_to_arm / `eb_binomial` for arm_to_base, keyed by
+               (arm pid, direction); its crps_all, same pooling;
+    gapclosed_onewarp  (d_onewarp - d_model) / (d_onewarp - d_oracle) from the three above;
     seed_abs_delta     max - min over the three per-seed pooled d_model values;
   and for rung D the swap median: the median swap_ratio_median over the real model's counts
   swap records of depth products, g_version per_track.
 Writes verify_raw.json beside records.tsv.gz; verify_compare.py compares it with blind_table.tsv.
 
-    python3 verify_raw.py <records.tsv.gz> <baselines.tsv.gz> <floor_pairs.tsv> <floor_curve.tsv>
+    python3 verify_raw.py <records.tsv.gz> <baselines.tsv.gz> <floor_pairs.tsv> <floor_curve.tsv> <nested_oracle.tsv>
 """
 import csv
 import gzip
@@ -29,6 +34,7 @@ import sys
 from collections import defaultdict
 
 DNASE_BASE = "C12M02__base__base"
+NESTED_PRED = {"base_to_arm": "binomial", "arm_to_base": "eb_binomial"}
 
 
 def rows(path):
@@ -68,14 +74,17 @@ def pooled(rec, value):
 
 
 def main(argv):
-    if len(argv) != 4:
+    if len(argv) != 5:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
-    rp, bp, fpp, fcp = argv
+    rp, bp, fpp, fcp, nop = argv
     rec, base, fp, fc = rows(rp), rows(bp), rows(fpp), rows(fcp)
+    nested = {(r["pid"], r["direction"]): float(r["crps_all"]) for r in rows(nop)
+              if r["space"] == "counts" and r["eval"] == "score" and r["r_source"] == "manifest"
+              and NESTED_PRED.get(r["direction"]) == r["predictive"] and r["crps_all"] != "NA"}
     ow = {(b["space"], b["pid"], b["direction"]): float(b["crps_all"]) for b in base
           if b["rung"] in ("QuantileMatching", "QM") and b["crps_all"] != ""}
-    out = {"d_model": {}, "d_onewarp": {}, "d_floor": {}, "gapclosed_onewarp": {},
+    out = {"d_model": {}, "d_onewarp": {}, "d_floor": {}, "d_oracle": {}, "gapclosed_onewarp": {},
            "seed_abs_delta": {}, "swap_ratio_median": {}}
     for rung in ("D", "A"):
         key = f"counts|depth|all|{rung}|per_track|both|all"
@@ -89,7 +98,8 @@ def main(argv):
             x = depth_of(r["target_pid"], r["level"], r["direction"] == "base_to_arm")
             return floor_of(r["track"], x, fc)
         out["d_floor"][key] = pooled(sel, fl)
-        m, o, f = out["d_model"][key], out["d_onewarp"][key], out["d_floor"][key]
+        out["d_oracle"][key] = pooled(sel, lambda r: nested.get((r["pid"], r["direction"])))
+        m, o, f = out["d_model"][key], out["d_onewarp"][key], out["d_oracle"][key]
         out["gapclosed_onewarp"][key] = (None if None in (m, o, f) or o == f
                                          else (o - m) / (o - f))
         ps = per_seed(sel, lambda r: float(r["crps_all"]))

@@ -7,11 +7,26 @@ READINGS ONLY. Nothing here ticks a box or gives a verdict. Every threshold is t
 Inputs in <results_dir> (run_all.sh copies them in):
   records.tsv.gz, baselines.tsv.gz   extract_records.py
   floor_pairs.tsv, floor_curve.tsv, floor_p15M.tsv   t137 (tools/t137/floor.py aggregate)
+  nested_oracle.tsv                  tools/t130/nested_oracle.py (absent -> d_oracle NA on depth
+                                     pairs in counts, with a line in BLIND.md)
+
+THE ORACLE (PI ruling 2026-10-30, plan_gaps.md A9). gap-closed runs one-warp -> d_oracle:
+  depth pairs, counts   the NESTED-READ oracle: a depth arm is a read subsample of its base, so the
+                        base and the arm share reads and an independent-replicate floor is no upper
+                        bound there. base_to_arm: `binomial` (Binomial(base, rho)); arm_to_base:
+                        `eb_binomial` (the exact posterior of the base given the arm under binomial
+                        thinning, prior = the base's training-chromosome histogram); rho from the
+                        MANIFEST depth (ORACLE_R). oracle_kind `nested_binomial` / `nested_eb_binomial`.
+  every other pair      the floor, as before (oracle_kind `floor`): h2's pe arm is a separate FASTQ
+                        reprocessing, not a subsample, and -log10 p cannot be thinned.
+  d_floor stays in every row as CONTEXT: what a fresh replicate would differ by.
 
 Per pair (space, arm product pid, direction):
   d_onewarp     the pair's QuantileMatching record (rungs_v2), Poisson / log-normal spread CRPS.
   d_nosolution  the pair's noSolution record.
-  d_floor       the floor at the TARGET's real depth X (pinned rule, plan_gaps.md A3). X = the
+  d_oracle      the gap top (THE ORACLE above), with its split oracle_crps_oracle_scaled_all /
+                oracle_scale_error_all and oracle_kind.
+  d_floor       context: what a fresh replicate would differ by. The floor at the TARGET's real depth X (pinned rule, plan_gaps.md A3). X = the
                 target product's total depth (products MANIFEST `depth`): a depth arm -> its level
                 (15M / 7.5M / 3.75M); the DNase base C12M02__base__base -> 50M; every other base
                 and every pe target -> 30M. counts: the SAME TRACK's BASE product's t137 curve
@@ -40,11 +55,11 @@ A missing value propagates as NA (never skipped).
 blind_table.tsv: one row per space x knob(depth|pe) x mark_class(+all) x rung x g_version x
 direction(base_to_arm|arm_to_base|both) x subset(all|top1):
   d_model d_onewarp d_nocov d_ids d_nosolution d_floor  pooled CRPS (subset `subset`)
-  gapclosed_onewarp = (d_onewarp - d_model) / (d_onewarp - d_floor)
+  gapclosed_onewarp = (d_onewarp - d_model) / (d_onewarp - d_oracle)
   gain_over_nocov   = d_nocov - d_model
   gain_gt_2seed     = (d_onewarp - d_model) > 2 x seed_abs_delta   (the h1 PI ruling's gain)
   crps_oracle_scaled_all, scale_error_all   the model's split (subset all, on every row)
-  d_shuffle, gapclosed_shuffle = (d_onewarp - d_shuffle) / (d_onewarp - d_floor)   t118's
+  d_shuffle, gapclosed_shuffle = (d_onewarp - d_shuffle) / (d_onewarp - d_oracle)   t118's
                     shuffle (C' from another arm of the same track, every knob changes)
   swap_ratio_median  median over the real model's swap records of the cell's arm products of
                     median |log(pred / X)| (direction- and subset-free)
@@ -52,7 +67,8 @@ direction(base_to_arm|arm_to_base|both) x subset(all|top1):
                     model's depthlaw records (counts, depth only)
   then, appended: gain_over_onewarp, gain_over_nocov_gt_2seed, onewarp_oracle_scaled_all,
   onewarp_scale_error_all, floor_oracle_scaled_all, floor_scale_error_all, split_depth,
-  floor_extrap, p_floor_matched.
+  floor_extrap, p_floor_matched, d_oracle, oracle_kind, oracle_crps_oracle_scaled_all,
+  oracle_scale_error_all.
 
     python analyze.py <results_dir>
 """
@@ -72,6 +88,10 @@ RATIOS = (1.0, 0.5, 0.25, 0.125)           # the t137 ladder (floor.RATIOS)
 SPREAD_RATIOS = (0.5, 0.25, 0.125)        # seeded ladder points: floor_curve seed_spread_r<k>
 READ_AT = {"15M": 15e6, "7.5M": 7.5e6, "3.75M": 3.75e6, "1.875M": 1.875e6}   # floor.READ_AT
 DNASE_BASE = "C12M02__base__base"         # the one 50M base (pseudoreps MANIFEST: 25M per half)
+NESTED_KNOB = "depth"                     # the arm whose products are read subsamples of the base
+ORACLE_R = "manifest"                     # nested_oracle.tsv r_source analyze reads
+ORACLE_PREDICTIVE = {"base_to_arm": "binomial", "arm_to_base": "eb_binomial"}
+FLOOR_LABEL = "what a fresh replicate would differ by"
 ONEWARP = ("QuantileMatching", "QM")
 CELL = ["space", "knob", "mark_class", "rung", "g_version", "dirc"]
 SUBSETS = ("all", "top1")
@@ -84,7 +104,8 @@ COLS = (CELL[:5] + ["direction", "subset", "d_model", "d_onewarp", "d_nocov", "d
                     "n_pairs", "n_runs", "gain_over_onewarp", "gain_over_nocov_gt_2seed",
                     "onewarp_oracle_scaled_all", "onewarp_scale_error_all",
                     "floor_oracle_scaled_all", "floor_scale_error_all", "split_depth",
-                    "floor_extrap", "p_floor_matched"])
+                    "floor_extrap", "p_floor_matched", "d_oracle", "oracle_kind",
+                    "oracle_crps_oracle_scaled_all", "oracle_scale_error_all"])
 CHECK_COLS = ["check", "hypothesis", "knob", "space", "rung", "g_version", "mark_class",
               "direction", "subset", "reading", "detail", "threshold"]
 
@@ -181,8 +202,34 @@ def pair_floor(space, track, target_pid, target_arm, target_level, tabs) -> dict
     return out
 
 
-def pair_values(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
-    """One row per (space, pid, direction) of the trained check set: baselines and the floor."""
+def nested_table(no: pd.DataFrame | None) -> dict | None:
+    """(pid, direction) -> the nested_oracle.tsv row analyze reads (ORACLE_R, ORACLE_PREDICTIVE)."""
+    if no is None:
+        return None
+    sel = no[(no["space"] == "counts") & (no["eval"] == "score") & (no["r_source"] == ORACLE_R)
+             & (no["predictive"] == no["direction"].map(ORACLE_PREDICTIVE))]
+    if sel.duplicated(["pid", "direction"]).any():
+        raise SystemExit("nested_oracle.tsv: duplicate (pid, direction) rows")
+    return {(r["pid"], r["direction"]): r for _, r in sel.iterrows()}
+
+
+def pair_oracle(space, arm, pid, direction, floor: dict, nested) -> dict:
+    """The gap top of one pair: the nested-read oracle on depth pairs in counts, else the floor."""
+    if space == "counts" and arm == NESTED_KNOB:
+        kind = f"nested_{ORACLE_PREDICTIVE[direction]}"
+        r = None if nested is None else nested.get((pid, direction))
+        if r is None:
+            return {"oracle_kind": kind}
+        return {"or_all": float(r["crps_all"]), "or_top1": float(r["crps_top1"]),
+                "or_os": float(r["crps_oracle_scaled_all"]), "or_se": float(r["scale_error_all"]),
+                "oracle_kind": kind}
+    return {"or_all": floor.get("fl_all"), "or_top1": floor.get("fl_top1"),
+            "or_os": floor.get("fl_os"), "or_se": floor.get("fl_se"), "oracle_kind": "floor"}
+
+
+def pair_values(rec: pd.DataFrame, base: pd.DataFrame, tabs, nested=None) -> pd.DataFrame:
+    """One row per (space, pid, direction) of the trained check set: baselines, the floor (context)
+    and the oracle (the gap top)."""
     keys = ["space", "pid", "direction"]
     pairs = rec.loc[rec["kind"] == "trained",
                     keys + ["track", "arm", "level", "target_pid"]].drop_duplicates(keys)
@@ -190,11 +237,12 @@ def pair_values(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
     for p in pairs.itertuples(index=False):
         b2a = p.direction == "base_to_arm"
         t_arm, t_level = (p.arm, p.level) if b2a else ("base", "base")
-        rows.append({"space": p.space, "pid": p.pid, "direction": p.direction,
-                     **pair_floor(p.space, p.track, p.target_pid, t_arm, t_level, tabs)})
+        fl = pair_floor(p.space, p.track, p.target_pid, t_arm, t_level, tabs)
+        rows.append({"space": p.space, "pid": p.pid, "direction": p.direction, **fl,
+                     **pair_oracle(p.space, p.arm, p.pid, p.direction, fl, nested)})
     pv = pd.DataFrame(rows)
     for c in ("fl_all", "fl_top1", "fl_os", "fl_se", "fl_sp_all", "fl_sp_top1", "floor_extrap",
-              "p_floor_matched"):
+              "p_floor_matched", "or_all", "or_top1", "or_os", "or_se"):
         if c not in pv:
             pv[c] = np.nan
     for tag, rungs in (("ow", ONEWARP), ("ns", ("noSolution",))):
@@ -240,19 +288,19 @@ def _ratio(num, den):
         return np.where(den != 0, num / den, np.nan)
 
 
-def blind_table(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
+def blind_table(rec: pd.DataFrame, base: pd.DataFrame, tabs, nested=None) -> pd.DataFrame:
     rec = rec[(rec["eval"] == "score") & rec["arm"].isin(KNOBS + ("base",))].copy()
     rec["knob"] = rec["arm"]
     rec["mark_class"] = rec["track"].map(TRACK_CLASS)
     if rec["mark_class"].isna().any():
         bad = sorted(rec.loc[rec["mark_class"].isna(), "track"].unique())
         raise SystemExit(f"tracks with no mark class: {bad}")
-    pv = pair_values(rec, base, tabs)
+    pv = pair_values(rec, base, tabs, nested)
     tr = rec[rec["kind"] == "trained"]
     real = expand(tr[tr["model"] == "real"].merge(pv, on=["space", "pid", "direction"], how="left"))
     vcols = (["crps_all", "crps_top1"] + SPLIT
-             + [f"{t}_{s}" for t in ("ow", "ns", "fl") for s in ("all", "top1")]
-             + ["ow_os", "ow_se", "fl_os", "fl_se", "fl_sp_all", "fl_sp_top1"])
+             + [f"{t}_{s}" for t in ("ow", "ns", "fl", "or") for s in ("all", "top1")]
+             + ["ow_os", "ow_se", "fl_os", "fl_se", "fl_sp_all", "fl_sp_top1", "or_os", "or_se"])
     ps_real = pool(real, vcols)
     twins = {m: pool(expand(tr[tr["model"] == m]), ["crps_all", "crps_top1"])
              for m in ("nocov", "ids")}
@@ -265,6 +313,7 @@ def blind_table(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
     sdepth = g["split_depth"].agg(lambda s: ",".join(sorted(s.dropna().unique())))
     fextrap = g["floor_extrap"].max()
     pmatch = g["p_floor_matched"].min()
+    okind = g["oracle_kind"].agg(lambda s: ",".join(sorted(s.dropna().unique())))
 
     sw = rec[(rec["kind"] == "swap") & (rec["model"] == "real")]
     sw = pd.concat([sw, sw.assign(mark_class="all")], ignore_index=True)
@@ -287,7 +336,9 @@ def blind_table(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
                           ("onewarp_oracle_scaled_all", "ow_os"),
                           ("onewarp_scale_error_all", "ow_se"),
                           ("floor_oracle_scaled_all", "fl_os"),
-                          ("floor_scale_error_all", "fl_se")):
+                          ("floor_scale_error_all", "fl_se"), ("d_oracle", f"or_{s}"),
+                          ("oracle_crps_oracle_scaled_all", "or_os"),
+                          ("oracle_scale_error_all", "or_se")):
             t[name] = seed_stats(ps_real, src)[0]
         t["d_nocov"] = seed_stats(twins["nocov"], col)[0].reindex(idx)
         t["d_ids"] = seed_stats(twins["ids"], col)[0].reindex(idx)
@@ -297,18 +348,19 @@ def blind_table(rec: pd.DataFrame, base: pd.DataFrame, tabs) -> pd.DataFrame:
         t["split_depth"] = sdepth
         t["floor_extrap"] = fextrap
         t["p_floor_matched"] = pmatch
+        t["oracle_kind"] = okind
         t["n_pairs"] = n_pairs
         t["n_runs"] = n_runs
         out.append(t)
     t = pd.concat(out).reset_index()
     t["direction"] = t["dirc"]
     t["gain_over_onewarp"] = t["d_onewarp"] - t["d_model"]
-    t["gapclosed_onewarp"] = _ratio(t["gain_over_onewarp"], t["d_onewarp"] - t["d_floor"])
+    t["gapclosed_onewarp"] = _ratio(t["gain_over_onewarp"], t["d_onewarp"] - t["d_oracle"])
     t["gain_over_nocov"] = t["d_nocov"] - t["d_model"]
     two = 2 * t["seed_abs_delta"]
     t["gain_gt_2seed"] = (t["gain_over_onewarp"] > two).where(two.notna())
     t["gain_over_nocov_gt_2seed"] = (t["gain_over_nocov"] > two).where(two.notna())
-    t["gapclosed_shuffle"] = _ratio(t["d_onewarp"] - t["d_shuffle"], t["d_onewarp"] - t["d_floor"])
+    t["gapclosed_shuffle"] = _ratio(t["d_onewarp"] - t["d_shuffle"], t["d_onewarp"] - t["d_oracle"])
     sk = ["space", "knob", "mark_class", "rung", "g_version"]
     t["swap_ratio_median"] = [swap.get(k, np.nan) for k in t[sk].itertuples(index=False, name=None)]
     t["depthlaw_median_abs_log2err"] = [dlaw.get(k, np.nan)
@@ -338,7 +390,9 @@ def checks_readings(t: pd.DataFrame) -> pd.DataFrame:
                   "subset": "all", "threshold": "TODO(PI)"}
         rows.append({**common, "check": "gapclosed", "reading": _f(r.gapclosed_onewarp),
                      "detail": f"gain over onewarp {_f(r.gain_over_onewarp)}; 2 x seed |delta| "
-                               f"{_f(2 * r.seed_abs_delta)}; floor_depth {r.floor_depth} "
+                               f"{_f(2 * r.seed_abs_delta)}; oracle {r.oracle_kind} "
+                               f"{_f(r.d_oracle)}; floor ({FLOOR_LABEL}) {_f(r.d_floor)} "
+                               f"floor_depth {r.floor_depth} "
                                f"floor_extrap {_f(r.floor_extrap)} p_floor_matched "
                                f"{_f(r.p_floor_matched)}"})
         rows.append({**common, "check": "shuffledrop", "reading": _f(r.gapclosed_shuffle),
@@ -378,6 +432,17 @@ Readings only. No box is ticked and no verdict is given here; every threshold is
    `verify_compare.py` wrote `verify.txt` (AGREE / DISAGREE at 1e-6).
 
 ## Definitions
+- The ORACLE (the top of the gap-closed interval; PI ruling 2026-10-30). Depth pairs in counts
+  use the NESTED-READ oracle (`nested_oracle.tsv`, `tools/t130/nested_oracle.py`): each t112
+  depth arm is a read subsample of its base, so the base and the arm share reads, and two
+  independent replicates are no upper bound. base_to_arm: Binomial(base count, rho), exact;
+  arm_to_base: the exact posterior of the base count given the arm count under binomial
+  thinning, with the base's training-chromosome histogram as prior. rho = the arm's MANIFEST
+  depth / the base's. `oracle_kind` names it (`nested_binomial`, `nested_eb_binomial`).
+- Every other pair keeps the floor as its oracle (`oracle_kind floor`). h2's run-type arm `pe`
+  is NOT a subsample of the base (a separate FASTQ reprocessing), so it is not nested-by-
+  subsampling and keeps the floor; depth pairs in -log10 p keep it too (p cannot be thinned).
+- `d_floor` stays in every row as context: what a fresh replicate would differ by.
 - The floor at a target of total depth X (15M / 7.5M / 3.75M depth arm, 50M DNase base, else
   30M) is the same track's BASE product's t137 curve read at reads_per_half = X
   (`floor_depth` = X; `floor_extrap 1` when X is beyond the base's own reads per half). The
@@ -386,10 +451,10 @@ Readings only. No box is ticked and no verdict is given here; every threshold is
   marks every target whose X is not that depth.
 - Pooling: per run mean over its check-set pairs -> per seed mean over runs -> mean over seeds.
   `seed_abs_delta` = the largest pairwise |difference| of the three per-seed d_model values.
-- `gapclosed_onewarp` = (d_onewarp - d_model) / (d_onewarp - d_floor);
+- `gapclosed_onewarp` = (d_onewarp - d_model) / (d_onewarp - d_oracle);
   `gain_gt_2seed` = (d_onewarp - d_model) > 2 x seed_abs_delta.
 - Every CRPS carries its split: the model's `crps_oracle_scaled_all` / `scale_error_all`, and
-  the one-warp and floor splits in the appended columns.
+  the one-warp, floor and oracle splits in the appended columns.
 - `shuffledrop` reads t118's shuffle (C' from another arm of the same track), which changes
   every knob, not only the one the hypothesis names.
 - `composegap`: the never-trained depth x pe law pairs are not extracted.
@@ -409,14 +474,21 @@ def main(argv) -> int:
     fp = pd.read_csv(d / "floor_pairs.tsv", sep="\t")
     fc = pd.read_csv(d / "floor_curve.tsv", sep="\t")
     f15 = pd.read_csv(d / "floor_p15M.tsv", sep="\t")
-    t = blind_table(rec, base, floor_tables(fp, fc, f15))
+    nop = d / "nested_oracle.tsv"
+    no = pd.read_csv(nop, sep="\t") if nop.is_file() else None
+    t = blind_table(rec, base, floor_tables(fp, fc, f15), nested_table(no))
     t.to_csv(d / "blind_table.tsv", sep="\t", index=False, na_rep="NA", float_format="%.10g")
     c = checks_readings(t)
     c.to_csv(d / "checks_readings.tsv", sep="\t", index=False, na_rep="NA")
-    key = ["d_model", "d_onewarp", "d_floor", "seed_abs_delta", "crps_oracle_scaled_all",
-           "scale_error_all"]
+    key = ["d_model", "d_onewarp", "d_oracle", "d_floor", "seed_abs_delta",
+           "crps_oracle_scaled_all", "scale_error_all"]
     lines = [f"records {len(rec)} (runs {rec['run'].nunique()}), baselines {len(base)}, "
-             f"floor_pairs {len(fp)}, floor_curve {len(fc)}, floor_p15M {len(f15)}",
+             f"floor_pairs {len(fp)}, floor_curve {len(fc)}, floor_p15M {len(f15)}, "
+             + (f"nested_oracle {len(no)}" if no is not None
+                else "nested_oracle.tsv ABSENT: d_oracle is NA on every depth pair in counts"),
+             f"oracle: depth pairs in counts -> nested-read ({ORACLE_R} rho; base_to_arm "
+             f"{ORACLE_PREDICTIVE['base_to_arm']}, arm_to_base {ORACLE_PREDICTIVE['arm_to_base']}); "
+             f"every other pair -> the floor. d_floor = context ({FLOOR_LABEL})",
              f"blind_table rows {len(t)}; checks_readings rows {len(c)}"]
     lines += [f"NA in {k}: {int(t[k].isna().sum())}" for k in key]
     head = t[(t["direction"] == "both") & (t["subset"] == "all") & (t["mark_class"] == "all")]
