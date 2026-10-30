@@ -3,21 +3,29 @@
     python tools/t139/join_floor.py <knob_out_dir> <floor_dir> <out.tsv>
 
 Reads `<knob_out_dir>/levels.tsv` (knob_effects.py: per space, mark class, arm, level, the median
-over tracks) and, from `<floor_dir>`, `floor_at_30M.tsv` (class median of the curve read at 30M)
-and `floor_curve.tsv` (per product: the ladder values and the thinning-seed spread). For each knob
-row and metric (abs_log2fc_top1, shape_1k) the floor is the class median at the arm's depth:
+over tracks) and `<floor_dir>/floor_curve.tsv` (t137 floor.py: one row per product x metric, the
+product's own curve log(metric) = alpha + beta * log2(reads_per_half) read at fixed depths, and
+its thinning-seed spread by ratio, seed_spread_r0.5 / r0.25 / r0.125).
 
-  depth 15M / 7.5M / 3.75M  -> class median of value_15M / value_7.5M / value_3.75M
-  every other arm (30M)     -> value_30M_extrap from floor_at_30M.tsv
+The floor rule (plan_gaps.md A3) is "the same track's BASE product's curve read at the target's
+depth X". The knob table is per mark class, not per track, so here the floor of a (mark_class,
+metric, X) is the MEDIAN over the class's BASE products only (pid suffix `__base__base`) of each
+base's curve read at reads_per_half = X:
 
-floor_seed_spread is the class median |seed 0 - seed 1| at that depth; 15M and 30M have no thinning
-draw, so they carry the 7.5M spread. above_floor = value > floor + 2 x floor_seed_spread.
-The floor exists in counts only: the p-space ladder was not run, so p rows carry floor NA
-(floor_p15M.tsv holds CRPS only, and no CRPS metric is in levels.tsv).
+  X = the arm's total depth: the level of a depth arm (15M / 7.5M / 3.75M), else 30M
+  value_<X> for X in 15M / 7.5M / 3.75M / 1.875M; value_30M_extrap for X = 30M;
+  any other X: exp(alpha + beta * log2 X) of the base's row.
+
+floor_seed_spread = the median over the same base products of seed_spread_r<k>, k = X / that
+base's reads_per_half_full (its n_lines) rounded to the nearest of 0.5 / 0.25 / 0.125 in log2;
+k >= 0.5 -> r0.5 (ratio 1 and the 30M read have no draw). above_floor = value > floor + 2 x
+floor_seed_spread. floor_at_30M.tsv (the median over ALL the class's products) is not read.
+The floor exists in counts only: the p-space ladder was not run, so p rows carry floor NA.
 """
 from __future__ import annotations
 
 import csv
+import math
 import sys
 from pathlib import Path
 
@@ -25,6 +33,9 @@ import numpy as np
 
 METRICS = {"abs_log2fc_top1": "median_abs_log2fc_top1", "shape_1k": "median_shape_1k"}
 LADDER = ("15M", "7.5M", "3.75M")
+READ_AT = {"15M": 15e6, "7.5M": 7.5e6, "3.75M": 3.75e6, "1.875M": 1.875e6}   # floor.READ_AT
+SPREAD_RATIOS = (0.5, 0.25, 0.125)
+BASE_SUFFIX = "__base__base"
 COLS = ("space mark_class arm level metric value floor floor_depth floor_seed_spread "
         "ratio_to_floor above_floor").split()
 
@@ -38,35 +49,63 @@ def _num(v):
     return None if v in (None, "", "NA", "None", "nan") else float(v)
 
 
-def _pick(row: dict, *names):
-    for n in names:
-        if n in row:
-            return row[n]
-    raise KeyError(f"none of {names} in {sorted(row)}")
+def depth_of(arm: str, level: str) -> str:
+    return level if arm == "depth" and level in LADDER else "30M"
 
 
-def floors(floor_dir: Path) -> dict:
-    """{(mark_class, metric, depth): (floor, seed_spread)} for depth in LADDER + ('30M',)."""
-    curve: dict = {}
+def reads(depth: str) -> float:
+    return float(depth.rstrip("M")) * 1e6
+
+
+def curve_at(row: dict, depth: str):
+    """The product's curve read at reads_per_half = depth."""
+    if depth in READ_AT:
+        return _num(row[f"value_{depth}"])
+    if depth == "30M":
+        return _num(row["value_30M_extrap"])
+    beta, alpha = _num(row.get("beta")), _num(row.get("alpha"))
+    if beta is None:
+        return None
+    if alpha is None:
+        v15 = _num(row.get("value_15M"))
+        if v15 is None:
+            return None
+        alpha = math.log(v15) - beta * math.log2(15e6)
+    return math.exp(alpha + beta * math.log2(reads(depth)))
+
+
+def spread_label(x: float, n_lines: float) -> str:
+    k = x / n_lines
+    if k >= 0.5:
+        return "r0.5"
+    best = min(SPREAD_RATIOS, key=lambda r: abs(math.log2(k) - math.log2(r)))
+    return f"r{best:g}"
+
+
+def _median(v):
+    v = [x for x in v if x is not None]
+    return float(np.median(v)) if v else None
+
+
+def floor_at(base_rows: list, depth: str):
+    """(floor, seed_spread): medians over the class's base products of the curve read at depth."""
+    x = reads(depth)
+    vals = [curve_at(r, depth) for r in base_rows]
+    sp = [_num(r[f"seed_spread_{spread_label(x, float(r['reads_per_half_full']))}"])
+          for r in base_rows]
+    return _median(vals), _median(sp)
+
+
+def bases(floor_dir: Path) -> dict:
+    """{(mark_class, metric): [floor_curve rows of the class's base products]}."""
+    out: dict = {}
     for r in _read(floor_dir / "floor_curve.tsv"):
-        curve.setdefault((r["mark_class"], r["metric"]), []).append(r)
-    out = {}
-    for (mc, m), rows in curve.items():
-        s75 = float(np.median([_num(_pick(r, "seed_spread_7.5M", "seed_spread_15M_7.5M"))
-                               for r in rows]))
-        s375 = float(np.median([_num(r["seed_spread_3.75M"]) for r in rows]))
-        spread = {"15M": s75, "7.5M": s75, "3.75M": s375, "30M": s75}
-        for d in LADDER:
-            out[(mc, m, d)] = (float(np.median([_num(r[f"value_{d}"]) for r in rows])), spread[d])
-        out[(mc, m, "30M")] = (None, spread["30M"])
-    for r in _read(floor_dir / "floor_at_30M.tsv"):
-        key = (r["mark_class"], r["metric"], "30M")
-        if key in out:
-            out[key] = (_num(_pick(r, "value_30M_extrap", "median_value_30M_extrap")), out[key][1])
+        if r["pid"].endswith(BASE_SUFFIX):
+            out.setdefault((r["mark_class"], r["metric"]), []).append(r)
     return out
 
 
-def join(levels: list, fl: dict) -> list:
+def join(levels: list, base_rows: dict) -> list:
     rows = []
     for lv in levels:
         for metric, col in METRICS.items():
@@ -78,12 +117,14 @@ def join(levels: list, fl: dict) -> list:
             if lv["space"] != "counts":
                 row["floor_depth"] = "p-ladder-not-run"
             else:
-                depth = lv["level"] if lv["arm"] == "depth" and lv["level"] in LADDER else "30M"
-                floor, spread = fl.get((lv["mark_class"], metric, depth), (None, None))
+                depth = depth_of(lv["arm"], lv["level"])
+                br = base_rows.get((lv["mark_class"], metric), [])
+                floor, spread = floor_at(br, depth) if br else (None, None)
                 row.update(floor=floor, floor_depth=depth, floor_seed_spread=spread)
                 if value is not None and floor is not None:
                     row["ratio_to_floor"] = value / floor if floor else None
-                    row["above_floor"] = value > floor + 2 * spread
+                    if spread is not None:
+                        row["above_floor"] = value > floor + 2 * spread
             rows.append(row)
     return rows
 
@@ -93,7 +134,7 @@ def main(argv=None):
     if len(argv) != 3:
         sys.exit("usage: join_floor.py <knob_out_dir> <floor_dir> <out.tsv>")
     knob, floor_dir, out = Path(argv[0]), Path(argv[1]), Path(argv[2])
-    rows = join(_read(knob / "levels.tsv"), floors(floor_dir))
+    rows = join(_read(knob / "levels.tsv"), bases(floor_dir))
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
         w.writerow(COLS)
