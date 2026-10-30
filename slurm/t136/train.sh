@@ -1,6 +1,6 @@
 #!/bin/bash
 # t136 (h28): train one run of the 42-row arm-to-arm grid (plan/T136_ARM2ARM_GRID.md) on a 10 GB
-# MIG slice on Fir, depth 7.5M held out of training, then score its trained pairs, held-out pairs,
+# MIG slice on Nibi, depth 7.5M held out of training, then score its trained pairs, held-out pairs,
 # shuffle, swap and depth law. Arms: Darm1 and Darm2, both phase 2's old D (g hidden 64, f 32
 # channels, n_theta 256, 12,000 steps) plus extra arm->arm training pairs (Darm1: depth 15M <->
 # depth 3.75M; Darm2: every arm->arm pair without the held-out 7.5M product). 7 per-track g x seeds
@@ -12,7 +12,8 @@
 #          <out_dir>/runs <index> [--max-steps $6] [--eval-every $7]
 #                                                  -> <out_dir>/runs/<run_name>/ckpt.pt, TRAIN_DONE
 #   2. python3 $KIT/tools/t118/ladder/score.py trained <manifest> <covariates.tsv> <cache_dir> \
-#          <blacklist> <out_dir>/runs/<run_name> --workers 4   -> scores.json, figdata.npz, SCORE_DONE
+#          <blacklist> <out_dir>/runs/<run_name>   -> scores.json, figdata.npz, SCORE_DONE
+#      (no --workers: score.py's default_workers() reads the CPU affinity, i.e. the 2 allocated cores)
 # A task whose SCORE_DONE exists exits 0 without work.
 #
 # THE TASK TABLE. Index -> run comes from `python3 tools/t136/pairs.py tasks <manifest>` (42 rows:
@@ -22,34 +23,45 @@
 # The out dir must be t136 or under it; any other directory is refused.
 #
 # NO --export. Every input is a POSITIONAL argument; the task index is $SLURM_ARRAY_TASK_ID.
-#   OUT=/project/def-maxwl/mforooz/t136
+# All paths are on Nibi:
+#   KIT=/project/def-maxwl/mforooz/t136/code/K<n>
+#   PRODUCTS=/project/def-maxwl/mforooz/t112_cf/products
 #   CACHE=/project/def-maxwl/mforooz/t118/ladder/cache   (t118's count cache, read-only here)
-#   BLACKLIST=/project/def-maxwl/mforooz/DATA_CANDI_MERGED/hg38_blacklist_v2.bed   (required)
+#   OUT=/project/def-maxwl/mforooz/t136
+#   BLACKLIST=/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed   (required)
 #
-# THE VENV is t118's pinned recipe (python/3.10.13, requirements-fir.txt, then
-# requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR.
+# THE VENV is t118's pinned recipe as slurm/t126/train.sh runs it on Nibi (module python/3.10.13,
+# requirements-fir.txt, then requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR.
 #
-# RESOURCES. One 10 GB MIG slice, 4 cores, 16 GB, 12 h; Fir nodes fc10713 (CUDA busy) and fc10715
-# (slow) excluded.
+# RESOURCES (PI ruling 2026-10-29). One 10 GB MIG slice, 2 cores, 10000M, 7 h, on Nibi; nodes
+# c128, c166, c537, c371 (the t126 list) and c329 excluded.
+#
+# RUNTIME RISK. Validation scores EVERY training pair over chr22 at each eval (every 250 steps):
+# Darm2 has 342 pairs per histone track against 36 for Darm1/old D, so one eval costs ~9.5x more.
+# t127's old-D logs show 25-106 s for the 36-pair step-0 eval, so a Darm2 eval may take ~4-17 min.
+# Run SMOKE row 30 (Darm2_C19M16_counts_real_s0) FIRST, read the `seconds` column of its
+# runs/<run>/train_log.tsv, and only then submit the full array.
 #
 # DRY_RUN=1 prints the two python command lines (nothing when SCORE_DONE exists) and exits 0
 # before any module load (needs numpy, scipy, torch through ${PYTHON:-python3}).
 #
-# Usage, from the Fir login node, after snapshotting the repo to $KIT:
+# Usage, from the Nibi login node, after snapshotting the repo to $KIT:
 #     mkdir -p $OUT/logs
 #     TRAIN=$(sbatch --parsable --array=0-20%12 --output=$OUT/logs/%x_%A_%a.out \
 #         $KIT/slurm/t136/train.sh $KIT $PRODUCTS $CACHE $OUT $BLACKLIST)      # Darm1
 #     TRAIN=$(sbatch --parsable --array=21-41%12 --output=$OUT/logs/%x_%A_%a.out \
 #         $KIT/slurm/t136/train.sh $KIT $PRODUCTS $CACHE $OUT $BLACKLIST)      # Darm2
+#     sbatch --parsable --array=30 --output=$OUT/logs/%x_%A_%a.out \
+#         $KIT/slurm/t136/train.sh $KIT $PRODUCTS $CACHE $OUT/smoke $BLACKLIST   # Darm2 smoke, first
 # then, at once after each, slurm/t136/law.sh on the same array with
 # --dependency=aftercorr:$TRAIN on the LIVE train array (aftercorr on a finished array is refused).
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t136_train
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1
-#SBATCH --exclude=fc10713,fc10715
-#SBATCH --time=12:00:00
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=16000M
+#SBATCH --exclude=c128,c166,c537,c371,c329
+#SBATCH --time=7:00:00
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=10000M
 
 set -euo pipefail
 
@@ -96,7 +108,7 @@ if [ "${DRY_RUN:-0}" = 1 ]; then
   [ -n "$RUN" ] || { echo "no task $IDX in the pairs.py table" >&2; exit 2; }
   if [ -f "$RUNS/$RUN/SCORE_DONE" ]; then echo "skip $RUN: SCORE_DONE exists" >&2; exit 0; fi
   echo "python3 $KIT/tools/t136/train.py train-index $MANIFEST $COVARIATES $CACHE $RUNS $IDX$EXTRA"
-  echo "python3 $KIT/tools/t118/ladder/score.py trained $MANIFEST $COVARIATES $CACHE $BLACKLIST $RUNS/$RUN --workers 4"
+  echo "python3 $KIT/tools/t118/ladder/score.py trained $MANIFEST $COVARIATES $CACHE $BLACKLIST $RUNS/$RUN"
   exit 0
 fi
 
@@ -174,6 +186,6 @@ python3 "$KIT/tools/t136/train.py" train-index "$MANIFEST" "$COVARIATES" "$CACHE
     ${STEP_ARGS[@]+"${STEP_ARGS[@]}"}
 echo "=== trained $(date -u)"
 python3 "$KIT/tools/t118/ladder/score.py" trained "$MANIFEST" "$COVARIATES" "$CACHE" "$BLACKLIST" \
-    "$RUNS/$RUN" --workers 4
+    "$RUNS/$RUN"
 
 echo "=== done $RUN $(date -u)"

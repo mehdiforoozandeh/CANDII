@@ -1,5 +1,5 @@
 #!/bin/bash
-# t136 (h28): the law test of one trained arm-to-arm grid run on CPU, on Fir. It scores every
+# t136 (h28): the law test of one trained arm-to-arm grid run on CPU, on Nibi. It scores every
 # arm->arm pair of its g (trained extra pairs included; the readings subtract config.json's
 # `extra_pairs`) from the run's checkpoint, with the oracle_scaled / scale_error CRPS split. One
 # array task = one run; 42 tasks, the same index as slurm/t136/train.sh. This is
@@ -12,8 +12,8 @@
 # Skipped when runs/<run>/LAW_DONE exists (exit 0). No SCORE_DONE: exit 3 (a failed train task
 # shows as a failed law task).
 #
-# NO --export; positional arguments only. CPU only, 8 cores, 24 GB, 6 h; Fir nodes fc10713 and
-# fc10715 excluded. The out dir must be t136 or under it. DRY_RUN=1 prints the command line that a
+# NO --export; positional arguments only. CPU only, 8 cores, 24 GB, 6 h, on Nibi (the train array's
+# cluster: aftercorr cannot chain across clusters); nodes c128, c166, c537, c371, c329 excluded. The out dir must be t136 or under it. DRY_RUN=1 prints the command line that a
 # real task would run and exits 0.
 #
 # Usage: submit right after the train array, WHILE IT IS LIVE (aftercorr releases task i when
@@ -26,7 +26,7 @@
 #              $KIT/slurm/t136/law.sh $KIT $PRODUCTS $CACHE $BLACKLIST $OUT      # Darm2
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=t136_law
-#SBATCH --exclude=fc10713,fc10715
+#SBATCH --exclude=c128,c166,c537,c371,c329
 #SBATCH --time=6:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24000M

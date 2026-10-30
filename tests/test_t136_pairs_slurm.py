@@ -1,4 +1,4 @@
-"""t136 — the arm-to-arm grid tables (`tools/t136/pairs.py`) and the two Fir job scripts.
+"""t136 — the arm-to-arm grid tables (`tools/t136/pairs.py`) and the two Nibi job scripts.
 
   * the table: 2 arms (Darm1, Darm2) x the 7 per-track g x seeds 0, 1, 2; anchors 0 / 21; SMOKE =
     the C19M16 seed-0 rows; no name overlaps phase 2's reference runs;
@@ -157,14 +157,19 @@ def test_script_parses(name):
     assert r.returncode == 0, r.stderr
 
 
-@pytest.mark.parametrize("name,time", [("train", "12:00:00"), ("law", "6:00:00")])
-def test_sbatch_lines(name, time):
+@pytest.mark.parametrize("name,time,cpus,mem", [("train", "7:00:00", "2", "10000M"),
+                                               ("law", "6:00:00", "8", "24000M")])
+def test_sbatch_lines(name, time, cpus, mem):
     lines = _sbatch(name)
     assert f"#SBATCH --job-name=t136_{name}" in lines
-    assert "#SBATCH --exclude=fc10713,fc10715" in lines
+    assert "#SBATCH --exclude=c128,c166,c537,c371,c329" in lines
+    assert f"#SBATCH --cpus-per-task={cpus}" in lines and f"#SBATCH --mem={mem}" in lines
+    assert "fc107" not in SCRIPTS[name].read_text() and "DATA_CANDI_MERGED" not in SCRIPTS[name].read_text()
     assert f"#SBATCH --time={time}" in lines and sum("--time" in ln for ln in lines) == 1
     assert "#SBATCH --account=def-maxwl" in lines
     assert any("gres" in ln for ln in lines) is (name == "train")
+    if name == "train":
+        assert "#SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1" in lines
     t = SCRIPTS[name].read_text()
     assert 'tools/t136/pairs.py" tasks "$MANIFEST"' in t and "t128p3/pairs.py" not in t
     assert "viabase.py" not in t
@@ -190,8 +195,7 @@ def test_dry_run_train(index):
     assert r.returncode == 0, r.stderr
     assert r.stdout.splitlines() == [
         f"python3 /kit/tools/t136/train.py train-index {HEAD} {OUT}/runs {index}",
-        f"python3 /kit/tools/t118/ladder/score.py trained {HEAD} /bl.bed {OUT}/runs/{run} "
-        "--workers 4"]
+        f"python3 /kit/tools/t118/ladder/score.py trained {HEAD} /bl.bed {OUT}/runs/{run}"]
 
 
 def test_dry_run_train_step_overrides():
