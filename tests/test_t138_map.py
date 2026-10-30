@@ -325,7 +325,8 @@ def test_map_sh_dry_run_lines():
         "python3 /kit/tools/t138/features.py build /a/t138/annot /np /x/t137/floor/bins1k "
         "/x/t138/out/features.npz",
         "python3 /kit/tools/t138/map.py run /x/t137/floor/bins1k /x/t138/out/features.npz "
-        "/prod/MANIFEST.tsv /x/t138/out"]
+        "/prod/MANIFEST.tsv /x/t138/out --blacklist "
+        "/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed"]
 
 
 def test_guards_refuse_other_dirs():

@@ -23,20 +23,21 @@
 #SBATCH --exclude=c128,c166,c537,c371,c329
 
 set -euo pipefail
-USAGE="usage: t138/map.sh <kit_dir> <annot_dir> <narrowpeak_dir> <bins1k_dir> <products_dir> <out_dir>"
+USAGE="usage: t138/map.sh <kit_dir> <annot_dir> <narrowpeak_dir> <bins1k_dir> <products_dir> <out_dir> [blacklist.bed]"
 KIT="${1:?$USAGE}"
 ANN="${2:?$USAGE}"
 NP="${3:?$USAGE}"
 BINS="${4:?$USAGE}"
 PRODUCTS="${5:?$USAGE}"
 OUT="${6:?$USAGE}"
+BL="${7:-/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed}"
 case "$OUT" in
   */t138|*/t138/*) ;;
   *) echo "out dir $OUT is not t138 or under it; t138 writes only there" >&2; exit 2 ;;
 esac
 FEAT="$OUT/features.npz"
 L1="python3 $KIT/tools/t138/features.py build $ANN $NP $BINS $FEAT"
-L2="python3 $KIT/tools/t138/map.py run $BINS $FEAT $PRODUCTS/MANIFEST.tsv $OUT"
+L2="python3 $KIT/tools/t138/map.py run $BINS $FEAT $PRODUCTS/MANIFEST.tsv $OUT --blacklist $BL"
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   echo "$L1"
   echo "$L2"
@@ -56,5 +57,5 @@ else
   rm -f "$FEAT.tmp"
   python3 "$KIT/tools/t138/features.py" build "$ANN" "$NP" "$BINS" "$FEAT"
 fi
-python3 "$KIT/tools/t138/map.py" run "$BINS" "$FEAT" "$PRODUCTS/MANIFEST.tsv" "$OUT"
+python3 "$KIT/tools/t138/map.py" run "$BINS" "$FEAT" "$PRODUCTS/MANIFEST.tsv" "$OUT" --blacklist "$BL"
 echo "=== done $(date -u)"
