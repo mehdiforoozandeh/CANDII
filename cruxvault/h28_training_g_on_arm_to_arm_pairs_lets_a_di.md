@@ -31,7 +31,7 @@ The direct g → f designs fit trained base ↔ arm depth pairs and miss the dep
 <!-- spec 09: the null hypothesis — the most parsimonious alternative explanation under
      which this result appears although the claim is false. One line, <=25 words, naming a family. Your checks must discriminate against it.
      The PI approves it before checks are written: `crux approve-null <id>`. -->
-_(one line: the null hypothesis, the most parsimonious alternative explanation — name a family from capacity, chance, leakage, selection, normalization, instrumentation)_
+Leakage: held-out arm→arm depth ratios also occur among trained arm→arm pairs, so g recalls seen ratios, not a pair-general depth law.
 
 ## Problem Statement
 
@@ -48,7 +48,7 @@ Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on ne
 
 ## Planned Intervention
 
-_(how this hypothesis will be tested)_
+[[t136_design_and_run_the_arm_to_arm_train|The arm-to-arm grid task]]: old D's phase-2 recipe (per-track g, depth 7.5M held out) in two new arms. Darm1 adds the two 15M ↔ 3.75M pairs (ratio 4) to training; Darm2 adds every arm → arm pair that does not touch 7.5M. 2 arms × 7 tracks × 3 seeds = 42 runs on Fir. The score set is every pair that touches 7.5M; the depth pairs in it have ratio 2, which Darm1 never trains as an arm → arm ratio. The comparators are the existing phase-2 old D runs, direct and via the base, and the seed spread. Design and draft checks: `plan/T136_ARM2ARM_GRID.md`. Exploratory: nothing runs before the PI approves the null.
 
 ## Run Links
 
