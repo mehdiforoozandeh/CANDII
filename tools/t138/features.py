@@ -25,6 +25,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -201,6 +202,10 @@ def pick_peak_file(narrowpeak_dir: Path, track: str):
         rule = "call_peak_pr1_*.bfilt.narrowPeak.gz"
     if not cands:
         raise SystemExit(f"{track}: no narrowPeak under {d} ({rule})")
+    if len(cands) > 1:
+        raise SystemExit(f"{track}: {len(cands)} narrowPeak files under {d} match {rule}; refusing "
+                         f"to pick one: " + " ".join(cands))
+    print(f"{track}: narrowPeak {d / cands[0]} ({rule})", file=sys.stderr, flush=True)
     return d / cands[0], rule, cands
 
 
@@ -274,7 +279,11 @@ def build(annot_dir: Path, narrowpeak_dir: Path, bins1k_dir: Path, out: Path) ->
                          "domain_threshold_smoothed_count": thr}
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out, **arrays)
+    # Write to <out>.tmp, then rename: a killed job leaves only a .tmp, never a truncated <out>
+    # that map.sh would take as done and skip. features.json is written before the npz rename.
+    tmp = out.with_name(out.name + ".tmp")
+    with open(tmp, "wb") as fh:  # a file handle: savez on a path would append ".npz"
+        np.savez_compressed(fh, **arrays)
     meta = {
         "chroms": chroms,
         "tracks": tracks,
@@ -294,7 +303,11 @@ def build(annot_dir: Path, narrowpeak_dir: Path, bins1k_dir: Path, out: Path) ->
                    "a15+b15 > its 90th percentile over bins with a nonzero count; 0 else",
         },
     }
-    out.with_suffix(".json").write_text(json.dumps(meta, indent=1, sort_keys=True))
+    js = out.with_suffix(".json")
+    js_tmp = js.with_name(js.name + ".tmp")
+    js_tmp.write_text(json.dumps(meta, indent=1, sort_keys=True))
+    os.replace(js_tmp, js)
+    os.replace(tmp, out)
     return meta
 
 

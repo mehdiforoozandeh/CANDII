@@ -11,24 +11,34 @@
 #                         the map runs on three features
 #   hg38.chrom.sizes      chromosome lengths computed from hg38.fa.gz (awk, no samtools)
 #   ANNOT.tsv             file, url, bytes, sha256 of every downloaded file
-# A file already present is not downloaded again. Needs bash, curl, gzip, awk, sha256sum only.
+# Every file is checked with gzip -t after download; a corrupt one is deleted and the script exits
+# 3. A file already present that passes gzip -t is not downloaded again. Needs bash, curl, gzip,
+# awk, sha256sum only.
 set -euo pipefail
 ANN="${1:?usage: annot.sh <annot_dir>}"
 mkdir -p "$ANN"
 UCSC=https://hgdownload.soe.ucsc.edu/goldenPath/hg38
 UMAP=https://bismap.hoffmanlab.org/raw/hg38
 
-fetch() {  # fetch <url> <dest>; returns curl's status, leaves no partial file
-  local url="$1" dest="$2"
-  if [[ -s "$dest" ]]; then echo "have $dest"; return 0; fi
+fetch() {  # fetch <url> <dest>; curl, then gzip -t; leaves no partial or corrupt file
+  local url="$1" dest="$2" rc
+  if [[ -s "$dest" ]]; then
+    if gzip -t "$dest"; then echo "have $dest"; return 0; fi
+    echo "corrupt $dest (gzip -t failed); deleted, fetching again" >&2
+    rm -f "$dest"
+  fi
   echo "get $url"
-  if curl -fL --retry 3 -o "$dest.part" "$url"; then
-    mv "$dest.part" "$dest"
-  else
-    local rc=$?
+  if curl -fL --retry 3 -o "$dest.part" "$url"; then :; else
+    rc=$?
     rm -f "$dest.part"
     return $rc
   fi
+  if ! gzip -t "$dest.part"; then
+    rm -f "$dest.part"
+    echo "FATAL: $url downloaded but fails gzip -t; deleted" >&2
+    exit 3
+  fi
+  mv "$dest.part" "$dest"
 }
 
 fetch "$UCSC/bigZips/hg38.fa.gz" "$ANN/hg38.fa.gz"

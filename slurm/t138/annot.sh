@@ -3,7 +3,9 @@
 # Runs tools/t138/annot.sh: UCSC hg38.fa.gz, UCSC rmsk.txt.gz, the Umap k36 bedGraph (or the
 # MAPPABILITY_MISSING marker), hg38.chrom.sizes and ANNOT.tsv. bash + curl + gzip; no venv.
 #
-# NO --export; positional arguments only. The annot dir must be t138 or under it.
+# NO --export; positional arguments only. The annot dir must be t138 or under it. SLURM does not
+# create the --output directory: the submitter runs `mkdir -p /project/def-maxwl/mforooz/t138/logs`
+# first.
 #   sbatch --parsable --output=/project/def-maxwl/mforooz/t138/logs/%x_%j.out \
 #       $KIT/slurm/t138/annot.sh $KIT /project/def-maxwl/mforooz/t138/annot
 #SBATCH --account=def-maxwl

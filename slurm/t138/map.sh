@@ -10,7 +10,8 @@
 #          <products_dir>/MANIFEST.tsv <out_dir>        -> map_*.tsv, map_check.txt, config.json
 #
 # NO --export; positional arguments only. The out dir must be t138 or under it. DRY_RUN=1 prints
-# the two python lines and exits 0 before any module load.
+# the two python lines and exits 0 before any module load. SLURM does not create the --output
+# directory: the submitter runs `mkdir -p /project/def-maxwl/mforooz/t138/logs` first.
 #   sbatch --parsable --output=/project/def-maxwl/mforooz/t138/logs/%x_%j.out \
 #       $KIT/slurm/t138/map.sh $KIT $ANNOT $NARROWPEAK $BINS1K $PRODUCTS $OUT
 #SBATCH --account=def-maxwl
@@ -47,9 +48,12 @@ export GIT_SHA
 echo "kit git sha: $GIT_SHA"
 set +u; module load scipy-stack; set -u
 mkdir -p "$OUT"
+# features.py writes $FEAT.tmp and renames it on success, so $FEAT exists only when complete; a
+# killed step 1 leaves a stale .tmp, removed here before the rebuild.
 if [[ -s "$FEAT" ]]; then
   echo "have $FEAT; step 1 skipped"
 else
+  rm -f "$FEAT.tmp"
   python3 "$KIT/tools/t138/features.py" build "$ANN" "$NP" "$BINS" "$FEAT"
 fi
 python3 "$KIT/tools/t138/map.py" run "$BINS" "$FEAT" "$PRODUCTS/MANIFEST.tsv" "$OUT"

@@ -93,6 +93,44 @@ def test_lengths_equal_bins1k(built):
     assert set(meta["files_sha256"]) >= {"hg38.fa.gz", "rmsk.txt.gz", "k36.umap.bedgraph.gz"}
 
 
+def test_build_is_atomic_and_logs_peak_file(tmp_path):
+    out = tmp_path / "features.npz"
+    p = py(FEATURES, "build", FIX / "annot", FIX / "narrowpeak", FIX / "bins1k", out)
+    assert p.returncode == 0, p.stderr
+    assert out.exists() and not out.with_name("features.npz.tmp").exists()
+    assert not (tmp_path / "features.json.tmp").exists()
+    assert "call_peak_shard0_x.bfilt.narrowPeak.gz" in p.stderr
+    assert "call_peak_pr1_x.no_chrM_MT.bfilt.narrowPeak.gz" in p.stderr
+
+
+def test_build_refuses_two_peak_candidates(tmp_path):
+    np_dir = tmp_path / "narrowpeak"
+    shutil.copytree(FIX / "narrowpeak", np_dir)
+    src = np_dir / "C19M16" / "call_peak_shard0_x.bfilt.narrowPeak.gz"
+    shutil.copy(src, np_dir / "C19M16" / "call_peak_shard0_y.bfilt.narrowPeak.gz")
+    out = tmp_path / "features.npz"
+    p = py(FEATURES, "build", FIX / "annot", np_dir, FIX / "bins1k", out)
+    assert p.returncode != 0
+    assert "call_peak_shard0_x" in p.stderr and "call_peak_shard0_y" in p.stderr
+    assert not out.exists()
+
+
+def test_annot_fetch_deletes_corrupt_download(tmp_path):
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "curl").write_text('#!/bin/bash\nwhile [[ $# -gt 0 ]]; do\n'
+                               '  if [[ "$1" == "-o" ]]; then echo notgzip > "$2"; fi; shift\n'
+                               'done\n')
+    (fake / "curl").chmod(0o755)
+    ann = tmp_path / "t138" / "annot"
+    env = {**os.environ, "PATH": f"{fake}:{os.environ['PATH']}"}
+    p = subprocess.run(["bash", str(ROOT / "tools/t138/annot.sh"), str(ann)],
+                       capture_output=True, text=True, env=env)
+    assert p.returncode == 3, (p.stdout, p.stderr)
+    assert "gzip -t" in p.stderr
+    assert not any(ann.iterdir())  # neither hg38.fa.gz nor hg38.fa.gz.part is left
+
+
 def test_mappability_missing_build(tmp_path):
     ann = tmp_path / "annot"
     shutil.copytree(FIX / "annot", ann)
@@ -109,7 +147,8 @@ def test_mappability_missing_build(tmp_path):
 
 # ---------------------------------------------------------------- map.py run (synthetic 1 kb)
 
-def synth(tmp: Path, inflate: bool, with_map: bool = True, seed: int = 1):
+def synth(tmp: Path, inflate: bool, with_map: bool = True, seed: int = 1,
+          lam_center: float = 60.0, lam_sd: float = 0.7):
     """2 chromosomes x 3000 1 kb bins; halves Poisson from one planted signal. With `inflate`,
     half b is over-dispersed inside the planted low-mappability decile."""
     rng = np.random.default_rng(seed)
@@ -138,7 +177,7 @@ def synth(tmp: Path, inflate: bool, with_map: bool = True, seed: int = 1):
     b1 = tmp / "bins1k"
     b1.mkdir()
     for pid, track, *_ in PRODUCTS:
-        lam = np.exp(rng.normal(np.log(60), 0.7, n))
+        lam = np.exp(rng.normal(np.log(lam_center), lam_sd, n))
         lam = lam * np.where(ctx[track] == 2, 10, np.where(ctx[track] == 1, 3, 1))
         a = rng.poisson(lam)
         lb = lam * np.exp(rng.normal(0, 1.2, n)) if inflate else lam
@@ -197,6 +236,37 @@ def test_inflated_low_mappability(tmp_path):
     assert any(r["reading"] == "delta_R2" and r["mark_class"] == "narrow" for r in cls)
     cfg = json.loads((out / "config.json").read_text())
     assert cfg["features"] == ["gc", "map", "rep", "ctx"] and cfg["mappability_missing"] is False
+
+
+def test_sparse_halves_level_null_nonnegative(tmp_path):
+    """~1.2 reads per 1 kb bin per half (sparse Poisson): the binned-mean null keeps R2_level >= 0
+    and map_check passes, at both depths (375 is ~0.3 reads per bin per half)."""
+    out = run_map(tmp_path, inflate=True, lam_center=1.2, lam_sd=0.3)
+    rows = tsv(out / "map_products.tsv")
+    assert len(rows) == 2 * len(PRODUCTS)
+    for r in rows:
+        assert float(r["R2_level"]) >= 0, (r["pid"], r["depth"], r["R2_level"])
+    check = (out / "map_check.txt").read_text()
+    assert "FAIL" not in check, check
+
+
+def test_level_null_is_binned_mean_step():
+    sys.path.insert(0, str(MAP.parent))
+    try:
+        import map as tmap
+    finally:
+        sys.path.pop(0)
+    rng = np.random.default_rng(3)
+    level = rng.integers(0, 5, 2000).astype(float)  # heavy ties: many quantile edges collapse
+    d = rng.random(2000) + level
+    dh = tmap.level_null(d, level)
+    for v in np.unique(level):  # one value per level = a step function, equal to the bin mean
+        assert np.unique(dh[level == v]).size == 1
+    edges = np.unique(np.quantile(level, np.linspace(0, 1, tmap.N_LEVEL_BINS + 1)))
+    idx = np.clip(np.searchsorted(edges, level, side="right") - 1, 0, edges.size - 2)
+    for k in np.unique(idx):
+        assert np.isclose(dh[idx == k][0], d[idx == k].mean())
+    assert 1 - (d - dh).var() / d.var() >= 0
 
 
 def test_map_without_mappability(tmp_path):

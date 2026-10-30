@@ -7,7 +7,7 @@ ratio-0.25 halves a375/b375 of G1's bins1k layout -- per 1 kb bin over the featu
 
   d      = |log2((a + 0.5) / (b + 0.5))|            (bins with a + b == 0 dropped; no blacklist)
   level  = log2(a + b + 1)
-  d_hat  = the NULL: the median of d in 40 quantile bins of level, linearly interpolated in level
+  d_hat  = the NULL: the mean of d in 40 quantile bins of level, a step function per bin
   r      = d - d_hat                                  (the residual the features are read against)
 
 Signal level is fitted FIRST; every feature reading is on r, never on d alone.
@@ -17,7 +17,7 @@ mean d per context class (0 other, 1 domain, 2 peak) and per feature decile (ran
 kept bins, ties averaged); R2_level = 1 - var(d - d_hat)/var(d) over the kept bins; R2_level_feat =
 OLS R^2 of d on [1, d_hat, gc, map, rep, ctx==1, ctx==2] on the subsample; R2_level_ols = OLS R^2
 of d on [1, d_hat] on the same rows; delta_R2 = R2_level_feat - R2_level_ols (both OLS, so a
-level-only world reads ~0; the brief's R2_level here read 0.18 on pure Poisson halves);
+level-only world reads ~0; R2_level >= 0 in-sample because d_hat is a binned conditional mean);
 delta_R2_shuffle = the same with the feature rows permuted jointly (seed 0); enrichment = the
 top-1 % r bins' share in a class / the class's share of all kept bins, for each context class, the
 bottom mappability decile and the top repeat decile.
@@ -78,20 +78,19 @@ def load_features(path: Path):
 
 
 def level_null(d: np.ndarray, level: np.ndarray, n_bins: int = N_LEVEL_BINS) -> np.ndarray:
-    """d_hat(level): the median of d in quantile bins of level, interpolated in level."""
+    """d_hat(level): the mean of d in quantile bins of level, assigned per bin as a step function.
+
+    A binned conditional mean is a least-squares projection of d onto the bin indicators, so the
+    in-sample R2_level = 1 - var(d - d_hat)/var(d) is >= 0 by construction (foreman ruling).
+    """
     edges = np.unique(np.quantile(level, np.linspace(0, 1, n_bins + 1)))
     if edges.size < 2:
-        return np.full(d.shape, np.median(d))
+        return np.full(d.shape, d.mean())
     idx = np.clip(np.searchsorted(edges, level, side="right") - 1, 0, edges.size - 2)
-    centers, meds = [], []
-    for k in range(edges.size - 1):
-        m = idx == k
-        if m.any():
-            centers.append(np.median(level[m]))
-            meds.append(np.median(d[m]))
-    centers, meds = np.asarray(centers), np.asarray(meds)
-    o = np.argsort(centers, kind="stable")
-    return np.interp(level, centers[o], meds[o])
+    cnt = np.bincount(idx, minlength=edges.size - 1)
+    tot = np.bincount(idx, weights=d, minlength=edges.size - 1)
+    means = np.divide(tot, cnt, out=np.zeros_like(tot), where=cnt > 0)  # empty bins never indexed
+    return means[idx]
 
 
 def deciles(x: np.ndarray) -> np.ndarray:
@@ -156,8 +155,7 @@ def readings(a: np.ndarray, b: np.ndarray, F: dict, ctx: np.ndarray, feats) -> d
     Fs = {f: Fk[f][rows] for f in feats}
     X = design(dh[rows], Fs, ctx[rows], feats)
     # delta_R2 compares like with like: both terms are OLS fits on the same rows, so a level-only
-    # world reads ~0. (1 - var(r)/var(d)) is not an OLS fit of d_hat, and the gap between the
-    # median null and the conditional mean would otherwise show up as a "feature" gain.
+    # world reads ~0. (1 - var(r)/var(d)) is measured on all kept bins, not on these rows.
     out["R2_level_ols"] = r2_ols(d[rows], X[:, :2])
     out["R2_level_feat"] = r2_ols(d[rows], X)
     out["delta_R2"] = out["R2_level_feat"] - out["R2_level_ols"]
@@ -304,8 +302,8 @@ def run(bins1k_dir: Path, features: Path, manifest: Path, out_dir: Path) -> dict
         "formulas": {
             "d": "|log2((a + 0.5) / (b + 0.5))| per 1 kb bin; bins with a + b == 0 dropped",
             "level": "log2(a + b + 1)",
-            "d_hat": f"median of d in {N_LEVEL_BINS} quantile bins of level (unique edges), "
-                     "interpolated linearly at the bins' median level",
+            "d_hat": f"mean of d in {N_LEVEL_BINS} quantile bins of level (unique edges), "
+                     "assigned per bin as a step function (binned conditional mean)",
             "r": "d - d_hat",
             "R2_level": "1 - var(d - d_hat) / var(d), all kept bins",
             "R2_level_ols": "OLS R^2 of d on [1, d_hat] on the subsample rows with finite "
