@@ -411,3 +411,63 @@ def test_scripts_parse_and_pin_resources():
         assert "--export" not in t.replace("NO --export", "")
     assert "module load scipy-stack" in (ROOT / "slurm/t141/map_knobs.sh").read_text()
     assert "requirements-fir.txt" in (ROOT / "slurm/t141/arms.sh").read_text()
+
+
+# ---------------------------------------------------------------- t142: read-thinned null
+
+DEPTH = "C19M16__depth__15M"
+
+
+def _null_files(world, d, ratio=0.5, rng_override=None, spoil=None):
+    """Stand-in t142 null files: any subset of the base (here a fixed binomial draw)."""
+    rows = arms.read_manifest(world["prod"] / "MANIFEST.tsv")
+    pid_index = [r["pid"] for r in rows].index(DEPTH)
+    (d / DEPTH).mkdir(parents=True, exist_ok=True)
+    with np.load(world["prod"] / "C19M16__base__base" / "counts25.npz") as b:
+        base = {c: b[c] for c in b.files if c != "chrM"}
+    files = {}
+    for s in (0, 1):
+        g = np.random.default_rng([99, s])
+        arr = {c: g.binomial(x.astype(np.int64), ratio).astype(np.uint32) for c, x in base.items()}
+        if spoil is not None:
+            spoil(arr)
+        np.savez(d / DEPTH / f"null_s{s}.npz", **arr)
+        rng = rng_override or [s, pid_index, 0]
+        (d / DEPTH / f"null_s{s}.json").write_text(json.dumps({"ratio": ratio, "rng": rng}))
+        files[s] = arr
+    return files, [r["pid"] for r in arms.arm_rows(rows)].index(DEPTH)
+
+
+def test_read_null_is_read_from_files(world, tmp_path):
+    files, idx = _null_files(world, tmp_path / "thinned")
+    assert arms.main(["arm", str(world["prod"]), str(tmp_path / "t141"), str(idx),
+                      str(tmp_path / "thinned")]) == 0
+    z = np.load(tmp_path / "t141" / "arms1k" / f"{DEPTH}.npz")
+    meta = json.loads(str(z["meta"]))
+    assert meta["null"]["thinning"] == "read" and meta["null"]["formula"] == arms.NULL_READ
+    zu = np.load(world["out"] / "arms1k" / f"{DEPTH}.npz")
+    assert json.loads(str(zu["meta"]))["null"]["thinning"] == "unit"
+    for s in (0, 1):
+        for c in CHROMS:
+            np.testing.assert_array_equal(z[f"counts_null{s}_{c}"],
+                                          files[s][c][:N1K * 40].reshape(-1, 40).sum(1))
+    for k in zu.files:                       # everything but the null is unchanged
+        if k != "meta" and "null" not in k:
+            np.testing.assert_array_equal(z[k], zu[k])
+
+
+@pytest.mark.parametrize("defect", ["ratio", "rng", "above"])
+def test_read_null_refuses_mismatch(world, tmp_path, defect):
+    kw = {}
+    if defect == "ratio":
+        kw["ratio"] = 0.25
+    elif defect == "rng":
+        kw["rng_override"] = [0, 0, 0]
+    else:
+        def spoil(arr):
+            arr["chr1"] = arr["chr1"].copy()
+            arr["chr1"][3] += 10_000
+        kw["spoil"] = spoil
+    _, idx = _null_files(world, tmp_path / "thinned", **kw)
+    assert arms.arm(world["prod"], tmp_path / "t141", idx, tmp_path / "thinned") == 3
+    assert not (tmp_path / "t141" / "arms1k" / f"{DEPTH}.npz").exists()
