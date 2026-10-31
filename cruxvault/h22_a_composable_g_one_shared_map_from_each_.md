@@ -26,6 +26,12 @@ If the model maps every run to a shared middle ground and back, it can connect a
 
 One network φ maps one side's covariates c to (α(c), β(c)). The source is encoded as z = (log(1 + X) − α(c)) / β(c) and decoded as log μ = α(c′) + β(c′)·z, so an arm → arm pair composes two trained legs by construction. If composition is what is missing, this design brings never-trained depth pairs to the trained-pair error and the retrained old design A does not. First readings: it does not, nor do two learned-decoder variants.
 
+## Expect
+
+The composable encoder-decoder g brings never-trained depth pairs to the trained-pair error, and the retrained old design A, with the same 7.5M level held out, does not.
+
+_Pre-run: written 2026-10-20, before the rung-A array was submitted. No numeric bar was set (exploratory)._
+
 ## Null
 
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially
@@ -36,6 +42,8 @@ _(one line: the cheapest way this result could be trivially true — name a fami
 ## Problem Statement
 
 Old g reads [c, c′] together, so an arm → arm pair is an input it never saw. Chaining its two trained legs through the base meets the depth law (0.07–0.16 log2) where its direct answer does not ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]). Real data has few arm → arm examples, so the fix must come from g's structure.
+
+Origin: after the loss and pseudocount fixes failed, the agent proposed making composition hold by construction (f = decode(C′) ∘ encode(C)); the PI asked for the formal definition and then chose every scope fork: counts only, both g versions, β learned and β = 1, the 7.5M level held out, and the baseline retrained. The PI rejected the agent's first rung-D build as asymmetric ("the encoder and decoder architecture must have symmetry"), which led to the shared-weight design.
 
 ## Idea / Hypothesis
 

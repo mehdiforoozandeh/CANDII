@@ -22,6 +22,10 @@ If you split one experiment's reads into two random halves, the two halves alrea
 
 Every covariate correction is read against a floor: the change that read resampling alone causes. This asks three things on the t117 pseudoreplicates (pr1/pr2 halves of all 130 counterfactual products), thinned along a depth ladder: how much resampling moves peak height, 1 kb shape and per-bin divergence; where in the genome the split-half disagreement concentrates, with signal level fitted first as the null; and how it shrinks with depth, read at 30M. It is settled when the 30M floor is stated per mark class with its depth curve, and the regional pattern is named or shown to be absent. The floor is the oracle for pairs that share no reads and context for pairs that do (PI rulings 2026-10-29, 2026-10-30; see Protocol).
 
+## Motivation
+
+This came out of a doubt on the knob-ranking deck: the PI found "a shape change of 0.52 just by downsampling reads ... very strange. what explains it? count noise? poisson noise?" (2026-10-26). On 2026-10-29 the PI made it a question: measure how much resampling alone moves shape and magnitude, "because that is the floor we cannot correct beyond", find where irreproducible regions sit, and keep every comparison fair against this floor. The PI's prior was that irreproducible regions are not uniform across the genome. Mid-run the unit thinning proved too smooth at 1 kb (about √k), and the PI ruled to rebuild everything with whole-read thinning.
+
 ## Question
 
 How much does resampling alone move a track's shape and magnitude, where in the genome is that noise concentrated, and how does it shrink with depth?
@@ -53,5 +57,7 @@ Readings, not judged, 2026-10-30 ([rebuilt floor and map](results/t142/DIGEST.md
 - For CANDI: a level-dependent spread, such as the NB variance, describes the floor. Low-depth noise is larger than first measured.
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f25` finding (moderate) [[f25_the_15m_floor_passes_an_exact_self_check|The 15M floor passes an exact self-check and real depth-arm halves match it…]]
 <!-- crux:ledger:end -->

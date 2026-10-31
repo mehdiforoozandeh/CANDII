@@ -30,6 +30,8 @@ How closely does a map h reproduce the −log10 p track from a predicted count d
 
 In [[q4_how_much_capacity_does_a_covariate_condi|the capacity grid]], f predicted −log10 p (P) directly, and some pairs blew up when a learned log-normal spread drifted. Here h maps f's NB over counts, plus the control, to P. [[q5_does_a_depth_offset_on_f_the_source_dept|The depth-offset question]] supplies f.
 
+The PI's framing (2026-10-08): h "predicts signal pvalue from the count distribution". From the agent's options the PI chose to move the control into h, not g, and to build h from the peak caller's own formula first. Because P is a Poisson upper tail at the local λ, h is almost known, so the expectation before the run was that the fixed formula does most of the work, and that a chain through counts does not explode as direct P did. h was first scored on true counts, so that any remaining error belongs to h alone. The PI stopped chains B and B2 on 2026-10-19 to save compute ("we don't want to spend anymore tokens and compute on this"), and declined to rerun them on 2026-10-25.
+
 ## Protocol
 
 Exploratory (PI 2026-10-08): readings only — no pass/fail bars, no ticks, no verdicts. The design, fork by fork, is `plan/ETA_OFFSET_AND_H_DESIGN.md` on the branch `exp/t118-counterfactual-f`.
@@ -65,7 +67,8 @@ At 6 of 8 designs (A, C, D, A2, C2, D2), aggregated 2026-10-25; the PI stopped c
 - [Deck](presentations/t125-eta-h/index.html) — published https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS; vault copy [DECK.md](presentations/t125-eta-h/DECK.md)
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
 - `h25` [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *open*
+- `f18` finding (moderate) [[f18_clear_margins_over_seed_wobble_but_one_t|Clear margins over seed wobble, but one track and one f seed, and two of…]]
 <!-- crux:ledger:end -->

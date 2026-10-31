@@ -28,6 +28,12 @@ The model first guesses read counts and then turns them into p-values, and most 
 
 A map h turns a count distribution and its matched control into a −log10 p track. With f's predicted NB as input, every h, from the bin formula to the learned MLPs, scores worse than the direct-p model (CRPS on P 0.178–0.276 against 0.143 ± 0.0016, the reference). The claim: f causes most of this excess. The test scores a 2 × 2 of {f's NB, the true X′ given f's dispersion} × {bin formula, best learned h} on the same pairs and seeds. It is supported if the swap to X′ removes at least 0.7 of the excess and the swap to the best h removes at most 0.2 (shares the PI's to confirm); it is refuted if the h swap removes more than the X′ swap. The existing "h alone" cells feed h a point X′, not an NB with f's dispersion, so they do not score this test.
 
+## Expect
+
+Swapping f's predicted counts for the true X′ (with f's dispersion) removes at least 0.7 of the chain's excess error over the direct-p model, and swapping the formula for the best learned h removes at most 0.2.
+
+_Pre-run for this test, which has not been built. The agent drafted the hypothesis and its bars on 2026-10-25 from the depth-offset readings, and the PI approved them in one batch ("i approve all your recommendations"); the PI did not set 0.7 and 0.2 individually._
+
 ## Null
 
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially

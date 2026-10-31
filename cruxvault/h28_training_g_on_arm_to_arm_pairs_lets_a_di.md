@@ -28,6 +28,12 @@ If the translator also practises on pairs where neither side is the original tra
 
 The direct g → f designs fit trained base ↔ arm depth pairs and miss the depth law on never-trained arm → arm pairs, while chaining two trained maps through the base meets it (0.07–0.12 against 0.29–0.34 direct). That fits two readings: g needs the base as a pivot, or g simply never saw an arm → arm pair. This claims the second: trained on some arm → arm pairs as well, a direct map meets the law on held-out arm → arm pairs. It decides what CANDI needs, since CANDI has a natural base only for depth (the full-depth track): if this holds, augmenting CANDI's corpus with counterfactual pairs is the route; if it fails, the pivot is. Settled by the median |log2 error| of the predicted scale on held-out arm → arm depth pairs against the via-base chain and the seed floor.
 
+## Expect
+
+Darm1 closes at least half the never-trained depth-law gap from the direct map to the pivot through the base (≤ 0.160), transfers the depth ratio, and closes at least half the held-out CRPS gap with a gain above 2 × seed spread.
+
+_Pre-run: the five checks and their bars were committed on 2026-10-29, and the 42-run grid was submitted on 2026-10-30. Darm2 was read, not checked, by the PI's design._
+
 ## Null
 
 <!-- spec 09: the null hypothesis — the most parsimonious alternative explanation under
@@ -38,6 +44,8 @@ Leakage: held-out arm→arm depth ratios also occur among trained arm→arm pair
 ## Problem Statement
 
 Arm of the PI's 2026-10-29 ruling on the unseen-pair gap: run beside the t135 pivot seeds, with the pivot as the default reading. Augmenting CANDI (by BAM or FASTQ re-derivation) is deferred until this and t135 say whether the architecture generalizes without it.
+
+Why (PI, 2026-10-29): "in real candi data, we don't have a lot of counterfactuals for most covariates ... so in real candi data, the definition of 'base' is not very straightforward". If arm-to-arm training generalizes without the base, "it motivates augmenting real candi data".
 
 ## Idea / Hypothesis
 

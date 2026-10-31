@@ -32,6 +32,12 @@ A stretch and a shift of the signal may turn one run into the other. In counts t
 
 Design A, the lowest rung of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one affine map in log space per pair. Exploratory readings, no verdict. It beats its scrambled-covariate twin in −log10 p (12 of 12 cells) but not in counts (3 of 12). Design A2, where g also reads the bin value, fixes counts and makes −log10 p explode. On never-trained arm → arm pairs, A gains nothing over the twin in counts.
 
+## Expect
+
+Design A (per-bin affine on the log scale) beats its scrambled-covariate twin by more than 2 × the seed wobble, per mark class, in counts and −log10 p, for both g versions.
+
+_Pre-run: the PI accepted the bars on 2026-09-25 ("i accept the bars") and they were locked that morning, before the row-1 training array was submitted. Row 2 ran under the PI's ruling "don't worry about the claims for now" (2026-09-28)._
+
 ## Null
 
 Normalization: the covariates are ignored — this design does no better than the same design trained with C and C' scrambled across pairs.

@@ -32,6 +32,12 @@ A small network can reshape peaks differently from background, where a single ke
 
 Design D, the top rung of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: a small dilated CNN whose layers g scales and shifts. Exploratory readings, no verdict. In counts, with one g per track D scores best of the four; it beats its scrambled-covariate twin in 11 of 12 cells, but beats design C in only 1 of 12. In −log10 p it explodes on some pairs, cause unknown, and beats its twin in 3 of 12 cells. Design D2 (g also reads the bin value) adds nothing in counts.
 
+## Expect
+
+Design D (conditioned dilated CNN) beats its scrambled twin and beats design C, each by more than 2 × the larger seed wobble, per mark class, in both spaces, for both g versions.
+
+_Pre-run: the PI accepted the bars on 2026-09-25 ("i accept the bars") and they were locked that morning, before the row-1 training array was submitted. Row 2 ran under the PI's ruling "don't worry about the claims for now" (2026-09-28)._
+
 ## Null
 
 Normalization: the covariates are ignored — this design does no better than the same design trained with C and C' scrambled across pairs.

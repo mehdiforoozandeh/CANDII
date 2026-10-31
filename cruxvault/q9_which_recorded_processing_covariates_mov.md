@@ -22,6 +22,10 @@ We re-processed the same experiments while changing one lab or software setting 
 
 Ranks the ten counterfactual-arm knobs by how far each moves a track from its base, in counts and −log10 p. Depth leads on peak height, the antibody-efficiency proxy on shape; the control and fragment-extension knobs move least. The middle group (duplicate removal, run type, read length, mapping-quality filter) re-draws its 30M-read subsample, so it is read against the resampling floor.
 
+## Motivation
+
+The PI asked on 2026-10-26: "among all covariates in the counterfactual augmented data, which ones have more effect on the signal. what's the ranking?" The PI kept it small: "this is a simple exploratory experiment. we don't want an over-engineered experiment here", and set the order: settle the metrics first, then rank. Peak height is |log2 fold change| over the top 1% of bins; shape is 1 − Spearman on 1 kb bins (summed to damp counting noise); FRiP was the PI's addition, on each track's own top-1% bins. After the first pass, the PI chose to re-score on peaks the base and the arm share, to remove the bias of base-chosen peaks.
+
 ## Question
 
 Which recorded processing covariates move a track the most when changed one at a time, in peak height and in the shape of the signal?
@@ -54,7 +58,8 @@ First pass, 192 base → arm comparisons ([[t133_rank_the_t112_processing_knobs_
 - [Deck](presentations/q9-knob-ranking/index.html) — published https://claude.ai/artifact/1T1NKMYo5taJjDowse9r2f; vault copy [DECK.md](presentations/q9-knob-ranking/DECK.md)
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**1 children** · open 0, leaning 1, settled 0, parked 0 · 1 finding(s) on this question
 
-- `q11` _(Q)_ [[q11_where_along_the_genome_does_each_covaria|Where along the genome does each covariate act: does a track react uniformly to a change in depth, read length or another processing knob, or more in some kinds of regions?]] — *open*
+- `q11` _(Q)_ [[q11_where_along_the_genome_does_each_covaria|Where along the genome does each covariate act: does a track react uniformly to a change in depth, read length or another processing knob, or more in some kinds of regions?]] — *leaning · moderate*
+- `f24` finding (moderate) [[f24_peak_height_clears_the_floor_by_a_wide_m|Peak height clears the floor by a wide margin; the shape ranking does not,…]]
 <!-- crux:ledger:end -->

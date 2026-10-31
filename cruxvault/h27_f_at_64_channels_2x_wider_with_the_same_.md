@@ -31,6 +31,12 @@ The network that turns one track into another may be too narrow to learn how seq
 
 f, the convolutional network that maps a source track to a target track, may be too narrow to carry the depth law onto pairs it never trained on. This claims that f at 64 channels, twice the 32 of old D, with the same receptive field, g hidden width, training pairs and loss, brings never-trained depth pairs onto the law. A miss at 64 channels refutes it at that width. Exploratory, like its parent: readings, no bars. It is the sibling of [[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]].
 
+## Expect
+
+With f at 64 channels and g's hidden width unchanged, never-trained depth → depth pairs fall to the trained-pair level (about 0.1).
+
+_Written after the run, at the PI's request on 2026-10-31. The standard-error bar for the three extra seeds (a real gain above 0.013) was set before that follow-up ran._
+
 ## Null
 
 Chance: a single seed or track happens to land near the law; the median over 3 seeds and 7 tracks guards against it.

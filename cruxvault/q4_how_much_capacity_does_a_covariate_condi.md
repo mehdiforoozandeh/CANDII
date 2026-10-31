@@ -22,6 +22,10 @@ How simple can the translator be: a stretch, a bendable curve, a look at neighbo
 
 How expressive must f be to use the covariates? The children are rungs A–D (affine, monotone curve, kernel plus curve, conditioned CNN), each judged against its scrambled-covariate twin and the rung below; a sequence-reading rung is parked. All four ran in two rows: g reads C, C′, or also the bin value. Exploratory readings: in counts the curve gives the main step and shape adds little. Some −log10 p pairs explode. No rung carries its gain to never-trained pairs.
 
+## Motivation
+
+The PI set the capacity question on 2026-09-25: "let's focus on the architecture: the form of f and how g produces it. we want to come up with 3-4 options in order of complexity and expressiveness." The agent proposed A → B → C → D, each adding one capability (magnitude, then shape, then context-dependent shape); the PI approved ("loved these 4 ideas") and parked a fifth, sequence-reading option. Row 2 is the PI's idea: g also reads the bin value x, so in floor bins g can emit an f that keeps zeros at zero. The agent first disputed it and then conceded the PI had the mechanism right. Both scramble twins (fixed permutation and re-scrambled every step) were kept because "both are answering different questions".
+
 ## Question
 
 How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?
@@ -41,11 +45,12 @@ CRPS on all bins, chr19 + chr21, one g per track, mean of 3 seeds ± seed wobble
 Also open: [[t119_rebuild_the_two_dnase_mapq_arms_c12|the DNase MAPQ-arm rebuild]].
 
 <!-- crux:ledger:start -->
-**5 children** · open 5, leaning 0, settled 0, parked 0
+**5 children** · open 1, leaning 4, settled 0, parked 0 · 1 finding(s) on this question
 
-- `h12` [[h12_a_covariate_conditioned_affine_map_on_th|A generator g(C, C') that outputs a per-bin affine map on the log scale beats the same design trained with scrambled covariates, in count and −log10 p space]] — *open*
-- `h13` [[h13_a_small_covariate_conditioned_convolutio|A generator g(C, C') that outputs a convolution kernel followed by a monotone curve beats its scrambled-covariate twin and the per-bin monotone-curve design]] — *open*
-- `h14` [[h14_an_encoder_decoder_with_the_encoder_cond|A generator g(C, C') that modulates a small dilated convolutional network beats its scrambled-covariate twin and the kernel-and-curve design]] — *open*
+- `h12` [[h12_a_covariate_conditioned_affine_map_on_th|A generator g(C, C') that outputs a per-bin affine map on the log scale beats the same design trained with scrambled covariates, in count and −log10 p space]] — *leaning · weak*
+- `h13` [[h13_a_small_covariate_conditioned_convolutio|A generator g(C, C') that outputs a convolution kernel followed by a monotone curve beats its scrambled-covariate twin and the per-bin monotone-curve design]] — *leaning · weak*
+- `h14` [[h14_an_encoder_decoder_with_the_encoder_cond|A generator g(C, C') that modulates a small dilated convolutional network beats its scrambled-covariate twin and the kernel-and-curve design]] — *leaning · weak*
 - `h16` [[h16_a_generator_that_reads_the_dna_sequence_|A generator that reads the DNA sequence as well as the source and target covariates outputs a position-dependent transformation that beats the same design without sequence on the knobs that act through mappability and GC]] — *open*
-- `h17` [[h17_a_generator_g_c_c_that_outputs_a_per_bin|A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design]] — *open*
+- `h17` [[h17_a_generator_g_c_c_that_outputs_a_per_bin|A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design]] — *leaning · weak*
+- `f16` finding (moderate) [[f16_the_pi_s_own_2026_10_29_review_called_th|The PI's own 2026-10-29 review called this question mostly answered; the…]]
 <!-- crux:ledger:end -->

@@ -28,6 +28,12 @@ If we tell a trained CANDI model that a track was read with shorter reads or as 
 
 Claim: CANDI's output does not follow a change in read length or run type with biology fixed, because its training has no pair that shows such a change. The probe keeps the input fixed (the T_ assays of the cell type), swaps only the output covariates from the base's to an arm's, and compares the predicted change with the real base-to-arm change of [[t112_build_the_counterfactual_arms_for_t|the counterfactual arms]]. Supported if the predicted log2 change stays near 0, or does not track the real one, and the arm's NLL does not improve. Refuted if the predicted change tracks the real one beyond a permuted-covariate null. Depth arms are the positive control: the offset head must reproduce them.
 
+## Expect
+
+Told a counterfactual arm's read length or run type, a trained CANDI checkpoint closes at most 25% of the real reachable gap to the arm's track, and its per-bin shift does not correlate with the real shift beyond the null's 95th percentile.
+
+_Pre-run: proposed by the agent on 2026-10-25, approved by the PI in chat ("i) yes") and by the PI's own null approval, before any inference. Pair eligibility was frozen before inference._
+
 ## Null
 
 Instrumentation: per-bin chr21 arm/base log2 ratios are mostly sampling noise, so even a covariate-aware model could not track them.

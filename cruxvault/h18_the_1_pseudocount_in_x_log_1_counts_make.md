@@ -31,6 +31,12 @@ The model adds 1 to every count before it reads it, and that could bend how pred
 
 Design A predicts log μ = a + b·log(1 + X). With the parameters a pure rescale needs (a = ln r, b = 1, r the depth ratio), μ = r(1 + X), so the predicted total overshoots r by log2(1 + 1/m), m the source's mean count per bin. If the pseudocount is the cause, removing it brings never-trained depth pairs onto the law. Design A0 in [[t127_head_to_head_poisson_nll_mean_nb_nl|the loss head-to-head task]] removes it: μ = e^a X^b + e^c, with e^c a learned floor. Rung A0 still misses never-trained pairs, so the +1 is not the cause.
 
+## Expect
+
+Without the +1, never-trained depth → depth pairs fall to the trained-pair level, a median |log2 error| of about 0.1.
+
+_The claim was written on 2026-10-19, before the loss head-to-head ran (2026-10-20). The check and the 0.1 level were written after the run, at the PI's order on 2026-10-21 to close it by recording the results and why they do not support it._
+
 ## Null
 
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially
@@ -41,6 +47,8 @@ Chance: a single seed or track happens to land near the law; the median over 3 s
 ## Problem Statement
 
 Low-depth sources have a small m, so the pseudocount is large relative to the signal exactly where the never-trained depth pairs start.
+
+Origin: the PI's reading of the agent's derivation, "you are saying that if we just through out the pseudocount (+1) is hurting the depth law?" (2026-10-19). Rung A0 (μ = eᵃXᵇ + eᶜ, no +1) was the direct test, run jointly with the loss hypothesis.
 
 ## Idea / Hypothesis
 

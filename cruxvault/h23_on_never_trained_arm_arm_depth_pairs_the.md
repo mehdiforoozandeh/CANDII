@@ -29,6 +29,12 @@ One small network cleans a track to a standard setting and then changes it to th
 
 One g reads two covariate vectors and sets the FiLM (per-layer scale and shift) of one dilated CNN f. The encoder runs f with FiLM g(c, C_clean) and outputs a per-bin latent z; the decoder runs the same f, same weights, with FiLM g(C_clean, c′) and outputs NB(loc, disp) for the target counts. C_clean is a learned covariate vector whose assay entries are copied from the source. Training uses base ↔ arm pairs only. The depth law says that for two runs that differ only in depth, log2(Σμ / ΣX) equals log2 of the depth ratio. The claim: on never-trained arm → arm depth pairs, the median |log2 error| of the predicted scale is within a tolerance δ of its trained-pair value on all 3 seeds; it is refuted if the gap exceeds δ on 2 or more seeds. The control is the one-pass FiLM CNN (design D) under the same training, which must stay above δ, or the check does not discriminate. δ is the PI's to set. The 7.5M pairs, held out of training, are reported separately.
 
+## Expect
+
+The median |log2 error| of the predicted scale on never-trained arm → arm pairs lies within a tolerance δ of its trained-pair value on all 3 seeds.
+
+_The design is pre-run (2026-10-21), but this node was filed on 2026-10-25, after the first readings, and δ was never set._
+
 ## Null
 
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially
@@ -39,6 +45,8 @@ Selection: the never-trained arm → arm depth ratios lie inside the trained rat
 ## Problem Statement
 
 The composable encoder-decoder with an exact inverse did not close the depth-law miss; the PI then designed a symmetric form (2026-10-21) in which one g sets the FiLM of one CNN for both halves through a learned clean middle setting.
+
+Origin: the PI's own re-architecture after rejecting the asymmetric rung D: one g, one shared-weight CNN, routed through a learned clean setting, C_clean. The PI chose C_clean learned and learned-from-base ("i literally said A and D"), raised the collapse risk of a round-trip loss, and put Z in Gaussian space with X and X′ in NB space.
 
 ## Idea / Hypothesis
 

@@ -31,6 +31,12 @@ The score we train on lets predicted totals drift; a different score forces the 
 
 With a log link and a free intercept, the Poisson NLL's optimum sets the predicted total equal to the observed total on the training pairs. The negative binomial NLL balances them only with per-bin weights n/(n + μ), so totals can drift. If this drift causes the miss, a model whose mean is trained by Poisson NLL and whose dispersion is trained by negative binomial NLL meets the depth law on never-trained depth pairs where the full negative binomial model does not. If the miss is a failure to carry over to never-trained pairs instead, fixing totals on trained pairs leaves never-trained pairs as they are. The run fixed rung A's totals and left the never-trained miss.
 
+## Expect
+
+With the mean trained by Poisson NLL and the dispersion by NB NLL, at least one law-capable rung (A0 or D) brings never-trained depth pairs to the trained-pair level (about 0.1), where the full NB NLL does not.
+
+_The claim was scoped on 2026-10-20, before the run was submitted that day. The check was written after the run, at the PI's order on 2026-10-21._
+
 ## Null
 
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially
@@ -41,6 +47,8 @@ Chance: a single seed or track happens to land near the law; the median over 3 s
 ## Problem Statement
 
 Rung A over-predicts totals on some pairs (DNase Σμ/Σy ≈ 13–15 on dedup → base), and the NB loss does not force predicted totals to match. The PI (2026-10-19) asked whether that drift is what makes every design miss the depth law ([[q7_why_do_the_covariate_conditioned_g_f_des|the depth-law question]]).
+
+Origin: the PI asked for this head-to-head unprompted (2026-10-20): "i want to compare this formulation ... with Poisson NLL for mean and NB NLL for dispersion against a full NB NLL formulation". The PI chose rungs A, A0 and D, per-track g, counts only, and no bar: "this is an exploratory experiment".
 
 ## Idea / Hypothesis
 

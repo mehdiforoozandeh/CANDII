@@ -22,6 +22,10 @@ When we change one lab or processing setting, does the signal change by the same
 
 A covariate whose effect is uniform along the genome can be corrected by one genome-wide monotone map (the one-warp baseline); an effect that varies by region needs a position-aware correction, which is what CANDI's covariate conditioning would then have to learn. This asks, for each t112 knob (depth, pe, crop/read length, dedup, mapq, abproxy, extsize; ctlid, ctldepth and ratio in −log10 p only), how much of the arm-vs-base change per 1 kb bin is left after the genome-wide one-warp fit, and whether that residual tracks mappability, GC, repeats or peak-vs-domain context once signal level is fitted first as the null. Same-read knobs have almost no sampling noise, so residual structure is a real covariate effect; the depth arm is the control, read against exact binomial thinning of the base, and should show none. Settled by per-knob, per-mark-class residual size against the pseudoreplicate floor at matched depth, and the feature gain over the level null.
 
+## Motivation
+
+The PI's extension of the noise-floor map (2026-10-30): "can we extend the same investigation not just to pseudoreplicate reproducibility but also to the 'covariate effect' of different covariates ... does the signal along the whole genome react uniformly to the read length? what about the depth". The design reads the residual after a genome-wide one-warp fit, with signal level fitted first as the null. Depth is the built-in control: if the map finds regional structure for depth, the method is wrong. The PI approved the design in one batch.
+
 ## Question
 
 Where along the genome does each covariate act: does a track react uniformly to a change in depth, read length or another processing knob, or more in some kinds of regions?
@@ -46,5 +50,7 @@ Readings, not judged, 2026-10-30 ([covariate-map digest](results/t141/DIGEST.md)
 - For CANDI: read length and mapping quality need a position-aware correction (sequence or mappability input); depth does not.
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f26` finding (moderate) [[f26_counts_readings_clear_the_shuffle_and_fl|Counts readings clear the shuffle and floor controls by 50–1000×; moderate…]]
 <!-- crux:ledger:end -->

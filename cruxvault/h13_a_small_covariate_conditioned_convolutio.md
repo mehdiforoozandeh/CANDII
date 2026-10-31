@@ -32,6 +32,12 @@ Letting each bin borrow from its neighbours lets the model widen or sharpen peak
 
 Design C of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one 33-bin kernel, then the 12-knot curve, per pair. Exploratory readings, no verdict. C beats its scrambled-covariate twin in 11 of 12 cells in each space. It beats design B in 5 of 12 count cells and 2 of 12 p cells. On never-trained arm → arm pairs it keeps more count gain than A or B. Design C2, where g also reads the bin value, is the one clear row-2 gain in counts (DNase), and it explodes in p.
 
+## Expect
+
+Design C (kernel, then monotone curve) beats its scrambled twin and beats design B, each by more than 2 × the larger seed wobble, per mark class, in both spaces, for both g versions.
+
+_Pre-run: the PI accepted the bars on 2026-09-25 ("i accept the bars") and they were locked that morning, before the row-1 training array was submitted. Row 2 ran under the PI's ruling "don't worry about the claims for now" (2026-09-28)._
+
 ## Null
 
 Normalization: the covariates are ignored — this design does no better than the same design trained with C and C' scrambled across pairs.

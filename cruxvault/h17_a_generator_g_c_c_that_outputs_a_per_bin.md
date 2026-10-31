@@ -32,6 +32,12 @@ A bendable curve instead of a straight stretch lets weak and strong signal chang
 
 Design B of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one monotone 12-knot curve in log space per pair. Exploratory readings, no verdict. In counts B beats its scrambled-covariate twin (11 of 12 cells) and design A (9 of 12). In −log10 p a few pairs explode. On never-trained arm → arm pairs most of the count gain is lost. Design B2, where g also reads the bin value, changes counts little and explodes more in p.
 
+## Expect
+
+Design B (per-bin monotone curve) beats its scrambled twin and beats design A, each by more than 2 × the larger seed wobble, per mark class, in both spaces, for both g versions.
+
+_Pre-run: the PI accepted the bars on 2026-09-25 ("i accept the bars") and they were locked that morning, before the row-1 training array was submitted. Row 2 ran under the PI's ruling "don't worry about the claims for now" (2026-09-28)._
+
 ## Null
 
 Normalization: the covariates are ignored — this design does no better than the same design trained with C and C' scrambled across pairs.
@@ -39,6 +45,8 @@ Normalization: the covariates are ignored — this design does no better than th
 ## Problem Statement
 
 Still magnitude only: beating [[h12_a_covariate_conditioned_affine_map_on_th|design A]] means the knobs change weak and strong bins differently. B has QuantileMatching's function class, chosen from C, C' instead of fitted on X'.
+
+Why B exists (PI, 2026-09-25): one-warp "is not using C and C' at all", so B uses the same function class but chooses the curve from C and C′. It measures how much of one-warp's gain the covariates alone reproduce.
 
 ## Idea / Hypothesis
 

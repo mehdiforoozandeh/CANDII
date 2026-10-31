@@ -31,6 +31,12 @@ The part of the model that reads the lab settings may be too small to learn how 
 
 g is a small MLP (2 × 64) on the source and target covariates. If its size limits it, a wider or deeper g, with the same training pairs and loss, brings never-trained depth pairs onto the law. Raised by the PI on 2026-10-19. Phase 3 of the pivot study (2026-10-29) ran a 4× wider g (2 × 256) on old D: it does not meet the law on never-trained depth pairs.
 
+## Expect
+
+With g at 2 × 256 and old D's f unchanged, never-trained depth → depth pairs fall to the trained-pair level (about 0.1).
+
+_Written after the run, at the PI's request on 2026-10-31. Before the run the PI guessed "bigger g wouldn't help f parameterized as A (affine). but would probably help with D (CNN)" (2026-10-20); the agent predicted no help._
+
 ## Null
 
 Chance: a single seed or track happens to land near the law; the median over 3 seeds and 7 tracks guards against it.

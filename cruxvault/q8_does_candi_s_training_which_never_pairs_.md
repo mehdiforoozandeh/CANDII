@@ -22,6 +22,10 @@ If a model only ever learns from each measurement next to a copy of itself, can 
 
 The round-trip-only arm of [[t128_build_and_run_phase_1_of_the_symmet|the symmetric encoder-decoder runs]] collapsed to near identity, because its source and target covariates are equal. This asks whether CANDI's own training has the same gap. In code it does for every covariate but depth: the target of an unmasked assay is the same experiment, so read length and run type are equal on both sides, and only depth differs, through independent binomial thinning (`dataset.py:43-65`, `store/dataset.py:142`). Training never pairs two experiments of one cell type and assay. It is settled by a covariate-swap probe on a trained checkpoint against the counterfactual arms' real tracks (the child hypothesis).
 
+## Motivation
+
+The PI named this as the next line of work on 2026-10-25, the CANDI covariate-collapse investigation. The question text is a code fact the agent read from the data loader: for an unmasked assay the target is the same experiment as the input, so training never pairs two real experiments that differ in a covariate other than depth. It is the direct bridge from the testbed back to CANDI. The PI delegated the design: "based on your findings, you recommend the null and verifiables".
+
 ## Question
 
 Does CANDI's training, which never pairs an experiment with a counterfactual of itself except in depth, leave the trained model unable to correct for a change in the other covariates?

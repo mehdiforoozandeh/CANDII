@@ -28,6 +28,12 @@ The model gets the read depth from a fixed rule and also from a learned part, an
 
 In the depth-offset grid, f removes the source depth before the transform and adds the target depth after it, so a model that ignores the covariates obeys the depth law by construction. On never-trained depth pairs, the covariate-conditioned design D gives a worst-pair |ratio − 1| of 0.87–1.45, and its no-covariates twin gives 0.05–0.14 with the same f and training pairs; so f and the pairs are not the cause. The claim: the depth entries of g's covariate input cause the miss. The test removes those entries from g's input, keeps the offset and every other covariate, and retrains D. It is supported if the worst-pair |ratio − 1| is ≤ 0.10 on all seeds and refuted if it stays above 0.5 (both bars the PI's to confirm). A pass is not guaranteed: without depth in its input, g sees base ↔ depth-arm training pairs as pairs with equal covariates and different targets, so it can still learn a non-identity transform for equal covariates that fights the offset.
 
+## Expect
+
+With the depth entries removed from g's input (offset and other covariates kept), retrained D reaches a worst-pair |ratio − 1| of at most 0.10 on all seeds; it is refuted if that stays above 0.5.
+
+_Written on 2026-10-25, after the depth-offset run that motivates it but before its own test, which has not been built. The agent drafted the bars and marked them as the PI's to confirm; the PI approved the batch without confirming them individually._
+
 ## Null
 
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially

@@ -22,6 +22,12 @@ When the model changes a track's sequencing depth, its predicted total should sc
 
 The depth law: on a pair of runs that differ only in sequencing depth, the predicted count scale (log2 of the sum of predicted means over the sum of source counts) should equal the log2 depth ratio. Every g → f design in [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]] and in [[q5_does_a_depth_offset_on_f_the_source_dept|the depth-offset grid]] meets it on trained base ↔ arm pairs and misses it on never-trained arm → arm pairs. The +1 pseudocount, the loss and the encoder-decoder designs tried so far do not close the miss; chaining two trained maps through the base does. Exploratory (PI 2026-10-19): no bars. It is answered when removing one cause brings never-trained depth pairs to the trained-pair error, and keeping it does not.
 
+## Motivation
+
+The PI first asked on 2026-10-02, reviewing the capacity-grid deck: "aren't we predicting negative binomial distribution parameterized by eta and log depth. so by definition the model must follow the depth law. why isn't that happening?" A hand-check of the computation came first, before any design was blamed. The question opened on 2026-10-19 with the PI's goal: "depth law is the simplest kind of technical artifact that we want our models g (and it's output f) to be learning near perfectly."
+
+Design: the PI named four suspects (the +1 pseudocount, extrapolation in g, the loss, the check itself) and had them tested in parallel, one hypothesis each; later sessions added g's input wiring, the size of g and f, and arm-to-arm training. The PI framed the target as "make g generalize with the least required number of training examples", and ruled the work exploratory: "we don't want to set a bar for now".
+
 ## Question
 
 Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?
@@ -46,15 +52,16 @@ Readings to 2026-10-31, not judged: median |log2 error| of the predicted scale, 
 - Size is not the cause at the widths tried ([[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]]). A 4× wider g misses on never-trained depth pairs (0.63 per-track, 0.46 across), and so does a 2× wider f (0.41, 0.34; [[h27_f_at_64_channels_2x_wider_with_the_same_|the f-size hypothesis]]), within noise of old D. With 6 seeds, the wider f's small CRPS gain through the base (0.006, 95% interval −0.002 to +0.013) is within seed noise and does not replicate on the new seeds. The PI closed the scale question at these sizes (2026-10-31); the across-track g is dropped from the gain test. Through the base, both stay near the law (0.09–0.21). Arm → arm training is not decided.
 
 <!-- crux:ledger:start -->
-**9 children** · open 4, leaning 3, settled 2, parked 0
+**9 children** · open 2, leaning 7, settled 0, parked 0 · 1 finding(s) on this question
 
-- `h18` [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *settled · strong*
-- `h19` [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *open*
+- `h18` [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *leaning · moderate*
+- `h19` [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *leaning · moderate*
 - `h20` [[h20_a_larger_g_with_the_same_training_pairs_|A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs]] — *leaning · moderate*
-- `h21` [[h21_fitting_the_mean_by_poisson_nll_and_the_|Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not]] — *settled · strong*
-- `h22` [[h22_a_composable_g_one_shared_map_from_each_|A composable g — one shared map from each side's covariates to a common latent, with an exact inverse — meets the depth law on never-trained depth pairs without arm → arm training]] — *open*
+- `h21` [[h21_fitting_the_mean_by_poisson_nll_and_the_|Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not]] — *leaning · moderate*
+- `h22` [[h22_a_composable_g_one_shared_map_from_each_|A composable g — one shared map from each side's covariates to a common latent, with an exact inverse — meets the depth law on never-trained depth pairs without arm → arm training]] — *leaning · moderate*
 - `h23` [[h23_on_never_trained_arm_arm_depth_pairs_the|On never-trained arm → arm depth pairs, the shared-weight encoder-decoder FiLM CNN meets the depth law at the trained-pair level]] — *open*
 - `h24` [[h24_the_depth_entries_in_g_s_covariate_input|The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs]] — *open*
 - `h27` [[h27_f_at_64_channels_2x_wider_with_the_same_|f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs]] — *leaning · moderate*
 - `h28` [[h28_training_g_on_arm_to_arm_pairs_lets_a_di|Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on never-trained arm-to-arm pairs, without a pivot through the base]] — *leaning · moderate*
+- `f23` finding (moderate) [[f23_consistent_across_every_design_loss_and_|Consistent across every design, loss and size tried, with the PI closing the…]]
 <!-- crux:ledger:end -->

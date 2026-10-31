@@ -26,6 +26,12 @@ The model learned each depth change it was shown, but it gets depth changes it w
 
 Training saw only base → arm and arm → base pairs; the law test uses arm → arm pairs, for example 15M → 7.5M. If the miss is this failure, trained depth pairs fit the law and never-trained ones miss it, and a fix targets coverage or composition, not capacity or the loss. Readings so far match this pattern in every design, loss and g version tried. Chaining g's two trained legs through the base meets the law.
 
+## Expect
+
+Trained base ↔ arm depth pairs fit the law (about 0.1) while never-trained arm → arm pairs miss it by several times that, and chaining g's two trained legs through the base meets the law.
+
+_The claim was written on 2026-10-19, the same evening as the first extrapolation reading that suggested it; no numeric bar was set and no null was drafted._
+
 ## Null
 
 <!-- spec 09: the BORING explanation — the cheapest way this result could be trivially

@@ -30,6 +30,10 @@ Does a depth offset on f (the source depth removed before f, the target depth ad
 
 In [[q4_how_much_capacity_does_a_covariate_condi|the capacity grid]], no design scaled its counts by d′/d on depth-only pairs (the depth law), and row-1 A had a large DNase scale error. An offset makes "do nothing" mean "scale by d′/d". [[q6_how_closely_does_a_map_h_reproduce_the_l|The map-h question]] takes the grid's other failure, the −log10 p blow-ups.
 
+The idea is the PI's (2026-10-08): "Put the depth offset on both ends... The depth law then holds by construction, and it fails today in every design." The PI also set the constraint: "keep the number of inputs and outputs and the operations done in this experiment as minimal as possible... no confounding design". g reads C and C′; f reads only X and θ. Every fork was walked one at a time with the PI and recorded in `plan/ETA_OFFSET_AND_H_DESIGN.md`. The PI kept depth in g's input, knowing g could still bend the law.
+
+Expected before the run (design doc, 2026-10-08): the offset adds no capacity when g reads both depths, and only moves g's "do nothing" output from "copy the counts" to "scale by d′/d".
+
 ## Protocol
 
 Exploratory (PI 2026-10-08): readings only — no pass/fail bars, no ticks, no verdicts. The design, fork by fork, is `plan/ETA_OFFSET_AND_H_DESIGN.md` on the branch `exp/t118-counterfactual-f`.
@@ -64,5 +68,7 @@ Complete: 432 of 432 runs. "±" is seed wobble; a gain clears above 2 × the lar
 - [Deck](presentations/t125-eta-h/index.html) — published https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS; vault copy [DECK.md](presentations/t125-eta-h/DECK.md)
 
 <!-- crux:ledger:start -->
-_(no children yet)_
+**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+
+- `f17` finding (moderate) [[f17_large_clean_margins_on_the_432_runs_and_|Large, clean margins on the 432 runs, and the PI's own reading on 2026-10-19…]]
 <!-- crux:ledger:end -->
