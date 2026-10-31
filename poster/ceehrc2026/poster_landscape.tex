@@ -1,0 +1,87 @@
+% CEEHRC 2026 poster: 44 in wide x 36 in high, inside the conference's 44 x 44 in
+% limit. The size is fixed by the PI (2026-10-04); build.sh fails if the PDF is
+% any other size or more than one page.
+%
+% Two rows of two columns, then the references in one band across the foot.
+% Row 1: the problem and its downstream applications | the schematic workflow. Row 2: the challenge
+% section | downstream utility. The
+% row heights are set by the right column; the log lines "POSTER: ... needs" say
+% how much each column needs.
+% Build: bash build.sh
+\documentclass{article}
+\usepackage[paperwidth=44in, paperheight=36in,
+            left=0.8in, right=0.8in, top=3.55in, bottom=0.7in]{geometry}
+\newcommand{\bodysize}{\fontsize{28}{35}\selectfont}
+\newcommand{\capsize}{\fontsize{26}{34}\selectfont}
+\newcommand{\smallsize}{\fontsize{20}{26}\selectfont}
+\newcommand{\headsize}{\fontsize{48}{58}\selectfont}
+\input{common}
+
+% Row 1 gives the schematic the width; row 2 gives the challenge section the width.
+\newcommand{\LeftW}{12.2in}
+\newcommand{\RightW}{29.2in}
+\newcommand{\UseW}{5.7in}      % one application icon; make_intro_panels.py draws W = 5.7
+\newcommand{\LeftWTwo}{28.4in}
+\newcommand{\RightWTwo}{13.0in}
+\newcommand{\RowOne}{15.96in}
+\newcommand{\RowTwo}{13.25in}
+
+\begin{document}
+% ============================================================ header ==========
+% Three columns between the margins, all sharing one top line (0.6 in) and one
+% bottom line (2.95 in): the SFU block | title, authors, affiliation | the QR
+% code with the link under it. A divider closes the header at 3.25 in.
+\begin{tikzpicture}[remember picture, overlay]
+  \coordinate (nw) at (current page.north west);
+  \coordinate (ne) at (current page.north east);
+  \fill[sfured] ($(nw)+(0.8in,-0.6in)$) rectangle ($(nw)+(6.4in,-2.95in)$);
+  \node[anchor=south east, inner sep=0pt, text=white]
+    at ($(nw)+(6.19in,-2.845in)$) {\fontsize{112}{112}\selectfont SFU};
+  \node[anchor=north west, inner sep=0pt, text=ink]
+    at ($(nw)+(7.1in,-0.6in)$) {\resizebox{33.7in}{!}{\bfseries\PosterTitle}};
+  \node[anchor=base west, inner sep=0pt, text=ink]
+    at ($(nw)+(7.1in,-2.21in)$) {\fontsize{52}{60}\selectfont\PosterAuthors};
+  \node[anchor=base west, inner sep=0pt, text=muted]
+    at ($(nw)+(7.1in,-2.95in)$) {\fontsize{32}{38}\selectfont\PosterAffil};
+  \node[anchor=north east, inner sep=0pt] at ($(ne)+(-0.8in,-0.6in)$)
+    {\qrcode[height=1.74in]{\PosterURL}};
+  \node[anchor=base east, inner sep=0pt, text=muted] at ($(ne)+(-0.8in,-2.95in)$)
+    {\fontsize{20.4}{24}\selectfont mehdiforoozandeh.github.io/CANDI};
+  \fill[rule] ($(nw)+(0.8in,-3.25in)$) rectangle ($(ne)+(-0.8in,-3.305in)$);
+\end{tikzpicture}%
+% ============================================================ row 1 ===========
+\Column{row 1 left}{\LeftW}{\RowOne}{%
+  \sectionbar{\HeadProblem}
+  {\bodysize\color{ink}\raggedright\TxtProblem\par}\vfill
+  \sectionbar{\fontsize{43}{52}\selectfont\HeadUses}   % 43 pt: one line in \LeftW
+  \panel{\UseW}{panels/use_states.pdf}{\TxtUseStates}\hfill
+  \panel{\UseW}{panels/use_gwas.pdf}{\TxtUseGwas}\par\vspace{0.15in}
+  \panel{\UseW}{panels/use_expr.pdf}{\TxtUseExpr}\hfill
+  \panel{\UseW}{panels/use_conf.pdf}{\TxtUseConf}\par}\hfill
+\Column{row 1 right}{\RightW}{\RowOne}{%
+  \sectionbar{\HeadStrip}
+  \includegraphics[width=\linewidth]{panels/ga_strip.pdf}\par\vspace{0.25in}
+  {\capsize\color{ink}\CapStrip\par}}
+
+\vspace{0.4in}
+% ============================================================ row 2 ===========
+\Column{row 2 left}{\LeftWTwo}{\RowTwo}{%
+  \sectionbar{\HeadEIC}
+  \panel{7.0in}{panels/eic_pearson_landscape.pdf}{\CapA}\hfill
+  \panel{8.8in}{panels/eic_skill_landscape.pdf}{\CapB}\hfill
+  \panel{11.8in}{panels/eic_measures_landscape.pdf}{\CapC}}\hfill
+\Column{row 2 right}{\RightWTwo}{\RowTwo}{%
+  \sectionbar{\HeadUtility}\vfill
+  \begin{minipage}[c]{7.0in}\includegraphics[width=\linewidth]{panels/ga_A.pdf}\end{minipage}\hfill
+  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapD\par}\end{minipage}\par\vfill
+  \begin{minipage}[c]{7.0in}\includegraphics[width=\linewidth]{panels/ga_B.pdf}\end{minipage}\hfill
+  \begin{minipage}[c]{5.6in}{\capsize\color{ink}\raggedright\CapE\par}\end{minipage}\par\vfill}
+
+% ======================================================= references ===========
+% One long band across the foot of the page, under a divider.
+\vspace{0.15in}
+{\color{rule}\rule{\linewidth}{4pt}}\par\vspace{0.15in}
+\sbox\PosterCol{\parbox{\linewidth}{\smallsize\color{muted}\TxtRefs}}%
+\typeout{POSTER: references need \the\dimexpr\ht\PosterCol+\dp\PosterCol\relax}%
+{\smallsize\color{muted}\TxtRefs\par}
+\end{document}

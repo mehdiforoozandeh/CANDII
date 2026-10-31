@@ -1,24 +1,24 @@
 ---
-id: t57
+id: t121
 type: task
-title: retire the four tests that pin nb_crps's pre-fix NaN at large n
-category: implementation
+title: build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract
+category: visualization
 parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
 status: open
-created: 2026-08-27T11:25:14
-updated: 2026-08-27T11:25:14
+created: 2026-09-28T18:28:59
+updated: 2026-09-28T18:28:59
 ---
 
-# t57 — retire the four tests that pin nb_crps's pre-fix NaN at large n
+# t121 — build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract
 
 Refs:: _(none)_
 
 ## Why
 
-PR #26 (t56) fixed the nb_crps large-dispersion NaN, but four tests merged from crossing branches still assert the defect; main is red until they pin the post-fix behavior instead
+poster for the 12th Canadian Conference on Epigenetics, 6-9 Oct 2026; extends docs/build_ga.py in the CANDI repo and may add new results from the Libbrecht collab repo
 
 ## Output
 

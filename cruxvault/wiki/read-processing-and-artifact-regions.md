@@ -35,4 +35,4 @@ Every one of these steps is a covariate: aligner, MAPQ threshold, deduplication 
 
 ## See also
 
-Related:: [[chip-seq-assay-and-controls]], [[peak-calling-and-signal-tracks]], [[encode-imputation-challenge]], [[distributional-shift-and-batch-effects]]
+Related:: [[chip-seq-assay-and-controls]], [[peak-calling-and-signal-tracks]], [[encode-imputation-challenge]], [[distributional-shift-and-batch-effects]], [[digest-processing-knobs-that-move-chip-seq-signal]]

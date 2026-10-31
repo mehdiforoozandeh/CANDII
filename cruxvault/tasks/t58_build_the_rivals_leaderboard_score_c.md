@@ -1,15 +1,15 @@
 ---
 id: t58
 type: task
-title: build the rivals leaderboard: score compiler, static HTML board, Pages deploy
+title: "build the rivals leaderboard: score compiler, static HTML board, Pages deploy"
 category: implementation
 parent: 
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-27T02:16:24
-updated: 2026-08-27T02:16:24
+status: done
+created: "2026-08-27T02:16:24"
+updated: "2026-09-17T21:54:20"
 ---
 
 # t58 — build the rivals leaderboard: score compiler, static HTML board, Pages deploy
@@ -24,7 +24,7 @@ turns t49-t54 score jsons into the public instrument the exp merge gate is block
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged af12879 + e99ec38](results/t58/MERGED.md)
 
 ## Evidence
 

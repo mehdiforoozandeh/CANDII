@@ -1727,3 +1727,37 @@ def test_help_metrics_cover_registry_and_mathml_is_xml() -> None:
     assert "familyMetricHelps" in js
     assert 'state.midHead === "radar"' in js and "${state.outerEval}/radar" in js
 
+
+
+# ---------------------------------------------------------------------------------------------
+# the notes under a board: one headline per caveat, folded on the page (t109)
+# ---------------------------------------------------------------------------------------------
+
+
+def test_every_caveat_carries_one_headline_and_they_travel_into_the_payload(root: Path) -> None:
+    """`caveat_heads` is parallel to `caveats` on every board and on the anchor block: the page
+    shows the headline and folds the record under it, so a caveat without a headline would be
+    a note nobody can skim, and a headline without a caveat would be a claim with no record."""
+    boards = lb.load_boards(root)
+    for bid, b in list(boards["boards"].items()) + [(lb.ANCHOR, boards["anchor"])]:
+        assert len(b["caveat_heads"]) == len(b["caveats"]) > 0, bid
+        assert all(1 <= len(hd.split()) <= 24 for hd in b["caveat_heads"]), bid
+    payload = lb.compile_leaderboard(root)
+    for bid, b in boards["boards"].items():
+        assert payload["boards"][bid]["meta"]["caveat_heads"] == b["caveat_heads"]
+    assert payload["boards"][lb.ANCHOR]["meta"]["caveat_heads"] == boards["anchor"]["caveat_heads"]
+
+
+def test_a_caveat_without_a_headline_is_a_gate(root: Path) -> None:
+    def drop_one(b):
+        b["boards"]["eic.19"]["caveat_heads"].pop()
+    edit_boards(root, drop_one)
+    with pytest.raises(lb.GateError, match="one headline per caveat"):
+        lb.load_boards(root)
+
+    def blank_one(b):
+        b["boards"]["eic.19"]["caveat_heads"].append("restored so the length gate passes")
+        b["anchor"]["caveat_heads"][0] = "   "
+    edit_boards(root, blank_one)
+    with pytest.raises(lb.GateError, match="one short line"):
+        lb.load_boards(root)

@@ -1,15 +1,15 @@
 ---
 id: t49
 type: task
-title: naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal
+title: "naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal"
 category: implementation
 parent: 
 blocked_by: t47
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-23T15:32:27
-updated: 2026-08-23T15:32:27
+status: done
+created: "2026-08-23T15:32:27"
+updated: "2026-09-17T21:54:20"
 ---
 
 # t49 — naive baseline suite: LOO average (point + moment-matched NB), pval mean + arcsinh variant, peak fraction, kNN k=1,5, per-assay marginal
@@ -24,7 +24,7 @@ RIVALS_PLAN.md par.5: the first leaderboard rows; unblocks the exp-lane merge ga
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 9f5594c](results/t49/ANCHORS.md)
 
 ## Evidence
 

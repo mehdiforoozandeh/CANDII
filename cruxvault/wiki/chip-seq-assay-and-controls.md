@@ -34,4 +34,4 @@ Because the control is a property of the *sample*, not of the target assay, it i
 
 ## See also
 
-Related:: [[peak-calling-and-signal-tracks]], [[sequencing-depth-and-coverage]], [[signal-normalization-in-epigenomics]], [[read-processing-and-artifact-regions]], [[reference-epigenome-compendia]]
+Related:: [[peak-calling-and-signal-tracks]], [[sequencing-depth-and-coverage]], [[signal-normalization-in-epigenomics]], [[read-processing-and-artifact-regions]], [[reference-epigenome-compendia]], [[digest-processing-knobs-that-move-chip-seq-signal]]

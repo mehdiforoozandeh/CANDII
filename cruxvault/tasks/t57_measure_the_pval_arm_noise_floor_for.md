@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-27T02:16:24
-updated: 2026-08-27T02:16:24
+status: done
+created: "2026-08-27T02:16:24"
+updated: "2026-09-19T00:25:00"
 ---
 
 # t57 — measure the pval-arm noise floor for Gaussian CRPS
@@ -24,7 +24,7 @@ quoting rule parity: pval-CRPS gaps have no floor to compare against; evidence d
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Noise-floor memo](results/t57/FLOOR_MEMO.md)
 
 ## Evidence
 

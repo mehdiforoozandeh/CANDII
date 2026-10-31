@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-08-23T15:32:11
-updated: 2026-08-23T15:32:11
+status: done
+created: "2026-08-23T15:32:11"
+updated: "2026-09-17T21:54:20"
 ---
 
 # t46 — stage the EIC challenge tracks and Max's 001/005 artifacts on Fir /project
@@ -24,7 +24,7 @@ RIVALS_PLAN.md par.8: Dataset-3 truth for placement scoring; retires the Nibi sc
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Staging record](results/t46/STAGING_RECORD.md)
 
 ## Evidence
 

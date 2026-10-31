@@ -1,0 +1,122 @@
+% Input by poster_landscape.tex: packages, colours, the panel and box styles,
+% and every sentence on the poster. The layout file sets its page with geometry
+% and its type scale (\bodysize, \capsize, \smallsize, \headsize), then inputs
+% this file. make_html.py reads the sentences too.
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}                 % scalable math at poster sizes
+\usepackage[default]{opensans}
+\usepackage{amsmath,xcolor,graphicx,tikz,qrcode,enumitem}
+\usetikzlibrary{calc}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+\definecolor{sfured}{HTML}{A6192E}
+\definecolor{ink}{HTML}{1B2A32}
+\definecolor{muted}{HTML}{5E6E78}
+% The pastel palette. SFU red is only the header block. Headings are deep slate;
+% the slate-blue accent and the cool fill carry the boxes and rules. The figures
+% use the same family (make_eic_panels.py, split_ga.py): coral for CANDI only,
+% mustard for the baseline, dusty blue for signal, sage and lavender for the rest.
+\definecolor{heading}{HTML}{2E4A62}
+\definecolor{accent}{HTML}{A9BFD3}
+\definecolor{panel}{HTML}{F3F6F9}
+\definecolor{rule}{HTML}{D9E1E8}
+
+\newcommand{\sectionbar}[1]{%
+  {\headsize\bfseries\color{heading}\raggedright\hyphenpenalty=10000 #1\par}\vspace{0.08in}%
+  {\color{accent}\rule{\linewidth}{5pt}}\par\vspace{0.3in}}
+
+% One panel: its graphic, then its one- or two-sentence caption.
+\newcommand{\panel}[3]{% #1 width  #2 graphic  #3 caption
+  \begin{minipage}[t]{#1}
+    \vspace{0pt}
+    \includegraphics[width=\linewidth]{#2}\par\vspace{0.2in}
+    {\capsize\color{ink}\raggedright#3\par}
+  \end{minipage}}
+
+\setlist[itemize]{leftmargin=1.0em, itemsep=0.3in, topsep=0.05in,
+                  label={\color{accent}\textbullet}}
+
+% ------------------------------------------------------------------ the words --
+\newcommand{\PosterTitle}{Self-supervised confidence-aware denoising imputation of genomic data}
+\newcommand{\PosterAuthors}{Mehdi Foroozandeh, Abdul Rahman Diab, and Maxwell Libbrecht}
+\newcommand{\PosterAffil}{Simon Fraser University, Department of Computing Science}
+\newcommand{\PosterURL}{https://mehdiforoozandeh.github.io/CANDI/}
+
+% The problem statement follows the introduction of the MLCB 2026 submission
+% (SSL/EpiDenoise/candi-mlcb-2026/main.pdf). Of the four downstream applications
+% (make_intro_panels.py), three are ones ChromImpute [1] demonstrates with imputed
+% data; the fourth is what CANDI's predicted intervals allow [3].
+\newcommand{\HeadProblem}{Epigenome Imputation problem}
+\newcommand{\TxtProblem}{%
+\begin{itemize}
+  \item Epigenomic data (e.g., histone modifications, DNA accessibility) span
+        tens to hundreds of assays and thousands of cell types.
+  \item Due to the high cost and complexity of profiling every assay in all
+        relevant cell types, most experiments are missing.
+  \item Epigenome imputation methods aim to predict these missing
+        experiments~[1,2].
+  \item Imputed data often has better properties than observed data, so
+        researchers also apply imputation for denoising~[1].
+  \item In the ENCODE Imputation Challenge, due to subtle differences in
+        experimental covariates between the train and test sets, a simple
+        average-activity baseline outperformed most of the entrants~[2].
+\end{itemize}}
+
+\newcommand{\HeadUses}{Downstream applications of imputation}
+\newcommand{\TxtUseStates}{Annotate chromatin states in every cell type~[1].}
+\newcommand{\TxtUseGwas}{Link disease-associated variants to cell type-specific regulatory elements~[1].}
+\newcommand{\TxtUseExpr}{Predict gene expression from marks around each gene~[1,3].}
+\newcommand{\TxtUseConf}{Keep confident predictions; discard uncertain predictions~[3].}
+
+\newcommand{\HeadStrip}{CANDI schematic workflow}
+\newcommand{\CapStrip}{%
+\textbf{Top:} for each 30\,kb locus, CANDI takes observed read counts with the
+ChIP-seq control, four covariates per assay and the DNA sequence; grey assays were
+never measured, yellow ones are masked. \textbf{Bottom:} each output is a
+probability distribution, here a mean and 95\% interval per assay; window by
+window, they fill every missing thread of the tensor.}
+
+\newcommand{\HeadEIC}{Fixing the train-test covariate shift in the ENCODE Imputation Challenge}
+\newcommand{\CapA}{%
+\textbf{A}\enspace CANDI's genome-wide Pearson $r$ on the 51 blind-test
+experiments; mustard: the baseline's median.}
+\newcommand{\CapB}{%
+\textbf{B}\enspace Imputation score before (filled) and after (open) a correction
+that rescales each method's prediction and blends in the baseline. Every method
+improves; after it, CANDI is the best.}
+\newcommand{\CapC}{%
+\textbf{C}\enspace Seven of the nine measures relative to the baseline, median
+over 51 experiments. CANDI is first on three and
+top 8 on the rest.}
+
+\newcommand{\HeadUtility}{Downstream utility of CANDI}
+\newcommand{\CapD}{%
+\textbf{D}\enspace Confidence calibration for DNase-seq (DND-41): predicted
+confidence level against the fraction of observed data within that interval.}
+\newcommand{\CapE}{%
+\textbf{E}\enspace Gene expression prediction as input assays are removed.
+Denoised+Imputed and Latent settings are robust to input sparsity.}
+
+\newcommand{\TxtRefs}{%
+[1]~Ernst J, Kellis M. Large-scale imputation of epigenomic datasets for systematic
+annotation of diverse human tissues. \textit{Nat Biotechnol} 33:364--376 (2015).\par
+[2]~Schreiber J, Boix C, \textit{et al.} The ENCODE Imputation Challenge: a critical
+assessment of methods for cross-cell type imputation of epigenomic profiles.
+\textit{Genome Biol} 24:79 (2023).\par
+[3]~Foroozandeh M, Diab AR, Libbrecht M. CANDI: self-supervised, confidence-aware
+denoising imputation of genomic data. \textit{bioRxiv} 2025.01.23.634626 (2025).\par
+Panels A--C: blind-test scoring from the Libbrecht lab's EIC reproduction;
+\emph{baseline} is the challenge's average-activity track. CANDI's output layer is
+fitted on training experiments only; the correction in B is fitted on chr22 of each
+blind-test experiment and scored on the other 22 chromosomes.}
+
+% \Column{name}{width}{height}{content}: a column of fixed height, top-aligned, so
+% \vfill inside it spreads its blocks to the row's height. The build log gets the
+% height the content needs ("POSTER: ... needs"), which is how rows are balanced.
+\newsavebox\PosterCol
+\newcommand{\Column}[4]{%
+  \sbox\PosterCol{\begin{minipage}[t]{#2}\vspace{0pt}#4\end{minipage}}%
+  \typeout{POSTER: #1 needs \the\dimexpr\ht\PosterCol+\dp\PosterCol\relax\space of #3}%
+  \begin{minipage}[t][#3][t]{#2}\vspace{0pt}#4\end{minipage}}
