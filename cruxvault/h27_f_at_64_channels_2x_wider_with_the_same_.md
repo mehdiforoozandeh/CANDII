@@ -11,10 +11,12 @@ replicates: 7 per-track g x 3 seeds (phase 3); 3 more seeds planned
 verdict: refuted
 metric: never-trained depth-law error 0.41 (per-track g) / 0.34 (across) vs trained 0.05; six-seed CRPS gain through the base 0.006, within seed noise
 created: "2026-10-29T14:25:51"
-updated: "2026-10-31T00:23:17"
+updated: "2026-10-31T00:33:38"
 lock: 48f1873f2633c1a4
 locked: "2026-10-31T00:23:17"
 lock_at: close
+null_approved: "2026-10-31T00:33:38"
+null_hash: 24641e914971592d
 ---
 
 # h27 — f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs

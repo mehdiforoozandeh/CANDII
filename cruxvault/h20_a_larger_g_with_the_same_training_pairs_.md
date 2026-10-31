@@ -11,10 +11,12 @@ replicates:
 verdict: refuted
 metric: never-trained depth-law error 0.63 (per-track g) / 0.46 (across) vs trained 0.07; old D 0.29 / 0.34
 created: "2026-10-19T23:41:09"
-updated: "2026-10-31T00:23:17"
+updated: "2026-10-31T00:33:38"
 lock: 64f29a808f5333b8
 locked: "2026-10-31T00:23:17"
 lock_at: close
+null_approved: "2026-10-31T00:33:38"
+null_hash: 24641e914971592d
 ---
 
 # h20 — A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs
