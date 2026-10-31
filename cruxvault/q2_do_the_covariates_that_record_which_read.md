@@ -18,7 +18,7 @@ Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 If the only thing that changed between two runs of the same sample is which reads made it into the pile, can knowing that setting translate one run into the other? Nobody has tested it yet; early readings say the settings help a little on pairs the model has seen, and seldom on new ones.
 
 ## TL;DR
-Four processing choices decide which reads enter the treatment pileup, and each moves both the counts and the −log10 p signal: [[h3_conditioning_on_the_recorded_read_length|read length]], [[h4_conditioning_on_the_recorded_duplicate_h|duplicate removal]], [[h5_conditioning_on_the_recorded_mapping_qua|the MAPQ filter]] and [[h6_conditioning_on_the_recorded_antibody_ef|the antibody proxy]]. Each has a counterfactual pair built by the ENCODE pipeline with that one choice changed and recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values beats one-warp, the covariate-free monotone map fitted within the knob, by the margin of [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]]. It answers yes only if every child holds. No child has been tested; exploratory readings from runs that trained on all ten knobs at once are summarised below.
+Four processing choices decide which reads enter the treatment pileup, and each moves both the counts and the −log10 p signal: [[h3_conditioning_on_the_recorded_read_length|read length]], [[h4_conditioning_on_the_recorded_duplicate_h|duplicate removal]], [[h5_conditioning_on_the_recorded_mapping_qua|the MAPQ filter]] and [[h6_conditioning_on_the_recorded_antibody_ef|the antibody proxy]]. Each has a counterfactual pair built by the ENCODE pipeline with that one choice changed and recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values beats its no-covariates twin (C and C′ re-scrambled at every step) by more than 2 × seed wobble, the per-child checks set by the PI on 2026-10-31 in place of [[q1_do_the_recorded_experimental_covariates_|the parent question's]] one-warp → oracle bar. It answers yes only if every child holds. No child has been tested; exploratory readings from runs that trained on all ten knobs at once are summarised below.
 
 ## Motivation
 
@@ -29,7 +29,7 @@ The PI asked which processing knobs, beyond depth and run type, move the signal:
 Do the covariates that record which reads entered the treatment pileup carry enough information to map a track across a change in one of them?
 
 ## Protocol
-Locked before any run: the children share q1's protocol; each is scored on both output axes; the shuffled-covariate twin of every model is a required control.
+Locked before any run: each child is scored on both output axes. PI ruling 2026-10-31: the children are scored against the no-covariates twin (C and C′ re-scrambled at every step), not by q1's one-warp → oracle gap-closed; a C′ swapped at scoring is the outcome-neutral control.
 
 ## Answer so far
 

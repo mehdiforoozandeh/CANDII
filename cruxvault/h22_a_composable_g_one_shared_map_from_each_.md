@@ -24,7 +24,7 @@ If the model maps every run to a shared middle ground and back, it can connect a
 
 ## TL;DR
 
-One network φ maps one side's covariates c to (α(c), β(c)). The source is encoded as z = (log(1 + X) − α(c)) / β(c) and decoded as log μ = α(c′) + β(c′)·z, so an arm → arm pair composes two trained legs by construction. If composition is what is missing, this design brings never-trained depth pairs to the trained-pair error and the retrained old design A does not. First readings: it does not, nor do two learned-decoder variants.
+One network φ maps one side's covariates c to (α(c), β(c)). The source is encoded as z = (log(1 + X) − α(c)) / β(c) and decoded as log μ = α(c′) + β(c′)·z, so an arm → arm pair composes two trained legs by construction.
 
 ## Expect
 
@@ -41,9 +41,9 @@ _(one line: the cheapest way this result could be trivially true — name a fami
 
 ## Problem Statement
 
-Old g reads [c, c′] together, so an arm → arm pair is an input it never saw. Chaining its two trained legs through the base meets the depth law (0.07–0.16 log2) where its direct answer does not ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]). Real data has few arm → arm examples, so the fix must come from g's structure.
+Old g reads [c, c′] together, so an arm → arm pair is an input it never saw. Chaining its two trained legs through the base meets the depth law (0.07–0.16 log2) where its direct answer does not ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]). Real arm → arm examples are few, so the fix must come from g's structure.
 
-Origin: after the loss and pseudocount fixes failed, the agent proposed making composition hold by construction (f = decode(C′) ∘ encode(C)); the PI asked for the formal definition and then chose every scope fork: counts only, both g versions, β learned and β = 1, the 7.5M level held out, and the baseline retrained. The PI rejected the agent's first rung-D build as asymmetric ("the encoder and decoder architecture must have symmetry"), which led to the shared-weight design.
+Origin: after the loss and pseudocount fixes failed, the agent proposed this design; the PI asked for the formal definition and chose every scope fork in the plan below. The PI rejected the agent's first rung-D build as asymmetric ("the encoder and decoder architecture must have symmetry"), which led to the shared-weight design.
 
 ## Idea / Hypothesis
 
@@ -86,6 +86,6 @@ A composable g — one shared map from each side's covariates to a common latent
 
 Exploratory readings, median |log2 error| on depth pairs ([report](results/h22/report.md)). Noise floor: old D's never-trained seed spread, 0.05 (per-track g) and 0.24 (across-track g).
 
-- Encoder-decoder A misses trained pairs too (1.0–1.4, never-trained 1.9–2.0; old A 0.09–0.12, 0.38–0.45); its CRPS is mostly scale error (per-track 1.105: oracle_scaled 0.679, scale_error 0.426; old A 0.872: 0.589, 0.283).
-- Encoder-decoder D keeps old D's trained fit (0.04–0.10; CRPS 0.448 against 0.445, scale_error 0.004 both, seed spread 0.004) but misses never-trained pairs as much (0.26–0.52 against 0.29–0.34). It falls below its twin on never-trained read-length, MAPQ and control-mixed-in pairs; 66 of 96 runs hit the step cap.
+- Encoder-decoder A, never-trained: 1.9–2.0 (old A 0.38–0.45). Its CRPS is mostly scale error (per-track 1.105: oracle_scaled 0.679, scale_error 0.426; old A 0.872: 0.589, 0.283).
+- Encoder-decoder D, trained: 0.04–0.10; CRPS 0.448 against 0.445, scale_error 0.004 both, seed spread 0.004. It falls below its twin on never-trained read-length, MAPQ and control-mixed-in pairs; 66 of 96 runs hit the step cap.
 - First pass 2026-10-24 ([[t128_build_and_run_phase_1_of_the_symmet|the symmetric encoder-decoder task]], no exact inverse): never-trained 0.29–0.42, within noise of old D; four of eight settings are unfinished.

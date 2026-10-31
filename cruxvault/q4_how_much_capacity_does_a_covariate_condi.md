@@ -20,7 +20,7 @@ How simple can the translator be: a stretch, a bendable curve, a look at neighbo
 
 ## TL;DR
 
-How expressive must f be to use the covariates? The children are rungs A–D (affine, monotone curve, kernel plus curve, conditioned CNN), each judged against its scrambled-covariate twin and the rung below; a sequence-reading rung is parked. All four ran in two rows: g reads C, C′, or also the bin value. Exploratory readings: in counts the curve gives the main step and shape adds little. Some −log10 p pairs explode. No rung carries its gain to never-trained pairs.
+How expressive must f be to use the covariates? The children are rungs A–D (affine, monotone curve, kernel plus curve, conditioned CNN), each judged against its scrambled-covariate twin and the rung below; a sequence-reading rung is parked. All four ran in two rows: g reads C, C′, or also the bin value. Exploratory readings: in counts the curve gives the main step and shape adds little.
 
 ## Motivation
 

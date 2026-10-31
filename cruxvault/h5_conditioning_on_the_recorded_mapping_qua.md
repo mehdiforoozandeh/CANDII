@@ -26,7 +26,7 @@ Knowing each run's mapping-quality cutoff closes at least half of the gap a plai
 
 ## TL;DR
 
-The pair is the base track (MAPQ ≥ 30) and its ENCODE re-run at threshold 0 or 10 ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map closes almost none of the gap toward the oracle, so the change is regional. A generator g that reads the cutoff gains a little over its no-covariates twin in counts, on trained and never-trained pairs, but not in p.
+The pair is the base track (MAPQ ≥ 30) and its ENCODE re-run at threshold 0 or 10 ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The checks (PI ruling 2026-10-31) ask g to beat its no-covariates twin by more than 2 × seed wobble per mark class, in counts and −log10 p separately, on base ↔ arm and never-trained arm → arm pairs; no per-knob scoring has run yet. Exploratory readings: a per-pair monotone map closes almost none of the gap toward the oracle, so the change is regional. A generator g that reads the cutoff gains a little over its no-covariates twin in counts, on trained and never-trained pairs, but not in p.
 
 ## Expect
 

@@ -26,7 +26,7 @@ Knowing that one run kept its duplicate reads closes at least half of the gap a 
 
 ## TL;DR
 
-The pair is the base track (duplicates removed) and its ENCODE re-run with duplicate removal off, on six ChIP tracks and one DNase track ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map already closes about half of the gap toward the oracle on both axes, so the null is plausible. A generator g that reads the setting beats its twin in half the configurations; with one level, no never-trained pair tests carry-over.
+The pair is the base track (duplicates removed) and its ENCODE re-run with duplicate removal off, on six ChIP tracks and one DNase track ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The checks (PI ruling 2026-10-31) ask g to beat its no-covariates twin by more than 2 × seed wobble per mark class, in counts and −log10 p separately, on base ↔ arm and never-trained arm → arm pairs; no per-knob scoring has run yet. Exploratory readings: a per-pair monotone map already closes about half of the gap toward the oracle on both axes, so the null is plausible. A generator g that reads the setting beats its twin in half the configurations; with one level, no never-trained pair tests carry-over.
 
 ## Expect
 

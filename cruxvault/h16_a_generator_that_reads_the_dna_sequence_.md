@@ -24,7 +24,7 @@ Some processing settings matter more in repetitive, hard-to-map DNA, so a model 
 
 ## TL;DR
 
-Idea stage: this design has not run and has no null or checks yet. The PI parked it on 2026-09-25 until the four sequence-blind designs of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]] had run; they have now run. Here g reads the DNA sequence as well as C and C', so f can differ from bin to bin. The claim is that this beats the same design without sequence on the knobs whose effect depends on mappability or GC (MAPQ, read length, dedup, run type).
+Idea stage: not run, and no null or checks yet. The PI parked it on 2026-09-25 until the four sequence-blind designs of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]] had run; they have now run. Here g also reads the DNA sequence, so f can differ from bin to bin. It should beat the same design without sequence on the knobs whose effect depends on mappability or GC.
 
 ## Expect
 
@@ -39,11 +39,11 @@ _(one line: the cheapest way this result could be trivially true — name a fami
 
 ## Problem Statement
 
-Designs A–D apply one f at every position, so they cannot express knob effects that act through sequence: MAPQ and read length through mappability, dedup through PCR GC bias, run type most in repeats. The grid gives a second reason. When g also read each bin's own value (design A2), counts CRPS on DNase fell from 3.06 ± 0.11 to 0.849 ± 0.009, and a twin that read a random bin's value did not gain (3.02). So a position-dependent f helps when its input is the right local signal. Sequence is such a signal, and g does not see it now.
+Designs A–D apply one f at every position, so they cannot express knob effects that act through sequence: MAPQ and read length through mappability, dedup through PCR GC bias, run type most in repeats. When g also read each bin's own value (design A2), counts CRPS on DNase fell from 3.06 ± 0.11 to 0.849 ± 0.009, and a twin that read a random bin's value did not gain (3.02). So a position-dependent f helps when it reads the right local signal; sequence is one, and g does not see it now.
 
-Risk: a sequence-reading g is large but sees few distinct (C, C') points, so it may learn the track's sequence pattern instead of covariate effects. The scrambled-covariate twin that keeps the sequence input catches that. The sequence-blind designs already fail to carry their gain to never-trained arm → arm pairs ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]); a larger g may make that worse.
+Risk: a sequence-reading g is large but sees few distinct (C, C') points, so it may learn each track's sequence pattern, not covariate effects; the scrambled-covariate twin that keeps the sequence input catches that. The sequence-blind designs already fail to carry their gain to never-trained arm → arm pairs ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]), and a larger g may make that worse.
 
-Origin: the PI's own addition, "let's add a fifth option where g gets C, C', and the DNA sequence as input" (2026-09-25). The argument above that row 2's gain points to position-dependent f is the agent's, written later; the PI did not state it.
+Origin: the PI's own addition, "let's add a fifth option where g gets C, C', and the DNA sequence as input" (2026-09-25). The row-2 (A2) argument above is the agent's, not the PI's.
 
 ## Idea / Hypothesis
 
@@ -56,7 +56,7 @@ A generator that reads the DNA sequence as well as the source and target covaria
 
 ## Planned Intervention
 
-Not run. Draft of 2026-09-25, not ruled (option E in `plan/T118_COUNTERFACTUAL_F.md`, parked): a dilated 1D CNN on one-hot DNA pooled to 25 bp bins, with Umap mappability (k = 24, 36, 50, 100), GC per bin and repeat masks as extra channels, and [C, C'] entering by feature-wise scale and shift. It pairs with design A made local (per-bin a, b and dispersion), so the comparison with A isolates what sequence adds. Alternatives on record: precomputed sequence tracks only, or features from a pretrained DNA model (Enformer, Borzoi, Nucleotide Transformer, Caduceus).
+Draft of 2026-09-25, not ruled (option E in `plan/T118_COUNTERFACTUAL_F.md`, parked): a dilated 1D CNN on one-hot DNA pooled to 25 bp bins, with Umap mappability (k = 24, 36, 50, 100), GC per bin and repeat masks as extra channels, and [C, C'] entering by feature-wise scale and shift. It pairs with design A made local (per-bin a, b and dispersion), so the comparison with A isolates what sequence adds. Alternatives on record: precomputed sequence tracks only, or features from a pretrained DNA model (Enformer, Borzoi, Nucleotide Transformer, Caduceus).
 
 ## Run Links
 

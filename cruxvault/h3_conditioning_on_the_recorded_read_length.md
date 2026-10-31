@@ -26,7 +26,7 @@ Knowing that one run used shorter reads closes at least half of the gap a plain 
 
 ## TL;DR
 
-The pair is a base ChIP track (101 bp reads) and its ENCODE re-run with reads cropped to 36 or 50 bp ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map closes 0.46 of the count gap toward the oracle but 0.01 of the p gap. A generator g that reads the crop beats its no-covariates twin on trained pairs; the gain mostly fails on the never-trained 36 → 50 bp pair.
+The pair is a base ChIP track (101 bp reads) and its ENCODE re-run with reads cropped to 36 or 50 bp ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The checks (PI ruling 2026-10-31) ask g to beat its no-covariates twin by more than 2 × seed wobble per mark class, in counts and −log10 p separately, on base ↔ arm and never-trained arm → arm pairs; no per-knob scoring has run yet. Exploratory readings: a per-pair monotone map closes 0.46 of the count gap toward the oracle but 0.01 of the p gap. A generator g that reads the crop beats its no-covariates twin on trained pairs; the gain mostly fails on the never-trained 36 → 50 bp pair.
 
 ## Expect
 

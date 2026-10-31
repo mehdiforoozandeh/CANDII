@@ -26,7 +26,7 @@ If the translator also practises on pairs where neither side is the original tra
 
 ## TL;DR
 
-The direct g → f designs fit trained base ↔ arm depth pairs and miss the depth law on never-trained arm → arm pairs, while chaining two trained maps through the base meets it (0.07–0.12 against 0.29–0.34 direct). That fits two readings: g needs the base as a pivot, or g simply never saw an arm → arm pair. This claims the second: trained on some arm → arm pairs as well, a direct map meets the law on held-out arm → arm pairs. It decides what CANDI needs, since CANDI has a natural base only for depth (the full-depth track): if this holds, augmenting CANDI's corpus with counterfactual pairs is the route; if it fails, the pivot is. Settled by the median |log2 error| of the predicted scale on held-out arm → arm depth pairs against the via-base chain and the seed floor.
+The direct g → f designs fit trained base ↔ arm depth pairs and miss the depth law on never-trained arm → arm pairs, while chaining two trained maps through the base meets it (0.07–0.12 against 0.29–0.34 direct). That fits two readings: g needs the base as a pivot, or g simply never saw an arm → arm pair. This claims the second: trained on some arm → arm pairs as well, a direct map meets the law on held-out arm → arm pairs. It decides what CANDI needs, since CANDI has a natural base only for depth (the full-depth track): if this holds, augmenting CANDI's corpus with counterfactual pairs is the route; if it fails, the pivot is.
 
 ## Expect
 

@@ -26,7 +26,7 @@ Knowing what fraction of a run's reads are background closes at least half of th
 
 ## TL;DR
 
-The pair is the base track and a counterfactual in which a fraction f = 0.5 or 0.9 of the treatment reads is replaced by matched-control reads, total fixed at 30M ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map closes 0.19 (counts) and 0.32 (p) of the gap toward the oracle. A generator g that reads f beats its twin by a small, steady margin in counts on both pair kinds; in p the gain vanishes on the never-trained pair.
+The pair is the base track and a counterfactual in which a fraction f = 0.5 or 0.9 of the treatment reads is replaced by matched-control reads, total fixed at 30M ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The checks (PI ruling 2026-10-31) ask g to beat its no-covariates twin by more than 2 × seed wobble per mark class, in counts and −log10 p separately, on base ↔ arm and never-trained arm → arm pairs; no per-knob scoring has run yet. Exploratory readings: a per-pair monotone map closes 0.19 (counts) and 0.32 (p) of the gap toward the oracle. A generator g that reads f beats its twin by a small, steady margin in counts on both pair kinds; in p the gain vanishes on the never-trained pair.
 
 ## Expect
 

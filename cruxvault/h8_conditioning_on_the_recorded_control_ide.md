@@ -26,7 +26,7 @@ Knowing which background library the peak caller used closes at least half of th
 
 ## TL;DR
 
-The pair is the base track and a counterfactual called against another cell line's control, or no control ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The counts are bit-identical to base, so the claim lives on the −log10 p axis. The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a generator g that reads the control identity beats its no-covariates twin in p on trained pairs and keeps most of the gain on the never-trained other → none pair. The bar cannot yet be read, because the source track already beats the pseudoreplicate oracle.
+The pair is the base track and a counterfactual called against another cell line's control, or no control ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The counts are bit-identical to base, so the claim lives on the −log10 p axis. The checks (PI ruling 2026-10-31) ask g to beat its no-covariates twin by more than 2 × seed wobble per mark class in −log10 p, on base ↔ arm and never-trained arm → arm pairs, with predicted counts held at the source; no per-knob scoring has run yet. Exploratory readings: a generator g that reads the control identity beats its no-covariates twin in p on trained pairs and keeps most of the gain on the never-trained other → none pair.
 
 ## Expect
 

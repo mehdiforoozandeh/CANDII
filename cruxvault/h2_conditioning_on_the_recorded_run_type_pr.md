@@ -39,9 +39,7 @@ Normalization: the pairs differ by one global monotone value-axis map, so a cova
 
 ## Problem Statement
 
-Run type carries more weight than depth: it is not a thinning identity. [[signal-normalization-in-epigenomics]] records that the single-end and paired-end deduplication rules differ, and that this shift let a naive baseline beat all but two of 23 ENCODE challenge submissions. On the shipped panel, assay and read length fix run type (`AGENTS.md` §7.2 rule 5). The t112 paired-end arm changes run type alone. It has one level, so only the 14 trained pairs isolate run type.
-
-Why run type: unlike depth, it has no closed-form answer, so it carries more weight for the claim. The counterfactual is the same paired-end reads re-processed mate-blind as single-end, so nothing else can differ between the two members.
+Run type carries more weight than depth: unlike depth, it has no closed-form thinning answer. [[signal-normalization-in-epigenomics]] records that the single-end and paired-end deduplication rules differ, and that this shift let a naive baseline beat all but two of 23 ENCODE challenge submissions. On the shipped panel, assay and read length fix run type (`AGENTS.md` §7.2 rule 5). The counterfactual is the same paired-end reads re-processed mate-blind as single-end, so nothing else differs between the two members. The t112 paired-end arm has one level, so only the 14 trained pairs isolate run type.
 
 ## Idea / Hypothesis
 
@@ -188,14 +186,7 @@ and the rule content-hash when the node goes running.
 
 ## Planned Intervention
 
-Four rungs on the t112 paired-end pairs (trained base ↔ paired-end), scored on chr19 + chr21 on macro NB CRPS against the real target (PI 2026-09-16):
-
-- **blind**: t118's no-covariates twin.
-- **onewarp**: one covariate-free monotone map fitted per pair (QuantileMatching).
-- **model**: t118's covariate-conditioned g → f.
-- **oracle**: the independent-replicate floor (PI rulings 2026-10-29, 2026-10-30; item v).
-
-Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t130_score_the_one_warp_check_set_blind_|The scoring task]] scored the existing runs.
+Four rungs on the t112 paired-end pairs (trained base ↔ paired-end), scored on chr19 + chr21 on macro NB CRPS against the real target (PI 2026-09-16): **blind** is t118's no-covariates twin; **onewarp** is one covariate-free monotone map per pair (QuantileMatching); **model** is t118's covariate-conditioned g → f; **oracle** is the independent-replicate floor (PI rulings 2026-10-29, 2026-10-30; item v). Gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t130_score_the_one_warp_check_set_blind_|The scoring task]] scored the existing runs.
 
 ## Run Links
 
@@ -216,4 +207,3 @@ Readings, not judged. The paired-end arm: 7 FASTQ re-runs, one per track, with t
 - Counts, trained base ↔ paired-end pairs: median relative CRPS gain 0.15 over 16 design × g configurations; 11 of 16 clear 2 × seed |Δ|. No CRPS split exists for these gains.
 - −log10 p, the same pairs: median-pair gain 0.03; the real model wins 86 % of pairs.
 - Every never-trained pair also changes a second knob. There the median-pair gain is 0.07 in counts (real wins 65 %) and −0.06 in p (34 %).
-- Blind pass (2026-10-30), counts: the floor sits above one-warp in narrow and broad marks, so gap-closed is negative there and means the model is better. The model beats one-warp by 0.055–0.214, > 2 × seed |Δ| in 16 of 16 narrow and broad cells. DNase is mixed.
