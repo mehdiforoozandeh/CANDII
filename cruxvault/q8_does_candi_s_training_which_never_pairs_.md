@@ -54,7 +54,7 @@ Second rerun with a curve-corrected floor, chr21 (2026-10-26). The pseudocount s
 
 The probe is parked (PI ruling 2026-10-29); this reading stands as the baseline, and the test of what CANDI needs moved to [[h28_training_g_on_arm_to_arm_pairs_lets_a_di|the arm-to-arm training claim]].
 
-Reading: CANDI is in the 'ignores' state for read length and run type, and the missing counterfactual pairs fit that, but low conditional information and collinearity are joint causes. Dedup, MAPQ, fragment and control knobs are not CANDI inputs at all.
+Reading (PI, 2026-10-31): CANDI uses read length and run type in the wrong direction. Told either one, it moves its predicted level, but not the way the real tracks move. This is the current stage of CANDI; it is not related to the covariate artifact correction (CAC) runs on the counterfactual testbed. The missing counterfactual pairs fit this, but low conditional information and collinearity are joint causes. Dedup, MAPQ, fragment and control knobs are not CANDI inputs at all.
 
 <!-- crux:ledger:start -->
 **1 children** · open 1, leaning 0, settled 0, parked 0
