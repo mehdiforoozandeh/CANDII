@@ -22,6 +22,7 @@ and denoising on cell types it has never seen. `README.md` is the five-minute ve
 | the CANDI_STORE corpus store — how to use it, layout, codecs, manifest | `STORE.md` |
 | what `candi.bench` and `candi.monitor` measure, the keys they write, quoting rules | `EVAL.md` |
 | every open question, hypothesis, task and result | `cruxvault/` |
+| what Max (PI) is doing — scan it before you start any task, so we do not duplicate his work | Fir, read-only: `/project/def-maxwl/maxwl/epi_imputation/notes_mirror/` — start at `notes/project_state.md`, then the newest `sprints/*/report.html` |
 
 Where a doc and the code disagree, **the code is right and the doc is the bug.**
 
@@ -112,8 +113,7 @@ An output must **resolve** — a vault file or `[[wikilink]]`, never a bare hash
   naming the run. Checkpoints and logs stay on the cluster. **Not** a symlink — Fir is reached
   over SSH and is not mounted here, so a link would have no local path to point at.
 
-Only the literature wiki was inherited from the old vault. No old hypothesis was migrated.
-Routine lint is `crux validate --check=tree,tasks`; the full wiki lint needs a local `raw/`.
+Only the literature wiki was inherited from the old vault. No old hypothesis was migrated. Routine lint is `crux validate --check=tree,tasks`; the full wiki lint needs a local `raw/`.
 
 ## Exceptions on record
 
