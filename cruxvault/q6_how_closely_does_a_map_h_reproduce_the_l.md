@@ -70,5 +70,5 @@ At 6 of 8 designs (A, C, D, A2, C2, D2), aggregated 2026-10-25; the PI stopped c
 **1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
 - `h25` [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *open*
-- `f18` finding (moderate) [[f18_clear_margins_over_seed_wobble_but_one_t|Clear margins over seed wobble, but one track and one f seed, and two of…]]
+- `f18` finding (strong) [[f18_clear_margins_over_seed_wobble_but_one_t|Clear margins over seed wobble, but one track and one f seed, and two of…]]
 <!-- crux:ledger:end -->

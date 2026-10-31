@@ -70,5 +70,5 @@ Complete: 432 of 432 runs. "±" is seed wobble; a gain clears above 2 × the lar
 <!-- crux:ledger:start -->
 **0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
-- `f17` finding (moderate) [[f17_large_clean_margins_on_the_432_runs_and_|Large, clean margins on the 432 runs, and the PI's own reading on 2026-10-19…]]
+- `f17` finding (strong) [[f17_large_clean_margins_on_the_432_runs_and_|Large, clean margins on the 432 runs, and the PI's own reading on 2026-10-19…]]
 <!-- crux:ledger:end -->

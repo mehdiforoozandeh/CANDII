@@ -52,5 +52,5 @@ Readings, not judged, 2026-10-30 ([covariate-map digest](results/t141/DIGEST.md)
 <!-- crux:ledger:start -->
 **0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
-- `f26` finding (moderate) [[f26_counts_readings_clear_the_shuffle_and_fl|Counts readings clear the shuffle and floor controls by 50–1000×; moderate…]]
+- `f26` finding (strong) [[f26_counts_readings_clear_the_shuffle_and_fl|Counts readings clear the shuffle and floor controls by 50–1000×; moderate…]]
 <!-- crux:ledger:end -->

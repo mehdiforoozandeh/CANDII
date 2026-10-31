@@ -59,5 +59,5 @@ Readings, not judged, 2026-10-30 ([rebuilt floor and map](results/t142/DIGEST.md
 <!-- crux:ledger:start -->
 **0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
-- `f25` finding (moderate) [[f25_the_15m_floor_passes_an_exact_self_check|The 15M floor passes an exact self-check and real depth-arm halves match it…]]
+- `f25` finding (strong) [[f25_the_15m_floor_passes_an_exact_self_check|The 15M floor passes an exact self-check and real depth-arm halves match it…]]
 <!-- crux:ledger:end -->

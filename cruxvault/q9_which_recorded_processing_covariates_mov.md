@@ -58,8 +58,8 @@ First pass, 192 base → arm comparisons ([[t133_rank_the_t112_processing_knobs_
 - [Deck](presentations/q9-knob-ranking/index.html) — published https://claude.ai/artifact/1T1NKMYo5taJjDowse9r2f; vault copy [DECK.md](presentations/q9-knob-ranking/DECK.md)
 
 <!-- crux:ledger:start -->
-**1 children** · open 0, leaning 1, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 0, leaning 0, settled 1, parked 0 · 1 finding(s) on this question
 
-- `q11` _(Q)_ [[q11_where_along_the_genome_does_each_covaria|Where along the genome does each covariate act: does a track react uniformly to a change in depth, read length or another processing knob, or more in some kinds of regions?]] — *leaning · moderate*
-- `f24` finding (moderate) [[f24_peak_height_clears_the_floor_by_a_wide_m|Peak height clears the floor by a wide margin; the shape ranking does not,…]]
+- `q11` _(Q)_ [[q11_where_along_the_genome_does_each_covaria|Where along the genome does each covariate act: does a track react uniformly to a change in depth, read length or another processing knob, or more in some kinds of regions?]] — *settled · strong*
+- `f24` finding (strong) [[f24_peak_height_clears_the_floor_by_a_wide_m|Peak height clears the floor by a wide margin; the shape ranking does not,…]]
 <!-- crux:ledger:end -->
