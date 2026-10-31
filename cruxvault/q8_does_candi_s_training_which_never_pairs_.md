@@ -53,7 +53,7 @@ The probe is parked (PI ruling 2026-10-29); this reading stands as the baseline,
 Reading: CANDI is in the 'ignores' state for read length and run type, and the missing counterfactual pairs fit that, but low conditional information and collinearity are joint causes. Dedup, MAPQ, fragment and control knobs are not CANDI inputs at all.
 
 <!-- crux:ledger:start -->
-**1 children** · ideas 0/1 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
+**1 children** · open 1, leaning 0, settled 0, parked 0
 
-- `h26` [[h26_a_trained_candi_checkpoint_told_a_counte|A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates]] — *idea*
+- `h26` [[h26_a_trained_candi_checkpoint_told_a_counte|A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates]] — *open*
 <!-- crux:ledger:end -->

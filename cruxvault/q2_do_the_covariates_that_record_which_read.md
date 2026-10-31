@@ -32,10 +32,10 @@ Locked before any run: the children share q1's protocol; each is scored on both 
 Readings only, from [[t118_learn_the_covariate_conditioned_tra|the g × f grid]] and [[t126_build_and_run_the_encoder_decoder_r|the encoder-decoder rungs]]; the [knob report](results/q2/KNOB_READINGS.md) has the tables and the CRPS split. Two patterns hold. First, a per-pair monotone map closes about half of the gap toward the pseudoreplicate oracle for duplicate removal (both axes) and read-length counts, but almost none for MAPQ or for read length in p. The one-warp null is therefore plausible for duplicates and unlikely for MAPQ. Second, a generator g that reads the covariates beats its no-covariates twin on trained pairs in counts for every knob (median gain 0.08–0.18 against a seed wobble of 0.003–0.06), and in p by less (0.03–0.14). On never-trained pairs within a knob the p gain vanishes or turns negative, and the learned-decoder encoder-decoder falls below its twin on nearly every never-trained pair. None of this scores the locked bar: the competitor is the twin, not one-warp, and the oracle is a half-depth pseudoreplicate.
 
 <!-- crux:ledger:start -->
-**4 children** · ideas 0/4 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
+**4 children** · open 4, leaning 0, settled 0, parked 0
 
-- `h3` [[h3_conditioning_on_the_recorded_read_length|Conditioning on the recorded read length predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
-- `h4` [[h4_conditioning_on_the_recorded_duplicate_h|Conditioning on the recorded duplicate handling predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
-- `h5` [[h5_conditioning_on_the_recorded_mapping_qua|Conditioning on the recorded mapping-quality filter predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
-- `h6` [[h6_conditioning_on_the_recorded_antibody_ef|Conditioning on the recorded antibody-efficiency proxy predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+- `h3` [[h3_conditioning_on_the_recorded_read_length|Conditioning on the recorded read length predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `h4` [[h4_conditioning_on_the_recorded_duplicate_h|Conditioning on the recorded duplicate handling predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `h5` [[h5_conditioning_on_the_recorded_mapping_qua|Conditioning on the recorded mapping-quality filter predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `h6` [[h6_conditioning_on_the_recorded_antibody_ef|Conditioning on the recorded antibody-efficiency proxy predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
 <!-- crux:ledger:end -->
