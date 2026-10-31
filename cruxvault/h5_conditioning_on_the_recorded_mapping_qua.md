@@ -28,6 +28,12 @@ Knowing each run's mapping-quality cutoff closes at least half of the gap a plai
 
 The pair is the base track (MAPQ ≥ 30) and its ENCODE re-run at threshold 0 or 10 ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map closes almost none of the gap toward the oracle, so the change is regional. A generator g that reads the cutoff gains a little over its no-covariates twin in counts, on trained and never-trained pairs, but not in p.
 
+## Expect
+
+A map conditioned on the recorded MAPQ filter closes at least 0.5 of the one-warp → oracle gap in both counts and −log10 p, per mark class, and the gain exceeds 2 × its own seed |Δ|.
+
+_Pre-run: the claim and bar were cloned from the depth hypothesis on 2026-09-17, before any run. The 2026-09-25 redesign moved the main test to the scrambled-covariate twin; this test has not run in its own design._
+
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 

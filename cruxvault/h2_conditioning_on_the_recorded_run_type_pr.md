@@ -28,12 +28,20 @@ Knowing whether the sequencer read DNA fragments from one end or both is enough 
 
 g reads the source's covariates C and the target's covariates C′ and outputs a map f; f(X) predicts the target X′ as NB counts. The pairs are the t112 paired-end arm against its single-end base, both at 30M reads. The claim is that run-type conditioning closes the gap that one-warp leaves.
 
+## Expect
+
+A run-type-conditioned map closes at least 0.5 of the one-warp → oracle gap per mark class, and the gain exceeds 2 × its own seed |Δ|.
+
+_Pre-run: claim written 2026-09-01; bar approved by the PI 2026-09-16/17. On 2026-10-30 the PI ruled that run-type pairs keep the independent-replicate floor as oracle, because the paired-end arm is not a read subsample of its base._
+
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 
 ## Problem Statement
 
 Run type carries more weight than depth: it is not a thinning identity. [[signal-normalization-in-epigenomics]] records that the single-end and paired-end deduplication rules differ, and that this shift let a naive baseline beat all but two of 23 ENCODE challenge submissions. On the shipped panel, assay and read length fix run type (`AGENTS.md` §7.2 rule 5). The t112 paired-end arm changes run type alone. It has one level, so only the 14 trained pairs isolate run type.
+
+Why run type: unlike depth, it has no closed-form answer, so it carries more weight for the claim. The counterfactual is the same paired-end reads re-processed mate-blind as single-end, so nothing else can differ between the two members.
 
 ## Idea / Hypothesis
 

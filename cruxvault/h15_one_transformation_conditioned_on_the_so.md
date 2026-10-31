@@ -32,12 +32,20 @@ If you know how two versions of one experiment were processed, a model can turn 
 
 A generator g reads the covariates C and C′ and outputs a transformation f; f(X) predicts X′ per bin. Pairs come from [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]. The competitor is g trained with scrambled covariates. So far, not judged: g beats that twin on held-out chromosomes almost everywhere; the gain shrinks on never-trained arm → arm pairs. Every chosen design misses the swap check and the depth law.
 
+## Expect
+
+g(C, C′) → f beats the same model trained with scrambled covariates, per mark class, in counts and −log10 p separately, with no further bar on the size of the gain (PI 2026-09-25).
+
+_Pre-run: locked 2026-09-25, before the row-1 training array was submitted._
+
 ## Null
 Normalization: the covariates are ignored — g does no better than the same model trained with C and C' scrambled across pairs.
 
 ## Problem Statement
 
 CANDI's zero-shot claims rest on covariate conditioning that cannot be isolated inside CANDI. Here each pair differs in one recorded knob; the question is whether the covariates alone reproduce its effect, as a relation between C and C′ (PI 2026-09-25). It replaces the one-warp design of [[h1_conditioning_on_the_recorded_sequencing_|the depth claim]] and [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]].
+
+Why this design (PI, 2026-09-25): one-warp "is not using C and C' at all", so beating it does not show that the covariates did any work. The PI wanted a model that learns how C and C′ change X into X′: "if C is depth and its 15M and if C' is 30M, then X' peak must be twice as big". So the competitor became the same model with the covariates scrambled, and the pseudoreplicate oracle was dropped once it proved not to be a floor ("let's forget about the oracle"). The PI also ruled that training runs both ways (base → arm and arm → base), so the swap check gates the claim.
 
 ## Idea / Hypothesis
 

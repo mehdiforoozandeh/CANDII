@@ -53,6 +53,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t130` [implementation] score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]]
+- `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations
 
 ## Blocked
 
@@ -65,6 +66,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 ### admin
 
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
+- `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations — *open*
 
 ### data-acquisition
 

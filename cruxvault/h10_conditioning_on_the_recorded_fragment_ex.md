@@ -28,6 +28,12 @@ Knowing how far each read was stretched into a fragment closes at least half of 
 
 The pair is the base track and a counterfactual with reads extended to 0.5× or 2× the cross-correlation fragment length (DNase: the smoothing window) ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The counts are bit-identical to base, so the claim lives on the −log10 p axis. The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map already beats the pseudoreplicate oracle in p. A generator g that reads the extension beats its twin in p on trained pairs in 10 of 16 configurations; on the never-trained pair half the configurations explode.
 
+## Expect
+
+A map conditioned on the recorded fragment extension closes at least 0.5 of the one-warp → oracle gap on the −log10 p axis, per mark class, with the gain above 2 × its own seed |Δ|, and leaves the counts unchanged.
+
+_Pre-run: the claim and bar were cloned from the depth hypothesis on 2026-09-17, before any run. The 2026-09-25 redesign moved the main test to the scrambled-covariate twin; this test has not run in its own design._
+
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 

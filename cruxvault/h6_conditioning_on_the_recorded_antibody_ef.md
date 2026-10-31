@@ -28,6 +28,12 @@ Knowing what fraction of a run's reads are background closes at least half of th
 
 The pair is the base track and a counterfactual in which a fraction f = 0.5 or 0.9 of the treatment reads is replaced by matched-control reads, total fixed at 30M ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map closes 0.19 (counts) and 0.32 (p) of the gap toward the oracle. A generator g that reads f beats its twin by a small, steady margin in counts on both pair kinds; in p the gain vanishes on the never-trained pair.
 
+## Expect
+
+A map conditioned on the recorded antibody-efficiency proxy (control-read fraction) closes at least 0.5 of the one-warp → oracle gap in both counts and −log10 p, per mark class, and the gain exceeds 2 × its own seed |Δ|.
+
+_Pre-run: the claim and bar were cloned from the depth hypothesis on 2026-09-17, before any run. The 2026-09-25 redesign moved the main test to the scrambled-covariate twin; this test has not run in its own design._
+
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 

@@ -28,12 +28,20 @@ Knowing how deeply two experiments were sequenced is enough to turn one experime
 
 g reads the source's covariates C and the target's covariates C′ and outputs a map f; f(X) predicts the target X′ as NB counts. The pairs are the t112 depth arms: a 30M-read base against its 15M, 7.5M and 3.75M subsamples. The claim is that depth conditioning closes the gap that one-warp leaves.
 
+## Expect
+
+A depth-conditioned map closes at least 0.5 of the one-warp → oracle gap per mark class, and the gain exceeds 2 × its own seed |Δ|.
+
+_Pre-run: claim written 2026-09-01; the bar was approved by the PI on 2026-09-16/17, before any run. The oracle was changed after the run: the nested-read oracle replaced the two-NB-draw oracle on 2026-10-30 (PI ruling), because a depth arm is a read subsample of its base._
+
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 
 ## Problem Statement
 
 Depth is the weak arm. Each depth arm is a binomial thinning of the base, and NB is closed under thinning, so the depth map has a closed-form answer. A win is weak evidence for [[q1_do_the_recorded_experimental_covariates_|the parent question]]; [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]] carries more weight. The literature names a stronger competitor: separate quantile normalisation of peak and background signal ([[signal-normalization-in-epigenomics]], [[quantile-normalization]]). PI ruling 2026-09-16: one-warp stays the denominator.
+
+Why depth first: it has a closed-form answer (binomial thinning), so it is the cheapest apparatus check before the harder knobs. The PI chose to test the covariates outside CANDI first — "let's do these experiments in vitro (not in vivo -- not in candi)" (2026-09-01) — because CANDI's depth response is a fixed log-depth offset, so a win inside CANDI would not show that the covariates did any work.
 
 ## Idea / Hypothesis
 

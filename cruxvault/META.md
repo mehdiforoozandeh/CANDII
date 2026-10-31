@@ -6,16 +6,16 @@ Root: [[candii]]
 
 ## Question tree
 
-- ○ `q1` [Q] [[q1_do_the_recorded_experimental_covariates_|**Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?**]] — *open*
-  - ○ `h1` [H] [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
-  - ○ `h2` [H] [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
-  - ○ `h15` [H] [[h15_one_transformation_conditioned_on_the_so|A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates]] — *open*
-  - ○ `q2` [Q] [[q2_do_the_covariates_that_record_which_read|**Do the covariates that record which reads entered the treatment pileup carry enough information to map a track across a change in one of them?**]] — *open*
+- ◐ `q1` [Q] [[q1_do_the_recorded_experimental_covariates_|**Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?**]] — *leaning* · weak
+  - ◐ `h1` [H] [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *leaning* · moderate · supports
+  - ◐ `h2` [H] [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *leaning* · weak · supports
+  - ◐ `h15` [H] [[h15_one_transformation_conditioned_on_the_so|A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates]] — *leaning* · weak · mixed
+  - ◐ `q2` [Q] [[q2_do_the_covariates_that_record_which_read|**Do the covariates that record which reads entered the treatment pileup carry enough information to map a track across a change in one of them?**]] — *leaning* · weak
     - ○ `h3` [H] [[h3_conditioning_on_the_recorded_read_length|Conditioning on the recorded read length predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
     - ○ `h4` [H] [[h4_conditioning_on_the_recorded_duplicate_h|Conditioning on the recorded duplicate handling predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
     - ○ `h5` [H] [[h5_conditioning_on_the_recorded_mapping_qua|Conditioning on the recorded mapping-quality filter predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
     - ○ `h6` [H] [[h6_conditioning_on_the_recorded_antibody_ef|Conditioning on the recorded antibody-efficiency proxy predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
-  - ○ `q3` [Q] [[q3_do_the_covariates_that_record_how_the_co|**Do the covariates that record how the control and the peak caller were configured carry enough information to map the p-value track across a change in one of them?**]] — *open*
+  - ◐ `q3` [Q] [[q3_do_the_covariates_that_record_how_the_co|**Do the covariates that record how the control and the peak caller were configured carry enough information to map the p-value track across a change in one of them?**]] — *leaning* · weak
     - ○ `h7` [H] [[h7_conditioning_on_the_recorded_control_to_|Conditioning on the recorded control-to-treatment scaling predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
     - ○ `h8` [H] [[h8_conditioning_on_the_recorded_control_ide|Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
     - ○ `h9` [H] [[h9_conditioning_on_the_recorded_control_dep|Conditioning on the recorded control depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
@@ -47,7 +47,7 @@ Root: [[candii]]
 
 ## Dashboard
 
-- **Questions** (11): open 10 · leaning 1 · settled 0 · parked 0
-- **Hypotheses** (27): open 22 · leaning 3 · settled 2 · parked 0
-- **Confidence**: weak 0 · moderate 4 · strong 2
-- **Findings**: 5
+- **Questions** (11): open 7 · leaning 4 · settled 0 · parked 0
+- **Hypotheses** (27): open 19 · leaning 6 · settled 2 · parked 0
+- **Confidence**: weak 5 · moderate 5 · strong 2
+- **Findings**: 11

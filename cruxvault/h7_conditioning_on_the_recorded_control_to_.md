@@ -28,6 +28,12 @@ Knowing how strongly the background was weighted when peaks were called closes a
 
 The pair is the base track and a counterfactual in which MACS2 used 0.5× or 2× the default control-to-treatment ratio ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The counts are bit-identical to base, so the claim lives on the −log10 p axis. The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a generator g that reads the ratio beats its no-covariates twin in p by a large margin on trained pairs and keeps most of it on the never-trained pair. The bar cannot yet be read, because the source track already beats the pseudoreplicate oracle.
 
+## Expect
+
+A map conditioned on the recorded control-to-treatment scaling closes at least 0.5 of the one-warp → oracle gap on the −log10 p axis, per mark class, with the gain above 2 × its own seed |Δ|, and leaves the counts unchanged.
+
+_Pre-run: the claim and bar were cloned from the depth hypothesis on 2026-09-17, before any run. The 2026-09-25 redesign moved the main test to the scrambled-covariate twin; this test has not run in its own design._
+
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 
