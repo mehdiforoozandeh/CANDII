@@ -34,7 +34,7 @@ Exploratory (PI 2026-10-19): readings only. No bars, no ticks, no verdicts.
 
 ## Answer so far
 
-Readings to 2026-10-29, not judged: median |log2 error| of the predicted scale, chr19 + chr21; the seed spread is the noise floor.
+Readings to 2026-10-31, not judged: median |log2 error| of the predicted scale, chr19 + chr21; the seed spread is the noise floor.
 
 - The data obey the law within 0.71% over 84 ordered pairs ([audit](results/t122/AUDIT.md)).
 - Trained pairs fit (0.04–0.12); never-trained arm → arm pairs miss (0.19–0.55), in every design and g version ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]).
@@ -43,7 +43,7 @@ Readings to 2026-10-29, not judged: median |log2 error| of the predicted scale, 
 - Encoder-decoder designs do not close it yet ([[h22_a_composable_g_one_shared_map_from_each_|the composable-g hypothesis]]). Encoder-decoder D gives 0.26–0.52, old D 0.29–0.34; encoder-decoder A also loses trained pairs (1.0–1.4). A symmetric design through a learned clean setting gives 0.29–0.42 in its two complete cross-loss settings (first pass).
 - Chaining old D's two trained maps through the base meets the law: 0.07 (across-track g) and 0.12 (per-track g, seed spread 0.05) against direct 0.34 and 0.29. The trained maps hold the law; g's direct answer on an unseen pair does not use it.
 - Base ↔ 7.5M pairs, held out of training, are easy (0.04–0.16) except for encoder-decoder A.
-- Size is not the cause at the widths tried ([[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]]). A 4× wider g misses on never-trained depth pairs (0.63 per-track, 0.46 across), and so does a 2× wider f (0.41, 0.34; [[h27_f_at_64_channels_2x_wider_with_the_same_|the f-size hypothesis]]), within noise of old D. With 6 seeds, the wider f's small CRPS gain through the base (0.006, 95% interval −0.002 to +0.013) is within seed noise and does not replicate on the new seeds. The across-track g is dropped from the gain test. Through the base, both stay near the law (0.09–0.21). Arm → arm training is not decided.
+- Size is not the cause at the widths tried ([[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]]). A 4× wider g misses on never-trained depth pairs (0.63 per-track, 0.46 across), and so does a 2× wider f (0.41, 0.34; [[h27_f_at_64_channels_2x_wider_with_the_same_|the f-size hypothesis]]), within noise of old D. With 6 seeds, the wider f's small CRPS gain through the base (0.006, 95% interval −0.002 to +0.013) is within seed noise and does not replicate on the new seeds. The PI closed the scale question at these sizes (2026-10-31); the across-track g is dropped from the gain test. Through the base, both stay near the law (0.09–0.21). Arm → arm training is not decided.
 
 <!-- crux:ledger:start -->
 **9 children** · ideas 2/9 done (supported 0, partial 0, refuted 2, inconclusive 0, invalid-run 0)

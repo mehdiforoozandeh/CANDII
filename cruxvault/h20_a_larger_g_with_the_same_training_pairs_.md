@@ -79,4 +79,4 @@ Exploratory readings; the PI has not ruled. Median |log2 error| of the predicted
 - Caveat (PI, 2026-10-29): read directly, its per-track CRPS seeds are 0.627, 0.82 and 0.77, mostly scale error. The PI ruled this a caveat; it is not followed up.
 - No run's best step came near the cap.
 
-So size, at these widths, is not what makes g miss the law on unseen pairs. The earlier readings had leaned the same way: the 2 × 64 g fits trained pairs to 0.04–0.10 in every design ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]), and it meets the law when its two trained maps run in series through the base.
+So size, at these widths, is not what makes g miss the law on unseen pairs. The PI closed the scale question at these sizes on 2026-10-31 (option A): no wider g, combined arm or learning-rate sweep follows. The earlier readings had leaned the same way: the 2 × 64 g fits trained pairs to 0.04–0.10 in every design ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]), and it meets the law when its two trained maps run in series through the base.

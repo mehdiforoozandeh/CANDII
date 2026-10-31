@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Pivot Translator</title>
+<script type="application/json" id="deck-sources">__SOURCES__</script>
+
+<!--
+  prezit deck (paper arc) · the symmetric encoder-decoder ("pivot translator"), phases 1 and 2 as one
+  story, for a lab audience that does not know the design (CS undergraduates: the goal and the
+  question, no project jargon). Specs: plan/T126_ENCDEC_D2.md (phase 1, and § Phase 2), and
+  plan/T126_ENCDEC_A.md / plan/T118_COUNTERFACTUAL_F.md for the background.
+  Numbers: cruxvault/results/t128/ (phase 1) and cruxvault/results/t128p2/ (phase 2), embedded as
+  DATA by build_deck.py with a sha256 sources manifest. Chrome and CSS copied from ../t128p2-encdec/.
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI request, 2026-10-26):
+  - New plain names for every model, defined on the method slides before any result; build_deck.py
+    maps the internal codes and the build fails if one leaks. A backup slide maps old to new names.
+  - Main results show one g per track only, one claim and one simple figure per slide (the PI asked
+    for no overplotting). The across-track g is on a backup slide.
+  - Exploratory: readings, not verdicts. The hypothesis slide states the claim; the discussion gives
+    a reading against it.
+  - Typed design constants only (marked data-src="literal"): 7 tracks, 25 bp bins, the CNN's sizes
+    (4 layers, 32 channels, kernel 5, dilations 1 2 4 8, 61 bins), g's 2 x 64, the step caps
+    4000 and 12,000, 3 seeds, the noise factor 2, the held-out 7.5M depth arm, the chromosome split.
+  - The only table is the grid of variants.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once (settings 1-8, the two references, the twin) */
+    --s1:#d9822b; --s2:#9a6a12; --s3:#5d7fb8; --s4:#2f4f8a; --s5:#c3a3dc; --s6:#9467bd; --s7:#5f3a85;
+    --s8:#c8435a; --oldd:#1f8a70; --via:#6fb59a; --twin:#77736c; --ref:#9a9ca4;
+    /* one colour per pair group */
+    --tr:#4f5d75; --ho:#0a8a8f; --nv:#c84d86; --nv2:#e8a3c3;
+    --ok:#3f8f6f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+      --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+      --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+    --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+    --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em;text-wrap:balance}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px;text-wrap:balance}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:none}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.mid svg{max-height:40vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2,.cards.c5{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 9px;margin:0 0 6px;border:1px solid var(--hair);color:var(--body)}
+  .tag.out{background:rgba(63,143,111,.13);border-color:var(--ok)}
+  .tag.part{background:rgba(217,130,43,.13);border-color:var(--s1)}
+  .tag.holds{background:rgba(200,77,134,.13);border-color:var(--nv)}
+  .tag.open{background:none;border-style:dashed;border-color:var(--muted)}
+  .tag.opt{background:none;border-style:dashed;border-color:var(--accent);color:var(--accent)}
+  table.grid.compact{border-spacing:6px 3px}
+  table.grid.compact td{padding:4px 8px;font-size:14px;line-height:1.25}
+  table.grid.compact th{padding:2px 4px;font-size:14px}
+  table.grid.compact td.arm small{display:inline;margin-left:6px}
+  table.grid td.y{font-weight:600;color:var(--ink)}
+  table.grid td.no{color:var(--faint)}
+  .mini{font-size:13px;color:var(--muted)}
+
+  /* the grid of arms */
+  table.grid{border-collapse:separate;border-spacing:8px 6px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:8px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:18%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.arm{font-weight:600;color:var(--ink);text-align:left;border-left:5px solid var(--c)}
+  table.grid td.arm small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:14.5px;border:1px solid var(--hair);background:var(--card);border-radius:16px;padding:4px 12px;color:var(--body)}
+  .chip b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+  /* phase 2: the metric definition strip (what it measures / best case / worst case) */
+  .mdef{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px;margin:0 0 8px}
+  .mdef div{background:var(--card);border:1px solid var(--hair);border-radius:8px;padding:7px 12px;font-size:14px;line-height:1.36;color:var(--body)}
+  .mdef div b{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px;color:var(--muted)}
+  .mdef div.best{border-left:4px solid var(--ok)}
+  .mdef div.best b{color:var(--ok)}
+  .mdef div.worst{border-left:4px solid var(--accent)}
+  .mdef div.worst b{color:var(--accent)}
+  .mdef div.what{border-left:4px solid var(--ink)}
+  @media (max-width:900px){.mdef{grid-template-columns:1fr}}
+  .slide h2{margin-bottom:8px}
+  .fig.res svg{max-height:43vh}
+  .cards.c3x3{grid-template-columns:repeat(3,1fr);gap:10px}
+  .cards.c3x3 .card{padding:9px 13px}
+  .cards.c3x3 .ct{font-size:15px;margin-bottom:3px}
+  .cards.c3x3 .cb{font-size:13.5px;line-height:1.36}
+  @media (max-width:900px){.cards.c3x3{grid-template-columns:1fr}}
+  ol.open{margin:8px 0 0 0;padding-left:0;list-style:none;counter-reset:op}
+  ol.open li{counter-increment:op;position:relative;padding:9px 14px 9px 54px;margin:8px 0;background:var(--card);border:1px solid var(--hair);border-radius:10px;font-size:clamp(14.5px,1.3vw,16.5px);line-height:1.42;color:var(--body)}
+  ol.open li::before{content:"(" counter(op,lower-roman) ")";position:absolute;left:14px;top:9px;font-weight:700;color:var(--accent)}
+  ol.open li b{color:var(--ink)}
+</style>
+<style>
+  /* this deck: one colour per model, defined once */
+  :root{--dir:#1f8a70;--via:#73b89d;--lrn:#d9822b;--fix:#4f78bd;--anc:#8a5cc2;--box:#a07a2c;--rt:#c8435a;
+    --vae:#e0a46a;--l01:#c9a3dc;--l1:#a982c6;--l10:#7d5aa6;--twin:#9a968f}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--dir:#3fb393;--via:#94d3b9;--lrn:#eb9a4c;
+    --fix:#7fa2e0;--anc:#b18ae6;--box:#cfa556;--rt:#e8707f;--vae:#f0c08e;--l01:#e0c8ee;--l1:#c7a6e4;--l10:#a985d4;--twin:#a19d96}}
+  :root[data-theme="dark"]{--dir:#3fb393;--via:#94d3b9;--lrn:#eb9a4c;--fix:#7fa2e0;--anc:#b18ae6;--box:#cfa556;
+    --rt:#e8707f;--vae:#f0c08e;--l01:#e0c8ee;--l1:#c7a6e4;--l10:#a985d4;--twin:#a19d96}
+  .find{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px}
+  .claim{font-family:var(--serif);font-size:clamp(19px,1.9vw,25px);line-height:1.4;color:var(--ink);max-width:62ch}
+  .hyp{border:2px solid var(--accent);border-radius:12px;padding:18px 24px;background:var(--card);margin-top:8px}
+  .hyp .claim{font-size:clamp(20px,2.1vw,28px)}
+  .verdict{display:inline-block;font-size:12.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:12px;padding:2px 10px;margin-right:8px}
+  .verdict.y{background:rgba(63,143,111,.15);color:var(--ok);border:1px solid var(--ok)}
+  .verdict.n{background:rgba(181,70,46,.12);color:var(--accent);border:1px solid var(--accent)}
+  .verdict.m{background:none;color:var(--muted);border:1px dashed var(--muted)}
+  ul.find2{list-style:none;margin-top:6px}
+  ul.find2 li{display:grid;grid-template-columns:30px 1fr;gap:8px;align-items:start;padding:8px 12px;margin:6px 0;background:var(--card);border:1px solid var(--hair);border-radius:10px;font-size:clamp(14.5px,1.3vw,16.5px);line-height:1.4;color:var(--body)}
+  ul.find2 li .lt{font-weight:700;color:var(--accent)}
+  ul.find2 li b{color:var(--ink)}
+  table.grid td.ph{font-size:13px;color:var(--muted)}
+  table.grid tr.sep td{background:none;border:none;padding:6px 0 0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;text-align:left}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline; the scope in one line
+       numbers  run counts only (DATA)
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      phase and task ids
+       -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · lab meeting · exploratory</div>
+      <h1>Can a model re-process a genomics track in a way it never saw? Testing a “pivot” translator</h1>
+      <p class="sub" id="tTitle"></p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+    </div>
+    <aside class="notes">
+      <p>This talk joins two rounds of experiments into one story. Round one tested a new design; round two tested three fixes that the first round suggested.</p>
+      <p>Every number on the slides is read from the result tables when the deck is built. The study is exploratory, so the slides give readings, not verdicts.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · MOTIVATION · background (a): what a track is and what processing does to it
+       job      schematic: one sample, a pipeline with settings, several tracks
+       numbers  design constants only (25 bp bins)
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      real tracks (an illustration only)
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>what a signal track is</div>
+      <h2>The same experiment gives different tracks when you change how its reads are processed</h2>
+      <div class="fig tall" id="figTrack"></div>
+      <ul class="pts">
+        <li>A <b>track</b> counts the sequencing reads that land in each <span data-src="literal">25</span> bp bin of the genome. Peaks mark where a protein or a histone mark sits.</li>
+        <li>Each processing <b>setting</b> (how many reads, how long, how strict the mapping filter, and so on) changes the counts, but not the biology.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>A sequencing experiment produces short reads. A pipeline maps them to the genome and counts how many land in each small bin. The result is a track: a long vector of counts, one per bin.</p>
+      <p>The pipeline has settings, which we call processing knobs. Fewer reads makes every peak lower and noisier. A stricter mapping filter throws away reads that map to more than one place, so some peaks shrink. The cell and the biology are the same; only the processing differs.</p>
+      <p>The three small tracks on the right are an illustration, not data.</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · background (b): the task as translation
+       job      schematic: (X, c) and c' in, X' out, as a distribution per bin
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      the covariate encoding
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>the task</div>
+      <h2>The task is translation: given a track and its settings, predict the track under other settings</h2>
+      <div class="fig" id="figTask"></div>
+      <ul class="pts">
+        <li>Like translating a sentence between languages, but the “languages” are processing settings. The model must learn what each setting does, not memorise examples.</li>
+        <li>Why it matters: public data were processed in many different ways. A translator lets us compare and combine them, and tells us which settings change the signal.</li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>The input is a track X and the settings vector c it was made with. We also give the settings c-prime we want. The model outputs, for every bin, a probability distribution over the count we would see under c-prime: a negative binomial, which is a standard distribution for overdispersed counts.</p>
+      <p>The settings are a short vector: depth, read length, deduplication, mapping-quality cut, run type, the control settings, and the assay.</p>
+    </aside>
+  </section>
+
+  <!-- 4 · MOTIVATION · the data: which pairs we train on and which we test
+       job      schematic: base at the centre, arms around; trained edges solid, test edges dashed
+       numbers  design constants (7 tracks)
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      the per-track arm lists, the DNase defect
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>the data and the test</div>
+      <h2>We train only on pairs that change one setting from a base track, and test on pairs of settings never seen together</h2>
+      <div class="fig tall" id="figPairs"></div>
+    </div>
+    <aside class="notes">
+      <p>We have seven tracks, one per assay. Each has a base, processed with standard settings, and many arms. Each arm changes exactly one setting of the base: fewer reads, shorter reads, a stricter filter, and so on.</p>
+      <p>Training sees only base-to-arm and arm-to-base pairs. The real test is arm-to-arm: for example, from a low-depth arm to a strict-filter arm. That pair changes two settings at once, and the model never saw it. We call these never-trained pairs.</p>
+      <p>One depth arm is held out of training completely, so we can also test a depth level the model never saw.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · MOTIVATION · the problem: what failed before
+       job      the direct translator fits trained depth pairs and misses never-trained ones; the two-step does not
+       source   results/t128p2/m5_depthlaw_table.tsv (direct translator, two-step; one g per track)
+       numbers  DATA.p2depth
+       cut      held-out depth and one g across tracks (backup)
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Problem</span>what failed before</div>
+      <h2 id="hProb"></h2>
+      <div class="fig" id="figProb"></div>
+      <div class="callout"><b>The depth test.</b> When two tracks differ only in read depth, the predicted total must scale by the depth ratio. The error is |log<sub><span data-src="literal">2</span></sub> predicted ratio − log<sub><span data-src="literal">2</span></sub> true ratio|: <span data-src="literal">0</span> is perfect, <span data-src="literal">1</span> means off by a factor of <span data-src="literal">2</span>.</div>
+    </div>
+    <aside class="notes">
+      <p>Our earlier model, which we call the direct translator, reads both settings vectors and maps the source straight to the target in one pass. It learns the depth changes it was trained on almost perfectly. On depth changes it never saw, it is several times worse.</p>
+      <p>But if we take the same trained model and use it twice, first from the arm to the base and then from the base to the other arm, the error drops a lot. Both of those steps are pairs it was trained on. So the knowledge is in the model; its direct answer just does not use it.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · MOTIVATION · the idea: build the detour into the model
+       job      schematic of three routes: direct, two-step via the base, pivot
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      none
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Idea</span>build the detour into the model</div>
+      <h2>Idea: make every translation go through a shared middle, like a pivot language</h2>
+      <div class="fig tall" id="figRoutes"></div>
+    </div>
+    <aside class="notes">
+      <p>Machine translation has an old trick: to go from Finnish to Portuguese with little paired text, translate Finnish to English and English to Portuguese. English is the pivot.</p>
+      <p>The two-step route does this by hand, with the base track as the pivot. Our new design, the pivot translator, builds it in: one network maps any track into a middle track, and the same network maps the middle track out to any target. If every track can reach the middle and leave it, any pair of settings should work, even a pair never seen together.</p>
+    </aside>
+  </section>
+
+  <!-- 7 · HYPOTHESIS
+       job      the claim, the measurable prediction, and what would count against it
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      a numeric pass bar (exploratory)
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Hypothesis</span>what we test</div>
+      <div class="hyp">
+        <div class="find">Hypothesis</div>
+        <div class="claim">A translator that sends every track through a shared middle, with one network for the way in and the way out, carries its fit over to pairs of settings it never saw together.</div>
+      </div>
+      <div class="cards c3" style="margin-top:16px">
+        <div class="card" style="--c:var(--ok)"><div class="rl">Prediction</div><div class="cb">On never-trained pairs, the pivot translator’s error falls below the direct translator’s, toward the two-step route’s, and its depth error falls toward the trained-pair level.</div></div>
+        <div class="card" style="--c:var(--accent)"><div class="rl">Against it</div><div class="cb">The pivot is no better than the direct translator on never-trained pairs: the middle adds nothing.</div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Boring explanation to rule out</div><div class="cb">The pivot just copies its input to the middle, so it is a direct translator in disguise.</div></div>
+      </div>
+      <p class="note">Exploratory study: no pass bar was set in advance. A gap between two models counts only when it is larger than twice the seed-to-seed spread (method slides).</p>
+    </div>
+    <aside class="notes">
+      <p>The prediction is concrete and measurable: lower error on never-trained pairs than the direct translator, approaching the two-step route.</p>
+      <p>We also name the boring explanation up front. A pivot model could learn to pass its input through the middle unchanged; then it would behave like the direct translator. Several results check for this.</p>
+    </aside>
+  </section>
+
+  <!-- 8 · METHOD · the building block: g sets the knobs of f
+       job      schematic: settings -> g (MLP) -> per-layer scale and shift -> CNN f -> NB per bin
+       numbers  design constants (layer sizes)
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      the skip connection and init details
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the building block</div>
+      <h2>Every model has two parts: a small network g reads the settings and tunes a convolutional network f that transforms the track</h2>
+      <div class="fig tall" id="figBlock"></div>
+    </div>
+    <aside class="notes">
+      <p>f is a small one-dimensional convolutional network that slides along the track. It sees a window of about one and a half kilobases around each bin, and it outputs a negative binomial distribution per bin.</p>
+      <p>g is a small multilayer perceptron. It reads two settings vectors, the "from" settings and the "to" settings, and outputs a scale and a shift for every channel of every layer of f. This is called feature-wise modulation, or FiLM. In plain words: g turns the knobs of f.</p>
+      <p>The key point: we never train one f per pair. We train g, and g produces the right f for any pair of settings.</p>
+      <p>We train two versions of g: one g per track, and one g shared across all seven tracks. The main slides show one g per track; the shared version is in the backup.</p>
+    </aside>
+  </section>
+
+  <!-- 9 · METHOD · the three routes in detail
+       job      schematic: direct = one pass of f; two-step = f twice through the base; pivot = same f twice through a middle
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      the Gaussian middle head
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the models</div>
+      <h2>The pivot translator runs the same f twice: once into the middle and once out of it</h2>
+      <div class="fig tall" id="figModels"></div>
+    </div>
+    <aside class="notes">
+      <p><b>Direct translator</b>: one pass. g reads the source and target settings and sets f; f maps the source to the target. This is our earlier best model.</p>
+      <p><b>Two-step via the base</b>: the direct translator used twice, source to base, then base to target. It needs no new training. It is the target we hope the pivot reaches.</p>
+      <p><b>Pivot translator</b>: the encoder is f set by g of the source settings and the middle settings. It outputs a middle track Z, one value per bin. The decoder is the same f, with the same weights, set by g of the middle settings and the target settings. Only the settings fed to g differ.</p>
+    </aside>
+  </section>
+
+  <!-- 10 · METHOD · how the pivot is trained
+       job      schematic of the losses: cross, round trip, and the two optional extras
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      the KL warm-up schedule
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>training the pivot</div>
+      <h2>The pivot learns from two losses: translate across a trained pair, and translate back to itself</h2>
+      <div class="fig" id="figLoss"></div>
+      <div class="cards c2" style="margin-top:8px">
+        <div class="card" style="--c:var(--l1)"><div class="ct">Extra <span data-src="literal">1</span>: agreement</div><div class="cb">Push the middles of the two tracks of a pair to be equal, with a weight λ. Both tracks came from one sample, so ideally they share one middle.</div></div>
+        <div class="card" style="--c:var(--vae)"><div class="ct">Extra <span data-src="literal">2</span>: noisy middle</div><div class="cb">Add random noise to the middle during training (a variational autoencoder). The model cannot then hide fine detail of the input in it.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>Each training example is a base track and one of its arms. The cross loss encodes the base and decodes it with the arm’s settings, and scores the result against the real arm; and the other way round. The round-trip loss encodes a track and decodes it with its own settings, and scores it against itself.</p>
+      <p>Both losses are negative log-likelihoods of the observed counts under the predicted distribution.</p>
+      <p>The two extras are optional, and the first round tested both.</p>
+    </aside>
+  </section>
+
+  <!-- 11 · METHOD · what the middle is: the four pivot variants
+       job      cards: learned, boxed, base-labelled, anchored
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      the box edge rule
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what the middle is</div>
+      <h2>The four pivot variants differ only in how tightly the middle is tied to the real base track</h2>
+      <div class="fig mid" id="figMiddles"></div>
+      <div class="cards" style="margin-top:6px">
+        <div class="card" style="--c:var(--lrn)"><div class="rl">Round <span data-src="literal">1</span> and <span data-src="literal">2</span></div><div class="ct">Learned pivot</div><div class="cb">The middle’s settings are learned freely, starting from zero. Nothing says what the middle should be.</div></div>
+        <div class="card" style="--c:var(--box)"><div class="rl">Round <span data-src="literal">1</span></div><div class="ct">Boxed pivot</div><div class="cb">Learned too, but it starts at the base’s settings and must stay inside the range seen in training.</div></div>
+        <div class="card" style="--c:var(--fix)"><div class="rl">Round <span data-src="literal">2</span></div><div class="ct">Base-labelled pivot</div><div class="cb">The middle’s settings are fixed to the base’s settings. The middle is told it is the base.</div></div>
+        <div class="card" style="--c:var(--anc)"><div class="rl">Round <span data-src="literal">2</span></div><div class="ct">Anchored pivot</div><div class="cb">As base-labelled, and the encoder is also trained to output the real base track. The middle must be the base.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The middle is described by a settings vector, like any track. The variants differ in who chooses it.</p>
+      <p>From left to right the middle gets closer to the real base track. The anchored pivot is the closest: an extra loss scores the encoder’s output against the actual base track, and the decoder reads that output. That makes it the built-in version of the two-step route.</p>
+    </aside>
+  </section>
+
+  <!-- 12 · METHOD · the grid of variants (the deck's one table)
+       job      every model, its round, its middle, its losses, runs scored
+       numbers  run counts from DATA; design constants
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      per-g run counts (backup)
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>everything we ran</div>
+      <h2>Two rounds: round <span data-src="literal">1</span> varied the loss, round <span data-src="literal">2</span> varied the middle and trained three times longer</h2>
+      <table class="grid compact">
+        <thead><tr><th style="width:30%">model</th><th>middle</th><th>losses</th><th>training cap</th><th style="width:11%">runs scored</th></tr></thead>
+        <tbody id="tblGrid"></tbody>
+      </table>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="notes">
+      <p>Round one, with a cap of four thousand training steps, tested the learned pivot under different losses, and the boxed pivot.</p>
+      <p>Round two, with a cap of twelve thousand steps, kept the learned pivot and added the base-labelled and anchored pivots, and retrained the direct translator under the same cap.</p>
+      <p>Every model is trained with both versions of g and three random seeds. The no-settings twin is the same model trained with the settings shuffled at random, so it cannot use them; it tells us whether a model uses the settings at all.</p>
+    </aside>
+  </section>
+
+  <!-- 13 · METHOD · how we score
+       job      CRPS and its split; the noise rule; the pair groups
+       numbers  design constants only
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      top-1% and non-zero bin subsets
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>how we score</div>
+      <h2>We score the whole predicted distribution, split its error into shape and scale, and ignore gaps smaller than seed noise</h2>
+      <div class="fig mid" id="figScore"></div>
+      <div class="cards c3" style="margin-top:6px">
+        <div class="card" style="--c:var(--ink)"><div class="ct">CRPS, lower is better</div><div class="cb">The distance between the predicted distribution and the observed count, in counts. For a single-number forecast it equals the absolute error.</div></div>
+        <div class="card" style="--c:var(--muted)"><div class="ct">Shape + scale</div><div class="cb"><b>Scale error</b>: the part one best rescaling of the prediction removes (a wrong total). <b>Shape error</b>: what is left. Every CRPS is shown with both.</div></div>
+        <div class="card" style="--c:var(--accent)"><div class="ct">The noise rule</div><div class="cb">Each model is trained with <span data-src="literal">3</span> seeds. A gap counts only if it exceeds <span data-src="literal">2</span>× the larger seed-to-seed spread; smaller gaps are labelled “within noise”.</div></div>
+      </div>
+      <p class="note">Training uses every chromosome except <span data-src="literal">19</span>, <span data-src="literal">21</span> and <span data-src="literal">22</span>; chromosome <span data-src="literal">22</span> picks the best training step; every score is on chromosomes <span data-src="literal">19</span> and <span data-src="literal">21</span>.</p>
+    </div>
+    <aside class="notes">
+      <p>CRPS, the continuous ranked probability score, compares a whole predicted distribution with what was observed. Lower is better and zero is a perfect, certain forecast.</p>
+      <p>We split it in two because the two parts have different causes. A model can get the shape of the track right and the total wrong; one rescaling would fix that. The project rule is to never quote a CRPS without its split.</p>
+      <p>The noise rule: the seed spread is the largest difference between the three seeds of one model. A gap between two models counts only if it is more than twice the larger of their two spreads.</p>
+      <p>Different pair groups have different difficulty, because deep targets have large counts and so large errors. So we compare models within one pair group, never a never-trained number against a trained number.</p>
+    </aside>
+  </section>
+
+  <!-- 14 · RESULTS (a) round-trip loss alone copies
+       job      the round-trip-only pivot sits at the identity and gains nothing over its twin
+       source   results/t128/swap_table.tsv, twin_table.tsv, knob_table.tsv (one g per track)
+       numbers  DATA.p1swap, DATA.p1twin, DATA.p1never
+       cut      the depth error of the round-trip pivot (in the bullet)
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) round <span data-src="literal">1</span> · which loss</div>
+      <div class="find">Finding <span data-src="literal">1</span></div>
+      <h2 id="hA"></h2>
+      <div class="fig res" id="figA"></div>
+      <ul class="pts"><li id="tA1"></li><li id="tA2"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Panel a: how far the predicted track moves away from the source track on real pairs, where the settings do change. A model that copies its input scores zero here.</p>
+      <p>Panel b: the gain over the no-settings twin on never-trained pairs. It is the fraction of the twin’s error that the real model removes. Zero means the settings are ignored.</p>
+      <p>With only the round-trip loss, the best answer is to copy: encode the track, decode it unchanged, done. The model finds that answer. The noisy middle does not stop it. The cross loss is what forces the model to use the settings. This confirms the boring explanation for this one variant, and rules it out for the others.</p>
+    </aside>
+  </section>
+
+  <!-- 15 · RESULTS (b) the pivot passes the swap check
+       job      the pivots return X when the settings do not change, and move it when they do
+       source   results/t128p2/m8_swap_table.tsv (one g per track)
+       numbers  DATA.p2swap
+       cut      one g across tracks
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) a sanity check</div>
+      <div class="find">Finding <span data-src="literal">2</span></div>
+      <h2 id="hB"></h2>
+      <div class="fig res" id="figB"></div>
+      <ul class="pts"><li id="tB1"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>The swap check gives the model the same settings on both sides. Nothing should change, so a good model returns its input. We measure the typical change as the median of the absolute log ratio of the prediction to the input, over bins with reads.</p>
+      <p>The pivot models pass it easily, because the round-trip loss trains exactly this. The direct translator never trained on a same-settings pair, and it moves the track several times more.</p>
+      <p>The second bar shows the pivots are not just copying: on real pairs they move the track much more than in the swap check.</p>
+    </aside>
+  </section>
+
+  <!-- 16 · RESULTS (c) the main result
+       job      never-trained CRPS: no pivot beats the direct translator; only the two-step does
+       source   results/t128p2/m1_never_table.tsv (one g per track, all knobs, never-trained pairs)
+       numbers  DATA.p2never
+       cut      per-knob and same-knob vs two-knob splits; one g across tracks (backup)
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) the main question · never-trained pairs</div>
+      <div class="find">Finding <span data-src="literal">3</span> · the main result</div>
+      <h2 id="hC"></h2>
+      <div class="fig res" id="figC"></div>
+      <ul class="pts"><li id="tC1"></li><li id="tC2"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>This is the question of the whole study. Each bar is the error on arm-to-arm pairs that no model saw in training, averaged over pairs, tracks and seeds. The dark part is shape error, the light part scale error. The black ticks are the three seeds.</p>
+      <p>All three pivot variants have lower bars than the direct translator, and they are ordered: the closer the middle is tied to the real base, the lower the bar. But every one of those gaps is within seed noise. Only the two-step route is clearly better than the direct translator, and it is also clearly better than every pivot.</p>
+      <p>Note how much of the direct translator’s error is scale error, and how little of the two-step route’s is. The pivots sit in between.</p>
+    </aside>
+  </section>
+
+  <!-- 17 · RESULTS (d) where the gap is: the second half
+       job      hop 1 of the anchored pivot equals the direct translator's arm -> base map; the full route does not
+       source   results/t128p2/m6_hop1_table.tsv, m1_never_table.tsv (one g per track)
+       numbers  DATA.p2hop, DATA.p2never
+       cut      the held-out-depth hop-1 rows
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) where the gap is</div>
+      <div class="find">Finding <span data-src="literal">4</span></div>
+      <h2 id="hD"></h2>
+      <div class="fig tall" id="figD"></div>
+    </div>
+    <aside class="notes">
+      <p>The anchored pivot and the two-step route have the same shape: arm, then a prediction of the base, then the target. So we can score each half on its own.</p>
+      <p>Half one, arm to base, is scored against the real base track. Here the anchored pivot’s encoder is as good as the direct translator’s own arm-to-base map: the gap is within noise.</p>
+      <p>The full route is not: the two-step route is clearly better. Half one is equal, so the difference must come from half two. In the two-step route, half two is a map trained for exactly that base-to-target pair. In the pivot, it is the same shared network that also does the encoding.</p>
+    </aside>
+  </section>
+
+  <!-- 18 · RESULTS (e) the extras do not help
+       job      round 1: noisy middle, agreement weights and the boxed pivot are all within noise of the learned pivot
+       source   results/t128/knob_table.tsv (never-trained, all knobs, one g per track)
+       numbers  DATA.p1never
+       cut      the twins of the extras (not trained)
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) round <span data-src="literal">1</span> · the loss extras</div>
+      <div class="find">Finding <span data-src="literal">5</span></div>
+      <h2 id="hE"></h2>
+      <div class="fig res" id="figE"></div>
+      <ul class="pts"><li id="tE1"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Round one tried to make the middle a better pivot by changing the loss: agreement between the two middles of a pair at three weights, a noisy middle, and a boxed middle that starts at the base.</p>
+      <p>None of them moved the never-trained error outside seed noise. That is why round two changed what the middle is, rather than the loss.</p>
+      <p>Some agreement runs were cancelled before they finished, so those rows have fewer runs; the run count is printed beside each row.</p>
+    </aside>
+  </section>
+
+  <!-- 19 · RESULTS (f) more steps do not help
+       job      round 1 runs hit the cap; with three times the cap, runs stop early and the error does not move
+       source   results/t128/steps_table.tsv, knob_table.tsv; results/t128p2/runs_fir.tsv, m9_steps_table.tsv, m1_never_table.tsv
+       numbers  DATA.p1steps, DATA.p2best, DATA.p2steps, DATA.p1never, DATA.p2never
+       cut      per-g step tables
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) round <span data-src="literal">2</span> · training longer</div>
+      <div class="find">Finding <span data-src="literal">6</span></div>
+      <h2 id="hF"></h2>
+      <div class="fig res" id="figF"></div>
+      <ul class="pts"><li id="tF1"></li><li id="tF2"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>In round one most learned-pivot runs were still improving when they hit the step cap. So round two tripled the cap, and kept early stopping: a run stops when its validation score has not improved for four checks in a row.</p>
+      <p>Each dot is one run’s best step. With room to train, the runs found their best step well before the new cap, and the never-trained error of the learned pivot did not move outside noise. Training time was not the limit.</p>
+    </aside>
+  </section>
+
+  <!-- 20 · RESULTS (g) the pivot costs nothing on trained pairs
+       job      trained-pair and held-out-depth CRPS: every pivot within noise of the direct translator
+       source   results/t128p2/m3_trained_table.tsv, m4_heldout_table.tsv (one g per track)
+       numbers  DATA.p2trained, DATA.p2heldout
+       cut      per-direction held-out rows
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(g) no cost elsewhere</div>
+      <div class="find">Finding <span data-src="literal">7</span></div>
+      <h2 id="hG"></h2>
+      <div class="fig res" id="figG"></div>
+    </div>
+    <aside class="notes">
+      <p>A new design could buy a gain on never-trained pairs by losing on the pairs we already handle. It did not: on trained pairs, scored on held-out chromosomes, and on the held-out depth level, every pivot is within noise of the direct translator.</p>
+      <p>So the pivot is a safe design; it is just not a better one yet.</p>
+    </aside>
+  </section>
+
+  <!-- 21 · RESULTS (h) the depth test on never-trained pairs
+       job      depth error: trained vs never-trained per model; only the two-step approaches the trained level
+       source   results/t128p2/m5_depthlaw_table.tsv (one g per track)
+       numbers  DATA.p2depth
+       cut      the held-out 7.5M depth rows
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(h) the depth test</div>
+      <div class="find">Finding <span data-src="literal">8</span></div>
+      <h2 id="hH"></h2>
+      <div class="fig res" id="figH"></div>
+      <ul class="pts"><li id="tH1"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>This is the depth test from the problem slide, now for every model. The filled dot is trained depth pairs; the open ring is never-trained depth pairs. A short line means the model carries its depth knowledge over.</p>
+      <p>Every model fits trained depth pairs. On never-trained depth pairs, the pivots are no better than the direct translator. Only the two-step route comes close to the trained level.</p>
+    </aside>
+  </section>
+
+  <!-- 22 · RESULTS (i) only the anchored pivot makes a shared middle
+       job      middle consistency ratio: only the anchored pivot below 1; the learned middle stays near the input
+       source   results/t128p2/m7_agree_table.tsv; results/t128/collapse_table.tsv, cclean_table.tsv
+       numbers  DATA.p2agree, DATA.p1collapse, DATA.p1drift
+       cut      the one-knob consistency rows
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(i) is the middle really shared?</div>
+      <div class="find">Finding <span data-src="literal">9</span></div>
+      <h2 id="hI"></h2>
+      <div class="fig res" id="figI"></div>
+      <ul class="pts"><li id="tI1"></li><li id="tI2"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Two arms of one track come from the same sample, so a true pivot would map them to the same middle. We measure how far apart their middles are, divided by how far apart the two inputs are. Below one, the middle brings them together. At one or above, the middle keeps the processing differences.</p>
+      <p>Only the anchored pivot goes below one. The learned pivot’s middle stays almost equal to its input, and its learned settings barely move from where they start. In other words, without an anchor the middle is just the input track, which is the boring explanation from the hypothesis slide.</p>
+    </aside>
+  </section>
+
+  <!-- 23 · DISCUSSION · summary of the findings
+       job      one line per finding, each marked for or against the hypothesis
+       numbers  restated from results (DATA); none new
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      none
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what we found</div>
+      <h2>Nine findings: the pivot is safe and uses the settings, but it does not yet beat the direct translator where it matters</h2>
+      <ul class="find2" id="lstFind"></ul>
+    </div>
+    <aside class="notes">
+      <p>Green findings support a part of the design; red findings count against the hypothesis; grey ones are neutral checks.</p>
+    </aside>
+  </section>
+
+  <!-- 24 · DISCUSSION · back to the hypothesis
+       job      the reading against the hypothesis: ruled out, ruled in, not shown
+       numbers  restated from results
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      none
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>back to the hypothesis</div>
+      <h2>Reading: the pivot as built does not carry the fit over; the gap sits in the shared decoder</h2>
+      <div class="fig mid" id="figLadder"></div>
+      <div class="cards c3" style="margin-top:6px">
+        <div class="card" style="--c:var(--accent)"><div class="rl">Ruled out</div><div class="cb">Changing the loss (agreement, noise, a box) or training longer. Neither moved the never-trained error.</div></div>
+        <div class="card" style="--c:var(--ok)"><div class="rl">Ruled in</div><div class="cb">Tying the middle to the real base. The error falls step by step as the tie gets tighter, and the anchored encoder matches the direct translator’s first hop.</div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Not shown</div><div class="cb">A gain over the direct translator outside noise. Only the two-step route has that, and it decodes with a map trained for each target.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The ladder orders the routes by how much of the real base track the middle holds. Never-trained error falls along it. Only the last step, to the two-step route, clears the noise, so the order is a reading, not a result.</p>
+      <p>The hypothesis said that a shared middle is enough. The readings say the middle has to be the real base, and even then a shared decoder loses to a decoder made for the target.</p>
+    </aside>
+  </section>
+
+  <!-- 25 · DISCUSSION · caveats
+       job      what could change the readings
+       numbers  restated from results (DATA)
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      none
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>caveats</div>
+      <h2>Five things that could change these readings</h2>
+      <ol class="open">
+        <li id="tQ1"></li><li id="tQ2"></li><li id="tQ3"></li><li id="tQ4"></li><li id="tQ5"></li>
+      </ol>
+    </div>
+    <aside class="notes">
+      <p>Each caveat is a reason to hold the readings loosely. None of them reverses the main result on its own.</p>
+    </aside>
+  </section>
+
+  <!-- 26 · DISCUSSION · options for the next round
+       job      labelled options with cost and what each would teach; no ranking
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      costs in GPU hours
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>options for the next round</div>
+      <h2>Four options for the next round; each tests one explanation of the gap</h2>
+      <div class="cards c2 lg">
+        <div class="card" style="--c:var(--anc)"><div class="rl">Option A</div><div class="ct">Swap in a target-specific decoder</div><div class="cb">Decode the anchored middle with the direct translator’s base-to-target map.</div><div class="cw">Teaches whether the shared decoder is the whole gap. Cheap: no new training of the decoder.</div></div>
+        <div class="card" style="--c:var(--fix)"><div class="rl">Option B</div><div class="ct">A bigger g or a bigger f</div><div class="cb">A wider settings network, a deeper convolutional network, or another activation.</div><div class="cw">Teaches whether capacity limits the shared decoder. Costs a full grid of runs.</div></div>
+        <div class="card" style="--c:var(--lrn)"><div class="rl">Option C</div><div class="ct">Some arm-to-arm training pairs</div><div class="cb">Add a few two-setting pairs to training and test on the rest.</div><div class="cw">Teaches whether coverage, not design, is the limit. Real data have few such pairs.</div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Option D</div><div class="ct">More seeds</div><div class="cb">More seeds for the pivots and the shared-across-tracks g.</div><div class="cw">Teaches whether the ordered but within-noise gaps are real. Cheap per run.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>These are options, not recommendations. The readings do not rank them.</p>
+    </aside>
+  </section>
+
+  <!-- 27 · BACKUP · old names to new names
+       job      map the earlier decks' names to this deck's names
+       numbers  none
+       source   none (schematic, design constants, or restated from earlier slides)
+       cut      none
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>names</div>
+      <h2>How the names in this deck map to the earlier decks</h2>
+      <table class="grid compact">
+        <thead><tr><th style="width:34%">this deck</th><th>earlier decks</th></tr></thead>
+        <tbody id="tblNames"></tbody>
+      </table>
+    </div>
+    <aside class="notes">
+      <p>For anyone who saw the round one or round two decks: the models are the same, only the names changed.</p>
+    </aside>
+  </section>
+
+  <!-- 28 · BACKUP · the main result for one g across tracks
+       job      never-trained CRPS, one g across tracks
+       source   results/t128p2/m1_never_table.tsv
+       numbers  DATA.p2never
+       cut      the other metrics for one g across tracks
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>one g across all tracks</div>
+      <h2 id="hX"></h2>
+      <div class="fig res" id="figX"></div>
+    </div>
+    <aside class="notes">
+      <p>The same chart as the main result, for the single g shared by all seven tracks. It has only three runs per model, one per seed, so its seed spread is large and every gap is within noise.</p>
+    </aside>
+  </section>
+
+  <!-- 29 · BACKUP · run counts
+       job      runs scored per model in both rounds, and the cancelled round-1 runs
+       source   results/t128/n_table.tsv, results/t128p2/n_table.tsv
+       numbers  DATA.p1n, DATA.p2n
+       cut      per-cluster counts
+       -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>run counts</div>
+      <h2 id="hN"></h2>
+      <div class="fig res" id="figN"></div>
+    </div>
+    <aside class="notes">
+      <p>Each bar is the number of runs scored, against the number planned. A few round-one runs were cancelled before they finished training and were not rerun; their rows on the result slides use the runs that exist.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · the pivot translator, rounds <span data-src="literal">1</span> and <span data-src="literal">2</span> · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py (plain names only; see its docstring).
+   p1* = round 1 (4000-step cap, results/t128/), p2* = round 2 (12,000-step cap, results/t128p2/).
+   A CRPS row is {v, os (shape), se (scale), sp (seed spread), seeds[], ...labels}.
+   =========================================================================== */
+const DATA = __DATA__;
+
+const PT='one g per track', AC='one g across tracks';
+const C={ink:'var(--ink)',body:'var(--body)',muted:'var(--muted)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',
+  axis:'var(--axis)',card:'var(--card)',paper:'var(--paper)',accent:'var(--accent)',ok:'var(--ok)'};
+/* one colour per model, defined once */
+const M={
+  dir:{n:'direct translator',c:'var(--dir)',s:'one pass, settings → settings'},
+  via:{n:'two-step via the base',c:'var(--via)',s:'direct translator used twice'},
+  lrn:{n:'learned pivot',c:'var(--lrn)',s:'middle learned freely'},
+  box:{n:'boxed pivot',c:'var(--box)',s:'middle starts at the base, kept in range'},
+  fix:{n:'base-labelled pivot',c:'var(--fix)',s:'middle fixed to the base’s settings'},
+  anc:{n:'anchored pivot',c:'var(--anc)',s:'middle trained to be the real base'},
+  rt:{n:'learned pivot, round-trip loss only',c:'var(--rt)',s:'no cross loss'},
+  rtv:{n:'learned pivot, round-trip loss only, noisy middle',c:'var(--rt)',s:'no cross loss, noisy middle'},
+  vae:{n:'learned pivot, noisy middle',c:'var(--vae)',s:'cross + round trip, noisy middle'},
+  l01:{n:'learned pivot, agreement weight 0.1',c:'var(--l01)',s:'+ agreement, λ = 0.1'},
+  l1:{n:'learned pivot, agreement weight 1',c:'var(--l1)',s:'+ agreement, λ = 1'},
+  l10:{n:'learned pivot, agreement weight 10',c:'var(--l10)',s:'+ agreement, λ = 10'}};
+const short={rt:'round-trip loss only',rtv:'round-trip only + noisy middle',vae:'+ noisy middle',l01:'+ agreement, λ = 0.1',
+  l1:'+ agreement, λ = 1',l10:'+ agreement, λ = 10'};
+
+const nz=s=>/^-0\.0+$/.test(s)?s.slice(1):s;
+const f2=v=>v==null?'—':nz(v.toFixed(2)), f3=v=>v==null?'—':nz(v.toFixed(3));
+const mn=s=>String(s).replace(/-/g,'−');
+const sg=(v,f=f3)=>v==null?'—':(v>0?'+':'')+mn(f(v));
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+const cs=r=>`${f3(r.v)} (shape ${f3(r.os)} + scale ${f3(r.se)})`;
+/* the noise rule: a gap counts only if |gap| > 2 x the larger seed spread */
+const noise=(gap,sa,sb)=>sa==null||sb==null?'too few seeds':Math.abs(gap)>2*Math.max(sa,sb)?'beyond noise':'within noise';
+const lab=l=>l==='counts'?'beyond noise':l==='within noise'?'within noise':'too few seeds';
+const LB=l=>l==='beyond noise'?'<b>beyond noise</b>':l;
+const LBs=l=>l==='beyond noise'?'<tspan style="font-weight:700;fill:var(--accent)">beyond noise</tspan>':l;   /* inside svg: never an HTML tag */
+const times=(a,b)=>(a/b).toFixed(1);
+
+/* accessors */
+const nv2=(k,g=PT,sub='never')=>DATA.p2never[M[k].n][g].all[sub];
+const nv1=(k,g=PT)=>(DATA.p1never[M[k].n]||{})[g];
+
+/* ---------- svg helpers ---------- */
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2,ex='')=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const ah=(x,y,dir,c,s=10)=>{const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arr=(x1,y1,x2,y2,c=C.muted,w=2.2,dash='')=>{const dx=x2-x1,dy=y2-y1,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d,s=11;
+  return L(x1,y1,x2-ux*s,y2-uy*s,c,w,dash)+`<polygon points="${x2},${y2} ${x2-ux*s-uy*s*0.6},${y2-uy*s+ux*s*0.6} ${x2-ux*s+uy*s*0.6},${y2-uy*s-ux*s*0.6}" style="fill:${c}"/>`;};
+const box=(x,y,w,h,t,c,sub,fs=18)=>R(x,y,w,h,C.card,c,10,2.4)+T(x+w/2,y+h/2+(sub?-4:6),t,'axlbl','middle',`style="font-size:${fs}px;font-weight:600;fill:var(--ink)"`)+(sub?T(x+w/2,y+h/2+17,sub,'cap','middle','style="font-size:13.5px"'):'');
+const linS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo);
+const ticks=(xx,lo,hi,step,y0,y1,fmt=v=>mn(f2(v)))=>{let s='';for(let v=lo;v<=hi+1e-9;v+=step){s+=L(xx(v),y0,xx(v),y1,C.grid,1)+T(xx(v),y1+20,fmt(v),'tick','middle','style="font-size:15px"');}return s;};
+const swatch=(x,y,c,t,op=1)=>R(x,y-12,15,15,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+22,y,t,'cap','start','style="font-size:15px;fill:var(--body)"');
+/* a toy track: deterministic bars, peaks at fixed places */
+function toyTrack(x,y,w,h,c,{scale=1,noise=0.15,drop=[],seed=1}={}){
+  let s='',r=seed;const rnd=()=>{r=(r*16807)%2147483647;return r/2147483647;};
+  const n=60,bw=w/n,peaks=[[12,1],[27,0.55],[40,0.85],[51,0.4]];
+  for(let i=0;i<n;i++){let v=0.06;peaks.forEach(([p,a],k)=>{if(!drop.includes(k))v+=a*Math.exp(-((i-p)**2)/5);});
+    v=Math.max(0.02,v*scale*(1+noise*(rnd()-0.5)*2));const bh=Math.min(h,v*h);s+=R(x+i*bw,y+h-bh,bw-1,bh,c,'none',0,0);}
+  return s+L(x,y+h,x+w,y+h,C.axis,1.2);}
+
+/* ---------- one-panel horizontal bars: label | bar (shape + scale split) | value and noise tag ----------
+   rows: {k (model key) or lab/c, sub, v, os, se, seeds, t1, t2}; refs: [{v, c, t}] */
+function hbars(o){
+  const W=o.W||1160,lx=o.lx||330,tw=o.tw||300,rh=o.rh||54,top=o.top||34,pw=W-lx-tw-20;
+  const rows=o.rows,H=top+rows.length*rh+(o.legend?84:58),xx=linS(o.lo,o.hi,lx,lx+pw);let s='';
+  if(o.title)s+=T(lx,18,o.title,'ptitle','start','style="font-size:18px"');
+  s+=ticks(xx,o.lo,o.hi,o.step,top-4,top+rows.length*rh,o.fmt);
+  if(o.lo<0)s+=L(xx(0),top-6,xx(0),top+rows.length*rh,C.ink,1.4);
+  (o.refs||[]).forEach(f=>{s+=L(xx(f.v),top-8,xx(f.v),top+rows.length*rh,f.c,2,'6 5')+(f.t?T(xx(f.v),top-12,f.t,'cap','middle',`style="font-size:13.5px;fill:${f.c}"`):'');});
+  rows.forEach((r,i)=>{const c=r.c||M[r.k].c,y=top+i*rh+10,bh=rh-22;
+    if(i%2===0)s+=R(lx,top+i*rh,pw,rh,C.grid,'none',0,0,';fill-opacity:.4');
+    s+=T(lx-14,y+bh/2+(r.sub===''?6:-1),r.lab||M[r.k].n,'axlbl','end',`style="font-size:16.5px;font-weight:600;fill:${c}"`);
+    if(r.sub!=='')s+=T(lx-14,y+bh/2+17,r.sub!=null?r.sub:M[r.k].s,'cap','end','style="font-size:13.5px"');
+    if(r.v==null){s+=T(lx+6,y+bh/2+5,'not measured','cap');}
+    else if(r.os!=null&&r.se!=null&&o.lo>=0){s+=R(lx,y,xx(r.os)-lx,bh,c,'none',2)+R(xx(r.os),y,xx(r.os+r.se)-xx(r.os),bh,c,'none',2,0,';fill-opacity:.35');}
+    else{const z=o.lo<0?xx(0):lx,a=Math.min(z,xx(r.v)),b=Math.max(z,xx(r.v));s+=R(a,y,b-a,bh,c,'none',2);}
+    (r.seeds||[]).forEach(v=>s+=L(xx(v),y-4,xx(v),y+bh+4,C.ink,1.8));
+    s+=T(lx+pw+16,y+bh/2-1,r.t1||'','val','start',`style="fill:${c};font-size:16px"`)+T(lx+pw+16,y+bh/2+18,r.t2||'','cap','start','style="font-size:14px"');});
+  s+=T(lx+pw/2,top+rows.length*rh+44,o.axis,'axlbl','middle','style="font-size:16px"');
+  if(o.legend)s+=o.legend(H-8);
+  return svg(W,H,s);
+}
+const splitLegend=(y,x=0)=>swatch(x,y,C.muted,'shape error')+swatch(x+150,y,C.muted,'scale error',0.35)+L(x+290,y-13,x+290,y+2,C.ink,1.8)+T(x+300,y,'one tick per seed','cap','start','style="font-size:15px;fill:var(--body)"');
+
+/* ================= background figures ================= */
+function figTrack(){
+  let s='';
+  s+=box(10,120,150,74,'one sample','var(--ink)','cells, one assay');
+  s+=arr(160,157,214,157);
+  s+=box(214,120,150,74,'reads','var(--ink)','short DNA sequences');
+  s+=arr(364,157,418,157);
+  s+=R(418,40,250,234,C.card,C.accent,12,2.4)+T(543,70,'processing pipeline','axlbl','middle','style="font-weight:600;fill:var(--ink)"');
+  ['how many reads (depth)','read length','mapping-quality cut','remove duplicates?','single or paired end','control settings'].forEach((t,i)=>{
+    s+=Ci(444,100+i*28,6,'none',C.accent,2)+L(444,100+i*28,449,96+i*28,C.accent,2)+T(460,105+i*28,t,'cap','start','style="font-size:15px;fill:var(--body)"');});
+  const tr=[['standard settings (the base)',{scale:1,noise:0.1,seed:3}],['fewer reads',{scale:0.55,noise:0.55,seed:7}],['stricter mapping-quality cut',{scale:0.95,noise:0.1,drop:[1,3],seed:5}]];
+  tr.forEach(([t,o],i)=>{const y=34+i*86;s+=arr(668,157,742,y+42,C.faint,1.6);
+    s+=toyTrack(752,y+14,380,56,['var(--dir)','var(--lrn)','var(--fix)'][i],o)+T(752,y+8,t,'cap','start','style="font-size:15px;fill:var(--body);font-weight:600"');});
+  s+=T(942,300,'illustration, not data','cap','middle','style="font-size:13.5px;font-style:italic"');
+  return svg(1160,310,s);
+}
+function figTask(){
+  let s='';
+  s+=toyTrack(10,40,250,70,'var(--dir)',{scale:1,noise:0.1,seed:3})+T(10,28,'track X','axlbl','start','style="font-weight:600"');
+  s+=R(10,128,250,40,C.card,C.hair,8,1.4)+T(135,154,'its settings c','mono','middle','style="font-size:16px"');
+  s+=R(10,186,250,40,C.card,C.accent,8,1.8)+T(135,212,'the settings we want, c′','mono','middle','style="font-size:16px"');
+  s+=arr(262,80,388,130)+arr(262,148,388,140)+arr(262,206,388,152);
+  s+=R(392,90,250,100,C.card,C.ink,14,2.6)+T(517,134,'translator','axlbl','middle','style="font-size:21px;font-weight:600;fill:var(--ink)"')+T(517,160,'learned from pairs of tracks','cap','middle','style="font-size:14px"');
+  s+=arr(642,140,742,140);
+  s+=toyTrack(752,40,300,70,'var(--lrn)',{scale:0.55,noise:0.5,seed:7})+T(752,28,'predicted track X′','axlbl','start','style="font-weight:600"');
+  // a distribution for one bin
+  const bx=860,by=210;s+=L(bx,by,bx+170,by,C.axis,1.2);
+  for(let i=0;i<14;i++){const p=Math.exp(-((i-4)**2)/7)*(i<4?1:1.0);s+=R(bx+i*12,by-p*60,10,p*60,'var(--lrn)','none',1,0,';fill-opacity:.55');}
+  s+=L(bx+6*12+5,by-72,bx+6*12+5,by,C.ink,2.2,'4 3')+T(bx+6*12+14,by-62,'observed count','cap','start','style="font-size:13.5px"');
+  s+=P(`M ${bx-14} 116 Q ${bx-30} 160 ${bx-8} ${by-30}`,'none',C.faint,1.6,';stroke-dasharray:4 4');
+  s+=T(bx-24,by+24,'for every bin: a distribution of counts','cap','start','style="font-size:14px"');
+  return svg(1160,250,s);
+}
+function figPairs(){
+  let s='';const cx=330,cy=215,r=150;
+  const arms=['fewer reads','shorter reads','mapping-quality cut','duplicates kept','single end','control settings'];
+  const ang=i=>-Math.PI/2+i*2*Math.PI/arms.length;
+  const pos=arms.map((t,i)=>[cx+r*Math.cos(ang(i)),cy+r*Math.sin(ang(i))]);
+  [[0,2],[1,3],[0,4],[2,5]].forEach(([a,b])=>{s+=L(pos[a][0],pos[a][1],pos[b][0],pos[b][1],'var(--accent)',2.4,'7 6');});
+  pos.forEach(([x,y])=>{s+=L(cx,cy,x,y,C.ink,3);});
+  pos.forEach(([x,y],i)=>{s+=Ci(x,y,34,C.card,'var(--fix)',2.6)+T(x,y+5,'arm','axlbl','middle','style="font-size:15px;font-weight:600"');
+    const c=Math.cos(ang(i)),sn=Math.sin(ang(i));
+    const lx=x+c*48,ly=y+sn*52+5,an=Math.abs(c)<0.2?'middle':c>0?'start':'end';
+    s+=T(Math.abs(c)<0.2?x:lx,Math.abs(c)<0.2?ly+(sn>0?6:0):y+5,arms[i],'cap',an,'style="font-size:15px;fill:var(--body)"');});
+  s+=Ci(cx,cy,46,'var(--dir)','none')+T(cx,cy+6,'base','axlbl','middle','style="font-size:18px;font-weight:700;fill:#fff"');
+  // the held-out depth arm, to the right of the star
+  const hx=cx+290,hy=cy;
+  s+=L(cx+46,cy,hx-32,hy,C.faint,2,'2 5')+Ci(hx,hy,30,C.card,C.faint,2,';stroke-dasharray:4 4')+T(hx,hy+5,'arm','cap','middle')+T(hx,hy+50,'held out','cap','middle','style="font-size:14px"');
+  const lx=720;
+  s+=L(lx,110,lx+60,110,C.ink,3)+T(lx+76,116,'trained pair: base ↔ arm, both ways','axlbl','start','style="font-size:17px"');
+  s+=L(lx,170,lx+60,170,'var(--accent)',2.4,'7 6')+T(lx+76,176,'never-trained pair: arm → arm','axlbl','start','style="font-size:17px;fill:var(--accent);font-weight:600"');
+  s+=T(lx+76,200,'two settings change at once: this is the test','cap','start','style="font-size:15px"');
+  s+=L(lx,250,lx+60,250,C.faint,2,'2 5')+T(lx+76,256,'one depth level, never in training','axlbl','start','style="font-size:17px"');
+  s+=T(lx,320,'7 tracks, one per assay, each with its own base and arms','cap','start','style="font-size:15px"');
+  return svg(1160,430,s);
+}
+/* ================= the problem ================= */
+function figProb(){
+  const d=DATA.p2depth[M.dir.n][PT],v=DATA.p2depth[M.via.n][PT];
+  const rows=[{k:'dir',lab:'direct translator',sub:'trained depth pairs',v:d.trained.v,seeds:d.trained.seeds,t1:f3(d.trained.v),t2:`seed spread ${f3(d.trained.sp)}`},
+    {k:'dir',lab:'direct translator',sub:'never-trained depth pairs',v:d.never.v,seeds:d.never.seeds,t1:f3(d.never.v),t2:`${times(d.never.v,d.trained.v)}× its trained error`},
+    {k:'via',lab:'two-step via the base',sub:'never-trained depth pairs',v:v.never.v,seeds:v.never.seeds,t1:f3(v.never.v),t2:`vs direct: ${LBs(lab(v.never.vs_direct))}`}];
+  return hbars({rows,lo:0,hi:0.4,step:0.1,axis:'depth error, median |log₂ error| (lower is better) · one g per track',title:''});
+}
+/* ================= method figures ================= */
+function figRoutes(){
+  let s='';const y=[60,190,320],xs=90,xt=1000;
+  const node=(x,yy,t,c,fill)=>Ci(x,yy,34,fill||C.card,c,2.6)+T(x,yy+6,t,'axlbl','middle','style="font-size:15.5px;font-weight:600"');
+  // direct
+  s+=T(10,y[0]-40,'Direct translator: one jump','axlbl','start','style="font-weight:700;fill:var(--dir)"');
+  s+=node(xs,y[0],'arm 1','var(--dir)')+node(xt,y[0],'arm 2','var(--dir)')+arr(xs+36,y[0],xt-36,y[0],'var(--dir)',3);
+  s+=T((xs+xt)/2,y[0]-10,'a pair never seen in training','cap','middle','style="font-size:14.5px;fill:var(--accent)"');
+  // two-step
+  s+=T(10,y[1]-48,'Two-step via the base: two trained jumps, by hand','axlbl','start','style="font-weight:700;fill:var(--via)"');
+  s+=node(xs,y[1],'arm 1','var(--via)')+node((xs+xt)/2,y[1],'base','var(--via)')+node(xt,y[1],'arm 2','var(--via)');
+  s+=arr(xs+36,y[1],(xs+xt)/2-36,y[1],'var(--via)',3)+arr((xs+xt)/2+36,y[1],xt-36,y[1],'var(--via)',3);
+  s+=T((xs+(xs+xt)/2)/2,y[1]-10,'trained pair','cap','middle','style="font-size:14.5px"')+T(((xs+xt)/2+xt)/2,y[1]-10,'trained pair','cap','middle','style="font-size:14.5px"');
+  // pivot
+  s+=T(10,y[2]-48,'Pivot translator: one network in, the same network out','axlbl','start','style="font-weight:700;fill:var(--lrn)"');
+  s+=node(xs,y[2],'arm 1','var(--lrn)')+R((xs+xt)/2-60,y[2]-30,120,60,C.card,'var(--lrn)',30,2.6,';stroke-dasharray:6 4')+T((xs+xt)/2,y[2]+6,'middle','axlbl','middle','style="font-size:15.5px;font-weight:600"')+node(xt,y[2],'arm 2','var(--lrn)');
+  s+=arr(xs+36,y[2],(xs+xt)/2-62,y[2],'var(--lrn)',3)+arr((xs+xt)/2+62,y[2],xt-36,y[2],'var(--lrn)',3);
+  s+=T((xs+(xs+xt)/2)/2,y[2]-10,'encode','cap','middle','style="font-size:14.5px"')+T(((xs+xt)/2+xt)/2,y[2]-10,'decode','cap','middle','style="font-size:14.5px"');
+  s+=T((xs+xt)/2,y[2]+58,'every track can reach the middle and leave it, so any pair should work','cap','middle','style="font-size:15px"');
+  return svg(1160,390,s);
+}
+function figBlock(){
+  let s='';
+  s+=R(10,30,210,50,C.card,C.hair,8,1.4)+T(115,61,'“from” settings c','mono','middle','style="font-size:16px"');
+  s+=R(10,96,210,50,C.card,C.accent,8,1.8)+T(115,127,'“to” settings c′','mono','middle','style="font-size:16px"');
+  s+=arr(220,55,300,82)+arr(220,121,300,98);
+  s+=R(304,36,200,104,C.card,C.ink,12,2.4)+T(404,76,'g','axlbl','middle','style="font-size:28px;font-weight:700;font-style:italic;fill:var(--ink)"')+T(404,102,'small MLP','cap','middle','style="font-size:15px"')+T(404,122,'2 hidden layers × 64','cap','middle','style="font-size:14px"');
+  s+=T(530,80,'outputs a scale and a shift for every channel of every layer of f','axlbl','start','style="font-size:16px;fill:var(--accent)"')+T(530,104,'(“FiLM”: g turns the knobs of f)','cap','start','style="font-size:15px;fill:var(--accent)"');
+  const fx=330,fy=250,lw=118,gap=26;
+  s+=toyTrack(10,fy+12,220,56,'var(--dir)',{seed:3})+T(10,fy,'input track','cap','start','style="font-size:15px;font-weight:600;fill:var(--body)"');
+  s+=arr(240,fy+40,fx-6,fy+40);
+  ['dilation 1','dilation 2','dilation 4','dilation 8'].forEach((t,i)=>{const x=fx+i*(lw+gap);
+    s+=R(x,fy,lw,80,C.card,C.ink,8,2)+T(x+lw/2,fy+36,'conv layer','axlbl','middle','style="font-size:15px;font-weight:600"')+T(x+lw/2,fy+58,t,'cap','middle','style="font-size:13.5px"');
+    s+=P(`M 404 140 C 404 ${fy-50} ${x+lw/2} ${fy-60} ${x+lw/2} ${fy-4}`,'none',C.accent,1.8,';stroke-dasharray:5 4')+ah(x+lw/2,fy-2,'d',C.accent,9);
+    if(i<3)s+=arr(x+lw,fy+40,x+lw+gap,fy+40,C.muted,1.8);});
+  const ex=fx+4*(lw+gap)-gap;
+  s+=arr(ex,fy+40,ex+40,fy+40);
+  s+=T(ex+48,fy+26,'per bin:','cap','start','style="font-size:14.5px"')+T(ex+48,fy+46,'a count','cap','start','style="font-size:14.5px"')+T(ex+48,fy+66,'distribution','cap','start','style="font-size:14.5px"');
+  s+=T(fx,fy+110,'f: a 1-D convolutional network, 4 layers × 32 channels, kernel 5; it sees 61 bins (about 1.5 kb) around each bin','cap','start','style="font-size:14.5px"');
+  s+=T(580,fy+150,'g never outputs a track. It sets how f behaves, so one trained g gives a different f for every pair of settings.','axlbl','middle','style="font-size:16.5px;fill:var(--ink);font-weight:600"');
+  return svg(1160,415,s);
+}
+function figModels(){
+  let s='';
+  const tk=(x,y,c,o,t)=>toyTrack(x,y,120,40,c,o)+T(x+60,y+60,t,'cap','middle','style="font-size:14px"');
+  const fbox=(x,y,c,t1,t2)=>R(x,y,190,62,C.card,c,10,2.4)+T(x+95,y+27,t1,'mono','middle','style="font-size:16px"')+T(x+95,y+49,t2,'cap','middle','style="font-size:13.5px"');
+  // direct
+  let y=30;s+=T(10,y,'Direct translator','axlbl','start','style="font-weight:700;fill:var(--dir)"');
+  s+=tk(20,y+16,'var(--dir)',{seed:3},'arm 1')+arr(150,y+36,240,y+36)+fbox(244,y+5,'var(--dir)','f [ g(c₁, c₂) ]','one pass')+arr(434,y+36,520,y+36)+tk(526,y+16,'var(--dir)',{scale:.6,noise:.4,seed:9},'arm 2');
+  // two-step
+  y=160;s+=T(10,y,'Two-step via the base','axlbl','start','style="font-weight:700;fill:var(--via)"');
+  s+=tk(20,y+16,'var(--via)',{seed:3},'arm 1')+arr(150,y+36,240,y+36)+fbox(244,y+5,'var(--via)','f [ g(c₁, c_base) ]','trained pair')+arr(434,y+36,520,y+36)+tk(526,y+16,'var(--via)',{scale:1.1,noise:.1,seed:4},'predicted base')
+    +arr(656,y+36,744,y+36)+fbox(748,y+5,'var(--via)','f [ g(c_base, c₂) ]','trained pair')+arr(938,y+36,1020,y+36)+tk(1026,y+16,'var(--via)',{scale:.6,noise:.4,seed:9},'arm 2');
+  // pivot
+  y=290;s+=T(10,y,'Pivot translator','axlbl','start','style="font-weight:700;fill:var(--lrn)"');
+  s+=tk(20,y+16,'var(--lrn)',{seed:3},'arm 1')+arr(150,y+36,240,y+36)+fbox(244,y+5,'var(--lrn)','f [ g(c₁, c_mid) ]','encoder')+arr(434,y+36,520,y+36)
+    +R(526,y+12,120,48,C.card,'var(--lrn)',24,2.4,';stroke-dasharray:6 4')+T(586,y+42,'middle Z','axlbl','middle','style="font-size:15px;font-weight:600"')+T(586,y+76,'one value per bin','cap','middle','style="font-size:13.5px"')
+    +arr(656,y+36,744,y+36)+fbox(748,y+5,'var(--lrn)','f [ g(c_mid, c₂) ]','decoder')+arr(938,y+36,1020,y+36)+tk(1026,y+16,'var(--lrn)',{scale:.6,noise:.4,seed:9},'arm 2');
+  s+=P(`M 339 ${y+70} C 339 ${y+118} 843 ${y+118} 843 ${y+70}`,'none',C.accent,2,';stroke-dasharray:6 4')+T(591,y+128,'the same f and the same g, with the same weights; only the settings fed to g differ','cap','middle','style="font-size:15px;fill:var(--accent)"');
+  return svg(1160,440,s);
+}
+function figLoss(){
+  let s='';
+  const tr=(x,y,t,c)=>R(x,y,120,44,C.card,c,8,2.2)+T(x+60,y+28,t,'axlbl','middle','style="font-size:16px;font-weight:600"');
+  const box2=(x,y,t,u)=>R(x,y,150,44,C.card,C.ink,8,1.6)+T(x+75,y+(u?19:28),t,'axlbl','middle','style="font-size:15px;font-weight:600"')+(u?T(x+75,y+37,u,'cap','middle','style="font-size:13px"'):'');
+  const mid=(x,y)=>R(x,y+4,80,36,C.card,'var(--lrn)',18,2.2,';stroke-dasharray:5 4')+T(x+40,y+28,'middle','cap','middle','style="font-size:14px;fill:var(--ink)"');
+  const row=(y,title,sub,src,srcc,dec,score)=>{
+    let o=T(10,y-14,title,'axlbl','start','style="font-weight:700;fill:var(--ink)"')+T(10+title.length*9.6+12,y-14,sub,'cap','start','style="font-size:15px"');
+    o+=tr(10,y,src,srcc)+arr(132,y+22,176,y+22)+box2(178,y,'encoder')+arr(330,y+22,370,y+22)+mid(372,y)+arr(454,y+22,494,y+22)+box2(496,y,'decoder',dec)+arr(648,y+22,690,y+22)
+      +T(698,y+28,score,'axlbl','start','style="font-size:16px;fill:var(--accent);font-weight:600"');
+    return o;};
+  s+=row(40,'Cross loss','translate across a trained pair','base','var(--dir)','with the arm’s settings','score against the real arm (and arm → base, the other way)');
+  s+=row(140,'Round-trip loss','translate back to itself','arm','var(--fix)','with its own settings','score against the input track');
+  return svg(1160,200,s);
+}
+function figMiddles(){
+  let s='';const xs=[150,430,710,990],y=70;
+  const ks=['lrn','box','fix','anc'];
+  s+=arr(40,150,1120,150,C.faint,2)+T(580,180,'the middle is tied more and more tightly to the real base track →','cap','middle','style="font-size:15.5px"');
+  ks.forEach((k,i)=>{const x=xs[i],c=M[k].c;
+    s+=R(x-70,y-36,140,72,C.card,c,36,2.8,i<2?';stroke-dasharray:7 5':'')+T(x,y-4,'middle','axlbl','middle','style="font-size:16px;font-weight:600"');
+    s+=T(x,y+18,['settings: learned','learned, boxed','settings = base','= real base track'][i],'cap','middle','style="font-size:14px"');
+    if(k==='anc')s+=Ci(x+70,y-36,13,'var(--dir)')+T(x+70,y-31,'✓','cap','middle','style="font-size:15px;fill:#fff;font-weight:700"');});
+  return svg(1160,195,s);
+}
+function figScore(){
+  let s='';const bx=40,by=170;
+  for(let i=0;i<16;i++){const p=Math.exp(-((i-6)**2)/9);s+=R(bx+i*20,by-p*100,17,p*100,'var(--lrn)','none',1,0,';fill-opacity:.6');}
+  s+=L(bx,by,bx+330,by,C.axis,1.4)+T(bx+165,by+24,'count in one bin','cap','middle','style="font-size:14.5px"');
+  s+=L(bx+9*20+8,by-112,bx+9*20+8,by,C.ink,2.6,'5 4')+T(bx+9*20+16,by-100,'observed','cap','start','style="font-size:14px;fill:var(--ink)"');
+  s+=T(bx,24,'predicted distribution vs observed count','axlbl','start','style="font-size:16px;font-weight:600"');
+  const gx=520;s+=T(gx,24,'three groups of pairs, scored separately','axlbl','start','style="font-size:16px;font-weight:600"');
+  [['trained pairs','base ↔ arm, on held-out chromosomes','var(--ink)'],['held-out depth','base ↔ a depth level never trained','var(--faint)'],['never-trained pairs','arm → arm: the main test','var(--accent)']].forEach(([t,u,c],i)=>{
+    s+=R(gx,48+i*44,16,16,c,'none',4,0)+T(gx+26,62+i*44,t,'axlbl','start',`style="font-size:16px;font-weight:600;fill:${c}"`)+T(gx+210,62+i*44,u,'cap','start','style="font-size:14.5px"');});
+  return svg(1160,200,s);
+}
+
+/* ================= results ================= */
+function figA(){
+  const lp=DATA.p1swap[M.lrn.n][PT],rt=DATA.p1swap[M.rt.n][PT],rtv=DATA.p1swap[M.rtv.n][PT];
+  const gl=DATA.p1twin[M.lrn.n][PT].never,gr=DATA.p1twin[M.rt.n][PT].never;
+  const a=hbars({W:1160,lx:330,tw:260,rh:50,top:34,title:'(a) how far the output moves from the input, on real pairs',lo:0,hi:0.3,step:0.1,
+    rows:[{k:'rt',lab:'round-trip loss only',sub:'',v:rt.ident,t1:f3(rt.ident),t2:'it copies its input'},
+      {k:'rtv',lab:'round-trip only + noisy middle',sub:'',c:'var(--rt)',v:rtv.ident,t1:f3(rtv.ident),t2:''},
+      {k:'lrn',lab:'cross + round-trip loss',sub:'',v:lp.ident,t1:f3(lp.ident),t2:'it moves the track'}],
+    axis:'median |log(prediction ÷ input)|, bins with reads'});
+  const b=hbars({W:1160,lx:330,tw:260,rh:50,top:34,title:'(b) gain over the no-settings twin, never-trained pairs',lo:0,hi:0.2,step:0.05,
+    rows:[{k:'rt',lab:'round-trip loss only',sub:'',v:gr.v,seeds:gr.seeds,t1:f3(gr.v),t2:'settings ignored'},
+      {k:'lrn',lab:'cross + round-trip loss',sub:'',v:gl.v,seeds:gl.seeds,t1:f3(gl.v),t2:'settings used'}],
+    axis:'fraction of the twin’s error removed (median over pairs)'});
+  return `<div style="width:100%">${a}<div style="height:10px;border-top:2px solid var(--axis);margin-top:4px"></div>${b}</div>`;
+}
+function figB(){
+  const ks=['lrn','fix','anc','dir'];const rows=[];
+  ks.forEach(k=>{const r=DATA.p2swap[M[k].n][PT];
+    rows.push({k,sub:'settings unchanged (should be 0)',v:r.swap,t1:f3(r.swap),t2:`seed spread ${f3(r.swap_sp)}`});
+    if(r.ident!=null)rows.push({k,lab:' ',sub:'settings changed (real pairs)',c:M[k].c,v:r.ident,t1:f3(r.ident),t2:''});});
+  return hbars({rows,lo:0,hi:0.3,step:0.05,rh:40,axis:'how far the prediction moves from the input: median |log(prediction ÷ input)| · one g per track'});
+}
+function figC(){
+  const ks=['dir','lrn','fix','anc','via'];const d=nv2('dir');
+  const rows=ks.map(k=>{const r=nv2(k);return {k,v:r.v,os:r.os,se:r.se,seeds:r.seeds,t1:cs(r),
+    t2:k==='dir'?`seed spread ${f3(r.sp)}`:`${sg(r.v-d.v)} vs direct: ${LBs(lab(r.vs_direct))}`};});
+  return hbars({rows,lo:0,hi:0.8,step:0.1,tw:330,rh:58,refs:[{v:d.v,c:'var(--dir)',t:'direct translator'}],
+    axis:'never-trained pairs: CRPS in counts (lower is better) · one g per track',legend:y=>splitLegend(y,330)});
+}
+function figD(){
+  let s='';const h=DATA.p2hop,ae=h[M.anc.n][PT].encoder,dd=h[M.dir.n][PT].decoder,an=nv2('anc'),vn=nv2('via');
+  const lblHop=lab(ae.vs_direct),lblAll=noise(an.v-vn.v,an.sp,vn.sp);
+  const row=(y,k,t1,t2,c)=>{const n=(x,t,cc,dash)=>Ci(x,y,32,C.card,cc,2.6,dash?';stroke-dasharray:5 4':'')+T(x,y+6,t,'axlbl','middle','style="font-size:15px;font-weight:600"');
+    return T(20,y-50,M[k].n,'axlbl','start',`style="font-weight:700;fill:${c}"`)+n(110,'arm 1',c)+arr(144,y,416,y,c,3)+n(450,'base?',c,true)+arr(484,y,756,y,c,3)+n(790,'arm 2',c)
+      +T(280,y-14,t1,'cap','middle','style="font-size:14.5px"')+T(620,y-14,t2,'cap','middle','style="font-size:14.5px"');};
+  s+=row(90,'anc','encoder (shared network)','decoder (the same shared network)','var(--anc)');
+  s+=row(250,'via','direct translator: arm → base','direct translator: base → arm','var(--via)');
+  // scores
+  const bx=850;
+  s+=R(bx,20,300,130,C.card,C.hair,10,1.4)+T(bx+16,48,'half 1: arm → base','axlbl','start','style="font-weight:700"')+T(bx+16,70,'scored against the real base','cap','start','style="font-size:14px"');
+  s+=T(bx+16,98,`anchored: ${f3(ae.v)} (${f3(ae.os)} + ${f3(ae.se)})`,'val','start','style="fill:var(--anc)"')+T(bx+16,120,`direct: ${f3(dd.v)} (${f3(dd.os)} + ${f3(dd.se)})`,'val','start','style="fill:var(--via)"')+T(bx+16,140,lblHop,'cap','start',`style="font-size:15px;font-weight:700;fill:${lblHop==='within noise'?'var(--muted)':'var(--accent)'}"`);
+  s+=R(bx,180,300,130,C.card,C.accent,10,2)+T(bx+16,208,'whole route: arm → arm','axlbl','start','style="font-weight:700"')+T(bx+16,230,'never-trained pairs','cap','start','style="font-size:14px"');
+  s+=T(bx+16,258,`anchored: ${f3(an.v)} (${f3(an.os)} + ${f3(an.se)})`,'val','start','style="fill:var(--anc)"')+T(bx+16,280,`two-step: ${f3(vn.v)} (${f3(vn.os)} + ${f3(vn.se)})`,'val','start','style="fill:var(--via)"')+T(bx+16,300,lblAll,'cap','start',`style="font-size:15px;font-weight:700;fill:${lblAll==='within noise'?'var(--muted)':'var(--accent)'}"`);
+  s+=T(430,350,'Half 1 is equal, so the gap must come from half 2: a shared decoder against a map trained for each target.','axlbl','middle','style="font-size:16.5px;fill:var(--ink);font-weight:600"');
+  s+=T(430,374,'CRPS in counts, lower is better, written as total (shape + scale) · one g per track','cap','middle','style="font-size:14px"');
+  return svg(1160,390,s);
+}
+function figE(){
+  const ks=['lrn','vae','l01','l1','l10','box'];const d=nv1('lrn');
+  const rows=ks.map(k=>{const r=nv1(k);return {k,lab:k==='lrn'?'learned pivot':k==='box'?'boxed pivot':short[k],sub:k==='lrn'?'cross + round-trip loss':k==='box'?M.box.s:'',
+    v:r.v,os:r.os,se:r.se,seeds:r.seeds,t1:cs(r),t2:k==='lrn'?`seed spread ${f3(r.sp)} · ${r.n} runs`:`${sg(r.gap_default)} vs learned: ${LBs(lab(r.vs_default))} · ${r.n} runs`};});
+  return hbars({rows,lo:0,hi:0.8,step:0.1,tw:360,rh:50,refs:[{v:d.v,c:'var(--lrn)',t:'learned pivot'}],
+    axis:'never-trained pairs: CRPS in counts (lower is better) · round 1 · one g per track',legend:y=>splitLegend(y,330)});
+}
+function figF(){
+  let s='';const W=1160,lx=300,pw=600,top=30,rh=50,ks=['lrn','fix','anc','dir'],cap=DATA.p2steps[M.lrn.n][PT].cap;
+  const xx=linS(0,cap,lx,lx+pw);
+  s+=T(lx,18,'each dot: the best step of one round-2 run (both versions of g)','ptitle','start','style="font-size:17px"');
+  s+=ticks(xx,0,cap,2000,top-4,top+ks.length*rh,v=>v.toLocaleString('en'));
+  s+=L(xx(4000),top-8,xx(4000),top+ks.length*rh,C.accent,2,'6 5')+T(xx(4000),top+ks.length*rh+40,'round-1 cap','cap','middle','style="font-size:14px;fill:var(--accent)"');
+  ks.forEach((k,i)=>{const y=top+i*rh+rh/2,c=M[k].c,b=DATA.p2best[M[k].n]||[],st=DATA.p2steps[M[k].n][PT];
+    if(i%2===0)s+=R(lx,top+i*rh,pw,rh,C.grid,'none',0,0,';fill-opacity:.4');
+    s+=T(lx-14,y+6,M[k].n,'axlbl','end',`style="font-size:16.5px;font-weight:600;fill:${c}"`);
+    b.forEach((v,j)=>s+=Ci(xx(v),y+((j%5)-2)*4,5,c,'none',0,';fill-opacity:.75'));
+    s+=T(lx+pw+16,y+6,`median ${st.best_median.toLocaleString('en')} (one g per track)`,'val','start',`style="fill:${c};font-size:15px"`);});
+  s+=T(lx+pw/2,top+ks.length*rh+40,'training step','axlbl','middle','style="font-size:16px"');
+  return svg(W,top+ks.length*rh+56,s);
+}
+function figG(){
+  const ks=['dir','lrn','fix','anc'];
+  const mk=(src,title,hi)=>hbars({W:1160,lx:330,tw:330,rh:46,top:34,title,lo:0,hi,step:0.1,
+    rows:ks.map(k=>{const r=src[M[k].n][PT];return {k,sub:'',v:r.v,os:r.os,se:r.se,seeds:r.seeds,t1:cs(r),t2:k==='dir'?`seed spread ${f3(r.sp)}`:`${sg(r.gap_direct)} vs direct: ${LBs(lab(r.vs_direct))}`};}),
+    axis:'CRPS in counts (lower is better) · one g per track'});
+  return `<div style="width:100%">${mk(DATA.p2trained,'(a) trained pairs',0.5)}<div style="height:8px;border-top:2px solid var(--axis);margin-top:2px"></div>${mk(DATA.p2heldout,'(b) the held-out depth level, both directions',0.5)}</div>`;
+}
+function figH(){
+  let s='';const W=1160,lx=330,pw=560,top=30,rh=56,ks=['dir','lrn','fix','anc','via'],xx=linS(0,0.7,lx,lx+pw);
+  s+=ticks(xx,0,0.7,0.1,top-4,top+ks.length*rh);
+  ks.forEach((k,i)=>{const y=top+i*rh+rh/2,c=M[k].c,d=DATA.p2depth[M[k].n][PT],t=d.trained,n=d.never;
+    if(i%2===0)s+=R(lx,top+i*rh,pw,rh,C.grid,'none',0,0,';fill-opacity:.4');
+    s+=T(lx-14,y+6,M[k].n,'axlbl','end',`style="font-size:16.5px;font-weight:600;fill:${c}"`);
+    if(t)s+=L(xx(t.v),y,xx(n.v),y,c,3)+Ci(xx(t.v),y,8,c);
+    (n.seeds||[]).forEach(v=>s+=L(xx(v),y-11,xx(v),y+11,C.ink,1.6));
+    s+=Ci(xx(n.v),y,9,C.paper,c,3);
+    s+=T(lx+pw+16,y,t?`trained ${f3(t.v)} → never ${f3(n.v)}`:`never ${f3(n.v)} (no trained pairs of its own)`,'val','start',`style="fill:${c};font-size:15px"`)
+      +T(lx+pw+16,y+18,k==='dir'?`seed spread ${f3(n.sp)}`:`never vs direct: ${lab(n.vs_direct)}`,'cap','start','style="font-size:14px"');});
+  s+=T(lx+pw/2,top+ks.length*rh+40,'depth error, median |log₂ error| (lower is better) · one g per track','axlbl','middle','style="font-size:16px"');
+  const ly=top+ks.length*rh+70;
+  s+=Ci(lx,ly-5,8,C.muted)+T(lx+14,ly,'trained depth pairs','cap','start','style="font-size:15px;fill:var(--body)"')+Ci(lx+200,ly-5,9,C.paper,C.muted,3)+T(lx+214,ly,'never-trained depth pairs','cap','start','style="font-size:15px;fill:var(--body)"')+L(lx+440,ly-13,lx+440,ly+2,C.ink,1.8)+T(lx+450,ly,'seeds (never-trained)','cap','start','style="font-size:15px;fill:var(--body)"');
+  return svg(W,ly+12,s);
+}
+function figI(){
+  const ks=['lrn','fix','anc'];
+  const rows=ks.map(k=>{const r=DATA.p2agree[M[k].n][PT];return {k,v:r.v,seeds:r.seeds,t1:f3(r.v),t2:r.v<1?'closer than the inputs':'as far apart as the inputs, or more'};});
+  return hbars({rows,lo:0,hi:1.4,step:0.2,rh:58,refs:[{v:1,c:'var(--ink)',t:'as far apart as the inputs'}],
+    axis:'distance between the middles of two arms of one track ÷ distance between the two inputs · one g per track'});
+}
+function figLadder(){
+  let s='';const ks=['dir','lrn','fix','anc','via'],x0=60,dx=255,y0=40;
+  const vals=ks.map(k=>nv2(k).v),lo=Math.min(...vals),hi=Math.max(...vals),yy=v=>y0+20+(v-lo)/(hi-lo)*110;
+  ks.forEach((k,i)=>{const x=x0+i*dx-(i?0:0),c=M[k].c,v=vals[i];
+    s+=R(x-6,yy(v)-6,190,12,c,'none',6,0)+T(x+92,yy(v)-14,f3(v),'val','middle',`style="fill:${c}"`)+T(x+92,y0+170,M[k].n,'axlbl','middle',`style="font-size:15px;font-weight:600;fill:${c}"`);
+    if(i)s+=L(x-60,yy(vals[i-1]),x-6,yy(v),C.faint,1.6,'4 4');});
+  s+=T(10,y0+4,'never-trained CRPS, one g per track: a lower error sits higher on the page','cap','start','style="font-size:14.5px"');
+  return svg(1300,y0+190,s);
+}
+function figX(){
+  const ks=['dir','lrn','fix','anc','via'];const d=nv2('dir',AC);
+  const rows=ks.map(k=>{const r=nv2(k,AC);return {k,v:r.v,os:r.os,se:r.se,seeds:r.seeds,t1:cs(r),
+    t2:k==='dir'?`seed spread ${f3(r.sp)}`:`${sg(r.v-d.v)} vs direct: ${LBs(lab(r.vs_direct))}`};});
+  return hbars({rows,lo:0,hi:0.8,step:0.1,tw:330,rh:58,refs:[{v:d.v,c:'var(--dir)',t:'direct translator'}],
+    axis:'never-trained pairs: CRPS in counts (lower is better) · one g across tracks',legend:y=>splitLegend(y,330)});
+}
+function figN(){
+  const rows=[];
+  ['lrn','rt','rtv','vae','l01','l1','l10','box'].forEach(k=>{const r=DATA.p1n[M[k].n];if(r)rows.push({k,lab:(k==='lrn'?'learned pivot':k==='box'?'boxed pivot':short[k])+' · round 1',sub:'',v:r.done,t1:`${r.done} of ${r.assigned}`,t2:r.done<r.assigned?'some runs cancelled':''});});
+  ['lrn','fix','anc','dir'].forEach(k=>{const r=DATA.p2n[M[k].n];rows.push({k,lab:M[k].n+' · round 2',sub:'',v:r.done,t1:`${r.done} of ${r.assigned}`,t2:''});});
+  return hbars({rows,lo:0,hi:24,step:4,rh:40,tw:240,lx:380,fmt:v=>String(v),axis:'runs scored (both versions of g × seeds)'});
+}
+
+const FIGS={figTrack,figTask,figPairs,figProb,figRoutes,figBlock,figModels,figLoss,figMiddles,figScore,figA,figB,figC,figD,figE,figF,figG,figH,figI,figLadder,figX,figN};
+Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
+
+/* ================= the grid of variants (the one table) ================= */
+try{
+  const rowsP1=[['lrn','learned, starts at 0','cross + round trip'],['rt','learned, starts at 0','round trip only'],['rtv','learned, starts at 0','round trip only, noisy middle'],
+    ['vae','learned, starts at 0','cross + round trip, noisy middle'],['l01','learned, starts at 0','cross + round trip + agreement (λ 0.1, 1, 10)'],['box','learned, starts at the base, kept in range','cross + round trip']];
+  const rowsP2=[['lrn','learned, starts at 0','cross + round trip'],['fix','fixed: the base’s settings','cross + round trip'],['anc','fixed: the base’s settings','cross + round trip + match the real base'],
+    ['dir','none: one pass','likelihood of the target']];
+  const nm=k=>k==='l01'?'learned pivot + agreement':k==='rt'||k==='rtv'||k==='vae'?`learned pivot, ${short[k].replace(/^\+ /,'')}`:M[k].n;
+  const done=(src,k)=>{if(k==='l01'){const a=['l01','l1','l10'].map(q=>DATA.p1n[M[q].n]);return `${a.reduce((s,r)=>s+r.done,0)} of ${a.reduce((s,r)=>s+r.assigned,0)}`;}
+    const r=src[M[k].n];return r?`${r.done} of ${r.assigned}`:'—';};
+  const tb=document.getElementById('tblGrid');let h='';
+  h+=`<tr class="sep"><td colspan="5">Round 1 · cap 4000 steps</td></tr>`;
+  rowsP1.forEach(([k,mid,loss])=>h+=`<tr><td class="arm" style="--c:${M[k].c}">${nm(k)}</td><td>${mid}</td><td>${loss}</td><td>4000</td><td>${done(DATA.p1n,k)}</td></tr>`);
+  h+=`<tr class="sep"><td colspan="5">Round 2 · cap 12,000 steps</td></tr>`;
+  rowsP2.forEach(([k,mid,loss])=>h+=`<tr><td class="arm" style="--c:${M[k].c}">${M[k].n}${k==='dir'?' <small>(reference, retrained)</small>':''}</td><td>${mid}</td><td>${loss}</td><td>12,000</td><td>${done(DATA.p2n,k)}</td></tr>`);
+  h+=`<tr class="sep"><td colspan="5">References · no new training</td></tr>`;
+  h+=`<tr><td class="arm" style="--c:var(--via)">two-step via the base</td><td>the predicted base track</td><td>— (reuses the direct translator)</td><td>—</td><td>${done(DATA.p2n,'via')}</td></tr>`;
+  h+=`<tr><td class="arm" style="--c:var(--twin)">no-settings twin</td><td colspan="2">the same model with the settings shuffled during training, so it cannot use them</td><td>4000</td><td>${['lrn','rt'].map(k=>DATA.p1n[M[k].n+' (no-settings twin)'].done).reduce((a,b)=>a+b,0)}</td></tr>`;
+  tb.innerHTML=h;
+  const p2=Object.entries(DATA.p2n).filter(([k])=>k!==M.via.n).reduce((s,[,v])=>s+v.done,0),p2a=Object.entries(DATA.p2n).filter(([k])=>k!==M.via.n).reduce((s,[,v])=>s+v.assigned,0);
+  putH('chips',['<b>7 g’s, one per track, + 1 g across tracks</b>','<b>3 seeds</b> each','<b>counts only</b>','<b>held out:</b> one depth level (7.5M reads)','<b>early stopping</b> on chromosome 22'].map(t=>`<span class="chip">${t}</span>`).join(''));
+  const p1=DATA.p1_trained_runs,p1a=DATA.p1_assigned;
+  put('tTitle',`Round 1: ${p1} of ${p1a} planned runs scored. Round 2: ${p2} of ${p2a}. Both rounds are one study: does a shared middle let a model handle pairs of settings it never saw together?`);
+}catch(e){console.error('grid',e);}
+
+/* ================= names (backup) ================= */
+try{
+  const N=[['direct translator','old D, old rung D, “old D retrained” (t118 / t126 rung D)'],['two-step via the base','old D through the base, via-base'],
+    ['pivot translator','symmetric encoder-decoder, rung D phase 1 and 2'],['learned pivot','learned middle, form A, the phase-1 default (setting 1)'],
+    ['boxed pivot','form D, C_clean in a box (setting 2)'],['base-labelled pivot','fixed middle, C_clean frozen at the base'],['anchored pivot','anchored middle (encoder predicts X_base)'],
+    ['round-trip loss only','L2 alone (settings 3 and 4)'],['cross loss / round-trip loss / agreement','L1 / L2 / L3'],['noisy middle','the VAE settings'],
+    ['the middle, middle settings','Z, C_clean'],['no-settings twin','no-covariates twin'],['round 1 / round 2','phase 1 / phase 2']];
+  document.getElementById('tblNames').innerHTML=N.map(([a,b])=>`<tr><td class="y" style="text-align:left">${a}</td><td style="text-align:left">${b}</td></tr>`).join('');
+}catch(e){console.error('names',e);}
+
+/* ================= headlines and prose: every number from DATA ================= */
+try{
+  // problem
+  const dD=DATA.p2depth[M.dir.n][PT],vD=DATA.p2depth[M.via.n][PT];
+  put('hProb',`The direct translator gets trained depth changes right and new ones wrong (${f3(dD.trained.v)} vs ${f3(dD.never.v)}), but using it twice through the base cuts the miss to ${f3(vD.never.v)}`);
+
+  // (a)
+  const rtS=DATA.p1swap[M.rt.n][PT],lpS=DATA.p1swap[M.lrn.n][PT],rtN=nv1('rt'),lpN=nv1('lrn'),rtD=DATA.p1depth[M.rt.n][PT].never,lpD=DATA.p1depth[M.lrn.n][PT].never;
+  put('hA','Trained only to translate tracks back to themselves, the pivot learns to copy; the cross loss is what makes it use the settings');
+  putH('tA1',`<b>Round-trip loss only:</b> the output moves ${f3(rtS.ident)} from the input on real pairs, against ${f3(lpS.ident)} with the cross loss, and it gains ${f3(DATA.p1twin[M.rt.n][PT].never.v)} over the no-settings twin.`);
+  putH('tA2',`Its never-trained error is ${cs(rtN)} against ${cs(lpN)} (${LB(lab(rtN.vs_default))}), and its depth error is ${f3(rtD.v)}, about a factor of ${(2**rtD.v).toFixed(1)}. Every model after this slide uses the cross loss.`);
+
+  // (b)
+  const sw=k=>DATA.p2swap[M[k].n][PT],pv=['lrn','fix','anc'].map(k=>sw(k).swap);
+  put('hB',`The pivots give the input back when the settings do not change (${f3(Math.min(...pv))}–${f3(Math.max(...pv))}), while the direct translator moves it by ${f3(sw('dir').swap)}`);
+  putH('tB1',`On real pairs the pivots move the track by ${f3(Math.min(...['lrn','fix','anc'].map(k=>sw(k).ident)))}–${f3(Math.max(...['lrn','fix','anc'].map(k=>sw(k).ident)))}, about ${Math.round(sw('lrn').ident/sw('lrn').swap)}× their swap value: they use the settings, they do not copy.`);
+
+  // (c)
+  const dn=nv2('dir'),vn=nv2('via'),pv2=['lrn','fix','anc'].map(k=>nv2(k));
+  const nWithin=['lrn','fix','anc'].filter(k=>lab(nv2(k).vs_direct)==='within noise').length;
+  put('hC',`No pivot beats the direct translator on never-trained pairs outside noise; only the two-step via the base does (${f3(vn.v)} vs ${f3(dn.v)})`);
+  putH('tC1',`<b>Pivots:</b> ${f3(Math.min(...pv2.map(r=>r.v)))}–${f3(Math.max(...pv2.map(r=>r.v)))} against the direct translator’s ${f3(dn.v)}. ${nWithin} of 3 gaps are within noise; the direct translator’s seed spread is ${f3(dn.sp)}.`);
+  putH('tC2',`<b>Ordered, but not beyond noise:</b> learned ${f3(nv2('lrn').v)} → base-labelled ${f3(nv2('fix').v)} → anchored ${f3(nv2('anc').v)}. The two-step route is lower than every pivot (anchored vs two-step: ${LB(lab(nv2('anc').vs_via))}), and most of the direct translator’s extra error is scale error (${f3(dn.se)} vs ${f3(vn.se)}).`);
+
+  // (d)
+  const ae=DATA.p2hop[M.anc.n][PT].encoder,dd=DATA.p2hop[M.dir.n][PT].decoder;
+  put('hD',`The anchored pivot’s first half predicts the base as well as the direct translator does (${f3(ae.v)} vs ${f3(dd.v)}); the gap is in the second half`);
+
+  // (e)
+  const ksE=['vae','l01','l1','l10','box'],nE=ksE.filter(k=>lab(nv1(k).vs_default)==='within noise').length;
+  put('hE',`Changing the loss does not help: ${nE} of ${ksE.length} round-1 variants are within noise of the plain learned pivot on never-trained pairs`);
+  putH('tE1',`Never-trained CRPS ranges ${f3(Math.min(...ksE.map(k=>nv1(k).v)))}–${f3(Math.max(...ksE.map(k=>nv1(k).v)))} against ${f3(nv1('lrn').v)} for the learned pivot. The agreement weight chosen on chromosome 22 was λ = ${DATA.p1lambda[PT]}.`);
+
+  // (f)
+  const s1=DATA.p1steps[M.lrn.n],l1=nv1('lrn'),l2=nv2('lrn'),cap2=DATA.p2steps[M.lrn.n][PT].cap;
+  const nLast=Object.values(DATA.p2steps).reduce((s,g)=>s+Object.values(g).reduce((a,r)=>a+r.last10,0),0),nAll=Object.values(DATA.p2steps).reduce((s,g)=>s+Object.values(g).reduce((a,r)=>a+r.n,0),0);
+  put('hF',`Training longer does not help: with ${cap2.toLocaleString('en')} steps allowed, runs stop near half of that and the error does not move`);
+  putH('tF1',`<b>Round 1:</b> ${s1.at_cap} of ${s1.n} learned-pivot runs were still improving at the 4000-step cap. <b>Round 2:</b> ${nLast} of ${nAll} runs had their best step in the last tenth of the new cap.`);
+  putH('tF2',`Learned pivot, never-trained CRPS: ${cs(l1)} at 4000 steps, ${cs(l2)} at ${cap2.toLocaleString('en')} (${noise(l2.v-l1.v,l1.sp,l2.sp)}).`);
+
+  // (g)
+  const tr=k=>DATA.p2trained[M[k].n][PT],ho=k=>DATA.p2heldout[M[k].n][PT];
+  const allW=['lrn','fix','anc'].every(k=>lab(tr(k).vs_direct)==='within noise'),allH=['lrn','fix','anc'].filter(k=>lab(ho(k).vs_direct)==='within noise').length;
+  put('hG',`The pivots cost nothing on the pairs we already handle: ${allW?'every':'not every'} trained-pair gap and ${allH} of 3 held-out-depth gaps to the direct translator are within noise`);
+
+  // (h)
+  const dp=k=>DATA.p2depth[M[k].n][PT],pvD=['lrn','fix','anc'].map(k=>dp(k).never.v);
+  put('hH',`On never-trained depth pairs the pivots miss as much as the direct translator (${f3(Math.min(...pvD))}–${f3(Math.max(...pvD))} vs ${f3(dp('dir').never.v)}); only the two-step comes near the trained level`);
+  putH('tH1',`Trained depth pairs: ${f3(Math.min(...['dir','lrn','fix','anc'].map(k=>dp(k).trained.v)))}–${f3(Math.max(...['dir','lrn','fix','anc'].map(k=>dp(k).trained.v)))} for every model. Two-step on never-trained pairs: ${f3(dp('via').never.v)}. This is the depth test the hypothesis named, and the pivots do not meet it.`);
+
+  // (i)
+  const ag=k=>DATA.p2agree[M[k].n][PT],col=DATA.p1collapse[M.lrn.n][PT];
+  put('hI',`Only the anchored pivot maps two arms of one track to nearby middles (ratio ${f3(ag('anc').v)}); the learned middle is close to a copy of the input`);
+  putH('tI1',`Ratio of middle distance to input distance: learned ${f3(ag('lrn').v)}, base-labelled ${f3(ag('fix').v)}, anchored ${f3(ag('anc').v)}.`);
+  putH('tI2',`Learned pivot (round 1): the middle correlates ${f3(col.corr)} with the input, and its learned middle settings moved a median of ${f3(DATA.p1drift[PT])} from their start (standardised units).`);
+
+  // findings list
+  const F=[['y','The cross loss is necessary',`Round-trip loss alone copies the input and gains ${f3(DATA.p1twin[M.rt.n][PT].never.v)} over the twin.`],
+    ['y','The pivots use the settings correctly',`They return the input when nothing changes (${f3(Math.min(...pv))}–${f3(Math.max(...pv))}) and move it on real pairs.`],
+    ['n','No pivot beats the direct translator on never-trained pairs',`${f3(Math.min(...pv2.map(r=>r.v)))}–${f3(Math.max(...pv2.map(r=>r.v)))} vs ${f3(dn.v)}, within noise. Only the two-step does (${f3(vn.v)}, beyond noise).`],
+    ['y','The first half of the anchored pivot works',`Arm → base: ${f3(ae.v)} vs the direct translator’s ${f3(dd.v)}, within noise. The gap is in the shared decoder.`],
+    ['n','Loss extras do not help',`${nE} of ${ksE.length} round-1 variants are within noise of the learned pivot.`],
+    ['n','Training longer does not help',`Runs stop near half the ${cap2.toLocaleString('en')}-step cap; the learned pivot moved ${sg(l2.v-l1.v)} (${noise(l2.v-l1.v,l1.sp,l2.sp)}).`],
+    ['m','No cost on trained pairs or the held-out depth','Every pivot is within noise of the direct translator there.'],
+    ['n','The depth test is not met',`Never-trained depth error ${f3(Math.min(...pvD))}–${f3(Math.max(...pvD))} vs trained ${f3(Math.min(...['lrn','fix','anc'].map(k=>dp(k).trained.v)))}–${f3(Math.max(...['lrn','fix','anc'].map(k=>dp(k).trained.v)))}.`],
+    ['y','Anchoring makes the middle shared',`Only the anchored pivot brings two arms’ middles closer than their inputs (${f3(ag('anc').v)}).`]];
+  const vt={y:'<span class="verdict y">supports the design</span>',n:'<span class="verdict n">against the hypothesis</span>',m:'<span class="verdict m">neutral check</span>'};
+  document.getElementById('lstFind').innerHTML=F.map(([v,t,b],i)=>`<li><span class="lt">${i+1}</span><div>${vt[v]}<b>${t}.</b> ${b}</div></li>`).join('');
+
+  // caveats
+  const dnA=nv2('dir',AC),vnA=nv2('via',AC);
+  putH('tQ1',`<b>One g across tracks is noisier.</b> It has one run per seed, and every gap there is within noise; even the two-step route (${f3(vnA.v)} vs ${f3(dnA.v)}) does not clear it. Backup slide.`);
+  putH('tQ2',`<b>Three seeds.</b> The pivots are ordered as the tie to the base tightens, but none of the steps clears the noise rule. More seeds could show whether the order is real.`);
+  putH('tQ3',`<b>Some round-1 runs are missing.</b> ${DATA.p1_assigned-DATA.p1_trained_runs} of ${DATA.p1_assigned} runs were cancelled before they finished, all in the agreement settings; those rows rest on fewer runs.`);
+  putH('tQ4',`<b>The two error measures disagree a little.</b> By CRPS every pivot is a little below the direct translator; by the depth test every pivot is a little above it. Both gaps are within noise, so neither is a result.`);
+  putH('tQ5',`<b>Trained and never-trained numbers are not comparable.</b> The two groups hold different pairs: deep targets have larger counts and larger errors. We compare models within a group only.`);
+
+  // backup headers
+  put('hX',`One g across tracks: every pivot is within noise of the direct translator (${f3(Math.min(...['lrn','fix','anc'].map(k=>nv2(k,AC).v)))}–${f3(Math.max(...['lrn','fix','anc'].map(k=>nv2(k,AC).v)))} vs ${f3(dnA.v)})`);
+  put('hN',`Runs scored: round 1 ${DATA.p1_trained_runs} of ${DATA.p1_assigned}, round 2 all`);
+}catch(e){console.error('prose',e);}
+
+/* ================= navigation and speaker notes ================= */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>

@@ -1,15 +1,15 @@
 ---
 id: t128
 type: task
-title: Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory)
+title: "Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory)"
 category: implementation
 parent: t118
 blocked_by: None
 refs: q7, h22, h19
 hypothesis_refs: 
-status: open
-created: 2026-10-21T13:10:55
-updated: 2026-10-21T13:10:55
+status: done
+created: "2026-10-21T13:10:55"
+updated: "2026-10-31T00:19:33"
 ---
 
 # t128 — Build and run phase 1 of the symmetric encoder-decoder rung D: one g sets the FiLM of one shared CNN for both halves through a learned clean middle setting; 8 settings, 240 runs, counts only, depth 7.5M held out (exploratory)
@@ -24,8 +24,10 @@ tests whether a symmetric encoder-decoder through a learned clean setting carrie
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- [First-pass readings, 2026-10-24](results/t128/analyze_out.txt) — not final; the deck is not built yet
+- [First-pass readings, 2026-10-24](results/t128/analyze_out.txt)
+- [Deck: symmetric encoder-decoder rung D, phase 1](presentations/t128-encdec-sym/DECK.md)
+- [Unified deck: the pivot translator, phases 1 and 2](presentations/t128-pivot/DECK.md)
 
 ## Evidence
 
-First pass, 2026-10-24, exploratory; another session may still be working on it. Design `plan/T126_ENCDEC_D2.md`. Four of eight settings are complete: the default and boxed clean-setting forms give never-trained depth error 0.29–0.42, within noise of old D (0.29–0.34); round-trip-only training stays at the identity (error about 2.0). The λ settings and the VAE with the cross loss are unfinished, so the λ choice is not final, and old D's CRPS split waits on Nibi job 24964406. Old D's two trained maps run in series through the base meet the law (0.07–0.12). Bears on [[h22_a_composable_g_one_shared_map_from_each_|the composable-g hypothesis]] and [[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]].
+Exploratory, closed by the PI on 2026-10-31. Design `plan/T126_ENCDEC_D2.md` (phases 1, 2, 3 and 3b). Phase 1 is final at 233 of 240 runs. No pivot design (learned, boxed, base-labelled or anchored middle) beat old D on never-trained pairs outside noise; only old D read through the base did (CRPS 0.545 against 0.662, one g per track). Phase 2 (t132) and phase 3 (t134, t135) followed. A wider g or f did not move the depth law or the never-trained CRPS outside noise; with six seeds bigger f's gain through the base was 0.006 (95% interval −0.002 to +0.013). The PI closed the scale question at these sizes. Bears on [[h22_a_composable_g_one_shared_map_from_each_|the composable-g hypothesis]], [[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]], [[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]] and [[h27_f_at_64_channels_2x_wider_with_the_same_|the f-size hypothesis]].
