@@ -5,7 +5,7 @@ title: "build the counterfactual arms for the in-vitro testbed: 10 processing kn
 category: data-acquisition
 parent: 
 blocked_by: None
-refs: h1, h2
+refs: h1, h2, h15
 hypothesis_refs: 
 status: done
 created: "2026-09-16T23:25:09"
@@ -14,7 +14,7 @@ updated: "2026-09-21T16:31:57"
 
 # t112 — build the counterfactual arms for the in-vitro testbed: 10 processing knobs on the 7 selected EIC tracks, one knob per arm, FASTQ re-runs where the knob sits before alignment, BAM-level re-derivation otherwise, all launched concurrently on Nibi
 
-Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+Refs:: [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]], [[h15_one_transformation_conditioned_on_the_so\|h15]]
 
 ## Why
 
@@ -82,13 +82,20 @@ CANDI's existing DSF ladder in kind. The planted-warp apparatus check is t106, n
 Children: t111 (arm 2). Every other arm lands on this task's branch.
 
 
+## Progress
+
+- 2026-10-25: PI ruling: the 1.4 TiB on Nibi /scratch with no /project copy (FASTQ arms, FASTQ cache, BAM arms, store sources, tagAligns, smoke) is left to purge on 2026-11-20. The 130 products, the store and the pseudoreplicates are on /project, md5-verified (job 24966415).
+- 2026-10-25: scratch-purge rescue before the 2026-11-20 purge (Nibi job 24966415). The 130 products were already on `/project/def-maxwl/mforooz/t112_cf/products/`; all 635 files have equal md5 on /scratch and /project, and 374 of 374 MANIFEST md5 fields match. The small `checks/`, `code/` and `logs/` dirs were copied to /project too. The FASTQ cache, the FASTQ-arm harvest, the BAM-arm tree, `store_src/` and the tagAligns stay on /scratch only, about 1.4 TiB; the PI decides. Detail in [the run paths](results/t112/NIBI_PATH.txt).
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
 - [manifest of all 130 products](results/t112/MANIFEST.tsv)
-- [counterfactual arms write-up](results/t112/COUNTERFACTUAL_ARMS.md)
+- [counterfactual arms write-up](results/t112/COUNTERFACTUAL_ARMS.md) — vault copy of the published summary https://claude.ai/code/artifact/fb5ff45d-f155-4b01-ac50-db1179f4fd61
+- [what was built](results/t112/MANIFEST.md)
 - [checks](results/t112/CHECKS.md)
+- [processing-knob survey behind the knob list](results/t111/knob_survey.md)
 
 ## Evidence
 

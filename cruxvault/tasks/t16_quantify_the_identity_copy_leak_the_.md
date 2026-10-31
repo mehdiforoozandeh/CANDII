@@ -24,7 +24,7 @@ When x_dsf == y_dsf the old bake hands the model an input column that is the SAM
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- results/t16/REPORT.md — merged e0b5fb6
+- [Leak report](results/t16/REPORT.md) — merged e0b5fb6
 
 ## Evidence
 

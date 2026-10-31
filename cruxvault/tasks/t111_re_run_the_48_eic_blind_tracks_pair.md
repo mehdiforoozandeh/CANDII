@@ -5,16 +5,16 @@ title: re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30
 category: data-acquisition
 parent: t112
 blocked_by: None
-refs: h2
+refs: h2, h15
 hypothesis_refs: 
-status: open
-created: 2026-09-16T21:53:46
-updated: 2026-09-16T21:53:46
+status: done
+created: "2026-09-16T21:53:46"
+updated: "2026-10-25T00:18:27"
 ---
 
 # t111 — re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms
 
-Refs:: [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+Refs:: [[h2_conditioning_on_the_recorded_run_type_pr\|h2]], [[h15_one_transformation_conditioned_on_the_so\|h15]]
 
 ## Why
 one track per assay is enough for h2 if the run-type effect is large there; the finished single-end arm on Nibi has no depth- and aligner-matched paired-end partner for any of them (PI ruling 2026-09-16: not all 48, one per assay, the largest before/after effect)
@@ -61,11 +61,16 @@ the earlier campaign hit a wall near 1 TiB — 7 experiments fit either way.
 
 Overlaps t102, whose single-end half this supersedes.
 
+## Progress
+
+- 2026-09-21: the 7 paired-end arms were built as arm 2 of [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]. Each is a FASTQ re-run with the base's pipeline image (chip-seq-pipeline2 v2.2.2; DNase: atac-seq-pipeline v2.2.3) and 30M-read subsample. The products are `<track>__pe__pe` under Nibi `/scratch/mforooz/t112_cf/products/` (purge 2026-11-20), and all 227 pre-use checks pass. This file does not confirm that the filtered paired-end BAMs were kept. Not marked done: the PI decides.
+
 ## Output
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [The 7 paired-end products: rows `<track>__pe__pe` of the counterfactual manifest](results/t112/MANIFEST.tsv)
+- [Pre-use checks of all 130 products](results/t112/CHECKS.md)
 
 ## Evidence
 

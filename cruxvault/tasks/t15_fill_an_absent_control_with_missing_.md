@@ -24,7 +24,7 @@ control_avail = 0 already makes it harmless, but 0 in control_meta[0] reads as l
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- results/t15/DELIVERABLE.md — merged df047d5
+- [Deliverable](results/t15/DELIVERABLE.md) — merged df047d5
 
 ## Evidence
 

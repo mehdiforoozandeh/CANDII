@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Bigger g, Bigger f</title>
+
+<!--
+  prezit deck (paper arc) · pivot study phase 3: a bigger g and a bigger f for old rung D, read
+  through the base. Spec: plan/T126_ENCDEC_D2.md § "Phase 3: PI decisions, 2026-10-27" and its
+  "Design check" block. Chrome, CSS and svg helpers copied from ../t128p2-encdec/ (the phase-2 deck).
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, and the t128p3-C8 brief):
+  - Exploratory: no hypothesis, no metrics.json, no verdicts; `crux deck --verify` does not apply
+    (the result tables are gitignored and live outside the vault of a worktree). Every measured
+    number is embedded as DATA by build_deck.py from cruxvault/results/t128p3/. One DATA token,
+    no sources manifest (the phase-2 interface).
+  - Typed design constants only: the 15,000-step cap, the last-10 % line (0.9 x the cap), the
+    12,000-step flag for a step-confounded run, eval every 250 and patience 4, lr 1e-3, batch 32,
+    the 7.5M held-out depth, the chromosome split, the noise rule's factor 2, the CNN's 4 layers,
+    kernel 5 and dilations 1, 2, 4, 8, the receptive field of 61 bins, and f's parameter counts
+    (about 16 k and about 62 k, from the spec). The g parameter counts are computed by the build
+    from the recorded sizes; the thresholds come from the tables.
+  - Each metric slide gives the definition, the best case and the worst case before the figure.
+    The three arms read through the base are ranked by metric 1, as a reading, not a gate.
+  - Plain names only: build_deck.py maps every arm code to its plain name before DATA is built,
+    and fails if a code reaches the page.
+  - The only table is the grid of arms.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once (settings 1-8, the two references, the twin) */
+    --s1:#d9822b; --s2:#9a6a12; --s3:#5d7fb8; --s4:#2f4f8a; --s5:#c3a3dc; --s6:#9467bd; --s7:#5f3a85;
+    --s8:#c8435a; --oldd:#1f8a70; --via:#6fb59a; --twin:#77736c; --ref:#9a9ca4;
+    /* one colour per pair group */
+    --tr:#4f5d75; --ho:#0a8a8f; --nv:#c84d86; --nv2:#e8a3c3;
+    --ok:#3f8f6f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+      --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+      --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --s1:#eb9a4c; --s2:#c9a04a; --s3:#86a5da; --s4:#6f8fd0; --s5:#dcc6ee; --s6:#b58fdc; --s7:#9a76c8;
+    --s8:#e8707f; --oldd:#3fb393; --via:#8fd0b5; --twin:#a19d96; --ref:#8a8c96;
+    --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em;text-wrap:balance}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px;text-wrap:balance}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:none}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.mid svg{max-height:40vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2,.cards.c5{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 9px;margin:0 0 6px;border:1px solid var(--hair);color:var(--body)}
+  .tag.out{background:rgba(63,143,111,.13);border-color:var(--ok)}
+  .tag.part{background:rgba(217,130,43,.13);border-color:var(--s1)}
+  .tag.holds{background:rgba(200,77,134,.13);border-color:var(--nv)}
+  .tag.open{background:none;border-style:dashed;border-color:var(--muted)}
+  .tag.opt{background:none;border-style:dashed;border-color:var(--accent);color:var(--accent)}
+  table.grid.compact{border-spacing:6px 3px}
+  table.grid.compact td{padding:4px 8px;font-size:14px;line-height:1.25}
+  table.grid.compact th{padding:2px 4px;font-size:14px}
+  table.grid.compact td.arm small{display:inline;margin-left:6px}
+  table.grid td.y{font-weight:600;color:var(--ink)}
+  table.grid td.no{color:var(--faint)}
+  .mini{font-size:13px;color:var(--muted)}
+
+  /* the grid of arms */
+  table.grid{border-collapse:separate;border-spacing:8px 6px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:8px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:18%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.arm{font-weight:600;color:var(--ink);text-align:left;border-left:5px solid var(--c)}
+  table.grid td.arm small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:14.5px;border:1px solid var(--hair);background:var(--card);border-radius:16px;padding:4px 12px;color:var(--body)}
+  .chip b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+  /* phase 2: the metric definition strip (what it measures / best case / worst case) */
+  .mdef{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px;margin:0 0 8px}
+  .mdef div{background:var(--card);border:1px solid var(--hair);border-radius:8px;padding:7px 12px;font-size:14px;line-height:1.36;color:var(--body)}
+  .mdef div b{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px;color:var(--muted)}
+  .mdef div.best{border-left:4px solid var(--ok)}
+  .mdef div.best b{color:var(--ok)}
+  .mdef div.worst{border-left:4px solid var(--accent)}
+  .mdef div.worst b{color:var(--accent)}
+  .mdef div.what{border-left:4px solid var(--ink)}
+  @media (max-width:900px){.mdef{grid-template-columns:1fr}}
+  .slide h2{margin-bottom:8px}
+  .fig.res svg{max-height:43vh}
+  .cards.c3x3{grid-template-columns:repeat(3,1fr);gap:10px}
+  .cards.c3x3 .card{padding:9px 13px}
+  .cards.c3x3 .ct{font-size:15px;margin-bottom:3px}
+  .cards.c3x3 .cb{font-size:13.5px;line-height:1.36}
+  @media (max-width:900px){.cards.c3x3{grid-template-columns:1fr}}
+  ol.open{margin:8px 0 0 0;padding-left:0;list-style:none;counter-reset:op}
+  ol.open li{counter-increment:op;position:relative;padding:9px 14px 9px 54px;margin:8px 0;background:var(--card);border:1px solid var(--hair);border-radius:10px;font-size:clamp(14.5px,1.3vw,16.5px);line-height:1.42;color:var(--body)}
+  ol.open li::before{content:"(" counter(op,lower-roman) ")";position:absolute;left:14px;top:9px;font-weight:700;color:var(--accent)}
+  ol.open li b{color:var(--ink)}
+</style></head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline; the scope in one line
+       source   results/t128p3/n_table.tsv, runs_fir.tsv; results/t128p3b/n_table.tsv
+       numbers  run counts only (DATA.counts, DATA.p3b.runs)
+       cut      the nav hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>Phase 3: does a bigger g, or a bigger f, lower the never-trained error of old D through the base?</h1>
+      <p class="sub"><span id="tRuns"></span>. Every number is read from the result tables when the deck is built. This is an exploratory pass: it reports readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+    </div>
+    <aside class="notes">
+      <p>Phase 2 found one route that beat old D on pairs it never trained on: old D read through the base. Phase 3 asks the scale question on that route alone. One arm grows g, the small network that turns the processing settings into the CNN's scale-and-shift values. The other arm grows f, the CNN itself.</p>
+      <p>The deck follows the order of a paper: motivation, method, results (one slide per metric), discussion.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · MOTIVATION · (a) what phase 2 showed
+       job      phase 2's finding as a figure: old D through the base beat old D direct on never-trained pairs
+       source   results/t128p3/m1_never_table.tsv (the phase-2 reference rows, re-pooled and checked to 1e-9)
+       numbers  DATA.m1 (reference rows); headline and bullets written from DATA
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what phase 2 showed</div>
+      <h2 id="hP2"></h2>
+      <div class="fig res" id="figP2"></div>
+      <ul class="pts"><li id="tP2a"></li><li id="tP2b"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>CRPS is the error of the whole predicted distribution, in counts; lower is better. Dark is the oracle-scaled part (the shape), light is the scale error (a wrong total). Black ticks are the three seeds.</p>
+      <p>Never-trained pairs are arm to arm pairs that the model never saw in training. Old D direct maps the source arm straight to the target. Old D through the base chains two of old D's trained maps: arm to base, then base to target.</p>
+      <p>Phase 2 deferred the scale question: is the small g or the small CNN what limits this route? Phase 3 asks it.</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · (b) the two arms, drawn
+       job      schematic: what grows in each arm, and what stays as phase 2
+       source   results/t128p3/runs_fir.tsv (recorded sizes); spec (f parameter counts)
+       numbers  design constants: sizes from DATA.size, g parameters computed by the build
+       cut      panel captions -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the two arms</div>
+      <h2>Each arm grows one part only: g gets wider, or f gets more channels</h2>
+      <div class="fig tall" id="figArms"></div>
+    </div>
+    <aside class="notes">
+      <p><b>g</b> is a small fully connected network. It reads the settings of the source and the target and outputs the scale-and-shift values (FiLM values) that set the CNN. <b>f</b> is the CNN that maps the source track to the predicted distribution.</p>
+      <p><b>Bigger g</b>: g's two hidden layers go from a width of sixty-four to two hundred and fifty-six; f is as in phase 2. <b>Bigger f</b>: f keeps its four layers, kernel and dilations, but doubles its channels. FiLM carries one scale and one shift per channel per layer, so g's output layer doubles too; g's hidden width stays as in phase 2. The receptive field does not change.</p>
+      <p>No combined arm and one size per axis (PI). A combined arm or a second size follows only if an axis helps.</p>
+    </aside>
+  </section>
+
+  <!-- 4 · METHOD · the grid of arms (the one table)
+       job      the arms and the reference, with sizes and the training recipe
+       source   results/t128p3/runs_fir.tsv, n_table.tsv; ref_runs_fir.tsv
+       numbers  sizes, parameter counts and runs scored from DATA; the rest are design constants of the spec
+       cut      the chips -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the arms</div>
+      <h2>Two new arms and one reference, each read directly and through the base</h2>
+      <table class="grid compact" id="tblArms">
+        <tr><th style="width:22%">arm</th><th>what grows</th><th>g hidden width<small>g parameters</small></th><th>f channels<small>f parameters</small></th><th>FiLM values<small>g's output</small></th><th>step cap</th><th>runs scored<small>direct · through the base</small></th></tr>
+      </table>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="notes">
+      <p>The reference is phase 2's old D, not rerun. No phase-2 old D run came near its cap, so its cap and the new cap act the same unless a bigger model trains longer; metric 9 checks that.</p>
+      <p>Each arm runs on each per-track g and on the one g across tracks, with three seeds. Seeds do not pair across arms: a bigger model draws more initial weights, so seed zero of one arm is not seed zero of another. The learning rate is unchanged from phase 2; that is a caveat, not a tuned choice.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · METHOD · how a never-trained pair is predicted, what is scored, how a run is selected
+       job      the two routes, the pair kinds, and the selection and scoring split as one schematic
+       source   spec (design constants); no result file
+       numbers  none (design constants: held-out level, chromosome split, recipe)
+       cut      panel (c) recipe line -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the route, the pairs, and the scoring</div>
+      <h2>Training sees only base ↔ arm pairs; a never-trained arm → arm pair is predicted directly, or through the base</h2>
+      <div class="fig tall" id="figRoute"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): the direct route uses one map, from the source's settings to the target's. The route through the base uses two of the same model's trained maps: source to base, then the predicted base to the target. It needs no training of its own.</p>
+      <p>Panel (b): each track was rebuilt many times, changing one processing setting (a <b>knob</b>) at a time; each rebuild is an <b>arm</b>. Training uses pairs between the base and one arm, both ways. The depth arm at 7.5M reads is held out. Arm to arm pairs are never trained.</p>
+      <p>Panel (c): each run keeps the step with the best validation likelihood on chromosome 22. Every score is on chromosomes 19 and 21, with the blacklist removed.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · METHOD · the CRPS split, the noise rule and the pre-registered thresholds
+       job      how to read every number, and the bar a gain must clear, set before the results
+       source   results/t128p3/m1_never_table.tsv (the thresholds); spec (the rule)
+       numbers  the thresholds and the reference values from DATA; the factor 2 is the spec's rule
+       cut      panel (b) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>how to read every number</div>
+      <h2>Every CRPS carries its split, every gap a noise label, and a gain must clear a bar set before the runs</h2>
+      <div class="fig tall" id="figRules"></div>
+    </div>
+    <aside class="notes">
+      <p><b>CRPS</b> (continuous ranked probability score) compares the whole predicted distribution of each bin with the observed count. Lower is better. Pooled CRPS: per seed, the mean over a track's pairs, then over tracks; the reading is the mean over seeds. <b>Oracle-scaled part</b>: the CRPS left after the one best rescaling of the prediction (the shape). <b>Scale error</b>: what that rescaling removes (a wrong total).</p>
+      <p><b>Noise rule</b>: the seed spread of a cell is the largest gap between its three seeds. A gap counts only if it is larger than two times the larger seed spread of the two cells.</p>
+      <p><b>Pre-registered reading</b> (design check, before any run): for one g per track, a gain counts above two times the larger of the reference's seed spread and the arm's own, and never below a floor of about three percent. For one g across tracks, the reference's own seed spread is large, so the bar is high; that cell is reported but read per knob. "Within noise" means "no gain above the stated threshold", never "no effect".</p>
+    </aside>
+  </section>
+
+  <!-- 7 · RESULTS · (a) metric 1, never-trained CRPS through the base, pooled
+       job      the question of phase 3, every knob pooled, with the threshold drawn
+       claim    written from DATA (hM1)
+       source   results/t128p3/m1_never_table.tsv (knob all, subgroup never)
+       numbers  DATA.m1
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) metric 1 · never-trained pairs, through the base</div>
+      <h2 id="hM1"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>CRPS on arm → arm pairs that no model trained on, predicted through the base, every knob pooled.</div>
+        <div class="best"><b>Best case</b>Below the small reference by more than the pre-registered threshold, mostly in the oracle-scaled part.</div>
+        <div class="worst"><b>Worst case</b>No lower than the small reference: size is not what limits this route.</div>
+      </div>
+      <div class="fig res" id="figM1"></div>
+      <ul class="pts"><li id="tM1a"></li><li id="tM1b"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Bars: dark is the oracle-scaled part, light is the scale error; black ticks are the seeds. The green dashed line is the small reference through the base. The red dashed mark on each row is the pre-registered threshold for that arm: the bar must end left of it for a gain to count. The hollow square is the same runs read directly, with no base.</p>
+      <p id="nM1"></p>
+    </aside>
+  </section>
+
+  <!-- 8 · RESULTS · (b) metric 1 per knob
+       job      the same metric per knob: one g per track, and one g across tracks (the cell the design check reads per knob)
+       claim    written from DATA (hM1k)
+       source   results/t128p3/m1_never_table.tsv (subgroup never, every knob)
+       numbers  DATA.m1
+       cut      the bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) metric 1 · per knob</div>
+      <h2 id="hM1k"></h2>
+      <div class="fig tall" id="figM1k"></div>
+      <ul class="pts"><li id="tM1ka"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>One row per knob; never-trained pairs whose source and target differ in that knob. Dots are the mean over seeds, with a whisker over the three seeds. The hollow green dot is the small reference. Each red tick is the pre-registered threshold of the arm on that lane: a dot left of its tick would count as a gain.</p>
+      <p id="nM1k"></p>
+    </aside>
+  </section>
+
+  <!-- 9 · RESULTS · (c) metric 2, the generalisation gap
+       job      the gap between never-trained and trained pairs, same model, direct
+       claim    written from DATA (hM2)
+       source   results/t128p3/m2_gap_table.tsv (knob all)
+       numbers  DATA.m2
+       cut      the callout -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) metric 2 · the generalisation gap</div>
+      <h2 id="hM2"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>Never-trained CRPS minus trained CRPS, same model, direct. The never-trained side uses same-knob pairs.</div>
+        <div class="best"><b>Best case</b>Near 0, and no worse than old D: unseen pairs are as good as trained ones.</div>
+        <div class="worst"><b>Worst case</b>Large and positive: the fit stays on the trained pairs.</div>
+      </div>
+      <div class="fig res" id="figM2"></div>
+      <div class="callout" id="tM2why"></div>
+    </div>
+    <aside class="notes">
+      <p>Bars: the pooled gap, with seed ticks. Below zero means the never-trained pairs score better than the trained ones. The routes through the base have no trained pairs of their own, so this metric is read on the direct runs.</p>
+      <p id="nM2"></p>
+    </aside>
+  </section>
+
+  <!-- 10 · RESULTS · (d) metric 3, trained pairs
+       job      no cost on the pairs the model trained on
+       claim    written from DATA (hM3)
+       source   results/t128p3/m3_trained_table.tsv (knob all)
+       numbers  DATA.m3
+       cut      the bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) metric 3 · trained pairs</div>
+      <h2 id="hM3"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>CRPS on the base ↔ arm pairs the model trained on, scored on other chromosomes.</div>
+        <div class="best"><b>Best case</b>Below old D: the extra size fits the known pairs better.</div>
+        <div class="worst"><b>Worst case</b>Above old D outside noise: the bigger model trains worse (for example, a learning rate that no longer fits).</div>
+      </div>
+      <div class="fig res" id="figM3"></div>
+      <ul class="pts"><li id="tM3a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Same layout as metric 1: split bars, seed ticks, and the noise label against old D in the text column. The routes through the base reuse these trained maps, so the trained pairs are read once, on the direct runs.</p>
+      <p id="nM3"></p>
+    </aside>
+  </section>
+
+  <!-- 11 · RESULTS · (e) metric 4, held-out depth
+       job      no cost on the held-out 7.5M depth
+       claim    written from DATA (hM4)
+       source   results/t128p3/m4_heldout_table.tsv
+       numbers  DATA.m4
+       cut      the bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) metric 4 · the held-out depth, 7.5M reads</div>
+      <h2 id="hM4"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>CRPS on base ↔ 7.5M pairs, a depth level held out of training. Both directions.</div>
+        <div class="best"><b>Best case</b>As low as old D, or lower: the model fills in a missing level of a known knob.</div>
+        <div class="worst"><b>Worst case</b>Above old D outside noise: the bigger model loses the interpolation.</div>
+      </div>
+      <div class="fig res" id="figM4"></div>
+      <ul class="pts"><li id="tM4a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): from 7.5M reads to the base (a deep target, so a high CRPS). Panel (b): from the base to 7.5M reads (a shallow target). One g per track as a bar with its split; one g across tracks as a hollow square.</p>
+      <p id="nM4"></p>
+    </aside>
+  </section>
+
+  <!-- 12 · RESULTS · (f) metric 5, the depth law (sanity check)
+       job      the depth law on trained, held-out and never-trained depth pairs
+       claim    written from DATA (hM5)
+       source   results/t128p3/m5_depthlaw_table.tsv
+       numbers  DATA.m5
+       cut      the bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) metric 5 · the depth law (a sanity check)</div>
+      <h2 id="hM5"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>|log2 predicted scale − log2 true read ratio| on depth pairs. Half the reads should halve every bin.</div>
+        <div class="best"><b>Best case</b>Near 0 in every pair group: the model scales counts by the read ratio.</div>
+        <div class="worst"><b>Worst case</b>Near 1 or more: off by a factor of 2, as a map that returns its input would be.</div>
+      </div>
+      <div class="fig res" id="figM5"></div>
+      <ul class="pts"><li id="tM5a"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Each row has up to four thin bars, one per pair group: trained, the held-out 7.5M, never-trained depth to depth, and never-trained pairs that touch 7.5M. Ticks are the seeds. Log scale. The routes through the base exist only for never-trained pairs.</p>
+      <p id="nM5"></p>
+    </aside>
+  </section>
+
+  <!-- 13 · RESULTS · (g) metric 9, best steps
+       job      was the cap the limit, and did a bigger model train longer than the reference?
+       claim    written from DATA (hM9)
+       source   results/t128p3/runs_fir.tsv, ref_runs_fir.tsv, m9_steps_table.tsv, step_confounded_runs.tsv
+       numbers  DATA.m9, DATA.m9_runs, DATA.stepconf, DATA.counts.max_steps
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(g) metric 9 · was the step cap the limit?</div>
+      <h2 id="hM9"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>The share of runs whose best step is in the last 10 % of the cap, and the median best step against the reference's.</div>
+        <div class="best"><b>Best case</b>0: every run found its best step well before the cap, so the reference's lower cap does not confound the comparison.</div>
+        <div class="worst"><b>Worst case</b>Runs whose best step is above the reference's cap: those are step-confounded and listed apart.</div>
+      </div>
+      <div class="fig res" id="figM9"></div>
+      <ul class="pts"><li id="tM9a"></li><li id="tM9b"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Each dot is one run's best step (by its own validation likelihood on chromosome 22); each small tick is where that run stopped. Early stopping (an evaluation every 250 steps, patience 4) ends a run after four evaluations with no gain. The lines mark the reference's cap, which is also the flag for a step-confounded run, the start of the last 10 %, and the new cap.</p>
+      <p id="nM9"></p>
+    </aside>
+  </section>
+
+  <!-- 14 · RESULTS · (h) the ranking
+       job      the three arms read through the base ranked by metric 1, one g per track and one g across tracks
+       claim    written from DATA (hRk)
+       source   results/t128p3/rank_table.tsv
+       numbers  DATA.rank
+       cut      the bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(h) the three routes through the base, ranked by metric 1</div>
+      <h2 id="hRk"></h2>
+      <div class="fig tall" id="figRank"></div>
+      <ul class="pts"><li id="tRka"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>A reading, not a gate (PI). Rows are in order of never-trained CRPS through the base, lowest first. The label under each new arm says whether its gap to the small reference passes the noise rule and the pre-registered threshold. The right-hand column is the same runs read directly.</p>
+      <p id="nRk"></p>
+    </aside>
+  </section>
+
+  <!-- 15 · RESULTS · (i) phase 3b: more seeds for bigger f and the reference
+       job      does bigger f's gain through the base hold at six seeds per arm (PI option B)?
+       claim    written from DATA (hS)
+       source   results/t128p3b/headline_table.tsv (metric 1, via the base, all), per_seed_table.tsv,
+                checks.txt, readout_control.json; m1_direct, m3, m4 tables in the notes
+       numbers  DATA.p3b; the bars and labels are the tables' own (spec § Phase 3b, Reading)
+       cut      the third line -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(i) more seeds: is bigger f's gain real?</div>
+      <h2 id="hS"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>Metric 1 through the base, one g per track: bigger f against the small reference, each with three new seeds (3–5), six seeds per arm.</div>
+        <div class="best"><b>Best case</b>The gap clears both pre-registered bars, and seeds 3–5 alone show the gain again.</div>
+        <div class="worst"><b>Worst case</b>The gap falls inside seed noise and seeds 3–5 alone show no gain: phase 3's gain was a draw of three seeds.</div>
+      </div>
+      <div class="fig res" id="figSeeds"></div>
+      <ul class="pts cols3"><li id="tSa"></li><li id="tSb"></li><li id="tSc"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): one dot per seed and arm (the mean over the seven per-track g). Filled dots are seeds 0–2 (phase 3 for bigger f, phase 2 for the reference); hollow dots are the new seeds 3–5. The faint stem runs from the oracle-scaled part up to the CRPS, so its length is the scale error. Dashed lines are the six-seed means.</p>
+      <p>Panel (b): the gap is the reference minus bigger f, so above zero means bigger f is lower. <b>SE</b> (standard error) of the gap: √(sd²/6 + sd²/6) over the two arms, seeds unpaired. <b>Real bar</b>: 4 × SE. <b>Size bar</b>: 2 × the larger six-seed range rescaled to three seeds, never below the phase-3 floor. The whisker is the 95% confidence interval (the range that holds the true gap 95 times in 100). Each red tick is the bar of that row.</p>
+      <p id="nS"></p>
+    </aside>
+  </section>
+
+  <!-- 16 · DISCUSSION · what each metric tells us
+       job      one line per metric 1, 2, 3, 4, 5, 9, and the six-seed reading
+       source   the result slides above
+       numbers  restated from results; none new
+       cut      the tier line in the notes -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what each metric tells us</div>
+      <h2 id="hD"></h2>
+      <div class="cards c3x3" id="cardsD"></div>
+    </div>
+    <aside class="notes">
+      <p>One line per metric, restated from the results. Tier 1 (metric 1) is the question. Tier 2 (metrics 2 to 5) checks that nothing else got worse. Tier 3 (metric 9) checks that the steps do not confound the comparison.</p>
+    </aside>
+  </section>
+
+  <!-- 17 · DISCUSSION · what follows, per the spec
+       job      the optimisation-failure reading, the spec's rule for a next arm, option B's outcome, the options left
+       source   results/t128p3/checks.txt (optimisation-failure reading); results/t128p3b (option B); spec (the rule)
+       numbers  restated from results; none new
+       cut      the third option -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what follows, per the spec</div>
+      <h2 id="hF"></h2>
+      <div class="cards c3">
+        <div class="card" style="--c:var(--ok)"><div class="rl">Reading</div><div class="ct">Not an optimisation failure</div><div class="cb" id="tF1"></div></div>
+        <div class="card" style="--c:var(--s3)"><div class="rl">Reading</div><div class="ct">The spec's rule for the next arm</div><div class="cb" id="tF2"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Caveat</div><div class="ct">What "within seed noise" does not say</div><div class="cb" id="tF3"></div></div>
+      </div>
+      <div class="cards c3" style="margin-top:14px">
+        <div class="card" style="--c:var(--accent)"><span class="tag opt">option A</span><div class="ct">Close the scale question at this size</div><div class="cb" id="tOA"></div></div>
+        <div class="card" style="--c:var(--muted)"><span class="tag out">option B · ran</span><div class="ct">More seeds for bigger f, one g per track</div><div class="cb" id="tOB"></div></div>
+        <div class="card" style="--c:var(--accent)"><span class="tag opt">option C</span><div class="ct">Tune the learning rate for the bigger models</div><div class="cb">The spec left it unchanged as a caveat. A short sweep per arm would teach whether size is held back by the recipe, at the cost of a new grid.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The optimisation-failure reading is the design check's rule: an arm that does not improve through the base and also gets worse on trained pairs reads as an optimisation failure, not as "capacity does not help".</p>
+      <p>Option B ran (PI, 2026-10-29): three more seeds per per-track g for bigger f and for the reference. Options A and C remain. The options carry no recommendation and no ranking; the PI chooses.</p>
+    </aside>
+  </section>
+
+  <!-- 18 · DISCUSSION · open points for the PI
+       job      the decisions only the PI can make, each answerable in one line
+       source   the result slides above
+       numbers  restated from results; none new
+       cut      the last point -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>open points for the PI</div>
+      <h2>Open points for the PI</h2>
+      <ol class="open">
+        <li id="tO1"></li>
+        <li id="tO2"></li>
+        <li id="tO3"></li>
+      </ol>
+    </div>
+    <aside class="notes">
+      <p>Each point is a question the readings raise and only the PI can settle. None is a recommendation. Settled by the PI on 2026-10-29 and so not repeated here: more seeds (option B, now run), bigger g's high direct seeds (a caveat, not followed up) and one g across tracks (dropped from the gain test).</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · pivot study phase 3 and 3b, a bigger g and a bigger f · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py from cruxvault/results/t128p3/ (see its docstring).
+   Arms and g versions are plain names (build_deck.py NAMES). Row layouts:
+     arms [through base: bigger g, bigger f, reference; direct: bigger g, bigger f, old D]
+     counts {runs, done, g_per_track, seeds, max_steps, ref_max_steps, ref_runs, arms};  n  arm -> {assigned, done}
+     size  arm -> {g_hidden, f_channels, n_theta, g_params}   (direct arm names)
+     m1  [arm, g, knob, subgroup, CRPS, oracle-scaled, scale error, seed spread, [seeds], n runs, n pairs,
+          gap vs old D, label, gap vs the reference through the base, label, prereg threshold, prereg label,
+          n step-confounded runs]
+     m2  [arm, g, knob, never CRPS, trained CRPS, gap, gap oracle-scaled, gap scale error, seed spread, [seeds],
+          n never pairs, n trained pairs, gap vs old D, label]
+     m3  [arm, g, knob, CRPS, os, se, spread, [seeds], n runs, n pairs, gap vs old D, label]
+     m4  [arm, g, direction, CRPS, os, se, spread, [seeds], n runs, n pairs, gap vs old D, label]
+     m5  [arm, g, group, median |log2 error|, spread, [seeds], n rows, gap vs old D, label, gap vs reference, label]
+     m9  [arm, g, n runs, cap, n best in last 10 %, n at cap, median best step, median steps run, median hours,
+          n best above 12,000, min best step, max best step, median s per step]
+     m9_runs [arm, g, best step, steps run];  stepconf [arm, g unit, seed, best step, steps run]
+     rank [arm, g, rank, m1, os, se, spread, gap vs reference, label, prereg threshold, prereg label,
+           direct arm, direct m1, os, se, spread, direct label vs old D]
+     optfail [arm, g, trained-CRPS gap vs old D, its label, reads as optimisation failure]
+     checks {pass, fail, agree, disagree}
+     p3b   phase 3b, metric 1 through the base, one g per track, 6 seeds (results/t128p3b): runs, done; f / ref
+           [CRPS, oracle-scaled, scale error] (6-seed means); sd, range; gap (reference − bigger f), se, real_bar,
+           size_bar, ci [lo, hi], label; gap3, se3, rep_bar, replication (seeds 3–5); drift, drift_bar, control_a;
+           gap_p3 (seeds 0–2), prereg_p3; seeds {f, ref: [seed, CRPS, os, se]}; knobs {n, labels, rep_pass,
+           drift_fail}; readout {n, unmatched, max, label}; direct, trained {gap, se, label, replication, gap3,
+           drift, drift_bar, control_a, new_gap, new_label}; heldout {direction: same}
+   =========================================================================== */
+const DATA = __DATA__;
+const COL={tr:'var(--tr)',ho:'var(--ho)',nv:'var(--nv)',nv2:'var(--nv2)',ok:'var(--ok)',ink:'var(--ink)',muted:'var(--muted)',
+  body:'var(--body)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',
+  accent:'var(--accent)',paper:'var(--paper)',ref:'var(--ref)',oldd:'var(--oldd)',via:'var(--via)'};
+const f2=v=>v==null?'—':v.toFixed(2), f3=v=>v==null?'—':v.toFixed(3), f4=v=>v==null?'—':v.toFixed(4);
+const mn=s=>String(s).replace(/-/g,'−');
+const sg=(v,f=f3)=>v==null?'—':(v>0?'+':'')+mn(f(v));
+const rng=(a,f=f3)=>{a=a.filter(v=>v!=null&&!isNaN(v));if(!a.length)return '—';const lo=Math.min(...a),hi=Math.max(...a);return f(lo)===f(hi)?mn(f(lo)):lo<0?`${mn(f(lo))} to ${mn(f(hi))}`:`${f(lo)}–${f(hi)}`;};
+const andJ=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+/* every CRPS with its split: total (oracle-scaled + scale error) */
+const cs=(v,os,se)=>`${f3(v)} (${f3(os)} + ${f3(se)})`;
+/* the spec's noise rule: a gap counts only if |gap| > 2 x the larger seed spread */
+const noise=(gap,sa,sb)=>sa==null||sb==null?'no seed spread':Math.abs(gap)>2*Math.max(sa,sb)?'counts':'within noise';
+const nl=l=>l==='counts'?'<b>counts</b>':l;
+const sh=n=>ARM(n).short;
+/* ---------- svg helpers (phase-1 deck) ---------- */
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2,ex='')=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g===GV[0]?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const diamond=(x,y,c,r=7)=>`<polygon points="${x},${y-r} ${x+r},${y} ${x},${y+r} ${x-r},${y}" style="fill:var(--paper);stroke:${c};stroke-width:2.2"/>`;
+const logS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo));
+const linS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo);
+const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+20,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const rotY=(x,y,txt,fs=15)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:${fs}px"`);
+const box=(x,y,w,h,txt,c,sub,fs=17)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-3:6),txt,'mono','middle',`style="font-size:${fs}px"`)+(sub?T(x+w/2,y+h/2+19,sub,'cap','middle'):'');
+const ticksX=(xx,lo,hi,step,y0,y1,fmt=v=>mn(f2(v)))=>{let s='';for(let v=lo;v<=hi+1e-9;v+=step){s+=L(xx(v),y0,xx(v),y1,COL.grid,1)+T(xx(v),y1+18,fmt(v),'tick','middle');}return s;};
+function rowLabel(x,y,a,lab,sub){const A=ARM(a);return T(x,y-2,lab||A.short,'axlbl','end',`style="font-size:15px;font-weight:600;fill:${A.c}"`)+T(x,y+15,sub==null?A.sub:sub,'cap','end','style="font-size:12.5px"');}
+/* arms and g versions: the plain names come from DATA (build_deck.py NAMES), in its order */
+const [VG,VF,VR,DG,DF,DR]=DATA.arms;
+const ARMS=[
+  {name:VG,short:'bigger g, through the base',sub:'g hidden width ×4',c:'var(--s1)'},
+  {name:VF,short:'bigger f, through the base',sub:'f channels ×2',c:'var(--s3)'},
+  {name:VR,short:'reference, through the base',sub:'phase 2, not rerun',c:'var(--via)'},
+  {name:DG,short:'bigger g, direct',sub:'the same runs, no base',c:'var(--s2)'},
+  {name:DF,short:'bigger f, direct',sub:'the same runs, no base',c:'var(--s4)'},
+  {name:DR,short:'old D, direct',sub:'phase 2, not rerun',c:'var(--oldd)'}];
+const ARM=n=>ARMS.find(a=>a.name===n);
+const VIA3=[VG,VF,VR],DIR3=[DG,DF,DR],NEW2=[VG,VF];
+const DOF={[VG]:DG,[VF]:DF,[VR]:DR};
+const GV=['one g per track','one g across tracks'];
+const [PT,AC]=GV;
+const GVc=g=>g[0].toUpperCase()+g.slice(1);
+const gs=g=>g.replace('one g ','');
+const KNAME={depth:'depth',crop:'read length',mapq:'MAPQ cut',abproxy:'control mixed in',ctldepth:'control depth',
+  ctlid:'control identity',dedup:'deduplication',extsize:'extension size',pe:'paired end',ratio:'ratio',all:'all knobs'};
+const KN=['depth','crop','mapq','abproxy','ctldepth','ctlid','ratio','extsize','dedup','pe'];
+const k1=v=>v==null?'—':Math.round(v).toLocaleString('en');
+const pre=l=>l==null?'—':l.startsWith('within')?'within noise':l;   /* the prereg label, short */
+const preH=l=>pre(l)==='gain'?'<b>gain</b>':pre(l);
+
+const m1r=(a,g,sub='never',k='all')=>DATA.m1.find(r=>r[0]===a&&r[1]===g&&r[2]===k&&r[3]===sub);
+const m2r=(a,g)=>DATA.m2.find(r=>r[0]===a&&r[1]===g);
+const m3r=(a,g)=>DATA.m3.find(r=>r[0]===a&&r[1]===g);
+const m4r=(a,g,d)=>DATA.m4.find(r=>r[0]===a&&r[1]===g&&r[2]===d);
+const m5r=(a,g,grp)=>DATA.m5.find(r=>r[0]===a&&r[1]===g&&r[2]===grp);
+const m9r=(a,g)=>DATA.m9.find(r=>r[0]===a&&r[1]===g);
+
+/* Generic bar chart, one panel per item of `panels`, one row per entry of rows(panel).
+   A row: {a, lab, sub, v, os, se (split), seeds, sq (second marker), thr (threshold mark), t1, t2} */
+function barPanels(o){
+  const panels=o.panels,rows0=o.rows(panels[0]),rh=o.rh||44,top=50,lx=o.lx||240,tw=o.tw||250,gap=30;
+  const pw=(1160-lx-panels.length*tw-(panels.length-1)*gap)/panels.length;
+  const H=top+rows0.length*rh+(o.legend?74:48);let s='';
+  rows0.forEach((r,i)=>s+=rowLabel(lx-12,top+i*rh+rh/2,r.a,r.lab,r.sub));
+  panels.forEach((p,pi)=>{const lo=typeof o.lo==='function'?o.lo(p):o.lo,hi=typeof o.hi==='function'?o.hi(p):o.hi;
+    let step=typeof o.step==='function'?o.step(p):o.step;while((hi-lo)/step*46>pw)step*=2;
+    const x0=lx+pi*(pw+tw+gap),xx=linS(lo,hi,x0,x0+pw),rows=o.rows(p);
+    s+=T(x0,22,`(${'abcd'[pi]}) ${o.ptitle?o.ptitle(p):GVc(p)}`,'ptitle','start','style="font-size:18px"');
+    s+=ticksX(xx,lo,hi,step,top-4,top+rows.length*rh);
+    if(lo<0)s+=L(xx(0),top-6,xx(0),top+rows.length*rh,COL.ink,1.3);
+    (o.bands?o.bands(p):[]).forEach(b=>{if(b)s+=R(xx(b[0]),top-4,xx(b[1])-xx(b[0]),rows.length*rh+4,COL.accent,'none',0,0,';fill-opacity:.09');});
+    (o.refs?o.refs(p):[]).forEach(f=>{if(f.v!=null)s+=L(xx(f.v),top-8,xx(f.v),top+rows.length*rh,f.c,1.8,'5 4');});
+    rows.forEach((r,i)=>{if(!r)return;const c=ARM(r.a).c,y=top+i*rh+9,bh=rh-20,z=lo<0?xx(0):x0;
+      if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      if(r.v==null){s+=T(x0+6,y+bh/2+5,'not measured','cap');}
+      else if(o.dot){if(r.os!=null)s+=R(xx(r.os),y+bh/2-5,xx(r.v)-xx(r.os),10,c,'none',2,0,';fill-opacity:.35')+L(xx(r.os),y+bh/2-9,xx(r.os),y+bh/2+9,c,2.4);s+=Ci(xx(r.v),y+bh/2,7,c);}
+      else if(r.os!=null&&r.se!=null&&r.os>=0&&r.se>=0&&lo>=0){s+=R(x0,y,xx(r.os)-x0,bh,c,'none',2)+R(xx(r.os),y,xx(r.os+r.se)-xx(r.os),bh,c,'none',2,0,';fill-opacity:.35');}
+      else{const a=Math.min(z,xx(r.v)),b=Math.max(z,xx(r.v));s+=R(a,y,b-a,bh,c,'none',2);}
+      (r.seeds||[]).forEach(v=>s+=L(xx(v),y-3,xx(v),y+bh+3,COL.ink,1.6));
+      if(r.thr!=null&&r.thr>=lo)s+=L(xx(r.thr),y-7,xx(r.thr),y+bh+7,COL.accent,2.6,'3 2');
+      if(r.sq!=null)s+=R(xx(r.sq)-6,y+bh/2-6,12,12,'var(--paper)',c,2,2.4);
+      s+=T(x0+pw+10,y+bh/2-1,r.t1||'','val','start',`style="fill:${c};font-size:14px"`)+T(x0+pw+10,y+bh/2+16,r.t2||'','cap','start','style="font-size:12.5px"');});
+    if(pi>0)s+=divider(x0-gap/2,10,top+rows.length*rh+4);});
+  s+=T(lx+(1160-lx)/2,top+rows0.length*rh+38,o.axis,'axlbl','middle','style="font-size:15px"');
+  if(o.legend)s+=o.legend(H-6);
+  return svg(1160,H,s);
+}
+const splitLegend=(y,extra='')=>sw(0,y,COL.muted,'oracle-scaled part')+sw(170,y,COL.muted,'scale error',0.35)+L(300,y-12,300,y,COL.ink,1.6)+T(308,y,'seeds','cap','start','style="font-size:14px;fill:var(--body)"')+extra;
+const legRef=(x,y,c,lab,dash='5 4')=>L(x,y-5,x+30,y-5,c,2,dash)+T(x+36,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const legSq=(x,y,lab)=>R(x,y-11,12,12,'var(--paper)',COL.ink,2,2)+T(x+18,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const xmaxOf=vals=>Math.ceil(Math.max(...vals.filter(v=>v!=null))*10)/10;
+
+/* ---------- motivation (a): phase 2 ---------- */
+function figP2(){
+  const arms=[DR,VR],vals=GV.flatMap(g=>arms.flatMap(a=>{const r=m1r(a,g);return r?[r[4],...r[8]]:[];}));
+  return barPanels({panels:GV,lo:0,hi:xmaxOf(vals),step:0.1,rh:52,
+    rows:g=>arms.map(a=>{const r=m1r(a,g);if(!r)return {a,v:null};
+      return {a,lab:a===DR?'old D, direct':'old D, through the base',sub:a===DR?'arm → target, one map':'arm → base → target',
+        v:r[4],os:r[5],se:r[6],seeds:r[8],t1:cs(r[4],r[5],r[6]),t2:`seed spread ${f3(r[7])}`+(a===VR?` · vs direct: ${r[12]}`:'')};}),
+    axis:'CRPS on counts, every never-trained pair, phase 2 (lower is better)',legend:y=>splitLegend(y)});
+}
+
+/* ---------- motivation (b): the two arms, drawn ---------- */
+function figArms(){
+  const W=1160,H=430;let s='';
+  const S=DATA.size,ref=S[DR],bg=S[DG],bf=S[DF];
+  const cols=[[ref,'(a) Small reference (phase 2)','var(--via)',null],[bg,'(b) Bigger g','var(--s1)','g'],[bf,'(c) Bigger f','var(--s3)','f']];
+  const FP={32:'about 16 k',64:'about 62 k'};          /* spec: f parameter counts */
+  const hmax=Math.max(...cols.map(c=>c[0].g_hidden)),cmax=Math.max(...cols.map(c=>c[0].f_channels));
+  cols.forEach(([z,title,c,grow],i)=>{const x0=i*395,cw=360;
+    if(i>0)s+=divider(x0-18,10,H-34);
+    s+=T(x0,24,title,'ptitle','start',`style="font-size:18px;fill:${c}"`);
+    // g: two hidden layers, height scales with the hidden width
+    const gh=40+120*z.g_hidden/hmax,gy=60;
+    s+=T(x0,gy+12,'g: settings → FiLM values','axlbl','start','style="font-size:15px;font-weight:600"');
+    const gc=grow==='g'?c:COL.ref;
+    [0,1].forEach(j=>s+=R(x0+20+j*56,gy+24+(160-gh)/2,40,gh,gc,'none',4,0,';fill-opacity:.85'));
+    const oh=40+80*z.n_theta/Math.max(...cols.map(q=>q[0].n_theta));
+    s+=R(x0+132,gy+24+(160-oh)/2,22,oh,grow==='f'?c:COL.ref,'none',4,0,';fill-opacity:.55');
+    s+=T(x0+168,gy+60,`hidden width ${z.g_hidden}`,'axlbl','start',`style="font-size:14.5px;${grow==='g'?'font-weight:700;fill:'+c:''}"`);
+    s+=T(x0+168,gy+82,`${z.n_theta} FiLM values`,'axlbl','start',`style="font-size:14.5px;${grow==='f'?'font-weight:700;fill:'+c:''}"`);
+    s+=T(x0+168,gy+104,`${k1(z.g_params)} parameters`,'cap','start','style="font-size:13.5px"');
+    // f: four layers, width scales with channels
+    const fy=270,fw=30+110*z.f_channels/cmax,fc=grow==='f'?c:COL.ref;
+    s+=T(x0,fy-10,'f: the CNN, 4 layers, kernel 5','axlbl','start','style="font-size:15px;font-weight:600"');
+    [0,1,2,3].forEach(j=>s+=R(x0+20,fy+4+j*24,fw,18,fc,'none',3,0,';fill-opacity:.85'));
+    s+=T(x0+168,fy+30,`${z.f_channels} channels`,'axlbl','start',`style="font-size:14.5px;${grow==='f'?'font-weight:700;fill:'+c:''}"`);
+    s+=T(x0+168,fy+52,`${FP[z.f_channels]||'—'} parameters`,'cap','start','style="font-size:13.5px"');
+    s+=T(x0+168,fy+74,'dilations 1, 2, 4, 8 · 61 bins seen','cap','start','style="font-size:13px"');
+  });
+  s+=T(0,H-8,'Grey: as in phase 2. Coloured: what the arm grows. FiLM: one scale and one shift per channel per layer, so more channels need more values from g.','cap','start','style="font-size:13.5px"');
+  return svg(W,H,s);
+}
+
+/* ---------- method: the route, the pairs, selection and scoring ---------- */
+function figRoute(){
+  const W=1160,H=440;let s='';
+  // (a) the two routes
+  s+=T(0,24,'(a) Two ways to predict a never-trained pair','ptitle','start','style="font-size:17px"');
+  const cd=COL.oldd,cv=COL.via;
+  s+=T(0,70,'direct: one map','axlbl','start',`style="font-weight:700;fill:${cd};font-size:15px"`);
+  s+=box(0,84,80,40,'arm',COL.hair,'',15)+arrowR(82,104,250,cd,2.4)+box(254,84,90,40,'target',COL.hair,'',15)+T(166,96,'arm → target','cap','middle','style="font-size:12.5px"');
+  s+=T(0,180,'through the base: two trained maps','axlbl','start',`style="font-weight:700;fill:${cv};font-size:15px"`);
+  s+=box(0,194,80,40,'arm',COL.hair,'',15)+arrowR(82,214,128,cv,2.4)+box(132,194,76,40,'base',COL.ink,'',15)+arrowR(210,214,250,cv,2.4)+box(254,194,90,40,'target',COL.hair,'',15);
+  s+=FO(0,250,350,120,'Each hop is a pair the model trained on (arm → base, base → arm). The second hop reads the predicted base mean. No training of its own.','font:400 14px var(--sans);color:var(--body);line-height:1.38');
+  s+=divider(372,10,H-6);
+  // (b) the pairs
+  const bx=392;s+=T(bx,24,'(b) Pairs: trained, held out, never trained','ptitle','start','style="font-size:17px"');
+  const cx=bx+180,cy=210,nodes=[['15M',cx-120,110],['7.5M (held out)',cx,72],['3.75M',cx+120,110],['trimmed',cx+120,320],['MAPQ up',cx,355],['control in',cx-120,320]];
+  const pos=nodes.map(n=>[n[1],n[2]]);
+  [[0,2],[3,4]].forEach(([i,j])=>s+=L(pos[i][0],pos[i][1],pos[j][0],pos[j][1],COL.nv,2.4,'7 5'));
+  s+=L(pos[0][0],pos[0][1],pos[5][0],pos[5][1],COL.nv2,2.6,'2 5');
+  pos.forEach(([x,y],i)=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d;
+    s+=L(cx+ux*46,cy+uy*46,x-ux*14,y-uy*14,i===1?COL.ho:COL.tr,3,i===1?'6 4':'');});
+  pos.forEach(([x,y],i)=>{s+=Ci(x,y,11,COL.card,i===1?COL.ho:COL.tr,2.5);
+    const right=x>cx+20,left=x<cx-20,anc=right?'start':left?'end':'middle';
+    s+=T(x+(right?16:left?-16:0),y+(right||left?5:(y<cy?-18:30)),nodes[i][0],'axlbl',anc,'style="font-size:14px;font-weight:600"');});
+  s+=Ci(cx,cy,44,COL.card,COL.ink,2.5)+T(cx,cy+6,'base','big','middle','style="font-size:20px"');
+  const ly=H-30;
+  s+=L(bx,ly-5,bx+26,ly-5,COL.tr,3)+T(bx+30,ly,'trained','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=L(bx+96,ly-5,bx+122,ly-5,COL.ho,3,'6 4')+T(bx+126,ly,'held out','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=L(bx+196,ly-5,bx+222,ly-5,COL.nv,2.4,'7 5')+T(bx+226,ly,'never, same knob','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=L(bx+96,ly+15,bx+122,ly+15,COL.nv2,2.6,'2 5')+T(bx+126,ly+20,'never, two knobs','cap','start','style="font-size:13px;fill:var(--body)"');
+  s+=divider(782,10,H-6);
+  // (c) selection and scoring
+  const qx=802;s+=T(qx,24,'(c) Selection and scoring','ptitle','start','style="font-size:17px"');
+  const rows=[['chromosome 22','pick each run\'s best step by its validation likelihood','var(--s3)'],
+    ['chromosomes 19 and 21','score every pair, blacklist removed','var(--s6)'],
+    ['the rest of the genome','training windows: base ↔ arm, 7.5M held out',COL.tr]];
+  rows.forEach(([a,b,c],i)=>{const y=50+i*100;s+=R(qx,y,358,84,COL.card,c,10,2.2)+T(qx+16,y+28,a,'axlbl','start',`style="font-weight:700;fill:${c};font-size:15.5px"`)+FO(qx+16,y+36,330,46,b,'font:400 14px var(--sans);color:var(--body);line-height:1.32');});
+  s+=FO(qx,358,358,70,`lr 1e-3, batch 32, eval every 250 steps, patience 4, cap ${DATA.counts.max_steps.toLocaleString('en')} (reference: ${DATA.counts.ref_max_steps.toLocaleString('en')})`,'font:400 13.5px var(--sans);color:var(--muted);line-height:1.35');
+  return svg(W,H,s);
+}
+
+/* ---------- method: the split, the noise rule, the thresholds ---------- */
+function figRules(){
+  const W=1160,H=420;let s='';
+  s+=T(0,24,'(a) CRPS = oracle-scaled part + scale error','ptitle','start','style="font-size:17px"');
+  const x0=0,xx=linS(0,1,x0,x0+340);
+  s+=R(x0,60,xx(0.72)-x0,44,COL.ink,'none',3,0,';fill-opacity:.75')+R(xx(0.72),60,xx(0.95)-xx(0.72),44,COL.ink,'none',3,0,';fill-opacity:.25');
+  s+=T((x0+xx(0.72))/2,88,'shape','axlbl','middle','style="fill:var(--paper);font-weight:700"')+T((xx(0.72)+xx(0.95))/2,88,'scale','axlbl','middle','style="font-weight:700"');
+  s+=FO(x0,120,350,240,'<b>Oracle-scaled part</b>: the error left after the one best rescaling of the prediction; it measures the <b>shape</b>.<br><b>Scale error</b>: what that rescaling removes; it measures a <b>wrong total</b>.<br>Every CRPS here is written <b>total (shape + scale)</b>.','font:400 14.5px var(--sans);color:var(--body);line-height:1.45');
+  s+=divider(372,10,H-6);
+  const bx=392;s+=T(bx,24,'(b) The noise rule','ptitle','start','style="font-size:17px"');
+  s+=T(bx,48,'3 seeds per cell; spread = largest − smallest seed','cap','start','style="font-size:13px"');
+  const yy=linS(0.4,0.75,300,80),A=[0.60,0.70,0.66],B=[0.45,0.53,0.50],mA=(A[0]+A[1]+A[2])/3,mB=(B[0]+B[1]+B[2])/3;
+  const cellS=(x,c,vals,lab)=>{let t='';vals.forEach(v=>t+=L(x-20,yy(v),x+20,yy(v),c,3.4));
+    t+=L(x+28,yy(Math.min(...vals)),x+28,yy(Math.max(...vals)),COL.ink,1.6)+T(x+34,yy((Math.min(...vals)+Math.max(...vals))/2)+5,'spread','cap','start','style="font-size:12.5px"')+T(x,322,lab,'axlbl','middle','style="font-size:14px;font-weight:600"');return t;};
+  s+=cellS(bx+60,'var(--s1)',A,'cell a')+cellS(bx+240,COL.via,B,'cell b');
+  s+=L(bx+160,yy(mA),bx+160,yy(mB),COL.accent,2.2,'4 3')+T(bx+160,yy(mB)+22,'gap','cap','middle','style="fill:var(--accent);font-weight:700"');
+  s+=FO(bx,336,360,70,'The gap counts only if it is larger than <b>2 × the larger spread</b>; otherwise it is labelled <b>within noise</b>.','font:400 14px var(--sans);color:var(--body);line-height:1.35');
+  s+=divider(782,10,H-6);
+  // (c) the pre-registered thresholds, read from the tables
+  const qx=802;s+=T(qx,24,'(c) The bar a gain must clear','ptitle','start','style="font-size:17px"');
+  GV.forEach((g,i)=>{const r=m1r(VR,g),thr=Math.min(...NEW2.map(a=>m1r(a,g)[15])),y=70+i*150;
+    const z=linS(0,Math.ceil(r[4]*10)/10,qx,qx+340);
+    s+=T(qx,y,GVc(g),'axlbl','start','style="font-size:15px;font-weight:700"');
+    s+=R(qx,y+14,z(r[4])-qx,30,COL.via,'none',3,0,';fill-opacity:.8')+T(qx+6,y+34,`reference ${f3(r[4])}`,'cap','start','style="font-size:13px;fill:var(--paper);font-weight:700"');
+    s+=R(z(r[4]-thr),y+50,z(r[4])-z(r[4]-thr),14,COL.accent,'none',2,0,';fill-opacity:.85')+L(z(r[4]-thr),y+10,z(r[4]-thr),y+70,COL.accent,2,'3 2');
+    s+=FO(qx,y+74,358,60,`Set before the runs: a gain counts only below ${f3(r[4]-thr)}: threshold ${f4(thr)} (the lower of the two arms' bars), ${f2(100*thr/r[4])} % of the reference.`,'font:400 14px var(--sans);color:var(--body);line-height:1.35');});
+  s+=FO(qx,368,358,52,'Seeds do not pair across arms: a bigger model draws more initial weights.','font:400 13.5px var(--sans);color:var(--muted);line-height:1.35');
+  return svg(W,H,s);
+}
+
+/* ---------- metric 1: pooled ---------- */
+function figM1(){
+  const span=g=>{const v=VIA3.flatMap(a=>{const r=m1r(a,g);return [r[5],...r[8],a===VR?null:m1r(VR,g)[4]-r[15]];}).filter(x=>x!=null);
+    return [Math.floor(Math.min(...v)*20)/20,Math.ceil(Math.max(...v)*20)/20];};
+  return barPanels({panels:GV,dot:true,lo:g=>span(g)[0],hi:g=>span(g)[1],step:g=>g===PT?0.01:0.05,rh:56,lx:262,tw:262,
+    refs:g=>[{v:(m1r(VR,g)||[])[4],c:COL.via}],
+    bands:g=>[[m1r(VR,g)[4]-Math.min(...NEW2.map(a=>m1r(a,g)[15])),m1r(VR,g)[4]]],
+    rows:g=>VIA3.map(a=>{const r=m1r(a,g),d=m1r(DOF[a],g);if(!r)return {a,v:null};
+      return {a,v:r[4],os:r[5],se:r[6],seeds:r[8],thr:a===VR?null:(m1r(VR,g)[4]-r[15]),
+        t1:cs(r[4],r[5],r[6]),t2:a===VR?`spread ${f3(r[7])} · the reference`:`spread ${f3(r[7])} · ${pre(r[16])} · bar ${f4(r[15])}`};}),
+    axis:'CRPS on counts, every never-trained pair, through the base (zoomed axis; the direct reading is on slide (h))',
+    legend:y=>Ci(7,y-5,7,COL.muted)+T(20,y,'CRPS','cap','start','style="font-size:14px;fill:var(--body)"')+R(80,y-10,30,10,COL.muted,'none',2,0,';fill-opacity:.35')+L(80,y-14,80,y+2,COL.muted,2.4)+T(116,y,'scale error (left end: oracle-scaled part)','cap','start','style="font-size:14px;fill:var(--body)"')+L(420,y-12,420,y,COL.ink,1.6)+T(428,y,'seeds','cap','start','style="font-size:14px;fill:var(--body)"')+legRef(490,y,COL.via,'small reference')+legRef(650,y,COL.accent,'threshold (shaded: within it)','3 2')});
+}
+
+/* ---------- metric 1: per knob ---------- */
+function figM1k(){
+  const W=1160,top=56,rh=36,lx=150,gap=50,pw=(W-lx-gap)/2-20;const H=top+KN.length*rh+72;let s='';
+  KN.forEach((k,i)=>s+=T(lx-12,top+i*rh+rh/2+5,KNAME[k],'axlbl','end','style="font-size:14.5px"'));
+  GV.forEach((g,pi)=>{const x0=lx+pi*(pw+gap+20);
+    const vals=KN.flatMap(k=>VIA3.flatMap(a=>{const r=m1r(a,g,'never',k);return r?r[8]:[];}));
+    const lo=Math.floor(Math.min(...vals)*10)/10,hi=Math.ceil(Math.max(...vals)*10)/10,xx=linS(lo,hi,x0,x0+pw);
+    s+=T(x0,22,`(${'ab'[pi]}) ${GVc(g)}`,'ptitle','start','style="font-size:18px"');
+    s+=ticksX(xx,lo,hi,0.1,top-4,top+KN.length*rh);
+    KN.forEach((k,i)=>{const y0=top+i*rh;if(i%2===0)s+=R(x0,y0,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      VIA3.forEach((a,j)=>{const r=m1r(a,g,'never',k);if(!r)return;const y=y0+8+j*10,c=ARM(a).c;
+        if(r[8].length)s+=L(xx(Math.min(...r[8])),y,xx(Math.max(...r[8])),y,c,1.6);
+        s+=a===VR?Ci(xx(r[4]),y,4.6,'var(--paper)',c,2.2):Ci(xx(r[4]),y,4.6,c);
+        if(a!==VR&&r[15]!=null){const ref=m1r(VR,g,'never',k);if(ref&&ref[4]-r[15]>=lo)s+=L(xx(ref[4]-r[15]),y-5,xx(ref[4]-r[15]),y+5,COL.accent,2.4);}});});
+    s+=T(x0+pw/2,top+KN.length*rh+38,'CRPS on counts, never-trained pairs, through the base','axlbl','middle','style="font-size:14.5px"');
+    if(pi>0)s+=divider(x0-gap/2-10,10,top+KN.length*rh+4);});
+  let lx2=0;VIA3.forEach(a=>{const c=ARM(a).c;s+=(a===VR?Ci(lx2+6,H-10,5,'var(--paper)',c,2.2):Ci(lx2+6,H-10,5,c))+T(lx2+16,H-5,sh(a),'cap','start','style="font-size:13.5px;fill:var(--body)"');lx2+=sh(a).length*7+50;});
+  s+=L(lx2+4,H-16,lx2+4,H-4,COL.accent,2.4)+T(lx2+12,H-5,'threshold: a gain lies left of it','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- metric 2 ---------- */
+function figM2(){
+  const vals=DATA.m2.filter(r=>DIR3.includes(r[0])).flatMap(r=>[r[5],...r[9]]);
+  const lo=Math.floor(Math.min(...vals)*20)/20,hi=0.05;
+  return barPanels({panels:GV,lo,hi,step:0.05,rh:46,
+    rows:g=>DIR3.map(a=>{const r=m2r(a,g);if(!r)return {a,v:null};
+      return {a,v:r[5],seeds:r[9],t1:`${sg(r[5])} (${sg(r[6])} ${r[7]<0?'−':'+'} ${f3(Math.abs(r[7]))})`,t2:a===DR?`spread ${f3(r[8])} · the reference`:`spread ${f3(r[8])} · vs old D: ${r[13]}`};}),
+    axis:'never-trained CRPS − trained CRPS, direct, every knob pooled (below 0: never-trained pairs score better)'});
+}
+
+/* ---------- metric 3 ---------- */
+function figM3(){
+  const vals=DATA.m3.filter(r=>DIR3.includes(r[0])).flatMap(r=>[r[3],...r[7]]);
+  return barPanels({panels:GV,lo:0,hi:xmaxOf(vals),step:0.1,rh:46,refs:g=>[{v:(m3r(DR,g)||[])[3],c:COL.oldd}],
+    rows:g=>DIR3.map(a=>{const r=m3r(a,g);if(!r)return {a,v:null};
+      return {a,v:r[3],os:r[4],se:r[5],seeds:r[7],t1:cs(r[3],r[4],r[5]),t2:a===DR?`spread ${f3(r[6])} · the reference`:`spread ${f3(r[6])} · vs old D: ${r[11]}`};}),
+    axis:'CRPS on counts, trained base ↔ arm pairs',legend:y=>splitLegend(y)+legRef(390,y,COL.oldd,'old D')});
+}
+
+/* ---------- metric 4 ---------- */
+function figM4(){
+  const dirs=['7.5M->base','base->7.5M'];
+  const vals=DATA.m4.filter(r=>DIR3.includes(r[0])).flatMap(r=>[r[3],...r[7]]);
+  return barPanels({panels:dirs,lo:0,hi:xmaxOf(vals),step:0.1,rh:46,ptitle:d=>d==='7.5M->base'?'7.5M reads → base':'base → 7.5M reads',
+    refs:d=>[{v:(m4r(DR,PT,d)||[])[3],c:COL.oldd}],
+    rows:d=>DIR3.map(a=>{const r=m4r(a,PT,d),q=m4r(a,AC,d);if(!r)return {a,v:null};
+      return {a,v:r[3],os:r[4],se:r[5],seeds:r[7],sq:q?q[3]:null,t1:cs(r[3],r[4],r[5]),
+        t2:a===DR?`across ${f3(q&&q[3])} · the reference`:`D: ${r[11]} · across ${f3(q&&q[3])}`};}),
+    axis:'CRPS on counts, held-out depth pairs (bar: one g per track · square: one g across tracks)',legend:y=>splitLegend(y)+legRef(390,y,COL.oldd,'old D, one g per track')+legSq(640,y,'one g across tracks')});
+}
+
+/* ---------- metric 5 ---------- */
+const DG5=[['trained','trained',COL.tr],['heldout','held-out 7.5M',COL.ho],['never','never trained, depth → depth',COL.nv],['never75','never trained, with 7.5M',COL.nv2]];
+function figM5(){
+  const arms=[...VIA3,...DIR3],top=50,rh=40,lx=240,pw=410,gap=40,xs0=[lx+4,lx+4+pw+gap];
+  const W=1160,H=top+arms.length*rh+80;let s='';
+  arms.forEach((a,i)=>s+=rowLabel(lx-12,top+i*rh+rh/2,a));
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=logS(0.02,1,x0,x0+pw);
+    s+=T(x0,22,`(${'ab'[pi]}) ${GVc(g)}`,'ptitle','start','style="font-size:18px"');
+    [[0.02,'0.02'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1']].forEach(([v,l])=>s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,l,'tick','middle'));
+    arms.forEach((a,i)=>{const y0=top+i*rh+2;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      DG5.forEach(([grp,,c],j)=>{const r=m5r(a,g,grp),yb=y0+j*9;if(!r||r[3]==null)return;
+        s+=R(x0,yb,xx(r[3])-x0,7,c,'none',1.5);r[5].forEach(v=>s+=L(xx(v),yb-1,xx(v),yb+8,COL.ink,1.6));});});
+    if(pi>0)s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'depth-law error, median |log2 predicted scale − log2 true read ratio| (log scale)','axlbl','middle','style="font-size:15px"');
+  let lxx=0;DG5.forEach(([,lab,c])=>{s+=sw(lxx,H-6,c,lab);lxx+=lab.length*7.2+40;});
+  return svg(W,H,s);
+}
+
+/* ---------- metric 9 ---------- */
+function figM9(){
+  const cap=DATA.counts.max_steps,rcap=DATA.counts.ref_max_steps,rowsK=[];DIR3.forEach(a=>GV.forEach(g=>rowsK.push([a,g])));
+  const top=40,rh=34,lx=240,pw=600,H=top+rowsK.length*rh+60;let s='';
+  const xx=linS(0,cap,lx,lx+pw);
+  for(let v=0;v<=cap;v+=2500)s+=L(xx(v),top-4,xx(v),top+rowsK.length*rh,COL.grid,1)+T(xx(v),top+rowsK.length*rh+18,v.toLocaleString('en'),'tick','middle');
+  [[rcap,'reference cap = flag',COL.muted,'6 4','end'],[0.9*cap,'last 10 %',COL.accent,'4 3','middle'],[cap,'cap',COL.ink,'','start']].forEach(([v,lab,c,d,an])=>s+=L(xx(v),top-14,xx(v),top+rowsK.length*rh,c,2,d)+T(xx(v)+(an==='end'?-4:an==='start'?4:0),top-18,lab,'cap',an,`style="font-size:13px;fill:${c};font-weight:600"`));
+  rowsK.forEach(([a,g],i)=>{const y=top+i*rh+rh/2,c=ARM(a).c,m=m9r(a,g);
+    if(i%2===0)s+=R(lx,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+    s+=T(lx-12,y+5,`${sh(a).replace(', direct','')} · ${gs(g)}`,'axlbl','end',`style="font-size:14px;font-weight:600;fill:${c}"`);
+    const rs=DATA.m9_runs.filter(r=>r[0]===a&&r[1]===g);
+    rs.forEach((r,j)=>{const jit=((j*37)%11-5)*1.3;s+=L(xx(r[3]),y-9,xx(r[3]),y+9,COL.faint,1.4)+Ci(xx(r[2]),y+jit,4.5,c,'none',0,';fill-opacity:.75');});
+    if(m)s+=T(lx+pw+12,y+5,`best ${k1(m[6])} · ${m[4]} of ${m[2]} in last 10 % · ${m[9]} above flag`,'cap','start','style="font-size:12.5px;fill:var(--body)"');});
+  s+=T(lx+pw/2,top+rowsK.length*rh+42,'training step (dot: best step of one run · tick: where it stopped)','axlbl','middle','style="font-size:15px"');
+  return svg(1160,H,s);
+}
+
+/* ---------- ranking ---------- */
+function figRank(){
+  const W=1160;let s='';const top=60,rh=74;
+  const n=Math.max(...GV.map(g=>DATA.rank.filter(r=>r[1]===g).length)),H=top+n*rh+40;
+  const all=DATA.rank,xmax=Math.ceil(Math.max(...all.flatMap(r=>[r[3],r[12]]))*10)/10;
+  GV.forEach((g,pi)=>{const x0=pi*(W/2)+(pi?20:0),rows=all.filter(r=>r[1]===g).sort((a,b)=>a[2]-b[2]);
+    const xa=linS(0,xmax,x0+190,x0+400),xd=linS(0,xmax,x0+420,x0+540);
+    s+=T(x0,22,`(${'ab'[pi]}) ${GVc(g)}`,'ptitle','start','style="font-size:18px"');
+    s+=T(xa(xmax/2),top-12,'through the base','cap','middle','style="font-size:12.5px;font-weight:600"')+T(xd(xmax/2),top-12,'direct','cap','middle','style="font-size:12.5px;font-weight:600"');
+    rows.forEach((r,i)=>{const a=r[0],c=ARM(a).c,y=top+i*rh+6,bh=22;
+      s+=T(x0+180,y+bh/2+5,`${r[2]}. ${sh(a).replace(', through the base','')}`,'axlbl','end',`style="font-size:15px;font-weight:600;fill:${c}"`);
+      s+=R(xa(0),y,xa(r[4])-xa(0),bh,c,'none',2)+R(xa(r[4]),y,xa(r[4]+r[5])-xa(r[4]),bh,c,'none',2,0,';fill-opacity:.35');
+      s+=R(xd(0),y,xd(r[12])-xd(0),bh,ARM(DOF[a]).c,'none',2,0,';fill-opacity:.55');
+      s+=T(xa(0),y+bh+16,cs(r[3],r[4],r[5])+` · spread ${f3(r[6])}`,'cap','start','style="font-size:12.5px;fill:var(--body)"');
+      s+=T(xd(0),y+bh+16,f3(r[12]),'cap','start','style="font-size:12.5px;fill:var(--body)"');
+      s+=T(xa(0),y+bh+33,a===VR?'the reference':`vs reference ${sg(r[7])}: ${r[8]}; bar ${f4(r[9])}: ${pre(r[10])}`,'cap','start',`style="font-size:12.5px;fill:${pre(r[10])==='gain'?'var(--accent)':'var(--muted)'}"`);});
+    if(pi>0)s+=divider(x0-20,10,top+rows.length*rh);});
+  s+=sw(0,H-6,COL.muted,'oracle-scaled part')+sw(170,H-6,COL.muted,'scale error',0.35)+sw(330,H-6,COL.muted,'direct, the same runs',0.55);
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+/* ---------- phase 3b: six seeds ---------- */
+function figSeeds(){
+  const B=DATA.p3b,W=1160,top=50,H=420,ph=290;let s='';
+  const cf=ARM(VF).c,cr=ARM(VR).c;
+  // (a) per-seed values
+  const all=[...B.seeds.f,...B.seeds.ref].flatMap(x=>[x[1],x[2]]);
+  const lo=Math.floor(Math.min(...all)*200)/200,hi=Math.ceil(Math.max(...all)*200)/200;
+  const ax0=70,ax1=500,yy=linS(lo,hi,top+ph,top),xs=sd=>ax0+30+(ax1-ax0-60)*sd/5;
+  s+=T(0,22,'(a) Metric 1 per seed, through the base','ptitle','start','style="font-size:18px"');
+  for(let v=lo;v<=hi+1e-9;v+=0.005)s+=L(ax0,yy(v),ax1,yy(v),COL.grid,1)+T(ax0-8,yy(v)+5,f3(v),'tick','end');
+  s+=R(xs(2.5),top,ax1-xs(2.5),ph,COL.grid,'none',0,0,';fill-opacity:.4')+T(xs(4),top+16,'new seeds','cap','middle','style="font-size:13px"')+T(xs(1),top+16,'phase 3 / phase 2','cap','middle','style="font-size:13px"');
+  [[B.seeds.ref,cr,-7,B.ref[0]],[B.seeds.f,cf,7,B.f[0]]].forEach(([rows,c,dx,m])=>{
+    s+=L(ax0,yy(m),ax1,yy(m),c,2,'6 4');
+    rows.forEach(([sd,v,os])=>{const x=xs(sd)+dx;s+=L(x,yy(os),x,yy(v),c,2.2,'')+(sd<=2?Ci(x,yy(v),6.5,c):Ci(x,yy(v),6,'var(--paper)',c,2.4));});});
+  for(let k=0;k<6;k++)s+=T(xs(k),top+ph+20,k,'tick','middle');
+  s+=T((ax0+ax1)/2,top+ph+42,'seed','axlbl','middle','style="font-size:15px"')+rotY(16,top+ph/2,'CRPS (dot) · oracle-scaled part (stem foot)',14);
+  s+=divider(560,10,H-30);
+  // (b) the gap against its bars
+  const bx=600,bw=360,rows=[
+    ['phase 3, seeds 0–2',B.gap_p3,null,[[B.prereg_p3,'bar']]],
+    ['seeds 3–5 alone',B.gap3,null,[[B.rep_bar,'2 × SE']]],
+    ['all six seeds',B.gap,B.ci,[[B.real_bar,'real'],[B.size_bar,'size']]]];
+  const gv=rows.flatMap(r=>[r[1],...(r[2]||[]),...r[3].map(b=>b[0])]);
+  const glo=Math.floor(Math.min(0,...gv)*200)/200,ghi=Math.ceil(Math.max(...gv)*200)/200,gx=linS(glo,ghi,bx+160,bx+160+bw),rh=86;
+  s+=T(bx,22,'(b) Gap: reference − bigger f (above 0: bigger f lower)','ptitle','start','style="font-size:18px"');
+  for(let v=glo;v<=ghi+1e-9;v+=0.005)s+=L(gx(v),top-4,gx(v),top+rows.length*rh,COL.grid,1)+T(gx(v),top+rows.length*rh+18,sg(v,f3),'tick','middle');
+  s+=L(gx(0),top-6,gx(0),top+rows.length*rh,COL.ink,1.3);
+  rows.forEach(([lab,v,ci,bars],i)=>{const y=top+i*rh+rh/2-8,c=i===2?cf:COL.muted;
+    if(i%2===0)s+=R(bx+160,top+i*rh,bw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+    s+=T(bx+150,y+5,lab,'axlbl','end',`style="font-size:14.5px;font-weight:600;fill:${i===2?cf:'var(--body)'}"`);
+    if(ci)s+=L(gx(ci[0]),y,gx(ci[1]),y,c,2.4)+L(gx(ci[0]),y-7,gx(ci[0]),y+7,c,2.4)+L(gx(ci[1]),y-7,gx(ci[1]),y+7,c,2.4);
+    bars.forEach(([b,bl],j)=>s+=L(gx(b),y-14,gx(b),y+14,COL.accent,2.6,j?'':'3 2')+T(gx(b),y+30,bl,'cap','middle','style="font-size:12.5px;fill:var(--accent)"'));
+    s+=Ci(gx(v),y,7,c)+T(gx(v),y-16,sg(v,f4),'val','middle',`style="fill:${c};font-size:14px"`);});
+  s+=T(bx+160+bw/2,top+rows.length*rh+40,'gap in CRPS on counts (whisker: 95% confidence interval)','axlbl','middle','style="font-size:14.5px"');
+  // legend
+  const ly=H-6;
+  s+=Ci(6,ly-5,6,cf)+T(16,ly,'bigger f','cap','start','style="font-size:14px;fill:var(--body)"')+Ci(96,ly-5,6,cr)+T(106,ly,'reference','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=Ci(196,ly-5,6,COL.muted)+T(206,ly,'seeds 0–2','cap','start','style="font-size:14px;fill:var(--body)"')+Ci(290,ly-5,6,'var(--paper)',COL.muted,2.4)+T(300,ly,'seeds 3–5','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=legRef(384,ly,COL.muted,'six-seed mean')+L(600,ly-12,600,ly+2,COL.accent,2.6,'3 2')+T(608,ly,'bar a gain must clear (dashed: the noise bar of the row; solid: the size bar)','cap','start','style="font-size:14px;fill:var(--body)"');
+  return svg(W,H+4,s);
+}
+
+const FIGS={figP2,figArms,figRoute,figRules,figM1,figM1k,figM2,figM3,figM4,figM5,figM9,figRank,figSeeds};
+Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
+
+/* ---------- the grid of arms ---------- */
+try{
+  const S=DATA.size,N=DATA.n,C=DATA.counts;
+  const FP={32:'about 16 k',64:'about 62 k'};
+  const G=[[DG,VG,'g: hidden width','new',C.max_steps],[DF,VF,'f: channels, and g\'s output layer','new',C.max_steps],[DR,VR,'nothing (phase 2, not rerun)','ref',C.ref_max_steps]];
+  const tb=document.getElementById('tblArms');
+  G.forEach(([d,v,grows,kind,cap])=>{const A=ARM(v),z=S[d];const tr=document.createElement('tr');
+    const nd=N[d],nv=N[v];
+    tr.innerHTML=`<td class="arm" style="--c:${A.c}">${kind==='ref'?'small reference: old D':sh(v).replace(', through the base','')}<small>${kind==='ref'?'phase 2':'phase 3'}</small></td>`+
+      `<td>${grows}</td><td${kind==='new'&&d===DG?' class="y"':''}>${z.g_hidden}<small class="mini"> · ${k1(z.g_params)}</small></td>`+
+      `<td${d===DF?' class="y"':''}>${z.f_channels}<small class="mini"> · ${FP[z.f_channels]||'—'}</small></td>`+
+      `<td${d===DF?' class="y"':''}>${z.n_theta}</td><td>${cap.toLocaleString('en')}</td>`+
+      `<td>${nd?`${nd.done} of ${nd.assigned}`:'—'} · ${nv?`${nv.done} of ${nv.assigned}`:'—'}</td>`;tb.appendChild(tr);});
+  putH('chips',[`<b>${C.g_per_track} g's, one per track, + 1 g across tracks</b>`,`<b>${C.seeds} seeds</b>, not paired across arms`,
+    '<b>eval every 250 steps, patience 4</b>','<b>lr 1e-3</b>, batch 32, unchanged','<b>held out:</b> the 7.5M depth arm'].map(t=>`<span class="chip">${t}</span>`).join(''));
+  put('tRuns',`${C.arms} arms × ${C.g_per_track + 1} g's × ${C.seeds} seeds = ${C.runs} new runs, all scored directly and through the base (${C.done} of ${C.runs}), with a ${C.max_steps.toLocaleString('en')}-step cap, against ${C.ref_runs} phase-2 reference runs; phase 3b added ${DATA.p3b.runs} runs (seeds ${DATA.p3b.seeds_new[0]}–${DATA.p3b.seeds_new.slice(-1)[0]}: bigger f and the reference, one g per track; ${DATA.p3b.done} of ${DATA.p3b.runs} scored)`);
+}catch(e){console.error('grid',e);}
+
+/* ---------- prose and headlines: every number from DATA ---------- */
+try{
+  const r1=(a,g,k='all')=>m1r(a,g,'never',k);
+  const gain=(a,g)=>r1(VR,g)[4]-r1(a,g)[4];
+  // motivation (a)
+  const pd=r1(DR,PT),pv=r1(VR,PT);
+  putH('hP2',`In phase 2, one g per track, old D through the base was the only route below old D direct on never-trained pairs, ${pv[12]==='counts'?'outside noise':'within noise'}`);
+  putH('tP2a',`<b>${GVc(PT)}:</b> through the base ${cs(pv[4],pv[5],pv[6])} against direct ${cs(pd[4],pd[5],pd[6])}: a gap of ${sg(pv[11])} (${nl(pv[12])}; seed spreads ${f3(pv[7])} and ${f3(pd[7])}). ${(pd[5]-pv[5])>(pd[6]-pv[6])?'More of the drop is in the oracle-scaled part':'More of the drop is in the scale error'} (${sg(pv[5]-pd[5])} and ${sg(pv[6]-pd[6])}).`);
+  putH('tP2b',`<b>${GVc(AC)}:</b> through the base ${cs(r1(VR,AC)[4],r1(VR,AC)[5],r1(VR,AC)[6])}, direct ${f3(r1(DR,AC)[4])} (${nl(r1(VR,AC)[12])}; seed spread ${f3(r1(VR,AC)[7])}). Phase 3 asks whether a bigger g or a bigger f lowers the route through the base further.`);
+
+  // metric 1 pooled
+  const anyGain=g=>NEW2.some(a=>pre(r1(a,g)[16])==='gain');
+  putH('hM1',`${GVc(PT)}, both bigger models read lower than the small reference through the base, but ${anyGain(PT)?'only some':'neither'} gain${anyGain(PT)?'s clear':' clears'} the pre-registered threshold of ${f4(Math.min(...NEW2.map(a=>r1(a,PT)[15])))} (gains ${NEW2.map(a=>f4(gain(a,PT))).join(' and ')})`);
+  putH('tM1a',`<b>${GVc(PT)}:</b> ${NEW2.map(a=>`${sh(a).replace(', through the base','')} ${cs(r1(a,PT)[4],r1(a,PT)[5],r1(a,PT)[6])}, spread ${f3(r1(a,PT)[7])}, gain ${f4(gain(a,PT))} (${preH(r1(a,PT)[16])})`).join('; ')}; reference ${cs(r1(VR,PT)[4],r1(VR,PT)[5],r1(VR,PT)[6])}, spread ${f3(r1(VR,PT)[7])}. Threshold ${f4(r1(VF,PT)[15])}.`);
+  putH('tM1b',`<b>${GVc(AC)}:</b> ${VIA3.map(a=>`${sh(a).replace(', through the base','')} ${cs(r1(a,AC)[4],r1(a,AC)[5],r1(a,AC)[6])}, spread ${f3(r1(a,AC)[7])}`).join('; ')}. Thresholds ${NEW2.map(a=>f3(r1(a,AC)[15])).join(' and ')}: ${andJ([...new Set(NEW2.map(a=>preH(r1(a,AC)[16])))])}.`);
+  put('nM1',`Direct, the same runs: ${GV.map(g=>`${g}: ${DIR3.map(a=>`${sh(a)} ${f3(r1(a,g)[4])}`).join(', ')}`).join('; ')}. Bigger g direct, one g per track, has seed values ${(r1(DG,PT)[8]||[]).map(f3).join(', ')}. Pairs per seed: ${r1(VG,PT)[10]}. Step-confounded runs in these cells: ${VIA3.reduce((p,a)=>p+GV.reduce((q,g)=>q+(r1(a,g)[17]||0),0),0)}.`);
+
+  // metric 1 per knob
+  const kg=g=>KN.flatMap(k=>NEW2.map(a=>[a,k,r1(a,g,k)])).filter(x=>x[2]);
+  const kGains=g=>kg(g).filter(x=>pre(x[2][16])==='gain'),kCount=g=>kg(g).filter(x=>x[2][14]==='counts');
+  putH('hM1k',`Per knob, no arm clears its pre-registered threshold on any knob${kCount(PT).length||kCount(AC).length?`; ${kCount(PT).length+kCount(AC).length} per-knob gap${kCount(PT).length+kCount(AC).length>1?'s pass':' passes'} the plain noise rule only`:''}`.replace('no arm clears',kGains(PT).length+kGains(AC).length?`${kGains(PT).length+kGains(AC).length} arm-knob cells clear`:'no arm clears'));
+  const big=g=>{const d=r1(VR,g,'dedup'),p=r1(VR,g,'pe'),e=r1(VR,g,'extsize');return `deduplication ${f3(d[7])}, paired end ${f3(p[7])}, extension size ${f3(e[7])}`;};
+  putH('tM1ka',`<b>${GVc(PT)}:</b> the largest gains sit on deduplication and paired end (${NEW2.map(a=>`${sh(a).replace(', through the base','')} ${f3(r1(VR,PT,'dedup')[4]-r1(a,PT,'dedup')[4])} and ${f3(r1(VR,PT,'pe')[4]-r1(a,PT,'pe')[4])}`).join('; ')}), below thresholds ${andJ([...new Set(NEW2.flatMap(a=>['dedup','pe'].map(k=>f3(r1(a,PT,k)[15]))))])}. <b>${GVc(AC)}:</b> the reference's seed spread on ${big(AC)} drives the high bar.`);
+  put('nM1k',`Per-knob gaps that pass the plain noise rule against the reference: ${[...kCount(PT).map(x=>`${sh(x[0])}, ${KNAME[x[1]]}, ${gs(PT)}, ${sg(x[2][13])}`),...kCount(AC).map(x=>`${sh(x[0])}, ${KNAME[x[1]]}, ${gs(AC)}, ${sg(x[2][13])}`)].join('; ')||'none'}. Each of them stays under its pre-registered threshold.`);
+
+  // metric 2
+  const g2=(a,g)=>m2r(a,g);
+  const v2=GV.flatMap(g=>[DG,DF].map(a=>[a,g,g2(a,g)]));
+  const c2=v2.filter(x=>x[2][13]==='counts');
+  putH('hM2',`The gap is negative for every model, as in phase 2; ${c2.length?`${c2.length} of the ${v2.length} bigger-model gaps ${c2.length>1?'differ':'differs'} from old D's outside noise`:'every bigger-model gap is within noise of old D'}`);
+  putH('tM2why',`<b>Why below zero:</b> the two pools hold different pairs (phase 2 showed it: knobs with one arm sit only in the trained pool, and half of the trained depth pairs target the deep base). <b>${GVc(PT)}:</b> ${DIR3.map(a=>`${sh(a)} ${sg(g2(a,PT)[5])} (${sg(g2(a,PT)[6])} ${g2(a,PT)[7]<0?'−':'+'} ${f3(Math.abs(g2(a,PT)[7]))}), spread ${f3(g2(a,PT)[8])}`).join('; ')}.${c2.length?` Counts: ${andJ(c2.map(x=>`${sh(x[0])}, ${gs(x[1])}, ${sg(x[2][12])}`))}.`:''}`);
+  put('nM2',`${GVc(AC)}: ${DIR3.map(a=>`${sh(a)} ${sg(g2(a,AC)[5])}, spread ${f3(g2(a,AC)[8])}`).join('; ')}.`);
+
+  // metric 3
+  const v3=GV.flatMap(g=>[DG,DF].map(a=>[a,g,m3r(a,g)]));
+  const c3=v3.filter(x=>x[2][11]==='counts'),worse3=v3.filter(x=>x[2][10]>0&&x[2][11]==='counts');
+  putH('hM3',`On trained pairs no bigger model is worse than old D${c3.length?`; ${andJ(c3.map(x=>`${sh(x[0])} ${gs(x[1])}`))} ${c3.length>1?'are':'is'} lower outside noise`:''}`.replace('no bigger model is worse',worse3.length?`${worse3.length} bigger-model cells are worse`:'no bigger model is worse'));
+  putH('tM3a',`<b>${GVc(PT)}:</b> ${DIR3.map(a=>`${sh(a)} ${cs(m3r(a,PT)[3],m3r(a,PT)[4],m3r(a,PT)[5])}`).join(', ')}; gaps to old D ${[DG,DF].map(a=>`${sg(m3r(a,PT)[10])} (${nl(m3r(a,PT)[11])})`).join(', ')}. <b>${GVc(AC)}:</b> ${DIR3.map(a=>`${sh(a)} ${f3(m3r(a,AC)[3])}`).join(', ')}, every gap ${andJ([...new Set([DG,DF].map(a=>m3r(a,AC)[11]))])}.`);
+  put('nM3',`Seed spreads: ${GV.map(g=>`${g} ${DIR3.map(a=>f3(m3r(a,g)[6])).join(', ')}`).join('; ')}.`);
+
+  // metric 4
+  const l4=GV.flatMap(g=>['7.5M->base','base->7.5M'].flatMap(d=>[DG,DF].map(a=>[a,g,d,m4r(a,g,d)])));
+  const c4=l4.filter(x=>x[3][11]==='counts'),w4=c4.filter(x=>x[3][10]>0);
+  putH('hM4',w4.length?`On the held-out depth ${w4.length} bigger-model gap${w4.length>1?'s are':' is'} above old D outside noise`:`On the held-out depth no bigger model is worse than old D${c4.length?` (${c4.length} of ${l4.length} gaps count${c4.length>1?'':'s'}, below old D)`:''}: the interpolation is kept`);
+  putH('tM4a',`<b>7.5M → base:</b> ${DIR3.map(a=>`${sh(a)} ${f3(m4r(a,PT,'7.5M->base')[3])}`).join(', ')}. <b>Base → 7.5M:</b> ${DIR3.map(a=>`${sh(a)} ${f3(m4r(a,PT,'base->7.5M')[3])}`).join(', ')}.${c4.length?` The gaps that count: ${andJ(c4.map(x=>`${sh(x[0])}, ${gs(x[1])}, ${x[2].replace('->',' → ')}, ${sg(x[3][10],f4)}`))}.`:''}`);
+  put('nM4',`Both directions together, one g per track: ${DIR3.map(a=>`${sh(a)} ${f3(m4r(a,PT,'both')[3])}`).join(', ')}.`);
+
+  // metric 5
+  const r5=(a,g,grp)=>m5r(a,g,grp);
+  putH('hM5',`The depth law holds on trained pairs for every model; on never-trained depth pairs the routes through the base stay closer than the direct maps`);
+  putH('tM5a',`<b>Trained:</b> ${rng(GV.flatMap(g=>DIR3.map(a=>r5(a,g,'trained')[3])))} for every model. <b>Never trained, depth → depth:</b> through the base ${rng(GV.flatMap(g=>VIA3.map(a=>r5(a,g,'never')[3])))}, direct ${rng(GV.flatMap(g=>DIR3.map(a=>r5(a,g,'never')[3])))}; seed spreads up to ${f3(Math.max(...GV.flatMap(g=>[...VIA3,...DIR3].map(a=>r5(a,g,'never')[4]))))}. Bigger vs small, through the base: ${GV.map(g=>`${gs(g)} ${andJ([...new Set(NEW2.map(a=>r5(a,g,'never')[10]))])}`).join('; ')}.`);
+  put('nM5',`Never trained, depth → depth, one g per track: ${[...VIA3,...DIR3].map(a=>`${sh(a)} ${f3(r5(a,PT,'never')[3])}`).join(', ')}.`);
+
+  // metric 9
+  const m9=DATA.m9.filter(r=>[DG,DF].includes(r[0])),nl10=m9.reduce((p,r)=>p+r[4],0),nAll=m9.reduce((p,r)=>p+r[2],0),ncap=m9.reduce((p,r)=>p+r[5],0),nflag=m9.reduce((p,r)=>p+(r[9]||0),0);
+  const bestAll=m9.map(r=>r[6]),stopAll=m9.map(r=>r[7]);
+  putH('hM9',`No run's best step came near the cap: ${nflag} of ${nAll} above the reference's ${DATA.counts.ref_max_steps.toLocaleString('en')}, median best steps ${rng(bestAll,k1)}, as in phase 2`);
+  putH('tM9a',`<b>Bigger models:</b> ${nl10} of ${nAll} best steps in the last 10 % of ${DATA.counts.max_steps.toLocaleString('en')}, ${ncap} at the cap; latest best step ${k1(Math.max(...m9.map(r=>r[11])))}. Runs stop at a median of ${rng(stopAll,k1)} steps. <b>Old D:</b> median best step ${rng(GV.map(g=>m9r(DR,g)[6]),k1)}.`);
+  putH('tM9b',`<b>Step-confounded runs</b> (best step above ${DATA.counts.ref_max_steps.toLocaleString('en')}, listed apart): ${DATA.stepconf.length?DATA.stepconf.map(r=>`${sh(r[0])}, ${r[1]}, seed ${r[2]}, best step ${k1(r[3])}`).join('; '):'none'}. The two caps act the same here.`);
+  put('nM9',`Median seconds per step: ${m9.map(r=>`${sh(r[0])}, ${gs(r[1])} ${f2(r[12])}`).join('; ')}; old D ${GV.map(g=>`${gs(g)} ${f2(m9r(DR,g)[12])}`).join(', ')}. Median training time per run: ${m9.map(r=>`${sh(r[0])}, ${gs(r[1])} ${f2(r[8])} h`).join('; ')}.`);
+
+  // ranking
+  const rk=g=>DATA.rank.filter(r=>r[1]===g).sort((a,b)=>a[2]-b[2]);
+  putH('hRk',`${GVc(PT)}: ${rk(PT).map(r=>sh(r[0]).replace(', through the base','')).join(' → ')}; ${GVc(AC).toLowerCase()}: ${rk(AC).map(r=>sh(r[0]).replace(', through the base','')).join(' → ')}; ${DATA.rank.some(r=>pre(r[10])==='gain')?'some gaps clear':'no gap clears'} its threshold`);
+  putH('tRka',`<b>Gaps to the reference</b>, one g per track: ${rk(PT).filter(r=>r[0]!==VR).map(r=>`${sh(r[0]).replace(', through the base','')} ${sg(r[7],f4)} against a threshold of ${f4(r[9])}`).join('; ')}. Across tracks: ${rk(AC).filter(r=>r[0]!==VR).map(r=>`${sh(r[0]).replace(', through the base','')} ${sg(r[7])} against ${f3(r[9])}`).join('; ')}. The order is a reading, not a ranking that counts.`);
+  put('nRk',`Direct, the same runs: ${GV.map(g=>`${g}: ${rk(g).map(r=>`${sh(r[11])} ${f3(r[12])} (${r[16]==='n/a'?'the reference':'vs old D: '+r[16]})`).join(', ')}`).join('; ')}.`);
+
+  // phase 3b: six seeds
+  const B=DATA.p3b,cl=x=>`${f3(x[0])} (${f3(x[1])} + ${f3(x[2])})`,mf=xs=>xs.reduce((p,x)=>p+x,0)/xs.length;
+  const nf=mf(B.seeds.f.filter(x=>x[0]>2).map(x=>x[1])),nr=mf(B.seeds.ref.filter(x=>x[0]>2).map(x=>x[1]));
+  const held=B.label.startsWith('gain'),repOK=B.replication==='PASS';
+  putH('hS',`With six seeds per arm, bigger f's gain through the base shrinks from ${f4(B.gap_p3)} to ${sg(B.gap,f4)}, ${B.label}${repOK?'; seeds 3–5 alone show the gain again':`; seeds 3–5 alone do not show it (${sg(B.gap3,f4)})`}`);
+  putH('tSa',`<b>Six seeds:</b> bigger f ${cl(B.f)}, reference ${cl(B.ref)}. Gap ${sg(B.gap,f4)}, standard error (SE) ${f4(B.se)}, 95% confidence interval ${sg(B.ci[0],f4)} to ${sg(B.ci[1],f4)}; real bar ${f4(B.real_bar)}, size bar ${f4(B.size_bar)}: <b>${B.label}</b>.`);
+  putH('tSb',`<b>Replication, seeds 3–5 alone:</b> bigger f ${f3(nf)}, reference ${f3(nr)}; gap ${sg(B.gap3,f4)} against a bar of ${f4(B.rep_bar)} (2 × SE): <b>${repOK?'replicates':'does not replicate'}</b>. ${B.gap3<0?'Bigger f reads slightly worse on the new seeds.':''}`);
+  putH('tSc',`<b>Control (a), kit drift:</b> the reference's new seeds read ${f4(Math.abs(B.drift))} ${B.drift<0?'lower':'higher'} than its old ones, bar ${f4(B.drift_bar)}: ${B.control_a==='PASS'?'pass, but close':'fail'}. <b>Control (b), readout:</b> the phase-3 rescoring of one phase-2 run matches its record on ${B.readout.n} pairs (largest |Δ| ${B.readout.max.toExponential(0)}): ${B.readout.label==='PASS'?'pass':'fail'}.`);
+  const sd=x=>`${sg(x.gap,f4)}, ${x.label}${x.control_a==='PASS'?'':` (kit drift fails here: the reference's new seeds read ${f4(Math.abs(x.drift))} lower against a bar of ${f4(x.drift_bar)}; on the new seeds alone ${sg(x.new_gap,f4)}, ${x.new_label})`}`;
+  put('nS',`Per knob, through the base: ${B.knobs.n} cells, every one ${andJ(B.knobs.labels)}; the new seeds alone show the gain on ${B.knobs.rep_pass.length} of ${B.knobs.n} (${andJ(B.knobs.rep_pass.map(k=>KNAME[k]))})${B.knobs.drift_fail.length?`; kit drift fails on ${andJ(B.knobs.drift_fail.map(k=>KNAME[k]))}`:''}. Six seeds, other readings (bigger f against old D, direct): never-trained ${sd(B.direct)}; trained pairs ${sd(B.trained)}; held-out 7.5M → base ${sd(B.heldout['7.5M->base'])}; base → 7.5M ${sd(B.heldout['base->7.5M'])}. Seed standard deviations through the base: bigger f ${f4(B.sd_f)}, reference ${f4(B.sd_ref)}.`);
+
+  // discussion: one line per metric
+  const minThr=f4(Math.min(...NEW2.map(a=>r1(a,PT)[15])));
+  putH('hD',`The bigger models cost nothing elsewhere; their gain through the base stays under the pre-registered bar, and bigger f's ${held?'held':'did not hold'} at six seeds`);
+  const cards=[
+    ['1 · never-trained, through the base','var(--s3)',`One g per track, three seeds: bigger f ${f3(r1(VF,PT)[4])}, bigger g ${f3(r1(VG,PT)[4])}, reference ${f3(r1(VR,PT)[4])}; gains ${f4(gain(VF,PT))} and ${f4(gain(VG,PT))}, threshold ${minThr}: ${andJ([...new Set(NEW2.map(a=>preH(r1(a,PT)[16])))])}. <b>Six seeds, bigger f:</b> ${f3(B.f[0])} against ${f3(B.ref[0])}, gap ${sg(B.gap,f4)}, ${B.label}; seeds 3–5 alone ${sg(B.gap3,f4)}.`],
+    ['2 · generalisation gap','var(--s1)',`Negative for all, ${rng(GV.flatMap(g=>DIR3.map(a=>g2(a,g)[5])),v=>sg(v))}, for the pool reason of phase 2; ${c2.length?`${c2.length} small difference${c2.length>1?'s':''} from old D count${c2.length>1?'':'s'}`:'every bigger-model gap is within noise of old D'}.`],
+    ['3 · trained pairs','var(--tr)',`No cost: ${rng(GV.flatMap(g=>[DG,DF].map(a=>m3r(a,g)[3])))} against old D ${rng(GV.map(g=>m3r(DR,g)[3]))}${c3.length?`, ${c3.length} cell${c3.length>1?'s':''} lower outside noise`:''}.`],
+    ['4 · held-out depth','var(--ho)',`The interpolation to 7.5M is kept: ${l4.length-c4.length} of ${l4.length} gaps within noise of old D${w4.length?'':', and the rest below it'}.`],
+    ['5 · depth law','var(--nv)',`Sane on trained pairs (${rng(GV.flatMap(g=>DIR3.map(a=>r5(a,g,'trained')[3])))}); on never-trained depth pairs the routes through the base stay closer than the direct maps, for every size.`],
+    ['9 · steps','var(--muted)',`${nflag} of ${nAll} best steps above the reference's ${DATA.counts.ref_max_steps.toLocaleString('en')}; medians ${rng(bestAll,k1)}. The bigger models did not train longer, so the caps do not confound the comparison.`]];
+  putH('cardsD',cards.map(([t,c,b])=>`<div class="card" style="--c:${c}"><div class="ct">${t}</div><div class="cb">${b}</div></div>`).join(''));
+
+  // what follows
+  const of=DATA.optfail,ofN=of.filter(x=>x[4]).length;
+  const anyG=DATA.rank.some(r=>pre(r[10])==='gain');
+  putH('hF',!held?`Option B ran and bigger f's gain did not hold at six seeds, so by the spec's rule neither a combined arm nor a second size follows; the options left are for the PI`:anyG?`One size axis cleared its bar, so by the spec's rule a combined arm or a second size may follow; the options below are for the PI`:`No size axis cleared its bar, so by the spec's rule neither a combined arm nor a second size follows yet; the options below are for the PI`);
+  putH('tF1',`${ofN?`${ofN} of ${of.length}`:`None of the ${of.length}`} arm × g cells read as an optimisation failure: no bigger model is worse on trained pairs (gaps to old D ${of.map(x=>sg(x[2])).join(', ')}).`);
+  putH('tF2',`A combined arm or a second size follows only if an axis helps (PI). Neither three-seed gain cleared its bar (bigger f ${f4(gain(VF,PT))}, bigger g ${f4(gain(VG,PT))}, against ${minThr}); at six seeds bigger f's gap is ${sg(B.gap,f4)}, ${B.label}.`);
+  putH('tF3',`It means no gain above the stated bars, not no effect. The six-seed 95% confidence interval, ${sg(B.ci[0],f4)} to ${sg(B.ci[1],f4)}, still holds gains up to ${sg(B.ci[1],f4)}${B.ci[1]<B.gap_p3?`, a little below phase 3's ${f4(B.gap_p3)}`:`, as large as phase 3's ${f4(B.gap_p3)}`}; six seeds do not rule out a small gain.`);
+  putH('tOB',`Ran: ${B.runs} runs, seeds ${B.seeds_new[0]}–${B.seeds_new.slice(-1)[0]}. Phase 3's gain of ${f4(gain(VF,PT))} became ${sg(B.gap,f4)} at six seeds (${B.label}), and seeds 3–5 alone gave ${sg(B.gap3,f4)}.`);
+  putH('tOA',`Keep the small g and f, and turn to another axis. The six seeds give the reading it would rest on: bigger f within seed noise of the reference. No compute cost.`);
+
+  // open points
+  putH('tO1',`<b>Next phase.</b> Option B ran and bigger f's gap is ${sg(B.gap,f4)}, ${B.label}. Option A (close the scale question at this size) or C (tune the learning rate for the bigger models)?`);
+  putH('tO2',`<b>The record under the depth-law question.</b> The f size is a reading there only (PI). Record it as "bigger f: ${sg(B.gap,f4)}, 95% confidence interval ${sg(B.ci[0],f4)} to ${sg(B.ci[1],f4)}, ${B.label}, not replicated on seeds 3–5"?`);
+  putH('tO3',`<b>The reference's new seeds read lower.</b> Through the base by ${f4(Math.abs(B.drift))} (bar ${f4(B.drift_bar)}, a pass, but close); on trained pairs by ${f4(Math.abs(B.trained.drift))} (bar ${f4(B.trained.drift_bar)}, a fail). Accept it as a draw of seeds, or look into it before the record is written?`);
+}catch(e){console.error('prose',e);}
+
+/* ---------- navigation and speaker notes ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>

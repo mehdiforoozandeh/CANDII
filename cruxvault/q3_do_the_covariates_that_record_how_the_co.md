@@ -15,10 +15,14 @@ updated: "2026-09-17T21:46:17"
 Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
-If two p-value tracks were called from the very same reads but with a different background or a different smoothing, can knowing that setting translate one into the other?
+If two p-value tracks were called from the very same reads but with a different background or a different smoothing, can knowing that setting translate one into the other? Nobody has tested it yet; early readings say the settings help a lot.
 
 ## TL;DR
-Four choices act at or after peak calling and leave the treatment counts bit-identical to the base: the MACS2 control-to-treatment ratio, which control library is used (matched, another cell's, or none), how deeply that control was sequenced, and how far each read is extended into a fragment. For each we hold a counterfactual pair built by the ENCODE pipeline with exactly that one choice changed and its value recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values predicts the other member's −log10 p signal better than one-warp, the covariate-free monotone map on the p axis fitted on training pairs and scored on held-out pairs, by the margin locked in [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]]. Because the counts do not move, every child carries the same control: a transformation whose count prediction moves has produced an invalid run, not a refutation. It answers yes only if every child holds; a refuted child names a knob whose recorded value does not carry the information.
+Four choices act at or after peak calling and leave the treatment counts bit-identical to base: [[h7_conditioning_on_the_recorded_control_to_|the control ratio]], [[h8_conditioning_on_the_recorded_control_ide|control identity]], [[h9_conditioning_on_the_recorded_control_dep|control depth]] and [[h10_conditioning_on_the_recorded_fragment_ex|fragment extension]]. Each has a counterfactual pair built by the ENCODE pipeline with that one choice changed and recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values predicts the other member's −log10 p signal better than one-warp by the margin of [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]]; a transformation whose count prediction moves has produced an invalid run. It answers yes only if every child holds. No child has been tested; exploratory readings are summarised below.
+
+## Motivation
+
+Same origin as the read-selection knobs (PI, 2026-09-17/18). These four knobs act at or after peak calling and leave the counts unchanged, so they test whether covariates explain the −log10 p track alone. The split was drafted by the agent; the PI did not confirm it in words.
 
 ## Question
 
@@ -29,13 +33,14 @@ Locked before any run: gap-closed is read on the −log10 p axis only; the count
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+Readings only, from [[t118_learn_the_covariate_conditioned_tra|the g × f grid]] and [[t126_build_and_run_the_encoder_decoder_r|the encoder-decoder rungs]]; the [knob report](results/q3/KNOB_READINGS.md) has the tables and the CRPS split. In p these knobs give the strongest covariate signal of all ten: g beats its no-covariates twin by a median 0.36–0.62 on trained pairs, and by 0.31–0.48 on never-trained pairs for the ratio, control identity and control depth, against seed wobbles of 0.003–0.024. Fragment extension is the exception: half of its never-trained p cells explode. The locked bar cannot yet be read, because for three knobs the unchanged source track already scores better than the half-depth pseudoreplicate oracle, so the one-warp → oracle interval is negative. The count-unchanged control has no direct reading; on count-identical never-trained pairs the old design A does worse than its twin, so count predictions can move.
 
 <!-- crux:ledger:start -->
-**4 children** · ideas 0/4 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
+**4 children** · open 4, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
-- `h7` [[h7_conditioning_on_the_recorded_control_to_|Conditioning on the recorded control-to-treatment scaling predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
-- `h8` [[h8_conditioning_on_the_recorded_control_ide|Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
-- `h9` [[h9_conditioning_on_the_recorded_control_dep|Conditioning on the recorded control depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
-- `h10` [[h10_conditioning_on_the_recorded_fragment_ex|Conditioning on the recorded fragment extension predicts a target track from a source track, beyond what a single value-axis map already does]] — *idea*
+- `h7` [[h7_conditioning_on_the_recorded_control_to_|Conditioning on the recorded control-to-treatment scaling predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `h8` [[h8_conditioning_on_the_recorded_control_ide|Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `h9` [[h9_conditioning_on_the_recorded_control_dep|Conditioning on the recorded control depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `h10` [[h10_conditioning_on_the_recorded_fragment_ex|Conditioning on the recorded fragment extension predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `f11` finding (weak) [[f11_readings_only_the_locked_bar_cannot_be_r|Readings only; the locked bar cannot be read because for three knobs the…]]
 <!-- crux:ledger:end -->

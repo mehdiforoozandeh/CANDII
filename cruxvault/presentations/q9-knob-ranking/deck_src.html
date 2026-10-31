@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Which Settings Move the Signal</title>
+
+<!--
+  prezit · PAPER ARC · anchor: the question "which recorded processing covariates move a track
+  the most when changed one at a time" (exploratory, 2026-10-26).
+
+  build    python build_deck.py  ->  index.html beside this file
+  numbers  every measured number comes from DATA, which build_deck.py reduces from
+           results/t133/pairs.tsv (Nibi job 25063638, code 5f95c43). None is typed here.
+  typed    design constants only, marked data-src="literal": the top-1% peak set, the 1 kb
+           shape bins, the 30M-read base, chr19 + chr21.
+  notes    every slide carries speaker notes (press n).
+-->
+<script type="application/json" id="deck-sources">__SOURCES__</script>
+
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+
+  /* --- paper arc ------------------------------------------------------ */
+  :root{--depth:#3f7d7a;--ab:#b5462e;--rerun:#7a5ea8;--ctl:#9a968e;--noise:#a6a29a}
+  .kicker .sec{display:inline-block;background:var(--accent);color:#fff;padding:3px 9px;
+    border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  @media (max-width:900px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:#fff;
+    border-radius:8px;padding:16px 18px}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));
+    font-weight:700;margin-bottom:8px}
+  .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .panels>div{padding:0 14px}
+  .panels .fig svg{max-height:var(--cap,56vh)}
+  .bsub{font:500 17px var(--sans);fill:#6f6b64}
+  .panels>div+div{border-left:1px solid var(--hair)}
+  @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
+  table.dtable td.run{color:var(--own);font-weight:600}
+  table.dtable td.off{color:var(--faint)}
+</style>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline, the scope in one line
+       source   DATA.n_pairs, DATA.n_tracks, DATA.n_arm_products; every bar's base → arm label from DATA.base (results/t133/MANIFEST.tsv) or the base recipe's defaults
+       numbers  counts only, from DATA
+       cut      the nav hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">counterfactual arms · lab meeting · exploratory</div>
+      <h1>Which processing settings change a track the most?</h1>
+      <p class="sub"><span id="tPairs"></span> before/after comparisons: <span id="tArms"></span> re-processed versions of <span id="tTracks"></span> tracks, each changing one setting, scored for peak height, shape and FRiP.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+      <aside class="notes"><p>This is a first, exploratory reading. There are no pass or fail bars. The goal is a ranking of the settings, and an honest list of what still muddies it.</p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · the data
+       job      what a counterfactual arm is, as a schematic
+       source   the counterfactual-arm build (design)
+       numbers  none
+       cut      nothing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the data</div>
+      <h2>Each arm re-processes the same experiment with one setting changed, so base vs arm isolates that setting</h2>
+      <div class="fig wide" id="figArms"></div>
+      <div class="chips" style="margin-top:18px;justify-content:center">
+        <div class="chip"><div class="cn" style="color:var(--depth)">Read side</div><div class="cc">depth · antibody proxy · read length · mapping quality · duplicates · run type</div></div>
+        <div class="chip"><div class="cn" style="color:var(--ctl)">Control side</div><div class="cc">control scaling · control identity · control depth · fragment extension</div></div>
+      </div>
+      <aside class="notes"><p>The base is the standard single-end ENCODE recipe. Every arm comes from the same raw reads with exactly one setting moved. Read-side settings change which reads enter the pileup, so they change both the counts and the p-values. Control-side settings only change the peak caller's p-values; the counts stay identical to the base.</p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · MOTIVATION · the question
+       job      narrow to the exact ask
+       source   the question node
+       numbers  none
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the question</div>
+      <p class="lead">If we change one processing setting, how much does the track move: in the height of its peaks, and in the pattern of where its signal falls?</p>
+      <p class="note">Why it matters: a model that translates a track across settings should spend its capacity on the settings that matter. The ranking tells us which those are.</p>
+      <aside class="notes"><p>Magnitude and shape are kept apart on purpose. A setting can rescale every peak without moving any of them, or leave heights alone and reshuffle the pattern.</p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · METHOD · the grid of arms (the deck's one table)
+       job      the ten settings, their levels and how each was made
+       source   DATA.levels (the level names)
+       numbers  none beyond level names from DATA
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the grid of arms</div>
+      <h2>Ten settings, one or more levels each</h2>
+      <table class="dtable" id="tblArms"></table>
+      <aside class="notes"><p>Re-run means the whole pipeline was run again from the raw reads. Derived means the change was applied to the base's filtered reads, or only to the peak caller. The two DNase mapping-quality arms came out identical to the base, so they are left out.</p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · METHOD · what we score
+       job      the three metrics and the summary rule, as cards
+       source   the question's Protocol (design constants)
+       numbers  literal design constants only
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what we score</div>
+      <h2>Three measures of how far an arm moved from its base</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--depth)"><div class="rl">Peak height</div><p>Take the base's top <span data-src="literal">1%</span> of bins (its peaks). Compare the mean signal there, arm over base, on a log<sub data-src="literal">2</sub> scale. One unit = peaks doubled or halved.</p></div>
+        <div class="card" style="--c:var(--ab)"><div class="rl">Shape</div><p>One minus the rank correlation between base and arm, on <span data-src="literal">1 kb</span> bins. Zero = same pattern, whatever the scale. Wider bins damp counting noise.</p></div>
+        <div class="card" style="--c:var(--rerun)"><div class="rl">FRiP</div><p>Fraction of reads in peaks: the share of a track's reads in its own top <span data-src="literal">1%</span> of bins. Counts only. We report arm minus base.</p></div>
+      </div>
+      <p class="note">Scored on <span data-src="literal">chr19 + chr21</span>, blacklist removed. Each bar is the median over the tracks of one mark class; the whisker is the range across those tracks. Each setting is shown at its strongest level.</p>
+      <aside class="notes"><p>There are no seeds here, so the uncertainty shown is the spread across tracks. Narrow marks and broad marks each have three tracks; DNase has one.</p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · RESULTS · (a) peak height
+       job      one claim, one figure as its evidence, one caveat
+       claim    depth moves peak height the most; the antibody proxy and read length come next
+       source   results/t133/pairs.tsv via DATA.ranked counts|narrow|abs_log2fc_top1 and counts|broad
+       numbers  DATA.ranked
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) peak height · counts · histone marks</div>
+      <h2>Depth moves peak height the most; the antibody proxy and read length come next</h2>
+      <div class="chartbox panels"><div class="fig" id="figMagN"></div><div class="fig" id="figMagB"></div></div>
+      <ul class="pts">
+        <li>Depth at its lowest level drops the peaks by <span id="tDepthMag"></span> log<sub data-src="literal">2</sub> units, close to the drop in read count itself.</li>
+      </ul>
+      <aside class="notes"><p>Panel a is the narrow marks and panel b the broad marks. The depth result is the expected one: fewer reads, proportionally shorter peaks. The interesting part is the order after it.</p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · RESULTS · (b) shape
+       job      one claim, one figure as its evidence, one caveat
+       claim    the antibody proxy changes the shape the most, more than an eightfold depth cut
+       source   DATA.ranked counts|narrow|shape_1k and counts|broad|shape_1k
+       numbers  DATA.ranked
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) shape · counts · histone marks</div>
+      <h2>Mixing control reads into the treatment changes the shape the most</h2>
+      <div class="chartbox panels"><div class="fig" id="figShpN"></div><div class="fig" id="figShpB"></div></div>
+      <ul class="pts">
+        <li>The antibody proxy reads <span id="tAbShape"></span>; the four re-run settings sit close together, between <span id="tRerunShape"></span>.</li>
+      </ul>
+      <aside class="notes"><p>Replacing most treatment reads with control reads flattens the contrast between peaks and background, which reorders bins. The four re-run settings bunch together; the last results slide shows why that bunching is suspicious.</p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · RESULTS · (c) p-values
+       job      one claim, one figure as its evidence, one caveat
+       claim    the control-side settings barely move the p-value track's shape
+       source   DATA.ranked pval|narrow|shape_1k and pval|broad|shape_1k
+       numbers  DATA.ranked
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) shape · p-value track · histone marks</div>
+      <h2>The four control-side settings barely move the p-value track's shape</h2>
+      <div class="chartbox panels"><div class="fig" id="figPN"></div><div class="fig" id="figPB"></div></div>
+      <ul class="pts">
+        <li>Control-side settings stay at or below <span id="tCtlMax"></span>; the read-side ones start at <span id="tReadMin"></span>. Control depth is the weakest of all.</li>
+      </ul>
+      <aside class="notes"><p>Control scaling, control identity, control depth and fragment extension change only the peak caller's inputs. They can still shift peak heights in p, which is in the table file, but the pattern stays almost the same.</p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · RESULTS · (d) DNase
+       job      one claim, one figure as its evidence, one caveat
+       claim    for DNase, duplicate removal and run type change the signal a lot, mostly by concentrating reads in peaks
+       source   DATA.ranked counts|DNase|abs_log2fc_top1, counts|DNase|dfrip
+       numbers  DATA.ranked
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) DNase · counts · one track</div>
+      <h2>In DNase, keeping duplicates and going paired-end pile reads into the peaks</h2>
+      <div class="chartbox panels"><div class="fig" id="figDnMag"></div><div class="fig" id="figDnFrip"></div></div>
+      <ul class="pts">
+        <li>Keeping duplicates raises FRiP by <span id="tDnDedup"></span>, a very large jump that we have not yet checked by hand.</li>
+      </ul>
+      <aside class="notes"><p>This is a single track, so there is no spread to show. Depth cuts peak height here too, but leaves FRiP nearly unchanged, as it should.</p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · RESULTS · (e) why the middle of the ranking is muddy — the schematic
+       job      explain, as a picture, why a re-run arm differs from its base in two ways and a depth cut in one
+       claim    a re-run arm changes the setting AND draws a different random read sample; a depth cut only removes reads
+       source   the counterfactual-arm build (design); no result file
+       numbers  literal design constants only
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) a caution on the middle of the ranking · why</div>
+      <h2>A re-run arm differs from its base in two ways, not one</h2>
+      <div class="fig wide" id="figRedraw"></div>
+      <ul class="pts">
+        <li>Every track keeps a random <span data-src="literal">30M</span> reads. A re-run arm draws its own random sample, so its reads are partly different from the base's even where the setting changes nothing.</li>
+      </ul>
+      <aside class="notes"><p>The pipeline subsamples every track to the same number of reads with a random draw. A re-run arm (duplicate removal, run type, read length, mapping-quality filter) goes through the whole pipeline again, so it gets a new draw. Its difference from the base is then the setting's effect plus the difference between two random samples. A depth cut is different: it keeps a subset of the base's own reads, so it has no second draw. That makes the depth cuts a ruler for how much read sampling alone moves the shape.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · RESULTS · (e) the evidence
+       job      one claim, one figure as its evidence, one caveat
+       claim    the re-run settings change the shape about as much as throwing away three quarters to seven eighths of the reads, so read sampling may explain much of their score
+       source   DATA.levels counts narrow/broad shape_1k for depth levels and the re-run settings
+       numbers  DATA.levels
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) a caution on the middle of the ranking · evidence</div>
+      <h2>Re-run settings change the shape about as much as discarding most of the reads</h2>
+      <div class="chartbox panels" style="--cap:44vh"><div class="fig" id="figLadN"></div><div class="fig" id="figLadB"></div></div>
+      <ul class="pts">
+        <li><b>Grey</b>: depth cuts, a ruler for read sampling alone. <b style="color:var(--rerun)">Purple</b>: re-run settings keep all <span data-src="literal">30M</span> reads yet score <span id="tLadRange"></span>, like keeping a quarter to an eighth of them. Read sampling likely drives most of it, so we cannot rank them yet.</li>
+      </ul>
+      <aside class="notes"><p>Read the chart from the grey bars first. Keeping half of the base's reads gives the smallest shape change, and keeping an eighth gives the largest. The purple bars fall between the quarter and the eighth cut. Each of these settings changes only part of the reads, while the new random sample touches all of them, so the sample is the simpler explanation for most of the shape change. Measuring a fresh random sample of the base against the base would give this floor directly.</p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · DISCUSSION · ruled in / out / doubts
+       job      readings restated; doubts kept honest
+       source   restated from results (a) to (e)
+       numbers  none new
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this reading says</div>
+      <h2>The ends of the ranking are clear; the middle is not yet</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--depth)"><div class="rl">Clear</div><p>Depth leads peak height. The antibody proxy leads shape. The control-side settings move the p-value track least, control depth weakest of all.</p></div>
+        <div class="card" style="--c:var(--rerun)"><div class="rl">Not resolved</div><p>Duplicate removal, run type, read length and mapping-quality filter: on shape they cannot be told apart from re-drawing the reads.</p></div>
+        <div class="card" style="--c:var(--noise)"><div class="rl">Doubts</div><p>Peaks are chosen on the base, so any re-drawn arm reads lower by regression to the mean, and FRiP at low depth is inflated the same way. The DNase FRiP jump is unchecked. Two chromosomes only.</p></div>
+      </div>
+      <aside class="notes"><p>Regression to the mean: the base's top bins are partly top because of the base's own noise, so an independent draw will usually be lower there. A nested depth cut does not suffer this, which is why depth behaves as expected.</p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · DISCUSSION · options for the next phase
+       job      labelled options; no recommendation
+       source   the doubts on the previous slide
+       numbers  none
+       cut      none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>options for the next phase</div>
+      <h2>Options for the next phase</h2>
+      <div class="cards">
+        <div class="card"><div class="rl">Option A</div><p>Measure the re-draw floor: score a fresh subsample of the base against the base, and subtract it. Small CPU job; resolves the middle of the ranking.</p></div>
+        <div class="card"><div class="rl">Option B</div><p>Choose peaks on a reference both tracks share (for example their union), to remove regression to the mean from peak height and FRiP. Minutes; cleaner magnitude ranking.</p></div>
+        <div class="card"><div class="rl">Option C</div><p>Check the DNase duplicate-removal jump by hand against the pipeline's own QC. Small; confirms or kills the largest DNase effect.</p></div>
+      </div>
+      <aside class="notes"><p>These are options, not recommendations. Each card says what it costs and what it would teach.</p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">counterfactual arms · which settings move the signal</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every measured number comes from DATA (build_deck.py, from results/t133/pairs.tsv).
+   Comparisons and ranges are computed here, never typed. */
+const DATA = __DATA__;
+const put=(id,html)=>{const e=document.getElementById(id); if(e) e.innerHTML=html;};
+const f2=v=>v.toFixed(2);
+
+const NAME={depth:'Sequencing depth',abproxy:'Antibody efficiency proxy',crop:'Read length',
+  mapq:'Mapping-quality filter',dedup:'Duplicate removal',pe:'Run type',ratio:'Control scaling',
+  ctlid:'Control identity',ctldepth:'Control depth',extsize:'Fragment extension'};
+const GROUP={depth:'depth',abproxy:'ab',crop:'rerun',mapq:'rerun',dedup:'rerun',pe:'rerun',
+  ratio:'ctl',ctlid:'ctl',ctldepth:'ctl',extsize:'ctl'};
+const COL=a=>`var(--${GROUP[a]})`;
+function LEV(a,l){
+  const m={depth:x=>`${x} reads`,abproxy:x=>`${Math.round(parseFloat(x.slice(1))*100)}% control reads`,
+    crop:x=>`${x} bp reads`,mapq:x=>`MAPQ ≥ ${x}`,dedup:()=>'duplicates kept',pe:()=>'paired-end',
+    ratio:x=>`scale × ${x.slice(1)}`,ctlid:x=>x==='none'?'no control':'another cell’s control',
+    ctldepth:x=>`${Math.round(parseFloat(x.slice(1))*100)}% of control reads`,
+    extsize:x=>`extension × ${x.slice(1)}`};
+  return m[a]?m[a](l):l;
+}
+/* "base → arm" for one bar: the base's setting comes from the manifest (DATA.base),
+   or is the pipeline default the base was run with */
+const rng=(v,f)=>v.length>1?`${f(v[0])}–${f(v[v.length-1])}`:f(v[0]);
+const Mr=n=>`${+(n/1e6).toFixed(2)}M`;
+function BA(mc,a,l){
+  const B=DATA.base[mc], dn=mc==='DNase', k=parseFloat(l.slice(1));
+  const fl=rng(B.fraglen,x=>x);
+  const m={
+    depth:()=>`${rng(B.depth,Mr)} → ${l} reads`,
+    abproxy:()=>`0% → ${Math.round(k*100)}% control reads`,
+    crop:()=>`${rng(B.read_length,x=>x)} → ${l} bp reads`,
+    mapq:()=>`MAPQ ≥ 30 → ≥ ${l}`,
+    dedup:()=>'duplicates removed → kept',
+    pe:()=>'single-end → paired-end',
+    ratio:()=>`default control scaling → × ${l.slice(1)}`,
+    ctlid:()=>l==='none'?'matched control → none':'matched → another cell’s control',
+    ctldepth:()=>`all control reads → ${Math.round(k*100)}%`,
+    extsize:()=>dn?`smoothing ${fl} → ${Math.round(B.fraglen[0]*k)} bp`:`extension ${fl} bp → × ${l.slice(1)}`};
+  return m[a]?m[a]():LEV(a,l);
+}
+const R=(space,mc,m)=>DATA.ranked[`${space}|${mc}|${m}`];
+const lvl=(space,mc,arm,level)=>DATA.levels.find(L=>L.space===space&&L.mc===mc&&L.arm===arm&&L.level===level);
+
+/* horizontal bars: rows {lab, sub, v, lo, hi, col}; whisker = range over tracks */
+function hbars(title, rows, xmax, xlab, signed=false, W=720, Lg=370){
+  /* signed: bars grow left or right from zero and every value carries its sign */
+  const xmin=signed?Math.min(0,-Math.ceil(-Math.min(...rows.map(r=>Math.min(r.v,r.lo??r.v)))*10)/10):0;
+  const rh=56, top=70, H=top+rows.length*rh+60, pW=W-Lg-70, xx=v=>Lg+(Math.max(xmin,v)-xmin)/(xmax-xmin)*pW;
+  const lab=v=>signed?(v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(2):f2(v);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  s+=`<text x="12" y="32" class="ptitle">${title}</text>`;
+  const span=xmax-xmin, step=span>2?1:(span>0.5?0.2:0.1);
+  for(let t=Math.ceil(xmin/step-1e-9)*step;t<=xmax+1e-9;t+=step){
+    s+=`<line x1="${xx(t)}" y1="${top-6}" x2="${xx(t)}" y2="${top+rows.length*rh}" class="grid"/>`;
+    s+=`<text x="${xx(t)}" y="${top+rows.length*rh+22}" text-anchor="middle" class="tick">${signed&&t>1e-9?'+':''}${+t.toFixed(1)}</text>`;
+  }
+  if(signed) s+=`<line x1="${xx(0)}" y1="${top-10}" x2="${xx(0)}" y2="${top+rows.length*rh}" class="zero"/>`;
+  rows.forEach((r,i)=>{
+    const y=top+i*rh+rh/2, x0=Math.min(xx(0),xx(r.v)), x1=Math.max(xx(0),xx(r.v));
+    s+=`<text x="${Lg-14}" y="${y-2}" text-anchor="end" class="axlbl">${r.lab}</text>`;
+    s+=`<text x="${Lg-14}" y="${y+18}" text-anchor="end" class="bsub">${r.sub}</text>`;
+    s+=`<rect x="${x0}" y="${y-13}" width="${Math.max(1,x1-x0)}" height="26" fill="${r.col}" opacity=".85" rx="2"/>`;
+    if(r.n>1) s+=`<line x1="${xx(r.lo)}" y1="${y}" x2="${xx(r.hi)}" y2="${y}" stroke="#1a1a1a" stroke-width="2"/>`
+      +`<line x1="${xx(r.lo)}" y1="${y-7}" x2="${xx(r.lo)}" y2="${y+7}" stroke="#1a1a1a" stroke-width="2"/>`
+      +`<line x1="${xx(r.hi)}" y1="${y-7}" x2="${xx(r.hi)}" y2="${y+7}" stroke="#1a1a1a" stroke-width="2"/>`;
+    s+=`<text x="${Math.max(xx(r.v),xx(r.hi??r.v),xx(0))+8}" y="${y+6}" class="val" fill="${r.col}">${lab(r.v)}</text>`;
+  });
+  s+=`<text x="${Lg+pW}" y="${H-8}" text-anchor="end" class="cap">${xlab}</text>`;
+  return s+`</svg>`;
+}
+const rowsOf=(mc,list,abs=true)=>list.map(r=>({lab:NAME[r.arm],sub:BA(mc,r.arm,r.level),
+  v:abs?Math.abs(r.v):r.v,lo:abs?Math.abs(r.lo):r.lo,hi:abs?Math.abs(r.hi):r.hi,n:r.n,col:COL(r.arm)}))
+  .map(r=>({...r,lo:Math.min(r.lo,r.hi),hi:Math.max(r.lo,r.hi)}));
+const xmaxOf=(...lists)=>Math.ceil(Math.max(...lists.flat().map(r=>Math.max(Math.abs(r.hi),Math.abs(r.lo),Math.abs(r.v))))*10)/10;
+
+/* (a) peak height, counts */
+{const a=R('counts','narrow','abs_log2fc_top1'), b=R('counts','broad','abs_log2fc_top1'), X=Math.ceil(xmaxOf(a,b));
+ put('figMagN',hbars('(a) Narrow marks',rowsOf('narrow',a),X,'peak height change, |log2 arm / base|'));
+ put('figMagB',hbars('(b) Broad marks',rowsOf('broad',b),X,'peak height change, |log2 arm / base|'));
+ const d=[a,b].map(l=>l.find(r=>r.arm==='depth').v);
+ put('tDepthMag',`${f2(d[0])} (narrow) and ${f2(d[1])} (broad)`);}
+
+/* (b) shape, counts */
+{const a=R('counts','narrow','shape_1k'), b=R('counts','broad','shape_1k'), X=xmaxOf(a,b);
+ put('figShpN',hbars('(a) Narrow marks',rowsOf('narrow',a),X,'shape change, 1 − rank correlation'));
+ put('figShpB',hbars('(b) Broad marks',rowsOf('broad',b),X,'shape change, 1 − rank correlation'));
+ const ab=[a,b].map(l=>l.find(r=>r.arm==='abproxy').v);
+ put('tAbShape',`${f2(ab[0])} (narrow) and ${f2(ab[1])} (broad)`);
+ const rr=[...a,...b].filter(r=>GROUP[r.arm]==='rerun').map(r=>r.v);
+ put('tRerunShape',`${f2(Math.min(...rr))} and ${f2(Math.max(...rr))}`);}
+
+/* (c) shape, p */
+{const a=R('pval','narrow','shape_1k'), b=R('pval','broad','shape_1k'), X=xmaxOf(a,b);
+ put('figPN',hbars('(a) Narrow marks',rowsOf('narrow',a),X,'shape change, 1 − rank correlation'));
+ put('figPB',hbars('(b) Broad marks',rowsOf('broad',b),X,'shape change, 1 − rank correlation'));
+ const all=[...a,...b];
+ put('tCtlMax',f2(Math.max(...all.filter(r=>GROUP[r.arm]==='ctl').map(r=>r.v))));
+ put('tReadMin',f2(Math.min(...all.filter(r=>GROUP[r.arm]!=='ctl').map(r=>r.v))));}
+
+/* (d) DNase */
+{const m=R('counts','DNase','abs_log2fc_top1'), fr=R('counts','DNase','dfrip'), X=Math.ceil(xmaxOf(m));
+ put('figDnMag',hbars('(a) Peak height',rowsOf('DNase',m),X,'|log2 arm / base|'));
+ put('figDnFrip',hbars('(b) FRiP change, arm minus base',rowsOf('DNase',fr,false),xmaxOf(fr),'+ = arm has more of its reads in peaks',true));
+ {const v=fr.find(r=>r.arm==='dedup').v; put('tDnDedup',(v>0?'+':'−')+Math.abs(v).toFixed(2));}}
+
+/* (e) the depth ladder vs the re-run settings, shape on counts */
+function ladder(mc,title){
+  const rows=[];
+  ['15M','7.5M','3.75M'].forEach(l=>{const L=lvl('counts',mc,'depth',l); rows.push({lab:'Depth cut',sub:BA(mc,'depth',l),...L.shape_1k,col:'var(--ctl)'});});
+  R('counts',mc,'shape_1k').filter(r=>GROUP[r.arm]==='rerun')
+    .forEach(r=>rows.push({lab:NAME[r.arm],sub:BA(mc,r.arm,r.level),v:r.v,lo:r.lo,hi:r.hi,n:r.n,col:'var(--rerun)'}));
+  rows.sort((p,q)=>p.v-q.v);
+  return hbars(title,rows,xmaxOf(rows),'shape change, 1 − rank correlation');
+}
+put('figLadN',ladder('narrow','(a) Narrow marks'));
+{const rr=['narrow','broad'].flatMap(mc=>R('counts',mc,'shape_1k').filter(r=>GROUP[r.arm]==='rerun').map(r=>r.v));
+ put('tLadRange',`${f2(Math.min(...rr))}–${f2(Math.max(...rr))}`);}
+put('figRedraw',`<svg viewBox="0 0 1160 380" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bdb9b1"/></marker></defs>
+  <text x="10" y="30" class="ptitle">(a) Base</text>
+  <rect x="10" y="44" width="170" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="95" y="78" text-anchor="middle" class="axlbl">raw reads</text>
+  <line x1="185" y1="72" x2="240" y2="72" class="axis" marker-end="url(#ar2)"/>
+  <rect x="245" y="44" width="250" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="370" y="78" text-anchor="middle" class="axlbl">pipeline, standard settings</text>
+  <line x1="500" y1="72" x2="555" y2="72" class="axis" marker-end="url(#ar2)"/>
+  <rect x="560" y="44" width="230" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="675" y="78" text-anchor="middle" class="axlbl">random 30M draw A</text>
+  <text x="10" y="150" class="ptitle" fill="var(--rerun)">(b) Re-run arm</text>
+  <rect x="10" y="164" width="170" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="95" y="198" text-anchor="middle" class="axlbl">same raw reads</text>
+  <line x1="185" y1="192" x2="240" y2="192" class="axis" marker-end="url(#ar2)"/>
+  <rect x="245" y="164" width="250" height="56" rx="8" fill="#fff" stroke="var(--rerun)" stroke-width="2.6"/><text x="370" y="198" text-anchor="middle" class="axlbl">pipeline, one setting changed</text>
+  <line x1="500" y1="192" x2="555" y2="192" class="axis" marker-end="url(#ar2)"/>
+  <rect x="560" y="164" width="230" height="56" rx="8" fill="#fff" stroke="var(--rerun)" stroke-width="2.6"/><text x="675" y="198" text-anchor="middle" class="axlbl">random 30M draw B</text>
+  <text x="820" y="186" class="xlab" fill="var(--rerun)">two differences:</text>
+  <text x="820" y="214" class="xsub">① the setting  ② a different draw</text>
+  <text x="10" y="270" class="ptitle" fill="var(--ctl)">(c) Depth cut</text>
+  <rect x="560" y="284" width="230" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.6"/><text x="675" y="318" text-anchor="middle" class="axlbl">draw A (the base's reads)</text>
+  <line x1="675" y1="104" x2="675" y2="280" stroke="#d8d4cc" stroke-width="1.4" stroke-dasharray="4 4"/>
+  <line x1="795" y1="312" x2="850" y2="312" class="axis" marker-end="url(#ar2)"/>
+  <rect x="855" y="284" width="190" height="56" rx="8" fill="#fff" stroke="var(--ctl)" stroke-width="2.6"/><text x="950" y="318" text-anchor="middle" class="axlbl">keep a subset</text>
+  <text x="820" y="372" class="xsub">one difference: fewer reads, no new draw</text>
+</svg>`);
+put('figLadB',ladder('broad','(b) Broad marks'));
+
+/* the grid of arms */
+{const ROUTE={depth:'derived (thinned)',abproxy:'derived (mixed)',crop:'re-run',mapq:'re-run',dedup:'re-run',pe:'re-run',
+   ratio:'derived (peak caller)',ctlid:'derived (peak caller)',ctldepth:'derived (thinned control)',extsize:'derived (peak caller)'};
+ const MOVES=a=>GROUP[a]==='ctl'?'p-values only':'counts and p-values';
+ const by={}; DATA.levels.forEach(L=>{(by[L.arm]=by[L.arm]||new Set()).add(LEV(L.arm,L.level));});
+ let h='<thead><tr><th>setting</th><th>levels</th><th>how made</th><th>changes</th></tr></thead><tbody>';
+ Object.keys(NAME).forEach(a=>{h+=`<tr><td style="color:${COL(a)}">${NAME[a]}</td><td>${[...by[a]].join(' · ')}</td><td>${ROUTE[a]}</td><td>${MOVES(a)}</td></tr>`;});
+ put('tblArms',h+'</tbody>');}
+
+/* the arms schematic */
+put('figArms',`<svg viewBox="0 0 1100 330" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bdb9b1"/></marker></defs>
+  <rect x="20" y="120" width="200" height="90" rx="10" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="120" y="160" text-anchor="middle" class="xlab">Raw reads</text>
+  <text x="120" y="188" text-anchor="middle" class="xsub">one experiment</text>
+  <line x1="225" y1="150" x2="370" y2="70" class="axis" marker-end="url(#ar)"/>
+  <line x1="225" y1="180" x2="370" y2="260" class="axis" marker-end="url(#ar)"/>
+  <rect x="380" y="30" width="250" height="80" rx="10" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="505" y="66" text-anchor="middle" class="xlab">Base</text>
+  <text x="505" y="92" text-anchor="middle" class="xsub">standard recipe</text>
+  <rect x="380" y="220" width="250" height="80" rx="10" fill="#fff" stroke="var(--ab)" stroke-width="2"/>
+  <text x="505" y="256" text-anchor="middle" class="xlab">Arm</text>
+  <text x="505" y="282" text-anchor="middle" class="xsub">same recipe, one setting moved</text>
+  <line x1="635" y1="70" x2="740" y2="150" class="axis" marker-end="url(#ar)"/>
+  <line x1="635" y1="260" x2="740" y2="180" class="axis" marker-end="url(#ar)"/>
+  <rect x="750" y="120" width="320" height="90" rx="10" fill="#fff" stroke="var(--depth)" stroke-width="2.4"/>
+  <text x="910" y="158" text-anchor="middle" class="xlab">Difference</text>
+  <text x="910" y="186" text-anchor="middle" class="xsub">= that one setting’s effect</text>
+</svg>`);
+
+put('tPairs',DATA.n_pairs); put('tArms',DATA.n_arm_products); put('tTracks',DATA.n_tracks);
+
+/* navigation and speaker notes — as in assets/deck.html */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>

@@ -2,39 +2,55 @@
 id: q4
 type: question
 schema: 2
-title: How much capacity does a covariate-conditioned transformation need before it closes the gap that a covariate-free monotone map leaves?
+title: How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?
 parent: q1
 status: open
 stale: false
 created: "2026-09-17T21:46:17"
-updated: "2026-09-17T21:46:17"
+updated: "2026-10-02T12:29:01"
 ---
 
-# q4 — How much capacity does a covariate-conditioned transformation need before it closes the gap that a covariate-free monotone map leaves?
+# q4 — How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?
 
 Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
-Once the settings are known, how simple can the translator be — a stretch and a shift, a look at the neighbouring bins, or a full network?
+
+How simple can the translator be: a stretch, a bendable curve, a look at neighbouring bins, or a small network? So far the bendable curve does most of the work.
 
 ## TL;DR
-The parent asks whether the recorded covariates carry the information; this one asks how much capacity is needed to use it. Its children are rungs of increasing capacity, each conditioned on the source and target covariates and each measured on the counterfactual pairs of [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]] against two comparators: one-warp, the covariate-free monotone map on each output axis fitted on training pairs and scored on held-out pairs, and the rung's own twin fitted with the covariates shuffled across pairs — so capacity and covariate information are separated at every rung. Gap-closed is (D_onewarp − D_model)/(D_onewarp − D_oracle) with the oracle two NB draws at the target depth; the noise floor is 2× the model's own seed |Δ| over the declared seeds. It is settled by the lowest rung whose gap-closed clears the bar in [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] and whose next rung adds less than that floor: if the lowest rung, the covariates act as a rescaling; if only the top, the information is there but needs long-range or latent structure.
+
+How expressive must f be to use the covariates? The children are rungs A–D (affine, monotone curve, kernel plus curve, conditioned CNN), each judged against its scrambled-covariate twin and the rung below; a sequence-reading rung is parked. All four ran in two rows: g reads C, C′, or also the bin value. Exploratory readings: in counts the curve gives the main step and shape adds little. Some −log10 p pairs explode. No rung carries its gain to never-trained pairs.
+
+## Motivation
+
+The PI set the capacity question on 2026-09-25: "let's focus on the architecture: the form of f and how g produces it. we want to come up with 3-4 options in order of complexity and expressiveness." The agent proposed A → B → C → D, each adding one capability (magnitude, then shape, then context-dependent shape); the PI approved ("loved these 4 ideas") and parked a fifth, sequence-reading option. Row 2 is the PI's idea: g also reads the bin value x, so in floor bins g can emit an f that keeps zeros at zero. The agent first disputed it and then conceded the PI had the mechanism right. Both scramble twins (fixed permutation and re-scrambled every step) were kept because "both are answering different questions".
 
 ## Question
 
-How much capacity does a covariate-conditioned transformation need before it closes the gap that a covariate-free monotone map leaves?
+How expressive must the transformation f be — a per-bin affine map, a per-bin monotone curve, a kernel plus curve, or a conditioned CNN — for a generator g(C, C') to capture what the covariates do?
 
 ## Protocol
-Locked before any run: every rung is compared to the same one-warp fit and to its own shuffled-covariate twin; rungs are read in order of capacity.
+Locked before any run: every rung is compared to its own scrambled-covariate twin and to the rung below, on the same pairs, split and scoring (plan/T118_COUNTERFACTUAL_F.md); rungs are read in order A, B, C, D.
 
 ## Answer so far
 
-_(interpretation — written by the PI/agent; auto-flagged stale when new evidence lands)_
+CRPS on all bins, chr19 + chr21, one g per track, mean of 3 seeds ± seed wobble (largest difference between two seeds).
+
+- Counts, row 1: DNase A 3.06 ± 0.11, B 0.824 ± 0.004, C 0.818 ± 0.027, D 0.772 ± 0.036; narrow 0.479, 0.392, 0.379, 0.375. A's excess is scale error (1.70 of 3.06). Beats the rung below: B 9 of 12 cells, C 5, D 1. Beats its twin: A 3, B–D 11.
+- −log10 p: A beats its twin in 12 of 12 cells and never explodes. B, C and D explode on a few sparse-to-full-depth pairs (CRPS > 20; D's DNase mean is 1.9 × 10⁴). In B and C the lowest knot's σ drifts; D's cause is not found ([[t123_diagnose_design_d_s_log10_p_explosi|the D diagnosis]]). The fix ([[t124_find_a_principled_fix_for_the_log10|the p-space fix]]) is deferred until the count model settles (PI ruling 2026-10-29); the PI rejected capping σ.
+- Row 2 (g reads the bin value x): A2 DNase 0.849 ± 0.009, against 3.02 for a twin that reads x from a random bin. B–D change little, except C2 on DNase (0.730 ± 0.003). In p, row 2 explodes more, A2 too, against the spec.
+- Never-trained arm → arm pairs: the relative count gain over the twin falls from 0.29 to 0.11 on same-knob pairs (median of 16 settings). More capacity does not fix it: per track, D keeps 0.23, A nothing. The depth law is unmet in every cell except one of B2. This points at g, not at f's form ([[q7_why_do_the_covariate_conditioned_g_f_des|the depth-law question]]).
+
+Also open: [[t119_rebuild_the_two_dnase_mapq_arms_c12|the DNase MAPQ-arm rebuild]].
 
 <!-- crux:ledger:start -->
-**3 children** · ideas 0/3 done (supported 0, partial 0, refuted 0, inconclusive 0, invalid-run 0)
+**5 children** · open 1, leaning 4, settled 0, parked 0 · 1 finding(s) on this question
 
-- `h12` [[h12_a_covariate_conditioned_affine_map_on_th|A covariate-conditioned affine map on the log-count axis closes at least half of the gap that the covariate-free monotone map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
-- `h13` [[h13_a_small_covariate_conditioned_convolutio|A small covariate-conditioned convolutional map over neighbouring bins closes gap that the conditioned affine map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
-- `h14` [[h14_an_encoder_decoder_with_the_encoder_cond|An encoder–decoder with the encoder conditioned on the source covariates and the decoder on the target covariates closes gap that the conditioned convolutional map leaves, and beats its shuffled-covariate twin by more than the seed floor]] — *idea*
+- `h12` [[h12_a_covariate_conditioned_affine_map_on_th|A generator g(C, C') that outputs a per-bin affine map on the log scale beats the same design trained with scrambled covariates, in count and −log10 p space]] — *leaning · weak*
+- `h13` [[h13_a_small_covariate_conditioned_convolutio|A generator g(C, C') that outputs a convolution kernel followed by a monotone curve beats its scrambled-covariate twin and the per-bin monotone-curve design]] — *leaning · weak*
+- `h14` [[h14_an_encoder_decoder_with_the_encoder_cond|A generator g(C, C') that modulates a small dilated convolutional network beats its scrambled-covariate twin and the kernel-and-curve design]] — *leaning · weak*
+- `h16` [[h16_a_generator_that_reads_the_dna_sequence_|A generator that reads the DNA sequence as well as the source and target covariates outputs a position-dependent transformation that beats the same design without sequence on the knobs that act through mappability and GC]] — *open*
+- `h17` [[h17_a_generator_g_c_c_that_outputs_a_per_bin|A generator g(C, C') that outputs a per-bin monotone curve on the log scale beats its scrambled-covariate twin and the per-bin affine design]] — *leaning · weak*
+- `f16` finding (moderate) [[f16_the_pi_s_own_2026_10_29_review_called_th|The PI's own 2026-10-29 review called this question mostly answered; the…]]
 <!-- crux:ledger:end -->

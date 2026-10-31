@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Translating Tracks Across Settings</title>
+
+<!--
+  prezit deck · t118 transformation grid (row 1 vs row 2, designs A–D, shuffled-bin twin)
+  Chrome copied from ~/.claude/skills/prezit/assets/deck.html.
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI request, 2026-10-01):
+  - Audience is the lab, not the PI: full motivation, background, method, results and
+    discussion sections, with more background than D2 allows.
+  - Visuals over text everywhere; the grid itself is the only table.
+  - The phase is exploratory: no hypothesis, no metrics.json, no approved synthesis. Numbers
+    come from cruxvault/results/row2/ (results_summary.tsv, checks_*.json, GRID_SUMMARY.md) and
+    plan/T118_STATUS.md, embedded below as DATA. `crux deck --verify` does not apply.
+  - A discussion slide and a next-steps slide are kept although no synthesis is approved; they
+    state readings and open questions, never a verdict.
+  - The real data snippet (H3K27ac, chr19:12,732,350–12,742,350) was read from the t112
+    products on Nibi on 2026-10-01.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    --row1:#4a72b0; --row2:#d9822b; --twin:#9b6bb3; --nocov:#8d8f98; --ids:#3f8f6f;
+    --ns:#b9b5ad; --qm:#6f6a62; --arm:#2f8f8a; --xsrc:#8d8f98;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --ns:#6e6b66; --qm:#b3aea6;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --ns:#6e6b66; --qm:#b3aea6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:16px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.4vw,56px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.9vw,38px);letter-spacing:-.015em;margin-bottom:18px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;font-size:clamp(20px,2.6vw,33px)}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:62ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:14px}
+  ul.pts{list-style:none;margin-top:14px;max-width:80ch}
+  ul.pts li{position:relative;padding-left:24px;margin:9px 0;font-size:clamp(15px,1.45vw,18.5px);line-height:1.45;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px;max-width:none}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:center}
+  .cols2.l{grid-template-columns:1.35fr 1fr}
+  @media (max-width:900px){.cols2,.cols2.l{grid-template-columns:1fr}}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.short svg{max-height:34vh}
+  .legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:8px;justify-content:center;font-size:15px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:8px}
+  .legend .sw{width:15px;height:15px;border-radius:3px;flex:none}
+  .legend .ln{width:22px;height:0;border-top:2.5px dashed;flex:none}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 21px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  @media (max-width:900px){.cards,.cards.c3{grid-template-columns:1fr 1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17.5px;line-height:1.5}.cards.lg .card{padding:20px 22px;min-height:190px}
+  .card svg{width:100%;height:auto;display:block;margin:4px 0 8px}
+
+  /* the grid table */
+  table.grid{border-collapse:separate;border-spacing:8px;width:100%;margin-top:4px}
+  table.grid th{font-size:14px;font-weight:600;color:var(--ink);text-align:center;padding:6px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:12px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:24%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td .nm{font-weight:700;font-size:20px;display:block}
+  table.grid tr.r1 td:not(.rh){border-left:4px solid var(--row1)}
+  table.grid tr.r2 td:not(.rh){border-left:4px solid var(--row2)}
+  table.grid tr.tw td:not(.rh){border-left:4px solid var(--twin)}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:2px 9px;margin:2px;border:1px solid var(--hair);color:var(--body)}
+  .tag.good{background:rgba(217,130,43,.16);border-color:var(--row2)}
+  .tag.bad{background:rgba(181,70,46,.14);border-color:var(--accent)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:12px 18px;margin-top:14px;font-size:clamp(15px,1.45vw,18px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:100vh;transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline; scope; exploratory status
+       numbers  scope counts only (definitional)
+       cut      the hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>Can a track's processing settings tell us<br>how to turn it into another track?</h1>
+      <p class="sub">A 2 × 4 grid of models, <span class="num">1 344</span> trained runs, on tracks where we
+      know the right answer. This is an exploratory pass: it shows readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd></p>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · settings change tracks
+       claim    the same biological sample gives very different tracks under different processing
+       source   t112 products on Nibi (real data)
+       numbers  none in prose; the figure carries the real peak heights
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the problem</div>
+      <h2>One sample, three processing choices, three different tracks</h2>
+      <div class="fig tall" id="figSnippet3"></div>
+      <p class="note">Real data: H3K27ac, the same 10 kb of chr19, the same cells. Only one processing setting changes per row. All three rows share one y-axis.</p>
+    </div>
+  </section>
+
+  <!-- 3 · MOTIVATION · why CANDI cares
+       claim    CANDI's zero-shot claim rests on the covariates doing real work, and that cannot be tested inside CANDI
+       numbers  none (D5) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>why we care</div>
+      <h2>CANDI relies on these settings, but we cannot test them inside CANDI</h2>
+      <div class="fig" id="figCandi"></div>
+      <ul class="pts cols">
+        <li><b>CANDI reads the settings</b> (we call them <b>covariates</b>) of the input tracks and of the track it should output.</li>
+        <li><b>Inside CANDI, the covariate path and the big model are mixed.</b> We cannot see what the covariates alone do.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4 · THE QUESTION
+       claim    one sentence: given X, C, C′, predict X′
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the question</div>
+      <p class="lead">We take a track <b>X</b> made with settings <b>C</b>. We ask for the same track made with settings <b>C′</b>. Can a model predict it from the settings alone?</p>
+      <div class="fig" id="figQuestion" style="margin-top:18px"></div>
+      <p class="note">We test this in isolation, on small models, on data where the true X′ exists.</p>
+    </div>
+  </section>
+
+  <!-- 5 · BACKGROUND · the counterfactual arms
+       claim    each arm changes exactly one processing knob of a base track
+       numbers  definitional: 10 knobs, 19 arms per histone track -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>the data</div>
+      <h2>We rebuilt each track many times, changing one setting at a time</h2>
+      <div class="cols2 l">
+        <div class="fig tall" id="figHub"></div>
+        <ul class="pts">
+          <li>We reran the <b>ENCODE pipeline</b> from the raw reads. Each rebuild, called an <b>arm</b>, changes exactly <b>one knob</b>.</li>
+          <li><span style="color:var(--arm);font-weight:600">Reads knobs</span> change which reads enter the pileup, so they move both outputs.</li>
+          <li><span style="color:var(--twin);font-weight:600">Control and caller knobs</span> change only the p-value track.</li>
+          <li>So for every change we have <b>the true answer</b> X′.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · BACKGROUND · tracks and mark classes
+       claim    7 tracks in 3 mark classes; results are reported per class
+       numbers  definitional counts -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>the data</div>
+      <h2>Seven tracks in three mark classes</h2>
+      <div class="fig" id="figTracks"></div>
+      <ul class="pts cols">
+        <li><b><span class="num">130</span> tracks in total:</b> 7 base tracks and 123 arms.</li>
+        <li><b>Every result is reported per class</b>, because the three classes have very different shapes.</li>
+      </ul>
+      <p class="note">DNase has no control, so it has fewer arms. Its two MAPQ arms came out identical to the base (a pipeline setting), so they are left out until they are rebuilt.</p>
+    </div>
+  </section>
+
+  <!-- 7 · BACKGROUND · two signal spaces
+       claim    every track exists as read counts and as −log10 p; some knobs move only p
+       source   t112 products on Nibi (real) + MANIFEST md5 check (T118_COUNTERFACTUAL_F.md)
+       numbers  none in prose -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Background</span>two kinds of signal</div>
+      <h2>Each track comes in two forms, and some knobs move only one</h2>
+      <div class="cols2 l">
+        <div class="fig" id="figSpaces"></div>
+        <div class="fig" id="figKnobMatrix"></div>
+      </div>
+      <ul class="pts cols">
+        <li><b>Counts:</b> the number of reads in each 25 bp bin.</li>
+        <li><b>−log10 p:</b> how surprising the counts are against the control. A peak caller (MACS2) makes it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 8 · METHOD · g and f
+       claim    a small generator g reads (C, C′) and outputs the parameters of a transformation f
+       numbers  definitional: MLP 2 × 64 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the model</div>
+      <h2>A small network g reads the settings and builds the transformation f</h2>
+      <div class="fig tall" id="figGF"></div>
+      <ul class="pts cols">
+        <li><b>We train g, not f.</b> f is only what g outputs for one pair of settings.</li>
+        <li><b>f outputs a distribution in every bin</b> (a mean and a spread), as CANDI does.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 9 · METHOD · designs A–D
+       claim    four forms of f, ordered from least to most expressive
+       numbers  definitional sizes only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>four designs of f</div>
+      <h2>Four designs of f, from simple to flexible</h2>
+      <div class="fig tall" id="figDesigns"></div>
+      <p class="note">A and B look at one bin at a time, so they can change magnitude only. C and D also see neighbouring bins, so they can change shape (for example, peak width).</p>
+    </div>
+  </section>
+
+  <!-- 10 · METHOD · row 1 vs row 2
+       claim    row 2 lets g read each bin's own level, so f can differ from bin to bin
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the two rows</div>
+      <h2>Row 2 lets g also read each bin's own level</h2>
+      <div class="fig tall" id="figRows"></div>
+      <ul class="pts cols">
+        <li><b>Row 1:</b> g reads only (C, C′). One f for the whole genome.</li>
+        <li><b>Row 2:</b> g reads (x, C, C′), where x is the bin's own level. f can treat low bins and peaks differently.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 11 · METHOD · THE GRID (the one table, by PI request)
+       claim    8 cells plus a twin row; 1 344 runs
+       numbers  definitional run counts -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the grid</div>
+      <h2>The grid: 2 rows × 4 designs, plus a control row</h2>
+      <table class="grid">
+        <tr><th></th>
+          <th>A<small>one straight line</small></th><th>B<small>a rising curve</small></th>
+          <th>C<small>smoothing kernel, then curve</small></th><th>D<small>small CNN</small></th></tr>
+        <tr class="r1"><td class="rh">Row 1 · g(C, C′)<small>one f per pair of settings</small></td>
+          <td><span class="nm">A</span>144 runs</td><td><span class="nm">B</span>144 runs</td><td><span class="nm">C</span>144 runs</td><td><span class="nm">D</span>144 runs</td></tr>
+        <tr class="r2"><td class="rh">Row 2 · g(x, C, C′)<small>one f per bin</small></td>
+          <td><span class="nm">A2</span>144 runs</td><td><span class="nm">B2</span>144 runs</td><td><span class="nm">C2</span>144 runs</td><td><span class="nm">D2</span>144 runs</td></tr>
+        <tr class="tw"><td class="rh">Shuffled-bin twin<small>row 2, but x comes from a random bin</small></td>
+          <td>A2 twin<br>48 runs</td><td>B2 twin<br>48 runs</td><td>C2 twin<br>48 runs</td><td>D2 twin<br>48 runs</td></tr>
+      </table>
+      <div class="fig short" id="figBudget" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- 12 · METHOD · two versions of g
+       claim    every cell is run with one g per track and with one g across tracks
+       numbers  definitional -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>two versions of g</div>
+      <h2>Every cell is trained two ways: one g per track, and one g for all tracks</h2>
+      <div class="fig" id="figGVersions"></div>
+      <ul class="pts cols">
+        <li><b>One g per track:</b> 7 small g's. Each one learns one track's arms.</li>
+        <li><b>One g across tracks:</b> a single g that also reads the assay. It must share what it learns between marks.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 13 · METHOD · controls (twins)
+       claim    each twin removes one explanation for a gain
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>controls</div>
+      <h2>Each model has twins that test one boring explanation each</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--row2)"><div class="ct">The real model</div>
+          <div id="icReal"></div>
+          <div class="cb">Reads the true settings.</div></div>
+        <div class="card" style="--c:var(--nocov)"><div class="ct">No-covariates twin</div>
+          <div id="icNocov"></div>
+          <div class="cb">Gets random settings at every step, so it learns one average map.</div>
+          <div class="cw">If the real model wins: the settings help.</div></div>
+        <div class="card" style="--c:var(--ids)"><div class="ct">Labels-as-ids twin</div>
+          <div id="icIds"></div>
+          <div class="cb">Gets wrong but fixed settings, so it can memorise one map per pair.</div>
+          <div class="cw">Only pairs never seen in training can tell it apart.</div></div>
+        <div class="card" style="--c:var(--twin)"><div class="ct">Shuffled-bin twin <small style="font-weight:400;color:var(--muted)">(row 2)</small></div>
+          <div id="icXshuf"></div>
+          <div class="cb">g reads the level of a random bin, not of its own bin.</div>
+          <div class="cw">If row 2 wins: the bin's own level helps, not just an extra input.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 · METHOD · split and law test
+       claim    train / validate / test on separate chromosomes; never-trained arm→arm pairs test generalisation
+       numbers  definitional -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>training and testing</div>
+      <h2>We test on unseen chromosomes and on unseen pairs</h2>
+      <div class="cols2">
+        <div class="fig" id="figChrom"></div>
+        <div class="fig" id="figPairs"></div>
+      </div>
+      <ul class="pts cols">
+        <li><b>Held-out chromosomes:</b> train everywhere except chr19, 21 and 22. Pick the best step on chr22. Score on chr19 and chr21.</li>
+        <li><b>The law test:</b> train only base ↔ arm pairs. Then score arm → arm pairs that were <b>never trained</b>. A model that memorised pairs has no answer for these.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 15 · METHOD · scoring
+       claim    CRPS scores a predicted distribution; a gain counts only if it beats 2 × the seed wobble
+       numbers  definitional (bar = 2 × wobble; 3 seeds) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>scoring</div>
+      <h2>Lower CRPS is better, and a gain counts only if it is larger than the seed noise</h2>
+      <div class="cols2">
+        <div class="fig" id="figCRPS"></div>
+        <div class="fig" id="figBar"></div>
+      </div>
+      <ul class="pts cols">
+        <li><b>CRPS</b> punishes a prediction that is off, and one that is too wide. We score all bins and the top 1% of bins (the peaks).</li>
+        <li><b>Seed wobble:</b> each model is trained with 3 random seeds. A gain counts only if it is more than <b>2 × the wobble</b>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 16 · RESULT · overview (counts)
+       claim    in counts, every design except row-1 A beats doing nothing; row 2 moves A the most
+       source   results_summary.tsv (trained, all pairs, real g) + grid.md references
+       numbers  in figure (rendered from DATA) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>overview · read counts</div>
+      <h2>In counts, row 2 mostly matters for design A</h2>
+      <div class="fig tall" id="figOverview"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--row1)"></span>row 1 · g(C, C′)</div>
+        <div class="item"><span class="sw" style="background:var(--row2)"></span>row 2 · g(x, C, C′)</div>
+        <div class="item"><span class="ln" style="border-color:var(--ns)"></span>do nothing (X′ = X)</div>
+        <div class="item"><span class="ln" style="border-color:var(--qm)"></span>QuantileMatching, which reads no settings</div>
+      </div>
+      <p class="note">No single knob: each dot pools every trained pair (all knobs, base → arm and arm → base). One g per track · CRPS on all bins, chr19 + chr21 · dot = mean of 3 seeds, bar = seed range · lower is better. The x-axes do not start at 0.</p>
+    </div>
+  </section>
+
+  <!-- 17 · RESULT · A2 fixes A, the twin does not
+       claim    reading the bin's own level fixes design A in counts; reading a random bin's level does not
+       numbers  rendered from DATA; prose numbers are the DNase cell -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 1</div>
+      <h2>Reading the bin's own level fixes design A in counts. A random bin's level does not.</h2>
+      <div class="fig" id="figA2"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--row1)"></span>A · row 1</div>
+        <div class="item"><span class="sw" style="background:var(--row2)"></span>A2 · row 2</div>
+        <div class="item"><span class="sw" style="background:var(--twin)"></span>A2 shuffled-bin twin</div>
+        <div class="item"><span class="ln" style="border-color:var(--ns)"></span>do nothing</div>
+      </div>
+      <ul class="pts cols">
+        <li><b>DNase:</b> CRPS falls from <span class="num" id="tA_dn"></span> to <span class="num" id="tA2_dn"></span>. Row-1 A was worse than doing nothing there.</li>
+        <li><b>The twin stays at row 1's level</b> (<span class="num" id="tTw_dn"></span>). So the gain needs the bin's <b>own</b> level.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 18 · RESULT · why A failed
+       claim    one straight line in log space cannot say "no change" in counts
+       source   T118_STATUS.md: on the p-only arms in counts, row-1 A learned a ≈ −1.6, b ≈ 1.9
+       numbers  a, b from the status file; the A2 line is a sketch, labelled as such -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>why A failed</div>
+      <h2>One straight line in log space cannot say "no change"</h2>
+      <div class="cols2 l">
+        <div class="fig tall" id="figWhyA"></div>
+        <ul class="pts">
+          <li>On arms where the true counts <b>do not change</b>, row-1 A learned a line with slope <span class="num">1.9</span>, where "no change" needs slope 1.</li>
+          <li>The result: it <b>overshoots the peaks</b> by several times.</li>
+          <li>A2 picks its line <b>per level</b>, so the map can bend and follow the truth.</li>
+          <li>B, C and D already bend, so row 2 had less to fix there.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 19 · RESULT · B, C, D change little
+       claim    for B, C and D, row 2 changes counts CRPS little; C2 on DNase is the exception
+       numbers  rendered from DATA -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 2</div>
+      <h2>For B, C and D, reading the level changes little in counts</h2>
+      <div class="fig tall" id="figDelta"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--row2)"></span>row 2 better, beyond seed noise</div>
+        <div class="item"><span class="sw" style="background:var(--accent)"></span>row 2 worse, beyond seed noise</div>
+        <div class="item"><span class="sw" style="border:2px solid var(--muted);background:none"></span>within seed noise</div>
+      </div>
+      <p class="note">Each dot is one mark class × one version of g. CRPS on all bins, counts. The exception is C2 on DNase: <span class="num" id="tC_dn"></span> → <span class="num" id="tC2_dn"></span> with one g per track.</p>
+    </div>
+  </section>
+
+  <!-- 19b · RESULT · one g per track vs one g across tracks
+       claim    in counts, one g per track beats one shared g on DNase; for histone marks the two tie
+       source   results_summary.tsv, trained pairs, real model, counts, CRPS on all bins, both versions of g
+       numbers  rendered from DATA.cells; p space left out (exploding pairs swamp the means)
+       cut      top-1% metric and p space stated in prose only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 3 · two versions of g</div>
+      <h2>One g per track wins on DNase. For histone marks, the two tie.</h2>
+      <div class="fig tall" id="figGver"></div>
+      <ul class="pts cols">
+        <li><b>DNase:</b> the shared g is worse in <span class="num" id="tGv_n"></span> of 8 designs, by <span class="num" id="tGv_rng"></span>. Row-1 A is the exception: its per-track fit was already very poor.</li>
+        <li><b>Histone marks:</b> the two versions are within <span class="num" id="tGv_h"></span> of each other. <b>A guess, not tested:</b> DNase is 1 of 7 tracks, so a shared g fits the 6 histone tracks first.</li>
+      </ul>
+      <p class="note">Counts only, CRPS on all bins. In −log10 p, the exploding pairs swamp the means, so this comparison waits for the p-value fix. The top 1% of bins shows the same pattern, larger.</p>
+    </div>
+  </section>
+
+  <!-- 20 · RESULT · p-space explosions
+       claim    in −log10 p, row 2 produces more exploding pairs than row 1, in every design; the twin does not
+       source   GRID_SUMMARY.md exploding (pair, seed) counts, summed over 3 classes × 2 versions of g
+       numbers  rendered from DATA.explode -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 4 · −log10 p</div>
+      <h2>In p-values, row 2 makes more predictions blow up, in every design</h2>
+      <div class="fig" id="figExplode"></div>
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--row1)"></span>row 1</div>
+        <div class="item"><span class="sw" style="background:var(--row2)"></span>row 2</div>
+        <div class="item"><span class="sw" style="background:var(--twin)"></span>shuffled-bin twin</div>
+      </div>
+      <ul class="pts cols">
+        <li><b>"Exploding"</b> means a (pair, seed) with CRPS above 20; typical values are below 1. We count them but do not judge them.</li>
+        <li><b>The plan predicted A2 would likely not explode.</b> It did. The twin explodes no more than row 1, so the bin's own level brings the problem.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 21 · RESULT · why a few pairs matter
+       claim    one exploding pair dominates a mean; in row 1 the cause was one badly fitted spread
+       source   cells (narrow, per track, p) + T118_STATUS.md row-1 diagnosis (σ 10.9 vs 1.8)
+       numbers  rendered -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 4, continued</div>
+      <h2>A few bad pairs ruin the average, because the spread blows up the mean</h2>
+      <div class="cols2">
+        <div class="fig" id="figSymptom"></div>
+        <div class="fig" id="figSigma"></div>
+      </div>
+      <ul class="pts cols">
+        <li><b>Left:</b> one exploding pair lifts a class mean from below 1 to as high as 10<sup>6</sup>.</li>
+        <li><b>Right, the row-1 cause:</b> a log-normal's mean grows as e<sup>σ²/2</sup>. One spread drifted to σ ≈ <span class="num">10.9</span> where the data ask for ≈ <span class="num">1.8</span>. <b>Row 2's cause is not diagnosed yet.</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 22 · RESULT · the checks
+       claim    the settings still help in row 2 (beats the no-covariates twin), but most other checks are mixed
+       source   checks_*.json tallies (verified equal to GRID_SUMMARY.md)
+       numbers  rendered from DATA.tally -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 5 · all checks</div>
+      <h2>Row 2 still uses the settings, at least in counts</h2>
+      <div class="fig tall" id="figChecks"></div>
+      <p class="note">Seen pairs = trained base ↔ arm pairs, scored on held-out chromosomes. Unseen pairs = the law test (arm → arm, never trained). Each cell = how many of 12 settings meet the check (3 mark classes × 2 versions of g × 2 metrics: all bins and top 1%). "Better" = the gain is larger than 2 × the seed wobble. Grey = does not apply (row 1 has no shuffled-bin twin).</p>
+    </div>
+  </section>
+
+  <!-- 23 · RESULT · depth law
+       claim    the depth law is still unmet: only B2 meets it, in 1 of 6 cells
+       source   checks_*.json depthlaw entries
+       numbers  rendered -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>finding 6</div>
+      <h2>No design follows the depth law yet</h2>
+      <div class="fig" id="figDepth"></div>
+      <ul class="pts cols">
+        <li><b>The depth law:</b> halve the reads, and the predicted counts should halve. We allow a 10% error.</li>
+        <li><b>Only one cell meets it</b> (B2, DNase, one g per track). The others miss by 17% to 136%. <b>We have not yet hand-checked how the law is computed.</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 24 · DISCUSSION · the grid, read
+       claim    summary of the grid readings (the grid as a table, by PI request)
+       numbers  restates numbers from the result slides only -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>the grid, read</div>
+      <h2>Reading the level helps where the map was too stiff, and hurts in p-values</h2>
+      <table class="grid">
+        <tr><th></th><th>A</th><th>B</th><th>C</th><th>D</th></tr>
+        <tr class="r2"><td class="rh">Row 2 vs row 1<small>counts</small></td>
+          <td><span class="tag good">large gain</span></td><td><span class="tag">no change</span></td>
+          <td><span class="tag good">gain on DNase</span></td><td><span class="tag">no change</span></td></tr>
+        <tr class="r2"><td class="rh">Row 2 vs row 1<small>−log10 p</small></td>
+          <td><span class="tag bad">now explodes</span></td><td><span class="tag bad">explodes more</span></td>
+          <td><span class="tag bad">explodes more</span></td><td><span class="tag bad">explodes, as in row 1</span></td></tr>
+        <tr class="tw"><td class="rh">Row 2 vs its twin<small>counts</small></td>
+          <td><span class="tag good">own level needed</span></td><td><span class="tag">no difference</span></td>
+          <td><span class="tag">small</span></td><td><span class="tag">no difference</span></td></tr>
+      </table>
+      <ul class="pts cols">
+        <li><b>A likely reason:</b> B, C and D already bend with the level, so giving g the level adds little in counts.</li>
+        <li><b>A guess, not yet tested:</b> in p-values, rare low levels get spreads that no data anchor, and a large spread blows up the mean.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 25 · DISCUSSION · open questions
+       claim    what we still do not know
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what is still unclear</div>
+      <h2>Four things we do not understand yet</h2>
+      <div class="cards lg">
+        <div class="card"><div class="ct">Why row 2 explodes</div><div class="cb">The row-1 cause (one drifting spread at the lowest knot) does not explain A2, which has no knots.</div></div>
+        <div class="card"><div class="ct">Why D explodes</div><div class="cb">D has no knots and explodes in both rows. Its cause is not found.</div></div>
+        <div class="card"><div class="ct">The depth law</div><div class="cb">Every design misses it. The computation itself may be wrong, so we check it by hand first.</div></div>
+        <div class="card"><div class="ct">Shape vs magnitude</div><div class="cb">C and D can change shape, but they barely beat B. Do the settings change shape at all, at this resolution?</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 26 · DISCUSSION · next steps
+       claim    the order of the next work
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>next steps</div>
+      <h2>Next: fix the p-value blow-ups properly, then check the depth law</h2>
+      <div class="fig" id="figNext"></div>
+      <p class="note">Nothing here is a verdict. All runs, reports and figures: cruxvault/results/row2/ (GRID_SUMMARY.md). Rejected fixes: capping σ, and reporting the blow-ups without a fix.</p>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · t118 transformation grid · exploratory</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time from:
+     snip    t112 products on Nibi, C19M16 (H3K27ac), chr19:12,732,350–12,742,350, 25 bp bins
+     cells   cruxvault/results/row2/results_summary.tsv, kind=trained, variant=all
+             key "rung|g_version|space|model|mark_class|metric" -> [mean over 3 seeds, seed wobble]
+     refs    cruxvault/results/row2/grid.md (noSolution, QuantileMatching; no seed)
+     tally   cruxvault/results/row2/checks_*.json (met of 12)
+     depth   checks_*.json depthlaw entries [g_version, class, value, wobble, met]
+     explode GRID_SUMMARY.md, exploding (pair, seed) records in −log10 p, summed over classes and g
+   =========================================================================== */
+const DATA = __DATA__;
+
+const COL={row1:'var(--row1)',row2:'var(--row2)',twin:'var(--twin)',nocov:'var(--nocov)',ids:'var(--ids)',
+  ns:'var(--ns)',qm:'var(--qm)',arm:'var(--arm)',x:'var(--xsrc)',ink:'var(--ink)',muted:'var(--muted)',
+  faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',accent:'var(--accent)',paper:'var(--paper)'};
+const CLASSES=['DNase','narrow','broad'];
+const cell=(r,g,s,m,c,k)=>DATA.cells[[r,g,s,m,c,k].join('|')];
+const f3=v=>v>=100?v.toExponential(1).replace('e+','e'):v>=10?v.toFixed(1):v>=1?v.toFixed(2):v.toFixed(3);
+
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2)=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const arrowHead=(x,y,dir,c,s=9)=>{ // dir: 'r','d','l','u'
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const arrowD=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2-8,c,w)+arrowHead(x,y2,'d',c);
+
+/* a step-shaped track: v values, drawn in box (x0, yBase-h .. yBase) */
+function trackD(v,x0,yBase,w,h,ymax,closed){
+  const n=v.length,dx=w/n;let d=closed?`M${x0},${yBase}`:'';
+  v.forEach((val,i)=>{const y=(yBase-h*Math.min(val,ymax)/ymax).toFixed(1);
+    const xa=(x0+i*dx).toFixed(1),xb=(x0+(i+1)*dx).toFixed(1);
+    d+=(d===''?`M${xa},${y}`:` L${xa},${y}`)+` L${xb},${y}`;});
+  return closed?d+` L${x0+w},${yBase} Z`:d;}
+const S=k=>DATA.snip[k];
+
+/* ---------- 2 · three tracks on one axis ---------- */
+function figSnippet3(){
+  const W=1160,H=470,lx=300,pw=850,ph=118,gap=28,top=20,ymax=240;
+  const rows=[['base__base/counts25','Base track','30 M reads'],
+              ['depth__3.75M/counts25','Fewer reads','3.75 M reads (1/8)'],
+              ['dedup__off/counts25','Duplicates kept','duplicate reads not removed']];
+  let s='';
+  rows.forEach(([k,t,sub],i)=>{
+    const yb=top+(i+1)*ph+i*gap, v=S(k), mx=Math.max(...v);
+    s+=T(0,yb-ph/2-8,t,'ptitle')+T(0,yb-ph/2+16,sub,'psub')+T(0,yb-ph/2+44,`highest bin: ${mx} reads`,'val','start','style="fill:var(--accent)"');
+    s+=L(lx,yb,lx+pw,yb,COL.axis,1.2)+L(lx,yb-ph,lx+pw,yb-ph,COL.grid,1,'3 4');
+    s+=P(trackD(v,lx,yb,pw,ph,ymax,true),COL.ink,'none',0,';fill-opacity:.82');
+  });
+  s+=T(lx-10,top+6,'240','tick','end')+T(lx-10,top+ph+4,'0','tick','end');
+  s+=L(lx,H-14,lx+pw*0.1,H-14,COL.muted,2)+T(lx+pw*0.1+8,H-9,'1 kb','cap');
+  s+=T(lx+pw,H-9,'reads per 25 bp bin (same scale in all rows)','cap','end');
+  return svg(W,H,s);
+}
+
+/* ---------- 3 · CANDI schematic ---------- */
+function figCandi(){
+  const W=1160,H=300;let s='';
+  const v=S('base__base/counts25').slice(120,300);
+  // inputs
+  [0,1,2].forEach(i=>{const y=40+i*80;
+    s+=R(20,y,200,60,COL.card,COL.hair,8);
+    s+=P(trackD(v,30,y+52,180,40,45,true),COL.x,'none',0);
+    s+=R(232,y+14,92,32,COL.card,COL.row1,16)+T(278,y+36,'C'+(i+1),'mono','middle');});
+  s+=T(120,30,'observed tracks','psub','middle')+T(278,30,'their settings','psub','middle');
+  // candi box
+  s+=R(420,60,300,180,COL.card,COL.ink,14,2)+T(570,135,'CANDI','big','middle')+T(570,165,'large imputation model','psub','middle');
+  // dashed region around covariate path
+  s+=R(360,20,420,262,'none',COL.accent,16,2).replace('stroke-width:2','stroke-width:2;stroke-dasharray:7 6');
+  s+=T(570,275,'covariate path and model are mixed together','psub','middle',`style="fill:var(--accent)"`);
+  for(let i=0;i<3;i++) s+=arrowR(326,70+i*80,418);
+  // output
+  s+=R(850,90,92,32,COL.card,COL.row2,16)+T(896,112,'C′','mono','middle')+T(896,80,'wanted settings','psub','middle');
+  s+=arrowR(842,106,722).replace(/x1="842"/,'x1="848"');
+  s+=arrowR(722,190,948);
+  s+=R(950,150,190,80,COL.card,COL.hair,8)+P(trackD(S('depth__15M/counts25').slice(120,300),960,222,170,60,45,true),COL.ink,'none',0);
+  s+=T(1045,250,'imputed track','psub','middle');
+  return svg(W,H,s);
+}
+/* fix: arrow from C′ into CANDI points left */
+function figCandiFixed(){
+  return figCandi().replace(/<line x1="848" y1="106" x2="[^"]+" y2="106"[^>]*\/><polygon[^>]*\/>/,
+    L(846,106,730,106,COL.muted,2)+arrowHead(722,106,'l',COL.muted));
+}
+
+/* ---------- 4 · the question ---------- */
+function figQuestion(){
+  const W=1160,H=280;let s='';
+  const vx=S('base__base/counts25').slice(100,300), vy=S('depth__15M/counts25').slice(100,300);
+  s+=R(10,40,280,150,COL.card,COL.hair,10)+P(trackD(vx,24,170,252,110,46,true),COL.x,'none',0)+T(150,30,'X · the track we have','ptitle','middle');
+  s+=R(330,60,170,48,COL.card,COL.row1,24)+T(415,91,'C: 30 M reads','axlbl','middle');
+  s+=R(330,130,170,48,COL.card,COL.row2,24)+T(415,161,'C′: 15 M reads','axlbl','middle');
+  s+=T(415,225,'how X was made, how we want it','psub','middle');
+  s+=arrowR(292,115,560)+arrowR(502,84,560)+arrowR(502,154,560);
+  s+=R(565,60,150,110,COL.card,COL.accent,14,2.5)+T(640,132,'?','big','middle',`style="font-size:54px;fill:var(--accent)"`);
+  s+=arrowR(717,115,800);
+  s+=R(805,40,300,150,COL.card,COL.hair,10)+P(trackD(vy,819,170,272,110,46,true),COL.ink,'none',0)+T(955,30,'X′ · the track we want','ptitle','middle');
+  s+=T(955,225,'real X′ exists, so we can score','psub','middle');
+  s+=T(640,260,'(real data: H3K27ac base, and its 15 M-read arm, same axis)','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 5 · hub of knobs ---------- */
+function figHub(){
+  const W=760,H=640,cx=380,cy=320;let s='';
+  const knobs=[['depth','15 · 7.5 · 3.75 M reads','r'],['read length','50 · 36 bp','r'],['paired-end','on','r'],
+    ['duplicates','kept','r'],['MAPQ cut','10 · 0','r'],['antibody proxy','mix in 50 · 90% control reads','r'],
+    ['control','none · another one','c'],['control depth','¼ · ½','c'],['control scaling','½ · 2×','c'],
+    ['fragment length','½ · 2×','c']];
+  knobs.forEach(([n,lv,t],i)=>{
+    const a=-Math.PI/2+i*2*Math.PI/knobs.length, r=205, x=cx+r*Math.cos(a), y=cy+r*Math.sin(a);
+    const c=t==='r'?COL.arm:COL.twin;
+    s+=L(cx+70*Math.cos(a),cy+70*Math.sin(a),x-30*Math.cos(a),y-30*Math.sin(a),c,2.5);
+    s+=Ci(x,y,13,c);
+    const right=Math.cos(a)>0.2,left=Math.cos(a)<-0.2,anc=right?'start':left?'end':'middle';
+    const tx=x+(right?22:left?-22:0), ty=y+(Math.abs(Math.cos(a))<=0.2?(Math.sin(a)<0?-30:40):-2);
+    s+=T(tx,ty,n,'ptitle',anc,'style="font-size:19px"')+T(tx,ty+21,lv,'psub',anc);
+  });
+  s+=Ci(cx,cy,68,COL.card,COL.ink,2.5)+T(cx,cy-4,'base','big','middle')+T(cx,cy+22,'track','psub','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 6 · tracks and classes ---------- */
+function figTracks(){
+  const W=1160,H=300;let s='';
+  const groups=[['DNase','open chromatin',['DNase-seq'],'9 arms',0],
+    ['narrow marks','sharp peaks',['H3K27ac','H3K4me3','H3K4me1'],'19 arms each',1],
+    ['broad marks','wide domains',['H3K27me3','H3K36me3','H3K9me3'],'19 arms each',2]];
+  const gx=[20,330,750],gw=[260,380,380];
+  groups.forEach(([n,sub,tr,arms,k],i)=>{
+    const x=gx[i],w=gw[i];
+    s+=R(x,10,w,280,COL.card,COL.hair,12);
+    s+=T(x+18,46,n,'ptitle')+T(x+18,70,sub,'psub');
+    // shape icon
+    const ix=x+18,iy=170,iw=w-36;
+    let d=`M${ix},${iy}`;
+    for(let j=0;j<=120;j++){const t=j/120,xx=ix+t*iw;let y=0;
+      if(k===0) y=Math.exp(-Math.pow((t-0.5)/0.025,2))*70;
+      if(k===1) y=Math.exp(-Math.pow((t-0.35)/0.03,2))*60+Math.exp(-Math.pow((t-0.7)/0.025,2))*45;
+      if(k===2) y=(t>0.15&&t<0.8?28+8*Math.sin(t*40):4);
+      d+=` L${xx.toFixed(1)},${(iy-y).toFixed(1)}`;}
+    s+=P(d+` L${ix+iw},${iy} Z`,COL.ink,'none',0,';fill-opacity:.75');
+    s+=L(ix,iy,ix+iw,iy,COL.axis,1);
+    tr.forEach((t,j)=>{s+=R(x+18+j*((w-36)/tr.length),205,(w-36)/tr.length-8,34,COL.paper,COL.hair,17)+
+      T(x+18+j*((w-36)/tr.length)+((w-36)/tr.length-8)/2,228,t,'axlbl','middle','style="font-size:15px"');});
+    s+=T(x+18,272,arms,'psub');
+  });
+  return svg(W,H,s);
+}
+
+/* ---------- 7 · counts vs p, knob matrix ---------- */
+function figSpaces(){
+  const W=700,H=330;let s='';
+  const pan=[['counts25','Counts',46],['pval25','−log10 p',50]];
+  pan.forEach(([sp,t,ym],i)=>{
+    const y0=30+i*155+120;
+    s+=T(0,y0-95,t,'ptitle');
+    s+=L(150,y0,690,y0,COL.axis,1);
+    s+=P(trackD(S('base__base/'+sp),150,y0,540,110,ym,false),'none',COL.ink,3.2,';stroke-opacity:.35');
+    s+=P(trackD(S('ctlid__none/'+sp),150,y0,540,110,ym,false),'none',COL.arm,1.6);
+    s+=T(0,y0-60,i===0?'identical':'different','psub');
+  });
+  s+=L(160,322,190,322,COL.ink,3.2).replace('/>',' style="stroke-opacity:.35"/>')+T(196,327,'base','cap')+L(260,322,290,322,COL.arm,2)+T(296,327,'arm: no control','cap');
+  return svg(W,H,s);
+}
+function figKnobMatrix(){
+  const W=430,H=360;let s='';
+  const rows=[['depth',1],['read length',1],['paired-end',1],['duplicates',1],['MAPQ cut',1],['antibody proxy',1],
+    ['control',0],['control depth',0],['control scaling',0],['fragment length',0]];
+  s+=T(250,22,'counts','axlbl','middle')+T(350,22,'−log10 p','axlbl','middle');
+  rows.forEach(([n,c],i)=>{const y=52+i*30, col=c?COL.arm:COL.twin;
+    s+=T(190,y+6,n,'axlbl','end','style="font-size:16px"');
+    s+=c?Ci(250,y,9,col):Ci(250,y,8,'none',COL.faint,1.8);
+    s+=Ci(350,y,9,col);});
+  s+=Ci(200,H-12,7,COL.muted)+T(212,H-7,'moves','cap')+Ci(290,H-12,6,'none',COL.faint,1.6)+T(302,H-7,'unchanged','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 8 · g and f ---------- */
+function figGF(){
+  const W=1160,H=400;let s='';
+  s+=R(20,40,150,46,COL.card,COL.row1,23)+T(95,70,'C','mono','middle');
+  s+=R(20,110,150,46,COL.card,COL.row2,23)+T(95,140,'C′','mono','middle');
+  s+=T(95,28,'settings','psub','middle');
+  s+=arrowR(172,63,250)+arrowR(172,133,250);
+  // g box with MLP dots
+  s+=R(255,30,210,140,COL.card,COL.accent,14,2.5)+T(360,24,'g · trained','val','middle','style="fill:var(--accent)"');
+  [[290,3],[360,4],[430,3]].forEach(([x,n],k)=>{for(let j=0;j<n;j++){const y=100+(j-(n-1)/2)*28;s+=Ci(x,y,8,COL.accent);}});
+  s+=T(360,160,'small MLP, 2 × 64','cap','middle');
+  s+=arrowR(467,100,560);
+  s+=R(565,70,120,60,COL.card,COL.hair,10)+T(625,107,'θ','big','middle')+T(625,58,'parameters','psub','middle');
+  s+=arrowD(625,132,215);
+  // X -> f -> X'
+  const vx=S('base__base/counts25').slice(100,300), vy=S('depth__15M/counts25').slice(100,300);
+  s+=R(20,220,300,140,COL.card,COL.hair,10)+P(trackD(vx,34,345,272,100,46,true),COL.x,'none',0)+T(170,385,'X','ptitle','middle');
+  s+=arrowR(322,290,520);
+  s+=R(525,220,200,140,COL.card,COL.ink,14,2.5)+T(625,297,'f','big','middle','style="font-size:40px"')+T(625,330,'built by g','psub','middle');
+  s+=arrowR(727,290,820);
+  // X' with band
+  const yb=345,w=300,h=100,x0=825;
+  const up=vy.map(v=>v*1.45+2), lo=vy.map(v=>Math.max(0,v*0.6-1));
+  s+=R(x0-6,220,w+12,140,COL.card,COL.hair,10);
+  s+=P(trackD(up,x0,yb,w,h,46,true),COL.row2,'none',0,';fill-opacity:.25');
+  s+=P(trackD(lo,x0,yb,w,h,46,true),COL.card,'none',0);
+  s+=P(trackD(vy,x0,yb,w,h,46,false),'none',COL.row2,2);
+  s+=T(x0+w/2,385,'predicted X′: a mean and a spread per bin','psub','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 9 · designs ---------- */
+function figDesigns(){
+  const W=1160,H=420;let s='';
+  const pw=260,gap=26,top=20,ph=200;
+  const names=[['A','one straight line'],['B','a rising curve'],['C','smoothing kernel, then curve'],['D','small CNN, tuned by g']];
+  const can=[['magnitude only','3 numbers'],['magnitude only','12-knot curve'],['+ one shape change, everywhere','33-bin kernel (825 bp)'],['+ shape that depends on neighbours','4 layers, view ≈ 1.5 kb']];
+  names.forEach(([n,t],i)=>{
+    const x=10+i*(pw+gap);
+    s+=R(x,top,pw,ph+150,COL.card,COL.hair,12);
+    s+=T(x+18,top+40,n,'big')+T(x+50,top+38,t,'axlbl');
+    const bx=x+30,by=top+70,bw=pw-60,bh=ph-60;
+    if(i<2){ // input level vs output level
+      s+=L(bx,by+bh,bx+bw,by+bh,COL.axis,1.2)+L(bx,by,bx,by+bh,COL.axis,1.2);
+      s+=T(bx+bw/2,by+bh+20,'input level → output level','cap','middle');
+      if(i===0) s+=L(bx+5,by+bh-10,bx+bw-5,by+10,COL.accent,3.5);
+      else{let d='',pts=[];for(let k=0;k<12;k++){const t=k/11,xx=bx+5+t*(bw-10),yy=by+bh-10-(bh-20)*(0.5*t+0.5*Math.pow(t,3)+0.15*Math.sin(t*6)*t*(1-t)*4);pts.push([xx,yy]);d+=(k?' L':'M')+xx.toFixed(1)+','+yy.toFixed(1);}
+        s+=P(d,'none',COL.accent,3.5);pts.forEach(p=>s+=Ci(p[0],p[1],4.5,COL.card,COL.accent,2));}
+    }else if(i===2){ // kernel then small curve
+      const kx=bx,kw=bw*0.45;
+      s+=L(kx,by+bh,kx+kw,by+bh,COL.axis,1.2);
+      let d=`M${kx},${by+bh}`;for(let k=0;k<=40;k++){const t=k/40;d+=` L${(kx+t*kw).toFixed(1)},${(by+bh-Math.exp(-Math.pow((t-0.5)/0.13,2))*(bh-20)).toFixed(1)}`;}
+      s+=P(d,'none',COL.accent,3.5)+T(kx+kw/2,by+bh+20,'kernel','cap','middle');
+      s+=T(kx+kw+14,by+bh/2+8,'→','big','middle');
+      const cx2=kx+kw+30,cw=bw-kw-30;
+      s+=L(cx2,by+bh,cx2+cw,by+bh,COL.axis,1.2)+L(cx2,by,cx2,by+bh,COL.axis,1.2);
+      let d2='';for(let k=0;k<=20;k++){const t=k/20;d2+=(k?' L':'M')+(cx2+4+t*(cw-8)).toFixed(1)+','+(by+bh-8-(bh-16)*(0.5*t+0.5*t*t*t)).toFixed(1);}
+      s+=P(d2,'none',COL.accent,3)+T(cx2+cw/2,by+bh+20,'curve','cap','middle');
+    }else{ // stacked conv layers with film arrows
+      for(let l=0;l<4;l++){const yy=by+l*34;s+=R(bx+40,yy,bw-60,24,'none',COL.accent,5,2);
+        for(let k=0;k<9;k++) s+=Ci(bx+52+k*((bw-84)/8),yy+12,3,COL.accent);
+        s+=L(bx,yy+12,bx+34,yy+12,COL.row1,2)+arrowHead(bx+40,yy+12,'r',COL.row1,7);}
+      s+=T(bx+8,by+bh+20,'g scales and shifts each layer','cap','start');
+    }
+    s+=L(x+18,top+ph+50,x+pw-18,top+ph+50,COL.hair,1);
+    s+=T(x+18,top+ph+82,can[i][0],'axlbl','start','style="font-size:15.5px"')+T(x+18,top+ph+108,can[i][1],'psub');
+  });
+  s+=L(40,H-8,W-60,H-8,COL.faint,1.5)+arrowHead(W-50,H-8,'r',COL.faint)+T(W/2,H-16,'more expressive →','cap','middle');
+  return svg(W,H,s).replace(`viewBox="0 0 ${W} ${H}"`,`viewBox="0 0 ${W} ${H+4}"`);
+}
+
+/* ---------- 10 · row 1 vs row 2 ---------- */
+function figRows(){
+  const W=1160,H=420;let s='';
+  const v=S('base__base/counts25'), lx=230, pw=900;
+  s+=T(0,70,'source track X','ptitle')+T(0,94,'(real H3K27ac)','psub');
+  s+=P(trackD(v,lx,110,pw,100,46,true),COL.x,'none',0)+L(lx,110,lx+pw,110,COL.axis,1);
+  // row1 strip
+  s+=T(0,190,'Row 1','ptitle','start','style="fill:var(--row1)"')+T(0,214,'g(C, C′) → one θ','psub');
+  s+=R(lx,165,pw,50,COL.row1,'none',6)+T(lx+pw/2,197,'the same f in every bin','axlbl','middle','style="fill:#fff"');
+  // row2 strip coloured by level
+  s+=T(0,300,'Row 2','ptitle','start','style="fill:var(--row2)"')+T(0,324,'g(x, C, C′) → θ per bin','psub');
+  const n=v.length,dx=pw/n;
+  v.forEach((val,i)=>{const op=0.15+0.85*Math.min(1,Math.log1p(val)/Math.log1p(45));
+    s+=`<rect x="${(lx+i*dx).toFixed(1)}" y="275" width="${(dx+0.6).toFixed(1)}" height="50" style="fill:var(--row2);fill-opacity:${op.toFixed(2)}"/>`;});
+  s+=T(lx+pw/2,355,'f changes with the bin\'s level: darker = higher level','psub','middle');
+  s+=T(lx+pw/2,395,'The extra input is one number per bin. g keeps its size (+64 weights).','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 11 · run budget ---------- */
+function figBudget(){
+  const W=1160,H=110;let s='';
+  const items=[['2','spaces','counts, −log10 p'],['8','versions of g','7 per-track + 1 across'],['3','model kinds','real + 2 twins'],['3','seeds','0, 1, 2'],['144','runs per cell','']];
+  items.forEach(([n,t,sub],i)=>{const x=40+i*230;
+    s+=T(x,50,n,'big','start',i===4?'style="fill:var(--accent)"':'')+T(x+(n.length*17+10),48,t,'axlbl')+T(x,78,sub,'psub');
+    if(i<4) s+=T(x+200,52,i===3?'=':'×','big','middle','style="fill:var(--faint)"');});
+  s+=T(W/2,H-4,'576 (row 1) + 576 (row 2) + 192 (twin: real g only) = 1 344 runs, all on Nibi','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 12 · two versions of g ---------- */
+function figGVersions(){
+  const W=1160,H=330;let s='';
+  const tr=['DNase','H3K27ac','H3K4me3','H3K4me1','H3K27me3','H3K36me3','H3K9me3'];
+  s+=T(270,24,'one g per track','ptitle','middle');
+  tr.forEach((t,i)=>{const y=45+i*39;
+    s+=R(30,y,150,30,COL.paper,COL.hair,15)+T(105,y+21,t,'axlbl','middle','style="font-size:14.5px"');
+    s+=L(182,y+15,330,y+15,COL.muted,1.5)+R(335,y+2,70,26,COL.card,COL.accent,6,2)+T(370,y+20,'g'+(i+1),'val','middle','style="fill:var(--accent)"');});
+  s+=L(580,30,580,320,COL.hair,1.5);
+  s+=T(880,24,'one g across tracks','ptitle','middle');
+  tr.forEach((t,i)=>{const y=45+i*39;
+    s+=R(640,y,150,30,COL.paper,COL.hair,15)+T(715,y+21,t,'axlbl','middle','style="font-size:14.5px"');
+    s+=L(792,y+15,980,180,COL.muted,1.5);});
+  s+=R(980,140,120,80,COL.card,COL.accent,12,2.5)+T(1040,188,'g','big','middle','style="fill:var(--accent)"');
+  s+=T(1040,245,'also reads the assay','psub','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 13 · twin icons ---------- */
+function icon(kind){
+  const W=260,H=112;let s='';
+  const chip=(x,y,t,c,dash)=>R(x,y,60,30,COL.card,c,15,2).replace('stroke-width:2',dash?'stroke-width:2;stroke-dasharray:4 3':'stroke-width:2')+T(x+30,y+21,t,'mono','middle','style="font-size:15px"');
+  if(kind==='real'){s+=chip(10,10,'C₁','var(--row1)')+chip(80,10,'C′₁','var(--row2)')+arrowR(145,25,190)+T(222,32,'pair 1','axlbl','middle','style="font-size:15px"');
+    s+=chip(10,55,'C₂','var(--row1)')+chip(80,55,'C′₂','var(--row2)')+arrowR(145,70,190)+T(222,77,'pair 2','axlbl','middle','style="font-size:15px"');}
+  if(kind==='nocov'){s+=chip(10,10,'?','var(--nocov)',1)+chip(80,10,'?','var(--nocov)',1)+arrowR(145,25,190)+T(222,32,'pair 1','axlbl','middle','style="font-size:15px"');
+    s+=chip(10,55,'?','var(--nocov)',1)+chip(80,55,'?','var(--nocov)',1)+arrowR(145,70,190)+T(222,77,'pair 2','axlbl','middle','style="font-size:15px"');
+    s+=T(110,106,'new random draw every step','cap','middle','style="font-size:12px"');}
+  if(kind==='ids'){s+=chip(10,10,'C₇','var(--ids)')+chip(80,10,'C′₇','var(--ids)')+arrowR(145,25,190)+T(222,32,'pair 1','axlbl','middle','style="font-size:15px"');
+    s+=chip(10,55,'C₃','var(--ids)')+chip(80,55,'C′₃','var(--ids)')+arrowR(145,70,190)+T(222,77,'pair 2','axlbl','middle','style="font-size:15px"');
+    s+=T(110,106,'wrong, but always the same','cap','middle','style="font-size:12px"');}
+  if(kind==='xshuf'){const v=S('base__base/counts25').slice(150,250),x0=10,w=240,yb=62;
+    s+=P(trackD(v,x0,yb,w,50,46,true),COL.x,'none',0)+L(x0,yb,x0+w,yb,COL.axis,1);
+    const i1=52,i2=12;const xa=x0+(i1+0.5)*w/100,xb=x0+(i2+0.5)*w/100;
+    s+=Ci(xa,yb+10,5,COL.twin)+Ci(xb,yb+10,5,'none',COL.twin,2);
+    s+=`<path d="M${xb},${yb+16} Q${(xa+xb)/2},${yb+42} ${xa},${yb+16}" style="fill:none;stroke:var(--twin);stroke-width:2;stroke-dasharray:4 3"/>`;
+    s+=T(xa+10,yb+30,'this bin reads x from a random bin','cap','start','style="font-size:12px"');}
+  return svg(W,H,s);
+}
+
+/* ---------- 14 · chromosomes and pairs ---------- */
+function figChrom(){
+  const W=560,H=250;let s='';
+  const len=[248,242,198,190,181,171,159,145,138,134,135,133,114,107,102,90,83,80,59,64,47,51,156];
+  const nm=[...Array(22).keys()].map(i=>String(i+1)).concat(['X']);
+  const tot=len.reduce((a,b)=>a+b,0);
+  let x=10;const w=540;
+  nm.forEach((n,i)=>{const cw=len[i]/tot*w-2;const role=(n==='19'||n==='21')?'test':n==='22'?'val':'train';
+    const c=role==='test'?COL.accent:role==='val'?COL.twin:COL.ns;
+    s+=R(x,90,cw,40,c,'none',3);
+    if(role==='test') s+=T(x+cw/2,78,n,'val','middle');
+    if(role==='val') s+=T(x+cw/2,152,n,'val','middle');
+    x+=cw+2;});
+  s+=R(30,180,18,18,COL.ns,'none',3)+T(56,195,'train','axlbl');
+  s+=R(150,180,18,18,COL.twin,'none',3)+T(176,195,'pick the best step (chr22)','axlbl');
+  s+=R(30,214,18,18,COL.accent,'none',3)+T(56,229,'score (chr19 + chr21)','axlbl');
+  s+=T(10,30,'Chromosomes, to scale','ptitle');
+  return svg(W,H,s);
+}
+function figPairs(){
+  const W=560,H=300,cx=280,cy=160;let s='';
+  const arms=['15 M','7.5 M','3.75 M','PE','dedup','36 bp'];
+  const pts=arms.map((a,i)=>{const t=-Math.PI/2+i*2*Math.PI/arms.length;return [cx+120*Math.cos(t),cy+110*Math.sin(t),a];});
+  // law-test edges (arm -> arm)
+  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++) s+=L(pts[i][0],pts[i][1],pts[j][0],pts[j][1],COL.accent,1.5,'5 5');
+  pts.forEach(p=>{s+=L(cx,cy,p[0],p[1],COL.ink,3);});
+  pts.forEach(p=>{s+=Ci(p[0],p[1],26,COL.card,COL.ink,2)+T(p[0],p[1]+5,p[2],'axlbl','middle','style="font-size:13px"');});
+  s+=Ci(cx,cy,32,COL.ink)+T(cx,cy+5,'base','val','middle','style="fill:var(--paper)"');
+  s+=T(10,22,'Pairs within one track','ptitle');
+  s+=L(330,282,370,282,COL.ink,3)+T(376,287,'trained','cap');
+  s+=L(440,282,480,282,COL.accent,1.5,'5 5')+T(486,287,'law test','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 15 · CRPS and the bar ---------- */
+function figCRPS(){
+  const W=560,H=280;let s='';
+  const x0=30,w=500,yb=220,truth=0.62;
+  s+=L(x0,yb,x0+w,yb,COL.axis,1.2);
+  const pdf=(m,sd)=>{let d='';for(let k=0;k<=120;k++){const t=k/120,y=Math.exp(-0.5*Math.pow((t-m)/sd,2))/sd*11;d+=(k?' L':'M')+(x0+t*w).toFixed(1)+','+(yb-y).toFixed(1);}return d;};
+  s+=P(pdf(0.6,0.07),'none',COL.row2,3.2)+P(pdf(0.35,0.16),'none',COL.nocov,3.2);
+  s+=L(x0+truth*w,40,x0+truth*w,yb,COL.ink,2.5,'6 4')+T(x0+truth*w-8,52,'true value','axlbl','end');
+  s+=T(x0+0.72*w,110,'sharp and right:','val','start','style="fill:var(--row2)"')+T(x0+0.72*w,132,'low CRPS','axlbl');
+  s+=T(x0,70,'wide and off:','val','start','style="fill:var(--nocov)"')+T(x0,92,'high CRPS','axlbl');
+  s+=T(x0+w/2,250,'predicted distributions for one bin','cap','middle');
+  return svg(W,H,s);
+}
+function figBar(){
+  const W=560,H=280;let s='';
+  const yy=v=>40+(1-v)*180;
+  s+=L(60,220,520,220,COL.axis,1.2)+T(40,130,'CRPS','cap','middle','transform="rotate(-90 40 130)"');
+  const A=[0.82,0.78,0.86],B=[0.52,0.56,0.49];
+  [[150,A,COL.row1,'model 1'],[380,B,COL.row2,'model 2']].forEach(([x,v,c,n])=>{
+    v.forEach((val,i)=>s+=Ci(x-30+i*30,yy(val),9,c));
+    const mn=Math.min(...v),mx=Math.max(...v);
+    s+=L(x+60,yy(mx),x+60,yy(mn),c,3)+T(x+70,(yy(mx)+yy(mn))/2+5,'wobble','cap');
+    s+=T(x,245,n,'axlbl','middle');});
+  const mA=A.reduce((a,b)=>a+b)/3,mB=B.reduce((a,b)=>a+b)/3;
+  s+=L(260,yy(mA),300,yy(mA),COL.muted,1.5,'4 3')+L(300,yy(mB),330,yy(mB),COL.muted,1.5,'4 3');
+  s+=L(300,yy(mA),300,yy(mB)-8,COL.accent,2.5)+arrowHead(300,yy(mB),'d',COL.accent);
+  s+=T(306,(yy(mA)+yy(mB))/2,'gain','val','start','style="fill:var(--accent)"');
+  s+=T(290,272,'counts only if gain > 2 × the larger wobble','cap','middle');
+  s+=T(60,22,'3 seeds per model','ptitle');
+  return svg(W,H,s);
+}
+
+/* ---------- 16 · overview ---------- */
+function figOverview(){
+  const W=1160,H=330;let s='';
+  const ranges={DNase:[0.5,3.3],narrow:[0.34,0.58],broad:[0.37,0.58]};
+  const pw=330,lx=80,gap=55,top=40,rowH=58;
+  const rows=['A','B','C','D'];
+  CLASSES.forEach((c,ci)=>{
+    const x0=lx+ci*(pw+gap),[a,b]=ranges[c],xx=v=>x0+(Math.min(Math.max(v,a),b)-a)/(b-a)*pw;
+    s+=T(x0+pw/2,top-14,c,'ptitle','middle');
+    if(ci>0) s+=L(x0-gap/2,top-30,x0-gap/2,top+rowH*4+30,COL.axis,2);
+    for(let k=0;k<=4;k++){const v=a+(b-a)*k/4;s+=L(xx(v),top,xx(v),top+rowH*4,COL.grid,1)+T(xx(v),top+rowH*4+22,v.toFixed(c==='DNase'?1:2),'tick','middle');}
+    const ref=DATA.refs['counts|'+c];
+    s+=L(xx(ref.ns),top-4,xx(ref.ns),top+rowH*4,COL.ns,2.5,'7 5')+L(xx(ref.qm),top-4,xx(ref.qm),top+rowH*4,COL.qm,2.5,'7 5');
+    rows.forEach((r,ri)=>{const y=top+rowH*ri+rowH/2;
+      if(ci===0) s+=T(lx-24,y+7,r,'ptitle','end');
+      [[r,COL.row1,-9],[r+'2',COL.row2,9]].forEach(([rg,col,off])=>{
+        const [m,wb]=cell(rg,'per_track','counts','real',c,'crps_all');
+        s+=L(xx(m-wb/2),y+off,xx(m+wb/2),y+off,col,3);
+        s+=Ci(xx(m),y+off,7,col);
+        if(m>b) s+=T(xx(b)-10,y+off-10,f3(m)+' →','val','end',`style="fill:${col}"`);});
+    });
+  });
+  s+=T(W/2,H-6,'CRPS (lower is better)','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 17 · A2 bars ---------- */
+function figA2(){
+  const W=1160,H=330;let s='';
+  const pw=330,gap=55,lx=70,top=30,ph=230;
+  CLASSES.forEach((c,ci)=>{
+    const x0=lx+ci*(pw+gap);
+    const bars=[['A','real',COL.row1,'A'],['A2','real',COL.row2,'A2'],['A2','xshuf',COL.twin,'twin']];
+    const vals=bars.map(([r,m])=>cell(r,'per_track','counts',m,c,'crps_all'));
+    const ref=DATA.refs['counts|'+c];
+    const ymax=Math.max(...vals.map(v=>v[0]+v[1]/2),ref.ns)*1.15;
+    const yy=v=>top+ph*(1-v/ymax);
+    s+=T(x0+pw/2,top-8,c,'ptitle','middle');
+    s+=L(x0,top+ph,x0+pw,top+ph,COL.axis,1.2);
+    bars.forEach(([r,m,col,lab],bi)=>{const bx=x0+25+bi*100,bw=80,[mv,wb]=vals[bi];
+      s+=R(bx,yy(mv),bw,top+ph-yy(mv),col,'none',3);
+      s+=L(bx+bw/2,yy(mv+wb/2),bx+bw/2,yy(Math.max(0,mv-wb/2)),COL.ink,2);
+      s+=T(bx+bw/2,yy(mv+wb/2)-8,f3(mv),'val','middle',`style="fill:${col}"`);
+      s+=T(bx+bw/2,top+ph+22,lab,'axlbl','middle');});
+    s+=L(x0,yy(ref.ns),x0+pw,yy(ref.ns),COL.ns,2.5,'7 5');
+  });
+  s+=T(W/2,H-4,'one g per track · CRPS on all bins · whisker = seed range · each panel has its own y-axis','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 18 · why A failed ---------- */
+function figWhyA(){
+  const W=680,H=470;let s='';
+  const x0=80,y0=400,w=560,h=360,xm=40,ym=60;
+  const xx=v=>x0+v/xm*w, yy=v=>y0-Math.min(v,ym)/ym*h;
+  for(let k=0;k<=4;k++){s+=L(x0,yy(k*15),x0+w,yy(k*15),COL.grid,1)+T(x0-10,yy(k*15)+5,k*15,'tick','end');}
+  for(let k=0;k<=4;k++){s+=T(xx(k*10),y0+24,k*10,'tick','middle');}
+  s+=L(x0,y0,x0+w,y0,COL.axis,1.2)+L(x0,y0,x0,y0-h,COL.axis,1.2);
+  s+=T(x0+w/2,y0+52,'source count in a bin','axlbl','middle')+T(22,y0-h/2,'predicted target count','axlbl','middle',`transform="rotate(-90 22 ${y0-h/2})"`);
+  // truth: no change
+  s+=L(xx(0),yy(0),xx(40),yy(40),COL.ink,3,'8 6')+T(xx(40),yy(40)-14,'no change (truth)','axlbl','end');
+  // A: exp(a)(1+X)^b with a=-1.6, b=1.9
+  let d='';for(let k=0;k<=200;k++){const X=k/200*xm, m=Math.exp(-1.6)*Math.pow(1+X,1.9); if(m>ym){d+=` L${xx(X).toFixed(1)},${yy(ym).toFixed(1)}`;break;} d+=(k?' L':'M')+xx(X).toFixed(1)+','+yy(m).toFixed(1);}
+  s+=P(d,'none',COL.row1,4);
+  const X20=20,m20=Math.exp(-1.6)*Math.pow(21,1.9);
+  s+=T(xx(19)-8,yy(ym)+22,'row-1 A','val','end','style="fill:var(--row1)"');
+  s+=L(xx(X20),yy(X20),xx(X20),yy(m20),COL.accent,2)+T(xx(X20)+8,yy(32),'×'+(m20/X20).toFixed(1)+' at 20 reads','val','start','style="fill:var(--accent)"');
+  // A2 sketch
+  let d2='';for(let k=0;k<=100;k++){const X=k/100*xm, m=X*(1+0.04*Math.sin(X/3));d2+=(k?' L':'M')+xx(X).toFixed(1)+','+yy(m).toFixed(1);}
+  s+=P(d2,'none',COL.row2,3,';stroke-dasharray:2 5;stroke-linecap:round');
+  s+=T(xx(40),yy(8),'A2 can bend (sketch)','val','end','style="fill:var(--row2)"');
+  s+=T(x0,20,'A on arms where counts do not change (a ≈ −1.6, b ≈ 1.9)','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 19 · % change row2 vs row1 ---------- */
+function figDelta(){
+  const W=1160,H=470;let s='';
+  const x0=110,w=1000,top=30,h=320,ylo=-80,yhi=20;
+  const yy=v=>top+(yhi-v)/(yhi-ylo)*h;
+  for(let v=ylo;v<=yhi;v+=20){s+=L(x0,yy(v),x0+w,yy(v),v===0?COL.axis:COL.grid,v===0?2:1)+T(x0-12,yy(v)+5,(v>0?'+':'')+v+'%','tick','end');}
+  s+=T(30,top+h/2,'row 2 vs row 1','axlbl','middle',`transform="rotate(-90 30 ${top+h/2})"`);
+  s+=T(x0+w-6,yy(-74),'better ↓','cap','end')+T(x0+w-6,yy(14),'worse ↑','cap','end');
+  ['A','B','C','D'].forEach((r,ri)=>{
+    const gx=x0+w*(ri+0.5)/4;
+    s+=T(gx,top+h+72,r+' → '+r+'2','ptitle','middle');
+    CLASSES.forEach((c,ci)=>{const xa=gx-100+ci*80-12,xb=gx-100+ci*80+40+12;
+      if(ci%2===0) s+=R(xa,top,xb-xa,h,COL.grid,'none',4).replace('fill:var(--grid)','fill:var(--grid);fill-opacity:.55');
+      s+=L(xa+3,top+h+14,xb-3,top+h+14,COL.faint,1.5)+T((xa+xb)/2,top+h+36,c,'tick','middle','style="font-size:15px;fill:var(--muted)"');});
+    let k=0;
+    CLASSES.forEach((c,ci)=>['per_track','across'].forEach((g,gi)=>{
+      const [m1,w1]=cell(r,g,'counts','real',c,'crps_all'),[m2,w2]=cell(r+'2',g,'counts','real',c,'crps_all');
+      const pct=(m2-m1)/m1*100,beyond=Math.abs(m2-m1)>2*Math.max(w1,w2);
+      const x=gx-100+k*40,y=yy(Math.max(ylo,Math.min(yhi,pct)));k++;
+      const fill=beyond?(m2<m1?COL.row2:COL.accent):'none',stroke=beyond?'none':COL.muted;
+      s+=gi===0?Ci(x,y,9,fill,stroke,2.2):R(x-8,y-8,16,16,fill,stroke,2,2.2);
+      if(Math.abs(pct)>8) s+=T(x+(pct<0?0:0),y+(pct<0?28:-14),Math.round(pct)+'%','val','middle',`style="fill:${beyond?(m2<m1?'var(--row2)':'var(--accent)'):'var(--muted)'}"`);
+    }));
+  });
+  s+=Ci(x0+w-300,H-10,7,'none',COL.muted,2)+T(x0+w-288,H-5,'one g per track','cap')+R(x0+w-160,H-17,14,14,'none',COL.muted,2,2)+T(x0+w-140,H-5,'one g across','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 19b · one g per track vs one g across ---------- */
+function gverPct(r,c){const [p,wp]=cell(r,'per_track','counts','real',c,'crps_all'),[a,wa]=cell(r,'across','counts','real',c,'crps_all');
+  return [(a-p)/p*100,Math.abs(a-p)>2*Math.max(wp,wa)];}
+function figGver(){
+  const W=1160,H=490;let s='';
+  const x0=110,w=1030,top=40,h=300,ylo=-60,yhi=100;
+  const yy=v=>top+(yhi-v)/(yhi-ylo)*h;
+  for(let v=ylo;v<=yhi;v+=20){s+=L(x0,yy(v),x0+w,yy(v),v===0?COL.axis:COL.grid,v===0?2:1)+T(x0-12,yy(v)+5,(v>0?'+':'')+v+'%','tick','end');}
+  s+=T(30,top+h/2,'one g across vs one g per track','axlbl','middle',`transform="rotate(-90 30 ${top+h/2})"`);
+  s+=T(x0+w-8,yy(92),'↑ one g per track is better','cap','end')+T(x0+w-8,yy(-52),'↓ one g across is better','cap','end');
+  const gw=w/8;
+  s+=L(x0+4*gw,top-30,x0+4*gw,top+h+100,COL.ink,2);
+  s+=T(x0+2*gw,top-14,'row 1 · g(C, C′)','ptitle','middle','style="fill:var(--row1)"')+T(x0+6*gw,top-14,'row 2 · g(x, C, C′)','ptitle','middle','style="fill:var(--row2)"');
+  ['A','B','C','D','A2','B2','C2','D2'].forEach((r,ri)=>{
+    const gx=x0+gw*(ri+0.5);
+    if(ri%4) s+=L(x0+gw*ri,top,x0+gw*ri,top+h+70,COL.hair,1.5);
+    s+=T(gx,top+h+92,r,'ptitle','middle');
+    CLASSES.forEach((c,ci)=>{
+      const x=gx+(ci-1)*40,[pct,beyond]=gverPct(r,c),y=yy(Math.max(ylo,Math.min(yhi,pct)));
+      s+=T(x+4,top+h+16,c,'tick','end',`style="font-size:13px;fill:var(--muted)" transform="rotate(-40 ${x+4} ${top+h+16})"`);
+      const col=beyond?COL.ink:'none',st=beyond?'none':COL.muted;
+      s+=Ci(x,y,9,col,st,2.2);
+      if(Math.abs(pct)>8) s+=T(x,y+(pct<0?28:-15),(pct>0?'+':'')+Math.round(pct)+'%','val','middle',`style="fill:${beyond?'var(--ink)':'var(--muted)'};font-size:15px"`);});
+  });
+  s+=Ci(x0+w-330,H-10,7,COL.ink)+T(x0+w-318,H-5,'beyond seed noise','cap')+Ci(x0+w-150,H-10,7,'none',COL.muted,2)+T(x0+w-138,H-5,'within noise','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 20 · explosions ---------- */
+function figExplode(){
+  const W=1160,H=330;let s='';
+  const x0=80,w=1040,top=20,h=240,ymax=26;
+  const yy=v=>top+h*(1-v/ymax);
+  [0,5,10,15,20,25].forEach(v=>s+=L(x0,yy(v),x0+w,yy(v),COL.grid,1)+T(x0-12,yy(v)+5,v,'tick','end'));
+  s+=T(26,top+h/2,'exploding (pair, seed)','axlbl','middle',`transform="rotate(-90 26 ${top+h/2})"`);
+  ['A','B','C','D'].forEach((r,ri)=>{const gx=x0+w*(ri+0.5)/4;
+    [['row1',COL.row1],['row2',COL.row2],['twin',COL.twin]].forEach(([k,c],bi)=>{
+      const v=DATA.explode[k][ri],bx=gx-105+bi*75,bw=60;
+      s+=R(bx,yy(v),bw,top+h-yy(v),c,'none',3)+T(bx+bw/2,yy(v)-8,v,'val','middle',`style="fill:${c}"`);});
+    s+=T(gx,top+h+30,r,'ptitle','middle');});
+  s+=L(x0,top+h,x0+w,top+h,COL.axis,1.2);
+  s+=T(W/2,H-4,'−log10 p · trained pairs · summed over 3 mark classes × 2 versions of g','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 21 · symptom and mechanism ---------- */
+function figSymptom(){
+  const W=560,H=330;let s='';
+  const x0=90,w=440,top=30,h=230,lo=-1,hi=7;
+  const yy=v=>top+h*(1-(Math.log10(v)-lo)/(hi-lo));
+  for(let e=lo;e<=hi;e+=2){s+=L(x0,yy(Math.pow(10,e)),x0+w,yy(Math.pow(10,e)),COL.grid,1)+T(x0-10,yy(Math.pow(10,e))+5,'10'+(e===0?'⁰':e===1?'¹':e<0?'⁻¹':'<tspan dy="-7" font-size="11">'+e+'</tspan>'),'tick','end');}
+  s+=L(x0,yy(1),x0+w,yy(1),COL.axis,1.5,'4 3');
+  ['A','B','C','D'].forEach((r,ri)=>{const gx=x0+w*(ri+0.5)/4;
+    [[r,'real',COL.row1,-30],[r+'2','real',COL.row2,0],[r+'2','xshuf',COL.twin,30]].forEach(([rg,m,c,off])=>{
+      const [v]=cell(rg,'per_track','pval',m,'narrow','crps_all');s+=Ci(gx+off,yy(v),9,c);});
+    s+=T(gx,top+h+26,r,'ptitle','middle');});
+  s+=T(x0,16,'narrow marks, one g per track, −log10 p','cap');
+  s+=T(26,top+h/2,'mean CRPS (log)','axlbl','middle',`transform="rotate(-90 26 ${top+h/2})"`);
+  s+=Ci(120,H-12,6,COL.row1)+T(130,H-7,'row 1','cap')+Ci(200,H-12,6,COL.row2)+T(210,H-7,'row 2','cap')+Ci(280,H-12,6,COL.twin)+T(290,H-7,'twin','cap');
+  return svg(W,H,s);
+}
+function figSigma(){
+  const W=560,H=330;let s='';
+  const x0=90,w=440,top=30,h=230,smax=12,lmax=32;
+  const xx=v=>x0+v/smax*w, yy=l=>top+h*(1-l/lmax);
+  for(let e=0;e<=30;e+=10){s+=L(x0,yy(e),x0+w,yy(e),COL.grid,1)+T(x0-10,yy(e)+5,'10'+(e?'<tspan dy="-7" font-size="11">'+e+'</tspan>':'⁰'),'tick','end');}
+  for(let k=0;k<=12;k+=3) s+=T(xx(k),top+h+22,k,'tick','middle');
+  let d='';for(let k=0;k<=120;k++){const sg=k/120*smax,l=sg*sg/2/Math.LN10;d+=(k?' L':'M')+xx(sg).toFixed(1)+','+yy(l).toFixed(1);}
+  s+=P(d,'none',COL.ink,3);
+  const mk=(sg,lab,c,dy)=>{const l=sg*sg/2/Math.LN10;return Ci(xx(sg),yy(l),8,c)+T(xx(sg)-12,yy(l)+dy,lab,'val','end',`style="fill:${c}"`);};
+  s+=mk(1.8,'data: σ ≈ 1.8 → ×5','var(--ids)',-12)+mk(10.9,'learned: σ ≈ 10.9 → ×10²⁶','var(--accent)',6);
+  s+=T(x0+w/2,top+h+48,'spread σ (log scale of the p-value)','axlbl','middle');
+  s+=T(x0,16,'log-normal mean ÷ median = e^(σ²/2)','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 22 · checks heatmap ---------- */
+function figChecks(){
+  const W=1210,H=390;let s='';
+  const rows=[['beatstwin','better than no-covariates twin · seen pairs'],['lawtest_nocov','better than no-covariates twin · unseen pairs'],
+    ['lawtest_ids','better than labels-as-ids twin · unseen pairs'],['beatsxshuf','better than shuffled-bin twin · seen pairs'],
+    ['lawtest_xshuf','better than shuffled-bin twin · unseen pairs'],['beatsrow1','row 2 better than its row-1 design · seen pairs']];
+  const des=['A','B','C','D','A2','B2','C2','D2'];
+  const lx=410,cw=45,rh=46,top=70;
+  ['counts','pval'].forEach((sp,si)=>{
+    const x0=lx+si*(cw*8+40);
+    s+=T(x0+cw*4,24,sp==='counts'?'counts':'−log10 p','ptitle','middle');
+    des.forEach((d,di)=>s+=T(x0+di*cw+cw/2,top-12,d,'axlbl','middle',`style="fill:${di<4?'var(--row1)':'var(--row2)'};font-weight:600"`));
+    rows.forEach(([k],ri)=>des.forEach((d,di)=>{
+      const t=DATA.tally[d+'|'+k+'|'+sp],x=x0+di*cw,y=top+ri*rh;
+      if(!t){s+=R(x+2,y+2,cw-4,rh-4,COL.grid,'none',4);return;}
+      const f=t[0]/t[1];
+      s+=`<rect x="${x+2}" y="${y+2}" width="${cw-4}" height="${rh-4}" rx="4" style="fill:var(--ids);fill-opacity:${(0.06+0.9*f).toFixed(2)}"/>`;
+      s+=T(x+cw/2,y+rh/2+6,t[0],'val','middle',`style="fill:${f>0.55?'#fff':'var(--ink)'}"`);}));
+  });
+  rows.forEach(([k,n],ri)=>s+=T(lx-14,top+ri*rh+rh/2+6,n,'axlbl','end'));
+  s+=T(lx,H-6,'number of 12 settings that meet the check · darker = more','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 23 · depth law ---------- */
+function figDepth(){
+  const W=1160,H=330;let s='';
+  const x0=90,w=1040,top=20,h=240,ymax=1.4;
+  const yy=v=>top+h*(1-Math.min(v,ymax)/ymax);
+  s+=R(x0,yy(0.1),w,top+h-yy(0.1),'var(--ids)','none',0).replace('fill:var(--ids)','fill:var(--ids);fill-opacity:.18');
+  [0,0.4,0.8,1.2].forEach(v=>s+=L(x0,yy(v),x0+w,yy(v),COL.grid,1)+T(x0-10,yy(v)+5,Math.round(v*100)+'%','tick','end'));
+  s+=T(x0+6,yy(0.1)-6,'within 10%: the bar','cap','start','style="fill:var(--ids)"');
+  s+=T(28,top+h/2,'scale error','axlbl','middle',`transform="rotate(-90 28 ${top+h/2})"`);
+  const des=['A','B','C','D','A2','B2','C2','D2'];
+  des.forEach((d,di)=>{const gx=x0+w*(di+0.5)/8,c=di<4?COL.row1:COL.row2;
+    DATA.depth[d].forEach((e,k)=>{const [g,cl,v,wb,met]=e;const x=gx-40+k*16;
+      s+=met?Ci(x,yy(v),10,'var(--ids)','var(--ink)',2):(g==='per_track'?Ci(x,yy(v),7,c):R(x-6,yy(v)-6,12,12,c,'none',2));});
+    s+=T(gx,top+h+28,d,'ptitle','middle',`style="fill:${c}"`);});
+  s+=Ci(x0+w-290,H-10,6,COL.muted)+T(x0+w-278,H-5,'one g per track','cap')+R(x0+w-160,H-16,12,12,COL.muted,'none',2)+T(x0+w-142,H-5,'one g across','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 26 · next steps ---------- */
+function figNext(){
+  const W=1160,H=330;let s='';
+  const steps=[['1','Fix the p-value blow-ups','with a principled change (one candidate: a spread that is a smooth function of the level)','var(--accent)'],
+    ['2','Hand-check the depth law','before reading it as a model failure','var(--row1)'],
+    ['3','Diagnose D','why a model with no knots also blows up','var(--twin)'],
+    ['4','Decide what to pre-register','row 2 ran as exploratory; checks and verdicts come after','var(--ids)']];
+  steps.forEach(([n,t,sub,c],i)=>{const x=10+i*290;
+    s+=R(x,40,265,230,COL.card,c,12,2.5);
+    s+=Ci(x+40,85,24,c)+T(x+40,93,n,'big','middle','style="fill:#fff"');
+    s+=`<foreignObject x="${x+18}" y="122" width="232" height="140"><div xmlns="http://www.w3.org/1999/xhtml" style="font:600 18px var(--sans);color:var(--ink);line-height:1.3">${t}</div><div xmlns="http://www.w3.org/1999/xhtml" style="font:400 15px var(--sans);color:var(--muted);line-height:1.4;margin-top:8px">${sub}</div></foreignObject>`;
+    if(i<3) s+=arrowR(x+268,155,x+288,COL.faint);});
+  s+=T(W/2,310,'Also waiting: the DNase MAPQ arms rebuilt with multimapping off','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figSnippet3,figCandi:figCandiFixed,figQuestion,figHub,figTracks,figSpaces,figKnobMatrix,figGF,figDesigns,figRows,
+  figBudget,figGVersions,figChrom,figPairs,figCRPS,figBar,figOverview,figA2,figWhyA,figDelta,figGver,figExplode,figSymptom,figSigma,figChecks,figDepth,figNext};
+for(const [id,fn] of Object.entries(FIGS)){const el=document.getElementById(id);if(el){try{el.innerHTML=fn();}catch(e){el.textContent='figure error: '+e.message;console.error(id,e);}}}
+[['icReal','real'],['icNocov','nocov'],['icIds','ids'],['icXshuf','xshuf']].forEach(([id,k])=>{const el=document.getElementById(id);if(el)el.innerHTML=icon(k);});
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const pm=(r,m,c)=>{const [v,w]=cell(r,'per_track','counts',m,c,'crps_all');return f3(v)+' ± '+f3(w);};
+put('tA_dn',pm('A','real','DNase'));put('tA2_dn',pm('A2','real','DNase'));put('tTw_dn',pm('A2','xshuf','DNase'));
+put('tC_dn',pm('C','real','DNase'));put('tC2_dn',pm('C2','real','DNase'));
+{const R8=['A','B','C','D','A2','B2','C2','D2'],dn=R8.map(r=>gverPct(r,'DNase')[0]).filter(v=>v>0);
+ put('tGv_n',String(dn.length));put('tGv_rng',Math.round(Math.min(...dn))+'% to '+Math.round(Math.max(...dn))+'%');
+ put('tGv_h',Math.ceil(Math.max(...R8.flatMap(r=>['narrow','broad'].map(c=>Math.abs(gverPct(r,c)[0])))))+'%');}
+
+/* ---------- navigation ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h=parseInt((location.hash||'').slice(1));show(isNaN(h)?0:h-1);
+</script>
+</body>
+</html>

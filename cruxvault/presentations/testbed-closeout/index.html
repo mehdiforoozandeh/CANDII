@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="prezit-arc" content="paper">
+<title>Counterfactual Testbed Close-out</title>
+
+<!--
+  prezit · PAPER ARC · anchor q1 (and everything under it) · task t143 · PI request 2026-10-30.
+  The close-out deck of the whole counterfactual in-vitro covariate testbed: for every original
+  goal, fully met / partially met / not met but answered.
+
+  arc      motivation -> method -> results (a)..(l) -> discussion -> backup
+  build    python build_deck.py [VAULT]  ->  index.html beside this file (see DECK.md)
+  numbers  every measured number comes from DATA, which build_deck.py reads from
+             results/t112, t130, t136, t139, t142 (tables; gitignored, synced in), and
+             the tracked q1-subtree nodes h1, h15, h26, q2-q8 (regex over their readings).
+           The deck-sources manifest records the sha256 of every file the build read.
+           Typed: panel letters, and design constants in data-src="literal" spans.
+  refresh  the arm-to-arm slides (f) and (g) and the scorecard row read results/t136 at build
+           time; when the second arm finishes, sync and rebuild (DECK.md). The prose around
+           those slides is computed from DATA, so it changes with the readings.
+  notes    every slide carries speaker notes (press n); notes hold no digits.
+  status   readings, not verdicts. h1, h2, h28 conclusions are the PI's to sign.
+-->
+<script type="application/json" id="deck-sources">{"h15_one_transformation_conditioned_on_the_so.md": "7f96240764ae32455019c503d2eb5bd179507e1339d1d9316d8e7384b19c107e", "h1_conditioning_on_the_recorded_sequencing_.md": "7eac1aa637a3664fe8e13b97e00587b2ba35fe2bb47f800d78a8165287c174b1", "h26_a_trained_candi_checkpoint_told_a_counte.md": "d83c9164c283e841695c24797b3c33ffa8daf18bcb02bfedb8b92a289654d0dd", "presentations/testbed-closeout/build_deck.py": "40031a64ea227e1ee434a2773c95a85ef5ebe988c774f2d456ad4a98799b903e", "presentations/testbed-closeout/deck_src.html": "57367f6ea5c6968ac385c839cfbf1078650056ed73bba1734ea65890321a9123", "q2_do_the_covariates_that_record_which_read.md": "77e121d1efaecd258b2f281866ec646a6d524b731fc0b5855620cdcb1fd1869a", "q3_do_the_covariates_that_record_how_the_co.md": "6dbb21fad5ed2c89abac1c72f0a63a32ecec86fc725bfb5441c49cba8938c8ed", "q4_how_much_capacity_does_a_covariate_condi.md": "2e5441d14902d833db079f387f03892aeff5c343a1cc967ed083a6a448df11d4", "q5_does_a_depth_offset_on_f_the_source_dept.md": "30d7742190a874829236619bd54cb445655bd9491ccda720675315c0e46ec1ef", "q6_how_closely_does_a_map_h_reproduce_the_l.md": "8df0ce2630b81ac8822af7eeb004e5bd45865397883559779779dd2c51af1e3d", "q7_why_do_the_covariate_conditioned_g_f_des.md": "560577f733c9895132c56b4eb2c8ac5a3ce038e345719bc8a4f39c0ba2df6d68", "q8_does_candi_s_training_which_never_pairs_.md": "695183d048bb8c1fd9553b529a3a0424bd6446e6e6b1772e75430565e37d7c59", "results/t112/MANIFEST.tsv": "9e8f493cab3b9ded1fb284578c8110815e2e9a23bf79d21811aa5932397280fd", "results/t130/blind_table.tsv": "32c5f06704b0617120c5e76f5a26563b963bbb6d18cbbeaaf4b408fc6181907d", "results/t130/runs.tsv": "40014adf695ca36c8abc0735e332952547d733e9152f5884ca4c751395137932", "results/t136/checks_readings.tsv": "0877a71121c98e2de20f499924764c74d3f255be60001d21023d67965789d476", "results/t136/m1_heldout_table.tsv": "5875c5d515d0aab3c8add24e7bf5ee46b0a7ddf499e2722a0ceb608d0f3615e2", "results/t136/m5_depthlaw_table.tsv": "b91f57011d86e9f7521b002406d21d61e437d9a01796dba5ae5191c1f3cdc41c", "results/t136/n_table.tsv": "b39c7a9d6bf4f7c5e9b1c3a442c35eb782c09ff05f540f59c1f7b116f695f827", "results/t139/knob_vs_floor.tsv": "48e437cac296e22ef3ed9042c92f272376c43ef92c145a088ae0c9ec616a19a2", "results/t139/pairs.tsv": "d0cb433e37ce845bd324084b0ff547c002b17db156d9ed195fe5cff71b37b241", "results/t142/compare_real_class.tsv": "7ea9c6c29594be886f9fcaa933f41cd9a6fc55f00c36a355e50d031c214a03af", "results/t142/floor_at_30M.tsv": "2efdb6407090b8b8df6be6f60a15835561ef4b85ce1931a4521064c562a2d3b3", "results/t142/map_classes.tsv": "a5aa69c06e7ad58a5557e5cb814b9205ee40a9658f8183711d2ae35ebd5094b6", "results/t142/t141_readthin/knob_classes.tsv": "1ceeba1c40c989da90be8eb9b496de23010c69ff0108fa88211cad6ebfafa846"}</script>
+
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+
+  /* --- paper arc ------------------------------------------------------ */
+  :root{--own:#3f7d7a;--eqc:#b5462e;--data:#3f7d7a;--model:#8d8f98;--noise:#a6a29a}
+  .kicker .sec{display:inline-block;background:var(--accent);color:#fff;padding:3px 9px;
+    border-radius:4px;margin-right:12px;letter-spacing:.14em}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  @media (max-width:900px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--hair);border-top:3px solid var(--c,var(--accent));background:#fff;
+    border-radius:8px;padding:16px 18px}
+  .card .rl{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--c,var(--accent));
+    font-weight:700;margin-bottom:8px}
+  .card p{font-size:clamp(14px,1.4vw,17px);line-height:1.45;color:#333}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .panels>div{padding:0 14px}
+  .panels .fig svg{max-height:40vh}
+  .panels>div+div{border-left:1px solid var(--hair)}
+  @media (max-width:900px){.panels{grid-template-columns:1fr}.panels>div+div{border-left:0;border-top:1px solid var(--hair)}}
+  table.dtable td.run{color:var(--own);font-weight:600}
+  table.dtable td.off{color:var(--faint)}
+
+  /* --- this deck ------------------------------------------------------ */
+  :root{
+    --per:#3f7d7a;      /* one g per track */
+    --acr:#7aa9a6;      /* one g across tracks */
+    --ow:#8d8f98;       /* one-warp (covariate-free monotone map) */
+    --orc:#2b2b2b;      /* oracle */
+    --twin:#c9c5bd;     /* no-covariates twin */
+    --dref:#8d8f98;     /* old design D, direct */
+    --dvia:#3f7d7a;     /* old design D, through the base */
+    --darm1:#b5462e;    /* trained on two extra arm-to-arm pairs */
+    --darm2:#6b5b95;    /* trained on every arm-to-arm pair */
+    --dnase:#b5462e; --narrow:#3f7d7a; --broad:#c28a2c;
+    --counts:#3f7d7a; --pval:#6b5b95;
+    --met:#3f7d7a; --part:#c28a2c; --ans:#6b7fa3;
+    --se:#e3b7aa;       /* scale error part of a CRPS */
+  }
+  [data-src="literal"]{font-weight:inherit}
+  /* fit: this deck runs a figure plus two bullets on most result slides */
+  h2{font-size:clamp(22px,2.7vw,34px);margin-bottom:14px}
+  .kicker{margin-bottom:14px}
+  ul.pts{margin-top:10px;max-width:none}
+  ul.pts li{margin:7px 0;font-size:clamp(14px,1.3vw,17px);line-height:1.42}
+  .fig svg{max-height:40vh}
+  .fig.tall svg{max-height:50vh}
+  .panels .fig svg{max-height:44vh}
+  .legend{margin-top:4px;font-size:14px}
+  .note{margin-top:12px}
+  .cards{margin-top:14px}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c4{grid-template-columns:repeat(4,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  .card p.big{font-size:clamp(15px,1.5vw,18px)}
+  .card .num{font-size:clamp(22px,2.4vw,30px);font-weight:600;color:var(--c,var(--accent));
+    font-variant-numeric:tabular-nums;margin:2px 0 6px}
+  table.dtable.sm{font-size:13.5px}
+  table.dtable.sm td{padding:6px 12px 6px 0}
+  table.dtable.xs{font-size:12.5px}
+  table.dtable.xs td{padding:4.5px 10px 4.5px 0;line-height:1.3}
+  table.dtable.xs th{padding-bottom:6px}
+  .stat{display:inline-block;border-radius:4px;padding:2px 8px;font-size:11.5px;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;color:#fff;white-space:nowrap}
+  .stat.met{background:var(--met)} .stat.part{background:var(--part)} .stat.ans{background:var(--ans)}
+  .stat.pass{background:var(--met)} .stat.fail{background:var(--darm1)} .stat.wait{background:var(--faint)}
+  .pend{color:var(--muted);font-style:italic}
+  .panels.p3{grid-template-columns:1fr 1fr 1fr}
+  .panels.p3 .fig svg{max-height:40vh}
+  .gl dt{font-weight:600;font-size:15px;margin-top:9px}
+  .gl dd{font-size:14.5px;color:#444;margin-left:0;line-height:1.4}
+  .gl{columns:2;column-gap:48px}
+  .gl div{break-inside:avoid}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      the question as a headline; the scope in one line; the status (readings, not verdicts)
+       source   DATA.design (results/t112/MANIFEST.tsv, results/t130/runs.tsv, results/t139/pairs.tsv)
+       numbers  counts only, from DATA
+       cut      the nav hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">counterfactual in-vitro covariate testbed · close-out</div>
+      <h1>Do the recorded covariates tell us how to turn one measurement of a track into another?</h1>
+      <p class="sub" id="tScope"></p>
+      <p class="sub">These are readings, not verdicts. The PI signs each claim. The depth, run-type and arm-to-arm conclusions wait for that signature.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+      <aside class="notes"><p>This deck closes the testbed. For each goal we set at the start, it says if the goal is fully met, partially met, or not met but answered well enough to stop. The arc is motivation, method, results and discussion. Every number is read from the vault when the deck is built.</p></aside>
+    </div>
+  </section>
+
+  <!-- 2 · MOTIVATION · why a testbed
+       job      why we left CANDI to test its covariates
+       source   q8 Answer so far (CANDI's depth offset and its run-type direction score)
+       numbers  earlier results, from DATA.probe
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>why a testbed</div>
+      <h2>CANDI cannot test its covariate conditioning on its own training data</h2>
+      <div class="chartbox fig mid" id="figWhy"></div>
+      <ul class="pts">
+        <li>In CANDI, depth enters as a fixed offset: the told-depth slope is <span id="tSlope"></span>. Depth is set, not learned.</li>
+        <li>Told a new run type, CANDI moves its output in the right direction with a score of <span id="tDir"></span>, which is near chance (a score of <span data-src="literal">0.5</span>).</li>
+      </ul>
+      <aside class="notes"><p>CANDI only ever pairs an experiment with a thinned copy of itself. So only depth changes between its input and its target. We cannot ask CANDI what a different read length would do, because it never saw that pair. The testbed builds those pairs on purpose.</p></aside>
+    </div>
+  </section>
+
+  <!-- 3 · MOTIVATION · the question and the goals
+       job      the anchor question, and the map of goals the scorecard returns to
+       source   q1 (Question, Protocol) and its children's titles
+       numbers  none
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the question and the goals</div>
+      <h2 id="tGoalsH"></h2>
+      <div class="chartbox fig wide tall" id="figGoals"></div>
+      <p class="note">Pre-registered (fixed in writing before any run): the competitor is a covariate-free monotone map on the value axis (the one-warp), not a blank baseline; no genome-wide correlation is a headline; every number quotes its noise floor.</p>
+      <aside class="notes"><p>The anchor question is whether the recorded covariates carry enough information to map one measurement of a track onto another measurement of the same material. Each box under it is one goal. The colour of each box is its final status, which the scorecard near the end repeats with one line of evidence.</p></aside>
+    </div>
+  </section>
+
+  <!-- 4 · METHOD · the counterfactual arms (the deck's design grid)
+       job      what was built: one base per track, one knob changed per arm
+       source   results/t112/MANIFEST.tsv
+       numbers  design constants from DATA.design
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the counterfactual arms</div>
+      <h2>Each track is re-processed with one processing knob changed at a time</h2>
+      <div class="cols2">
+        <div class="chartbox fig" id="figArms"></div>
+        <div id="tblKnobs"></div>
+      </div>
+      <p class="note" id="tArmsNote"></p>
+      <aside class="notes"><p>Each arm is the same biological material as its base. Only one processing choice differs. Read-side knobs are re-run from the raw reads or the alignments. Control-side knobs change only the control or the peak caller, so they move the minus log ten p track and leave the counts unchanged.</p></aside>
+    </div>
+  </section>
+
+  <!-- 5 · METHOD · the model
+       job      the model as a schematic: g reads (C, C') and sets f; four designs of f
+       source   T118_COUNTERFACTUAL_F.md §1 and "Architecture ladder"
+       numbers  none
+       cut      the cards' second line -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the model</div>
+      <h2>A small network g reads both covariate sets and sets the transformation f</h2>
+      <div class="chartbox fig wide" id="figModel"></div>
+      <div class="cards c4">
+        <div class="card" style="--c:var(--per)"><div class="rl">Design A</div><p>An affine map per bin (a scale and a shift).</p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Design B</div><p>A monotone curve per bin (a fixed set of knots).</p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Design C</div><p>A smoothing kernel, then a monotone curve.</p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Design D</div><p>A small convolutional network, set by g through FiLM (a per-channel scale and shift).</p></div>
+      </div>
+      <aside class="notes"><p>The covariates C describe how the input track was made. C prime describes the track we want. The model must learn the relation between them, not one map per pair of settings. Each design runs with one g per track and with one g across all tracks, each with three seeds.</p></aside>
+    </div>
+  </section>
+
+  <!-- 6 · METHOD · references, pairs and the significance criterion
+       job      what each model is compared against, on which pairs, and when a gain counts
+       source   q1 Protocol; t130 DIGEST (gap closed, oracles); AGENTS.md §7.2 (CRPS split)
+       numbers  design constants only (literal)
+       cut      the second note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>references and scoring</div>
+      <h2>Every model is placed between a covariate-free map and an oracle</h2>
+      <div class="chartbox fig wide" id="figScore"></div>
+      <p class="note">CRPS (continuous ranked probability score; lower is better) is always split into its oracle-scaled part (shape) and its scale-error part (level). A gain is statistically significant only when it is above <span data-src="literal">2 ×</span> the seed range (largest minus smallest of three seeds). Smaller gains stay on the slide, labelled.</p>
+      <aside class="notes"><p>The one-warp is the covariate-free monotone map. The no-covariates twin is the same model trained with no covariates. The oracle is the best any predictor can do. For a depth pair it is the exact binomial thinning law, because a depth arm is a random subset of the base's reads. Trained pairs are base to arm; never-trained pairs are arm to arm, which training never showed.</p></aside>
+    </div>
+  </section>
+
+  <!-- 7 · RESULTS · (a) the main claim against the twin
+       job      one claim: covariates help on trained pairs; most of the help is lost on never-trained pairs
+       claim    the covariate-conditioned g beats its no-covariates twin on trained pairs, and the gain shrinks on never-trained pairs
+       source   h15 Findings, h1 Findings
+       numbers  DATA.main
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the covariates against the no-covariates twin</div>
+      <h2>The covariates help on trained pairs; most of the help is lost on never-trained pairs</h2>
+      <div class="chartbox fig mid" id="figMain"></div>
+      <ul class="pts">
+        <li id="tMain1"></li>
+        <li id="tMain2"></li>
+        <li id="tMain3"></li>
+      </ul>
+      <aside class="notes"><p>The bars are relative gains over the twin, as a median over the design and g configurations. Trained pairs are base to arm. Never-trained pairs are arm to arm, with one knob or two knobs changed. The drop is largest in the minus log ten p space.</p></aside>
+    </div>
+  </section>
+
+  <!-- 8 · RESULTS · (b) depth beyond the one-warp (h1)
+       job      one claim: on depth pairs, designs B-D close most of the one-warp-to-oracle gap
+       claim    base-to-arm depth pairs: designs B, C and D close most of the gap from one-warp to the exact thinning oracle in every mark class
+       source   results/t130/blind_table.tsv (counts, depth, base_to_arm, subset all)
+       numbers  DATA.h1
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) depth, against the one-warp and the exact oracle</div>
+      <h2>On depth pairs, designs B to D close most of the gap from the one-warp to the oracle</h2>
+      <div class="chartbox panels p3"><div class="fig" id="figH1a"></div><div class="fig" id="figH1b"></div><div class="fig" id="figH1c"></div></div>
+      <div class="legend" id="lgG"></div>
+      <ul class="pts">
+        <li id="tH1a"></li>
+        <li id="tH1b"></li>
+      </ul>
+      <aside class="notes"><p>Gap closed is the one-warp error minus the model error, over the one-warp error minus the oracle error. One is the oracle; zero is the one-warp. The whisker is the seed noise in the same units. The PI has not signed this reading, and the model design for the verdict is still his choice.</p></aside>
+    </div>
+  </section>
+
+  <!-- 9 · RESULTS · (c) run type beyond the one-warp (h2)
+       job      one claim: histone marks gain over the one-warp; DNase is mixed
+       claim    on paired-end pairs, every design beats the one-warp on histone marks above the seed range; DNase is mixed
+       source   results/t130/blind_table.tsv (counts, pe, both directions, subset all)
+       numbers  DATA.h2
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) run type, against the one-warp</div>
+      <h2>On run-type pairs, the model beats the one-warp on histone marks; DNase is mixed</h2>
+      <div class="chartbox panels p3"><div class="fig" id="figH2a"></div><div class="fig" id="figH2b"></div><div class="fig" id="figH2c"></div></div>
+      <div class="legend" id="lgG2"></div>
+      <ul class="pts">
+        <li id="tH2a"></li>
+        <li id="tH2b"></li>
+      </ul>
+      <aside class="notes"><p>The paired-end arm is a separate re-processing, not a subset of the base's reads. So no exact oracle exists, and the independent-replicate floor sits above the one-warp. Gap closed cannot be read here; the gain over the one-warp can. Not judged by the PI.</p></aside>
+    </div>
+  </section>
+
+  <!-- 10 · RESULTS · (d) capacity and the depth offset
+       job      one claim: more capacity or a depth offset helps design A only
+       claim    the depth offset repairs design A's scale error; no other design clears the significance criterion, and capacity does not fix never-trained pairs
+       source   q5 Answer so far (offset), q4 Answer so far (capacity)
+       numbers  DATA.cap
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) capacity of f and a depth offset</div>
+      <h2>A depth offset repairs design A's scale error; nothing in f fixes never-trained pairs</h2>
+      <div class="chartbox fig mid" id="figCap"></div>
+      <div class="legend" id="lgSplit"></div>
+      <ul class="pts">
+        <li id="tCap1"></li>
+        <li id="tCap2"></li>
+      </ul>
+      <aside class="notes"><p>The offset removes the source depth before f and adds the target depth after it. It helps the affine design, mostly in scale error. The other designs do not clear the criterion. More capacity in f leaves the never-trained gain where it was, so the limit is in g, not in the form of f.</p></aside>
+    </div>
+  </section>
+
+  <!-- 11 · RESULTS · (e) the depth-law miss
+       job      one claim: g fits trained pairs but misses the depth law on never-trained pairs; four causes ruled out; the chain through the base meets it
+       claim    the depth-law miss is not the pseudocount, the loss, the size of g or f, or a missing composable structure; two trained maps chained through the base meet the law
+       source   q7 Answer so far
+       numbers  DATA.law
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(e) the depth law on never-trained pairs</div>
+      <h2>Only the chain through the base meets the depth law on never-trained pairs</h2>
+      <div class="chartbox fig wide" id="figLaw"></div>
+      <ul class="pts">
+        <li id="tLaw1"></li>
+        <li id="tLaw2"></li>
+      </ul>
+      <aside class="notes"><p>The depth law says that a track at half the depth has half the counts. The real arms obey it closely. Every direct design learns it on trained pairs and misses it on never-trained arm to arm pairs. Removing the pseudocount, changing the loss, making g or f wider, and an encoder-decoder did not fix it. Running two trained maps in series through the base does.</p></aside>
+    </div>
+  </section>
+
+  <!-- 12 · RESULTS · (f) arm-to-arm training: the checks
+       job      one claim: training on two arm-to-arm pairs meets the depth-law checks but fails the CRPS check
+       claim    the first arm passes the law and ratio checks and fails the CRPS check; both arms finished (42 of 42 runs), both controls pass, so the reading is final
+       source   results/t136/checks_readings.tsv, m5_depthlaw_table.tsv, n_table.tsv
+       numbers  DATA.h28
+       cut      the note
+       refresh  re-sync results/t136 and rebuild; the Darm2 column and the rule line read DATA -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(f) training g on arm-to-arm pairs: the checks</div>
+      <h2 id="tH28h"></h2>
+      <div class="cols2">
+        <div class="chartbox fig" id="figH28law"></div>
+        <div id="tblH28"></div>
+      </div>
+      <p class="note" id="tH28note"></p>
+      <aside class="notes"><p>The first arm adds two arm to arm depth pairs per track to training. The second arm adds every arm to arm pair that does not touch the held-out depth. The checks were pre-registered and approved by the PI before the run. Both arms finished every run. Both controls pass, so the rule reading is final: it fails, on the CRPS check. The reading is not judged: the PI has not signed.</p></aside>
+    </div>
+  </section>
+
+  <!-- 13 · RESULTS · (g) arm-to-arm training: CRPS by mark class
+       job      one claim: the CRPS failure is DNase-driven and is scale error
+       claim    on held-out pairs the first arm's CRPS is worse than the reference in DNase, mostly as scale error; the second arm (read, not checked) reaches the through-the-base CRPS
+       source   results/t136/m1_heldout_table.tsv (subgroup heldout75)
+       numbers  DATA.h28.crps
+       cut      the second bullet
+       refresh  as slide 12 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(g) training g on arm-to-arm pairs: CRPS on held-out pairs</div>
+      <h2 id="tH28gh"></h2>
+      <div class="chartbox panels"><div class="fig" id="figH28h"></div><div class="fig" id="figH28d"></div></div>
+      <div class="legend" id="lgH28"></div>
+      <ul class="pts">
+        <li id="tH28c1"></li>
+        <li id="tH28c2"></li>
+        <li id="tH28c3"></li>
+      </ul>
+      <aside class="notes"><p>Each bar is a CRPS split into its shape part and its scale-error part. The whisker marks the seed range. The DNase class has one track, so its pairs are few and its seed range is wide. The pre-registered rule reads only the first arm. The second arm is complete; its bars are a reading, not a check.</p></aside>
+    </div>
+  </section>
+
+  <!-- 14 · RESULTS · (h) counts to -log10 p
+       job      one claim: a map h from counts to p is stable and is limited by the count model's errors
+       claim    an h trained on the true counts beats an h trained on f's predictions, and no push or formula h explodes
+       source   q6 Answer so far
+       numbers  DATA.hmap
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(h) from counts to the p-value track</div>
+      <h2>A map from counts to the p-value track is stable, and is limited by the count model</h2>
+      <div class="chartbox fig mid" id="figH"></div>
+      <ul class="pts">
+        <li id="tH1"></li>
+        <li id="tH2"></li>
+      </ul>
+      <aside class="notes"><p>The direct designs that predict the p-value track sometimes explode on sparse to full depth pairs. A separate map h, from a predicted count distribution and its control to the p-value, does not explode. Training h on f's predictions does not repair f's errors. The direct p-space fix is deferred until the count model settles, by PI ruling.</p></aside>
+    </div>
+  </section>
+
+  <!-- 15 · RESULTS · (i) which knobs move a track
+       job      one claim: every knob moves peak height far above the resampling floor; few move the shape above it
+       claim    peak height moves above the floor for every knob; the one-kilobase shape moves above it for few knobs
+       source   results/t139/knob_vs_floor.tsv (counts)
+       numbers  DATA.knob
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(i) which knobs move a track</div>
+      <h2>Every knob moves peak height far above the floor; few move the shape above it</h2>
+      <div class="chartbox panels"><div class="fig" id="figKa"></div><div class="fig" id="figKb"></div></div>
+      <ul class="pts">
+        <li id="tK1"></li>
+        <li id="tK2"></li>
+      </ul>
+      <aside class="notes"><p>Peak height is the log two change of the top one percent of bins on one shared peak set. Shape is one minus the rank correlation at one kilobase. The floor is the distance between two independent half libraries at the arm's depth. A knob arm reuses the base's reads, so below the floor does not mean no effect.</p></aside>
+    </div>
+  </section>
+
+  <!-- 16 · RESULTS · (j) the resampling floor
+       job      one claim: the floor shrinks with depth, the real halves match whole-read thinning, and signal level (not region) sets it
+       claim    whole-read thinning reproduces the real depth-arm halves, and signal level explains the floor while regional features add almost nothing
+       source   results/t142/floor_at_30M.tsv, compare_real_class.tsv, map_classes.tsv
+       numbers  DATA.floor
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(j) how much resampling alone moves a track</div>
+      <h2>Resampling noise shrinks with depth, and signal level sets it, not region</h2>
+      <div class="chartbox panels"><div class="fig" id="figFa"></div><div class="fig" id="figFb"></div></div>
+      <ul class="pts">
+        <li id="tF1"></li>
+        <li id="tF2"></li>
+      </ul>
+      <aside class="notes"><p>The floor is the distance between the two pseudoreplicate halves of a product, thinned along a depth ladder. The first pass thinned each bin alone and split reads, which made the one kilobase shape too smooth. The rebuild drops whole reads, and it matches the real depth-arm halves. The value at the full depth is an extrapolation.</p></aside>
+    </div>
+  </section>
+
+  <!-- 17 · RESULTS · (k) where each knob acts along the genome
+       job      one claim: depth acts uniformly; MAPQ and read length act in low-mappability regions
+       claim    the depth arm's residual equals its whole-read thinning null; MAPQ zero and short reads add a mappability-driven residual
+       source   results/t142/t141_readthin/knob_classes.tsv
+       numbers  DATA.where, DATA.shuf
+       cut      the second bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(k) where along the genome each knob acts</div>
+      <h2>Depth acts the same everywhere; mapping quality and read length act where mappability is low</h2>
+      <div class="chartbox panels"><div class="fig" id="figWa"></div><div class="fig" id="figWb"></div></div>
+      <div class="legend" id="lgW"></div>
+      <ul class="pts">
+        <li id="tW1"></li>
+        <li id="tW2"></li>
+      </ul>
+      <aside class="notes"><p>The residual is what the one-warp leaves per one kilobase bin. Signal level is fitted first. The feature gain is the extra variance that GC, mappability, repeats and peak context explain together. The shuffle control permutes the feature rows. The depth arm sits on its thinning null, so depth needs no position-aware correction.</p></aside>
+    </div>
+  </section>
+
+  <!-- 18 · RESULTS · (l) the trained CANDI probe
+       job      one claim: the probe of a trained CANDI checkpoint could not be read; it is parked
+       claim    CANDI's output moves when told a counterfactual covariate, but the per-region test is not readable; the probe is parked
+       source   h26 Findings, q8 Answer so far
+       numbers  DATA.probe
+       cut      the third card -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(l) a trained CANDI, told a counterfactual covariate</div>
+      <h2>CANDI's output moves when told a new read length or run type, but the test could not be read</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--met)"><div class="rl">The swap is wired</div><div class="num" id="tP1"></div><p>Prompt rows change one field in the target column only.</p></div>
+        <div class="card" style="--c:var(--darm1)"><div class="rl">The depth control fails</div><div class="num" id="tP2"></div><p>Rows pass; told depth also moves the learned part of the output.</p></div>
+        <div class="card" style="--c:var(--darm1)"><div class="rl">No pair clears the floor</div><div class="num" id="tP3"></div><p>Knob pairs clear the split-half reproducibility floor; that floor statistic is biased down.</p></div>
+      </div>
+      <aside class="notes"><p>The probe told a trained CANDI checkpoint an arm's read length or run type in place of the base's. The output level moves, so CANDI does not ignore these covariates. Whether it moves the right way per region could not be tested, because the positive control failed. The PI parked the probe and moved the question to arm to arm training.</p></aside>
+    </div>
+  </section>
+
+  <!-- 19 · DISCUSSION · ruled in, ruled out
+       job      readings restated as what they rule in and out
+       source   restated from results (a) to (l)
+       numbers  none new
+       cut      the third card -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
+      <h2>The covariates carry the information; a direct g does not carry it to unseen pairs</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--met)"><div class="rl">Ruled in</div><p>The covariates beat the no-covariates twin on trained pairs (a). On depth, designs B to D sit near the exact oracle (b). Every knob moves peak height above the floor (i).</p></div>
+        <div class="card" style="--c:var(--darm1)"><div class="rl">Ruled out</div><p>The depth-law miss is not the pseudocount, the loss, the size of g or f, or a missing encoder-decoder structure (e). More capacity in f does not help never-trained pairs (d).</p></div>
+        <div class="card" style="--c:var(--ans)"><div class="rl">Located</div><p>The gap is in how g answers a pair it never saw. Two trained maps through the base meet the law (e). Arm-to-arm training meets the law but not the CRPS (f, g).</p></div>
+      </div>
+      <aside class="notes"><p>The discussion adds no number. Each card restates result slides by their letters.</p></aside>
+    </div>
+  </section>
+
+  <!-- 20 · DISCUSSION · limitations
+       job      the limitations, each with its count
+       source   restated from method and results; DATA.design, DATA.h28.n
+       numbers  restated counts from DATA
+       cut      the fourth card -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>limitations</div>
+      <h2>Limitations</h2>
+      <div class="cards c2">
+        <div class="card" style="--c:var(--ow)"><div class="rl">Few tracks</div><p id="tLim1"></p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">No oracle for re-processed arms</div><p>A re-run arm is not a subset of its base's reads, so only depth has an exact oracle. For run type, gap closed cannot be read (c).</p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">The p-value space is unfixed</div><p>Designs B to D still explode on a few sparse to full depth pairs; the PI deferred the fix until the count model settles (h).</p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">Open runs</div><p id="tLim4"></p></div>
+      </div>
+      <aside class="notes"><p>Each limitation names what it affects. None of them reverses a reading in the main arc; each one bounds how far a reading carries.</p></aside>
+    </div>
+  </section>
+
+  <!-- 21 · DISCUSSION · the goals scorecard (a grid, so a table)
+       job      every original goal, its status, one line of evidence
+       source   restated from results; every number from DATA
+       numbers  restated from results, none new
+       cut      nothing; the PI asked for every goal
+       refresh  the arm-to-arm row reads DATA.h28 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>goals scorecard</div>
+      <h2 id="tScoreH"></h2>
+      <div id="tblScore"></div>
+      <aside class="notes"><p>Fully met means the goal's question has an answer backed by readings. Partially met means part of the goal holds and part does not. Not met but answered means the goal was not reached, and we know enough to stop. Rows on the depth, run-type and arm-to-arm claims wait for the PI's signature.</p></aside>
+    </div>
+  </section>
+
+  <!-- 22 · DISCUSSION · what carries to CANDI
+       job      the lessons CANDI should take from the testbed
+       source   restated from results (b), (e), (f), (j), (k); q10 and q11 "For CANDI" lines
+       numbers  restated from DATA
+       cut      the fifth card -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what carries to CANDI</div>
+      <h2>What carries to CANDI</h2>
+      <div class="cards c5">
+        <div class="card" style="--c:var(--per)"><div class="rl">Depth</div><p class="big" id="tC1"></p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Read length, mapping quality</div><p class="big" id="tC2"></p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Noise model</div><p class="big" id="tC3"></p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Training pairs</div><p class="big" id="tC4"></p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Scoring</div><p class="big">Score against the one-warp and the no-covariates twin; use the exact thinning oracle for depth; split every CRPS.</p></div>
+      </div>
+      <aside class="notes"><p>The transfer task into CANDI is deferred. The arm-to-arm grid is complete; its reading waits for the PI's signature. These cards are what the testbed says that task should start from.</p></aside>
+    </div>
+  </section>
+
+  <!-- 23 · BACKUP · glossary
+       job      glosses repeated in one place
+       source   none
+       numbers  none
+       cut      the last entries -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>glossary</div>
+      <h2>Glossary</h2>
+      <dl class="gl">
+        <div><dt>Base, arm</dt><dd>A track as made by the standard pipeline; the same track with one knob changed.</dd></div>
+        <div><dt>One-warp</dt><dd>One monotone map from base values to arm values, with no covariates.</dd></div>
+        <div><dt>No-covariates twin</dt><dd>The same model, trained with the covariates removed.</dd></div>
+        <div><dt>Oracle</dt><dd>The best possible predictor; for depth, the exact binomial thinning law.</dd></div>
+        <div><dt>Gap closed</dt><dd>The share of the one-warp-to-oracle distance that a model removes.</dd></div>
+        <div><dt>CRPS</dt><dd>Continuous ranked probability score: the error of a predicted distribution.</dd></div>
+        <div><dt>Oracle-scaled part, scale error</dt><dd>The CRPS split into shape error and level error.</dd></div>
+        <div><dt>Seed range</dt><dd>Largest minus smallest value over three seeds (random restarts).</dd></div>
+        <div><dt>Depth law</dt><dd>Counts scale with sequencing depth: half the reads, half the counts.</dd></div>
+        <div><dt>Trained, never-trained pair</dt><dd>Base-to-arm pairs seen in training; arm-to-arm pairs never seen.</dd></div>
+        <div><dt>Through the base</dt><dd>Two trained maps in series: arm to base, then base to arm.</dd></div>
+        <div><dt>Resampling floor</dt><dd>How far two independent half libraries of one track differ.</dd></div>
+      </dl>
+      <aside class="notes"><p>Each term is also glossed on the slide where it first appears.</p></aside>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">counterfactual testbed · close-out</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Every measured number below comes from DATA, which build_deck.py embeds from vault files.
+   Comparisons (gaps, counts of cells, "above the criterion") are computed here, never typed. */
+const DATA = {"design":{"n_products":130,"n_bases":7,"n_arms":123,"n_tracks":7,"n_knobs":10,"assays":["DNase-seq","H3K27ac","H3K27me3","H3K36me3","H3K4me1","H3K4me3","H3K9me3"],"knobs":{"abproxy":{"levels":["f0.5","f0.9"],"route":"bam","knob":"control_read_fraction"},"crop":{"levels":["36","50"],"route":"fastq","knob":"crop_length"},"ctldepth":{"levels":["q0.25","q0.5"],"route":"bam","knob":"ctl_subsample_reads"},"ctlid":{"levels":["none","other"],"route":"bam","knob":"control_accession"},"dedup":{"levels":["off"],"route":"fastq","knob":"no_dup_removal"},"depth":{"levels":["15M","3.75M","7.5M"],"route":"bam","knob":"treatment_reads"},"extsize":{"levels":["k0.5","k2"],"route":"bam","knob":"fraglen"},"mapq":{"levels":["0","10"],"route":"fastq","knob":"mapq_thresh"},"pe":{"levels":["pe"],"route":"fastq","knob":"paired_end"},"ratio":{"levels":["k0.5","k2"],"route":"bam","knob":"macs2_ratio"}},"n_ladder_runs":576,"n_knob_pairs":192},"main":{"n_cfg":"16","counts":["0.29","0.11","0.16"],"p":["0.15","0.06","0.004"],"twin_cells":["5","6","6"],"swap":["0.19","0.22","0.46","0.55","0.1"],"h1":["0.46","16","16","0.16","13","16"],"q2":["0.08","0.18","0.003","0.06"],"q3":["0.36","0.62","0.31","0.48","0.003","0.024"]},"h1":[{"cls":"DNase","rung":"A","g":"across","gc":-0.6194,"noise_gc":2.5963,"gain":-0.0179,"seed2":0.0749,"twin_gain":1.5101,"d_model":0.2587,"os":0.248,"se":0.0107,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"DNase","rung":"A","g":"per_track","gc":-0.5391,"noise_gc":1.1544,"gain":-0.0156,"seed2":0.0333,"twin_gain":1.2105,"d_model":0.2564,"os":0.2467,"se":0.0097,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"DNase","rung":"B","g":"across","gc":0.8491,"noise_gc":0.0906,"gain":0.0245,"seed2":0.0026,"twin_gain":1.0691,"d_model":0.2163,"os":0.2151,"se":0.0012,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"DNase","rung":"B","g":"per_track","gc":0.9173,"noise_gc":0.0719,"gain":0.0265,"seed2":0.0021,"twin_gain":0.9768,"d_model":0.2144,"os":0.2139,"se":0.0004,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"DNase","rung":"C","g":"across","gc":0.7691,"noise_gc":0.5276,"gain":0.0222,"seed2":0.0152,"twin_gain":1.0992,"d_model":0.2186,"os":0.215,"se":0.0036,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"DNase","rung":"C","g":"per_track","gc":0.9026,"noise_gc":0.1843,"gain":0.026,"seed2":0.0053,"twin_gain":0.9961,"d_model":0.2148,"os":0.2136,"se":0.0012,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"DNase","rung":"D","g":"across","gc":0.8872,"noise_gc":0.1008,"gain":0.0256,"seed2":0.0029,"twin_gain":1.0567,"d_model":0.2152,"os":0.2138,"se":0.0015,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"DNase","rung":"D","g":"per_track","gc":0.866,"noise_gc":0.4056,"gain":0.025,"seed2":0.0117,"twin_gain":0.8743,"d_model":0.2158,"os":0.2135,"se":0.0023,"d_onewarp":0.2408,"ow_os":0.2307,"ow_se":0.0101,"d_oracle":0.212,"or_os":0.212,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3725},{"cls":"broad","rung":"A","g":"across","gc":0.5253,"noise_gc":0.1663,"gain":0.0165,"seed2":0.0052,"twin_gain":0.2701,"d_model":0.2009,"os":0.2002,"se":0.0007,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"broad","rung":"A","g":"per_track","gc":0.4698,"noise_gc":0.1177,"gain":0.0148,"seed2":0.0037,"twin_gain":0.2929,"d_model":0.2026,"os":0.2018,"se":0.0008,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"broad","rung":"B","g":"across","gc":0.8341,"noise_gc":0.026,"gain":0.0262,"seed2":0.0008,"twin_gain":0.2747,"d_model":0.1912,"os":0.1909,"se":0.0002,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"broad","rung":"B","g":"per_track","gc":0.788,"noise_gc":0.107,"gain":0.0248,"seed2":0.0034,"twin_gain":0.2912,"d_model":0.1926,"os":0.1916,"se":0.001,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"broad","rung":"C","g":"across","gc":0.8136,"noise_gc":0.0973,"gain":0.0256,"seed2":0.0031,"twin_gain":0.2963,"d_model":0.1918,"os":0.1912,"se":0.0006,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"broad","rung":"C","g":"per_track","gc":0.811,"noise_gc":0.0811,"gain":0.0255,"seed2":0.0025,"twin_gain":0.3032,"d_model":0.1919,"os":0.1913,"se":0.0006,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"broad","rung":"D","g":"across","gc":0.7922,"noise_gc":0.0968,"gain":0.0249,"seed2":0.003,"twin_gain":0.2917,"d_model":0.1925,"os":0.1913,"se":0.0012,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"broad","rung":"D","g":"per_track","gc":0.8241,"noise_gc":0.019,"gain":0.0259,"seed2":0.0006,"twin_gain":0.3132,"d_model":0.1915,"os":0.1913,"se":0.0002,"d_onewarp":0.2174,"ow_os":0.2091,"ow_se":0.0083,"d_oracle":0.186,"or_os":0.186,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.3983},{"cls":"narrow","rung":"A","g":"across","gc":-0.0749,"noise_gc":0.7271,"gain":-0.0021,"seed2":0.0206,"twin_gain":0.3196,"d_model":0.1994,"os":0.1915,"se":0.0079,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363},{"cls":"narrow","rung":"A","g":"per_track","gc":-0.0134,"noise_gc":1.5576,"gain":-0.0004,"seed2":0.0442,"twin_gain":0.3091,"d_model":0.1976,"os":0.1923,"se":0.0054,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363},{"cls":"narrow","rung":"B","g":"across","gc":0.8108,"noise_gc":0.0689,"gain":0.023,"seed2":0.002,"twin_gain":0.303,"d_model":0.1742,"os":0.1737,"se":0.0005,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363},{"cls":"narrow","rung":"B","g":"per_track","gc":0.7907,"noise_gc":0.0538,"gain":0.0225,"seed2":0.0015,"twin_gain":0.3007,"d_model":0.1748,"os":0.174,"se":0.0008,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363},{"cls":"narrow","rung":"C","g":"across","gc":0.7808,"noise_gc":0.1727,"gain":0.0222,"seed2":0.0049,"twin_gain":0.3053,"d_model":0.1751,"os":0.1742,"se":0.0009,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363},{"cls":"narrow","rung":"C","g":"per_track","gc":0.7669,"noise_gc":0.2553,"gain":0.0218,"seed2":0.0072,"twin_gain":0.3194,"d_model":0.1755,"os":0.1741,"se":0.0013,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363},{"cls":"narrow","rung":"D","g":"across","gc":0.7752,"noise_gc":0.0928,"gain":0.022,"seed2":0.0026,"twin_gain":0.2951,"d_model":0.1752,"os":0.1742,"se":0.0011,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363},{"cls":"narrow","rung":"D","g":"per_track","gc":0.8067,"noise_gc":0.0639,"gain":0.0229,"seed2":0.0018,"twin_gain":0.3288,"d_model":0.1743,"os":0.1739,"se":0.0004,"d_onewarp":0.1972,"ow_os":0.1915,"ow_se":0.0057,"d_oracle":0.1688,"or_os":0.1689,"or_se":-0.0,"oracle":"nested_binomial","d_floor":0.363}],"h2":[{"cls":"DNase","rung":"A","g":"across","gc":null,"noise_gc":null,"gain":-0.9212,"seed2":1.222,"twin_gain":0.9653,"d_model":2.3717,"os":2.0613,"se":0.3104,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"DNase","rung":"A","g":"per_track","gc":null,"noise_gc":null,"gain":-1.6246,"seed2":1.0987,"twin_gain":0.3614,"d_model":3.0751,"os":2.1432,"se":0.9319,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"DNase","rung":"B","g":"across","gc":null,"noise_gc":null,"gain":-0.4762,"seed2":0.9365,"twin_gain":0.0087,"d_model":1.9267,"os":1.7787,"se":0.148,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"DNase","rung":"B","g":"per_track","gc":null,"noise_gc":null,"gain":0.1161,"seed2":0.0364,"twin_gain":0.4502,"d_model":1.3344,"os":1.3132,"se":0.0212,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"DNase","rung":"C","g":"across","gc":null,"noise_gc":null,"gain":-0.293,"seed2":0.5462,"twin_gain":0.4676,"d_model":1.7435,"os":1.6219,"se":0.1216,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"DNase","rung":"C","g":"per_track","gc":null,"noise_gc":null,"gain":0.0117,"seed2":0.0974,"twin_gain":0.929,"d_model":1.4388,"os":1.3969,"se":0.0419,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"DNase","rung":"D","g":"across","gc":null,"noise_gc":null,"gain":-0.6267,"seed2":0.396,"twin_gain":0.0034,"d_model":2.0772,"os":1.8505,"se":0.2266,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"DNase","rung":"D","g":"per_track","gc":null,"noise_gc":null,"gain":0.1294,"seed2":0.1929,"twin_gain":0.698,"d_model":1.3211,"os":1.2942,"se":0.0269,"d_onewarp":1.4505,"ow_os":1.4314,"ow_se":0.0191,"d_oracle":1.0191,"or_os":0.7172,"or_se":0.0214,"oracle":"floor","d_floor":1.0191},{"cls":"broad","rung":"A","g":"across","gc":null,"noise_gc":null,"gain":0.1686,"seed2":0.0047,"twin_gain":0.0364,"d_model":0.6817,"os":0.6791,"se":0.0026,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"broad","rung":"A","g":"per_track","gc":null,"noise_gc":null,"gain":0.1651,"seed2":0.0296,"twin_gain":0.0333,"d_model":0.6853,"os":0.6815,"se":0.0038,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"broad","rung":"B","g":"across","gc":null,"noise_gc":null,"gain":0.1692,"seed2":0.0101,"twin_gain":0.0474,"d_model":0.6812,"os":0.6789,"se":0.0022,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"broad","rung":"B","g":"per_track","gc":null,"noise_gc":null,"gain":0.1588,"seed2":0.0411,"twin_gain":0.0319,"d_model":0.6916,"os":0.6878,"se":0.0038,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"broad","rung":"C","g":"across","gc":null,"noise_gc":null,"gain":0.2083,"seed2":0.0018,"twin_gain":0.0705,"d_model":0.642,"os":0.6413,"se":0.0007,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"broad","rung":"C","g":"per_track","gc":null,"noise_gc":null,"gain":0.2078,"seed2":0.0029,"twin_gain":0.0636,"d_model":0.6425,"os":0.6414,"se":0.0011,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"broad","rung":"D","g":"across","gc":null,"noise_gc":null,"gain":0.2135,"seed2":0.008,"twin_gain":0.0768,"d_model":0.6369,"os":0.6358,"se":0.0011,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"broad","rung":"D","g":"per_track","gc":null,"noise_gc":null,"gain":0.2132,"seed2":0.0032,"twin_gain":0.0647,"d_model":0.6371,"os":0.6364,"se":0.0007,"d_onewarp":0.8503,"ow_os":0.8028,"ow_se":0.0475,"d_oracle":1.0945,"or_os":0.5355,"or_se":0.0717,"oracle":"floor","d_floor":1.0945},{"cls":"narrow","rung":"A","g":"across","gc":null,"noise_gc":null,"gain":0.0552,"seed2":0.0469,"twin_gain":0.1107,"d_model":0.7595,"os":0.7525,"se":0.007,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043},{"cls":"narrow","rung":"A","g":"per_track","gc":null,"noise_gc":null,"gain":0.0696,"seed2":0.0397,"twin_gain":0.1056,"d_model":0.745,"os":0.73,"se":0.015,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043},{"cls":"narrow","rung":"B","g":"across","gc":null,"noise_gc":null,"gain":0.1179,"seed2":0.0649,"twin_gain":0.0704,"d_model":0.6968,"os":0.6844,"se":0.0124,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043},{"cls":"narrow","rung":"B","g":"per_track","gc":null,"noise_gc":null,"gain":0.1456,"seed2":0.0281,"twin_gain":0.0749,"d_model":0.6691,"os":0.6675,"se":0.0016,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043},{"cls":"narrow","rung":"C","g":"across","gc":null,"noise_gc":null,"gain":0.151,"seed2":0.0313,"twin_gain":0.1202,"d_model":0.6637,"os":0.6582,"se":0.0055,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043},{"cls":"narrow","rung":"C","g":"per_track","gc":null,"noise_gc":null,"gain":0.1636,"seed2":0.0349,"twin_gain":0.0994,"d_model":0.651,"os":0.6451,"se":0.0059,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043},{"cls":"narrow","rung":"D","g":"across","gc":null,"noise_gc":null,"gain":0.1326,"seed2":0.0488,"twin_gain":0.0914,"d_model":0.6821,"os":0.666,"se":0.0161,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043},{"cls":"narrow","rung":"D","g":"per_track","gc":null,"noise_gc":null,"gain":0.167,"seed2":0.0553,"twin_gain":0.128,"d_model":0.6476,"os":0.6432,"se":0.0045,"d_onewarp":0.8146,"ow_os":0.7764,"ow_se":0.0383,"d_oracle":1.0043,"or_os":0.5,"or_se":0.0578,"oracle":"floor","d_floor":1.0043}],"cap":{"q5":["1.247","0.016","1.109","0.138","3.06","0.113","1.36","1.70","1.813","0.227"],"cells":["6","54"],"bd":["0","36"],"law":["0.10","0","72"],"q4never":["0.29","0.11"],"explode":["20"]},"law":{"data":["0.71","84"],"trained":["0.04","0.12","0.19","0.55"],"a0":["0.38","0.46","0.12"],"pois":["0.29","0.38","0.28","0.05","0.16"],"encd":["0.26","0.52","0.29","0.34"],"sym":["0.29","0.42"],"via":["0.07","0.12","0.05","0.34","0.29"],"size":["0.63","0.46","0.41","0.34"]},"h28":{"law":{"heldout_r2":{"Dref":{"v":0.1948,"sr":0.0605,"complete":true},"Dviabase":{"v":0.125,"sr":0.0219,"complete":true},"Darm1":{"v":0.1477,"sr":0.1235,"complete":true},"Darm2":{"v":0.1511,"sr":0.0283,"complete":true}},"trained_base":{"Dref":{"v":0.052,"sr":0.01,"complete":true},"Darm1":{"v":0.0632,"sr":0.0084,"complete":true},"Darm2":{"v":0.0726,"sr":0.0604,"complete":true}},"trained_r4":{"Dref":{"v":0.2909,"sr":0.0514,"complete":true},"Dviabase":{"v":0.1097,"sr":0.0544,"complete":true},"Darm1":{"v":0.1203,"sr":0.1061,"complete":true},"Darm2":{"v":0.1252,"sr":0.0235,"complete":true}}},"crps":{"all":{"Dref":{"v":0.5251,"os":0.4732,"se":0.0519,"sr":0.0318,"pairs":228,"complete":true},"Dviabase":{"v":0.435,"os":0.4292,"se":0.0058,"sr":0.0026,"pairs":228,"complete":true},"Darm1":{"v":0.5731,"os":0.466,"se":0.107,"sr":0.0623,"pairs":228,"complete":true},"Darm2":{"v":0.4281,"os":0.4254,"se":0.0027,"sr":0.005,"pairs":228,"complete":true}},"dnase":{"Dref":{"v":1.2175,"os":0.9433,"se":0.2742,"sr":0.1827,"pairs":12,"complete":true},"Dviabase":{"v":0.7505,"os":0.7415,"se":0.009,"sr":0.0186,"pairs":12,"complete":true},"Darm1":{"v":1.5732,"os":0.9163,"se":0.6569,"sr":0.3992,"pairs":12,"complete":true},"Darm2":{"v":0.7299,"os":0.7252,"se":0.0047,"sr":0.0295,"pairs":12,"complete":true}},"histone":{"Dref":{"v":0.4097,"os":0.3949,"se":0.0148,"sr":0.0067,"pairs":216,"complete":true},"Dviabase":{"v":0.3824,"os":0.3771,"se":0.0053,"sr":0.0026,"pairs":216,"complete":true},"Darm1":{"v":0.4064,"os":0.391,"se":0.0154,"sr":0.0079,"pairs":216,"complete":true},"Darm2":{"v":0.3778,"os":0.3755,"se":0.0023,"sr":0.0009,"pairs":216,"complete":true}}},"n":{"Dref":{"assigned":21,"law_done":21,"train_done":21},"Dviabase":{"assigned":21,"law_done":21,"train_done":0},"Darm1":{"assigned":21,"law_done":21,"train_done":21},"Darm2":{"assigned":21,"law_done":21,"train_done":21}},"checks":[{"c":"c1","name":"lawheldout","kind":"claim","arm":"Darm1","item":"gap closed on heldout_r2","value":0.6741,"thr":">= 0.5","reading":"PASS"},{"c":"c2","name":"basefit","kind":"control","arm":"Darm1","item":"arm reading","value":null,"thr":"both items","reading":"PASS"},{"c":"c2","name":"basefit","kind":"control","arm":"Darm2","item":"arm reading","value":null,"thr":"both items","reading":"PASS"},{"c":"c2","name":"basefit","kind":"control","arm":"both","item":"check reading","value":null,"thr":"Darm1 and Darm2","reading":"PASS"},{"c":"c3","name":"ratiotransfer","kind":"claim","arm":"Darm1","item":"heldout_r2 vs trained_r4 + 2 x spread","value":0.1477,"thr":"<= 0.367","reading":"PASS"},{"c":"c4","name":"crpsheldout","kind":"claim","arm":"Darm1","item":"crps_all gap closed","value":-0.5319,"thr":">= 0.5","reading":"FAIL"},{"c":"c4","name":"crpsheldout","kind":"claim","arm":"Darm1","item":"gain Dref - Darm1","value":-0.048,"thr":"> 0.125","reading":"FAIL"},{"c":"c4","name":"crpsheldout","kind":"claim","arm":"Darm1","item":"oracle_scaled gap closed","value":0.1637,"thr":">= 0.25","reading":"FAIL"},{"c":"c4","name":"crpsheldout","kind":"claim","arm":"Darm1","item":"check reading","value":null,"thr":"all three","reading":"FAIL"},{"c":"c5","name":"runhealth","kind":"control","arm":"Darm1","item":"arm reading","value":null,"thr":"all items","reading":"PASS"},{"c":"c5","name":"runhealth","kind":"control","arm":"Darm2","item":"arm reading","value":null,"thr":"all items","reading":"PASS"},{"c":"c5","name":"runhealth","kind":"control","arm":"both","item":"check reading","value":null,"thr":"all 42 runs","reading":"PASS"}],"rule":"FAIL"},"hmap":{"repair":["36","36","35","0.1172","0.0004","0.1145","0.0027","0.1352","0.1302","0.0050"],"best":["0.0798","0.0013"],"noexplode":["0","20"]},"knob":[{"cls":"DNase","arm":"dedup","level":"off","metric":"abs_log2fc_top1","v":2.5516,"floor":0.0038713325338548634,"fsr":0.001411868953962728,"above":true,"ratio":659.1007},{"cls":"DNase","arm":"dedup","level":"off","metric":"shape_1k","v":0.0609,"floor":0.08330709718461608,"fsr":0.00021967608273765205,"above":false,"ratio":0.7308},{"cls":"DNase","arm":"depth","level":"15M","metric":"abs_log2fc_top1","v":1.7216,"floor":0.004126238847088531,"fsr":0.001411868953962728,"above":true,"ratio":417.2207},{"cls":"DNase","arm":"depth","level":"15M","metric":"shape_1k","v":0.0537,"floor":0.11020578082033414,"fsr":0.00021967608273765205,"above":false,"ratio":0.487},{"cls":"DNase","arm":"depth","level":"3.75M","metric":"abs_log2fc_top1","v":3.5754,"floor":0.004687509229502429,"fsr":0.008606076602397964,"above":true,"ratio":762.7421},{"cls":"DNase","arm":"depth","level":"3.75M","metric":"shape_1k","v":0.2094,"floor":0.19286309154610437,"fsr":0.003625073567320669,"above":true,"ratio":1.0859},{"cls":"DNase","arm":"depth","level":"7.5M","metric":"abs_log2fc_top1","v":2.6888,"floor":0.004397929362649991,"fsr":0.00459814009302911,"above":true,"ratio":611.3877},{"cls":"DNase","arm":"depth","level":"7.5M","metric":"shape_1k","v":0.1175,"floor":0.14578966902789112,"fsr":0.000982998127289969,"above":false,"ratio":0.8056},{"cls":"DNase","arm":"pe","level":"pe","metric":"abs_log2fc_top1","v":1.8557,"floor":0.0038713325338548634,"fsr":0.001411868953962728,"above":true,"ratio":479.3453},{"cls":"DNase","arm":"pe","level":"pe","metric":"shape_1k","v":0.1107,"floor":0.08330709718461608,"fsr":0.00021967608273765205,"above":true,"ratio":1.3282},{"cls":"broad","arm":"abproxy","level":"f0.5","metric":"abs_log2fc_top1","v":0.3888,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":123.8684},{"cls":"broad","arm":"abproxy","level":"f0.5","metric":"shape_1k","v":0.2732,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":false,"ratio":0.5525},{"cls":"broad","arm":"abproxy","level":"f0.9","metric":"abs_log2fc_top1","v":0.9918,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":315.9713},{"cls":"broad","arm":"abproxy","level":"f0.9","metric":"shape_1k","v":0.5804,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":true,"ratio":1.1736},{"cls":"broad","arm":"crop","level":"36","metric":"abs_log2fc_top1","v":1.1521,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":367.0362},{"cls":"broad","arm":"crop","level":"36","metric":"shape_1k","v":0.3959,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":false,"ratio":0.8005},{"cls":"broad","arm":"crop","level":"50","metric":"abs_log2fc_top1","v":0.9129,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":290.8446},{"cls":"broad","arm":"crop","level":"50","metric":"shape_1k","v":0.3603,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":false,"ratio":0.7286},{"cls":"broad","arm":"dedup","level":"off","metric":"abs_log2fc_top1","v":0.2663,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":84.8474},{"cls":"broad","arm":"dedup","level":"off","metric":"shape_1k","v":0.3513,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":false,"ratio":0.7104},{"cls":"broad","arm":"depth","level":"15M","metric":"abs_log2fc_top1","v":0.8192,"floor":0.004454434687557198,"fsr":0.0062686461205130155,"above":true,"ratio":183.8975},{"cls":"broad","arm":"depth","level":"15M","metric":"shape_1k","v":0.1572,"floor":0.5429933211488814,"fsr":0.0021166309507173464,"above":false,"ratio":0.2896},{"cls":"broad","arm":"depth","level":"3.75M","metric":"abs_log2fc_top1","v":2.479,"floor":0.008970797335481626,"fsr":0.0060671318039000055,"above":true,"ratio":276.3425},{"cls":"broad","arm":"depth","level":"3.75M","metric":"shape_1k","v":0.4854,"floor":0.6546272161976375,"fsr":0.0008239378062729896,"above":false,"ratio":0.7414},{"cls":"broad","arm":"depth","level":"7.5M","metric":"abs_log2fc_top1","v":1.711,"floor":0.006321378870643261,"fsr":0.0062686461205130155,"above":true,"ratio":270.6647},{"cls":"broad","arm":"depth","level":"7.5M","metric":"shape_1k","v":0.3238,"floor":0.5962031585270261,"fsr":0.0021166309507173464,"above":false,"ratio":0.5431},{"cls":"broad","arm":"mapq","level":"0","metric":"abs_log2fc_top1","v":0.4118,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":131.1854},{"cls":"broad","arm":"mapq","level":"0","metric":"shape_1k","v":0.4285,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":false,"ratio":0.8665},{"cls":"broad","arm":"mapq","level":"10","metric":"abs_log2fc_top1","v":0.3138,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":99.9625},{"cls":"broad","arm":"mapq","level":"10","metric":"shape_1k","v":0.3637,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":false,"ratio":0.7355},{"cls":"broad","arm":"pe","level":"pe","metric":"abs_log2fc_top1","v":0.2344,"floor":0.003138870298988061,"fsr":0.0062686461205130155,"above":true,"ratio":74.6804},{"cls":"broad","arm":"pe","level":"pe","metric":"shape_1k","v":0.4192,"floor":0.4945323462236022,"fsr":0.0021166309507173464,"above":false,"ratio":0.8476},{"cls":"narrow","arm":"abproxy","level":"f0.5","metric":"abs_log2fc_top1","v":0.6181,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":161.3015},{"cls":"narrow","arm":"abproxy","level":"f0.5","metric":"shape_1k","v":0.2714,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":0.5115},{"cls":"narrow","arm":"abproxy","level":"f0.9","metric":"abs_log2fc_top1","v":1.5318,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":399.7371},{"cls":"narrow","arm":"abproxy","level":"f0.9","metric":"shape_1k","v":0.531,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":1.0009},{"cls":"narrow","arm":"crop","level":"36","metric":"abs_log2fc_top1","v":1.0442,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":272.4898},{"cls":"narrow","arm":"crop","level":"36","metric":"shape_1k","v":0.4114,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":0.7755},{"cls":"narrow","arm":"crop","level":"50","metric":"abs_log2fc_top1","v":0.7929,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":206.9325},{"cls":"narrow","arm":"crop","level":"50","metric":"shape_1k","v":0.382,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":0.72},{"cls":"narrow","arm":"dedup","level":"off","metric":"abs_log2fc_top1","v":0.2482,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":64.7627},{"cls":"narrow","arm":"dedup","level":"off","metric":"shape_1k","v":0.3851,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":0.7259},{"cls":"narrow","arm":"depth","level":"15M","metric":"abs_log2fc_top1","v":0.9323,"floor":0.004773407287429672,"fsr":0.0038542911498831763,"above":true,"ratio":195.3058},{"cls":"narrow","arm":"depth","level":"15M","metric":"shape_1k","v":0.1673,"floor":0.5745210893835225,"fsr":0.001514178303609004,"above":false,"ratio":0.2912},{"cls":"narrow","arm":"depth","level":"3.75M","metric":"abs_log2fc_top1","v":2.7776,"floor":0.007407210119508176,"fsr":0.0035230622425848953,"above":true,"ratio":374.9873},{"cls":"narrow","arm":"depth","level":"3.75M","metric":"shape_1k","v":0.4913,"floor":0.6738231298903414,"fsr":0.001925688950253246,"above":false,"ratio":0.7291},{"cls":"narrow","arm":"depth","level":"7.5M","metric":"abs_log2fc_top1","v":1.8786,"floor":0.0059462282805138825,"fsr":0.0038542911498831763,"above":true,"ratio":315.9289},{"cls":"narrow","arm":"depth","level":"7.5M","metric":"shape_1k","v":0.3384,"floor":0.6221941808120788,"fsr":0.001514178303609004,"above":false,"ratio":0.5438},{"cls":"narrow","arm":"mapq","level":"0","metric":"abs_log2fc_top1","v":0.2396,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":62.5175},{"cls":"narrow","arm":"mapq","level":"0","metric":"shape_1k","v":0.4501,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":0.8485},{"cls":"narrow","arm":"mapq","level":"10","metric":"abs_log2fc_top1","v":0.127,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":33.1541},{"cls":"narrow","arm":"mapq","level":"10","metric":"shape_1k","v":0.3825,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":0.7211},{"cls":"narrow","arm":"pe","level":"pe","metric":"abs_log2fc_top1","v":0.2576,"floor":0.0038319109285386388,"fsr":0.0038542911498831763,"above":true,"ratio":67.2247},{"cls":"narrow","arm":"pe","level":"pe","metric":"shape_1k","v":0.4449,"floor":0.5305007541465931,"fsr":0.001514178303609004,"above":false,"ratio":0.8386}],"floor":{"curve":{"abs_log2fc_top1":{"DNase":{"n":10,"30M":0.0024,"15M":0.0036,"7.5M":0.0046,"3.75M":0.0062,"1.875M":0.0085,"sr05":0.00262359195421706,"sr0125":0.009185547852586521},"broad":{"n":60,"30M":0.0042,"15M":0.0054,"7.5M":0.0091,"3.75M":0.0131,"1.875M":0.0191,"sr05":0.005945722489587709,"sr0125":0.014873818882094013},"narrow":{"n":60,"30M":0.0037,"15M":0.006,"7.5M":0.009,"3.75M":0.0118,"1.875M":0.0193,"sr05":0.005914519173166316,"sr0125":0.014954624399450177},"all":{"n":130,"30M":0.0037,"15M":0.0054,"7.5M":0.0083,"3.75M":0.0119,"1.875M":0.0181,"sr05":0.005823495351432105,"sr0125":0.014675013707060357}},"shape_1k":{"DNase":{"n":10,"30M":0.1139,"15M":0.1686,"7.5M":0.252,"3.75M":0.3945,"1.875M":0.6547,"sr05":0.0013068836597224798,"sr0125":0.002586488229328221},"broad":{"n":60,"30M":0.4849,"15M":0.5699,"7.5M":0.6706,"3.75M":0.7884,"1.875M":0.921,"sr05":0.0017702012817032986,"sr0125":0.0027643179649656235},"narrow":{"n":60,"30M":0.5331,"15M":0.6076,"7.5M":0.6962,"3.75M":0.7873,"1.875M":0.8699,"sr05":0.002876997420228178,"sr0125":0.0031304522921068445},"all":{"n":130,"30M":0.4938,"15M":0.5778,"7.5M":0.676,"3.75M":0.7872,"1.875M":0.877,"sr05":0.00235144254194114,"sr0125":0.002870136836608861}}},"real":{"DNase":{"read":0.9837,"unit":2.0102,"n":3},"broad":{"read":1.0016,"unit":1.241,"n":9},"narrow":{"read":1.0023,"unit":1.183,"n":9},"all":{"read":1.0016,"unit":1.2261,"n":21}},"map":{"DNase":{"15":{"R2_level":{"v":0.377964,"lo":0.292593,"hi":0.380363},"delta_R2":{"v":1.61995e-05,"lo":1.56123e-05,"hi":0.000128132},"delta_R2_shuffle":{"v":9.57659e-06,"lo":3.14841e-06,"hi":1.02103e-05}},"375":{"R2_level":{"v":0.318885,"lo":0.292206,"hi":0.357078},"delta_R2":{"v":6.22436e-05,"lo":3.61972e-05,"hi":0.000112038},"delta_R2_shuffle":{"v":1.10515e-05,"lo":4.7066e-06,"hi":1.93826e-05}}},"broad":{"15":{"R2_level":{"v":0.194273,"lo":0.159352,"hi":0.254762},"delta_R2":{"v":4.49367e-05,"lo":2.45947e-06,"hi":0.000215002},"delta_R2_shuffle":{"v":5.41666e-06,"lo":9.16162e-08,"hi":2.52272e-05}},"375":{"R2_level":{"v":0.211528,"lo":0.151608,"hi":0.317443},"delta_R2":{"v":2.36473e-05,"lo":5.16509e-06,"hi":0.00026865},"delta_R2_shuffle":{"v":7.40826e-06,"lo":1.49505e-06,"hi":3.26232e-05}}},"narrow":{"15":{"R2_level":{"v":0.179388,"lo":0.126745,"hi":0.247334},"delta_R2":{"v":9.06407e-05,"lo":2.08413e-06,"hi":0.000283371},"delta_R2_shuffle":{"v":7.65186e-06,"lo":1.67486e-06,"hi":2.65079e-05}},"375":{"R2_level":{"v":0.207973,"lo":0.152956,"hi":0.396747},"delta_R2":{"v":4.46612e-05,"lo":5.36306e-06,"hi":0.000266218},"delta_R2_shuffle":{"v":6.46783e-06,"lo":4.46345e-07,"hi":1.64998e-05}}}}},"where":[{"arm":"abproxy","level":"f0.5","cls":"broad","space":"counts","series":"arm","v":0.0022648,"lo":0.00057684,"hi":0.00347254},{"arm":"abproxy","level":"f0.5","cls":"broad","space":"pval","series":"arm","v":0.00557868,"lo":0.00137587,"hi":0.00565096},{"arm":"abproxy","level":"f0.5","cls":"narrow","space":"counts","series":"arm","v":0.00107565,"lo":0.000363143,"hi":0.0011243},{"arm":"abproxy","level":"f0.5","cls":"narrow","space":"pval","series":"arm","v":0.0062282,"lo":0.00217215,"hi":0.0335132},{"arm":"abproxy","level":"f0.9","cls":"broad","space":"counts","series":"arm","v":0.0148114,"lo":0.0133019,"hi":0.0245614},{"arm":"abproxy","level":"f0.9","cls":"broad","space":"pval","series":"arm","v":0.0231201,"lo":0.0202661,"hi":0.0315813},{"arm":"abproxy","level":"f0.9","cls":"narrow","space":"counts","series":"arm","v":0.00606684,"lo":0.0058168,"hi":0.0102914},{"arm":"abproxy","level":"f0.9","cls":"narrow","space":"pval","series":"arm","v":0.0199468,"lo":0.014516,"hi":0.0209936},{"arm":"crop","level":"36","cls":"broad","space":"counts","series":"arm","v":0.0416198,"lo":0.0389005,"hi":0.0572711},{"arm":"crop","level":"36","cls":"broad","space":"pval","series":"arm","v":0.012546,"lo":0.00550626,"hi":0.0256471},{"arm":"crop","level":"36","cls":"narrow","space":"counts","series":"arm","v":0.0275521,"lo":0.0273618,"hi":0.0341953},{"arm":"crop","level":"36","cls":"narrow","space":"pval","series":"arm","v":0.0158649,"lo":0.00475967,"hi":0.0417296},{"arm":"crop","level":"50","cls":"broad","space":"counts","series":"arm","v":0.0180617,"lo":0.0138896,"hi":0.029274},{"arm":"crop","level":"50","cls":"broad","space":"pval","series":"arm","v":0.00838331,"lo":0.00231446,"hi":0.0139839},{"arm":"crop","level":"50","cls":"narrow","space":"counts","series":"arm","v":0.013014,"lo":0.0128106,"hi":0.0158941},{"arm":"crop","level":"50","cls":"narrow","space":"pval","series":"arm","v":0.0121776,"lo":0.00207436,"hi":0.0446759},{"arm":"ctldepth","level":"q0.25","cls":"broad","space":"pval","series":"arm","v":0.0114465,"lo":0.00790994,"hi":0.0120472},{"arm":"ctldepth","level":"q0.25","cls":"narrow","space":"pval","series":"arm","v":0.019364,"lo":0.0035952,"hi":0.0362348},{"arm":"ctldepth","level":"q0.5","cls":"broad","space":"pval","series":"arm","v":0.0129399,"lo":0.009333,"hi":0.0131095},{"arm":"ctldepth","level":"q0.5","cls":"narrow","space":"pval","series":"arm","v":0.0176588,"lo":0.00410055,"hi":0.0336764},{"arm":"ctlid","level":"none","cls":"broad","space":"pval","series":"arm","v":0.0770121,"lo":0.0507122,"hi":0.0825228},{"arm":"ctlid","level":"none","cls":"narrow","space":"pval","series":"arm","v":0.0628548,"lo":0.058012,"hi":0.104071},{"arm":"ctlid","level":"other","cls":"broad","space":"pval","series":"arm","v":0.0245239,"lo":0.00577097,"hi":0.0820271},{"arm":"ctlid","level":"other","cls":"narrow","space":"pval","series":"arm","v":0.0207845,"lo":0.0140668,"hi":0.0362339},{"arm":"dedup","level":"off","cls":"DNase","space":"counts","series":"arm","v":9.56478e-05,"lo":9.56478e-05,"hi":9.56478e-05},{"arm":"dedup","level":"off","cls":"DNase","space":"pval","series":"arm","v":0.00528817,"lo":0.00528817,"hi":0.00528817},{"arm":"dedup","level":"off","cls":"broad","space":"counts","series":"arm","v":0.000829535,"lo":0.000212553,"hi":0.00103137},{"arm":"dedup","level":"off","cls":"broad","space":"pval","series":"arm","v":0.00355749,"lo":0.000377415,"hi":0.00656655},{"arm":"dedup","level":"off","cls":"narrow","space":"counts","series":"arm","v":0.00051504,"lo":0.000165276,"hi":0.000967195},{"arm":"dedup","level":"off","cls":"narrow","space":"pval","series":"arm","v":0.00491793,"lo":0.000426878,"hi":0.028706},{"arm":"depth","level":"15M","cls":"DNase","space":"counts","series":"arm","v":0.000135543,"lo":0.000135543,"hi":0.000135543},{"arm":"depth","level":"15M","cls":"DNase","space":"counts","series":"null_s0","v":0.00017923,"lo":0.00017923,"hi":0.00017923},{"arm":"depth","level":"15M","cls":"DNase","space":"pval","series":"arm","v":0.00531101,"lo":0.00531101,"hi":0.00531101},{"arm":"depth","level":"15M","cls":"broad","space":"counts","series":"arm","v":0.00028226,"lo":0.000110265,"hi":0.000358477},{"arm":"depth","level":"15M","cls":"broad","space":"counts","series":"null_s0","v":0.000241432,"lo":0.000111876,"hi":0.000307756},{"arm":"depth","level":"15M","cls":"broad","space":"pval","series":"arm","v":0.00467216,"lo":0.00162742,"hi":0.00632221},{"arm":"depth","level":"15M","cls":"narrow","space":"counts","series":"arm","v":0.000215757,"lo":0.000173428,"hi":0.000328529},{"arm":"depth","level":"15M","cls":"narrow","space":"counts","series":"null_s0","v":0.000211322,"lo":0.000155033,"hi":0.00037482},{"arm":"depth","level":"15M","cls":"narrow","space":"pval","series":"arm","v":0.00758975,"lo":0.00236652,"hi":0.0373844},{"arm":"depth","level":"3.75M","cls":"DNase","space":"counts","series":"arm","v":0.0019033,"lo":0.0019033,"hi":0.0019033},{"arm":"depth","level":"3.75M","cls":"DNase","space":"counts","series":"null_s0","v":0.00193854,"lo":0.00193854,"hi":0.00193854},{"arm":"depth","level":"3.75M","cls":"DNase","space":"pval","series":"arm","v":0.0337564,"lo":0.0337564,"hi":0.0337564},{"arm":"depth","level":"3.75M","cls":"broad","space":"counts","series":"arm","v":0.00315072,"lo":0.00271687,"hi":0.0032249},{"arm":"depth","level":"3.75M","cls":"broad","space":"counts","series":"null_s0","v":0.00309429,"lo":0.00260528,"hi":0.00333016},{"arm":"depth","level":"3.75M","cls":"broad","space":"pval","series":"arm","v":0.0217559,"lo":0.0179332,"hi":0.0264485},{"arm":"depth","level":"3.75M","cls":"narrow","space":"counts","series":"arm","v":0.00203732,"lo":0.00122737,"hi":0.00218698},{"arm":"depth","level":"3.75M","cls":"narrow","space":"counts","series":"null_s0","v":0.00215732,"lo":0.00105725,"hi":0.00220189},{"arm":"depth","level":"3.75M","cls":"narrow","space":"pval","series":"arm","v":0.0276853,"lo":0.0249244,"hi":0.0361794},{"arm":"depth","level":"7.5M","cls":"DNase","space":"counts","series":"arm","v":0.000661073,"lo":0.000661073,"hi":0.000661073},{"arm":"depth","level":"7.5M","cls":"DNase","space":"counts","series":"null_s0","v":0.000691716,"lo":0.000691716,"hi":0.000691716},{"arm":"depth","level":"7.5M","cls":"DNase","space":"pval","series":"arm","v":0.00285535,"lo":0.00285535,"hi":0.00285535},{"arm":"depth","level":"7.5M","cls":"broad","space":"counts","series":"arm","v":0.0010087,"lo":0.000491281,"hi":0.00104275},{"arm":"depth","level":"7.5M","cls":"broad","space":"counts","series":"null_s0","v":0.00091987,"lo":0.000565191,"hi":0.00103449},{"arm":"depth","level":"7.5M","cls":"broad","space":"pval","series":"arm","v":0.00934291,"lo":0.00402969,"hi":0.00974189},{"arm":"depth","level":"7.5M","cls":"narrow","space":"counts","series":"arm","v":0.000780028,"lo":0.000569433,"hi":0.000893288},{"arm":"depth","level":"7.5M","cls":"narrow","space":"counts","series":"null_s0","v":0.000864422,"lo":0.000546601,"hi":0.000936108},{"arm":"depth","level":"7.5M","cls":"narrow","space":"pval","series":"arm","v":0.0105535,"lo":0.00488258,"hi":0.0272368},{"arm":"extsize","level":"k0.5","cls":"DNase","space":"counts","series":"arm","v":0.0,"lo":0.0,"hi":0.0},{"arm":"extsize","level":"k0.5","cls":"DNase","space":"pval","series":"arm","v":0.0336328,"lo":0.0336328,"hi":0.0336328},{"arm":"extsize","level":"k0.5","cls":"broad","space":"counts","series":"arm","v":0.0,"lo":0.0,"hi":0.0},{"arm":"extsize","level":"k0.5","cls":"broad","space":"pval","series":"arm","v":0.0022469,"lo":0.00117708,"hi":0.00340676},{"arm":"extsize","level":"k0.5","cls":"narrow","space":"counts","series":"arm","v":0.0,"lo":0.0,"hi":0.0},{"arm":"extsize","level":"k0.5","cls":"narrow","space":"pval","series":"arm","v":0.00253742,"lo":0.00152943,"hi":0.0287755},{"arm":"extsize","level":"k2","cls":"DNase","space":"counts","series":"arm","v":0.0,"lo":0.0,"hi":0.0},{"arm":"extsize","level":"k2","cls":"DNase","space":"pval","series":"arm","v":0.00386062,"lo":0.00386062,"hi":0.00386062},{"arm":"extsize","level":"k2","cls":"broad","space":"counts","series":"arm","v":0.0,"lo":0.0,"hi":0.0},{"arm":"extsize","level":"k2","cls":"broad","space":"pval","series":"arm","v":0.00158744,"lo":0.00117151,"hi":0.00184373},{"arm":"extsize","level":"k2","cls":"narrow","space":"counts","series":"arm","v":0.0,"lo":0.0,"hi":0.0},{"arm":"extsize","level":"k2","cls":"narrow","space":"pval","series":"arm","v":0.00874792,"lo":0.00221417,"hi":0.0542984},{"arm":"mapq","level":"0","cls":"broad","space":"counts","series":"arm","v":0.110431,"lo":0.0931327,"hi":0.122505},{"arm":"mapq","level":"0","cls":"broad","space":"pval","series":"arm","v":0.0312776,"lo":0.0131492,"hi":0.042723},{"arm":"mapq","level":"0","cls":"narrow","space":"counts","series":"arm","v":0.0988023,"lo":0.0801052,"hi":0.115491},{"arm":"mapq","level":"0","cls":"narrow","space":"pval","series":"arm","v":0.0242966,"lo":0.00891236,"hi":0.0260188},{"arm":"mapq","level":"10","cls":"broad","space":"counts","series":"arm","v":0.0067636,"lo":0.0063788,"hi":0.00753527},{"arm":"mapq","level":"10","cls":"broad","space":"pval","series":"arm","v":0.00576987,"lo":0.000355566,"hi":0.00744945},{"arm":"mapq","level":"10","cls":"narrow","space":"counts","series":"arm","v":0.00507687,"lo":0.00480332,"hi":0.00558114},{"arm":"mapq","level":"10","cls":"narrow","space":"pval","series":"arm","v":0.0102741,"lo":0.000606451,"hi":0.0425115},{"arm":"pe","level":"pe","cls":"DNase","space":"counts","series":"arm","v":0.0147186,"lo":0.0147186,"hi":0.0147186},{"arm":"pe","level":"pe","cls":"DNase","space":"pval","series":"arm","v":0.00515973,"lo":0.00515973,"hi":0.00515973},{"arm":"pe","level":"pe","cls":"broad","space":"counts","series":"arm","v":0.00169987,"lo":0.00106306,"hi":0.00209604},{"arm":"pe","level":"pe","cls":"broad","space":"pval","series":"arm","v":0.004596,"lo":0.000107372,"hi":0.00680264},{"arm":"pe","level":"pe","cls":"narrow","space":"counts","series":"arm","v":0.00232626,"lo":0.000489251,"hi":0.0024335},{"arm":"pe","level":"pe","cls":"narrow","space":"pval","series":"arm","v":0.0034618,"lo":0.000910182,"hi":0.0296658},{"arm":"ratio","level":"k0.5","cls":"broad","space":"pval","series":"arm","v":0.0460407,"lo":0.0252911,"hi":0.129381},{"arm":"ratio","level":"k0.5","cls":"narrow","space":"pval","series":"arm","v":0.0283203,"lo":0.0197745,"hi":0.0435228},{"arm":"ratio","level":"k2","cls":"broad","space":"pval","series":"arm","v":0.0081271,"lo":0.00780273,"hi":0.0240504},{"arm":"ratio","level":"k2","cls":"narrow","space":"pval","series":"arm","v":0.0259648,"lo":0.00925807,"hi":0.0342635}],"shuf":2.83861e-05,"probe":{"slope":["1.0000"],"dir":["0.559"],"swap":["80","80"],"depth":["32","42"],"effect":["0","19"]}};
+const put=(id,html)=>{const e=document.getElementById(id); if(e) e.innerHTML=html;};
+const M='−';
+const fx=(v,d=3)=>v==null?'n/a':(v<0?M:'')+Math.abs(v).toFixed(d);
+const sx=(v,d=3)=>v==null?'n/a':(v>0?'+':v<0?M:'')+Math.abs(v).toFixed(d);
+const num=s=>parseFloat(s);
+const mn=a=>Math.min(...a), mx=a=>Math.max(...a);
+const rngs=(a,d=2)=>{const lo=mn(a),hi=mx(a);return lo.toFixed(d)===hi.toFixed(d)?fx(lo,d):lo<0?`${fx(lo,d)} to ${fx(hi,d)}`:`${fx(lo,d)}–${fx(hi,d)}`;};
+const fz=v=>fx(v,Math.abs(v)<0.01&&v!==0?4:3);
+const sci=v=>{if(v===0)return '0'; const e=Math.floor(Math.log10(Math.abs(v))); return e>=-2?v.toFixed(Math.max(2,-e+1)):`${(v/10**e).toFixed(1)}e${e}`;};
+const TWO='2 ×';
+const crps=(v,os,se,sr)=>`${fx(v)} (${fz(os)} + ${fz(se)}${sr!=null?`; seed range ${fz(sr)}`:''})`;
+const C=n=>`var(--${n})`;
+
+/* ------------------------------------------------------------------ chart scaffolds */
+/* dot / range panel: rows [{lab, pts:[{v, lo, hi, col, hollow, range}]}] */
+function dotPanel(o){
+  const W=o.W||560, Lg=o.Lg||110, R=28, top=o.top||70, rowH=o.rowH||54;
+  const pB=top+o.rows.length*rowH, H=pB+(o.xlab?66:40), pW=W-Lg-R;
+  const tr=v=>o.log?Math.log10(v):v, a=tr(o.xmin), b=tr(o.xmax);
+  const clampT=v=>{let t=o.log?tr(Math.max(v,o.xmin*0.999)):v; return Math.max(a,Math.min(b,t));};
+  const xx=v=>Lg+(clampT(v)-a)/(b-a)*pW;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  if(o.title) s+=`<text x="10" y="30" class="ptitle">${o.title}</text>`;
+  if(o.sub) s+=`<text x="10" y="52" class="psub">${o.sub}</text>`;
+  (o.ticks||[]).forEach(t=>{
+    s+=`<line x1="${xx(t)}" y1="${top-6}" x2="${xx(t)}" y2="${pB}" class="grid"/>`;
+    s+=`<text x="${xx(t)}" y="${pB+22}" text-anchor="middle" class="tick">${o.tf?o.tf(t):t}</text>`;
+  });
+  (o.refs||[]).forEach(r=>{
+    s+=`<line x1="${xx(r.v)}" y1="${top-10}" x2="${xx(r.v)}" y2="${pB}" class="zero" ${r.col?`style="stroke:${r.col}"`:''}/>`;
+    s+=`<text x="${xx(r.v)}" y="${top-14}" text-anchor="${r.anchor||'middle'}" class="cap">${r.lab}</text>`;
+  });
+  o.rows.forEach((row,i)=>{
+    const yc=top+rowH*(i+0.5);
+    s+=`<text x="${Lg-12}" y="${yc+6}" text-anchor="end" class="axlbl">${row.lab}</text>`;
+    const n=row.pts.length;
+    row.pts.forEach((p,k)=>{
+      const y=yc+(k-(n-1)/2)*Math.min(16,rowH/(n+0.5));
+      if(p.range){
+        s+=`<line x1="${xx(p.lo)}" y1="${y}" x2="${Math.max(xx(p.hi),xx(p.lo)+4)}" y2="${y}" stroke="${p.col}" stroke-width="11" stroke-linecap="round" opacity="${p.op||1}"/>`;
+        if(p.txt) s+=`<text x="${Math.max(xx(p.hi),xx(p.lo)+4)+14}" y="${y+6}" class="val" fill="${p.col}">${p.txt}</text>`;
+        return;
+      }
+      if(p.lo!=null) s+=`<line x1="${xx(p.lo)}" y1="${y}" x2="${xx(p.hi)}" y2="${y}" stroke="${p.col}" stroke-width="2.6" stroke-linecap="round"/>`;
+      const off=(o.log?p.v<o.xmin||p.v>o.xmax:p.v<o.xmin||p.v>o.xmax);
+      s+=`<circle cx="${xx(p.v)}" cy="${y}" r="${p.r||6.5}" fill="${p.hollow?'#fff':p.col}" stroke="${p.col}" stroke-width="2.4"/>`;
+      if(off) s+=`<text x="${xx(p.v)+(p.v<o.xmin?-10:10)}" y="${y+5}" text-anchor="${p.v<o.xmin?'end':'start'}" class="cap">${fx(p.v,2)}</text>`;
+      if(p.txt) s+=`<text x="${xx(p.v)+12}" y="${y-9}" class="cap" fill="${p.col}">${p.txt}</text>`;
+    });
+  });
+  s+=`<line x1="${Lg}" y1="${pB}" x2="${Lg+pW}" y2="${pB}" class="axis"/>`;
+  if(o.xlab) s+=`<text x="${Lg+pW/2}" y="${pB+52}" text-anchor="middle" class="cap">${o.xlab}</text>`;
+  return s+`</svg>`;
+}
+/* horizontal stacked CRPS bars: rows [{lab, os, se, sr, col, faded}] */
+function stackPanel(o){
+  const W=o.W||900, Lg=o.Lg||300, R=190, top=o.title?62:24, rowH=o.rowH||58;
+  const pB=top+o.rows.length*rowH, H=pB+52, pW=W-Lg-R, xx=v=>Lg+v/o.xmax*pW;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  if(o.title) s+=`<text x="10" y="32" class="ptitle">${o.title}</text>`;
+  (o.ticks||[]).forEach(t=>{s+=`<line x1="${xx(t)}" y1="${top-4}" x2="${xx(t)}" y2="${pB}" class="grid"/><text x="${xx(t)}" y="${pB+22}" text-anchor="middle" class="tick">${t}</text>`;});
+  o.rows.forEach((r,i)=>{
+    const y=top+i*rowH+10, h=rowH-22, tot=r.os+r.se, op=r.faded?0.45:1;
+    s+=`<text x="${Lg-12}" y="${y+h/2+6}" text-anchor="end" class="axlbl">${r.lab}</text>`;
+    s+=`<rect x="${Lg}" y="${y}" width="${xx(r.os)-Lg}" height="${h}" fill="${r.col}" opacity="${op}" rx="2"/>`;
+    s+=`<rect x="${xx(r.os)}" y="${y}" width="${Math.max(1,xx(tot)-xx(r.os))}" height="${h}" fill="var(--se)" opacity="${op}" rx="2"/>`;
+    if(r.sr!=null) s+=`<line x1="${xx(Math.max(0,tot-r.sr/2))}" y1="${y+h/2}" x2="${xx(tot+r.sr/2)}" y2="${y+h/2}" stroke="#333" stroke-width="2"/>`;
+    s+=`<text x="${xx(Math.max(tot+(r.sr||0)/2,tot))+10}" y="${y+h/2+6}" class="val" fill="${r.col}">${fx(tot)}${r.tag?` · ${r.tag}`:''}</text>`;
+  });
+  s+=`<line x1="${Lg}" y1="${pB}" x2="${Lg+pW}" y2="${pB}" class="axis"/>`;
+  if(o.xlab) s+=`<text x="${Lg+pW/2}" y="${pB+46}" text-anchor="middle" class="cap">${o.xlab}</text>`;
+  return s+`</svg>`;
+}
+const legend=items=>items.map(([c,l,hollow])=>`<span class="item"><span class="sw" style="background:${hollow?'#fff':c};border:2.4px solid ${c}"></span>${l}</span>`).join('');
+
+/* ------------------------------------------------------------------ 1 title */
+const D=DATA.design;
+put('tScope', `${D.n_tracks} tracks · ${D.n_products} products (${D.n_bases} bases and ${D.n_arms} arms) · ${D.n_knobs} processing knobs · ${D.n_ladder_runs} model runs on the main ladder · ${D.n_knob_pairs} base-to-arm knob comparisons, and the studies built on them.`);
+
+/* ------------------------------------------------------------------ 2 why a testbed */
+put('tSlope', DATA.probe.slope[0]); put('tDir', DATA.probe.dir[0]);
+put('figWhy', `<svg viewBox="0 0 1000 250" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9a958d"/></marker></defs>
+  <text x="20" y="30" class="ptitle">(a) CANDI training</text>
+  <rect x="20" y="56" width="180" height="70" rx="10" fill="#fff" stroke="var(--ow)" stroke-width="2"/>
+  <text x="110" y="98" text-anchor="middle" class="xlab">experiment</text>
+  <line x1="205" y1="91" x2="290" y2="91" class="axis" marker-end="url(#ar)"/>
+  <rect x="295" y="56" width="180" height="70" rx="10" fill="#fff" stroke="var(--ow)" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="385" y="88" text-anchor="middle" class="xlab">thinned copy</text>
+  <text x="385" y="112" text-anchor="middle" class="xsub">of itself</text>
+  <text x="248" y="168" text-anchor="middle" class="xsub">only depth changes; read length,</text>
+  <text x="248" y="194" text-anchor="middle" class="xsub">run type and the rest stay equal</text>
+  <line x1="500" y1="40" x2="500" y2="220" class="sep"/>
+  <text x="525" y="30" class="ptitle">(b) the testbed</text>
+  <rect x="525" y="56" width="180" height="70" rx="10" fill="#fff" stroke="var(--per)" stroke-width="2"/>
+  <text x="615" y="98" text-anchor="middle" class="xlab">base track</text>
+  <line x1="710" y1="91" x2="795" y2="91" class="axis" marker-end="url(#ar)"/>
+  <rect x="800" y="56" width="180" height="70" rx="10" fill="#fff" stroke="var(--per)" stroke-width="2"/>
+  <text x="890" y="88" text-anchor="middle" class="xlab">same reads,</text>
+  <text x="890" y="112" text-anchor="middle" class="xsub">one knob changed</text>
+  <text x="752" y="168" text-anchor="middle" class="xsub">the true counterfactual is known,</text>
+  <text x="752" y="194" text-anchor="middle" class="xsub">for each knob on its own</text>
+</svg>`);
+
+/* ------------------------------------------------------------------ goals (slides 3, 21) */
+const H=DATA.h1, H2=DATA.h2, MAIN=DATA.main, CAP=DATA.cap, LAW=DATA.law, H28=DATA.h28, HM=DATA.hmap, PR=DATA.probe;
+/* (b) depth */
+const h1BD=H.filter(r=>r.rung!=='A');
+const h1gc=h1BD.map(r=>r.gc), h1k=h1BD.filter(r=>r.gain>r.seed2).length;
+/* (c) run type */
+const h2hist=H2.filter(r=>r.cls!=='DNase'), h2dn=H2.filter(r=>r.cls==='DNase');
+const h2k=h2hist.filter(r=>r.gain>r.seed2).length, h2dk=h2dn.filter(r=>r.gain>r.seed2).length;
+/* (f) arm-to-arm */
+const ckOf=(c,arm,item)=>H28.checks.find(x=>x.c===c&&x.arm===arm&&(!item||x.item===item));
+const c1=ckOf('c1','Darm1'), c3=ckOf('c3','Darm1'), c4=ckOf('c4','Darm1','crps_all gap closed'), c4r=ckOf('c4','Darm1','check reading');
+const n2=H28.n.Darm2;
+/* (i) knobs */
+const KN=DATA.knob, kPH=KN.filter(r=>r.metric==='abs_log2fc_top1'), kSH=KN.filter(r=>r.metric==='shape_1k');
+const kPHa=kPH.filter(r=>r.above).length, kSHa=kSH.filter(r=>r.above);
+/* (j) floor */
+const FL=DATA.floor;
+/* (k) where */
+const W_=DATA.where;
+const wOf=(arm,level,cls,space,series='arm')=>W_.find(r=>r.arm===arm&&r.level===level&&r.cls===cls&&r.space===space&&r.series===series);
+const mapq0=['narrow','broad'].map(c=>wOf('mapq','0',c,'counts').v);
+
+const ST={met:'Fully met',part:'Partially met',ans:'Not met · answered'};
+const GOALS=[
+  {k:'q1',g:'The covariates beat the scrambled twin (main claim)',s:'part',
+   ev:`Trained pairs: ${MAIN.twin_cells[0]}–${MAIN.twin_cells[1]} of ${MAIN.twin_cells[2]} cells. Never-trained gain ${MAIN.counts[0]} → ${MAIN.counts[1]} in counts, ${MAIN.p[0]} → ${MAIN.p[1]} in p; swap and depth law unmet (a).`},
+  {k:'h1',g:'Depth, beyond the one-warp',s:'met',
+   ev:`Designs B–D close ${rngs(h1gc)} of the gap; ${h1k} of ${h1BD.length} cells above ${TWO} the seed range (b). Not judged.`},
+  {k:'h2',g:'Run type, beyond the one-warp',s:'part',
+   ev:`Histone marks ${h2k} of ${h2hist.length} cells above the criterion; DNase ${h2dk} of ${h2dn.length}; no oracle, so no gap closed (c). Not judged.`},
+  {k:'q2',g:'Read-side knobs carry the information',s:'part',
+   ev:`Beats the twin on trained pairs by ${MAIN.q2[0]}–${MAIN.q2[1]} (seed range ${MAIN.q2[2]}–${MAIN.q2[3]}); the p gain vanishes on never-trained pairs.`},
+  {k:'q3',g:'Control-side knobs carry the information',s:'part',
+   ev:`p gain ${MAIN.q3[2]}–${MAIN.q3[3]} on never-trained pairs (seed range ${MAIN.q3[4]}–${MAIN.q3[5]}); the pre-registered threshold is not readable.`},
+  {k:'q4',g:'How expressive f must be',s:'part',
+   ev:`Never-trained gain ${CAP.q4never[0]} → ${CAP.q4never[1]} (median); more capacity does not close it, so the limit is g, not f (d). The p-space explosion is unfixed.`},
+  {k:'q5',g:'Does a depth offset help',s:'met',
+   ev:`Only design A: ${CAP.cells[0]} of ${CAP.cells[1]} cells clear, all design A; B–D ${CAP.bd[0]} of ${CAP.bd[1]} (d).`},
+  {k:'q6',g:'A map from counts to the p-value track',s:'met',
+   ev:`The true-count map is lower in ${HM.repair[0]} of ${HM.repair[1]} rows; push and formula maps have ${HM.noexplode[0]} explosions (h).`},
+  {k:'q7',g:'Why the depth law is missed',s:'part',
+   ev:`Pseudocount, loss, size and encoder-decoder ruled out; through the base ${LAW.via[1]} against ${LAW.via[4]} direct (e). Not fixed in a direct g.`},
+  {k:'h28',g:'Training g on arm-to-arm pairs',s:'part',
+   ev:`Law check ${c1?c1.reading:'n/a'} (gap closed ${c1?fx(c1.value):'n/a'}); CRPS check ${c4r?c4r.reading:'n/a'} (${c4?fx(c4.value,2):'n/a'}); second arm ${n2.law_done} of ${n2.assigned} scored (f, g). Not judged.`},
+  {k:'q8',g:'Does CANDI\'s training block the other covariates',s:'ans',
+   ev:`Probe not readable: depth control ${PR.depth[0]} of ${PR.depth[1]} rows, ${PR.effect[0]} of ${PR.effect[1]} pairs clear the floor. Parked; moved to arm-to-arm training (l).`},
+  {k:'q9',g:'Which knobs move a track the most',s:'met',
+   ev:`Peak height above the floor in ${kPHa} of ${kPH.length} rows; shape in ${kSHa.length} of ${kSH.length} (i).`},
+  {k:'q10',g:'How much resampling alone moves a track',s:'met',
+   ev:`Real halves match whole-read thinning (ratio ${fx(FL.real.all.read)}); signal level, not region, sets the floor (j).`},
+  {k:'q11',g:'Where along the genome each knob acts',s:'met',
+   ev:`Depth acts uniformly; mapping quality zero adds a feature gain of ${rngs(mapq0)} (k).`},
+];
+const nS=s=>GOALS.filter(x=>x.s===s).length;
+put('tGoalsH', `One question, ${GOALS.length} goals under it`);
+put('tScoreH', `${nS('met')} goals fully met, ${nS('part')} partially met, ${nS('ans')} not met but answered`);
+put('tblScore', `<table class="dtable xs"><thead><tr><th>goal</th><th>status</th><th>evidence (result slide)</th></tr></thead><tbody>${
+  GOALS.map(x=>`<tr><td>${x.g}</td><td><span class="stat ${x.s}">${ST[x.s]}</span></td><td>${x.ev}</td></tr>`).join('')}</tbody></table>`);
+
+(function(){
+  const W=1160, bw=152, gap=10, rows=[GOALS.slice(0,7),GOALS.slice(7)];
+  let s=`<svg viewBox="0 0 ${W} 380" preserveAspectRatio="xMidYMid meet">`;
+  s+=`<rect x="${W/2-330}" y="10" width="660" height="62" rx="10" fill="#fff" stroke="var(--accent)" stroke-width="2"/>`;
+  s+=`<text x="${W/2}" y="38" text-anchor="middle" class="xlab">Do the recorded covariates carry enough information</text>`;
+  s+=`<text x="${W/2}" y="62" text-anchor="middle" class="xsub">to map one measurement of a track onto another of the same material?</text>`;
+  const SH={met:'var(--met)',part:'var(--part)',ans:'var(--ans)'};
+  rows.forEach((row,ri)=>{
+    const y=110+ri*135, x0=(W-(row.length*bw+(row.length-1)*gap))/2;
+    row.forEach((gl,i)=>{
+      const x=x0+i*(bw+gap);
+      s+=`<line x1="${W/2}" y1="72" x2="${x+bw/2}" y2="${y}" stroke="#e6e3dd" stroke-width="1"/>`;
+      s+=`<rect x="${x}" y="${y}" width="${bw}" height="112" rx="9" fill="#fff" stroke="${SH[gl.s]}" stroke-width="2.4"/>`;
+      s+=`<rect x="${x}" y="${y}" width="${bw}" height="8" rx="3" fill="${SH[gl.s]}"/>`;
+      const words=gl.g.replace(/ \(main claim\)/,'').split(' '); let lines=[''];
+      words.forEach(w=>{ if((lines[lines.length-1]+' '+w).trim().length>17) lines.push(w); else lines[lines.length-1]=(lines[lines.length-1]+' '+w).trim(); });
+      lines.slice(0,4).forEach((l,k)=>{s+=`<text x="${x+bw/2}" y="${y+34+k*19}" text-anchor="middle" style="font:500 15px var(--sans);fill:#2a2a2a">${l}</text>`;});
+    });
+  });
+  const lg=[['met','fully met'],['part','partially met'],['ans','not met, answered']];
+  lg.forEach(([k,l],i)=>{s+=`<rect x="${W/2-300+i*210}" y="${364}" width="14" height="14" rx="3" fill="${SH[k]}"/><text x="${W/2-280+i*210}" y="${376}" class="cap">${l}</text>`;});
+  put('figGoals', s+`</svg>`);
+})();
+
+/* ------------------------------------------------------------------ 4 the arms */
+const PLAIN={depth:'depth',dedup:'duplicate removal off',mapq:'mapping-quality cut',crop:'read length (crop)',
+  pe:'paired-end run type',abproxy:'antibody proxy (control reads mixed in)',extsize:'fragment extension',
+  ratio:'control scaling ratio',ctlid:'control identity',ctldepth:'control depth'};
+const PONLY=new Set(['extsize','ratio','ctlid','ctldepth']);
+const lvl=l=>l.replace(/^f/,'fraction ').replace(/^k/,'× ').replace(/^q/,'× ');
+const ORDER=['depth','dedup','mapq','crop','pe','abproxy','extsize','ratio','ctlid','ctldepth'].filter(k=>D.knobs[k]);
+put('tblKnobs', `<table class="dtable xs"><thead><tr><th>knob</th><th>levels</th><th>how the arm is made</th></tr></thead><tbody>${
+  ORDER.map(k=>{const kn=D.knobs[k]; return `<tr><td>${PLAIN[k]}</td><td class="num">${kn.levels.map(lvl).join(', ')}</td><td><span class="role">${kn.route==='fastq'?'re-run from raw reads':'from the alignments'}${PONLY.has(k)?'; p only':''}</span></td></tr>`;}).join('')}</tbody></table>`);
+put('tArmsNote', `Assays: ${D.assays.join(', ')}. Every product is binned at ${'25 bp'} into counts and a −log10 p track.`);
+(function(){
+  const W=440,Hh=420,cx=110,cy=210;
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="xMidYMid meet">`;
+  s+=`<circle cx="${cx}" cy="${cy}" r="62" fill="#fff" stroke="var(--accent)" stroke-width="2.4"/>`;
+  s+=`<text x="${cx}" y="${cy-4}" text-anchor="middle" class="xlab">base</text><text x="${cx}" y="${cy+22}" text-anchor="middle" class="xsub">one per track</text>`;
+  ORDER.forEach((k,i)=>{
+    const y=24+i*(Hh-48)/(ORDER.length-1), col=PONLY.has(k)?'var(--pval)':'var(--counts)';
+    s+=`<line x1="${cx+60}" y1="${cy}" x2="${220}" y2="${y}" stroke="#d8d4cc" stroke-width="1.3"/>`;
+    s+=`<circle cx="226" cy="${y}" r="7" fill="${col}"/><text x="240" y="${y+7}" style="font:500 20px var(--sans);fill:#2a2a2a">${PLAIN[k].replace(/ \(.*\)/,'')}</text>`;
+  });
+  put('figArms', s+`</svg>`);
+})();
+
+/* ------------------------------------------------------------------ 5 the model */
+put('figModel', `<svg viewBox="0 0 1160 210" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9a958d"/></marker></defs>
+  <rect x="20" y="20" width="220" height="56" rx="9" fill="#fff" stroke="var(--ow)"/><text x="130" y="55" text-anchor="middle" class="xlab">C · how X was made</text>
+  <rect x="20" y="92" width="220" height="56" rx="9" fill="#fff" stroke="var(--ow)"/><text x="130" y="127" text-anchor="middle" class="xlab">C′ · the wanted track</text>
+  <line x1="245" y1="48" x2="320" y2="80" class="axis" marker-end="url(#ar2)"/><line x1="245" y1="120" x2="320" y2="90" class="axis" marker-end="url(#ar2)"/>
+  <rect x="325" y="52" width="120" height="66" rx="9" fill="var(--per)"/><text x="385" y="93" text-anchor="middle" style="font:600 24px var(--sans);fill:#fff">g</text>
+  <line x1="450" y1="85" x2="560" y2="85" class="axis" marker-end="url(#ar2)"/><text x="505" y="72" text-anchor="middle" class="xsub">parameters</text>
+  <rect x="565" y="52" width="120" height="66" rx="9" fill="#fff" stroke="var(--per)" stroke-width="2.4"/><text x="625" y="93" text-anchor="middle" style="font:600 24px var(--sans);fill:var(--per)">f</text>
+  <rect x="565" y="150" width="120" height="48" rx="9" fill="#fff" stroke="var(--ow)"/><text x="625" y="181" text-anchor="middle" class="xlab">track X</text>
+  <line x1="625" y1="148" x2="625" y2="122" class="axis" marker-end="url(#ar2)"/>
+  <line x1="690" y1="85" x2="800" y2="85" class="axis" marker-end="url(#ar2)"/>
+  <rect x="805" y="40" width="335" height="90" rx="9" fill="#fff" stroke="var(--accent)" stroke-width="2"/>
+  <text x="972" y="76" text-anchor="middle" class="xlab">predicted X′, per bin</text>
+  <text x="972" y="106" text-anchor="middle" class="xsub">a negative binomial (counts) or a log-normal (p)</text>
+</svg>`);
+
+/* ------------------------------------------------------------------ 6 references and scoring */
+put('figScore', `<svg viewBox="0 0 1160 230" preserveAspectRatio="xMidYMid meet">
+  <text x="20" y="30" class="ptitle">(a) where a model sits</text>
+  <line x1="40" y1="110" x2="620" y2="110" class="axis"/>
+  <circle cx="80" cy="110" r="9" fill="var(--orc)"/><text x="80" y="88" text-anchor="middle" class="xlab">oracle</text>
+  <circle cx="250" cy="110" r="9" fill="var(--per)"/><text x="250" y="88" text-anchor="middle" class="xlab" fill="var(--per)">model</text>
+  <circle cx="460" cy="110" r="9" fill="var(--ow)"/><text x="460" y="88" text-anchor="middle" class="xlab">one-warp</text>
+  <circle cx="580" cy="110" r="9" fill="var(--twin)"/><text x="580" y="88" text-anchor="middle" class="xsub">twin</text>
+  <text x="40" y="140" class="xsub">← lower error</text>
+  <line x1="250" y1="160" x2="460" y2="160" stroke="var(--per)" stroke-width="3"/><line x1="80" y1="182" x2="460" y2="182" stroke="#999" stroke-width="3"/>
+  <text x="40" y="216" class="xsub">gap closed = model's share of the one-warp-to-oracle distance</text>
+  <line x1="660" y1="40" x2="660" y2="210" class="sep"/>
+  <text x="690" y="30" class="ptitle">(b) the pairs that are scored</text>
+  <rect x="700" y="60" width="110" height="44" rx="8" fill="#fff" stroke="var(--accent)" stroke-width="2"/><text x="755" y="88" text-anchor="middle" class="xlab">base</text>
+  <rect x="930" y="50" width="110" height="40" rx="8" fill="#fff" stroke="var(--ow)"/><text x="985" y="76" text-anchor="middle" class="xsub">arm 1</text>
+  <rect x="930" y="140" width="110" height="40" rx="8" fill="#fff" stroke="var(--ow)"/><text x="985" y="166" text-anchor="middle" class="xsub">arm 2</text>
+  <line x1="812" y1="78" x2="928" y2="70" stroke="var(--per)" stroke-width="3"/><line x1="812" y1="90" x2="928" y2="158" stroke="var(--per)" stroke-width="3"/>
+  <text x="850" y="140" class="cap" fill="var(--per)">trained</text>
+  <line x1="1040" y1="92" x2="1040" y2="138" stroke="var(--darm1)" stroke-width="3" stroke-dasharray="6 4"/>
+  <text x="1052" y="120" class="cap" fill="var(--darm1)">never-trained</text>
+</svg>`);
+
+/* ------------------------------------------------------------------ (a) main claim */
+(function(){
+  const G=[['trained (base to arm)',0],['never-trained, one knob',1],['never-trained, two knobs',2]];
+  const W=960,Hh=330,top=50,pB=270,yMax=0.35,yy=v=>pB-(pB-top)*v/yMax;
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="xMidYMid meet">`;
+  s+=`<text x="10" y="28" class="ptitle">Relative CRPS gain over the no-covariates twin (median of ${MAIN.n_cfg} configurations)</text>`;
+  [0,0.1,0.2,0.3].forEach(t=>{s+=`<line x1="80" y1="${yy(t)}" x2="${W-20}" y2="${yy(t)}" class="grid"/><text x="70" y="${yy(t)+5}" text-anchor="end" class="tick">${t.toFixed(1)}</text>`;});
+  G.forEach(([l,i],gi)=>{
+    const x=150+gi*270;
+    [['counts',MAIN.counts[i],'var(--counts)'],['−log10 p',MAIN.p[i],'var(--pval)']].forEach(([n,v,c],k)=>{
+      const xv=x+k*92, val=num(v);
+      s+=`<rect x="${xv}" y="${yy(val)}" width="80" height="${pB-yy(val)}" fill="${c}" rx="2"/>`;
+      s+=`<text x="${xv+40}" y="${yy(val)-8}" text-anchor="middle" class="barval" fill="${c}">${v}</text>`;
+    });
+    s+=`<text x="${x+86}" y="${pB+30}" text-anchor="middle" class="xlab" style="font-size:18px">${l}</text>`;
+  });
+  s+=`<line x1="80" y1="${pB}" x2="${W-20}" y2="${pB}" class="axis"/>`;
+  s+=`<rect x="${W-250}" y="40" width="14" height="14" fill="var(--counts)"/><text x="${W-230}" y="52" class="cap">counts</text><rect x="${W-150}" y="40" width="14" height="14" fill="var(--pval)"/><text x="${W-130}" y="52" class="cap">−log10 p</text>`;
+  put('figMain', s+`</svg>`);
+})();
+put('tMain1', `On trained pairs the covariates beat the twin in ${MAIN.twin_cells[0]}–${MAIN.twin_cells[1]} of ${MAIN.twin_cells[2]} mark-class cells. For depth alone, the count gain clears ${TWO} the seed range in ${MAIN.h1[1]} of ${MAIN.h1[2]} configurations trained and ${MAIN.h1[4]} of ${MAIN.h1[5]} never-trained.`);
+put('tMain2', `On never-trained pairs the gain falls from ${MAIN.counts[0]} to ${MAIN.counts[1]} in counts and from ${MAIN.p[0]} to ${MAIN.p[1]} in −log10 p (one knob changed).`);
+put('tMain3', `The swap check is unmet: median |log(mean / X)| ${MAIN.swap[0]}–${MAIN.swap[1]} in counts and ${MAIN.swap[2]}–${MAIN.swap[3]} in p, against a threshold of ${MAIN.swap[4]}. No CRPS split exists for these relative gains.`);
+
+/* ------------------------------------------------------------------ (b) depth */
+const RUNGS=['A','B','C','D'];
+function h1panel(cls,letter){
+  const rows=RUNGS.map(rg=>({lab:`design ${rg}`,pts:['per_track','across'].map(gv=>{
+    const r=H.find(x=>x.cls===cls&&x.rung===rg&&x.g===gv);
+    return {v:r.gc,lo:r.gc-r.noise_gc,hi:r.gc+r.noise_gc,col:gv==='per_track'?C('per'):C('acr'),hollow:gv==='across'};})}));
+  return dotPanel({title:`(${letter}) ${cls==='DNase'?'DNase':cls+' marks'}`,rows,xmin:-0.8,xmax:1.2,ticks:[-0.5,0,0.5,1],tf:t=>fx(t,1),
+    refs:[{v:0,lab:'one-warp'},{v:1,lab:'oracle'}],W:420,Lg:96,rowH:56,xlab:'gap closed (whisker: seed noise)'});
+}
+put('figH1a',h1panel('DNase','a')); put('figH1b',h1panel('narrow','b')); put('figH1c',h1panel('broad','c'));
+put('lgG', legend([[C('per'),'one g per track'],[C('acr'),'one g across tracks',true]]));
+(function(){
+  const r=H.find(x=>x.cls==='narrow'&&x.rung==='D'&&x.g==='per_track');
+  const A=H.filter(x=>x.rung==='A'&&x.cls!=='broad'), tw=H.map(x=>x.twin_gain);
+  put('tH1a', `Designs B–D close ${rngs(h1gc)} of the gap in every class; ${h1k} of ${h1BD.length} of their cells gain over the one-warp by more than ${TWO} the seed range. Narrow marks, design D per track: CRPS ${crps(r.d_model,r.os,r.se)} against the one-warp ${crps(r.d_onewarp,r.ow_os,r.ow_se)} and the oracle ${crps(r.d_oracle,r.or_os,r.or_se)}.`);
+  put('tH1b', `Design A gains nothing on DNase and narrow marks (gap closed ${rngs(A.map(x=>x.gc))}). Every design beats its no-covariates twin, by ${rngs(tw)} CRPS.`);
+})();
+
+/* ------------------------------------------------------------------ (c) run type */
+function h2panel(cls,letter){
+  const rows=RUNGS.map(rg=>({lab:`design ${rg}`,pts:['per_track','across'].map(gv=>{
+    const r=H2.find(x=>x.cls===cls&&x.rung===rg&&x.g===gv);
+    return {v:r.gain,lo:r.gain-r.seed2,hi:r.gain+r.seed2,col:gv==='per_track'?C('per'):C('acr'),hollow:gv==='across'};})}));
+  return dotPanel({title:`(${letter}) ${cls==='DNase'?'DNase':cls+' marks'}`,rows,xmin:-1,xmax:0.4,ticks:[-1,-0.5,0,0.25],tf:t=>fx(t,2),
+    refs:[{v:0,lab:'one-warp'}],W:420,Lg:96,rowH:56,xlab:`CRPS gain over the one-warp (whisker: ${TWO} seed range)`});
+}
+put('figH2a',h2panel('DNase','a')); put('figH2b',h2panel('narrow','b')); put('figH2c',h2panel('broad','c'));
+put('lgG2', legend([[C('per'),'one g per track'],[C('acr'),'one g across tracks',true]]));
+(function(){
+  const nr=H2.find(x=>x.cls==='narrow'&&x.rung==='D'&&x.g==='per_track');
+  put('tH2a', `Histone marks: ${h2k} of ${h2hist.length} cells gain ${rngs(h2hist.map(x=>x.gain))} over the one-warp, above ${TWO} the seed range. Narrow, design D per track: CRPS ${crps(nr.d_model,nr.os,nr.se)} against the one-warp ${crps(nr.d_onewarp,nr.ow_os,nr.ow_se)}.`);
+  put('tH2b', `DNase: ${h2dk} of ${h2dn.length} cells are above the criterion; the designs with one g across tracks lose to the one-warp. A fresh replicate (the floor, ${fx(nr.d_floor)} for narrow marks) sits above the one-warp, so gap closed is not read.`);
+})();
+
+/* ------------------------------------------------------------------ (d) capacity and offset */
+(function(){
+  const q=CAP.q5.map(num);
+  put('figCap', stackPanel({title:'Design A, one g per track, DNase · counts CRPS',xmax:3.5,ticks:[0,1,2,3],
+    rows:[{lab:'no depth offset',os:q[6],se:q[7],sr:q[5],col:C('ow')},{lab:'with the depth offset',os:q[2],se:q[3],sr:q[1],col:C('per')}],
+    xlab:'CRPS = oracle-scaled part (solid) + scale error (light); whisker: seed range'}));
+  put('lgSplit', legend([[C('per'),'oracle-scaled part (shape)'],['var(--se)','scale error (level)']]));
+  put('tCap1', `The offset lowers design A's CRPS by ${CAP.q5[8]}, above the criterion of ${CAP.q5[9]}; scale error falls from ${CAP.q5[7]} to ${CAP.q5[3]}. Only ${CAP.cells[0]} of ${CAP.cells[1]} cells clear, all design A; designs B–D clear ${CAP.bd[0]} of ${CAP.bd[1]}.`);
+  put('tCap2', `More capacity in f does not help never-trained pairs: the median count gain over the twin falls from ${CAP.q4never[0]} (trained) to ${CAP.q4never[1]} (never-trained), and the larger designs do not close it. With the offset, the depth law holds in ${CAP.law[1]} of ${CAP.law[2]} cells.`);
+})();
+
+/* ------------------------------------------------------------------ (e) depth law */
+(function(){
+  const L=LAW, n=a=>a.map(num);
+  const R_=(lab,lo,hi,col)=>({lab,pts:[{range:true,lo,hi,col,txt:lo===hi?fx(lo,2):`${fx(lo,2)}–${fx(hi,2)}`}]});
+  const p=n(L.pois.slice(0,3)), sz=n(L.size), via=n(L.via);
+  const rows=[
+    R_('trained pairs, every design',num(L.trained[0]),num(L.trained[1]),C('per')),
+    R_('never-trained, every design',num(L.trained[2]),num(L.trained[3]),C('darm1')),
+    R_('no pseudocount',num(L.a0[0]),num(L.a0[1]),C('ow')),
+    R_('Poisson loss on the mean',mn(p),mx(p),C('ow')),
+    R_('encoder-decoder',num(L.encd[0]),num(L.encd[1]),C('ow')),
+    R_('symmetric encoder-decoder',num(L.sym[0]),num(L.sym[1]),C('ow')),
+    R_('g four times wider',mn([sz[0],sz[1]]),mx([sz[0],sz[1]]),C('ow')),
+    R_('f twice as wide',mn([sz[2],sz[3]]),mx([sz[2],sz[3]]),C('ow')),
+    R_('old design D, direct',mn([via[3],via[4]]),mx([via[3],via[4]]),C('dref')),
+    R_('old D, through the base',mn([via[0],via[1]]),mx([via[0],via[1]]),C('dvia')),
+  ];
+  put('figLaw', dotPanel({rows,xmin:0,xmax:0.75,ticks:[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7],tf:t=>t.toFixed(1),W:960,Lg:270,rowH:34,top:30,
+    refs:[{v:0,lab:'law holds',anchor:'start'}],xlab:'median |log2 error| of the predicted scale, never-trained depth pairs unless marked'}));
+  const gap=via[4]-via[1];
+  put('tLaw1', `The real arms obey the law within ${L.data[0]}% over ${L.data[1]} pairs. Direct designs fit trained pairs (${L.trained[0]}–${L.trained[1]}) and miss never-trained ones (${L.trained[2]}–${L.trained[3]}); seed range of the loss runs ${L.pois[3]}–${L.pois[4]}.`);
+  put('tLaw2', `Through the base, one g per track reads ${L.via[1]} against ${L.via[4]} direct: a gap of ${fx(gap,2)}, ${gap>2*num(L.via[2])?'above':'below'} ${TWO} its seed range of ${L.via[2]}.`);
+})();
+
+/* ------------------------------------------------------------------ (f) arm-to-arm checks */
+const ARMN={Dref:'old D, direct',Dviabase:'old D, through the base',Darm1:'first arm: two extra pairs',Darm2:'second arm: every pair'};
+const ARMC={Dref:C('dref'),Dviabase:C('dvia'),Darm1:C('darm1'),Darm2:C('darm2')};
+(function(){
+  const lw=H28.law.heldout_r2, thr=lw.Dref.v-0.5*(lw.Dref.v-lw.Dviabase.v);
+  const rows=['Dref','Dviabase','Darm1','Darm2'].filter(a=>lw[a]).map(a=>({lab:ARMN[a].split(':')[0],pts:[{v:lw[a].v,lo:lw[a].v-lw[a].sr/2,hi:lw[a].v+lw[a].sr/2,col:ARMC[a],hollow:!lw[a].complete,txt:lw[a].complete?fx(lw[a].v):`${fx(lw[a].v)} · partial`}]}));
+  put('figH28law', dotPanel({title:'(a) depth law, held-out ratio-2 pairs',sub:`whisker: seed range${n2.law_done===n2.assigned?'':'; hollow: still running'}`,rows,xmin:0,xmax:0.3,ticks:[0,0.1,0.2,0.3],tf:t=>t.toFixed(1),
+    refs:[{v:thr,lab:`pass line ${fx(thr)}`,col:'var(--darm1)'}],W:520,Lg:190,rowH:46,top:90,xlab:'median |log2 error| of the predicted scale'}));
+  const NAME={c1:'(b) depth law on held-out pairs',c2:'(c) fit on trained base pairs',c3:'(d) depth law carries to an unseen ratio',c4:'(e) CRPS on held-out pairs',c5:'(f) run health'};
+  const badge=r=>!r?'<span class="pend">n/a</span>':r==='PASS'?'<span class="stat pass">pass</span>':r==='FAIL'?'<span class="stat fail">fail</span>':`<span class="stat wait">running</span>`;
+  const row=c=>{
+    const kind=H28.checks.find(x=>x.c===c).kind;
+    const a1=c==='c1'?c1:c==='c3'?c3:c==='c4'?c4r:ckOf(c,'Darm1','arm reading');
+    const a2=kind==='control'?ckOf(c,'Darm2','arm reading'):null;
+    const v1=c==='c1'?` ${fx(c1.value)} ≥ ${c1.thr.replace('>= ','')}`:c==='c3'?` ${fx(c3.value)} ≤ ${c3.thr.replace('<= ','')}`:c==='c4'?` ${fx(c4.value,2)} ≥ ${c4.thr.replace('>= ','')}`:'';
+    return `<tr><td>${NAME[c]}</td><td><span class="role">${kind==='control'?'control':'claim'}</span></td><td>${badge(a1&&a1.reading)}<span class="role">${v1}</span></td><td>${kind==='control'?badge(a2&&a2.reading):'<span class="role">read, not checked</span>'}</td></tr>`;};
+  put('tblH28', `<table class="dtable sm"><thead><tr><th>pre-registered check</th><th>kind</th><th>first arm</th><th>second arm</th></tr></thead><tbody>${['c1','c2','c3','c4','c5'].map(row).join('')}</tbody></table>`);
+  const pass=[c1,c3].every(x=>x&&x.reading==='PASS'), fail=c4r&&c4r.reading==='FAIL';
+  put('tH28h', pass&&fail?'Arm-to-arm training meets the depth law on held-out pairs, but fails the CRPS check':'Arm-to-arm training: the pre-registered checks');
+  const done2=n2.law_done===n2.assigned, ctl=['c2','c5'].every(c=>{const r=ckOf(c,'both');return r&&r.reading==='PASS';});
+  put('tH28note', done2&&ctl
+    ? `Rule: all three claim checks must pass, read only when both controls pass. Both arms finished (${H28.n.Darm1.law_done+n2.law_done} of ${H28.n.Darm1.assigned+n2.assigned} runs) and both controls pass, so the reading is final: ${H28.rule.toLowerCase()}. Not judged: the PI signs.`
+    : `Rule: all three claim checks must pass, read only when both controls pass. Reading now: ${H28.rule.toLowerCase()}. Second arm: ${n2.law_done} of ${n2.assigned} runs scored. Not judged: the PI signs.`);
+})();
+
+/* ------------------------------------------------------------------ (g) arm-to-arm CRPS */
+(function(){
+  const panel=(cls,title)=>{const c=H28.crps[cls]; const arms=['Dref','Dviabase','Darm1','Darm2'].filter(a=>c[a]);
+    return stackPanel({title,xmax:cls==='dnase'?2:0.6,ticks:cls==='dnase'?[0,0.5,1,1.5,2]:[0,0.2,0.4,0.6],W:640,Lg:190,rowH:56,
+      rows:arms.map(a=>({lab:ARMN[a].split(':')[0],os:c[a].os,se:c[a].se,sr:c[a].sr,col:ARMC[a],faded:!c[a].complete,tag:c[a].complete?'':'partial'})),
+      xlab:'CRPS: oracle-scaled + scale error; whisker: seed range'});};
+  put('figH28h', panel('histone','(a) histone marks')); put('figH28d', panel('dnase','(b) DNase'));
+  put('lgH28', legend([[C('dref'),ARMN.Dref],[C('dvia'),ARMN.Dviabase],[C('darm1'),ARMN.Darm1],[C('darm2'),ARMN.Darm2],['var(--se)','scale error']]));
+  const gc=cls=>{const c=H28.crps[cls]; return (c.Dref.v-c.Darm1.v)/(c.Dref.v-c.Dviabase.v);};
+  const a=H28.crps.all, d=H28.crps.dnase;
+  put('tH28c1', `All held-out pairs: first arm ${crps(a.Darm1.v,a.Darm1.os,a.Darm1.se,a.Darm1.sr)}, against old D direct ${crps(a.Dref.v,a.Dref.os,a.Dref.se)} and through the base ${crps(a.Dviabase.v,a.Dviabase.os,a.Dviabase.se)}: gap closed ${fx(gc('all'),2)} against a threshold of 0.5.`);
+  const gc2=cls=>{const c=H28.crps[cls]; return (c.Dref.v-c.Darm2.v)/(c.Dref.v-c.Dviabase.v);};
+  put('tH28gh', a.Darm2.complete&&gc2('all')>=0.5?'The first arm\'s CRPS failure is DNase scale error; the second arm removes it':'The CRPS failure is in DNase, and it is scale error');
+  put('tH28c2', `DNase: gap closed ${fx(gc('dnase'),2)}, with scale error ${fx(d.Darm1.se)} against ${fx(d.Dref.se)} for old D; histone marks: gap closed ${fx(gc('histone'),2)}.`);
+  put('tH28c3', a.Darm2.complete
+    ? `Second arm, all ${n2.law_done} runs (read, not checked; the rule reads the first arm): ${crps(a.Darm2.v,a.Darm2.os,a.Darm2.se,a.Darm2.sr)}, gap closed ${fx(gc2('all'),2)}; DNase ${fx(gc2('dnase'),2)}, scale error ${fx(d.Darm2.se)}.`
+    : `The second arm reads partial (${n2.law_done} of ${n2.assigned} runs).`);
+})();
+
+/* ------------------------------------------------------------------ (h) counts to p */
+(function(){
+  const r=HM.repair.map(num);
+  put('figH', stackPanel({title:'Map h (design D2, learned MLP) · log CRPS on the p-value track',xmax:0.16,ticks:[0,0.05,0.1,0.15],
+    rows:[{lab:'h trained on true counts',os:r[5],se:r[6],sr:r[4],col:C('per')},{lab:'h trained on f\'s predictions',os:r[8],se:r[9],col:C('ow')}],
+    xlab:'log CRPS = oracle-scaled part + scale error; whisker: seed range'}));
+  put('tH1', `The true-count map is lower in ${HM.repair[0]} of ${HM.repair[1]} rows, ${HM.repair[2]} above the criterion: training h on f's predictions does not repair f's errors.`);
+  put('tH2', `Push and formula maps have ${HM.noexplode[0]} records with CRPS above ${HM.noexplode[1]}. The direct p designs B–D still explode above that threshold on a few pairs (fix deferred by the PI).`);
+})();
+
+/* ------------------------------------------------------------------ (i) knobs vs floor */
+const KPL=(r)=>`${PLAIN[r.arm].replace(/ \(.*\)/,'')} ${r.arm==='depth'||r.arm==='crop'||r.arm==='mapq'||r.arm==='abproxy'?lvl(r.level):''}`.trim();
+(function(){
+  const nr=r=>r.cls==='narrow';
+  const ph=kPH.filter(nr).sort((a,b)=>b.v-a.v), order=ph.map(r=>r.arm+r.level);
+  const sh=order.map(k=>kSH.find(r=>nr(r)&&r.arm+r.level===k));
+  put('figKa', dotPanel({title:'(a) peak height, narrow marks',sub:'log scale',rows:ph.map(r=>({lab:KPL(r),pts:[{v:r.v,col:C('narrow')},{v:r.floor,col:C('ow'),hollow:true,r:5}]})),
+    xmin:0.001,xmax:10,log:true,ticks:[0.001,0.01,0.1,1,10],tf:t=>t>=1?t:t.toString(),W:560,Lg:220,rowH:30,top:70,xlab:'|log2 change|, top bins'}));
+  put('figKb', dotPanel({title:'(b) one-kilobase shape, narrow marks',sub:'hollow: the resampling floor at the arm\'s depth',rows:sh.map(r=>({lab:KPL(r),pts:[{v:r.v,col:r.above?C('darm1'):C('narrow')},{v:r.floor,col:C('ow'),hollow:true,r:5}]})),
+    xmin:0,xmax:0.8,ticks:[0,0.2,0.4,0.6,0.8],tf:t=>t.toFixed(1),W:560,Lg:220,rowH:30,top:70,xlab:'1 − rank correlation at 1 kb'}));
+  const rat=kPH.map(r=>r.ratio), fsr=mx(KN.map(r=>r.fsr));
+  put('tK1', `Peak height is above the floor in ${kPHa} of ${kPH.length} rows over all classes, by ${Math.round(mn(rat))}× to ${Math.round(mx(rat))}× (floor seed range ≤ ${fx(fsr,4)}).`);
+  put('tK2', `Shape is above the floor in ${kSHa.length} of ${kSH.length} rows: ${kSHa.map(r=>`${r.cls==='DNase'?'DNase':r.cls} ${KPL(r)}`).join(', ')}. Below the floor does not mean no effect: a knob arm reuses the base's reads.`);
+})();
+
+/* ------------------------------------------------------------------ (j) floor */
+(function(){
+  const S=FL.curve.shape_1k, cls=['DNase','narrow','broad'], dep=[1.875,3.75,7.5,15,30], key=['1.875M','3.75M','7.5M','15M','30M'];
+  const W=600,Hh=380,L=70,R=150,top=70,pB=310,xx=d=>L+(Math.log2(d)-Math.log2(1.875))/(Math.log2(30)-Math.log2(1.875))*(W-L-R),yy=v=>pB-(pB-top)*v;
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="xMidYMid meet"><text x="10" y="30" class="ptitle">(a) one-kilobase shape floor</text><text x="10" y="52" class="psub">dashed: extrapolated to the full depth</text>`;
+  [0,0.25,0.5,0.75,1].forEach(t=>{s+=`<line x1="${L}" y1="${yy(t)}" x2="${W-R}" y2="${yy(t)}" class="grid"/><text x="${L-8}" y="${yy(t)+5}" text-anchor="end" class="tick">${t}</text>`;});
+  dep.forEach(d=>{s+=`<text x="${xx(d)}" y="${pB+22}" text-anchor="middle" class="tick">${d}M</text>`;});
+  const lab=[];
+  cls.forEach(c=>{const col=C(c==='DNase'?'dnase':c), v=key.map(k=>S[c][k]);
+    s+=`<polyline points="${dep.slice(0,4).map((d,i)=>`${xx(d)},${yy(v[i])}`).join(' ')}" fill="none" stroke="${col}" stroke-width="3"/>`;
+    s+=`<line x1="${xx(15)}" y1="${yy(v[3])}" x2="${xx(30)}" y2="${yy(v[4])}" stroke="${col}" stroke-width="3" stroke-dasharray="6 5"/>`;
+    dep.forEach((d,i)=>{s+=`<circle cx="${xx(d)}" cy="${yy(v[i])}" r="4.5" fill="${i===4?'#fff':col}" stroke="${col}" stroke-width="2"/>`;});
+    lab.push([yy(v[4]),col,`${c} ${fx(v[4])}`]);});
+  lab.sort((p,q)=>p[0]-q[0]); for(let i=1;i<lab.length;i++) lab[i][0]=Math.max(lab[i][0],lab[i-1][0]+22);
+  lab.forEach(([y,col,t])=>{s+=`<text x="${xx(30)+12}" y="${y+6}" text-anchor="start" class="val" fill="${col}">${t}</text>`;});
+  s+=`<line x1="${L}" y1="${pB}" x2="${W-R}" y2="${pB}" class="axis"/><text x="${(L+W-R)/2}" y="${pB+50}" text-anchor="middle" class="cap">reads per half library (whole-read thinning)</text>`;
+  put('figFa', s+'</svg>');
+  const rows=[]; cls.forEach(c=>['15','375'].forEach(dp=>{const m=FL.map[c][dp]; rows.push({lab:`${c}, ${dp==='15'?'15M':'3.75M'}`,pts:[
+    {range:true,lo:0,hi:m.R2_level.v,col:C(c==='DNase'?'dnase':c),txt:`level ${fx(m.R2_level.v,2)} · features +${sci(m.delta_R2.v)}`}]});}));
+  put('figFb', dotPanel({title:'(b) what explains the disagreement',sub:'R² of the signal-level null; extra R² of four regional features',rows,xmin:0,xmax:0.7,ticks:[0,0.2,0.4],tf:t=>t.toFixed(1),W:560,Lg:150,rowH:44,top:76,xlab:'R² per bin'}));
+  const sr=mx(cls.flatMap(c=>[S[c].sr05,S[c].sr0125]));
+  put('tF1', `Whole-read thinning reproduces the real depth-arm halves: shape ratio ${fx(FL.real.all.read)} over ${FL.real.all.n} arms, against ${fx(FL.real.all.unit)} for the first pass, which thinned count units. Seed range ≤ ${fx(sr,4)}.`);
+  const R2=cls.flatMap(c=>['15','375'].map(d=>FL.map[c][d].R2_level.v)), dR=cls.flatMap(c=>['15','375'].map(d=>FL.map[c][d].delta_R2.hi)), sh=cls.flatMap(c=>['15','375'].map(d=>FL.map[c][d].delta_R2_shuffle.hi));
+  put('tF2', `Signal level explains ${rngs(R2)} of the per-bin disagreement; mappability, repeats, GC and peak context add ≤ ${sci(mx(dR))} (shuffle control ≤ ${sci(mx(sh))}).`);
+})();
+
+/* ------------------------------------------------------------------ (k) where knobs act */
+(function(){
+  const lab=(a,l)=>`${PLAIN[a].replace(/ \(.*\)/,'')} ${['depth','crop','mapq','abproxy','ctldepth','ratio','extsize'].includes(a)?lvl(l):a==='ctlid'?l:''}`.trim();
+  const mk=(space,list)=>list.map(([a,l])=>{const pts=[];
+    ['narrow','broad'].forEach(c=>{const r=wOf(a,l,c,space); if(r) pts.push({v:Math.max(r.v,1e-5),col:C(c)});});
+    if(a==='depth'){const r=wOf(a,l,'narrow',space,'null_s0'); if(r) pts.push({v:r.v,col:C('ow'),hollow:true});}
+    return {lab:lab(a,l),pts};}).filter(r=>r.pts.length);
+  const cl=mk('counts',[['mapq','0'],['crop','36'],['crop','50'],['abproxy','0.9'],['mapq','10'],['pe','pe'],['abproxy','0.5'],['dedup','off'],['depth','3.75M'],['depth','15M']].map(([a,l])=>[a,a==='abproxy'?'f'+l:l]));
+  const pl=mk('pval',[['ctlid','none'],['ratio','k0.5'],['mapq','0'],['ctlid','other'],['ratio','k2'],['ctldepth','q0.5'],['extsize','k2'],['depth','3.75M']]);
+  const o={xmin:1e-5,xmax:0.3,log:true,ticks:[1e-5,1e-4,1e-3,1e-2,1e-1],tf:t=>sci(t),W:560,Lg:200,rowH:30,top:70,
+    refs:[{v:DATA.shuf,lab:'shuffle max',anchor:'start'}],xlab:'extra R² of four regional features (log scale)'};
+  put('figWa', dotPanel({...o,title:'(a) counts',rows:cl})); put('figWb', dotPanel({...o,title:'(b) −log10 p',rows:pl}));
+  put('lgW', legend([[C('narrow'),'narrow marks'],[C('broad'),'broad marks'],[C('ow'),'whole-read thinning null (narrow)',true]]));
+  const d3=wOf('depth','3.75M','narrow','counts'), n3=wOf('depth','3.75M','narrow','counts','null_s0');
+  put('tW1', `Depth matches its null: narrow marks at 3.75M, ${sci(d3.v)} against ${sci(n3.v)}. Mapping quality zero adds ${rngs(mapq0)}, mostly from mappability; read length 36 adds ${rngs(['narrow','broad'].map(c=>wOf('crop','36',c,'counts').v))}.`);
+  put('tW2', `In −log10 p, control identity "none" adds ${rngs(['narrow','broad'].map(c=>wOf('ctlid','none',c,'pval').v))} and ratio ×0.5 adds ${rngs(['narrow','broad'].map(c=>wOf('ratio','k0.5',c,'pval').v))}; the shuffle control stays ≤ ${sci(DATA.shuf)}.`);
+})();
+
+/* ------------------------------------------------------------------ (l) probe */
+put('tP1', `${PR.swap[0]} of ${PR.swap[1]}`); put('tP2', `${PR.depth[0]} of ${PR.depth[1]}`); put('tP3', `${PR.effect[0]} of ${PR.effect[1]}`);
+
+/* ------------------------------------------------------------------ discussion */
+const per=H.filter(x=>x.g==='per_track');
+put('tLim1', `${D.n_tracks} tracks: one DNase track and three tracks per histone class. Each run has three seeds, so each class value rests on one to three tracks.`);
+put('tLim4', n2.law_done===n2.assigned
+  ? `The arm-to-arm rule reads only the first arm; the second arm's CRPS is a reading, not a check (f, g). The extra seeds for the wider f are still queued.`
+  : `The arm-to-arm grid's second arm has ${n2.law_done} of ${n2.assigned} runs scored, so its two controls are not readable (f). The extra seeds for the wider f are still queued.`);
+put('tC1', `Keep the fixed depth offset. Depth acts the same along the genome (k), and maps through the full-depth base meet the law: ${LAW.via[1]} against ${LAW.via[4]} direct (e).`);
+put('tC2', `Add a position-aware input, such as sequence or mappability: mapping quality zero adds a feature gain of ${rngs(mapq0)} (k).`);
+put('tC3', `A level-dependent spread, such as the NB variance, describes the floor (j). Low-depth noise is larger than first measured: the shape floor is ${fx(FL.curve.shape_1k.narrow['3.75M'])} at 3.75M per half (narrow).`);
+put('tC4', H28.crps.all.Darm2&&H28.crps.all.Darm2.complete
+  ? `A direct g does not carry base-to-arm training to arm-to-arm pairs (a, e). Training on every arm-to-arm pair reaches the through-the-base CRPS, ${fx(H28.crps.all.Darm2.v)} against ${fx(H28.crps.all.Dviabase.v)} (g; read, not checked).`
+  : `A direct g does not carry base-to-arm training to arm-to-arm pairs (a, e). Add arm-to-arm pairs for the other covariates only if the second arm shows the need (f).`);
+
+/* ------------------------------------------------------------------ navigation and notes */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){
+  cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+}
+const next=()=>show(cur+1), prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;
+document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>

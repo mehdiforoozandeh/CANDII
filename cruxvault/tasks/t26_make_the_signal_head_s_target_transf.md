@@ -27,7 +27,7 @@ land first.
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-- results/t26/DELIVERABLE.md — merged abd9b31
+- [Deliverable](results/t26/DELIVERABLE.md) — merged abd9b31
 
 ## Evidence
 

@@ -1,0 +1,8 @@
+{"run": {"run_name": "D_C07M20_counts_real_s0"},
+ "records": [
+  {"kind": "law", "eval": "score", "track": "C07M20", "arm_src": "abproxy", "level_src": "f0.5", "arm_tgt": "abproxy", "level_tgt": "f0.9", "crps_all": 0.6004084696712416},
+  {"kind": "law", "eval": "score", "track": "C07M20", "arm_src": "crop", "level_src": "36", "arm_tgt": "mapq", "level_tgt": "30", "crps_all": 0.5},
+  {"kind": "law", "eval": "score", "track": "C07M20", "arm_src": "pe", "level_src": "se", "arm_tgt": "pe", "level_tgt": "pe", "crps_all": 0.25},
+  {"kind": "law", "eval": "fit", "track": "C07M20", "arm_src": "pe", "level_src": "se", "arm_tgt": "pe", "level_tgt": "pe", "crps_all": 9.0},
+  {"kind": "depthlaw", "eval": "score", "track": "C07M20", "arm_src": "depth", "level_src": "5M", "arm_tgt": "depth", "level_tgt": "10M", "crps_all": 9.0}
+ ]}

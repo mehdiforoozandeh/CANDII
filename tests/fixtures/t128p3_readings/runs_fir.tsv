@@ -1,0 +1,19 @@
+index	run	cluster	arm	g	g_version	model	seed	rung	g_hidden	f_channels	n_theta	TRAIN_DONE	SCORE_DONE	LAW_DONE	viabase_LAW_DONE	max_steps	steps_run	best_step	val_nll	val_cross_nll	val_nll_rule	train_s	s_per_step	device	node	train_log	run_dir
+0	Dbigg_C07M20_counts_real_s0	fir	Dbigg	C07M20	per_track	real	0	D	256	32	256	1	1	1	1	15000	3500	2500	1.0		t118 cross NLL	3150.0	0.9	cuda	fc1000	t128p3_train_100_0.out	1
+1	Dbigg_C07M20_counts_real_s1	fir	Dbigg	C07M20	per_track	real	1	D	256	32	256	1	1	1	1	15000	3750	2750	1.0		t118 cross NLL	3375.0	0.9	cuda	fc1001	t128p3_train_100_1.out	1
+2	Dbigg_C07M20_counts_real_s2	fir	Dbigg	C07M20	per_track	real	2	D	256	32	256	1	1	1	1	15000	4000	3000	1.0		t118 cross NLL	3600.0	0.9	cuda	fc1002	t128p3_train_100_2.out	1
+3	Dbigg_C19M16_counts_real_s0	fir	Dbigg	C19M16	per_track	real	0	D	256	32	256	1	1	1	1	15000	3500	2500	1.0		t118 cross NLL	3150.0	0.9	cuda	fc1003	t128p3_train_100_3.out	1
+4	Dbigg_C19M16_counts_real_s1	fir	Dbigg	C19M16	per_track	real	1	D	256	32	256	1	1	1	1	15000	3750	2750	1.0		t118 cross NLL	3375.0	0.9	cuda	fc1004	t128p3_train_100_4.out	1
+5	Dbigg_C19M16_counts_real_s2	fir	Dbigg	C19M16	per_track	real	2	D	256	32	256	1	1	1	1	15000	4000	3000	1.0		t118 cross NLL	3600.0	0.9	cuda	fc1005	t128p3_train_100_5.out	1
+6	Dbigg_all_counts_real_s0	fir	Dbigg	all	across	real	0	D	256	32	256	1	1	1	1	15000	4000	3000	1.0		t118 cross NLL	5400.0	1.35	cuda	fc1006	t128p3_train_100_6.out	1
+7	Dbigg_all_counts_real_s1	fir	Dbigg	all	across	real	1	D	256	32	256	1	1	1	1	15000	4250	3250	1.0		t118 cross NLL	5737.5	1.35	cuda	fc1007	t128p3_train_100_7.out	1
+8	Dbigg_all_counts_real_s2	fir	Dbigg	all	across	real	2	D	256	32	256	1	1	1	1	15000	15000	13750	1.0		t118 cross NLL	20250.0	1.35	cuda	fc1008	t128p3_train_100_8.out	1
+9	Dbigf_C07M20_counts_real_s0	fir	Dbigf	C07M20	per_track	real	0	D	64	64	512	1	1	1	1	15000	3500	2500	1.0		t118 cross NLL	3150.0	0.9	cuda	fc1009	t128p3_train_100_9.out	1
+10	Dbigf_C07M20_counts_real_s1	fir	Dbigf	C07M20	per_track	real	1	D	64	64	512	1	1	1	1	15000	13500	12500	1.0		t118 cross NLL	12150.0	0.9	cuda	fc1010	t128p3_train_100_10.out	1
+11	Dbigf_C07M20_counts_real_s2	fir	Dbigf	C07M20	per_track	real	2	D	64	64	512	1	1	1	1	15000	4000	3000	1.0		t118 cross NLL	3600.0	0.9	cuda	fc1011	t128p3_train_100_11.out	1
+12	Dbigf_C19M16_counts_real_s0	fir	Dbigf	C19M16	per_track	real	0	D	64	64	512	1	1	1	1	15000	3500	2500	1.0		t118 cross NLL	3150.0	0.9	cuda	fc1012	t128p3_train_100_12.out	1
+13	Dbigf_C19M16_counts_real_s1	fir	Dbigf	C19M16	per_track	real	1	D	64	64	512	1	1	1	1	15000	3750	2750	1.0		t118 cross NLL	3375.0	0.9	cuda	fc1013	t128p3_train_100_13.out	1
+14	Dbigf_C19M16_counts_real_s2	fir	Dbigf	C19M16	per_track	real	2	D	64	64	512	1	1	1	1	15000	4000	3000	1.0		t118 cross NLL	3600.0	0.9	cuda	fc1014	t128p3_train_100_14.out	1
+15	Dbigf_all_counts_real_s0	fir	Dbigf	all	across	real	0	D	64	64	512	1	1	1	1	15000	4000	3000	1.0		t118 cross NLL	5400.0	1.35	cuda	fc1015	t128p3_train_100_15.out	1
+16	Dbigf_all_counts_real_s1	fir	Dbigf	all	across	real	1	D	64	64	512	1	1	1	1	15000	4250	3250	1.0		t118 cross NLL	5737.5	1.35	cuda	fc1016	t128p3_train_100_16.out	1
+17	Dbigf_all_counts_real_s2	fir	Dbigf	all	across	real	2	D	64	64	512	1	1	1	1	15000	4500	3500	1.0		t118 cross NLL	6075.0	1.35	cuda	fc1017	t128p3_train_100_17.out	1

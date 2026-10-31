@@ -1,0 +1,6 @@
+pid	biosample	track	cell	assay	arm	level	route	knob	knob_value	depth	read_length	run_type	fraglen	control_accession	control_source	pipeline_repo	pipeline_release	sif_md5	counts25_md5	pval25_md5	control_counts25_md5	slurm_job_ids	product_dir
+C07M20__base__base	CF_C07__base__base	C07M20	C07	H3K4me1	base	base	bam	none		30000000													synthetic/C07M20__base__base
+C07M20__depth__15M	CF_C07__depth__15M	C07M20	C07	H3K4me1	depth	15M	bam	treatment_reads	15000000	15000000													synthetic/C07M20__depth__15M
+C07M20__ratio__k2	CF_C07__ratio__k2	C07M20	C07	H3K4me1	ratio	k2	bam	macs2_ratio	0.375	30000000													synthetic/C07M20__ratio__k2
+C12M02__base__base	CF_C12__base__base	C12M02	C12	DNase-seq	base	base	bam	none		50000000													synthetic/C12M02__base__base
+C12M02__dedup__off	CF_C12__dedup__off	C12M02	C12	DNase-seq	dedup	off	bam	atac.no_dup_removal	true	50000000													synthetic/C12M02__dedup__off

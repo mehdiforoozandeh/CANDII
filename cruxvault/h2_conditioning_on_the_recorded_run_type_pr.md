@@ -6,8 +6,8 @@ title: Conditioning on the recorded run type predicts a target track from a sour
 parent: q1
 status: idea
 rule: all
-measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, over a paired-end arm against its single-end rebuild; instrument is a standalone encoder/decoder testbed with log d pinned as a fixed offset of coefficient exactly 1, scored through bench.distributional.nb_suite and bench.covariate
-replicates: "TODO(PI) — source→target pairs per arm x seeds, on the panel t100 selects. Whatever it is, it must clear the seed floor: one paired seed change on the q19 recipe moves pooled imputation CRPS by 0.0463 (macro 0.0327) under eval.py and macro CRPS by 0.0608 under bench, and the per-track floor is several times either macro. The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
+measurement: gap-closed on the onewarp→oracle interval, per signal decile and per mark class, on macro NB CRPS in counts, over the t112 paired-end arm against its single-end base (both at 30M reads) on chr19 + chr21; instrument is t118's covariate-conditioned g → f, with its no-covariates twin as blind, per-pair QuantileMatching as onewarp and the independent-replicate floor at the target depth (PI rulings 2026-10-29 and 2026-10-30) as oracle
+replicates: "7 tracks: 14 trained base ↔ paired-end pairs, x 3 seeds of each g (the t118 runs). Run type has one arm level, so no never-trained pair changes run type alone. TODO(PI): which g → f designs and versions count. The gain must clear 2 × the model's own seed |Δ| (PI ruling 2026-09-16). The ~0.09 target-clustered floor and the ±0.13 per-comparison uncertainty belong to the frozen full-EIC panel and are quoted only for it (AGENTS.md §7.2 rule 2)."
 verdict: 
 metric: 
 created: "2026-09-01T02:16:44"
@@ -22,45 +22,26 @@ Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 
 ## ELI5
 
-Knowing whether the sequencer read DNA fragments from one end or both is enough to turn one
-experiment's numbers into the other's — and by more than just rescaling them would.
+Knowing whether the sequencer read DNA fragments from one end or both is enough to turn one experiment's numbers into the other's, and by more than plain rescaling.
 
 ## TL;DR
 
-An encoder reads a source track of raw counts plus the source's recorded covariates; a decoder
-reads the target's covariates and emits raw counts and a −log10 p signal. The mean is
-`mu = d · exp(eta)`, so `log mu = eta + log d` with **`log d` pinned as a fixed offset of
-coefficient exactly 1** — without the pin, eta and the decoder's scale are confounded and eta is
-not identified. The claim is **not** that prediction is possible. A single global monotone map on
-the value axis, with no covariates at all, already removes most of the level difference, so that
-map is the competitor. The claim is that conditioning on the recorded run type closes the gap that
-map leaves, up to the floor set by two independent draws from the same eta at the target depth.
+g reads the source's covariates C and the target's covariates C′ and outputs a map f; f(X) predicts the target X′ as NB counts. The pairs are the t112 paired-end arm against its single-end base, both at 30M reads. The claim is that run-type conditioning closes the gap that one-warp leaves.
+
+## Expect
+
+A run-type-conditioned map closes at least 0.5 of the one-warp → oracle gap per mark class, and the gain exceeds 2 × its own seed |Δ|.
+
+_Pre-run: claim written 2026-09-01; bar approved by the PI 2026-09-16/17. On 2026-10-30 the PI ruled that run-type pairs keep the independent-replicate floor as oracle, because the paired-end arm is not a read subsample of its base._
 
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 
 ## Problem Statement
 
-Run type is the arm that carries real weight, because unlike depth it is not a thinning identity.
-`[[signal-normalization-in-epigenomics]]` records why it matters: a difference in the
-**deduplication rule** between single-end and paired-end data — single-end keeps one read per
-duplicate set, paired-end keeps a pair if either mate is unique — shifted the distribution enough
-that a naive baseline outperformed all but two of 23 ENCODE challenge submissions. Nothing in any
-of those methods could have detected it, because the assumption was made before the model saw the
-data.
+Run type carries more weight than depth: it is not a thinning identity. [[signal-normalization-in-epigenomics]] records that the single-end and paired-end deduplication rules differ, and that this shift let a naive baseline beat all but two of 23 ENCODE challenge submissions. On the shipped panel, assay and read length fix run type (`AGENTS.md` §7.2 rule 5). The t112 paired-end arm changes run type alone. It has one level, so only the 14 trained pairs isolate run type.
 
-**This arm is gated on identifiability and may be impossible.** `AGENTS.md` §7.2 rule 5 records
-`H(run_type | assay_id, read_length) = 0.000 bits` on the shipped 8-assay panel (n = 26 `T_`
-records), against 0.551 bits on the full EIC panel, and calls a run-type steering demonstration
-impossible there as a property of the data rather than of the architecture. A first reading on the
-361-track control metadata (`results/t10/eic_control_metadata.csv`, 73 usable rows, 58 single-ended
-/ 15 paired-ended) gives `H(run_type) = 0.733` bits falling to **0.124** bits given `read_length`,
-and 0.119 given `read_length` and `lab` — thin but non-zero. That is controls, not the signal
-tracks this will use, so it settles nothing; `t100` measures it on the panel actually selected, and
-that measurement gates this node.
-
-The literature names a stronger competitor than `onewarp` — the peak/background-split transform
-S3norm fits. PI ruling 2026-09-16: `onewarp` stays the denominator; `splitwarp` is not a rung.
+Why run type: unlike depth, it has no closed-form answer, so it carries more weight for the claim. The counterfactual is the same paired-end reads re-processed mate-blind as single-end, so nothing else can differ between the two members.
 
 ## Idea / Hypothesis
 
@@ -75,32 +56,33 @@ Conditioning on the recorded run type predicts a target track from a source trac
 run `invalid-run`, never a refutation.
 
 - [ ] `plantedrecovery` [outcome-neutral] — inject a synthetic covariate carrying a KNOWN monotone
-      warp, and compare the recovered warp against the true one. Threshold: `TODO(PI)`.
+      warp, and compare the recovered warp against the true one. Threshold: `TODO(PI)`. g reads the
+      planted covariate as one added entry of C and C′.
       Follows `meta_probe.py`'s `off`/`shuffled`/`planted` discipline: the shift is added to the
-      TARGET in log space only, `x_data` stays bit-identical, the draw comes from a dedicated RNG
+      TARGET X′ in log space only, the source X stays bit-identical, the draw comes from a dedicated RNG
       stream disjoint from the data stream, and the product is rounded back to an integer. It does
       NOT reuse `meta_probe` itself, which plants one bit (`MetadataEmbedding` raises above
       `num_runtypes = 2` and widening the table changes the parameter count).
       *Fails if:* the fitting procedure cannot recover a warp it was handed, so any warp it reports
       on real pairs is an artifact of the fit rather than a reading of the data.
-- [ ] `shuffledrop` [outcome-neutral] — gap-closed with the covariate delta resampled from its own
-      marginal across pairs (same marginal, zero association); must collapse. Threshold:
-      `TODO(PI)`. **Calls `bench.covariate.covuse` / `_marginal_resample`; does not reimplement
-      them.** Reports `within_batch_d_crps` (the structural tripwire, must read exactly `0.0`) and
-      `conditional_null_degenerate` beside the result, so a p-value of 1.0 cannot be misread as the
-      model ignoring the covariate when the truth is that the conditional null is empty. Watch for
-      the degeneracy `meta_probe` measured on six consecutive real batches: with one biosample per
-      batch, permuting along B is the identity.
+- [ ] `shuffledrop` [outcome-neutral] — gap-closed at scoring with the run-type entry of C′ resampled
+      from its own marginal across the scored pairs (same marginal, zero association); must
+      collapse. Threshold: `TODO(PI)`. **Calls `bench.covariate._marginal_resample`; does not
+      reimplement it.** t118's shuffle check (C′ taken from another arm of the same track) is
+      near this check, but it changes every knob, not this one alone. Reports
+      `conditional_null_degenerate` beside the result: if every scored pair carries one value of
+      the knob, the resample is the identity, and a p-value of 1.0 means an empty null, not a
+      g that ignores the covariate.
       *Fails if:* gap-closed survives the shuffle, so the apparatus is reading something other than
       the covariates — capacity, position, or the source track itself.
-- [ ] `latentguard` [outcome-neutral] — `bench.covariate.depthblind` + `biokeep` on `z`. Threshold:
-      `TODO(PI)`. Proposed addition, not in the original set: the encoder is `z = ENCODER(x, x_md)`,
-      and a collapsed encoder scores a perfect invariance. `depthblind` refuses to return without
-      `biokeep` (D13) for exactly this reason.
-      *Fails if:* the encoder is invariant because it collapsed, not because it is good.
+- [ ] `latentguard` [outcome-neutral] — written for the dropped testbed: `bench.covariate.depthblind`
+      + `biokeep` on the encoder latent `z`. **g → f has no `z`**: g reads only C and C′, and f
+      reads only X, so this check cannot run as written. `TODO(PI)`: drop it, or aim it at f
+      (guard against an f that ignores X). Threshold: `TODO(PI)`.
+      *Fails if:* the model is invariant because it collapsed, not because it is good.
 
-**Claim-directed checks** — each reported as a **difference against the `onewarp` rung on held-out
-pairs**, never in absolute terms. Measured absolutely, the null passes `qqresidual` and
+**Claim-directed checks** — each reported as a **difference against the `onewarp` rung on the
+held-out chromosomes chr19 + chr21**, never in absolute terms. Measured absolutely, the null passes `qqresidual` and
 `crps_split`, because `onewarp` is *fitted* to flatten the quantile curve.
 
 - [ ] `gapclosed` [claim-directed, DISCRIMINATES against the null] — `(D_onewarp − D_model) /
@@ -120,12 +102,13 @@ pairs**, never in absolute terms. Measured absolutely, the null passes `qqresidu
       one; note this is a value-axis QQ curve, a different object from `ece`'s PIT curve.
       *Fails if:* the fit is right on the bulk and wrong in the tail — the mean is matched and the
       peaks are not.
-- [ ] `swapfidelity` [claim-directed] — feed the decoder the SOURCE covariates while the target is
-      the other arm; it must predict the SOURCE, scored as gap-closed toward it. **Read jointly
-      with `gapclosed`** (see the two failure readings below). Threshold: `TODO(PI)`. Reuses
+- [ ] `swapfidelity` [claim-directed] — give g C′ = C (the SOURCE covariates) while the target is
+      the other arm; the f it outputs must return the SOURCE, scored as gap-closed toward it. This
+      is t118's swap check; t118's bar for the main claim (≥ 0.5) carries over only if the PI rules so. **Read jointly
+      with `gapclosed`** (see the failure readings below). Threshold: `TODO(PI)`. Reuses
       `covuse`'s scoring half — `nb_crps_mean` against a chosen target and the randomization-test
       p-value form `(1 + #{L_r ≤ L_obs}) / (R + 1)`.
-      *Fails if:* told the source covariates, the decoder still predicts the target, so its output
+      *Fails if:* told the source covariates, g still predicts the target, so its output
       does not depend on what it is told.
 
 **Combination rule: `all`**, over the three claim-directed checks. The cost, stated rather than
@@ -145,17 +128,19 @@ loosened to compensate.
   hypothesis never asserted. Computed by running `bench.covariate.covshare(scalar="level")` inside
   each decile rather than with a new estimator — but note the open bug `t43`, which leaks
   across-unit variance into that estimator's bias term.
-- `composegap` — fit on the two 1-D sweeps only (depth alone, run type alone), compose, and predict
-  the held-out joint 2x2 corner.
+- `composegap` — score the never-trained depth arm ↔ paired-end pairs of t118's law test, where
+  both knobs change. g there was trained on the 1-D arms of all ten knobs, not on the two sweeps
+  alone.
 - `sweepcurve` — gap-closed against the number of distinct covariate values seen, with
-  interpolation and extrapolation reported **separately**.
+  interpolation and extrapolation reported **separately**. **Cannot be read here:** run type has
+  two values, so no interpolation or extrapolation exists.
 - **Broad marks are diagnostic, never gating.** Their level barely moves, so a ratio there is a
   small number over a smaller one.
 
-**Two pre-committed failure readings.**
+**Three pre-committed failure readings.**
 
-1. *Reading the covariates as nuisance* — `gapclosed` high with `swapfidelity` at chance. The
-   decoder learned one fixed direction-of-travel map for this pair set rather than a
+1. *Reading the covariates as nuisance* — `gapclosed` high with `swapfidelity` at chance. g
+   learned one fixed direction-of-travel map for this pair set rather than a
    covariate-steered one. This is the `p(y|c) = p(y)` failure `bench/covariate.py` names in its
    opening docstring.
 2. *Copying the source* — `swapfidelity` high while `gapclosed` is low and `blind` is
@@ -172,54 +157,63 @@ loosened to compensate.
   level-only `aspects_of(...)["level"]` reading;
 - (ii) **decided — PI ruling 2026-09-16: the `oracle` rung is two NB draws.** The model emits NB, and on an
   overdispersed target a Poisson oracle would sit below anything reachable, leaving gap-closed no
-  ceiling of 1;
+  ceiling of 1. **Superseded:** the 2026-10-29 gap-closing plan used the pseudoreplicate floor (one of the PI's three baselines, 2026-10-29) as the oracle
+  (q10); for run type it stays so (v);
 - (iii) **decided — PI ruling 2026-09-16: `onewarp` is the headline denominator; `splitwarp` is not a rung;**
-- (iv) every `TODO(PI)` threshold above.
+- (iv) every `TODO(PI)` threshold above;
+- (v) **decided — PI ruling 2026-10-30: the run-type pairs keep the independent-replicate floor as
+  oracle.** The exact nested-read oracle applies only to pairs nested by read subsampling (the
+  depth arms). The paired-end arm is a separate re-processing from FASTQ, not a read subsample of
+  its base, so no nested-read law exists for it. The eta question of the two-NB-draw oracle does
+  not arise. Reading note (foreman correction, 2026-10-30): in counts the floor sits above
+  one-warp for narrow and broad marks, so the interval is inverted and gap-closed comes out
+  negative. There a negative gap-closed means the model beats one-warp, not the reverse; an
+  earlier chat claim that one-warp beats the model was wrong;
+- (vi) `TODO(PI)`: which g → f is the `model` rung — which of designs A–D, and the per-track g,
+  the across-track g, or both (t118 rules both decide for its main claim);
+- (vii) `TODO(PI)`: the spread device for `onewarp`. t118 scored QuantileMatching as Poisson,
+  which ruling (ii) rejects for the oracle;
+- (viii) `TODO(PI)`: `latentguard` (see above);
+- (ix) `TODO(PI)`: whether −log10 p (log-normal CRPS, t118) also gates. Ruling (i) names NB CRPS,
+  so as written the gate reads counts only.
+- (x) **oracle, recorded:** PI ruling 2026-09-16 sets two NB draws. The t117 pseudoreplicates are
+  the other option; the PI dropped them as t118's oracle on 2026-09-25, because two halves share
+  no reads while a base and its arm share many, so the halves are not a floor. If the paired-end arm shares reads with its
+  base, two independent NB draws may not be a floor either, and gap-closed can exceed 1.
 
 **The null was approved on 2026-09-16 (`crux approve-null`), so checks may be written against it.**
-Every bar in the checks above is still `TODO(PI)`, so nothing is locked yet; the checks, their kinds
+The checks were adapted from the testbed to g → f on 2026-10-25 (PI ruling of that day); every bar
+in them is still `TODO(PI)`, so nothing is locked yet; the checks, their kinds
 and the rule content-hash when the node goes running.
 
 ## Planned Intervention
 
-A four-rung ladder is fit on paired real tracks and every rung is scored on the same distance:
+Four rungs on the t112 paired-end pairs (trained base ↔ paired-end), scored on chr19 + chr21 on macro NB CRPS against the real target (PI 2026-09-16):
 
-| rung | what it is |
-|---|---|
-| `blind` | no covariates |
-| `onewarp` | one global monotone value-axis map, no covariates — **the competitor** |
-| `model` | covariate-conditioned |
-| `oracle` | two independent **NB** draws from the same eta at the target depth — the irreducible floor (PI ruling 2026-09-16) |
+- **blind**: t118's no-covariates twin.
+- **onewarp**: one covariate-free monotone map fitted per pair (QuantileMatching).
+- **model**: t118's covariate-conditioned g → f.
+- **oracle**: the independent-replicate floor (PI rulings 2026-10-29, 2026-10-30; item v).
 
-Headline gap-closed is `(D_onewarp − D_model) / (D_onewarp − D_oracle)`, never measured from
-`blind`. `blind` and `onewarp` emit point maps, so they are made CRPS-scorable through the
-point-to-distribution spread device the leaderboard already carries (see `t69`).
-
-**Do not reach for `configs/regions/encode_pilot_hg38.bed` if any check subsamples loci.** Another
-session in this repo reports measuring, 2026-09-01, that the 44 ENCODE Pilot Regions flip
-checkpoint selections on CRPS gaps of 0.066–0.069 because their offset grows with training instead
-of staying constant, while a seeded random window set of identical size was faithful. **That
-measurement is not verified here and nothing in this node rests on it** — it is recorded as a
-caution with its provenance named. Note that `EVAL.md` on `implementation/cheap-v-eval` currently
-argues the opposite, so one of the two is wrong. Any locus subsample used here is re-measured for
-the specific metric in question first.
-
-Scored results in this repo carry a `provenance.eval_scope` block (name, bed, sha256,
-`scored_bins`, `fraction`), with the scope hanging off `EvalSource.eval_regions`. Two runs compare
-only when that block matches — the BED path alone will not do, because a BED is a mutable file.
-**As of writing that block lives only on the unpushed local branch `implementation/cheap-v-eval`,
-90 commits ahead of `origin/main`; it is not on `origin/main` and not on origin at all.**
+Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t130_score_the_one_warp_check_set_blind_|The scoring task]] scored the existing runs.
 
 ## Run Links
 
-_(none yet)_
+Blind check set, scored 2026-10-30: Nibi `/project/def-maxwl/mforooz/t130` (extract job 25402234, kit `/project/def-maxwl/mforooz/t137/code/K2`, 6743ab6). The paired-end products are on Nibi under `/scratch/mforooz/t112_cf/products/<track>__pe__pe/` (purge 2026-11-20). The readings below come from the counterfactual-grid runs: `/project/def-maxwl/mforooz/t118/ladder/runs` (row 1) and `/project/def-maxwl/mforooz/t118/row2/runs` (row 2); extraction job 24641277 into `/project/def-maxwl/mforooz/t118/knobgen/`.
 
 ## Artifacts
 
-<!-- what the run produced. Keep files under results/h2/ and link at least the report:
-     - [Report](results/h2/report.md)   - results/h2/curve.png -->
-_(none yet)_
+- [Blind check-set readings](results/t130/DIGEST.md)
+- [Depth and run-type readings from the knob tables](results/h2/knob_readings.txt), made by [knob_readings.py](results/h2/knob_readings.py)
+- [Manifest of the 130 counterfactual products, with the 7 paired-end arms](results/t112/MANIFEST.tsv)
+- [Knob-generalisation figures](results/t118/knob_generalization/report.pdf)
+- [Design text before the 2026-10-24 compression](results/h2/design_notes.md)
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+Readings, not judged. The paired-end arm: 7 FASTQ re-runs, one per track, with the base's pipeline image. Against the no-covariates twin:
+
+- Counts, trained base ↔ paired-end pairs: median relative CRPS gain 0.15 over 16 design × g configurations; 11 of 16 clear 2 × seed |Δ|. No CRPS split exists for these gains.
+- −log10 p, the same pairs: median-pair gain 0.03; the real model wins 86 % of pairs.
+- Every never-trained pair also changes a second knob. There the median-pair gain is 0.07 in counts (real wins 65 %) and −0.06 in p (34 %).
+- Blind pass (2026-10-30), counts: the floor sits above one-warp in narrow and broad marks, so gap-closed is negative there and means the model is better. The model beats one-warp by 0.055–0.214, > 2 × seed |Δ| in 16 of 16 narrow and broad cells. DNase is mixed.

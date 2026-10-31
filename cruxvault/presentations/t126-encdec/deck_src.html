@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encoder-Decoder g</title>
+
+<!--
+  prezit deck · t126: encoder-decoder g for rungs A and D.
+  Chrome, build pattern and chart style copied from ../t125-eta-h/ and ../t118-grid/.
+
+  DEVIATIONS FROM THE prezit DEFAULTS (PI, 2026-10-21):
+  - Arc: motivation (with the 2026-10-19 diagnosis), method, results, discussion. No summary or
+    appendix slide. The section is marked on every slide (kicker).
+  - Exploratory phase: no hypothesis, no metrics.json, no verdicts. `crux deck --verify` does not
+    apply. Every number is embedded as DATA by build_deck.py from cruxvault/results/t126/ and its
+    deck_inputs/ (the t118 knob report and the 2026-10-19 diagnosis tables). No measured number is
+    typed in this file. Typed: design constants of the spec only (layer counts, dilations 1, 2, 4, 8,
+    32 channels, g = 2 x 64, the chromosome split), on method slides and in notes.
+  - Motivation slides carry numbers (PI: the diagnosis is today's evidence).
+  - The discussion restates result numbers and the doubts' run counts; it adds no new reading.
+  - Every slide has speaker notes (<aside class="notes">), shown with the `n` key, as in t125.
+  - The only table is the grid of arms.
+-->
+
+<style>
+  :root{
+    --paper:#faf9f7; --card:#ffffff; --ink:#1a1a1a; --body:#333; --muted:#77736c;
+    --faint:#a6a29a; --hair:#e6e3dd; --grid:#ececea; --axis:#cfccc6; --accent:#b5462e;
+    /* one colour per arm, defined once */
+    --olda:#4a72b0; --eda:#d9822b; --eda1:#a8552e; --oldd:#1f8a70;
+    --edd0:#b08fcc; --edd1:#a47cc4; --edd2:#8257a8; --edd3:#5f3a85; --twin:#77736c; --ref:#9a9ca4;
+    /* one colour per pair group */
+    --tr:#4f5d75; --ho:#0a8a8f; --nv:#c84d86; --nv2:#e8a3c3;
+    --ok:#3f8f6f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+      --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+      --olda:#6f95d2; --eda:#e89a45; --eda1:#d07a4c; --oldd:#3fb393;
+      --edd0:#d6bde8; --edd1:#bf9ddb; --edd2:#a37cc9; --edd3:#8a62b5; --twin:#a19d96; --ref:#8a8c96;
+      --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#17171a; --card:#212126; --ink:#ececec; --body:#cfcfcf; --muted:#a19d96;
+    --faint:#7d7a74; --hair:#34343a; --grid:#2a2a30; --axis:#4a4a52; --accent:#e0714f;
+    --olda:#6f95d2; --eda:#e89a45; --eda1:#d07a4c; --oldd:#3fb393;
+    --edd0:#d6bde8; --edd1:#bf9ddb; --edd2:#a37cc9; --edd3:#8a62b5; --twin:#a19d96; --ref:#8a8c96;
+    --tr:#8d9ab0; --ho:#2fb5ba; --nv:#e070a4; --nv2:#f0b4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .5s ease;z-index:50}
+  #deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:4.5vh 7vw 8.5vh;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;overflow:hidden}
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+  .wrap{width:100%;max-width:1200px;margin:0 auto}
+
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec{display:inline-block;border:1px solid var(--accent);border-radius:20px;padding:2px 10px;margin-right:10px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;font-size:clamp(30px,4.2vw,54px);letter-spacing:-.01em;text-wrap:balance}
+  h2{font-weight:600;line-height:1.15;font-size:clamp(22px,2.5vw,34px);letter-spacing:-.015em;margin-bottom:14px;text-wrap:balance}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;margin-top:20px;max-width:70ch}
+  .note{color:var(--faint);font-size:13.5px;line-height:1.5;margin-top:10px}
+  ul.pts{list-style:none;margin-top:10px;max-width:none}
+  ul.pts li{position:relative;padding-left:24px;margin:6px 0;font-size:clamp(15px,1.35vw,17.5px);line-height:1.42;color:var(--body)}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+  ul.pts.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 34px}
+  @media (max-width:900px){ul.pts.cols,ul.pts.cols3{grid-template-columns:1fr}}
+  .num{font-variant-numeric:tabular-nums;font-weight:600}
+
+  .fig{display:flex;justify-content:center}
+  .fig svg{width:100%;height:auto;max-height:46vh;display:block}
+  .fig.tall svg{max-height:56vh}
+  .fig.mid svg{max-height:40vh}
+
+  /* svg text, sized for a projector */
+  .axlbl{font:500 17px var(--sans);fill:var(--body)}
+  .ptitle{font:600 20px var(--sans);fill:var(--ink)}
+  .big{font:600 26px var(--sans);fill:var(--ink)}
+  .psub{font:400 15px var(--sans);fill:var(--muted)}
+  .tick{font:400 14px var(--sans);fill:var(--faint)}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:var(--faint)}
+  .mono{font:600 18px ui-monospace,Menlo,monospace;fill:var(--ink)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .cards.c2{grid-template-columns:repeat(2,1fr)}
+  .cards.c5{grid-template-columns:repeat(5,1fr);gap:12px}
+  @media (max-width:900px){.cards,.cards.c3,.cards.c2,.cards.c5{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--hair);border-top:4px solid var(--c,var(--accent));
+    border-radius:10px;padding:14px 16px}
+  .card .ct{font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;line-height:1.3}
+  .card .cb{font-size:15px;line-height:1.42;color:var(--body)}
+  .card .cw{font-size:14px;line-height:1.4;color:var(--muted);margin-top:8px;border-top:1px dashed var(--hair);padding-top:8px}
+  .cards.lg .ct{font-size:20px}.cards.lg .cb{font-size:17px;line-height:1.5}.cards.lg .card{padding:20px 22px}
+  .card .rl{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--c,var(--accent));font-weight:700;margin-bottom:5px}
+  .card .bn{font-size:15px;font-weight:600;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.35}
+  .tag{display:inline-block;font-size:12.5px;border-radius:12px;padding:1px 9px;margin:0 0 6px;border:1px solid var(--hair);color:var(--body)}
+  .tag.out{background:rgba(63,143,111,.13);border-color:var(--ok)}
+  .tag.part{background:rgba(217,130,43,.13);border-color:var(--eda)}
+  .tag.holds{background:rgba(200,77,134,.13);border-color:var(--nv)}
+  .tag.open{background:none;border-style:dashed;border-color:var(--muted)}
+
+  /* the grid of arms */
+  table.grid{border-collapse:separate;border-spacing:8px 6px;width:100%;margin-top:2px;table-layout:fixed}
+  table.grid th{font-size:15px;font-weight:600;color:var(--ink);text-align:center;padding:4px}
+  table.grid th small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:3px}
+  table.grid td{background:var(--card);border:1px solid var(--hair);border-radius:10px;text-align:center;
+    padding:8px 8px;font-size:15px;color:var(--body);line-height:1.35}
+  table.grid td.rh{text-align:left;background:none;border:none;font-weight:600;color:var(--ink);width:18%}
+  table.grid td.rh small{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:2px}
+  table.grid td.arm{font-weight:600;color:var(--ink);text-align:left;border-left:5px solid var(--c)}
+  table.grid td.arm small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{font-size:14.5px;border:1px solid var(--hair);background:var(--card);border-radius:16px;padding:4px 12px;color:var(--body)}
+  .chip b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:10px 18px;margin-top:12px;font-size:clamp(15px,1.4vw,17px);line-height:1.45;color:var(--body)}
+  .callout b{color:var(--ink)}
+
+  .foot{position:fixed;bottom:20px;left:7vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:7vw;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(7vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:var(--card);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px}
+  .nav button:hover,.nav button:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .hint{margin-top:36px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:var(--card)}
+
+  /* speaker notes: hidden; `n` shows the active slide's notes as an overlay */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;bottom:58px;max-height:52vh;overflow:auto;
+    background:var(--card);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;
+    font-size:16.5px;line-height:1.55;color:var(--body);z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+  aside.notes b{color:var(--ink)}
+  .nbadge{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;display:none}
+  body.shownotes .nbadge{display:block}
+
+  @media (max-width:700px){
+    .slide{padding:5vh 16px 70px;justify-content:flex-start;overflow-y:auto}
+    .foot{display:none}
+  }
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint,.nbadge{display:none}
+    #deck{position:static}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;height:auto;min-height:100vh;transition:none;justify-content:flex-start}
+    .foot{display:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;font-size:12.5px;line-height:1.5;color:#333;max-width:1200px;margin-left:auto;margin-right:auto;width:100%}
+    aside.notes::before{content:"Speaker notes";display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b5462e;font-weight:700;margin-bottom:4px}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the idea, the two rungs and the scope
+       numbers  run counts only (DATA.runs) -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">CANDII · counterfactual transformations · lab meeting</div>
+      <h1>An encoder-decoder g: does building in composition carry the fit to pairs the model never trained on?</h1>
+      <p class="sub"><b>Rung A</b> (one straight line per pair) and <b>rung D</b> (a small CNN): <span class="num" id="tRunsA"></span> and <span class="num" id="tRunsD"></span> trained runs, all scored.
+        This is an exploratory pass: it reports readings, not verdicts.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
+    </div>
+    <aside class="notes">
+      <p>This deck follows the transformation grid (t118) and the depth-offset deck (t125). It asks one question: if g is built so that any pair of settings composes through one shared middle, does the model then work on pairs it never trained on?</p>
+      <p>Every number on the slides and in these notes is read from the result files when the deck is built. Nothing here is a verdict.</p>
+    </aside>
+  </section>
+
+  <!-- 2 · MOTIVATION · trained and never-trained pairs, and the depth law
+       job      teach the two words the deck rests on: a never-trained pair, and the depth law
+       source   ../t118-grid/snippet.json (real H3K27ac); deck_inputs/diag_count_sums.jsonl (the true ratio)
+       numbers  the snippet's read ratio and locus (DATA) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>two words first</div>
+      <h2>The model trains only on base ↔ arm pairs; arm → arm pairs are never seen in training</h2>
+      <div class="fig tall" id="figPairs"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each track was rebuilt many times, changing one setting (a <b>knob</b>) at a time; each rebuild is an <b>arm</b>. Training uses only pairs between the base track and one arm, in both directions (solid). A pair between two arms (dashed) is <b>never trained</b>: the model must work it out from the settings alone.</p>
+      <p>Panel (b): the <b>depth law</b>. With fewer reads, every bin scales by the read ratio. We read the predicted total over the source total, on a log2 scale, against the true ratio. The error is the gap between the two; 0 is perfect.</p>
+    </aside>
+  </section>
+
+  <!-- 3 · MOTIVATION · the failure in t118
+       claim    every t118 design fits trained pairs, and misses never-trained pairs
+       source   deck_inputs/knobreport_depth_table.tsv, knobreport_knob_table.tsv (the t118 knob report)
+       numbers  DATA.mot_depth, DATA.mot_knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>the problem, from the earlier grid</div>
+      <h2>Every earlier design fits the pairs it trained on, and misses the pairs it never saw</h2>
+      <div class="fig tall" id="figMot"></div>
+      <ul class="pts cols">
+        <li><span id="tMot1"></span></li>
+        <li><span id="tMot2"></span></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): each column is one design of the earlier grid (A to D; a 2 means g also reads the bin's level). Each design has two versions of g: a circle is one g per track, a square is one g across tracks. Dark is the error on trained depth pairs; pink is on never-trained depth → depth pairs.</p>
+      <p>Panel (b): how much better the real model is than its <b>no-covariates twin</b> (the same model that sees random settings), per knob, as a share of the twin's CRPS. Higher is better. Every knob loses gain on its never-trained pairs, but MAPQ and control fraction gain little even when trained.</p>
+      <p>The four control and caller knobs do not change the counts at all, so they are left out of panel (b).</p>
+    </aside>
+  </section>
+
+  <!-- 4 · MOTIVATION · the diagnosis: four suspects
+       job      one card per suspect: what we checked and what it found
+       source   deck_inputs/diag_* (2026-10-19 checks)
+       numbers  DATA.diag -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>diagnosis · four suspects</div>
+      <h2>We checked four suspects for the gap: one is ruled out, one is indirect, one mostly holds, one is open</h2>
+      <div class="cards">
+        <div class="card" style="--c:var(--ok)"><span class="tag out">ruled out</span><div class="ct">1 · The check itself</div>
+          <div class="cb">We recomputed the depth law from the raw count histograms, and summed the counts of every depth track.</div><div class="bn" id="tS1"></div></div>
+        <div class="card" style="--c:var(--eda)"><span class="tag part">indirect</span><div class="ct">2 · The +1 in log(1 + count)</div>
+          <div class="cb">On log(1 + count), the depth law is a curve, not a straight line, because of the +1. Old A compensates with a steeper line.</div><div class="bn" id="tS2"></div></div>
+        <div class="card" style="--c:var(--nv)"><span class="tag holds">mostly holds</span><div class="ct">3 · g extrapolates badly</div>
+          <div class="cb">Going arm → base → arm with two trained maps beats the direct arm → arm map that g never trained on.</div><div class="bn" id="tS3"></div></div>
+        <div class="card" style="--c:var(--muted)"><span class="tag open">open</span><div class="ct">4 · The loss</div>
+          <div class="cb">The negative binomial likelihood gives high-count bins less weight, so it does not force the predicted total to match the target's. Not tested yet.</div><div class="bn">no check run</div></div>
+      </div>
+      <div class="fig mid" id="figDiag" style="margin-top:14px"></div>
+    </div>
+    <aside class="notes">
+      <p>Card 1: if the check were wrong, the gap could be fake. A second computation, from the count histograms, gives the same numbers, and the depth tracks hold the counts their read depth says. So the check stands.</p>
+      <p>Card 2, panel (a): on log(1 + count), the exact depth law is a curve, not a line, because the zero bins stay at zero. The best straight line has a slope above 1 and an offset below ln r (r is the read ratio). That is what old A learned. It is indirect: it explains how A fits, not why never-trained pairs fail.</p>
+      <p>Card 3, panel (b): composing two trained maps through the base is far closer to the law than the direct map. So the maps g learned are fine where it trained; it is g's guess for a new pair of settings that is off.</p>
+      <p>Card 4: a Poisson likelihood for the mean would force the predicted total to equal the target total for every pair; the negative binomial likelihood we use does not. The loss is still a suspect; no check has been run.</p>
+    </aside>
+  </section>
+
+  <!-- 5 · MOTIVATION · the fix must come from g's structure
+       job      bridge: why we change g's structure, not the data
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>what to change</div>
+      <h2>Real data has few arm → arm examples, so the fix must come from g's structure</h2>
+      <div class="cards c2 lg">
+        <div class="card" style="--c:var(--muted)"><div class="rl">Option 1 · more pairs</div>
+          <div class="ct">Train on arm → arm pairs too.</div>
+          <div class="cb">Public data rarely holds the same sample processed two ways, so CANDI cannot rely on such pairs.</div></div>
+        <div class="card" style="--c:var(--accent)"><div class="rl">Option 2 · structure (this work)</div>
+          <div class="ct">Make every pair pass through one shared middle.</div>
+          <div class="cb">Suspect 3 says routing through the base works. Build that route into g: encode the source with its own settings, decode with the target's. Then arm → arm composes by construction.</div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>CANDI's training data comes from public experiments. Two processings of the same sample are rare there, so the model cannot learn arm → arm maps from examples.</p>
+      <p>The diagnosis points to structure: the trained maps are good, and chaining two of them works. An encoder-decoder makes that chaining part of the model.</p>
+    </aside>
+  </section>
+
+  <!-- 6 · METHOD · the encoder-decoder idea
+       job      schematic: old g reads both settings; the encoder-decoder reads one side at a time
+       numbers  none -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the idea</div>
+      <h2>An encoder-decoder g reads one track's settings at a time, so any two tracks compose</h2>
+      <div class="fig tall" id="figIdea"></div>
+    </div>
+    <aside class="notes">
+      <p>Lane (a), the old g: it reads the source settings c and the target settings c′ together. An arm → arm pair is a new combination of inputs, which g has never seen.</p>
+      <p>Lane (b), the encoder-decoder: one shared network φ reads <b>one</b> track's settings and gives that track's coordinates. The encoder removes the source's settings, giving a covariate-free latent z; the decoder adds the target's. Any pair, trained or not, uses the same two pieces. With c′ = c the model returns X itself.</p>
+    </aside>
+  </section>
+
+  <!-- 7 · METHOD · rung A with the exact inverse
+       job      the equations, the two rung-A arms, and the round-trip rule they imply
+       numbers  none (definitional) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>rung A · the exact inverse</div>
+      <h2>Rung A: encoding is the exact inverse of decoding, so a round trip returns the start</h2>
+      <div class="fig tall" id="figRungA"></div>
+    </div>
+    <aside class="notes">
+      <p>φ(c) gives two numbers per track: a location α and a scale β. Encoding subtracts α and divides by β; decoding multiplies by the target's β and adds its α. The result is still one straight line on log(1 + count), as in old A, with slope b = β(c′)/β(c).</p>
+      <p>Two arms: β learned, or β fixed at 1 (then the map is a pure shift). In both, b for c → c′ times b for c′ → c is exactly 1. Keep that in mind for result (d).</p>
+      <p>The spread of the negative binomial comes from a second small network ψ that reads the target's settings only.</p>
+    </aside>
+  </section>
+
+  <!-- 8 · METHOD · rung D with a learned decoder
+       job      the split CNN and the four-term loss with lambda
+       numbers  lambda grid and chosen lambda (DATA.lam); layer sizes are design constants -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>rung D · a learned decoder</div>
+      <h2>Rung D: the CNN is cut in two, an encoder tuned by the source and a decoder tuned by the target</h2>
+      <div class="fig tall" id="figRungD"></div>
+      <p class="note" id="tLam"></p>
+    </div>
+    <aside class="notes">
+      <p>Top: old D's four dilated layers are split 2 + 2. The first two are tuned (scaled and shifted, called FiLM) by g_enc, which reads the source settings; the last two by g_dec, which reads the target's. There is no shortcut from X to the output: everything passes through the latent Z. The view stays the same as old D.</p>
+      <p>Bottom: the loss for one trained pair (X, c) → (X′, c′). Two cross terms (the real job), two self terms (a round trip on one side), and a pull λ that asks both latents to agree. λ = 0 drops the pull.</p>
+      <p>λ is picked per version of g by the lowest validation NLL on chr22, the earlier grid's rule.</p>
+    </aside>
+  </section>
+
+  <!-- 9 · METHOD · the grid of arms (the one table) and the training scope
+       numbers  run counts, seeds, g counts, held-out level (DATA) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the arms</div>
+      <h2>Every arm runs against a retrained baseline, and each has its own no-covariates twin</h2>
+      <table class="grid" id="tblArms">
+        <tr><th></th><th>arm</th><th>how g reads the settings</th><th>the map at the start of training</th></tr>
+        <tr><td class="rh" rowspan="3">Rung A<small>one straight line on log(1 + count)</small></td>
+          <td class="arm" style="--c:var(--olda)">old A, retrained<small>baseline</small></td><td>both sides at once</td><td>the identity</td></tr>
+        <tr><td class="arm" style="--c:var(--eda)">encoder-decoder A, scale learned</td><td>one side at a time</td><td>the identity</td></tr>
+        <tr><td class="arm" style="--c:var(--eda1)">encoder-decoder A, scale fixed at 1<small>a pure shift</small></td><td>one side at a time</td><td>the identity</td></tr>
+        <tr><td class="rh" rowspan="3">Rung D<small>a small CNN</small></td>
+          <td class="arm" style="--c:var(--oldd)">old D, retrained<small>baseline</small></td><td>both sides at once</td><td>the identity</td></tr>
+        <tr><td class="arm" style="--c:var(--edd0)">encoder-decoder D, no pull (λ = 0)</td><td>one side at a time</td><td>a constant map</td></tr>
+        <tr><td class="arm" style="--c:var(--edd2)" id="tArmLam"></td><td>one side at a time</td><td>a constant map</td></tr>
+      </table>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="notes">
+      <p>The baselines are retrained, not reused, because this run holds the middle depth out of training. Every arm has a no-covariates twin: the same model fed random settings, which can only learn one average map.</p>
+      <p>Encoder-decoder D has no shortcut from X, so it cannot start as the identity: it starts as a constant map. Old D starts at the identity. This is a known difference, named again in the doubts.</p>
+    </aside>
+  </section>
+
+  <!-- 10 · METHOD · which pairs are scored
+       job      schematic of the depth pair groups and the knob groups
+       numbers  depth levels (DATA.levels) -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>what we score</div>
+      <h2>We score trained pairs, a held-out depth, and never-trained arm → arm pairs</h2>
+      <div class="fig tall" id="figGroups"></div>
+    </div>
+    <aside class="notes">
+      <p>Panel (a), the depth ladder. Trained pairs link the base to two depths. The middle depth is held out of training: its pairs with the base are only scored. Never-trained pairs link two depths, with or without the held-out one.</p>
+      <p>Panel (b), the other knobs: they have trained base ↔ arm pairs and never-trained arm → arm pairs of the same knob; two-knob pairs mix two arms of different knobs.</p>
+      <p>Scores are on chromosomes 19 and 21; the best training step and λ are picked on chromosome 22.</p>
+    </aside>
+  </section>
+
+  <!-- 11 · RESULTS · (a) the depth law
+       claim    no encoder-decoder arm closes the never-trained depth gap; the held-out depth is easy for all
+                but encoder-decoder A
+       source   results/t126/depth_table.tsv, depth_points.tsv.gz
+       numbers  DATA.depth, DATA.depth_seed -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(a) the depth law</div>
+      <h2>No encoder-decoder arm closes the never-trained depth gap; the held-out depth is easy for every arm but encoder-decoder A</h2>
+      <div class="fig tall" id="figDepth"></div>
+      <ul class="pts">
+        <li id="tDa1"></li>
+        <li id="tDa2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each row is one arm; each bar is the median error over that pair group, with the 25th to 75th percentile as a whisker. The small ticks are each seed's own median: a gap smaller than their spread is not a gap. Log scale.</p>
+      <p>The held-out depth sits between two trained depths, so it tests interpolation only. Encoder-decoder A misses even its trained depths; result (d) shows why.</p>
+      <p id="nDa"></p>
+    </aside>
+  </section>
+
+  <!-- 12 · RESULTS · (b) the other knobs
+       claim    encoder-decoder D gains more on trained pairs of three knobs, but falls below its twin on their
+                never-trained pairs, where old D keeps a gain
+       source   results/t126/knob_table.tsv
+       numbers  DATA.knob -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(b) the other knobs</div>
+      <h2>Encoder-decoder D gains more on trained pairs, but falls below its twin on never-trained pairs of three knobs</h2>
+      <div class="fig tall" id="figKnob"></div>
+      <ul class="pts">
+        <li id="tKb1"></li>
+        <li id="tKb2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Gain over the twin: for each pair, (twin's CRPS − real CRPS) / twin's CRPS, then the median over pairs. Above 0, the settings help; below 0, the model is worse than ignoring them.</p>
+      <p>Filled dot: trained pairs. Open ring: never-trained pairs of the same knob. The line joins the two for one arm. Two-knob pairs are all never-trained, so they have a ring only.</p>
+      <p id="nKb"></p>
+    </aside>
+  </section>
+
+  <!-- 13 · RESULTS · (c) the fit on trained pairs
+       claim    encoder-decoder D keeps old D's fit; encoder-decoder A loses fit with one g per track, mostly as
+                scale error
+       source   results/t126/fit_table.tsv
+       numbers  DATA.fit -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(c) the fit on trained pairs</div>
+      <h2>Encoder-decoder D keeps old D's fit on trained pairs; encoder-decoder A loses fit, mostly in scale error</h2>
+      <div class="fig tall" id="figFit"></div>
+      <ul class="pts">
+        <li id="tFc1"></li>
+        <li id="tFc2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>CRPS on counts over the trained pairs, mean over a track's pairs, then over tracks, then over seeds. Lower is better. Dark is the oracle-scaled part (left after the best single rescale); light is the scale error (what that rescale removes). The whisker is the range over 3 seeds; the grey tick is the no-covariates twin.</p>
+      <p>So the encoder-decoder D structure costs nothing on trained pairs. Encoder-decoder A's loss is mostly a wrong overall scale, which result (d) explains.</p>
+    </aside>
+  </section>
+
+  <!-- 14 · RESULTS · (d) why encoder-decoder A fails
+       claim    the exact inverse forces b(c->c')·b(c'->c) = 1, but old A learns a slope above 1 both ways (the +1
+                compensation)
+       source   results/t126/ab_table.tsv; depth_points.tsv.gz (the share of downward pairs predicted upward)
+       numbers  DATA.ab, DATA.prod, DATA.down -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(d) why encoder-decoder A fails</div>
+      <h2>The exact inverse forces the two directions' slopes to multiply to 1, but old A needs a slope above 1 both ways</h2>
+      <div class="fig tall" id="figAB"></div>
+      <ul class="pts">
+        <li id="tAd1"></li>
+        <li id="tAd2"></li>
+      </ul>
+    </div>
+    <aside class="notes">
+      <p>Each point is one trained or held-out base ↔ depth pair of one track and one seed. ln r is the log read ratio, target over source; less depth is on the left. The dashed lines are the depth law on log counts: slope b = 1 and offset a = ln r.</p>
+      <p>Old A sits above b = 1 on both sides: that is the +1 compensation of the diagnosis. Encoder-decoder A cannot do that: if its slope is above 1 one way, it must be below 1 the other way. It keeps the offset near 0, so a zero-count bin keeps a mean near 1, and with less depth the prediction goes up, not down.</p>
+      <p id="nAd"></p>
+    </aside>
+  </section>
+
+  <!-- 15 · DISCUSSION · what this rules in and out
+       job      readings restated as what they rule in and out; no verdicts
+       numbers  restated from results (a) to (d); none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
+      <h2>Composition by construction is not enough on its own, in either form we tried</h2>
+      <div class="cards c3 lg">
+        <div class="card" style="--c:var(--eda)"><div class="rl">Ruled out, for rung A</div>
+          <div class="ct">An exact inverse on log(1 + count)</div>
+          <div class="cb">It cannot learn the slope above 1 that old A uses in both directions, so it misses even trained depths.</div><div class="bn" id="tR1"></div></div>
+        <div class="card" style="--c:var(--edd2)"><div class="rl">Not enough, for rung D</div>
+          <div class="ct">A learned latent, at these settings</div>
+          <div class="cb">It keeps old D's trained fit, but the never-trained depth error does not drop, and three knobs fall below the twin.</div><div class="bn" id="tR2"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Still in play</div>
+          <div class="ct">The loss, and how the latent is trained</div>
+          <div class="cb">The negative binomial loss does not force the predicted total to match, and it is untested. Composing two trained maps through the base did work in the earlier grid.</div><div class="bn" id="tR3"></div></div>
+      </div>
+      <p class="note">These are readings from one exploratory run, not verdicts. Each is open to the doubts on the next slide.</p>
+    </div>
+    <aside class="notes">
+      <p>Rung A: the result has a clear cause. The +1 in log(1 + count) makes the best line steeper than 1 in both directions, and an exact inverse forbids that. A fix would have to change the space (for example, a log of counts with a different offset) or drop the exact inverse.</p>
+      <p>Rung D: the structure is there and the trained fit is unchanged, yet the never-trained pairs do not improve. The doubts on the next slide could each explain this.</p>
+      <p>The loss is the one suspect not yet tested.</p>
+    </aside>
+  </section>
+
+  <!-- 16 · DISCUSSION · doubts
+       job      the five doubts the PI named, each with its count
+       numbers  DATA.steps, DATA.lam, DATA.levels (restated); none new -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>doubts</div>
+      <h2>Five doubts could each change the rung-D reading</h2>
+      <div class="cards c5">
+        <div class="card" style="--c:var(--edd2)"><div class="ct">The start</div>
+          <div class="cb">Encoder-decoder D starts as a constant map; old D starts at the identity. The start may shape what the latent learns.</div></div>
+        <div class="card" style="--c:var(--edd2)"><div class="ct">Under-training</div>
+          <div class="cb" id="tDb2"></div></div>
+        <div class="card" style="--c:var(--ho)"><div class="ct">Interpolation only</div>
+          <div class="cb" id="tDb3"></div></div>
+        <div class="card" style="--c:var(--nv)"><div class="ct">Product identity</div>
+          <div class="cb">For knobs other than depth, each track's settings are unique per arm, so g can use them as a name. A gain or loss there may be memory, not a rule.</div></div>
+        <div class="card" style="--c:var(--muted)"><div class="ct">λ within noise</div>
+          <div class="cb" id="tDb5"></div></div>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The start and the step cap together: encoder-decoder D began further from a good map and often used every step, so it may need more steps or an identity-like start before its never-trained pairs can be judged.</p>
+      <p>Product identity: within one track, every arm's settings vector is different, so for knobs other than depth g can learn "this vector means this arm". Depth has three levels in a clear order, so it is the cleanest test.</p>
+      <p>λ: the chosen λ wins by about one seed's spread, so the choice is weak.</p>
+    </aside>
+  </section>
+
+</div>
+
+<div class="foot">CANDII · encoder-decoder g · exploratory</div>
+<div class="nbadge">speaker notes on · press n to hide</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* ===========================================================================
+   DATA — embedded at build time by build_deck.py (see its docstring for every input):
+     snip, locus, snip_ratio   ../t118-grid/snippet.json; the 15 M ratio from diag_count_sums.jsonl
+     levels                    depth levels (millions of reads): base, trained, held out
+     mot_depth                 knob report: [row, design, g version, trained error, never-trained error]
+     mot_knob                  knob report: "space|knob|group" -> [median over 16 configs of the gain, n]
+     diag                      2026-10-19 checks: audit, count sums, old-A (a, b), composition via base
+     depth                     [arm, g version, group, median, q25, q75, slope, n records]
+     depth_seed                "arm|g|group" -> per-seed medians
+     knob                      [arm, g version, group, knob, typical-pair gain, n pairs]
+     fit                       [arm, g version, model, CRPS, seed min, seed max, oracle-scaled, scale error, n seeds]
+     ab                        [arm, g version, kind, ln r, a, b]; prod "arm|g" -> b(c->c')*b(c'->c)
+     down                      arm -> [share of downward trained pairs predicted upward, median log2 scale, n]
+     lam, lam_chosen, steps, cap, runs
+   =========================================================================== */
+const DATA = __DATA__;
+
+const COL={olda:'var(--olda)',eda:'var(--eda)',eda1:'var(--eda1)',oldd:'var(--oldd)',twin:'var(--twin)',ref:'var(--ref)',
+  tr:'var(--tr)',ho:'var(--ho)',nv:'var(--nv)',nv2:'var(--nv2)',ok:'var(--ok)',ink:'var(--ink)',muted:'var(--muted)',
+  body:'var(--body)',faint:'var(--faint)',hair:'var(--hair)',grid:'var(--grid)',axis:'var(--axis)',card:'var(--card)',
+  accent:'var(--accent)',paper:'var(--paper)'};
+const GV=['per_track','across'];
+const GN={per_track:'one g per track',across:'one g across tracks'};
+const lamOf=k=>{const r=DATA.lam.find(x=>x[0]===k);return r?r[4]:null;};
+const LAMS=[...new Set(DATA.lam.map(r=>r[0]))].sort((a,b)=>lamOf(a)-lamOf(b));
+const EDDC=['var(--edd0)','var(--edd1)','var(--edd2)','var(--edd3)'];
+const lamTxt=v=>String(v);
+const ARMS=[
+  {k:'A',l1:'old A',l2:'retrained',c:COL.olda},
+  {k:'AED',l1:'encoder-decoder A',l2:'scale learned',c:COL.eda},
+  {k:'AED1',l1:'encoder-decoder A',l2:'scale fixed at 1',c:COL.eda1},
+  {k:'D',l1:'old D',l2:'retrained',c:COL.oldd},
+  ...LAMS.map((k,i)=>({k,l1:'encoder-decoder D',l2:lamOf(k)===0?'no pull (λ = 0)':`λ = ${lamTxt(lamOf(k))}`,c:EDDC[i]}))];
+const ARM=k=>ARMS.find(a=>a.k===k);
+const aName=k=>{const a=ARM(k);return `${a.l1}, ${a.l2}`;};
+const EDD=LAMS, EDDP=LAMS.filter(k=>lamOf(k)>0);
+const chosen=g=>DATA.lam.find(r=>r[1]===g&&r[5])[0];
+
+const f2=v=>v.toFixed(2), f3=v=>v.toFixed(3);
+const rng=(a,f=f2)=>{const lo=Math.min(...a),hi=Math.max(...a);const n=v=>f(v).replace('-','−');return f(lo)===f(hi)?n(lo):lo<0?`${n(lo)} to ${n(hi)}`:`${n(lo)}–${n(hi)}`;};
+const andJ=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+const putH=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+const dep=(a,g,grp)=>DATA.depth.find(r=>r[0]===a&&r[1]===g&&r[2]===grp);
+const depV=(arms,grp)=>arms.flatMap(a=>GV.map(g=>dep(a,g,grp)[3]));
+const kn=(a,g,grp,k)=>DATA.knob.find(r=>r[0]===a&&r[1]===g&&r[2]===grp&&r[3]===k);
+const ft=(a,g,m='real')=>DATA.fit.find(r=>r[0]===a&&r[1]===g&&r[2]===m);
+
+/* ---------- svg helpers (t125) ---------- */
+const svg=(w,h,b)=>`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${b}</svg>`;
+const T=(x,y,s,cls='axlbl',a='start',ex='')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${a}" ${ex}>${s}</text>`;
+const L=(x1,y1,x2,y2,c,w=1.5,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c};stroke-width:${w}${dash?';stroke-dasharray:'+dash:''}"/>`;
+const R=(x,y,w,h,fill,stroke='none',rx=6,sw=1.5,ex='')=>`<rect x="${x}" y="${y}" width="${Math.max(0,w)}" height="${Math.max(0,h)}" rx="${rx}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const Ci=(x,y,r,fill,stroke='none',sw=2)=>`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}"/>`;
+const P=(d,fill,stroke='none',sw=2,ex='')=>`<path d="${d}" style="fill:${fill};stroke:${stroke};stroke-width:${sw}${ex}"/>`;
+const FO=(x,y,w,h,html,st='font:400 15px var(--sans);color:var(--muted);line-height:1.38')=>`<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="${st}">${html}</div></foreignObject>`;
+const arrowHead=(x,y,dir,c,s=9)=>{
+  const m={r:[[x,y],[x-s,y-s*0.6],[x-s,y+s*0.6]],l:[[x,y],[x+s,y-s*0.6],[x+s,y+s*0.6]],d:[[x,y],[x-s*0.6,y-s],[x+s*0.6,y-s]],u:[[x,y],[x-s*0.6,y+s],[x+s*0.6,y+s]]}[dir];
+  return `<polygon points="${m.map(p=>p.join(',')).join(' ')}" style="fill:${c}"/>`;};
+const arrowR=(x1,y,x2,c=COL.muted,w=2)=>L(x1,y,x2-8,y,c,w)+arrowHead(x2,y,'r',c);
+const arrowD=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2-8,c,w)+arrowHead(x,y2,'d',c);
+const arrowU=(x,y1,y2,c=COL.muted,w=2)=>L(x,y1,x,y2+8,c,w)+arrowHead(x,y2,'u',c);
+const divider=(x,y1,y2)=>L(x,y1,x,y2,COL.axis,2);
+/* g-version marker: circle = one g per track, square = one g across tracks */
+const mark=(x,y,g,fill,stroke='none',r=6,sw=2)=>g==='per_track'?Ci(x,y,r,fill,stroke,sw):R(x-r*0.9,y-r*0.9,r*1.8,r*1.8,fill,stroke,1.5,sw);
+const logS=(lo,hi,a,b)=>v=>a+(b-a)*(Math.log10(Math.max(lo,Math.min(hi,v)))-Math.log10(lo))/(Math.log10(hi)-Math.log10(lo));
+const linS=(lo,hi,a,b)=>v=>a+(b-a)*(v-lo)/(hi-lo);
+const sw=(x,y,c,lab,op=1)=>R(x,y-11,14,14,c,'none',3,0,op<1?`;fill-opacity:${op}`:'')+T(x+20,y,lab,'cap','start','style="font-size:14px;fill:var(--body)"');
+const rotY=(x,y,txt,fs=15)=>T(x,y,txt,'axlbl','middle',`transform="rotate(-90 ${x} ${y})" style="font-size:${fs}px"`);
+function trackD(v,x0,yBase,w,h,ymax,closed){
+  const n=v.length,dx=w/n;let d=closed?`M${x0},${yBase}`:'';
+  v.forEach((val,i)=>{const y=(yBase-h*Math.min(val,ymax)/ymax).toFixed(1);
+    const xa=(x0+i*dx).toFixed(1),xb=(x0+(i+1)*dx).toFixed(1);
+    d+=(d===''?`M${xa},${y}`:` L${xa},${y}`)+` L${xb},${y}`;});
+  return closed?d+` L${x0+w},${yBase} Z`:d;}
+const S=k=>DATA.snip[k];
+const mlab=m=>(m%1===0?m.toFixed(0):String(m))+'M';
+
+/* ---------- 2 · pairs and the depth law ---------- */
+function figPairs(){
+  const W=1160,H=470;let s='';
+  s+=T(0,24,'(a) Training uses base ↔ arm pairs only','ptitle');
+  const cx=300,cy=225;
+  const tl=DATA.levels.trained, ho=DATA.levels.heldout;
+  const nodes=[[`${mlab(tl[0])} reads`,160,110],[`${mlab(ho[0])} reads`,300,68],[`${mlab(tl[1])} reads`,440,110],
+    ['reads trimmed',440,340],['reads trimmed more',300,382],['control mixed in',160,340]];
+  const pos=nodes.map(n=>[n[1],n[2]]);
+  [[0,1],[1,2],[0,2],[3,4]].forEach(([i,j])=>s+=L(pos[i][0],pos[i][1],pos[j][0],pos[j][1],COL.nv,2.4,'7 5'));
+  s+=L(pos[0][0],pos[0][1],pos[5][0],pos[5][1],COL.nv2,2.6,'2 5');
+  pos.forEach(([x,y])=>{const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy),ux=dx/d,uy=dy/d;
+    s+=L(cx+ux*56,cy+uy*56,x-ux*16,y-uy*16,COL.tr,3);});
+  pos.forEach(([x,y],i)=>{s+=Ci(x,y,13,COL.card,COL.tr,2.5);
+    const right=x>cx+20,left=x<cx-20,anc=right?'start':left?'end':'middle';
+    s+=T(x+(right?20:left?-20:0),y+(right||left?6:(y<cy?-22:34)),nodes[i][0],'axlbl',anc,'style="font-size:15.5px;font-weight:600"');});
+  s+=Ci(cx,cy,54,COL.card,COL.ink,2.5)+T(cx,cy-2,'base','big','middle','style="font-size:22px"')+T(cx,cy+20,'track','psub','middle');
+  const ly=H-10;
+  s+=L(0,ly-5,34,ly-5,COL.tr,3)+T(42,ly,'trained, both directions','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(218,ly-5,252,ly-5,COL.nv,2.4,'7 5')+T(260,ly,'never trained, same knob','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(440,ly-5,474,ly-5,COL.nv2,2.6,'2 5')+T(482,ly,'two knobs','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=divider(600,10,H-6);
+  // (b) the depth law on real data
+  const vb=S('base__base/counts25').slice(100,340),va=S('depth__15M/counts25').slice(100,340),f=DATA.snip_ratio;
+  const lx=630,pw=520,ym=46;
+  s+=T(lx,24,'(b) The depth law: fewer reads scale every bin','ptitle');
+  s+=T(lx,62,'base track','axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(vb,lx,158,pw,86,ym,true),COL.ref,'none',0)+L(lx,158,lx+pw,158,COL.axis,1);
+  s+=T(lx,194,`arm with ${mlab(tl[0])} reads (filled) and base × ${f.toFixed(2)} (line)`,'axlbl','start','style="font-size:15px;font-weight:600"');
+  s+=P(trackD(va,lx,290,pw,86,ym*f,true),COL.ink,'none',0,';fill-opacity:.8');
+  s+=P(trackD(vb.map(x=>x*f),lx,290,pw,86,ym*f,false),'none',COL.ho,2.2);
+  s+=L(lx,290,lx+pw,290,COL.axis,1);
+  s+=T(lx+pw,310,`real H3K27ac, ${DATA.locus[0]}; each panel has its own y-axis`,'cap','end');
+  s+=R(lx,326,pw,94,COL.card,COL.hair,10)+FO(lx+14,334,pw-28,84,'<b>Depth-law error</b> = | log2 (predicted total ÷ source total) − log2 (true read ratio) |. It is 0 when the model scales the counts exactly by the read ratio.','font:400 16px var(--sans);color:var(--body);line-height:1.42');
+  return svg(W,H,s);
+}
+
+/* ---------- 3 · the t118 failure ---------- */
+function figMot(){
+  const W=1160,H=430;let s='';
+  // (a) depth law per design
+  const des=[...new Set(DATA.mot_depth.map(r=>r[1]))];
+  const ax=70,aw=560,top=70,h=280,yy=logS(0.03,1,top+h,top);
+  s+=T(0,24,'(a) Depth law, every earlier design, both versions of g','ptitle');
+  s+=T(0,48,'● one g per track · ■ one g across tracks','psub');
+  [[0.03,'0.03'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1']].forEach(([v,l])=>s+=L(ax,yy(v),ax+aw,yy(v),COL.grid,1)+T(ax-8,yy(v)+5,l,'tick','end'));
+  s+=rotY(16,top+h/2,'median depth-law error (log scale)');
+  const gw=aw/des.length;
+  des.forEach((d,i)=>{const gx=ax+i*gw;if(i%2===0)s+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+    s+=T(gx+gw/2,top+h+24,d,'ptitle','middle','style="font-size:17px"');
+    if(i===4)s+=L(gx,top-6,gx,top+h+8,COL.axis,2);
+    GV.forEach((g,j)=>{const r=DATA.mot_depth.find(x=>x[1]===d&&x[2]===g),x=gx+gw*(j?0.68:0.32);
+      s+=L(x,yy(r[3]),x,yy(r[4]),COL.faint,1.6)+mark(x,yy(r[3]),g,COL.tr,'none',6)+mark(x,yy(r[4]),g,COL.nv,'none',6);});});
+  s+=T(ax+2*gw,top+h+48,'row 1: g reads the settings','cap','middle')+T(ax+6*gw,top+h+48,'row 2: g also reads the bin level','cap','middle');
+  s+=sw(ax,H-6,COL.tr,'trained depth pairs')+sw(ax+190,H-6,COL.nv,'never-trained depth → depth pairs');
+  s+=divider(665,10,H-6);
+  // (b) per knob, counts
+  const ks=[['depth','depth'],['crop','read length'],['mapq','MAPQ cut'],['abproxy','control mixed in']];
+  const bx=830,bw=310,xx=linS(0,0.5,bx,bx+bw),rt=86,rh=62;
+  s+=T(690,24,'(b) Gain over the twin, per knob','ptitle')+T(690,48,'counts · median over the 16 designs × versions of g','psub');
+  [0,0.1,0.2,0.3,0.4,0.5].forEach(v=>s+=L(xx(v),rt-14,xx(v),rt+ks.length*rh-20,COL.grid,1)+T(xx(v),rt+ks.length*rh,f2(v).replace(/0$/,''),'tick','middle'));
+  s+=T(bx+bw/2,rt+ks.length*rh+24,'gain over the twin (share of its CRPS)','axlbl','middle','style="font-size:15px"');
+  ks.forEach(([k,lab],i)=>{const y=rt+i*rh+10,a=DATA.mot_knob[`counts|${k}|trained`][0],b=DATA.mot_knob[`counts|${k}|same`][0];
+    s+=T(bx-14,y+5,lab,'axlbl','end','style="font-size:16px;font-weight:600"');
+    s+=L(xx(a),y,xx(b),y,COL.faint,2)+Ci(xx(a),y,7,COL.tr)+Ci(xx(b),y,7,COL.card,COL.nv,2.5);});
+  s+=Ci(840,H-10,6,COL.tr)+T(852,H-5,'trained','cap')+Ci(930,H-10,6,COL.card,COL.nv,2.5)+T(942,H-5,'never trained, same knob','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 4 · the diagnosis evidence: (a) suspect 2, (b) suspect 3 ---------- */
+function figDiag(){
+  const W=1160,H=300;let s='';const D=DATA.diag;
+  const top=50,h=200;
+  // (a) the +1: the exact law on log(1 + count) is a curve; old A's median line
+  const bx=60,bw=470,xs=linS(0,4,bx,bx+bw),ys=linS(-2.5,4,top+h,top);
+  s+=T(0,20,'(a) Suspect 2: why old A needs a slope above 1','ptitle','start','style="font-size:17px"');
+  [-2,0,2,4].forEach(v=>s+=L(bx,ys(v),bx+bw,ys(v),COL.grid,1)+T(bx-8,ys(v)+5,v,'tick','end'));
+  [0,1,2,3,4].forEach(v=>s+=T(xs(v),top+h+18,v,'tick','middle'));
+  s+=T(bx+bw/2,top+h+36,'source: log(1 + count)','axlbl','middle','style="font-size:14px"');
+  s+=rotY(18,top+h/2,'target: log mean',14);
+  const lr=Math.log(0.5);let d='';
+  for(let k=1;k<=80;k++){const x=4*k/80,y=lr+Math.log(Math.exp(x)-1);if(y<-2.5)continue;d+=(d?' L':'M')+xs(x).toFixed(1)+','+ys(y).toFixed(1);}
+  s+=P(d,'none',COL.ink,2.6);
+  const b=D.b_q[1],a=lr+D.off_q[1];
+  const xe=Math.min(4,(4-a)/b);
+  s+=L(xs(0),ys(a),xs(xe),ys(a+xe*b),COL.olda,3)+L(xs(0),ys(lr),xs(4),ys(lr+4),COL.muted,2,'6 4');
+  const lgx=bx+12,lgy=top+12;
+  s+=R(lgx-6,lgy-8,290,80,COL.paper,'none',6);
+  s+=L(lgx,lgy+6,lgx+30,lgy+6,COL.ink,2.6)+T(lgx+38,lgy+11,'exact law, half the reads','cap','start','style="fill:var(--ink);font-size:13.5px"');
+  s+=L(lgx,lgy+30,lgx+30,lgy+30,COL.olda,3)+T(lgx+38,lgy+35,`old A, median learned line (slope ${f2(b)})`,'cap','start','style="fill:var(--olda);font-size:13.5px"');
+  s+=L(lgx,lgy+54,lgx+30,lgy+54,COL.muted,2,'6 4')+T(lgx+38,lgy+59,'a plain shift (slope 1)','cap','start','style="fill:var(--muted);font-size:13.5px"');
+  s+=divider(580,10,H-6);
+  // (b) composition through the base, per earlier row-1 design
+  const yy=logS(0.03,1,top+h,top),ax=660,aw=490;
+  s+=T(600,20,'(b) Suspect 3: direct map against two trained maps via the base','ptitle','start','style="font-size:17px"');
+  [[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1']].forEach(([v,l])=>s+=L(ax,yy(v),ax+aw,yy(v),COL.grid,1)+T(ax-8,yy(v)+5,l,'tick','end'));
+  s+=rotY(618,top+h/2,'median depth-law error (log)',14);
+  const des=[...new Set(D.compose.map(r=>r[0]))],gw=aw/des.length;
+  des.forEach((dd,i)=>{const gx=ax+i*gw;if(i%2===0)s+=R(gx,top,gw,h,COL.grid,'none',0,0,';fill-opacity:.5');
+    s+=T(gx+gw/2,top+h+22,dd,'ptitle','middle','style="font-size:16px"');
+    GV.forEach((g,j)=>{const c=D.compose.find(r=>r[0]===dd&&r[1]===g),t=DATA.mot_depth.find(r=>r[1]===dd&&r[2]===g),x=gx+gw*(j?0.7:0.3);
+      s+=L(x,yy(c[2]),x,yy(t[3]),COL.faint,1.4)+mark(x,yy(c[2]),g,COL.nv,'none',6)+mark(x,yy(c[3]),g,COL.card,COL.ho,6,2.4)+mark(x,yy(t[3]),g,COL.tr,'none',5);});});
+  const ly=H-6;
+  s+=Ci(606,ly-4,6,COL.nv)+T(616,ly,'direct arm → arm, never trained','cap')+Ci(862,ly-4,6,COL.card,COL.ho,2.4)+T(874,ly,'arm → base → arm','cap')+Ci(1030,ly-4,5,COL.tr)+T(1040,ly,'trained pairs','cap');
+  return svg(W,H,s);
+}
+
+/* ---------- 6 · the idea ---------- */
+function figIdea(){
+  const W=1160,H=440;let s='';
+  const box=(x,y,w,h,txt,c,sub,fs=17)=>R(x,y,w,h,COL.card,c,10,2.2)+T(x+w/2,y+h/2+(sub?-3:6),txt,'mono','middle',`style="font-size:${fs}px"`)+(sub?T(x+w/2,y+h/2+19,sub,'cap','middle'):'');
+  s+=T(0,24,'(a) Old g: reads both settings at once','ptitle','start','style="fill:var(--olda)"');
+  let y=60;
+  s+=box(0,y-6,90,40,'c',COL.hair)+box(0,y+46,90,40,'c′',COL.hair)+arrowR(92,y+14,150)+arrowR(92,y+66,150);
+  s+=box(155,y,140,80,'g(c, c′)',COL.accent,'one network');
+  s+=L(297,y+65,512,y+65,COL.accent,2)+arrowHead(520,y+65,'r',COL.accent)+T(410,y+86,'parameters of f','cap','middle');
+  s+=box(365,y-8,100,48,'X',COL.hair)+arrowR(467,y+16,520);
+  s+=box(525,y-8,120,96,'f',COL.ink,'')+arrowR(647,y+40,700)+box(705,y+12,100,56,'X′',COL.hair);
+  s+=R(870,y-4,290,96,COL.paper,COL.olda,10,1.5,';stroke-dasharray:5 4')+FO(882,y+4,270,86,'An arm → arm pair is a <b>new input point</b> (c₁, c₂) for g: it must guess.','font:400 15.5px var(--sans);color:var(--body);line-height:1.35');
+  s+=L(0,184,W,184,COL.axis,1.5,'6 6');
+  s+=T(0,216,'(b) Encoder-decoder: one network φ reads one track\'s settings at a time','ptitle','start','style="fill:var(--accent)"');
+  y=262;
+  s+=box(0,y,100,60,'X',COL.hair,'source')+arrowR(102,y+30,150);
+  s+=box(155,y,170,60,'encode',COL.accent,'with φ(c)');
+  s+=arrowR(327,y+30,375)+R(380,y-4,160,68,COL.paper,COL.ink,34,2.5)+T(460,y+28,'z','big','middle')+T(460,y+50,'no settings left','cap','middle');
+  s+=arrowR(542,y+30,590)+box(595,y,170,60,'decode',COL.accent,'with φ(c′)');
+  s+=arrowR(767,y+30,815)+box(820,y,100,60,'X′',COL.hair,'target');
+  s+=R(950,y-14,210,88,COL.paper,COL.accent,10,1.5,';stroke-dasharray:5 4')+FO(960,y-6,192,80,'Same φ on both sides. c′ = c gives X back.','font:400 15.5px var(--sans);color:var(--body);line-height:1.35');
+  s+=FO(0,y+86,W,70,'<b>arm 1 → arm 2</b> = decode with φ(c₂) after encode with φ(c₁): the very pieces that training used on base ↔ arm 1 and base ↔ arm 2. The route through the base, from suspect 3, is now part of the model.','font:400 16.5px var(--sans);color:var(--body);line-height:1.45');
+  return svg(W,H,s);
+}
+
+/* ---------- 7 · rung A ---------- */
+function figRungA(){
+  const W=1160,H=430;let s='';
+  const eq=(x,y,w,t,sub,c=COL.hair)=>R(x,y,w,58,COL.card,c,10,2)+T(x+16,y+27,t,'mono','start','style="font-size:17px"')+T(x+16,y+47,sub,'cap','start');
+  s+=T(0,24,'(a) The maps','ptitle');
+  s+=eq(0,44,560,'x = log(1 + X)','the source counts, as in old A');
+  s+=eq(0,114,560,'z = (x − α(c)) / β(c)','encode: remove the source\'s location and scale',COL.accent);
+  s+=eq(0,184,560,'log μ′ = α(c′) + β(c′) · z','decode: add the target\'s location and scale',COL.accent);
+  s+=eq(0,254,560,'X′ ~ NB(μ′, spread from ψ(c′))','ψ: a small network on the target settings only');
+  s+=R(0,330,560,90,COL.paper,COL.ink,10,1.5)+FO(14,338,532,80,'Together: <b>one straight line</b>, log μ′ = a + b·x, with slope <b>b = β(c′) / β(c)</b> and offset a = α(c′) − b·α(c). This is old A\'s form, built from one side at a time.','font:400 15.5px var(--sans);color:var(--body);line-height:1.4');
+  s+=divider(600,10,H-6);
+  s+=T(630,24,'(b) Two arms, and the rule they share','ptitle');
+  // arm cards with mini line plots
+  const mini=(x,y,c,lab,sub,slopes,cap)=>{let t=R(x,y,250,204,COL.card,c,12,2.2)+T(x+14,y+28,lab,'axlbl','start',`style="font-size:16px;font-weight:600;fill:${c}"`)+T(x+14,y+48,sub,'cap','start');
+    const px=x+24,py=y+64,pw=200,ph=110;t+=L(px,py+ph,px+pw,py+ph,COL.axis,1.2)+L(px,py,px,py+ph,COL.axis,1.2);
+    slopes.forEach(([b,a,dash])=>t+=L(px,py+ph-(a)*ph,px+pw,py+ph-(a+b)*ph,c,3,dash));
+    t+=T(px+pw/2,py+ph+17,cap,'cap','middle','style="font-size:13px"');return t;};
+  s+=mini(630,44,COL.eda,'scale learned','β from φ: slope and offset',[[0.9,0.05,''],[0.5,0.15,'6 4']],'one line per target: slopes differ');
+  s+=mini(905,44,COL.eda1,'scale fixed at 1','β = 1: a pure shift',[[0.6,0.05,''],[0.6,0.32,'6 4']],'one line per target: all parallel');
+  s+=R(630,256,525,164,COL.paper,COL.accent,10,2)+FO(646,266,495,150,'<b>The round-trip rule.</b> Going c → c′ and back multiplies the two slopes: b(c → c′) · b(c′ → c) = (β(c′)/β(c)) · (β(c)/β(c′)) = <b>1</b>. A slope above 1 one way forces a slope below 1 the other way.','font:400 16px var(--sans);color:var(--body);line-height:1.45');
+  return svg(W,H,s);
+}
+
+/* ---------- 8 · rung D ---------- */
+function figRungD(){
+  const W=1160,H=440;let s='';
+  s+=T(0,24,'(a) The network: 2 layers tuned by the source, 2 by the target','ptitle');
+  const y=56,lw=150,lh=64;
+  const layer=(x,t,sub,c)=>R(x,y,lw,lh,COL.card,c,10,2.2)+T(x+lw/2,y+28,t,'axlbl','middle','style="font-size:15px;font-weight:600"')+T(x+lw/2,y+48,sub,'cap','middle');
+  s+=R(0,y,90,lh,COL.card,COL.hair,10)+T(45,y+30,'x','mono','middle')+T(45,y+50,'log(1+X)','cap','middle');
+  s+=arrowR(92,y+lh/2,118)+layer(122,'conv, dilation 1','tuned by g_enc(c)',COL.accent)+arrowR(274,y+lh/2,300)+layer(304,'conv, dilation 2','tuned by g_enc(c)',COL.accent);
+  s+=arrowR(456,y+lh/2,486)+R(490,y-6,100,lh+12,COL.paper,COL.ink,38,2.5)+T(540,y+30,'Z','big','middle')+T(540,y+52,'latent','cap','middle');
+  s+=arrowR(592,y+lh/2,618)+layer(622,'conv, dilation 4','tuned by g_dec(c′)',COL.edd2)+arrowR(774,y+lh/2,800)+layer(804,'conv, dilation 8','tuned by g_dec(c′)',COL.edd2);
+  s+=arrowR(956,y+lh/2,982)+R(986,y,174,lh,COL.card,COL.ink,10,2)+T(1073,y+28,'head','axlbl','middle','style="font-size:15px;font-weight:600"')+T(1073,y+48,'mean and spread of X′','cap','middle');
+  s+=T(305,y+lh+30,'encoder','ptitle','middle','style="fill:var(--accent);font-size:17px"')+T(790,y+lh+30,'decoder','ptitle','middle','style="fill:var(--edd2);font-size:17px"');
+  s+=T(580,y+lh+56,'no shortcut from x to the output: everything passes through Z · g_enc and g_dec each read one side only','cap','middle','style="font-size:14px"');
+  s+=L(0,206,W,206,COL.axis,1.5,'6 6');
+  // (b) the loss
+  s+=T(0,238,'(b) The loss for one trained pair (X, c) → (X′, c′), with Z = enc(X, c), Z′ = enc(X′, c′)','ptitle');
+  const gx=150,gy=290,cw=300,ch=52;
+  s+=T(gx+cw/2,gy-12,'decode with c′','axlbl','middle','style="font-weight:600"')+T(gx+cw+10+cw/2,gy-12,'decode with c','axlbl','middle','style="font-weight:600"');
+  s+=T(gx-14,gy+ch/2+5,'from Z','axlbl','end','style="font-weight:600"')+T(gx-14,gy+ch+8+ch/2+5,'from Z′','axlbl','end','style="font-weight:600"');
+  const cellB=(x,yy,t,lab,c)=>R(x,yy,cw,ch,COL.card,c,8,2)+T(x+14,yy+22,t,'mono','start','style="font-size:15px"')+T(x+14,yy+42,lab,'cap','start');
+  s+=cellB(gx,gy,'NLL(X′ | dec(Z, c′))','cross: the real job',COL.ink)+cellB(gx+cw+10,gy,'NLL(X | dec(Z, c))','self: a round trip',COL.hair);
+  s+=cellB(gx,gy+ch+8,'NLL(X′ | dec(Z′, c′))','self: a round trip',COL.hair)+cellB(gx+cw+10,gy+ch+8,'NLL(X | dec(Z′, c))','cross: the reverse job',COL.ink);
+  s+=T(gx+2*cw+30,gy+ch+10,'+','big','middle');
+  s+=R(gx+2*cw+50,gy+18,300,ch+20,COL.paper,COL.edd2,10,2)+T(gx+2*cw+64,gy+46,'λ · mse(Z, Z′)','mono','start','style="font-size:16px"')+T(gx+2*cw+64,gy+68,'pull the two latents together','cap','start');
+  return svg(W,H,s);
+}
+
+/* ---------- 10 · pair groups ---------- */
+function figGroups(){
+  const W=1160,H=420;let s='';
+  s+=T(0,24,'(a) Depth: the middle depth is held out of training','ptitle');
+  const lv=[DATA.levels.base,...DATA.levels.trained,...DATA.levels.heldout].sort((a,b)=>b-a);
+  const x0=120,y0=70,dy=92,yOf=m=>y0+lv.indexOf(m)*dy;
+  lv.forEach(m=>{const held=DATA.levels.heldout.includes(m),isb=m===DATA.levels.base;
+    s+=R(x0,yOf(m)-24,150,48,COL.card,held?COL.ho:COL.ink,24,2.4,held?';stroke-dasharray:6 4':'')+T(x0+75,yOf(m)+6,(isb?'base · ':'')+mlab(m)+' reads','axlbl','middle','style="font-size:15.5px;font-weight:600"');});
+  const B=DATA.levels.base,[t1,t2]=DATA.levels.trained,h1=DATA.levels.heldout[0];
+  const arc=(m1,m2,side,off,c,dash,w=2.6)=>{const ya=yOf(m1),yb=yOf(m2),xs=side<0?x0:x0+150,xo=xs+side*off;
+    return P(`M${xs},${ya} C${xo},${ya} ${xo},${yb} ${xs},${yb}`,'none',c,w,dash?`;stroke-dasharray:${dash}`:'');};
+  s+=arc(B,t1,-1,60,COL.tr,'')+arc(B,t2,-1,130,COL.tr,'');
+  s+=arc(B,h1,1,70,COL.ho,'6 4');
+  s+=arc(t1,t2,1,150,COL.nv,'7 5');
+  s+=arc(t1,h1,-1,40,COL.nv2,'2 5')+arc(h1,t2,1,40,COL.nv2,'2 5');
+  const lx=430;
+  [[COL.tr,'','trained: base ↔ trained depths'],[COL.ho,'6 4','held out: base ↔ middle depth (scored only)'],
+   [COL.nv,'7 5','never trained: depth → depth'],[COL.nv2,'2 5','never trained, with the middle depth']].forEach(([c,dash,t],i)=>{
+    const yy=110+i*58;s+=L(lx,yy,lx+40,yy,c,3,dash)+T(lx+52,yy+5,t,'axlbl','start','style="font-size:15px"');});
+  s+=divider(835,10,H-6);
+  s+=T(860,24,'(b) Other knobs','ptitle');
+  s+=FO(860,46,300,360,'<p style="margin:0 0 12px"><b style="color:var(--tr)">Trained:</b> base ↔ arm, both directions.</p><p style="margin:0 0 12px"><b style="color:var(--nv)">Never trained, same knob:</b> one arm of a knob → another arm of the same knob.</p><p style="margin:0 0 12px"><b style="color:var(--nv)">Two knobs:</b> an arm of one knob → an arm of another.</p><p style="margin:0">All scores: chromosomes 19 and 21. Best training step and λ: chromosome 22.</p>','font:400 16px var(--sans);color:var(--body);line-height:1.45');
+  return svg(W,H,s);
+}
+
+/* ---------- 11 · depth law results ---------- */
+const DG=[['trained','trained',COL.tr],['heldout','held-out middle depth',COL.ho],['never','never trained, depth → depth',COL.nv],['never75','never trained, with the middle depth',COL.nv2]];
+function armLabels(x,top,rh,arms,fs=15){let s='';arms.forEach((k,i)=>{const a=ARM(k),y=top+i*rh+rh/2;
+  s+=T(x,y-2,a.l1,'axlbl','end',`style="font-size:${fs}px;font-weight:600;fill:${a.c}"`)+T(x,y+16,a.l2,'cap','end',`style="font-size:${fs-1.5}px"`);});return s;}
+function figDepth(){
+  const W=1160,H=540;let s='';
+  const arms=ARMS.map(a=>a.k),top=52,rh=50,lx=232;
+  s+=armLabels(lx-10,top,rh,arms);
+  const pw=430,gap=30,xs0=[lx+10,lx+10+pw+gap];
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=logS(0.02,3,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GN[g][0].toUpperCase()+GN[g].slice(1)}`,'ptitle');
+    [[0.02,'0.02'],[0.05,'0.05'],[0.1,'0.1'],[0.2,'0.2'],[0.5,'0.5'],[1,'1'],[2,'2']].forEach(([v,l])=>s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,l,'tick','middle'));
+    arms.forEach((k,i)=>{const y0=top+i*rh+5;if(i%2===0)s+=R(x0,top+i*rh,pw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+      DG.forEach(([grp,,c],j)=>{const r=dep(k,g,grp),yb=y0+j*10;
+        s+=R(x0,yb,xx(r[3])-x0,8,c,'none',1.5);
+        s+=L(xx(r[4]),yb+4,xx(r[5]),yb+4,COL.ink,1.1);
+        (DATA.depth_seed[`${k}|${g}|${grp}`]||[]).forEach(v=>s+=L(xx(v),yb-1,xx(v),yb+9,COL.ink,1.6));});});
+    s+=L(x0,top+4*rh,x0+pw,top+4*rh,COL.axis,2);
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'depth-law error, | log2 predicted scale − log2 true read ratio | (log scale)','axlbl','middle','style="font-size:15px"');
+  let lxx=0;DG.forEach(([,lab,c])=>{s+=sw(lxx,H-8,c,lab);lxx+=lab.length*7.2+40;});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+60,'bar: median · whisker: middle half of the records · ticks: each seed\'s median','cap','middle');
+  return svg(W,H,s);
+}
+
+/* ---------- 12 · knobs ---------- */
+function figKnob(){
+  const W=1160,H=520;let s='';
+  const KS=[['depth','depth'],['crop','read length'],['mapq','MAPQ cut'],['abproxy','control mixed in'],['cross','two knobs']];
+  const top=70,sub=12,kh=5*sub+16,lx=150;
+  KS.forEach(([,lab],i)=>{const y=top+i*kh+kh/2;s+=T(lx-14,y+5,lab,'axlbl','end','style="font-size:16px;font-weight:600"');});
+  const pw=470,gap=30,xs0=[lx,lx+pw+gap];
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(-0.25,0.65,x0+10,x0+pw-10),arms=['A','AED','AED1','D',chosen(g)];
+    s+=T(x0,24,`(${'ab'[pi]}) ${GN[g][0].toUpperCase()+GN[g].slice(1)}`,'ptitle')+T(x0,46,`encoder-decoder D at its chosen λ = ${lamTxt(DATA.lam_chosen[g])}`,'psub');
+    [-0.2,0,0.2,0.4,0.6].forEach(v=>s+=L(xx(v),top-6,xx(v),top+KS.length*kh-6,v===0?COL.muted:COL.grid,v===0?1.6:1)+T(xx(v),top+KS.length*kh+12,v===0?'0':f2(v).replace(/0$/,''),'tick','middle'));
+    KS.forEach(([k],i)=>{const yk=top+i*kh;if(i%2===0)s+=R(x0,yk-4,pw,kh-4,COL.grid,'none',0,0,';fill-opacity:.35');
+      arms.forEach((a,j)=>{const y=yk+8+j*sub,c=ARM(a).c;
+        const tr=k==='cross'?null:kn(a,g,'trained',k),nv=kn(a,g,k==='cross'?'cross':'same',k);
+        if(tr) s+=L(xx(tr[4]),y,xx(nv[4]),y,c,2.2)+Ci(xx(tr[4]),y,5.5,c);
+        s+=Ci(xx(nv[4]),y,5.5,COL.card,c,2.4);});});
+    if(pi>0) s+=divider(x0-gap/2,10,top+KS.length*kh);});
+  s+=T(xs0[0]+pw+gap/2,top+KS.length*kh+34,'gain over the no-covariates twin, (twin CRPS − real CRPS) ÷ twin CRPS, median over pairs','axlbl','middle','style="font-size:15px"');
+  let x=0;const legA=['A','AED','AED1','D'];
+  legA.forEach(a=>{const lab=aName(a);s+=Ci(x+6,H-12,6,ARM(a).c)+T(x+18,H-7,lab,'cap','start','style="font-size:13.5px;fill:var(--body)"');x+=lab.length*6.3+30;});
+  s+=Ci(x+6,H-12,6,ARM(EDDP[1]).c)+T(x+18,H-7,'encoder-decoder D, chosen λ','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=T(W,H-7,'● trained  ○ never trained','cap','end','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 13 · fit ---------- */
+function figFit(){
+  const W=1160,H=480;let s='';
+  const arms=ARMS.map(a=>a.k),top=50,rh=44,lx=232;
+  s+=armLabels(lx-10,top-3,rh,arms);
+  const pw=430,gap=30,xs0=[lx+10,lx+10+pw+gap],xmax=Math.ceil(Math.max(...DATA.fit.map(r=>r[5]))*10)/10+0.1;
+  GV.forEach((g,pi)=>{const x0=xs0[pi],xx=linS(0,xmax,x0,x0+pw);
+    s+=T(x0,24,`(${'ab'[pi]}) ${GN[g][0].toUpperCase()+GN[g].slice(1)}`,'ptitle');
+    for(let v=0;v<=xmax+1e-9;v+=0.2) s+=L(xx(v),top-4,xx(v),top+arms.length*rh,COL.grid,1)+T(xx(v),top+arms.length*rh+18,f2(v).replace(/\.?0+$/,'')||'0','tick','middle');
+    arms.forEach((k,i)=>{const r=ft(k,g),t=ft(k,g,'nocov'),c=ARM(k).c,y=top+i*rh+8,bh=rh-18;
+      s+=R(x0,y,xx(r[6])-x0,bh,c,'none',2)+R(xx(r[6]),y,xx(r[6]+r[7])-xx(r[6]),bh,c,'none',2,0,';fill-opacity:.35');
+      s+=L(xx(r[4]),y+bh/2,xx(r[5]),y+bh/2,COL.ink,1.4)+L(xx(r[4]),y+bh/2-5,xx(r[4]),y+bh/2+5,COL.ink,1.4)+L(xx(r[5]),y+bh/2-5,xx(r[5]),y+bh/2+5,COL.ink,1.4);
+      s+=L(xx(t[3]),y-3,xx(t[3]),y+bh+3,COL.twin,3);
+      s+=T(Math.max(xx(r[5]),xx(t[3]))+8,y+bh/2+5,f3(r[3]),'val','start',`style="fill:${c};font-size:14px"`);});
+    s+=L(x0,top+4*rh-3,x0+pw,top+4*rh-3,COL.axis,2);
+    if(pi>0) s+=divider(x0-gap/2,10,top+arms.length*rh+4);});
+  s+=T(xs0[0]+pw+gap/2,top+arms.length*rh+40,'CRPS on counts, trained pairs (mean over a track\'s pairs, then tracks, then seeds)','axlbl','middle','style="font-size:15px"');
+  s+=sw(0,H-8,COL.muted,'oracle-scaled part')+sw(170,H-8,COL.muted,'scale error',0.35);
+  s+=L(300,H-14,300,H-2,COL.twin,3)+T(310,H-8,'no-covariates twin','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=L(460,H-8,490,H-8,COL.ink,1.4)+T(498,H-8,'range over 3 seeds','cap','start','style="font-size:14px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- 14 · a and b ---------- */
+function figAB(){
+  const W=1160,H=440;let s='';
+  const top=60,h=300,g='per_track';
+  const A3=['A','AED','AED1'];
+  const pt=(x,y,kind,c)=>kind==='trained'?Ci(x,y,4.2,c,'none',0)+`<circle cx="${x}" cy="${y}" r="4.2" style="fill:${c};fill-opacity:.55;stroke:none"/>`:`<polygon points="${x},${y-6} ${x+6},${y} ${x},${y+6} ${x-6},${y}" style="fill:${c};fill-opacity:.8"/>`;
+  const jit=i=>((i*37)%11-5)*1.4;
+  const panel=(x0,pw,title,col,ylo,yhi,ideal,ylab)=>{const xx=linS(-2.3,2.3,x0,x0+pw),yy=linS(ylo,yhi,top+h,top);let t='';
+    t+=T(x0-50,24,title,'ptitle','start','style="font-size:18px"');
+    for(let v=Math.ceil(ylo*2)/2;v<=yhi+1e-9;v+=(yhi-ylo>3?1:0.5)) t+=L(x0,yy(v),x0+pw,yy(v),COL.grid,1)+T(x0-8,yy(v)+5,String(+v.toFixed(1)),'tick','end');
+    [-2,-1,0,1,2].forEach(v=>t+=T(xx(v),top+h+18,v,'tick','middle'));
+    t+=L(x0,top+h,x0+pw,top+h,COL.axis,1.2)+L(xx(0),top,xx(0),top+h,COL.axis,1,'3 3');
+    t+=T(x0+pw/2,top+h+40,'ln r, r = target reads ÷ source reads','axlbl','middle','style="font-size:15px"');
+    t+=rotY(x0-42,top+h/2,ylab);
+    t+=ideal(xx,yy);
+    DATA.ab.filter(r=>r[1]===g&&A3.includes(r[0])).forEach((r,i)=>t+=pt(xx(r[3])+jit(i),yy(Math.max(ylo,Math.min(yhi,r[col]))),r[2],ARM(r[0]).c));
+    return t;};
+  s+=panel(70,320,'(a) Learned slope b, one g per track',5,0.3,2.5,(xx,yy)=>L(xx(-2.3),yy(1),xx(2.3),yy(1),COL.ink,1.6,'6 4')+T(xx(2.3),yy(1)-8,'b = 1','cap','end','style="fill:var(--ink)"'),'learned slope b');
+  s+=divider(425,10,H-6);
+  s+=panel(500,320,'(b) Learned offset a, one g per track',4,-4.3,2.5,(xx,yy)=>L(xx(-2.3),yy(-2.3),xx(2.3),yy(2.3),COL.ink,1.6,'6 4')+T(xx(2.2),yy(2.2)+22,'a = ln r','cap','end','style="fill:var(--ink)"'),'learned offset a');
+  s+=divider(855,10,H-6);
+  // (c) the round trip
+  const cx0=915,cw=235,yy=linS(0.5,3.5,top+h,top);
+  s+=T(875,24,'(c) Round trip b(c → c′) · b(c′ → c)','ptitle','start','style="font-size:18px"');
+  [0.5,1,1.5,2,2.5,3,3.5].forEach(v=>s+=L(cx0,yy(v),cx0+cw,yy(v),COL.grid,1)+T(cx0-8,yy(v)+5,v,'tick','end'));
+  s+=L(cx0,yy(1),cx0+cw,yy(1),COL.ink,1.6,'6 4')+T(cx0+cw,yy(1)+20,'exact inverse: 1','cap','end','style="fill:var(--ink)"');
+  s+=rotY(cx0-42,top+h/2,'product of the two slopes');
+  A3.forEach((a,i)=>{const x=cx0+34+i*76;
+    GV.forEach((gv,j)=>(DATA.prod[`${a}|${gv}`]||[]).forEach((v,k)=>s+=mark(x+(j?14:-10)+((k*13)%9-4),yy(v),gv,ARM(a).c,'none',4.2)));
+    const ls=a==='A'?['old A','retrained']:['encoder-','decoder A',a==='AED'?'scale learned':'scale fixed at 1'];
+    ls.forEach((t,j)=>s+=T(x+2,top+h+18+j*15,t,'cap','middle',`style="font-size:12.5px;fill:${ARM(a).c};font-weight:${j<ls.length-1||a==='A'?600:400}"`));});
+  // legend
+  const ly=H-8;let x=0;
+  A3.forEach(a=>{const lab=aName(a);s+=Ci(x+6,ly-4,5,ARM(a).c)+T(x+16,ly,lab,'cap','start','style="font-size:13.5px;fill:var(--body)"');x+=lab.length*6.7+30;});
+  s+=Ci(x+6,ly-4,4.2,COL.muted)+T(x+16,ly,'trained pair','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=`<polygon points="${x+120},${ly-10} ${x+126},${ly-4} ${x+120},${ly+2} ${x+114},${ly-4}" style="fill:var(--muted)"/>`+T(x+132,ly,'held-out depth','cap','start','style="font-size:13.5px;fill:var(--body)"');
+  s+=T(W,ly,'(c) ● one g per track ■ one g across tracks','cap','end','style="font-size:13.5px;fill:var(--body)"');
+  return svg(W,H,s);
+}
+
+/* ---------- render ---------- */
+const FIGS={figPairs,figMot,figDiag,figIdea,figRungA,figRungD,figGroups,figDepth,figKnob,figFit,figAB};
+Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
+
+/* ---------- prose: every number from DATA ---------- */
+try{
+  put('tRunsA',DATA.runs.A);put('tRunsD',DATA.runs.D);
+  // motivation
+  const md=DATA.mot_depth;
+  putH('tMot1',`<b>Depth law:</b> median error ${rng(md.map(r=>r[3]))} on trained pairs, ${rng(md.map(r=>r[4]))} on never-trained pairs, in all ${md.length} designs × versions of g.`);
+  const mk=DATA.mot_knob,KN=[['depth','depth'],['crop','read length'],['mapq','MAPQ'],['abproxy','control mixed in']];
+  const lower=KN.filter(([k])=>mk[`counts|${k}|same`][0]<mk[`counts|${k}|trained`][0]).length;
+  const pk=Object.keys(mk).filter(k=>k.startsWith('pval|')&&k.endsWith('|same')).map(k=>k.split('|')[1]);
+  const plow=pk.filter(k=>mk[`pval|${k}|same`][0]<mk[`pval|${k}|trained`][0]).length;
+  putH('tMot2',`<b>Knobs:</b> ${lower} of ${KN.length} lose gain on never-trained pairs (${KN.map(([k,l])=>`${l} ${f2(mk[`counts|${k}|trained`][0])} → ${f2(mk[`counts|${k}|same`][0])}`).join(', ')}); on the p-value track, ${plow} of ${pk.length} knobs do.`);
+  // diagnosis
+  const D=DATA.diag;
+  put('tS1',`${D.audit_n} depth-law records of ${D.audit_runs} old-A runs: largest gap ${D.audit_max.toExponential(0)}; summed counts of ${D.sums_n} depth tracks within ${f2(D.sums_max)} of the nominal log2 ratio.`);
+  put('tS2',`Old A, median over ${D.audit_n} depth pairs: slope b = ${f2(D.b_q[1])} (quartiles ${f2(D.b_q[0])}–${f2(D.b_q[2])}); offset a = ln r ${f2(D.off_q[1])} (${f2(D.off_q[0])} to ${f2(D.off_q[2])}).`);
+  put('tS3',`Earlier designs A–D: direct arm → arm ${rng(D.compose.map(r=>r[2]))}; arm → base → arm ${rng(D.compose.map(r=>r[3]))} (median error).`);
+  // rung D lambda and the arms
+  const lg=LAMS.map(lamOf).filter(v=>v>0).map(lamTxt);
+  put('tLam',`λ grid: ${lg.join(', ')}, plus λ = 0 as its own arm. Chosen on chromosome 22, the lowest mean validation NLL: λ = ${lamTxt(DATA.lam_chosen.per_track)} for one g per track, λ = ${lamTxt(DATA.lam_chosen.across)} for one g across tracks.`);
+  putH('tArmLam',`encoder-decoder D, with the pull (λ = ${lg.join(', ')})<small>one λ chosen per version of g</small>`);
+  const ho=DATA.levels.heldout.map(mlab).join(', ');
+  putH('chips',[`<b>held out of training:</b> the ${ho} depth arm of every track`,`<b>a no-covariates twin</b> for every arm`,
+    `<b>${DATA.runs.per_track} g's, one per track, + 1 g across tracks</b>`,`<b>${DATA.runs.seeds} seeds</b>`,'<b>counts only</b>',
+    `<b>${DATA.runs.A} + ${DATA.runs.D}</b> trained runs (rung A + rung D)`,`<b>up to ${DATA.cap} steps</b>, best step on chromosome 22`].map(t=>`<span class="chip">${t}</span>`).join(''));
+  // (a) depth
+  const OA=['A'],EA=['AED','AED1'],OD=['D'];
+  putH('tDa1',`<b>Never-trained depth → depth:</b> encoder-decoder A ${rng(depV(EA,'never'))} against old A ${rng(depV(OA,'never'))}; encoder-decoder D ${rng(depV(EDD,'never'))} (all λ) against old D ${rng(depV(OD,'never'))}. Trained pairs: old A, old D and encoder-decoder D ${rng(depV(['A','D',...EDD],'trained'))}.`);
+  putH('tDa2',`<b>Held-out ${ho} depth:</b> old A ${rng(depV(OA,'heldout'))}, old D ${rng(depV(OD,'heldout'))}, encoder-decoder D ${rng(depV(EDD,'heldout'))}; encoder-decoder A ${rng(depV(EA,'heldout'))}, and ${rng(depV(EA,'trained'))} even on its trained pairs.`);
+  const sdS=Object.entries(DATA.depth_seed).filter(([k])=>k.split('|')[2]==='never').map(([,v])=>Math.max(...v)-Math.min(...v));
+  put('nDa',`Ranges are over both versions of g. The spread of the three seeds' medians on never-trained pairs is up to ${f2(Math.max(...sdS))} for one arm; several gaps between encoder-decoder D and old D are smaller than that.`);
+  // (b) knobs
+  const K3=['crop','mapq','abproxy'],kv=(arms,grp)=>arms.flatMap(a=>GV.flatMap(g=>K3.map(k=>kn(a==='chosen'?chosen(g):a,g,grp,k)[4])));
+  putH('tKb1',`<b>Read length, MAPQ, control mixed in:</b> encoder-decoder D at the chosen λ gains ${rng(kv(['chosen'],'trained'))} on trained pairs (old D ${rng(kv(['D'],'trained'))}), but ${rng(kv(['chosen'],'same'))} on never-trained pairs (old D ${rng(kv(['D'],'same'))}).`);
+  const cr=(a)=>GV.map(g=>kn(a==='chosen'?chosen(g):a,g,'cross','cross')[4]);
+  putH('tKb2',`<b>Encoder-decoder A</b> gains ${rng(kv(['AED','AED1'],'trained').concat(kv(['AED','AED1'],'same')))} on these three knobs. <b>Two knobs at once:</b> encoder-decoder D ${rng(cr('chosen'))}, old D ${rng(cr('D'))}. <b>Depth:</b> trained ${rng(GV.map(g=>kn(chosen(g),g,'trained','depth')[4]))} → never trained ${rng(GV.map(g=>kn(chosen(g),g,'same','depth')[4]))} for encoder-decoder D.`);
+  const nS=kn('D','per_track','same','crop')[5],nT=kn('D','per_track','trained','crop')[5];
+  const allL=EDD.flatMap(a=>GV.flatMap(g=>K3.map(k=>kn(a,g,'same',k)[4])));
+  put('nKb',`Each of these knobs has ${nT} trained and ${nS} never-trained pairs per version of g, and no seed spread is stored for this reading. Every λ reads alike: encoder-decoder D's never-trained gains on the three knobs span ${rng(allL)} over all λ.`);
+  // (c) fit
+  const fv=(arms,f=r=>r[3])=>arms.flatMap(a=>GV.map(g=>f(ft(a,g))));
+  putH('tFc1',`<b>Rung D:</b> encoder-decoder D ${rng(fv(EDD),f3)} (all λ) against old D ${rng(fv(OD),f3)}; seed ranges up to ${f3(Math.max(...fv(['D',...EDD],r=>r[5]-r[4])))}.`);
+  const a=ft('A','per_track'),e=ft('AED','per_track'),e1=ft('AED1','per_track'),ax=ft('A','across'),ex=ft('AED','across');
+  putH('tFc2',`<b>Rung A, one g per track:</b> scale learned ${f3(e[3])} (scale error ${f3(e[7])}), scale fixed at 1 ${f3(e1[3])} (${f3(e1[7])}), old A ${f3(a[3])} (${f3(a[7])}). <b>Across tracks</b> the gap to old A is ${f3(ex[3]-ax[3])}, smaller than old A's seed range ${f3(ax[5]-ax[4])}.`);
+  // (d) a, b
+  const ab=DATA.ab.filter(r=>r[1]==='per_track'&&r[2]==='trained');
+  const bOld=ab.filter(r=>r[0]==='A').map(r=>r[5]),bE=ab.filter(r=>r[0]==='AED'&&r[3]<0).map(r=>r[5]),aE=ab.filter(r=>r[0]==='AED').map(r=>r[4]),aE1=ab.filter(r=>r[0]==='AED1').map(r=>r[4]);
+  const pOld=GV.flatMap(g=>DATA.prod[`A|${g}`]),pE=GV.flatMap(g=>DATA.prod[`AED|${g}`].concat(DATA.prod[`AED1|${g}`]));
+  putH('tAd1',`<b>Old A</b>, one g per track: slope b ${rng(bOld)} on trained depth pairs, in both directions; round trip ${rng(pOld)} over both versions of g. <b>Encoder-decoder A:</b> round trip ${rng(pE,f3)}, by construction, so with less depth its slope drops to ${rng(bE)}.`);
+  const dn=DATA.down;
+  putH('tAd2',`<b>Its offset a stays near 0</b> (scale learned ${rng(aE)}, scale fixed at 1 ${rng(aE1)}), not near ln r. On trained pairs with fewer target reads, it predicts <b>more</b> reads in ${Math.round(dn.AED[0]*100)}% (scale learned) and ${Math.round(dn.AED1[0]*100)}% (scale fixed) of ${dn.AED[2]} records; old A in ${Math.round(dn.A[0]*100)}%.`);
+  put('nAd',`Panels (a) and (b) show one g per track; the across-tracks g reads alike (panel c). Held-out pairs (diamonds) follow the trained ones.`);
+  // discussion
+  put('tR1',`Trained depth error ${rng(depV(EA,'trained'))}; old A ${rng(depV(OA,'trained'))}.`);
+  put('tR2',`Never-trained depth ${rng(depV(EDD,'never'))}; old D ${rng(depV(OD,'never'))}.`);
+  put('tR3',`Earlier grid: via the base ${rng(D.compose.map(r=>r[3]))}, direct ${rng(D.compose.map(r=>r[2]))}.`);
+  const st=DATA.steps,capN=arms=>arms.reduce((s,k)=>s+st[k][1],0),runN=arms=>arms.reduce((s,k)=>s+st[k][0],0);
+  put('tDb2',`${capN(EDD)} of ${runN(EDD)} encoder-decoder D runs ran all ${DATA.cap} steps, against ${capN(OD)} of ${runN(OD)} for old D. They may need more steps.`);
+  put('tDb3',`The held-out ${ho} depth lies between the trained ${DATA.levels.trained.map(mlab).join(' and ')} depths. It tests interpolation, not extrapolation.`);
+  const lp=DATA.lam.filter(r=>r[4]>0),gaps=GV.map(g=>{const v=lp.filter(r=>r[1]===g).map(r=>r[2]);return Math.max(...v)-Math.min(...v);});
+  put('tDb5',`The validation NLL differs between λ values by at most ${(Math.max(...gaps)).toFixed(4)}; one g's seed range is ${rng(lp.map(r=>r[3]),v=>v.toFixed(4))}.`);
+}catch(e){console.error('prose',e);}
+
+/* ---------- navigation and speaker notes ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length;let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;
+  document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+const toggleNotes=()=>document.body.classList.toggle('shownotes');
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();toggleNotes();}
+  else if(e.key==='Escape'){document.body.classList.remove('shownotes');}
+  else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);});
+const h0=parseInt((location.hash||'').slice(1));show(isNaN(h0)?0:h0-1);
+</script>
+</body>
+</html>

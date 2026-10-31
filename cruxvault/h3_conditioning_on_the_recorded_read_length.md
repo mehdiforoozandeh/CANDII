@@ -21,17 +21,25 @@ null_hash: 8e4d67b544ab2035
 Parent:: [[q2_do_the_covariates_that_record_which_read]]
 
 ## ELI5
-Knowing that one run used shorter reads than the other closes at least half of the gap a plain rescale leaves.
+
+Knowing that one run used shorter reads closes at least half of the gap a plain rescale leaves. Untested; early readings help on trained pairs only.
 
 ## TL;DR
-The pair is the base track (101 bp reads) and its counterfactual re-run by the ENCODE pipeline with reads cropped to 36 or 50 bp before alignment, the crop recorded as the covariate ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The competitor — call it one-warp — is a single covariate-free monotone map on each output axis, fitted on training pairs pooled within this knob and scored on held-out pairs; the oracle is two independent NB draws from the same eta at the target depth (PI ruling 2026-09-16). Gap-closed is (D_onewarp − D_model) / (D_onewarp − D_oracle) with D the macro NB CRPS against the real target. Supported if gap-closed is at least 0.5 on both axes in every mark class and the gain over one-warp exceeds 2× the model's own seed |Δ|; refuted if either fails in any class. If the one-warp → oracle interval is itself below 2× seed |Δ|, the null is supported and gap-closed is not read. The same model with the covariate shuffled across pairs must collapse (a control), so a win belongs to the covariate and not to capacity.
+
+The pair is a base ChIP track (101 bp reads) and its ENCODE re-run with reads cropped to 36 or 50 bp ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The bar is [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]] (gap-closed against one-warp ≥ 0.5 per mark class, gain above 2× seed |Δ|); no run has scored it. Exploratory readings: a per-pair monotone map closes 0.46 of the count gap toward the oracle but 0.01 of the p gap. A generator g that reads the crop beats its no-covariates twin on trained pairs; the gain mostly fails on the never-trained 36 → 50 bp pair.
+
+## Expect
+
+A map conditioned on the recorded read length (36 or 50 bp against 101 bp) closes at least 0.5 of the one-warp → oracle gap in both counts and −log10 p, per mark class, and the gain exceeds 2 × its own seed |Δ|.
+
+_Pre-run: the claim and bar were cloned from the depth hypothesis on 2026-09-17, before any run. The 2026-09-25 redesign moved the main test to the scrambled-covariate twin; this test has not run in its own design._
 
 ## Null
 Normalization: the pairs differ by one global monotone value-axis map, so a covariate-free rescale already closes the gap and the conditioning adds nothing.
 
 ## Problem Statement
 
-Read length changes mappability, duplicate marking and the fragment estimate together; whether the recorded length alone predicts the joint effect is open.
+Read length changes mappability, duplicate marking and the fragment estimate together; whether the recorded length alone predicts the joint effect is open. It is one of four read-selection knobs under [[q2_do_the_covariates_that_record_which_read|the read-selection question]], with the design of [[h1_conditioning_on_the_recorded_sequencing_|the depth claim]]. The arm is ChIP only.
 
 ## Idea / Hypothesis
 
@@ -154,18 +162,26 @@ and the rule content-hash when the node goes running.
 
 ## Planned Intervention
 
-_(how this hypothesis will be tested)_
+No run has tested this claim: [[t103_build_the_in_vitro_covariate_testbed|the testbed build]] has not run on this arm, and [[t107_run_the_in_vitro_covariate_testbed_o|the testbed run]] covers only depth and run type. The readings come from runs that trained one generator g on all ten knobs at once: the g × f grid, rows 1 and 2 ([[t118_learn_the_covariate_conditioned_tra|the grid task]]; `plan/T118_COUNTERFACTUAL_F.md`), and the encoder-decoder rungs ([[t126_build_and_run_the_encoder_decoder_r|the encoder-decoder task]]; `plan/T126_ENCDEC_A.md`). Both score chr19 + chr21 over 3 seeds against a no-covariates twin.
 
 ## Run Links
 
-_(none yet)_
+- g × f grid rows 1 and 2: `nibi:/project/def-maxwl/mforooz/t118/{ladder,row2}/runs` (row-2 arrays 22855414, 22862752; knob extraction 24641277)
+- Encoder-decoder: `nibi:/project/def-maxwl/mforooz/t126/{runs,D/runs}` (train 24646366, 24647762; law 24646367, 24647788, 24706070)
+- Products: `nibi:/scratch/mforooz/t112_cf/products/<track>__crop__{36,50}/` (scratch purge 2026-11-20)
 
 ## Artifacts
 
 <!-- what the run produced. Keep files under results/h3/ and link at least the report:
      - [Report](results/h3/report.md)   - results/h3/curve.png -->
-_(none yet)_
+- [Per-knob readings for this knob family](results/q2/KNOB_READINGS.md) — the tables, the CRPS split and the caveats
+- [Baseline rungs by arm](results/t118/rungs_v2.md)
+- [Grid knob table, rows 1 and 2](results/t118/knob_generalization/knob_table.tsv) and its [figures](results/t118/knob_generalization/report.pdf)
+- [Encoder-decoder knob table](results/t126/knob_table.tsv) and its [report](results/t126/report.pdf)
+- [Grid deck](presentations/t118-grid/index.html) — published https://claude.ai/artifact/1mFz6C5jLaG1Ctc8JN572C
+- [Encoder-decoder deck](presentations/t126-encdec/index.html) — published https://claude.ai/artifact/KP7pipaRbNbEStUaJR7jrZ
+- [Counterfactual-arms manifest](results/t112/MANIFEST.tsv) and [summary](results/t112/COUNTERFACTUAL_ARMS.md) — published https://claude.ai/code/artifact/fb5ff45d-f155-4b01-ac50-db1179f4fd61
 
 ## Findings
 
-_(written by the PI/agent when the case is closed)_
+Observed 2026-10-01 to 2026-10-21; not concluded. QuantileMatching, a per-pair monotone map, closes 0.46 (counts) and 0.01 (p) of the noSolution → oracle interval. Grid, gain over the twin, median of 16 configurations, bar 2× seed wobble: trained 0.18 in counts (16/16 met, median wobble 0.003) and 0.05 in p (6/16); never-trained 0.05 in counts (12/16) and −0.26 in p (1/16; 2 cells explode). Encoder-decoder, counts: old design D 0.20 trained, 0.19 never-trained; the learned-decoder rung 0.27–0.30 trained but −0.16 to −0.11 never-trained. Caveats: the twin is weaker than one-warp, and the oracle is a half-depth pseudoreplicate. Tables: [knob readings](results/q2/KNOB_READINGS.md).

@@ -24,7 +24,7 @@ poster for the 12th Canadian Conference on Epigenetics, 6-9 Oct 2026; extends do
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Poster, web version](results/t121/posters.md) — published https://claude.ai/artifact/Cw7LBCNgGMwq2RCzoXLcZf (44 × 36 in landscape; the portrait artifact https://claude.ai/artifact/UwHMhKgQUQGqvDtTcLySnq is out of date). The source is on branch `visualization/t121-ceehrc-poster`, `poster/ceehrc2026/`.
 
 ## Evidence
 
