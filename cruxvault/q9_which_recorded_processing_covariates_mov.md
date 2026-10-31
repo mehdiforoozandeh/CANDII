@@ -20,7 +20,7 @@ We re-processed the same experiments while changing one lab or software setting 
 
 ## TL;DR
 
-Ranks the ten counterfactual-arm knobs by how far each moves a track from its base, in counts and −log10 p. Depth leads on peak height, the antibody-efficiency proxy on shape; the control and fragment-extension knobs move least. The middle group (duplicate removal, run type, read length, mapping-quality filter) re-draws its 30M-read subsample, so it is read against the resampling floor.
+CAC: which knobs create the largest artifacts. Ranks the ten counterfactual-arm knobs by how far each moves a track from its base, in counts and −log10 p. Depth leads on peak height, the antibody-efficiency proxy on shape; the control and fragment-extension knobs move least. The middle group (duplicate removal, run type, read length, mapping-quality filter) re-draws its 30M-read subsample, so it is read against the resampling floor.
 
 ## Motivation
 

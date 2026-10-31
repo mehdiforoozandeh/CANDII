@@ -20,7 +20,7 @@ A peak caller turns read counts into a significance score with a fixed recipe. C
 
 ## TL;DR
 
-On the true counts, the caller's fragment-wide formula nearly matches the best learned map; formula plus a learned correction is best. Push-only h never blows up in the chain, but there every h trails the earlier direct p model on designs A, D and D2, and training h on f's predictions does not repair f.
+CAC: from predicted counts to −log10 p. On the true counts, the caller's fragment-wide formula nearly matches the best learned map; formula plus a learned correction is best. Push-only h never blows up in the chain, but there every h trails the earlier direct p model on designs A, D and D2, and training h on f's predictions does not repair f.
 
 ## Question
 
