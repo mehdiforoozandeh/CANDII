@@ -50,17 +50,20 @@ Old D's f is 4 dilated convolution layers (dilations 1, 2, 4, 8; kernel 5; a 61-
 
 ## Planned Intervention
 
-Phase 3 of the pivot study ran it (arm "bigger f": 7 per-track g + 1 across-track g, 3 seeds, 15,000-step cap, early stop). Next (PI, 2026-10-29): 3 more seeds per per-track g for bigger f and for old D, to settle whether its small CRPS gain through the base is real. Spec: plan/T126_ENCDEC_D2.md § Phase 3.
+Phase 3 of the pivot study ran it (arm "bigger f": 7 per-track g + 1 across-track g, 3 seeds, 15,000-step cap, early stop). Phase 3b (PI, 2026-10-29) added 3 seeds per per-track g for bigger f and for old D (42 runs, done 2026-10-31), read with a standard-error bar fixed before the run. Spec: plan/T126_ENCDEC_D2.md § Phase 3.
 
 ## Run Links
 
 - Fir: /project/def-maxwl/mforooz/t128p3 (runs/Dbigf_*, viabase/Dbigf_*); train 758805, law 758806.
+- Fir: /project/def-maxwl/mforooz/t128p3/seeds3b (seeds 3–5, both arms); train 1211830/1211840, law 1211839/1211842.
 
 ## Artifacts
 
 - [Phase-3 deck: a bigger g and a bigger f](presentations/t128p3-scale/DECK.md)
 - [Phase-3 depth-law table (arm Dbigf)](results/t128p3/m5_depthlaw_table.tsv)
 - [Phase-3 ranking table](results/t128p3/rank_table.tsv)
+- [Phase-3b six-seed headline table](results/t128p3b/headline_table.tsv)
+- [Phase-3b checks](results/t128p3b/checks.txt)
 
 ## Findings
 
@@ -68,5 +71,6 @@ Exploratory readings; the PI has not ruled. Median |log2 error| of the predicted
 
 - On never-trained depth → depth pairs, f at 64 channels misses the law: 0.41 (0.23) per-track g, 0.34 (0.10) across-track g, against old D at 0.29 (0.05) and 0.34 (0.24). The gaps are within noise. It fits trained pairs (0.05).
 - Read through the base it stays near the law: 0.09 and 0.11, as old D (0.11 and 0.07).
-- On never-trained arm → arm CRPS through the base, per-track g, it gives 0.530 (0.526 + 0.004; spread 0.005) against old D's 0.545 (0.537 + 0.008; spread 0.008). The gain of 0.0146 is just under the bar set before the run (0.015). Three more seeds will test it (PI, 2026-10-29).
+- On never-trained arm → arm CRPS through the base, per-track g, it gives 0.530 (0.526 + 0.004; spread 0.005) against old D's 0.545 (0.537 + 0.008; spread 0.008). The gain of 0.0146 was just under the bar set before the run (0.015).
+- With 6 seeds the gain shrinks to 0.006: bigger f 0.533 (0.528 + 0.005) against old D's 0.539 (0.532 + 0.007). The standard error is 0.003, the bar for a real gain 0.013, and the 95% interval −0.002 to +0.013: within seed noise. On the three new seeds alone, bigger f is slightly worse (−0.003). Both controls pass: the reference's new seeds match its old ones (Δ −0.011, bar 0.012), and the readout reproduces a phase-2 run exactly.
 - Trained-pair and held-out 7.5M CRPS are slightly lower than old D's with per-track g (−0.009 and −0.005), both passing the noise rule.
