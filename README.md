@@ -1,5 +1,9 @@
 # CANDI
 
+[![CANDI poster, CEEHRC 2026 — click for the full-resolution PDF](poster/ceehrc2026/poster_landscape_preview.jpg)](poster/ceehrc2026/poster_landscape.pdf)
+
+*CEEHRC 2026 poster. Click the image for the full-resolution PDF.*
+
 **C**onfidence-**A**ware **N**eural **D**enoising **I**mputer — self-supervised epigenome imputation
 and denoising from raw sequencing read counts plus experimental covariates.
 
