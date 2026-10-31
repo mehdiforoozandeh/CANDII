@@ -1,15 +1,15 @@
 ---
 id: t135
 type: task
-title: Run phase 3b of the pivot study: 3 more seeds for the bigger f and the small reference, per-track g, 42 runs (exploratory)
+title: "Run phase 3b of the pivot study: 3 more seeds for the bigger f and the small reference, per-track g, 42 runs (exploratory)"
 category: implementation
 parent: t118
 blocked_by: None
 refs: q7, h27
 hypothesis_refs: 
-status: open
-created: 2026-10-29T14:31:18
-updated: 2026-10-29T14:31:18
+status: done
+created: "2026-10-29T14:31:18"
+updated: "2026-10-30T22:28:03"
 ---
 
 # t135 — Run phase 3b of the pivot study: 3 more seeds for the bigger f and the small reference, per-track g, 42 runs (exploratory)
@@ -28,7 +28,7 @@ PI option B 2026-10-29: give the bigger f's 0.0146 CRPS gain through the base th
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Deck, slide 15: six seeds for the bigger f](presentations/t128p3-scale/DECK.md)
 
 ## Evidence
 
