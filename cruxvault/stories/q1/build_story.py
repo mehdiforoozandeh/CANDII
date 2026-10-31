@@ -245,12 +245,21 @@ c2 = c("c2", "Darm1", "trained_base median |log2 err|")
 m = re.search(r"Darm1 ([0-9.]+) \(spread ([0-9.]+)\) vs Dref ([0-9.]+) \(spread ([0-9.]+)\)", c2["detail"])
 macros.update(fitArm=num(m.group(1), 3), fitArmS=num(m.group(2), 3), fitRef=num(m.group(3), 3),
               fitRefS=num(m.group(4), 3))
-# second arm: how far it has run (refresh this paragraph when it finishes)
+# second arm: runs finished (complete since 2026-10-31)
 d2 = c("c5", "Darm2", "runs finished")
 macros["armTwoDone"] = num(d2["value"], 0)
 m = re.search(r"(\d+) of (\d+)", d2["threshold"])
 macros["armTwoAll"] = num(m.group(1), 0)
 macros["ruleReading"] = [r for r in ck if r["check"] == "rule"][0]["reading"].split(" (")[0].replace("-", "~").lower()
+# both controls over both arms (the rule is final only when both pass)
+assert all(c(k, "both", "check reading")["reading"] == "PASS" for k in ("c2", "c5")), "a control fails: rewrite the arm-to-arm paragraph"
+# second arm on held-out pairs: read, not checked (the rule reads the first arm only)
+h2 = [r for r in tsv("results/t136/m1_heldout_table.tsv") if r["scope"] == "all7" and r["class"] == "all"
+      and r["arm"] == "Darm2" and r["subgroup"] == "heldout75" and r["knob"] == "all"][0]
+assert h2["complete"] == "True", "second arm incomplete"
+macros.update(crArmTwo=num(h2["crps_all"], 3), crArmTwoOS=num(h2["crps_oracle_scaled_all"], 3),
+              crArmTwoSE=num(h2["scale_error_all"], 3), crArmTwoS=num(h2["seed_spread"], 3),
+              crArmTwoGap=num(h2["closed_crps_all"], 2))
 
 # ---- knob effects against the floor -------------------------------------------------------
 kv = [r for r in tsv("results/t139/knob_vs_floor.tsv") if r["space"] == "counts"]

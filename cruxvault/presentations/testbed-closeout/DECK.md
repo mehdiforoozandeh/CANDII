@@ -25,9 +25,9 @@ CLOSEOUT_SYNC_FROM=/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxv
 
 Without `CLOSEOUT_SYNC_FROM`, the build reads the copies already under this vault's `results/`.
 
-## Refreshing the arm-to-arm slides when the second arm finishes
+## Refreshing the arm-to-arm slides
 
-Slides 12 and 13, the scorecard row "Training g on arm-to-arm pairs" and the "Open runs" limitation read `results/t136` at build time. At this build the first arm (Darm1) is final and the second arm (Darm2) has 10 of 21 runs law-scored.
+Slides 12 and 13, the scorecard row "Training g on arm-to-arm pairs" and the "Open runs" limitation read `results/t136` at build time. At this build (2026-10-31) the grid is complete: both arms finished 21 of 21 runs, both controls (c2, c5) pass, and the rule reading is final (FAIL, on the CRPS check c4). The PI has not signed. Slide 13 adds the second arm's CRPS as a reading, not a check: it reaches the through-the-base CRPS. The steps below stay for any later re-run of the readings.
 
 1. Re-run the arm-to-arm readings in the main checkout when Darm2 is complete (`tools/t136/readings/run_all.sh`, as G15 did), so `results/t136/*.tsv` are current.
 2. Rebuild with `CLOSEOUT_SYNC_FROM` as above. The second-arm column, the rule line, the partial markers and the counts update from the tables.
@@ -43,7 +43,7 @@ Slides 12 and 13, the scorecard row "Training g on arm-to-arm pairs" and the "Op
   - (c) Run type: histone marks beat the one-warp; DNase is mixed; no oracle exists.
   - (d) The depth offset repairs design A's scale error; capacity in f does not fix never-trained pairs.
   - (e) The depth-law miss: four causes ruled out; the chain through the base meets the law.
-  - (f), (g) Arm-to-arm training: the law checks pass, the CRPS check fails, DNase-driven and scale error; the second arm is running.
+  - (f), (g) Arm-to-arm training: the grid is complete and both controls pass; the law checks pass and the CRPS check fails, DNase-driven and scale error, so the rule reading is final (fail, not judged). The second arm, read and not checked, reaches the through-the-base CRPS.
   - (h) The map from counts to the p-value track is stable and limited by the count model.
   - (i) Every knob moves peak height above the floor; few move the shape above it.
   - (j) The resampling floor: whole-read thinning matches the real halves; signal level, not region, sets it.

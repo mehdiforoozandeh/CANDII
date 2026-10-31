@@ -499,7 +499,7 @@
 
   <!-- 12 · RESULTS · (f) arm-to-arm training: the checks
        job      one claim: training on two arm-to-arm pairs meets the depth-law checks but fails the CRPS check
-       claim    the first arm passes the law and ratio checks and fails the CRPS check; the second arm is still running
+       claim    the first arm passes the law and ratio checks and fails the CRPS check; both arms finished (42 of 42 runs), both controls pass, so the reading is final
        source   results/t136/checks_readings.tsv, m5_depthlaw_table.tsv, n_table.tsv
        numbers  DATA.h28
        cut      the note
@@ -513,13 +513,13 @@
         <div id="tblH28"></div>
       </div>
       <p class="note" id="tH28note"></p>
-      <aside class="notes"><p>The first arm adds two arm to arm depth pairs per track to training. The second arm adds every arm to arm pair that does not touch the held-out depth. The checks were pre-registered and approved by the PI before the run. The first arm's readings are final. The second arm is still running, so the two controls are not yet readable and the PI has not signed.</p></aside>
+      <aside class="notes"><p>The first arm adds two arm to arm depth pairs per track to training. The second arm adds every arm to arm pair that does not touch the held-out depth. The checks were pre-registered and approved by the PI before the run. Both arms finished every run. Both controls pass, so the rule reading is final: it fails, on the CRPS check. The reading is not judged: the PI has not signed.</p></aside>
     </div>
   </section>
 
   <!-- 13 · RESULTS · (g) arm-to-arm training: CRPS by mark class
        job      one claim: the CRPS failure is DNase-driven and is scale error
-       claim    on held-out pairs the first arm's CRPS is worse than the reference in DNase, mostly as scale error; histone marks sit near the reference
+       claim    on held-out pairs the first arm's CRPS is worse than the reference in DNase, mostly as scale error; the second arm (read, not checked) reaches the through-the-base CRPS
        source   results/t136/m1_heldout_table.tsv (subgroup heldout75)
        numbers  DATA.h28.crps
        cut      the second bullet
@@ -527,14 +527,15 @@
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Results</span>(g) training g on arm-to-arm pairs: CRPS on held-out pairs</div>
-      <h2>The CRPS failure is in DNase, and it is scale error</h2>
+      <h2 id="tH28gh"></h2>
       <div class="chartbox panels"><div class="fig" id="figH28h"></div><div class="fig" id="figH28d"></div></div>
       <div class="legend" id="lgH28"></div>
       <ul class="pts">
         <li id="tH28c1"></li>
         <li id="tH28c2"></li>
+        <li id="tH28c3"></li>
       </ul>
-      <aside class="notes"><p>Each bar is a CRPS split into its shape part and its scale-error part. The whisker marks the seed range. The DNase class has one track, so its pairs are few and its seed range is wide. The second arm's bars are partial while it runs.</p></aside>
+      <aside class="notes"><p>Each bar is a CRPS split into its shape part and its scale-error part. The whisker marks the seed range. The DNase class has one track, so its pairs are few and its seed range is wide. The pre-registered rule reads only the first arm. The second arm is complete; its bars are a reading, not a check.</p></aside>
     </div>
   </section>
 
@@ -702,7 +703,7 @@
         <div class="card" style="--c:var(--per)"><div class="rl">Training pairs</div><p class="big" id="tC4"></p></div>
         <div class="card" style="--c:var(--per)"><div class="rl">Scoring</div><p class="big">Score against the one-warp and the no-covariates twin; use the exact thinning oracle for depth; split every CRPS.</p></div>
       </div>
-      <aside class="notes"><p>The transfer task into CANDI is deferred. It waits on the arm-to-arm grid's second arm. These cards are what the testbed says that task should start from.</p></aside>
+      <aside class="notes"><p>The transfer task into CANDI is deferred. The arm-to-arm grid is complete; its reading waits for the PI's signature. These cards are what the testbed says that task should start from.</p></aside>
     </div>
   </section>
 
@@ -1091,7 +1092,7 @@ const ARMC={Dref:C('dref'),Dviabase:C('dvia'),Darm1:C('darm1'),Darm2:C('darm2')}
 (function(){
   const lw=H28.law.heldout_r2, thr=lw.Dref.v-0.5*(lw.Dref.v-lw.Dviabase.v);
   const rows=['Dref','Dviabase','Darm1','Darm2'].filter(a=>lw[a]).map(a=>({lab:ARMN[a].split(':')[0],pts:[{v:lw[a].v,lo:lw[a].v-lw[a].sr/2,hi:lw[a].v+lw[a].sr/2,col:ARMC[a],hollow:!lw[a].complete,txt:lw[a].complete?fx(lw[a].v):`${fx(lw[a].v)} · partial`}]}));
-  put('figH28law', dotPanel({title:'(a) depth law, held-out ratio-2 pairs',sub:'whisker: seed range; hollow: still running',rows,xmin:0,xmax:0.3,ticks:[0,0.1,0.2,0.3],tf:t=>t.toFixed(1),
+  put('figH28law', dotPanel({title:'(a) depth law, held-out ratio-2 pairs',sub:`whisker: seed range${n2.law_done===n2.assigned?'':'; hollow: still running'}`,rows,xmin:0,xmax:0.3,ticks:[0,0.1,0.2,0.3],tf:t=>t.toFixed(1),
     refs:[{v:thr,lab:`pass line ${fx(thr)}`,col:'var(--darm1)'}],W:520,Lg:190,rowH:46,top:90,xlab:'median |log2 error| of the predicted scale'}));
   const NAME={c1:'(b) depth law on held-out pairs',c2:'(c) fit on trained base pairs',c3:'(d) depth law carries to an unseen ratio',c4:'(e) CRPS on held-out pairs',c5:'(f) run health'};
   const badge=r=>!r?'<span class="pend">n/a</span>':r==='PASS'?'<span class="stat pass">pass</span>':r==='FAIL'?'<span class="stat fail">fail</span>':`<span class="stat wait">running</span>`;
@@ -1104,7 +1105,10 @@ const ARMC={Dref:C('dref'),Dviabase:C('dvia'),Darm1:C('darm1'),Darm2:C('darm2')}
   put('tblH28', `<table class="dtable sm"><thead><tr><th>pre-registered check</th><th>kind</th><th>first arm</th><th>second arm</th></tr></thead><tbody>${['c1','c2','c3','c4','c5'].map(row).join('')}</tbody></table>`);
   const pass=[c1,c3].every(x=>x&&x.reading==='PASS'), fail=c4r&&c4r.reading==='FAIL';
   put('tH28h', pass&&fail?'Arm-to-arm training meets the depth law on held-out pairs, but fails the CRPS check':'Arm-to-arm training: the pre-registered checks');
-  put('tH28note', `Rule: all three claim checks must pass, read only when both controls pass. Reading now: ${H28.rule.toLowerCase()}. Second arm: ${n2.law_done} of ${n2.assigned} runs scored. Not judged: the PI signs.`);
+  const done2=n2.law_done===n2.assigned, ctl=['c2','c5'].every(c=>{const r=ckOf(c,'both');return r&&r.reading==='PASS';});
+  put('tH28note', done2&&ctl
+    ? `Rule: all three claim checks must pass, read only when both controls pass. Both arms finished (${H28.n.Darm1.law_done+n2.law_done} of ${H28.n.Darm1.assigned+n2.assigned} runs) and both controls pass, so the reading is final: ${H28.rule.toLowerCase()}. Not judged: the PI signs.`
+    : `Rule: all three claim checks must pass, read only when both controls pass. Reading now: ${H28.rule.toLowerCase()}. Second arm: ${n2.law_done} of ${n2.assigned} runs scored. Not judged: the PI signs.`);
 })();
 
 /* ------------------------------------------------------------------ (g) arm-to-arm CRPS */
@@ -1118,7 +1122,12 @@ const ARMC={Dref:C('dref'),Dviabase:C('dvia'),Darm1:C('darm1'),Darm2:C('darm2')}
   const gc=cls=>{const c=H28.crps[cls]; return (c.Dref.v-c.Darm1.v)/(c.Dref.v-c.Dviabase.v);};
   const a=H28.crps.all, d=H28.crps.dnase;
   put('tH28c1', `All held-out pairs: first arm ${crps(a.Darm1.v,a.Darm1.os,a.Darm1.se,a.Darm1.sr)}, against old D direct ${crps(a.Dref.v,a.Dref.os,a.Dref.se)} and through the base ${crps(a.Dviabase.v,a.Dviabase.os,a.Dviabase.se)}: gap closed ${fx(gc('all'),2)} against a threshold of 0.5.`);
-  put('tH28c2', `DNase: gap closed ${fx(gc('dnase'),2)}, with scale error ${fx(d.Darm1.se)} against ${fx(d.Dref.se)} for old D; histone marks: gap closed ${fx(gc('histone'),2)}. The second arm reads ${a.Darm2.complete?'complete':'partial'} (${n2.law_done} of ${n2.assigned} runs).`);
+  const gc2=cls=>{const c=H28.crps[cls]; return (c.Dref.v-c.Darm2.v)/(c.Dref.v-c.Dviabase.v);};
+  put('tH28gh', a.Darm2.complete&&gc2('all')>=0.5?'The first arm\'s CRPS failure is DNase scale error; the second arm removes it':'The CRPS failure is in DNase, and it is scale error');
+  put('tH28c2', `DNase: gap closed ${fx(gc('dnase'),2)}, with scale error ${fx(d.Darm1.se)} against ${fx(d.Dref.se)} for old D; histone marks: gap closed ${fx(gc('histone'),2)}.`);
+  put('tH28c3', a.Darm2.complete
+    ? `Second arm, all ${n2.law_done} runs (read, not checked; the rule reads the first arm): ${crps(a.Darm2.v,a.Darm2.os,a.Darm2.se,a.Darm2.sr)}, gap closed ${fx(gc2('all'),2)}; DNase ${fx(gc2('dnase'),2)}, scale error ${fx(d.Darm2.se)}.`
+    : `The second arm reads partial (${n2.law_done} of ${n2.assigned} runs).`);
 })();
 
 /* ------------------------------------------------------------------ (h) counts to p */
@@ -1196,11 +1205,15 @@ put('tP1', `${PR.swap[0]} of ${PR.swap[1]}`); put('tP2', `${PR.depth[0]} of ${PR
 /* ------------------------------------------------------------------ discussion */
 const per=H.filter(x=>x.g==='per_track');
 put('tLim1', `${D.n_tracks} tracks: one DNase track and three tracks per histone class. Each run has three seeds, so each class value rests on one to three tracks.`);
-put('tLim4', `The arm-to-arm grid's second arm has ${n2.law_done} of ${n2.assigned} runs scored, so its two controls are not readable (f). The extra seeds for the wider f are still queued.`);
+put('tLim4', n2.law_done===n2.assigned
+  ? `The arm-to-arm rule reads only the first arm; the second arm's CRPS is a reading, not a check (f, g). The extra seeds for the wider f are still queued.`
+  : `The arm-to-arm grid's second arm has ${n2.law_done} of ${n2.assigned} runs scored, so its two controls are not readable (f). The extra seeds for the wider f are still queued.`);
 put('tC1', `Keep the fixed depth offset. Depth acts the same along the genome (k), and maps through the full-depth base meet the law: ${LAW.via[1]} against ${LAW.via[4]} direct (e).`);
 put('tC2', `Add a position-aware input, such as sequence or mappability: mapping quality zero adds a feature gain of ${rngs(mapq0)} (k).`);
 put('tC3', `A level-dependent spread, such as the NB variance, describes the floor (j). Low-depth noise is larger than first measured: the shape floor is ${fx(FL.curve.shape_1k.narrow['3.75M'])} at 3.75M per half (narrow).`);
-put('tC4', `A direct g does not carry base-to-arm training to arm-to-arm pairs (a, e). Add arm-to-arm pairs for the other covariates only if the second arm shows the need (f).`);
+put('tC4', H28.crps.all.Darm2&&H28.crps.all.Darm2.complete
+  ? `A direct g does not carry base-to-arm training to arm-to-arm pairs (a, e). Training on every arm-to-arm pair reaches the through-the-base CRPS, ${fx(H28.crps.all.Darm2.v)} against ${fx(H28.crps.all.Dviabase.v)} (g; read, not checked).`
+  : `A direct g does not carry base-to-arm training to arm-to-arm pairs (a, e). Add arm-to-arm pairs for the other covariates only if the second arm shows the need (f).`);
 
 /* ------------------------------------------------------------------ navigation and notes */
 const slides=[...document.querySelectorAll('.slide')];

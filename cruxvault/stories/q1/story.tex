@@ -13,12 +13,12 @@
 %%           log2, k = 4-5 count units per read, ratios 2 and 4, 2 test chromosomes,
 %%           mapping filter 0.
 %%
-%% REFRESH when the second arm of the arm-to-arm grid finishes: rerun the t136 readings,
-%% copy results/t136/checks_readings.tsv, rebuild, and re-read the paragraph
-%% "Arm-to-arm training" and the depth-law row of the goals table.
+%% REFRESH after any re-run of the t136 readings: copy results/t136/{checks_readings,
+%% m1_heldout_table}.tsv, rebuild, and re-read the paragraph "Arm-to-arm training" and the
+%% depth-law row of the goals table. The grid is complete (42 of 42 runs, 2026-10-31).
 \documentclass[pdflatex,sn-mathphys-num,iicol]{sn-jnl}
 
-% crux-sources: {"results/h15/report.md": "1a627c961d3e0204db7eb34de5744e566f36dcc62a5572564784e6f79785cb02", "results/h19/knob_generalization/group_table.tsv": "2c0c89ae7409e736993ebfc05baf0d999f97fa78b5b2ca4396c746bc0338c5e5", "results/h19/knob_generalization/knob_table.tsv": "dbab28911a5a807e45a2d8fa00a3aaaf68f65e32fecc891d393b0b74280114fb", "results/h19/knob_generalization/verify.txt": "a29dfb5c0f41029547a8198253aadb9cc274daf0946ce1db8e757372deff0ead", "results/t122/AUDIT.md": "d137ae1c41217c54de7651644d14b527c49595c99e1902db453d5e92b66cc93c", "results/t125/part1_digest.md": "ad3e66d7aacd44101b02a386f728c95fe2c0af466c93e2a9428477cfb71aeea4", "results/t125/part2_digest.md": "953db8ff3884ecb22e16a643cd1ea9d84a8ba4d43b14b0bfc4935cf4d6648d5e", "results/t130/blind_table.tsv": "32c5f06704b0617120c5e76f5a26563b963bbb6d18cbbeaaf4b408fc6181907d", "results/t130/nested_dispersion.tsv": "895510f95be1b0f7d461d80384a4ab266fec9f2dcd6357c0767e1530562ddd31", "results/t136/checks_readings.tsv": "9f763c556613a51245847e3b8fea3760e1e1587ef6995e7adf92136947c33bfb", "results/t137/floor_at_30M.tsv": "57c79b0fb27abb7455b3579b5fba3cf482254003af58ce42d885974dbf75e63c", "results/t138/map_classes.tsv": "0dbc2954ccf8c1b77c07fcd5dfb61ffcbefdfc0fa6f97c1cbd20e2b5f9f4a8d3", "results/t139/knob_vs_floor.tsv": "48e437cac296e22ef3ed9042c92f272376c43ef92c145a088ae0c9ec616a19a2", "results/t142/compare_real_class.tsv": "7ea9c6c29594be886f9fcaa933f41cd9a6fc55f00c36a355e50d031c214a03af", "results/t142/floor_at_30M.tsv": "2efdb6407090b8b8df6be6f60a15835561ef4b85ce1931a4521064c562a2d3b3", "results/t142/map_classes.tsv": "a5aa69c06e7ad58a5557e5cb814b9205ee40a9658f8183711d2ae35ebd5094b6", "results/t142/t141_readthin/knob_classes.tsv": "1ceeba1c40c989da90be8eb9b496de23010c69ff0108fa88211cad6ebfafa846", "stories/q1/build_story.py": "024a07c76558d979cc49ba66d8d05efd059dffc27afebac62c692a25a978161d", "stories/q1/story_src.tex": "9db5c4c740692bb0d975e24e17027340a393bddd54cd79a155d98b9f5d4dd330"}
+% crux-sources: {"results/h15/report.md": "1a627c961d3e0204db7eb34de5744e566f36dcc62a5572564784e6f79785cb02", "results/h19/knob_generalization/group_table.tsv": "2c0c89ae7409e736993ebfc05baf0d999f97fa78b5b2ca4396c746bc0338c5e5", "results/h19/knob_generalization/knob_table.tsv": "dbab28911a5a807e45a2d8fa00a3aaaf68f65e32fecc891d393b0b74280114fb", "results/h19/knob_generalization/verify.txt": "a29dfb5c0f41029547a8198253aadb9cc274daf0946ce1db8e757372deff0ead", "results/t122/AUDIT.md": "d137ae1c41217c54de7651644d14b527c49595c99e1902db453d5e92b66cc93c", "results/t125/part1_digest.md": "ad3e66d7aacd44101b02a386f728c95fe2c0af466c93e2a9428477cfb71aeea4", "results/t125/part2_digest.md": "953db8ff3884ecb22e16a643cd1ea9d84a8ba4d43b14b0bfc4935cf4d6648d5e", "results/t130/blind_table.tsv": "32c5f06704b0617120c5e76f5a26563b963bbb6d18cbbeaaf4b408fc6181907d", "results/t130/nested_dispersion.tsv": "895510f95be1b0f7d461d80384a4ab266fec9f2dcd6357c0767e1530562ddd31", "results/t136/checks_readings.tsv": "0877a71121c98e2de20f499924764c74d3f255be60001d21023d67965789d476", "results/t136/m1_heldout_table.tsv": "5875c5d515d0aab3c8add24e7bf5ee46b0a7ddf499e2722a0ceb608d0f3615e2", "results/t137/floor_at_30M.tsv": "57c79b0fb27abb7455b3579b5fba3cf482254003af58ce42d885974dbf75e63c", "results/t138/map_classes.tsv": "0dbc2954ccf8c1b77c07fcd5dfb61ffcbefdfc0fa6f97c1cbd20e2b5f9f4a8d3", "results/t139/knob_vs_floor.tsv": "48e437cac296e22ef3ed9042c92f272376c43ef92c145a088ae0c9ec616a19a2", "results/t142/compare_real_class.tsv": "7ea9c6c29594be886f9fcaa933f41cd9a6fc55f00c36a355e50d031c214a03af", "results/t142/floor_at_30M.tsv": "2efdb6407090b8b8df6be6f60a15835561ef4b85ce1931a4521064c562a2d3b3", "results/t142/map_classes.tsv": "a5aa69c06e7ad58a5557e5cb814b9205ee40a9658f8183711d2ae35ebd5094b6", "results/t142/t141_readthin/knob_classes.tsv": "1ceeba1c40c989da90be8eb9b496de23010c69ff0108fa88211cad6ebfafa846", "stories/q1/build_story.py": "c046242182ca251792fbf551e562f7948e81325826f79333eaed4fb4b20cbf12", "stories/q1/story_src.tex": "8aba13b4bcf4061cdc04c180a5886ab2291096f6d66eeda6f8adc410c3730593"}
 
 \usepackage{graphicx}
 \usepackage{amsmath}
@@ -44,7 +44,7 @@
 \definecolor{cBr}{HTML}{4B5FA6}
 
 \newcommand{\armTwoAll}{21}
-\newcommand{\armTwoDone}{10}
+\newcommand{\armTwoDone}{21}
 \newcommand{\cFourGap}{\ensuremath{-}0.53}
 \newcommand{\cOneGap}{0.674}
 \newcommand{\cThreeBar}{0.367}
@@ -55,6 +55,11 @@
 \newcommand{\crArmOS}{0.466}
 \newcommand{\crArmS}{0.062}
 \newcommand{\crArmSE}{0.107}
+\newcommand{\crArmTwo}{0.428}
+\newcommand{\crArmTwoGap}{1.08}
+\newcommand{\crArmTwoOS}{0.425}
+\newcommand{\crArmTwoS}{0.005}
+\newcommand{\crArmTwoSE}{0.003}
 \newcommand{\crRef}{0.525}
 \newcommand{\crRefOS}{0.473}
 \newcommand{\crRefS}{0.032}
@@ -193,7 +198,7 @@
 \newcommand{\relPCross}{0.004}
 \newcommand{\relPSame}{0.06}
 \newcommand{\relPTr}{0.15}
-\newcommand{\ruleReading}{not~readable}
+\newcommand{\ruleReading}{fail}
 \newcommand{\shLowBr}{0.79}
 \newcommand{\shLowDn}{0.39}
 \newcommand{\shLowNar}{0.79}
@@ -425,15 +430,16 @@ unseen arm-to-arm pairs the direct map misses it (median $|\log_{\lit{2}}|$ scal
 \lawRef{}, seed range \lawRefS{}); two trained maps chained through the base come closer
 (\lawVia{}, seed range \lawViaS{}).
 
-\paragraph{Arm-to-arm training (first arm final, second running).} One added arm-to-arm pair
+\paragraph{Arm-to-arm training (complete).} One added arm-to-arm pair
 per track (ratio \lit{4}) brings the held-out ratio-\lit{2} error to \lawArm{} (seed range
 \lawArmS{}), closing \cOneGap{} of the gap to the chained map (bar \lit{0.5}); it passes the
 transfer bar (\cThreeHeld{} against \cThreeBar{}) and keeps the base fit (\fitArm{} against
 \fitRef{}). But the predicted distribution gets worse: CRPS \crArm{} (\crArmOS{} + \crArmSE{}, seed range \crArmS{}) against \crRef{}
 (\crRefOS{} + \crRefSE{}) direct and \crVia{} (\crViaOS{} + \crViaSE{}) chained, a gap closed
-of \cFourGap{}, mostly scale error in DNase. The second arm has \armTwoDone{} of \armTwoAll{}
-runs, so the combined reading is \ruleReading{}; if its controls pass, the CRPS check makes it
-a fail.
+of \cFourGap{}, mostly scale error in DNase. Both arms are complete and
+both controls pass, so the reading is final: \ruleReading{} (not judged). The
+every-pair second arm (not checked) reaches the chained map: CRPS \crArmTwo{} (\crArmTwoOS{} + \crArmTwoSE{}, seed
+range \crArmTwoS{}), gap closed \crArmTwoGap{}.
 
 \paragraph{The floor, and where settings act.} Whole-read thinning reproduces the real depth
 halves (\lit{1}~kb shape ratio \realRead{}, against \realUnit{} for count thinning). At
@@ -532,7 +538,7 @@ Control and caller settings & Partly met & $p$ gain \ctlPTrLo{}--\ctlPTrHi{} tra
 Capacity of the map & Answered & A monotone curve suffices in counts; more capacity does not fix unseen pairs; $p$ explodes in B--D \\
 Depth offset & Answered & Helps design A only: DNase CRPS \oldA{} (\oldAOS{} + \oldASE{}) to \offA{} (\offAOS{} + \offASE{}), gain \offGain{} against bar \offBar{}; other designs \offBDclear{}/\offBDn{}; depth law met in \offLawIn{}/\offLawN{} cells \\
 Counts-to-$p$ map & Answered & Caller's formula plus learned correction, log CRPS \hBest{} $\pm$ \hBestW{} (\hBestOS{} + \hBestSE{}), against \hAff{} (\hAffOS{} + \hAffSE{}) for an affine map; one track \\
-Why the depth law is missed & Partly met & Not the pseudocount, loss or model size; arm-to-arm training meets the law (gap closed \cOneGap{}) but CRPS fails (\cFourGap{}); second arm \armTwoDone{}/\armTwoAll{} runs \\
+Why the depth law is missed & Partly met & Not the pseudocount, loss or model size; arm-to-arm training meets the law (gap closed \cOneGap{}) but CRPS fails (\cFourGap{}); grid complete, controls pass; every-pair arm closes \crArmTwoGap{} (not checked) \\
 Does CANDI's training let it correct other covariates? & Partly met & Told read length or run type, CANDI moves its level; per-region tracking unreadable (floor failed its depth control); probe parked \\
 Which settings move a track most & Met & On one shared peak set: peak height above floor \nPhAbove{}/\nPh{} (\phRatioLo{}--\phRatioHi{}$\times$), shape \nShAbove{}/\nSh{} \\
 How much resampling alone moves a track & Met & \lit{1}~kb shape floor at \lit{30}M: narrow \shThirtyNar{}, broad \shThirtyBr{}, DNase \shThirtyDn{} (seed range $\le$ \shSpreadHi{}); level, not region, sets it \\
@@ -545,8 +551,8 @@ Where along the genome settings act & Met & Depth uniform (residual = null); map
 
 On trained pairs the covariates carry the information: for depth they close most of the gap
 to the oracle; for run type and control settings they beat a covariate-free map. On
-unseen pairs the gain shrinks and the direct map misses the depth law. Arm-to-arm training
-fixes the law but not the distribution. Table~\ref{tab:goals} gives each goal's status. Limitations: \lit{7} tracks, \lit{3} seeds, \lit{2} test chromosomes, and no ceiling for the
+unseen pairs the gain shrinks and the direct map misses the depth law. Two arm-to-arm
+pairs fix the law but not the distribution; every pair fixes both (not checked). Table~\ref{tab:goals} gives each goal's status. Limitations: \lit{7} tracks, \lit{3} seeds, \lit{2} test chromosomes, and no ceiling for the
 run-type and control claims.
 
 \paragraph{What carries to CANDI.} Use the full-depth track as the depth base, with depth as a
@@ -557,7 +563,6 @@ combinations that training never paired.
 
 Next steps, without ranking:
 \begin{itemize}
-\item \textbf{Read the second arm.} Cheap, running; makes the arm-to-arm reading final.
 \item \textbf{A full-depth oracle for run type and control settings.} Moderate; gives those
 claims a ceiling.
 \item \textbf{Augment CANDI with counterfactual pairs.} Costly; tests whether the trained-pair
