@@ -50,6 +50,7 @@ Checks written after the run, at the PI's request on 2026-10-31; the work was ex
 
 - [ ] With f at 64 channels (g hidden width 64), the never-trained depth → depth median |log2 error| falls to the trained-pair level (about 0.1) for one g per track or one g across tracks
       fails-if:: Both g versions stay well above their trained-pair level
+      discriminates:: true
       (found: 0.41 per-track g, 0.34 across-track g; trained 0.05 — [depth-law table](results/t128p3/m5_depthlaw_table.tsv))
 - [x] [outcome-neutral] The target tracks themselves obey the depth law on the scored bins
       fails-if:: Σy/ΣX differs from the manifest depth ratio by more than 0.01 log2
