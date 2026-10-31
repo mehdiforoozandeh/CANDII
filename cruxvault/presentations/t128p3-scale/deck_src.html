@@ -209,8 +209,8 @@
 
   <!-- 1 · TITLE
        job      the question as a headline; the scope in one line
-       source   results/t128p3/n_table.tsv, runs_fir.tsv
-       numbers  run counts only (DATA.counts)
+       source   results/t128p3/n_table.tsv, runs_fir.tsv; results/t128p3b/n_table.tsv
+       numbers  run counts only (DATA.counts, DATA.p3b.runs)
        cut      the nav hint -->
   <section class="slide active">
     <div class="wrap">
@@ -500,8 +500,34 @@
     </aside>
   </section>
 
-  <!-- 15 · DISCUSSION · what each metric tells us
-       job      one line per metric 1, 2, 3, 4, 5, 9
+  <!-- 15 · RESULTS · (i) phase 3b: more seeds for bigger f and the reference
+       job      does bigger f's gain through the base hold at six seeds per arm (PI option B)?
+       claim    written from DATA (hS)
+       source   results/t128p3b/headline_table.tsv (metric 1, via the base, all), per_seed_table.tsv,
+                checks.txt, readout_control.json; m1_direct, m3, m4 tables in the notes
+       numbers  DATA.p3b; the bars and labels are the tables' own (spec § Phase 3b, Reading)
+       cut      the third line -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(i) more seeds: is bigger f's gain real?</div>
+      <h2 id="hS"></h2>
+      <div class="mdef">
+        <div class="what"><b>What it measures</b>Metric 1 through the base, one g per track: bigger f against the small reference, each with three new seeds (3–5), six seeds per arm.</div>
+        <div class="best"><b>Best case</b>The gap clears both pre-registered bars, and seeds 3–5 alone show the gain again.</div>
+        <div class="worst"><b>Worst case</b>The gap falls inside seed noise and seeds 3–5 alone show no gain: phase 3's gain was a draw of three seeds.</div>
+      </div>
+      <div class="fig res" id="figSeeds"></div>
+      <ul class="pts cols3"><li id="tSa"></li><li id="tSb"></li><li id="tSc"></li></ul>
+    </div>
+    <aside class="notes">
+      <p>Panel (a): one dot per seed and arm (the mean over the seven per-track g). Filled dots are seeds 0–2 (phase 3 for bigger f, phase 2 for the reference); hollow dots are the new seeds 3–5. The faint stem runs from the oracle-scaled part up to the CRPS, so its length is the scale error. Dashed lines are the six-seed means.</p>
+      <p>Panel (b): the gap is the reference minus bigger f, so above zero means bigger f is lower. <b>SE</b> (standard error) of the gap: √(sd²/6 + sd²/6) over the two arms, seeds unpaired. <b>Real bar</b>: 4 × SE. <b>Size bar</b>: 2 × the larger six-seed range rescaled to three seeds, never below the phase-3 floor. The whisker is the 95% confidence interval (the range that holds the true gap 95 times in 100). Each red tick is the bar of that row.</p>
+      <p id="nS"></p>
+    </aside>
+  </section>
+
+  <!-- 16 · DISCUSSION · what each metric tells us
+       job      one line per metric 1, 2, 3, 4, 5, 9, and the six-seed reading
        source   the result slides above
        numbers  restated from results; none new
        cut      the tier line in the notes -->
@@ -516,9 +542,9 @@
     </aside>
   </section>
 
-  <!-- 16 · DISCUSSION · what follows, per the spec
-       job      the optimisation-failure reading, the spec's rule for a next arm, and the options
-       source   results/t128p3/checks.txt (optimisation-failure reading); spec (the rule)
+  <!-- 17 · DISCUSSION · what follows, per the spec
+       job      the optimisation-failure reading, the spec's rule for a next arm, option B's outcome, the options left
+       source   results/t128p3/checks.txt (optimisation-failure reading); results/t128p3b (option B); spec (the rule)
        numbers  restated from results; none new
        cut      the third option -->
   <section class="slide">
@@ -528,21 +554,21 @@
       <div class="cards c3">
         <div class="card" style="--c:var(--ok)"><div class="rl">Reading</div><div class="ct">Not an optimisation failure</div><div class="cb" id="tF1"></div></div>
         <div class="card" style="--c:var(--s3)"><div class="rl">Reading</div><div class="ct">The spec's rule for the next arm</div><div class="cb" id="tF2"></div></div>
-        <div class="card" style="--c:var(--muted)"><div class="rl">Caveat</div><div class="ct">What "within noise" does not say</div><div class="cb" id="tF3"></div></div>
+        <div class="card" style="--c:var(--muted)"><div class="rl">Caveat</div><div class="ct">What "within seed noise" does not say</div><div class="cb" id="tF3"></div></div>
       </div>
       <div class="cards c3" style="margin-top:14px">
-        <div class="card" style="--c:var(--accent)"><span class="tag opt">option A</span><div class="ct">Close the scale question at this size</div><div class="cb">Keep the small g and f, and turn to another axis. It would teach nothing new about size, at no compute cost.</div></div>
-        <div class="card" style="--c:var(--accent)"><span class="tag opt">option B</span><div class="ct">More seeds for bigger f, one g per track</div><div class="cb" id="tOB"></div></div>
+        <div class="card" style="--c:var(--accent)"><span class="tag opt">option A</span><div class="ct">Close the scale question at this size</div><div class="cb" id="tOA"></div></div>
+        <div class="card" style="--c:var(--muted)"><span class="tag out">option B · ran</span><div class="ct">More seeds for bigger f, one g per track</div><div class="cb" id="tOB"></div></div>
         <div class="card" style="--c:var(--accent)"><span class="tag opt">option C</span><div class="ct">Tune the learning rate for the bigger models</div><div class="cb">The spec left it unchanged as a caveat. A short sweep per arm would teach whether size is held back by the recipe, at the cost of a new grid.</div></div>
       </div>
     </div>
     <aside class="notes">
       <p>The optimisation-failure reading is the design check's rule: an arm that does not improve through the base and also gets worse on trained pairs reads as an optimisation failure, not as "capacity does not help".</p>
-      <p>The options carry no recommendation and no ranking; the PI chooses.</p>
+      <p>Option B ran (PI, 2026-10-29): three more seeds per per-track g for bigger f and for the reference. Options A and C remain. The options carry no recommendation and no ranking; the PI chooses.</p>
     </aside>
   </section>
 
-  <!-- 17 · DISCUSSION · open points for the PI
+  <!-- 18 · DISCUSSION · open points for the PI
        job      the decisions only the PI can make, each answerable in one line
        source   the result slides above
        numbers  restated from results; none new
@@ -555,17 +581,16 @@
         <li id="tO1"></li>
         <li id="tO2"></li>
         <li id="tO3"></li>
-        <li id="tO4"></li>
       </ol>
     </div>
     <aside class="notes">
-      <p>Each point is a question the readings raise and only the PI can settle. None is a recommendation.</p>
+      <p>Each point is a question the readings raise and only the PI can settle. None is a recommendation. Settled by the PI on 2026-10-29 and so not repeated here: more seeds (option B, now run), bigger g's high direct seeds (a caveat, not followed up) and one g across tracks (dropped from the gain test).</p>
     </aside>
   </section>
 
 </div>
 
-<div class="foot">CANDII · pivot study phase 3, a bigger g and a bigger f · exploratory</div>
+<div class="foot">CANDII · pivot study phase 3 and 3b, a bigger g and a bigger f · exploratory</div>
 <div class="nbadge">speaker notes on · press n to hide</div>
 <div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
 <div class="count"><span id="cur"></span> / <span id="tot"></span></div>
@@ -592,6 +617,12 @@
            direct arm, direct m1, os, se, spread, direct label vs old D]
      optfail [arm, g, trained-CRPS gap vs old D, its label, reads as optimisation failure]
      checks {pass, fail, agree, disagree}
+     p3b   phase 3b, metric 1 through the base, one g per track, 6 seeds (results/t128p3b): runs, done; f / ref
+           [CRPS, oracle-scaled, scale error] (6-seed means); sd, range; gap (reference − bigger f), se, real_bar,
+           size_bar, ci [lo, hi], label; gap3, se3, rep_bar, replication (seeds 3–5); drift, drift_bar, control_a;
+           gap_p3 (seeds 0–2), prereg_p3; seeds {f, ref: [seed, CRPS, os, se]}; knobs {n, labels, rep_pass,
+           drift_fail}; readout {n, unmatched, max, label}; direct, trained {gap, se, label, replication, gap3,
+           drift, drift_bar, control_a, new_gap, new_label}; heldout {direction: same}
    =========================================================================== */
 const DATA = __DATA__;
 const COL={tr:'var(--tr)',ho:'var(--ho)',nv:'var(--nv)',nv2:'var(--nv2)',ok:'var(--ok)',ink:'var(--ink)',muted:'var(--muted)',
@@ -932,7 +963,49 @@ function figRank(){
 }
 
 /* ---------- render ---------- */
-const FIGS={figP2,figArms,figRoute,figRules,figM1,figM1k,figM2,figM3,figM4,figM5,figM9,figRank};
+/* ---------- phase 3b: six seeds ---------- */
+function figSeeds(){
+  const B=DATA.p3b,W=1160,top=50,H=420,ph=290;let s='';
+  const cf=ARM(VF).c,cr=ARM(VR).c;
+  // (a) per-seed values
+  const all=[...B.seeds.f,...B.seeds.ref].flatMap(x=>[x[1],x[2]]);
+  const lo=Math.floor(Math.min(...all)*200)/200,hi=Math.ceil(Math.max(...all)*200)/200;
+  const ax0=70,ax1=500,yy=linS(lo,hi,top+ph,top),xs=sd=>ax0+30+(ax1-ax0-60)*sd/5;
+  s+=T(0,22,'(a) Metric 1 per seed, through the base','ptitle','start','style="font-size:18px"');
+  for(let v=lo;v<=hi+1e-9;v+=0.005)s+=L(ax0,yy(v),ax1,yy(v),COL.grid,1)+T(ax0-8,yy(v)+5,f3(v),'tick','end');
+  s+=R(xs(2.5),top,ax1-xs(2.5),ph,COL.grid,'none',0,0,';fill-opacity:.4')+T(xs(4),top+16,'new seeds','cap','middle','style="font-size:13px"')+T(xs(1),top+16,'phase 3 / phase 2','cap','middle','style="font-size:13px"');
+  [[B.seeds.ref,cr,-7,B.ref[0]],[B.seeds.f,cf,7,B.f[0]]].forEach(([rows,c,dx,m])=>{
+    s+=L(ax0,yy(m),ax1,yy(m),c,2,'6 4');
+    rows.forEach(([sd,v,os])=>{const x=xs(sd)+dx;s+=L(x,yy(os),x,yy(v),c,2.2,'')+(sd<=2?Ci(x,yy(v),6.5,c):Ci(x,yy(v),6,'var(--paper)',c,2.4));});});
+  for(let k=0;k<6;k++)s+=T(xs(k),top+ph+20,k,'tick','middle');
+  s+=T((ax0+ax1)/2,top+ph+42,'seed','axlbl','middle','style="font-size:15px"')+rotY(16,top+ph/2,'CRPS (dot) · oracle-scaled part (stem foot)',14);
+  s+=divider(560,10,H-30);
+  // (b) the gap against its bars
+  const bx=600,bw=360,rows=[
+    ['phase 3, seeds 0–2',B.gap_p3,null,[[B.prereg_p3,'bar']]],
+    ['seeds 3–5 alone',B.gap3,null,[[B.rep_bar,'2 × SE']]],
+    ['all six seeds',B.gap,B.ci,[[B.real_bar,'real'],[B.size_bar,'size']]]];
+  const gv=rows.flatMap(r=>[r[1],...(r[2]||[]),...r[3].map(b=>b[0])]);
+  const glo=Math.floor(Math.min(0,...gv)*200)/200,ghi=Math.ceil(Math.max(...gv)*200)/200,gx=linS(glo,ghi,bx+160,bx+160+bw),rh=86;
+  s+=T(bx,22,'(b) Gap: reference − bigger f (above 0: bigger f lower)','ptitle','start','style="font-size:18px"');
+  for(let v=glo;v<=ghi+1e-9;v+=0.005)s+=L(gx(v),top-4,gx(v),top+rows.length*rh,COL.grid,1)+T(gx(v),top+rows.length*rh+18,sg(v,f3),'tick','middle');
+  s+=L(gx(0),top-6,gx(0),top+rows.length*rh,COL.ink,1.3);
+  rows.forEach(([lab,v,ci,bars],i)=>{const y=top+i*rh+rh/2-8,c=i===2?cf:COL.muted;
+    if(i%2===0)s+=R(bx+160,top+i*rh,bw,rh,COL.grid,'none',0,0,';fill-opacity:.35');
+    s+=T(bx+150,y+5,lab,'axlbl','end',`style="font-size:14.5px;font-weight:600;fill:${i===2?cf:'var(--body)'}"`);
+    if(ci)s+=L(gx(ci[0]),y,gx(ci[1]),y,c,2.4)+L(gx(ci[0]),y-7,gx(ci[0]),y+7,c,2.4)+L(gx(ci[1]),y-7,gx(ci[1]),y+7,c,2.4);
+    bars.forEach(([b,bl],j)=>s+=L(gx(b),y-14,gx(b),y+14,COL.accent,2.6,j?'':'3 2')+T(gx(b),y+30,bl,'cap','middle','style="font-size:12.5px;fill:var(--accent)"'));
+    s+=Ci(gx(v),y,7,c)+T(gx(v),y-16,sg(v,f4),'val','middle',`style="fill:${c};font-size:14px"`);});
+  s+=T(bx+160+bw/2,top+rows.length*rh+40,'gap in CRPS on counts (whisker: 95% confidence interval)','axlbl','middle','style="font-size:14.5px"');
+  // legend
+  const ly=H-6;
+  s+=Ci(6,ly-5,6,cf)+T(16,ly,'bigger f','cap','start','style="font-size:14px;fill:var(--body)"')+Ci(96,ly-5,6,cr)+T(106,ly,'reference','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=Ci(196,ly-5,6,COL.muted)+T(206,ly,'seeds 0–2','cap','start','style="font-size:14px;fill:var(--body)"')+Ci(290,ly-5,6,'var(--paper)',COL.muted,2.4)+T(300,ly,'seeds 3–5','cap','start','style="font-size:14px;fill:var(--body)"');
+  s+=legRef(384,ly,COL.muted,'six-seed mean')+L(600,ly-12,600,ly+2,COL.accent,2.6,'3 2')+T(608,ly,'bar a gain must clear (dashed: the noise bar of the row; solid: the size bar)','cap','start','style="font-size:14px;fill:var(--body)"');
+  return svg(W,H+4,s);
+}
+
+const FIGS={figP2,figArms,figRoute,figRules,figM1,figM1k,figM2,figM3,figM4,figM5,figM9,figRank,figSeeds};
 Object.entries(FIGS).forEach(([id,f])=>{try{const el=document.getElementById(id);if(el)el.innerHTML=f();}catch(e){console.error(id,e);}});
 
 /* ---------- the grid of arms ---------- */
@@ -950,7 +1023,7 @@ try{
       `<td>${nd?`${nd.done} of ${nd.assigned}`:'—'} · ${nv?`${nv.done} of ${nv.assigned}`:'—'}</td>`;tb.appendChild(tr);});
   putH('chips',[`<b>${C.g_per_track} g's, one per track, + 1 g across tracks</b>`,`<b>${C.seeds} seeds</b>, not paired across arms`,
     '<b>eval every 250 steps, patience 4</b>','<b>lr 1e-3</b>, batch 32, unchanged','<b>held out:</b> the 7.5M depth arm'].map(t=>`<span class="chip">${t}</span>`).join(''));
-  put('tRuns',`${C.arms} arms × ${C.g_per_track + 1} g's × ${C.seeds} seeds = ${C.runs} new runs, all scored directly and through the base (${C.done} of ${C.runs}), with a ${C.max_steps.toLocaleString('en')}-step cap, against ${C.ref_runs} phase-2 reference runs`);
+  put('tRuns',`${C.arms} arms × ${C.g_per_track + 1} g's × ${C.seeds} seeds = ${C.runs} new runs, all scored directly and through the base (${C.done} of ${C.runs}), with a ${C.max_steps.toLocaleString('en')}-step cap, against ${C.ref_runs} phase-2 reference runs; phase 3b added ${DATA.p3b.runs} runs (seeds ${DATA.p3b.seeds_new[0]}–${DATA.p3b.seeds_new.slice(-1)[0]}: bigger f and the reference, one g per track; ${DATA.p3b.done} of ${DATA.p3b.runs} scored)`);
 }catch(e){console.error('grid',e);}
 
 /* ---------- prose and headlines: every number from DATA ---------- */
@@ -1020,11 +1093,22 @@ try{
   putH('tRka',`<b>Gaps to the reference</b>, one g per track: ${rk(PT).filter(r=>r[0]!==VR).map(r=>`${sh(r[0]).replace(', through the base','')} ${sg(r[7],f4)} against a threshold of ${f4(r[9])}`).join('; ')}. Across tracks: ${rk(AC).filter(r=>r[0]!==VR).map(r=>`${sh(r[0]).replace(', through the base','')} ${sg(r[7])} against ${f3(r[9])}`).join('; ')}. The order is a reading, not a ranking that counts.`);
   put('nRk',`Direct, the same runs: ${GV.map(g=>`${g}: ${rk(g).map(r=>`${sh(r[11])} ${f3(r[12])} (${r[16]==='n/a'?'the reference':'vs old D: '+r[16]})`).join(', ')}`).join('; ')}.`);
 
+  // phase 3b: six seeds
+  const B=DATA.p3b,cl=x=>`${f3(x[0])} (${f3(x[1])} + ${f3(x[2])})`,mf=xs=>xs.reduce((p,x)=>p+x,0)/xs.length;
+  const nf=mf(B.seeds.f.filter(x=>x[0]>2).map(x=>x[1])),nr=mf(B.seeds.ref.filter(x=>x[0]>2).map(x=>x[1]));
+  const held=B.label.startsWith('gain'),repOK=B.replication==='PASS';
+  putH('hS',`With six seeds per arm, bigger f's gain through the base shrinks from ${f4(B.gap_p3)} to ${sg(B.gap,f4)}, ${B.label}${repOK?'; seeds 3–5 alone show the gain again':`; seeds 3–5 alone do not show it (${sg(B.gap3,f4)})`}`);
+  putH('tSa',`<b>Six seeds:</b> bigger f ${cl(B.f)}, reference ${cl(B.ref)}. Gap ${sg(B.gap,f4)}, standard error (SE) ${f4(B.se)}, 95% confidence interval ${sg(B.ci[0],f4)} to ${sg(B.ci[1],f4)}; real bar ${f4(B.real_bar)}, size bar ${f4(B.size_bar)}: <b>${B.label}</b>.`);
+  putH('tSb',`<b>Replication, seeds 3–5 alone:</b> bigger f ${f3(nf)}, reference ${f3(nr)}; gap ${sg(B.gap3,f4)} against a bar of ${f4(B.rep_bar)} (2 × SE): <b>${repOK?'replicates':'does not replicate'}</b>. ${B.gap3<0?'Bigger f reads slightly worse on the new seeds.':''}`);
+  putH('tSc',`<b>Control (a), kit drift:</b> the reference's new seeds read ${f4(Math.abs(B.drift))} ${B.drift<0?'lower':'higher'} than its old ones, bar ${f4(B.drift_bar)}: ${B.control_a==='PASS'?'pass, but close':'fail'}. <b>Control (b), readout:</b> the phase-3 rescoring of one phase-2 run matches its record on ${B.readout.n} pairs (largest |Δ| ${B.readout.max.toExponential(0)}): ${B.readout.label==='PASS'?'pass':'fail'}.`);
+  const sd=x=>`${sg(x.gap,f4)}, ${x.label}${x.control_a==='PASS'?'':` (kit drift fails here: the reference's new seeds read ${f4(Math.abs(x.drift))} lower against a bar of ${f4(x.drift_bar)}; on the new seeds alone ${sg(x.new_gap,f4)}, ${x.new_label})`}`;
+  put('nS',`Per knob, through the base: ${B.knobs.n} cells, every one ${andJ(B.knobs.labels)}; the new seeds alone show the gain on ${B.knobs.rep_pass.length} of ${B.knobs.n} (${andJ(B.knobs.rep_pass.map(k=>KNAME[k]))})${B.knobs.drift_fail.length?`; kit drift fails on ${andJ(B.knobs.drift_fail.map(k=>KNAME[k]))}`:''}. Six seeds, other readings (bigger f against old D, direct): never-trained ${sd(B.direct)}; trained pairs ${sd(B.trained)}; held-out 7.5M → base ${sd(B.heldout['7.5M->base'])}; base → 7.5M ${sd(B.heldout['base->7.5M'])}. Seed standard deviations through the base: bigger f ${f4(B.sd_f)}, reference ${f4(B.sd_ref)}.`);
+
   // discussion: one line per metric
   const minThr=f4(Math.min(...NEW2.map(a=>r1(a,PT)[15])));
-  putH('hD',`Six readings: the bigger models cost nothing elsewhere, and their gain through the base stays under the pre-registered bar`);
+  putH('hD',`The bigger models cost nothing elsewhere; their gain through the base stays under the pre-registered bar, and bigger f's ${held?'held':'did not hold'} at six seeds`);
   const cards=[
-    ['1 · never-trained, through the base','var(--s3)',`One g per track: bigger f ${f3(r1(VF,PT)[4])}, bigger g ${f3(r1(VG,PT)[4])}, reference ${f3(r1(VR,PT)[4])}. Gains ${f4(gain(VF,PT))} and ${f4(gain(VG,PT))}, threshold ${minThr}: ${andJ([...new Set(NEW2.map(a=>preH(r1(a,PT)[16])))])}. Across tracks: ${andJ([...new Set(NEW2.map(a=>preH(r1(a,AC)[16])))])}.`],
+    ['1 · never-trained, through the base','var(--s3)',`One g per track, three seeds: bigger f ${f3(r1(VF,PT)[4])}, bigger g ${f3(r1(VG,PT)[4])}, reference ${f3(r1(VR,PT)[4])}; gains ${f4(gain(VF,PT))} and ${f4(gain(VG,PT))}, threshold ${minThr}: ${andJ([...new Set(NEW2.map(a=>preH(r1(a,PT)[16])))])}. <b>Six seeds, bigger f:</b> ${f3(B.f[0])} against ${f3(B.ref[0])}, gap ${sg(B.gap,f4)}, ${B.label}; seeds 3–5 alone ${sg(B.gap3,f4)}.`],
     ['2 · generalisation gap','var(--s1)',`Negative for all, ${rng(GV.flatMap(g=>DIR3.map(a=>g2(a,g)[5])),v=>sg(v))}, for the pool reason of phase 2; ${c2.length?`${c2.length} small difference${c2.length>1?'s':''} from old D count${c2.length>1?'':'s'}`:'every bigger-model gap is within noise of old D'}.`],
     ['3 · trained pairs','var(--tr)',`No cost: ${rng(GV.flatMap(g=>[DG,DF].map(a=>m3r(a,g)[3])))} against old D ${rng(GV.map(g=>m3r(DR,g)[3]))}${c3.length?`, ${c3.length} cell${c3.length>1?'s':''} lower outside noise`:''}.`],
     ['4 · held-out depth','var(--ho)',`The interpolation to 7.5M is kept: ${l4.length-c4.length} of ${l4.length} gaps within noise of old D${w4.length?'':', and the rest below it'}.`],
@@ -1035,17 +1119,17 @@ try{
   // what follows
   const of=DATA.optfail,ofN=of.filter(x=>x[4]).length;
   const anyG=DATA.rank.some(r=>pre(r[10])==='gain');
-  putH('hF',anyG?`One size axis cleared its bar, so by the spec's rule a combined arm or a second size may follow; the options below are for the PI`:`No size axis cleared its bar, so by the spec's rule neither a combined arm nor a second size follows yet; the options below are for the PI`);
+  putH('hF',!held?`Option B ran and bigger f's gain did not hold at six seeds, so by the spec's rule neither a combined arm nor a second size follows; the options left are for the PI`:anyG?`One size axis cleared its bar, so by the spec's rule a combined arm or a second size may follow; the options below are for the PI`:`No size axis cleared its bar, so by the spec's rule neither a combined arm nor a second size follows yet; the options below are for the PI`);
   putH('tF1',`${ofN?`${ofN} of ${of.length}`:`None of the ${of.length}`} arm × g cells read as an optimisation failure: no bigger model is worse on trained pairs (gaps to old D ${of.map(x=>sg(x[2])).join(', ')}).`);
-  putH('tF2',`A combined arm or a second size follows only if an axis helps (PI). Neither gain clears the bar: bigger f ${f4(gain(VF,PT))} and bigger g ${f4(gain(VG,PT))} against ${minThr}, one g per track.`);
-  putH('tF3',`It means no gain above the stated threshold, not no effect. Bigger f's gain sits ${f4(r1(VF,PT)[15]-gain(VF,PT))} under its bar, with three seeds per cell.`);
-  putH('tOB',`Three more seeds per per-track g for bigger f and for the reference. It would teach whether the gain of ${f4(gain(VF,PT))} against a bar of ${f4(r1(VF,PT)[15])} holds, at the cost of re-running the reference.`);
+  putH('tF2',`A combined arm or a second size follows only if an axis helps (PI). Neither three-seed gain cleared its bar (bigger f ${f4(gain(VF,PT))}, bigger g ${f4(gain(VG,PT))}, against ${minThr}); at six seeds bigger f's gap is ${sg(B.gap,f4)}, ${B.label}.`);
+  putH('tF3',`It means no gain above the stated bars, not no effect. The six-seed 95% confidence interval, ${sg(B.ci[0],f4)} to ${sg(B.ci[1],f4)}, still holds gains up to ${sg(B.ci[1],f4)}${B.ci[1]<B.gap_p3?`, a little below phase 3's ${f4(B.gap_p3)}`:`, as large as phase 3's ${f4(B.gap_p3)}`}; six seeds do not rule out a small gain.`);
+  putH('tOB',`Ran: ${B.runs} runs, seeds ${B.seeds_new[0]}–${B.seeds_new.slice(-1)[0]}. Phase 3's gain of ${f4(gain(VF,PT))} became ${sg(B.gap,f4)} at six seeds (${B.label}), and seeds 3–5 alone gave ${sg(B.gap3,f4)}.`);
+  putH('tOA',`Keep the small g and f, and turn to another axis. The six seeds give the reading it would rest on: bigger f within seed noise of the reference. No compute cost.`);
 
   // open points
-  putH('tO1',`<b>Bigger f's gain.</b> One g per track it is ${f4(gain(VF,PT))}, just under the pre-registered ${f4(r1(VF,PT)[15])}. Read it as within noise and stop, or add seeds (option B)?`);
-  putH('tO2',`<b>Bigger g, direct, one g per track.</b> Its seeds are ${(r1(DG,PT)[8]||[]).map(f3).join(', ')} (spread ${f3(r1(DG,PT)[7])}), mostly scale error (${f3(r1(DG,PT)[6])}). Through the base the spread is ${f3(r1(VG,PT)[7])}. Look into the high seeds, or leave it as a caveat?`);
-  putH('tO3',`<b>One g across tracks.</b> The bars are ${NEW2.map(a=>f3(r1(a,AC)[15])).join(' and ')}, so no gain there could count. Keep the across-track g in the next phase, or drop it?`);
-  putH('tO4',`<b>Next phase.</b> Option A (close the scale question), B (more seeds for bigger f) or C (tune the learning rate)?`);
+  putH('tO1',`<b>Next phase.</b> Option B ran and bigger f's gap is ${sg(B.gap,f4)}, ${B.label}. Option A (close the scale question at this size) or C (tune the learning rate for the bigger models)?`);
+  putH('tO2',`<b>The record under the depth-law question.</b> The f size is a reading there only (PI). Record it as "bigger f: ${sg(B.gap,f4)}, 95% confidence interval ${sg(B.ci[0],f4)} to ${sg(B.ci[1],f4)}, ${B.label}, not replicated on seeds 3–5"?`);
+  putH('tO3',`<b>The reference's new seeds read lower.</b> Through the base by ${f4(Math.abs(B.drift))} (bar ${f4(B.drift_bar)}, a pass, but close); on trained pairs by ${f4(Math.abs(B.trained.drift))} (bar ${f4(B.trained.drift_bar)}, a fail). Accept it as a draw of seeds, or look into it before the record is written?`);
 }catch(e){console.error('prose',e);}
 
 /* ---------- navigation and speaker notes ---------- */

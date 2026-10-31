@@ -28,6 +28,15 @@ checkout's cruxvault/results/t128p3/; override with T128P3_RESULTS=<dir>.
 NAMES maps every arm code and g version to its plain name before anything enters DATA; the build
 fails if a code leaks into DATA or into the page. Stdlib only.
 
+Phase 3b (PI option B; spec plan/T126_ENCDEC_D2.md § "Phase 3b" and its Reading block): seeds 3-5 for
+bigger f and the small reference, one g per track. Its tables come from tools/t128p3/readings3b/; the
+default is the main checkout's cruxvault/results/t128p3b/; override with T128P3B_RESULTS=<dir>.
+  headline_table.tsv         metric 1 through the base, 6 seeds: means with split, gap, SE, the real
+                             and size bars, 95% CI, label, replication (seeds 3-5) and control (a)
+  per_seed_table.tsv         one row per arm, cell and seed, with the split
+  m1_direct_table.tsv, m3_trained_table.tsv, m4_heldout_table.tsv   the same reading, other metrics
+  n_table.tsv, checks.txt, readout_control.json                     runs, the checks, control (b)
+
     /Users/mforooz/miniforge3/envs/candii/bin/python cruxvault/presentations/t128p3-scale/build_deck.py
 """
 import csv, gzip, json, math, os, pathlib, re
@@ -35,6 +44,8 @@ import csv, gzip, json, math, os, pathlib, re
 HERE = pathlib.Path(__file__).resolve().parent
 R = pathlib.Path(os.environ.get(
     "T128P3_RESULTS", "/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxvault/results/t128p3"))
+R3B = pathlib.Path(os.environ.get(
+    "T128P3B_RESULTS", "/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/cruxvault/results/t128p3b"))
 NAMES = {"Dbigg": "bigger g (hidden width 256), direct",
          "Dbigf": "bigger f (64 channels), direct",
          "Dbiggviabase": "bigger g, through the base",
@@ -51,8 +62,8 @@ G_IN = 40
 REF_SIZES = (64, 32, 256)
 
 
-def tsv(name):
-    p = R / name
+def tsv(name, root=None):
+    p = (root or R) / name
     op = gzip.open(p, "rt") if name.endswith(".gz") else open(p)
     with op as f:
         return list(csv.DictReader(f, delimiter="\t"))
@@ -163,9 +174,63 @@ checks = {"pass": sum(l.startswith("PASS") for l in chk), "fail": sum(l.startswi
           "agree": sum(l.startswith("AGREE") for l in ver), "disagree": sum(l.startswith("DISAGREE") for l in ver)}
 assert checks["fail"] == 0 and checks["disagree"] == 0, checks
 
+# ---------------- phase 3b: six seeds for bigger f and the reference, one g per track ----------------
+hd = {(r["metric"], r["cell"]): r for r in tsv("headline_table.tsv", R3B)}
+h = hd[("m1_never", "all")]
+assert (h["arm_f"], h["arm_ref"]) == ("Dbigfviabase", "Dviabase"), (h["arm_f"], h["arm_ref"])
+ps = tsv("per_seed_table.tsv", R3B)
+p3b_seeds = {key: sorted([int(r["seed"]), num(r["value"], 6), num(r["crps_oracle_scaled_all"], 6),
+                          num(r["scale_error_all"], 6)] for r in ps
+                         if r["metric"] == "m1_never" and r["cell"] == "all" and r["arm"] == code)
+             for key, code in (("f", "Dbigfviabase"), ("ref", "Dviabase"))}
+assert all(len(v) == 6 for v in p3b_seeds.values()), p3b_seeds
+mean = lambda xs: sum(xs) / len(xs)
+gap_p3 = mean([x[1] for x in p3b_seeds["ref"][:3]]) - mean([x[1] for x in p3b_seeds["f"][:3]])
+# the seeds 0-2 gap must be phase 3's gain on the same cell (m1_never_table, one g per track, all, never)
+_m1 = {(r[0], r[1]): r for r in m1 if r[2] == "all" and r[3] == "never"}
+_g = _m1[(nm("Dviabase"), nm("per_track"))][4] - _m1[(nm("Dbigfviabase"), nm("per_track"))][4]
+assert abs(gap_p3 - _g) < 1e-4, (gap_p3, _g)
+knob = [r for (m, c), r in hd.items() if m == "m1_never" and c != "all"]
+def side(r):
+    return {"gap": num(r["gap"], 6), "se": num(r["se"], 6), "label": r["label"], "replication": r["replication"],
+            "gap3": num(r["gap3"], 6), "drift": num(r["drift_delta"], 6), "drift_bar": num(r["drift_bar"], 6),
+            "control_a": r["control_a"], "new_gap": num(r.get("new_gap"), 6), "new_label": r.get("new_label") or None}
+m3b = tsv("m3_trained_table.tsv", R3B)
+m4b = tsv("m4_heldout_table.tsv", R3B)
+m1d = {r["cell"]: r for r in tsv("m1_direct_table.tsv", R3B)}
+nt3 = [r for r in tsv("n_table.tsv", R3B) if r["tree"] == "seeds3b"]
+rc = json.loads((R3B / "readout_control.json").read_text())
+chk3 = (R3B / "checks.txt").read_text().splitlines()
+# the only FAIL line allowed is the replication reading itself (a reading, not a broken check)
+assert all(l.startswith("FAIL replication") for l in chk3 if l.startswith("FAIL")), chk3
+p3b = {"runs": sum(int(float(r["assigned"])) for r in nt3),
+       "done": sum(min(int(float(r["LAW_DONE"])), int(float(r["viabase_LAW_DONE"]))) for r in nt3),
+       "arms": len(nt3), "seeds_new": sorted({x[0] for x in p3b_seeds["f"]})[3:],
+       "f": [num(h["mean_f"], 6), num(h["f_crps_oracle_scaled_all"], 6), num(h["f_scale_error_all"], 6)],
+       "ref": [num(h["mean_ref"], 6), num(h["ref_crps_oracle_scaled_all"], 6), num(h["ref_scale_error_all"], 6)],
+       "sd_f": num(h["sd_f"], 6), "sd_ref": num(h["sd_ref"], 6),
+       "range_f": num(h["range_f"], 6), "range_ref": num(h["range_ref"], 6),
+       "gap": num(h["gap"], 6), "se": num(h["se"], 6), "real_bar": num(h["real_bar"], 6),
+       "size_bar": num(h["size_bar"], 6), "ci": [num(h["ci_lo"], 6), num(h["ci_hi"], 6)], "label": h["label"],
+       "gap3": num(h["gap3"], 6), "se3": num(h["se3"], 6), "rep_bar": num(h["rep_bar"], 6),
+       "replication": h["replication"], "drift": num(h["drift_delta"], 6), "drift_bar": num(h["drift_bar"], 6),
+       "control_a": h["control_a"], "gap_p3": round(gap_p3, 6),
+       "prereg_p3": _m1[(nm("Dbigfviabase"), nm("per_track"))][15],
+       "seeds": p3b_seeds,
+       "knobs": {"n": len(knob), "labels": sorted({r["label"] for r in knob}),
+                 "rep_pass": sorted(r["cell"] for r in knob if r["replication"] == "PASS"),
+                 "drift_fail": sorted(r["cell"] for r in knob if r["control_a"] != "PASS")},
+       "readout": {"n": rc["n_pairs"], "unmatched": rc["n_unmatched"], "max": rc["max_abs_delta"],
+                   "label": rc["control_b"]},
+       "direct": side(m1d["all"]),
+       "trained": side(next(r for r in m3b if r["cell"] == "all")),
+       "heldout": {r["cell"]: side(r) for r in m4b},
+       "checks": {"pass": sum(l.startswith("PASS") for l in chk3)}}
+assert p3b["readout"]["label"] == "PASS" and p3b["control_a"] in ("PASS", "FAIL")
+
 data = {"arms": [nm(c) for c in ORDER], "counts": counts, "n": n, "size": size, "m1": m1, "m2": m2,
         "m3": m3, "m4": m4, "m5": m5, "m9": m9, "m9_runs": m9_runs, "stepconf": stepconf, "rank": rank,
-        "optfail": optfail, "checks": checks}
+        "optfail": optfail, "checks": checks, "p3b": p3b}
 blob = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 assert not CODES.search(blob), "arm code leaked into DATA: " + CODES.search(blob).group(0)
 src = (HERE / "deck_src.html").read_text(encoding="utf-8")
@@ -174,4 +239,6 @@ out = src.replace("__DATA__", blob)
 assert not CODES.search(out), "arm code in the page: " + CODES.search(out).group(0)
 (HERE / "index.html").write_text(out, encoding="utf-8")
 print(f"wrote {HERE / 'index.html'} from {R}: {counts['done']} of {counts['runs']} runs scored; "
-      f"{len(m9_runs)} runs with steps; {checks['pass']} checks pass, {checks['agree']} second-method agreements")
+      f"{len(m9_runs)} runs with steps; {checks['pass']} checks pass, {checks['agree']} second-method agreements; "
+      f"phase 3b from {R3B}: {p3b['done']} of {p3b['runs']} runs, gap {p3b['gap']:+.4f} ({p3b['label']}), "
+      f"replication {p3b['replication']}, controls {p3b['control_a']} / {p3b['readout']['label']}")
