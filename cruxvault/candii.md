@@ -17,10 +17,10 @@ A self-supervised epigenome imputer/denoiser over raw counts, emitting a Negativ
 
 ## Programme
 
-Two strands of work run under this root (as of 2026-10-24).
+Two strands of work run under this root (as of 2026-10-31).
 
 - **The benchmark.** A leaderboard scores CANDI and rival imputation methods on the EIC challenge tracks, with a distributional metric suite (`EVAL.md`, `plan/BENCHMARK_DESIGN.md`, `plan/LEADERBOARD_PRD.md`). This work lives in the taskhub, for example [[t81_retrain_every_trainable_method_under|the uniform retrain]] and [[t99_stamp_24_marginal_s_genome_wide_stor|the genome-wide marginal rows]]. No question node holds its results yet. The merge gate for experiment branches waits on it (`CLAUDE.md`).
-- **The counterfactual testbed.** [[q1_do_the_recorded_experimental_covariates_|The covariate question]] asks whether the recorded covariates alone carry enough information to map one processing of a track onto another. Seven EIC tracks were reprocessed with the ENCODE pipelines into a base plus arms that change one of ten knobs. A small generator g reads the source and target covariates and outputs a transformation f of the source track. The readings so far are exploratory: g beats a scrambled-covariate twin on trained pairs, gains less on never-trained pairs, and misses the depth law.
+- **Covariate artifact correction (CAC), on the counterfactual testbed.** [[q1_do_the_recorded_experimental_covariates_|The covariate question]] asks whether the recorded covariates alone carry enough information to map one processing of a track onto another. Seven EIC tracks were reprocessed with the ENCODE pipelines into a base plus arms that change one of ten knobs. A small generator g reads the source and target covariates and outputs a transformation f of the source track. g beats a scrambled-covariate twin on trained pairs, gains less on never-trained pairs, and misses the depth law unless it pivots through the base. CANDI's own covariate use (the CANDI-training question) is CANDI's current stage, not a CAC run.
 
 ## Navigate
 

@@ -20,7 +20,7 @@ When the model changes a track's sequencing depth, its predicted total should sc
 
 ## TL;DR
 
-The depth law: on a pair of runs that differ only in sequencing depth, the predicted count scale (log2 of the sum of predicted means over the sum of source counts) should equal the log2 depth ratio. Every g → f design in [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]] and in [[q5_does_a_depth_offset_on_f_the_source_dept|the depth-offset grid]] meets it on trained base ↔ arm pairs and misses it on never-trained arm → arm pairs. The +1 pseudocount, the loss, the encoder-decoder designs and the sizes of g and f tried do not close the miss; chaining two trained maps through the base does. Exploratory (PI 2026-10-19): no bars. It is answered when removing one cause brings never-trained depth pairs to the trained-pair error, and keeping it does not.
+CAC: why corrections miss the depth law. The depth law: on a pair of runs that differ only in sequencing depth, the predicted count scale (log2 of the sum of predicted means over the sum of source counts) should equal the log2 depth ratio. Every g → f design in [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]] and in [[q5_does_a_depth_offset_on_f_the_source_dept|the depth-offset grid]] meets it on trained base ↔ arm pairs and misses it on never-trained arm → arm pairs. The +1 pseudocount, the loss, the encoder-decoder designs and the sizes of g and f tried do not close the miss; chaining two trained maps through the base does. Exploratory (PI 2026-10-19): no bars. It is answered when removing one cause brings never-trained depth pairs to the trained-pair error, and keeping it does not.
 
 ## Motivation
 

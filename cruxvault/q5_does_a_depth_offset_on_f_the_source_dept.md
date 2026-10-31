@@ -20,7 +20,7 @@ A model predicts a track's read counts under other lab settings. Here it first d
 
 ## TL;DR
 
-The offset helps only design A, mostly in scale error. No design follows the depth law. The settings still improve the mean beyond plain d′/d scaling. The no-covariates twin of design D nearly follows the law while the real D misses it, so g's use of the covariates causes the miss; [[q7_why_do_the_covariate_conditioned_g_f_des|the depth-law-miss question]] takes this up.
+CAC: a depth offset on f. The offset helps only design A, mostly in scale error. No design follows the depth law. The settings still improve the mean beyond plain d′/d scaling. The no-covariates twin of design D nearly follows the law while the real D misses it, so g's use of the covariates causes the miss; [[q7_why_do_the_covariate_conditioned_g_f_des|the depth-law-miss question]] takes this up.
 
 ## Question
 

@@ -8,6 +8,8 @@ _This file starts empty on purpose. A seeded glossary would put words in your mo
 
 ## Terms
 
+- **CAC** — covariate artifact correction: learning to map a track across a change in its recorded processing covariates, studied on the counterfactual testbed
+
 ## Not jargon
 
 _(checked, dismissed, never proposed again)_

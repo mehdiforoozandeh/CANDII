@@ -20,7 +20,7 @@ If you split one experiment's reads into two random halves, the two halves alrea
 
 ## TL;DR
 
-Every covariate correction is read against a floor: the change that read resampling alone causes. This asks three things on the t117 pseudoreplicates (pr1/pr2 halves of all 130 counterfactual products), thinned along a depth ladder: how much resampling moves peak height, 1 kb shape and per-bin divergence; where in the genome the split-half disagreement concentrates, with signal level fitted first as the null; and how it shrinks with depth, read at 30M. It is settled when the 30M floor is stated per mark class with its depth curve, and the regional pattern is named or shown to be absent. The floor is the oracle for pairs that share no reads and context for pairs that do (PI rulings 2026-10-29, 2026-10-30; see Protocol).
+CAC: the resampling floor no correction can go below. Every covariate correction is read against a floor: the change that read resampling alone causes. This asks three things on the t117 pseudoreplicates (pr1/pr2 halves of all 130 counterfactual products), thinned along a depth ladder: how much resampling moves peak height, 1 kb shape and per-bin divergence; where in the genome the split-half disagreement concentrates, with signal level fitted first as the null; and how it shrinks with depth, read at 30M. It is settled when the 30M floor is stated per mark class with its depth curve, and the regional pattern is named or shown to be absent. The floor is the oracle for pairs that share no reads and context for pairs that do (PI rulings 2026-10-29, 2026-10-30; see Protocol).
 
 ## Motivation
 
