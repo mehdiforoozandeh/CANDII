@@ -18,7 +18,7 @@ Parent:: [[q1_do_the_recorded_experimental_covariates_]]
 If two p-value tracks were called from the very same reads but with a different background or a different smoothing, can knowing that setting translate one into the other? Nobody has tested it yet; early readings say the settings help a lot.
 
 ## TL;DR
-Four choices act at or after peak calling and leave the treatment counts bit-identical to base: [[h7_conditioning_on_the_recorded_control_to_|the control ratio]], [[h8_conditioning_on_the_recorded_control_ide|control identity]], [[h9_conditioning_on_the_recorded_control_dep|control depth]] and [[h10_conditioning_on_the_recorded_fragment_ex|fragment extension]]. Each has a counterfactual pair built by the ENCODE pipeline with that one choice changed and recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values predicts the other member's −log10 p signal better than one-warp by the margin of [[q1_do_the_recorded_experimental_covariates_|the parent question's locked protocol]]; a transformation whose count prediction moves has produced an invalid run. It answers yes only if every child holds. No child has been tested; exploratory readings are summarised below.
+Four choices act at or after peak calling and leave the treatment counts bit-identical to base: [[h7_conditioning_on_the_recorded_control_to_|the control ratio]], [[h8_conditioning_on_the_recorded_control_ide|control identity]], [[h9_conditioning_on_the_recorded_control_dep|control depth]] and [[h10_conditioning_on_the_recorded_fragment_ex|fragment extension]]. Each has a counterfactual pair built by the ENCODE pipeline with that one choice changed and recorded ([[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]). The question is whether a transformation conditioned on the source and target values predicts the other member's −log10 p signal better than its no-covariates twin by more than 2 × seed wobble, the per-child checks set by the PI on 2026-10-31 in place of [[q1_do_the_recorded_experimental_covariates_|the parent question's]] one-warp → oracle bar; a transformation whose count prediction moves has produced an invalid run. It answers yes only if every child holds. No child has been tested; exploratory readings are summarised below.
 
 ## Motivation
 
@@ -29,7 +29,7 @@ Same origin as the read-selection knobs (PI, 2026-09-17/18). These four knobs ac
 Do the covariates that record how the control and the peak caller were configured carry enough information to map the p-value track across a change in one of them?
 
 ## Protocol
-Locked before any run: gap-closed is read on the −log10 p axis only; the count-unchanged control and the shuffled-covariate twin are required on every child.
+Locked before any run: each child is read on the −log10 p axis only, and the count-unchanged control is required on every child. PI ruling 2026-10-31: the children are scored against the no-covariates twin (C and C′ re-scrambled at every step), not by q1's one-warp → oracle gap-closed; a C′ swapped at scoring is a second outcome-neutral control.
 
 ## Answer so far
 

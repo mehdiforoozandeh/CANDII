@@ -29,7 +29,7 @@ The network that turns one track into another may be too narrow to learn how seq
 
 ## TL;DR
 
-f, the convolutional network that maps a source track to a target track, may be too narrow to carry the depth law onto pairs it never trained on. This claims that f at 64 channels, twice the 32 of old D, with the same receptive field, g hidden width, training pairs and loss, brings never-trained depth pairs onto the law. A miss at 64 channels refutes it at that width. Exploratory, like its parent: readings, no bars. It is the sibling of [[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]].
+f, the convolutional network from source track to target track, may be too narrow to carry the depth law onto never-trained pairs. At 64 channels (old D: 32), with the same g hidden width, training pairs and loss, f should bring never-trained depth pairs onto the law; a miss refutes it at that width. Exploratory; sibling of [[h20_a_larger_g_with_the_same_training_pairs_|the g-size hypothesis]].
 
 ## Expect
 
@@ -43,13 +43,13 @@ Chance: a single seed or track happens to land near the law; the median over 3 s
 
 ## Problem Statement
 
-The depth law: when two runs of one sample differ only in sequencing depth, the predicted count scale (log2 of the summed predicted means over the summed source counts) should equal the log2 read ratio. Each track was reprocessed into arms that change one setting from a base; training uses base ↔ arm pairs only. Every g → f design meets the law on trained pairs and misses it on never-trained arm → arm pairs ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]). Width is a cheap suspect to rule out before a structural fix.
+Every g → f design meets the depth law on trained base ↔ arm pairs and misses it on never-trained arm → arm pairs ([[h19_g_fits_trained_base_arm_depth_pairs_but_|the trained versus never-trained hypothesis]]). Width is a cheap suspect to rule out before a structural fix.
 
-One confound is built in: g sets one FiLM scale and one shift per channel per layer, so doubling f's channels doubles g's output layer (256 → 512 values; g grows from 23 k to 40 k parameters). A pass cannot separate f's width from that larger g head.
+Built-in confound: g sets one FiLM scale and shift per channel per layer, so doubling f's channels doubles g's output layer (256 → 512 values; g grows from 23 k to 40 k parameters). A pass cannot separate f's width from that larger g head.
 
 ## Idea / Hypothesis
 
-Old D's f is 4 dilated convolution layers (dilations 1, 2, 4, 8; kernel 5; a 61-bin field) at 32 channels, about 16 k parameters. At 64 channels it has about 62 k, with the same layers and field. If width limits f, the wider f closes the never-trained gap more than it changes the trained-pair error.
+Old D's f is 4 dilated convolution layers (dilations 1, 2, 4, 8; kernel 5; a 61-bin field) at 32 channels, about 16 k parameters; at 64 channels it has about 62 k. If width limits f, the wider f closes the never-trained gap more than it changes the trained-pair error.
 
 ## Verifiables
 
@@ -83,11 +83,10 @@ Phase 3 of the pivot study ran it (arm "bigger f": 7 per-track g + 1 across-trac
 
 ## Findings
 
-Exploratory readings; the PI has not ruled. Median |log2 error| of the predicted scale, chr19 + chr21; seed spread in brackets.
+Exploratory. Median |log2 error| of the predicted scale, chr19 + chr21, seed spread in brackets:
 
-- On never-trained depth → depth pairs, f at 64 channels misses the law: 0.41 (0.23) per-track g, 0.34 (0.10) across-track g, against old D at 0.29 (0.05) and 0.34 (0.24). The gaps are within noise. It fits trained pairs (0.05).
-- Read through the base it stays near the law: 0.09 and 0.11, as old D (0.11 and 0.07).
-- On never-trained arm → arm CRPS through the base, per-track g, it gives 0.530 (0.526 + 0.004; spread 0.005) against old D's 0.545 (0.537 + 0.008; spread 0.008). The gain of 0.0146 was just under the bar set before the run (0.015).
-- With 6 seeds the gain shrinks to 0.006: bigger f 0.533 (0.528 + 0.005) against old D's 0.539 (0.532 + 0.007). The standard error is 0.003, the bar for a real gain 0.013, and the 95% interval −0.002 to +0.013: within seed noise. On the three new seeds alone, bigger f is slightly worse (−0.003). Both controls pass: the reference's new seeds match its old ones (Δ −0.011, bar 0.012), and the readout reproduces a phase-2 run exactly. On trained pairs the reference's new seeds read 0.009 lower than its old ones (bar 0.004, mostly deduplication and paired end); the PI ruled it a draw of seeds (2026-10-31).
-- The PI closed the scale question at this size on 2026-10-31 (option A): no wider f or learning-rate sweep follows.
-- Trained-pair and held-out 7.5M CRPS are slightly lower than old D's with per-track g (−0.009 and −0.005), both passing the noise rule.
+- Never-trained depth → depth: 0.41 (0.23) per-track g, 0.34 (0.10) across-track g; old D 0.29 (0.05), 0.34 (0.24); within noise. Through the base: 0.09 and 0.11; old D 0.11 and 0.07.
+- Never-trained arm → arm CRPS through the base, per-track g, 3 seeds: 0.530 (0.526 + 0.004; spread 0.005) against old D's 0.545 (0.537 + 0.008; spread 0.008); pre-run bar 0.015.
+- 6 seeds: 0.533 (0.528 + 0.005) against 0.539 (0.532 + 0.007); standard error 0.003, bar 0.013. The three new seeds alone favour old D (−0.003). Both controls pass: the reference's new seeds match its old ones (Δ −0.011, bar 0.012), and the readout reproduces a phase-2 run exactly. On trained pairs the reference's new seeds read 0.009 lower (bar 0.004, mostly deduplication and paired end); PI ruling 2026-10-31: a draw of seeds.
+- Trained-pair and held-out 7.5M CRPS are −0.009 and −0.005 against old D, per-track g, both passing the noise rule.
+- Closure was option A: no wider f or learning-rate sweep follows.

@@ -30,7 +30,7 @@ If you know how two versions of one experiment were processed, a model can turn 
 
 ## TL;DR
 
-A generator g reads the covariates C and C′ and outputs a transformation f; f(X) predicts X′ per bin. Pairs come from [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]. The competitor is g trained with scrambled covariates. So far, not judged: g beats that twin on held-out chromosomes almost everywhere; the gain shrinks on never-trained arm → arm pairs. Every chosen design misses the swap check and the depth law.
+A generator g reads the covariates C and C′ and outputs a transformation f; f(X) predicts X′ per bin. Pairs come from [[t112_build_the_counterfactual_arms_for_t|the counterfactual-arms task]]. The competitor is g trained with scrambled covariates (PI 2026-09-25).
 
 ## Expect
 
@@ -43,9 +43,9 @@ Normalization: the covariates are ignored — g does no better than the same mod
 
 ## Problem Statement
 
-CANDI's zero-shot claims rest on covariate conditioning that cannot be isolated inside CANDI. Here each pair differs in one recorded knob; the question is whether the covariates alone reproduce its effect, as a relation between C and C′ (PI 2026-09-25). It replaces the one-warp design of [[h1_conditioning_on_the_recorded_sequencing_|the depth claim]] and [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]].
+CANDI's covariate conditioning cannot be isolated inside CANDI. Here each pair differs in one recorded knob, and the covariates alone must reproduce its effect as a relation between C and C′. This replaces the one-warp design of [[h1_conditioning_on_the_recorded_sequencing_|the depth claim]] and [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]].
 
-Why this design (PI, 2026-09-25): one-warp "is not using C and C' at all", so beating it does not show that the covariates did any work. The PI wanted a model that learns how C and C′ change X into X′: "if C is depth and its 15M and if C' is 30M, then X' peak must be twice as big". So the competitor became the same model with the covariates scrambled, and the pseudoreplicate oracle was dropped once it proved not to be a floor ("let's forget about the oracle"). The PI also ruled that training runs both ways (base → arm and arm → base), so the swap check gates the claim.
+PI rulings, 2026-09-25: one-warp "is not using C and C' at all", so beating it does not show that the covariates did any work; the model must learn how C and C′ change X into X′ (a 15M → 30M depth change must double a peak). The pseudoreplicate oracle was dropped because it proved not to be a floor.
 
 ## Idea / Hypothesis
 
@@ -69,10 +69,10 @@ A generator conditioned on the source and target covariates produces the transfo
 
 Run under [[t118_learn_the_covariate_conditioned_tra|the generator task]]; design in `plan/T118_COUNTERFACTUAL_F.md`, run record in `plan/T118_STATUS.md`.
 
-- 7 tracks; base ↔ arm training pairs, both directions; chr22 validates; chr19 + chr21 score.
+- 7 tracks; base ↔ arm training pairs, both directions (PI 2026-09-25), so the swap check gates the claim.
 - f is one of the designs A–D of [[q4_how_much_capacity_does_a_covariate_condi|the capacity question]]; chr22 picks the judged design.
-- g per track and g across tracks, 3 seeds each; NB for counts, log-normal for −log10 p.
-- Twins: no-covariates and labels-as-ids. The pseudoreplicate oracle was dropped (PI 2026-09-25).
+- g per track and g across tracks, 3 seeds each.
+- Twins: no-covariates and labels-as-ids.
 
 ## Run Links
 
@@ -98,10 +98,8 @@ Run under [[t118_learn_the_covariate_conditioned_tra|the generator task]]; desig
 
 Exploratory drafts (2026-09-25 to 10-19), not ticked. Bars are 2 × the real g's 3-seed wobble, per mark class.
 
-- Chosen: C (across-track g), D (per-track, counts), A (per-track, p).
-- Beats the no-covariates twin: 5–6 of 6 cells; shuffle 4–6 of 6.
-- Swap unmet everywhere: median |log(mean / X)| 0.19–0.22 in counts, 0.46–0.55 in p (bar 0.1).
-- Depth law unmet: worst-pair error 0.19–1.36 (bar 0.10). The real data obey the law ([audit](results/t122/AUDIT.md)).
-- Law test on never-trained pairs against that twin: 4–6 of 6 in counts, 1–3 of 6 in p.
-- Relative gain over that twin, median of 16 configurations, trained / never-trained one knob / two knobs: counts 0.29 / 0.11 / 0.16; p 0.15 / 0.06 / 0.004.
-- Caveats: exploding p pairs make p means unreadable; the DNase MAPQ arms equal the base; no oracle-scaled / scale-error split exists here.
+- Chosen: C (across-track g), D (per-track, counts), A (per-track, p). Shuffle twin beaten in 4–6 of 6 cells.
+- Swap: median |log(mean / X)| 0.19–0.22 in counts, 0.46–0.55 in p (bar 0.1).
+- Depth law: worst-pair error 0.19–1.36 (bar 0.10); the real data obey it ([audit](results/t122/AUDIT.md)).
+- Never-trained pairs against the no-covariates twin: law test 4–6 of 6 in counts, 1–3 of 6 in p. Median gain of 16 configurations, trained / one knob / two knobs: counts 0.29 / 0.11 / 0.16; p 0.15 / 0.06 / 0.004.
+- Exploding p pairs make p means unreadable; the DNase MAPQ arms equal the base; no oracle-scaled / scale-error split exists.

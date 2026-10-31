@@ -26,7 +26,7 @@ Knowing how deeply two experiments were sequenced is enough to turn one experime
 
 ## TL;DR
 
-g reads the source's covariates C and the target's covariates C′ and outputs a map f; f(X) predicts the target X′ as NB counts. The pairs are the t112 depth arms: a 30M-read base against its 15M, 7.5M and 3.75M subsamples. The claim is that depth conditioning closes the gap that one-warp leaves.
+g reads the source's covariates C and the target's covariates C′ and outputs a map f; f(X) predicts the target X′ as NB counts. The pairs are the t112 depth arms: a 30M-read base against its 15M, 7.5M and 3.75M subsamples. Depth conditioning should close the gap that one-warp leaves.
 
 ## Expect
 
@@ -39,9 +39,9 @@ Normalization: the pairs differ by one global monotone value-axis map, so a cova
 
 ## Problem Statement
 
-Depth is the weak arm. Each depth arm is a binomial thinning of the base, and NB is closed under thinning, so the depth map has a closed-form answer. A win is weak evidence for [[q1_do_the_recorded_experimental_covariates_|the parent question]]; [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]] carries more weight. The literature names a stronger competitor: separate quantile normalisation of peak and background signal ([[signal-normalization-in-epigenomics]], [[quantile-normalization]]). PI ruling 2026-09-16: one-warp stays the denominator.
+Each depth arm is a binomial thinning of the base, and NB is closed under thinning, so the depth map has a closed-form answer. Depth is therefore the cheapest apparatus check before the harder knobs, but a win is weak evidence for [[q1_do_the_recorded_experimental_covariates_|the parent question]]; [[h2_conditioning_on_the_recorded_run_type_pr|the run-type claim]] carries more weight. The literature names a stronger competitor: separate quantile normalisation of peak and background signal ([[signal-normalization-in-epigenomics]], [[quantile-normalization]]). PI ruling 2026-09-16: one-warp stays the denominator.
 
-Why depth first: it has a closed-form answer (binomial thinning), so it is the cheapest apparatus check before the harder knobs. The PI chose to test the covariates outside CANDI first — "let's do these experiments in vitro (not in vivo -- not in candi)" (2026-09-01) — because CANDI's depth response is a fixed log-depth offset, so a win inside CANDI would not show that the covariates did any work.
+The PI chose on 2026-09-01 to test the covariates outside CANDI ("in vitro"), because CANDI's depth response is a fixed log-depth offset, so a win inside CANDI would not show that the covariates did any work.
 
 ## Idea / Hypothesis
 
@@ -193,14 +193,7 @@ and the rule content-hash when the node goes running.
 
 ## Planned Intervention
 
-Four rungs on the t112 depth pairs (trained base ↔ depth and never-trained depth → depth), scored on chr19 + chr21 on macro NB CRPS against the real target (PI 2026-09-16):
-
-- **blind**: t118's no-covariates twin.
-- **onewarp**: one covariate-free monotone map fitted per pair (QuantileMatching).
-- **model**: t118's covariate-conditioned g → f.
-- **oracle**: the exact nested-read oracle (PI ruling 2026-10-30, item v).
-
-Headline gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t130_score_the_one_warp_check_set_blind_|The scoring task]] scored the existing runs.
+Four rungs on the depth pairs named in `measurement` (PI 2026-09-16): **blind** is t118's no-covariates twin; **onewarp** is one covariate-free monotone map per pair (QuantileMatching); **model** is t118's covariate-conditioned g → f; **oracle** is the exact nested-read oracle (PI ruling 2026-10-30, item v). Gap-closed = (D_onewarp − D_model) / (D_onewarp − D_oracle). [[t130_score_the_one_warp_check_set_blind_|The scoring task]] scored the existing runs.
 
 ## Run Links
 
@@ -219,8 +212,7 @@ Blind check set, scored 2026-10-30: Nibi `/project/def-maxwl/mforooz/t130` (extr
 
 Readings, not judged. Against the no-covariates twin (2026-10-19):
 
-- The real depth arms obey the depth law: totals match within 0.71 % (84 pairs).
+- The real depth arms obey the depth law: totals match within 0.71 % (84 pairs). Median |log2 scale error| is 0.04–0.09 trained and 0.18–0.55 untrained.
 - Counts, median relative CRPS gain over 16 design × g configurations: 0.46 on trained pairs (16 of 16 clear 2 × seed |Δ|) and 0.16 on never-trained depth → depth pairs (13 of 16). No CRPS split exists for these gains.
 - −log10 p: exploding pairs make the pooled gain unreadable; median-pair gain 0.21 trained, 0.12 never-trained.
-- Depth law, median |log2 scale error|: 0.04–0.09 trained, 0.18–0.55 untrained.
-- Nested-oracle blind pass (2026-10-30), counts: base → arm, B–D close 0.77–0.92 of the gap per class, > 2 × seed |Δ| in 18/18 cells; A ≤ 0 in DNase, narrow. arm → base: C–D 1.1–3.7 (past the per-bin ceiling), B 0.23–0.86. Model scale_error ≤ 0.011 base → arm, ≤ 0.17 arm → base. Arm dispersion 0.995–1.006 of binomial.
+- Nested-oracle pass (2026-10-30): design A is ≤ 0 in DNase and narrow marks base → arm. Arm → base, C–D close 1.1–3.7 (past the per-bin ceiling) and B 0.23–0.86. Model scale_error is ≤ 0.011 base → arm and ≤ 0.17 arm → base.

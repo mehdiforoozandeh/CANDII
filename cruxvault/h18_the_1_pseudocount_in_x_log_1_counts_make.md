@@ -29,7 +29,7 @@ The model adds 1 to every count before it reads it, and that could bend how pred
 
 ## TL;DR
 
-Design A predicts log μ = a + b·log(1 + X). With the parameters a pure rescale needs (a = ln r, b = 1, r the depth ratio), μ = r(1 + X), so the predicted total overshoots r by log2(1 + 1/m), m the source's mean count per bin. If the pseudocount is the cause, removing it brings never-trained depth pairs onto the law. Design A0 in [[t127_head_to_head_poisson_nll_mean_nb_nl|the loss head-to-head task]] removes it: μ = e^a X^b + e^c, with e^c a learned floor. Rung A0 still misses never-trained pairs, so the +1 is not the cause.
+Design A predicts log μ = a + b·log(1 + X). With the parameters a pure rescale needs (a = ln r, b = 1, r the depth ratio), μ = r(1 + X), so the predicted total overshoots r by log2(1 + 1/m), m the source's mean count per bin. If the pseudocount is the cause, removing it brings never-trained depth pairs onto the law. Design A0 in [[t127_head_to_head_poisson_nll_mean_nb_nl|the loss head-to-head task]] removes it: μ = e^a X^b + e^c, with e^c a learned floor, so it can express the law exactly.
 
 ## Expect
 
@@ -48,7 +48,7 @@ Chance: a single seed or track happens to land near the law; the median over 3 s
 
 Low-depth sources have a small m, so the pseudocount is large relative to the signal exactly where the never-trained depth pairs start.
 
-Origin: the PI's reading of the agent's derivation, "you are saying that if we just through out the pseudocount (+1) is hurting the depth law?" (2026-10-19). Rung A0 (μ = eᵃXᵇ + eᶜ, no +1) was the direct test, run jointly with the loss hypothesis.
+Origin: the PI's reading of the agent's derivation, "you are saying that if we just through out the pseudocount (+1) is hurting the depth law?" (2026-10-19). Rung A0 was the direct test, run jointly with the loss hypothesis.
 
 ## Idea / Hypothesis
 
@@ -90,6 +90,4 @@ Checks written after the run, at the PI's request on 2026-10-20; the work was ex
 
 Observed 2026-10-19. Over design A's 504 depth-pair readings, the pure-rescale parameters would overshoot by 0.40–2.96 log2, far more than the observed never-trained miss (about 0.3). The fitted g avoids them: median b is 1.55 (trained) and 1.72 (never-trained), and median a − ln r is −1.58 and −1.77.
 
-Observed 2026-10-20 in the loss head-to-head ([report](results/t127/report.md)): rung A0, which drops the +1 and can express the law exactly (μ = e^a·X^b + e^c), does not meet it either. Never-trained depth → depth median |log2 err| is 0.46 (NB loss, wobble 0.16) and 0.38 (Poisson-mean loss, wobble 0.07), against rung A's 0.33 and 0.29; trained pairs fit (0.12). So removing the +1 does not fix the miss on never-trained pairs. PI understood and agreed 2026-10-20 that neither A nor A0's g learns the depth ratio as a rule.
-
-Why not supported (PI, 2026-10-20): the +1 distorts rung A's fitted parameters, but removing it does not close the depth-law miss. Rung A0 can express the law exactly and still misses never-trained depth pairs by 0.38–0.46 log2, as much as or more than rung A. The +1 is therefore not the cause; the miss comes from g failing to carry the trained fit over to never-trained pairs.
+Observed 2026-10-20 ([report](results/t127/report.md)): on never-trained depth → depth pairs the A0 errors have seed wobble 0.16 (NB loss) and 0.07 (Poisson-mean loss); rung A's errors are 0.33 and 0.29. PI ruling 2026-10-20: the +1 distorts rung A's fitted parameters but is not the cause of the miss; neither A's nor A0's g learns the depth ratio as a rule, and the miss comes from g failing to carry the trained fit over to never-trained pairs.

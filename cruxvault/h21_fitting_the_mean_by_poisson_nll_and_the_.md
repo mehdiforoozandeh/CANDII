@@ -29,7 +29,7 @@ The score we train on lets predicted totals drift; a different score forces the 
 
 ## TL;DR
 
-With a log link and a free intercept, the Poisson NLL's optimum sets the predicted total equal to the observed total on the training pairs. The negative binomial NLL balances them only with per-bin weights n/(n + μ), so totals can drift. If this drift causes the miss, a model whose mean is trained by Poisson NLL and whose dispersion is trained by negative binomial NLL meets the depth law on never-trained depth pairs where the full negative binomial model does not. If the miss is a failure to carry over to never-trained pairs instead, fixing totals on trained pairs leaves never-trained pairs as they are. The run fixed rung A's totals and left the never-trained miss.
+With a log link and a free intercept, the Poisson NLL's optimum sets the predicted total equal to the observed total on the training pairs. The negative binomial NLL balances them only with per-bin weights n/(n + μ), so totals can drift. If this drift causes the miss, a model whose mean is trained by Poisson NLL and whose dispersion is trained by negative binomial NLL meets the depth law on never-trained depth pairs where the full negative binomial model does not.
 
 ## Expect
 
@@ -46,7 +46,7 @@ Chance: a single seed or track happens to land near the law; the median over 3 s
 
 ## Problem Statement
 
-Rung A over-predicts totals on some pairs (DNase Σμ/Σy ≈ 13–15 on dedup → base), and the NB loss does not force predicted totals to match. The PI (2026-10-19) asked whether that drift is what makes every design miss the depth law ([[q7_why_do_the_covariate_conditioned_g_f_des|the depth-law question]]).
+Rung A over-predicts totals on some pairs (DNase Σμ/Σy ≈ 13–15 on dedup → base). The PI (2026-10-19) asked whether that drift is what makes every design miss the depth law ([[q7_why_do_the_covariate_conditioned_g_f_des|the depth-law question]]).
 
 Origin: the PI asked for this head-to-head unprompted (2026-10-20): "i want to compare this formulation ... with Poisson NLL for mean and NB NLL for dispersion against a full NB NLL formulation". The PI chose rungs A, A0 and D, per-track g, counts only, and no bar: "this is an exploratory experiment".
 
@@ -68,7 +68,7 @@ Checks written after the run, at the PI's request on 2026-10-20; the work was ex
 
 ## Planned Intervention
 
-[[t127_head_to_head_poisson_nll_mean_nb_nl|the loss head-to-head task]]: designs A, A0 (no pseudocount) and D, per-track g, 3 seeds, counts only, no bar.
+[[t127_head_to_head_poisson_nll_mean_nb_nl|the loss head-to-head task]]: designs A, A0 (no pseudocount) and D, 3 seeds.
 
 ## Run Links
 
@@ -86,11 +86,6 @@ Checks written after the run, at the PI's request on 2026-10-20; the work was ex
 
 ## Findings
 
-The head-to-head run (126 runs: rungs A, A0, D × nb/ppml × 7 tracks × 3 seeds) did not fix the depth
-law. Never-trained depth → depth median |log2 err| moved A 0.33 → 0.29 (wobble 0.05), A0 0.46 → 0.38
-(0.16), D 0.27 → 0.28 (0.13), and the worst-pair check stayed at 0.46–0.68 in every arm. The loss did
-remove rung A's total-scale bias (scale_error 0.253 → 0.005, wobble 0.025), and it left NB likelihood
-and PIT calibration unchanged. PI reading (2026-10-20): the Poisson-mean loss fixes rung A's scale
-bias but not the depth law, so it is not the cure. The box stays unticked; closing is the PI's call.
+The head-to-head run had 126 runs (rungs A, A0, D × nb/ppml × 7 tracks × 3 seeds). Never-trained depth → depth median |log2 err|, nb → ppml: A 0.33 → 0.29 (wobble 0.05), A0 0.46 → 0.38 (0.16), D 0.27 → 0.28 (0.13); the worst-pair check stayed at 0.46–0.68 in every arm. The scale_error drop has wobble 0.025, and the loss left NB likelihood and PIT calibration unchanged.
 
-Why not supported (PI, 2026-10-20): the Poisson-mean loss balances totals on the trained pairs, which is what it guarantees, but the depth-law miss is on never-trained pairs. There g still has to produce a ratio it never saw, and changing the loss does not teach it the rule. The loss is therefore not the cause.
+PI ruling 2026-10-20: the Poisson-mean loss balances totals on the trained pairs, which is what it guarantees, but the miss is on never-trained pairs. There g still has to produce a ratio it never saw, and changing the loss does not teach it the rule, so the loss is not the cause.

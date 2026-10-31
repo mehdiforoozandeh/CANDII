@@ -27,7 +27,7 @@ One small network cleans a track to a standard setting and then changes it to th
 
 ## TL;DR
 
-One g reads two covariate vectors and sets the FiLM (per-layer scale and shift) of one dilated CNN f. The encoder runs f with FiLM g(c, C_clean) and outputs a per-bin latent z; the decoder runs the same f, same weights, with FiLM g(C_clean, c′) and outputs NB(loc, disp) for the target counts. C_clean is a learned covariate vector whose assay entries are copied from the source. Training uses base ↔ arm pairs only. The depth law says that for two runs that differ only in depth, log2(Σμ / ΣX) equals log2 of the depth ratio. The claim: on never-trained arm → arm depth pairs, the median |log2 error| of the predicted scale is within a tolerance δ of its trained-pair value on all 3 seeds; it is refuted if the gap exceeds δ on 2 or more seeds. The control is the one-pass FiLM CNN (design D) under the same training, which must stay above δ, or the check does not discriminate. δ is the PI's to set. The 7.5M pairs, held out of training, are reported separately.
+One g reads two covariate vectors and sets the FiLM (per-layer scale and shift) of one dilated CNN f. The encoder runs f with FiLM g(c, C_clean) and outputs a per-bin latent z; the decoder runs the same f, same weights, with FiLM g(C_clean, c′) and outputs NB(loc, disp) for the target counts. C_clean is a learned covariate vector whose assay entries are copied from the source. Training uses base ↔ arm pairs only. The depth law: for runs that differ only in depth, log2(Σμ / ΣX) = log2 of the depth ratio. The claim is refuted if the never-trained gap exceeds δ on 2 or more seeds. The control, the one-pass FiLM CNN (design D) under the same training, must stay above δ, or the check does not discriminate. The 7.5M pairs, held out of training, are reported separately.
 
 ## Expect
 
@@ -44,9 +44,7 @@ Selection: the never-trained arm → arm depth ratios lie inside the trained rat
 
 ## Problem Statement
 
-The composable encoder-decoder with an exact inverse did not close the depth-law miss; the PI then designed a symmetric form (2026-10-21) in which one g sets the FiLM of one CNN for both halves through a learned clean middle setting.
-
-Origin: the PI's own re-architecture after rejecting the asymmetric rung D: one g, one shared-weight CNN, routed through a learned clean setting, C_clean. The PI chose C_clean learned and learned-from-base ("i literally said A and D"), raised the collapse risk of a round-trip loss, and put Z in Gaussian space with X and X′ in NB space.
+The [[h22_a_composable_g_one_shared_map_from_each_|exact-inverse encoder-decoder]] did not close the depth-law miss. After rejecting the asymmetric rung D, the PI designed this symmetric form (2026-10-21): one g, one shared-weight CNN, routed through a learned clean setting, C_clean. The PI chose C_clean learned and learned-from-base ("i literally said A and D"), raised the collapse risk of a round-trip loss, and put Z in Gaussian space with X and X′ in NB space.
 
 ## Idea / Hypothesis
 
@@ -59,7 +57,7 @@ On never-trained arm → arm depth pairs, the shared-weight encoder-decoder FiLM
 
 ## Planned Intervention
 
-[[t128_build_and_run_phase_1_of_the_symmet|The symmetric encoder-decoder task]], phase 1: 8 settings (cross loss plus round-trip loss, deterministic, in f forms A and D; round-trip loss alone, deterministic and VAE; a latent-agreement term at λ = 0.1, 1, 10; cross plus round trip as a VAE) × 8 g's (7 per-track, 1 across-track) × 3 seeds, plus no-covariates twins for two settings: 240 runs, counts only. Design: `plan/T126_ENCDEC_D2.md`. Exploratory: no bar is set yet.
+[[t128_build_and_run_phase_1_of_the_symmet|The symmetric encoder-decoder task]], phase 1: 8 settings (cross loss plus round-trip loss, deterministic, in f forms A and D; round-trip loss alone, deterministic and VAE; a latent-agreement term at λ = 0.1, 1, 10; cross plus round trip as a VAE) × 8 g's (7 per-track, 1 across-track) × 3 seeds, plus no-covariates twins for two settings: 240 runs, counts only. Design: `plan/T126_ENCDEC_D2.md`. Exploratory.
 
 ## Run Links
 
@@ -72,4 +70,4 @@ On never-trained arm → arm depth pairs, the shared-weight encoder-decoder FiLM
 
 ## Findings
 
-Not closed. First pass (2026-10-24), median |log2 error| on never-trained depth pairs: the two complete cross-plus-round-trip settings 0.31–0.42 and 0.29–0.39, λ = 0.1 (11 of 24 runs) 0.32, against old D 0.29–0.34 and trained pairs 0.05–0.09. The settings trained on the round-trip loss alone miss trained pairs too (1.4–2.4), so the cross loss is needed. Chaining old D's two trained maps through the base gives 0.07–0.12. Four of eight settings are unfinished (λ = 1 and 10, VAE).
+First pass (2026-10-24), median |log2 error| on never-trained depth pairs: the two complete cross-plus-round-trip settings 0.31–0.42 and 0.29–0.39, λ = 0.1 (11 of 24 runs) 0.32, against old D 0.29–0.34 and trained pairs 0.05–0.09. Round-trip loss alone misses trained pairs by 1.4–2.4, so the cross loss is needed. Chaining old D's two trained maps through the base gives 0.07–0.12. The unfinished settings are λ = 1 and 10, and VAE.

@@ -30,7 +30,7 @@ A bendable curve instead of a straight stretch lets weak and strong signal chang
 
 ## TL;DR
 
-Design B of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one monotone 12-knot curve in log space per pair. Exploratory readings, no verdict. In counts B beats its scrambled-covariate twin (11 of 12 cells) and design A (9 of 12). In −log10 p a few pairs explode. On never-trained arm → arm pairs most of the count gain is lost. Design B2, where g also reads the bin value, changes counts little and explodes more in p.
+Design B of [[q4_how_much_capacity_does_a_covariate_condi|the capacity ladder]]: one monotone 12-knot curve in log space per pair, chosen by g from C and C′. It should beat its scrambled-covariate twin and design A. Exploratory readings, no verdict. Design B2, where g also reads the bin value, changes counts little and explodes more in p.
 
 ## Expect
 
@@ -44,9 +44,7 @@ Normalization: the covariates are ignored — this design does no better than th
 
 ## Problem Statement
 
-Still magnitude only: beating [[h12_a_covariate_conditioned_affine_map_on_th|design A]] means the knobs change weak and strong bins differently. B has QuantileMatching's function class, chosen from C, C' instead of fitted on X'.
-
-Why B exists (PI, 2026-09-25): one-warp "is not using C and C' at all", so B uses the same function class but chooses the curve from C and C′. It measures how much of one-warp's gain the covariates alone reproduce.
+Still magnitude only: beating [[h12_a_covariate_conditioned_affine_map_on_th|design A]] means the knobs change weak and strong bins differently. Why B exists (PI, 2026-09-25): one-warp "is not using C and C' at all", so B keeps QuantileMatching's function class but chooses the curve from C and C′ instead of fitting it on X′. It measures how much of one-warp's gain the covariates alone reproduce.
 
 ## Idea / Hypothesis
 
@@ -94,7 +92,7 @@ Run under [[t118_learn_the_covariate_conditioned_tra|the g → f ladder task]]; 
 
 CRPS on all bins, one g per track, mean of 3 seeds ± seed wobble (largest difference between two seeds); split = oracle-scaled + scale error.
 
-- Row 1, counts: DNase 0.824 ± 0.004 (0.816 + 0.007), no-covariates twin 1.54 ± 0.02 (1.17 + 0.37); narrow 0.392 against 0.497. QuantileMatching scores 0.886 on DNase (its table has no split).
-- Row 1, −log10 p: DNase 0.541 ± 0.111 against 0.744; met in 7 of 12. With one g across tracks, DNase is 24.9 ± 62.7: on a sparse source mapped to the full-depth base, the lowest knot's σ drifts (`plan/T118_STATUS.md`). A principled fix is open ([[t124_find_a_principled_fix_for_the_log10|the p-space fix task]]).
-- Never-trained arm → arm pairs: beats the no-covariates twin in 8 of 12 count and 1 of 12 p cells. The relative count gain over the twin falls from 0.29 (trained) to 0.06 (never-trained, same knob) ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]). Depth law unmet, 6 of 6.
+- Row 1, counts: DNase 0.824 ± 0.004 splits as 0.816 + 0.007; the no-covariates twin is 1.54 ± 0.02 (1.17 + 0.37); narrow 0.392 against 0.497. QuantileMatching scores 0.886 on DNase (its table has no split).
+- Row 1, −log10 p: DNase 0.541 ± 0.111 against 0.744; met in 7 of 12. With one g across tracks, DNase is 24.9 ± 62.7 (`plan/T118_STATUS.md`). A principled fix is open ([[t124_find_a_principled_fix_for_the_log10|the p-space fix task]]).
+- Never-trained arm → arm pairs: beats the no-covariates twin in 8 of 12 count and 1 of 12 p cells ([[h19_g_fits_trained_base_arm_depth_pairs_but_|trained versus never-trained]]). Depth law unmet, 6 of 6.
 - Row 2: B2 counts DNase 0.817 ± 0.008; it beats B in 0 of 12. Only B2 meets the depth law anywhere (1 of 6 cells). In p, exploding records rise (narrow / broad 3 / 4, against 1 / 0 in row 1).

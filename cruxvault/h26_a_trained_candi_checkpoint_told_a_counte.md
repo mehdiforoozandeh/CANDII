@@ -42,7 +42,7 @@ Instrumentation: per-bin chr21 arm/base log2 ratios are mostly sampling noise, s
 
 ## Problem Statement
 
-CANDI's training never shows one experiment next to a counterfactual of itself in read length or run type, so nothing in its objective identifies how these covariates change a track. The counterfactual arms give real tracks that differ from a base in exactly one knob, so the correction CANDI would have to make is known.
+Nothing in CANDI's training objective identifies how read length or run type change a track. The counterfactual arms give real tracks that differ from a base in exactly one knob, so the correction CANDI would have to make is known.
 
 ## Idea / Hypothesis
 
@@ -105,31 +105,10 @@ CPU only, no training. Checkpoint: the selected CANDI checkpoint of [[t81_retrai
 
 ## Findings
 
-Rerun 2 of 2026-10-26, under the second amendment. Numbers from `results/h26/rerun2/eligibility.json` (`mechanism_check`) and `results.json`, 1 kb. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` met by its letter only; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated. See [[pseudocount-log-ratios-carry-a-signal-level-curve]].
+Three runs; ticks proposed, not applied. In all three, `swapwired` is met (80 of 80 rows change one field in the target column only; read lengths 36 and 50 lie in the training range 20-101), `depthcontrol` and `effectfloor` are unmet, and `gapleft` and `swapcorr` could not be evaluated. `depthcontrol` part (1), reported: 10 of 42 rows (worst 0.107 log2, because told depth also moves eta through FiLM); part (2): 32 of 42 (fails mostly at 15M); part (3): 21 of 21 (42 of 42 in rerun 1).
 
-- Mechanism: on the 21 thinning pairs, raw r_split is -0.03 to 0.63 (15 eligible); after subtracting the curve it is -0.11 to -0.37, against a null p99 of 0.008-0.013. The curve explains the raw reproducibility, but the residual overshoots below the null instead of landing on it, most at 15M (raw near 0, residual about -0.36). The cross-half level fit induces this anti-correlation; own-level and pooled-level fits are negative too.
-- `thinningblank`: 0 of 21 eligible, but only because the statistic is biased negative, as in the first run.
-- `effectfloor`: 0 of 19. Read length 36 bp residual r 0.015-0.086 (above null p99, below the 0.2 floor); 50 bp and run type at or below 0.
-- `swapwired` 80 of 80; `depthcontrol` part (2) 32 of 42, part (3) 21 of 21 (same predictions as rerun 1).
+- Run of 2026-10-25 (PI delegated; null and thresholds approved after the run, on 2026-10-25 and 2026-10-26; `results/h26/eligibility.json`, `results.json`): `effectfloor` 0 of 19 knob pairs eligible, best 1 kb r_split 0.084. Decile stratification anti-correlates the two base halves and biases r_split down (depth pairs -0.15 to -0.46), so `thinningblank` is met for that reason too. Reported only, the model uses both covariates on the output side: told 36 bp, the chr21 level moves -0.22 to -0.89 log2 (real -1.05 to -1.08, mostly the bin-count rule); told PE, -0.19 to -0.98 for ChIP and +0.52 to +0.70 for DNase (real -0.08 to +0.01). At 1 kb the pr1-fitted oracle worsens NLL on 38 of 38 rows.
+- Rerun 1, 2026-10-26, post-hoc amendments (`results/h26/rerun1/`, 1 kb): prompts are the `T_` cells only, no `B_` array opened; all 7 tracks kept a prompt (HAP-1 and SJSA1 have one assay each); predictions are bit-identical to the first run. Without deciles, `thinningblank` is unmet: 15 of 21 depth pairs eligible (7.5M r_split 0.34-0.52, 3.75M 0.48-0.63; null p99 0.32-0.40). `effectfloor`: read length 8 of 12 eligible (36 bp r_split 0.28-0.36, the thinning range), run type 0 of 7 (max 0.162). On the 8 eligible pairs the pr1 oracle worsens pr2 NLL on 38 of 38 rows, so `gapleft` has no reachable gap, and `swapcorr` holds on 15 of 16 pair-seed rows (C07M20 36 bp, seed 0: ρ 0.315 > p95 0.225); with both controls failed, these are not read.
+- Rerun 2, 2026-10-26, second amendment (`results/h26/rerun2/eligibility.json` `mechanism_check`, `results.json`, 1 kb; [[pseudocount-log-ratios-carry-a-signal-level-curve]]): on the 21 thinning pairs raw r_split is -0.03 to 0.63 (15 eligible), and after subtracting the curve -0.11 to -0.37, against a null p99 of 0.008-0.013. The residual overshoots below the null, most at 15M (raw near 0, residual about -0.36); the cross-half level fit induces this, and own-level and pooled-level fits are negative too. `thinningblank` is met by its letter only (0 of 21 eligible, statistic biased negative). `effectfloor` 0 of 19: 36 bp residual r 0.015-0.086 (above null p99, below the 0.2 floor); 50 bp and run type at or below 0.
 
-Rerun 1 of 2026-10-26, under the post-hoc amendments. Numbers from `results/h26/rerun1/eligibility.json` and `results.json`, 1 kb. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` unmet; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated.
-
-- Prompts are the `T_` cells only; no `B_` array was opened. All 7 tracks kept a prompt (HAP-1 and SJSA1 have one assay each). Predictions are bit-identical to the first run.
-- `swapwired`: 80 of 80 rows.
-- `depthcontrol`: part (2) holds on 32 of 42 rows (fails mostly at 15M); part (3) on 42 of 42. Part (1), reported: 10 of 42.
-- `thinningblank`: 15 of 21 depth pairs eligible (7.5M r_split 0.34-0.52, 3.75M 0.48-0.63; null p99 0.32-0.40). Without deciles, the split-half statistic finds reproducibility where thinning has none.
-- `effectfloor`: read length 8 of 12 pairs eligible (36 bp r_split 0.28-0.36, the same range as the thinning pairs); run type 0 of 7 (max 0.162).
-- As scored on the 8 eligible pairs: the pr1 oracle worsens pr2 NLL on 38 of 38 rows, so `gapleft` has no reachable gap; `swapcorr` holds on 15 of 16 pair-seed rows (C07M20 36 bp, seed 0: ρ 0.315 > p95 0.225). With both controls failed, these are not read.
-
-Run of 2026-10-25 (PI delegated; the null and the thresholds were approved after the run, on 2026-10-25 and 2026-10-26). Numbers from `results/h26/eligibility.json` and `results.json`. Proposed ticks, not applied: `swapwired` met; `depthcontrol` unmet; `thinningblank` met; `effectfloor` unmet; `gapleft` and `swapcorr` could not be evaluated (no eligible pair).
-
-- `swapwired`: 80 of 80 prompt rows change one field in the target column only; read lengths 36 and 50 lie in the training range 20-101.
-- `depthcontrol`: part (1) holds on 10 of 42 rows (worst 0.107 log2), because told depth also moves eta through FiLM; part (2) on 32 of 42; part (3) on 21 of 21.
-- `effectfloor`: 0 of 19 knob pairs eligible; best 1 kb r_split 0.084. Decile stratification anti-correlates the two base halves and biases r_split down (depth pairs -0.15 to -0.46), so `thinningblank` passes for that reason too. The design needs repair before a rerun.
-- Reported only: the model does use both covariates on the output side. Told 36 bp, chr21 level moves -0.22 to -0.89 log2 (real -1.05 to -1.08, mostly the bin-count rule). Told PE, it moves -0.19 to -0.98 for ChIP and +0.52 to +0.70 for DNase; the real tracks move -0.08 to +0.01. At 1 kb the pr1-fitted oracle worsens NLL on 38 of 38 rows.
-
-Prior evidence, before the run. Pre-CANDII numbers are single seed, 12 held-out targets.
-
-- Code: an unmasked assay's target is the same experiment, so read length and run type are equal on both sides; only depth varies, by independent binomial thinning (`src/candi/dataset.py:43-65, 430-446`; `src/candi/store/dataset.py:142`).
-- With the depth offset on, run_type steering was functionally null (`AGENTS.md` §7.1, §7.2 item 3); at weight decay 0 its direction score was 0.559 (archive h47).
-- With the offset off, run_type changed imputation in the right direction, but run type, read length and depth are collinear on that panel (archive h42).
+Prior evidence: an unmasked assay's target is the same experiment, so only depth varies, by independent binomial thinning (`src/candi/dataset.py:43-65, 430-446`; `src/candi/store/dataset.py:142`). The archive readings (h47, h42; `AGENTS.md` §7.1, §7.2 item 3) are in [[q8_does_candi_s_training_which_never_pairs_|the parent question]].
