@@ -174,3 +174,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t114` [implementation] rename the covariate metric keys from codes to names (covuse..biokeep) — *done* → `results/t39/DELIVERABLE.md`
 - `t115` [implementation] sampled NB-CRPS estimator: fair-CRPS sampling, k-sweep validated against exact P1, opt-in bench flag — *done* → `results/t115/MERGED.md`
 - `t116` [implementation] retire the four tests that pin nb_crps's pre-fix NaN at large n — *done* → `results/t116/MERGED.md`
+- `t117` [data-acquisition] make ENCODE pseudoreplicates (pr1, pr2: counts and MACS2 -log10 p) for all 130 counterfactual-arm products on Nibi — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *done* → `results/t117/CHECKS.md`, `results/t117/MANIFEST.tsv`
