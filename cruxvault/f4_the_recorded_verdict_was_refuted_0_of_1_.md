@@ -5,8 +5,8 @@ schema: 3
 title: "A 64-channel f misses the law on never-trained depth pairs (0.41 per-track,…"
 parent: h27
 direction: against
-confidence: moderate
-why: "A 64-channel f misses the law on never-trained depth pairs (0.41 per-track, 0.34 across-track; trained 0.05), and its CRPS gain through the base shrank from 0.0146 to 0.006 with six seeds (95% interval −0.002 to +0.013); moderate because the check was written after the run (2026-10-31)."
+confidence: strong
+why: "A 64-channel f misses the law on never-trained depth pairs (0.41 per-track, 0.34 across-track; trained 0.05), and its CRPS gain through the base shrank from 0.0146 to 0.006 with six seeds (95% interval −0.002 to +0.013). Settled by the PI's rule: no further work is planned on it (PI closed the scale question 2026-10-31)."
 verifiables: claim 0/1 met; controls 1/1 met; rule all
 evidence: results/t128p3/m5_depthlaw_table.tsv, results/t128p3/rank_table.tsv, results/t128p3b/headline_table.tsv, results/t128p3b/checks.txt
 migrated_from: h27

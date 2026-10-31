@@ -5,8 +5,8 @@ schema: 3
 title: "Removing the +1 does not bring never-trained depth pairs onto the law: rung A0…"
 parent: h18
 direction: against
-confidence: moderate
-why: "Removing the +1 does not bring never-trained depth pairs onto the law: rung A0 reads 0.46 (NB loss) and 0.38 (Poisson-mean loss) against 0.12 on trained pairs, no closer than rung A; moderate because the check was written after the run, at the PI's order (2026-10-21)."
+confidence: strong
+why: "Removing the +1 does not bring never-trained depth pairs onto the law: rung A0 reads 0.46 (NB loss) and 0.38 (Poisson-mean loss) against 0.12 on trained pairs, no closer than rung A. Settled by the PI's rule: no further work is planned on it (PI closed it 2026-10-21)."
 verifiables: claim 0/1 met; controls 1/1 met; rule all
 migrated_from: h18
 created: "2026-10-25T00:58:40"

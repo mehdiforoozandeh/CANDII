@@ -4,8 +4,8 @@ type: finding
 schema: 3
 title: The 15M floor passes an exact self-check and real depth-arm halves match it…
 parent: q10
-confidence: moderate
-why: The 15M floor passes an exact self-check and real depth-arm halves match it (ratio 1.002); the 30M values are extrapolated on a concave curve.
+confidence: strong
+why: "The 15M floor passes an exact self-check and real depth-arm halves match it (ratio 1.002); the 30M values are extrapolated on a concave curve. Settled by the PI's rule: no further work is planned on it (its tasks are done)."
 evidence: results/t142/DIGEST.md, results/t138/DIGEST.md
 created: "2026-10-31T12:58:41"
 updated: "2026-10-31T12:58:41"

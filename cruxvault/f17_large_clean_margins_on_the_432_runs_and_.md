@@ -4,8 +4,8 @@ type: finding
 schema: 3
 title: Large, clean margins on the 432 runs, and the PI's own reading on 2026-10-19…
 parent: q5
-confidence: moderate
-why: Large, clean margins on the 432 runs, and the PI's own reading on 2026-10-19 agrees; moderate because the protocol was exploratory with no bars and the training devices were mixed.
+confidence: strong
+why: "Large, clean margins on the 432 runs, and the PI's own reading on 2026-10-19 agrees. Settled by the PI's rule: no further work is planned on it (PI: no more compute on this, 2026-10-19)."
 evidence: results/t125/GRID_SUMMARY_part1.md, results/t125/depth_law.tsv, results/t125/results_summary_eta.tsv
 created: "2026-10-31T12:57:10"
 updated: "2026-10-31T12:57:10"

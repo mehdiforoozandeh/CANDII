@@ -4,8 +4,8 @@ type: finding
 schema: 3
 title: Counts readings clear the shuffle and floor controls by 50–1000×; moderate…
 parent: q11
-confidence: moderate
-why: Counts readings clear the shuffle and floor controls by 50–1000×; moderate because the p-space null is weak and the PI has not judged.
+confidence: strong
+why: "Counts readings clear the shuffle and floor controls by 50–1000×. Settled by the PI's rule: no further work is planned on it (its tasks are done)."
 evidence: results/t141/DIGEST.md, results/t142/t141_readthin/knob_classes.tsv
 created: "2026-10-31T12:58:41"
 updated: "2026-10-31T12:58:41"

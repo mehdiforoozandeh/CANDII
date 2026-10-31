@@ -4,8 +4,8 @@ type: finding
 schema: 3
 title: Clear margins over seed wobble, but one track and one f seed, and two of…
 parent: q6
-confidence: moderate
-why: Clear margins over seed wobble, but one track and one f seed, and two of eight designs stopped by the PI.
+confidence: strong
+why: "Clear margins over seed wobble, but one track and one f seed, and two of eight designs stopped by the PI. Settled by the PI's rule: no further work is planned on it (PI: no more compute on this, 2026-10-19)."
 evidence: results/t125/part2_digest.md, results/t125/h_alone_summary.tsv, results/t125/h_repair.tsv, results/t125/h_vs_oldgrid.tsv
 created: "2026-10-31T12:57:10"
 updated: "2026-10-31T12:57:10"

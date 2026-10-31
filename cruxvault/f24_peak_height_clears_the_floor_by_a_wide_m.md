@@ -4,8 +4,8 @@ type: finding
 schema: 3
 title: Peak height clears the floor by a wide margin; the shape ranking does not,…
 parent: q9
-confidence: moderate
-why: Peak height clears the floor by a wide margin; the shape ranking does not, and the PI has not judged either.
+confidence: strong
+why: "Peak height clears the floor by a wide margin; the shape ranking does not, and the PI has not judged either. Settled by the PI's rule: no further work is planned on it (its tasks are done)."
 evidence: results/t133/DIGEST.md, results/t139/DIGEST.md, results/t139/knob_vs_floor.tsv
 created: "2026-10-31T12:58:41"
 updated: "2026-10-31T12:58:41"
