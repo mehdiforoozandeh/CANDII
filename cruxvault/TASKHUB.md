@@ -39,6 +39,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed
 - `t111` [data-acquisition] re-run 7 EIC blind tracks paired-end under the single-end recipe (bwa, 30M reads, same pipeline images) on Nibi, one per assay, chosen for the largest before-vs-after reprocessing effect, and keep the filtered BAMs for both arms — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
+- `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract
 
 ## Blocked
 
@@ -101,6 +102,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t108` [visualization] leaderboard masthead: retire the 'retrains are running, nothing is ranked' warning — the retrains landed and the board has ranked since 2026-09-05 — *open*
 - `t109` [visualization] leaderboard 'On this regime' notes: one skimmable headline per note, full text collapsed under it — the 14 notes per regime run 3,800–4,300 words as flat paragraphs above the board — *open*
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
+- `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
 
 ## Done · Dropped
 
