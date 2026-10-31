@@ -4,14 +4,17 @@ type: idea
 schema: 2
 title: A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs
 parent: q7
-status: idea
-rule:
-measurement:
-replicates:
-verdict:
-metric:
-created: 2026-10-19T23:41:09
-updated: 2026-10-19T23:41:09
+status: done
+rule: all
+measurement: 
+replicates: 
+verdict: refuted
+metric: never-trained depth-law error 0.63 (per-track g) / 0.46 (across) vs trained 0.07; old D 0.29 / 0.34
+created: "2026-10-19T23:41:09"
+updated: "2026-10-31T00:23:17"
+lock: 64f29a808f5333b8
+locked: "2026-10-31T00:23:17"
+lock_at: close
 ---
 
 # h20 — A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs
@@ -28,10 +31,7 @@ g is a small MLP (2 × 64) on the source and target covariates. If its size limi
 
 ## Null
 
-<!-- spec 09: the BORING explanation — the cheapest way this result could be trivially
-     true. One line, <=25 words, naming a family. Your checks must discriminate against it.
-     The PI approves it before checks are written: `crux approve-null <id>`. -->
-_(one line: the cheapest way this result could be trivially true — name a family from capacity, chance, leakage, selection, normalization, instrumentation)_
+Chance: a single seed or track happens to land near the law; the median over 3 seeds and 7 tracks guards against it.
 
 ## Problem Statement
 
@@ -44,7 +44,14 @@ A larger g, with the same training pairs and loss, meets the depth law on never-
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-- [ ] _(state a falsifiable, pre-registered check)_
+Checks written after the run, at the PI's request on 2026-10-31; the work was exploratory with no bar set beforehand.
+
+- [ ] With g at 2 × 256 (old D's f unchanged), the never-trained depth → depth median |log2 error| falls to the trained-pair level (about 0.1) for one g per track or one g across tracks
+      fails-if:: Both g versions stay well above their trained-pair level
+      (found: 0.63 per-track g, 0.46 across-track g; trained 0.07 — [depth-law table](results/t128p3/m5_depthlaw_table.tsv))
+- [x] [outcome-neutral] The target tracks themselves obey the depth law on the scored bins
+      fails-if:: Σy/ΣX differs from the manifest depth ratio by more than 0.01 log2
+      (found: within 0.004 log2, as for the loss hypothesis; the data audit gives 0.71% over 84 ordered pairs)
 
 ## Planned Intervention
 

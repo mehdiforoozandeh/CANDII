@@ -4,14 +4,17 @@ type: idea
 schema: 2
 title: f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs
 parent: q7
-status: idea
-rule: 
+status: done
+rule: all
 measurement: 
 replicates: 7 per-track g x 3 seeds (phase 3); 3 more seeds planned
-verdict: 
-metric: 
+verdict: refuted
+metric: never-trained depth-law error 0.41 (per-track g) / 0.34 (across) vs trained 0.05; six-seed CRPS gain through the base 0.006, within seed noise
 created: "2026-10-29T14:25:51"
-updated: "2026-10-29T14:25:51"
+updated: "2026-10-31T00:23:17"
+lock: 48f1873f2633c1a4
+locked: "2026-10-31T00:23:17"
+lock_at: close
 ---
 
 # h27 — f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs
@@ -28,10 +31,7 @@ f, the convolutional network that maps a source track to a target track, may be 
 
 ## Null
 
-<!-- spec 09: the null hypothesis — the most parsimonious alternative explanation under
-     which this result appears although the claim is false. One line, <=25 words, naming a family. Your checks must discriminate against it.
-     The PI approves it before checks are written: `crux approve-null <id>`. -->
-_(one line: the null hypothesis, the most parsimonious alternative explanation — name a family from capacity, chance, leakage, selection, normalization, instrumentation)_
+Chance: a single seed or track happens to land near the law; the median over 3 seeds and 7 tracks guards against it.
 
 ## Problem Statement
 
@@ -46,7 +46,14 @@ Old D's f is 4 dilated convolution layers (dilations 1, 2, 4, 8; kernel 5; a 61-
 ## Verifiables
 
 <!-- on close, tick each box met/unmet/could-not-evaluate; the verdict is derived from them. -->
-- [ ] _(state a falsifiable, pre-registered check)_
+Checks written after the run, at the PI's request on 2026-10-31; the work was exploratory with no bar set beforehand.
+
+- [ ] With f at 64 channels (g hidden width 64), the never-trained depth → depth median |log2 error| falls to the trained-pair level (about 0.1) for one g per track or one g across tracks
+      fails-if:: Both g versions stay well above their trained-pair level
+      (found: 0.41 per-track g, 0.34 across-track g; trained 0.05 — [depth-law table](results/t128p3/m5_depthlaw_table.tsv))
+- [x] [outcome-neutral] The target tracks themselves obey the depth law on the scored bins
+      fails-if:: Σy/ΣX differs from the manifest depth ratio by more than 0.01 log2
+      (found: within 0.004 log2, as for the loss hypothesis; the data audit gives 0.71% over 84 ordered pairs)
 
 ## Planned Intervention
 

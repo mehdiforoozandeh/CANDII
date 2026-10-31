@@ -32,12 +32,12 @@ Root: [[candii]]
   - ○ `q7` [Q] [[q7_why_do_the_covariate_conditioned_g_f_des|**Why do the covariate-conditioned g → f designs miss the depth law on depth-only pairs?**]] — *open*
     - ✓ `h18` [H] [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *done* — _refuted_ (`never-trained depth miss, rung A0 (no +1): 0.46 (NB) / 0.38 (Poisson-mean) median |log2 err| vs trained 0.12`)
     - · `h19` [H] [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *idea*
-    - · `h20` [H] [[h20_a_larger_g_with_the_same_training_pairs_|A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs]] — *idea*
+    - ✓ `h20` [H] [[h20_a_larger_g_with_the_same_training_pairs_|A larger g, with the same training pairs and loss, meets the depth law on never-trained depth pairs]] — *done* — _refuted_ (`never-trained depth-law error 0.63 (per-track g) / 0.46 (across) vs trained 0.07; old D 0.29 / 0.34`)
     - ✓ `h21` [H] [[h21_fitting_the_mean_by_poisson_nll_and_the_|Fitting the mean by Poisson NLL and the dispersion by negative binomial NLL meets the depth law where the full negative binomial NLL does not]] — *done* — _refuted_ (`never-trained depth miss with Poisson-mean loss: A0 0.38, D 0.28 median |log2 err| vs trained 0.07–0.12`)
     - · `h22` [H] [[h22_a_composable_g_one_shared_map_from_each_|A composable g — one shared map from each side's covariates to a common latent, with an exact inverse — meets the depth law on never-trained depth pairs without arm → arm training]] — *idea*
     - · `h23` [H] [[h23_on_never_trained_arm_arm_depth_pairs_the|On never-trained arm → arm depth pairs, the shared-weight encoder-decoder FiLM CNN meets the depth law at the trained-pair level]] — *idea*
     - · `h24` [H] [[h24_the_depth_entries_in_g_s_covariate_input|The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs]] — *idea*
-    - · `h27` [H] [[h27_f_at_64_channels_2x_wider_with_the_same_|f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs]] — *idea*
+    - ✓ `h27` [H] [[h27_f_at_64_channels_2x_wider_with_the_same_|f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs]] — *done* — _refuted_ (`never-trained depth-law error 0.41 (per-track g) / 0.34 (across) vs trained 0.05; six-seed CRPS gain through the base 0.006, within seed noise`)
     - · `h28` [H] [[h28_training_g_on_arm_to_arm_pairs_lets_a_di|Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on never-trained arm-to-arm pairs, without a pivot through the base]] — *idea*
   - ○ `q8` [Q] [[q8_does_candi_s_training_which_never_pairs_|**Does CANDI's training, which never pairs an experiment with a counterfactual of itself except in depth, leave the trained model unable to correct for a change in the other covariates?**]] — *open*
     - · `h26` [H] [[h26_a_trained_candi_checkpoint_told_a_counte|A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates]] — *idea*
@@ -48,5 +48,5 @@ Root: [[candii]]
 ## Dashboard
 
 - **Questions** (11): open 11 · review 0 · resolved 0
-- **Hypotheses** (27): idea 20 · staged 0 · running 5 · done 2
-- **Verdicts**: supported 0 · partial 0 · refuted 2 · inconclusive 0 · invalid-run 0
+- **Hypotheses** (27): idea 18 · staged 0 · running 5 · done 4
+- **Verdicts**: supported 0 · partial 0 · refuted 4 · inconclusive 0 · invalid-run 0
