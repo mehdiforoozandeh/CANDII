@@ -52,6 +52,8 @@ Giving the shared count-space correction model a mappability track, or one-hot D
 - [ ] [hypothesis] `localise` — the dec0 gain exceeds the dec9 gain on MAPQ 0 and crop 36 by more than wobble. fails-if:: the gain is even across deciles.
 Runs: mappability 3, shifted mappability 3, one-hot DNA 3 = 9. Joint power ~41%.
 
+
+**Post-smoke amendments (PI rulings, 2026-10-31), made after the single-seed smoke test, before any full run.** (1) 36-mer mappability equals 1.0 on 36% of 1 kb blocks, so tied-rank deciles leave the top deciles empty; the high stratum for `localise` is the top non-empty decile (dec8, every fully mappable block), keyed `dectop`, in place of dec9. (2) Strata are genome-wide deciles of 1 kb mean mappability, blacklist dropped; the oracle scale is refitted per stratum. (3) The DNA encoder is Conv(4→16, k15), GELU, 25 bp average pool, Conv(16→4).
 ## Planned Intervention
 
 _(how this hypothesis will be tested)_
