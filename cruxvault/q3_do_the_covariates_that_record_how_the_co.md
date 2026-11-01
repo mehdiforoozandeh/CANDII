@@ -36,11 +36,11 @@ Locked before any run: each child is read on the −log10 p axis only, and the c
 Readings only, from [[t118_learn_the_covariate_conditioned_tra|the g × f grid]] and [[t126_build_and_run_the_encoder_decoder_r|the encoder-decoder rungs]]; the [knob report](results/q3/KNOB_READINGS.md) has the tables and the CRPS split. In p these knobs give the strongest covariate signal of all ten: g beats its no-covariates twin by a median 0.36–0.62 on trained pairs, and by 0.31–0.48 on never-trained pairs for the ratio, control identity and control depth, against seed wobbles of 0.003–0.024. Fragment extension is the exception: half of its never-trained p cells explode. The locked bar cannot yet be read, because for three knobs the unchanged source track already scores better than the half-depth pseudoreplicate oracle, so the one-warp → oracle interval is negative. The count-unchanged control has no direct reading; on count-identical never-trained pairs the old design A does worse than its twin, so count predictions can move.
 
 <!-- crux:ledger:start -->
-**4 children** · open 4, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**4 children** · open 0, leaning 0, settled 0, parked 4 · 1 finding(s) on this question
 
-- `h7` [[h7_conditioning_on_the_recorded_control_to_|Conditioning on the recorded control-to-treatment scaling predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
-- `h8` [[h8_conditioning_on_the_recorded_control_ide|Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
-- `h9` [[h9_conditioning_on_the_recorded_control_dep|Conditioning on the recorded control depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
-- `h10` [[h10_conditioning_on_the_recorded_fragment_ex|Conditioning on the recorded fragment extension predicts a target track from a source track, beyond what a single value-axis map already does]] — *open*
+- `h7` [[h7_conditioning_on_the_recorded_control_to_|Conditioning on the recorded control-to-treatment scaling predicts a target track from a source track, beyond what a single value-axis map already does]] — *parked*
+- `h8` [[h8_conditioning_on_the_recorded_control_ide|Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does]] — *parked*
+- `h9` [[h9_conditioning_on_the_recorded_control_dep|Conditioning on the recorded control depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *parked*
+- `h10` [[h10_conditioning_on_the_recorded_fragment_ex|Conditioning on the recorded fragment extension predicts a target track from a source track, beyond what a single value-axis map already does]] — *parked*
 - `f11` finding (weak) [[f11_readings_only_the_locked_bar_cannot_be_r|Readings only; the locked bar cannot be read because for three knobs the…]]
 <!-- crux:ledger:end -->

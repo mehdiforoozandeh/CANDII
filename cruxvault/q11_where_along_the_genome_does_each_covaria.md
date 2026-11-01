@@ -50,7 +50,8 @@ Readings, not judged, 2026-10-30 ([covariate-map digest](results/t141/DIGEST.md)
 - For CANDI: read length and mapping quality need a position-aware correction (sequence or mappability input); depth does not.
 
 <!-- crux:ledger:start -->
-**0 children** · open 0, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
+- `h31` [[h31_giving_the_shared_count_space_correction|Giving the shared count-space correction model a mappability track, or one-hot DNA sequence, as extra input improves correction on read-length and MAPQ arms without harming the other knobs]] — *open*
 - `f26` finding (strong) [[f26_counts_readings_clear_the_shuffle_and_fl|Counts readings clear the shuffle and floor controls by 50–1000×; moderate…]]
 <!-- crux:ledger:end -->
