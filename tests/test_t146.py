@@ -152,6 +152,9 @@ def synth_kit(tmp_path_factory):
         np.save(feats / f"map25__{c}.npy", rng.random(n).astype(np.float32))
         np.save(feats / f"dna__{c}.npy", rng.integers(0, 5, n * 25).astype(np.uint8))
         np.save(feats / f"dec__{c}.npy", rng.integers(-1, 10, n).astype(np.int8))
+    # hg38's shape: no bins in dec9, so the top stratum is dec8
+    edges = {str(k): (None if k == 9 else [0.0, 1.0, 1]) for k in range(10)}
+    (feats / "strata.json").write_text(json.dumps({"strata": {"decile_min_max_n": edges}}))
     (feats / "FEATURES_DONE").write_text("ok\n")
     bl = _bed(tmp, [("chr19", 100 * 25, 110 * 25)])
     return {"tmp": tmp, "manifest": manifest, "cov": covariates, "cache": cache, "feats": feats,
@@ -194,6 +197,9 @@ def test_every_code_path_trains_and_scores(synth_kit, name):
         assert r["crps_all"] == pytest.approx(r["crps_oracle_scaled_all"] + r["scale_error_all"])
         assert r["n_blacklisted"] == 10
         assert sum(r[f"n_dec{k}"] for k in range(10)) <= r["n_all"]
+        assert r["dectop_k"] == 8 and r["crps_dectop"] == r["crps_dec8"]
+        assert r["crps_dectop"] == pytest.approx(r["crps_oracle_scaled_dectop"]
+                                                 + r["scale_error_dectop"])
 
 
 def test_step0_norm_is_the_initial_models_mean_loss(synth_kit):

@@ -28,8 +28,11 @@ never-trained arm->arm pair, `tasks.law_pairs`, every `law_stride`-th by index f
 Depth pairs carry depth_log2_ratio_true / depth_log2_scale_pred (log2 sum m / sum x).
 
 **Deciles** (h31): every record carries crps_dec<k>, n_dec<k> for the fixed strata k = 0..9
-(`features.py`, dec__<chrom>.npy) and the split of dec0 and dec9 (c* refitted inside the stratum).
-Bins of blacklisted or tail 1 kb blocks (decile -1) count in `all` only.
+(`features.py`, dec__<chrom>.npy) and the split of dec0 and of the TOP non-empty decile, keyed
+`_dectop` (c* refitted inside the stratum; `dectop_k` names it). Umap k36 is exactly 1.0 on ~36 %
+of the 1 kb blocks, so rank deciles with averaged ties leave dec7 and dec9 empty and dec8 holds every
+fully mappable block: dec8 is the top stratum on hg38 (strata.json). Bins of blacklisted or tail
+1 kb blocks (decile -1) count in `all` only.
 
 Writes <run_dir>/scores.json and SCORE_DONE.
 """
@@ -61,7 +64,6 @@ from t146.features import Features  # noqa: E402
 from t146.model import T146Model, mean_of, predict_chrom, size_of  # noqa: E402
 from t146.train import full_inputs  # noqa: E402
 
-DEC_SPLIT = (0, 9)
 _RUN: dict = {}
 
 
@@ -85,6 +87,10 @@ class Run:
         fd = features_dir or self.cfg.get("features_dir")
         self.feats = Features(fd) if fd else None
         self.seed = int(self.cfg["seed"])
+        self.dec_top = None
+        if self.feats is not None:
+            st = json.loads((self.feats.root / "strata.json").read_text())["strata"]
+            self.dec_top = max(int(k) for k, v in st["decile_min_max_n"].items() if v)
         self._ex: dict = {}
 
     def theta(self, cs, ct):
@@ -173,9 +179,12 @@ def score_job(job: dict) -> dict:
             idx = np.flatnonzero(dec == k)
             rec[f"n_dec{k}"] = int(idx.size)
             rec[f"crps_dec{k}"] = lscore._finite(float(crps[idx].mean())) if idx.size else None
-            if k in DEC_SPLIT and idx.size:
+            if k in (0, run.dec_top) and idx.size:
                 sp = lscore.split_all("counts", m[idx], n[idx], y[idx], crps[idx])
-                rec.update({f"{kk.replace('_all', '')}_dec{k}": v for kk, v in sp.items()})
+                sfx = "dec0" if k == 0 else "dectop"
+                rec.update({f"{kk.replace('_all', '')}_{sfx}": v for kk, v in sp.items()})
+        rec["dectop_k"] = run.dec_top
+        rec["crps_dectop"] = rec.get(f"crps_dec{run.dec_top}")
     if job.get("depth"):
         sx, sm = float(x.sum()), float(m.sum())
         rec["depth_log2_ratio_true"] = math.log2(_RUN["depth"][p["target_pid"]]

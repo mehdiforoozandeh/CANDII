@@ -19,8 +19,8 @@ cap with early stopping on chr22 (patience 4, eval every 250 steps) — old shar
             zeroed, a mask-indicator input channel), g fed (C_p, C_p), its own head.
   consist   h30. Loss = L_corr + W_CONSIST * L_cons. L_cons = mean over bins of
             (loc_direct - loc_chained)^2 + (disp_direct - disp_chained)^2 on a never-trained
-            arm->arm pair (a, a'); chained = a -> base -> a' through the same model with no gradient
-            (a target, not a second route to train).
+            arm->arm pair (a, a'); chained = a -> base -> a' through the same model; gradient flows
+            through both routes (the stop-gradient target collapsed in the smoke).
   map       h31. + per-bin (25 bp) Umap k36 mappability as a second input channel.
   mapshift  h31 null control. + the same channel circularly shifted by 5 Mb within the chromosome.
   dna       h31. + one-hot DNA (A, C, G, T; N = all zero) through a small conv encoder.

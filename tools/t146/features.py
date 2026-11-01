@@ -161,7 +161,8 @@ def strata(maps: dict, n_bins: dict, blacklist) -> tuple[dict, dict]:
         sel = v_kept[dec == k]
         edges[k] = [float(sel.min()), float(sel.max()), int(sel.size)] if sel.size else None
     info = {"n_blocks": int(v.size), "n_blacklisted_blocks": int(b.sum()),
-            "decile_min_max_n": edges}
+            "decile_min_max_n": edges,
+            "top_decile": max(k for k, e in edges.items() if e is not None)}
     return out, info
 
 

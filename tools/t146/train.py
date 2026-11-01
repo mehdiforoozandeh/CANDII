@@ -17,10 +17,11 @@ default_rng([seed, 7146, k]), so the correction stream is the alone arm's stream
   denoise  product uniform over the fit pids; each input bin masked (x = 0, mask channel = 1) with
            probability MASK_RATE; y = the same product's counts; NLL over the masked in-chromosome
            output bins only; g gets (C_p, C_p); the aux head. Correction batches carry mask 0.
-  consist  pair uniform over `tasks.consist_pairs`; x_a with a 60-bin halo; chained (no gradient):
-           leg 1 = model(C_a, C_base) on x_a, x_mid = log1p(NB mean) (0 off the chromosome), leg 2 =
-           model(C_base, C_a') on x_mid; direct = model(C_a, C_a') on x_a; L_cons = mean over the
-           in-chromosome bins of the squared differences of the clamped log mean and log size.
+  consist  pair uniform over `tasks.consist_pairs`; x_a with a 60-bin halo; chained: leg 1 =
+           model(C_a, C_base) on x_a, x_mid = log1p(NB mean, clamped) (0 off the chromosome), leg 2
+           = model(C_base, C_a') on x_mid; direct = model(C_a, C_a') on x_a; L_cons = mean over the
+           in-chromosome bins of (loc_d - loc_c)^2 + (disp_d - disp_c)^2, unclamped, with gradient
+           through BOTH routes (h30's v2 checks that the chained route did not get worse).
 
 **Loss normalisation** (`step0_losses`): L0_corr and L0_aux = the mean loss of the initial model
 over NORM_BATCHES batches drawn from default_rng([seed, 7147, 0 | 1]) (not the training stream).
@@ -225,15 +226,15 @@ class Batches:
                                            for p in prs])).to(self.dev)
         xt = _t(xa, self.dev)
         lo_mu, hi_mu = math.log(MU_MIN), math.log(MU_MAX)
-        lo_n, hi_n = math.log(N_MIN), math.log(N_MAX)
-        with torch.no_grad():
-            loc1, _ = self.m(cov_ab, xt)
-            xm = torch.log1p(loc1.double().clamp(lo_mu, hi_mu).exp()).float()
-            xm = xm * _t(inc1, self.dev).float()
-            loc_c, disp_c = self.m(cov_bt, xm)
+        # both routes carry gradient (an agreement loss, not a bootstrapped target): the
+        # stop-gradient version collapsed in the smoke (job 25715856_27) to loc below the NLL's
+        # clamp everywhere, where every gradient is zero. Neither route is clamped in the
+        # squared error, so a route outside the clamp is still pulled back.
+        loc1, _ = self.m(cov_ab, xt)
+        xm = torch.log1p(loc1.clamp(lo_mu, hi_mu).exp()) * _t(inc1, self.dev).to(loc1.dtype)
+        loc_c, disp_c = self.m(cov_bt, xm)
         loc_d, disp_d = self.m(cov_d, xt[:, c:xt.shape[1] - c])
-        se = ((loc_d.clamp(lo_mu, hi_mu) - loc_c.clamp(lo_mu, hi_mu)) ** 2
-              + (disp_d.clamp(lo_n, hi_n) - disp_c.clamp(lo_n, hi_n)) ** 2)
+        se = (loc_d - loc_c) ** 2 + (disp_d - disp_c) ** 2
         mm = _t(inc, self.dev).to(se.dtype)
         return (se * mm).sum() / mm.sum().clamp(min=1.0)
 

@@ -14,7 +14,7 @@ same = the knob; cross = once under each of its two knobs; "all" = every pair on
 Writes:
   records.tsv.gz  every record, flat (the input to any further reading)
   pooled.tsv      arm x weight x route x group x knob: crps_all, crps_oracle_scaled_all,
-                  scale_error_all, crps_dec0 / dec9 with their splits, seed_spread, per-seed crps
+                  scale_error_all, crps_dec0 / dectop (the top non-empty decile) with their splits, seed_spread, per-seed crps
   cells.tsv       (h30) law pairs by (source knob, target knob) cell x route, pooled the same way
   deciles.tsv     (h31) per arm x seed x track x kind x direction x knob x level: crps per decile
   depthlaw.tsv    median |log2 scale error| per arm x weight x route x depth group, seed spread
@@ -30,7 +30,7 @@ import pandas as pd
 
 METRICS = ["crps_all", "crps_oracle_scaled_all", "scale_error_all",
            "crps_dec0", "crps_oracle_scaled_dec0", "scale_error_dec0",
-           "crps_dec9", "crps_oracle_scaled_dec9", "scale_error_dec9"]
+           "crps_dectop", "crps_oracle_scaled_dectop", "scale_error_dectop"]
 PAIR = ["source_pid", "target_pid"]
 
 
