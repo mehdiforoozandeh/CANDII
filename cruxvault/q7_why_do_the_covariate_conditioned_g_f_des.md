@@ -50,7 +50,7 @@ Readings to 2026-10-31, not judged: median |log2 error| of the predicted scale, 
 - Arm → arm training: [[h28_training_g_on_arm_to_arm_pairs_lets_a_di|the arm-to-arm hypothesis]].
 
 <!-- crux:ledger:start -->
-**9 children** · open 1, leaning 2, settled 6, parked 0 · 1 finding(s) on this question
+**10 children** · open 2, leaning 2, settled 6, parked 0 · 1 finding(s) on this question
 
 - `h18` [[h18_the_1_pseudocount_in_x_log_1_counts_make|The +1 pseudocount in x = log(1 + counts) makes the g → f designs miss the depth law]] — *settled · strong*
 - `h19` [[h19_g_fits_trained_base_arm_depth_pairs_but_|g fits trained base ↔ arm depth pairs but does not carry the fit over to never-trained arm → arm depth pairs]] — *leaning · moderate*
@@ -61,5 +61,6 @@ Readings to 2026-10-31, not judged: median |log2 error| of the predicted scale, 
 - `h24` [[h24_the_depth_entries_in_g_s_covariate_input|The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs]] — *open*
 - `h27` [[h27_f_at_64_channels_2x_wider_with_the_same_|f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs]] — *settled · strong*
 - `h28` [[h28_training_g_on_arm_to_arm_pairs_lets_a_di|Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on never-trained arm-to-arm pairs, without a pivot through the base]] — *leaning · moderate*
+- `h30` [[h30_chaining_one_shared_count_space_correcti|Chaining one shared count-space correction model through the base transfers to never-trained arm-to-arm pairs across every count-moving knob, including cross-knob pairs, better than the direct route, and a pivot-consistency loss lets the direct route match the chained route]] — *open*
 - `f23` finding (moderate) [[f23_consistent_across_every_design_loss_and_|Consistent across every design, loss and size tried, with the PI closing the…]]
 <!-- crux:ledger:end -->
