@@ -152,8 +152,11 @@ def _t(a, dev):
 
 
 class Batches:
-    def __init__(self, model, wins: Windows, enc, rows, tp, dev, batch):
+    def __init__(self, model, wins: Windows, enc, rows, tp, dev, batch, mode="real", seed=0):
         self.m, self.w, self.enc, self.dev, self.B = model, wins, enc, dev, int(batch)
+        if mode not in T.MODELS:
+            raise ValueError(f"model {mode!r} not in {T.MODELS}")
+        self.mode, self.seed = mode, int(seed)
         self.rows, self.tp = rows, tp
         self.cov_tp = torch.from_numpy(np.stack([enc.encode_pair(p["source_pid"], p["target_pid"])
                                                  for p in tp])).to(dev)
@@ -164,6 +167,29 @@ class Batches:
         self.cp = T.consist_pairs(rows)
         self.base = {r["track"]: r["pid"] for r in lp.usable_products(rows) if r["arm"] == "base"}
         self.track = {r["pid"]: r["track"] for r in lp.usable_products(rows)}
+        # t118 twins: ids = a fixed derangement within each pair set; nocov = a random correction
+        # pair's covariates per sample, from its own rng (the window stream stays the real one's)
+        self.perm_tp = lp.ids_permutation(len(tp), seed)
+        self.perm_xa = lp.ids_permutation(len(self.xa), seed)
+        self.perm_fit = lp.ids_permutation(len(self.fit), seed)
+        self.reset_cov_rng()
+
+    def reset_cov_rng(self):
+        self.cov_rng = np.random.default_rng([self.seed, 7121])
+
+    def cov_index(self, pi):
+        """Which correction pair's (C, C') each sample is fed."""
+        if self.mode == "ids":
+            return self.perm_tp[pi]
+        if self.mode == "nocov":
+            return self.cov_rng.integers(len(self.tp), size=len(pi))
+        return pi
+
+    def cov_val(self):
+        """[n_pairs, 40] the covariates validation feeds each correction pair (ids: the scrambled
+        labels it trained on; nocov: every row is used through the mean theta, see validate)."""
+        return self.cov_tp[torch.from_numpy(self.perm_tp).to(self.dev)] if self.mode == "ids" \
+            else self.cov_tp
 
     def corr(self, rng):
         """The correction batch, drawn in `ladder.train.Sampler.draw`'s order."""
@@ -174,7 +200,8 @@ class Batches:
         y = self.w.y([self.tp[i]["target_pid"] for i in pi], ci, st)
         m = self.w.inchrom(ci, st, 0)
         ex, dna = self.w.extras(ci, st, c)
-        loc, disp = self.m(self.cov_tp[torch.from_numpy(pi).to(self.dev)], _t(x, self.dev),
+        ci_ = self.cov_index(pi)
+        loc, disp = self.m(self.cov_tp[torch.from_numpy(ci_).to(self.dev)], _t(x, self.dev),
                            _t(ex, self.dev), _t(dna, self.dev))
         return self.m.nll(loc, disp, _t(y, self.dev), _t(m, self.dev))
 
@@ -186,7 +213,8 @@ class Batches:
         y = self.w.y([self.xa[i]["target_pid"] for i in pi], ci, st)
         m = self.w.inchrom(ci, st, 0)
         ex, dna = self.w.extras(ci, st, c)
-        loc, disp = self.m(self.cov_xa[torch.from_numpy(pi).to(self.dev)], _t(x, self.dev),
+        cx = self.perm_xa[pi] if self.mode == "ids" else pi
+        loc, disp = self.m(self.cov_xa[torch.from_numpy(cx).to(self.dev)], _t(x, self.dev),
                            _t(ex, self.dev), _t(dna, self.dev), head="aux")
         return self.m.nll(loc, disp, _t(y, self.dev), _t(m, self.dev))
 
@@ -202,7 +230,8 @@ class Batches:
         y = self.w.y(pids, ci, st)
         lm = mask[:, c:c + self.w.W]
         ex, dna = self.w.extras(ci, st, c, mask=mask.astype(np.float32))
-        cov = torch.from_numpy(np.stack([self.enc.encode_pair(p, p) for p in pids])).to(self.dev)
+        cp = ([self.fit[self.perm_fit[i]] for i in pi] if self.mode == "ids" else pids)
+        cov = torch.from_numpy(np.stack([self.enc.encode_pair(p, p) for p in cp])).to(self.dev)
         loc, disp = self.m(cov, _t(x, self.dev), _t(ex, self.dev), _t(dna, self.dev), head="aux")
         return self.m.nll(loc, disp, _t(y, self.dev), _t(lm, self.dev))
 
@@ -259,7 +288,10 @@ def step0_losses(bt: Batches, aux, seed, n_batches) -> dict:
 
 
 @torch.no_grad()
-def validate(model, corpus, feats, tp, cov_tp, dev, chrom=lp.VAL_CHROMS[0], cache=None) -> float:
+def validate(model, corpus, feats, tp, cov_tp, dev, chrom=lp.VAL_CHROMS[0], cache=None,
+             average_theta=False) -> float:
+    """`average_theta` (the nocov twin): one theta for every pair, g's mean over `cov_tp`, exactly
+    as it is scored."""
     was = model.training
     model.eval()
     per = []
@@ -271,7 +303,8 @@ def validate(model, corpus, feats, tp, cov_tp, dev, chrom=lp.VAL_CHROMS[0], cach
             cache["ex"] = full_inputs(feats, sc, has_dna, chrom, X.shape[0])
         ex, dna = cache["ex"] if cache is not None else full_inputs(feats, sc, has_dna, chrom,
                                                                      X.shape[0])
-        theta = model.theta(cov_tp[i:i + 1])[0]
+        theta = (model.theta(cov_tp).mean(0) if average_theta
+                 else model.theta(cov_tp[i:i + 1])[0])
         loc, disp = predict_chrom(model, X, theta, dev, extra_full=ex, dna_full=dna)
         y = torch.from_numpy(np.asarray(Y, np.float32)).to(dev)
         per.append(float(model.nll(torch.from_numpy(loc).to(dev), torch.from_numpy(disp).to(dev), y)))
@@ -336,8 +369,11 @@ def run_training(manifest, covariates, data_dir, runs_dir, task: dict, features_
     model = T146Model(inputs=inputs, aux_head=aux in ("xassay", "denoise")).to(dev)
     wins = Windows(corpus, chroms, lens, cfg["window"], feats, model.form.scalar,
                    model.form.has_dna)
-    bt = Batches(model, wins, enc, rows, tp, dev, cfg["batch"])
+    mode = arm["model"]
+    bt = Batches(model, wins, enc, rows, tp, dev, cfg["batch"], mode=mode, seed=seed)
     norm = step0_losses(bt, aux, seed, cfg["norm_batches"])
+    bt.reset_cov_rng()                                      # step 0 must not move the nocov stream
+    avg = mode == "nocov"
     corr_factor = 1.0 / norm["L0_corr"] if arm["corr_scale"] == "step0" else 1.0
     aux_factor = 0.0
     if aux in ("xassay", "denoise"):
@@ -350,7 +386,7 @@ def run_training(manifest, covariates, data_dir, runs_dir, task: dict, features_
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, (s + 1) / warm))
     config = {"run_name": name, "task": task, "arm": task["arm"], "arm_spec": arm,
               "seed": seed, "weight": w, "rung": T.RUNG, "g": T.G, "space": T.SPACE,
-              "model": "real", "inputs": list(inputs), "holdout": [list(h) for h in T.HOLDOUT],
+              "model": mode, "ids_perm": [int(v) for v in bt.perm_tp], "inputs": list(inputs), "holdout": [list(h) for h in T.HOLDOUT],
               **cfg, "device": str(dev), "context": CONTEXT, "n_theta": model.form.n_theta,
               "n_params": int(sum(p.numel() for p in model.parameters())),
               "train_chroms": chroms, "val_chroms": list(lp.VAL_CHROMS),
@@ -369,7 +405,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, task: dict, features_
     t1 = time.time()
     vcache = {}
     t_val = time.time()
-    val = validate(model, corpus, feats, tp, bt.cov_tp, dev, cache=vcache)
+    val = validate(model, corpus, feats, tp, bt.cov_val(), dev, cache=vcache,
+                           average_theta=avg)
     t_val = time.time() - t_val
     log = [(0, float("nan"), float("nan"), float("nan"), val, time.time() - t1)]
     print(f"{name}: step 0 val {val:.6f} ({t_val:.1f} s) norm {norm}", flush=True)
@@ -392,7 +429,8 @@ def run_training(manifest, covariates, data_dir, runs_dir, task: dict, features_
         sched.step()
         acc.append((float(total), float(lc), float(la)))
         if step % cfg["eval_every"] == 0 or step == cfg["max_steps"]:
-            val = validate(model, corpus, feats, tp, bt.cov_tp, dev, cache=vcache)
+            val = validate(model, corpus, feats, tp, bt.cov_val(), dev, cache=vcache,
+                           average_theta=avg)
             a = np.mean(acc, 0)
             log.append((step, float(a[0]), float(a[1]), float(a[2]), val, time.time() - t1))
             acc = []

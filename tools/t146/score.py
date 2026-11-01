@@ -87,6 +87,18 @@ class Run:
         fd = features_dir or self.cfg.get("features_dir")
         self.feats = Features(fd) if fd else None
         self.seed = int(self.cfg["seed"])
+        # t118 twins: ids = a trained pair is fed its scrambled labels (every other pair its own);
+        # nocov = one theta, g's mean over the correction pairs, for every query
+        self.mode = self.cfg.get("arm_spec", {}).get("model", "real")
+        tp = self.cfg["train_pairs"]
+        keys = [(p["source_pid"], p["target_pid"]) for p in tp]
+        self._cov_map = ({keys[i]: keys[int(j)] for i, j in enumerate(self.cfg["ids_perm"])}
+                         if self.mode == "ids" else {})
+        self._theta_avg = None
+        if self.mode == "nocov":
+            cov = torch.from_numpy(np.stack([self.enc.encode_pair(*k) for k in keys])).to(self.dev)
+            with torch.no_grad():
+                self._theta_avg = self.model.theta(cov).mean(0)
         self.dec_top = None
         if self.feats is not None:
             st = json.loads((self.feats.root / "strata.json").read_text())["strata"]
@@ -94,6 +106,9 @@ class Run:
         self._ex: dict = {}
 
     def theta(self, cs, ct):
+        if self._theta_avg is not None:
+            return self._theta_avg
+        cs, ct = self._cov_map.get((cs, ct), (cs, ct))
         cov = torch.from_numpy(self.enc.encode_pair(cs, ct)).reshape(1, -1).to(self.dev)
         with torch.no_grad():
             return self.model.theta(cov)[0]

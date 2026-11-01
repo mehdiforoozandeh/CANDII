@@ -24,10 +24,20 @@ cap with early stopping on chr22 (patience 4, eval every 250 steps) — old shar
   map       h31. + per-bin (25 bp) Umap k36 mappability as a second input channel.
   mapshift  h31 null control. + the same channel circularly shifted by 5 Mb within the chromosome.
   dna       h31. + one-hot DNA (A, C, G, T; N = all zero) through a small conv encoder.
+  xassay_ids, denoise_ids  h29 `notwrecked` twins (PI 2026-10-31): the w = 1 joint arm with its
+            covariates scrambled at TRAINING time, t118's labels-as-ids scheme
+            (`ladder.pairs.ids_permutation(n, seed)`, a fixed derangement): training pair i is fed
+            the (C, C') of pair perm[i], separately within the correction pairs, the imputation
+            pairs and the denoising products. Validation and scoring of a trained pair use its
+            scrambled labels, as the t118 twin.
+  alone_nocov  h30 floor: correction alone with t118's no-covariates scheme — every sample takes
+            the (C, C') of a uniformly random correction pair (rng default_rng([seed, 7121])); it is
+            validated and predicted with ONE theta, g's mean over the correction pairs.
 
-**Tasks** (42 rows; `tasks()`; the PI-approved design counts 24 + 9 + 9):
+**Tasks** (51 rows; `tasks()`; 24 + 9 + 9, plus the 9 twins the PI added on 2026-10-31):
   0-2 alone s0-2 | 3-5 alone s3-5 | 6-8 matched s0-2 | 9-17 xassay w x s (w slowest) |
-  18-26 denoise w x s | 27-32 consist s0-5 | 33-35 map s0-2 | 36-38 mapshift s0-2 | 39-41 dna s0-2
+  18-26 denoise w x s | 27-32 consist s0-5 | 33-35 map s0-2 | 36-38 mapshift s0-2 | 39-41 dna s0-2 |
+  42-44 xassay_ids w1 s0-2 | 45-47 denoise_ids w1 s0-2 | 48-50 alone_nocov s0-2
 
     python tools/t146/tasks.py tasks
     python tools/t146/tasks.py audit <MANIFEST.tsv> <covariates.tsv>
@@ -67,12 +77,23 @@ ARMS = {
     "map":      {"hyp": "h31", "aux": None, "corr_scale": "none", "inputs": ("map",)},
     "mapshift": {"hyp": "h31", "aux": None, "corr_scale": "none", "inputs": ("mapshift",)},
     "dna":      {"hyp": "h31", "aux": None, "corr_scale": "none", "inputs": ("dna",)},
+    "xassay_ids":  {"hyp": "h29", "aux": "xassay", "corr_scale": "step0", "inputs": (),
+                    "model": "ids"},
+    "denoise_ids": {"hyp": "h29", "aux": "denoise", "corr_scale": "step0", "inputs": ("mask",),
+                    "model": "ids"},
+    "alone_nocov": {"hyp": "h30", "aux": None, "corr_scale": "none", "inputs": (),
+                    "model": "nocov"},
 }
+for _a in ARMS.values():
+    _a.setdefault("model", "real")
+MODELS = ("real", "ids", "nocov")
 #: arms scored through the base too (h30): chained mean, chained mixture, ceiling
 CHAIN_ARMS = ("alone", "consist")
 #: one config per new code path, seed 0, weight 1 (indices into `tasks()`)
 SMOKE_RUNS = ("alone_s0", "matched_s0", "xassay_w1_s0", "denoise_w1_s0", "consist_s0", "map_s0",
               "mapshift_s0", "dna_s0")
+#: the twin code paths (added after the smoke; unit-tested, not smoked)
+TWIN_RUNS = ("xassay_ids_w1_s0", "denoise_ids_w1_s0", "alone_nocov_s0")
 
 
 def run_name(arm: str, weight, seed: int) -> str:
@@ -81,13 +102,16 @@ def run_name(arm: str, weight, seed: int) -> str:
 
 
 def tasks() -> list[dict]:
-    """The 42-row table; a pure function of the constants."""
+    """The 51-row table; a pure function of the constants."""
     spec = ([("alone", None, s) for s in range(6)]
             + [("matched", None, s) for s in range(3)]
             + [("xassay", w, s) for w in WEIGHTS for s in range(3)]
             + [("denoise", w, s) for w in WEIGHTS for s in range(3)]
             + [("consist", W_CONSIST, s) for s in range(6)]
-            + [(a, None, s) for a in ("map", "mapshift", "dna") for s in range(3)])
+            + [(a, None, s) for a in ("map", "mapshift", "dna") for s in range(3)]
+            + [("xassay_ids", 1.0, s) for s in range(3)]
+            + [("denoise_ids", 1.0, s) for s in range(3)]
+            + [("alone_nocov", None, s) for s in range(3)])
     out = []
     for arm, w, s in spec:
         out.append({"index": len(out), "arm": arm, "hyp": ARMS[arm]["hyp"],

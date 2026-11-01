@@ -41,3 +41,12 @@ index	arm	hyp	weight	seed	inputs	run_name
 39	dna	h31	-	0	dna	dna_s0
 40	dna	h31	-	1	dna	dna_s1
 41	dna	h31	-	2	dna	dna_s2
+42	xassay_ids	h29	1.0	0	-	xassay_ids_w1_s0
+43	xassay_ids	h29	1.0	1	-	xassay_ids_w1_s1
+44	xassay_ids	h29	1.0	2	-	xassay_ids_w1_s2
+45	denoise_ids	h29	1.0	0	mask	denoise_ids_w1_s0
+46	denoise_ids	h29	1.0	1	mask	denoise_ids_w1_s1
+47	denoise_ids	h29	1.0	2	mask	denoise_ids_w1_s2
+48	alone_nocov	h30	-	0	-	alone_nocov_s0
+49	alone_nocov	h30	-	1	-	alone_nocov_s1
+50	alone_nocov	h30	-	2	-	alone_nocov_s2

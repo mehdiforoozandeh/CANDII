@@ -32,14 +32,19 @@ COV = REPO / "tools" / "t118" / "covariates.tsv"
 
 def test_task_table_counts_and_smoke_rows():
     t = T.tasks()
-    assert len(t) == 42 and [r["index"] for r in t] == list(range(42))
+    assert len(t) == 51 and [r["index"] for r in t] == list(range(51))
     by = {}
     for r in t:
         by.setdefault(r["arm"], []).append(r)
     assert {a: len(v) for a, v in by.items()} == {"alone": 6, "matched": 3, "xassay": 9,
                                                    "denoise": 9, "consist": 6, "map": 3,
-                                                   "mapshift": 3, "dna": 3}
-    assert len({r["run_name"] for r in t}) == 42
+                                                   "mapshift": 3, "dna": 3, "xassay_ids": 3,
+                                                   "denoise_ids": 3, "alone_nocov": 3}
+    assert len({r["run_name"] for r in t}) == 51
+    assert [r["run_name"] for r in t[42:]] == [
+        "xassay_ids_w1_s0", "xassay_ids_w1_s1", "xassay_ids_w1_s2", "denoise_ids_w1_s0",
+        "denoise_ids_w1_s1", "denoise_ids_w1_s2", "alone_nocov_s0", "alone_nocov_s1",
+        "alone_nocov_s2"]
     assert [t[i]["run_name"] for i in T.SMOKE_INDICES] == list(T.SMOKE_RUNS)
 
 
@@ -170,7 +175,7 @@ def _train(kit, name, steps=2, runs="runs"):
                            eval_every=1, device="cpu", **SMALL)
 
 
-@pytest.mark.parametrize("name", list(T.SMOKE_RUNS))
+@pytest.mark.parametrize("name", list(T.SMOKE_RUNS) + list(T.TWIN_RUNS))
 def test_every_code_path_trains_and_scores(synth_kit, name):
     rd = _train(synth_kit, name)
     cfg = json.loads((rd / "config.json").read_text())
@@ -310,3 +315,70 @@ def test_tables_from_the_scored_runs(synth_kit, tmp_path):
     assert set(a.route) == {"direct", "chain", "mix", "ceiling"}
     np.testing.assert_allclose(a.crps_all, a.crps_oracle_scaled_all + a.scale_error_all, rtol=1e-3)
     assert (tmp_path / "cells.tsv").is_file() and (tmp_path / "deciles.tsv").is_file()
+
+
+# ---- the t118-scheme twins (PI 2026-10-31) --------------------------------------------------------
+
+def _bt(kit, mode, seed=0, aux_head=True):
+    rows = kit["rows"]
+    corpus = data.Corpus(kit["cache"])
+    tp = T.train_pairs(rows)
+    enc = encoding.Encoder.fit(encoding.read_covariates(kit["cov"]), T.fit_pids(rows))
+    chroms, lens = ltrain.training_chroms(corpus, tp[0]["source_pid"], "counts")
+    torch.manual_seed(seed)
+    m = M.T146Model(aux_head=aux_head, inputs=())
+    w = TR.Windows(corpus, chroms, lens, 128, None, (), False)
+    return TR.Batches(m, w, enc, rows, tp, torch.device("cpu"), 4, mode=mode, seed=seed)
+
+
+def test_ids_twin_feeds_a_fixed_derangement_in_every_pair_set(synth_kit):
+    bt = _bt(synth_kit, "ids", seed=1)
+    for perm, n in ((bt.perm_tp, len(bt.tp)), (bt.perm_xa, len(bt.xa)), (bt.perm_fit, len(bt.fit))):
+        assert sorted(perm) == list(range(n)) and not np.any(perm == np.arange(n))
+    assert np.array_equal(bt.perm_tp, lp.ids_permutation(len(bt.tp), 1))   # t118's scheme
+    pi = np.arange(len(bt.tp))
+    assert np.array_equal(bt.cov_index(pi), bt.perm_tp)
+    assert torch.equal(bt.cov_val(), bt.cov_tp[torch.from_numpy(bt.perm_tp)])
+    real = _bt(synth_kit, "real", seed=1)
+    assert np.array_equal(real.cov_index(pi), pi) and torch.equal(real.cov_val(), real.cov_tp)
+
+
+def test_ids_twin_scores_trained_pairs_with_their_scrambled_labels(synth_kit):
+    rd = _train(synth_kit, "xassay_ids_w1_s0")
+    run = S.Run(rd, synth_kit["cache"], synth_kit["feats"])
+    cfg = json.loads((rd / "config.json").read_text())
+    assert cfg["model"] == "ids" and run.mode == "ids"
+    tp = cfg["train_pairs"]
+    j = cfg["ids_perm"][0]
+    a = (tp[0]["source_pid"], tp[0]["target_pid"])
+    b = (tp[j]["source_pid"], tp[j]["target_pid"])
+    assert torch.equal(run.theta(*a), _real_theta(run, *b))
+    law = T.law_pairs(synth_kit["rows"])[0]          # an untrained pair keeps its own labels
+    assert torch.equal(run.theta(law["source_pid"], law["target_pid"]),
+                       _real_theta(run, law["source_pid"], law["target_pid"]))
+
+
+def _real_theta(run, cs, ct):
+    cov = torch.from_numpy(run.enc.encode_pair(cs, ct)).reshape(1, -1)
+    with torch.no_grad():
+        return run.model.theta(cov)[0]
+
+
+def test_nocov_twin_draws_random_covariates_and_predicts_with_one_theta(synth_kit):
+    bt = _bt(synth_kit, "nocov", seed=2, aux_head=False)
+    pi = np.zeros(200, dtype=np.int64)
+    ci = bt.cov_index(pi)
+    want = np.random.default_rng([2, 7121]).integers(len(bt.tp), size=200)
+    assert np.array_equal(ci, want) and len(set(ci.tolist())) > 1
+    bt.reset_cov_rng()
+    assert np.array_equal(bt.cov_index(pi), want)     # step 0 cannot move the stream
+    rd = _train(synth_kit, "alone_nocov_s0")
+    run = S.Run(rd, synth_kit["cache"], synth_kit["feats"])
+    rows = synth_kit["rows"]
+    p, q = T.train_pairs(rows)[0], T.law_pairs(rows)[1]
+    t1, t2 = run.theta(p["source_pid"], p["target_pid"]), run.theta(q["source_pid"], q["target_pid"])
+    assert torch.equal(t1, t2)
+    keys = [(r["source_pid"], r["target_pid"]) for r in run.cfg["train_pairs"]]
+    cov = torch.from_numpy(np.stack([run.enc.encode_pair(*k) for k in keys]))
+    with torch.no_grad():
+        assert torch.allclose(t1, run.model.theta(cov).mean(0))
