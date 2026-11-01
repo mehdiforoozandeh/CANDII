@@ -20,7 +20,7 @@
 # THE VENV is t118's pinned recipe (python/3.10.13, requirements-fir.txt, then
 # requirements-pypi.txt from $KIT/wheels), built per task in $SLURM_TMPDIR, as slurm/t136/train.sh.
 #
-# RESOURCES. One 10 GB MIG slice, 1 core, 16 GB (inside the slice's billing: <= 1 CPU, <= 36G),
+# RESOURCES. One 10 GB MIG slice, 1 core, 32 GB (smoke MaxRSS 3-11 GB, memmap pages counted) (inside the slice's billing: <= 1 CPU, <= 36G),
 # --time set in the header (Nibi's default is 15 min). Nibi nodes c128, c166, c537, c371, c329
 # excluded (the t126/t136 list).
 #
@@ -39,7 +39,7 @@
 #SBATCH --exclude=c128,c166,c537,c371,c329
 #SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=16000M
+#SBATCH --mem=32000M
 
 set -euo pipefail
 USAGE="usage: t146/train.sh <kit_dir> <products_dir> <cache_dir> <out_dir> <features_dir> [max_steps [eval_every]]"
