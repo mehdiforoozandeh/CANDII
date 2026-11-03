@@ -1,6 +1,6 @@
 # Close-out of the covariate artifact correction (CAC) testbed: lab deck
 
-Artifact: not published yet (the foreman publishes). Add the URL here when it exists.
+Artifact: https://claude.ai/artifact/YPwpootBTpn3pkY1nGVQGB (published 2026-11-03, private)
 
 Source: `index.html` beside this file, built by `build_deck.py` from `deck_src.html`. Anchor: [[q1_do_the_recorded_experimental_covariates_|q1]] and everything under it. Tasks: [[t143_close_out_deck_and_story_of_the_who|the close-out task]] and [[t146_build_and_run_the_final_cac_testbed|the final CAC testbed experiments]]. PI requests: 2026-10-30 (one deck that marks the testbed done and states, for every goal, fully met, partially met, or not met but answered) and 2026-11-03 (cover the whole testbed, the final experiments included; one big deck, one idea per slide).
 
