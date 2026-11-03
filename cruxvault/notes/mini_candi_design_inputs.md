@@ -101,3 +101,13 @@ other knob needs raw reads fetched on the cluster first.
 Open data items: MAPQ arms of the DNase track are byte-identical to base (t119, open). The
 "41 of 48 EIC blind tracks reprocessed SE with BAMs" count lives in the EIC_REPRO tree on
 the cluster; not verified from this repo.
+
+## 8. Results of the final testbed experiments (2026-11-03, PI-accepted readings)
+
+| Experiment | Reading | Design consequence |
+|---|---|---|
+| Joint objective (h29) | against, weak: no objective moves unseen-pair CRPS beyond 2x wobble; cross-assay w4 near-miss toward improvement | Joint training did not break correction transfer at testbed scale; objective design remains a risk to watch at CANDI scale |
+| Pivot through the base (h30) | against, moderate: 2 of 98 cells; pooled gain within noise for a shared model | Drop routing through a base (2.5) as a design input for a shared model; an agreement loss between routes is an exploratory lead (direct 0.598 vs 0.660) |
+| Sequence-aware input (h31) | supports, weak: mappability lowers CRPS in the lowest-mappability decile on 6/6 tracks for crop 36 and MAPQ 0, beats a shifted control, localised | Add a mappability input channel from the first mini-CANDI stage; one-hot DNA gives about a quarter of the gain |
+
+Evidence: results/t146/REPORT.md.
