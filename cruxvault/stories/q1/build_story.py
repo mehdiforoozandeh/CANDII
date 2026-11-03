@@ -338,6 +338,205 @@ tables["tblKnob"] = (["x", "nar", "br", "lab"],
                        raw(kc_(a_, l, "arm", "delta_R2", ("broad",))[0], 6), lab]
                       for i, (a_, l, lab) in enumerate(lv)])
 macros["nKnobLevels"] = num(len(lv), 0)
+
+# ---- motivation: the imputation challenge (wiki page compiled from the vault's source) -------
+eic = load("wiki/encode-imputation-challenge.md")
+macros["nEICmodels"] = num(re.search(r"(\d+) models were submitted", eic).group(1), 0)
+
+# ---- the covariate-swap probe on trained CANDI: told level shift against the real one ---------
+sw = load("results/h26/results.json")["pairs"]
+pts = {"crop36": [], "pe": [], "peDn": []}
+for key, by_seed in sw.items():
+    trk, arm = key.split("|")
+    for s in by_seed.values():
+        tag = "crop36" if arm == "crop__36" else ("peDn" if arm == "pe__pe" and trk == "C12M02" else
+                                                 ("pe" if arm == "pe__pe" else None))
+        if tag:
+            pts[tag].append((f(s["global_real"]), f(s["global_pred"])))
+for tag, nm in (("crop36", "swL"), ("pe", "swP"), ("peDn", "swD")):
+    put(nm + "Pred", [p for _, p in pts[tag]])
+    put(nm + "Real", [r for r, _ in pts[tag]])
+for tag, nm in (("crop36", "tblSwL"), ("pe", "tblSwP"), ("peDn", "tblSwD"), ("crop50", None)):
+    if nm:
+        tables[nm] = (["x", "y"], [[raw(r, 3), raw(p, 3)] for r, p in pts[tag]])
+macros["nSwapSeeds"] = num(len(next(iter(sw.values()))), 0)
+
+# ---- depth law across every fix tried: trained against never-trained depth pairs ----------------
+law = []   # (label, trained, never, never seed range)
+m5 = {(r["arm"], r["g_version"], r["group"]): r for r in tsv("results/t128p3/m5_depthlaw_table.tsv")}
+t127 = {(r["rung"], r["loss"], r["depth_source"]): r for r in csv.DictReader(io.StringIO(load("results/t127/depth_law.csv")))}
+t128 = {(r["arm"], r["g_version"], r["group"]): r for r in tsv("results/t128/depth_table.tsv")}
+t146law = {(r["arm"], r["route"], r["dgroup"]): r for r in tsv("results/t146/depthlaw.tsv")}
+mm = lambda d, k: f(d[k]["median_abs_err"])
+law.append(("{reference CNN}", mm(m5, ("D", "per_track", "trained")), mm(m5, ("D", "per_track", "never")),
+            f(m5[("D", "per_track", "never")]["seed_spread"])))
+law.append(("{no pseudocount}", f(t127[("A0", "nb", "trained")]["median_abs_log2_err"]),
+            f(t127[("A0", "nb", "law")]["median_abs_log2_err"]), f(t127[("A0", "nb", "law")]["wob_median"])))
+law.append(("{Poisson mean loss}", f(t127[("D", "ppml", "trained")]["median_abs_log2_err"]),
+            f(t127[("D", "ppml", "law")]["median_abs_log2_err"]), f(t127[("D", "ppml", "law")]["wob_median"])))
+law.append(("{4x wider generator}", mm(m5, ("Dbigg", "per_track", "trained")), mm(m5, ("Dbigg", "per_track", "never")),
+            f(m5[("Dbigg", "per_track", "never")]["seed_spread"])))
+law.append(("{2x wider map}", mm(m5, ("Dbigf", "per_track", "trained")), mm(m5, ("Dbigf", "per_track", "never")),
+            f(m5[("Dbigf", "per_track", "never")]["seed_spread"])))
+law.append(("{encoder-decoder}", mm(t128, ("DS", "per_track", "trained")), mm(t128, ("DS", "per_track", "never")),
+            f(t128[("DS", "per_track", "never")]["seed_spread"])))
+law.append(("{shared model}", mm(t146law, ("alone", "direct", "trained")), mm(t146law, ("alone", "direct", "never")),
+            f(t146law[("alone", "direct", "never")]["seed_spread"])))
+law.append(("{agreement loss}", mm(t146law, ("consist", "direct", "trained")), mm(t146law, ("consist", "direct", "never")),
+            f(t146law[("consist", "direct", "never")]["seed_spread"])))
+law.append(("{via base, reference}", None, mm(m5, ("Dviabase", "per_track", "never")),
+            f(m5[("Dviabase", "per_track", "never")]["seed_spread"])))
+law.append(("{via base, shared}", None, mm(t146law, ("alone", "chain", "never")),
+            f(t146law[("alone", "chain", "never")]["seed_spread"])))
+n = len(law)
+tables["tblLawNever"] = (["y", "v", "e", "lab"], [[n - 1 - i, raw(v, 3), raw(e / 2, 4), lab] for i, (lab, _, v, e) in enumerate(law)])
+tables["tblLawTr"] = (["y", "v"], [[n - 1 - i, raw(t, 3)] for i, (_, t, _, _) in enumerate(law) if t is not None])
+direct = [v for lab, t, v, e in law if t is not None and lab != "{agreement loss}"]
+trained = [t for lab, t, v, e in law if t is not None]
+put("lawNeverAll", direct)
+macros["pLawAg"] = num(t146law[("consist", "direct", "never")]["median_abs_err"], 3)
+macros["pLawAgS"] = num(t146law[("consist", "direct", "never")]["seed_spread"], 3)
+put("lawTrAll", trained)
+put("lawViaAll", [v for lab, t, v, e in law if t is None])
+macros["nLawFixes"] = num(len(direct), 0)
+
+# ---- the final experiments: joint objective, pivot through the base, mappability input ---------
+hp = {(r["arm"], r["weight"], r["group"]): r for r in tsv("results/t146/checks_h29_pooled.tsv")}
+hc = {(r["arm"], r["check"], r["group"]): r for r in tsv("results/t146/checks_h29.tsv")}
+
+
+def crps3(prefix, r, sp="crps_all_spread"):
+    macros[prefix] = num(r["crps_all"], 3)
+    macros[prefix + "OS"] = num(r["crps_oracle_scaled_all"], 3)
+    macros[prefix + "SE"] = num(r["scale_error_all"], 3)
+    macros[prefix + "S"] = num(r[sp], 3)
+
+
+W1, WN = "1.00000", "-1.00000"
+crps3("jAlone", hp[("alone", WN, "never")])
+crps3("jMatch", hp[("matched", WN, "never")])
+crps3("jX", hp[("xassay", W1, "never")])
+crps3("jXfour", hp[("xassay", "4.00000", "never")])
+crps3("jDn", hp[("denoise", W1, "never")])
+crps3("jXids", hp[("xassay_ids", W1, "never")])
+crps3("jDnids", hp[("denoise_ids", W1, "never")])
+for nm, key in (("jXd", ("xassay", "primary vs alone", "never")), ("jDnd", ("denoise", "primary vs alone", "never")),
+                ("jXfourd", ("xassay", "dose w4 vs alone", "never")),
+                ("jXnw", ("xassay", "notwrecked ids - joint (trained)", "trained")),
+                ("jDnnw", ("denoise", "notwrecked ids - joint (trained)", "trained")),
+                ("jXtw", ("xassay", "reading: ids - joint", "never")),
+                ("jDntw", ("denoise", "reading: ids - joint", "never"))):
+    r = hc[key]
+    macros[nm] = num(r["delta"], 3, sign=True)
+    macros[nm + "Bar"] = num(r["bar"], 3)
+    if r["d_scale_error"]:
+        macros[nm + "SE"] = num(r["d_scale_error"], 3, sign=True)
+assert not any(hc[(a, "primary vs alone", "never")]["passes"] == "True" for a in ("xassay", "denoise"))
+tables["tblJoint"] = (["x", "os", "se", "err", "lab"], [
+    [i, raw(hp[k]["crps_oracle_scaled_all"], 4), raw(hp[k]["scale_error_all"], 4), raw(f(hp[k]["crps_all_spread"]) / 2, 4), lab]
+    for i, (k, lab) in enumerate([(("alone", WN, "never"), "{alone}"), (("matched", WN, "never"), "{matched scale}"),
+                                  (("xassay", W1, "never"), "{cross-assay}"), (("xassay", "4.00000", "never"), "{cross-assay x4}"),
+                                  (("denoise", W1, "never"), "{denoising}"), (("xassay_ids", W1, "never"), "{cross-assay, scrambled}"),
+                                  (("denoise_ids", W1, "never"), "{denoising, scrambled}")])])
+
+pv = {(r["arm"], r["route"], r["group"]): r for r in tsv("results/t146/checks_h30_pooled.tsv")}
+crps3("pDir", pv[("alone", "direct", "never")])
+crps3("pCh", pv[("alone", "chain", "never")])
+crps3("pAg", pv[("consist", "direct", "never")])
+crps3("pAgCh", pv[("consist", "chain", "never")])
+crps3("pFloor", pv[("alone_nocov", "direct", "never")])
+crps3("pCeil", pv[("alone", "ceiling", "never")])
+g = f(pv[("alone", "direct", "never")]["crps_all"]) - f(pv[("alone", "chain", "never")]["crps_all"])
+bar = 2 * max(f(pv[("alone", "direct", "never")]["crps_all_spread"]), f(pv[("alone", "chain", "never")]["crps_all_spread"]))
+macros["pGain"], macros["pGainBar"] = num(g, 3, sign=True), num(bar, 3)
+ga = f(pv[("alone", "direct", "never")]["crps_all"]) - f(pv[("consist", "direct", "never")]["crps_all"])
+bara = 2 * max(f(pv[("alone", "direct", "never")]["crps_all_spread"]), f(pv[("consist", "direct", "never")]["crps_all_spread"]))
+macros["pAgGain"], macros["pAgBar"] = num(ga, 3, sign=True), num(bara, 3)
+po = [r for r in tsv("results/t146/pooled.tsv") if r["arm"] == "alone" and r["group"] == "never" and r["knob"] == "all"]
+pd_ = {r["route"]: r for r in po}
+seedg = [f(pd_["direct"]["crps_s%d" % i]) - f(pd_["chain"]["crps_s%d" % i]) for i in range(6)]
+put("pSeedGain", seedg, 3)
+macros["nSeedPos"] = num(sum(x > 0 for x in seedg), 0)
+macros["nSeedAll"] = num(len(seedg), 0)
+cells = tsv("results/t146/checks_h30_cells.tsv")
+macros["nCells"] = num(len(cells), 0)
+macros["nCellWin"] = num(sum(r["win"] == "True" for r in cells), 0)
+macros["nCellNeed"] = num(math.ceil(2 * len(cells) / 3), 0)
+cx = [r for r in cells if r["cross"] == "True"]
+macros["nCross"], macros["nCrossWin"] = num(len(cx), 0), num(sum(r["win"] == "True" for r in cx), 0)
+macros["nCellWorse"] = num(sum(f(r["gain"]) < -f(r["bar"]) for r in cells), 0)
+macros["pLawCh"] = num(t146law[("alone", "chain", "never")]["median_abs_err"], 3)
+macros["pLawChS"] = num(t146law[("alone", "chain", "never")]["seed_spread"], 3)
+macros["pLawDir"] = num(t146law[("alone", "direct", "never")]["median_abs_err"], 3)
+macros["pLawDirS"] = num(t146law[("alone", "direct", "never")]["seed_spread"], 3)
+an = load("results/t146/analyze_out.txt")
+m = re.search(r"n1 trained base<->arm alone s0-5: .*?gap ([-+0-9.]+) \(bar ([0-9.]+)\)", an)
+macros["nOneGap"], macros["nOneBar"] = num(m.group(1), 3, sign=True), num(m.group(2), 3)
+tables["tblPivot"] = (["x", "os", "se", "err", "lab"], [
+    [i, raw(pv[k]["crps_oracle_scaled_all"], 4), raw(pv[k]["scale_error_all"], 4), raw(f(pv[k]["crps_all_spread"]) / 2, 4), lab]
+    for i, (k, lab) in enumerate([(("alone", "ceiling", "never"), "{ceiling}"), (("alone", "direct", "never"), "{direct}"),
+                                  (("alone", "chain", "never"), "{via base}"), (("consist", "direct", "never"), "{agreement, direct}"),
+                                  (("alone_nocov", "direct", "never"), "{no covariates}")])])
+
+pts31 = tsv("results/t146/checks_h31_per_track_seed.tsv")
+
+
+def dec0(arm, kl):
+    rr = [r for r in pts31 if r["arm"] == arm and r["kl"] == kl and (arm != "alone" or int(r["seed"]) < 3)]
+    by = {}
+    for r in rr:
+        by.setdefault(r["seed"], []).append(f(r["crps_dec0"]))
+    sm = [st.mean(v) for v in by.values()]
+    return (st.mean(f(r["crps_dec0"]) for r in rr), st.mean(f(r["crps_oracle_scaled_dec0"]) for r in rr),
+            st.mean(f(r["scale_error_dec0"]) for r in rr), max(sm) - min(sm), len({r["track"] for r in rr}))
+
+
+rows31 = []
+for arm, an_ in (("alone", "Al"), ("map", "Map"), ("mapshift", "Sh"), ("dna", "Dna")):
+    for kl, kn in (("crop:36", "L"), ("mapq:0", "Q")):
+        v, os_, se, sp, nt = dec0(arm, kl)
+        macros["m" + an_ + kn], macros["m" + an_ + kn + "OS"] = num(v, 3), num(os_, 3)
+        macros["m" + an_ + kn + "SE"], macros["m" + an_ + kn + "S"] = num(se, 3), num(sp, 3)
+        rows31.append((arm, kl, os_, se, sp))
+macros["nMapTracks"] = num(dec0("alone", "crop:36")[4], 0)
+lab31 = {"alone": "alone", "map": "mappability", "mapshift": "shifted", "dna": "DNA"}
+pre31 = {"crop:36": "36 bp", "mapq:0": "MAPQ 0"}
+xs = {"crop:36": 0, "mapq:0": 5}
+tables["tblMap"] = (["x", "os", "se", "err", "lab"],
+                    [[xs[kl] + ["alone", "map", "mapshift", "dna"].index(a), raw(os_, 4), raw(se, 4), raw(sp / 2, 4),
+                      "{" + pre31[kl] + ", " + lab31[a] + "}"] for a, kl, os_, se, sp in rows31])
+c31 = {(r["arm"], r["check"], r["kl"]): r for r in tsv("results/t146/checks_h31.tsv")}
+for arm, an_ in (("map", "Map"), ("dna", "Dna")):
+    for kl, kn in (("crop:36", "L"), ("mapq:0", "Q")):
+        r = c31[(arm, "dec0 per-track gain > 2 SD", kl)]
+        macros["n" + an_ + kn + "Pass"] = num(r["n_pass"], 0)
+        r = c31[(arm, "shiftnull", kl)]
+        macros["s" + an_ + kn], macros["s" + an_ + kn + "Bar"] = num(r["mean_gain"], 3, sign=True), num(r["bar"], 3)
+        r = c31[(arm, "localise", kl)]
+        macros["l" + an_ + kn], macros["l" + an_ + kn + "Bar"] = num(r["mean_gain"], 3, sign=True), num(r["bar"], 3)
+r = c31[("map", "no-harm dec0", "depth")]
+macros["mDepthChg"], macros["mDepthSD"] = num(-f(r["mean_gain"]), 4, sign=True), num(f(r["bar"]), 4)
+r = c31[("map", "no-harm dec0", "dedup")]
+macros["mDedupChg"] = num(-f(r["mean_gain"]), 4, sign=True)
+gm = {r["arm"]: r for r in po + [r for r in tsv("results/t146/pooled.tsv") if r["arm"] == "map" and r["route"] == "direct"
+                                   and r["group"] == "never" and r["knob"] == "all"] if r["route"] == "direct"}
+crps3("gMap", gm["map"], "seed_spread")
+crps3("gAl", gm["alone"], "seed_spread")
+
+# power and the post-smoke amendments, read from the claims' own records
+for nm, rel in (("powJoint", "h29_adding_a_cross_assay_imputation_or_maske.md"),
+                ("powPivot", "h30_chaining_one_shared_count_space_correcti.md"),
+                ("powMap", "h31_giving_the_shared_count_space_correction.md")):
+    macros[nm] = num(re.search(r"Joint power ~(\d+)%", load(rel)).group(1), 0)
+
+# costs of the next steps (the design-input note and the final run's record)
+note = load("notes/mini_candi_design_inputs.md")
+m = re.search(r"median ([0-9.]+) h, max ([0-9.]+) h per product", note)
+macros["costFastq"], macros["costFastqMax"] = num(m.group(1), 1), num(m.group(2), 1)
+macros["costBam"] = num(re.search(r"~(\d+) h per product", note).group(1), 0)
+rp = load("results/t146/REPORT.md")
+m = re.search(r"mean (\d+)–(\d+) min per arm", rp)
+macros["costTrLo"], macros["costTrHi"] = num(m.group(1), 0), num(m.group(2), 0)
 # =======================================================================================
 
 for name in (*macros, *tables):

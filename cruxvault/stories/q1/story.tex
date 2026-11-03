@@ -1,24 +1,24 @@
-%% storify: close-out of the counterfactual covariate testbed (PI request 2026-10-30).
-%% Anchor: the question "Do the recorded experimental covariates carry enough information
-%% to map one measurement of a track onto another measurement of the same material?" and
-%% everything under it. Edit THIS file. Run `python3 build_story.py` to write story.tex,
-%% then `latexmk -pdf story.tex`. Never edit story.tex by hand: the build overwrites it.
+%% storify: the whole covariate-artifact-correction testbed, final experiments included
+%% (PI request 2026-11-03; first built 2026-10-30/31). Anchor: the question "Do the recorded
+%% experimental covariates carry enough information to map one measurement of a track onto
+%% another measurement of the same material?" and everything under it. PI length ruling
+%% 2026-11-03: at most six pages and about 1,800 body words. Edit THIS file. Run
+%% `python3 build_story.py` to write story.tex, then `latexmk -pdf story.tex`. Never edit
+%% story.tex by hand: the build overwrites it.
 %%
 %% numbers   every measured number is a macro the build defines in the data slot below,
-%%           read from results/{t130,t136,t137,t138,t139,t142,h15,h19,t122,t125}.
+%%           read from results/{t130,t136,t137,t138,t139,t142,h15,h19,h26,t122,t125,t127,
+%%           t128,t128p3,t146}, the final claims' records, the design-input note and the
+%%           imputation-challenge wiki page.
 %% typed     design constants only, each in \lit{}: 7 tracks, 10 settings, 130 products,
 %%           30M and 50M base depths, 15M/7.5M/3.75M depth arms, 36 and 50 bp read
 %%           lengths, antibody proxy 50% and 90%, 25 bp bins, 1 kb bins, chr19 + chr21,
-%%           3 seeds, the PI's bar 0.5 and 2 x seed range, the swap bar 0.1, log10 and
-%%           log2, k = 4-5 count units per read, ratios 2 and 4, 2 test chromosomes,
-%%           mapping filter 0.
-%%
-%% REFRESH after any re-run of the t136 readings: copy results/t136/{checks_readings,
-%% m1_heldout_table}.tsv, rebuild, and re-read the paragraph "Arm-to-arm training" and the
-%% depth-law row of the goals table. The grid is complete (42 of 42 runs, 2026-10-31).
+%%           3 and 6 seeds, the bar 0.5 and 2 x seed range, log10 and log2, k = 4-5 count
+%%           units per read, ratios 2 and 4, MAPQ 0, objective weights 0.25, 1 and 4,
+%%           a 5 Mb shift, 36-mer mappability, two thirds of cells, depth-law bar 0.16.
 \documentclass[pdflatex,sn-mathphys-num,iicol]{sn-jnl}
 
-% crux-sources: {"results/h15/report.md": "1a627c961d3e0204db7eb34de5744e566f36dcc62a5572564784e6f79785cb02", "results/h19/knob_generalization/group_table.tsv": "2c0c89ae7409e736993ebfc05baf0d999f97fa78b5b2ca4396c746bc0338c5e5", "results/h19/knob_generalization/knob_table.tsv": "dbab28911a5a807e45a2d8fa00a3aaaf68f65e32fecc891d393b0b74280114fb", "results/h19/knob_generalization/verify.txt": "a29dfb5c0f41029547a8198253aadb9cc274daf0946ce1db8e757372deff0ead", "results/t122/AUDIT.md": "d137ae1c41217c54de7651644d14b527c49595c99e1902db453d5e92b66cc93c", "results/t125/part1_digest.md": "ad3e66d7aacd44101b02a386f728c95fe2c0af466c93e2a9428477cfb71aeea4", "results/t125/part2_digest.md": "953db8ff3884ecb22e16a643cd1ea9d84a8ba4d43b14b0bfc4935cf4d6648d5e", "results/t130/blind_table.tsv": "32c5f06704b0617120c5e76f5a26563b963bbb6d18cbbeaaf4b408fc6181907d", "results/t130/nested_dispersion.tsv": "895510f95be1b0f7d461d80384a4ab266fec9f2dcd6357c0767e1530562ddd31", "results/t136/checks_readings.tsv": "0877a71121c98e2de20f499924764c74d3f255be60001d21023d67965789d476", "results/t136/m1_heldout_table.tsv": "5875c5d515d0aab3c8add24e7bf5ee46b0a7ddf499e2722a0ceb608d0f3615e2", "results/t137/floor_at_30M.tsv": "57c79b0fb27abb7455b3579b5fba3cf482254003af58ce42d885974dbf75e63c", "results/t138/map_classes.tsv": "0dbc2954ccf8c1b77c07fcd5dfb61ffcbefdfc0fa6f97c1cbd20e2b5f9f4a8d3", "results/t139/knob_vs_floor.tsv": "48e437cac296e22ef3ed9042c92f272376c43ef92c145a088ae0c9ec616a19a2", "results/t142/compare_real_class.tsv": "7ea9c6c29594be886f9fcaa933f41cd9a6fc55f00c36a355e50d031c214a03af", "results/t142/floor_at_30M.tsv": "2efdb6407090b8b8df6be6f60a15835561ef4b85ce1931a4521064c562a2d3b3", "results/t142/map_classes.tsv": "a5aa69c06e7ad58a5557e5cb814b9205ee40a9658f8183711d2ae35ebd5094b6", "results/t142/t141_readthin/knob_classes.tsv": "1ceeba1c40c989da90be8eb9b496de23010c69ff0108fa88211cad6ebfafa846", "stories/q1/build_story.py": "c046242182ca251792fbf551e562f7948e81325826f79333eaed4fb4b20cbf12", "stories/q1/story_src.tex": "8fe43f72a72c521e89e0061b4ec301718cc44feeeffd1bd441e97f2ad9986687"}
+% crux-sources: {"h29_adding_a_cross_assay_imputation_or_maske.md": "0fa755e3b02fa1f02698ea63f2e87b34d075a2f42155d91f4cd72a98b39a1838", "h30_chaining_one_shared_count_space_correcti.md": "81f792f6a60c33cbd389e06e995477dbaa2485c427c4288682cfa6548d34c7c8", "h31_giving_the_shared_count_space_correction.md": "ec7b3ad38869928ec5b055f5d77d6cb6088c9c3cff71ab2d11e5bc8465fddc91", "notes/mini_candi_design_inputs.md": "485a6bf615e94e2af9e1bd37a34444a61cde8d76fb37090c28cad2eddb0504fa", "results/h15/report.md": "1a627c961d3e0204db7eb34de5744e566f36dcc62a5572564784e6f79785cb02", "results/h19/knob_generalization/group_table.tsv": "2c0c89ae7409e736993ebfc05baf0d999f97fa78b5b2ca4396c746bc0338c5e5", "results/h19/knob_generalization/knob_table.tsv": "dbab28911a5a807e45a2d8fa00a3aaaf68f65e32fecc891d393b0b74280114fb", "results/h19/knob_generalization/verify.txt": "a29dfb5c0f41029547a8198253aadb9cc274daf0946ce1db8e757372deff0ead", "results/h26/results.json": "09d70318722324098b47be7f924b136edca4dcf7eccd7e305ad6d43723cc6800", "results/t122/AUDIT.md": "d137ae1c41217c54de7651644d14b527c49595c99e1902db453d5e92b66cc93c", "results/t125/part1_digest.md": "ad3e66d7aacd44101b02a386f728c95fe2c0af466c93e2a9428477cfb71aeea4", "results/t125/part2_digest.md": "953db8ff3884ecb22e16a643cd1ea9d84a8ba4d43b14b0bfc4935cf4d6648d5e", "results/t127/depth_law.csv": "3b6826b1922020d812ac309b0f93e889d3ea67c928b4436a286462fdff48ecbc", "results/t128/depth_table.tsv": "c61e99c71832eab736f3d4f1faa65db90364474fff065377740407025041588d", "results/t128p3/m5_depthlaw_table.tsv": "269eec8f4046441c9a6dc21665a4325b5d25cc44c3879968407e3917388f1298", "results/t130/blind_table.tsv": "32c5f06704b0617120c5e76f5a26563b963bbb6d18cbbeaaf4b408fc6181907d", "results/t130/nested_dispersion.tsv": "895510f95be1b0f7d461d80384a4ab266fec9f2dcd6357c0767e1530562ddd31", "results/t136/checks_readings.tsv": "0877a71121c98e2de20f499924764c74d3f255be60001d21023d67965789d476", "results/t136/m1_heldout_table.tsv": "5875c5d515d0aab3c8add24e7bf5ee46b0a7ddf499e2722a0ceb608d0f3615e2", "results/t137/floor_at_30M.tsv": "57c79b0fb27abb7455b3579b5fba3cf482254003af58ce42d885974dbf75e63c", "results/t138/map_classes.tsv": "0dbc2954ccf8c1b77c07fcd5dfb61ffcbefdfc0fa6f97c1cbd20e2b5f9f4a8d3", "results/t139/knob_vs_floor.tsv": "48e437cac296e22ef3ed9042c92f272376c43ef92c145a088ae0c9ec616a19a2", "results/t142/compare_real_class.tsv": "7ea9c6c29594be886f9fcaa933f41cd9a6fc55f00c36a355e50d031c214a03af", "results/t142/floor_at_30M.tsv": "2efdb6407090b8b8df6be6f60a15835561ef4b85ce1931a4521064c562a2d3b3", "results/t142/map_classes.tsv": "a5aa69c06e7ad58a5557e5cb814b9205ee40a9658f8183711d2ae35ebd5094b6", "results/t142/t141_readthin/knob_classes.tsv": "1ceeba1c40c989da90be8eb9b496de23010c69ff0108fa88211cad6ebfafa846", "results/t146/REPORT.md": "4065a7aa83bc1bc90c3c22742cdae83000edcaedb44507655198a6d87283a377", "results/t146/analyze_out.txt": "8b3b934ee8ae81813536746bd4a8e3b9a7d80b40900df806dfe9cf6085c92a31", "results/t146/checks_h29.tsv": "d17798ada1e9a3cec65cb044fedd23338430aae56755b89d91f5f70117d9ac48", "results/t146/checks_h29_pooled.tsv": "cfa93efc194413b657dfdd3bdd45aef48ea6a7453052f661d5809c89b67120af", "results/t146/checks_h30_cells.tsv": "14b5c615e208bc03d81aac8082aa7071a0043015b06f8a43ce7097d3cdecceac", "results/t146/checks_h30_pooled.tsv": "a835f651247727a17aee07aea31773aad8b486d95586bfa11923e3bef2de7217", "results/t146/checks_h31.tsv": "14ba8ae9a16816c1b98106d981ad34fed57cf0657df9d332410245e53eefab6b", "results/t146/checks_h31_per_track_seed.tsv": "5094b25a2b75163b883d41496ed6e0f87f1183e34bb7cbf1fbdd79092a6b5f60", "results/t146/depthlaw.tsv": "775ccd918cff1e533674ed5de7de12bf2f90f31c8c5500a79aee74be1e5f04a2", "results/t146/pooled.tsv": "98e6ecdc8300efad70c05143bfda0ae93d4716b4cd0fe7f9391615da67159949", "stories/q1/build_story.py": "38145479b81bd5958a383b5c7efc9347aed0e2f2b8507689c78d0b9c0bda2fee", "stories/q1/story_src.tex": "74644ec08142dd08189bedc225c0516a1f791f16cce38cc5f1baf925f3834d14", "wiki/encode-imputation-challenge.md": "3b179980d35be86bc7bb3b03c13308164ece24554446bc7e1c1a63f03aa5b539"}
 
 \usepackage{graphicx}
 \usepackage{amsmath}
@@ -42,6 +42,9 @@
 \definecolor{cDn}{HTML}{B5462E}
 \definecolor{cNar}{HTML}{3F7D7A}
 \definecolor{cBr}{HTML}{4B5FA6}
+% the two parts of CRPS in every stacked bar
+\definecolor{pOS}{HTML}{4B5FA6}
+\definecolor{pSE}{HTML}{D9A441}
 
 \newcommand{\armTwoAll}{21}
 \newcommand{\armTwoDone}{21}
@@ -51,6 +54,11 @@
 \newcommand{\cThreeHeld}{0.148}
 \newcommand{\cThreeTr}{0.120}
 \newcommand{\cThreeTrS}{0.106}
+\newcommand{\costBam}{1}
+\newcommand{\costFastq}{13.4}
+\newcommand{\costFastqMax}{30.6}
+\newcommand{\costTrHi}{36}
+\newcommand{\costTrLo}{11}
 \newcommand{\crArm}{0.573}
 \newcommand{\crArmOS}{0.466}
 \newcommand{\crArmS}{0.062}
@@ -98,6 +106,14 @@
 \newcommand{\floorCtxLo}{0.36}
 \newcommand{\floorFeatHi}{0.00009}
 \newcommand{\floorFeatLo}{0.00002}
+\newcommand{\gAl}{0.660}
+\newcommand{\gAlOS}{0.610}
+\newcommand{\gAlS}{0.031}
+\newcommand{\gAlSE}{0.050}
+\newcommand{\gMap}{0.665}
+\newcommand{\gMapOS}{0.605}
+\newcommand{\gMapS}{0.011}
+\newcommand{\gMapSE}{0.060}
 \newcommand{\gcAHi}{\ensuremath{-}0.01}
 \newcommand{\gcALo}{\ensuremath{-}0.62}
 \newcommand{\gcAnoiseHi}{2.6}
@@ -118,21 +134,117 @@
 \newcommand{\hBestW}{0.0035}
 \newcommand{\ivBHi}{0.031}
 \newcommand{\ivBLo}{0.028}
+\newcommand{\jAlone}{0.667}
+\newcommand{\jAloneOS}{0.612}
+\newcommand{\jAloneS}{0.019}
+\newcommand{\jAloneSE}{0.055}
+\newcommand{\jDn}{0.674}
+\newcommand{\jDnOS}{0.629}
+\newcommand{\jDnS}{0.051}
+\newcommand{\jDnSE}{0.045}
+\newcommand{\jDnd}{\ensuremath{+}0.007}
+\newcommand{\jDndBar}{0.103}
+\newcommand{\jDndSE}{\ensuremath{-}0.010}
+\newcommand{\jDnids}{0.956}
+\newcommand{\jDnidsOS}{0.697}
+\newcommand{\jDnidsS}{0.041}
+\newcommand{\jDnidsSE}{0.259}
+\newcommand{\jDnnw}{\ensuremath{-}0.009}
+\newcommand{\jDnnwBar}{0.094}
+\newcommand{\jDnnwSE}{\ensuremath{-}0.011}
+\newcommand{\jDntw}{\ensuremath{+}0.282}
+\newcommand{\jDntwBar}{0.103}
+\newcommand{\jMatch}{0.659}
+\newcommand{\jMatchOS}{0.613}
+\newcommand{\jMatchS}{0.017}
+\newcommand{\jMatchSE}{0.047}
+\newcommand{\jX}{0.642}
+\newcommand{\jXOS}{0.603}
+\newcommand{\jXS}{0.034}
+\newcommand{\jXSE}{0.039}
+\newcommand{\jXd}{\ensuremath{-}0.025}
+\newcommand{\jXdBar}{0.067}
+\newcommand{\jXdSE}{\ensuremath{-}0.016}
+\newcommand{\jXfour}{0.633}
+\newcommand{\jXfourOS}{0.607}
+\newcommand{\jXfourS}{0.014}
+\newcommand{\jXfourSE}{0.026}
+\newcommand{\jXfourd}{\ensuremath{-}0.034}
+\newcommand{\jXfourdBar}{0.039}
+\newcommand{\jXfourdSE}{\ensuremath{-}0.029}
+\newcommand{\jXids}{0.964}
+\newcommand{\jXidsOS}{0.692}
+\newcommand{\jXidsS}{0.034}
+\newcommand{\jXidsSE}{0.271}
+\newcommand{\jXnw}{\ensuremath{-}0.005}
+\newcommand{\jXnwBar}{0.124}
+\newcommand{\jXnwSE}{\ensuremath{-}0.009}
+\newcommand{\jXtw}{\ensuremath{+}0.322}
+\newcommand{\jXtwBar}{0.068}
 \newcommand{\knobShufHi}{0.00001}
 \newcommand{\knobShufLo}{0.00000}
+\newcommand{\lDnaL}{\ensuremath{+}0.015}
+\newcommand{\lDnaLBar}{0.006}
+\newcommand{\lDnaQ}{\ensuremath{+}0.011}
+\newcommand{\lDnaQBar}{0.006}
+\newcommand{\lMapL}{\ensuremath{+}0.045}
+\newcommand{\lMapLBar}{0.005}
+\newcommand{\lMapQ}{\ensuremath{+}0.051}
+\newcommand{\lMapQBar}{0.003}
 \newcommand{\lawArm}{0.148}
 \newcommand{\lawArmS}{0.123}
 \newcommand{\lawData}{0.71}
+\newcommand{\lawNeverAllHi}{0.63}
+\newcommand{\lawNeverAllLo}{0.24}
 \newcommand{\lawRef}{0.195}
 \newcommand{\lawRefS}{0.061}
 \newcommand{\lawSeedHi}{0.213}
 \newcommand{\lawSeedLo}{0.089}
+\newcommand{\lawTrAllHi}{0.12}
+\newcommand{\lawTrAllLo}{0.05}
 \newcommand{\lawVia}{0.125}
+\newcommand{\lawViaAllHi}{0.11}
+\newcommand{\lawViaAllLo}{0.09}
 \newcommand{\lawViaS}{0.022}
 \newcommand{\lvlFifteenHi}{0.38}
 \newcommand{\lvlFifteenLo}{0.18}
 \newcommand{\lvlLowHi}{0.32}
 \newcommand{\lvlLowLo}{0.21}
+\newcommand{\mAlL}{0.353}
+\newcommand{\mAlLOS}{0.322}
+\newcommand{\mAlLS}{0.004}
+\newcommand{\mAlLSE}{0.031}
+\newcommand{\mAlQ}{0.590}
+\newcommand{\mAlQOS}{0.569}
+\newcommand{\mAlQS}{0.004}
+\newcommand{\mAlQSE}{0.020}
+\newcommand{\mDedupChg}{\ensuremath{-}0.0166}
+\newcommand{\mDepthChg}{\ensuremath{-}0.0094}
+\newcommand{\mDepthSD}{0.0011}
+\newcommand{\mDnaL}{0.338}
+\newcommand{\mDnaLOS}{0.316}
+\newcommand{\mDnaLS}{0.011}
+\newcommand{\mDnaLSE}{0.022}
+\newcommand{\mDnaQ}{0.577}
+\newcommand{\mDnaQOS}{0.558}
+\newcommand{\mDnaQS}{0.011}
+\newcommand{\mDnaQSE}{0.020}
+\newcommand{\mMapL}{0.303}
+\newcommand{\mMapLOS}{0.300}
+\newcommand{\mMapLS}{0.010}
+\newcommand{\mMapLSE}{0.003}
+\newcommand{\mMapQ}{0.532}
+\newcommand{\mMapQOS}{0.530}
+\newcommand{\mMapQS}{0.004}
+\newcommand{\mMapQSE}{0.002}
+\newcommand{\mShL}{0.348}
+\newcommand{\mShLOS}{0.323}
+\newcommand{\mShLS}{0.006}
+\newcommand{\mShLSE}{0.026}
+\newcommand{\mShQ}{0.594}
+\newcommand{\mShQOS}{0.573}
+\newcommand{\mShQS}{0.004}
+\newcommand{\mShQSE}{0.021}
 \newcommand{\mapqZeroDecHi}{0.48}
 \newcommand{\mapqZeroDecLo}{0.45}
 \newcommand{\mapqZeroHi}{0.110}
@@ -140,19 +252,37 @@
 \newcommand{\nArmsDisp}{21}
 \newcommand{\nBDcells}{18}
 \newcommand{\nBDgain}{18}
+\newcommand{\nCellNeed}{66}
+\newcommand{\nCellWin}{2}
+\newcommand{\nCellWorse}{0}
+\newcommand{\nCells}{98}
 \newcommand{\nCfg}{16}
+\newcommand{\nCross}{90}
+\newcommand{\nCrossWin}{2}
+\newcommand{\nDnaLPass}{6}
+\newcommand{\nDnaQPass}{5}
+\newcommand{\nEICmodels}{23}
 \newcommand{\nKnobLevels}{9}
+\newcommand{\nLawFixes}{7}
 \newcommand{\nLawPairs}{84}
+\newcommand{\nMapLPass}{6}
+\newcommand{\nMapQPass}{6}
+\newcommand{\nMapTracks}{6}
 \newcommand{\nMetSame}{7}
 \newcommand{\nMetTr}{14}
+\newcommand{\nOneBar}{0.006}
+\newcommand{\nOneGap}{\ensuremath{-}0.006}
 \newcommand{\nPeDn}{8}
 \newcommand{\nPeDnSig}{1}
 \newcommand{\nPeHist}{16}
 \newcommand{\nPeHistSig}{16}
 \newcommand{\nPh}{27}
 \newcommand{\nPhAbove}{27}
+\newcommand{\nSeedAll}{6}
+\newcommand{\nSeedPos}{6}
 \newcommand{\nSh}{27}
 \newcommand{\nShAbove}{3}
+\newcommand{\nSwapSeeds}{2}
 \newcommand{\offA}{1.247}
 \newcommand{\offAOS}{1.109}
 \newcommand{\offASE}{0.138}
@@ -167,6 +297,42 @@
 \newcommand{\oldAOS}{1.36}
 \newcommand{\oldASE}{1.70}
 \newcommand{\oldAw}{0.113}
+\newcommand{\pAg}{0.598}
+\newcommand{\pAgBar}{0.061}
+\newcommand{\pAgCh}{0.604}
+\newcommand{\pAgChOS}{0.576}
+\newcommand{\pAgChS}{0.035}
+\newcommand{\pAgChSE}{0.028}
+\newcommand{\pAgGain}{\ensuremath{+}0.062}
+\newcommand{\pAgOS}{0.577}
+\newcommand{\pAgS}{0.015}
+\newcommand{\pAgSE}{0.021}
+\newcommand{\pCeil}{0.423}
+\newcommand{\pCeilOS}{0.418}
+\newcommand{\pCeilS}{0.008}
+\newcommand{\pCeilSE}{0.005}
+\newcommand{\pCh}{0.633}
+\newcommand{\pChOS}{0.576}
+\newcommand{\pChS}{0.077}
+\newcommand{\pChSE}{0.057}
+\newcommand{\pDir}{0.660}
+\newcommand{\pDirOS}{0.610}
+\newcommand{\pDirS}{0.031}
+\newcommand{\pDirSE}{0.050}
+\newcommand{\pFloor}{0.804}
+\newcommand{\pFloorOS}{0.648}
+\newcommand{\pFloorS}{0.023}
+\newcommand{\pFloorSE}{0.156}
+\newcommand{\pGain}{\ensuremath{+}0.027}
+\newcommand{\pGainBar}{0.154}
+\newcommand{\pLawAg}{0.134}
+\newcommand{\pLawAgS}{0.075}
+\newcommand{\pLawCh}{0.089}
+\newcommand{\pLawChS}{0.140}
+\newcommand{\pLawDir}{0.245}
+\newcommand{\pLawDirS}{0.196}
+\newcommand{\pSeedGainHi}{0.070}
+\newcommand{\pSeedGainLo}{0.004}
 \newcommand{\peFloor}{1.004}
 \newcommand{\peFloorOS}{0.500}
 \newcommand{\peFloorSE}{0.058}
@@ -181,6 +347,9 @@
 \newcommand{\phFloorSpreadLo}{0.001}
 \newcommand{\phRatioHi}{763}
 \newcommand{\phRatioLo}{33}
+\newcommand{\powJoint}{41}
+\newcommand{\powMap}{41}
+\newcommand{\powPivot}{51}
 \newcommand{\readPSameHi}{0.01}
 \newcommand{\readPSameLo}{\ensuremath{-}0.26}
 \newcommand{\readTrHi}{0.18}
@@ -199,6 +368,14 @@
 \newcommand{\relPSame}{0.06}
 \newcommand{\relPTr}{0.15}
 \newcommand{\ruleReading}{fail}
+\newcommand{\sDnaL}{\ensuremath{+}0.010}
+\newcommand{\sDnaLBar}{0.011}
+\newcommand{\sDnaQ}{\ensuremath{+}0.017}
+\newcommand{\sDnaQBar}{0.011}
+\newcommand{\sMapL}{\ensuremath{+}0.045}
+\newcommand{\sMapLBar}{0.011}
+\newcommand{\sMapQ}{\ensuremath{+}0.062}
+\newcommand{\sMapQBar}{0.005}
 \newcommand{\shLowBr}{0.79}
 \newcommand{\shLowDn}{0.39}
 \newcommand{\shLowNar}{0.79}
@@ -214,6 +391,18 @@
 \newcommand{\shThirtySDn}{0.001}
 \newcommand{\shThirtySNar}{0.003}
 \newcommand{\shufMax}{0.00003}
+\newcommand{\swDPredHi}{0.70}
+\newcommand{\swDPredLo}{0.52}
+\newcommand{\swDRealHi}{\ensuremath{-}0.03}
+\newcommand{\swDRealLo}{\ensuremath{-}0.03}
+\newcommand{\swLPredHi}{\ensuremath{-}0.22}
+\newcommand{\swLPredLo}{\ensuremath{-}0.89}
+\newcommand{\swLRealHi}{\ensuremath{-}1.05}
+\newcommand{\swLRealLo}{\ensuremath{-}1.08}
+\newcommand{\swPPredHi}{\ensuremath{-}0.19}
+\newcommand{\swPPredLo}{\ensuremath{-}0.98}
+\newcommand{\swPRealHi}{0.01}
+\newcommand{\swPRealLo}{\ensuremath{-}0.08}
 \newcommand{\swapHi}{0.22}
 \newcommand{\swapLo}{0.19}
 \newcommand{\wModel}{0.175}
@@ -251,6 +440,16 @@ x gc err
 1.27 0.807 0.064
 }\tblGapD
 \pgfplotstableread{
+x os se err lab
+0 0.6120 0.0547 0.0097 {alone}
+1 0.6126 0.0467 0.0085 {matched scale}
+2 0.6028 0.0387 0.0168 {cross-assay}
+3 0.6067 0.0261 0.0068 {cross-assay x4}
+4 0.6294 0.0447 0.0257 {denoising}
+5 0.6925 0.2714 0.0169 {cross-assay, scrambled}
+6 0.6972 0.2592 0.0207 {denoising, scrambled}
+}\tblJoint
+\pgfplotstableread{
 x nar br lab
 0 0.000216 0.000282 {depth 15M}
 1 0.002037 0.003151 {depth 3.75M}
@@ -262,6 +461,49 @@ x nar br lab
 7 0.005077 0.006764 {MAPQ 10}
 8 0.098802 0.110431 {MAPQ 0}
 }\tblKnob
+\pgfplotstableread{
+y v e lab
+9 0.291 0.0257 {reference CNN}
+8 0.456 0.0803 {no pseudocount}
+7 0.276 0.0452 {Poisson mean loss}
+6 0.628 0.0949 {4x wider generator}
+5 0.411 0.1148 {2x wider map}
+4 0.311 0.0032 {encoder-decoder}
+3 0.245 0.0982 {shared model}
+2 0.134 0.0374 {agreement loss}
+1 0.110 0.0272 {via base, reference}
+0 0.089 0.0700 {via base, shared}
+}\tblLawNever
+\pgfplotstableread{
+y v
+9 0.052
+8 0.120
+7 0.070
+6 0.070
+5 0.051
+4 0.062
+3 0.065
+2 0.067
+}\tblLawTr
+\pgfplotstableread{
+x os se err lab
+0 0.3216 0.0310 0.0020 {36 bp, alone}
+5 0.5691 0.0204 0.0022 {MAPQ 0, alone}
+1 0.2997 0.0033 0.0050 {36 bp, mappability}
+6 0.5304 0.0020 0.0019 {MAPQ 0, mappability}
+2 0.3228 0.0256 0.0029 {36 bp, shifted}
+7 0.5734 0.0210 0.0022 {MAPQ 0, shifted}
+3 0.3164 0.0221 0.0053 {36 bp, DNA}
+8 0.5576 0.0198 0.0055 {MAPQ 0, DNA}
+}\tblMap
+\pgfplotstableread{
+x os se err lab
+0 0.4182 0.0052 0.0041 {ceiling}
+1 0.6096 0.0502 0.0153 {direct}
+2 0.5763 0.0570 0.0385 {via base}
+3 0.5768 0.0209 0.0076 {agreement, direct}
+4 0.6485 0.1555 0.0116 {no covariates}
+}\tblPivot
 \pgfplotstableread{
 x y
 4.907 0.485
@@ -310,23 +552,60 @@ x y
 1.907 0.687
 0.907 0.745
 }\tblShUnitNar
+\pgfplotstableread{
+x y
+-0.029 0.695
+-0.029 0.521
+}\tblSwD
+\pgfplotstableread{
+x y
+-1.071 -0.223
+-1.071 -0.567
+-1.055 -0.567
+-1.055 -0.805
+-1.046 -0.685
+-1.046 -0.768
+-1.063 -0.838
+-1.063 -0.798
+-1.067 -0.759
+-1.067 -0.893
+-1.075 -0.713
+-1.075 -0.565
+}\tblSwL
+\pgfplotstableread{
+x y
+0.001 -0.338
+0.001 -0.980
+-0.005 -0.366
+-0.005 -0.626
+-0.017 -0.415
+-0.017 -0.437
+-0.011 -0.266
+-0.011 -0.192
+-0.080 -0.838
+-0.080 -0.344
+0.013 -0.234
+0.013 -0.319
+}\tblSwP
 
 \raggedbottom
 
 \begin{document}
 
-\title[Counterfactual covariate testbed]{Recorded processing covariates map a track onto its counterfactual on trained pairs, but the map does not carry to unseen pairs}
+\title[Covariate artifact correction testbed]{Recorded processing covariates correct a track on the pairs they were trained on, but the correction does not carry to unseen pairs}
 
 \author{\fnm{Mehdi} \sur{Foroozandeh}}
 \affil{\orgname{CANDI project, private close-out draft, \today}}
 
-\abstract{We asked whether recorded processing covariates carry enough information to map one
-measurement of an epigenomic track onto another of the same material. We built counterfactual arms of \lit{7} tracks, each changing one of \lit{10} processing
-settings, and trained a generator that reads the covariates and outputs the map. On trained
-depth pairs, the better designs close \gcBDLo{} to \gcBDHi{} of the gap from a covariate-free
-monotone map to the exact oracle (seed range at most \gcBDnoiseHi{} of that gap). On unseen
-pairs the gain over a scrambled-covariate twin falls from \relCntTr{} to \relCntSame{}, and
-no design meets the depth law. All readings are exploratory, not judged.}
+\abstract{We asked whether recorded processing covariates carry enough information to map
+one measurement of an epigenomic track onto another of the same material. We built
+counterfactual arms of \lit{7} tracks, each changing one of \lit{10} processing settings, and
+trained networks that read the covariates and output the correction. On trained depth pairs
+the better designs close \gcBDLo{} to \gcBDHi{} of the gap from a covariate-free map to the
+oracle (seed range at most \gcBDnoiseHi{} of the gap). On unseen pairs the gain over a scrambled-covariate twin falls from \relCntTr{} to
+\relCntSame{}, and no design follows the depth law; three final experiments did not change this,
+but a mappability input helps in low-mappability bins. All readings are exploratory, on
+\lit{7} tracks.}
 
 \keywords{epigenomics, experimental covariates, counterfactual data, sequencing depth}
 
@@ -334,121 +613,158 @@ no design meets the depth law. All readings are exploratory, not judged.}
 
 \section{Motivation and background}\label{sec:motivation}
 
-CANDI imputes epigenomic tracks from raw counts and reads experimental covariates (depth,
-run type, read length) on both sides; its zero-shot claims rest on that conditioning. Inside
-CANDI it cannot be tested alone: training tracks differ in biology and covariates at once, and
-the covariates are collinear (they change together). Depth has a closed form, binomial
-thinning; the other settings have none. Missing was data where one setting's true effect is known. Our question: do the recorded covariates carry enough information to map one
-measurement of a track onto another of the same material?
+In the ENCODE Imputation Challenge, an average-activity baseline beat all but two of
+\nEICmodels{} submitted models \cite{schreiber2023}. The cause was a small processing
+difference: the single-end training data and the paired-end blind test data were
+deduplicated by different rules. Processing settings (covariates) thus leave artifacts that a
+model must correct.
+
+CANDI imputes tracks from raw counts and reads covariates (depth, run type, read length) on
+both sides. Inside CANDI this conditioning cannot be tested: its corpus pairs an experiment
+only with thinned copies of itself, so only depth ever changes with the material fixed, and
+the covariates are collinear (they change together). We therefore built an isolated testbed.
+Our question: do the recorded covariates carry enough information to map one measurement of a
+track onto another of the same material?
 
 \section{Methods}\label{sec:methods}
 
-\paragraph{Counterfactual arms.} We took \lit{7} ENCODE imputation-challenge tracks (one
-DNase-seq, three narrow and three broad histone marks), each processed to a base of \lit{30}M
-reads (DNase \lit{50}M) and to arms that change one setting: depth (\lit{15}M,
-\lit{7.5}M, \lit{3.75}M subsamples of the base), read length (\lit{36}, \lit{50}~bp), mapping
-filter, duplicate removal, paired-end, an antibody proxy (\lit{50}\% or \lit{90}\% control
-reads), fragment extension and three control settings: \lit{130} products. Each product was
-split into two pseudoreplicate halves (random halves of its reads).
+\paragraph{Counterfactual arms.} We took \lit{7} challenge tracks (one DNase-seq, three narrow
+and three broad histone marks), processed each to a base of \lit{30}M reads (DNase \lit{50}M)
+and to arms that change one setting: depth (\lit{15}M, \lit{7.5}M, \lit{3.75}M), read length
+(\lit{36}, \lit{50}~bp), mapping filter, duplicate removal, paired-end, an antibody proxy
+(\lit{50}\% or \lit{90}\% control reads), fragment extension and three control settings:
+\lit{130} products, each split into two random halves of its reads.
 
-\paragraph{Model and competitors.} A generator $g$ reads the source and target covariates $C$,
+\paragraph{Model and competitors.} A generator $g$ reads source and target covariates $C$,
 $C'$ and outputs a map $f$; $f(X)$ predicts the target as negative binomial (NB) counts per
-\lit{25}~bp bin, or as $-\log_{\lit{10}} p$ (Fig.~\ref{fig:design}). Four designs of $f$ rise
-in capacity: per-bin affine (A), per-bin monotone curve (B), kernel plus curve (C) and a
-conditioned convolutional network (D). The competitors are the no-covariates twin (covariates
-scrambled), one-warp (a covariate-free monotone map per pair) and an oracle. The score is the
-NB CRPS (continuous ranked probability score, distance from forecast to observation), split
-into a shape part and a scale error. Gap closed is
-$(D_\text{one-warp}-D_\text{model})/(D_\text{one-warp}-D_\text{oracle})$. The bar, set before
-reading, is gap closed $\ge \lit{0.5}$ in every mark class and a gain above \lit{2}$\times$ the
-seed range (largest minus smallest of \lit{3} seeds). Scoring uses held-out \lit{chr19} and
-\lit{chr21}.
+\lit{25}~bp bin (Fig.~\ref{fig:design}a). Four designs of $f$ rise in capacity: per-bin affine
+(A), per-bin monotone curve (B), kernel plus curve (C) and a conditioned convolutional network
+(D). Competitors are a scrambled-covariate twin, one-warp (a covariate-free monotone map per
+pair) and an oracle (exact binomial thinning for depth). The score is the NB CRPS (continuous
+ranked probability score, distance from forecast to observation), always split into a shape
+part and a scale error. A gain counts when it exceeds \lit{2}$\times$ the seed range (largest
+minus smallest over \lit{3} seeds). Scoring uses held-out \lit{chr19} and \lit{chr21}, on
+trained pairs and on unseen pairs (arm to arm, never paired in training). The depth law says a
+depth change scales the predicted total by the depth ratio.
 
-\paragraph{Floor and maps.} The resampling floor thins the halves along a depth ladder and
-reads \lit{1}~kb shape (one minus Spearman) and peak height. Regional maps fit
-signal level as the null, then read GC, mappability, repeats and peak context, beside a
-shuffle control.
+\paragraph{Final experiments.} Three claims were pre-registered (fixed in writing before any
+run) on one model shared by all tracks (Fig.~\ref{fig:design}b): adding a cross-assay
+imputation or masked-bin denoising objective (weights \lit{0.25}, \lit{1}, \lit{4}) changes
+unseen-pair CRPS; routing through the base ($\text{arm}\to\text{base}\to\text{arm}'$) beats the
+direct route in two thirds of unseen cells (\lit{6} seeds); a \lit{36}-mer mappability input
+lowers CRPS in the lowest-mappability tenth of bins on read-length and mapping-filter arms,
+beside a \lit{5}~Mb shifted-mappability control. After a one-seed smoke test (a short trial run), and before the
+full runs, the design was amended: scrambled twins were added, a collapsed
+consistency loss was replaced by an agreement loss between routes, and empty top strata were
+redefined. The joint probability of meeting every check was \powJoint{}\% to \powPivot{}\%.
 
-\paragraph{Two corrections.} First, the floor was planned as the depth oracle. But a depth arm
-shares its base's reads, so the floor sat above one-warp and inverted the interval. The oracle
-is now the exact nested-read oracle: binomial thinning of the base count, and its Bayes
-posterior in reverse. The real arms have \dispLo{} to \dispHi{} of the binomial
-variance. Second, a read adds one count to each \lit{25}~bp bin it covers ($k=\lit{4}$--\lit{5}); the
-first floor thinned single counts, so multi-bin sums were about $\sqrt{k}$ too smooth. We
-rebuilt it by thinning whole reads.
-
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
 \begin{tikzpicture}[box/.style={draw, rounded corners=2pt, align=center, font=\scriptsize,
-    minimum height=0.8cm, text width=1.95cm, inner sep=2pt}, >={Stealth[length=1.5mm]}]
+    minimum height=0.8cm, text width=2.0cm, inner sep=2pt}, >={Stealth[length=1.5mm]}]
+  \node[font=\small] at (-1.3,0.7) {(a)};
   \node[box] (base) at (0,0) {Base track $X$\\ (full depth)};
   \node[box] (arm) at (5.0,0) {Arm $X'$: one\\ setting changed};
   \node[box] (cov) at (0,-1.45) {Covariates\\ $C$, $C'$};
   \node[box, draw=dD] (g) at (2.5,-1.45) {Generator $g$\\ $\to$ map $f$ (A--D)};
   \node[box, draw=dD] (pred) at (5.0,-1.45) {Prediction\\ $f(X)$, NB};
-  \node[box, text width=6.9cm] (score) at (2.5,-2.85) {Score against $X'$: NB CRPS = shape +
+  \node[box, text width=6.9cm] (score) at (2.5,-2.85) {Score against $X'$: CRPS = shape +
     scale error, beside twin, one-warp and oracle};
   \draw[->] (base) -- node[above, font=\tiny] {same reads} (arm);
   \draw[->] (cov) -- (g);
   \draw[->] (g) -- (pred);
   \draw[->] (pred) -- (pred |- score.north);
   \draw[->] (arm.east) -- ++(0.2,0) |- (score.east);
+  \begin{scope}[xshift=8.6cm]
+  \node[font=\small] at (-1.0,0.7) {(b)};
+  \node[box, draw=dD, text width=2.4cm] (sh) at (1.2,0) {One shared\\ correction model};
+  \node[box, text width=2.2cm] (j) at (4.6,0) {+ imputation or\\ denoising loss};
+  \node[box, text width=2.2cm] (pv) at (4.6,-1.45) {arm $\to$ base $\to$ arm$'$\\ against direct};
+  \node[box, text width=2.2cm] (mp) at (4.6,-2.85) {+ mappability\\ input channel};
+  \node[box, text width=2.4cm] (un) at (1.2,-2.0) {Scored on unseen\\ arm-to-arm pairs};
+  \draw[->] (sh) -- (j); \draw[->] (sh.east) -- ++(0.3,0) |- (pv); \draw[->] (sh.east) -- ++(0.3,0) |- (mp);
+  \draw[->] (sh) -- (un);
+  \end{scope}
 \end{tikzpicture}
-\caption{Design. Each arm reprocesses the base's reads with one setting changed. The generator
-reads both covariate sets and outputs the map that turns the base into a predicted arm, scored
-beside three competitors.}\label{fig:design}
-\end{figure}
+\caption{Design. (a) Each arm reprocesses the base's reads with one setting changed; the
+generator reads both covariate sets and outputs the map that turns the base into a predicted
+arm. (b) The three final experiments, each a change to one shared model.}\label{fig:design}
+\end{figure*}
 
 \section{Results and discussion}\label{sec:results}
 
-\paragraph{Depth: the covariates close most of the gap.} From base to arm, designs B to D close
-\gcBDLo{} to \gcBDHi{} of the gap in every mark class (Fig.~\ref{fig:results}a), with a seed
-range of \gcBDnoiseLo{} to \gcBDnoiseHi{} in gap units; the gain beats \lit{2}$\times$ the seed
-range in \nBDgain{} of \nBDcells{} cells. In narrow marks, design B scores \wModel{}
-(\wModelOS{} shape + \wModelSE{} scale error), one-warp \wWarp{} (\wWarpOS{} + \wWarpSE{}) and
-the oracle \wOra{} (\wOraOS{} + \wOraSE{}), against \lit{2}$\times$ seed range \wSeed{}. The
-interval is small (\ivBLo{} to \ivBHi{}). Design A shows no gain in DNase and narrow marks (\gcALo{} to \gcAHi{}, seed range \gcAnoiseLo{} to
-\gcAnoiseHi{}). From arm to base, C and D pass the per-bin oracle (\gcCDabLo{} to \gcCDabHi{}) by
-reading neighbouring bins.
+\paragraph{Which settings act, and where.} Whole-read resampling sets the floor: at
+\lit{3.75}M reads per half the narrow \lit{1}~kb shape floor is \shLowNar{}, not
+\shLowUnitNar{} (Fig.~\ref{fig:results}b). Peak height moves beyond this floor in \nPhAbove{} of
+\nPh{} setting rows, shape in only \nShAbove{} of \nSh{}. Signal level explains \lvlFifteenLo{}
+to \lvlFifteenHi{} of the per-bin disagreement; regional features add at most \featMax{}. Depth
+acts uniformly (residual \depArm{} against its null \depNull{}); the mapping filter and read
+length act in low-mappability bins (feature gain \mapqZeroLo{} to \mapqZeroHi{} and
+\cropFeatLo{} to \cropFeatHi{}; Fig.~\ref{fig:results}c).
 
-\paragraph{Run type: better than one-warp, no valid ceiling.} Paired-end reprocessing is not a
-subsample, so the floor stays its oracle. In narrow marks the floor, \peFloor{} (\peFloorOS{} +
-\peFloorSE{}), lies above one-warp, \peWarp{} (\peWarpOS{} + \peWarpSE{}), so gap closed cannot
-be read. The model beats one-warp by \peGainLo{} to \peGainHi{} in \nPeHistSig{} of \nPeHist{}
-histone cells, each above \lit{2}$\times$ the seed range (\peSeedLo{} to \peSeedHi{}); in DNase,
-\nPeDnSig{} of \nPeDn{} cells.
+\paragraph{Trained pairs: the covariates carry the information.} From base to arm, designs B to
+D close \gcBDLo{} to \gcBDHi{} of the gap in every mark class (Fig.~\ref{fig:results}a; seed
+range at most \gcBDnoiseHi{} of the gap), above \lit{2}$\times$ the seed range in \nBDgain{} of
+\nBDcells{} cells. In narrow marks, design B scores \wModel{} (\wModelOS{} shape + \wModelSE{}
+scale error), one-warp \wWarp{} (\wWarpOS{} + \wWarpSE{}) and the oracle \wOra{} (\wOraOS{} +
+\wOraSE{}); \lit{2}$\times$ the seed range is \wSeed{}. The affine design A shows no gain
+(\gcALo{} to \gcAHi{}): a monotone curve gives the main step, and more capacity adds little. For
+paired-end, the model beats one-warp by \peGainLo{} to \peGainHi{} in \nPeHistSig{} of
+\nPeHist{} histone cells (\lit{2}$\times$ seed range \peSeedLo{} to \peSeedHi{}). A depth offset helps only A, in scale error (DNase \oldA{} $\pm$
+\oldAw{} to \offA{} $\pm$ \offAw{}; Table~\ref{tab:goals}). From predicted counts, the peak
+caller's formula plus a learned correction gives $p$ best (log CRPS \hBest{} $\pm$ \hBestW{}, \hBestOS{} + \hBestSE{}).
 
-\paragraph{Unseen pairs.} The relative count gain over the twin falls from \relCntTr{} on
-trained pairs to \relCntSame{} on unseen pairs of one setting (\relCntCross{} for two); in $p$,
-from \relPTr{} to \relPSame{} (\relPCross{}). It clears \lit{2}$\times$ the seed range in
-\nMetTr{} of \nCfg{} configurations trained and \nMetSame{} of \nCfg{} unseen. Only the control settings keep their $p$ gain (\ctlPTrLo{} to \ctlPTrHi{}
-trained, \ctlPSameLo{} to \ctlPSameHi{} unseen; seed range at most \ctlWobHi{}). Told $C'=C$,
-no design returns its input (\swapLo{} to \swapHi{}, bar \lit{0.1}).
+\paragraph{Unseen pairs: the correction does not transfer.} The relative count gain over the
+twin falls from \relCntTr{} on trained pairs to \relCntSame{} on unseen pairs. The real arms obey
+the depth law within \lawData\%, yet every design meets it on trained pairs (\lawTrAllLo{} to
+\lawTrAllHi{}, median $|\log_{\lit{2}}|$ error) and misses it on unseen pairs (\lawNeverAllLo{} to
+\lawNeverAllHi{}; Fig.~\ref{fig:transfer}a). Removing the pseudocount, a Poisson mean loss,
+wider networks and an encoder-decoder do not close the miss. Chaining two trained maps through
+the base does (\lawViaAllLo{} to \lawViaAllHi{}). The miss is a failure to transfer, not a lack
+of capacity.
 
-\paragraph{The depth law.} The real arms obey it within \lawData\% (\nLawPairs{} pairs). On
-unseen arm-to-arm pairs the direct map misses it (median $|\log_{\lit{2}}|$ scale error
-\lawRef{}, seed range \lawRefS{}); two trained maps chained through the base come closer
-(\lawVia{}, seed range \lawViaS{}).
+\paragraph{Arm-to-arm training teaches scale, not distribution.} One added arm-to-arm pair per
+track closes \cOneGap{} of the depth-law gap to the chained map (bar \lit{0.5}), but CRPS gets
+worse: \crArm{} (\crArmOS{} + \crArmSE{}, seed range \crArmS{}) against \crRef{} (\crRefOS{} +
+\crRefSE{}, \crRefS{}) direct and \crVia{} (\crViaOS{} + \crViaSE{}, \crViaS{}) chained, a gap
+closed of \cFourGap{}. Training on every pair reaches the chained map (\crArmTwo{}, \crArmTwoOS{}
++ \crArmTwoSE{}, \crArmTwoS{}; not pre-registered).
 
-\paragraph{Arm-to-arm training (complete).} One added arm-to-arm pair
-per track (ratio \lit{4}) brings the held-out ratio-\lit{2} error to \lawArm{} (seed range
-\lawArmS{}), closing \cOneGap{} of the gap to the chained map (bar \lit{0.5}); it passes the
-transfer bar (\cThreeHeld{} against \cThreeBar{}) and keeps the base fit (\fitArm{} against
-\fitRef{}). But the predicted distribution gets worse: CRPS \crArm{} (\crArmOS{} + \crArmSE{}, seed range \crArmS{}) against \crRef{}
-(\crRefOS{} + \crRefSE{}) direct and \crVia{} (\crViaOS{} + \crViaSE{}) chained, a gap closed
-of \cFourGap{}, mostly scale error in DNase. Both arms are complete and
-both controls pass, so the reading is final: \ruleReading{} (not judged). The
-every-pair second arm (not checked) reaches the chained map: CRPS \crArmTwo{} (\crArmTwoOS{} + \crArmTwoSE{}, seed
-range \crArmTwoS{}), gap closed \crArmTwoGap{}.
+\paragraph{Trained CANDI.} Told a \lit{36}~bp read length, CANDI moves its predicted level by
+\swLPredLo{} to \swLPredHi{} $\log_{\lit{2}}$ (real \swLRealLo{} to \swLRealHi{}); told
+paired-end, by \swPPredLo{} to \swPPredHi{} in histone marks (real \swPRealLo{} to \swPRealHi{})
+and \swDPredLo{} to \swDPredHi{} in DNase (real \swDRealLo{}; Fig.~\ref{fig:transfer}b). Its
+depth control failed, so per-region tracking cannot be read. The PI's reading: CANDI uses
+both covariates, but not in the direction the real tracks move.
 
-\paragraph{The floor, and where settings act.} Whole-read thinning reproduces the real depth
-halves (\lit{1}~kb shape ratio \realRead{}, against \realUnit{} for count thinning). At
-\lit{3.75}M reads per half the narrow shape floor is \shLowNar{}, not \shLowUnitNar{}
-(Fig.~\ref{fig:results}b; seed range at most \shSpreadHi{}). Signal level explains
-\lvlFifteenLo{} to \lvlFifteenHi{} of the per-bin disagreement; regional features add at most
-\featMax{} (shuffle \shufMax{}). Depth acts uniformly: its residual equals its whole-read null
-(DNase \depArm{} against \depNull{}). The mapping filter does not: feature gain \mapqZeroLo{} to
-\mapqZeroHi{} (Fig.~\ref{fig:results}c), against at most \floorFeatHi{} for the floor.
+\paragraph{Joint objective: no change.} At weight \lit{1}, the cross-assay objective moves
+unseen-pair CRPS by \jXd{} (bar \jXdBar{}) and denoising by \jDnd{} (bar \jDndBar{}):
+neither is statistically significant (Fig.~\ref{fig:final}a). Correction alone scores \jAlone{}
+(\jAloneOS{} + \jAloneSE{}, seed range \jAloneS{}); cross-assay \jX{} (\jXOS{} + \jXSE{},
+\jXS{}). At weight \lit{4}, cross-assay nearly clears (\jXfourd{} against \jXfourdBar{}),
+mostly in scale error (\jXfourdSE{}). The scrambled twins are worse on unseen pairs by
+\jXtw{} and \jDntw{}, but the planned twin check on trained pairs cannot fail, because the twin is
+scored on its own training labels. Reading: against the claim, weak evidence.
+
+\paragraph{Pivot through the base: no general gain.} Routing beats the direct route beyond the
+bar in \nCellWin{} of \nCells{} unseen cells (\nCellNeed{} needed; \nCrossWin{} of \nCross{}
+cross-setting cells) and loses in \nCellWorse{}. Pooled, it is lower in \nSeedPos{} of
+\nSeedAll{} seeds (gain \pGain{} against bar \pGainBar{}): direct \pDir{} (\pDirOS{} + \pDirSE{},
+seed range \pDirS{}), chained \pCh{} (\pChOS{} + \pChSE{}, \pChS{}; Fig.~\ref{fig:final}b). The
+chained route follows the depth law (\pLawCh{}, seed range \pLawChS{}; bar \lit{0.16}). On six
+seeds the trained-pair control missed its band (\nOneGap{} against \nOneBar{}); the PI counted
+it on the three seeds shared with the reference model. Unplanned, the agreement-loss model's direct route scores
+\pAg{} (\pAgOS{} + \pAgSE{}, \pAgS{}), \pAgGain{} against bar \pAgBar{}; this is exploratory.
+Reading: against, moderate evidence.
+
+\paragraph{Mappability input: a local gain.} In the lowest-mappability tenth of bins the
+mappability channel lowers CRPS on all \nMapLPass{} of \nMapTracks{} tracks for read length
+\lit{36} (\mMapL{}, \mMapLOS{} + \mMapLSE{}, seed range \mMapLS{}, against \mAlL{}, \mAlLOS{} +
+\mAlLSE{}, \mAlLS{}) and for mapping filter \lit{0} (\mMapQ{} against \mAlQ{};
+Fig.~\ref{fig:final}c). It beats shifted mappability (\sMapQ{} against bar \sMapQBar{}), the gain
+is local (genome-wide \gMap{} against \gAl{}), and a DNA-sequence input gives about a quarter of it. The
+depth arm, meant to stay unchanged, improved by \mDepthChg{} (seed standard deviation \mDepthSD{}),
+so this no-change control failed. Reading: supports, weak evidence.
 
 \begin{figure*}[t]
 \centering
@@ -510,39 +826,120 @@ halves (\lit{1}~kb shape ratio \realRead{}, against \realUnit{} for count thinni
   \addlegendentry{broad}
 \end{axis}
 \end{tikzpicture}
-\caption{(a) Gap closed from one-warp to the nested-read oracle on depth pairs, base to arm,
-one generator per track. Error bars are \lit{2}$\times$ the seed range in gap units; grid lines
-mark zero and the \lit{0.5} bar. (b) The \lit{1}~kb shape floor (median over products) along
-the thinning ladder; the rightmost point is extrapolated. Solid lines thin whole reads, dashed
-lines thin single counts; the seed range is at most \shSpreadHi{}, smaller than the marks.
-(c) Extra $R^{\lit{2}}$ that GC, mappability, repeats and peak context add to the signal-level null on
-the one-warp residual (median over tracks); the dashed line is the largest shuffle control.}
+\caption{What the settings do, and what trained pairs reach. (a) Gap closed from one-warp to the
+oracle on depth pairs, base to arm, one generator per track; error bars are \lit{2}$\times$ the
+seed range in gap units; grid lines mark zero and the \lit{0.5} bar. (b) The \lit{1}~kb shape
+floor (median over products) along the thinning ladder; solid lines thin whole reads, dashed
+lines thin single counts; the rightmost point is extrapolated; the seed range (at most
+\shSpreadHi{}) is smaller than the marks. (c) Extra $R^{\lit{2}}$ that GC, mappability, repeats
+and peak context add to the signal-level null (median over tracks); the dashed line is the
+largest shuffle control.}
 \label{fig:results}
 \end{figure*}
 
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[name=la, width=0.5\textwidth, height=5.4cm,
+    title={\small (a) Depth-law error, trained against unseen pairs},
+    xmin=0, xmax=0.95, ymin=-0.6, ymax=9.6,
+    ytick=data, yticklabels from table={\tblLawNever}{lab},
+    xlabel={Median $|\log_{\lit{2}}|$ error of predicted scale},
+    tick label style={font=\scriptsize}, label style={font=\footnotesize},
+    legend style={font=\tiny, at={(0.98,0.03)}, anchor=south east, draw=none, fill=none}]
+  \addplot[only marks, mark=*, mark size=1.6pt, color=dC, error bars/.cd, x dir=both, x explicit]
+    table[x=v, y=y, x error=e]{\tblLawNever};
+  \addlegendentry{unseen pairs}
+  \addplot[only marks, mark=o, mark size=1.6pt, color=dB] table[x=v, y=y]{\tblLawTr};
+  \addlegendentry{trained pairs}
+\end{axis}
+\begin{axis}[at={(la.east)}, anchor=west, xshift=1.4cm, width=0.38\textwidth, height=5.4cm,
+    title={\small (b) Trained CANDI: told level shift},
+    xmin=-1.3, xmax=0.9, ymin=-1.3, ymax=0.9,
+    xlabel={Real $\log_{\lit{2}}$ level change}, ylabel={Predicted $\log_{\lit{2}}$ change},
+    tick label style={font=\scriptsize}, label style={font=\footnotesize},
+    legend style={font=\tiny, at={(0.97,0.03)}, anchor=south east, draw=none, fill=none}]
+  \addplot[gray, dashed, domain=-1.3:0.9, forget plot] {x};
+  \addplot[only marks, mark=*, mark size=1.4pt, color=cNar] table[x=x, y=y]{\tblSwL};
+  \addlegendentry{read length 36}
+  \addplot[only marks, mark=square*, mark size=1.4pt, color=cBr] table[x=x, y=y]{\tblSwP};
+  \addlegendentry{paired-end, histone}
+  \addplot[only marks, mark=triangle*, mark size=1.8pt, color=cDn] table[x=x, y=y]{\tblSwD};
+  \addlegendentry{paired-end, DNase}
+\end{axis}
+\end{tikzpicture}
+\caption{The correction does not transfer. (a) Depth-law error of each fix tried (one generator
+per track except the shared models), on trained pairs (open) and unseen arm-to-arm pairs
+(filled; error bars span the seed range). The two bottom rows chain trained maps through the
+base. (b) Predicted against real chromosome-wide level change when a trained CANDI is told an
+arm's covariate, one point per track and seed; the dashed line is agreement.}\label{fig:transfer}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}
+\pgfplotsset{stk/.style={ybar stacked, bar width=7pt, ymin=0,
+    xtick=data, xticklabel style={rotate=40, anchor=north east, font=\tiny},
+    xtick style={draw=none}, tick label style={font=\scriptsize}, label style={font=\footnotesize},
+    legend style={font=\tiny, draw=none, fill=none, at={(0.03,0.97)}, anchor=north west}, area legend}}
+\begin{axis}[stk, name=fa, width=0.36\textwidth, height=5cm, ymax=1.15,
+    title={\small (a) Joint objective, unseen pairs}, ylabel={CRPS},
+    xticklabels from table={\tblJoint}{lab}, enlarge x limits=0.1]
+  \addplot[fill=pOS, draw=none] table[x=x, y=os]{\tblJoint};
+  \addlegendentry{shape}
+  \addplot[fill=pSE, draw=none, error bars/.cd, y dir=both, y explicit, error bar style={black}]
+    table[x=x, y=se, y error=err]{\tblJoint};
+  \addlegendentry{scale error}
+\end{axis}
+\begin{axis}[stk, name=fb, at={(fa.east)}, anchor=west, xshift=1.0cm, width=0.3\textwidth, height=5cm,
+    ymax=1.0, title={\small (b) Routes, unseen pairs},
+    xticklabels from table={\tblPivot}{lab}, enlarge x limits=0.13]
+  \addplot[fill=pOS, draw=none] table[x=x, y=os]{\tblPivot};
+  \addplot[fill=pSE, draw=none, error bars/.cd, y dir=both, y explicit, error bar style={black}]
+    table[x=x, y=se, y error=err]{\tblPivot};
+\end{axis}
+\begin{axis}[stk, at={(fb.east)}, anchor=west, xshift=1.0cm, width=0.36\textwidth, height=5cm,
+    ymax=0.7, title={\small (c) Lowest-mappability bins},
+    xticklabels from table={\tblMap}{lab}, enlarge x limits=0.06]
+  \addplot[fill=pOS, draw=none] table[x=x, y=os]{\tblMap};
+  \addplot[fill=pSE, draw=none, error bars/.cd, y dir=both, y explicit, error bar style={black}]
+    table[x=x, y=se, y error=err]{\tblMap};
+\end{axis}
+\end{tikzpicture}
+\caption{The final experiments on one shared model. Each bar is CRPS split into shape (blue) and
+scale error (gold); error bars span the seed range over \lit{3} seeds (\lit{6} for the routes).
+(a) Correction alone, a matched-loss-scale control, the two joint objectives at weight \lit{1}
+(cross-assay also at \lit{4}) and their scrambled twins. (b) The base-to-target ceiling, the
+direct and chained routes, the agreement-loss model and the no-covariates floor. (c) Mean over
+tracks in the lowest-mappability tenth of bins.}\label{fig:final}
+\end{figure*}
+
 \begin{table*}[t]
-\caption{Each original goal, its status and one line of evidence. Status is a proposal for the
-PI to sign. Met: the question has a full reading. Partly met: part of it is read. Answered: the
-aim was not met, but the reading answers the question well enough to act.}
+\caption{Each goal, its status and one line of evidence. Met: the question has a full reading.
+Partly met: part of it is read. Answered: the aim was not met, but the reading answers the
+question well enough to act. Every reading is exploratory.}
 \label{tab:goals}
 \footnotesize
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.1\textwidth}>{\raggedright\arraybackslash}p{0.59\textwidth}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.1\textwidth}>{\raggedright\arraybackslash}p{0.58\textwidth}@{}}
 \toprule
-Goal & Status & Evidence (not judged) \\
+Goal & Status & Evidence \\
 \midrule
-Do covariates map one measurement onto another? (main question) & Partly met & Beat the scrambled twin on trained pairs; count gain \relCntTr{} falls to \relCntSame{} unseen; swap and depth-law checks unmet \\
+Do covariates map one measurement onto another? (main question) & Partly met & Beat the scrambled twin on trained pairs; count gain \relCntTr{} falls to \relCntSame{} unseen; swap ($\le$ \swapHi{} against bar \lit{0.1}) and depth-law checks unmet \\
 Depth conditioning beyond one-warp & Met & Designs B--D close \gcBDLo{}--\gcBDHi{} of the gap; gain above \lit{2}$\times$ seed range in \nBDgain{}/\nBDcells{} cells; design A no gain \\
 Run-type conditioning beyond one-warp & Partly met & Beats one-warp in \nPeHistSig{}/\nPeHist{} histone cells by \peGainLo{}--\peGainHi{}; no valid ceiling; DNase \nPeDnSig{}/\nPeDn{} \\
-Read-selection settings & Partly met & Count gain over twin \readTrLo{}--\readTrHi{} trained (seed range \readWobLo{}--\readWobHi{}); $p$ gain \readPSameLo{}--\readPSameHi{} unseen; one-warp bar not scored \\
-Control and caller settings & Partly met & $p$ gain \ctlPTrLo{}--\ctlPTrHi{} trained, \ctlPSameLo{}--\ctlPSameHi{} unseen (seed range $\le$ \ctlWobHi{}); oracle interval negative, so bar unreadable \\
-Capacity of the map & Answered & A monotone curve suffices in counts; more capacity does not fix unseen pairs; $p$ explodes in B--D \\
-Depth offset & Answered & Helps design A only: DNase CRPS \oldA{} (\oldAOS{} + \oldASE{}) to \offA{} (\offAOS{} + \offASE{}), gain \offGain{} against bar \offBar{}; other designs \offBDclear{}/\offBDn{}; depth law met in \offLawIn{}/\offLawN{} cells \\
-Counts-to-$p$ map & Answered & Caller's formula plus learned correction, log CRPS \hBest{} $\pm$ \hBestW{} (\hBestOS{} + \hBestSE{}), against \hAff{} (\hAffOS{} + \hAffSE{}) for an affine map; one track \\
-Why the depth law is missed & Partly met & Not the pseudocount, loss or model size; arm-to-arm training meets the law (gap closed \cOneGap{}) but CRPS fails (\cFourGap{}); grid complete, controls pass; every-pair arm closes \crArmTwoGap{} (not checked) \\
-Does CANDI's training let it correct other covariates? & Answered & Told read length or run type, CANDI moves its level; per-region tracking unreadable (floor failed its depth control); probe parked \\
-Which settings move a track most & Met & On one shared peak set: peak height above floor \nPhAbove{}/\nPh{} (\phRatioLo{}--\phRatioHi{}$\times$), shape \nShAbove{}/\nSh{} \\
+Read-selection settings & Partly met & Count gain over twin \readTrLo{}--\readTrHi{} trained (seed range \readWobLo{}--\readWobHi{}); one-warp bar not scored \\
+Control and caller settings & Set aside & $p$ gain \ctlPTrLo{}--\ctlPTrHi{} trained, \ctlPSameLo{}--\ctlPSameHi{} unseen (seed range $\le$ \ctlWobHi{}); out of scope once the work moved to count space \\
+Capacity of the map & Answered & A monotone curve suffices in counts; more capacity does not fix unseen pairs \\
+Depth offset & Answered & Helps design A only: DNase \oldA{} $\pm$ \oldAw{} (\oldAOS{} + \oldASE{}) to \offA{} $\pm$ \offAw{} (\offAOS{} + \offASE{}), bar \offBar{}; other designs \offBDclear{}/\offBDn{}; depth law met in \offLawIn{}/\offLawN{} cells \\
+Counts-to-$p$ map & Answered & Formula plus learned correction, log CRPS \hBest{} $\pm$ \hBestW{} (\hBestOS{} + \hBestSE{}), against \hAff{} $\pm$ \hAffW{} (\hAffOS{} + \hAffSE{}) affine; one track \\
+Why the depth law is missed & Answered & Not pseudocount, loss, width or encoder-decoder (\lawNeverAllLo{}--\lawNeverAllHi{} unseen); chaining meets it (\lawViaAllLo{}--\lawViaAllHi{}); arm-to-arm training fixes scale, not CRPS (\cFourGap{}) \\
+Does trained CANDI correct other covariates? & Answered & Level moves when told read length or run type, not as the real tracks do; per-region tracking unreadable (depth control failed) \\
+Which settings move a track most & Met & Peak height above floor \nPhAbove{}/\nPh{} (\phRatioLo{}--\phRatioHi{}$\times$), shape \nShAbove{}/\nSh{} \\
 How much resampling alone moves a track & Met & \lit{1}~kb shape floor at \lit{30}M: narrow \shThirtyNar{}, broad \shThirtyBr{}, DNase \shThirtyDn{} (seed range $\le$ \shSpreadHi{}); level, not region, sets it \\
-Where along the genome settings act & Met & Depth uniform (residual = null); mapping filter \mapqZeroLo{}--\mapqZeroHi{}, read length \cropFeatLo{}--\cropFeatHi{} extra $R^{\lit{2}}$, in low-mappability bins \\
+Where along the genome settings act & Met & Depth uniform; mapping filter \mapqZeroLo{}--\mapqZeroHi{}, read length \cropFeatLo{}--\cropFeatHi{} extra $R^{\lit{2}}$, in low-mappability bins \\
+Joint objective changes transfer & Not supported & Cross-assay \jXd{} (bar \jXdBar{}), denoising \jDnd{} (bar \jDndBar{}); weak \\
+Routing through the base transfers & Not supported & \nCellWin{}/\nCells{} cells; pooled gain \pGain{} against \pGainBar{}; moderate \\
+Mappability input helps & Supported & \nMapLPass{}/\nMapTracks{} and \nMapQPass{}/\nMapTracks{} tracks in the lowest tenth; depth control failed; weak \\
 \botrule
 \end{tabular}
 \end{table*}
@@ -550,23 +947,32 @@ Where along the genome settings act & Met & Depth uniform (residual = null); map
 \section{Conclusion}\label{sec:conclusion}
 
 On trained pairs the covariates carry the information: for depth they close most of the gap
-to the oracle; for run type and control settings they beat a covariate-free map. On
-unseen pairs the gain shrinks and the direct map misses the depth law. Two arm-to-arm
-pairs fix the law but not the distribution; every pair fixes both (not checked). Table~\ref{tab:goals} gives each goal's status. Limitations: \lit{7} tracks, \lit{3} seeds, \lit{2} test chromosomes, and no ceiling for the
-run-type and control claims.
+to the oracle, and for run type they beat a covariate-free map. On unseen pairs the gain
+shrinks and no direct map follows the depth law. Neither a joint objective nor routing through
+a shared base changed this; a mappability input helps where reads map poorly. These are
+readings: a pre-registered pass of the transfer test on more tracks would settle the question
+(Table~\ref{tab:goals}).
 
-\paragraph{What carries to CANDI.} Use the full-depth track as the depth base, with depth as a
-fixed offset and no positional term. An NB-like, level-dependent spread describes the
-resampling floor. Read length and mapping filters act in low-mappability regions, so their
-correction needs sequence or mappability input. Conditioning will not carry to setting
-combinations that training never paired.
+\paragraph{Limitations.} Only \lit{7} tracks and \lit{3} to \lit{6} seeds; the final checks
+had a joint probability of \powJoint{}\% to \powPivot{}\% of passing if true; the twin check of
+the joint objective could not fail; the depth oracle was redefined, and the run-type bar set, after their runs; run type
+and control settings have no valid ceiling.
 
-Next steps, without ranking:
+\paragraph{Next steps for the mini-CANDI prototype, without ranking.} The design rulings keep
+count space only and depth as a learned probe, and defer costly reprocessing.
 \begin{itemize}
-\item \textbf{A full-depth oracle for run type and control settings.} Moderate; gives those
-claims a ceiling.
-\item \textbf{Augment CANDI with counterfactual pairs.} Costly; tests whether the trained-pair
-gain carries into CANDI.
+\item \textbf{A first prototype} with depth and a mappability channel, gated by the twin, the
+seed range and the unseen-pair depth law. Testbed scale (training \costTrLo{} to \costTrHi{} min
+per arm); teaches whether correction survives inside an imputer.
+\item \textbf{A pre-registered test of the agreement loss.} One arm, \lit{6} seeds; teaches
+whether the exploratory lead is real.
+\item \textbf{Run-type size on more tracks}, from single-end reprocessed challenge tracks. CPU
+analysis, if the PI opens that panel; teaches how large the challenge's failure knob is per assay.
+\item \textbf{New counterfactual pairs for CANDI's corpus.} Read-level settings need the
+pipeline rerun (median \costFastq{}~h per product); teaches whether real pairs fix transfer.
 \end{itemize}
+
+\backmatter
+\bibliography{references}
 
 \end{document}
