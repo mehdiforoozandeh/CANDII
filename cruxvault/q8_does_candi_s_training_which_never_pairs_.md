@@ -51,7 +51,8 @@ The covariate-swap probe ([[h26_a_trained_candi_checkpoint_told_a_counte|the pro
 PI reading 2026-10-31: CANDI uses read length and run type in the wrong direction; told either one, it moves its predicted level, but not the way the real tracks move. This is the current stage of CANDI, unrelated to the covariate artifact correction (CAC) runs on the testbed. The missing counterfactual pairs fit this, but low conditional information and collinearity are joint causes. Dedup, MAPQ, fragment and control knobs are not CANDI inputs at all.
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
 
 - `h26` [[h26_a_trained_candi_checkpoint_told_a_counte|A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates]] — *open*
+- `f29` finding (moderate) [[f29_read_from_the_data_documents_and_the_cou|Read from the data documents and the counterfactual-arm build record, not…]]
 <!-- crux:ledger:end -->

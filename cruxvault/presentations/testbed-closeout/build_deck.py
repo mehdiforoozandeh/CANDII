@@ -1,5 +1,6 @@
-"""Rebuild index.html from deck_src.html: the close-out deck of the counterfactual in-vitro
-covariate testbed (anchor q1, task t143; PI request 2026-10-30).
+"""Rebuild index.html from deck_src.html: the close-out deck of the whole covariate artifact
+correction (CAC) testbed, final experiments included (anchor q1, tasks t143 and t146; PI requests
+2026-10-30 and 2026-11-03).
 
 Paper arc (prezit references/paper-arc.md). Every number on a slide is read here from a vault
 file and embedded as DATA; the page types none. The build writes the deck-sources manifest
@@ -9,9 +10,11 @@ deck is current.
 Two kinds of source:
   results/<tid>/...   result tables (gitignored, so they are synced into this vault first;
                       see SYNC below)
-  <node>.md           tracked vault nodes (q1's subtree) whose "Answer so far" / "Findings"
-                      carry the earlier readings; a regex reads each number, and the build
+  <node>.md           tracked vault nodes (q1's subtree and its findings f1-f32) whose readings
+                      carry the earlier numbers; a regex reads each number, and the build
                       fails if a sentence it reads has changed shape
+  wiki/, notes/       the ENCODE Imputation Challenge page (motivation) and
+                      notes/mini_candi_design_inputs.md (reprocessing cost)
 
 Refresh after new readings (for example when the arm-to-arm grid's second arm finishes):
 
@@ -32,13 +35,17 @@ SYNC = ["t112/MANIFEST.tsv",
         "t136/n_table.tsv",
         "t139/knob_vs_floor.tsv", "t139/pairs.tsv",
         "t142/floor_at_30M.tsv", "t142/compare_real_class.tsv", "t142/map_classes.tsv",
-        "t142/t141_readthin/knob_classes.tsv"]
+        "t142/t141_readthin/knob_classes.tsv",
+        "t146/analyze_out.txt", "t146/checks_h29.tsv", "t146/checks_h30_cells.tsv", "t146/checks_h30_pooled.tsv",
+        "t146/checks_h31.tsv", "t146/checks_h31_per_track_seed.tsv", "t146/depthlaw.tsv", "t146/pooled.tsv",
+        "t146/sacct_per_arm.tsv"]
 src_dir = os.environ.get("CLOSEOUT_SYNC_FROM")
 if src_dir:
     for rel in SYNC:
         dst = VAULT / "results" / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(pathlib.Path(src_dir) / rel, dst)
+        if (pathlib.Path(src_dir) / rel).exists():     # a missing source fails later, at its read
+            shutil.copy2(pathlib.Path(src_dir) / rel, dst)
 
 read = []
 
@@ -85,15 +92,16 @@ for r in arms:
 design = {"n_products": len(man), "n_bases": len(man) - len(arms), "n_arms": len(arms),
           "n_tracks": len({r["track"] for r in man}), "n_knobs": len(knobs),
           "assays": sorted({r["assay"] for r in man}),
+          "track_assay": {r["track"]: f'{r["assay"]}, cell type {r["cell"]}' for r in man},
           "knobs": knobs,
           "n_ladder_runs": len(tsv("t130/runs.tsv")),
           "n_knob_pairs": len(tsv("t139/pairs.tsv"))}
 
 # ---------------- (a) the main claim, from h15 / h1 ----------------
 h15 = node("h15")
-g = grab(h15, r"median of (\d+) configurations, trained / never-trained one knob / two knobs: "
+g = grab(h15, r"Median gain of (\d+) configurations, trained / one knob / two knobs: "
               r"counts (\d+(?:\.\d+)?) / (\d+(?:\.\d+)?) / (\d+(?:\.\d+)?); p (\d+(?:\.\d+)?) / (\d+(?:\.\d+)?) / (\d+(?:\.\d+)?)", "h15 gains")
-tw = grab(h15, r"Beats the no-covariates twin: (\d)–(\d) of (\d) cells", "h15 twin")
+tw = grab(node("f8"), r"beat the scrambled twin in (\d)–(\d) of (\d) mark-class cells", "f8 twin")
 sw = grab(h15, r"median \|log\(mean / X\)\| (\d+(?:\.\d+)?)–(\d+(?:\.\d+)?) in counts, (\d+(?:\.\d+)?)–(\d+(?:\.\d+)?) in p \(bar (\d+(?:\.\d+)?)\)",
           "h15 swap")
 h1n = node("h1")
@@ -149,18 +157,20 @@ cap = {"q5": q5a, "cells": q5c, "bd": q5bd, "law": q5law, "q4never": q4n, "explo
 
 # ---------------- (e) the depth-law miss, from q7 ----------------
 q7 = node("q7")
+NUM = r"(\d+(?:\.\d+)?)"
 law = {
     "data": grab(q7, r"The data obey the law within (\d+(?:\.\d+)?)% over (\d+) ordered pairs", "q7 data"),
-    "trained": grab(q7, r"Trained pairs fit \((\d+(?:\.\d+)?)–(\d+(?:\.\d+)?)\); never-trained arm → arm pairs miss "
-                        r"\((\d+(?:\.\d+)?)–(\d+(?:\.\d+)?)\)", "q7 trained"),
-    "a0": grab(q7, r"misses \((\d+(?:\.\d+)?)–(\d+(?:\.\d+)?), trained (\d+(?:\.\d+)?)\)", "q7 A0"),
-    "pois": grab(q7, r"\(A (\d+(?:\.\d+)?), A0 (\d+(?:\.\d+)?), D (\d+(?:\.\d+)?); seed wobble (\d+(?:\.\d+)?)–(\d+(?:\.\d+)?)\)", "q7 Poisson"),
-    "encd": grab(q7, r"Encoder-decoder D gives (\d+(?:\.\d+)?)–(\d+(?:\.\d+)?), old D (\d+(?:\.\d+)?)–(\d+(?:\.\d+)?)", "q7 encdec"),
-    "sym": grab(q7, r"gives (\d+(?:\.\d+)?)–(\d+(?:\.\d+)?) in its two complete cross-loss settings", "q7 sym"),
-    "via": grab(q7, r"meets the law: (\d+(?:\.\d+)?) \(across-track g\) and (\d+(?:\.\d+)?) \(per-track g, seed spread (\d+(?:\.\d+)?)\) "
-                    r"against direct (\d+(?:\.\d+)?) and (\d+(?:\.\d+)?)", "q7 via"),
-    "size": grab(q7, r"wider g misses on never-trained depth pairs \((\d+(?:\.\d+)?) per-track, (\d+(?:\.\d+)?) across\), and so "
-                     r"does a 2× wider f \((\d+(?:\.\d+)?), (\d+(?:\.\d+)?);", "q7 size"),
+    "trained": grab(node("f19"), r"trained pairs fit the law \(" + NUM + "–" + NUM + r"\) while never-trained arm → arm pairs miss it \("
+                    + NUM + "–" + NUM + r"\)", "f19 trained"),
+    "a0": grab(node("f1"), r"rung A0 reads " + NUM + r" \(NB loss\) and " + NUM + r" \(Poisson-mean loss\) against " + NUM, "f1 A0"),
+    "pois": grab(node("f3"), r"never-trained depth-law miss \(A0 " + NUM + ", D " + NUM + "; trained " + NUM + "–" + NUM + r"\)", "f3 Poisson"),
+    "wob": grab(q7, r"the loss\]\] \(seed wobble " + NUM + "–" + NUM + r"\)", "q7 loss wobble"),
+    "encd": grab(node("f20"), r"stays at " + NUM + "–" + NUM + r" on never-trained pairs, within noise of old D's " + NUM + "–" + NUM, "f20 encdec"),
+    "sym": grab(node("f21"), r"settings read " + NUM + "–" + NUM + " on never-trained pairs", "f21 sym"),
+    "via": grab(q7, r"gives " + NUM + r" \(across-track g\) and " + NUM + r" \(per-track g, seed spread " + NUM + r"\) against direct "
+                    + NUM + " and " + NUM, "q7 via"),
+    "size": grab(node("f2"), r"misses the law on never-trained depth pairs \(" + NUM + " per-track, " + NUM + " across-track", "f2 wide g")
+            + grab(node("f4"), r"misses the law on never-trained depth pairs \(" + NUM + " per-track, " + NUM + " across-track", "f4 wide f"),
 }
 
 # ---------------- (f) arm-to-arm training (h28), from t136 ----------------
@@ -195,6 +205,7 @@ q6 = node("q6")
 hmap = {"repair": grab(q6, r"in (\d+) of (\d+) rows \((\d+) clear; D2, MLP rung 5: (\d+(?:\.\d+)?) ± (\d+(?:\.\d+)?) "
                            r"\((\d+(?:\.\d+)?) \+ (\d+(?:\.\d+)?)\) against (\d+(?:\.\d+)?) \((\d+(?:\.\d+)?) \+ (\d+(?:\.\d+)?)\)", "q6 repair"),
         "best": grab(q6, r"formula \+ MLP (\d+(?:\.\d+)?) ± (\d+(?:\.\d+)?)", "q6 best"),
+        "formula": grab(q6, r"fragment formula (\d+(?:\.\d+)?)", "q6 formula"),
         "noexplode": grab(q6, r"Push and formula h have (\d+) records with CRPS > (\d+)", "q6 explode")}
 
 # ---------------- (h) knob ranking against the floor, from t139 ----------------
@@ -234,12 +245,115 @@ q8 = node("q8")
 h26 = node("h26")
 probe = {"slope": grab(q8, r"told-depth slope (\d+(?:\.\d+)?)", "q8 slope"),
          "dir": grab(q8, r"run_type direction score is (\d+(?:\.\d+)?)", "q8 dir"),
-         "swap": grab(h26, r"`swapwired`: (\d+) of (\d+) rows", "h26 swap"),
-         "depth": grab(h26, r"`depthcontrol`: part \(2\) holds on (\d+) of (\d+) rows", "h26 depth"),
-         "effect": grab(h26, r"`effectfloor`: (\d+) of (\d+)\.", "h26 effect")}
+         "swap": grab(h26, r"`swapwired` is met \((\d+) of (\d+) rows", "h26 swap"),
+         "depth": grab(h26, r"part \(2\): (\d+) of (\d+)", "h26 depth"),
+         "effect": grab(h26, r"`effectfloor` (\d+) of (\d+): 36 bp", "h26 effect"),
+         "level": grab(h26, r"told 36 bp, the chr21 level moves (-?\d\.\d+) to (-?\d\.\d+) log2 \(real (-?\d\.\d+) to (-?\d\.\d+), "
+                            r"mostly the bin-count rule\); told PE, (-?\d\.\d+) to (-?\d\.\d+) for ChIP and \+(\d\.\d+) to \+(\d\.\d+) "
+                            r"for DNase \(real (-?\d\.\d+) to \+(\d\.\d+)\)", "h26 told level")}
+
+# ---------------- motivation: the ENCODE Imputation Challenge, from the wiki ----------------
+def text(rel):
+    return path(rel).read_text(encoding="utf-8")
+
+
+WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+eicw = text("wiki/encode-imputation-challenge.md")
+eic = {"n": int(grab(eicw, r"(\d+) models were submitted", "EIC entrants")[0]),
+       "beat": WORDS[grab(eicw, r"outperformed all but (\w+) submissions", "EIC baseline")[0]],
+       "cells": grab(eicw, r"only (\d+) of the (\d+) test cell types had more than two", "EIC cell types")}
+
+
+def fm(stem):
+    """direction and confidence of a finding node, from its frontmatter"""
+    t = node(stem)
+    return {k: (re.search(rf"^{k}: (.*)$", t, re.M) or [None, ""])[1].strip() for k in ("direction", "confidence")}
+
+
+signed = {k: fm(k) for k in ("f5", "f6", "f7", "f30", "f31", "f32")}
+
+# ---------------- (m)-(o) the final experiments, results/t146 ----------------
+ao = text("results/t146/analyze_out.txt")
+AT = {}
+tbl = ao[ao.index("arm table"):ao.index("primary + checks")]
+for m in re.finditer(r"^  (\w+)\s+w(-?[\d.]+)\s+(.*)$", tbl, re.M):
+    arm, w, rest = m.groups()
+    for g_ in re.finditer(r"(\w+) (\d\.\d+) \[(\d\.\d+)/(\d\.\d+)\] sp (\d\.\d+)", rest):
+        AT.setdefault(f"{arm}@{w}", {})[g_[1]] = {"v": float(g_[2]), "os": float(g_[3]), "se": float(g_[4]), "sr": float(g_[5])}
+assert "alone@-1" in AT and "xassay@1" in AT, "t146 arm table changed shape"
+ck29 = {}
+for r in tsv("t146/checks_h29.tsv"):
+    ck29[f"{r['arm']}|{r['check']}|{r['group']}"] = {"x": f(r["x"]), "y": f(r["y"]), "d": f(r["delta"]), "bar": f(r["bar"]),
+                                                      "pass": r["passes"] == "True", "dos": f(r["d_oracle_scaled"]),
+                                                      "dse": f(r["d_scale_error"])}
+dl = {f"{r['arm']}|{r['route']}|{r['dgroup']}": {"v": f(r["median_abs_err"]), "sr": f(r["seed_spread"])}
+      for r in tsv("t146/depthlaw.tsv")}
+cells30 = [{"src": r["src"], "tgt": r["tgt"], "cross": r["cross"] == "True", "gain": f(r["gain"]), "bar": f(r["bar"]),
+            "win": r["win"] == "True", "go": f(r["gain_oracle"]), "bo": f(r["bar_oracle"]), "winmix": r["win_mix"] == "True"}
+           for r in tsv("t146/checks_h30_cells.tsv")]
+p30 = {}
+for r in tsv("t146/checks_h30_pooled.tsv"):
+    if r["group"] == "never":
+        p30[f"{r['arm']}|{r['route']}"] = {"v": f(r["crps_all"]), "os": f(r["crps_oracle_scaled_all"]),
+                                            "se": f(r["scale_error_all"]), "sr": f(r["crps_all_spread"]), "n": int(r["n_seeds"])}
+seeds30 = [float(x) for x in grab(ao, r"paired direct-chain alone never: per seed \[([^\]]*)\]", "t146 per-seed gain")[0].split(",")]
+agree = grab(ao, r"reading consist direct - alone direct never: (-?\d\.\d+) bar (\d\.\d+)", "t146 agreement reading")
+n1 = {"s3": grab(ao, r"n1 trained base<->arm alone s0-2: (\d\.\d+) \(oracle_scaled (\d\.\d+), scale_error (\d\.\d+); spread (\d\.\d+)\); "
+                     r"old D (\d\.\d+) -> gap ([+-]\d\.\d+) \(bar (\d\.\d+)\)", "t146 n1 three seeds"),
+      "s6": grab(ao, r"n1 6-seed exact gap (-?\d\.\d+)", "t146 n1 six seeds")}
+# h31: lowest-mappability decile, per-track table, comparator seeds 0-2
+pts = tsv("t146/checks_h31_per_track_seed.tsv")
+
+
+def dec0(arm, kl):
+    rs = [r for r in pts if r["arm"] == arm and r["kl"] == kl and (arm != "alone" or int(r["seed"]) < 3)]
+    seeds = sorted({r["seed"] for r in rs})
+    per_seed = [sum(f(r["crps_dec0"]) for r in rs if r["seed"] == s_) / sum(1 for r in rs if r["seed"] == s_) for s_ in seeds]
+    mean = lambda k: sum(f(r[k]) for r in rs) / len(rs)
+    mu = sum(per_seed) / len(per_seed)
+    sd = (sum((x - mu) ** 2 for x in per_seed) / (len(per_seed) - 1)) ** 0.5
+    return {"v": R4(mu), "os": R4(mean("crps_oracle_scaled_dec0")), "se": R4(mean("scale_error_dec0")), "sd": R4(sd),
+            "sr": R4(max(per_seed) - min(per_seed)), "n_tracks": len({r["track"] for r in rs})}
+
+
+def track_gain(arm, kl):
+    out = []
+    for t in sorted({r["track"] for r in pts if r["kl"] == kl}):
+        a = [f(r["crps_dec0"]) for r in pts if r["arm"] == "alone" and r["kl"] == kl and r["track"] == t and int(r["seed"]) < 3]
+        b = [f(r["crps_dec0"]) for r in pts if r["arm"] == arm and r["kl"] == kl and r["track"] == t]
+        ma = sum(a) / len(a)
+        sd = (sum((x - ma) ** 2 for x in a) / (len(a) - 1)) ** 0.5
+        out.append({"t": t, "gain": R4(ma - sum(b) / len(b)), "bar": R4(2 * sd)})
+    return out
+
+
+h31 = {"dec0": {kl: {a: dec0(a, kl) for a in ("alone", "map", "mapshift", "dna")} for kl in ("crop:36", "mapq:0")},
+       "track": {kl: {a: track_gain(a, kl) for a in ("map", "mapshift", "dna")} for kl in ("crop:36", "mapq:0")},
+       "checks": [{"arm": r["arm"], "check": r["check"], "kl": r["kl"], "pass": f(r["n_pass"]), "n": f(r["n_tracks"]),
+                   "need": f(r["need"]), "gain": f(r["mean_gain"]), "met": r["met"] == "True", "bar": f(r["bar"])}
+                  for r in tsv("t146/checks_h31.tsv")]}
+gw = {}
+for r in tsv("t146/pooled.tsv"):
+    if r["route"] == "direct" and r["group"] == "never" and r["knob"] == "all" and r["arm"] in ("alone", "map", "dna", "mapshift"):
+        gw[r["arm"]] = {"v": f(r["crps_all"]), "os": f(r["crps_oracle_scaled_all"]), "se": f(r["scale_error_all"]),
+                        "sr": f(r["seed_spread"]), "n": int(r["n_seeds"])}
+h31["gw"] = gw
+sac = {}
+for r in tsv("t146/sacct_per_arm.tsv"):
+    sac.setdefault(r["arm"], {})[r["kind"]] = {"n": int(r["n"]), "mean": f(r["wall_min_mean"]), "max": f(r["wall_min_max"]),
+                                               "cpus": int(r["cpus"]), "gb": f(r["peak_rss_gb"])}
+power = {h: int(grab(node(h), r"Joint power ~(\d+)%", f"{h} power")[0]) for h in ("h29", "h30", "h31")}
+note = text("notes/mini_candi_design_inputs.md")
+cost = {"fastq": grab(note, r"median (\d+(?:\.\d+)?) h, max (\d+(?:\.\d+)?) h per product", "note FASTQ cost"),
+        "bam": grab(note, r"~(\d+) h per product", "note BAM cost"),
+        "tb": grab(note, r"~(\d+) TB FASTQ transient", "note FASTQ storage")}
+twinlaw = grab(node("f17"), r"nearly meet it \((\d+(?:\.\d+)?)–(\d+(?:\.\d+)?)\)", "f17 twin law")
+final = {"AT": AT, "ck29": ck29, "dl": dl, "cells30": cells30, "p30": p30, "seeds30": seeds30, "agree": agree, "n1": n1,
+         "h31": h31, "sac": sac, "power": power, "cost": cost, "twinlaw": twinlaw}
 
 data = {"design": design, "main": main, "h1": h1b, "h2": h2b, "cap": cap, "law": law, "h28": h28,
-        "hmap": hmap, "knob": knob, "floor": floor, "where": where, "shuf": shuf, "probe": probe}
+        "hmap": hmap, "knob": knob, "floor": floor, "where": where, "shuf": shuf, "probe": probe,
+        "eic": eic, "signed": signed, "final": final}
 
 # ---------------- manifest and page ----------------
 src_path = HERE / "deck_src.html"
@@ -253,4 +367,4 @@ out = src.replace("__SOURCES__", json.dumps(sources, sort_keys=True))
 out = out.replace("__DATA__", json.dumps(data, separators=(",", ":"), ensure_ascii=False))
 (HERE / "index.html").write_bytes(out.encode("utf-8"))
 print(f"wrote {HERE / 'index.html'}: {len(sources)} source file(s); h28 rule: {h28['rule']}; "
-      f"Darm2 law done {h28['n'].get('Darm2', {}).get('law_done')} of {h28['n'].get('Darm2', {}).get('assigned')}")
+      f"h30 wins {sum(c['win'] for c in cells30)} of {len(cells30)}; t146 runs {sum(a['train']['n'] for a in sac.values())}")
