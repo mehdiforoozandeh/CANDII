@@ -1,3 +1,7 @@
+# The landing page is the EIC board (t147): tools/eic_board.py builds _site/ from Max's exact
+# reproduction of the 2019 challenge boards (leaderboard/eic/). The rivals leaderboard below is
+# kept one level down, at _site/legacy/.
+#
 # The rivals leaderboard — LEADERBOARD_PRD.md §9 (t58 M3), board redesigned by t82.
 #
 # On every push to main that touches the board, run the full gate (`check`: row schemas, the
@@ -20,6 +24,7 @@ on:
     paths:
       - "leaderboard/**"
       - "tools/leaderboard.py"
+      - "tools/eic_board.py"
       - ".github/workflows/leaderboard.yml"
 
 permissions:
@@ -40,10 +45,15 @@ jobs:
         with:
           python-version: "3.11"
       # stdlib only — no pip install, by rule (PRD §6)
-      - name: check (row gates + deterministic double build)
+      - name: check the EIC board (reproduction gates + deterministic double build)
+        run: python tools/eic_board.py check
+      - name: check the legacy board (row gates + deterministic double build)
         run: python tools/leaderboard.py check
+      # the EIC build clears _site/, so it runs first; the legacy board goes one level down
       - name: build _site/
-        run: python tools/leaderboard.py build
+        run: |
+          python tools/eic_board.py build --out _site
+          python tools/leaderboard.py build --out _site/legacy
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
