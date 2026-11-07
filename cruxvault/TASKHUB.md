@@ -55,6 +55,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]]
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations
 - `t147` [visualization] replace the landing-page leaderboard with a three-layer EIC board from Max's exact reproduction
+- `t148` [visualization] variance decomposition of every EIC entry on all three truth layers, for the EIC board
 
 ## Blocked
 
@@ -130,6 +131,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
 - `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *blocked*
 - `t147` [visualization] replace the landing-page leaderboard with a three-layer EIC board from Max's exact reproduction — *open*
+- `t148` [visualization] variance decomposition of every EIC entry on all three truth layers, for the EIC board — *open*
 
 ## Done · Dropped
 
