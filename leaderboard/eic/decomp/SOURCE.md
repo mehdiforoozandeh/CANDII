@@ -21,5 +21,5 @@ decomposition (`errdecomp.py`, copied unchanged).
 | `components.tsv` | truth x entry x assay x part x band | V, explained, unexplained, added, E |
 
 Unit: asinh of the track value, as a fraction of each truth track's variance (so 1.0 = predicting the mean).
-There is no noise-floor term: the EIC truth has no replicates. 1376 tracks, not 1377 (27 x 51): one entry
-has no submitted track for one experiment.
+There is no noise-floor term: the EIC truth has no replicates. 1376 tracks, not 1377 (27 x 51): UIOWA Michaelson
+Lab has no submitted track for one experiment.
