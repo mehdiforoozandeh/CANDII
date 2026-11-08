@@ -1,5 +1,5 @@
 ---
-id: t149
+id: t150
 type: task
 title: score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison
 category: implementation
@@ -12,7 +12,7 @@ created: 2026-11-07T14:05:40
 updated: 2026-11-07T14:05:40
 ---
 
-# t149 — score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison
+# t150 — score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison
 
 Refs:: [[q1_do_the_recorded_experimental_covariates_\|q1]]
 
