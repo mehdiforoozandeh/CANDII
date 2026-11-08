@@ -69,21 +69,52 @@
 
   <section aria-labelledby="h-decomp">
     <div class="board-head">
-      <h2 id="h-decomp" class="section-title">Where each entry's error comes from</h2>
+      <h2 id="h-decomp" class="section-title">Error budget</h2>
       <span class="muted small" id="decomp-layer"></span>
     </div>
-    <p class="muted small decomp-lede">Each bar is an entry's squared error on the selected layer, as
-      a fraction of the truth's variance, so 1.0 equals predicting each track's mean. The bar splits
-      exactly into three parts.
-      <span class="legend"><i class="sw lvl"></i><b>Calibration</b>: removed by the best monotone
-      rescaling of the prediction.
-      <i class="sw shr"></i><b>Shared</b>: the same mistake at the same position in every held-out
-      cell type of an assay.
-      <i class="sw spc"></i><b>Specific</b>: the rest, particular to one track.</span></p>
-    <div id="decomp" class="decomp"></div>
-    <p class="muted small">Rows follow the board order. The board ranks entries over 9 measures, so
-      the bar lengths need not follow it. The unit is asinh of the signal. The truth has no
-      replicates, so no part of the error is marked as noise.</p>
+    <dl class="defs">
+      <dt>What is measured: normalized MSE</dt>
+      <dd>For one track: the mean over its 25 bp bins of (truth − prediction)², with both in asinh
+        units, divided by the variance of the truth track. 0 is a perfect prediction. 1 is the
+        error of predicting the track's own mean in every bin. Each bar is the mean over the 51
+        blind tracks, on the truth layer selected above.</dd>
+      <dt>Calibration error (offset, scale, nonlinear)</dt>
+      <dd>The part that the best monotone rescaling of the prediction would remove: a constant
+        shift (offset), a wrong spread (scale), and a curved value map (nonlinear). It does not
+        need any bin to change its rank.</dd>
+      <dt>Shared and specific error</dt>
+      <dd>The rest needs bins to be reordered. <b>Shared</b> is the part common to all held-out
+        tracks of one assay at one position. <b>Specific</b> is the part particular to one track,
+        i.e. to its cell type.</dd>
+      <dt>Spatial bands</dt>
+      <dd>Both parts are split by the scale of the pattern (a Haar wavelet decomposition):
+        ≤200 bp, 0.4–3.2 kb (peaks), 6.4–51 kb (domains) and ≥102 kb (broad).</dd>
+    </dl>
+
+    <figure class="fig">
+      <div class="fig-scroll"><svg id="fig-budget" role="img" aria-label="Error budget of every entry"></svg></div>
+      <div class="fig-legend" id="legend-budget"></div>
+      <figcaption><b>Figure 1. The error budget of every entry.</b> Each bar is the entry's normalized
+        MSE, split into the calibration terms and the shared and specific error by spatial band
+        (darker = coarser). The top bar splits the truth's own variance the same way: what a
+        prediction that knew nothing would have to explain. The dotted line marks 1, the error of
+        predicting each track's mean. Bars longer than the axis are cut (white zigzag), with their
+        length at the end. Rows follow the board order; the board ranks entries over 9 measures,
+        so bar lengths need not follow it.</figcaption>
+    </figure>
+
+    <figure class="fig">
+      <div class="fig-scroll"><svg id="fig-eue" role="img" aria-label="Explained and unexplained variance of every entry"></svg></div>
+      <div class="fig-legend l2" id="legend-eue"></div>
+      <figcaption><b>Figure 2. How much of the truth's variance each entry explains.</b> Left: each
+        bar spans the truth's whole variance (0 to 1), divided into the eight components (shared
+        left of the black line, specific right of it), each as wide as its share of the variance
+        (header). Within a component, the dark part is explained by the prediction and the light
+        part is not. Right, on its own axis: the error the prediction adds on top (red), summed
+        over components, and the calibration error (yellow). The light parts and the right panel
+        add up to the normalized MSE of figure 1. The 2019 truth has no replicates, so no part is
+        marked as sampling noise.</figcaption>
+    </figure>
   </section>
 
   <section aria-labelledby="h-method" class="method">
@@ -154,10 +185,15 @@
     <details>
       <summary>How the error is decomposed</summary>
       <p>Per track, the squared error divided by the truth's variance is split into an offset, a
-        scale and a nonlinear term, which the best monotone map of the prediction would remove
-        (shown together as calibration), and a residual that needs bins to be reordered. Across
+        scale and a nonlinear term, which the best monotone map of the prediction would remove,
+        and a residual that needs bins to be reordered. Across
         the held-out tracks of one assay, the residual splits exactly into a part shared by every
-        track at a position and a track-specific part. Tracks are averaged with equal weight over
+        track at a position and a track-specific part, and each part is split over four bands of
+        Haar wavelet levels. Per component, let V be the truth's variance in it, P the calibrated
+        prediction's, C their covariance and E the error. Then explained = C²/P (0 if C ≤ 0),
+        unexplained = V − explained, and added = E − unexplained, the variation the prediction adds
+        that the truth does not have.
+        Tracks are averaged with equal weight over
         the 51 experiments. The method is Max Libbrecht's sprint 06 decomposition, run unchanged
         on all 27 entries and the three truth layers. UIOWA Michaelson Lab has 50 tracks, because
         it submitted none for one experiment.</p>

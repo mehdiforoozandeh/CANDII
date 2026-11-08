@@ -94,7 +94,7 @@ def test_build_writes_the_page_and_its_data(tmp_path: Path) -> None:
     out = tmp_path / "_site"
     eb.main(["build", "--out", str(out)])
     assert sorted(p.name for p in out.iterdir()) == sorted(["eic.json", *eb.SITE_FILES])
-    assert json.loads((out / "eic.json").read_text(encoding="utf-8"))["schema"] == "eic-board/2"
+    assert json.loads((out / "eic.json").read_text(encoding="utf-8"))["schema"] == "eic-board/3"
 
 
 def test_the_decomposition_covers_every_default_entry_and_adds_up() -> None:
@@ -103,6 +103,12 @@ def test_the_decomposition_covers_every_default_entry_and_adds_up() -> None:
         assert len(names) == 27 and "CANDI + tcfloor" in names and "CANDI" in names
         for d in layer["decomp"]:
             assert abs(d["mse"] - d["level"] - d["shared"] - d["specific"]) < 2e-4
+            assert abs(d["level"] - d["offset"] - d["scale"] - d["nonlinear"]) < 2e-4
+            assert abs(d["shared"] - sum(d["bands"][:4])) < 5e-4
+            assert abs(d["specific"] - sum(d["bands"][4:])) < 5e-4
+            # the residual = unexplained + added, summed over the eight components
+            assert abs(d["shared"] + d["specific"] - sum(d["unexplained"]) - d["added"]) < 1e-3
+        assert len(layer["decomp_truth"]) == 8 and abs(sum(layer["decomp_truth"]) - 1) < 2e-3
 
 
 def test_a_decomposition_that_does_not_add_up_is_refused(root: Path) -> None:
@@ -111,4 +117,13 @@ def test_a_decomposition_that_does_not_add_up_is_refused(root: Path) -> None:
         r["mse"] = str(float(r["mse"]) * 1.01)
     rewrite(root / "decomp" / "summary.tsv", bump)
     with pytest.raises(eb.GateError, match="level \\+ shared"):
+        eb.compile_board(root)
+
+
+def test_a_component_that_does_not_add_up_is_refused(root: Path) -> None:
+    def bump(rows):
+        r = next(r for r in rows if r["truth"] == "qn" and r["assay"] == "all" and r["part"] == "specific")
+        r["explained"] = str(float(r["explained"]) + 0.01)
+    rewrite(root / "decomp" / "components.tsv", bump)
+    with pytest.raises(eb.GateError, match="does not add up"):
         eb.compile_board(root)

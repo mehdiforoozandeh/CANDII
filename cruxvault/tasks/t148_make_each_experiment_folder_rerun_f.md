@@ -7,9 +7,9 @@ parent:
 blocked_by: None
 refs: q10
 hypothesis_refs: 
-status: open
-created: 2026-11-08T03:12:17
-updated: 2026-11-08T03:12:17
+status: done
+created: "2026-11-08T03:12:17"
+updated: "2026-11-08T04:53:05"
 ---
 
 # t148 — make each experiment folder rerun from one bash runall.sh (no args, skip-if-exists, frozen once cited); commit small results folders under a 1 MB cap; pilot on t138
@@ -24,7 +24,7 @@ finding evidence links break on a fresh clone; reproduction today is per-task sc
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [t138 runall pilot, merged dcc97ef](results/t138/runall.sh)
 
 ## Evidence
 
