@@ -1,0 +1,3 @@
+PASS rows 260 expected 260
+PASS R2_level>=0
+PASS shuffle-control 256/260

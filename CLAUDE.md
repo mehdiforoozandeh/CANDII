@@ -78,22 +78,22 @@ python tools/golden.py    # bit-exact against the pre-change tree
 If a `docs/` or `implementation/` branch moves a number, it was mislabelled. Find the bug or
 relabel the task.
 
-**Experiment lanes — TODO, NOT YET DEFINED.** The gate is blocked on an imputation-methods
-leaderboard that does not exist yet. Until it lands, an `exp/` branch does **not** merge on
-anyone's judgement that a number looks better. Write down why the naive version is not enough:
-the target-clustered noise floor on macro CRPS is **~0.09**, and a *seed change alone* moves
-pooled CRPS by **0.1195** (`AGENTS.md` §7.2). Several recorded between-arm gaps are smaller
-than that. Do not invent a gate to unblock yourself — raise it.
+**Experiment lanes** (`exp/`) — merge when both hold, with the stamped row committed on the branch:
+```bash
+python tools/golden.py check ref.pt   # (a) bit-exact vs `golden.py save ref.pt` run on origin/main
+python tools/leaderboard.py add <score.json> --board <regime> ...  # (b) stamp the row; see --help
+python tools/leaderboard.py check     # (b) every row gate + a bit-exact double build
+```
 
 ### Closing the loop
 
 ```bash
-crux task done t12 --output "[Merged 9a3f1c2](results/t12/DELIVERABLE.md)" --concluded h7:supported
-crux task accept t12     # the PI's signature — never run this on your own judgement
+crux task done t12 --output "[Merged 9a3f1c2](results/t12/DELIVERABLE.md)"
+crux finding h7 -d supports -c moderate -w "<why>" -e results/t12/DELIVERABLE.md
 ```
-
-An output must **resolve** — a vault file or `[[wikilink]]`, never a bare hash. A conclusion does
-**not** close a hypothesis; `crux close h7` is separate, PI-gated, and needs the boxes ticked.
+An output must **resolve** — a vault file or `[[wikilink]]`, never a bare hash — and enters the
+tree only as a finding's evidence. State derives from findings: nothing is accepted or closed; park
+a dropped node (`crux park h7`). Recording, settling and parking are yours; **merging a PR is the PI's**.
 
 ## Where numbers live
 
@@ -105,13 +105,13 @@ An output must **resolve** — a vault file or `[[wikilink]]`, never a bare hash
 
 ## The vault
 
-`cruxvault/` is tracked. Two directories inside it are **not**, and must stay that way:
+`cruxvault/` is tracked, except `cruxvault/raw/` (332 MB of source PDFs; local, never committed).
 
-- `cruxvault/raw/` — 332 MB of source PDFs. Present locally, never committed.
-- `cruxvault/results/` — `results/<hid>/` holds the small evidence rsync'd down from Fir: the
-  report crux links from `## Artifacts`, its figures, the scored JSON, and a `FIR_PATH.txt`
-  naming the run. Checkpoints and logs stay on the cluster. **Not** a symlink — Fir is reached
-  over SSH and is not mounted here, so a link would have no local path to point at.
+- `cruxvault/results/<task-id>/` holds the small evidence pulled down from the cluster. A folder
+  is tracked once converted: `bash runall.sh` reruns it (no arguments, skip-if-exists),
+  `MANIFEST.tsv` hashes every output (big files stay on the cluster), no file is over 1 MB, and
+  `.gitignore` gets one `!` line. Once a finding cites it, it is frozen; a redo is a new task.
+  Unconverted folders stay untracked. The contract: `AGENTS.md` §4.11.
 
 Only the literature wiki was inherited from the old vault. No old hypothesis was migrated. Routine lint is `crux validate --check=tree,tasks`; the full wiki lint needs a local `raw/`.
 

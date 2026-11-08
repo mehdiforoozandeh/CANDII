@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CANDI EIC leaderboard</title>
+<meta name="description" content="CANDI on the 2019 ENCODE Imputation Challenge, scored on the original, the quantile-normalized and the reprocessed + normalized truth.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox='0 0 16 16'%3E%3Crect x='1' y='8' width='3' height='7' rx='1' fill='%233b6fd6'/%3E%3Crect x='6' y='4' width='3' height='11' rx='1' fill='%233b6fd6' opacity='.7'/%3E%3Crect x='11' y='1' width='3' height='14' rx='1' fill='%233b6fd6' opacity='.45'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <p class="eyebrow">CANDI · leaderboard</p>
+  <h1>CANDI on the ENCODE Imputation Challenge</h1>
+  <p class="lede">In the 2019 ENCODE Imputation Challenge (EIC), 23 teams predicted 51 held-out
+    epigenomic tracks. After the challenge, the organizers found that the held-out truth had been
+    processed differently from the training data. They then published the scores again on two
+    corrected versions of the truth. This board shows the published field on all three versions,
+    scored exactly as the organizers scored it, with CANDI added as a 26th entry.</p>
+  <ul class="facts" aria-label="Benchmark at a glance">
+    <li><b>51</b> blind experiments</li>
+    <li><b>12</b> cell types</li>
+    <li><b>8</b> assays</li>
+    <li><b>9</b> measures</li>
+    <li><b>10</b> bootstraps</li>
+    <li><b>25</b> published entries</li>
+  </ul>
+</header>
+
+<main>
+  <section aria-labelledby="h-summary">
+    <h2 id="h-summary" class="section-title">CANDI on each layer</h2>
+    <div id="cards" class="cards"><p class="muted">Loading eic.json …</p></div>
+  </section>
+
+  <section aria-labelledby="h-board" class="board">
+    <div class="board-head">
+      <h2 id="h-board" class="section-title">Leaderboard</h2>
+      <div class="seg" role="tablist" aria-label="Truth version" id="tabs"></div>
+    </div>
+    <div id="layer-note" class="layer-note"></div>
+    <div class="table-tools">
+      <label class="toggle"><input type="checkbox" id="variants"> Show depth-prompt variants</label>
+      <span class="muted small">Score is a mean normalized rank: lower is better. Δ is the change
+        in position from the previous layer.</span>
+    </div>
+    <div class="table-wrap">
+      <table id="table">
+        <thead><tr>
+          <th class="num" scope="col">#</th>
+          <th scope="col">Entry</th>
+          <th scope="col" class="score-col">Score</th>
+          <th class="num" scope="col">Δ</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-bump">
+    <h2 id="h-bump" class="section-title">How positions move across the three layers</h2>
+    <p class="muted small">Each line is one entry. Hover a line or a table row to follow it.
+      <span class="legend"><i class="sw candi"></i>CANDI <i class="sw baseline"></i>baselines
+      <i class="sw team"></i>2019 winners</span></p>
+    <div id="bump" class="bump"></div>
+  </section>
+
+  <section aria-labelledby="h-decomp">
+    <div class="board-head">
+      <h2 id="h-decomp" class="section-title">Where each entry's error comes from</h2>
+      <span class="muted small" id="decomp-layer"></span>
+    </div>
+    <p class="muted small decomp-lede">Each bar is an entry's squared error on the selected layer, as
+      a fraction of the truth's variance, so 1.0 equals predicting each track's mean. The bar splits
+      exactly into three parts.
+      <span class="legend"><i class="sw lvl"></i><b>Calibration</b>: removed by the best monotone
+      rescaling of the prediction.
+      <i class="sw shr"></i><b>Shared</b>: the same mistake at the same position in every held-out
+      cell type of an assay.
+      <i class="sw spc"></i><b>Specific</b>: the rest, particular to one track.</span></p>
+    <div id="decomp" class="decomp"></div>
+    <p class="muted small">Rows follow the board order. The board ranks entries over 9 measures, so
+      the bar lengths need not follow it. The unit is asinh of the signal. The truth has no
+      replicates, so no part of the error is marked as noise.</p>
+  </section>
+
+  <section aria-labelledby="h-method" class="method">
+    <h2 id="h-method" class="section-title">Method</h2>
+
+    <details open>
+      <summary>The three layers</summary>
+      <dl class="layers-dl">
+        <dt>1 · Original truth</dt>
+        <dd>The raw predictions, scored against the blind truth as released in 2019. The blind
+          tracks were processed as paired-end, while 90% of the training tracks were single-end.
+          This changes duplicate removal, and so the signal. The organizers published these scores
+          as Additional File 2 (MOESM2).</dd>
+        <dt>2 · Quantile normalized</dt>
+        <dd>The same truth, with no reprocessing. Each truth track is mapped onto one shared
+          distribution per assay, separately inside its peaks (1,000 levels) and in the background
+          (50 levels). The reference is the mean over the 2019 training and validation tracks.
+          Additional File 3 (MOESM3).</dd>
+        <dt>3 · Reprocessed + normalized</dt>
+        <dd>48 truth tracks reprocessed from the reads as single-end (ATAC-seq must stay
+          paired-end), then normalized as in layer 2. This is the organizers' corrected board,
+          Additional File 4 (MOESM4).</dd>
+      </dl>
+    </details>
+
+    <details>
+      <summary>How the score and the position are computed</summary>
+      <ol>
+        <li>For each experiment, bootstrap and measure, the entries are ranked.</li>
+        <li>Ranks are averaged over the 9 measures and normalized by the number of entries.</li>
+        <li>An entry's score in a bootstrap is its mean over the 51 experiments, each capped at
+          0.5. Lower is better.</li>
+        <li>An entry's position comes from its second-best bootstrap; ties are broken by the mean
+          score.</li>
+      </ol>
+      <p>The score is a rank, so it moves with the field and hides how close two entries are.
+        Always quote the margin next to the position.</p>
+      <p>The 9 measures are genome-wide MSE, Pearson and Spearman correlation; MSE in promoters,
+        gene bodies and enhancers; MSE weighted by the variance across cell types; and MSE at the
+        top 1% of bins by observed (mse1obs) and by imputed (mse1imp) signal.</p>
+    </details>
+
+    <details>
+      <summary>Reproduction, and where it follows the code over the paper</summary>
+      <p>Every number here comes from Max Libbrecht's reproduction of the challenge scoring. His
+        scorer reproduces the organizers' published tables:</p>
+      <ul>
+        <li><b>Layer 1:</b> every published value, to a median relative difference of
+          3 × 10<sup>−10</sup>; all 25 positions.</li>
+        <li><b>Layer 2:</b> all 25 positions. Values are within a median of 2 × 10<sup>−4</sup>;
+          the truth was rebuilt with ENCODE peak files, and DNase-seq is 30% off.</li>
+        <li><b>Layer 3:</b> every published value, to a median relative difference of
+          3 × 10<sup>−10</sup>; all 25 positions. The truth is Jacob Schreiber's Zenodo records.</li>
+      </ul>
+      <p>Where the challenge's code and the paper's Methods disagree, this board follows the code:</p>
+      <ul>
+        <li>The 10 bootstraps are 10 fixed groups of chromosomes, not resampled positions.</li>
+        <li>Blacklisted bins are deleted before scoring.</li>
+        <li>Gene annotation is GENCODE v29 (the paper says v38).</li>
+        <li>The weights of the variance-weighted MSE are the variance across cell types of the
+          scored truth version itself (the paper says the training set).</li>
+      </ul>
+      <p>Each CANDI arm is added alone to the published field and the field is re-ranked, so each
+        CANDI row is a position out of 26. The 25 published entries keep their published scores and
+        positions. Two CANDI arms never share one field.</p>
+    </details>
+
+    <details>
+      <summary>How the error is decomposed</summary>
+      <p>Per track, the squared error divided by the truth's variance is split into an offset, a
+        scale and a nonlinear term, which the best monotone map of the prediction would remove
+        (shown together as calibration), and a residual that needs bins to be reordered. Across
+        the held-out tracks of one assay, the residual splits exactly into a part shared by every
+        track at a position and a track-specific part. Tracks are averaged with equal weight over
+        the 51 experiments. The method is Max Libbrecht's sprint 06 decomposition, run unchanged
+        on all 27 entries and the three truth layers. UIOWA Michaelson Lab has 50 tracks, because
+        it submitted none for one experiment.</p>
+    </details>
+
+    <details>
+      <summary>What "CANDI" and "CANDI + tcfloor" are</summary>
+      <ul>
+        <li><b>CANDI</b>: the 8-assay CANDI model (about 3.1 M parameters), three seeds averaged,
+          given each blind experiment's own recorded covariates.</li>
+        <li><b>CANDI + tcfloor</b>: CANDI's prediction C passed through one linear map per assay,
+          a + b·C + c·A, where A is the Average baseline. The 24 coefficients are fitted on the
+          challenge's training tracks only, so this entry could have been submitted in 2019. For
+          H3K4me3 and ATAC-seq the map returns almost only the Average baseline.</li>
+        <li><b>Depth-prompt variants</b> (toggle above): the same arms with the depth covariate fixed
+          at 30 M reads.</li>
+      </ul>
+      <p>The organizers warn that the corrected boards should not be used to declare winners,
+        because the teams could not retrain on the corrected data.</p>
+    </details>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>Sources:
+    <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10111747/">Schreiber, Boix et al., Genome Biology 2023</a> ·
+    corrected truth <a href="https://zenodo.org/records/14736608">Zenodo 14736608</a> and
+    <a href="https://zenodo.org/records/14736610">14736610</a> ·
+    tables in <code>leaderboard/eic/source/</code> of the
+    <a href="https://github.com/mehdiforoozandeh/CANDII">CANDII repository</a>.</p>
+  <p><a href="legacy/">The previous leaderboard (retrained rivals, Dataset 1 regimes)</a></p>
+</footer>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+cluster: Nibi
+dir: /project/def-maxwl/mforooz/t138/out (features.npz stays on Nibi; not copied)
+job: 25402043 (t138 map, COMPLETED; started 05:38:15Z, done 05:50:51Z 2026-10-30, host c161)
+job log: /project/def-maxwl/mforooz/t138/logs/t138_map_25402043.out (copied here)
+kit: /project/def-maxwl/mforooz/t137/code/K2 (GIT_SHA 6743ab64644aaf16e5c1c222b8396bf7726bb233)
+input bins: /project/def-maxwl/mforooz/t137/floor/bins1k (G1 layout; a15/b15, a375/b375)
+blacklist: APPLIED -- /project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed; config.json "blacklist" names it and "n_blacklisted_1k_bins" = 195800 (amendment A8)
+features: gc, map (k36.umap.bedgraph.gz, mappability_missing false), rep (rmsk.txt.gz), ctx (base narrowPeaks per track, named in features.json and the job log)
+code: tools/t138/{features,map}.py, slurm/t138/map.sh on exp/t118-counterfactual-f

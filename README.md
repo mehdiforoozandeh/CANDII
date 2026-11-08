@@ -4,6 +4,10 @@
 
 *CEEHRC 2026 poster. Click the image for the full-resolution PDF.*
 
+**Leaderboard:** [CANDI on the ENCODE Imputation Challenge](https://mehdiforoozandeh.github.io/CANDII/) —
+the 2019 field on the original, the quantile-normalized and the reprocessed + normalized truth
+(`leaderboard/eic/`, built by `tools/eic_board.py`).
+
 **C**onfidence-**A**ware **N**eural **D**enoising **I**mputer — self-supervised epigenome imputation
 and denoising from raw sequencing read counts plus experimental covariates.
 
