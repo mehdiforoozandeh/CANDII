@@ -1,0 +1,49 @@
+truth	board	arm	n_experiments	position	of	score_mean	score_worst_bootstrap	best_other	best_other_score	best_other_best_bootstrap	average_position	average_score
+mehdi	ours	CANDI + tcfloor	48	1	26	0.2036	0.2137	Hongyang Li and Yuanfang Guan v1	0.2693	0.264	18	0.4056
+mehdi	ours	CANDI repro-covariates + tcfloor	48	1	26	0.2004	0.2091	Hongyang Li and Yuanfang Guan v1	0.2721	0.2683	18	0.4058
+mehdi	ours	CANDI repro-covariates, uncorrected	48	14	26	0.361	0.3646	Hongyang Li and Yuanfang Guan v1	0.2531	0.2509	17	0.3871
+mehdi	ours	CANDI, uncorrected	48	16	26	0.3816	0.3839	Hongyang Li and Yuanfang Guan v1	0.2516	0.247	17	0.3886
+mehdipq	ours	CANDI + tcfloor	51	1	26	0.1724	0.1785	Hongyang Li and Yuanfang Guan v1	0.2252	0.2165	9	0.346
+mehdipq	ours	CANDI repro-covariates + tcfloor	51	1	26	0.1643	0.1683	Hongyang Li and Yuanfang Guan v1	0.225	0.2173	9	0.3468
+mehdipq	ours	CANDI repro-covariates, uncorrected	51	17	26	0.3885	0.3922	Hongyang Li and Yuanfang Guan v1	0.2112	0.2049	9	0.331
+mehdipq	ours	CANDI, uncorrected	51	17	26	0.4017	0.4034	Hongyang Li and Yuanfang Guan v1	0.2099	0.2042	9	0.3313
+pe	ours	CANDI + tcfloor	51	1	26	0.1792	0.1843	Hongyang Li and Yuanfang Guan v1	0.3061	0.2893	4	0.3131
+pe	ours	CANDI repro-covariates + tcfloor	51	1	26	0.1833	0.1875	Hongyang Li and Yuanfang Guan v1	0.3057	0.2911	4	0.3128
+pe	ours	CANDI repro-covariates, uncorrected	51	14	26	0.3605	0.3638	Hongyang Li and Yuanfang Guan v1	0.2898	0.2747	3	0.2981
+pe	ours	CANDI, uncorrected	51	14	26	0.3512	0.3548	Hongyang Li and Yuanfang Guan v1	0.2908	0.2769	3	0.302
+pe	published MOESM2	CANDI + tcfloor	51	1	26	0.1792	0.1843	Hongyang Li and Yuanfang Guan v1	0.3061	0.2893	4	0.3131
+pe	published MOESM2	CANDI repro-covariates + tcfloor	51	1	26	0.1833	0.1875	Hongyang Li and Yuanfang Guan v1	0.3057	0.2911	4	0.3128
+pe	published MOESM2	CANDI repro-covariates, uncorrected	51	14	26	0.3605	0.3638	Hongyang Li and Yuanfang Guan v1	0.2898	0.2747	3	0.2981
+pe	published MOESM2	CANDI, uncorrected	51	14	26	0.3512	0.3548	Hongyang Li and Yuanfang Guan v1	0.2908	0.2769	3	0.302
+pq	ours	CANDI + tcfloor	51	1	26	0.1677	0.1741	Hongyang Li and Yuanfang Guan v1	0.2158	0.2111	7	0.3342
+pq	ours	CANDI repro-covariates + tcfloor	51	1	26	0.1625	0.1668	Hongyang Li and Yuanfang Guan v1	0.2161	0.2119	7	0.3368
+pq	ours	CANDI repro-covariates, uncorrected	51	17	26	0.3983	0.4027	Hongyang Li and Yuanfang Guan v1	0.1967	0.1919	6	0.3192
+pq	ours	CANDI, uncorrected	51	18	26	0.4126	0.4147	Hongyang Li and Yuanfang Guan v1	0.196	0.1911	6	0.3193
+pq	published MOESM3	CANDI + tcfloor	51	1	26	0.1589	0.1654	Hongyang Li and Yuanfang Guan v1	0.2147	0.2119	7	0.3339
+pq	published MOESM3	CANDI repro-covariates + tcfloor	51	1	26	0.1552	0.1599	Hongyang Li and Yuanfang Guan v1	0.2152	0.2126	7	0.3362
+pq	published MOESM3	CANDI repro-covariates, uncorrected	51	16	26	0.3882	0.3918	Hongyang Li and Yuanfang Guan v1	0.1959	0.1911	6	0.3189
+pq	published MOESM3	CANDI, uncorrected	51	17	26	0.4013	0.4031	Hongyang Li and Yuanfang Guan v1	0.1952	0.1904	6	0.3192
+pqse	ours	CANDI + tcfloor	51	1	26	0.205	0.2117	BrokenNodes_v3	0.2939	0.2867	18	0.4126
+pqse	ours	CANDI repro-covariates + tcfloor	51	1	26	0.198	0.2065	BrokenNodes_v3	0.2943	0.2881	18	0.4145
+pqse	ours	CANDI repro-covariates, uncorrected	51	16	26	0.3699	0.3736	BrokenNodes_v3	0.2905	0.2831	18	0.394
+pqse	ours	CANDI, uncorrected	51	16	26	0.3773	0.3813	BrokenNodes_v3	0.2904	0.2831	18	0.3936
+qn	ours	CANDI + tcfloor	51	1	26	0.2287	0.2364	BrokenNodes_v3	0.2795	0.2734	18	0.4284
+qn	ours	CANDI repro-covariates + tcfloor	51	1	26	0.232	0.2407	BrokenNodes_v3	0.2794	0.2734	18	0.4308
+qn	ours	CANDI repro-covariates, uncorrected	51	15	26	0.3598	0.3609	BrokenNodes_v3	0.2808	0.2741	18	0.4159
+qn	ours	CANDI, uncorrected	51	16	26	0.3629	0.3667	BrokenNodes_v3	0.2816	0.2763	18	0.4153
+qn	published MOESM4	CANDI + tcfloor	51	1	26	0.2287	0.2364	BrokenNodes_v3	0.2795	0.2734	18	0.4284
+qn	published MOESM4	CANDI repro-covariates + tcfloor	51	1	26	0.232	0.2407	BrokenNodes_v3	0.2794	0.2734	18	0.4308
+qn	published MOESM4	CANDI repro-covariates, uncorrected	51	15	26	0.3598	0.3609	BrokenNodes_v3	0.2808	0.2741	18	0.4159
+qn	published MOESM4	CANDI, uncorrected	51	16	26	0.3629	0.3667	BrokenNodes_v3	0.2816	0.2763	18	0.4153
+qnold	ours	CANDI + tcfloor	48	1	26	0.1377	0.1483	Hongyang Li and Yuanfang Guan v1	0.1521	0.1478	4	0.2164
+qnold	ours	CANDI repro-covariates + tcfloor	48	1	26	0.1173	0.1208	Hongyang Li and Yuanfang Guan v1	0.154	0.1518	4	0.2172
+qnold	ours	CANDI repro-covariates, uncorrected	48	12	26	0.3827	0.3846	Hongyang Li and Yuanfang Guan v1	0.135	0.1316	3	0.2033
+qnold	ours	CANDI, uncorrected	48	12	26	0.3761	0.3796	Hongyang Li and Yuanfang Guan v1	0.1363	0.1339	3	0.2037
+se	ours	CANDI + tcfloor	48	6	26	0.3137	0.3179	BrokenNodes_v3	0.1963	0.1867	24	0.4883
+se	ours	CANDI repro-covariates + tcfloor	48	6	26	0.3097	0.3148	BrokenNodes_v3	0.1972	0.1867	24	0.4882
+se	ours	CANDI repro-covariates, uncorrected	48	3	26	0.2993	0.3029	BrokenNodes_v3	0.2045	0.1983	24	0.4823
+se	ours	CANDI, uncorrected	48	6	26	0.3058	0.3094	BrokenNodes_v3	0.2054	0.1998	24	0.482
+sq	ours	CANDI + tcfloor	48	1	26	0.225	0.2323	BrokenNodes_v3	0.2674	0.2611	18	0.4298
+sq	ours	CANDI repro-covariates + tcfloor	48	1	26	0.2287	0.2369	BrokenNodes_v3	0.2673	0.2611	18	0.4323
+sq	ours	CANDI repro-covariates, uncorrected	48	14	26	0.351	0.3522	BrokenNodes_v3	0.2697	0.2627	18	0.4172
+sq	ours	CANDI, uncorrected	48	14	26	0.3543	0.3584	BrokenNodes_v3	0.2705	0.265	18	0.4166
