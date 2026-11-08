@@ -45,6 +45,14 @@ LAYERS = (
     ("corrected", "qn_vs_MOESM4_board.tsv", "published MOESM4"),
 )
 
+# The error decomposition (decomp/summary.tsv, Max's sprint 06 method): its `truth` code per layer.
+DECOMP_TRUTH = {"original": "pe", "qn": "pq", "corrected": "qn"}
+N_EXPERIMENTS = 51
+# Entries with fewer scored tracks than experiments: UIOWA submitted nothing for one experiment.
+SHORT_ENTRIES = {"UIOWA Michaelson Lab": 50}
+# summary.tsv is printed to 6 significant figures, so mse = level + shared + specific to ~1e-5.
+DECOMP_REL = 1e-4
+
 # CANDI arms on the board: (arm name in candi_placement.tsv, label on the page, shown by default)
 ARMS = (
     ("CANDI + tcfloor", "CANDI + tcfloor", True),
@@ -127,13 +135,42 @@ def load_candi(root: Path) -> Dict[str, List[Dict[str, Any]]]:
     return out
 
 
+def load_decomp(root: Path, layer: str, names: Sequence[str]) -> List[Dict[str, Any]]:
+    """One row per board entry: MSE as a fraction of the truth's variance, split exactly into
+    level (calibration) + shared + specific (ranking error common to / particular to a track)."""
+    truth = DECOMP_TRUTH[layer]
+    labels = {arm: label for arm, label, _ in ARMS}
+    rows = [r for r in read_tsv(root / "decomp" / "summary.tsv")
+            if r["truth"] == truth and r["assay"] == "all"]
+    by_name = {labels.get(r["entry"], r["entry"]): r for r in rows}
+    if len(by_name) != len(rows) or sorted(by_name) != sorted(names):
+        raise GateError(f"decomp/summary.tsv ({truth}): entries do not match the board: "
+                        f"missing {sorted(set(names) - set(by_name))}, "
+                        f"extra {sorted(set(by_name) - set(names))}")
+    out = []
+    for name in names:
+        r = by_name[name]
+        n = int(r["n_tracks"])
+        if n != SHORT_ENTRIES.get(r["entry"], N_EXPERIMENTS):
+            raise GateError(f"decomp ({truth}) {name}: {n} tracks")
+        mse, level, shared, specific = (float(r[k]) for k in ("mse", "level", "shared", "specific"))
+        if abs(mse - level - shared - specific) > DECOMP_REL * mse:
+            raise GateError(f"decomp ({truth}) {name}: mse {mse} != level + shared + specific")
+        out.append({"name": name, "n_tracks": n, "mse": round(mse, 4), "level": round(level, 4),
+                    "shared": round(shared, 4), "specific": round(specific, 4)})
+    return out
+
+
 def compile_board(root: Path) -> Dict[str, Any]:
     candi = load_candi(root)
     layers = []
     for layer, tsv, _ in LAYERS:
-        layers.append({"id": layer, "published": load_layer(root, layer, tsv),
-                       "candi": candi[layer]})
-    return {"schema": "eic-board/1", "layers": layers}
+        published = load_layer(root, layer, tsv)
+        default_arms = [c["name"] for c in candi[layer] if c["default"]]
+        layers.append({"id": layer, "published": published, "candi": candi[layer],
+                       "decomp": load_decomp(root, layer,
+                                             [p["name"] for p in published] + default_arms)})
+    return {"schema": "eic-board/2", "layers": layers}
 
 
 def dump_json(obj: Any) -> str:

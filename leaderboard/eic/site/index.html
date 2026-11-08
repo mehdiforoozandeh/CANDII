@@ -67,6 +67,25 @@
     <div id="bump" class="bump"></div>
   </section>
 
+  <section aria-labelledby="h-decomp">
+    <div class="board-head">
+      <h2 id="h-decomp" class="section-title">Where each entry's error comes from</h2>
+      <span class="muted small" id="decomp-layer"></span>
+    </div>
+    <p class="muted small decomp-lede">Each bar is an entry's squared error on the selected layer, as
+      a fraction of the truth's variance, so 1.0 equals predicting each track's mean. The bar splits
+      exactly into three parts.
+      <span class="legend"><i class="sw lvl"></i><b>Calibration</b>: removed by the best monotone
+      rescaling of the prediction.
+      <i class="sw shr"></i><b>Shared</b>: the same mistake at the same position in every held-out
+      cell type of an assay.
+      <i class="sw spc"></i><b>Specific</b>: the rest, particular to one track.</span></p>
+    <div id="decomp" class="decomp"></div>
+    <p class="muted small">Rows follow the board order. The board ranks entries over 9 measures, so
+      the bar lengths need not follow it. The unit is asinh of the signal. The truth has no
+      replicates, so no part of the error is marked as noise.</p>
+  </section>
+
   <section aria-labelledby="h-method" class="method">
     <h2 id="h-method" class="section-title">Method</h2>
 
@@ -130,6 +149,18 @@
       <p>Each CANDI arm is added alone to the published field and the field is re-ranked, so each
         CANDI row is a position out of 26. The 25 published entries keep their published scores and
         positions. Two CANDI arms never share one field.</p>
+    </details>
+
+    <details>
+      <summary>How the error is decomposed</summary>
+      <p>Per track, the squared error divided by the truth's variance is split into an offset, a
+        scale and a nonlinear term, which the best monotone map of the prediction would remove
+        (shown together as calibration), and a residual that needs bins to be reordered. Across
+        the held-out tracks of one assay, the residual splits exactly into a part shared by every
+        track at a position and a track-specific part. Tracks are averaged with equal weight over
+        the 51 experiments. The method is Max Libbrecht's sprint 06 decomposition, run unchanged
+        on all 27 entries and the three truth layers. UIOWA Michaelson Lab has 50 tracks, because
+        it submitted none for one experiment.</p>
     </details>
 
     <details>
