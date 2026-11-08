@@ -1,5 +1,5 @@
 ---
-id: t148
+id: t149
 type: task
 title: variance decomposition of every EIC entry on all three truth layers, for the EIC board
 category: visualization
@@ -12,7 +12,7 @@ created: "2026-11-07T13:48:31"
 updated: "2026-11-08T03:14:30"
 ---
 
-# t148 — variance decomposition of every EIC entry on all three truth layers, for the EIC board
+# t149 — variance decomposition of every EIC entry on all three truth layers, for the EIC board
 
 Refs:: _(none)_
 

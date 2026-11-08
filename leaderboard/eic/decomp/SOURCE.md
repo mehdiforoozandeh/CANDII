@@ -1,6 +1,6 @@
 # Where these three tables come from
 
-Made by `tools/eic_decomp/` (task t148) on Nibi, 2026-11-07: Slurm array 26430723 (216 tasks = 27 entries x
+Made by `tools/eic_decomp/` (task t149) on Nibi, 2026-11-07: Slurm array 26430723 (216 tasks = 27 entries x
 8 assays, all COMPLETED), then `aggregate.py /scratch/mforooz/eic_decomp/out agg`. Per-task outputs (Gram
 matrices, per-track terms) stay on Nibi under `/scratch/mforooz/eic_decomp/out/<truth>/<assay>/`.
 

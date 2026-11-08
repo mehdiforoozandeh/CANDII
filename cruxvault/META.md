@@ -39,15 +39,19 @@ Root: [[candii]]
     - ○ `h24` [H] [[h24_the_depth_entries_in_g_s_covariate_input|The depth entries in g's covariate input cause the conditioned generator to miss the depth law on never-trained depth pairs]] — *open*
     - ● `h27` [H] [[h27_f_at_64_channels_2x_wider_with_the_same_|f at 64 channels (2x wider), with the same g hidden width, training pairs and loss, meets the depth law on never-trained depth pairs]] — *settled* · strong · against (`never-trained depth-law error 0.41 (per-track g) / 0.34 (across) vs trained 0.05; six-seed CRPS gain through the base 0.006, within seed noise`)
     - ◐ `h28` [H] [[h28_training_g_on_arm_to_arm_pairs_lets_a_di|Training g on arm-to-arm pairs lets a direct g -> f map meet the depth law on never-trained arm-to-arm pairs, without a pivot through the base]] — *leaning* · moderate · against
+    - ○ `h30` [H] [[h30_chaining_one_shared_count_space_correcti|Chaining one shared count-space correction model through the base transfers to never-trained arm-to-arm pairs across every count-moving knob, including cross-knob pairs, better than the direct route, and a pivot-consistency loss lets the direct route match the chained route]] — *open*
   - ○ `q8` [Q] [[q8_does_candi_s_training_which_never_pairs_|**Does CANDI's training, which never pairs an experiment with a counterfactual of itself except in depth, leave the trained model unable to correct for a change in the other covariates?**]] — *open*
     - ○ `h26` [H] [[h26_a_trained_candi_checkpoint_told_a_counte|A trained CANDI checkpoint, told a counterfactual arm's read length or run type in place of the base's, moves its predicted counts no closer to the arm's real track than when told the base's own covariates]] — *open*
   - ● `q9` [Q] [[q9_which_recorded_processing_covariates_mov|**Which recorded processing covariates move a track the most when changed one at a time, in peak height and in the shape of the signal?**]] — *settled* · strong
     - ● `q11` [Q] [[q11_where_along_the_genome_does_each_covaria|**Where along the genome does each covariate act: does a track react uniformly to a change in depth, read length or another processing knob, or more in some kinds of regions?**]] — *settled* · strong
+      - ○ `h31` [H] [[h31_giving_the_shared_count_space_correction|Giving the shared count-space correction model a mappability track, or one-hot DNA sequence, as extra input improves correction on read-length and MAPQ arms without harming the other knobs]] — *open*
   - ● `q10` [Q] [[q10_how_much_does_resampling_alone_move_a_tr|**How much does resampling alone move a track's shape and magnitude, where in the genome is that noise concentrated, and how does it shrink with depth?**]] — *settled* · strong
+  - ○ `q12` [Q] [[q12_when_covariate_correction_is_trained_joi|**When covariate correction is trained jointly with imputation of masked assays and reconstruction, does the combined objective change how well the correction transfers to covariate combinations never seen in training, compared with training it alone?**]] — *open*
+    - ○ `h29` [H] [[h29_adding_a_cross_assay_imputation_or_maske|Adding a cross-assay imputation or masked-bin denoising objective to one shared count-space correction model changes how well the correction transfers to never-trained arm-to-arm pairs, compared with the same model trained on correction alone]] — *open*
 
 ## Dashboard
 
-- **Questions** (11): open 1 · leaning 5 · settled 5 · parked 0
-- **Hypotheses** (27): open 12 · leaning 9 · settled 6 · parked 0
+- **Questions** (12): open 2 · leaning 5 · settled 5 · parked 0
+- **Hypotheses** (30): open 15 · leaning 9 · settled 6 · parked 0
 - **Confidence**: weak 9 · moderate 5 · strong 11
 - **Findings**: 27

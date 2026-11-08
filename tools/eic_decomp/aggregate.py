@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate decompose.py's per-(truth, assay, entry) outputs into the two tables the EIC board reads (t148).
+"""Aggregate decompose.py's per-(truth, assay, entry) outputs into the two tables the EIC board reads (t149).
 
 Definitions are Max's sprint 06 (report.html, report2.html; aggregate2.py), in units of each target track's
 variance at 25 bp, asinh units:

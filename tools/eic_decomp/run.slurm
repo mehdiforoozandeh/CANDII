@@ -1,5 +1,5 @@
 #!/bin/bash
-# EIC error decomposition (t148): one array task per line of TASKS (tab-separated: <slug> <assay>).
+# EIC error decomposition (t149): one array task per line of TASKS (tab-separated: <slug> <assay>).
 # Reads Max's sprint 04 inputs (group-readable since 2026-11-07); writes $OUT.
 #SBATCH --job-name=eic_decomp
 #SBATCH --account=def-maxwl_cpu
