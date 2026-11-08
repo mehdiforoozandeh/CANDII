@@ -36,47 +36,90 @@ What it is **not**:
 
 ## 2. FILE MAP
 
+One line per file under `src/`, as of 2026-11-08. `src/candi/eval.py` (the old M1/M2/M3/S14
+instrument) was deleted 2026-08-22 in `2f56cb1`; `candi.bench` replaced it (D15).
+
 ### 2.1 `src/candi/` — the training path
 
-| file | lines | owns |
-|---|---|---|
-| `model.py` | 263 | `CandiModel`, `build_model`, the FiLM-tap vocabulary (`parse_film_taps`), and the NB helpers `forward_full` / `nb_mean` / `nb_nll` / `encode_latent`. |
-| `encoder.py` | 1252 | `MetadataEmbedding`, `SignalConvTower`, `MaskTokenInjector`, `DNAConvTower`, `LinearFusion`, `V2Encoder`. The `arcsinh` transform lives here, not in the loader. |
-| `decoder.py` | 593 | `SymmetricDecoder` — grouped deconv trunk at constant lane width, four FiLM taps, the NB head, plus the optional `GaussianSignalHead` and `PeakHead`. |
-| `dataset.py` | 497 | `CandiKitH5Dataset` and the depth-centre helper. Reads all scale from `h5.attrs`. |
-| `batch.py` | 160 | masking, the obs/imp maps, the control append, the availability cross-check. |
-| `train.py` | 1479 | the CLI, the training loop, and the run JSON. |
-| `eval.py` | 1532 | the M1/M2/M3/S14 instrument. Contract in `EVAL.md`. |
-| `metrics.py` | 146 | numeric primitives only — `nb_crps`, `calibration_pit_curve`, `ece`, the correlations. |
-| `param_groups.py` | 418 | the decay/no-decay partition, asserted exhaustive and disjoint. |
-| `precision.py` | 134 | the bf16 autocast fences. Evaluation is never autocast. |
-| `reference.py` · `probes.py` · `meta_probe.py` · `healthcheck.py` · `compare_arms.py` · `verify_bake.py` · `report.py` · `report_h74.py` | | reference table, diagnostic probes, pre-training health check, arm comparison, bake verification, figures. |
-| `_vendored.py` | 354 | `MISSING=-1`, `CLOZE=-2`, `DataMasker`. **RNG-load-bearing** — `apply_mask` draws from the global torch RNG every step. Do not reorder, do not add draws. |
+| file | owns |
+|---|---|
+| `__init__.py` | the package marker and its one-line identity. |
+| `README.md` | the default architecture, **generated** by `tools/arch_diagram.py` from a real forward pass; `tests/test_arch_readme.py` fails when it drifts. `arch/` holds the same pass as `arch.json`, `candi_graph.dot/.svg`, `torchinfo.txt`. |
+| `model.py` | `CandiModel`, `build_model`, the FiLM-tap vocabulary (`parse_film_taps`), and the NB helpers `forward_full` / `nb_mean` / `nb_nll` / `encode_latent`. |
+| `config.py` | `EncoderConfig`, a verbatim copy; the 4 metadata rows and 2 run types are fenced by asserts in the encoder, not fields here. |
+| `encoder.py` | `MetadataEmbedding`, `SignalConvTower`, `MaskTokenInjector`, `DNAConvTower`, `LinearFusion`, `V2Encoder`. The `arcsinh` transform lives here, not in the loader. |
+| `decoder.py` | `SymmetricDecoder` — grouped deconv trunk at constant lane width, four FiLM taps, the NB head, plus the optional `GaussianSignalHead` and `PeakHead`. |
+| `dataset.py` | `CandiKitH5Dataset` and the depth-centre helper. Reads all scale from `h5.attrs`. |
+| `batch.py` | masking, the obs/imp maps, the control append, the availability cross-check. |
+| `train.py` | the CLI, the training loop, the reference-offset wiring, and the run JSON. |
+| `monitor.py` | the mid-training dial: whole-chromosome imputation every N epochs, denoising once at the end. Keys in `EVAL.md`. |
+| `metrics.py` | numeric primitives only — `nb_crps`, quantiles, `calibration_pit_curve`, `ece`, the correlations. |
+| `stats.py` | cluster-level inference — a bootstrap, a sign test, a target-clustered interval; no model, no h5. |
+| `param_groups.py` | the decay/no-decay partition, asserted exhaustive and disjoint. |
+| `precision.py` | the bf16 autocast fences. Evaluation is never autocast. |
+| `reference.py` | the per-assay, per-position average reference over `T_` biosamples (the h74 deviation target). |
+| `probes.py` | activation probes on the metadata → FiLM pathway (h75). |
+| `meta_probe.py` | the h64 arm switch that brackets the covariate-gradient meter with two controls. |
+| `healthcheck.py` | pre-training health checks on real baked data. |
+| `compare_arms.py` | paired arm-vs-arm comparison. |
+| `verify_bake.py` | independent check that a baked h5 mirrors its source npz tree. |
+| `report.py` · `report_h74.py` | figures and markdown regenerated from a results JSON only; `report_h74.py` is the h74 residual-vs-raw contrast. |
+| `_vendored.py` | `MISSING=-1`, `CLOZE=-2`, `DataMasker`. **RNG-load-bearing** — `apply_mask` draws from the global torch RNG every step. Do not reorder, do not add draws. |
 
 ### 2.2 `src/candi/prep/` — the bake path (needs the `[prepare]` extra)
 
-`bake.py` (522) writes the h5 and runs the post-bake `_verify` gates. `handler.py` (2000) is the
-ENCODE-side reader. `reference_sample.py` (191) derives and asserts the assay order.
-`panel.py` validates the panel JSON and rejects unknown keys. Schema and layout → `DATA.md`.
+| file | owns |
+|---|---|
+| `bake.py` | writes the h5 (schema v2) and runs the post-bake `_verify` gates. |
+| `handler.py` | `CANDIDataHandler`, the ENCODE-side reader, vendored verbatim with edits E1–E5. |
+| `reference_sample.py` | derives and asserts the assay order; builds tensors the way the handler does. |
+| `panel.py` | validates the panel JSON and rejects unknown keys — the one place scale is declared. |
+| `paths.py` | the side files the bake needs, as explicit validated arguments. |
+
+Schema and layout → `DATA.md`.
 
 ### 2.3 `src/candi/store/` — the corpus store (needs no extra; h5py is a core dep)
 
-`layout.py` owns every on-disk rule in one place — paths, chunking, the per-file counts dtype, the
-fixed-point pval codec, the floor `n_bins` rule — and is the only module here that does not import
-h5py. **pval is stored TRANSFORMED and the reader inverts it**: `round(arcsinh(-log10 p) * 2000)` in
+**pval is stored TRANSFORMED and the reader inverts it**: `round(arcsinh(-log10 p) * 2000)` in
 `uint16` (D25), decoded back to `-log10 p` by `BiosampleStore.pval`, so the codec is invisible above
 `reader.py` and no caller changed when it landed. The codec is read off the file's own `scale` and
 `transform` attrs, never off this package's defaults — that is what lets a schema-1 file (linear
-×100, ceiling 655.35) still decode correctly, and it is the only back-compat there is. `writer.py` turns one biosample's npz tree into `counts/peaks/pval.h5`; `manifest.py` builds
-`manifest.json` with the metadata CSVs as authority; `genome.py` builds `dna.h5` and `mask.h5` and
-owns window eligibility; `reader.py` is the `CorpusStore → BiosampleStore → TrackView` API;
-`regime.py` parses the regime file and generates the window plan; `dataset.py` is `StoreDataset`.
-`cli.py` exposes the build half as `python -m candi.store`.
+×100, ceiling 655.35) still decode correctly, and it is the only back-compat there is.
+
+| file | owns |
+|---|---|
+| `layout.py` | every on-disk rule in one place — paths, chunking, the per-file counts dtype, the fixed-point pval codec, the floor `n_bins` rule. The only module here that does not import h5py. |
+| `writer.py` | one biosample's npz tree → `counts/peaks/pval.h5`. |
+| `pval_from_counts.py` | the MACS2-equivalent Poisson p-value at bin resolution, from binned counts. |
+| `manifest.py` | `manifest.json`, with the metadata CSVs as authority. |
+| `genome.py` | `dna.h5` and `mask.h5`, and window eligibility. |
+| `reader.py` | the `CorpusStore → BiosampleStore → TrackView` API. |
+| `regime.py` | parses the regime file (the authority that replaced `h5.attrs`) and generates the window plan. |
+| `dataset.py` | `StoreDataset` — windows, binomial thinning, the batch dict. |
+| `cli.py` · `__main__.py` | the build half as `python -m candi.store`. |
 
 This lands **beside** the bake, not on top of it (D21). The contract is `STORE.md`; §4.8 and §4.9
 are the recipes.
 
-### 2.4 Tests, tools and jobs
+### 2.4 `src/candi/bench/` — the evaluation suite (`python -m candi.bench`)
+
+The contract is `EVAL.md`.
+
+| file | owns |
+|---|---|
+| `cli.py` · `__main__.py` | the one CLI. |
+| `harness.py` | whole eval chromosomes, one track at a time, both arms (`count`, `pval`); the loss tier (`loss_block`); panel macros. |
+| `eic.py` | E-block: the nine ENCODE Imputation Challenge measures. |
+| `partitions.py` | P-block: the four post-hoc measures the challenge retrospective recommends. |
+| `distributional.py` | D-block: CRPS with its scale split, PIT/ECE, coverage, the NLLs. |
+| `binary.py` | B-block: peak recovery (AUPRC, overlap). |
+| `covariate.py` | C-block: covariate sensitivity. |
+| `ranking.py` | the challenge's rank aggregation; inert without a competitor score table. |
+| `annotations.py` · `assets/` | the pinned annotation beds and `msevar` variance pools; provenance in `assets/PROVENANCE.md`. |
+| `external.py` | scores prediction tracks someone else wrote to disk (rivals). |
+| `dump.py` | writes a CANDI checkpoint's predictions to the external contract. |
+
+### 2.5 Tests, tools and jobs
 
 `tests/` is CPU-only and needs no GPU and no data. `tools/golden.py` is the bit-exactness gate;
 `tools/peak_check.py` checks the peak head. `slurm/` holds the sbatch scripts — the directory is
@@ -136,7 +179,7 @@ swallow it. Avoid `models/` and `logs/` for the same reason.
     the case in its header; splitting an array across both routes needs **disjoint index ranges**,
     because two tasks writing one output file is the real hazard, not the queue.
 14. **`--heads` changes the objective, not just the architecture.** `count` is required and is the
-    only head `eval.py` scores. `signal` and `peak` add loss terms supervised on full-depth targets
+    head every checkpoint can be scored on (`candi.bench`'s `count` arm; the `pval` arm needs `signal`). `signal` and `peak` add loss terms supervised on full-depth targets
     only, so a run naming either is **not** a control for a run that does not.
 
 **Never infer what a tracker id means.** `h34`, `h45`, `q19` and friends appear in prose throughout
@@ -375,7 +418,7 @@ Every message below is a real string in the source.
 | `metadata must be 4 rows` / `assay_id ... exceeds table bound` / `run_type ... exceeds table bound` | a hand-built metadata tensor | `encoder.py::MetadataEmbedding`; deliberate — these previously aliased onto the sentinel slots |
 | `DNA length G != context L x resolution` | `resolution`/`context_bins` mismatch between h5 and model | `encoder.py::V2Encoder` |
 | `Availability mismatch between counts and peaks` / `... and signal` | the optional heads' targets disagree with the count availability map | `batch.py` |
-| `depth_center mismatch: reference ... vs eval ...` | a reference table built at a different depth centre | `eval.py`; the two offsets would compose on different scales |
+| `depth_center mismatch: the reference was built at ... but this run uses ...` | a reference table built at a different depth centre | `train.py`; the two offsets would compose on different scales |
 | `has no config.arch block — it predates --arch-from` | an old run JSON | re-score by passing the architecture by hand, or re-train |
 | `parameter(s) landed in BOTH groups` / `in no group` | the decay/no-decay partition is no longer exhaustive and disjoint | `param_groups.py`; `tests/test_param_partition.py` |
 | `[data] WARNING: single-DSF ladder` | `dsf_list` has one level, so per-assay independent DSF sampling is inert and the depth signal is gone | `prep/panel.py` |
@@ -415,7 +458,7 @@ from it was migrated into CANDII.
 M1 columns are from the archive's `candi_kit/research/H48_SCORECARD.md` §M1. The **M3 ratio column is carried forward from a
 pre-fix run** (the archive's `.BUILD_PLAN.md` anchor table): `H48_REPORT.md` §3 records that M3 was never re-scored,
 so it still uses the old permuted labels and a `between` pool that admits same-region pairs. The kit
-fixes that pool (`eval.py::eval_M3`), so **your M3 will not be comparable to this column** — quote it
+fixes that pool (`eval.py::eval_M3`, deleted 2026-08-22; see git 2f56cb1), so **your M3 will not be comparable to this column** — quote it
 only with that caveat, or not at all.
 
 Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2):
@@ -448,7 +491,7 @@ Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2)
    them to read a CANDII run makes a real difference look like noise. Re-measured on the CANDII q19
    recipe — one paired seed change over an otherwise identical 284 k-parameter smoke-scale recipe,
    jobs `55883172` / `55883173` — a seed moves pooled imputation CRPS by **0.0463** (macro 0.0327)
-   under `eval.py`, and macro CRPS by **0.0608** under `bench`: **2-4× below 0.1195**. Not every
+   under `eval.py` (deleted 2026-08-22; see git 2f56cb1), and macro CRPS by **0.0608** under `bench`: **2-4× below 0.1195**. Not every
    figure shrinks — pooled ECE moved **0.0422**, *larger* than 0.0354 — and the per-track floor is
    several times either macro, so a single-track claim must clear the track number. The **~0.09
    target-clustered floor and the ±0.13 stand unamended**: two seeds are one paired difference, not
@@ -486,7 +529,7 @@ Steering, sentinel-free and target-clustered (H48_SCORECARD §M2, H48_REPORT F2)
 6. **Capability of the model, not of this kit's outputs:** the model is counts-only NB. Do not claim
    peak calling, peak precision/recall/AUROC, or p-value tracks.
 7. **Metric hygiene.** Only the default-emitted metrics may back a claim. Keys behind
-   `--include-deprecated` ship with a verdict string in `eval.py::DEPRECATED_VERDICTS` and must never be quoted as
+   `--include-deprecated` ship with a verdict string in `eval.py::DEPRECATED_VERDICTS` (deleted 2026-08-22; see git 2f56cb1) and must never be quoted as
    evidence: the `read_length` flip arm (7/12 flips are out of training support), the shuffled-depth
    `null` (a mathematical no-op — one `[4,F]` tensor broadcast over the batch, so the permutation is
    bitwise identity), `frac_min_at_true` (0.25 is not chance; it is the deterministic value of
