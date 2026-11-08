@@ -55,7 +55,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]]
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations
 - `t150` [implementation] score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison — refs [[q1_do_the_recorded_experimental_covariates_\|q1]]
-- `t151` [visualization] redraw the EIC board's error-decomposition panel as Max's error-budget figure, with the band split, explained/unexplained split and defined axes
 
 ## Blocked
 
@@ -131,7 +130,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 - `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
 - `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *blocked*
-- `t151` [visualization] redraw the EIC board's error-decomposition panel as Max's error-budget figure, with the band split, explained/unexplained split and defined axes — *open*
 
 ## Done · Dropped
 
@@ -227,3 +225,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t147` [visualization] replace the landing-page leaderboard with a three-layer EIC board from Max's exact reproduction — *done* → `results/t147/DELIVERABLE.md`
 - `t148` [implementation] make each experiment folder rerun from one bash runall.sh (no args, skip-if-exists, frozen once cited); commit small results folders under a 1 MB cap; pilot on t138 — refs [[q10_how_much_does_resampling_alone_move_a_tr\|q10]] — *done* → `results/t138/runall.sh`
 - `t149` [visualization] variance decomposition of every EIC entry on all three truth layers, for the EIC board — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/55`
+- `t151` [visualization] redraw the EIC board's error-decomposition panel as Max's error-budget figure, with the band split, explained/unexplained split and defined axes — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/59`
