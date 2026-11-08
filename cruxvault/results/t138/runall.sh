@@ -15,8 +15,8 @@
 #   5. check         always: re-hash every MANIFEST.tsv row, print MISMATCH, exit 1 on any
 # A step that must submit a job first builds the code kit at $KIT from git commit $KIT_SHA
 # (the commit the recorded run used), so the rerun runs the recorded code, not today's tree.
-# Inputs owned by t137 (the 1 kb bins and the product manifest) are frozen there; if they are
-# gone, rerun t137 first. Hand-written files (DIGEST.md, NIBI_PATH.txt) are not outputs.
+# Inputs owned by other tasks are frozen there: the 1 kb bins (t137) and the products (t112).
+# If they are gone, rerun that task first. Paths match the recorded submit line of job 25402043. Hand-written files (DIGEST.md, NIBI_PATH.txt) are not outputs.
 # ssh exit 69 or 255 means the tunnel is down: run `hpc up nibi`, then rerun.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -29,7 +29,7 @@ KIT=$T/kit
 ANN=$T/annot
 NP=/project/def-maxwl/mforooz/EIC_REPRO/003_pipeline/results
 BINS=/project/def-maxwl/mforooz/t137/floor/bins1k
-PRODUCTS=/project/def-maxwl/mforooz/t137/floor/bins1k   # holds the product MANIFEST.tsv
+PRODUCTS=/project/def-maxwl/mforooz/t112_cf/products   # holds the product MANIFEST.tsv (t112)
 BL=/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed
 OUT=$T/out
 TABLES=(map_products.tsv map_classes.tsv map_context.tsv map_deciles.tsv map_check.txt
@@ -82,7 +82,7 @@ else kit; submit_wait slurm/t138/annot.sh "$KIT" "$ANN"; fi
 if remote "test -s $OUT/map_check.txt"; then echo "2 map: have $OUT/map_check.txt"
 else
   remote "test -d $BINS && test -s $PRODUCTS/MANIFEST.tsv" \
-    || { echo "t137 inputs missing under $BINS; rerun t137 first" >&2; exit 1; }
+    || { echo "inputs missing: $BINS (t137) or $PRODUCTS/MANIFEST.tsv (t112); rerun that task" >&2; exit 1; }
   kit; submit_wait slurm/t138/map.sh "$KIT" "$ANN" "$NP" "$BINS" "$PRODUCTS" "$OUT" "$BL"
 fi
 
