@@ -7,9 +7,9 @@ parent: t147
 blocked_by: None
 refs: 
 hypothesis_refs: 
-status: open
-created: 2026-11-07T13:48:31
-updated: 2026-11-07T13:48:31
+status: done
+created: "2026-11-07T13:48:31"
+updated: "2026-11-08T03:14:30"
 ---
 
 # t148 — variance decomposition of every EIC entry on all three truth layers, for the EIC board
@@ -24,7 +24,7 @@ shows what the correction did to each entry's error: level vs shared vs cell-typ
 
 <!-- required before `done`, and the engine checks it resolves. Either form:
      - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
-_(none yet)_
+- [Merged 93bd977 — EIC board error-decomposition panel](https://github.com/mehdiforoozandeh/CANDII/pull/55)
 
 ## Evidence
 
