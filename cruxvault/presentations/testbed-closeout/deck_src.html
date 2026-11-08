@@ -4,25 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="prezit-arc" content="paper">
-<title>Counterfactual Testbed Close-out</title>
+<title>CAC Testbed Close-out</title>
 
 <!--
-  prezit · PAPER ARC · anchor q1 (and everything under it) · task t143 · PI request 2026-10-30.
-  The close-out deck of the whole counterfactual in-vitro covariate testbed: for every original
-  goal, fully met / partially met / not met but answered.
+  prezit · PAPER ARC · anchor q1 (and everything under it) · tasks t143, t146 · PI requests 2026-10-30
+  ("one big deck") and 2026-11-03 (cover the whole testbed, final experiments included).
+  The close-out deck of the whole covariate artifact correction (CAC) testbed: why it was built,
+  the lessons of q2-q12 (findings f1-f32), the three final experiments (h29, h30, h31), and what
+  goes into the mini-CANDI prototype.
 
-  arc      motivation -> method -> results (a)..(l) -> discussion -> backup
+  arc      motivation -> method -> results (a)..(l) lessons -> method (final experiments)
+             -> results (m)..(o) -> discussion -> backup
   build    python build_deck.py [VAULT]  ->  index.html beside this file (see DECK.md)
   numbers  every measured number comes from DATA, which build_deck.py reads from
-             results/t112, t130, t136, t139, t142 (tables; gitignored, synced in), and
-             the tracked q1-subtree nodes h1, h15, h26, q2-q8 (regex over their readings).
+             results/t112, t130, t136, t139, t142, t146 (tables; gitignored, synced in),
+             the tracked q1-subtree nodes and findings (regex over their readings), the wiki page
+             on the ENCODE Imputation Challenge, and notes/mini_candi_design_inputs.md.
            The deck-sources manifest records the sha256 of every file the build read.
-           Typed: panel letters, and design constants in data-src="literal" spans.
-  refresh  the arm-to-arm slides (f) and (g) and the scorecard row read results/t136 at build
-           time; when the second arm finishes, sync and rebuild (DECK.md). The prose around
-           those slides is computed from DATA, so it changes with the readings.
+           Typed: panel letters, design constants (the pre-registered thresholds, weights 0.25/1/4,
+             the 5 Mb shift, 36-mer mappability, 25 bp bins) and the goals' status words.
   notes    every slide carries speaker notes (press n); notes hold no digits.
-  status   readings, not verdicts. h1, h2, h28 conclusions are the PI's to sign.
+  status   the PI's readings and signatures as recorded in the findings; the deck adds none.
 -->
 <script type="application/json" id="deck-sources">__SOURCES__</script>
 
@@ -255,6 +257,19 @@
     --counts:#3f7d7a; --pval:#6b5b95;
     --met:#3f7d7a; --part:#c28a2c; --ans:#6b7fa3;
     --se:#e3b7aa;       /* scale error part of a CRPS */
+    /* final experiments (t146) */
+    --alone:#3f7d7a;    /* shared correction alone */
+    --matched:#8d8f98;  /* matched loss scale */
+    --xassay:#b5462e;   /* cross-assay imputation objective */
+    --denoise:#c28a2c;  /* masked-bin denoising objective */
+    --ids:#c9c5bd;      /* scrambled-covariate twin */
+    --chain:#6b5b95;    /* routed through the base */
+    --mix:#a99bc9;      /* 16-draw mixture through the base */
+    --agree:#8a6a3a;    /* agreement-loss arm */
+    --ceil:#2b2b2b;     /* ceiling: leg two fed the real base */
+    --map:#2f6fb0;      /* mappability channel */
+    --dna:#c28a2c;      /* one-hot DNA channel */
+    --shift:#8d8f98;    /* mappability shifted by 5 Mb */
   }
   [data-src="literal"]{font-weight:inherit}
   /* fit: this deck runs a figure plus two bullets on most result slides */
@@ -289,6 +304,8 @@
   .gl dt{font-weight:600;font-size:15px;margin-top:9px}
   .gl dd{font-size:14.5px;color:#444;margin-left:0;line-height:1.4}
   .gl{columns:2;column-gap:48px}
+  .cards.c3{grid-template-columns:repeat(3,1fr)}
+  .card .cost{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.4}
   .gl div{break-inside:avoid}
 </style>
 </head>
@@ -296,25 +313,44 @@
 <div id="progress"></div>
 <div id="deck">
 
-  <!-- 1 · TITLE
+  <!-- TITLE
        job      the question as a headline; the scope in one line; the status (readings, not verdicts)
        source   DATA.design (results/t112/MANIFEST.tsv, results/t130/runs.tsv, results/t139/pairs.tsv)
        numbers  counts only, from DATA
        cut      the nav hint -->
   <section class="slide active">
     <div class="wrap">
-      <div class="kicker">counterfactual in-vitro covariate testbed · close-out</div>
+      <div class="kicker">covariate artifact correction (CAC) testbed · close-out</div>
       <h1>Do the recorded covariates tell us how to turn one measurement of a track into another?</h1>
       <p class="sub" id="tScope"></p>
-      <p class="sub">These are readings, not verdicts. The PI signs each claim. The depth, run-type and arm-to-arm conclusions wait for that signature.</p>
+      <p class="sub">Each claim carries the PI's reading and its confidence, as recorded in the vault. Most of the work was exploratory; the final three experiments were pre-registered (their rules fixed in writing before any run).</p>
       <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> &nbsp;·&nbsp; <kbd>n</kbd> shows the speaker notes</p>
-      <aside class="notes"><p>This deck closes the testbed. For each goal we set at the start, it says if the goal is fully met, partially met, or not met but answered well enough to stop. The arc is motivation, method, results and discussion. Every number is read from the vault when the deck is built.</p></aside>
+      <aside class="notes"><p>This deck closes the covariate artifact correction testbed, the final experiments included. It goes from why we built the testbed, through what it taught, to the three final experiments and what goes into the mini-CANDI prototype. For each goal it says if the goal is fully met, partially met, or not met but answered well enough to stop. Every number is read from the vault when the deck is built.</p></aside>
     </div>
   </section>
 
-  <!-- 2 · MOTIVATION · why a testbed
-       job      why we left CANDI to test its covariates
-       source   q8 Answer so far (CANDI's depth offset and its run-type direction score)
+  <!-- MOTIVATION · the ENCODE Imputation Challenge
+       job      why processing covariates matter: one processing difference broke a whole benchmark
+       source   wiki/encode-imputation-challenge.md (Schreiber et al., the challenge's retrospective)
+       numbers  earlier results, from DATA.eic
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Motivation</span>a benchmark broken by processing</div>
+      <h2>In the ENCODE Imputation Challenge, one processing difference let a plain average beat almost every model</h2>
+      <div class="chartbox fig wide" id="figEIC"></div>
+      <ul class="pts">
+        <li id="tEIC1"></li>
+        <li>The cause was a distribution shift (training and test data differ systematically): the older training data were single-end, the newer blind test data paired-end, and the duplicate-removal rule differs between the two. After the correction, more than half the entries beat the baseline.</li>
+        <li>CANDI records such processing choices as covariates. This testbed asks if a model can use them to undo such a shift.</li>
+      </ul>
+      <aside class="notes"><p>The challenge scored imputation models on experiments collected after the submissions closed. Under the measures fixed before the challenge, the average-activity baseline won against almost everyone. The retrospective traced this to a small difference in duplicate removal between single-end and paired-end data, not to data quality. That is exactly the kind of processing artifact that covariate correction should remove.</p></aside>
+    </div>
+  </section>
+
+  <!-- MOTIVATION · why a testbed
+       job      why we left CANDI to test its covariates in an isolated testbed
+       source   q8 Answer so far (CANDI's depth offset and its run-type direction score); notes/mini_candi_design_inputs.md §7 (corpus fact)
        numbers  earlier results, from DATA.probe
        cut      the second bullet -->
   <section class="slide">
@@ -325,12 +361,13 @@
       <ul class="pts">
         <li>In CANDI, depth enters as a fixed offset: the told-depth slope is <span id="tSlope"></span>. Depth is set, not learned.</li>
         <li>Told a new run type, CANDI moves its output in the right direction with a score of <span id="tDir"></span>, which is near chance (a score of <span data-src="literal">0.5</span>).</li>
+        <li>CANDI's corpora are built from released signal files, with no reads recorded. So from the corpus as built, only depth pairs can be made; every other knob needs its raw reads re-processed.</li>
       </ul>
       <aside class="notes"><p>CANDI only ever pairs an experiment with a thinned copy of itself. So only depth changes between its input and its target. We cannot ask CANDI what a different read length would do, because it never saw that pair. The testbed builds those pairs on purpose.</p></aside>
     </div>
   </section>
 
-  <!-- 3 · MOTIVATION · the question and the goals
+  <!-- MOTIVATION · the question and the goals
        job      the anchor question, and the map of goals the scorecard returns to
        source   q1 (Question, Protocol) and its children's titles
        numbers  none
@@ -345,7 +382,7 @@
     </div>
   </section>
 
-  <!-- 4 · METHOD · the counterfactual arms (the deck's design grid)
+  <!-- METHOD · the counterfactual arms (the deck's design grid)
        job      what was built: one base per track, one knob changed per arm
        source   results/t112/MANIFEST.tsv
        numbers  design constants from DATA.design
@@ -363,7 +400,7 @@
     </div>
   </section>
 
-  <!-- 5 · METHOD · the model
+  <!-- METHOD · the model
        job      the model as a schematic: g reads (C, C') and sets f; four designs of f
        source   T118_COUNTERFACTUAL_F.md §1 and "Architecture ladder"
        numbers  none
@@ -383,7 +420,7 @@
     </div>
   </section>
 
-  <!-- 6 · METHOD · references, pairs and the significance criterion
+  <!-- METHOD · references, pairs and the significance criterion
        job      what each model is compared against, on which pairs, and when a gain counts
        source   q1 Protocol; t130 DIGEST (gap closed, oracles); AGENTS.md §7.2 (CRPS split)
        numbers  design constants only (literal)
@@ -398,7 +435,7 @@
     </div>
   </section>
 
-  <!-- 7 · RESULTS · (a) the main claim against the twin
+  <!-- RESULTS · (a) the main claim against the twin
        job      one claim: covariates help on trained pairs; most of the help is lost on never-trained pairs
        claim    the covariate-conditioned g beats its no-covariates twin on trained pairs, and the gain shrinks on never-trained pairs
        source   h15 Findings, h1 Findings
@@ -418,7 +455,7 @@
     </div>
   </section>
 
-  <!-- 8 · RESULTS · (b) depth beyond the one-warp (h1)
+  <!-- RESULTS · (b) depth beyond the one-warp (h1)
        job      one claim: on depth pairs, designs B-D close most of the one-warp-to-oracle gap
        claim    base-to-arm depth pairs: designs B, C and D close most of the gap from one-warp to the exact thinning oracle in every mark class
        source   results/t130/blind_table.tsv (counts, depth, base_to_arm, subset all)
@@ -434,11 +471,11 @@
         <li id="tH1a"></li>
         <li id="tH1b"></li>
       </ul>
-      <aside class="notes"><p>Gap closed is the one-warp error minus the model error, over the one-warp error minus the oracle error. One is the oracle; zero is the one-warp. The whisker is the seed noise in the same units. The PI has not signed this reading, and the model design for the verdict is still his choice.</p></aside>
+      <aside class="notes"><p>Gap closed is the one-warp error minus the model error, over the one-warp error minus the oracle error. One is the oracle; zero is the one-warp. The whisker is the seed noise in the same units. The PI signed the claim as supported for designs B to D. Design A is the exception.</p></aside>
     </div>
   </section>
 
-  <!-- 9 · RESULTS · (c) run type beyond the one-warp (h2)
+  <!-- RESULTS · (c) run type beyond the one-warp (h2)
        job      one claim: histone marks gain over the one-warp; DNase is mixed
        claim    on paired-end pairs, every design beats the one-warp on histone marks above the seed range; DNase is mixed
        source   results/t130/blind_table.tsv (counts, pe, both directions, subset all)
@@ -454,11 +491,11 @@
         <li id="tH2a"></li>
         <li id="tH2b"></li>
       </ul>
-      <aside class="notes"><p>The paired-end arm is a separate re-processing, not a subset of the base's reads. So no exact oracle exists, and the independent-replicate floor sits above the one-warp. Gap closed cannot be read here; the gain over the one-warp can. Not judged by the PI.</p></aside>
+      <aside class="notes"><p>The paired-end arm is a separate re-processing, not a subset of the base's reads. So no exact oracle exists, and the independent-replicate floor sits above the one-warp. Gap closed cannot be read here; the gain over the one-warp can. The PI accepted the bar of beating the one-warp by more than two times the seed noise, with no oracle; the reading stays weak because that bar was set after the run.</p></aside>
     </div>
   </section>
 
-  <!-- 10 · RESULTS · (d) capacity and the depth offset
+  <!-- RESULTS · (d) capacity and the depth offset
        job      one claim: more capacity or a depth offset helps design A only
        claim    the depth offset repairs design A's scale error; no other design clears the significance criterion, and capacity does not fix never-trained pairs
        source   q5 Answer so far (offset), q4 Answer so far (capacity)
@@ -478,7 +515,7 @@
     </div>
   </section>
 
-  <!-- 11 · RESULTS · (e) the depth-law miss
+  <!-- RESULTS · (e) the depth-law miss
        job      one claim: g fits trained pairs but misses the depth law on never-trained pairs; four causes ruled out; the chain through the base meets it
        claim    the depth-law miss is not the pseudocount, the loss, the size of g or f, or a missing composable structure; two trained maps chained through the base meet the law
        source   q7 Answer so far
@@ -497,7 +534,7 @@
     </div>
   </section>
 
-  <!-- 12 · RESULTS · (f) arm-to-arm training: the checks
+  <!-- RESULTS · (f) arm-to-arm training: the checks
        job      one claim: training on two arm-to-arm pairs meets the depth-law checks but fails the CRPS check
        claim    the first arm passes the law and ratio checks and fails the CRPS check; both arms finished (42 of 42 runs), both controls pass, so the reading is final
        source   results/t136/checks_readings.tsv, m5_depthlaw_table.tsv, n_table.tsv
@@ -513,11 +550,11 @@
         <div id="tblH28"></div>
       </div>
       <p class="note" id="tH28note"></p>
-      <aside class="notes"><p>The first arm adds two arm to arm depth pairs per track to training. The second arm adds every arm to arm pair that does not touch the held-out depth. The checks were pre-registered and approved by the PI before the run. Both arms finished every run. Both controls pass, so the rule reading is final: it fails, on the CRPS check. The reading is not judged: the PI has not signed.</p></aside>
+      <aside class="notes"><p>The first arm adds two arm to arm depth pairs per track to training. The second arm adds every arm to arm pair that does not touch the held-out depth. The checks were pre-registered and approved by the PI before the run. Both arms finished every run. Both controls pass, so the rule reading is final: it fails, on the CRPS check. The PI signed it as not supported: arm to arm training teaches the scale of the answer, not its distribution.</p></aside>
     </div>
   </section>
 
-  <!-- 13 · RESULTS · (g) arm-to-arm training: CRPS by mark class
+  <!-- RESULTS · (g) arm-to-arm training: CRPS by mark class
        job      one claim: the CRPS failure is DNase-driven and is scale error
        claim    on held-out pairs the first arm's CRPS is worse than the reference in DNase, mostly as scale error; the second arm (read, not checked) reaches the through-the-base CRPS
        source   results/t136/m1_heldout_table.tsv (subgroup heldout75)
@@ -539,26 +576,27 @@
     </div>
   </section>
 
-  <!-- 14 · RESULTS · (h) counts to -log10 p
-       job      one claim: a map h from counts to p is stable and is limited by the count model's errors
-       claim    an h trained on the true counts beats an h trained on f's predictions, and no push or formula h explodes
-       source   q6 Answer so far
+  <!-- RESULTS · (h) counts to -log10 p
+       job      one claim: predict counts and derive the p-value track by the caller's formula
+       claim    on true counts the fragment-wide formula nearly matches the best learned map; an h trained on f's predictions does not repair f; no push or formula h explodes
+       source   q6 Answer so far and Findings; PI ruling on count space (q6 TL;DR)
        numbers  DATA.hmap
        cut      the second bullet -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Results</span>(h) from counts to the p-value track</div>
-      <h2>A map from counts to the p-value track is stable, and is limited by the count model</h2>
+      <h2>Predict counts, then derive the p-value track by the peak caller's formula</h2>
       <div class="chartbox fig mid" id="figH"></div>
       <ul class="pts">
+        <li id="tH0"></li>
         <li id="tH1"></li>
         <li id="tH2"></li>
       </ul>
-      <aside class="notes"><p>The direct designs that predict the p-value track sometimes explode on sparse to full depth pairs. A separate map h, from a predicted count distribution and its control to the p-value, does not explode. Training h on f's predictions does not repair f's errors. The direct p-space fix is deferred until the count model settles, by PI ruling.</p></aside>
+      <aside class="notes"><p>The direct designs that predict the p-value track sometimes explode on sparse to full depth pairs. A separate map h, from a predicted count distribution and its control to the p-value, does not explode. The peak caller's own formula does most of the work. Training h on f's predictions does not repair f's errors. By PI ruling, the redesigned model has no direct p-value head: it predicts counts, and the p-value track comes from the formula.</p></aside>
     </div>
   </section>
 
-  <!-- 15 · RESULTS · (i) which knobs move a track
+  <!-- RESULTS · (i) which knobs move a track
        job      one claim: every knob moves peak height far above the resampling floor; few move the shape above it
        claim    peak height moves above the floor for every knob; the one-kilobase shape moves above it for few knobs
        source   results/t139/knob_vs_floor.tsv (counts)
@@ -577,7 +615,7 @@
     </div>
   </section>
 
-  <!-- 16 · RESULTS · (j) the resampling floor
+  <!-- RESULTS · (j) the resampling floor
        job      one claim: the floor shrinks with depth, the real halves match whole-read thinning, and signal level (not region) sets it
        claim    whole-read thinning reproduces the real depth-arm halves, and signal level explains the floor while regional features add almost nothing
        source   results/t142/floor_at_30M.tsv, compare_real_class.tsv, map_classes.tsv
@@ -596,7 +634,7 @@
     </div>
   </section>
 
-  <!-- 17 · RESULTS · (k) where each knob acts along the genome
+  <!-- RESULTS · (k) where each knob acts along the genome
        job      one claim: depth acts uniformly; MAPQ and read length act in low-mappability regions
        claim    the depth arm's residual equals its whole-read thinning null; MAPQ zero and short reads add a mappability-driven residual
        source   results/t142/t141_readthin/knob_classes.tsv
@@ -616,98 +654,224 @@
     </div>
   </section>
 
-  <!-- 18 · RESULTS · (l) the trained CANDI probe
-       job      one claim: the probe of a trained CANDI checkpoint could not be read; it is parked
-       claim    CANDI's output moves when told a counterfactual covariate, but the per-region test is not readable; the probe is parked
-       source   h26 Findings, q8 Answer so far
+  <!-- RESULTS · (l) the trained CANDI probe
+       job      one claim: told a new read length or run type, a trained CANDI moves its level, but not the way the real tracks move
+       claim    PI reading: CANDI uses read length and run type in the wrong direction; the per-region test could not be read (its controls failed); parked
+       source   h26 Findings (first run: told level against real level; reruns: controls), q8 Answer so far (PI reading)
        numbers  DATA.probe
-       cut      the third card -->
+       cut      the second bullet -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Results</span>(l) a trained CANDI, told a counterfactual covariate</div>
-      <h2>CANDI's output moves when told a new read length or run type, but the test could not be read</h2>
-      <div class="cards">
-        <div class="card" style="--c:var(--met)"><div class="rl">The swap is wired</div><div class="num" id="tP1"></div><p>Prompt rows change one field in the target column only.</p></div>
-        <div class="card" style="--c:var(--darm1)"><div class="rl">The depth control fails</div><div class="num" id="tP2"></div><p>Rows pass; told depth also moves the learned part of the output.</p></div>
-        <div class="card" style="--c:var(--darm1)"><div class="rl">No pair clears the floor</div><div class="num" id="tP3"></div><p>Knob pairs clear the split-half reproducibility floor; that floor statistic is biased down.</p></div>
-      </div>
-      <aside class="notes"><p>The probe told a trained CANDI checkpoint an arm's read length or run type in place of the base's. The output level moves, so CANDI does not ignore these covariates. Whether it moves the right way per region could not be tested, because the positive control failed. The PI parked the probe and moved the question to arm to arm training.</p></aside>
+      <h2>Told a new read length or run type, CANDI moves its level, but not the way the real tracks move</h2>
+      <div class="chartbox fig mid" id="figProbe"></div>
+      <ul class="pts">
+        <li id="tP1"></li>
+        <li id="tP2"></li>
+      </ul>
+      <aside class="notes"><p>The probe told a trained CANDI checkpoint an arm's read length or run type in place of the base's, and compared the predicted change with the real arm. The PI's reading: CANDI uses these covariates in the wrong direction. This describes CANDI as it is now, not the testbed runs. Missing counterfactual pairs fit this, but low conditional information and collinearity of the covariates are joint causes. Whether it moves the right way per region could not be tested, because the positive control failed, so the probe is parked.</p></aside>
     </div>
   </section>
 
-  <!-- 19 · DISCUSSION · ruled in, ruled out
+  <!-- METHOD · the final experiments
+       job      the three final experiments as schematics, on one shared count-space correction model
+       source   h29, h30, h31 (Expect, Verifiables); q12; results/t146/sacct_per_arm.tsv (run counts)
+       numbers  design constants (literal) and run counts from DATA.final.sac
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>the final experiments</div>
+      <h2>Three final tests on one correction model shared across the tracks, in count space</h2>
+      <div class="chartbox fig wide" id="figFinal"></div>
+      <div class="cards">
+        <div class="card" style="--c:var(--xassay)"><div class="rl">(a) A joint objective</div><p>Does adding cross-assay imputation or masked-bin denoising (predict hidden bins of the same track) change transfer to never-trained pairs?</p></div>
+        <div class="card" style="--c:var(--chain)"><div class="rl">(b) A pivot through the base</div><p>Does routing arm to base to arm, with one shared model, beat the direct route on every count-moving knob?</p></div>
+        <div class="card" style="--c:var(--map)"><div class="rl">(c) A mappability input</div><p>Does a per-bin mappability channel (how uniquely reads align there) help the read-length and mapping-quality arms?</p></div>
+      </div>
+      <p class="note" id="tFinalNote"></p>
+      <aside class="notes"><p>All three experiments use design D, one model shared across the seven tracks, trained on base to arm pairs and scored on never-trained arm to arm pairs on held-out chromosomes. The first tests if the testbed's negatives on model form survive joint training, which CANDI does. The second tests if the routing fix of the depth law carries to a shared model and to every knob. The third tests if a position-aware input fixes the knobs that act through mappability.</p></aside>
+    </div>
+  </section>
+
+  <!-- METHOD · pre-registration and post-smoke amendments (a grid, so a table)
+       job      what was fixed before any run, and what changed after the smoke test and before the full runs
+       source   h29, h30, h31 (Expect, Verifiables, post-smoke amendments); results/t146/sacct_per_arm.tsv
+       numbers  design constants (pre-registered thresholds, typed in the render code) and run counts and power from DATA.final
+       cut      the note -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Method</span>pre-registration</div>
+      <h2>Every check was fixed before any run; the repairs after the smoke test came before the full runs</h2>
+      <div id="tblPre"></div>
+      <p class="note">A smoke test is a short single-seed run that proves the pipeline works. A difference counts only when it is above <span data-src="literal">2 ×</span> the larger seed range (maximum minus minimum over seeds) of the two arms compared, unless the experiment sets another rule. Statistical power is the chance to detect a true effect of the expected size.</p>
+      <aside class="notes"><p>The checks were drafted by a pre-run reviewer that did not see the argument for each claim, and the PI approved each one in chat before any run. After the smoke test, the PI made repairs, all recorded in each hypothesis: among them a scrambled-covariate twin for the joint arms, an agreement loss in place of a consistency loss that collapsed, a no-covariates floor for the pivot, and new mappability strata, because many blocks are fully mappable.</p></aside>
+    </div>
+  </section>
+
+  <!-- RESULTS · (m) the joint objective (h29)
+       job      one claim: neither imputation objective moves never-trained CRPS beyond the bar
+       claim    at weight 1, cross-assay imputation and masked-bin denoising move never-trained CRPS by less than 2 x the seed range; PI reading against, weak
+       source   results/t146/analyze_out.txt (arm table), checks_h29.tsv; f30
+       numbers  DATA.final.AT, DATA.final.ck29, DATA.final.power, DATA.signed.f30
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(m) a joint objective</div>
+      <h2 id="tMh"></h2>
+      <div class="chartbox panels"><div class="fig" id="figMa"></div><div class="fig" id="figMb"></div></div>
+      <div class="legend" id="lgM"></div>
+      <ul class="pts">
+        <li id="tM1"></li>
+        <li id="tM2"></li>
+        <li id="tM3"></li>
+      </ul>
+      <aside class="notes"><p>Each bar is the never-trained CRPS split into its shape part and its scale-error part, with the seed range as a whisker. The right panel shows each arm minus correction alone, against the grey band of two times the seed range. Nothing leaves the band at weight one. The scrambled-covariate twins are far worse on never-trained pairs, so the joint models do use the covariates. The PI read this as against, weak.</p></aside>
+    </div>
+  </section>
+
+  <!-- RESULTS · (n) the pivot through the base (h30)
+       job      one claim: for a shared model, routing through the base wins in almost no cell
+       claim    chained beats direct beyond the bar in 2 of 98 never-trained cells (66 needed); pooled it is lower in every seed but within the bar; PI reading against, moderate; the agreement-loss arm's direct route is an exploratory lead
+       source   results/t146/checks_h30_cells.tsv, checks_h30_pooled.tsv, depthlaw.tsv, analyze_out.txt; f31
+       numbers  DATA.final.cells30, p30, seeds30, agree, dl, DATA.signed.f31
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(n) a pivot through the base</div>
+      <h2 id="tNh"></h2>
+      <div class="chartbox panels"><div class="fig" id="figNa"></div><div class="fig" id="figNb"></div></div>
+      <ul class="pts">
+        <li id="tN1"></li>
+        <li id="tN2"></li>
+        <li id="tN3"></li>
+      </ul>
+      <aside class="notes"><p>Each dot on the left is one never-trained cell, a source knob and a target knob. A dot above the diagonal is a cell where the route through the base wins by more than two times the seed range. The right panel pools every cell. The route through the base is lower in every seed, but by less than the bar, so it is not significant. The PI read this as against, moderate. The agreement-loss arm was not planned as a test of the direct route, so its gain is exploratory.</p></aside>
+    </div>
+  </section>
+
+  <!-- RESULTS · (o) the mappability input (h31)
+       job      one claim: a mappability channel lowers CRPS where mappability is lowest, and nowhere else
+       claim    in the lowest-mappability decile the mappability arm beats correction alone on 6 of 6 tracks for crop 36 and MAPQ 0, beats the shifted control and is localised; the depth no-change control failed; PI reading supports, weak
+       source   results/t146/checks_h31_per_track_seed.tsv (dec0, comparator seeds 0-2), checks_h31.tsv, pooled.tsv; f32
+       numbers  DATA.final.h31, DATA.signed.f32
+       cut      the third bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Results</span>(o) a mappability input</div>
+      <h2 id="tOh"></h2>
+      <div class="chartbox panels"><div class="fig" id="figOa"></div><div class="fig" id="figOb"></div></div>
+      <div class="legend" id="lgO"></div>
+      <ul class="pts">
+        <li id="tO1"></li>
+        <li id="tO2"></li>
+        <li id="tO3"></li>
+      </ul>
+      <aside class="notes"><p>The lowest-mappability decile is the tenth of one kilobase blocks where reads align least uniquely, with the blacklist removed; the strata were fixed before the run. The shifted control moves the mappability track by five megabases, so it keeps the channel and its parameters but breaks its alignment with the genome. It keeps almost none of the gain. The failed control is the depth arm, which should not change and improved instead. That caps the reading at weak.</p></aside>
+    </div>
+  </section>
+
+  <!-- DISCUSSION · ruled in, ruled out
        job      readings restated as what they rule in and out
-       source   restated from results (a) to (l)
+       source   restated from results (a) to (o)
        numbers  none new
        cut      the third card -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Discussion</span>what this rules in and out</div>
-      <h2>The covariates carry the information; a direct g does not carry it to unseen pairs</h2>
+      <h2>The covariates carry the information; no correction tried carries it to unseen pairs</h2>
       <div class="cards">
-        <div class="card" style="--c:var(--met)"><div class="rl">Ruled in</div><p>The covariates beat the no-covariates twin on trained pairs (a). On depth, designs B to D sit near the exact oracle (b). Every knob moves peak height above the floor (i).</p></div>
-        <div class="card" style="--c:var(--darm1)"><div class="rl">Ruled out</div><p>The depth-law miss is not the pseudocount, the loss, the size of g or f, or a missing encoder-decoder structure (e). More capacity in f does not help never-trained pairs (d).</p></div>
-        <div class="card" style="--c:var(--ans)"><div class="rl">Located</div><p>The gap is in how g answers a pair it never saw. Two trained maps through the base meet the law (e). Arm-to-arm training meets the law but not the CRPS (f, g).</p></div>
+        <div class="card" style="--c:var(--met)"><div class="rl">Ruled in</div><p>The covariates beat the no-covariates twin on trained pairs (a). On depth, designs B to D sit near the exact oracle (b). Every knob moves peak height above the floor (i). A mappability channel helps where mappability is low (o).</p></div>
+        <div class="card" style="--c:var(--darm1)"><div class="rl">Ruled out</div><p>The depth-law miss is not the pseudocount, the loss, the size of g or f, or the encoder-decoder (e). Arm-to-arm training does not fix the distribution (f). A shared model gains nothing from the route through the base (n).</p></div>
+        <div class="card" style="--c:var(--ans)"><div class="rl">Located</div><p>The gap is in transfer to pairs never trained on, not in capacity. At testbed scale, joint training with imputation does not change it (m), so the testbed's negatives on model form are not an artifact of training the correction alone.</p></div>
       </div>
-      <aside class="notes"><p>The discussion adds no number. Each card restates result slides by their letters.</p></aside>
+      <aside class="notes"><p>The discussion adds no number. Each card restates result slides by their letters. The joint-objective reading is weak, so the last card is a reading at testbed scale, not a claim about CANDI at full scale.</p></aside>
     </div>
   </section>
 
-  <!-- 20 · DISCUSSION · limitations
+  <!-- DISCUSSION · what goes into the mini-CANDI prototype
+       job      the design inputs the testbed hands to the staged mini-CANDI prototype
+       source   notes/mini_candi_design_inputs.md (PI rulings, §2, §8); restated from results (h), (k), (n), (o)
+       numbers  restated from DATA
+       cut      the fifth card -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>what goes into the mini-CANDI prototype</div>
+      <h2>What goes into the mini-CANDI prototype</h2>
+      <div class="cards c5">
+        <div class="card" style="--c:var(--per)"><div class="rl">Count space only</div><p class="big">Predict counts; derive the p-value track by the formula (h). No direct p-value head (PI ruling).</p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">Depth as a learned probe</div><p class="big" id="tD1"></p></div>
+        <div class="card" style="--c:var(--per)"><div class="rl">A mappability channel</div><p class="big" id="tD2"></p></div>
+        <div class="card" style="--c:var(--darm1)"><div class="rl">No routing through a base</div><p class="big" id="tD3"></p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">Costly reprocessing deferred</div><p class="big" id="tD4"></p></div>
+      </div>
+      <aside class="notes"><p>Mini-CANDI is a staged, first-principles prototype: few assays, few covariates, few parameters, then scale. Depth stays a learned input on purpose: its law is known exactly, so how well the network follows it is a cheap measure of how much correction it learns. The closed-form depth offset is parked for the publication version. New counterfactual pairs that need raw reads re-processed wait until their return is clear.</p></aside>
+    </div>
+  </section>
+
+  <!-- DISCUSSION · limitations
        job      the limitations, each with its count
-       source   restated from method and results; DATA.design, DATA.h28.n
+       source   restated from method and results; DATA.design, DATA.final (power, checks)
        numbers  restated counts from DATA
-       cut      the fourth card -->
+       cut      the sixth card -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Discussion</span>limitations</div>
       <h2>Limitations</h2>
-      <div class="cards c2">
+      <div class="cards c3">
         <div class="card" style="--c:var(--ow)"><div class="rl">Few tracks</div><p id="tLim1"></p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">Low statistical power</div><p id="tLim2"></p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">A check that cannot fail</div><p id="tLim3"></p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">A failed no-change control</div><p id="tLim4"></p></div>
         <div class="card" style="--c:var(--ow)"><div class="rl">No oracle for re-processed arms</div><p>A re-run arm is not a subset of its base's reads, so only depth has an exact oracle. For run type, gap closed cannot be read (c).</p></div>
-        <div class="card" style="--c:var(--ow)"><div class="rl">The p-value space is unfixed</div><p>Designs B to D still explode on a few sparse to full depth pairs; the PI deferred the fix until the count model settles (h).</p></div>
-        <div class="card" style="--c:var(--ow)"><div class="rl">Open runs</div><p id="tLim4"></p></div>
+        <div class="card" style="--c:var(--ow)"><div class="rl">Many readings are exploratory</div><p>Many readings in (a) to (k) were made after the run, or with a bar or an oracle set after it; each finding says which. The final experiments (m) to (o) were pre-registered.</p></div>
       </div>
-      <aside class="notes"><p>Each limitation names what it affects. None of them reverses a reading in the main arc; each one bounds how far a reading carries.</p></aside>
+      <aside class="notes"><p>Each limitation names what it affects. None of them reverses a reading; each one bounds how far a reading carries. The low power means a null result in the final experiments is a weak null.</p></aside>
     </div>
   </section>
 
-  <!-- 21 · DISCUSSION · the goals scorecard (a grid, so a table)
-       job      every original goal, its status, one line of evidence
+  <!-- DISCUSSION · the goals scorecard, 1 of 2 (a grid, so a table)
+       job      every goal, its status, one line of evidence
        source   restated from results; every number from DATA
        numbers  restated from results, none new
-       cut      nothing; the PI asked for every goal
-       refresh  the arm-to-arm row reads DATA.h28 -->
+       cut      nothing; the PI asked for every goal; split over two slides to fit -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Discussion</span>goals scorecard</div>
       <h2 id="tScoreH"></h2>
       <div id="tblScore"></div>
-      <aside class="notes"><p>Fully met means the goal's question has an answer backed by readings. Partially met means part of the goal holds and part does not. Not met but answered means the goal was not reached, and we know enough to stop. Rows on the depth, run-type and arm-to-arm claims wait for the PI's signature.</p></aside>
+      <aside class="notes"><p>Fully met means the goal's question has an answer backed by readings. Partially met means part of the goal holds and part does not. Not met but answered means the goal was not reached, and we know enough to stop. The status words are the deck's summary of the PI's readings in the findings.</p></aside>
     </div>
   </section>
 
-  <!-- 22 · DISCUSSION · what carries to CANDI
-       job      the lessons CANDI should take from the testbed
-       source   restated from results (b), (e), (f), (j), (k); q10 and q11 "For CANDI" lines
-       numbers  restated from DATA
-       cut      the fifth card -->
+  <!-- DISCUSSION · the goals scorecard, 2 of 2 (a grid, so a table)
+       job      every goal, its status, one line of evidence (continued)
+       source   restated from results; every number from DATA
+       numbers  restated from results, none new
+       cut      nothing; the PI asked for every goal -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker"><span class="sec">Discussion</span>what carries to CANDI</div>
-      <h2>What carries to CANDI</h2>
-      <div class="cards c5">
-        <div class="card" style="--c:var(--per)"><div class="rl">Depth</div><p class="big" id="tC1"></p></div>
-        <div class="card" style="--c:var(--per)"><div class="rl">Read length, mapping quality</div><p class="big" id="tC2"></p></div>
-        <div class="card" style="--c:var(--per)"><div class="rl">Noise model</div><p class="big" id="tC3"></p></div>
-        <div class="card" style="--c:var(--per)"><div class="rl">Training pairs</div><p class="big" id="tC4"></p></div>
-        <div class="card" style="--c:var(--per)"><div class="rl">Scoring</div><p class="big">Score against the one-warp and the no-covariates twin; use the exact thinning oracle for depth; split every CRPS.</p></div>
-      </div>
-      <aside class="notes"><p>The transfer task into CANDI is deferred. The arm-to-arm grid is complete; its reading waits for the PI's signature. These cards are what the testbed says that task should start from.</p></aside>
+      <div class="kicker"><span class="sec">Discussion</span>goals scorecard, continued</div>
+      <h2>Goals scorecard, continued: transfer, CANDI, and the final experiments</h2>
+      <div id="tblScore2"></div>
+      <aside class="notes"><p>The second half of the scorecard. The last three rows are the final experiments. Their status words summarise the PI's readings in the findings.</p></aside>
     </div>
   </section>
 
-  <!-- 23 · BACKUP · glossary
+  <!-- DISCUSSION · next-step options
+       job      labelled options for the PI to choose from, each with its cost and what it would teach; no ranking
+       source   notes/mini_candi_design_inputs.md §6, §7; results/t146/sacct_per_arm.tsv (cost); restated from (m), (n), (o)
+       numbers  costs from DATA.final.sac and DATA.final.cost (new numbers on a discussion slide, by request: the PI asked for costs)
+       cut      the fifth option -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Discussion</span>options for the next phase</div>
+      <h2>Options for the next phase, unranked</h2>
+      <div class="cards c3" id="tOpts"></div>
+      <aside class="notes"><p>The options are listed in no order, and they carry no recommendation, because the PI chooses. Each card says what the option would teach and what it would cost, from the run records of the final experiments and the counterfactual-arm build.</p></aside>
+    </div>
+  </section>
+
+  <!-- BACKUP · glossary (1 of 2)
        job      glosses repeated in one place
        source   none
        numbers  none
@@ -715,7 +879,7 @@
   <section class="slide">
     <div class="wrap">
       <div class="kicker"><span class="sec">Backup</span>glossary</div>
-      <h2>Glossary</h2>
+      <h2>Glossary: the testbed</h2>
       <dl class="gl">
         <div><dt>Base, arm</dt><dd>A track as made by the standard pipeline; the same track with one knob changed.</dd></div>
         <div><dt>One-warp</dt><dd>One monotone map from base values to arm values, with no covariates.</dd></div>
@@ -734,9 +898,34 @@
     </div>
   </section>
 
+  <!-- BACKUP · glossary (2 of 2)
+       job      glosses of the final experiments, repeated in one place
+       source   h29, h30, h31; glossary.md (CAC)
+       numbers  none
+       cut      the last entries -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker"><span class="sec">Backup</span>glossary</div>
+      <h2>Glossary: the final experiments</h2>
+      <dl class="gl">
+        <div><dt>CAC</dt><dd>Covariate artifact correction: undoing processing effects using the recorded covariates.</dd></div>
+        <div><dt>Shared correction model</dt><dd>One design-D model for all seven tracks, in count space.</dd></div>
+        <div><dt>Cross-assay imputation</dt><dd>Predict a masked assay of the same cell type from the others.</dd></div>
+        <div><dt>Masked-bin denoising</dt><dd>Predict hidden bins of a track from the rest of it.</dd></div>
+        <div><dt>Matched loss scale</dt><dd>Correction alone, with its loss rescaled as a joint loss would be.</dd></div>
+        <div><dt>Scrambled-covariate twin</dt><dd>The same model, covariates shuffled at training time.</dd></div>
+        <div><dt>Agreement loss</dt><dd>A penalty on disagreement between the direct and the routed predictions.</dd></div>
+        <div><dt>Mappability</dt><dd>How uniquely short reads align at a position.</dd></div>
+        <div><dt>Lowest-mappability decile</dt><dd>The tenth of one-kilobase blocks with the lowest mean mappability.</dd></div>
+        <div><dt>Statistical power</dt><dd>The chance that a test detects a true effect of the expected size.</dd></div>
+      </dl>
+      <aside class="notes"><p>Each term is also glossed on the slide where it first appears, or in the method slides of the final experiments.</p></aside>
+    </div>
+  </section>
+
 </div>
 
-<div class="foot">counterfactual testbed · close-out</div>
+<div class="foot">CAC testbed · close-out</div>
 <div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
 <div class="count"><span id="cur"></span> / <span id="tot"></span></div>
 
@@ -848,8 +1037,36 @@ put('figWhy', `<svg viewBox="0 0 1000 250" preserveAspectRatio="xMidYMid meet">
   <text x="752" y="194" text-anchor="middle" class="xsub">for each knob on its own</text>
 </svg>`);
 
-/* ------------------------------------------------------------------ goals (slides 3, 21) */
+/* ------------------------------------------------------------------ the ENCODE Imputation Challenge */
+(function(){
+  const E=DATA.eic;
+  put('tEIC1', `The average-activity baseline (the assay's mean signal over the training cell types, blind to the target) beat all but ${E.beat} of ${E.n} submitted models under the measures fixed before the challenge. Only ${E.cells[0]} of the ${E.cells[1]} test cell types had more than two training experiments.`);
+  const W=1160,Hh=250; let s=`<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="xMidYMid meet">`;
+  s+=`<text x="10" y="28" class="ptitle">(a) the ranking under the pre-registered measures</text><text x="10" y="50" class="psub">schematic: order only, positions not to scale</text>`;
+  const x0=40,x1=560,y=150, bx=x0+(x1-x0)*0.86;
+  s+=`<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" class="axis"/><text x="${x0}" y="${y+36}" class="cap">worse</text><text x="${x1}" y="${y+36}" text-anchor="end" class="cap">better</text>`;
+  for(let i=0;i<E.n;i++){const above=i>=E.n-E.beat; const xi=above?bx+14+(i-(E.n-E.beat))*18:x0+12+i*((bx-x0-24)/(E.n-E.beat-1));
+    s+=`<circle cx="${xi}" cy="${y-14}" r="6.5" fill="${above?'var(--per)':'#fff'}" stroke="${above?'var(--per)':'var(--ow)'}" stroke-width="2"/>`;}
+  s+=`<line x1="${bx}" y1="${y-60}" x2="${bx}" y2="${y+10}" stroke="var(--accent)" stroke-width="3"/><text x="${bx}" y="${y-68}" text-anchor="middle" class="val" fill="var(--accent)">average baseline</text>`;
+  s+=`<text x="${(x0+bx)/2}" y="${y+62}" text-anchor="middle" class="xsub">${E.n-E.beat} models below the baseline</text>`;
+  s+=`<line x1="600" y1="20" x2="600" y2="230" class="sep"/>`;
+  s+=`<text x="630" y="28" class="ptitle">(b) one duplicate-removal rule, two run types</text>`;
+  const row=(yy,lab,sub,keep)=>{let t=`<text x="630" y="${yy}" class="xlab" style="font-size:19px">${lab}</text><text x="630" y="${yy+22}" class="xsub">${sub}</text>`;
+    [0,1,2].forEach(k=>{const xx=950+k*62; t+=`<rect x="${xx}" y="${yy-22}" width="48" height="14" rx="3" fill="${k<keep?'var(--per)':'#fff'}" stroke="var(--per)" stroke-width="1.6"/>`;
+      if(lab.startsWith('paired')) t+=`<rect x="${xx+(k===1?14:0)}" y="${yy-2}" width="48" height="14" rx="3" fill="${k<keep?'var(--per)':'#fff'}" stroke="var(--per)" stroke-width="1.6"/>`;});
+    return t;};
+  s+=row(95,'single-end (training data)','one read kept per duplicate set',1);
+  s+=row(175,'paired-end (test data)','a pair kept if either mate is unique',2);
+  s+=`<text x="1012" y="226" text-anchor="middle" class="cap">filled: reads kept</text>`;
+  put('figEIC', s+'</svg>');
+})();
+
+/* ------------------------------------------------------------------ goals (slides 4 and the scorecard) */
 const H=DATA.h1, H2=DATA.h2, MAIN=DATA.main, CAP=DATA.cap, LAW=DATA.law, H28=DATA.h28, HM=DATA.hmap, PR=DATA.probe;
+const FN=DATA.final, SG=DATA.signed, AT=FN.AT, K29=FN.ck29, P31=FN.h31;
+const rd=f=>`${f.direction}, ${f.confidence}`;   /* a PI reading, from a finding's frontmatter */
+const cr=(o,d=3)=>`${fx(o.v,d)} (${fx(o.os,d)} + ${fx(o.se,d)}; seed range ${fx(o.sr,d)})`;
+const n30=FN.cells30.length, w30=FN.cells30.filter(c=>c.win).length, need30=Math.ceil(n30*2/3);
 /* (b) depth */
 const h1BD=H.filter(r=>r.rung!=='A');
 const h1gc=h1BD.map(r=>r.gc), h1k=h1BD.filter(r=>r.gain>r.seed2).length;
@@ -873,43 +1090,50 @@ const mapq0=['narrow','broad'].map(c=>wOf('mapq','0',c,'counts').v);
 const ST={met:'Fully met',part:'Partially met',ans:'Not met · answered'};
 const GOALS=[
   {k:'q1',g:'The covariates beat the scrambled twin (main claim)',s:'part',
-   ev:`Trained pairs: ${MAIN.twin_cells[0]}–${MAIN.twin_cells[1]} of ${MAIN.twin_cells[2]} cells. Never-trained gain ${MAIN.counts[0]} → ${MAIN.counts[1]} in counts, ${MAIN.p[0]} → ${MAIN.p[1]} in p; swap and depth law unmet (a).`},
+   ev:`Trained pairs: ${MAIN.twin_cells[0]}–${MAIN.twin_cells[1]} of ${MAIN.twin_cells[2]} cells. Never-trained gain ${MAIN.counts[0]} → ${MAIN.counts[1]} in counts, ${MAIN.p[0]} → ${MAIN.p[1]} in p; swap check and depth law unmet (a).`},
   {k:'h1',g:'Depth, beyond the one-warp',s:'met',
-   ev:`Designs B–D close ${rngs(h1gc)} of the gap; ${h1k} of ${h1BD.length} cells above ${TWO} the seed range (b). Not judged.`},
+   ev:`Designs B–D close ${rngs(h1gc)} of the gap; ${h1k} of ${h1BD.length} cells above ${TWO} the seed range (b). PI: ${rd(SG.f6)}.`},
   {k:'h2',g:'Run type, beyond the one-warp',s:'part',
-   ev:`Histone marks ${h2k} of ${h2hist.length} cells above the criterion; DNase ${h2dk} of ${h2dn.length}; no oracle, so no gap closed (c). Not judged.`},
+   ev:`Histone marks ${h2k} of ${h2hist.length} cells above the criterion; DNase ${h2dk} of ${h2dn.length}; no oracle (c). PI: ${rd(SG.f7)}.`},
   {k:'q2',g:'Read-side knobs carry the information',s:'part',
    ev:`Beats the twin on trained pairs by ${MAIN.q2[0]}–${MAIN.q2[1]} (seed range ${MAIN.q2[2]}–${MAIN.q2[3]}); the p gain vanishes on never-trained pairs.`},
   {k:'q3',g:'Control-side knobs carry the information',s:'part',
-   ev:`p gain ${MAIN.q3[2]}–${MAIN.q3[3]} on never-trained pairs (seed range ${MAIN.q3[4]}–${MAIN.q3[5]}); the pre-registered threshold is not readable.`},
+   ev:`p gain ${MAIN.q3[2]}–${MAIN.q3[3]} on never-trained pairs (seed range ${MAIN.q3[4]}–${MAIN.q3[5]}); now out of scope (count space only).`},
   {k:'q4',g:'How expressive f must be',s:'part',
-   ev:`Never-trained gain ${CAP.q4never[0]} → ${CAP.q4never[1]} (median); more capacity does not close it, so the limit is g, not f (d). The p-space explosion is unfixed.`},
+   ev:`Never-trained gain ${CAP.q4never[0]} → ${CAP.q4never[1]}; more capacity does not close it, so the limit is g, not f (d).`},
   {k:'q5',g:'Does a depth offset help',s:'met',
    ev:`Only design A: ${CAP.cells[0]} of ${CAP.cells[1]} cells clear, all design A; B–D ${CAP.bd[0]} of ${CAP.bd[1]} (d).`},
   {k:'q6',g:'A map from counts to the p-value track',s:'met',
-   ev:`The true-count map is lower in ${HM.repair[0]} of ${HM.repair[1]} rows; push and formula maps have ${HM.noexplode[0]} explosions (h).`},
+   ev:`Fragment formula ${HM.formula[0]} against ${HM.best[0]} for the best learned map; ${HM.noexplode[0]} explosions (h).`},
   {k:'q7',g:'Why the depth law is missed',s:'part',
-   ev:`Pseudocount, loss, size and encoder-decoder ruled out; through the base ${LAW.via[1]} against ${LAW.via[4]} direct (e). Not fixed in a direct g.`},
-  {k:'h28',g:'Training g on arm-to-arm pairs',s:'part',
-   ev:`Law check ${c1?c1.reading:'n/a'} (gap closed ${c1?fx(c1.value):'n/a'}); CRPS check ${c4r?c4r.reading:'n/a'} (${c4?fx(c4.value,2):'n/a'}); second arm ${n2.law_done} of ${n2.assigned} scored (f, g). Not judged.`},
+   ev:`Four causes ruled out (e); the route through the base wins in ${w30} of ${n30} cells for a shared model (n).`},
+  {k:'h28',g:'Training g on arm-to-arm pairs',s:'ans',
+   ev:`Law check ${c1?c1.reading.toLowerCase():'n/a'} (gap closed ${c1?fx(c1.value):'n/a'}); CRPS check ${c4r?c4r.reading.toLowerCase():'n/a'} (${c4?fx(c4.value,2):'n/a'}) (f, g). PI: ${rd(SG.f5)}.`},
   {k:'q8',g:'Does CANDI\'s training block the other covariates',s:'ans',
-   ev:`Probe not readable: depth control ${PR.depth[0]} of ${PR.depth[1]} rows, ${PR.effect[0]} of ${PR.effect[1]} pairs clear the floor. Parked; moved to arm-to-arm training (l).`},
+   ev:`CANDI moves its level the wrong way; per-region test unreadable (depth control ${PR.depth[0]} of ${PR.depth[1]} rows) (l).`},
   {k:'q9',g:'Which knobs move a track the most',s:'met',
    ev:`Peak height above the floor in ${kPHa} of ${kPH.length} rows; shape in ${kSHa.length} of ${kSH.length} (i).`},
   {k:'q10',g:'How much resampling alone moves a track',s:'met',
    ev:`Real halves match whole-read thinning (ratio ${fx(FL.real.all.read)}); signal level, not region, sets the floor (j).`},
   {k:'q11',g:'Where along the genome each knob acts',s:'met',
    ev:`Depth acts uniformly; mapping quality zero adds a feature gain of ${rngs(mapq0)} (k).`},
+  {k:'q12',g:'Does a joint objective change transfer',s:'part',
+   ev:`No arm moves never-trained CRPS beyond the bar at weight one; power about ${FN.power.h29}% (m). PI: ${rd(SG.f30)}.`},
+  {k:'h30',g:'A pivot through the base, for a shared model',s:'ans',
+   ev:`${w30} of ${n30} cells win (${need30} needed) (n). PI: ${rd(SG.f31)}.`},
+  {k:'h31',g:'A mappability input for read length and mapping quality',s:'part',
+   ev:`Lower lowest-decile CRPS on every track; the depth no-change control failed (o). PI: ${rd(SG.f32)}.`},
 ];
 const nS=s=>GOALS.filter(x=>x.s===s).length;
 put('tGoalsH', `One question, ${GOALS.length} goals under it`);
 put('tScoreH', `${nS('met')} goals fully met, ${nS('part')} partially met, ${nS('ans')} not met but answered`);
-put('tblScore', `<table class="dtable xs"><thead><tr><th>goal</th><th>status</th><th>evidence (result slide)</th></tr></thead><tbody>${
-  GOALS.map(x=>`<tr><td>${x.g}</td><td><span class="stat ${x.s}">${ST[x.s]}</span></td><td>${x.ev}</td></tr>`).join('')}</tbody></table>`);
+const scoreTbl=G=>`<table class="dtable sm"><thead><tr><th>goal</th><th>status</th><th>evidence (result slide)</th></tr></thead><tbody>${
+  G.map(x=>`<tr><td>${x.g}</td><td><span class="stat ${x.s}">${ST[x.s]}</span></td><td>${x.ev}</td></tr>`).join('')}</tbody></table>`;
+put('tblScore', scoreTbl(GOALS.slice(0,8))); put('tblScore2', scoreTbl(GOALS.slice(8)));
 
 (function(){
-  const W=1160, bw=152, gap=10, rows=[GOALS.slice(0,7),GOALS.slice(7)];
-  let s=`<svg viewBox="0 0 ${W} 380" preserveAspectRatio="xMidYMid meet">`;
+  const W=1160, bw=152, gap=10, rows=[GOALS.slice(0,7),GOALS.slice(7,14),GOALS.slice(14)];
+  let s=`<svg viewBox="0 0 ${W} 515" preserveAspectRatio="xMidYMid meet">`;
   s+=`<rect x="${W/2-330}" y="10" width="660" height="62" rx="10" fill="#fff" stroke="var(--accent)" stroke-width="2"/>`;
   s+=`<text x="${W/2}" y="38" text-anchor="middle" class="xlab">Do the recorded covariates carry enough information</text>`;
   s+=`<text x="${W/2}" y="62" text-anchor="middle" class="xsub">to map one measurement of a track onto another of the same material?</text>`;
@@ -927,7 +1151,8 @@ put('tblScore', `<table class="dtable xs"><thead><tr><th>goal</th><th>status</th
     });
   });
   const lg=[['met','fully met'],['part','partially met'],['ans','not met, answered']];
-  lg.forEach(([k,l],i)=>{s+=`<rect x="${W/2-300+i*210}" y="${364}" width="14" height="14" rx="3" fill="${SH[k]}"/><text x="${W/2-280+i*210}" y="${376}" class="cap">${l}</text>`;});
+  lg.forEach(([k,l],i)=>{s+=`<rect x="${W/2-300+i*210}" y="${499}" width="14" height="14" rx="3" fill="${SH[k]}"/><text x="${W/2-280+i*210}" y="${511}" class="cap">${l}</text>`;});
+  s+=`<text x="${W/2+380}" y="${110+2*135+60}" class="cap">the final experiments</text>`;
   put('figGoals', s+`</svg>`);
 })();
 
@@ -1031,8 +1256,8 @@ put('lgG', legend([[C('per'),'one g per track'],[C('acr'),'one g across tracks',
 (function(){
   const r=H.find(x=>x.cls==='narrow'&&x.rung==='D'&&x.g==='per_track');
   const A=H.filter(x=>x.rung==='A'&&x.cls!=='broad'), tw=H.map(x=>x.twin_gain);
-  put('tH1a', `Designs B–D close ${rngs(h1gc)} of the gap in every class; ${h1k} of ${h1BD.length} of their cells gain over the one-warp by more than ${TWO} the seed range. Narrow marks, design D per track: CRPS ${crps(r.d_model,r.os,r.se)} against the one-warp ${crps(r.d_onewarp,r.ow_os,r.ow_se)} and the oracle ${crps(r.d_oracle,r.or_os,r.or_se)}.`);
-  put('tH1b', `Design A gains nothing on DNase and narrow marks (gap closed ${rngs(A.map(x=>x.gc))}). Every design beats its no-covariates twin, by ${rngs(tw)} CRPS.`);
+  put('tH1a', `Designs B–D close ${rngs(h1gc)} of the gap in every class; ${h1k} of ${h1BD.length} of their cells gain over the one-warp by more than ${TWO} the seed range. Narrow marks, design D per track: CRPS ${crps(r.d_model,r.os,r.se,r.seed2/2)} against the one-warp ${crps(r.d_onewarp,r.ow_os,r.ow_se)} and the oracle ${crps(r.d_oracle,r.or_os,r.or_se)} (both fixed maps, with no seeds).`);
+  put('tH1b', `Design A gains nothing on DNase and narrow marks (gap closed ${rngs(A.map(x=>x.gc))}). Every design beats its no-covariates twin, by ${rngs(tw)} CRPS. PI reading: ${rd(SG.f6)}, for designs B–D.`);
 })();
 
 /* ------------------------------------------------------------------ (c) run type */
@@ -1047,8 +1272,8 @@ put('figH2a',h2panel('DNase','a')); put('figH2b',h2panel('narrow','b')); put('fi
 put('lgG2', legend([[C('per'),'one g per track'],[C('acr'),'one g across tracks',true]]));
 (function(){
   const nr=H2.find(x=>x.cls==='narrow'&&x.rung==='D'&&x.g==='per_track');
-  put('tH2a', `Histone marks: ${h2k} of ${h2hist.length} cells gain ${rngs(h2hist.map(x=>x.gain))} over the one-warp, above ${TWO} the seed range. Narrow, design D per track: CRPS ${crps(nr.d_model,nr.os,nr.se)} against the one-warp ${crps(nr.d_onewarp,nr.ow_os,nr.ow_se)}.`);
-  put('tH2b', `DNase: ${h2dk} of ${h2dn.length} cells are above the criterion; the designs with one g across tracks lose to the one-warp. A fresh replicate (the floor, ${fx(nr.d_floor)} for narrow marks) sits above the one-warp, so gap closed is not read.`);
+  put('tH2a', `Histone marks: ${h2k} of ${h2hist.length} cells gain ${rngs(h2hist.map(x=>x.gain))} over the one-warp, above ${TWO} the seed range. Narrow, design D per track: CRPS ${crps(nr.d_model,nr.os,nr.se,nr.seed2/2)} against the one-warp ${crps(nr.d_onewarp,nr.ow_os,nr.ow_se)}.`);
+  put('tH2b', `DNase: ${h2dk} of ${h2dn.length} cells are above the criterion; the designs with one g across tracks lose to the one-warp. A fresh replicate (the floor, ${fx(nr.d_floor)} for narrow marks) sits above the one-warp, so gap closed is not read. PI reading: ${rd(SG.f7)}.`);
 })();
 
 /* ------------------------------------------------------------------ (d) capacity and offset */
@@ -1066,11 +1291,11 @@ put('lgG2', legend([[C('per'),'one g per track'],[C('acr'),'one g across tracks'
 (function(){
   const L=LAW, n=a=>a.map(num);
   const R_=(lab,lo,hi,col)=>({lab,pts:[{range:true,lo,hi,col,txt:lo===hi?fx(lo,2):`${fx(lo,2)}–${fx(hi,2)}`}]});
-  const p=n(L.pois.slice(0,3)), sz=n(L.size), via=n(L.via);
+  const p=n(L.pois.slice(0,2)), a0=n(L.a0.slice(0,2)), sz=n(L.size), via=n(L.via);
   const rows=[
     R_('trained pairs, every design',num(L.trained[0]),num(L.trained[1]),C('per')),
     R_('never-trained, every design',num(L.trained[2]),num(L.trained[3]),C('darm1')),
-    R_('no pseudocount',num(L.a0[0]),num(L.a0[1]),C('ow')),
+    R_('no pseudocount',mn(a0),mx(a0),C('ow')),
     R_('Poisson loss on the mean',mn(p),mx(p),C('ow')),
     R_('encoder-decoder',num(L.encd[0]),num(L.encd[1]),C('ow')),
     R_('symmetric encoder-decoder',num(L.sym[0]),num(L.sym[1]),C('ow')),
@@ -1082,7 +1307,7 @@ put('lgG2', legend([[C('per'),'one g per track'],[C('acr'),'one g across tracks'
   put('figLaw', dotPanel({rows,xmin:0,xmax:0.75,ticks:[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7],tf:t=>t.toFixed(1),W:960,Lg:270,rowH:34,top:30,
     refs:[{v:0,lab:'law holds',anchor:'start'}],xlab:'median |log2 error| of the predicted scale, never-trained depth pairs unless marked'}));
   const gap=via[4]-via[1];
-  put('tLaw1', `The real arms obey the law within ${L.data[0]}% over ${L.data[1]} pairs. Direct designs fit trained pairs (${L.trained[0]}–${L.trained[1]}) and miss never-trained ones (${L.trained[2]}–${L.trained[3]}); seed range of the loss runs ${L.pois[3]}–${L.pois[4]}.`);
+  put('tLaw1', `The real arms obey the law within ${L.data[0]}% over ${L.data[1]} pairs. Direct designs fit trained pairs (${L.trained[0]}–${L.trained[1]}) and miss never-trained ones (${L.trained[2]}–${L.trained[3]}); seed range of the loss runs ${L.wob[0]}–${L.wob[1]}.`);
   put('tLaw2', `Through the base, one g per track reads ${L.via[1]} against ${L.via[4]} direct: a gap of ${fx(gap,2)}, ${gap>2*num(L.via[2])?'above':'below'} ${TWO} its seed range of ${L.via[2]}.`);
 })();
 
@@ -1104,11 +1329,11 @@ const ARMC={Dref:C('dref'),Dviabase:C('dvia'),Darm1:C('darm1'),Darm2:C('darm2')}
     return `<tr><td>${NAME[c]}</td><td><span class="role">${kind==='control'?'control':'claim'}</span></td><td>${badge(a1&&a1.reading)}<span class="role">${v1}</span></td><td>${kind==='control'?badge(a2&&a2.reading):'<span class="role">read, not checked</span>'}</td></tr>`;};
   put('tblH28', `<table class="dtable sm"><thead><tr><th>pre-registered check</th><th>kind</th><th>first arm</th><th>second arm</th></tr></thead><tbody>${['c1','c2','c3','c4','c5'].map(row).join('')}</tbody></table>`);
   const pass=[c1,c3].every(x=>x&&x.reading==='PASS'), fail=c4r&&c4r.reading==='FAIL';
-  put('tH28h', pass&&fail?'Arm-to-arm training meets the depth law on held-out pairs, but fails the CRPS check':'Arm-to-arm training: the pre-registered checks');
+  put('tH28h', pass&&fail?'Arm-to-arm training teaches the scale, not the distribution: the depth law passes, the CRPS check fails':'Arm-to-arm training: the pre-registered checks');
   const done2=n2.law_done===n2.assigned, ctl=['c2','c5'].every(c=>{const r=ckOf(c,'both');return r&&r.reading==='PASS';});
   put('tH28note', done2&&ctl
-    ? `Rule: all three claim checks must pass, read only when both controls pass. Both arms finished (${H28.n.Darm1.law_done+n2.law_done} of ${H28.n.Darm1.assigned+n2.assigned} runs) and both controls pass, so the reading is final: ${H28.rule.toLowerCase()}. Not judged: the PI signs.`
-    : `Rule: all three claim checks must pass, read only when both controls pass. Reading now: ${H28.rule.toLowerCase()}. Second arm: ${n2.law_done} of ${n2.assigned} runs scored. Not judged: the PI signs.`);
+    ? `Rule: all three claim checks must pass, read only when both controls pass. Both arms finished (${H28.n.Darm1.law_done+n2.law_done} of ${H28.n.Darm1.assigned+n2.assigned} runs) and both controls pass, so the reading is final: ${H28.rule.toLowerCase()}. PI reading: ${rd(SG.f5)}.`
+    : `Rule: all three claim checks must pass, read only when both controls pass. Reading now: ${H28.rule.toLowerCase()}. Second arm: ${n2.law_done} of ${n2.assigned} runs scored.`);
 })();
 
 /* ------------------------------------------------------------------ (g) arm-to-arm CRPS */
@@ -1121,7 +1346,7 @@ const ARMC={Dref:C('dref'),Dviabase:C('dvia'),Darm1:C('darm1'),Darm2:C('darm2')}
   put('lgH28', legend([[C('dref'),ARMN.Dref],[C('dvia'),ARMN.Dviabase],[C('darm1'),ARMN.Darm1],[C('darm2'),ARMN.Darm2],['var(--se)','scale error']]));
   const gc=cls=>{const c=H28.crps[cls]; return (c.Dref.v-c.Darm1.v)/(c.Dref.v-c.Dviabase.v);};
   const a=H28.crps.all, d=H28.crps.dnase;
-  put('tH28c1', `All held-out pairs: first arm ${crps(a.Darm1.v,a.Darm1.os,a.Darm1.se,a.Darm1.sr)}, against old D direct ${crps(a.Dref.v,a.Dref.os,a.Dref.se)} and through the base ${crps(a.Dviabase.v,a.Dviabase.os,a.Dviabase.se)}: gap closed ${fx(gc('all'),2)} against a threshold of 0.5.`);
+  put('tH28c1', `All held-out pairs: first arm ${crps(a.Darm1.v,a.Darm1.os,a.Darm1.se,a.Darm1.sr)}, against old D direct ${crps(a.Dref.v,a.Dref.os,a.Dref.se,a.Dref.sr)} and through the base ${crps(a.Dviabase.v,a.Dviabase.os,a.Dviabase.se,a.Dviabase.sr)}: gap closed ${fx(gc('all'),2)} against a threshold of 0.5.`);
   const gc2=cls=>{const c=H28.crps[cls]; return (c.Dref.v-c.Darm2.v)/(c.Dref.v-c.Dviabase.v);};
   put('tH28gh', a.Darm2.complete&&gc2('all')>=0.5?'The first arm\'s CRPS failure is DNase scale error; the second arm removes it':'The CRPS failure is in DNase, and it is scale error');
   put('tH28c2', `DNase: gap closed ${fx(gc('dnase'),2)}, with scale error ${fx(d.Darm1.se)} against ${fx(d.Dref.se)} for old D; histone marks: gap closed ${fx(gc('histone'),2)}.`);
@@ -1134,10 +1359,11 @@ const ARMC={Dref:C('dref'),Dviabase:C('dvia'),Darm1:C('darm1'),Darm2:C('darm2')}
 (function(){
   const r=HM.repair.map(num);
   put('figH', stackPanel({title:'Map h (design D2, learned MLP) · log CRPS on the p-value track',xmax:0.16,ticks:[0,0.05,0.1,0.15],
-    rows:[{lab:'h trained on true counts',os:r[5],se:r[6],sr:r[4],col:C('per')},{lab:'h trained on f\'s predictions',os:r[8],se:r[9],col:C('ow')}],
+    rows:[{lab:'h trained on true counts',os:r[5],se:r[6],sr:r[4],col:C('per')},{lab:'h trained on f\'s predictions',os:r[8],se:r[9],col:C('ow'),tag:'one seed'}],
     xlab:'log CRPS = oracle-scaled part + scale error; whisker: seed range'}));
+  put('tH0', `On the true counts, the caller's fragment-wide formula reads ${HM.formula[0]} log CRPS against ${HM.best[0]} ± ${HM.best[1]} (standard deviation over seeds) for the formula plus a learned correction, the best map tried; no split is recorded for these two.`);
   put('tH1', `The true-count map is lower in ${HM.repair[0]} of ${HM.repair[1]} rows, ${HM.repair[2]} above the criterion: training h on f's predictions does not repair f's errors.`);
-  put('tH2', `Push and formula maps have ${HM.noexplode[0]} records with CRPS above ${HM.noexplode[1]}. The direct p designs B–D still explode above that threshold on a few pairs (fix deferred by the PI).`);
+  put('tH2', `Push and formula maps have ${HM.noexplode[0]} records with CRPS above ${HM.noexplode[1]}, where the direct p designs explode on a few pairs. By PI ruling, the redesign has no direct p-value head.`);
 })();
 
 /* ------------------------------------------------------------------ (i) knobs vs floor */
@@ -1200,20 +1426,170 @@ const KPL=(r)=>`${PLAIN[r.arm].replace(/ \(.*\)/,'')} ${r.arm==='depth'||r.arm==
 })();
 
 /* ------------------------------------------------------------------ (l) probe */
-put('tP1', `${PR.swap[0]} of ${PR.swap[1]}`); put('tP2', `${PR.depth[0]} of ${PR.depth[1]}`); put('tP3', `${PR.effect[0]} of ${PR.effect[1]}`);
+(function(){
+  const L=PR.level.map(num);   /* told 36 bp lo hi, real lo hi, told PE ChIP lo hi, told PE DNase lo hi, real PE lo hi */
+  const R_=(lab,lo,hi,col)=>({lab,pts:[{range:true,lo:Math.min(lo,hi),hi:Math.max(lo,hi),col,txt:`${sx(Math.min(lo,hi),2)} to ${sx(Math.max(lo,hi),2)}`}]});
+  const rows=[R_('told read length 36: CANDI',L[0],L[1],C('darm1')),R_('real 36 bp arm',L[2],L[3],C('orc')),
+    R_('told paired-end, ChIP: CANDI',L[4],L[5],C('darm1')),R_('told paired-end, DNase: CANDI',L[6],L[7],C('darm1')),R_('real paired-end arm',L[8],L[9],C('orc'))];
+  put('figProbe', dotPanel({title:'Change of the chromosome 21 level when told the arm\'s covariate',sub:'range as recorded in the probe\'s first run (chromosome 21)',rows,xmin:-1.3,xmax:1.0,ticks:[-1,-0.5,0,0.5,1],tf:t=>sx(t,1),W:960,Lg:300,rowH:44,top:84,
+    refs:[{v:0,lab:'no change'}],xlab:'log2 change of the predicted (or real) level'}));
+  put('tP1', `Told paired-end, CANDI moves ChIP tracks by ${sx(L[4],2)} to ${sx(L[5],2)} and DNase by ${sx(L[6],2)} to ${sx(L[7],2)}, where the real arms move ${sx(L[8],2)} to ${sx(L[9],2)}. The real 36 bp change is mostly the bin-count rule. PI reading: CANDI uses these covariates in the wrong direction.`);
+  put('tP2', `The per-region test is not readable: the swap is wired (${PR.swap[0]} of ${PR.swap[1]} rows), but the depth control passes on ${PR.depth[0]} of ${PR.depth[1]} rows and ${PR.effect[0]} of ${PR.effect[1]} knob pairs clear the split-half reproducibility floor. Parked.`);
+})();
+
+/* ------------------------------------------------------------------ band scaffold */
+/* rows [{lab, lo, hi, dots:[{v,col,hollow}]}]: a grey band per row (the bar) and dots */
+function bandPanel(o){
+  const W=o.W||600, Lg=o.Lg||220, R=30, top=o.top||76, rowH=o.rowH||40;
+  const pB=top+o.rows.length*rowH, H=pB+(o.xlab?66:40), pW=W-Lg-R, xx=v=>Lg+(Math.max(o.xmin,Math.min(o.xmax,v))-o.xmin)/(o.xmax-o.xmin)*pW;
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  if(o.title) s+=`<text x="10" y="30" class="ptitle">${o.title}</text>`;
+  if(o.sub) s+=`<text x="10" y="52" class="psub">${o.sub}</text>`;
+  (o.ticks||[]).forEach(t=>{s+=`<line x1="${xx(t)}" y1="${top-6}" x2="${xx(t)}" y2="${pB}" class="grid"/><text x="${xx(t)}" y="${pB+22}" text-anchor="middle" class="tick">${o.tf?o.tf(t):t}</text>`;});
+  s+=`<line x1="${xx(0)}" y1="${top-10}" x2="${xx(0)}" y2="${pB}" class="zero"/>`;
+  o.rows.forEach((r,i)=>{
+    const yc=top+rowH*(i+0.5);
+    s+=`<text x="${Lg-12}" y="${yc+6}" text-anchor="end" class="axlbl">${r.lab}</text>`;
+    s+=`<rect x="${xx(r.lo)}" y="${yc-rowH*0.32}" width="${Math.max(2,xx(r.hi)-xx(r.lo))}" height="${rowH*0.64}" fill="#e9e6e0" rx="3"/>`;
+    const n=r.dots.length;
+    r.dots.forEach((d,k)=>{const y=yc+(k-(n-1)/2)*Math.min(11,rowH/(n+0.5));
+      s+=`<circle cx="${xx(d.v)}" cy="${y}" r="${d.r||6.5}" fill="${d.hollow?'#fff':d.col}" stroke="${d.col}" stroke-width="2.4"/>`;
+      if(d.txt) s+=`<text x="${xx(d.v)+12}" y="${y+6}" class="cap" fill="${d.col}">${d.txt}</text>`;});
+  });
+  s+=`<line x1="${Lg}" y1="${pB}" x2="${Lg+pW}" y2="${pB}" class="axis"/>`;
+  if(o.xlab) s+=`<text x="${Lg+pW/2}" y="${pB+52}" text-anchor="middle" class="cap">${o.xlab}</text>`;
+  return s+`</svg>`;
+}
+
+/* ------------------------------------------------------------------ the final experiments: design */
+const SAC=FN.sac, run=a=>SAC[a].train.n, SHARED=3;   /* h30 reuses h29's three seeds of correction alone */
+const runs29=SHARED+run('matched')+run('xassay')+run('denoise')+run('xassay_ids')+run('denoise_ids');
+const runs30=run('alone')-SHARED+run('consist')+run('alone_nocov'), runs31=run('map')+run('mapshift')+run('dna');
+put('tFinalNote', `${runs29+runs30+runs31} training runs in all (${runs29}, ${runs30} and ${runs31}), every one trained and scored. Trained on base-to-arm pairs; scored on chromosomes 19 and 21, held out of training.`);
+put('figFinal', `<svg viewBox="0 0 1160 230" preserveAspectRatio="xMidYMid meet">
+  <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9a958d"/></marker></defs>
+  <text x="10" y="28" class="ptitle">(a) a joint objective</text>
+  <rect x="20" y="80" width="130" height="70" rx="9" fill="var(--alone)"/><text x="85" y="112" text-anchor="middle" style="font:600 19px var(--sans);fill:#fff">shared</text><text x="85" y="136" text-anchor="middle" style="font:600 19px var(--sans);fill:#fff">model</text>
+  <line x1="152" y1="100" x2="210" y2="70" class="axis" marker-end="url(#ar3)"/><text x="215" y="68" class="xsub">correction loss</text>
+  <line x1="152" y1="130" x2="210" y2="160" class="axis" marker-end="url(#ar3)"/><text x="215" y="160" class="xsub" fill="var(--xassay)">+ w × imputation</text><text x="215" y="184" class="xsub" fill="var(--xassay)">or denoising loss</text>
+  <line x1="385" y1="20" x2="385" y2="215" class="sep"/>
+  <text x="400" y="28" class="ptitle">(b) a pivot through the base</text>
+  <rect x="410" y="110" width="100" height="44" rx="8" fill="#fff" stroke="var(--ow)"/><text x="460" y="138" text-anchor="middle" class="xlab">arm</text>
+  <rect x="580" y="50" width="100" height="44" rx="8" fill="#fff" stroke="var(--accent)" stroke-width="2"/><text x="630" y="78" text-anchor="middle" class="xlab">base</text>
+  <rect x="650" y="110" width="100" height="44" rx="8" fill="#fff" stroke="var(--ow)"/><text x="700" y="138" text-anchor="middle" class="xlab">arm′</text>
+  <line x1="512" y1="132" x2="646" y2="132" stroke="var(--alone)" stroke-width="3" marker-end="url(#ar3)"/><text x="580" y="176" text-anchor="middle" class="cap" fill="var(--alone)">direct</text>
+  <line x1="490" y1="108" x2="585" y2="92" stroke="var(--chain)" stroke-width="3" marker-end="url(#ar3)"/><line x1="660" y1="96" x2="688" y2="108" stroke="var(--chain)" stroke-width="3" marker-end="url(#ar3)"/>
+  <text x="520" y="200" class="cap" fill="var(--chain)">routed: two legs of one model</text>
+  <line x1="775" y1="20" x2="775" y2="215" class="sep"/>
+  <text x="790" y="28" class="ptitle">(c) a mappability input</text>
+  <rect x="800" y="60" width="200" height="34" rx="6" fill="#fff" stroke="var(--ow)"/><text x="900" y="83" text-anchor="middle" class="xsub">source counts, per bin</text>
+  <rect x="800" y="104" width="200" height="34" rx="6" fill="#fff" stroke="var(--map)" stroke-width="2"/><text x="900" y="127" text-anchor="middle" class="xsub" fill="var(--map)">mappability, per bin</text>
+  <line x1="1002" y1="99" x2="1050" y2="99" class="axis" marker-end="url(#ar3)"/>
+  <rect x="1055" y="72" width="95" height="54" rx="9" fill="var(--alone)"/><text x="1102" y="105" text-anchor="middle" style="font:600 17px var(--sans);fill:#fff">model</text>
+  <text x="800" y="170" class="cap">controls: the same track shifted by 5 Mb;</text><text x="800" y="192" class="cap">and one-hot DNA in its place</text>
+</svg>`);
+put('tblPre', `<table class="dtable xs"><thead><tr><th>experiment</th><th>arms (training runs)</th><th>pre-registered primary check</th><th>repairs after the smoke test (PI)</th><th>power</th></tr></thead><tbody>
+  <tr><td>(a) joint objective</td><td>correction alone, matched loss scale, cross-assay and denoising at weights 0.25, 1 and 4; three seeds each (${runs29})</td><td>at weight 1, never-trained CRPS moves beyond ${TWO} the seed range against correction alone</td><td>scrambled-covariate twins added for both objectives at weight 1</td><td class="num">${FN.power.h29}%</td></tr>
+  <tr><td>(b) pivot through the base</td><td>six seeds of correction alone, scored direct and routed; agreement-loss arm, six seeds; no-covariates floor (${runs30})</td><td>routed beats direct beyond ${TWO} the seed range in at least two thirds of never-trained cells; routed depth-law error ≤ 0.16</td><td>a consistency loss collapsed, so an agreement loss replaced it; the 16-draw mixture is scored as a moment-matched negative binomial</td><td class="num">${FN.power.h30}%</td></tr>
+  <tr><td>(c) mappability input</td><td>mappability, mappability shifted by 5 Mb, one-hot DNA; three seeds each (${runs31})</td><td>lowest-mappability-decile CRPS lower beyond ${TWO} the seed standard deviation on ≥ 5 of 7 tracks (read length 36) and ≥ 4 of 6 (mapping quality 0)</td><td>strata are genome-wide deciles of one-kilobase mappability; the top stratum is the top non-empty decile</td><td class="num">${FN.power.h31}%</td></tr>
+</tbody></table>`);
+
+/* ------------------------------------------------------------------ (m) joint objective */
+(function(){
+  const nv=k=>AT[k].never;
+  const rows=[['correction alone','alone@-1','alone'],['matched loss scale','matched@-1','matched'],['cross-assay, weight 1','xassay@1','xassay'],
+    ['denoising, weight 1','denoise@1','denoise'],['cross-assay, weight 4','xassay@4','xassay'],['scrambled twin, cross-assay','xassay_ids@1','ids'],['scrambled twin, denoising','denoise_ids@1','ids']]
+    .map(([lab,k,c])=>({lab,os:nv(k).os,se:nv(k).se,sr:nv(k).sr,col:C(c),faded:k==='xassay@4'}));
+  put('figMa', stackPanel({title:'(a) never-trained CRPS, by objective',W:700,Lg:270,rowH:46,xmax:1.1,ticks:[0,0.25,0.5,0.75,1],rows,xlab:'CRPS: oracle-scaled + scale error; whisker: seed range'}));
+  const K=k=>K29[k];
+  const br=[['cross-assay, weight 1','xassay|primary vs alone|never','xassay'],['denoising, weight 1','denoise|primary vs alone|never','denoise'],
+    ['matched loss scale','matched|reading: matched - alone|never','matched'],['cross-assay, weight 0.25','xassay|dose w0.25 vs alone|never','xassay'],
+    ['cross-assay, weight 4','xassay|dose w4 vs alone|never','xassay'],['denoising, weight 0.25','denoise|dose w0.25 vs alone|never','denoise'],['denoising, weight 4','denoise|dose w4 vs alone|never','denoise']]
+    .map(([lab,k,c],i)=>({lab,lo:-K(k).bar,hi:K(k).bar,dots:[{v:K(k).d,col:C(c),hollow:i>2,txt:sx(K(k).d)}]}));
+  put('figMb', bandPanel({title:'(b) change against correction alone',sub:`grey: ${TWO} the larger seed range; hollow: secondary dose readings`,rows:br,xmin:-0.16,xmax:0.16,ticks:[-0.15,-0.1,-0.05,0,0.05,0.1,0.15],tf:t=>sx(t,2),W:640,Lg:250,rowH:44,top:84,xlab:'never-trained CRPS, arm minus correction alone (lower is better)'}));
+  put('lgM', legend([[C('alone'),'correction alone'],[C('matched'),'matched loss scale'],[C('xassay'),'cross-assay imputation'],[C('denoise'),'masked-bin denoising'],[C('ids'),'scrambled-covariate twin'],['var(--se)','scale error']]));
+  const xa=K('xassay|primary vs alone|never'), dn=K('denoise|primary vs alone|never'), w4=K('xassay|dose w4 vs alone|never');
+  const anyPass=[xa,dn].some(x=>x.pass);
+  put('tMh', anyPass?'An imputation objective moves never-trained CRPS beyond the bar':`Neither objective moves never-trained CRPS beyond ${TWO} the seed range`);
+  put('tM1', `Never-trained CRPS: correction alone ${cr(nv('alone@-1'))}. Cross-assay changes it by ${sx(xa.d)} (shape ${sx(xa.dos)}, scale error ${sx(xa.dse)}), bar ${fx(xa.bar)}; denoising by ${sx(dn.d)}, bar ${fx(dn.bar)}. Neither is significant.`);
+  const t1=K('xassay|reading: ids - joint|never'), t2=K('denoise|reading: ids - joint|never'), n1=K('xassay|notwrecked ids - joint (trained)|trained'), n2_=K('denoise|notwrecked ids - joint (trained)|trained');
+  put('tM2', `The joint models use the covariates: their scrambled twins are worse on never-trained pairs by ${sx(t1.d)} and ${sx(t2.d)}. The pre-registered twin check on trained pairs (${sx(n1.d)}, ${sx(n2_.d)}) is a defect: it scores the twin on its own training labels.`);
+  put('tM3', `Dose reading: cross-assay at weight 4, ${cr(nv('xassay@4'))}, is ${sx(w4.d)} against a bar of ${fx(w4.bar)}: a near miss, mostly scale error (${sx(w4.dse)}). PI reading: ${rd(SG.f30)}; power about ${FN.power.h29}%.`);
+})();
+
+/* ------------------------------------------------------------------ (n) pivot through the base */
+(function(){
+  const CL=FN.cells30, W=640,Hh=470,L=80,R=24,top=84,pB=400, lx=v=>Math.log10(v), x0=lx(0.005), x1=lx(2);
+  const xx=v=>L+(lx(Math.max(0.005,Math.min(2,v)))-x0)/(x1-x0)*(W-L-R), yy=v=>top+(0.2-Math.max(-0.2,Math.min(0.2,v)))/0.4*(pB-top);
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="xMidYMid meet"><text x="10" y="30" class="ptitle">(a) every never-trained cell</text><text x="10" y="54" class="psub">above the diagonal: the route through the base wins beyond the bar</text>`;
+  [-0.2,-0.1,0,0.1,0.2].forEach(t=>{s+=`<line x1="${L}" y1="${yy(t)}" x2="${W-R}" y2="${yy(t)}" class="${t===0?'zero':'grid'}"/><text x="${L-8}" y="${yy(t)+5}" text-anchor="end" class="tick">${sx(t,1)}</text>`;});
+  [0.01,0.1,1].forEach(t=>{s+=`<text x="${xx(t)}" y="${pB+22}" text-anchor="middle" class="tick">${t}</text>`;});
+  let d=''; for(let k=0;k<=40;k++){const v=10**(x0+(lx(0.2)-x0)*k/40); d+=`${k?'L':'M'}${xx(v)},${yy(v)} `;} s+=`<path d="${d}" fill="none" stroke="var(--chain)" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+  CL.forEach(c=>{s+=`<circle cx="${xx(c.bar)}" cy="${yy(c.gain)}" r="${c.win?7:5}" fill="${c.win?'var(--chain)':'#fff'}" stroke="${c.win?'var(--chain)':(c.cross?'var(--ow)':'var(--alone)')}" stroke-width="1.8" opacity="${c.win?1:0.85}"/>`;});
+  s+=`<line x1="${L}" y1="${pB}" x2="${W-R}" y2="${pB}" class="axis"/><text x="${(L+W-R)/2}" y="${pB+50}" text-anchor="middle" class="cap">bar: ${TWO} the larger seed range (log scale)</text>`;
+  s+=`<text x="14" y="${(top+pB)/2}" transform="rotate(-90 14 ${(top+pB)/2})" text-anchor="middle" class="cap">CRPS, direct minus routed</text>`;
+  put('figNa', s+'</svg>');
+  const P=k=>FN.p30[k];
+  const rows=[['ceiling: leg two fed the real base','alone|ceiling','ceil'],['direct route','alone|direct','alone'],['routed, mean fed on','alone|chain','chain'],
+    ['routed, 16-draw mixture','alone|mix','mix'],['agreement loss, direct','consist|direct','agree'],['no-covariates twin (floor)','alone_nocov|direct','ids']]
+    .map(([lab,k,c])=>({lab,os:P(k).os,se:P(k).se,sr:P(k).sr,col:C(c),tag:k==='consist|direct'?'exploratory':''}));
+  put('figNb', stackPanel({title:'(b) pooled never-trained CRPS',W:700,Lg:290,rowH:50,xmax:0.9,ticks:[0,0.2,0.4,0.6,0.8],rows,xlab:'CRPS: oracle-scaled + scale error; whisker: seed range'}));
+  const cross=CL.filter(c=>c.cross), lose=CL.filter(c=>c.gain<-c.bar).length, mixw=CL.filter(c=>c.winmix).length;
+  put('tNh', `Routing a shared model through the base wins beyond the bar in ${w30} of ${n30} never-trained cells`);
+  put('tN1', `${w30} of ${n30} cells win beyond ${TWO} the seed range, where ${need30} were needed; cross-knob cells ${cross.filter(c=>c.win).length} of ${cross.length}; the mixture reading wins in ${mixw}. Routing is worse beyond the bar in ${lose} cells.`);
+  const dr=P('alone|direct'), ch=P('alone|chain'), g=dr.v-ch.v, bar=2*Math.max(dr.sr,ch.sr), sd=FN.seeds30, pos=sd.filter(x=>x>0).length;
+  const dlc=FN.dl['alone|chain|never'], dld=FN.dl['alone|direct|never'];
+  put('tN2', `Pooled over ${dr.n} seeds: direct ${cr(dr)}, routed ${cr(ch)}. Routed is lower in ${pos} of ${sd.length} seeds (${rngs(sd,3)}), but the gain ${sx(g)} is below the bar ${fx(bar)}: not significant. The routed depth law holds (${fx(dlc.v)}, seed range ${fx(dlc.sr)}; direct ${fx(dld.v)}). PI reading: ${rd(SG.f31)}.`);
+  const ag=FN.agree.map(num);
+  put('tN3', `Exploratory: the agreement-loss arm's direct route reads ${cr(P('consist|direct'))}, lower than correction alone's direct route by ${fx(-ag[0])} against a bar of ${fx(ag[1])}. It was not a planned test of the direct route.`);
+})();
+
+/* ------------------------------------------------------------------ (o) mappability input */
+(function(){
+  const D0=P31.dec0, KL=[['crop:36','read length 36'],['mapq:0','mapping quality 0']], AR=[['alone','correction alone','alone'],['map','mappability','map'],['mapshift','shifted by 5 Mb','shift'],['dna','one-hot DNA','dna']];
+  const rows=[]; KL.forEach(([k,kl])=>AR.forEach(([a,al,c])=>{const o=D0[k][a]; rows.push({lab:`${kl} · ${al}`,os:o.os,se:o.se,sr:o.sr,col:C(c)});}));
+  put('figOa', stackPanel({title:'(a) CRPS in the lowest-mappability decile',W:720,Lg:330,rowH:40,xmax:0.7,ticks:[0,0.2,0.4,0.6],rows,xlab:'CRPS: oracle-scaled + scale error; whisker: seed range'}));
+  const TG=P31.track['mapq:0'], tracks=TG.map.map(r=>r.t);
+  const br=tracks.map((t,i)=>({lab:D.track_assay[t],lo:0,hi:TG.map[i].bar,dots:[{v:TG.map[i].gain,col:C('map')},{v:TG.dna[i].gain,col:C('dna')},{v:TG.mapshift[i].gain,col:C('shift'),hollow:true}]}));
+  put('figOb', bandPanel({title:'(b) gain per track, mapping quality 0',sub:`grey: ${TWO} the seed standard deviation of correction alone`,rows:br,xmin:-0.02,xmax:0.08,ticks:[0,0.02,0.04,0.06,0.08],tf:t=>fx(t,2),W:640,Lg:250,rowH:46,top:84,xlab:'lowest-decile CRPS, correction alone minus arm'}));
+  put('lgO', legend([[C('alone'),'correction alone'],[C('map'),'mappability channel'],[C('shift'),'shifted by 5 Mb',true],[C('dna'),'one-hot DNA'],['var(--se)','scale error']]));
+  const ck=(arm,check,kl)=>P31.checks.find(x=>x.arm===arm&&x.check===check&&x.kl===kl);
+  const m36=ck('map','dec0 per-track gain > 2 SD','crop:36'), m0=ck('map','dec0 per-track gain > 2 SD','mapq:0');
+  put('tOh', m36.met&&m0.met?'A mappability channel lowers CRPS where mappability is lowest, on every track':'A mappability channel: the lowest-decile checks');
+  put('tO1', `Mapping quality 0: correction alone ${cr(D0['mapq:0'].alone)}, mappability ${cr(D0['mapq:0'].map)}. The gain clears the bar on ${m36.pass} of ${m36.n} tracks for read length 36 and ${m0.pass} of ${m0.n} for mapping quality 0 (${m36.need} and ${m0.need} needed).`);
+  const sn=ck('map','shiftnull','mapq:0'), lc=ck('map','localise','mapq:0'), nh=ck('map','no-harm dec0','depth');
+  put('tO2', `The shifted channel keeps little of the gain (${fx(sn.gain)} lower, bar ${fx(sn.bar)}), and the gain is local to the lowest decile (${fx(lc.gain)} over the top, bar ${fx(lc.bar)}). But the depth arm improved by ${fx(nh.gain,4)} (seed standard deviation ${fx(nh.bar,4)}), where no change was expected: a failed control. PI reading: ${rd(SG.f32)}.`);
+  const dm=ck('dna','dec0 per-track gain > 2 SD','mapq:0'), gw=P31.gw;
+  put('tO3', `One-hot DNA gives ${Math.round(100*dm.gain/m0.gain)}% of the gain (${fx(dm.gain)} against ${fx(m0.gain)}). Genome-wide never-trained CRPS is unchanged: ${cr(gw.map)} against ${cr(gw.alone)}.`);
+})();
 
 /* ------------------------------------------------------------------ discussion */
-const per=H.filter(x=>x.g==='per_track');
-put('tLim1', `${D.n_tracks} tracks: one DNase track and three tracks per histone class. Each run has three seeds, so each class value rests on one to three tracks.`);
-put('tLim4', n2.law_done===n2.assigned
-  ? `The arm-to-arm rule reads only the first arm; the second arm's CRPS is a reading, not a check (f, g). The extra seeds for the wider f are still queued.`
-  : `The arm-to-arm grid's second arm has ${n2.law_done} of ${n2.assigned} runs scored, so its two controls are not readable (f). The extra seeds for the wider f are still queued.`);
-put('tC1', `Keep the fixed depth offset. Depth acts the same along the genome (k), and maps through the full-depth base meet the law: ${LAW.via[1]} against ${LAW.via[4]} direct (e).`);
-put('tC2', `Add a position-aware input, such as sequence or mappability: mapping quality zero adds a feature gain of ${rngs(mapq0)} (k).`);
-put('tC3', `A level-dependent spread, such as the NB variance, describes the floor (j). Low-depth noise is larger than first measured: the shape floor is ${fx(FL.curve.shape_1k.narrow['3.75M'])} at 3.75M per half (narrow).`);
-put('tC4', H28.crps.all.Darm2&&H28.crps.all.Darm2.complete
-  ? `A direct g does not carry base-to-arm training to arm-to-arm pairs (a, e). Training on every arm-to-arm pair reaches the through-the-base CRPS, ${fx(H28.crps.all.Darm2.v)} against ${fx(H28.crps.all.Dviabase.v)} (g; read, not checked).`
-  : `A direct g does not carry base-to-arm training to arm-to-arm pairs (a, e). Add arm-to-arm pairs for the other covariates only if the second arm shows the need (f).`);
+(function(){
+  const m0=P31.checks.find(x=>x.arm==='map'&&x.kl==='mapq:0'&&x.check.startsWith('dec0')), nh=P31.checks.find(x=>x.arm==='map'&&x.check==='no-harm dec0'&&x.kl==='depth');
+  const CO=FN.cost, ag=FN.agree.map(num), w4=K29['xassay|dose w4 vs alone|never'];
+  put('tD1', `Keep depth a learned input, as a cheap probe: its law is known exactly. The no-covariates twins nearly meet it (${FN.twinlaw[0]}–${FN.twinlaw[1]}); the closed-form offset is parked for later (PI ruling).`);
+  put('tD2', `Add it from the first stage: it lowers lowest-decile CRPS on ${m0.pass} of ${m0.n} tracks for read length and mapping quality (o).`);
+  put('tD3', `For a shared model the route wins in ${w30} of ${n30} cells (n). The agreement loss stays an exploratory lead.`);
+  put('tD4', `Re-processing from raw reads costs a median ${CO.fastq[0]} h per product, and about ${CO.tb} TB of raw reads per seven-track build; deferred until its return is clear (PI ruling).`);
+  put('tLim1', `${D.n_tracks} tracks: one DNase track and three tracks per histone class. DNase has no read-length or mapping-quality arm, so (o) rests on ${m0.n} tracks.`);
+  put('tLim2', `The final experiments had about ${FN.power.h29}% (joint objective, mappability) and ${FN.power.h30}% (pivot) power under their combination rules, so their null results are weak.`);
+  put('tLim3', `The joint objective's twin check on trained pairs scores the twin on the labels it trained on, so it cannot show whether the joint loss wrecks the covariates (m).`);
+  put('tLim4', `The mappability arm improved the depth arm by ${fx(nh.gain,4)}, where no change was expected (seed standard deviation ${fx(nh.bar,4)}). This caps (o) at weak.`);
+  const S=a=>SAC[a], mn_=v=>Math.round(v);
+  const OPTS=[
+    ['Option A','Build the first mini-CANDI stage','Teaches whether depth as a probe and the mappability channel hold with several assays and an imputation objective.',
+      `Testbed scale: a mappability run trained in a mean ${mn_(S('map').train.mean)} min on one GPU slice and scored in ${mn_(S('map').score.mean)} min on ${S('map').score.cpus} CPUs.`],
+    ['Option B','Pre-register the agreement loss','Teaches whether its exploratory direct-route gain replicates (' + fx(-ag[0]) + ' against a bar of ' + fx(ag[1]) + ').',
+      `Six seeds: training ${mn_(S('consist').train.mean)} min each; scoring ${mn_(S('consist').score.mean)} min each (maximum ${mn_(S('consist').score.max)}) on ${S('consist').score.cpus} CPUs.`],
+    ['Option C','Re-test the joint objective at weight 4','Teaches whether its near miss (' + sx(w4.d) + ' against ' + fx(w4.bar) + ') is real, with more seeds for more power.',
+      `Per seed: training ${mn_(S('xassay').train.mean)} min; scoring ${mn_(S('xassay').score.mean)} min on ${S('xassay').score.cpus} CPUs.`],
+    ['Option D','Measure the run-type effect on more tracks','Teaches how large run type, the challenge\'s knob, is per assay.',
+      'CPU analysis, if single-end and paired-end products of one experiment exist; the candidate source is the challenge\'s blind tracks, which needs a PI ruling.'],
+    ['Option E','Build counterfactual pairs from raw reads','Teaches non-depth corrections beyond the seven tracks (deferred by the PI until its return is clear).',
+      `A median ${CO.fastq[0]} h per product (maximum ${CO.fastq[1]} h) and about ${CO.tb} TB of raw reads per seven-track build; knobs made from alignments take about ${CO.bam} h per product.`],
+  ];
+  put('tOpts', OPTS.map(([o,t,teach,cost])=>`<div class="card" style="--c:var(--ans)"><div class="rl">${o} · ${t}</div><p>${teach}</p><p class="cost">Cost: ${cost}</p></div>`).join(''));
+})();
 
 /* ------------------------------------------------------------------ navigation and notes */
 const slides=[...document.querySelectorAll('.slide')];

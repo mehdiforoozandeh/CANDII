@@ -20,7 +20,7 @@ A peak caller turns read counts into a significance score with a fixed recipe. C
 
 ## TL;DR
 
-CAC: from predicted counts to −log10 p. On the true counts, the caller's fragment-wide formula nearly matches the best learned map; formula plus a learned correction is best. Push-only h never blows up in the chain, but there every h trails the earlier direct p model on designs A, D and D2, and training h on f's predictions does not repair f.
+CAC: from predicted counts to −log10 p. On the true counts, the caller's fragment-wide formula nearly matches the best learned map; formula plus a learned correction is best. Push-only h never blows up in the chain, but there every h trails the earlier direct p model on designs A, D and D2, and training h on f's predictions does not repair f. PI ruling 2026-10-31: the redesigned model has no direct p-value head; p is derived from the predicted counts by the formula, and all remaining covariate-correction and mini-CANDI work is in count space only.
 
 ## Question
 
@@ -67,8 +67,8 @@ At 6 of 8 designs (A, C, D, A2, C2, D2), aggregated 2026-10-25; the PI stopped c
 - [Deck](presentations/t125-eta-h/index.html) — published https://claude.ai/artifact/AfLpe1acvSC9i43jg28AqS; vault copy [DECK.md](presentations/t125-eta-h/DECK.md)
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0 · 1 finding(s) on this question
+**1 children** · open 0, leaning 0, settled 0, parked 1 · 1 finding(s) on this question
 
-- `h25` [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *open*
+- `h25` [[h25_in_the_counts_log10_p_chain_most_of_the_|In the counts → −log10 p chain, most of the p error comes from f's predicted count distribution, not from the map h]] — *parked*
 - `f18` finding (strong) [[f18_clear_margins_over_seed_wobble_but_one_t|Clear margins over seed wobble, but one track and one f seed, and two of…]]
 <!-- crux:ledger:end -->

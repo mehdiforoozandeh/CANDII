@@ -35,7 +35,7 @@ The testbed ruled out model form only for correction trained alone; if joint tra
 _(optional: the pre-registered rules — endpoints, thresholds, scope — locked before any run)_
 
 <!-- crux:ledger:start -->
-**1 children** · open 1, leaning 0, settled 0, parked 0
+**1 children** · open 0, leaning 1, settled 0, parked 0
 
-- `h29` [[h29_adding_a_cross_assay_imputation_or_maske|Adding a cross-assay imputation or masked-bin denoising objective to one shared count-space correction model changes how well the correction transfers to never-trained arm-to-arm pairs, compared with the same model trained on correction alone]] — *open*
+- `h29` [[h29_adding_a_cross_assay_imputation_or_maske|Adding a cross-assay imputation or masked-bin denoising objective to one shared count-space correction model changes how well the correction transfers to never-trained arm-to-arm pairs, compared with the same model trained on correction alone]] — *leaning · weak*
 <!-- crux:ledger:end -->

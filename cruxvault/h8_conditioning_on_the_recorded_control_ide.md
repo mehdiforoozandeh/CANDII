@@ -11,9 +11,10 @@ replicates: "TODO(PI) — source→target pairs per arm x seeds, on the counterf
 verdict: 
 metric: 
 created: "2026-09-17T21:46:17"
-updated: "2026-09-17T21:47:48"
+updated: "2026-10-31T18:16:46"
 null_approved: "2026-09-17T21:47:48"
 null_hash: 8e4d67b544ab2035
+parked: true
 ---
 
 # h8 — Conditioning on the recorded control identity predicts a target track from a source track, beyond what a single value-axis map already does

@@ -55,6 +55,8 @@ Adding a cross-assay imputation or masked-bin denoising objective to one shared 
 - [ ] [hypothesis] `matchedarm` — the joint arm differs from correction alone with matched loss scale by more than 2x wobble. fails-if:: the null holds. discriminates:: true
 Runs: shared correction alone 3, matched-scale arm 3, 2 objectives x 3 weights x 3 seeds 18 = 24; per-track reference reused (fir:/project/def-maxwl/mforooz/t128p2/runs/D_<g>_counts_real_s{0,1,2}). Joint power ~41% under rule all.
 
+
+**Post-smoke amendments (PI rulings, 2026-10-31), made after the single-seed smoke test, before any full run.** (1) A scrambled-covariate twin (covariates shuffled at training time) is added for the cross-assay and denoising arms at weight 1, 3 seeds each, for `notwrecked`. (2) The matched-scale arm scales the correction loss by 1/L0 (initial mean loss, 8 batches); under Adam this mainly tests gradient clipping (clip 1.0), so `matchedarm` can rarely fail; accepted as built. (3) The drift reference is reported for both subgroups: old shared D cross 0.720, never 0.667; smoke on the stride-8 subset reproduced it (never 0.7159 vs 0.7156).
 ## Planned Intervention
 
 _(how this hypothesis will be tested)_

@@ -52,6 +52,8 @@ Chaining one shared count-space correction model through the base transfers to n
 - [ ] [hypothesis] `v2` — the consistency arm's chained CRPS stays within 2x spread of arm 1's chained CRPS. fails-if:: the direct route matches only because the chained route got worse.
 Runs: 3 extra shared correction-alone seeds (reusing h29's 3) + consistency arm 6 seeds. Joint power ~51%. Shared direct and chained share read noise between arm and arm', which favours direct, so a routed win is conservative.
 
+
+**Post-smoke amendments (PI rulings, 2026-10-31), made after the single-seed smoke test, before any full run.** (1) The pivot-consistency loss with a stop-gradient chained target collapsed (all means below the NB clamp, zero gradients); it is replaced by an agreement loss: squared error on unclamped log mean and log size between the direct and chained routes, gradient through both, weight 1. `v2` guards it. (2) A no-covariates twin of shared correction alone (3 seeds) is added as the floor. (3) The 16-draw mixture is scored as a moment-matched NB, an approximation of the mixture's CRPS. (4) The ceiling is the base→target map, joined to every pair.
 ## Planned Intervention
 
 _(how this hypothesis will be tested)_
