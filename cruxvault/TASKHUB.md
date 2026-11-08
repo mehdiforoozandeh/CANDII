@@ -222,3 +222,4 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t142` [implementation] rebuild the thinned floor, its 1 kb readings and the t141 depth null by whole-read thinning, and check against the real depth-arm halves — refs [[q10_how_much_does_resampling_alone_move_a_tr\|q10]], [[q11_where_along_the_genome_does_each_covaria\|q11]] — *done* → `results/t142/DIGEST.md`, `results/t142/t141_readthin/knob_classes.tsv`
 - `t144` [hpc-setup] size GPU jobs to measured use and prefer the cluster with fair-share headroom — *done* → `notes/gpu-job-sizing.md`
 - `t147` [visualization] replace the landing-page leaderboard with a three-layer EIC board from Max's exact reproduction — *done* → `results/t147/DELIVERABLE.md`
+- `t148` [visualization] variance decomposition of every EIC entry on all three truth layers, for the EIC board — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/55`
