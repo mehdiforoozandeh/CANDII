@@ -325,6 +325,29 @@ collides at every level. Full numbers, and what does and does not follow for `AG
 
 ---
 
+### 4.11 Make an experiment folder reproducible (the runall contract)
+
+`cruxvault/results/<task-id>/` is tracked only once it meets this contract. `results/t138/` is the
+worked example; copy its `runall.sh`.
+
+1. `bash runall.sh`, from any directory, rebuilds the folder. No arguments, no environment
+   variables. Interpreter paths, cluster paths and the code's git sha are constants at the top.
+2. Every step is guarded: if its output exists, it is skipped. A crashed run restarts at the first
+   missing output; a finished folder reruns as a check only.
+3. Every command that creates an output is in the script. Hand-written prose (`DIGEST.md`, the
+   `*_PATH.txt` provenance note) is not an output and the script never writes it.
+4. It writes only in its own folder and under `/project/def-maxwl/mforooz/<task-id>/` on the
+   cluster. Inputs another task owns are read, never rebuilt; if missing, the script says which
+   task to rerun. A step that must submit a job first builds the code kit from the recorded sha.
+5. Cluster calls use `ssh -o BatchMode=yes`; exit 69/255 stops with "run `hpc up <cluster>`".
+6. The last steps write `MANIFEST.tsv` (`path`, `bytes`, `sha256`, `where` = `git` or
+   `<cluster>:<abs path>`) when absent, then re-hash every row and exit 1 on a mismatch.
+7. Tracked files stay under 1 MB; anything bigger stays on the cluster as a manifest row.
+8. Frozen once a finding cites it: never edit a cited folder. A redo is a new crux task and folder.
+
+To convert a folder: write `runall.sh`, run it until `5 check` reports every row matching, add
+`!cruxvault/results/<task-id>/` to `.gitignore`, and run `pytest tests/test_results_folders.py`.
+
 ## 5. VALIDATION
 
 ### 5.1 The bit-exactness gate — every change clears it before the next one starts
