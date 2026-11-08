@@ -218,6 +218,39 @@ function renderBump() {
   applyFocus();
 }
 
+// The error decomposition of the selected layer: one stacked bar per board entry, in board order.
+const DECOMP_MAX = 2.0;
+function renderDecomp() {
+  const layer = state.data.layers.find((l) => l.id === state.layer);
+  document.getElementById("decomp-layer").textContent = LAYER_META[layer.id].title;
+  const parts = new Map(layer.decomp.map((d) => [d.name, d]));
+  const box = document.getElementById("decomp");
+  box.replaceChildren();
+  const pct = (x) => `${((Math.min(x, DECOMP_MAX) / DECOMP_MAX) * 100).toFixed(2)}%`;
+  for (const r of merged(layer)) {
+    const d = parts.get(r.name);
+    if (!d) continue;
+    const clip = d.mse > DECOMP_MAX;
+    const bar = el("div", { class: `dbar${clip ? " clip" : ""}`, style: `width:${pct(d.mse)}` },
+      ...[["lvl", d.level], ["shr", d.shared], ["spc", d.specific]].map(([k, v]) =>
+        el("i", { class: k, style: `width:${((v / d.mse) * 100).toFixed(2)}%` })));
+    const track = el("div", { class: "dtrack" }, bar, el("span", { class: "dref", style: `left:${pct(1)}` }));
+    const row = el("div", {
+      class: `drow ${r.kind}`, "data-name": r.name,
+      title: `${r.name}: calibration ${d.level.toFixed(3)} + shared ${d.shared.toFixed(3)} + ` +
+        `specific ${d.specific.toFixed(3)} = ${d.mse.toFixed(3)}` + (d.n_tracks < 51 ? ` (${d.n_tracks} tracks)` : ""),
+    }, el("span", { class: "dn" }, `${r.position} · ${r.name}`), track,
+      el("span", { class: "dv" }, `${d.mse.toFixed(2)}${clip ? "›" : ""}`));
+    row.addEventListener("mouseenter", () => setFocus(r.name));
+    row.addEventListener("mouseleave", () => setFocus(null));
+    box.append(row);
+  }
+  const ticks = el("div", { class: "ticks" },
+    ...[0, 0.5, 1, 1.5, 2].map((t) => el("span", { style: `left:${pct(t)}` }, t === 1 ? "1 = mean" : String(t))));
+  box.append(el("div", { class: "daxis" }, el("span", {}), ticks, el("span", {})));
+  applyFocus();
+}
+
 function setFocus(name) {
   state.focus = name;
   applyFocus();
@@ -227,7 +260,7 @@ function applyFocus() {
   const bump = document.getElementById("bump");
   bump.classList.toggle("focus", state.focus != null);
   for (const n of bump.querySelectorAll("[data-name]")) n.classList.toggle("on", n.dataset.name === state.focus);
-  for (const tr of document.querySelectorAll("#table tbody tr")) tr.classList.toggle("hl", tr.dataset.name === state.focus);
+  for (const tr of document.querySelectorAll("#table tbody tr, #decomp .drow")) tr.classList.toggle("hl", tr.dataset.name === state.focus);
 }
 
 function setLayer(id) {
@@ -236,6 +269,7 @@ function setLayer(id) {
   renderCards();
   renderTabs();
   renderTable();
+  renderDecomp();
 }
 
 function renderAll() {
@@ -243,6 +277,7 @@ function renderAll() {
   renderTabs();
   renderTable();
   renderBump();
+  renderDecomp();
 }
 
 async function main() {
