@@ -382,3 +382,16 @@ def test_nocov_twin_draws_random_covariates_and_predicts_with_one_theta(synth_ki
     cov = torch.from_numpy(np.stack([run.enc.encode_pair(*k) for k in keys]))
     with torch.no_grad():
         assert torch.allclose(t1, run.model.theta(cov).mean(0))
+
+
+def test_depth_baseline_fits_the_nb_size_it_was_drawn_from() -> None:
+    """t149: the depth-only rule's one NB size per pair is the ML size with the mean held fixed."""
+    from t146 import depth_baseline as dbl
+    rng = np.random.default_rng(0)
+    m = rng.gamma(2.0, 3.0, 200_000)
+    for n_true in (0.5, 4.0):
+        y = rng.negative_binomial(n_true, n_true / (n_true + m)).astype(np.float64)
+        assert abs(dbl.fit_size(m, y) / n_true - 1) < 0.05
+    x = np.array([0.0, 2.0, 10.0])
+    assert np.allclose(dbl.rule_mean("depth_only", x, 0.5), [dbl.br.PRED_FLOOR, 1.0, 5.0])
+    assert np.allclose(dbl.rule_mean("identity", x, 0.5), [dbl.br.PRED_FLOOR, 2.0, 10.0])
