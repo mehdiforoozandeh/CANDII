@@ -50,7 +50,7 @@ DECOMP_TRUTH = {"original": "pe", "qn": "pq", "corrected": "qn"}
 N_EXPERIMENTS = 51
 # Entries with fewer scored tracks than experiments: UIOWA submitted nothing for one experiment.
 SHORT_ENTRIES = {"UIOWA Michaelson Lab": 50}
-# summary.tsv is printed to 6 significant figures, so mse = level + shared + specific to ~1e-5.
+# The tables are printed to 6 significant figures, so every sum below holds to ~1e-5 of max(mse, 1).
 DECOMP_REL = 1e-4
 
 # CANDI arms on the board: (arm name in candi_placement.tsv, label on the page, shown by default)
@@ -135,9 +135,23 @@ def load_candi(root: Path) -> Dict[str, List[Dict[str, Any]]]:
     return out
 
 
-def load_decomp(root: Path, layer: str, names: Sequence[str]) -> List[Dict[str, Any]]:
-    """One row per board entry: MSE as a fraction of the truth's variance, split exactly into
-    level (calibration) + shared + specific (ranking error common to / particular to a track)."""
+BANDS = ("fine", "peak", "domain", "broad")   # Haar bands: <=200 bp, 0.4-3.2 kb, 6.4-51 kb, >=102 kb
+PARTS = ("shared", "specific")
+
+
+def _near(a: float, b: float, scale: float) -> bool:
+    return abs(a - b) <= DECOMP_REL * max(scale, 1.0)
+
+
+def load_decomp(root: Path, layer: str, names: Sequence[str]) -> Dict[str, Any]:
+    """The error budget of every board entry on one layer, from decomp/summary.tsv and
+    decomp/components.tsv (rows with assay == "all").
+
+    Unit: normalized MSE, the squared error in asinh units divided by the truth track's variance
+    (1.0 = predicting each track's own mean), averaged over the scored tracks. Per entry it splits
+    exactly into offset + scale + nonlinear (calibration) + shared and specific error in four Haar
+    bands; per band and part, the truth's variance V = explained + unexplained, and the error
+    E = unexplained + added. Returns {"truth": the truth's variance split, "entries": [...]}."""
     truth = DECOMP_TRUTH[layer]
     labels = {arm: label for arm, label, _ in ARMS}
     rows = [r for r in read_tsv(root / "decomp" / "summary.tsv")
@@ -147,18 +161,59 @@ def load_decomp(root: Path, layer: str, names: Sequence[str]) -> List[Dict[str, 
         raise GateError(f"decomp/summary.tsv ({truth}): entries do not match the board: "
                         f"missing {sorted(set(names) - set(by_name))}, "
                         f"extra {sorted(set(by_name) - set(names))}")
+    comps: Dict[str, Dict[tuple, Dict[str, float]]] = {}
+    for c in read_tsv(root / "decomp" / "components.tsv"):
+        if c["truth"] == truth and c["assay"] == "all":
+            comps.setdefault(labels.get(c["entry"], c["entry"]), {})[(c["part"], c["band"])] = {
+                k: float(c[k]) for k in ("V", "explained", "unexplained", "added", "E")}
+    truth_split = None
     out = []
     for name in names:
         r = by_name[name]
         n = int(r["n_tracks"])
         if n != SHORT_ENTRIES.get(r["entry"], N_EXPERIMENTS):
             raise GateError(f"decomp ({truth}) {name}: {n} tracks")
-        mse, level, shared, specific = (float(r[k]) for k in ("mse", "level", "shared", "specific"))
-        if abs(mse - level - shared - specific) > DECOMP_REL * mse:
+        f = {k: float(v) for k, v in r.items() if k not in ("truth", "entry", "assay", "n_tracks")}
+        mse = f["mse"]
+        if not _near(mse, f["level"] + f["shared"] + f["specific"], mse):
             raise GateError(f"decomp ({truth}) {name}: mse {mse} != level + shared + specific")
-        out.append({"name": name, "n_tracks": n, "mse": round(mse, 4), "level": round(level, 4),
-                    "shared": round(shared, 4), "specific": round(specific, 4)})
-    return out
+        if not _near(f["level"], f["offset"] + f["scale"] + f["nonlinear"], mse):
+            raise GateError(f"decomp ({truth}) {name}: level != offset + scale + nonlinear")
+        for part, pre in (("shared", "sh"), ("specific", "sp")):
+            if not _near(f[part], sum(f[f"{pre}_{b}"] for b in BANDS), mse):
+                raise GateError(f"decomp ({truth}) {name}: {part} != the sum of its bands")
+        cs = comps.get(name, {})
+        if sorted(cs) != sorted([(p, b) for p in PARTS for b in BANDS] + [("level", "all")]):
+            raise GateError(f"decomp/components.tsv ({truth}) {name}: missing components")
+        expl, unexpl, added = [], [], 0.0
+        for part, pre in (("shared", "sh"), ("specific", "sp")):
+            for b in BANDS:
+                c = cs[(part, b)]
+                if not (_near(c["V"], c["explained"] + c["unexplained"], mse)
+                        and _near(c["E"], c["unexplained"] + c["added"], mse)
+                        and _near(c["E"], f[f"{pre}_{b}"], mse)
+                        and _near(c["V"], f[f"truth_{pre}_{b}"], mse)):
+                    raise GateError(f"decomp ({truth}) {name}: {part} {b} does not add up")
+                expl.append(round(c["explained"], 4))
+                unexpl.append(round(c["unexplained"], 4))
+                added += c["added"]
+        if not _near(cs[("level", "all")]["E"], f["level"], mse):
+            raise GateError(f"decomp ({truth}) {name}: the level component != level")
+        tv = [f[f"truth_{pre}_{b}"] for pre in ("sh", "sp") for b in BANDS]
+        if n == N_EXPERIMENTS:   # the truth's split is the same for every entry with all tracks
+            if truth_split is None:
+                if abs(sum(tv) - 1.0) > 1e-3:
+                    raise GateError(f"decomp ({truth}): the truth's variance split sums to {sum(tv)}")
+                truth_split = tv
+            elif any(abs(a - b) > DECOMP_REL for a, b in zip(tv, truth_split)):
+                raise GateError(f"decomp ({truth}) {name}: the truth's variance split differs")
+        out.append({"name": name, "n_tracks": n, "mse": round(mse, 4), "level": round(f["level"], 4),
+                    "offset": round(f["offset"], 4), "scale": round(f["scale"], 4),
+                    "nonlinear": round(f["nonlinear"], 4),
+                    "shared": round(f["shared"], 4), "specific": round(f["specific"], 4),
+                    "bands": [round(f[f"{pre}_{b}"], 4) for pre in ("sh", "sp") for b in BANDS],
+                    "explained": expl, "unexplained": unexpl, "added": round(added, 4)})
+    return {"truth": [round(v, 4) for v in truth_split], "entries": out}
 
 
 def compile_board(root: Path) -> Dict[str, Any]:
@@ -167,10 +222,10 @@ def compile_board(root: Path) -> Dict[str, Any]:
     for layer, tsv, _ in LAYERS:
         published = load_layer(root, layer, tsv)
         default_arms = [c["name"] for c in candi[layer] if c["default"]]
+        dec = load_decomp(root, layer, [p["name"] for p in published] + default_arms)
         layers.append({"id": layer, "published": published, "candi": candi[layer],
-                       "decomp": load_decomp(root, layer,
-                                             [p["name"] for p in published] + default_arms)})
-    return {"schema": "eic-board/2", "layers": layers}
+                       "decomp": dec["entries"], "decomp_truth": dec["truth"]})
+    return {"schema": "eic-board/3", "layers": layers}
 
 
 def dump_json(obj: Any) -> str:

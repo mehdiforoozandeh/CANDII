@@ -218,36 +218,202 @@ function renderBump() {
   applyFocus();
 }
 
-// The error decomposition of the selected layer: one stacked bar per board entry, in board order.
-const DECOMP_MAX = 2.0;
+// The error budget of the selected layer, drawn as Max Libbrecht's sprint 06 report figures.
+// Components in eic.json order: shared fine, peak, domain, broad, then specific in the same bands.
+const BAND_LABELS = ["≤200 bp", "0.4–3.2 kb", "6.4–51 kb", "≥102 kb"];
+const CAL_COLORS = [["offset", "#E69F00"], ["scale", "#56B4E9"], ["nonlinear", "#009E73"]];
+const SHARED_COLORS = ["#f2d3e6", "#e2a6c9", "#cf7aab", "#b3568c"];
+const SPECIFIC_COLORS = ["#c3dbef", "#84b3da", "#3f86c0", "#0b5a99"];
+const EUE_COLORS = {
+  sharedDark: "#b3568c", sharedLight: "#ecc6dc", specificDark: "#0b5a99", specificLight: "#bcd6ec",
+  added: "#D55E00", calibration: "#E69F00",
+};
+const BUDGET_MAX = 1.6;  // bars past this are cut, with their length printed
+const EUE_RIGHT_MAX = 0.5;
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(parent, tag, attrs = {}, text = null) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text != null) n.textContent = text;
+  parent.append(n);
+  return n;
+}
+
+function decompRows(layer) {
+  const parts = new Map(layer.decomp.map((d) => [d.name, d]));
+  return merged(layer).filter((r) => parts.has(r.name)).map((r) => ({ r, d: parts.get(r.name) }));
+}
+
+function rowGroup(svg, r, y, h, width) {
+  const g = svgEl(svg, "g", { class: `drow ${r.kind}`, "data-name": r.name });
+  svgEl(g, "rect", { class: "rowbg", x: 0, y: y - 2, width, height: h + 4, rx: 4 });
+  g.addEventListener("mouseenter", () => setFocus(r.name));
+  g.addEventListener("mouseleave", () => setFocus(null));
+  return g;
+}
+
+// A white zigzag across a cut bar, as in Max's figures.
+function zigzag(g, x, y, h) {
+  const k = h / 4;
+  svgEl(g, "polygon", {
+    class: "cut",
+    points: `${x - 3},${y} ${x + 2},${y + k} ${x - 3},${y + 2 * k} ${x + 2},${y + 3 * k} ${x - 3},${y + h} ` +
+      `${x + 3},${y + h} ${x + 8},${y + 3 * k} ${x + 3},${y + 2 * k} ${x + 8},${y + k} ${x + 3},${y}`,
+  });
+}
+
+function legend(id, items, rows) {
+  const box = document.getElementById(id);
+  box.style.gridTemplateRows = `repeat(${rows}, auto)`;
+  box.style.gridAutoFlow = "column";
+  box.replaceChildren(...items.map((it) => it == null ? el("span", {})
+    : el("span", {}, el("i", { style: `background:${it[1]}` }), it[0])));
+}
+
+function renderBudget(layer, rows) {
+  const svg = document.getElementById("fig-budget");
+  svg.replaceChildren();
+  const W = 980, L = 262, R = 912, top = 34, rh = 22, bh = 15;
+  const x = (v) => L + (Math.min(v, BUDGET_MAX) / BUDGET_MAX) * (R - L);
+  svgEl(svg, "text", { class: "ft", x: L, y: 18 },
+    `Error budget on the ${LAYER_META[layer.id].title.toLowerCase()} layer (51 blind tracks)`);
+  const all = [{ truth: true, name: "(variance of the truth)" }, ...rows];
+  all.forEach((row, i) => {
+    const y = top + i * rh;
+    const segs = row.truth
+      ? [[0, "#000"], [0, "#000"], [0, "#000"], ...layer.decomp_truth.map((v, k) =>
+        [v, (k < 4 ? SHARED_COLORS : SPECIFIC_COLORS)[k % 4]])]
+      : [...CAL_COLORS.map(([k, c]) => [row.d[k], c]),
+        ...row.d.bands.map((v, k) => [v, (k < 4 ? SHARED_COLORS : SPECIFIC_COLORS)[k % 4]])];
+    const total = row.truth ? layer.decomp_truth.reduce((a, b) => a + b, 0) : row.d.mse;
+    const g = row.truth ? svgEl(svg, "g") : rowGroup(svg, row.r, y, bh, W);
+    const label = row.truth ? row.name : `${row.r.position} · ${row.r.name}`;
+    svgEl(g, "text", { class: `yl ${row.truth ? "truth" : row.r.kind}`, x: L - 8, y: y + bh - 3, "text-anchor": "end" },
+      label.length > 38 ? label.slice(0, 37) + "…" : label);
+    let acc = 0;
+    for (const [v, color] of segs) {
+      if (v <= 0 || acc >= BUDGET_MAX) { acc += Math.max(v, 0); continue; }
+      svgEl(g, "rect", { x: x(acc), y, width: Math.max(x(acc + v) - x(acc), 0), height: bh, fill: color });
+      acc += v;
+    }
+    const cut = total > BUDGET_MAX;
+    if (cut) zigzag(g, R - 14, y, bh);
+    svgEl(g, "text", { class: "val", x: x(total) + 6, y: y + bh - 3 }, total.toFixed(2));
+    const t = row.truth ? "" : `${row.r.name}: offset ${row.d.offset.toFixed(3)}, scale ${row.d.scale.toFixed(3)}, ` +
+      `nonlinear ${row.d.nonlinear.toFixed(3)}, shared ${row.d.shared.toFixed(3)}, specific ` +
+      `${row.d.specific.toFixed(3)}; normalized MSE ${row.d.mse.toFixed(3)}` +
+      (row.d.n_tracks < 51 ? ` (${row.d.n_tracks} tracks)` : "");
+    if (t) svgEl(g, "title", {}, t);
+  });
+  const yb = top + all.length * rh + 4;
+  svgEl(svg, "line", { class: "axis", x1: L, y1: top - 6, x2: L, y2: yb });
+  svgEl(svg, "line", { class: "axis", x1: L, y1: yb, x2: R, y2: yb });
+  svgEl(svg, "line", { class: "ref", x1: x(1), y1: top - 6, x2: x(1), y2: yb });
+  for (let t = 0; t <= BUDGET_MAX + 1e-9; t += 0.2) {
+    svgEl(svg, "line", { class: "axis", x1: x(t), y1: yb, x2: x(t), y2: yb + 4 });
+    svgEl(svg, "text", { class: "tick", x: x(t), y: yb + 17, "text-anchor": "middle" }, t.toFixed(1));
+  }
+  svgEl(svg, "text", { class: "xt", x: (L + R) / 2, y: yb + 38, "text-anchor": "middle" },
+    "normalized MSE (fraction of the truth's variance; mean over the 51 blind tracks)");
+  svg.setAttribute("viewBox", `0 0 ${W} ${yb + 48}`);
+  legend("legend-budget", [
+    ...CAL_COLORS, null,
+    ...BAND_LABELS.map((b, k) => [`shared ${b}`, SHARED_COLORS[k]]),
+    ...BAND_LABELS.map((b, k) => [`specific ${b}`, SPECIFIC_COLORS[k]]),
+  ], 4);
+}
+
+function renderEue(layer, rows) {
+  const svg = document.getElementById("fig-eue");
+  svg.replaceChildren();
+  const W = 980, L = 262, LR = 772, RL = 800, RR = 930, top = 112, rh = 22, bh = 15;
+  const x = (v) => L + v * (LR - L);
+  const xr = (v) => RL + (Math.min(v, EUE_RIGHT_MAX) / EUE_RIGHT_MAX) * (RR - RL);
+  const tv = layer.decomp_truth;
+  const edges = [0];
+  for (const v of tv) edges.push(edges[edges.length - 1] + v);
+  const scale = 1 / edges[8];   // the split sums to 1 up to rounding; draw it to span exactly 0..1
+  const ex = (k) => x(edges[k] * scale);
+  svgEl(svg, "text", { class: "ft", x: L, y: 18 },
+    `Explained and unexplained variance on the ${LAYER_META[layer.id].title.toLowerCase()} layer`);
+  // header: each component's band and share of the truth's variance
+  // labels anchored at each component's left edge, as in Max's figure; a label too close to the
+  // next one moves left so the slanted labels never overlap
+  const anchors = tv.map((_, k) => ex(k) + 4);
+  for (let k = 6; k >= 0; k--) anchors[k] = Math.min(anchors[k], anchors[k + 1] - 15);
+  tv.forEach((v, k) => {
+    const cx = anchors[k];
+    svgEl(svg, "path", { class: "axis", fill: "none", d: `M${ex(k)},${top - 4} V${top - 9} L${cx},${top - 13}` });
+    svgEl(svg, "text", { class: "hdr", x: cx, y: top - 15, transform: `rotate(-55 ${cx} ${top - 15})` },
+      `${BAND_LABELS[k % 4]} (${Math.round(v * scale * 100)}%)`);
+  });
+  rows.forEach(({ r, d }, i) => {
+    const y = top + i * rh;
+    const g = rowGroup(svg, r, y, bh, W);
+    const label = `${r.position} · ${r.name}`;
+    svgEl(g, "text", { class: `yl ${r.kind}`, x: L - 8, y: y + bh - 3, "text-anchor": "end" },
+      label.length > 38 ? label.slice(0, 37) + "…" : label);
+    tv.forEach((_, k) => {
+      const e = d.explained[k], u = d.unexplained[k];
+      const f = e + u > 0 ? e / (e + u) : 0;
+      const x0 = ex(k), x1 = ex(k + 1), xm = x0 + f * (x1 - x0);
+      const shared = k < 4;
+      svgEl(g, "rect", { x: x0, y, width: xm - x0, height: bh, fill: shared ? EUE_COLORS.sharedDark : EUE_COLORS.specificDark });
+      svgEl(g, "rect", { x: xm, y, width: x1 - xm, height: bh, fill: shared ? EUE_COLORS.sharedLight : EUE_COLORS.specificLight });
+    });
+    const tot = d.added + d.level;
+    svgEl(g, "rect", { x: xr(0), y, width: xr(d.added) - xr(0), height: bh, fill: EUE_COLORS.added });
+    if (d.added < EUE_RIGHT_MAX)
+      svgEl(g, "rect", { x: xr(d.added), y, width: xr(tot) - xr(d.added), height: bh, fill: EUE_COLORS.calibration });
+    if (tot > EUE_RIGHT_MAX) {
+      zigzag(g, RR - 12, y, bh);
+      svgEl(g, "text", { class: "val", x: RR + 5, y: y + bh - 3 }, tot.toFixed(2));
+    }
+    const ex8 = d.explained.reduce((a, b) => a + b, 0), un8 = d.unexplained.reduce((a, b) => a + b, 0);
+    svgEl(g, "title", {}, `${r.name}: explained ${ex8.toFixed(3)}, unexplained ${un8.toFixed(3)}, ` +
+      `added ${d.added.toFixed(3)}, calibration ${d.level.toFixed(3)}; normalized MSE ${d.mse.toFixed(3)}`);
+  });
+  const yb = top + rows.length * rh + 4;
+  for (let k = 1; k < 8; k++) if (k !== 4) svgEl(svg, "line", { class: "csep", x1: ex(k), y1: top - 2, x2: ex(k), y2: yb - 4 });
+  svgEl(svg, "line", { class: "sep", x1: ex(4), y1: top - 6, x2: ex(4), y2: yb });
+  // brackets under the two halves
+  const sh = edges[4] * scale;
+  [[0, 4, `shared parts (${Math.round(sh * 100)}%)`], [4, 8, `specific parts (${Math.round((1 - sh) * 100)}%)`]]
+    .forEach(([a, b, t]) => {
+      svgEl(svg, "path", { class: "axis", fill: "none", d: `M${ex(a) + 4},${yb + 2} v4 H${ex(b) - 4} v-4` });
+      svgEl(svg, "text", { class: "tick", x: (ex(a) + ex(b)) / 2, y: yb + 20, "text-anchor": "middle" }, t);
+    });
+  const ya = yb + 30;
+  svgEl(svg, "line", { class: "axis", x1: L, y1: top - 6, x2: L, y2: ya });
+  svgEl(svg, "line", { class: "axis", x1: L, y1: ya, x2: LR, y2: ya });
+  for (let t = 0; t <= 1 + 1e-9; t += 0.2) {
+    svgEl(svg, "line", { class: "axis", x1: x(t), y1: ya, x2: x(t), y2: ya + 4 });
+    svgEl(svg, "text", { class: "tick", x: x(t), y: ya + 17, "text-anchor": "middle" }, t.toFixed(1));
+  }
+  svgEl(svg, "text", { class: "xt", x: (L + LR) / 2, y: ya + 38, "text-anchor": "middle" },
+    "fraction of the truth's variance");
+  svgEl(svg, "line", { class: "axis", x1: RL, y1: ya, x2: RR, y2: ya });
+  for (const t of [0, 0.25, 0.5]) {
+    svgEl(svg, "line", { class: "axis", x1: xr(t), y1: ya, x2: xr(t), y2: ya + 4 });
+    svgEl(svg, "text", { class: "tick", x: xr(t), y: ya + 17, "text-anchor": "middle" }, String(t));
+  }
+  svgEl(svg, "text", { class: "xt", x: (RL + RR) / 2, y: ya + 38, "text-anchor": "middle" }, "added + calibration");
+  svgEl(svg, "text", { class: "xt", x: (RL + RR) / 2, y: ya + 53, "text-anchor": "middle" }, "error");
+  svg.setAttribute("viewBox", `0 0 ${W} ${ya + 62}`);
+  legend("legend-eue", [
+    ["explained (shared)", EUE_COLORS.sharedDark], ["explained (specific)", EUE_COLORS.specificDark],
+    ["unexplained (shared)", EUE_COLORS.sharedLight], ["unexplained (specific)", EUE_COLORS.specificLight],
+    ["added by the prediction", EUE_COLORS.added], ["calibration error", EUE_COLORS.calibration],
+  ], 2);
+}
+
 function renderDecomp() {
   const layer = state.data.layers.find((l) => l.id === state.layer);
   document.getElementById("decomp-layer").textContent = LAYER_META[layer.id].title;
-  const parts = new Map(layer.decomp.map((d) => [d.name, d]));
-  const box = document.getElementById("decomp");
-  box.replaceChildren();
-  const pct = (x) => `${((Math.min(x, DECOMP_MAX) / DECOMP_MAX) * 100).toFixed(2)}%`;
-  for (const r of merged(layer)) {
-    const d = parts.get(r.name);
-    if (!d) continue;
-    const clip = d.mse > DECOMP_MAX;
-    const bar = el("div", { class: `dbar${clip ? " clip" : ""}`, style: `width:${pct(d.mse)}` },
-      ...[["lvl", d.level], ["shr", d.shared], ["spc", d.specific]].map(([k, v]) =>
-        el("i", { class: k, style: `width:${((v / d.mse) * 100).toFixed(2)}%` })));
-    const track = el("div", { class: "dtrack" }, bar, el("span", { class: "dref", style: `left:${pct(1)}` }));
-    const row = el("div", {
-      class: `drow ${r.kind}`, "data-name": r.name,
-      title: `${r.name}: calibration ${d.level.toFixed(3)} + shared ${d.shared.toFixed(3)} + ` +
-        `specific ${d.specific.toFixed(3)} = ${d.mse.toFixed(3)}` + (d.n_tracks < 51 ? ` (${d.n_tracks} tracks)` : ""),
-    }, el("span", { class: "dn" }, `${r.position} · ${r.name}`), track,
-      el("span", { class: "dv" }, `${d.mse.toFixed(2)}${clip ? "›" : ""}`));
-    row.addEventListener("mouseenter", () => setFocus(r.name));
-    row.addEventListener("mouseleave", () => setFocus(null));
-    box.append(row);
-  }
-  const ticks = el("div", { class: "ticks" },
-    ...[0, 0.5, 1, 1.5, 2].map((t) => el("span", { style: `left:${pct(t)}` }, t === 1 ? "1 = mean" : String(t))));
-  box.append(el("div", { class: "daxis" }, el("span", {}), ticks, el("span", {})));
+  const rows = decompRows(layer);
+  renderBudget(layer, rows);
+  renderEue(layer, rows);
   applyFocus();
 }
 
@@ -260,7 +426,7 @@ function applyFocus() {
   const bump = document.getElementById("bump");
   bump.classList.toggle("focus", state.focus != null);
   for (const n of bump.querySelectorAll("[data-name]")) n.classList.toggle("on", n.dataset.name === state.focus);
-  for (const tr of document.querySelectorAll("#table tbody tr, #decomp .drow")) tr.classList.toggle("hl", tr.dataset.name === state.focus);
+  for (const tr of document.querySelectorAll("#table tbody tr, .fig .drow")) tr.classList.toggle("hl", tr.dataset.name === state.focus);
 }
 
 function setLayer(id) {
