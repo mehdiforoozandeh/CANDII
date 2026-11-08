@@ -1,5 +1,5 @@
 #!/bin/bash
-# t150: the depth-only baseline (counts x d'/d, one fitted NB size per pair) and the identity
+# t149: the depth-only baseline (counts x d'/d, one fitted NB size per pair) and the identity
 # reference, scored on the final CAC testbed's direct pairs exactly as score.sh scores a run
 # (tools/t146/depth_baseline.py). One CPU job, no array, no GPU.
 #
@@ -8,7 +8,7 @@
 #   -> $OUT/baselines/depth_only/scores.json, SCORE_DONE (exists: exit 0)
 # Paths as slurm/t146/score.sh. 32 cores x 4000 MB (Nibi/Fir CPU rule).
 #SBATCH --account=def-maxwl
-#SBATCH --job-name=t150_depth_baseline
+#SBATCH --job-name=t149_depth_baseline
 #SBATCH --exclude=c128,c166,c537,c371,c329
 #SBATCH --time=06:00:00
 #SBATCH --cpus-per-task=32
@@ -40,7 +40,7 @@ case "$(sha256sum "$BLACKLIST" | cut -d' ' -f1)" in
   "$BLACKLIST_SHA256_PREFIX"*) ;;
   *) echo "blacklist sha256 does not start $BLACKLIST_SHA256_PREFIX" >&2; exit 2 ;;
 esac
-echo "=== t150 depth baseline job $SLURM_JOB_ID host=$(hostname) $(date -u)"
+echo "=== t149 depth baseline job $SLURM_JOB_ID host=$(hostname) $(date -u)"
 set +u; module load python/3.10.13; set -u
 virtualenv --no-download "$SLURM_TMPDIR/venv"
 source "$SLURM_TMPDIR/venv/bin/activate"

@@ -385,7 +385,7 @@ def test_nocov_twin_draws_random_covariates_and_predicts_with_one_theta(synth_ki
 
 
 def test_depth_baseline_fits_the_nb_size_it_was_drawn_from() -> None:
-    """t150: the depth-only rule's one NB size per pair is the ML size with the mean held fixed."""
+    """t149: the depth-only rule's one NB size per pair is the ML size with the mean held fixed."""
     from t146 import depth_baseline as dbl
     rng = np.random.default_rng(0)
     m = rng.gamma(2.0, 3.0, 200_000)
