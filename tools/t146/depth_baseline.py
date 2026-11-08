@@ -51,7 +51,7 @@ from t146 import tasks as T  # noqa: E402
 from t146.features import Features  # noqa: E402
 
 RULES = ("depth_only", "identity")
-FIT_STRIDE = 10
+FIT_STRIDE = 100   # ~1.1 M bins per fit; 10 timed the smoke out (job 26494971)
 TRAIN_CHROMS = tuple(c for c in lp.MAIN_CHROMS
                      if c not in lp.SCORE_CHROMS + lp.VAL_CHROMS and c not in lp.DROP_CHROMS)
 
@@ -81,6 +81,7 @@ def score_job(job: dict) -> list[dict]:
     corpus, blacklist, feats, depth = (_CTX[k] for k in ("corpus", "blacklist", "feats", "depth"))
     p = job["pair"]
     src, tgt = p["source_pid"], p["target_pid"]
+    t0 = time.time()
     ratio = depth[tgt] / depth[src]
     # training-chromosome subsample for the size fit
     fx, fy = [], []
@@ -135,6 +136,7 @@ def score_job(job: dict) -> list[dict]:
             rec["depth_log2_ratio_true"] = math.log2(ratio)
             rec["depth_log2_scale_pred"] = math.log2(sm / sx) if sx > 0 and sm > 0 else None
         recs.append(rec)
+    print(f"pair {job['kind']} {src}->{tgt}: {time.time() - t0:.1f} s", flush=True)
     return recs
 
 

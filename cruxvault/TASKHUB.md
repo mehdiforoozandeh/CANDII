@@ -54,7 +54,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]]
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]]
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations
-- `t150` [implementation] score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison — refs [[q1_do_the_recorded_experimental_covariates_\|q1]]
 
 ## Blocked
 
@@ -121,7 +120,6 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t130` [implementation] score the one-warp check set (blind, onewarp, model, oracle) on the counterfactual depth and run-type pairs — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]] — *open*
 - `t140` [implementation] carry the pivot lesson into CANDI: the full-depth track as the base for depth; non-depth covariates by augmentation only if the arm-to-arm grid shows it is needed — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[q8_does_candi_s_training_which_never_pairs_\|q8]] — *blocked*
-- `t150` [implementation] score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *open*
 
 ### visualization
 
@@ -225,4 +223,5 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t147` [visualization] replace the landing-page leaderboard with a three-layer EIC board from Max's exact reproduction — *done* → `results/t147/DELIVERABLE.md`
 - `t148` [implementation] make each experiment folder rerun from one bash runall.sh (no args, skip-if-exists, frozen once cited); commit small results folders under a 1 MB cap; pilot on t138 — refs [[q10_how_much_does_resampling_alone_move_a_tr\|q10]] — *done* → `results/t138/runall.sh`
 - `t149` [visualization] variance decomposition of every EIC entry on all three truth layers, for the EIC board — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/55`
+- `t150` [implementation] score a depth-only baseline row (counts × d′/d, no network, no other covariate) beside the learned correction in the final CAC comparison — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *done* → `results/t150/REPORT.md`
 - `t151` [visualization] redraw the EIC board's error-decomposition panel as Max's error-budget figure, with the band split, explained/unexplained split and defined axes — *done* → `https://github.com/mehdiforoozandeh/CANDII/pull/59`
