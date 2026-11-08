@@ -105,13 +105,13 @@ a dropped node (`crux park h7`). Recording, settling and parking are yours; **me
 
 ## The vault
 
-`cruxvault/` is tracked. Two directories inside it are **not**, and must stay that way:
+`cruxvault/` is tracked, except `cruxvault/raw/` (332 MB of source PDFs; local, never committed).
 
-- `cruxvault/raw/` — 332 MB of source PDFs. Present locally, never committed.
-- `cruxvault/results/` — `results/<hid>/` holds the small evidence rsync'd down from Fir: the
-  report crux links from `## Artifacts`, its figures, the scored JSON, and a `FIR_PATH.txt`
-  naming the run. Checkpoints and logs stay on the cluster. **Not** a symlink — Fir is reached
-  over SSH and is not mounted here, so a link would have no local path to point at.
+- `cruxvault/results/<task-id>/` holds the small evidence pulled down from the cluster. A folder
+  is tracked once converted: `bash runall.sh` reruns it (no arguments, skip-if-exists),
+  `MANIFEST.tsv` hashes every output (big files stay on the cluster), no file is over 1 MB, and
+  `.gitignore` gets one `!` line. Once a finding cites it, it is frozen; a redo is a new task.
+  Unconverted folders stay untracked. The contract: `AGENTS.md` §4.11.
 
 Only the literature wiki was inherited from the old vault. No old hypothesis was migrated. Routine lint is `crux validate --check=tree,tasks`; the full wiki lint needs a local `raw/`.
 

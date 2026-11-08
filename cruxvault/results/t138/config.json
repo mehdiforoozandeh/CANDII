@@ -1,0 +1,78 @@
+{
+ "inputs": {
+  "bins1k_dir": "/project/def-maxwl/mforooz/t137/floor/bins1k",
+  "features": "/project/def-maxwl/mforooz/t138/out/features.npz",
+  "manifest": "/project/def-maxwl/mforooz/t112_cf/products/MANIFEST.tsv"
+ },
+ "features": [
+  "gc",
+  "map",
+  "rep",
+  "ctx"
+ ],
+ "blacklist": "/project/def-maxwl/mforooz/EIC_REPRO/002/scripts/hg38_blacklist_v2.bed",
+ "n_blacklisted_1k_bins": 195800,
+ "mappability_missing": false,
+ "n_products": 130,
+ "depths": {
+  "15": {
+   "halves": [
+    "a15",
+    "b15"
+   ],
+   "reads_per_half": 15000000
+  },
+  "375": {
+   "halves": [
+    "a375",
+    "b375"
+   ],
+   "reads_per_half": 3750000
+  }
+ },
+ "chroms": [
+  "chr1",
+  "chr10",
+  "chr11",
+  "chr12",
+  "chr13",
+  "chr14",
+  "chr15",
+  "chr16",
+  "chr17",
+  "chr18",
+  "chr19",
+  "chr2",
+  "chr20",
+  "chr21",
+  "chr22",
+  "chr3",
+  "chr4",
+  "chr5",
+  "chr6",
+  "chr7",
+  "chr8",
+  "chr9",
+  "chrX"
+ ],
+ "formulas": {
+  "d": "|log2((a + 0.5) / (b + 0.5))| per 1 kb bin; bins with a + b == 0 dropped",
+  "blacklist": "with --blacklist: a 1 kb bin is dropped if any of its 40 x 25 bp sub-bins overlaps the BED by >= 1 bp (knob_effects.bad_bins); none dropped without it",
+  "level": "log2(a + b + 1)",
+  "d_hat": "mean of d in 40 quantile bins of level (unique edges), assigned per bin as a step function (binned conditional mean)",
+  "r": "d - d_hat",
+  "R2_level": "1 - var(d - d_hat) / var(d), all kept bins",
+  "R2_level_ols": "OLS R^2 of d on [1, d_hat] on the subsample rows with finite features",
+  "R2_level_feat": "OLS R^2 of d on [1, d_hat, features, ctx==1, ctx==2] on the same rows",
+  "delta_R2": "R2_level_feat - R2_level_ols (both OLS on the same rows)",
+  "delta_R2_shuffle": "the same with feature + ctx rows permuted jointly (seed 0)",
+  "deciles": "rank deciles over kept bins, ties averaged, NaN excluded",
+  "enrichment": "share of the top-1 % r bins in the class / the class's share of kept bins"
+ },
+ "subsample": 500000,
+ "seed": 0,
+ "top_fraction": 0.01,
+ "shuffle_pass_fraction": 0.9,
+ "git_sha": "6743ab64644aaf16e5c1c222b8396bf7726bb233",
+ "note": "exploratory readings; no verdicts"
+}

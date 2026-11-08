@@ -32,11 +32,14 @@ slurm/logs/
 **/.obsidian/workspace-mobile.json
 **/.obsidian/cache
 
-# The crux vault is tracked — except these two, which are why the old repo became unmanageable.
-# `raw/` is 332 MB of source PDFs; it lives on the laptop that reads them and is rebuildable
-# from the tracked `cruxvault/wiki/.sources.tsv`. `results/<hid>/` is the small evidence rsync'd
-# down from Fir — the report, its figures, the scored JSON — and it is untracked because the old
-# repo's equivalent grew to 132 MB. Note `.sources.tsv` sits under `wiki/`, not `raw/`, so
-# neither rule touches it; that is deliberate and is what keeps `raw/` reconstructible.
+# The crux vault is tracked — except `raw/`, 332 MB of source PDFs. It lives on the laptop that
+# reads them and is rebuildable from the tracked `cruxvault/wiki/.sources.tsv` (under `wiki/`,
+# not `raw/`, so the rule does not touch it; that is what keeps `raw/` reconstructible).
 cruxvault/raw/
-cruxvault/results/
+# `results/<task-id>/` is the small evidence pulled down from the cluster. Every folder is
+# ignored until it is converted to the runall contract (AGENTS.md §4.11): `bash runall.sh`
+# rebuilds it, `MANIFEST.tsv` hashes every output, and no tracked file is over 1 MB
+# (tests/test_results_folders.py). The old repo's untracked equivalent grew to 132 MB; the cap
+# is what stops that here. Converting a folder = one `!` line below.
+cruxvault/results/*
+!cruxvault/results/t138/
