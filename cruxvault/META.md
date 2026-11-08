@@ -6,7 +6,7 @@ Root: [[candii]]
 
 ## Question tree
 
-- ◐ `q1` [Q] [[q1_do_the_recorded_experimental_covariates_|**Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?**]] — *leaning* · weak
+- ◐ `q1` [Q] [[q1_do_the_recorded_experimental_covariates_|**Do the recorded experimental covariates carry enough information to map one measurement of a track onto another measurement of the same underlying material?**]] — *leaning* · moderate
   - ◐ `h1` [H] [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *leaning* · moderate · supports
   - ◐ `h2` [H] [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *leaning* · weak · supports
   - ◐ `h15` [H] [[h15_one_transformation_conditioned_on_the_so|A generator conditioned on the source and target covariates produces the transformation that maps a track onto its counterfactual arms, in both count and −log10 p space, beyond the same model trained with scrambled covariates]] — *leaning* · weak · mixed
@@ -53,5 +53,5 @@ Root: [[candii]]
 
 - **Questions** (12): open 0 · leaning 7 · settled 5 · parked 0
 - **Hypotheses** (30): open 6 · leaning 12 · settled 6 · parked 6
-- **Confidence**: weak 12 · moderate 7 · strong 11
-- **Findings**: 32
+- **Confidence**: weak 11 · moderate 8 · strong 11
+- **Findings**: 33

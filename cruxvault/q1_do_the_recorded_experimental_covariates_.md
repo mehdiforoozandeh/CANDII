@@ -64,7 +64,7 @@ Exploratory readings (PI ruling), not judged. Bars are 2 × the 3-seed wobble.
 - The depth and run-type claims were never run in their own design.
 
 <!-- crux:ledger:start -->
-**13 children** · open 0, leaning 9, settled 4, parked 0 · 1 finding(s) on this question
+**13 children** · open 0, leaning 9, settled 4, parked 0 · 2 finding(s) on this question
 
 - `h1` [[h1_conditioning_on_the_recorded_sequencing_|Conditioning on the recorded sequencing depth predicts a target track from a source track, beyond what a single value-axis map already does]] — *leaning · moderate*
 - `h2` [[h2_conditioning_on_the_recorded_run_type_pr|Conditioning on the recorded run type predicts a target track from a source track, beyond what a single value-axis map already does]] — *leaning · weak*
@@ -80,4 +80,5 @@ Exploratory readings (PI ruling), not judged. Bars are 2 × the 3-seed wobble.
 - `q10` _(Q)_ [[q10_how_much_does_resampling_alone_move_a_tr|How much does resampling alone move a track's shape and magnitude, where in the genome is that noise concentrated, and how does it shrink with depth?]] — *settled · strong*
 - `q12` _(Q)_ [[q12_when_covariate_correction_is_trained_joi|When covariate correction is trained jointly with imputation of masked assays and reconstruction, does the combined objective change how well the correction transfers to covariate combinations never seen in training, compared with training it alone?]] — *leaning · weak*
 - `f9` finding (weak) [[f9_exploratory_readings_the_pi_has_not_judg|Exploratory readings the PI has not judged, and the depth and run-type tests…]]
+- `f33` finding (moderate) [[f33_margins_are_11_66x_the_seed_sd_on_every_|Margins are 11-66x the seed SD on every pair kind, but the gap is…]]
 <!-- crux:ledger:end -->
