@@ -11,14 +11,28 @@ number (1 to 6, mapped through `RUNGS`) or the module name itself, so a new modu
 `rungs/` is buildable at once as `{"rung": "<name>", ...}`. `available()` lists every module in
 `rungs/` that defines `Model`.
 
+Wrappers (plan pinned interface E). `build_model(config)` builds the model class with `two_step`
+and `control_head` removed from the config, then applies `minicandi.control_head.wrap(model,
+config)` when `config["control_head"]` is set and not `"channel"`, then
+`minicandi.two_step.wrap(model, config)` when `config["two_step"]` is true (lazy imports, this
+order). A rung's own `Model(config)` still raises NotApplicable for `two_step`.
+
+`config["model_file"]` (a path relative to the repository root, or absolute; default absent) makes
+`build_model` load `class Model` from that file with importlib in place of the rung module named
+by `config["rung"]` (the mix-and-match hybrids and the evolved candidates use it). The file is
+executed once per resolved path and process, as module `minicandi_model_file.<stem>_<hash>`.
+
 `load_run(run_dir)` is the only loader the scorer (E6) and the guardrail (E4) use. It reads
 `<run_dir>/ckpt.pt` (the pinned dict, `contract.check_ckpt`), rebuilds the model from the saved
 config with the RNG forked (so loading never moves the caller's RNG), loads the state dict and
-returns `(model, config)` with the model in eval mode on `map_location`.
+returns `(model, config)` with the model in eval mode on `map_location`. The saved config holds
+the wrapper keys and `model_file`, so `load_run` rebuilds the same wrapped model.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -34,6 +48,10 @@ RUNGS = {1: "pointwise", 2: "conv_ae", 3: "conv_attn_ae", 4: "unet", 5: "axial",
 RUNGS_DIR = Path(__file__).resolve().parent / "rungs"
 PACKAGE = "minicandi.rungs"
 CKPT_NAME = "ckpt.pt"
+REPO = _TOOLS.parent
+#: config keys that select a wrapper; the inner model is built without them
+WRAPPER_KEYS = ("two_step", "control_head")
+_MODEL_FILES: dict = {}
 
 
 def module_name(rung) -> str:
@@ -72,14 +90,58 @@ def available() -> list[str]:
     return out
 
 
-def build_model(config: dict) -> C.MiniCandi:
-    """Build the rung that `config["rung"]` names, from `config`. Seed the RNG before the call
-    (AGENTS.md invariant 10); this function draws nothing itself."""
+def model_file_module(model_file):
+    """Import the file `model_file` (relative to the repository root, or absolute) once and return
+    it; it must define `class Model`."""
+    path = Path(model_file)
+    if not path.is_absolute():
+        path = REPO / path
+    path = path.resolve()
+    if not path.is_file():
+        raise ModuleNotFoundError(f"model_file {model_file!r}: no file {path}")
+    key = str(path)
+    if key not in _MODEL_FILES:
+        tag = hashlib.sha256(key.encode()).hexdigest()[:12]
+        name = f"minicandi_model_file.{path.stem}_{tag}"
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        try:
+            spec.loader.exec_module(mod)
+        except BaseException:
+            sys.modules.pop(name, None)
+            raise
+        _MODEL_FILES[key] = mod
+    mod = _MODEL_FILES[key]
+    if not isinstance(getattr(mod, "Model", None), type):
+        raise TypeError(f"model_file {path} defines no class Model")
+    return mod
+
+
+def model_class(config: dict) -> type:
+    """`class Model` of `config["model_file"]` when set, else of the rung module."""
+    if config.get("model_file"):
+        return model_file_module(config["model_file"]).Model
     if "rung" not in config:
         raise KeyError("config has no 'rung'")
-    model = rung_module(config["rung"]).Model(dict(config))
+    return rung_module(config["rung"]).Model
+
+
+def build_model(config: dict) -> C.MiniCandi:
+    """Build the model that `config` names, then its wrappers (module docstring). Seed the RNG
+    before the call (AGENTS.md invariant 10); this function draws nothing itself."""
+    if "rung" not in config and not config.get("model_file"):
+        raise KeyError("config has no 'rung'")
+    inner_cfg = {k: v for k, v in config.items() if k not in WRAPPER_KEYS}
+    model = model_class(config)(inner_cfg)
     if not isinstance(model, C.MiniCandi):
         raise TypeError(f"{type(model).__name__} is not a contract.MiniCandi")
+    if config.get("control_head") not in (None, "channel"):
+        from minicandi import control_head as CH
+        model = CH.wrap(model, dict(config))
+    if config.get("two_step"):
+        from minicandi import two_step as TS
+        model = TS.wrap(model, dict(config))
     return model
 
 
@@ -100,5 +162,5 @@ def load_run(run_dir, map_location="cpu") -> tuple[C.MiniCandi, dict]:
     return model, config
 
 
-__all__ = ["CKPT_NAME", "RUNGS", "RUNGS_DIR", "available", "build_model", "load_run",
-           "module_name", "rung_module"]
+__all__ = ["CKPT_NAME", "REPO", "RUNGS", "RUNGS_DIR", "WRAPPER_KEYS", "available", "build_model",
+           "load_run", "model_class", "model_file_module", "module_name", "rung_module"]
