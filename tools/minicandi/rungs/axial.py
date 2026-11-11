@@ -41,8 +41,20 @@ module is built, so every arm lands within the 10 % band of interface C.
 
 Config keys read: context_bins, covariate_injection (concat|film|tokens), mask_mode (drop|token),
 dna (own|off|shuffled), count_transform, qc_on_input, param_budget, axis, scramble_covariates and
-scramble_all (`model_covariates`, the rule shared by all six rungs). `average_input` is not built in
-this rung, and `two_step` in none: the constructor raises NotApplicable for them.
+scramble_all (`model_covariates`, the rule shared by all six rungs). `two_step` is built in no rung:
+the constructor raises NotApplicable for it.
+
+average_input: log1p of the batch's `avg` (the per-position average of other cells; it holds no
+hidden-bin content) is lifted per patch by Linear(P, d) and added to every query row, so it reaches
+the tracks that have no input row. The lift is built before the FFN width is sized, so the arm stays
+within the parameter budget.
+
+Component arm keys (pinned interface E, chunk A3) reach every component through
+`component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
+`model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower of the DNA row and
+of the per-bin DNA skip reads `batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
+`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+parameter and output for output (tests/test_minicandi_rung_arms.py).
 """
 from __future__ import annotations
 
@@ -60,7 +72,7 @@ if str(_TOOLS) not in sys.path:
 
 from minicandi.components import (ConvBlock, CountTransform, CovariateInjector,  # noqa: E402
                                   DnaTower, MaskHandler, NBHead, NotApplicable, _check,
-                                  sinusoidal_positions)
+                                  component_kwargs, sinusoidal_positions)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
@@ -153,11 +165,12 @@ class Model(MiniCandi):
         cfg = dict(config or {})
         self.config = cfg
         check_rung(cfg)
-        if cfg.get("average_input"):
-            raise NotApplicable("rung 5 does not build the average_input channel")
+        self.average_input = bool(cfg.get("average_input"))
         self.scramble = scramble_mode(cfg)
+        kw = component_kwargs(cfg)
+        self.cov_dropout = kw["covariate_dropout"]
         self.inj_mode = _check(cfg.get("covariate_injection", "tokens"),
-                               ("concat", "film", "tokens"), "covariate_injection")
+                               ("concat", "film", "tokens", "adaln_zero"), "covariate_injection")
         self.mask_mode = _check(cfg.get("mask_mode", "drop"), ("token", "drop"), "mask_mode")
         self.axis = _check(cfg.get("axis", "both"), AXES, "axis")
         self.dna_mode = cfg.get("dna", "own")
@@ -169,10 +182,10 @@ class Model(MiniCandi):
         k_in = k_input(cfg)
 
         # inputs
-        self.transform = CountTransform(cfg.get("count_transform", "offset"))
+        self.transform = CountTransform(cfg.get("count_transform", "offset"), **kw["transform"])
         self.mask = MaskHandler(self.mask_mode, 2)
         self.patch_in = nn.Linear(2 * PATCH, d)
-        self.dna = DnaTower(self.dna_mode, D_DNA)
+        self.dna = DnaTower(self.dna_mode, D_DNA, **kw["dna"])
         if self.dna_mode != "off":
             self.patch_dna = nn.Linear(D_DNA * PATCH, d)
             self.dna_skip = nn.Linear(D_DNA, D_DEC)
@@ -184,10 +197,12 @@ class Model(MiniCandi):
         self.register_buffer("pos", sinusoidal_positions(self.n_patch, d), persistent=False)
 
         # covariates: C on input rows, C' on query rows
-        self.cov_in = CovariateInjector(self.inj_mode, d, k_in)
-        self.cov_out = CovariateInjector(self.inj_mode, d, K_META)
+        self.cov_in = CovariateInjector(self.inj_mode, d, k_in, **kw["injector"])
+        self.cov_out = CovariateInjector(self.inj_mode, d, K_META, **kw["injector"])
         if self.inj_mode == "tokens":
             self.dna_cov_token = nn.Parameter(torch.randn(d) * 0.02)
+        if self.average_input:              # the query rows' lift of log1p(avg), per patch
+            self.avg_patch = nn.Linear(PATCH, d)
 
         # attention stack
         self.layers = nn.ModuleList()
@@ -204,7 +219,7 @@ class Model(MiniCandi):
         self.dec_norm = nn.LayerNorm(d)
         self.unpatch = nn.Linear(d, PATCH * D_DEC)
         self.refine = ConvBlock(D_DEC, D_DEC, kernel=5)
-        self.head = NBHead(D_DEC, self.transform)
+        self.head = NBHead(D_DEC, self.transform, **kw["head"])
 
         # FFN width from the parameter budget: every FFN adds d_ff (2d + 1) + 3d parameters
         budget = float(cfg.get("param_budget", 1.0e6))
@@ -235,11 +250,16 @@ class Model(MiniCandi):
         else:
             h_in = torch.where(avail[:, :, None, None], h_in, torch.zeros_like(h_in))
 
-        dna = self.dna(batch["x_dna"])                                             # [B, L, D_DNA]
+        dna = self.dna(batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"])
         h_dna = (self.row_dna + self.pos).expand(B, 1, N, d)
         if self.dna_mode != "off":
             h_dna = h_dna + self.patch_dna(dna.reshape(B, N, PATCH * D_DNA))[:, None]
         h_out = (self.row_out[:, None] + self.pos).expand(B, A, N, d)
+        if self.average_input:
+            if "avg" not in batch:
+                raise ValueError("average_input is set but the batch has no `avg`")
+            av = torch.log1p(batch["avg"].float().clamp_min(0.0))                  # [B, L, A]
+            h_out = h_out + self.avg_patch(av.view(B, N, PATCH, A).permute(0, 3, 1, 2))
 
         if self.inj_mode == "tokens":
             t_in = self.cov_in.tokens(c_in)[:, :, None]                            # [B, A, 1, d]
@@ -265,7 +285,8 @@ class Model(MiniCandi):
         return x, allow, tie, dna
 
     def forward(self, batch: dict) -> dict:
-        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
+                                                         self.cov_dropout)
         x, allow, tie, dna = self._rows(batch, c_in, c_out, c_in_t)
         tied = tie if self.axis == "tied_position" else None
         for blk in self.layers:

@@ -40,6 +40,13 @@ d_model, n_heads, n_latents, n_self_layers, patch_bins, d_bin, d_dna, d_bin_out,
 Scrambled covariates: `model_covariates`, the rule shared by all six rungs.
 `average_input` adds one always-present token per (track, patch) from log1p of the batch's `avg`
 rate. `two_step = true` raises NotApplicable, as in every rung.
+
+Component arm keys (pinned interface E, chunk A3) reach every component through
+`component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
+`model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower reads
+`batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
+`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+parameter and output for output (tests/test_minicandi_rung_arms.py).
 """
 from __future__ import annotations
 
@@ -56,7 +63,8 @@ if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
 from minicandi.components import (CovariateInjector, CountTransform, DnaTower,  # noqa: E402
-                                  MaskHandler, NBHead, NotApplicable, sinusoidal_positions)
+                                  MaskHandler, NBHead, NotApplicable, component_kwargs,
+                                  sinusoidal_positions)
 from minicandi.contract import A, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
@@ -162,16 +170,18 @@ class Model(MiniCandi):
         self.scramble = scramble_mode(cfg)
         self.average_input = bool(cfg["average_input"])
         d_bin, d_dna, d_out = int(cfg["d_bin"]), int(cfg["d_dna"]), int(cfg["d_bin_out"])
+        kw = component_kwargs(cfg)
+        self.cov_dropout = kw["covariate_dropout"]
 
         # inputs
-        self.transform = CountTransform(cfg["count_transform"])
+        self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
         self.bin_in = nn.Linear(1, d_bin - 1)                  # + 1 visible-flag channel
         self.mask = MaskHandler(cfg["mask_mode"], d_bin - 1)
         self.patch_in = nn.Linear(P * d_bin, d)
         self.in_track = nn.Parameter(torch.randn(A, d) * 0.02)
-        self.cin = CovariateInjector(self.injection, d, k_input(cfg))
+        self.cin = CovariateInjector(self.injection, d, k_input(cfg), **kw["injector"])
         self.dna_mode = cfg["dna"]
-        self.dna = DnaTower(self.dna_mode, d_dna)
+        self.dna = DnaTower(self.dna_mode, d_dna, **kw["dna"])
         if self.dna_mode != "off":
             self.dna_patch = nn.Linear(P * d_dna, d)
             self.dna_type = nn.Parameter(torch.randn(d) * 0.02)
@@ -189,10 +199,10 @@ class Model(MiniCandi):
 
         # decoder
         self.out_track = nn.Parameter(torch.randn(A, d) * 0.02)
-        self.cout = CovariateInjector(self.injection, d, k_input(None))
+        self.cout = CovariateInjector(self.injection, d, k_input(None), **kw["injector"])
         self.decode = Block(d, n_heads, mlp, cross=True)
         self.unpatch = nn.Linear(d, P * d_out)
-        self.head = NBHead(d_out, self.transform)
+        self.head = NBHead(d_out, self.transform, **kw["head"])
 
     # -----------------------------------------------------------------------------------------
 
@@ -204,7 +214,8 @@ class Model(MiniCandi):
             raise ValueError(f"L = {L} is not a multiple of patch_bins = {P}")
         NP = L // P
         dev = x_counts.device
-        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
+                                                         self.cov_dropout)
         pos = sinusoidal_positions(NP, d, device=dev)                       # [NP, d]
 
         # (track, patch) count tokens
@@ -228,7 +239,8 @@ class Model(MiniCandi):
             valids.append(x_avail if self.mask.mode == "drop"
                           else torch.ones_like(x_avail))
         if self.dna_mode != "off":
-            g = self.dna(batch["x_dna"]).reshape(B, NP, -1)                  # [B, NP, P*d_dna]
+            x_dna = batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"]
+            g = self.dna(x_dna).reshape(B, NP, -1)                  # [B, NP, P*d_dna]
             parts.append(self.dna_patch(g) + self.dna_type + pos)
             valids.append(torch.ones(B, NP, dtype=torch.bool, device=dev))
         if self.average_input:

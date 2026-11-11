@@ -25,6 +25,13 @@ weights them by exactly 0. The window-level transforms (local_ratio, quantile) t
 
 Scrambled covariates (`scramble_covariates`, `scramble_all`): `model_covariates`, the rule shared
 by all six rungs. `two_step = true` (decision D15) raises NotApplicable, as in every rung.
+
+Component arm keys (pinned interface E, chunk A3) reach every component through
+`component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
+`model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower reads
+`batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
+`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+parameter and output for output (tests/test_minicandi_rung_arms.py).
 """
 from __future__ import annotations
 
@@ -41,7 +48,7 @@ if str(_TOOLS) not in sys.path:
 
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import (CountTransform, CovariateInjector, DnaTower,  # noqa: E402
-                                  MaskHandler, NBHead, NotApplicable)
+                                  MaskHandler, NBHead, NotApplicable, component_kwargs)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 1
@@ -99,27 +106,30 @@ class Model(C.MiniCandi):
         self.mask_mode = cfg.get("mask_mode", "drop")
         self.average_input = bool(cfg.get("average_input"))
         k_in = C.k_input(cfg)
+        kw = component_kwargs(cfg)
+        self.cov_dropout = kw["covariate_dropout"]
 
-        self.transform = CountTransform(cfg.get("count_transform", "offset"))
+        self.transform = CountTransform(cfg.get("count_transform", "offset"), **kw["transform"])
         self.in_proj = nn.Linear(1, d)
         self.in_track = nn.Parameter(torch.zeros(C.A, d))
         nn.init.normal_(self.in_track, std=0.02)
-        self.in_cov = CovariateInjector(self.injection, d, k_in)
+        self.in_cov = CovariateInjector(self.injection, d, k_in, **kw["injector"])
         self.phi = _MLP(d, d, d)
         self.mask = MaskHandler(self.mask_mode, d)
-        self.dna = DnaTower(cfg.get("dna", "own"), D_DNA)
+        self.dna = DnaTower(cfg.get("dna", "own"), D_DNA, **kw["dna"])
         self.trunk = nn.Sequential(nn.Linear(d + 1 + D_DNA, d), nn.GELU(), _MLP(d, d, d))
         self.out_track = nn.Parameter(torch.zeros(C.A, d))
         nn.init.normal_(self.out_track, std=0.02)
-        self.out_cov = CovariateInjector(self.injection, d, C.K_META)
+        self.out_cov = CovariateInjector(self.injection, d, C.K_META, **kw["injector"])
         self.psi = _MLP(d, d, d)
-        self.head = NBHead(d, self.transform)
+        self.head = NBHead(d, self.transform, **kw["head"])
         if self.average_input:                    # additive, default off: constructed last
             self.avg_proj = nn.Linear(1, d)
 
     def forward(self, batch: dict) -> dict:
         x_avail, x_bin_mask = batch["x_avail"], batch["x_bin_mask"]
-        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
+                                                         self.cov_dropout)
         vis = MaskHandler.visible(x_avail, x_bin_mask)                     # [B, L, A]
         x = self.transform(batch["x_counts"], c_in_t[..., C.LOG2_DEPTH_COL], vis)
         h = self.in_proj(x.unsqueeze(-1)) + self.in_track                  # [B, L, A, d]
@@ -137,7 +147,8 @@ class Model(C.MiniCandi):
             total = total + (tok * tw[..., None]).sum(1)[:, None, :]
             count = count + tw.sum(1)[:, None]
         pooled = total / count.clamp_min(1.0)[..., None]
-        z = torch.cat([pooled, torch.log1p(count)[..., None], self.dna(batch["x_dna"])], -1)
+        dna = self.dna(batch["x_dna_emb" if self.dna.mode == "precomputed" else "x_dna"])
+        z = torch.cat([pooled, torch.log1p(count)[..., None], dna], -1)
         z = self.trunk(z)                                                  # [B, L, d]
         g = z[:, :, None, :] + self.out_track                              # [B, L, A, d]
         if self.average_input and "avg" in batch:

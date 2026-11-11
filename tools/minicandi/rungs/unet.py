@@ -34,6 +34,13 @@ Not applicable (`NotApplicable`): `skip_source = dna` with `dna = off` (no DNA s
 `skip_source = both` with `dna = off` keeps only the count skips; that is the `dna_off` arm of the
 base.
 
+Component arm keys (pinned interface E, chunk A3) reach every component through
+`component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
+`model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower reads
+`batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
+`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+parameter and output for output (tests/test_minicandi_rung_arms.py). `dna = precomputed` feeds the DNA skips too.
+
 A window whose length is not a multiple of 2**n_levels is zero-padded at its right end inside the
 network (features already masked) and the output is cropped back to L.
 """
@@ -54,7 +61,7 @@ for _p in (_TOOLS / "t118", _TOOLS):
 from ladder.model import G  # noqa: E402
 from minicandi.components import (ConvBlock, CountTransform, CovariateInjector,  # noqa: E402
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
-                                  Upsample, sinusoidal_positions)
+                                  Upsample, component_kwargs, sinusoidal_positions)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
@@ -145,6 +152,8 @@ class Model(MiniCandi):
         self.average_input = bool(cfg["average_input"])
         self.scramble = scramble_mode(cfg)
         self.k_in = k_input(cfg)
+        kw = component_kwargs(cfg)
+        self.cov_dropout = kw["covariate_dropout"]
         self.skip_counts = self.skip_source in ("counts", "both")
         self.skip_dna = self.skip_source in ("dna", "both") and self.dna_mode != "off"
         chans = tuple(width * m for m in LEVEL_MULT[:N_LEVELS + 1])
@@ -153,21 +162,21 @@ class Model(MiniCandi):
         d_model = chans[-1]
 
         # per-track input path
-        self.transform = CountTransform(cfg["count_transform"])
+        self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
         self.track_in = nn.Sequential(nn.Linear(1, D_TRACK), nn.GELU(),
                                       nn.Linear(D_TRACK, D_TRACK))
         self.track_emb_in = nn.Parameter(torch.randn(A, D_TRACK) * 0.02)
         if self.average_input:
             self.avg_in = nn.Linear(1, D_TRACK)
         self.in_inj = CovariateInjector(self.injection, d_model if tokens else D_TRACK,
-                                        self.k_in, D_COV)
+                                        self.k_in, D_COV, **kw["injector"])
         self.mask = MaskHandler(cfg["mask_mode"], D_TRACK)
 
         # towers
         self.stem = nn.Conv1d(A * (D_TRACK + 1), chans[0], 1)
         self.count_tower = _Tower(chans)
         if self.dna_mode != "off":
-            self.dna = DnaTower(self.dna_mode, chans[0])
+            self.dna = DnaTower(self.dna_mode, chans[0], **kw["dna"])
             self.dna_tower = _Tower(chans)
             self.fuse = nn.Conv1d(2 * d_model, d_model, 1)
         else:
@@ -180,7 +189,7 @@ class Model(MiniCandi):
 
         # decoder with skips steered by the output covariates
         self.out_inj = CovariateInjector(self.injection, d_model if tokens else D_HEAD, K_META,
-                                         D_COV)
+                                         D_COV, **kw["injector"])
         if tokens:
             self.tok_to_cov = nn.Linear(d_model, D_COV)
             self.tok_to_head = nn.Linear(d_model, D_HEAD)
@@ -199,13 +208,14 @@ class Model(MiniCandi):
         if self.skip_counts:
             self.head_skip = nn.Linear(D_HEAD + D_TRACK + 1, D_HEAD)
         self.head_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_HEAD, D_HEAD), nn.GELU())
-        self.nb = NBHead(D_HEAD, self.transform)
+        self.nb = NBHead(D_HEAD, self.transform, **kw["head"])
 
     # ------------------------------------------------------------------ forward
     def forward(self, batch: dict) -> dict:
         x_counts, x_avail = batch["x_counts"], batch["x_avail"].bool()
         x_bin_mask = batch["x_bin_mask"].bool()
-        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
+                                                         self.cov_dropout)
         c_in, c_out = c_in.float(), c_out.float()
         y_avail = batch["y_avail"].bool()
         B, L, _ = x_counts.shape
@@ -230,7 +240,8 @@ class Model(MiniCandi):
         c_skips, bottom = self.count_tower(self.stem(fused))
         d_skips = None
         if self.dna_mode != "off":
-            dna = F.pad(self.dna(batch["x_dna"]).transpose(1, 2), (0, Lp - L))
+            x_dna = batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"]
+            dna = F.pad(self.dna(x_dna).transpose(1, 2), (0, Lp - L))
             d_skips, d_bottom = self.dna_tower(dna)
             bottom = self.fuse(torch.cat([bottom, d_bottom], dim=1))
 

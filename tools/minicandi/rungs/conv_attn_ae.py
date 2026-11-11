@@ -33,6 +33,13 @@ average_input, scramble_covariates, scramble_all, two_step, context_bins, param_
 `control_input`, `predict_control`, `base_depth` act in the dataset; the model needs no change for
 them. Scrambled covariates: `model_covariates`, the rule shared by all six rungs. `two_step = true`
 raises NotApplicable, as in every rung.
+
+Component arm keys (pinned interface E, chunk A3) reach every component through
+`component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
+`model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower reads
+`batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
+`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+parameter and output for output (tests/test_minicandi_rung_arms.py).
 """
 from __future__ import annotations
 
@@ -114,20 +121,24 @@ class Model(MiniCandi):
         self.injection = cfg["covariate_injection"]
         self.average_input = bool(cfg.get("average_input"))
         self.scramble = scramble_mode(cfg)
+        kw = M.component_kwargs(cfg)
+        self.cov_dropout = kw["covariate_dropout"]
 
-        self.transform = M.CountTransform(cfg["count_transform"])
+        self.transform = M.CountTransform(cfg["count_transform"], **kw["transform"])
         self.lift = nn.Linear(1, D_TRACK)
         self.mask = M.MaskHandler(cfg["mask_mode"], D_TRACK)
         if self.injection == "tokens":
-            self.cov_in = M.CovariateInjector("tokens", W, self.k_in, D_COV)
-            self.cov_out = M.CovariateInjector("tokens", W, K_META, D_COV)
+            self.cov_in = M.CovariateInjector("tokens", W, self.k_in, D_COV, **kw["injector"])
+            self.cov_out = M.CovariateInjector("tokens", W, K_META, D_COV, **kw["injector"])
             self.tok_read = nn.Linear(W, D_OUT)
         else:
-            self.cov_in = M.CovariateInjector(self.injection, D_TRACK, self.k_in, D_COV)
-            self.cov_out = M.CovariateInjector(self.injection, D_OUT, K_META, D_COV)
+            self.cov_in = M.CovariateInjector(self.injection, D_TRACK, self.k_in, D_COV,
+                                              **kw["injector"])
+            self.cov_out = M.CovariateInjector(self.injection, D_OUT, K_META, D_COV,
+                                               **kw["injector"])
         if self.average_input:
             self.avg_lift = nn.Linear(1, D_TRACK)
-        self.dna = M.DnaTower(cfg["dna"], D_DNA)
+        self.dna = M.DnaTower(cfg["dna"], D_DNA, **kw["dna"])
         d_fuse = A * D_TRACK + (D_DNA if cfg["dna"] != "off" else 0)
         self.fuse = nn.Linear(d_fuse, W)
 
@@ -142,13 +153,14 @@ class Model(MiniCandi):
         self.readout = nn.Linear(W, A * D_OUT)
         self.track_emb = nn.Parameter(torch.zeros(A, D_OUT))
         nn.init.normal_(self.track_emb, std=0.02)
-        self.head = M.NBHead(D_OUT, self.transform)
+        self.head = M.NBHead(D_OUT, self.transform, **kw["head"])
 
     # -------------------------------------------------------------------------------- forward
 
     def forward(self, batch: dict) -> dict:
         x_counts, x_avail, x_bin_mask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
-        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
+                                                         self.cov_dropout)
         B, L, Ac = x_counts.shape
         vis = M.MaskHandler.visible(x_avail, x_bin_mask)
         x = self.transform(x_counts, c_in_t[..., LOG2_DEPTH_COL], vis)
@@ -159,7 +171,8 @@ class Model(MiniCandi):
             h = h + self.avg_lift(torch.log1p(batch["avg"].float().clamp_min(0.0))[..., None])
         feats = [h.reshape(B, L, Ac * D_TRACK)]
         if self.dna.mode != "off":
-            feats.append(self.dna(batch["x_dna"]))
+            feats.append(self.dna(batch["x_dna_emb" if self.dna.mode == "precomputed"
+                                        else "x_dna"]))
         z = self.fuse(torch.cat(feats, dim=-1)).transpose(1, 2)            # [B, W, L]
 
         for blk, dn in zip(self.enc, self.down):

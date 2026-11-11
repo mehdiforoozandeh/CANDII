@@ -192,7 +192,7 @@ def test_dna_off_has_no_tower():
     assert sum(p.numel() for p in m.dna.parameters()) == 0
 
 
-@pytest.mark.parametrize("over", [{"average_input": True}, {"two_step": True}])
+@pytest.mark.parametrize("over", [{"two_step": True}])
 def test_not_applicable(over):
     with pytest.raises(NotApplicable):
         axial.Model(cfg(**over))

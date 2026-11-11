@@ -30,6 +30,13 @@ NotApplicable, as in every rung.
 
 Scrambled covariates: `model_covariates`, the rule shared by all six rungs.
 
+Component arm keys (pinned interface E, chunk A3) reach every component through
+`component_kwargs(cfg)`: `covariate_injection = adaln_zero`, `covariate_dropout` (passed to
+`model_covariates`), `covariate_embedding`, `dna = precomputed` (the DnaTower reads
+`batch["x_dna_emb"]`; needs `dna_embedding_dim`), `offset_eps`, `count_transform = soft_clip` and
+`head = nb_shared_size`. With every key at its default the model is today's, parameter for
+parameter and output for output (tests/test_minicandi_rung_arms.py).
+
 Guardrail part 1 holds by construction: the only reads of `x_counts` go through the
 count transform, whose window statistics use visible bins only, and the MaskHandler replaces every
 hidden or missing position before any cross-bin or cross-track mixing.
@@ -53,7 +60,7 @@ if str(_TOOLS) not in sys.path:
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import (ConvBlock, CountTransform, CovariateInjector,  # noqa: E402
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
-                                  Upsample)
+                                  Upsample, component_kwargs)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 2
@@ -120,16 +127,18 @@ class Model(C.MiniCandi):
         self.scramble = scramble_mode(cfg)
         self.use_avg = bool(cfg["average_input"])
         k_in = C.k_input(cfg)
+        kw = component_kwargs(cfg)
+        self.cov_dropout = kw["covariate_dropout"]
 
-        self.transform = CountTransform(cfg["count_transform"])
+        self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
         # per-track lift: Linear(1, d_t) with its own weight and bias per track
         self.lift_w = nn.Parameter(torch.randn(A, D_TRACK) * 0.5)
         self.lift_b = nn.Parameter(torch.zeros(A, D_TRACK))
         if self.use_avg:
             self.avg_w = nn.Parameter(torch.randn(A, D_TRACK) * 0.5)
         self.mask = MaskHandler(mask_mode, D_TRACK)
-        self.inj_in = CovariateInjector(inj, D_TRACK, k_in, D_COV)
-        self.dna = DnaTower(cfg["dna"], D_DNA)
+        self.inj_in = CovariateInjector(inj, D_TRACK, k_in, D_COV, **kw["injector"])
+        self.dna = DnaTower(cfg["dna"], D_DNA, **kw["dna"])
 
         widths = _level_widths(W)
         c_stem = A * D_TRACK + (A if mask_mode == "drop" else 0) \
@@ -153,9 +162,9 @@ class Model(C.MiniCandi):
 
         self.out_proj = nn.Linear(widths[0], A * D_OUT)
         self.out_track = nn.Parameter(torch.randn(A, D_OUT) * 0.02)
-        self.inj_out = CovariateInjector(inj, D_OUT, C.K_META, D_COV)
+        self.inj_out = CovariateInjector(inj, D_OUT, C.K_META, D_COV, **kw["injector"])
         self.out_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_OUT, D_OUT), nn.GELU())
-        self.head = NBHead(D_OUT, self.transform)
+        self.head = NBHead(D_OUT, self.transform, **kw["head"])
 
     # ------------------------------------------------------------------ forward
 
@@ -163,7 +172,8 @@ class Model(C.MiniCandi):
         x_counts, x_avail, bmask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         B, L, A = x_counts.shape
         vis = MaskHandler.visible(x_avail, bmask)                         # [B, L, A]
-        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
+                                                         self.cov_dropout)
         x = self.transform(x_counts, c_in_t[..., C.LOG2_DEPTH_COL], vis)
         h = x[..., None] * self.lift_w + self.lift_b                     # [B, L, A, d_t]
         h, vis = self.mask(h, x_avail, bmask)
@@ -178,7 +188,8 @@ class Model(C.MiniCandi):
         if self.mask_mode == "drop":
             feats.append(vis.to(h.dtype))
         if self.dna.mode != "off":
-            feats.append(self.dna(batch["x_dna"]).to(h.dtype))
+            dna_key = "x_dna_emb" if self.dna.mode == "precomputed" else "x_dna"
+            feats.append(self.dna(batch[dna_key]).to(h.dtype))
         z = torch.cat(feats, dim=-1).transpose(1, 2)                       # [B, C, L]
 
         f = 2 ** N_LEVELS
