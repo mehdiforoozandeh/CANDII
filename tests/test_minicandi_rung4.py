@@ -137,6 +137,22 @@ def test_wiring_check_has_power_against_an_unmasked_count_skip(batch):
     assert not C.wiring_check(m, batch)["pass"]
 
 
+@pytest.mark.parametrize("mask_mode", ("token", "drop"))
+def test_wiring_check_fails_with_the_mask_bypassed(batch, mask_mode, monkeypatch):
+    """Planted negative control: with every bin and track called visible, hidden and missing
+    counts reach the perturbed model and the check must fail (so the passes above are real)."""
+    m = _jitter(_model(mask_mode=mask_mode)).eval()
+    assert C.wiring_check(m, batch)["pass"]
+    monkeypatch.setattr(MaskHandler, "visible", staticmethod(lambda a, mk: torch.ones_like(mk)))
+    assert not C.wiring_check(m, batch)["pass"]
+    assert not copy_leak(m, [batch])["part1_wiring_pass"]
+
+
+def test_two_step_is_not_applicable():
+    with pytest.raises(NotApplicable, match="later ablation on the winning design"):
+        unet.Model(_cfg(two_step=True))
+
+
 def test_skip_dna_with_dna_off_is_not_applicable():
     with pytest.raises(NotApplicable):
         unet.Model(_cfg(skip_source="dna", dna="off"))
@@ -218,6 +234,6 @@ def test_context_not_a_multiple_of_the_stride_works(batch, Lx):
 
 
 def test_explicit_width_and_registry_free_build():
-    m = unet.build(_cfg(width=8))
+    m = unet.Model(_cfg(width=8))
     assert m.width == 8 and isinstance(m, C.MiniCandi)
     assert unet.fit_width(_cfg()) == _model().width

@@ -21,16 +21,14 @@ Data flow, shapes for B windows, L bins, A = 36 tracks:
 
 Config keys read here: `covariate_injection` (concat | film; `tokens` raises NotApplicable:
 no attention reads tokens), `mask_mode` (token | drop), `dna` (own | off | shuffled),
-`count_transform`, `scramble_covariates`, `qc_on_input` (K of c_in), `average_input` (needs the
-batch key `avg`), `param_budget` (the conv width W is chosen so that the parameter count is the
-closest to it; default 1.0e6). Keys the dataset or the train loop handle (`context_bins`,
-`control_input`, `predict_control`, `two_step`, `base_depth`, `windows_seen`, `lr`,
-`batch_size`, `simpler_than_base`) do not change the network.
+`count_transform`, `scramble_covariates`, `scramble_all`, `qc_on_input` (K of c_in),
+`average_input` (needs the batch key `avg`), `param_budget` (the conv width W is chosen so that the
+parameter count is the closest to it; default 1.0e6). Keys the dataset or the train loop handle
+(`context_bins`, `control_input`, `predict_control`, `base_depth`, `windows_seen`, `lr`,
+`batch_size`, `simpler_than_base`) do not change the network. `two_step = true` raises
+NotApplicable, as in every rung.
 
-`scramble_covariates` permutes the covariate rows fed to the two covariate embeddings across the
-windows of the batch (`covariates.scramble_covariates`; seeded in eval mode, fresh per call in
-training). The count transform keeps each track's own log2 depth on both sides, so the scrambled
-control removes what the network learns from C and C', not the size-factor normalisation.
+Scrambled covariates: `model_covariates`, the rule shared by all six rungs.
 
 Guardrail part 1 holds by construction: the only reads of `x_counts` go through the
 count transform, whose window statistics use visible bins only, and the MaskHandler replaces every
@@ -56,13 +54,13 @@ from minicandi import contract as C  # noqa: E402
 from minicandi.components import (ConvBlock, CountTransform, CovariateInjector,  # noqa: E402
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
                                   Upsample)
-from minicandi.covariates import scramble_covariates  # noqa: E402
+from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 2
 NAME = "conv_ae"
 DEFAULTS = {"covariate_injection": "film", "mask_mode": "token", "dna": "own",
-            "count_transform": "offset", "scramble_covariates": False, "qc_on_input": False,
-            "average_input": False, "param_budget": 1.0e6}
+            "count_transform": "offset", "qc_on_input": False, "average_input": False,
+            "param_budget": 1.0e6}
 D_TRACK = 16          # per-track input features d_t
 D_OUT = 16            # per-track output features d_o
 D_DNA = 32            # DNA tower output channels
@@ -71,7 +69,24 @@ N_LEVELS = 4          # downsampling steps of 2: the latent is at L / 16
 KERNEL = 5
 WIDTH_STEP = 4        # W and every level width are multiples of 4
 WIDTH_RANGE = (16, 1024)
-SCRAMBLE_SEED = 0
+
+
+# ---------------------------------------------------------------------------------------------
+# Rule shared by all six rungs, kept identical in each module (tests/test_minicandi_all_rungs.py
+# proves it); the scramble rule is `covariates.model_covariates`. Registration: the registry imports
+# this module by name and builds `Model(config)`.
+# ---------------------------------------------------------------------------------------------
+TWO_STEP_MESSAGE = ("two_step (D15) is not built in any rung: two-step correction is a later "
+                    "ablation on the winning design")
+
+
+def check_rung(cfg: dict) -> None:
+    """Refuse a config that names another rung (`rung` may be the number or the module name)."""
+    r = cfg.get("rung", RUNG)
+    if r not in (RUNG, str(RUNG), NAME):
+        raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
+    if cfg.get("two_step"):
+        raise NotApplicable(TWO_STEP_MESSAGE)
 
 
 def _level_widths(W: int) -> list[int]:
@@ -86,8 +101,7 @@ class Model(C.MiniCandi):
     def __init__(self, config: dict | None = None, width: int | None = None):
         super().__init__()
         cfg = {**DEFAULTS, **(config or {})}
-        if cfg.get("rung", RUNG) != RUNG:
-            raise ValueError(f"conv_ae is rung {RUNG}; config has rung {cfg['rung']}")
+        check_rung(cfg)
         if cfg["covariate_injection"] == "tokens":
             raise NotApplicable("rung 2 (conv autoencoder) has no attention to read covariate "
                                 "tokens; covariate_injection = tokens does not apply")
@@ -103,7 +117,7 @@ class Model(C.MiniCandi):
         A = C.A
         inj, mask_mode = cfg["covariate_injection"], cfg["mask_mode"]
         self.mask_mode = mask_mode
-        self.scramble = bool(cfg["scramble_covariates"])
+        self.scramble = scramble_mode(cfg)
         self.use_avg = bool(cfg["average_input"])
         k_in = C.k_input(cfg)
 
@@ -145,24 +159,14 @@ class Model(C.MiniCandi):
 
     # ------------------------------------------------------------------ forward
 
-    def _covariates(self, batch: dict) -> tuple:
-        c_in, c_out = batch["c_in"], batch["c_out"]
-        if self.scramble:
-            gen = None if self.training else torch.Generator().manual_seed(SCRAMBLE_SEED)
-            c_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
-            c_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen) \
-                .to(c_out.device)
-        return c_in, c_out
-
     def forward(self, batch: dict) -> dict:
         x_counts, x_avail, bmask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         B, L, A = x_counts.shape
         vis = MaskHandler.visible(x_avail, bmask)                         # [B, L, A]
-        # depth removal uses each track's TRUE depth (never scrambled)
-        x = self.transform(x_counts, batch["c_in"][..., C.LOG2_DEPTH_COL], vis)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        x = self.transform(x_counts, c_in_t[..., C.LOG2_DEPTH_COL], vis)
         h = x[..., None] * self.lift_w + self.lift_b                     # [B, L, A, d_t]
         h, vis = self.mask(h, x_avail, bmask)
-        c_in, c_out = self._covariates(batch)
         h = self.inj_in(h, c_in[:, None])
         if self.use_avg:
             if "avg" not in batch:
@@ -197,7 +201,7 @@ class Model(C.MiniCandi):
         o = self.out_proj(z).reshape(B, L, A, D_OUT) + self.out_track
         o = self.inj_out(o, c_out[:, None])
         o = self.out_mlp(o)
-        return self.head(o, batch["c_out"])
+        return self.head(o, c_out_t)
 
 
 def choose_width(config: dict) -> int:
@@ -221,4 +225,4 @@ def choose_width(config: dict) -> int:
     return min((lo * WIDTH_STEP, hi * WIDTH_STEP), key=lambda w: abs(count(w) - budget))
 
 
-__all__ = ["DEFAULTS", "Model", "NAME", "NotApplicable", "RUNG", "choose_width"]
+__all__ = ["DEFAULTS", "Model", "NAME", "NotApplicable", "RUNG", "TWO_STEP_MESSAGE", "choose_width"]

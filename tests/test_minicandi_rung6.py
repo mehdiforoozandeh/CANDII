@@ -47,9 +47,11 @@ def _cfg(arm: str) -> dict:
 def _model(arm: str, seed: int = 0, bite: bool = True) -> R6.Model:
     torch.manual_seed(seed)
     m = R6.Model(_cfg(arm))
-    if bite:                              # leave the NB head's zero init: make the output depend
-        for p in m.head.lin.parameters():  # on the input so the wiring check can catch a leak
-            torch.nn.init.normal_(p, std=0.5)
+    if bite:      # the NB head starts at zero, so an untrained model ignores its inputs and a
+        g = torch.Generator().manual_seed(seed)  # wiring check would pass vacuously: add noise
+        with torch.no_grad():                     # to every parameter
+            for p in m.parameters():
+                p.add_(0.05 * torch.randn(p.shape, generator=g))
     return m
 
 
@@ -94,7 +96,7 @@ def test_base_config_pins_the_plan_defaults():
 
 
 def test_two_step_is_not_applicable():
-    with pytest.raises(M.NotApplicable):
+    with pytest.raises(M.NotApplicable, match="later ablation on the winning design"):
         R6.Model({**BASE, "two_step": True})
 
 
@@ -133,6 +135,18 @@ def test_shapes_positivity_and_copy_leak_part1(arm, batch, avg_batch, qc_batch):
     assert g["hidden_input_max_abs_change"] <= guardrail.REL_TOL
     assert g["unavailable_input_max_abs_change"] <= guardrail.REL_TOL
     assert g["n_hidden_bins"] > 0 and g["n_unavailable_bins"] > 0
+
+
+@pytest.mark.parametrize("arm", ["base", "mask_token"])
+def test_wiring_check_fails_with_the_mask_bypassed(arm, batch, monkeypatch):
+    """Planted negative control: with every bin and track called visible, hidden and missing
+    counts reach the perturbed model and the check must fail (so the passes above are real)."""
+    m = _model(arm).eval()
+    assert C.wiring_check(m, batch)["pass"]
+    monkeypatch.setattr(M.MaskHandler, "visible",
+                        staticmethod(lambda a, mk: torch.ones_like(mk)))
+    assert not C.wiring_check(m, batch)["pass"]
+    assert not guardrail.copy_leak(m, [batch])["part1_wiring_pass"]
 
 
 def test_output_depends_on_visible_input(batch):

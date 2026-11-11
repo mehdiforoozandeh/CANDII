@@ -5,6 +5,7 @@
   "mask_mode": "drop",
   "dna": "own",
   "scramble_covariates": false,
+  "scramble_all": false,
   "count_transform": "offset",
   "qc_on_input": false,
   "two_step": false,

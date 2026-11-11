@@ -32,16 +32,14 @@ nothing but a `torch.where` that discards it (MaskHandler), and the element set 
 on the masks only, never on counts.
 
 Config keys read (defaults in DEFAULTS): covariate_injection, mask_mode, dna, count_transform,
-scramble_covariates, qc_on_input, average_input, two_step, and the architecture keys d_model,
-n_heads, n_latents, n_self_layers, patch_bins, d_bin, d_dna, d_bin_out, mlp_ratio.
+scramble_covariates, scramble_all, qc_on_input, average_input, two_step, and the architecture keys
+d_model, n_heads, n_latents, n_self_layers, patch_bins, d_bin, d_dna, d_bin_out, mlp_ratio.
 `n_latents` is the key of the agent-extra arms (PI ruling 14): `latents_small` = 32,
 `latents_large` = 512 against the base 128; all three stay within 10% of the 1.0e6 budget.
 
-`scramble_covariates` permutes C and C' across the windows of a batch (`covariates.
-scramble_covariates`, a fixed-seed generator in eval mode) before they reach the covariate
-embeddings; the count transform and the NB head keep the true depth column.
+Scrambled covariates: `model_covariates`, the rule shared by all six rungs.
 `average_input` adds one always-present token per (track, patch) from log1p of the batch's `avg`
-rate. `two_step` (D15) is not expressible here: the constructor raises NotApplicable.
+rate. `two_step = true` raises NotApplicable, as in every rung.
 """
 from __future__ import annotations
 
@@ -60,18 +58,35 @@ if str(_TOOLS) not in sys.path:
 from minicandi.components import (CovariateInjector, CountTransform, DnaTower,  # noqa: E402
                                   MaskHandler, NBHead, NotApplicable, sinusoidal_positions)
 from minicandi.contract import A, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
-from minicandi.covariates import scramble_covariates  # noqa: E402
+from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 6
 NAME = "perceiver"
 
 DEFAULTS = {
     "covariate_injection": "tokens", "mask_mode": "drop", "dna": "own",
-    "count_transform": "offset", "scramble_covariates": False, "qc_on_input": False,
-    "average_input": False, "two_step": False,
+    "count_transform": "offset", "qc_on_input": False, "average_input": False,
     "d_model": 128, "n_heads": 4, "n_latents": 128, "n_self_layers": 4, "patch_bins": 16,
     "d_bin": 4, "d_dna": 16, "d_bin_out": 16, "mlp_ratio": 2,
 }
+
+
+# ---------------------------------------------------------------------------------------------
+# Rule shared by all six rungs, kept identical in each module (tests/test_minicandi_all_rungs.py
+# proves it); the scramble rule is `covariates.model_covariates`. Registration: the registry imports
+# this module by name and builds `Model(config)`.
+# ---------------------------------------------------------------------------------------------
+TWO_STEP_MESSAGE = ("two_step (D15) is not built in any rung: two-step correction is a later "
+                    "ablation on the winning design")
+
+
+def check_rung(cfg: dict) -> None:
+    """Refuse a config that names another rung (`rung` may be the number or the module name)."""
+    r = cfg.get("rung", RUNG)
+    if r not in (RUNG, str(RUNG), NAME):
+        raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
+    if cfg.get("two_step"):
+        raise NotApplicable(TWO_STEP_MESSAGE)
 
 
 class Attention(nn.Module):
@@ -137,17 +152,14 @@ class Model(MiniCandi):
     def __init__(self, config: dict | None = None):
         super().__init__()
         cfg = {**DEFAULTS, **(config or {})}
-        if cfg.get("rung", RUNG) != RUNG:
-            raise ValueError(f"perceiver is rung {RUNG}, config says rung {cfg['rung']}")
-        if cfg.get("two_step"):
-            raise NotApplicable("two_step (D15): rung 6 reads no base view; not expressible")
+        check_rung(cfg)
         self.cfg = cfg
         d, P = int(cfg["d_model"]), int(cfg["patch_bins"])
         if d % 2:
             raise ValueError("d_model must be even (sinusoidal positions)")
         self.d, self.P = d, P
         self.injection = cfg["covariate_injection"]
-        self.scramble = bool(cfg["scramble_covariates"])
+        self.scramble = scramble_mode(cfg)
         self.average_input = bool(cfg["average_input"])
         d_bin, d_dna, d_out = int(cfg["d_bin"]), int(cfg["d_dna"]), int(cfg["d_bin_out"])
 
@@ -184,14 +196,6 @@ class Model(MiniCandi):
 
     # -----------------------------------------------------------------------------------------
 
-    def _covariates(self, batch: dict):
-        c_in, c_out = batch["c_in"], batch["c_out"]
-        if self.scramble:
-            gen = None if self.training else torch.Generator().manual_seed(0)
-            c_in = scramble_covariates(c_in, batch["x_avail"], gen)
-            c_out = scramble_covariates(c_out, batch["y_avail"], gen)
-        return c_in, c_out
-
     def forward(self, batch: dict) -> dict:
         x_counts, x_avail, bin_mask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         B, L, Ac = x_counts.shape
@@ -200,12 +204,12 @@ class Model(MiniCandi):
             raise ValueError(f"L = {L} is not a multiple of patch_bins = {P}")
         NP = L // P
         dev = x_counts.device
-        c_in, c_out = self._covariates(batch)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
         pos = sinusoidal_positions(NP, d, device=dev)                       # [NP, d]
 
         # (track, patch) count tokens
         vis = MaskHandler.visible(x_avail, bin_mask)                         # [B, L, A]
-        x = self.transform(x_counts, batch["c_in"][..., LOG2_DEPTH_COL], vis)
+        x = self.transform(x_counts, c_in_t[..., LOG2_DEPTH_COL], vis)
         x = torch.where(vis, x, torch.zeros_like(x))       # no hidden value enters any op below
         h, vis = self.mask(self.bin_in(x[..., None]), x_avail, bin_mask)
         h = torch.cat([h, vis[..., None].to(h.dtype)], dim=-1)               # [B, L, A, d_bin]
@@ -253,7 +257,7 @@ class Model(MiniCandi):
         o = self.decode(q.reshape(B, NP * Ac, d), z)                          # [B, NP*A, d]
         o = F.gelu(self.unpatch(o)).view(B, NP, Ac, P, -1)
         o = o.permute(0, 1, 3, 2, 4).reshape(B, L, Ac, -1)                   # [B, L, A, d_out]
-        return self.head(o, batch["c_out"])
+        return self.head(o, c_out_t)
 
 
-__all__ = ["DEFAULTS", "Model", "NAME", "RUNG"]
+__all__ = ["DEFAULTS", "Model", "NAME", "RUNG", "TWO_STEP_MESSAGE"]

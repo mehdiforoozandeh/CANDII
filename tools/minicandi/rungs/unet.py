@@ -24,11 +24,13 @@ Layout of one forward pass (B windows, L bins, A = 36 tracks):
 Config keys read: `skip_source` (dna | counts | both; base both), `covariate_injection`,
 `mask_mode`, `dna`, `count_transform`, `qc_on_input`, `average_input`, `param_budget`, and the
 optional `width` (channels of the finest level; when absent the constructor picks the width whose
-parameter count is closest to `param_budget`). Keys that act outside the model (scramble_covariates,
-two_step, base_depth, control_input, predict_control, windows_seen, lr, batch_size) are accepted
-and ignored here.
+parameter count is closest to `param_budget`), `scramble_covariates` and `scramble_all`
+(`model_covariates`, the rule shared by all six rungs). Keys that act outside the model
+(base_depth, control_input, predict_control, windows_seen, lr, batch_size) are accepted and
+ignored here.
 
-Not applicable (`NotApplicable`): `skip_source = dna` with `dna = off` (no DNA skip exists).
+Not applicable (`NotApplicable`): `skip_source = dna` with `dna = off` (no DNA skip exists), and
+`two_step = true`, as in every rung.
 `skip_source = both` with `dna = off` keeps only the count skips; that is the `dna_off` arm of the
 base.
 
@@ -54,8 +56,10 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
                                   Upsample, sinusoidal_positions)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
+from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 4
+NAME = "unet"
 SKIP_SOURCES = ("dna", "counts", "both")
 N_LEVELS = 4                 # stride 16 at the bottleneck
 LEVEL_MULT = (1, 2, 2, 4, 4)  # channels per level as multiples of `width` (level N_LEVELS = bottom)
@@ -68,6 +72,24 @@ WIDTH_STEP = 1                # 4*width (the attention width) is always divisibl
 DEFAULTS = {"skip_source": "both", "covariate_injection": "film", "mask_mode": "token",
             "dna": "own", "count_transform": "offset", "qc_on_input": False,
             "average_input": False, "param_budget": 1.0e6}
+
+
+# ---------------------------------------------------------------------------------------------
+# Rule shared by all six rungs, kept identical in each module (tests/test_minicandi_all_rungs.py
+# proves it); the scramble rule is `covariates.model_covariates`. Registration: the registry imports
+# this module by name and builds `Model(config)`.
+# ---------------------------------------------------------------------------------------------
+TWO_STEP_MESSAGE = ("two_step (D15) is not built in any rung: two-step correction is a later "
+                    "ablation on the winning design")
+
+
+def check_rung(cfg: dict) -> None:
+    """Refuse a config that names another rung (`rung` may be the number or the module name)."""
+    r = cfg.get("rung", RUNG)
+    if r not in (RUNG, str(RUNG), NAME):
+        raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
+    if cfg.get("two_step"):
+        raise NotApplicable(TWO_STEP_MESSAGE)
 
 
 def _cfg(config: dict) -> dict:
@@ -121,6 +143,7 @@ class Model(MiniCandi):
         self.injection = cfg["covariate_injection"]
         self.dna_mode = cfg["dna"]
         self.average_input = bool(cfg["average_input"])
+        self.scramble = scramble_mode(cfg)
         self.k_in = k_input(cfg)
         self.skip_counts = self.skip_source in ("counts", "both")
         self.skip_dna = self.skip_source in ("dna", "both") and self.dna_mode != "off"
@@ -182,14 +205,15 @@ class Model(MiniCandi):
     def forward(self, batch: dict) -> dict:
         x_counts, x_avail = batch["x_counts"], batch["x_avail"].bool()
         x_bin_mask = batch["x_bin_mask"].bool()
-        c_in, c_out = batch["c_in"].float(), batch["c_out"].float()
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        c_in, c_out = c_in.float(), c_out.float()
         y_avail = batch["y_avail"].bool()
         B, L, _ = x_counts.shape
         tokens = self.injection == "tokens"
 
         # per-track input features; the mask is applied before anything mixes bins or tracks
         vis = MaskHandler.visible(x_avail, x_bin_mask)
-        x = self.transform(x_counts, c_in[..., LOG2_DEPTH_COL], vis)
+        x = self.transform(x_counts, c_in_t.float()[..., LOG2_DEPTH_COL], vis)
         h = self.track_in(x[..., None]) + self.track_emb_in
         if not tokens:
             h = self.in_inj(h, c_in[:, None])
@@ -259,12 +283,11 @@ class Model(MiniCandi):
             hd = hd + self.tok_to_head(tok_out)[:, None]
         else:
             hd = self.out_inj(hd, c_out[:, None])
-        return self.nb(self.head_mlp(hd), c_out)
+        return self.nb(self.head_mlp(hd), c_out_t.float())
 
 
 def _validate(cfg: dict) -> None:
-    if int(cfg.get("rung", RUNG)) != RUNG:
-        raise ValueError(f"unet.Model is rung {RUNG}, config says rung {cfg.get('rung')}")
+    check_rung(cfg)
     if cfg["skip_source"] not in SKIP_SOURCES:
         raise ValueError(f"skip_source {cfg['skip_source']!r} not in {SKIP_SOURCES}")
     if cfg["skip_source"] == "dna" and cfg["dna"] == "off":
@@ -300,15 +323,5 @@ def fit_width(cfg: dict) -> int:
     return best * WIDTH_STEP
 
 
-def build(config: dict) -> Model:
-    return Model(config)
-
-
-try:  # registration at import is guarded: the registry (T1) imports rungs lazily by name
-    from minicandi import registry as _registry  # noqa: E402
-    if hasattr(_registry, "register"):
-        _registry.register(RUNG, Model)
-except Exception:  # pragma: no cover - registry absent or a different interface
-    pass
-
-__all__ = ["DEFAULTS", "Model", "N_LEVELS", "RUNG", "SKIP_SOURCES", "build", "fit_width"]
+__all__ = ["DEFAULTS", "Model", "NAME", "N_LEVELS", "RUNG", "SKIP_SOURCES", "TWO_STEP_MESSAGE",
+           "fit_width"]
