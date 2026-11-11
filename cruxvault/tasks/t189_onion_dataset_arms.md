@@ -1,0 +1,33 @@
+---
+id: t189
+type: task
+title: Onion: Dataset arms
+category: implementation
+parent: t152
+blocked_by: None
+refs: 
+hypothesis_refs: 
+status: open
+created: 2026-11-11T11:20:25
+updated: 2026-11-11T11:20:25
+---
+
+# t189 — Onion: Dataset arms
+
+Refs:: _(none)_
+
+## Why
+
+unblocks the stage-2 dataset arms
+
+## Output
+
+<!-- required before `done`, and the engine checks it resolves. Either form:
+     - [Deduped table](results/dedupe/table.tsv)   - [[wiki/candi-datasets]] -->
+_(none yet)_
+
+## Evidence
+
+_(experiments only: what this run showed, in prose. The structured fact is
+`hypothesis_refs` in the frontmatter; this is the narrative beside it, and the
+engine never parses it.)_

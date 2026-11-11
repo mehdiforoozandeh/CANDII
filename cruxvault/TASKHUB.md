@@ -57,6 +57,24 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t152` [implementation] peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder
 - `t153` [admin] Onion: crux child tasks, notepad rulings, package files, golden reference
 - `t154` [hpc-setup] Onion: Kit tooling, cluster probes, cluster choice
+- `t187` [admin] Onion: Crux tasks and task map rows for every remaining chunk
+- `t188` [implementation] Onion: Two-step correction, loss arms, model wrappers
+- `t189` [implementation] Onion: Dataset arms
+- `t190` [implementation] Onion: Component arms: covariate embedding and injection, DNA tower mode, transforms, head
+- `t191` [implementation] Onion: ChIP control arms: the output-only lambda head
+- `t192` [implementation] Onion: DNA source arms: precompute tool for frozen sequence-model embeddings
+- `t193` [implementation] Onion: Scorer and eval-set additions
+- `t194` [implementation] Onion: Selection rule: the blind state after a validation failure
+- `t195` [implementation] Onion: Arm report: headline table, development evals, accessibility-only table
+- `t196` [implementation] Onion: Resolution study tool
+- `t197` [implementation] Onion: Crossed mixed-model cross-check
+- `t198` [implementation] Onion: Tables builder and dataset check
+- `t199` [implementation] Onion: Read-derived QC fill tool
+- `t200` [implementation] Onion: Ladder kit: arm configs for all six rungs and the submit script
+- `t201` [implementation] Onion: Genome-wide prediction and EIC export
+- `t202` [implementation] Onion: Compute and storage tally tool
+- `t203` [implementation] Onion: Proxy scorer for the evolution step
+- `t204` [data-acquisition] Onion: Which EIC experiments are among the Borzoi and Flashzoi training targets
 
 ## Blocked
 
@@ -95,6 +113,33 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t184` [data-acquisition] Onion: EIC build, priority 4 (submit) — blocked by `t180`
 - `t185` [implementation] Onion: Eval set, layers and baselines on eic_v1 (submit) — blocked by `t183`, `t172`, `t179`
 - `t186` [implementation] Onion: Collect: scorer validity on eic_v1 — blocked by `t185`
+- `t205` [implementation] Onion: Rung support for the stage-2 arm keys — blocked by `t190`, `t189`
+- `t206` [implementation] Onion: External EIC entries in signal space — blocked by `t193`
+- `t207` [hpc-setup] Onion: Frozen DNA embeddings: environment, smoke, genome-wide jobs and collect — blocked by `t192`
+- `t208` [implementation] Onion: Stage-2 arm configs and the all-arms integration test — blocked by `t188`, `t189`, `t190`, `t191`, `t192`, `t205`, `t193`, `t200`
+- `t209` [implementation] Onion: Arm smoke on the pilot tables (Fir) — blocked by `t208`, `t200`, `t165`
+- `t210` [data-acquisition] Onion: Collect priority 4, then build and check eic_v2 — blocked by `t184`, `t183`, `t198`
+- `t211` [data-acquisition] Onion: Fill the read-derived QC side table (submit and collect) — blocked by `t183`, `t199`
+- `t212` [implementation] Onion: Onion layers, resolution study and mixed model: training, validation and blind tracks — blocked by `t210`, `t193`, `t196`, `t197`
+- `t213` [implementation] Onion: Rung 1: base arm and per-rung ablations, collect and settle — blocked by `t200`, `t186`, `t195`
+- `t214` [implementation] Onion: Rung 2: base arm and per-rung ablations, collect and settle — blocked by `t213`, `t200`, `t186`, `t195`
+- `t215` [implementation] Onion: Rung 3: base arm and per-rung ablations, collect and settle — blocked by `t213`, `t200`, `t186`, `t195`
+- `t216` [implementation] Onion: Rung 4: base arm and per-rung ablations, collect and settle — blocked by `t213`, `t200`, `t186`, `t195`
+- `t217` [implementation] Onion: Rung 5: base arm and per-rung ablations, collect and settle — blocked by `t213`, `t200`, `t186`, `t195`
+- `t218` [implementation] Onion: Rung 6: base arm and per-rung ablations, collect and settle — blocked by `t213`, `t200`, `t186`, `t195`
+- `t219` [implementation] Onion: Combined configurations within a rung and the cross-rung comparison — blocked by `t213`, `t214`, `t215`, `t216`, `t217`, `t218`, `t195`
+- `t220` [implementation] Onion: Mix-and-match combinations: propose, build, train and settle — blocked by `t219`, `t188`, `t195`
+- `t221` [implementation] Onion: Evolution of the winning recipes: autopilot, confirmations and the named design — blocked by `t220`, `t203`, `t188`, `t195`
+- `t222` [implementation] Onion: Stage 2 on the design: submit, collect and settle — blocked by `t221`, `t208`, `t211`, `t207`, `t186`, `t209`, `t195`
+- `t223` [implementation] Onion: Final design: the design plus the stage-2 winners, freeze and the done rule on validation — blocked by `t222`
+- `t224` [implementation] Onion: The EIC model: train on training plus validation tracks — blocked by `t223`, `t189`
+- `t225` [implementation] Onion: The single blind pass and the done rule on the blind tracks — blocked by `t224`, `t223`, `t210`, `t212`, `t201`, `t206`, `t194`
+- `t226` [implementation] Onion: EIC board and the comparison with external entries in signal space — blocked by `t225`
+- `t227` [admin] Onion: The gate before the extended-dataset step — blocked by `t225`, `t212`, `t210`
+- `t228` [admin] Onion: Final compute and storage tally — blocked by `t225`, `t226`
+- `t229` [visualization] Onion: The /prezit deck — blocked by `t225`, `t226`, `t212`, `t228`, `t227`
+- `t230` [manuscript] Onion: The 12-page /storify report — blocked by `t225`, `t226`, `t212`, `t228`, `t227`
+- `t231` [admin] Onion: Vault close-out — blocked by `t229`, `t230`
 
 ## By category
 
@@ -103,6 +148,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations — *open*
 - `t153` [admin] Onion: crux child tasks, notepad rulings, package files, golden reference — *open*
+- `t187` [admin] Onion: Crux tasks and task map rows for every remaining chunk — *open*
+- `t227` [admin] Onion: The gate before the extended-dataset step — *blocked*
+- `t228` [admin] Onion: Final compute and storage tally — *blocked*
+- `t231` [admin] Onion: Vault close-out — *blocked*
 
 ### data-acquisition
 
@@ -119,12 +168,16 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t180` [data-acquisition] Onion: EIC build, priorities 1 to 3 (submit) — *blocked*
 - `t183` [data-acquisition] Onion: Collect priorities 1 to 3, build and check eic_v1 — *blocked*
 - `t184` [data-acquisition] Onion: EIC build, priority 4 (submit) — *blocked*
+- `t204` [data-acquisition] Onion: Which EIC experiments are among the Borzoi and Flashzoi training targets — *open*
+- `t210` [data-acquisition] Onion: Collect priority 4, then build and check eic_v2 — *blocked*
+- `t211` [data-acquisition] Onion: Fill the read-derived QC side table (submit and collect) — *blocked*
 
 ### hpc-setup
 
 - `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *open*
 - `t154` [hpc-setup] Onion: Kit tooling, cluster probes, cluster choice — *open*
 - `t169` [hpc-setup] Onion: DNase-seq pipeline setup and kit — *blocked*
+- `t207` [hpc-setup] Onion: Frozen DNA embeddings: environment, smoke, genome-wide jobs and collect — *blocked*
 
 ### implementation
 
@@ -190,6 +243,45 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t182` [implementation] Onion: Pilot: collect — *blocked*
 - `t185` [implementation] Onion: Eval set, layers and baselines on eic_v1 (submit) — *blocked*
 - `t186` [implementation] Onion: Collect: scorer validity on eic_v1 — *blocked*
+- `t188` [implementation] Onion: Two-step correction, loss arms, model wrappers — *open*
+- `t189` [implementation] Onion: Dataset arms — *open*
+- `t190` [implementation] Onion: Component arms: covariate embedding and injection, DNA tower mode, transforms, head — *open*
+- `t191` [implementation] Onion: ChIP control arms: the output-only lambda head — *open*
+- `t192` [implementation] Onion: DNA source arms: precompute tool for frozen sequence-model embeddings — *open*
+- `t193` [implementation] Onion: Scorer and eval-set additions — *open*
+- `t194` [implementation] Onion: Selection rule: the blind state after a validation failure — *open*
+- `t195` [implementation] Onion: Arm report: headline table, development evals, accessibility-only table — *open*
+- `t196` [implementation] Onion: Resolution study tool — *open*
+- `t197` [implementation] Onion: Crossed mixed-model cross-check — *open*
+- `t198` [implementation] Onion: Tables builder and dataset check — *open*
+- `t199` [implementation] Onion: Read-derived QC fill tool — *open*
+- `t200` [implementation] Onion: Ladder kit: arm configs for all six rungs and the submit script — *open*
+- `t201` [implementation] Onion: Genome-wide prediction and EIC export — *open*
+- `t202` [implementation] Onion: Compute and storage tally tool — *open*
+- `t203` [implementation] Onion: Proxy scorer for the evolution step — *open*
+- `t205` [implementation] Onion: Rung support for the stage-2 arm keys — *blocked*
+- `t206` [implementation] Onion: External EIC entries in signal space — *blocked*
+- `t208` [implementation] Onion: Stage-2 arm configs and the all-arms integration test — *blocked*
+- `t209` [implementation] Onion: Arm smoke on the pilot tables (Fir) — *blocked*
+- `t212` [implementation] Onion: Onion layers, resolution study and mixed model: training, validation and blind tracks — *blocked*
+- `t213` [implementation] Onion: Rung 1: base arm and per-rung ablations, collect and settle — *blocked*
+- `t214` [implementation] Onion: Rung 2: base arm and per-rung ablations, collect and settle — *blocked*
+- `t215` [implementation] Onion: Rung 3: base arm and per-rung ablations, collect and settle — *blocked*
+- `t216` [implementation] Onion: Rung 4: base arm and per-rung ablations, collect and settle — *blocked*
+- `t217` [implementation] Onion: Rung 5: base arm and per-rung ablations, collect and settle — *blocked*
+- `t218` [implementation] Onion: Rung 6: base arm and per-rung ablations, collect and settle — *blocked*
+- `t219` [implementation] Onion: Combined configurations within a rung and the cross-rung comparison — *blocked*
+- `t220` [implementation] Onion: Mix-and-match combinations: propose, build, train and settle — *blocked*
+- `t221` [implementation] Onion: Evolution of the winning recipes: autopilot, confirmations and the named design — *blocked*
+- `t222` [implementation] Onion: Stage 2 on the design: submit, collect and settle — *blocked*
+- `t223` [implementation] Onion: Final design: the design plus the stage-2 winners, freeze and the done rule on validation — *blocked*
+- `t224` [implementation] Onion: The EIC model: train on training plus validation tracks — *blocked*
+- `t225` [implementation] Onion: The single blind pass and the done rule on the blind tracks — *blocked*
+- `t226` [implementation] Onion: EIC board and the comparison with external entries in signal space — *blocked*
+
+### manuscript
+
+- `t230` [manuscript] Onion: The 12-page /storify report — *blocked*
 
 ### visualization
 
@@ -198,6 +290,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t110` [visualization] leaderboard page: picking Count, P-value or Peak throws ReferenceError LOSS_ELI5 is not defined — restore the constant t82 deleted while its two uses stayed — *open*
 - `t121` [visualization] build the CEEHRC 2026 poster (44x44 in) from the CANDI graphical abstract — *open*
 - `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — *blocked*
+- `t229` [visualization] Onion: The /prezit deck — *blocked*
 
 ## Done · Dropped
 
