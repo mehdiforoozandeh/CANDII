@@ -14,8 +14,9 @@
 # BLIND_PASSES.tsv beside the eval set and refuses a repeat without --repeat-blind-reason "<text>".
 # CPU form: 2 cores x 4000 MB (F3, measured on Fir, pilot_rung2 seed 0, 64 regions: 2 CPUs 25.0 min
 # = 0.83 CPU-h; 4 CPUs 20.9 min = 1.39; 8 CPUs 21.6 min = 2.88; the old 16 CPUs 39 min = 10.4; the
-# scorer is mostly single-threaded). A rung whose forward pass is >= 5e9 FLOPs per window (rung 1,
-# rung 5) is cheaper on the GPU form.
+# scorer is mostly single-threaded). Rung 1 (3.3e10 FLOPs per window) on the GPU form: 39.8 min,
+# 0.66 CPU-h + 0.66 GPU-h, against 38.3 CPU-h on 16 CPUs; rung 5 (7.5e9) not measured. GPU scores
+# differ from CPU scores by up to 1.1e-5: score every seed of one comparison on one device.
 # GPU form (a 1g.10gb slice is free; rung 1's forward is 44x rung 2's): add
 #   --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1 --cpus-per-task=1 --mem=24000M (and on Fir
 #   --exclude=fc10713,fc10715) to the sbatch line; score.py's --device auto then runs on the GPU.
