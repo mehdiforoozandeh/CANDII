@@ -114,7 +114,10 @@ States per split: PASS; FAIL (a defined margin is <= 2x the spread; the run stop
 metric is undefined, a denominator is under its tolerance, or, only with CLIP_GOAL_TERMS False, a
 term is out of band); REFUSED (scores not comparable, or a zero seed spread);
 MISSING (not scored yet). Condition 2 overall: FAIL if either split fails, else the validation state
-unless it passed, then PASS, or PENDING while the blind pass is missing.
+unless it passed, then PASS, or PENDING while the blind pass is missing. PI ruling 24: the blind
+state is computed whenever blind scores exist, also after a validation FAIL (the blind tracks are
+still scored once); `check-done` prints `validation: <state>` and `blind: <state>`, each with its
+per-goal margins and seed spreads.
 
 Blind layout (pinned). The blind eval set is `eval/eic_v2/evalset_blind.json` (built with
 `evalset.py build --include-blind` on `tables/eic_v2`). A run's blind pass is scored into
@@ -753,12 +756,11 @@ def check_done(runs, ladder, final=None, baselines=None, blind_baselines=None, *
     baselines = str(baselines) if baselines else _baselines_from(final)
     sv, lv = (done_condition_2(final, baselines, clip=clip) if baselines
               else ("MISSING", ["no baselines dir (no scored final seed0)"]))
-    if sv == "PASS":
-        bb = str(blind_baselines) if blind_baselines else _baselines_from(final, "blind")
-        sb, lb = (done_condition_2(final, bb, "blind", clip=clip) if bb
-                  else ("MISSING", ["no blind pass of the final design yet"]))
-    else:
-        sb, lb = "MISSING", ["blind pass waits for validation"]
+    # PI ruling 24: the blind pass runs once also after a validation failure, so the blind state is
+    # computed whenever blind scores exist, whatever the validation state.
+    bb = str(blind_baselines) if blind_baselines else _baselines_from(final, "blind")
+    sb, lb = (done_condition_2(final, bb, "blind", clip=clip) if bb
+              else ("MISSING", ["no blind pass of the final design yet"]))
     if "FAIL" in (sv, sb):
         c2 = "FAIL"
     elif sv != "PASS":
