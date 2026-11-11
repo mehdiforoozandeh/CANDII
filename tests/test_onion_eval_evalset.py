@@ -247,3 +247,21 @@ def test_f11_targets_without_halves_kept_and_counted(tmp_path):
     assert ev["targets_without_halves"] == sorted([v[0]["measurement_id"], v[1]["measurement_id"]])
     # the scorable rule counts only tracks with halves: H3K4me3 drops to 1 and is not scorable
     assert "H3K4me3" not in ev["scorable"]["imputation"]
+
+
+def test_chrom_sizes_flat_and_nested_layouts(tmp_path):
+    """The cluster's chrom_sizes.json is nested ({"assembly": ..., "chrom_sizes": {...}}); the flat
+    reader died with `invalid literal for int() ... 'GRCh38'`. Both layouts give the same blocks."""
+    make_synthetic_tables(tmp_path, n_cells=9, val_tracks=VAL, blind_tracks=BLIND)
+    gdir = tmp_path / "genome"
+    path = gdir / "chrom_sizes.json"
+    flat = json.loads(path.read_text())
+    assert all(isinstance(v, int) for v in flat.values())
+    assert E.read_chrom_sizes(path) == flat
+    want = E.candidate_blocks(gdir, 512)
+    path.write_text(json.dumps({"assembly": "GRCh38", "chrom_sizes": flat}))
+    assert E.read_chrom_sizes(path) == flat
+    assert E.candidate_blocks(gdir, 512) == want and want
+    path.write_text(json.dumps(["chr1", 100]))
+    with pytest.raises(ValueError, match="chrom -> size"):
+        E.read_chrom_sizes(path)

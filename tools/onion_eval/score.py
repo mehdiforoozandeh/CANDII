@@ -23,12 +23,19 @@ What is scored (validation split by default):
   correction pairs    source pr1 -> target pr2 (PI ruling 6); model, depth-only scaling and the
                       floor (target pr1 -> target pr2, one fitted NB size) all predict the same pr2
   replicate pairs     the evalset's replicate-ladder pairs of the scored split, same layout
-  copy-leak           guardrail parts 1 and 2 (`guardrail.copy_leak`) on the validation
-                      reconstruction windows, over 3 mask seeds. `copy_leak_pass` is true only when
-                      every mask seed passes (finding 2); `copy_leak_spread_ok` is true only when
-                      the part-2 relative gain moved across mask seeds by at most
-                      SPREAD_MAX_FRACTION x the gain threshold (addendum); select_rule escalates
-                      an arm whose spread is not ok
+  copy-leak           the guardrail (`guardrail.copy_leak`) on the validation reconstruction
+                      windows, over 3 mask seeds. `copy_leak_pass` (the hard gate, D13) is true only
+                      when every mask seed passes part 1 of the PI's definition: perturbing hidden
+                      bins or unavailable tracks moves no output (finding 2). Part 2 of the PI's
+                      definition is this scorer's rule: same-view reconstruction is scored on
+                      hidden bins only, denoising and correction against an independent draw.
+                      The same-view copy gain (ours) is written beside it and does not gate:
+                      `same_view_copy_gain`, `same_view_copy_gain_relative` (max over mask seeds),
+                      `..._relative_by_mask_seed`, `..._relative_spread` (max - min over mask
+                      seeds) and `same_view_copy_gain_flag` (relative gain above the threshold on
+                      any mask seed). With `guardrail.GATE_ON_COPY_GAIN` True the gain gates too,
+                      and `same_view_copy_gain_spread_ok` (spread at most SPREAD_MAX_FRACTION x
+                      the threshold, addendum) must hold or select_rule escalates
 
 Blind discipline (gate G4; finding 9 and 14). `--split blind` needs `--allow-blind`, an eval set
 built with `--include-blind` (pinned name `evalset_blind.json`) and `--out` ending in `/blind`
@@ -125,8 +132,9 @@ CONTROL = "chipseq-control"
 NOISE_FLOOR_HALVES = "pseudoreplicate_halves"
 NOISE_FLOOR_NONE = "none_pilot"
 PILOT_H1_KEY = "specific_variance_recovered_NO_NOISE_FLOOR_pilot_only"
-#: copy-leak part 2: the relative gain's spread across mask seeds must be at most this fraction of
-#: the gate threshold ("well under", addendum), else `copy_leak_spread_ok` is false
+#: same-view copy gain: its relative spread across mask seeds must be at most this fraction of
+#: the threshold ("well under", addendum), else `same_view_copy_gain_spread_ok` is false; it
+#: matters only when guardrail.GATE_ON_COPY_GAIN is True
 SPREAD_MAX_FRACTION = 0.5
 BLIND_LEDGER = "BLIND_PASSES.tsv"
 LEDGER_COLUMNS = ("time", "run", "evalset_sha256", "tables_sha256", "git_sha", "out", "status",
@@ -772,10 +780,12 @@ class Scorer:
     def _copy_leak(self):
         if self.model is None:
             return {"hidden_input_max_abs_change": None, "unavailable_input_max_abs_change": None,
-                    "same_view_copy_gain": None, "copy_leak_pass": None,
-                    "copy_leak_spread_ok": None, "part1_wiring_pass": None,
+                    "same_view_copy_gain": None, "same_view_copy_gain_flag": None,
+                    "copy_leak_pass": None, "same_view_copy_gain_spread_ok": None,
+                    "part1_wiring_pass": None,
                     "reason": "not applicable: a training-free baseline reads no hidden input"}
-        from onion_eval.guardrail import GAIN_THRESHOLD, copy_leak
+        from onion_eval import guardrail as G
+        GAIN_THRESHOLD, gate_on = G.GAIN_THRESHOLD, bool(G.GATE_ON_COPY_GAIN)
         per_seed, n_win = [], 0
         for s in self.guardrail_seeds:
             ds = self._OnionDataset(self.tables, self.split, self.cfg, seed=s)
@@ -784,15 +794,24 @@ class Scorer:
             wins = [ds.item_window(it) for it in items]
             n_win = len(wins)
             batches = [self.C.collate(wins[i:i + self.bs]) for i in range(0, len(wins), self.bs)]
-            per_seed.append(copy_leak(self.model_pred.model, batches, seed=s))
+            per_seed.append(G.copy_leak(self.model_pred.model, batches, seed=s))
         if not per_seed:
-            return {"copy_leak_pass": None, "copy_leak_spread_ok": None, "part1_wiring_pass": None,
-                    "reason": "no mask seed"}
+            return {"copy_leak_pass": None, "same_view_copy_gain_spread_ok": None,
+                    "part1_wiring_pass": None, "same_view_copy_gain_flag": None,
+                    "gate_on_copy_gain": gate_on, "reason": "no mask seed"}
         rel = [_j(r["same_view_copy_gain_relative"]) for r in per_seed]
         fin = [v for v in rel if v is not None]
         spread = (max(fin) - min(fin)) if len(fin) >= 2 else None
         lim = SPREAD_MAX_FRACTION * GAIN_THRESHOLD
         spread_ok = bool(spread is not None and len(fin) == len(rel) and spread <= lim)
+        flags = [bool(v is not None and v > GAIN_THRESHOLD) for v in rel]
+        part1 = all(r["part1_wiring_pass"] is True for r in per_seed)
+        why = [] if part1 else ["part 1 failed on a mask seed: perturbing hidden bins or "
+                                "unavailable tracks moved an output, or no hidden bin was checked"]
+        if gate_on and not spread_ok:
+            why.append(f"the relative gain moved {spread} across mask seeds (limit {lim:g}); score "
+                       f"with more --guardrail-windows" if spread is not None else
+                       "the relative gain is undefined on a mask seed, or fewer than 2 mask seeds")
 
         def mx(k):
             v = [_j(r[k]) for r in per_seed]
@@ -803,8 +822,8 @@ class Scorer:
             "same_view_copy_gain": mx("same_view_copy_gain"),
             "same_view_copy_gain_relative": mx("same_view_copy_gain_relative"),
             "copy_leak_pass": all(r["copy_leak_pass"] is True for r in per_seed),
-            "part1_wiring_pass": all(r["part1_wiring_pass"] is True for r in per_seed),
-            "part2_j_invariance_pass": all(r["part2_j_invariance_pass"] is True for r in per_seed),
+            "part1_wiring_pass": part1,
+            "gate_on_copy_gain": gate_on,
             "copy_leak_pass_by_mask_seed": [bool(r["copy_leak_pass"]) for r in per_seed],
             "hidden_input_max_abs_change_by_mask_seed": [_j(r["hidden_input_max_abs_change"])
                                                          for r in per_seed],
@@ -812,13 +831,13 @@ class Scorer:
                 _j(r["unavailable_input_max_abs_change"]) for r in per_seed],
             "same_view_copy_gain_relative_by_mask_seed": rel,
             "same_view_copy_gain_relative_spread": spread,
-            "copy_leak_spread_ok": spread_ok,
-            "spread_limit_relative": lim, "gain_threshold_relative": GAIN_THRESHOLD,
+            "same_view_copy_gain_flag": any(flags),
+            "same_view_copy_gain_flag_by_mask_seed": flags,
+            "same_view_copy_gain_spread_ok": spread_ok,
+            "same_view_copy_gain_spread_limit_relative": lim,
+            "same_view_copy_gain_threshold_relative": GAIN_THRESHOLD,
             "mask_seeds": list(self.guardrail_seeds), "n_windows_per_seed": n_win,
-            "reason": "" if spread_ok else (
-                f"the relative gain moved {spread} across mask seeds (limit {lim:g}); score with "
-                f"more --guardrail-windows" if spread is not None else
-                "the relative gain is undefined on a mask seed, or fewer than 2 mask seeds"),
+            "reason": "; ".join(why),
         }
 
     # -------------------------------------------------------------- run
@@ -1225,7 +1244,8 @@ def main(argv=None) -> int:
     sel = s["selection"]
     print(f"scores -> {a.out}/scores.json; composite {sel['composite']} (imputation "
           f"{sel['imputation_gap_closed']}, correction {sel['correction_gap_closed']}, uncertainty "
-          f"{sel['uncertainty_gap_closed']}); copy_leak_pass {s['copy_leak'].get('copy_leak_pass')}")
+          f"{sel['uncertainty_gap_closed']}); copy_leak_pass {s['copy_leak'].get('copy_leak_pass')}; "
+          f"same_view_copy_gain_flag {s['copy_leak'].get('same_view_copy_gain_flag')}")
     return 0
 
 

@@ -2,7 +2,7 @@
 
     python tools/minicandi/train.py --config <json> --tables <dir> --seed <k> --out <run dir>
         [--device cpu|cuda] [--max-windows N] [--val-every W] [--val-batches 8]
-        [--log-every 50] [--ckpt-minutes 15]
+        [--log-every 50] [--ckpt-minutes 15] [--workers 0]
 
 One run directory holds:
   ckpt.pt         the pinned dict (`contract.make_ckpt`): state_dict, the full config, param_count,
@@ -34,6 +34,15 @@ Schedule: AdamW (lr = `config["lr"]`, weight decay 0.01), linear warm-up over th
 (at most 1000), cosine decay to 10% of lr at the last step; gradient norm clipped at 1.0. The loss
 is `contract.nb_nll` over `contract.loss_mask`. A non-finite loss stops the run with an error and
 leaves the last checkpoint in place.
+
+Data workers. `--workers 0` (default) draws every training batch in this process from the sampler
+generator above. `--workers N` (N > 0) draws them in N DataLoader worker processes: batch k comes
+from its own generator `numpy.random.default_rng([seed, 4, k])`, so the batch sequence depends on
+the seed only (not on N, nor on which worker draws a batch), a resume is exact, and the worker
+base seed comes from a generator seeded with `seed`, so no draw of the training torch RNG moves.
+Each worker opens its own h5 handles (`OnionDataset` drops inherited handles after a fork and
+pickles without them under spawn). The two streams differ, so a resume refuses a switch between
+0 and N > 0 workers. Measured on Fir: 0.93 s per batch in-process against 0.081 s with 8 workers.
 
 `--val-every W` (windows, 0 = off) logs the NB loss over the first `--val-batches` batches of the
 dataset in val mode (needs the tables' evalset.json); the batches are fixed for the whole run.
@@ -70,6 +79,28 @@ WEIGHT_DECAY = 0.01
 CLIP = 1.0
 WARMUP_FRAC, WARMUP_MAX, LR_FLOOR = 0.05, 1000, 0.1
 PEARSON_BATCHES = 4
+WORKER_STREAM = 4          # batch k with workers: default_rng([seed, WORKER_STREAM, k])
+
+
+class StepBatches(torch.utils.data.Dataset):
+    """Batch k of a run with workers, from its own generator: picklable for DataLoader workers."""
+
+    def __init__(self, ds: OnionDataset, batch_size: int, seed: int):
+        self.ds, self.bs, self.seed = ds, int(batch_size), int(seed)
+
+    def __getitem__(self, k: int) -> dict:
+        return self.ds.batch(self.bs, np.random.default_rng([self.seed, WORKER_STREAM, int(k)]))
+
+
+def worker_batches(ds: OnionDataset, batch_size: int, seed: int, first_step: int, total_steps: int,
+                   workers: int):
+    """Iterator over the batches of steps first_step .. total_steps - 1 drawn by `workers`
+    DataLoader worker processes (in step order)."""
+    loader = torch.utils.data.DataLoader(
+        StepBatches(ds, batch_size, seed), batch_size=None,
+        sampler=range(first_step, total_steps), num_workers=workers,
+        generator=torch.Generator().manual_seed(seed))
+    return iter(loader)
 
 
 def full_config(config: dict) -> dict:
@@ -170,9 +201,12 @@ def _write_json(obj, path: Path) -> None:
 
 def train(config: dict, tables, seed: int, out, device: str = "cpu",
           max_windows: int | None = None, val_every: int = 0, val_batches: int = 8,
-          log_every: int = 50, ckpt_minutes: float = 15.0) -> dict:
+          log_every: int = 50, ckpt_minutes: float = 15.0, workers: int = 0) -> dict:
     """Train (or resume) one run; returns the run.json dict."""
     cfg = full_config(config)
+    workers = int(workers)
+    if workers < 0:
+        raise ValueError(f"--workers {workers}: must be >= 0")
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     if (out / "DONE").is_file():
@@ -217,6 +251,10 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         wall0, fpw, fpw_fwd = float(st["wall_seconds"]), st["flops_per_window"], \
             st["flops_per_window_forward"]
         n_resumes = int(st.get("n_resumes", 0)) + 1
+        if (int(st.get("workers", 0)) > 0) != (workers > 0):
+            raise ValueError(f"{state_path}: the run started with --workers {st.get('workers', 0)}; "
+                             f"0 and N > 0 workers draw different batch streams, resume with "
+                             f"{'--workers 0' if not st.get('workers', 0) else '--workers N > 0'}")
         print(f"resume: step {step}, windows {windows} of {budget}")
     else:
         step, windows, wall0, n_resumes = 0, 0, 0.0, 0
@@ -257,7 +295,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                 "training_flops": windows * fpw, "windows_seen": windows, "steps": step,
                 "total_steps": total_steps, "wall_seconds": wall0 + (time.time() - t0),
                 "device": str(dev), "host": socket.gethostname(), "torch": torch.__version__,
-                "n_resumes": n_resumes, "done": done, **last}
+                "n_resumes": n_resumes, "done": done, **({"workers": workers} if workers else {}),
+                **last}
 
     def checkpoint(done: bool, last: dict) -> dict:
         _save(C.make_ckpt(model, cfg, windows, tsha, sha), ckpt_path)
@@ -265,7 +304,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
                "cuda_rng": torch.cuda.get_rng_state_all() if dev.type == "cuda" else None,
                "data_rng": data_rng.bit_generator.state, "scramble_rng": scr_gen.get_state(),
                "wall_seconds": wall0 + (time.time() - t0), "flops_per_window": fpw,
-               "flops_per_window_forward": fpw_fwd, "n_resumes": n_resumes}, state_path)
+               "flops_per_window_forward": fpw_fwd, "n_resumes": n_resumes,
+               **({"workers": workers} if workers else {})}, state_path)
         info = summary(done, last)
         _write_json(info, out / "run.json")
         return info
@@ -276,10 +316,11 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     last: dict = {}
     next_val = (windows // val_every + 1) * val_every if val else None
     model.train()
+    loader = worker_batches(ds, bs, seed, step, total_steps, workers) if workers > 0 else None
     while windows < budget:
         if max_windows is not None and windows >= max_windows:
             break
-        batch = ds.batch(bs, data_rng)
+        batch = ds.batch(bs, data_rng) if loader is None else next(loader)
         batch = to_device(batch, dev)
         for g in opt.param_groups:
             g["lr"] = lr_at(step, total_steps, float(cfg["lr"]))
@@ -309,6 +350,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         if time.time() - t_ckpt > 60.0 * ckpt_minutes:
             checkpoint(False, last)
             t_ckpt = time.time()
+    del loader                                   # stops the worker processes
     done = windows >= budget
     info = checkpoint(done, last)
     log.close()
@@ -329,10 +371,12 @@ def main(argv=None) -> int:
     ap.add_argument("--val-batches", type=int, default=8)
     ap.add_argument("--log-every", type=int, default=50)
     ap.add_argument("--ckpt-minutes", type=float, default=15.0)
+    ap.add_argument("--workers", type=int, default=0,
+                    help="DataLoader worker processes for training batches (0 = in-process)")
     a = ap.parse_args(argv)
     config = json.loads(Path(a.config).read_text(encoding="utf-8"))
     info = train(config, a.tables, a.seed, a.out, a.device, a.max_windows, a.val_every,
-                 a.val_batches, a.log_every, a.ckpt_minutes)
+                 a.val_batches, a.log_every, a.ckpt_minutes, a.workers)
     print(json.dumps({k: info[k] for k in ("windows_seen", "steps", "param_count",
                                            "flops_per_window", "training_flops", "done")}))
     return 0

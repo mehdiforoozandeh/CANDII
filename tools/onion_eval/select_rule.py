@@ -3,6 +3,8 @@
     python tools/onion_eval/select_rule.py compare --incumbent <arm dir> --challenger <arm dir>
         [--simpler incumbent|challenger|none] [--name <comparison>] [--settlements <tsv>]
     python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p]
+        (columns: arm, seed, state, composite, copy_leak_pass (the gate as applied below: True,
+        False or unreliable), same_view_copy_gain_flag)
     python tools/onion_eval/select_rule.py check-rung --runs <dir> --rung <r> --ladder <json>
     python tools/onion_eval/select_rule.py check-done --runs <dir> --ladder <json>
         [--final <arm dir>] [--baselines <dir>] [--blind-baselines <dir>]
@@ -26,8 +28,8 @@ over >= 3 seeds means the seeds do not vary: REFUSED. Deltas are challenger mean
 mean over seeds.
   RULE_NOT_APPLICABLE_ASK_PI  a goal term is undefined in any seed of either arm; a goal term is
                               outside GOAL_BAND, or its denominator is under its tolerance (see
-                              "Goal terms"); both arms fail the copy-leak gate; or the copy-leak
-                              gate was not measured reliably (mask-seed spread too large)
+                              "Goal terms"); both arms fail the copy-leak gate; or (only with
+                              the copy gain gating, see below) the gate was not measured reliably
   INCUMBENT                   the challenger fails the copy-leak gate (it is out); or the
                               incumbent's composite is higher by more than 2x the spread and no goal
                               of the incumbent is lower by more than 2x that goal's spread; or the
@@ -38,10 +40,15 @@ mean over seeds.
                               goal drops by more than 2x that goal's own spread
   CHALLENGER_AS_SIMPLER       within the bars (or a vetoed win) and --simpler challenger
   TIE_ASK_PI                  within the bars (or a vetoed win) and --simpler none (prints ESCALATE)
-Copy-leak gate per arm: `fail` when a seed has no result (the check did not run), a seed fails
-part 1 (wiring), or a seed fails part 2 while its mask-seed spread is acceptable;
-`unreliable` when a seed's `copy_leak_spread_ok` is not true (the part-2 gain moved too much across
-mask seeds to trust it); else `pass`.
+Copy-leak gate per arm (the PI's definition; D13: an arm that fails it is out): `fail` when a seed
+has no result (the check did not run) or a seed fails part 1 (`part1_wiring_pass`: perturbing hidden
+bins or unavailable tracks moved an output, on any mask seed); else `pass`. The same-view copy gain
+(`same_view_copy_gain_flag`, its relative value and mask-seed spread) is shown by `table` and never
+gates, escalates or refuses, unless the scores.json says `gate_on_copy_gain` true (written when
+guardrail.GATE_ON_COPY_GAIN is True). Then the old gate applies: `unreliable` when a seed's
+`same_view_copy_gain_spread_ok` is not true (the gain moved too much across mask seeds to trust
+it), else `pass` only when every seed's `copy_leak_pass` is true. A scores.json written before the
+switch existed has no `gate_on_copy_gain` and is read with the gate off (part 1 only).
 
 `--simpler` (finding 12 and the simplicity gap). It may be omitted only when the incumbent is the
 challenger's own rung base (`rung<k>_base` against `rung<k>_<arm>`); it is then read from the
@@ -126,6 +133,9 @@ SETTLEMENT_COLUMNS = ("comparison", "incumbent", "challenger", "simpler", "compo
 LADDER_KEYS = ("name", "incumbent", "challenger", "simpler", "d14_condition_1", "verdict",
                "notepad_ref")
 SEED_RE = re.compile(r"^seed(\d+)$")
+#: any of these in a seed dir means the run has started (seed_state `running`)
+STARTED_FILES = ("run.json", "ckpt.pt", "ckpt.pt.tmp", "train_state.pt", "log.jsonl", "DONE",
+                 "RUNNING", "scores.json")
 
 # What every compared scores.json must say (finding 1).
 EXPECT_REGIME = "leave_one_assay_out"
@@ -180,7 +190,10 @@ def load_seed(path: Path) -> dict:
     den = sel.get("denominators") or {}
     return {"goals": g, "composite": _composite(g), "copy_leak_pass": cl.get("copy_leak_pass"),
             "copy_leak_part1": cl.get("part1_wiring_pass"),
-            "copy_leak_spread_ok": cl.get("copy_leak_spread_ok"),
+            "gate_on_copy_gain": cl.get("gate_on_copy_gain") is True,
+            "copy_gain_spread_ok": cl.get("same_view_copy_gain_spread_ok",
+                                          cl.get("copy_leak_spread_ok")),
+            "copy_gain_flag": cl.get("same_view_copy_gain_flag"),
             "denominators": {k: _num(den.get(DENOM_KEYS[k][0])) for k in DENOM_KEYS},
             "reason": sel.get("reason", ""), "goal_reasons": reasons, "path": str(path),
             "evalset_sha256": s.get("evalset_sha256") or "",
@@ -271,9 +284,13 @@ def gate_status(seeds: list[dict]) -> str:
         return "fail"
     if any(s["copy_leak_part1"] is False for s in seeds):
         return "fail"
-    if any(s["copy_leak_spread_ok"] is not True for s in seeds):
-        return "unreliable"
-    return "pass" if all(s["copy_leak_pass"] is True for s in seeds) else "fail"
+    if any(s["gate_on_copy_gain"] for s in seeds):          # the old gate, switched on
+        if any(s["copy_gain_spread_ok"] is not True for s in seeds):
+            return "unreliable"
+        return "pass" if all(s["copy_leak_pass"] is True for s in seeds) else "fail"
+    ok = [s["copy_leak_part1"] if s["copy_leak_part1"] is not None else s["copy_leak_pass"]
+          for s in seeds]
+    return "pass" if all(v is True for v in ok) else "fail"
 
 
 def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None = None) -> dict:
@@ -294,8 +311,9 @@ def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None =
         return dict(out, verdict="INCUMBENT", reason="the challenger fails the copy-leak gate (out)")
     if "unreliable" in (gi, gc):
         return dict(out, verdict="RULE_NOT_APPLICABLE_ASK_PI",
-                    reason="copy-leak gate not measured reliably: the part-2 gain moved too much "
-                           "across mask seeds (copy_leak_spread_ok false); rescore with more windows")
+                    reason="copy-leak gate not measured reliably (gate_on_copy_gain): the same-view "
+                           "copy gain moved too much across mask seeds "
+                           "(same_view_copy_gain_spread_ok false); rescore with more windows")
     undefined = [f"{who} {s['path']}: {k}" for who, arm in (("incumbent", inc), ("challenger", ch))
                  for s in arm for k in GOALS if s["goals"][k] is None]
     if undefined:
@@ -411,12 +429,14 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
 
 def seed_state(d: Path) -> str:
     """failed | done (scored: SCORED and scores.json) | running | queued. Training's DONE alone
-    means trained, not scored, so the seed is still `running` (finding 3)."""
+    means trained, not scored, so the seed is still `running` (finding 3). A run that has started
+    (train.py's log.jsonl or train_state.pt, a checkpoint, or a job log `*.out`) is `running` before
+    its first run.json or DONE exists."""
     if (d / "FAILED").exists():
         return "failed"
     if (d / "SCORED").exists() and (d / "scores.json").is_file():
         return "done"
-    if any((d / f).exists() for f in ("run.json", "ckpt.pt", "DONE", "RUNNING", "scores.json")):
+    if any((d / f).exists() for f in STARTED_FILES) or any(d.glob("*.out")):
         return "running"
     return "queued"
 
@@ -426,12 +446,15 @@ def table(runs, prefix: str = "") -> list[dict]:
     for arm in sorted(p for p in Path(runs).iterdir() if p.is_dir() and p.name.startswith(prefix)):
         for d in seed_dirs(arm):
             st = seed_state(d)
-            comp, cl = None, None
+            comp, cl, flag = None, None, None
             if (d / "scores.json").is_file():
                 s = load_seed(d / "scores.json")
-                comp, cl = s["composite"], s["copy_leak_pass"]
+                g = gate_status([s])            # the gate as select_rule applies it (old scores too)
+                comp, flag = s["composite"], s["copy_gain_flag"]
+                cl = {"pass": True, "fail": False}.get(g, g)
             rows.append({"arm": arm.name, "seed": int(SEED_RE.match(d.name).group(1)), "state": st,
-                         "composite": comp, "copy_leak_pass": cl})
+                         "composite": comp, "copy_leak_pass": cl,
+                         "same_view_copy_gain_flag": flag})
     return rows
 
 
@@ -690,10 +713,11 @@ def main(argv=None) -> int:
             print(f"ESCALATE: {res['reason']}")
         return 0
     if a.cmd == "table":
-        print("arm\tseed\tstate\tcomposite\tcopy_leak_pass")
+        print("arm\tseed\tstate\tcomposite\tcopy_leak_pass\tsame_view_copy_gain_flag")
         for row in table(a.runs, a.prefix):
             comp = "" if row["composite"] is None else f"{row['composite']:.6g}"
-            print(f"{row['arm']}\t{row['seed']}\t{row['state']}\t{comp}\t{row['copy_leak_pass']}")
+            print(f"{row['arm']}\t{row['seed']}\t{row['state']}\t{comp}\t{row['copy_leak_pass']}"
+                  f"\t{row['same_view_copy_gain_flag']}")
         return 0
     if a.cmd == "check-rung":
         missing = check_rung(a.runs, a.rung, a.ladder)
