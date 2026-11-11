@@ -271,3 +271,15 @@ The PI answered "yes to all six, go with your recommendations". The question: sh
 
 ## 2026-11-11 Compute and storage used so far (decision D3)
 This account is partial. It sums only the figures that the plan Log or the result files state; jobs without a stated CPU-h are listed but not counted. CPU-h stated: the cluster probe about 0.6 (`.orchestrate/cluster_evidence.md`), the EpiATLAS and ChIP-Atlas catalogs 0.14 (Nibi job 26815002), the ENCODE catalog and census about 5.9, and the DNase-seq pipeline setup about 7.8 so far: 0.6 + 0.14 + 5.9 + 7.8 = 14.4 CPU-h. GPU: rung 1 of the pilot ran 3 seeds on a Fir GPU slice; the Log says "DONE in ~32 min" and does not say whether that is per seed or in all. Not counted (no CPU-h stated): the region strata build (Nibi job 26813690, 6 min 59 s wall), the pilot training on Fir, and the pilot scoring jobs. Still running at the last Log line that names them (the queue was not checked for this entry): the EIC board reproduction, Nibi 26816540, 26818325, 26818330, 26818332 (each 56 CPU, 224 GB, 10 h requested, so at most 4 x 56 x 10 = 2240 CPU-h); the ChIP-seq and ATAC-seq smokes, Nibi 26816043 and 26817587; the DNase-seq smoke, Nibi 26820304; the pilot's rung 1 CPU twin, Fir 3432010; and the pilot scoring jobs, Fir 3438391, 3438393, 3438395, 3439926, 3438399, 3438400, 3438401, 3439674, 3438402, 3438404, 3438406. Storage stated: Nibi `/project` holds the genome layer (843M), the kit (34M), the hg38 pipeline references (8.5 GB), the DNase-seq pipeline (6.1 GB) and the strata masks (44 MB); Nibi `/scratch` holds the EIC truth copy (53 GB), left there with Max's copy as the backup; Fir holds its kit (37M) and the pilot tables (size not stated).
+
+## 2026-11-11 Agent call: the read download stays on Nibi, with more parallel connections
+
+The download route for the EIC reads stays on Nibi. The staging step uses about 256 connections in total: 4 files at once, with 64 byte ranges each.
+
+- The measured rate from Nibi to ENCODE's storage is about 0.14 MB/s per connection. The rate rose linearly up to 64 connections (8.6 to 9.3 MB/s) and showed no cap.
+- If the linear scaling holds, 256 connections give about 36 MB/s. The first priority of the build list (291.4 GB) then takes about 2.2 hours, and the whole list (2791.6 GB) takes about 22 hours.
+- The scaling beyond 64 connections is an assumption. The first staging jobs measure the total rate.
+- The fallback, if the scaling fails: download on Fir (129.5 MB/s measured with 4 files and 16 ranges each) and move the reads to Nibi with Globus. That route needs one Globus action from the PI, because no authenticated route exists.
+- Reason for staying on Nibi: the pipelines, the references and the processing are on Nibi, Fir's environment setup failed on 12 nodes in two days, and the fallback needs the PI.
+
+Evidence: the download-route measurement entry above (probe jobs on Nibi 26823539 and 26824325, on Fir 3440471, 3441260 and 3442621).
