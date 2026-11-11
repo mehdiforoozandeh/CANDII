@@ -1,7 +1,9 @@
 """E6 -- the onion eval set (`evalset.json`) and the scorable set (PI ruling 4), from a tables dir.
 
     python tools/onion_eval/evalset.py build --tables <dir> [--strata <masks.h5>] [--n-regions 512]
-        [--n-fit-regions 16] [--region-bins 16384] [--seed 0] [--include-blind] --out <evalset.json>
+        [--n-fit-regions 16] [--region-bins 16384] [--seed 0] [--include-blind]
+        [--inputs-roles train|train,val] [--pair-splits train,val] [--regions-bed <bed>
+        [--regions-exclude]] --out <evalset.json>
     python tools/onion_eval/evalset.py check --evalset <json> [--tables <dir>] [--allow-blind]
 
 `build` writes `evalset.json` (pinned interface D) and, beside it, `scorable.tsv` and
@@ -11,8 +13,9 @@ records `tables_sha256` (`minicandi.dataset.tables_sha256` of the tables at buil
 refuses tables on disk, or a run checkpoint, that do not match it (finding 9).
 
 Blind eval set (pinned path convention). Built only with `--include-blind`, only to a file named
-`evalset_blind.json`: `eval/eic_v2/evalset_blind.json` from `tables/eic_v2` (the tables that hold
-the blind measurements). A validation eval set is never named `evalset_blind.json`. Blind passes
+`evalset_blind.json` or `evalset_blind_<tag>.json` (SC): `eval/eic_v2/evalset_blind.json` from
+`tables/eic_v2` (the tables that hold the blind measurements). A validation eval set is never
+named so. Blind passes
 over that eval set are logged in `BLIND_PASSES.tsv` beside it (score.py).
 
 Regions (agent decision, logged). Fixed seeded random regions of `region_bins` (16384 = 2^14) bins,
@@ -44,6 +47,28 @@ pr1 and the target's pr2, PI ruling 6); a pair without them is dropped and count
 Replicate pairs. Every pair id whose rung is a replicate-ladder rung (layers.RUNGS), any split
 (the layers job reads them all; the scorer scores only the pairs of its own split).
 
+Options (chunk SC; each one off by default, and an eval set built with the defaults is byte-identical
+to one built before SC; a non-default option adds its own keys and changes no existing key):
+  --inputs-roles train|train,val  `train,val` (only with --include-blind; PI ruling 21): a BLIND
+                       target's inputs also hold the cell's validation tracks (its base views of
+                       other assays, and its accessibility track in `accessibility_only`); a
+                       validation target keeps training inputs only. Recorded as `inputs_roles`.
+  --pair-splits a,b    only correction and replicate pairs whose `split` is in the list are written
+                       (correction pairs also keep today's split rule); E8a passes `train,val` so a
+                       blind eval set lists no blind pair. Recorded as `pair_splits`.
+  --regions-bed B [--regions-exclude]  eval and fit regions are drawn only from candidate blocks
+                       that lie wholly inside the (merged) BED intervals, or with --regions-exclude
+                       only from blocks that overlap none (the leakage square). Recorded as
+                       `regions_bed`, `regions_bed_mode`, `n_candidate_regions_before_bed`.
+  A blind eval set may be named `evalset_blind.json` or `evalset_blind_<tag>.json`.
+
+Read overlap (DT, Log "FOR E7a"). The testbed's arms of one track come from the same reads and
+each arm's halves were split independently, so the source pr1 and the target pr2 of a correction
+pair can share reads when both sides belong to one experiment and one side is a `testbed` layer
+row. Such a pair gets `read_disjoint: 0` and a `read_disjoint_reason`, and the eval set the count
+`correction_pairs_not_read_disjoint`; the scorer keeps it out of every correction metric. Both keys
+are written only when such a pair exists.
+
 Scorable set (ruling 4, the plan's rule), one row per assay:
   imputation_scorable  >= 3 validation tracks with pseudoreplicate halves, from >= 3 distinct cells,
                        and >= 5 training tracks
@@ -59,6 +84,7 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -83,6 +109,17 @@ SCORABLE_COLUMNS = ("assay", "n_train", "n_val", "n_val_cells", "has_floors",
                     "imputation_scorable", "correction_scorable", "reason")
 LAYOUT = "pr1 source -> pr2 target (PI ruling 6)"
 BLIND_EVALSET_NAME = "evalset_blind.json"
+#: a blind eval set is `evalset_blind.json` or `evalset_blind_<tag>.json` (SC)
+BLIND_EVALSET_RE = re.compile(r"evalset_blind(_[A-Za-z0-9][A-Za-z0-9._-]*)?\.json")
+INPUT_ROLES = (("train",), ("train", "val"))
+TESTBED = "testbed"
+NOT_READ_DISJOINT = ("one experiment's reads on both sides and a testbed arm on one side: the "
+                     "testbed split each arm's halves independently, so the source pr1 and the "
+                     "target pr2 can share reads (DT, Log 'FOR E7a')")
+
+
+def is_blind_evalset_name(name: str) -> bool:
+    return bool(BLIND_EVALSET_RE.fullmatch(str(name)))
 
 
 def read_tsv(path) -> list[dict]:
@@ -162,6 +199,46 @@ def candidate_blocks(gdir: Path, region_bins: int, min_valid: float = MIN_VALID)
     return out
 
 
+def read_bed(path) -> dict:
+    """chrom -> merged, sorted [(start_bp, end_bp)] of a BED file (0-based, half-open); header,
+    track and comment lines are skipped; overlapping or touching intervals are merged."""
+    raw = defaultdict(list)
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        f = line.split("\t") if "\t" in line else line.split()
+        if not f or f[0].startswith(("#", "track", "browser")) or len(f) < 3:
+            continue
+        s, e = int(f[1]), int(f[2])
+        if e < s:
+            raise ValueError(f"{path}: interval end before start: {line!r}")
+        raw[f[0]].append((s, e))
+    out = {}
+    for c, iv in raw.items():
+        merged = []
+        for s, e in sorted(iv):
+            if merged and s <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], e)
+            else:
+                merged.append([s, e])
+        out[c] = [(s, e) for s, e in merged]
+    return out
+
+
+def filter_blocks(cands: list, bed: dict, region_bins: int, exclude: bool = False) -> list:
+    """Candidate blocks wholly inside one merged BED interval, or (exclude) overlapping none."""
+    import bisect
+    out = []
+    for c, sb in cands:
+        s, e = int(sb) * 25, (int(sb) + region_bins) * 25
+        iv = bed.get(c, [])
+        i = bisect.bisect_right([a for a, _ in iv], s) - 1     # last interval starting <= s
+        inside = i >= 0 and iv[i][1] >= e
+        j = bisect.bisect_left([a for a, _ in iv], e)          # intervals starting before e
+        overlaps = any(b > s for _, b in iv[max(0, i):j]) if j > 0 else False
+        if (not exclude and inside) or (exclude and not overlaps):
+            out.append([c, sb])
+    return out
+
+
 def draw_regions(cands: list, n: int, n_fit: int, seed: int) -> tuple[list, list]:
     """Seeded draw without replacement: n eval regions, then n_fit disjoint fit regions; each list
     sorted by (chrom, start) so the scorer's concatenation order is fixed."""
@@ -174,13 +251,25 @@ def draw_regions(cands: list, n: int, n_fit: int, seed: int) -> tuple[list, list
 
 # --------------------------------------------------------------------------------------- items
 
-def imputation_targets(rows: list[dict], splits) -> list[dict]:
-    train = base_views(rows, ("train",))
+def input_pool(rows: list[dict], inputs_roles, target_role: str) -> dict:
+    """(cell, assay) -> the base view a target of role `target_role` may take as input: training
+    tracks, plus (inputs_roles = train,val, blind targets only; ruling 21) validation tracks of a
+    (cell, assay) with no training track."""
+    pool = base_views(rows, ("train",))
+    if "val" in inputs_roles and target_role == "blind":
+        for k, r in base_views(rows, ("val",)).items():
+            pool.setdefault(k, r)
+    return pool
+
+
+def imputation_targets(rows: list[dict], splits, inputs_roles=("train",)) -> list[dict]:
+    pools = {role: input_pool(rows, inputs_roles, role) for role in ("val", "blind")}
     targets = base_views(rows, splits)
     items = []
     for (cell, assay), r in sorted(targets.items()):
         if r["in_eic"] == "train" or assay == CONTROL:
             continue
+        train = pools[r["in_eic"]]
         loao = sorted(t["measurement_id"] for (c, a), t in train.items() if c == cell and a != assay)
         items.append({"target": r["measurement_id"], "inputs": loao,
                       "regime": "leave_one_assay_out", "split": r["in_eic"],
@@ -195,33 +284,46 @@ def imputation_targets(rows: list[dict], splits) -> list[dict]:
     return items
 
 
-def control_targets(rows: list[dict], splits) -> list[dict]:
+def control_targets(rows: list[dict], splits, inputs_roles=("train",)) -> list[dict]:
     """Validation (or blind) ChIP-seq control tracks, each with the cell's training tracks of the
     other assays as inputs; scored apart from the imputation headline (finding 16)."""
-    train = base_views(rows, ("train",))
+    pools = {role: input_pool(rows, inputs_roles, role) for role in ("val", "blind")}
     out = []
     for (cell, assay), r in sorted(base_views(rows, splits).items()):
         if r["in_eic"] == "train" or assay != CONTROL:
             continue
+        train = pools[r["in_eic"]]
         loao = sorted(t["measurement_id"] for (c, a), t in train.items() if c == cell and a != assay)
         out.append({"target": r["measurement_id"], "inputs": loao, "regime": "control",
                     "split": r["in_eic"], "assay": assay, "cell": cell, "has_halves": _halves(r)})
     return out
 
 
-def correction_pairs(pairs: list[dict], meas: dict, splits) -> tuple[list, int]:
+def shares_reads(a: dict, b: dict) -> bool:
+    """True when the pr1 half of `a` and the pr2 half of `b` can share reads: one experiment on
+    both sides and a testbed-layer row on one side (the testbed split each arm's halves on its own)."""
+    same = (a.get("experiment") or "") != "" and a.get("experiment") == b.get("experiment")
+    return same and TESTBED in (a.get("layer"), b.get("layer"))
+
+
+def correction_pairs(pairs: list[dict], meas: dict, splits, pair_splits=None) -> tuple[list, int]:
     out, dropped = [], 0
     for p in pairs:
         if p["rung"] != "designed" or p["split"] not in splits:
+            continue
+        if pair_splits is not None and p["split"] not in pair_splits:
             continue
         a, b = meas.get(p["a"]), meas.get(p["b"])
         if a is None or b is None or not (_halves(a) and _halves(b)):
             dropped += 1
             continue
-        out.append({"source": p["a"], "target": p["b"], "never_trained": int(p["never_trained"] or 0),
-                    "subset_pair": int(p["subset_pair"] or 0), "split": p["split"],
-                    "pair_id": p["pair_id"], "knob": p.get("knobs_differing", ""),
-                    "assay": p["assay"], "cell": p["cell"]})
+        item = {"source": p["a"], "target": p["b"], "never_trained": int(p["never_trained"] or 0),
+                "subset_pair": int(p["subset_pair"] or 0), "split": p["split"],
+                "pair_id": p["pair_id"], "knob": p.get("knobs_differing", ""),
+                "assay": p["assay"], "cell": p["cell"]}
+        if shares_reads(a, b):
+            item.update(read_disjoint=0, read_disjoint_reason=NOT_READ_DISJOINT)
+        out.append(item)
     return out, dropped
 
 
@@ -234,7 +336,7 @@ def scorable_rows(rows: list[dict], cor: list[dict], splits=("val",)) -> list[di
     assays = sorted({r["assay"] for r in rows})
     nt_tracks = defaultdict(set)
     for p in cor:
-        if p["never_trained"] == 1 and p["subset_pair"] == 0:
+        if p["never_trained"] == 1 and p["subset_pair"] == 0 and p.get("read_disjoint", 1):
             nt_tracks[p["assay"]].add(p["cell"])
     out = []
     for a in assays:
@@ -282,27 +384,49 @@ def layer_scorable(pairs: list[dict], ids: list) -> dict:
 # --------------------------------------------------------------------------------------- build
 
 def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_bins=REGION_BINS,
-          seed=0, include_blind=False) -> dict:
+          seed=0, include_blind=False, inputs_roles=("train",), pair_splits=None,
+          regions_bed=None, regions_exclude=False) -> dict:
     from minicandi.dataset import tables_sha256
     tables = Path(tables).resolve()
     out = Path(out)
-    if include_blind != (out.name == BLIND_EVALSET_NAME):
+    if include_blind != is_blind_evalset_name(out.name):
         raise ValueError(f"a blind eval set is built with --include-blind into a file named "
-                         f"{BLIND_EVALSET_NAME}, and only then (got include_blind={include_blind}, "
-                         f"{out.name})")
+                         f"{BLIND_EVALSET_NAME} or evalset_blind_<tag>.json, and only then (got "
+                         f"include_blind={include_blind}, {out.name})")
     if region_bins <= 0 or region_bins & (region_bins - 1):
         raise ValueError("region_bins must be a power of 2")
+    inputs_roles = tuple(inputs_roles)
+    if inputs_roles not in INPUT_ROLES:
+        raise ValueError(f"inputs_roles must be one of {[','.join(r) for r in INPUT_ROLES]}")
+    if "val" in inputs_roles and not include_blind:
+        raise ValueError("--inputs-roles train,val is allowed only with --include-blind (ruling 21: "
+                         "a blind target's inputs may hold the cell's validation tracks)")
+    if pair_splits is not None:
+        pair_splits = tuple(pair_splits)
+        bad = [s for s in pair_splits if s not in ("train", "val", "blind")]
+        if bad or not pair_splits:
+            raise ValueError(f"pair_splits: unknown split(s) {bad} (train, val, blind)")
+    if regions_exclude and not regions_bed:
+        raise ValueError("--regions-exclude needs --regions-bed")
     rows = read_tsv(tables / "measurements.tsv")
     meas = {r["measurement_id"]: r for r in rows}
     pairs = read_tsv(tables / "pairs.tsv")
     splits = ("val", "blind") if include_blind else ("val",)
 
     cands = candidate_blocks(genome_dir(tables), region_bins)
+    n_before_bed = len(cands)
+    if regions_bed:
+        cands = filter_blocks(cands, read_bed(regions_bed), region_bins, exclude=regions_exclude)
+        if len(cands) < n_regions + n_fit_regions:
+            raise ValueError(f"{regions_bed}: {len(cands)} candidate blocks "
+                             f"{'outside' if regions_exclude else 'inside'} the BED intervals, "
+                             f"need {n_regions} + {n_fit_regions}")
     regions, fit_regions = draw_regions(cands, n_regions, n_fit_regions, seed)
-    imp = imputation_targets(rows, splits)
-    ctl = control_targets(rows, splits)
-    cor, dropped = correction_pairs(pairs, meas, splits)
-    rep = [p["pair_id"] for p in pairs if p["rung"] in REPLICATE_RUNGS and p["a"] != p["b"]]
+    imp = imputation_targets(rows, splits, inputs_roles)
+    ctl = control_targets(rows, splits, inputs_roles)
+    cor, dropped = correction_pairs(pairs, meas, splits, pair_splits)
+    rep = [p["pair_id"] for p in pairs if p["rung"] in REPLICATE_RUNGS and p["a"] != p["b"]
+           and (pair_splits is None or p["split"] in pair_splits)]
     sc = scorable_rows(rows, cor)
     names = []
     if strata and Path(strata).is_file():
@@ -323,6 +447,18 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
                      "layers": layer_scorable(pairs, rep)},
         "strata": names, "strata_path": str(Path(strata).resolve()) if names else "",
     }
+    # SC options: keys only when an option is not at its default (default build byte-identical)
+    if inputs_roles != ("train",):
+        ev["inputs_roles"] = list(inputs_roles)
+    if pair_splits is not None:
+        ev["pair_splits"] = list(pair_splits)
+    if regions_bed:
+        ev.update(regions_bed=str(Path(regions_bed).resolve()),
+                  regions_bed_mode="exclude" if regions_exclude else "inside",
+                  n_candidate_regions_before_bed=n_before_bed)
+    n_shared = sum(1 for p in cor if p.get("read_disjoint", 1) == 0)
+    if n_shared:
+        ev["correction_pairs_not_read_disjoint"] = n_shared
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(ev, indent=1), encoding="utf-8")
     write_tsv(out.parent / "scorable.tsv", SCORABLE_COLUMNS, sc)
@@ -363,8 +499,11 @@ def check(evalset, tables=None, allow_blind=False) -> list[str]:
         for m in [t["target"]] + t["inputs"]:
             if m not in meas:
                 bad.append(f"{m} not in measurements.tsv")
+        val_ok = ("val" in ev.get("inputs_roles", ["train"])
+                  and meas.get(t["target"], {}).get("in_eic") == "blind")
         for m in t["inputs"]:
-            if m in meas and meas[m]["in_eic"] != "train":
+            if m in meas and meas[m]["in_eic"] != "train" and not (
+                    val_ok and meas[m]["in_eic"] == "val"):
                 bad.append(f"input {m} of {t['target']} is not a training track")
     ids = [t["target"] for t in ev["imputation_targets"]] + \
           [m for p in ev["correction_pairs"] for m in (p["source"], p["target"])]
@@ -406,6 +545,11 @@ def main(argv=None) -> int:
     b.add_argument("--region-bins", type=int, default=REGION_BINS)
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--include-blind", action="store_true")
+    b.add_argument("--inputs-roles", default="train", choices=("train", "train,val"))
+    b.add_argument("--pair-splits", default=None,
+                   help="comma list of splits; only correction and replicate pairs of these splits")
+    b.add_argument("--regions-bed", default=None)
+    b.add_argument("--regions-exclude", action="store_true")
     b.add_argument("--out", required=True)
     c = sub.add_parser("check")
     c.add_argument("--evalset", required=True)
@@ -415,7 +559,10 @@ def main(argv=None) -> int:
     if a.cmd == "build":
         ev = build(a.tables, a.out, strata=a.strata, n_regions=a.n_regions,
                    n_fit_regions=a.n_fit_regions, region_bins=a.region_bins, seed=a.seed,
-                   include_blind=a.include_blind)
+                   include_blind=a.include_blind, inputs_roles=tuple(a.inputs_roles.split(",")),
+                   pair_splits=(tuple(s for s in a.pair_splits.split(",") if s)
+                                if a.pair_splits is not None else None),
+                   regions_bed=a.regions_bed, regions_exclude=a.regions_exclude)
         print(f"evalset: {len(ev['regions'])} regions, {len(ev['imputation_targets'])} imputation "
               f"items ({len(ev['targets_without_halves'])} targets without halves), "
               f"{len(ev['control_targets'])} control targets, "
