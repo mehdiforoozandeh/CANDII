@@ -144,7 +144,8 @@ class _Toy(C.MiniCandi):
 
     def forward(self, batch):
         B, L, Ac = batch["x_counts"].shape
-        x = self.tr(batch["x_counts"], batch["c_in"][..., C.LOG2_DEPTH_COL])
+        vis = M.MaskHandler.visible(batch["x_avail"], batch["x_bin_mask"])
+        x = self.tr(batch["x_counts"], batch["c_in"][..., C.LOG2_DEPTH_COL], vis)
         if self.leak:                       # deliberately reads the raw counts at hidden bins
             h = self.inp(x[..., None])
         else:
@@ -160,9 +161,10 @@ class _Toy(C.MiniCandi):
 @pytest.mark.parametrize("injection", ["concat", "film"])
 @pytest.mark.parametrize("mask_mode", ["token", "drop"])
 @pytest.mark.parametrize("dna", ["own", "off", "shuffled"])
-def test_components_pass_the_wiring_check(injection, mask_mode, dna):
+@pytest.mark.parametrize("transform", M.TRANSFORMS)
+def test_components_pass_the_wiring_check(injection, mask_mode, dna, transform):
     torch.manual_seed(0)
-    model = _Toy(injection, mask_mode, dna).eval()
+    model = _Toy(injection, mask_mode, dna, transform).eval()
     for p in model.head.lin.parameters():                   # leave the zero init: make it bite
         torch.nn.init.normal_(p, std=0.5)
     b = _toy_batch()
@@ -276,3 +278,16 @@ def test_ckpt_format_round_trips(tmp_path):
     assert set(back) == set(C.CKPT_KEYS) and back["param_count"] == model.param_count()
     m2 = _Toy()
     m2.load_state_dict(back["state_dict"])
+
+
+@pytest.mark.parametrize("name", M.INPUT_ONLY)
+def test_window_transforms_ignore_hidden_bins(name):
+    g = torch.Generator().manual_seed(1)
+    y = torch.randint(0, 30, (2, 600, C.A), generator=g, dtype=torch.int32)
+    vis = torch.rand(2, 600, C.A, generator=g) > 0.3
+    d = torch.full((2, C.A), 24.0)
+    tr = M.CountTransform(name)
+    y2 = torch.where(vis, y, y + 1000)
+    a, b = tr(y, d, vis), tr(y2, d, vis)
+    assert torch.equal(a[vis], b[vis])
+    assert not torch.equal(tr(y, d)[vis], tr(y2, d)[vis])        # without `visible` it leaks

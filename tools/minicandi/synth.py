@@ -19,8 +19,11 @@ and returns the tables directory. Planted effects:
   noise        counts ~ NB(mean s * rate * effect, size 5), s = depth / 2**24;
                pr1 ~ Binomial(counts, 1/2), pr2 = counts - pr1
 
-Cells: T_s<i> (train), V_s<i> (val), B_s<i> (blind). Assays default to DNase-seq, H3K27ac,
-H3K4me3, H3K27me3 and the control. `withheld.tsv` holds two combinations:
+Split per TRACK, as EIC: cells s0..s<n-1> each hold training tracks, and `val_tracks` /
+`blind_tracks` (cell index, assay) mark the validation and blind tracks (defaults: s0 H3K4me3,
+s1 H3K27ac, s2 DNase-seq val; s3 H3K4me3, s4 H3K27ac blind); every other track, the control
+included, is training. Assays default to DNase-seq, H3K27ac, H3K4me3, H3K27me3 and the control.
+Datasets are chunked at <= 4096 bins. `withheld.tsv` holds two combinations:
 (mapq 0 -> se) for narrow_histone, and (depth 0.50 -> mapq 0) for every class (`*`).
 """
 from __future__ import annotations
@@ -64,7 +67,7 @@ def _write_counts(path: Path, arrays: dict, mid: str, depth: float) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as f:
         for chrom, v in arrays.items():
-            f.create_dataset(chrom, data=v.astype(np.uint32))
+            f.create_dataset(chrom, data=v.astype(np.uint32), chunks=(min(4096, v.size),))
         f.attrs.update({"schema": 1, "measurement_id": mid, "depth_reads": depth,
                         "depth_fragments": depth, "resolution": C.RES,
                         "counting_rule": "synthetic"})
@@ -75,8 +78,12 @@ def _nb(rng, mu: np.ndarray) -> np.ndarray:
     return rng.negative_binomial(NB_SIZE, p)
 
 
-def make_synthetic_tables(root, *, n_train: int = 4, n_val: int = 1, n_blind: int = 1,
-                          assays=DEFAULT_ASSAYS, chrom_bins=None, smooth: int = 6,
+VAL_TRACKS = ((0, "H3K4me3"), (1, "H3K27ac"), (2, "DNase-seq"))
+BLIND_TRACKS = ((3, "H3K4me3"), (4, "H3K27ac"))
+
+
+def make_synthetic_tables(root, *, n_cells: int = 6, val_tracks=VAL_TRACKS,
+                          blind_tracks=BLIND_TRACKS, assays=DEFAULT_ASSAYS, chrom_bins=None, smooth: int = 6,
                           seed: int = 0, name: str = "synth") -> Path:
     root = Path(root)
     rng = np.random.default_rng(seed)
@@ -104,19 +111,20 @@ def make_synthetic_tables(root, *, n_train: int = 4, n_val: int = 1, n_blind: in
     (gdir / "chrom_sizes.json").write_text(
         json.dumps({c: nb * C.RES for c, nb in chrom_bins.items()}), encoding="utf-8")
 
-    cells = ([(f"T_s{i}", "train") for i in range(n_train)]
-             + [(f"V_s{i}", "val") for i in range(n_val)]
-             + [(f"B_s{i}", "blind") for i in range(n_blind)])
+    roles = {**{(i, a): "val" for i, a in val_tracks},
+             **{(i, a): "blind" for i, a in blind_tracks}}
+    cells = [f"s{i}" for i in range(n_cells)]
     shared = {c: _smooth(rng.standard_normal(nb), smooth) for c, nb in chrom_bins.items()}
     rows, pairs = [], []
     offsets = {a: (0.0 if a == C.CONTROL else 0.5) for a in assays}
     track_no = 0
-    for ci, (cell, role) in enumerate(cells):
+    for ci, cell in enumerate(cells):
         z = {c: 0.7 * shared[c] + 0.7 * _smooth(rng.standard_normal(nb), smooth)
              + 2.0 * (gc[c] - 0.5) for c, nb in chrom_bins.items()}
         lab = LABS[ci % len(LABS)]
         donor = f"donor{ci}"
         for a in assays:
+            role = roles.get((ci, a), "train")
             track_no += 1
             exp = f"ENCSR{track_no:06d}"
             eic = f"C{ci + 1:02d}M{C.TRACK_INDEX[a] + 1:02d}"
@@ -214,7 +222,8 @@ def _write_tsv(path: Path, columns: tuple, rows: list[dict]) -> None:
 def make_evalset(tables_dir, *, n_regions: int = 2, region_bins: int = 256, seed: int = 0,
                  out=None) -> Path:
     """A tiny evalset.json over the synthetic tables (pinned interface D keys used by the
-    dataset): one leave-one-assay-out target per val track, one correction pair per val track."""
+    dataset): one leave-one-assay-out target per val track (inputs = the same cell's training
+    base views), one correction pair per val track (se arm -> base)."""
     tables_dir = Path(tables_dir)
     rows = list(csv.DictReader(open(tables_dir / "measurements.tsv", encoding="utf-8"),
                                delimiter="\t"))
@@ -226,7 +235,8 @@ def make_evalset(tables_dir, *, n_regions: int = 2, region_bins: int = 256, seed
         c = chroms[int(rng.integers(len(chroms)))]
         nb = sizes[c] // C.RES
         regions.append([c, int(rng.integers(0, nb - region_bins + 1))])
-    base = {(r["cell"], r["assay"]): r["measurement_id"] for r in rows if not r["arm_knob"]}
+    base = {(r["cell"], r["assay"]): r["measurement_id"] for r in rows
+            if not r["arm_knob"] and r["in_eic"] == "train"}      # inputs: TRAINING tracks
     imp, cor = [], []
     for r in rows:
         if r["in_eic"] != "val" or r["arm_knob"]:

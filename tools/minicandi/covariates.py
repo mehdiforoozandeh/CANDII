@@ -11,9 +11,9 @@
 A categorical value's id is 1 + its index in the vocabulary; an unknown or empty value has id 0.
 
 Vectors hold RAW values: log2_depth = log2(depth_reads x depth_scale), 0/1 flags, read length in
-bp, MAPQ threshold, categorical ids as floats. An empty numeric cell is written as the column's
-fixed centre (so it standardises to 0). `CovariateEmbedding` standardises the numeric columns with
-fixed constants (no fitted state, so a checkpoint never depends on a fit) and embeds each
+bp, MAPQ threshold, categorical ids as floats. An empty numeric or flag cell (run_type, dedup
+included) is written as the column's fixed centre (so it standardises to 0).
+`CovariateEmbedding` standardises the numeric columns with fixed constants (no fitted state, so a checkpoint never depends on a fit) and embeds each
 categorical column through its own `nn.Embedding`.
 
 D6: read-derived QC (`QC_COLUMNS`) goes into C only when `qc_on_input` is set, never into C'.
@@ -70,6 +70,14 @@ def _num(v, col: str) -> float:
     return float(v)
 
 
+def _flag(v, true_set, col: str) -> float:
+    """0/1 flag; an empty cell is the column centre (0.5), as for numeric columns."""
+    t = "" if v is None else str(v).strip().lower()
+    if t == "":
+        return NUMERIC[col][0]
+    return 1.0 if t in true_set else 0.0
+
+
 class CovariateEncoder:
     """measurements.tsv row (dict of str) -> raw float32 vectors for C and C'."""
 
@@ -90,9 +98,9 @@ class CovariateEncoder:
         else:
             log2_depth = math.log2(max(float(d), 1.0) * float(depth_scale))
         v = [log2_depth,
-             1.0 if str(row.get("run_type", "")).strip().lower() in _PE else 0.0,
+             _flag(row.get("run_type"), _PE, "run_type_pe"),
              _num(row.get("read_length"), "read_length"),
-             1.0 if str(row.get("dedup", "")).strip().lower() in _TRUE else 0.0,
+             _flag(row.get("dedup"), _TRUE, "dedup_on"),
              _num(row.get("mapq_threshold"), "mapq_threshold")]
         v += [float(self.cat_id(field, row.get(field))) for field in CATEGORICAL.values()]
         out = np.asarray(v, dtype=np.float32)

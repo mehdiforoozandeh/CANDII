@@ -14,7 +14,14 @@ Batch (dict of torch tensors; B windows, L bins, A = 36 tracks, K covariates):
   y_avail    bool    [B, A]      a target exists
   y_kind     uint8   [B, A]      0 none, 1 imputation, 2 correction, 3 same-view reconstruction
   avg        float32 [B, L, A]   optional, leave-one-cell-out per-position average rate
-  meta       list[dict]          cell, chrom, start_bin, measurement ids in and out
+  meta       list[dict]          cell, chrom, start_bin, measurement ids in and out:
+                                 `inputs`, `targets` (lists of ids) and `measurements_in`,
+                                 `measurements_out` (lists of length A, "" where none)
+Optional keys added by M1 for two-step training (decision D15; an ADDITION to pinned interface C,
+no pinned key changed), present only when config `two_step` is true:
+  c_base     float32 [B, A, K_META]  C_base: the base view's covariates of every target's track
+                                     (0 where the track has no target or no base view)
+  y_base     int32   [B, L, A]       the base view's counts (thinned under base_depth = fixed)
 
 Covariate columns hold RAW values (log2 depth in log2 reads, read length in bp, categorical ids
 as floats); standardisation and embedding live in the network (`covariates.CovariateEmbedding`),
@@ -93,7 +100,7 @@ DTYPES = {
     "x_counts": torch.int32, "x_avail": torch.bool, "x_bin_mask": torch.bool,
     "x_dna": torch.uint8, "c_in": torch.float32, "c_out": torch.float32,
     "y_counts": torch.int32, "y_avail": torch.bool, "y_kind": torch.uint8,
-    "avg": torch.float32,
+    "avg": torch.float32, "c_base": torch.float32, "y_base": torch.int32,
 }
 REQUIRED = ("x_counts", "x_avail", "x_bin_mask", "x_dna", "c_in", "c_out", "y_counts",
             "y_avail", "y_kind", "meta")
@@ -108,7 +115,8 @@ def k_input(config: dict | None) -> int:
 def expected_shapes(B: int, L: int, K: int) -> dict:
     return {"x_counts": (B, L, A), "x_avail": (B, A), "x_bin_mask": (B, L, A),
             "x_dna": (B, L * RES), "c_in": (B, A, K), "c_out": (B, A, K_META),
-            "y_counts": (B, L, A), "y_avail": (B, A), "y_kind": (B, A), "avg": (B, L, A)}
+            "y_counts": (B, L, A), "y_avail": (B, A), "y_kind": (B, A), "avg": (B, L, A),
+            "c_base": (B, A, K_META), "y_base": (B, L, A)}
 
 
 def validate_batch(batch: dict, K: int | None = None) -> tuple[int, int]:

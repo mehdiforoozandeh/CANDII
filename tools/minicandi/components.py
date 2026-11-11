@@ -205,24 +205,29 @@ def _pos(z: torch.Tensor) -> torch.Tensor:
     return F.softplus(z, beta=10.0) + MU_MIN
 
 
-def _avg_rank_normal(x: torch.Tensor) -> torch.Tensor:
-    """Per-window quantile normalisation along dim 1 of [B, L, A]: average ranks of ties, then
-    the standard-normal quantile of (rank - 0.5) / L."""
-    B, L, Ac = x.shape
-    xt = x.transpose(1, 2).contiguous()                       # [B, A, L]
-    srt, _ = torch.sort(xt, dim=-1)
-    lo = torch.searchsorted(srt, xt, right=False).float()
-    hi = torch.searchsorted(srt, xt, right=True).float()
-    u = ((lo + hi) / 2.0) / L                                  # (avg 1-based rank - 0.5) / L
-    u = u.clamp(0.5 / L, 1 - 0.5 / L)
+def _avg_rank_normal(x: torch.Tensor, visible: torch.Tensor) -> torch.Tensor:
+    """Per-window quantile normalisation along dim 1 of [B, L, A] over VISIBLE bins only:
+    average ranks of ties among the visible values, then the standard-normal quantile of
+    (rank - 0.5) / n_visible. Hidden and missing bins get 0 and never affect a visible score."""
+    xt = x.transpose(1, 2).float()                             # [B, A, L]
+    vt = visible.transpose(1, 2)
+    big = torch.finfo(torch.float32).max
+    srt, _ = torch.sort(torch.where(vt, xt, torch.full_like(xt, big)), dim=-1)
+    q = torch.where(vt, xt, torch.zeros_like(xt)).contiguous()
+    lo = torch.searchsorted(srt.contiguous(), q, right=False).float()
+    hi = torch.searchsorted(srt.contiguous(), q, right=True).float()
+    n = vt.sum(-1, keepdim=True).float().clamp_min(1.0)
+    u = ((lo + hi) / 2.0) / n
+    u = torch.minimum(torch.maximum(u, 0.5 / n), 1 - 0.5 / n)
     z = math.sqrt(2.0) * torch.erfinv(2.0 * u - 1.0)
+    z = torch.where(vt, z, torch.zeros_like(z))
     return z.transpose(1, 2)
 
 
 class CountTransform(nn.Module):
     """Input-side depth removal and output-side depth add-back (architecture ablations doc).
 
-    forward(y int [B, L, A], log2_depth [B, A]) -> x float [B, L, A]
+    forward(y int [B, L, A], log2_depth [B, A], visible bool [B, L, A] | None) -> x [B, L, A]
     add_back(eta float [B, L, A], log2_depth [B, A]) -> mu float [B, L, A] > 0
 
     s = 2**(log2_depth - 24) is the size factor against a 2**24-read reference.
@@ -233,8 +238,11 @@ class CountTransform(nn.Module):
       pearson      z = (y - s l_a)/sqrt(s l_a + (s l_a)**2/r_a), clipped at +-30
                                                           mu = pos(s l_a + eta sqrt(...))
       local_ratio  x = log2((y + 1)/(lambda_local + 1)), lambda_local = max of the window mean and
-                   the 1 kb and 10 kb running means of the same track  (input only)
-      quantile     per-window average-rank normal scores (input only)
+                   the 1 kb and 10 kb running means of the same track, all over VISIBLE bins
+                   only (input only)
+      quantile     per-window average-rank normal scores among VISIBLE bins (input only)
+    `visible` (MaskHandler.visible) keeps hidden and missing bins out of every window statistic,
+    so the two window-level transforms stay J-invariant; None means every bin is visible.
       raw          x = y                                  mu = pos(eta) (depth via covariates)
     The input-only transforms have no per-sample inverse, so their add_back is the offset form.
     pos() is a smooth positive floor (softplus, beta 10, plus 1e-4). l_a and r_a (pearson) are
@@ -255,8 +263,11 @@ class CountTransform(nn.Module):
     def size_factor(log2_depth: torch.Tensor) -> torch.Tensor:
         return torch.exp2(log2_depth.float() - REF_LOG2_DEPTH)[:, None, :]   # [B, 1, A]
 
-    def forward(self, y: torch.Tensor, log2_depth: torch.Tensor) -> torch.Tensor:
+    def forward(self, y: torch.Tensor, log2_depth: torch.Tensor,
+                visible: torch.Tensor | None = None) -> torch.Tensor:
         y = y.float()
+        if visible is None:
+            visible = torch.ones_like(y, dtype=torch.bool)
         s = self.size_factor(log2_depth)
         n = self.name
         if n == "offset":
@@ -272,16 +283,23 @@ class CountTransform(nn.Module):
             z = (y - m) / torch.sqrt(m + m * m / self.r)
             return z.clamp(-PEARSON_CLIP, PEARSON_CLIP)
         if n == "local_ratio":
-            yt = y.transpose(1, 2)                                     # [B, A, L]
-            lam = yt.mean(dim=-1, keepdim=True).expand_as(yt)
+            vt = visible.transpose(1, 2).float()                       # [B, A, L]
+            yt = y.transpose(1, 2) * vt
+            Lb = yt.shape[-1]
+            lam = (yt.sum(-1, keepdim=True) / vt.sum(-1, keepdim=True).clamp_min(1.0))
+            lam = lam.expand_as(yt)
             for w in LOCAL_WINDOWS:
-                if w < yt.shape[-1]:
-                    run = F.avg_pool1d(yt, w, stride=1, padding=w // 2,
-                                       count_include_pad=False)[..., :yt.shape[-1]]
+                if w < Lb:
+                    num = F.avg_pool1d(yt, w, stride=1, padding=w // 2,
+                                       count_include_pad=True)[..., :Lb]
+                    den = F.avg_pool1d(vt, w, stride=1, padding=w // 2,
+                                       count_include_pad=True)[..., :Lb]
+                    run = torch.where(den > 0, num / den.clamp_min(1e-12), torch.zeros_like(num))
                     lam = torch.maximum(lam, run)
-            return torch.log2((yt + EPS) / (lam + EPS)).transpose(1, 2)
+            x = torch.log2((y.transpose(1, 2) * vt + EPS) / (lam + EPS))
+            return x.transpose(1, 2)
         if n == "quantile":
-            return _avg_rank_normal(y)
+            return _avg_rank_normal(y, visible)
         return y                                                      # raw
 
     def add_back(self, eta: torch.Tensor, log2_depth: torch.Tensor) -> torch.Tensor:
