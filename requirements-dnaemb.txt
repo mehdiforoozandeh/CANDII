@@ -1,0 +1,22 @@
+# The separate DNA-model venv (PI rulings 10 and 22): Flashzoi (borzoi-pytorch) and Nucleotide Transformer v2 500M
+# multi-species (transformers), for tools/minicandi/dna_embed.py only. Never installed into the main kit venv.
+# slurm/minicandi/dna_embed.sh builds it in $SLURM_TMPDIR under python/3.11:
+#   (1) every line WITHOUT the "# pypi" marker from the Alliance wheelhouse: pip install --no-index
+#   (2) the "# pypi" lines with --no-deps (from $DNAEMB_WHEELS if set, else PyPI; compute nodes have internet)
+# Pins follow Max's working Flashzoi env (Fir bench 2026-10-29: torch 2.9.1, transformers 4.57.6, huggingface_hub<1.0,
+# tokenizers<0.23, borzoi_pytorch 0.5.1 --no-deps); each version below was listed by `avail_wheels -p 3.11` on Nibi
+# on 2026-11-11. borzoi-pytorch 0.5.1 declares transformers>=4.57.6,<5, torch>=2.1, einops, numpy, intervaltree~=3.1,
+# pandas, and flash-attn>=2.6.3 for Flashzoi (PyPI metadata, 2026-11-11).
+torch==2.9.1
+triton==3.5.0
+flash_attn==2.8.3
+numpy==2.3.3
+h5py==3.15.0
+einops==0.8.1
+intervaltree==3.1.0
+pandas==2.3.3
+safetensors==0.7.0
+transformers==4.57.6
+huggingface_hub==0.36.2
+tokenizers==0.22.2
+borzoi-pytorch==0.5.1  # pypi  (wheel sha256 a7ed251e013e1eed320a3998ddb6484e7aab7fdf81d52755ad880ae7da0f26fa)
