@@ -131,13 +131,57 @@ def default_model(env):
     return sc.run(), sc.suff
 
 
+def _flat(x, p=""):
+    if isinstance(x, dict):
+        for k, v in x.items():
+            if k not in SKIP_KEYS:
+                yield from _flat(v, f"{p}/{k}")
+    elif isinstance(x, list):
+        for i, v in enumerate(x):
+            yield from _flat(v, f"{p}[{i}]")
+    else:
+        yield p, json.dumps(x, sort_keys=True, allow_nan=False)
+
+
+_SIGS = ("signal_arcsinh", "signal_arcsinh_plug_in")
+_AGG = ("ci[0]", "ci[1]", "macro", "per_assay/H3K4me3", "per_assay_reason/H3K4me3", "reason")
+
+
+def f4_keys(env, baseline=False) -> set:
+    """The exact scores.json keys that chunk F4 changes on this fixture: the position average of a
+    ChIP target with no observed control (s1, s2) takes lambda from the training-average control,
+    so the H3K4me3 signal-space r_spec becomes defined and s1, s2 carry the F4 label. With the
+    position average as main predictor, s1 and s2 also get a signal, so the H3K4me3 signal-space
+    headline 1 (and every target's signal-space level, a whole-assay quantity) becomes defined."""
+    h1 = "/specific_variance_recovered_above_noise"
+    nc = (env["targets"]["s1"], env["targets"]["s2"])
+    keys = {f"/r_spec/{sp}/{a}" for sp in _SIGS for a in _AGG}
+    keys |= {f"{h1}/{sp}/per_target/{t}/lambda_source_training_average" for sp in _SIGS for t in nc}
+    if baseline:
+        keys |= {f"{h1}/{sp}/{a}" for sp in _SIGS for a in _AGG}
+        keys |= {f"{h1}/{sp}/per_target/{t}/{k}" for sp in _SIGS for t in nc
+                 for k in ("lambda_source", "level")}
+        keys |= {f"{h1}/signal_arcsinh/per_target/{t}/lambda_reason" for t in nc}
+        keys |= {f"{h1}/{sp}/per_target/{env['targets']['s0']}/level" for sp in _SIGS}
+    return keys
+
+
+def assert_same_but_f4(old: dict, new: dict, allowed: set):
+    """Every key outside `allowed` is bit-identical (same JSON text), and the keys that differ are
+    exactly `allowed` (the F4 list is exact, not a loose mask)."""
+    fo, fn = dict(_flat(old)), dict(_flat(new))
+    changed = {k for k in set(fo) | set(fn) if fo.get(k) != fn.get(k)}
+    assert changed == allowed, (sorted(changed - allowed), sorted(allowed - changed))
+
+
 def test_before_after_bit_identical(env, default_model, tmp_path_factory):
-    """Default options: the scorer before SC and after SC write the same scores and suffstats."""
+    """Default options: the scorer before SC and now write the same scores and suffstats, except
+    the listed F4 keys (training-average control on no-control ChIP targets)."""
     old = old_module("score_before_sc", "tools/onion_eval/score.py", tmp_path_factory.mktemp("old"))
     new_s, new_suff = default_model
     o = _scorer(old, env)
     old_s = o.run()
-    assert canon(old_s) == canon(new_s)
+    assert_same_but_f4(old_s, new_s, f4_keys(env))
     assert set(o.suff) == set(new_suff)
     for k in o.suff:
         np.testing.assert_array_equal(o.suff[k], new_suff[k])
@@ -147,7 +191,7 @@ def test_before_after_bit_identical(env, default_model, tmp_path_factory):
     d = tmp_path_factory.mktemp("bl")
     a = old.score(env["evalset"], d / "old", baseline="position_average", config=CFG, **KW)
     b = S.score(env["evalset"], d / "new", baseline="position_average", config=CFG, **KW)
-    assert canon(a) == canon(b)
+    assert_same_but_f4(a, b, f4_keys(env, baseline=True))
     assert "lambda_source_option" not in b and "signal_source" not in b
     assert "correction_pairs_not_read_disjoint" not in b
 
@@ -183,8 +227,11 @@ def test_lambda_source_predicted_control(env, default_model):
     assert pc[t0]["level"] != auto[t0]["level"]            # s0's control is now the predicted one
     assert h1[PCK]["macro"] is not None
     # r_spec's training average is the `auto` one; on a ChIP target without an observed control
-    # it is undefined in both routes (the position average has no control; pre-existing)
-    assert s["r_spec"][PCK]["reason"] == s["r_spec"]["signal_arcsinh"]["reason"] != ""
+    # it takes lambda from the training-average control (F4), so r_spec is defined in both routes
+    assert s["r_spec"][PCK]["reason"] == s["r_spec"]["signal_arcsinh"]["reason"] == ""
+    assert s["r_spec"][PCK]["per_assay"]["H3K4me3"] is not None
+    assert auto[t1]["lambda_source_training_average"] == "training_average_control"
+    assert "lambda_source_training_average" not in auto[t0]
     assert h1[PCK]["lambda_source_option"] == "predicted_control"
 
 
