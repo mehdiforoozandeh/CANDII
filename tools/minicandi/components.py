@@ -1,12 +1,16 @@
 """miniCANDI shared components: every rung and every per-rung ablation is built from these.
 
-  CovariateInjector(mode)  concat | film | tokens   (config `covariate_injection`)
-  DnaTower(mode)           own | off | shuffled     (config `dna`)
+  CovariateInjector(mode)  concat | film | tokens | adaln_zero   (config `covariate_injection`)
+  DnaTower(mode)           own | off | shuffled | precomputed      (config `dna`)
   MaskHandler(mode)        token | drop             (config `mask_mode`)
   CountTransform(name)     offset | log1p | asinh | anscombe | pearson | local_ratio | quantile |
-                           raw                      (config `count_transform`), each with
+                           raw | soft_clip          (config `count_transform`), each with
                            `forward` (depth removed on the input side) and `add_back`
-  NBHead                   features -> {"n", "mu"} through the transform's depth add-back
+  NBHead(head)             nb | nb_shared_size: features -> {"n", "mu"} through the transform's
+                           depth add-back           (config `head`)
+  component_kwargs(cfg)    the constructor keyword arguments of the component arm keys
+                           (pinned interface E, chunk A3); a config without them gives today's
+                           components, parameter for parameter
   ConvBlock, Downsample, Upsample, sinusoidal_positions   building blocks for rungs 2 to 6
   NotApplicable            raised by a rung constructor for an arm that does not apply to it
 
@@ -38,18 +42,27 @@ from minicandi.contract import (A, LOG2_DEPTH_COL, MU_MAX, MU_MIN, N_MAX, N_MIN,
 from minicandi.covariates import CovariateEmbedding  # noqa: E402
 from t146.model import onehot  # noqa: E402
 
-INJECTION_MODES = ("concat", "film", "tokens")
-DNA_MODES = ("own", "off", "shuffled")
+INJECTION_MODES = ("concat", "film", "tokens", "adaln_zero")
+DNA_MODES = ("own", "off", "shuffled", "precomputed")
 MASK_MODES = ("token", "drop")
-TRANSFORMS = ("offset", "log1p", "asinh", "anscombe", "pearson", "local_ratio", "quantile", "raw")
-#: transforms with no per-sample inverse; their `add_back` is the offset form (log2 rate)
+TRANSFORMS = ("offset", "log1p", "asinh", "anscombe", "pearson", "local_ratio", "quantile", "raw",
+              "soft_clip")
+#: window-level transforms with no per-sample inverse; their `add_back` is the offset form
 INPUT_ONLY = ("local_ratio", "quantile")
+#: every transform whose `add_back` is the offset form: the window-level ones and the per-bin,
+#: input-only `soft_clip`
+OFFSET_ADD_BACK = ("offset",) + INPUT_ONLY + ("soft_clip",)
+HEADS = ("nb", "nb_shared_size")
+COVARIATE_EMBEDDINGS = ("full", "numeric_only")
 #: reference depth D0 = 2**REF_LOG2_DEPTH reads; size factor s = 2**(log2_depth - REF_LOG2_DEPTH)
 REF_LOG2_DEPTH = 24.0
 EPS = 1.0
 ASINH_COFACTOR = 1.0
 PEARSON_CLIP = 30.0
 LOCAL_WINDOWS = (40, 400)        # 1 kb and 10 kb in 25 bp bins
+#: Borzoi target squashing: x**(3/4), then values above the clip continue as clip + sqrt(excess)
+SOFT_CLIP_POWER = 0.75
+SOFT_CLIP_AT = 384.0
 
 
 class NotApplicable(ValueError):
@@ -60,6 +73,41 @@ def _check(mode: str, allowed: tuple, what: str) -> str:
     if mode not in allowed:
         raise ValueError(f"{what} {mode!r} not in {allowed}")
     return mode
+
+
+def component_kwargs(cfg: dict) -> dict:
+    """The component arm keys of a config, as constructor keyword arguments (chunk A3).
+
+    {"injector":  {"embedding", "null_vector"}   -> CovariateInjector(..., **)
+     "covariate_dropout": p                       -> covariates.model_covariates(..., dropout=p)
+     "dna":       {} or {"d_emb"}                 -> DnaTower(cfg["dna"], d_out, **)
+     "transform": {"offset_eps"}                  -> CountTransform(name, **)
+     "head":      {"head"}                        -> NBHead(d, transform, **)}
+
+    Keys and defaults: `covariate_embedding` full, `covariate_dropout` 0, `offset_eps` 1.0, `head`
+    nb; `dna = precomputed` needs `dna_embedding_dim` (the width of the `dna_embedding_h5` vectors).
+    Every default value gives the component exactly as it was before these keys existed.
+    """
+    emb = _check(cfg.get("covariate_embedding", "full"), COVARIATE_EMBEDDINGS,
+                 "covariate_embedding")
+    p = float(cfg.get("covariate_dropout", 0.0) or 0.0)
+    if not 0.0 <= p < 1.0:
+        raise ValueError(f"covariate_dropout {p} not in [0, 1)")
+    eps = float(cfg.get("offset_eps", EPS))
+    if not eps > 0.0:
+        raise ValueError(f"offset_eps {eps} must be > 0")
+    dna = {}
+    if cfg.get("dna") == "precomputed":
+        d_emb = cfg.get("dna_embedding_dim")
+        if not isinstance(d_emb, int) or isinstance(d_emb, bool) or d_emb < 1:
+            raise ValueError("dna = precomputed needs a positive int `dna_embedding_dim`, "
+                             f"got {d_emb!r}")
+        dna = {"d_emb": d_emb}
+    return {"injector": {"embedding": emb, "null_vector": p > 0.0},
+            "covariate_dropout": p,
+            "dna": dna,
+            "transform": {"offset_eps": eps},
+            "head": {"head": _check(cfg.get("head", "nb"), HEADS, "head")}}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -74,22 +122,34 @@ class CovariateInjector(nn.Module):
     film    gamma, beta = G(emb(c)); h' = gamma * h + beta     (identity at initialisation)
     tokens  `forward` returns h unchanged; `tokens(c)` gives one token per track,
             emb(c) + a learned track embedding, for the rung to append to its sequence
+    adaln_zero  shift, scale, gate = G0(emb(c)), every one 0 at initialisation;
+            h' = h + gate * ((1 + scale) * LayerNorm(h) + shift)   (identity at initialisation,
+            the DiT adaLN-Zero form; LayerNorm without affine parameters)
+
+    `embedding` (`full` | `numeric_only`) and `null_vector` (built for covariate dropout) are
+    passed to `CovariateEmbedding`; see `component_kwargs`.
 
     `c` must broadcast against h's leading dims after embedding (e.g. c [B, 1, A, K] against
     h [B, L, A, d]). The embedding is computed once per call on the un-broadcast c.
     """
 
     def __init__(self, mode: str, d_model: int, k_in: int, d_cov: int = 32,
-                 n_tracks: int = A):
+                 n_tracks: int = A, *, embedding: str = "full", null_vector: bool = False):
         super().__init__()
         self.mode = _check(mode, INJECTION_MODES, "covariate_injection")
         self.d_model = d_model
-        self.embed = CovariateEmbedding(k_in, d_cov)
+        self.embed = CovariateEmbedding(
+            k_in, d_cov,
+            numeric_only=_check(embedding, COVARIATE_EMBEDDINGS, "covariate_embedding")
+            == "numeric_only",
+            null_vector=null_vector)
         if mode == "concat":
             self.proj = nn.Linear(d_model + d_cov, d_model)
         elif mode == "film":
             init = torch.cat([torch.ones(d_model), torch.zeros(d_model)])
             self.g = G(d_cov, 2 * d_model, init)
+        elif mode == "adaln_zero":
+            self.g = G(d_cov, 3 * d_model, torch.zeros(3 * d_model))
         else:
             self.tok = nn.Linear(d_cov, d_model)
             self.track_emb = nn.Parameter(torch.zeros(n_tracks, d_model))
@@ -103,6 +163,11 @@ class CovariateInjector(nn.Module):
             e = e.expand(*h.shape[:-1], e.shape[-1])
             return self.proj(torch.cat([h, e], dim=-1))
         theta = self.g(e)
+        if self.mode == "adaln_zero":
+            d = self.d_model
+            shift, scale, gate = theta[..., :d], theta[..., d:2 * d], theta[..., 2 * d:]
+            hn = F.layer_norm(h, (d,))
+            return h + gate * ((1.0 + scale) * hn + shift)
         gamma, beta = theta[..., :self.d_model], theta[..., self.d_model:]
         return gamma * h + beta
 
@@ -127,20 +192,36 @@ class DnaTower(nn.Module):
     shuffled  the same tower, fed the window's 25 bp blocks in a random order: composition per
               bin is kept, alignment to the counts is broken. Deterministic in eval mode
               (generator seeded with `shuffle_seed`), fresh per call in training.
+    precomputed  frozen per-bin sequence-model vectors float [B, L, d_emb] (the dataset's
+              `x_dna_emb`) -> LayerNorm(d_emb) -> Linear(d_emb, d_out); no convolution on bases,
+              so each output bin reads only its own vector. `d_emb` is required.
     """
 
     def __init__(self, mode: str, d_out: int, channels: int = 32, kernel: int = 15,
-                 shuffle_seed: int = 0):
+                 shuffle_seed: int = 0, d_emb: int | None = None):
         super().__init__()
         self.mode = _check(mode, DNA_MODES, "dna")
         self.d_out = d_out
         self.shuffle_seed = shuffle_seed
-        if mode != "off":
+        if mode == "precomputed":
+            if d_emb is None or int(d_emb) < 1:
+                raise ValueError(f"DnaTower('precomputed') needs d_emb >= 1, got {d_emb!r}")
+            self.d_emb = int(d_emb)
+            self.norm = nn.LayerNorm(self.d_emb)
+            self.proj = nn.Linear(self.d_emb, d_out)
+        elif mode != "off":
             self.conv1 = nn.Conv1d(4, channels, kernel, padding=kernel // 2)
             self.pool = nn.AvgPool1d(RES, RES)
             self.conv2 = nn.Conv1d(channels, d_out, 1)
 
     def forward(self, x_dna: torch.Tensor) -> torch.Tensor:
+        if self.mode == "precomputed":
+            if not x_dna.is_floating_point() or x_dna.dim() != 3 \
+                    or x_dna.shape[-1] != self.d_emb:
+                raise ValueError(f"DnaTower('precomputed') reads float [B, L, {self.d_emb}] "
+                                 f"(batch['x_dna_emb']), got {x_dna.dtype} "
+                                 f"{tuple(x_dna.shape)}")
+            return self.proj(self.norm(x_dna.float()))
         B, n_bp = x_dna.shape
         L = n_bp // RES
         if self.mode == "off":
@@ -244,14 +325,20 @@ class CountTransform(nn.Module):
     `visible` (MaskHandler.visible) keeps hidden and missing bins out of every window statistic,
     so the two window-level transforms stay J-invariant; None means every bin is visible.
       raw          x = y                                  mu = pos(eta) (depth via covariates)
+      soft_clip    z = (y/s)**(3/4); x = z, or 384 + sqrt(z - 384) above 384 (the Borzoi
+                   target squashing; per bin, input only)
     The input-only transforms have no per-sample inverse, so their add_back is the offset form.
+    `offset_eps` (config key, default 1.0) is the pseudocount of `offset` only.
     pos() is a smooth positive floor (softplus, beta 10, plus 1e-4). l_a and r_a (pearson) are
     per-track buffers, default 1 and 10; set them from training data with `set_pearson_stats`.
     """
 
-    def __init__(self, name: str, n_tracks: int = A):
+    def __init__(self, name: str, n_tracks: int = A, offset_eps: float = EPS):
         super().__init__()
         self.name = _check(name, TRANSFORMS, "count_transform")
+        if not float(offset_eps) > 0.0:
+            raise ValueError(f"offset_eps {offset_eps} must be > 0")
+        self.offset_eps = float(offset_eps)
         self.register_buffer("lam", torch.ones(n_tracks))
         self.register_buffer("r", torch.full((n_tracks,), 10.0))
 
@@ -271,7 +358,11 @@ class CountTransform(nn.Module):
         s = self.size_factor(log2_depth)
         n = self.name
         if n == "offset":
-            return torch.log2((y + EPS) / s)
+            return torch.log2((y + self.offset_eps) / s)
+        if n == "soft_clip":
+            z = torch.pow(y / s, SOFT_CLIP_POWER)
+            excess = (z - SOFT_CLIP_AT).clamp_min(0.0)
+            return torch.where(z > SOFT_CLIP_AT, SOFT_CLIP_AT + torch.sqrt(excess), z)
         if n == "log1p":
             return torch.log1p(y / s)
         if n == "asinh":
@@ -305,7 +396,7 @@ class CountTransform(nn.Module):
     def add_back(self, eta: torch.Tensor, log2_depth: torch.Tensor) -> torch.Tensor:
         s = self.size_factor(log2_depth)
         n = self.name
-        if n in ("offset",) + INPUT_ONLY:
+        if n in OFFSET_ADD_BACK:
             mu = s * torch.exp2(eta.clamp(max=60.0))
         elif n == "log1p":
             mu = s * _pos(torch.expm1(eta.clamp(max=60.0)))
@@ -328,22 +419,30 @@ class NBHead(nn.Module):
     initialisation eta = the track bias (0) and log n = log n0 for every bin. mu comes from the
     transform's depth add-back with log2_depth = c_out[..., 0] (the target's own C'), so an
     imputed target is decoded at its own depth.
+
+    head = nb_shared_size: the Linear gives eta only (Linear(d, 1)), and log n = log n0 + the
+    track bias's size entry: one learned NB size per track, the same at every bin and window.
     """
 
     def __init__(self, d_in: int, transform: "CountTransform | str" = "offset", n0: float = 2.0,
-                 n_tracks: int = A):
+                 n_tracks: int = A, head: str = "nb"):
         super().__init__()
         self.transform = transform if isinstance(transform, CountTransform) \
             else CountTransform(transform, n_tracks)
-        self.lin = nn.Linear(d_in, 2)
+        self.head = _check(head, HEADS, "head")
+        self.lin = nn.Linear(d_in, 2 if self.head == "nb" else 1)
         nn.init.zeros_(self.lin.weight)
         nn.init.zeros_(self.lin.bias)
         self.track_bias = nn.Parameter(torch.zeros(n_tracks, 2))
         self.log_n0 = math.log(n0)
 
     def forward(self, h: torch.Tensor, c_out: torch.Tensor) -> dict:
-        out = self.lin(h) + self.track_bias                           # [B, L, A, 2]
-        eta, log_n = out[..., 0], self.log_n0 + out[..., 1]
+        if self.head == "nb_shared_size":
+            eta = self.lin(h)[..., 0] + self.track_bias[:, 0]
+            log_n = (self.log_n0 + self.track_bias[:, 1]).expand_as(eta)
+        else:
+            out = self.lin(h) + self.track_bias                       # [B, L, A, 2]
+            eta, log_n = out[..., 0], self.log_n0 + out[..., 1]
         n = log_n.clamp(math.log(N_MIN), math.log(N_MAX)).exp()
         mu = self.transform.add_back(eta, c_out[..., LOG2_DEPTH_COL])
         return {"n": n.float(), "mu": mu.float()}
