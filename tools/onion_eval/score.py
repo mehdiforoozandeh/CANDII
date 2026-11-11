@@ -97,6 +97,23 @@ mean (PI ruling 20), is written beside it under the same keys with the suffix `_
 (`signal_arcsinh_plug_in` in headline 1 and in r_spec). Without the module the signal space is NaN
 with the reason.
 
+Options of chunk SC (each off by default; a default scores.json is unchanged):
+  --lambda-source auto|observed_control|predicted_control. `auto` is the route above.
+      `observed_control` never uses the predicted control (a ChIP-seq target without an observed
+      control is undefined in the signal space, with the reason). `predicted_control` keeps the
+      `auto` keys and also scores every ChIP-seq target with the model's predicted control, even
+      where an observed control exists, under `signal_arcsinh_predicted_control` (headline 1 and
+      r_spec; the expectation mode; the training average `a` is the `auto` one); per target it
+      records `lambda_source`. The option is written as `lambda_source_option`.
+  score(..., signal_override=f) (chunk XE): an external entry. f(target row, regions) gives the
+      entry's signal per region; it replaces the derived signal in the `signal_arcsinh` path (the
+      plug-in variant is undefined), and every count-space metric is undefined with the reason
+      `external entry: signal only`. No pair is scored.
+  A correction pair flagged `read_disjoint: 0` by evalset.py (two sides can share reads) is never
+      scored; their count is `correction_pairs_not_read_disjoint`.
+  A blind eval set may be `evalset_blind.json` or `evalset_blind_<tag>.json`; the scorer reads
+      `include_blind` from the eval set, not its name.
+
 Per-metric aggregation. Each metric is {"macro", "per_assay", "ci", "non_scorable_per_assay",
 "missing_scorable", "reason"}: per assay over that assay's targets (headline 1 and 4 as ratios of
 means, the others as means), macro = mean over the scorable assays (evalset `scorable`), undefined
@@ -178,6 +195,16 @@ PAIR_ONLY = ("depth_only_scaling", "pseudoreplicate_floor")
 SIGNAL_PREFIX = {"expectation": "sig_", "plug_in": "sig_pi_"}
 #: suffix of the signal-space keys that hold the plug-in variant
 PLUG_IN = "_plug_in"
+#: --lambda-source (SC): `auto` is the behavior before SC and the default
+LAMBDA_SOURCE_OPTIONS = ("auto", "observed_control", "predicted_control")
+#: record prefix and key suffix of the `predicted_control` signal route (every ChIP target)
+PC_PREFIX = "sig_pc_"
+PREDICTED_CONTROL = "_predicted_control"
+#: an external entry (chunk XE): the main predictor gives a signal only, through signal_override
+EXTERNAL = "external"
+EXTERNAL_REASON = "external entry: signal only"
+EXTERNAL_PLUG_IN_REASON = ("external entry: signal only (no NB prediction, so no plug-in "
+                           "variant)")
 
 
 class ScoreRefused(Exception):
@@ -390,7 +417,8 @@ class Scorer:
     def __init__(self, evalset, *, main, model=None, config=None, split="val", allow_blind=False,
                  n_boot=200, seed=0, guardrail_windows=256, guardrail_seeds=(0, 1, 2),
                  device="cpu", no_halves=False, dnase_route=None, run_tables_sha256=None,
-                 log=print, region_cache=True, infer_batch=None):
+                 log=print, region_cache=True, infer_batch=None, lambda_source="auto",
+                 signal_override=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -398,8 +426,18 @@ class Scorer:
             raise ValueError("split must be val or blind")
         if split == "blind" and not allow_blind:
             raise PermissionError("scoring blind targets needs --allow-blind (gate G4)")
-        if main not in REFS and model is None:
+        if lambda_source not in LAMBDA_SOURCE_OPTIONS:
+            raise ValueError(f"lambda_source {lambda_source!r} not in {LAMBDA_SOURCE_OPTIONS}")
+        if (signal_override is not None) != (main == EXTERNAL):
+            raise ValueError(f"main {EXTERNAL!r} goes with a signal_override, and only it")
+        if signal_override is not None and model is not None:
+            raise ValueError("signal_override replaces the model: give no model")
+        if main not in REFS and model is None and main != EXTERNAL:
             raise ValueError(f"main {main!r}: give a model or one of {REFS}")
+        self.lambda_source = lambda_source
+        self.signal_override = signal_override
+        self.external = signal_override is not None
+        self.n_pairs_not_read_disjoint = 0
         self.C, self.log = C, log
         self.evalset_path = Path(evalset).resolve()
         self.ev = json.loads(self.evalset_path.read_text(encoding="utf-8"))
@@ -541,13 +579,23 @@ class Scorer:
     def _needs_predicted_control(self, job) -> bool:
         if self.sig is None or job["kind"] != "imputation" or job.get("regime") == "control":
             return False
+        if self.lambda_source == "observed_control":
+            return False
         row = self.ds.rows[job["target"]]
         try:
             route = self.sig.route_of(row["assay_class"] or row["assay"])
         except ValueError:
             return False
-        return (route == "chip" and not (row.get("control_measurement_id") or "").strip()
+        observed = bool((row.get("control_measurement_id") or "").strip())
+        if self.lambda_source == "predicted_control":
+            observed = False          # the predicted-control route runs on every ChIP target
+        return (route == "chip" and not observed
                 and self.predict_control and self._signal_files(row)[0] is not None)
+
+    def _sig_prefixes(self) -> list:
+        """Record prefixes of the signal variants: the two modes, plus the predicted-control route."""
+        return list(SIGNAL_PREFIX.values()) + (
+            [PC_PREFIX] if self.lambda_source == "predicted_control" else [])
 
     # -------------------------------------------------------------- reference predictors
     def _region_batch(self, mids, chrom, start, which="counts"):
@@ -645,6 +693,9 @@ class Scorer:
                 t1 = time.perf_counter()
                 self.timing["windows"] += t1 - t0
                 preds = {}
+                if self.external:      # signal only: the count-space prediction is undefined
+                    nanv = np.full(batch["y_counts"].shape, np.nan)
+                    preds[EXTERNAL] = {"n": nanv, "mu": nanv}
                 for name in names:
                     if name in ("depth_only_scaling", "pseudoreplicate_floor") and not pair:
                         nanv = np.full(batch["y_counts"].shape, np.nan)
@@ -702,7 +753,8 @@ class Scorer:
                            and (n > 0).all())
             pa_ok = bool(np.isfinite(A["position_average.mu"]).all()
                          and np.isfinite(A["position_average.n"]).all())
-            nan = Mx.Undefined("the predictor is undefined on this target (NaN prediction)")
+            nan = Mx.Undefined(EXTERNAL_REASON if self.external else
+                               "the predictor is undefined on this target (NaN prediction)")
             if self.main == "position_average":
                 pa_c = Mx.crps_split(A["position_average.n"], A["position_average.mu"], y)
             elif pa_ok:                # the skill needs only the reference's CRPS (same estimator)
@@ -781,9 +833,11 @@ class Scorer:
                 for i in eb:
                     recs[i]["budget"] = {k: bud[k] for k in BUDGET_KEYS}
             self._signal_group(recs, arrays, ok, regime, assay)
+        elif self.external:            # no count prediction; the signal comes from the override
+            self._signal_group(recs, arrays, list(range(len(recs))), regime, assay)
         else:
             for r in recs:
-                for pre in SIGNAL_PREFIX.values():
+                for pre in self._sig_prefixes():
                     r[f"{pre}E_sp"] = r[f"{pre}V_sp"] = r[f"{pre}level"] = Mx.Undefined(
                         "the predictor is undefined on this target")
         for r in recs:
@@ -797,11 +851,16 @@ class Scorer:
     def _signal_target(self, job, n, mu, A, defined, pa_ok):
         """Signal-space records of one target, once per NB-to-signal mode (SIGNAL_PREFIX): the
         headline `expectation` under `sig_*`, the `plug_in` variant under `sig_pi_*` (ruling 20)."""
+        pc = self.lambda_source == "predicted_control"
+
         def undef(reason):
             u = Mx.Undefined(reason)
             rec = {"lambda_source": None, "lambda_reason": reason}
-            for pre in SIGNAL_PREFIX.values():
+            for pre in self._sig_prefixes():
                 rec.update({f"{pre}N": u, f"{pre}r_spec": u})
+            if pc:
+                rec.update({"lambda_source" + PREDICTED_CONTROL: None,
+                            "lambda_reason" + PREDICTED_CONTROL: reason})
             return {"record": rec}
         if self.sig is None:
             return undef(self.sig_reason)
@@ -822,42 +881,80 @@ class Scorer:
         kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route)
         rec = {"lambda_source": None, "lambda_reason": ""}
         out = {}
-        for mode, pre in SIGNAL_PREFIX.items():
+        variants = [(mode, pre, row) for mode, pre in SIGNAL_PREFIX.items()]
+        if pc:    # the predicted-control route: the observed control is ignored (SC)
+            variants.append(("expectation", PC_PREFIX, dict(row, control_measurement_id="")))
+        a_by_mode = {}
+        for mode, pre, row_v in variants:
             src, lam_reason, ps, pa_reason = None, "", None, ""
-            if defined:
+            if self.external and pre == SIGNAL_PREFIX["expectation"]:
+                ps = self._override_signal(row)
+                src = "external_entry"
+            elif self.external:
+                lam_reason = EXTERNAL_PLUG_IN_REASON
+            elif pre == PC_PREFIX and A.get("main.ctl_mu") is None:
+                lam_reason = ("the predictor gives no control prediction (predict_control off, or "
+                              "a training-free baseline)")
+            elif defined:
                 try:
-                    sp, src = self.sig.signal_from_nb(n, mu, row, predicted_control=A.get("main.ctl_mu"),
+                    sp, src = self.sig.signal_from_nb(n, mu, row_v, predicted_control=A.get("main.ctl_mu"),
                                                       mode=mode, **kw)
                     ps = Mx.to_space(np.asarray(sp, np.float64), "signal_arcsinh")
                 except (ValueError, KeyError) as e:
                     lam_reason = f"no signal from the prediction: {e}"
             else:
                 lam_reason = "the predictor is undefined on this target"
-            a_s = None
-            if pa_ok:
-                try:
-                    sa, _ = self.sig.signal_from_nb(A["position_average.n"], A["position_average.mu"],
-                                                    row, predicted_control=None, mode=mode, **kw)
-                    a_s = Mx.to_space(np.asarray(sa, np.float64), "signal_arcsinh")
-                except (ValueError, KeyError) as e:
-                    a_s, pa_reason = None, f"no signal from the position average: {e}"
+            if mode in a_by_mode:         # the predicted-control route reuses the training average
+                a_s, pa_reason = a_by_mode[mode]
+            else:
+                a_s = None
+                if pa_ok:
+                    try:
+                        sa, _ = self.sig.signal_from_nb(A["position_average.n"], A["position_average.mu"],
+                                                        row, predicted_control=None, mode=mode, **kw)
+                        a_s = Mx.to_space(np.asarray(sa, np.float64), "signal_arcsinh")
+                    except (ValueError, KeyError) as e:
+                        a_s, pa_reason = None, f"no signal from the position average: {e}"
+                a_by_mode[mode] = (a_s, pa_reason)
             if ps is not None and a_s is not None:
                 rs = Mx.r_spec(ts, ps, a_s)
             else:
                 rs = Mx.Undefined(lam_reason or (pa_reason if pa_ok else "position average undefined"))
             rec.update({f"{pre}N": N, f"{pre}r_spec": rs})
-            if mode == "expectation":
+            if pre == SIGNAL_PREFIX["expectation"]:
                 rec.update(lambda_source=src, lambda_reason=lam_reason)
+            elif pre == PC_PREFIX:
+                rec.update({"lambda_source" + PREDICTED_CONTROL: src,
+                            "lambda_reason" + PREDICTED_CONTROL: lam_reason})
             out.update({f"{pre}truth": ts, f"{pre}pred": ps})
         return {"record": rec, **out}
 
+    def _override_signal(self, row) -> np.ndarray:
+        """The external entry's signal (raw units, like signal.h5) of one target over the eval
+        regions, in the scorer's order, mapped to signal_arcsinh."""
+        got = self.signal_override(row, list(self.regions))
+        if isinstance(got, (list, tuple)):        # one array per region
+            sig = np.concatenate([np.asarray(p, np.float32).reshape(-1) for p in got])
+        else:                                     # the regions end to end
+            sig = np.asarray(got, np.float32).reshape(-1)
+        want = len(self.regions) * self.rb
+        if sig.shape != (want,):
+            raise ValueError(f"signal_override for {row['measurement_id']}: {sig.shape[0]} bins, "
+                             f"want {len(self.regions)} regions x {self.rb}")
+        if not np.isfinite(sig).all():
+            raise ValueError(f"signal_override for {row['measurement_id']}: non-finite values")
+        return Mx.to_space(sig.astype(np.float64), "signal_arcsinh")
+
     def _signal_group(self, recs, arrays, ok, regime, assay):
-        for pre in SIGNAL_PREFIX.values():
+        for pre in self._sig_prefixes():
             for r in recs:
                 r[f"{pre}E_sp"] = r[f"{pre}V_sp"] = r[f"{pre}level"] = Mx.Undefined(
                     "the predictor is undefined on this target")
             if self.sig is None or any(arrays[i].get(f"{pre}pred") is None for i in ok):
-                reasons = sorted({recs[i].get("lambda_reason") or "" for i in ok} - {""})
+                rkey = "lambda_reason" + (PREDICTED_CONTROL if pre == PC_PREFIX else "")
+                reasons = sorted({recs[i].get(rkey) or "" for i in ok} - {""})
+                if self.external and pre != SIGNAL_PREFIX["expectation"]:
+                    reasons = [EXTERNAL_PLUG_IN_REASON]
                 reason = self.sig_reason or ("; ".join(reasons) if reasons
                                              else "signal prediction or truth missing")
                 for r in recs:
@@ -1006,8 +1103,11 @@ class Scorer:
                                 "cell": p["cell"], "never_trained": int(p["never_trained"] or 0),
                                 "subset_pair": int(p["subset_pair"] or 0),
                                 "knob": p.get("knobs_differing", "")})
-        if self.no_halves:          # every pair reads halves
+        if self.no_halves or self.external:   # every pair reads halves; a pair is count-space
             cor, rep = [], []
+        # DT, Log "FOR E7a": a pair whose two sides can share reads is never scored
+        self.n_pairs_not_read_disjoint = sum(1 for p in cor if p.get("read_disjoint", 1) == 0)
+        cor = [p for p in cor if p.get("read_disjoint", 1) != 0]
         for j in imp + ctl + cor + rep:
             for m in [j["target"]] + j.get("inputs", []) + ([j["source"]] if "source" in j else []):
                 if m not in meas:
@@ -1074,15 +1174,28 @@ class Scorer:
         tg = time.perf_counter()
         scores["copy_leak"] = self._copy_leak()
         self.timing["guardrail"] += time.perf_counter() - tg
+        if self.external:
+            for k in list(scores):
+                if k.startswith(("correction_", "subset_pairs_", "depth_law_")):
+                    scores[k] = metric([], None, sc_cor, undefined_reason=EXTERNAL_REASON)
+            scores["correction_gap_closed_vs_depth_only_never_trained"].update(
+                per_knob={}, n_pairs=0, denominator_relative_by_assay={})
+            scores["replicate_pair_gap_closed_vs_depth_only"] = {"per_rung": {},
+                                                                 "reason": EXTERNAL_REASON}
         if self.no_halves:
             imp_t = Mx.Undefined("--no-halves mode: headline 1 has no noise floor and is not a "
                                  "selection term")
+        elif self.external:
+            imp_t = Mx.Undefined(EXTERNAL_REASON)
         else:
             imp_t = scores["specific_variance_recovered_above_noise"][SPACE]["macro"]
         cor_m = scores["correction_gap_closed_vs_depth_only_never_trained"]
-        cor_t = cor_m["macro"]
+        cor_t = Mx.Undefined(EXTERNAL_REASON) if self.external else cor_m["macro"]
         h1_status = scores["specific_variance_recovered_above_noise"][SPACE]["per_assay_status"]
-        unc, unc_den = self._uncertainty(main_recs, sc_imp)
+        if self.external:
+            unc, unc_den = Mx.Undefined(EXTERNAL_REASON), None
+        else:
+            unc, unc_den = self._uncertainty(main_recs, sc_imp)
         comp = composite(imp_t, cor_t, unc)
         den_rel = [v for v in cor_m["denominator_relative_by_assay"].values() if v is not None]
         scores["selection"] = {
@@ -1117,6 +1230,14 @@ class Scorer:
                        "infer_batch": self.tile_bs, "region_cache": self.region_cache,
                        "timing_seconds": {k: round(v, 1) for k, v in sorted(self.timing.items())},
                        "torch_threads": torch.get_num_threads(), "device": str(self.device)})
+        # SC: keys only off the default, so a default scores.json is unchanged
+        if self.lambda_source != "auto":
+            scores["lambda_source_option"] = self.lambda_source
+        if self.external:
+            scores["signal_source"] = "external entry (signal_override)"
+            scores["count_space_reason"] = EXTERNAL_REASON
+        if self.n_pairs_not_read_disjoint:
+            scores["correction_pairs_not_read_disjoint"] = self.n_pairs_not_read_disjoint
         return scores
 
     # -------------------------------------------------------------- metric assembly
@@ -1203,6 +1324,20 @@ class Scorer:
                                                         nb, sd, require_all=ra),
             "error_budget": budget,
         }
+        if self.lambda_source == "predicted_control":
+            sk = "signal_arcsinh" + PREDICTED_CONTROL
+            h1pc = metric(recs, recovered_fn(PC_PREFIX), scorable, nb, sd, require_all=ra)
+            h1pc["per_target"] = {r["target"]: {
+                "assay": r["assay"], "cell": r["cell"], "level": _j(r[f"{PC_PREFIX}level"]),
+                "N": _j(r[f"{PC_PREFIX}N"]),
+                "lambda_source": r.get("lambda_source" + PREDICTED_CONTROL),
+                "lambda_reason": r.get("lambda_reason" + PREDICTED_CONTROL, "")} for r in recs}
+            h1pc["dnase_route"] = self.dnase_route
+            h1pc["signal_mode"] = "expectation"
+            h1pc["lambda_source_option"] = self.lambda_source
+            out["specific_variance_recovered_above_noise"][sk] = h1pc
+            out["r_spec"][sk] = metric(recs, _mean_of(f"{PC_PREFIX}r_spec"), scorable, nb, sd,
+                                       require_all=ra)
         if self.no_halves:
             pilot["per_target"] = h1["per_target"]
             out[PILOT_H1_KEY] = pilot
@@ -1217,7 +1352,30 @@ class Scorer:
                                   "note": "pilot only: the uncertainty term over every assay with a "
                                           "target (no scorable assay exists without halves); never "
                                           "a selection input"}
+        if self.external:
+            self._blank_count_space(out, recs, scorable)
         return out
+
+    #: the count-space metrics of an imputation table (an external entry writes each undefined)
+    COUNT_SPACE_KEYS = ("count_crps_skill_vs_position_average", "count_crps",
+                        "count_crps_oracle_scaled", "count_crps_scale_error", "pit_deviation_pooled",
+                        "pit_deviation_worst_stratum", "predicted_over_replicate_variance")
+
+    def _blank_count_space(self, out, recs, scorable) -> None:
+        """External entry (XE): every count-space metric undefined with EXTERNAL_REASON."""
+        def u():
+            return metric(recs, None, scorable, undefined_reason=EXTERNAL_REASON)
+        for k in self.COUNT_SPACE_KEYS:
+            out[k] = u()
+        h1 = u()
+        h1.update(per_assay_status={}, per_target={}, n_targets_without_halves=0,
+                  targets_without_halves=[])
+        out["specific_variance_recovered_above_noise"][SPACE] = h1
+        out["r_spec"][SPACE] = u()
+        out["error_budget"] = {**{k: None for k in BUDGET_KEYS}, "per_assay": {},
+                               "reason": EXTERNAL_REASON}
+        for k in (PILOT_H1_KEY, PILOT_UNC_KEY):
+            out.pop(k, None)
 
     def _uncertainty_all(self, recs):
         """The uncertainty term over every assay with a target (the pilot form, DEFECTS item 3)."""
@@ -1397,10 +1555,15 @@ def run_tables_sha256(run) -> str:
 
 
 def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
-          repeat_blind_reason=None, **kw) -> dict:
-    """Score a run dir, an in-memory model, or a baseline name; writes the output files."""
-    if sum(x is not None for x in (run, baseline, model)) != 1:
-        raise ValueError("give exactly one of run, baseline, model")
+          repeat_blind_reason=None, signal_override=None, **kw) -> dict:
+    """Score a run dir, an in-memory model, a baseline name, or an external entry; writes the
+    output files. `signal_override` (chunk XE): a callable (target row, regions) -> the entry's
+    float32 signal (raw units, like the pipeline's signal.h5) per region, either a list of one
+    array per region or the regions end to end; it replaces the model's derived signal in the
+    `signal_arcsinh` path, and every count-space metric is written undefined with the reason
+    `external entry: signal only`."""
+    if sum(x is not None for x in (run, baseline, model, signal_override)) != 1:
+        raise ValueError("give exactly one of run, baseline, model, signal_override")
     split = kw.get("split", "val")
     out = Path(out)
     if (split == "blind") != (out.name == "blind"):
@@ -1411,9 +1574,12 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
         run_sha = run_tables_sha256(run)
         from minicandi.registry import load_run          # lazy: chunk T1 owns it
         model, config = load_run(run)
-    main = baseline if baseline is not None else "model"
+    main = (baseline if baseline is not None else EXTERNAL if signal_override is not None
+            else "model")
     if baseline is not None and baseline not in REFS:
         raise ValueError(f"unknown baseline {baseline!r}; one of {REFS}")
+    if signal_override is not None:
+        kw["signal_override"] = signal_override
     sc = Scorer(evalset, main=main, model=model, config=config, run_tables_sha256=run_sha, **kw)
     if main in PAIR_ONLY:
         _, cor, rep, _ = sc.jobs()
@@ -1428,7 +1594,9 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if split == "blind":
         ledger = sc.evalset_path.parent / BLIND_LEDGER
         key = (str(Path(run).resolve()) if run is not None else
-               f"baseline:{baseline}" if baseline is not None else f"model:{out.resolve()}")
+               f"baseline:{baseline}" if baseline is not None else
+               f"external:{out.resolve()}" if signal_override is not None else
+               f"model:{out.resolve()}")
         esha = sha256_file(sc.evalset_path)
         prior = [r for r in ledger_rows(ledger) if r["run"] == key and r["evalset_sha256"] == esha]
         reason = (repeat_blind_reason or "").strip()
@@ -1481,6 +1649,11 @@ def main(argv=None) -> int:
                          "floor, under a key the selection rule refuses")
     ap.add_argument("--dnase-route", default=None,
                     choices=("hotspot2_density", "macs2_no_control"))
+    ap.add_argument("--lambda-source", default="auto", choices=LAMBDA_SOURCE_OPTIONS,
+                    help="auto (default): the observed control where it exists, else the model's "
+                         "predicted control; observed_control: never the predicted control; "
+                         "predicted_control: also score every ChIP target with the predicted "
+                         "control, under keys with the suffix _predicted_control")
     ap.add_argument("--device", default="auto",
                     help="auto (default: cuda when a GPU is visible, else cpu), cpu or cuda")
     ap.add_argument("--n-boot", type=int, default=200)
@@ -1504,7 +1677,8 @@ def main(argv=None) -> int:
                   allow_blind=a.allow_blind, device=device, n_boot=a.n_boot,
                   guardrail_windows=a.guardrail_windows, no_halves=a.no_halves,
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
-                  infer_batch=a.infer_batch, region_cache=not a.no_region_cache)
+                  infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
+                  lambda_source=a.lambda_source)
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
