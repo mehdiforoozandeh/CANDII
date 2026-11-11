@@ -124,7 +124,7 @@ class CovariateEmbedding(nn.Module):
 
     Numeric columns are standardised with the fixed `NUMERIC` constants; each categorical column
     has its own `nn.Embedding(CAT_TABLE, d_cat)`; the concatenation goes through a 2-layer MLP.
-    `scramble` (the scrambled-covariates control) is applied by the caller, not here.
+    The scrambled-covariates control is applied by the caller (`model_covariates`), not here.
     """
 
     def __init__(self, k_in: int, d_out: int, d_cat: int = 8, hidden: int = 64):
@@ -167,3 +167,35 @@ def scramble_covariates(c: torch.Tensor, avail: torch.Tensor, generator=None) ->
             perm = idx[torch.randperm(idx.numel(), generator=generator)]
             out[idx, a] = c[perm, a]
     return out
+
+
+SCRAMBLE_SEED = 0
+
+
+def scramble_mode(cfg: dict) -> str:
+    """`all` (scramble_all), `covariates` (scramble_covariates) or `none`."""
+    if cfg.get("scramble_all"):
+        return "all"
+    return "covariates" if cfg.get("scramble_covariates") else "none"
+
+
+def model_covariates(batch: dict, mode: str, training: bool) -> tuple:
+    """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
+    the count transform and the NB head use.
+
+    `covariates`: every covariate column the encoders read (depth included) is permuted across the
+    windows of the batch (`scramble_covariates`); the transform keeps each track's true depth, so
+    the arm measures use of the covariates beyond the depth offset. `all`: the transform reads the
+    same scrambled depth. Every rung calls this once per forward; neither the dataset nor the train
+    loop scrambles. Eval mode draws from a generator seeded with SCRAMBLE_SEED; training mode from
+    the global torch RNG.
+    """
+    c_in, c_out = batch["c_in"], batch["c_out"]
+    if mode == "none":
+        return c_in, c_out, c_in, c_out
+    gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
+    s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
+    s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
+    if mode == "all":
+        return s_in, s_out, s_in, s_out
+    return s_in, s_out, c_in, c_out

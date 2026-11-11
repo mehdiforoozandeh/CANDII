@@ -56,7 +56,7 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
                                   Upsample, sinusoidal_positions)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
-from minicandi.covariates import scramble_covariates  # noqa: E402
+from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 4
 NAME = "unet"
@@ -76,11 +76,11 @@ DEFAULTS = {"skip_source": "both", "covariate_injection": "film", "mask_mode": "
 
 # ---------------------------------------------------------------------------------------------
 # Rule shared by all six rungs, kept identical in each module (tests/test_minicandi_all_rungs.py
-# proves it). Registration: the registry imports this module by name and builds `Model(config)`.
+# proves it); the scramble rule is `covariates.model_covariates`. Registration: the registry imports
+# this module by name and builds `Model(config)`.
 # ---------------------------------------------------------------------------------------------
 TWO_STEP_MESSAGE = ("two_step (D15) is not built in any rung: two-step correction is a later "
                     "ablation on the winning design")
-SCRAMBLE_SEED = 0
 
 
 def check_rung(cfg: dict) -> None:
@@ -90,35 +90,6 @@ def check_rung(cfg: dict) -> None:
         raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
     if cfg.get("two_step"):
         raise NotApplicable(TWO_STEP_MESSAGE)
-
-
-def scramble_mode(cfg: dict) -> str:
-    """`all` (scramble_all), `covariates` (scramble_covariates) or `none`."""
-    if cfg.get("scramble_all"):
-        return "all"
-    return "covariates" if cfg.get("scramble_covariates") else "none"
-
-
-def model_covariates(batch: dict, mode: str, training: bool) -> tuple:
-    """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
-    the count transform and the NB head use.
-
-    `covariates`: every covariate column the encoders read (depth included) is permuted across the
-    windows of the batch (`covariates.scramble_covariates`); the transform keeps each track's true
-    depth, so the arm measures use of the covariates beyond the depth offset. `all`: the transform
-    reads the same scrambled depth. Scrambling belongs to the model; the dataset does not apply
-    it. Eval mode draws from a generator seeded with SCRAMBLE_SEED; training mode from the global
-    torch RNG.
-    """
-    c_in, c_out = batch["c_in"], batch["c_out"]
-    if mode == "none":
-        return c_in, c_out, c_in, c_out
-    gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
-    s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
-    s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
-    if mode == "all":
-        return s_in, s_out, s_in, s_out
-    return s_in, s_out, c_in, c_out
 
 
 def _cfg(config: dict) -> dict:
@@ -353,4 +324,4 @@ def fit_width(cfg: dict) -> int:
 
 
 __all__ = ["DEFAULTS", "Model", "NAME", "N_LEVELS", "RUNG", "SKIP_SOURCES", "TWO_STEP_MESSAGE",
-           "fit_width", "model_covariates", "scramble_mode"]
+           "fit_width"]

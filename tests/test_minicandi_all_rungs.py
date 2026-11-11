@@ -17,6 +17,7 @@ if str(_ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(_ROOT / "tools"))
 
 from minicandi import contract as C  # noqa: E402
+from minicandi import covariates as COV  # noqa: E402
 from minicandi import registry as R  # noqa: E402
 from minicandi import synth  # noqa: E402
 from minicandi import train as T  # noqa: E402
@@ -28,7 +29,7 @@ from onion_eval import guardrail as G  # noqa: E402
 
 L = 64
 RUNGS = sorted(R.RUNGS)
-SHARED = ("check_rung", "scramble_mode", "model_covariates")
+SHARED = ("check_rung",)
 
 
 def _base(r: int) -> dict:
@@ -96,7 +97,10 @@ def test_the_shared_rule_is_identical_in_all_six_modules():
         srcs = {inspect.getsource(getattr(m, fn)) for m in mods}
         assert len(srcs) == 1, fn
     assert len({m.TWO_STEP_MESSAGE for m in mods}) == 1
-    assert len({m.SCRAMBLE_SEED for m in mods}) == 1
+    for m in mods:                       # one scramble rule, defined once in covariates.py
+        assert m.model_covariates is COV.model_covariates
+        assert m.scramble_mode is COV.scramble_mode
+        assert "def model_covariates" not in inspect.getsource(m)
 
 
 # ------------------------------------------------------------------------- (d) two_step
@@ -160,15 +164,14 @@ def test_scrambling_is_applied_once_and_keeps_the_true_depth_unless_scramble_all
     model seeds it; not the original, not a second scramble). The count transform and the NB head
     read the true depth under scramble_covariates and the same scrambled depth under
     scramble_all. The outputs move against the unscrambled model with the same weights."""
-    mod = R.rung_module(r)
     torch.manual_seed(0)
     plain = _perturb(R.build_model(_cfg(r)))
     m = R.build_model(_cfg(r, **{mode: True})).eval()
     m.load_state_dict(plain.state_dict())
-    ref_in, ref_out = _reference(batch, mod.SCRAMBLE_SEED)
+    ref_in, ref_out = _reference(batch, COV.SCRAMBLE_SEED)
     assert not torch.equal(ref_in, batch["c_in"]) and not torch.equal(ref_out, batch["c_out"])
     twice_in = scramble_covariates(ref_in, batch["x_avail"],
-                                   torch.Generator().manual_seed(mod.SCRAMBLE_SEED))
+                                   torch.Generator().manual_seed(COV.SCRAMBLE_SEED))
     assert not torch.equal(twice_in, ref_in)
 
     seen, hooks = _spy(m)
@@ -199,16 +202,27 @@ def test_scrambling_is_applied_once_and_keeps_the_true_depth_unless_scramble_all
             assert not torch.allclose(out["mu"], cov(batch)["mu"])
 
 
-@pytest.mark.xfail(strict=True, reason="train.py (not owned by chunk RC) scrambles c_in and c_out "
-                   "itself, so a scrambling config is scrambled twice in training and the count "
-                   "transform loses the true depth; delete the scramble block in train.train")
-def test_the_train_loop_leaves_scrambling_to_the_model(tables, tmp_path, monkeypatch):
-    calls = []
-    real = T.scramble_covariates
-    monkeypatch.setattr(T, "scramble_covariates", lambda *a, **k: calls.append(1) or real(*a, **k))
-    T.train(_cfg(1, scramble_covariates=True, batch_size=2, windows_seen=2, param_budget=1.4e5),
-            tables, 0, tmp_path / "run")
-    assert not calls
+@pytest.mark.parametrize("mode", ["scramble_covariates", "scramble_all"])
+def test_training_scrambles_exactly_once_per_forward(tables, tmp_path, monkeypatch, mode):
+    """Through the train loop, `scramble_covariates` runs exactly twice (C and C') per model
+    forward, so the loop adds no scramble of its own; with scrambling off it never runs."""
+    calls, forwards = [], []
+    real = COV.scramble_covariates
+    monkeypatch.setattr(COV, "scramble_covariates",
+                        lambda *a, **k: calls.append(1) or real(*a, **k))
+
+    def build(c):
+        m = R.build_model(c)
+        m.register_forward_pre_hook(lambda *_: forwards.append(1))
+        return m
+
+    monkeypatch.setattr(T, "build_model", build)
+    small = dict(batch_size=2, windows_seen=4, param_budget=1.4e5)
+    T.train(_cfg(1, **small), tables, 0, tmp_path / "off")
+    assert forwards and not calls
+    forwards.clear()
+    T.train(_cfg(1, **small, **{mode: True}), tables, 0, tmp_path / "on")
+    assert forwards and len(calls) == 2 * len(forwards), (len(calls), len(forwards))
 
 
 # ------------------------------------------------------------------------- (a) wiring, (f) matrix

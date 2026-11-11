@@ -198,22 +198,6 @@ def test_same_seed_same_run(tables, tmp_path):
     assert not all(torch.equal(sx[k], sz[k]) for k in sx)
 
 
-def test_scramble_covariates_is_applied_by_the_loop(tables, tmp_path, monkeypatch):
-    calls = []
-    real = T.scramble_covariates
-
-    def spy(c, avail, generator=None):
-        calls.append(tuple(c.shape))
-        return real(c, avail, generator)
-
-    monkeypatch.setattr(T, "scramble_covariates", spy)
-    T.train(dict(SMALL, windows_seen=8), tables, 0, tmp_path / "off")
-    assert calls == []
-    T.train(dict(SMALL, windows_seen=8, scramble_covariates=True), tables, 0, tmp_path / "on")
-    assert len(calls) == 4                     # 2 steps x (c_in, c_out)
-    assert calls[1][-1] == C.K_META
-
-
 def test_flops_per_window_counts_forward_and_backward_and_scales_with_context(tables):
     out = {}
     for ctx in (32, 64, 128):

@@ -27,9 +27,8 @@ Determinism (AGENTS.md invariant 10): cudnn deterministic, benchmark off, then
 `numpy.random.default_rng([seed, 1])`; the FLOPs batch and the pearson statistics come from their
 own generators and the forked torch RNG, so they move no training draw.
 
-Scrambled covariates (`config["scramble_covariates"]`, the control arm): the dataset does not
-apply it; each training batch gets `covariates.scramble_covariates` on c_in (over x_avail) and on
-c_out (over y_avail), from a torch generator seeded with the run seed.
+Scrambled covariates (`scramble_covariates`, `scramble_all`): the model applies them, once per
+forward (`covariates.model_covariates`); neither this loop nor the dataset scrambles.
 
 Schedule: AdamW (lr = `config["lr"]`, weight decay 0.01), linear warm-up over the first 5% of steps
 (at most 1000), cosine decay to 10% of lr at the last step; gradient norm clipped at 1.0. The loss
@@ -61,7 +60,6 @@ if str(_TOOLS) not in sys.path:
 
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import CountTransform  # noqa: E402
-from minicandi.covariates import scramble_covariates  # noqa: E402
 from minicandi.dataset import OnionDataset, tables_sha256  # noqa: E402
 from minicandi.registry import CKPT_NAME, build_model  # noqa: E402
 
@@ -282,9 +280,6 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         if max_windows is not None and windows >= max_windows:
             break
         batch = ds.batch(bs, data_rng)
-        if cfg.get("scramble_covariates"):
-            batch["c_in"] = scramble_covariates(batch["c_in"], batch["x_avail"], scr_gen)
-            batch["c_out"] = scramble_covariates(batch["c_out"], batch["y_avail"], scr_gen)
         batch = to_device(batch, dev)
         for g in opt.param_groups:
             g["lr"] = lr_at(step, total_steps, float(cfg["lr"]))
