@@ -29,5 +29,18 @@ at the end of this, please create a /prezit and a detailed 12 page /storify repo
 
 during your long horizon run, you must face some unexpected things. your rule for asking something from me or not is the following:
 
-if the decision is so important that it belongs in the main paper/manuscript's methods section, it needs my decision. if it's something deep in the code, or something that belongs in the supplementary material, you can decide yourself and then write it down in the notepad (cruxvault/INSTRUCTIONS/peeling_the_onion/long-horizon notepad). 
+if the decision is so important that it belongs in the main paper/manuscript's methods section, it needs my decision. if it's something deep in the code, or something that belongs in the supplementary material, you can decide yourself and then write it down in the notepad (cruxvault/INSTRUCTIONS/peeling_the_onion/long-horizon notepad). ==exception: ablation outcomes that the selection rule in long-horizon decisions.md settles are yours to decide, even though they appear in the methods section; log each one in the notepad.==
+
+==while a question waits for my answer, keep working on every workstream that the question does not block.==
+
+i want you to act as a foreman for this long horizon work and /orchestrate.
+
+use subagents liberally
+
+==whenever you have questions (or uncertainty) for which you can find the answer in literature or web, first dispatch read-only subagents to look it up in either the project's wiki or web.==
+
+the other source that you can look for answers is this directory: cruxvault/INSTRUCTIONS/peeling_the_onion
+
+remember that this file contains the most high-level guidance (constitution) of this project. so make sure you are staying aligned to it:
+cruxvault/INSTRUCTIONS/peeling_the_onion/peeling the onion.md
 
