@@ -193,3 +193,93 @@ def test_bad_inputs_are_refused():
         S.signal_track(np.full(5, 1.0), 2.0, "ATAC-seq", None, {"depth_reads": 1e6})
     with pytest.raises(ValueError):
         S.nb_expected_neglog10p(np.array([0.0, 1.0]), 2.0, 1.0, 1.0)
+
+
+# ------------------------------------------------------------------ scorer adapter (review E6)
+
+class _FakeDS:
+    """The two things signal_from_nb reads from the scorer's OnionDataset: rows and read()."""
+
+    def __init__(self, rows, tracks):
+        self.rows, self.tracks, self.calls = rows, tracks, []
+
+    def read(self, mid, chrom, start, L):
+        self.calls.append((mid, chrom, start, L))
+        return self.tracks[(mid, chrom)][start:start + L]
+
+
+def _row(mid, assay, assay_class, ctl="", depth="2e7", rl="36"):
+    return {"measurement_id": mid, "assay": assay, "assay_class": assay_class,
+            "control_measurement_id": ctl, "depth_reads": depth, "read_length": rl,
+            "frag_len": "180"}
+
+
+RB = 64
+REGIONS = [("chr1", 0), ("chr2", 128)]
+
+
+def _nb(seed=0):
+    rng = np.random.default_rng(seed)
+    mu = rng.uniform(0.2, 6.0, len(REGIONS) * RB)
+    return np.full(mu.size, 4.0), mu
+
+
+def test_signal_from_nb_chip_observed_control_per_region():
+    n, mu = _nb()
+    ctl = {("ctl", c): np.random.default_rng(1).poisson(2.0, 400).astype(np.int32) for c, _ in REGIONS}
+    rows = {"t": _row("t", "H3K4me3", "narrow_histone", "ctl"),
+            "ctl": _row("ctl", "chipseq-control", "control", depth="3e7", rl="50")}
+    ds = _FakeDS(rows, ctl)
+    sig, src = S.signal_from_nb(n, mu, rows["t"], ds=ds, regions=REGIONS, rb=RB)
+    assert src == "observed_control" and sig.shape == (len(REGIONS) * RB,)
+    assert ds.calls == [("ctl", "chr1", 0, RB), ("ctl", "chr2", 128, RB)]
+    cov = dict(CHIP_COV)
+    for i, (c, s) in enumerate(REGIONS):           # one signal_track call per region, no mixing
+        want, _ = S.signal_track(mu[i * RB:(i + 1) * RB], n[i * RB:(i + 1) * RB], "narrow_histone",
+                                 ctl[("ctl", c)][s:s + RB], cov)
+        np.testing.assert_array_equal(sig[i * RB:(i + 1) * RB], want)
+
+
+def test_signal_from_nb_chip_predicted_control_when_no_observed_one():
+    n, mu = _nb()
+    row = _row("t", "H3K27ac", "narrow_histone")
+    pc = np.full(mu.size, 1.5)
+    sig, src = S.signal_from_nb(n, mu, row, ds=_FakeDS({"t": row}, {}), regions=REGIONS, rb=RB,
+                                predicted_control=pc)
+    assert src == "predicted_control"
+    cov = {"depth_reads": 2e7, "read_length": 36, "frag_len": 180, "control_depth_reads": 2e7,
+           "control_read_length": 36, "control_is_predicted": True}
+    want, _ = S.signal_track(mu[:RB], n[:RB], "narrow_histone", pc[:RB], cov)
+    np.testing.assert_array_equal(sig[:RB], want)
+    with pytest.raises(ValueError, match="no observed control and no predicted control"):
+        S.signal_from_nb(n, mu, row, ds=_FakeDS({"t": row}, {}), regions=REGIONS, rb=RB)
+
+
+@pytest.mark.parametrize("route,label", [("hotspot2_density", "hotspot2_density"),
+                                         ("macs2_no_control", "local_background")])
+def test_dnase_route_is_one_named_argument(route, label):
+    """The PI asked whether EIC scoring should use the MACS2 route for DNase-seq: one argument."""
+    n, mu = _nb(2)
+    row = _row("d", "DNase-seq", "accessibility_dnase", depth="4e7")
+    sig, src = S.signal_from_nb(n, mu, row, ds=_FakeDS({"d": row}, {}), regions=REGIONS, rb=RB,
+                                dnase_route=route)
+    assert src == label
+    one, src1 = S.signal_track(mu[:RB], n[:RB], "accessibility_dnase", None, DNASE_COV,
+                               dnase_route=route)
+    np.testing.assert_array_equal(sig[:RB], one)
+    if route == "macs2_no_control":           # the ATAC rule on DNase counts
+        atac, _ = S.signal_track(mu[:RB], n[:RB], "accessibility_atac", None, DNASE_COV)
+        np.testing.assert_array_equal(one, atac)
+    assert S.DNASE_ROUTE_DEFAULT == "hotspot2_density"
+
+
+def test_signal_from_nb_refuses_bad_shapes_and_routes():
+    n, mu = _nb()
+    row = _row("d", "DNase-seq", "accessibility_dnase")
+    with pytest.raises(ValueError, match="dnase_route"):
+        S.signal_track(mu, n, "accessibility_dnase", None, DNASE_COV, dnase_route="hotspot3")
+    with pytest.raises(ValueError):
+        S.signal_from_nb(n[:-1], mu[:-1], row, ds=_FakeDS({"d": row}, {}), regions=REGIONS, rb=RB)
+    with pytest.raises(ValueError, match="control"):
+        S.signal_from_nb(n, mu, _row("c", "chipseq-control", "control"), ds=_FakeDS({}, {}),
+                         regions=REGIONS, rb=RB)

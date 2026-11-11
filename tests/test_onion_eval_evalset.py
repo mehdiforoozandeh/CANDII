@@ -121,7 +121,7 @@ def test_pairs_without_halves_dropped_and_blind_flagged(tmp_path):
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
-    out = tmp_path / "eval" / "synth" / "evalset.json"
+    out = tmp_path / "eval" / "synth" / "evalset_blind.json"
     ev = E.build(t, out, n_regions=2, n_fit_regions=1, region_bins=512, include_blind=True)
     assert ev["correction_pairs_dropped"] > 0
     assert victim["measurement_id"] not in {m for c in ev["correction_pairs"]
@@ -152,3 +152,98 @@ def test_cli_build_with_strata(tmp_path, capsys):
     assert set(ev["scorable"]) == {"imputation", "correction", "layers"}
     assert E.main(["check", "--evalset", str(out)]) == 0
     assert "imputation-scorable H3K4me3: 3 validation targets" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ review E6 regression tests
+
+def _rewrite(t, rows):
+    with open(t / "measurements.tsv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+
+
+def test_f13_missing_mask_raises(tmp_path):
+    """Finding 13: without mask.h5 (or a chromosome in it) every block was accepted silently."""
+    t = make_synthetic_tables(tmp_path, n_cells=9, val_tracks=VAL, blind_tracks=BLIND)
+    mask = tmp_path / "genome" / "mask.h5"
+    with h5py.File(mask, "a") as f:
+        del f["chr2"]
+    with pytest.raises(KeyError, match="chr2"):
+        E.build(t, tmp_path / "eval" / "synth" / "evalset.json", n_regions=2, n_fit_regions=1,
+                region_bins=512)
+    mask.unlink()
+    with pytest.raises(FileNotFoundError, match="mask"):
+        E.build(t, tmp_path / "eval" / "synth" / "evalset.json", n_regions=2, n_fit_regions=1,
+                region_bins=512)
+
+
+def test_mask_applied_and_tables_sha256_recorded(built):
+    from minicandi.dataset import tables_sha256
+    root, t, out, ev = built
+    assert ev["mask_applied"] is True and ev["include_blind"] is False
+    assert ev["tables_sha256"] == tables_sha256(t)
+
+
+def test_f9_tables_change_is_caught(tmp_path):
+    t = make_synthetic_tables(tmp_path, n_cells=9, val_tracks=VAL, blind_tracks=BLIND)
+    out = tmp_path / "eval" / "synth" / "evalset.json"
+    E.build(t, out, n_regions=2, n_fit_regions=1, region_bins=512)
+    assert E.check(out) == []
+    with open(t / "pairs.tsv", "a", encoding="utf-8") as fh:
+        fh.write("")                                  # bytes unchanged: still passes
+    assert E.check(out) == []
+    rows = tsv(t / "measurements.tsv")
+    rows[0]["lab"] = "elsewhere"
+    _rewrite(t, rows)
+    assert any("tables_sha256" in b for b in E.check(out))
+
+
+def test_blind_evalset_path_convention(tmp_path):
+    t = make_synthetic_tables(tmp_path, n_cells=9, val_tracks=VAL, blind_tracks=BLIND)
+    d = tmp_path / "eval" / "synth"
+    with pytest.raises(ValueError, match="evalset_blind.json"):
+        E.build(t, d / "evalset.json", n_regions=2, n_fit_regions=1, region_bins=512,
+                include_blind=True)
+    with pytest.raises(ValueError, match="evalset_blind.json"):
+        E.build(t, d / "evalset_blind.json", n_regions=2, n_fit_regions=1, region_bins=512)
+    ev = E.build(t, d / "evalset_blind.json", n_regions=2, n_fit_regions=1, region_bins=512,
+                 include_blind=True)
+    assert ev["include_blind"] is True
+    assert any(x["split"] == "blind" for x in ev["imputation_targets"])
+
+
+def test_f16_control_is_never_an_imputation_target(tmp_path):
+    """Finding 16: a validation chipseq-control track became an imputation target."""
+    t = make_synthetic_tables(tmp_path, n_cells=9, val_tracks=VAL + ((7, "chipseq-control"),),
+                              blind_tracks=BLIND)
+    out = tmp_path / "eval" / "synth" / "evalset.json"
+    ev = E.build(t, out, n_regions=2, n_fit_regions=1, region_bins=512)
+    meas = {r["measurement_id"]: r for r in tsv(t / "measurements.tsv")}
+    assert all(meas[x["target"]]["assay"] != E.CONTROL for x in ev["imputation_targets"])
+    assert [meas[x["target"]]["assay"] for x in ev["control_targets"]] == [E.CONTROL]
+    ct = ev["control_targets"][0]
+    assert ct["regime"] == "control" and ct["cell"] == "s7" and ct["inputs"]
+    assert all(meas[m]["in_eic"] == "train" and meas[m]["assay"] != E.CONTROL for m in ct["inputs"])
+    assert E.CONTROL not in ev["scorable"]["imputation"]
+    row = {r["assay"]: r for r in tsv(out.parent / "scorable.tsv")}[E.CONTROL]
+    assert "not an imputation target" in row["reason"]
+    assert E.check(out) == []
+
+
+def test_f11_targets_without_halves_kept_and_counted(tmp_path):
+    """Finding 11: targets were not filtered or flagged on halves (a store: path never has them)."""
+    t = make_synthetic_tables(tmp_path, n_cells=9, val_tracks=VAL, blind_tracks=BLIND)
+    rows = tsv(t / "measurements.tsv")
+    v = [r for r in rows if r["in_eic"] == "val" and r["arm_knob"] == "" and r["assay"] == "H3K4me3"]
+    v[0]["has_pseudoreps"] = "0"
+    v[1]["counts_path"] = "store:/x/CANDI_STORE/eic:C02:H3K4me3"
+    _rewrite(t, rows)
+    ev = E.build(t, tmp_path / "eval" / "synth" / "evalset.json", n_regions=2, n_fit_regions=1,
+                 region_bins=512)
+    flags = {x["target"]: x["has_halves"] for x in ev["imputation_targets"]}
+    assert flags[v[0]["measurement_id"]] is False and flags[v[1]["measurement_id"]] is False
+    assert flags[v[2]["measurement_id"]] is True
+    assert ev["targets_without_halves"] == sorted([v[0]["measurement_id"], v[1]["measurement_id"]])
+    # the scorable rule counts only tracks with halves: H3K4me3 drops to 1 and is not scorable
+    assert "H3K4me3" not in ev["scorable"]["imputation"]

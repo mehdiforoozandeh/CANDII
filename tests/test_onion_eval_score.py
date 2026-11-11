@@ -19,6 +19,7 @@ if str(REPO / "tools") not in sys.path:
     sys.path.insert(0, str(REPO / "tools"))
 
 from minicandi.contract import MiniCandi  # noqa: E402
+from minicandi.dataset import tables_sha256  # noqa: E402
 from minicandi.synth import make_synthetic_tables  # noqa: E402
 from onion_eval import evalset as E  # noqa: E402
 from onion_eval import metrics as Mx  # noqa: E402
@@ -26,7 +27,7 @@ from onion_eval import score as S  # noqa: E402
 from onion_eval import select_rule as R  # noqa: E402
 
 VAL = ((0, "H3K4me3"), (1, "H3K4me3"), (2, "H3K4me3"), (3, "H3K27ac"), (4, "H3K27ac"),
-       (5, "H3K27ac"), (6, "H3K27me3"))
+       (5, "H3K27ac"), (6, "H3K27me3"), (7, "chipseq-control"))
 BLIND = ((8, "H3K4me3"),)
 CFG = {"context_bins": 128, "batch_size": 4}
 KW = dict(n_boot=30, guardrail_windows=8, log=lambda *a: None)
@@ -76,6 +77,14 @@ def env(tmp_path_factory):
     with open(t / "pairs.tsv", "a", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=list(pairs[0]), delimiter="\t", lineterminator="\n")
         w.writerows(extra)
+    # pipeline signal tracks for the H3K4me3 validation targets (the signal space, X2)
+    for r in meas.values():
+        if r["in_eic"] == "val" and r["arm_knob"] == "" and r["assay"] == "H3K4me3":
+            d = Path(r["counts_path"][3:]).parent
+            for nm, src in (("signal", "counts"), ("pr1_signal", "pr1"), ("pr2_signal", "pr2")):
+                with h5py.File(d / f"{src}.h5", "r") as fi, h5py.File(d / f"{nm}.h5", "w") as fo:
+                    for c in fi:
+                        fo.create_dataset(c, data=np.asarray(fi[c][:], np.float32) * 0.7)
     sp = root / "eval" / "strata" / "masks.h5"
     sp.parent.mkdir(parents=True)
     sizes = json.loads((root / "genome" / "chrom_sizes.json").read_text())
@@ -111,6 +120,9 @@ def model_run(env, tmp_path_factory):
     """The trivial model scored through the CLI `--run`, with a stand-in for T1's load_run."""
     run = tmp_path_factory.mktemp("runs") / "rung1_trivial" / "seed0"
     run.mkdir(parents=True)
+    # training wrote DONE and ckpt.pt (finding 3: the scorer used to skip on this DONE)
+    (run / "DONE").write_text("1\n")
+    torch.save({"tables_sha256": tables_sha256(env["tables"])}, run / "ckpt.pt")
     fake = types.ModuleType("minicandi.registry")
     fake.load_run = lambda d: (Trivial(), dict(CFG))
     old = sys.modules.get("minicandi.registry")
@@ -145,24 +157,35 @@ def test_every_pinned_key_and_level(model_run, env):
     assert set(h1["per_target"]) == set(loao)
     assert all(np.isfinite(v["level"]) for v in h1["per_target"].values())
     sig = s["specific_variance_recovered_above_noise"]["signal_arcsinh"]
-    assert sig["macro"] is None and "signal_from_counts" in sig["reason"]
+    # H3K4me3 has signal tracks (no observed control: the model's predicted control); H3K27ac has none
+    assert sig["per_assay"]["H3K4me3"] is not None
+    assert sig["macro"] is None and "signal.h5" in sig["reason"]
+    for tg, v in sig["per_target"].items():
+        if v["assay"] == "H3K4me3":
+            assert v["lambda_source"] == "predicted_control" and np.isfinite(v["level"])
+            assert v["level"] != h1["per_target"][tg]["level"]         # finding 15
+        else:
+            assert v["lambda_source"] is None and "signal.h5" in v["lambda_reason"]
     assert set(s["copy_leak"]) >= set(("hidden_input_max_abs_change", "unavailable_input_max_abs_change",
                                        "same_view_copy_gain", "copy_leak_pass"))
     assert s["copy_leak"]["hidden_input_max_abs_change"] == 0.0
     assert len(s["copy_leak"]["same_view_copy_gain_relative_by_mask_seed"]) == 3
+    assert isinstance(s["copy_leak"]["copy_leak_spread_ok"], bool)
     assert set(s["error_budget"]) >= set(S.BUDGET_KEYS)
     assert set(s["selection"]) >= {"space", "imputation_gap_closed", "correction_gap_closed",
                                    "uncertainty_gap_closed", "composite"}
     assert s["selection"]["space"] == "counts_log1p"
     assert s["regime"] == "leave_one_assay_out" and s["split"] == "val"
     assert s["n_targets"] == len(loao) and s["n_pairs"] == len(env["ev"]["correction_pairs"])
-    assert (model_run / "DONE").is_file()
+    assert (model_run / "SCORED").is_file()
     suff = np.load(model_run / "suffstats.npz")
     assert any(k.startswith("gram/leave_one_assay_out/H3K4me3/") for k in suff.files)
     assert any(k.startswith("pit/") for k in suff.files) and any(k.startswith("pair/") for k in suff.files)
-    # a second call skips on DONE
+    # a second call skips on SCORED
     assert S.main(["--run", str(model_run), "--evalset", str(env["evalset"]),
                    "--out", str(model_run)]) == 0
+    assert s["tables_sha256"] == s["run_tables_sha256"] == tables_sha256(env["tables"])
+    assert s["noise_floor"] == "pseudoreplicate_halves" and s["n_targets_without_halves"] == 0
 
 
 def test_trivial_model_selection_terms(model_run):
@@ -239,10 +262,13 @@ def test_blind_refused(env):
     meas = {r["measurement_id"]: r for r in _tsv(env["tables"] / "measurements.tsv")}
     blind = next(m for m, r in meas.items() if r["in_eic"] == "blind" and r["arm_knob"] == "")
     ev["imputation_targets"] = [dict(ev["imputation_targets"][0], target=blind)]
-    p = env["root"] / "eval" / "synth" / "evalset_blind.json"
+    p = env["root"] / "eval" / "synth" / "evalset_smuggled.json"
     p.write_text(json.dumps(ev))
     with pytest.raises(PermissionError):
         S.Scorer(p, main="marginal_nb", config=CFG).jobs()
+    # finding 14: --allow-blind on a validation pass still refuses a blind row
+    with pytest.raises(PermissionError, match="blind"):
+        S.Scorer(p, main="marginal_nb", config=CFG, split="val", allow_blind=True).jobs()
 
 
 def test_pooled_pit_equals_concatenated():
@@ -260,3 +286,249 @@ def test_pooled_pit_equals_concatenated():
 def test_composite_weights():
     assert S.composite(0.4, 0.8, 0.2) == pytest.approx(0.5 * 0.4 + 0.25 * 0.8 + 0.25 * 0.2)
     assert np.isnan(S.composite(0.4, float("nan"), 0.2))
+
+
+# ------------------------------------------------------------------ review E6 regression tests
+
+def _model_scorer(env, **kw):
+    return S.Scorer(env["evalset"], main="model", model=Trivial(), config=CFG,
+                    run_tables_sha256=tables_sha256(env["tables"]), **dict(KW, **kw))
+
+
+def test_f2_copy_leak_pass_needs_every_mask_seed(env, monkeypatch):
+    """Finding 2: copy_leak_pass came from mask seed 0 only (relative gain 0.05 on seed 0, 0.15 on
+    seed 1 passed)."""
+    from onion_eval import guardrail as G
+    gains = {0: 0.05, 1: 0.15, 2: 0.05}
+
+    def fake(model, batches, seed=0):
+        g = gains[seed]
+        return {"hidden_input_max_abs_change": 0.0, "unavailable_input_max_abs_change": 0.0,
+                "same_view_copy_gain": g, "same_view_copy_gain_relative": g,
+                "copy_leak_pass": g <= G.GAIN_THRESHOLD, "part1_wiring_pass": True,
+                "part2_j_invariance_pass": g <= G.GAIN_THRESHOLD}
+    monkeypatch.setattr(G, "copy_leak", fake)
+    cl = _model_scorer(env)._copy_leak()
+    assert cl["copy_leak_pass"] is False and cl["copy_leak_pass_by_mask_seed"] == [True, False, True]
+    assert cl["same_view_copy_gain_relative_spread"] == pytest.approx(0.10)
+    assert cl["copy_leak_spread_ok"] is False                   # 0.10 > 0.5 x 0.10
+    assert cl["hidden_input_max_abs_change_by_mask_seed"] == [0.0, 0.0, 0.0]
+    gains.update({1: 0.07})
+    cl = _model_scorer(env)._copy_leak()
+    assert cl["copy_leak_pass"] is True and cl["copy_leak_spread_ok"] is True
+
+
+def test_f3_done_from_training_does_not_skip_scoring(model_run):
+    """Finding 3: a run dir always holds training's DONE; the scorer skipped it and never scored."""
+    assert (model_run / "DONE").is_file() and (model_run / "scores.json").is_file()
+    assert R.seed_state(model_run) == "done"
+    for sh in ("slurm/onion_eval/score.sh", "slurm/minicandi/train.sh"):
+        text = (REPO / sh).read_text()
+        assert '-f "$OUT/SCORED"' in text and '-f "$OUT/DONE"' not in text, sh
+
+
+def test_f6_undefined_noise_floor_makes_headline_1_undefined():
+    """Finding 6 repro: (E=.2, V=.5, N=.1), (E=.45, V=.5, N=Undefined), (E=.2, V=.5, N=.1) gave
+    per_assay A = 0.75 with no reason."""
+    recs = [dict(assay="A", cell="c0", E_sp=.2, V_sp=.5, N=.1),
+            dict(assay="A", cell="c1", E_sp=.45, V_sp=.5, N=Mx.Undefined("halves unreadable")),
+            dict(assay="A", cell="c2", E_sp=.2, V_sp=.5, N=.1)]
+    m = S.metric(recs, S.recovered_fn(), {"A"}, n_boot=0)
+    assert m["per_assay"]["A"] is None and m["macro"] is None
+    assert "halves unreadable" in m["per_assay_reason"]["A"] and m["reason"]
+    recs[1]["V_sp"] = Mx.Undefined("no other group")
+    recs[1]["N"] = 0.1
+    assert "no other group" in S.metric(recs, S.recovered_fn(), {"A"}, n_boot=0)["per_assay_reason"]["A"]
+    # a target WITHOUT halves is left out (finding 11), not counted as undefined
+    recs[1].update(V_sp=.5, N=Mx.Undefined("no halves"), has_halves=False)
+    m = S.metric(recs, S.recovered_fn(), {"A"}, n_boot=0)
+    assert m["per_assay"]["A"] == pytest.approx(1 - (0.2 - 0.1) / (0.5 - 0.1))
+
+
+def test_f10_missing_scorable_assay_is_listed_and_voids_the_headline():
+    recs = [dict(assay="A", cell="c0", x=1.0), dict(assay="A", cell="c1", x=2.0)]
+    m = S.metric(recs, S._mean_of("x"), {"A", "B"}, n_boot=0)
+    assert m["macro"] == 1.5 and m["missing_scorable"] == ["B"]
+    m = S.metric(recs, S._mean_of("x"), {"A", "B"}, n_boot=0, require_all=True)
+    assert m["macro"] is None and "B" in m["reason"] and m["missing_scorable"] == ["B"]
+
+
+def test_f4_selection_writes_denominators(model_run, env):
+    sel = _strict(model_run / "scores.json")["selection"]
+    den = sel["denominators"]
+    assert den["uncertainty_marginal_pit_deviation"] > 0
+    rel = den["correction_baseline_minus_floor_relative_by_assay"]
+    assert set(rel) == set(env["ev"]["scorable"]["correction"])
+    assert den["correction_baseline_minus_floor_relative_min"] == pytest.approx(min(rel.values()))
+    # the review's input: metrics.uncertainty_gap_closed([0.01], [1e-9]) explodes; the rule escalates
+    assert Mx.uncertainty_gap_closed([0.01], [1e-9]) < -1e6
+    s = {"selection": dict(sel, uncertainty_gap_closed=-9999999.0,
+                           denominators=dict(den, uncertainty_marginal_pit_deviation=1e-9))}
+    seed = R.load_seed(_write(env["root"] / "f4.json", s))
+    probs, _ = R.screen_terms([seed])
+    assert {k for k, _ in probs} == {"uncertainty"}
+
+
+def _write(p, obj):
+    p.write_text(json.dumps(obj))
+    return p
+
+
+def test_f16_control_scored_apart(model_run, env):
+    s = _strict(model_run / "scores.json")
+    loao = s["specific_variance_recovered_above_noise"]["counts_log1p"]["per_target"]
+    assert all(v["assay"] != "chipseq-control" for v in loao.values())
+    pc = s["predicted_control"]
+    assert pc["regime"] == "control" and pc["n_targets"] == 1
+    assert pc["count_crps"]["per_assay"]["chipseq-control"] is not None
+    assert env["res"]["marginal_nb"]["predicted_control"]["n_targets"] == 0
+
+
+def test_f9_tables_checked_against_evalset_and_checkpoint(env, tmp_path):
+    with pytest.raises(S.ScoreRefused, match="trained on tables"):
+        S.Scorer(env["evalset"], main="model", model=Trivial(), config=CFG,
+                 run_tables_sha256="0" * 64, **KW)
+    ev = json.loads(env["evalset"].read_text())
+    p = env["evalset"].parent / "evalset_badsha.json"
+    p.write_text(json.dumps(dict(ev, tables_sha256="0" * 64)))
+    with pytest.raises(S.ScoreRefused, match="changed since"):
+        S.Scorer(p, main="marginal_nb", config=CFG, **KW)
+    p.write_text(json.dumps({k: v for k, v in ev.items() if k != "tables_sha256"}))
+    with pytest.raises(S.ScoreRefused, match="no tables_sha256"):
+        S.Scorer(p, main="marginal_nb", config=CFG, **KW)
+    run = tmp_path / "rung1_x" / "seed0"
+    run.mkdir(parents=True)
+    assert S.main(["--run", str(run), "--evalset", str(env["evalset"]), "--out", str(run)]) == 2
+
+
+def test_f9_blind_ledger_and_repeat_reason(env, capsys):
+    """Finding 9: a second blind pass with --force silently overwrote the first, with no record."""
+    t = env["tables"]
+    bdir = env["root"] / "eval" / "synth_blind"
+    ev = E.build(t, bdir / "evalset_blind.json", n_regions=1, n_fit_regions=1, region_bins=256,
+                 include_blind=True)
+    ev["imputation_targets"] = [x for x in ev["imputation_targets"]
+                                if x["split"] == "blind" and x["regime"] == "leave_one_assay_out"]
+    ev["correction_pairs"], ev["replicate_pairs"] = [], []
+    (bdir / "evalset_blind.json").write_text(json.dumps(ev))
+    out = bdir / "baselines" / "marginal_nb" / "seed0" / "blind"
+    args = ["--baseline", "marginal_nb", "--evalset", str(bdir / "evalset_blind.json"),
+            "--split", "blind", "--allow-blind", "--n-boot", "0"]
+    # the pinned layout: a blind pass writes into .../blind, and a val eval set is refused
+    assert S.main(args + ["--out", str(out.parent)]) == 2
+    assert S.main(["--baseline", "marginal_nb", "--evalset", str(env["evalset"]), "--split",
+                   "blind", "--allow-blind", "--out", str(out)]) == 2
+    assert S.main(args + ["--out", str(out)]) == 0
+    s = _strict(out / "scores.json")
+    assert s["split"] == "blind" and s["n_targets"] == 1
+    led = _tsv(bdir / "BLIND_PASSES.tsv")
+    assert [r["status"] for r in led] == ["started", "scored"]
+    assert led[0]["run"] == "baseline:marginal_nb" and led[0]["evalset_sha256"] == s["evalset_sha256"]
+    assert led[0]["tables_sha256"] == tables_sha256(t) and led[0]["git_sha"]
+    capsys.readouterr()
+    assert S.main(args + ["--out", str(out), "--force"]) == 2
+    assert "--repeat-blind-reason" in capsys.readouterr().err
+    assert len(_tsv(bdir / "BLIND_PASSES.tsv")) == 2
+    assert S.main(args + ["--out", str(out), "--force", "--repeat-blind-reason",
+                          "node died mid-write"]) == 0
+    led = _tsv(bdir / "BLIND_PASSES.tsv")
+    assert len(led) == 4 and led[-1]["repeat_reason"] == "node died mid-write"
+
+
+@pytest.fixture(scope="module")
+def halves_env(tmp_path_factory):
+    """Tables where one H3K4me3 validation target has no halves on disk (finding 11 repro: the
+    scorer read pr1/pr2 of every target and raised)."""
+    root = tmp_path_factory.mktemp("halves")
+    t = make_synthetic_tables(root, n_cells=9, val_tracks=VAL[:6], blind_tracks=BLIND)
+    rows = _tsv(t / "measurements.tsv")
+    v = [r for r in rows if r["in_eic"] == "val" and r["arm_knob"] == "" and r["assay"] == "H3K4me3"]
+    v[0]["has_pseudoreps"] = "0"
+    d = Path(v[0]["counts_path"][3:]).parent
+    (d / "pr1.h5").unlink()
+    (d / "pr2.h5").unlink()
+    with open(t / "measurements.tsv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
+        w.writeheader()
+        w.writerows(rows)
+    out = root / "eval" / "synth" / "evalset.json"
+    ev = E.build(t, out, n_regions=1, n_fit_regions=1, region_bins=256, seed=0)
+    ev["imputation_targets"] = [x for x in ev["imputation_targets"]
+                                if x["regime"] == "leave_one_assay_out"]
+    ev["correction_pairs"], ev["replicate_pairs"] = [], []
+    out.write_text(json.dumps(ev))
+    return {"tables": t, "evalset": out, "victim": v[0]["measurement_id"], "root": root}
+
+
+def test_f11_target_without_halves_is_counted_not_raised(halves_env):
+    s = S.score(halves_env["evalset"], halves_env["root"] / "pa", baseline="position_average",
+                config=CFG, **KW)
+    h1 = s["specific_variance_recovered_above_noise"]["counts_log1p"]
+    assert s["n_targets_without_halves"] == 1 and h1["targets_without_halves"] == [halves_env["victim"]]
+    pt = h1["per_target"][halves_env["victim"]]
+    assert pt["N"] is None and pt["has_halves"] is False and pt["E_sp"] is not None
+    # H3K4me3 is still scored from its two targets with halves... but it is no longer scorable
+    assert "H3K4me3" in h1["non_scorable_per_assay"]
+    assert s["predicted_over_replicate_variance"]["per_assay_reason"]
+
+
+def test_f11_no_halves_pilot_mode(env, monkeypatch):
+    """`--no-halves`: the pilot's store: tables. No half is read; headline 1 without a noise floor
+    goes under a key the selection rule cannot mistake for the headline, and is refused there."""
+    sc = S.Scorer(env["evalset"], main="position_average", config=CFG, no_halves=True, **KW)
+    real = sc.ds.read
+
+    def read(mid, chrom, start, L=None, which="counts"):
+        assert which == "counts", f"read {which} in --no-halves mode"
+        return real(mid, chrom, start, L, which)
+    monkeypatch.setattr(sc.ds, "read", read)
+    s = sc.run()
+    assert s["noise_floor"] == "none_pilot" and s["n_pairs"] == 0
+    assert s["specific_variance_recovered_above_noise"]["counts_log1p"]["macro"] is None
+    assert "--no-halves" in s["specific_variance_recovered_above_noise"]["counts_log1p"]["reason"]
+    assert s[S.PILOT_H1_KEY]["macro"] is not None
+    assert s["selection"]["imputation_gap_closed"] is None and s["selection"]["imputation_reason"]
+    assert s["pit_deviation_pooled"]["macro"] is not None
+
+
+# ------------------------------------------------------------------ end to end: train, score, select
+
+E2E = {"rung": 2, "context_bins": 64, "batch_size": 4, "param_budget": 2.0e4, "windows_seen": 8,
+       "lr": 1e-3, "covariate_injection": "film", "mask_mode": "token", "dna": "own",
+       "scramble_covariates": False, "scramble_all": False, "count_transform": "offset",
+       "qc_on_input": False, "two_step": False, "base_depth": "native", "average_input": False,
+       "control_input": True, "predict_control": True}
+
+
+def test_end_to_end_train_score_compare(env, tmp_path):
+    """Train rung 2 for a few windows via the train CLI (the run dir then holds training's DONE),
+    score each run via the scorer CLI, then `select_rule.py compare` on three seeds per arm: the
+    path that finding 3 broke ("0 scored seeds")."""
+    from minicandi import train as T
+    ev = json.loads(env["evalset"].read_text())
+    ev["imputation_targets"] = [x for x in ev["imputation_targets"]
+                                if x["regime"] == "leave_one_assay_out"]
+    ev["correction_pairs"] = [p for p in ev["correction_pairs"] if not p["subset_pair"]][:2]
+    ev["replicate_pairs"], ev["control_targets"] = [], []
+    evp = env["evalset"].parent / "evalset_e2e.json"
+    evp.write_text(json.dumps(ev))
+    runs = tmp_path / "runs"
+    arms = {"rung2_base": dict(E2E, simpler_than_base=None),
+            "rung2_dna_off": dict(E2E, dna="off", simpler_than_base=True)}
+    for arm, cfg in arms.items():
+        cp = tmp_path / f"{arm}.json"
+        cp.write_text(json.dumps(cfg))
+        for k in range(3):
+            run = runs / arm / f"seed{k}"
+            assert T.main(["--config", str(cp), "--tables", str(env["tables"]), "--seed", str(k),
+                           "--out", str(run), "--log-every", "1000"]) in (0, None)
+            assert (run / "DONE").is_file() and not (run / "SCORED").exists()
+            assert S.main(["--run", str(run), "--evalset", str(evp), "--out", str(run),
+                           "--n-boot", "0", "--guardrail-windows", "4"]) == 0
+            assert (run / "SCORED").is_file()
+    rows = R.table(runs, "rung2_")
+    assert len(rows) == 6 and {r["state"] for r in rows} == {"done"}
+    res = R.compare(runs / "rung2_base", runs / "rung2_dna_off", None,
+                    settlements=runs / "settlements.tsv")
+    assert res["verdict"] in R.VERDICTS, res
+    assert _tsv(runs / "settlements.tsv")[0]["verdict"] == res["verdict"]
