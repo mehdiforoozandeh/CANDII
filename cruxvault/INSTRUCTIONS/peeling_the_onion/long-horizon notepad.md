@@ -316,3 +316,14 @@ Evidence: `cruxvault/results/t180/KIT_INTEGRATION.md`.
 - Pilot (Fir): 355 CPU-h and 1.7 GPU-h. Scoring took 298 of the CPU-h.
 - Kit smokes (Nibi), alignment step: ChIP-seq 19.68 CPU-h, ATAC-seq 15.12 CPU-h, DNase-seq 4.73 CPU-h. The view step added 3.32, 2.37 and 1.88 CPU-h.
 - Projected EIC build: 1,565 + 4,282 + 1,484 CPU-h for priorities 1 to 3, and 14,920 CPU-h for priority 4.
+
+## 2026-11-11 Agent call: all seeds of one comparison are scored on one device
+
+Every run that enters one comparison under the selection rule (both arms, all seeds) is scored on the same device type, CPU or GPU.
+
+- GPU and CPU scores of the same run differ by up to 1.1e-5, from float32 GPU kernels. The CPU path reproduces the stored scores to 1.9e-14.
+- The difference is about 350 times smaller than the pilot seed spread (0.0038), but one device per comparison removes it as a question.
+- The faster scorer costs about 0.8 CPU-h per run, down from 10.4 CPU-h (rung 2) and 38.3 CPU-h (rung 1). The ladder's scoring estimate fell from about 3,800 to about 240 CPU-h. Rung 5 was not measured.
+- The same-view copy-gain diagnostic now draws independent masks per seed. Its spread on rung 2 rose from 0.009 to 0.099, which matches the train-split spread. It stays a diagnostic.
+
+Evidence: `cruxvault/results/t182/F3.md`.
