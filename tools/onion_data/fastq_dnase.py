@@ -386,6 +386,63 @@ def sha256_file(path, bufsize=1 << 22) -> str:
     return h.hexdigest()
 
 
+#: Nibi to S3 runs near 0.2 MB/s per connection and scales with connections (measured
+#: 2026-11-11: 1 stream 0.20 MB/s, 8 streams 1.7 MB/s), so large files go in parallel ranges.
+STREAMS = 32
+CHUNK = 64 << 20
+
+
+def _resolve(url):
+    """Final URL after redirects, and its size (None when the server gives none)."""
+    req = urllib.request.Request(url, headers={"Range": "bytes=0-0"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        final = r.geturl()
+        cr = r.headers.get("Content-Range", "")
+    m = re.match(r"bytes 0-0/(\d+)$", cr)
+    return final, (int(m.group(1)) if m else None)
+
+
+def _fetch_ranges(url, part, streams=STREAMS, chunk=CHUNK):
+    """Write url to part with up to `streams` parallel HTTP range requests (one stream if the
+    server gives no size). Each range is retried; the caller checks the md5 of the whole."""
+    from concurrent.futures import ThreadPoolExecutor
+    final, size = _resolve(url)
+    if size is None or size <= chunk:
+        with urllib.request.urlopen(final, timeout=300) as r, open(part, "wb") as out:
+            shutil.copyfileobj(r, out, 1 << 22)
+        return
+    with open(part, "wb") as out:
+        out.truncate(size)
+    state = {"url": final}
+
+    def one(start):
+        end = min(start + chunk, size) - 1
+        for k in range(6):
+            try:
+                req = urllib.request.Request(state["url"], headers={"Range": f"bytes={start}-{end}"})
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    data = r.read()
+                if len(data) != end - start + 1:
+                    raise IOError(f"range {start}-{end}: {len(data)} bytes")
+                fd = os.open(part, os.O_WRONLY)
+                try:
+                    os.pwrite(fd, data, start)
+                finally:
+                    os.close(fd)
+                return len(data)
+            except Exception as e:  # noqa: BLE001
+                if k == 5:
+                    raise
+                if "403" in str(e):          # signed S3 URL expired: resolve again
+                    state["url"] = _resolve(url)[0]
+                time.sleep(5 * (k + 1))
+
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=streams) as ex:
+        done = sum(ex.map(one, range(0, size, chunk)))
+    log(f"fetched {done} bytes in {time.time() - t0:.0f} s ({done / max(time.time() - t0, 1) / 2**20:.1f} MB/s)")
+
+
 def download(url, dest, md5=None, tries=4):
     """Stream url to dest (via dest.part); verify md5 when given. Skip if dest has that md5."""
     dest = Path(dest)
@@ -396,8 +453,7 @@ def download(url, dest, md5=None, tries=4):
     part = dest.with_name(dest.name + ".part")
     for i in range(tries):
         try:
-            with urllib.request.urlopen(url, timeout=300) as r, open(part, "wb") as out:
-                shutil.copyfileobj(r, out, 1 << 22)
+            _fetch_ranges(url, part)
             got = md5_file(part)
             if md5 is not None and got != md5:
                 raise IOError(f"md5 {got} != {md5}")
