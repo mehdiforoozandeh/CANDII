@@ -327,3 +327,26 @@ Every run that enters one comparison under the selection rule (both arms, all se
 - The same-view copy-gain diagnostic now draws independent masks per seed. Its spread on rung 2 rose from 0.009 to 0.099, which matches the train-split spread. It stays a diagnostic.
 
 Evidence: `cruxvault/results/t182/F3.md`.
+
+## 2026-11-11 PI rulings 22 to 25
+
+- **Ruling 22, pretrained DNA sources.** Both are approved: Flashzoi (package `borzoi-pytorch`) and Nucleotide Transformer v2 500M multi-species (package `transformers`), frozen, installed in the separate DNA-model environment, with embeddings precomputed on Nibi.
+- **Ruling 23, assembly of the final design.** PI's words: "different winning ideas from different rungs can have positive combination effect. do a few combination (mix and matches). select the combinations intelligently. in general, architecture design of miniCANDI is a very complex and high dimensional problem with lots or knobs and design choices. the 6 rungs should give you some idea of what works and what doesn't. then you can further optimize the winning recipes by evolving them (you can dispatch subagents to run crux autopilot on them)". The agent's reading: after the six rungs, the agent picks a small set of combinations that mix winning ideas across rungs, tests each with 3 seeds under the selection rule, and then runs an automated search (crux autopilot, started by subagents) on the winning recipes. The search scores on validation only.
+- **Ruling 24, a failed done rule.** If the final design fails the done rule on validation, the blind EIC tracks are still scored, once.
+- **Ruling 25, the EIC board entry.** The entry is seed 0, named in the freeze file before any blind track is read. The 3-seed spread is reported beside it. Seeds are not averaged.
+
+## 2026-11-11 Result: our port of the EIC scorer reproduces the published board
+
+All 1,274 submission tracks of the 25 entries were scored against the organizers' corrected truth. All 25 overall ranks and all 9 per-measure rankings match the published board. A second, pure-Python rank computation confirmed it.
+
+- Largest relative differences per measure: genome-wide Pearson 1.84e-3 (2 rows; the expected size), genome-wide Spearman 3.0e-4 (64 rows), mse1obs 8.2e-6 (25 rows, all on one track and bootstrap), every other measure below 3e-8.
+- The cause of the Spearman and mse1obs differences was not found. They change no rank.
+- Compute: 140.7 CPU-h used (1,148.9 core-hours allocated).
+
+Evidence: `cruxvault/results/t166/BOARD_REPRO.md`, `verify_published.tsv`, `verify_ranks_second_method.txt`.
+
+## 2026-11-11 Agent calls from the cold review of the second plan amendment
+
+- The onion-layer, resolution and mixed-model analyses use training and validation tracks only until the single blind pass. Reason: the PI's rule is that the blind tracks are touched once, at the end.
+- The "scramble everything" control runs on rung 1 only. On rungs 2 to 6 it informs no decision (15 runs, about 170 CPU-h cut).
+- The plug-in signal is not scored against the secondary truth on the board (about 270 CPU-h cut). It is still reported beside the headline against the primary truth (ruling 20).
