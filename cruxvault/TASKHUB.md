@@ -55,12 +55,46 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]]
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations
 - `t152` [implementation] peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder
+- `t153` [admin] Onion: crux child tasks, notepad rulings, package files, golden reference
+- `t154` [hpc-setup] Onion: Kit tooling, cluster probes, cluster choice
 
 ## Blocked
 
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — blocked by `t100`
 - `t140` [implementation] carry the pivot lesson into CANDI: the full-depth track as the base for depth; non-depth covariates by augmentation only if the arm-to-arm grid shows it is needed — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[q8_does_candi_s_training_which_never_pairs_\|q8]] — blocked by `t135`, `t136`
 - `t143` [visualization] close-out deck and story of the whole counterfactual testbed — refs [[q1_do_the_recorded_experimental_covariates_\|q1]] — blocked by `t142`, `t136`
+- `t155` [data-acquisition] Onion: Globus transfer of the testbed scratch tree, Nibi to Fir — blocked by `t153`, `t154`
+- `t156` [data-acquisition] Onion: ENCODE catalog and replicate-ladder census — blocked by `t153`, `t154`
+- `t157` [data-acquisition] Onion: EpiATLAS and ChIP-Atlas catalogs — blocked by `t153`, `t154`
+- `t158` [data-acquisition] Onion: EIC accession ledger and check script — blocked by `t153`, `t154`
+- `t159` [implementation] Onion: Headline metric library — blocked by `t153`
+- `t160` [implementation] Onion: Onion layers along the replicate ladder — blocked by `t153`
+- `t161` [implementation] Onion: Region strata masks — blocked by `t153`, `t154`
+- `t162` [implementation] Onion: Training-free baselines and copy-leak guardrail — blocked by `t153`
+- `t163` [implementation] Onion: Development evals: error budget in counts — blocked by `t153`
+- `t164` [implementation] Onion: miniCANDI contract, dataset and shared components — blocked by `t153`
+- `t165` [implementation] Onion: Pilot tables over the existing EIC store — blocked by `t153`, `t154`
+- `t166` [implementation] Onion: EIC scoring route against the corrected truth — blocked by `t153`, `t154`
+- `t167` [implementation] Onion: Alignment-level view kit — blocked by `t153`, `t154`
+- `t168` [implementation] Onion: FASTQ-level uniform kit for histone ChIP-seq and ATAC-seq — blocked by `t153`, `t154`
+- `t169` [hpc-setup] Onion: DNase-seq pipeline setup and kit — blocked by `t153`, `t154`
+- `t170` [data-acquisition] Onion: EIC build list and withheld design — blocked by `t156`, `t158`
+- `t171` [data-acquisition] Onion: Import the counterfactual testbed as views — blocked by `t158`
+- `t172` [implementation] Onion: Eval set builder, scorer and selection rule — blocked by `t159`, `t160`, `t161`, `t162`, `t163`, `t164`
+- `t173` [implementation] Onion: Train loop, registry, rung 1 (pointwise set model) — blocked by `t164`
+- `t174` [implementation] Onion: Rung 2: convolutional autoencoder — blocked by `t164`
+- `t175` [implementation] Onion: Rung 3: conv plus attention autoencoder — blocked by `t164`
+- `t176` [implementation] Onion: Rung 4: U-Net with skip-source arms — blocked by `t164`
+- `t177` [implementation] Onion: Rung 5: axial transformer — blocked by `t164`
+- `t178` [implementation] Onion: Rung 6: Perceiver IO — blocked by `t164`
+- `t179` [implementation] Onion: Signal from predicted counts — blocked by `t153`
+- `t180` [data-acquisition] Onion: EIC build, priorities 1 to 3 (submit) — blocked by `t170`, `t167`, `t168`, `t169`
+- `t181` [implementation] Onion: Pilot: all six rungs on pilot_eic (submit) — blocked by `t173`, `t174`, `t175`, `t176`, `t177`, `t178`, `t172`, `t165`
+- `t182` [implementation] Onion: Pilot: collect — blocked by `t181`
+- `t183` [data-acquisition] Onion: Collect priorities 1 to 3, build and check eic_v1 — blocked by `t180`, `t171`
+- `t184` [data-acquisition] Onion: EIC build, priority 4 (submit) — blocked by `t180`
+- `t185` [implementation] Onion: Eval set, layers and baselines on eic_v1 (submit) — blocked by `t183`, `t172`, `t179`
+- `t186` [implementation] Onion: Collect: scorer validity on eic_v1 — blocked by `t185`
 
 ## By category
 
@@ -68,6 +102,7 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 
 - `t131` [admin] walk the PI through the five open design choices of the depth and run-type claims on the counterfactual arms (oracle source, which designs are the model rung, onewarp as a distribution, the encoder-latent check, whether −log10 p gates) as multiple-choice forks — refs [[h1_conditioning_on_the_recorded_sequencing_\|h1]], [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t145` [admin] bring the research tree up to the crux 4.0 design: expectations, motivation, design logic and findings, reconstructed from the PI's conversations — *open*
+- `t153` [admin] Onion: crux child tasks, notepad rulings, package files, golden reference — *open*
 
 ### data-acquisition
 
@@ -75,10 +110,21 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t100` [data-acquisition] measure the conditional entropy of run_type given assay_id and read_length on the biosample panel the in-vitro covariate testbed will use, and select a panel that breaks the degeneracy — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *open*
 - `t102` [data-acquisition] rebuild the paired-end arm's experiments as single-end BAMs on Nibi and land both arms in CANDI_STORE — refs [[h2_conditioning_on_the_recorded_run_type_pr\|h2]] — *blocked*
 - `t119` [data-acquisition] rebuild the two DNase MAPQ arms (C12M02 mapq 0 and 10) with multimapping off, so the MAPQ cut applies; the t112 builds are byte-identical to the DNase base — refs [[h15_one_transformation_conditioned_on_the_so\|h15]] — *open*
+- `t155` [data-acquisition] Onion: Globus transfer of the testbed scratch tree, Nibi to Fir — *blocked*
+- `t156` [data-acquisition] Onion: ENCODE catalog and replicate-ladder census — *blocked*
+- `t157` [data-acquisition] Onion: EpiATLAS and ChIP-Atlas catalogs — *blocked*
+- `t158` [data-acquisition] Onion: EIC accession ledger and check script — *blocked*
+- `t170` [data-acquisition] Onion: EIC build list and withheld design — *blocked*
+- `t171` [data-acquisition] Onion: Import the counterfactual testbed as views — *blocked*
+- `t180` [data-acquisition] Onion: EIC build, priorities 1 to 3 (submit) — *blocked*
+- `t183` [data-acquisition] Onion: Collect priorities 1 to 3, build and check eic_v1 — *blocked*
+- `t184` [data-acquisition] Onion: EIC build, priority 4 (submit) — *blocked*
 
 ### hpc-setup
 
 - `t39` [hpc-setup] every SLURM job imports candi from the shared kit, not from KIT -- the venv's editable install pins /project/.../CANDII/src — *open*
+- `t154` [hpc-setup] Onion: Kit tooling, cluster probes, cluster choice — *open*
+- `t169` [hpc-setup] Onion: DNase-seq pipeline setup and kit — *blocked*
 
 ### implementation
 
@@ -122,6 +168,28 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t136` [implementation] design and run the arm-to-arm training grid: g trained on base<->arm plus some arm->arm depth pairs, scored on held-out arm->arm pairs against the via-base chain (exploratory) — refs [[h28_training_g_on_arm_to_arm_pairs_lets_a_di\|h28]], [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]] — *open*
 - `t140` [implementation] carry the pivot lesson into CANDI: the full-depth track as the base for depth; non-depth covariates by augmentation only if the arm-to-arm grid shows it is needed — refs [[q7_why_do_the_covariate_conditioned_g_f_des\|q7]], [[q8_does_candi_s_training_which_never_pairs_\|q8]] — *blocked*
 - `t152` [implementation] peeling the onion: build the extended 4-axis dataset and the updated EIC dataset, the onion eval set, and miniCANDI through the rung 1-6 ablation ladder — *open*
+- `t159` [implementation] Onion: Headline metric library — *blocked*
+- `t160` [implementation] Onion: Onion layers along the replicate ladder — *blocked*
+- `t161` [implementation] Onion: Region strata masks — *blocked*
+- `t162` [implementation] Onion: Training-free baselines and copy-leak guardrail — *blocked*
+- `t163` [implementation] Onion: Development evals: error budget in counts — *blocked*
+- `t164` [implementation] Onion: miniCANDI contract, dataset and shared components — *blocked*
+- `t165` [implementation] Onion: Pilot tables over the existing EIC store — *blocked*
+- `t166` [implementation] Onion: EIC scoring route against the corrected truth — *blocked*
+- `t167` [implementation] Onion: Alignment-level view kit — *blocked*
+- `t168` [implementation] Onion: FASTQ-level uniform kit for histone ChIP-seq and ATAC-seq — *blocked*
+- `t172` [implementation] Onion: Eval set builder, scorer and selection rule — *blocked*
+- `t173` [implementation] Onion: Train loop, registry, rung 1 (pointwise set model) — *blocked*
+- `t174` [implementation] Onion: Rung 2: convolutional autoencoder — *blocked*
+- `t175` [implementation] Onion: Rung 3: conv plus attention autoencoder — *blocked*
+- `t176` [implementation] Onion: Rung 4: U-Net with skip-source arms — *blocked*
+- `t177` [implementation] Onion: Rung 5: axial transformer — *blocked*
+- `t178` [implementation] Onion: Rung 6: Perceiver IO — *blocked*
+- `t179` [implementation] Onion: Signal from predicted counts — *blocked*
+- `t181` [implementation] Onion: Pilot: all six rungs on pilot_eic (submit) — *blocked*
+- `t182` [implementation] Onion: Pilot: collect — *blocked*
+- `t185` [implementation] Onion: Eval set, layers and baselines on eic_v1 (submit) — *blocked*
+- `t186` [implementation] Onion: Collect: scorer validity on eic_v1 — *blocked*
 
 ### visualization
 
