@@ -5,20 +5,29 @@
     python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p]
     python tools/onion_eval/select_rule.py check-rung --runs <dir> --rung <r> --ladder <json>
     python tools/onion_eval/select_rule.py check-done --runs <dir> --ladder <json>
-        [--final <arm dir>] [--baselines <dir>]
+        [--final <arm dir>] [--baselines <dir>] [--blind-baselines <dir>]
     python tools/onion_eval/select_rule.py ladder-add --ladder <json> --name <n> --incumbent <arm>
-        --challenger <arm> --simpler <s> --d14 true|false --verdict <v>
+        --challenger <arm> --simpler <s> --d14 true|false [--verdict <v>] [--notepad-ref <ref>]
 
 An arm dir holds `seed<k>/scores.json` (score.py). Each seed's goal terms are read from
 `scores.json["selection"]` (imputation, correction and uncertainty gap closed, on validation,
 leave-one-assay-out, counts_log1p, scorable assays); the composite is recomputed from them as
 0.5 imputation + 0.25 correction + 0.25 uncertainty.
 
+Comparability (finding 1). Every seed of both arms (and, for D14 condition 2, every baseline) must
+carry the same non-empty `evalset_sha256` and `tables_sha256`, `regime == leave_one_assay_out`,
+`selection.space == counts_log1p`, `noise_floor == pseudoreplicate_halves` (a pilot scored with
+`score.py --no-halves` is refused), and `split == val` (`split == blind` for the blind pass).
+Otherwise the command REFUSES (exit 2, no row written).
+
 D13 (`compare`). Seed spread of a quantity = max - min over seeds, the larger of the two arms
-(ruling 7); each arm needs >= 3 seeds, else the command REFUSES (exit 2, no row written). Deltas are
-challenger mean minus incumbent mean over seeds.
-  RULE_NOT_APPLICABLE_ASK_PI  a goal term or the composite is undefined in any seed of either arm,
-                              or both arms fail the copy-leak gate (prints ESCALATE and the reason)
+(ruling 7); each arm needs >= 3 seeds, else REFUSED. A spread of exactly 0 (composite or a goal)
+over >= 3 seeds means the seeds do not vary: REFUSED. Deltas are challenger mean minus incumbent
+mean over seeds.
+  RULE_NOT_APPLICABLE_ASK_PI  a goal term is undefined in any seed of either arm; a goal term is
+                              outside GOAL_BAND, or its denominator is under its tolerance (see
+                              "Goal terms"); both arms fail the copy-leak gate; or the copy-leak
+                              gate was not measured reliably (mask-seed spread too large)
   INCUMBENT                   the challenger fails the copy-leak gate (it is out); or the
                               incumbent's composite is higher by more than 2x the spread and no goal
                               of the incumbent is lower by more than 2x that goal's spread; or the
@@ -29,24 +38,62 @@ challenger mean minus incumbent mean over seeds.
                               goal drops by more than 2x that goal's own spread
   CHALLENGER_AS_SIMPLER       within the bars (or a vetoed win) and --simpler challenger
   TIE_ASK_PI                  within the bars (or a vetoed win) and --simpler none (prints ESCALATE)
-The copy-leak gate passes for an arm when `copy_leak.copy_leak_pass` is true in every seed; a
-missing or null value fails it (the check was not run). `--simpler` defaults to the challenger's
-`simpler_than_base` (seed0/run.json config, else seed0/config.json): true -> challenger, false ->
-incumbent, null -> none. Every verdict appends one row to `settlements.tsv` (default: in the parent
-dir of the challenger arm).
+Copy-leak gate per arm: `fail` when a seed has no result (the check did not run), a seed fails
+part 1 (wiring), or a seed fails part 2 while its mask-seed spread is acceptable;
+`unreliable` when a seed's `copy_leak_spread_ok` is not true (the part-2 gain moved too much across
+mask seeds to trust it); else `pass`.
 
-D14 (`check-done`). Condition 1: every `ladder.json` comparison with `d14_condition_1` true has both
-arms with >= 3 done seeds and a settled verdict (CHALLENGER, INCUMBENT, CHALLENGER_AS_SIMPLER,
-NOT_APPLICABLE_BY_CONSTRUCTION, or a PI ruling recorded as `PI_<verdict>`), and rungs 1 to 6 each have
-at least one such comparison. An escalated comparison (TIE_ASK_PI, RULE_NOT_APPLICABLE_ASK_PI) is not
-settled until the PI's ruling is recorded. Condition 2: the final design (`--final`, default
-`<runs>/final`, >= 3 seeds) beats the strongest training-free baseline (marginal_nb,
-position_average, depth_only_scaling: the highest defined value of each goal) on EACH goal by more
-than 2x the final design's seed spread of that goal; on validation (`seed<k>/scores.json`,
-`<baselines>/<name>/seed0/scores.json`) and then on blind (`seed<k>/blind/scores.json`,
-`<baselines>/<name>/seed0/blind/scores.json`). Prints PASS, FAIL, or PENDING (validation passes and
-the blind pass is not scored yet). `--baselines` defaults to `<dir of the evalset>/baselines`, read
-from the final design's seed0 scores.json.
+`--simpler` (finding 12 and the simplicity gap). It may be omitted only when the incumbent is the
+challenger's own rung base (`rung<k>_base` against `rung<k>_<arm>`); it is then read from the
+challenger's `simpler_than_base` (seed0/run.json config, else seed0/config.json), which must be
+true, false or null (true -> challenger, false -> incumbent, null -> none). For any other comparison
+(cross-rung, arm against arm, a final design) `--simpler` must be given, else REFUSED. Every
+verdict appends one row to `settlements.tsv` (default: in the parent dir of the challenger arm)
+with a UTC `time` column; the latest row of a comparison is the one with the greatest time.
+
+Goal terms (finding 4; PI asked whether D13's "0-1 gap closed scale" means clipping). Constants:
+GOAL_BAND, UNCERTAINTY_DENOM_TOL, CORRECTION_DENOM_REL_TOL, CLIP_GOAL_TERMS, CLIP_RANGE. With
+CLIP_GOAL_TERMS False (default), a term outside GOAL_BAND escalates with the term and its value.
+With True, each term is clipped to CLIP_RANGE before the composite. In both modes a term whose
+denominator is under its tolerance escalates: the marginal-NB PIT deviation (uncertainty) and
+(depth-only CRPS - floor CRPS) / depth-only CRPS, the smallest over scorable assays (correction);
+score.py writes both under `selection.denominators`.
+
+Arm naming and the ladder (pinned). An arm of the ladder is named `rung<k>_<arm>` (k = 1..6; arm
+in [a-z0-9_], the rung base is `rung<k>_base`); `_rung_of` reads k from the incumbent.
+`ladder.json` schema:
+
+    {"comparisons": [{"name": str,                 unique; the settlements.tsv `comparison`
+                      "incumbent": "rung<k>_<arm>",
+                      "challenger": "rung<k>_<arm>",
+                      "simpler": "incumbent"|"challenger"|"none",
+                      "d14_condition_1": true|false,  false for agent extras (ruling 14)
+                      "verdict": str,                 "" = take the latest settlements.tsv row
+                      "notepad_ref": str}]}           where the notepad records a PI ruling or a
+                                                      not-applicable call; "" otherwise
+
+A ladder verdict is accepted (finding 8) when it is "" and a settlements.tsv row exists; a D13
+verdict equal to the latest settlements.tsv row of that comparison; `PI_(CHALLENGER|INCUMBENT|
+CHALLENGER_AS_SIMPLER)` with a non-empty notepad_ref; or `NOT_APPLICABLE_BY_CONSTRUCTION` with a
+non-empty notepad_ref. Anything else is not a settlement.
+
+D14 (`check-done`). Condition 1: every `ladder.json` comparison with `d14_condition_1` true has an
+accepted settled verdict (CHALLENGER, INCUMBENT, CHALLENGER_AS_SIMPLER, a PI ruling, or
+NOT_APPLICABLE_BY_CONSTRUCTION) and both arms with >= 3 done seeds, and rungs 1 to 6 each have at
+least one such comparison. Condition 2: the final design (`--final`, default `<runs>/final`, >= 3
+seeds) beats the strongest training-free baseline (marginal_nb, position_average,
+depth_only_scaling: the highest defined value of each goal) on EACH goal by more than 2x the final
+design's seed spread of that goal; first on validation, then once on blind. States per split:
+PASS; FAIL (a defined margin is <= 2x the spread; the run stops); ESCALATE (a lead metric is
+undefined, or a term is out of band); REFUSED (scores not comparable, or a zero seed spread);
+MISSING (not scored yet). Condition 2 overall: FAIL if either split fails, else the validation state
+unless it passed, then PASS, or PENDING while the blind pass is missing.
+
+Blind layout (pinned). The blind eval set is `eval/eic_v2/evalset_blind.json` (built with
+`evalset.py build --include-blind` on `tables/eic_v2`). A run's blind pass is scored into
+`<runs>/<arm>/seed<k>/blind/` and a baseline's into `eval/eic_v2/baselines/<name>/seed0/blind/`.
+`--baselines` defaults to `<dir of the validation evalset>/baselines` and `--blind-baselines` to
+`<dir of the blind evalset>/baselines`, each read from the final design's seed0 scores.json.
 """
 from __future__ import annotations
 
@@ -56,6 +103,7 @@ import json
 import math
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 GOALS = ("imputation", "correction", "uncertainty")
@@ -68,17 +116,43 @@ TRAINING_FREE = ("marginal_nb", "position_average", "depth_only_scaling")
 VERDICTS = ("CHALLENGER", "INCUMBENT", "CHALLENGER_AS_SIMPLER", "TIE_ASK_PI",
             "RULE_NOT_APPLICABLE_ASK_PI")
 ESCALATED = ("TIE_ASK_PI", "RULE_NOT_APPLICABLE_ASK_PI")
-SETTLED = ("CHALLENGER", "INCUMBENT", "CHALLENGER_AS_SIMPLER", "NOT_APPLICABLE_BY_CONSTRUCTION")
+NOT_APPLICABLE = "NOT_APPLICABLE_BY_CONSTRUCTION"
+SETTLED = ("CHALLENGER", "INCUMBENT", "CHALLENGER_AS_SIMPLER", NOT_APPLICABLE)
+PI_RE = re.compile(r"^PI_(CHALLENGER|INCUMBENT|CHALLENGER_AS_SIMPLER)$")
+ARM_RE = re.compile(r"^rung([1-6])_([a-z0-9][a-z0-9_]*)$")
 SETTLEMENT_COLUMNS = ("comparison", "incumbent", "challenger", "simpler", "composite_delta",
-                      "seed_spread", "per_goal_deltas", "per_goal_spreads", "copy_leak", "verdict")
+                      "seed_spread", "per_goal_deltas", "per_goal_spreads", "copy_leak", "verdict",
+                      "time")
+LADDER_KEYS = ("name", "incumbent", "challenger", "simpler", "d14_condition_1", "verdict",
+               "notepad_ref")
 SEED_RE = re.compile(r"^seed(\d+)$")
+
+# What every compared scores.json must say (finding 1).
+EXPECT_REGIME = "leave_one_assay_out"
+EXPECT_SPACE = "counts_log1p"
+EXPECT_NOISE_FLOOR = "pseudoreplicate_halves"
+
+# Goal terms (finding 4). PI question pending: does "0-1 gap closed scale" mean clipping?
+CLIP_GOAL_TERMS = False            # the PI's answer flips this one line
+CLIP_RANGE = (0.0, 1.0)
+GOAL_BAND = (-1.0, 1.5)            # escalate outside this band when not clipping
+UNCERTAINTY_DENOM_TOL = 0.005      # marginal-NB PIT deviation (mean |F_bar(u) - u|) below this
+CORRECTION_DENOM_REL_TOL = 0.01    # (depth-only CRPS - floor CRPS) / depth-only CRPS below this
+DENOM_KEYS = {"uncertainty": ("uncertainty_marginal_pit_deviation", UNCERTAINTY_DENOM_TOL),
+              "correction": ("correction_baseline_minus_floor_relative_min", CORRECTION_DENOM_REL_TOL)}
 
 
 class Refused(Exception):
-    """The rule may not be applied (e.g. fewer than 3 seeds)."""
+    """The rule may not be applied (e.g. fewer than 3 seeds, scores not comparable)."""
+
+
+class Missing(Refused):
+    """Fewer scored seeds than the rule needs (not scored yet)."""
 
 
 def _num(x):
+    if isinstance(x, bool):
+        return None
     try:
         v = float(x)
     except (TypeError, ValueError):
@@ -91,21 +165,32 @@ def seed_dirs(arm: Path) -> list[Path]:
                   key=lambda p: int(SEED_RE.match(p.name).group(1))) if Path(arm).is_dir() else []
 
 
+def _composite(g: dict):
+    return None if any(g[k] is None for k in GOALS) else sum(WEIGHTS[k] * g[k] for k in GOALS)
+
+
 def load_seed(path: Path) -> dict:
-    """Goal terms, recomputed composite and copy-leak pass of one scores.json."""
+    """Goal terms, recomputed composite, copy-leak results, denominators and the comparability
+    fields of one scores.json."""
     s = json.loads(Path(path).read_text(encoding="utf-8"))
     sel = s.get("selection") or {}
     g = {k: _num(sel.get(GOAL_KEYS[k])) for k in GOALS}
-    comp = (None if any(v is None for v in g.values())
-            else sum(WEIGHTS[k] * g[k] for k in GOALS))
     reasons = {k: (sel.get("uncertainty_reason") if k == "uncertainty" else "") for k in GOALS}
-    cl = (s.get("copy_leak") or {}).get("copy_leak_pass")
-    return {"goals": g, "composite": comp, "copy_leak_pass": cl, "reason": sel.get("reason", ""),
-            "goal_reasons": reasons, "path": str(path)}
+    cl = s.get("copy_leak") or {}
+    den = sel.get("denominators") or {}
+    return {"goals": g, "composite": _composite(g), "copy_leak_pass": cl.get("copy_leak_pass"),
+            "copy_leak_part1": cl.get("part1_wiring_pass"),
+            "copy_leak_spread_ok": cl.get("copy_leak_spread_ok"),
+            "denominators": {k: _num(den.get(DENOM_KEYS[k][0])) for k in DENOM_KEYS},
+            "reason": sel.get("reason", ""), "goal_reasons": reasons, "path": str(path),
+            "evalset_sha256": s.get("evalset_sha256") or "",
+            "tables_sha256": s.get("tables_sha256") or "", "split": s.get("split"),
+            "regime": s.get("regime"), "space": sel.get("space"),
+            "noise_floor": s.get("noise_floor"), "evalset": s.get("evalset", "")}
 
 
 def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS) -> list[dict]:
-    """Every seed of an arm with a scores.json (under `sub` inside each seed dir); Refused when
+    """Every seed of an arm with a scores.json (under `sub` inside each seed dir); Missing when
     fewer than min_seeds."""
     seeds = []
     for d in seed_dirs(Path(arm)):
@@ -113,8 +198,63 @@ def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS) -> list[dict]:
         if p.is_file():
             seeds.append(load_seed(p))
     if len(seeds) < min_seeds:
-        raise Refused(f"{arm}: {len(seeds)} scored seeds; the rule needs at least {min_seeds}")
+        raise Missing(f"{arm}: {len(seeds)} scored seeds; the rule needs at least {min_seeds}")
     return seeds
+
+
+def check_comparable(seeds: list[dict], split: str = "val") -> None:
+    """Refused unless every scores.json comes from the same eval set and tables, on `split`, in
+    the headline regime and space, with the pseudoreplicate noise floor (finding 1)."""
+    bad = []
+    for s in seeds:
+        p = s["path"]
+        if s["split"] != split:
+            bad.append(f"{p}: split {s['split']!r}, need {split!r}")
+        if s["regime"] != EXPECT_REGIME:
+            bad.append(f"{p}: regime {s['regime']!r}, need {EXPECT_REGIME!r}")
+        if s["space"] != EXPECT_SPACE:
+            bad.append(f"{p}: selection.space {s['space']!r}, need {EXPECT_SPACE!r}")
+        if s["noise_floor"] != EXPECT_NOISE_FLOOR:
+            bad.append(f"{p}: noise_floor {s['noise_floor']!r}, need {EXPECT_NOISE_FLOOR!r} "
+                       f"(a --no-halves pilot score is never a D13/D14 input)")
+        for k in ("evalset_sha256", "tables_sha256"):
+            if not s[k]:
+                bad.append(f"{p}: no {k}")
+    for k in ("evalset_sha256", "tables_sha256"):
+        vals = sorted({s[k] for s in seeds if s[k]})
+        if len(vals) > 1:
+            bad.append(f"{k} differs across the compared scores: " + ", ".join(v[:12] for v in vals))
+    if bad:
+        raise Refused("scores not comparable: " + "; ".join(bad[:6])
+                      + (f"; ... {len(bad) - 6} more" if len(bad) > 6 else ""))
+
+
+def screen_terms(seeds: list[dict], clip: bool | None = None) -> tuple[list[tuple], list[dict]]:
+    """(problems [(goal, message)], seeds) after the goal-term checks of finding 4. Undefined terms
+    are left for the caller. With clipping the returned seeds carry clipped goals and a recomputed
+    composite."""
+    clip = CLIP_GOAL_TERMS if clip is None else clip
+    problems, out = [], []
+    for s in seeds:
+        g = dict(s["goals"])
+        for k, (key, tol) in DENOM_KEYS.items():
+            if g[k] is None:
+                continue
+            d = s["denominators"].get(k)
+            if d is None:
+                problems.append((k, f"{s['path']}: {k} denominator ({key}) not recorded"))
+            elif d < tol:
+                problems.append((k, f"{s['path']}: {k} denominator {key} = {d:.4g} < tolerance {tol:g}"))
+        for k in GOALS:
+            if g[k] is None:
+                continue
+            if clip:
+                g[k] = min(max(g[k], CLIP_RANGE[0]), CLIP_RANGE[1])
+            elif not GOAL_BAND[0] <= g[k] <= GOAL_BAND[1]:
+                problems.append((k, f"{s['path']}: {k} term = {g[k]:.6g} outside the sanity band "
+                                    f"[{GOAL_BAND[0]:g}, {GOAL_BAND[1]:g}]"))
+        out.append(dict(s, goals=g, composite=_composite(g)))
+    return problems, out
 
 
 def spread(vals) -> float:
@@ -125,28 +265,50 @@ def _mean(vals) -> float:
     return sum(vals) / len(vals)
 
 
-def decide(inc: list[dict], ch: list[dict], simpler: str) -> dict:
+def gate_status(seeds: list[dict]) -> str:
+    """pass | fail | unreliable, the copy-leak gate of one arm (see the module docstring)."""
+    if any(s["copy_leak_pass"] is None for s in seeds):
+        return "fail"
+    if any(s["copy_leak_part1"] is False for s in seeds):
+        return "fail"
+    if any(s["copy_leak_spread_ok"] is not True for s in seeds):
+        return "unreliable"
+    return "pass" if all(s["copy_leak_pass"] is True for s in seeds) else "fail"
+
+
+def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None = None) -> dict:
     """D13 on two arms' seed lists. Returns {verdict, reason, composite_delta, seed_spread,
-    per_goal_deltas, per_goal_spreads, copy_leak}."""
+    per_goal_deltas, per_goal_spreads, copy_leak}. Raises Refused when the rule may not run."""
     if simpler not in ("incumbent", "challenger", "none"):
         raise ValueError("simpler must be incumbent, challenger or none")
     if len(inc) < MIN_SEEDS or len(ch) < MIN_SEEDS:
         raise Refused(f"seeds: incumbent {len(inc)}, challenger {len(ch)}; D13 needs at least {MIN_SEEDS}")
+    check_comparable(inc + ch, "val")
     out = {"composite_delta": None, "seed_spread": None, "per_goal_deltas": {}, "per_goal_spreads": {}}
-    pass_i = all(s["copy_leak_pass"] is True for s in inc)
-    pass_c = all(s["copy_leak_pass"] is True for s in ch)
-    out["copy_leak"] = f"incumbent={'pass' if pass_i else 'fail'};challenger={'pass' if pass_c else 'fail'}"
-    if not pass_i and not pass_c:
+    gi, gc = gate_status(inc), gate_status(ch)
+    out["copy_leak"] = f"incumbent={gi};challenger={gc}"
+    if gi == "fail" and gc == "fail":
         return dict(out, verdict="RULE_NOT_APPLICABLE_ASK_PI",
                     reason="both arms fail the copy-leak gate")
-    if not pass_c:
+    if gc == "fail":
         return dict(out, verdict="INCUMBENT", reason="the challenger fails the copy-leak gate (out)")
+    if "unreliable" in (gi, gc):
+        return dict(out, verdict="RULE_NOT_APPLICABLE_ASK_PI",
+                    reason="copy-leak gate not measured reliably: the part-2 gain moved too much "
+                           "across mask seeds (copy_leak_spread_ok false); rescore with more windows")
     undefined = [f"{who} {s['path']}: {k}" for who, arm in (("incumbent", inc), ("challenger", ch))
                  for s in arm for k in GOALS if s["goals"][k] is None]
     if undefined:
         return dict(out, verdict="RULE_NOT_APPLICABLE_ASK_PI",
                     reason="lead metric undefined: " + "; ".join(undefined[:6]))
-    if not pass_i:
+    p_i, inc = screen_terms(inc, clip)
+    p_c, ch = screen_terms(ch, clip)
+    if p_i or p_c:
+        probs = [m for _, m in p_i + p_c]
+        return dict(out, verdict="RULE_NOT_APPLICABLE_ASK_PI",
+                    reason="goal term outside the D13 gap-closed scale (PI ruling pending): "
+                           + "; ".join(probs[:6]))
+    if gi == "fail":
         return dict(out, verdict="CHALLENGER", reason="the incumbent fails the copy-leak gate (out)")
     ci, cc = [s["composite"] for s in inc], [s["composite"] for s in ch]
     d = _mean(cc) - _mean(ci)
@@ -154,6 +316,10 @@ def decide(inc: list[dict], ch: list[dict], simpler: str) -> dict:
     gd = {k: _mean([s["goals"][k] for s in ch]) - _mean([s["goals"][k] for s in inc]) for k in GOALS}
     gs = {k: max(spread([s["goals"][k] for s in inc]), spread([s["goals"][k] for s in ch]))
           for k in GOALS}
+    zero = (["composite"] if sp == 0 else []) + [k for k in GOALS if gs[k] == 0]
+    if zero:
+        raise Refused(f"seed spread is exactly 0 for {', '.join(zero)} over {len(inc)} and "
+                      f"{len(ch)} seeds: the seeds do not vary, so the 2x-spread bars are void")
     out.update(composite_delta=d, seed_spread=sp, per_goal_deltas=gd, per_goal_spreads=gs)
     ch_drops = [k for k in GOALS if -gd[k] > BAR * gs[k]]
     in_drops = [k for k in GOALS if gd[k] > BAR * gs[k]]
@@ -176,6 +342,11 @@ def decide(inc: list[dict], ch: list[dict], simpler: str) -> dict:
     return dict(out, verdict="TIE_ASK_PI", reason=why + "; neither arm is clearly simpler")
 
 
+def is_own_rung_base(incumbent: str, challenger: str) -> bool:
+    m = ARM_RE.match(challenger)
+    return bool(m) and incumbent == f"rung{m.group(1)}_base"
+
+
 def simpler_from_config(challenger: Path) -> str:
     for d in seed_dirs(challenger)[:1]:
         for name in ("run.json", "config.json"):
@@ -185,6 +356,9 @@ def simpler_from_config(challenger: Path) -> str:
                 cfg = j.get("config", j)
                 if "simpler_than_base" in cfg:
                     v = cfg["simpler_than_base"]
+                    if not (v is None or isinstance(v, bool)):
+                        raise Refused(f"{p}: simpler_than_base = {v!r} ({type(v).__name__}); it "
+                                      f"must be true, false or null; pass --simpler")
                     return {True: "challenger", False: "incumbent", None: "none"}[v]
     raise Refused(f"{challenger}: no simpler_than_base in seed0/run.json; pass --simpler")
 
@@ -195,7 +369,7 @@ def append_settlement(path: Path, row: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=list(SETTLEMENT_COLUMNS), delimiter="\t",
-                           lineterminator="\n")
+                           lineterminator="\n", extrasaction="ignore")
         if new:
             w.writeheader()
         w.writerow(row)
@@ -208,19 +382,26 @@ def _fmt(x):
     return "" if x is None else f"{x:.6g}"
 
 
-def compare(incumbent, challenger, simpler=None, name=None, settlements=None) -> dict:
+def _utc() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+
+def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *, clip=None) -> dict:
     inc_dir, ch_dir = Path(incumbent), Path(challenger)
     if simpler is None:
+        if not is_own_rung_base(inc_dir.name, ch_dir.name):
+            raise Refused(f"{inc_dir.name} is not the rung base of {ch_dir.name}: simpler_than_base "
+                          f"is relative to the challenger's own rung base, so pass --simpler")
         simpler = simpler_from_config(ch_dir)
     inc = load_arm(inc_dir)
     ch = load_arm(ch_dir)
-    res = decide(inc, ch, simpler)
+    res = decide(inc, ch, simpler, clip=clip)
     name = name or f"{inc_dir.name}__vs__{ch_dir.name}"
     row = {"comparison": name, "incumbent": inc_dir.name, "challenger": ch_dir.name,
            "simpler": simpler, "composite_delta": _fmt(res["composite_delta"]),
            "seed_spread": _fmt(res["seed_spread"]), "per_goal_deltas": _fmt(res["per_goal_deltas"]),
            "per_goal_spreads": _fmt(res["per_goal_spreads"]), "copy_leak": res["copy_leak"],
-           "verdict": res["verdict"]}
+           "verdict": res["verdict"], "time": _utc()}
     append_settlement(Path(settlements) if settlements else ch_dir.parent / "settlements.tsv", row)
     res["comparison"] = name
     return res
@@ -229,11 +410,13 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None) ->
 # ------------------------------------------------------------------------------------------ table
 
 def seed_state(d: Path) -> str:
+    """failed | done (scored: SCORED and scores.json) | running | queued. Training's DONE alone
+    means trained, not scored, so the seed is still `running` (finding 3)."""
     if (d / "FAILED").exists():
         return "failed"
-    if (d / "DONE").exists() and (d / "scores.json").is_file():
+    if (d / "SCORED").exists() and (d / "scores.json").is_file():
         return "done"
-    if any((d / f).exists() for f in ("run.json", "ckpt.pt", "DONE", "RUNNING")):
+    if any((d / f).exists() for f in ("run.json", "ckpt.pt", "DONE", "RUNNING", "scores.json")):
         return "running"
     return "queued"
 
@@ -256,24 +439,47 @@ def table(runs, prefix: str = "") -> list[dict]:
 
 def read_ladder(path) -> dict:
     p = Path(path)
-    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {"comparisons": []}
+    lad = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {"comparisons": []}
+    for c in lad.get("comparisons", []):
+        miss = [k for k in ("name", "incumbent", "challenger") if not c.get(k)]
+        if miss:
+            raise ValueError(f"{path}: a comparison lacks {miss}: {c}")
+    return lad
 
 
 def latest_settlements(runs) -> dict:
-    out = {}
+    """comparison -> verdict of its latest row (greatest `time`; a row without time is oldest;
+    ties keep the later row read)."""
+    best = {}
+    k = 0
     for p in sorted(Path(runs).glob("**/settlements.tsv")):
         with open(p, newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh, delimiter="\t"):
-                out[r["comparison"]] = r["verdict"]
-    return out
+                k += 1
+                key = (r.get("time") or "", k)
+                if r["comparison"] not in best or key >= best[r["comparison"]][0]:
+                    best[r["comparison"]] = (key, r["verdict"])
+    return {c: v for c, (_, v) in best.items()}
 
 
-def verdict_of(c: dict, settled_rows: dict) -> str:
-    return (c.get("verdict") or settled_rows.get(c["name"]) or "").strip()
+def ladder_verdict(c: dict, settled_rows: dict) -> tuple[str, str]:
+    """(verdict, problem) of one ladder comparison; problem '' when the verdict is accepted."""
+    v = (c.get("verdict") or "").strip()
+    s = (settled_rows.get(c["name"]) or "").strip()
+    ref = (c.get("notepad_ref") or "").strip()
+    if not v:
+        return (s, "") if s else ("", "no verdict in the ladder and no settlements.tsv row")
+    if PI_RE.match(v) or v == NOT_APPLICABLE:
+        return (v, "") if ref else (v, f"verdict {v} has no notepad_ref")
+    if v in VERDICTS:
+        if v != s:
+            return v, f"ladder verdict {v} does not match the latest settlements.tsv row ({s or 'none'})"
+        return v, ""
+    return v, f"verdict {v!r} is not a D13 verdict, a PI_ ruling or {NOT_APPLICABLE}"
 
 
 def _rung_of(c: dict):
-    m = re.match(r"^rung(\d+)_", c.get("incumbent", ""))
+    m = ARM_RE.match(c.get("incumbent", ""))
     return int(m.group(1)) if m else None
 
 
@@ -283,14 +489,33 @@ def check_rung(runs, rung: int, ladder) -> list[str]:
     comps = [c for c in lad.get("comparisons", []) if _rung_of(c) == int(rung)]
     if not comps:
         return [f"no comparison of rung {rung} in {ladder}"]
-    return [c["name"] for c in comps
-            if not (verdict_of(c, rows) in SETTLED + ESCALATED or verdict_of(c, rows).startswith("PI_"))]
+    out = []
+    for c in comps:
+        v, prob = ladder_verdict(c, rows)
+        if prob:
+            out.append(f"{c['name']} ({prob})")
+        elif not (v in SETTLED + ESCALATED or PI_RE.match(v)):
+            out.append(f"{c['name']} (verdict {v})")
+    return out
 
 
-def ladder_add(ladder, name, incumbent, challenger, simpler, d14: bool, verdict: str) -> dict:
+def ladder_add(ladder, name, incumbent, challenger, simpler, d14: bool, verdict: str = "",
+               notepad_ref: str = "") -> dict:
+    verdict, notepad_ref = (verdict or "").strip(), (notepad_ref or "").strip()
+    if simpler not in ("incumbent", "challenger", "none"):
+        raise Refused(f"simpler {simpler!r} must be incumbent, challenger or none")
+    if verdict and not (verdict in VERDICTS or verdict == NOT_APPLICABLE or PI_RE.match(verdict)):
+        raise Refused(f"verdict {verdict!r}: use one of {VERDICTS}, {NOT_APPLICABLE}, "
+                      f"PI_CHALLENGER, PI_INCUMBENT, PI_CHALLENGER_AS_SIMPLER, or '' (settlements)")
+    if (PI_RE.match(verdict) or verdict == NOT_APPLICABLE) and not notepad_ref:
+        raise Refused(f"verdict {verdict} needs --notepad-ref (where the notepad records it)")
+    if d14:
+        bad = [a for a in (incumbent, challenger) if not ARM_RE.match(a)]
+        if bad:
+            raise Refused(f"arm names {bad} do not follow rung<k>_<arm> (k = 1..6)")
     lad = read_ladder(ladder)
     entry = {"name": name, "incumbent": incumbent, "challenger": challenger, "simpler": simpler,
-             "d14_condition_1": bool(d14), "verdict": verdict}
+             "d14_condition_1": bool(d14), "verdict": verdict, "notepad_ref": notepad_ref}
     comps = [c for c in lad.get("comparisons", []) if c["name"] != name] + [entry]
     lad["comparisons"] = comps
     Path(ladder).parent.mkdir(parents=True, exist_ok=True)
@@ -308,10 +533,13 @@ def done_condition_1(runs, ladder) -> tuple[bool, list[str]]:
         if not any(_rung_of(c) == r for c in listed):
             problems.append(f"rung {r}: no listed comparison")
     for c in listed:
-        v = verdict_of(c, rows)
-        if v == "NOT_APPLICABLE_BY_CONSTRUCTION":
+        v, prob = ladder_verdict(c, rows)
+        if prob:
+            problems.append(f"{c['name']}: {prob}; not a settlement")
             continue
-        if not (v in SETTLED or v.startswith("PI_")):
+        if v == NOT_APPLICABLE:
+            continue
+        if not (v in SETTLED or PI_RE.match(v)):
             problems.append(f"{c['name']}: verdict {v or 'missing'} is not a settlement")
         for side in ("incumbent", "challenger"):
             arm = runs / c[side]
@@ -321,58 +549,97 @@ def done_condition_1(runs, ladder) -> tuple[bool, list[str]]:
     return not problems, problems
 
 
-def done_condition_2(final, baselines, sub: str = "") -> tuple[str, list[str]]:
-    """('PASS'|'FAIL'|'MISSING', lines) on one split (sub '' = validation, 'blind')."""
+def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = None) -> tuple[str, list[str]]:
+    """(PASS|FAIL|ESCALATE|REFUSED|MISSING, lines) on one split (sub '' = validation, 'blind')."""
+    split = "blind" if sub else "val"
     try:
         seeds = load_arm(final, sub)
-    except Refused as e:
+    except Missing as e:
         return "MISSING", [str(e)]
-    lines, ok = [], True
+    base = {}
+    for b in TRAINING_FREE:
+        p = Path(baselines) / b / "seed0" / sub / "scores.json" if sub else \
+            Path(baselines) / b / "seed0" / "scores.json"
+        if not p.is_file():
+            return "MISSING", [f"baseline {b}: {p} missing"]
+        base[b] = load_seed(p)
+    try:
+        check_comparable(seeds + list(base.values()), split)
+    except Refused as e:
+        return "REFUSED", [str(e)]
+    lines, states = [], []
+    p_f, seeds = screen_terms(seeds, clip)
+    p_b, bl = screen_terms(list(base.values()), clip)
+    base = dict(zip(base, bl))
     for g in GOALS:
         vals = [s["goals"][g] for s in seeds]
         if any(v is None for v in vals):
-            return "FAIL", lines + [f"{g}: the final design's lead metric is undefined; ESCALATE"]
+            states.append("ESCALATE")
+            lines.append(f"  {g}: the final design's lead metric is undefined; ESCALATE")
+            continue
+        probs = [m for k, m in p_f + p_b if k == g]
+        if probs:
+            states.append("ESCALATE")
+            lines.append(f"  {g}: {probs[0]}; ESCALATE")
+            continue
         sp = spread(vals)
+        if sp == 0:
+            states.append("REFUSED")
+            lines.append(f"  {g}: seed spread exactly 0 over {len(vals)} seeds: the seeds do not "
+                         f"vary; REFUSED")
+            continue
         best, best_name = None, ""
-        for b in TRAINING_FREE:
-            p = Path(baselines) / b / "seed0" / sub / "scores.json" if sub else \
-                Path(baselines) / b / "seed0" / "scores.json"
-            if not p.is_file():
-                return "MISSING", lines + [f"baseline {b}: {p} missing"]
-            v = load_seed(p)["goals"][g]
+        for b, s in base.items():
+            v = s["goals"][g]
             if v is not None and (best is None or v > best):
                 best, best_name = v, b
         if best is None:
-            return "FAIL", lines + [f"{g}: no training-free baseline is defined; ESCALATE"]
+            states.append("ESCALATE")
+            lines.append(f"  {g}: no training-free baseline is defined; ESCALATE")
+            continue
         margin = _mean(vals) - best
         good = margin > BAR * sp
-        ok &= good
+        states.append("PASS" if good else "FAIL")
         lines.append(f"  {g}: final {_mean(vals):.4f} vs {best_name} {best:.4f}: margin {margin:+.4f}, "
                      f"2 x seed spread {BAR * sp:.4f} -> {'beats' if good else 'does not beat'}")
-    return ("PASS" if ok else "FAIL"), lines
+    for st in ("REFUSED", "FAIL", "ESCALATE"):
+        if st in states:
+            return st, lines
+    return "PASS", lines
 
 
-def check_done(runs, ladder, final=None, baselines=None) -> dict:
+def _baselines_from(final: Path, sub: str = "") -> str:
+    for d in seed_dirs(final)[:1]:
+        p = d / sub / "scores.json" if sub else d / "scores.json"
+        if p.is_file():
+            ev = json.loads(p.read_text(encoding="utf-8")).get("evalset", "")
+            return str(Path(ev).parent / "baselines") if ev else ""
+    return ""
+
+
+def check_done(runs, ladder, final=None, baselines=None, blind_baselines=None, *, clip=None) -> dict:
     runs = Path(runs)
     final = Path(final) if final else runs / "final"
     c1, p1 = done_condition_1(runs, ladder)
-    if baselines is None:
-        baselines = ""
-        for d in seed_dirs(final)[:1]:
-            if (d / "scores.json").is_file():
-                ev = json.loads((d / "scores.json").read_text(encoding="utf-8")).get("evalset", "")
-                baselines = str(Path(ev).parent / "baselines") if ev else ""
-    sv, lv = done_condition_2(final, baselines) if baselines else ("MISSING", ["no baselines dir"])
-    sb, lb = (done_condition_2(final, baselines, "blind") if sv == "PASS"
-              else ("MISSING", ["blind pass waits for validation"]))
-    if sv == "FAIL" or sb == "FAIL":
+    baselines = str(baselines) if baselines else _baselines_from(final)
+    sv, lv = (done_condition_2(final, baselines, clip=clip) if baselines
+              else ("MISSING", ["no baselines dir (no scored final seed0)"]))
+    if sv == "PASS":
+        bb = str(blind_baselines) if blind_baselines else _baselines_from(final, "blind")
+        sb, lb = (done_condition_2(final, bb, "blind", clip=clip) if bb
+                  else ("MISSING", ["no blind pass of the final design yet"]))
+    else:
+        sb, lb = "MISSING", ["blind pass waits for validation"]
+    if "FAIL" in (sv, sb):
         c2 = "FAIL"
-    elif sv == "PASS" and sb == "PASS":
+    elif sv != "PASS":
+        c2 = sv
+    elif sb == "PASS":
         c2 = "PASS"
-    elif sv == "PASS":
+    elif sb == "MISSING":
         c2 = "PENDING"
     else:
-        c2 = "FAIL"
+        c2 = sb
     return {"condition_1": "PASS" if c1 else "FAIL", "problems_1": p1, "condition_2": c2,
             "validation": (sv, lv), "blind": (sb, lb)}
 
@@ -400,6 +667,7 @@ def main(argv=None) -> int:
     d.add_argument("--ladder", required=True)
     d.add_argument("--final")
     d.add_argument("--baselines")
+    d.add_argument("--blind-baselines")
     la = sub.add_parser("ladder-add")
     la.add_argument("--ladder", required=True)
     la.add_argument("--name", required=True)
@@ -407,7 +675,8 @@ def main(argv=None) -> int:
     la.add_argument("--challenger", required=True)
     la.add_argument("--simpler", required=True, choices=("incumbent", "challenger", "none"))
     la.add_argument("--d14", required=True, choices=("true", "false"))
-    la.add_argument("--verdict", required=True)
+    la.add_argument("--verdict", default="")
+    la.add_argument("--notepad-ref", default="")
     a = ap.parse_args(argv)
 
     if a.cmd == "compare":
@@ -434,7 +703,7 @@ def main(argv=None) -> int:
         print(f"rung {a.rung}: all comparisons settled or escalated")
         return 0
     if a.cmd == "check-done":
-        res = check_done(a.runs, a.ladder, a.final, a.baselines)
+        res = check_done(a.runs, a.ladder, a.final, a.baselines, a.blind_baselines)
         print(f"D14 condition 1: {res['condition_1']}")
         for p in res["problems_1"]:
             print(f"  {p}")
@@ -445,9 +714,13 @@ def main(argv=None) -> int:
                 print(f"  {ln}")
         return 0 if (res["condition_1"] == "PASS" and res["condition_2"] == "PASS") else 1
     if a.cmd == "ladder-add":
-        e = ladder_add(a.ladder, a.name, a.incumbent, a.challenger, a.simpler, a.d14 == "true",
-                       a.verdict)
-        print(f"ladder: {e['name']} -> {e['verdict']}")
+        try:
+            e = ladder_add(a.ladder, a.name, a.incumbent, a.challenger, a.simpler, a.d14 == "true",
+                           a.verdict, a.notepad_ref)
+        except Refused as ex:
+            print(f"REFUSED: {ex}")
+            return 2
+        print(f"ladder: {e['name']} -> {e['verdict'] or '(from settlements.tsv)'}")
         return 0
     return 1
 

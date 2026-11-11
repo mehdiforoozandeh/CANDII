@@ -6,12 +6,20 @@
 
 `build` writes `evalset.json` (pinned interface D) and, beside it, `scorable.tsv` and
 `non_scorable_assays.tsv`. They go beside the evalset, not into the tables dir, because
-`minicandi.dataset.tables_sha256` hashes a `scorable.tsv` found in the tables dir.
+`minicandi.dataset.tables_sha256` hashes a `scorable.tsv` found in the tables dir. The evalset
+records `tables_sha256` (`minicandi.dataset.tables_sha256` of the tables at build time); the scorer
+refuses tables on disk, or a run checkpoint, that do not match it (finding 9).
+
+Blind eval set (pinned path convention). Built only with `--include-blind`, only to a file named
+`evalset_blind.json`: `eval/eic_v2/evalset_blind.json` from `tables/eic_v2` (the tables that hold
+the blind measurements). A validation eval set is never named `evalset_blind.json`. Blind passes
+over that eval set are logged in `BLIND_PASSES.tsv` beside it (score.py).
 
 Regions (agent decision, logged). Fixed seeded random regions of `region_bins` (16384 = 2^14) bins,
 each aligned to a multiple of `region_bins` (so the Haar transform of headline 1 never mixes two
 regions), with a genome-mask valid fraction >= 0.9, drawn without replacement over every chromosome
-except chrY and chrM. A second disjoint seeded draw, `fit_regions`, holds the bins on which the
+except chrY and chrM. A missing `mask.h5`, or a chromosome missing from it, raises (finding 13);
+the evalset records `mask_applied: true`. A second disjoint seeded draw, `fit_regions`, holds the bins on which the
 scorer fits the NB size of the depth-only baseline and the floor, and the marginal NB (out of
 sample: never a scored bin). ENCODE Pilot Regions are not used (eval protocol,
 fixed-random-window-scope).
@@ -21,6 +29,12 @@ preferred) of a validation track; regime `leave_one_assay_out` gives as inputs t
 the same cell's TRAINING tracks of every other assay (the control included); regime
 `accessibility_only` (D11b.2) gives only the cell's DNase-seq or ATAC-seq training track, and a cell
 without one has no target in that regime. An accessibility target has no accessibility-only item.
+The ChIP-seq control (`chipseq-control`) is never an imputation target (finding 16): a validation
+control goes to `control_targets` (same leave-one-assay-out inputs), which the scorer scores in a
+separate table when the model predicts the control, and the control is never imputation-scorable.
+Each target carries `has_halves`; a target without pseudoreplicate halves (every `store:` path,
+e.g. the pilot) is kept and counted in `targets_without_halves`: the scorer gives it no noise
+floor and keeps it out of headline 1 (finding 11).
 
 Correction pairs. Every `pairs.tsv` row with rung `designed` and split val (blind only with
 `--include-blind`): source = a, target = b, with `never_trained`, `subset_pair`, plus `pair_id` and
@@ -68,6 +82,7 @@ LAYER_MIN_PAIRS, LAYER_MIN_CELLS = 5, 3
 SCORABLE_COLUMNS = ("assay", "n_train", "n_val", "n_val_cells", "has_floors",
                     "imputation_scorable", "correction_scorable", "reason")
 LAYOUT = "pr1 source -> pr2 target (PI ruling 6)"
+BLIND_EVALSET_NAME = "evalset_blind.json"
 
 
 def read_tsv(path) -> list[dict]:
@@ -93,7 +108,9 @@ def _base_rank(r: dict) -> tuple:
 
 
 def _halves(r: dict) -> bool:
-    return str(r.get("has_pseudoreps", "")).strip() in ("1", "true", "True")
+    """True when the row has pseudoreplicate halves on disk (a `store:` path never has them)."""
+    return (str(r.get("has_pseudoreps", "")).strip() in ("1", "true", "True")
+            and not str(r.get("counts_path", "")).startswith("store:"))
 
 
 def base_views(rows: list[dict], roles) -> dict:
@@ -119,19 +136,19 @@ def candidate_blocks(gdir: Path, region_bins: int, min_valid: float = MIN_VALID)
     sizes = json.loads((gdir / "chrom_sizes.json").read_text(encoding="utf-8"))
     mpath = gdir / "mask.h5"
     out = []
-    mf = h5py.File(mpath, "r") if mpath.is_file() else None
-    try:
+    if not mpath.is_file():
+        raise FileNotFoundError(f"{mpath}: no genome mask; regions would be drawn unmasked")
+    with h5py.File(mpath, "r") as mf:
         for chrom in sorted(sizes):
             if chrom in EXCLUDE_CHROMS:
                 continue
+            if chrom not in mf:
+                raise KeyError(f"{mpath}: no mask for {chrom}; regions would be drawn unmasked")
             nb = int(sizes[chrom]) // 25
-            m = np.asarray(mf[chrom][:], bool) if (mf is not None and chrom in mf) else None
+            m = np.asarray(mf[chrom][:], bool)
             for s in range(0, nb - region_bins + 1, region_bins):
-                if m is None or m[s:s + region_bins].mean() >= min_valid:
+                if m[s:s + region_bins].mean() >= min_valid:
                     out.append([chrom, int(s)])
-    finally:
-        if mf is not None:
-            mf.close()
     return out
 
 
@@ -152,20 +169,34 @@ def imputation_targets(rows: list[dict], splits) -> list[dict]:
     targets = base_views(rows, splits)
     items = []
     for (cell, assay), r in sorted(targets.items()):
-        if r["in_eic"] == "train":
+        if r["in_eic"] == "train" or assay == CONTROL:
             continue
         loao = sorted(t["measurement_id"] for (c, a), t in train.items() if c == cell and a != assay)
         items.append({"target": r["measurement_id"], "inputs": loao,
                       "regime": "leave_one_assay_out", "split": r["in_eic"],
-                      "assay": assay, "cell": cell})
+                      "assay": assay, "cell": cell, "has_halves": _halves(r)})
         if assay in ACCESSIBILITY:
             continue
         acc = [train[(cell, a)]["measurement_id"] for a in ACCESSIBILITY if (cell, a) in train]
         if acc:
             items.append({"target": r["measurement_id"], "inputs": acc[:1],
                           "regime": "accessibility_only", "split": r["in_eic"],
-                          "assay": assay, "cell": cell})
+                          "assay": assay, "cell": cell, "has_halves": _halves(r)})
     return items
+
+
+def control_targets(rows: list[dict], splits) -> list[dict]:
+    """Validation (or blind) ChIP-seq control tracks, each with the cell's training tracks of the
+    other assays as inputs; scored apart from the imputation headline (finding 16)."""
+    train = base_views(rows, ("train",))
+    out = []
+    for (cell, assay), r in sorted(base_views(rows, splits).items()):
+        if r["in_eic"] == "train" or assay != CONTROL:
+            continue
+        loao = sorted(t["measurement_id"] for (c, a), t in train.items() if c == cell and a != assay)
+        out.append({"target": r["measurement_id"], "inputs": loao, "regime": "control",
+                    "split": r["in_eic"], "assay": assay, "cell": cell, "has_halves": _halves(r)})
+    return out
 
 
 def correction_pairs(pairs: list[dict], meas: dict, splits) -> tuple[list, int]:
@@ -204,6 +235,10 @@ def scorable_rows(rows: list[dict], cor: list[dict], splits=("val",)) -> list[di
         imp = len(with_h) >= IMP_MIN_VAL and len(cells) >= IMP_MIN_CELLS and n_train >= IMP_MIN_TRAIN
         corr = len(nt_tracks[a] & {r["cell"] for r in v}) >= COR_MIN_VAL
         why = []
+        if a == CONTROL:
+            imp = False
+            why.append("the ChIP-seq control is not an imputation target (scored apart when the "
+                       "model predicts it)")
         if len(with_h) < IMP_MIN_VAL:
             why.append(f"{len(with_h)} validation tracks with halves (need {IMP_MIN_VAL})")
         if len(cells) < IMP_MIN_CELLS:
@@ -238,8 +273,13 @@ def layer_scorable(pairs: list[dict], ids: list) -> dict:
 
 def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_bins=REGION_BINS,
           seed=0, include_blind=False) -> dict:
+    from minicandi.dataset import tables_sha256
     tables = Path(tables).resolve()
     out = Path(out)
+    if include_blind != (out.name == BLIND_EVALSET_NAME):
+        raise ValueError(f"a blind eval set is built with --include-blind into a file named "
+                         f"{BLIND_EVALSET_NAME}, and only then (got include_blind={include_blind}, "
+                         f"{out.name})")
     if region_bins <= 0 or region_bins & (region_bins - 1):
         raise ValueError("region_bins must be a power of 2")
     rows = read_tsv(tables / "measurements.tsv")
@@ -250,6 +290,7 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
     cands = candidate_blocks(genome_dir(tables), region_bins)
     regions, fit_regions = draw_regions(cands, n_regions, n_fit_regions, seed)
     imp = imputation_targets(rows, splits)
+    ctl = control_targets(rows, splits)
     cor, dropped = correction_pairs(pairs, meas, splits)
     rep = [p["pair_id"] for p in pairs if p["rung"] in REPLICATE_RUNGS and p["a"] != p["b"]]
     sc = scorable_rows(rows, cor)
@@ -259,10 +300,13 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
         with h5py.File(strata, "r") as f:
             names = sorted(f.keys())
     ev = {
-        "tables": tables.name, "tables_dir": str(tables),
+        "tables": tables.name, "tables_dir": str(tables), "tables_sha256": tables_sha256(tables),
+        "include_blind": bool(include_blind), "mask_applied": True,
         "regions": regions, "fit_regions": fit_regions, "region_bins": int(region_bins),
         "seed": int(seed), "n_candidate_regions": len(cands),
-        "imputation_targets": imp, "correction_pairs": cor, "correction_pairs_dropped": dropped,
+        "imputation_targets": imp, "control_targets": ctl,
+        "targets_without_halves": sorted({t["target"] for t in imp if not t["has_halves"]}),
+        "correction_pairs": cor, "correction_pairs_dropped": dropped,
         "correction_layout": LAYOUT, "replicate_pairs": rep,
         "scorable": {"imputation": [r["assay"] for r in sc if r["imputation_scorable"]],
                      "correction": [r["assay"] for r in sc if r["correction_scorable"]],
@@ -289,10 +333,20 @@ def sha256_file(path) -> str:
 
 def check(evalset, tables=None, allow_blind=False) -> list[str]:
     """Problems of an evalset (empty list = passes); prints the counts per scorable assay."""
+    from minicandi.dataset import tables_sha256
     ev = json.loads(Path(evalset).read_text(encoding="utf-8"))
     tdir = Path(tables) if tables else tables_dir_of(ev, evalset)
     meas = {r["measurement_id"]: r for r in read_tsv(tdir / "measurements.tsv")}
     bad = []
+    if not ev.get("tables_sha256"):
+        bad.append("evalset has no tables_sha256 (rebuild it)")
+    elif ev["tables_sha256"] != tables_sha256(tdir):
+        bad.append(f"tables_sha256 of {tdir} differs from the evalset's")
+    if not ev.get("mask_applied"):
+        bad.append("evalset regions were not drawn under the genome mask")
+    for t in ev["imputation_targets"]:
+        if meas.get(t["target"], {}).get("assay") == CONTROL:
+            bad.append(f"control {t['target']} is an imputation target")
     for t in ev["imputation_targets"]:
         if not t["inputs"]:
             bad.append(f"target {t['target']} ({t['regime']}) has no input")
@@ -353,7 +407,9 @@ def main(argv=None) -> int:
                    n_fit_regions=a.n_fit_regions, region_bins=a.region_bins, seed=a.seed,
                    include_blind=a.include_blind)
         print(f"evalset: {len(ev['regions'])} regions, {len(ev['imputation_targets'])} imputation "
-              f"items, {len(ev['correction_pairs'])} correction pairs "
+              f"items ({len(ev['targets_without_halves'])} targets without halves), "
+              f"{len(ev['control_targets'])} control targets, "
+              f"{len(ev['correction_pairs'])} correction pairs "
               f"({ev['correction_pairs_dropped']} dropped: no halves), "
               f"{len(ev['replicate_pairs'])} replicate pairs; imputation-scorable "
               f"{len(ev['scorable']['imputation'])}, correction-scorable "

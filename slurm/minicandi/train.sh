@@ -9,10 +9,11 @@
 #     sbatch --time=03:00:00 --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1 --cpus-per-task=1 \
 #         --mem=10000M --output=$OUT/train_%j.out \
 #         $KIT/slurm/minicandi/train.sh $KIT $CONFIG $TABLES $SEED $OUT gpu [$EVALSET]
-#   -> $OUT/{ckpt.pt,run.json,log.jsonl,DONE} and, with EVALSET, $OUT/{scores.json,suffstats.npz}
+#   -> $OUT/{ckpt.pt,run.json,log.jsonl,DONE} and, with EVALSET, $OUT/{scores.json,suffstats.npz,SCORED}
 #
 # Rerunning the same command resumes from $OUT/ckpt.pt (train.py) and skips training when DONE
-# exists. EXTRA_TRAIN_ARGS (space-separated, e.g. "--max-windows 100000 --val-every 20000") is
+# exists; scoring is skipped only when $OUT/SCORED exists (score.py writes it after scores.json;
+# training's DONE never skips scoring). EXTRA_TRAIN_ARGS (space-separated, e.g. "--max-windows 100000 --val-every 20000") is
 # passed to train.py. Never pass a comma-valued variable through sbatch --export; export it in the
 # shell and use --export=ALL. DRY_RUN=1 prints the commands and exits.
 #SBATCH --account=def-maxwl
@@ -65,8 +66,8 @@ export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 "${TRAIN[@]}"
 if [ -z "$EVALSET" ]; then
   echo "no evalset given: scoring skipped"
-elif [ -f "$OUT/scores.json" ]; then
-  echo "skip scoring: $OUT/scores.json exists"
+elif [ -f "$OUT/SCORED" ]; then
+  echo "skip scoring: $OUT/SCORED exists"
 else
   "${SCORE[@]}"
 fi

@@ -29,11 +29,17 @@ Routes
   `candi.store.pval_from_counts.pval_from_counts` (the no-control rule) with d = 150, not the ChIP
   route. The 10 kb window reads the predicted mean (PI decision 2026-10-11, t125 formula h).
   lambda_source = `local_background`.
-* DNase-seq (`accessibility_dnase`): dnase-seq-pipeline v3.0.0, hotspot2 v2.1 `density-peaks.bash`
-  (cleavage counts summed over a 150 bp window sliding every 20 bp) and the pipeline's
-  `normalize_density_starch` (density / reads in the nuclear BAM * 1e6). No p-value and no lambda;
-  lambda_source = `hotspot2_density`. Not modelled from binned counts: hotspot2's "bad spot" filter and
-  its mappable-region restriction of cut sites.
+* DNase-seq (`accessibility_dnase`), selectable by `dnase_route` (DNASE_ROUTES; default
+  DNASE_ROUTE_DEFAULT = `hotspot2_density`, decision D9b as written; the PI has been asked whether
+  EIC scoring should use the MACS2 route instead):
+  - `hotspot2_density`: dnase-seq-pipeline v3.0.0, hotspot2 v2.1 `density-peaks.bash` (cleavage
+    counts summed over a 150 bp window sliding every 20 bp) and the pipeline's
+    `normalize_density_starch` (density / reads in the nuclear BAM * 1e6). No p-value and no lambda;
+    lambda_source = `hotspot2_density`. Not modelled from binned counts: hotspot2's "bad spot"
+    filter and its mappable-region restriction of cut sites.
+  - `macs2_no_control`: the ATAC-seq rule above applied to DNase-seq counts (MACS2 without control,
+    `--shift -75 --extsize 150`, lambda = max(lambda_bg, llocal window of the treatment));
+    lambda_source = `local_background`.
 
 Counts to the caller's units (PI decision 2026-10-11, `tools/t125/hmap/caller.py`): a read of length
 rl touches (rl + 24) / 25 bins on average, so the tags behind a binned count are count * 25 / (rl + 24)
@@ -45,6 +51,17 @@ is its NB expectation, E_NB(n, mu)[-log10 P(Poisson(lambda) > floor(pileup(k)))]
 the NB's 1e-10 and 1 - 1e-10 quantiles. lambda is deterministic: it comes from the control, or (no
 control) from the predicted mean. The hotspot2 density is linear in the counts, so its expectation is
 the density of `mu`.
+
+Scorer adapter: `signal_from_nb(n, mu, row, *, ds, regions, rb, predicted_control=None,
+dnase_route=...) -> (signal, lambda_source)`. The scorer's vectors join the eval regions end to end
+(region i = bins [i*rb, (i+1)*rb)), so the adapter calls `signal_track` once per region. The observed
+control is read from the row's `control_measurement_id` through the dataset; without one, the
+caller's `predicted_control` (the model's control mean over the same bins) is used and labelled
+`predicted_control`, with the treatment's own depth and read length as the control covariates
+(the scorer asks for the predicted control at the treatment's C'). Region-edge truncation: each
+region is one stretch with no flank, so the MACS2 local windows (llocal = 10 kb = 400 bins, slocal
+= 1 kb) and the hotspot2 150 bp window are truncated at both ends of every 2^14-bin region; about
+2 x 200 of 16384 bins per region (2.4%) see a shortened llocal window. Logged, not corrected.
 """
 from __future__ import annotations
 
@@ -70,6 +87,9 @@ __all__ = [
     "nb_expected_neglog10p",
     "hotspot2_normalized_density",
     "signal_track",
+    "signal_from_nb",
+    "DNASE_ROUTES",
+    "DNASE_ROUTE_DEFAULT",
 ]
 
 LAMBDA_SOURCES = ("observed_control", "predicted_control", "local_background", "hotspot2_density")
@@ -85,6 +105,9 @@ HOTSPOT2_SCALE = 1_000_000
 #: NB mass left out at each end of the enumeration.
 NB_TAIL = 1e-10
 _MAX_CELLS = 4_000_000
+#: DNase-seq routes; the default is D9b as written (PI asked whether EIC scoring should use MACS2).
+DNASE_ROUTES = ("hotspot2_density", "macs2_no_control")
+DNASE_ROUTE_DEFAULT = "hotspot2_density"
 
 _CHIP_CLASSES = ("broad_histone", "narrow_histone")
 _ATAC = ("accessibility_atac", "ATAC-seq")
@@ -202,23 +225,27 @@ def _need(cov: dict, *keys):
 
 
 def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
-                 *, gsize: float = MACS2_GSIZE_HS) -> tuple[np.ndarray, str]:
+                 *, gsize: float = MACS2_GSIZE_HS,
+                 dnase_route: str = DNASE_ROUTE_DEFAULT) -> tuple[np.ndarray, str]:
     """The assay's pipeline signal derived from the predicted NB, and its lambda source.
 
     `covariates` keys (the `measurements.tsv` names): all routes `depth_reads` (treatment tagAlign
     lines, or BAM reads for DNase) and `read_length`; ChIP also `frag_len`, `control_depth_reads`,
-    `control_read_length`, and optionally `control_is_predicted` (default False).
+    `control_read_length`, and optionally `control_is_predicted` (default False). `dnase_route`
+    picks the DNase-seq route (DNASE_ROUTES).
     """
+    if dnase_route not in DNASE_ROUTES:
+        raise ValueError(f"dnase_route {dnase_route!r} not in {DNASE_ROUTES}")
     route = route_of(assay_class)
     mu = np.asarray(mu, dtype=np.float64)
-    if route == "dnase":
+    if route == "dnase" and dnase_route == "hotspot2_density":
         depth, rl = _need(covariates, "depth_reads", "read_length")
         sig = hotspot2_normalized_density(mu, read_length=rl, depth_reads=depth)
         return sig.astype(np.float32), "hotspot2_density"
 
-    if route == "atac":
+    if route in ("atac", "dnase"):          # dnase here only with dnase_route = macs2_no_control
         if control_counts is not None:
-            raise ValueError("ATAC-seq has no control; its pipeline runs MACS2 without one")
+            raise ValueError(f"{assay_class} has no control; its MACS2 route runs without one")
         depth, rl = _need(covariates, "depth_reads", "read_length")
         d = float(ATAC_SMOOTH_WIN)
         lam = macs2_lambda(lambda_bg=d * depth / gsize, treat_pileup=pileup_from_counts(mu, d, rl))
@@ -240,3 +267,46 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
     sig = nb_expected_neglog10p(mu, n, d / (rl + SPAN_EXTRA), lam)
     source = "predicted_control" if bool(covariates.get("control_is_predicted", False)) else "observed_control"
     return sig.astype(np.float32), source
+
+
+def signal_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=None,
+                   dnase_route: str = DNASE_ROUTE_DEFAULT) -> tuple[np.ndarray, str]:
+    """Signal of one target over the scorer's concatenated eval regions, and its lambda source.
+
+    `n`, `mu` [len(regions) * rb]: the predicted NB, region i at bins [i*rb, (i+1)*rb). `row`: the
+    target's `measurements.tsv` row. `ds`: the scorer's `OnionDataset` (reads the observed control).
+    `predicted_control` [len(regions) * rb] or None: the model's control mean on the same bins, used
+    only when the row has no `control_measurement_id` (ChIP-seq). See the module docstring for the
+    region-edge truncation of the local windows.
+    """
+    n = np.asarray(n, dtype=np.float64)
+    mu = np.asarray(mu, dtype=np.float64)
+    if mu.shape != (len(regions) * int(rb),) or n.shape != mu.shape:
+        raise ValueError(f"n, mu must be [{len(regions)} x {rb}], got {n.shape}, {mu.shape}")
+    route = route_of(row["assay_class"] or row["assay"])
+    ctl_id = (row.get("control_measurement_id") or "").strip()
+    crow = ds.rows.get(ctl_id) if ctl_id else None
+    if ctl_id and crow is None:
+        raise KeyError(f"{row['measurement_id']}: control {ctl_id} not in measurements.tsv")
+    if route == "chip" and crow is None and predicted_control is None:
+        raise ValueError(f"{row['measurement_id']}: no observed control and no predicted control")
+    cov = {"depth_reads": row["depth_reads"], "read_length": row["read_length"],
+           "frag_len": row.get("frag_len")}
+    if route == "chip":
+        if crow is not None:
+            cov.update(control_depth_reads=crow["depth_reads"],
+                       control_read_length=crow["read_length"], control_is_predicted=False)
+        else:   # the predicted control is asked for at the treatment's own C'
+            cov.update(control_depth_reads=row["depth_reads"],
+                       control_read_length=row["read_length"], control_is_predicted=True)
+    out, source = [], None
+    for i, (c, s) in enumerate(regions):
+        sl = slice(i * int(rb), (i + 1) * int(rb))
+        ctl = None
+        if route == "chip":
+            ctl = (ds.read(ctl_id, c, int(s), int(rb)).astype(np.float64) if crow is not None
+                   else np.asarray(predicted_control, dtype=np.float64)[sl])
+        sig, source = signal_track(mu[sl], n[sl], row["assay_class"] or row["assay"], ctl, cov,
+                                   dnase_route=dnase_route)
+        out.append(sig)
+    return np.concatenate(out), source
