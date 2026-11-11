@@ -375,3 +375,10 @@ Evidence: `cruxvault/results/flashzoi_overlap/FLASHZOI_OVERLAP.md`, `overlap_tra
 - **Control for the per-position average in signal space.** For a ChIP-seq target whose cell type has no observed control, the per-position average signal uses the average of the training controls as its lambda source, and the row is labelled with that source. This follows D9b, where a missing control is replaced by a predicted control with a label. Before this call, the signal-space specific-variance correlation was undefined on those targets.
 - **Negative values in published EIC entries.** 301 of the 1,284 submitted tracks hold negative values. In our own metric tables, negative and non-finite bins are set to 0, because a -log10 p-value signal cannot be negative. The count of changed bins is recorded per target. The challenge-scorer board uses every submission unchanged.
 - **Covariate-dropout arm.** The dropout rate is 0.1. No document fixes it.
+
+## 2026-11-11 Agent calls: frozen DNA embeddings
+
+- **Projection.** Both frozen DNA sources (Flashzoi, Nucleotide Transformer v2) are reduced to 128 dimensions per 25 bp bin by a PCA. The PCA is fit on at most 1,000,000 bins inside the Borzoi training folds, with fold 3 excluded, for both sources, so the two arms are treated alike. Explained variance: Flashzoi 0.775, Nucleotide Transformer v2 0.550.
+- **GPU slice.** The embedding jobs use the 20 GB slice type on Nibi, because its queue was empty and the 10 GB queue held 36 jobs.
+- **Environment.** The embedding environment is built per job in node-local storage. No persistent environment was added.
+- **Result.** Flashzoi embeddings are complete and verified for chr1-22 and chrX (31.6 GB, 1.83 slice-hours). Evidence: `cruxvault/results/t207/SUBMITTED.md`.
