@@ -30,30 +30,36 @@ Routes
   route. The 10 kb window reads the predicted mean (PI decision 2026-10-11, t125 formula h).
   lambda_source = `local_background`.
 * DNase-seq (`accessibility_dnase`), selectable by `dnase_route` (DNASE_ROUTES; default
-  DNASE_ROUTE_DEFAULT = `hotspot2_density`, decision D9b as written; the PI has been asked whether
-  EIC scoring should use the MACS2 route instead):
+  DNASE_ROUTE_DEFAULT = `macs2_no_control`, PI ruling 19 of 2026-11-11: for EIC signal scoring the
+  DNase-seq route is MACS2 without control, because the EIC DNase-seq truth is a MACS2 -log10 p
+  track; `hotspot2_density` stays available as the native DNase-seq signal view):
+  - `macs2_no_control` (default): the ATAC-seq rule above applied to DNase-seq counts (MACS2
+    without control, `--shift -75 --extsize 150`, lambda = max(lambda_bg, llocal window of the
+    treatment)); lambda_source = `local_background`.
   - `hotspot2_density`: dnase-seq-pipeline v3.0.0, hotspot2 v2.1 `density-peaks.bash` (cleavage
     counts summed over a 150 bp window sliding every 20 bp) and the pipeline's
     `normalize_density_starch` (density / reads in the nuclear BAM * 1e6). No p-value and no lambda;
     lambda_source = `hotspot2_density`. Not modelled from binned counts: hotspot2's "bad spot"
     filter and its mappable-region restriction of cut sites.
-  - `macs2_no_control`: the ATAC-seq rule above applied to DNase-seq counts (MACS2 without control,
-    `--shift -75 --extsize 150`, lambda = max(lambda_bg, llocal window of the treatment));
-    lambda_source = `local_background`.
 
 Counts to the caller's units (PI decision 2026-10-11, `tools/t125/hmap/caller.py`): a read of length
 rl touches (rl + 24) / 25 bins on average, so the tags behind a binned count are count * 25 / (rl + 24)
 and the MACS2 pileup (tags extended to d) is count * d / (rl + 24). The bin's own pileup is the
 "bin" variant of that decision.
 
-From the NB to one signal value: the MACS2 score is a function of the bin's own count k, so the track
-is its NB expectation, E_NB(n, mu)[-log10 P(Poisson(lambda) > floor(pileup(k)))], summed over k between
-the NB's 1e-10 and 1 - 1e-10 quantiles. lambda is deterministic: it comes from the control, or (no
-control) from the predicted mean. The hotspot2 density is linear in the counts, so its expectation is
-the density of `mu`.
+From the NB to one signal value (`mode`, PI ruling 20 of 2026-11-11; SIGNAL_MODES):
+  - `expectation` (default, the headline): the MACS2 score is a function of the bin's own count k,
+    so the track is its NB expectation, E_NB(n, mu)[-log10 P(Poisson(lambda) > floor(pileup(k)))],
+    summed over k between the NB's 1e-10 and 1 - 1e-10 quantiles.
+  - `plug_in` (reported beside it): the score of the NB mean, -log10 P(Poisson(lambda) >
+    floor(pileup(mu))). It ignores the NB's spread, so it differs from the expectation by the
+    Jensen gap of the score over the NB.
+lambda is deterministic in both modes: it comes from the control, or (no control) from the
+predicted mean. The hotspot2 density is linear in the counts, so its expectation is the density of
+`mu` and the two modes give the same track.
 
 Scorer adapter: `signal_from_nb(n, mu, row, *, ds, regions, rb, predicted_control=None,
-dnase_route=...) -> (signal, lambda_source)`. The scorer's vectors join the eval regions end to end
+dnase_route=..., mode="expectation") -> (signal, lambda_source)`. The scorer's vectors join the eval regions end to end
 (region i = bins [i*rb, (i+1)*rb)), so the adapter calls `signal_track` once per region. The observed
 control is read from the row's `control_measurement_id` through the dataset; without one, the
 caller's `predicted_control` (the model's control mean over the same bins) is used and labelled
@@ -90,6 +96,8 @@ __all__ = [
     "signal_from_nb",
     "DNASE_ROUTES",
     "DNASE_ROUTE_DEFAULT",
+    "SIGNAL_MODES",
+    "plug_in_neglog10p",
 ]
 
 LAMBDA_SOURCES = ("observed_control", "predicted_control", "local_background", "hotspot2_density")
@@ -105,9 +113,11 @@ HOTSPOT2_SCALE = 1_000_000
 #: NB mass left out at each end of the enumeration.
 NB_TAIL = 1e-10
 _MAX_CELLS = 4_000_000
-#: DNase-seq routes; the default is D9b as written (PI asked whether EIC scoring should use MACS2).
+#: DNase-seq routes; the default is MACS2 without control (PI ruling 19, 2026-11-11).
 DNASE_ROUTES = ("hotspot2_density", "macs2_no_control")
-DNASE_ROUTE_DEFAULT = "hotspot2_density"
+DNASE_ROUTE_DEFAULT = "macs2_no_control"
+#: NB -> signal: expectation of the score (headline) or score of the NB mean (PI ruling 20).
+SIGNAL_MODES = ("expectation", "plug_in")
 
 _CHIP_CLASSES = ("broad_histone", "narrow_histone")
 _ATAC = ("accessibility_atac", "ATAC-seq")
@@ -199,6 +209,25 @@ def nb_expected_neglog10p(mu, n, scale: float, lam, *, tail: float = NB_TAIL) ->
     return out
 
 
+def plug_in_neglog10p(mu, scale: float, lam) -> np.ndarray:
+    """-log10 P(Poisson(lam) > floor(mu * scale)) per bin: the MACS2 score of the NB mean (the
+    `plug_in` mode of PI ruling 20), float64."""
+    mu = np.asarray(mu, dtype=np.float64)
+    if mu.ndim != 1:
+        raise ValueError(f"mu must be 1-D [L], got shape {mu.shape}")
+    if not np.all(mu > 0):
+        raise ValueError("mu must be > 0 everywhere (contract: NB outputs are positive)")
+    lam = np.broadcast_to(np.asarray(lam, dtype=np.float64), mu.shape).copy()
+    obs = np.floor(mu * float(scale)).astype(np.int64)
+    return log10_upper_tail(obs, lam)
+
+
+def _score(mu, n, scale, lam, mode):
+    if mode == "plug_in":
+        return plug_in_neglog10p(mu, scale, lam)
+    return nb_expected_neglog10p(mu, n, scale, lam)
+
+
 def hotspot2_normalized_density(mu, *, read_length: float, depth_reads: float) -> np.ndarray:
     """hotspot2 density normalized per million reads, per 25 bp bin.
 
@@ -226,16 +255,21 @@ def _need(cov: dict, *keys):
 
 def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
                  *, gsize: float = MACS2_GSIZE_HS,
-                 dnase_route: str = DNASE_ROUTE_DEFAULT) -> tuple[np.ndarray, str]:
+                 dnase_route: str = DNASE_ROUTE_DEFAULT,
+                 mode: str = "expectation") -> tuple[np.ndarray, str]:
     """The assay's pipeline signal derived from the predicted NB, and its lambda source.
 
     `covariates` keys (the `measurements.tsv` names): all routes `depth_reads` (treatment tagAlign
     lines, or BAM reads for DNase) and `read_length`; ChIP also `frag_len`, `control_depth_reads`,
     `control_read_length`, and optionally `control_is_predicted` (default False). `dnase_route`
-    picks the DNase-seq route (DNASE_ROUTES).
+    picks the DNase-seq route (DNASE_ROUTES). `mode` (SIGNAL_MODES): `expectation` of the MACS2
+    score under the NB (headline) or `plug_in`, the score of the NB mean; `n` is unused in
+    `plug_in` mode.
     """
     if dnase_route not in DNASE_ROUTES:
         raise ValueError(f"dnase_route {dnase_route!r} not in {DNASE_ROUTES}")
+    if mode not in SIGNAL_MODES:
+        raise ValueError(f"mode {mode!r} not in {SIGNAL_MODES}")
     route = route_of(assay_class)
     mu = np.asarray(mu, dtype=np.float64)
     if route == "dnase" and dnase_route == "hotspot2_density":
@@ -249,7 +283,7 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
         depth, rl = _need(covariates, "depth_reads", "read_length")
         d = float(ATAC_SMOOTH_WIN)
         lam = macs2_lambda(lambda_bg=d * depth / gsize, treat_pileup=pileup_from_counts(mu, d, rl))
-        sig = nb_expected_neglog10p(mu, n, d / (rl + SPAN_EXTRA), lam)
+        sig = _score(mu, n, d / (rl + SPAN_EXTRA), lam, mode)
         return sig.astype(np.float32), "local_background"
 
     # ChIP-seq
@@ -264,14 +298,16 @@ def signal_track(mu, n, assay_class: str, control_counts, covariates: dict,
     lam = macs2_lambda(lambda_bg=d * depth / gsize,
                        control_pileup=pileup_from_counts(control_counts, d, crl),
                        ratio_treat2control=depth / cdepth)
-    sig = nb_expected_neglog10p(mu, n, d / (rl + SPAN_EXTRA), lam)
+    sig = _score(mu, n, d / (rl + SPAN_EXTRA), lam, mode)
     source = "predicted_control" if bool(covariates.get("control_is_predicted", False)) else "observed_control"
     return sig.astype(np.float32), source
 
 
 def signal_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=None,
-                   dnase_route: str = DNASE_ROUTE_DEFAULT) -> tuple[np.ndarray, str]:
+                   dnase_route: str = DNASE_ROUTE_DEFAULT,
+                   mode: str = "expectation") -> tuple[np.ndarray, str]:
     """Signal of one target over the scorer's concatenated eval regions, and its lambda source.
+    `mode`: `expectation` (headline) or `plug_in` (PI ruling 20), as in `signal_track`.
 
     `n`, `mu` [len(regions) * rb]: the predicted NB, region i at bins [i*rb, (i+1)*rb). `row`: the
     target's `measurements.tsv` row. `ds`: the scorer's `OnionDataset` (reads the observed control).
@@ -307,6 +343,6 @@ def signal_from_nb(n, mu, row: dict, *, ds, regions, rb: int, predicted_control=
             ctl = (ds.read(ctl_id, c, int(s), int(rb)).astype(np.float64) if crow is not None
                    else np.asarray(predicted_control, dtype=np.float64)[sl])
         sig, source = signal_track(mu[sl], n[sl], row["assay_class"] or row["assay"], ctl, cov,
-                                   dnase_route=dnase_route)
+                                   dnase_route=dnase_route, mode=mode)
         out.append(sig)
     return np.concatenate(out), source

@@ -72,8 +72,12 @@ Space of headline 1 and 2 for selection: always `counts_log1p` (ruling 13; there
 the dataset, the region list and the region length; a ChIP-seq target without an observed control
 uses the model's predicted control (a second forward pass with the control channel asked for at
 the target's own C'). `lambda_source` per target is written under `per_target`. `--dnase-route`
-selects the DNase-seq route (default hotspot2_density, D9b). Without the module the signal space is
-NaN with the reason.
+selects the DNase-seq route (default `macs2_no_control`, PI ruling 19: the EIC DNase-seq truth is a
+MACS2 track; `hotspot2_density` is the native DNase-seq view). The headline signal is the expectation
+of the MACS2 score under the predicted NB (`signal_arcsinh`); the plug-in variant, the score of the NB
+mean (PI ruling 20), is written beside it under the same keys with the suffix `_plug_in`
+(`signal_arcsinh_plug_in` in headline 1 and in r_spec). Without the module the signal space is NaN
+with the reason.
 
 Per-metric aggregation. Each metric is {"macro", "per_assay", "ci", "non_scorable_per_assay",
 "missing_scorable", "reason"}: per assay over that assay's targets (headline 1 and 4 as ratios of
@@ -85,8 +89,9 @@ shared estimate is not refitted per draw).
 
 Selection denominators (finding 4). `selection.denominators` holds the marginal-NB PIT deviation
 (uncertainty) and, per correction-scorable assay, (depth-only CRPS - floor CRPS) / depth-only CRPS,
-with its minimum; select_rule escalates a term whose denominator is under its tolerance, or a term
-outside its sanity band.
+with its minimum; select_rule escalates a term whose denominator is under its tolerance. The goal
+terms and `composite` here are raw; select_rule clips each term to [0, 1] inside the composite (PI
+ruling 18) and keeps the raw terms for the per-goal veto.
 
 Baseline fitting (agent decisions, logged): marginal NB per assay and the NB size of depth-only
 scaling and of the floor are fitted on the evalset's `fit_regions` (never a scored bin); the
@@ -140,6 +145,10 @@ BLIND_LEDGER = "BLIND_PASSES.tsv"
 LEDGER_COLUMNS = ("time", "run", "evalset_sha256", "tables_sha256", "git_sha", "out", "status",
                   "repeat_reason")
 SCORED = "SCORED"
+#: NB -> signal modes (PI ruling 20): record-key prefix of each; the headline is `expectation`
+SIGNAL_PREFIX = {"expectation": "sig_", "plug_in": "sig_pi_"}
+#: suffix of the signal-space keys that hold the plug-in variant
+PLUG_IN = "_plug_in"
 
 
 class ScoreRefused(Exception):
@@ -669,8 +678,9 @@ class Scorer:
             self._signal_group(recs, arrays, ok, regime, assay)
         else:
             for r in recs:
-                r["sig_E_sp"] = r["sig_V_sp"] = r["sig_level"] = Mx.Undefined(
-                    "the predictor is undefined on this target")
+                for pre in SIGNAL_PREFIX.values():
+                    r[f"{pre}E_sp"] = r[f"{pre}V_sp"] = r[f"{pre}level"] = Mx.Undefined(
+                        "the predictor is undefined on this target")
         for r in recs:
             r["recovered"] = recovered_fn(no_floor=self.no_halves)([r])
             for k, v in r["pit"].items():
@@ -680,10 +690,14 @@ class Scorer:
 
     # -------------------------------------------------------------- signal space (X2)
     def _signal_target(self, job, n, mu, A, defined, pa_ok):
+        """Signal-space records of one target, once per NB-to-signal mode (SIGNAL_PREFIX): the
+        headline `expectation` under `sig_*`, the `plug_in` variant under `sig_pi_*` (ruling 20)."""
         def undef(reason):
             u = Mx.Undefined(reason)
-            return {"record": {"sig_N": u, "sig_r_spec": u, "lambda_source": None,
-                               "lambda_reason": reason}}
+            rec = {"lambda_source": None, "lambda_reason": reason}
+            for pre in SIGNAL_PREFIX.values():
+                rec.update({f"{pre}N": u, f"{pre}r_spec": u})
+            return {"record": rec}
         if self.sig is None:
             return undef(self.sig_reason)
         row = self._row(job["target"])
@@ -699,54 +713,60 @@ class Scorer:
         ts = Mx.to_space(files["signal"], "signal_arcsinh")
         h1 = Mx.to_space(files["pr1_signal"], "signal_arcsinh")
         h2 = Mx.to_space(files["pr2_signal"], "signal_arcsinh")
-        kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route)
-        src, lam_reason, ps, pa_reason = None, "", None, ""
-        if defined:
-            try:
-                sp, src = self.sig.signal_from_nb(n, mu, row, predicted_control=A.get("main.ctl_mu"),
-                                                  **kw)
-                ps = Mx.to_space(np.asarray(sp, np.float64), "signal_arcsinh")
-            except (ValueError, KeyError) as e:
-                lam_reason = f"no signal from the prediction: {e}"
-        else:
-            lam_reason = "the predictor is undefined on this target"
-        a_s = None
-        if pa_ok:
-            try:
-                sa, _ = self.sig.signal_from_nb(A["position_average.n"], A["position_average.mu"],
-                                                row, predicted_control=None, **kw)
-                a_s = Mx.to_space(np.asarray(sa, np.float64), "signal_arcsinh")
-            except (ValueError, KeyError) as e:
-                a_s, pa_reason = None, f"no signal from the position average: {e}"
         N = Mx.noise_floor(h1, h2, ts, 2.0)
-        if ps is not None and a_s is not None:
-            rs = Mx.r_spec(ts, ps, a_s)
-        else:
-            rs = Mx.Undefined(lam_reason or (pa_reason if pa_ok else "position average undefined"))
-        return {"record": {"sig_N": N, "sig_r_spec": rs, "lambda_source": src,
-                           "lambda_reason": lam_reason},
-                "sig_truth": ts, "sig_pred": ps}
+        kw = dict(ds=self.ds, regions=self.regions, rb=self.rb, dnase_route=self.dnase_route)
+        rec = {"lambda_source": None, "lambda_reason": ""}
+        out = {}
+        for mode, pre in SIGNAL_PREFIX.items():
+            src, lam_reason, ps, pa_reason = None, "", None, ""
+            if defined:
+                try:
+                    sp, src = self.sig.signal_from_nb(n, mu, row, predicted_control=A.get("main.ctl_mu"),
+                                                      mode=mode, **kw)
+                    ps = Mx.to_space(np.asarray(sp, np.float64), "signal_arcsinh")
+                except (ValueError, KeyError) as e:
+                    lam_reason = f"no signal from the prediction: {e}"
+            else:
+                lam_reason = "the predictor is undefined on this target"
+            a_s = None
+            if pa_ok:
+                try:
+                    sa, _ = self.sig.signal_from_nb(A["position_average.n"], A["position_average.mu"],
+                                                    row, predicted_control=None, mode=mode, **kw)
+                    a_s = Mx.to_space(np.asarray(sa, np.float64), "signal_arcsinh")
+                except (ValueError, KeyError) as e:
+                    a_s, pa_reason = None, f"no signal from the position average: {e}"
+            if ps is not None and a_s is not None:
+                rs = Mx.r_spec(ts, ps, a_s)
+            else:
+                rs = Mx.Undefined(lam_reason or (pa_reason if pa_ok else "position average undefined"))
+            rec.update({f"{pre}N": N, f"{pre}r_spec": rs})
+            if mode == "expectation":
+                rec.update(lambda_source=src, lambda_reason=lam_reason)
+            out.update({f"{pre}truth": ts, f"{pre}pred": ps})
+        return {"record": rec, **out}
 
     def _signal_group(self, recs, arrays, ok, regime, assay):
-        for r in recs:
-            r["sig_E_sp"] = r["sig_V_sp"] = r["sig_level"] = Mx.Undefined(
-                "the predictor is undefined on this target")
-        if self.sig is None or any(arrays[i].get("sig_pred") is None for i in ok):
-            reasons = sorted({recs[i].get("lambda_reason") or "" for i in ok} - {""})
-            reason = self.sig_reason or ("; ".join(reasons) if reasons
-                                         else "signal prediction or truth missing")
+        for pre in SIGNAL_PREFIX.values():
             for r in recs:
-                r["sig_E_sp"] = r["sig_V_sp"] = r["sig_level"] = Mx.Undefined(reason)
-            return
-        T = np.stack([arrays[i]["sig_truth"] for i in ok])
-        P = np.stack([arrays[i]["sig_pred"] for i in ok])
-        ss = Mx.shared_specific(T, P, np.array([recs[i]["cell"] for i in ok]),
-                                np.array([recs[i]["sig_N"] for i in ok], np.float64))
-        for j, i in enumerate(ok):
-            for k in ("E_sp", "V_sp"):
-                recs[i][f"sig_{k}"] = (Mx.Undefined(ss["reason"][j]) if ss["reason"][j]
-                                       else float(ss[k][j]))
-            recs[i]["sig_level"] = float(ss["level"][j])      # finding 15: signal-space level
+                r[f"{pre}E_sp"] = r[f"{pre}V_sp"] = r[f"{pre}level"] = Mx.Undefined(
+                    "the predictor is undefined on this target")
+            if self.sig is None or any(arrays[i].get(f"{pre}pred") is None for i in ok):
+                reasons = sorted({recs[i].get("lambda_reason") or "" for i in ok} - {""})
+                reason = self.sig_reason or ("; ".join(reasons) if reasons
+                                             else "signal prediction or truth missing")
+                for r in recs:
+                    r[f"{pre}E_sp"] = r[f"{pre}V_sp"] = r[f"{pre}level"] = Mx.Undefined(reason)
+                continue
+            T = np.stack([arrays[i][f"{pre}truth"] for i in ok])
+            P = np.stack([arrays[i][f"{pre}pred"] for i in ok])
+            ss = Mx.shared_specific(T, P, np.array([recs[i]["cell"] for i in ok]),
+                                    np.array([recs[i][f"{pre}N"] for i in ok], np.float64))
+            for j, i in enumerate(ok):
+                for k in ("E_sp", "V_sp"):
+                    recs[i][f"{pre}{k}"] = (Mx.Undefined(ss["reason"][j]) if ss["reason"][j]
+                                            else float(ss[k][j]))
+                recs[i][f"{pre}level"] = float(ss["level"][j])  # finding 15: signal-space level
 
     # -------------------------------------------------------------- pairs
     def _pair_record(self, job):
@@ -989,6 +1009,14 @@ class Scorer:
                                            "lambda_reason": r.get("lambda_reason", "")}
                              for r in recs}
         h1s["dnase_route"] = self.dnase_route
+        h1s["signal_mode"] = "expectation"
+        h1p = metric(recs, recovered_fn(SIGNAL_PREFIX["plug_in"]), scorable, nb, sd, require_all=ra)
+        h1p["per_target"] = {r["target"]: {"assay": r["assay"], "cell": r["cell"],
+                                           "level": _j(r["sig_pi_level"]), "N": _j(r["sig_pi_N"]),
+                                           "lambda_source": r.get("lambda_source")}
+                             for r in recs}
+        h1p["dnase_route"] = self.dnase_route
+        h1p["signal_mode"] = "plug_in"
 
         def pit_fn(key):
             def fn(rs):
@@ -1020,10 +1048,13 @@ class Scorer:
                          else None)
         budget["per_assay"] = per_assay_budget
         out = {
-            "specific_variance_recovered_above_noise": {SPACE: h1, "signal_arcsinh": h1s},
+            "specific_variance_recovered_above_noise": {SPACE: h1, "signal_arcsinh": h1s,
+                                                        "signal_arcsinh" + PLUG_IN: h1p},
             "r_spec": {SPACE: metric(recs, _mean_of("r_spec"), scorable, nb, sd, require_all=ra),
                        "signal_arcsinh": metric(recs, _mean_of("sig_r_spec"), scorable, nb, sd,
-                                                require_all=ra)},
+                                                require_all=ra),
+                       "signal_arcsinh" + PLUG_IN: metric(recs, _mean_of("sig_pi_r_spec"), scorable,
+                                                          nb, sd, require_all=ra)},
             "count_crps_skill_vs_position_average": metric(recs, _mean_of("skill"), scorable, nb, sd,
                                                            require_all=ra),
             "count_crps": metric(recs, _mean_of("crps"), scorable, nb, sd, require_all=ra),

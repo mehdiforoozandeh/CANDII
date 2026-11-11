@@ -385,7 +385,7 @@ def test_f4_goal_term_out_of_band_escalates(tmp_path):
     ch2 = make_arm(tmp_path, "rung1_y", [(0.5 + a, 0.5 + b, 5.0 + c) for a, b, c in jit])
     res2 = R.compare(inc, ch2, "challenger", settlements=tmp_path / "s.tsv", clip=False)
     assert res2["verdict"] == "RULE_NOT_APPLICABLE_ASK_PI" and "uncertainty term = 5" in res2["reason"]
-    assert R.CLIP_GOAL_TERMS is False and R.GOAL_BAND == (-1.0, 1.5)
+    assert R.CLIP_GOAL_TERMS is True and R.GOAL_BAND == (-1.0, 1.5)       # ruling 18: clip by default
 
 
 def test_f4_clip_mode(tmp_path, monkeypatch):
@@ -393,11 +393,16 @@ def test_f4_clip_mode(tmp_path, monkeypatch):
     inc = make_arm(tmp_path, "rung1_base", [(0.5 + a, 0.5 + b, 0.5 + c) for a, b, c in jit])
     ch = make_arm(tmp_path, "rung1_x", [(0.9 + a, 0.9 + b, 5.0 + c) for a, b, c in jit])
     res = R.decide(R.load_arm(inc), R.load_arm(ch), "none", clip=True)
-    # clipped to (0.9, 0.9, 1.0): a clear win on every goal
+    # composite from the clipped terms (0.9, 0.9, 1.0): a clear win on every goal
     assert res["verdict"] == "CHALLENGER"
-    assert res["per_goal_deltas"]["uncertainty"] == pytest.approx(1.0 - _mean_u(jit))
-    monkeypatch.setattr(R, "CLIP_GOAL_TERMS", True)           # the one-line switch
-    assert R.decide(R.load_arm(inc), R.load_arm(ch), "none")["verdict"] == "CHALLENGER"
+    assert res["composite_delta"] == pytest.approx(
+        0.5 * 0.4 + 0.25 * 0.4 + 0.25 * (1.0 - _mean_u(jit)))
+    # the per-goal deltas of the veto are raw (ruling 18)
+    assert res["per_goal_deltas"]["uncertainty"] == pytest.approx(5.0 - 0.5)
+    assert res["goal_terms_raw"]["challenger"]["uncertainty"][0] == pytest.approx(5.0)
+    assert res["goal_terms_clipped"]["challenger"]["uncertainty"] == [1.0, 1.0, 1.0]
+    monkeypatch.setattr(R, "CLIP_GOAL_TERMS", False)          # the pre-ruling mode escalates
+    assert R.decide(R.load_arm(inc), R.load_arm(ch), "none")["verdict"] == "RULE_NOT_APPLICABLE_ASK_PI"
 
 
 def _mean_u(jit):
@@ -612,3 +617,87 @@ def test_table_shows_the_gate_for_old_scores(tmp_path):
     make_arm(tmp_path, "rung1_o", BASE, copy_leak=old)
     row = R.table(tmp_path, "rung1_o")[0]
     assert row["copy_leak_pass"] is True
+
+
+# ------------------------------------------------------------------ PI ruling 18 (2026-11-11)
+
+def test_r18_default_clips_out_of_band_without_escalating(tmp_path):
+    """Clipping is the PI's answer to the out-of-band check: a raw term of 1.3 no longer escalates
+    by default; the settlement row carries the raw and the clipped terms."""
+    jit = [(0.0, 0.0, 0.0), (0.01, 0.01, 0.01), (0.0, 0.01, 0.0)]
+    inc = make_arm(tmp_path, "rung1_base", [(0.5 + a, 0.5 + b, 0.5 + c) for a, b, c in jit])
+    ch = make_arm(tmp_path, "rung1_x", [(1.3 + a, 0.5 + b, 0.5 + c) for a, b, c in jit])
+    st = tmp_path / "s.tsv"
+    res = R.compare(inc, ch, "none", settlements=st)
+    assert res["verdict"] == "CHALLENGER" and res["clip_goal_terms"] is True
+    # composite delta from clipped imputation (1.0 against ~0.503)
+    assert res["composite_delta"] == pytest.approx(0.5 * (1.0 - (0.5 + 0.01 / 3)))
+    row = _rows(st)[-1]
+    assert row["clip_goal_terms"] == "true"
+    raw, clipped = json.loads(row["goal_terms_raw"]), json.loads(row["goal_terms_clipped"])
+    assert raw["challenger"]["imputation"] == [1.3, 1.31, 1.3]
+    assert clipped["challenger"]["imputation"] == [1.0, 1.0, 1.0]
+    assert raw["incumbent"]["uncertainty"] == clipped["incumbent"]["uncertainty"]
+
+
+def test_r18_veto_uses_raw_terms_and_raw_spreads(tmp_path):
+    """The incumbent's raw uncertainty 1.2 clips to 1.0 in every seed; the challenger's 1.0 too.
+    Clipped, uncertainty drops by 0 (and its clipped spread is 0); raw, it drops by 0.2, beyond 2x
+    its raw spread 0.02, so the challenger's composite win is vetoed."""
+    inc = make_arm(tmp_path, "rung1_base", [(0.30, 0.40, 1.20), (0.31, 0.41, 1.21), (0.30, 0.40, 1.22)])
+    ch = make_arm(tmp_path, "rung1_x", [(0.60, 0.40, 1.00), (0.61, 0.41, 1.01), (0.60, 0.40, 1.02)])
+    res = R.decide(R.load_arm(inc), R.load_arm(ch), "none")
+    assert res["composite_delta"] == pytest.approx(0.5 * 0.30)          # clipped: uncertainty 1 = 1
+    assert res["per_goal_deltas"]["uncertainty"] == pytest.approx(-0.20)
+    assert res["per_goal_spreads"]["uncertainty"] == pytest.approx(0.02)
+    assert res["verdict"] == "TIE_ASK_PI" and "vetoed" in res["reason"] and "uncertainty" in res["reason"]
+
+
+def test_r18_composite_spread_is_the_clipped_composites(tmp_path):
+    """Agent call: the composite's seed spread comes from the clipped composite. The challenger's raw
+    imputation moves 1.1..1.5 across seeds (raw composite spread 0.2) but clips to 1.0 in all."""
+    inc = make_arm(tmp_path, "rung1_base", [(0.50, 0.40, 0.50), (0.51, 0.41, 0.50), (0.50, 0.40, 0.51)])
+    ch = make_arm(tmp_path, "rung1_x", [(1.10, 0.40, 0.50), (1.30, 0.41, 0.50), (1.50, 0.40, 0.51)])
+    res = R.decide(R.load_arm(inc), R.load_arm(ch), "none")
+    clipped_ch = [0.5 * 1.0 + 0.25 * 0.40 + 0.25 * 0.50, 0.5 * 1.0 + 0.25 * 0.41 + 0.25 * 0.50,
+                  0.5 * 1.0 + 0.25 * 0.40 + 0.25 * 0.51]
+    clipped_inc = [0.5 * 0.50 + 0.25 * 0.40 + 0.25 * 0.50, 0.5 * 0.51 + 0.25 * 0.41 + 0.25 * 0.50,
+                   0.5 * 0.50 + 0.25 * 0.40 + 0.25 * 0.51]
+    want = max(max(clipped_ch) - min(clipped_ch), max(clipped_inc) - min(clipped_inc))
+    assert res["seed_spread"] == pytest.approx(want)
+    assert res["per_goal_spreads"]["imputation"] == pytest.approx(0.40)    # raw
+    assert res["verdict"] == "CHALLENGER"
+
+
+def test_r18_denominator_still_escalates_with_clipping(tmp_path):
+    inc = make_arm(tmp_path, "rung1_base", BASE)
+    ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.1),
+                  denominators={"uncertainty_marginal_pit_deviation": 1e-6,
+                                "correction_baseline_minus_floor_relative_min": 0.2})
+    res = R.decide(R.load_arm(inc), R.load_arm(ch), "none")          # default: clipping on
+    assert res["verdict"] == "RULE_NOT_APPLICABLE_ASK_PI" and "uncertainty denominator" in res["reason"]
+
+
+def test_r18_done_condition_2_compares_raw_terms(tmp_path):
+    """Final imputation 1.30 raw against a baseline at 1.10 raw: clipped both are 1.0 (margin 0,
+    FAIL); raw the margin 0.2 beats 2x the spread 0.02, so condition 2 passes on that goal."""
+    runs = tmp_path / "runs"
+    make_arm(runs, "final", [(1.30, 0.40, 0.50), (1.31, 0.41, 0.50), (1.30, 0.40, 0.51)])
+    bl = tmp_path / "baselines"
+    _baselines(bl, dict(GOOD_BASELINES, position_average=(1.10, 0.15, 0.30)))
+    st, lines = R.done_condition_2(runs / "final", bl)
+    assert st == "PASS"
+    imp = [ln for ln in lines if ln.strip().startswith("imputation")][0]
+    assert "margin +0.2033" in imp and "clipped 1.0000 vs 1.0000" in imp
+
+
+def test_r18_table_shows_raw_and_clipped_terms(tmp_path, capsys):
+    make_arm(tmp_path, "rung1_h", [(1.25, 0.4, -0.2)] * 3)
+    row = R.table(tmp_path, "rung1_h")[0]
+    assert row["imputation_raw"] == pytest.approx(1.25) and row["imputation_clipped"] == 1.0
+    assert row["uncertainty_raw"] == pytest.approx(-0.2) and row["uncertainty_clipped"] == 0.0
+    assert row["composite"] == pytest.approx(0.5 * 1.0 + 0.25 * 0.4 + 0.25 * 0.0)
+    assert R.main(["table", "--runs", str(tmp_path), "--prefix", "rung1_h"]) == 0
+    head, first = capsys.readouterr().out.splitlines()[:2]
+    cols = dict(zip(head.split("\t"), first.split("\t")))
+    assert cols["imputation_raw"] == "1.25" and cols["imputation_clipped"] == "1"

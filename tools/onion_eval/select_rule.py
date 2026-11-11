@@ -3,8 +3,9 @@
     python tools/onion_eval/select_rule.py compare --incumbent <arm dir> --challenger <arm dir>
         [--simpler incumbent|challenger|none] [--name <comparison>] [--settlements <tsv>]
     python tools/onion_eval/select_rule.py table --runs <dir> [--prefix p]
-        (columns: arm, seed, state, composite, copy_leak_pass (the gate as applied below: True,
-        False or unreliable), same_view_copy_gain_flag)
+        (columns: arm, seed, state, composite (from the clipped terms while CLIP_GOAL_TERMS),
+        <goal>_raw and <goal>_clipped for each goal, copy_leak_pass (the gate as applied below:
+        True, False or unreliable), same_view_copy_gain_flag)
     python tools/onion_eval/select_rule.py check-rung --runs <dir> --rung <r> --ladder <json>
     python tools/onion_eval/select_rule.py check-done --runs <dir> --ladder <json>
         [--final <arm dir>] [--baselines <dir>] [--blind-baselines <dir>]
@@ -14,7 +15,8 @@
 An arm dir holds `seed<k>/scores.json` (score.py). Each seed's goal terms are read from
 `scores.json["selection"]` (imputation, correction and uncertainty gap closed, on validation,
 leave-one-assay-out, counts_log1p, scorable assays); the composite is recomputed from them as
-0.5 imputation + 0.25 correction + 0.25 uncertainty.
+0.5 imputation + 0.25 correction + 0.25 uncertainty, each term clipped to [0, 1] first (PI ruling 18,
+see "Goal terms").
 
 Comparability (finding 1). Every seed of both arms (and, for D14 condition 2, every baseline) must
 carry the same non-empty `evalset_sha256` and `tables_sha256`, `regime == leave_one_assay_out`,
@@ -25,11 +27,13 @@ Otherwise the command REFUSES (exit 2, no row written).
 D13 (`compare`). Seed spread of a quantity = max - min over seeds, the larger of the two arms
 (ruling 7); each arm needs >= 3 seeds, else REFUSED. A spread of exactly 0 (composite or a goal)
 over >= 3 seeds means the seeds do not vary: REFUSED. Deltas are challenger mean minus incumbent
-mean over seeds.
-  RULE_NOT_APPLICABLE_ASK_PI  a goal term is undefined in any seed of either arm; a goal term is
-                              outside GOAL_BAND, or its denominator is under its tolerance (see
-                              "Goal terms"); both arms fail the copy-leak gate; or (only with
-                              the copy gain gating, see below) the gate was not measured reliably
+mean over seeds. The composite's delta and seed spread use the clipped composite (agent call, see
+"Goal terms"); every per-goal delta and spread of the veto uses the raw goal terms.
+  RULE_NOT_APPLICABLE_ASK_PI  a goal term is undefined in any seed of either arm; a goal term's
+                              denominator is under its tolerance; (only with CLIP_GOAL_TERMS False)
+                              a goal term is outside GOAL_BAND (see "Goal terms"); both arms fail
+                              the copy-leak gate; or (only with the copy gain gating, see below)
+                              the gate was not measured reliably
   INCUMBENT                   the challenger fails the copy-leak gate (it is out); or the
                               incumbent's composite is higher by more than 2x the spread and no goal
                               of the incumbent is lower by more than 2x that goal's spread; or the
@@ -40,7 +44,8 @@ mean over seeds.
                               goal drops by more than 2x that goal's own spread
   CHALLENGER_AS_SIMPLER       within the bars (or a vetoed win) and --simpler challenger
   TIE_ASK_PI                  within the bars (or a vetoed win) and --simpler none (prints ESCALATE)
-Copy-leak gate per arm (the PI's definition; D13: an arm that fails it is out): `fail` when a seed
+Copy-leak gate per arm (the PI's definition, confirmed by PI ruling 17 of 2026-11-11: the hard gate
+of D13 is the wiring check only; an arm that fails it is out): `fail` when a seed
 has no result (the check did not run) or a seed fails part 1 (`part1_wiring_pass`: perturbing hidden
 bins or unavailable tracks moved an output, on any mask seed); else `pass`. The same-view copy gain
 (`same_view_copy_gain_flag`, its relative value and mask-seed spread) is shown by `table` and never
@@ -56,12 +61,21 @@ challenger's `simpler_than_base` (seed0/run.json config, else seed0/config.json)
 true, false or null (true -> challenger, false -> incumbent, null -> none). For any other comparison
 (cross-rung, arm against arm, a final design) `--simpler` must be given, else REFUSED. Every
 verdict appends one row to `settlements.tsv` (default: in the parent dir of the challenger arm)
-with a UTC `time` column; the latest row of a comparison is the one with the greatest time.
+with a UTC `time` column; the latest row of a comparison is the one with the greatest time. After
+`time` the row carries `clip_goal_terms` and every seed's goal terms, raw and clipped
+(`goal_terms_raw`, `goal_terms_clipped`: JSON {arm side: {goal: [per seed]}}); these columns come
+after `time`, so a settlements.tsv written before them still reads by its header.
 
-Goal terms (finding 4; PI asked whether D13's "0-1 gap closed scale" means clipping). Constants:
-GOAL_BAND, UNCERTAINTY_DENOM_TOL, CORRECTION_DENOM_REL_TOL, CLIP_GOAL_TERMS, CLIP_RANGE. With
-CLIP_GOAL_TERMS False (default), a term outside GOAL_BAND escalates with the term and its value.
-With True, each term is clipped to CLIP_RANGE before the composite. In both modes a term whose
+Goal terms (finding 4; PI ruling 18 of 2026-11-11 on D13's "0-1 gap closed scale"). Constants:
+GOAL_BAND, UNCERTAINTY_DENOM_TOL, CORRECTION_DENOM_REL_TOL, CLIP_GOAL_TERMS, CLIP_RANGE.
+CLIP_GOAL_TERMS True (default, the ruling): each goal term is clipped to CLIP_RANGE = [0, 1] INSIDE
+THE COMPOSITE only. The per-goal veto ("no single goal drops by more than 2x that goal's own seed
+spread") and every seed spread a veto uses are computed on the RAW terms. The raw out-of-band check
+(GOAL_BAND) does not escalate in this mode: clipping is the PI's answer to it. Agent call (the ruling
+leaves it open): the composite's seed spread, the bar of condition 1 of D13, is the spread of the
+clipped composite, because it measures the noise of the quantity being compared. With
+CLIP_GOAL_TERMS False (the pre-ruling mode, kept for tests and reanalysis) the composite uses the raw
+terms and a term outside GOAL_BAND escalates with the term and its value. In both modes a term whose
 denominator is under its tolerance escalates: the marginal-NB PIT deviation (uncertainty) and
 (depth-only CRPS - floor CRPS) / depth-only CRPS, the smallest over scorable assays (correction);
 score.py writes both under `selection.denominators`.
@@ -90,9 +104,12 @@ NOT_APPLICABLE_BY_CONSTRUCTION) and both arms with >= 3 done seeds, and rungs 1 
 least one such comparison. Condition 2: the final design (`--final`, default `<runs>/final`, >= 3
 seeds) beats the strongest training-free baseline (marginal_nb, position_average,
 depth_only_scaling: the highest defined value of each goal) on EACH goal by more than 2x the final
-design's seed spread of that goal; first on validation, then once on blind. States per split:
-PASS; FAIL (a defined margin is <= 2x the spread; the run stops); ESCALATE (a lead metric is
-undefined, or a term is out of band); REFUSED (scores not comparable, or a zero seed spread);
+design's seed spread of that goal; first on validation, then once on blind. Condition 2 compares
+goal by goal on the RAW terms (final design and baselines), never clipped: a goal term above 1 or
+below 0 against a baseline is information, not noise. The clipped values are printed beside them.
+States per split: PASS; FAIL (a defined margin is <= 2x the spread; the run stops); ESCALATE (a lead
+metric is undefined, a denominator is under its tolerance, or, only with CLIP_GOAL_TERMS False, a
+term is out of band); REFUSED (scores not comparable, or a zero seed spread);
 MISSING (not scored yet). Condition 2 overall: FAIL if either split fails, else the validation state
 unless it passed, then PASS, or PENDING while the blind pass is missing.
 
@@ -129,7 +146,7 @@ PI_RE = re.compile(r"^PI_(CHALLENGER|INCUMBENT|CHALLENGER_AS_SIMPLER)$")
 ARM_RE = re.compile(r"^rung([1-6])_([a-z0-9][a-z0-9_]*)$")
 SETTLEMENT_COLUMNS = ("comparison", "incumbent", "challenger", "simpler", "composite_delta",
                       "seed_spread", "per_goal_deltas", "per_goal_spreads", "copy_leak", "verdict",
-                      "time")
+                      "time", "clip_goal_terms", "goal_terms_raw", "goal_terms_clipped")
 LADDER_KEYS = ("name", "incumbent", "challenger", "simpler", "d14_condition_1", "verdict",
                "notepad_ref")
 SEED_RE = re.compile(r"^seed(\d+)$")
@@ -142,10 +159,11 @@ EXPECT_REGIME = "leave_one_assay_out"
 EXPECT_SPACE = "counts_log1p"
 EXPECT_NOISE_FLOOR = "pseudoreplicate_halves"
 
-# Goal terms (finding 4). PI question pending: does "0-1 gap closed scale" mean clipping?
-CLIP_GOAL_TERMS = False            # the PI's answer flips this one line
+# Goal terms (finding 4). PI ruling 18 (2026-11-11): clip each term to [0, 1] inside the composite;
+# the per-goal veto uses raw terms; a near-zero denominator still escalates.
+CLIP_GOAL_TERMS = True
 CLIP_RANGE = (0.0, 1.0)
-GOAL_BAND = (-1.0, 1.5)            # escalate outside this band when not clipping
+GOAL_BAND = (-1.0, 1.5)            # escalate outside this band only when not clipping
 UNCERTAINTY_DENOM_TOL = 0.005      # marginal-NB PIT deviation (mean |F_bar(u) - u|) below this
 CORRECTION_DENOM_REL_TOL = 0.01    # (depth-only CRPS - floor CRPS) / depth-only CRPS below this
 DENOM_KEYS = {"uncertainty": ("uncertainty_marginal_pit_deviation", UNCERTAINTY_DENOM_TOL),
@@ -242,14 +260,20 @@ def check_comparable(seeds: list[dict], split: str = "val") -> None:
                       + (f"; ... {len(bad) - 6} more" if len(bad) > 6 else ""))
 
 
+def _clip(v):
+    return None if v is None else min(max(v, CLIP_RANGE[0]), CLIP_RANGE[1])
+
+
 def screen_terms(seeds: list[dict], clip: bool | None = None) -> tuple[list[tuple], list[dict]]:
-    """(problems [(goal, message)], seeds) after the goal-term checks of finding 4. Undefined terms
-    are left for the caller. With clipping the returned seeds carry clipped goals and a recomputed
-    composite."""
+    """(problems [(goal, message)], seeds) after the goal-term checks of finding 4 and ruling 18.
+    Undefined terms are left for the caller. Every returned seed carries `raw_goals` (as scored),
+    `clipped_goals` (each term clipped to CLIP_RANGE), `goals` (the clipped terms with clipping,
+    else the raw ones) and `composite` recomputed from `goals`."""
     clip = CLIP_GOAL_TERMS if clip is None else clip
     problems, out = [], []
     for s in seeds:
-        g = dict(s["goals"])
+        raw = dict(s.get("raw_goals", s["goals"]))
+        g = dict(raw)
         for k, (key, tol) in DENOM_KEYS.items():
             if g[k] is None:
                 continue
@@ -258,16 +282,22 @@ def screen_terms(seeds: list[dict], clip: bool | None = None) -> tuple[list[tupl
                 problems.append((k, f"{s['path']}: {k} denominator ({key}) not recorded"))
             elif d < tol:
                 problems.append((k, f"{s['path']}: {k} denominator {key} = {d:.4g} < tolerance {tol:g}"))
+        clipped = {k: _clip(raw[k]) for k in GOALS}
         for k in GOALS:
             if g[k] is None:
                 continue
             if clip:
-                g[k] = min(max(g[k], CLIP_RANGE[0]), CLIP_RANGE[1])
+                g[k] = clipped[k]
             elif not GOAL_BAND[0] <= g[k] <= GOAL_BAND[1]:
                 problems.append((k, f"{s['path']}: {k} term = {g[k]:.6g} outside the sanity band "
                                     f"[{GOAL_BAND[0]:g}, {GOAL_BAND[1]:g}]"))
-        out.append(dict(s, goals=g, composite=_composite(g)))
+        out.append(dict(s, raw_goals=raw, clipped_goals=clipped, goals=g, composite=_composite(g)))
     return problems, out
+
+
+def _terms_by_side(inc: list[dict], ch: list[dict], key: str) -> dict:
+    return {side: {k: [s[key][k] for s in arm] for k in GOALS}
+            for side, arm in (("incumbent", inc), ("challenger", ch))}
 
 
 def spread(vals) -> float:
@@ -301,7 +331,13 @@ def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None =
     if len(inc) < MIN_SEEDS or len(ch) < MIN_SEEDS:
         raise Refused(f"seeds: incumbent {len(inc)}, challenger {len(ch)}; D13 needs at least {MIN_SEEDS}")
     check_comparable(inc + ch, "val")
-    out = {"composite_delta": None, "seed_spread": None, "per_goal_deltas": {}, "per_goal_spreads": {}}
+    clip = CLIP_GOAL_TERMS if clip is None else clip
+    out = {"composite_delta": None, "seed_spread": None, "per_goal_deltas": {}, "per_goal_spreads": {},
+           "clip_goal_terms": bool(clip)}
+    _, si = screen_terms(inc, clip)          # the terms as scored and clipped, for the record
+    _, sc = screen_terms(ch, clip)
+    out["goal_terms_raw"] = _terms_by_side(si, sc, "raw_goals")
+    out["goal_terms_clipped"] = _terms_by_side(si, sc, "clipped_goals")
     gi, gc = gate_status(inc), gate_status(ch)
     out["copy_leak"] = f"incumbent={gi};challenger={gc}"
     if gi == "fail" and gc == "fail":
@@ -324,15 +360,17 @@ def decide(inc: list[dict], ch: list[dict], simpler: str, *, clip: bool | None =
     if p_i or p_c:
         probs = [m for _, m in p_i + p_c]
         return dict(out, verdict="RULE_NOT_APPLICABLE_ASK_PI",
-                    reason="goal term outside the D13 gap-closed scale (PI ruling pending): "
-                           + "; ".join(probs[:6]))
+                    reason="goal term not usable on the D13 gap-closed scale: " + "; ".join(probs[:6]))
     if gi == "fail":
         return dict(out, verdict="CHALLENGER", reason="the incumbent fails the copy-leak gate (out)")
+    # composite (clipped terms while clipping): its delta and its seed spread (agent call)
     ci, cc = [s["composite"] for s in inc], [s["composite"] for s in ch]
     d = _mean(cc) - _mean(ci)
     sp = max(spread(ci), spread(cc))
-    gd = {k: _mean([s["goals"][k] for s in ch]) - _mean([s["goals"][k] for s in inc]) for k in GOALS}
-    gs = {k: max(spread([s["goals"][k] for s in inc]), spread([s["goals"][k] for s in ch]))
+    # per-goal veto: raw terms, raw seed spreads (ruling 18)
+    gd = {k: _mean([s["raw_goals"][k] for s in ch]) - _mean([s["raw_goals"][k] for s in inc])
+          for k in GOALS}
+    gs = {k: max(spread([s["raw_goals"][k] for s in inc]), spread([s["raw_goals"][k] for s in ch]))
           for k in GOALS}
     zero = (["composite"] if sp == 0 else []) + [k for k in GOALS if gs[k] == 0]
     if zero:
@@ -393,6 +431,14 @@ def append_settlement(path: Path, row: dict) -> None:
         w.writerow(row)
 
 
+def _fmt_terms(x) -> str:
+    if not x:
+        return ""
+    return json.dumps({side: {k: [None if v is None else round(v, 6) for v in vals]
+                              for k, vals in goals.items()} for side, goals in x.items()},
+                      sort_keys=True, separators=(",", ":"))
+
+
 def _fmt(x):
     if isinstance(x, dict):
         return json.dumps({k: (None if v is None else round(v, 6)) for k, v in x.items()},
@@ -419,7 +465,10 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
            "simpler": simpler, "composite_delta": _fmt(res["composite_delta"]),
            "seed_spread": _fmt(res["seed_spread"]), "per_goal_deltas": _fmt(res["per_goal_deltas"]),
            "per_goal_spreads": _fmt(res["per_goal_spreads"]), "copy_leak": res["copy_leak"],
-           "verdict": res["verdict"], "time": _utc()}
+           "verdict": res["verdict"], "time": _utc(),
+           "clip_goal_terms": str(res["clip_goal_terms"]).lower(),
+           "goal_terms_raw": _fmt_terms(res.get("goal_terms_raw")),
+           "goal_terms_clipped": _fmt_terms(res.get("goal_terms_clipped"))}
     append_settlement(Path(settlements) if settlements else ch_dir.parent / "settlements.tsv", row)
     res["comparison"] = name
     return res
@@ -447,14 +496,18 @@ def table(runs, prefix: str = "") -> list[dict]:
         for d in seed_dirs(arm):
             st = seed_state(d)
             comp, cl, flag = None, None, None
+            raw = clipped = dict.fromkeys(GOALS)
             if (d / "scores.json").is_file():
-                s = load_seed(d / "scores.json")
+                s = screen_terms([load_seed(d / "scores.json")])[1][0]
                 g = gate_status([s])            # the gate as select_rule applies it (old scores too)
                 comp, flag = s["composite"], s["copy_gain_flag"]
+                raw, clipped = s["raw_goals"], s["clipped_goals"]
                 cl = {"pass": True, "fail": False}.get(g, g)
             rows.append({"arm": arm.name, "seed": int(SEED_RE.match(d.name).group(1)), "state": st,
-                         "composite": comp, "copy_leak_pass": cl,
-                         "same_view_copy_gain_flag": flag})
+                         "composite": comp,
+                         **{f"{k}_raw": raw[k] for k in GOALS},
+                         **{f"{k}_clipped": clipped[k] for k in GOALS},
+                         "copy_leak_pass": cl, "same_view_copy_gain_flag": flag})
     return rows
 
 
@@ -594,8 +647,8 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
     p_f, seeds = screen_terms(seeds, clip)
     p_b, bl = screen_terms(list(base.values()), clip)
     base = dict(zip(base, bl))
-    for g in GOALS:
-        vals = [s["goals"][g] for s in seeds]
+    for g in GOALS:            # raw terms, goal by goal (ruling 18: a term outside [0, 1] is information)
+        vals = [s["raw_goals"][g] for s in seeds]
         if any(v is None for v in vals):
             states.append("ESCALATE")
             lines.append(f"  {g}: the final design's lead metric is undefined; ESCALATE")
@@ -613,7 +666,7 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
             continue
         best, best_name = None, ""
         for b, s in base.items():
-            v = s["goals"][g]
+            v = s["raw_goals"][g]
             if v is not None and (best is None or v > best):
                 best, best_name = v, b
         if best is None:
@@ -623,8 +676,11 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
         margin = _mean(vals) - best
         good = margin > BAR * sp
         states.append("PASS" if good else "FAIL")
-        lines.append(f"  {g}: final {_mean(vals):.4f} vs {best_name} {best:.4f}: margin {margin:+.4f}, "
-                     f"2 x seed spread {BAR * sp:.4f} -> {'beats' if good else 'does not beat'}")
+        cf = _mean([s["clipped_goals"][g] for s in seeds])
+        cb = base[best_name]["clipped_goals"][g]
+        lines.append(f"  {g}: final {_mean(vals):.4f} vs {best_name} {best:.4f} (raw): margin "
+                     f"{margin:+.4f}, 2 x seed spread {BAR * sp:.4f} -> "
+                     f"{'beats' if good else 'does not beat'}; clipped {cf:.4f} vs {cb:.4f}")
     for st in ("REFUSED", "FAIL", "ESCALATE"):
         if st in states:
             return st, lines
@@ -713,11 +769,14 @@ def main(argv=None) -> int:
             print(f"ESCALATE: {res['reason']}")
         return 0
     if a.cmd == "table":
-        print("arm\tseed\tstate\tcomposite\tcopy_leak_pass\tsame_view_copy_gain_flag")
+        terms = [f"{k}_{v}" for v in ("raw", "clipped") for k in GOALS]
+        print("\t".join(["arm", "seed", "state", "composite", *terms, "copy_leak_pass",
+                         "same_view_copy_gain_flag"]))
+        f = lambda x: "" if x is None else f"{x:.6g}"          # noqa: E731
         for row in table(a.runs, a.prefix):
-            comp = "" if row["composite"] is None else f"{row['composite']:.6g}"
-            print(f"{row['arm']}\t{row['seed']}\t{row['state']}\t{comp}\t{row['copy_leak_pass']}"
-                  f"\t{row['same_view_copy_gain_flag']}")
+            print("\t".join([row["arm"], str(row["seed"]), row["state"], f(row["composite"]),
+                             *(f(row[t]) for t in terms), str(row["copy_leak_pass"]),
+                             str(row["same_view_copy_gain_flag"])]))
         return 0
     if a.cmd == "check-rung":
         missing = check_rung(a.runs, a.rung, a.ladder)

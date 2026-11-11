@@ -163,7 +163,8 @@ def test_atac_signal_rises_with_the_predicted_count_at_a_peak():
 def test_dnase_route_is_hotspot2_normalized_density():
     mu = np.zeros(40)
     mu[20] = 60.0                                      # 60 * 25 / 60 = 25 tags in bin 20
-    sig, src = S.signal_track(mu, 3.0, "accessibility_dnase", None, DNASE_COV)
+    sig, src = S.signal_track(mu, 3.0, "accessibility_dnase", None, DNASE_COV,
+                              dnase_route="hotspot2_density")
     assert src == "hotspot2_density"
     per_m = 1e6 / 4.0e7
     want = np.zeros(40)
@@ -171,12 +172,14 @@ def test_dnase_route_is_hotspot2_normalized_density():
     want[18:23] = 25 * per_m
     assert np.allclose(sig, want, rtol=1e-6)
     # a flat track: the window holds exactly 150 bp of tags
-    flat, _ = S.signal_track(np.full(40, 6.0), 3.0, "DNase-seq", None, DNASE_COV)
+    flat, _ = S.signal_track(np.full(40, 6.0), 3.0, "DNase-seq", None, DNASE_COV,
+                             dnase_route="hotspot2_density")
     assert flat[20] == pytest.approx(6.0 * 25 / 60 * 6 * per_m, rel=1e-6)
 
 
 def test_every_label_is_one_of_the_four():
-    outs = [S.signal_track(np.full(30, 2.0), 3.0, "DNase-seq", None, DNASE_COV)[1],
+    outs = [S.signal_track(np.full(30, 2.0), 3.0, "DNase-seq", None, DNASE_COV,
+                           dnase_route="hotspot2_density")[1],
             S.signal_track(np.full(30, 2.0), 3.0, "ATAC-seq", None, ATAC_COV)[1],
             S.signal_track(np.full(30, 2.0), 3.0, "H3K4me3", np.ones(30), CHIP_COV)[1],
             S.signal_track(np.full(30, 2.0), 3.0, "H3K4me3", np.ones(30),
@@ -258,7 +261,8 @@ def test_signal_from_nb_chip_predicted_control_when_no_observed_one():
 @pytest.mark.parametrize("route,label", [("hotspot2_density", "hotspot2_density"),
                                          ("macs2_no_control", "local_background")])
 def test_dnase_route_is_one_named_argument(route, label):
-    """The PI asked whether EIC scoring should use the MACS2 route for DNase-seq: one argument."""
+    """PI ruling 19: EIC scoring uses the MACS2 no-control route for DNase-seq (the default);
+    hotspot2 density stays selectable by the one argument."""
     n, mu = _nb(2)
     row = _row("d", "DNase-seq", "accessibility_dnase", depth="4e7")
     sig, src = S.signal_from_nb(n, mu, row, ds=_FakeDS({"d": row}, {}), regions=REGIONS, rb=RB,
@@ -270,7 +274,10 @@ def test_dnase_route_is_one_named_argument(route, label):
     if route == "macs2_no_control":           # the ATAC rule on DNase counts
         atac, _ = S.signal_track(mu[:RB], n[:RB], "accessibility_atac", None, DNASE_COV)
         np.testing.assert_array_equal(one, atac)
-    assert S.DNASE_ROUTE_DEFAULT == "hotspot2_density"
+    assert S.DNASE_ROUTE_DEFAULT == "macs2_no_control"
+    default, _ = S.signal_from_nb(n, mu, row, ds=_FakeDS({"d": row}, {}), regions=REGIONS, rb=RB)
+    if route == "macs2_no_control":
+        np.testing.assert_array_equal(default, sig)
 
 
 def test_signal_from_nb_refuses_bad_shapes_and_routes():
@@ -283,3 +290,63 @@ def test_signal_from_nb_refuses_bad_shapes_and_routes():
     with pytest.raises(ValueError, match="control"):
         S.signal_from_nb(n, mu, _row("c", "chipseq-control", "control"), ds=_FakeDS({}, {}),
                          regions=REGIONS, rb=RB)
+
+
+# ------------------------------------------------------------- plug-in beside expectation (ruling 20)
+def test_plug_in_is_the_score_of_the_nb_mean():
+    lam = 2.5
+    for mu, scale in ((3.3, 1.0), (40.0, 1.5), (0.4, 2.0)):
+        got = S.plug_in_neglog10p(np.array([mu]), scale, lam)[0]
+        assert got == pytest.approx(_mp_neglog10_sf(np.floor(mu * scale), lam)[0], rel=1e-9)
+
+
+def test_point_mass_nb_expectation_equals_plug_in():
+    """A vanishing mean puts all NB mass on k = 0, a point mass: the two modes agree exactly in
+    value. A huge size parameter alone gives the Poisson limit, not a point mass; at a large mean
+    its relative spread 1/sqrt(mu) is small and the two agree to a relative 1e-3."""
+    lam = np.array([0.5, 2.0, 7.3])
+    mu = np.full(3, 1e-12)
+    np.testing.assert_allclose(S.nb_expected_neglog10p(mu, 1.0, 1.0, lam),
+                               S.plug_in_neglog10p(mu, 1.0, lam), rtol=1e-12)
+    mu = np.array([4000.0])
+    e = S.nb_expected_neglog10p(mu, 1e12, 1.0, 100.0)[0]
+    p = S.plug_in_neglog10p(mu, 1.0, 100.0)[0]
+    assert e == pytest.approx(p, rel=1e-3)
+    e_od = S.nb_expected_neglog10p(mu, 2.0, 1.0, 100.0)[0]          # over-dispersed, same mean
+    assert abs(e_od - p) / p > 1e-2
+
+
+@pytest.mark.parametrize("mu,n,scale,lam", [(20.0, 2.0, 1.0, 3.0), (6.0, 0.8, 1.5, 4.0),
+                                            (3.0, 1.5, 1.0, 6.0)])
+def test_overdispersed_nb_differs_in_the_direction_of_jensen(mu, n, scale, lam):
+    """The expected sign of E[s(K)] - s(mu) comes from an independent sum (50-digit tail), not from
+    an assumed convexity of the score on the tested range."""
+    f = lambda k: _mp_neglog10_sf(np.floor(k * scale), lam)              # noqa: E731
+    want_e = _nb_sample_mean(mu, n, f)
+    want_p = float(f(np.array([mu]))[0])
+    sign = np.sign(want_e - want_p)
+    assert sign != 0
+    e = S.nb_expected_neglog10p(np.array([mu]), n, scale, lam)[0]
+    p = S.plug_in_neglog10p(np.array([mu]), scale, lam)[0]
+    assert np.sign(e - p) == sign
+    assert e - p == pytest.approx(want_e - want_p, rel=1e-5)
+
+
+def test_signal_track_and_adapter_take_the_mode():
+    n, mu = _nb(3)
+    for assay, cls, cov, ctl in (("ATAC-seq", "accessibility_atac", ATAC_COV, None),
+                                 ("H3K4me3", "narrow_histone", CHIP_COV, np.ones(RB))):
+        e, src_e = S.signal_track(mu[:RB], n[:RB], cls, ctl, cov)
+        p, src_p = S.signal_track(mu[:RB], n[:RB], cls, ctl, cov, mode="plug_in")
+        assert src_e == src_p and not np.array_equal(e, p)
+    row = _row("d", "DNase-seq", "accessibility_dnase", depth="4e7")
+    kw = dict(ds=_FakeDS({"d": row}, {}), regions=REGIONS, rb=RB)
+    p, _ = S.signal_from_nb(n, mu, row, mode="plug_in", **kw)
+    want, _ = S.signal_track(mu[:RB], n[:RB], "accessibility_dnase", None, DNASE_COV, mode="plug_in")
+    np.testing.assert_array_equal(p[:RB], want)
+    # hotspot2 density is linear in the counts: both modes give the density of the mean
+    h_e, _ = S.signal_from_nb(n, mu, row, dnase_route="hotspot2_density", **kw)
+    h_p, _ = S.signal_from_nb(n, mu, row, dnase_route="hotspot2_density", mode="plug_in", **kw)
+    np.testing.assert_array_equal(h_e, h_p)
+    with pytest.raises(ValueError, match="mode"):
+        S.signal_track(mu[:RB], n[:RB], "ATAC-seq", None, ATAC_COV, mode="median")

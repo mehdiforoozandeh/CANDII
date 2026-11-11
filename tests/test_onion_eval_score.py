@@ -149,7 +149,7 @@ def test_every_pinned_key_and_level(model_run, env):
     s = _strict(model_run / "scores.json")
     assert set(PINNED) <= set(s)
     for k in ("specific_variance_recovered_above_noise", "r_spec"):
-        assert set(s[k]) == {"counts_log1p", "signal_arcsinh"}
+        assert set(s[k]) == {"counts_log1p", "signal_arcsinh", "signal_arcsinh_plug_in"}
     h1 = s["specific_variance_recovered_above_noise"]["counts_log1p"]
     assert set(h1) >= {"macro", "per_assay", "ci", "per_target"}
     loao = [x["target"] for x in env["ev"]["imputation_targets"]
@@ -166,6 +166,17 @@ def test_every_pinned_key_and_level(model_run, env):
             assert v["level"] != h1["per_target"][tg]["level"]         # finding 15
         else:
             assert v["lambda_source"] is None and "signal.h5" in v["lambda_reason"]
+    # ruling 20: the plug-in variant (score of the NB mean) beside the headline expectation
+    pi = s["specific_variance_recovered_above_noise"]["signal_arcsinh_plug_in"]
+    assert sig["signal_mode"] == "expectation" and pi["signal_mode"] == "plug_in"
+    assert pi["per_assay"]["H3K4me3"] is not None and pi["macro"] is None
+    for tg, v in pi["per_target"].items():
+        if v["assay"] == "H3K4me3":                # same truth and floor, another prediction
+            assert np.isfinite(v["level"]) and v["N"] == sig["per_target"][tg]["N"]
+            assert v["level"] != sig["per_target"][tg]["level"]
+    assert set(s["r_spec"]["signal_arcsinh_plug_in"]) >= {"macro", "per_assay", "reason"}
+    # ruling 19: the DNase-seq route defaults to MACS2 without control
+    assert sig["dnase_route"] == s["dnase_route"] == "macs2_no_control"
     assert set(s["copy_leak"]) >= set(("hidden_input_max_abs_change", "unavailable_input_max_abs_change",
                                        "same_view_copy_gain", "copy_leak_pass"))
     assert s["copy_leak"]["hidden_input_max_abs_change"] == 0.0
