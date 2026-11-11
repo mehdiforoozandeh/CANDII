@@ -57,9 +57,46 @@ the sampler's own keys in `DEFAULTS`.
   scramble_covariates      NOT applied here: the train loop must call
                            `covariates.scramble_covariates` on c_in and c_out of each batch.
 
+Dataset arms (pinned interface E, chunk A2). Each is off at its default, and the defaults give
+byte-identical batches to the code before the arms (tested on the synthetic tables).
+  input_depth = fixed      every input (C side only) deeper than `FIXED_BASE_LOG2_DEPTH` of its
+                           class is binomially thinned to it, seeded by (measurement, file,
+                           chromosome, start bin); c_in column 0 states the thinned depth. An
+                           input is never made deeper. Targets, C' and kind are unchanged (a
+                           same-view target keeps its native counts; its loss is on hidden bins
+                           only, where the input holds nothing). Applies in every mode.
+  mask_scheme              which tracks of a training window are masked whole (train mode only):
+                           uniform    (default) p ~ U(mask_prob_range), each track masked with p
+                           dirichlet  the visible share s ~ Dirichlet(alpha, alpha)[0]
+                                      (`mask_dirichlet_alpha`, default 1), round(s * n) visible
+                           panel      the masked set is the set of this cell's training assays
+                                      that another training cell (drawn uniformly) lacks
+                           Each keeps at least one input when the cell has two or more tracks.
+  bin_mask_shape = span    the same-view bin mask of a training window is a union of spans of
+                           `bin_mask_span_bins` bins (default 32) covering about `bin_mask_frac`
+                           of the window; validation and blind items keep the random mask, so
+                           the copy-leak gain stays comparable across arms.
+  train_on_validation      mode train also reads `in_eic = val` rows (the EIC model, PI ruling
+                           21); refused with RoleError unless `config["final_model"]` is true.
+                           Blind rows stay unreadable in train mode. The leave-one-cell-out
+                           average then also sums the other cells' validation tracks.
+  dna_embedding_h5         adds `x_dna_emb` float32 [B, L, d_emb]: a directory of
+                           `<chrom>.h5` files with dataset `emb` (the chunk A5 layout), or one
+                           h5 file with a dataset (or a group with `emb`) per chromosome
+  dna_shift_bp             int, default 0: x_dna (and x_dna_emb, by dna_shift_bp // 25 bins) is
+                           read from the same chromosome shifted by this many bases, wrapping at
+                           the chromosome end (the wrong-locus control)
+  qc_table                 a TSV `measurement_id` + the 7 QC columns that overrides the QC
+                           columns of the rows it lists (chunk QCb writes it). It reaches C only
+                           through `qc_on_input`, never C'.
+
 Leave-one-cell-out average (`average_input`): with `config["average_h5"]` (built once by
 `build_average_h5`) it reads one per-track sum of training-cell rates and subtracts the window's
-own cell; without it, it reads every other training cell directly (small tables only).
+own cell; without it, it reads every other training cell directly (small tables only). The
+window's own cell, and so every target track of the window, never enters its average. An
+`average_h5` records the measurements it summed (`measurement_ids`); a file that summed a row
+this dataset may not average over (a validation row without `train_on_validation`) raises
+RoleError.
 
 `counts_path` forms:
   h5:<abs path to counts.h5>           pr1.h5 / pr2.h5 are its siblings; writers should chunk
@@ -120,7 +157,15 @@ DEFAULTS = {"context_bins": 1024, "batch_size": 8, "mask_prob_range": (0.2, 0.8)
             "same_view_prob": 0.5, "bin_mask_frac": 0.25, "region_bins": 16384,
             "min_valid_frac": 0.5, "exclude_chroms": ("chrY", "chrM"), "max_open_files": 256,
             "control_input": True, "predict_control": True, "two_step": False,
-            "base_depth": "native"}
+            "base_depth": "native",
+            # dataset arms (chunk A2); every default leaves the batches unchanged
+            "input_depth": "native", "mask_scheme": "uniform", "mask_dirichlet_alpha": 1.0,
+            "bin_mask_shape": "random", "bin_mask_span_bins": 32, "train_on_validation": False,
+            "final_model": False, "dna_shift_bp": 0}
+MASK_SCHEMES = ("uniform", "dirichlet", "panel")
+BIN_MASK_SHAPES = ("random", "span")
+INPUT_DEPTHS = ("native", "fixed")
+QC_TABLE_COLUMNS = ("measurement_id",) + C.QC_COLUMNS
 #: D15 arm "fixed reference depth": log2 reads of the base per assay class (agent decision)
 FIXED_BASE_LOG2_DEPTH = {"accessibility_dnase": 23.0, "accessibility_atac": 23.0,
                          "broad_histone": 23.0, "narrow_histone": 23.0, "control": 23.0}
@@ -220,6 +265,17 @@ class OnionDataset(IterableDataset):
             raise RoleError("mode = blind needs config['allow_blind'] = true (gate G4)")
         if self.config["base_depth"] not in ("native", "fixed"):
             raise ValueError(f"base_depth {self.config['base_depth']!r} not in (native, fixed)")
+        for key, allowed in (("input_depth", INPUT_DEPTHS), ("mask_scheme", MASK_SCHEMES),
+                             ("bin_mask_shape", BIN_MASK_SHAPES)):
+            if self.config[key] not in allowed:
+                raise ValueError(f"{key} {self.config[key]!r} not in {allowed}")
+        self.train_on_validation = bool(self.config["train_on_validation"])
+        if self.train_on_validation and not self.config["final_model"]:
+            raise RoleError("train_on_validation needs config['final_model'] = true (PI ruling "
+                            "21: only the EIC model trains on validation tracks)")
+        #: the roles that training reads (and that the average sums over)
+        self.train_roles = ("train", "val") if self.train_on_validation else ("train",)
+        self.dna_shift_bp = int(self.config["dna_shift_bp"])
         self.mode, self.seed = mode, int(seed)
         self.tables_dir = Path(tables_dir)
         self.L = int(self.config["context_bins"])
@@ -238,13 +294,17 @@ class OnionDataset(IterableDataset):
             if not r["assay_class"]:
                 r["assay_class"] = C.assay_class(r["assay"])
             self.rows[r["measurement_id"]] = r
+        if self.config.get("qc_table"):
+            self._apply_qc_table(self.config["qc_table"])
         wp = self.tables_dir / "withheld.tsv"
         self.withheld = Withheld(read_tsv(wp, WITHHELD_COLUMNS) if wp.is_file() else [])
         self.encoder = CovariateEncoder(load_covariates_json(self.tables_dir / "covariates.json"))
 
-        self.allowed = {m for m, r in self.rows.items() if r["in_eic"] in ROLES[mode]}
-        #: training tracks: (cell, assay) -> sorted measurement ids (train rows only)
-        self.train_tracks = self.group_tracks(("train",))
+        roles = self.train_roles if mode == "train" else ROLES[mode]
+        self.allowed = {m for m, r in self.rows.items() if r["in_eic"] in roles}
+        #: training tracks: (cell, assay) -> sorted measurement ids (train rows, plus val rows
+        #: under train_on_validation)
+        self.train_tracks = self.group_tracks(self.train_roles)
         self.train_cells = sorted({c for c, _ in self.train_tracks})
         #: the training-track base view of each (cell, assay), for the average
         self.train_base = {k: min(v, key=lambda m: (view_of(self.rows[m])[0] != "base",
@@ -268,6 +328,24 @@ class OnionDataset(IterableDataset):
         self._stores: dict = {}
         self._pid = os.getpid()
         self._rng = np.random.default_rng([self.seed, 0])
+        emb = self.config.get("dna_embedding_h5")
+        self.dna_emb_path = Path(emb) if emb else None
+        if self.dna_emb_path is not None and not self.dna_emb_path.exists():
+            raise FileNotFoundError(f"dna_embedding_h5 {self.dna_emb_path}: missing")
+
+    def _apply_qc_table(self, path) -> None:
+        """Override the 7 QC columns of every row that the side table lists (empty cells too:
+        the side table is the source for the rows it holds). Rows it does not list keep the
+        values of measurements.tsv. Ids that measurements.tsv lacks are ignored and counted."""
+        self.qc_table_rows, self.qc_table_unknown = 0, 0
+        for r in read_tsv(path, QC_TABLE_COLUMNS):
+            row = self.rows.get(r["measurement_id"])
+            if row is None:
+                self.qc_table_unknown += 1
+                continue
+            for c in C.QC_COLUMNS:
+                row[c] = (r.get(c) or "").strip()
+            self.qc_table_rows += 1
 
     def group_tracks(self, roles: tuple) -> dict:
         """(cell, assay) -> sorted measurement ids of the rows whose `in_eic` is in `roles`."""
@@ -366,6 +444,8 @@ class OnionDataset(IterableDataset):
 
     def dna(self, chrom: str, start: int, L: int | None = None) -> np.ndarray:
         L = self.L if L is None else int(L)
+        if self.dna_shift_bp:
+            return self._dna_shifted(chrom, start, L)
         out = np.full(L * C.RES, 4, dtype=np.uint8)
         end_bp = min((start + L) * C.RES, self.genome.chrom_sizes[chrom]) \
             if self.genome.has_dna else 0
@@ -373,6 +453,51 @@ class OnionDataset(IterableDataset):
             self._fresh()
             v = self.genome.dna(chrom, start * C.RES, end_bp)
             out[: v.shape[0]] = v
+        return out
+
+    def _dna_shifted(self, chrom: str, start: int, L: int) -> np.ndarray:
+        """The wrong-locus control: base i of the window is base (start*25 + i + shift) mod the
+        chromosome length of the same chromosome."""
+        out = np.full(L * C.RES, 4, dtype=np.uint8)
+        if not self.genome.has_dna:
+            return out
+        self._fresh()
+        size = int(self.genome.chrom_sizes[chrom])
+        pos = (start * C.RES + self.dna_shift_bp) % size
+        k = 0
+        while k < out.shape[0]:
+            n = min(out.shape[0] - k, size - pos)
+            out[k:k + n] = self.genome.dna(chrom, pos, pos + n)
+            k += n
+            pos = 0
+        return out
+
+    def _emb_dataset(self, chrom: str):
+        p = self.dna_emb_path
+        if p.is_dir():
+            return self._h5file(p / f"{chrom}.h5")["emb"]
+        obj = self._h5file(p)[chrom]
+        return obj["emb"] if isinstance(obj, h5py.Group) else obj
+
+    def dna_emb(self, chrom: str, start: int, L: int | None = None) -> np.ndarray:
+        """float32 [L, d_emb] of the precomputed DNA embedding; 0 past the chromosome end.
+        Under `dna_shift_bp` the rows come from start + dna_shift_bp // 25, wrapping."""
+        L = self.L if L is None else int(L)
+        self._fresh()
+        ds = self._emb_dataset(chrom)
+        n, d = int(ds.shape[0]), int(ds.shape[1])
+        out = np.zeros((L, d), np.float32)
+        if not self.dna_shift_bp:
+            end = min(start + L, n)
+            if end > start:
+                out[: end - start] = ds[start:end]
+            return out
+        pos, k = (start + self.dna_shift_bp // C.RES) % n, 0
+        while k < L:
+            m = min(L - k, n - pos)
+            out[k:k + m] = ds[pos:pos + m]
+            k += m
+            pos = 0
         return out
 
     # ---------------------------------------------------------------- withheld
@@ -421,9 +546,7 @@ class OnionDataset(IterableDataset):
         chrom, start = self._draw_locus(rng)
         assays = sorted(a for c, a in self.train_tracks if c == cell)
         order = [assays[i] for i in rng.permutation(len(assays))]
-        lo, hi = self.config["mask_prob_range"]
-        p_mask = float(rng.uniform(lo, hi))
-        masked = {a for a in order if rng.random() < p_mask}
+        masked = self._masked_set(cell, order, rng)
         if len(assays) > 1 and len(masked) == len(assays):
             masked.discard(order[0])
         if len(assays) == 1:
@@ -439,6 +562,26 @@ class OnionDataset(IterableDataset):
                     entries.append((a, v_in, v_out, kind))
                     break
         return {"cell": cell, "chrom": chrom, "start_bin": start, "entries": entries}
+
+    def _masked_set(self, cell: str, order: list, rng) -> set:
+        """The tracks masked whole in one training window (`mask_scheme`). Only which of the
+        cell's training tracks are inputs changes; the candidate views stay training views."""
+        scheme = self.config["mask_scheme"]
+        if scheme == "uniform":
+            lo, hi = self.config["mask_prob_range"]
+            p_mask = float(rng.uniform(lo, hi))
+            return {a for a in order if rng.random() < p_mask}
+        if scheme == "dirichlet":
+            alpha = float(self.config["mask_dirichlet_alpha"])
+            share = float(rng.dirichlet([alpha, alpha])[0])
+            n_vis = int(round(share * len(order)))
+            return set(order[n_vis:])
+        # panel: copy the missing-assay pattern of another training cell
+        others = [c for c in self.train_cells if c != cell]
+        if not others:
+            return set()
+        donor = others[int(rng.integers(len(others)))]
+        return {a for a in order if (donor, a) not in self.train_tracks}
 
     def _candidates(self, masked: bool, views: list, rng) -> list:
         vs = [views[i] for i in rng.permutation(len(views))]
@@ -522,6 +665,8 @@ class OnionDataset(IterableDataset):
         c_in = np.zeros((C.A, self.K), np.float32)
         c_out = np.zeros((C.A, C.K_META), np.float32)
         m_in, m_out = [""] * C.A, [""] * C.A
+        fixed_in = self.config["input_depth"] == "fixed"
+        native_x: dict[int, np.ndarray] = {}
         two = bool(self.config.get("two_step"))
         if two:
             c_base = np.zeros((C.A, C.K_META), np.float32)
@@ -534,6 +679,16 @@ class OnionDataset(IterableDataset):
             m_in[t] = m
             x_counts[:, t] = self.read(m, chrom, start_bin, L, input_file)
             c_in[t] = self.encoder.c_in(r, self.qc_on_input, input_depth_scale)
+            if fixed_in:
+                ref = FIXED_BASE_LOG2_DEPTH[r["assay_class"]]
+                if c_in[t, C.LOG2_DEPTH_COL] > ref:
+                    native_x[t] = x_counts[:, t].copy()
+                    q = 2.0 ** (ref - float(c_in[t, C.LOG2_DEPTH_COL]))
+                    rng = np.random.default_rng(np.random.SeedSequence(
+                        [stable_hash(m), stable_hash(input_file), stable_hash(chrom),
+                         int(start_bin), 16]))
+                    x_counts[:, t] = thin_counts(x_counts[:, t], 1.0 / q, rng)
+                    c_in[t, C.LOG2_DEPTH_COL] = ref
         for m, r in zip(targets, rows_out):
             t = C.TRACK_INDEX[r["assay"]]
             if y_avail[t]:
@@ -543,8 +698,10 @@ class OnionDataset(IterableDataset):
             same = m_in[t] == m and target_file == input_file
             y_kind[t] = (C.KIND_IMPUTE if not m_in[t]
                          else C.KIND_SAME if same else C.KIND_CORRECT)
-            y_counts[:, t] = x_counts[:, t] if same else self.read(m, chrom, start_bin, L,
-                                                                   target_file)
+            if same:                       # a thinned input keeps its native target
+                y_counts[:, t] = native_x[t] if t in native_x else x_counts[:, t]
+            else:
+                y_counts[:, t] = self.read(m, chrom, start_bin, L, target_file)
             c_out[t] = self.encoder.c_out(r, target_depth_scale)
             if two:
                 c_base[t], y_base[:, t] = self._base_leg(m, chrom, start_bin, L)
@@ -563,6 +720,8 @@ class OnionDataset(IterableDataset):
         if two:
             win["c_base"] = torch.from_numpy(c_base)
             win["y_base"] = torch.from_numpy(y_base)
+        if self.dna_emb_path is not None:
+            win["x_dna_emb"] = torch.from_numpy(self.dna_emb(chrom, start_bin, L))
         if avg if avg is not None else self.config.get("average_input"):
             win["avg"] = torch.from_numpy(self.average(cell, chrom, start_bin, L))
         meta = {"cell": cell, "chrom": chrom, "start_bin": int(start_bin),
@@ -579,14 +738,29 @@ class OnionDataset(IterableDataset):
         bm = np.zeros((self.L, C.A), bool)
         for a, v_in, v_out, kind in plan["entries"]:
             if kind == C.KIND_SAME:
-                bm[:, C.TRACK_INDEX[a]] = self._bin_mask(rng)
+                bm[:, C.TRACK_INDEX[a]] = self._bin_mask(rng, self.config["bin_mask_shape"])
         return self.window(plan["chrom"], plan["start_bin"], inputs, targets, x_bin_mask=bm,
                            extra_meta={"kinds": {e[0]: int(e[3]) for e in plan["entries"]}})
 
-    def _bin_mask(self, rng) -> np.ndarray:
+    def _bin_mask(self, rng, shape: str = "random") -> np.ndarray:
+        if shape == "span":
+            return self._span_mask(rng)
         col = rng.random(self.L) < float(self.config["bin_mask_frac"])
         if not col.any():
             col[int(rng.integers(self.L))] = True
+        return col
+
+    def _span_mask(self, rng) -> np.ndarray:
+        """Union of spans of `bin_mask_span_bins` bins at uniform starts; the span count is
+        round(bin_mask_frac * L / span), at least 1, so about that fraction is hidden. At least
+        one bin stays visible."""
+        span = max(1, min(int(self.config["bin_mask_span_bins"]), self.L - 1))
+        k = max(1, int(round(float(self.config["bin_mask_frac"]) * self.L / span)))
+        col = np.zeros(self.L, bool)
+        for s in rng.integers(0, self.L - span + 1, size=k):
+            col[int(s):int(s) + span] = True
+        if col.all():
+            col[int(rng.integers(self.L))] = False
         return col
 
     # ---------------------------------------------------------------- average
@@ -609,9 +783,19 @@ class OnionDataset(IterableDataset):
         path = self.config.get("average_h5")
         if path:
             f = self._h5file(Path(path))
+            sources = set(self.train_base.values())
             for track, g in f.items():
                 t = C.TRACK_INDEX[track]
                 n = int(g.attrs["n_cells"])
+                own = self.train_base.get((cell, track))
+                if "measurement_ids" in g.attrs:
+                    summed = [str(x) for x in np.atleast_1d(g.attrs["measurement_ids"])]
+                    bad = sorted(set(summed) - sources)
+                    if bad:
+                        raise RoleError(f"{path}: track {track} sums {bad}, which this dataset "
+                                        f"may not average over (roles {self.train_roles})")
+                    mine = [m for m in summed if self.rows[m]["cell"] == cell]
+                    own = mine[0] if mine else None
                 if chrom not in g:
                     continue
                 ds = g[chrom]
@@ -619,7 +803,6 @@ class OnionDataset(IterableDataset):
                 end = min(start + L, ds.shape[0])
                 if end > start:
                     s[: end - start] = ds[start:end]
-                own = self.train_base.get((cell, track))
                 if own is not None:
                     rate = self._rate(own, chrom, start, L)
                     if rate is not None:
@@ -738,7 +921,9 @@ class OnionDataset(IterableDataset):
 def build_average_h5(tables_dir, out_path, config: dict | None = None) -> Path:
     """Write the per-track sum of training-cell rates (counts x 1e6 / depth_reads of each
     training cell's base view) per chromosome, float32, chunks of 4096 bins, with the number of
-    cells as the group attr `n_cells`. `OnionDataset` subtracts the window's own cell."""
+    cells as the group attr `n_cells` and the summed measurements as `measurement_ids`.
+    `OnionDataset` subtracts the window's own cell. The roles summed are those of
+    `config` (training tracks; also validation tracks under `train_on_validation`)."""
     cfg = dict(config or {})
     cfg.setdefault("context_bins", 1)
     ds = OnionDataset(tables_dir, "train", cfg)
@@ -752,6 +937,7 @@ def build_average_h5(tables_dir, out_path, config: dict | None = None) -> Path:
         for a, mids in per_track.items():
             g = f.create_group(a)
             g.attrs["n_cells"] = len(mids)
+            g.attrs["measurement_ids"] = np.asarray(mids, dtype=h5py.string_dtype())
             for chrom, nb in ds.n_bins.items():
                 s = np.zeros(nb, np.float64)
                 for k in range(0, nb, 1 << 20):
