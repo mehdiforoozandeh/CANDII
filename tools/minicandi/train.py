@@ -32,8 +32,10 @@ forward (`covariates.model_covariates`); neither this loop nor the dataset scram
 
 Schedule: AdamW (lr = `config["lr"]`, weight decay 0.01), linear warm-up over the first 5% of steps
 (at most 1000), cosine decay to 10% of lr at the last step; gradient norm clipped at 1.0. The loss
-is `contract.nb_nll` over `contract.loss_mask`. A non-finite loss stops the run with an error and
-leaves the last checkpoint in place.
+is `losses.total_loss(out, batch, config)` (config keys `loss`, `loss_weights`, and the base leg of
+`two_step`); without those keys it is `contract.nb_nll` over `contract.loss_mask`, bit for bit.
+Each log line carries the loss `parts`. A non-finite loss stops the run with an error and leaves
+the last checkpoint in place.
 
 Data workers. `--workers 0` (default) draws every training batch in this process from the sampler
 generator above. `--workers N` (N > 0) draws them in N DataLoader worker processes: batch k comes
@@ -44,7 +46,7 @@ Each worker opens its own h5 handles (`OnionDataset` drops inherited handles aft
 pickles without them under spawn). The two streams differ, so a resume refuses a switch between
 0 and N > 0 workers. Measured on Fir: 0.93 s per batch in-process against 0.081 s with 8 workers.
 
-`--val-every W` (windows, 0 = off) logs the NB loss over the first `--val-batches` batches of the
+`--val-every W` (windows, 0 = off) logs the NB loss (of the main output, whatever `loss` is) over the first `--val-batches` batches of the
 dataset in val mode (needs the tables' evalset.json); the batches are fixed for the whole run.
 """
 from __future__ import annotations
@@ -70,6 +72,8 @@ if str(_TOOLS) not in sys.path:
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import CountTransform  # noqa: E402
 from minicandi.dataset import OnionDataset, tables_sha256  # noqa: E402
+from minicandi.losses import check_config as check_loss_config  # noqa: E402
+from minicandi.losses import total_loss  # noqa: E402
 from minicandi.registry import CKPT_NAME, build_model  # noqa: E402
 
 DEFAULTS = {"context_bins": 1024, "batch_size": 8, "lr": 1e-3, "param_budget": 1.0e6,
@@ -137,24 +141,33 @@ def to_device(batch: dict, device) -> dict:
     return {k: (v.to(device) if torch.is_tensor(v) else v) for k, v in batch.items()}
 
 
-def step_loss(model, batch: dict) -> torch.Tensor:
+def step_loss(model, batch: dict, config: dict | None = None,
+              parts: dict | None = None) -> torch.Tensor:
+    """The training loss of one batch. With `config`, `losses.total_loss` (its parts go into
+    `parts` when given); without, the NB NLL of the main output over `contract.loss_mask`."""
     out = model(batch)
-    return C.nb_nll(out["n"], out["mu"], batch["y_counts"], C.loss_mask(batch))
+    if config is None:
+        return C.nb_nll(out["n"], out["mu"], batch["y_counts"], C.loss_mask(batch))
+    loss, p = total_loss(out, batch, config)
+    if parts is not None:
+        parts.update(p)
+    return loss
 
 
 def _devices(device) -> list:
     return [torch.device(device).index or 0] if torch.device(device).type == "cuda" else []
 
 
-def flops_per_window(model, batch: dict, device) -> tuple[float, float]:
-    """(training, forward) FLOPs per window on one batch; moves no RNG and leaves no gradient."""
+def flops_per_window(model, batch: dict, device, config: dict | None = None) -> tuple[float, float]:
+    """(training, forward) FLOPs per window on one batch (the loss of `config`); moves no RNG and
+    leaves no gradient."""
     B = batch["x_counts"].shape[0]
     with torch.random.fork_rng(devices=_devices(device)):
         with FlopCounterMode(display=False) as fc:
             out = model(batch)
         fwd = fc.get_total_flops()
         with FlopCounterMode(display=False) as fc:
-            loss = step_loss(model, batch)
+            loss = step_loss(model, batch, config)
             loss.backward()
         total = fc.get_total_flops()
     model.zero_grad(set_to_none=True)
@@ -204,6 +217,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
           log_every: int = 50, ckpt_minutes: float = 15.0, workers: int = 0) -> dict:
     """Train (or resume) one run; returns the run.json dict."""
     cfg = full_config(config)
+    check_loss_config(cfg)
     workers = int(workers)
     if workers < 0:
         raise ValueError(f"--workers {workers}: must be >= 0")
@@ -260,7 +274,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         step, windows, wall0, n_resumes = 0, 0, 0.0, 0
         probe = ds.batch(bs, np.random.default_rng([seed, 2]))
         model.train()
-        fpw, fpw_fwd = flops_per_window(model, to_device(probe, dev), dev)
+        fpw, fpw_fwd = flops_per_window(model, to_device(probe, dev), dev, cfg)
         if cfg.get("count_transform") == "pearson":
             prng = np.random.default_rng([seed, 3])
             set_pearson_stats(model, [ds.batch(bs, prng) for _ in range(PEARSON_BATCHES)])
@@ -324,7 +338,8 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
         batch = to_device(batch, dev)
         for g in opt.param_groups:
             g["lr"] = lr_at(step, total_steps, float(cfg["lr"]))
-        loss = step_loss(model, batch)
+        parts: dict = {}
+        loss = step_loss(model, batch, cfg, parts)
         if not torch.isfinite(loss):
             raise FloatingPointError(f"non-finite loss {loss.item()} at step {step}")
         opt.zero_grad(set_to_none=True)
@@ -338,7 +353,7 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
             rec = {"step": step, "windows_seen": windows, "training_flops": windows * fpw,
                    "loss": float(loss.item()), "grad_norm": gnorm,
                    "lr": opt.param_groups[0]["lr"],
-                   "wall_seconds": round(wall0 + time.time() - t0, 2)}
+                   "wall_seconds": round(wall0 + time.time() - t0, 2), "parts": parts}
             log.write(json.dumps(rec) + "\n")
             log.flush()
         if next_val is not None and windows >= next_val:

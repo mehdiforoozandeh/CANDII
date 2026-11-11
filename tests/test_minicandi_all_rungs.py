@@ -110,8 +110,9 @@ def test_the_shared_rule_is_identical_in_all_six_modules():
 def test_two_step_is_not_applicable_with_one_message(r):
     mod = R.rung_module(r)
     with pytest.raises(NotApplicable) as e:
-        R.build_model(_cfg(r, two_step=True))
+        mod.Model(_cfg(r, two_step=True))
     assert str(e.value) == mod.TWO_STEP_MESSAGE
+    assert type(R.build_model(_cfg(r, two_step=True))).__name__ == "TwoStep"   # chunk A1
     assert "later ablation on the winning design" in mod.TWO_STEP_MESSAGE
 
 

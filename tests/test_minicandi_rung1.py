@@ -94,7 +94,8 @@ def test_build_is_deterministic_and_width_search_draws_nothing():
 
 def test_two_step_is_refused():
     with pytest.raises(NotApplicable, match="later ablation on the winning design"):
-        R.build_model(_small(two_step=True))
+        P.Model(_small(two_step=True))
+    assert type(R.build_model(_small(two_step=True))).__name__ == "TwoStep"   # chunk A1
 
 
 @pytest.mark.parametrize("inj,mm", ARMS)
