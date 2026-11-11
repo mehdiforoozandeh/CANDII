@@ -369,3 +369,9 @@ The overlap of Flashzoi's training data with the EIC blind set is zero on tracks
 - Not determined: the Borzoi preprint says the four models have distinct held-out folds, which contradicts the code, the repository README and the Flashzoi paper; the code was taken as the authority. The weights were not inspected.
 
 Evidence: `cruxvault/results/flashzoi_overlap/FLASHZOI_OVERLAP.md`, `overlap_tracks.tsv`.
+
+## 2026-11-11 Agent calls: signal-space details
+
+- **Control for the per-position average in signal space.** For a ChIP-seq target whose cell type has no observed control, the per-position average signal uses the average of the training controls as its lambda source, and the row is labelled with that source. This follows D9b, where a missing control is replaced by a predicted control with a label. Before this call, the signal-space specific-variance correlation was undefined on those targets.
+- **Negative values in published EIC entries.** 301 of the 1,284 submitted tracks hold negative values. In our own metric tables, negative and non-finite bins are set to 0, because a -log10 p-value signal cannot be negative. The count of changed bins is recorded per target. The challenge-scorer board uses every submission unchanged.
+- **Covariate-dropout arm.** The dropout rate is 0.1. No document fixes it.
