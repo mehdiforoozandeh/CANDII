@@ -23,26 +23,30 @@ Subcommands (stdlib only; `run` and `setup` run inside a Nibi job, see slurm/oni
     units   --experiment ENCSR...                print the experiment's units and their arms
     run     (--experiment E --unit U --arm A | --build-list TSV --row I) --work W [--dry-run]
 
-Units (pinned interface B): `experiment` (one pipeline run over every biological replicate; it
+Units (pinned interface B): `pooled` (one pipeline run over every biological replicate; it
 yields `br<i>` and `pooled`), `br<i>tr<j>` (one library alone), `br<i>tr<j>ln<k>` (one FASTQ, or
 one R1/R2 pair, of one library alone; k orders the library's files by accession).
 Arms: `base`; `se` (paired-end reads only: mate 1 of every pair as single-end); `crop36`, `crop50`
 (when the unit's shortest read is longer than the crop). A crop sets the replicate's
 `read_length`, which the pipeline's own trim step (`trim_fastq_to_length`) applies.
 
-Output, per run, under `<work>/<experiment>/<dir>/` where `<dir>` is `<arm>` for unit `experiment`
-and `<unit>.<arm>` otherwise:
+Output, per run, under `<work>/<experiment>/<dir>/` where `<dir>` is `<arm>` for unit `pooled`
+and `<unit>.<arm>` otherwise -- the SAME layout and names as the ChIP/ATAC kit (fastq_uniform.py),
+so align_views.py reads both alike:
 
-    <u>.unfiltered.bam    the pipeline's merged BAM (ENCODE "unfiltered alignments")
-    <u>.filtered.bam      the pipeline's nuclear BAM (ENCODE "alignments"; QC-fail and non-nuclear
-                          reads removed; duplicates kept, flagged 0x400)
-    <u>.tagAlign.gz       reads of <u>.filtered.bam without flag 0x400, one line per read (mates of
-                          a pair are two lines), `bedtools bamtobed` + the ENCODE tagAlign awk
-    pooled.tagAlign.gz    concatenation of the br<i> tagAligns (unit `experiment` only)
-    input.json  ALIGN_DONE (json: cpu_hours, wall_hours, max_rss_gb, n_reads, provenance)
+    rep<i>.unfiltered.bam     the pipeline's merged BAM (ENCODE "unfiltered alignments")
+    rep<i>.filtered.bam(.bai) the pipeline's nuclear BAM (ENCODE "alignments"; QC-fail and
+                              non-nuclear reads removed; duplicates kept, flagged 0x400)
+    rep<i>.tagAlign.gz        reads of rep<i>.filtered.bam without flag 0x400, one line per read
+                              (mates of a pair are two lines), `bedtools bamtobed` + the tagAlign awk
+    rep<i>.duplication_metrics.txt
+    input.json  arm.json (reps: rep i -> bio_rep, run type, read length, covariates)  HARVEST.tsv
+    ALIGN_DONE (json: cpu_hours, wall_hours, max_rss_gb, n_reads, provenance; written last)
 
-`<u>` is `br<i>` for unit `experiment`, else the unit name. Cromwell runs in `--tmp` (the job's
-`$SLURM_TMPDIR`); only the files above reach `--work`.
+`rep<i>` is the i-th biological replicate of the unit in replicate-number order (arm.json maps it).
+FASTQs are read from the shared staging dir `<fastq root>/<experiment>/` (fastq_uniform.py stage),
+fetched there if absent, and deleted once every build-list row of the experiment verifies.
+Cromwell runs in `--tmp` (the job's `$SLURM_TMPDIR`); only the files above reach `--work`.
 """
 from __future__ import annotations
 
@@ -61,6 +65,9 @@ import tarfile
 import time
 import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fastq_uniform as FU  # noqa: E402  (sibling, stdlib only: staging, harvest, cleanup)
 
 PIPELINE_REPO = "https://github.com/ENCODE-DCC/dnase-seq-pipeline"
 PIPELINE_TAG = "v3.0.0"
@@ -106,8 +113,13 @@ MACHINE_SIZES = {
 ARMS = ("base", "se", "crop36", "crop50")
 CROPS = {"crop36": 36, "crop50": 50}
 FASTQ_STATUSES = ("released",)
+#: used only when an experiment has no released FASTQ (7 training DNase-seq experiments of the
+#: published list are archived; build list D4), as fastq_uniform.portal_files does
+FASTQ_FALLBACK_STATUSES = ("archived",)
+#: stampipes filter_reads.py --min_mapq default (dnase-seq-pipeline v3.0.0, in the image)
+MAPQ_THRESH = 10
 TAGALIGN_AWK = r"""awk 'BEGIN{OFS="\t"}{$4="N";$5="1000";print $0}'"""
-BUILD_LIST_KEYS = ("experiment", "unit", "arm")
+BUILD_LIST_KEYS = ("row", "experiment", "unit", "arm")
 
 WRAPPER_NAME = "dnase_align_only.wdl"
 
@@ -168,7 +180,8 @@ def die(msg):
 def get_json(url, tries=4):
     for i in range(tries):
         try:
-            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            req = urllib.request.Request(url, headers={"Accept": "application/json",
+                                                       "User-Agent": FU.USER_AGENT})
             with urllib.request.urlopen(req, timeout=120) as r:
                 return json.load(r)
         except Exception as e:  # noqa: BLE001 -- network: retry, then fail loudly
@@ -216,6 +229,9 @@ def libraries(meta) -> list[dict]:
                           "library": lib.get("accession", ""),
                           "adapters": adapters_of(lib)}
     byacc = {f["accession"]: f for f in meta["fastqs"] if f.get("status") in FASTQ_STATUSES}
+    if not byacc:
+        byacc = {f["accession"]: f for f in meta["fastqs"]
+                 if f.get("status") in FASTQ_FALLBACK_STATUSES}
     out = {}
     for f in sorted(byacc.values(), key=lambda f: f["accession"]):
         rep = reps.get(f.get("replicate"))
@@ -239,7 +255,7 @@ def libraries(meta) -> list[dict]:
 def units(meta) -> list[dict]:
     """Every unit of the experiment: {"unit", "libraries": [library dicts with selected runs]}."""
     libs = libraries(meta)
-    us = [{"unit": "experiment", "libraries": libs}]
+    us = [{"unit": "pooled", "libraries": libs}]
     for lib in libs:
         tag = f"br{lib['bio']}tr{lib['tech']}"
         us.append({"unit": tag, "libraries": [lib]})
@@ -346,26 +362,27 @@ def input_json(experiment, u, arm, fastq_path, refs_dir) -> dict:
 
 
 def out_dir_name(unit, arm) -> str:
-    return arm if unit == "experiment" else f"{unit}.{arm}"
+    return arm if unit == "pooled" else f"{unit}.{arm}"
 
 
 def product_names(unit, bios) -> list[str]:
-    """Per-replicate product prefixes: br<i> for unit `experiment`, else the unit itself."""
-    if unit == "experiment":
-        return [f"br{b}" for b in bios]
-    if len(bios) != 1:
+    """Per-replicate product prefixes, as the ChIP/ATAC kit writes them: rep1..repN in
+    biological-replicate order (arm.json maps rep i to its bio_rep)."""
+    if unit != "pooled" and len(bios) != 1:
         die(f"unit {unit} spans {len(bios)} biological replicates")
-    return [unit]
+    return [f"rep{i}" for i in range(1, len(bios) + 1)]
 
 
-def read_build_list(tsv, row) -> dict:
+def read_build_list(tsv, row) -> tuple[list[dict], dict]:
+    """(all rows, the row whose `row` column equals `row`) -- the same rule as fastq_uniform."""
     with open(tsv, newline="") as fh:
         rows = list(csv.DictReader(fh, delimiter="\t"))
     if not rows or any(k not in rows[0] for k in BUILD_LIST_KEYS):
         die(f"{tsv}: needs columns {BUILD_LIST_KEYS}")
-    if not 0 <= row < len(rows):
-        die(f"{tsv}: row {row} out of range (0..{len(rows) - 1})")
-    return {k: rows[row][k] for k in BUILD_LIST_KEYS}
+    hits = [r for r in rows if r["row"] == str(row)]
+    if len(hits) != 1:
+        die(f"{tsv}: {len(hits)} rows with row = {row}, expected 1")
+    return rows, hits[0]
 
 
 # --- file helpers ------------------------------------------------------------------------------
@@ -394,7 +411,7 @@ CHUNK = 64 << 20
 
 def _resolve(url):
     """Final URL after redirects, and its size (None when the server gives none)."""
-    req = urllib.request.Request(url, headers={"Range": "bytes=0-0"})
+    req = urllib.request.Request(url, headers={"Range": "bytes=0-0", "User-Agent": FU.USER_AGENT})
     with urllib.request.urlopen(req, timeout=120) as r:
         final = r.geturl()
         cr = r.headers.get("Content-Range", "")
@@ -419,7 +436,8 @@ def _fetch_ranges(url, part, streams=STREAMS, chunk=CHUNK):
         end = min(start + chunk, size) - 1
         for k in range(6):
             try:
-                req = urllib.request.Request(state["url"], headers={"Range": f"bytes={start}-{end}"})
+                req = urllib.request.Request(state["url"], headers={"Range": f"bytes={start}-{end}",
+                                                                   "User-Agent": FU.USER_AGENT})
                 with urllib.request.urlopen(req, timeout=300) as r:
                     data = r.read()
                 if len(data) != end - start + 1:
@@ -616,19 +634,55 @@ def cmd_units(a):
                     int(any(r["R2"] is not None for r in runs))])
 
 
+def arm_record(experiment, unit, arm, reps, u, used_md5, row=None) -> dict:
+    """arm.json in the ChIP/ATAC kit's form (fastq_uniform.arm_record), for align_views.py."""
+    runs = unit_runs(u)
+    pe = [bool(r.get("pe_fastqs")) and arm != "se" for r in reps]
+    lengths = sorted({int(x["read_length"]) for x in runs})
+    knob, value = {"base": ("", ""), "se": ("se", "1"), "crop36": ("crop", "36"),
+                   "crop50": ("crop", "50")}[arm]
+    return {
+        "experiment": experiment, "unit": unit, "arm": arm, "layer": "uniform",
+        "assay": "DNase-seq", "assay_class": "accessibility_dnase",
+        "eic_track": (row or {}).get("eic_track", ""), "build_list_row": (row or {}).get("row", ""),
+        "pipeline": "dnase-seq-pipeline", "pipeline_version": PIPELINE_TAG,
+        "pipeline_commit": PIPELINE_COMMIT, "pipeline_type": "dnase", "image": IMAGE,
+        "image_digest": IMAGE_DIGEST, "workflow": WRAPPER_NAME,
+        "reps": [{"rep": i, "bio_rep": r["number"], "read_length": r["read_length"],
+                  "paired_end": p, "se_fastqs": len(r.get("se_fastqs", [])),
+                  "pe_pairs": len(r.get("pe_fastqs", []))}
+                 for i, (r, p) in enumerate(zip(reps, pe), start=1)],
+        "arm_knob": knob, "arm_value": value, "paired_end_per_rep": pe,
+        "crop_length": CROPS.get(arm, 0),
+        "run_type": ("paired-ended" if all(pe) else "single-ended" if not any(pe) else "mixed"),
+        "read_length": min(r["read_length"] for r in reps),
+        "read_lengths_source": lengths,
+        "platforms": sorted({(x["R1"].get("platform") or "").strip("/").split("/")[-1]
+                             for x in runs} - {""}),
+        "dedup": "on", "mapq_threshold": MAPQ_THRESH, "fastq_md5": used_md5,
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+    }
+
+
 def cmd_run(a):
+    rows = None
+    row = None
     if a.build_list:
-        spec = read_build_list(a.build_list, a.row)
-        experiment, unit, arm = spec["experiment"], spec["unit"], spec["arm"]
+        rows, row = read_build_list(a.build_list, a.row)
+        experiment, unit, arm = row["experiment"], row["unit"], row["arm"]
     else:
         experiment, unit, arm = a.experiment, a.unit, a.arm
     if not (experiment and unit and arm):
         die("give --experiment, --unit and --arm, or --build-list and --row")
     t0 = time.time()
     out = Path(a.work) / experiment / out_dir_name(unit, arm)
-    if (out / "ALIGN_DONE").exists() and not a.force:
-        log(f"{out}/ALIGN_DONE exists; skip")
+    if ((out / "ALIGN_DONE").exists() or (out / FU.NOT_APPLICABLE).exists()) and not a.force:
+        log(f"{out}: ALIGN_DONE or {FU.NOT_APPLICABLE} exists; skip")
+        if rows is not None:
+            FU.cleanup_fastq(rows, experiment, a.work, a.fastq_root)   # a rerun frees what it can
         return
+    if not a.dry_run:
+        FU.check_caper_jars((CROMWELL, WOMTOOL))
     out.mkdir(parents=True, exist_ok=True)
     tmp = Path(a.tmp)
     tmp.mkdir(parents=True, exist_ok=True)
@@ -639,14 +693,15 @@ def cmd_run(a):
         meta = fetch_metadata(experiment)
         (out / "encode_metadata.json").write_text(json.dumps(meta) + "\n")
     u = select_unit(meta, unit)
-    fq_dir = tmp / "fastq"
+    fq_dir = Path(a.fastq_root) / experiment
 
     def fastq_path(f):
         return str(fq_dir / f"{f['accession']}.fastq.gz")
 
     inp = input_json(experiment, u, arm, fastq_path, a.scratch_refs)
     reps = replicates_json(experiment, u, arm, fastq_path)
-    notes = {f"br{r['number']}": r["_adapters_note"] for r in reps if "_adapters_note" in r}
+    notes = {f"rep{i}": r["_adapters_note"] for i, r in enumerate(reps, 1)
+             if "_adapters_note" in r}
     (out / "input.json").write_text(json.dumps(inp, indent=1) + "\n")
     bios = [r["number"] for r in reps]
     names = product_names(unit, bios)
@@ -654,13 +709,25 @@ def cmd_run(a):
         log(f"dry run: wrote {out / 'input.json'}")
         return
 
-    used = {}
+    # FASTQs from the shared staging dir (fastq_uniform.py stage); fetched there when absent
+    need, used = [], {}
     for r in unit_runs(u):
         for f in (r["R1"], r["R2"]):
             if f is None or (arm == "se" and f is r["R2"]):
                 continue
-            download(ENCODE + f["href"], fastq_path(f), md5=f["md5sum"])
             used[f["accession"]] = f["md5sum"]
+            url = (f.get("cloud_metadata") or {}).get("url") or ENCODE + f["href"]
+            need.append({"url": url, "dest": fastq_path(f), "md5": f["md5sum"],
+                         "bytes": int(f.get("file_size") or 0)})
+    missing = [n for n in need if not (Path(n["dest"]).exists() and
+                                       (not n["bytes"] or Path(n["dest"]).stat().st_size == n["bytes"]))]
+    if missing:
+        if all(n["bytes"] for n in missing):
+            FU.fetch_many(missing, a.ranges, a.parallel_files)
+        else:
+            for n in missing:
+                download(n["url"], n["dest"], md5=n["md5"])
+    t_staged = time.time()
     inp_path = tmp / "input.json"
     inp_path.write_text(json.dumps(inp, indent=1) + "\n")
 
@@ -676,6 +743,7 @@ def cmd_run(a):
                SINGULARITY_BINDPATH=",".join(binds))
     sh(["caper", "run", WRAPPER_NAME, "-c", str(conf), "-b", "local", "-i", str(inp_path),
         "--singularity", str(sif), "--str-label", f"{experiment}_{out.name}"], cwd=root, env=env)
+    t_aligned = time.time()
 
     md = find_metadata(tmp / "cromwell_out")
     if md.get("status") != "Succeeded":
@@ -685,47 +753,62 @@ def cmd_run(a):
     dup = outs["dnase_align_only.duplication_metrics"]
     if not (len(unf) == len(nuc) == len(names)):
         die(f"{len(unf)} unfiltered and {len(nuc)} nuclear BAMs for {len(names)} replicates")
-    n_reads, tas = {}, []
+    n_reads = {}
+    harvest = ["name\tsrc\tbytes\tmd5"]
+
+    def keep(src, name):
+        m = FU.copy_verified(src, out / name)
+        harvest.append(f"{name}\t{src}\t{(out / name).stat().st_size}\t{m}")
+
     for name, ub, nb, dm in zip(names, unf, nuc, dup):
-        shutil.copyfile(ub, out / f"{name}.unfiltered.bam.part")
-        os.replace(out / f"{name}.unfiltered.bam.part", out / f"{name}.unfiltered.bam")
-        shutil.copyfile(nb, out / f"{name}.filtered.bam.part")
-        os.replace(out / f"{name}.filtered.bam.part", out / f"{name}.filtered.bam")
-        shutil.copyfile(dm, out / f"{name}.duplication_metrics.txt")
+        keep(ub, f"{name}.unfiltered.bam")
+        keep(nb, f"{name}.filtered.bam")
+        keep(dm, f"{name}.duplication_metrics.txt")
+        fb = out / f"{name}.filtered.bam"
+        apptainer_bash(sif, f"samtools index {fb} {fb}.bai.part", binds, out_path=fb)
+        os.replace(f"{fb}.bai.part", f"{fb}.bai")
+        harvest.append(f"{name}.filtered.bam.bai\tsamtools index\t{Path(f'{fb}.bai').stat().st_size}"
+                       f"\t{md5_file(f'{fb}.bai')}")
         ta = out / f"{name}.tagAlign.gz"
-        apptainer_bash(sif, f"samtools view -b -F 1024 {out / (name + '.filtered.bam')} | "
+        apptainer_bash(sif, f"samtools view -b -F 1024 {fb} | "
                             f"bedtools bamtobed -i stdin | {TAGALIGN_AWK} | gzip -nc > {ta}.part",
                        binds, out_path=ta)
         os.replace(f"{ta}.part", ta)
+        harvest.append(f"{name}.tagAlign.gz\tsamtools view -F 1024 | bamtobed\t"
+                       f"{ta.stat().st_size}\t{md5_file(ta)}")
         with gzip.open(ta, "rb") as fh:
             n_reads[name] = sum(1 for _ in fh)
-        tas.append(ta)
-    if unit == "experiment":
-        with open(out / "pooled.tagAlign.gz.part", "wb") as w:
-            for ta in tas:
-                with open(ta, "rb") as fh:
-                    shutil.copyfileobj(fh, w)
-        os.replace(out / "pooled.tagAlign.gz.part", out / "pooled.tagAlign.gz")
-        n_reads["pooled"] = sum(n_reads[n] for n in names)
+    (out / "HARVEST.tsv").write_text("\n".join(harvest) + "\n")
+    (out / "metadata.json").write_text(json.dumps(md) + "\n")
+    rec = arm_record(experiment, unit, arm, reps, u, used, row)
+    rec["adapters_notes"] = notes
+    (out / "arm.json").write_text(json.dumps(rec, indent=2) + "\n")
 
     ru = resource.getrusage(resource.RUSAGE_CHILDREN)
     done = {
         "experiment": experiment, "unit": unit, "arm": arm, "products": names,
         "cpu_hours": round((ru.ru_utime + ru.ru_stime) / 3600.0, 4),
-        "wall_hours": round((time.time() - t0) / 3600.0, 4),
+        "cpu_hours_source": "getrusage(RUSAGE_CHILDREN) of this process; sacct of the job is the "
+                            "authority",
+        "wall_hours": round((t_aligned - t_staged) / 3600.0, 4),
+        "stage_wall_hours": round((t_staged - t0) / 3600.0, 4),
+        "total_wall_hours": round((time.time() - t0) / 3600.0, 4),
         "max_rss_gb": round(ru.ru_maxrss / 2**20, 3),
-        "n_reads": n_reads,
+        "n_reads": sum(n_reads.values()), "n_reads_per_rep": n_reads,
+        "n_reads_definition": "lines of the filtered tagAlign (one per read; 2 per pair)",
         "tagalign_rule": "filtered BAM without flag 0x400; bedtools bamtobed; one line per read",
         "pipeline": "dnase-seq-pipeline", "pipeline_version": PIPELINE_TAG,
         "pipeline_commit": PIPELINE_COMMIT, "image": IMAGE, "image_digest": IMAGE_DIGEST,
         "workflow": WRAPPER_NAME, "workflow_id": md.get("id"),
-        "read_length": {f"br{r['number']}": r["read_length"] for r in reps},
+        "read_length": {f"rep{i}": r["read_length"] for i, r in enumerate(reps, 1)},
         "fastqs_md5": used, "adapters_notes": notes,
-        "reference_set": REFERENCE_SET, "job_id": os.environ.get("SLURM_JOB_ID", ""),
+        "reference_set": REFERENCE_SET, "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
         "finished": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
     (out / "ALIGN_DONE").write_text(json.dumps(done, indent=1) + "\n")
     log(f"ALIGN_DONE {out}: {json.dumps({k: done[k] for k in ('cpu_hours', 'wall_hours', 'n_reads')})}")
+    if rows is not None:
+        FU.cleanup_fastq(rows, experiment, a.work, a.fastq_root)
 
 
 def main(argv=None):
@@ -740,11 +823,14 @@ def main(argv=None):
     s.add_argument("--metadata")
     s = sub.add_parser("run")
     s.add_argument("--experiment")
-    s.add_argument("--unit", default="experiment")
+    s.add_argument("--unit", default="pooled")
     s.add_argument("--arm", default="base")
     s.add_argument("--build-list")
-    s.add_argument("--row", type=int, default=0)
+    s.add_argument("--row", help="the build list's `row` column value")
     s.add_argument("--work", default=WORK)
+    s.add_argument("--fastq-root", default=FU.FASTQ_ROOT)
+    s.add_argument("--ranges", type=int, default=FU.RANGES)
+    s.add_argument("--parallel-files", type=int, default=FU.PARALLEL_FILES)
     s.add_argument("--metadata", help="cached fetch_metadata() json (tests, reruns)")
     s.add_argument("--pipeline-dir", default=PIPELINE_DIR)
     s.add_argument("--scratch-refs", default=SCRATCH_REFS)

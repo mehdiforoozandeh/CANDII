@@ -860,6 +860,161 @@ def summary(res: dict, out_dir: Path) -> None:
 
 # ------------------------------------------------------------------------------------------- main
 
+def array_spec(rows, priority) -> str:
+    """The `row` numbers of one priority as a SLURM --array spec (`1-104`, or `3,5-9`)."""
+    nums = sorted(int(r["row"]) for r in rows if str(r["priority"]) == str(priority))
+    parts, i = [], 0
+    while i < len(nums):
+        j = i
+        while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
+            j += 1
+        parts.append(str(nums[i]) if i == j else f"{nums[i]}-{nums[j]}")
+        i = j + 1
+    return ",".join(parts)
+
+
+def parse_spec(spec: str) -> list[int]:
+    """A SLURM --array spec (`3,5-9`, no step or `%`) -> its row numbers."""
+    out = []
+    for part in (spec or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        lo, _, hi = part.partition("-")
+        out += list(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def spec_of(nums) -> str:
+    """Row numbers -> the shortest SLURM --array spec."""
+    return array_spec([{"row": n, "priority": "x"} for n in set(nums)], "x")
+
+
+NOT_APPLICABLE = "NOT_APPLICABLE"      # fastq_uniform.NOT_APPLICABLE: the row's arm does not exist
+
+# Wall hours per million catalog reads (both mates counted), from the KF smokes
+# (cruxvault/results/t180/smoke_cost.tsv, 16 CPUs): align = wall_h / million_reads of the align
+# step; views = the same for the views step. chip 4.071/122.63 and 1.941/122.63; atac 3.939/85.32
+# and 0.816/85.32; dnase 1.482/117.20 and 1.325/117.20; native views 0.512/31.69 (8 CPUs).
+WALL_H_PER_MREADS = {"chip": (4.071 / 122.63, 1.941 / 122.63), "atac": (3.939 / 85.32, 0.816 / 85.32),
+                     "dnase": (1.482 / 117.20, 1.325 / 117.20), "native": (0.0, 0.512 / 31.69)}
+SIGNAL_WALL_H = 0.585                   # smoke_cost.tsv "signal after" (job 26829785)
+ARM_VIEWS_FRACTION = 0.25               # an arm or lane row builds one view, not seven
+NATIVE_MREADS_PER_GB = 31.69 / 0.543    # row 1: reads of the mapq0 arm per GB of redacted BAM
+LONG_ROW_H = 18.0                       # projected wall above this gets a longer limit
+TIME_LIMITS = ((18.0, "1-00:00:00"), (48.0, "3-00:00:00"), (float("inf"), "7-00:00:00"))
+
+
+def row_pipeline(r: dict) -> str:
+    p = (r.get("pipeline") or "").strip()
+    if p == NATIVE_PIPELINE:
+        return "native"
+    for k in ("chip", "atac", "dnase"):
+        if p.startswith(k):
+            return k
+    raise SystemExit(f"row {r['row']}: unknown pipeline {p!r}")
+
+
+def read_counts(files_tsv) -> dict:
+    """file accession -> catalog read_count (FASTQs that have one), from catalog files.tsv."""
+    out = {}
+    with open(files_tsv, newline="") as fh:
+        for f in csv.DictReader(fh, delimiter="\t"):
+            if f.get("file_format") == "fastq" and (f.get("read_count") or "").strip():
+                out[f["file"]] = int(float(f["read_count"]))
+    return out
+
+
+def projected_wall_h(r: dict, counts: dict, mreads_per_gb: float) -> tuple[float, float]:
+    """(million reads, projected wall hours) of one row at 16 CPUs: catalog reads x the smoke
+    rates; a FASTQ without a catalog read count is estimated from the row's GB."""
+    pipe = row_pipeline(r)
+    files = split_acc(r.get("fastq_files", ""))
+    gbs = float(r.get("fastq_gb") or 0)
+    if pipe == "native":
+        m = gbs * NATIVE_MREADS_PER_GB
+    else:
+        known = [counts[f] for f in files if f in counts]
+        m = sum(known) / 1e6
+        if len(known) < len(files):
+            m += gbs * (len(files) - len(known)) / max(len(files), 1) * mreads_per_gb
+    align, views = WALL_H_PER_MREADS[pipe]
+    if not (r["unit"] == "pooled" and r["arm"] == "base"):
+        views *= ARM_VIEWS_FRACTION
+    h = m * (align + views)
+    if any("signal" in prods for _, prods in parse_tokens(r.get("expected_measurements", ""))):
+        h += SIGNAL_WALL_H
+    return m, h
+
+
+def time_limit(h: float) -> str:
+    return next(lim for top, lim in TIME_LIMITS if h <= top)
+
+
+def row_rundir(work, r: dict) -> Path:
+    """fastq_uniform.arm_dir: where the row's alignment (and NOT_APPLICABLE) lives."""
+    return Path(work) / r["experiment"] / (r["arm"] if r["unit"] == "pooled"
+                                           else f"{r['unit']}.{r['arm']}")
+
+
+def row_state(r: dict, out, work) -> tuple[str, int]:
+    """("not_applicable" | "built" | "todo", number of expected measurements not yet written).
+    Built = every expected measurement has provenance.json (written last); NOT_APPLICABLE counts
+    as built (the row's arm does not exist for the experiment and builds nothing)."""
+    if (row_rundir(work, r) / NOT_APPLICABLE).exists():
+        return "not_applicable", 0
+    mids = [m for m, _ in parse_tokens(r.get("expected_measurements", ""))]
+    left = sum(1 for m in mids if not (Path(out) / m / "provenance.json").is_file())
+    return ("built" if mids and not left else "todo"), left
+
+
+def pending(rows, out, work, priority=None, spec=None, active=(), counts=None, err=None) -> dict:
+    """The rows of one priority (or `all`), optionally only those in `spec`, that still need a
+    job: not built, not NOT_APPLICABLE, not queued or running (`active`). Returns {"limits":
+    {time limit: [rows]}, "signal": [rows asking for signal], "skipped": {row: reason}}; prints
+    one line per row to `err`."""
+    err = err or sys.stderr
+    sel = [r for r in rows if priority in (None, "all") or str(r["priority"]) == str(priority)]
+    if spec:
+        keep = set(parse_spec(spec))
+        sel = [r for r in sel if int(r["row"]) in keep]
+    if not sel:
+        raise SystemExit(f"no build-list rows for priority {priority} and rows {spec or 'all'}")
+    act = set(active or ())
+    rate = None
+    if counts is not None:
+        n = g = 0.0
+        for r in rows:
+            fs = split_acc(r.get("fastq_files", ""))
+            if fs and row_pipeline(r) != "native" and all(f in counts for f in fs):
+                n += sum(counts[f] for f in fs) / 1e6
+                g += float(r.get("fastq_gb") or 0)
+        rate = n / g if g else 0.0
+    res = {"limits": {}, "signal": [], "skipped": {}}
+    for r in sorted(sel, key=lambda r: int(r["row"])):
+        n = int(r["row"])
+        tag = f"row {n} {r['experiment']} {r['unit']} {r['arm']}"
+        state, left = row_state(r, out, work)
+        if state != "todo":
+            res["skipped"][n] = state
+            print(f"skip {tag}: {state.replace('_', ' ')}", file=err)
+            continue
+        if n in act:
+            res["skipped"][n] = "active"
+            print(f"skip {tag}: queued or running", file=err)
+            continue
+        lim, note = TIME_LIMITS[0][1], ""
+        if counts is not None:
+            m, h = projected_wall_h(r, counts, rate)
+            lim = time_limit(h)
+            note = f", {m:.1f} M reads, projected {h:.1f} h" + (" LONG" if h > LONG_ROW_H else "")
+        res["limits"].setdefault(lim, []).append(n)
+        if any("signal" in p for _, p in parse_tokens(r.get("expected_measurements", ""))):
+            res["signal"].append(n)
+        print(f"submit {tag}: {left} measurement(s) to build{note}, limit {lim}", file=err)
+    return res
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -879,7 +1034,35 @@ def main(argv=None) -> int:
     c.add_argument("--build-list", required=True)
     c.add_argument("--ledger", required=True)
     c.add_argument("--withheld", required=True)
+    r = sub.add_parser("rows", help="print one priority's rows as a SLURM --array spec")
+    r.add_argument("--build-list", required=True)
+    r.add_argument("--priority", required=True)
+    q = sub.add_parser("pending", help="rows that still need a job, grouped by time limit "
+                                       "(stdout: `<limit>\\t<array spec>` lines, then "
+                                       "`signal\\t<spec>`); one skip/submit line per row on stderr")
+    q.add_argument("--build-list", required=True)
+    q.add_argument("--priority", default="all", help="a priority, or all")
+    q.add_argument("--rows", default="", help="only these rows (an --array spec)")
+    q.add_argument("--out", required=True, help="measurements root")
+    q.add_argument("--work", required=True, help="work root (run dirs, NOT_APPLICABLE markers)")
+    q.add_argument("--active", default="", help="rows queued or running (an --array spec)")
+    q.add_argument("--files", default="", help="catalog files.tsv: read counts for time limits")
     a = ap.parse_args(argv)
+    if a.cmd == "pending":
+        counts = read_counts(a.files) if a.files else None
+        res = pending(read_tsv(a.build_list), a.out, a.work, a.priority, a.rows,
+                      parse_spec(a.active), counts)
+        for lim, nums in sorted(res["limits"].items()):
+            print(f"{lim}\t{spec_of(nums)}")
+        if res["signal"]:
+            print(f"signal\t{spec_of(res['signal'])}")
+        return 0
+    if a.cmd == "rows":
+        spec = array_spec(read_tsv(a.build_list), a.priority)
+        if not spec:
+            raise SystemExit(f"no rows with priority {a.priority}")
+        print(spec)
+        return 0
     ledger = read_tsv(a.ledger)
     if a.cmd == "probe":
         res = probe(ledger, read_tsv(Path(a.catalog) / "files.tsv"), a.threads, a.out)

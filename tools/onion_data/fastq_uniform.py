@@ -119,6 +119,28 @@ CROP_TOL = 2           # chip.crop_length_tol default
 MAPQ_THRESH = 30       # chip.wdl:179, atac.wdl:184 default
 UNIT_RE = re.compile(r"^(pooled|br(\d+)(?:tr(\d+)(?:ln(\d+))?)?)$")
 BUILD_LIST_REQUIRED = ("row", "experiment", "assay", "assay_class", "unit", "arm")
+#: a run dir under work/<experiment>/: `<arm>` (unit pooled) or `<unit>.<arm>`. align_views'
+#: read-set dirs (`<unit>.<layer>`) do not match.
+RUN_DIR_RE = re.compile(r"^(?:br\d+(?:tr\d+(?:ln\d+)?)?\.)?(base|se|crop36|crop50)$")
+#: a run dir that holds this file instead of ALIGN_DONE is a row that does not apply (kept, verified)
+NOT_APPLICABLE = "NOT_APPLICABLE"
+#: ENCODE4's own processing of an experiment whose biological replicate mixes single-end and
+#: paired-end runs (portal, 2026-11-11: chip-seq-alignment-step v2 `derived_from` of ENCSR339FOO,
+#: ENCSR082NQB, ENCSR389WWC, ENCSR447ZGY, ENCSR720GSE, ENCSR955IXZ, ENCSR976JHS lists one mate
+#: per pair plus the single-end runs, for every replicate of the experiment).
+MIXED_RUN_TYPE_NOTE = ("mixed single-end and paired-end runs: every replicate aligned as "
+                       "single-end from mate 1 of each pair plus the single-end runs, as ENCODE4's "
+                       "chip-seq-alignment-step v2 did for these experiments")
+
+#: staging (Nibi -> ENCODE S3 is ~0.14 MB/s per TCP flow, linear in flows up to 64 at least:
+#: NETPROBE 2026-11-11). Byte ranges per file and files at once; both are CLI parameters.
+RANGES = 64
+PARALLEL_FILES = 4
+USER_AGENT = "Mozilla/5.0 (generic-client)"
+
+
+class NotApplicable(Exception):
+    """A build-list row whose arm does not exist for this experiment (written as NOT_APPLICABLE)."""
 
 
 def log(msg):
@@ -198,7 +220,8 @@ def arm_dir(work, row) -> Path:
 def _get_json(url, tries=4):
     for k in range(tries):
         try:
-            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            req = urllib.request.Request(url, headers={"Accept": "application/json",
+                                                       "User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=120) as r:
                 return json.load(r)
         except Exception as e:  # noqa: BLE001 - network; retried, then raised
@@ -240,6 +263,21 @@ def portal_files(experiment) -> dict:
             "fetched_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 
+def portal_file(accession) -> dict:
+    """One file's record (a native redacted BAM): accession, md5, bytes, bio_rep, url, status."""
+    f = _get_json(f"{PORTAL}/files/{accession}/?format=json&frame=object")
+    ext = f.get("file_format", "bam")
+    return {"accession": f["accession"], "md5": f["md5sum"], "bytes": f["file_size"],
+            "bio_rep": (f.get("biological_replicates") or [None])[0],
+            "output_type": f.get("output_type", ""), "status": f.get("status", ""),
+            "assembly": f.get("assembly", ""), "file_format": ext,
+            "mapped_read_length": f.get("mapped_read_length"),
+            "mapped_run_type": f.get("mapped_run_type", ""),
+            "analysis_step_version": f.get("analysis_step_version", ""),
+            "url": ((f.get("cloud_metadata") or {}).get("url")
+                    or f"{PORTAL}/files/{f['accession']}/@@download/{f['accession']}.{ext}")}
+
+
 # --- unit, arm and input JSON ------------------------------------------------------------------
 
 def unit_reps(files_json: dict, unit: str, restrict=None) -> list[dict]:
@@ -278,10 +316,18 @@ def unit_reps(files_json: dict, unit: str, restrict=None) -> list[dict]:
                 if mate is None:
                     raise SystemExit(f"{f['accession']}: mate {f['paired_with']!r} not in the table")
                 r2.append(mate["accession"])
+        rep = {"rep": i, "bio_rep": b, "tech_reps": sorted({f["tech_rep"] for f in mine}),
+               "r1": [f["accession"] for f in mine], "r2": r2}
         if r2 and len(r2) != len(mine):
-            raise SystemExit(f"bio rep {b}: mixes single-end and paired-end FASTQs")
-        reps.append({"rep": i, "bio_rep": b, "tech_reps": sorted({f["tech_rep"] for f in mine}),
-                     "r1": [f["accession"] for f in mine], "r2": r2})
+            # ENCODE4 aligned such a replicate as single-end from mate 1 (MIXED_RUN_TYPE_NOTE);
+            # `arm_settings` turns every replicate of the unit single-end.
+            rep["r2"], rep["mixed_run_types"] = [], True
+            rep["mates_dropped"] = r2
+        reps.append(rep)
+    if any(r.get("mixed_run_types") for r in reps):
+        for r in reps:
+            if r["r2"]:
+                r["mates_dropped"], r["r2"] = r["r2"], []
     return reps
 
 
@@ -295,7 +341,11 @@ def arm_settings(files_json, reps, arm) -> dict:
     pe = [bool(r["r2"]) for r in reps]
     knob, value = ARMS[arm]
     crop = 0
+    mixed = any(r.get("mixed_run_types") for r in reps)
     if arm == "se":
+        if mixed:
+            raise NotApplicable("arm se: the base of this experiment is already mate 1 only "
+                                f"({MIXED_RUN_TYPE_NOTE}), so se would repeat the base")
         if not any(pe):
             raise SystemExit("arm se: the experiment is single-end already")
         pe = [False] * len(reps)
@@ -310,6 +360,7 @@ def arm_settings(files_json, reps, arm) -> dict:
         "read_length": read_length, "read_lengths_source": lengths,
         "platforms": sorted({f["platform"] for f in used if f["platform"]}),
         "dedup": "on", "mapq_threshold": MAPQ_THRESH,
+        "mixed_run_types": MIXED_RUN_TYPE_NOTE if mixed else "",
     }
 
 
@@ -381,12 +432,20 @@ def byte_ranges(size: int, n: int) -> list[tuple[int, int]]:
     return [(s, min(s + step, size) - 1) for s in range(0, size, step)]
 
 
-def _fetch_range(url, part: Path, lo: int, hi: int, tries=5):
+def backoff_s(k: int, base=5.0, cap=300.0) -> float:
+    """Exponential backoff with jitter for retry k (0-based): base * 2^k, capped, +-25%."""
+    import random
+    return min(cap, base * 2 ** k) * (0.75 + 0.5 * random.random())
+
+
+def _fetch_range(url, part: Path, lo: int, hi: int, tries=8):
+    """One byte range into `part` at offset lo (rangefetch.sh logic: curl -r lo-hi --retry)."""
     for k in range(tries):
         try:
-            req = urllib.request.Request(url, headers={"Range": f"bytes={lo}-{hi}"})
+            req = urllib.request.Request(url, headers={"Range": f"bytes={lo}-{hi}",
+                                                       "User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=300) as r, open(part, "r+b") as out:
-                if r.status != 206:
+                if r.status != 206 and not (lo == 0 and r.status == 200):
                     raise IOError(f"HTTP {r.status} for a range request")
                 out.seek(lo)
                 got = 0
@@ -395,45 +454,93 @@ def _fetch_range(url, part: Path, lo: int, hi: int, tries=5):
                     got += len(chunk)
             if got != hi - lo + 1:
                 raise IOError(f"range {lo}-{hi}: {got} bytes")
-            return
+            return got
         except Exception as e:  # noqa: BLE001 - network; retried, then raised
             if k == tries - 1:
                 raise
-            log(f"range {lo}-{hi}: {e}; retry {k + 1}")
-            time.sleep(10 * (k + 1))
+            w = backoff_s(k)
+            log(f"range {lo}-{hi}: {e}; retry {k + 1} in {w:.0f} s")
+            time.sleep(w)
 
 
-def download(url, dest: Path, want_md5: str, size: int, streams=32, tries=3):
-    """Parallel HTTP range download, then md5 of the whole file against the portal's.
-
-    One connection from Nibi to the ENCODE S3 bucket moved about 0.2-0.4 MB/s on 2026-11-11, and
-    8 parallel ranges moved about 8 times that, so the file is fetched as `streams` ranges."""
+def download(url, dest: Path, want_md5: str, size: int, ranges=RANGES, tries=3) -> dict:
+    """`ranges` parallel HTTP byte ranges into one preallocated file, then the md5 of the whole
+    against the portal's; mode 0444. Returns {"bytes", "seconds"}."""
     from concurrent.futures import ThreadPoolExecutor
+    dest = Path(dest)
     for k in range(tries):
         part = dest.with_name(dest.name + ".part%d" % os.getpid())
+        t0 = time.time()
         try:
             with open(part, "wb") as fh:
                 fh.truncate(size)
-            with ThreadPoolExecutor(streams) as ex:
-                for f in [ex.submit(_fetch_range, url, part, lo, hi)
-                          for lo, hi in byte_ranges(size, streams)]:
+            rr = byte_ranges(size, ranges)
+            with ThreadPoolExecutor(len(rr)) as ex:
+                for f in [ex.submit(_fetch_range, url, part, lo, hi) for lo, hi in rr]:
                     f.result()
             got = md5_file(part)
             if got != want_md5:
                 raise IOError(f"md5 {got} != portal {want_md5}")
             os.chmod(part, 0o444)
             os.replace(part, dest)
-            return
+            return {"bytes": size, "seconds": time.time() - t0}
         except Exception as e:  # noqa: BLE001 - network; retried, then raised
             if part.exists():
                 part.unlink()
             if k == tries - 1:
                 raise SystemExit(f"download {url} FAILED after {tries} tries: {e}")
-            log(f"download {url}: {e}; retry {k + 1}")
-            time.sleep(10 * (k + 1))
+            w = backoff_s(k, base=15)
+            log(f"download {url}: {e}; retry {k + 1} in {w:.0f} s")
+            time.sleep(w)
 
 
-def stage(experiment, fastq_root=FASTQ_ROOT, accessions=None) -> dict:
+def fetch_many(items, ranges=RANGES, parallel_files=PARALLEL_FILES) -> dict:
+    """Download `items` ({"url", "dest", "md5", "bytes"}) `parallel_files` at a time, each in
+    `ranges` byte ranges; a file already present with the right size and md5 is kept. Returns the
+    aggregate {"files", "bytes", "seconds", "mb_per_s", "ranges", "parallel_files"}."""
+    from concurrent.futures import ThreadPoolExecutor
+    todo = []
+    for it in items:
+        dest = Path(it["dest"])
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists() and dest.stat().st_size == it["bytes"] and md5_file(dest) == it["md5"]:
+            log(f"{dest.name}: present, md5 ok")
+            continue
+        if dest.exists():
+            dest.chmod(0o644)
+            dest.unlink()
+        todo.append(it)
+    t0 = time.time()
+
+    def one(it):
+        import fcntl
+        dest = Path(it["dest"])
+        # two rows of one experiment (base and an arm) may stage at once: one downloads, one waits
+        with open(f"{dest}.lock", "w") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            if dest.exists() and dest.stat().st_size == it["bytes"]:
+                log(f"{dest.name}: staged by another job meanwhile")
+                return None
+            log(f"{dest.name}: downloading {it['bytes'] / 2**30:.2f} GiB in {ranges} ranges")
+            r = download(it["url"], dest, it["md5"], it["bytes"], ranges=ranges)
+        log(f"{dest.name}: {it['bytes'] / 1e6 / max(r['seconds'], 1e-9):.2f} MB/s")
+        return r
+
+    if todo:
+        with ThreadPoolExecutor(max(1, min(parallel_files, len(todo)))) as ex:
+            list(ex.map(one, todo))
+    sec = time.time() - t0
+    nb = sum(it["bytes"] for it in todo)
+    st = {"files": len(todo), "bytes": nb, "seconds": round(sec, 1),
+          "mb_per_s": round(nb / 1e6 / sec, 3) if todo and sec > 0 else None,
+          "ranges": ranges, "parallel_files": parallel_files}
+    log(f"staged {st['files']} file(s), {nb / 1e9:.3f} GB in {sec:.0f} s "
+        f"({st['mb_per_s']} MB/s aggregate, {ranges} ranges x {parallel_files} files)")
+    return st
+
+
+def stage(experiment, fastq_root=FASTQ_ROOT, accessions=None, ranges=RANGES,
+          parallel_files=PARALLEL_FILES) -> dict:
     """Fetch the portal table and every FASTQ (or `accessions` and their mates), md5-checked."""
     d = Path(fastq_root) / experiment
     d.mkdir(parents=True, exist_ok=True)
@@ -442,22 +549,62 @@ def stage(experiment, fastq_root=FASTQ_ROOT, accessions=None) -> dict:
     if accessions:
         keep = set(accessions)
         want = [f for f in want if f["accession"] in keep or f["paired_with"] in keep]
-    t0 = time.time()
-    for f in want:
-        dest = d / f"{f['accession']}.fastq.gz"
-        if dest.exists() and dest.stat().st_size == f["bytes"] and md5_file(dest) == f["md5"]:
-            log(f"{f['accession']}: present, md5 ok")
-            continue
-        if dest.exists():
-            dest.chmod(0o644)
-            dest.unlink()
-        log(f"{f['accession']}: downloading {f['bytes'] / 2**30:.2f} GiB")
-        download(f["url"], dest, f["md5"], f["bytes"])
+    st = fetch_many([{"url": f["url"], "dest": d / f"{f['accession']}.fastq.gz", "md5": f["md5"],
+                      "bytes": f["bytes"]} for f in want], ranges, parallel_files)
     fj["staged"] = [f["accession"] for f in want]
-    fj["stage_wall_hours"] = (time.time() - t0) / 3600
+    fj["stage_wall_hours"] = st["seconds"] / 3600
+    fj["stage_stats"] = st
     write_atomic(d / "files.json", json.dumps(fj, indent=1) + "\n")
     log(f"{experiment}: {len(want)} FASTQs staged and md5-verified in {d}")
     return fj
+
+
+def row_kind(row) -> str:
+    """`chip`, `atac`, `dnase` or `native` (ENCODE's redacted unfiltered BAM, PI ruling 16)."""
+    p = (row.get("pipeline") or "").strip()
+    if p == "native-redacted-bam":
+        return "native"
+    if row.get("assay_class") == "accessibility_dnase" or p.startswith("dnase-seq-pipeline"):
+        return "dnase"
+    return pipeline_key(row)[0]
+
+
+def row_accessions(row) -> list:
+    return [a for a in (row.get("fastq_files") or "").replace(",", ";").split(";") if a]
+
+
+def stage_native(row, fastq_root=FASTQ_ROOT, ranges=RANGES, parallel_files=PARALLEL_FILES) -> dict:
+    """The redacted unfiltered GRCh38 BAMs a native row names, md5-checked against the portal,
+    under `<fastq root>/<experiment>/<accession>.bam`, with `bams.json` (one record per BAM)."""
+    exp = row["experiment"]
+    d = Path(fastq_root) / exp
+    recs = [portal_file(a) for a in row_accessions(row)]
+    for r in recs:
+        if r["file_format"] != "bam" or r["assembly"] != "GRCh38":
+            raise SystemExit(f"{r['accession']}: {r['file_format']} {r['assembly']}, not a GRCh38 BAM")
+    st = fetch_many([{"url": r["url"], "dest": d / f"{r['accession']}.bam", "md5": r["md5"],
+                      "bytes": r["bytes"]} for r in recs], ranges, parallel_files)
+    rec = {"experiment": exp, "bams": recs, "stage_stats": st,
+           "fetched_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    write_atomic(d / "bams.json", json.dumps(rec, indent=1) + "\n")
+    return rec
+
+
+def stage_row(row, fastq_root=FASTQ_ROOT, ranges=RANGES, parallel_files=PARALLEL_FILES,
+              work=WORK) -> dict:
+    """Stage what one build-list row reads: its FASTQs (any pipeline), or its native BAMs.
+    Nothing when the row's run dir already holds ALIGN_DONE or NOT_APPLICABLE: the alignment no
+    longer needs the FASTQs, and the cleanup may have deleted them (a second `submit`, KF2)."""
+    if row_kind(row) != "native":
+        d = arm_dir(work, row)
+        done = [m for m in ("ALIGN_DONE", NOT_APPLICABLE) if (d / m).exists()]
+        if done:
+            log(f"row {row.get('row', '')}: {d / done[0]} exists, nothing to stage")
+            return {"skipped": str(d / done[0])}
+    if row_kind(row) == "native":
+        return stage_native(row, fastq_root, ranges, parallel_files)
+    return stage(row["experiment"], fastq_root, row_accessions(row) or None, ranges,
+                 parallel_files)
 
 
 def staged_ok(files_json, fastq_root, experiment, accessions) -> bool:
@@ -501,6 +648,29 @@ def prepare_refs(src=REFCACHE, dest=REFS) -> Path:
 
 
 # --- run ---------------------------------------------------------------------------------------
+
+#: Caper's own jars, given as local files so Caper never "installs" them: with the default
+#: (a GitHub URL) every `caper run` takes a file lock under ~/.caper on the NFS home, and jobs
+#: starting together died on it ("OSError: [Errno 116] Stale file handle", KF job 26829982).
+CROMWELL_JAR = "/home/mforooz/.caper/cromwell_jar/cromwell-82.jar"
+WOMTOOL_JAR = "/home/mforooz/.caper/womtool_jar/womtool-82.jar"
+
+
+def check_caper_jars(jars=None) -> None:
+    """Fail fast, before staging or Cromwell starts, when a Caper jar named in the conf is
+    missing (the jars live in the user's ~/.caper, outside the kit)."""
+    jars = jars or (CROMWELL_JAR, WOMTOOL_JAR)
+    missing = [str(j) for j in jars if not Path(j).is_file()]
+    if missing:
+        raise SystemExit("Caper jar(s) missing: " + ", ".join(missing) + ". Caper runs offline "
+                         "from these local jars; restore them (e.g. `caper init local` on a login "
+                         "node downloads cromwell-82 and womtool-82 into ~/.caper) and resubmit.")
+
+
+def caper_conf_text() -> str:
+    return (f"backend=local\ndisable-auto-update-check=True\ncromwell={CROMWELL_JAR}\n"
+            f"womtool={WOMTOOL_JAR}\n")
+
 
 def check_image(key, eic=EIC) -> str:
     spec = PIPELINES[key]
@@ -601,13 +771,15 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
     key, _ = pipeline_key(row)
     exp = row["experiment"]
     out = arm_dir(work, row)
-    if (out / "ALIGN_DONE").exists():
-        log(f"{out}: ALIGN_DONE exists, nothing to do")
+    if (out / "ALIGN_DONE").exists() or (out / NOT_APPLICABLE).exists():
+        log(f"{out}: ALIGN_DONE or {NOT_APPLICABLE} exists, nothing to do")
+        cleanup_fastq(rows, exp, work, fastq_root)      # a rerun still frees what it can
         return 0
     out.mkdir(parents=True, exist_ok=True)
     genome_tsv = Path(refs) / "hg38.local.tsv"
     if not genome_tsv.exists():
         raise SystemExit(f"{genome_tsv} missing: run `fastq_uniform.py prepare-refs` first")
+    check_caper_jars()
     check_image(key, eic)
 
     fj_path = Path(fastq_root) / exp / "files.json"
@@ -620,7 +792,12 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
         fj = stage(exp, fastq_root, restrict or None)
         reps = unit_reps(fj, row["unit"], restrict or None)
     t_staged = time.time()
-    arm = arm_settings(fj, reps, row["arm"])
+    try:
+        arm = arm_settings(fj, reps, row["arm"])
+    except NotApplicable as e:
+        write_not_applicable(out, row, str(e))
+        cleanup_fastq(rows, exp, work, fastq_root)
+        return 0
     job = os.environ.get("SLURM_JOB_ID")
     rec = arm_record(row, fj, reps, arm, job)
     rec["fastq_md5"] = {f["accession"]: f["md5"] for f in fj["files"]
@@ -639,7 +816,7 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
     write_atomic(out / "input.json", json.dumps(inp, indent=2) + "\n")
     write_atomic(tmp / "input.json", json.dumps(inp, indent=2) + "\n")
     conf = tmp / "caper.conf"
-    conf.write_text("backend=local\ndisable-auto-update-check=True\n")
+    conf.write_text(caper_conf_text())
     spec = PIPELINES[key]
     meta_path = tmp / "metadata.json"
     binds = ",".join(sorted({str(Path(fastq_root)), str(Path(refs)), str(tmp)}))
@@ -697,8 +874,29 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
 
 # --- verify and cleanup ------------------------------------------------------------------------
 
+def write_not_applicable(out: Path, row, reason: str):
+    """Record a row whose arm does not exist for the experiment; it counts as verified."""
+    rec = {"experiment": row["experiment"], "unit": row["unit"], "arm": row["arm"],
+           "build_list_row": row.get("row", ""), "reason": reason,
+           "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+           "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    write_atomic(Path(out) / NOT_APPLICABLE, json.dumps(rec, indent=2) + "\n")
+    log(f"{out}: {NOT_APPLICABLE}: {reason}")
+
+
+def read_dropped(d: Path) -> dict:
+    """name -> record of keepers deliberately deleted after the views were built (DROPPED.tsv)."""
+    p = Path(d) / "DROPPED.tsv"
+    if not p.exists():
+        return {}
+    rows = [ln.split("\t") for ln in p.read_text().strip().split("\n")[1:] if ln]
+    return {r[0]: r for r in rows}
+
+
 def verify_arm(d: Path, md5=False) -> list[str]:
     probs = []
+    if (d / NOT_APPLICABLE).exists():
+        return []
     if not (d / "ALIGN_DONE").exists():
         return [f"{d}: no ALIGN_DONE"]
     h = d / "HARVEST.tsv"
@@ -711,8 +909,11 @@ def verify_arm(d: Path, md5=False) -> list[str]:
         for stem in ("unfiltered.bam", "filtered.bam", "filtered.bam.bai", "tagAlign.gz"):
             if f"rep{r['rep']}.{stem}" not in names:
                 probs.append(f"{d}: HARVEST.tsv lacks rep{r['rep']}.{stem}")
+    dropped = read_dropped(d)
     for name, _src, size, m in rows:
         p = d / name
+        if name in dropped and not p.exists():
+            continue
         if not p.exists() or p.stat().st_size != int(size):
             probs.append(f"{p}: missing or size != {size}")
         elif md5 and md5_file(p) != m:
@@ -721,18 +922,30 @@ def verify_arm(d: Path, md5=False) -> list[str]:
 
 
 def cleanup_fastq(rows, experiment, work, fastq_root) -> bool:
-    """Delete the staged FASTQs once every build-list row of the experiment verifies."""
-    mine = [r for r in rows if r["experiment"] == experiment]
+    """Delete the staged FASTQs once every build-list row of the experiment verifies.
+
+    `rows` is the whole build list (every priority), so the FASTQs stay while any row of the
+    experiment -- a priority-3 arm row or a priority-4 library or lane row included -- has no
+    ALIGN_DONE or NOT_APPLICABLE yet. Native rows read staged BAMs, not FASTQs, and never call this.
+    Two rows of one experiment may finish at the same moment (KF2 review): the directory is first
+    renamed to a private name, which only one caller can do; the other finds it gone and returns
+    True. Missing files are fine."""
+    native = {r["row"] for r in rows if r["experiment"] == experiment and row_kind(r) == "native"}
+    mine = [r for r in rows if r["experiment"] == experiment and r["row"] not in native]
     probs = [p for r in mine for p in verify_arm(arm_dir(work, r))]
     if probs:
         log(f"{experiment}: FASTQs kept, {len(probs)} row check(s) open, e.g. {probs[0]}")
         return False
     d = Path(fastq_root) / experiment
-    if d.exists():
-        for p in d.iterdir():
-            p.chmod(0o644)
-        shutil.rmtree(d)
-        log(f"{experiment}: all {len(mine)} rows verified; deleted {d}")
+    gone = d.with_name(f".{experiment}.deleting.{os.getpid()}.{time.time_ns()}")
+    try:
+        os.rename(d, gone)
+    except FileNotFoundError:
+        return True                     # never staged, or another row's cleanup took it
+    shutil.rmtree(gone, ignore_errors=True)
+    if gone.exists():
+        log(f"{experiment}: WARNING {gone} not fully deleted")
+    log(f"{experiment}: all {len(mine)} rows verified; deleted {d}")
     return True
 
 
@@ -741,9 +954,15 @@ def cleanup_fastq(rows, experiment, work, fastq_root) -> bool:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("stage")
-    s.add_argument("--experiment", required=True, action="append")
+    s = sub.add_parser("stage", help="an experiment's FASTQs, or what one build-list row reads")
+    s.add_argument("--experiment", action="append", default=[])
+    s.add_argument("--build-list")
+    s.add_argument("--row")
     s.add_argument("--fastq-root", default=FASTQ_ROOT)
+    s.add_argument("--ranges", type=int, default=RANGES, help="byte ranges per file")
+    s.add_argument("--parallel-files", type=int, default=PARALLEL_FILES)
+    s.add_argument("--work", default=WORK, help="a row whose run dir is done stages nothing")
+    sub.add_parser("check-jars", help="exit non-zero when Caper's local jars are missing")
     s = sub.add_parser("prepare-refs")
     s.add_argument("--src", default=REFCACHE)
     s.add_argument("--dest", default=REFS)
@@ -769,8 +988,19 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     if a.cmd == "stage":
+        if a.build_list:
+            if not a.row:
+                raise SystemExit("stage --build-list needs --row")
+            stage_row(get_row(read_build_list(a.build_list), a.row), a.fastq_root, a.ranges,
+                      a.parallel_files, a.work)
+        elif not a.experiment:
+            raise SystemExit("stage: give --experiment, or --build-list and --row")
         for e in a.experiment:
-            stage(e, a.fastq_root)
+            stage(e, a.fastq_root, None, a.ranges, a.parallel_files)
+        return 0
+    if a.cmd == "check-jars":
+        check_caper_jars()
+        print("caper jars present: " + ", ".join((CROMWELL_JAR, WOMTOOL_JAR)))
         return 0
     if a.cmd == "prepare-refs":
         prepare_refs(a.src, a.dest)
@@ -791,7 +1021,8 @@ def main(argv=None) -> int:
                    max_tasks=a.max_concurrent_tasks)
     if a.cmd == "verify":
         base = Path(a.work) / a.experiment
-        dirs = sorted(p for p in base.iterdir() if p.is_dir()) if base.exists() else []
+        dirs = sorted(p for p in base.iterdir() if p.is_dir() and RUN_DIR_RE.match(p.name)) \
+            if base.exists() else []
         probs = [p for d in dirs for p in verify_arm(d, a.md5)]
         for p in probs:
             print(p)
