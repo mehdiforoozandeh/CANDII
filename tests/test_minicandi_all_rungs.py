@@ -247,7 +247,7 @@ ARMS = {**{f"covariate_injection={m}": {"covariate_injection": m}
                                             "predict_control")}}
 #: per rung, the arms whose construction raises NotApplicable; every other arm builds
 NOT_APPLICABLE = {1: set(), 2: {"covariate_injection=tokens"}, 3: set(), 4: set(),
-                  5: {"average_input=true"}, 6: set()}
+                  5: set(), 6: set()}
 
 
 def support_matrix() -> dict:
