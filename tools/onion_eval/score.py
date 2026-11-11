@@ -134,6 +134,16 @@ position average's leave-one-cell-out table and its NB size are fitted per (assa
 training cells' base views of that region (the table must cover the scored bins and the genome-wide
 table does not fit in memory), so its NB size is one per assay per region. The position average is
 also the training average `a` of r_spec.
+
+Training-average control (chunk F4, foreman call logged in the notepad): in the signal space, the
+position average of a ChIP-seq target with no observed control takes its MACS2 lambda from the
+average of the training controls, i.e. the position average of the `chipseq-control` track,
+fitted like every position average (the training-track base views, `train_base`, so a model trained
+on train+val uses its validation controls too; never a blind control), leave-one-cell-out, scaled
+to the target's own C' depth. Such a record carries `lambda_source_training_average =
+training_average_control` (and, under `per_target`, the same key); when the position average is the
+main predictor its `lambda_source` is `training_average_control`. Targets with an observed control,
+and ATAC-seq and DNase-seq targets, are unchanged.
 """
 from __future__ import annotations
 
@@ -200,6 +210,8 @@ LAMBDA_SOURCE_OPTIONS = ("auto", "observed_control", "predicted_control")
 #: record prefix and key suffix of the `predicted_control` signal route (every ChIP target)
 PC_PREFIX = "sig_pc_"
 PREDICTED_CONTROL = "_predicted_control"
+#: lambda source of the position average on a ChIP target with no observed control (F4)
+TRAINING_AVERAGE_CONTROL = "training_average_control"
 #: an external entry (chunk XE): the main predictor gives a signal only, through signal_override
 EXTERNAL = "external"
 EXTERNAL_REASON = "external entry: signal only"
@@ -492,6 +504,7 @@ class Scorer:
         else:
             self.dnase_route = dnase_route
         self._pa_cache: dict = {}
+        self._pa_ctl_rate: dict = {}               # (region index, cell) -> average control rate
         self.suff: dict = {}
         self.timing: dict = defaultdict(float)     # wall seconds per phase, in scores.json
         # F3 region cache: a tile read inside the current evalset region is a slice of one
@@ -592,6 +605,38 @@ class Scorer:
         return (route == "chip" and not observed
                 and self.predict_control and self._signal_files(row)[0] is not None)
 
+    def _needs_average_control(self, job) -> bool:
+        """F4: a ChIP-seq imputation target with no observed control and pipeline signal tracks;
+        its position average takes lambda from the training-average control."""
+        if self.sig is None or job["kind"] != "imputation" or job.get("regime") == "control":
+            return False
+        row = self.ds.rows[job["target"]]
+        try:
+            route = self.sig.route_of(row["assay_class"] or row["assay"])
+        except ValueError:
+            return False
+        return (route == "chip" and not (row.get("control_measurement_id") or "").strip()
+                and self._signal_files(row)[0] is not None)
+
+    def _average_control_rate(self, ri, cell) -> np.ndarray:
+        """Leave-one-cell-out mean rate (count / depth) of the training controls over region ri,
+        fitted like the position average (`train_base`); NaN where undefined."""
+        key = (ri, cell)
+        if key not in self._pa_ctl_rate:
+            from onion_eval.baselines import PositionAverage
+            c, s = self.regions[ri]
+            mids = [m for (_, a), m in sorted(self.ds.train_base.items()) if a == CONTROL]
+            ci = self.C.TRACK_INDEX[CONTROL]
+            bins = int(s) + np.arange(self.rb, dtype=np.int64)
+            if mids:
+                self._set_region(c, s)
+                pa = PositionAverage().fit([self._region_batch(mids, c, s)])
+                rate = pa.loo_rate(c, ci, cell, bins)
+            else:
+                rate = np.full(self.rb, np.nan)
+            self._pa_ctl_rate[key] = rate
+        return self._pa_ctl_rate[key]
+
     def _sig_prefixes(self) -> list:
         """Record prefixes of the signal variants: the two modes, plus the predicted-control route."""
         return list(SIGNAL_PREFIX.values()) + (
@@ -679,6 +724,8 @@ class Scorer:
         if pair:
             dos, floor_n = self._fit_pair_refs(job)
         names = tuple(refs) + ((self.main,) if self.main in REFS and self.main not in refs else ())
+        want_avg_ctl = ((not pair) and "position_average" in names
+                        and self._needs_average_control(job))
         out = defaultdict(list)
         for ri, tiles in self._tiles(self.regions):
             self._set_region(*self.regions[ri])
@@ -704,6 +751,13 @@ class Scorer:
                         preds[name] = _np_out(self.marg.predict(batch))
                     elif name == "position_average":
                         preds[name] = _np_out(self._pa(tgt["assay"], ri).predict(batch))
+                        if want_avg_ctl:   # F4: the training-average control at the target's C'
+                            r0 = self.regions[ri][1]
+                            depth = 2.0 ** np.asarray(batch["c_out"][:, t, 0], np.float64)
+                            rate = self._average_control_rate(ri, tgt["cell"])
+                            out["position_average.ctl_mu"].append(np.concatenate([
+                                np.maximum(rate[s - r0:s - r0 + self.L] * depth[b], PRED_FLOOR)
+                                for b, (_, s) in enumerate(tl)]))
                     elif name == "depth_only_scaling":
                         preds[name] = _np_out(dos.predict(batch))
                     elif name == "pseudoreplicate_floor":
@@ -732,6 +786,8 @@ class Scorer:
                         out[h].append(np.concatenate([self.ds.read(job["target"], c, s, self.L, h)
                                                       for c, s in tl]).astype(np.float64))
         res = {k: (np.concatenate(v) if k != "log2r" else v[0]) for k, v in out.items()}
+        if "position_average.ctl_mu" in res and not np.isfinite(res["position_average.ctl_mu"]).all():
+            del res["position_average.ctl_mu"]     # no training control covers a bin: as before F4
         return res
 
     # -------------------------------------------------------------- imputation
@@ -896,9 +952,15 @@ class Scorer:
                 lam_reason = ("the predictor gives no control prediction (predict_control off, or "
                               "a training-free baseline)")
             elif defined:
+                ctl, avg = A.get("main.ctl_mu"), False
+                if (ctl is None and pre != PC_PREFIX and self.main == "position_average"
+                        and self.lambda_source != "observed_control"
+                        and A.get("position_average.ctl_mu") is not None):
+                    ctl, avg = A["position_average.ctl_mu"], True     # F4
                 try:
-                    sp, src = self.sig.signal_from_nb(n, mu, row_v, predicted_control=A.get("main.ctl_mu"),
+                    sp, src = self.sig.signal_from_nb(n, mu, row_v, predicted_control=ctl,
                                                       mode=mode, **kw)
+                    src = TRAINING_AVERAGE_CONTROL if avg else src
                     ps = Mx.to_space(np.asarray(sp, np.float64), "signal_arcsinh")
                 except (ValueError, KeyError) as e:
                     lam_reason = f"no signal from the prediction: {e}"
@@ -909,10 +971,13 @@ class Scorer:
             else:
                 a_s = None
                 if pa_ok:
+                    actl = A.get("position_average.ctl_mu")     # F4: None unless no observed control
                     try:
                         sa, _ = self.sig.signal_from_nb(A["position_average.n"], A["position_average.mu"],
-                                                        row, predicted_control=None, mode=mode, **kw)
+                                                        row, predicted_control=actl, mode=mode, **kw)
                         a_s = Mx.to_space(np.asarray(sa, np.float64), "signal_arcsinh")
+                        if actl is not None:
+                            rec["lambda_source_training_average"] = TRAINING_AVERAGE_CONTROL
                     except (ValueError, KeyError) as e:
                         a_s, pa_reason = None, f"no signal from the position average: {e}"
                 a_by_mode[mode] = (a_s, pa_reason)
@@ -1262,14 +1327,20 @@ class Scorer:
         h1s["per_target"] = {r["target"]: {"assay": r["assay"], "cell": r["cell"],
                                            "level": _j(r["sig_level"]), "N": _j(r["sig_N"]),
                                            "lambda_source": r.get("lambda_source"),
-                                           "lambda_reason": r.get("lambda_reason", "")}
+                                           "lambda_reason": r.get("lambda_reason", ""),
+                                           **({"lambda_source_training_average":
+                                               r["lambda_source_training_average"]}
+                                              if "lambda_source_training_average" in r else {})}
                              for r in recs}
         h1s["dnase_route"] = self.dnase_route
         h1s["signal_mode"] = "expectation"
         h1p = metric(recs, recovered_fn(SIGNAL_PREFIX["plug_in"]), scorable, nb, sd, require_all=ra)
         h1p["per_target"] = {r["target"]: {"assay": r["assay"], "cell": r["cell"],
                                            "level": _j(r["sig_pi_level"]), "N": _j(r["sig_pi_N"]),
-                                           "lambda_source": r.get("lambda_source")}
+                                           "lambda_source": r.get("lambda_source"),
+                                           **({"lambda_source_training_average":
+                                               r["lambda_source_training_average"]}
+                                              if "lambda_source_training_average" in r else {})}
                              for r in recs}
         h1p["dnase_route"] = self.dnase_route
         h1p["signal_mode"] = "plug_in"
