@@ -16,6 +16,13 @@ included) is written as the column's fixed centre (so it standardises to 0).
 `CovariateEmbedding` standardises the numeric columns with fixed constants (no fitted state, so a checkpoint never depends on a fit) and embeds each
 categorical column through its own `nn.Embedding`.
 
+Component arms (pinned interface E, chunk A3). `covariate_embedding = numeric_only` builds the
+embedding with `numeric_only=True` (every categorical id is read as 0). `covariate_dropout = p`
+is applied by `model_covariates(..., dropout=p)` in training mode only: it marks a dropped track's
+rows of the ENCODER copies of C and C' with NaN, and an embedding built with `null_vector=True`
+maps such a row to one learned null vector. The copies whose column 0 the count transform and the
+NB head read are never touched.
+
 D6: read-derived QC (`QC_COLUMNS`) goes into C only when `qc_on_input` is set, never into C'.
 `c_out` therefore has exactly K_META columns, always.
 
@@ -127,8 +134,10 @@ class CovariateEmbedding(nn.Module):
     The scrambled-covariates control is applied by the caller (`model_covariates`), not here.
     """
 
-    def __init__(self, k_in: int, d_out: int, d_cat: int = 8, hidden: int = 64):
+    def __init__(self, k_in: int, d_out: int, d_cat: int = 8, hidden: int = 64, *,
+                 numeric_only: bool = False, null_vector: bool = False):
         super().__init__()
+        self.numeric_only = bool(numeric_only)
         if k_in not in (K_META, K_META + K_QC):
             raise ValueError(f"k_in {k_in}; want {K_META} or {K_META + K_QC}")
         cols = list(META_COLUMNS) + (list(QC_COLUMNS) if k_in > K_META else [])
@@ -140,18 +149,32 @@ class CovariateEmbedding(nn.Module):
         self.tables = nn.ModuleList(nn.Embedding(CAT_TABLE, d_cat) for _ in self.cat_idx)
         n_feat = len(self.num_idx) + d_cat * len(self.cat_idx)
         self.mlp = nn.Sequential(nn.Linear(n_feat, hidden), nn.GELU(), nn.Linear(hidden, d_out))
+        # created only for the covariate-dropout arm, so a default build keeps today's state_dict
+        self.null = nn.Parameter(torch.zeros(d_out)) if null_vector else None
 
     def forward(self, c: torch.Tensor) -> torch.Tensor:
         if c.shape[-1] != self.k_in:
             raise ValueError(f"covariates have K = {c.shape[-1]}, embedding built for {self.k_in}")
         c = c.float()
+        dropped = None
+        if self.null is not None:
+            dropped = torch.isnan(c).any(dim=-1)
+            c = torch.where(torch.isnan(c), torch.zeros_like(c), c)
+        elif torch.isnan(c).any():
+            raise ValueError("covariate rows are NaN (covariate dropout) but this embedding was "
+                             "built without null_vector=True")
         num = (c[..., self.num_idx] - self.centre) / self.scale
         feats = [num]
         for j, i in enumerate(self.cat_idx):
             ids = c[..., i].round().long()
             ids = torch.where((ids >= 0) & (ids < CAT_TABLE), ids, torch.zeros_like(ids))
+            if self.numeric_only:
+                ids = torch.zeros_like(ids)
             feats.append(self.tables[j](ids))
-        return self.mlp(torch.cat(feats, dim=-1))
+        e = self.mlp(torch.cat(feats, dim=-1))
+        if dropped is not None:
+            e = torch.where(dropped[..., None], self.null.to(e.dtype), e)
+        return e
 
 
 def scramble_covariates(c: torch.Tensor, avail: torch.Tensor, generator=None) -> torch.Tensor:
@@ -179,7 +202,17 @@ def scramble_mode(cfg: dict) -> str:
     return "covariates" if cfg.get("scramble_covariates") else "none"
 
 
-def model_covariates(batch: dict, mode: str, training: bool) -> tuple:
+def drop_covariates(c_in: torch.Tensor, c_out: torch.Tensor, p: float) -> tuple:
+    """The covariate-dropout arm: one draw per (window, track) from the global torch RNG; a dropped
+    track's rows of C and C' become NaN (read by `CovariateEmbedding(null_vector=True)` as the
+    learned null vector). Returns new tensors; the inputs are not modified."""
+    drop = torch.rand(c_in.shape[:2], device=c_in.device) < p                 # [B, A]
+    nan = torch.tensor(float("nan"), device=c_in.device)
+    return (torch.where(drop[..., None], nan.to(c_in.dtype), c_in),
+            torch.where(drop[..., None], nan.to(c_out.dtype), c_out))
+
+
+def model_covariates(batch: dict, mode: str, training: bool, dropout: float = 0.0) -> tuple:
     """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
     the count transform and the NB head use.
 
@@ -189,13 +222,23 @@ def model_covariates(batch: dict, mode: str, training: bool) -> tuple:
     same scrambled depth. Every rung calls this once per forward; neither the dataset nor the train
     loop scrambles. Eval mode draws from a generator seeded with SCRAMBLE_SEED; training mode from
     the global torch RNG.
+
+    `dropout` (config `covariate_dropout`, default 0): in training mode only, after any scramble,
+    each track's rows of the two encoder copies are dropped with this probability
+    (`drop_covariates`); the two transform copies are never dropped, so the depth offset is kept.
+    At 0, or in eval mode, nothing is drawn and the outputs are today's.
     """
     c_in, c_out = batch["c_in"], batch["c_out"]
     if mode == "none":
-        return c_in, c_out, c_in, c_out
-    gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
-    s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
-    s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
-    if mode == "all":
-        return s_in, s_out, s_in, s_out
-    return s_in, s_out, c_in, c_out
+        e_in, e_out, t_in, t_out = c_in, c_out, c_in, c_out
+    else:
+        gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
+        s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
+        s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
+        if mode == "all":
+            e_in, e_out, t_in, t_out = s_in, s_out, s_in, s_out
+        else:
+            e_in, e_out, t_in, t_out = s_in, s_out, c_in, c_out
+    if training and dropout > 0:
+        e_in, e_out = drop_covariates(e_in, e_out, float(dropout))
+    return e_in, e_out, t_in, t_out
