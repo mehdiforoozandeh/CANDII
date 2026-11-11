@@ -350,3 +350,10 @@ Evidence: `cruxvault/results/t166/BOARD_REPRO.md`, `verify_published.tsv`, `veri
 - The onion-layer, resolution and mixed-model analyses use training and validation tracks only until the single blind pass. Reason: the PI's rule is that the blind tracks are touched once, at the end.
 - The "scramble everything" control runs on rung 1 only. On rungs 2 to 6 it informs no decision (15 runs, about 170 CPU-h cut).
 - The plug-in signal is not scored against the secondary truth on the board (about 270 CPU-h cut). It is still reported beside the headline against the primary truth (ruling 20).
+
+## 2026-11-11 PI ruling 26: Flashzoi in the final model depends on its training data
+
+PI's words: "decide on evidence -- make sure what is in flashzoi training data (both tracks and genomic loci). if the overlap is non-zero, ablation only. if overlap is absolutely zero, we are allowed to use flashzoi in the final model."
+
+- The agent checks Flashzoi's training tracks and training loci against the EIC blind set, from the published target table and fold file.
+- A non-zero overlap makes Flashzoi an ablation arm only. A zero overlap allows it in the final model.
