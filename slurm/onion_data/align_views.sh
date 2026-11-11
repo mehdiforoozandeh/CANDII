@@ -3,6 +3,7 @@
 #
 #   sbatch --output=<log> [--time ... --mem ... --cpus-per-task ...] \
 #       <kit>/slurm/onion_data/align_views.sh <kit dir> build <build args...>
+#   sbatch ... align_views.sh <kit dir> run --build-list <tsv> --row <n> [run args...]
 #   sbatch ... align_views.sh <kit dir> verify --measurements <dir>
 #
 # Environment: the kit venv of slurm/onion_kit/run.sh (requirements-fir.txt and the kit wheels, in
@@ -19,8 +20,8 @@
 #SBATCH --gres=none
 
 set -uo pipefail
-KIT="${1:?usage: align_views.sh <kit dir> build|verify <args...>}"
-MODE="${2:?usage: align_views.sh <kit dir> build|verify <args...>}"
+KIT="${1:?usage: align_views.sh <kit dir> build|run|verify <args...>}"
+MODE="${2:?usage: align_views.sh <kit dir> build|run|verify <args...>}"
 shift 2
 KIT=$(cd "$KIT" && pwd)
 [ -f "$KIT/tools/onion_data/align_views.py" ] || { echo "no align_views.py in $KIT" >&2; exit 2; }
@@ -43,6 +44,7 @@ source "$KIT/slurm/_kit_pin.sh"
 
 case "$MODE" in
   build) python tools/onion_data/align_views.py build "$@" --tmp "$SLURM_TMPDIR" ;;
+  run) python tools/onion_data/align_views.py run "$@" --tmp "$SLURM_TMPDIR/views" ;;
   verify) python tools/onion_data/align_views.py verify "$@" ;;
   *) echo "unknown mode $MODE" >&2; echo "[onion-run] exit=2"; exit 2 ;;
 esac

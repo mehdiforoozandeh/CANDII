@@ -62,7 +62,7 @@ def path(f):
 def test_units_and_arms(meta):
     got = {u["unit"]: D.arms_for(u) for u in D.units(meta)}
     assert got == {
-        "experiment": ["base", "se"],                     # shortest read is 36 bp: no crop
+        "pooled": ["base", "se"],                         # shortest read is 36 bp: no crop
         "br1tr1": ["base", "se", "crop36", "crop50"],
         "br1tr1ln1": ["base", "se", "crop36", "crop50"],
         "br1tr1ln2": ["base", "se", "crop36", "crop50"],
@@ -76,7 +76,7 @@ def test_replaced_fastq_never_enters(meta):
 
 
 def test_base_experiment_input(meta):
-    u = D.select_unit(meta, "experiment")
+    u = D.select_unit(meta, "pooled")
     inp = D.input_json("ENCSRTEST", u, "base", path, "/refs")
     reps = inp["dnase_align_only.replicates"]
     assert [r["number"] for r in reps] == [1, 2]
@@ -93,8 +93,11 @@ def test_base_experiment_input(meta):
     assert refs["indexed_fasta"]["fai"] == "/refs/GRCh38.fa.fai"
     assert refs["nuclear_chroms"] == "/refs/nuclear_chroms.txt"
     assert not any(k.startswith("hotspot") for k in refs)
-    assert D.product_names("experiment", [1, 2]) == ["br1", "br2"]
-    assert D.out_dir_name("experiment", "base") == "base"
+    # the ChIP/ATAC kit's names and layout (KF): unit `pooled`, products rep<i>
+    assert D.product_names("pooled", [1, 2]) == ["rep1", "rep2"]
+    assert D.out_dir_name("pooled", "base") == "base"
+    with pytest.raises(SystemExit):
+        D.select_unit(meta, "experiment")
 
 
 def test_se_arm_takes_mate1_only(meta):
@@ -113,12 +116,12 @@ def test_crop_arm_sets_trim_length(meta, arm, n):
     assert rep["pe_fastqs"] == [{"R1": "/tmp/fq/ENCFF00B1.fastq.gz",
                                  "R2": "/tmp/fq/ENCFF00B2.fastq.gz"}]
     assert D.out_dir_name("br1tr1ln2", arm) == f"br1tr1ln2.{arm}"
-    assert D.product_names("br1tr1ln2", [1]) == ["br1tr1ln2"]
+    assert D.product_names("br1tr1ln2", [1]) == ["rep1"]
 
 
 def test_arm_that_does_not_apply_is_refused(meta):
     with pytest.raises(SystemExit, match="does not apply"):
-        D.input_json("ENCSRTEST", D.select_unit(meta, "experiment"), "crop36", path, "/refs")
+        D.input_json("ENCSRTEST", D.select_unit(meta, "pooled"), "crop36", path, "/refs")
     with pytest.raises(SystemExit, match="does not apply"):
         D.input_json("ENCSRTEST", D.select_unit(meta, "br2tr1"), "se", path, "/refs")
     with pytest.raises(SystemExit, match="unknown arm"):
@@ -144,24 +147,53 @@ def test_dry_run_from_build_list(meta, tmp_path):
     md = tmp_path / "meta.json"
     md.write_text(json.dumps(meta))
     bl = tmp_path / "build.tsv"
-    bl.write_text("experiment\tunit\tarm\nENCSRTEST\texperiment\tbase\nENCSRTEST\tbr1tr1\tcrop50\n")
-    D.main(["run", "--build-list", str(bl), "--row", "1", "--work", str(tmp_path / "work"),
+    # the `row` column picks the row (as fastq_uniform), not the line index (KF fix)
+    bl.write_text("row\texperiment\tunit\tarm\n7\tENCSRTEST\tpooled\tbase\n"
+                  "8\tENCSRTEST\tbr1tr1\tcrop50\n")
+    D.main(["run", "--build-list", str(bl), "--row", "8", "--work", str(tmp_path / "work"),
             "--metadata", str(md), "--tmp", str(tmp_path / "tmp"), "--dry-run",
-            "--scratch-refs", "/refs"])
+            "--scratch-refs", "/refs", "--fastq-root", str(tmp_path / "fq")])
     inp = json.loads((tmp_path / "work/ENCSRTEST/br1tr1.crop50/input.json").read_text())
     (rep,) = inp["dnase_align_only.replicates"]
     assert rep["read_length"] == 50 and len(rep["pe_fastqs"]) == 2
-    assert rep["pe_fastqs"][0]["R1"].endswith("/tmp/fastq/ENCFF00A1.fastq.gz")
+    # FASTQs come from the shared staging dir, as the ChIP/ATAC kit's do
+    assert rep["pe_fastqs"][0]["R1"] == str(tmp_path / "fq/ENCSRTEST/ENCFF00A1.fastq.gz")
+    with pytest.raises(SystemExit, match="0 rows with row = 1"):
+        D.read_build_list(bl, 1)
 
 
 def test_build_list_needs_columns(tmp_path):
     bl = tmp_path / "b.tsv"
     bl.write_text("experiment\tarm\nE\tbase\n")
     with pytest.raises(SystemExit, match="needs columns"):
-        D.read_build_list(bl, 0)
+        D.read_build_list(bl, 1)
 
 
 def test_reference_bundle_record_is_complete():
     assert {D.REF_INDEXED_FASTA, D.REF_BWA_INDEX, D.REF_NUCLEAR_CHROMS} <= set(D.REFERENCE_FILES)
     assert all(len(v[2]) == 32 for v in D.REFERENCE_FILES.values())
     assert D.IMAGE_DIGEST.startswith("sha256:") and len(D.IMAGE_DIGEST) == 71
+
+
+def test_archived_fastqs_used_only_without_released(meta):
+    """7 training DNase-seq experiments of the published list have archived FASTQs only (D4)."""
+    for f in meta["fastqs"]:
+        f["status"] = "archived"
+    accs = {r["R1"]["accession"] for u in D.units(meta) for r in D.unit_runs(u)}
+    assert accs == {"ENCFF00A1", "ENCFF00B1", "ENCFF00C1", "ENCFF00X9"}
+    meta["fastqs"][0]["status"] = "released"
+    meta["fastqs"][1]["status"] = "released"
+    accs = {r["R1"]["accession"] for u in D.units(meta) for r in D.unit_runs(u)}
+    assert accs == {"ENCFF00A1"}
+
+
+def test_arm_record_has_the_chip_kit_form(meta):
+    u = D.select_unit(meta, "pooled")
+    reps = D.replicates_json("ENCSRTEST", u, "base", path)
+    rec = D.arm_record("ENCSRTEST", "pooled", "base", reps, u, {})
+    assert [(r["rep"], r["bio_rep"]) for r in rec["reps"]] == [(1, 1), (2, 2)]
+    assert rec["paired_end_per_rep"] == [True, False] and rec["run_type"] == "mixed"
+    assert rec["mapq_threshold"] == 10 and rec["dedup"] == "on" and rec["read_length"] == 36
+    se = D.arm_record("ENCSRTEST", "br1tr1", "se", D.replicates_json(
+        "ENCSRTEST", D.select_unit(meta, "br1tr1"), "se", path), D.select_unit(meta, "br1tr1"), {})
+    assert se["run_type"] == "single-ended" and (se["arm_knob"], se["arm_value"]) == ("se", "1")

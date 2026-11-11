@@ -6,8 +6,8 @@
 # Row: the third argument, else $SLURM_ARRAY_TASK_ID. Caper runs on its Local backend inside this
 # job; Cromwell's execution tree is under $SLURM_TMPDIR and dies with the job. Only the keepers
 # reach /scratch/mforooz/onion/work/<experiment>/<arm>/ (tools/onion_data/fastq_uniform.py).
-# Afterwards, if the kit holds tools/onion_data/align_views.py (chunk D5) and ONION_VIEWS is not 0,
-# the experiment's counts are built from those keepers with the kit's own venv.
+# Afterwards, if ONION_VIEWS is not 0, `align_views.py run --row` builds the row's measurements
+# from those keepers with the kit's own venv. The bulk build uses build_row.sh (all pipelines).
 # Cost record: `sacct -j <job> --format=JobID,Elapsed,TotalCPU,AllocTRES%60,MaxRSS,State`.
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=onion_fastq
@@ -41,18 +41,18 @@ echo "=== fastq_uniform.py exit=$rc $(date -u)"
 [ "$rc" -eq 0 ] || { echo "[onion-fastq] exit=$rc"; exit "$rc"; }
 
 if [ "${ONION_VIEWS:-1}" != 0 ] && [ -f "$KIT/tools/onion_data/align_views.py" ]; then
-  EXP=$(awk -F'\t' -v r="$ROW" 'NR==1{for(i=1;i<=NF;i++)c[$i]=i; next} $c["row"]==r{print $c["experiment"]}' "$BL")
   deactivate 2>/dev/null || true
   set +u; module load python/3.10.13; set -u
   { virtualenv --no-download "$SLURM_TMPDIR/kitvenv" &&
     source "$SLURM_TMPDIR/kitvenv/bin/activate" &&
     pip install -q --no-index --upgrade pip &&
     pip install -q --no-index -r "$KIT/requirements-fir.txt" &&
-    pip install -q --no-index --find-links "$KIT/wheels" -r "$KIT/requirements-pypi.txt"; } ||
+    pip install -q --no-index --find-links "$KIT/wheels" -r "$KIT/requirements-pypi.txt" &&
+    pip install -q --no-index pyBigWig; } ||
     { echo "kit venv setup failed"; echo "[onion-fastq] exit=4"; exit 4; }
   cd "$KIT" && source "$KIT/slurm/_kit_pin.sh"
-  python tools/onion_data/align_views.py run --build-list "$BL" --experiment "$EXP" \
-    --work "$WORK" --out /scratch/mforooz/onion/measurements
+  python tools/onion_data/align_views.py run --build-list "$BL" --row "$ROW" \
+    --work "$WORK" --out /scratch/mforooz/onion/measurements --tmp "$SLURM_TMPDIR/views"
   rc=$?
   echo "=== align_views.py exit=$rc $(date -u)"
 else

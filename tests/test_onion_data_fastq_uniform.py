@@ -246,3 +246,170 @@ def test_byte_ranges_cover_the_file_once():
         assert rs[0][0] == 0 and rs[-1][1] == size - 1
         assert all(b[0] == a[1] + 1 for a, b in zip(rs, rs[1:]))
         assert len(rs) <= n
+
+
+# --- KF (t180): mixed run types, not-applicable arms, staging, dropped BAMs ---------------------
+
+#: ENCSR082NQB-like: bio rep 1 one PE pair; bio rep 2 one PE pair plus one SE run (mixed)
+MIXED = {"experiment": "ENCSR000MIX", "note": "", "files": [
+    _f("ENCFF301", 1, 1, 76, "1", "ENCFF302"), _f("ENCFF302", 1, 1, 76, "2", "ENCFF301"),
+    _f("ENCFF401", 2, 1, 76, "1", "ENCFF402"), _f("ENCFF402", 2, 1, 76, "2", "ENCFF401"),
+    _f("ENCFF403", 2, 1, 76)]}
+
+
+def test_mixed_replicate_runs_as_single_end_mate1_like_encode4():
+    """ENCODE4's chip-seq-alignment-step v2 aligned these experiments single-end from mate 1 of
+    each pair plus the SE runs, for every replicate (portal derived_from, 2026-11-11)."""
+    e = "ENCSR000MIX"
+    d = js(row(e, "H3K79me2", "broad_histone"), MIXED)
+    assert d["chip.paired_end"] is False
+    assert d["chip.fastqs_rep1_R1"] == [p(e, "ENCFF301")]                  # PE-only rep too
+    assert d["chip.fastqs_rep2_R1"] == [p(e, "ENCFF401"), p(e, "ENCFF403")]
+    assert not any(k.endswith("_R2") for k in d)
+    reps = F.unit_reps(MIXED, "pooled")
+    a = F.arm_settings(MIXED, reps, "base")
+    assert a["run_type"] == "single-ended" and "mate 1" in a["mixed_run_types"]
+    assert reps[1]["mixed_run_types"] and reps[1]["mates_dropped"] == ["ENCFF402"]
+    # a lane of the mixed library is one run type, so it stays what it is
+    lane = js(row(e, "H3K79me2", "broad_histone", unit="br2tr1ln1"), MIXED)
+    assert lane["chip.paired_end"] is True and lane["chip.fastqs_rep1_R2"] == [p(e, "ENCFF402")]
+
+
+def test_se_arm_of_a_mixed_experiment_is_not_applicable(tmp_path):
+    reps = F.unit_reps(MIXED, "pooled")
+    with pytest.raises(F.NotApplicable, match="repeat the base"):
+        F.arm_settings(MIXED, reps, "se")
+    r = row("ENCSR000MIX", "H3K79me2", "broad_histone", arm="se")
+    d = F.arm_dir(tmp_path, r)
+    d.mkdir(parents=True)
+    F.write_not_applicable(d, r, "x")
+    assert F.verify_arm(d) == []                     # counts as verified: FASTQs can be cleaned
+    assert json.loads((d / F.NOT_APPLICABLE).read_text())["arm"] == "se"
+
+
+def test_run_dir_names_exclude_readset_dirs():
+    for ok in ("base", "se", "crop36", "br1tr2ln3.base", "br2.crop50"):
+        assert F.RUN_DIR_RE.match(ok)
+    for no in ("pooled.uniform", "br1.native", "BUILD_COST.uniform.3.json", "base.x"):
+        assert not F.RUN_DIR_RE.match(no)
+
+
+def test_dropped_bams_still_verify(tmp_path):
+    d = tmp_path / "base"
+    d.mkdir()
+    lines = ["name\tsrc\tbytes\tmd5"]
+    for stem in ("unfiltered.bam", "filtered.bam", "filtered.bam.bai", "tagAlign.gz"):
+        (d / f"rep1.{stem}").write_bytes(b"abc")
+        lines.append(f"rep1.{stem}\tsrc\t3\t{F.md5_file(d / f'rep1.{stem}')}")
+    (d / "HARVEST.tsv").write_text("\n".join(lines) + "\n")
+    (d / "arm.json").write_text(json.dumps({"reps": [{"rep": 1, "bio_rep": 1}]}))
+    (d / "ALIGN_DONE").write_text("{}")
+    (d / "rep1.unfiltered.bam").unlink()
+    assert F.verify_arm(d) != []
+    (d / "DROPPED.tsv").write_text("name\tbytes\tmd5\treason\tdropped_utc\n"
+                                   "rep1.unfiltered.bam\t3\tx\tkeep_bam=0\tt\n")
+    assert F.verify_arm(d) == []
+
+
+@pytest.fixture
+def range_server(tmp_path):
+    """A local HTTP server that honours Range, logs every request and fails the first request for
+    one path (to exercise retry)."""
+    import http.server
+    import threading
+    root = tmp_path / "srv"
+    root.mkdir()
+    log = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            path = root / self.path.lstrip("/")
+            log.append((self.path, self.headers.get("Range"), self.headers.get("User-Agent")))
+            if self.path.endswith("flaky.bin") and sum(1 for x in log if x[0] == self.path) == 1:
+                self.send_response(503)
+                self.end_headers()
+                return
+            data = path.read_bytes()
+            rg = self.headers.get("Range")
+            if rg:
+                lo, hi = (int(x) for x in rg.split("=")[1].split("-"))
+                body = data[lo:hi + 1]
+                self.send_response(206)
+            else:
+                body = data
+                self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    yield root, f"http://127.0.0.1:{srv.server_address[1]}", log
+    srv.shutdown()
+
+
+def test_fetch_many_ranges_md5_retry_and_user_agent(range_server, tmp_path, monkeypatch):
+    import hashlib
+    import os as _os
+    root, url, log = range_server
+    monkeypatch.setattr(F, "backoff_s", lambda k, base=5.0, cap=300.0: 0.01)
+    items = []
+    for i, name in enumerate(("a.bin", "b.bin", "flaky.bin")):
+        data = _os.urandom(5000 + 997 * i)
+        (root / name).write_bytes(data)
+        items.append({"url": f"{url}/{name}", "dest": tmp_path / "out" / name,
+                      "md5": hashlib.md5(data).hexdigest(), "bytes": len(data)})
+    st = F.fetch_many(items, ranges=7, parallel_files=2)
+    for it in items:
+        assert Path(it["dest"]).read_bytes() == (root / Path(it["dest"]).name).read_bytes()
+        assert (Path(it["dest"]).stat().st_mode & 0o777) == 0o444
+    assert st["files"] == 3 and st["ranges"] == 7 and st["parallel_files"] == 2
+    per_file = {}
+    for path, rg, ua in log:
+        per_file.setdefault(path, set()).add(rg)
+        assert ua == F.USER_AGENT
+    assert all(len(v) == 7 for v in per_file.values())        # 7 distinct ranges per file
+    # already staged and md5-good: no request
+    n = len(log)
+    assert F.fetch_many(items, ranges=7, parallel_files=2)["files"] == 0 and len(log) == n
+    # a wrong md5 fails after the retries, and leaves no file behind
+    bad = dict(items[0], dest=tmp_path / "out" / "bad.bin", md5="0" * 32)
+    monkeypatch.setattr(F, "time", type("T", (), {"time": staticmethod(__import__("time").time),
+                                                  "sleep": staticmethod(lambda s: None),
+                                                  "strftime": staticmethod(__import__("time").strftime)}))
+    with pytest.raises(SystemExit, match="md5"):
+        F.fetch_many([bad], ranges=3, parallel_files=1)
+    assert not (tmp_path / "out" / "bad.bin").exists()
+
+
+def test_stage_row_routes_native_rows_to_their_bams(range_server, tmp_path, monkeypatch):
+    import hashlib
+    root, url, _ = range_server
+    data = b"BAM" * 1000
+    (root / "ENCFF989MMP.bam").write_bytes(data)
+    monkeypatch.setattr(F, "portal_file", lambda acc: {
+        "accession": acc, "md5": hashlib.md5(data).hexdigest(), "bytes": len(data), "bio_rep": 1,
+        "output_type": "redacted unfiltered alignments", "status": "released",
+        "assembly": "GRCh38", "file_format": "bam", "mapped_read_length": 36,
+        "mapped_run_type": "single-ended", "analysis_step_version": "/x/bwa-alignment-step-v-1-0/",
+        "url": f"{url}/{acc}.bam"})
+    r = {"row": "1", "experiment": "ENCSR749PIF", "assay": "chipseq-control",
+         "assay_class": "control", "unit": "pooled", "arm": "base",
+         "fastq_files": "ENCFF989MMP", "pipeline": "native-redacted-bam"}
+    assert F.row_kind(r) == "native"
+    F.stage_row(r, tmp_path / "fq", ranges=4, parallel_files=1)
+    assert (tmp_path / "fq/ENCSR749PIF/ENCFF989MMP.bam").read_bytes() == data
+    bj = json.loads((tmp_path / "fq/ENCSR749PIF/bams.json").read_text())
+    assert bj["bams"][0]["bio_rep"] == 1
+    assert F.row_kind({"assay_class": "accessibility_dnase",
+                       "pipeline": "dnase-seq-pipeline v3.0.0"}) == "dnase"
+
+
+def test_caper_conf_names_local_jars_so_concurrent_jobs_take_no_lock():
+    t = F.caper_conf_text()
+    assert f"cromwell={F.CROMWELL_JAR}" in t and f"womtool={F.WOMTOOL_JAR}" in t
+    assert "http" not in t and t.startswith("backend=local")

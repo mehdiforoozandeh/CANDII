@@ -860,6 +860,19 @@ def summary(res: dict, out_dir: Path) -> None:
 
 # ------------------------------------------------------------------------------------------- main
 
+def array_spec(rows, priority) -> str:
+    """The `row` numbers of one priority as a SLURM --array spec (`1-104`, or `3,5-9`)."""
+    nums = sorted(int(r["row"]) for r in rows if str(r["priority"]) == str(priority))
+    parts, i = [], 0
+    while i < len(nums):
+        j = i
+        while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
+            j += 1
+        parts.append(str(nums[i]) if i == j else f"{nums[i]}-{nums[j]}")
+        i = j + 1
+    return ",".join(parts)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -879,7 +892,16 @@ def main(argv=None) -> int:
     c.add_argument("--build-list", required=True)
     c.add_argument("--ledger", required=True)
     c.add_argument("--withheld", required=True)
+    r = sub.add_parser("rows", help="print one priority's rows as a SLURM --array spec")
+    r.add_argument("--build-list", required=True)
+    r.add_argument("--priority", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "rows":
+        spec = array_spec(read_tsv(a.build_list), a.priority)
+        if not spec:
+            raise SystemExit(f"no rows with priority {a.priority}")
+        print(spec)
+        return 0
     ledger = read_tsv(a.ledger)
     if a.cmd == "probe":
         res = probe(ledger, read_tsv(Path(a.catalog) / "files.tsv"), a.threads, a.out)

@@ -370,3 +370,19 @@ def test_cli_build_and_check(tmp_path):
                    str(tmp_path / "ledger.tsv"), "--withheld", str(tmp_path / "wh.tsv")]) == 0
     with open(tmp_path / "sum" / "priority_summary.tsv") as fh:
         assert [r["priority"] for r in csv.DictReader(fh, delimiter="\t")] == ["1", "2", "3", "4"]
+
+
+def test_rows_prints_a_priority_as_an_array_spec(tmp_path, capsys):
+    """KF (t180): the submit chunk's one command per priority reads the rows from here."""
+    from onion_data import build_list as BLM
+    rows = [{"row": str(i), "priority": p} for i, p in
+            enumerate([1, 1, 1, 2, 2, 1, 4, 4, 4, 4], start=1)]
+    assert BLM.array_spec(rows, 1) == "1-3,6"
+    assert BLM.array_spec(rows, "4") == "7-10"
+    assert BLM.array_spec(rows, 3) == ""
+    t = tmp_path / "bl.tsv"
+    t.write_text("row\tpriority\n" + "".join(f"{r['row']}\t{r['priority']}\n" for r in rows))
+    assert BLM.main(["rows", "--build-list", str(t), "--priority", "2"]) == 0
+    assert capsys.readouterr().out.strip() == "4-5"
+    with pytest.raises(SystemExit):
+        BLM.main(["rows", "--build-list", str(t), "--priority", "3"])
