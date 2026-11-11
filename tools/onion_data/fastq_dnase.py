@@ -571,7 +571,7 @@ def cmd_setup(a):
     p2 = sh(["java", "-jar", WOMTOOL, "validate", "dnase.wdl"], cwd=root, check=False,
             capture_output=True, text=True)
     manifest["womtool_validate_dnase_wdl"] = {"rc": p2.returncode}
-    ver = apptainer_bash(sif, "samtools --version | head -1; bedtools --version; bwa 2>&1 | grep Version",
+    ver = apptainer_bash(sif, "samtools --version | head -1; bedtools --version; { bwa 2>&1 || true; } | grep Version",
                          binds=[])
     manifest["image_tools"] = ver.strip().splitlines()
     (pdir / "SETUP.json").write_text(json.dumps(manifest, indent=1) + "\n")
@@ -668,7 +668,7 @@ def cmd_run(a):
     conf = tmp / "caper.conf"
     conf.write_text(caper_conf(tmp, a.max_concurrent_tasks))
     sif = Path(a.pipeline_dir) / SIF_NAME
-    sh(["caper", "-c", str(conf), "run", WRAPPER_NAME, "-i", str(inp_path),
+    sh(["caper", "run", WRAPPER_NAME, "-c", str(conf), "-b", "local", "-i", str(inp_path),
         "--singularity", str(sif), "--str-label", f"{experiment}_{out.name}"], cwd=root)
 
     md = find_metadata(tmp / "cromwell_out")
