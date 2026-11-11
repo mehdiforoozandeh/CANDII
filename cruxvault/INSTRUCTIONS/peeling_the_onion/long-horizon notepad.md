@@ -357,3 +357,15 @@ PI's words: "decide on evidence -- make sure what is in flashzoi training data (
 
 - The agent checks Flashzoi's training tracks and training loci against the EIC blind set, from the published target table and fold file.
 - A non-zero overlap makes Flashzoi an ablation arm only. A zero overlap allows it in the final model.
+
+## 2026-11-11 Result and outcome of ruling 26: Flashzoi is an ablation arm only
+
+The overlap of Flashzoi's training data with the EIC blind set is zero on tracks and non-zero on loci. Under ruling 26 the non-zero locus overlap makes Flashzoi an ablation arm only. It does not enter the final model.
+
+- Tracks, same ENCODE experiment: blind 0 of 51, validation 44 of 45, training 252 of 267.
+- Tracks, same cell type and same assay from a different experiment: blind 0, validation 16, training 84.
+- Loci: the training folds of all 4 published replicates cover 68.95% of chr1-22 and chrX. All 4 replicates hold out the same test fold (fold 3, 11.40% of the genome) and validation fold (fold 4).
+- Consequence for the ablation itself: Flashzoi was trained on 44 of the 45 EIC validation experiments, so a validation score of the Flashzoi arm on its training loci is inflated. The Flashzoi arm is judged on fold 3 loci only (11.24% of the genome lies outside every Flashzoi training input window).
+- Not determined: the Borzoi preprint says the four models have distinct held-out folds, which contradicts the code, the repository README and the Flashzoi paper; the code was taken as the authority. The weights were not inspected.
+
+Evidence: `cruxvault/results/flashzoi_overlap/FLASHZOI_OVERLAP.md`, `overlap_tracks.tsv`.
