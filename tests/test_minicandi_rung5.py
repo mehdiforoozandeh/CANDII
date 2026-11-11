@@ -73,10 +73,12 @@ def _model(**over):
 
 def _live(**over):
     """NBHead's output layer is zero-initialised, so at initialisation every output is constant and
-    a wiring check would pass vacuously. Give the head random weights first."""
+    a wiring check would pass vacuously. Add noise to every parameter first."""
     m = _model(**over)
+    g = torch.Generator().manual_seed(7)
     with torch.no_grad():
-        torch.nn.init.normal_(m.head.lin.weight, std=0.5)
+        for p in m.parameters():
+            p.add_(0.05 * torch.randn(p.shape, generator=g))
     return m
 
 
@@ -194,6 +196,9 @@ def test_dna_off_has_no_tower():
 def test_not_applicable(over):
     with pytest.raises(NotApplicable):
         axial.Model(cfg(**over))
+    if over.get("two_step"):
+        with pytest.raises(NotApplicable, match="later ablation on the winning design"):
+            axial.Model(cfg(**over))
 
 
 def test_bad_axis_and_context():

@@ -40,9 +40,9 @@ Parameters are matched to `param_budget` (default 1.0e6) by sizing the FFN width
 module is built, so every arm lands within the 10 % band of interface C.
 
 Config keys read: context_bins, covariate_injection (concat|film|tokens), mask_mode (drop|token),
-dna (own|off|shuffled), count_transform, qc_on_input, param_budget, axis. `scramble_covariates` is
-applied by the train loop (dataset.py). `average_input` and `two_step` are not built in this rung:
-the constructor raises NotApplicable for them.
+dna (own|off|shuffled), count_transform, qc_on_input, param_budget, axis, scramble_covariates and
+scramble_all (`model_covariates`, the rule shared by all six rungs). `average_input` is not built in
+this rung, and `two_step` in none: the constructor raises NotApplicable for them.
 """
 from __future__ import annotations
 
@@ -62,8 +62,10 @@ from minicandi.components import (ConvBlock, CountTransform, CovariateInjector, 
                                   DnaTower, MaskHandler, NBHead, NotApplicable, _check,
                                   sinusoidal_positions)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
+from minicandi.covariates import scramble_covariates  # noqa: E402
 
 RUNG = 5
+NAME = "axial"
 AXES = ("both", "position_only", "track_only", "tied_position")
 PATCH = 16          # bins per patch (400 bp)
 D_MODEL = 128
@@ -72,6 +74,53 @@ N_LAYERS = 4
 D_DNA = 32          # per-bin DNA features
 D_DEC = 32          # per-bin decoder features
 D_FF_MIN = 64
+
+
+# ---------------------------------------------------------------------------------------------
+# Rule shared by all six rungs, kept identical in each module (tests/test_minicandi_all_rungs.py
+# proves it). Registration: the registry imports this module by name and builds `Model(config)`.
+# ---------------------------------------------------------------------------------------------
+TWO_STEP_MESSAGE = ("two_step (D15) is not built in any rung: two-step correction is a later "
+                    "ablation on the winning design")
+SCRAMBLE_SEED = 0
+
+
+def check_rung(cfg: dict) -> None:
+    """Refuse a config that names another rung (`rung` may be the number or the module name)."""
+    r = cfg.get("rung", RUNG)
+    if r not in (RUNG, str(RUNG), NAME):
+        raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
+    if cfg.get("two_step"):
+        raise NotApplicable(TWO_STEP_MESSAGE)
+
+
+def scramble_mode(cfg: dict) -> str:
+    """`all` (scramble_all), `covariates` (scramble_covariates) or `none`."""
+    if cfg.get("scramble_all"):
+        return "all"
+    return "covariates" if cfg.get("scramble_covariates") else "none"
+
+
+def model_covariates(batch: dict, mode: str, training: bool) -> tuple:
+    """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
+    the count transform and the NB head use.
+
+    `covariates`: every covariate column the encoders read (depth included) is permuted across the
+    windows of the batch (`covariates.scramble_covariates`); the transform keeps each track's true
+    depth, so the arm measures use of the covariates beyond the depth offset. `all`: the transform
+    reads the same scrambled depth. Scrambling belongs to the model; the dataset does not apply
+    it. Eval mode draws from a generator seeded with SCRAMBLE_SEED; training mode from the global
+    torch RNG.
+    """
+    c_in, c_out = batch["c_in"], batch["c_out"]
+    if mode == "none":
+        return c_in, c_out, c_in, c_out
+    gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
+    s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
+    s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
+    if mode == "all":
+        return s_in, s_out, s_in, s_out
+    return s_in, s_out, c_in, c_out
 
 
 class AxialAttention(nn.Module):
@@ -132,10 +181,10 @@ class Model(MiniCandi):
         super().__init__()
         cfg = dict(config or {})
         self.config = cfg
+        check_rung(cfg)
         if cfg.get("average_input"):
             raise NotApplicable("rung 5 does not build the average_input channel")
-        if cfg.get("two_step"):
-            raise NotApplicable("rung 5 does not build the two-step (C_base) head")
+        self.scramble = scramble_mode(cfg)
         self.inj_mode = _check(cfg.get("covariate_injection", "tokens"),
                                ("concat", "film", "tokens"), "covariate_injection")
         self.mask_mode = _check(cfg.get("mask_mode", "drop"), ("token", "drop"), "mask_mode")
@@ -196,7 +245,7 @@ class Model(MiniCandi):
 
     # ------------------------------------------------------------------------------------------
 
-    def _rows(self, batch: dict):
+    def _rows(self, batch: dict, c_in, c_out, c_in_t):
         """-> grid x [B, R, N(+1), d], row-attention allow [B, R, R], tie rows [B, R], dna [B, L, D_DNA]."""
         xc, avail, bmask = batch["x_counts"], batch["x_avail"].bool(), batch["x_bin_mask"].bool()
         B, L, _ = xc.shape
@@ -204,7 +253,7 @@ class Model(MiniCandi):
             raise ValueError(f"window has {L} bins; the model was built for {self.L}")
         N, d = self.n_patch, D_MODEL
         vis = MaskHandler.visible(avail, bmask)
-        z = self.transform(xc, batch["c_in"][..., LOG2_DEPTH_COL], vis)            # [B, L, A]
+        z = self.transform(xc, c_in_t[..., LOG2_DEPTH_COL], vis)            # [B, L, A]
         feat = torch.stack([z, torch.ones_like(z)], dim=-1)                        # [B, L, A, 2]
         feat, _ = self.mask(feat, avail, bmask)        # hidden and missing replaced, never read
         feat = feat.view(B, N, PATCH, A, 2).permute(0, 3, 1, 2, 4).reshape(B, A, N, 2 * PATCH)
@@ -221,7 +270,6 @@ class Model(MiniCandi):
             h_dna = h_dna + self.patch_dna(dna.reshape(B, N, PATCH * D_DNA))[:, None]
         h_out = (self.row_out[:, None] + self.pos).expand(B, A, N, d)
 
-        c_in, c_out = batch["c_in"], batch["c_out"]
         if self.inj_mode == "tokens":
             t_in = self.cov_in.tokens(c_in)[:, :, None]                            # [B, A, 1, d]
             t_in = torch.where(avail[:, :, None, None], t_in, torch.zeros_like(t_in))
@@ -246,7 +294,8 @@ class Model(MiniCandi):
         return x, allow, tie, dna
 
     def forward(self, batch: dict) -> dict:
-        x, allow, tie, dna = self._rows(batch)
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
+        x, allow, tie, dna = self._rows(batch, c_in, c_out, c_in_t)
         tied = tie if self.axis == "tied_position" else None
         for blk in self.layers:
             if "pos" in blk:
@@ -263,11 +312,8 @@ class Model(MiniCandi):
             f = f + self.dna_skip(dna)[:, None]
         f = self.refine(f.reshape(B * A, self.L, D_DEC).transpose(1, 2))
         f = f.transpose(1, 2).reshape(B, A, self.L, D_DEC).transpose(1, 2)        # [B, L, A, D]
-        return self.head(f, batch["c_out"])
+        return self.head(f, c_out_t)
 
 
-def build(config: dict) -> Model:
-    return Model(config)
-
-
-__all__ = ["AXES", "AxialAttention", "Model", "NotApplicable", "PATCH", "RUNG", "build"]
+__all__ = ["AXES", "AxialAttention", "Model", "NAME", "NotApplicable", "PATCH", "RUNG",
+           "TWO_STEP_MESSAGE", "model_covariates", "scramble_mode"]

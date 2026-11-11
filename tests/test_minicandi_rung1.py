@@ -18,6 +18,7 @@ from minicandi import contract as C  # noqa: E402
 from minicandi import registry as R  # noqa: E402
 from minicandi import synth  # noqa: E402
 from minicandi import train as T  # noqa: E402
+from minicandi.components import MaskHandler, NotApplicable  # noqa: E402
 from minicandi.dataset import OnionDataset  # noqa: E402
 from minicandi.rungs import pointwise as P  # noqa: E402
 from onion_eval import guardrail as G  # noqa: E402
@@ -92,7 +93,7 @@ def test_build_is_deterministic_and_width_search_draws_nothing():
 
 
 def test_two_step_is_refused():
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotApplicable, match="later ablation on the winning design"):
         R.build_model(_small(two_step=True))
 
 
@@ -114,6 +115,20 @@ def test_wiring_check_passes(tables, inj, mm, transform):
     pert["x_counts"] = torch.where(vis, b["x_counts"] + noise, b["x_counts"])
     with torch.no_grad():
         assert not torch.allclose(m(b)["mu"], m(pert)["mu"])
+
+
+@pytest.mark.parametrize("mm", ["drop", "token"])
+def test_wiring_check_fails_with_the_mask_bypassed(tables, mm, monkeypatch):
+    """Planted negative control: with every bin and track called visible, hidden and missing
+    counts reach the perturbed model and the check must fail (so the passes above are real)."""
+    cfg = _small(mask_mode=mm)
+    torch.manual_seed(0)
+    m = _jiggle(R.build_model(cfg))
+    b = OnionDataset(tables, "train", cfg, 0).batch(4, np.random.default_rng(1))
+    assert C.wiring_check(m, b)["pass"]
+    monkeypatch.setattr(MaskHandler, "visible", staticmethod(lambda a, mk: torch.ones_like(mk)))
+    assert not C.wiring_check(m, b)["pass"]
+    assert not G.copy_leak(m, [b])["part1_wiring_pass"]
 
 
 @pytest.mark.parametrize("inj,mm", [("film", "drop"), ("tokens", "token")])

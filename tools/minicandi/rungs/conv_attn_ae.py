@@ -29,10 +29,10 @@ The trunk width W is fitted to `param_budget` (binary search over multiples of 8
 lands within 10% of the budget (matched parameters).
 
 Config keys read: covariate_injection, mask_mode, dna, count_transform, qc_on_input,
-average_input, two_step, context_bins, param_budget. `scramble_covariates` is applied by the
-train loop (dataset.py), and `control_input`, `predict_control`, `base_depth` by the dataset; the
-model needs no change for them. `two_step = true` raises `NotApplicable` (the model-side form of
-two-step correction, decision D15, is not pinned).
+average_input, scramble_covariates, scramble_all, two_step, context_bins, param_budget.
+`control_input`, `predict_control`, `base_depth` act in the dataset; the model needs no change for
+them. Scrambled covariates: `model_covariates`, the rule shared by all six rungs. `two_step = true`
+raises NotApplicable, as in every rung.
 """
 from __future__ import annotations
 
@@ -48,13 +48,15 @@ if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
 from minicandi import components as M  # noqa: E402
+from minicandi.components import NotApplicable  # noqa: E402
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
+from minicandi.covariates import scramble_covariates  # noqa: E402
 
 RUNG = 3
 NAME = "conv_attn_ae"
 DEFAULTS = {"covariate_injection": "film", "mask_mode": "token", "dna": "own",
             "count_transform": "offset", "qc_on_input": False, "average_input": False,
-            "two_step": False, "context_bins": 1024, "param_budget": 1.0e6}
+            "context_bins": 1024, "param_budget": 1.0e6}
 
 D_TRACK = 16          # per-track input feature width
 D_OUT = 16            # per-track output feature width
@@ -70,6 +72,53 @@ WIDTH_RANGE = (16, 1024)
 BUDGET_TOL = 0.10
 
 
+# ---------------------------------------------------------------------------------------------
+# Rule shared by all six rungs, kept identical in each module (tests/test_minicandi_all_rungs.py
+# proves it). Registration: the registry imports this module by name and builds `Model(config)`.
+# ---------------------------------------------------------------------------------------------
+TWO_STEP_MESSAGE = ("two_step (D15) is not built in any rung: two-step correction is a later "
+                    "ablation on the winning design")
+SCRAMBLE_SEED = 0
+
+
+def check_rung(cfg: dict) -> None:
+    """Refuse a config that names another rung (`rung` may be the number or the module name)."""
+    r = cfg.get("rung", RUNG)
+    if r not in (RUNG, str(RUNG), NAME):
+        raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
+    if cfg.get("two_step"):
+        raise NotApplicable(TWO_STEP_MESSAGE)
+
+
+def scramble_mode(cfg: dict) -> str:
+    """`all` (scramble_all), `covariates` (scramble_covariates) or `none`."""
+    if cfg.get("scramble_all"):
+        return "all"
+    return "covariates" if cfg.get("scramble_covariates") else "none"
+
+
+def model_covariates(batch: dict, mode: str, training: bool) -> tuple:
+    """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
+    the count transform and the NB head use.
+
+    `covariates`: every covariate column the encoders read (depth included) is permuted across the
+    windows of the batch (`covariates.scramble_covariates`); the transform keeps each track's true
+    depth, so the arm measures use of the covariates beyond the depth offset. `all`: the transform
+    reads the same scrambled depth. Scrambling belongs to the model; the dataset does not apply
+    it. Eval mode draws from a generator seeded with SCRAMBLE_SEED; training mode from the global
+    torch RNG.
+    """
+    c_in, c_out = batch["c_in"], batch["c_out"]
+    if mode == "none":
+        return c_in, c_out, c_in, c_out
+    gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
+    s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
+    s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
+    if mode == "all":
+        return s_in, s_out, s_in, s_out
+    return s_in, s_out, c_in, c_out
+
+
 def resolve_config(config: dict | None) -> dict:
     cfg = dict(DEFAULTS)
     cfg.update(config or {})
@@ -82,11 +131,7 @@ class Model(MiniCandi):
     def __init__(self, config: dict | None = None, *, width: int | None = None):
         super().__init__()
         cfg = resolve_config(config)
-        if cfg.get("two_step"):
-            raise M.NotApplicable("rung 3 does not implement two_step (D15): the model-side form "
-                                  "of two-step correction is not pinned")
-        if "rung" in cfg and int(cfg["rung"]) != RUNG:
-            raise ValueError(f"config rung {cfg['rung']} is not {RUNG}")
+        check_rung(cfg)
         L = int(cfg["context_bins"])
         if L % (2 ** N_DOWN):
             raise ValueError(f"context_bins {L} must be a multiple of {2 ** N_DOWN}")
@@ -97,6 +142,7 @@ class Model(MiniCandi):
         self.k_in = k_input(cfg)
         self.injection = cfg["covariate_injection"]
         self.average_input = bool(cfg.get("average_input"))
+        self.scramble = scramble_mode(cfg)
 
         self.transform = M.CountTransform(cfg["count_transform"])
         self.lift = nn.Linear(1, D_TRACK)
@@ -131,10 +177,10 @@ class Model(MiniCandi):
 
     def forward(self, batch: dict) -> dict:
         x_counts, x_avail, x_bin_mask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
-        c_in, c_out = batch["c_in"], batch["c_out"]
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
         B, L, Ac = x_counts.shape
         vis = M.MaskHandler.visible(x_avail, x_bin_mask)
-        x = self.transform(x_counts, c_in[..., LOG2_DEPTH_COL], vis)
+        x = self.transform(x_counts, c_in_t[..., LOG2_DEPTH_COL], vis)
         h, _ = self.mask(self.lift(x[..., None]), x_avail, x_bin_mask)    # [B, L, A, D_TRACK]
         if self.injection != "tokens":
             h = self.cov_in(h, c_in[:, None])
@@ -167,7 +213,7 @@ class Model(MiniCandi):
             f = f + self.tok_read(seq[:, Lc + Ac:])[:, None]               # c_out tokens
         else:
             f = self.cov_out(f, c_out[:, None])
-        return self.head(f, c_out)
+        return self.head(f, c_out_t)
 
 
 # ------------------------------------------------------------------------------- budget
@@ -197,18 +243,5 @@ def fit_width(config: dict | None) -> int:
     return best
 
 
-def build(config: dict) -> Model:
-    return Model(config)
-
-
-# Registration with the T1 registry when it exists. The registry imports rung modules lazily by
-# name and reads `Model`; a `register(name, cls)` hook is used only if the registry defines one.
-try:
-    from minicandi import registry as _registry  # noqa: E402
-except ImportError:
-    _registry = None
-if _registry is not None and callable(getattr(_registry, "register", None)):
-    _registry.register(NAME, Model)
-
-
-__all__ = ["DEFAULTS", "Model", "NAME", "RUNG", "build", "fit_width", "resolve_config"]
+__all__ = ["DEFAULTS", "Model", "NAME", "RUNG", "TWO_STEP_MESSAGE", "fit_width",
+           "model_covariates", "resolve_config", "scramble_mode"]

@@ -83,14 +83,13 @@ def _toy_batch(B=3, L=48, K=C.K_META, seed=0, avg=False):
     return b
 
 
-def _bite(model: torch.nn.Module, seed: int = 0) -> torch.nn.Module:
-    """Give every all-zero parameter (the NB head, the FiLM generators' last layers) random
-    values, so outputs depend on inputs and the wiring check is not vacuous."""
+def _perturb(model: torch.nn.Module, seed: int = 0) -> torch.nn.Module:
+    """Add noise to every parameter. The NB head and the FiLM generators start at zero, so an
+    untrained model ignores its inputs and a wiring check would pass vacuously."""
     g = torch.Generator().manual_seed(seed)
     with torch.no_grad():
         for p in model.parameters():
-            if p.numel() and not p.any():
-                p.copy_(torch.randn(p.shape, generator=g) * 0.1)
+            p.add_(0.05 * torch.randn(p.shape, generator=g))
     return model
 
 
@@ -115,6 +114,11 @@ def test_base_json_carries_every_pinned_key_and_the_plan_base():
 def test_tokens_injection_is_not_applicable():
     with pytest.raises(M.NotApplicable):
         conv_ae.Model({**BASE, "covariate_injection": "tokens"})
+
+
+def test_two_step_is_not_applicable():
+    with pytest.raises(M.NotApplicable, match="later ablation on the winning design"):
+        conv_ae.Model({**BASE, "two_step": True})
 
 
 def test_wrong_rung_is_refused():
@@ -149,7 +153,7 @@ def test_construction_does_not_move_the_global_seed():
 
 def test_shapes_and_positivity_on_synthetic_batches(synth_batches):
     torch.manual_seed(0)
-    model = _bite(conv_ae.Model(BASE)).eval()
+    model = _perturb(conv_ae.Model(BASE)).eval()
     for batch in synth_batches:
         C.validate_batch(batch)
         out = model(batch)
@@ -167,7 +171,7 @@ def test_shapes_and_positivity_on_synthetic_batches(synth_batches):
 def test_guardrail_part1_holds_for_every_arm(arm):
     cfg = _cfg(arm)
     torch.manual_seed(0)
-    model = _bite(conv_ae.Model(cfg)).eval()
+    model = _perturb(conv_ae.Model(cfg)).eval()
     K = C.k_input(cfg)
     batches = [_toy_batch(K=K, seed=s, avg=cfg["average_input"]) for s in (0, 1)]
     out = model(batches[0])
@@ -196,11 +200,25 @@ def test_guardrail_part1_holds_for_every_arm(arm):
 
 def test_guardrail_part1_on_synthetic_batches(synth_batches):
     torch.manual_seed(0)
-    model = _bite(conv_ae.Model(BASE)).eval()
+    model = _perturb(conv_ae.Model(BASE)).eval()
     g = copy_leak(model, synth_batches, seed=0)
     assert g["part1_wiring_pass"], g
     for b in synth_batches:
         assert C.wiring_check(model, b)["pass"]
+
+
+@pytest.mark.parametrize("arm", ["base", "drop"])
+def test_wiring_check_fails_with_the_mask_bypassed(arm, monkeypatch):
+    """Planted negative control: with every bin and track called visible, hidden and missing
+    counts reach the perturbed model and the check must fail (so the passes above are real)."""
+    torch.manual_seed(0)
+    model = _perturb(conv_ae.Model(_cfg(arm))).eval()
+    b = _toy_batch()
+    assert C.wiring_check(model, b)["pass"]
+    monkeypatch.setattr(M.MaskHandler, "visible",
+                        staticmethod(lambda a, mk: torch.ones_like(mk)))
+    assert not C.wiring_check(model, b)["pass"]
+    assert not copy_leak(model, [b])["part1_wiring_pass"]
 
 
 def test_average_input_needs_avg():
@@ -245,7 +263,7 @@ def test_optimizer_steps_lower_the_nb_loss(synth_batches):
 def test_gradients_reach_covariate_encoders_and_dna_tower(arm, synth_batches):
     cfg = _cfg(arm)
     torch.manual_seed(0)
-    model = _bite(conv_ae.Model(cfg)).train()
+    model = _perturb(conv_ae.Model(cfg)).train()
     b = synth_batches[0]
     o = model(b)
     C.nb_nll(o["n"], o["mu"], b["y_counts"], C.loss_mask(b)).backward()

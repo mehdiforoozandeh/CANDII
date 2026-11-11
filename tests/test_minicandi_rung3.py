@@ -67,14 +67,13 @@ def _toy_batch(B=2, K=C.K_META, seed=0, avg=False, L=L):
     return b
 
 
-def _biting(model):
-    """Leave the zero-initialised NB head and FiLM so every input path reaches the output."""
-    torch.manual_seed(1)
-    for p in model.head.lin.parameters():
-        torch.nn.init.normal_(p, std=0.5)
-    for inj in (model.cov_in, model.cov_out):
-        if inj.mode == "film":
-            torch.nn.init.normal_(inj.g.net[-1].weight, std=0.1)
+def _perturb(model, seed: int = 0):
+    """Add noise to every parameter. The NB head and FiLM start at zero, so an untrained model
+    ignores its inputs and a wiring check would pass vacuously."""
+    g = torch.Generator().manual_seed(seed)
+    with torch.no_grad():
+        for p in model.parameters():
+            p.add_(0.05 * torch.randn(p.shape, generator=g))
     return model.eval()
 
 
@@ -87,7 +86,7 @@ def _batch_for(cfg):
 def test_shapes_positivity_budget_and_guardrail_part1(arm):
     cfg = _cfg(**arm)
     torch.manual_seed(0)
-    model = _biting(R.Model(cfg))
+    model = _perturb(R.Model(cfg))
     n = model.param_count()
     assert abs(n - cfg["param_budget"]) <= 0.10 * cfg["param_budget"], n
     b = _batch_for(cfg)
@@ -107,7 +106,7 @@ def test_shapes_positivity_budget_and_guardrail_part1(arm):
 @pytest.mark.parametrize("mask_mode", M.MASK_MODES)
 def test_every_count_transform_passes_part1(transform, mask_mode):
     cfg = _cfg(count_transform=transform, mask_mode=mask_mode)
-    model = _biting(R.Model(cfg, width=32))
+    model = _perturb(R.Model(cfg, width=32))
     b = _toy_batch()
     out = model(b)
     assert (out["n"] > 0).all() and (out["mu"] > 0).all()
@@ -138,7 +137,7 @@ def test_attention_carries_no_hidden_bin_content(inj, mask_mode):
     change, while a change of visible content does move it (so the check looks at a live
     path). 512 bins, 32 latent positions."""
     Lw = 512
-    model = _biting(R.Model(_cfg(covariate_injection=inj, mask_mode=mask_mode,
+    model = _perturb(R.Model(_cfg(covariate_injection=inj, mask_mode=mask_mode,
                                  context_bins=Lw), width=32))
     b = _toy_batch(B=1, L=Lw)
     hid = dict(b)
@@ -158,7 +157,7 @@ def test_attention_carries_no_hidden_bin_content(inj, mask_mode):
 
 
 def test_a_leaky_variant_fails_the_wiring_check():
-    model = _biting(R.Model(_cfg(), width=32))
+    model = _perturb(R.Model(_cfg(), width=32))
 
     class _NoMask(torch.nn.Module):            # forwards raw features at hidden bins
         def forward(self, h, x_avail, x_bin_mask):
@@ -168,8 +167,21 @@ def test_a_leaky_variant_fails_the_wiring_check():
     assert not C.wiring_check(model, _toy_batch())["pass"]
 
 
+@pytest.mark.parametrize("mask_mode", M.MASK_MODES)
+def test_wiring_check_fails_with_the_mask_bypassed(mask_mode, monkeypatch):
+    """Planted negative control: with every bin and track called visible, hidden and missing
+    counts reach the perturbed model and the check must fail (so the passes above are real)."""
+    model = _perturb(R.Model(_cfg(mask_mode=mask_mode), width=32))
+    b = _toy_batch()
+    assert C.wiring_check(model, b)["pass"]
+    monkeypatch.setattr(M.MaskHandler, "visible",
+                        staticmethod(lambda a, mk: torch.ones_like(mk)))
+    assert not C.wiring_check(model, b)["pass"]
+    assert not copy_leak(model, [b])["part1_wiring_pass"]
+
+
 def test_not_applicable_and_bad_configs():
-    with pytest.raises(M.NotApplicable):
+    with pytest.raises(M.NotApplicable, match="later ablation on the winning design"):
         R.Model(_cfg(two_step=True))
     with pytest.raises(ValueError):
         R.Model(_cfg(context_bins=L + 3))

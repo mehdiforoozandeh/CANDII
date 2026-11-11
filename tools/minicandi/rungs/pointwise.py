@@ -23,7 +23,8 @@ Guardrail part 1 holds by construction: the only path from `x_counts` to the out
 MaskHandler, which replaces every hidden or missing member by `torch.where`, and the drop-mode pool
 weights them by exactly 0. The window-level transforms (local_ratio, quantile) take `visible`.
 
-Not supported: `two_step = true` (decision D15) raises NotImplementedError; no rung-1 arm uses it.
+Scrambled covariates (`scramble_covariates`, `scramble_all`): `model_covariates`, the rule shared
+by all six rungs. `two_step = true` (decision D15) raises NotApplicable, as in every rung.
 """
 from __future__ import annotations
 
@@ -40,10 +41,61 @@ if str(_TOOLS) not in sys.path:
 
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import (CountTransform, CovariateInjector, DnaTower,  # noqa: E402
-                                  MaskHandler, NBHead)
+                                  MaskHandler, NBHead, NotApplicable)
+from minicandi.covariates import scramble_covariates  # noqa: E402
+
+RUNG = 1
+NAME = "pointwise"
 
 DEFAULT_PARAM_BUDGET = 1.0e6
 D_DNA = 32
+
+
+# ---------------------------------------------------------------------------------------------
+# Rule shared by all six rungs, kept identical in each module (tests/test_minicandi_all_rungs.py
+# proves it). Registration: the registry imports this module by name and builds `Model(config)`.
+# ---------------------------------------------------------------------------------------------
+TWO_STEP_MESSAGE = ("two_step (D15) is not built in any rung: two-step correction is a later "
+                    "ablation on the winning design")
+SCRAMBLE_SEED = 0
+
+
+def check_rung(cfg: dict) -> None:
+    """Refuse a config that names another rung (`rung` may be the number or the module name)."""
+    r = cfg.get("rung", RUNG)
+    if r not in (RUNG, str(RUNG), NAME):
+        raise ValueError(f"{NAME} is rung {RUNG}; config has rung {r!r}")
+    if cfg.get("two_step"):
+        raise NotApplicable(TWO_STEP_MESSAGE)
+
+
+def scramble_mode(cfg: dict) -> str:
+    """`all` (scramble_all), `covariates` (scramble_covariates) or `none`."""
+    if cfg.get("scramble_all"):
+        return "all"
+    return "covariates" if cfg.get("scramble_covariates") else "none"
+
+
+def model_covariates(batch: dict, mode: str, training: bool) -> tuple:
+    """(c_in, c_out) for the covariate encoders and (c_in_t, c_out_t) whose column 0 is the depth
+    the count transform and the NB head use.
+
+    `covariates`: every covariate column the encoders read (depth included) is permuted across the
+    windows of the batch (`covariates.scramble_covariates`); the transform keeps each track's true
+    depth, so the arm measures use of the covariates beyond the depth offset. `all`: the transform
+    reads the same scrambled depth. Scrambling belongs to the model; the dataset does not apply
+    it. Eval mode draws from a generator seeded with SCRAMBLE_SEED; training mode from the global
+    torch RNG.
+    """
+    c_in, c_out = batch["c_in"], batch["c_out"]
+    if mode == "none":
+        return c_in, c_out, c_in, c_out
+    gen = None if training else torch.Generator().manual_seed(SCRAMBLE_SEED)
+    s_in = scramble_covariates(c_in.cpu(), batch["x_avail"].cpu(), gen).to(c_in.device)
+    s_out = scramble_covariates(c_out.cpu(), batch["y_avail"].cpu(), gen).to(c_out.device)
+    if mode == "all":
+        return s_in, s_out, s_in, s_out
+    return s_in, s_out, c_in, c_out
 
 
 class _MLP(nn.Module):
@@ -66,8 +118,8 @@ class Model(C.MiniCandi):
     def __init__(self, config: dict):
         super().__init__()
         cfg = dict(config)
-        if cfg.get("two_step"):
-            raise NotImplementedError("rung 1 does not implement two_step (D15)")
+        check_rung(cfg)
+        self.scramble = scramble_mode(cfg)
         d = cfg.get("d_model")
         if d is None:
             d = choose_width(cfg)
@@ -96,9 +148,9 @@ class Model(C.MiniCandi):
 
     def forward(self, batch: dict) -> dict:
         x_avail, x_bin_mask = batch["x_avail"], batch["x_bin_mask"]
-        c_in, c_out = batch["c_in"], batch["c_out"]
+        c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training)
         vis = MaskHandler.visible(x_avail, x_bin_mask)                     # [B, L, A]
-        x = self.transform(batch["x_counts"], c_in[..., C.LOG2_DEPTH_COL], vis)
+        x = self.transform(batch["x_counts"], c_in_t[..., C.LOG2_DEPTH_COL], vis)
         h = self.in_proj(x.unsqueeze(-1)) + self.in_track                  # [B, L, A, d]
         h = self.in_cov(h, c_in[:, None])
         h, vis = self.mask(self.phi(h), x_avail, x_bin_mask)
@@ -123,7 +175,7 @@ class Model(C.MiniCandi):
             g = g + self.out_cov.tokens(c_out)[:, None]
         else:
             g = self.out_cov(g, c_out[:, None])
-        return self.head(self.psi(g), c_out)
+        return self.head(self.psi(g), c_out_t)
 
 
 def _count(cfg: dict, d: int) -> int:
@@ -145,4 +197,5 @@ def choose_width(cfg: dict, step: int = 8, lo: int = 8, hi: int = 2048) -> int:
     return min(cands, key=lambda d: (abs(_count(cfg, d) - budget), d))
 
 
-__all__ = ["Model", "choose_width"]
+__all__ = ["Model", "NAME", "RUNG", "TWO_STEP_MESSAGE", "choose_width", "model_covariates",
+           "scramble_mode"]
