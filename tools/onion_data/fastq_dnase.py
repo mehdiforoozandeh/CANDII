@@ -668,8 +668,14 @@ def cmd_run(a):
     conf = tmp / "caper.conf"
     conf.write_text(caper_conf(tmp, a.max_concurrent_tasks))
     sif = Path(a.pipeline_dir) / SIF_NAME
+    # Caper binds only the common roots of the input JSON's paths, so a task cannot follow the
+    # soft link Cromwell makes to an upstream call's output under cromwell_out (smoke 26818194:
+    # "pigz: abort: read error on concatenated.fastq.gz"). Apptainer adds these binds too.
+    binds = sorted({str(tmp), os.path.realpath(tmp), "/scratch", "/project"})
+    env = dict(os.environ, APPTAINER_BINDPATH=",".join(binds),
+               SINGULARITY_BINDPATH=",".join(binds))
     sh(["caper", "run", WRAPPER_NAME, "-c", str(conf), "-b", "local", "-i", str(inp_path),
-        "--singularity", str(sif), "--str-label", f"{experiment}_{out.name}"], cwd=root)
+        "--singularity", str(sif), "--str-label", f"{experiment}_{out.name}"], cwd=root, env=env)
 
     md = find_metadata(tmp / "cromwell_out")
     if md.get("status") != "Succeeded":
@@ -680,7 +686,6 @@ def cmd_run(a):
     if not (len(unf) == len(nuc) == len(names)):
         die(f"{len(unf)} unfiltered and {len(nuc)} nuclear BAMs for {len(names)} replicates")
     n_reads, tas = {}, []
-    binds = sorted({"/scratch", "/project", str(tmp)})
     for name, ub, nb, dm in zip(names, unf, nuc, dup):
         shutil.copyfile(ub, out / f"{name}.unfiltered.bam.part")
         os.replace(out / f"{name}.unfiltered.bam.part", out / f"{name}.unfiltered.bam")
