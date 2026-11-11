@@ -1,0 +1,532 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Max Sprint 07</title>
+<style>
+  :root{
+    /* --- chrome ------------------------------------------------------- */
+    --paper:#faf9f7;
+    --ink:#1a1a1a;
+    --muted:#77736c;
+    --faint:#a6a29a;
+    --hair:#e6e3dd;
+    --accent:#b5462e;
+
+    /* --- semantic series colours -------------------------------------- */
+    /* One colour per arm, reused identically in chart, legend and bullets.
+       Rename the tokens to your arms; never colour by chart. */
+    --baseline:#8d8f98;
+    --arm-a:#3f7d7a;
+    --arm-b:#b5462e;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    overflow:hidden;
+  }
+
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);
+    width:0;transition:width .5s ease;z-index:50}
+
+  #deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:5.5vh 8vw 8.5vh;   /* bottom pad clears the fixed foot / counter / nav */
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .6s ease,visibility .6s ease;   /* fade only — no slide, no zoom */
+  }
+  .slide.active{opacity:1;visibility:visible;pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  .wrap{width:100%;max-width:1160px;margin:0 auto}
+
+  /* --- typography ----------------------------------------------------- */
+  .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:22px}
+  h1{font-family:var(--serif);font-weight:400;line-height:1.12;
+    font-size:clamp(30px,4.6vw,58px);letter-spacing:-.01em}
+  h2{font-weight:600;line-height:1.14;font-size:clamp(24px,3.4vw,42px);
+    letter-spacing:-.015em;margin-bottom:26px}
+  .lead{font-family:var(--serif);font-weight:400;line-height:1.32;
+    font-size:clamp(22px,2.9vw,36px);letter-spacing:-.005em}
+  .sub{color:var(--muted);font-size:clamp(15px,1.5vw,19px);line-height:1.5;
+    margin-top:22px;max-width:56ch}
+  .note{color:var(--faint);font-size:13px;line-height:1.5;margin-top:26px}
+
+  ul.pts{list-style:none;margin-top:26px;max-width:70ch}
+  ul.pts li{position:relative;padding-left:26px;margin:14px 0;
+    font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  ul.pts li::before{content:"";position:absolute;left:2px;top:.62em;
+    width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  ul.pts li b{color:var(--ink);font-weight:600}
+  .em{color:var(--accent);font-weight:600}
+
+  ul.pts.lg li{font-size:clamp(16px,1.65vw,21px);margin:11px 0}
+  ul.pts.cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 48px;
+    max-width:none;margin-top:18px}
+  @media (max-width:900px){ul.pts.cols{grid-template-columns:1fr}}
+
+  /* numbers the vault owns render in tabular figures so a --refresh that
+     changes a digit does not reflow the sentence around it */
+  [data-src],[data-derived]{font-variant-numeric:tabular-nums;font-weight:600}
+
+  /* --- lineage chain -------------------------------------------------- */
+  .chain{display:flex;align-items:stretch;gap:0;margin-top:34px;flex-wrap:wrap}
+  .node{flex:1;min-width:180px;border:1px solid var(--hair);border-radius:10px;
+    padding:18px 20px;background:#fff}
+  .node .lab{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:8px}
+  .node .txt{font-size:15px;line-height:1.4;color:#2a2a2a}
+  .node.now{border-color:var(--accent);box-shadow:0 1px 0 var(--accent)}
+  .node.now .lab{color:var(--accent)}
+  .arrow{display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:20px}
+
+  /* --- method pipeline ------------------------------------------------ */
+  .pipe{display:flex;align-items:flex-start;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;padding:14px 16px;text-align:left}
+  .step .n{font-family:var(--serif);font-size:22px;color:var(--accent);line-height:1}
+  .step .t{font-size:14.5px;line-height:1.4;color:#2a2a2a;margin-top:8px}
+  .psep{color:var(--faint);font-size:18px;padding:24px 4px 0}
+
+  /* --- target callout ------------------------------------------------- */
+  .target{border-left:3px solid var(--accent);background:#fff;border-radius:0 8px 8px 0;
+    padding:16px 22px;margin-top:6px}
+  .target .tlab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:8px}
+  .target .ttxt{font-size:clamp(15px,1.55vw,19px);line-height:1.5;color:#333}
+  .target .ttxt b{color:var(--ink);font-weight:600}
+
+  .cols2{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;margin-top:26px;
+    align-items:start}
+  @media (max-width:900px){.cols2{grid-template-columns:1fr}}
+  .blk .blab{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;margin-bottom:14px}
+
+  /* --- chips: a short fixed list, when a table would be overkill ------ */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{border:1px solid var(--hair);background:#fff;border-radius:8px;padding:10px 14px;line-height:1.2}
+  .chip .cn{font-size:15px;font-weight:600;color:var(--ink)}
+  .chip .cc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:3px}
+
+  /* --- tables --------------------------------------------------------- */
+  table.dtable{border-collapse:collapse;width:100%;font-size:15px}
+  table.dtable th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;text-align:left;padding:0 14px 10px 0;
+    border-bottom:1px solid var(--hair)}
+  table.dtable td{padding:11px 14px 11px 0;border-bottom:1px solid var(--hair);
+    color:#333;line-height:1.35}
+  table.dtable td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+  table.dtable td.num{font-variant-numeric:tabular-nums}
+  table.dtable td .role{color:var(--muted);font-size:13px}
+
+  /* --- chart ---------------------------------------------------------- */
+  .chartbox{margin:8px 0}
+  .fig{display:flex;justify-content:center}
+  /* Cap chart height so a tall figure can never crowd out its caption bullets.
+     A full-width chart + a legend + four two-line bullets + a footnote is the
+     ceiling for one slide — check the fit after every content edit. */
+  .fig svg{width:100%;height:auto;max-height:44vh;display:block}
+  .fig.wide svg{max-width:1160px}
+  .fig.mid svg{max-width:960px}
+  .legend{display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;justify-content:center;
+    font-size:15px;color:var(--muted)}
+  .legend.big{font-size:16px;gap:30px}
+  .legend .item{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:16px;height:16px;border-radius:3px;flex:none}
+
+  /* SVG text lives in viewBox units and gets scaled DOWN when the svg is placed
+     in a column — so everything here is sized for a projector, ~1.5x what looks
+     right on a laptop. Do not shrink these to taste. */
+  .axlbl{font:500 17px var(--sans);fill:#3a3a3a}
+  .ptitle{font:600 22px var(--sans);fill:#1a1a1a;letter-spacing:.02em}
+  .psub{font:400 14px var(--sans);fill:#8a8a8a}
+  .tick{font:400 15px var(--sans);fill:#9a9a9a}
+  .val{font:600 16px var(--sans)}
+  .cap{font:400 14px var(--sans);fill:#9a9a9a}
+  .grid{stroke:#ececea;stroke-width:1}
+  .axis{stroke:#cfccc6;stroke-width:1.2}
+  .zero{stroke:#bbb;stroke-width:1.6;stroke-dasharray:5 4}
+  .sep{stroke:#e6e3dd;stroke-width:1}
+  .barval{font:600 20px var(--sans)}
+  .mult{font:600 19px var(--sans);fill:#1a1a1a}
+  .xlab{font:600 22px var(--sans);fill:#1a1a1a}
+  .xsub{font:400 15px var(--sans);fill:#8a8a8a}
+  .ylab{font:500 18px var(--sans);fill:#8a8a8a}
+
+  /* --- chrome --------------------------------------------------------- */
+  .foot{position:fixed;bottom:20px;left:8vw;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint)}
+  .count{position:fixed;bottom:20px;right:8vw;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+  .nav{position:fixed;bottom:16px;right:calc(8vw + 64px);display:flex;gap:6px}
+  .nav button{border:1px solid var(--hair);background:#fff;color:var(--muted);
+    width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;
+    transition:border-color .2s,color .2s}
+  .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .hint{margin-top:40px;font-size:12px;color:var(--faint)}
+  kbd{font-family:var(--sans);border:1px solid var(--hair);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+
+  /* --- speaker notes ---------------------------------------------------
+     Optional: an <aside class="notes"> inside a slide, written in <p> (an <li>
+     there counts toward the slide's 7 units). Hidden; `n` overlays the active
+     slide's notes; print puts them under each slide. A deck without notes is
+     unaffected. */
+  aside.notes{display:none}
+  body.shownotes .slide.active aside.notes{display:block;position:fixed;left:7vw;right:7vw;
+    bottom:58px;max-height:52vh;overflow:auto;background:#fff;border:1px solid var(--hair);
+    border-left:4px solid var(--accent);border-radius:10px;padding:16px 22px;font-size:16.5px;
+    line-height:1.55;color:#333;z-index:60;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+  aside.notes::before{content:"Speaker notes · n to close";display:block;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+  aside.notes p{margin:0 0 6px}
+
+  @media print{
+    body{overflow:visible}
+    #progress,.nav,.count,.hint{display:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;
+      height:100vh;transition:none}
+    aside.notes{display:block;margin-top:18px;border-top:1px solid #bbb;padding-top:10px;
+      font-size:12.5px;line-height:1.5;color:#333}
+  }
+  code{font-size:.9em;color:var(--muted)}
+  /* this deck: long headlines + 4 caption bullets, so tighter fit at 16:9 */
+  h2{font-size:clamp(22px,2.6vw,34px);margin-bottom:14px}
+  .fig svg{max-height:36vh}
+  ul.pts.cols{margin-top:10px}
+  ul.pts.cols li{font-size:clamp(13px,1.2vw,16px);margin:5px 0;line-height:1.4}
+</style>
+</head><body><div id="progress"></div>
+<div id="deck">
+
+  <!-- 1 · TITLE
+       job      name the sprint and its three routes
+       source   Max sprint 07 report_sections/00_summary.md
+       numbers  none
+       cut      the nav hint -->
+  <section class="slide active">
+    <div class="wrap">
+      <div class="kicker">Max · sprint 07 · 4–11 Nov 2026</div>
+      <h1>A reference recipe, the real noise floor,<br>and three routes to cell-type-specific signal</h1>
+      <p class="sub">A walkthrough of Max's main findings. Every number is read from his sprint's output tables (repo <code>mlibbrecht/01_2026-10-19_research</code>, sprint 07). The charts are redrawn from those tables.</p>
+      <p class="hint">Navigate with <kbd>&rarr;</kbd> <kbd>&larr;</kbd> or <kbd>space</kbd> · <kbd>n</kbd> for notes</p>
+    </div>
+  </section>
+
+  <!-- 2 · SETUP
+       job      the one metric, the benchmark, the yardstick
+       source   00_summary.md; model/contrasts.tsv seed-gap rows
+       numbers  definitional constants only
+       cut      the threads list -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Setup · how to read every result</div>
+      <h2>One metric, one benchmark, one yardstick</h2>
+      <div class="target">
+        <div class="tlab">Metric · r_spec</div>
+        <div class="ttxt">The correlation between prediction and truth <b>after the signal shared by all cell types is removed</b>. It scores the part of the signal that imputation exists for.</div>
+      </div>
+      <ul class="pts lg">
+        <li><b>Benchmark A v3:</b> 45 held-out ENCODE biosamples, 283 target tracks, 6 chromosomes. Intervals are 95% bootstrap intervals over the held-out biosamples.</li>
+        <li><b>Seed gap</b> (the difference between two runs that differ only in the random seed): 0.001 to 0.011 r_spec over five recipes, 0.007 on average. A single-run difference under about 0.01 is not a finding.</li>
+        <li><b>Seven threads:</b> recipe, noise floor, cell-state vector, processing artifacts, variant effects, compute, literature.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 · RESULT · recipe R2
+       job      one claim, its evidence, the mechanism and the caveat
+       claim    R2 (RNA input + equal-weight loss) beats last sprint's model by +0.031 r_spec
+       source   output/model/contrasts.tsv (primary, rspec, all); interaction.tsv
+       numbers  six contrasts with 95% CIs
+       cut      the two-head row -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Result 1 · the reference recipe</div>
+      <h2>RNA input plus an equal-weight loss raises r_spec by a tenth</h2>
+      <div class="chartbox fig wide" id="chartRecipe"></div>
+      <ul class="pts cols">
+        <li><b>R2 vs R1:</b> r_spec 0.273 → 0.304 (two seeds each), about 4.5× the 0.007 seed gap. R1 is last sprint's best model: frozen DNA-sequence features plus attention over 32 similar reference biosamples.</li>
+        <li><b>The loss matters most.</b> The old loss is a Gaussian negative log-likelihood (NLL), which down-weights bins with high predicted variance. The new loss weights every 25 bp bin equally.</li>
+        <li><b>RNA helps once the loss counts the peaks.</b> The interaction is +0.012 [+0.005, +0.019].</li>
+        <li><b>By mark:</b> the largest gain is on H3K79me2 (+0.150). H3K27ac gains +0.024. H3K9me3 and accessibility show no gain.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4 · RESULT · noise floor
+       job      one claim, its evidence, the mechanism and the caveat
+       claim    the noise floor is ~0.26 on the common targets, not 0.36; sprint 06 used one replicate's depth
+       source   output/floors/floors_headline.tsv (all_common rows)
+       numbers  three floors with 95% CIs
+       cut      the 5% bio-vs-pseudo bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Result 2 · the noise floor</div>
+      <h2>The noise floor is 0.28, not 0.38, so there is more room than we thought</h2>
+      <div class="chartbox fig mid" id="chartFloor"></div>
+      <ul class="pts cols">
+        <li><b>Noise floor:</b> the share of a track's variance that is sequencing noise. No model can go below it.</li>
+        <li><b>Cause:</b> sprint 06 read depth from the ENCODE manifest, which lists one replicate. The benchmark tracks pool both replicates, so the floors were set at about half the true depth.</li>
+        <li><b>Our pseudoreplicate floors hold</b> at the pooled depth for reads ≥ 60 bp (within 0.002). For 36 bp reads they overstate the noise by about 0.1.</li>
+        <li>On six experiments with both kinds of data, biological replicates sit only 5% above the pseudoreplicate prediction. Over all 282 targets the floor is 0.28.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 5 · RESULT · error budget
+       job      one claim, its evidence, the mechanism and the caveat
+       claim    R2 recovers about a quarter of the recoverable cell-type-specific signal
+       source   output/model/decomp_budget.tsv
+       numbers  mse split + recovered share per model
+       cut      the calibration bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Result 3 · where the error is</div>
+      <h2>R2 recovers about a quarter of the cell-type-specific signal that can be recovered</h2>
+      <div class="chartbox fig mid" id="chartBudget"></div>
+      <ul class="pts cols">
+        <li><b>Normalized error</b> (MSE ÷ track variance) for R2 is 0.665. It splits into 0.110 calibration, 0.027 shared signal and 0.527 cell-type-specific signal.</li>
+        <li><b>Of the 0.527 specific error,</b> 0.282 is noise (the corrected floor) and 0.245 is predictable but not yet explained.</li>
+        <li><b>Recovered share:</b> training-track average 0.07, R1 0.21, R2 0.25 (seed 1).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6 · RESULT · cell-state vector (negative)
+       job      one claim, its evidence, the mechanism and the caveat
+       claim    a TF-expression vector via FiLM carries no usable cell-state information; its training gain is regularisation
+       source   output/trans/summary.md; trans/contrasts.tsv ("37 with RNA", seed rows)
+       numbers  four contrasts with 95% CIs
+       cut      none — it is a negative result -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Result 4 · cell state through TF expression · negative</div>
+      <h2>A transcription-factor expression vector gives no cell-state information; its training-time gain is regularization</h2>
+      <div class="chartbox fig wide" id="chartTrans"></div>
+      <ul class="pts cols">
+        <li><b>The test:</b> Corgi+-style FiLM layers (they scale and shift internal features from a vector) feed the expression vector into CANDII.</li>
+        <li><b>Swapping in another biosample's vector</b> at prediction time changes r_spec by +0.001 [−0.002, +0.003].</li>
+        <li><b>Constant and shuffled vectors</b> reproduce or beat the training gain, so the gain is noise injection.</li>
+        <li><b>Why:</b> the RNA coverage track already carries each TF's expression where it matters. Cell state now moves to the reference panel.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 7 · RESULT · processing artifacts (Mehdi's testbed)
+       job      one claim, its evidence, the mechanism and the caveat
+       claim    read-level processing artifacts are correctable by a per-bin curve; peak-caller artifacts are not
+       source   report_sections/04_covariates.md (short version, "For Mehdi's results")
+       numbers  0.05 / 0.02 / 3–41%, from the report prose (no table redrawn)
+       cut      the DNase bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Result 5 · processing artifacts · on Mehdi's testbed</div>
+      <h2>Read-level artifacts can be corrected; peak-caller artifacts cannot yet</h2>
+      <div class="cols2">
+        <div class="target">
+          <div class="tlab">Correctable · which reads are counted</div>
+          <div class="ttxt">Depth, single- vs paired-end, read length, duplicates, mapping quality. For histone marks, a <b>per-bin lookup curve</b> comes within <b>0.05</b> of a no-change resample (most settings within 0.02). Depth is exact in counts. The curves transfer to a new mark.</div>
+        </div>
+        <div class="target" style="border-left-color:var(--muted)">
+          <div class="tlab" style="color:var(--muted)">Not yet · how MACS2 makes p-values</div>
+          <div class="ttxt">Fragment extension, the control experiment, the control scaling. The reads are identical, but a per-bin curve leaves <b>3% to 41%</b> of the variance unexplained. These settings are invisible in counts.</div>
+        </div>
+      </div>
+      <ul class="pts">
+        <li><b>On your transfer failure</b> (for example, 15M → 3.75M): Max's untested hypothesis is that the network saw absolute depths, not ratios, and never saw a pair without the base.</li>
+        <li><b>On counts-only CANDI:</b> correct for depth. But the largest artifacts left in p-values come from the peak caller. A counts-only model must also predict the background rate λ to fix them. DNase needs its own corrections.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 8 · RESULT · variant effects
+       job      one claim, its evidence, the mechanism and the caveat
+       claim    the reference panel blocks variant effects; a cell-state vector gets within 0.02–0.05 of Borzoi
+       source   output/s2a/residual_scores.tsv (plain_all)
+       numbers  Spearman per mark × predictor with 95% CIs
+       cut      the caveat bullet goes last -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Result 6 · variant effects on histone QTLs</div>
+      <h2>The reference panel blocks variant effects; a learned cell-state vector nearly matches Borzoi</h2>
+      <div class="chartbox fig wide" id="chartS2A"></div>
+      <div class="legend big" id="legS2A"></div>
+      <ul class="pts cols">
+        <li><b>Task:</b> predict the measured allele effect at histone QTLs (variants whose alleles carry different amounts of a mark) in 75 lymphoblastoid lines.</li>
+        <li><b>The panel model copies reference tracks,</b> which do not change with the allele. Reference dropout restores the direction of the effect, not its size.</li>
+        <li><b>Dropout costs imputation</b> 0.007 [0.001, 0.013] r_spec, within the pre-registered 0.02.</li>
+        <li><b>Caveat:</b> the frozen sequence encoder was trained on GM12878's own marks. A clean test needs an assay it never saw.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 9 · RESULT · compute
+       job      one claim, its evidence, the mechanism and the caveat
+       claim    a 1/7 H100 slice trains the recipe in 10.4 h with the same science as CPU
+       source   output/model/contrasts.tsv (GPU/bf16/batch rows); 00_summary.md (hours, spend)
+       numbers  three contrasts with CIs, hours, spend
+       cut      the spend bullet -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">Result 7 · compute</div>
+      <h2>A seventh of an H100 trains the recipe in 10.4 hours and matches CPU</h2>
+      <ul class="pts lg">
+        <li><b>GPU slice (1g.10gb) vs CPU, same recipe:</b> −0.005 [−0.011, +0.000] r_spec in fp32. That is inside the seed gap. The run costs one and a half H100-hours.</li>
+        <li><b>bf16 vs fp32 on GPU:</b> −0.002 [−0.007, +0.003].</li>
+        <li><b>A bigger batch does not shorten training:</b> batch 32 × 60k steps loses 0.010 [0.003, 0.018] to batch 8 × 240k steps.</li>
+        <li><b>Spend:</b> about $335 of the $2,000 budget at list price.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 10 · WHAT IT MEANS FOR US
+       job      the asks addressed to Mehdi, and Max's next steps
+       source   report_sections/12_next.md §12.5, §12.7
+       numbers  none new
+       cut      the next-steps list -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">What it asks of us</div>
+      <h2>Three questions for Mehdi, and the one gap left in goal G1</h2>
+      <ul class="pts lg">
+        <li><b>Rival comparison (the one thing G1 still lacks):</b> which is cheaper? Port the rival methods to Benchmark A v3's held-out set, or port its 45 biosamples and 283 targets to our evaluation regime. Every table should also report the training average and a retrieval baseline.</li>
+        <li><b>Testbed question 1:</b> does paired-end duplicate marking keep a pair when either mate is unique?</li>
+        <li><b>Testbed question 2:</b> do the single-end base and the paired-end arm come from the same library?</li>
+        <li><b>Max's next steps:</b> a single-head run with the two-head loss balance; a random-vector regularizer; the reference panel as the place cell state enters; read-level correction inside training; a clean held-out-assay variant test.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">Max sprint 07 · walkthrough</div>
+<div class="nav"><button id="prev" aria-label="previous">&larr;</button><button id="next" aria-label="next">&rarr;</button></div>
+<div class="count"><span id="cur"></span> / <span id="tot"></span></div>
+
+<script>
+/* Generic forest plot. Values read from Max's sprint 07 output tables (sources in each slide header). */
+function forest(ROWS,opt){
+  const W=1140,rowH=opt.rowH||46,top=48,bottom=58,Lg=opt.Lg||470,rightPad=40;
+  const H=top+bottom+rowH*ROWS.length;
+  const plotW=W-Lg-rightPad,pT=top,pB=H-bottom;
+  const [dmin,dmax]=opt.range;
+  const xx=v=>Lg+(v-dmin)/(dmax-dmin)*plotW;
+  const rowY=i=>pT+rowH*(i+0.5);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  if(opt.band){s+=`<rect x="${xx(-opt.band)}" y="${pT}" width="${xx(opt.band)-xx(-opt.band)}" height="${pB-pT}" fill="#ecebe7"/>`;
+    s+=`<text x="${xx(opt.band)+6}" y="${pB-8}" class="cap">seed gap ±${opt.band}</text>`;}
+  opt.ticks.forEach(t=>{s+=`<line x1="${xx(t)}" y1="${pT}" x2="${xx(t)}" y2="${pB}" class="grid"/>`;
+    s+=`<text x="${xx(t)}" y="${pB+24}" text-anchor="middle" class="tick">${t>0&&opt.signed?'+':''}${t}</text>`;});
+  if(opt.zero!==false) s+=`<line x1="${xx(0)}" y1="${pT-6}" x2="${xx(0)}" y2="${pB}" class="zero"/>`;
+  ROWS.forEach((r,i)=>{
+    const y=rowY(i),c=r.c||'#3f7d7a';
+    if(r.grp && (i===0||ROWS[i-1].grp!==r.grp)){
+      if(i>0) s+=`<line x1="16" y1="${y-rowH/2}" x2="${W-rightPad}" y2="${y-rowH/2}" class="sep"/>`;
+      s+=`<text x="16" y="${y+6}" class="ptitle">${r.grp}</text>`;}
+    s+=`<text x="${Lg-18}" y="${y+6}" text-anchor="end" class="axlbl">${r.lab}</text>`;
+    s+=`<line x1="${xx(r.lo)}" y1="${y}" x2="${xx(r.hi)}" y2="${y}" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>`;
+    s+=`<circle cx="${xx(r.v)}" cy="${y}" r="5.6" fill="${c}"/>`;
+    const t=(opt.signed&&r.v>0?'+':'')+r.v.toFixed(opt.dp||3);
+    s+=`<text x="${xx(r.hi)+10}" y="${y+6}" class="val" fill="${c}">${t}</text>`;
+  });
+  s+=`<line x1="${Lg}" y1="${pB}" x2="${Lg+plotW}" y2="${pB}" class="axis"/>`;
+  s+=`<text x="${Lg}" y="${H-6}" class="cap">${opt.cap}</text>`;
+  return s+`</svg>`;
+}
+const TEAL='#3f7d7a',RUST='#b5462e',GREY='#8d8f98',GOLD='#c08a2b';
+
+/* model/contrasts.tsv, primary setting, rspec, all 283 tracks, 2-seed rows */
+document.getElementById('chartRecipe').innerHTML=forest([
+  {lab:'R2 vs R1 (the whole recipe)',v:0.0314,lo:0.0224,hi:0.0399,c:RUST},
+  {lab:'equal-weight loss, with RNA',v:0.0239,lo:0.0163,hi:0.0311},
+  {lab:'equal-weight loss, no RNA',v:0.0123,lo:0.0042,hi:0.0200},
+  {lab:'RNA input, with equal-weight loss',v:0.0191,lo:0.0108,hi:0.0287},
+  {lab:'RNA input, with NLL loss',v:0.0076,lo:0.0011,hi:0.0148},
+  {lab:'two-head loss vs R2',v:0.0078,lo:0.0016,hi:0.0145,c:GREY}
+],{range:[-0.01,0.05],ticks:[-0.01,0,0.01,0.02,0.03,0.04,0.05],band:0.007,signed:true,rowH:44,
+   cap:'difference in r_spec, two-seed means · 95% paired bootstrap over 45 biosamples'});
+
+/* floors/floors_headline.tsv, all_common (128 targets) */
+(function(){
+  const B=[{t:'ENCODE biological replicates',s:'measured this sprint',v:0.2590,lo:0.2255,hi:0.2928,c:TEAL},
+           {t:'pseudoreplicates, pooled depth',s:'transferred, in fragments',v:0.3037,lo:0.2734,hi:0.3341,c:GOLD},
+           {t:'sprint 06 as reported',s:'one replicate\'s depth',v:0.3558,lo:0.3221,hi:0.3898,c:GREY}];
+  const W=960,H=400,top=40,bottom=80,left=70,right=20,plotW=W-left-right,plotH=H-top-bottom,pB=top+plotH,yMax=0.45;
+  const yy=v=>top+plotH*(1-v/yMax),gW=plotW/B.length,bw=150;
+  let s=`<svg viewBox="0 0 ${W} ${H}">`;
+  [0,0.1,0.2,0.3,0.4].forEach(t=>{s+=`<line x1="${left}" y1="${yy(t)}" x2="${left+plotW}" y2="${yy(t)}" class="grid"/><text x="${left-12}" y="${yy(t)+5}" text-anchor="end" class="tick">${t}</text>`;});
+  s+=`<text transform="translate(20,${top+plotH/2}) rotate(-90)" text-anchor="middle" class="ylab">mean noise share</text>`;
+  B.forEach((b,i)=>{const cx=left+gW*(i+.5),x=cx-bw/2;
+    s+=`<rect x="${x}" y="${yy(b.v)}" width="${bw}" height="${pB-yy(b.v)}" fill="${b.c}" rx="2"/>`;
+    s+=`<line x1="${cx}" y1="${yy(b.lo)}" x2="${cx}" y2="${yy(b.hi)}" stroke="#1a1a1a" stroke-width="2"/>`;
+    s+=`<text x="${cx+bw/2+6}" y="${yy(b.v)+6}" class="barval" fill="${b.c}">${b.v.toFixed(2)}</text>`;
+    s+=`<text x="${cx}" y="${pB+28}" text-anchor="middle" class="xlab" style="font-size:18px">${b.t}</text>`;
+    s+=`<text x="${cx}" y="${pB+50}" text-anchor="middle" class="xsub">${b.s}</text>`;});
+  s+=`<line x1="${left}" y1="${pB}" x2="${left+plotW}" y2="${pB}" class="axis"/>`;
+  s+=`<text x="${left}" y="${H-4}" class="cap">128 targets covered by both floor sets · whiskers: 95% bootstrap interval</text>`;
+  document.getElementById('chartFloor').innerHTML=s+`</svg>`;
+})();
+
+/* model/decomp_budget.tsv: r2_s1 split; recovered_share for avg, d3fz240_s1 (R1), r2_s1 (R2) */
+(function(){
+  const W=1000,H=330,left=230,right=40,plotW=W-left-right,x=v=>left+v/0.75*plotW;
+  const segs=[{lab:'calibration',v:0.1103,c:GREY},{lab:'shared',v:0.0272,c:GOLD},
+              {lab:'specific · noise',v:0.2816,c:'#c9c6bf'},{lab:'specific · not yet explained',v:0.2453,c:RUST}];
+  let s=`<svg viewBox="0 0 ${W} ${H}">`;
+  let acc=0; const y=40,h=56;
+  s+=`<text x="${left-16}" y="${y+h/2+6}" text-anchor="end" class="axlbl">R2 error 0.665</text>`;
+  segs.forEach(g=>{s+=`<rect x="${x(acc)}" y="${y}" width="${x(acc+g.v)-x(acc)}" height="${h}" fill="${g.c}"/>`;
+    s+=`<text x="${(x(acc)+x(acc+g.v))/2}" y="${y+h+24}" text-anchor="middle" class="psub" style="font-size:15px">${g.lab}</text>`;
+    s+=`<text x="${(x(acc)+x(acc+g.v))/2}" y="${y+h/2+6}" text-anchor="middle" class="val" fill="#fff">${g.v.toFixed(3)}</text>`;acc+=g.v;});
+  const R=[{lab:'training average',v:0.0726,c:GREY},{lab:'R1 (last sprint)',v:0.2066,c:TEAL},{lab:'R2',v:0.2475,c:RUST}];
+  const x2=v=>left+v/0.35*plotW;
+  s+=`<text x="${left}" y="170" class="ptitle" style="font-size:18px">share of the recoverable specific signal recovered</text>`;
+  R.forEach((r,i)=>{const yy=190+i*42;
+    s+=`<text x="${left-16}" y="${yy+22}" text-anchor="end" class="axlbl">${r.lab}</text>`;
+    s+=`<rect x="${left}" y="${yy}" width="${x2(r.v)-left}" height="30" fill="${r.c}" rx="2"/>`;
+    s+=`<text x="${x2(r.v)+8}" y="${yy+22}" class="val" fill="${r.c}">${r.v.toFixed(2)}</text>`;});
+  document.getElementById('chartBudget').innerHTML=s+`</svg>`;
+})();
+
+/* trans/contrasts.tsv, "37 with RNA" view; swap = mean of 2 seeds (summary.md), controls seed 2 */
+document.getElementById('chartTrans').innerHTML=forest([
+  {lab:'own vector vs another biosample\'s',v:0.001,lo:-0.002,hi:0.003,c:TEAL},
+  {lab:'trained with real vector (withheld) vs none',v:0.0126,lo:0.0067,hi:0.0181,c:GREY},
+  {lab:'trained with constant vector vs none',v:0.0113,lo:0.0033,hi:0.0189,c:GOLD},
+  {lab:'trained with shuffled vector vs none',v:0.0238,lo:0.0145,hi:0.0326,c:RUST}
+],{range:[-0.01,0.04],ticks:[-0.01,0,0.01,0.02,0.03,0.04],band:0.007,signed:true,rowH:48,
+   cap:'difference in r_spec · 37 biosamples with RNA · controls are seed 2 · 95% bootstrap'});
+
+/* s2a/residual_scores.tsv, readout plain_all, n = 2000 per mark */
+(function(){
+  const P=[['reference-panel model',GREY],['+ reference dropout',GOLD],['cell-state vector (z only)',TEAL],['Borzoi (trained on these marks)',RUST]];
+  const D={H3K27ac:[[0.1993,0.1559,0.2430],[0.2571,0.2147,0.2985],[0.3885,0.3486,0.4281],[0.4220,0.3848,0.4592]],
+           H3K4me1:[[0.0762,0.0320,0.1212],[0.2841,0.2415,0.3258],[0.4134,0.3755,0.4511],[0.4456,0.4079,0.4811]],
+           H3K4me3:[[0.0384,-0.0074,0.0837],[0.2713,0.2320,0.3153],[0.3774,0.3394,0.4172],[0.4015,0.3610,0.4395]]};
+  const rows=[];Object.keys(D).forEach(m=>D[m].forEach((d,i)=>rows.push({grp:m,lab:P[i][0],v:d[0],lo:d[1],hi:d[2],c:P[i][1]})));
+  document.getElementById('chartS2A').innerHTML=forest(rows,{range:[-0.05,0.5],ticks:[0,0.1,0.2,0.3,0.4,0.5],rowH:24,Lg:420,dp:2,
+    cap:'Spearman rank correlation with the measured allele effect · 95% bootstrap'});
+})();
+
+const slides=[...document.querySelectorAll('.slide')];
+const tot=slides.length; let cur=0;
+document.getElementById('tot').textContent=tot;
+function show(i){cur=Math.max(0,Math.min(tot-1,i));slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('cur').textContent=cur+1;document.getElementById('progress').style.width=((cur+1)/tot*100)+'%';}
+const next=()=>show(cur+1),prev=()=>show(cur-1);
+document.getElementById('next').onclick=next;document.getElementById('prev').onclick=prev;
+window.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='Home'){show(0);} else if(e.key==='End'){show(tot-1);}
+  else if(e.key==='n'||e.key==='N'){e.preventDefault();document.body.classList.toggle('shownotes');}
+});
+show(0);
+</script>
+</body>
+</html>
