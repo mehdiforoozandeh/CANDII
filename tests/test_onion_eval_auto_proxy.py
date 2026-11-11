@@ -336,26 +336,83 @@ def test_the_real_rung2_model_passes_the_dynamic_checks():
     assert abs(st["param_count"] - 1e6) <= 1e5
 
 
-A1_MERGED = "model_file" in inspect.getsource(registry)
+@pytest.fixture
+def repo_recipes():
+    """Recipe directories inside the repository, as the evolution step lays them out
+    (tools/minicandi/evolve/<name>/{config.json, model.py}, model_file relative to the root);
+    removed afterwards."""
+    base = REPO / "tools" / "minicandi" / "evolve"
+    made_base = not base.exists()
+    root = base / f"_pytest_{os.getpid()}"
+    made = []
+
+    def make(name: str, src: str) -> tuple[Path, dict]:
+        rec = root / name
+        rel = rec.relative_to(REPO).as_posix()
+        cfg = _rung_cfg(2, model_file=f"{rel}/model.py")
+        _recipe(rec, cfg, src)
+        made.append(rec)
+        return rec, cfg
+
+    yield make
+    shutil.rmtree(root, ignore_errors=True)
+    if made_base:
+        shutil.rmtree(base, ignore_errors=True)
 
 
-@pytest.mark.skipif(not A1_MERGED, reason="runs after chunk A1 merges (registry model_file)")
-def test_model_file_stub_after_a1(tmp_path):
-    """A copy of rung 2's module loaded through model_file passes; a copy that reads hidden
-    counts fails the wiring check."""
-    rec = _recipe(tmp_path / "r", {})
-    cfg = _rung_cfg(2, model_file=str(rec / "model.py"))
-    (rec / "config.json").write_text(json.dumps(cfg))
+def _leaky_conv_ae() -> str:
+    src = (REPO / "tools/minicandi/rungs/conv_ae.py").read_text()
+    leak = src.replace("    def forward(self, batch: dict) -> dict:\n",
+                       "    def forward(self, batch: dict) -> dict:\n"
+                       "        batch = dict(batch, x_bin_mask=batch['x_bin_mask'] & False)\n", 1)
+    assert leak != src
+    return leak
+
+
+def test_registry_has_the_model_file_hook():
+    assert "model_file" in inspect.getsource(registry)
+
+
+def test_static_gate_on_a_real_relative_model_file(repo_recipes):
+    """The whole gate, cluster rules (relative model_file, recipe under tools/minicandi/): config,
+    syntax tree, then the model built through the registry's model_file hook."""
+    rec, cfg = repo_recipes("recipe1", (REPO / "tools/minicandi/rungs/conv_ae.py").read_text())
+    rel = AP.check_config(json.loads((rec / "config.json").read_text()), rec, local=False)
+    assert rel == rec.relative_to(REPO).as_posix()
+    assert AP.check_module((rec / "model.py").read_text()) == []
+    model = registry.build_model(dict(cfg, windows_seen=1))
+    assert AP.model_from_file(model, rec / "model.py")
     st = AP.check_model(cfg, rec / "model.py")
     assert abs(st["param_count"] - 1e6) <= 1e5
-    leak = (REPO / "tools/minicandi/rungs/conv_ae.py").read_text().replace(
-        "    def forward(self, batch: dict) -> dict:\n",
-        "    def forward(self, batch: dict) -> dict:\n"
-        "        batch = dict(batch, x_bin_mask=batch['x_bin_mask'] & False)\n", 1)
-    assert leak != (REPO / "tools/minicandi/rungs/conv_ae.py").read_text()
-    (rec / "model.py").write_text(leak)
+
+
+def test_model_file_that_reads_hidden_counts_fails_the_wiring_gate(repo_recipes):
+    """A separate directory: the registry imports each model_file path once per process, so a
+    rewritten file at a path already imported would not be re-read."""
+    rec, cfg = repo_recipes("leaky", _leaky_conv_ae())
+    assert AP.check_module((rec / "model.py").read_text()) == []      # the syntax tree is clean
+    AP.check_config(cfg, rec, local=False)
     with pytest.raises(AP.Reject, match="wiring check failed"):
         AP.check_model(cfg, rec / "model.py")
+
+
+def test_model_file_with_a_banned_import_fails_the_static_gate(repo_recipes, tmp_path):
+    rec, cfg = repo_recipes("osimport", "import os\n" + (REPO / "tools/minicandi/rungs/"
+                                                            "conv_ae.py").read_text())
+    rc, res = _run_cli(["--recipe", rec, "--local", "--tables", tmp_path, "--evalset",
+                        tmp_path / "e.json", "--runs-root", tmp_path])
+    assert rc != 0 and "model.py refused" in res["reason"] and "import os" in res["reason"]
+
+
+def test_local_attempt_through_a_relative_model_file(repo_recipes, env, tmp_path):
+    """One seed end to end with the candidate loaded by model_file (training, load_run, scoring)."""
+    rec, cfg = repo_recipes("e2e", (REPO / "tools/minicandi/rungs/conv_ae.py").read_text())
+    rc, res = _run_cli(["--recipe", rec.relative_to(REPO), "--local", "--tables", env["tables"],
+                        "--evalset", env["evalset"], "--windows", 40, "--seeds", "0",
+                        "--runs-root", tmp_path / "runs", *LOCAL])
+    assert rc == 0 and res["passed"] is True, res
+    run_cfg = json.loads((Path(res["attempt"]) / "seed0" / "proxy_config.json").read_text())
+    assert run_cfg["model_file"] == cfg["model_file"]
 
 
 # ------------------------------------------------------------------------- eval-set refusals
