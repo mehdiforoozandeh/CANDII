@@ -6,6 +6,9 @@ kit venv. It imports only numpy and h5py at module level; torch, borzoi_pytorch 
 model is built. It imports nothing from `candi` or `minicandi`, so it runs in that venv as is.
 
     dna_embed.py precompute --source flashzoi|ntv2 --genome $O/genome --out <dir> --chroms chr21 [--device cuda]
+    dna_embed.py fit        --source flashzoi|ntv2 --genome $O/genome --out <projection.npz> --fit-chroms chr1 --dim 128
+                            [--fit-bed <bed>] [--exclude-bed <bed>] [--n-fit 1000000] [--per-window 2000]
+    dna_embed.py precompute ... --projection <projection.npz>     (streamed: only projected files are written)
     dna_embed.py project    --dir <dir> --fit-chroms chr1 --dim 128 [--chroms ...]
     dna_embed.py verify     --dir <dir> [--chroms ...] [--genome <genome dir>]
     dna_embed.py folds      --out <prefix> [--src <url or path of sequences_human.bed.gz>]
@@ -14,6 +17,9 @@ Output of `precompute`: `<dir>/<chrom>.h5` (dataset `emb`, float16 `[n_bins, d]`
 length of the genome layer's `mask.h5[chrom]`, i.e. floor(chrom length / 25)) and `<dir>/meta.json`. `project` fits a
 PCA on random valid bins (mask.h5 = 1) of the fit chromosomes (no label is read), writes `<dir>/projection.npz` and
 replaces each `<chrom>.h5` by its projection in place (the unprojected file is the deleted intermediate).
+The genome-wide route avoids that intermediate: `fit` runs the model on random windows of the fit chromosomes and fits
+the PCA from the streamed embeddings (no file but `projection.npz`), and `precompute --projection` projects each batch
+before it is written, so only the `[n_bins, dim]` files persist. Both routes give the same values (test).
 
 Grid rule (pure function `native_index`): native grids do not nest in 25 bp (Flashzoi 32 bp, the 6-mer tokenizer of
 Nucleotide Transformer v2 6 bp). The 25 bp bin b covers [25 b, 25 b + 25) bp; it takes the embedding of the native bin
@@ -238,48 +244,103 @@ def read_meta(d: Path) -> dict:
 
 
 # ----------------------------------------------------------------------------------------------- precompute
+def window_bins(src: Source, codes: np.ndarray, idx: np.ndarray, wins: Sequence[int], batch: int):
+    """Run the model on windows `wins` (in batches) and yield (w, b0, b1, z) per window: z float32 [b1 - b0, d] holds
+    the embeddings of the 25 bp bins b0..b1 - 1 whose centre lies in window w's kept span."""
+    per_win = src.out_bp // src.native_bp
+    wins = list(wins)
+    for i in range(0, len(wins), batch):
+        ws = wins[i:i + batch]
+        x = np.stack([padded(codes, w * src.out_bp - src.crop_bp, src.input_bp) for w in ws])
+        z = np.asarray(src.embed(x), np.float32)
+        if z.shape != (len(ws), per_win, src.d):
+            raise ValueError(f"{src.name}: embed gave {z.shape}, expected {(len(ws), per_win, src.d)}")
+        for j, w in enumerate(ws):
+            n0 = w * per_win
+            b0, b1 = int(np.searchsorted(idx, n0, "left")), int(np.searchsorted(idx, n0 + per_win, "left"))
+            yield w, b0, b1, z[j][idx[b0:b1] - n0]
+
+
+def n_windows(src: Source, n_bins: int) -> tuple[np.ndarray, int]:
+    """Native index of each 25 bp bin, and the number of model windows that cover the chromosome."""
+    idx = native_index(n_bins, src.native_bp)
+    n_native = int(idx[-1]) + 1 if n_bins else 0
+    return idx, -(-n_native // (src.out_bp // src.native_bp))
+
+
+def load_projection(path: Path) -> dict:
+    """projection.npz -> its arrays, with mean and components as float32 and the file's sha256."""
+    p = dict(np.load(path, allow_pickle=False))
+    p["mean"] = np.asarray(p["mean"], np.float32)
+    p["components"] = np.asarray(p["components"], np.float32)
+    p["sha256"] = sha256_file(Path(path))
+    return p
+
+
+def apply_projection(z: np.ndarray, proj: dict) -> np.ndarray:
+    """The projection `project` applies: the float16-rounded embedding, minus the mean, times the components; float16
+    out. Rounding z to float16 first makes a streamed projection equal precompute-then-project."""
+    z = np.asarray(z, np.float32).astype(np.float16).astype(np.float32)
+    return ((z - proj["mean"]) @ proj["components"].T).astype(np.float16)
+
+
 def precompute_chrom(src: Source, genome: Path, chrom: str, out: Path, batch: int = 4,
-                     log: Callable[[str], None] = print) -> Path:
-    """Write `<out>/<chrom>.h5`; skips a chromosome whose file exists (a crash leaves only `<chrom>.h5.tmp`)."""
+                     log: Callable[[str], None] = print, proj: Optional[dict] = None) -> Path:
+    """Write `<out>/<chrom>.h5`; skips a chromosome whose file exists (a crash leaves only `<chrom>.h5.tmp`).
+
+    With `proj` (from `load_projection`), each batch is projected as it is computed and only the projected file is
+    written: no unprojected intermediate exists on disk."""
     src.check()
     final = Path(out) / f"{chrom}.h5"
+    dim = int(proj["components"].shape[0]) if proj is not None else 0
     if final.is_file():
+        with h5py.File(final, "r") as h:
+            pdim, psha = int(h.attrs.get("projected_dim", 0)), str(h.attrs.get("projection_sha256", ""))
+        if proj is not None and (pdim != dim or psha != proj["sha256"]):
+            raise SystemExit(f"{final} exists with projected_dim {pdim} or another projection; move it away first")
         log(f"[dna_embed] {chrom}: {final} exists, skipped")
         return final
+    if proj is not None and proj["components"].shape[1] != src.d:
+        raise SystemExit(f"projection d_in {proj['components'].shape[1]} is not the model's d {src.d}")
     n_bins = genome_bins(genome, chrom)
     with h5py.File(Path(genome) / "dna.h5", "r") as f:
         codes = np.asarray(f[chrom][:], np.uint8)
-    idx = native_index(n_bins, src.native_bp)
-    per_win = src.out_bp // src.native_bp
-    n_native = int(idx[-1]) + 1 if n_bins else 0
-    n_win = -(-n_native // per_win)
+    idx, n_win = n_windows(src, n_bins)
+    d_out = dim or src.d
     tmp = final.with_name(final.name + ".tmp")
     with h5py.File(tmp, "w") as h:
-        ds = h.create_dataset("emb", shape=(n_bins, src.d), dtype="float16",
-                              chunks=(max(1, min(CHUNK_BINS, n_bins)), src.d))
-        h.attrs.update(source=src.name, chrom=chrom, native_bp=src.native_bp, res=RES, projected_dim=0)
-        for w0 in range(0, n_win, batch):
-            ws = range(w0, min(w0 + batch, n_win))
-            x = np.stack([padded(codes, w * src.out_bp - src.crop_bp, src.input_bp) for w in ws])
-            z = np.asarray(src.embed(x), np.float32)
-            if z.shape != (len(ws), per_win, src.d):
-                raise ValueError(f"{src.name}: embed gave {z.shape}, expected {(len(ws), per_win, src.d)}")
-            z = z.reshape(-1, src.d)
-            n0, n1 = w0 * per_win, (w0 + len(ws)) * per_win
-            b0, b1 = np.searchsorted(idx, n0, "left"), np.searchsorted(idx, n1, "left")
+        ds = h.create_dataset("emb", shape=(n_bins, d_out), dtype="float16",
+                              chunks=(max(1, min(CHUNK_BINS, n_bins)), d_out))
+        h.attrs.update(source=src.name, chrom=chrom, native_bp=src.native_bp, res=RES, projected_dim=dim)
+        if proj is not None:
+            h.attrs.update(projection_sha256=proj["sha256"], d_in=int(src.d))
+        for w, b0, b1, zb in window_bins(src, codes, idx, range(n_win), batch):
             if b1 > b0:
-                ds[b0:b1] = z[idx[b0:b1] - n0].astype(np.float16)
-            if w0 % (batch * 500) == 0:
-                log(f"[dna_embed] {chrom}: window {w0}/{n_win} {_dt.datetime.now().isoformat(timespec='seconds')}")
+                ds[b0:b1] = apply_projection(zb, proj) if proj is not None else zb.astype(np.float16)
+            if w % (batch * 500) == 0:
+                log(f"[dna_embed] {chrom}: window {w}/{n_win} {_dt.datetime.now().isoformat(timespec='seconds')}")
     os.replace(tmp, final)
-    log(f"[dna_embed] {chrom}: {n_bins} bins x {src.d} -> {final}")
+    log(f"[dna_embed] {chrom}: {n_bins} bins x {d_out} -> {final}")
     return final
 
 
+def projection_meta(proj: dict) -> dict:
+    rec = dict(method="pca", dim=int(proj["components"].shape[0]), d_in=int(proj["components"].shape[1]),
+               file="projection.npz", sha256=proj["sha256"], applied="streamed inside precompute (no intermediate)")
+    for k in ("n_fit", "seed", "explained", "sample", "fit_bed", "exclude_bed", "fit_bed_md5", "exclude_bed_md5",
+              "n_windows", "per_window"):
+        if k in proj:
+            rec[k] = np.asarray(proj[k]).item()
+    if "fit_chroms" in proj:
+        rec["fit_chroms"] = [str(c) for c in np.atleast_1d(proj["fit_chroms"])]
+    return rec
+
+
 def precompute(src: Source, genome: Path, out: Path, chroms: Sequence[str], batch: int = 4,
-               log: Callable[[str], None] = print) -> None:
+               log: Callable[[str], None] = print, projection: Optional[Path] = None) -> None:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    proj = load_projection(Path(projection)) if projection else None
     meta = read_meta(out)
     if meta and meta.get("source") != src.name:
         raise SystemExit(f"{out}/meta.json holds source {meta.get('source')!r}, not {src.name!r}")
@@ -288,9 +349,129 @@ def precompute(src: Source, genome: Path, out: Path, chroms: Sequence[str], batc
                 grid_rule="25 bp bin b takes native bin floor((25 b + 12.5) / native_bp)",
                 dtype="float16", chunk_bins=CHUNK_BINS, date=_dt.date.today().isoformat(), **src.meta)
     meta.setdefault("projection", None)
+    if proj is not None:
+        meta.update(projection=projection_meta(proj), d=int(proj["components"].shape[0]), d_model=int(src.d),
+                    projection_path=str(Path(projection).resolve()))
     write_json_atomic(out / "meta.json", meta)
     for c in chroms:
-        precompute_chrom(src, genome, c, out, batch=batch, log=log)
+        precompute_chrom(src, genome, c, out, batch=batch, log=log, proj=proj)
+
+
+# ----------------------------------------------------------------------------------------------- fit (streamed PCA)
+def read_bed(path: Optional[str]) -> dict:
+    """chrom -> (sorted starts, sorted ends) int64 arrays; overlapping intervals are allowed."""
+    if not path:
+        return {}
+    acc: dict = {}
+    for ln in Path(path).read_text().splitlines():
+        if not ln.strip() or ln.startswith(("#", "track")):
+            continue
+        c, s, e = ln.split("\t")[:3]
+        acc.setdefault(c, ([], []))
+        acc[c][0].append(int(s))
+        acc[c][1].append(int(e))
+    return {c: (np.sort(np.array(s, np.int64)), np.sort(np.array(e, np.int64))) for c, (s, e) in acc.items()}
+
+
+def bins_in(bed: dict, chrom: str, n_bins: int) -> np.ndarray:
+    """Bool [n_bins]: the 25 bp bin's centre lies in at least one interval [start, end) of `bed` on `chrom`.
+    (#intervals with start <= centre) - (#intervals with end <= centre) = #intervals holding the centre."""
+    if chrom not in bed:
+        return np.zeros(n_bins, bool)
+    s, e = bed[chrom]
+    c2 = 2 * RES * np.arange(n_bins, dtype=np.int64) + RES                   # 2 x centre, exact in integers
+    return (np.searchsorted(2 * s, c2, "right") - np.searchsorted(2 * e, c2, "right")) > 0
+
+
+def fit_streamed(src: Source, genome: Path, fit_chroms: Sequence[str], dim: int, n_fit: int = 1_000_000,
+                 seed: int = 0, fit_bed: Optional[str] = None, exclude_bed: Optional[str] = None,
+                 per_window: int = 2000, batch: int = 4, log: Callable[[str], None] = print) -> dict:
+    """PCA of up to n_fit bins, drawn by running the model on random windows of the fit chromosomes; no embedding
+    file is written. Eligible bins: mask.h5 = 1, centre inside `fit_bed` (if given) and outside `exclude_bed` (if
+    given). Windows holding an eligible bin are visited in a seeded random order; each gives at most `per_window`
+    random eligible bins. Mean and covariance accumulate in float64 from the float16-rounded embeddings."""
+    src.check()
+    rng = np.random.default_rng(seed)
+    inc, exc = read_bed(fit_bed), read_bed(exclude_bed)
+    per = src.out_bp // src.native_bp
+    plan, elig, idxs = [], {}, {}
+    for c in fit_chroms:
+        nb = genome_bins(genome, c)
+        with h5py.File(Path(genome) / "mask.h5", "r") as f:
+            ok = np.asarray(f[c][:]) > 0
+        if fit_bed:
+            ok &= bins_in(inc, c, nb)
+        if exclude_bed:
+            ok &= ~bins_in(exc, c, nb)
+        idx, n_win = n_windows(src, nb)
+        elig[c], idxs[c] = ok, idx
+        cs = np.concatenate([[0], np.cumsum(ok, dtype=np.int64)])
+        wb = np.searchsorted(idx, np.arange(n_win + 1) * per, "left")
+        plan += [(c, int(w)) for w in np.flatnonzero(cs[wb[1:]] - cs[wb[:-1]] > 0)]
+    order = [plan[i] for i in rng.permutation(len(plan))]
+    s1 = np.zeros(src.d, np.float64)
+    s2 = np.zeros((src.d, src.d), np.float64)
+    n = used = pos = 0
+    codes_c, codes = None, None
+    while n < n_fit and pos < len(order):
+        c = order[pos][0]
+        ws = []
+        while pos < len(order) and order[pos][0] == c and len(ws) < batch:
+            ws.append(order[pos][1])
+            pos += 1
+        if codes_c != c:
+            with h5py.File(Path(genome) / "dna.h5", "r") as f:
+                codes = np.asarray(f[c][:], np.uint8)
+            codes_c = c
+        for w, b0, b1, zb in window_bins(src, codes, idxs[c], ws, batch):
+            rows = np.flatnonzero(elig[c][b0:b1])
+            take = min(per_window, rows.size, n_fit - n)
+            if take <= 0:
+                continue
+            rows = np.sort(rng.choice(rows, size=take, replace=False))
+            x = zb[rows].astype(np.float16).astype(np.float64)
+            s1 += x.sum(0)
+            s2 += x.T @ x
+            n += take
+            used += 1
+            if used % 100 == 0:
+                log(f"[dna_embed] fit: {n}/{n_fit} bins from {used} windows "
+                    f"{_dt.datetime.now().isoformat(timespec='seconds')}")
+    if n <= dim:
+        raise SystemExit(f"fit: only {n} eligible bins for dim {dim}")
+    mean = s1 / n
+    cov = (s2 - n * np.outer(mean, mean)) / (n - 1)
+    ev, v = np.linalg.eigh(cov)
+    top = np.argsort(ev)[::-1][:dim]
+    comp = v[:, top].T
+    sign = np.sign(comp[np.arange(dim), np.abs(comp).argmax(1)])
+    comp = comp * np.where(sign == 0, 1, sign)[:, None]
+
+    def md5(p):
+        return hashlib.md5(Path(p).read_bytes()).hexdigest() if p else ""
+    return dict(mean=mean.astype(np.float32), components=comp.astype(np.float32),
+                eigenvalues=ev[top].astype(np.float64), explained=float(ev[top].sum() / max(ev.sum(), 1e-300)),
+                n_fit=int(n), seed=int(seed), fit_chroms=list(fit_chroms), n_windows=int(used),
+                per_window=int(per_window), fit_bed=str(fit_bed or ""), exclude_bed=str(exclude_bed or ""),
+                fit_bed_md5=md5(fit_bed), exclude_bed_md5=md5(exclude_bed),
+                sample=("mask.h5 = 1 bins" + (", centre in fit_bed" if fit_bed else "")
+                        + (", centre not in exclude_bed" if exclude_bed else "")
+                        + "; random windows, at most per_window random bins each; no label read"))
+
+
+def fit(src: Source, genome: Path, out_npz: Path, fit_chroms: Sequence[str], dim: int, **kw) -> Path:
+    """Fit the streamed PCA and write it to `out_npz` (refuses to overwrite an existing projection)."""
+    out_npz = Path(out_npz)
+    if out_npz.is_file():
+        raise SystemExit(f"{out_npz} exists; a projection is never refitted in place")
+    p = fit_streamed(src, genome, fit_chroms, dim, **kw)
+    out_npz.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out_npz.with_name(f".{out_npz.stem}.{os.getpid()}.tmp.npz")
+    np.savez(tmp, **{k: np.asarray(v) for k, v in p.items()})
+    os.replace(tmp, out_npz)
+    print(f"[dna_embed] fit: PCA {dim} of {src.d} on {p['n_fit']} bins from {p['n_windows']} windows: "
+          f"explained {p['explained']:.4f} -> {out_npz}")
+    return out_npz
 
 
 # ----------------------------------------------------------------------------------------------- project (PCA)
@@ -471,6 +652,22 @@ def main(argv: Optional[Sequence[str]] = None, source_factory: Callable[..., Sou
     p.add_argument("--batch", type=int, default=4)
     p.add_argument("--weights", help="a local model directory (skips the download; sha256 still checked)")
     p.add_argument("--weights-dir", default=DEFAULT_WEIGHTS_DIR)
+    p.add_argument("--projection", help="a projection.npz from `fit`: project each batch as it is computed and "
+                                        "write only the projected file")
+    t = sub.add_parser("fit")
+    for k in ("--source", "--genome", "--out"):
+        t.add_argument(k, required=True, **({"choices": SOURCES} if k == "--source" else {}))
+    t.add_argument("--fit-chroms", required=True)
+    t.add_argument("--dim", type=int, required=True)
+    t.add_argument("--n-fit", type=int, default=1_000_000)
+    t.add_argument("--per-window", type=int, default=2000)
+    t.add_argument("--seed", type=int, default=0)
+    t.add_argument("--fit-bed", help="only bins whose centre is in these intervals")
+    t.add_argument("--exclude-bed", help="never bins whose centre is in these intervals")
+    t.add_argument("--device", default="cuda")
+    t.add_argument("--batch", type=int, default=4)
+    t.add_argument("--weights")
+    t.add_argument("--weights-dir", default=DEFAULT_WEIGHTS_DIR)
     q = sub.add_parser("project")
     q.add_argument("--dir", required=True)
     q.add_argument("--genome")
@@ -490,7 +687,12 @@ def main(argv: Optional[Sequence[str]] = None, source_factory: Callable[..., Sou
     if a.cmd == "precompute":
         chroms = _chroms(a.chroms) or genome_chroms(Path(a.genome))
         src = source_factory(a.source, a.device, a.weights, a.weights_dir)
-        precompute(src, Path(a.genome), Path(a.out), chroms, batch=a.batch)
+        precompute(src, Path(a.genome), Path(a.out), chroms, batch=a.batch, projection=a.projection)
+        return 0
+    if a.cmd == "fit":
+        src = source_factory(a.source, a.device, a.weights, a.weights_dir)
+        fit(src, Path(a.genome), Path(a.out), _chroms(a.fit_chroms), a.dim, n_fit=a.n_fit, seed=a.seed,
+            fit_bed=a.fit_bed, exclude_bed=a.exclude_bed, per_window=a.per_window, batch=a.batch)
         return 0
     if a.cmd == "project":
         project(Path(a.dir), Path(a.genome) if a.genome else None, _chroms(a.fit_chroms), a.dim,

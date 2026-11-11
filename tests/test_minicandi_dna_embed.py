@@ -255,3 +255,80 @@ def test_slurm_dry_run(tmp_path):
     py = [ln for ln in (tmp_path / "req_pypi.txt").read_text().splitlines() if ln.strip()]
     assert py == ["borzoi-pytorch==0.5.1 --hash=sha256:"
                   "a7ed251e013e1eed320a3998ddb6484e7aab7fdf81d52755ad880ae7da0f26fa"]
+
+
+# ---------------------------------------------------------------- streamed fit and projection (chunk A5x)
+def test_streamed_projection_equals_fit_then_project(genome, tmp_path):
+    npz = tmp_path / "proj" / "projection.npz"
+    E.fit(stub(), genome, npz, ["chr1"], 2, n_fit=3000, seed=2, per_window=40, batch=3, log=lambda s: None)
+    with pytest.raises(SystemExit):                                   # never refitted in place
+        E.fit(stub(), genome, npz, ["chr1"], 2, n_fit=3000, log=lambda s: None)
+    two = tmp_path / "two"
+    E.precompute(stub(), genome, two, ["chr1", "chr2"], batch=2, log=lambda s: None)
+    (two / "projection.npz").write_bytes(npz.read_bytes())
+    E.project(two, None, ["chr1"], 2, None, log=lambda s: None)       # reuses the copied projection
+    one = tmp_path / "one"
+    E.precompute(stub(), genome, one, ["chr1", "chr2"], batch=5, log=lambda s: None, projection=npz)
+    for c in CHROMS:
+        with h5py.File(one / f"{c}.h5") as a, h5py.File(two / f"{c}.h5") as b:
+            assert a["emb"].shape == (CHROMS[c] // 25, 2) and a["emb"].dtype == np.float16
+            np.testing.assert_allclose(a["emb"][:].astype(np.float32), b["emb"][:].astype(np.float32), atol=1e-3)
+            assert a.attrs["projected_dim"] == 2 and a.attrs["projection_sha256"] == E.sha256_file(npz)
+    assert sorted(p.name for p in one.iterdir()) == ["chr1.h5", "chr2.h5", "meta.json"]   # no intermediate
+    meta = json.loads((one / "meta.json").read_text())
+    assert meta["d"] == 2 and meta["d_model"] == 5 and meta["projection"]["n_fit"] == 3000
+    assert E.verify(one) == (2, True, 0)
+    E.precompute(stub(), genome, one, ["chr2"], log=lambda s: None, projection=npz)        # skip, same projection
+    raw = tmp_path / "raw"                                            # an unprojected file is never mistaken
+    E.precompute(stub(), genome, raw, ["chr2"], log=lambda s: None)
+    with pytest.raises(SystemExit):
+        E.precompute(stub(), genome, raw, ["chr2"], log=lambda s: None, projection=npz)
+
+
+def test_streamed_fit_matches_exact_pca_and_respects_beds(genome, tmp_path):
+    raw = tmp_path / "raw"
+    E.precompute(stub(), genome, raw, ["chr1"], log=lambda s: None)
+    with h5py.File(raw / "chr1.h5") as h, h5py.File(genome / "mask.h5") as m:
+        x = h["emb"][:].astype(np.float64)[m["chr1"][:] > 0]
+    p = E.fit_streamed(stub(), genome, ["chr1"], 2, n_fit=10 ** 9, per_window=10 ** 9, log=lambda s: None)
+    assert p["n_fit"] == x.shape[0]                                   # every eligible bin, exactly once
+    np.testing.assert_allclose(p["mean"], x.mean(0), atol=1e-6)
+    ev, v = np.linalg.eigh(np.cov(x.T))
+    top = v[:, np.argsort(ev)[::-1][:2]].T
+    np.testing.assert_allclose(np.abs(p["components"] @ top.T), np.eye(2), atol=1e-4)
+    nb = CHROMS["chr1"] // 25
+    inc, exc = tmp_path / "inc.bed", tmp_path / "exc.bed"
+    inc.write_text("chr1\t0\t100000\tfold0\nchr1\t50000\t150000\tfold1\n")      # overlapping intervals
+    exc.write_text("chr1\t120000\t130000\tfold3\n")
+    q = E.fit_streamed(stub(), genome, ["chr1"], 2, n_fit=10 ** 9, per_window=10 ** 9, fit_bed=str(inc),
+                       exclude_bed=str(exc), log=lambda s: None)
+    centre = 25 * np.arange(nb) + 12.5
+    with h5py.File(genome / "mask.h5") as m:
+        want = (m["chr1"][:] > 0) & (centre < 150000) & ~((centre >= 120000) & (centre < 130000))
+    assert q["n_fit"] == int(want.sum()) and q["fit_bed_md5"] and q["exclude_bed_md5"]
+    np.testing.assert_allclose(q["mean"], raw_mean(raw, want), atol=1e-6)
+    r = E.fit_streamed(stub(), genome, ["chr1"], 2, n_fit=500, per_window=30, seed=4, log=lambda s: None)
+    assert r["n_fit"] == 500 and r["n_windows"] == -(-500 // 30)
+
+
+def raw_mean(raw: Path, rows: np.ndarray) -> np.ndarray:
+    with h5py.File(raw / "chr1.h5") as h:
+        return h["emb"][:].astype(np.float64)[rows].mean(0)
+
+
+def test_bins_in_centre_rule():
+    bed = {"chrA": (np.array([0, 30]), np.array([13, 60]))}
+    # bin centres 12.5, 37.5, 62.5: [0,13) holds 12.5; [30,60) holds 37.5; nothing holds 62.5
+    assert E.bins_in(bed, "chrA", 3).tolist() == [True, True, False]
+    assert E.bins_in(bed, "chrB", 2).tolist() == [False, False]
+
+
+def test_cli_fit_and_projected_precompute(genome, tmp_path, capsys):
+    npz = tmp_path / "p.npz"
+    assert E.main(["fit", "--source", "flashzoi", "--genome", str(genome), "--out", str(npz), "--fit-chroms", "chr1",
+                   "--dim", "3", "--n-fit", "2000", "--device", "cpu"], source_factory=lambda *a: stub()) == 0
+    out = tmp_path / "o"
+    assert E.main(["precompute", "--source", "flashzoi", "--genome", str(genome), "--out", str(out), "--chroms",
+                   "chr2", "--device", "cpu", "--projection", str(npz)], source_factory=lambda *a: stub()) == 0
+    with h5py.File(out / "chr2.h5") as h:
+        assert h["emb"].shape == (CHROMS["chr2"] // 25, 3)
