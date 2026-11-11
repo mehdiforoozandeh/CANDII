@@ -170,7 +170,9 @@ def test_every_pinned_key_and_level(model_run, env):
                                        "same_view_copy_gain", "copy_leak_pass"))
     assert s["copy_leak"]["hidden_input_max_abs_change"] == 0.0
     assert len(s["copy_leak"]["same_view_copy_gain_relative_by_mask_seed"]) == 3
-    assert isinstance(s["copy_leak"]["copy_leak_spread_ok"], bool)
+    assert isinstance(s["copy_leak"]["same_view_copy_gain_spread_ok"], bool)
+    assert isinstance(s["copy_leak"]["same_view_copy_gain_flag"], bool)
+    assert s["copy_leak"]["gate_on_copy_gain"] is False
     assert set(s["error_budget"]) >= set(S.BUDGET_KEYS)
     assert set(s["selection"]) >= {"space", "imputation_gap_closed", "correction_gap_closed",
                                    "uncertainty_gap_closed", "composite"}
@@ -295,27 +297,53 @@ def _model_scorer(env, **kw):
                     run_tables_sha256=tables_sha256(env["tables"]), **dict(KW, **kw))
 
 
-def test_f2_copy_leak_pass_needs_every_mask_seed(env, monkeypatch):
-    """Finding 2: copy_leak_pass came from mask seed 0 only (relative gain 0.05 on seed 0, 0.15 on
-    seed 1 passed)."""
-    from onion_eval import guardrail as G
-    gains = {0: 0.05, 1: 0.15, 2: 0.05}
-
+def _fake_guardrail(G, gains, part1):
     def fake(model, batches, seed=0):
         g = gains[seed]
-        return {"hidden_input_max_abs_change": 0.0, "unavailable_input_max_abs_change": 0.0,
+        ok = part1[seed] and (g <= G.GAIN_THRESHOLD or not G.GATE_ON_COPY_GAIN)
+        return {"hidden_input_max_abs_change": 0.0 if part1[seed] else 0.5,
+                "unavailable_input_max_abs_change": 0.0,
                 "same_view_copy_gain": g, "same_view_copy_gain_relative": g,
-                "copy_leak_pass": g <= G.GAIN_THRESHOLD, "part1_wiring_pass": True,
-                "part2_j_invariance_pass": g <= G.GAIN_THRESHOLD}
-    monkeypatch.setattr(G, "copy_leak", fake)
+                "same_view_copy_gain_flag": g > G.GAIN_THRESHOLD,
+                "copy_leak_pass": ok, "part1_wiring_pass": part1[seed],
+                "gate_on_copy_gain": G.GATE_ON_COPY_GAIN}
+    return fake
+
+
+def test_f2_copy_leak_pass_needs_every_mask_seed(env, monkeypatch):
+    """Finding 2: copy_leak_pass came from mask seed 0 only. The gate is part 1 on every mask seed;
+    the same-view copy gain (0.05, 0.15, 0.05 here) is written and flagged but does not gate."""
+    from onion_eval import guardrail as G
+    gains, part1 = {0: 0.05, 1: 0.15, 2: 0.05}, {0: True, 1: True, 2: True}
+    monkeypatch.setattr(G, "copy_leak", _fake_guardrail(G, gains, part1))
+    cl = _model_scorer(env)._copy_leak()
+    assert cl["copy_leak_pass"] is True and cl["gate_on_copy_gain"] is False
+    assert cl["same_view_copy_gain_flag"] is True
+    assert cl["same_view_copy_gain_flag_by_mask_seed"] == [False, True, False]
+    assert cl["same_view_copy_gain_relative"] == pytest.approx(0.15)
+    assert cl["same_view_copy_gain_relative_spread"] == pytest.approx(0.10)
+    assert cl["same_view_copy_gain_spread_ok"] is False         # 0.10 > 0.5 x 0.10, written only
+    assert cl["hidden_input_max_abs_change_by_mask_seed"] == [0.0, 0.0, 0.0]
+    assert cl["reason"] == ""
+    part1[1] = False                                            # one mask seed leaks: out
     cl = _model_scorer(env)._copy_leak()
     assert cl["copy_leak_pass"] is False and cl["copy_leak_pass_by_mask_seed"] == [True, False, True]
-    assert cl["same_view_copy_gain_relative_spread"] == pytest.approx(0.10)
-    assert cl["copy_leak_spread_ok"] is False                   # 0.10 > 0.5 x 0.10
-    assert cl["hidden_input_max_abs_change_by_mask_seed"] == [0.0, 0.0, 0.0]
+    assert cl["part1_wiring_pass"] is False and "part 1 failed" in cl["reason"]
+
+
+def test_f2_gate_on_copy_gain_restores_the_old_gate(env, monkeypatch):
+    from onion_eval import guardrail as G
+    monkeypatch.setattr(G, "GATE_ON_COPY_GAIN", True)
+    gains, part1 = {0: 0.05, 1: 0.15, 2: 0.05}, {0: True, 1: True, 2: True}
+    monkeypatch.setattr(G, "copy_leak", _fake_guardrail(G, gains, part1))
+    cl = _model_scorer(env)._copy_leak()
+    assert cl["gate_on_copy_gain"] is True
+    assert cl["copy_leak_pass"] is False and cl["copy_leak_pass_by_mask_seed"] == [True, False, True]
+    assert cl["same_view_copy_gain_spread_ok"] is False and "across mask seeds" in cl["reason"]
     gains.update({1: 0.07})
     cl = _model_scorer(env)._copy_leak()
-    assert cl["copy_leak_pass"] is True and cl["copy_leak_spread_ok"] is True
+    assert cl["copy_leak_pass"] is True and cl["same_view_copy_gain_spread_ok"] is True
+    assert cl["same_view_copy_gain_flag"] is False
 
 
 def test_f3_done_from_training_does_not_skip_scoring(model_run):

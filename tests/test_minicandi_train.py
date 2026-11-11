@@ -238,3 +238,58 @@ def test_lr_schedule_warms_up_and_decays_to_the_floor():
 def test_cuda_matches_cpu_shape(tables, tmp_path):
     info = T.train(dict(SMALL, windows_seen=8), tables, 0, tmp_path / "g", device="cuda")
     assert info["device"].startswith("cuda") and info["done"]
+
+
+# ------------------------------------------------------------------ F2: DataLoader workers
+
+def _worker_batches(tables, seed, workers, n=3, first=0):
+    ds = OnionDataset(tables, "train", dict(SMALL, windows_seen=64), seed)
+    it = T.worker_batches(ds, 4, seed, first, first + n, workers)
+    return [next(it) for _ in range(n)]
+
+
+def _same(a: dict, b: dict) -> bool:
+    return all(torch.equal(a[k], b[k]) if torch.is_tensor(a[k]) else a[k] == b[k] for k in a)
+
+
+def test_workers_same_seed_same_batches(tables):
+    """Same seed and same N give identical batches across two runs; the stream does not depend on
+    N or on the first step (so a resume draws the same batches)."""
+    a, b = _worker_batches(tables, 7, 2), _worker_batches(tables, 7, 2)
+    assert all(_same(x, y) for x, y in zip(a, b))
+    assert not _same(a[0], a[1])
+    assert _same(_worker_batches(tables, 7, 1, n=1, first=2)[0], a[2])      # N = 1, from step 2
+
+
+def test_workers_run_resumes_exactly(tables, tmp_path):
+    cfg = dict(SMALL, windows_seen=24)
+    T.train(cfg, tables, 2, tmp_path / "w1", workers=1)
+    T.train(cfg, tables, 2, tmp_path / "w3", max_windows=12, workers=1)
+    info = T.train(cfg, tables, 2, tmp_path / "w3", workers=1)
+    assert info["workers"] == 1 and info["done"] and info["n_resumes"] == 1
+    s1, s3 = (torch.load(tmp_path / d / "ckpt.pt", weights_only=False)["state_dict"]
+              for d in ("w1", "w3"))
+    assert all(torch.equal(s1[k], s3[k]) for k in s1)
+    with pytest.raises(ValueError, match="workers"):                       # 0 <-> N > 0 refused
+        T.train(cfg, tables, 2, tmp_path / "w3x", max_windows=12)
+        T.train(cfg, tables, 2, tmp_path / "w3x", workers=1)
+
+
+def test_workers_zero_is_the_default_and_unrecorded(tables, tmp_path):
+    info = T.train(dict(SMALL, windows_seen=8), tables, 0, tmp_path / "z")
+    assert "workers" not in info
+    st = torch.load(tmp_path / "z" / T.STATE_NAME, weights_only=False)
+    assert "workers" not in st
+    with pytest.raises(ValueError, match="workers"):
+        T.train(dict(SMALL, windows_seen=8), tables, 0, tmp_path / "n", workers=-1)
+
+
+@pytest.mark.parametrize("cpus,want", [("", "0"), ("1", "0"), ("8", "7")])
+def test_train_sh_passes_workers(cpus, want):
+    import os
+    import subprocess
+    env = dict(os.environ, DRY_RUN="1", SLURM_CPUS_PER_TASK=cpus)
+    r = subprocess.run(["bash", str(_ROOT / "slurm/minicandi/train.sh"), "K", "c.json", "T", "0",
+                        "O", "cpu"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split()[-2:] == ["--workers", want]

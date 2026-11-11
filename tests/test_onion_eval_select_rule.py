@@ -17,8 +17,9 @@ from onion_eval import select_rule as R  # noqa: E402
 
 def write_seed(d: Path, imp, cor, unc, leak=True, sub="", simpler=None, done=True, **meta):
     """A hand-built scores.json with every field the rule checks; `meta` overrides top-level keys
-    (evalset_sha256, tables_sha256, split, regime, noise_floor), `space`, `denominators` and
-    `spread_ok`."""
+    (evalset_sha256, tables_sha256, split, regime, noise_floor), `space`, `denominators`,
+    `spread_ok`, `gate_on` (gate_on_copy_gain), `flag` (same_view_copy_gain_flag), `part1`
+    (part1_wiring_pass, default `leak`) and `copy_leak` (replaces the whole copy_leak dict)."""
     d.mkdir(parents=True, exist_ok=True)
     tgt = d / sub if sub else d
     tgt.mkdir(parents=True, exist_ok=True)
@@ -29,8 +30,11 @@ def write_seed(d: Path, imp, cor, unc, leak=True, sub="", simpler=None, done=Tru
                        "correction_gap_closed": cor, "uncertainty_gap_closed": unc,
                        "composite": comp, "reason": "" if comp is not None else "undefined",
                        "denominators": den},
-         "copy_leak": {"copy_leak_pass": leak, "part1_wiring_pass": leak,
-                       "copy_leak_spread_ok": meta.pop("spread_ok", True)},
+         "copy_leak": meta.pop("copy_leak", None) or {
+             "copy_leak_pass": leak, "part1_wiring_pass": meta.pop("part1", leak),
+             "same_view_copy_gain_spread_ok": meta.pop("spread_ok", True),
+             "gate_on_copy_gain": meta.pop("gate_on", False),
+             "same_view_copy_gain_flag": meta.pop("flag", False)},
          "evalset_sha256": "E" * 64 if not sub else "B" * 64, "tables_sha256": "T" * 64,
          "split": "blind" if sub == "blind" else "val", "regime": "leave_one_assay_out",
          "noise_floor": "pseudoreplicate_halves",
@@ -192,7 +196,12 @@ def test_table_states(tmp_path, capsys):
     assert st[("rung1_r", 0)] == "running" and st[("rung1_f", 0)] == "failed"
     base = [r for r in rows if r["arm"] == "rung1_base"][0]
     assert base["composite"] == pytest.approx(0.5 * 0.3 + 0.25 * 0.4 + 0.25 * 0.5)
-    assert base["copy_leak_pass"] is True
+    assert base["copy_leak_pass"] is True and base["same_view_copy_gain_flag"] is False
+    make_arm(tmp_path, "rung1_g", BASE, flag=True)
+    assert R.main(["table", "--runs", str(tmp_path), "--prefix", "rung1_g"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].split("\t")[-1] == "same_view_copy_gain_flag"
+    assert out[1].split("\t")[-2:] == ["True", "True"]
 
 
 def _ladder(tmp_path, comps):
@@ -534,12 +543,45 @@ def test_ladder_simpler_explicit_off_the_rung_base(tmp_path):
     assert R.ladder_add(tmp_path / "l.json", "x", "final", "stage2_x", "none", False)["verdict"] == ""
 
 
-def test_f2_copy_leak_spread_not_ok_escalates(tmp_path):
+def test_f2_copy_gain_spread_and_flag_do_not_gate(tmp_path):
+    """The PI's gate is part 1 only: a flagged same-view copy gain with a large mask-seed spread
+    neither escalates nor refuses nor fails the arm."""
     inc = make_arm(tmp_path, "rung1_base", BASE)
-    ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.1), spread_ok=False)
+    ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.1), spread_ok=False, flag=True)
+    res = R.decide(R.load_arm(inc), R.load_arm(ch), "none")
+    assert res["copy_leak"] == "incumbent=pass;challenger=pass"
+    assert res["verdict"] == "CHALLENGER", res
+
+
+def test_f2_part1_failure_is_out(tmp_path):
+    inc = make_arm(tmp_path, "rung1_base", BASE)
+    ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.1), leak=False)
+    res = R.decide(R.load_arm(inc), R.load_arm(ch), "none")
+    assert res["verdict"] == "INCUMBENT" and res["copy_leak"] == "incumbent=pass;challenger=fail"
+
+
+def test_f2_gate_on_copy_gain_restores_the_old_gate(tmp_path):
+    """With gate_on_copy_gain in the scores (guardrail.GATE_ON_COPY_GAIN True) a large spread
+    escalates and a failed gain fails the arm, as before."""
+    inc = make_arm(tmp_path, "rung1_base", BASE, gate_on=True)
+    ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.1), spread_ok=False, gate_on=True)
     res = R.decide(R.load_arm(inc), R.load_arm(ch), "none")
     assert res["verdict"] == "RULE_NOT_APPLICABLE_ASK_PI" and "not measured reliably" in res["reason"]
     assert res["copy_leak"] == "incumbent=pass;challenger=unreliable"
+    ch2 = make_arm(tmp_path, "rung1_y", shift(BASE, di=0.1), leak=False, part1=True, gate_on=True)
+    res = R.decide(R.load_arm(inc), R.load_arm(ch2), "none")
+    assert res["verdict"] == "INCUMBENT" and res["copy_leak"] == "incumbent=pass;challenger=fail"
+
+
+def test_f2_old_scores_are_read_with_the_gate_off(tmp_path):
+    """A scores.json from before the switch (copy_leak_pass included the gain; old spread key; no
+    gate_on_copy_gain) is judged on part 1 only."""
+    old = {"copy_leak_pass": False, "part1_wiring_pass": True, "part2_j_invariance_pass": False,
+           "copy_leak_spread_ok": False}
+    inc = make_arm(tmp_path, "rung1_base", BASE)
+    ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.1), copy_leak=old)
+    assert R.gate_status(R.load_arm(ch)) == "pass"
+    assert R.decide(R.load_arm(inc), R.load_arm(ch), "none")["verdict"] == "CHALLENGER"
 
 
 def test_table_needs_scored_marker(tmp_path):
@@ -552,3 +594,21 @@ def test_table_needs_scored_marker(tmp_path):
     assert R.seed_state(d) == "running"
     (d / "SCORED").write_text("x")
     assert R.seed_state(d) == "done"
+
+
+@pytest.mark.parametrize("started", ["log.jsonl", "train_state.pt", "ckpt.pt", "train_123.out"])
+def test_started_run_is_running_not_queued(tmp_path, started):
+    """A run that has started (log or checkpoint, no run.json or DONE yet) shows `running`."""
+    d = tmp_path / "rung1_t" / "seed0"
+    d.mkdir(parents=True)
+    assert R.seed_state(d) == "queued"
+    (d / started).write_text("x")
+    assert R.seed_state(d) == "running"
+
+
+def test_table_shows_the_gate_for_old_scores(tmp_path):
+    old = {"copy_leak_pass": False, "part1_wiring_pass": True, "copy_leak_spread_ok": False,
+           "same_view_copy_gain_flag": None}
+    make_arm(tmp_path, "rung1_o", BASE, copy_leak=old)
+    row = R.table(tmp_path, "rung1_o")[0]
+    assert row["copy_leak_pass"] is True

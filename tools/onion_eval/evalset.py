@@ -130,10 +130,20 @@ def genome_dir(tables_dir: Path) -> Path:
     return Path(tables_dir).parent.parent / "genome"
 
 
+def read_chrom_sizes(path: Path) -> dict:
+    """chrom -> length in bp from a chrom_sizes.json in either layout: flat `{"chr1": 248956422}`
+    or nested `{"assembly": "GRCh38", "chrom_sizes": {"chr1": 248956422}}` (the cluster store)."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    sizes = raw.get("chrom_sizes", raw) if isinstance(raw, dict) else None
+    if not isinstance(sizes, dict):
+        raise ValueError(f"{path}: not a chrom -> size map")
+    return {str(c): int(n) for c, n in sizes.items()}
+
+
 def candidate_blocks(gdir: Path, region_bins: int, min_valid: float = MIN_VALID) -> list:
     """Every aligned block [chrom, start_bin] of `region_bins` bins with valid fraction >= min_valid."""
     import h5py
-    sizes = json.loads((gdir / "chrom_sizes.json").read_text(encoding="utf-8"))
+    sizes = read_chrom_sizes(gdir / "chrom_sizes.json")
     mpath = gdir / "mask.h5"
     out = []
     if not mpath.is_file():
@@ -144,7 +154,7 @@ def candidate_blocks(gdir: Path, region_bins: int, min_valid: float = MIN_VALID)
                 continue
             if chrom not in mf:
                 raise KeyError(f"{mpath}: no mask for {chrom}; regions would be drawn unmasked")
-            nb = int(sizes[chrom]) // 25
+            nb = sizes[chrom] // 25
             m = np.asarray(mf[chrom][:], bool)
             for s in range(0, nb - region_bins + 1, region_bins):
                 if m[s:s + region_bins].mean() >= min_valid:

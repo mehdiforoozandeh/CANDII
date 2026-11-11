@@ -89,7 +89,8 @@ def test_honest_passes_both_parts():
     assert set(G.KEYS) <= set(r)
     assert r["hidden_input_max_abs_change"] == 0.0
     assert r["unavailable_input_max_abs_change"] == 0.0
-    assert r["part1_wiring_pass"] and r["part2_j_invariance_pass"] and r["copy_leak_pass"]
+    assert r["part1_wiring_pass"] and r["copy_leak_pass"]
+    assert r["same_view_copy_gain_flag"] is False and r["gate_on_copy_gain"] is False
 
 
 def test_identity_copy_fails_wiring():
@@ -98,11 +99,26 @@ def test_identity_copy_fails_wiring():
     assert not r["part1_wiring_pass"] and not r["copy_leak_pass"]
 
 
-def test_masked_copy_fails_j_invariance():
+def test_masked_copy_is_flagged_but_passes_the_gate():
+    """The PI's gate is part 1 only: a model that echoes visible bins but never reads a hidden one
+    passes, with the same-view copy gain flagged."""
     r = G.copy_leak(make_masked_copy(1.0), [same_view_batch(0)])
-    assert r["part1_wiring_pass"]            # it never reads a hidden bin ...
-    assert not r["part2_j_invariance_pass"]  # ... but it echoes the visible ones
-    assert r["same_view_copy_gain"] > 0 and not r["copy_leak_pass"]
+    assert r["part1_wiring_pass"]                        # it never reads a hidden bin ...
+    assert r["same_view_copy_gain_flag"] is True         # ... but it echoes the visible ones
+    assert r["same_view_copy_gain"] > 0 and r["copy_leak_pass"] is True
+
+
+def test_gate_on_copy_gain_restores_the_old_gate(monkeypatch):
+    monkeypatch.setattr(G, "GATE_ON_COPY_GAIN", True)
+    r = G.copy_leak(make_masked_copy(1.0), [same_view_batch(0)])
+    assert r["gate_on_copy_gain"] is True and r["part1_wiring_pass"]
+    assert r["same_view_copy_gain_flag"] is True and r["copy_leak_pass"] is False
+    h = G.copy_leak(honest, [same_view_batch(s) for s in range(3)])
+    assert h["copy_leak_pass"] is True
+
+
+def test_default_switch_is_off():
+    assert G.GATE_ON_COPY_GAIN is False
 
 
 def test_reading_unavailable_track_fails():
@@ -111,11 +127,24 @@ def test_reading_unavailable_track_fails():
     assert r["unavailable_input_max_abs_change"] > G.REL_TOL and not r["copy_leak_pass"]
 
 
-def test_no_same_view_entries_fails_closed():
+def test_no_same_view_entries(monkeypatch):
+    """No y_kind 3 entry: the gain is undefined and not flagged; the gate (part 1) still decides.
+    With the copy gain gating, an undefined gain fails closed."""
     b = same_view_batch(0)
     b["y_kind"] = torch.where(b["y_kind"] == 3, torch.tensor(1, dtype=torch.uint8), b["y_kind"])
     r = G.copy_leak(honest, [b])
-    assert np.isnan(r["same_view_copy_gain"]) and not r["copy_leak_pass"]
+    assert np.isnan(r["same_view_copy_gain"]) and r["same_view_copy_gain_flag"] is False
+    assert r["copy_leak_pass"] is True
+    monkeypatch.setattr(G, "GATE_ON_COPY_GAIN", True)
+    assert G.copy_leak(honest, [b])["copy_leak_pass"] is False
+
+
+def test_no_hidden_bin_fails_closed():
+    """Part 1 with no hidden bin did not run: it fails rather than passing vacuously."""
+    b = same_view_batch(0)
+    b["x_bin_mask"] = torch.zeros_like(b["x_bin_mask"])
+    r = G.copy_leak(honest, [b])
+    assert r["n_hidden_bins"] == 0 and not r["part1_wiring_pass"] and not r["copy_leak_pass"]
 
 
 def calibration(seeds=range(5)):

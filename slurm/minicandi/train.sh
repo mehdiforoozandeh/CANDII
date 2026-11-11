@@ -13,7 +13,10 @@
 #
 # Rerunning the same command resumes from $OUT/ckpt.pt (train.py) and skips training when DONE
 # exists; scoring is skipped only when $OUT/SCORED exists (score.py writes it after scores.json;
-# training's DONE never skips scoring). EXTRA_TRAIN_ARGS (space-separated, e.g. "--max-windows 100000 --val-every 20000") is
+# training's DONE never skips scoring). train.py gets --workers <allocated CPUs - 1> (at least 0):
+# that many DataLoader worker processes draw the training batches (0.93 s per batch in-process
+# against 0.081 s with 8 workers on Fir); a --workers in EXTRA_TRAIN_ARGS overrides it.
+# EXTRA_TRAIN_ARGS (space-separated, e.g. "--max-windows 100000 --val-every 20000") is
 # passed to train.py. Never pass a comma-valued variable through sbatch --export; export it in the
 # shell and use --export=ALL. DRY_RUN=1 prints the commands and exits.
 #SBATCH --account=def-maxwl
@@ -39,8 +42,10 @@ case "$MODE" in
   *) echo "mode must be cpu or gpu" >&2; exit 2 ;;
 esac
 read -r -a EXTRA <<< "${EXTRA_TRAIN_ARGS:-}"
+WORKERS=$(( ${SLURM_CPUS_PER_TASK:-1} - 1 ))
+[ "$WORKERS" -ge 0 ] || WORKERS=0
 TRAIN=(python3 "$KIT/tools/minicandi/train.py" --config "$CONFIG" --tables "$TABLES"
-       --seed "$SEED" --out "$OUT" --device "$DEVICE" ${EXTRA[@]+"${EXTRA[@]}"})
+       --seed "$SEED" --out "$OUT" --device "$DEVICE" --workers "$WORKERS" ${EXTRA[@]+"${EXTRA[@]}"})
 SCORE=(python3 "$KIT/tools/onion_eval/score.py" --run "$OUT" --evalset "$EVALSET" --out "$OUT")
 if [ "${DRY_RUN:-0}" = 1 ]; then
   echo "${TRAIN[*]}"

@@ -23,11 +23,16 @@ UMBRELLA = Path("/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/.claude
 KIT = "/project/def-maxwl/mforooz/onion_kit/K0"
 
 
-def _run(script: Path, *args: str, cwd: Path, cluster_env: str | None = None):
-    env = {k: v for k, v in os.environ.items() if k != "ONION_CLUSTER"}
+def _run(script: Path, *args: str, cwd: Path, cluster_env: str | None = None,
+         exclude_env: str | None = ""):
+    """exclude_env: the ONION_EXCLUDE value ('' = no default exclude list; None = unset, so the
+    exclude files decide)."""
+    env = {k: v for k, v in os.environ.items() if k not in ("ONION_CLUSTER", "ONION_EXCLUDE")}
     env["ONION_DRY_RUN"] = "1"
     if cluster_env is not None:
         env["ONION_CLUSTER"] = cluster_env
+    if exclude_env is not None:
+        env["ONION_EXCLUDE"] = exclude_env
     return subprocess.run(["bash", str(script), *args], cwd=cwd, env=env,
                           capture_output=True, text=True, timeout=60)
 
@@ -118,7 +123,8 @@ def test_remote_run_cpu_and_gpu(tmp_path):
     assert "--cpus-per-task=4 --mem=16000M" in cpu.stdout and "--time=02:00:00" in cpu.stdout
     gpu = _run(RUN, "--cluster", "fir", "--gpu", "T1", "1", "10000", "1-00:00:00", "-c", "pass",
                cwd=tmp_path)
-    assert "--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1 --exclude=fc10713,fc10715" in gpu.stdout
+    assert "--gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1" in gpu.stdout
+    assert re.search(r"sbatch .* --exclude=fc10713,fc10715 ", gpu.stdout)
     gn = _run(RUN, "--cluster", "nibi", "--gpu", "T1", "2", "10000", "01:00:00", "-c", "pass",
               cwd=tmp_path)
     assert "nvidia_h100_80gb_hbm3_1g.10gb:1" in gn.stdout and "--exclude" not in gn.stdout
@@ -155,3 +161,138 @@ def test_probe_covers_internet_and_write():
     assert "count=1024" in text and "1073741824" in text and 'rm -f "$F"' in text
     for line in ("internet: yes", "internet: no", "write_test: pass", "write_test: fail"):
         assert line in text
+
+
+# ------------------------------------------------------------------ F2: exclude list and retry
+
+def _exclude(out: str):
+    m = re.search(r"^mkdir .*sbatch .*?(?: --exclude=(\S+))? '/project", out, re.M)
+    assert m, out
+    return m.group(1)
+
+
+@pytest.mark.parametrize("script,args", [
+    (CHECK, ["K0", "-c", "pass"]), (RUN, ["K0", "1", "4000", "00:10:00", "-c", "pass"]),
+], ids=["check", "run"])
+def test_exclude_lookup_order_and_flag(script, args, tmp_path):
+    (tmp_path / ".orchestrate").mkdir()
+    (tmp_path / ".orchestrate" / "exclude_fir").write_text("# bad nodes\nfc1, fc2\nfc3 # hung\n")
+    r = _run(script, "--cluster", "fir", *args, cwd=tmp_path, exclude_env=None)
+    assert _exclude(r.stdout) == "fc1,fc2,fc3"                                # ./.orchestrate
+    assert _exclude(_run(script, "--cluster", "nibi", *args, cwd=tmp_path, exclude_env=None)
+                    .stdout) in (None, _umbrella_exclude("nibi"))           # per cluster
+    r = _run(script, "--cluster", "fir", *args, cwd=tmp_path, exclude_env="fc9")
+    assert _exclude(r.stdout) == "fc9"                                        # env wins
+    r = _run(script, "--cluster", "fir", "--exclude", "fc3,fc4", *args, cwd=tmp_path,
+             exclude_env=None)
+    assert _exclude(r.stdout) == "fc1,fc2,fc3,fc4"                            # flag adds
+    assert _exclude(_run(script, "--cluster", "fir", *args, cwd=tmp_path).stdout) is None
+    assert "ONION_EXCLUDE_NODES='fc1,fc2,fc3'" in _run(script, "--cluster", "fir", *args,
+                                                      cwd=tmp_path, exclude_env=None).stdout
+    bad = _run(script, "--cluster", "fir", "--exclude", "fc1;rm", *args, cwd=tmp_path)
+    assert bad.returncode == 2 and "bad --exclude" in bad.stderr
+
+
+def _umbrella_exclude(cluster):
+    f = UMBRELLA.parent / f"exclude_{cluster}"
+    if not f.is_file():
+        return None
+    names = re.findall(r"[A-Za-z0-9._-]+", re.sub(r"#.*", "", f.read_text()))
+    return ",".join(dict.fromkeys(names))
+
+
+def test_exclude_umbrella_fallback(tmp_path):
+    r = _run(CHECK, "--cluster", "fir", "K0", "-c", "pass", cwd=tmp_path, exclude_env=None)
+    assert _exclude(r.stdout) == _umbrella_exclude("fir")
+
+
+@pytest.mark.parametrize("script,args", [
+    (CHECK, ["K0", "-c", "pass"]), (RUN, ["K0", "1", "4000", "00:10:00", "-c", "pass"]),
+], ids=["check", "run"])
+def test_resubmit_options_match_the_sbatch_line(script, args, tmp_path):
+    out = _run(script, "--cluster", "nibi", *args, cwd=tmp_path).stdout
+    opts = re.search(r"ONION_RESUBMIT='([^']*)'", out).group(1)
+    assert f"sbatch --parsable --export=ALL {opts} '" in out
+    assert "unset ONION_RETRY_OF" in out
+
+
+def _stub_bin(tmp_path: Path, venv_ok: bool) -> Path:
+    b = tmp_path / "bin"
+    b.mkdir()
+    stubs = {
+        "virtualenv": "exit 0" if venv_ok else "echo 'OSError: [Errno 5] Input/output error: /cvmfs' >&2; exit 1",
+        "sbatch": f'echo "$*" > {tmp_path}/sbatch_args; echo "${{ONION_RETRY_OF:-}}|${{ONION_EXCLUDE_NODES:-}}" > {tmp_path}/sbatch_env; echo 4242',
+        "scontrol": "exit 0", "module": "exit 0", "pip": "exit 0",
+    }
+    for name, body in stubs.items():
+        (b / name).write_text("#!/bin/bash\n" + body + "\n")
+        (b / name).chmod(0o755)
+    return b
+
+
+@pytest.mark.parametrize("job,tag", [(SLURM / "check.sh", "onion-check"), (SLURM / "run.sh", "onion-run")],
+                         ids=["check", "run"])
+def test_job_retries_once_on_another_node_when_setup_fails(job, tag, tmp_path):
+    b = _stub_bin(tmp_path, venv_ok=False)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", SLURM_JOB_ID="100",
+               SLURM_TMPDIR=str(tmp_path), ONION_RESUBMIT="--time=00:10:00 --output=x_%j.out",
+               ONION_EXCLUDE_NODES="fcA")
+    env.pop("ONION_RETRY_OF", None)
+    r = subprocess.run(["bash", str(job), str(tmp_path / "kit"), "-c", "print(1)"], env=env,
+                       capture_output=True, text=True, timeout=60)
+    host = subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip()
+    assert r.returncode == 3
+    assert f"[{tag}] retried-as=4242 host={host}" in r.stdout and f"[{tag}] exit=3" in r.stdout
+    assert f"[{tag}] env-ready" not in r.stdout
+    args = (tmp_path / "sbatch_args").read_text().split()
+    assert args[:5] == ["--parsable", "--export=ALL", "--time=00:10:00", "--output=x_%j.out",
+                        f"--exclude=fcA,{host}"]
+    assert args[5:] == [str(tmp_path / "kit" / "slurm/onion_kit" / job.name), str(tmp_path / "kit"),
+                        "-c", "print(1)"]
+    assert (tmp_path / "sbatch_env").read_text().strip() == f"100|fcA,{host}"
+    (tmp_path / "sbatch_args").unlink()
+    env["ONION_RETRY_OF"] = "99"                                    # a retry never retries again
+    r = subprocess.run(["bash", str(job), str(tmp_path / "kit"), "-c", "print(1)"], env=env,
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 3 and "retried-as" not in r.stdout
+    assert not (tmp_path / "sbatch_args").exists()
+
+
+def test_remote_check_follows_the_retry(tmp_path):
+    """The first job died in setup and resubmitted itself; remote_check prints both ids, waits on
+    the retry and returns its exit code."""
+    b = tmp_path / "bin"
+    b.mkdir()
+    (b / "ssh").write_text(r"""#!/bin/bash
+for a in "$@"; do last="$a"; done
+case "$*" in *"-O check"*) exit 0 ;; esac
+case "$last" in
+  *sbatch*) echo 111 ;;
+  *squeue*) ;;
+  *check_111.out*) printf 'check.sh: venv setup failed on fcX
+[onion-check] retried-as=222 host=fcX
+[onion-check] exit=3
+' ;;
+  *check_222.out*) printf 'hello
+[onion-check] env-ready host=fcY
+[onion-check] exit=0
+' ;;
+esac
+""")
+    (b / "ssh").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ONION_")}
+    env.update(PATH=f"{b}:{os.environ['PATH']}", ONION_EXCLUDE="fc1")
+    r = subprocess.run(["bash", str(CHECK), "--cluster", "fir", "K0", "-c", "pass"], cwd=tmp_path,
+                       env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert "--exclude=fc1" in r.stdout.splitlines()[0]                      # printed sbatch line
+    assert "Jobs: 111 222" in r.stdout and "excluding fcX" in r.stdout
+    assert "hello" in r.stdout and "[onion-check]" not in r.stdout
+
+
+def test_umbrella_exclude_fir_lists_the_dead_nodes():
+    names = (_umbrella_exclude("fir") or "").split(",")
+    if not (UMBRELLA.parent / "exclude_fir").is_file():
+        pytest.skip("no umbrella checkout on this machine")
+    assert set(names) >= {"fc10713", "fc10715", "fc30601", "fc30568", "fc30605", "fc30564",
+                          "fc30654", "fc30435", "fc30562", "fc30355"}
