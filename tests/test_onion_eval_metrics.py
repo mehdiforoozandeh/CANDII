@@ -251,3 +251,117 @@ def test_variance_ratio_analytic_and_planted():
     assert M.variance_ratio(n / 3, mu, ra, rb)["pooled"] > honest + 0.5   # planted over-dispersion
     z = M.variance_ratio(n[:3], mu[:3], np.ones(3), np.ones(3))
     assert _undefined(z["pooled"]) and z["reason"]
+
+
+# ------------------------------------------------------------------ retry 1: review defects
+
+def test_to_space_rescale_keyword_and_input_checks():
+    x = np.array([0.0, 1.0, 3.0])
+    assert np.allclose(M.to_space(x, "counts_log1p", rescale=2.0), np.log1p(2 * x))
+    assert np.allclose(M.to_space(x, "counts_log1p", 2.0), M.to_space(x, "counts_log1p", rescale=2.0))
+    for bad in (3e7, 0.0, -1.0):                                  # an absolute depth is refused
+        with pytest.raises(ValueError):
+            M.to_space(x, "counts_log1p", rescale=bad)
+    with pytest.raises(ValueError):
+        M.to_space(x, "counts_log1p", 2.0, rescale=2.0)
+    for bad_x in ([0.0, np.nan], [0.0, -1.0], [np.inf]):
+        for sp in M.SPACES:
+            with pytest.raises(ValueError):
+                M.to_space(bad_x, sp)
+
+
+def test_shared_specific_level_defined_in_both_modes():
+    s, U = _orthogonal_tracks(1024, 3)
+    X = s + U
+    for cal in (True, False):
+        out = M.shared_specific(X, 2.0 * X + 1.0, groups=[0, 1, 2], J=4, calibrated=cal)
+        assert np.isfinite(out["level"]).all() and np.isfinite(out["offset"]).all()
+        assert np.allclose(out["level"], out["offset"] + out["scale"] + out["nonlinear"])
+    # 2X + 1: standardized offset (1 + mean)^2/Var = 0.5, scale (2 SD - SD)^2/Var = 1 (Var(x) = 2, mean 0)
+    assert out["offset"] == pytest.approx(np.full(3, 0.5)) and out["scale"] == pytest.approx(np.ones(3))
+
+
+def test_noise_floor_colored_signal_and_levels():
+    rng = np.random.default_rng(7)
+    L = 1 << 16
+    sig = np.repeat(rng.normal(size=L // 256), 256) * 2.0         # low-frequency signal, variance ~4
+    e1, e2 = rng.normal(size=(2, L))
+    target = sig + 0.5 * (e1 + e2)
+    noise = 0.5 * (e1 + e2)
+    want = noise.var() / target.var()                             # independent formula
+    out = M.noise_floor(sig + e1, sig + e2, target, 2.0, J=10, return_levels=True)
+    assert out["N"] == pytest.approx(want, abs=0.01)
+    assert M.noise_floor(sig + e1, sig + e2, target, 2.0, J=10) == out["N"]
+    # fine levels are pure noise (R ~ 0), coarse levels pure signal (R ~ 1)
+    assert out["R"][0] < 0.05 and out["R"][9] > 0.9
+    assert list(out["n_coef"][:3]) == [L // 2, L // 4, L // 8] and out["n_coef"][-1] == L >> 10
+    assert np.isclose(out["energy_share"].sum(), 1.0)
+
+
+def test_crps_split_nan_mask_negative_and_same_estimator():
+    rng = np.random.default_rng(8)
+    mu = rng.gamma(2.0, 2.0, size=400)
+    n = np.full(400, 2.0)
+    y = rng.negative_binomial(n, n / (n + mu)).astype(float)
+    ref = M.crps_split(n[1:], mu[1:], y[1:])
+    mu_nan = mu.copy(); mu_nan[0] = np.nan
+    got = M.crps_split(n, mu_nan, y)
+    assert got["n_dropped"] == 1 and got["crps"] == pytest.approx(ref["crps"]) and not got["reason"]
+    m = np.ones(400, bool); m[0] = False
+    assert M.crps_split(n, mu, y, mask=m)["crps"] == pytest.approx(ref["crps"])
+    allnan = M.crps_split(n, np.full(400, np.nan), y)
+    assert _undefined(allnan["crps"]) and allnan["reason"]
+    with pytest.raises(ValueError):
+        M.crps_split(n, mu, -y - 1)
+    # crps_approx goes to both numbers, so scale_error stays near the closed-form one
+    samp = M.crps_split(n, mu, y, crps_approx=200)
+    assert samp["crps"] == pytest.approx(samp["oracle_scaled"] + samp["scale_error"])
+    assert abs(samp["scale_error"] - M.crps_split(n, mu, y)["scale_error"]) < 0.05
+
+
+def test_pit_deviation_nan_and_mask():
+    rng = np.random.default_rng(9)
+    L = 5000
+    mu = rng.gamma(1.0, 3.0, size=L)
+    n = np.full(L, 1.5)
+    y = rng.negative_binomial(n, n / (n + mu)).astype(float)
+    lab = np.where(np.arange(L) % 2 == 0, "a", "b")
+    ref = M.pit_deviation(n[1:], mu[1:], y[1:], lab[1:])
+    yn = y.copy(); yn[0] = np.nan
+    got = M.pit_deviation(n, mu, yn, lab)
+    assert got["n_dropped"] == 1 and got["pooled"] == pytest.approx(ref["pooled"])
+    assert got["per_stratum"] == pytest.approx(ref["per_stratum"])
+    m = np.ones(L, bool); m[0] = False
+    assert M.pit_deviation(n, mu, y, lab, mask=m)["pooled"] == pytest.approx(ref["pooled"])
+    assert _undefined(M.pit_deviation(n, np.full(L, np.nan), y)["pooled"])
+    with pytest.raises(ValueError):
+        M.pit_deviation(n, mu, -y - 1)
+
+
+def test_variance_ratio_unequal_depth_planted():
+    rng = np.random.default_rng(10)
+    L = 200000
+    mu = rng.gamma(2.0, 2.0, size=L)
+    n = np.full(L, 3.0)
+    ra = rng.negative_binomial(n, n / (n + mu))
+    rb2 = rng.poisson(rng.gamma(n, 2 * mu / n))                  # b at twice a's depth (NB(n, 2 mu))
+    honest = M.variance_ratio(n, mu, ra, rng.negative_binomial(n, n / (n + mu)))["pooled"]
+    matched = M.variance_ratio(n, mu, ra, rb2, depth_ratio_b=0.5)
+    # thinning NB(n, 2mu) by 1/2 gives NB(n, mu): ratio back near 1, within seed noise of the honest one
+    assert matched["pooled"] == pytest.approx(1.0, abs=0.03) and abs(matched["pooled"] - honest) < 0.04
+    undeclared = M.variance_ratio(n, mu, ra, rb2)                 # depth mismatch not declared
+    assert _undefined(undeclared["pooled"]) and "totals differ" in undeclared["reason"]
+    # b shallower: a is thinned and mu with it
+    shallow = M.variance_ratio(n, 2 * mu, rb2, ra, depth_ratio_b=2.0)
+    assert shallow["pooled"] == pytest.approx(1.0, abs=0.03)
+
+
+def test_variance_ratio_nan_replicate_and_negative():
+    n, mu = np.full(5, 2.0), np.full(5, 4.0)
+    a, b = np.array([0, 10, 3, 7.0, np.nan]), np.array([4, 6, 7, 3.0, 5.0])
+    out = M.variance_ratio(n, mu, a, b)
+    assert out["n_dropped"] == 1 and out["pooled"] == pytest.approx(12 / 8) and not out["reason"]
+    allnan = M.variance_ratio(n, mu, np.full(5, np.nan), b)
+    assert _undefined(allnan["pooled"]) and "finite" in allnan["reason"]
+    with pytest.raises(ValueError):
+        M.variance_ratio(n, mu, -np.ones(5), b)

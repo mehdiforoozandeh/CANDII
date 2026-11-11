@@ -40,7 +40,7 @@ _TOOLS = Path(__file__).resolve().parents[1]
 if str(_TOOLS) not in sys.path:
     sys.path.insert(0, str(_TOOLS))
 
-from candi.bench.distributional import marginal_nb, oracle_scale, p_from_mu  # noqa: E402
+from candi.bench.distributional import marginal_nb, nb_crps_mean, oracle_scale, p_from_mu  # noqa: E402
 from candi.metrics import PIT_GRID, calibration_pit_curve, nb_crps  # noqa: E402
 from eic_decomp import errdecomp as _ed  # noqa: E402
 
@@ -74,21 +74,36 @@ def _f64(x):
 
 # --------------------------------------------------------------------------------------------- space
 
-def to_space(x, space: str, depth: Optional[float] = None) -> np.ndarray:
+MAX_RESCALE = 100.0
+
+
+def to_space(x, space: str, depth: Optional[float] = None, *, rescale: Optional[float] = None) -> np.ndarray:
     """Put x into a metric space. The only place a space is applied.
 
-    counts_log1p:   log(1 + depth * x). `depth` is the factor that brings x to the target's own depth
-                    (None or 1.0: x is already at the target's depth, e.g. an NB mean decoded with the
-                    target's own C').
+    counts_log1p:   log(1 + rescale * x). `rescale` is a multiplicative FACTOR (target depth / depth of
+                    x), never an absolute depth: it must lie in (0, 100]. None or 1.0: x is already at
+                    the target's depth (e.g. an NB mean decoded with the target's own C'). A
+                    pseudoreplicate half of an even split takes rescale=2.0, so the halves enter the
+                    noise floor at the target's depth, not at their own half depth.
     signal_arcsinh: asinh(x), x an assay pipeline signal track. Signal is already depth-normalized, so
-                    `depth` must be None or 1.0.
+                    the factor must be None or 1.0.
+    `depth` is the positional alias of `rescale`, kept for the pinned signature `to_space(x, space,
+    depth)`; give one or the other. Raises on non-finite or negative x.
     """
+    if depth is not None and rescale is not None:
+        raise ValueError("give rescale or its alias depth, not both")
+    f = rescale if rescale is not None else depth
     x = _f64(x)
+    if not np.isfinite(x).all():
+        raise ValueError("x holds non-finite values")
+    if (x < 0).any():
+        raise ValueError("x holds negative values")
+    if f is not None and not (0.0 < float(f) <= MAX_RESCALE):
+        raise ValueError(f"rescale {f!r} is outside (0, {MAX_RESCALE:g}]: it is a depth ratio, not a depth")
     if space == "counts_log1p":
-        s = 1.0 if depth is None else float(depth)
-        return np.log1p(s * x)
+        return np.log1p((1.0 if f is None else float(f)) * x)
     if space == "signal_arcsinh":
-        if depth not in (None, 1, 1.0):
+        if f not in (None, 1, 1.0):
             raise ValueError("signal_arcsinh takes no depth rescale")
         return np.arcsinh(x)
     raise ValueError(f"unknown space {space!r}; expected one of {SPACES}")
@@ -116,11 +131,13 @@ def shared_specific(truth, pred, groups, noise=None, *, J: int = J, calibrated: 
 
     Per target: x is centred and divided by SD(x); the prediction is first calibrated to x (the best
     monotone map, errdecomp.calibrate; its level error is reported as `level`) when `calibrated`, then
-    put on the same standardization. Gram matrices by Haar scale of the truth (V), prediction (P), the
+    put on the same standardization. `level` (= offset + scale + nonlinear, errdecomp.calibrate) and its
+    three terms are computed in both modes, so they are never NaN for a defined target. Gram matrices by Haar scale of the truth (V), prediction (P), the
     symmetrized cross term (C) and the error E = V - 2C + P are split into shared and specific parts
     (Max s06 aggregate2.py). Zero padding to a multiple of 2^J preserves every inner product.
 
-    Returns a dict of [T] arrays: V_sh, V_sp, E_sh, E_sp, P_sh, P_sp, C_sh, C_sp, N, level; `by_level`
+    Returns a dict of [T] arrays: V_sh, V_sp, E_sh, E_sp, P_sh, P_sp, C_sh, C_sp, N, level, offset,
+    scale, nonlinear; `by_level`
     (same names, [J+1, T]); and `reason`, a list of [T] strings ('' when defined).
     """
     X, Y = _f64(truth), _f64(pred)
@@ -131,6 +148,7 @@ def shared_specific(truth, pred, groups, noise=None, *, J: int = J, calibrated: 
     reason = [""] * T
     Xs, Ys = np.zeros_like(X), np.zeros_like(Y)
     level = np.full(T, np.nan)
+    lev_terms = {nm: np.full(T, np.nan) for nm in ("offset", "scale", "nonlinear")}
     ok = np.zeros(T, bool)
     for t in range(T):
         x, y = X[t], Y[t]
@@ -138,11 +156,12 @@ def shared_specific(truth, pred, groups, noise=None, *, J: int = J, calibrated: 
         if not sx > 0:
             reason[t] = "truth has zero variance"
             continue
-        if calibrated:
-            terms, yc = _ed.calibrate(x, y)
-            level[t] = terms["offset"] + terms["scale"] + terms["nonlinear"]
-        else:
-            yc, level[t] = y, np.nan
+        terms, yc = _ed.calibrate(x, y)     # level terms in both modes
+        for nm in ("offset", "scale", "nonlinear"):
+            lev_terms[nm][t] = terms[nm]
+        level[t] = terms["offset"] + terms["scale"] + terms["nonlinear"]
+        if not calibrated:
+            yc = y
         Xs[t], Ys[t] = (x - mx) / sx, (yc - mx) / sx
         ok[t] = True
     Xp, Yp = _pad(Xs, J), _pad(Ys, J)
@@ -168,22 +187,31 @@ def shared_specific(truth, pred, groups, noise=None, *, J: int = J, calibrated: 
             reason[t] = "no target of another group in this assay"
     out["N"] = np.full(T, np.nan) if noise is None else _f64(noise).reshape(T)
     out["level"] = level
+    out.update(lev_terms)
     out["reason"] = reason
     return out
 
 
-def noise_floor(pr1, pr2, target, depth_ratio: float = 2.0, *, J: int = J) -> float:
+def noise_floor(pr1, pr2, target, depth_ratio: float = 2.0, *, J: int = J, return_levels: bool = False):
     """Sampling-noise floor N of a target track, in units of Var(target).
 
-    pr1, pr2: the target's two pseudoreplicate halves (same space as target). At each Haar level k,
+    pr1, pr2: the target's two pseudoreplicate halves, in the same space as target. In `counts_log1p`
+    the halves are rescaled to the target's depth BEFORE log1p (`to_space(half, "counts_log1p",
+    rescale=2.0)` for an even split), not taken at their own half depth. At each Haar level k,
     R_k = corr of the halves' level-k coefficients (clipped to [0, 1]); the noise share of a track at
     `depth_ratio` times the half depth (fragments) is 1 - k R_k / (1 + (k - 1) R_k) (Spearman-Brown).
     N = sum_k share_k * (energy share of the target at level k). Undefined if a vector is constant.
+
+    return_levels=True returns a dict {N, R, share, energy_share, n_coef} instead of the scalar;
+    n_coef [J+1] is the number of coefficients per level that touch real (unpadded) bins, so a caller
+    can see thin coarse levels whose R is poorly estimated.
     """
     H = np.stack([_f64(pr1), _f64(pr2), _f64(target)])
+    L = H.shape[1]
     H = H - H.mean(1, keepdims=True)
     if not (H.std(1) > 0).all():
-        return Undefined("a half or the target has zero variance")
+        u = Undefined("a half or the target has zero variance")
+        return {"N": u, "reason": u.reason} if return_levels else u
     G = _ed.gram_by_scale(_pad(H, J), J)
     with np.errstate(invalid="ignore", divide="ignore"):
         R = G[:, 0, 1] / np.sqrt(G[:, 0, 0] * G[:, 1, 1])
@@ -191,7 +219,11 @@ def noise_floor(pr1, pr2, target, depth_ratio: float = 2.0, *, J: int = J) -> fl
     k = float(depth_ratio)
     share = 1.0 - k * R / (1.0 + (k - 1.0) * R)
     xs = G[:, 2, 2] / G[:, 2, 2].sum()
-    return float(np.dot(share, xs))
+    N = float(np.dot(share, xs))
+    if not return_levels:
+        return N
+    n_coef = np.array([-(-L // (1 << j)) for j in range(1, J + 1)] + [-(-L // (1 << J))])
+    return {"N": N, "R": R, "share": share, "energy_share": xs, "n_coef": n_coef, "reason": ""}
 
 
 def specific_variance_recovered(E_sp, V_sp, N) -> float:
@@ -317,19 +349,42 @@ def r_spec(y, p, a, *, mask=None, n_knots: int = 400, tail_knots: int = 80, min_
 
 # --------------------------------------------------------------------------------------------- metrics 3, 4
 
-def crps_split(n, mu, y, **oracle_kw) -> Dict[str, float]:
+def _clean(arrays, counts, mask):
+    """Validate per-bin inputs. arrays: dict name -> array (all broadcast to one shape and raveled);
+    counts: names that are observed counts (raise on a negative finite value); mask: optional bool
+    selection. Bins with any non-finite value are dropped. Returns (dict of 1-D arrays, n_dropped)."""
+    names = list(arrays)
+    vals = np.broadcast_arrays(*(_f64(arrays[k]) for k in names))
+    vals = [v.ravel() for v in vals]
+    for k, v in zip(names, vals):
+        if k in counts and (v[np.isfinite(v)] < 0).any():
+            raise ValueError(f"{k} holds negative counts")
+    keep = np.ones(vals[0].size, bool) if mask is None else np.asarray(mask, bool).ravel().copy()
+    if keep.size != vals[0].size:
+        raise ValueError("mask must have one entry per bin")
+    sel = keep.sum()
+    for v in vals:
+        keep &= np.isfinite(v)
+    return {k: v[keep] for k, v in zip(names, vals)}, int(sel - keep.sum()), keep
+
+
+def crps_split(n, mu, y, *, mask=None, crps_approx: Optional[int] = None, crps_seed: int = 0,
+               **oracle_kw) -> Dict[str, float]:
     """Mean NB CRPS of NB(n, mu) against counts y, with its oracle split.
 
-    Returns {crps, oracle_scaled, scale_error}; crps = oracle_scaled + scale_error exactly.
-    oracle_scaled is `candi.bench.distributional.oracle_scale`'s crps_oracle_scaled (one per-call
-    multiplicative rescale of mu granted for free)."""
-    n, mu, y = (_f64(v).ravel() for v in (n, mu, y))
-    if y.size == 0:
-        r = Undefined("no bins")
-        return {"crps": r, "oracle_scaled": r, "scale_error": r, "reason": r.reason}
-    crps = float(np.mean(nb_crps(n, p_from_mu(n, mu), y)))
-    orc = float(oracle_scale(mu, n, y, **oracle_kw)["crps_oracle_scaled"])
-    return {"crps": crps, "oracle_scaled": orc, "scale_error": crps - orc, "reason": ""}
+    Returns {crps, oracle_scaled, scale_error, n_dropped, reason}; crps = oracle_scaled + scale_error
+    exactly. oracle_scaled is `candi.bench.distributional.oracle_scale`'s crps_oracle_scaled (one
+    multiplicative rescale of mu granted for free). Both CRPS numbers use the same estimator:
+    `crps_approx` / `crps_seed` go to both (closed form by default). Bins outside `mask` or with a
+    non-finite n, mu or y are dropped (counted in n_dropped); negative y raises."""
+    d, dropped, _ = _clean({"n": n, "mu": mu, "y": y}, ("y",), mask)
+    if d["y"].size == 0:
+        r = Undefined("no bins with finite n, mu and y")
+        return {"crps": r, "oracle_scaled": r, "scale_error": r, "n_dropped": dropped, "reason": r.reason}
+    kw = dict(crps_approx=crps_approx, crps_seed=crps_seed)
+    crps = nb_crps_mean(d["n"], d["mu"], d["y"], **kw)
+    orc = float(oracle_scale(d["mu"], d["n"], d["y"], **kw, **oracle_kw)["crps_oracle_scaled"])
+    return {"crps": crps, "oracle_scaled": orc, "scale_error": crps - orc, "n_dropped": dropped, "reason": ""}
 
 
 def crps_skill(model: Dict, baseline: Dict) -> Dict[str, float]:
@@ -394,43 +449,83 @@ def _pit_dev(n, mu, y):
     return float(np.mean(np.abs(np.asarray(fbar) - np.asarray(g))))
 
 
-def pit_deviation(n, mu, y, strata=None) -> Dict:
+def pit_deviation(n, mu, y, strata=None, *, mask=None) -> Dict:
     """Headline 6: mean |F_bar(u) - u| over the 21-point grid (non-randomized PIT,
     `candi.metrics.calibration_pit_curve`), pooled over all bins and per stratum.
 
-    strata: None, one label per bin, or {name: bool mask}. Returns {pooled, worst_stratum,
-    worst_stratum_name, per_stratum, reason}; an empty stratum is skipped."""
-    n, mu, y = (_f64(v).ravel() for v in (n, mu, y))
+    strata: None, one label per bin, or {name: bool mask}. Bins outside `mask` or with a non-finite
+    n, mu or y are dropped (n_dropped); negative y raises. Returns {pooled, worst_stratum,
+    worst_stratum_name, per_stratum, n_dropped, reason}; an empty stratum is skipped."""
+    d, dropped, keep = _clean({"n": n, "mu": mu, "y": y}, ("y",), mask)
+    n, mu, y = d["n"], d["mu"], d["y"]
     if y.size == 0:
-        r = Undefined("no bins")
-        return {"pooled": r, "worst_stratum": r, "worst_stratum_name": "", "per_stratum": {}, "reason": r.reason}
-    per = {k: _pit_dev(n[m], mu[m], y[m]) for k, m in _strata_masks(strata, y.size).items() if m.any()}
+        r = Undefined("no bins with finite n, mu and y")
+        return {"pooled": r, "worst_stratum": r, "worst_stratum_name": "", "per_stratum": {},
+                "n_dropped": dropped, "reason": r.reason}
+    per = {k: _pit_dev(n[m[keep]], mu[m[keep]], y[m[keep]])
+           for k, m in _strata_masks(strata, keep.size).items() if m[keep].any()}
     worst = max(per, key=per.get) if per else ""
     return {"pooled": _pit_dev(n, mu, y),
             "worst_stratum": per[worst] if per else Undefined("no non-empty stratum"),
-            "worst_stratum_name": worst, "per_stratum": per, "reason": ""}
+            "worst_stratum_name": worst, "per_stratum": per, "n_dropped": dropped, "reason": ""}
 
 
-def variance_ratio(n, mu, rep_a, rep_b, strata=None) -> Dict:
+def _thin(x, p, rng):
+    if not np.array_equal(x, np.round(x)):
+        raise ValueError("thinning needs integer counts")
+    return rng.binomial(x.astype(np.int64), p).astype(np.float64)
+
+
+def variance_ratio(n, mu, rep_a, rep_b, strata=None, *, depth_ratio_b: float = 1.0, mask=None,
+                   total_tol: float = 0.05, seed: int = 0) -> Dict:
     """Headline 7: mean predicted NB variance (mu + mu^2 / n) over mean replicate variance
-    ((rep_a - rep_b)^2 / 2, unbiased for one replicate's variance), per stratum and pooled.
-    1 = predicted spread matches replicate spread; > 1 over-dispersed. The replicates and the
-    prediction must be at the same depth.
+    ((a - b)^2 / 2, unbiased for one replicate's variance when a and b are iid at one depth), per
+    stratum and pooled. 1 = predicted spread matches replicate spread; > 1 over-dispersed.
 
-    Returns {pooled, per_stratum, worst_stratum (largest |log2 ratio|), worst_stratum_name, reason}."""
-    n, mu, a, b = (_f64(v).ravel() for v in (n, mu, rep_a, rep_b))
+    The prediction NB(n, mu) is for rep_a's depth. depth_ratio_b = depth(a) / depth(b). The deeper
+    replicate is binomially thinned (seeded) to the shallower depth: if b is deeper, b is thinned by
+    depth_ratio_b; if b is shallower, a is thinned by 1 / depth_ratio_b and mu with it (a thinned
+    NB(n, mu) is NB(n, p mu)). After matching, sum(a) / sum(b) must lie within 1 +- total_tol, else
+    the result is Undefined (the replicates are not at the depth that was declared). Bins outside
+    `mask` or with a non-finite input are dropped (n_dropped); negative counts raise.
+
+    Returns {pooled, per_stratum, worst_stratum (largest |log2 ratio|), worst_stratum_name,
+    n_dropped, reason}."""
+    d, dropped, keep = _clean({"n": n, "mu": mu, "a": rep_a, "b": rep_b}, ("a", "b"), mask)
+    n, mu, a, b = d["n"], d["mu"], d["a"], d["b"]
+
+    def _undef(reason):
+        u = Undefined(reason)
+        return {"pooled": u, "per_stratum": {}, "worst_stratum": u, "worst_stratum_name": "",
+                "n_dropped": dropped, "reason": reason}
+
+    if a.size == 0:
+        return _undef("no bins with finite n, mu and replicates")
+    r = float(depth_ratio_b)
+    if not r > 0:
+        raise ValueError("depth_ratio_b must be positive")
+    rng = np.random.default_rng(seed)
+    if r < 1.0:
+        b = _thin(b, r, rng)
+    elif r > 1.0:
+        a = _thin(a, 1.0 / r, rng)
+        mu = mu / r
+    sa, sb = a.sum(), b.sum()
+    if not (sa > 0 and sb > 0):
+        return _undef("a replicate has zero total counts")
+    if abs(sa / sb - 1.0) > total_tol:
+        return _undef(f"replicate totals differ after depth matching: sum(a)/sum(b) = {sa / sb:.3f}")
     pv = mu + mu * mu / n
     rv = 0.5 * (a - b) ** 2
 
     def _ratio(m):
-        d = rv[m].mean() if m.any() else 0.0
-        return float(pv[m].mean() / d) if d > 0 else Undefined("replicate variance is zero")
+        dd = rv[m].mean() if m.any() else 0.0
+        return float(pv[m].mean() / dd) if dd > 0 else Undefined("replicate variance is zero")
 
-    allm = np.ones(a.size, bool)
-    pooled = _ratio(allm)
-    per = {k: _ratio(m) for k, m in _strata_masks(strata, a.size).items() if m.any()}
+    pooled = _ratio(np.ones(a.size, bool))
+    per = {k: _ratio(m[keep]) for k, m in _strata_masks(strata, keep.size).items() if m[keep].any()}
     fin = {k: v for k, v in per.items() if np.isfinite(v) and v > 0}
     worst = max(fin, key=lambda k: abs(np.log2(fin[k]))) if fin else ""
     return {"pooled": pooled, "per_stratum": per,
             "worst_stratum": fin[worst] if worst else Undefined("no stratum with a defined ratio"),
-            "worst_stratum_name": worst, "reason": getattr(pooled, "reason", "")}
+            "worst_stratum_name": worst, "n_dropped": dropped, "reason": getattr(pooled, "reason", "")}
