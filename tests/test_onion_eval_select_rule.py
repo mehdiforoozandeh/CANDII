@@ -701,3 +701,61 @@ def test_r18_table_shows_raw_and_clipped_terms(tmp_path, capsys):
     head, first = capsys.readouterr().out.splitlines()[:2]
     cols = dict(zip(head.split("\t"), first.split("\t")))
     assert cols["imputation_raw"] == "1.25" and cols["imputation_clipped"] == "1"
+
+
+# ------------------------------------------------------------------ F3: pilot defects
+
+def test_f3_skipped_seed_state_and_table(tmp_path):
+    """A pair-only baseline on an eval set with no pair writes SKIPPED (score.py, DEFECTS item 4):
+    `skipped`, never `done`, and never `queued` (it will not run)."""
+    d = tmp_path / "baselines" / "depth_only_scaling" / "seed0"
+    d.mkdir(parents=True)
+    (d / R.SKIPPED).write_text("depth_only_scaling is defined on pairs only\n")
+    assert R.seed_state(d) == "skipped"
+    assert [r["state"] for r in R.table(tmp_path / "baselines")] == ["skipped"]
+
+
+def test_f3_done_condition_2_leaves_a_skipped_baseline_out(tmp_path):
+    runs = tmp_path / "runs"
+    make_arm(runs, "final", BASE)
+    bl = tmp_path / "baselines"
+    _baselines(bl, {k: v for k, v in GOOD_BASELINES.items() if k != "depth_only_scaling"})
+    st, lines = R.done_condition_2(runs / "final", bl)
+    assert st == "MISSING"
+    (bl / "depth_only_scaling" / "seed0").mkdir(parents=True)
+    (bl / "depth_only_scaling" / "seed0" / R.SKIPPED).write_text("no pair\n")
+    st, lines = R.done_condition_2(runs / "final", bl)
+    assert st == "PASS", lines
+    assert any("depth_only_scaling: skipped" in ln for ln in lines)
+
+
+def _h1_scores(stored: bool):
+    pt = {"t1": {"assay": "A", "has_halves": True, "N": 0.1}, "t2": {"assay": "A", "has_halves": True, "N": 0.2},
+          "t3": {"assay": "A", "has_halves": True, "N": 0.1}, "u1": {"assay": "B", "has_halves": True, "N": 0.1}}
+    s = {"noise_floor": "pseudoreplicate_halves", "scorable": {"imputation": ["A"]},
+         "specific_variance_recovered_above_noise": {"counts_log1p": {
+             "per_assay": {"A": 0.3}, "non_scorable_per_assay": {"B": None},
+             "per_assay_reason": {"B": "assay-level split needs 2 targets"}, "per_target": pt}},
+         "selection": {}}
+    if stored:
+        s["selection"]["headline1_per_assay_status"] = {"A": {"fallback": "stored"}}
+    return s
+
+
+def test_f3_h1_status_derived_and_stored(tmp_path, capsys):
+    """Per assay: floor, headline 1 defined or not and why, in the imputation term, fallback
+    (DEFECTS item 5). A one-target assay is non-scorable: no fallback value, out of the term."""
+    st = R.h1_status(_h1_scores(False))
+    assert st["A"]["in_imputation_term"] and st["A"]["headline1_defined"] and st["A"]["floor_exists"]
+    b = st["B"]
+    assert b["floor_exists"] and not b["headline1_defined"] and not b["in_imputation_term"]
+    assert b["value"] is None and "1 validation target" in b["reason"] and "non-scorable" in b["fallback"]
+    assert R.h1_status(_h1_scores(True)) == {"A": {"fallback": "stored"}}
+    p = tmp_path / "scores.json"
+    p.write_text(json.dumps(_h1_scores(False)))
+    assert R.main(["h1-status", str(p)]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].split("\t")[:3] == ["scores", "assay", "n_targets"] and len(out) == 3
+    pilot = dict(_h1_scores(False), noise_floor="none_pilot")
+    assert all(not v["in_imputation_term"] and not v["floor_exists"] and "pilot" in v["fallback"]
+               for v in R.h1_status(pilot).values())

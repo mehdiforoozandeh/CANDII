@@ -39,6 +39,17 @@ setting under `gate_on_copy_gain`.
 
     python tools/onion_eval/guardrail.py --run <run dir> --tables <tables dir> [--split val]
         [--max-batches 8] [--seed 0] [--out copy_leak.json]
+    python tools/onion_eval/guardrail.py --run <run dir> --tables <tables dir> --out-dir <run>/guardrail
+        --val-seeds 0 --train-seeds 0:5 [--max-batches 32]
+        (one job per run, one model load: <out-dir>/{val,train}_s<k>.json and summary.json, the
+        part-1 verdict over every seed and the copy gain's spread per split; exit 0 iff part 1
+        passes everywhere. It replaces the unversioned P2a runner `ONION/logs/p2a_guard_runner.py`.)
+    One kit command per run, after training, with the setup retry and the exclude list:
+        bash tools/onion_kit/remote_run.sh --after <train job id> <kit> 4 16000 01:00:00 \
+            tools/onion_eval/guardrail.py --run <run> --tables <tables> --out-dir <run>/guardrail \
+            --val-seeds 0 --train-seeds 0:5 --max-batches 32
+Val-split windows: a seeded random sample of the evalset items per seed (`batches_for`), so the
+spread across seeds includes window sampling, not the bin masks alone (DEFECTS item 9).
 """
 from __future__ import annotations
 
@@ -140,6 +151,54 @@ def copy_leak(model: Callable, batches: Iterable[dict], *, seed: int = 0) -> dic
     }
 
 
+def batches_for(ds, split: str, max_batches: int, seed: int) -> list:
+    """The guardrail's batches. Train split: the dataset's own seeded sampler (windows and masks
+    both follow `seed`). Val split: each task's evalset items in a seeded order (rng [seed, 9]),
+    round-robin over the tasks. The val iterator's first items are the same windows for every seed
+    (only the masks change), which understated the mask-seed spread (DEFECTS item 9)."""
+    if split == "train":
+        return [bt for _, bt in zip(range(max_batches), ds)]
+    from minicandi import contract as C
+    rng = np.random.default_rng([int(seed), 9])
+    by_task: dict = {}
+    for it in ds.evalset_items():
+        by_task.setdefault(it["task"], []).append(it)
+    # each task's items in a seeded order, then round-robin over the tasks (as the val iterator
+    # does), so every batch set holds reconstruction items, i.e. hidden bins for part 1
+    lists = [[lst[i] for i in rng.permutation(len(lst))] for _, lst in sorted(by_task.items())]
+    items = [lst[i] for i in range(max((len(x) for x in lists), default=0))
+             for lst in lists if i < len(lst)]
+    bs = int(ds.config["batch_size"])
+    wins = [ds.item_window(it) for it in items[: max_batches * bs]]
+    return [C.collate(wins[i:i + bs]) for i in range(0, len(wins), bs)]
+
+
+def _seeds(text: str) -> list:
+    """'0:5' -> [0..4]; '0,2' -> [0, 2]; '' -> []."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if ":" in text:
+        a, b = (int(x) for x in text.split(":"))
+        return list(range(a, b))
+    return [int(x) for x in text.split(",")]
+
+
+def summarize(results: dict) -> dict:
+    """Part 1 over every (split, seed) and the copy gain's range and spread per split."""
+    out = {"part1_wiring_pass": all(r["part1_wiring_pass"] for r in results.values()),
+           "copy_leak_pass": all(r["copy_leak_pass"] for r in results.values()),
+           "gate_on_copy_gain": bool(GATE_ON_COPY_GAIN), "runs": sorted(results)}
+    for split in ("val", "train"):
+        rel = [results[k]["same_view_copy_gain_relative"] for k in sorted(results)
+               if k.startswith(split + "_")]
+        fin = [float(v) for v in rel if v is not None and np.isfinite(v)]
+        out[f"{split}_same_view_copy_gain_relative"] = fin
+        out[f"{split}_same_view_copy_gain_relative_spread"] = (max(fin) - min(fin)
+                                                               if len(fin) >= 2 else None)
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run", required=True)
@@ -148,14 +207,40 @@ def main(argv=None) -> int:
     ap.add_argument("--max-batches", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out")
+    ap.add_argument("--out-dir", help="several seeds in one job (the P2a runner, F3): writes "
+                    "<out-dir>/{val,train}_s<k>.json and summary.json; needs --val-seeds and/or "
+                    "--train-seeds")
+    ap.add_argument("--val-seeds", default="", help="e.g. 0 or 0,1 or 0:3")
+    ap.add_argument("--train-seeds", default="", help="e.g. 0:5")
     a = ap.parse_args(argv)
+    from onion_eval.score import set_threads
+    set_threads()                                # the allocation, not the node's cores (F3)
     from minicandi.dataset import OnionDataset   # lazy: M1 owns these modules
     from minicandi.registry import load_run
     model, config = load_run(a.run)
     model.eval()
+    if a.out_dir:
+        jobs = [("val", k) for k in _seeds(a.val_seeds)] + [("train", k) for k in _seeds(a.train_seeds)]
+        if not jobs:
+            ap.error("--out-dir needs --val-seeds and/or --train-seeds")
+        out = Path(a.out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        results = {}
+        for split, k in jobs:                    # one model load for every seed
+            ds = OnionDataset(a.tables, split, config, k)
+            res = copy_leak(model, batches_for(ds, split, a.max_batches, k), seed=k)
+            res.update(split=split, seed=k, max_batches=a.max_batches)
+            (out / f"{split}_s{k}.json").write_text(json.dumps(res, indent=2, sort_keys=True) + "\n")
+            results[f"{split}_s{k}"] = res
+            print(json.dumps({"split": split, "seed": k, **{x: res[x] for x in (
+                "part1_wiring_pass", "hidden_input_max_abs_change",
+                "unavailable_input_max_abs_change", "same_view_copy_gain_relative")}}), flush=True)
+        summ = summarize(results)
+        (out / "summary.json").write_text(json.dumps(summ, indent=2, sort_keys=True) + "\n")
+        print(json.dumps(summ, sort_keys=True))
+        return 0 if summ["copy_leak_pass"] else 1
     ds = OnionDataset(a.tables, a.split, config, a.seed)
-    batches = [bt for _, bt in zip(range(a.max_batches), ds)]
-    res = copy_leak(model, batches, seed=a.seed)
+    res = copy_leak(model, batches_for(ds, a.split, a.max_batches, a.seed), seed=a.seed)
     text = json.dumps(res, indent=2, sort_keys=True)
     if a.out:
         Path(a.out).write_text(text + "\n")

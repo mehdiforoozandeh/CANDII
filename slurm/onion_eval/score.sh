@@ -12,12 +12,19 @@
 # only) needs "--split blind --allow-blind" in the extra args, the blind eval set
 # eval/eic_v2/evalset_blind.json and <out_dir> = <seed dir>/blind; score.py logs every blind pass in
 # BLIND_PASSES.tsv beside the eval set and refuses a repeat without --repeat-blind-reason "<text>".
-# 16 cores x 4000 MB (Nibi/Fir CPU rule); --time set explicitly (Nibi default is 15 min).
+# CPU form: 2 cores x 4000 MB (F3, measured on Fir, pilot_rung2 seed 0, 64 regions: 2 CPUs 25.0 min
+# = 0.83 CPU-h; 4 CPUs 20.9 min = 1.39; 8 CPUs 21.6 min = 2.88; the old 16 CPUs 39 min = 10.4; the
+# scorer is mostly single-threaded). A rung whose forward pass is >= 5e9 FLOPs per window (rung 1,
+# rung 5) is cheaper on the GPU form.
+# GPU form (a 1g.10gb slice is free; rung 1's forward is 44x rung 2's): add
+#   --gres=gpu:nvidia_h100_80gb_hbm3_1g.10gb:1 --cpus-per-task=1 --mem=24000M (and on Fir
+#   --exclude=fc10713,fc10715) to the sbatch line; score.py's --device auto then runs on the GPU.
+# Torch uses OMP_NUM_THREADS = the allocated CPUs (never the node's cores; F3).
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=onion_score
-#SBATCH --time=08:00:00
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=64000M
+#SBATCH --time=03:00:00
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=8000M
 #SBATCH --gres=none
 
 set -euo pipefail

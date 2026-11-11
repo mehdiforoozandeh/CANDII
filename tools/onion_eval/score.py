@@ -3,10 +3,17 @@
     python tools/onion_eval/score.py (--run <run dir> | --baseline <name>) --evalset <json> --out <dir>
         [--split val|blind] [--allow-blind] [--repeat-blind-reason "<text>"] [--no-halves]
         [--dnase-route hotspot2_density|macs2_no_control] [--device cpu] [--n-boot 200]
-        [--guardrail-windows 256] [--force]
+        [--guardrail-windows 256] [--force] [--infer-batch N] [--no-region-cache]
     -> <out>/scores.json, <out>/suffstats.npz, <out>/SCORED (SCORED last; an existing SCORED skips
        the job unless --force). The scorer never reads or writes DONE: training's DONE in a run dir
-       means trained, not scored (finding 3).
+       means trained, not scored (finding 3). A pair-only predictor (`depth_only_scaling`,
+       `pseudoreplicate_floor`) on an eval set with no correction or replicate pair on the split
+       writes only <out>/SKIPPED (the reason) and exits 0 (F3, DEFECTS item 4).
+
+Cost (F3). Each tile read inside the current evalset region is a slice of one whole-region read
+per (measurement, file) and of one region of DNA (`--no-region-cache` restores tile reads; the
+scores are identical). `--infer-batch` sets the windows per forward pass while scoring targets.
+`timing_seconds` in scores.json splits the wall time by phase.
 
 A baseline is scored into `eval/<tables>/baselines/<name>/seed0/` so `select_rule.py table` reads it
 like a run. Baselines: `marginal_nb`, `position_average`, `depth_only_scaling` (E4, the three
@@ -23,8 +30,10 @@ What is scored (validation split by default):
   correction pairs    source pr1 -> target pr2 (PI ruling 6); model, depth-only scaling and the
                       floor (target pr1 -> target pr2, one fitted NB size) all predict the same pr2
   replicate pairs     the evalset's replicate-ladder pairs of the scored split, same layout
-  copy-leak           the guardrail (`guardrail.copy_leak`) on the validation reconstruction
-                      windows, over 3 mask seeds. `copy_leak_pass` (the hard gate, D13) is true only
+  copy-leak           the guardrail (`guardrail.copy_leak`) on validation reconstruction
+                      windows, over 3 mask seeds; each mask seed draws its own random sample of
+                      the reconstruction items (`guardrail_items`, F3) with its own bin masks, so
+                      the spread across mask seeds includes window sampling. `copy_leak_pass` (the hard gate, D13) is true only
                       when every mask seed passes part 1 of the PI's definition: perturbing hidden
                       bins or unavailable tracks moves no output (finding 2). Part 2 of the PI's
                       definition is this scorer's rule: same-view reconstruction is scored on
@@ -56,7 +65,16 @@ Pseudoreplicate halves (finding 11). A target without halves (`has_pseudoreps` n
 every included target (finding 6). `--no-halves` (the pilot on `store:` tables): no half is ever
 read; `specific_variance_recovered_above_noise` is null with the reason, and headline 1 without a
 noise floor is written under `specific_variance_recovered_NO_NOISE_FLOOR_pilot_only`;
-`noise_floor = "none_pilot"`, which select_rule refuses.
+`noise_floor = "none_pilot"`, which select_rule refuses. The pilot also gets the uncertainty term
+over every assay with a target under `uncertainty_gap_closed_all_assays_pilot_only` (never a
+selection input; F3, DEFECTS item 3).
+
+Headline 1 per assay (F3, DEFECTS item 5). `selection.headline1_per_assay_status` (also under
+headline 1's `per_assay_status`) says per assay: the targets, those with a noise floor, whether
+headline 1 is defined and why not, whether the assay is in the composite's imputation term, and
+the fallback used. No fallback value exists: an assay outside the scorable set (PI ruling 4) never
+enters the term; a scorable assay that is undefined makes the term undefined. The definition is
+written beside the term (`selection.imputation_term_definition`).
 
 Every metric is computed by the merged library (`metrics.py`, `error_budget.py`), once per target
 track over all of its bins (addendum): the scorer streams the predictor region by region and tile by
@@ -137,6 +155,14 @@ CONTROL = "chipseq-control"
 NOISE_FLOOR_HALVES = "pseudoreplicate_halves"
 NOISE_FLOOR_NONE = "none_pilot"
 PILOT_H1_KEY = "specific_variance_recovered_NO_NOISE_FLOOR_pilot_only"
+PILOT_UNC_KEY = "uncertainty_gap_closed_all_assays_pilot_only"
+#: the composite's imputation term (D13, plan E6, PI ruling 4), written beside it in scores.json
+IMPUTATION_TERM_DEFINITION = (
+    "macro mean, over the eval set's imputation-scorable assays (>= 3 validation tracks with "
+    "pseudoreplicate halves from >= 3 cells, evalset.py), of headline 1 per assay in counts_log1p "
+    "(leave-one-assay-out, validation). It is undefined when any scorable assay is undefined or has "
+    "no target. A non-scorable assay never enters it, so it needs no fallback; its headline 1 is "
+    "reported apart, per assay, with its floor status. No floor and no value is ever invented.")
 #: same-view copy gain: its relative spread across mask seeds must be at most this fraction of
 #: the threshold ("well under", addendum), else `same_view_copy_gain_spread_ok` is false; it
 #: matters only when guardrail.GATE_ON_COPY_GAIN is True
@@ -145,6 +171,9 @@ BLIND_LEDGER = "BLIND_PASSES.tsv"
 LEDGER_COLUMNS = ("time", "run", "evalset_sha256", "tables_sha256", "git_sha", "out", "status",
                   "repeat_reason")
 SCORED = "SCORED"
+#: a pair-only predictor with no pair to score writes this (the reason) instead of NaN rows
+SKIPPED = "SKIPPED"
+PAIR_ONLY = ("depth_only_scaling", "pseudoreplicate_floor")
 #: NB -> signal modes (PI ruling 20): record-key prefix of each; the headline is `expectation`
 SIGNAL_PREFIX = {"expectation": "sig_", "plug_in": "sig_pi_"}
 #: suffix of the signal-space keys that hold the plug-in variant
@@ -310,6 +339,23 @@ def has_halves(row: dict) -> bool:
             and str(row.get("counts_path", "")).startswith("h5:"))
 
 
+#: how the copy-leak diagnostic draws its windows per mask seed (F3, DEFECTS item 9)
+GUARD_DRAW = ("per mask seed s: a seeded random sample (rng [s, 9]) of the validation "
+              "reconstruction items, bin masks from rng [s, item, 3]")
+
+
+def guardrail_items(ds, n: int, seed: int) -> tuple[list, int]:
+    """(`n` validation reconstruction items drawn at random with mask seed `seed`, in item order;
+    the pool size). The old draw took the first `n` items for every seed:
+    the same windows of one target, with only the bin masks changing, so its spread across mask
+    seeds (0.003-0.013 in the pilot) missed the window-sampling noise (0.045-0.12 across train-split
+    seeds). Masks come from the dataset seed, so every seed also gets independent masks."""
+    pool = [it for it in ds.evalset_items() if it["task"] == "reconstruction"]
+    k = min(int(n), len(pool))
+    pick = np.sort(np.random.default_rng([int(seed), 9]).choice(len(pool), k, replace=False))
+    return [pool[i] for i in pick], len(pool)
+
+
 def _signal_module():
     try:
         from onion_eval import signal_from_counts as S  # noqa: F401  (X2, lazy)
@@ -344,7 +390,7 @@ class Scorer:
     def __init__(self, evalset, *, main, model=None, config=None, split="val", allow_blind=False,
                  n_boot=200, seed=0, guardrail_windows=256, guardrail_seeds=(0, 1, 2),
                  device="cpu", no_halves=False, dnase_route=None, run_tables_sha256=None,
-                 log=print):
+                 log=print, region_cache=True, infer_batch=None):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -375,6 +421,7 @@ class Scorer:
         self.split, self.allow_blind, self.n_boot, self.seed = split, split == "blind", n_boot, seed
         self.no_halves = bool(no_halves)
         self.main, self.model_pred = main, (ModelPredictor(model, device) if model is not None else None)
+        self.device = device
         self.guardrail_windows, self.guardrail_seeds = guardrail_windows, tuple(guardrail_seeds)
         self.model = model
         self.rb = int(self.ev.get("region_bins", 2 ** 14))
@@ -386,6 +433,8 @@ class Scorer:
                     "allow_blind": self.allow_blind})
         cfg.setdefault("batch_size", 8)
         self.cfg, self.L, self.bs = cfg, L, int(cfg["batch_size"])
+        #: windows per forward pass while scoring targets (F3); the guardrail keeps batch_size
+        self.tile_bs = int(infer_batch or self.bs)
         self._OnionDataset = OnionDataset
         self.ds = OnionDataset(self.tables, split, cfg, seed=0)
         self.predict_control = bool(self.ds.config.get("predict_control")) and model is not None
@@ -406,8 +455,56 @@ class Scorer:
             self.dnase_route = dnase_route
         self._pa_cache: dict = {}
         self.suff: dict = {}
+        self.timing: dict = defaultdict(float)     # wall seconds per phase, in scores.json
+        # F3 region cache: a tile read inside the current evalset region is a slice of one
+        # whole-region read per (measurement, file); see _cached_read
+        self.region_cache = bool(region_cache)
+        self._region, self._rc = None, {}
+        self._ds_read, self._ds_dna = self.ds.read, self.ds.dna
+        if self.region_cache:
+            self.ds.read, self.ds.dna = self._cached_read, self._cached_dna
 
     # -------------------------------------------------------------- data
+    def _set_region(self, chrom, start) -> None:
+        """Make (chrom, start) the cached region; the previous region's arrays are dropped."""
+        if self._region != (chrom, int(start)):
+            self._region, self._rc = (chrom, int(start)), {}
+
+    def _in_region(self, chrom, start, L) -> bool:
+        r = self._region
+        return r is not None and chrom == r[0] and r[1] <= start and start + L <= r[1] + self.rb
+
+    def _cacheable(self, mid) -> bool:
+        """A slice of a whole-region read equals a direct read: true for h5: paths and for store:
+        views that are not depth-thinned (those thin with a seed that depends on the start bin)."""
+        from minicandi.dataset import view_of
+        row = self.ds.check_row(mid)
+        p = row["counts_path"]
+        return p.startswith("h5:") or (p.startswith("store:") and view_of(row)[0] != "depth")
+
+    def _cached_read(self, mid, chrom, start, L=None, which="counts"):
+        L = self.ds.L if L is None else int(L)
+        start = int(start)
+        if not (self._in_region(chrom, start, L) and self._cacheable(mid)):
+            return self._ds_read(mid, chrom, start, L, which)
+        key = (mid, which)
+        arr = self._rc.get(key)
+        if arr is None:
+            arr = self._rc[key] = self._ds_read(mid, chrom, self._region[1], self.rb, which)
+        o = start - self._region[1]
+        return arr[o:o + L].copy()
+
+    def _cached_dna(self, chrom, start, L=None):
+        L = self.ds.L if L is None else int(L)
+        start = int(start)
+        if not self._in_region(chrom, start, L):
+            return self._ds_dna(chrom, start, L)
+        arr = self._rc.get(("__dna__",))
+        if arr is None:
+            arr = self._rc[("__dna__",)] = self._ds_dna(chrom, self._region[1], self.rb)
+        o = (start - self._region[1]) * self.C.RES
+        return arr[o:o + L * self.C.RES].copy()
+
     def _strata(self) -> dict:
         names = self.ev.get("strata") or []
         path = self.ev.get("strata_path") or None
@@ -491,6 +588,7 @@ class Scorer:
             pa = PositionAverage()
             if mids:
                 c, s = self.regions[ri]
+                self._set_region(c, s)
                 pa.fit([self._region_batch(mids, c, s)])
             self._pa_cache[key] = pa
         return self._pa_cache[key]
@@ -535,13 +633,17 @@ class Scorer:
         names = tuple(refs) + ((self.main,) if self.main in REFS and self.main not in refs else ())
         out = defaultdict(list)
         for ri, tiles in self._tiles(self.regions):
-            for b0 in range(0, len(tiles), self.bs):
-                tl = tiles[b0:b0 + self.bs]
+            self._set_region(*self.regions[ri])
+            for b0 in range(0, len(tiles), self.tile_bs):
+                tl = tiles[b0:b0 + self.tile_bs]
+                t0 = time.perf_counter()
                 if pair:
                     wins = [self._pair_window(job, c, s) for c, s in tl]
                 else:
                     wins = [self.ds.window(c, s, job["inputs"], [job["target"]]) for c, s in tl]
                 batch = self.C.collate(wins)
+                t1 = time.perf_counter()
+                self.timing["windows"] += t1 - t0
                 preds = {}
                 for name in names:
                     if name in ("depth_only_scaling", "pseudoreplicate_floor") and not pair:
@@ -560,12 +662,15 @@ class Scorer:
                         mu[:, :, t] = np.maximum(p1, PRED_FLOOR)
                         n[:, :, t] = floor_n
                         preds[name] = {"n": n, "mu": mu}
+                t2 = time.perf_counter()
+                self.timing["reference_predictors"] += t2 - t1
                 preds["main"] = preds[self.main] if self.main in preds else self.model_pred(batch)
+                if want_ctl:
+                    out["main.ctl_mu"].append(self._predicted_control(batch, t).reshape(-1))
+                self.timing["model_forward"] += time.perf_counter() - t2
                 for name, p in preds.items():
                     out[f"{name}.n"].append(p["n"][:, :, t].reshape(-1))
                     out[f"{name}.mu"].append(p["mu"][:, :, t].reshape(-1))
-                if want_ctl:
-                    out["main.ctl_mu"].append(self._predicted_control(batch, t).reshape(-1))
                 out["y"].append(batch["y_counts"][:, :, t].numpy().reshape(-1).astype(np.float64))
                 if pair:
                     out["x"].append(batch["x_counts"][:, :, t].numpy().reshape(-1).astype(np.float64))
@@ -797,6 +902,13 @@ class Scorer:
         return out
 
     # -------------------------------------------------------------- guardrail
+    def _guard_model(self):
+        """The model as the guardrail calls it: CPU batches in, on the scoring device inside."""
+        m, dev = self.model_pred.model, self.device
+        if str(dev) == "cpu":
+            return m
+        return lambda b: m({k: (v.to(dev) if torch.is_tensor(v) else v) for k, v in b.items()})
+
     def _copy_leak(self):
         if self.model is None:
             return {"hidden_input_max_abs_change": None, "unavailable_input_max_abs_change": None,
@@ -806,15 +918,15 @@ class Scorer:
                     "reason": "not applicable: a training-free baseline reads no hidden input"}
         from onion_eval import guardrail as G
         GAIN_THRESHOLD, gate_on = G.GAIN_THRESHOLD, bool(G.GATE_ON_COPY_GAIN)
-        per_seed, n_win = [], 0
+        per_seed, n_win, n_pool, n_targets = [], 0, 0, []
         for s in self.guardrail_seeds:
             ds = self._OnionDataset(self.tables, self.split, self.cfg, seed=s)
-            items = [it for it in ds.evalset_items() if it["task"] == "reconstruction"]
-            items = items[: self.guardrail_windows]
+            items, n_pool = guardrail_items(ds, self.guardrail_windows, s)
+            n_targets.append(len({it["targets"][0] for it in items}))
             wins = [ds.item_window(it) for it in items]
             n_win = len(wins)
             batches = [self.C.collate(wins[i:i + self.bs]) for i in range(0, len(wins), self.bs)]
-            per_seed.append(G.copy_leak(self.model_pred.model, batches, seed=s))
+            per_seed.append(G.copy_leak(self._guard_model(), batches, seed=s))
         if not per_seed:
             return {"copy_leak_pass": None, "same_view_copy_gain_spread_ok": None,
                     "part1_wiring_pass": None, "same_view_copy_gain_flag": None,
@@ -857,6 +969,8 @@ class Scorer:
             "same_view_copy_gain_spread_limit_relative": lim,
             "same_view_copy_gain_threshold_relative": GAIN_THRESHOLD,
             "mask_seeds": list(self.guardrail_seeds), "n_windows_per_seed": n_win,
+            "window_draw": GUARD_DRAW, "n_reconstruction_items": n_pool,
+            "n_targets_by_mask_seed": n_targets,
             "reason": "; ".join(why),
         }
 
@@ -911,7 +1025,9 @@ class Scorer:
         imp, cor, rep, ctl = self.jobs()
         sc = self.ev.get("scorable", {})
         sc_imp, sc_cor = sc.get("imputation", []), sc.get("correction", [])
+        tq = time.perf_counter()
         self.marg = self._fit_marginal({j["assay"] for j in imp + ctl})
+        self.timing["fit_marginal"] += time.perf_counter() - tq
         scores = {}
         recs_by_regime = {}
         for regime in REGIMES + ("control",):
@@ -922,10 +1038,13 @@ class Scorer:
             recs = []
             for a in sorted(groups):
                 self.log(f"score: {regime} {a}: {len(groups[a])} targets")
+                tq = time.perf_counter()
                 recs += self._imputation_group(groups[a], regime)
+                self.timing["targets_total"] += time.perf_counter() - tq
             self._pa_cache.clear()
             recs_by_regime[regime] = recs
         main_recs = recs_by_regime["leave_one_assay_out"]
+        ta = time.perf_counter()
         scores.update(self._imputation_metrics(main_recs, sc_imp, require_all=True))
         scores["accessibility_only"] = self._imputation_metrics(
             recs_by_regime["accessibility_only"], sc_imp)
@@ -939,15 +1058,22 @@ class Scorer:
             scores["predicted_control"] = {"n_targets": 0, "reason": (
                 "predict_control is off or the predictor is a training-free baseline"
                 if not self.predict_control else "no control target in this split")}
+        self.timing["assembly"] += time.perf_counter() - ta
         self.log(f"score: {len(cor)} correction pairs, {len(rep)} replicate pairs")
+        tq = time.perf_counter()
         cor_recs = [self._pair_record(j) for j in cor]
         rep_recs = [self._pair_record(j) for j in rep]
+        self.timing["pairs_total"] += time.perf_counter() - tq
+        ta = time.perf_counter()
         scores.update(self._correction_metrics(cor_recs, sc_cor))
         scores["replicate_pair_gap_closed_vs_depth_only"] = {"per_rung": {
             rung: metric([r for r in rep_recs if r["rung"] == rung], _gap_fn, set(
                 (sc.get("layers") or {}).get(rung, [])), self.n_boot, self.seed)
             for rung in sorted({r["rung"] for r in rep_recs})}}
+        self.timing["assembly"] += time.perf_counter() - ta
+        tg = time.perf_counter()
         scores["copy_leak"] = self._copy_leak()
+        self.timing["guardrail"] += time.perf_counter() - tg
         if self.no_halves:
             imp_t = Mx.Undefined("--no-halves mode: headline 1 has no noise floor and is not a "
                                  "selection term")
@@ -955,6 +1081,7 @@ class Scorer:
             imp_t = scores["specific_variance_recovered_above_noise"][SPACE]["macro"]
         cor_m = scores["correction_gap_closed_vs_depth_only_never_trained"]
         cor_t = cor_m["macro"]
+        h1_status = scores["specific_variance_recovered_above_noise"][SPACE]["per_assay_status"]
         unc, unc_den = self._uncertainty(main_recs, sc_imp)
         comp = composite(imp_t, cor_t, unc)
         den_rel = [v for v in cor_m["denominator_relative_by_assay"].values() if v is not None]
@@ -964,6 +1091,11 @@ class Scorer:
             "composite": _j(comp), "reason": _why(comp) if _undef(comp) else "",
             "imputation_reason": _why(imp_t) if _undef(imp_t) else "",
             "uncertainty_reason": _why(unc) if _undef(unc) else "",
+            "correction_reason": cor_m.get("reason", "") if _undef(cor_t) else "",
+            "imputation_term_definition": IMPUTATION_TERM_DEFINITION,
+            "imputation_assays_in_term": sorted(
+                a for a, v in h1_status.items() if v["in_imputation_term"]),
+            "headline1_per_assay_status": h1_status,
             "denominators": {
                 "uncertainty_marginal_pit_deviation": _j(unc_den),
                 "correction_baseline_minus_floor_relative_min": (min(den_rel) if den_rel and len(
@@ -981,7 +1113,10 @@ class Scorer:
                        "run_tables_sha256": self.run_tables_sha256,
                        "dnase_route": self.dnase_route, "baseline_fit_on": self.fit_on,
                        "n_regions": len(self.regions), "region_bins": self.rb,
-                       "context_bins": self.L, "wall_seconds": round(time.time() - t0, 1)})
+                       "context_bins": self.L, "wall_seconds": round(time.time() - t0, 1),
+                       "infer_batch": self.tile_bs, "region_cache": self.region_cache,
+                       "timing_seconds": {k: round(v, 1) for k, v in sorted(self.timing.items())},
+                       "torch_threads": torch.get_num_threads(), "device": str(self.device)})
         return scores
 
     # -------------------------------------------------------------- metric assembly
@@ -1071,7 +1206,22 @@ class Scorer:
         if self.no_halves:
             pilot["per_target"] = h1["per_target"]
             out[PILOT_H1_KEY] = pilot
+        h1["per_assay_status"] = headline1_status(recs, scorable, pilot if self.no_halves else h1,
+                                                  self.no_halves, in_composite=ra)
+        if self.no_halves:
+            pilot["per_assay_status"] = h1["per_assay_status"]
+            unc, den = self._uncertainty_all(recs)
+            out[PILOT_UNC_KEY] = {"value": _j(unc), "marginal_pit_deviation": _j(den),
+                                  "assays": sorted({r["assay"] for r in recs}),
+                                  "reason": _why(unc) if _undef(unc) else "",
+                                  "note": "pilot only: the uncertainty term over every assay with a "
+                                          "target (no scorable assay exists without halves); never "
+                                          "a selection input"}
         return out
+
+    def _uncertainty_all(self, recs):
+        """The uncertainty term over every assay with a target (the pilot form, DEFECTS item 3)."""
+        return self._uncertainty(recs, sorted({r["assay"] for r in recs}))
 
     def _uncertainty(self, recs, scorable):
         """(uncertainty term, its denominator = mean marginal-NB PIT deviation over the assays)."""
@@ -1134,6 +1284,48 @@ class Scorer:
         }
 
 
+FALLBACK_NONE_NEEDED = "none needed: defined, in the imputation term"
+FALLBACK_NON_SCORABLE = ("none: non-scorable (PI ruling 4), so outside the macro and the composite; "
+                         "reported apart")
+FALLBACK_UNDEFINED = ("none: a scorable assay is undefined, so the macro and the composite's "
+                      "imputation term are undefined (select_rule escalates)")
+FALLBACK_PILOT = (f"pilot --no-halves: headline 1 with N = 0 under {PILOT_H1_KEY}; never a "
+                  f"selection input")
+
+
+def headline1_status(recs, scorable, h1m: dict, no_halves: bool, in_composite: bool) -> dict:
+    """Per assay of one regime (DEFECTS item 5): whether the pseudoreplicate noise floor exists,
+    whether headline 1 is defined (and why not), whether the assay is in the composite's imputation
+    term, and the fallback used. `h1m` is the headline-1 metric dict the values come from (the
+    pilot form in --no-halves mode). No fallback value is ever computed: there is none."""
+    by = defaultdict(list)
+    for r in recs:
+        by[r["assay"]].append(r)
+    vals = dict(h1m.get("per_assay") or {}, **(h1m.get("non_scorable_per_assay") or {}))
+    reasons = h1m.get("per_assay_reason") or {}
+    out = {}
+    for a, rs in sorted(by.items()):
+        n_floor = sum(1 for r in rs if r["has_halves"] and not _undef(r["N"]))
+        defined = vals.get(a) is not None
+        sc = a in set(scorable)
+        if no_halves:
+            fb = FALLBACK_PILOT
+        elif not sc:
+            fb = FALLBACK_NON_SCORABLE
+        else:
+            fb = FALLBACK_NONE_NEEDED if defined else FALLBACK_UNDEFINED
+        why = "" if defined else reasons.get(a, "")
+        if not defined and len(rs) < 2:
+            why = (f"{len(rs)} validation target: the shared/specific split needs >= 2 targets of "
+                   f"the assay" + (f" ({why})" if why else ""))
+        out[a] = {"n_targets": len(rs), "n_targets_with_floor": n_floor,
+                  "floor_exists": n_floor > 0 and not no_halves, "headline1_defined": defined,
+                  "value": vals.get(a), "reason": why, "scorable": sc,
+                  "in_imputation_term": bool(in_composite and sc and not no_halves),
+                  "fallback": fb}
+    return out
+
+
 def _gap_fn(rs):
     keys = ("crps_model", "crps_depth_only", "crps_floor")
     bad = [r for r in rs if any(_undef(r[k]) for k in keys)]
@@ -1185,6 +1377,14 @@ def write_outputs(scores: dict, suff: dict, out) -> Path:
     return out / "scores.json"
 
 
+def write_skipped(out, reason: str) -> Path:
+    """`<out>/SKIPPED` (the reason): the job had nothing to score; no scores.json is written."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / SKIPPED).write_text(reason + "\n", encoding="utf-8")
+    return out / SKIPPED
+
+
 def run_tables_sha256(run) -> str:
     """tables_sha256 recorded in the run's checkpoint (ckpt.pt; T1's pinned dict)."""
     p = Path(run) / "ckpt.pt"
@@ -1215,6 +1415,15 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if baseline is not None and baseline not in REFS:
         raise ValueError(f"unknown baseline {baseline!r}; one of {REFS}")
     sc = Scorer(evalset, main=main, model=model, config=config, run_tables_sha256=run_sha, **kw)
+    if main in PAIR_ONLY:
+        _, cor, rep, _ = sc.jobs()
+        if not cor and not rep:
+            reason = (f"{main} is defined on pairs only and this eval set has 0 correction and 0 "
+                      f"replicate pairs on split {split}"
+                      + (" (--no-halves drops every pair)" if sc.no_halves else ""))
+            write_skipped(out, reason)
+            sc.log(f"skip: {reason}; wrote {out / SKIPPED}")
+            return {"skipped": reason}
     ledger, entry = None, None
     if split == "blind":
         ledger = sc.evalset_path.parent / BLIND_LEDGER
@@ -1241,6 +1450,22 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     return scores
 
 
+def allocated_cpus() -> int:
+    """CPUs this process may run on (the Slurm allocation, not the node's core count)."""
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except AttributeError:                       # pragma: no cover - macOS
+        return max(1, os.cpu_count() or 1)
+
+
+def set_threads() -> int:
+    """Torch threads = OMP_NUM_THREADS if set, else the allocated CPUs. Without it torch took the
+    node's 192 cores inside a 4-CPU job on Fir (F3: run.sh sets no OMP_NUM_THREADS)."""
+    n = int(os.environ.get("OMP_NUM_THREADS") or allocated_cpus())
+    torch.set_num_threads(max(1, n))
+    return torch.get_num_threads()
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     g = ap.add_mutually_exclusive_group(required=True)
@@ -1256,22 +1481,36 @@ def main(argv=None) -> int:
                          "floor, under a key the selection rule refuses")
     ap.add_argument("--dnase-route", default=None,
                     choices=("hotspot2_density", "macs2_no_control"))
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--device", default="auto",
+                    help="auto (default: cuda when a GPU is visible, else cpu), cpu or cuda")
     ap.add_argument("--n-boot", type=int, default=200)
     ap.add_argument("--guardrail-windows", type=int, default=256)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--infer-batch", type=int, default=None,
+                    help="windows per forward pass while scoring targets (default: the run's "
+                         "batch_size); the guardrail keeps batch_size")
+    ap.add_argument("--no-region-cache", action="store_true",
+                    help="read every tile from disk (the pre-F3 path; for equality checks)")
     a = ap.parse_args(argv)
     if (Path(a.out) / SCORED).is_file() and not a.force:
         print(f"skip: {a.out}/{SCORED} exists")
         return 0
+    set_threads()
+    device = a.device
+    if device == "auto":
+        device = "cuda" if (a.run and torch.cuda.is_available()) else "cpu"
     try:
         s = score(a.evalset, a.out, run=a.run, baseline=a.baseline, split=a.split,
-                  allow_blind=a.allow_blind, device=a.device, n_boot=a.n_boot,
+                  allow_blind=a.allow_blind, device=device, n_boot=a.n_boot,
                   guardrail_windows=a.guardrail_windows, no_halves=a.no_halves,
-                  dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason)
+                  dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
+                  infer_batch=a.infer_batch, region_cache=not a.no_region_cache)
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
+    if "skipped" in s:
+        print(f"skipped: {s['skipped']} ({a.out}/{SKIPPED})")
+        return 0
     sel = s["selection"]
     print(f"scores -> {a.out}/scores.json; composite {sel['composite']} (imputation "
           f"{sel['imputation_gap_closed']}, correction {sel['correction_gap_closed']}, uncertainty "
