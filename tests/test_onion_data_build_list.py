@@ -386,3 +386,56 @@ def test_rows_prints_a_priority_as_an_array_spec(tmp_path, capsys):
     assert capsys.readouterr().out.strip() == "4-5"
     with pytest.raises(SystemExit):
         BLM.main(["rows", "--build-list", str(t), "--priority", "3"])
+
+
+def test_pending_skips_built_not_applicable_and_active_rows_and_splits_long_rows(tmp_path, capsys):
+    """KF2 B2, M2, M4, M6: `submit` is safe to run twice; long rows get a longer limit."""
+    import json
+    from onion_data import build_list as BLM
+    out, work = tmp_path / "meas", tmp_path / "work"
+
+    def r(n, exp, unit="pooled", arm="base", files="F1", gb="1.0", pipe="chip-seq-pipeline2 v2.2.2",
+          sig=False, pri="1"):
+        mid = f"{exp}.{unit}.uniform.{arm}"
+        return {"row": str(n), "priority": pri, "experiment": exp, "unit": unit, "arm": arm,
+                "fastq_files": files, "fastq_gb": gb, "pipeline": pipe,
+                "expected_measurements": f"{mid}:counts+pr1+pr2" + ("+signal" if sig else "")
+                + (f";{exp}.pooled.uniform.nodedup:counts+pr1+pr2" if arm == "base" else "")}
+    rows = [r(1, "BUILT"), r(2, "HALF"), r(3, "MIX", arm="se"), r(4, "BIG", files="F4;F5",
+            sig=True), r(5, "RUNNING"), r(6, "NOCOUNT", files="F6", gb="2.0"), r(7, "P2", pri="2")]
+    for mid in ("BUILT.pooled.uniform.base", "BUILT.pooled.uniform.nodedup",
+                "HALF.pooled.uniform.base"):
+        (out / mid).mkdir(parents=True)
+        (out / mid / "provenance.json").write_text("{}")
+    (work / "MIX" / "se").mkdir(parents=True)
+    (work / "MIX" / "se" / "NOT_APPLICABLE").write_text(json.dumps({"reason": "mixed"}))
+    # F4 + F5: 700 M reads of ChIP -> 700 * (0.0332 + 0.0158) + 0.585 = 34.9 h > 18 h
+    counts = {"F1": 10_000_000, "F4": 350_000_000, "F5": 350_000_000}
+    res = BLM.pending(rows, out, work, priority="1", active=[5], counts=counts)
+    assert res["skipped"] == {1: "built", 3: "not_applicable", 5: "active"}
+    assert res["limits"] == {"1-00:00:00": [2, 6], "3-00:00:00": [4]}
+    assert res["signal"] == [4]
+    m, h = BLM.projected_wall_h(rows[3], counts, 10.0)
+    assert m == 700 and abs(h - (700 * (4.071 + 1.941) / 122.63 + 0.585)) < 1e-9
+    m6, _ = BLM.projected_wall_h(rows[5], counts, 10.0)      # no read count: 2 GB x 10 M/GB
+    assert m6 == 20
+    err = capsys.readouterr().err
+    assert "skip row 1 BUILT" in err and "not applicable" in err and "queued or running" in err
+    assert "submit row 4 BIG" in err and "LONG" in err
+    # an explicit row list, and the stdout plan the shell reads
+    assert BLM.main(["pending", "--build-list", str(_tsv(tmp_path, rows)), "--priority", "all",
+                     "--rows", "1-3,7", "--out", str(out), "--work", str(work)]) == 0
+    assert capsys.readouterr().out.split("\n")[0] == "1-00:00:00\t2,7"
+    # every expected measurement built: nothing to print (build_row.sh exits 0 at once)
+    assert BLM.main(["pending", "--build-list", str(_tsv(tmp_path, rows)), "--rows", "1",
+                     "--out", str(out), "--work", str(work)]) == 0
+    assert capsys.readouterr().out == ""
+    assert BLM.parse_spec("3,5-7") == [3, 5, 6, 7] and BLM.spec_of([7, 3, 6, 5]) == "3,5-7"
+
+
+def _tsv(tmp_path, rows):
+    p = tmp_path / "bl.tsv"
+    cols = list(rows[0])
+    p.write_text("\t".join(cols) + "\n" + "".join("\t".join(r[c] for c in cols) + "\n"
+                                                  for r in rows))
+    return p

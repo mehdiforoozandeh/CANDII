@@ -513,7 +513,7 @@ def test_driver_builds_exactly_the_rows_measurements(driver, capsys, monkeypatch
 
     def fake_signal(cfg, half_tas, cost, sources=None):
         assert cfg["signal_spec"]["controls"] == ["ENCSRCTL"]
-        AV.control_readsets(cfg["work"], "ENCSRCTL")   # now built
+        assert AV.control_readsets(cfg["work"], "ENCSRCTL", cfg["out"])   # now built
         z = {c: np.zeros(n // 25, np.float32) for c, n in SIZES.items()}
         fake["signal.h5"] = half_tas
         return {"signal.h5": z, "pr1_signal.h5": z, "pr2_signal.h5": z, "_prov": {"fake": 1}}
@@ -521,7 +521,7 @@ def test_driver_builds_exactly_the_rows_measurements(driver, capsys, monkeypatch
     assert run(2) == 0
     assert len(fake["signal.h5"]["pr1"]) == 2              # both replicates' halves
     assert _meta_of(out, "ENCSRCHP.pooled.uniform.base")["has_signal"] == "1"
-    assert AV.control_readsets(driver["work"], "ENCSRCTL")
+    assert AV.control_readsets(driver["work"], "ENCSRCTL", out)
     for r in (3, 4, 5, 6, 7):
         assert run(r) == 0
     names = {p.name for p in out.iterdir() if not p.name.startswith(".")}
@@ -601,6 +601,74 @@ def test_drop_bams_after_views(driver):
     assert driver["run"](1, "--drop-bams") == 0           # keep_bam = 0
     assert not (d / "rep1.filtered.bam").exists() and (d / "rep1.tagAlign.gz").exists()
     assert "rep1.unfiltered.bam" in (d / "DROPPED.tsv").read_text()
+
+
+def _readset(work, exp, unit, layer="uniform"):
+    d = work / exp / f"{unit}.{layer}" / "base"
+    d.mkdir(parents=True, exist_ok=True)
+    for h in ("pr1", "pr2"):
+        (d / f"{h}.tagAlign.gz").write_bytes(b"")
+    (d / "READSET.json").write_text("{}")
+
+
+def test_partly_built_control_is_pending(tmp_path):
+    """KF2 B1: a 2-replicate control with only br1's read set is not built; the ChIP row's
+    signal must wait (ControlPending, exit 75), never run on br1 alone."""
+    work, out = tmp_path / "work", tmp_path / "meas"
+    (work / "CTL2" / "base").mkdir(parents=True)
+    (work / "CTL2" / "base" / "arm.json").write_text(json.dumps(
+        {"reps": [{"rep": 1, "bio_rep": 1}, {"rep": 2, "bio_rep": 2}]}))
+    _readset(work, "CTL2", "br1")
+    assert AV.control_readsets(work, "CTL2", out, "uniform") == {}
+    cfg = {"work": str(work), "out": str(out), "experiment": "CHP", "tmp": str(tmp_path / "t"),
+           "control_layers": {"CTL2": "uniform"}}
+    with pytest.raises(AV.ControlPending):
+        AV.chip_signal_inputs(cfg, AV.Cost(), "x", {"controls": ["CTL2"]})
+    _readset(work, "CTL2", "br2")                  # every replicate of arm.json: built
+    assert sorted(AV.control_readsets(work, "CTL2", out, "uniform")) == ["br1", "br2"]
+    # no run record and no pooled measurement: pending; the pooled base measurement settles it
+    (work / "CTL2" / "base" / "arm.json").unlink()
+    assert AV.control_readsets(work, "CTL2", out, "uniform") == {}
+    (out / "CTL2.pooled.uniform.base").mkdir(parents=True)
+    (out / "CTL2.pooled.uniform.base" / "provenance.json").write_text("{}")
+    assert sorted(AV.control_readsets(work, "CTL2", out, "uniform")) == ["br1", "br2"]
+    # a native control: bams.json in the staging dir lists the replicates; layers never mix
+    fq = tmp_path / "fq"
+    (fq / "NAT").mkdir(parents=True)
+    (fq / "NAT" / "bams.json").write_text(json.dumps({"bams": [{"bio_rep": 1}, {"bio_rep": 2}]}))
+    _readset(work, "NAT", "br1", "native")
+    assert AV.control_readsets(work, "NAT", out, "native", fq) == {}
+    _readset(work, "NAT", "br2", "native")
+    assert sorted(AV.control_readsets(work, "NAT", out, "native", fq)) == ["br1", "br2"]
+    assert AV.control_readsets(work, "NAT", out, "uniform", fq) == {}
+
+
+def test_bam_drop_waits_for_every_row_reading_the_run_dir(driver, capsys):
+    """KF2 M3: BAMs of a keep_bam = 0 row go only when no row that reads its run dir lacks a
+    measurement. Arm rows (se) and lane rows read their own run dirs, so they never block."""
+    import csv as _csv
+    d = driver["work"] / "ENCSRCTL" / "base"
+    lines = ["name\tsrc\tbytes\tmd5"] + [
+        f"{n}\ts\t{(d / n).stat().st_size}\tm" for n in
+        ("rep1.unfiltered.bam", "rep1.filtered.bam", "rep1.tagAlign.gz")]
+    (d / "HARVEST.tsv").write_text("\n".join(lines) + "\n")
+    bl = driver["bl"]
+    with open(bl) as fh:
+        rows = list(_csv.DictReader(fh, delimiter="\t"))
+    # a later-priority row that reads the same run dir (same experiment, unit, arm) and is unbuilt
+    extra = dict(rows[0], row="99", priority="4",
+                 expected_measurements="ENCSRCTL.pooled.uniform.depth0.50:counts+pr1+pr2")
+    _bl(bl, [{k: r[k] for k in BL_COLS} for r in rows] + [extra])
+    assert driver["run"](1, "--drop-bams") == 0
+    assert (d / "rep1.filtered.bam").exists() and not (d / "DROPPED.tsv").exists()
+    assert "rows ['99'] still read them" in capsys.readouterr().out
+    _bl(bl, [{k: r[k] for k in BL_COLS} for r in rows])     # only arm/lane rows elsewhere
+    assert driver["run"](1, "--drop-bams") == 0
+    assert not (d / "rep1.filtered.bam").exists() and (d / "rep1.tagAlign.gz").exists()
+    # the ChIP experiment's se arm row and lane row have their own run dirs
+    FU = AV._fu()
+    chp = [r for r in rows if r["experiment"] == "ENCSRCHP"]
+    assert len({FU.arm_dir(driver["work"], r) for r in chp}) == len(chp)
 
 
 @pytest.mark.skipif(not (shutil.which("samtools") and shutil.which("bedtools")),

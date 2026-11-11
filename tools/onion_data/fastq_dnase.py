@@ -676,9 +676,13 @@ def cmd_run(a):
         die("give --experiment, --unit and --arm, or --build-list and --row")
     t0 = time.time()
     out = Path(a.work) / experiment / out_dir_name(unit, arm)
-    if (out / "ALIGN_DONE").exists() and not a.force:
-        log(f"{out}/ALIGN_DONE exists; skip")
+    if ((out / "ALIGN_DONE").exists() or (out / FU.NOT_APPLICABLE).exists()) and not a.force:
+        log(f"{out}: ALIGN_DONE or {FU.NOT_APPLICABLE} exists; skip")
+        if rows is not None:
+            FU.cleanup_fastq(rows, experiment, a.work, a.fastq_root)   # a rerun frees what it can
         return
+    if not a.dry_run:
+        FU.check_caper_jars((CROMWELL, WOMTOOL))
     out.mkdir(parents=True, exist_ok=True)
     tmp = Path(a.tmp)
     tmp.mkdir(parents=True, exist_ok=True)

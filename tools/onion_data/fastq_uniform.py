@@ -590,8 +590,17 @@ def stage_native(row, fastq_root=FASTQ_ROOT, ranges=RANGES, parallel_files=PARAL
     return rec
 
 
-def stage_row(row, fastq_root=FASTQ_ROOT, ranges=RANGES, parallel_files=PARALLEL_FILES) -> dict:
-    """Stage what one build-list row reads: its FASTQs (any pipeline), or its native BAMs."""
+def stage_row(row, fastq_root=FASTQ_ROOT, ranges=RANGES, parallel_files=PARALLEL_FILES,
+              work=WORK) -> dict:
+    """Stage what one build-list row reads: its FASTQs (any pipeline), or its native BAMs.
+    Nothing when the row's run dir already holds ALIGN_DONE or NOT_APPLICABLE: the alignment no
+    longer needs the FASTQs, and the cleanup may have deleted them (a second `submit`, KF2)."""
+    if row_kind(row) != "native":
+        d = arm_dir(work, row)
+        done = [m for m in ("ALIGN_DONE", NOT_APPLICABLE) if (d / m).exists()]
+        if done:
+            log(f"row {row.get('row', '')}: {d / done[0]} exists, nothing to stage")
+            return {"skipped": str(d / done[0])}
     if row_kind(row) == "native":
         return stage_native(row, fastq_root, ranges, parallel_files)
     return stage(row["experiment"], fastq_root, row_accessions(row) or None, ranges,
@@ -645,6 +654,17 @@ def prepare_refs(src=REFCACHE, dest=REFS) -> Path:
 #: starting together died on it ("OSError: [Errno 116] Stale file handle", KF job 26829982).
 CROMWELL_JAR = "/home/mforooz/.caper/cromwell_jar/cromwell-82.jar"
 WOMTOOL_JAR = "/home/mforooz/.caper/womtool_jar/womtool-82.jar"
+
+
+def check_caper_jars(jars=None) -> None:
+    """Fail fast, before staging or Cromwell starts, when a Caper jar named in the conf is
+    missing (the jars live in the user's ~/.caper, outside the kit)."""
+    jars = jars or (CROMWELL_JAR, WOMTOOL_JAR)
+    missing = [str(j) for j in jars if not Path(j).is_file()]
+    if missing:
+        raise SystemExit("Caper jar(s) missing: " + ", ".join(missing) + ". Caper runs offline "
+                         "from these local jars; restore them (e.g. `caper init local` on a login "
+                         "node downloads cromwell-82 and womtool-82 into ~/.caper) and resubmit.")
 
 
 def caper_conf_text() -> str:
@@ -753,11 +773,13 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
     out = arm_dir(work, row)
     if (out / "ALIGN_DONE").exists() or (out / NOT_APPLICABLE).exists():
         log(f"{out}: ALIGN_DONE or {NOT_APPLICABLE} exists, nothing to do")
+        cleanup_fastq(rows, exp, work, fastq_root)      # a rerun still frees what it can
         return 0
     out.mkdir(parents=True, exist_ok=True)
     genome_tsv = Path(refs) / "hg38.local.tsv"
     if not genome_tsv.exists():
         raise SystemExit(f"{genome_tsv} missing: run `fastq_uniform.py prepare-refs` first")
+    check_caper_jars()
     check_image(key, eic)
 
     fj_path = Path(fastq_root) / exp / "files.json"
@@ -900,18 +922,30 @@ def verify_arm(d: Path, md5=False) -> list[str]:
 
 
 def cleanup_fastq(rows, experiment, work, fastq_root) -> bool:
-    """Delete the staged FASTQs once every build-list row of the experiment verifies."""
-    mine = [r for r in rows if r["experiment"] == experiment]
+    """Delete the staged FASTQs once every build-list row of the experiment verifies.
+
+    `rows` is the whole build list (every priority), so the FASTQs stay while any row of the
+    experiment -- a priority-3 arm row or a priority-4 library or lane row included -- has no
+    ALIGN_DONE or NOT_APPLICABLE yet. Native rows read staged BAMs, not FASTQs, and never call this.
+    Two rows of one experiment may finish at the same moment (KF2 review): the directory is first
+    renamed to a private name, which only one caller can do; the other finds it gone and returns
+    True. Missing files are fine."""
+    native = {r["row"] for r in rows if r["experiment"] == experiment and row_kind(r) == "native"}
+    mine = [r for r in rows if r["experiment"] == experiment and r["row"] not in native]
     probs = [p for r in mine for p in verify_arm(arm_dir(work, r))]
     if probs:
         log(f"{experiment}: FASTQs kept, {len(probs)} row check(s) open, e.g. {probs[0]}")
         return False
     d = Path(fastq_root) / experiment
-    if d.exists():
-        for p in d.iterdir():
-            p.chmod(0o644)
-        shutil.rmtree(d)
-        log(f"{experiment}: all {len(mine)} rows verified; deleted {d}")
+    gone = d.with_name(f".{experiment}.deleting.{os.getpid()}.{time.time_ns()}")
+    try:
+        os.rename(d, gone)
+    except FileNotFoundError:
+        return True                     # never staged, or another row's cleanup took it
+    shutil.rmtree(gone, ignore_errors=True)
+    if gone.exists():
+        log(f"{experiment}: WARNING {gone} not fully deleted")
+    log(f"{experiment}: all {len(mine)} rows verified; deleted {d}")
     return True
 
 
@@ -927,6 +961,8 @@ def main(argv=None) -> int:
     s.add_argument("--fastq-root", default=FASTQ_ROOT)
     s.add_argument("--ranges", type=int, default=RANGES, help="byte ranges per file")
     s.add_argument("--parallel-files", type=int, default=PARALLEL_FILES)
+    s.add_argument("--work", default=WORK, help="a row whose run dir is done stages nothing")
+    sub.add_parser("check-jars", help="exit non-zero when Caper's local jars are missing")
     s = sub.add_parser("prepare-refs")
     s.add_argument("--src", default=REFCACHE)
     s.add_argument("--dest", default=REFS)
@@ -956,11 +992,15 @@ def main(argv=None) -> int:
             if not a.row:
                 raise SystemExit("stage --build-list needs --row")
             stage_row(get_row(read_build_list(a.build_list), a.row), a.fastq_root, a.ranges,
-                      a.parallel_files)
+                      a.parallel_files, a.work)
         elif not a.experiment:
             raise SystemExit("stage: give --experiment, or --build-list and --row")
         for e in a.experiment:
             stage(e, a.fastq_root, None, a.ranges, a.parallel_files)
+        return 0
+    if a.cmd == "check-jars":
+        check_caper_jars()
+        print("caper jars present: " + ", ".join((CROMWELL_JAR, WOMTOOL_JAR)))
         return 0
     if a.cmd == "prepare-refs":
         prepare_refs(a.src, a.dest)

@@ -39,7 +39,9 @@ fi
 if [ -f "$1" ]; then
   ROW="${2:-${SLURM_ARRAY_TASK_ID:-}}"
   [ -n "$ROW" ] || { echo "stage_fastq.sh: build list given but no row (argument or array index)"; exit 2; }
-  python "$PY" stage --build-list "$1" --row "$ROW" --ranges "$RANGES" --parallel-files "$PFILES"
+  # a row whose run dir holds ALIGN_DONE or NOT_APPLICABLE stages nothing (its FASTQs may be gone)
+  python "$PY" stage --build-list "$1" --row "$ROW" --ranges "$RANGES" --parallel-files "$PFILES" \
+    --work "${ONION_WORK:-/scratch/mforooz/onion/work}"
 else
   args=()
   for e in "$@"; do args+=(--experiment "$e"); done

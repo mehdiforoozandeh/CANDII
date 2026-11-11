@@ -1057,18 +1057,44 @@ def build_signal(cfg, half_tas: dict, cost: Cost, sources=None) -> dict:
     return out
 
 
-def control_readsets(work, control: str) -> dict:
-    """{unit: (pr1, pr2)} of a control experiment's built base read sets (pooled or br<i>, any
-    layer); empty when the control has not been built yet."""
-    out = {}
+def control_replicates(work, control: str, layer: str, fastq_root=None) -> list | None:
+    """The base read-set units a fully built control has: `["pooled"]` for one replicate, else
+    `br<bio_rep>` per replicate, from the control's run record (`work/<ctl>/base/arm.json`; native:
+    `<fastq root>/<ctl>/bams.json`). None when there is no run record yet."""
+    if layer == "native":
+        bj = Path(fastq_root) / control / "bams.json" if fastq_root else None
+        if not (bj and bj.is_file()):
+            return None
+        bios = [r.get("bio_rep") for r in json.loads(bj.read_text())["bams"]]
+    else:
+        aj = Path(work) / control / "base" / "arm.json"
+        if not aj.is_file():
+            return None
+        bios = [r.get("bio_rep") for r in json.loads(aj.read_text())["reps"]]
+    return ["pooled"] if len(bios) == 1 else [f"br{b}" for b in bios]
+
+
+def control_readsets(work, control: str, out, layer: str = "uniform", fastq_root=None) -> dict:
+    """{unit: (pr1, pr2)} of a control experiment's base read sets, only when the control is
+    completely built: its pooled base measurement exists (`<out>/<ctl>.pooled.<layer>.base/
+    provenance.json`, written after every replicate's read set), or every replicate its run record
+    lists has READSET.json. Otherwise {} and the caller raises ControlPending: a control row that
+    runs beside its ChIP row may have br1 built and br2 not yet (KF2 review)."""
+    found = {}
     d = Path(work) / control
-    if not d.is_dir():
-        return out
-    for u in sorted(d.iterdir()):
-        m = re.fullmatch(r"(pooled|br\d+)\.(uniform|native)", u.name)
-        if m and (u / "base" / "READSET.json").is_file():
-            out[m.group(1)] = tuple(str(u / "base" / f"{h}.tagAlign.gz") for h in HALVES)
-    return out
+    if d.is_dir():
+        for u in sorted(d.iterdir()):
+            m = re.fullmatch(rf"(pooled|br\d+)\.{re.escape(layer)}", u.name)
+            if m and (u / "base" / "READSET.json").is_file():
+                found[m.group(1)] = tuple(str(u / "base" / f"{h}.tagAlign.gz") for h in HALVES)
+    if not found:
+        return {}
+    if (Path(out) / measurement_id(control, "pooled", layer, "base") / "provenance.json").is_file():
+        return found
+    want = control_replicates(work, control, layer, fastq_root)
+    if want and set(want) <= set(found):
+        return {u: found[u] for u in want}
+    return {}
 
 
 def chip_fraglen(cfg, cost) -> dict:
@@ -1115,9 +1141,11 @@ def chip_signal_inputs(cfg, cost, pooled_ta, spec) -> dict:
     tmp = Path(cfg["tmp"])
     ctl_units = {}
     for c in spec.get("controls") or []:
-        r = control_readsets(cfg["work"], c)
+        r = control_readsets(cfg["work"], c, cfg["out"], (cfg.get("control_layers") or {}).get(
+            c, "uniform"), cfg.get("fastq_root"))
         if not r:
-            raise ControlPending(f"control {c} of {cfg['experiment']} has no built base read set")
+            raise ControlPending(f"control {c} of {cfg['experiment']} is not completely built "
+                                 f"(no pooled base measurement, or a replicate's read set missing)")
         ctl_units.update({f"{c}.{u}": v for u, v in r.items()})
     if not ctl_units:
         raise SystemExit(f"{cfg['experiment']}: chip signal needs a control_experiment")
@@ -1570,9 +1598,32 @@ def config_from_row(a) -> dict | None:
         "run_metadata": run_metadata, "references": {}, "name_tokens": a.name_tokens,
         "check_refilter": a.check_refilter, "build_list_row": row["row"],
         "keep_bam": row.get("keep_bam", "1"), "rundir": str(rundir), "notes": notes,
-        "nuclear_chroms": a.nuclear_chroms,
+        "nuclear_chroms": a.nuclear_chroms, "fastq_root": a.fastq_root,
+        "control_layers": {c: control_layer(rows, c) for c in controls},
+        "row": row, "rows": rows,
     }
     return cfg
+
+
+def bam_readers_pending(cfg) -> list:
+    """Build-list rows (any priority) that still read this row's run-dir BAMs: every row whose run
+    dir is the same directory and whose expected measurements are not all written. A row reads only
+    its own run dir (`fastq_uniform.arm_dir`): a priority-3 FASTQ arm row (`se`, `crop36`,
+    `crop50`) and a priority-4 library or lane row each align their own FASTQs into their own run
+    dir, and the depth, nodedup and mapq0 views come from the base row itself. So once the row's
+    own measurements exist, no later row needs these BAMs."""
+    FU = _fu()
+    rd = Path(cfg["rundir"]).resolve()
+    out = []
+    for r in cfg.get("rows") or [cfg["row"]]:
+        if FU.row_kind(r) == "native" or FU.arm_dir(cfg["work"], r).resolve() != rd:
+            continue
+        if (rd / FU.NOT_APPLICABLE).exists():
+            continue
+        if any(not (Path(cfg["out"]) / mid / "provenance.json").is_file()
+               for mid in parse_expected(r.get("expected_measurements", ""))):
+            out.append(r["row"])
+    return out
 
 
 def drop_bams(cfg) -> list:
@@ -1616,7 +1667,12 @@ def run_row(a) -> int:
         print(f"[align_views] row {cfg['build_list_row']}: NOT BUILT {missing}", flush=True)
         return 1
     if a.drop_bams and cfg["keep_bam"] == "0":
-        drop_bams(cfg)
+        readers = bam_readers_pending(cfg)
+        if readers:
+            print(f"[align_views] BAMs kept in {cfg['rundir']}: rows {readers} still read them",
+                  flush=True)
+        else:
+            drop_bams(cfg)
     return 0
 
 
