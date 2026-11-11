@@ -283,3 +283,36 @@ The download route for the EIC reads stays on Nibi. The staging step uses about 
 - Reason for staying on Nibi: the pipelines, the references and the processing are on Nibi, Fir's environment setup failed on 12 nodes in two days, and the fallback needs the PI.
 
 Evidence: the download-route measurement entry above (probe jobs on Nibi 26823539 and 26824325, on Fir 3440471, 3441260 and 3442621).
+
+## 2026-11-11 Agent call: training budget for the miniCANDI ladder
+
+Every arm inside one rung trains on the same number of windows: 80,000. The six rung-base runs (3 seeds each, 18 runs) are also trained at matched compute, 2.4e15 FLOPs, and the comparison between rungs uses those matched-compute runs. The per-rung ablation arms are not repeated at matched compute.
+
+- Pilot evidence (Fir, 40,000 windows, the old EIC store, settles nothing): the validation loss of rungs 1, 4, 5 and 6 changed by less than 1% over the last quarter of training. Rung 3 still fell by 4.4%, so 80,000 windows is an extrapolation for rung 3, not a measurement.
+- Matched compute is anchored at rung 1's flattening point: 9.77e10 FLOPs per window x 24,565 windows. Anchored at rung 4 instead, rung 1 would see 680 windows, and its validation loss at 2,000 windows was still 1.20 to 1.34 against a plateau near 1.02.
+- Matched compute on every arm would cost about 10,900 CPU-h for no extra decision. An arm is compared with its own rung's base, and both have the same FLOPs per window to within the arm's change.
+- Device: rung 1 on a GPU slice (32 min against about 3.9 h on CPU). Rungs 2 to 6 on CPU with 12 CPUs and 8 loader workers.
+- Projected cost: 28 GPU-h + 1,562 CPU-h (equal windows), 1 GPU-h + 1,209 CPU-h (matched-compute bases), about 3,800 CPU-h of scoring at the pilot's settings.
+- Pilot seed spread of rung 1 (max - min, 3 seeds): 0.0038 in the specific-variance correlation, 0.0058 in CRPS. The selection rule therefore resolves differences above about 0.008 and 0.012.
+
+Evidence: `cruxvault/results/t182/PILOT.md`, `budgets.md`, `pilot_scores.tsv`; `tools/minicandi/configs/budgets.json`.
+
+## 2026-11-11 Agent call: experiments that mix single-end and paired-end runs
+
+A ChIP-seq experiment whose runs mix single-end and paired-end reads is aligned single-end, from mate 1 of each pair. This follows ENCODE4's handling. The paired-end to single-end arm does not apply to these experiments (6 build-list rows), and each such row records "not applicable".
+
+- For ENCSR955IXZ and ENCSR976JHS, ENCODE used mate 2. The kit uses mate 1 for every experiment, so these two differ from ENCODE's own processing.
+
+## 2026-11-11 Agent call: the MACS2 signal step skips the fold-enrichment track
+
+The uniform pipeline's signal step builds only the p-value track. The fold-enrichment branch (about 40% of one MACS2 run, and unused here) is skipped, and the pooled, first-half and second-half runs go in parallel. Signal is built only for build-list rows whose products include it.
+
+- The p-value bigWig files have the same md5 as before the change. The signal step fell from 2.40 h to 0.59 h on the ChIP-seq smoke experiment.
+
+Evidence: `cruxvault/results/t180/KIT_INTEGRATION.md`.
+
+## 2026-11-11 Compute tally: kit smokes and pilot
+
+- Pilot (Fir): 355 CPU-h and 1.7 GPU-h. Scoring took 298 of the CPU-h.
+- Kit smokes (Nibi), alignment step: ChIP-seq 19.68 CPU-h, ATAC-seq 15.12 CPU-h, DNase-seq 4.73 CPU-h. The view step added 3.32, 2.37 and 1.88 CPU-h.
+- Projected EIC build: 1,565 + 4,282 + 1,484 CPU-h for priorities 1 to 3, and 14,920 CPU-h for priority 4.
