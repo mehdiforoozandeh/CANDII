@@ -528,6 +528,12 @@ def test_f11_no_halves_pilot_mode(env, monkeypatch):
     assert s[S.PILOT_H1_KEY]["macro"] is not None
     assert s["selection"]["imputation_gap_closed"] is None and s["selection"]["imputation_reason"]
     assert s["pit_deviation_pooled"]["macro"] is not None
+    # F3 (DEFECTS item 3): the uncertainty term over every assay, under a pilot-only key
+    pu = s[S.PILOT_UNC_KEY]
+    assert pu["value"] is not None and pu["marginal_pit_deviation"] > 0 and pu["assays"]
+    st = s["selection"]["headline1_per_assay_status"]
+    assert st and all(not v["floor_exists"] and not v["in_imputation_term"]
+                      and v["fallback"] == S.FALLBACK_PILOT for v in st.values())
 
 
 # ------------------------------------------------------------------ end to end: train, score, select
@@ -571,3 +577,130 @@ def test_end_to_end_train_score_compare(env, tmp_path):
                     settlements=runs / "settlements.tsv")
     assert res["verdict"] in R.VERDICTS, res
     assert _tsv(runs / "settlements.tsv")[0]["verdict"] == res["verdict"]
+
+
+# ------------------------------------------------------------------ F3: pilot defects
+
+def test_f3_guardrail_windows_are_drawn_per_mask_seed(env, monkeypatch):
+    """DEFECTS item 9: every mask seed used the first N reconstruction items (one target's windows),
+    so the copy gain's spread missed window-sampling noise. Now each seed draws its own windows."""
+    from onion_eval import guardrail as G
+    sc = _model_scorer(env, guardrail_windows=6)
+    seen = {}
+
+    def fake(model, batches, seed=0):
+        seen[seed] = [(m["measurements_out"], m["chrom"], m["start_bin"])
+                      for b in batches for m in b["meta"]]
+        return _fake_guardrail(G, {0: 0.01, 1: 0.02, 2: 0.03}, {0: True, 1: True, 2: True})(model, batches, seed)
+    monkeypatch.setattr(G, "copy_leak", fake)
+    cl = sc._copy_leak()
+    assert set(seen) == {0, 1, 2} and all(len(v) == 6 for v in seen.values())
+    assert seen[0] != seen[1] and seen[1] != seen[2]
+    assert cl["window_draw"] == S.GUARD_DRAW and cl["n_reconstruction_items"] > 6
+    assert cl["same_view_copy_gain_relative_spread"] == pytest.approx(0.02)
+    items0, n0 = S.guardrail_items(sc.ds, 6, 0)
+    assert S.guardrail_items(sc.ds, 6, 0)[0] == items0                  # deterministic per seed
+    assert [it["item"] for it in items0] == sorted(it["item"] for it in items0)
+    assert all(it["task"] == "reconstruction" for it in items0)
+    assert len({it["targets"][0] for s_ in (0, 1, 2) for it in S.guardrail_items(sc.ds, 6, s_)[0]}) > 1
+
+
+def test_f3_headline1_status_per_assay(model_run, env):
+    """DEFECTS item 5: per assay, whether the floor exists, whether headline 1 is defined, whether
+    the assay is in the composite's imputation term, and the fallback (none is ever computed)."""
+    s = _strict(model_run / "scores.json")
+    sel = s["selection"]
+    st = sel["headline1_per_assay_status"]
+    assert st == s["specific_variance_recovered_above_noise"]["counts_log1p"]["per_assay_status"]
+    sc = set(env["ev"]["scorable"]["imputation"])
+    assert sel["imputation_assays_in_term"] == sorted(sc) and sel["imputation_term_definition"]
+    for a, v in st.items():
+        assert v["in_imputation_term"] == (a in sc) and v["floor_exists"]
+        if a in sc:
+            assert v["headline1_defined"] and v["fallback"] == S.FALLBACK_NONE_NEEDED
+    one = st["H3K27me3"]                     # one validation target: no shared/specific split
+    assert one["n_targets"] == 1 and not one["headline1_defined"] and one["value"] is None
+    assert "1 validation target" in one["reason"] and one["fallback"] == S.FALLBACK_NON_SCORABLE
+    assert R.h1_status(s) == st
+
+
+def test_f3_pair_only_baseline_skips_without_pairs(env, tmp_path, capsys):
+    """DEFECTS item 4: depth-only scaling is defined on pairs only; with no pair the job writes
+    SKIPPED and no scores.json, instead of a table of NaN rows."""
+    ev = dict(env["ev"], correction_pairs=[], replicate_pairs=[])
+    p = env["root"] / "eval" / "synth" / "evalset_nopairs.json"
+    p.write_text(json.dumps(ev))
+    out = tmp_path / "depth_only_scaling" / "seed0"
+    assert S.main(["--baseline", "depth_only_scaling", "--evalset", str(p), "--out", str(out),
+                   "--n-boot", "0"]) == 0
+    assert "skipped:" in capsys.readouterr().out
+    assert (out / S.SKIPPED).is_file() and not (out / "scores.json").exists()
+    assert R.seed_state(out) == "skipped"
+    # with pairs it still scores
+    assert "skipped" not in env["res"]["depth_only_scaling"]
+
+
+class ConvReader(MiniCandi):
+    """Reads its count input and the DNA (a fixed random conv over log1p counts)."""
+
+    def __init__(self):
+        super().__init__()
+        g = torch.Generator().manual_seed(0)
+        self.w = torch.nn.Parameter(torch.randn(36, 36, 5, generator=g) * 0.05, requires_grad=False)
+
+    def forward(self, b):
+        x = torch.log1p(b["x_counts"].double()).permute(0, 2, 1)
+        h = torch.nn.functional.conv1d(x, self.w.double(), padding=2).permute(0, 2, 1)
+        dna = (b["x_dna"].double().reshape(h.shape[0], h.shape[1], -1) == 1).double().mean(-1)
+        mu = torch.exp(0.5 * torch.tanh(h) + dna[..., None]) * (2.0 ** b["c_out"][..., 0] / 2 ** 24)[:, None, :]
+        return {"n": torch.full_like(mu, 4.0), "mu": mu.clamp_min(1e-3)}
+
+
+SKIP_KEYS = {"wall_seconds", "timing_seconds", "infer_batch", "region_cache", "torch_threads"}
+
+
+def _leaves(x, path=""):
+    if isinstance(x, dict):
+        for k, v in x.items():
+            if k not in SKIP_KEYS:
+                yield from _leaves(v, f"{path}/{k}")
+    elif isinstance(x, list):
+        for i, v in enumerate(x):
+            yield from _leaves(v, f"{path}[{i}]")
+    else:
+        yield path, x
+
+
+def max_score_difference(a: dict, b: dict) -> float:
+    """Max |a - b| over the numeric leaves; every non-numeric leaf must be equal."""
+    la, lb = dict(_leaves(a)), dict(_leaves(b))
+    assert set(la) == set(lb), set(la) ^ set(lb)
+    worst = 0.0
+    for k, v in la.items():
+        w = lb[k]
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and w is not None:
+            worst = max(worst, abs(float(v) - float(w)))
+        else:
+            assert v == w, (k, v, w)
+    return worst
+
+
+def test_f3_region_cache_and_inference_batch_keep_every_score(env):
+    """DEFECTS item 6: the region cache (one whole-region read per measurement, tiles are slices)
+    and a larger inference batch change no score."""
+    common = dict(main="model", model=ConvReader(), config=CFG,
+                  run_tables_sha256=tables_sha256(env["tables"]), n_boot=30, guardrail_windows=8,
+                  log=lambda *a: None)
+    old = S.Scorer(env["evalset"], region_cache=False, **common)
+    reads = []
+    real = old._ds_read
+    old.ds.read = lambda *a, **k: (reads.append(a), real(*a, **k))[1]
+    a = old.run()
+    new = S.Scorer(env["evalset"], region_cache=True, infer_batch=16, **common)
+    reads_new = []
+    real_new = new._ds_read
+    new._ds_read = lambda *a, **k: (reads_new.append(a), real_new(*a, **k))[1]
+    b = new.run()
+    assert max_score_difference(a, b) <= 1e-9
+    assert len(reads_new) < len(reads)          # 2 tiles per region here; 16 on the pilot
+    assert b["infer_batch"] == 16 and b["region_cache"] is True and b["timing_seconds"]["model_forward"] >= 0

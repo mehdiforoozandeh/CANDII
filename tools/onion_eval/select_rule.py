@@ -9,6 +9,9 @@
     python tools/onion_eval/select_rule.py check-rung --runs <dir> --rung <r> --ladder <json>
     python tools/onion_eval/select_rule.py check-done --runs <dir> --ladder <json>
         [--final <arm dir>] [--baselines <dir>] [--blind-baselines <dir>]
+    python tools/onion_eval/select_rule.py h1-status <scores.json> [...]
+        (per assay: n_targets, n_targets_with_floor, floor_exists, headline1_defined, value,
+        scorable, in_imputation_term, fallback, reason; DEFECTS item 5)
     python tools/onion_eval/select_rule.py ladder-add --ladder <json> --name <n> --incumbent <arm>
         --challenger <arm> --simpler <s> --d14 true|false [--verdict <v>] [--notepad-ref <ref>]
 
@@ -150,6 +153,7 @@ SETTLEMENT_COLUMNS = ("comparison", "incumbent", "challenger", "simpler", "compo
 LADDER_KEYS = ("name", "incumbent", "challenger", "simpler", "d14_condition_1", "verdict",
                "notepad_ref")
 SEED_RE = re.compile(r"^seed(\d+)$")
+SKIPPED = "SKIPPED"                 # score.py: a pair-only baseline with no pair to score
 #: any of these in a seed dir means the run has started (seed_state `running`)
 STARTED_FILES = ("run.json", "ckpt.pt", "ckpt.pt.tmp", "train_state.pt", "log.jsonl", "DONE",
                  "RUNNING", "scores.json")
@@ -203,7 +207,7 @@ def load_seed(path: Path) -> dict:
     s = json.loads(Path(path).read_text(encoding="utf-8"))
     sel = s.get("selection") or {}
     g = {k: _num(sel.get(GOAL_KEYS[k])) for k in GOALS}
-    reasons = {k: (sel.get("uncertainty_reason") if k == "uncertainty" else "") for k in GOALS}
+    reasons = {k: sel.get(f"{k}_reason") or "" for k in GOALS}
     cl = s.get("copy_leak") or {}
     den = sel.get("denominators") or {}
     return {"goals": g, "composite": _composite(g), "copy_leak_pass": cl.get("copy_leak_pass"),
@@ -477,14 +481,17 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
 # ------------------------------------------------------------------------------------------ table
 
 def seed_state(d: Path) -> str:
-    """failed | done (scored: SCORED and scores.json) | running | queued. Training's DONE alone
-    means trained, not scored, so the seed is still `running` (finding 3). A run that has started
-    (train.py's log.jsonl or train_state.pt, a checkpoint, or a job log `*.out`) is `running` before
-    its first run.json or DONE exists."""
+    """failed | done (scored: SCORED and scores.json) | skipped | running | queued. Training's DONE
+    alone means trained, not scored, so the seed is still `running` (finding 3). A run that has
+    started (train.py's log.jsonl or train_state.pt, a checkpoint, or a job log `*.out`) is
+    `running` before its first run.json or DONE exists. `skipped`: score.py wrote SKIPPED (a
+    pair-only baseline on an eval set with no pair); it has no scores and never counts as done."""
     if (d / "FAILED").exists():
         return "failed"
     if (d / "SCORED").exists() and (d / "scores.json").is_file():
         return "done"
+    if (d / SKIPPED).is_file():
+        return "skipped"
     if any((d / f).exists() for f in STARTED_FILES) or any(d.glob("*.out")):
         return "running"
     return "queued"
@@ -509,6 +516,45 @@ def table(runs, prefix: str = "") -> list[dict]:
                          **{f"{k}_clipped": clipped[k] for k in GOALS},
                          "copy_leak_pass": cl, "same_view_copy_gain_flag": flag})
     return rows
+
+
+H1_COLUMNS = ("assay", "n_targets", "n_targets_with_floor", "floor_exists", "headline1_defined",
+              "value", "scorable", "in_imputation_term", "fallback", "reason")
+PILOT_H1_KEY = "specific_variance_recovered_NO_NOISE_FLOOR_pilot_only"
+
+
+def h1_status(s: dict) -> dict:
+    """Per-assay headline-1 status of one scores.json (DEFECTS item 5): whether the noise floor
+    exists, whether headline 1 is defined, whether the assay is in the composite's imputation term
+    and which fallback is used. score.py writes it under `selection.headline1_per_assay_status`;
+    for a scores.json written before that, it is derived from the per-target records (same rules)."""
+    st = (s.get("selection") or {}).get("headline1_per_assay_status")
+    if st is not None:
+        return st
+    h1 = (s.get("specific_variance_recovered_above_noise") or {}).get(EXPECT_SPACE) or {}
+    pilot = s.get("noise_floor") != EXPECT_NOISE_FLOOR
+    src = s.get(PILOT_H1_KEY, h1) if pilot else h1
+    vals = dict(src.get("per_assay") or {}, **(src.get("non_scorable_per_assay") or {}))
+    reasons = src.get("per_assay_reason") or {}
+    scorable = set((s.get("scorable") or {}).get("imputation") or [])
+    by: dict = {}
+    for t in (h1.get("per_target") or {}).values():
+        by.setdefault(t["assay"], []).append(t)
+    out = {}
+    for a, ts in sorted(by.items()):
+        nf = sum(1 for t in ts if t.get("has_halves") and t.get("N") is not None)
+        d = vals.get(a) is not None
+        fb = ("pilot --no-halves: headline 1 with N = 0; never a selection input" if pilot else
+              "none: non-scorable (PI ruling 4)" if a not in scorable else
+              "none needed" if d else "none: the imputation term is undefined")
+        why = "" if d else reasons.get(a, "")
+        if not d and len(ts) < 2:
+            why = f"{len(ts)} validation target: the shared/specific split needs >= 2 targets"
+        out[a] = {"n_targets": len(ts), "n_targets_with_floor": nf,
+                  "floor_exists": nf > 0 and not pilot, "headline1_defined": d, "value": vals.get(a),
+                  "scorable": a in scorable, "in_imputation_term": a in scorable and not pilot,
+                  "fallback": fb, "reason": why}
+    return out
 
 
 # ------------------------------------------------------------------------------------------ ladder
@@ -632,10 +678,14 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
         seeds = load_arm(final, sub)
     except Missing as e:
         return "MISSING", [str(e)]
-    base = {}
+    base, skipped = {}, []
     for b in TRAINING_FREE:
         p = Path(baselines) / b / "seed0" / sub / "scores.json" if sub else \
             Path(baselines) / b / "seed0" / "scores.json"
+        if not p.is_file() and (p.parent / SKIPPED).is_file():
+            why = (p.parent / SKIPPED).read_text(encoding="utf-8").strip()
+            skipped.append(f"  baseline {b}: skipped by score.py ({why}); left out of the maximum")
+            continue
         if not p.is_file():
             return "MISSING", [f"baseline {b}: {p} missing"]
         base[b] = load_seed(p)
@@ -643,7 +693,7 @@ def done_condition_2(final, baselines, sub: str = "", *, clip: bool | None = Non
         check_comparable(seeds + list(base.values()), split)
     except Refused as e:
         return "REFUSED", [str(e)]
-    lines, states = [], []
+    lines, states = list(skipped), []
     p_f, seeds = screen_terms(seeds, clip)
     p_b, bl = screen_terms(list(base.values()), clip)
     base = dict(zip(base, bl))
@@ -747,6 +797,8 @@ def main(argv=None) -> int:
     d.add_argument("--final")
     d.add_argument("--baselines")
     d.add_argument("--blind-baselines")
+    h = sub.add_parser("h1-status")
+    h.add_argument("scores", nargs="+", help="scores.json files")
     la = sub.add_parser("ladder-add")
     la.add_argument("--ladder", required=True)
     la.add_argument("--name", required=True)
@@ -777,6 +829,15 @@ def main(argv=None) -> int:
             print("\t".join([row["arm"], str(row["seed"]), row["state"], f(row["composite"]),
                              *(f(row[t]) for t in terms), str(row["copy_leak_pass"]),
                              str(row["same_view_copy_gain_flag"])]))
+        return 0
+    if a.cmd == "h1-status":
+        print("\t".join(("scores",) + H1_COLUMNS))
+        for p in a.scores:
+            st = h1_status(json.loads(Path(p).read_text(encoding="utf-8")))
+            for assay, v in st.items():
+                print("\t".join([p, assay] + ["" if v.get(c) is None else
+                                              (f"{v[c]:.6g}" if isinstance(v[c], float) else str(v[c]))
+                                              for c in H1_COLUMNS[1:]]))
         return 0
     if a.cmd == "check-rung":
         missing = check_rung(a.runs, a.rung, a.ladder)

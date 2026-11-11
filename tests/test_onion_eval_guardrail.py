@@ -169,6 +169,74 @@ def test_cli_help_does_not_need_minicandi():
     assert out.returncode == 0 and "--run" in out.stdout
 
 
+# ------------------------------------------------------------------ F3: one job per run, honest draws
+
+def test_f3_seed_lists_and_summary():
+    assert G._seeds("0:5") == [0, 1, 2, 3, 4] and G._seeds("0,2") == [0, 2] and G._seeds("") == []
+    res = {"val_s0": {"part1_wiring_pass": True, "copy_leak_pass": True,
+                      "same_view_copy_gain_relative": 0.2},
+           "train_s0": {"part1_wiring_pass": True, "copy_leak_pass": True,
+                        "same_view_copy_gain_relative": 0.5},
+           "train_s1": {"part1_wiring_pass": False, "copy_leak_pass": False,
+                        "same_view_copy_gain_relative": 0.56}}
+    s = G.summarize(res)
+    assert s["part1_wiring_pass"] is False and s["copy_leak_pass"] is False
+    assert s["train_same_view_copy_gain_relative_spread"] == pytest.approx(0.06)
+    assert s["val_same_view_copy_gain_relative_spread"] is None
+
+
+def test_f3_val_batches_differ_across_seeds(tmp_path):
+    """DEFECTS item 9: in val mode the first batches were the same windows for every seed (only
+    the bin masks moved). `batches_for` draws a seeded sample of the evalset items per seed."""
+    from minicandi.dataset import OnionDataset
+    from minicandi.synth import make_synthetic_tables
+    from onion_eval import evalset as E
+    t = make_synthetic_tables(tmp_path, n_cells=9, val_tracks=((0, "H3K4me3"), (1, "H3K4me3"),
+                                                                (2, "H3K27ac")), blind_tracks=())
+    evp = tmp_path / "eval" / "synth" / "evalset.json"
+    E.build(t, evp, n_regions=2, n_fit_regions=1, region_bins=256, seed=0)
+    cfg = {"context_bins": 128, "batch_size": 4, "evalset": str(evp), "region_bins": 256}
+    keys = {}
+    for s in (0, 1):
+        bs = G.batches_for(OnionDataset(t, "val", cfg, s), "val", 2, s)
+        assert len(bs) == 2 and all(b["x_counts"].shape[0] == 4 for b in bs)
+        keys[s] = [(tuple(m["measurements_out"]), m["start_bin"]) for b in bs for m in b["meta"]]
+    assert keys[0] != keys[1]
+    again = G.batches_for(OnionDataset(t, "val", cfg, 0), "val", 2, 0)
+    assert [(tuple(m["measurements_out"]), m["start_bin"]) for b in again for m in b["meta"]] == keys[0]
+
+    # the kit runner: one CLI call, one model load, every seed, a summary (DEFECTS item 8)
+    import json
+    import types
+    loads = []
+
+    class Const(torch.nn.Module):
+        def forward(self, b):
+            return {"n": torch.full(b["y_counts"].shape, 5.0), "mu": torch.full(b["y_counts"].shape, 2.0)}
+
+    def load_run(d):
+        loads.append(d)
+        return Const(), dict(cfg)
+    fake = types.ModuleType("minicandi.registry")
+    fake.load_run = load_run
+    old = sys.modules.get("minicandi.registry")
+    sys.modules["minicandi.registry"] = fake
+    try:
+        out = tmp_path / "guard"
+        rc = G.main(["--run", "r", "--tables", str(t), "--out-dir", str(out), "--val-seeds", "0",
+                     "--train-seeds", "0:2", "--max-batches", "2"])
+    finally:
+        if old is None:
+            sys.modules.pop("minicandi.registry", None)
+        else:
+            sys.modules["minicandi.registry"] = old
+    assert rc == 0 and loads == ["r"]          # part 1 ran: the val draw holds hidden bins
+    assert {p.name for p in out.iterdir()} == {"val_s0.json", "train_s0.json", "train_s1.json",
+                                              "summary.json"}
+    summ = json.loads((out / "summary.json").read_text())
+    assert summ["part1_wiring_pass"] is True and summ["runs"] == ["train_s0", "train_s1", "val_s0"]
+
+
 if __name__ == "__main__":
     for k, v in calibration().items():
         print(k, np.round(v, 3))

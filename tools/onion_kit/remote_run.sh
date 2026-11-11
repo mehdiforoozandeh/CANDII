@@ -3,7 +3,7 @@
 # It does not wait. Push the kit first with push_kit.sh.
 #
 #   bash tools/onion_kit/remote_run.sh [--cluster fir|nibi] [--gpu] [--name NAME]
-#        [--exclude node1,node2] <kit id> <cpus> <mem MB> <hh:mm:ss> <python args...>
+#        [--exclude node1,node2] [--after <job id>] <kit id> <cpus> <mem MB> <hh:mm:ss> <python args...>
 #
 # e.g.  remote_run.sh D1 4 16000 02:00:00 tools/onion_data/encode_catalog.py --out ...
 # The job runs slurm/onion_kit/run.sh from /project/def-maxwl/mforooz/onion_kit/<kit id> with
@@ -19,13 +19,18 @@
 # e.g. a CVMFS / I/O error) resubmits itself once on another node (slurm/onion_kit/run.sh). This
 # script does not wait, so the retry's job id is in the first job's log, as
 # `[onion-run] retried-as=<job id> host=<node>`; the retry logs to run_<kit id>_<retry id>.out.
+# --after <job id>: the job starts only after that job ends OK (--dependency=afterok:<id>), e.g. a
+# guardrail or scoring job after its training job (F3: dependent jobs used to be raw sbatch of
+# check.sh, with no exclude list). The dependency is on the first submission only: it is not in
+# ONION_RESUBMIT, so a setup retry (submitted once the dependency has already held) has none.
+# Chain on a live job: Fir refuses afterok on a job that ended over 30 s ago (MinJobAge).
 set -euo pipefail
 
 UMBRELLA_ORCH="/Users/mforooz/Desktop/research/libbrechteam@sfu/CANDII/.claude/worktrees/onion/.orchestrate"
 UMBRELLA_CLUSTER_FILE="$UMBRELLA_ORCH/cluster"
 KITS=/project/def-maxwl/mforooz/onion_kit
 LOGS=/project/def-maxwl/mforooz/ONION/logs/onion_kit
-USAGE="usage: remote_run.sh [--cluster fir|nibi] [--gpu] [--name NAME] [--exclude nodes] <kit id> <cpus> <mem MB> <hh:mm:ss> <python args...>"
+USAGE="usage: remote_run.sh [--cluster fir|nibi] [--gpu] [--name NAME] [--exclude nodes] [--after job] <kit id> <cpus> <mem MB> <hh:mm:ss> <python args...>"
 
 die() { echo "remote_run: $*" >&2; exit 2; }
 
@@ -43,13 +48,14 @@ exclude_list() {   # <cluster> <extra nodes...> -> one comma-separated, de-dupli
     printf '%s\n' "$@"; } | nodes_of | awk '!seen[$0]++' | paste -sd, -
 }
 
-CLUSTER="" GPU=0 NAME="" EXCLUDE=""
+CLUSTER="" GPU=0 NAME="" EXCLUDE="" AFTER=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --cluster) CLUSTER="${2:?$USAGE}"; shift 2 ;;
     --gpu) GPU=1; shift ;;
     --name) NAME="${2:?$USAGE}"; shift 2 ;;
     --exclude) EXCLUDE="${2?$USAGE}"; shift 2 ;;
+    --after) AFTER="${2:?$USAGE}"; shift 2 ;;
     -h|--help) echo "$USAGE"; exit 0 ;;
     -*) die "unknown option $1. $USAGE" ;;
     *) break ;;
@@ -63,6 +69,7 @@ KIT_ID="$1" CPUS="$2" MEM="$3" TIME="$4"; shift 4
 [[ "$TIME" =~ ^([0-9]+-)?[0-9]{1,2}:[0-9]{2}:[0-9]{2}$ ]] || die "bad time '$TIME' ([d-]hh:mm:ss)"
 [ -z "$NAME" ] || [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || die "bad --name '$NAME'"
 [[ "$EXCLUDE" =~ ^[A-Za-z0-9._,-]*$ ]] || die "bad --exclude '$EXCLUDE' (node names, comma-separated)"
+[ -z "$AFTER" ] || [[ "$AFTER" =~ ^[0-9]+$ ]] || die "bad --after '$AFTER' (a job id)"
 NAME="${NAME:-onion_$KIT_ID}"
 
 if [ -z "$CLUSTER" ]; then
@@ -87,7 +94,7 @@ QARGS=""; for a in "$@"; do QARGS="$QARGS $(printf '%q' "$a")"; done
 EXCL="$(exclude_list "$CLUSTER" "$GPU_BAD" "$EXCLUDE")"
 [[ "$EXCL" =~ ^[A-Za-z0-9._,-]*$ ]] || die "bad exclude list '$EXCL' (node names only)"
 OPTS="--job-name=$NAME --time=$TIME --cpus-per-task=$CPUS --mem=${MEM}M $GRES --output=$LOGS/run_${KIT_ID}_%j.out"
-SBATCH="sbatch --parsable --export=ALL $OPTS${EXCL:+ --exclude=$EXCL} '$KIT/slurm/onion_kit/run.sh' '$KIT'$QARGS"
+SBATCH="sbatch --parsable --export=ALL $OPTS${EXCL:+ --exclude=$EXCL}${AFTER:+ --dependency=afterok:$AFTER} '$KIT/slurm/onion_kit/run.sh' '$KIT'$QARGS"
 SUBMIT="test -f '$KIT/slurm/onion_kit/run.sh' || { echo 'no kit $KIT on $CLUSTER: run push_kit.sh $KIT_ID' >&2; exit 2; }
 mkdir -p '$LOGS' && export ONION_RESUBMIT='$OPTS' ONION_EXCLUDE_NODES='$EXCL' && unset ONION_RETRY_OF && $SBATCH"
 if [ "${ONION_DRY_RUN:-0}" = 1 ]; then echo "cluster=$CLUSTER"; echo "$SUBMIT"; exit 0; fi

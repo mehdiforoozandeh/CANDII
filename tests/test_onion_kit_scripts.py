@@ -296,3 +296,57 @@ def test_umbrella_exclude_fir_lists_the_dead_nodes():
         pytest.skip("no umbrella checkout on this machine")
     assert set(names) >= {"fc10713", "fc10715", "fc30601", "fc30568", "fc30605", "fc30564",
                           "fc30654", "fc30435", "fc30562", "fc30355"}
+
+
+# ------------------------------------------------------------------ F3: dependent jobs retry too
+
+SCONTROL_RECORD = """JobId=100 JobName=p2a_guard_rung1
+   Account=def-maxwl_cpu QOS=normal
+   JobState=RUNNING Reason=None Dependency=(null)
+   RunTime=00:00:05 TimeLimit=01:30:00 TimeMin=N/A
+   ReqNodeList=(null) ExcNodeList=fc[10713,10715]
+   NumNodes=1 NumCPUs=4 NumTasks=1 CPUs/Task=4 ReqB:S:C:T=0:0:*:*
+   MinCPUsNode=4 MinMemoryNode=16000M MinTmpDiskNode=0
+   StdOut=/logs/check_100.out
+"""
+
+
+def test_raw_sbatch_check_job_rebuilds_its_retry_options(tmp_path):
+    """DEFECTS item 1: a guardrail job chained by raw `sbatch --dependency=afterok` had no
+    ONION_RESUBMIT, so a CVMFS death in setup was never retried. check.sh now rebuilds the options
+    (no dependency, no account) and the exclude list from `scontrol show job`."""
+    b = _stub_bin(tmp_path, venv_ok=False)
+    rec = tmp_path / "record.txt"
+    rec.write_text(SCONTROL_RECORD)
+    (b / "scontrol").write_text(f"#!/bin/bash\ncat {rec}\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ONION_")}
+    env.update(PATH=f"{b}:{os.environ['PATH']}", SLURM_JOB_ID="100", SLURM_TMPDIR=str(tmp_path))
+    r = subprocess.run(["bash", str(SLURM / "check.sh"), str(tmp_path / "kit"), "-c", "print(1)"],
+                       env=env, capture_output=True, text=True, timeout=60)
+    host = subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip()
+    assert r.returncode == 3 and "[onion-check] retried-as=4242" in r.stdout, r.stdout
+    args = (tmp_path / "sbatch_args").read_text().split()
+    assert args[:2] == ["--parsable", "--export=ALL"]
+    opts = args[2:8]
+    assert opts == ["--job-name=p2a_guard_rung1", "--time=01:30:00", "--cpus-per-task=4",
+                    "--mem=16000M", "--gres=none", "--output=/logs/check_%j.out"]
+    assert args[8] == f"--exclude=fc[10713,10715],{host}"
+    assert not any(a.startswith(("--dependency", "--account")) for a in args)
+    # an unreadable record leaves the job without a retry, as before
+    (b / "scontrol").write_text("#!/bin/bash\nexit 0\n")
+    (tmp_path / "sbatch_args").unlink()
+    r = subprocess.run(["bash", str(SLURM / "check.sh"), str(tmp_path / "kit"), "-c", "print(1)"],
+                       env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 3 and "retried-as" not in r.stdout
+    assert not (tmp_path / "sbatch_args").exists()
+
+
+def test_remote_run_after_adds_the_dependency_to_the_first_submission_only(tmp_path):
+    r = _run(RUN, "--cluster", "fir", "--after", "3430066", "P2a", "4", "16000", "01:00:00",
+             "tools/onion_eval/guardrail.py", "--run", "r", cwd=tmp_path, exclude_env="fcA")
+    assert r.returncode == 0, r.stderr
+    assert "--exclude=fcA --dependency=afterok:3430066 '" in r.stdout
+    opts = re.search(r"ONION_RESUBMIT='([^']*)'", r.stdout).group(1)
+    assert "dependency" not in opts
+    assert _run(RUN, "--cluster", "fir", "--after", "12x", "P2a", "4", "16000", "01:00:00", "-c",
+                "1", cwd=tmp_path).returncode == 2
