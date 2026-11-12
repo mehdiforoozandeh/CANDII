@@ -11,6 +11,11 @@
   component_kwargs(cfg)    the constructor keyword arguments of the component arm keys
                            (pinned interface E, chunk A3); a config without them gives today's
                            components, parameter for parameter
+  res_bp (chunk RM)        the token size in bp (config `res_bp`, one of RES_BPS, default 25):
+                           the DnaTower pools `res_bp` bases per token and the local windows of
+                           `local_ratio` keep their 1 kb and 10 kb lengths in tokens of `res_bp`.
+                           At 25 nothing changes: `component_kwargs` adds no key, and every
+                           component is built and computes exactly as before
   ConvBlock, Downsample, Upsample, sinusoidal_positions   building blocks for rungs 2 to 6
   NotApplicable            raised by a rung constructor for an arm that does not apply to it
 
@@ -60,6 +65,9 @@ EPS = 1.0
 ASINH_COFACTOR = 1.0
 PEARSON_CLIP = 30.0
 LOCAL_WINDOWS = (40, 400)        # 1 kb and 10 kb in 25 bp bins
+LOCAL_WINDOWS_BP = (1000, 10000)
+#: token sizes of the resolution arms (Amendment 3, ruling 29); 25 is the default
+RES_BPS = (1, 5, 25, 50, 125)
 #: Borzoi target squashing: x**(3/4), then values above the clip continue as clip + sqrt(excess)
 SOFT_CLIP_POWER = 0.75
 SOFT_CLIP_AT = 384.0
@@ -73,6 +81,63 @@ def _check(mode: str, allowed: tuple, what: str) -> str:
     if mode not in allowed:
         raise ValueError(f"{what} {mode!r} not in {allowed}")
     return mode
+
+
+def local_windows(res_bp: int = RES) -> tuple:
+    """The 1 kb and 10 kb running-mean windows of `local_ratio` in tokens of `res_bp` bp (at least
+    1 token); (40, 400) at 25 bp."""
+    if int(res_bp) == RES:
+        return LOCAL_WINDOWS
+    return tuple(max(1, w // int(res_bp)) for w in LOCAL_WINDOWS_BP)
+
+
+def res_bp_of(cfg: dict) -> int:
+    """`cfg["res_bp"]` (default 25), checked against RES_BPS."""
+    r = cfg.get("res_bp", RES)
+    if isinstance(r, bool) or r not in RES_BPS:
+        raise ValueError(f"res_bp {r!r} not in {RES_BPS}")
+    return int(r)
+
+
+#: sub-bins per 25 bp token of the decoupled arms (`res_in_sub`, `res_out_sub`)
+RES_SUBS = (1, 5)
+
+
+def res_subs_of(cfg: dict) -> tuple[int, int]:
+    """(`res_in_sub`, `res_out_sub`) of a config, each 1 (default) or 5. A sub key above 1 needs
+    `res_bp` = 25: the decoupled arms keep 25 bp tokens and change only the input or the output."""
+    out = []
+    for key in ("res_in_sub", "res_out_sub"):
+        v = cfg.get(key, 1)
+        if isinstance(v, bool) or v not in RES_SUBS:
+            raise ValueError(f"{key} {v!r} not in {RES_SUBS}")
+        out.append(int(v))
+    if max(out) > 1 and res_bp_of(cfg) != RES:
+        raise ValueError(f"res_in_sub / res_out_sub > 1 need res_bp = {RES}, got "
+                         f"{cfg.get('res_bp')!r}")
+    return out[0], out[1]
+
+
+def sub_to_fine(x: torch.Tensor) -> torch.Tensor:
+    """[B, L, A, s] (s sub-bins per token) -> [B, L*s, A], sub-bins in genome order."""
+    B, L, A_, s = x.shape
+    return x.permute(0, 1, 3, 2).reshape(B, L * s, A_)
+
+
+def fine_to_sub(x: torch.Tensor, s: int) -> torch.Tensor:
+    """[B, L*s, A] -> [B, L, A, s]; the inverse of `sub_to_fine`."""
+    B, Ls, A_ = x.shape
+    return x.reshape(B, Ls // s, s, A_).permute(0, 1, 3, 2)
+
+
+def sub_output(out: dict, s: int) -> dict:
+    """A head output at s sub-bins per token, `{"n", "mu"}` [B, L*s, A], as the rung's output: the
+    25 bp `n`, `mu` [B, L, A] are the pooled NB of the s sub-bins (`losses.pool_nb`), and `n_sub`,
+    `mu_sub` [B, L, A, s] carry the sub-bins (the loss of `res_out_sub` is at the sub-bins)."""
+    from minicandi.losses import pool_nb
+    mu, n = pool_nb(out["mu"], out["n"], s, dim=1)
+    return {**out, "n": n, "mu": mu, "n_sub": fine_to_sub(out["n"], s),
+            "mu_sub": fine_to_sub(out["mu"], s)}
 
 
 def component_kwargs(cfg: dict) -> dict:
@@ -97,16 +162,22 @@ def component_kwargs(cfg: dict) -> dict:
     if not eps > 0.0:
         raise ValueError(f"offset_eps {eps} must be > 0")
     dna = {}
+    res = res_bp_of(cfg)
     if cfg.get("dna") == "precomputed":
         d_emb = cfg.get("dna_embedding_dim")
         if not isinstance(d_emb, int) or isinstance(d_emb, bool) or d_emb < 1:
             raise ValueError("dna = precomputed needs a positive int `dna_embedding_dim`, "
                              f"got {d_emb!r}")
         dna = {"d_emb": d_emb}
+        if res != RES:
+            raise ValueError(f"dna = precomputed holds one vector per 25 bp bin; res_bp {res} "
+                             f"does not apply")
+    # res_bp (chunk RM): only off the default, so a default config gives the same kwargs
+    res_kw = {} if res == RES else {"res_bp": res}
     return {"injector": {"embedding": emb, "null_vector": p > 0.0},
             "covariate_dropout": p,
-            "dna": dna,
-            "transform": {"offset_eps": eps},
+            "dna": {**dna, **res_kw},
+            "transform": {"offset_eps": eps, **res_kw},
             "head": {"head": _check(cfg.get("head", "nb"), HEADS, "head")}}
 
 
@@ -184,7 +255,7 @@ class CovariateInjector(nn.Module):
 
 
 class DnaTower(nn.Module):
-    """x_dna uint8 [B, L*25] -> float [B, L, d_out].
+    """x_dna uint8 [B, L*res_bp] -> float [B, L, d_out] (res_bp = 25 unless the config sets it).
 
     own       one-hot -> Conv1d(4, c, k) -> GELU -> AvgPool(25) -> Conv1d(c, d_out, 1)
               (the t146 `DNAEncoder` pattern, widened)
@@ -198,11 +269,12 @@ class DnaTower(nn.Module):
     """
 
     def __init__(self, mode: str, d_out: int, channels: int = 32, kernel: int = 15,
-                 shuffle_seed: int = 0, d_emb: int | None = None):
+                 shuffle_seed: int = 0, d_emb: int | None = None, res_bp: int = RES):
         super().__init__()
         self.mode = _check(mode, DNA_MODES, "dna")
         self.d_out = d_out
         self.shuffle_seed = shuffle_seed
+        self.res_bp = int(res_bp)
         if mode == "precomputed":
             if d_emb is None or int(d_emb) < 1:
                 raise ValueError(f"DnaTower('precomputed') needs d_emb >= 1, got {d_emb!r}")
@@ -211,7 +283,7 @@ class DnaTower(nn.Module):
             self.proj = nn.Linear(self.d_emb, d_out)
         elif mode != "off":
             self.conv1 = nn.Conv1d(4, channels, kernel, padding=kernel // 2)
-            self.pool = nn.AvgPool1d(RES, RES)
+            self.pool = nn.AvgPool1d(self.res_bp, self.res_bp)
             self.conv2 = nn.Conv1d(channels, d_out, 1)
 
     def forward(self, x_dna: torch.Tensor) -> torch.Tensor:
@@ -223,14 +295,15 @@ class DnaTower(nn.Module):
                                  f"{tuple(x_dna.shape)}")
             return self.proj(self.norm(x_dna.float()))
         B, n_bp = x_dna.shape
-        L = n_bp // RES
+        R = self.res_bp
+        L = n_bp // R
         if self.mode == "off":
             return torch.zeros(B, L, self.d_out, device=x_dna.device)
         codes = x_dna
         if self.mode == "shuffled":
             gen = None if self.training else torch.Generator().manual_seed(self.shuffle_seed)
             perm = torch.randperm(L, generator=gen).to(x_dna.device)
-            codes = x_dna.reshape(B, L, RES)[:, perm].reshape(B, n_bp)
+            codes = x_dna.reshape(B, L, R)[:, perm].reshape(B, n_bp)
         h = self.conv2(self.pool(F.gelu(self.conv1(onehot(codes)))))
         return h.transpose(1, 2)
 
@@ -328,13 +401,16 @@ class CountTransform(nn.Module):
       soft_clip    z = (y/s)**(3/4); x = z, or 384 + sqrt(z - 384) above 384 (the Borzoi
                    target squashing; per bin, input only)
     The input-only transforms have no per-sample inverse, so their add_back is the offset form.
-    `offset_eps` (config key, default 1.0) is the pseudocount of `offset` only.
+    `offset_eps` (config key, default 1.0) is the pseudocount of `offset` only. `res_bp` (default
+    25) sets the token size of the `local_ratio` windows (`local_windows`).
     pos() is a smooth positive floor (softplus, beta 10, plus 1e-4). l_a and r_a (pearson) are
     per-track buffers, default 1 and 10; set them from training data with `set_pearson_stats`.
     """
 
-    def __init__(self, name: str, n_tracks: int = A, offset_eps: float = EPS):
+    def __init__(self, name: str, n_tracks: int = A, offset_eps: float = EPS,
+                 res_bp: int = RES):
         super().__init__()
+        self.local_windows = local_windows(res_bp)
         self.name = _check(name, TRANSFORMS, "count_transform")
         if not float(offset_eps) > 0.0:
             raise ValueError(f"offset_eps {offset_eps} must be > 0")
@@ -379,7 +455,7 @@ class CountTransform(nn.Module):
             Lb = yt.shape[-1]
             lam = (yt.sum(-1, keepdim=True) / vt.sum(-1, keepdim=True).clamp_min(1.0))
             lam = lam.expand_as(yt)
-            for w in LOCAL_WINDOWS:
+            for w in self.local_windows:
                 if w < Lb:
                     num = F.avg_pool1d(yt, w, stride=1, padding=w // 2,
                                        count_include_pad=True)[..., :Lb]

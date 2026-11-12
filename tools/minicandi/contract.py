@@ -7,7 +7,8 @@ Batch (dict of torch tensors; B windows, L bins, A = 36 tracks, K covariates):
   x_counts   int32   [B, L, A]   input counts, 0 where not given (and 0 on hidden bins)
   x_avail    bool    [B, A]      track given as input (False = missing or assay-masked)
   x_bin_mask bool    [B, L, A]   True = this bin of an available track is hidden from the input
-  x_dna      uint8   [B, L*25]   codes A=0 C=1 G=2 T=3 N=4
+  x_dna      uint8   [B, L*25]   codes A=0 C=1 G=2 T=3 N=4 ([B, L*res_bp] under config res_bp,
+                                 chunk RM; sub-bin keys x_counts_sub, y_counts_sub [B, L, A, 5])
   c_in       float32 [B, A, K]   input covariates C, 0 where x_avail is False
   c_out      float32 [B, A, K_META]  output covariates C' (never read-derived QC, D6)
   y_counts   int32   [B, L, A]   target counts
@@ -118,14 +119,14 @@ def k_input(config: dict | None) -> int:
     return K_META + (K_QC if (config or {}).get("qc_on_input") else 0)
 
 
-def expected_shapes(B: int, L: int, K: int) -> dict:
+def expected_shapes(B: int, L: int, K: int, res_bp: int = RES) -> dict:
     return {"x_counts": (B, L, A), "x_avail": (B, A), "x_bin_mask": (B, L, A),
-            "x_dna": (B, L * RES), "c_in": (B, A, K), "c_out": (B, A, K_META),
+            "x_dna": (B, L * res_bp), "c_in": (B, A, K), "c_out": (B, A, K_META),
             "y_counts": (B, L, A), "y_avail": (B, A), "y_kind": (B, A), "avg": (B, L, A),
             "c_base": (B, A, K_META), "y_base": (B, L, A)}
 
 
-def validate_batch(batch: dict, K: int | None = None) -> tuple[int, int]:
+def validate_batch(batch: dict, K: int | None = None, res_bp: int = RES) -> tuple[int, int]:
     """Raise ValueError unless `batch` matches the contract exactly. Returns (B, L)."""
     missing = [k for k in REQUIRED if k not in batch]
     if missing:
@@ -134,7 +135,7 @@ def validate_batch(batch: dict, K: int | None = None) -> tuple[int, int]:
     K = batch["c_in"].shape[-1] if K is None else K
     if K not in (K_META, K_META + K_QC):
         raise ValueError(f"c_in has K = {K}; want {K_META} or {K_META + K_QC}")
-    shapes = expected_shapes(B, L, K)
+    shapes = expected_shapes(B, L, K, res_bp)
     for key, dt in DTYPES.items():
         if key not in batch:
             continue
