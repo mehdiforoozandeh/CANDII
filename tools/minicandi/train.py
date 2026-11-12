@@ -14,12 +14,18 @@ One run directory holds:
                   divided by its windows), training FLOPs (= windows seen x FLOPs per window: the
                   matched-compute currency), windows seen, steps, wall seconds, device
   log.jsonl       one line per `--log-every` steps (and per validation pass)
-  DONE            written once windows_seen reaches `config["windows_seen"]`
+  DONE            written once windows_seen reaches `config["windows_seen"]`, or (with CAPPED)
+                  once it reaches `--max-windows`
+  CAPPED          written (before DONE) when the run stopped at `--max-windows` short of the
+                  budget: json {"windows_seen", "max_windows", "budget"}. A run with CAPPED is
+                  NOT a full-budget run; run.json then has "done": false, "capped": true.
 
 Budget. `config["windows_seen"]` is the training budget in windows; steps = ceil(budget /
-batch_size). `--max-windows N` stops this invocation at N windows without DONE (checkpointed), so
-a long run can be split across jobs. Rerunning the same command resumes from ckpt.pt and
-continues the step count; with DONE present it exits 0 at once. A resume refuses a changed config
+batch_size). `--max-windows N` stops this invocation at N windows (checkpointed) and ends it in
+the terminal state CAPPED + DONE, so a launcher that skips on DONE (`submit_arms.sh`) does not
+resubmit a finished capped smoke. Rerunning with a larger `--max-windows`, or none, removes CAPPED
+and DONE and resumes from ckpt.pt, continuing the step count, so a long run can still be split
+across jobs; with DONE present otherwise it exits 0 at once. A resume refuses a changed config
 or changed tables (sha256). A resume is exact: on CPU, k steps then a resume to n equals n steps.
 
 Determinism (AGENTS.md invariant 10): cudnn deterministic, benchmark off, then
@@ -83,6 +89,7 @@ WEIGHT_DECAY = 0.01
 CLIP = 1.0
 WARMUP_FRAC, WARMUP_MAX, LR_FLOOR = 0.05, 1000, 0.1
 PEARSON_BATCHES = 4
+CAPPED_NAME = "CAPPED"
 WORKER_STREAM = 4          # batch k with workers: default_rng([seed, WORKER_STREAM, k])
 
 
@@ -224,8 +231,14 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     if (out / "DONE").is_file():
-        print(f"skip: {out / 'DONE'} exists")
-        return json.loads((out / "run.json").read_text(encoding="utf-8"))
+        cap = (json.loads((out / CAPPED_NAME).read_text(encoding="utf-8"))
+               if (out / CAPPED_NAME).is_file() else None)
+        if cap is None or (max_windows is not None and max_windows <= cap["windows_seen"]):
+            print(f"skip: {out / 'DONE'} exists" + (" (capped)" if cap else ""))
+            return json.loads((out / "run.json").read_text(encoding="utf-8"))
+        print(f"extend: capped at {cap['windows_seen']} windows; resuming")
+        (out / "DONE").unlink()
+        (out / CAPPED_NAME).unlink()
     if device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("--device cuda but CUDA is not available")
     dev = torch.device(device)
@@ -367,10 +380,18 @@ def train(config: dict, tables, seed: int, out, device: str = "cpu",
             t_ckpt = time.time()
     del loader                                   # stops the worker processes
     done = windows >= budget
+    capped = not done and max_windows is not None and windows >= max_windows
+    if capped:
+        last = {**last, "capped": True, "max_windows": int(max_windows)}
     info = checkpoint(done, last)
     log.close()
     if done:
         (out / "DONE").write_text(f"{windows}\n", encoding="utf-8")
+    elif capped:                     # CAPPED first: a DONE is never seen without it on a capped run
+        _write_json({"windows_seen": windows, "max_windows": int(max_windows), "budget": budget},
+                    out / CAPPED_NAME)
+        (out / "DONE").write_text(f"{windows} capped at --max-windows {max_windows} of {budget}\n",
+                                  encoding="utf-8")
     return info
 
 

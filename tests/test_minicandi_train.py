@@ -165,12 +165,13 @@ def test_resume_continues_the_step_count_and_is_exact(tables, tmp_path):
     straight = T.train(cfg, tables, 3, tmp_path / "a", log_every=1)
     part = T.train(cfg, tables, 3, tmp_path / "b", max_windows=16, log_every=1)
     assert part["windows_seen"] == 16 and part["steps"] == 4 and not part["done"]
-    assert not (tmp_path / "b" / "DONE").exists()
+    assert (tmp_path / "b" / "CAPPED").is_file() and (tmp_path / "b" / "DONE").is_file()
     ck = torch.load(tmp_path / "b" / "ckpt.pt", weights_only=False)
     assert ck["windows_seen"] == 16
     full = T.train(cfg, tables, 3, tmp_path / "b", log_every=1)
     assert full["steps"] == 8 and full["windows_seen"] == 32 and full["done"]
     assert full["n_resumes"] == 1 and (tmp_path / "b" / "DONE").is_file()
+    assert not (tmp_path / "b" / "CAPPED").exists() and "capped" not in full
     steps = [json.loads(x)["step"] for x in (tmp_path / "b" / "log.jsonl").read_text().splitlines()]
     assert steps == list(range(1, 9))
     sa = torch.load(tmp_path / "a" / "ckpt.pt", weights_only=False)["state_dict"]
@@ -178,6 +179,31 @@ def test_resume_continues_the_step_count_and_is_exact(tables, tmp_path):
     assert straight["steps"] == 8
     for k in sa:
         assert torch.equal(sa[k], sb[k]), k
+
+
+def test_max_windows_cap_ends_in_capped_done_and_never_reads_as_full(tables, tmp_path):
+    """Arm smoke defect 3: a run stopped by --max-windows wrote no DONE, so submit_arms.sh
+    resubmitted it. It now ends in CAPPED + DONE; run.json says done false, capped true."""
+    cfg = dict(SMALL, windows_seen=32)
+    out = tmp_path / "c"
+    part = T.train(cfg, tables, 0, out, max_windows=8, log_every=1)
+    assert not part["done"] and part["capped"] and part["max_windows"] == 8
+    cap = json.loads((out / "CAPPED").read_text())
+    assert cap == {"windows_seen": 8, "max_windows": 8, "budget": 32}
+    assert "capped" in (out / "DONE").read_text()
+    run = json.loads((out / "run.json").read_text())
+    assert run["done"] is False and run["capped"] is True and run["windows_seen"] == 8
+    # the same command again (a resubmission) is a no-op, as for a full run
+    before = (out / "ckpt.pt").stat().st_mtime_ns
+    again = T.train(cfg, tables, 0, out, max_windows=8, log_every=1)
+    assert (out / "ckpt.pt").stat().st_mtime_ns == before and again["capped"]
+    # a larger cap extends it; CAPPED moves with it
+    more = T.train(cfg, tables, 0, out, max_windows=16, log_every=1)
+    assert more["windows_seen"] == 16 and more["capped"] and more["n_resumes"] == 1
+    assert json.loads((out / "CAPPED").read_text())["windows_seen"] == 16
+    # a full run never has the capped key
+    full = T.train(dict(SMALL, windows_seen=8), tables, 0, tmp_path / "f", log_every=1)
+    assert full["done"] and "capped" not in full and not (tmp_path / "f" / "CAPPED").exists()
 
 
 def test_resume_refuses_a_changed_config(tables, tmp_path):
@@ -293,3 +319,60 @@ def test_train_sh_passes_workers(cpus, want):
                         "O", "cpu"], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert r.stdout.split()[-2:] == ["--workers", want]
+
+
+def _fake_slurm(tmp_path, venv_rc: int, update_rc: int = 0) -> dict:
+    """A PATH whose module/virtualenv/pip/sbatch/scontrol/squeue are logging fakes."""
+    import os
+    b = tmp_path / "bin"
+    b.mkdir()
+    log = tmp_path / "calls.log"
+    rec = ("JobId=1234 JobName=mc_rung2_x_s0 TimeLimit=00:20:00 CPUs/Task=8 "
+           "MinMemoryNode=32000M ExcNodeList=fc1 StdOut=/runs/x/seed0/train_1234.out")
+    fakes = {
+        "module": "exit 0",
+        "virtualenv": f'mkdir -p "$3/bin"; : > "$3/bin/activate"; exit {venv_rc}',
+        "pip": "exit 0",
+        "sbatch": f'echo "sbatch $*" >> {log}; echo 4242',
+        "scontrol": f'if [ "$1" = show ]; then echo "{rec}"; else echo "scontrol $*" >> {log}; exit {update_rc}; fi',
+        "squeue": 'printf "777 afterok:1234(unfulfilled)\\n778 afterok:12345(unfulfilled)\\n"',
+        "hostname": "echo badnode",
+    }
+    for name, body in fakes.items():
+        (b / name).write_text(f"#!/bin/bash\n{body}\n")
+        (b / name).chmod(0o755)
+    (tmp_path / "tmpdir").mkdir()
+    return dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", SLURM_JOB_ID="1234",
+                SLURM_TMPDIR=str(tmp_path / "tmpdir"), USER="me")
+
+
+@pytest.mark.parametrize("retried,update_rc", [(False, 0), (True, 0), (False, 1)])
+def test_train_sh_setup_failure_retries_once_elsewhere(tmp_path, retried, update_rc):
+    """Arm smoke defect 2: a CVMFS I/O error (exit 126) in setup killed 11 jobs for good. Now the
+    job resubmits itself once, off this node, moves its afterok dependent and exits 3; a retried
+    job never retries again."""
+    import subprocess
+    env = _fake_slurm(tmp_path, 126, update_rc)
+    if retried:
+        env["ONION_RETRY_OF"] = "1000"
+    r = subprocess.run(["bash", str(_ROOT / "slurm/minicandi/train.sh"), "/kit", "c.json", "T",
+                        "0", str(tmp_path / "out"), "cpu"], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    calls = (tmp_path / "calls.log").read_text().splitlines() \
+        if (tmp_path / "calls.log").exists() else []
+    if retried:
+        assert calls == [] and "retried-as" not in r.stdout
+        return
+    assert len(calls) == 2, calls
+    sb = calls[0].split()
+    assert "--exclude=fc1,badnode" in sb and "--time=00:20:00" in sb and "--gres=none" in sb
+    assert "--output=/runs/x/seed0/train_%j.out" in sb and "--job-name=mc_rung2_x_s0" in sb
+    assert sb[-7:] == ["/kit/slurm/minicandi/train.sh", "/kit", "c.json", "T", "0",
+                       str(tmp_path / "out"), "cpu"]
+    assert calls[1] == "scontrol update JobId=777 Dependency=afterok:4242"   # not 778
+    assert "[minicandi-train] retried-as=4242 host=badnode" in r.stdout
+    moved = "[minicandi-train] dependent 777 now waits on 4242" in r.stdout
+    failed = ("[minicandi-train] dependency-move-failed scoring_job=777 retry_job=4242"
+              in r.stdout)
+    assert (moved, failed) == ((True, False) if update_rc == 0 else (False, True))

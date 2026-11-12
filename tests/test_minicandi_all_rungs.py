@@ -287,7 +287,8 @@ def test_end_to_end_train_cli_load_run_and_guardrail(r, tables, tmp_path, monkey
     assert T.main(["--config", str(tmp_path / "cfg.json"), "--tables", str(tables), "--seed", "0",
                    "--out", str(run), "--max-windows", "4", "--log-every", "1"]) == 0
     info = json.loads((run / "run.json").read_text())
-    assert info["windows_seen"] == 4 and info["done"] is False and not (run / "DONE").exists()
+    assert info["windows_seen"] == 4 and info["done"] is False and info["capped"] is True
+    assert (run / "CAPPED").is_file()                    # a capped run ends in CAPPED + DONE
     assert info["flops_per_window"] > 0 and info["flops_per_window_forward"] > 0
     print(f"rung {r} {R.RUNGS[r]}: params {info['param_count']}, training FLOPs per window "
           f"{info['flops_per_window']:.3e} at L = {L}")

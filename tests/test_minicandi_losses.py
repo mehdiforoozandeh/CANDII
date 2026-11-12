@@ -144,6 +144,26 @@ def test_kind_weights_by_hand(batch, name):
     assert float(got) == pytest.approx(tot / int(mask.sum()), rel=1e-5)
 
 
+def test_main_no_control_by_hand_and_moves_no_loss(batch):
+    """t209 ASF (c): the comparable loss across control arms is the mean over tracks 0 to 34."""
+    out = _out(batch, seed=3)
+    mask = C.loss_mask(batch)
+    b = dict(batch)
+    y_avail, y_kind = b["y_avail"].clone(), b["y_kind"].clone()
+    y_avail[:, C.CONTROL_INDEX] = True                   # make the control a target in the batch
+    y_kind[:, C.CONTROL_INDEX] = C.KIND_IMPUTE
+    b["y_avail"], b["y_kind"] = y_avail, y_kind
+    mask = C.loss_mask(b)
+    assert mask[..., C.CONTROL_INDEX].any()
+    got, parts = LS.total_loss(out, b, {})
+    assert torch.equal(got, C.nb_nll(out["n"], out["mu"], b["y_counts"], mask))
+    per = LS.nb_nll_per(out["n"], out["mu"], b["y_counts"])
+    keep = mask.clone()
+    keep[..., C.CONTROL_INDEX] = False
+    assert parts["main_no_control"] == pytest.approx(float(per[keep].double().mean()), rel=1e-5)
+    assert parts["main"] != pytest.approx(parts["main_no_control"], rel=1e-6)
+
+
 def test_base_leg_by_hand(batch):
     out = _out(batch, seed=2, base=True)
     mask = C.loss_mask(batch)

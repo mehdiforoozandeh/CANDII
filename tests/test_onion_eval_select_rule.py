@@ -601,6 +601,24 @@ def test_table_needs_scored_marker(tmp_path):
     assert R.seed_state(d) == "done"
 
 
+def test_capped_run_is_its_own_state_and_never_a_settled_seed(tmp_path):
+    """t209 ASf: a run stopped at --max-windows (CAPPED, then DONE) is `capped`, even when scored;
+    it is tabulated but never counts as a seed of the rule."""
+    inc = make_arm(tmp_path, "rung1_base", BASE)
+    ch = make_arm(tmp_path, "rung1_x", shift(BASE, di=0.10))
+    d = ch / "seed2"
+    (d / "CAPPED").write_text('{"windows_seen": 8, "max_windows": 8, "budget": 32}')
+    (d / "DONE").write_text("8 capped")
+    (d / "SCORED").write_text("x")
+    assert R.seed_state(d) == "capped"
+    rows = {r["seed"]: r for r in R.table(tmp_path, "rung1_x")}
+    assert rows[2]["state"] == "capped" and rows[2]["composite"] is not None
+    assert len(R.load_arm(ch, min_seeds=1)) == 2
+    with pytest.raises(R.Missing):
+        R.load_arm(ch)
+    assert len(R.load_arm(inc)) == 3
+
+
 @pytest.mark.parametrize("started", ["log.jsonl", "train_state.pt", "ckpt.pt", "train_123.out"])
 def test_started_run_is_running_not_queued(tmp_path, started):
     """A run that has started (log or checkpoint, no run.json or DONE yet) shows `running`."""
