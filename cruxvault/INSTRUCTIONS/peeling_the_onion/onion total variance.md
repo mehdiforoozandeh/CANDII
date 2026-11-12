@@ -160,6 +160,35 @@ A model whose predicted variance lies within the bounds has `rho(pseudoreplicate
 
 What `score.py` reports (imputed targets; it does not score the other two kinds with headline 7). The old scalar `predicted_over_replicate_variance` keeps its value: the ratio against the target's own halves, now described as the lower-bound check. Beside it, `per_rung` holds the ratio at every rung that `pairs.tsv` populates for the target's cell and assay (the prediction thinned to each pair's depth), `pass_rate` the share of targets with `rho(pseudoreplicate) >= 1` and `rho(other_experiment) <= 1`, and `per_target` both. PIT deviation stays the selection metric for uncertainty; headline 7 is reported only.
 
+## explained-per-layer
+
+PI ruling 32 (2026-11-12): the explained fraction per layer is a reported metric. It never enters `select_rule.py`. Code: `layers.pair_explained`, `layers.explained_table`, `layers.predicted_layer_mean`; `score.py` key `explained_fraction_per_layer`.
+
+**Estimator.** Take a layer k and the rung r whose increment isolates it ([rung-to-term-map](#rung-to-term-map); the donor and experiment layers are siblings over isogenic, the cell-type layer is over `anisogenic + other_experiment - isogenic`). For each pair (Y, Y') of a rung, the two counts are thinned to the common depth of the layer table and taken on its scale, log1p. The model predicts each member under that member's own inputs and covariates; its predicted mean on the layer scale is `e = E[log1p Y]` under its predictive law NB(n, mu) thinned to the common depth. With `d = log1p(Y) - log1p(Y')` and `d_hat = e - e'`, both centred over bins, define per pair
+
+```
+C = 0.5 mean(d_hat d)        (captured part)
+PV = 0.5 mean(d^2)           (pair value, as in layers.tsv)
+```
+
+Average C and PV over the pairs of each cell. For the layer of rung r with the terms `sum_q k_q PV_q` that the layer table subtracts, over the cells that populate r and every q:
+
+```
+EF_k = mean_c [C_r(c) - sum_q k_q C_q(c)] / mean_c [PV_r(c) - sum_q k_q PV_q(c)]
+```
+
+The denominator is the layer term `T_k` of the layer table. The numerator is the captured part of `T_k`. The subtraction removes the sampling term and the lower layers from both, as the layer itself does.
+
+**Why the covariance form.** Write `d = D_k + D_low + D_s`: the difference of the layer-k components, of the lower layers, and of the read sampling. When the model's inputs do not include the members' own reads, `d_hat` is a function of inputs that are independent of the members' own read sampling, so `E[d_hat D_s] = 0`. The captured part `0.5 E[d_hat D_k]` then equals `0.5 Cov(d_hat, d)` minus the same covariance with the lower layers, and the lower rung's C removes that part. So `EF_k = 0.5 E[d_hat D_k] / T_k`, the share of the layer term that the prediction difference captures (a regression coefficient of the layer component on the prediction difference, scaled by the layer term).
+
+**Assumptions.** (1) The model's inputs do not contain the members' own reads. When they do (a reconstructed or self-corrected target), `d_hat` covaries with the sampling term `D_s`, C is biased upward, and the lower-rung subtraction removes the bias only if the leak is the same on both rungs. Then no explained fraction is reported. `score.py` computes it on imputed targets only. (2) Both members are at the common depth on the layer scale: `e` is taken under the prediction thinned to that depth. `log1p(mu_hat)` is not `E[log1p Y]` at a few reads per bin; with it, a model that knows the cell type exactly scored 1.07 in the simulation, against 0.99 with `e`. (3) The assumptions of the layer itself: exchangeable pairs, the same cells in every rung of the layer, and for the cell-type layer that donor and experiment add.
+
+**Range and interval.** No clipping. With few pairs `EF_k` can be negative or above 1. It is reported with a 95% cluster-bootstrap interval over the cells that it uses (the `layers.py` form), the pair count and the cell count.
+
+**What `score.py` fills today.** `score.py` predicts only imputation targets, i.e. the pooled base views. The layer is filled where the two members of an other_experiment or other_cell_type pair are both targets of the scored regime. The members of an isogenic or anisogenic pair (biological replicates of one experiment) are never predicted. For an imputed target they get the same inputs (the other assays of the cell) and the same covariates up to depth, so their `d_hat` is 0 at the common depth and their C is 0. `score.py` uses that, and it lists those rungs under `zero_by_shared_inputs`. Their pair values come from their reads. So the experiment layer and the cell-type layer can be filled; the nested layers and the donor layer cannot (their captured part is 0 by construction for an imputation model). `build_tables.py` writes no other_experiment pair yet, so on `eic_v1` the cell-type row is over anisogenic and its layer is `cell_type+experiment`.
+
+**Check by simulation** (`tests/test_onion_eval_tv_fixes.py`; the audit chain, 6 cells, donor and experiment crossed). A model that knows the cell-type layer exactly and nothing else: cell type 0.987 [0.938, 1.037], experiment 0, donor 0 (seed 0; 0.991 and 1.005 on seeds 1 and 2). A model that also knows the experiment layer: cell type 0.997 [0.949, 1.045], experiment 0.944 [0.872, 1.015], donor 0 (seed 0). On seeds 1 and 2 the experiment layer gave 0.908 [0.886, 0.929] and 0.956 [0.882, 1.029]: it sits a few percent below 1. The model knows the experiment factor but averages over the donor that an other_experiment pair shares, and log1p does not separate the two exactly.
+
 ## scales
 
 This section states the identity across bin sizes (plan Amendment 3, section C). It needs an additive measure: one count per read at one position (the point rule), so that the count at any bin size is the exact sum of the 1 bp counts. The overlap rule of the stored 25 bp counts (`tools/t112/bin25.py`) is not additive across bin sizes.

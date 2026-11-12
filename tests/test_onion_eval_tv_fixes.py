@@ -384,3 +384,93 @@ def test_headline7_per_rung_and_pass_flag():
     assert blk["macro"] == pytest.approx(np.mean([r["variance_ratio"] for r in recs]))
     assert set(blk["per_rung"]) == set(LY.RUNGS) and "pass_rate" in blk and len(blk["per_target"]) == 6
     assert blk["upper_bound_rung"]["imputation"] == "other_experiment"
+
+
+# ===================================================================================================
+# PI ruling 32: explained fraction per layer
+
+def _layer_model(sim, t, knows):
+    """A model that knows the cell-type layer exactly ("ct"), or also the experiment layer ("ct+x"): its NB mean
+    and size, with the size of the levels it does not know (`total_variance._z1_model` form)."""
+    c, d, x = (int(v[1:]) for v in t.split(".")[:3])
+    mu = sim["base"] * sim["g_cell"][c]
+    rest = ["donor", "experiment", "bio_rep", "library", "sequencing"]
+    if knows == "ct+x":
+        mu = mu * sim["g_exp"][(c, d, x)]
+        rest.remove("experiment")
+    n = 1.0 / (np.prod([1 + TV.BASE_LAYERS[k] for k in rest]) - 1)
+    return np.full(mu.shape, n), mu
+
+
+@pytest.fixture(scope="module")
+def explained(sims):
+    import zlib
+    sim = sims["sim"]
+    out = {}
+    for knows in ("ct", "ct+x"):
+        cache, recs = {}, []
+        for p in sim["pairs"]:
+            if p["rung"] not in ("isogenic", "anisogenic", "other_experiment", "other_cell_type"):
+                continue
+            for t in (p["a"], p["b"]):
+                if t not in cache:
+                    cache[t] = LY.predicted_layer_mean(*_layer_model(sim, t, knows))
+            got = LY.pair_explained(sim["tracks"][p["a"]], sim["tracks"][p["b"]], cache[p["a"]], cache[p["b"]],
+                                    1.0, 1.0, seed=zlib.crc32(p["pair_id"].encode()))
+            recs.append(dict(rung=p["rung"], cell=p["cell"], captured=got["captured"], pair_value=got["pair_value"]))
+        out[knows] = {r["layer"]: r for r in LY.explained_table(recs, n_boot=400)}
+    return out
+
+
+def test_explained_fraction_cell_type_model(explained):
+    t = explained["ct"]
+    assert _in(t["cell_type"], 1.0), t["cell_type"]
+    assert t["experiment"]["explained_fraction"] == pytest.approx(0.0, abs=1e-12)
+    assert t["donor"]["explained_fraction"] == pytest.approx(0.0, abs=1e-12)
+    # the layer term is the layer table's increment (same pair values, same subtraction)
+    assert t["cell_type"]["increment_over"] == "anisogenic+other_experiment-isogenic"
+
+
+def test_explained_fraction_cell_type_and_experiment_model(explained):
+    t = explained["ct+x"]
+    assert _in(t["cell_type"], 1.0) and _in(t["experiment"], 1.0), (t["cell_type"], t["experiment"])
+    assert t["donor"]["explained_fraction"] == pytest.approx(0.0, abs=1e-12)
+
+
+def test_explained_fraction_not_clipped_and_undefined_without_prediction():
+    recs = [dict(rung="isogenic", cell="c0", captured=0.0, pair_value=0.2),
+            dict(rung="other_experiment", cell="c0", captured=-0.01, pair_value=0.25),
+            dict(rung="other_experiment", cell="c1", captured=0.1, pair_value=0.25),
+            dict(rung="isogenic", cell="c1", captured=None, pair_value=0.2)]
+    rows = {r["rung"]: r for r in LY.explained_table(recs, n_boot=50)}
+    r = rows["other_experiment"]
+    assert r["flag"] != "ok" and np.isnan(r["explained_fraction"])      # c1's isogenic pair has no prediction
+    rows = {r["rung"]: r for r in LY.explained_table(recs[:2], n_boot=50)}
+    assert rows["other_experiment"]["explained_fraction"] == pytest.approx(-0.01 / 0.05)   # negative, kept
+
+
+def test_score_explained_per_layer_fills_where_both_members_are_predicted(sims):
+    """score.Scorer._explained_per_layer on the simulator: other_experiment and other_cell_type members are
+    targets with the ct+x model's prediction; isogenic and anisogenic members are read only."""
+    from onion_eval import score as SC
+    sim = sims["sim"]
+    pairs = [p for p in sim["pairs"] if p["rung"] in SC.EXPLAINED_RUNGS]
+    fake = _FakeScorer(sim, None, pairs, {k: v * 1e7 for k, v in sim["depth"].items()})
+    fake.n_boot = 200
+    idx = {}
+    for p in pairs:
+        idx.setdefault(("A", p["cell"]), {}).setdefault(p["rung"], []).append((p["a"], p["b"]))
+    fake._rung_pair_index = idx
+    fake._rung_pairs = lambda assay, cell: idx.get((assay, cell), {})
+    cells = {t: f"c{t.split('.')[0][1:]}" for p in pairs for t in (p["a"], p["b"])}
+    fake._row = lambda m: {"cell": cells[m], "depth_reads": str(fake.depth[m])}
+    targets = {t for p in pairs if p["rung"] in SC.EXPLAINED_OUTER for t in (p["a"], p["b"])}
+    arrays = []
+    for t in sorted(targets):
+        n, mu = _layer_model(sim, t, "ct+x")
+        arrays.append(dict(defined=True, target=t, n=n, mu=mu, y=sim["tracks"][t].astype(float)))
+    out = SC.Scorer._explained_per_layer(fake, "A", arrays)
+    rows = {r["layer"]: r for r in out["rows"]}
+    assert set(rows) == {"experiment", "cell_type"} and out["zero_by_shared_inputs"] == ["isogenic", "anisogenic"]
+    for lay in ("experiment", "cell_type"):
+        assert rows[lay]["ci_low"] <= 1.0 <= rows[lay]["ci_high"], rows[lay]

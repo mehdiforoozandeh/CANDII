@@ -98,7 +98,8 @@ def simulate(layers: dict, depth: dict | None = None, n_cells: int = 6, n_pos: i
     Returns {"tracks": {id: int32 counts (n_pos,)}, "depth": {id: depth factor}, "meta": {id: {cell, donor,
     experiment, bio_rep, library, sequencing, half}}, "rate": {leaf id: float32 rate}, "pairs": [{pair_id, a, b,
     rung, assay, cell}] (rung names of pairs.tsv; a pseudoreplicate pair is (<leaf>.pr1, <leaf>.pr2)),
-    "planted": planted(...), "base": the base rate m per position, "g_cell": {cell: factor}}."""
+    "planted": planted(...), "base": the base rate m per position, "g_cell": {cell: factor}, "g_donor":
+    {(cell, donor): factor}, "g_exp": {(cell, donor, experiment): factor}}."""
     depth = dict(depth or {})
     scale = float(depth.get("scale", 1.0))
     pr_frac = float(depth.get("pr_frac", 0.5))
@@ -107,16 +108,18 @@ def simulate(layers: dict, depth: dict | None = None, n_cells: int = 6, n_pos: i
     rng = np.random.default_rng([seed, 0])
     rng_c = np.random.default_rng([seed if count_seed is None else count_seed, 1])
     base = rng.gamma(base_shape, base_mean / base_shape, n_pos)
-    tracks, dep, meta, rate, g_cell = {}, {}, {}, {}, {}
+    tracks, dep, meta, rate, g_cell, g_donor, g_exp = {}, {}, {}, {}, {}, {}, {}
     for c in range(n_cells):
         gc = _gamma(rng, _cv(layers, "cell_type", c), n_pos)
         g_cell[c] = gc
         gd = [_gamma(rng, _cv(layers, "donor", c), n_pos) for _ in range(2)]
+        g_donor.update({(c, d): gd[d] for d in range(2)})
         gx = {}
         for d, x in product(range(2), range(2)):
             key = x if crossed else (d, x)
             if key not in gx:
                 gx[key] = _gamma(rng, _cv(layers, "experiment", c), n_pos)
+            g_exp[(c, d, x)] = gx[key]
         for d, x, r in product(range(2), range(2), range(2)):
             gr = _gamma(rng, _cv(layers, "bio_rep", c), n_pos)
             for l in range(2):
@@ -165,6 +168,7 @@ def simulate(layers: dict, depth: dict | None = None, n_cells: int = 6, n_pos: i
             add("other_experiment", _leaf(c, d, 0, 0, 0, 0), _leaf(c, d, 1, 0, 0, 0), cell)
         add("other_cell_type", _leaf(c, 0, 0, 0, 0, 0), _leaf((c + 1) % n_cells, 0, 0, 0, 0, 0), cell)
     return dict(tracks=tracks, depth=dep, meta=meta, rate=rate, pairs=pairs, base=base, g_cell=g_cell,
+                g_donor=g_donor, g_exp=g_exp,
                 planted=planted(layers, base * scale, n_cells, crossed=crossed), layers=layers, crossed=crossed,
                 n_cells=n_cells)
 
