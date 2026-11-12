@@ -132,3 +132,14 @@ Every chunk of the peeling-the-onion plan maps to one crux child task of t152. `
 | XIm | t255 | Extra inputs in a mix or evolved design (conditional) |
 | S3a | t256 | Stage 3 on the design (submit) |
 | S3b | t256 | Stage 3: collect and settle |
+| OXs | t257 | Select the second experiments |
+| OXd | t258 | Dataset guard for evaluation-only second experiments |
+| OXe | t259 | Eval set add-on and add-on scoring |
+| OXl | t260 | Layers by pair class |
+| OXr | t261 | Arm report: metric 7 per rung with two bounds |
+| OXb | t262 | Build list of the second experiments, and kit KX |
+| OXt | t263 | Tables add-on and the ledger exception |
+| OXa | t264 | Build the second experiments (submit) |
+| OXc | t264 | Collect the second experiments |
+| OXx | t265 | Build and check the eic_v1x tables |
+| OXy | t266 | Add-on eval set, the experiment layer and the baselines' two bounds |

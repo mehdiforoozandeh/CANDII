@@ -85,6 +85,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t240` [data-acquisition] Onion: Probe: are the read sets there, and what does a recount cost
 - `t241` [implementation] Onion: Recount tool at 1 bp with the point rule
 - `t242` [implementation] Onion: Variance-by-scale tool
+- `t257` [data-acquisition] Onion: Select the second experiments
+- `t258` [implementation] Onion: Dataset guard for evaluation-only second experiments
+- `t260` [implementation] Onion: Layers by pair class
+- `t261` [implementation] Onion: Arm report: metric 7 per rung with two bounds
 
 ## Blocked
 
@@ -165,6 +169,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t254` [implementation] Onion: Resolution arms: submit, collect and report — blocked by `t249`, `t247`, `t248`, `t214`, `t216`, `t250`
 - `t255` [implementation] Onion: Extra inputs in a mix or evolved design — blocked by `t221`, `t244`, `t246`
 - `t256` [implementation] Onion: Stage 3 on the design: submit, collect and settle — blocked by `t246`, `t245`, `t248`, `t186`
+- `t259` [implementation] Onion: Eval set add-on and add-on scoring — blocked by `t258`
+- `t262` [data-acquisition] Onion: Build list of the second experiments, and its kit — blocked by `t257`
+- `t263` [implementation] Onion: Tables add-on and the ledger exception — blocked by `t258`, `t257`
+- `t264` [data-acquisition] Onion: Build the second experiments: submit and collect — blocked by `t262`, `t183`
+- `t265` [data-acquisition] Onion: Build and check the eic_v1x tables — blocked by `t264`, `t263`, `t183`
+- `t266` [implementation] Onion: Add-on eval set, the experiment layer and the baselines' two bounds — blocked by `t265`, `t259`, `t260`, `t261`, `t185`, `t186`, `t236`
 
 ## By category
 
@@ -200,6 +210,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t240` [data-acquisition] Onion: Probe: are the read sets there, and what does a recount cost — *open*
 - `t245` [data-acquisition] Onion: Fetch and bin the RNA-seq inputs (Nibi) — *blocked*
 - `t249` [data-acquisition] Onion: Recount the subset at 1 bp (submit and collect) — *blocked*
+- `t257` [data-acquisition] Onion: Select the second experiments — *open*
+- `t262` [data-acquisition] Onion: Build list of the second experiments, and its kit — *blocked*
+- `t264` [data-acquisition] Onion: Build the second experiments: submit and collect — *blocked*
+- `t265` [data-acquisition] Onion: Build and check the eic_v1x tables — *blocked*
 
 ### hpc-setup
 
@@ -327,6 +341,12 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t254` [implementation] Onion: Resolution arms: submit, collect and report — *blocked*
 - `t255` [implementation] Onion: Extra inputs in a mix or evolved design — *blocked*
 - `t256` [implementation] Onion: Stage 3 on the design: submit, collect and settle — *blocked*
+- `t258` [implementation] Onion: Dataset guard for evaluation-only second experiments — *open*
+- `t259` [implementation] Onion: Eval set add-on and add-on scoring — *blocked*
+- `t260` [implementation] Onion: Layers by pair class — *open*
+- `t261` [implementation] Onion: Arm report: metric 7 per rung with two bounds — *open*
+- `t263` [implementation] Onion: Tables add-on and the ledger exception — *blocked*
+- `t266` [implementation] Onion: Add-on eval set, the experiment layer and the baselines' two bounds — *blocked*
 
 ### manuscript
 
