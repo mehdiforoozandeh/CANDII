@@ -5,6 +5,8 @@
         [--inputs-roles train|train,val] [--pair-splits train,val] [--regions-bed <bed>
         [--regions-exclude]] --out <evalset.json>
     python tools/onion_eval/evalset.py check --evalset <json> [--tables <dir>] [--allow-blind]
+    python tools/onion_eval/evalset.py addon --base <frozen evalset.json> --tables <add-on tables>
+        --out <json>
 
 `build` writes `evalset.json` (pinned interface D) and, beside it, `scorable.tsv` and
 `non_scorable_assays.tsv`. They go beside the evalset, not into the tables dir, because
@@ -62,6 +64,24 @@ to one built before SC; a non-default option adds its own keys and changes no ex
                        `regions_bed`, `regions_bed_mode`, `n_candidate_regions_before_bed`.
   A blind eval set may be named `evalset_blind.json` or `evalset_blind_<tag>.json`.
 
+Second experiments (OXe, Amendment 4, PI ruling 33). Add-on tables (`eic_v1x`, `eic_v2x`) hold
+second experiments: rows with `in_eic = evalonly` (training and validation tracks) and the blind
+track's second experiment (`in_eic = blind`), each listed in `evaluation_only.tsv` with a `use`
+that starts with `other_experiment`. `build` never lists such a row as a target, an input or a
+correction-pair side, under every option; its `other_experiment` pairs enter `replicate_pairs`
+under the usual split rule (the layer file, `evalset_layers.json`). Tables without such rows give
+a byte-identical eval set.
+
+Add-on eval set (`addon`, decision 6). From a frozen eval set and its add-on tables: the regions,
+fit regions, strata and `scorable` of the base, verbatim; `imputation_targets` = the base's
+`leave_one_assay_out` targets that have an `other_experiment` pair in the add-on tables, each
+followed by its second experiment as a target with the same inputs, regime and split and the key
+`"evaluation_only": true`; no correction pair and no control target; `replicate_pairs` = only the
+`other_experiment` pair ids whose EIC side is a chosen target (the scorer makes every listed pair
+of its split a pair job); `addon_of` = sha256 of the base file, `tables_sha256` of the add-on
+tables. The add-on tables must extend the base's tables (`build_info.json::addon_of_tables_sha256`
+equals the base's `tables_sha256`). The scorer reads such an eval set only with `--addon`.
+
 Read overlap (DT, Log "FOR E7a"). The testbed's arms of one track come from the same reads and
 each arm's halves were split independently, so the source pr1 and the target pr2 of a correction
 pair can share reads when both sides belong to one experiment and one side is a `testbed` layer
@@ -113,6 +133,9 @@ BLIND_EVALSET_NAME = "evalset_blind.json"
 BLIND_EVALSET_RE = re.compile(r"evalset_blind(_[A-Za-z0-9][A-Za-z0-9._-]*)?\.json")
 INPUT_ROLES = (("train",), ("train", "val"))
 TESTBED = "testbed"
+EVALONLY = "evalonly"
+#: `use` prefix of a second experiment in evaluation_only.tsv (Amendment 4, decision 2)
+OTHER_EXPERIMENT_USE = "other_experiment"
 NOT_READ_DISJOINT = ("one experiment's reads on both sides and a testbed arm on one side: the "
                      "testbed split each arm's halves independently, so the source pr1 and the "
                      "target pr2 can share reads (DT, Log 'FOR E7a')")
@@ -133,6 +156,20 @@ def write_tsv(path, columns, rows) -> None:
         w.writeheader()
         for r in rows:
             w.writerow({k: r.get(k, "") for k in columns})
+
+
+def second_experiment_ids(tables) -> set:
+    """Measurement ids of the second experiments of a tables dir: `in_eic = evalonly` rows, and
+    every row that `evaluation_only.tsv` marks `other_experiment` (the blind track's one has
+    `in_eic = blind`). Empty for tables without them."""
+    tables = Path(tables)
+    ids = {r["measurement_id"] for r in read_tsv(tables / "measurements.tsv")
+           if r["in_eic"] == EVALONLY}
+    eo = tables / "evaluation_only.tsv"
+    if eo.is_file():
+        ids |= {r["measurement_id"] for r in read_tsv(eo)
+                if (r.get("use") or "").strip().startswith(OTHER_EXPERIMENT_USE)}
+    return ids
 
 
 def _is_base(r: dict) -> bool:
@@ -409,8 +446,14 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
     if regions_exclude and not regions_bed:
         raise ValueError("--regions-exclude needs --regions-bed")
     rows = read_tsv(tables / "measurements.tsv")
-    meas = {r["measurement_id"]: r for r in rows}
     pairs = read_tsv(tables / "pairs.tsv")
+    second = second_experiment_ids(tables)
+    if second:               # OXe: never a target, an input or a correction-pair side
+        rows = [r for r in rows if r["measurement_id"] not in second]
+        cor_pairs = [p for p in pairs if p["a"] not in second and p["b"] not in second]
+    else:
+        cor_pairs = pairs
+    meas = {r["measurement_id"]: r for r in rows}
     splits = ("val", "blind") if include_blind else ("val",)
 
     cands = candidate_blocks(genome_dir(tables), region_bins)
@@ -424,7 +467,7 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
     regions, fit_regions = draw_regions(cands, n_regions, n_fit_regions, seed)
     imp = imputation_targets(rows, splits, inputs_roles)
     ctl = control_targets(rows, splits, inputs_roles)
-    cor, dropped = correction_pairs(pairs, meas, splits, pair_splits)
+    cor, dropped = correction_pairs(cor_pairs, meas, splits, pair_splits)
     rep = [p["pair_id"] for p in pairs if p["rung"] in REPLICATE_RUNGS and p["a"] != p["b"]
            and (pair_splits is None or p["split"] in pair_splits)]
     sc = scorable_rows(rows, cor)
@@ -505,6 +548,27 @@ def check(evalset, tables=None, allow_blind=False) -> list[str]:
             if m in meas and meas[m]["in_eic"] != "train" and not (
                     val_ok and meas[m]["in_eic"] == "val"):
                 bad.append(f"input {m} of {t['target']} is not a training track")
+    second = second_experiment_ids(tdir)
+    flagged = [t for t in ev["imputation_targets"] if t.get("evaluation_only")]
+    for t in ev["imputation_targets"]:
+        if t["target"] in second and not t.get("evaluation_only"):
+            bad.append(f"second experiment {t['target']} is a target without evaluation_only")
+        for m in t["inputs"]:
+            if m in second:
+                bad.append(f"second experiment {m} is an input of {t['target']}")
+    for t in flagged:
+        if not ev.get("addon_of"):
+            bad.append(f"evaluation-only target {t['target']} in an eval set without addon_of")
+        if t["target"] not in second:
+            bad.append(f"evaluation-only target {t['target']} is not a second experiment")
+    for t in ev.get("control_targets", []):
+        if t["target"] in second or set(t["inputs"]) & second:
+            bad.append(f"second experiment in control target {t['target']}")
+    for p in ev["correction_pairs"]:
+        if {p["source"], p["target"]} & second:
+            bad.append(f"second experiment in correction pair {p.get('pair_id', '')}")
+    if ev.get("addon_of"):
+        bad += addon_problems(ev, tdir)
     ids = [t["target"] for t in ev["imputation_targets"]] + \
           [m for p in ev["correction_pairs"] for m in (p["source"], p["target"])]
     if not allow_blind:
@@ -534,6 +598,91 @@ def check(evalset, tables=None, allow_blind=False) -> list[str]:
     return bad
 
 
+# --------------------------------------------------------------------------------------- add-on
+
+def addon_info(tables) -> dict:
+    """`build_info.json` of add-on tables ({} when absent)."""
+    p = Path(tables) / "build_info.json"
+    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+
+
+def addon_problems(ev: dict, tdir) -> list[str]:
+    """Problems specific to an add-on eval set (empty list = passes)."""
+    bad = []
+    if ev.get("correction_pairs"):
+        bad.append("an add-on eval set lists correction pairs")
+    if ev.get("control_targets"):
+        bad.append("an add-on eval set lists control targets")
+    pairs = {p["pair_id"]: p for p in read_tsv(Path(tdir) / "pairs.tsv")}
+    meas = {r["measurement_id"]: r for r in read_tsv(Path(tdir) / "measurements.tsv")}
+    eic = {(meas[t["target"]]["cell"], meas[t["target"]]["assay"]) for t in ev["imputation_targets"]
+           if not t.get("evaluation_only") and t["target"] in meas}
+    for pid in ev.get("replicate_pairs", []):
+        p = pairs.get(pid)
+        if (p is None or p["rung"] != "other_experiment"
+                or not {(meas.get(m, {}).get("cell"), meas.get(m, {}).get("assay"))
+                        for m in (p["a"], p["b"])} & eic):
+            bad.append(f"replicate pair {pid} is not an other_experiment pair of a listed target")
+    info = addon_info(tdir)
+    if not info.get("addon_of_tables_sha256"):
+        bad.append(f"{tdir}/build_info.json has no addon_of_tables_sha256 (not add-on tables)")
+    return bad
+
+
+def addon(base, tables, out) -> dict:
+    """The add-on eval set of a frozen eval set on its add-on tables (module docstring)."""
+    from minicandi.dataset import tables_sha256
+    base, tables, out = Path(base), Path(tables).resolve(), Path(out)
+    raw = base.read_bytes()
+    bev = json.loads(raw.decode("utf-8"))
+    if bev.get("addon_of"):
+        raise ValueError(f"{base}: already an add-on eval set")
+    info = addon_info(tables)
+    if info.get("addon_of_tables_sha256") != bev.get("tables_sha256"):
+        raise ValueError(f"{tables}/build_info.json: addon_of_tables_sha256 "
+                         f"{str(info.get('addon_of_tables_sha256'))[:12]} is not the base eval set's "
+                         f"tables_sha256 {str(bev.get('tables_sha256'))[:12]}")
+    meas = {r["measurement_id"]: r for r in read_tsv(tables / "measurements.tsv")}
+    second = second_experiment_ids(tables)
+    other = defaultdict(list)          # EIC track (cell, assay) -> [(pair id, second experiment)]
+    for p in read_tsv(tables / "pairs.tsv"):
+        if p["rung"] != "other_experiment" or p["a"] == p["b"]:
+            continue
+        for e, x in ((p["a"], p["b"]), (p["b"], p["a"])):
+            if x in second and e not in second and e in meas:
+                other[(meas[e]["cell"], meas[e]["assay"])].append((p["pair_id"], x))
+    targets, pair_ids, seen = [], [], set()
+    for t in bev["imputation_targets"]:
+        row = meas.get(t["target"])
+        if row is None:
+            raise ValueError(f"base target {t['target']} is not in {tables}/measurements.tsv")
+        key = (row["cell"], row["assay"])
+        if t["regime"] != "leave_one_assay_out" or key not in other:
+            continue
+        if set(t["inputs"]) & second:
+            raise ValueError(f"base target {t['target']} has a second experiment as input")
+        targets.append(dict(t))
+        for pid, x in sorted(other[key]):
+            if pid not in seen:
+                seen.add(pid)
+                pair_ids.append(pid)
+            targets.append(dict(t, target=x, has_halves=_halves(meas[x]), evaluation_only=True))
+    ev = dict(bev)
+    for k in ("correction_pairs_not_read_disjoint", "pair_splits"):
+        ev.pop(k, None)
+    ev.update({
+        "tables": tables.name, "tables_dir": str(tables), "tables_sha256": tables_sha256(tables),
+        "imputation_targets": targets, "control_targets": [],
+        "targets_without_halves": sorted({t["target"] for t in targets
+                                          if not t["has_halves"] and not t.get("evaluation_only")}),
+        "correction_pairs": [], "correction_pairs_dropped": 0, "replicate_pairs": pair_ids,
+        "addon_of": hashlib.sha256(raw).hexdigest(), "addon_of_path": str(base.resolve()),
+    })
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(ev, indent=1), encoding="utf-8")
+    return ev
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -555,7 +704,18 @@ def main(argv=None) -> int:
     c.add_argument("--evalset", required=True)
     c.add_argument("--tables")
     c.add_argument("--allow-blind", action="store_true")
+    x = sub.add_parser("addon")
+    x.add_argument("--base", required=True)
+    x.add_argument("--tables", required=True)
+    x.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "addon":
+        ev = addon(a.base, a.tables, a.out)
+        n_x = sum(1 for t in ev["imputation_targets"] if t.get("evaluation_only"))
+        print(f"add-on evalset: {len(ev['imputation_targets']) - n_x} validation targets with a "
+              f"second experiment, {n_x} evaluation-only targets, {len(ev['replicate_pairs'])} "
+              f"other_experiment pair ids -> {a.out}")
+        return 0
     if a.cmd == "build":
         ev = build(a.tables, a.out, strata=a.strata, n_regions=a.n_regions,
                    n_fit_regions=a.n_fit_regions, region_bins=a.region_bins, seed=a.seed,
