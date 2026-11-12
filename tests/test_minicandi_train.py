@@ -321,7 +321,7 @@ def test_train_sh_passes_workers(cpus, want):
     assert r.stdout.split()[-2:] == ["--workers", want]
 
 
-def _fake_slurm(tmp_path, venv_rc: int) -> dict:
+def _fake_slurm(tmp_path, venv_rc: int, update_rc: int = 0) -> dict:
     """A PATH whose module/virtualenv/pip/sbatch/scontrol/squeue are logging fakes."""
     import os
     b = tmp_path / "bin"
@@ -334,7 +334,7 @@ def _fake_slurm(tmp_path, venv_rc: int) -> dict:
         "virtualenv": f'mkdir -p "$3/bin"; : > "$3/bin/activate"; exit {venv_rc}',
         "pip": "exit 0",
         "sbatch": f'echo "sbatch $*" >> {log}; echo 4242',
-        "scontrol": f'if [ "$1" = show ]; then echo "{rec}"; else echo "scontrol $*" >> {log}; fi',
+        "scontrol": f'if [ "$1" = show ]; then echo "{rec}"; else echo "scontrol $*" >> {log}; exit {update_rc}; fi',
         "squeue": 'printf "777 afterok:1234(unfulfilled)\\n778 afterok:12345(unfulfilled)\\n"',
         "hostname": "echo badnode",
     }
@@ -346,13 +346,13 @@ def _fake_slurm(tmp_path, venv_rc: int) -> dict:
                 SLURM_TMPDIR=str(tmp_path / "tmpdir"), USER="me")
 
 
-@pytest.mark.parametrize("retried", [False, True])
-def test_train_sh_setup_failure_retries_once_elsewhere(tmp_path, retried):
+@pytest.mark.parametrize("retried,update_rc", [(False, 0), (True, 0), (False, 1)])
+def test_train_sh_setup_failure_retries_once_elsewhere(tmp_path, retried, update_rc):
     """Arm smoke defect 2: a CVMFS I/O error (exit 126) in setup killed 11 jobs for good. Now the
     job resubmits itself once, off this node, moves its afterok dependent and exits 3; a retried
     job never retries again."""
     import subprocess
-    env = _fake_slurm(tmp_path, 126)
+    env = _fake_slurm(tmp_path, 126, update_rc)
     if retried:
         env["ONION_RETRY_OF"] = "1000"
     r = subprocess.run(["bash", str(_ROOT / "slurm/minicandi/train.sh"), "/kit", "c.json", "T",
@@ -372,3 +372,7 @@ def test_train_sh_setup_failure_retries_once_elsewhere(tmp_path, retried):
                        str(tmp_path / "out"), "cpu"]
     assert calls[1] == "scontrol update JobId=777 Dependency=afterok:4242"   # not 778
     assert "[minicandi-train] retried-as=4242 host=badnode" in r.stdout
+    moved = "[minicandi-train] dependent 777 now waits on 4242" in r.stdout
+    failed = ("[minicandi-train] dependency-move-failed scoring_job=777 retry_job=4242"
+              in r.stdout)
+    assert (moved, failed) == ((True, False) if update_rc == 0 else (False, True))

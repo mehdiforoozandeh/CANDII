@@ -105,15 +105,17 @@ retry_elsewhere() {   # at most once: a retried job never retries again
              "$KIT/slurm/minicandi/train.sh" "${ARGS[@]}") 2>&1 | tail -1 | cut -d';' -f1)"
   [[ "$new" =~ ^[0-9]+$ ]] || { echo "train.sh: the retry was not submitted: $new"; return 1; }
   echo "[minicandi-train] retried-as=$new host=$host"
-  # a dependent (afterok) job would be killed when this job fails: point it at the retry
+  # a dependent (afterok) job would be killed when this job fails: point it at the retry.
+  # Fail-safe (unverified on Fir and Nibi): one try per dependent, no loop, nothing cancelled.
   squeue -h -u "${USER:-$(id -un)}" -t PENDING -o '%i %E' 2>/dev/null |
     grep -E "afterok:${SLURM_JOB_ID}([^0-9]|\$)" | while read -r dep _; do
-      if scontrol update "JobId=$dep" "Dependency=afterok:$new"; then
+      if scontrol update "JobId=$dep" "Dependency=afterok:$new" > /dev/null 2>&1; then
         echo "[minicandi-train] dependent $dep now waits on $new"
       else
-        echo "train.sh: could not move dependent job $dep onto $new"
+        echo "[minicandi-train] dependency-move-failed scoring_job=$dep retry_job=$new: submit the scoring for $new by hand"
       fi
     done
+  return 0
 }
 if ! setup; then
   echo "train.sh: environment setup failed on $(hostname)"

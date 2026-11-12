@@ -157,6 +157,8 @@ LADDER_KEYS = ("name", "incumbent", "challenger", "simpler", "d14_condition_1", 
                "notepad_ref")
 SEED_RE = re.compile(r"^seed(\d+)$")
 SKIPPED = "SKIPPED"                 # score.py: a pair-only baseline with no pair to score
+#: train.py: the run stopped at --max-windows short of its budget (t209 ASf); never a full run
+CAPPED = "CAPPED"
 #: any of these in a seed dir means the run has started (seed_state `running`)
 STARTED_FILES = ("run.json", "ckpt.pt", "ckpt.pt.tmp", "train_state.pt", "log.jsonl", "DONE",
                  "RUNNING", "scores.json")
@@ -228,12 +230,12 @@ def load_seed(path: Path) -> dict:
 
 
 def load_arm(arm, sub: str = "", min_seeds: int = MIN_SEEDS) -> list[dict]:
-    """Every seed of an arm with a scores.json (under `sub` inside each seed dir); Missing when
-    fewer than min_seeds."""
+    """Every seed of an arm with a scores.json (under `sub` inside each seed dir) and no CAPPED;
+    Missing when fewer than min_seeds."""
     seeds = []
     for d in seed_dirs(Path(arm)):
         p = d / sub / "scores.json" if sub else d / "scores.json"
-        if p.is_file():
+        if p.is_file() and not (d / CAPPED).exists():      # a capped run never counts as a seed
             seeds.append(load_seed(p))
     if len(seeds) < min_seeds:
         raise Missing(f"{arm}: {len(seeds)} scored seeds; the rule needs at least {min_seeds}")
@@ -484,11 +486,15 @@ def compare(incumbent, challenger, simpler=None, name=None, settlements=None, *,
 # ------------------------------------------------------------------------------------------ table
 
 def seed_state(d: Path) -> str:
-    """failed | done (scored: SCORED and scores.json) | skipped | running | queued. Training's DONE
+    """capped | failed | done (scored: SCORED and scores.json) | skipped | running | queued.
+    `capped`: train.py wrote CAPPED (stopped at --max-windows short of the budget); checked first,
+    so a capped run is never `done`, whatever else it holds (t209 ASf). Training's DONE
     alone means trained, not scored, so the seed is still `running` (finding 3). A run that has
     started (train.py's log.jsonl or train_state.pt, a checkpoint, or a job log `*.out`) is
     `running` before its first run.json or DONE exists. `skipped`: score.py wrote SKIPPED (a
     pair-only baseline on an eval set with no pair); it has no scores and never counts as done."""
+    if (d / CAPPED).exists():
+        return "capped"
     if (d / "FAILED").exists():
         return "failed"
     if (d / "SCORED").exists() and (d / "scores.json").is_file():
