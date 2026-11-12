@@ -48,6 +48,23 @@ other_cell_type. A rung with no pair gets a row with `n_pairs = 0` and flag `not
 it is never dropped and never filled. A rung with fewer than 5 pairs or fewer than 3 cells is flagged
 `few pairs`, and a pooled row by assay class is added for it.
 
+Pair classes of the other_experiment rung (plan Amendment 4, decision 5; PI rulings 30, 33). An
+other_experiment pair's `knobs_differing` starts with its class, the part made of `experiment`, `lab`
+and `donor` (`donor?` when a donor is unknown); any other knob (run_type, read_length, platform) is a
+technical difference, ignored for the class and counted in the column `tech_diff_pairs`. When the
+pairs carry classes, the pooled other_experiment row stays and one row per class present follows it,
+with its own cells, increment (over the same pair value as the pooled row), interval and flags, the
+class in the column `pair_class`, and `layer` = experiment_repeat (`experiment`: same lab, same donor;
+a repeat experiment, never a lab layer), experiment (`experiment;lab`: the lab layer of ruling 30),
+experiment_repeat+donor, experiment+donor (and the `donor?` forms). The cell-type row then takes the
+other_experiment pair value from the same-donor classes (`experiment`, `experiment;lab`) when they
+give at least 5 pairs from 3 cells, else from the pooled rung with the flag `donor not separated`.
+Every row of such a table carries the flag `common depth set with second experiments`: the common
+depth of an assay is the shallowest side of any of its pairs, so a second experiment can lower it and
+the table is not comparable with one built without them. `explained_table` adds the same class rows.
+A table whose pairs carry no class is written exactly as before (no `pair_class`, `tech_diff_pairs`
+columns).
+
 CLI: python tools/onion_eval/layers.py run --tables <dir> --evalset <json> --out <layers.tsv>
 """
 from __future__ import annotations
@@ -77,6 +94,14 @@ BAND_ORDER = ["fine", "peak", "domain", "broad", "all"]
 MIN_PAIRS, MIN_CELLS = 5, 3
 FLAG_OK, FLAG_FEW, FLAG_EMPTY = "ok", "few pairs", "not populated by EIC"
 FLAG_CELLS, FLAG_DEPTHS = "cells differ from lower rung", "assays at different depths"
+FLAG_DONOR, FLAG_SECOND = "donor not separated", "common depth set with second experiments"
+# other_experiment pair classes (Amendment 4, decision 5) -> layer name; the order of the class rows
+PAIR_CLASS_LAYER = {"experiment": "experiment_repeat", "experiment;lab": "experiment",
+                    "experiment;donor": "experiment_repeat+donor", "experiment;lab;donor": "experiment+donor",
+                    "experiment;donor?": "experiment_repeat+donor?",
+                    "experiment;lab;donor?": "experiment+donor?"}
+SAME_DONOR_CLASSES = ("experiment", "experiment;lab")
+CLASS_KNOBS = ("experiment", "lab", "donor", "donor?")
 NESTED = RUNGS[:4]                                   # pseudoreplicate .. isogenic: nested rungs
 SIBLINGS = ("anisogenic", "other_experiment")        # crossed: each over isogenic (PI ruling 30)
 LAYER = {"pseudoreplicate": "sampling", "sequencing": "sequencing", "technical": "library",
@@ -85,6 +110,39 @@ LAYER = {"pseudoreplicate": "sampling", "sequencing": "sequencing", "technical":
 COLUMNS = ["assay_or_class", "pooled_by_class", "stratum", "band", "rung", "n_pairs", "n_cells",
            "variance", "layer_increment", "ci_low", "ci_high", "ci_width", "flag", "increment_over",
            "depth", "layer"]
+CLASS_COLUMNS = ["pair_class", "tech_diff_pairs"]          # written only when the pairs carry classes
+
+
+def pair_class_of(knobs):
+    """(pair class, technical difference) of an other_experiment pair from its `knobs_differing`:
+    "experiment;lab;read_length" -> ("experiment;lab", True). Empty knobs give ("", False) (no class)."""
+    toks = [t for t in (knobs or "").split(";") if t]
+    if not toks:
+        return "", False
+    cls = ["experiment"] + [t for t in CLASS_KNOBS[1:] if t in toks]
+    return ";".join(cls), any(t not in CLASS_KNOBS for t in toks)
+
+
+def _class_order(records):
+    """Pair classes present among the other_experiment records, in PAIR_CLASS_LAYER order."""
+    got = {x.get("pair_class") for x in records if x["rung"] == "other_experiment" and x.get("pair_class")}
+    return [k for k in PAIR_CLASS_LAYER if k in got] + sorted(got - set(PAIR_CLASS_LAYER))
+
+
+def _class_layer(base_layer, cls):
+    """Layer name of a class row: the pooled row's layer with its last part ("experiment") replaced."""
+    held = base_layer.split("+")[:-1]
+    return "+".join(held + [PAIR_CLASS_LAYER.get(cls, cls)])
+
+
+def _add_flag(flag, text):
+    return text if flag == FLAG_OK else f"{flag}; {text}"
+
+
+def _same_donor(records):
+    """The same-donor other_experiment records and whether they reach MIN_PAIRS from MIN_CELLS."""
+    sd = [x for x in records if x["rung"] == "other_experiment" and x.get("pair_class") in SAME_DONOR_CLASSES]
+    return sd, len(sd) >= MIN_PAIRS and len({x["cell"] for x in sd}) >= MIN_CELLS
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -221,7 +279,9 @@ def layer_table(records, n_boot=1000, seed=0):
     records: list of dicts {"rung", "cell", "v": {(stratum, band): Var(d)}} (one per pair, the
     `pair_variance` value; halved here to the pair value). Returns one dict per (stratum, band, rung),
     every rung of RUNGS included, with n_pairs, n_cells, variance, layer_increment, ci_low, ci_high,
-    ci_width, flag, increment_over, layer (see the module doc for the definitions)."""
+    ci_width, flag, increment_over, layer (see the module doc for the definitions). Records of the
+    other_experiment rung may carry "pair_class" and "tech_diff" (`pair_class_of`); then every row also
+    gets `pair_class` and `tech_diff_pairs`, and class rows follow the pooled other_experiment row."""
     keys = sorted({k for r in records for k in r["v"]})
     by_rung = {r: [x for x in records if x["rung"] == r] for r in RUNGS}
     populated = [r for r in RUNGS if by_rung[r]]
@@ -233,10 +293,14 @@ def layer_table(records, n_boot=1000, seed=0):
     draws = rng.integers(0, len(cells), size=(n_boot, len(cells))) if cells else np.zeros((n_boot, 0), int)
     weights = (np.stack([np.bincount(dr, minlength=len(cells)) for dr in draws]) if cells else draws).astype(float)
 
-    def cell_means(rung, key):
-        """{cell: mean pair value of the cell} over the rung's finite records."""
+    classes = _class_order(records)
+    sub = {k: [x for x in by_rung["other_experiment"] if x.get("pair_class") == k] for k in classes}
+    sd, sd_ok = _same_donor(records)
+
+    def cell_means(recs, key):
+        """{cell: mean pair value of the cell} over the finite records."""
         acc = {}
-        for x in by_rung[rung]:
+        for x in recs:
             v = x["v"].get(key, np.nan)
             if np.isfinite(v):
                 acc.setdefault(x["cell"], []).append(0.5 * v)
@@ -253,29 +317,54 @@ def layer_table(records, n_boot=1000, seed=0):
             boot = (w * vals).sum(1) / w.sum(1)
         return float(vals.mean()), boot, len(cs)
 
+    def stat_row(row, recs, cmr, terms, cmt, cells_t):
+        """Fill a populated row: variance of cmr, increment over the terms (pair values cmt, cells cells_t)."""
+        cells_r = {x["cell"] for x in recs}
+        var, _, _ = mean_boot(cmr)
+        common = set(cmr).intersection(*(set(cmt[q]) for q, _ in terms))
+        inc, iboot, ncl = mean_boot({c: cmr[c] - sum(k * cmt[q][c] for q, k in terms) for c in common})
+        lo, hi = _interval(inc, iboot, ncl) if np.isfinite(inc) else (np.nan, np.nan)
+        flag = FLAG_OK if (len(recs) >= MIN_PAIRS and len(cells_r) >= MIN_CELLS) else FLAG_FEW
+        if any(cells_r != cells_t[q] for q, _ in terms):
+            flag = FLAG_CELLS if flag == FLAG_OK else f"{flag}; {FLAG_CELLS}"
+        row.update(variance=var, layer_increment=inc, ci_low=lo, ci_high=hi, ci_width=hi - lo, flag=flag)
+        return row
+
+    labelled = bool(classes)
     rows = []
     for key in keys:
-        cm = {r: cell_means(r, key) for r in populated}
+        cm = {r: cell_means(by_rung[r], key) for r in populated}
         for r in RUNGS:
             recs = by_rung[r]
             n_pairs, n_cells = len(recs), len(rung_cells[r])
             terms, layer = lower.get(r, ([], LAYER[r]))
             row = dict(stratum=key[0], band=key[1], rung=r, n_pairs=n_pairs, n_cells=n_cells,
                        increment_over=format_terms(terms) if recs else "", layer=layer)
+            if labelled:
+                row.update(pair_class="", tech_diff_pairs=(sum(bool(x.get("tech_diff")) for x in recs)
+                                                           if r == "other_experiment" else ""))
             if not recs:
                 row.update(variance=np.nan, layer_increment=np.nan, ci_low=np.nan, ci_high=np.nan,
                            ci_width=np.nan, flag=FLAG_EMPTY)
                 rows.append(row)
                 continue
-            var, _, _ = mean_boot(cm[r])
-            common = set(cm[r]).intersection(*(set(cm[q]) for q, _ in terms))
-            inc, iboot, ncl = mean_boot({c: cm[r][c] - sum(k * cm[q][c] for q, k in terms) for c in common})
-            lo, hi = _interval(inc, iboot, ncl) if np.isfinite(inc) else (np.nan, np.nan)
-            flag = FLAG_OK if (n_pairs >= MIN_PAIRS and n_cells >= MIN_CELLS) else FLAG_FEW
-            if any(rung_cells[r] != rung_cells[q] for q, _ in terms):
-                flag = FLAG_CELLS if flag == FLAG_OK else f"{flag}; {FLAG_CELLS}"
-            row.update(variance=var, layer_increment=inc, ci_low=lo, ci_high=hi, ci_width=hi - lo, flag=flag)
+            cmt, cells_t, donor_flag = cm, rung_cells, False
+            if labelled and r == "other_cell_type" and any(q == "other_experiment" for q, _ in terms):
+                if sd_ok:     # the cell-type layer over the same-donor experiment pairs (decision 5)
+                    cmt = dict(cm, other_experiment=cell_means(sd, key))
+                    cells_t = dict(rung_cells, other_experiment={x["cell"] for x in sd})
+                else:
+                    donor_flag = True
+            stat_row(row, recs, cm[r], terms, cmt, cells_t)
+            if donor_flag:
+                row["flag"] = _add_flag(row["flag"], FLAG_DONOR)
             rows.append(row)
+            if labelled and r == "other_experiment":
+                for k in classes:
+                    cr = dict(row, n_pairs=len(sub[k]), n_cells=len({x["cell"] for x in sub[k]}),
+                              layer=_class_layer(layer, k), pair_class=k,
+                              tech_diff_pairs=sum(bool(x.get("tech_diff")) for x in sub[k]))
+                    rows.append(stat_row(cr, sub[k], cell_means(sub[k], key), terms, cm, rung_cells))
     return rows
 
 
@@ -342,7 +431,10 @@ def explained_table(records, n_boot=1000, seed=0):
       explained_fraction = mean_c [C_r(c) - sum_q k_q C_q(c)] / mean_c [PV_r(c) - sum_q k_q PV_q(c)]
     over the cells c that populate r and every q (C, PV: the cell's mean over its pairs). The numerator
     is the captured part of the layer term, the denominator the layer term itself. No clipping: with few
-    pairs it can be negative or above 1. Interval: 95% cluster bootstrap over those cells (`_interval`)."""
+    pairs it can be negative or above 1. Interval: 95% cluster bootstrap over those cells (`_interval`).
+    Records may carry "pair_class" (other_experiment); then every row gets `pair_class`, a row per class
+    follows the other_experiment row, and the cell-type row uses the same-donor classes as `layer_table`
+    does (flag `donor not separated` when they are too few)."""
     by_rung = {r: [x for x in records if x["rung"] == r] for r in RUNGS}
     populated = [r for r in RUNGS if by_rung[r]]
     terms_of = lower_terms(populated)
@@ -352,23 +444,26 @@ def explained_table(records, n_boot=1000, seed=0):
     draws = rng.integers(0, len(cells), size=(n_boot, len(cells))) if cells else np.zeros((n_boot, 0), int)
     weights = (np.stack([np.bincount(dr, minlength=len(cells)) for dr in draws]) if cells else draws).astype(float)
 
-    def cell_means(rung, key):
+    def cell_means(recs, key):
         acc = {}
-        for x in by_rung[rung]:
+        for x in recs:
             v = x.get(key)
             acc.setdefault(x["cell"], []).append(np.nan if v is None else float(v))
         return {c: float(np.mean(v)) for c, v in acc.items()}
 
-    cm = {r: (cell_means(r, "captured"), cell_means(r, "pair_value")) for r in populated}
+    def both(recs):
+        return cell_means(recs, "captured"), cell_means(recs, "pair_value")
+
+    classes = _class_order(records)
+    sd, sd_ok = _same_donor(records)
+    cm = {r: both(by_rung[r]) for r in populated}
     rows = []
-    for r in populated:
-        terms, layer = terms_of[r]
-        if not terms:
-            continue
+
+    def ef_row(r, layer, terms, cmr, cmt, n_pairs):
         rungs = [r] + [q for q, _ in terms]
-        common = sorted(set(cm[r][1]).intersection(*(set(cm[q][1]) for q in rungs[1:])))
-        num = np.array([cm[r][0][c] - sum(k * cm[q][0][c] for q, k in terms) for c in common])
-        den = np.array([cm[r][1][c] - sum(k * cm[q][1][c] for q, k in terms) for c in common])
+        common = sorted(set(cmr[1]).intersection(*(set(cmt[q][1]) for q in rungs[1:])))
+        num = np.array([cmr[0][c] - sum(k * cmt[q][0][c] for q, k in terms) for c in common])
+        den = np.array([cmr[1][c] - sum(k * cmt[q][1][c] for q, k in terms) for c in common])
         flag = "ok"
         if not common:
             ef, lo, hi, flag = np.nan, np.nan, np.nan, "no cell populates every rung of the layer"
@@ -380,10 +475,32 @@ def explained_table(records, n_boot=1000, seed=0):
             with np.errstate(invalid="ignore", divide="ignore"):
                 boot = (w @ num) / (w @ den)
             lo, hi = _interval(ef, boot, len(common)) if np.isfinite(ef) else (np.nan, np.nan)
-        rows.append(dict(rung=r, layer=layer, increment_over=format_terms(terms), explained_fraction=ef,
-                         ci_low=lo, ci_high=hi, captured=float(num.mean()) if common else np.nan,
-                         layer_term=float(den.mean()) if common else np.nan,
-                         n_pairs=len(by_rung[r]), n_cells=len(common), flag=flag))
+        return dict(rung=r, layer=layer, increment_over=format_terms(terms), explained_fraction=ef,
+                    ci_low=lo, ci_high=hi, captured=float(num.mean()) if common else np.nan,
+                    layer_term=float(den.mean()) if common else np.nan,
+                    n_pairs=n_pairs, n_cells=len(common), flag=flag)
+
+    for r in populated:
+        terms, layer = terms_of[r]
+        if not terms:
+            continue
+        cmt, donor_flag = cm, False
+        if classes and r == "other_cell_type" and any(q == "other_experiment" for q, _ in terms):
+            if sd_ok:
+                cmt = dict(cm, other_experiment=both(sd))
+            else:
+                donor_flag = True
+        row = ef_row(r, layer, terms, cm[r], cmt, len(by_rung[r]))
+        if donor_flag:
+            row["flag"] = _add_flag(row["flag"], FLAG_DONOR)
+        if classes:
+            row["pair_class"] = ""
+        rows.append(row)
+        if classes and r == "other_experiment":
+            for k in classes:
+                recs = [x for x in by_rung[r] if x.get("pair_class") == k]
+                rows.append(dict(ef_row(r, _class_layer(layer, k), terms, both(recs), cm, len(recs)),
+                                 pair_class=k))
     return rows
 
 
@@ -394,8 +511,11 @@ def assemble(records, n_boot=1000, seed=0):
     some assay of the class is flagged few pairs or is empty while the class has pairs at that rung, a
     pooled block over all the class's assays is added (pooled_by_class = 1), keeping only those rungs.
     A record may carry "depth" (the common depth of its assay); a row's `depth` is the one depth of its
-    records, `mixed` (flagged) when they differ, NaN when none is given."""
+    records, `mixed` (flagged) when they differ, NaN when none is given. When the
+    other_experiment records carry pair classes, the class rows are added (`layer_table`), a pooled block
+    is added per weak (rung, pair class), and every row gets the flag FLAG_SECOND."""
     rows = []
+    labelled = bool(_class_order(records))
     assays = sorted({r["assay"] for r in records})
     cls_of = {r["assay"]: r["assay_class"] for r in records}
 
@@ -411,16 +531,19 @@ def assemble(records, n_boot=1000, seed=0):
         for row in t:
             rows.append(dict(assay_or_class=a, pooled_by_class=0, depth=dep, **row))
             if row["flag"] == FLAG_EMPTY or FLAG_FEW in row["flag"]:
-                weak.setdefault(cls_of[a], set()).add(row["rung"])
+                weak.setdefault(cls_of[a], set()).add((row["rung"], row.get("pair_class", "")))
     for c in sorted(weak):
         cr = [r for r in records if r["assay_class"] == c]
         t = layer_table(cr, n_boot=n_boot, seed=seed)
         dep = depth_of(cr)
         for row in t:
-            if row["rung"] in weak[c] and row["n_pairs"] > 0:
+            if (row["rung"], row.get("pair_class", "")) in weak[c] and row["n_pairs"] > 0:
                 if dep == "mixed":
                     row["flag"] = FLAG_DEPTHS if row["flag"] == FLAG_OK else f"{row['flag']}; {FLAG_DEPTHS}"
                 rows.append(dict(assay_or_class=c, pooled_by_class=1, depth=dep, **row))
+    if labelled:
+        for row in rows:
+            row["flag"] = _add_flag(row["flag"], FLAG_SECOND)
     return rows
 
 
@@ -429,11 +552,12 @@ def write_tsv(rows, path):
         if isinstance(v, float):
             return "" if np.isnan(v) else repr(v)
         return str(v)
+    cols = COLUMNS + CLASS_COLUMNS if any("pair_class" in r for r in rows) else COLUMNS
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
-        w.writerow(COLUMNS)
+        w.writerow(cols)
         for r in rows:
-            w.writerow([fmt(r[c]) for c in COLUMNS])
+            w.writerow([fmt(r[c]) for c in cols])
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -549,13 +673,19 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
         pv = pair_variance(a, b, da, db, strata, depth=common[p["assay"]],
                            seed=zlib.crc32(p["pair_id"].encode()))
         v = {(s, bd): x for s, row in pv["variance"].items() for bd, x in row.items()}
-        records.append(dict(assay=p["assay"], assay_class=meas[p["a"]]["assay_class"], rung=p["rung"],
-                            cell=p["cell"] or meas[p["a"]]["cell"], v=v, depth=common[p["assay"]]))
+        rec = dict(assay=p["assay"], assay_class=meas[p["a"]]["assay_class"], rung=p["rung"],
+                   cell=p["cell"] or meas[p["a"]]["cell"], v=v, depth=common[p["assay"]])
+        if p["rung"] == "other_experiment":
+            cls, tech = pair_class_of(p.get("knobs_differing", ""))
+            if cls:
+                rec.update(pair_class=cls, tech_diff=tech)
+        records.append(rec)
     # assays in the evalset's layers scope with no pair at all still get their empty rows
     scope = set()
     for assays in (ev.get("scorable", {}).get("layers", {}) or {}).values():
         scope.update(assays)
     rows = assemble(records, n_boot=n_boot, seed=seed)
+    labelled = bool(_class_order(records))
     for a in sorted(scope - {r["assay"] for r in records}):
         for s in ["all"] + list(strata):
             for bd in BAND_ORDER:
@@ -564,6 +694,9 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
                                      n_pairs=0, n_cells=0, variance=np.nan, layer_increment=np.nan,
                                      ci_low=np.nan, ci_high=np.nan, ci_width=np.nan, flag=FLAG_EMPTY,
                                      increment_over="", depth=np.nan, layer=LAYER[r]))
+                    if labelled:
+                        rows[-1].update(pair_class="", tech_diff_pairs="",
+                                        flag=_add_flag(FLAG_EMPTY, FLAG_SECOND))
     write_tsv(rows, out)
     return rows
 
