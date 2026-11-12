@@ -229,6 +229,10 @@ class Model(MiniCandi):
     # ------------------------------------------------------------------ forward
     def forward(self, batch: dict) -> dict:
         self.begin_extras(batch)
+        if self.out_sub > 1 and self.training and "y_counts_sub" not in batch:
+            raise ValueError("res_out_sub is set and the training batch has no `y_counts_sub`: "
+                             "train through tools/minicandi/res_dataset.py, whose loss is at "
+                             "the sub-bins")
         x_counts, x_avail = batch["x_counts"], batch["x_avail"].bool()
         x_bin_mask = batch["x_bin_mask"].bool()
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,

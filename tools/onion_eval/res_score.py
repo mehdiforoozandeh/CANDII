@@ -97,6 +97,19 @@ def span_of(at: int, region_bins: int) -> tuple[int, int | None]:
 
 # --------------------------------------------------------------------------------------- predict
 
+def _load(run, device="cpu"):
+    """(model, config) of a run at its own token size: `registry.load_run` without the 25 bp
+    adapter, and also for res_bp > 25, which `load_run` refuses."""
+    from minicandi.registry import CKPT_NAME, build_model
+    ck = torch.load(Path(run) / CKPT_NAME, map_location=device, weights_only=False)
+    C.check_ckpt(ck)
+    config = dict(ck["config"])
+    with torch.random.fork_rng(devices=[]):
+        model = build_model(config)
+    model.load_state_dict(ck["state_dict"])
+    return model.to(device).eval(), config
+
+
 def _headline_jobs(ev: dict) -> list[dict]:
     return [t for t in ev.get("imputation_targets", [])
             if t.get("split") == "val" and t.get("regime") == REGIME]
@@ -113,8 +126,7 @@ def predict(run, tables, evalset, *, model=None, config=None, device="cpu", infe
         log(f"skip: {cache / INFO} exists (--force to predict again)")
         return cache / INFO
     if model is None:
-        from minicandi.registry import load_run
-        model, config = load_run(run, map_location=device)
+        model, config = _load(run, device)
     inner = getattr(model, "inner", model)          # a ResAdapter's fine model
     inner = inner.to(device).eval()
     cfg = dict(config)
@@ -218,6 +230,8 @@ class CacheScorer(S.Scorer):
         if bound not in BOUNDS:
             raise ValueError(f"bound {bound!r} not in {BOUNDS}")
         cfg = {k: v for k, v in info["config"].items() if not k.startswith("res_")}
+        # the scorer reads only the 25 bp truth here: its tiles need not be the run's context
+        cfg["context_bins"] = min(1024, int(info["region_bins"]))
         super().__init__(info["evalset"], main="model", model=_NoModel(), config=cfg,
                          run_tables_sha256=info["tables_sha256"], **kw)
         self.info, self.at, self.bound = info, int(at), bound

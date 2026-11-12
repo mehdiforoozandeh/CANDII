@@ -30,7 +30,8 @@ together with `dna = precomputed` is refused (`check_extra_config`). The rung ke
 
 Resolution (chunk RM): `res_bp` != 25 and `res_in_sub` / `res_out_sub` > 1 build in rungs 2 and 4
 only (else NotApplicable); `load_run` wraps a run of `res_bp` < 25 or `res_in_sub` > 1 in
-`res_adapter.ResAdapter`, which presents it to the scorer at 25 bp.
+`res_adapter.ResAdapter`, which presents it to the scorer at 25 bp, and refuses `res_bp` > 25
+(scored by `onion_eval/res_score.py` only).
 
 `load_run(run_dir)` is the only loader the scorer (E6) and the guardrail (E4) use. It reads
 `<run_dir>/ckpt.pt` (the pinned dict, `contract.check_ckpt`), rebuilds the model from the saved
@@ -188,6 +189,8 @@ def load_run(run_dir, map_location="cpu") -> tuple[C.MiniCandi, dict]:
     ck = torch.load(path, map_location=map_location, weights_only=False)
     C.check_ckpt(ck)
     config = dict(ck["config"])
+    if config.get("res_bp", C.RES) > C.RES:              # chunk RM: no 25 bp output to score
+        raise ValueError(f"{path}: res_bp {config['res_bp']} > 25; score it with res_score.py")
     with torch.random.fork_rng(devices=[]):
         model = build_model(config)
     model.load_state_dict(ck["state_dict"])

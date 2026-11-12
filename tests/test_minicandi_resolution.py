@@ -351,3 +351,157 @@ def test_res_arms_build_and_run(env, rung, res):
         o = model(b)
     assert o["mu"].shape == (2, L, C.A)
     assert C.wiring_check(model, b)["pass"]
+
+
+# --------------------------------------------------------------------------- retry 1: exact values
+
+def _pooled_truth(env, target, at):
+    """The target's 25 bp counts over the eval region, block-summed to `at` bp over the span."""
+    span, _ = RS.span_of(at, EB)
+    c, s = env["ev"]["regions"][0]
+    row = {r["measurement_id"]: r for r in read_tsv(env["tables"] / "measurements.tsv")}[target]
+    with h5py.File(row["counts_path"][3:], "r") as f:
+        y = np.asarray(f[c][s:s + span], np.float64)
+    k = at // 25
+    return y.reshape(-1, k).sum(-1)
+
+
+def test_tables_at_50_125_250_have_the_known_values(env, tmp_path):
+    """A constant 25 bp model (mu 2, n 4): at b bp its pooled NB is mu = 2 b/25, n = 4 b/25
+    (independent) and n = 4 (comonotone); count_crps must equal metrics.crps_split of that NB
+    against the block-summed truth, averaged per assay, then over the scorable assays."""
+    from onion_eval import metrics as Mx
+    run = tmp_path / "const25"
+    RS.predict(run, env["tables"], env["evalset"], model=Const(2.0, 4.0),
+               config={"context_bins": 1024, "res_bp": 25}, **QUIET)
+    jobs = env["ev"]["imputation_targets"]
+    for at in (50, 125, 250):
+        k = at // 25
+        tab = RS.table(run, at, n_boot=0, **QUIET)
+        span, J = RS.span_of(at, EB)
+        assert tab["span_bp_per_region"] == span * 25 and tab["haar_depth_J"] == J
+        for bound, n in (("independent", 4.0 * k), ("comonotone", 4.0)):
+            per = {}
+            for j in jobs:
+                y = _pooled_truth(env, j["target"], at)
+                c = Mx.crps_split(np.full(y.size, n), np.full(y.size, 2.0 * k), y)["crps"]
+                per.setdefault(j["assay"], []).append(c)
+            want = float(np.mean([np.mean(v) for v in per.values()]))
+            got = tab["bounds"][bound]["count_crps"]
+            assert abs(got - want) <= 1e-9 * max(1.0, abs(want)), (at, bound, got, want)
+
+
+def test_cache_pooling_formulas(tmp_path):
+    """mu_i = 1, 2, 3, 4 and n_i = 1, 4, 9, 16 in one 50 bp bin of two 25 bp cache bins."""
+    mu, n = np.array([1.0, 2.0, 3.0, 4.0]), np.array([1.0, 4.0, 9.0, 16.0])
+    cache = tmp_path / RS.CACHE
+    cache.mkdir()
+    np.savez(cache / "t.npz", mu_sum=np.array([[3.0, 7.0]]),
+             v_ind=np.array([[1 / 1 + 4 / 4, 9 / 9 + 16 / 16]]),
+             s_com=np.array([[1 / 1 + 2 / 2, 3 / 3 + 4 / 4]]), bin_bp=np.int64(25))
+    import types as _t
+    for bound in ("independent", "comonotone"):
+        ns = _t.SimpleNamespace(cache=cache, at=50, span=2, bound=bound)
+        got_n, got_mu = RS.CacheScorer._main_from_cache(ns, "t")
+        assert got_mu.tolist() == [10.0]
+        want = 100.0 / (mu * mu / n).sum() if bound == "independent" else \
+            100.0 / (mu / np.sqrt(n)).sum() ** 2
+        assert got_n.tolist() == [want]                       # 25 and 25
+    # pool_nb, the rule of the adapter and of the 25 bp output of the head, is the same formula
+    from minicandi.losses import pool_nb
+    pm, pn = pool_nb(torch.from_numpy(mu[None]), torch.from_numpy(n[None]), 4, dim=1)
+    assert pm.item() == 10.0 and abs(pn.item() - 25.0) < 1e-12
+
+
+def test_scorer_tiles_need_not_be_the_run_context(env, tmp_path):
+    """res5_ctx-like: context_bins 640 tokens of 5 bp does not divide the 2,048-bin region; the
+    table still runs (the scorer tiles the 25 bp truth by its own window)."""
+    run = tmp_path / "res5_ctx"
+    RS.predict(run, env["tables"], env["evalset"], model=Const(2.0, 4.0),
+               config={"context_bins": 640, "res_bp": 5}, **QUIET)
+    assert EB % 640
+    tab = RS.table(run, 25, bounds=("independent",), n_boot=0, **QUIET)
+    assert tab["bounds"]["independent"]["count_crps"] is not None
+
+
+@pytest.mark.parametrize("rung", [2, 4])
+def test_sub_bins_are_in_genome_order(env, rung):
+    """Sub-bin j of token l is bases [25 l + 5 j, 25 l + 5 j + 5): in the dataset's
+    y_counts_sub, and in the head, whose expanded features at fine position 5 l + j are token
+    l's features plus the sub-bin embedding j."""
+    cfg = {"rung": rung, "context_bins": 32, "param_budget": 2.0e5, "res_out_sub": 5}
+    ds = ResDataset(env["tables"], "train", {**cfg, "batch_size": 2}, seed=0)
+    b = ds.batch(2, np.random.default_rng(3))
+    meta = b["meta"][0]
+    t = next(i for i, m in enumerate(meta["measurements_out"]) if m)
+    v = ds.read_bp(meta["measurements_out"][t], meta["chrom"], meta["start_bp"], 32 * 25,
+                   meta["target_file"])
+    assert np.array_equal(b["y_counts_sub"][0, :, t].numpy(), R.pool(v, 5).reshape(32, 5))
+    assert np.array_equal(M.sub_to_fine(b["y_counts_sub"])[0, :, t].numpy(), R.pool(v, 5))
+    torch.manual_seed(0)
+    model = build_model(cfg).eval()
+    with torch.no_grad():
+        model.out_sub_emb.copy_(torch.randn_like(model.out_sub_emb))
+    tok_mod, fine_mod = ((model.out_proj, model.inj_out) if rung == 2
+                         else (model.head_skip, model.out_inj))
+    seen = {}
+    h1 = tok_mod.register_forward_hook(lambda m, i, o: seen.__setitem__("tok", o))
+    h2 = fine_mod.register_forward_pre_hook(lambda m, i: seen.__setitem__("fine", i[0]))
+    with torch.no_grad():
+        o = model(b)
+    h1.remove()
+    h2.remove()
+    tok = seen["tok"]
+    if rung == 2:
+        tok = tok.reshape(2, 32, C.A, -1) + model.out_track
+    fine = seen["fine"].reshape(2, 32, 5, C.A, -1)
+    for j in range(5):
+        assert torch.allclose(fine[:, :, j], tok + model.out_sub_emb[j], atol=1e-6)
+    assert torch.equal(M.sub_to_fine(o["mu_sub"]).reshape(2, 32, 5, C.A)[:, :, 2],
+                       o["mu_sub"][..., 2])
+
+
+def test_in25_out5_cache_matches_the_models_pooled_output(env, tmp_path):
+    cfg = {"rung": 2, "context_bins": 256, "param_budget": 2.0e5, "res_out_sub": 5}
+    torch.manual_seed(0)
+    model = build_model(cfg).eval()
+    with torch.no_grad():                         # a head whose output varies along the window
+        model.head.lin.weight.normal_(0.0, 0.3)
+        model.out_sub_emb.normal_(0.0, 1.0)
+    run = tmp_path / "in25_out5"
+    RS.predict(run, env["tables"], env["evalset"], model=model, config=cfg, **QUIET)
+    info = json.loads((run / RS.CACHE / RS.INFO).read_text())
+    assert info["output_bin_bp"] == 5 and info["cache_bin_bp"] == 25
+    job = _target_job(env)
+    t = C.TRACK_INDEX[job["assay"]]
+    c, s = env["ev"]["regions"][0]
+    ds = ResDataset(env["tables"], "val", {**cfg, "evalset": str(env["evalset"])})
+    b = C.collate([ds.window(c, s * 25 + k * 256 * 25, job["inputs"], [job["target"]])
+                   for k in range(EB // 256)])
+    with torch.no_grad():
+        o = model(b)
+    z = np.load(run / RS.CACHE / f"{job['target']}.npz")
+    mu = o["mu"][..., t].double().reshape(-1).numpy()
+    n = o["n"][..., t].double().reshape(-1).numpy()
+    assert np.allclose(z["mu_sum"][0], mu, rtol=1e-5)
+    assert np.allclose(z["mu_sum"][0] ** 2 / z["v_ind"][0], n, rtol=1e-4)
+    assert z["mu_sum"][0].std() > 0
+
+
+def test_plain_train_refuses_out_sub_and_load_run_refuses_coarse(env, tmp_path):
+    cfg = {"rung": 2, "context_bins": 32, "param_budget": 2.0e5, "res_out_sub": 5}
+    torch.manual_seed(0)
+    model = build_model(cfg).train()
+    od = OnionDataset(env["tables"], "train", {"context_bins": 32, "batch_size": 2})
+    with pytest.raises(ValueError, match="y_counts_sub"):
+        model(od.batch(2, np.random.default_rng(0)))
+    run = tmp_path / "res50"
+    cfg50 = {"rung": 2, "context_bins": 32, "param_budget": 2.0e5, "res_bp": 50}
+    torch.manual_seed(0)
+    m50 = build_model(cfg50)
+    run.mkdir()
+    torch.save(C.make_ckpt(m50, cfg50, 0, "x", "x"), run / "ckpt.pt")
+    with pytest.raises(ValueError, match="res_score"):
+        load_run(run)
+    back, _ = RS._load(run)
+    assert back.param_count() == m50.param_count()
