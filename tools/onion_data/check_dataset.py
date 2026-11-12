@@ -29,6 +29,26 @@ It prints one count per rule and exits 1 when any count is nonzero (2 on a missi
   sha256 mismatches                            counts.h5 missing, or its sha256 != the row's
   pairs naming an unknown measurement, duplicate ids
   rows of the older tables changed or missing  (with --superset-of)
+Add-on tables (Amendment 4, chunk OXt; `--addon-of` and `--other-experiments` default to
+`build_info.json`). A second-experiment row is a row with `in_eic = evalonly` or whose experiment
+is in the reviewed list `$OXL`; such an experiment is exempt from the two ledger lines above only
+under decision 3, which these lines enforce (each must be 0, and each prints on every tables):
+  second-experiment rows outside the reviewed list
+  second-experiment rows not flagged evaluation-only     `in_eic` not `evalonly` (`blind` only for
+                                               a blind track)
+  second-experiment rows that are not a pooled uniform base view   `<x>.pooled.uniform.base`, or
+                                               `<x>.pooled.native.base` for `$OXL` source
+                                               `redacted_bam` (`build_tables.second_view_layer`)
+  second-experiment rows in a training pair or outside the other_experiment rung   (pairs.tsv and
+                                               pairs_shared_reads.tsv; both sides second: also)
+  evaluation-only rows readable in a training mode   mode train must raise RoleError in the
+                                               constructor (3 configs); in mode val, the
+                                               second-experiment ids in `train_tracks`,
+                                               `train_base`, or as the `_base_view` of another row
+  evalonly rows that disagree with evaluation_only.tsv   either side missing, or another `use`
+  rows of the base tables changed or missing   a base file not byte-identical, or (for the four
+                                               appended files) not a byte prefix
+and the count line `second-experiment rows: N (other lab n1, same lab n2)`.
 Then one line per replicate rung (`layers.RUNGS`) and assay: the pair count over every split and
 the width of the 95% interval of the rung's mean pair variance (depth-matched log1p difference,
 `layers.pair_variance`, every Haar band), cluster bootstrap over cells (`layers._interval`), from at
@@ -57,8 +77,8 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 from minicandi import contract as C  # noqa: E402
-from minicandi.dataset import (MEASUREMENT_COLUMNS, PAIR_COLUMNS, ROLES,  # noqa: E402
-                               WITHHELD_COLUMNS, Withheld, read_tsv)
+from minicandi.dataset import (EVALONLY, MEASUREMENT_COLUMNS, PAIR_COLUMNS,  # noqa: E402
+                               ROLES, WITHHELD_COLUMNS, Withheld, read_tsv)
 from onion_data import build_list as BL  # noqa: E402
 from onion_data import build_tables as BT  # noqa: E402
 
@@ -181,6 +201,136 @@ def rung_widths(by_id: dict, pairs: list, regions: list, max_pairs: int, seed: i
 
 
 # --------------------------------------------------------------------------------------------
+# add-on: second experiments (Amendment 4)
+
+ADDON_RULES = ("second-experiment rows outside the reviewed list",
+               "second-experiment rows not flagged evaluation-only",
+               "second-experiment rows that are not a pooled uniform base view",
+               "second-experiment rows in a training pair or outside the other_experiment rung",
+               "evaluation-only rows readable in a training mode",
+               "evalonly rows that disagree with evaluation_only.tsv",
+               "rows of the base tables changed or missing")
+TRAIN_CONFIGS = ({}, {"final_model": True}, {"train_on_validation": True, "final_model": True})
+
+
+def load_reviewed_list(a, info: dict) -> dict:
+    path = a.other_experiments or info.get("other_experiments", "")
+    return BT.reviewed_list(BL.read_tsv(path)) if path else {}
+
+
+def second_row(r: dict, oxl: dict) -> bool:
+    return r["in_eic"] == EVALONLY or r["experiment"] in oxl
+
+
+def _dataset_genome(T: Path, a, tmp: Path) -> str:
+    """A genome dir for the guard probe: the real one when it has chrom sizes, else a stand-in
+    with one chromosome (the probe reads no counts and no sequence)."""
+    g = Path(a.genome_dir) if a.genome_dir else T.parent.parent / "genome"
+    if (g / "chrom_sizes.json").is_file():
+        return str(g)
+    (tmp / "chrom_sizes.json").write_text(json.dumps({"chr1": 4096 * C.RES}))
+    return str(tmp)
+
+
+def dataset_probe(T: Path, a, sx_ids: set, bad) -> None:
+    """`evaluation-only rows readable in a training mode`, through `OnionDataset` itself."""
+    import tempfile
+    from minicandi import dataset as D
+    rule = "evaluation-only rows readable in a training mode"
+    with tempfile.TemporaryDirectory() as td:
+        base_cfg = {"dna": "off", "genome_dir": _dataset_genome(T, a, Path(td)),
+                    "context_bins": 64}
+        for cfg in TRAIN_CONFIGS:
+            try:
+                D.OnionDataset(T, "train", dict(base_cfg, **cfg))
+            except D.RoleError:
+                continue
+            except Exception as e:  # noqa: BLE001 - any other outcome is not the refusal
+                bad(rule, f"mode train {cfg}: {type(e).__name__} instead of RoleError")
+                continue
+            bad(rule, f"mode train {cfg}: constructed")
+        try:
+            ds = D.OnionDataset(T, "val", base_cfg)
+        except Exception as e:  # noqa: BLE001
+            bad(rule, f"mode val: {type(e).__name__}: {e}")
+            return
+        for k, mids in sorted(ds.train_tracks.items()):
+            for m in sorted(set(mids) & sx_ids):
+                bad(rule, f"{m} in train_tracks{k}")
+        for k, m in sorted(ds.train_base.items()):
+            if m in sx_ids:
+                bad(rule, f"{m} is train_base{k}")
+        for mid, r in sorted(ds.rows.items()):
+            if mid not in sx_ids and ds._base_view(r) in sx_ids:
+                bad(rule, f"{ds._base_view(r)} is the base view of {mid}")
+
+
+def base_changed(T: Path, base: Path) -> int:
+    n = 0
+    for p in sorted(base.iterdir()):
+        if not p.is_file() or p.name == BT.BUILD_INFO:
+            continue
+        q = T / p.name
+        old = p.read_bytes()
+        new = q.read_bytes() if q.is_file() else None
+        if p.name in BT.ADDON_APPENDED:
+            if new is None or not new.startswith(old):
+                have = set(BT.body_lines(q)) if new is not None else set()
+                n += max(1, sum(1 for ln in BT.body_lines(p) if ln not in have))
+        elif new != old:
+            n += 1
+    return n
+
+
+def addon_rules(a, T: Path, info: dict, rows: list, pairs: list, eval_only: dict, L: dict,
+                bad, V: dict) -> str:
+    """The add-on lines (module doc); returns the count line."""
+    for k in ADDON_RULES:
+        V[k] = 0
+    oxl = load_reviewed_list(a, info)
+    sx = [r for r in rows if second_row(r, oxl)]
+    sx_ids = {r["measurement_id"] for r in sx}
+    n_other = n_same = 0
+    for r in sx:
+        mid, x = r["measurement_id"], r["experiment"]
+        e = oxl.get(x)
+        if e is None or L["role"].get(x) is not None:
+            bad("second-experiment rows outside the reviewed list", mid)
+        else:
+            n_other += "lab" in e["pair_class"].split(";")
+            n_same += "lab" not in e["pair_class"].split(";")
+        blind_ok = r["in_eic"] == "blind" and e is not None and e["split"] == "blind"
+        if r["in_eic"] != EVALONLY and not blind_ok:
+            bad("second-experiment rows not flagged evaluation-only", f"{mid} in_eic={r['in_eic']}")
+        layer = BT.second_view_layer(e["source"]) if e is not None else "uniform"
+        if not BT.is_second_view(r, layer):
+            bad("second-experiment rows that are not a pooled uniform base view",
+                f"{mid} (allowed: {x}.pooled.{layer}.base)")
+        if eval_only.get(mid) != BT.USE_OTHER_EXPERIMENT:
+            bad("evalonly rows that disagree with evaluation_only.tsv",
+                f"{mid}: " + ("not listed" if mid not in eval_only else "use differs"))
+    by_id = {r["measurement_id"]: r for r in rows}
+    for mid, use in eval_only.items():
+        if use == BT.USE_OTHER_EXPERIMENT and mid in by_id and mid not in sx_ids:
+            bad("evalonly rows that disagree with evaluation_only.tsv", f"{mid}: not a second row")
+    rule = "second-experiment rows in a training pair or outside the other_experiment rung"
+    for p in pairs:
+        sides = [m for m in (p["a"], p["b"]) if m in sx_ids]
+        if not sides:
+            continue
+        if p["split"] == "train" or p["rung"] != "other_experiment" or len(sides) == 2:
+            bad(rule, f"{p['pair_id']} {p['rung']} {p['split']}")
+    if sx or "addon_of" in info:
+        dataset_probe(T, a, sx_ids, bad)
+    base = a.addon_of or info.get("addon_of", "")
+    if base:
+        V["rows of the base tables changed or missing"] = base_changed(T, Path(base))
+    elif sx:
+        bad("rows of the base tables changed or missing", "second-experiment rows, no base named")
+    return f"second-experiment rows: {len(sx)} (other lab {n_other}, same lab {n_same})"
+
+
+# --------------------------------------------------------------------------------------------
 # check
 
 
@@ -237,14 +387,19 @@ def check(a) -> int:
         if x in pub_exps:
             pub_controls |= set(BL.split_acc(r.get("encode_possible_controls", "")))
     readable = set(ROLES["train"]) | set(ROLES["val"])
+    oxl = load_reviewed_list(a, info)
     for r in rows:
         mid, x = r["measurement_id"], r["experiment"]
         role = L["role"].get(x)
-        if role is None:
+        if role is None and x in oxl:
+            pass                                     # decision 3: the add-on lines judge it
+        elif role is None:
             bad("measurements outside ledger", mid)
         elif r["in_eic"] != role:
             bad("rows whose EIC split differs from the ledger", f"{mid} {r['in_eic']} != {role}")
-        if r["assay"] == C.CONTROL:
+        if role is None and x in oxl:
+            pass
+        elif r["assay"] == C.CONTROL:
             if x not in pub_controls:
                 bad("accessions outside the published EIC list", mid)
         elif (x, r["eic_track"], r["in_eic"]) not in pub_keys:
@@ -269,6 +424,9 @@ def check(a) -> int:
             bad("pairs naming an unknown measurement", p["pair_id"])
             continue
         split = BT.pair_split(A, B)
+        if second_row(A, oxl) or second_row(B, oxl):
+            eic = [r for r in (A, B) if not second_row(r, oxl)]
+            split = BT.other_experiment_split(eic[0]) if eic else "val"
         if p["split"] != split:
             bad("pairs whose split is not their sides' EIC role", f"{p['pair_id']} {p['split']} != {split}")
         if p["split"] == "train" and (A["in_eic"] != "train" or B["in_eic"] != "train"):
@@ -324,6 +482,7 @@ def check(a) -> int:
           + ", ".join(f"{s} {sum(1 for p in pairs if p['never_trained'] == '1' and p['split'] == s)}"
                       for s in ("val", "blind")))
     print(f"pairs: {len(pairs)}; pairs_shared_reads.tsv: {len(shared)}")
+    sx_count = addon_rules(a, T, info, rows, pairs + shared, eval_only, L, bad, V)
     for k, n in V.items():
         print(f"{k}: {n}" + (f"  e.g. {', '.join(ex[k])}" if n and ex.get(k) else ""))
 
@@ -355,6 +514,7 @@ def check(a) -> int:
                   f"{w['n_read']} pairs from {w['n_cells_read']} cells read)")
             print(f"rung {rung} {assay}: {len(ps)} pairs, {len(cells)} cells"
                   + (f" ({nb} blind, not read)" if nb else "") + f", {ws}")
+    print(sx_count)
     n_viol = sum(V.values())
     print(f"check: {'PASS' if not n_viol else f'FAIL ({n_viol} violations)'}")
     return 0 if not n_viol else 1
@@ -364,6 +524,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--tables", required=True)
     ap.add_argument("--superset-of", default="")
+    ap.add_argument("--addon-of", default="", help="base tables; default build_info's addon_of")
+    ap.add_argument("--other-experiments", default="",
+                    help="$OXL; default build_info's other_experiments")
     ap.add_argument("--ledger", default="", help="default: build_info.json's ledger, else Nibi's")
     ap.add_argument("--published", default=str(PUBLISHED))
     ap.add_argument("--genome-dir", default="", help="default: <tables>/../../genome")
