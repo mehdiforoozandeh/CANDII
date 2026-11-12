@@ -50,6 +50,7 @@ set +u; module load python/3.10.13; set -u
 source "$SLURM_TMPDIR/venv/bin/activate"
 cd "$KIT"
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1 MPLBACKEND=Agg
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-${SLURM_CPUS_PER_TASK:-1}}"   # not the node's cores (as check.sh)
 source "$KIT/slurm/_kit_pin.sh"
 echo "[onion-run] env-ready host=$(hostname)"
 python "$@"
