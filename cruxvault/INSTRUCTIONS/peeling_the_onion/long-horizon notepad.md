@@ -410,3 +410,4 @@ The PI gave these six notes on 2026-11-12. They guide the work; where a note cha
 - **Resolution counts.** Stored 25 bp counts add a read to every bin it overlaps, so they do not sum across bin sizes. The resolution arms use a separate recount with one point per read, with their own 25 bp base, on a region subset (1 bp genome-wide would take 1,131 GB; the region store takes 124 GB).
 - **Resolution score tables.** 50 bp does not divide 125 bp. Arms are compared on a 250 bp table (all five arms) and a 50 bp table (1, 5, 25 and 50 bp arms).
 - **RNA-seq files.** At most 40 GB of ENCODE RNA-seq files are downloaded to Nibi scratch.
+- **RNA-seq cell list (2026-11-12).** 39 cell types get an RNA-seq input, not 40. T47D is left out, because every ENCODE RNA-seq experiment of T47D is from treated cells. 4 of the 39 experiments are unstranded; their signal is split in half over the two strand channels and flagged.
