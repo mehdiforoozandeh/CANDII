@@ -56,6 +56,28 @@ evaluation_only.tsv build_info.json. With `--superset-of`, every line of the old
 `measurements.tsv` and `pairs.tsv` must reappear byte-identical, `withheld.tsv` must be identical
 and each covariates vocabulary must extend the older one (ids stay); else exit 1 and nothing is
 written. `--dry-run` prints the same counts and writes nothing.
+
+ADD-ON (Amendment 4, chunk OXt). `build` is unchanged: an experiment with no ledger role, such as
+a second experiment of PI ruling 33, still goes to `missing.tsv`.
+
+    python build_tables.py addon --base <frozen tables> --other-build-list $BX \\
+        --other-experiments $OXL --measurements <dir> --work <dir> --out <add-on tables>
+
+copies every base file byte for byte, and appends to `measurements.tsv`, `pairs.tsv`,
+`missing.tsv` and `evaluation_only.tsv` (the base file stays a byte prefix). A build-list
+measurement becomes a row only when its experiment is a selected or fallback experiment of the
+reviewed list `$OXL`, its directory verifies as in `build`, its `meta.json` says
+`in_eic = evalonly`, and it is the pooled base view of its allowed layer: `uniform`, or `native`
+for a redacted-alignment build (`$OXL` source `redacted_bam`, build-list pipeline
+`build_list.NATIVE_PIPELINE`; both must agree). The row takes `eic_track`, `cell`, `assay` of
+its EIC track, `in_eic = evalonly` (`blind` when the EIC side is blind), and no control; it is
+listed in `evaluation_only.tsv` with `USE_OTHER_EXPERIMENT`, and it gets exactly one pair:
+`other_experiment` against the EIC track's pooled base view (uniform before native, never
+testbed), `knobs_differing` = the `$OXL` pair class then its `tech_diff` (a fallback's technical
+knobs are read from the two rows), split `val` (or `blind`). Everything else goes to
+`missing.tsv`, e.g. a second experiment whose EIC partner is not in the base. `build_info.json`
+holds `addon_of`, `addon_of_tables_sha256`, `other_experiments(_sha256)` and the base's own
+`build_info.json` under `base_build_info`.
 """
 from __future__ import annotations
 
@@ -693,6 +715,233 @@ def cmd_build(a) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------------------------
+# add-on of the evaluation-only second experiments (Amendment 4, chunk OXt)
+
+#: the `use` text of a second experiment in `evaluation_only.tsv` (Amendment 4, decision 2)
+USE_OTHER_EXPERIMENT = "other_experiment: evaluation use only, never training"
+#: base files to which the add-on appends rows; every other base file is copied byte for byte
+ADDON_APPENDED = (MEASUREMENTS, PAIRS, MISSING, EVAL_ONLY)
+ADDON_COLUMNS = {MEASUREMENTS: MEASUREMENT_COLUMNS, PAIRS: PAIR_COLUMNS,
+                 MISSING: MISSING_COLUMNS, EVAL_ONLY: EVAL_ONLY_COLUMNS}
+#: `$OXL` source value of a second experiment built from ENCODE's redacted alignment
+REDACTED_SOURCE = "redacted_bam"
+TECH_KNOBS = ("run_type", "read_length", "platform")
+
+
+def reviewed_list(rows: list) -> dict:
+    """experiment -> {"track", "split", "pair_class", "tech_diff", "source", "choice"} for every
+    selected (`experiment`) and fallback (`fallback`) experiment of the reviewed list `$OXL`.
+    A fallback's `tech_diff` is not in `$OXL` (None: computed from the two table rows)."""
+    out = {}
+    for r in rows:
+        if r.get("experiment"):
+            out[r["experiment"]] = {"track": r["eic_track"], "split": r["split"],
+                                    "pair_class": r["pair_class"],
+                                    "tech_diff": r.get("tech_diff", ""),
+                                    "source": r.get("source") or "fastq", "choice": "selected"}
+        if r.get("fallback"):
+            out.setdefault(r["fallback"], {"track": r["eic_track"], "split": r["split"],
+                                           "pair_class": r.get("fallback_pair_class", ""),
+                                           "tech_diff": None,
+                                           "source": r.get("fallback_source") or "fastq",
+                                           "choice": "fallback"})
+    return out
+
+
+def second_view_layer(source: str) -> str:
+    """The layer of a second experiment's one allowed view: `native` for a redacted-alignment
+    build (`build_list.NATIVE_PIPELINE`, whose rows write `<x>.pooled.native.base`), else
+    `uniform`."""
+    return "native" if source == REDACTED_SOURCE else "uniform"
+
+
+def is_second_view(row: dict, layer: str) -> bool:
+    """The pooled base view of the second experiment in its allowed layer, and nothing else."""
+    return (row["measurement_id"] == f"{row['experiment']}.pooled.{layer}.base"
+            and row["unit"] == "pooled" and row["layer"] == layer
+            and view_of(row)[0] == "base")
+
+
+def eic_partner(rows: list, track: str) -> dict | None:
+    """The EIC track's pooled base view in the base tables: uniform before native, never
+    testbed and never a second experiment (the rule of `other_cell_type`)."""
+    c = [r for r in rows if r["eic_track"] == track and r["unit"] == "pooled"
+         and r["layer"] in LAYER_PREF and view_of(r)[0] == "base"
+         and r["in_eic"] in ROLE_ORDER]
+    return min(c, key=lambda r: (LAYER_PREF[r["layer"]], r["measurement_id"])) if c else None
+
+
+def other_experiment_split(eic_row: dict) -> str:
+    """`split` of an `other_experiment` pair: `blind` for a blind EIC side, else `val`."""
+    return "blind" if eic_row["in_eic"] == "blind" else "val"
+
+
+def knobs_of(entry: dict, a: dict, b: dict) -> str:
+    tech = entry["tech_diff"]
+    if tech is None:
+        tech = ";".join(k for k in TECH_KNOBS if a.get(k, "") != b.get(k, ""))
+    return ";".join(x for x in (entry["pair_class"], tech) if x)
+
+
+def collect_addon(a) -> dict:
+    t0 = time.time()
+    base, M, W = Path(a.base), Path(a.measurements), Path(a.work)
+    oxl_bytes = Path(a.other_experiments).read_bytes()
+    oxl = reviewed_list(_tsv_rows_of(oxl_bytes))
+    base_rows = read_tsv(base / MEASUREMENTS, MEASUREMENT_COLUMNS)
+    base_ids = {r["measurement_id"] for r in base_rows}
+    by_track = defaultdict(list)
+    for r in base_rows:
+        by_track[r["eic_track"]].append(r)
+
+    expected = {}                                   # mid -> (build-list row, products)
+    for r in BL.read_tsv(a.other_build_list):
+        for mid, prods in BL.parse_tokens(r.get("expected_measurements", "")):
+            expected.setdefault(mid, (r, prods))
+    missing, cand = [], {}
+
+    def miss(r, mid, reason, products=""):
+        missing.append({"row": r.get("row", ""), "priority": r.get("priority", ""),
+                        "experiment": mid.split(".", 1)[0], "measurement_id": mid,
+                        "products_missing": products, "reason": reason})
+
+    for mid in sorted(expected):
+        r, prods = expected[mid]
+        d = M / mid
+        exp = mid.split(".", 1)[0]
+        entry = oxl.get(exp)
+        if entry is None:
+            miss(r, mid, "second experiment: not in the reviewed list (other_experiments.tsv)")
+            continue
+        layer = second_view_layer(entry["source"])
+        native_row = r.get("pipeline", "") == BL.NATIVE_PIPELINE
+        if native_row != (layer == "native"):
+            miss(r, mid, f"second experiment: build-list pipeline {r.get('pipeline')!r} "
+                         f"disagrees with the reviewed source {entry['source']!r}")
+            continue
+        if mid in base_ids:
+            miss(r, mid, "second experiment: measurement id already in the base tables")
+            continue
+        if not (d / "provenance.json").is_file() or not (d / "meta.json").is_file():
+            miss(r, mid, "second experiment: not built (no provenance.json)")
+            continue
+        try:
+            meta = json.loads((d / "meta.json").read_text())
+        except ValueError as e:
+            miss(r, mid, f"second experiment: meta.json unreadable: {e}")
+            continue
+        row = {k: str(meta.get(k, "")) for k in MEASUREMENT_COLUMNS}
+        if meta.get("measurement_id") != mid or row["experiment"] != exp:
+            miss(r, mid, "second experiment: meta measurement_id or experiment != directory")
+        elif meta.get("in_eic") != "evalonly":
+            miss(r, mid, f"second experiment: meta in_eic {meta.get('in_eic')!r} != 'evalonly'")
+        elif not is_second_view(row, layer):
+            miss(r, mid, f"second experiment: not the pooled {layer} base view")
+        else:
+            cand[mid] = (r, prods, row, entry)
+
+    tasks = [(str(M), mid.split(".", 1)[0], [mid], a.recount_chrom) for mid in sorted(cand)]
+    probs = {}
+    for t in tasks:
+        probs.update(verify_experiment(t))
+
+    rows, pairs, eval_only = [], [], []
+    for mid in sorted(cand):
+        r, prods, row, entry = cand[mid]
+        if probs.get(mid):
+            miss(r, mid, "second experiment: verify failed: " + "; ".join(probs[mid][:3]))
+            continue
+        partner = eic_partner(by_track.get(entry["track"], []), entry["track"])
+        if partner is None:
+            miss(r, mid, f"second experiment: EIC partner of track {entry['track']} absent "
+                         f"from the base tables")
+            continue
+        prov = json.loads((M / mid / "provenance.json").read_text())
+        for col, v in qc_values(W, row["experiment"], row["unit"], arm_of(mid), prov).items():
+            if row[col] == "":
+                row[col] = v
+        row.update({"in_eic": "blind" if partner["in_eic"] == "blind" else "evalonly",
+                    "eic_track": partner["eic_track"], "cell": partner["cell"],
+                    "assay": partner["assay"], "assay_class": partner["assay_class"],
+                    "control_measurement_id": "", "frip": ""})
+        lack = [p for p in prods if p != "counts" and not (M / mid / f"{p}.h5").is_file()]
+        if lack:
+            miss(r, mid, "kept; expected products missing", "+".join(lack))
+        rows.append(row)
+        eval_only.append({"measurement_id": mid, "use": USE_OTHER_EXPERIMENT})
+        pairs.append({"pair_id": pair_id("other_experiment", partner["measurement_id"], mid),
+                      "a": partner["measurement_id"], "b": mid, "rung": "other_experiment",
+                      "assay": partner["assay"], "cell": partner["cell"],
+                      "knobs_differing": knobs_of(entry, partner, row), "subset_pair": "0",
+                      "split": other_experiment_split(partner), "never_trained": "0"})
+    pairs.sort(key=lambda p: (p["a"], p["b"]))
+    missing.sort(key=lambda m: m["measurement_id"])
+    return {"rows": rows, "pairs": pairs, "missing": missing, "eval_only": eval_only,
+            "oxl": oxl, "oxl_sha256": sha256_bytes(oxl_bytes), "n_expected": len(expected),
+            "wall_s": time.time() - t0}
+
+
+def _tsv_rows_of(b: bytes) -> list:
+    return [dict(r) for r in csv.DictReader(io.StringIO(b.decode("utf-8")), delimiter="\t")]
+
+
+def cmd_addon(a) -> int:
+    from minicandi.dataset import tables_sha256
+    base, out = Path(a.base), Path(a.out)
+    if not (base / MEASUREMENTS).is_file():
+        print(f"refused: {base} holds no measurements.tsv")
+        return 2
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        print(f"refused: {out} exists and is not empty: frozen tables are never overwritten")
+        return 2
+    res = collect_addon(a)
+    new = {MEASUREMENTS: res["rows"], PAIRS: res["pairs"], MISSING: res["missing"],
+           EVAL_ONLY: res["eval_only"]}
+    out.mkdir(parents=True, exist_ok=True)
+    for p in sorted(base.iterdir()):
+        if p.is_file() and p.name != BUILD_INFO and p.name not in ADDON_APPENDED:
+            tmp = out / (p.name + ".part")
+            tmp.write_bytes(p.read_bytes())
+            os.replace(tmp, out / p.name)
+    for name in ADDON_APPENDED:
+        old = (base / name).read_text(encoding="utf-8") if (base / name).is_file() else \
+            tsv_text(ADDON_COLUMNS[name], [])
+        if old and not old.endswith("\n"):
+            old += "\n"
+        body = tsv_text(ADDON_COLUMNS[name], new[name]).split("\n", 1)[1]
+        write_text(out / name, old + body)
+    base_info = (json.loads((base / BUILD_INFO).read_text())
+                 if (base / BUILD_INFO).is_file() else {})
+    info = {"schema": 1, "tool": "tools/onion_data/build_tables.py addon", "git_sha": git_sha(),
+            "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "addon_of": str(base.resolve()), "addon_of_tables_sha256": tables_sha256(base),
+            "other_experiments": str(Path(a.other_experiments).resolve()),
+            "other_experiments_sha256": res["oxl_sha256"],
+            "other_build_list": str(Path(a.other_build_list).resolve()),
+            "measurements": str(Path(a.measurements).resolve()),
+            "work": str(Path(a.work).resolve()), "recount_chrom": a.recount_chrom,
+            "ledger": base_info.get("ledger", ""), "base_build_info": base_info,
+            "files_sha256": {p.name: sha256_bytes(p.read_bytes())
+                             for p in sorted(out.iterdir()) if p.is_file()},
+            "slurm_job_id": os.environ.get("SLURM_JOB_ID", "")}
+    write_text(out / BUILD_INFO, json.dumps(info, indent=1) + "\n")
+    reasons = Counter(m["reason"].split(":")[1].strip() if m["reason"].startswith("second")
+                      else m["reason"] for m in res["missing"])
+    print(f"second-experiment measurements in the build list: {res['n_expected']}")
+    print(f"rows appended: {len(res['rows'])} ("
+          + ", ".join(f"{k} {v}" for k, v in sorted(Counter(r['in_eic'] for r in res['rows'])
+                                                    .items())) + ")")
+    print(f"other_experiment pairs appended: {len(res['pairs'])} ("
+          + ", ".join(f"{k} {v}" for k, v in sorted(Counter(p['split'] for p in res['pairs'])
+                                                    .items())) + ")")
+    print(f"missing.tsv rows appended: {len(res['missing'])}"
+          + (" (" + ", ".join(f"{k} {v}" for k, v in sorted(reasons.items())) + ")"
+             if reasons else ""))
+    print(f"wrote {out} (add-on of {base}); wall {res['wall_s']:.0f} s")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -711,6 +960,16 @@ def main(argv=None) -> int:
     b.add_argument("--recount-chrom", default="none",
                    help="chromosome recounted from the half tagAligns in verify (none = off)")
     b.set_defaults(func=cmd_build)
+    x = sub.add_parser("addon", help="add-on tables: a frozen base plus the second experiments")
+    x.add_argument("--base", required=True, help="the frozen tables directory")
+    x.add_argument("--other-build-list", required=True, help="$BX")
+    x.add_argument("--other-experiments", required=True, help="$OXL, the reviewed list")
+    x.add_argument("--measurements", required=True)
+    x.add_argument("--work", required=True)
+    x.add_argument("--out", required=True)
+    x.add_argument("--recount-chrom", default="none",
+                   help="chromosome recounted from the half tagAligns in verify (none = off)")
+    x.set_defaults(func=cmd_addon)
     a = ap.parse_args(argv)
     return a.func(a)
 
