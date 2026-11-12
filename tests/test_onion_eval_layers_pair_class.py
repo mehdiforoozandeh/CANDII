@@ -242,11 +242,17 @@ def test_pair_class_of():
 
 
 # ---------------------------------------------------------------------------------------------------
-# Byte identity without classes: digests written on the base commit 5bfad89 with the same recipes.
+# Byte identity without classes: digests written on the base commit 5bfad89 with the same recipes, one set
+# per platform (the last float bits differ between the laptop, darwin, and the Nibi nodes, linux: Nibi job
+# 26980321 ran the recipes on a kit of 5bfad89).
 
-BASE_DIGESTS = {"assemble": "7c07f886b2719e04b09dda947b84b5ef52e5fc797c6897917f956e85f26764d3",
-                "run": "a3eba56e7c30a5a78f0f442bad6fe5255b443db683c01f8248ca8b35fe3c85e8",
-                "explained": "852c7f7db3db44211e781261535502b721ca774480ff38228f8182a666126090"}
+_DIGESTS = {"darwin": {"assemble": "7c07f886b2719e04b09dda947b84b5ef52e5fc797c6897917f956e85f26764d3",
+                       "run": "a3eba56e7c30a5a78f0f442bad6fe5255b443db683c01f8248ca8b35fe3c85e8",
+                       "explained": "852c7f7db3db44211e781261535502b721ca774480ff38228f8182a666126090"},
+            "linux": {"assemble": "d861660e9aa408985b87411962632c6ad28b4857a0c752b63132553bfdb6229b",
+                      "run": "9a6f40badb880bfcaa1edf866b1eb5ca3f7c9167fe516b4c41b27b071a000705",
+                      "explained": "852c7f7db3db44211e781261535502b721ca774480ff38228f8182a666126090"}}
+BASE_DIGESTS = _DIGESTS.get(sys.platform, _DIGESTS["linux"])
 
 
 def test_table_without_classes_is_byte_identical_to_base():
