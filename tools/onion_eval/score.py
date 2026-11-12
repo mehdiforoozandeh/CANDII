@@ -941,7 +941,7 @@ class Scorer:
         else:
             ok = float(lo >= 1.0 and hi <= 1.0)
         out = {"variance_ratio_per_rung": per, "variance_ratio_pass": ok}
-        if self.addon:          # OXe: the reason text of every Undefined ratio
+        if getattr(self, "addon", False):          # OXe: the reason text of every Undefined ratio
             reasons = {g: why_rung.get(g) or _why(v) for g, v in per.items() if _undef(v)}
             up = H7_UPPER_RUNG["imputation"]
             if up not in per:
@@ -968,8 +968,8 @@ class Scorer:
         out["per_rung"] = {g: metric(recs, rung_fn(g), scorable, nb, sd) for g in rungs}
         out["pass_rate"] = metric(recs, _mean_of("variance_ratio_pass"), scorable, nb, sd)
         out["upper_bound_rung"] = dict(H7_UPPER_RUNG)
-        out["per_target"] = {r["target"]: self._h7_target(r) for r in recs}
-        if self.addon:
+        out["per_target"] = {r["target"]: Scorer._h7_target(self, r) for r in recs}  # duck-typed callers (tests)
+        if getattr(self, "addon", False):
             up = H7_UPPER_RUNG["imputation"]
             out["n_undefined_upper_bound"] = sum(
                 1 for r in recs if _undef((r.get("variance_ratio_per_rung") or {}).get(up)))
@@ -980,7 +980,7 @@ class Scorer:
         e = {"per_rung": {g: _j(v) for g, v in (r.get("variance_ratio_per_rung") or {}).items()},
              "pass": _j(r.get("variance_ratio_pass")), "reason": _why(r.get("variance_ratio_pass"))
              if _undef(r.get("variance_ratio_pass")) else ""}
-        if self.addon:
+        if getattr(self, "addon", False):
             e["per_rung_reason"] = dict(r.get("variance_ratio_per_rung_reason") or {})
         return e
 
