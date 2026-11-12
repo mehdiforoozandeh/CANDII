@@ -77,6 +77,41 @@ def test_telescoping_check_passes_and_flags(sim, tmp_path):
     assert not any(r["ok"] for r in TV.telescoping_check(bad2))
 
 
+def _class_rows(sim, labels):
+    """layers rows of the crossed sibling rungs on cells c0-c5, the other_experiment pair of donor d labelled
+    with pair class labels[d] (plan Amendment 4, OXl)."""
+    cells = {f"c{c}" for c in range(6)}
+    ps = [p for p in sim["pairs"] if p["cell"] in cells
+          and p["rung"] in ("isogenic", "anisogenic", "other_experiment", "other_cell_type")]
+    recs = TV._records(sim, ps, depth=1.0)
+    for p, r in zip(ps, recs):
+        r["assay"], r["assay_class"] = "A", "narrow_histone"
+        if p["rung"] == "other_experiment":
+            r["pair_class"] = labels[int(p["a"].split(".")[1][1:])]
+    return LY.assemble(recs, n_boot=20)
+
+
+@pytest.mark.parametrize("labels", [("experiment;lab", "experiment;lab;donor"),     # one same-donor class
+                                    ("experiment", "experiment;lab"),               # both: value implied
+                                    ("experiment;donor", "experiment;lab;donor")])  # donor not separated
+def test_telescoping_check_on_a_table_with_pair_classes(sim, tmp_path, labels):
+    rows = _class_rows(sim, labels)
+    path = tmp_path / "layers.tsv"
+    LY.write_tsv(rows, path)
+    got = TV._read_layers(path)
+    assert any(r["pair_class"] for r in got)
+    out = TV.telescoping_check(path)
+    assert out and all(r["ok"] for r in out), [r for r in out if not r["ok"]][:1]
+    assert {(r["innermost"], r["outermost"]) for r in out} == {("isogenic", "other_cell_type")}
+    ct = [r for r in got if r["rung"] == "other_cell_type" and r["band"] == "all" and r["stratum"] == "all"][0]
+    assert (LY.FLAG_DONOR in ct["flag"]) == ("experiment" not in labels and "experiment;lab" not in labels)
+    if labels[0] == "experiment;lab":         # the check reads the class value: a wrong cell-type row is caught
+        for r in got:
+            if r["rung"] == "other_cell_type" and r["band"] == "all":
+                r["layer_increment"] = str(float(r["layer_increment"]) + 0.01)
+        assert [r for r in TV.telescoping_check(got) if not r["ok"]]
+
+
 def _budget():
     rng = np.random.default_rng(0)
     M = 2 ** 14
