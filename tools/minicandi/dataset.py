@@ -12,6 +12,13 @@ may read only some `in_eic` roles; any other row raises `RoleError`:
   train  train                  (a validation or blind row is never read, even by request)
   val    train, val
   blind  train, val, blind      (and only when `config["allow_blind"]` is true)
+A fourth value, `in_eic = evalonly`, marks a second experiment of an EIC track in add-on tables
+(Amendment 4). Modes val and blind read such a row as a target only: it is in no role set, so
+never in `group_tracks`, `train_tracks`, `train_base` or the average; it is never an input (the
+window raises RoleError; `evalset_items` gives it no reconstruction item); it is never the base
+view of another row, and it is its own base view. Mode train raises RoleError in the
+constructor when the tables hold such a row or `build_info.json` has the key `addon_of`.
+`evaluation_only.tsv` is not read.
 
 Training mode, per window: one cell; the candidate tracks are that cell's TRAINING tracks only;
 a window of `context_bins` bins on one chromosome (the genome mask must mark at least half the
@@ -169,6 +176,10 @@ TABLE_FILES = ("measurements.tsv", "pairs.tsv", "withheld.tsv", "covariates.json
                "scorable.tsv", "missing.tsv")
 MODES = ("train", "val", "blind")
 ROLES = {"train": ("train",), "val": ("train", "val"), "blind": ("train", "val", "blind")}
+#: the `in_eic` value of a second experiment in add-on tables (Amendment 4, decision 2): read
+#: in modes val and blind as a target only; never in a role set, never an input or a base leg
+EVALONLY = "evalonly"
+IN_EIC_VALUES = ("train", "val", "blind", EVALONLY)
 FILES = ("counts", "pr1", "pr2")
 HALVES = ("pr1", "pr2")
 DEFAULTS = {"context_bins": 1024, "batch_size": 8, "mask_prob_range": (0.2, 0.8),
@@ -309,11 +320,13 @@ class OnionDataset(IterableDataset):
                 raise ValueError(f"duplicate measurement_id {r['measurement_id']!r}")
             if r["assay"] not in C.TRACK_INDEX:
                 raise ValueError(f"{r['measurement_id']}: assay {r['assay']!r} not in the panel")
-            if r["in_eic"] not in ("train", "val", "blind"):
+            if r["in_eic"] not in IN_EIC_VALUES:
                 raise ValueError(f"{r['measurement_id']}: in_eic {r['in_eic']!r}")
             if not r["assay_class"]:
                 r["assay_class"] = C.assay_class(r["assay"])
             self.rows[r["measurement_id"]] = r
+        if mode == "train":
+            self._refuse_addon_tables()
         if self.config.get("qc_table"):
             self._apply_qc_table(self.config["qc_table"])
         wp = self.tables_dir / "withheld.tsv"
@@ -322,6 +335,8 @@ class OnionDataset(IterableDataset):
 
         roles = self.train_roles if mode == "train" else ROLES[mode]
         self.allowed = {m for m, r in self.rows.items() if r["in_eic"] in roles}
+        if mode != "train":                     # readable as a target; in no role set
+            self.allowed |= {m for m, r in self.rows.items() if r["in_eic"] == EVALONLY}
         #: training tracks: (cell, assay) -> sorted measurement ids (train rows, plus val rows
         #: under train_on_validation)
         self.train_tracks = self.group_tracks(self.train_roles)
@@ -353,6 +368,21 @@ class OnionDataset(IterableDataset):
         if self.dna_emb_path is not None and not self.dna_emb_path.exists():
             raise FileNotFoundError(f"dna_embedding_h5 {self.dna_emb_path}: missing")
         self._init_extras()
+
+    def _refuse_addon_tables(self) -> None:
+        """Mode train never reads add-on (evaluation-only) tables: RoleError when a row has
+        `in_eic = evalonly` or `build_info.json` has the key `addon_of` (Amendment 4)."""
+        x = sorted(m for m, r in self.rows.items() if r["in_eic"] == EVALONLY)
+        if x:
+            raise RoleError(f"{self.tables_dir}: {len(x)} row(s) with in_eic = {EVALONLY} "
+                            f"(first {x[0]}); add-on tables are evaluation tables only and mode "
+                            f"train may not read them")
+        info = self.tables_dir / "build_info.json"
+        if info.is_file():
+            data = json.loads(info.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "addon_of" in data:
+                raise RoleError(f"{info}: has addon_of; add-on tables are evaluation tables "
+                                f"only and mode train may not read them")
 
     def _init_extras(self) -> None:
         """Readers of the extra inputs (chunk XI); each only when its config key is set."""
@@ -416,11 +446,12 @@ class OnionDataset(IterableDataset):
             self.qc_table_rows += 1
 
     def group_tracks(self, roles: tuple) -> dict:
-        """(cell, assay) -> sorted measurement ids of the rows whose `in_eic` is in `roles`."""
+        """(cell, assay) -> sorted measurement ids of the rows whose `in_eic` is in `roles`.
+        An `evalonly` row is never grouped, even when `roles` names it."""
         out: dict[tuple, list] = {}
         for m in sorted(self.rows):
             r = self.rows[m]
-            if r["in_eic"] in roles:
+            if r["in_eic"] in roles and r["in_eic"] != EVALONLY:
                 out.setdefault((r["cell"], r["assay"]), []).append(m)
         return out
 
@@ -669,10 +700,13 @@ class OnionDataset(IterableDataset):
     # ---------------------------------------------------------------- materialise
 
     def _base_view(self, row: dict) -> str | None:
-        """The base view of a target's track among the rows this mode may read."""
+        """The base view of a target's track among the rows this mode may read. An `evalonly`
+        row is never a candidate; an `evalonly` target is its own base view."""
+        if row["in_eic"] == EVALONLY:
+            return row["measurement_id"]
         cands = [m for m in self.allowed
                  if self.rows[m]["cell"] == row["cell"] and self.rows[m]["assay"] == row["assay"]
-                 and view_of(self.rows[m])[0] == "base"]
+                 and view_of(self.rows[m])[0] == "base" and self.rows[m]["in_eic"] != EVALONLY]
         return min(cands, key=lambda m: _base_rank(self.rows[m])) if cands else None
 
     def _base_leg(self, mid: str, chrom: str, start: int, L: int) -> tuple:
@@ -713,6 +747,9 @@ class OnionDataset(IterableDataset):
             target_depth_scale = 0.5 if target_file in HALVES else 1.0
         rows_in = [self.check_row(m) for m in inputs]
         rows_out = [self.check_row(m) for m in targets]
+        x_in = [m for m, r in zip(inputs, rows_in) if r["in_eic"] == EVALONLY]
+        if x_in:
+            raise RoleError(f"{x_in}: in_eic = {EVALONLY} is a target only, never an input")
         cells = {r["cell"] for r in rows_in + rows_out}
         if len(cells) != 1:
             raise ValueError(f"a window holds one cell; got {sorted(cells)}")
@@ -928,6 +965,9 @@ class OnionDataset(IterableDataset):
         for t in ev.get("imputation_targets", []):
             if t.get("split") == split and t["target"] not in seen:
                 seen.add(t["target"])
+                row = self.rows.get(t["target"])
+                if row is not None and row["in_eic"] == EVALONLY:
+                    continue                    # reconstruction feeds the target as an input
                 ctx = [m for m in t["inputs"] if m != t["target"]]
                 jobs.append({"inputs": [t["target"]] + ctx, "targets": [t["target"]],
                              "task": "reconstruction"})
