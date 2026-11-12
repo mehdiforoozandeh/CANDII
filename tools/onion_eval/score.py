@@ -3,7 +3,7 @@
     python tools/onion_eval/score.py (--run <run dir> | --baseline <name>) --evalset <json> --out <dir>
         [--split val|blind] [--allow-blind] [--repeat-blind-reason "<text>"] [--no-halves]
         [--dnase-route hotspot2_density|macs2_no_control] [--device cpu] [--n-boot 200]
-        [--guardrail-windows 256] [--force] [--infer-batch N] [--no-region-cache]
+        [--guardrail-windows 256] [--force] [--infer-batch N] [--no-region-cache] [--addon]
     -> <out>/scores.json, <out>/suffstats.npz, <out>/SCORED (SCORED last; an existing SCORED skips
        the job unless --force). The scorer never reads or writes DONE: training's DONE in a run dir
        means trained, not scored (finding 3). A pair-only predictor (`depth_only_scaling`,
@@ -122,6 +122,25 @@ Options of chunk SC (each off by default; a default scores.json is unchanged):
   A blind eval set may be `evalset_blind.json` or `evalset_blind_<tag>.json`; the scorer reads
       `include_blind` from the eval set, not its name.
 
+Add-on scoring (OXe, Amendment 4, PI ruling 33). `--addon` scores an add-on eval set
+(`evalset.py addon`, key `addon_of`) and is required for one; it is refused on any other eval set
+and on the blind split. The form is `score.sh $K $EVX <seed dir>/ox run <seed dir> --addon`: the
+add-on score goes to `<seed dir>/ox/scores.json` and never over a `scores.json` of another eval set
+(an output dir whose `scores.json` has another `evalset_sha256` is refused). On validation the
+run's `tables_sha256` must equal `build_info.json::addon_of_tables_sha256` of the add-on tables (the
+tables the add-on extends). A target flagged `evaluation_only` (a second experiment) is predicted
+with its EIC track's inputs and enters only `explained_fraction_per_layer` (the experiment row needs
+both members of the pair predicted) and the `per_target` blocks of headline 1 and headline 7, with
+`"evaluation_only": true`; no headline block, no `selection` term and no `n_targets` count reads it,
+and it stays out of the shared/specific split, the error budget and the signal space of its assay.
+The copy-leak draw leaves out every reconstruction item of a flagged target. The explained
+fraction also reads the isogenic and anisogenic pairs of the scored split from `pairs.tsv` (they are
+the term the experiment layer subtracts; the eval set lists only the other_experiment pair ids, so
+they are never pair jobs). Headline 7 in an add-on score: `per_target` gives `per_rung_reason`
+(the reason of every Undefined ratio, the upper-bound rung included when it is not populated) and
+the block gains `n_undefined_upper_bound` (EIC targets whose upper bound is Undefined). Without
+`--addon` every output is unchanged.
+
 Per-metric aggregation. Each metric is {"macro", "per_assay", "ci", "non_scorable_per_assay",
 "missing_scorable", "reason"}: per assay over that assay's targets (headline 1 and 4 as ratios of
 means, the others as means), macro = mean over the scorable assays (evalset `scorable`), undefined
@@ -204,6 +223,9 @@ H7_DESCRIPTION = ("lower-bound check: mean predicted NB variance over the pair v
                   "pseudoreplicate and <= 1 at upper_bound_rung (PI ruling 31). PIT stays the "
                   "selection metric.")
 POOLED = "__pooled__"
+#: OXe: why an evaluation-only target (a second experiment) has no assay-level value
+FLAGGED_REASON = ("evaluation-only target (a second experiment, PI ruling 33): outside the "
+                  "shared/specific split, the error budget and every headline block")
 BUDGET_KEYS = ("level", "shared", "specific", "explained", "unexplained", "noise", "added")
 CONTROL = "chipseq-control"
 NOISE_FLOOR_HALVES = "pseudoreplicate_halves"
@@ -421,13 +443,16 @@ GUARD_DRAW = ("per mask seed s: a seeded random sample (rng [s, 9]) of the valid
               "reconstruction items, bin masks from rng [s, item, 3]")
 
 
-def guardrail_items(ds, n: int, seed: int) -> tuple[list, int]:
+def guardrail_items(ds, n: int, seed: int, exclude=()) -> tuple[list, int]:
     """(`n` validation reconstruction items drawn at random with mask seed `seed`, in item order;
     the pool size). The old draw took the first `n` items for every seed:
     the same windows of one target, with only the bin masks changing, so its spread across mask
     seeds (0.003-0.013 in the pilot) missed the window-sampling noise (0.045-0.12 across train-split
     seeds). Masks come from the dataset seed, so every seed also gets independent masks."""
     pool = [it for it in ds.evalset_items() if it["task"] == "reconstruction"]
+    if exclude:              # OXe: never a second experiment in the copy-leak draw
+        ex = set(exclude)
+        pool = [it for it in pool if not (set(it["targets"]) | set(it["inputs"])) & ex]
     k = min(int(n), len(pool))
     pick = np.sort(np.random.default_rng([int(seed), 9]).choice(len(pool), k, replace=False))
     return [pool[i] for i in pick], len(pool)
@@ -468,7 +493,7 @@ class Scorer:
                  n_boot=200, seed=0, guardrail_windows=256, guardrail_seeds=(0, 1, 2),
                  device="cpu", no_halves=False, dnase_route=None, run_tables_sha256=None,
                  log=print, region_cache=True, infer_batch=None, lambda_source="auto",
-                 signal_override=None):
+                 signal_override=None, addon=False):
         from minicandi import contract as C
         from minicandi.dataset import OnionDataset, tables_sha256
         from onion_eval.evalset import tables_dir_of
@@ -502,9 +527,31 @@ class Scorer:
             raise ScoreRefused(f"tables {self.tables} changed since the eval set was built "
                                f"(sha256 {self.tables_sha256[:12]} vs {self.ev['tables_sha256'][:12]})")
         self.run_tables_sha256 = run_tables_sha256
-        if model is not None and split == "val" and run_tables_sha256 != self.tables_sha256:
+        self.addon = bool(addon)
+        self.addon_of_tables_sha256 = None
+        if self.ev.get("addon_of") and not self.addon:
+            raise ScoreRefused(f"{self.evalset_path}: an add-on eval set (addon_of); score it with "
+                               f"--addon into <seed dir>/ox")
+        if self.addon:
+            if not self.ev.get("addon_of"):
+                raise ScoreRefused(f"--addon: {self.evalset_path} is not an add-on eval set (no "
+                                   f"addon_of; build it with evalset.py addon)")
+            if split != "val":
+                raise ScoreRefused("--addon scores the validation split only")
+            from onion_eval.evalset import addon_info
+            self.addon_of_tables_sha256 = addon_info(self.tables).get("addon_of_tables_sha256")
+            if not self.addon_of_tables_sha256:
+                raise ScoreRefused(f"{self.tables}/build_info.json: no addon_of_tables_sha256 (not "
+                                   f"add-on tables)")
+        #: second experiments flagged evaluation_only (add-on eval set; empty otherwise)
+        self.flagged = {t["target"] for t in self.ev["imputation_targets"]
+                        if t.get("evaluation_only")} if self.addon else set()
+        want_run = self.addon_of_tables_sha256 if self.addon else self.tables_sha256
+        if model is not None and split == "val" and run_tables_sha256 != want_run:
             raise ScoreRefused(f"the run was trained on tables sha256 {str(run_tables_sha256)[:12]}, "
-                               f"the eval set's tables are {self.tables_sha256[:12]}")
+                               + (f"the add-on tables extend {want_run[:12]} "
+                                  f"(build_info.json::addon_of_tables_sha256)" if self.addon else
+                                  f"the eval set's tables are {self.tables_sha256[:12]}"))
         # finding 14: blind rows only on a blind pass
         self.split, self.allow_blind, self.n_boot, self.seed = split, split == "blind", n_boot, seed
         self.no_halves = bool(no_halves)
@@ -840,9 +887,13 @@ class Scorer:
             want = set(self.ev.get("replicate_pairs") or [])
             path = self.tables / "pairs.tsv"
             meas = self.ds.rows
+            # OXe: an add-on score also reads the zero rungs of the explained fraction (isogenic,
+            # anisogenic) of its split; the add-on eval set lists only other_experiment pair ids
+            free = EXPLAINED_ZERO if self.addon else ()
             for p in (read_tsv(path) if path.exists() else []):
                 if (p["rung"] not in REPLICATE_RUNGS[1:] or p["a"] == p["b"] or p.get("split") != self.split
-                        or (want and p["pair_id"] not in want) or p["a"] not in meas or p["b"] not in meas):
+                        or (want and p["pair_id"] not in want and p["rung"] not in free)
+                        or p["a"] not in meas or p["b"] not in meas):
                     continue
                 for c in {meas[p["a"]]["cell"], meas[p["b"]]["cell"]}:
                     idx[(p["assay"], c)][p["rung"]].append((p["a"], p["b"]))
@@ -855,26 +906,33 @@ class Scorer:
         it is thinned to a's depth (mu x D_a / D) and b is depth-matched to a by `variance_ratio`. A
         rung's ratio is the harmonic mean of its pairs' pooled ratios."""
         per = {"pseudoreplicate": vr_pr}
+        why_rung = {}
         if defined and not self.external:
             D = float(row.get("depth_reads") or row.get("depth_fragments") or "nan")
             for rung, pairs in sorted(self._rung_pairs(job["assay"], job["cell"]).items()):
-                vals = []
+                vals, why = [], []
                 for a, b in pairs:
                     ra, rb = self._row(a), self._row(b)
                     Da = float(ra.get("depth_reads") or ra.get("depth_fragments") or "nan")
                     Db = float(rb.get("depth_reads") or rb.get("depth_fragments") or "nan")
                     if not (np.isfinite(D) and Da > 0 and Db > 0):
+                        why.append(f"{a}:{b}: a depth is missing")
                         continue
                     xa, xb = (np.concatenate([self._ds_read(m, c, s, self.rb) for c, s in self.regions])
                               .astype(np.float64) for m in (a, b))
                     if xa.size != size:
+                        why.append(f"{a}:{b}: the pair covers other bins than the target")
                         continue
                     v = Mx.variance_ratio(n, mu * Da / D, xa, xb, depth_ratio_b=Da / Db,
                                           seed=zlib.crc32(f"h7:{a}:{b}".encode()))["pooled"]
                     if not _undef(v) and v > 0:
                         vals.append(float(v))
+                    else:
+                        why.append(f"{a}:{b}: " + (_why(v) if _undef(v) else f"ratio {v}"))
                 per[rung] = (float(1.0 / np.mean(1.0 / np.array(vals))) if vals else
                              Mx.Undefined(f"no pair of rung {rung} gave a defined ratio"))
+                if not vals:
+                    why_rung[rung] = f"no pair of rung {rung} gave a defined ratio: " + "; ".join(why)
         lo, hi = per.get("pseudoreplicate"), per.get(H7_UPPER_RUNG["imputation"])
         if _undef(lo) or _undef(hi):
             why = ("no pseudoreplicate ratio" if _undef(lo) else
@@ -882,7 +940,15 @@ class Scorer:
             ok = Mx.Undefined(why)
         else:
             ok = float(lo >= 1.0 and hi <= 1.0)
-        return {"variance_ratio_per_rung": per, "variance_ratio_pass": ok}
+        out = {"variance_ratio_per_rung": per, "variance_ratio_pass": ok}
+        if self.addon:          # OXe: the reason text of every Undefined ratio
+            reasons = {g: why_rung.get(g) or _why(v) for g, v in per.items() if _undef(v)}
+            up = H7_UPPER_RUNG["imputation"]
+            if up not in per:
+                reasons[up] = (f"rung {up} not populated for this cell and assay" if defined
+                               else "the predictor is undefined on this target")
+            out["variance_ratio_per_rung_reason"] = reasons
+        return out
 
     def _h7_metric(self, recs, scorable, require_all=False):
         """Headline 7 block: the old scalar (the pseudoreplicate ratio, now read as the lower-bound
@@ -902,11 +968,30 @@ class Scorer:
         out["per_rung"] = {g: metric(recs, rung_fn(g), scorable, nb, sd) for g in rungs}
         out["pass_rate"] = metric(recs, _mean_of("variance_ratio_pass"), scorable, nb, sd)
         out["upper_bound_rung"] = dict(H7_UPPER_RUNG)
-        out["per_target"] = {r["target"]: {
-            "per_rung": {g: _j(v) for g, v in (r.get("variance_ratio_per_rung") or {}).items()},
-            "pass": _j(r.get("variance_ratio_pass")), "reason": _why(r.get("variance_ratio_pass"))
-            if _undef(r.get("variance_ratio_pass")) else ""} for r in recs}
+        out["per_target"] = {r["target"]: self._h7_target(r) for r in recs}
+        if self.addon:
+            up = H7_UPPER_RUNG["imputation"]
+            out["n_undefined_upper_bound"] = sum(
+                1 for r in recs if _undef((r.get("variance_ratio_per_rung") or {}).get(up)))
         return out
+
+    def _h7_target(self, r) -> dict:
+        """Headline 7's per_target entry of one record."""
+        e = {"per_rung": {g: _j(v) for g, v in (r.get("variance_ratio_per_rung") or {}).items()},
+             "pass": _j(r.get("variance_ratio_pass")), "reason": _why(r.get("variance_ratio_pass"))
+             if _undef(r.get("variance_ratio_pass")) else ""}
+        if self.addon:
+            e["per_rung_reason"] = dict(r.get("variance_ratio_per_rung_reason") or {})
+        return e
+
+    @staticmethod
+    def _h1_target(r) -> dict:
+        """Headline 1's (counts_log1p) per_target entry of one record."""
+        return {"assay": r["assay"], "cell": r["cell"], "level": _j(r["level"]),
+                "E_sp": _j(r["E_sp"]), "V_sp": _j(r["V_sp"]), "N": _j(r["N"]),
+                "N_log1p_bias_sim": _j(r.get("N_log1p_bias_sim")),
+                "depth_reads": r.get("depth_reads"), "has_halves": r["has_halves"],
+                "recovered": _j(r["recovered"])}
 
     # -------------------------------------------------------------- imputation
     def _imputation_group(self, jobs, regime):
@@ -983,11 +1068,14 @@ class Scorer:
                  _j(pa_c["crps"]) or np.nan, y.size], np.float64)
         # assay-level shared / specific split (headline 1) and error budget, over defined targets;
         # a target without halves joins the shared estimate (it needs no N) but not headline 1
-        ok = [i for i, a in enumerate(arrays) if a["defined"]]
+        # OXe: a flagged (evaluation-only) target stays out of the assay-level split, the error
+        # budget and the signal space, so its EIC targets keep their values
+        ok = [i for i, a in enumerate(arrays) if a["defined"] and recs[i]["target"] not in self.flagged]
         assay = jobs[0]["assay"]
         for i, r in enumerate(recs):
             for k in ("E_sp", "V_sp", "level"):
-                r[k] = Mx.Undefined("the predictor is undefined on this target")
+                r[k] = Mx.Undefined(FLAGGED_REASON if r["target"] in self.flagged else
+                                    "the predictor is undefined on this target")
             r["budget"] = None
         if ok:
             T = np.stack([arrays[i]["truth"] for i in ok])
@@ -1017,6 +1105,12 @@ class Scorer:
             self._signal_group(recs, arrays, ok, regime, assay)
         elif self.external:            # no count prediction; the signal comes from the override
             self._signal_group(recs, arrays, list(range(len(recs))), regime, assay)
+        elif self.flagged:
+            for r in recs:
+                for pre in self._sig_prefixes():
+                    r[f"{pre}E_sp"] = r[f"{pre}V_sp"] = r[f"{pre}level"] = Mx.Undefined(
+                        FLAGGED_REASON if r["target"] in self.flagged else
+                        "the predictor is undefined on this target")
         else:
             for r in recs:
                 for pre in self._sig_prefixes():
@@ -1275,7 +1369,7 @@ class Scorer:
         per_seed, n_win, n_pool, n_targets = [], 0, 0, []
         for s in self.guardrail_seeds:
             ds = self._OnionDataset(self.tables, self.split, self.cfg, seed=s)
-            items, n_pool = guardrail_items(ds, self.guardrail_windows, s)
+            items, n_pool = guardrail_items(ds, self.guardrail_windows, s, self.flagged)
             n_targets.append(len({it["targets"][0] for it in items}))
             wins = [ds.item_window(it) for it in items]
             n_win = len(wins)
@@ -1386,7 +1480,7 @@ class Scorer:
         self.marg = self._fit_marginal({j["assay"] for j in imp + ctl})
         self.timing["fit_marginal"] += time.perf_counter() - tq
         scores = {}
-        recs_by_regime = {}
+        recs_by_regime, flagged_by_regime = {}, {}
         for regime in REGIMES + ("control",):
             groups = defaultdict(list)
             for j in (ctl if regime == "control" else imp):
@@ -1399,10 +1493,13 @@ class Scorer:
                 recs += self._imputation_group(groups[a], regime)
                 self.timing["targets_total"] += time.perf_counter() - tq
             self._pa_cache.clear()
-            recs_by_regime[regime] = recs
+            flagged_by_regime[regime] = [r for r in recs if r["target"] in self.flagged]
+            recs_by_regime[regime] = [r for r in recs if r["target"] not in self.flagged]
         main_recs = recs_by_regime["leave_one_assay_out"]
         ta = time.perf_counter()
         scores.update(self._imputation_metrics(main_recs, sc_imp, require_all=True))
+        if self.addon:
+            self._add_flagged(scores, flagged_by_regime["leave_one_assay_out"])
         scores["accessibility_only"] = self._imputation_metrics(
             recs_by_regime["accessibility_only"], sc_imp)
         scores["accessibility_only"]["regime"] = "accessibility_only"
@@ -1495,7 +1592,25 @@ class Scorer:
             scores["count_space_reason"] = EXTERNAL_REASON
         if self.n_pairs_not_read_disjoint:
             scores["correction_pairs_not_read_disjoint"] = self.n_pairs_not_read_disjoint
+        if self.addon:
+            fl = sorted(self.flagged)
+            scores["addon"] = {
+                "addon_of": self.ev["addon_of"], "addon_of_path": self.ev.get("addon_of_path", ""),
+                "addon_of_tables_sha256": self.addon_of_tables_sha256,
+                "evaluation_only_targets": fl, "n_evaluation_only_targets": len(fl),
+                "note": "add-on score (Amendment 4): reported only; evaluation-only targets enter "
+                        "explained_fraction_per_layer and per_target only, never a headline block, "
+                        "a selection term or n_targets"}
         return scores
+
+    def _add_flagged(self, scores, recs) -> None:
+        """OXe: the evaluation-only targets' per_target entries (headline 1 in counts_log1p and
+        headline 7), each marked `evaluation_only`; no aggregate reads them."""
+        h1 = scores["specific_variance_recovered_above_noise"][SPACE]
+        h7 = scores["predicted_over_replicate_variance"]
+        for r in recs:
+            h1.setdefault("per_target", {})[r["target"]] = dict(self._h1_target(r), evaluation_only=True)
+            h7.setdefault("per_target", {})[r["target"]] = dict(self._h7_target(r), evaluation_only=True)
 
     # -------------------------------------------------------------- metric assembly
     def _imputation_metrics(self, recs, scorable, require_all=False) -> dict:
@@ -1511,12 +1626,7 @@ class Scorer:
             h1 = metric(recs, recovered_fn(), scorable, nb, sd, require_all=ra)
         h1["n_targets_without_halves"] = len(wo)
         h1["targets_without_halves"] = wo
-        h1["per_target"] = {r["target"]: {"assay": r["assay"], "cell": r["cell"], "level": _j(r["level"]),
-                                          "E_sp": _j(r["E_sp"]), "V_sp": _j(r["V_sp"]), "N": _j(r["N"]),
-                                          "N_log1p_bias_sim": _j(r.get("N_log1p_bias_sim")),
-                                          "depth_reads": r.get("depth_reads"),
-                                          "has_halves": r["has_halves"],
-                                          "recovered": _j(r["recovered"])} for r in recs}
+        h1["per_target"] = {r["target"]: self._h1_target(r) for r in recs}
         h1s = metric(recs, recovered_fn("sig_"), scorable, nb, sd, require_all=ra)
         h1s["per_target"] = {r["target"]: {"assay": r["assay"], "cell": r["cell"],
                                            "level": _j(r["sig_level"]), "N": _j(r["sig_N"]),
@@ -1839,6 +1949,13 @@ def score(evalset, out, *, run=None, baseline=None, model=None, config=None,
     if (split == "blind") != (out.name == "blind"):
         raise ScoreRefused(f"--out {out}: a blind pass writes into a dir named 'blind' "
                            f"(<seed dir>/blind), and only a blind pass does")
+    if kw.get("addon"):     # OXe: never over a scores.json of another eval set
+        prev = out / "scores.json"
+        if prev.is_file():
+            old = json.loads(prev.read_text(encoding="utf-8")).get("evalset_sha256")
+            if old != sha256_file(evalset):
+                raise ScoreRefused(f"{prev} holds a score of another eval set (evalset_sha256 "
+                                   f"{str(old)[:12]}); an add-on score goes to <seed dir>/ox")
     run_sha = kw.pop("run_tables_sha256", None)
     if run is not None:
         run_sha = run_tables_sha256(run)
@@ -1934,6 +2051,9 @@ def main(argv=None) -> int:
                          "batch_size); the guardrail keeps batch_size")
     ap.add_argument("--no-region-cache", action="store_true",
                     help="read every tile from disk (the pre-F3 path; for equality checks)")
+    ap.add_argument("--addon", action="store_true",
+                    help="score an add-on eval set (evalset.py addon; required for one) into "
+                         "<seed dir>/ox; the run must be trained on the tables the add-on extends")
     a = ap.parse_args(argv)
     if (Path(a.out) / SCORED).is_file() and not a.force:
         print(f"skip: {a.out}/{SCORED} exists")
@@ -1948,7 +2068,7 @@ def main(argv=None) -> int:
                   guardrail_windows=a.guardrail_windows, no_halves=a.no_halves,
                   dnase_route=a.dnase_route, repeat_blind_reason=a.repeat_blind_reason,
                   infer_batch=a.infer_batch, region_cache=not a.no_region_cache,
-                  lambda_source=a.lambda_source)
+                  lambda_source=a.lambda_source, **({"addon": True} if a.addon else {}))
     except (PermissionError, ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

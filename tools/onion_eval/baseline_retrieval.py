@@ -24,6 +24,7 @@ prediction is asked for; without it the counts kept by `fit` are used (NaN outsi
 Correlations of assay b use the bins that every training cell with b covers.
 
     python tools/onion_eval/baseline_retrieval.py run --tables <dir> --evalset <json> --out <dir>
+        [--addon]
     -> <out>/scores.json, suffstats.npz, SCORED (score.py's writer and keys; `predictor` is
        `retrieval`), and <out>/retrieval_neighbors.tsv (one row per chosen neighbor).
 
@@ -32,6 +33,11 @@ writes every count-space metric undefined, so this tool uses score.py's in-memor
 (`Scorer` with `model=`), with `predict_control` off and the copy-leak guardrail reported as for a
 training-free baseline (`copy_leak_pass` None). Validation split only; score.py is not edited.
 An existing <out>/SCORED skips the job, as score.py does.
+
+`--addon` (OXe, Amendment 4): scores an add-on eval set (`evalset.py addon`) on its add-on tables
+and is required for one; it passes `--addon` to the scorer. The retrieval pool stays
+`ds.train_base` (no second experiment is ever a neighbor, an input or a fit track), and the
+baseline's training tables are the ones the add-on extends (`addon_of_tables_sha256`).
 """
 from __future__ import annotations
 
@@ -288,7 +294,17 @@ def run(tables, evalset, out, *, config=None, **kw) -> dict:
         raise S.ScoreRefused(f"--tables {tables} is not the eval set's tables {tdir}")
     if kw.get("split", "val") != "val":
         raise S.ScoreRefused("the retrieval baseline is scored on the validation split only")
-    sc = _scorer_class()(evalset, config=config, run_tables_sha256=tables_sha256(tdir), **kw)
+    if kw.get("addon"):       # trained on nothing: its training tables are the ones the add-on extends
+        from onion_eval.evalset import addon_info
+        run_sha = addon_info(tdir).get("addon_of_tables_sha256")
+    else:
+        run_sha = tables_sha256(tdir)
+    if kw.get("addon"):
+        prev = Path(out) / "scores.json"
+        if prev.is_file() and json.loads(prev.read_text(encoding="utf-8")).get(
+                "evalset_sha256") != S.sha256_file(evalset):
+            raise S.ScoreRefused(f"{prev} holds a score of another eval set")
+    sc = _scorer_class()(evalset, config=config, run_tables_sha256=run_sha, **kw)
     scores = sc.run()
     S.write_outputs(scores, sc.suff, out)
     with open(Path(out) / NEIGHBORS_TSV, "w", newline="", encoding="utf-8") as fh:
@@ -306,13 +322,15 @@ def main(argv=None) -> int:
     p.add_argument("--tables", required=True)
     p.add_argument("--evalset", required=True)
     p.add_argument("--out", required=True)
+    p.add_argument("--addon", action="store_true",
+                   help="score an add-on eval set (required for one); passed to the scorer")
     a = ap.parse_args(argv)
     if (Path(a.out) / S.SCORED).is_file():
         print(f"skip: {a.out}/{S.SCORED} exists")
         return 0
     S.set_threads()
     try:
-        s = run(a.tables, a.evalset, a.out)
+        s = run(a.tables, a.evalset, a.out, **({"addon": True} if a.addon else {}))
     except (PermissionError, S.ScoreRefused) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2
