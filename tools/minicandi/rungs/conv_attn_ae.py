@@ -56,7 +56,8 @@ if str(_TOOLS) not in sys.path:
 
 from minicandi import components as M  # noqa: E402
 from minicandi.components import NotApplicable  # noqa: E402
-from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
+from minicandi.contract import (A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input,  # noqa: E402
+                                without_extras)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 3
@@ -114,7 +115,7 @@ class Model(MiniCandi):
         if L % (2 ** N_DOWN):
             raise ValueError(f"context_bins {L} must be a multiple of {2 ** N_DOWN}")
         if width is None:
-            width = fit_width(cfg)
+            width = fit_width(without_extras(cfg))
         self.config = cfg
         self.width = W = int(width)
         self.k_in = k_input(cfg)
@@ -154,10 +155,13 @@ class Model(MiniCandi):
         self.track_emb = nn.Parameter(torch.zeros(A, D_OUT))
         nn.init.normal_(self.track_emb, std=0.02)
         self.head = M.NBHead(D_OUT, self.transform, **kw["head"])
+        # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
+        self.build_extras(cfg, D_DNA if cfg["dna"] != "off" else None, ("cov_in", "cov_out"))
 
     # -------------------------------------------------------------------------------- forward
 
     def forward(self, batch: dict) -> dict:
+        self.begin_extras(batch)
         x_counts, x_avail, x_bin_mask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
                                                          self.cov_dropout)
@@ -171,8 +175,9 @@ class Model(MiniCandi):
             h = h + self.avg_lift(torch.log1p(batch["avg"].float().clamp_min(0.0))[..., None])
         feats = [h.reshape(B, L, Ac * D_TRACK)]
         if self.dna.mode != "off":
-            feats.append(self.dna(batch["x_dna_emb" if self.dna.mode == "precomputed"
-                                        else "x_dna"]))
+            feats.append(self.add_extra_track(
+                self.dna(batch["x_dna_emb" if self.dna.mode == "precomputed" else "x_dna"]),
+                batch))
         z = self.fuse(torch.cat(feats, dim=-1)).transpose(1, 2)            # [B, W, L]
 
         for blk, dn in zip(self.enc, self.down):

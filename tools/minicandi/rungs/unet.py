@@ -140,6 +140,10 @@ class Model(MiniCandi):
         if "width" not in (config or {}) and abs(self.param_count() - budget) > 0.10 * budget:
             raise ValueError(f"rung 4: no width brings the parameter count within 10% of "
                              f"param_budget {budget:.0f} (got {self.param_count()})")
+        # extra inputs (chunk XI), constructed last (after the budget check, which they do not
+        # enter); dna = off leaves no DNA features
+        self.build_extras(cfg, self.chans[0] if self.dna_mode != "off" else None,
+                          ("in_inj", "out_inj"))
 
     # ------------------------------------------------------------------ construction
     def _build(self, cfg: dict, width: int) -> None:
@@ -212,6 +216,7 @@ class Model(MiniCandi):
 
     # ------------------------------------------------------------------ forward
     def forward(self, batch: dict) -> dict:
+        self.begin_extras(batch)
         x_counts, x_avail = batch["x_counts"], batch["x_avail"].bool()
         x_bin_mask = batch["x_bin_mask"].bool()
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
@@ -241,7 +246,8 @@ class Model(MiniCandi):
         d_skips = None
         if self.dna_mode != "off":
             x_dna = batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"]
-            dna = F.pad(self.dna(x_dna).transpose(1, 2), (0, Lp - L))
+            dna = F.pad(self.add_extra_track(self.dna(x_dna), batch).transpose(1, 2),
+                        (0, Lp - L))
             d_skips, d_bottom = self.dna_tower(dna)
             bottom = self.fuse(torch.cat([bottom, d_bottom], dim=1))
 

@@ -90,6 +90,22 @@ byte-identical batches to the code before the arms (tested on the synthetic tabl
                            columns of the rows it lists (chunk QCb writes it). It reaches C only
                            through `qc_on_input`, never C'.
 
+Extra inputs (pinned interface E, chunk XI). Each key is emitted only when its config key is set,
+so a default batch is unchanged; every mode emits them (they are inputs, never targets).
+  rna_track      x_rna float32 [B, L, 2], x_rna_avail bool [B], from `rna_h5_dir/<cell>.h5`
+                 (`extra_data.RnaTracks`: log1p of the 25 bp mean, plus and minus strand)
+  cell_vector    x_cell_vec float32 [B, n_genes], x_cell_vec_avail bool [B], from
+                 `expression_tsv` and the `genes.tsv` beside it (`extra_data.Expression`,
+                 z-scored over the training cells); `n_genes` (default 2000) must equal the
+                 number of genes in genes.tsv
+  cell_embedding cell_id int64 [B]: `extra_data.cell_index(tables)` (sorted training cells from
+                 1, 0 = unknown). The config key `n_cells` (not pinned by interface E; pinned here)
+                 must equal the number of those cells, since the model sizes its table from it.
+  aug_revcomp    train mode only: each training window is read on the other strand with
+                 probability REVCOMP_PROB (`extra_data.revcomp_window`; meta `revcomp` = True),
+                 drawn from the window's generator after the window is built. Refused with a
+                 frozen DNA embedding (dna = precomputed or dna_embedding_h5).
+
 Leave-one-cell-out average (`average_input`): with `config["average_h5"]` (built once by
 `build_average_h5`) it reads one per-track sum of training-cell rates and subtracts the window's
 own cell; without it, it reads every other training cell directly (small tables only). The
@@ -136,6 +152,8 @@ from candi.store.dataset import stable_hash, thin_counts  # noqa: E402
 from candi.store.reader import CorpusStore, GenomeView, _HandlePool  # noqa: E402
 from minicandi import contract as C  # noqa: E402
 from minicandi.covariates import CovariateEncoder, load_covariates_json  # noqa: E402
+from minicandi.extra_data import Expression, RnaTracks, cell_index, revcomp_window  # noqa: E402
+from minicandi.extra_inputs import N_GENES  # noqa: E402
 
 MEASUREMENT_COLUMNS = (
     "measurement_id", "experiment", "assay", "assay_class", "cell", "eic_track", "in_eic", "unit",
@@ -170,6 +188,8 @@ QC_TABLE_COLUMNS = ("measurement_id",) + C.QC_COLUMNS
 FIXED_BASE_LOG2_DEPTH = {"accessibility_dnase": 23.0, "accessibility_atac": 23.0,
                          "broad_histone": 23.0, "narrow_histone": 23.0, "control": 23.0}
 LAYER_PREF = {"uniform": 0, "native": 1, "testbed": 2}
+#: aug_revcomp: probability that a training window is read on the other strand
+REVCOMP_PROB = 0.5
 
 
 class RoleError(PermissionError):
@@ -332,6 +352,54 @@ class OnionDataset(IterableDataset):
         self.dna_emb_path = Path(emb) if emb else None
         if self.dna_emb_path is not None and not self.dna_emb_path.exists():
             raise FileNotFoundError(f"dna_embedding_h5 {self.dna_emb_path}: missing")
+        self._init_extras()
+
+    def _init_extras(self) -> None:
+        """Readers of the extra inputs (chunk XI); each only when its config key is set."""
+        cfg = self.config
+        self.rna = self.expression = self.cell_ids = None
+        self.aug_revcomp = bool(cfg.get("aug_revcomp"))
+        if self.aug_revcomp and (cfg.get("dna") == "precomputed" or self.dna_emb_path is not None):
+            raise ValueError("aug_revcomp with a frozen DNA embedding (dna = precomputed or "
+                             "dna_embedding_h5): a flipped embedding is not the embedding of the "
+                             "reverse strand; use dna = own")
+        if cfg.get("rna_track"):
+            d = cfg.get("rna_h5_dir")
+            if not d or not Path(d).is_dir():
+                raise FileNotFoundError(f"rna_track needs the directory rna_h5_dir, got {d!r}")
+            self.rna = RnaTracks(d)
+        if cfg.get("cell_vector"):
+            tsv = cfg.get("expression_tsv")
+            if not tsv or not Path(tsv).is_file():
+                raise FileNotFoundError(f"cell_vector needs the file expression_tsv, got {tsv!r}")
+            self.expression = Expression(tsv, Path(tsv).parent / "genes.tsv",
+                                         train_cells=self.train_cells)
+            n_genes = int(cfg.get("n_genes", N_GENES))
+            if self.expression.n_genes != n_genes:
+                raise ValueError(f"{tsv}: genes.tsv lists {self.expression.n_genes} genes; the "
+                                 f"config's n_genes is {n_genes}")
+        if cfg.get("cell_embedding"):
+            self.cell_ids = cell_index(self.tables_dir)
+            n = cfg.get("n_cells")
+            if n != len(self.cell_ids):
+                raise ValueError(f"cell_embedding: config n_cells = {n!r}, but measurements.tsv "
+                                 f"has {len(self.cell_ids)} training cells (set n_cells to it)")
+
+    def _extra_keys(self, cell: str, chrom: str, start: int, L: int) -> dict:
+        """The keys of pinned interface E for one window; {} with no extra key set."""
+        out = {}
+        if self.rna is not None:
+            self._fresh()
+            x, ok = self.rna.window(cell, chrom, start, L)
+            out["x_rna"] = torch.from_numpy(x)
+            out["x_rna_avail"] = torch.tensor(bool(ok))
+        if self.expression is not None:
+            v, ok = self.expression.vector(cell)
+            out["x_cell_vec"] = torch.from_numpy(v)
+            out["x_cell_vec_avail"] = torch.tensor(bool(ok))
+        if self.cell_ids is not None:
+            out["cell_id"] = torch.tensor(int(self.cell_ids.get(cell, 0)), dtype=torch.int64)
+        return out
 
     def _apply_qc_table(self, path) -> None:
         """Override the 7 QC columns of every row that the side table lists (empty cells too:
@@ -380,6 +448,8 @@ class OnionDataset(IterableDataset):
             self._h5, self._stores, self._pid = OrderedDict(), {}, os.getpid()
             self._pool = _HandlePool()
             self.genome = GenomeView(self.genome.dir, self._pool)
+            if getattr(self, "rna", None) is not None:
+                self.rna = RnaTracks(self.rna.dir)
 
     def __getstate__(self) -> dict:
         """Pickle without open handles (DataLoader workers under spawn)."""
@@ -724,6 +794,7 @@ class OnionDataset(IterableDataset):
             win["x_dna_emb"] = torch.from_numpy(self.dna_emb(chrom, start_bin, L))
         if avg if avg is not None else self.config.get("average_input"):
             win["avg"] = torch.from_numpy(self.average(cell, chrom, start_bin, L))
+        win.update(self._extra_keys(cell, chrom, start_bin, L))
         meta = {"cell": cell, "chrom": chrom, "start_bin": int(start_bin),
                 "inputs": list(inputs), "targets": list(targets),
                 "measurements_in": m_in, "measurements_out": m_out,
@@ -739,8 +810,12 @@ class OnionDataset(IterableDataset):
         for a, v_in, v_out, kind in plan["entries"]:
             if kind == C.KIND_SAME:
                 bm[:, C.TRACK_INDEX[a]] = self._bin_mask(rng, self.config["bin_mask_shape"])
-        return self.window(plan["chrom"], plan["start_bin"], inputs, targets, x_bin_mask=bm,
-                           extra_meta={"kinds": {e[0]: int(e[3]) for e in plan["entries"]}})
+        win = self.window(plan["chrom"], plan["start_bin"], inputs, targets, x_bin_mask=bm,
+                          extra_meta={"kinds": {e[0]: int(e[3]) for e in plan["entries"]}})
+        if self.aug_revcomp and rng.random() < REVCOMP_PROB:   # training windows only
+            win = revcomp_window(win)
+            win["meta"] = dict(win["meta"], revcomp=True)
+        return win
 
     def _bin_mask(self, rng, shape: str = "random") -> np.ndarray:
         if shape == "span":

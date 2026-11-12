@@ -228,6 +228,9 @@ class Model(MiniCandi):
         self.d_ff = max(D_FF_MIN, int(round((budget - p0 - N_LAYERS * 3 * d) / per)))
         for blk in self.layers:
             blk["ffn"] = FFN(d, self.d_ff)
+        # extra inputs (chunk XI), constructed last (after the FFN width, which they do not
+        # enter); dna = off leaves no DNA features
+        self.build_extras(cfg, D_DNA if self.dna_mode != "off" else None, ("cov_in", "cov_out"))
 
     # ------------------------------------------------------------------------------------------
 
@@ -251,6 +254,7 @@ class Model(MiniCandi):
             h_in = torch.where(avail[:, :, None, None], h_in, torch.zeros_like(h_in))
 
         dna = self.dna(batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"])
+        dna = self.add_extra_track(dna, batch)
         h_dna = (self.row_dna + self.pos).expand(B, 1, N, d)
         if self.dna_mode != "off":
             h_dna = h_dna + self.patch_dna(dna.reshape(B, N, PATCH * D_DNA))[:, None]
@@ -285,6 +289,7 @@ class Model(MiniCandi):
         return x, allow, tie, dna
 
     def forward(self, batch: dict) -> dict:
+        self.begin_extras(batch)
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
                                                          self.cov_dropout)
         x, allow, tie, dna = self._rows(batch, c_in, c_out, c_in_t)

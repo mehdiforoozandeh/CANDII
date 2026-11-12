@@ -203,10 +203,13 @@ class Model(MiniCandi):
         self.decode = Block(d, n_heads, mlp, cross=True)
         self.unpatch = nn.Linear(d, P * d_out)
         self.head = NBHead(d_out, self.transform, **kw["head"])
+        # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
+        self.build_extras(cfg, d_dna if self.dna_mode != "off" else None, ("cin", "cout"))
 
     # -----------------------------------------------------------------------------------------
 
     def forward(self, batch: dict) -> dict:
+        self.begin_extras(batch)
         x_counts, x_avail, bin_mask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         B, L, Ac = x_counts.shape
         P, d = self.P, self.d
@@ -240,7 +243,7 @@ class Model(MiniCandi):
                           else torch.ones_like(x_avail))
         if self.dna_mode != "off":
             x_dna = batch["x_dna_emb" if self.dna_mode == "precomputed" else "x_dna"]
-            g = self.dna(x_dna).reshape(B, NP, -1)                  # [B, NP, P*d_dna]
+            g = self.add_extra_track(self.dna(x_dna), batch).reshape(B, NP, -1)                  # [B, NP, P*d_dna]
             parts.append(self.dna_patch(g) + self.dna_type + pos)
             valids.append(torch.ones(B, NP, dtype=torch.bool, device=dev))
         if self.average_input:
