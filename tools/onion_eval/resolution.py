@@ -7,8 +7,11 @@ variance in log1p counts, at ONE matched depth per assay class, of these sources
   pseudoreplicate     counting noise of one track: half the variance of pr1 - pr2 (the two halves of
                       each base track), i.e. the noise a single track carries at the matched depth
   <rung>              each further replicate rung of `layers.RUNGS` that the pairs populate: its
-                      layer increment over the nearest populated lower rung (variance one replicate
-                      adds, per track), from `layers.layer_table` with single levels as bands
+                      layer increment (per track) from `layers.layer_table` with single levels as
+                      bands: nested up to isogenic, then anisogenic (donor) and other_experiment
+                      (experiment) each over isogenic, and other_cell_type over the pair value of a
+                      pair that shares only the cell type (`layers.lower_terms`, PI ruling 30); an
+                      other_cell_type pair is clustered on its `a` side's cell
   knob:<knob>         each designed knob, base against arm, non-subset pairs only: the variance of the
                       view difference beyond counting noise,
                         V(base.pr1, arm.pr2) - (V(base.pr1, base.pr2) + V(arm.pr1, arm.pr2)) / 2,
@@ -320,7 +323,7 @@ def run(tables, evalset, out, n_boot=1000, seed=0, include_blind=False):
         ma, mb = meas[p["a"]], meas[p["b"]]
         v = level_variance(read(ma["counts_path"]), read(mb["counts_path"]), _depth(ma), _depth(mb),
                            common[ma["assay_class"]], seed=zlib.crc32(p["pair_id"].encode()))
-        units[ma["assay_class"]]["rungs"].append(dict(rung=p["rung"], cell=p["cell"], v=v))
+        units[ma["assay_class"]]["rungs"].append(dict(rung=p["rung"], cell=p["cell"] or ma["cell"], v=v))
     for p, a, b in knob_pairs:
         ma, mb = meas[a], meas[b]
         subset = p["subset_pair"] == "1"

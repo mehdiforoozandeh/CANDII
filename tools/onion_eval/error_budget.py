@@ -69,13 +69,18 @@ def _standardize(v):
     return (v - v.mean()) / sd if sd > 0 else np.zeros_like(v)
 
 
-def noise_share_from_halves(half1, half2, depth_ratio=2.0, valid=None):
+def noise_share_from_halves(half1, half2, depth_ratio=2.0, valid=None, shares=None):
     """Noise share per Haar scale of each target, from its two pseudoreplicate halves (eue_rep.py convention).
 
     half1, half2: (T, M) in the same space as the truth. R_k = per-scale correlation of the two standardized halves
     (Gram entry over sqrt of the two energies), clipped to [0, 1]. The full track holds depth_ratio halves' worth of
     reads (2 for pr1/pr2 of the pooled target; depth in fragments), so its reliability is the Spearman-Brown
-    k R / (1 + (k - 1) R) and the noise share is 1 minus that. Returns (T, K) in [0, 1]."""
+    k R / (1 + (k - 1) R) and the noise share is 1 minus that. Returns (T, K) in [0, 1].
+
+    shares: (T, 2) or (2,), each half's real share (f1, f2) of the target's reads (halves rescaled by 1 / f_i
+    before log1p, as score.py does). It replaces depth_ratio with the unequal-length form of
+    `metrics.noise_floor`: R^2 (s + 1/f1)(s + 1/f2) = s^2 for the signal-to-noise ratio s, noise share
+    1 / (1 + s). A target with f1 == f2 takes the form above with k = 1 / f1 (bit-identical for even halves)."""
     h1, h2 = np.atleast_2d(np.asarray(half1, np.float64)), np.atleast_2d(np.asarray(half2, np.float64))
     if h1.shape != h2.shape:
         raise ValueError(f"halves differ in shape: {h1.shape} vs {h2.shape}")
@@ -91,8 +96,23 @@ def noise_share_from_halves(half1, half2, depth_ratio=2.0, valid=None):
         with np.errstate(invalid="ignore", divide="ignore"):
             R[:, k] = np.where(xx * zz > 0, xz / np.sqrt(xx * zz), 0.0)
     R = R.clip(0, 1)
-    k_ = float(depth_ratio)
-    return 1 - k_ * R / (1 + (k_ - 1) * R)
+    if shares is None:
+        k_ = float(depth_ratio)
+        return 1 - k_ * R / (1 + (k_ - 1) * R)
+    f = np.broadcast_to(np.asarray(shares, np.float64), (h1.shape[0], 2))
+    out = np.empty_like(R)
+    for t in range(R.shape[0]):
+        f1, f2 = float(f[t, 0]), float(f[t, 1])
+        r = R[t]
+        if f1 == f2:
+            k_ = 1.0 / f1
+            out[t] = 1 - k_ * r / (1 + (k_ - 1) * r)
+            continue
+        a, b, r2 = 1.0 / f1, 1.0 / f2, r * r
+        with np.errstate(invalid="ignore", divide="ignore"):
+            s = (r2 * (a + b) + np.sqrt(r2 * r2 * (a + b) ** 2 + 4.0 * (1.0 - r2) * r2 * a * b)) / (2.0 * (1.0 - r2))
+        out[t] = np.where(r2 >= 1.0, 0.0, 1.0 / (1.0 + s))
+    return out
 
 
 def _eue(V, C, P, Ev, N):

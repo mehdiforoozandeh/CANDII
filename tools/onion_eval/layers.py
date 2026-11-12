@@ -11,12 +11,30 @@ read as its two halves `pr1.h5` and `pr2.h5` (siblings of an `h5:` counts path),
 Column definitions of layers.tsv. `variance` is the pair value of the rung, 0.5 E[(Y - Y')^2] =
 0.5 Var(d) (the mean term of d is 0 for exchangeable sides), i.e. E[Var(Y | Z(k-1))] of the identity in
 `onion total variance.md`; it is the per-track value, half the variance of the pair difference. A
-rung's variance is the mean over its cells of the cell's mean pair value. Its `layer_increment` is the
-difference to the nearest populated lower rung (named in `increment_over`), taken per cell over the cells
-that populate both rungs and averaged over those cells; the innermost populated rung's increment is its
-own variance. Where the two rungs have the same cells the increments add up exactly to the outermost
-rung's variance; a rung whose cells differ from its lower rung's is flagged `cells differ from lower
-rung` (its increment uses the common cells only, and is empty when there is none). Intervals are 95%
+rung's variance is the mean over its cells of the cell's mean pair value. Its `layer_increment` is its
+variance minus the pair value named in `increment_over`, taken per cell over the cells that populate
+every rung involved and averaged over those cells; the innermost populated rung's increment is its own
+variance. `layer` names the layer(s) of the identity that the increment holds.
+
+Which pair value an increment subtracts (PI ruling 30, `lower_terms`). Donor and experiment are crossed
+in ENCODE, so they are sibling layers, not nested ones:
+  pseudoreplicate -> sequencing -> technical -> isogenic   nested: each over the nearest populated rung
+                                                           before it (layers sampling, sequencing,
+                                                           library, biological_replicate)
+  anisogenic        over isogenic: the donor layer (the pair shares cell type and experiment)
+  other_experiment  over isogenic: the experiment (lab) layer (the pair shares cell type and donor)
+  other_cell_type   over the pair value of a pair that shares only the cell type, built as
+                    anisogenic + other_experiment - isogenic (`increment_over` =
+                    "anisogenic+other_experiment-isogenic"; exact when donor and experiment add):
+                    the cell-type layer
+With isogenic missing a sibling is taken over the nearest populated nested rung, and its layer name
+lists the nested layers it also holds (e.g. `biological_replicate+donor`). With a sibling or isogenic
+missing, other_cell_type is taken over other_experiment, else anisogenic, else the nearest nested rung,
+and its layer name lists what it also holds (e.g. `cell_type+experiment`). When every rung has the same
+cells, the increments of the chain innermost -> isogenic, donor, experiment and cell type add up exactly
+to the other_cell_type variance. A rung whose cells differ from those of a rung it subtracts is flagged
+`cells differ from lower rung` (its increment uses the common cells only, and is empty when there is
+none). An other_cell_type pair (two cells) is clustered on its `a` side's cell. Intervals are 95%
 intervals on the layer increment from a cluster bootstrap over the cells it uses: increment +-
 t(0.975, n - 1) x bootstrap SE x sqrt(n / (n - 1)), n = those cells. The plain percentile interval
 under-covered with 8 cells (70-90% over 20 seeds). `depth` is the common depth (reads) at which every
@@ -59,9 +77,14 @@ BAND_ORDER = ["fine", "peak", "domain", "broad", "all"]
 MIN_PAIRS, MIN_CELLS = 5, 3
 FLAG_OK, FLAG_FEW, FLAG_EMPTY = "ok", "few pairs", "not populated by EIC"
 FLAG_CELLS, FLAG_DEPTHS = "cells differ from lower rung", "assays at different depths"
+NESTED = RUNGS[:4]                                   # pseudoreplicate .. isogenic: nested rungs
+SIBLINGS = ("anisogenic", "other_experiment")        # crossed: each over isogenic (PI ruling 30)
+LAYER = {"pseudoreplicate": "sampling", "sequencing": "sequencing", "technical": "library",
+         "isogenic": "biological_replicate", "anisogenic": "donor", "other_experiment": "experiment",
+         "other_cell_type": "cell_type"}
 COLUMNS = ["assay_or_class", "pooled_by_class", "stratum", "band", "rung", "n_pairs", "n_cells",
            "variance", "layer_increment", "ci_low", "ci_high", "ci_width", "flag", "increment_over",
-           "depth"]
+           "depth", "layer"]
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -133,6 +156,51 @@ def pair_variance(a, b, depth_a, depth_b, strata=None, bands=None, *, depth=None
 # ---------------------------------------------------------------------------------------------------
 # Rungs and layers
 
+def lower_terms(populated):
+    """Which pair value each populated rung's increment subtracts (module doc, PI ruling 30).
+
+    populated: rung names with pairs. Returns {rung: (terms, layer)}: terms a list of (rung, coefficient)
+    whose weighted sum of pair values is subtracted ([] for the innermost rung), layer the layer name(s)
+    the increment holds. `increment_over` is `format_terms(terms)`."""
+    pop = [r for r in RUNGS if r in set(populated)]
+
+    def nested_before(r):
+        """The nearest populated nested rung before r ("" if none) and the nested layers in between
+        (from just after it up to r's own nested position, or up to isogenic for a later rung)."""
+        stop = NESTED.index(r) if r in NESTED else len(NESTED)
+        prev = [q for q in NESTED[:stop] if q in pop]
+        q = prev[-1] if prev else ""
+        start = NESTED.index(q) + 1 if q else 0
+        return q, [LAYER[x] for x in NESTED[start:stop]]
+
+    out = {}
+    for r in pop:
+        q, held = nested_before(r)
+        if r in NESTED or r in SIBLINGS:
+            out[r] = ([(q, 1)] if q else [], "+".join(held + [LAYER[r]]))
+            continue
+        sib = [x for x in SIBLINGS if x in pop]                  # other_cell_type
+        if "isogenic" in pop and len(sib) == 2:
+            out[r] = ([("anisogenic", 1), ("other_experiment", 1), ("isogenic", -1)], LAYER[r])
+        elif sib:
+            s_ = sib[-1]                                         # other_experiment, else anisogenic
+            out[r] = ([(s_, 1)], "+".join([LAYER[r]] + [LAYER[x] for x in SIBLINGS if x != s_]))
+        else:
+            out[r] = ([(q, 1)] if q else [], "+".join(held + [LAYER[x] for x in SIBLINGS] + [LAYER[r]]))
+    return out
+
+
+def format_terms(terms):
+    """`increment_over` text of a term list: "isogenic", or "anisogenic+other_experiment-isogenic"."""
+    return "".join(("" if i == 0 and c > 0 else ("+" if c > 0 else "-")) + q for i, (q, c) in enumerate(terms))
+
+
+def parse_terms(text):
+    """Inverse of `format_terms`: [(rung, coefficient)]."""
+    import re
+    return [(q, -1 if sign == "-" else 1) for sign, q in re.findall(r"([+-]?)([a-z_]+)", text or "")]
+
+
 def _interval(est, boot, n_clusters):
     """95% interval from the cluster-bootstrap standard error, with the small-sample correction
     sqrt(n / (n - 1)) and a t quantile on n - 1 degrees of freedom (n = cells). With one cell there is
@@ -153,14 +221,11 @@ def layer_table(records, n_boot=1000, seed=0):
     records: list of dicts {"rung", "cell", "v": {(stratum, band): Var(d)}} (one per pair, the
     `pair_variance` value; halved here to the pair value). Returns one dict per (stratum, band, rung),
     every rung of RUNGS included, with n_pairs, n_cells, variance, layer_increment, ci_low, ci_high,
-    ci_width, flag, increment_over (see the module doc for the definitions)."""
+    ci_width, flag, increment_over, layer (see the module doc for the definitions)."""
     keys = sorted({k for r in records for k in r["v"]})
     by_rung = {r: [x for x in records if x["rung"] == r] for r in RUNGS}
     populated = [r for r in RUNGS if by_rung[r]]
-    lower = {}
-    for r in RUNGS:
-        prev = [q for q in RUNGS[:RUNGS.index(r)] if q in populated]
-        lower[r] = prev[-1] if prev else ""
+    lower = lower_terms(populated)
     rung_cells = {r: {x["cell"] for x in by_rung[r]} for r in RUNGS}
     cells = sorted({x["cell"] for x in records})
     cidx = {c: i for i, c in enumerate(cells)}
@@ -194,25 +259,131 @@ def layer_table(records, n_boot=1000, seed=0):
         for r in RUNGS:
             recs = by_rung[r]
             n_pairs, n_cells = len(recs), len(rung_cells[r])
+            terms, layer = lower.get(r, ([], LAYER[r]))
             row = dict(stratum=key[0], band=key[1], rung=r, n_pairs=n_pairs, n_cells=n_cells,
-                       increment_over=lower[r] if recs else "")
+                       increment_over=format_terms(terms) if recs else "", layer=layer)
             if not recs:
                 row.update(variance=np.nan, layer_increment=np.nan, ci_low=np.nan, ci_high=np.nan,
                            ci_width=np.nan, flag=FLAG_EMPTY)
                 rows.append(row)
                 continue
             var, _, _ = mean_boot(cm[r])
-            if lower[r]:
-                common = set(cm[r]) & set(cm[lower[r]])
-                inc, iboot, ncl = mean_boot({c: cm[r][c] - cm[lower[r]][c] for c in common})
-            else:
-                inc, iboot, ncl = mean_boot(cm[r])
+            common = set(cm[r]).intersection(*(set(cm[q]) for q, _ in terms))
+            inc, iboot, ncl = mean_boot({c: cm[r][c] - sum(k * cm[q][c] for q, k in terms) for c in common})
             lo, hi = _interval(inc, iboot, ncl) if np.isfinite(inc) else (np.nan, np.nan)
             flag = FLAG_OK if (n_pairs >= MIN_PAIRS and n_cells >= MIN_CELLS) else FLAG_FEW
-            if lower[r] and rung_cells[r] != rung_cells[lower[r]]:
+            if any(rung_cells[r] != rung_cells[q] for q, _ in terms):
                 flag = FLAG_CELLS if flag == FLAG_OK else f"{flag}; {FLAG_CELLS}"
             row.update(variance=var, layer_increment=inc, ci_low=lo, ci_high=hi, ci_width=hi - lo, flag=flag)
             rows.append(row)
+    return rows
+
+
+# ---------------------------------------------------------------------------------------------------
+# Explained fraction per layer (PI ruling 32; `onion total variance.md`, explained-per-layer)
+
+EXPLAINED_COLUMNS = ["rung", "layer", "increment_over", "explained_fraction", "ci_low", "ci_high",
+                     "captured", "layer_term", "n_pairs", "n_cells", "flag"]
+
+
+def predicted_layer_mean(n, mu, keep=1.0, *, exact_below=30.0):
+    """The model's predicted mean on the scale of the layer table: E[log1p Y'] under its predictive law
+    NB(n, mu) thinned to the common depth (keep = depth / the prediction's depth; a thinned NB(n, mu) is
+    NB(n, keep mu)). Exact (pmf sum) where keep mu <= exact_below, else the second-order expansion
+    log1p(m) - (m + m^2 / n) / (2 (1 + m)^2). log1p(mu) itself is not used: at a few reads per bin it
+    is not E[log1p Y] (the audit's cell-type model scored 1.07 with it, 0.99 with this)."""
+    from scipy.stats import nbinom
+    n = np.broadcast_to(np.asarray(n, np.float64), np.shape(mu)).astype(np.float64)
+    m = np.asarray(mu, np.float64) * float(keep)
+    out = np.log1p(m) - (m + m * m / n) / (2.0 * (1.0 + m) ** 2)
+    sm = m <= exact_below
+    if sm.any():
+        k = np.arange(0, int(exact_below * 6 + 80), dtype=np.float64)
+        lk = np.log1p(k)
+        ms, ns = m[sm], n[sm]
+        res = np.empty(ms.size)
+        for i in range(0, ms.size, 8192):
+            pm = nbinom.pmf(k[None, :], ns[i:i + 8192, None], (ns / (ns + ms))[i:i + 8192, None])
+            res[i:i + 8192] = pm @ lk
+        out[sm] = res
+    return out
+
+
+def pair_explained(a, b, ea, eb, depth_a, depth_b, *, depth=None, seed=0):
+    """Captured part and pair value of one pair on the layer-table scale.
+
+    a, b: integer counts (bins of the pair); ea, eb: the model's predicted layer-scale means of the two
+    members (`predicted_layer_mean` at the common depth), each from its own inputs and covariates. The
+    counts are thinned to the common depth exactly as `pair_variance` does (same seed, same draws).
+    With d = log1p(a') - log1p(b') and d_hat = ea - eb, both centred: returns {"captured":
+    0.5 mean(d_hat d), "pair_value": 0.5 mean(d^2) (= half of pair_variance's Var(d)), "depth"}."""
+    a = np.asarray(a).reshape(-1)
+    b = np.asarray(b).reshape(-1)
+    depth_a, depth_b = float(depth_a), float(depth_b)
+    target = min(depth_a, depth_b) if depth is None else float(depth)
+    if target > min(depth_a, depth_b) * (1 + 1e-9):
+        raise ValueError(f"target depth {target} exceeds a track depth ({depth_a}, {depth_b})")
+    rng = np.random.default_rng(seed)
+    a2 = thin(a, target / depth_a, rng)
+    b2 = thin(b, target / depth_b, rng)
+    d = np.log1p(a2) - np.log1p(b2)
+    dh = np.asarray(ea, np.float64).reshape(-1) - np.asarray(eb, np.float64).reshape(-1)
+    d, dh = d - d.mean(), dh - dh.mean()
+    return {"captured": 0.5 * float(np.mean(d * dh)), "pair_value": 0.5 * float(np.mean(d * d)),
+            "depth": target}
+
+
+def explained_table(records, n_boot=1000, seed=0):
+    """Explained fraction per layer from per-pair records {"rung", "cell", "captured", "pair_value"}
+    (`pair_explained`; "captured" may be None for a rung whose members got no prediction, which leaves
+    every layer that subtracts it undefined).
+
+    For the layer of rung r, with the terms of `lower_terms` (the same pair value the layer subtracts):
+      explained_fraction = mean_c [C_r(c) - sum_q k_q C_q(c)] / mean_c [PV_r(c) - sum_q k_q PV_q(c)]
+    over the cells c that populate r and every q (C, PV: the cell's mean over its pairs). The numerator
+    is the captured part of the layer term, the denominator the layer term itself. No clipping: with few
+    pairs it can be negative or above 1. Interval: 95% cluster bootstrap over those cells (`_interval`)."""
+    by_rung = {r: [x for x in records if x["rung"] == r] for r in RUNGS}
+    populated = [r for r in RUNGS if by_rung[r]]
+    terms_of = lower_terms(populated)
+    cells = sorted({x["cell"] for x in records})
+    cidx = {c: i for i, c in enumerate(cells)}
+    rng = np.random.default_rng(seed)
+    draws = rng.integers(0, len(cells), size=(n_boot, len(cells))) if cells else np.zeros((n_boot, 0), int)
+    weights = (np.stack([np.bincount(dr, minlength=len(cells)) for dr in draws]) if cells else draws).astype(float)
+
+    def cell_means(rung, key):
+        acc = {}
+        for x in by_rung[rung]:
+            v = x.get(key)
+            acc.setdefault(x["cell"], []).append(np.nan if v is None else float(v))
+        return {c: float(np.mean(v)) for c, v in acc.items()}
+
+    cm = {r: (cell_means(r, "captured"), cell_means(r, "pair_value")) for r in populated}
+    rows = []
+    for r in populated:
+        terms, layer = terms_of[r]
+        if not terms:
+            continue
+        rungs = [r] + [q for q, _ in terms]
+        common = sorted(set(cm[r][1]).intersection(*(set(cm[q][1]) for q in rungs[1:])))
+        num = np.array([cm[r][0][c] - sum(k * cm[q][0][c] for q, k in terms) for c in common])
+        den = np.array([cm[r][1][c] - sum(k * cm[q][1][c] for q, k in terms) for c in common])
+        flag = "ok"
+        if not common:
+            ef, lo, hi, flag = np.nan, np.nan, np.nan, "no cell populates every rung of the layer"
+        elif not np.isfinite(num).all():
+            ef, lo, hi, flag = np.nan, np.nan, np.nan, "a rung of the layer has no prediction for its pairs"
+        else:
+            ef = float(num.mean() / den.mean()) if den.mean() != 0 else np.nan
+            w = weights[:, [cidx[c] for c in common]]
+            with np.errstate(invalid="ignore", divide="ignore"):
+                boot = (w @ num) / (w @ den)
+            lo, hi = _interval(ef, boot, len(common)) if np.isfinite(ef) else (np.nan, np.nan)
+        rows.append(dict(rung=r, layer=layer, increment_over=format_terms(terms), explained_fraction=ef,
+                         ci_low=lo, ci_high=hi, captured=float(num.mean()) if common else np.nan,
+                         layer_term=float(den.mean()) if common else np.nan,
+                         n_pairs=len(by_rung[r]), n_cells=len(common), flag=flag))
     return rows
 
 
@@ -379,7 +550,7 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
                            seed=zlib.crc32(p["pair_id"].encode()))
         v = {(s, bd): x for s, row in pv["variance"].items() for bd, x in row.items()}
         records.append(dict(assay=p["assay"], assay_class=meas[p["a"]]["assay_class"], rung=p["rung"],
-                            cell=p["cell"], v=v, depth=common[p["assay"]]))
+                            cell=p["cell"] or meas[p["a"]]["cell"], v=v, depth=common[p["assay"]]))
     # assays in the evalset's layers scope with no pair at all still get their empty rows
     scope = set()
     for assays in (ev.get("scorable", {}).get("layers", {}) or {}).values():
@@ -392,7 +563,7 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
                     rows.append(dict(assay_or_class=a, pooled_by_class=0, stratum=s, band=bd, rung=r,
                                      n_pairs=0, n_cells=0, variance=np.nan, layer_increment=np.nan,
                                      ci_low=np.nan, ci_high=np.nan, ci_width=np.nan, flag=FLAG_EMPTY,
-                                     increment_over="", depth=np.nan))
+                                     increment_over="", depth=np.nan, layer=LAYER[r]))
     write_tsv(rows, out)
     return rows
 

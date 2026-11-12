@@ -185,6 +185,24 @@ WEIGHTS = {"imputation": 0.5, "correction": 0.25, "uncertainty": 0.25}
 REGIMES = ("leave_one_assay_out", "accessibility_only")
 REPLICATE_RUNGS = ("pseudoreplicate", "sequencing", "technical", "isogenic", "anisogenic",
                    "other_experiment", "other_cell_type")
+#: headline 7 upper bound (PI ruling 31): the rung whose pair shares only what the model knows. An
+#: imputed target: another experiment of the same cell type. A reconstructed target (its own reads at
+#: other bins are an input) and a covariate-corrected target (source pr1 -> target pr2 of one track) share
+#: every layer down to the sampling term with their input, so their upper-bound rung is the
+#: pseudoreplicate rung itself: both bounds meet and a calibrated model scores 1 there. score.py scores
+#: headline 7 on imputed targets only.
+H7_UPPER_RUNG = {"imputation": "other_experiment", "reconstruction": "pseudoreplicate",
+                 "correction": "pseudoreplicate"}
+#: explained fraction per layer (PI ruling 32): rungs whose members are predicted (outer) and rungs within one
+#: experiment whose prediction difference is 0 for an imputed target (zero)
+EXPLAINED_OUTER = ("other_experiment", "other_cell_type")
+EXPLAINED_ZERO = ("isogenic", "anisogenic")
+EXPLAINED_RUNGS = EXPLAINED_OUTER + EXPLAINED_ZERO
+H7_DESCRIPTION = ("lower-bound check: mean predicted NB variance over the pair value of the target's own "
+                  "pseudoreplicate halves (the sampling term); a calibrated model scores >= 1 here. "
+                  "per_rung gives the ratio at every populated rung; pass = ratio >= 1 at "
+                  "pseudoreplicate and <= 1 at upper_bound_rung (PI ruling 31). PIT stays the "
+                  "selection metric.")
 POOLED = "__pooled__"
 BUDGET_KEYS = ("level", "shared", "specific", "explained", "unexplained", "noise", "added")
 CONTROL = "chipseq-control"
@@ -526,6 +544,7 @@ class Scorer:
         self._pa_cache: dict = {}
         self._pa_ctl_rate: dict = {}               # (region index, cell) -> average control rate
         self.suff: dict = {}
+        self._rung_pair_index = None              # (assay, cell) -> rung -> pairs (headline 7)
         self.timing: dict = defaultdict(float)     # wall seconds per phase, in scores.json
         # F3 region cache: a tile read inside the current evalset region is a slice of one
         # whole-region read per (measurement, file); see _cached_read
@@ -810,6 +829,85 @@ class Scorer:
             del res["position_average.ctl_mu"]     # no training control covers a bin: as before F4
         return res
 
+    # -------------------------------------------------------------- headline 7 per rung
+    def _rung_pairs(self, assay, cell):
+        """{rung: [(a, b)]}: the replicate-ladder pairs of pairs.tsv (other than pseudoreplicate rows)
+        of this assay with a side in this cell, of the scored split, restricted to the eval set's
+        `replicate_pairs` when it lists any."""
+        if self._rung_pair_index is None:
+            from onion_eval.evalset import read_tsv
+            idx = defaultdict(lambda: defaultdict(list))
+            want = set(self.ev.get("replicate_pairs") or [])
+            path = self.tables / "pairs.tsv"
+            meas = self.ds.rows
+            for p in (read_tsv(path) if path.exists() else []):
+                if (p["rung"] not in REPLICATE_RUNGS[1:] or p["a"] == p["b"] or p.get("split") != self.split
+                        or (want and p["pair_id"] not in want) or p["a"] not in meas or p["b"] not in meas):
+                    continue
+                for c in {meas[p["a"]]["cell"], meas[p["b"]]["cell"]}:
+                    idx[(p["assay"], c)][p["rung"]].append((p["a"], p["b"]))
+            self._rung_pair_index = idx
+        return self._rung_pair_index.get((assay, cell), {})
+
+    def _h7_per_rung(self, job, row, n, mu, defined, vr_pr, size):
+        """Headline 7 at every populated rung of the target's cell and assay, and the two-bound pass
+        flag (PI ruling 31). The prediction NB(n, mu) is for the target's depth D; against a pair (a, b)
+        it is thinned to a's depth (mu x D_a / D) and b is depth-matched to a by `variance_ratio`. A
+        rung's ratio is the harmonic mean of its pairs' pooled ratios."""
+        per = {"pseudoreplicate": vr_pr}
+        if defined and not self.external:
+            D = float(row.get("depth_reads") or row.get("depth_fragments") or "nan")
+            for rung, pairs in sorted(self._rung_pairs(job["assay"], job["cell"]).items()):
+                vals = []
+                for a, b in pairs:
+                    ra, rb = self._row(a), self._row(b)
+                    Da = float(ra.get("depth_reads") or ra.get("depth_fragments") or "nan")
+                    Db = float(rb.get("depth_reads") or rb.get("depth_fragments") or "nan")
+                    if not (np.isfinite(D) and Da > 0 and Db > 0):
+                        continue
+                    xa, xb = (np.concatenate([self._ds_read(m, c, s, self.rb) for c, s in self.regions])
+                              .astype(np.float64) for m in (a, b))
+                    if xa.size != size:
+                        continue
+                    v = Mx.variance_ratio(n, mu * Da / D, xa, xb, depth_ratio_b=Da / Db,
+                                          seed=zlib.crc32(f"h7:{a}:{b}".encode()))["pooled"]
+                    if not _undef(v) and v > 0:
+                        vals.append(float(v))
+                per[rung] = (float(1.0 / np.mean(1.0 / np.array(vals))) if vals else
+                             Mx.Undefined(f"no pair of rung {rung} gave a defined ratio"))
+        lo, hi = per.get("pseudoreplicate"), per.get(H7_UPPER_RUNG["imputation"])
+        if _undef(lo) or _undef(hi):
+            why = ("no pseudoreplicate ratio" if _undef(lo) else
+                   f"rung {H7_UPPER_RUNG['imputation']} not populated for this cell and assay")
+            ok = Mx.Undefined(why)
+        else:
+            ok = float(lo >= 1.0 and hi <= 1.0)
+        return {"variance_ratio_per_rung": per, "variance_ratio_pass": ok}
+
+    def _h7_metric(self, recs, scorable, require_all=False):
+        """Headline 7 block: the old scalar (the pseudoreplicate ratio, now read as the lower-bound
+        check), plus `per_rung` (one metric block per rung), `pass_rate` (share of targets that pass
+        both bounds) and `per_target`."""
+        nb, sd = self.n_boot, self.seed
+        out = metric(recs, _mean_of("variance_ratio"), scorable, nb, sd, require_all=require_all)
+        out["description"] = H7_DESCRIPTION
+        rungs = sorted({k for r in recs for k in (r.get("variance_ratio_per_rung") or {})},
+                       key=REPLICATE_RUNGS.index)
+
+        def rung_fn(rung):
+            def fn(rs):
+                return _mean_of("_v")([{"_v": (r.get("variance_ratio_per_rung") or {}).get(
+                    rung, Mx.Undefined(f"rung {rung} not populated"))} for r in rs])
+            return fn
+        out["per_rung"] = {g: metric(recs, rung_fn(g), scorable, nb, sd) for g in rungs}
+        out["pass_rate"] = metric(recs, _mean_of("variance_ratio_pass"), scorable, nb, sd)
+        out["upper_bound_rung"] = dict(H7_UPPER_RUNG)
+        out["per_target"] = {r["target"]: {
+            "per_rung": {g: _j(v) for g, v in (r.get("variance_ratio_per_rung") or {}).items()},
+            "pass": _j(r.get("variance_ratio_pass")), "reason": _why(r.get("variance_ratio_pass"))
+            if _undef(r.get("variance_ratio_pass")) else ""} for r in recs}
+        return out
+
     # -------------------------------------------------------------- imputation
     def _imputation_group(self, jobs, regime):
         """Per-target records of one (regime, assay) group, and the assay-level shared/specific."""
@@ -850,22 +948,22 @@ class Scorer:
             mn, mm = A["marginal_nb.n"], A["marginal_nb.mu"]
             r["pit_marginal"] = ((pit_curve(mn, mm, y), y.size)
                                  if np.isfinite(mn).all() and np.isfinite(mm).all() else None)
+            f = _half_shares(row) if halves else (0.5, 0.5)
             if not halves:
                 vr = no_halves
-            else:
-                vr = (Mx.variance_ratio(n, 0.5 * mu, A["pr1"], A["pr2"], self.strata or None,
-                                        depth_ratio_b=1.0)["pooled"] if defined else nan)
+            else:                  # the prediction thinned to pr1's share; pr2 matched to pr1's depth
+                vr = (Mx.variance_ratio(n, f[0] * mu, A["pr1"], A["pr2"], self.strata or None,
+                                        depth_ratio_b=f[0] / f[1])["pooled"] if defined else nan)
             r["variance_ratio"] = vr
+            r.update(self._h7_per_rung(job, row, n, mu, defined, vr, y.size))
             # headline 1 / 2 in counts_log1p: prediction is the NB mean at the target's own C'
             ts = Mx.to_space(y, SPACE)
             h1 = h2 = None
             dr = row.get("depth_reads") or row.get("depth_fragments")
             r["depth_reads"] = float(dr) if dr else None
-            if halves:
-                h1, h2 = (Mx.to_space(A[h], SPACE, rescale=2.0) for h in ("pr1", "pr2"))
-                f = _half_shares(row)
-                r["N"] = Mx.noise_floor(*(Mx.to_space(A[h], SPACE, rescale=1.0 / fh)
-                                          for h, fh in zip(("pr1", "pr2"), f)), ts, shares=f)
+            if halves:             # each half rescaled to the target's depth by 1 / its read share
+                h1, h2 = (Mx.to_space(A[h], SPACE, rescale=1.0 / fh) for h, fh in zip(("pr1", "pr2"), f))
+                r["N"] = Mx.noise_floor(h1, h2, ts, shares=f)
                 r["N_log1p_bias_sim"] = Mx.noise_floor_log1p_bias(
                     y, f, seed=zlib.crc32(f"nfb:{job['target']}".encode()))
             else:
@@ -877,8 +975,8 @@ class Scorer:
                            else Mx.Undefined("prediction or training average undefined"))
             sig = self._signal_target(job, n, mu, A, defined, pa_ok)
             r.update(sig.pop("record"))
-            arrays.append({"defined": defined, "truth": ts, "pred": ps, "h1": h1, "h2": h2,
-                           "n": n, "mu": mu, **sig})
+            arrays.append({"defined": defined, "truth": ts, "pred": ps, "h1": h1, "h2": h2, "shares": f,
+                           "n": n, "mu": mu, "y": y, "target": job["target"], **sig})
             recs.append(r)
             self.suff[f"crps/{regime}/{job['target']}"] = np.array(
                 [_j(m_c["crps"]) or np.nan, _j(m_c["oracle_scaled"]) or np.nan,
@@ -909,7 +1007,8 @@ class Scorer:
             if eb:
                 nbl = (None if self.no_halves else
                        EB.noise_share_from_halves(np.stack([arrays[i]["h1"] for i in eb]),
-                                                  np.stack([arrays[i]["h2"] for i in eb]), 2.0))
+                                                  np.stack([arrays[i]["h2"] for i in eb]),
+                                                  shares=np.array([arrays[i]["shares"] for i in eb])))
                 bud = EB.error_budget(np.stack([arrays[i]["truth"] for i in eb]),
                                       np.stack([arrays[i]["pred"] for i in eb]),
                                       np.array([recs[i]["cell"] for i in eb]), noise_by_level=nbl)
@@ -923,12 +1022,78 @@ class Scorer:
                 for pre in self._sig_prefixes():
                     r[f"{pre}E_sp"] = r[f"{pre}V_sp"] = r[f"{pre}level"] = Mx.Undefined(
                         "the predictor is undefined on this target")
+        ef = self._explained_per_layer(jobs[0]["assay"], arrays)
         for r in recs:
             r["recovered"] = recovered_fn(no_floor=self.no_halves)([r])
+            r["_explained_per_layer"] = ef
             for k, v in r["pit"].items():
                 if v is not None:
                     self.suff[f"pit/{regime}/{r['target']}/{k}"] = np.append(v[0], v[1])
         return recs
+
+    # -------------------------------------------------------------- explained fraction per layer
+    def _explained_per_layer(self, assay, arrays) -> dict:
+        """Explained fraction per layer of one assay (PI ruling 32; reported only, never a selection
+        input; `layers.explained_table`, `onion total variance.md` explained-per-layer).
+
+        Filled where the two members of a pair both have a prediction: an other_experiment or
+        other_cell_type pair of `pairs.tsv` whose two sides are both imputation targets of this regime.
+        The members of a pair within one experiment (isogenic, anisogenic) are never predicted; for an
+        imputed target they get the same inputs (the cell's other assays) and covariates up to depth, so
+        their prediction difference is 0 at the common depth and their captured part is 0
+        (`zero_by_shared_inputs`); their pair value comes from their reads. Layers reported: experiment
+        (other_experiment over isogenic) and cell type (over anisogenic + other_experiment - isogenic, or
+        the fallback that `layers.lower_terms` names)."""
+        from onion_eval import layers as LY
+        if self.external:
+            return {"rows": [], "reason": EXTERNAL_REASON}
+        pred = {a["target"]: a for a in arrays if a["defined"]}
+        self._rung_pairs(assay, "")                                 # builds the index
+        seen, pairs = set(), []
+        for (ass, _), by in self._rung_pair_index.items():
+            if ass != assay:
+                continue
+            for rung, lst in by.items():
+                if rung not in EXPLAINED_RUNGS:
+                    continue
+                for a, b in lst:
+                    if (rung, a, b) not in seen:
+                        seen.add((rung, a, b))
+                        pairs.append((rung, a, b))
+        outer = [p for p in pairs if p[0] in EXPLAINED_OUTER and p[1] in pred and p[2] in pred]
+        if not outer:
+            return {"rows": [], "zero_by_shared_inputs": list(EXPLAINED_ZERO), "reason":
+                    "no other_experiment or other_cell_type pair with a prediction for both members"}
+        cells = {self._row(m)["cell"] for _, a, b in outer for m in (a, b)}
+        inner = [p for p in pairs if p[0] in EXPLAINED_ZERO and self._row(p[1])["cell"] in cells]
+
+        def depth(m):
+            row = self._row(m)
+            return float(row.get("depth_reads") or row.get("depth_fragments") or "nan")
+
+        used = outer + inner
+        D = min(min(depth(a), depth(b)) for _, a, b in used)
+
+        def counts(m):
+            if m in pred:
+                return pred[m]["y"]
+            return np.concatenate([self._ds_read(m, c, s_, self.rb) for c, s_ in self.regions]).astype(np.float64)
+
+        recs = []
+        for rung, a, b in used:
+            xa, xb = counts(a), counts(b)
+            if rung in EXPLAINED_OUTER:
+                ea, eb = (LY.predicted_layer_mean(pred[m]["n"], pred[m]["mu"], D / depth(m)) for m in (a, b))
+            else:
+                ea = eb = np.zeros(xa.size)
+            got = LY.pair_explained(xa, xb, ea, eb, depth(a), depth(b), depth=D,
+                                    seed=zlib.crc32(f"ef:{rung}:{a}:{b}".encode()))
+            recs.append(dict(rung=rung, cell=self._row(a)["cell"], captured=got["captured"],
+                             pair_value=got["pair_value"]))
+        rows = [r for r in LY.explained_table(recs, n_boot=self.n_boot, seed=self.seed)
+                if r["rung"] in EXPLAINED_OUTER]
+        return {"rows": [{k: (_j(v) if isinstance(v, float) else v) for k, v in r.items()} for r in rows],
+                "depth": D, "zero_by_shared_inputs": list(EXPLAINED_ZERO), "reason": ""}
 
     # -------------------------------------------------------------- signal space (X2)
     def _signal_target(self, job, n, mu, A, defined, pa_ok):
@@ -1420,8 +1585,13 @@ class Scorer:
                                              require_all=ra),
             "pit_deviation_pooled": metric(recs, pit_fn(POOLED), scorable, nb, sd, require_all=ra),
             "pit_deviation_worst_stratum": metric(recs, worst_fn, scorable, nb, sd, require_all=ra),
-            "predicted_over_replicate_variance": metric(recs, _mean_of("variance_ratio"), scorable,
-                                                        nb, sd, require_all=ra),
+            "predicted_over_replicate_variance": self._h7_metric(recs, scorable, require_all=ra),
+            "explained_fraction_per_layer": {
+                "description": "reported only, never a selection input (PI ruling 32): per layer, the share of "
+                               "the layer term that the prediction difference of the pair captures, "
+                               "layers.explained_table",
+                "per_assay": {r["assay"]: r["_explained_per_layer"] for r in recs
+                              if r.get("_explained_per_layer") is not None}},
             "error_budget": budget,
         }
         if self.lambda_source == "predicted_control":
