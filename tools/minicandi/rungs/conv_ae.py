@@ -114,9 +114,11 @@ class Model(C.MiniCandi):
                                 "tokens; covariate_injection = tokens does not apply")
         self.config = cfg
         if width is None:
-            width = choose_width(cfg)
+            width = choose_width(C.without_extras(cfg))
         self.width = int(width)
         self._build(cfg, self.width)
+        # extra inputs (chunk XI), constructed last; dna = off leaves no DNA features
+        self.build_extras(cfg, D_DNA if cfg["dna"] != "off" else None, ("inj_in", "inj_out"))
 
     # ------------------------------------------------------------------ construction
 
@@ -169,6 +171,7 @@ class Model(C.MiniCandi):
     # ------------------------------------------------------------------ forward
 
     def forward(self, batch: dict) -> dict:
+        self.begin_extras(batch)
         x_counts, x_avail, bmask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         B, L, A = x_counts.shape
         vis = MaskHandler.visible(x_avail, bmask)                         # [B, L, A]
@@ -189,7 +192,7 @@ class Model(C.MiniCandi):
             feats.append(vis.to(h.dtype))
         if self.dna.mode != "off":
             dna_key = "x_dna_emb" if self.dna.mode == "precomputed" else "x_dna"
-            feats.append(self.dna(batch[dna_key]).to(h.dtype))
+            feats.append(self.add_extra_track(self.dna(batch[dna_key]), batch).to(h.dtype))
         z = torch.cat(feats, dim=-1).transpose(1, 2)                       # [B, C, L]
 
         f = 2 ** N_LEVELS

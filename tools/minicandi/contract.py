@@ -102,6 +102,12 @@ DTYPES = {
     "y_counts": torch.int32, "y_avail": torch.bool, "y_kind": torch.uint8,
     "avg": torch.float32, "c_base": torch.float32, "y_base": torch.int32,
 }
+#: optional keys of pinned interface E (chunk XI), present only when their config key is set:
+#: x_rna [B, L, 2], x_rna_avail [B], x_cell_vec [B, n_genes], x_cell_vec_avail [B], cell_id [B]
+EXTRA_DTYPES = {"x_rna": torch.float32, "x_rna_avail": torch.bool, "x_cell_vec": torch.float32,
+                "x_cell_vec_avail": torch.bool, "cell_id": torch.int64}
+#: config keys that build an extra-input module in a rung; a rung sizes its trunk without them
+EXTRA_KEYS = ("rna_track", "cell_vector", "cell_embedding")
 REQUIRED = ("x_counts", "x_avail", "x_bin_mask", "x_dna", "c_in", "c_out", "y_counts",
             "y_avail", "y_kind", "meta")
 CKPT_KEYS = ("state_dict", "config", "param_count", "windows_seen", "tables_sha256", "git_sha")
@@ -157,6 +163,13 @@ def validate_batch(batch: dict, K: int | None = None) -> tuple[int, int]:
         raise ValueError("c_in must be 0 where x_avail is False")
     if (batch["c_out"][~y_avail] != 0).any():
         raise ValueError("c_out must be 0 where y_avail is False")
+    for key, dt in EXTRA_DTYPES.items():
+        if key not in batch:
+            continue
+        t = batch[key]
+        want = {"x_rna": (B, L, 2), "x_cell_vec": (B, t.shape[-1])}.get(key, (B,))
+        if tuple(t.shape) != want or t.dtype != dt:
+            raise ValueError(f"{key}: {t.dtype} {tuple(t.shape)}, want {dt} {want}")
     return B, L
 
 
@@ -171,14 +184,95 @@ def collate(windows: list[dict]) -> dict:
     return out
 
 
+def without_extras(cfg: dict | None) -> dict:
+    """`cfg` without the extra-input keys: the config a rung's width search builds from, so an
+    extra input never changes the trunk."""
+    return {k: v for k, v in (cfg or {}).items() if k not in EXTRA_KEYS}
+
+
+class CellFiLMEmbed(torch.nn.Module):
+    """A covariate embedding followed by the cell-state FiLM of the current forward
+    (`extra_inputs.apply_cell_state`); `MiniCandi.begin_extras` sets `film` per forward."""
+
+    def __init__(self, base: torch.nn.Module):
+        super().__init__()
+        self.base = base
+        self.film = None
+
+    def forward(self, c: torch.Tensor) -> torch.Tensor:
+        from minicandi.extra_inputs import apply_cell_state
+        e = self.base(c)
+        if self.film is None:
+            raise RuntimeError("cell-state embedding called before begin_extras(batch)")
+        gamma, beta = self.film
+        B = gamma.shape[0]
+        return apply_cell_state(e.reshape(B, -1, e.shape[-1]), gamma, beta).reshape(e.shape)
+
+
 class MiniCandi(torch.nn.Module):
-    """Base class of every rung: `forward(batch) -> {"n": [B,L,A] > 0, "mu": [B,L,A] > 0}`."""
+    """Base class of every rung: `forward(batch) -> {"n": [B,L,A] > 0, "mu": [B,L,A] > 0}`.
+
+    Extra inputs (Amendment 3, chunk XI). A rung calls `build_extras(cfg, d_dna, injectors)` as
+    the LAST step of its construction, `begin_extras(batch)` first in `forward`, and passes its
+    per-bin DNA features through `add_extra_track(dna, batch)`. With no key of `EXTRA_KEYS` set the
+    three calls build nothing, draw nothing and return their input: the model is today's.
+      rna_track       `extra_inputs.ExtraTrackStem(2, d_dna)` of `x_rna` (null row where
+                      `x_rna_avail` is False), added to the DNA features of every bin. A rung that
+                      has no DNA features (d_dna None, e.g. dna = off) raises NotApplicable.
+      cell_vector / cell_embedding
+                      one `extra_inputs.CellState(d_cov)`, whose (gamma, beta) FiLM the output of
+                      the covariate embedding of every listed injector (input and output side):
+                      each injector's `embed` is wrapped in `CellFiLMEmbed`.
+    Both start as the identity (stem 0, gamma 1, beta 0), so at initialisation the model with the
+    keys gives the output of the model without them under the same seed.
+    """
 
     def forward(self, batch: dict) -> dict:  # pragma: no cover - abstract
         raise NotImplementedError
 
     def param_count(self) -> int:
         return int(sum(p.numel() for p in self.parameters()))
+
+    def build_extras(self, cfg: dict, d_dna: int | None, injectors: tuple) -> None:
+        from minicandi.components import NotApplicable
+        from minicandi.extra_inputs import CellState, ExtraTrackStem, extra_kwargs
+        kw = extra_kwargs(cfg)
+        if kw["rna_track"] is not None:
+            if d_dna is None:
+                raise NotApplicable(f"{type(self).__module__}: rna_track is added to the per-bin "
+                                    f"DNA features, and this configuration has none (dna = "
+                                    f"{cfg.get('dna', 'own')!r})")
+            self.rna_stem = ExtraTrackStem(d=int(d_dna), **kw["rna_track"])
+        if kw["cell_state"] is not None:
+            mods = [getattr(self, name) for name in injectors]
+            d_cov = {m.embed.mlp[-1].out_features for m in mods}
+            if len(d_cov) != 1:
+                raise NotApplicable(f"cell state: the covariate embeddings differ in width {d_cov}")
+            self.cell_state = CellState(d_cov.pop(), **kw["cell_state"])
+            self._film_embeds = []
+            for m in mods:
+                m.embed = CellFiLMEmbed(m.embed)
+                self._film_embeds.append(m.embed)
+
+    def begin_extras(self, batch: dict) -> None:
+        cs = getattr(self, "cell_state", None)
+        if cs is not None:
+            film = cs(batch)
+            for e in self._film_embeds:
+                e.film = film
+
+    def add_extra_track(self, dna: torch.Tensor, batch: dict) -> torch.Tensor:
+        stem = getattr(self, "rna_stem", None)
+        if stem is None:
+            return dna
+        if "x_rna" not in batch:
+            raise ValueError("rna_track is set but the batch has no `x_rna` (dataset config "
+                             "rna_track / rna_h5_dir)")
+        x = batch["x_rna"].to(dna.dtype)
+        avail = batch.get("x_rna_avail")
+        if avail is None:
+            avail = torch.ones(x.shape[0], dtype=torch.bool, device=x.device)
+        return dna + stem(x, avail).to(dna.dtype)
 
 
 def nb_nll(n: torch.Tensor, mu: torch.Tensor, y: torch.Tensor,
@@ -249,6 +343,7 @@ def wiring_check(model: torch.nn.Module, batch: dict, seed: int = 0) -> dict:
 
 __all__ = [
     "A", "ASSAYS", "ASSAY_CLASSES", "BROAD_HISTONE", "CKPT_KEYS", "CONTROL", "CONTROL_INDEX",
+    "CellFiLMEmbed", "EXTRA_DTYPES", "EXTRA_KEYS", "without_extras",
     "K_META", "K_QC", "KIND_CORRECT", "KIND_IMPUTE", "KIND_NONE", "KIND_SAME", "LOG2_DEPTH_COL",
     "META_COLUMNS", "MU_MAX", "MU_MIN", "MiniCandi", "N_MAX", "N_MIN", "QC_COLUMNS", "RES",
     "TRACKS", "TRACK_INDEX", "assay_class", "check_ckpt", "collate", "expected_shapes",

@@ -22,6 +22,12 @@ order). A rung's own `Model(config)` still raises NotApplicable for `two_step`.
 by `config["rung"]` (the mix-and-match hybrids and the evolved candidates use it). The file is
 executed once per resolved path and process, as module `minicandi_model_file.<stem>_<hash>`.
 
+Extra inputs (Amendment 3, chunk XI). `loss_assay_weight = learned` registers the parameter
+`assay_log_w` float32 [A] (zeros; no RNG drawn) on the outermost model and a forward hook that
+adds it to the output as `out["assay_log_w"]`; `losses.total_loss` reads it. `aug_revcomp`
+together with `dna = precomputed` is refused (`check_extra_config`). The rung keys
+`rna_track`, `cell_vector`, `cell_embedding` act inside the rung (`contract.MiniCandi`).
+
 `load_run(run_dir)` is the only loader the scorer (E6) and the guardrail (E4) use. It reads
 `<run_dir>/ckpt.pt` (the pinned dict, `contract.check_ckpt`), rebuilds the model from the saved
 config with the RNG forked (so loading never moves the caller's RNG), loads the state dict and
@@ -51,6 +57,8 @@ CKPT_NAME = "ckpt.pt"
 REPO = _TOOLS.parent
 #: config keys that select a wrapper; the inner model is built without them
 WRAPPER_KEYS = ("two_step", "control_head")
+#: `loss_assay_weight` values (pinned interface E); `learned` adds the parameter `assay_log_w`
+LOSS_ASSAY_WEIGHTS = (None, "none", "equal", "learned")
 _MODEL_FILES: dict = {}
 
 
@@ -132,6 +140,7 @@ def build_model(config: dict) -> C.MiniCandi:
     before the call (AGENTS.md invariant 10); this function draws nothing itself."""
     if "rung" not in config and not config.get("model_file"):
         raise KeyError("config has no 'rung'")
+    check_extra_config(config)
     inner_cfg = {k: v for k, v in config.items() if k not in WRAPPER_KEYS}
     model = model_class(config)(inner_cfg)
     if not isinstance(model, C.MiniCandi):
@@ -142,7 +151,27 @@ def build_model(config: dict) -> C.MiniCandi:
     if config.get("two_step"):
         from minicandi import two_step as TS
         model = TS.wrap(model, dict(config))
+    if config.get("loss_assay_weight", "none") == "learned":
+        model.register_parameter("assay_log_w", torch.nn.Parameter(torch.zeros(C.A)))
+        model.register_forward_hook(_emit_assay_log_w)
     return model
+
+
+def _emit_assay_log_w(module, inputs, out):
+    """Forward hook under `loss_assay_weight = learned`: the output also carries the learned log
+    weight per track, `out["assay_log_w"]` float32 [A] (pinned interface E)."""
+    return {**out, "assay_log_w": module.assay_log_w}
+
+
+def check_extra_config(config: dict) -> None:
+    """Refuse the extra-input key combinations no rung can build (chunk XI)."""
+    w = config.get("loss_assay_weight", "none")
+    if w not in LOSS_ASSAY_WEIGHTS:
+        raise ValueError(f"loss_assay_weight {w!r} not in {LOSS_ASSAY_WEIGHTS}")
+    if config.get("aug_revcomp") and config.get("dna") == "precomputed":
+        raise ValueError("aug_revcomp with dna = precomputed: the reversal flips the frozen "
+                         "embedding rows, and a flipped embedding is not the embedding of the "
+                         "reverse strand; use dna = own")
 
 
 def load_run(run_dir, map_location="cpu") -> tuple[C.MiniCandi, dict]:
@@ -162,5 +191,6 @@ def load_run(run_dir, map_location="cpu") -> tuple[C.MiniCandi, dict]:
     return model, config
 
 
-__all__ = ["CKPT_NAME", "REPO", "RUNGS", "RUNGS_DIR", "WRAPPER_KEYS", "available", "build_model",
+__all__ = ["CKPT_NAME", "LOSS_ASSAY_WEIGHTS", "REPO", "RUNGS", "RUNGS_DIR", "WRAPPER_KEYS",
+           "available", "build_model", "check_extra_config",
            "load_run", "model_class", "model_file_module", "module_name", "rung_module"]

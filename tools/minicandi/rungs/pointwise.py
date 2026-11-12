@@ -100,7 +100,7 @@ class Model(C.MiniCandi):
         self.scramble = scramble_mode(cfg)
         d = cfg.get("d_model")
         if d is None:
-            d = choose_width(cfg)
+            d = choose_width(C.without_extras(cfg))
         self.d_model = d = int(d)
         self.injection = cfg.get("covariate_injection", "film")
         self.mask_mode = cfg.get("mask_mode", "drop")
@@ -125,8 +125,11 @@ class Model(C.MiniCandi):
         self.head = NBHead(d, self.transform, **kw["head"])
         if self.average_input:                    # additive, default off: constructed last
             self.avg_proj = nn.Linear(1, d)
+        # extra inputs (chunk XI), constructed last; the DNA vector exists in every dna mode
+        self.build_extras(cfg, D_DNA, ("in_cov", "out_cov"))
 
     def forward(self, batch: dict) -> dict:
+        self.begin_extras(batch)
         x_avail, x_bin_mask = batch["x_avail"], batch["x_bin_mask"]
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
                                                          self.cov_dropout)
@@ -148,6 +151,7 @@ class Model(C.MiniCandi):
             count = count + tw.sum(1)[:, None]
         pooled = total / count.clamp_min(1.0)[..., None]
         dna = self.dna(batch["x_dna_emb" if self.dna.mode == "precomputed" else "x_dna"])
+        dna = self.add_extra_track(dna, batch)
         z = torch.cat([pooled, torch.log1p(count)[..., None], dna], -1)
         z = self.trunk(z)                                                  # [B, L, d]
         g = z[:, :, None, :] + self.out_track                              # [B, L, A, d]
