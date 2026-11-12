@@ -51,7 +51,18 @@ class Cat:
                 "run_type": rt, "read_length": "36" if rt == "single-ended" else "100",
                 "platform": "HiSeq", "paired_with": mate, "bio_reps": "1", "tech_reps": "1_1",
                 "status": "released", "paired_end": end, "read_count": str(reads),
-                "file_size": "1000000000", "url": ""}
+                "file_size": "1000000000", "url": "", "output_type": "reads", "assembly": "",
+                "md5": ""}
+
+    def bam(self, acc, rep="1", status="released"):
+        """A redacted unfiltered GRCh38 BAM of `acc` (the native route of PI ruling 16)."""
+        self.n += 1
+        f = {k: "" for k in self.files[0]}
+        f.update({"file": f"FB{self.n:04d}", "experiment": acc, "file_format": "bam",
+                  "output_type": B.NATIVE_OUTPUT, "assembly": "GRCh38", "bio_reps": rep,
+                  "status": status, "file_size": "2000000000", "md5": f"md5{self.n}"})
+        self.files.append(f)
+        return f["file"]
 
     def write(self, d: Path):
         d.mkdir(parents=True, exist_ok=True)
@@ -87,6 +98,16 @@ def world(tmp_path):
     c.exp("PE_OK", lab=LAB_O, donor="D1", reads=10 * M, pe=True)        # 20 M reads, 10 M fragments
     c.exp("PE_LOW", lab=LAB_O, donor="D1", reads=6 * M, pe=True)        # 12 M reads, 6 M fragments
     c.exp("CTL_A", lab=LAB_O, donor="D1", reads=10 * M)
+    # PI ruling 16 for second experiments: FASTQs restricted (403), redacted BAMs served
+    c.exp("E7", reads=10 * M)
+    c.exp("F2", lab=LAB_O, donor="D1", reads=20 * M)                     # FASTQ, ratio 1
+    c.exp("RB", lab=LAB_O, donor="D1", reads=10 * M)                     # BAM, ratio 0
+    c.exp("RB_LOW", lab=LAB_O, donor="D1", reads=10 * M)                 # BAM, 8 M fragments
+    c.exp("NOB", lab=LAB_O, donor="D1", reads=10 * M)                    # nothing served
+    restricted = {f["file"] for f in c.files if f["experiment"] in ("RB", "RB_LOW", "NOB")}
+    bam_rb, bam_low = c.bam("RB"), c.bam("RB_LOW")
+    metrics = {bam_rb: {"mapped": 20 * M, "total": 21 * M, "paired": 20 * M},
+               bam_low: {"mapped": 16 * M, "total": 17 * M, "paired": 16 * M}}
     cat_dir = c.write(tmp_path / "catalog")
     census = [
         track("C09M01", "val", "E1", ["B", "C", "A", "P", "S", "SL", "E2"]),
@@ -94,30 +115,33 @@ def world(tmp_path):
         track("C05M01", "val", "E4", ["X2", "X1"]),
         track("C07M01", "train", "E6", ["PE_LOW", "PE_OK"]),
         {**track("C08M01", "train", "E6", ["Z"]), "best_candidate": "", "other_accessions": ""},
+        track("C11M01", "val", "E7", ["RB", "F2", "RB_LOW", "NOB"]),
     ]
     ledger = [{"eic_track": t, "role": r, "assay_class": "narrow_histone", "experiment": e,
                "encode_possible_controls": ""}
               for t, r, e in (("C09M01", "val", "E1"), ("C01M01", "train", "E5"),
                               ("C05M01", "val", "E4"), ("C07M01", "train", "E6"),
-                              ("C02M01", "train", "E2"))]
+                              ("C02M01", "train", "E2"), ("C11M01", "val", "E7"))]
     build = [{"experiment": e, "role": r, "arm": "base", "unit": "pooled",
               "assay_class": "narrow_histone", "control_experiment": ""}
              for e, r in (("E1", "val"), ("E4", "val"), ("E5", "train"), ("E6", "train"),
-                          ("E2", "train"))]
+                          ("E2", "train"), ("E7", "val"))]
     # the floor: fragments of the training base experiments E5, E6, E2 = 10 M each
     ok = {"status": "released", "errors": [], "perturbed": False, "treated": False,
           "modified": False, "term": TERM}
-    portal = {a: dict(ok) for a in ("A", "B", "C", "S", "SL", "E2", "X1", "X2", "PE_OK", "PE_LOW")}
+    portal = {a: dict(ok) for a in ("A", "B", "C", "S", "SL", "E2", "X1", "X2", "PE_OK", "PE_LOW",
+                                    "F2", "RB", "RB_LOW", "NOB")}
     portal["P"] = {**ok, "perturbed": True, "treated": True}
     wanted = {r["experiment"] for r in c.exps}
     cat = OX.load_catalog(cat_dir, wanted)
-    probe = {f["file"]: "200" for f in c.files}
+    probe = {f["file"]: ("403" if f["file"] in restricted else "200") for f in c.files}
     return {"census": census, "cat": cat, "cat_dir": cat_dir, "ledger": ledger, "build": build,
-            "portal": portal, "probe": probe, "tmp": tmp_path}
+            "portal": portal, "probe": probe, "metrics": metrics, "tmp": tmp_path}
 
 
 def run(w):
-    return OX.select(w["census"], w["cat"], w["ledger"], w["build"], w["portal"], w["probe"])
+    return OX.select(w["census"], w["cat"], w["ledger"], w["build"], w["portal"], w["probe"],
+                     w["metrics"])
 
 
 def ev(res, track, acc):
@@ -179,7 +203,9 @@ def test_dropped_and_no_candidate_track(world):
 def test_cli_select_end_to_end(world, monkeypatch):
     w, t = world, world["tmp"]
     monkeypatch.setattr(OX, "portal_meta", lambda accs: w["portal"])
-    monkeypatch.setattr(OX, "head_probe", lambda files, threads=16: w["probe"])
+    monkeypatch.setattr(OX, "head_probe", lambda files, threads=16: {
+        f["file"]: w["probe"][f["file"]] for f in files})
+    monkeypatch.setattr(OX, "bam_metrics", lambda accs: w["metrics"])
     B.write_tsv(t / "census.tsv", tuple(w["census"][0]), w["census"])
     B.write_tsv(t / "ledger.tsv", tuple(w["ledger"][0]), w["ledger"])
     B.write_tsv(t / "build.tsv", tuple(w["build"][0]), w["build"])
@@ -188,10 +214,12 @@ def test_cli_select_end_to_end(world, monkeypatch):
                     "--out", str(t / "out" / "other_experiments.tsv"),
                     "--dropped", str(t / "out" / "dropped.tsv")]) == 0
     rows = B.read_tsv(t / "out" / "other_experiments.tsv")
-    assert tuple(rows[0]) == OX.OUT_COLUMNS and len(rows) == 4
-    assert [r["eic_track"] for r in rows] == ["C05M01", "C09M01", "C01M01", "C07M01"]
+    assert tuple(rows[0]) == OX.OUT_COLUMNS and len(rows) == 5
+    assert [r["eic_track"] for r in rows] == ["C05M01", "C09M01", "C11M01", "C01M01", "C07M01"]
+    assert rows[2]["fallback_source"] == "redacted_bam"
     md = (t / "out" / "SELECTION.md").read_text()
     assert "undercount" in md and "| narrow_histone | 3 | 10,000,000 |" in md
+    assert "| val | narrow_histone | 3 | 0 |" in md and "| all | all | 5 | 0 |" in md
 
 
 def test_pair_smoke(tmp_path):
@@ -229,3 +257,26 @@ def test_blind_track_never_selected(world):
     # the blind track holds nothing: the validation track C09M01 keeps its choice and fallback
     r = {x["eic_track"]: x for x in res["rows"]}["C09M01"]
     assert (r["experiment"], r["fallback"]) == ("A", "B")
+
+
+def test_redacted_bam_source(world):
+    res = run(world)
+    rb, low, nob = (ev(res, "C11M01", a) for a in ("RB", "RB_LOW", "NOB"))
+    # accepted from the redacted BAM; fragments = flagstats mapped / 2 (paired-end)
+    assert rb["ok"] and rb["source"] == "redacted_bam" and rb["fragments"] == str(10 * M)
+    assert rb["catalog_reads"] == str(21 * M) and rb["log2_depth_ratio"] == "0.000"
+    assert rb["alignment_files"] and rb["alignment_md5"].startswith("md5") and not rb["fastq_files"]
+    assert rb["alignment_bytes"] == "2000000000" and rb["tech_diff"] == "source"
+    assert rb["checks"].split(";")[3].startswith("4:ok(redacted_bam 1 BAMs")
+    assert any(f.startswith("6 fragments 8000000 < floor 10000000") for f in low["fails"])
+    assert any(f.startswith("4 no FASTQ served") for f in nob["fails"])
+    r = {x["eic_track"]: x for x in res["rows"]}["C11M01"]
+    # equal on lab and donor: the FASTQ candidate goes first although RB is depth-closer
+    assert (r["experiment"], r["source"], r["fallback"], r["fallback_source"]) == \
+        ("F2", "fastq", "RB", "redacted_bam")
+
+
+def test_redacted_bam_without_flagstats_fails(world):
+    w = dict(world, metrics={})
+    rb = ev(run(w), "C11M01", "RB")
+    assert not rb["ok"] and "6 a redacted BAM has no flagstats mapped count" in rb["fails"]

@@ -18,7 +18,12 @@ Checks per (track, candidate), written to the column `checks`:
     term as the EIC experiment.
   3 not EIC: not an EIC ledger experiment, not an EIC control, no library shared with the EIC
     experiment.
-  4 fastq: at least one FASTQ served (HTTP 200), mates kept together (`build_list.available_fastqs`).
+  4 source: at least one FASTQ served (HTTP 200), mates kept together
+    (`build_list.available_fastqs`); `source = fastq`. Else (PI ruling 16, as for the EIC
+    experiments) a released GRCh38 "redacted unfiltered alignments" BAM per biological replicate
+    served by the portal (`build_list.native_bams`, the `native-redacted-bam` route);
+    `source = redacted_bam`, its depth = flagstats `mapped` of the unfiltered BAM, halved when
+    paired-end (fragments). Among candidates equal on lab and donor, `fastq` goes first.
   5 tech: run type, read length, platform, biological-replicate count (recorded).
   6 depth: fragments >= the 5th percentile of the fragments of the EIC training base experiments
     of the same assay class. A paired-end read pair is one fragment (the R1 read counts);
@@ -26,8 +31,8 @@ Checks per (track, candidate), written to the column `checks`:
   7 control: the candidate's own control, served or not, and whether the EIC build holds it
     (recorded only; decision 4).
 A candidate passes when checks 1, 2, 3, 4 and 6 pass. Order of the passing candidates: other lab
-first, then same donor, other donor, unknown donor, then the smallest |log2 depth ratio| to the EIC
-experiment (fragments), then the accession. Assignment: tracks in the order validation, blind,
+first, then same donor, other donor, unknown donor, then source fastq before redacted_bam, then the
+smallest |log2 depth ratio| to the EIC experiment (fragments), then the accession. Assignment: tracks in the order validation, blind,
 training, then `eic_track`; first every track takes its best passing candidate that no earlier
 track holds, then, in the same order, every track takes its next free candidate as the fallback.
 An experiment serves at most one track. A blind track gets no second experiment (foreman decision
@@ -76,7 +81,9 @@ OUT_COLUMNS = ("eic_track", "split", "cell", "assay", "assay_class", "eic_experi
                "same_biosample", "run_type", "read_length", "platform", "tech_diff", "n_bio_reps",
                "catalog_reads", "fragments", "log2_depth_ratio", "fastq_files", "fastq_gb",
                "own_control", "own_control_state", "checks", "fallback", "fallback_pair_class",
-               "fallback_fastq_files", "fallback_fastq_gb")
+               "fallback_fastq_files", "fallback_fastq_gb", "source", "alignment_files",
+               "alignment_bytes", "alignment_md5", "alignment_gb", "fallback_source",
+               "fallback_alignment_files", "fallback_alignment_gb")
 DROPPED_COLUMNS = ("eic_track", "split", "cell", "assay", "assay_class", "eic_experiment",
                    "n_candidates", "reason", "candidates")
 
@@ -130,10 +137,32 @@ def portal_meta(accessions, batch: int = 40, gap: float = 0.3) -> dict:
     return out
 
 
+def bam_metrics(accessions, batch: int = 40, gap: float = 0.3) -> dict:
+    """file accession -> {mapped, total, paired} of the portal's samtools flagstats of that BAM
+    (the `unfiltered` processing stage when the file has several)."""
+    accs, out = sorted(set(accessions)), {}
+    for i in range(0, len(accs), batch):
+        q = [("type", "File")] + [("accession", a) for a in accs[i:i + batch]] + \
+            [("field", "accession"), ("field", "quality_metrics"), ("format", "json"),
+             ("limit", "all")]
+        d = _get_json(f"{PORTAL}/search/?{urllib.parse.urlencode(q)}")
+        for g in d.get("@graph", []):
+            qs = [x for x in g.get("quality_metrics") or [] if isinstance(x, dict)
+                  and "SamtoolsFlagstatsQualityMetric" in (x.get("@type") or []) and "mapped" in x]
+            qs = [x for x in qs if x.get("processing_stage") == "unfiltered"] or qs
+            if qs:
+                x = qs[0]
+                out[g["accession"]] = {"mapped": int(x["mapped"]), "total": int(x.get("total") or 0),
+                                       "paired": int(x.get("paired") or x.get("read1") or 0)}
+        time.sleep(gap)
+    return out
+
+
 def head_probe(files, threads: int = 16) -> dict:
     """file accession -> HTTP status (str) of one HEAD, as `build_list.probe` sends it."""
     def head(f):
-        url = f.get("url") or (f"{PORTAL}/files/{f['file']}/@@download/{f['file']}.fastq.gz")
+        ext = "bam" if f.get("file_format") == "bam" else "fastq.gz"
+        url = f.get("url") or (f"{PORTAL}/files/{f['file']}/@@download/{f['file']}.{ext}")
         last = ""
         for _ in range(3):
             try:
@@ -163,7 +192,7 @@ def load_catalog(catalog: Path, wanted: set) -> dict:
     files = defaultdict(list)
     with open(catalog / "files.tsv", newline="") as fh:
         for r in csv.DictReader(fh, delimiter="\t"):
-            if r["experiment"] in wanted and r.get("file_format") == "fastq":
+            if r["experiment"] in wanted and (r.get("file_format") == "fastq" or B.is_native_bam(r)):
                 files[r["experiment"]].append(r)
     return {"exps": exps, "libs": libs, "files": files}
 
@@ -238,7 +267,9 @@ def eic_sets(ledger: list[dict], build_rows: list[dict]) -> dict:
         (ctls if r.get("assay_class") == B.CONTROL_CLASS else exps).add(r["experiment"])
         ctls.update(B.split_acc(r.get("control_experiment", "")))
     ctls -= exps
-    return {"experiments": exps, "controls": ctls,
+    source = {r["experiment"]: "redacted_bam" for r in build_rows
+              if r.get("pipeline") == B.NATIVE_PIPELINE}
+    return {"experiments": exps, "controls": ctls, "source": source,
             "build": {r["experiment"] for r in build_rows}}
 
 
@@ -265,8 +296,20 @@ def candidates_of(row: dict) -> list[str]:
     return out
 
 
+def bam_depth(bams: list[dict], metrics: dict) -> tuple[int | None, int | None]:
+    """(reads, fragments) of redacted BAMs: `total` and `mapped` of the unfiltered flagstats;
+    `mapped` counts mates separately, so a paired-end BAM (flagstats `paired` > 0) gives
+    fragments = mapped / 2. None when a BAM has no flagstats."""
+    if not bams or any(f["file"] not in metrics for f in bams):
+        return None, None
+    reads = sum(metrics[f["file"]]["total"] for f in bams)
+    frags = sum(metrics[f["file"]]["mapped"] // (2 if metrics[f["file"]]["paired"] > 0 else 1)
+                for f in bams)
+    return reads, frags
+
+
 def evaluate(track: dict, acc: str, cat: dict, portal: dict, probe: dict, eic: dict,
-             floors: dict) -> dict:
+             floors: dict, metrics: dict | None = None) -> dict:
     """All seven checks of one candidate for one track."""
     E = track["eic_experiment"]
     ex = cat["exps"].get(acc)
@@ -298,20 +341,27 @@ def evaluate(track: dict, acc: str, cat: dict, portal: dict, probe: dict, eic: d
         fails.append("3 shares library " + ",".join(sorted(shared)))
     # 4
     rel = released_fastqs(cat["files"].get(acc, []))
-    kept, _ = B.available_fastqs(rel, {f: {"http": h} for f, h in probe.items()})
+    pdict = {f: {"http": h} for f, h in probe.items()}
+    kept, _ = B.available_fastqs(rel, pdict)
+    bams, source = [], "fastq"
     if not kept:
-        fails.append(f"4 no FASTQ served (0/{len(rel)})")
+        bams = B.native_bams(cat["files"].get(acc, []), pdict)
+        if bams:
+            source = "redacted_bam"
+        else:
+            fails.append(f"4 no FASTQ served (0/{len(rel)}) and no redacted GRCh38 BAM served")
     # 5
-    tech = tech_of(kept)
+    tech = tech_of(kept or rel)
     eic_files = released_fastqs(cat["files"].get(E, []))
     eic_tech = tech_of(eic_files)
     # 6
-    reads, frags = depth_of(kept)
+    reads, frags = depth_of(kept) if kept else bam_depth(bams, metrics or {})
     _, eic_frags = depth_of(eic_files)
     floor = floors.get(track["assay_class"], (float("nan"), 0))[0]
-    if kept and frags is None:
-        fails.append("6 a FASTQ has no catalog read count")
-    elif kept and not (frags >= floor):
+    if (kept or bams) and frags is None:
+        fails.append("6 a FASTQ has no catalog read count" if kept else
+                     "6 a redacted BAM has no flagstats mapped count")
+    elif (kept or bams) and not (frags >= floor):
         fails.append(f"6 fragments {frags} < floor {floor:.0f}")
     ratio = (math.log2(frags / eic_frags) if frags and eic_frags else float("nan"))
     # 7
@@ -329,7 +379,9 @@ def evaluate(track: dict, acc: str, cat: dict, portal: dict, probe: dict, eic: d
         "1:" + ("fail" if any(f.startswith("1") for f in fails) else "ok"),
         "2:" + ("fail" if any(f.startswith("2") for f in fails) else "ok"),
         "3:" + ("fail" if any(f.startswith("3") for f in fails) else "ok"),
-        f"4:{'ok' if kept else 'fail'}({len(kept)}/{len(rel)} served)",
+        (f"4:ok({len(kept)}/{len(rel)} served)" if kept else
+         f"4:ok(redacted_bam {len(bams)} BAMs; 0/{len(rel)} FASTQ served)" if bams else
+         f"4:fail(0/{len(rel)} served)"),
         "5:recorded",
         f"6:{'fail' if any(f.startswith('6') for f in fails) else 'ok'}"
         f"({frags if frags is not None else 'NA'}>={floor:.0f})",
@@ -342,8 +394,13 @@ def evaluate(track: dict, acc: str, cat: dict, portal: dict, probe: dict, eic: d
                                   {l["biosample"] for l in eic_libs} - {""}) else "0",
         "same_lab": same_lab, "donor_rel": donor, "pair_class": pair_class(same_lab, donor),
         **tech,
-        "tech_diff": ";".join(k for k in ("run_type", "read_length", "platform")
-                              if tech[k] != eic_tech[k]),
+        "tech_diff": ";".join([k for k in ("run_type", "read_length", "platform")
+                               if tech[k] != eic_tech[k]] +
+                              (["source"] if source != eic["source"].get(E, "fastq") else [])),
+        "source": source, "alignment_files": ";".join(f["file"] for f in bams),
+        "alignment_bytes": ";".join(str(f.get("file_size", "")) for f in bams),
+        "alignment_md5": ";".join(f.get("md5", "") for f in bams),
+        "alignment_gb": f"{B.gb(bams):.3f}",
         "catalog_reads": "" if reads is None else str(reads),
         "fragments": "" if frags is None else str(frags),
         "log2_depth_ratio": "" if math.isnan(ratio) else f"{ratio:.3f}", "_ratio": ratio,
@@ -355,11 +412,11 @@ def evaluate(track: dict, acc: str, cat: dict, portal: dict, probe: dict, eic: d
 
 def order_key(c: dict):
     r = abs(c["_ratio"]) if not math.isnan(c["_ratio"]) else float("inf")
-    return (c["same_lab"], DONOR_RANK[c["donor_rel"]], r, c["experiment"])
+    return (c["same_lab"], DONOR_RANK[c["donor_rel"]], c["source"] != "fastq", r, c["experiment"])
 
 
 def select(census: list[dict], cat: dict, ledger: list[dict], build_rows: list[dict],
-           portal: dict, probe: dict) -> dict:
+           portal: dict, probe: dict, metrics: dict | None = None) -> dict:
     eic = eic_sets(ledger, build_rows)
     floors = depth_floors(build_rows, cat)
     tracks = sorted((r for r in census if candidates_of(r)),
@@ -367,7 +424,7 @@ def select(census: list[dict], cat: dict, ledger: list[dict], build_rows: list[d
     blind = {t["eic_track"] for t in tracks if t["split"] == "blind"}
     evals = {}
     for t in tracks:
-        evals[t["eic_track"]] = [evaluate(t, a, cat, portal, probe, eic, floors)
+        evals[t["eic_track"]] = [evaluate(t, a, cat, portal, probe, eic, floors, metrics)
                                  for a in candidates_of(t)]
     # foreman decision 2026-11-12: a blind track gets no second experiment (it could become an
     # input of that track before the single ledgered blind pass); it holds no candidate either
@@ -403,7 +460,10 @@ def select(census: list[dict], cat: dict, ledger: list[dict], build_rows: list[d
                         "fallback": f.get("experiment", ""),
                         "fallback_pair_class": f.get("pair_class", ""),
                         "fallback_fastq_files": f.get("fastq_files", ""),
-                        "fallback_fastq_gb": f.get("fastq_gb", "")})
+                        "fallback_fastq_gb": f.get("fastq_gb", ""),
+                        "fallback_source": f.get("source", ""),
+                        "fallback_alignment_files": f.get("alignment_files", ""),
+                        "fallback_alignment_gb": f.get("alignment_gb", "")})
         else:
             cands = []
             for c in evals[k]:
@@ -421,13 +481,16 @@ def select(census: list[dict], cat: dict, ledger: list[dict], build_rows: list[d
 # ------------------------------------------------------------------------------------ summary
 
 def build_cost(rows: list[dict]) -> tuple[float, float, float]:
-    """(million catalog reads, CPU-h low, CPU-h high) of the first choices at the t180 rates."""
+    """(million reads, CPU-h low, CPU-h high) of the first choices at the t180 rates. A FASTQ row
+    pays alignment plus views. A redacted-BAM row is not aligned: its low figure is the views rate
+    only, its high figure the full rate (no rate of the native filter step is measured)."""
     m = lo = hi = 0.0
     for r in rows:
         mr = int(r["catalog_reads"] or 0) / 1e6
         (a_lo, a_hi), views = RATES["accessibility_dnase" if r["assay_class"] ==
                                     "accessibility_dnase" else "chip_atac"]
-        m, lo, hi = m + mr, lo + mr * (a_lo + views), hi + mr * (a_hi + views)
+        native = r.get("source") == "redacted_bam"
+        m, lo, hi = m + mr, lo + mr * ((0 if native else a_lo) + views), hi + mr * (a_hi + views)
     return m, lo, hi
 
 
@@ -476,16 +539,33 @@ def summary_md(res: dict, n_heads: int, n_served: int, census_path: str) -> str:
     for k in sorted(set(pc) | set(fc)):
         L.append(f"| {k} | {pc.get(k, 0)} | {fc.get(k, 0)} |")
     L.append(f"| (no fallback) | | {sum(1 for r in rows if not r['fallback'])} |")
+    L.extend(["", "## Kept tracks per source", "",
+              "A candidate with no served FASTQ is accepted from ENCODE's released redacted "
+              "unfiltered GRCh38 BAMs (PI ruling 16, the build's `native-redacted-bam` route). Its "
+              "depth is the `mapped` count of the portal's samtools flagstats of the unfiltered BAM, "
+              "halved for a paired-end BAM, so it is compared with the floor in fragments.", "",
+              "| split | assay class | fastq | redacted_bam |", "|---|---|---|---|"])
+    for k in sorted({(r["split"], r["assay_class"]) for r in rows}):
+        rs = [r for r in rows if (r["split"], r["assay_class"]) == k]
+        nb = sum(1 for r in rs if r["source"] == "redacted_bam")
+        L.append(f"| {k[0]} | {k[1]} | {len(rs) - nb} | {nb} |")
+    nb = sum(1 for r in rows if r["source"] == "redacted_bam")
+    L.append(f"| all | all | {len(rows) - nb} | {nb} |")
     m, lo, hi = build_cost(rows)
     gb = sum(float(r["fastq_gb"] or 0) for r in rows)
-    fgb = sum(float(r["fallback_fastq_gb"] or 0) for r in rows)
+    agb = sum(float(r["alignment_gb"] or 0) for r in rows)
+    fgb = sum(float(r["fallback_fastq_gb"] or 0) + float(r["fallback_alignment_gb"] or 0)
+              for r in rows)
     td = Counter(r["tech_diff"] or "(none)" for r in rows)
     L.extend(["", "## Size and build cost of the first choices", "",
-              f"- FASTQ: {gb:,.1f} GB over {len(rows)} experiments (fallbacks: {fgb:,.1f} GB).",
-              f"- Catalog reads (both mates counted): {m:,.0f} million.",
+              f"- Staging: {gb + agb:,.1f} GB over {len(rows)} experiments ({gb:,.1f} GB of FASTQ, "
+              f"{agb:,.1f} GB of redacted BAM; fallbacks: {fgb:,.1f} GB).",
+              f"- Reads (FASTQ: catalog read counts, both mates; BAM: flagstats total): "
+              f"{m:,.0f} million.",
               f"- Build cost at the t180 rates (ChIP-seq and ATAC-seq 0.160 to 0.177 CPU-h per "
-              f"million reads plus 0.027 for the views; DNase-seq 0.04 plus 0.016): {lo:,.0f} to "
-              f"{hi:,.0f} CPU-h, against the planned 2,190 CPU-h.",
+              f"million reads plus 0.027 for the views; DNase-seq 0.04 plus 0.016; a redacted-BAM row "
+              f"at the views rate only for the low figure and at the full rate for the high one): "
+              f"{lo:,.0f} to {hi:,.0f} CPU-h, against the planned 2,190 CPU-h.",
               "- Technical differences from the EIC experiment: " +
               ", ".join(f"{k} {v}" for k, v in sorted(td.items())) + ".",
               "- Own controls are recorded only (decision 4); no second experiment is built with a "
@@ -496,6 +576,14 @@ def summary_md(res: dict, n_heads: int, n_served: int, census_path: str) -> str:
             L.append(f"| {d['eic_track']} | {d['split']} | {d['assay']} | {d['reason']} |")
         L.append("")
         L.append("The failed checks of every candidate are in `dropped.tsv`.")
+    L.extend(["", "## Check commands", "",
+              "Every census track with a candidate is in exactly one of the two tables, and no "
+              "experiment is chosen twice. `FNR>1` skips the header of each file (`NR>1` would "
+              "count the header of the second file as a track):", "",
+              "```",
+              "awk -F'\\t' 'FNR>1' other_experiments.tsv dropped.tsv | cut -f1 | sort -u | wc -l",
+              "awk -F'\\t' 'FNR>1{print $9; if ($28 != \"\") print $28}' other_experiments.tsv "
+              "| sort | uniq -d | wc -l", "```"])
     return "\n".join(L) + "\n"
 
 
@@ -519,7 +607,21 @@ def cmd_select(a) -> int:
     n_ok = sum(1 for v in probe.values() if v == "200")
     print(f"[select] HEAD: {len(probe)} FASTQs, {n_ok} served; "
           f"codes {dict(Counter(probe.values()))}", flush=True)
-    res = select(census, cat, ledger, build_rows, portal, probe)
+    # PI ruling 16 for second experiments: a candidate with no served FASTQ may use ENCODE's
+    # redacted unfiltered GRCh38 BAMs (the build's native-redacted-bam route)
+    pd = {f: {"http": h} for f, h in probe.items()}
+    no_fq = sorted(x for x in cands if not B.available_fastqs(
+        released_fastqs(cat["files"].get(x, [])), pd)[0])
+    bam_rows = [f for x in no_fq for f in cat["files"].get(x, []) if B.is_native_bam(f)]
+    bprobe = head_probe(bam_rows, a.threads)
+    probe = {**probe, **bprobe}
+    served_bams = [f for x in no_fq for f in B.native_bams(cat["files"].get(x, []),
+                                                           {**pd, **{k: {"http": v} for k, v in bprobe.items()}})]
+    metrics = bam_metrics([f["file"] for f in served_bams])
+    print(f"[select] {len(no_fq)} candidates with no served FASTQ; {len(bam_rows)} redacted BAMs, "
+          f"{sum(1 for v in bprobe.values() if v == '200')} served, {len(served_bams)} usable, "
+          f"{len(metrics)} with flagstats", flush=True)
+    res = select(census, cat, ledger, build_rows, portal, probe, metrics)
     for c, (v, n) in sorted(res["floors"].items()):
         print(f"[select] depth floor {c}: {v:,.0f} fragments (5th percentile of {n})", flush=True)
     B.write_tsv(a.out, OUT_COLUMNS, res["rows"])
