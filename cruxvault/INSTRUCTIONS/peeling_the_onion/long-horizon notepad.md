@@ -399,3 +399,14 @@ The PI gave these six notes on 2026-11-12. They guide the work; where a note cha
 - **27. RNA-seq input is ablation only.** Both bulk RNA-seq forms (aligned track, log-TPM vector) run as ablation arms and are reported in a side table. The final EIC-comparison model does not use RNA-seq, so D8 holds. Evidence at the time: 40 of 51 EIC cell types have ENCODE bulk RNA-seq, and 5 of the 12 cell types with blind tracks have it (`cruxvault/results/pi_notes_2026-11-12/RNA_CENSUS.md`).
 - **28. Resolution result is reported only.** The 1 bp to 128 bp ablation and the analysis of variance lost below 25 bp run on a subset of experiments. The final model stays at 25 bp in this run.
 - **29. Resolution grid.** 1, 5, 25, 50 and 125 bp.
+
+## 2026-11-12 Agent calls: plan amendment for the PI notes
+
+- **Survey arms kept.** RNA-seq as a track, RNA-seq as an expression vector, a learned cell-type embedding, four loss arms (profile-shape term weighted 5 times, equal weight per assay, learned weight per assay, multi-scale loss) and reverse-complement augmentation.
+- **Survey arms cut.** U-Net skip decoder (rung 4 already has skips), multi-resolution output heads (the multi-scale loss stands in), the ChromBPNet-style bias model, the squash transform, ensemble distillation and the hypernetwork decoder. Reason: cost against expected information in a 2.35 M parameter prototype.
+- **Loss and augmentation winners may join the final design.** RNA-seq arms and the cell-embedding arm never join it (ruling 27; an embedding cannot serve an unseen cell type).
+- **Training average as input.** It is reported against the design and against the archived blended-CANDI number where the two are comparable. No blend is rebuilt (D10).
+- **Retrieval baseline.** It is a reported row in every table. The done rule keeps its three baselines (D14).
+- **Resolution counts.** Stored 25 bp counts add a read to every bin it overlaps, so they do not sum across bin sizes. The resolution arms use a separate recount with one point per read, with their own 25 bp base, on a region subset (1 bp genome-wide would take 1,131 GB; the region store takes 124 GB).
+- **Resolution score tables.** 50 bp does not divide 125 bp. Arms are compared on a 250 bp table (all five arms) and a 50 bp table (1, 5, 25 and 50 bp arms).
+- **RNA-seq files.** At most 40 GB of ENCODE RNA-seq files are downloaded to Nibi scratch.
