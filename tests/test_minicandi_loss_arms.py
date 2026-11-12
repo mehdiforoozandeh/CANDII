@@ -1,6 +1,6 @@
 """miniCANDI loss arms of stage 3 (chunk LS; plan Amendment 3 section B, pinned interface E, and
 the key `loss_bin_equal` of the foreman amendment): each arm by hand, the gradient structure of the
-bin-equal loss, the running mean of the equal assay weight, `pool_nb`, and the defaults bit for bit
+bin-equal loss and of the stateless equal assay weight, `pool_nb`, and the defaults bit for bit
 over 5 training steps."""
 from __future__ import annotations
 
@@ -173,23 +173,57 @@ def _per_assay_means(per, mask):
     return np.array(las)
 
 
-def test_equal_assay_weight_running_mean(batch):
-    LS.reset_assay_ema()
+def test_equal_assay_weight_is_stateless(batch):
+    """(i) resume-exactness: the same inputs give the same value and gradient whatever came
+    before; the value is 1 and part `assay_mean` is the unweighted mean of the per-assay losses."""
     cfg = {"loss_assay_weight": "equal"}
     mask = C.loss_mask(batch)
     o1, o2 = _out(batch, seed=4), _out(batch, seed=5)
-    l1, _ = LS.total_loss(o1, batch, cfg)
-    assert float(l1) == pytest.approx(1.0, rel=1e-6)     # first step: each assay over itself
-    l2, _ = LS.total_loss(o2, batch, cfg)
+    a = _leaf(o1)
+    la, pa = LS.total_loss(a, batch, cfg)
+    la.backward()
+    for _ in range(3):
+        LS.total_loss(o2, batch, cfg)                     # earlier calls on other inputs
+    b = _leaf(o1)
+    lb, pb = LS.total_loss(b, batch, dict(cfg))
+    lb.backward()
+    assert torch.equal(la, lb) and pa == pb
+    assert torch.equal(a["mu"].grad, b["mu"].grad) and torch.equal(a["n"].grad, b["n"].grad)
+    assert float(la) == pytest.approx(1.0, rel=1e-6)
     a1 = _per_assay_means(LS.nb_nll_per(o1["n"], o1["mu"], batch["y_counts"]), mask)
-    a2 = _per_assay_means(LS.nb_nll_per(o2["n"], o2["mu"], batch["y_counts"]), mask)
-    ema = 0.99 * a1 + 0.01 * a2
-    assert float(l2) == pytest.approx(float(np.mean(a2 / ema)), rel=1e-5)
-    # the running mean is per config object and carries no gradient
-    o = _leaf(o2)
-    LS.total_loss(o, batch, {"loss_assay_weight": "equal"})[0].backward()
-    assert torch.isfinite(o["mu"].grad).all() and float(o["mu"].grad.abs().sum()) > 0
-    LS.reset_assay_ema()
+    assert pa["assay_mean"] == pytest.approx(float(a1.mean()), rel=1e-5)
+
+
+def test_equal_assay_weight_gives_every_assay_the_same_gradient_scale(batch):
+    """(ii) the gradient is that of mean_a log(L_a): scaling one assay's loss by c leaves it, and
+    it equals grad(L_a) / (n_present * L_a) per assay."""
+    cfg = {"loss_assay_weight": "equal"}
+    mask = C.loss_mask(batch)
+    y = batch["y_counts"]
+    o = _leaf(_out(batch, seed=9, dtype=torch.float64))
+    LS.total_loss(o, batch, cfg)[0].backward()
+    ref = _leaf(_out(batch, seed=9, dtype=torch.float64))
+    per = LS.nb_nll_per(ref["n"][mask], ref["mu"][mask], y[mask])
+    track = torch.arange(C.A).expand_as(mask)[mask]
+    present = sorted(set(track.tolist()))
+    logs = torch.stack([torch.log(per[track == t].mean()) for t in present]).mean()
+    logs.backward()
+    np.testing.assert_allclose(o["mu"].grad.numpy(), ref["mu"].grad.numpy(), rtol=1e-9,
+                               atol=1e-15)
+    np.testing.assert_allclose(o["n"].grad.numpy(), ref["n"].grad.numpy(), rtol=1e-9,
+                               atol=1e-15)
+    # inflating one assay's loss leaves the gradients of the other assays unchanged
+    t0 = present[0]
+    big = _leaf(_out(batch, seed=9, dtype=torch.float64))
+    sel = torch.zeros_like(mask)
+    sel[..., t0] = True
+    yb = torch.where(sel, y * 0 + 50, y)                  # inflate one assay's loss
+    LS.total_loss(big, dict(batch, y_counts=yb), cfg)[0].backward()
+    sm = _leaf(_out(batch, seed=9, dtype=torch.float64))
+    LS.total_loss(sm, batch, cfg)[0].backward()
+    other = mask & ~sel
+    np.testing.assert_allclose(big["n"].grad[other].numpy(), sm["n"].grad[other].numpy(),
+                               rtol=1e-9, atol=1e-15)
 
 
 def test_learned_assay_weight_by_hand(batch):
@@ -279,8 +313,6 @@ def test_multiscale_by_hand(batch):
 @pytest.mark.parametrize("arm", [{"loss_bin_equal": True}, {"loss_assay_weight": "equal"},
                                  {"loss_shape_weight": 5}, {"loss_multiscale": [4, 16]}])
 def test_each_arm_trains_for_5_steps(arm, tables, tmp_path):
-    LS.reset_assay_ema()
     T.train(_cfg(1, windows_seen=20, **arm), tables, 0, tmp_path / "run", log_every=1)
     rec = [json.loads(x) for x in (tmp_path / "run/log.jsonl").read_text().splitlines()]
     assert len(rec) == 5 and all(np.isfinite(r["loss"]) for r in rec)
-    LS.reset_assay_ema()

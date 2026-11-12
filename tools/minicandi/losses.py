@@ -42,11 +42,12 @@ leaves the loss bit-identical to the loss above.
   loss_assay_weight            "none" | "equal" | "learned". The main term becomes a mean over the
                                assays (tracks) with masked bins in the batch of a per-assay term,
                                each built from that assay's mean (kind-weighted) per-bin loss L_a.
-                               equal: L_a / m_a, m_a an exponential running mean of L_a.detach()
-                               (momentum 0.99, started at the first observed L_a, updated before
-                               the division). The running means live in this module, keyed by the
-                               config dict object (`train.train` passes one dict for the whole
-                               run; `reset_assay_ema` clears them); a resumed run restarts them.
+                               equal: L_a / L_a.detach(), stateless: its value is 1 and its
+                               gradient is that of sum over present assays of log(L_a), divided
+                               by their number, so every present assay gets the same gradient
+                               scale. No state is kept, so a resumed run equals an uninterrupted
+                               one. Because `main` is then always 1, part `assay_mean` logs the
+                               unweighted mean of L_a over the present assays (both arms).
                                learned: exp(lw_a) * L_a - lw_a, lw = out["assay_log_w"] [A], i.e.
                                the weighted loss plus -sum(log w) over the present assays, divided
                                by their number.
@@ -89,8 +90,6 @@ CRPS_K_MIN = 16
 #: Gaussian CRPS with the NB's mean and sd
 CRPS_K_CAP = 65536
 ASSAY_WEIGHTS = ("none", "equal", "learned")
-#: momentum of the running mean of `loss_assay_weight = equal`
-ASSAY_EMA_MOMENTUM = 0.99
 
 
 def check_config(config: dict) -> None:
@@ -260,30 +259,6 @@ def shape_nll(mu, y, mask):
     return nll.sum() / k
 
 
-_ASSAY_EMA: dict = {}
-
-
-def reset_assay_ema() -> None:
-    """Forget every running mean of `loss_assay_weight = equal`."""
-    _ASSAY_EMA.clear()
-
-
-def _assay_ema(config: dict, la, present):
-    """Update and return the running means [A] of the config's run (present assays only)."""
-    key = id(config)
-    if key not in _ASSAY_EMA or _ASSAY_EMA[key][0] is not config:
-        _ASSAY_EMA[key] = (config, torch.zeros_like(la), torch.zeros(la.shape[0], dtype=torch.bool,
-                                                                         device=la.device))
-    _, ema, seen = _ASSAY_EMA[key]
-    ema, seen = ema.to(la.device), seen.to(la.device)
-    cur = la.detach()
-    upd = torch.where(seen, ASSAY_EMA_MOMENTUM * ema + (1 - ASSAY_EMA_MOMENTUM) * cur, cur)
-    ema = torch.where(present, upd, ema)
-    seen = seen | present
-    _ASSAY_EMA[key] = (config, ema, seen)
-    return ema
-
-
 # ---------------------------------------------------------------------------------- total
 
 
@@ -328,9 +303,10 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
                     0, track, torch.ones_like(per_w))
                 present = c_a > 0
                 la = s_a / c_a.clamp_min(1.0)
+                parts["assay_mean"] = float(la[present].detach().mean())
                 if assay_w == "equal":
-                    ema = _assay_ema(config, la, present)
-                    main = (la[present] / ema[present].clamp_min(1e-8)).mean()
+                    lp = la[present]
+                    main = (lp / lp.detach().clamp_min(1e-8)).mean()
                 else:
                     if "assay_log_w" not in out:
                         raise KeyError("loss_assay_weight = learned needs out['assay_log_w']")
@@ -367,7 +343,6 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
     return loss, parts
 
 
-__all__ = ["ASSAY_EMA_MOMENTUM", "ASSAY_WEIGHTS", "CRPS_K_CAP", "DEFAULT_LOSS", "LOSSES",
-           "PER_BIN", "WEIGHT_KEYS", "bin_equal_per", "check_config", "multiscale_nll", "nb_crps",
-           "nb_nll_per", "pool_nb", "poisson_mean_detached_size_per", "reset_assay_ema",
-           "shape_nll", "total_loss", "weights"]
+__all__ = ["ASSAY_WEIGHTS", "CRPS_K_CAP", "DEFAULT_LOSS", "LOSSES", "PER_BIN", "WEIGHT_KEYS",
+           "bin_equal_per", "check_config", "multiscale_nll", "nb_crps", "nb_nll_per", "pool_nb",
+           "poisson_mean_detached_size_per", "shape_nll", "total_loss", "weights"]
