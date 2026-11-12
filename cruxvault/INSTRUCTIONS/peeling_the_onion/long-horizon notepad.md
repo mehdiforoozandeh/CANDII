@@ -393,3 +393,9 @@ The PI gave these six notes on 2026-11-12. They guide the work; where a note cha
 4. **Extra-input ablations.** (a) Bulk RNA-seq as an extra input, in two forms: RNA-seq aligned to the genome, i.e. one more count track; and the expression vector (log TPM) of the cell as a new input modality, which defines the cell state and the trans-regulatory effects (as in corgi). (b) The training-set average as an extra input. (c) A learned cell-type representation.
 5. **Resolution.** The resolution of the input and output count signal matters. How much variance is lost because 25 bp is too coarse? Ablate from 1 bp to 128 bp.
 6. **Priorities stay.** (1) Good imputation, (2) covariate artifact correction, (3) calibrated uncertainty. The variance decomposition of note 1 is central to all three.
+
+## 2026-11-12 PI rulings 27-29 (on the notes above)
+
+- **27. RNA-seq input is ablation only.** Both bulk RNA-seq forms (aligned track, log-TPM vector) run as ablation arms and are reported in a side table. The final EIC-comparison model does not use RNA-seq, so D8 holds. Evidence at the time: 40 of 51 EIC cell types have ENCODE bulk RNA-seq, and 5 of the 12 cell types with blind tracks have it (`cruxvault/results/pi_notes_2026-11-12/RNA_CENSUS.md`).
+- **28. Resolution result is reported only.** The 1 bp to 128 bp ablation and the analysis of variance lost below 25 bp run on a subset of experiments. The final model stays at 25 bp in this run.
+- **29. Resolution grid.** 1, 5, 25, 50 and 125 bp.
