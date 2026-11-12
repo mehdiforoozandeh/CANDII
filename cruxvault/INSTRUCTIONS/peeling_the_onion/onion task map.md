@@ -105,3 +105,30 @@ Every chunk of the peeling-the-onion plan maps to one crux child task of t152. `
 | RD | t229 | The /prezit deck |
 | RSy | t230 | The 12-page /storify report |
 | VC | t231 | Vault close-out |
+| TV1 | t232 | The total-variance note |
+| TV2 | t233 | The audit of the estimators against the identity |
+| TVf | t234 | Fix chunk for real defects of the audit (conditional) |
+| MS | t235 | Read Max's result files |
+| BRt | t236 | Retrieval baseline |
+| XRd | t237 | RNA-seq input tool |
+| XM | t238 | Extra-input model components |
+| XD | t239 | Extra-input readers and the reverse-complement transform |
+| RC0 | t240 | Probe: are the read sets there, and what does a recount cost |
+| RCt | t241 | Recount tool at 1 bp with the point rule |
+| RVt | t242 | Variance-by-scale tool |
+| LS | t243 | Loss arms |
+| XI | t244 | Integration of the extra inputs in the dataset, the contract and the six rungs |
+| XRf | t245 | Fetch and bin the RNA-seq inputs (Nibi) |
+| S3K | t246 | Stage-3 arm configs |
+| RM | t247 | Model code for another bin size |
+| AS3 | t248 | Smoke of the Amendment 3 arms on the pilot tables (Fir) |
+| RCa | t249 | Recount the subset at 1 bp (submit and collect) |
+| RVa | t250 | Variance lost below 25 bp (run and report) |
+| BRa | t251 | Retrieval baseline on eic_v1 |
+| YS | t252 | Run-to-run yardstick |
+| PW | t253 | Does the NB head down-weight peaks |
+| RMa | t254 | Resolution arms (submit) |
+| RMb | t254 | Resolution arms (collect and report) |
+| XIm | t255 | Extra inputs in a mix or evolved design (conditional) |
+| S3a | t256 | Stage 3 on the design (submit) |
+| S3b | t256 | Stage 3: collect and settle |

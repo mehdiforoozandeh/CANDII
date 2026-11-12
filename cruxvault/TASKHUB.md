@@ -75,6 +75,16 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t202` [implementation] Onion: Compute and storage tally tool
 - `t203` [implementation] Onion: Proxy scorer for the evolution step
 - `t204` [data-acquisition] Onion: Which EIC experiments are among the Borzoi and Flashzoi training targets
+- `t232` [manuscript] Onion: The total-variance note
+- `t233` [implementation] Onion: The audit of the estimators against the identity
+- `t235` [data-acquisition] Onion: Read Max's result files
+- `t236` [implementation] Onion: Retrieval baseline
+- `t237` [implementation] Onion: RNA-seq input tool
+- `t238` [implementation] Onion: Extra-input model components
+- `t239` [implementation] Onion: Extra-input readers and the reverse-complement transform
+- `t240` [data-acquisition] Onion: Probe: are the read sets there, and what does a recount cost
+- `t241` [implementation] Onion: Recount tool at 1 bp with the point rule
+- `t242` [implementation] Onion: Variance-by-scale tool
 
 ## Blocked
 
@@ -140,6 +150,21 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t229` [visualization] Onion: The /prezit deck — blocked by `t225`, `t226`, `t212`, `t228`, `t227`
 - `t230` [manuscript] Onion: The 12-page /storify report — blocked by `t225`, `t226`, `t212`, `t228`, `t227`
 - `t231` [admin] Onion: Vault close-out — blocked by `t229`, `t230`
+- `t234` [implementation] Onion: Fix the real defects of the estimator audit — blocked by `t233`
+- `t243` [implementation] Onion: Loss arms — blocked by `t235`
+- `t244` [implementation] Onion: Integration of the extra inputs in the dataset, the contract and the six rungs — blocked by `t238`, `t239`
+- `t245` [data-acquisition] Onion: Fetch and bin the RNA-seq inputs (Nibi) — blocked by `t237`
+- `t246` [implementation] Onion: Stage-3 arm configs — blocked by `t244`, `t243`
+- `t247` [implementation] Onion: Model code for another bin size — blocked by `t244`, `t241`, `t243`
+- `t248` [implementation] Onion: Smoke of the Amendment 3 arms on the pilot tables (Fir) — blocked by `t246`, `t247`, `t209`
+- `t249` [data-acquisition] Onion: Recount the subset at 1 bp (submit and collect) — blocked by `t183`, `t185`, `t240`, `t241`
+- `t250` [implementation] Onion: Variance lost below 25 bp (run and report) — blocked by `t249`, `t242`
+- `t251` [implementation] Onion: Retrieval baseline on eic_v1 — blocked by `t185`, `t236`
+- `t252` [implementation] Onion: Run-to-run yardstick — blocked by `t214`
+- `t253` [implementation] Onion: Does the NB head down-weight peaks — blocked by `t214`, `t235`
+- `t254` [implementation] Onion: Resolution arms: submit, collect and report — blocked by `t249`, `t247`, `t248`, `t214`, `t216`, `t250`
+- `t255` [implementation] Onion: Extra inputs in a mix or evolved design — blocked by `t221`, `t244`, `t246`
+- `t256` [implementation] Onion: Stage 3 on the design: submit, collect and settle — blocked by `t246`, `t245`, `t248`, `t186`
 
 ## By category
 
@@ -171,6 +196,10 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t204` [data-acquisition] Onion: Which EIC experiments are among the Borzoi and Flashzoi training targets — *open*
 - `t210` [data-acquisition] Onion: Collect priority 4, then build and check eic_v2 — *blocked*
 - `t211` [data-acquisition] Onion: Fill the read-derived QC side table (submit and collect) — *blocked*
+- `t235` [data-acquisition] Onion: Read Max's result files — *open*
+- `t240` [data-acquisition] Onion: Probe: are the read sets there, and what does a recount cost — *open*
+- `t245` [data-acquisition] Onion: Fetch and bin the RNA-seq inputs (Nibi) — *blocked*
+- `t249` [data-acquisition] Onion: Recount the subset at 1 bp (submit and collect) — *blocked*
 
 ### hpc-setup
 
@@ -278,10 +307,31 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t224` [implementation] Onion: The EIC model: train on training plus validation tracks — *blocked*
 - `t225` [implementation] Onion: The single blind pass and the done rule on the blind tracks — *blocked*
 - `t226` [implementation] Onion: EIC board and the comparison with external entries in signal space — *blocked*
+- `t233` [implementation] Onion: The audit of the estimators against the identity — *open*
+- `t234` [implementation] Onion: Fix the real defects of the estimator audit — *blocked*
+- `t236` [implementation] Onion: Retrieval baseline — *open*
+- `t237` [implementation] Onion: RNA-seq input tool — *open*
+- `t238` [implementation] Onion: Extra-input model components — *open*
+- `t239` [implementation] Onion: Extra-input readers and the reverse-complement transform — *open*
+- `t241` [implementation] Onion: Recount tool at 1 bp with the point rule — *open*
+- `t242` [implementation] Onion: Variance-by-scale tool — *open*
+- `t243` [implementation] Onion: Loss arms — *blocked*
+- `t244` [implementation] Onion: Integration of the extra inputs in the dataset, the contract and the six rungs — *blocked*
+- `t246` [implementation] Onion: Stage-3 arm configs — *blocked*
+- `t247` [implementation] Onion: Model code for another bin size — *blocked*
+- `t248` [implementation] Onion: Smoke of the Amendment 3 arms on the pilot tables (Fir) — *blocked*
+- `t250` [implementation] Onion: Variance lost below 25 bp (run and report) — *blocked*
+- `t251` [implementation] Onion: Retrieval baseline on eic_v1 — *blocked*
+- `t252` [implementation] Onion: Run-to-run yardstick — *blocked*
+- `t253` [implementation] Onion: Does the NB head down-weight peaks — *blocked*
+- `t254` [implementation] Onion: Resolution arms: submit, collect and report — *blocked*
+- `t255` [implementation] Onion: Extra inputs in a mix or evolved design — *blocked*
+- `t256` [implementation] Onion: Stage 3 on the design: submit, collect and settle — *blocked*
 
 ### manuscript
 
 - `t230` [manuscript] Onion: The 12-page /storify report — *blocked*
+- `t232` [manuscript] Onion: The total-variance note — *open*
 
 ### visualization
 
