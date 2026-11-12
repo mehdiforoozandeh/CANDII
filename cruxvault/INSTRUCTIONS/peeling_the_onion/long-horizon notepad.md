@@ -382,3 +382,14 @@ Evidence: `cruxvault/results/flashzoi_overlap/FLASHZOI_OVERLAP.md`, `overlap_tra
 - **GPU slice.** The embedding jobs use the 20 GB slice type on Nibi, because its queue was empty and the 10 GB queue held 36 jobs.
 - **Environment.** The embedding environment is built per job in node-local storage. No persistent environment was added.
 - **Result.** Flashzoi embeddings are complete and verified for chr1-22 and chrX (31.6 GB, 1.83 slice-hours). Evidence: `cruxvault/results/t207/SUBMITTED.md`.
+
+## 2026-11-12 PI notes (to keep in mind for the rest of the run)
+
+The PI gave these six notes on 2026-11-12. They guide the work; where a note changes a binding decision, the agent brings the evidence to the PI first.
+
+1. **Law of total variance.** The variance decomposition work (metrics, evals, the model formulation, and how we measure it) follows the law of total variance, i.e. Var(Y) = E[Var(Y|Z)] + Var(E[Y|Z]), applied layer by layer. The layers can also be drawn as a probabilistic graphical model.
+2. **Reference architectures for the ablations.** AlphaGenome 1 and 2, Borzoi, Enformer, BPNet and ChromBPNet, scooby and corgi.
+3. **Max's repo.** Check it for new sprints and results, and use them to inform this work.
+4. **Extra-input ablations.** (a) Bulk RNA-seq as an extra input, in two forms: RNA-seq aligned to the genome, i.e. one more count track; and the expression vector (log TPM) of the cell as a new input modality, which defines the cell state and the trans-regulatory effects (as in corgi). (b) The training-set average as an extra input. (c) A learned cell-type representation.
+5. **Resolution.** The resolution of the input and output count signal matters. How much variance is lost because 25 bp is too coarse? Ablate from 1 bp to 128 bp.
+6. **Priorities stay.** (1) Good imputation, (2) covariate artifact correction, (3) calibrated uncertainty. The variance decomposition of note 1 is central to all three.
