@@ -28,6 +28,38 @@ each kind (absent when a kind has no masked bin). `main_no_control`: the same me
 bins of tracks 0 to 34 (the control excluded). It is the loss to compare across control arms:
 `control_input = false` turns every control target into kind 1, scored on all bins, so `main`
 then averages over a different bin set than the base's (t209 ASF.md). Logging only; no gradient.
+
+Loss arms of stage 3 (plan Amendment 3, section B; pinned interface E, plus the key
+`loss_bin_equal` of the foreman amendment). Each key at its default (absent, 0, "none", [], false)
+leaves the loss bit-identical to the loss above.
+  loss_bin_equal (bool)        replaces the per-bin loss by the NB analogue of Max's equal-weight
+                               loss: per masked element
+                                 nb_nll(n, mu.detach(), y) + 0.5 * (y - mu)^2 / vbar,
+                               vbar = the mean of the predicted NB variance mu + mu^2/n (detached)
+                               over the loss-mask bins of one (window, track). The likelihood trains
+                               only the dispersion n; the mean gets the same weight 1/vbar on the
+                               squared error of every bin of a track. Needs `loss` = nb_nll.
+  loss_assay_weight            "none" | "equal" | "learned". The main term becomes a mean over the
+                               assays (tracks) with masked bins in the batch of a per-assay term,
+                               each built from that assay's mean (kind-weighted) per-bin loss L_a.
+                               equal: L_a / m_a, m_a an exponential running mean of L_a.detach()
+                               (momentum 0.99, started at the first observed L_a, updated before
+                               the division). The running means live in this module, keyed by the
+                               config dict object (`train.train` passes one dict for the whole
+                               run; `reset_assay_ema` clears them); a resumed run restarts them.
+                               learned: exp(lw_a) * L_a - lw_a, lw = out["assay_log_w"] [A], i.e.
+                               the weighted loss plus -sum(log w) over the present assays, divided
+                               by their number.
+  loss_shape_weight (float)    adds weight x the multinomial negative log-likelihood of y under
+                               p = mu / sum(mu) over the loss-mask bins of each (window, track)
+                               (the multinomial coefficient included), summed over (window, track)
+                               and divided by the number of masked bins: a per-bin scale, like the
+                               main term. part `shape`.
+  loss_multiscale ([k, ...])   for each block size k adds the mean NB NLL of the block sums of y
+                               under the pooled prediction `pool_nb(mu, n, k)` (moment-matched size
+                               under conditional independence, Amendment 3 section C), over the
+                               blocks of k consecutive bins that the loss mask covers whole; a
+                               trailing L mod k bins are dropped. part `multiscale_<k>`.
 """
 from __future__ import annotations
 
@@ -56,6 +88,9 @@ CRPS_K_MIN = 16
 #: an element whose window would pass this many points (sd above ~3000 counts) is scored by the
 #: Gaussian CRPS with the NB's mean and sd
 CRPS_K_CAP = 65536
+ASSAY_WEIGHTS = ("none", "equal", "learned")
+#: momentum of the running mean of `loss_assay_weight = equal`
+ASSAY_EMA_MOMENTUM = 0.99
 
 
 def check_config(config: dict) -> None:
@@ -67,6 +102,20 @@ def check_config(config: dict) -> None:
     bad = sorted(set(w) - set(WEIGHT_KEYS))
     if bad:
         raise ValueError(f"loss_weights keys {bad} not in {WEIGHT_KEYS}")
+    aw = config.get("loss_assay_weight", "none")
+    if aw not in ASSAY_WEIGHTS:
+        raise ValueError(f"loss_assay_weight {aw!r} not in {ASSAY_WEIGHTS}")
+    sw = config.get("loss_shape_weight", 0)
+    if not isinstance(sw, (int, float)) or isinstance(sw, bool) or sw < 0:
+        raise ValueError(f"loss_shape_weight {sw!r} must be a number >= 0")
+    ks = config.get("loss_multiscale") or []
+    if not all(isinstance(k, int) and not isinstance(k, bool) and k >= 2 for k in ks):
+        raise ValueError(f"loss_multiscale {ks!r} must be a list of integers >= 2")
+    be = config.get("loss_bin_equal", False)
+    if not isinstance(be, bool):
+        raise ValueError(f"loss_bin_equal {be!r} must be a bool")
+    if be and name != DEFAULT_LOSS:
+        raise ValueError(f"loss_bin_equal needs loss {DEFAULT_LOSS!r}, not {name!r}")
 
 
 def weights(config: dict) -> dict:
@@ -145,6 +194,96 @@ PER_BIN = {"nb_nll": nb_nll_per, "poisson_mean_detached_size": poisson_mean_deta
            "nb_crps": nb_crps}
 
 
+# ---------------------------------------------------------------------------------- loss arms
+
+
+def bin_equal_per(n, mu, y, mask):
+    """[B, L, A] element loss of `loss_bin_equal`: nb_nll(n, mu.detach(), y) + 0.5 (y - mu)^2 / vbar,
+    vbar [B, 1, A] the detached mean of mu + mu^2/n over the `mask` bins of each (window, track)."""
+    yy = y.to(mu.dtype)
+    m = mask.to(mu.dtype)
+    with torch.no_grad():
+        mc = mu.clamp(C.MU_MIN, C.MU_MAX)
+        var = mc + mc * mc / n.clamp(C.N_MIN, C.N_MAX)
+        vbar = (var * m).sum(1, keepdim=True) / m.sum(1, keepdim=True).clamp_min(1.0)
+        vbar = vbar.clamp_min(C.MU_MIN)
+    nll = _ladder_nb_nll(torch.log(mu.detach().clamp_min(C.MU_MIN)),
+                         torch.log(n.clamp_min(C.N_MIN)), yy)
+    return nll + 0.5 * (yy - mu) ** 2 / vbar
+
+
+def pool_nb(mu, n, k: int, dim: int = 1):
+    """(mu_pool, n_pool): the NB of the sum of k consecutive bins along `dim` (a trailing
+    remainder is dropped). mu_pool = sum mu_i; n_pool = (sum mu_i)^2 / sum(mu_i^2 / n_i), the
+    moment-matched size under conditional independence (Amendment 3, section C). mu and n are
+    clamped below as in `contract.nb_nll` first."""
+    mu = mu.clamp_min(C.MU_MIN).movedim(dim, -1)
+    n = n.clamp_min(C.N_MIN).movedim(dim, -1)
+    nb = mu.shape[-1] // k
+    mu = mu[..., :nb * k].reshape(*mu.shape[:-1], nb, k)
+    n = n[..., :nb * k].reshape(*n.shape[:-1], nb, k)
+    s = mu.sum(-1)
+    v = (mu * mu / n).sum(-1)
+    return s.movedim(-1, dim), (s * s / v).movedim(-1, dim)
+
+
+def _block_sum(x, k: int, dim: int = 1):
+    x = x.movedim(dim, -1)
+    nb = x.shape[-1] // k
+    return x[..., :nb * k].reshape(*x.shape[:-1], nb, k).sum(-1).movedim(-1, dim)
+
+
+def multiscale_nll(n, mu, y, mask, k: int):
+    """Mean NB NLL of the k-bin sums of y under `pool_nb(mu, n, k)` over the blocks that `mask`
+    covers whole; a zero with a graph when there is none."""
+    mu_p, n_p = pool_nb(mu, n, k)
+    y_p = _block_sum(y.to(mu.dtype), k)
+    full = _block_sum(mask.to(torch.int64), k) == k
+    if not full.any():
+        return (mu * 0.0).sum()
+    return nb_nll_per(n_p[full], mu_p[full], y_p[full]).mean()
+
+
+def shape_nll(mu, y, mask):
+    """Multinomial NLL of y under mu / sum(mu) over the `mask` bins of each (window, track), summed
+    over (window, track) and divided by the number of masked bins."""
+    k = int(mask.sum())
+    if k == 0:
+        return (mu * 0.0).sum()
+    m = mask.to(mu.dtype)
+    yy = y.to(mu.dtype) * m
+    mc = mu.clamp_min(C.MU_MIN)
+    log_p = torch.log(mc) - torch.log((mc * m).sum(1, keepdim=True).clamp_min(C.MU_MIN))
+    N = yy.sum(1)
+    nll = (-(yy * log_p).sum(1) - torch.lgamma(N + 1.0)
+           + (torch.lgamma(yy + 1.0) * m).sum(1))
+    return nll.sum() / k
+
+
+_ASSAY_EMA: dict = {}
+
+
+def reset_assay_ema() -> None:
+    """Forget every running mean of `loss_assay_weight = equal`."""
+    _ASSAY_EMA.clear()
+
+
+def _assay_ema(config: dict, la, present):
+    """Update and return the running means [A] of the config's run (present assays only)."""
+    key = id(config)
+    if key not in _ASSAY_EMA or _ASSAY_EMA[key][0] is not config:
+        _ASSAY_EMA[key] = (config, torch.zeros_like(la), torch.zeros(la.shape[0], dtype=torch.bool,
+                                                                         device=la.device))
+    _, ema, seen = _ASSAY_EMA[key]
+    ema, seen = ema.to(la.device), seen.to(la.device)
+    cur = la.detach()
+    upd = torch.where(seen, ASSAY_EMA_MOMENTUM * ema + (1 - ASSAY_EMA_MOMENTUM) * cur, cur)
+    ema = torch.where(present, upd, ema)
+    seen = seen | present
+    _ASSAY_EMA[key] = (config, ema, seen)
+    return ema
+
+
 # ---------------------------------------------------------------------------------- total
 
 
@@ -159,12 +298,18 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
     unit = all(w[k] == 1.0 for k in ("impute", "correct", "same"))
     parts: dict = {}
     kind = batch["y_kind"][:, None, :].expand_as(mask)
-    if name == DEFAULT_LOSS and unit:
+    bin_equal = bool(config.get("loss_bin_equal", False))
+    assay_w = config.get("loss_assay_weight", "none")
+    track = torch.arange(mask.shape[-1], device=mask.device).expand_as(mask)[mask]
+    if name == DEFAULT_LOSS and unit and not bin_equal and assay_w == "none":
         main = C.nb_nll(out["n"], out["mu"], y, mask)      # the pre-A1 loss, bit for bit
         with torch.no_grad():
             per_m = nb_nll_per(out["n"][mask], out["mu"][mask], y[mask])
     else:
-        per_m = PER_BIN[name](out["n"][mask], out["mu"][mask], y[mask])
+        if bin_equal:
+            per_m = bin_equal_per(out["n"], out["mu"], y, mask)[mask]
+        else:
+            per_m = PER_BIN[name](out["n"][mask], out["mu"][mask], y[mask])
         k = int(mask.sum())
         if k == 0:
             main = (out["mu"] * 0.0).sum()
@@ -172,7 +317,25 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
             wk = torch.zeros(4, dtype=per_m.dtype, device=per_m.device)
             for kd, key in KIND_KEYS.items():
                 wk[kd] = w[key]
-            main = (per_m * wk[kind[mask].long()]).sum() / k
+            per_w = per_m * wk[kind[mask].long()]
+            if assay_w == "none":
+                main = per_w.sum() / k
+            else:
+                A = mask.shape[-1]
+                s_a = torch.zeros(A, dtype=per_w.dtype, device=per_w.device).index_add(
+                    0, track, per_w)
+                c_a = torch.zeros(A, dtype=per_w.dtype, device=per_w.device).index_add(
+                    0, track, torch.ones_like(per_w))
+                present = c_a > 0
+                la = s_a / c_a.clamp_min(1.0)
+                if assay_w == "equal":
+                    ema = _assay_ema(config, la, present)
+                    main = (la[present] / ema[present].clamp_min(1e-8)).mean()
+                else:
+                    if "assay_log_w" not in out:
+                        raise KeyError("loss_assay_weight = learned needs out['assay_log_w']")
+                    lw = out["assay_log_w"].to(la.dtype)[present]
+                    main = (torch.exp(lw) * la[present] - lw).mean()
     parts["main"] = float(main.detach())
     with torch.no_grad():
         km = kind[mask]
@@ -180,11 +343,19 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
             sel = km == kd
             if sel.any():
                 parts[key] = float(per_m.detach()[sel].mean())
-        track = torch.arange(mask.shape[-1], device=mask.device).expand_as(mask)[mask]
         nc = track != C.CONTROL_INDEX
         if nc.any():
             parts["main_no_control"] = float(per_m.detach()[nc].mean())
     loss = main
+    sw = float(config.get("loss_shape_weight", 0))
+    if sw != 0.0:
+        shape = shape_nll(out["mu"], y, mask)
+        parts["shape"] = float(shape.detach())
+        loss = loss + sw * shape
+    for kb in config.get("loss_multiscale") or []:
+        ms = multiscale_nll(out["n"], out["mu"], y, mask, int(kb))
+        parts[f"multiscale_{int(kb)}"] = float(ms.detach())
+        loss = loss + ms
     if "mu_base" in out:
         if "y_base" not in batch or "c_base" not in batch:
             raise KeyError("a two-step output needs batch['y_base'] and batch['c_base']")
@@ -196,5 +367,7 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
     return loss, parts
 
 
-__all__ = ["CRPS_K_CAP", "DEFAULT_LOSS", "LOSSES", "PER_BIN", "WEIGHT_KEYS", "check_config",
-           "nb_crps", "nb_nll_per", "poisson_mean_detached_size_per", "total_loss", "weights"]
+__all__ = ["ASSAY_EMA_MOMENTUM", "ASSAY_WEIGHTS", "CRPS_K_CAP", "DEFAULT_LOSS", "LOSSES",
+           "PER_BIN", "WEIGHT_KEYS", "bin_equal_per", "check_config", "multiscale_nll", "nb_crps",
+           "nb_nll_per", "pool_nb", "poisson_mean_detached_size_per", "reset_assay_ema",
+           "shape_nll", "total_loss", "weights"]
