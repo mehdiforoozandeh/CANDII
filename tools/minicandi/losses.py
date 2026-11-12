@@ -24,7 +24,10 @@ loss_mask)`, the loss of every run before this module: 0 difference.
 
 `parts` (floats, for `log.jsonl`): `main` (the main term), `base` (when the output has a base
 leg), and `impute`, `correct`, `same`: the unweighted mean per-bin loss over the masked bins of
-each kind (absent when a kind has no masked bin).
+each kind (absent when a kind has no masked bin). `main_no_control`: the same mean over the masked
+bins of tracks 0 to 34 (the control excluded). It is the loss to compare across control arms:
+`control_input = false` turns every control target into kind 1, scored on all bins, so `main`
+then averages over a different bin set than the base's (t209 ASF.md). Logging only; no gradient.
 """
 from __future__ import annotations
 
@@ -177,6 +180,10 @@ def total_loss(out: dict, batch: dict, config: dict | None) -> tuple[torch.Tenso
             sel = km == kd
             if sel.any():
                 parts[key] = float(per_m.detach()[sel].mean())
+        track = torch.arange(mask.shape[-1], device=mask.device).expand_as(mask)[mask]
+        nc = track != C.CONTROL_INDEX
+        if nc.any():
+            parts["main_no_control"] = float(per_m.detach()[nc].mean())
     loss = main
     if "mu_base" in out:
         if "y_base" not in batch or "c_base" not in batch:
