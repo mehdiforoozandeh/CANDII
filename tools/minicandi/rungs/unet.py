@@ -41,6 +41,14 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `head = nb_shared_size`. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py). `dna = precomputed` feeds the DNA skips too.
 
+Resolution keys (chunk RM): `res_bp` reaches the DnaTower and the count transform through
+`component_kwargs`. `res_in_sub = 5`: the per-track input MLP reads the five 5 bp sub-bin counts
+of each 25 bp token (batch key `x_counts_sub` [B, L, A, 5], each through the count transform), its
+first layer Linear(5, d) in place of Linear(1, d). `res_out_sub = 5`: after the count skip a
+learned sub-bin embedding expands each token's head features to five sub-bins, the head emits
+(mu, n) per sub-bin, and the output holds `mu_sub`, `n_sub` [B, L, A, 5] and their pooled NB at
+25 bp as `mu`, `n` (`components.sub_output`). At 1 (default) neither builds anything.
+
 A window whose length is not a multiple of 2**n_levels is zero-padded at its right end inside the
 network (features already masked) and the output is cropped back to L.
 """
@@ -61,7 +69,8 @@ for _p in (_TOOLS / "t118", _TOOLS):
 from ladder.model import G  # noqa: E402
 from minicandi.components import (ConvBlock, CountTransform, CovariateInjector,  # noqa: E402
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
-                                  Upsample, component_kwargs, sinusoidal_positions)
+                                  Upsample, component_kwargs, fine_to_sub, res_subs_of,
+                                  sinusoidal_positions, sub_output, sub_to_fine)
 from minicandi.contract import A, K_META, LOG2_DEPTH_COL, MiniCandi, k_input  # noqa: E402
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
@@ -167,7 +176,8 @@ class Model(MiniCandi):
 
         # per-track input path
         self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
-        self.track_in = nn.Sequential(nn.Linear(1, D_TRACK), nn.GELU(),
+        self.in_sub, self.out_sub = res_subs_of(cfg)
+        self.track_in = nn.Sequential(nn.Linear(self.in_sub, D_TRACK), nn.GELU(),
                                       nn.Linear(D_TRACK, D_TRACK))
         self.track_emb_in = nn.Parameter(torch.randn(A, D_TRACK) * 0.02)
         if self.average_input:
@@ -213,10 +223,16 @@ class Model(MiniCandi):
             self.head_skip = nn.Linear(D_HEAD + D_TRACK + 1, D_HEAD)
         self.head_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_HEAD, D_HEAD), nn.GELU())
         self.nb = NBHead(D_HEAD, self.transform, **kw["head"])
+        if self.out_sub > 1:
+            self.out_sub_emb = nn.Parameter(torch.randn(self.out_sub, D_HEAD) * 0.02)
 
     # ------------------------------------------------------------------ forward
     def forward(self, batch: dict) -> dict:
         self.begin_extras(batch)
+        if self.out_sub > 1 and self.training and "y_counts_sub" not in batch:
+            raise ValueError("res_out_sub is set and the training batch has no `y_counts_sub`: "
+                             "train through tools/minicandi/res_dataset.py, whose loss is at "
+                             "the sub-bins")
         x_counts, x_avail = batch["x_counts"], batch["x_avail"].bool()
         x_bin_mask = batch["x_bin_mask"].bool()
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
@@ -228,8 +244,16 @@ class Model(MiniCandi):
 
         # per-track input features; the mask is applied before anything mixes bins or tracks
         vis = MaskHandler.visible(x_avail, x_bin_mask)
-        x = self.transform(x_counts, c_in_t.float()[..., LOG2_DEPTH_COL], vis)
-        h = self.track_in(x[..., None]) + self.track_emb_in
+        if self.in_sub == 1:
+            x = self.transform(x_counts, c_in_t.float()[..., LOG2_DEPTH_COL], vis)[..., None]
+        else:
+            if "x_counts_sub" not in batch:
+                raise ValueError("res_in_sub is set but the batch has no `x_counts_sub`")
+            x = fine_to_sub(self.transform(sub_to_fine(batch["x_counts_sub"]),
+                                           c_in_t.float()[..., LOG2_DEPTH_COL],
+                                           vis.repeat_interleave(self.in_sub, dim=1)),
+                            self.in_sub)
+        h = self.track_in(x) + self.track_emb_in
         if not tokens:
             h = self.in_inj(h, c_in[:, None])
         h, vis = self.mask(h, x_avail, x_bin_mask)
@@ -296,11 +320,15 @@ class Model(MiniCandi):
         hd = self.to_head(z)[:, :, None, :] + self.track_emb_out          # [B, L, A, D_HEAD]
         if self.skip_counts:
             hd = self.head_skip(torch.cat([hd, h_track], dim=-1))
+        if self.out_sub > 1:                                                # [B, L*s, A, D]
+            hd = (hd[:, :, None] + self.out_sub_emb[:, None, :]).reshape(
+                B, L * self.out_sub, A, D_HEAD)
         if tokens:
             hd = hd + self.tok_to_head(tok_out)[:, None]
         else:
             hd = self.out_inj(hd, c_out[:, None])
-        return self.nb(self.head_mlp(hd), c_out_t.float())
+        out = self.nb(self.head_mlp(hd), c_out_t.float())
+        return sub_output(out, self.out_sub) if self.out_sub > 1 else out
 
 
 def _validate(cfg: dict) -> None:

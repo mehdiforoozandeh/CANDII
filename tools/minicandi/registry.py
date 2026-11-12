@@ -28,6 +28,11 @@ adds it to the output as `out["assay_log_w"]`; `losses.total_loss` reads it. `au
 together with `dna = precomputed` is refused (`check_extra_config`). The rung keys
 `rna_track`, `cell_vector`, `cell_embedding` act inside the rung (`contract.MiniCandi`).
 
+Resolution (chunk RM): `res_bp` != 25 and `res_in_sub` / `res_out_sub` > 1 build in rungs 2 and 4
+only (else NotApplicable); `load_run` wraps a run of `res_bp` < 25 or `res_in_sub` > 1 in
+`res_adapter.ResAdapter`, which presents it to the scorer at 25 bp, and refuses `res_bp` > 25
+(scored by `onion_eval/res_score.py` only).
+
 `load_run(run_dir)` is the only loader the scorer (E6) and the guardrail (E4) use. It reads
 `<run_dir>/ckpt.pt` (the pinned dict, `contract.check_ckpt`), rebuilds the model from the saved
 config with the RNG forked (so loading never moves the caller's RNG), loads the state dict and
@@ -141,6 +146,10 @@ def build_model(config: dict) -> C.MiniCandi:
     if "rung" not in config and not config.get("model_file"):
         raise KeyError("config has no 'rung'")
     check_extra_config(config)
+    from minicandi.components import NotApplicable, res_bp_of, res_subs_of
+    if (res_bp_of(config) != C.RES or max(res_subs_of(config)) > 1) and (
+            config.get("model_file") or module_name(config["rung"]) not in ("conv_ae", "unet")):
+        raise NotApplicable("res_bp, res_in_sub and res_out_sub are built in rungs 2 and 4 only")
     inner_cfg = {k: v for k, v in config.items() if k not in WRAPPER_KEYS}
     model = model_class(config)(inner_cfg)
     if not isinstance(model, C.MiniCandi):
@@ -180,12 +189,17 @@ def load_run(run_dir, map_location="cpu") -> tuple[C.MiniCandi, dict]:
     ck = torch.load(path, map_location=map_location, weights_only=False)
     C.check_ckpt(ck)
     config = dict(ck["config"])
+    if config.get("res_bp", C.RES) > C.RES:              # chunk RM: no 25 bp output to score
+        raise ValueError(f"{path}: res_bp {config['res_bp']} > 25; score it with res_score.py")
     with torch.random.fork_rng(devices=[]):
         model = build_model(config)
     model.load_state_dict(ck["state_dict"])
     if model.param_count() != int(ck["param_count"]):
         raise ValueError(f"{path}: param_count {model.param_count()} != saved "
                          f"{ck['param_count']}")
+    if config.get("res_bp", C.RES) < C.RES or config.get("res_in_sub", 1) > 1:
+        from minicandi.res_adapter import ResAdapter     # chunk RM: scored at 25 bp
+        model = ResAdapter(model, config, run_dir)
     model.to(map_location)
     model.eval()
     return model, config

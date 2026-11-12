@@ -37,6 +37,14 @@ Component arm keys (pinned interface E, chunk A3) reach every component through
 `head = nb_shared_size`. With every key at its default the model is today's, parameter for
 parameter and output for output (tests/test_minicandi_rung_arms.py).
 
+Resolution keys (chunk RM): `res_bp` reaches the DnaTower and the count transform through
+`component_kwargs`. `res_in_sub = 5`: the per-track lift reads the five 5 bp sub-bin counts of
+each 25 bp token (batch key `x_counts_sub` [B, L, A, 5], each through the count transform), a
+Linear(5, d_t) per track in place of Linear(1, d_t). `res_out_sub = 5`: a learned sub-bin
+embedding expands each token's output features to five sub-bins before the output injection, the
+head emits (mu, n) per sub-bin, and the output holds `mu_sub`, `n_sub` [B, L, A, 5] and their pooled
+NB at 25 bp as `mu`, `n` (`components.sub_output`). At 1 (default) neither builds anything.
+
 Guardrail part 1 holds by construction: the only reads of `x_counts` go through the
 count transform, whose window statistics use visible bins only, and the MaskHandler replaces every
 hidden or missing position before any cross-bin or cross-track mixing.
@@ -60,7 +68,8 @@ if str(_TOOLS) not in sys.path:
 from minicandi import contract as C  # noqa: E402
 from minicandi.components import (ConvBlock, CountTransform, CovariateInjector,  # noqa: E402
                                   DnaTower, Downsample, MaskHandler, NBHead, NotApplicable,
-                                  Upsample, component_kwargs)
+                                  Upsample, component_kwargs, fine_to_sub, res_subs_of,
+                                  sub_output, sub_to_fine)
 from minicandi.covariates import model_covariates, scramble_mode  # noqa: E402
 
 RUNG = 2
@@ -133,8 +142,14 @@ class Model(C.MiniCandi):
         self.cov_dropout = kw["covariate_dropout"]
 
         self.transform = CountTransform(cfg["count_transform"], **kw["transform"])
+        self.in_sub, self.out_sub = res_subs_of(cfg)
         # per-track lift: Linear(1, d_t) with its own weight and bias per track
-        self.lift_w = nn.Parameter(torch.randn(A, D_TRACK) * 0.5)
+        # (Linear(in_sub, d_t) under res_in_sub)
+        if self.in_sub == 1:
+            self.lift_w = nn.Parameter(torch.randn(A, D_TRACK) * 0.5)
+        else:
+            self.lift_w = nn.Parameter(torch.randn(A, self.in_sub, D_TRACK)
+                                       * (0.5 / self.in_sub ** 0.5))
         self.lift_b = nn.Parameter(torch.zeros(A, D_TRACK))
         if self.use_avg:
             self.avg_w = nn.Parameter(torch.randn(A, D_TRACK) * 0.5)
@@ -167,18 +182,33 @@ class Model(C.MiniCandi):
         self.inj_out = CovariateInjector(inj, D_OUT, C.K_META, D_COV, **kw["injector"])
         self.out_mlp = nn.Sequential(nn.GELU(), nn.Linear(D_OUT, D_OUT), nn.GELU())
         self.head = NBHead(D_OUT, self.transform, **kw["head"])
+        if self.out_sub > 1:
+            self.out_sub_emb = nn.Parameter(torch.randn(self.out_sub, D_OUT) * 0.02)
 
     # ------------------------------------------------------------------ forward
 
     def forward(self, batch: dict) -> dict:
         self.begin_extras(batch)
+        if self.out_sub > 1 and self.training and "y_counts_sub" not in batch:
+            raise ValueError("res_out_sub is set and the training batch has no `y_counts_sub`: "
+                             "train through tools/minicandi/res_dataset.py, whose loss is at "
+                             "the sub-bins")
         x_counts, x_avail, bmask = batch["x_counts"], batch["x_avail"], batch["x_bin_mask"]
         B, L, A = x_counts.shape
         vis = MaskHandler.visible(x_avail, bmask)                         # [B, L, A]
         c_in, c_out, c_in_t, c_out_t = model_covariates(batch, self.scramble, self.training,
                                                          self.cov_dropout)
-        x = self.transform(x_counts, c_in_t[..., C.LOG2_DEPTH_COL], vis)
-        h = x[..., None] * self.lift_w + self.lift_b                     # [B, L, A, d_t]
+        if self.in_sub == 1:
+            x = self.transform(x_counts, c_in_t[..., C.LOG2_DEPTH_COL], vis)
+            h = x[..., None] * self.lift_w + self.lift_b                 # [B, L, A, d_t]
+        else:
+            if "x_counts_sub" not in batch:
+                raise ValueError("res_in_sub is set but the batch has no `x_counts_sub`")
+            s = self.in_sub
+            xs = fine_to_sub(self.transform(sub_to_fine(batch["x_counts_sub"]),
+                                            c_in_t[..., C.LOG2_DEPTH_COL],
+                                            vis.repeat_interleave(s, dim=1)), s)
+            h = torch.einsum("blas,asd->blad", xs, self.lift_w) + self.lift_b
         h, vis = self.mask(h, x_avail, bmask)
         h = self.inj_in(h, c_in[:, None])
         if self.use_avg:
@@ -213,9 +243,13 @@ class Model(C.MiniCandi):
         z = z[..., :L].transpose(1, 2)                                     # [B, L, W]
 
         o = self.out_proj(z).reshape(B, L, A, D_OUT) + self.out_track
+        if self.out_sub > 1:                                               # [B, L*s, A, d_o]
+            o = (o[:, :, None] + self.out_sub_emb[:, None, :]).reshape(B, L * self.out_sub, A,
+                                                                        D_OUT)
         o = self.inj_out(o, c_out[:, None])
         o = self.out_mlp(o)
-        return self.head(o, c_out_t)
+        out = self.head(o, c_out_t)
+        return sub_output(out, self.out_sub) if self.out_sub > 1 else out
 
 
 def choose_width(config: dict) -> int:
