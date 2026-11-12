@@ -261,11 +261,20 @@ def telescoping_check(layers_tsv, tol=1e-9):
     donor and experiment as siblings over isogenic, cell type over anisogenic + other_experiment - isogenic),
     and the sum: the innermost rung's variance plus every other increment, against the outermost rung's
     variance (exact when every rung is populated with the same cells, or along a nested chain).
+    Pair-class rows (a non-empty `pair_class`, plan Amendment 4 / OXl) are skipped; the pooled row of each rung
+    is used. When such a group's cell-type row subtracts the same-donor other_experiment pairs (its flag lacks
+    `donor not separated`), that value replaces the pooled other_experiment value in the cell-type row's check
+    and in the sum (so the sum telescopes): it is the variance of the one same-donor class row when only one is
+    present; with both same-donor classes present it is not in the table, so it is implied from the cell-type
+    row itself and that row's own check is arithmetic only.
     Returns rows {group, innermost, outermost, sum_of_increments, outermost_variance, abs_diff, chain_ok, ok}."""
     rows = _read_layers(layers_tsv)
-    groups = {}
+    groups, classes = {}, {}
     for r in rows:
         key = (r["assay_or_class"], str(r["pooled_by_class"]), r["stratum"], r["band"])
+        if r.get("pair_class"):
+            classes.setdefault(key, {})[r["pair_class"]] = r
+            continue
         groups.setdefault(key, {})[r["rung"]] = r
     out = []
     for key, by in sorted(groups.items()):
@@ -275,14 +284,30 @@ def telescoping_check(layers_tsv, tol=1e-9):
         var = {rg: _num(by[rg]["variance"]) for rg in pop}
         inc = {rg: _num(by[rg]["layer_increment"]) for rg in pop}
         want = LY.lower_terms(pop)
+        oe = "other_experiment"
+        ct_var, shift = var, 0.0          # pair values the cell-type row subtracts; sum correction
+        cl = classes.get(key, {})
+        ct = by.get("other_cell_type")
+        if cl and ct is not None and oe in pop and LY.FLAG_DONOR not in ct.get("flag", ""):
+            ct_terms = LY.parse_terms(ct["increment_over"])
+            k_oe = dict(ct_terms).get(oe)
+            if k_oe:
+                sd = [cl[k] for k in LY.SAME_DONOR_CLASSES if k in cl]
+                if len(sd) == 1:
+                    v_sd = _num(sd[0]["variance"])
+                else:
+                    v_sd = (var["other_cell_type"] - inc["other_cell_type"]
+                            - sum(k * var[q] for q, k in ct_terms if q != oe)) / k_oe
+                ct_var, shift = dict(var, **{oe: v_sd}), v_sd - var[oe]
         chain_ok = True
         for rg in pop:
             terms = LY.parse_terms(by[rg]["increment_over"])
+            vv = ct_var if rg == "other_cell_type" else var
             chain_ok &= LY.format_terms(terms) == LY.format_terms(want[rg][0])
             chain_ok &= all(q in var for q, _ in terms)
             if chain_ok:
-                chain_ok &= abs(inc[rg] - (var[rg] - sum(k * var[q] for q, k in terms))) <= tol * (1 + abs(var[rg]))
-        s_ = var[pop[0]] + sum(inc[rg] for rg in pop[1:])
+                chain_ok &= abs(inc[rg] - (var[rg] - sum(k * vv[q] for q, k in terms))) <= tol * (1 + abs(var[rg]))
+        s_ = var[pop[0]] + sum(inc[rg] for rg in pop[1:]) + shift
         diff = abs(s_ - var[pop[-1]])
         out.append(dict(group="|".join(key), innermost=pop[0], outermost=pop[-1], sum_of_increments=s_,
                         outermost_variance=var[pop[-1]], abs_diff=diff, chain_ok=bool(chain_ok),
