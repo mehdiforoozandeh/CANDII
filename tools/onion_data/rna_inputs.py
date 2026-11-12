@@ -33,7 +33,9 @@ the float16 maximum (attribute `<strand>_n_clipped`). The reader applies log1p.
 
 vector. `expression.tsv`: one row per cell, column `cell`, then log1p TPM of every protein-coding
 gene present in all cells' annotations (Ensembl id without the version suffix; `_PAR_Y` rows
-dropped; duplicate ids summed). `genes.tsv`: the 2,000 of those genes with the highest variance of
+dropped; duplicate ids summed), minus the mitochondrial genes (chrM in the GTF, or a `chrom` of
+chrM or a `gene_name` starting "MT-" in a TSV; foreman decision of 2026-11-12: their TPM tracks the
+library protocol, not the cell state; `--keep-mito` keeps them). `genes.tsv`: the 2,000 of those genes with the highest variance of
 log1p TPM across cells (population variance; a tie goes to the lower gene id). That choice is an
 agent call; it is logged on stdout and in `vector_log.json`.
 
@@ -373,6 +375,32 @@ def read_gene_types(path) -> dict:
     return out
 
 
+def read_mito_genes(path) -> set:
+    """Ensembl ids (no version) of the mitochondrial genes: chrM rows of a GTF, or TSV rows whose
+    `chrom` is chrM/MT or whose `gene_name` starts with "MT-"."""
+    p = str(path)
+    op = gzip.open if p.endswith(".gz") else open
+    out = set()
+    with op(p, "rt") as f:
+        if ".gtf" in p:
+            for line in f:
+                if not line.startswith(("chrM\t", "MT\t")):
+                    continue
+                parts = line.split("\t")
+                if len(parts) >= 9 and parts[2] == "gene":
+                    gid = re.search(r'gene_id "([^"]+)"', parts[8])
+                    g = gene_id(gid.group(1)) if gid else None
+                    if g:
+                        out.add(g)
+        else:
+            for r in csv.DictReader(f, delimiter="\t"):
+                g = gene_id(r["gene_id"])
+                if g and (r.get("chrom") in ("chrM", "MT")
+                          or (r.get("gene_name") or "").startswith("MT-")):
+                    out.add(g)
+    return out
+
+
 def read_tpm(path) -> dict:
     """`{gene id: TPM}` from an ENCODE RSEM gene quantification tsv; duplicate ids summed."""
     out: dict[str, float] = {}
@@ -384,24 +412,29 @@ def read_tpm(path) -> dict:
     return out
 
 
-def choose_genes(tpm_by_cell: dict, gene_types: dict, n=N_GENES):
-    """Genes in every cell and protein-coding; top `n` by population variance of log1p TPM,
+def choose_genes(tpm_by_cell: dict, gene_types: dict, n=N_GENES, exclude=frozenset()):
+    """Genes in every cell, protein-coding and not in `exclude`; top `n` by population variance of log1p TPM,
     a tie to the lower id. Returns (all kept genes sorted, matrix [cells, genes], chosen rows)."""
     cells = sorted(tpm_by_cell)
     common = set.intersection(*(set(tpm_by_cell[c]) for c in cells))
-    keep = sorted(g for g in common if gene_types.get(g) == "protein_coding")
+    pc = sorted(g for g in common if gene_types.get(g) == "protein_coding")
+    excluded = [g for g in pc if g in exclude]
+    keep = [g for g in pc if g not in exclude]
     x = np.log1p(np.array([[tpm_by_cell[c][g] for g in keep] for c in cells], dtype=np.float64))
     var = x.var(axis=0) if len(cells) else np.zeros(len(keep))
     order = sorted(range(len(keep)), key=lambda j: (-var[j], keep[j]))[:n]
     chosen = [{"gene_id": keep[j], "rank": i + 1, "variance": float(var[j]),
                "mean": float(x[:, j].mean())} for i, j in enumerate(order)]
     return cells, keep, x, chosen, {"cells": len(cells), "genes_in_all_cells": len(common),
-                                    "protein_coding_in_all_cells": len(keep)}
+                                    "protein_coding_in_all_cells": len(pc),
+                                    "excluded_mito": len(excluded), "excluded_mito_ids": excluded,
+                                    "genes_kept": len(keep)}
 
 
-def build_vector(cells, gene_types_path, out_dir, files_dir, n=N_GENES) -> dict:
+def build_vector(cells, gene_types_path, out_dir, files_dir, n=N_GENES, exclude_mito=True) -> dict:
     tpm = {c["cell"]: read_tpm(local_path(c, "gene_quant", files_dir)) for c in cells}
-    names, keep, x, chosen, stats = choose_genes(tpm, read_gene_types(gene_types_path), n)
+    mito = read_mito_genes(gene_types_path) if exclude_mito else set()
+    names, keep, x, chosen, stats = choose_genes(tpm, read_gene_types(gene_types_path), n, mito)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     with open(out / "expression.tsv", "w") as f:
@@ -410,9 +443,12 @@ def build_vector(cells, gene_types_path, out_dir, files_dir, n=N_GENES) -> dict:
             f.write(c + "\t" + "\t".join(f"{v:.6g}" for v in x[i]) + "\n")
     write_tsv(out / "genes.tsv", chosen, ("gene_id", "rank", "variance", "mean"))
     rec = dict(stats, chosen=len(chosen), gencode=sorted({c["gencode"] for c in cells}),
+               exclude_mito=exclude_mito,
                rule=f"top {n} protein-coding genes by population variance of log1p TPM across "
-                    "cells; genes absent from any cell's annotation removed first; tie to the "
-                    "lower Ensembl id (agent call, XRd)")
+                    "cells; genes absent from any cell's annotation removed first"
+                    + ("; mitochondrial genes removed (foreman decision 2026-11-12)"
+                       if exclude_mito else "")
+                    + "; tie to the lower Ensembl id (agent call, XRd)")
     (out / "vector_log.json").write_text(json.dumps(rec, indent=1) + "\n")
     print("vector: " + json.dumps(rec), flush=True)
     return rec
@@ -503,6 +539,7 @@ def main(argv=None) -> int:
     a.add_argument("--out-dir", required=True)
     a.add_argument("--files", default=FILES_DIR)
     a.add_argument("--n-genes", type=int, default=N_GENES)
+    a.add_argument("--keep-mito", action="store_true", help="keep the mitochondrial genes")
     a = sub.add_parser("check")
     a.add_argument("--root", required=True)
     a.add_argument("--tracks", required=True)
@@ -534,7 +571,8 @@ def main(argv=None) -> int:
         print(f"tracks written: {n}")
         return 0
     if args.cmd == "vector":
-        build_vector(read_tsv(args.cells), args.gene_types, args.out_dir, args.files, args.n_genes)
+        build_vector(read_tsv(args.cells), args.gene_types, args.out_dir, args.files, args.n_genes,
+                     exclude_mito=not args.keep_mito)
         return 0
     return check(args.root, args.tracks, args.cells, args.files, md5=not args.no_md5)
 

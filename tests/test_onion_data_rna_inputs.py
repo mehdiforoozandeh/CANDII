@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -182,6 +183,35 @@ def test_vector_gene_rule(listed, tmp_path):
     first = (tmp_path / "root" / "genes.tsv").read_bytes()
     R.build_vector(rows, gt, tmp_path / "root", files, n=2)
     assert (tmp_path / "root" / "genes.tsv").read_bytes() == first
+
+
+def test_vector_excludes_mito_by_default(listed, tmp_path):
+    rows, _ = listed
+    files = tmp_path / "files"
+    # ENCSG09 is a protein-coding chrM gene with the largest spread; it must not be chosen
+    q = {"cell_a": {"ENSG01.1": 0, "ENSG02.1": 5, "ENSG09.1": 0},
+         "cell_b": {"ENSG01.1": 100, "ENSG02.1": 0, "ENSG09.1": 9000},
+         "cell_e": {"ENSG01.1": 50, "ENSG02.1": 5, "ENSG09.1": 0}}
+    for r in rows:
+        _quant(R.local_path(r, "gene_quant", files), q[r["cell"]])
+    gtf = tmp_path / "ann.gtf"
+    attrs = 'gene_id "{}"; gene_type "protein_coding"; gene_name "{}";'
+    gtf.write_text("".join(
+        f"{c}\tHAVANA\tgene\t1\t100\t.\t+\t.\t{attrs.format(g, nm)}\n"
+        for c, g, nm in (("chr1", "ENSG01.4", "A"), ("chr2", "ENSG02.4", "B"),
+                         ("chrM", "ENSG09.4", "MT-ND6"))))
+    assert R.read_mito_genes(gtf) == {"ENSG09"}
+    rec = R.build_vector(rows, gtf, tmp_path / "root", files, n=1)
+    assert rec["excluded_mito"] == 1 and rec["excluded_mito_ids"] == ["ENSG09"]
+    assert rec["genes_kept"] == 2
+    assert [g["gene_id"] for g in R.read_tsv(tmp_path / "root" / "genes.tsv")] == ["ENSG01"]
+    hdr = (tmp_path / "root" / "expression.tsv").read_text().splitlines()[0].split("\t")
+    assert "ENSG09" not in hdr
+    log = json.loads((tmp_path / "root" / "vector_log.json").read_text())
+    assert log["excluded_mito_ids"] == ["ENSG09"]
+    rec = R.build_vector(rows, gtf, tmp_path / "root2", files, n=1, exclude_mito=False)
+    assert rec["excluded_mito"] == 0
+    assert [g["gene_id"] for g in R.read_tsv(tmp_path / "root2" / "genes.tsv")] == ["ENSG09"]
 
 
 def test_check_counts_and_md5(listed, tmp_path, capsys):
