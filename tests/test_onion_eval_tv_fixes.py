@@ -268,3 +268,119 @@ def test_noise_floor_unequal_halves_on_the_audit_simulation():
     # second method: N minus the simulated bias of the diagnostic holds the planted share for both splits
     for est, lo, hi in (even_c, uneq_c):
         assert lo <= plant <= hi, (plant, est, lo, hi)
+
+
+# ===================================================================================================
+# TVg: PI rulings 30 (sibling layers) and 31 (headline 7 per rung), the simulator on the pair-value scale,
+# and the error budget with real read shares
+
+def test_lower_terms_sibling_structure_and_fallbacks():
+    full = LY.lower_terms(LY.RUNGS)
+    fmt = {r: (LY.format_terms(t), lay) for r, (t, lay) in full.items()}
+    assert fmt["isogenic"] == ("technical", "biological_replicate")
+    assert fmt["anisogenic"] == ("isogenic", "donor")
+    assert fmt["other_experiment"] == ("isogenic", "experiment")
+    assert fmt["other_cell_type"] == ("anisogenic+other_experiment-isogenic", "cell_type")
+    assert LY.parse_terms(fmt["other_cell_type"][0]) == full["other_cell_type"][0]
+    # other_experiment empty (build_tables writes none): cell type over anisogenic, holding the experiment
+    part = LY.lower_terms(["pseudoreplicate", "isogenic", "anisogenic", "other_cell_type"])
+    assert LY.format_terms(part["other_cell_type"][0]) == "anisogenic"
+    assert part["other_cell_type"][1] == "cell_type+experiment"
+    assert part["isogenic"][1] == "sequencing+library+biological_replicate"
+    # isogenic empty: each sibling over the nearest nested rung, holding the biological-replicate layer
+    noiso = LY.lower_terms(["technical", "anisogenic", "other_experiment", "other_cell_type"])
+    assert noiso["anisogenic"] == ([("technical", 1)], "biological_replicate+donor")
+    assert noiso["other_cell_type"] == ([("other_experiment", 1)], "cell_type+donor")
+
+
+def test_crossed_layers_recover_planted_donor_experiment_and_cell_type(sims):
+    """PI ruling 30 on the simulator with donor and experiment crossed (cv2 donor 0.15, experiment 0.10, cell
+    type 0.5). The cell-type layer is planted over a true pair that shares only the cell type."""
+    sim, big = sims["sim"], sims["big"]
+    rows = TV.case_crossed_layers(0, big)
+    for r in rows:
+        assert r["defect"] == "no", (r["place"], r["planted"], r["estimated"])
+    # all rungs on the same cells: the increments add up to the other_cell_type pair value
+    ps = [p for p in sim["pairs"]]
+    rows_all = LY.assemble([dict(r, assay="A", assay_class="narrow_histone")
+                            for r in TV._records(sim, ps, depth=0.5)], n_boot=50)   # halves set the depth
+    chk = TV.telescoping_check(rows_all)
+    assert chk and all(c["ok"] for c in chk), [c for c in chk if not c["ok"]][:1]
+
+
+def test_error_budget_noise_with_real_shares():
+    from onion_eval import error_budget as EB
+    rng = np.random.default_rng(5)
+    M, f = 2 ** 12, (0.3, 0.7)
+    sig = rng.normal(0, 1, (3, M))
+    h1, h2 = (sig + rng.normal(0, np.sqrt(1 / fi), (3, M)) for fi in f)
+    even = EB.noise_share_from_halves(h1, h2, 2.0)
+    assert np.array_equal(EB.noise_share_from_halves(h1, h2, shares=(0.5, 0.5)), even)    # bit-identical
+    got = EB.noise_share_from_halves(h1, h2, shares=np.tile(f, (3, 1)))
+    assert got[:, :8].mean() == pytest.approx(0.5, abs=0.03)       # planted noise share 1 / (1 + 1) on fine scales
+    assert abs(even[:, :8].mean() - 0.5) > 0.03
+    # the same unequal form as metrics.noise_floor on one track and its own energy weights
+    one = Mx.noise_floor(h1[0], h2[0], sig[0] + rng.normal(0, 1, M), J=12, shares=f, return_levels=True)
+    assert one["share"][:8].mean() == pytest.approx(got[0, :8].mean(), abs=0.02)
+
+
+class _FakeScorer:
+    """The attributes `Scorer._h7_per_rung` and `_h7_metric` read, over one simulated cell."""
+
+    def __init__(self, sim, cell, pairs, depth):
+        self.sim, self.cell, self.pairs, self.depth = sim, cell, pairs, depth
+        self.regions, self.rb, self.external, self.n_boot, self.seed = [("chr1", 0)], TV.L, False, 20, 0
+
+    def _rung_pairs(self, assay, cell):
+        out = {}
+        for p in self.pairs:
+            if p["cell"] == cell:
+                out.setdefault(p["rung"], []).append((p["a"], p["b"]))
+        return out
+
+    def _row(self, mid):
+        return {"depth_reads": str(self.depth[mid])}
+
+    def _ds_read(self, mid, chrom, start, L):
+        return self.sim["tracks"][mid][start:start + L]
+
+
+def _h7(sim, c, n_scale=1.0):
+    from onion_eval import score as SC
+    n, mu = TV._z1_model(sim, c)
+    pairs = [p for p in sim["pairs"] if p["rung"] != "pseudoreplicate"]
+    fake = _FakeScorer(sim, f"c{c}", pairs, {k: v * 1e7 for k, v in sim["depth"].items()})
+    leaf = TV._leaf(c, 0, 0, 0, 0, 0)
+    vr = Mx.variance_ratio(n * n_scale, 0.5 * mu, sim["tracks"][leaf + ".pr1"], sim["tracks"][leaf + ".pr2"])["pooled"]
+    job = {"assay": "A", "cell": f"c{c}", "target": leaf}
+    return SC.Scorer._h7_per_rung(fake, job, {"depth_reads": "1e7"}, n * n_scale, mu, True, vr, TV.L), fake
+
+
+def test_headline7_per_rung_and_pass_flag():
+    """A calibrated Z1 model on a design with one donor per cell type (a cell line): >= 1 at the halves, about
+    1 at other_experiment, so it passes. A model with a much smaller NB size (over-dispersed) fails the upper
+    bound."""
+    from onion_eval import score as SC
+    sim = TV.simulate(dict(TV.BASE_LAYERS, donor=0.0), n_cells=6, seed=0)
+    passes, ratios = [], []
+    for c in range(6):
+        out, _ = _h7(sim, c)
+        per = out["variance_ratio_per_rung"]
+        assert set(per) == set(LY.RUNGS)
+        ratios.append(per["other_experiment"])
+        passes.append(out["variance_ratio_pass"])
+    assert np.mean(ratios) == pytest.approx(1.0, abs=0.05)
+    assert sum(passes) >= 3                     # about 1 at the upper bound: a pass in about half the cells
+    over, fake = _h7(sim, 0, n_scale=0.2)
+    assert over["variance_ratio_per_rung"]["other_experiment"] > 1.5 and over["variance_ratio_pass"] == 0.0
+    # the metric block: old scalar kept, described as the lower-bound check, per_rung and pass_rate added
+    recs = []
+    for c in range(6):
+        out, _ = _h7(sim, c)
+        recs.append(dict(target=f"t{c}", assay="A", cell=f"c{c}", variance_ratio=out["variance_ratio_per_rung"][
+            "pseudoreplicate"], **out))
+    blk = SC.Scorer._h7_metric(fake, recs, ["A"])
+    assert blk["description"].startswith("lower-bound check")
+    assert blk["macro"] == pytest.approx(np.mean([r["variance_ratio"] for r in recs]))
+    assert set(blk["per_rung"]) == set(LY.RUNGS) and "pass_rate" in blk and len(blk["per_target"]) == 6
+    assert blk["upper_bound_rung"]["imputation"] == "other_experiment"

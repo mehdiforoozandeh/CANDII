@@ -17,7 +17,7 @@ applies a space (`counts_log1p` or `signal_arcsinh`); no metric hard-wires one.
 | 4 | gap closed against depth-only scaling               | crps_split, gap_closed            |
 | 5 | depth-law error                                     | depth_law_error                   |
 | 6 | non-randomized PIT deviation, pooled / worst stratum| pit_deviation                     |
-| 7 | predicted over replicate variance                   | variance_ratio                    |
+| 7 | predicted over replicate variance, per rung         | variance_ratio                    |
 | - | D13 uncertainty term                                | uncertainty_gap_closed            |
 
 An undefined metric never raises. A scalar result is then an `Undefined` (a float NaN that carries a
@@ -542,8 +542,16 @@ def _thin(x, p, rng):
 def variance_ratio(n, mu, rep_a, rep_b, strata=None, *, depth_ratio_b: float = 1.0, mask=None,
                    total_tol: float = 0.05, seed: int = 0) -> Dict:
     """Headline 7: mean predicted NB variance (mu + mu^2 / n) over mean replicate variance
-    ((a - b)^2 / 2, unbiased for one replicate's variance when a and b are iid at one depth), per
-    stratum and pooled. 1 = predicted spread matches replicate spread; > 1 over-dispersed.
+    ((a - b)^2 / 2, the pair value of the rung that a and b form: unbiased for E[Var(Y | the levels
+    they share)] when a and b are iid given those levels at one depth), per stratum and pooled.
+
+    Reading (PI ruling 31; `onion total variance.md`, model-variance). The ratio is read per rung, with
+    two bounds. Against the target's own pseudoreplicate halves the pair value is the sampling term
+    only, the lower bound of a calibrated model's predicted variance: a calibrated model scores >= 1
+    there, and < 1 means under-dispersed. Against the rung whose pair shares only what the model knows
+    (another experiment of the same cell type, for imputation) the pair value is the upper bound: a
+    calibrated model scores <= 1 there, and > 1 means over-dispersed. A ratio of 1 at the halves is
+    not "calibrated" for an imputation model (the audit's calibrated cell-type model scored 2.57).
 
     The prediction NB(n, mu) is for rep_a's depth. depth_ratio_b = depth(a) / depth(b). The deeper
     replicate is binomially thinned (seeded) to the shallower depth: if b is deeper, b is thinned by

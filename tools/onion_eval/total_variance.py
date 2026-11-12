@@ -251,10 +251,12 @@ def _num(v):
 
 
 def telescoping_check(layers_tsv, tol=1e-9):
-    """Per (assay_or_class, pooled_by_class, stratum, band) of a layers.tsv (a path or its rows): the innermost
-    populated rung's variance plus the layer increments of the outer populated rungs against the outermost
-    populated rung's variance; also each increment against (its rung's variance - the variance of the rung it
-    names in increment_over), and increment_over against the nearest populated lower rung.
+    """Per (assay_or_class, pooled_by_class, stratum, band) of a layers.tsv (a path or its rows): each increment
+    against (its rung's variance - the pair value it names in increment_over, `layers.parse_terms`), each
+    increment_over against `layers.lower_terms` of the populated rungs (PI ruling 30: nested up to isogenic,
+    donor and experiment as siblings over isogenic, cell type over anisogenic + other_experiment - isogenic),
+    and the sum: the innermost rung's variance plus every other increment, against the outermost rung's
+    variance (exact when every rung is populated with the same cells, or along a nested chain).
     Returns rows {group, innermost, outermost, sum_of_increments, outermost_variance, abs_diff, chain_ok, ok}."""
     rows = _read_layers(layers_tsv)
     groups = {}
@@ -268,14 +270,17 @@ def telescoping_check(layers_tsv, tol=1e-9):
             continue
         var = {rg: _num(by[rg]["variance"]) for rg in pop}
         inc = {rg: _num(by[rg]["layer_increment"]) for rg in pop}
-        chain_ok = by[pop[0]]["increment_over"] in ("", None) and abs(inc[pop[0]] - var[pop[0]]) <= tol * (
-            1 + abs(var[pop[0]]))
-        for prev, rg in zip(pop, pop[1:]):
-            chain_ok &= by[rg]["increment_over"] == prev
-            chain_ok &= abs(inc[rg] - (var[rg] - var[prev])) <= tol * (1 + abs(var[rg]))
-        s = var[pop[0]] + sum(inc[rg] for rg in pop[1:])
-        diff = abs(s - var[pop[-1]])
-        out.append(dict(group="|".join(key), innermost=pop[0], outermost=pop[-1], sum_of_increments=s,
+        want = LY.lower_terms(pop)
+        chain_ok = True
+        for rg in pop:
+            terms = LY.parse_terms(by[rg]["increment_over"])
+            chain_ok &= LY.format_terms(terms) == LY.format_terms(want[rg][0])
+            chain_ok &= all(q in var for q, _ in terms)
+            if chain_ok:
+                chain_ok &= abs(inc[rg] - (var[rg] - sum(k * var[q] for q, k in terms))) <= tol * (1 + abs(var[rg]))
+        s_ = var[pop[0]] + sum(inc[rg] for rg in pop[1:])
+        diff = abs(s_ - var[pop[-1]])
+        out.append(dict(group="|".join(key), innermost=pop[0], outermost=pop[-1], sum_of_increments=s_,
                         outermost_variance=var[pop[-1]], abs_diff=diff, chain_ok=bool(chain_ok),
                         ok=bool(chain_ok and diff <= tol * (1 + abs(var[pop[-1]])))))
     return out
@@ -355,16 +360,19 @@ BASE_LAYERS = {"cell_type": 0.5, "donor": 0.15, "experiment": 0.10, "bio_rep": 0
 HET_LAYERS = dict(BASE_LAYERS, library=[0.6, 0.6, 0.6, 0.05, 0.05, 0.05])     # library variance by cell
 
 
-def _verdict(planted_v, est, lo, hi):
+def _verdict(planted_v, est, lo, hi, atol=0.0):
     """Defect rule of the chunk: the bias exceeds the bootstrap interval (planted outside [lo, hi] and |bias|
-    larger than the half width)."""
+    larger than the half width) and exceeds `atol` (a stated practical floor, for an estimate at a parameter
+    boundary whose interval collapses). A non-finite estimate is a defect (the tool returned nothing)."""
     bias = est - planted_v
+    if not np.isfinite(est):
+        return bias, True
     half = (hi - lo) / 2 if np.isfinite(hi - lo) else np.inf
-    return bias, bool((planted_v < lo or planted_v > hi) and abs(bias) > half)
+    return bias, bool((planted_v < lo or planted_v > hi) and abs(bias) > half and abs(bias) > atol)
 
 
-def _row(place, claim, planted_v, est, lo, hi, fix_yes, fix_no="none needed", unit=""):
-    bias, defect = _verdict(planted_v, est, lo, hi)
+def _row(place, claim, planted_v, est, lo, hi, fix_yes, fix_no="none needed", unit="", atol=0.0):
+    bias, defect = _verdict(planted_v, est, lo, hi, atol)
     rel = f" ({100 * bias / planted_v:+.0f}%)" if abs(planted_v) > 1e-6 and np.isfinite(planted_v) else ""
     return dict(place=place, claim=claim, planted=f"{planted_v:.4g}{unit}",
                 estimated=f"{est:.4g} [{lo:.4g}, {hi:.4g}]", bias=f"{bias:+.3g}{rel}",
@@ -473,11 +481,9 @@ def case_factor_half(seed, big):
     t = _lt(recs)["technical"]
     plant = pair_values(big, "log1p", ["technical"])["technical"]
     direct = pair_values(sim, "log1p", ["technical"])["technical"]       # second method: same pairs, 0.5 mean(d^2)
-    row = _row("layers.py:93,111 (pair_variance)", "a rung's `variance` in layers.tsv is the pair value "
+    row = _row("layers.py layer_table (pair value)", "a rung's `variance` in layers.tsv is the pair value "
                 "0.5 E[(Y - Y')^2] of section A (log1p, technical rung)", plant, t["variance"], t["ci_low"],
-                t["ci_high"], "the column is Var(Y - Y'), twice the pair value: halve variance, layer_increment and "
-                "the interval in layers.tsv, or state the factor 2 in the column definition and halve it wherever a "
-                "layer is set against a term of the identity (resolution.py:199 already halves)")
+                t["ci_high"], "store the pair value, half of Var(Y - Y')")
     row["_num"]["second_method_ratio"] = t["variance"] / direct
     return row
 
@@ -490,7 +496,7 @@ def case_mean_term(seed, big):
     cells = [r["cell"] for r in recs]
     est, lo, hi = RS.mean_ci(v[:, None], cells)[:3]
     plant = pair_values(big, "log1p", ["other_cell_type"])["other_cell_type"]
-    return _row("layers.py:111 (centring of d)", "0.5 x the centred variance of d equals 0.5 E[d^2] (the mean term "
+    return _row("layers.py pair_variance (centring of d)", "0.5 x the centred variance of d equals 0.5 E[d^2] (the mean term "
                 "(E d)^2 / 2 is 0 for exchangeable sides; other_cell_type rung)", plant, est[0], lo[0], hi[0],
                 "use 0.5 mean(d^2) without centring")
 
@@ -501,7 +507,7 @@ def case_unequal_sides(seed, big):
     v = np.array([0.5 * r["v"][ALL] for r in recs])
     est, lo, hi = RS.mean_ci(v[:, None], [r["cell"] for r in recs])[:3]
     plant = pair_values(big, "log1p", ["technical"])["technical"]
-    return _row("layers.py:87-92 (thinning)", "the b side at 2x depth is thinned to the a side; the pair value "
+    return _row("layers.py pair_variance (thinning)", "the b side at 2x depth is thinned to the a side; the pair value "
                 "equals the one at equal depth (technical rung, x 0.5)", plant, est[0], lo[0], hi[0],
                 "thin before log1p (the code does)")
 
@@ -511,114 +517,123 @@ def case_unequal_rungs(seed, big):
     pairs = [p for p in sim["pairs"] if p["rung"] in ("isogenic", "other_experiment")]
     got = _layers_run(sim, pairs, "halves")
     pv = pair_values(big, "log1p", ["isogenic", "other_experiment"])
-    plant = 2 * (pv["other_experiment"] - pv["isogenic"])
+    plant = pv["other_experiment"] - pv["isogenic"]
     r = got["other_experiment"]
-    return _row("layers.py:295-299 (common depth)", "with experiment 1 at 2x depth, every rung is thinned to one "
-                "common depth; the other_experiment increment over isogenic (x 2, the layers.py scale) matches the "
-                "one at equal depth", plant, _num(r["layer_increment"]), _num(r["ci_low"]), _num(r["ci_high"]),
-                "thin every rung of an assay to one depth (the code does)")
+    return _row("layers.py run (common depth)", "with experiment 1 at 2x depth, every rung is thinned to one common "
+                "depth; the other_experiment increment over isogenic (the experiment layer, pair-value scale) "
+                "matches the one at equal depth", plant, _num(r["layer_increment"]), _num(r["ci_low"]),
+                _num(r["ci_high"]), "thin every rung of an assay to one depth")
 
 
 def case_self_pair(seed, big):
-    """build_tables writes a pseudoreplicate pair as (m, m); layers.run then reads counts.h5 twice."""
+    """build_tables writes a pseudoreplicate pair as (m, m); layers.run reads its pr1.h5 / pr2.h5 halves."""
     sim = simulate(BASE_LAYERS, n_cells=6, seed=seed)
     pairs = [p for p in sim["pairs"] if p["rung"] in ("pseudoreplicate", "sequencing")]
     got = _layers_run(sim, pairs, "self")
-    plant = 2 * pair_values(big, "log1p", ["pseudoreplicate"])["pseudoreplicate"]
+    plant = pair_values(big, "log1p", ["pseudoreplicate"])["pseudoreplicate"]
     r = got["pseudoreplicate"]
-    rows = [_row("layers.py:303-306 with build_tables.py:347-349", "a pseudoreplicate row of pairs.tsv (a = b = the "
-                 "base view) gives the pseudoreplicate rung: Var(pr1 - pr2) at the common depth", plant,
-                 _num(r["variance"]), _num(r["ci_low"]), _num(r["ci_high"]),
-                 "when a == b, read the pr1.h5 and pr2.h5 siblings at half depth, as check_dataset.py:151-153 does; "
-                 "today the rung reads the same counts.h5 twice, so its variance is 0 when the track sets the common "
-                 "depth and the whole sampling term moves into the sequencing increment")]
-    # second method: the same tables with the halves as two measurements
-    got2 = _layers_run(sim, pairs, "halves")
+    rows = [_row("layers.py run (a == b) with build_tables.py:347-349", "a pseudoreplicate row of pairs.tsv (a = b = "
+                 "the base view) gives the pseudoreplicate rung: the pair value of pr1 - pr2 at the halves' depth",
+                 plant, _num(r["variance"]), _num(r["ci_low"]), _num(r["ci_high"]),
+                 "read the pr1.h5 and pr2.h5 siblings at their own depth when a == b")]
+    got2 = _layers_run(sim, pairs, "halves")                          # second method: halves as measurements
     r2 = got2["pseudoreplicate"]
-    rows.append(_row("layers.py:295-306 (halves as measurements)", "with the halves as two measurements at half depth, "
-                     "the common depth is the half depth and the pseudoreplicate rung equals Var(pr1 - pr2) there",
-                     plant, _num(r2["variance"]), _num(r2["ci_low"]), _num(r2["ci_high"]),
-                     "none; see the half-depth row for what this does to the other rungs"))
+    rows.append(_row("layers.py run (halves as measurements)", "with the halves as two measurements at half depth, "
+                     "the common depth is the half depth and the pseudoreplicate rung equals the pair value there",
+                     plant, _num(r2["variance"]), _num(r2["ci_low"]), _num(r2["ci_high"]), "match the a == b form"))
+    rows[-1]["_num"]["same_as_self_form"] = _num(r2["variance"]) == _num(r["variance"])
     return rows, got, got2
 
 
 def case_half_depth(seed, big, big_half, got2):
     """With halves in the table, every rung is evaluated at half depth: compare the sequencing increment there
-    with the one at the full (target) depth."""
-    pv_full = pair_values(big, "log1p", ["pseudoreplicate", "sequencing"])
+    with the planted half-depth layer."""
+    pv_full = pair_values(big, "log1p", ["pseudoreplicate"])
     pv_half = pair_values(big_half, "log1p", ["sequencing"])
-    plant_half = 2 * (pv_half["sequencing"] - pv_full["pseudoreplicate"])     # pr pair value of big = half depth
+    plant_half = pv_half["sequencing"] - pv_full["pseudoreplicate"]     # pr pair value of big = half depth
     r = got2["sequencing"]
-    row = _row("layers.py:295-299 (pseudoreplicate halves at half depth)", "the sequencing increment over the "
+    row = _row("layers.py run (pseudoreplicate halves at half depth)", "the sequencing increment over the "
                "pseudoreplicate rung, both at the half depth that the halves impose, equals the planted half-depth "
                "layer", plant_half, _num(r["layer_increment"]), _num(r["ci_low"]), _num(r["ci_high"]),
-               "match depths (the code does at the half depth)")
+               "match depths")
     return row, plant_half
 
 
 def case_cell_sets(seed, big_het):
+    """Library variance 0.6 in cells 0-2 and 0.05 in cells 3-5; the technical rung on all 6 cells, the isogenic
+    rung on cells 1-5. The increment is taken per cell over cells 1-5."""
     sim = simulate(HET_LAYERS, n_cells=6, seed=seed)
-    tech = [p for p in sim["pairs"] if p["rung"] == "technical" and p["cell"] in ("c0", "c1", "c2")]
-    iso = [p for p in sim["pairs"] if p["rung"] == "isogenic" and p["cell"] in ("c3", "c4", "c5")]
+    common = ("c1", "c2", "c3", "c4", "c5")
+    tech = [p for p in sim["pairs"] if p["rung"] == "technical"]
+    iso = [p for p in sim["pairs"] if p["rung"] == "isogenic" and p["cell"] in common]
     t = _lt(_records(sim, tech + iso, depth=1.0))["isogenic"]
-    pv = pair_values(big_het, "log1p", ["technical", "isogenic"])
-    plant = 2 * (pv["isogenic"] - pv["technical"])
-    both = [p for p in sim["pairs"] if p["rung"] in ("technical", "isogenic")]
-    t2 = _lt(_records(sim, both, depth=1.0))["isogenic"]                 # second method: both rungs on all cells
-    row = _row("layers.py:180-183 (increment over another cell set)", "the isogenic increment over the technical rung "
-                "equals the biological-replicate layer when the two rungs come from different cells (library "
-                "variance 0.6 in cells 0-2, 0.05 in cells 3-5)", plant, t["layer_increment"], t["ci_low"],
-                t["ci_high"], "take the difference per cell over the cells that populate both rungs (paired by "
-                "cell), and flag a rung whose cells differ from its lower rung's")
-    row["_num"]["second_method_same_cells"] = (t2["layer_increment"], t2["ci_low"], t2["ci_high"])
+    pv = pair_values(dict(big_het, pairs=[p for p in big_het["pairs"] if p["cell"] in common]), "log1p",
+                     ["technical", "isogenic"])
+    plant = pv["isogenic"] - pv["technical"]
+    row = _row("layers.py layer_table (increment over another cell set)", "the isogenic increment over the technical "
+               "rung equals the biological-replicate layer of the common cells when the technical rung has a cell "
+               f"more (library variance 0.6 in cells 0-2, 0.05 in cells 3-5; flag `{t['flag']}`)", plant,
+               t["layer_increment"], t["ci_low"], t["ci_high"], "take the difference per cell over the common cells")
+    row["_num"]["flag"] = t["flag"]
     return row
 
 
 def case_log1p_counts(seed, big, big_half):
-    """Counts: pair values scale as D E[m] + D^2 (...); log1p: the layer at the common depth is not the layer at
-    the target depth. Claim tested: the share of a layer in log1p does not depend on depth."""
+    """A log1p layer holds at one depth (assumption 4): layers.tsv writes that depth; the layer is checked there."""
     pv1 = pair_values(big, "log1p", ["technical", "isogenic"])
     pvh = pair_values(big_half, "log1p", ["technical", "isogenic"])
-    plant = pv1["isogenic"] - pv1["technical"]                       # biological-replicate layer at depth 1
-    est = pvh["isogenic"] - pvh["technical"]                         # the same layer at depth 0.5
+    plant_target = pv1["isogenic"] - pv1["technical"]                  # the layer at depth 1 (the target's)
+    plant = pvh["isogenic"] - pvh["technical"]                         # the layer at the table's depth 0.5
     sim = simulate(BASE_LAYERS, {"scale": 0.5}, n_cells=6, seed=seed)
-    recs = _records(sim, [p for p in sim["pairs"] if p["rung"] in ("technical", "isogenic")], depth=0.5)
-    t = _lt(recs)["isogenic"]
-    lo, hi = 0.5 * t["ci_low"], 0.5 * t["ci_high"]
+    pairs = [p for p in sim["pairs"] if p["rung"] in ("technical", "isogenic")]
+    got = _layers_run(sim, pairs, "halves")
+    r = got["isogenic"]
     c1 = pair_values(big, "counts", ["technical", "isogenic"])
     ch = pair_values(big_half, "counts", ["technical", "isogenic"])
     ratio_counts = (ch["isogenic"] - ch["technical"]) / (c1["isogenic"] - c1["technical"])
-    row = _row("plan section A (4); layers.py:295 vs score.py:840 (headline 1 at the target depth)",
-               "a log1p layer measured at half depth equals the layer at the target depth (on counts it is exactly "
-               f"x 0.25; measured {ratio_counts:.3f})", plant, 0.5 * t["layer_increment"], lo, hi,
-               "write the common depth into layers.tsv and compare a layer with headline 1 only at one depth; the "
-               "log1p identity holds at one depth only (assumption 4)", )
-    row["_num"]["mc_half"] = est
+    row = _row("layers.py run (`depth` column; plan section A (4))", "a log1p layer of layers.tsv equals the planted "
+               f"layer at the depth its `depth` column states ({_num(r['depth']):.4g} reads, half the target's); at the "
+               f"target depth the planted layer is {plant_target:.4g} (on counts the half-depth layer is x "
+               f"{ratio_counts:.3f}), so a layer is set against headline 1 only at that depth", plant,
+               _num(r["layer_increment"]), _num(r["ci_low"]), _num(r["ci_high"]),
+               "write the common depth into layers.tsv and compare at that depth only")
+    row["_num"]["planted_at_target_depth"] = plant_target
     return row
 
 
-def case_crossed_layers(seed, big_x, big_nested):
+def case_crossed_layers(seed, big):
+    """PI ruling 30: with donor and experiment crossed, donor = anisogenic - isogenic, experiment =
+    other_experiment - isogenic, cell type = other_cell_type - (anisogenic + other_experiment - isogenic). Planted:
+    pair-value differences of the reference draw, the cell type over a true pair that shares only the cell type
+    (other donor and other experiment), so the inclusion-exclusion step is tested too."""
     sim = simulate(BASE_LAYERS, n_cells=6, seed=seed, crossed=True)
-    ps = [p for p in sim["pairs"] if p["rung"] in ("isogenic", "anisogenic", "other_experiment")]
-    t = _lt(_records(sim, ps, depth=1.0))["other_experiment"]
-    pv = pair_values(big_x, "log1p", ["isogenic", "other_experiment"])
-    plant = 2 * (pv["other_experiment"] - pv["isogenic"])            # the experiment layer (x 2, layers scale)
-    cf = sim["planted"]["pair_value"]                                # second method: closed form on counts
-    row = _row("layers.py:41-42,145-148 (rung order)", "with donor and experiment crossed (ENCODE), the "
-                "other_experiment increment over anisogenic is the experiment layer (planted cv2: donor 0.15, "
-                "experiment 0.10)", plant, t["layer_increment"], t["ci_low"], t["ci_high"],
-                "take anisogenic and other_experiment each as an increment over isogenic (two sibling layers), and "
-                "other_cell_type over a pair that shares only the cell type; or read these layers from "
-                "mixed_model.py")
-    row["_num"]["counts_closed_form"] = dict(increment=cf["other_experiment"] - cf["anisogenic"],
-                                             experiment_layer=cf["other_experiment"] - cf["isogenic"])
-    return row
+    ps = [p for p in sim["pairs"] if p["rung"] in ("isogenic", "anisogenic", "other_experiment", "other_cell_type")]
+    t = _lt(_records(sim, ps, depth=1.0))
+    pv = pair_values(big, "log1p", ["isogenic", "anisogenic", "other_experiment", "other_cell_type"])
+    z1 = [dict(pair_id=f"z1:{c}", a=_leaf(c, 0, 0, 0, 0, 0), b=_leaf(c, 1, 1, 0, 0, 0), rung="cell_type_only",
+               cell=f"c{c}") for c in range(sim["n_cells"])]
+    pz = pair_values(dict(big, pairs=z1), "log1p", ["cell_type_only"])["cell_type_only"]
+    cf = sim["planted"]["pair_value"]
+    rows = []
+    for rung, layer, plant in (("anisogenic", "donor", pv["anisogenic"] - pv["isogenic"]),
+                               ("other_experiment", "experiment", pv["other_experiment"] - pv["isogenic"]),
+                               ("other_cell_type", "cell type", pv["other_cell_type"] - pz)):
+        r = t[rung]
+        row = _row(f"layers.py lower_terms ({layer} layer, crossed)", f"with donor and experiment crossed (ENCODE; "
+                   f"planted cv2 donor 0.15, experiment 0.10, cell type 0.5), the {rung} increment over "
+                   f"`{r['increment_over']}` (layer `{r['layer']}`) recovers the planted {layer} layer", plant,
+                   r["layer_increment"], r["ci_low"], r["ci_high"], "check the sibling structure of lower_terms")
+        rows.append(row)
+    rows[0]["_num"]["counts_closed_form_donor"] = cf["anisogenic"] - cf["isogenic"]
+    rows[1]["_num"]["counts_closed_form_experiment"] = cf["other_experiment"] - cf["isogenic"]
+    return rows
 
 
-def _gauss_mm(seed, crossed_labels, n_cells=6, K=600, n_boot=30):
+def _gauss_mm(seed, n_cells=6, K=600, n_boot=30, donor=True):
+    """The Gaussian crossed design through the tool's own labelling (`mixed_model.select_observations`)."""
     rng = np.random.default_rng(seed)
     var = dict(cell=1.0, donor=0.5, experiment=0.5, library=0.3, residual=0.2)
-    obs, Y = [], []
+    meas, Y = [], []
     mu = rng.normal(0, 1, K)
     for c in range(n_cells):
         uc = rng.normal(0, np.sqrt(var["cell"]), K)
@@ -628,9 +643,11 @@ def _gauss_mm(seed, crossed_labels, n_cells=6, K=600, n_boot=30):
             ul = rng.normal(0, np.sqrt(var["library"]), K)
             for h in range(2):
                 Y.append(mu + uc + ud[d] + ux[x] + ul + rng.normal(0, np.sqrt(var["residual"]), K))
-                exp = f"c{c}x{x}"
-                rep = f"c{c}|d{d}" if crossed_labels else f"{exp}|d{d}"   # mixed_model.py:277-278 form
-                obs.append(dict(cell=f"c{c}", experiment=exp, replicate=rep, library=f"{exp}|d{d}l{l}"))
+            meas.append(dict(measurement_id=f"c{c}x{x}d{d}l{l}", assay="A", in_eic="train", arm_knob="",
+                             unit=f"br{d + 1}tr{l + 1}", layer="uniform", experiment=f"c{c}x{x}", cell=f"c{c}",
+                             donor=f"D{c}{d}" if donor else "", bio_rep=str(d + 1), depth_reads="1000",
+                             has_pseudoreps="1", counts_path=f"h5:/none/c{c}x{x}d{d}l{l}/counts.h5"))
+    obs, _ = MM.select_observations(meas, "A")
     Y = np.array(Y)
     labels = {f: [o[f] for o in obs] for f in MM.FACTORS}
     rows, _ = MM.decompose(Y @ Y.T, Y.sum(1), K, labels, None, n_boot=n_boot, seed=seed)
@@ -639,20 +656,16 @@ def _gauss_mm(seed, crossed_labels, n_cells=6, K=600, n_boot=30):
 
 
 def case_crossed_mm(seed):
-    got, frac = _gauss_mm(seed, crossed_labels=False)
-    got2, _ = _gauss_mm(seed, crossed_labels=True)                   # second method: donor labelled crossed
-    r = got["experiment"]
-    row = _row("mixed_model.py:277-278 (replicate = experiment|donor)", "with a donor effect shared by the two "
-               "experiments of a cell (crossed), the experiment row recovers the experiment fraction (Gaussian "
-               "synthetic: cell 1.0, donor 0.5, experiment 0.5, library 0.3, residual 0.2; the replicate row holds "
-               f"the donor: {got['replicate']['variance_fraction']:.3g} against {frac['donor']:.3g})",
-               frac["experiment"], r["variance_fraction"], r["ci_low"], r["ci_high"],
-               "label the donor by cell and donor, crossed with experiment, when the table names a donor (with "
-               f"that label the experiment row gives {got2['experiment']['variance_fraction']:.3g})")
-    row["_num"].update(replicate_run_labels=got["replicate"]["variance_fraction"],
-                       experiment_crossed_labels=got2["experiment"]["variance_fraction"],
-                       replicate_crossed_labels=got2["replicate"]["variance_fraction"])
-    return row
+    got, frac = _gauss_mm(seed)
+    rows = []
+    for f, key in (("experiment", "experiment"), ("replicate", "donor")):
+        r = got[f]
+        rows.append(_row(f"mixed_model.py select_observations + decompose ({f} row, crossed donor)", "with a donor "
+                         "shared by the two experiments of a cell (crossed) and named in the table, the "
+                         f"{f} row recovers the planted {key} fraction (Gaussian synthetic: cell 1.0, donor 0.5, "
+                         "experiment 0.5, library 0.3, residual 0.2)", frac[key], r["variance_fraction"],
+                         r["ci_low"], r["ci_high"], "label the donor by cell and donor, crossed with experiment"))
+    return rows
 
 
 def _mm_depth(seed, exp_depth, band="fine", n_boot=40, thin_to=None):
@@ -665,77 +678,74 @@ def _mm_depth(seed, exp_depth, band="fine", n_boot=40, thin_to=None):
         obs.append(dict(counts_path=mid, cell=f"c{c}", experiment=exp, replicate=f"{exp}|r{r}",
                         library=f"{exp}|r{r}l{l}", depth=sim["depth"][mid]))
 
-    trk = dict(sim["tracks"])
-    if thin_to is not None:                       # second method: thin every observation to one depth first
-        rng = np.random.default_rng(seed + 5)
-        for o in obs:
-            trk[o["counts_path"]] = LY.thin(trk[o["counts_path"]], thin_to / o["depth"], rng)
-            o["depth"] = thin_to
-
     class Reader:
         def read(self, path, chrom, start, end):
-            return trk[path][start:end]
+            return sim["tracks"][path][start:end]
 
-    S, ysum, K = MM.sufficient_stats(obs, [("chr1", 0)], band, Reader())
+    D = MM.common_depth(obs) if thin_to is None else thin_to       # as mixed_model.run: one common depth
+    S, ysum, K = MM.sufficient_stats(obs, [("chr1", 0)], band, Reader(), depth=D)
     labels = {f: [o[f] for o in obs] for f in MM.FACTORS}
-    depth = np.log2([o["depth"] for o in obs])
-    rows, beta = MM.decompose(S, ysum, K, labels, depth, n_boot=n_boot, seed=seed)
+    rows, beta = MM.decompose(S, ysum, K, labels, None, n_boot=n_boot, seed=seed)
     return {r["factor"]: r for r in rows}
 
 
 def case_depth_slope(seed):
-    eq = _mm_depth(seed, [1.0, 1.0])
     uneq = _mm_depth(seed, [1.0, 4.0])
     r = uneq["experiment"]
-    row = _row("mixed_model.py:5,345-348 (one fixed slope on log2 depth)", "with no experiment variance planted and "
-               "experiment 1 at 4x depth, the experiment fraction (fine band, log1p) stays at its equal-depth value",
-               eq["experiment"]["variance_fraction"], r["variance_fraction"], r["ci_low"], r["ci_high"],
-               "thin every observation of an assay to one depth before log1p (as layers.py does); a fixed additive "
-               "slope cannot absorb depth, which changes the size of the Haar detail coefficients, not their mean")
-    row["_num"]["equal_depth_ci"] = (eq["experiment"]["ci_low"], eq["experiment"]["ci_high"])
-    th = _mm_depth(seed, [1.0, 4.0], thin_to=1.0)["experiment"]
-    row["_num"]["second_method_thinned"] = (th["variance_fraction"], th["ci_low"], th["ci_high"])
+    row = _row("mixed_model.py sufficient_stats (thinning to one depth)", "with no experiment variance planted and "
+               "experiment 1 at 4x depth, the experiment fraction (fine band, log1p) is 0 (a practical floor of "
+               "0.001: REML sits at the zero boundary, where the bootstrap interval collapses)", 0.0,
+               r["variance_fraction"], r["ci_low"], r["ci_high"],
+               "thin every observation of an assay to one depth before log1p", atol=1e-3)
+    row["_num"]["equal_depth"] = _mm_depth(seed, [1.0, 1.0])["experiment"]["variance_fraction"]
     return row
 
 
 def _noise_case(seed, pr_frac):
-    """Per-track N of metrics.noise_floor as score.py:843-844 computes it, and the planted sampling share."""
+    """Per-track N of metrics.noise_floor as score.py computes it (each half rescaled by 1 / its real share of
+    the reads, the unequal-length form), N minus the `noise_floor_log1p_bias` diagnostic, and the planted
+    sampling share."""
     sim = simulate(BASE_LAYERS, {"pr_frac": pr_frac}, n_cells=6, seed=seed)
     rng = np.random.default_rng(seed + 7)
-    est, plant, cells = [], [], []
+    est, corr, plant, cells = [], [], [], []
     for c, d, x in product(range(6), range(2), range(2)):
         mid = _leaf(c, d, x, 0, 0, 0)
         y = sim["tracks"][mid]
+        hs = [sim["tracks"][f"{mid}.{h}"] for h in ("pr1", "pr2")]
+        f = tuple(float(h.sum() / y.sum()) for h in hs)             # pr1 + pr2 = counts
         ts = Mx.to_space(y, "counts_log1p")
-        h1, h2 = (Mx.to_space(sim["tracks"][f"{mid}.{h}"], "counts_log1p", rescale=2.0) for h in ("pr1", "pr2"))
-        est.append(Mx.noise_floor(h1, h2, ts, 2.0))
+        n_ = Mx.noise_floor(*(Mx.to_space(h, "counts_log1p", rescale=1.0 / fi) for h, fi in zip(hs, f)), ts,
+                            shares=f)
+        est.append(n_)
+        corr.append(n_ - Mx.noise_floor_log1p_bias(y, f, seed=zlib.crc32(f"nfb:{mid}".encode())))
         lam = sim["rate"][mid].astype(float)
         y1, y2 = (np.log1p(rng.poisson(lam)) for _ in range(2))     # two iid copies given Z6: k = 1 gives 1 - R
         plant.append(Mx.noise_floor(y1, y2, ts, 1.0))
         cells.append(f"c{c}")
     e = RS.mean_ci(np.array(est)[:, None], cells)
-    return float(np.mean(plant)), e[0][0], e[1][0], e[2][0]
+    k = RS.mean_ci(np.array(corr)[:, None], cells)
+    return float(np.mean(plant)), (e[0][0], e[1][0], e[2][0]), (k[0][0], k[1][0], k[2][0])
 
 
 def case_spearman_brown(seed):
     rows = []
     for frac, place in ((0.5, "even halves"), (0.3, "unequal halves 0.3 / 0.7")):
-        plant, est, lo, hi = _noise_case(seed, frac)
-        rows.append(_row(f"metrics.py:195-226, score.py:843-844 ({place})", "the Spearman-Brown floor N equals the "
-                         f"sampling share of the target's log1p variance ({place}; rescale 2.0, k = 2 as score.py)",
-                         plant, est, lo, hi, "pass the halves' real depth shares: rescale each half by depth(target) "
-                         "/ depth(half) and use the unequal-length Spearman-Brown form; or build halves as an even "
-                         "split (pseudoreplicate halves are near even, so this matters only for an uneven split)" if frac != 0.5
-                         else "the Spearman-Brown step assumes additive noise of one size; in log1p at a few reads "
-                         "per bin it understates the sampling share. Estimate the noise term in counts, where the "
-                         "halves give it exactly, or calibrate the step by simulation at the track's mean count"))
+        plant, (est, lo, hi), (cest, clo, chi) = _noise_case(seed, frac)
+        rows.append(_row(f"metrics.py noise_floor, score.py ({place})", "the Spearman-Brown floor N (real read shares, "
+                         f"unequal-length form) equals the sampling share of the target's log1p variance ({place})",
+                         plant, est, lo, hi, "REAL, not corrected by PI decision: the log1p step at a few reads per bin "
+                         "understates the sampling share (more for the shallower half); scores.json reports the "
+                         "simulated size per target as `N_log1p_bias_sim`"))
+        rows.append(_row(f"metrics.py noise_floor_log1p_bias ({place})", "N minus the diagnostic's simulated bias "
+                         f"equals the planted sampling share ({place})", plant, cest, clo, chi,
+                         "the diagnostic does not reproduce the log1p bias at this count distribution"))
     return rows
 
 
 def _budget_case(seed, n_boot=60):
     sim = simulate(BASE_LAYERS, n_cells=6, seed=seed)
     rng = np.random.default_rng(seed + 11)
-    truth, pred, h1, h2, cells, plant = [], [], [], [], [], []
+    truth, pred, h1, h2, cells, plant, shares = [], [], [], [], [], [], []
     for c, d, x in product(range(6), range(2), range(2)):
         mid = _leaf(c, d, x, 0, 0, 0)
         y = sim["tracks"][mid]
@@ -743,13 +753,15 @@ def _budget_case(seed, n_boot=60):
         t = np.log1p(y.astype(float))
         truth.append(t)
         pred.append(np.log1p(lam))                                         # the oracle: it knows Z6
-        h1.append(np.log1p(2.0 * sim["tracks"][mid + ".pr1"]))
-        h2.append(np.log1p(2.0 * sim["tracks"][mid + ".pr2"]))
+        f1 = float(sim["tracks"][mid + ".pr1"].sum() / y.sum())    # real read shares, as score.py
+        shares.append((f1, 1.0 - f1))
+        h1.append(np.log1p(sim["tracks"][mid + ".pr1"] / f1))
+        h2.append(np.log1p(sim["tracks"][mid + ".pr2"] / (1.0 - f1)))
         y2 = np.log1p(rng.poisson(lam))
         plant.append(0.5 * np.mean((t - y2) ** 2) / t.var())                 # sampling share of Var(x)
         cells.append(f"c{c}")
     truth, pred, cells = np.array(truth), np.array(pred), np.array(cells)
-    nbl = EB.noise_share_from_halves(np.array(h1), np.array(h2), 2.0)
+    nbl = EB.noise_share_from_halves(np.array(h1), np.array(h2), shares=np.array(shares))
     bud = EB.error_budget(truth, pred, cells, noise_by_level=nbl)
     flags = sum(bud["per_band"][p][b]["floor_flag"] for p in EB.PARTS for b in EB.BANDS)
     vtot = np.stack([np.einsum("kbb->bk", EB._gram(EB._pad(((t - t.mean()) / t.std())[None]),
@@ -775,7 +787,7 @@ def _budget_case(seed, n_boot=60):
 
 def case_budget_clip(seed):
     bud, plant, n_uncl, lo, hi, flags = _budget_case(seed)
-    row = _row("error_budget.py:104-107 (floor_flag clip)", "for an oracle that knows Z6, the budget's noise equals "
+    row = _row("error_budget.py error_budget (floor_flag clip; real read shares)", "for an oracle that knows Z6, the budget's noise equals "
                f"the planted sampling share (unclipped N = {n_uncl:.4g}; {flags} of 8 components clipped)", plant,
                bud["noise"], lo, hi, "report the unclipped N and the clipped amount beside the budget; the clip keeps "
                "V = explained + unexplained + noise but moves the excess of N into explained")
@@ -815,15 +827,15 @@ def _pair_rates(sim, p):
     return rate(p["a"]), rate(p["b"])
 
 
-def case_headline7(seed):
-    """Headline 7 per rung for a calibrated model that knows Z1. Planted: the exact Poisson expectation of
-    0.5 (a - b)^2 given the latent rates of each pair, 0.5 mean((la - lb)^2) + 0.5 mean(la + lb)."""
-    sim = simulate(BASE_LAYERS, n_cells=6, seed=seed)
-    rows = []
-    res = {r: ([], [], []) for r in RUNGS}
-    for c in range(6):
+def _h7_ratios(sim, extra=()):
+    """Headline 7 per rung for the calibrated Z1 model, per cell: {rung: (est, lo, hi, planted)}. Planted: the
+    model's mean predicted variance over the exact Poisson expectation of 0.5 (a - b)^2 given the latent rates,
+    0.5 mean((la - lb)^2) + 0.5 mean(la + lb). extra: further pairs (dicts as sim["pairs"])."""
+    n_cells = sim["n_cells"]
+    res = {}
+    for c in range(n_cells):
         n, mu = _z1_model(sim, c)
-        cps = [p for p in sim["pairs"] if p["cell"] == f"c{c}"]
+        cps = [p for p in list(sim["pairs"]) + list(extra) if p["cell"] == f"c{c}"]
         pairs = [dict(rung=p["rung"], a=sim["tracks"][p["a"]], b=sim["tracks"][p["b"]],
                       mu_scale=0.5 if p["rung"] == "pseudoreplicate" else 1.0) for p in cps]
         got = per_rung_variance_ratio(n, mu, pairs)
@@ -835,27 +847,54 @@ def case_headline7(seed):
                 if p["rung"] == r:
                     la, lb = _pair_rates(sim, p)
                     pden.append(0.5 * np.mean((la - lb) ** 2) + 0.5 * np.mean(la + lb))
-            res[r][0].append(pv_pred)
-            res[r][1].append(pv_pred / g["ratio"])
-            res[r][2].append(float(np.mean(pden)))
-    for r in RUNGS:
-        num, den, pden = (np.array(v) for v in res[r])
-        est, lo, hi = _boot_ratio_ci(num, den, [f"c{c}" for c in range(6)], seed=seed)
-        plant = float(num.sum() / pden.sum())
+            v = res.setdefault(r, ([], [], []))
+            v[0].append(pv_pred)
+            v[1].append(pv_pred / g["ratio"])
+            v[2].append(float(np.mean(pden)))
+    out = {}
+    for r, (num, den, pden) in res.items():
+        num, den, pden = np.array(num), np.array(den), np.array(pden)
+        est, lo, hi = _boot_ratio_ci(num, den, [f"c{c}" for c in range(n_cells)], seed=0)
+        out[r] = (est, lo, hi, float(num.sum() / pden.sum()))
+    return out
+
+
+def case_headline7(seed):
+    """Headline 7 per rung (PI ruling 31) for a calibrated model that knows Z1 (position and cell type)."""
+    sim = simulate(BASE_LAYERS, n_cells=6, seed=seed)
+    z1 = [dict(pair_id=f"z1:{c}", a=_leaf(c, 0, 0, 0, 0, 0), b=_leaf(c, 1, 1, 0, 0, 0), rung="cell_type_only",
+               cell=f"c{c}", assay="A") for c in range(6)]
+    got = _h7_ratios(sim, z1)
+    rows = []
+    for r in RUNGS + ["cell_type_only"]:
+        est, lo, hi, plant = got[r]
         if r == "pseudoreplicate":
-            row = _row("metrics.py:481-483, score.py:836 (headline 7, pseudoreplicate)", "for a calibrated model "
-                       "that knows Z1 (cell type), headline 7 against the pseudoreplicate halves is 1, and > 1 "
-                       "means over-dispersed (metrics.py:483)", 1.0, est, lo, hi,
-                       f"the ratio for a calibrated model is {plant:.3g} (planted from the latent rates), not 1: the "
-                       "halves give the lower bound of section A. Report headline 7 per rung and call 1 calibrated "
-                       "only at the rung whose shared conditioning set is the model's information")
-            row["_num"]["planted_calibrated_ratio"] = plant
+            row = _row("metrics.py variance_ratio, score.py (headline 7, pseudoreplicate: lower-bound check)",
+                       "for a calibrated model that knows Z1, headline 7 against the target's halves equals the planted "
+                       f"ratio and is >= 1 (the sampling term is the lower bound; planted {plant:.3g})", plant, est, lo,
+                       hi, "the estimator is biased at this rung")
+        elif r == "cell_type_only":
+            row = _row("metrics.py variance_ratio (pair that shares only the cell type; upper bound)", "for a "
+                       "calibrated Z1 model, headline 7 against a pair that shares only the cell type (other donor and "
+                       "other experiment) is 1: the pair value of the rung that shares exactly what the model knows",
+                       plant, est, lo, hi, "the estimator is biased at this rung")
         else:
-            row = _row(f"metrics.py:479-531 via per_rung_variance_ratio ({r})", f"headline 7 against the {r} "
-                       "rung equals the planted ratio Var(Y|Z1) / pair value of the rung (calibrated Z1 model; 1 "
-                       "only where the rung shares exactly Z1)", plant, est, lo, hi,
-                       "the estimator is biased at this rung; check the thinning and the pair choice")
+            row = _row(f"metrics.py variance_ratio via per_rung_variance_ratio ({r})", f"headline 7 against the {r} "
+                       "rung equals the planted ratio Var(Y|Z1) / pair value of the rung (calibrated Z1 model)", plant,
+                       est, lo, hi, "the estimator is biased at this rung; check the thinning and the pair choice")
         rows.append(row)
+    # the pass rule of score.py: ratio >= 1 at pseudoreplicate and <= 1 at other_experiment. In ENCODE a cell line
+    # has one donor, so other_experiment shares only the cell type; plant that design (donor cv2 0)
+    one = _h7_ratios(simulate(dict(BASE_LAYERS, donor=0.0), n_cells=6, seed=seed))
+    est, lo, hi, plant = one["other_experiment"]
+    row = _row("score.py H7_UPPER_RUNG (other_experiment, one donor per cell type)", "with one donor per cell type "
+               "(a cell line), other_experiment shares only what a Z1 model knows: a calibrated Z1 model scores 1 "
+               f"there, and passes (ratio at pseudoreplicate {one['pseudoreplicate'][0]:.3g} >= 1). With several "
+               f"donors per cell type (the crossed design above) other_experiment also shares the donor and the "
+               f"calibrated model scores {got['other_experiment'][0]:.3g} > 1 there", plant, est, lo, hi,
+               "the estimator is biased at this rung")
+    row["_num"]["pass_one_donor"] = bool(one["pseudoreplicate"][0] >= 1 and est <= 1 + (hi - lo) / 2)
+    rows.append(row)
     return rows
 
 
@@ -877,8 +916,10 @@ def audit(seed=0):
     rows += sp
     hd, _ = case_half_depth(seed, big, big_half, got2)
     rows.append(hd)
-    rows += [case_cell_sets(seed, big_het), case_log1p_counts(seed, big, big_half),
-             case_crossed_layers(seed, big, None), case_crossed_mm(seed), case_depth_slope(seed)]
+    rows += [case_cell_sets(seed, big_het), case_log1p_counts(seed, big, big_half)]
+    rows += case_crossed_layers(seed, big)
+    rows += case_crossed_mm(seed)
+    rows.append(case_depth_slope(seed))
     rows += case_spearman_brown(seed)
     clip, bud = case_budget_clip(seed)
     rows += [clip, case_budget_identity(bud)]
@@ -893,9 +934,13 @@ def write_audit(rows, path, seed=0):
              "0.08, library 0.05, sequencing 0.02; base rate mean 3 reads per bin; 6 cells; 16,384 bins) and calls "
              "the tool at the place named. Planted log1p values are direct pair values 0.5 mean(d^2) of a second "
              "Poisson draw of the same latent rates. The interval is the 95% cluster-bootstrap interval over cells "
-             "of the estimate (the tool's own interval where it has one). A row is a defect only when the planted "
-             "value lies outside the interval and the bias is larger than its half width; every defect row "
-             "reproduced on seeds 1 and 2.", "",
+             "of the estimate (the tool's own interval where it has one). Every layer and pair value is on the "
+             "pair-value scale of layers.tsv, and every tool is called with its current arguments (chunk TVg). A row "
+             "is a defect only when the planted value lies outside the interval and the bias is larger than its half "
+             "width (and than a stated practical floor, where the row names one); a non-finite estimate is a "
+             "defect. The cell-bootstrap interval does not hold the draw-to-draw noise of a single test draw "
+             "everywhere (cells share the base-rate profile), so a seed other than 0 can flag a row by chance; "
+             "compare with seeds 1 and 2 before reading a flag as a defect.", "",
              "| " + " | ".join(COLS) + " |", "|" + "---|" * len(COLS)]
     for r in rows:
         cells = [r["place"], r["claim"], r["planted"], r["estimated"], r["bias"], r["defect"], r["fix"]]

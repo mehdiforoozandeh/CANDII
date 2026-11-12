@@ -77,24 +77,29 @@ The chain sets map to the graph as follows. Z0 holds position and assay. Z1 adds
 
 ## rung-to-term-map
 
-One row per rung of `layers.RUNGS` (in its order). "Shares" is the deepest chain set that both members of a pair hold in common. "Pair value" is `PV` of that set. "Layer increment" is the term that the difference to the row above isolates.
+One row per rung of `layers.RUNGS` (in its order). "Shares" is the set of chain levels that both members of a pair hold in common. "Pair value" is `PV` of that set. "Layer increment" is what `layers.py` subtracts and the term that this isolates (PI ruling 30, 2026-11-12; `layers.lower_terms`). The rungs up to isogenic are nested. Donor and experiment are crossed in ENCODE, so the anisogenic and other_experiment rungs are siblings: each is taken over isogenic.
 
-| rung (`layers.RUNGS`) | shares | pair value `0.5 E[(Y-Y')^2]` | layer increment over the previous row | assumptions |
+| rung (`layers.RUNGS`) | shares | pair value `0.5 E[(Y-Y')^2]` | layer increment (`increment_over`; `layer`) | assumptions |
 |---|---|---|---|---|
-| pseudoreplicate | Z6 | `T_s` | `T_s` (innermost rung: its own pair value) | (1), (2), (6) |
-| sequencing | Z5 | `T_6 + T_s` | `T_6`, sequencing run | (1), (2), (5), (6) |
-| technical | Z4 | `T_5 + T_6 + T_s` | `T_5`, library | (1), (2), (5), (6) |
-| isogenic | Z3 | `T_4 + ... + T_s` | `T_4`, biological replicate | (1), (2), (5), (6) |
-| anisogenic | Z1 in the nested order; it also shares the experiment | `T_2 + T_4 + T_5 + T_6 + T_s` (donor and below, with no experiment term) | `T_2`, donor | (1), (2), (3), (5), (6) |
-| other_experiment | Z1 | `T_2 + T_3 + ... + T_s` | `T_3`, experiment and lab | (1), (2), (3), (5), (6) |
-| other_cell_type | Z0 | `T_1 + ... + T_6 + T_s` | `T_1`, cell type | (1), (2), (5), (6) |
+| pseudoreplicate | Z6 | `T_s` | its own pair value; `sampling` | (1), (2), (6) |
+| sequencing | Z5 | `T_6 + T_s` | over pseudoreplicate: `T_6`; `sequencing` | (1), (2), (5), (6) |
+| technical | Z4 | `T_5 + T_6 + T_s` | over sequencing: `T_5`; `library` | (1), (2), (5), (6) |
+| isogenic | Z3 | `T_4 + ... + T_s` | over technical: `T_4`; `biological_replicate` | (1), (2), (5), (6) |
+| anisogenic | cell type and experiment (not the donor) | `T_2 + T_4 + T_5 + T_6 + T_s` | over isogenic: `T_2`; `donor` | (1), (2), (3), (5), (6) |
+| other_experiment | cell type and donor (not the experiment) | `T_3 + T_4 + T_5 + T_6 + T_s` | over isogenic: `T_3`; `experiment` (lab, antibody lot, protocol) | (1), (2), (3), (5), (6) |
+| other_cell_type | Z0 | `T_1 + ... + T_6 + T_s` | over `anisogenic+other_experiment-isogenic`, i.e. `PV(Z1)` of a pair that shares only the cell type, `T_2 + T_3 + T_4 + ... + T_s`: `T_1`; `cell_type` | (1), (2), (3), (5), (6) |
 
-How `layers.py` computes these rows:
-- It computes `Var(d)` with `d = log1p(a') - log1p(b')`, where a' and b' are binomially thinned to one common depth per assay (the shallowest side of any pair of that assay). Under exchangeability `E[d] = 0`, so `Var(d)` estimates `2 PV` on the log1p scale at that depth (assumptions 4 and 6). The variance is centred within each stratum and split exactly over Haar bands.
-- The layer increment is the rung variance minus the variance of the nearest populated lower rung. When a rung is empty, the increment of the next populated rung is a sum of two or more terms.
-- `resolution.py` reports half of the increment, i.e. `PV` units.
-- The pseudoreplicate halves hold half the reads of the pooled track. Their pair value is `T_s` at half depth.
-- `mixed_model.py` is the order-free cross-check of the anisogenic and other_experiment rows. It fits cell, experiment, replicate and library as crossed random effects with one fixed slope on log2 depth.
+Here `T_2` and `T_3` are the donor and experiment terms as siblings: each is the variance that the level adds given the cell type and the other level. With crossed, additive levels the two sibling terms and the nested terms of the identity agree; with multiplicative levels (counts) each sibling term carries a factor of the other level (on counts, `PV(anisogenic) - PV(isogenic) = E[m^2](1 + c_ct)(1 + c_x) c_d` against the nested `E[m^2](1 + c_ct) c_d`). The cell-type row subtracts `PV(anisogenic) + PV(other_experiment) - PV(isogenic)`, which equals `PV(Z1)` exactly when donor and experiment add (no interaction). The total-variance audit tested it against a true pair that shares only the cell type (other donor and other experiment): cell-type layer 0.1993 [0.187, 0.2117] against a planted 0.1994 (log1p, seed 0).
+
+When every rung has the same cells, the increments add up exactly: `PV(pseudoreplicate)` plus the increments of sequencing, technical, isogenic, anisogenic, other_experiment and other_cell_type equals `PV(other_cell_type)`.
+
+How `layers.py` computes these rows (chunks TVf and TVg):
+- `pair_variance` returns `Var(d)` with `d = log1p(a') - log1p(b')`, where a' and b' are binomially thinned to one common depth per assay (the shallowest side of any pair of that assay, a pseudoreplicate half included). `layer_table` stores the pair value `0.5 Var(d)` (assumption 6), as the mean over cells of each cell's mean pair value. The common depth is the `depth` column.
+- A pseudoreplicate row of `pairs.tsv` (a = b) is read as its `pr1.h5` and `pr2.h5` halves at their own depths.
+- An increment is taken per cell over the cells that populate every rung involved, then averaged over those cells. A rung whose cells differ from a rung that it subtracts is flagged `cells differ from lower rung` (assumption 5). An other_cell_type pair (two cells) is clustered on the cell of its `a` side.
+- When a rung is empty, the increment of the next rung holds more than one term; its `layer` column names them (for example `cell_type+experiment` when other_experiment has no pair, which `build_tables.py` does not yet write).
+- `resolution.py` reports the increments as `layer_table` gives them, i.e. in `PV` units.
+- `mixed_model.py` is the order-free cross-check of the anisogenic and other_experiment rows. It fits cell, experiment, replicate and library as crossed random effects. When the table names a donor, the replicate level is the donor, labelled by cell and donor, so that it is crossed with experiment. Every observation of an assay is thinned to one common depth before log1p; no depth slope is fitted.
 
 ## metric-to-term-map
 
@@ -137,15 +142,23 @@ The last two terms form the cross term. Both terms are zero when the mean is cal
 
 **Two bounds.**
 - Lower bound: `E[Var(Y|S,C')] >= T_s = PV(Z6)`, the pseudoreplicate pair value. No input removes the read sampling of the target.
-- Upper bound: `E[Var(Y|S,C')] <= PV(Zk*) = E[Var(Y|Zk*)]`, where Zk* is the deepest chain set that is a function of (S, C'). Conditioning on more information never raises the expected conditional variance. For imputation of a missing assay from other assays of the same cell, Zk* is typically Z1 (cell type), so the bound is the other_experiment pair value. For reconstruction of a track whose own reads are in S, Zk* is deeper.
+- Upper bound: `E[Var(Y|S,C')] <= PV(Zk*) = E[Var(Y|Zk*)]`, where Zk* is the deepest set of chain levels that is a function of (S, C'). Conditioning on more information never raises the expected conditional variance.
 
-**Calibration ratio per rung.** For each rung r with pair value `PV_r`, define
+**Calibration ratio per rung (headline 7; PI ruling 31).** For each rung r with pair value `PV_r`, define
 
 ```
 rho(r) = mean(mu_hat + mu_hat^2/n) / PV_r     (both at one depth, over the same bins)
 ```
 
-A model whose predicted variance lies within the bounds has `rho(pseudoreplicate) >= 1` and `rho(r*) <= 1` at the rung r* that shares Zk*. Headline 7 is `rho` at one rung; `score.py` uses the pseudoreplicate rung, the lower bound.
+A model whose predicted variance lies within the bounds has `rho(pseudoreplicate) >= 1` and `rho(r*) <= 1` at the rung r* whose pair shares exactly Zk*. Neither bound alone says "calibrated": in the audit, a calibrated model that knows the cell type scored 2.57 against the halves. The upper-bound rung r* depends on what the model's inputs give it (`score.H7_UPPER_RUNG`):
+
+| target | inputs S | Zk* | upper-bound rung r* |
+|---|---|---|---|
+| imputed (a missing assay of a cell, from other assays) | other tracks of the cell, covariates | Z1, the cell type | other_experiment of the same cell type. It shares only the cell type when the cell type has one donor (a cell line); with several donors it also shares the donor, and the right pair is one of another donor and another experiment (in the audit, ratio 1.013 [0.952, 1.075] at such a pair against 1.30 at other_experiment) |
+| reconstructed (its own reads at other bins are an input) | the target's own reads | Z6: every level of the target is known from its own reads | pseudoreplicate: both bounds meet, and a calibrated model scores 1 |
+| covariate-corrected (source pr1 -> target pr2 of one track) | the source half | Z6 (the two halves share every level) | pseudoreplicate of the target, at the target's covariates: both bounds meet |
+
+What `score.py` reports (imputed targets; it does not score the other two kinds with headline 7). The old scalar `predicted_over_replicate_variance` keeps its value: the ratio against the target's own halves, now described as the lower-bound check. Beside it, `per_rung` holds the ratio at every rung that `pairs.tsv` populates for the target's cell and assay (the prediction thinned to each pair's depth), `pass_rate` the share of targets with `rho(pseudoreplicate) >= 1` and `rho(other_experiment) <= 1`, and `per_target` both. PIT deviation stays the selection metric for uncertainty; headline 7 is reported only.
 
 ## scales
 
@@ -179,7 +192,7 @@ Each assumption is a condition under which an estimator of [rung-to-term-map](#r
 
 1. **Exchangeable pair.** The two members of a pair are conditionally independent and identically distributed given the set that they share. A pair that shares reads (for example, a depth subset of a parent) violates it. Pseudoreplicate halves meet it only when the read split is random and the reads are independent given Z6.
 2. **Equal covariates, above all equal depth.** Both members of a pair, both rungs of a difference, and the model and the truth are at one depth on the scale used. On counts, `T_s` scales with depth and each `T_k` scales with depth squared. The tools thin the deeper track binomially to the shallower depth. Pseudoreplicate halves are at half the depth of the pooled track.
-3. **Order of conditioning.** The chain nests donor before experiment. In ENCODE donor and experiment are crossed, so the anisogenic and other_experiment rungs do not isolate one nested term each. `mixed_model.py` is the order-free check.
+3. **Order of conditioning.** The chain nests donor before experiment, but in ENCODE donor and experiment are crossed. `layers.py` therefore takes the donor and experiment layers as siblings, each over isogenic (PI ruling 30), and the cell-type layer over `PV(anisogenic) + PV(other_experiment) - PV(isogenic)`, which is the pair value of a pair that shares only the cell type when donor and experiment add (no interaction). `mixed_model.py` is the order-free check.
 4. **Scale.** The identity is exact for counts. On log1p it holds only at one fixed depth, and its sampling term then depends on the rate of the bin (it is not `E[Y]`). The error budget, headlines 1 and 2, and `layers.py` work on log1p.
 5. **Same cells and positions.** Both rungs of a difference, and the model and the baseline of a skill, use the same cells, regions and strata. A difference over two different cell sets mixes a layer with the variance between cell sets.
-6. **Factor 0.5 and the mean term.** `0.5 E[(Y - Y')^2]` equals `E[Var(Y|Z)]` only when `E[Y - Y' | Z] = 0`. The variance of the difference, `Var(Y - Y')`, removes the mean of the difference; the mean square difference keeps it. The two agree only for an exchangeable pair at equal depth. `layers.py` reports `Var(d)`, i.e. twice the pair value; `metrics.variance_ratio` and `resolution.py` use half of it.
+6. **Factor 0.5 and the mean term.** `0.5 E[(Y - Y')^2]` equals `E[Var(Y|Z)]` only when `E[Y - Y' | Z] = 0`. The variance of the difference, `Var(Y - Y')`, removes the mean of the difference; the mean square difference keeps it. The two agree only for an exchangeable pair at equal depth. `layers.pair_variance` returns `Var(d)`; `layers.tsv`, `resolution.py` and `metrics.variance_ratio` hold the pair value, half of it.
