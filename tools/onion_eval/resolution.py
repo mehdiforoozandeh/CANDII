@@ -6,9 +6,9 @@ variance in log1p counts, at ONE matched depth per assay class, of these sources
 
   pseudoreplicate     counting noise of one track: half the variance of pr1 - pr2 (the two halves of
                       each base track), i.e. the noise a single track carries at the matched depth
-  <rung>              each further replicate rung of `layers.RUNGS` that the pairs populate: half its
+  <rung>              each further replicate rung of `layers.RUNGS` that the pairs populate: its
                       layer increment over the nearest populated lower rung (variance one replicate
-                      adds), from `layers.layer_table` with single levels as bands
+                      adds, per track), from `layers.layer_table` with single levels as bands
   knob:<knob>         each designed knob, base against arm, non-subset pairs only: the variance of the
                       view difference beyond counting noise,
                         V(base.pr1, arm.pr2) - (V(base.pr1, base.pr2) + V(arm.pr1, arm.pr2)) / 2,
@@ -183,7 +183,8 @@ def class_rows(cls, units, n_boot=1000, seed=0):
                              variance=float(mean[i]), n_pairs=int(n_used[i]), n_cells=int(n_cells[i]),
                              ci_low=float(lo[i]), ci_high=float(hi[i])))
 
-    # replicate ladder: halves give the pseudoreplicate rung, then layers' increments, all per track (/2)
+    # replicate ladder: halves give the pseudoreplicate rung, then layers' increments; `layer_table`
+    # already returns the per-track pair value 0.5 Var(d), so no further halving here
     recs = [dict(rung="pseudoreplicate", cell=r["cell"], v={("all", lv): x for lv, x in zip(LEVELS, r["v"])})
             for r in units["pr"]]
     recs += [dict(rung=r["rung"], cell=r["cell"], v={("all", lv): x for lv, x in zip(LEVELS, r["v"])})
@@ -196,8 +197,8 @@ def class_rows(cls, units, n_boot=1000, seed=0):
                 continue
             key = "variance" if rung == "pseudoreplicate" else "layer_increment"
             g = [got[lv] for lv in LEVELS]
-            emit(rung, np.array([x[key] for x in g]) / 2, np.array([x["ci_low"] for x in g]) / 2,
-                 np.array([x["ci_high"] for x in g]) / 2, [x["n_pairs"] for x in g], [x["n_cells"] for x in g])
+            emit(rung, np.array([x[key] for x in g]), np.array([x["ci_low"] for x in g]),
+                 np.array([x["ci_high"] for x in g]), [x["n_pairs"] for x in g], [x["n_cells"] for x in g])
 
     for source in sorted({k["source"] for k in units["knobs"]}):
         ks = [k for k in units["knobs"] if k["source"] == source]

@@ -2,13 +2,20 @@
 
 Per assay, a linear mixed model of the band-level Haar coefficients of log1p counts:
 
-    y[o, k] = mu[k] + beta * log2_depth[o] + sum_f u_f[level_f(o), k] + e[o, k]
+    y[o, k] = mu[k] + sum_f u_f[level_f(o), k] + e[o, k]
 
-o is one observation (one track), k one Haar coefficient of the band over the eval-set regions. mu[k]
-is a fixed effect per coefficient (the genomic signal shared by every track), beta one fixed slope on
-log2 depth, and u_f an independent random effect per factor level and coefficient, with variance s_f.
-The factors are cell, experiment, replicate (biological replicate, or the donor when the table names
-one) and library; the residual e is the variance between the two pseudoreplicate halves of one library
+o is one observation (one track), k one Haar coefficient of the band over the eval-set regions. Every
+observation of the assay is first thinned binomially to one common depth (the shallowest observation;
+a half counts at its own depth) before log1p, as `layers.py` does: depth changes the size of the Haar
+detail coefficients, not their mean, so a fixed additive slope on log2 depth cannot absorb it. mu[k]
+is a fixed effect per coefficient (the genomic signal shared by every track), and u_f an independent
+random effect per factor level and coefficient, with variance s_f. (`reml_fit` still takes an optional
+fixed slope on log2 depth; after the thinning `run` has no depth left to fit, and its `log2_depth` row
+says so.) The factors are cell, experiment, replicate and library. The replicate level is the
+biological replicate within its experiment (`<experiment>|<bio_rep>`); when the table names a donor it
+is the donor, labelled by cell and donor (`<cell>|<donor>`), so that it is crossed with experiment as in
+ENCODE (one donor shared by two experiments of a cell). The residual e is the variance between the two
+pseudoreplicate halves of one library
 when the halves exist, else between observations of one library. The factors may be crossed or nested:
 the fit takes any set of incidence matrices. The coefficients k are treated as independent replicates
 of the model (working independence), so the fit needs only the sufficient statistics Y Y' and Y 1.
@@ -42,6 +49,7 @@ import csv
 import json
 import math
 import sys
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -274,8 +282,10 @@ def select_observations(meas_rows, assay, layer=None):
         if _unit_rank(m["unit"]) != best[m["experiment"]]:
             continue
         exp, unit = m["experiment"], m["unit"]
-        rep_key = m.get("donor") or (m.get("bio_rep") or unit.split("tr")[0])
-        rep = f"{exp}|{rep_key}"
+        if m.get("donor"):                      # a donor is crossed with experiment: label it by cell
+            rep = f"{m['cell']}|{m['donor']}"
+        else:
+            rep = f"{exp}|{m.get('bio_rep') or unit.split('tr')[0]}"
         lib = f"{exp}|{unit}"
         depth = float(m.get("depth_reads") or m.get("depth_fragments") or "nan")
         base = dict(cell=m["cell"], experiment=exp, replicate=rep, library=lib, lab=m.get("lab", ""),
@@ -290,18 +300,37 @@ def select_observations(meas_rows, assay, layer=None):
     return obs, layer
 
 
-def sufficient_stats(obs, regions, band, reader=None):
-    """Accumulates S = Y Y' and ysum = Y 1 over the regions for one Haar band. Returns (S, ysum, K)."""
+def common_depth(obs):
+    """The depth every observation is thinned to: the shallowest finite positive `depth` of obs, or None
+    when some observation has none (then no thinning)."""
+    d = [float(o.get("depth", float("nan"))) for o in obs]
+    return min(d) if d and all(np.isfinite(x) and x > 0 for x in d) else None
+
+
+def sufficient_stats(obs, regions, band, reader=None, depth="common"):
+    """Accumulates S = Y Y' and ysum = Y 1 over the regions for one Haar band. Returns (S, ysum, K).
+
+    depth: "common" (default) thins every observation binomially to `common_depth(obs)` before log1p
+    (a fixed seed per observation's counts path); a number thins to that depth; None reads unthinned."""
+    from onion_eval.layers import CountsReader, thin  # noqa: E402
     if reader is None:
-        from onion_eval.layers import CountsReader  # noqa: E402
         reader = CountsReader()
+    if depth == "common":
+        depth = common_depth(obs)
+    keep = [1.0 if depth is None else float(depth) / float(o["depth"]) for o in obs]
+    if any(p > 1.0 + 1e-9 for p in keep):
+        raise ValueError(f"thinning depth {depth} exceeds an observation's depth")
+    rngs = [np.random.default_rng(zlib.crc32(f"mm:{o['counts_path']}".encode())) for o in obs]
     idx = BANDS[band]
     L = 2 ** J
     n = len(obs)
     S, ysum, K = np.zeros((n, n)), np.zeros(n), 0
     for chrom, start in regions:
-        X = np.stack([np.log1p(np.asarray(reader.read(o["counts_path"], chrom, start, start + L),
-                                          np.float64)) for o in obs])
+        X = []
+        for o, p, g in zip(obs, keep, rngs):
+            x = reader.read(o["counts_path"], chrom, start, start + L)
+            X.append(np.log1p(np.asarray(thin(x, p, g) if p < 1.0 else x, np.float64)))
+        X = np.stack(X)
         c = errdecomp.haar(X, J)
         Y = np.concatenate([c[i] for i in idx], axis=1)
         S += Y @ Y.T
@@ -340,11 +369,10 @@ def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None)
                              ci_low=float("nan"), ci_high=float("nan"), n_levels=len(obs), estimable=0,
                              note=f"too few observations ({len(obs)}) or cells to fit"))
             continue
-        S, ysum, K = sufficient_stats(obs, regions, band, reader)
+        D = common_depth(obs)
+        S, ysum, K = sufficient_stats(obs, regions, band, reader, depth=D)
         labels = {f: [o[f] for o in obs] for f in FACTORS}
-        depth = np.log2(np.array([o["depth"] for o in obs]))
-        if not np.all(np.isfinite(depth)):
-            depth = None
+        depth = None                            # thinned to one depth: no slope left to fit
         fr, beta = decompose(S, ysum, K, labels, depth, n_boot=n_boot, seed=seed)
         halves = sum(1 for o in obs if o["half"])
         for r in fr:
@@ -354,9 +382,10 @@ def run(tables, evalset, band, out, layer=None, n_boot=200, seed=0, reader=None)
             rows.append(dict(assay=assay, band=band, **r))
         rows.append(dict(assay=assay, band=band, **lab_row(obs)))
         rows.append(dict(assay=assay, band=band, factor="log2_depth", variance_fraction=float("nan"),
-                         ci_low=float("nan"), ci_high=float("nan"), n_levels=len(obs), estimable=int(
-                             depth is not None and np.ptp(depth) > 1e-9),
-                         note=f"fixed slope beta = {beta:.6g} per log2 depth (not a variance component)"))
+                         ci_low=float("nan"), ci_high=float("nan"), n_levels=len(obs), estimable=0,
+                         note=(f"every observation thinned to {D:.6g} reads before log1p; no depth slope fitted"
+                               if D is not None else "no depth for some observation: read unthinned; no depth"
+                               " slope fitted")))
     write_tsv(rows, out)
     return rows
 

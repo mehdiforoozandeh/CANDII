@@ -46,7 +46,7 @@ from eic_decomp import errdecomp as _ed  # noqa: E402
 
 __all__ = [
     "SPACES", "Undefined", "to_space",
-    "shared_specific", "noise_floor", "specific_variance_recovered",
+    "shared_specific", "noise_floor", "noise_floor_log1p_bias", "specific_variance_recovered",
     "Level", "r_spec",
     "crps_split", "crps_skill", "gap_closed", "uncertainty_gap_closed",
     "depth_law_error", "pit_deviation", "variance_ratio", "marginal_nb",
@@ -192,15 +192,22 @@ def shared_specific(truth, pred, groups, noise=None, *, J: int = J, calibrated: 
     return out
 
 
-def noise_floor(pr1, pr2, target, depth_ratio: float = 2.0, *, J: int = J, return_levels: bool = False):
+def noise_floor(pr1, pr2, target, depth_ratio: float = 2.0, *, J: int = J, return_levels: bool = False,
+                shares=None):
     """Sampling-noise floor N of a target track, in units of Var(target).
 
     pr1, pr2: the target's two pseudoreplicate halves, in the same space as target. In `counts_log1p`
     the halves are rescaled to the target's depth BEFORE log1p (`to_space(half, "counts_log1p",
-    rescale=2.0)` for an even split), not taken at their own half depth. At each Haar level k,
-    R_k = corr of the halves' level-k coefficients (clipped to [0, 1]); the noise share of a track at
+    rescale=1 / share)`, 2.0 for an even split), not taken at their own half depth. At each Haar level
+    k, R_k = corr of the halves' level-k coefficients (clipped to [0, 1]); the noise share of a track at
     `depth_ratio` times the half depth (fragments) is 1 - k R_k / (1 + (k - 1) R_k) (Spearman-Brown).
+    shares = (f1, f2), the halves' real shares of the target's depth, replaces depth_ratio with the
+    unequal-length form: half i carries 1 / f_i times the target's noise variance, so with s_k the
+    target's signal-to-noise ratio, R_k^2 (s_k + 1/f1)(s_k + 1/f2) = s_k^2, and the noise share is
+    1 / (1 + s_k). Equal shares f give exactly the Spearman-Brown form with k = 1 / f.
     N = sum_k share_k * (energy share of the target at level k). Undefined if a vector is constant.
+    In counts_log1p at a few reads per bin the step understates the sampling share (about -4% at 3
+    reads per bin in the total-variance audit); `noise_floor_log1p_bias` reports its simulated size.
 
     return_levels=True returns a dict {N, R, share, energy_share, n_coef} instead of the scalar;
     n_coef [J+1] is the number of coefficients per level that touch real (unpadded) bins, so a caller
@@ -216,14 +223,70 @@ def noise_floor(pr1, pr2, target, depth_ratio: float = 2.0, *, J: int = J, retur
     with np.errstate(invalid="ignore", divide="ignore"):
         R = G[:, 0, 1] / np.sqrt(G[:, 0, 0] * G[:, 1, 1])
     R = np.clip(np.nan_to_num(R, nan=0.0), 0.0, 1.0)
-    k = float(depth_ratio)
-    share = 1.0 - k * R / (1.0 + (k - 1.0) * R)
+    if shares is not None and float(shares[0]) != float(shares[1]):
+        a, b = 1.0 / float(shares[0]), 1.0 / float(shares[1])
+        R2 = R * R
+        with np.errstate(invalid="ignore", divide="ignore"):
+            snr = (R2 * (a + b) + np.sqrt(R2 * R2 * (a + b) ** 2 + 4.0 * (1.0 - R2) * R2 * a * b)) / (
+                2.0 * (1.0 - R2))
+        share = np.where(R2 >= 1.0, 0.0, 1.0 / (1.0 + snr))
+    else:
+        k = float(depth_ratio) if shares is None else 1.0 / float(shares[0])
+        share = 1.0 - k * R / (1.0 + (k - 1.0) * R)
     xs = G[:, 2, 2] / G[:, 2, 2].sum()
     N = float(np.dot(share, xs))
     if not return_levels:
         return N
     n_coef = np.array([-(-L // (1 << j)) for j in range(1, J + 1)] + [-(-L // (1 << J))])
     return {"N": N, "R": R, "share": share, "energy_share": xs, "n_coef": n_coef, "reason": ""}
+
+
+def _rate_npmle(counts, n_grid: int = 120, iters: int = 300):
+    """Nonparametric maximum-likelihood rate distribution of a Poisson mixture (EM on a fixed grid of
+    rates, 0 plus a geometric grid up to 1.5 x the largest count): (grid, weights)."""
+    from scipy.special import gammaln, xlogy
+    vals, cnt = np.unique(np.asarray(counts, np.int64), return_counts=True)
+    grid = np.concatenate([[0.0], np.geomspace(0.01, max(float(vals.max()), 1.0) * 1.5, n_grid - 1)])
+    lik = np.exp(xlogy(vals[:, None], grid[None, :]) - grid[None, :] - gammaln(vals[:, None] + 1.0))
+    w = np.full(grid.size, 1.0 / grid.size)
+    for _ in range(iters):
+        p = lik * w
+        p /= np.maximum(p.sum(1, keepdims=True), 1e-300)
+        w = (cnt[:, None] * p).sum(0) / cnt.sum()
+    return grid, w
+
+
+def noise_floor_log1p_bias(counts, shares=(0.5, 0.5), *, n: int = 2 ** 14, J: int = J, seed: int = 0) -> float:
+    """Simulated bias of `noise_floor` in counts_log1p at a track's count distribution (a diagnostic;
+    the estimator is not corrected by it).
+
+    The rate distribution of the track is fitted to its counts (`_rate_npmle`, a Poisson mixture, so
+    it is set by the track's mean count and the shape of its counts), n rates are drawn from it, a
+    Poisson track is drawn and split binomially into halves with the given depth shares, and N is
+    computed as score.py does (halves rescaled by 1 / share before log1p). The planted sampling share is
+    0.5 mean((log1p y - log1p y')^2) / Var(log1p y), y' a second Poisson draw of the same rates.
+    Returns N - planted (negative: N understates the sampling share). On the 24 tracks of the
+    total-variance audit (3 reads per bin) its mean was -0.011 for even halves and -0.014 for 0.3 / 0.7
+    halves; the audit's true rates give -0.009 and -0.014."""
+    y = _f64(counts).reshape(-1)
+    y = y[np.isfinite(y)]
+    if not (y.size and y.mean() > 0):
+        return Undefined("mean count is not positive")
+    grid, w = _rate_npmle(np.rint(y))
+    rng = np.random.default_rng(seed)
+    lam = rng.choice(grid, n, p=w / w.sum())
+    y1 = rng.poisson(lam)
+    f1, f2 = float(shares[0]), float(shares[1])
+    f1, f2 = f1 / (f1 + f2), f2 / (f1 + f2)
+    h1 = rng.binomial(y1, f1)
+    t1, t2 = np.log1p(y1.astype(np.float64)), np.log1p(rng.poisson(lam).astype(np.float64))
+    if not t1.var() > 0:
+        return Undefined("the simulated track is constant")
+    est = noise_floor(to_space(h1, "counts_log1p", rescale=1.0 / f1),
+                      to_space(y1 - h1, "counts_log1p", rescale=1.0 / f2), t1, J=J, shares=(f1, f2))
+    if isinstance(est, Undefined):
+        return est
+    return float(est - 0.5 * np.mean((t1 - t2) ** 2) / t1.var())
 
 
 def specific_variance_recovered(E_sp, V_sp, N) -> float:

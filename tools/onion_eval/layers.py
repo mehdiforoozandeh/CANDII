@@ -1,17 +1,29 @@
 """Onion layers along the replicate ladder (D12, primary decomposition; plan chunk E2).
 
-For every replicate pair (a, b) of one rung, the pair variance is the variance of the depth-matched
-difference d = log1p(a') - log1p(b') of the two count tracks, where the deeper track (or both, when a
-common target depth is given) is binomially thinned to the shallower depth. The variance is split
-exactly over Haar scale bands (orthonormal transform from `tools/eic_decomp/errdecomp.py`, J = 14) and
-computed inside each region stratum.
+For every replicate pair (a, b) of one rung, `pair_variance` gives Var(d), the variance of the
+depth-matched difference d = log1p(a') - log1p(b') of the two count tracks, where the deeper track (or
+both, when a common target depth is given) is binomially thinned to the shallower depth. The variance is
+split exactly over Haar scale bands (orthonormal transform from `tools/eic_decomp/errdecomp.py`, J = 14)
+and computed inside each region stratum. A pseudoreplicate row of pairs.tsv (a = b, the base view) is
+read as its two halves `pr1.h5` and `pr2.h5` (siblings of an `h5:` counts path), each at its own depth
+(the file's `depth_reads` attribute, else half the base depth).
 
-A rung's variance is the mean pair variance over its pairs. Its layer increment is the rung variance
-minus the variance of the nearest populated lower rung (the row names that rung in `increment_over`);
-the innermost populated rung's increment is its own variance. Intervals are 95% intervals on the layer
-increment from a cluster bootstrap over cells (both rungs resampled with the same cells): increment
-+- t(0.975, n_cells - 1) x bootstrap SE x sqrt(n_cells / (n_cells - 1)), n_cells counted over both
-rungs. The plain percentile interval under-covered with 8 cells (70-90% over 20 seeds).
+Column definitions of layers.tsv. `variance` is the pair value of the rung, 0.5 E[(Y - Y')^2] =
+0.5 Var(d) (the mean term of d is 0 for exchangeable sides), i.e. E[Var(Y | Z(k-1))] of the identity in
+`onion total variance.md`; it is the per-track value, half the variance of the pair difference. A
+rung's variance is the mean over its cells of the cell's mean pair value. Its `layer_increment` is the
+difference to the nearest populated lower rung (named in `increment_over`), taken per cell over the cells
+that populate both rungs and averaged over those cells; the innermost populated rung's increment is its
+own variance. Where the two rungs have the same cells the increments add up exactly to the outermost
+rung's variance; a rung whose cells differ from its lower rung's is flagged `cells differ from lower
+rung` (its increment uses the common cells only, and is empty when there is none). Intervals are 95%
+intervals on the layer increment from a cluster bootstrap over the cells it uses: increment +-
+t(0.975, n - 1) x bootstrap SE x sqrt(n / (n - 1)), n = those cells. The plain percentile interval
+under-covered with 8 cells (70-90% over 20 seeds). `depth` is the common depth (reads) at which every
+pair of the assay was taken. On log1p counts a layer holds at that depth only (assumption 4 of the
+note): never set it against headline 1 of a target at another depth (headline 1 writes each target's
+`depth_reads` beside it); a pooled row whose assays have different depths has depth `mixed` and the flag
+`assays at different depths`.
 
 Rung order: pseudoreplicate, sequencing, technical, isogenic, anisogenic, other_experiment,
 other_cell_type. A rung with no pair gets a row with `n_pairs = 0` and flag `not populated by EIC`;
@@ -46,8 +58,10 @@ BANDS = {name.split(" ")[0]: list(idx) for name, idx in errdecomp.BANDS.items()}
 BAND_ORDER = ["fine", "peak", "domain", "broad", "all"]
 MIN_PAIRS, MIN_CELLS = 5, 3
 FLAG_OK, FLAG_FEW, FLAG_EMPTY = "ok", "few pairs", "not populated by EIC"
+FLAG_CELLS, FLAG_DEPTHS = "cells differ from lower rung", "assays at different depths"
 COLUMNS = ["assay_or_class", "pooled_by_class", "stratum", "band", "rung", "n_pairs", "n_cells",
-           "variance", "layer_increment", "ci_low", "ci_high", "ci_width", "flag", "increment_over"]
+           "variance", "layer_increment", "ci_low", "ci_high", "ci_width", "flag", "increment_over",
+           "depth"]
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -134,11 +148,12 @@ def _interval(est, boot, n_clusters):
 
 
 def layer_table(records, n_boot=1000, seed=0):
-    """Rung variances, layer increments and intervals for one group (an assay, or a pooled class).
+    """Rung pair values, layer increments and intervals for one group (an assay, or a pooled class).
 
-    records: list of dicts {"rung", "cell", "v": {(stratum, band): variance}} (one per pair).
-    Returns one dict per (stratum, band, rung), every rung of RUNGS included, with n_pairs, n_cells,
-    variance, layer_increment, ci_low, ci_high, ci_width, flag, increment_over."""
+    records: list of dicts {"rung", "cell", "v": {(stratum, band): Var(d)}} (one per pair, the
+    `pair_variance` value; halved here to the pair value). Returns one dict per (stratum, band, rung),
+    every rung of RUNGS included, with n_pairs, n_cells, variance, layer_increment, ci_low, ci_high,
+    ci_width, flag, increment_over (see the module doc for the definitions)."""
     keys = sorted({k for r in records for k in r["v"]})
     by_rung = {r: [x for x in records if x["rung"] == r] for r in RUNGS}
     populated = [r for r in RUNGS if by_rung[r]]
@@ -146,29 +161,39 @@ def layer_table(records, n_boot=1000, seed=0):
     for r in RUNGS:
         prev = [q for q in RUNGS[:RUNGS.index(r)] if q in populated]
         lower[r] = prev[-1] if prev else ""
+    rung_cells = {r: {x["cell"] for x in by_rung[r]} for r in RUNGS}
     cells = sorted({x["cell"] for x in records})
     cidx = {c: i for i, c in enumerate(cells)}
     rng = np.random.default_rng(seed)
     draws = rng.integers(0, len(cells), size=(n_boot, len(cells))) if cells else np.zeros((n_boot, 0), int)
-    weights = np.stack([np.bincount(dr, minlength=len(cells)) for dr in draws]) if cells else draws
+    weights = (np.stack([np.bincount(dr, minlength=len(cells)) for dr in draws]) if cells else draws).astype(float)
 
-    def stats(rung, key):
-        recs = [x for x in by_rung[rung] if np.isfinite(x["v"].get(key, np.nan))]
-        if not recs:
-            return np.nan, np.full(n_boot, np.nan)
-        vals = np.array([x["v"][key] for x in recs])
-        ci = np.array([cidx[x["cell"]] for x in recs])
-        w = weights[:, ci].astype(float)                   # (n_boot, n_pairs): copies of each pair
+    def cell_means(rung, key):
+        """{cell: mean pair value of the cell} over the rung's finite records."""
+        acc = {}
+        for x in by_rung[rung]:
+            v = x["v"].get(key, np.nan)
+            if np.isfinite(v):
+                acc.setdefault(x["cell"], []).append(0.5 * v)
+        return {c: float(np.mean(v)) for c, v in acc.items()}
+
+    def mean_boot(per_cell):
+        """Mean over cells and its bootstrap draws (cells resampled with the shared weights)."""
+        if not per_cell:
+            return np.nan, np.full(n_boot, np.nan), 0
+        cs = sorted(per_cell)
+        vals = np.array([per_cell[c] for c in cs])
+        w = weights[:, [cidx[c] for c in cs]]
         with np.errstate(invalid="ignore", divide="ignore"):
             boot = (w * vals).sum(1) / w.sum(1)
-        return float(vals.mean()), boot
+        return float(vals.mean()), boot, len(cs)
 
     rows = []
     for key in keys:
-        cache = {r: stats(r, key) for r in populated}
+        cm = {r: cell_means(r, key) for r in populated}
         for r in RUNGS:
             recs = by_rung[r]
-            n_pairs, n_cells = len(recs), len({x["cell"] for x in recs})
+            n_pairs, n_cells = len(recs), len(rung_cells[r])
             row = dict(stratum=key[0], band=key[1], rung=r, n_pairs=n_pairs, n_cells=n_cells,
                        increment_over=lower[r] if recs else "")
             if not recs:
@@ -176,16 +201,17 @@ def layer_table(records, n_boot=1000, seed=0):
                            ci_width=np.nan, flag=FLAG_EMPTY)
                 rows.append(row)
                 continue
-            var, boot = cache[r]
+            var, _, _ = mean_boot(cm[r])
             if lower[r]:
-                lvar, lboot = cache[lower[r]]
-                inc, iboot = var - lvar, boot - lboot
-                ncl = len({x["cell"] for x in recs + by_rung[lower[r]]})
+                common = set(cm[r]) & set(cm[lower[r]])
+                inc, iboot, ncl = mean_boot({c: cm[r][c] - cm[lower[r]][c] for c in common})
             else:
-                inc, iboot, ncl = var, boot, n_cells
-            lo, hi = _interval(inc, iboot, ncl)
-            row.update(variance=var, layer_increment=inc, ci_low=lo, ci_high=hi, ci_width=hi - lo,
-                       flag=FLAG_OK if (n_pairs >= MIN_PAIRS and n_cells >= MIN_CELLS) else FLAG_FEW)
+                inc, iboot, ncl = mean_boot(cm[r])
+            lo, hi = _interval(inc, iboot, ncl) if np.isfinite(inc) else (np.nan, np.nan)
+            flag = FLAG_OK if (n_pairs >= MIN_PAIRS and n_cells >= MIN_CELLS) else FLAG_FEW
+            if lower[r] and rung_cells[r] != rung_cells[lower[r]]:
+                flag = FLAG_CELLS if flag == FLAG_OK else f"{flag}; {FLAG_CELLS}"
+            row.update(variance=var, layer_increment=inc, ci_low=lo, ci_high=hi, ci_width=hi - lo, flag=flag)
             rows.append(row)
     return rows
 
@@ -195,24 +221,35 @@ def assemble(records, n_boot=1000, seed=0):
 
     One row block per assay (every rung, every stratum and band). For each (assay class, rung) where
     some assay of the class is flagged few pairs or is empty while the class has pairs at that rung, a
-    pooled block over all the class's assays is added (pooled_by_class = 1), keeping only those rungs."""
+    pooled block over all the class's assays is added (pooled_by_class = 1), keeping only those rungs.
+    A record may carry "depth" (the common depth of its assay); a row's `depth` is the one depth of its
+    records, `mixed` (flagged) when they differ, NaN when none is given."""
     rows = []
     assays = sorted({r["assay"] for r in records})
     cls_of = {r["assay"]: r["assay_class"] for r in records}
+
+    def depth_of(recs):
+        ds = sorted({float(r["depth"]) for r in recs if r.get("depth") is not None})
+        return ds[0] if len(ds) == 1 else ("mixed" if ds else np.nan)
+
     weak = {}                                           # class -> set of rungs needing a pooled row
     for a in assays:
         ar = [r for r in records if r["assay"] == a]
         t = layer_table(ar, n_boot=n_boot, seed=seed)
+        dep = depth_of(ar)
         for row in t:
-            rows.append(dict(assay_or_class=a, pooled_by_class=0, **row))
-            if row["flag"] != FLAG_OK:
+            rows.append(dict(assay_or_class=a, pooled_by_class=0, depth=dep, **row))
+            if row["flag"] == FLAG_EMPTY or FLAG_FEW in row["flag"]:
                 weak.setdefault(cls_of[a], set()).add(row["rung"])
     for c in sorted(weak):
         cr = [r for r in records if r["assay_class"] == c]
         t = layer_table(cr, n_boot=n_boot, seed=seed)
+        dep = depth_of(cr)
         for row in t:
             if row["rung"] in weak[c] and row["n_pairs"] > 0:
-                rows.append(dict(assay_or_class=c, pooled_by_class=1, **row))
+                if dep == "mixed":
+                    row["flag"] = FLAG_DEPTHS if row["flag"] == FLAG_OK else f"{row['flag']}; {FLAG_DEPTHS}"
+                rows.append(dict(assay_or_class=c, pooled_by_class=1, depth=dep, **row))
     return rows
 
 
@@ -257,6 +294,27 @@ class CountsReader:
         raise ValueError(f"unknown counts_path {counts_path!r}")
 
 
+def half_depths(m):
+    """The pseudoreplicate halves of a measurement row with an `h5:` counts path:
+    ((pr1 path, depth), (pr2 path, depth)), or None when either file is missing. A half's depth is its
+    file's `depth_reads` attribute; without both attributes each half gets half the row's depth."""
+    kind, _, rest = m["counts_path"].partition(":")
+    if kind != "h5":
+        return None
+    paths = [Path(rest).with_name(f"{h}.h5") for h in ("pr1", "pr2")]
+    if not all(q.is_file() for q in paths):
+        return None
+    import h5py
+    deps = []
+    for q in paths:
+        with h5py.File(q, "r") as f:
+            deps.append(float(f.attrs.get("depth_reads", 0) or 0))
+    if not all(d > 0 for d in deps):
+        d = float(m.get("depth_reads") or m.get("depth_fragments")) / 2.0
+        deps = [d, d]
+    return tuple((f"h5:{q}", d) for q, d in zip(paths, deps))
+
+
 def load_strata_regions(masks_path, names, regions, L):
     """Stratum masks over the evaluation regions: {name: bool (R, L)}; names absent from the file are
     reported on stderr and skipped."""
@@ -292,22 +350,36 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
     def depth(m):
         return float(m["depth_reads"] or m["depth_fragments"])
 
+    # the two sides (counts path, depth) of each pair; a == b is a pseudoreplicate row: its halves
+    sides = {}
+    for p in sel:
+        ma, mb = meas[p["a"]], meas[p["b"]]
+        if p["a"] == p["b"]:
+            h = half_depths(ma)
+            if h is None:
+                print(f"layers: {p['pair_id']}: a == b and no pr1.h5 / pr2.h5 halves; skipped", file=sys.stderr)
+                continue
+            sides[p["pair_id"]] = h
+        else:
+            sides[p["pair_id"]] = ((ma["counts_path"], depth(ma)), (mb["counts_path"], depth(mb)))
+    sel = [p for p in sel if p["pair_id"] in sides]
+
     # common depth per assay: the shallowest side of any of its pairs (every rung at one depth)
     common = {}
     for p in sel:
-        d = min(depth(meas[p["a"]]), depth(meas[p["b"]]))
-        common[p["assay"]] = min(common.get(p["assay"], np.inf), d)
+        (_, da), (_, db) = sides[p["pair_id"]]
+        common[p["assay"]] = min(common.get(p["assay"], np.inf), da, db)
 
     reader, records = CountsReader(), []
     for p in sel:
-        ma, mb = meas[p["a"]], meas[p["b"]]
-        a = np.stack([reader.read(ma["counts_path"], c, s, s + L) for c, s in regions])
-        b = np.stack([reader.read(mb["counts_path"], c, s, s + L) for c, s in regions])
-        pv = pair_variance(a, b, depth(ma), depth(mb), strata, depth=common[p["assay"]],
+        (pa, da), (pb, db) = sides[p["pair_id"]]
+        a = np.stack([reader.read(pa, c, s, s + L) for c, s in regions])
+        b = np.stack([reader.read(pb, c, s, s + L) for c, s in regions])
+        pv = pair_variance(a, b, da, db, strata, depth=common[p["assay"]],
                            seed=zlib.crc32(p["pair_id"].encode()))
         v = {(s, bd): x for s, row in pv["variance"].items() for bd, x in row.items()}
-        records.append(dict(assay=p["assay"], assay_class=ma["assay_class"], rung=p["rung"],
-                            cell=p["cell"], v=v))
+        records.append(dict(assay=p["assay"], assay_class=meas[p["a"]]["assay_class"], rung=p["rung"],
+                            cell=p["cell"], v=v, depth=common[p["assay"]]))
     # assays in the evalset's layers scope with no pair at all still get their empty rows
     scope = set()
     for assays in (ev.get("scorable", {}).get("layers", {}) or {}).values():
@@ -320,7 +392,7 @@ def run(tables, evalset, out, strata_path=None, n_boot=1000, seed=0):
                     rows.append(dict(assay_or_class=a, pooled_by_class=0, stratum=s, band=bd, rung=r,
                                      n_pairs=0, n_cells=0, variance=np.nan, layer_increment=np.nan,
                                      ci_low=np.nan, ci_high=np.nan, ci_width=np.nan, flag=FLAG_EMPTY,
-                                     increment_over=""))
+                                     increment_over="", depth=np.nan))
     write_tsv(rows, out)
     return rows
 

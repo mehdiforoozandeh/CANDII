@@ -69,6 +69,14 @@ noise floor is written under `specific_variance_recovered_NO_NOISE_FLOOR_pilot_o
 over every assay with a target under `uncertainty_gap_closed_all_assays_pilot_only` (never a
 selection input; F3, DEFECTS item 3).
 
+Noise floor N in counts_log1p (TVf). Each half is rescaled to the target's depth by 1 / its real
+share of the reads (the `depth_reads` attributes of pr1.h5 and pr2.h5; 0.5 each without them), and N
+uses the unequal-length Spearman-Brown form of `metrics.noise_floor(shares=...)`. The error budget
+still takes the halves rescaled by 2.0. Headline 1's `per_target` also carries `depth_reads` (the
+target's depth: a log1p layer of layers.tsv is comparable with it only at that depth) and
+`N_log1p_bias_sim` (`metrics.noise_floor_log1p_bias` at the target's mean count: the simulated bias of
+N; a diagnostic, never applied).
+
 Headline 1 per assay (F3, DEFECTS item 5). `selection.headline1_per_assay_status` (also under
 headline 1's `per_assay_status`) says per assay: the targets, those with a noise floor, whether
 headline 1 is defined and why not, whether the assay is in the composite's imputation term, and
@@ -156,6 +164,7 @@ import os
 import subprocess
 import sys
 import time
+import zlib
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -370,6 +379,17 @@ def git_sha() -> str:
                               text=True, timeout=10).stdout.strip() or "unknown"
     except Exception:  # pragma: no cover - no git on the node
         return "unknown"
+
+
+def _half_shares(row: dict) -> tuple:
+    """(f1, f2): the real shares of the target's reads in pr1.h5 and pr2.h5 (their `depth_reads`
+    attributes, via `layers.half_depths`); (0.5, 0.5) when the attributes are missing."""
+    from onion_eval.layers import half_depths
+    h = half_depths(row)
+    if h is None:
+        return (0.5, 0.5)
+    d1, d2 = h[0][1], h[1][1]
+    return (d1 / (d1 + d2), d2 / (d1 + d2))
 
 
 def has_halves(row: dict) -> bool:
@@ -839,11 +859,18 @@ class Scorer:
             # headline 1 / 2 in counts_log1p: prediction is the NB mean at the target's own C'
             ts = Mx.to_space(y, SPACE)
             h1 = h2 = None
+            dr = row.get("depth_reads") or row.get("depth_fragments")
+            r["depth_reads"] = float(dr) if dr else None
             if halves:
                 h1, h2 = (Mx.to_space(A[h], SPACE, rescale=2.0) for h in ("pr1", "pr2"))
-                r["N"] = Mx.noise_floor(h1, h2, ts, 2.0)
+                f = _half_shares(row)
+                r["N"] = Mx.noise_floor(*(Mx.to_space(A[h], SPACE, rescale=1.0 / fh)
+                                          for h, fh in zip(("pr1", "pr2"), f)), ts, shares=f)
+                r["N_log1p_bias_sim"] = Mx.noise_floor_log1p_bias(
+                    y, f, seed=zlib.crc32(f"nfb:{job['target']}".encode()))
             else:
                 r["N"] = no_halves
+                r["N_log1p_bias_sim"] = no_halves
             ps = Mx.to_space(mu, SPACE) if defined else None
             a_s = Mx.to_space(A["position_average.mu"], SPACE) if pa_ok else None
             r["r_spec"] = (Mx.r_spec(ts, ps, a_s) if (defined and pa_ok)
@@ -1321,6 +1348,8 @@ class Scorer:
         h1["targets_without_halves"] = wo
         h1["per_target"] = {r["target"]: {"assay": r["assay"], "cell": r["cell"], "level": _j(r["level"]),
                                           "E_sp": _j(r["E_sp"]), "V_sp": _j(r["V_sp"]), "N": _j(r["N"]),
+                                          "N_log1p_bias_sim": _j(r.get("N_log1p_bias_sim")),
+                                          "depth_reads": r.get("depth_reads"),
                                           "has_halves": r["has_halves"],
                                           "recovered": _j(r["recovered"])} for r in recs}
         h1s = metric(recs, recovered_fn("sig_"), scorable, nb, sd, require_all=ra)

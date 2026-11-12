@@ -75,7 +75,8 @@ def poisson_log1p_var(lam):
     return float(np.sum(p * np.log1p(x) ** 2) - m ** 2)
 
 
-NOISE = 2 * poisson_log1p_var(math.exp(LOG_LAMBDA))     # variance of a pseudoreplicate difference
+# layers.tsv holds the pair value 0.5 E[(Y - Y')^2] (per track; TVf), half the variance of the difference
+NOISE = poisson_log1p_var(math.exp(LOG_LAMBDA))          # pair value of a pseudoreplicate pair
 
 
 def planted_increment(rung, band):
@@ -83,8 +84,8 @@ def planted_increment(rung, band):
         return NOISE * centered_frac(band)
     s2, kind = PLANT[rung]
     if kind == "white":
-        return 2 * s2 * centered_frac(band)
-    return 2 * s2 if band in (kind, "all") else 0.0
+        return s2 * centered_frac(band)
+    return s2 if band in (kind, "all") else 0.0
 
 
 def ladder_records(seed=0, n_cells=8, per_cell=3, assay="H3K4me3", cls="narrow_histone", strata=None):
@@ -140,7 +141,7 @@ def test_pair_variance_thins_deeper_track_to_shallower_depth():
     b = rng.poisson(lam, (4, L))
     pv = LY.pair_variance(a, b, 2e7, 1e7)
     assert pv["depth"] == 1e7
-    assert pv["variance"]["all"]["all"] == pytest.approx(NOISE, rel=0.05)
+    assert pv["variance"]["all"]["all"] == pytest.approx(2 * NOISE, rel=0.05)   # pair_variance is Var(d)
     with pytest.raises(ValueError):
         LY.pair_variance(a, b, 2e7, 1e7, depth=1.5e7)
     common = LY.pair_variance(a, b, 2e7, 1e7, depth=5e6)
@@ -156,7 +157,7 @@ def test_pair_variance_stratum():
     d = np.log1p(a) - np.log1p(b)
     assert pv["n_bins"]["left"] == L
     assert pv["variance"]["left"]["all"] == pytest.approx(d[m].var(), rel=1e-9)
-    assert pv["variance"]["left"]["all"] == pytest.approx(NOISE + 2 * 0.010, rel=0.1)
+    assert pv["variance"]["left"]["all"] == pytest.approx(2 * NOISE + 2 * 0.010, rel=0.1)
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -230,10 +231,12 @@ def test_few_pairs_flag_wide_interval_and_class_pool():
     main = _row(rows, "H3K4me3", "technical")
     t = _row(rows, "H3K9ac", "technical")
     s = _row(rows, "H3K9ac", "sequencing")
-    assert t["flag"] == s["flag"] == "few pairs"
+    assert s["flag"] == "few pairs"
+    # technical (cells C00, C01) over sequencing (C00 only): the increment uses the common cell C00 (TVf)
+    assert t["flag"] == "few pairs; " + LY.FLAG_CELLS
     assert (t["n_pairs"], t["n_cells"]) == (2, 2)
     assert t["increment_over"] == "sequencing"
-    assert t["ci_width"] > 2 * main["ci_width"]
+    assert t["ci_width"] > 2 * main["ci_width"] and math.isinf(t["ci_width"])
     assert s["n_cells"] == 1 and math.isinf(s["ci_width"])          # one cell: no interval
     assert _row(rows, "H3K9ac", "pseudoreplicate")["flag"] == "not populated by EIC"
     # pooled by class: the few-pairs and empty rungs of H3K9ac get a narrow_histone row
@@ -284,7 +287,8 @@ def test_cli_writes_layers_tsv(tmp_path):
     assert list(got[0]) == LY.COLUMNS
     tech = [r for r in got if r["assay_or_class"] == "H3K27ac" and r["rung"] == "technical" and r["band"] == "all"]
     assert len(tech) == 1 and tech[0]["n_pairs"] == "6" and tech[0]["increment_over"] == "pseudoreplicate"
-    assert float(tech[0]["layer_increment"]) == pytest.approx(0.04, abs=0.02)
+    assert float(tech[0]["layer_increment"]) == pytest.approx(0.02, abs=0.01)   # per-track pair value
+    assert float(tech[0]["depth"]) == 1e7
     empty = [r for r in got if r["assay_or_class"] == "H3K27ac" and r["rung"] == "isogenic"]
     assert empty and all(r["flag"] == "not populated by EIC" and r["n_pairs"] == "0" and r["variance"] == ""
                          for r in empty)
