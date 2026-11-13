@@ -227,3 +227,27 @@ def test_library_without_adapters_takes_auto_detected_ones(meta):
     with pytest.raises(SystemExit, match="auto-detection found none"):
         D.replicates_json("ENCSRTEST", D.select_unit(meta, "br1tr1"), "base", path,
                           lambda p: "")
+
+
+def test_large_job_gets_the_larger_mark_heap_and_default_stays_identical(meta):
+    """D6x, row 396: only a job with >= 150000 MB passes machine_sizes.mark = large2x-alt
+    (Picard -Xmx58G); a default job's input JSON is byte-identical to the release default."""
+    u = D.select_unit(meta, "br1tr1")
+    base = D.input_json("ENCSRTEST", u, "base", path, "/refs")
+    for mem in (None, "", "64000", "128000", 149999):
+        sizes = D.machine_sizes_for(mem)
+        assert sizes == D.MACHINE_SIZES
+        assert json.dumps(D.input_json("ENCSRTEST", u, "base", path, "/refs",
+                                       machine_sizes=sizes)) == json.dumps(base)
+        assert D.java_heap_record(sizes) == {
+            "stage": "mark (AddMateCigar, MarkDuplicatesWithMateCigar)",
+            "input": "dnase_align_only.machine_sizes.mark = large", "memory_gb": 13,
+            "xmx_gb": 12, "default": True}
+    big = D.machine_sizes_for("160000")
+    inp = D.input_json("ENCSRTEST", u, "base", path, "/refs", machine_sizes=big)
+    ms = inp["dnase_align_only.machine_sizes"]
+    assert ms["mark"] == "large2x-alt" and {k: v for k, v in ms.items() if k != "mark"} == \
+        {k: v for k, v in D.MACHINE_SIZES.items() if k != "mark"}
+    assert D.MACHINE_SIZES["mark"] == "large"            # the module default is not mutated
+    h = D.java_heap_record(big)
+    assert (h["memory_gb"], h["xmx_gb"], h["default"]) == (65, 58, False)

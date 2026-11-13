@@ -110,6 +110,40 @@ MACHINE_SIZES = {
     "peaks": "medium2x", "qc": "medium2x", "score": "medium", "trim": "large2x", "unpack": "medium",
 }
 
+#: The duplicate-marking stage's Java heap (D6x, row 396). merge_mark_and_filter_bams.wdl passes
+#: `machine_sizes.mark` to wdl/workflows/mixed/mark.wdl, which gives add_mate_cigar and
+#: mark_duplicates_with_mate_cigar `compute.runtimes[machine_size + "-low-cpu"]`
+#: (wdl/runtimes.json), and wdl/tasks/picard.wdl:47 sets
+#: `java_heap = "-Xmx~{round(resources.memory_gb * heap_ratio)}G"` with heap_ratio 0.9.
+#: The release default "large" -> large-low-cpu, 13 GB -> -Xmx12G; ENCSR269SIA (1,027 M reads)
+#: died there 4 times with "GC overhead limit exceeded". A job given at least
+#: BIG_MARK_MIN_MEM_MB (build_row.sh submit with ONION_MEM) passes the pipeline's own input
+#: `machine_sizes.mark = "large2x-alt"` -> large2x-alt-low-cpu, 65 GB -> -Xmx58G; the same input
+#: sets that stage's `samtools sort -@` to 12 (of the job's 16 CPUs). Two replicates may mark
+#: at once (max-concurrent-tasks 2), so the job needs over 2 x 65 GB. Below that, the input JSON
+#: is the release default, byte for byte.
+RUNTIMES_MEM_GB = {"large-low-cpu": 13, "large2x-alt-low-cpu": 65}   # wdl/runtimes.json v3.0.0
+HEAP_RATIO = 0.9                                                    # picard.wdl heap_ratio
+BIG_MARK = "large2x-alt"
+BIG_MARK_MIN_MEM_MB = 150000
+
+
+def machine_sizes_for(mem_mb) -> dict:
+    """`dnase_align_only.machine_sizes` for a job of `mem_mb` MB (SLURM_MEM_PER_NODE)."""
+    sizes = dict(MACHINE_SIZES)
+    if mem_mb and int(mem_mb) >= BIG_MARK_MIN_MEM_MB:
+        sizes["mark"] = BIG_MARK
+    return sizes
+
+
+def java_heap_record(sizes) -> dict:
+    gb = RUNTIMES_MEM_GB[sizes["mark"] + "-low-cpu"]
+    return {"stage": "mark (AddMateCigar, MarkDuplicatesWithMateCigar)",
+            "input": f"dnase_align_only.machine_sizes.mark = {sizes['mark']}",
+            "memory_gb": gb, "xmx_gb": round(gb * HEAP_RATIO),
+            "default": sizes["mark"] == MACHINE_SIZES["mark"]}
+
+
 ARMS = ("base", "se", "crop36", "crop50")
 CROPS = {"crop36": 36, "crop50": 50}
 FASTQ_STATUSES = ("released",)
@@ -396,12 +430,12 @@ def references_json(refs_dir) -> dict:
     }
 
 
-def input_json(experiment, u, arm, fastq_path, refs_dir, reps=None) -> dict:
+def input_json(experiment, u, arm, fastq_path, refs_dir, reps=None, machine_sizes=None) -> dict:
     reps = reps if reps is not None else replicates_json(experiment, u, arm, fastq_path)
     clean = [{k: v for k, v in r.items() if not k.startswith("_")} for r in reps]
     return {"dnase_align_only.replicates": clean,
             "dnase_align_only.references": references_json(refs_dir),
-            "dnase_align_only.machine_sizes": dict(MACHINE_SIZES)}
+            "dnase_align_only.machine_sizes": dict(machine_sizes or MACHINE_SIZES)}
 
 
 def out_dir_name(unit, arm) -> str:
@@ -768,7 +802,11 @@ def cmd_run(a):
                 download(n["url"], n["dest"], md5=n["md5"])
     # adapters may be detected from the staged reads, so the input JSON follows the staging
     reps = replicates_json(experiment, u, arm, fastq_path, detect=detect_adapter)
-    inp = input_json(experiment, u, arm, fastq_path, a.scratch_refs, reps=reps)
+    sizes = machine_sizes_for(os.environ.get("SLURM_MEM_PER_NODE"))
+    heap = java_heap_record(sizes)
+    inp = input_json(experiment, u, arm, fastq_path, a.scratch_refs, reps=reps,
+                     machine_sizes=sizes)
+    log(f"mark stage: {heap['input']} -> -Xmx{heap['xmx_gb']}G")
     notes = {f"rep{i}": r["_adapters_note"] for i, r in enumerate(reps, 1)
              if "_adapters_note" in r}
     adapter_source = {f"rep{i}": r["_adapter_source"] for i, r in enumerate(reps, 1)
@@ -836,6 +874,7 @@ def cmd_run(a):
     rec["adapters_notes"] = notes
     rec["adapter_source"] = adapter_source
     rec["adapter_kind"] = adapter_kind
+    rec["java_heap"] = heap
     if detection:
         rec["adapter_detection"] = detection
     (out / "arm.json").write_text(json.dumps(rec, indent=2) + "\n")
@@ -858,7 +897,7 @@ def cmd_run(a):
         "workflow": WRAPPER_NAME, "workflow_id": md.get("id"),
         "read_length": {f"rep{i}": r["read_length"] for i, r in enumerate(reps, 1)},
         "fastqs_md5": used, "adapters_notes": notes, "adapter_source": adapter_source,
-        "adapter_kind": adapter_kind,
+        "adapter_kind": adapter_kind, "java_heap": heap,
         "reference_set": REFERENCE_SET, "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
         "finished": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }

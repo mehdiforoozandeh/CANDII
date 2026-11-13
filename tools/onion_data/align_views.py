@@ -1621,6 +1621,8 @@ def run_notes(armj: dict) -> dict:
         notes["truncated_reads"] = {
             a: {k: p.get(k) for k in ("reads_kept", "reads_expected", "kept_fraction")}
             for a, p in prep.items() if p.get("truncated_source")}
+    if armj.get("java_heap"):
+        notes["java_heap"] = armj["java_heap"]
     if armj.get("adapter_source"):
         notes["adapter_source"] = armj["adapter_source"]
         notes["adapter_kind"] = armj.get("adapter_kind", {})

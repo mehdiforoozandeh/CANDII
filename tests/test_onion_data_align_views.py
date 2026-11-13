@@ -779,3 +779,8 @@ def test_renote_backfills_kf2_rows_and_is_idempotent(driver, capsys, monkeypatch
     out = capsys.readouterr().out
     assert "row 5: queued or running; skipped" in out and "0 file(s) changed" in out
     assert "notes" not in json.loads(pj.read_text())
+
+
+def test_run_notes_carry_the_java_heap():
+    heap = {"input": "dnase_align_only.machine_sizes.mark = large2x-alt", "xmx_gb": 58}
+    assert AV.run_notes({"java_heap": heap})["java_heap"] == heap

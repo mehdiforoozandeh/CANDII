@@ -34,6 +34,8 @@
 #   on every build array and the signal pass of that submit, e.g.
 #   ONION_TIME=3-00:00:00 bash build_row.sh submit <kit> <build list> 1 50 2 56
 #   ONION_SBATCH_TEST=1 prints the sbatch lines instead of submitting (tests only).
+#   A DNase row whose job has ONION_MEM >= 150000M also gets the pipeline's larger duplicate-
+#   marking machine size (Picard -Xmx58G instead of -Xmx12G; fastq_dnase.machine_sizes_for).
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=onion_build
 #SBATCH --output=/project/def-maxwl/mforooz/ONION/logs/build_%A_%a.out
