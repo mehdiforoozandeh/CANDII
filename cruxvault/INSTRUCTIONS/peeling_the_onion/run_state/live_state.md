@@ -13,9 +13,10 @@ PI priorities: imputation, covariate artifact correction, calibrated uncertainty
 |---|---|---|
 | (E7a returned) | eval set on eic_v1 (sha b5f7a4cf), check OK, average table done; baseline scorings resubmitted at 128000M: 27179565-27179568; layers 27164943 running; job watch -> E7b (collect: scorer validity, scoring cost AND memory), then gate G2, L1a, RCa, BRa. Ladder scoring memory: 128000M until measured | - |
 | (QCa returned) | QC fill batch 1 = job 27164529 (400 rows); batches 2-6 by the foreman when the queue has room (commands in results/t211/SUBMITTED.md); QCb must fix `collect` | - |
-| L1a builder (opus) | RUNG 1 submit on eic_v1: 8 arms x 3 seeds, scoring at 128000M, Nibi CPU timing probe | log job ids; L1b collect when runs end; E7b must confirm the baselines |
+| L1a builder (opus) | RUNG 1 is 55x too slow on Nibi (/scratch h5 reads, workers 0): measure, fix the data path with identical results per seed, check scoring, check the scrambled_covariates arm, resubmit rung 1 after the old runs are gone | review the diff (train.sh / train.py / dataset.py); log job ids |
+WAITING ON THE PI: cancel the slow rung-1 jobs (names mc_rung*; ids 27186605-27186736). The foreman must not cancel.
 | SM builder (opus) | scorer memory: per-region streaming, bit-identical scores (PI instruction 2026-11-13) | independent review (score.py is the selection scorer); merge; new memory figure for the ladder |
-| V7, ERx, STt, RBk builders (opus) | region experiments, wave R1 (Amendment 7): tasks and questions; evalset --regions-file and superset; training strata tool; region configs | review each; merge; then TR (after SM's diff), SAx (after L1a merges), then RB1a, STa, PRg |
+| (region wave R1: V7, ERx, STt, RBk merged) | next: TR (sampler `train_regions` + window loss weights) after the foreman reads SM's diff; SAx after L1a merges; then RB1a, STa, PRg | - |
 | OXa builder (opus) | second experiments build (evaluation-only add-on), current build code | then D6c batch 1 (priority 4); OXc collect |
 
 eic_v1 FROZEN 2026-11-13 14:30 UTC (hash a068a867; 249/267 train, 42/45 val, 37/40 controls; 8 scorable assays). Collect: DONE. TODO: renote rows 132 and 211 when their jobs end (kit D6y). TODO: D6u update when tail rows verify (watchdog 27124200; `tail_watch.py status` for an interim view).
