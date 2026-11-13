@@ -92,6 +92,11 @@ while its assay group is open (headline 1 and the error budget split shared from
 targets of one assay). `suffstats.npz` keeps the sufficient statistics: the Gram matrices per Haar
 scale (shared and specific parts of V, P, C, E), the PIT curves (F_bar on the 21-point grid, with bin
 counts, per target and stratum), and the CRPS sums per target and pair.
+Memory (SM, PI 2026-11-13): a target's vectors fill buffers of their final length (no list of tile
+pieces); the position-average fits of a region live only while the group (or the pair phase) is open
+and keep only the per-cell means of the cells it predicts for; a training-average control rate is
+dropped once no later group reads its cell; freed heap pages go back to the OS (glibc malloc_trim)
+after each target, group and pair. Every value and every float operation order is unchanged.
 
 Space of headline 1 and 2 for selection: always `counts_log1p` (ruling 13; there is no option).
 `signal_arcsinh` is computed through `signal_from_counts.signal_from_nb` (X2), imported lazily, with
@@ -481,6 +486,72 @@ class ModelPredictor:
         return {k: o[k].detach().cpu().double().numpy() for k in ("n", "mu")}
 
 
+class _VectorBuffer:
+    """One vector filled piece by piece into a buffer of its final length (SM): the same values as
+    `np.concatenate(pieces)` (dtype promoted as concatenate would), without holding the pieces and
+    their concatenation at once."""
+
+    def __init__(self, size: int):
+        self.size, self.buf, self.n = int(size), None, 0
+
+    def append(self, piece) -> None:
+        a = np.asarray(piece).reshape(-1)
+        if self.buf is None:
+            self.buf = np.empty(max(self.size, a.size), dtype=a.dtype)
+        elif a.dtype != self.buf.dtype:
+            self.buf = self.buf.astype(np.result_type(self.buf, a))
+        if self.n + a.size > self.buf.size:          # more bins than expected: grow
+            grown = np.empty(self.n + a.size, self.buf.dtype)
+            grown[:self.n] = self.buf[:self.n]
+            self.buf = grown
+        self.buf[self.n:self.n + a.size] = a
+        self.n += a.size
+
+    def array(self) -> np.ndarray:
+        return self.buf if self.n == self.buf.size else self.buf[:self.n].copy()
+
+
+class _Vectors:
+    """`defaultdict(list)` of `_job_arrays`, each key a `_VectorBuffer` of `size` bins; `scalar`
+    stores a non-vector value (log2r). `result()` keeps the keys' first-use order."""
+
+    def __init__(self, size: int):
+        self.size, self.d = int(size), {}
+
+    def __getitem__(self, k):
+        if k not in self.d:
+            self.d[k] = _VectorBuffer(self.size)
+        return self.d[k]
+
+    def __contains__(self, k) -> bool:
+        return k in self.d
+
+    def scalar(self, k, v) -> None:
+        self.d[k] = v
+
+    def result(self) -> dict:
+        return {k: (v.array() if isinstance(v, _VectorBuffer) else v) for k, v in self.d.items()}
+
+
+def _trim_heap() -> None:
+    """SM: hand freed heap pages back to the OS (glibc `malloc_trim`); a no-op elsewhere. The
+    scorer frees vectors of many sizes in turn, and glibc keeps that memory mapped otherwise."""
+    global _LIBC
+    if _LIBC is None:
+        try:
+            import ctypes
+            _LIBC = ctypes.CDLL("libc.so.6") if sys.platform.startswith("linux") else False
+            if _LIBC and not hasattr(_LIBC, "malloc_trim"):
+                _LIBC = False
+        except OSError:
+            _LIBC = False
+    if _LIBC:
+        _LIBC.malloc_trim(0)
+
+
+_LIBC = None
+
+
 def _np_out(o):
     return {k: (o[k].detach().cpu().double().numpy() if torch.is_tensor(o[k])
                 else np.asarray(o[k], np.float64)) for k in ("n", "mu")}
@@ -590,7 +661,11 @@ class Scorer:
         else:
             self.dnase_route = dnase_route
         self._pa_cache: dict = {}
+        #: SM: cells whose own per-cell means a cached position-average fit keeps (None = all);
+        #: set per imputation group to the group's target cells, the only cells it predicts for
+        self._pa_keep_cells = None
         self._pa_ctl_rate: dict = {}               # (region index, cell) -> average control rate
+        self._cells_ahead = None                   # SM: run()'s count of imputation jobs per cell to go
         self.suff: dict = {}
         self._rung_pair_index = None              # (assay, cell) -> rung -> pairs (headline 7)
         self.timing: dict = defaultdict(float)     # wall seconds per phase, in scores.json
@@ -922,6 +997,13 @@ class Scorer:
                 c, s = self.regions[ri]
                 self._set_region(c, s)
                 pa.fit([self._region_batch(mids, c, s)])
+                if self._pa_keep_cells is not None:
+                    # SM: `loo_rate` reads a cell's own per-region mean only for the cell it
+                    # predicts for; the other training cells enter only through S and N, so
+                    # dropping their means keeps every prediction and frees ~a vector per cell
+                    for t in pa.table.values():
+                        t["cells"] = {cl: v for cl, v in t["cells"].items()
+                                      if cl in self._pa_keep_cells}
             self._pa_cache[key] = pa
         return self._pa_cache[key]
 
@@ -966,7 +1048,7 @@ class Scorer:
         want_avg_ctl = ((not pair) and "position_average" in names
                         and self._needs_average_control(job))
         want_dump_ctl = (not pair) and self._dump_wants_avg_ctl(job)    # AGd; read by the dump only
-        out = defaultdict(list)
+        out = _Vectors(len(self.regions) * self.rb)
         for ri, tiles in self._tiles(self.regions):
             self._set_region(*self.regions[ri])
             for b0 in range(0, len(tiles), self.tile_bs):
@@ -1027,12 +1109,13 @@ class Scorer:
                 if pair:
                     out["x"].append(batch["x_counts"][:, :, t].numpy().reshape(-1).astype(np.float64))
                     if "log2r" not in out:
-                        out["log2r"] = [float(batch["c_out"][0, t, 0] - batch["c_in"][0, t, 0])]
+                        out.scalar("log2r", float(batch["c_out"][0, t, 0] - batch["c_in"][0, t, 0]))
                 elif halves:
                     for h in ("pr1", "pr2"):
                         out[h].append(np.concatenate([self.ds.read(job["target"], c, s, self.L, h)
                                                       for c, s in tl]).astype(np.float64))
-        res = {k: (np.concatenate(v) if k != "log2r" else v[0]) for k, v in out.items()}
+        res = out.result()
+        del out
         if "position_average.ctl_mu" in res and not np.isfinite(res["position_average.ctl_mu"]).all():
             del res["position_average.ctl_mu"]     # no training control covers a bin: as before F4
         if "dump.avg_ctl_mu" in res and not np.isfinite(res["dump.avg_ctl_mu"]).all():
@@ -1159,6 +1242,24 @@ class Scorer:
     # -------------------------------------------------------------- imputation
     def _imputation_group(self, jobs, regime):
         """Per-target records of one (regime, assay) group, and the assay-level shared/specific."""
+        # SM: the position-average fits of this group keep only its target cells' own means, and
+        # live only while the group is open (they were held for every region of the assay)
+        cells = {j["cell"] for j in jobs}
+        self._pa_cache.clear()
+        self._pa_keep_cells = cells
+        try:
+            return self._imputation_group_body(jobs, regime)
+        finally:
+            self._pa_cache.clear()
+            self._pa_keep_cells = None
+            if self._cells_ahead is not None:   # run(): drop control rates no later group reads
+                for j in jobs:
+                    self._cells_ahead[j["cell"]] -= 1
+                self._pa_ctl_rate = {k: v for k, v in self._pa_ctl_rate.items()
+                                     if self._cells_ahead[k[1]] > 0}
+            _trim_heap()
+
+    def _imputation_group_body(self, jobs, regime):
         from onion_eval import error_budget as EB
         recs, arrays = [], []
         for job in jobs:
@@ -1231,6 +1332,9 @@ class Scorer:
             self.suff[f"crps/{regime}/{job['target']}"] = np.array(
                 [_j(m_c["crps"]) or np.nan, _j(m_c["oracle_scaled"]) or np.nan,
                  _j(pa_c["crps"]) or np.nan, y.size], np.float64)
+            # SM: drop this target's other vectors before the next target's are built
+            del A, a_s, sig
+            _trim_heap()
         # assay-level shared / specific split (headline 1) and error budget, over defined targets;
         # a target without halves joins the shared estimate (it needs no N) but not headline 1
         # OXe: a flagged (evaluation-only) target stays out of the assay-level split, the error
@@ -1515,6 +1619,8 @@ class Scorer:
         self.suff[f"pair/{job.get('pair_id') or job['source'] + '>' + job['target']}"] = np.array(
             [_j(out["crps_model"]) or np.nan, _j(out["crps_depth_only"]) or np.nan,
              _j(out["crps_floor"]) or np.nan, y.size], np.float64)
+        del A, y, mu
+        _trim_heap()
         return out
 
     # -------------------------------------------------------------- guardrail
@@ -1650,6 +1756,9 @@ class Scorer:
         tq = time.perf_counter()
         self.marg = self._fit_marginal({j["assay"] for j in imp + ctl})
         self.timing["fit_marginal"] += time.perf_counter() - tq
+        _trim_heap()
+        from collections import Counter
+        self._cells_ahead = Counter(j["cell"] for j in imp + ctl)
         scores = {}
         recs_by_regime, flagged_by_regime = {}, {}
         for regime in REGIMES + ("control",):
@@ -1688,8 +1797,16 @@ class Scorer:
         self.timing["assembly"] += time.perf_counter() - ta
         self.log(f"score: {len(cor)} correction pairs, {len(rep)} replicate pairs")
         tq = time.perf_counter()
-        cor_recs = [self._pair_record(j) for j in cor]
-        rep_recs = [self._pair_record(j) for j in rep]
+        # SM: with main position_average, pair windows read the position-average fits too; they
+        # keep only the pair cells' own means and are dropped after the pair phase
+        self._pa_cache.clear()
+        self._pa_keep_cells = {j["cell"] for j in cor + rep}
+        try:
+            cor_recs = [self._pair_record(j) for j in cor]
+            rep_recs = [self._pair_record(j) for j in rep]
+        finally:
+            self._pa_cache.clear()
+            self._pa_keep_cells = None
         self.timing["pairs_total"] += time.perf_counter() - tq
         ta = time.perf_counter()
         scores.update(self._correction_metrics(cor_recs, sc_cor))
