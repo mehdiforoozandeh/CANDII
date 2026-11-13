@@ -506,3 +506,110 @@ def test_missing_caper_jar_fails_fast(tmp_path, monkeypatch):
     (tmp_path / "womtool-82.jar").write_bytes(b"")
     F.check_caper_jars()
     assert F.main(["check-jars"]) == 0
+
+
+# --------------------------------------------------------- D6x: read preparation before Caper
+
+import gzip as _gz  # noqa: E402
+import random as _rnd  # noqa: E402
+
+
+def _fastq(path, n, mate, suffix=True, comment=True):
+    rng = _rnd.Random(7 + mate)
+    with _gz.open(path, "wt", compresslevel=6) as fh:
+        for i in range(n):
+            name = f"@BI:SL-HAK:C4M5UACXX:7:2316:{i}:95491" + (f"/{mate}" if suffix else "")
+            name += " 1:X:0:GACAGTAA" if comment else ""
+            seq = "".join(rng.choice("ACGT") for _ in range(50))
+            fh.write(f"{name}\n{seq}\n+\n{''.join(rng.choice('#AFJ') for _ in range(50))}\n")
+
+
+def _pe_fj(exp, n=None):
+    fj = {"experiment": exp, "note": "", "files": [
+        _f("ENCFFR1", 1, 1, 50, "1", "ENCFFR2"), _f("ENCFFR2", 1, 1, 50, "2", "ENCFFR1"),
+        _f("ENCFFS1", 2, 1, 50)]}
+    for f in fj["files"]:
+        f["read_count"] = n
+    return fj
+
+
+def _reads(path):
+    with _gz.open(path, "rt") as fh:
+        lines = fh.read().splitlines()
+    return lines[0::4], len(lines) // 4
+
+
+def test_pe_read_name_suffix_is_stripped_only_where_present(tmp_path):
+    """D6x class A: `/1` `/2` before a comment is stripped from the name token of both mates in
+    a streamed copy; the staged file is untouched; SE runs and clean pairs are left alone."""
+    exp, fq = "ENCSRPE", tmp_path / "fq"
+    (fq / exp).mkdir(parents=True)
+    _fastq(fq / exp / "ENCFFR1.fastq.gz", 300, 1)
+    _fastq(fq / exp / "ENCFFR2.fastq.gz", 300, 2)
+    _fastq(fq / exp / "ENCFFS1.fastq.gz", 50, 1)              # single-end with a suffix: kept
+    fj = _pe_fj(exp)
+    reps = F.unit_reps(fj, "pooled")
+    paths, prov = F.prepare_reads(reps, [True, False], fj, fq, exp, tmp_path / "tmp",
+                                  read_count=lambda a: None)
+    assert sorted(paths) == ["ENCFFR1", "ENCFFR2"]
+    h1, n1 = _reads(paths["ENCFFR1"])
+    h2, n2 = _reads(paths["ENCFFR2"])
+    assert n1 == n2 == 300
+    assert h1[0] == "@BI:SL-HAK:C4M5UACXX:7:2316:0:95491 1:X:0:GACAGTAA"
+    assert [h.split()[0] for h in h1] == [h.split()[0] for h in h2]
+    assert prov["ENCFFR1"]["read_names_normalised"] and not prov["ENCFFR1"]["truncated_source"]
+    assert prov["ENCFFR1"]["mate_of"] == "ENCFFR2"
+    assert F.first_header(fq / exp / "ENCFFR1.fastq.gz").split()[0].endswith("/1")   # untouched
+    # the Caper input JSON reads the prepared copies
+    d = F.build_input_json(row(exp, "H3K4me3", "narrow_histone"), fj, GTSV, str(fq),
+                           cropped={**paths, "ENCFFS1": "x"})
+    assert d["chip.fastqs_rep1_R1"] == [paths["ENCFFR1"]]
+    # a clean pair (no suffix) needs nothing
+    exp2 = "ENCSRCLEAN"
+    (fq / exp2).mkdir()
+    _fastq(fq / exp2 / "ENCFFR1.fastq.gz", 20, 1, suffix=False)
+    _fastq(fq / exp2 / "ENCFFR2.fastq.gz", 20, 2, suffix=False)
+    _fastq(fq / exp2 / "ENCFFS1.fastq.gz", 20, 1)
+    fj2 = _pe_fj(exp2)
+    assert F.prepare_reads(F.unit_reps(fj2, "pooled"), [True, False], fj2, fq, exp2,
+                           tmp_path / "tmp2", read_count=lambda a: None) == ({}, {})
+
+
+def _truncate(path, keep_fraction):
+    data = Path(path).read_bytes()
+    Path(path).write_bytes(data[: int(len(data) * keep_fraction)])
+
+
+def test_truncated_source_keeps_complete_records_and_cuts_the_mate(tmp_path):
+    """D6x class E: a gzip FASTQ that ends early keeps its complete records; its mate is cut to
+    the same count; provenance has the kept and expected reads; under half is refused."""
+    exp, fq = "ENCSRTR", tmp_path / "fq"
+    (fq / exp).mkdir(parents=True)
+    _fastq(fq / exp / "ENCFFR1.fastq.gz", 2000, 1)
+    _fastq(fq / exp / "ENCFFR2.fastq.gz", 2000, 2)
+    _fastq(fq / exp / "ENCFFS1.fastq.gz", 10, 1, suffix=False)
+    _truncate(fq / exp / "ENCFFR2.fastq.gz", 0.7)
+    scan = F.gz_scan(fq / exp / "ENCFFR2.fastq.gz")
+    assert not scan["complete"] and 1000 < scan["records"] < 2000
+    assert F.gz_scan(fq / exp / "ENCFFR1.fastq.gz") == {"complete": True, "records": 2000}
+    fj = _pe_fj(exp)
+    fj["files"][0]["read_count"] = 2000          # the portal counts the R1 file only
+    reps = F.unit_reps(fj, "pooled")
+    paths, prov = F.prepare_reads(reps, [True, False], fj, fq, exp, tmp_path / "tmp",
+                                  read_count=lambda a: None)
+    k = scan["records"]
+    (h1, n1), (h2, n2) = _reads(paths["ENCFFR1"]), _reads(paths["ENCFFR2"])
+    assert n1 == n2 == k and h1[-1].split()[0] == h2[-1].split()[0]
+    p2 = prov["ENCFFR2"]
+    assert p2["truncated_source"] and p2["truncated_files"] == ["ENCFFR2"]
+    assert p2["reads_kept"] == k and p2["reads_expected"] == 2000
+    assert p2["kept_fraction"] == round(k / 2000, 4) and p2["read_names_normalised"]
+    assert "ENCFFS1" not in paths
+    # the scan is remembered beside the staged file
+    assert (fq / exp / ".ENCFFR2.fastq.gz.gzscan.json").exists()
+    # under half kept: not built
+    _fastq(fq / exp / "ENCFFR2.fastq.gz", 2000, 2)
+    _truncate(fq / exp / "ENCFFR2.fastq.gz", 0.3)
+    with pytest.raises(SystemExit, match="kept fraction"):
+        F.prepare_reads(reps, [True, False], fj, fq, exp, tmp_path / "tmp3",
+                        read_count=lambda a: None)

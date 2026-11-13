@@ -29,6 +29,11 @@
 # reads that run dir has its measurements (align_views.bam_readers_pending; set 0 to keep them);
 # ONION_VIEWS_ARGS adds align_views.py run options (e.g. --name-tokens --check-refilter);
 # ONION_WORK, ONION_OUT, ONION_FASTQ_ROOT move the three roots (tests only).
+# Submit-only overrides (D6x), for a resubmission of rows that ran out of time or memory:
+#   ONION_TIME=3-00:00:00 replaces the projected time limit, ONION_MEM=128000M the header --mem,
+#   on every build array and the signal pass of that submit, e.g.
+#   ONION_TIME=3-00:00:00 bash build_row.sh submit <kit> <build list> 1 50 2 56
+#   ONION_SBATCH_TEST=1 prints the sbatch lines instead of submitting (tests only).
 #SBATCH --account=def-maxwl
 #SBATCH --job-name=onion_build
 #SBATCH --output=/project/def-maxwl/mforooz/ONION/logs/build_%A_%a.out
@@ -49,29 +54,38 @@ if [ "${1:-}" = submit ]; then
   SPEC="${7:-}"
   KIT=$(cd "$KIT" && pwd); BL=$(cd "$(dirname "$BL")" && pwd)/$(basename "$BL")
   FILES=/project/def-maxwl/mforooz/ONION/catalog/encode/files.tsv   # read counts: time limits
-  python3 "$KIT/tools/onion_data/fastq_uniform.py" check-jars || exit 3
-  ACTIVE=$(squeue -u "$USER" -h -r -n onion_build,onion_signal,onion_stage -o '%K' 2>/dev/null \
-           | grep -E '^[0-9]+$' | sort -un | paste -sd, -)
+  RES=(); [ -n "${ONION_MEM:-}" ] && RES+=(--mem="$ONION_MEM")
+  SB=(sbatch); [ "${ONION_SBATCH_TEST:-0}" = 1 ] && SB=(echo sbatch)
+  if [ "${ONION_SBATCH_TEST:-0}" != 1 ]; then
+    python3 "$KIT/tools/onion_data/fastq_uniform.py" check-jars || exit 3
+    ACTIVE=$(squeue -u "$USER" -h -r -n onion_build,onion_signal,onion_stage -o '%K' 2>/dev/null \
+             | grep -E '^[0-9]+$' | sort -un | paste -sd, -)
+  else
+    ACTIVE=""
+  fi
   args=(--build-list "$BL" --priority "$PRI" --out "$OUT" --work "$WORK")
   [ -n "$SPEC" ] && args+=(--rows "$SPEC")
   [ -n "$ACTIVE" ] && args+=(--active "$ACTIVE")
   [ -f "$FILES" ] && args+=(--files "$FILES")
   PLAN=$(python3 "$KIT/tools/onion_data/build_list.py" pending "${args[@]}") || exit 2
-  mkdir -p /project/def-maxwl/mforooz/ONION/logs
+  [ "${ONION_SBATCH_TEST:-0}" = 1 ] || mkdir -p /project/def-maxwl/mforooz/ONION/logs
   [ -n "$PLAN" ] || { echo "priority $PRI${SPEC:+ rows $SPEC}: nothing to submit"; exit 0; }
   BIDS=(); SIG=""
   while IFS=$'\t' read -r LIM ROWS; do
     if [ "$LIM" = signal ]; then SIG="$ROWS"; continue; fi
-    SID=$(sbatch --parsable --array="${ROWS}%${SCONC}" "$KIT/slurm/onion_data/stage_fastq.sh" \
+    LIM="${ONION_TIME:-$LIM}"
+    SID=$("${SB[@]}" --parsable --array="${ROWS}%${SCONC}" "$KIT/slurm/onion_data/stage_fastq.sh" \
           "$KIT" "$BL") || exit 3
-    BID=$(sbatch --parsable --time="$LIM" --array="${ROWS}%${CONC}" --dependency="aftercorr:${SID}" \
+    BID=$("${SB[@]}" --parsable --time="$LIM" ${RES[@]+"${RES[@]}"} --array="${ROWS}%${CONC}" \
+          --dependency="aftercorr:${SID}" \
           --kill-on-invalid-dep=yes "$KIT/slurm/onion_data/build_row.sh" "$KIT" "$BL") || exit 3
-    echo "rows $ROWS (limit $LIM): stage array $SID (%$SCONC)  build array $BID (%$CONC)"
+    echo "rows $ROWS (limit $LIM${ONION_MEM:+, mem $ONION_MEM}): stage array $SID (%$SCONC)  build array $BID (%$CONC)"
     BIDS+=("$BID")
   done <<< "$PLAN"
   if [ -n "$SIG" ]; then
     DEP="afterany:$(IFS=:; echo "${BIDS[*]}")"
-    GID=$(sbatch --parsable --array="${SIG}%${CONC}" --dependency="$DEP" \
+    SIGT=(); [ -n "${ONION_TIME:-}" ] && SIGT=(--time="$ONION_TIME")
+    GID=$("${SB[@]}" --parsable ${SIGT[@]+"${SIGT[@]}"} ${RES[@]+"${RES[@]}"} --array="${SIG}%${CONC}" --dependency="$DEP" \
           --job-name=onion_signal "$KIT/slurm/onion_data/build_row.sh" "$KIT" "$BL") || exit 3
     echo "signal pass $GID rows $SIG (after $DEP)"
   fi
@@ -157,6 +171,14 @@ T1=$(date +%s)
 echo "=== align step exit=$rc wall_s=$((T1 - T0)) $(date -u)"
 [ "$rc" -eq 0 ] || finish "$rc"
 rm -rf "$SLURM_TMPDIR/align"
+# a row whose arm does not exist for the experiment (NOT_APPLICABLE, written by the align step)
+# builds nothing: no views and no verify (verify fails on an experiment with no measurement yet)
+UNIT=$(field unit); ARM=$(field arm)
+RD="$WORK/$EXP/$ARM"; [ "$UNIT" = pooled ] || RD="$WORK/$EXP/$UNIT.$ARM"
+if [ "$KIND" != native ] && [ -f "$RD/NOT_APPLICABLE" ]; then
+  echo "=== row $ROW: $RD/NOT_APPLICABLE; nothing to build, verify skipped"
+  finish 0
+fi
 
 # --- 2. views ---------------------------------------------------------------------------------
 set +u; module load apptainer/1.3.5 python/3.10.13; set -u

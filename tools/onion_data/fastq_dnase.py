@@ -291,12 +291,33 @@ def select_unit(meta, unit) -> dict:
 
 # --- input JSON --------------------------------------------------------------------------------
 
-def replicates_json(experiment, u, arm, fastq_path) -> list[dict]:
+#: dnase-seq-pipeline v3.0.0 has no adapter detection: its paired-end trim step needs
+#: `Replicate.adapters` (select_first in concatenate_trim_and_align_pe_fastqs.wdl). For a PE
+#: library whose portal record lists no read1/read2 3' adapters (ENCLB364ZHU, row 211), the
+#: adapters come from the detector that `atac.auto_detect_adapter` runs in atac-seq-pipeline
+#: v2.2.3 (`detect_adapter.py` in its image: the most frequent of the Illumina, Nextera and
+#: smallRNA 3' adapter stems in the first 250,000 reads), run on that library's first R1 and R2.
+DETECT_ADAPTER_PY = ("import sys; sys.path.insert(0, '/software/atac-seq-pipeline/src'); "
+                     "import detect_adapter as d; print(d.detect_most_likely_adapter(sys.argv[1]))")
+
+
+def detect_adapter(path, sif=None) -> str:
+    """atac-seq-pipeline v2.2.3's own adapter detection on one FASTQ ('' when none is found)."""
+    sif = sif or str(Path(FU.EIC) / FU.PIPELINES["atac"]["sif"])
+    d = str(Path(path).parent)
+    p = sh(["apptainer", "exec", "--cleanenv", "-B", d, sif, "python3", "-c", DETECT_ADAPTER_PY,
+            str(path)], capture_output=True, text=True)
+    return p.stdout.strip()
+
+
+def replicates_json(experiment, u, arm, fastq_path, detect=None) -> list[dict]:
     """`dnase.replicates` for this unit and arm: one entry per biological replicate.
 
     `fastq_path(file_object) -> str` maps a FASTQ to its local path. PE runs of one replicate
     share one `adapters` entry (the pipeline's model); when its libraries disagree, the entry of
     the library with the most PE runs is used and recorded under `_adapters_note`.
+    `detect(path) -> str` (detect_adapter) fills the adapters of a PE library that has none on
+    the portal; without it such a library is refused. `_adapter_source` records which.
     """
     if arm not in ARMS:
         die(f"unknown arm {arm!r} (known: {ARMS})")
@@ -326,12 +347,32 @@ def replicates_json(experiment, u, arm, fastq_path) -> list[dict]:
             counts = {}
             for lib in pe_libs:
                 counts[lib["library"]] = counts.get(lib["library"], 0) + 1
+            source = "portal"
             if any(lib["adapters"] is None for lib in pe_libs):
                 bad = sorted({lib["library"] for lib in pe_libs if lib["adapters"] is None})
-                die(f"{experiment} br{bio}: paired-end library without read1/read2 3' adapters "
-                    f"on the portal: {bad}")
+                if detect is None:
+                    die(f"{experiment} br{bio}: paired-end library without read1/read2 3' "
+                        f"adapters on the portal: {bad}")
+                found = {}
+                for lib in pe_libs:
+                    if lib["adapters"] is None and lib["library"] not in found:
+                        run = next(r for r in lib["runs"] if r["R2"] is not None)
+                        seqs = {"sequence_R1": detect(fastq_path(run["R1"])),
+                                "sequence_R2": detect(fastq_path(run["R2"]))}
+                        if not all(seqs.values()):
+                            die(f"{experiment} br{bio}: library {lib['library']} has no adapters "
+                                f"on the portal and auto-detection found none: {seqs}")
+                        found[lib["library"]] = seqs
+                pe_libs = [dict(lib, adapters=found[lib["library"]])
+                           if lib["adapters"] is None else lib for lib in pe_libs]
+                source = "auto_detect"
+                rep["_adapter_detection"] = {
+                    "tool": "detect_adapter.py of " + FU.PIPELINES["atac"]["image"]
+                            + " (atac.auto_detect_adapter)",
+                    "libraries": found}
             best = max(pe_libs, key=lambda lib: (counts[lib["library"]], lib["library"]))
             rep["adapters"] = best["adapters"]
+            rep["_adapter_source"] = source
             if len({json.dumps(lib["adapters"], sort_keys=True) for lib in pe_libs}) > 1:
                 rep["_adapters_note"] = (f"libraries disagree on adapters; used {best['library']}")
             rep["pe_fastqs"] = pe
@@ -353,8 +394,8 @@ def references_json(refs_dir) -> dict:
     }
 
 
-def input_json(experiment, u, arm, fastq_path, refs_dir) -> dict:
-    reps = replicates_json(experiment, u, arm, fastq_path)
+def input_json(experiment, u, arm, fastq_path, refs_dir, reps=None) -> dict:
+    reps = reps if reps is not None else replicates_json(experiment, u, arm, fastq_path)
     clean = [{k: v for k, v in r.items() if not k.startswith("_")} for r in reps]
     return {"dnase_align_only.replicates": clean,
             "dnase_align_only.references": references_json(refs_dir),
@@ -698,14 +739,10 @@ def cmd_run(a):
     def fastq_path(f):
         return str(fq_dir / f"{f['accession']}.fastq.gz")
 
-    inp = input_json(experiment, u, arm, fastq_path, a.scratch_refs)
-    reps = replicates_json(experiment, u, arm, fastq_path)
-    notes = {f"rep{i}": r["_adapters_note"] for i, r in enumerate(reps, 1)
-             if "_adapters_note" in r}
-    (out / "input.json").write_text(json.dumps(inp, indent=1) + "\n")
-    bios = [r["number"] for r in reps]
-    names = product_names(unit, bios)
     if a.dry_run:
+        inp = input_json(experiment, u, arm, fastq_path, a.scratch_refs)
+        product_names(unit, [r["number"] for r in inp["dnase_align_only.replicates"]])
+        (out / "input.json").write_text(json.dumps(inp, indent=1) + "\n")
         log(f"dry run: wrote {out / 'input.json'}")
         return
 
@@ -727,6 +764,17 @@ def cmd_run(a):
         else:
             for n in missing:
                 download(n["url"], n["dest"], md5=n["md5"])
+    # adapters may be detected from the staged reads, so the input JSON follows the staging
+    reps = replicates_json(experiment, u, arm, fastq_path, detect=detect_adapter)
+    inp = input_json(experiment, u, arm, fastq_path, a.scratch_refs, reps=reps)
+    notes = {f"rep{i}": r["_adapters_note"] for i, r in enumerate(reps, 1)
+             if "_adapters_note" in r}
+    adapter_source = {f"rep{i}": r["_adapter_source"] for i, r in enumerate(reps, 1)
+                      if "_adapter_source" in r}
+    detection = {f"rep{i}": r["_adapter_detection"] for i, r in enumerate(reps, 1)
+                 if "_adapter_detection" in r}
+    (out / "input.json").write_text(json.dumps(inp, indent=1) + "\n")
+    names = product_names(unit, [r["number"] for r in reps])
     t_staged = time.time()
     inp_path = tmp / "input.json"
     inp_path.write_text(json.dumps(inp, indent=1) + "\n")
@@ -782,6 +830,9 @@ def cmd_run(a):
     (out / "metadata.json").write_text(json.dumps(md) + "\n")
     rec = arm_record(experiment, unit, arm, reps, u, used, row)
     rec["adapters_notes"] = notes
+    rec["adapter_source"] = adapter_source
+    if detection:
+        rec["adapter_detection"] = detection
     (out / "arm.json").write_text(json.dumps(rec, indent=2) + "\n")
 
     ru = resource.getrusage(resource.RUSAGE_CHILDREN)
@@ -801,7 +852,7 @@ def cmd_run(a):
         "pipeline_commit": PIPELINE_COMMIT, "image": IMAGE, "image_digest": IMAGE_DIGEST,
         "workflow": WRAPPER_NAME, "workflow_id": md.get("id"),
         "read_length": {f"rep{i}": r["read_length"] for i, r in enumerate(reps, 1)},
-        "fastqs_md5": used, "adapters_notes": notes,
+        "fastqs_md5": used, "adapters_notes": notes, "adapter_source": adapter_source,
         "reference_set": REFERENCE_SET, "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
         "finished": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
