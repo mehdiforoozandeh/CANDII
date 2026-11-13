@@ -3,7 +3,8 @@
     python tools/onion_eval/evalset.py build --tables <dir> [--strata <masks.h5>] [--n-regions 512]
         [--n-fit-regions 16] [--region-bins 16384] [--seed 0] [--include-blind]
         [--inputs-roles train|train,val] [--pair-splits train,val] [--regions-bed <bed>
-        [--regions-exclude]] --out <evalset.json>
+        [--regions-exclude]] [--regions-file <json>] --out <evalset.json>
+    python tools/onion_eval/evalset.py superset --base <evalset.json> --n-regions N --out <json>
     python tools/onion_eval/evalset.py check --evalset <json> [--tables <dir>] [--allow-blind]
     python tools/onion_eval/evalset.py addon --base <frozen evalset.json> --tables <add-on tables>
         --out <json>
@@ -63,6 +64,15 @@ to one built before SC; a non-default option adds its own keys and changes no ex
                        only from blocks that overlap none (the leakage square). Recorded as
                        `regions_bed`, `regions_bed_mode`, `n_candidate_regions_before_bed`.
   A blind eval set may be named `evalset_blind.json` or `evalset_blind_<tag>.json`.
+  --regions-file F     (ERx) eval and fit regions and region_bins are read from F (an eval set,
+                       or a `superset` output) and used as they are; each block must be a candidate
+                       block of the genome mask. Refused with --n-regions, --n-fit-regions, --seed
+                       or --regions-bed; `seed` is the file's. Recorded as `regions_file`,
+                       `regions_file_sha256`.
+
+Superset (`superset`, ERx). A regions file with the base eval set's regions, its fit regions
+unchanged, and the next blocks of the base's seeded candidate order that are in neither list, up
+to --n-regions; so a larger eval set built from it keeps the old regions as a subset.
 
 Second experiments (OXe, Amendment 4, PI ruling 33). Add-on tables (`eic_v1x`, `eic_v2x`) hold
 second experiments: rows with `in_eic = evalonly` (training and validation tracks) and the blind
@@ -420,10 +430,96 @@ def layer_scorable(pairs: list[dict], ids: list) -> dict:
 
 # --------------------------------------------------------------------------------------- build
 
-def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_bins=REGION_BINS,
-          seed=0, include_blind=False, inputs_roles=("train",), pair_splits=None,
-          regions_bed=None, regions_exclude=False) -> dict:
+def read_regions_file(path) -> dict:
+    """The `regions`, `fit_regions`, `region_bins` (and `seed`, when present) of a regions file:
+    an eval set, or the output of `superset` (ERx)."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    miss = [k for k in ("regions", "fit_regions", "region_bins") if k not in raw]
+    if miss:
+        raise ValueError(f"{path}: regions file lacks {miss}")
+    blocks = lambda xs: [[str(c), int(s)] for c, s in xs]  # noqa: E731
+    return {"regions": blocks(raw["regions"]), "fit_regions": blocks(raw["fit_regions"]),
+            "region_bins": int(raw["region_bins"]), "seed": raw.get("seed")}
+
+
+def file_regions(rf: dict, cands: list, path) -> tuple[list, list]:
+    """The file's eval and fit regions as they are; each must be a candidate block, none twice."""
+    ok = set(map(tuple, cands))
+    seen: set = set()
+    for name in ("regions", "fit_regions"):
+        for b in rf[name]:
+            if tuple(b) not in ok:
+                raise ValueError(f"{path}: {name} block {b[0]}:{b[1]} is not a candidate block of "
+                                 f"the genome mask at {rf['region_bins']} bins")
+            if tuple(b) in seen:
+                raise ValueError(f"{path}: block {b[0]}:{b[1]} is listed twice")
+            seen.add(tuple(b))
+    return rf["regions"], rf["fit_regions"]
+
+
+def superset(base, n_regions: int, out) -> dict:
+    """A regions file that holds the base eval set's regions, its fit regions unchanged, and the
+    next blocks of the base's seeded candidate order that are in neither list, up to n_regions
+    (ERx). `regions` is sorted as `draw_regions` sorts; `added_regions` keeps permutation order."""
+    base, out = Path(base), Path(out)
+    raw = base.read_bytes()
+    bev = json.loads(raw.decode("utf-8"))
+    if bev.get("regions_bed"):
+        raise ValueError(f"{base}: built with --regions-bed; superset supports unfiltered "
+                         f"candidate blocks only")
+    if bev.get("seed") is None:
+        raise ValueError(f"{base}: no seed; the candidate order cannot be reproduced")
+    rb, seed = int(bev["region_bins"]), int(bev["seed"])
+    cands = candidate_blocks(genome_dir(tables_dir_of(bev, base)), rb)
+    if bev.get("n_candidate_regions") is not None and len(cands) != int(bev["n_candidate_regions"]):
+        raise ValueError(f"{base}: {bev['n_candidate_regions']} candidate blocks at build, "
+                         f"{len(cands)} now (the genome mask changed)")
+    rf = read_regions_file(base)
+    regions, fit = file_regions(rf, cands, base)
+    if n_regions < len(regions):
+        raise ValueError(f"n_regions {n_regions} < the base's {len(regions)} regions")
+    taken = set(map(tuple, regions)) | set(map(tuple, fit))
+    added = []
+    for i in np.random.default_rng(seed).permutation(len(cands)):
+        if len(regions) + len(added) >= n_regions:
+            break
+        if tuple(cands[i]) not in taken:
+            added.append(cands[i])
+    if len(regions) + len(added) < n_regions:
+        raise ValueError(f"{len(cands)} candidate blocks: cannot reach {n_regions} regions "
+                         f"beside {len(fit)} fit regions")
+    res = {"regions": sorted(regions + added), "fit_regions": fit, "region_bins": rb, "seed": seed,
+           "n_candidate_regions": len(cands), "added_regions": added,
+           "superset_of": str(base.resolve()), "superset_of_sha256": hashlib.sha256(raw).hexdigest()}
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(res, indent=1), encoding="utf-8")
+    return res
+
+
+def build(tables, out, *, strata=None, n_regions=None, n_fit_regions=None, region_bins=None,
+          seed=None, include_blind=False, inputs_roles=("train",), pair_splits=None,
+          regions_bed=None, regions_exclude=False, regions_file=None) -> dict:
+    """`n_regions`, `n_fit_regions`, `seed` default to 512, 16, 0 and `region_bins` to 2^14 without
+    `regions_file`; with it (ERx) they come from the file and the draw options are refused."""
     from minicandi.dataset import tables_sha256
+    rf = None
+    if regions_file is not None:
+        given = [n for n, v in (("n_regions", n_regions), ("n_fit_regions", n_fit_regions),
+                                ("seed", seed), ("regions_bed", regions_bed)) if v is not None]
+        if regions_exclude:
+            given.append("regions_exclude")
+        if given:
+            raise ValueError(f"--regions-file is refused together with {given}")
+        rf = read_regions_file(regions_file)
+        if region_bins is not None and int(region_bins) != rf["region_bins"]:
+            raise ValueError(f"region_bins {region_bins} differs from the regions file's "
+                             f"{rf['region_bins']}")
+        region_bins, seed = rf["region_bins"], rf["seed"]
+    else:
+        n_regions = 512 if n_regions is None else n_regions
+        n_fit_regions = 16 if n_fit_regions is None else n_fit_regions
+        region_bins = REGION_BINS if region_bins is None else region_bins
+        seed = 0 if seed is None else seed
     tables = Path(tables).resolve()
     out = Path(out)
     if include_blind != is_blind_evalset_name(out.name):
@@ -464,7 +560,10 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
             raise ValueError(f"{regions_bed}: {len(cands)} candidate blocks "
                              f"{'outside' if regions_exclude else 'inside'} the BED intervals, "
                              f"need {n_regions} + {n_fit_regions}")
-    regions, fit_regions = draw_regions(cands, n_regions, n_fit_regions, seed)
+    if rf is not None:
+        regions, fit_regions = file_regions(rf, cands, regions_file)
+    else:
+        regions, fit_regions = draw_regions(cands, n_regions, n_fit_regions, seed)
     imp = imputation_targets(rows, splits, inputs_roles)
     ctl = control_targets(rows, splits, inputs_roles)
     cor, dropped = correction_pairs(cor_pairs, meas, splits, pair_splits)
@@ -480,7 +579,7 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
         "tables": tables.name, "tables_dir": str(tables), "tables_sha256": tables_sha256(tables),
         "include_blind": bool(include_blind), "mask_applied": True,
         "regions": regions, "fit_regions": fit_regions, "region_bins": int(region_bins),
-        "seed": int(seed), "n_candidate_regions": len(cands),
+        "seed": None if seed is None else int(seed), "n_candidate_regions": len(cands),
         "imputation_targets": imp, "control_targets": ctl,
         "targets_without_halves": sorted({t["target"] for t in imp if not t["has_halves"]}),
         "correction_pairs": cor, "correction_pairs_dropped": dropped,
@@ -499,6 +598,9 @@ def build(tables, out, *, strata=None, n_regions=512, n_fit_regions=16, region_b
         ev.update(regions_bed=str(Path(regions_bed).resolve()),
                   regions_bed_mode="exclude" if regions_exclude else "inside",
                   n_candidate_regions_before_bed=n_before_bed)
+    if rf is not None:       # ERx: key only with --regions-file (default build byte-identical)
+        ev.update(regions_file=str(Path(regions_file).resolve()),
+                  regions_file_sha256=sha256_file(regions_file))
     n_shared = sum(1 for p in cor if p.get("read_disjoint", 1) == 0)
     if n_shared:
         ev["correction_pairs_not_read_disjoint"] = n_shared
@@ -689,10 +791,12 @@ def main(argv=None) -> int:
     b = sub.add_parser("build")
     b.add_argument("--tables", required=True)
     b.add_argument("--strata")
-    b.add_argument("--n-regions", type=int, default=512)
-    b.add_argument("--n-fit-regions", type=int, default=16)
-    b.add_argument("--region-bins", type=int, default=REGION_BINS)
-    b.add_argument("--seed", type=int, default=0)
+    b.add_argument("--n-regions", type=int, default=None, help="default 512")
+    b.add_argument("--n-fit-regions", type=int, default=None, help="default 16")
+    b.add_argument("--region-bins", type=int, default=None, help=f"default {REGION_BINS}")
+    b.add_argument("--seed", type=int, default=None, help="default 0")
+    b.add_argument("--regions-file", default=None,
+                   help="json with regions, fit_regions, region_bins, used as they are (ERx)")
     b.add_argument("--include-blind", action="store_true")
     b.add_argument("--inputs-roles", default="train", choices=("train", "train,val"))
     b.add_argument("--pair-splits", default=None,
@@ -708,7 +812,16 @@ def main(argv=None) -> int:
     x.add_argument("--base", required=True)
     x.add_argument("--tables", required=True)
     x.add_argument("--out", required=True)
+    u = sub.add_parser("superset")
+    u.add_argument("--base", required=True)
+    u.add_argument("--n-regions", type=int, required=True)
+    u.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "superset":
+        res = superset(a.base, a.n_regions, a.out)
+        print(f"regions file: {len(res['regions'])} regions ({len(res['added_regions'])} added), "
+              f"{len(res['fit_regions'])} fit regions -> {a.out}")
+        return 0
     if a.cmd == "addon":
         ev = addon(a.base, a.tables, a.out)
         n_x = sum(1 for t in ev["imputation_targets"] if t.get("evaluation_only"))
@@ -722,7 +835,8 @@ def main(argv=None) -> int:
                    include_blind=a.include_blind, inputs_roles=tuple(a.inputs_roles.split(",")),
                    pair_splits=(tuple(s for s in a.pair_splits.split(",") if s)
                                 if a.pair_splits is not None else None),
-                   regions_bed=a.regions_bed, regions_exclude=a.regions_exclude)
+                   regions_bed=a.regions_bed, regions_exclude=a.regions_exclude,
+                   regions_file=a.regions_file)
         print(f"evalset: {len(ev['regions'])} regions, {len(ev['imputation_targets'])} imputation "
               f"items ({len(ev['targets_without_halves'])} targets without halves), "
               f"{len(ev['control_targets'])} control targets, "
