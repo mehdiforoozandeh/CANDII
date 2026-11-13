@@ -16,7 +16,10 @@ before plain peaks; then the newest file; then the accession. The `rule` column 
 the reason in `rule` and an empty `file`. The catalog route (`--files`) is the offline fallback,
 used for an experiment only when its portal JSON cannot be read; the catalog has no `file_type`, no
 analysis and no `preferred_default`, so that route ranks by output type, then the newest
-`pipeline_version`, then accession, and says so in `rule` (`catalog_fallback:...`).
+`pipeline_version`, then accession, and says so in `rule` (`catalog_fallback:...`). An experiment
+with no released GRCh38 narrowPeak file on the portal gets its newest archived one, of the best
+output type that exists, with `rule` starting `archived_fallback:` and naming the file's status and
+date (7 DNase-seq training tracks need it; such files serve the consensus and frequency bins).
 Controls are skipped. A rerun skips a file already on disk with the right md5, and merges its rows
 into an existing `peak_files.tsv` by `eic_track`.
 
@@ -283,11 +286,11 @@ def _get(opener, url: str, tries: int = 4) -> bytes:
 
 def choose_from_portal(exp: dict):
     """(file dict, rule text) or (None, reason) from an experiment's portal JSON."""
-    files = [f for f in exp.get("files") or [] if isinstance(f, dict)
-             and f.get("file_type") == "bed narrowPeak" and f.get("assembly") == "GRCh38"
-             and f.get("status") == "released"]
+    peaks = [f for f in exp.get("files") or [] if isinstance(f, dict)
+             and f.get("file_type") == "bed narrowPeak" and f.get("assembly") == "GRCh38"]
+    files = [f for f in peaks if f.get("status") == "released"]
     if not files:
-        return None, "no released GRCh38 bed narrowPeak file"
+        return _archived_fallback(peaks)
 
     def ans(f):
         return {a.get("@id") if isinstance(a, dict) else a for a in f.get("analyses") or []}
@@ -316,6 +319,22 @@ def choose_from_portal(exp: dict):
                              OUTPUT_RANK.get(f.get("output_type"), 9)))
     f = pool[0]
     rule = (f"portal:preferred_default_narrowPeak_GRCh38;{scope};preferred_default={'yes' if f.get('preferred_default') else 'no'};"
+            f"output_type_rank={OUTPUT_RANK.get(f.get('output_type'), 9)}")
+    return {"file": f.get("accession"), "output_type": f.get("output_type") or "",
+            "md5": f.get("md5sum") or "", "url": PORTAL + f["href"] if f.get("href") else ""}, rule
+
+
+def _archived_fallback(peaks: list):
+    """No released GRCh38 narrowPeak file: the newest archived one, of the best output type that
+    exists (rank as `OUTPUT_RANK`). Used for the consensus peak set and frequency bins only."""
+    arch = [f for f in peaks if f.get("status") == "archived"]
+    if not arch:
+        return None, "no released or archived GRCh38 bed narrowPeak file"
+    arch.sort(key=lambda f: f.get("accession") or "")
+    arch.sort(key=lambda f: f.get("date_created") or "", reverse=True)
+    arch.sort(key=lambda f: OUTPUT_RANK.get(f.get("output_type"), 9))
+    f = arch[0]
+    rule = (f"archived_fallback:status={f.get('status')};date={f.get('date_created') or 'none'};"
             f"output_type_rank={OUTPUT_RANK.get(f.get('output_type'), 9)}")
     return {"file": f.get("accession"), "output_type": f.get("output_type") or "",
             "md5": f.get("md5sum") or "", "url": PORTAL + f["href"] if f.get("href") else ""}, rule

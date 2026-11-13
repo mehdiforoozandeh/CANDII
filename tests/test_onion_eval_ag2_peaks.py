@@ -279,3 +279,20 @@ def test_fetched_row_counts_failed_blind_downloads(tmp_path):
                    "--allow-blind", "--evalset", str(ev)], opener=bad) == 3
     assert [r["status"] for r in _rows(ev.parent / "BLIND_PASSES.tsv")] == \
         ["started", "fetched failed_downloads=1"]
+
+
+def test_archived_fallback_only_without_a_released_file():
+    e = _exp("ENCSRA")
+    pick, rule = P.choose_from_portal(e)                   # released file exists: unchanged
+    assert pick["file"] == "ENCSRAR" and rule.startswith("portal:")
+    for f in e["files"]:
+        f["status"] = "archived"
+    e["files"][0]["date_created"] = "2019"
+    e["files"][1]["date_created"] = "2024"                 # pseudoreplicated: worse output type
+    e["files"][2]["date_created"] = "2021"                 # replicated, newest of its type
+    pick, rule = P.choose_from_portal(e)
+    assert pick["file"] == "ENCSRAR" and pick["md5"] == MD5
+    assert rule == "archived_fallback:status=archived;date=2021;output_type_rank=0"
+    e["files"] = [f for f in e["files"] if f.get("file_type") != "bed narrowPeak"]
+    pick, rule = P.choose_from_portal(e)                   # neither: stays missing
+    assert pick is None and rule == "no released or archived GRCh38 bed narrowPeak file"
