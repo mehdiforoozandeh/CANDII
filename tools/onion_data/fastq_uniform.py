@@ -255,7 +255,7 @@ def portal_files(experiment) -> dict:
             "tech_rep": int(tr.split("_")[1]) if "_" in tr else None,
             "platform": (f.get("platform") or "").strip("/").split("/")[-1],
             "flowcell": fc.get("flowcell", ""), "lane": fc.get("lane", ""),
-            "status": f.get("status"),
+            "status": f.get("status"), "read_count": f.get("read_count"),
             "url": (f.get("cloud_metadata") or {}).get("url") or FASTQ_URL.format(f["accession"]),
         })
     files.sort(key=lambda d: d["accession"])
@@ -370,8 +370,9 @@ def fastq_path(fastq_root, experiment, acc) -> str:
 
 def build_input_json(row, files_json, genome_tsv, fastq_root=FASTQ_ROOT, eic=EIC,
                      cropped=None) -> dict:
-    """The Caper input JSON for one build-list row. `cropped` maps an accession to the path of its
-    pre-cropped FASTQ (ATAC crop arms only)."""
+    """The Caper input JSON for one build-list row. `cropped` maps an accession to the path the
+    run reads instead of the staged file: its pre-cropped FASTQ (ATAC crop arms) or its repaired
+    copy (prepare_reads); see input_paths."""
     key, ptype = pipeline_key(row)
     spec, pfx = PIPELINES[key], key
     restrict = [a for a in (row.get("fastq_files") or "").replace(",", ";").split(";") if a]
@@ -680,24 +681,30 @@ def check_image(key, eic=EIC) -> str:
     return got
 
 
-def crop_fastqs(reps, arm, fastq_root, experiment, tmp, cpus, eic=EIC) -> dict:
-    """ATAC crop arm: crop each FASTQ (pair) with the chip image's Trimmomatic step."""
+def crop_fastqs(reps, arm, fastq_root, experiment, tmp, cpus, eic=EIC, src=None) -> dict:
+    """ATAC crop arm: crop each FASTQ (pair) with the chip image's Trimmomatic step. `src` maps
+    an accession to a prepared copy (prepare_reads) to crop instead of the staged file."""
     sif = str(Path(eic) / PIPELINES["chip"]["sif"])
     out = Path(tmp) / "crop"
     out.mkdir(parents=True, exist_ok=True)
+    src = src or {}
+
+    def inp(acc):
+        return src.get(acc) or fastq_path(fastq_root, experiment, acc)
+
     paths = {}
     for r in reps:
         pairs = list(zip(r["r1"], r["r2"])) if r["r2"] else [(a, None) for a in r["r1"]]
         for a, b in pairs:
             o1, o2 = out / a, out / (b or "none")
             o1.mkdir(exist_ok=True)
-            cmd = ["apptainer", "exec", "--cleanenv", "-B", f"{fastq_root},{out}", sif,
-                   "encode_task_trimmomatic.py", "--fastq1", fastq_path(fastq_root, experiment, a),
+            cmd = ["apptainer", "exec", "--cleanenv", "-B", f"{fastq_root},{Path(tmp)}", sif,
+                   "encode_task_trimmomatic.py", "--fastq1", inp(a),
                    "--crop-length", str(arm["crop_length"]), "--crop-length-tol", str(CROP_TOL),
                    "--out-dir-R1", str(o1), "--nth", str(cpus)]
             if b:
                 o2.mkdir(exist_ok=True)
-                cmd += ["--fastq2", fastq_path(fastq_root, experiment, b), "--paired-end",
+                cmd += ["--fastq2", inp(b), "--paired-end",
                         "--out-dir-R2", str(o2)]
             log("crop: " + " ".join(cmd))
             subprocess.run(cmd, check=True)
@@ -711,6 +718,269 @@ def crop_fastqs(reps, arm, fastq_root, experiment, tmp, cpus, eic=EIC) -> dict:
                     raise SystemExit(f"crop {b}: {len(got2)} outputs in {o2}")
                 paths[b] = str(got2[0])
     return paths
+
+
+# --- read preparation before Caper (D6x) ---------------------------------------------------------
+#
+# Two source defects, both repaired by a streaming rewrite into the job's tmp dir (the staged file
+# keeps the portal's bytes and md5), recorded under arm.json `fastq_prep`:
+#  (1) Broad paired-end FASTQs name reads `@<id>/1 1:X:0:<index>`. Bowtie2 strips `/1` `/2` only at
+#      the end of the whole header line, so with a comment after it the SAM QNAMEs keep the suffix,
+#      mates never match, and the pipeline's `samtools fixmate` keeps no pair (D6b-early: 27 rows;
+#      Nibi probe 2026-11-13: 0 proper pairs with the suffix, 400 of 400 without). The suffix is
+#      stripped from the name token of every header, only for paired-end runs whose first header
+#      has it.
+#  (2) A FASTQ that ENCODE itself serves truncated (md5 = portal md5, gzip ends early; ENCFF033XNT):
+#      the complete records before the break are kept; its mate is cut to the same read count.
+#      Below MIN_KEPT_FRACTION of the expected reads the row is refused.
+
+MIN_KEPT_FRACTION = 0.5
+SUFFIX_RE = re.compile(r"/[12]$")
+
+
+def gz_stream(path, sink=None, bufsize=1 << 22) -> dict:
+    """Decompress a (multi-member) gzip file as far as it goes, passing every decompressed chunk
+    to `sink`. `gzip -cd` drops its last buffer at a break, so the kit reads with zlib itself.
+    Returns {"complete", "records": complete 4-line records, "trailing_garbage_bytes"}. Bytes after
+    a clean member end that do not start a new gzip member are trailing garbage: the stream counts
+    as complete (gzip itself says "decompression OK, trailing garbage ignored"), and the count of
+    those bytes is returned so the caller can record it. A member that starts and breaks off is a
+    truncation."""
+    import zlib
+    lines, started, ok, garbage = 0, False, True, 0
+    boundary = False                     # just after a clean member end
+    d = zlib.decompressobj(31)
+    with open(path, "rb") as fh:
+        for buf in iter(lambda: fh.read(bufsize), b""):
+            if garbage:
+                garbage += len(buf)
+                continue
+            while buf:
+                if boundary and not buf.startswith(b"\x1f\x8b"[:len(buf)]):
+                    garbage = len(buf)
+                    break
+                try:
+                    out = d.decompress(buf)
+                except zlib.error:
+                    if boundary:
+                        garbage = len(buf)
+                        break
+                    ok = False
+                    break
+                started, boundary = True, False
+                lines += out.count(b"\n")
+                if sink is not None and out:
+                    sink(out)
+                if d.eof:
+                    buf, d, started, boundary = d.unused_data, zlib.decompressobj(31), False, True
+                else:
+                    buf = b""
+            if not ok:
+                break
+    if started and not d.eof:
+        ok = False
+    return {"complete": ok, "records": lines // 4, "trailing_garbage_bytes": garbage}
+
+
+def gz_scan(path) -> dict:
+    return gz_stream(path)
+
+
+def gz_scan_cached(path) -> dict:
+    """gz_scan, remembered beside the staged file (`.<name>.gzscan.json`, keyed by size and
+    mtime) so that the rows of one experiment scan each file once."""
+    p = Path(path)
+    st = p.stat()
+    key = {"bytes": st.st_size, "mtime": int(st.st_mtime)}
+    memo = p.with_name(f".{p.name}.gzscan.json")
+    try:
+        got = json.loads(memo.read_text())
+        if {k: got.get(k) for k in key} == key:
+            return {k: got[k] for k in ("complete", "records", "trailing_garbage_bytes")}
+    except (OSError, ValueError, KeyError):
+        pass
+    res = gz_scan(p)
+    try:
+        write_atomic(memo, json.dumps({**key, **res}) + "\n")
+    except OSError:
+        pass
+    return res
+
+
+def first_header(path) -> str:
+    with gzip.open(path, "rt", errors="replace") as fh:
+        return fh.readline().rstrip("\n")
+
+
+def has_mate_suffix(path) -> bool:
+    """The first header's name token ends in /1 or /2."""
+    h = first_header(path)
+    return bool(h.startswith("@") and h[1:].split() and SUFFIX_RE.search(h[1:].split()[0]))
+
+
+#: awk over a decompressed FASTQ: keep at most `lim` records (0 = all), strip /1 /2 from the
+#: name token when s = 1, and write "<records> <last name token>" to `cnt` at the end.
+REWRITE_AWK = r"""
+lim > 0 && NR > 4 * lim { exit }
+NR % 4 == 1 {
+  m = match($0, /[ \t]/); t = m ? substr($0, 1, m - 1) : $0; r = m ? substr($0, m) : ""
+  if (s == 1 && t ~ /\/[12]$/) t = substr(t, 1, length(t) - 2)
+  $0 = t r; last = t
+}
+{ print; c++ }
+END { print int(c / 4), last > cnt }
+"""
+
+
+def rewrite_fastq(src, dest, records=0, strip_suffix=False) -> tuple[int, str]:
+    """Stream src -> dest (gzip -1): the first `records` records (0 = all), with the /1 /2 name
+    suffix stripped when asked. Returns (records written, last name token, `@` included)."""
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cnt = dest.with_name(dest.name + ".count")
+    cmd = (f"awk -v lim={int(records)} -v s={1 if strip_suffix else 0} -v cnt={sh_quote(cnt)} "
+           f"{sh_quote(REWRITE_AWK)} | gzip -1 > {sh_quote(dest)}")
+    proc = subprocess.Popen(["bash", "-c", cmd], stdin=subprocess.PIPE)
+
+    class Done(Exception):
+        pass
+
+    def sink(chunk):
+        try:
+            proc.stdin.write(chunk)
+        except BrokenPipeError:           # awk kept its `records` and exited
+            raise Done
+    try:
+        gz_stream(src, sink)
+    except Done:
+        pass
+    try:
+        proc.stdin.close()
+    except BrokenPipeError:
+        pass
+    if proc.wait() != 0:
+        raise SystemExit(f"rewrite {src} -> {dest}: awk | gzip exit {proc.returncode}")
+    n, _, last = cnt.read_text().strip().partition(" ")
+    cnt.unlink()
+    return int(n), last
+
+
+def sh_quote(x) -> str:
+    import shlex
+    return shlex.quote(str(x))
+
+
+def _portal_read_count(acc):
+    try:
+        return _get_json(f"{PORTAL}/files/{acc}/?format=json&frame=object", tries=2).get("read_count")
+    except Exception:  # noqa: BLE001 - provenance only; the mate's count stands in
+        return None
+
+
+def prepare_reads(reps, pe_per_rep, files_json, fastq_root, experiment, tmp, cpus=4,
+                  read_count=_portal_read_count) -> tuple[dict, dict]:
+    """Repair the two source defects above for the FASTQs one run reads. Returns (accession ->
+    path of the repaired copy under `tmp`/prep, accession -> provenance record); both empty when
+    no file needs a repair. Raises SystemExit when a truncated file keeps under
+    MIN_KEPT_FRACTION of its expected reads, or when a cut pair's last names disagree."""
+    from concurrent.futures import ThreadPoolExecutor
+    by = {f["accession"]: f for f in files_json["files"]}
+    units = []                                   # (r1, r2 or None)
+    for r, is_pe in zip(reps, pe_per_rep):
+        if is_pe:
+            units += list(zip(r["r1"], r["r2"]))
+        else:
+            units += [(a, None) for a in r["r1"]]
+    accs = [a for u in units for a in u if a]
+
+    def path(a):
+        return fastq_path(fastq_root, experiment, a)
+
+    with ThreadPoolExecutor(max(1, min(cpus, len(accs)))) as ex:
+        scans = dict(zip(accs, ex.map(lambda a: gz_scan_cached(path(a)), accs)))
+    plan = []                                    # (unit, records to keep or 0, strip, notes)
+    for a, b in units:
+        bad = [x for x in (a, b) if x and not scans[x]["complete"]]
+        strip = bool(b) and (has_mate_suffix(path(a)) or has_mate_suffix(path(b)))
+        junk = [x for x in (a, b) if x and scans[x].get("trailing_garbage_bytes")]
+        if not bad and not strip and not junk:
+            continue
+        keep, note = 0, {}
+        if bad:
+            keep = min(scans[x]["records"] for x in (a, b) if x)
+            exp_n = None
+            for x in bad + [y for y in (a, b) if y and y not in bad]:
+                exp_n = (by.get(x) or {}).get("read_count") or read_count(x)
+                if exp_n:
+                    break
+            frac = keep / exp_n if exp_n else None
+            note = {"truncated_source": True, "truncated_files": bad, "reads_kept": keep,
+                    "reads_expected": exp_n,
+                    "kept_fraction": round(frac, 4) if frac is not None else None}
+            log(f"truncated source FASTQ {bad}: {keep} complete records kept of {exp_n} expected")
+            if frac is None or frac < MIN_KEPT_FRACTION:
+                raise SystemExit(f"truncated source FASTQ {bad} of {experiment}: kept fraction "
+                                 f"{frac} is under {MIN_KEPT_FRACTION}, or no portal read count "
+                                 "exists for either mate; not built")
+        plan.append(((a, b), keep, strip, note))
+    if not plan:
+        return {}, {}
+    out = Path(tmp) / "prep"
+
+    def one(item):
+        (a, b), keep, strip, note = item
+        res = {x: rewrite_fastq(path(x), out / f"{x}.fastq.gz", keep, strip) for x in (a, b) if x}
+        return item, res
+
+    paths, prov = {}, {}
+    with ThreadPoolExecutor(max(1, min(cpus, len(plan)))) as ex:
+        for ((a, b), keep, strip, note), res in ex.map(one, plan):
+            want = keep or None
+            names = set()
+            for x, (n, last) in res.items():
+                if want is None:
+                    want_x = scans[x]["records"]
+                else:
+                    want_x = want
+                if n != want_x:
+                    raise SystemExit(f"prepare {x}: wrote {n} records, expected {want_x}")
+                names.add(SUFFIX_RE.sub("", last))
+            if b and len(names) != 1:
+                raise SystemExit(f"prepare {a}/{b}: last read names differ after the cut: {names}")
+            for x, (n, _) in res.items():
+                paths[x] = str(out / f"{x}.fastq.gz")
+                prov[x] = {"mate_of": (b if x == a else a) if b else None,
+                           "read_names_normalised": strip,
+                           "read_name_rule": ("trailing /1 or /2 stripped from the name token "
+                                              "(Bowtie2 keeps it when a comment follows)")
+                           if strip else "",
+                           "truncated_source": bool(note), "records_written": n,
+                           "source_md5": (by.get(x) or {}).get("md5", ""), **note}
+                g = scans[x].get("trailing_garbage_bytes") or 0
+                if g:
+                    prov[x]["trailing_garbage_bytes"] = g
+                    prov[x]["trailing_garbage_note"] = (
+                        f"{g} bytes after the last complete gzip member are not gzip data; "
+                        "dropped, the file counts as complete")
+    log(f"prepared {len(paths)} FASTQ(s) under {out}: "
+        + ", ".join(f"{x} (names {'stripped' if p['read_names_normalised'] else 'kept'}, "
+                    f"truncated {p['truncated_source']})" for x, p in prov.items()))
+    return paths, prov
+
+
+def input_paths(key, arm, reps, fastq_root, experiment, prepared, crop) -> tuple:
+    """(accession -> FASTQ path for the input JSON, or None for the staged paths; the crop_tool
+    record, or '' when no crop ran). `crop()` runs the ATAC pre-crop and is called only for an
+    ATAC crop arm; only then is a crop tool recorded (a repaired, uncropped run records none)."""
+    paths, crop_tool = (dict(prepared) if prepared else None), ""
+    if key == "atac" and arm["crop_length"]:
+        paths = crop()
+        crop_tool = ("encode_task_trimmomatic.py from " + PIPELINES["chip"]["image"]
+                     + f" (CROP {arm['crop_length']}, MINLEN {arm['crop_length'] - CROP_TOL})")
+    if paths is not None:
+        for a in [a for r in reps for a in r["r1"] + r["r2"]]:
+            paths.setdefault(a, fastq_path(fastq_root, experiment, a))
+    return paths, crop_tool
 
 
 def final_calls(meta, name) -> dict:
@@ -805,13 +1075,16 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
 
     tmp = Path(tmp) / f"onion_{exp}_{row['unit']}_{row['arm']}"
     tmp.mkdir(parents=True, exist_ok=True)
-    cropped = None
-    if key == "atac" and arm["crop_length"]:
-        cropped = crop_fastqs(reps, arm, fastq_root, exp, tmp, cpus, eic)
-        for a in [a for r in reps for a in r["r1"] + r["r2"]]:
-            cropped.setdefault(a, fastq_path(fastq_root, exp, a))
-        rec["crop_tool"] = ("encode_task_trimmomatic.py from " + PIPELINES["chip"]["image"]
-                            + f" (CROP {arm['crop_length']}, MINLEN {arm['crop_length'] - CROP_TOL})")
+    prepared, prep = prepare_reads(reps, arm["paired_end_per_rep"], fj, fastq_root, exp, tmp,
+                                   cpus)
+    if prep:
+        rec["fastq_prep"] = prep
+        rec["truncated_source"] = any(p["truncated_source"] for p in prep.values())
+    cropped, crop_tool = input_paths(
+        key, arm, reps, fastq_root, exp, prepared,
+        lambda: crop_fastqs(reps, arm, fastq_root, exp, tmp, cpus, eic, src=prepared))
+    if crop_tool:
+        rec["crop_tool"] = crop_tool
     inp = build_input_json(row, fj, genome_tsv, fastq_root, eic, cropped)
     write_atomic(out / "input.json", json.dumps(inp, indent=2) + "\n")
     write_atomic(tmp / "input.json", json.dumps(inp, indent=2) + "\n")
@@ -864,6 +1137,8 @@ def run(rows, row, work, tmp, cpus, fastq_root=FASTQ_ROOT, refs=REFS, eic=EIC, m
         "n_reads_definition": "lines of the filtered tagAlign (one per read; 2 per pair)",
         "slurm_job_id": job, "workflow_id": meta.get("id"), "cpus": cpus,
         "finished_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "truncated_source": rec.get("truncated_source", False),
+        "fastq_prep": prep,
     }
     write_atomic(out / "ALIGN_DONE", json.dumps(done, indent=2) + "\n")
     log(f"ALIGN_DONE {out}: {json.dumps(done)}")

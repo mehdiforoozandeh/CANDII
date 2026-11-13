@@ -436,7 +436,7 @@ def driver(tmp_path, monkeypatch):
     _write_ta(d / "rep1.unfiltered.bam", g1[:150])
     d = work / "ENCSRDNS" / "base"
     arm_json(d, [1], "single-ended", read_length=36, pipeline="dnase-seq-pipeline",
-             version="v3.0.0", mapq=10)
+             version="v3.0.0", mapq=10, adapter_source={"rep1": "auto_detect"})
     _write_rep(d, 1, 4, 500, "d", dnase=True)
     d = work / "ENCSRMIX" / "se"
     d.mkdir(parents=True)
@@ -723,3 +723,48 @@ def test_filter_output_name_follows_filter_chrs(tmp_path):
     assert AV.filter_output(tmp_path, "nodedup", ["chrM", "MT"]).name == \
         "rep1.unfiltered.filt.no_chrM_MT.bam"
     assert AV.filter_output(tmp_path, "mapq0", []).name == "x.nodup.bam"   # chip
+
+
+def test_provenance_carries_what_the_fastq_kits_did_to_the_reads(driver):
+    """D6x: provenance.json `notes` copies fastq_prep, truncated_source (reads kept and expected)
+    and adapter_source from the run's arm.json."""
+    assert driver["run"](5) == 0                       # the DNase row
+    prov = json.loads((driver["out"] / "ENCSRDNS.pooled.uniform.base" / "provenance.json")
+                      .read_text())
+    assert prov["notes"]["adapter_source"] == {"rep1": "auto_detect"}
+    assert "fastq_prep" not in prov["notes"]
+    armj = {"mixed_run_types": "", "truncated_source": True, "fastq_prep": {
+        "R2": {"truncated_source": True, "reads_kept": 6, "reads_expected": 10,
+               "kept_fraction": 0.6, "read_names_normalised": True},
+        "R1": {"truncated_source": True, "reads_kept": 6, "reads_expected": 10,
+               "kept_fraction": 0.6, "read_names_normalised": True}}}
+    n = AV.run_notes(armj)
+    assert n["truncated_source"] is True and n["fastq_prep"] == armj["fastq_prep"]
+    assert n["truncated_reads"]["R2"] == {"reads_kept": 6, "reads_expected": 10,
+                                          "kept_fraction": 0.6}
+    assert AV.run_notes({"mixed_run_types": "x"}) == {"mixed_run_types": "x"}
+
+
+def test_renote_backfills_kf2_rows_and_is_idempotent(driver, capsys):
+    """D6x review: `renote` drops a false crop_tool from a non-crop arm.json and writes
+    provenance notes; a second pass changes nothing."""
+    assert driver["run"](5) == 0
+    aj = driver["work"] / "ENCSRDNS" / "base" / "arm.json"
+    armj = json.loads(aj.read_text())
+    armj["crop_tool"] = "encode_task_trimmomatic.py (CROP 0, MINLEN -2)"
+    armj["adapter_kind"] = {"rep1": "stem"}
+    aj.write_text(json.dumps(armj))
+    pj = driver["out"] / "ENCSRDNS.pooled.uniform.base" / "provenance.json"
+    prov = json.loads(pj.read_text())
+    del prov["notes"]
+    pj.write_text(json.dumps(prov))
+    assert AV.main(["renote", "--build-list", str(driver["bl"]), "--rows", "5",
+                    "--work", str(driver["work"]), "--out", str(driver["out"])]) == 0
+    assert "crop_tool" not in json.loads(aj.read_text())
+    notes = json.loads(pj.read_text())["notes"]
+    assert notes["adapter_source"] == {"rep1": "auto_detect"}
+    assert notes["adapter_kind"] == {"rep1": "stem"}
+    capsys.readouterr()
+    AV.main(["renote", "--build-list", str(driver["bl"]), "--rows", "5",
+             "--work", str(driver["work"]), "--out", str(driver["out"])])
+    assert "renote: 0 file(s) changed" in capsys.readouterr().out

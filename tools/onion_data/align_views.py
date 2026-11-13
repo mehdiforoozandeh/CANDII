@@ -869,6 +869,8 @@ def write_measurement(cfg, unit, arm, halves_counts: dict, half_tas: dict, half_
         "slurm_job_ids": bam_arm._job_ids(), "code": {"git_sha": git_sha()},
         "created_utc": utc(), **extra_prov,
     }
+    if cfg.get("notes"):
+        prov["notes"] = cfg["notes"]
     (stage / "provenance.json").write_text(json.dumps(prov, indent=1) + "\n")
     shutil.rmtree(final, ignore_errors=True)
     os.replace(stage, final)
@@ -1530,7 +1532,7 @@ def config_from_row(a) -> dict | None:
         mapq = armj.get("mapq_threshold", BASE_MAPQ[pipeline])
         if (rundir / "metadata.json").is_file():
             run_metadata = str(rundir / "metadata.json")
-        notes = {"mixed_run_types": armj.get("mixed_run_types", "")}
+        notes = run_notes(armj)
     else:
         bj = Path(a.fastq_root) / exp / "bams.json"
         if not bj.is_file():
@@ -1605,6 +1607,28 @@ def config_from_row(a) -> dict | None:
     return cfg
 
 
+def run_notes(armj: dict) -> dict:
+    """What the FASTQ kits did to the reads before alignment (arm.json), for provenance.json:
+    the mixed-run-type rule, D6x's `fastq_prep` (read names stripped of /1 /2, truncated source
+    files cut to their complete records), `truncated_source` with the reads kept and expected
+    per truncated file, and the DNase `adapter_source` (portal or auto_detect)."""
+    notes = {"mixed_run_types": armj.get("mixed_run_types", "")}
+    prep = armj.get("fastq_prep") or {}
+    if prep:
+        notes["fastq_prep"] = prep
+    if prep or "truncated_source" in armj:
+        notes["truncated_source"] = bool(armj.get("truncated_source"))
+        notes["truncated_reads"] = {
+            a: {k: p.get(k) for k in ("reads_kept", "reads_expected", "kept_fraction")}
+            for a, p in prep.items() if p.get("truncated_source")}
+    if armj.get("adapter_source"):
+        notes["adapter_source"] = armj["adapter_source"]
+        notes["adapter_kind"] = armj.get("adapter_kind", {})
+        if armj.get("adapter_detection"):
+            notes["adapter_detection"] = armj["adapter_detection"]
+    return notes
+
+
 def bam_readers_pending(cfg) -> list:
     """Build-list rows (any priority) that still read this row's run-dir BAMs: every row whose run
     dir is the same directory and whose expected measurements are not all written. A row reads only
@@ -1676,6 +1700,49 @@ def run_row(a) -> int:
     return 0
 
 
+def renote(build_list, rows_spec, work, out) -> int:
+    """D6x backfill for rows aligned and viewed by kit KF2, after their jobs end. Per row:
+    (1) arm.json of a run that is not a crop arm (crop_length 0) loses the `crop_tool` that KF2
+    wrote for every repaired run (it named a crop that never ran); the same key leaves ALIGN_DONE
+    if present; (2) each expected measurement's provenance.json gets `notes` = run_notes(arm.json).
+    Idempotent: a file already right is not rewritten. Rows without arm.json (native, not
+    applicable, not aligned yet) and measurements without provenance.json are skipped."""
+    FU = _fu()
+    want = set()
+    for part in rows_spec.split(","):
+        lo, _, hi = part.partition("-")
+        want.update(range(int(lo), int(hi or lo) + 1))
+    changed = 0
+    for row in FU.read_build_list(build_list):
+        if int(row["row"]) not in want:
+            continue
+        rundir = FU.arm_dir(work, row)
+        aj = rundir / "arm.json"
+        if not aj.is_file():
+            print(f"row {row['row']}: no {aj}; skipped")
+            continue
+        armj = json.loads(aj.read_text())
+        if not armj.get("crop_length") and "crop_tool" in armj:
+            del armj["crop_tool"]
+            FU.write_atomic(aj, json.dumps(armj, indent=2) + "\n")
+            print(f"row {row['row']}: removed crop_tool from {aj}")
+            changed += 1
+        notes = run_notes(armj)
+        for mid in parse_expected(row.get("expected_measurements", "")):
+            pj = Path(out) / mid / "provenance.json"
+            if not pj.is_file():
+                print(f"row {row['row']}: {mid} has no provenance.json yet; skipped")
+                continue
+            prov = json.loads(pj.read_text())
+            if prov.get("notes") != notes:
+                prov["notes"] = notes
+                FU.write_atomic(pj, json.dumps(prov, indent=1) + "\n")
+                print(f"row {row['row']}: {mid} provenance notes written")
+                changed += 1
+    print(f"renote: {changed} file(s) changed")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1744,7 +1811,15 @@ def main(argv=None) -> int:
     v.add_argument("--recount-chrom", default="chr21")
     v.add_argument("--experiment", action="append", default=[],
                    help="limit to these experiments (repeatable)")
+    n = sub.add_parser("renote", help="D6x backfill: provenance notes and arm.json crop_tool of "
+                                      "rows built by kit KF2 (run after their jobs end)")
+    n.add_argument("--build-list", required=True)
+    n.add_argument("--rows", required=True, help="e.g. 95,117")
+    n.add_argument("--work", default="/scratch/mforooz/onion/work")
+    n.add_argument("--out", default="/scratch/mforooz/onion/measurements")
     a = ap.parse_args(argv)
+    if a.cmd == "renote":
+        return renote(a.build_list, a.rows, a.work, a.out)
     if a.cmd == "verify":
         return verify(a.measurements, a.recount_chrom, set(a.experiment) or None)
     if a.cmd == "run":

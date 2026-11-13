@@ -439,3 +439,83 @@ def _tsv(tmp_path, rows):
     p.write_text("\t".join(cols) + "\n" + "".join("\t".join(r[c] for c in cols) + "\n"
                                                   for r in rows))
     return p
+
+
+# ------------------------------------------------- D6x: build_row.sh submit override, NOT_APPLICABLE
+
+_BUILD_ROW = _ROOT / "slurm" / "onion_data" / "build_row.sh"
+
+
+def _d6x_rows():
+    def r(n, exp, arm="base", sig=False):
+        mid = f"{exp}.pooled.uniform.{arm}"
+        return {"row": str(n), "priority": "1", "experiment": exp, "assay_class": "narrow_histone",
+                "unit": "pooled", "arm": arm, "fastq_files": "F1", "fastq_gb": "1.0",
+                "pipeline": "chip-seq-pipeline2 v2.2.2",
+                "expected_measurements": f"{mid}:counts+pr1+pr2" + ("+signal" if sig else "")}
+    return [r(56, "DNASE", sig=True), r(102, "MIX", arm="se")]
+
+
+def _run_build_row(args, env_extra, tmp_path):
+    import os
+    import subprocess
+    env = dict(os.environ, ONION_OUT=str(tmp_path / "meas"), ONION_WORK=str(tmp_path / "work"),
+               ONION_FASTQ_ROOT=str(tmp_path / "fq"), **env_extra)
+    # output to files, not pipes: the script's 30 s memory sampler outlives it by one sleep
+    log = tmp_path / "build_row.log"
+    with open(log, "w") as out, open(str(log) + ".err", "w") as err:
+        rc = subprocess.run(["bash", str(_BUILD_ROW), *args], env=env, stdout=out, stderr=err,
+                            timeout=60).returncode
+    return subprocess.CompletedProcess(args, rc, log.read_text(),
+                                       Path(str(log) + ".err").read_text())
+
+
+def test_submit_time_and_memory_override_reach_every_array(tmp_path):
+    """D6x class C: ONION_TIME and ONION_MEM replace the projected limit and the header memory
+    on the build array and the signal pass; without them nothing changes."""
+    bl = _tsv(tmp_path, _d6x_rows())
+    kit = _ROOT
+    p = _run_build_row(["submit", str(kit), str(bl), "1", "50", "2", "56"],
+                       {"ONION_SBATCH_TEST": "1", "ONION_TIME": "3-00:00:00",
+                        "ONION_MEM": "128000M"}, tmp_path)
+    assert p.returncode == 0, p.stderr
+    build = [ln for ln in p.stdout.splitlines() if ln.startswith("rows 56")]
+    assert build and "limit 3-00:00:00, mem 128000M" in build[0]
+    assert "--time=3-00:00:00 --mem=128000M --array=56%50" in build[0]
+    sig = [ln for ln in p.stdout.splitlines() if ln.startswith("signal pass")]
+    assert sig and "--time=3-00:00:00 --mem=128000M --array=56%50" in sig[0]
+    assert "--job-name=onion_signal" in sig[0]
+    # stage array keeps its own resources
+    assert "stage_fastq.sh" in build[0] and "--mem=128000M --array=56%2" not in build[0]
+    q = _run_build_row(["submit", str(kit), str(bl), "1", "50", "2", "56"],
+                       {"ONION_SBATCH_TEST": "1"}, tmp_path)
+    assert q.returncode == 0, q.stderr
+    line = [ln for ln in q.stdout.splitlines() if ln.startswith("rows 56")][0]
+    assert "--time=1-00:00:00 --array=56%50" in line and "--mem" not in line
+
+
+def test_not_applicable_row_exits_zero_without_verify(tmp_path):
+    """D6x class B: a row whose align step writes NOT_APPLICABLE ends with exit 0, skipping the
+    views step and verify (verify fails on an experiment with no measurement yet)."""
+    import json
+    import os
+    bl = _tsv(tmp_path, _d6x_rows())
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    rd = tmp_path / "work" / "MIX" / "se"
+    # the align step's python writes NOT_APPLICABLE (as fastq_uniform.run does) and returns 0
+    (stub / "python").write_text(
+        "#!/bin/bash\nmkdir -p %s && echo '%s' > %s/NOT_APPLICABLE\nexit 0\n"
+        % (rd, json.dumps({"reason": "arm se: mixed"}), rd))
+    (stub / "python").chmod(0o755)
+    (tmp_path / "slurmtmp").mkdir()
+    p = _run_build_row([str(_ROOT), str(bl), "102"],
+                       {"SLURM_TMPDIR": str(tmp_path / "slurmtmp"),
+                        "PATH": f"{stub}:{os.environ['PATH']}"}, tmp_path)
+    assert "nothing to build, verify skipped" in p.stdout, p.stdout + p.stderr
+    assert "=== verify" not in p.stdout and "views step" not in p.stdout
+    assert p.stdout.strip().endswith("[onion-build] exit=0") and p.returncode == 0
+    # a rerun exits 0 at step 0 (pending treats NOT_APPLICABLE as built)
+    q = _run_build_row([str(_ROOT), str(bl), "102"],
+                       {"SLURM_TMPDIR": str(tmp_path / "slurmtmp")}, tmp_path)
+    assert q.returncode == 0 and "exit 0" in q.stdout

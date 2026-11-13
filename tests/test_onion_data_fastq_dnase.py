@@ -197,3 +197,33 @@ def test_arm_record_has_the_chip_kit_form(meta):
     se = D.arm_record("ENCSRTEST", "br1tr1", "se", D.replicates_json(
         "ENCSRTEST", D.select_unit(meta, "br1tr1"), "se", path), D.select_unit(meta, "br1tr1"), {})
     assert se["run_type"] == "single-ended" and (se["arm_knob"], se["arm_value"]) == ("se", "1")
+
+
+def test_library_without_adapters_takes_auto_detected_ones(meta):
+    """D6x class D: a PE library with no portal adapters gets the adapters that the ATAC
+    pipeline's own detector finds in its first R1 and R2, and says so."""
+    meta["experiment"]["replicates"][0]["library"] = _lib("ENCLB001", None)
+    seen = []
+
+    def detect(p):
+        seen.append(p)
+        return "AGATCGGAAGAGC"
+    (rep,) = D.replicates_json("ENCSRTEST", D.select_unit(meta, "br1tr1"), "base", path, detect)
+    assert rep["adapters"] == {"sequence_R1": "AGATCGGAAGAGC", "sequence_R2": "AGATCGGAAGAGC"}
+    assert rep["_adapter_source"] == "auto_detect" and rep["_adapter_kind"] == "stem"
+    assert seen == ["/tmp/fq/ENCFF00A1.fastq.gz", "/tmp/fq/ENCFF00A2.fastq.gz"]
+    assert "atac.auto_detect_adapter" in rep["_adapter_detection"]["tool"]
+    inp = D.input_json("ENCSRTEST", D.select_unit(meta, "br1tr1"), "base", path, "/refs",
+                       reps=[rep])
+    (clean,) = inp["dnase_align_only.replicates"]
+    assert clean["adapters"]["sequence_R1"] == "AGATCGGAAGAGC" and "_adapter_source" not in clean
+    # a library with portal adapters keeps them and says portal
+    meta["experiment"]["replicates"][0]["library"] = _lib("ENCLB001", AD1)
+    (rep,) = D.replicates_json("ENCSRTEST", D.select_unit(meta, "br1tr1"), "base", path, detect)
+    assert rep["adapters"] == AD1 and rep["_adapter_source"] == "portal"
+    assert rep["_adapter_kind"] == "full"
+    # nothing detected: refused
+    meta["experiment"]["replicates"][0]["library"] = _lib("ENCLB001", None)
+    with pytest.raises(SystemExit, match="auto-detection found none"):
+        D.replicates_json("ENCSRTEST", D.select_unit(meta, "br1tr1"), "base", path,
+                          lambda p: "")
