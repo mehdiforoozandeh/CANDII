@@ -33,7 +33,7 @@ def test_hand_case_six_tiles():
 
 
 def test_background_tiles_never_enter():
-    y = np.array([1, 0, 1, 0, 0, 0, 1, 0], bool)          # a target call off the consensus too
+    y = np.array([1, 0, 1, 0, 0, 0, 0, 0], bool)
     s = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 5.0, 9.0])  # background ranked first
     c = np.array([1, 1, 1, 1, 1, 1, 0, 0], bool)
     a, pf = P.auprc(y, c, s)
@@ -41,6 +41,18 @@ def test_background_tiles_never_enter():
     assert pf == pytest.approx(2 / 6)
     p, r, f = P.binary_prf(y, c, np.array([1, 1, 0, 0, 0, 0, 1, 1], bool))
     assert (p, r) == (pytest.approx(0.5), pytest.approx(0.5)) and f == pytest.approx(0.5)
+
+
+def test_target_positive_outside_consensus_raises():
+    y = np.array([1, 0, 1, 0, 0, 0, 1, 0], bool)          # tile 6 is positive but off the consensus
+    c = np.array([1, 1, 1, 1, 1, 1, 0, 0], bool)
+    s = np.arange(8.0)
+    with pytest.raises(ValueError, match="outside the consensus"):
+        P.auprc(y, c, s)
+    with pytest.raises(ValueError, match="outside the consensus"):
+        P.auprc_by_frequency(y, c, s, np.where(c, 0.5, 0.0))
+    cons, _ = P.consensus({"other": c, "target": y})       # target in the tile set: accepted
+    assert not math.isnan(P.auprc(y, cons, s)[0])
 
 
 def test_all_positive_is_undefined_not_one():
@@ -72,6 +84,15 @@ def test_tiles_per_region_drop_tail():
     v = np.arange(88.0)
     assert P.tile_mean(v, 20, region_bins=44)[2] == pytest.approx(np.mean(np.arange(44, 64)))
     assert P.tile_max(v, 20, region_bins=44)[3] == 83.0
+    # genome grid: region 0 covers genome bins 5..48 and holds one whole tile (bins 20..39);
+    # region 1 covers bins 40..83 and holds two (40..59, 60..79); partial tiles are dropped
+    g = P.tile_mean(v, 20, region_bins=44, region_starts=[5, 40])
+    assert g.tolist() == pytest.approx([np.mean(np.arange(15, 35)), np.mean(np.arange(44, 64)),
+                                        np.mean(np.arange(64, 84))])
+    # x[41] is genome bin 46 (no whole tile); x[69] is genome bin 65 (region 1, tile 60..79)
+    assert P.tile_any(x, 20, region_bins=44, region_starts=[5, 40]).tolist() == [False, False, True]
+    assert P.tile_any(x, 20, region_bins=44, region_starts=[0, 40]).tolist() == \
+        P.tile_any(x, 20, region_bins=44).tolist()           # aligned starts: same as region grid
     assert P.derived_peaks(np.array([1.99, 2.0, 3.0])).tolist() == [False, True, True]
 
 
@@ -158,7 +179,8 @@ def test_fetch_val_picks_rule_and_checks_md5(tmp_path):
     assert set(rows) == {"C01M01", "C03M01"}
     r = rows["C01M01"]
     assert r["file"] == "ENCSRVALR" and r["md5"] == MD5 and r["n_peaks"] == "2"
-    assert r["rule"].startswith("portal:default_analysis;preferred_default=yes")
+    assert r["rule"].startswith("portal:preferred_default_narrowPeak_GRCh38;default_analysis;"
+                                "preferred_default=yes")
     assert (out / "C01M01.narrowPeak.gz").read_bytes() == NP
     bad = lambda url: (json.dumps(_exp("ENCSRVAL")).encode() if "/experiments/" in url
                        else b"corrupt")
@@ -192,7 +214,7 @@ def test_blind_fetch_writes_two_ledger_rows_and_refuses_a_second(tmp_path):
             "--allow-blind", "--evalset", str(ev)]
     assert P.main(args, opener=portal) == 0
     rows = _rows(ledger)
-    assert [r["status"] for r in rows] == ["started", "fetched"]
+    assert [r["status"] for r in rows] == ["started", "fetched failed_downloads=0"]
     assert all(r["run"] == f"peaks:{out.resolve()}" and r["tables_sha256"] == "abc" for r in rows)
     blind_calls = [n for url, n in portal.calls if "ENCSRBLD" in url]
     assert blind_calls and all(n == 1 for n in blind_calls)   # every blind read after `started`
@@ -206,3 +228,52 @@ def test_blind_fetch_writes_two_ledger_rows_and_refuses_a_second(tmp_path):
     assert P.main(args + ["--repeat-blind-reason", "portal outage"], opener=Portal()) == 0
     rows = _rows(ledger)
     assert len(rows) == 4 and rows[-1]["repeat_reason"] == "portal outage"
+
+
+def test_portal_preferred_default_wins_over_default_analysis():
+    e = _exp("ENCSRX")
+    e["files"] = [f for f in e["files"] if f["accession"] != "ENCSRXR"]  # preferred only in old
+    pick, rule = P.choose_from_portal(e)
+    assert pick["file"] == "ENCSRXX" and "preferred_default=yes" in rule
+    for f in e["files"]:
+        f.pop("preferred_default", None)                  # none marked: default analysis decides
+    pick, rule = P.choose_from_portal(e)
+    assert pick["file"] == "ENCSRXP" and ";default_analysis;" in rule
+
+
+def test_catalog_is_offline_fallback_ranked_by_pipeline_version(tmp_path, monkeypatch):
+    led, _ = _setup(tmp_path)
+    cat = tmp_path / "files.tsv"
+    cols = ["file", "experiment", "file_format", "output_type", "assembly", "status",
+            "pipeline_version", "md5", "url"]
+    with open(cat, "w", newline="") as fh:
+        w = csv.writer(fh, delimiter="\t")
+        w.writerow(cols)
+        for acc, ver in (("ENCFFA", "v1.2.0"), ("ENCFFB", "1.10.1"), ("ENCFFC", "")):
+            w.writerow([acc, "ENCSRVAL", "bed", "replicated peaks", "GRCh38", "released", ver, MD5,
+                        f"https://x/{acc}.bed.gz"])
+    out = tmp_path / "peaks"
+    args = ["fetch", "--ledger", str(led), "--roles", "val", "--out", str(out), "--files", str(cat)]
+    assert P.main(args, opener=Portal()) == 0             # portal reachable: portal route
+    assert _rows(out / "peak_files.tsv")[0]["file"] == "ENCSRVALR"
+
+    def offline(url):
+        if "/experiments/" in url:
+            raise OSError("no network")
+        return NP
+    monkeypatch.setattr(P.time, "sleep", lambda s: None)   # no retry waits
+    assert P.main(args, opener=offline) == 0
+    r = _rows(out / "peak_files.tsv")[0]
+    assert r["file"] == "ENCFFB"                           # 1.10.1 is newer than 1.2.0
+    assert r["rule"].startswith("catalog_fallback:") and "portal_unreachable=OSError" in r["rule"]
+
+
+def test_fetched_row_counts_failed_blind_downloads(tmp_path):
+    led, ev = _setup(tmp_path)
+    out = tmp_path / "peaks"
+    bad = lambda url: (json.dumps(_exp(url.split("/experiments/")[1].split("/")[0])).encode()
+                       if "/experiments/" in url else (b"corrupt" if "ENCSRBLD" in url else NP))
+    assert P.main(["fetch", "--ledger", str(led), "--roles", "blind", "--out", str(out),
+                   "--allow-blind", "--evalset", str(ev)], opener=bad) == 3
+    assert [r["status"] for r in _rows(ev.parent / "BLIND_PASSES.tsv")] == \
+        ["started", "fetched failed_downloads=1"]
