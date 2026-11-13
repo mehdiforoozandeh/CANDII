@@ -19,6 +19,9 @@
 # EXTRA_TRAIN_ARGS (space-separated, e.g. "--max-windows 100000 --val-every 20000") is
 # passed to train.py. Never pass a comma-valued variable through sbatch --export; export it in the
 # shell and use --export=ALL. DRY_RUN=1 prints the commands and exits.
+# ONION_STAGE=1 (default off) adds --stage-dir $SLURM_TMPDIR/stage: train.py copies the training
+# counts.h5 files to the node's local disk first (identical batches; on Nibi's NFS /scratch an h5
+# open took 0.21 s and a rung-1 batch 11.4 s, staged 0.17 s; the copy of 56 GB is one-time per job).
 # Retry (as slurm/onion_kit/check.sh): when the environment setup fails (e.g. a CVMFS I/O error,
 # exit 126, on a bad node) the job resubmits itself once, with its own sbatch options read from
 # `scontrol show job` and this node added to --exclude, moves every pending job of this user that
@@ -53,6 +56,7 @@ WORKERS=$(( ${SLURM_CPUS_PER_TASK:-1} - 1 ))
 [ "$WORKERS" -ge 0 ] || WORKERS=0
 TRAIN=(python3 "$KIT/tools/minicandi/train.py" --config "$CONFIG" --tables "$TABLES"
        --seed "$SEED" --out "$OUT" --device "$DEVICE" --workers "$WORKERS" ${EXTRA[@]+"${EXTRA[@]}"})
+[ "${ONION_STAGE:-0}" != 1 ] || TRAIN+=(--stage-dir "${SLURM_TMPDIR:-/tmp}/stage")
 SCORE=(python3 "$KIT/tools/onion_eval/score.py" --run "$OUT" --evalset "$EVALSET" --out "$OUT")
 if [ "${DRY_RUN:-0}" = 1 ]; then
   echo "${TRAIN[*]}"

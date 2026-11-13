@@ -14,7 +14,8 @@
 #
 # Env: SEEDS (default "0 1 2"); DRY_RUN=1 (print the sbatch lines, submit and write nothing);
 #   EXTRA_TRAIN_ARGS (to train.sh, after "--workers <budgets workers>"); SCORE_TIME (overrides
-#   budgets score_time); ONION_EXCLUDE=<node list> (--exclude on every line; on Fir the nodes of
+#   budgets score_time); SCORE_MEM=<MB> (overrides the scoring --mem; eic_v1 scoring needs
+#   128000); ONION_EXCLUDE=<node list> (--exclude on every line; on Fir the nodes of
 #   .orchestrate/exclude_fir); DEVICE=cpu|cuda (overrides the rung's device); CLUSTER=fir|nibi
 #   (default $CC_CLUSTER, else the host name; a GPU job needs it for its CPU count).
 #
@@ -70,6 +71,7 @@ for spec in "${ARGS_ARMS[@]}"; do
       --rung "$RUNG" --config "$CONFIG" --device "${DEVICE:-}" --cluster "$CL" \
       --score-time "${SCORE_TIME:-}" --extra "${EXTRA_TRAIN_ARGS:-}")"
   [ -n "$STIME" ] || { echo "plan failed for $spec" >&2; exit 2; }
+  SMEM="${SCORE_MEM:-$SMEM}"
   for SEED in "${SEED_LIST[@]}"; do
     RUN="$ARMDIR/seed$SEED"
     JOB="mc_$(basename "$ARMDIR")_s$SEED"
