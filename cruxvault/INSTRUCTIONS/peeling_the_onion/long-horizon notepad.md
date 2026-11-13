@@ -445,3 +445,32 @@ Agent calls from the same audit (code level; evidence `cruxvault/results/t233/AU
 - **Ruling 35.** AlphaGenome 2 gets no row on the EIC challenge board. It appears on a separate comparison board on our evaluation regions.
 - **Ruling 36.** No single-cell RNA-seq conditioning. Cells that AlphaGenome 2 cannot query are reported as not queryable.
 - **Ruling 37.** "Our leaderboard" means this run's comparison tables plus the new AlphaGenome 2 board. The repo leaderboard (`tools/leaderboard.py`) is not changed.
+
+## AlphaGenome 2 leakage audit on the EIC track list (2026-11-13)
+
+- Source: `cruxvault/results/t273/AG2_LEAKAGE.md` and `PREREGISTRATION.md`; audit job 27085861 on Nibi; laptop and Nibi outputs are byte-identical.
+- AlphaGenome 2 trained on 36 of the 51 EIC blind tracks and on 32 of the 45 EIC validation tracks.
+- Headline set (tracks unseen by AlphaGenome 2 and by CANDI): 15 blind tracks from 11 cells, and 12 validation tracks from 10 cells. All 15 blind tracks are broad histone marks (H3K27me3 6, H3K9me3 9). Each set meets the minimum of 10 tracks from 3 cells.
+- Second, labelled set (AlphaGenome 2 trained, CANDI did not): 36 blind tracks from 12 cells, and 32 validation tracks from 21 cells.
+- No cell matched by name under a different ontology id. The 11 name-mismatch rows were checked by hand; none changed a label.
+- Limit: the headline set on the blind split holds only two broad marks, so it does not test narrow marks or accessibility. Ruling 34b (extended-dataset test set with enough unseen tracks) must cover those assays.
+- Code-level calls: ChIP-seq API values are sums over 128 bp and are divided by 128 for the fold-change track; the API key is read from a file at run time and client error text is never printed.
+- PI decision of 2026-11-13: the check against Max's numbers runs as a comparison of our scorer with Max's own script on identical inputs (his cached predictions, our truth store, tiles rebuilt from ENCODE peak files), because his score table and his tiles are not available. The request for tile access is dropped.
+- 2026-11-13, check of our AlphaGenome 2 scorer against Max's own script (source `cruxvault/results/t276/MAX_REPRO.md`; Fir job 3727830): pass. 12 of 12 targets and 48 of 48 comparisons are within the tolerances pinned before the run (1e-4 for the correlation metrics, 0.005 for AUPRC). The largest differences are 4.9e-7 (correlation metrics) and 3.9e-6 (AUPRC). Code-level call: peak tiles outside the set of whole valid tiles are dropped for the target and for every method (Max's rule), and the dropped count is recorded per target.
+
+## PI ruling 38 (2026-11-13): freeze now, update later with notes
+
+- PI's words: "freeze whatever we can get in the next 6h and then send out reliable watchdogs to wait for the remaining runs and as soon as they are finished you update the dataset with notes".
+- Applied as: `eic_v1` is frozen at about 2026-11-13 14:30 UTC with the tracks verified by then, and a table of the missing tracks with the reason for each. The remaining rows (a tail of slow DNase-seq rows, 2 of them validation tracks) are watched by a job on the cluster. Each time tail rows verify, a new dataset version is built that adds them, with a change note; earlier versions stay untouched.
+- Rule that follows (my reading, to be pinned by the plan amendment): every comparison under the selection rule is made within one dataset version and one evaluation-set version; the final model, the blind pass and the reports use the last version and state it.
+
+## Dataset version `eic_v1` frozen (2026-11-13 14:30 UTC)
+
+- Source: `cruxvault/results/t183/DATASET_EIC_V1.md`; tables on Nibi `/project/def-maxwl/mforooz/ONION/tables/eic_v1`; tables hash starts `a068a867`; dataset check passed with every leak rule at 0 (job 27158261).
+- Present: 249 of 267 training tracks, 42 of 45 validation tracks, 37 of 40 controls (the 3 absent controls are blind-only, priority 4).
+- Absent, to arrive in update versions: validation H3K9ac in cell C25, 2 validation DNase-seq tracks, and 18 DNase-seq training tracks. Cause: slow paired-end alignment (`bwa sampe`) of the standard DNase-seq pipeline, one Java heap limit, and one memory limit.
+- Code-level call: H3K9ac is not counted as a scorable assay on `eic_v1`, because its only validation view falls back to a replicate with no signal products. 8 assays are scorable on `eic_v1`; DNase-seq is not (1 of 3 validation tracks).
+- 22 of the 42 validation targets have no accessibility-only item on `eic_v1`.
+- Cost of the FASTQ build so far: 4,511 CPU-hours used (19,894 allocated; the projection was 7,331). Archive on nearline: 55 tar files, 2,740 measurements, 242 GB.
+- Revised code-level call (2026-11-13): the evaluation set on `eic_v1` keeps H3K9ac as built. Its validation target is the replicate view of ENCSR521AIV, which has counts and no signal products. H3K9ac is therefore scored in count space (the selection rule's space), flagged in reports, and left out of the signal-space metrics until its pooled track arrives in an update. `eic_v1` has 9 scorable assays in count space. Evaluation set: 256 regions, 63 imputation items, 1,480 correction pairs, 3,134 replicate pairs, 0 blind items; hash starts `b5f7a4cf` (`cruxvault/results/t185/SUBMITTED.md`).
+- Scheduling call (2026-11-13): Nibi allows 1,000 queued jobs per user, with array tasks counted. Slots go to dataset rows first, then the ladder, then the second experiments, then the quality-metric fill.
