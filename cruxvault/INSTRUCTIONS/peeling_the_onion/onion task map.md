@@ -162,3 +162,22 @@ Every chunk of the peeling-the-onion plan maps to one crux child task of t152. `
 | ERg | t283 | The eval regions, written before the tables exist |
 | AGxf | t284 | AlphaGenome 2 fetch on the regions file |
 | D6u | t285 | Update the dataset from a watchdog report |
+| TR | t286 | Training regions, exclusion and per-window loss weights |
+| ERx | t287 | Evaluation set from an explicit regions file |
+| STt | t288 | Strata and region-list tool, from training data only |
+| RBk | t289 | Configs of the region experiments |
+| SAx | t290 | submit_arms.sh: extra scoring arguments and a nice value |
+| RB1a | t291 | Budget curve on rung 1: submit the trainings |
+| STa | t292 | Strata tables and region lists: submit (Nibi) |
+| STb | t293 | Strata tables and region lists: collect |
+| PRg | t294 | Per-region output of the scorer and the region bootstrap |
+| RTa | t295 | Territory, unseen-loci and selection arms: submit |
+| ECa | t296 | Evaluation-region count: the 1,024-region set and its scorings (submit) |
+| RB1s | t297 | Budget curve on rung 1: submit the scorings |
+| RB1b | t298 | Budget curve on rung 1: report |
+| RTb | t299 | Territory, unseen loci and selection: report |
+| RTc | t300 | Confirmation of the best selection strategy at the full budget |
+| ECb | t301 | Evaluation-region count: analysis |
+| RB4a | t302 | Budget curve on rung 4: submit |
+| RB4b | t303 | Budget curve on rung 4: report |
+| RGs | t304 | The answers to the PI's region questions |

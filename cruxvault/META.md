@@ -48,10 +48,19 @@ Root: [[candii]]
   - ● `q10` [Q] [[q10_how_much_does_resampling_alone_move_a_tr|**How much does resampling alone move a track's shape and magnitude, where in the genome is that noise concentrated, and how does it shrink with depth?**]] — *settled* · strong
   - ◐ `q12` [Q] [[q12_when_covariate_correction_is_trained_joi|**When covariate correction is trained jointly with imputation of masked assays and reconstruction, does the combined objective change how well the correction transfers to covariate combinations never seen in training, compared with training it alone?**]] — *leaning* · weak
     - ◐ `h29` [H] [[h29_adding_a_cross_assay_imputation_or_maske|Adding a cross-assay imputation or masked-bin denoising objective to one shared count-space correction model changes how well the correction transfers to never-trained arm-to-arm pairs, compared with the same model trained on correction alone]] — *leaning* · weak · against
+- ○ `q13` [Q] [[q13_how_many_training_windows_and_how_much_d|**How many training windows and how much distinct territory does miniCANDI need?**]] — *open*
+  - ○ `h32` [H] [[h32_a_smaller_budget_of_windows_ranks_the_ar|A smaller budget of windows ranks the arms of a rung as 80,000 windows does]] — *open*
+  - ○ `h33` [H] [[h33_at_80_000_windows_training_on_r_blocks_o|At 80,000 windows, training on R blocks of U is as good as training on all of U]] — *open*
+- ○ `q14` [Q] [[q14_how_should_training_regions_be_selected_|**How should training regions be selected under a limited budget?**]] — *open*
+  - ○ `h34` [H] [[h34_at_a_limited_budget_20_000_windows_a_wei|At a limited budget (20,000 windows), a weighted stratified draw beats the uniform draw]] — *open*
+- ○ `q15` [Q] [[q15_are_256_evaluation_regions_enough|**Are 256 evaluation regions enough?**]] — *open*
+  - ○ `h35` [H] [[h35_256_evaluation_regions_are_enough|256 evaluation regions are enough]] — *open*
+- ○ `q16` [Q] [[q16_does_the_validation_score_depend_on_havi|**Does the validation score depend on having seen the evaluation loci?**]] — *open*
+  - ○ `h36` [H] [[h36_seeing_the_evaluation_loci_in_training_d|Seeing the evaluation loci in training does not raise the score]] — *open*
 
 ## Dashboard
 
-- **Questions** (12): open 0 · leaning 7 · settled 5 · parked 0
-- **Hypotheses** (30): open 6 · leaning 12 · settled 6 · parked 6
+- **Questions** (16): open 4 · leaning 7 · settled 5 · parked 0
+- **Hypotheses** (35): open 11 · leaning 12 · settled 6 · parked 6
 - **Confidence**: weak 11 · moderate 8 · strong 11
 - **Findings**: 33

@@ -96,6 +96,11 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t271` [implementation] Onion: Peaks: ENCODE peak files, tiles, consensus AUPRC
 - `t272` [implementation] Onion: Signal-space baselines of Max: training mean and closest-5 oracle
 - `t283` [implementation] Onion: The eval regions, written before the tables exist
+- `t286` [implementation] Onion: Training regions, exclusion and per-window loss weights — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]]
+- `t287` [implementation] Onion: Evaluation set from an explicit regions file — refs [[h35_256_evaluation_regions_are_enough\|h35]]
+- `t288` [implementation] Onion: Strata and region-list tool, from training data only — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]]
+- `t289` [implementation] Onion: Configs of the region experiments — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]]
+- `t294` [implementation] Onion: Per-region output of the scorer and the region bootstrap — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]]
 
 ## Blocked
 
@@ -194,6 +199,20 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — blocked by `t225`, `t281`
 - `t284` [data-acquisition] Onion: AlphaGenome 2 fetch on the regions file — blocked by `t283`, `t273`, `t268`, `t271`, `t276`
 - `t285` [data-acquisition] Onion: Update the dataset from a watchdog report — blocked by `t183`, `t198`
+- `t290` [implementation] Onion: submit_arms.sh: extra scoring arguments and a nice value — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t213`
+- `t291` [implementation] Onion: Budget curve on rung 1: submit the trainings — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t289`, `t290`, `t213`
+- `t292` [data-acquisition] Onion: Strata tables and region lists: submit (Nibi) — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t288`, `t185`, `t207`
+- `t293` [data-acquisition] Onion: Strata tables and region lists: collect — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t292`
+- `t295` [implementation] Onion: Territory, unseen-loci and selection arms: submit — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t286`, `t289`, `t290`, `t293`, `t294`, `t186`
+- `t296` [implementation] Onion: Evaluation-region count: the 1,024-region set and its scorings (submit) — refs [[h35_256_evaluation_regions_are_enough\|h35]] — blocked by `t287`, `t294`, `t186`, `t213`
+- `t297` [implementation] Onion: Budget curve on rung 1: submit the scorings — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t291`, `t294`, `t186`, `t213`
+- `t298` [implementation] Onion: Budget curve on rung 1: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t297`, `t213`
+- `t299` [implementation] Onion: Territory, unseen loci and selection: report — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t295`
+- `t300` [implementation] Onion: Confirmation of the best selection strategy at the full budget — refs [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]] — blocked by `t299`
+- `t301` [implementation] Onion: Evaluation-region count: analysis — refs [[h35_256_evaluation_regions_are_enough\|h35]] — blocked by `t296`
+- `t302` [implementation] Onion: Budget curve on rung 4: submit — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t289`, `t290`, `t294`, `t216`
+- `t303` [implementation] Onion: Budget curve on rung 4: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — blocked by `t302`, `t216`
+- `t304` [implementation] Onion: The answers to the PI's region questions — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — blocked by `t298`, `t299`, `t301`, `t303`
 
 ## By category
 
@@ -238,6 +257,8 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t277` [data-acquisition] Onion: Fetch AG2 for the EIC cells on the eval regions — *blocked*
 - `t284` [data-acquisition] Onion: AlphaGenome 2 fetch on the regions file — *blocked*
 - `t285` [data-acquisition] Onion: Update the dataset from a watchdog report — *blocked*
+- `t292` [data-acquisition] Onion: Strata tables and region lists: submit (Nibi) — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
+- `t293` [data-acquisition] Onion: Strata tables and region lists: collect — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
 
 ### hpc-setup
 
@@ -385,6 +406,23 @@ Everything this project has to **do**. A task is an action; a claim about the wo
 - `t281` [implementation] Onion: miniCANDI against AG2 on the validation tracks (collect) — *blocked*
 - `t282` [implementation] Onion: AG2 on the blind tracks, inside the single blind pass — *blocked*
 - `t283` [implementation] Onion: The eval regions, written before the tables exist — *open*
+- `t286` [implementation] Onion: Training regions, exclusion and per-window loss weights — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *open*
+- `t287` [implementation] Onion: Evaluation set from an explicit regions file — refs [[h35_256_evaluation_regions_are_enough\|h35]] — *open*
+- `t288` [implementation] Onion: Strata and region-list tool, from training data only — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *open*
+- `t289` [implementation] Onion: Configs of the region experiments — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *open*
+- `t290` [implementation] Onion: submit_arms.sh: extra scoring arguments and a nice value — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
+- `t291` [implementation] Onion: Budget curve on rung 1: submit the trainings — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
+- `t294` [implementation] Onion: Per-region output of the scorer and the region bootstrap — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *open*
+- `t295` [implementation] Onion: Territory, unseen-loci and selection arms: submit — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
+- `t296` [implementation] Onion: Evaluation-region count: the 1,024-region set and its scorings (submit) — refs [[h35_256_evaluation_regions_are_enough\|h35]] — *blocked*
+- `t297` [implementation] Onion: Budget curve on rung 1: submit the scorings — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
+- `t298` [implementation] Onion: Budget curve on rung 1: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
+- `t299` [implementation] Onion: Territory, unseen loci and selection: report — refs [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
+- `t300` [implementation] Onion: Confirmation of the best selection strategy at the full budget — refs [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]] — *blocked*
+- `t301` [implementation] Onion: Evaluation-region count: analysis — refs [[h35_256_evaluation_regions_are_enough\|h35]] — *blocked*
+- `t302` [implementation] Onion: Budget curve on rung 4: submit — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
+- `t303` [implementation] Onion: Budget curve on rung 4: report — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]] — *blocked*
+- `t304` [implementation] Onion: The answers to the PI's region questions — refs [[h32_a_smaller_budget_of_windows_ranks_the_ar\|h32]], [[h33_at_80_000_windows_training_on_r_blocks_o\|h33]], [[h34_at_a_limited_budget_20_000_windows_a_wei\|h34]], [[h35_256_evaluation_regions_are_enough\|h35]], [[h36_seeing_the_evaluation_loci_in_training_d\|h36]] — *blocked*
 
 ### manuscript
 

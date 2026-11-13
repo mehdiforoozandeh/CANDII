@@ -15,7 +15,7 @@ PI priorities: imputation, covariate artifact correction, calibrated uncertainty
 | (QCa returned) | QC fill batch 1 = job 27164529 (400 rows); batches 2-6 by the foreman when the queue has room (commands in results/t211/SUBMITTED.md); QCb must fix `collect` | - |
 | L1a builder (opus) | RUNG 1 submit on eic_v1: 8 arms x 3 seeds, scoring at 128000M, Nibi CPU timing probe | log job ids; L1b collect when runs end; E7b must confirm the baselines |
 | SM builder (opus) | scorer memory: per-region streaming, bit-identical scores (PI instruction 2026-11-13) | independent review (score.py is the selection scorer); merge; new memory figure for the ladder |
-| planner (fable) | Amendment 7: region budget and selection experiments (a1, a2, b, c, unseen-loci gap), from results/region_budget/REGION_RESEARCH.md | cold review; PI decisions; launch V7 and the start-now chunks |
+| V7, ERx, STt, RBk builders (opus) | region experiments, wave R1 (Amendment 7): tasks and questions; evalset --regions-file and superset; training strata tool; region configs | review each; merge; then TR (after SM's diff), SAx (after L1a merges), then RB1a, STa, PRg |
 | OXa builder (opus) | second experiments build (evaluation-only add-on), current build code | then D6c batch 1 (priority 4); OXc collect |
 
 eic_v1 FROZEN 2026-11-13 14:30 UTC (hash a068a867; 249/267 train, 42/45 val, 37/40 controls; 8 scorable assays). Collect: DONE. TODO: renote rows 132 and 211 when their jobs end (kit D6y). TODO: D6u update when tail rows verify (watchdog 27124200; `tail_watch.py status` for an interim view).
